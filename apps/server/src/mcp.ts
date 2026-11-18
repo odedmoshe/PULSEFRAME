@@ -8,7 +8,7 @@ import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { NarrationBody, NarrationScriptBody, TranscribeBody, type Speech } from './speech.ts';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { listOps, RationalTimeSchema, summarize, timeline, transcriptFor, transcriptView, TRACKING_JOB_TYPE, TrackRunBody } from '@pulseframe/core';
+import { listOps, RationalTimeSchema, summarize, timeline, transcriptFor, transcriptView, TRACKING_JOB_TYPE, TrackRunBody, MOMENTS_JOB_TYPE, StartMomentsBodySchema, MOMENTS_LABEL } from '@pulseframe/core';
 import type { Auth, Principal, Scope } from './auth.ts';
 import type { Capabilities } from './capabilities.ts';
 import { ExportOptionsSchema, type Exporter } from './export.ts';
@@ -27,6 +27,7 @@ import { applyTemplateFor, planTemplateFor, regenerateTemplateFor } from './temp
 import { PROJECT_RESOURCE_KINDS, registerResourcesAndPrompts } from './mcpResources.ts';
 import type { Derivatives } from './derive.ts';
 import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
+import { cancelMomentsJob, momentsLaneOf, startMomentsJob } from './moments.ts';
 import { assertMayTakeRendered, forPrincipal, peopleAccess, peopleNote, readingAs } from './peoplePrivacy.ts';
 import { assertMayHandleImportJob, IMPORT_JOB_TYPE, type ImportQueue } from './importContracts.ts';
 import type { RenderCacheService } from './renderCacheRoutes.ts';
@@ -113,8 +114,10 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
       run('edit', () => { read(projectId); const j = startTrackingJob(store, gov, principal, projectId, motionTrackId, TrackRunBody.parse(rest), { derivatives }); return { jobId: j.id, status: j.status }; }));
     server.registerTool('get_motion_track', { description: 'A motion track\'s summary: its media, kind (point or region), source-frame range, how it was made, how many samples are tracked, weak, lost, hand-placed, interpolated or re-acquired, the problem stretches (source frames) to review, and which clips follow it or blur along it. Tracking uses no AI model; a tracked blur is not guaranteed redaction. The samples themselves are in the project document (motionTracks).', inputSchema: z.object({ projectId: pid, motionTrackId: z.string() }), annotations: ro }, ({ projectId, motionTrackId }) =>
       run('observe', () => { const p = read(projectId); return motionTrackView(p.doc, p.revision, motionTrackId); }));
+    server.registerTool('measure_moments', { description: `Measure the candidate moments of video files (for the family film recipe): measured movement inside the picture, sharpness, brightness and sound level, with fixed rules. ${MOMENTS_LABEL.en}; faces are not used. A durable job (poll get_job, cancel with cancel_job); the windows are attached to each file's analyses in one undoable step when it succeeds. Answers { cached: true } when every file already has a current measurement and overwrite is not set. Never runs on import.`, inputSchema: z.object({ projectId: pid, ...StartMomentsBodySchema.shape }) }, ({ projectId, assetIds, overwrite }) =>
+      run('edit', () => { read(projectId); const r = startMomentsJob(store, gov, principal, projectId, { assetIds, ...(overwrite !== undefined ? { overwrite } : {}) }, { derivatives: derivatives ?? { get: () => null, put: () => Promise.reject(new Error('no derivative store')) }, lane: momentsLaneOf(exporter.lane) }); return 'cached' in r ? r : { jobId: r.id, status: r.status }; }));
     const rparams = z.record(z.string(), z.unknown()).optional().describe('Recipe parameters (see list_catalog → recipes for each schema)');
-    server.registerTool('plan_recipe', { description: 'Preview what a recipe would do to this project: its steps, the data it is based on and alternative settings. Recipes are rule-based multi-step edits (beat-montage, social-pack, tidy-speech, portrait-blur; see list_catalog → recipes, whose aiInput says when a recipe uses a result an AI model made earlier). Read-only.', inputSchema: z.object({ projectId: pid, recipeId: z.string(), params: rparams }), annotations: ro }, ({ projectId, recipeId, params }) => run('observe', () => { read(projectId); return planRecipeFor(store, projectId, recipeId, params); }));
+    server.registerTool('plan_recipe', { description: 'Preview what a recipe would do to this project: its steps, the data it is based on and alternative settings. Recipes are rule-based multi-step edits (beat-montage, social-pack, tidy-speech, portrait-blur, family-film; see list_catalog → recipes, whose aiInput says when a recipe uses a result an AI model made earlier). Read-only.', inputSchema: z.object({ projectId: pid, recipeId: z.string(), params: rparams }), annotations: ro }, ({ projectId, recipeId, params }) => run('observe', () => { read(projectId); return planRecipeFor(store, projectId, recipeId, params, gov, principal); }));
     server.registerTool('apply_recipe', { description: 'Apply a recipe as ONE undoable step. Everything it creates is a normal editable object. Returns a runId for regenerate_recipe.', inputSchema: z.object({ projectId: pid, recipeId: z.string(), params: rparams }) }, ({ projectId, recipeId, params }) => run('observe', () => { read(projectId); return applyRecipe(store, gov, principal, projectId, recipeId, params); }));
     server.registerTool('regenerate_recipe', { description: 'Redo a previous recipe run, optionally with new parameters: clips the run created that nobody changed are replaced; clips that were edited by hand since are kept exactly as they are. One undoable step.', inputSchema: z.object({ projectId: pid, runId: z.string(), params: rparams }) }, ({ projectId, runId, params }) => run('observe', () => { read(projectId); return regenerateRecipe(store, gov, principal, projectId, runId, params); }));
     // Templates (ADR-0016). Rule-based; no model. The gallery is list_catalog → templates (also GET /api/v1/templates).
@@ -208,7 +211,7 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
       }));
     server.registerTool('request_model_download', { description: 'Ask the project owner to approve downloading a capability\'s missing model files. It only creates a pending approval bound to the exact byte count and file hashes shown by list_capabilities; nothing is downloaded until the owner approves it in the editor. Agents cannot start a download themselves.', inputSchema: z.object({ projectId: pid, capabilityId: z.string() }) }, ({ projectId, capabilityId }) =>
       run('observe', async () => ({ approval: await requestModelDownload(capabilities, gov, principal, projectId, capabilityId) })));
-    server.registerTool('cancel_job', { description: 'Request cancellation of a job (export, capability, analysis, transcription, narration, model download, motion tracking, import). The result states what actually happened (removed from queue, interrupt requested, already finished).', inputSchema: z.object({ jobId: z.string() }) }, ({ jobId }) =>
+    server.registerTool('cancel_job', { description: 'Request cancellation of a job (export, capability, analysis, transcription, narration, model download, motion tracking, moments measurement, import). The result states what actually happened (removed from queue, interrupt requested, already finished).', inputSchema: z.object({ jobId: z.string() }) }, ({ jobId }) =>
       run('edit', () => {
         const j = store.getJob(jobId);
         gov.assertMayAct(principal, j.projectId, 'observe');
@@ -217,6 +220,7 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
         // the same dispatch as POST /jobs/:jobId/cancel (http.ts)
         if (j.type === 'analysis') return cancelAnalysisJob(store, jobId, principal.actor);
         if (j.type === TRACKING_JOB_TYPE) return cancelTrackingJob(store, jobId, principal.actor);
+        if (j.type === MOMENTS_JOB_TYPE) return cancelMomentsJob(store, jobId, principal.actor);
         if (speech?.handles(j)) return speech.cancel(jobId, principal.actor);
         return j.type === 'export' ? exporter.cancel(jobId, principal.actor) : capabilities.cancel(jobId, principal.actor);
       }));

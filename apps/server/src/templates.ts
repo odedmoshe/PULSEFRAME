@@ -13,7 +13,7 @@
  */
 import * as T from '@pulseframe/time';
 import {
-  clipEnd, findClip, findGatedTemplate, findTemplate, fingerprint, gatedTemplateError, gatedTemplateSummary, MODEL_GATED_TEMPLATES, planTemplate, summarizeTemplate, TemplateError, TEMPLATE_METHOD, TEMPLATES,
+  clipEnd, FAMILY_FILM_RUN_RECIPE_ID, findClip, findGatedTemplate, findTemplate, fingerprint, gatedTemplateError, gatedTemplateSummary, MODEL_GATED_TEMPLATES, planTemplate, summarizeTemplate, TemplateError, TEMPLATE_METHOD, TEMPLATES,
   type Asset, type KnownGrid, type ProjectDocument, type SlotRecord, type TemplateApplyResult, type TemplateDef, type TemplatePlan, type TemplatePlanView, type TemplateRegenerateResult, type TemplateSummary,
 } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
@@ -136,7 +136,7 @@ export async function applyTemplateFor(store: Store, gov: Governance, principal:
  * sound; an edit to either keeps both, so the kept slot stays whole (still linked, its own sound under its own picture) and its
  * key is not made again.
  */
-function keptByHand(doc: ProjectDocument, live: readonly string[], fingerprints: Readonly<Record<string, string>>): string[] {
+export function keptByHand(doc: ProjectDocument, live: readonly string[], fingerprints: Readonly<Record<string, string>>): string[] {
   const clip = (id: string) => findClip(doc, id)!.clip;
   const edited = live.filter((id) => fingerprint(clip(id)) !== fingerprints[id]);
   const groups = new Set(edited.map((id) => clip(id)).flatMap((c) => (c.type === 'media' && c.linkGroupId ? [c.linkGroupId] : [])));
@@ -174,6 +174,12 @@ export async function regenerateTemplateFor(store: Store, gov: Governance, princ
   const p = store.getProject(projectId);
   const run = Object.hasOwn(p.doc.recipeRuns, runId) ? p.doc.recipeRuns[runId] : undefined;
   if (!run || !run.recipeId.startsWith('template:')) throw new ApiError(404, 'not_found', `template run ${runId} not found`, { runId }, 'A template run id is returned by apply (runId).');
+  // a family film (ADR-0026) is recorded as a template run, but it is planned by the film planner, not from the catalogue
+  if (run.recipeId === FAMILY_FILM_RUN_RECIPE_ID) {
+    const { regenerateFamilyFilmFor } = await import('./familyFilm.ts');
+    // the answer is the film's own (FamilyFilmRegenerateResult: its warnings are film warnings, with picks and exclusions)
+    return await regenerateFamilyFilmFor(store, gov, principal, projectId, runId, newParams, expectedRevision) as unknown as TemplateRegenerateResult;
+  }
   if (newParams !== undefined && (typeof newParams !== 'object' || newParams === null || Array.isArray(newParams))) throw new ApiError(400, 'invalid_request', 'params must be an object of template parameters to change');
   const def = templateOf(run.recipeId.slice('template:'.length));
   const live = run.createdIds.filter((id) => !!findClip(p.doc, id));
