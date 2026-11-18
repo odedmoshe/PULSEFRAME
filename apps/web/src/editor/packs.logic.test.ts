@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PACK_FIELD_KEYS, PackFieldsInputSchema, TEMPLATES } from '@pulseframe/core';
+import { createProject, PACK_FIELD_KEYS, PackFieldsInputSchema, TEMPLATES } from '@pulseframe/core';
 import { dictionaries } from '@pulseframe/i18n';
 import { PACK_I18N_KEYS, PACK_STRINGS } from './packs.strings.ts';
 import { PACK_TABS } from './packs.testids.ts';
@@ -129,9 +129,11 @@ describe('the one operation behind each action', () => {
     expect(a.op.args).toMatchObject({ text: 'Happy holiday' });
     expect(a.fallbackUsed).toBe(true);
   });
-  it('a look is ONE add_adjustment over the whole edit', () => {
-    const a = lookAction(FIXTURE_PACK.looks[0]!, 'he');
-    expect(a.op).toMatchObject({ op: 'add_adjustment', args: { span: 'edit', label: 'חמים' } });
+  it('a look is ONE commit: an add_adjustment over the whole edit (nothing to move in a project without graphic elements)', () => {
+    const a = lookAction(FIXTURE_PACK.looks[0]!, 'he', createProject({ id: 'prj_look', name: 'look', width: 540, height: 960 }));
+    expect(a.ops).toHaveLength(1);
+    expect(a.ops[0]).toMatchObject({ op: 'add_adjustment', args: { span: 'edit', label: 'חמים' } });
+    expect(lookAction(FIXTURE_PACK.looks[0]!, 'he', null).ops).toEqual([]);
   });
   it('a caption look is ONE apply_caption_look', () => { expect(captionAction('t1', 'look-x')).toEqual({ op: 'apply_caption_look', args: { trackId: 't1', lookId: 'look-x' } }); });
   it('finds the caption tracks of the main sequence and keeps the chosen one while it is there', () => {

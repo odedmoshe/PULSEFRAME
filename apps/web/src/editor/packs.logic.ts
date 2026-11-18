@@ -6,7 +6,7 @@
  */
 import * as T from '@pulseframe/time';
 import {
-  ELEMENTS, MUSIC_STYLES, PACK_FIELD_KEYS, PackFieldsInputSchema, candleNight, findCaptionLook, findTemplate, formatHebrewDate, hebrewFromRd, isValidGregorian, packLookOp, packTitleOp, rdFromGregorian, suggestPacks,
+  ELEMENTS, MUSIC_STYLES, PACK_FIELD_KEYS, PackFieldsInputSchema, candleNight, findCaptionLook, findTemplate, formatHebrewDate, hebrewFromRd, isValidGregorian, packLookOps, packTitleOp, rdFromGregorian, suggestPacks,
   gregorianFromRd,
   type GDate, type LifeEventHint, type OpCall, type PackDef, type PackFieldKey, type PackFieldValues, type PackFieldsInput, type PackLook, type PackSuggestion, type PackSummary, type PackTitle, type ProjectDocument,
 } from '@pulseframe/core';
@@ -116,8 +116,8 @@ export const titleAction = (title: PackTitle, c: ActionContext): { op: OpCall; l
   const r = packTitleOp(title, { lang: c.lang, fields: titleFieldValues(c.fields), start: c.start, rate: c.rate, dated: false, motion: c.motion });
   return { op: r.op, label: title.name[c.lang], fallbackUsed: r.words.usedFallback };
 };
-/** ONE add_adjustment over the whole edit (core packLookOp). */
-export const lookAction = (look: PackLook, lang: Lang): { op: OpCall; label: string } => ({ op: packLookOp(look, lang), label: look.name[lang] });
+/** ONE commit: an add_adjustment over the whole edit, and the move_track that keeps the graphic elements above it (core packLookOps). */
+export const lookAction = (look: PackLook, lang: Lang, doc: ProjectDocument | null): { ops: OpCall[]; label: string } => ({ ops: doc ? packLookOps(look, lang, doc) : [], label: look.name[lang] });
 /** ONE apply_caption_look. */
 export const captionAction = (trackId: string, lookId: string): OpCall => ({ op: 'apply_caption_look', args: { trackId, lookId } });
 /** The colours an element of this pack is made in: its palette, or the element's own defaults (the server uses them when none is named). */

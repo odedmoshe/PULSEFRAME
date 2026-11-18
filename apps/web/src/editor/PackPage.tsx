@@ -192,7 +192,7 @@ export function PackPage({ pack, projectId, lang, initialTab, onBack, onOpenTemp
       captionTracks={tracks} captionTrackId={pickCaptionTarget(tracks, trackChoice)} onCaptionTrack={setTrackChoice}
       fields={fields} onFields={setFields} motionNone={motionNone} onMotionNone={setMotionNone} busy={busy} status={status}
       onAddTitle={(t) => { const a = titleAction(t, { lang, start: editor.playhead, rate: editor.rate, fields, motion: motionNone ? 'none' : 'full' }); void run(t.id, () => commit([a.op], a.label), a.label); }}
-      onApplyLook={(l) => { const a = lookAction(l, lang); void run(l.id, () => commit([a.op], a.label), a.label); }}
+      onApplyLook={(l) => { const a = lookAction(l, lang, state.doc); if (a.ops.length) void run(l.id, () => commit(a.ops, a.label), a.label); }}
       onApplyCaption={(id) => { const track = pickCaptionTarget(tracks, trackChoice); const l = view.captionLooks.find((x) => x.id === id); if (track && l) void run(id, () => commit([captionAction(track, id)], l.name[lang]), l.name[lang]); }}
       onAddElement={(id, name) => void run(id, async () => { await api.addElement(projectId, { elementId: id, ...elementColours(pack), start: editor.playhead }); return true; }, name[lang])}
       onAddSound={(id, name) => void run(id, async () => { await api.addSoundEffect(projectId, { sfxId: id, start: editor.playhead }); return true; }, name)}

@@ -7,7 +7,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  applyTransaction, canonical, createProject, flashGapFrames, MOTION_PRESETS, sourceTimesToTimeline, TEMPLATES, TemplateError, TRANSITION_IDS, validateProject,
+  applyTransaction, canonical, createProject, flashGapFrames, MOTION_PRESETS, packLookOp, packLookOps, PACKS, sourceTimesToTimeline, TEMPLATES, TemplateError, TRANSITION_IDS, validateProject,
   type Asset, type ProjectDocument, type TemplateDef, type TemplatePlan,
 } from './index.ts';
 import { MAX_TEMPLATE_OPS, mirrorForReading, planTemplate, summarizeTemplate } from './templatePlan.ts';
@@ -367,6 +367,33 @@ describe('a look of a template never covers its graphic elements or its titles (
     const without = { ...plan, ops: plan.ops.filter((o) => o.op !== 'move_track') };
     const r = apply(doc, without);
     expect(covered(r.doc, elementAssetsOf(plan, r.results[0]!.output as unknown as { assetIds: Record<string, string> }))).not.toEqual([]);
+  });
+  it('a pack look applied afterwards (the pack page: packLookOps, one transaction) colours the footage and not the graphics', () => {
+    const rate = { num: 30, den: 1 };
+    /** As madeAssets, with the provenance the element route gives (procedural id element.…), which packLookOps reads. */
+    const withProvenance = (plan: TemplatePlan) => madeAssets(plan).map((a, i) => (plan.assetsNeeded[i]!.kind === 'element' ? { ...a, asset: { ...a.asset, provenance: { ...a.asset.provenance, procedural: { id: plan.assetsNeeded[i]!.id, version: 2, generator: 'test' } } } } : a));
+    let applied = 0;
+    for (const id of ['tpl.hanukkah-greeting', 'tpl.birthday-invite', 'tpl.hanukkah-party']) for (const look of PACKS.flatMap((p) => p.looks)) {
+      const doc = project(rate, null);
+      const plan = planTemplate(doc, TEMPLATES.find((t) => t.id === id)!, { media: MEDIA, musicAssetId: null, lang: 'he' });
+      const r = applyTransaction(doc, [{ op: 'apply_template', args: { templateId: plan.templateId, templateVersion: plan.version, params: plan.params, steps: plan.steps, assets: withProvenance(plan), ops: plan.ops, slots: plan.slots } }], { idSeed: 'lk', actor: 'test', allowInternal: true });
+      const els = elementAssetsOf(plan, r.results[0]!.output as unknown as { assetIds: Record<string, string> });
+      const after = applyTransaction(r.doc, packLookOps(look, 'he', r.doc), { idSeed: 'lk2', actor: 'test' });
+      expect(after.results.length, `${id} ${look.id}`).toBeGreaterThanOrEqual(1);
+      expect(validateProject(after.doc)).toEqual([]);
+      expect(covered(after.doc, els), `${id} + ${look.id}`).toEqual([]);
+      // control: the add_adjustment alone (as before) puts the look over the template's graphics
+      const alone = applyTransaction(r.doc, [packLookOp(look, 'he')], { idSeed: 'lk3', actor: 'test' });
+      expect(covered(alone.doc, els), `${id} + ${look.id} without the move`).not.toEqual([]);
+      applied++;
+    }
+    expect(applied).toBe(18);
+  });
+  it('packLookOps leaves a track that also holds pictures where it is: the look colours every picture', () => {
+    const doc = project({ num: 30, den: 1 }, null);
+    const look = PACKS[0]!.looks[0]!;
+    const mixed = applyTransaction(doc, [{ op: 'add_clip', args: { assetId: 'img_a', start: T.ZERO, duration: T.rt(2, 1) } }], { idSeed: 'mx', actor: 'test' }).doc;
+    expect(packLookOps(look, 'he', mixed)).toHaveLength(1);
   });
   it('graphicsTrackIndex replays the track placement of the real ops: the move lands right above the topmost look', () => {
     const rate = { num: 30, den: 1 };
