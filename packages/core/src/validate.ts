@@ -7,6 +7,16 @@ import { personNameKey } from './people.ts';
 import { lifeIssues } from './fields.ts';
 import { MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, TRACK_STATES } from './tracking.ts';
 import { momentsProblem } from './momentsContract.ts';
+import { isV1Easing, type Keyframe } from './keyframe.ts';
+import { CURVES_BUILT } from './curves.ts';
+
+/**
+ * PLACEHOLDER of the ADR-0019 contracts commit, until curves.ts CURVES_BUILT: a key with a curve of ADR-0019 or with handles is
+ * not renderable in this build. These fields are new, so this can only fire on documents that use them. W1 replaces it with
+ * the rules 'keyframe_curve' (bezier present exactly when easing is 'bezier') and 'keyframe_curve_flash' (no turn-back curve
+ * on a light channel: keyframeChannels.ts isLightChannel).
+ */
+const unbuiltCurve = (k: Keyframe) => !CURVES_BUILT && (!isV1Easing(k.easing) || k.bezier !== undefined);
 
 export interface Issue { code: string; message: string; ids: string[] }
 
@@ -134,6 +144,7 @@ export function validateProject(doc: ProjectDocument): Issue[] {
             if (i > 0 && !T.lt(keys[i - 1]!.time, k.time)) issues.push({ code: 'unsorted_keyframes', message: `clip ${c.id} ${prop} keyframes are not strictly increasing in time`, ids: [c.id] });
             if (!T.isFrameAligned(k.time, rate)) issues.push({ code: 'not_frame_aligned', message: `clip ${c.id} ${prop} keyframe is not on a frame boundary`, ids: [c.id] });
             if (!TransformSchema.shape[prop].safeParse(k.value).success) issues.push({ code: 'keyframe_out_of_range', message: `clip ${c.id} ${prop} keyframe value ${k.value} is out of range`, ids: [c.id] });
+            if (unbuiltCurve(k)) issues.push({ code: 'keyframe_curve', message: `clip ${c.id} ${prop} keyframe uses the curve "${k.easing}", which this build cannot draw yet`, ids: [c.id] });
           });
         }
         const seenFx = new Set<string>();
@@ -150,6 +161,8 @@ export function validateProject(doc: ProjectDocument): Issue[] {
             if (d && NOT_ANIMATABLE[fx.type]?.includes(param)) continue;
             const ok = !!d && animatableParams(fx.type).includes(param) && keys.every((k, i) => (i === 0 || T.lt(keys[i - 1]!.time, k.time)) && T.isFrameAligned(k.time, rate) && d.params.safeParse({ ...fx.params, [param]: k.value }).success);
             if (!ok) issues.push({ code: 'effect_keyframes', message: `clip ${c.id} effect ${fx.type}: keyframes of "${param}" are not animatable, out of range, unsorted or off the frame grid`, ids: [c.id] });
+            const odd = keys.find(unbuiltCurve);
+            if (odd) issues.push({ code: 'keyframe_curve', message: `clip ${c.id} effect ${fx.type}: a keyframe of "${param}" uses the curve "${odd.easing}", which this build cannot draw yet`, ids: [c.id] });
           }
           // Time effects and beat modulators are new fields: these rules can only fire on documents that use them, so an
           // older project stays editable (see the note on NOT_ANIMATABLE keys above).

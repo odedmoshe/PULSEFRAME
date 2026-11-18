@@ -28,7 +28,9 @@ import { velocityNeeds } from './transitionTiming.ts';
 import { adjustmentRefusal, clipEnd, forbidsOverlap, lutAssets, lutUsers, sequenceDuration, validateProject } from './validate.ts';
 import { frameOf } from './sequences.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
-import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
+import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt, TRANSFORM_RANGE } from './animation.ts';
+import { CurveHandlesSchema, isV1Easing, KEYFRAME_REFUSALS, type CurveHandles, type Easing, type Keyframe, type KeyframeRefusalKey } from './keyframe.ts';
+import { CURVES_BUILT } from './curves.ts';
 import { detachAssetFromEvents } from './events.ts';
 import { handDownCapture } from './capture.ts';
 import { DEFAULT_REDACT_REGION, isUsable, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, roundHalfUp, SIZE_UNIT, ST, TrackOpArgs, trackSampleAt, type MotionTrack, type RedactRegion } from './tracking.ts';
@@ -142,6 +144,24 @@ function assertFree(t: Track, start: T.RationalTime, end: T.RationalTime, ignore
 export function assertAligned(d: ProjectDocument, t: T.RationalTime, what: string) {
   if (!T.isFrameAligned(t, d.settings.frameRate))
     throw new OpError('invalid_args', `${what} must fall on a ${d.settings.frameRate.num}/${d.settings.frameRate.den} fps frame boundary`, { value: t, nearest: T.snapToFrame(t, d.settings.frameRate) }, 'Use the returned nearest value.');
+}
+/**
+ * The typed refusal of the keyframe curve rules and operations (ADR-0019, keyframe.ts KEYFRAME_REFUSALS):
+ * `throw keyframeRefusal('curveFlash', { clipId, channel }, 'overshoot', 'opacity')`. Exported for keyframeOps.ts.
+ */
+export function keyframeRefusal<K extends KeyframeRefusalKey>(key: K, details: Record<string, unknown>, ...values: Parameters<(typeof KEYFRAME_REFUSALS)[K]['message']>): OpError {
+  const r = KEYFRAME_REFUSALS[key] as { code: OpErrorCode; message: (...v: unknown[]) => string; hint?: string };
+  return new OpError(r.code, r.message(...values), details, r.hint);
+}
+/**
+ * PLACEHOLDER of the ADR-0019 contracts commit, until curves.ts CURVES_BUILT: a key with a curve of ADR-0019 (an easing other
+ * than the v1 five) or with handles is refused as not built, so no such key can enter a document before the sampler renders
+ * it. v1 easings without handles pass unchanged (they need no curve rule: they never turn back and carry no handles). W1
+ * replaces the callers with the curve rules (bezier iff 'bezier', the flash rule per channel). Exported for sequenceOps.ts.
+ */
+export function refuseUnbuiltCurve(easing: Easing | undefined, bezier: CurveHandles | undefined): void {
+  if (CURVES_BUILT) return;
+  if (bezier !== undefined || (easing !== undefined && !isV1Easing(easing))) throw keyframeRefusal('notBuilt', { easing: easing ?? null, bezier: bezier ?? null }, `the curve "${easing ?? 'bezier'}"`);
 }
 /** A new empty track of `kind` in its stacking slot (default name V1, A1, T1, C1, FX1 …). Exported for add_sequence (sequenceOps.ts). */
 export function newTrack(seq: Sequence, kind: Track['kind'], ctx: OpContext, name?: string): Track {
@@ -641,10 +661,11 @@ defineOp({
   name: 'set_keyframe',
   version: 1,
   description: 'Add or replace a keyframe for x, y, scale, rotation or opacity at a clip-local time. The first keyframe on a property starts animating it; between keys the value is interpolated with the easing of the earlier key. An adjustment clip animates its opacity only.',
-  args: z.object({ ...KfTarget, value: z.number(), easing: z.enum(EASINGS).optional().describe('Default linear') }).strict(),
+  args: z.object({ ...KfTarget, value: z.number(), easing: z.enum(EASINGS).optional().describe('Default linear; left out, an existing key keeps its curve'), bezier: CurveHandlesSchema.optional().describe("The four handles [x1, y1, x2, y2] of a custom curve, only with easing 'bezier' (list_catalog → curves)") }).strict(),
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
     if (a.property !== 'opacity') refuseAdjustmentTransform(clip, { [a.property]: NaN }, 'animated'); // any key on these properties, whatever its value
+    refuseUnbuiltCurve(a.easing, a.bezier); // ADR-0019 contracts: W1 replaces this with the curve rules and the shape-keeping insertion
     assertAligned(d, a.time, 'time');
     if (!TransformSchema.shape[a.property].safeParse(a.value).success) throw new OpError('invalid_args', `value ${a.value} is out of range for ${a.property}`, { property: a.property });
     const keys = [...(clip.keyframes?.[a.property] ?? [])];
@@ -688,7 +709,7 @@ defineOp({
     for (const p of a.property ? [a.property] : ANIMATABLE) {
       const keys = kf[p];
       if (!keys?.length) continue;
-      clip.transform = { ...clip.transform, [p]: sampleKeyframes(keys, a.at ?? T.ZERO) };
+      clip.transform = { ...clip.transform, [p]: sampleKeyframes(keys, a.at ?? T.ZERO, TRANSFORM_RANGE[p]) };
       delete kf[p];
     }
     if (Object.keys(kf).length) clip.keyframes = kf;
@@ -1536,7 +1557,7 @@ function placeMotion(clip: Clip, rate: T.Rate, kind: 'in' | 'out' | 'loop' | 'mo
     // keys the motion does not cover stay: after an entrance, before an exit; a loop or a move covers the whole clip
     const kept = kind === 'in' ? (keyframes[p] ?? []).filter((k) => frameOf(k.time) > hi + 1e-9)
       : kind === 'out' ? (keyframes[p] ?? []).filter((k) => frameOf(k.time) < lo - 1e-9) : [];
-    const fresh = keys.map((k) => ({ time: T.frameTime(k.frame, rate), value: k.value, easing: k.easing }));
+    const fresh: Keyframe[] = keys.map((k) => ({ time: T.frameTime(k.frame, rate), value: k.value, easing: k.easing }));
     // The key an entrance ends on is also the key that what follows starts from (an exit that begins right there, a slow zoom):
     // where one was there already, it keeps its easing, so the entrance does not change the shape of what comes after it.
     const meets = kind === 'in' && kept.length ? (keyframes[p] ?? []).find((k) => Math.abs(frameOf(k.time) - hi) <= 1e-9) : undefined;
@@ -2605,9 +2626,10 @@ defineOp({
   name: 'set_effect_keyframe',
   version: 1,
   description: 'Animate a numeric effect parameter: add or replace a keyframe at a clip-local time. The first key on a parameter starts animating it; between keys the value is interpolated with the easing of the earlier key. list_catalog shows each effect\'s parameters and ranges.',
-  args: z.object({ ...FxKeyTarget, value: z.number(), easing: z.enum(EASINGS).optional() }).strict(),
+  args: z.object({ ...FxKeyTarget, value: z.number(), easing: z.enum(EASINGS).optional().describe('Default linear; left out, an existing key keeps its curve'), bezier: CurveHandlesSchema.optional().describe("The four handles [x1, y1, x2, y2] of a custom curve, only with easing 'bezier' (list_catalog → curves)") }).strict(),
   apply(d, a) {
     const { clip } = pictureClip(d, a.clipId);
+    refuseUnbuiltCurve(a.easing, a.bezier); // ADR-0019 contracts: W1 replaces this with the curve rules and the shape-keeping insertion
     const i = mustEffect(clip, a.effectId);
     const fx = { ...clip.effects![i]! };
     if (!animatableParams(fx.type).includes(a.param)) throw new OpError('invalid_args', `"${a.param}" is not a numeric parameter of ${fx.type}`, { animatable: animatableParams(fx.type) });
