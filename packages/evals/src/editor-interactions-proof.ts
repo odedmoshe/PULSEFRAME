@@ -248,6 +248,22 @@ async function main() {
       await page.locator(`.clip[data-clip-id="${picClip}"]`).click();
       await page.locator('[data-testid=key-strip-key]').first().waitFor({ timeout: 5000 }).catch(() => {});
       const stripFrames = (await page.locator('[data-testid=key-strip-key]').evaluateAll((els) => els.map((e) => Number(e.getAttribute('data-frame'))))).sort((a, b) => a - b);
+      // keyboard only: Alt+K puts the focus on the strip, Enter on a key opens the curve picker with the focus inside, Escape closes it
+      // and gives the focus back to the same key; nothing is committed on the way
+      const focused = () => page.evaluate(() => { const a = document.activeElement as HTMLElement | null; return { id: a?.dataset.testid ?? null, frame: a?.dataset.frame ?? null, inPicker: !!a?.closest('[data-testid=curve-picker]') }; });
+      const revK = (await call(`/projects/${pid}`)).body.revision as number;
+      await page.locator(`.clip[data-clip-id="${picClip}"]`).focus();
+      await page.keyboard.press('Alt+KeyK');
+      const afterAltK = await focused();
+      await page.keyboard.press('Enter');
+      await page.getByTestId('curve-picker').waitFor({ timeout: 5000 }).catch(() => {});
+      const pickerOpen = (await page.getByTestId('curve-picker').count()) === 1;
+      const inPicker = await focused();
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => !document.querySelector('[data-testid=curve-picker]'), undefined, { timeout: 5000 }).catch(() => {});
+      const afterEsc = await focused();
+      const revK2 = (await call(`/projects/${pid}`)).body.revision as number;
+      check('keyframe strip by keyboard: Alt+K focuses a strip key, Enter opens the curve picker with the focus inside, Escape closes it and the focus is back on the same key; no commit', afterAltK.id === 'key-strip-key' && pickerOpen && inPicker.inPicker && (await page.getByTestId('curve-picker').count()) === 0 && afterEsc.id === 'key-strip-key' && afterEsc.frame === afterAltK.frame && revK2 === revK, { afterAltK, pickerOpen, inPicker, afterEsc, revisions: [revK, revK2] });
       await page.locator(`.clip[data-clip-id="${title}"]`).click();
       await page.waitForFunction((id) => document.querySelectorAll(`.clip[data-clip-id="${id}"] i.kf`).length > 0, picClip, { timeout: 5000 }).catch(() => {});
       const passive = await page.locator(`.clip[data-clip-id="${picClip}"] i.kf`).count();

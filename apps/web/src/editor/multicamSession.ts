@@ -99,6 +99,14 @@ export function reportOf(outputs: readonly (SwitchAnglesOutput | undefined | nul
   }
   return { saved, skipped: [...skipped].map(([reason, count]) => ({ reason, count })), dropped, warnings };
 }
+/**
+ * The places a commit left unchanged against what was asked, for the live report. Core's `skipped` lists cuts AND stretches of the
+ * program; a stretch that was 'already_on_angle' already shows the asked angle, so nothing the person asked for is missing there and
+ * it is not counted (reporting it as lost contradicted "n cuts saved" when every cut had landed).
+ */
+export function unchangedPlaces(rep: Pick<SessionReport, 'skipped'>): { reason: string; count: number }[] {
+  return rep.skipped.filter((k) => k.reason !== 'already_on_angle' && k.count > 0);
+}
 
 /** The picture angles of a group in the order the tiles and the digits use (1..9); the digits never name a sound angle. */
 export const pictureAngles = (group: MulticamGroup): MulticamAngle[] => group.angles.filter((a) => a.kind === 'picture');

@@ -57,7 +57,7 @@ export function AngleViewer({ groupId, lang, liveAngleIds }: AngleViewerProps) {
   const [problem, setProblem] = useState<string | null>(null);
   const doc = state.doc;
   const group = doc ? multicamGroupOf(doc, groupId) : undefined;
-  const key = `${groupId}|${liveAngleIds.join(',')}|${JSON.stringify(group)}`;
+  const key = `${groupId}|${lang}|${liveAngleIds.join(',')}|${JSON.stringify(group)}`;
 
   // one pool and one draft-only player for the life of the viewer
   useEffect(() => {
@@ -82,7 +82,7 @@ export function AngleViewer({ groupId, lang, liveAngleIds }: AngleViewerProps) {
     span.current = s;
     if (!s || !liveAngleIds.length) { setProblem(null); return; }
     try {
-      const mv = multiviewDocument(d, groupId, { liveAngleIds, g0: s.g0, duration: s.duration, width: 480, height: 270 });
+      const mv = multiviewDocument(d, groupId, { liveAngleIds, g0: s.g0, duration: s.duration, width: 480, height: 270, rtl: lang === 'he' }); // tile 1 top right in Hebrew, as the tile buttons are
       setProblem(null);
       p.setDoc(mv);
     } catch (e) { setProblem(e instanceof Error ? e.message : String(e)); }
