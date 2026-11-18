@@ -377,7 +377,15 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
       return bm ? { draw: (ctx, dx, dy, dw, dh) => ctx.drawImage(bm, dx, dy, dw, dh) } : null;
     };
     const ctx = canvas.getContext('2d')!;
-    const draw = (n: number) => drawGraph(ctx, guard.apply(evaluate(doc, f(n)), performance.now() / 1000), provider).finally(() => { showHeld(); mirror(it.key); });
+    // Each frame is drawn off screen and put on the tile in one step: drawGraph fills the background, then waits for the GPU
+    // effects, and a tile drawn in place showed that bare background between frames, a dark-bright flicker at the drawing rate
+    // that the flash guard cannot see (creative-tools-proof, strobe hover: rises 0.2 s apart with nothing held).
+    const back = document.createElement('canvas');
+    back.width = canvas.width; back.height = canvas.height;
+    const bctx = back.getContext('2d')!;
+    const draw = (n: number) => drawGraph(bctx, guard.apply(evaluate(doc, f(n)), performance.now() / 1000), provider)
+      .then((r) => { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(back, 0, 0); return r; })
+      .finally(() => { showHeld(); mirror(it.key); });
     let stop = false;
     let busy: Promise<unknown> = Promise.resolve();
     let startAt = 0, last = -1, raf = 0;
