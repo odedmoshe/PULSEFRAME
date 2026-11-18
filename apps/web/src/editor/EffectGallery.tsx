@@ -360,7 +360,7 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
 
   // Animate only the hot tile (a motion, a time effect, an overlay or the strobe): one drawGraph at a time, about 30 fps, stopped
   // on leave / blur / tab change / close. Every frame it draws, and the still frame it puts back, passes the dialog's flash guard
-  // with the real time of drawing, as the player does (apps/web/src/player.ts).
+  // the way the player's frames do (FlashGuard.paint: decided before the draw, timed from the copy to the tile).
   useEffect(() => { setHot(null); }, [tab]);
   useEffect(() => {
     if (!hot) return;
@@ -383,9 +383,16 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
     const back = document.createElement('canvas');
     back.width = canvas.width; back.height = canvas.height;
     const bctx = back.getContext('2d')!;
-    const draw = (n: number) => drawGraph(bctx, guard.apply(evaluate(doc, f(n)), performance.now() / 1000), provider)
-      .then((r) => { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(back, 0, 0); return r; })
-      .finally(() => { showHeld(); mirror(it.key); });
+    // The guard decides before the draw and times a rise from the copy to the tile, with the light really drawn (FlashGuard.paint).
+    const draw = (n: number) => guard.paint(evaluate(doc, f(n)), {
+      now: () => performance.now() / 1000,
+      draw: (g) => drawGraph(bctx, g, provider),
+      copy: () => { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(back, 0, 0); },
+      sleep: (s) => new Promise<void>((r) => setTimeout(r, Math.ceil(s * 1000))),
+      nextFrame: (run) => { requestAnimationFrame(run); },
+    }).finally(() => { showHeld(); mirror(it.key); });
+    // This tile shows its still, drawn without the guard: what it shows is not the guard's last frame, so its next light counts as a rise.
+    guard.screenUnknown();
     let stop = false;
     let busy: Promise<unknown> = Promise.resolve();
     let startAt = 0, last = -1, raf = 0;
