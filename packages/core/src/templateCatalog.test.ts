@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  adjustmentRefusal, applyTransaction, createProject, ELEMENTS, findEffect, findTemplate, findTextPreset, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, MODEL_GATED_TEMPLATES, MOTION_PRESETS,
+  adjustmentRefusal, applyTransaction, elementIdChoices, createProject, ELEMENTS, findEffect, findTemplate, findTextPreset, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, MODEL_GATED_TEMPLATES, MOTION_PRESETS,
   TemplateDefSchema, BUILTIN_TEMPLATES, TEMPLATES, TRANSITION_IDS, validateProject, type OpCall, type ProjectDocument,
 } from './index.ts';
 
@@ -58,7 +58,7 @@ describe('built-in templates', () => {
       }
       for (const x of t.texts) expect([x.key, !!findTextPreset(x.presetId)]).toEqual([x.key, true]);
       for (const e of t.elements) {
-        expect([e.key, elements.has(e.elementId)]).toEqual([e.key, true]);
+        for (const id of elementIdChoices(e, t.slots.length)) expect([e.key, id, elements.has(id)]).toEqual([e.key, id, true]);
         if (e.motion) expect([e.key, motions.has(e.motion.presetId)]).toEqual([e.key, true]);
       }
       for (const a of t.adjust) for (const fx of a.effects) expect([a.key, fx.type, !!findEffect(fx.type)]).toEqual([a.key, fx.type, true]);

@@ -4,6 +4,10 @@
  * templateParity.golden.json was recorded by running templateParity.fixture.ts against the core tree of commit 159a301 (the
  * tree before this track, extracted with git archive) and compared equal with this tree when it was written. A change here
  * is a change of what an existing template makes, and must be deliberate (then re-record and say why).
+ * Re-recorded 2026-11-18 (24 of 36 changed, deliberately): a template that has graphic elements and looks now puts its elements on
+ * a track of their own and moves it above the looks (move_track), so a look colours or blurs the pictures and never the graphics
+ * (tpl.quote-card's divider was blurred by its own dim look). Exactly the four built-ins with both changed (travel-montage,
+ * birthday, quote-card, countdown-list); photo-dump and home-video plan byte for byte as before.
  */
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_TEMPLATES, canonical, createProject } from './index.ts';
