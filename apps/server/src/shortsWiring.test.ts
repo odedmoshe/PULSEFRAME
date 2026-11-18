@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, summarize, type MediaClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, BROWSER_EXPORT_SIDECAR_REFUSED, createProject, summarize, type MediaClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { Exporter, outputDoc, usesGpuEffects } from './export.ts';
 import { preflight } from './preflight.ts';
 import { exportCaptions, startExportBatch } from './http.ts';
@@ -162,6 +162,48 @@ describe('browser export of a short', () => {
       expect(body.snapshot.mainSequenceId).toBe('seq_short');
       expect(body.snapshot.settings).toMatchObject({ width: 720, height: 1280 });
       expect(body.manifest.output).toMatchObject({ width: 720, height: 1280, frames: 60 });
+    } finally {
+      be.stop(); st.close(); fs.rmSync(d, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('browser export and captions', () => {
+  it('a subtitle file is refused on the browser route (it writes none), with a code and a hint (Hebrew: shorts-wording.test.ts); burned keeps the captions in the picture, none hides them', async () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-shorts-bxc-'));
+    fs.mkdirSync(path.join(d, 'web/assets'), { recursive: true });
+    fs.writeFileSync(path.join(d, 'web/assets/heebo-latin-400.woff2'), 'x');
+    const st = new Store(path.join(d, 'data'));
+    const ex = new Exporter(st, {} as never, () => '', path.join(d, 'web'));
+    const p = st.createProject({ name: 'bxc' });
+    const doc = project();
+    for (const seq of Object.values(doc.sequences)) for (const t of seq.tracks) if (t.kind === 'video') t.clips = [];
+    doc.assets = {};
+    st.db.prepare('UPDATE projects SET doc = ? WHERE id = ?').run(JSON.stringify({ ...doc, id: p.doc.id }), p.doc.id);
+    const app = new Hono<any>();
+    app.onError((e, ctx) => (e instanceof ApiError ? ctx.json(e.toJSON(), e.status as any) : ctx.json({ error: { code: 'internal', message: String(e) } }, 500)));
+    app.use('*', async (ctx, next) => { ctx.set('principal', { actor: 'user:a', kind: 'user', scopes: ['observe', 'edit'] } satisfies Principal); await next(); });
+    const be = registerBrowserExportRoutes(app, st, ex, { now: () => 1_000_000, sweepIntervalMs: 0 });
+    const start = async (captions: string, n: number) => {
+      const r = await app.request(`/api/v1/projects/${p.doc.id}/exports/browser`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: `session-cap-${n}`, sequenceId: 'seq_short', captions }) });
+      return { status: r.status, body: (await r.json()) as any };
+    };
+    const jobs = () => (st.db.prepare("SELECT COUNT(*) AS n FROM jobs WHERE project_id = ? AND type = 'export'").get(p.doc.id) as { n: number }).n;
+    const captionHidden = (snapshot: ProjectDocument) => Object.values(snapshot.sequences).flatMap((s) => s.tracks.filter((t) => t.kind === 'caption').map((t) => t.hidden));
+    try {
+      let n = 0;
+      for (const captions of ['sidecar-srt', 'sidecar-vtt']) {
+        const r = await start(captions, n++);
+        expect(r.status, JSON.stringify(r.body).slice(0, 300)).toBe(422);
+        expect(r.body.error).toMatchObject({ code: 'unsupported_in_browser_export', message: BROWSER_EXPORT_SIDECAR_REFUSED.message, hint: BROWSER_EXPORT_SIDECAR_REFUSED.hint, details: { captions, supported: ['burned', 'none'] } });
+      }
+      expect(jobs()).toBe(0);
+      const burned = await start('burned', n++);
+      expect(burned.status, JSON.stringify(burned.body).slice(0, 300)).toBe(201);
+      expect(captionHidden(burned.body.snapshot)).toEqual([false]);
+      const none = await start('none', n++);
+      expect(none.status).toBe(201);
+      expect(captionHidden(none.body.snapshot)).toEqual([true]);
     } finally {
       be.stop(); st.close(); fs.rmSync(d, { recursive: true, force: true });
     }

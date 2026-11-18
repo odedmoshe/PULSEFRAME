@@ -1,7 +1,7 @@
 /**
  * Keeps the Hebrew wording of the refusals of shorts (packages/i18n/src/shorts.ts HE_SHORTS) in step with their fixed English
- * sentences (core shortsContract.ts SEQUENCE_REFUSALS, SHORTS_REFUSALS, SHORTS_PROPOSE_REFUSED; ADR-0018). The sentences are
- * built from their tables (the bodies that raise them are the workers'); the one an existing operation already says today
+ * sentences (core shortsContract.ts SEQUENCE_REFUSALS, SHORTS_REFUSALS, SHORTS_PROPOSE_REFUSED, BROWSER_EXPORT_SIDECAR_REFUSED;
+ * ADR-0018). The sentences are built from their tables (the bodies that raise them are the workers'); the one an existing operation already says today
  * (`sequence <id> not found`, ops.ts seqOf) is also provoked for real. Every pattern is used. Also: the shared strings exist in
  * both languages, every reason code, score component, warning and error code has a label, the stage words are worded, the
  * decided labels are exact, and no string anywhere in the track calls a moment viral or predicts views or retention.
@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  applyTransaction, CANDIDATE_WARNINGS, createProject, OpError, PLAN_WARNING_CODES, SCORE_COMPONENTS, SEQUENCE_REFUSALS, SHORT_REASON_CODES, SHORTS_ERROR_CODES,
+  applyTransaction, BROWSER_EXPORT_SIDECAR_REFUSED, CANDIDATE_WARNINGS, createProject, OpError, PLAN_WARNING_CODES, SCORE_COMPONENTS, SEQUENCE_REFUSALS, SHORT_REASON_CODES, SHORTS_ERROR_CODES,
   SHORTS_PROPOSE_REFUSED, SHORTS_RANK_METHOD, SHORTS_REFUSALS, SHORTS_STAGES, type SequenceRefusalKey, type ShortsRefusalKey,
 } from '@pulseframe/core';
 import { dictionaries, jobStageLabel, SHORTS_REFUSAL_PATTERNS, TRACKING_REFUSAL_PATTERNS, translateRefusal } from '../../i18n/src/index.ts';
@@ -63,6 +63,7 @@ describe('Hebrew wording of the refusals of shorts (ADR-0018)', () => {
       ...Object.entries(SEQ).map(([k, m]) => [`sequence.${k}`, m, undefined] as [string, string, undefined]),
       ...Object.entries(SHORTS).map(([k, m]) => [`shorts.${k}`, m, ELSEWHERE[k as ShortsRefusalKey]] as [string, string, readonly RegExp[] | undefined]),
       ['propose', SHORTS_PROPOSE_REFUSED, undefined],
+      ['browserSidecar', BROWSER_EXPORT_SIDECAR_REFUSED.message, undefined],
     ];
     for (const [key, message, elsewhere] of all) {
       expect(translateRefusal('he', message), `${key}: ${message}`).toMatch(/[֐-׿]/);
@@ -117,7 +118,7 @@ describe('shared strings of shorts', () => {
     const forbidden = /viral|virality|ויראל|retention|predict/i;
     /** What a sentence says once its negations are taken out ("not a prediction of views", "never viral" may stand). */
     const affirmative = (s: string) => s.replace(/\b(not a|never|no)\b[^;.,]*/gi, '');
-    const texts = [...Object.values(SHORTS_HE), ...Object.values(SHORTS_EN), SHORTS_RANK_METHOD, ...Object.values(SEQ), ...Object.values(SHORTS), SHORTS_PROPOSE_REFUSED];
+    const texts = [...Object.values(SHORTS_HE), ...Object.values(SHORTS_EN), SHORTS_RANK_METHOD, ...Object.values(SEQ), ...Object.values(SHORTS), SHORTS_PROPOSE_REFUSED, BROWSER_EXPORT_SIDECAR_REFUSED.message, BROWSER_EXPORT_SIDECAR_REFUSED.hint];
     expect(texts.filter((s) => forbidden.test(affirmative(s)))).toEqual([]);
     expect(SHORTS_RANK_METHOD).toMatch(/heuristic; not a prediction/);
     // the files of the track, whoever fills them later (the workers' bodies are checked again by their own strings tests)

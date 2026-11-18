@@ -15,7 +15,7 @@
  */
 import type { Hono } from 'hono';
 import { z } from 'zod';
-import { RationalTimeSchema } from '@pulseframe/core';
+import { BROWSER_EXPORT_SIDECAR_REFUSED, RationalTimeSchema } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import { GENERIC_BLOCKER_HINT, renderDocFor, type Exporter, type Manifest } from './export.ts';
 import { PHOTOSENSITIVITY_METHOD } from './flashCheck.ts';
@@ -147,11 +147,14 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
     const { doc: stored, revision } = store.getProject(projectId);
     const { manifest, blockers, warnings } = exporter.plan(stored, revision, rawOptions);
     // The tab renders the snapshot as it is, so the snapshot is the output's own document (export.ts renderDocFor, as the
-    // server route snapshots): the sequence alone (a short, ADR-0018), in its linked format, captions hidden for a clean picture.
+    // server route snapshots): the sequence alone (a short, ADR-0018), in its linked format, captions hidden unless burned (a
+    // sidecar is refused below: this route writes no subtitle file).
     const doc = renderDocFor(stored, manifest.options);
     // Loudness normalisation needs the R128 measurement pass, which only the server route has. Refuse rather than export at a different level.
     if (doc.settings.loudness) throw new ApiError(409, 'unsupported_in_browser_export', 'this project has a loudness target; the browser export route cannot measure and normalise loudness', { loudness: doc.settings.loudness }, 'Use the server export, or clear the loudness target.');
     if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, blockers[0]!.hint ?? GENERIC_BLOCKER_HINT);
+    // The tab writes no subtitle file and the snapshot hides the caption tracks unless they are burned: refuse a sidecar rather than lose the captions.
+    if (manifest.options.captions.startsWith('sidecar')) throw new ApiError(422, 'unsupported_in_browser_export', BROWSER_EXPORT_SIDECAR_REFUSED.message, { captions: manifest.options.captions, supported: BROWSER_EXPORT_SIDECAR_REFUSED.supported }, BROWSER_EXPORT_SIDECAR_REFUSED.hint);
     if (!BROWSER_FORMATS.includes(manifest.options.format)) throw new ApiError(422, 'browser_route_unsupported_format', `the browser route exports ${BROWSER_FORMATS.join(' or ')}, not ${manifest.options.format}`, { supported: BROWSER_FORMATS });
     const expiresAt = clock() + leaseMs;
     const job = store.createJob(projectId, 'export', p.actor, { revision, snapshot: doc, manifest, warnings, retryOf: null, route: 'browser', lease: { sessionId: sid.data, expiresAt } });

@@ -116,8 +116,9 @@ const ltr = (s: string) => `⁦${s}⁩`;
 /**
  * Hebrew wording of the refusals of the sequence operations (core shortsContract.ts SEQUENCE_REFUSALS) and of the shorts
  * routes (SHORTS_REFUSALS), recognised by their shape like the other tables in refusals.ts; plus the propose-mode refusal
- * (SHORTS_PROPOSE_REFUSED). A refusal both tables share (sequenceNotFound, notPlanMade) has one row; one that reuses another
- * table's words (a missing motion track: the tracking table) has none here.
+ * (SHORTS_PROPOSE_REFUSED) and the browser export's refusal of a subtitle file (BROWSER_EXPORT_SIDECAR_REFUSED). A refusal
+ * both tables share (sequenceNotFound, notPlanMade) has one row; one that reuses another table's words (a missing motion
+ * track: the tracking table) has none here.
  */
 export const HE_SHORTS: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^[\s\S]+ is not built yet$/, () => 'החלק הזה עוד לא נבנה בגרסה הזו, ולכן לא נעשה דבר'],
@@ -148,5 +149,6 @@ export const HE_SHORTS: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^the plan needs (\d+) operations; at most (\d+) fit in one step$/, (m) => `התוכנית צריכה ${m[1]} פעולות, ובצעד אחד נכנסות עד ${m[2]}. אפשר ליצור פחות קטעים בבת אחת, או לוותר על הקיצור`],
   [/^motion track \S+ follows a subject in another file$/, () => 'מסלול המעקב שנבחר עוקב אחרי משהו בקובץ אחר'],
   [/^a turned picture \(rotation\) cannot follow a motion track in a short$/, () => 'תמונה מסובבת אינה יכולה לעקוב אחרי מסלול מעקב בקטע קצר; אפשר למרכז או להשתמש ברקע מטושטש'],
+  [/^the browser export route cannot write a subtitle file, so the captions would be lost$/, () => 'הייצוא בדפדפן אינו יכול לכתוב קובץ כתוביות נפרד, ולכן הכתוביות היו הולכות לאיבוד. אפשר לייצא בשרת, או לבחור כתוביות בתוך הסרטון או בלי כתוביות'],
   [/^making shorts is committed by the server as one step, which a proposal cannot carry; ask the owner to make them, or switch this credential to edit mode$/, () => 'יצירת קטעים קצרים נשמרת בשרת כצעד אחד, והצעה אינה יכולה לשאת אותו. אפשר לבקש מבעל/ת הפרויקט ליצור אותם'],
 ];

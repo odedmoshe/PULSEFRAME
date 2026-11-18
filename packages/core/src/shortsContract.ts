@@ -338,6 +338,16 @@ export function shortsRefusal<K extends ShortsRefusalKey>(key: K, details: Recor
   const r = SHORTS_REFUSALS[key] as ShortsRefusalRow<unknown[]>;
   return new ShortsError(r.code, r.message(...values), details, r.hint);
 }
+/**
+ * The browser export route writes no subtitle file (no sidecar), and its snapshot is the output's own document with the
+ * caption tracks hidden unless captions are burned (server export.ts renderDocFor): a sidecar-* request there is refused
+ * (422 unsupported_in_browser_export, details: captions, supported) rather than exported without its captions.
+ */
+export const BROWSER_EXPORT_SIDECAR_REFUSED = {
+  message: 'the browser export route cannot write a subtitle file, so the captions would be lost',
+  hint: 'Use the server export for a subtitle file, or choose captions burned (drawn into the picture) or none.',
+  supported: ['burned', 'none'],
+} as const;
 /** A proposal (propose mode) cannot carry the internal plan op: the server answers 403 insufficient_scope with these words. */
 export const SHORTS_PROPOSE_REFUSED = 'making shorts is committed by the server as one step, which a proposal cannot carry; ask the owner to make them, or switch this credential to edit mode' as const;
 
