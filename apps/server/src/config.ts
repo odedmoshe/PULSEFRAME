@@ -1,3 +1,4 @@
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -73,7 +74,35 @@ export interface Config {
    * material filmed elsewhere is corrected with the clock shift (shift_asset_captures).
    */
   homeZone: string;
+  // ---- phone drop and the import queue (ADR-0023, amends ADR-0002) ----
+  /**
+   * Port of the phone drop listener (PF_DROP_PORT, default 8788; 0 = any free port). It listens only while an owner-issued code
+   * is live, on the one private address the owner confirmed, and serves only the upload page and the upload routes.
+   */
+  dropPort: number;
+  /** Minutes a code waits for a phone, and a connected phone may stay idle before the code closes (PF_DROP_TTL_MINUTES, default 10, 1–60). */
+  dropTtlMinutes: number;
+  /** Bytes one code may receive in all (PF_DROP_CODE_BYTES, default 16 GiB). */
+  dropCodeBytes: number;
+  /** Free disk space the door and the import queue leave for everything else (PF_IMPORT_RESERVE_BYTES, default 2 GiB; see importContracts.ts diskReserveRefuses). */
+  importReserveBytes: number;
+  /**
+   * NEVER read from the environment: addresses outside the private ranges that a proof may bind the door to (a launcher script in
+   * packages/evals passes them to startServer from its own argv). [] in the product: the door binds only RFC 1918 addresses.
+   */
+  dropAdmitAddresses: string[];
+  // ---- segmented export and render cache (ADR-0024) ----
+  /** Size limit of the render cache in <dataDir>/render-cache, in bytes (PF_RENDER_CACHE_BYTES, default 2 GiB; 0 = the cache and the fast export are off). Counted against the storage ceiling like everything in the data directory. */
+  renderCacheBytes: number;
+  /** Evict least-recently-used segments when free disk space falls below renderCacheMinFreeBytes (PF_RENDER_CACHE_AUTOCLEAR, default on; '0' = off). */
+  renderCacheAutoClear: boolean;
+  /** Disk space the cache always leaves free while auto-clear is on (PF_RENDER_CACHE_MIN_FREE_BYTES, default 1 GiB). */
+  renderCacheMinFreeBytes: number;
+  /** libx264 threads of one segment encode (PF_SEGMENT_THREADS, default min(cores, 8)). Part of the encoder id: changing it makes every stored segment a miss. */
+  segmentThreads: number;
 }
+/** The drop port when PF_DROP_PORT is not set. */
+export const DEFAULT_DROP_PORT = 8788;
 /** The home zone when PF_HOME_TZ is not set. */
 export const DEFAULT_HOME_ZONE = 'Asia/Jerusalem';
 /** The zone as given when this machine's Intl knows it; refuses to start otherwise (a wrong zone would silently date every import wrongly). */
@@ -82,6 +111,11 @@ function homeZoneOf(value: string | undefined): string {
   try { new Intl.DateTimeFormat('en', { timeZone: zone }); } catch { throw new Error(`PF_HOME_TZ=${zone} refused: not a time zone this machine knows (use an IANA name such as Asia/Jerusalem or Europe/London)`); }
   return zone;
 }
+/** Render cache defaults (ADR-0024): 2 GiB of segments, at least 1 GiB of disk left free. */
+export const DEFAULT_RENDER_CACHE_BYTES = 2 * 1024 ** 3;
+export const DEFAULT_RENDER_CACHE_MIN_FREE_BYTES = 1024 ** 3;
+/** min(cores, 8): the thread count is part of the encoder id, so it is fixed per machine, not per job. */
+export const defaultSegmentThreads = () => Math.max(1, Math.min(8, typeof os.availableParallelism === 'function' ? os.availableParallelism() : os.cpus().length));
 /** Exact publisher hosts model files may come from by default (no wildcards beyond Hugging Face's CDN). Redirect targets must match too. */
 export const DEFAULT_MODEL_HOSTS = ['huggingface.co', '.hf.co', 'github.com', 'release-assets.githubusercontent.com', 'objects.githubusercontent.com', 'raw.githubusercontent.com'];
 const num = (v: string | undefined, fallback: number, min = 0) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Math.max(min, Number(v)) : fallback);
@@ -125,5 +159,14 @@ export function loadConfig(env = process.env): Config {
     agentMaxFramesPerJob: Math.floor(num(env.PF_AI_AGENT_MAX_FRAMES, 300)),
     agentMaxQueuedJobs: Math.floor(num(env.PF_AI_AGENT_MAX_QUEUED, 2)),
     homeZone: homeZoneOf(env.PF_HOME_TZ),
+    dropPort: Math.floor(num(env.PF_DROP_PORT, DEFAULT_DROP_PORT)) <= 65535 ? Math.floor(num(env.PF_DROP_PORT, DEFAULT_DROP_PORT)) : DEFAULT_DROP_PORT,
+    dropTtlMinutes: Math.min(60, Math.max(1, Math.floor(num(env.PF_DROP_TTL_MINUTES, 10, 1)))),
+    dropCodeBytes: Math.floor(num(env.PF_DROP_CODE_BYTES, 16 * 1024 ** 3, 1)),
+    importReserveBytes: Math.floor(num(env.PF_IMPORT_RESERVE_BYTES, 2 * 1024 ** 3)),
+    dropAdmitAddresses: [],
+    renderCacheBytes: Math.floor(num(env.PF_RENDER_CACHE_BYTES, DEFAULT_RENDER_CACHE_BYTES)),
+    renderCacheAutoClear: env.PF_RENDER_CACHE_AUTOCLEAR !== '0' && env.PF_RENDER_CACHE_AUTOCLEAR !== 'false',
+    renderCacheMinFreeBytes: Math.floor(num(env.PF_RENDER_CACHE_MIN_FREE_BYTES, DEFAULT_RENDER_CACHE_MIN_FREE_BYTES)),
+    segmentThreads: Math.floor(num(env.PF_SEGMENT_THREADS, defaultSegmentThreads(), 1)),
   };
 }

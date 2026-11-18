@@ -11,7 +11,8 @@ import {
 } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import type { Asset, Clip, OpCall, ProjectDocument } from '@pulseframe/core';
-import { beatPositionAt, clipEnd, findClip, findEffect, fitScale, speedValue, TEXT_PRESETS, transitionDef } from '@pulseframe/core';
+import { assetDisplayName } from './assetLabel.ts';
+import { beatPositionAt, clipEnd, fieldsToDisplay, findClip, findEffect, fitScale, speedValue, TEXT_PRESETS, transitionDef } from '@pulseframe/core';
 import { effectParamLabel, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, coverEditOps, keyframeProps, type Keymap } from './commands.ts';
 import { ADJUST_STRINGS } from './adjust.strings.ts';
@@ -83,12 +84,12 @@ export function ObjectHeader({ kind, keymap }: { kind: ObjectKind; keymap: Keyma
       name = S.cutTitle(shortTimecode(cut.frame, fps)); tile = ico(Scissors, 20); tone = 'cut';
       // the earlier clip first in reading order, the arrow pointing the way the edit runs (← in Hebrew, → in English)
       meta = <span dir={state.lang === 'he' ? 'rtl' : 'ltr'}><bdi dir="ltr">{names[0]}</bdi> {S.cutArrow} <bdi dir="ltr">{names[1]}</bdi></span>;
-    } else if (c.type === 'text') { name = c.text.split('\n')[0] || S.kindText; tile = <span className="oh-abc" aria-hidden="true">אבג</span>; tone = 'text'; meta = <><span className="oh-part">{S.kindText} · {sec(c.duration)}</span> · <span className="oh-part">{trackName}</span></>; }
+    } else if (c.type === 'text') { name = (c.fields ? fieldsToDisplay(state.lang, c.text, doc) : c.text).split('\n')[0] || S.kindText; tile = <span className="oh-abc" aria-hidden="true">אבג</span>; tone = 'text'; meta = <><span className="oh-part">{S.kindText} · {sec(c.duration)}</span> · <span className="oh-part">{trackName}</span></>; }
     else if (c.type === 'caption') { name = c.text || S.kindCaption; tile = ico(Captions, 20); tone = 'caption'; meta = <>{S.kindCaption} · {sec(c.duration)}</>; }
     else if (c.type === 'adjustment') { name = c.label || S.kindAdjust; tile = ico(Layers, 20); tone = 'adjust'; meta = <>{S.kindAdjust} · {sec(c.duration)}</>; }
     else {
       const a = doc.assets[c.assetId];
-      name = (a?.name ?? '').replace(/\.[a-z0-9]{2,5}$/i, '') || S.missing;
+      name = (assetDisplayName(a, state.lang) ?? '').replace(/\.[a-z0-9]{2,5}$/i, '') || S.missing;
       if (sel.track.kind === 'audio') { tile = ico(Music, 20); tone = 'music'; meta = <><span className="oh-part">{S.kindSound} · {sec(c.duration)}</span> · <span className="oh-part">{trackName}</span></>; }
       else if (a?.kind === 'image') {
         tile = <img src={`/api/v1/projects/${encodeURIComponent(doc.id)}/assets/${encodeURIComponent(a.id)}/content`} alt="" loading="lazy" draggable={false} />; tone = 'video';

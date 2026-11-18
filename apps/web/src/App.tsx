@@ -20,7 +20,7 @@ import { Splitter } from './editor/Splitter.tsx';
 import { StageHeader } from './editor/StageHeader.tsx';
 import { StatusBar } from './editor/StatusBar.tsx';
 import { Transport } from './editor/Transport.tsx';
-import { shortcutAllowed } from './editor/shortcutGate.ts';
+import { isTyping, shortcutAllowed } from './editor/shortcutGate.ts';
 import { Editor, EditorContext, useEditorState } from './editor/store.ts';
 import { toastOf } from './editor/undoToast.ts';
 import { Timeline } from './editor/Timeline.tsx';
@@ -42,9 +42,8 @@ export function App() {
   // One keyboard dispatcher for every command. Editing shortcuts are disabled while typing (SPEC §3).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement;
-      const typing = el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
       const chord = chordOf(e);
+      const typing = isTyping(e.target as HTMLInputElement | null, chord);
       // a chord may belong to more than one command (the cut's , and . before the keyframe steps): the first that can run now acts
       const bound = keymap.lookupAll(chord);
       const cmd = bound.find((c) => !c.enabled || c.enabled(editor)) ?? bound[0];

@@ -30,6 +30,8 @@ interface SoundSession {
 /** A voice that cannot run in this browser, with the reason the editor shows. */
 class FxUnavailable extends Error {}
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+/** Real time in seconds (the flash guard's clock: monotonic, never the audio clock). */
+const realTime = () => performance.now() / 1000;
 /** Give the page a turn (rendering, input) between slices of effect processing. */
 const yieldToPage = (): Promise<void> => {
   const s = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
@@ -92,7 +94,8 @@ export class Player {
   private origin = { clock: 0, frame: 0 };
   /**
    * SAFETY: whatever the transport does (shuttle, stepping, loop, jumps, edits during playback), the screen never shows
-   * a strobe flash start less than a third of a second after the last one (engine strobeSchedule.ts FlashGuard).
+   * a rise of strobe or transition light less than a third of a second after the last one (engine strobeSchedule.ts
+   * FlashGuard). pump() tells it what each frame painted and when the frame reached the screen.
    */
   readonly flashGuard = new FlashGuard();
   /** Session setting: hear the mix without sound effects (A/B). Never stored in the project. */
@@ -230,12 +233,21 @@ export class Player {
         if (!this.shown && (this.canvas.width !== w || this.canvas.height !== h)) { this.canvas.width = w; this.canvas.height = h; } // the layout gets the right shape at once
         const back = (this.back ??= document.createElement('canvas'));
         if (back.width !== w || back.height !== h) { back.width = w; back.height = h; }
-        const g = this.flashGuard.apply(evaluate(doc, T.frameTime(frame, frameRate)), performance.now() / 1000); // real time, never the audio clock (it can stand still)
-        const drawn = await drawGraph(back.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, scale === 1 ? this.pool.frames : this.pool.draftFrames);
-        // the finished frame replaces the one on screen at once (resizing the visible canvas clears it, so only now)
-        if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
-        this.canvas.getContext('2d', { alpha: false })!.drawImage(back, 0, 0);
-        this.shown = true;
+        // SAFETY (ADR-0009 decision 2): the guard decides on this frame's light relative to the light ON SCREEN before the draw,
+        // copies a rise only a third of a second after the last rise reached the screen (timed from the copy, not from the
+        // decision: the draw takes as long as it takes), and records what was painted (an effect that could not run drew no light).
+        const drawn = await this.flashGuard.paint(evaluate(doc, T.frameTime(frame, frameRate)), {
+          now: realTime, // real time, never the audio clock (it can stand still)
+          draw: (g) => drawGraph(back.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, scale === 1 ? this.pool.frames : this.pool.draftFrames),
+          copy: () => {
+            // the finished frame replaces the one on screen at once (resizing the visible canvas clears it, so only now)
+            if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
+            this.canvas.getContext('2d', { alpha: false })!.drawImage(back, 0, 0);
+            this.shown = true;
+          },
+          sleep: (s) => sleep(Math.ceil(s * 1000)),
+          ...(typeof requestAnimationFrame === 'function' ? { nextFrame: (run: () => void) => { requestAnimationFrame(run); } } : {}),
+        });
         /** GPU effects of the frame on screen that could not run in this browser (shown without them; the editor says so). */
         this.unavailableEffects = drawn.unavailableEffects;
         this.unavailableReasons = drawn.unavailableReasons ?? {};

@@ -48,7 +48,7 @@ export function ArchiveFamilyOption({ projectId, onHref }: { projectId: string; 
   );
   return (
     <div className="pf-fam">
-      <label className="pf-life-check" htmlFor={id}><input id={id} type="checkbox" checked={on} data-testid={PEOPLE_TESTIDS.archiveFamily} aria-describedby={`${id}-note`} onChange={(e) => { setProblem(null); setOn(e.target.checked); }} /> <span>{P.archiveFamily}</span></label>
+      <label className="pf-life-check" htmlFor={id}><input id={id} type="checkbox" checked={on} data-testid={PEOPLE_TESTIDS.archiveFamily} aria-describedby={on ? `${id}-note` : undefined} onChange={(e) => { setProblem(null); setOn(e.target.checked); }} /> <span>{P.archiveFamily}</span></label>
       {on && <p id={`${id}-note`} className="pf-life-note">{P.archiveFamilyNote}</p>}
       {on && !check && <p className="pf-life-note" role="status">{P.archiveFamilyChecking}</p>}
       {problem && <p className="pf-life-note danger" role="alert">{problem}</p>}

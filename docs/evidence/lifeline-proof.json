@@ -1,7 +1,7 @@
 {
   "proof": "lifeline",
   "adr": "ADR-0021",
-  "ranAt": "2026-11-18T00:54:58.670Z",
+  "ranAt": "2026-11-18T02:19:18.687Z",
   "result": "PASSED",
   "passed": 17,
   "total": 17,
@@ -281,10 +281,10 @@
       "bytes": 48128,
       "familyCheck": {
         "varying": [
-          "clp_391d80b6a21"
+          "clp_46923a55b51"
         ],
         "empty": [
-          "clp_391d80b6a25"
+          "clp_46923a55b55"
         ]
       },
       "frozen": {
@@ -1492,20 +1492,20 @@
       "evaluate": {
         "frames": 1000,
         "liveTitles": 20,
-        "medianMsPerFrameLive": 0.025,
-        "medianMsPerFrameTyped": 0.023,
-        "addedMsPerFrame": 0.003,
+        "medianMsPerFrameLive": 0.021,
+        "medianMsPerFrameTyped": 0.019,
+        "addedMsPerFrame": 0.002,
         "budgetMs": 0.2,
         "withinBudget": true,
-        "firstFrameAfterAnEditMs": 0.064
+        "firstFrameAfterAnEditMs": 0.051
       },
       "commit": {
         "datedFiles": 500,
         "events": 60,
         "created": 60,
         "commits": 30,
-        "medianMs": 20.177,
-        "maxMs": 30.784
+        "medianMs": 14.725,
+        "maxMs": 21.887
       }
     }
   },
@@ -1779,8 +1779,8 @@
             "severity": "blocker",
             "message": "the title \"צולם ב־{date}\" has a field without data, so those words would be missing from the film ({date}: there is no capture date to take it from (the picture under the title has none, or no dated picture is on the timeline))",
             "ids": [
-              "clp_88c417d4090",
-              "clp_67b5e775310"
+              "clp_2b41c4ade10",
+              "clp_e23d4b36ff0"
             ],
             "range": {
               "startFrame": 0,
@@ -1804,8 +1804,8 @@
             "severity": "blocker",
             "message": "the title \"{hebrewDate}\" shows a Hebrew date ({hebrewDate}) for a picture taken around sunset: the Hebrew date depends on whether it was filmed before or after sunset, and that has not been answered. Answer it for the event (update_event afterSunset); it is never guessed",
             "ids": [
-              "clp_66d05c6b130",
-              "evt_8588865bd00"
+              "clp_351f7f5b960",
+              "evt_31de9288030"
             ],
             "range": {
               "startFrame": 0,
@@ -1909,10 +1909,10 @@
         ],
         "familyCheck": {
           "varying": [
-            "clp_391d80b6a21"
+            "clp_46923a55b51"
           ],
           "empty": [
-            "clp_391d80b6a25"
+            "clp_46923a55b55"
           ]
         },
         "afterTheCutTheCopyShowsTheFirstValue": true
@@ -1967,20 +1967,20 @@
         "evaluate": {
           "frames": 1000,
           "liveTitles": 20,
-          "medianMsPerFrameLive": 0.025,
-          "medianMsPerFrameTyped": 0.023,
-          "addedMsPerFrame": 0.003,
+          "medianMsPerFrameLive": 0.021,
+          "medianMsPerFrameTyped": 0.019,
+          "addedMsPerFrame": 0.002,
           "budgetMs": 0.2,
           "withinBudget": true,
-          "firstFrameAfterAnEditMs": 0.064
+          "firstFrameAfterAnEditMs": 0.051
         },
         "commit": {
           "datedFiles": 500,
           "events": 60,
           "created": 60,
           "commits": 30,
-          "medianMs": 20.177,
-          "maxMs": 30.784
+          "medianMs": 14.725,
+          "maxMs": 21.887
         }
       }
     }

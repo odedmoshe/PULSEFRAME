@@ -39,8 +39,13 @@ export interface CommitRequest {
   dependsOn?: string[];
   /** Authorization hook: sees the exact entity diff before anything is written; throw ApiError to refuse. */
   guard?: (ctx: { changes: EntityChange[]; before: ProjectDocument; after: ProjectDocument }) => void;
-  /** Set only by Store.undo/redo. */
-  kind?: 'edit' | 'undo' | 'redo';
+  /**
+   * 'undo' and 'redo' are set only by Store.undo/redo. 'background' (ADR-0023) is set only by the import queue: a file that
+   * finished importing while its owner kept editing. Store.undo's default target skips it (kind IN ('edit','redo')) and it does
+   * not abandon a redo (only a later 'edit' does), so Ctrl+Z still undoes the person's own last edit; it is reversed by
+   * transaction id, or by removing the file from the library.
+   */
+  kind?: 'edit' | 'undo' | 'redo' | 'background';
   undoes?: string;
 }
 export interface CommitResult {
@@ -52,7 +57,7 @@ export interface CommitResult {
   summary: string;
   results: { op: string; summary: string; affectedIds: string[]; output?: Record<string, unknown> }[];
   warnings: string[];
-  kind?: 'edit' | 'undo' | 'redo';
+  kind?: 'edit' | 'undo' | 'redo' | 'background';
   undoes?: string;
   rebasedFrom?: number;
 }

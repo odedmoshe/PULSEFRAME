@@ -22,6 +22,8 @@ export interface PackStrings {
   musicTitle: string; musicNote: string; musicUnheard: string; soundsTitle: string;
   lookNote: string;
   source: string;
+  /** A field named inside a pack's own hint, in words: «נר [מספר הלילה] של חנוכה», never the stored key {night}. */
+  hintField: Record<'name' | 'name2' | 'age' | 'night' | 'place' | 'when' | 'date', string>;
   fields: {
     legend: string; label: Record<'name' | 'name2' | 'age' | 'night' | 'place' | 'when' | 'date', string>; atLighting: string; atLightingHint: string;
     candleGroup: string; clearCandle: string; candle: (n: number) => string; candleDerived: (n: number) => string; notHanukkah: string; candleNone: string;
@@ -66,6 +68,7 @@ const he: PackStrings = {
   soundsTitle: 'אפקטים קוליים',
   lookNote: 'המראה נכנס כשכבת התאמה על כל העריכה, ואפשר להסיר אותה בנפרד.',
   source: d.he['pack.source'],
+  hintField: { name: 'השם', name2: 'השם הנוסף', age: 'הגיל', night: 'מספר הלילה', place: 'המקום', when: 'המועד', date: 'תאריך הצילום' },
   fields: {
     legend: d.he['pack.fields'],
     label: { name: d.he['pack.field.name'], name2: d.he['pack.field.name2'], age: d.he['pack.field.age'], night: d.he['pack.field.night'], place: d.he['pack.field.place'], when: d.he['pack.field.when'], date: d.he['pack.field.date'] },
@@ -122,6 +125,7 @@ const en: PackStrings = {
   soundsTitle: 'Sound effects',
   lookNote: 'The look goes in as an adjustment layer over the whole edit, and it can be removed on its own.',
   source: d.en['pack.source'],
+  hintField: { name: 'the name', name2: 'the second name', age: 'the age', night: 'the night number', place: 'the place', when: 'the time', date: 'the date filmed' },
   fields: {
     legend: d.en['pack.fields'],
     label: { name: d.en['pack.field.name'], name2: d.en['pack.field.name2'], age: d.en['pack.field.age'], night: d.en['pack.field.night'], place: d.en['pack.field.place'], when: d.en['pack.field.when'], date: d.en['pack.field.date'] },

@@ -6,7 +6,7 @@
  */
 import { createContext, useContext, useSyncExternalStore } from 'react';
 import * as T from '@pulseframe/time';
-import { clipEnd, findClip, projectVariant, sequenceDuration, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun, type TemplateInput } from '@pulseframe/core';
+import { clipEnd, findClip, projectVariant, sequenceDuration, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun, type TemplateInput, type ExportMode, type SegmentPlanView } from '@pulseframe/core';
 import { createT, dictionaries, dirOf, translateRefusal, type Key, type Lang } from '@pulseframe/i18n';
 import { initGpu, type GpuStatus, type ImageLayer, type RenderGraph, type TextLayer, type VideoLayer } from '@pulseframe/engine';
 import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
@@ -108,7 +108,14 @@ export interface EditorState {
   exportSheet: number;
   /** The last notice for the toast queue (App.tsx ToastBridge); `n` makes each one new. Session state only. */
   notice: (Notice & { n: number }) | null;
+  /** Render cache (ADR-0024): the latest segment plan of the fast export. Session state only. */
+  segmentPlan: SegmentPlanState;
+  /** The viewer's «ייצוא מהיר» switch, kept in this browser (localStorage 'pf.fastExport'); never project state. */
+  fastExport: boolean;
 }
+/** localStorage key of the «ייצוא מהיר» switch. */
+export const FAST_EXPORT_KEY = 'pf.fastExport';
+const readFastExport = () => { try { return localStorage.getItem(FAST_EXPORT_KEY) === '1'; } catch { return false; } };
 /** A place the ride bar can ask the editor to show: a tab of the inspector, or a gallery (RideBar.tsx, Inspector.tsx). */
 export type PanelTarget = 'speed' | 'animation' | 'effects' | 'transition' | 'transitions-gallery' | 'sound' | 'replace';
 /** The tabs of the effects gallery that can be asked for from outside it. */
@@ -119,7 +126,13 @@ export type GalleryTab = 'effects' | 'looks' | 'transitions' | 'text' | 'motion'
  */
 export interface Notice { kind: 'undo' | 'info'; title: string; body?: string; undoes?: string }
 /** What an export is started with (POST /exports): the defaults are left out, as exportSheet.logic.ts exportOptions builds it. */
-export interface ExportRequest { variantId?: string; quality?: string; captions?: string; format?: string; scale?: number }
+export interface ExportRequest { variantId?: string; quality?: string; captions?: string; format?: string; scale?: number; /** «ייצוא מהיר» (ADR-0024): 'incremental' when the viewer's switch is on and the format is MP4. */ mode?: ExportMode }
+/**
+ * The fast export's segment plan as the sheet line and the timeline lane read it (ADR-0024). `off`: the lane is hidden (the
+ * cache is off, or this project never used the fast export); `updating`: a plan is being made (aria-busy); `error`: the last
+ * request failed (the lane says nothing rather than a guess). The lead's wiring refreshes it 1.5 s after the last revision change.
+ */
+export interface SegmentPlanState { status: 'off' | 'updating' | 'ready' | 'error'; view: SegmentPlanView | null; revision: number | null }
 /** What the track picker is picking, and on which clip's picture. */
 export interface TrackPick { kind: 'point' | 'region'; clipId: string; assetId: string }
 /** A clip as drawn at the playhead: its transform after the follow post-pass (ADR-0015), its own transform, and the follow's scale factor m (resolved scale = own scale · m). */
@@ -168,6 +181,7 @@ export class Editor {
     trackJobs: {}, trackJobFor: {}, picker: null, activeTrackId: null,
     templatesOpen: false, templatesFocus: 0, templateRun: null,
     cutClipId: null, loupe: false, inspectorTab: null, panelRequest: null, gallery: null, stageNote: null, notice: null, exportSheet: 0,
+    segmentPlan: { status: 'off', view: null, revision: null }, fastExport: readFastExport(),
   };
   /** Counter that makes each view request (tab, panel, gallery, notice) a new one. */
   private requests = 0;
@@ -467,6 +481,8 @@ export class Editor {
     const tr = d && id ? d.sequences[d.mainSequenceId]!.tracks.find((t) => t.id === id) : undefined;
     return tr && tr.kind === kind && !tr.locked ? tr.id : null;
   }
+  /** The «ייצוא מהיר» switch (ADR-0024): a preference of this browser, never an edit of the project. */
+  setFastExport(on: boolean) { try { localStorage.setItem(FAST_EXPORT_KEY, on ? '1' : '0'); } catch { /* storage unavailable: the choice lasts for this visit */ } this.set({ fastExport: on }); }
   setWorkspace(workspace: Workspace) { try { localStorage.setItem(WS_KEY, workspace); } catch { /* ignore */ } this.set({ workspace }); }
   /** 'toggle' adds the clip to the selection or removes it (Shift/Ctrl/⌘-click); the default replaces the selection. */
   select(id: string | null, mode: 'replace' | 'toggle' = 'replace') {

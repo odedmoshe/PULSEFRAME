@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-18T01:28:12.473Z",
+  "ranAt": "2026-11-18T02:43:19.094Z",
   "result": "PASSED",
   "passed": 11,
   "total": 11,
@@ -53,27 +53,27 @@
       "drawMsPerFrame": {
         "none": {
           "samples": 30,
-          "medianMs": 19,
-          "p95Ms": 22,
-          "meanOf30FrameExportMs": 0.87
+          "medianMs": 21,
+          "p95Ms": 35,
+          "meanOf30FrameExportMs": 1.07
         },
         "color.adjust": {
           "samples": 30,
-          "medianMs": 59,
-          "p95Ms": 72,
-          "meanOf30FrameExportMs": 30.87
+          "medianMs": 60,
+          "p95Ms": 67,
+          "meanOf30FrameExportMs": 28.83
         },
         "blur.gaussian 0.01": {
           "samples": 30,
           "medianMs": 72,
-          "p95Ms": 86,
-          "meanOf30FrameExportMs": 40.87
+          "p95Ms": 80,
+          "meanOf30FrameExportMs": 38.67
         },
         "overlay.snow": {
           "samples": 30,
-          "medianMs": 52,
-          "p95Ms": 59,
-          "meanOf30FrameExportMs": 12.47
+          "medianMs": 53,
+          "p95Ms": 66,
+          "meanOf30FrameExportMs": 11.53
         }
       },
       "note": "server export, software canvas, this machine under whatever load it had; each per-frame sample is a one-frame export (one frame drawn in a fresh render page, its picture decode included); the mean is the draw stage of one 30-frame export. Recorded, not a target."
@@ -258,27 +258,27 @@
         "drawMsPerFrame": {
           "none": {
             "samples": 30,
-            "medianMs": 19,
-            "p95Ms": 22,
-            "meanOf30FrameExportMs": 0.87
+            "medianMs": 21,
+            "p95Ms": 35,
+            "meanOf30FrameExportMs": 1.07
           },
           "color.adjust": {
             "samples": 30,
-            "medianMs": 59,
-            "p95Ms": 72,
-            "meanOf30FrameExportMs": 30.87
+            "medianMs": 60,
+            "p95Ms": 67,
+            "meanOf30FrameExportMs": 28.83
           },
           "blur.gaussian 0.01": {
             "samples": 30,
             "medianMs": 72,
-            "p95Ms": 86,
-            "meanOf30FrameExportMs": 40.87
+            "p95Ms": 80,
+            "meanOf30FrameExportMs": 38.67
           },
           "overlay.snow": {
             "samples": 30,
-            "medianMs": 52,
-            "p95Ms": 59,
-            "meanOf30FrameExportMs": 12.47
+            "medianMs": 53,
+            "p95Ms": 66,
+            "meanOf30FrameExportMs": 11.53
           }
         },
         "note": "server export, software canvas, this machine under whatever load it had; each per-frame sample is a one-frame export (one frame drawn in a fresh render page, its picture decode included); the mean is the draw stage of one 30-frame export. Recorded, not a target."
@@ -289,7 +289,7 @@
       "ok": true,
       "detail": {
         "exportStatus": "failed",
-        "exportError": "{\"code\":\"export_failed\",\"message\":\"render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses color.grade, which needs a graphics adapter in the render worker; the browser offers WebGPU but gave no graphics adapter\\n    at v (http://127.0.0.1:8914/assets/render-Bo60ePNU.js:1:738)",
+        "exportError": "{\"code\":\"export_failed\",\"message\":\"render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses color.grade, which needs a graphics adapter in the render worker; the browser offers WebGPU but gave no graphics adapter\\n    at v (http://127.0.0.1:8914/assets/render-BSTs9D5z.js:1:738)",
         "stillStatus": 503,
         "stillError": "{\"error\":{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses color.grade, which needs a graphics adapter in the render worker; the browser offers WebGPU but gave no graphics adapter\\n\""
       }

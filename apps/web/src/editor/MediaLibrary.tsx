@@ -14,6 +14,7 @@ import { MEDIA_STRINGS } from './media.strings.ts';
 import { CaptureEditor, DateBadge } from './lifeline/CaptureEditor.tsx';
 import { LIFE_STRINGS } from './lifeline/lifeline.strings.ts';
 import { LIFE_TESTIDS } from './lifeline/lifeline.testids.ts';
+import { assetDisplayName } from './assetLabel.ts';
 import './mediaLibrary.css';
 
 type Loaded = LoadedDerivative<ImageBitmap> | null;
@@ -199,7 +200,7 @@ export function MediaGrid({ onView, query = '', filter = 'all', only }: { onView
                 <CardMenu a={a} doc={doc} isLut={isLut} isUsed={isUsed} onView={onView} />
               </span>
             </div>
-            <span className="pf-mc-name"><span className="asset-name" dir="auto" title={a.name}>{stem(a.name)}</span>
+            <span className="pf-mc-name"><span className="asset-name" dir="auto" title={a.name}>{stem(assetDisplayName(a, state.lang) ?? a.name)}</span>
               <InlineRename value={a.name} label={`${t('media.rename')}: ${a.name}`} testid={`rename-${a.id}`} className="pf-mc-rename" onCommit={(name) => void editor.commit([{ op: 'rename_asset', args: { assetId: a.id, name } }], 'Rename file')} /></span>
             <DateBadge assetId={a.id} />
             {(bpm || shots || lang) && (

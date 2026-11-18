@@ -51,6 +51,40 @@ async function hasGpuDevice(browser: Browser): Promise<boolean> {
   } catch { return false; } finally { await context.close().catch(() => {}); srv.close(); }
 }
 
+/**
+ * Who renders a job (ADR-0024): the browser's version, the launch mode it was started with, and — for a render that uses GPU
+ * effects — the WebGPU adapter it found. Part of the render cache's engine fingerprint (`browser` = `${version}|launch=${launch}`),
+ * because the worker is chosen per document (a project with one GPU effect is drawn by the GPU browser throughout).
+ */
+export interface WorkerIdentity {
+  version: string;
+  /** auto | window | chrome | off (PF_RENDER_GPU, or the mode the GPU search found). */
+  launch: string;
+  /** `${vendor}|${architecture}|${device}|${description}` of the adapter a GPU pass runs on; null for a render without GPU effects or when no device was found. */
+  adapter: string | null;
+  /** The adapter is a software rasteriser (fallback adapter, SwiftShader, llvmpipe, WARP): only then are GPU frames cacheable in wave 1. */
+  softwareAdapter: boolean;
+}
+/** Words in an adapter's description that name a software rasteriser. */
+const SOFTWARE_ADAPTER = /swiftshader|llvmpipe|lavapipe|softpipe|microsoft basic render|\bwarp\b/i;
+/** The WebGPU adapter of a browser as the render page would request it, or null when there is none. */
+async function adapterOf(browser: Browser): Promise<{ adapter: string; software: boolean } | null> {
+  const srv = http.createServer((_q, r) => { r.setHeader('content-type', 'text/html'); r.end('<!doctype html><title>gpu identity</title>'); });
+  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await page.goto(`http://127.0.0.1:${(srv.address() as AddressInfo).port}/`);
+    const info = await Promise.race([
+      page.evaluate('(async () => { try { const a = await navigator.gpu?.requestAdapter({ powerPreference: "high-performance" }); if (!a) return null; const i = a.info ?? {}; return { vendor: i.vendor ?? "", architecture: i.architecture ?? "", device: i.device ?? "", description: i.description ?? "", fallback: i.isFallbackAdapter === true || a.isFallbackAdapter === true }; } catch { return null; } })()') as Promise<{ vendor: string; architecture: string; device: string; description: string; fallback: boolean } | null>,
+      new Promise<null>((r) => setTimeout(() => r(null), 20_000).unref()),
+    ]);
+    if (!info) return null;
+    const adapter = `${info.vendor}|${info.architecture}|${info.device}|${info.description}`;
+    return { adapter, software: info.fallback || SOFTWARE_ADAPTER.test(adapter) };
+  } catch { return null; } finally { await context.close().catch(() => {}); srv.close(); }
+}
+
 export class RenderHost {
   private browser?: Promise<Browser>;
   /** The browser for renders that need a graphics adapter, once one was found; `null` when none of the launch modes gave a device. */
@@ -58,11 +92,12 @@ export class RenderHost {
   /** Which launch mode gave the GPU browser, for diagnostics ('none' when the search failed). */
   gpuMode?: string;
   version?: string;
+  private identities = new Map<boolean, Promise<WorkerIdentity>>();
 
   private async launch(): Promise<Browser> {
     this.browser ??= chromium.launch(workerLaunchOptions()).then((b) => {
       this.version = b.version();
-      b.on('disconnected', () => (this.browser = undefined));
+      b.on('disconnected', () => { this.browser = undefined; this.identities.clear(); });
       return b;
     });
     return this.browser;
@@ -84,7 +119,7 @@ export class RenderHost {
           if (await hasGpuDevice(b)) {
             this.gpuMode = mode;
             console.log(`render worker: GPU effects use launch mode "${mode}" (${b.version()})`);
-            b.on('disconnected', () => { this.gpuBrowser = undefined; });
+            b.on('disconnected', () => { this.gpuBrowser = undefined; this.identities.delete(true); });
             return b;
           }
         } catch { /* this mode cannot start here (no display, no installed Chrome): try the next */ }
@@ -128,6 +163,25 @@ export class RenderHost {
       const closed = await Promise.race([context.close().then(() => true, () => true), new Promise<boolean>((r) => setTimeout(() => r(false), 5000).unref())]);
       if (!closed) { if (await this.browser?.catch(() => undefined) === browser) this.browser = undefined; else this.gpuBrowser = undefined; void browser.close().catch(() => {}); }
     }
+  }
+  /**
+   * The identity of the browser that renders a job with (`gpu` = usesGpuEffects(doc), as the export decides) or without GPU effects.
+   * Launches lazily, like a render would, and is cached until that browser goes away.
+   */
+  identity(gpu: boolean): Promise<WorkerIdentity> {
+    let p = this.identities.get(gpu);
+    if (!p) {
+      p = (async () => {
+        const browser = gpu ? await this.launchGpu() : await this.launch();
+        const configured = process.env.PF_RENDER_GPU;
+        const launch = configured || (gpu && this.gpuMode && this.gpuMode !== 'none' ? this.gpuMode : 'auto');
+        const found = gpu ? await adapterOf(browser) : null;
+        return { version: browser.version(), launch, adapter: found?.adapter ?? null, softwareAdapter: found?.software ?? false };
+      })();
+      p.catch(() => this.identities.delete(gpu));
+      this.identities.set(gpu, p);
+    }
+    return p;
   }
   async renderStill(url: string, frameIndex: number, opts: { gpu?: boolean } = {}): Promise<Buffer> {
     const b64 = await this.withPage(url, (p) => p.evaluate((i) => window.__pf!.renderPng(i), frameIndex), undefined, !!opts.gpu);

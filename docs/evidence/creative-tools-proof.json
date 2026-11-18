@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-18T00:46:40.490Z",
+ "generatedAt": "2026-11-18T05:31:32.139Z",
  "profile": {
   "os": "Linux 6.18.44-fc-v595",
   "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
@@ -217,24 +217,30 @@
   },
   {
    "name": "a hovered strobe tile animates (its light rises again) but shows at most three rises in any second of real time (sampled on every animation frame for at least 2 s and until 60 samples, at most 20 s), and the dialog carries data-flashes-held from its flash guard",
-   "ok": false,
+   "ok": true,
    "detail": {
-    "samples": 61,
-    "seconds": 34.84,
-    "rises": 1,
-    "mostInOneSecond": 1,
-    "flashesHeld": "0",
-    "changes": 3,
+    "samples": 64,
+    "seconds": 11.05,
+    "rises": 7,
+    "mostInOneSecond": 2,
+    "flashesHeld": "1",
+    "changes": 25,
     "levels": [
-     0,
-     130
+     75,
+     183
     ],
     "riseTimes": [
-     19.728
+     2.498,
+     3.579,
+     5.573,
+     6.495,
+     7.749,
+     8.421,
+     9.677
     ],
     "sampleGapsMs": {
-     "median": 536,
-     "max": 1356
+     "median": 172,
+     "max": 687
     },
     "errors": []
    }
@@ -326,7 +332,7 @@
    "name": "the caption controls list the ready-made looks; choosing one restyles the caption track and the list then shows that look as the current one",
    "ok": true,
    "detail": {
-    "lookOptions": 40,
+    "lookOptions": 46,
     "chosen": "caption.documentary",
     "shownLook": "caption.documentary"
    }
@@ -505,7 +511,7 @@
    "name": "graphic elements through the API: the catalogue lists them, one is made as a PNG picture asset that records how it was made, placed as a three-second picture clip, and drawn in the asked colour over a transparent background on a rendered still; an unknown element and a colour that is not #RRGGBB are refused",
    "ok": true,
    "detail": {
-    "count": 252,
+    "count": 302,
     "asset": {
      "width": 1024,
      "height": 1024,
@@ -522,7 +528,7 @@
    "name": "the elements browser in the library shows every element as a drawn thumbnail, filters by category, and a click adds the element at the playhead as a picture clip",
    "ok": true,
    "detail": {
-    "tilesAll": 252,
+    "tilesAll": 302,
     "bubbles": 25,
     "statusText": "נוסף לציר הזמן: בועת דיבור מלבנית, זנב למטה"
    }
@@ -598,25 +604,31 @@
    "stutter": 338
   },
   "galleryStrobeHover": {
-   "samples": 61,
-   "seconds": 34.84,
-   "rises": 1,
-   "mostInOneSecond": 1,
-   "flashesHeld": "0",
-   "changes": 3,
+   "samples": 64,
+   "seconds": 11.05,
+   "rises": 7,
+   "mostInOneSecond": 2,
+   "flashesHeld": "1",
+   "changes": 25,
    "levels": [
-    0,
-    130
+    75,
+    183
    ],
    "riseTimes": [
-    19.728
+    2.498,
+    3.579,
+    5.573,
+    6.495,
+    7.749,
+    8.421,
+    9.677
    ],
    "sampleGapsMs": {
-    "median": 536,
-    "max": 1356
+    "median": 172,
+    "max": 687
    }
   }
  },
- "passed": 40,
- "failed": 1
+ "passed": 41,
+ "failed": 0
 }

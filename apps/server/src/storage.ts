@@ -8,8 +8,29 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import type { RenderCacheStatus } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import { ApiError, type Store } from './store.ts';
+
+/**
+ * Derived data in the data directory that can give room back on demand (the render cache, ADR-0024). Registered once per store
+ * by the server; absent in tests and when the cache is off. Every check of the storage ceiling asks it to make room before it
+ * refuses, so a full cache is never the reason an upload, an import, a narration, an AI result or an export is refused.
+ */
+export interface StorageHooks {
+  /** Evict unpinned derived data so that `neededBytes` more fit under the ceiling (SegmentStore.trim(neededBytes)). Synchronous. */
+  reclaim(neededBytes: number): void;
+  /** Remove derived data that only this project referenced (SegmentStore.purgeProject): pictures of a deleted project do not linger. */
+  purgeProject(projectId: string): void;
+  /** What the owner sees in the storage report. */
+  status(): RenderCacheStatus;
+}
+const hooksOf = new WeakMap<Store, StorageHooks>();
+/** Register (or with null, remove) the store's reclaimable derived data. */
+export function setStorageHooks(store: Store, hooks: StorageHooks | null): void {
+  if (hooks) hooksOf.set(store, hooks);
+  else hooksOf.delete(store);
+}
 
 const ownerOnly = (p: Principal, what: string) => { if (p.kind !== 'user') throw new ApiError(403, 'owner_required', `only the owner can ${what}`); };
 const GRACE_MS = 10 * 60_000;
@@ -27,6 +48,8 @@ export function deleteProject(store: Store, by: Principal, projectId: string, co
     store.db.prepare('DELETE FROM projects WHERE id = ?').run(projectId);
   })();
   for (const f of outputs) fs.rmSync(path.join(store.outDir, path.basename(f)), { force: true });
+  // Rendered segments hold pictures of the project: the ones no other project shares go with it (ADR-0024).
+  hooksOf.get(store)?.purgeProject(projectId);
   store.events.emit('projects', { projectId, change: 'deleted' });
   return { deleted: { id: projectId, name: doc.name }, exportsRemoved: outputs.length, note: 'Media files are kept until storage clean-up is run, because other projects may use the same files.' };
 }
@@ -63,7 +86,13 @@ export function dataDirBytes(dir: string): number {
 export function assertStorageRoom(store: Store, neededBytes: number, what: string): number {
   const quotaBytes = store.maxStorageBytes;
   if (!quotaBytes) return Infinity;
-  const usedBytes = dataDirBytes(store.dataDir);
+  let usedBytes = dataDirBytes(store.dataDir);
+  const hooks = hooksOf.get(store);
+  // Derived data that can be made again (the render cache) gives room back first; then the directory is measured again.
+  if (usedBytes + neededBytes > quotaBytes && hooks) {
+    hooks.reclaim(neededBytes);
+    usedBytes = dataDirBytes(store.dataDir);
+  }
   if (usedBytes + neededBytes > quotaBytes)
     throw new ApiError(507, 'storage_quota_exceeded', `not enough room to ${what}: the storage ceiling is ${quotaBytes} bytes and ${usedBytes} are in use`, { quotaBytes, usedBytes, neededBytes }, 'Delete projects you no longer need and run the storage clean-up (owner: project manager → storage), or raise PF_MAX_STORAGE_BYTES.');
   return quotaBytes - usedBytes;
@@ -90,6 +119,7 @@ export function storageReport(store: Store, by: Principal, now = Date.now(), quo
     exportsBytes: dirBytes(store.outDir),
     totalBytes: dataDirBytes(store.dataDir),
     quotaBytes: quotaBytes || null,
+    ...(hooksOf.has(store) ? { renderCache: hooksOf.get(store)!.status() } : {}),
     unreferenced: { files: collectable.length, bytes: collectable.reduce((n, b) => n + b.bytes, 0), tooNewToJudge: tooNew, hashes: collectable.map((b) => b.hash) },
     rule: 'A file is unreferenced only if no remaining project (including its history), job or proposal mentions its content hash, and it is older than ten minutes.',
   };

@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-18T02:02:15.919Z",
+  "ranAt": "2026-11-18T03:20:34.747Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
@@ -270,7 +270,7 @@
         "sh1": "▶▶ ×2",
         "fwd2": 1.99,
         "sh2": "◀◀ ×1",
-        "back1": -1.03,
+        "back1": -1,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -284,9 +284,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 0.99,
+        "playSpeed": 1,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 2.01,
+        "shuttleSpeed": 1.97,
         "staysPaused": true
       }
     },
@@ -314,30 +314,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_a0346c343c0",
-          "clp_a0346c343c1"
+          "clp_9e072dfc210",
+          "clp_9e072dfc211"
         ],
         "afterAB": [
-          "clp_a0346c343c0",
-          "clp_a0346c343c1"
+          "clp_9e072dfc210",
+          "clp_9e072dfc211"
         ],
         "afterAdd": [
-          "clp_a0346c343c0",
-          "clp_a0346c343c1",
-          "clp_a0346c343c2"
+          "clp_9e072dfc210",
+          "clp_9e072dfc211",
+          "clp_9e072dfc212"
         ],
         "midEscape": [
-          "clp_a0346c343c1"
+          "clp_9e072dfc211"
         ],
         "afterEscape": [
-          "clp_a0346c343c0",
-          "clp_a0346c343c1",
-          "clp_a0346c343c2"
+          "clp_9e072dfc210",
+          "clp_9e072dfc211",
+          "clp_9e072dfc212"
         ],
         "afterEscapeUp": [
-          "clp_a0346c343c0",
-          "clp_a0346c343c1",
-          "clp_a0346c343c2"
+          "clp_9e072dfc210",
+          "clp_9e072dfc211",
+          "clp_9e072dfc212"
         ]
       }
     },
@@ -499,7 +499,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 24/1799",
+        "valueText": "עוקב קדימה 27/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -631,50 +631,117 @@
       }
     },
     {
-      "name": "the Templates drawer lists 8 cards: the 6 built-ins, available, then Text-Behind-Subject and 3D-Zoom, unavailable with their Hebrew reason (template.unavailable.<model>)",
+      "name": "the Templates drawer lists 15 cards in order: the 6 built-ins, available, then the content packs' 7 templates (pack.hanukkah, pack.birthday), available, each with its genre from core, then Text-Behind-Subject and 3D-Zoom, unavailable with their Hebrew reason (template.unavailable.<model>)",
       "ok": true,
       "detail": {
         "cards": [
           {
             "id": "tpl.travel-montage",
+            "genre": "montage",
             "available": true,
             "reason": null
           },
           {
             "id": "tpl.photo-dump",
+            "genre": "montage",
             "available": true,
             "reason": null
           },
           {
             "id": "tpl.birthday",
+            "genre": "celebration",
             "available": true,
             "reason": null
           },
           {
             "id": "tpl.quote-card",
+            "genre": "quote",
             "available": true,
             "reason": null
           },
           {
             "id": "tpl.countdown-list",
+            "genre": "list",
             "available": true,
             "reason": null
           },
           {
             "id": "tpl.home-video",
+            "genre": "memories",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.hanukkah-candles",
+            "genre": "holiday",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.hanukkah-eight-nights",
+            "genre": "holiday",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.hanukkah-party",
+            "genre": "holiday",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.hanukkah-greeting",
+            "genre": "holiday",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.birthday-age",
+            "genre": "celebration",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.birthday-cake",
+            "genre": "celebration",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.birthday-invite",
+            "genre": "celebration",
             "available": true,
             "reason": null
           },
           {
             "id": "tpl.text-behind-subject",
+            "genre": "promo",
             "available": false,
             "reason": "דורשת מודל שמפריד את הדמות מהרקע בכל פריים, והוא אינו מותקן במחשב הזה. תבנית לעולם אינה מורידה מודלים."
           },
           {
             "id": "tpl.3d-zoom",
+            "genre": "memories",
             "available": false,
             "reason": "דורשת מודל שמעריך עומק (כמה רחוקה כל נקודה מהמצלמה), והוא אינו מותקן במחשב הזה. תבנית לעולם אינה מורידה מודלים."
           }
+        ],
+        "want": [
+          "tpl.travel-montage",
+          "tpl.photo-dump",
+          "tpl.birthday",
+          "tpl.quote-card",
+          "tpl.countdown-list",
+          "tpl.home-video",
+          "tpl.hanukkah-candles",
+          "tpl.hanukkah-eight-nights",
+          "tpl.hanukkah-party",
+          "tpl.hanukkah-greeting",
+          "tpl.birthday-age",
+          "tpl.birthday-cake",
+          "tpl.birthday-invite",
+          "tpl.text-behind-subject",
+          "tpl.3d-zoom"
         ]
       }
     },
@@ -684,7 +751,7 @@
       "detail": {
         "genre": "montage",
         "filtered": 2,
-        "unfiltered": 8
+        "unfiltered": 15
       }
     },
     {
@@ -693,18 +760,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_ab251da8350",
-          "ast_f89e19aca80",
-          "ast_58e215fad10",
-          "ast_a4da00bd910",
-          "ast_d30e7d6ff40"
+          "ast_86725d0b2d0",
+          "ast_9091408b0e0",
+          "ast_f621daf6b90",
+          "ast_f25e3845310",
+          "ast_d700e765ab0"
         ],
         "order1": [
-          "ast_ab251da8350",
-          "ast_a4da00bd910",
-          "ast_f89e19aca80",
-          "ast_58e215fad10",
-          "ast_d30e7d6ff40"
+          "ast_86725d0b2d0",
+          "ast_f25e3845310",
+          "ast_9091408b0e0",
+          "ast_f621daf6b90",
+          "ast_d700e765ab0"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -728,7 +795,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-18T02:02:08.676Z",
+          "createdAt": "2026-11-18T03:20:26.913Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -802,7 +869,7 @@
         "statusText": "הפעימה בפריים 60 (⁦00:00:02:00⁩)",
         "want": "הפעימה בפריים 60 (⁦00:00:02:00⁩)",
         "statusRole": "status",
-        "describedBy": "_r_30_",
+        "describedBy": "_r_31_",
         "announced": 1,
         "onVelocity": "transition-velocity",
         "opt3": {

@@ -59,3 +59,26 @@ Status: **accepted** (2026-11-17). Steps 1–3 built and tested. Step 4 is built
   (simulated transports, property test over random transports), `flashAnalysis.test.ts` (thresholds at 24/30/60 fps,
   area, red, ranges, a property over square waves), GPU proof (an exported file with three strobes; 8× shuttle in the
   editor sampled on every animation frame).
+
+## Amendment (2026-11-18): the screen guard counts what is painted, when it is painted
+A stricter shuttle check (8× in the editor, measured on the painted screen) found that the guard of decision 3 could let
+four light rises reach the screen within 0.9 s in about one run in eight. Four causes, all fixed in `FlashGuard.paint`
+(`packages/engine/src/strobeSchedule.ts`), used by the player and the effect gallery:
+1. The guard took the light of the graph it was handed as what was on screen; the compositor can paint less (a GPU pass
+   not ready yet, a missing picture). Now the compositor reports what it drew, and the guard records that after the copy.
+2. The guard stamped its time before an asynchronous draw. Now: decide before the draw, wait before the copy so that no
+   rise is copied less than the gap after the last one reached the screen, record after the copy, and move the stamp to
+   the next animation frame (only ever later).
+3. It followed only the single strongest light; a strong title strobe could hide the picture's own strobes rising. Now
+   every layer's light, combined as the passes combine it, counts as a rise of its own.
+4. A weak first step of a rise (below 0.1 of full light) could set the rise's time too early; further steps up within it
+   move the time to them.
+Checks: `apps/web/src/player.flash.test.ts` (the real Player on a fake clock with slow draws; the recorded failing run
+reproduced on the old code), `flashGuard.test.ts` (screen measured as the proof measures it; property tests with draws
+that take time); the GPU proof's shuttle check (margin of need, a floor of flashes that grows with the window, replays
+through guards with wrong gaps that must be judged unsafe or too close, and a `too-close` verdict: rises closer than the
+gap less half a 60 Hz refresh). Verified here: `pnpm proof:gpu` 92/92 twice (shuttle `ok`, closest rises 0.346 s),
+`proof:trend-light` 15/15, `proof:creative` 41/41. **Not promised:** the page knows when a frame is copied and when the
+next animation frame runs, not when the display shows it; normal-speed playback with varying draw times can show a
+scheduled flash up to about 75 ms late; at 120/144 fps on a 60 Hz display a scheduled flash is sometimes held; two
+full-frame layers whose lights move in opposite directions can still raise mean brightness without any layer rising.

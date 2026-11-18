@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-17T23:52:02.702Z",
+  "ranAt": "2026-11-18T02:18:15.093Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v553 x64",
+    "platform": "Linux 6.18.44-fc-v595 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
@@ -353,7 +353,7 @@
       }
     },
     {
-      "name": "all 5 catalog families render differently from each other (none fell back to another face), and the export manifest pins the font files by SHA-256",
+      "name": "all 11 catalog families render differently from each other (none fell back to another face), and the export manifest pins the font files by SHA-256",
       "ok": true,
       "detail": {
         "families": [
@@ -361,10 +361,16 @@
           "Rubik",
           "Assistant",
           "Frank Ruhl Libre",
-          "Secular One"
+          "Secular One",
+          "Suez One",
+          "David Libre",
+          "Karantina",
+          "Amatic SC",
+          "Fredoka",
+          "Gveret Levin"
         ],
         "manifestFonts": [
-          "Secular One:2"
+          "Gveret Levin:2"
         ]
       }
     },

@@ -196,3 +196,21 @@ export function alsoSuggestion(targets: ExportTarget[], exportedVariantIds: Read
   const other = targets.filter((t) => t.kind !== 'master' && (t.height > t.width) !== tall && t.height !== t.width && !done(t));
   return other.find((t) => t.kind === 'variant') ?? other[0] ?? null;
 }
+
+/**
+ * The label of a preflight fix button in the interface language. The server words its fixes in English (apps/server/src/preflight.ts);
+ * each wording it can send is recognised here and said from the strings. A label that is not recognised is shown as the server sent it.
+ */
+export function fixLabel(F: { removeStretch: string; removeTransition: string; removeRamp: string; shorten: (m: string) => string; lowerRamp: (v: string) => string; atVelocity: (v: string) => string; noRamp: string; noBeatLock: string; and: string }, serverLabel: string): string {
+  if (serverLabel === 'Remove this stretch from every track') return F.removeStretch;
+  if (serverLabel === 'Remove the transition') return F.removeTransition;
+  if (serverLabel === 'Remove the velocity ramp') return F.removeRamp;
+  const ramp = /^Lower the velocity ramp to ×(\d+)$/.exec(serverLabel);
+  if (ramp) return F.lowerRamp(ramp[1]!);
+  const sh = /^Shorten the transition to (\d+) frames(?:, (.+))?$/.exec(serverLabel);
+  if (sh) {
+    const parts = (sh[2] ?? '').split(' and ').filter(Boolean).map((x) => { const v = /^at velocity ×(\d+)$/.exec(x); return v ? F.atVelocity(v[1]!) : x === 'without its velocity ramp' ? F.noRamp : x === 'without the beat lock' ? F.noBeatLock : x; });
+    return parts.length ? `${F.shorten(sh[1]!)}, ${parts.join(F.and)}` : F.shorten(sh[1]!);
+  }
+  return serverLabel;
+}

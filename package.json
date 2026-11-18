@@ -76,7 +76,10 @@
     "proof:packs": "tsx packages/evals/src/packs-proof.ts",
     "proof:fonts": "tsx packages/evals/src/fonts-proof.ts",
     "proof:music": "tsx packages/evals/src/music-proof.ts",
-    "packs:sheet": "tsx packages/evals/src/packs-sheet.ts"
+    "packs:sheet": "tsx packages/evals/src/packs-sheet.ts",
+    "proof:phone-drop": "tsx packages/evals/src/phone-drop-proof.ts",
+    "proof:phone-drop-baseline": "tsx packages/evals/src/phone-drop-baseline.ts",
+    "proof:incremental": "tsx packages/evals/src/incremental-export-proof.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
