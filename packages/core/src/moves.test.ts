@@ -113,6 +113,33 @@ describe('planPerformance through the real apply_take', () => {
     const bw = planPerformance(doc, input([hit(0, 0, 30, 2), hit(1, 0, 35, 2)], bankWith({ 0: move('move.black-white') }))).chips;
     expect(bw.map((c) => c.state)).toEqual(['kept', 'merged']);
   });
+  it('merges only into what the previous hit really plays: a punch ends at its cut, a fallback pulse at its cap', () => {
+    // two pictures [0, 100) and [100, 200) on V1, then a gap and a third from 230: a punch held past a cut stops at the cut,
+    // so a tap on the next picture is its own hit on that picture (and not a "merged" chip that did nothing)
+    const { doc, ids, clipId } = project({ frames: 100 });
+    const trackId = clipsOf(doc).find((x) => x.clip.id === clipId)!.track.id;
+    const r = tx(doc, [{ op: 'add_clip', args: { assetId: ids.video!, trackId, start: f(100), duration: f(100) } }, { op: 'add_clip', args: { assetId: ids.video!, trackId, start: f(230), duration: f(100) } }]);
+    const second = out(r, 0).clipId!, third = out(r, 1).clipId!;
+    const punch = bankWith({ 0: move('move.punch') });
+    const { plan } = take(r.doc, input([hit(0, 0, 95, 20), hit(1, 0, 104, 6)], punch));
+    expect(plan.chips.map((c) => [c.tap, c.state, c.frame, c.frames])).toEqual([[0, 'kept', 95, 5], [1, 'kept', 104, 6]]);
+    expect(plan.args!.steps.map((s) => (s.args as { clipId: string }).clipId)).toEqual([clipId, second]);
+    // a tap exactly on the cut does not abut-merge into the punch that ended there
+    expect(planPerformance(r.doc, input([hit(0, 0, 95, 20), hit(1, 0, 100, 6)], punch)).chips.map((c) => [c.tap, c.state, c.frame])).toEqual([[0, 'kept', 95], [1, 'kept', 100]]);
+    // a punch with no picture under it ends where the next picture starts: a tap there is its own hit
+    const gap = planPerformance(r.doc, input([hit(0, 0, 210, 40), hit(1, 0, 235, 6)], punch));
+    expect(gap.chips.map((c) => [c.tap, c.state, c.frame, c.reason ?? null])).toEqual([[0, 'held', 210, 'no_picture'], [1, 'kept', 235, null]]);
+    expect(gap.args!.steps.every((s) => (s.args as { clipId: string }).clipId === third)).toBe(true);
+    // a pulse with no followed music is capped at PULSE_MAX_HOLD_SECONDS (90 frames): a tap after the cap is its own hit
+    const { doc: long } = project();
+    const pulse = bankWith({ 0: move('move.pulse') });
+    const p = planPerformance(long, input([hit(0, 0, 10, 150), hit(1, 0, 105, 6)], pulse, { gpu: true }));
+    expect(p.chips.map((c) => [c.tap, c.state, c.frame, c.frames])).toEqual([[0, 'kept', 10, 90], [1, 'kept', 105, 15]]);
+    expect(p.args!.steps.filter((s) => s.op === 'add_adjustment')).toHaveLength(2);
+    // inside the cap it still merges, and the merged chip covers the tap
+    const m = planPerformance(long, input([hit(0, 0, 10, 150), hit(1, 0, 60, 6)], pulse, { gpu: true }));
+    expect(m.chips.map((c) => [c.tap, c.state, c.frame, c.frames])).toEqual([[0, 'kept', 10, 90], [1, 'merged', 10, 90]]);
+  });
   it('holds what the op would refuse: needs_gpu, missing_asset, no_music, outside_edit, empty pads (a warning, no chip)', () => {
     const { doc } = project({ frames: 100 });
     const bank = bankWith({ 0: move('move.shake'), 1: move('move.sound-impact'), 2: move('move.sticker-star'), 3: move('move.beat-strobe'), 4: move('move.blur-hit') });

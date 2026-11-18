@@ -86,6 +86,8 @@ describe('properties of the planner (through the real apply_take)', () => {
       const input = { ...(w.seqId !== w.doc.mainSequenceId ? { sequenceId: w.seqId } : {}), hits, bank, assets: assetsFor(bank, w), settings, gpu: r() < 0.5 };
       const plan = planPerformance(w.doc, input);
       expect(plan.chips.length).toBeLessThanOrEqual(hits.length);
+      // a merged chip is never a tap that did nothing: its range (what its hit really plays) covers the tap's own frame
+      for (const c of plan.chips) if (c.state === 'merged') { const h = hits.find((x) => x.tap === c.tap)!; expect(c.frame <= h.frame && h.frame < c.frame + c.frames, `document ${s} tap ${c.tap}`).toBe(true); }
       kept += plan.chips.filter((c) => c.state === 'kept').length; held += plan.chips.filter((c) => c.state === 'held').length;
       if (!plan.args) continue;
       for (const step of plan.args.steps) { expect((TAKE_STEP_OPS as readonly string[]).includes(step.op), step.op).toBe(true); seen.set(step.op, (seen.get(step.op) ?? 0) + 1); }

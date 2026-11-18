@@ -219,6 +219,8 @@ const pictureAt = (doc: ProjectDocument, c: Clip) => c.type === 'media' && hasPi
 
 interface Entry {
   hit: Hit; spec: MoveSpec; cls: FlashClass; a: number; b: number; merged: Hit[];
+  /** what the hit plays on: a punch, the clip it keys (null: no picture); rule 3 merges only within one */
+  on: string | null;
   held?: HeldReason; since?: number; steps?: TemplateStep[];
 }
 interface Lane { id: string | null; bind: string | null; busy: [number, number][] }
@@ -261,6 +263,35 @@ export const planPerformance: PlanPerformance = (doc, input) => {
   };
   const fits = (f: number, mine: readonly number[]) => breachAt(f, mine) === null && mine.every((m) => Math.abs(m - f) >= gap);
 
+  /** The topmost visible picture clip under frame `f`: what a punch there keys. */
+  const punchTarget = (f: number): { track: Track; clip: Clip } | null => {
+    for (let i = seq.tracks.length - 1; i >= 0; i--) {
+      const t = seq.tracks[i]!;
+      if (t.kind !== 'video' || t.hidden) continue;
+      for (const c of t.clips) if (pictureAt(doc, c) && startFrame(c, rate) <= f && f < endFrame(c, rate)) return { track: t, clip: c };
+    }
+    return null;
+  };
+  /**
+   * Where a hit of `spec` over [a, b) really ends once realised: a punch at the end of the clip it keys (with no picture under
+   * it, where a picture first starts), a pulse with no followed music under it at PULSE_MAX_HOLD_SECONDS (planAdjust's cap).
+   * Rule 3 merges a tap only into this range, so a "merged" chip always covers its tap.
+   */
+  const realEnd = (spec: MoveSpec, a: number, b: number): number => {
+    if (spec.kind === 'punch') {
+      const t = punchTarget(a);
+      if (t) return Math.min(b, endFrame(t.clip, rate));
+      let next = b;
+      for (const tr of seq.tracks) if (tr.kind === 'video' && !tr.hidden) for (const c of tr.clips) { const cs = startFrame(c, rate); if (pictureAt(doc, c) && cs > a && cs < next) next = cs; }
+      return next;
+    }
+    if (spec.kind === 'adjust' && spec.effects.some((fx) => fx.onBeat && fx.type === 'motion.pulse')) {
+      const music = followedBeats(doc, secondsOf(a), secondsOf(b) - 1e-9, seqId).length > 0;
+      if (spec.effects.some((fx) => fx.onBeat && fx.type === 'motion.pulse' && !(effectHas(fx.type, 'follow') && music))) return Math.min(b, a + framesOfSeconds(PULSE_MAX_HOLD_SECONDS));
+    }
+    return b;
+  };
+
   // 1–3: cap, availability, range, merge and retrigger
   const chips = new Map<number, Chip>();
   const chipOf = (h: Hit, spec: MoveSpec, state: Chip['state'], frame = h.frame, frames = h.frames, reason?: HeldReason, since?: number) =>
@@ -288,18 +319,24 @@ export const planPerformance: PlanPerformance = (doc, input) => {
     if (cls !== 'none') len = Math.max(len, gap);
     if (spec.kind === 'sound') len = T.frameCount(asset!.duration, rate);
     if (a >= editEnd) { hold('outside_edit'); continue; }
-    const b = Math.min(a + len, editEnd);
+    const b = realEnd(spec, a, Math.min(a + len, editEnd));
     if (spec.kind === 'sound' && b - a < 1) { hold('sound_too_short', undefined, a, Math.max(1, b - a)); continue; }
     if (cls !== 'none' && b - a < gap) { hold('flash_limit', b - a, a, b - a); continue; }
-    // the same pad again while its hit lasts: merge, or cut the previous one when this hit starts inside its release
+    // the same pad again while its hit lasts (as realised, on the same clip): merge, or cut the previous one when this hit starts
+    // inside its release; a tap the previous hit does not reach after all (its end clamped again) is its own hit
+    const on = spec.kind === 'punch' ? punchTarget(a)?.clip.id ?? null : null;
     const prev = spec.kind === 'sound' ? undefined : lastByPad.get(hit.pad);
-    if (prev && a <= prev.b) {
+    if (prev && a <= prev.b && on === prev.on) {
       const rel = releaseOf(prev.spec, prev.b - prev.a);
       const minLen = Math.max(3, prev.cls !== 'none' ? gap : 1);
-      if (a < prev.b && a >= prev.b - rel && a - 1 - prev.a >= minLen) prev.b = a - 1;
-      else { prev.b = Math.max(prev.b, b); prev.merged.push(hit); continue; }
+      const lastStart = prev.merged.at(-1)?.frame ?? prev.a;
+      if (a < prev.b && a >= prev.b - rel && a - 1 - prev.a >= minLen && a - 1 > lastStart) prev.b = a - 1;
+      else {
+        const nb = realEnd(prev.spec, prev.a, Math.max(prev.b, b));
+        if (a < nb) { prev.b = nb; prev.merged.push(hit); continue; }
+      }
     }
-    const e: Entry = { hit, spec, cls, a, b, merged: [] };
+    const e: Entry = { hit, spec, cls, a, b, merged: [], on };
     entries.push(e);
     if (spec.kind !== 'sound') lastByPad.set(hit.pad, e);
   }
@@ -326,12 +363,7 @@ export const planPerformance: PlanPerformance = (doc, input) => {
 
   // 5: realisation per kind (each returns its steps, its changes of light and what to record when kept)
   const planPunch = (e: Entry, spec: Spec<'punch'>): Planned => {
-    let target: { track: Track; clip: Clip } | null = null;
-    for (let i = seq.tracks.length - 1; i >= 0 && !target; i--) {
-      const t = seq.tracks[i]!;
-      if (t.kind !== 'video' || t.hidden) continue;
-      for (const c of t.clips) if (pictureAt(doc, c) && startFrame(c, rate) <= e.a && e.a < endFrame(c, rate)) { target = { track: t, clip: c }; break; }
-    }
+    const target = punchTarget(e.a);
     if (!target) return { held: 'no_picture' };
     if (target.track.locked) return { held: 'locked' };
     if (target.clip.follow) return { held: 'follows_track' };
