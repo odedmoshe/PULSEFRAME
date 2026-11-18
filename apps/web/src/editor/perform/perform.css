@@ -1,13 +1,15 @@
 /* Perform mode (ADR-0025): the pad row, the take lane, the calibration and the camera. Prefix .pf-perform. Tokens of the redesign
-   (ds/tokens.css): the view sits over the stage and re-applies the dark tokens (.pf-force-dark). Logical properties throughout, so
-   the right-to-left page mirrors; the pad row is dir=ltr on purpose (it mirrors the physical number row). Not looked at in a
-   browser in this session (see the worker report). */
-.app > .stage > .pf-perform { grid-row: 2; grid-column: 1; z-index: 4; }
-.pf-perform { position: relative; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); min-block-size: 0; pointer-events: none; color: var(--pf-text); font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); }
-.pf-perform > * { pointer-events: auto; }
-.pf-perform > .pf-sr { pointer-events: none; }
-.pf-perform-panel { grid-area: 1 / 1; align-self: end; display: grid; gap: var(--pf-sp-3); padding: var(--pf-sp-4) var(--pf-sp-5); max-block-size: 100%; overflow: auto;
-  background: var(--pf-plate); border-block-start: 2px solid var(--pf-m-perform); box-shadow: 0 -8px 24px rgb(0 0 0 / 0.28); }
+   (ds/tokens.css): the view re-applies the dark tokens (.pf-force-dark). Logical properties throughout, so the right-to-left page
+   mirrors; the pad row is dir=ltr on purpose (it mirrors the physical number row).
+   Layout (looked at in Chromium at 1280×800 and 1500×1000, Hebrew and English): the view is a row of the stage UNDER the viewer
+   and above the transport, never over the picture ("a large viewer; under it the pad row"). The row is fit-content(55%): it is as
+   tall as its content up to 55 % of the stage, and scrolls inside past that; the viewer keeps the rest (at least 120 px). */
+.app > .stage:has(> .pf-perform) { grid-template-rows: auto minmax(120px, 1fr) fit-content(55%) auto; }
+.app > .stage > .pf-perform { grid-row: 3; grid-column: 1 / -1; z-index: 4; }
+.app > .stage:has(> .pf-perform) > .transport { grid-row: 4; }
+.pf-perform { position: relative; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); min-block-size: 0; overflow: hidden; color: var(--pf-text); font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); }
+.pf-perform-panel { grid-area: 1 / 1; display: grid; align-content: start; gap: var(--pf-sp-3); padding: var(--pf-sp-3) var(--pf-sp-5); min-block-size: 0; overflow: auto; overscroll-behavior: contain;
+  background: var(--pf-surface-1); border-block-start: 2px solid var(--pf-m-perform); container-type: inline-size; }
 .pf-perform-top { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-4); justify-content: space-between; }
 .pf-perform-transport, .pf-perform-cal { display: flex; align-items: center; gap: var(--pf-sp-3); flex-wrap: wrap; }
 .pf-perform-badge { padding: var(--pf-sp-1) var(--pf-sp-4); border-radius: var(--pf-r-pill); box-shadow: inset 0 0 0 1px var(--pf-line-strong); font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
@@ -18,9 +20,10 @@
 
 /* pads */
 .pf-perform-pads { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: var(--pf-sp-3); }
-.pf-perform-padcell { display: grid; gap: var(--pf-sp-2); align-content: start; min-inline-size: 0; }
+.pf-perform-padcell { display: grid; gap: var(--pf-sp-1); align-content: start; justify-items: center; min-inline-size: 0; }
+.pf-perform-padcell > * { max-inline-size: 100%; }
 .pf-perform-padcell[data-hidden-by] .pf-perform-pad { visibility: hidden; }
-.pf-perform-pad { display: grid; gap: var(--pf-sp-1); place-items: center; min-block-size: 76px; padding: var(--pf-sp-3); border: 0; border-radius: var(--pf-r-lg); cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none;
+.pf-perform-pad { display: grid; gap: var(--pf-sp-1); place-items: center; min-block-size: 60px; min-inline-size: 0; inline-size: 100%; padding: var(--pf-sp-2); border: 0; border-radius: var(--pf-r-lg); cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none;
   background: var(--pf-surface-3); color: var(--pf-text); box-shadow: inset 0 0 0 1px var(--pf-line-control); font: inherit; transition: background var(--pf-dur-fast) var(--pf-ease-out), transform var(--pf-dur-press) var(--pf-ease-out); }
 .pf-perform-pad:hover { background: var(--pf-surface-4); }
 .pf-perform-pad:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
@@ -28,8 +31,9 @@
 .pf-perform-pad[data-state='empty'] { background: transparent; border: 1px dashed var(--pf-line-strong); color: var(--pf-text-3); }
 .pf-perform-pad[data-state='disabled'] { cursor: not-allowed; color: var(--pf-text-disabled); background: var(--pf-surface-1); border: 1px dashed var(--pf-line-strong); }
 .pf-perform-padkey { font-family: var(--pf-font-mono); font-size: var(--pf-fs-lg); font-weight: var(--pf-fw-semibold); line-height: 1; }
-.pf-perform-padname { font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); text-align: center; overflow-wrap: anywhere; }
-.pf-perform-padreason { font-size: var(--pf-fs-xs); color: var(--pf-attention); text-align: center; }
+.pf-perform-padname { font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); text-align: center; overflow-wrap: break-word; hyphens: auto; max-inline-size: 100%; }
+.pf-perform-padreason { font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); color: var(--pf-attention); text-align: center; }
+.pf-perform-padcell .pf-btn { white-space: normal; block-size: auto; min-block-size: var(--pf-h-sm, 28px); text-align: center; }
 .pf-perform-padedit { justify-self: center; }
 
 /* settings */
@@ -57,10 +61,12 @@
 .pf-perform-field small { color: var(--pf-text-2); }
 
 /* the camera */
-.pf-perform-camera { grid-area: 1 / 1; display: grid; gap: var(--pf-sp-3); align-content: start; padding: var(--pf-sp-4) var(--pf-sp-5); overflow: auto; background: var(--pf-plate); border-block-start: 2px solid var(--pf-m-perform); }
+.pf-perform-camera { grid-area: 1 / 1; display: flex; flex-direction: column; gap: var(--pf-sp-3); padding: var(--pf-sp-3) var(--pf-sp-5); min-block-size: 0; overflow: auto; overscroll-behavior: contain; background: var(--pf-surface-1); border-block-start: 2px solid var(--pf-m-perform); }
+.pf-perform-camera > * { flex-shrink: 0; }
 .pf-perform-camera-head { display: flex; align-items: center; justify-content: space-between; gap: var(--pf-sp-3); }
 .pf-perform-camera-head h2 { margin: 0; font-size: var(--pf-fs-md); }
-.pf-perform-camera-picture { position: relative; justify-self: center; inline-size: min(100%, 640px); max-block-size: 46vh; background: #000; border-radius: var(--pf-r-md); overflow: hidden; cursor: crosshair; touch-action: none; }
+/* the box keeps the picture's own shape (aspect-ratio and inline-size are set on the element from the source size) */
+.pf-perform-camera-picture { position: relative; align-self: center; background: #000; border-radius: var(--pf-r-md); overflow: hidden; cursor: crosshair; touch-action: none; }
 .pf-perform-camera-picture:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
 .pf-perform-camera-canvas { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; object-fit: contain; }
 .pf-perform-camera-crop { position: absolute; box-sizing: border-box; border: 2px solid var(--pf-m-perform); box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.5); pointer-events: none; }
@@ -70,5 +76,6 @@
 .pf-perform-dial { display: grid; gap: var(--pf-sp-1); min-inline-size: 160px; font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
 .pf-perform-camera-review { display: grid; gap: var(--pf-sp-3); }
 
-@media (max-width: 900px) { .pf-perform-pads { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+/* the pad row needs about 56 px a pad; a narrower stage takes two rows of four */
+@container (max-width: 460px) { .pf-perform-pads { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (prefers-reduced-motion: reduce) { .pf-perform-pad { transition: none; } .pf-perform-pad[aria-pressed='true'], .pf-perform-pad[data-state='held-down'] { transform: none; } }

@@ -12,6 +12,11 @@ type S = string;
 const he = {
   'pv.aria.view': 'הופעה: לחצנים, הקלטה וצילום',
   'pv.pads': 'לחצני ההופעה', 'pv.pad': 'לחצן', 'pv.padEmpty': 'לחצן ריק', 'pv.padHeldDown': 'לחוץ', 'pv.edit': 'עריכת לחצן', 'pv.editPad': 'עריכת לחצן {n}',
+  // the catalogue's moves by name (core moves.ts MOVES; a title pad shows its own text, a sticker its element's name). For the owner's review.
+  'pv.move.punch': 'זום פתאומי', 'pv.move.colour-split': 'פיצול צבעים', 'pv.move.blur-hit': 'טשטוש', 'pv.move.pixelate': 'פיקסלים',
+  'pv.move.black-white': 'שחור-לבן', 'pv.move.confetti': 'קונפטי', 'pv.move.speed-lines': 'קווי מהירות', 'pv.move.sound-impact': 'צליל מכה',
+  'pv.move.pulse': 'פעימה', 'pv.move.shake': 'רעידה', 'pv.move.glitch': 'גליץ׳', 'pv.move.rgb-shake': 'רעידת צבעים', 'pv.move.zoom-blur': 'טשטוש זום',
+  'pv.move.beat-strobe': 'הבזק על הפעימה',
   'pv.bank': 'ערכת לחצנים', 'pv.bankNote': 'שינוי הערכה מחזיר את הלחצנים לברירת המחדל שלה',
   'pv.keyHint': 'מקשי 1 עד 8 (גם במקלדת המספרים), או עכבר ומגע. אפשר גם Enter על לחצן שבפוקוס',
   'pv.record': 'הקלטה', 'pv.stop': 'עצירה', 'pv.accept': 'אישור', 'pv.discard': 'זריקה', 'pv.again': 'שוב',
@@ -85,6 +90,10 @@ const he = {
 const en: Record<keyof typeof he, S> = {
   'pv.aria.view': 'Perform: pads, recording and camera',
   'pv.pads': 'Performance pads', 'pv.pad': 'Pad', 'pv.padEmpty': 'Empty pad', 'pv.padHeldDown': 'held', 'pv.edit': 'Edit pad', 'pv.editPad': 'Edit pad {n}',
+  'pv.move.punch': 'Zoom punch', 'pv.move.colour-split': 'Colour split', 'pv.move.blur-hit': 'Blur hit', 'pv.move.pixelate': 'Pixelate',
+  'pv.move.black-white': 'Black and white', 'pv.move.confetti': 'Confetti', 'pv.move.speed-lines': 'Speed lines', 'pv.move.sound-impact': 'Impact sound',
+  'pv.move.pulse': 'Pulse', 'pv.move.shake': 'Shake', 'pv.move.glitch': 'Glitch', 'pv.move.rgb-shake': 'RGB shake', 'pv.move.zoom-blur': 'Zoom blur',
+  'pv.move.beat-strobe': 'Flash on the beat',
   'pv.bank': 'Pad bank', 'pv.bankNote': 'Changing the bank puts the pads back to its defaults',
   'pv.keyHint': 'Keys 1 to 8 (the keypad too), or a mouse or touch. Enter on a focused pad works as well',
   'pv.record': 'Record', 'pv.stop': 'Stop', 'pv.accept': 'Accept', 'pv.discard': 'Discard', 'pv.again': 'Again',

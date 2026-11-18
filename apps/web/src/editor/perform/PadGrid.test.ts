@@ -5,8 +5,8 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { Chip, MoveSpec, PadBank } from '@pulseframe/core';
-import { PadGrid } from './PadGrid.tsx';
+import { MOVES, type Chip, type MoveSpec, type PadBank } from '@pulseframe/core';
+import { moveLabel, PadGrid } from './PadGrid.tsx';
 import { TakeLane } from './TakeLane.tsx';
 import type { PadStatus } from './capture.ts';
 
@@ -70,5 +70,16 @@ describe('TakeLane markup', () => {
     const h = lane([], false);
     expect(h).not.toContain('perform-ghost-banner');
     expect(h).toContain('אחרי העצירה');
+  });
+});
+
+describe('pad names', () => {
+  it('every catalogue move has a name in the page\'s language (no move id read as English words in a Hebrew page)', () => {
+    for (const m of MOVES) {
+      const he = moveLabel(m, 'he'), en = moveLabel(m, 'en');
+      expect(/[\u0590-\u05ff]/.test(he), `he ${m.id}: ${he}`).toBe(true);
+      if (m.kind !== 'title') expect(/[\u0590-\u05ff]/.test(en), `en ${m.id}: ${en}`).toBe(false);
+      expect(en).not.toMatch(/^[a-z]+( [a-z]+)*$/); // not the bare id
+    }
   });
 });
