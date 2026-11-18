@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-18T17:34:49.799Z",
+  "ranAt": "2026-11-18T21:31:24.496Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 56,
-  "total": 56,
+  "passed": 58,
+  "total": 58,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -123,14 +123,58 @@
       }
     },
     {
+      "name": "keyframe strip by keyboard: Alt+K focuses a strip key, Enter opens the curve picker with the focus inside, Escape closes it and the focus is back on the same key; no commit",
+      "ok": true,
+      "detail": {
+        "afterAltK": {
+          "id": "key-strip-key",
+          "frame": "5",
+          "inPicker": false
+        },
+        "pickerOpen": true,
+        "inPicker": {
+          "id": null,
+          "frame": null,
+          "inPicker": true
+        },
+        "afterEsc": {
+          "id": "key-strip-key",
+          "frame": "5",
+          "inPicker": false
+        },
+        "revisions": [
+          24,
+          24
+        ]
+      }
+    },
+    {
+      "name": "keyframe diamonds: the selected clip's keyframe strip and its passive diamonds once unselected each show one diamond per distinct key frame, effect keys included (an x key on the frame of a radius key counts once)",
+      "ok": true,
+      "detail": {
+        "distinct": [
+          5,
+          8,
+          25
+        ],
+        "keys": 4,
+        "stripFrames": [
+          5,
+          8,
+          25
+        ],
+        "passive": 3
+      }
+    },
+    {
       "name": "cut then paste moves the clip in one transaction (effects and keyframes come along); nothing is committed by the cut itself; one undo puts it back",
       "ok": true,
       "detail": {
         "pending": 1,
         "revisions": [
-          23,
-          23,
-          24
+          25,
+          25,
+          26
         ],
         "landedAt": 300
       }
@@ -268,9 +312,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 1.98,
+        "fwd2": 2.08,
         "sh2": "◀◀ ×1",
-        "back1": -1,
+        "back1": -0.99,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -284,9 +328,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 0.99,
+        "playSpeed": 1,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 2.04,
+        "shuttleSpeed": 2.01,
         "staysPaused": true
       }
     },
@@ -314,30 +358,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_5ea62fe0820",
-          "clp_5ea62fe0821"
+          "clp_bb33304d170",
+          "clp_bb33304d171"
         ],
         "afterAB": [
-          "clp_5ea62fe0820",
-          "clp_5ea62fe0821"
+          "clp_bb33304d170",
+          "clp_bb33304d171"
         ],
         "afterAdd": [
-          "clp_5ea62fe0820",
-          "clp_5ea62fe0821",
-          "clp_5ea62fe0822"
+          "clp_bb33304d170",
+          "clp_bb33304d171",
+          "clp_bb33304d172"
         ],
         "midEscape": [
-          "clp_5ea62fe0821"
+          "clp_bb33304d171"
         ],
         "afterEscape": [
-          "clp_5ea62fe0820",
-          "clp_5ea62fe0821",
-          "clp_5ea62fe0822"
+          "clp_bb33304d170",
+          "clp_bb33304d171",
+          "clp_bb33304d172"
         ],
         "afterEscapeUp": [
-          "clp_5ea62fe0820",
-          "clp_5ea62fe0821",
-          "clp_5ea62fe0822"
+          "clp_bb33304d170",
+          "clp_bb33304d171",
+          "clp_bb33304d172"
         ]
       }
     },
@@ -499,7 +543,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 9/1799",
+        "valueText": "עוקב קדימה 20/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -760,18 +804,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_e8d2fd5c640",
-          "ast_2b62d3e9b00",
-          "ast_c766ce71aa0",
-          "ast_09292e37f30",
-          "ast_a537e005c40"
+          "ast_15b0955f590",
+          "ast_54ddd8385b0",
+          "ast_c5186cc5650",
+          "ast_ce1db5ba9b0",
+          "ast_10be188df50"
         ],
         "order1": [
-          "ast_e8d2fd5c640",
-          "ast_09292e37f30",
-          "ast_2b62d3e9b00",
-          "ast_c766ce71aa0",
-          "ast_a537e005c40"
+          "ast_15b0955f590",
+          "ast_ce1db5ba9b0",
+          "ast_54ddd8385b0",
+          "ast_c5186cc5650",
+          "ast_10be188df50"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -795,7 +839,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-18T17:32:04.457Z",
+          "createdAt": "2026-11-18T21:28:10.820Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -921,8 +965,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_dfd10df6de0",
-          "seq_dfd10df6de7"
+          "seq_cdb657b60d0",
+          "seq_cdb657b60d7"
         ],
         "revisions": 1,
         "transactions": [
@@ -932,7 +976,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_dfd10df6de0",
+          "seq": "seq_cdb657b60d0",
           "selected": "true"
         }
       }
@@ -963,9 +1007,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_dfd10df6de0"
+          "seq": "seq_cdb657b60d0"
         },
-        "secondTab": "seq_dfd10df6de0",
+        "secondTab": "seq_cdb657b60d0",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"

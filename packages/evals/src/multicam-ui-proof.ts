@@ -14,7 +14,7 @@
  *   U8  an RTL screenshot of the panel and the tile order; a keyboard-only path from the library multi-select to a placed
  *       program; accessible names on the panel's controls and the modal sync dialog. The scripted page audit (unnamed, contrast,
  *       tab order, focus rings in both languages) is a11y-audit.ts (pnpm audit:a11y; axe-core is not installed in this repo).
- * Writes .artifacts/multicam/multicam-ui-proof.json. Exit codes: 0 all checks pass, 1 a check failed, 2 blocked (the multicam
+ * Writes docs/evidence/multicam-ui-proof.json (screenshots in .artifacts/multicam/ui). Exit codes: 0 all checks pass, 1 a check failed, 2 blocked (the multicam
  * fixture, the server routes or core bodies are not built in this checkout, or no browser). Never a pass when blocked.
  *   pnpm build && pnpm proof:multicam-ui
  */
@@ -30,7 +30,7 @@ import { generateMulticamFixture } from '../../fixtures/src/multicam.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/multicam/ui');
-const OUT = path.join(root, '.artifacts/multicam/multicam-ui-proof.json');
+const OUT = path.join(root, 'docs/evidence/multicam-ui-proof.json'); // screenshots stay in .artifacts/multicam/ui
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
 const checks: { name: string; ok: boolean | null; detail?: unknown }[] = [];
@@ -57,7 +57,7 @@ async function main() {
   try { fixture = await generateMulticamFixture({ outDir: path.join(art, 'fixture'), seconds: 40, fps: R, narrationPath: path.join(root, 'docs/demo/narration-sample-he.m4a') }); }
   catch (e) { return blocked(`the multicam fixture generator is not available: ${e instanceof Error ? e.message : String(e)}`); }
 
-  const s = await startServer({ port: 8836, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 8838, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -88,9 +88,14 @@ async function main() {
     const boundaries = (d: any) => { const out: { frame: number; angleId: string }[] = []; let prev: string | null = null; for (const c of segs(d)) { if (prev !== null && c.multicam.angleId !== prev) out.push({ frame: T.frameIndexAt(c.start, R), angleId: c.multicam.angleId }); prev = c.multicam.angleId; } return out; };
     measurements.sync = (sync.body.pieces as any[]).map((p) => ({ angleId: p.angleId, verdict: p.verdict, offsetSeconds: p.offsetSeconds }));
     const initialSegs = segs(d0).length;
+    // place_multicam fills stretches the chosen camera does not cover from another synced camera (fill defaults to true), so the
+    // placed program can already hold angle changes; the cuts of the session are counted on top of those, which must lie past the cut range
+    const initialB = boundaries(d0);
+    measurements.initialBoundaries = initialB;
 
     // ---- the editor ----
     const ctx = await browser.newContext({ viewport: { width: 1500, height: 1000 } });
+    await ctx.addInitScript('globalThis.__name = (f) => f'); // tsx/esbuild helper referenced by functions passed to page.evaluate
     await ctx.addInitScript(([id, trackId]) => { (window as any).__pfAudioTap = true; try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'all'); localStorage.setItem(`pf.targets.v1.${id}`, JSON.stringify({ video: trackId, audio: null })); } catch { /* storage unavailable */ } }, [pid, track]);
     const page = await ctx.newPage();
     const errors: string[] = [];
@@ -149,8 +154,12 @@ async function main() {
     const d1 = await doc(pid);
     const bs = boundaries(d1);
     const expectAngle = (digit: number) => pictureIds[digit - 1];
-    const same = bs.length === 12 && bs.every((b, i) => b.frame === pressed[i]!.painted && b.angleId === expectAngle(pressed[i]!.digit));
-    check('U1: 12 digit keydowns during playback give exactly 1 new history entry with 12 cuts at the painted frames (+-0, reaction 0)', committed && same && (await historyCount(pid)) === h0 + 1, { newEntries: (await historyCount(pid)) - h0, cutFrames: bs.map((b) => b.frame), paintedFrames: pressed.map((x) => x.painted), live });
+    const fillOutside = initialB.every((b) => b.frame > LAST);
+    const want1 = [...pressed.map((x) => ({ frame: x.painted, angleId: expectAngle(x.digit) })), ...initialB];
+    const same = fillOutside && bs.length === want1.length && bs.every((b, i) => b.frame === want1[i]!.frame && b.angleId === want1[i]!.angleId);
+    check('U1: 12 digit keydowns during playback give exactly 1 new history entry with 12 cuts at the painted frames (+-0, reaction 0)', committed && same && (await historyCount(pid)) === h0 + 1, { newEntries: (await historyCount(pid)) - h0, cutFrames: bs.map((b) => b.frame), paintedFrames: pressed.map((x) => x.painted), placedBoundaries: initialB.map((b) => b.frame), live });
+    // every cut landed, so the live report must say 12 saved and must not call any of them unsaved (a stretch already on the angle is not a lost cut)
+    check('U1: the live report says 12 cuts were saved and none was lost', !!live && live.includes('12 חתכים נשמרו') && !live.includes('לא נשמרו'), { live });
     measurements.u1 = { pressed, cuts: bs };
     const wantsAudio = sess.clock === 'audio' && base.clock === 'audio';
     const ons = (x: any) => x.audioOnsetsTimelineSeconds as number[];
@@ -169,7 +178,7 @@ async function main() {
     check('U4: program paint lateness at the cut frames recorded against the baseline (a miss is reported, it decides wave-2 prefetch)', atCuts.length > 0, u4);
 
     // ---- U6: the preview canvas against render_frame at 5 cut frames ----
-    const sample = [bs[0]!, bs[2]!, bs[5]!, bs[8]!, bs[11]!];
+    const sample = [bs[0]!, bs[1]!, bs[2]!, bs[6]!, bs[10]!]; // digits 2, 3, 1, 2, 3: every picture angle is sampled
     const u6: unknown[] = [];
     let u6ok = true;
     for (const b of sample) {
@@ -181,17 +190,18 @@ async function main() {
       const png = (await fetch(`${s.url}/api/v1/projects/${pid}/frame?index=${b.frame}`, { headers: h }).then((r) => r.arrayBuffer()).then((a) => Buffer.from(a)));
       const dec = decodePng(png);
       const ren = [0, 1].map((c) => readBarcodeChannel(dec.rgb, dec.w, 3, rect(dec.w, dec.h), c as 0 | 1));
-      const ok = pre.join() === ren.join();
+      const ok = pre.join() === ren.join() && pre[1] === made.angleIds.indexOf(b.angleId); // and the barcode names the angle that was cut to
       u6ok = u6ok && ok;
       u6.push({ frame: b.frame, preview: pre, renderFrame: ren, expectedAngleIndex: made.angleIds.indexOf(b.angleId), ok });
     }
     void BARCODE;
-    check('U6: the preview canvas barcode equals render_frame at 5 cut frames', u6ok, u6);
+    check('U6: the preview canvas barcode equals render_frame at 5 cut frames (every picture angle) and names the angle cut to', u6ok, u6);
 
     // ---- U1 (undo): one undo removes all 12 ----
     await page.keyboard.press('Control+z');
-    const undone = await waitFor(async () => boundaries(await doc(pid)).length === 0 && segs(await doc(pid)).length === initialSegs);
-    check('U1: one undo removes all 12 cuts', undone, { segmentsBefore: initialSegs, segmentsAfter: segs(await doc(pid)).length });
+    const sameB = (x: { frame: number; angleId: string }[]) => x.length === initialB.length && x.every((b, i) => b.frame === initialB[i]!.frame && b.angleId === initialB[i]!.angleId);
+    const undone = await waitFor(async () => { const d = await doc(pid); return sameB(boundaries(d)) && segs(d).length === initialSegs; });
+    check('U1: one undo removes all 12 cuts', undone, { segmentsBefore: initialSegs, segmentsAfter: segs(await doc(pid)).length, boundariesAfter: boundaries(await doc(pid)).map((b) => b.frame) });
 
     // ---- U5: a digit while paused ----
     const f5 = 300;
@@ -233,12 +243,33 @@ async function main() {
     await page.goto(`${s.ownerUrl}&project=${pid}`);
     await page.getByTestId('multicam-panel').waitFor({ timeout: 30000 });
     const panel = page.getByTestId('multicam-panel');
+    // the Timeline's multicam badge: every program segment on screen carries «n · label» naming its own angle (no other test renders it)
+    const dB = await doc(pid);
+    const badges = await page.locator('[data-testid=multicam-badge]').evaluateAll((els) => els.map((e) => ({ clipId: (e.closest('[data-clip-id]') as HTMLElement | null)?.dataset.clipId ?? null, angleId: (e as HTMLElement).dataset.angleId ?? null, text: (e.textContent ?? '').trim(), w: e.getBoundingClientRect().width })));
+    const progBadges = segs(dB).map((c) => ({ c, b: badges.find((x) => x.clipId === c.id) }));
+    const shownSegs = (await page.locator('[data-clip-id]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.clipId))).filter((id) => segs(dB).some((c) => c.id === id));
+    const badgeOk = shownSegs.length > 0 && progBadges.filter((x) => shownSegs.includes(x.c.id)).every(({ c, b }) => !!b && b.w > 0 && b.angleId === c.multicam.angleId && b.text.startsWith(String(pictureIds.indexOf(c.multicam.angleId) + 1)));
+    check('U8: the Timeline shows a multicam badge «n · label» on every program segment on screen, naming its own angle', badgeOk, { shownSegments: shownSegs.length, badges: progBadges.filter((x) => shownSegs.includes(x.c.id)).map(({ c, b }) => ({ angle: c.multicam.angleId, badge: b ?? null })).slice(0, 8) });
     await panel.screenshot({ path: path.join(art, 'panel-rtl.png') });
     const tiles = await page.locator('[data-testid=multicam-tile]').evaluateAll((els) => els.map((e) => ({ n: (e as HTMLElement).dataset.tile, x: e.getBoundingClientRect().x, y: e.getBoundingClientRect().y, pressed: e.getAttribute('aria-pressed'), keys: e.getAttribute('aria-keyshortcuts') })));
     const dir = await page.evaluate(() => document.documentElement.dir);
     const rtlOk = dir === 'rtl' && tiles.length >= 2 && tiles[0]!.y === tiles[1]!.y ? tiles[0]!.x > tiles[1]!.x : dir === 'rtl' && tiles.length >= 2;
     const unnamed = await panel.locator('button, input, select, [role=spinbutton], [role=meter]').evaluateAll((els) => els.filter((e) => !(e.getAttribute('aria-label') || (e.textContent ?? '').trim() || (e as HTMLInputElement).labels?.length)).map((e) => e.outerHTML.slice(0, 80)));
     const modalOnPanel = (await panel.getAttribute('aria-modal')) !== null;
+    // the viewer canvas must read in the same order as the tile buttons: in Hebrew tile 1's angle is the top-right cell, tile 2's the top-left
+    // (barcode channel 1 = the angle's index in the group; read on the canvas pixels at the playhead after the reload)
+    // at frame 300 every camera has picture (camera 2 starts late in group time); poll the canvas until both top cells show a barcode
+    await seekTo(300);
+    const readViewer = async () => {
+      const vpx = await page.evaluate(() => { const c = document.querySelector('[data-testid=multicam-viewer] canvas') as HTMLCanvasElement; const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data; return { w: c.width, h: c.height, data: Array.from(d) }; });
+      const vbuf = Buffer.from(vpx.data);
+      const cell = (right: boolean) => readBarcodeChannel(vbuf, vpx.w, 4, { x: right ? vpx.w / 2 : 0, y: 0, w: vpx.w / 2, h: vpx.h / 2 }, 1);
+      return { topRight: cell(true), topLeft: cell(false) };
+    };
+    let vr = await readViewer();
+    for (const t = Date.now(); (vr.topRight === 0 || vr.topLeft === 0) && Date.now() - t < 15000; vr = await readViewer()) await sleep(200);
+    const viewerOrder = { ...vr, atFrame: 300, tile1Angle: made.angleIds.indexOf(pictureIds[0]!), tile2Angle: made.angleIds.indexOf(pictureIds[1]!) };
+    check('U8: the angle viewer canvas reads right to left like the tiles (tile 1\'s angle in the top-right cell, tile 2\'s in the top-left)', viewerOrder.topRight === viewerOrder.tile1Angle && viewerOrder.topLeft === viewerOrder.tile2Angle, viewerOrder);
     await page.getByTestId('multicam-sync-open').click();
     await page.getByTestId('multicam-sync-dialog').waitFor({ timeout: 10000 });
     const rows = await page.locator('[data-testid=multicam-sync-row]').count();
