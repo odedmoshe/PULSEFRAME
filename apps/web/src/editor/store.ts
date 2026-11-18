@@ -8,6 +8,7 @@ import { createContext, useContext, useSyncExternalStore } from 'react';
 import * as T from '@pulseframe/time';
 import { clipEnd, findClip, projectOutput, projectSequence, sequenceDuration, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun, type TemplateInput, type ExportMode, type SegmentPlanView } from '@pulseframe/core';
 import { groupTimeAt, multicamGroupOf, projectVariant, type SwitchAnglesOutput } from '@pulseframe/core';
+import type { TakeRequest, TakeResult } from '@pulseframe/core';
 import { createT, dictionaries, dirOf, translateRefusal, type Key, type Lang } from '@pulseframe/i18n';
 import { initGpu, type GpuStatus, type ImageLayer, type RenderGraph, type TextLayer, type VideoLayer } from '@pulseframe/engine';
 import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
@@ -149,6 +150,13 @@ export interface EditorState {
   multicamLive?: { text: string; n: number } | null;
   /** The reaction offset in frames (0–10) a new recording starts with. */
   multicamReaction?: number;
+  // ---- perform mode (ADR-0025): session state, never stored or sent in presence ----
+  /** A planned take shown for review (Editor.showGhost), or null/absent: the player shows it instead of the committed document. */
+  performGhost?: ProjectDocument | null;
+  /** A take is being recorded (Editor.setPerformRecording): the shortcut gate lets only Space through, and loads draw without stopping the sound when they can. */
+  performRecording?: boolean;
+  /** The linked format that was viewed when the perform workspace was entered, or that was chosen inside it (setViewVariant refuses it there: the view works on the master and says so, perform.masterOnly), or null. */
+  performLeftVariant?: string | null;
   /** The family film dialog (ADR-0026) is open. Session state only. */
   filmOpen: boolean;
   /** What the dialog was opened with: an event's files or the library selection (openFilm). */
@@ -225,7 +233,7 @@ const readTargets = (projectId: string): { video: string | null; audio: string |
 };
 /** Drag-and-drop type of a library file dragged onto the timeline (the payload is the asset id). */
 export const ASSET_DRAG_TYPE = 'application/x-pulseframe-asset';
-export const WORKSPACES = ['pro', 'quick', 'motion', 'color', 'captions', 'sound', 'deliver', 'shorts', 'custom'] as const;
+export const WORKSPACES = ['pro', 'quick', 'motion', 'color', 'captions', 'sound', 'deliver', 'shorts', 'perform', 'custom'] as const;
 export type Workspace = (typeof WORKSPACES)[number];
 const WS_KEY = 'pf.workspace.v1';
 const readWorkspace = (): Workspace => { try { const v = localStorage.getItem(WS_KEY); return (WORKSPACES as readonly string[]).includes(v ?? '') ? (v as Workspace) : 'pro'; } catch { return 'pro'; } };
@@ -354,7 +362,9 @@ export class Editor {
       this.set({ doc: projected, rawDoc: p.project, activeSequenceId, revision: p.revision, selection, viewVariantId, ...cut, ...targets, ...picker, ...cutGone, keySel, curvePicker });
       const vd = this.viewDoc;
       // while switches are being recorded (or committed) the sound plan is unchanged, so playback is not stopped (ADR-0020)
-      if (vd) { if (this.state.multicamRec || this.committingSession) this.player?.setPictureDoc(vd); else this.player?.setDoc(vd); }
+      // perform mode (ADR-0025): a ghost under review stays on screen (the view re-plans it on the new revision and shows it again);
+      // while a take is recorded the picture is replaced without stopping the sound when the sound plan is unchanged
+      if (vd && !this.state.performGhost) { if (this.state.multicamRec || this.committingSession || this.state.performRecording) this.player?.setPictureDoc(vd); else this.player?.setDoc(vd); }
     }
     return p;
   }
@@ -374,6 +384,9 @@ export class Editor {
   setViewVariant(id: string | null) {
     const doc = this.state.doc;
     const next = id && doc?.variants?.[id] ? id : null;
+    // perform mode (ADR-0025) works on the master only: takes and camera keys are planned for it, so a linked format is not
+    // shown there; the refused format is remembered for the view's note (perform.masterOnly), as on entering the workspace
+    if (next && this.state.workspace === 'perform') { this.set({ performLeftVariant: next }); return; }
     if (next === this.state.viewVariantId) return;
     this.set({ viewVariantId: next });
     const vd = this.viewDoc;
@@ -495,6 +508,42 @@ export class Editor {
     void this.pool?.dispose();
   }
 
+  // ---------- perform mode (ADR-0025): the editor side of perform/contract.ts PerformHost (lead) ----------
+  get performActive(): boolean { return this.state.workspace === 'perform'; }
+  get gpuReady(): boolean { return !!this.state.gpu?.available; }
+  /** Multicam live switching owns the number keys (its program is on the video target track): pads then take none. */
+  get multicamDigitsLive(): boolean { return !!this.multicamProgram(); }
+  setPerformRecording(on: boolean): void { if (!!this.state.performRecording !== on) this.set({ performRecording: on }); }
+  /** Review a planned take without committing it (the player restarts with its sound); null shows the committed document again. */
+  showGhost(doc: ProjectDocument | null): void {
+    this.set({ performGhost: doc });
+    const shown = doc ?? this.viewDoc;
+    if (shown) this.player?.setDoc(shown);
+  }
+  /** ONE POST /takes (one transaction, one undo) against the editor's revision, then reload; null when refused (the refusal is shown). */
+  async commitTake(req: Omit<TakeRequest, 'expectedRevision' | 'dryRun'>): Promise<TakeResult | null> {
+    return this.enqueue(async () => {
+      const { doc, revision } = this.state;
+      if (!doc) return null;
+      this.set({ save: 'save.saving', error: null });
+      try {
+        const r = await api.performTake(doc.id, { ...req, expectedRevision: revision }) as TakeResult;
+        this.set({ performGhost: null });
+        await this.load(doc.id);
+        this.set({ save: 'save.saved' });
+        return r;
+      } catch (e) {
+        if (e instanceof ApiFailure && (e.code === 'stale_revision' || e.code === 'conflict')) { await this.load(doc.id); this.set({ save: 'save.conflict' }); }
+        else { this.set({ save: 'save.saved' }); this.fail(e); }
+        return null;
+      }
+    });
+  }
+  /** A camera take's ops (three replace_clip_keyframes with the take range) as ONE transaction, labelled «צלם». */
+  async commitCamera(ops: OpCall[]): Promise<number | null> {
+    const r = await this.commit(ops, 'Virtual camera');
+    return r ? r.revision : null;
+  }
   // ---------- multicam live switching (ADR-0020) ----------
   private sessCache: { doc: ProjectDocument; rec: MulticamSession; out: ProjectDocument } | null = null;
   private committingSession = false;
@@ -825,7 +874,15 @@ export class Editor {
     if (!id) return;
     try { const { drop } = await dropApi.close(id, dropId); this.set({ drop, dropLive: null }); } catch (e) { if (e instanceof ApiFailure && e.code === 'drop_not_found') this.set({ drop: null }); else this.fail(e); }
   }
-  setWorkspace(workspace: Workspace) { try { localStorage.setItem(WS_KEY, workspace); } catch { /* ignore */ } this.set({ workspace }); }
+  setWorkspace(workspace: Workspace) {
+    try { localStorage.setItem(WS_KEY, workspace); } catch { /* ignore */ }
+    if (workspace === this.state.workspace) return;
+    // perform mode (ADR-0025) works on the master only: entering it leaves a viewed format (remembered for the view's note);
+    // leaving it drops a ghost and a recording
+    if (workspace === 'perform') { const left = this.state.viewVariantId; this.set({ workspace, performLeftVariant: left }); if (left) this.setViewVariant(null); return; }
+    if (this.state.workspace === 'perform') { this.set({ performRecording: false, performLeftVariant: null }); if (this.state.performGhost) this.showGhost(null); }
+    this.set({ workspace });
+  }
   /** 'toggle' adds the clip to the selection or removes it (Shift/Ctrl/⌘-click); the default replaces the selection. */
   select(id: string | null, mode: 'replace' | 'toggle' = 'replace') {
     const cur = this.state.selection;

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import * as T from '@pulseframe/time';
-import { describeRecipes, FORMAT_PROFILES } from '@pulseframe/core';
+import { describeRecipes, FORMAT_PROFILES, PERFORM_RECIPE_ID } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { api, ApiFailure, type RecipeAlternative, type RecipeParams, type RecipePlanResult } from '../api.ts';
 import { useEditorState } from './store.ts';
@@ -76,7 +76,8 @@ export function RecipesPanel() {
   };
   const useAlternative = (recipeId: string, alt: RecipeAlternative) => { loadParams(recipeId, alt.params); void plan(recipeId, alt.params); };
 
-  const recipeName = (id: string) => RECIPES.find((r) => r.id === id)?.name[lang] ?? id;
+  // a perform take (ADR-0025) is recorded as a run too; it has no form here, only its name
+  const recipeName = (id: string) => (id === PERFORM_RECIPE_ID ? t('perform.recipe') : RECIPES.find((r) => r.id === id)?.name[lang] ?? id);
   const runs = doc ? Object.values(doc.recipeRuns ?? {}) : [];
   const assetName = (id: string) => doc?.assets[id]?.name ?? id;
   const clipLabel = (c: (typeof audioClips)[number]) => `${c.type === 'media' ? assetName(c.assetId) : c.id} · ${rate ? T.toTimecode(c.start, rate) : ''}`;

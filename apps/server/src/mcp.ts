@@ -8,7 +8,7 @@ import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { NarrationBody, NarrationScriptBody, TranscribeBody, type Speech } from './speech.ts';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { MulticamSyncBody, listOps, RationalTimeSchema, summarize, timeline, transcriptFor, transcriptView, TRACKING_JOB_TYPE, TrackRunBody, MOMENTS_JOB_TYPE, StartMomentsBodySchema, MOMENTS_LABEL, BuildShortsBodySchema, FindShortsBodySchema, ReframePlanBodySchema, sequenceList, SHORTS_MEASUREMENT_KIND, shortsRefusal } from '@pulseframe/core';
+import { MulticamSyncBody, listOps, RationalTimeSchema, summarize, timeline, transcriptFor, transcriptView, TRACKING_JOB_TYPE, TrackRunBody, MOMENTS_JOB_TYPE, StartMomentsBodySchema, MOMENTS_LABEL, BuildShortsBodySchema, FindShortsBodySchema, ReframePlanBodySchema, sequenceList, SHORTS_MEASUREMENT_KIND, shortsRefusal, TakeRequestSchema } from '@pulseframe/core';
 import type { Auth, Principal, Scope } from './auth.ts';
 import type { Capabilities } from './capabilities.ts';
 import { ExportOptionsSchema, outputDoc, type Exporter } from './export.ts';
@@ -29,6 +29,7 @@ import { PROJECT_RESOURCE_KINDS, registerResourcesAndPrompts } from './mcpResour
 import type { Derivatives } from './derive.ts';
 import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
 import { multicamView, syncMulticam } from './multicamSync.ts';
+import { takeFor } from './perform.ts';
 import { cancelMomentsJob, momentsLaneOf, startMomentsJob } from './moments.ts';
 import { assertMayTakeRendered, forPrincipal, peopleAccess, peopleNote, readingAs } from './peoplePrivacy.ts';
 import { assertMayHandleImportJob, IMPORT_JOB_TYPE, type ImportQueue } from './importContracts.ts';
@@ -125,6 +126,9 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
       run(b.dryRun ? 'observe' : 'edit', () => { read(projectId); return syncMulticam(store, gov, principal, projectId, groupId, MulticamSyncBody.parse(b)); }));
     server.registerTool('get_multicam', { description: 'A multicam group: its angles and files with each file\'s sync verdict and measured quality, the group-time span each file covers, the program tracks that use it, program segments out of step with the master sound, the level envelopes\' state and the capture-time priors. Read-only.', inputSchema: z.object({ projectId: pid, groupId: z.string() }), annotations: ro }, ({ projectId, groupId }) =>
       run('observe', () => { read(projectId); return multicamView(store, projectId, groupId); }));
+    // perform mode (ADR-0025): a take's raw taps, planned on the server and committed as ONE internal apply_take (dryRun plans only)
+    server.registerTool('perform_take', { description: 'Record a performance take (perform mode): pad presses (timeline seconds, pads 0-7) with the pad bank (built-in moves: adjustment hits, zoom punch, sounds, titles, stickers; catalogue ids, never asset ids), the project assets each sound or sticker pad resolved to, and the snap settings (snap off/beat/half, tempo, strength). The server quantises and plans the take with fixed rules (no model) and commits it as ONE undoable step; a hit that would change light faster than three times a second, or needs what is missing, is left out and its chip says why. dryRun plans without changing anything (observe). Credentials in propose mode are refused. Answers 501 take_not_built while this build has no planner; 409 take_empty when no tap could be kept.', inputSchema: z.object({ projectId: pid, ...TakeRequestSchema.shape }) }, ({ projectId, ...b }) =>
+      run('observe', () => { read(projectId); return takeFor(store, gov, principal, projectId, TakeRequestSchema.parse(b)); }));
     const rparams = z.record(z.string(), z.unknown()).optional().describe('Recipe parameters (see list_catalog → recipes for each schema)');
     server.registerTool('plan_recipe', { description: 'Preview what a recipe would do to this project: its steps, the data it is based on and alternative settings. Recipes are rule-based multi-step edits (beat-montage, social-pack, tidy-speech, portrait-blur, family-film; see list_catalog → recipes, whose aiInput says when a recipe uses a result an AI model made earlier). Read-only.', inputSchema: z.object({ projectId: pid, recipeId: z.string(), params: rparams }), annotations: ro }, ({ projectId, recipeId, params }) => run('observe', () => { read(projectId); return planRecipeFor(store, projectId, recipeId, params, gov, principal); }));
     server.registerTool('apply_recipe', { description: 'Apply a recipe as ONE undoable step. Everything it creates is a normal editable object. Returns a runId for regenerate_recipe.', inputSchema: z.object({ projectId: pid, recipeId: z.string(), params: rparams }) }, ({ projectId, recipeId, params }) => run('observe', () => { read(projectId); return applyRecipe(store, gov, principal, projectId, recipeId, params); }));

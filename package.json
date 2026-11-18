@@ -85,7 +85,8 @@
     "baseline:keys": "tsx packages/evals/src/keys-baseline.ts",
     "proof:keyframes": "tsx packages/evals/src/keyframes-proof.ts",
     "proof:multicam": "tsx packages/evals/src/multicam-proof.ts",
-    "proof:multicam-ui": "tsx packages/evals/src/multicam-ui-proof.ts"
+    "proof:multicam-ui": "tsx packages/evals/src/multicam-ui-proof.ts",
+    "proof:perform": "tsx packages/evals/src/perform-proof.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

@@ -2,6 +2,8 @@
  * Whether a keyboard shortcut may run right now. Kept apart from the dispatcher in App.tsx so the rule can be tested
  * without a browser. Editing shortcuts never act on the timeline while the user is typing or while a modal dialog is open.
  */
+import { PERFORM_RECORDING_COMMANDS } from './perform/performKeys.ts';
+
 export interface ShortcutContext {
   /** The key was pressed in a text field, a select or editable text. */
   typing: boolean;
@@ -9,12 +11,16 @@ export interface ShortcutContext {
   paletteOpen: boolean;
   /** Any modal dialog is on screen: any element with aria-modal="true", whatever its class. */
   modalOpen: boolean;
+  /** A perform take is being recorded (ADR-0025): only the pads (the view's own listener), Space, and Escape (the view) act. */
+  performRecording?: boolean;
 }
 
 export function shortcutAllowed(chord: string, cmd: { id: string; group: string }, ctx: ShortcutContext): boolean {
   if (ctx.typing && !(chord.startsWith('Mod+') && cmd.group === 'view')) return false;
   // The palette's own toggle must still close it; nothing else runs behind the palette.
   if (ctx.paletteOpen) return cmd.id === 'view.palette';
+  // While a take is recorded nothing is edited or switched (multicam's digits included): perform/performKeys.ts.
+  if (ctx.performRecording) return PERFORM_RECORDING_COMMANDS.includes(cmd.id);
   // Any other modal dialog (projects, activity, source viewer, effects gallery, …): no editor shortcut acts behind it.
   return !ctx.modalOpen;
 }

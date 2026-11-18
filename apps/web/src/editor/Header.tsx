@@ -24,8 +24,8 @@ import { IconExport, IconRedo, IconUndo } from './icons.tsx';
 import { WORKSPACES, useEditorState, type Workspace } from './store.ts';
 import '../ds/chrome.css';
 
-const MODES: Workspace[] = ['pro', 'color', 'sound', 'captions', 'deliver', 'shorts'];
-const TINT: Record<string, string> = { pro: 'var(--pf-m-edit)', color: 'var(--pf-m-look)', sound: 'var(--pf-m-sound)', captions: 'var(--pf-m-captions)', deliver: 'var(--pf-m-deliver)', shorts: 'var(--pf-m-look)' };
+const MODES: Workspace[] = ['pro', 'color', 'sound', 'captions', 'deliver', 'shorts', 'perform'];
+const TINT: Record<string, string> = { pro: 'var(--pf-m-edit)', color: 'var(--pf-m-look)', sound: 'var(--pf-m-sound)', captions: 'var(--pf-m-captions)', deliver: 'var(--pf-m-deliver)', shorts: 'var(--pf-m-look)', perform: 'var(--pf-m-perform)' };
 const MODE_ICON: Record<string, string> = {
   pro: 'M4 6.5 12 12M4 17.5 12 12m0 0 8-7M12 12l8 7M5.5 5.5a2 2 0 1 0 0 .01M5.5 18.5a2 2 0 1 0 0 .01',
   color: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 0v18',
@@ -33,6 +33,8 @@ const MODE_ICON: Record<string, string> = {
   captions: 'M4 6h16v12H4zM8 11h3M13 11h3M8 14.5h8',
   deliver: 'M12 4v11m0 0-4-4m4 4 4-4M5 19h14',
   shorts: 'M8 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM10 18h4',
+  // perform (ADR-0025): four pads
+  perform: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
 };
 const ModeGlyph = ({ id }: { id: string }) => (
   <svg className="pf-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d={MODE_ICON[id]} /></svg>
@@ -47,11 +49,11 @@ export function Header() {
   const exporting = !!job && ['queued', 'running', 'cancel-requested'].includes(job.status);
   const [projectsOpen, setProjectsOpen] = useState(false);
 
-  // Shift+1…6 switch modes (§5). Not while typing, and not behind a dialog.
+  // Shift+1…7 switch modes (§5; Shift+7 is perform, ADR-0025). Not while typing, and not behind a dialog.
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target) || document.querySelector('[aria-modal="true"]')) return;
-      const m = /^Digit([1-6])$/.exec(e.code);
+      const m = /^Digit([1-7])$/.exec(e.code);
       if (m) { e.preventDefault(); editor.setWorkspace(MODES[Number(m[1]) - 1]!); }
     };
     window.addEventListener('keydown', on);
