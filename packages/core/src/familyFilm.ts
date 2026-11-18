@@ -16,9 +16,13 @@
  *    it plays backwards or at another speed); without music a steady FILM.fallbackBpm grid (steadyGrid). The grid is counted in
  *    UNITS of g beats from the film start: g = m/2 for an even meter m, else m (times 2 or 4 when the music is so fast that fewer
  *    than two spans fit [FILM.minSlotSeconds, FILM.maxSlotSeconds]: "counted on every second beat"). Allowed spans are
- *    {m/2 (even m), m, 2m, 4m} beats, i.e. {1, 2, 4, 8} or {1, 2, 4} units, inside that range. Every cut is a unit boundary
- *    (a bar start or a half-bar when the music has bars), snapped ONCE to the nearest frame; lengths are differences of snapped
- *    boundaries (ADR-0003).
+ *    {m/2 (even m), m, 2m, 4m} beats, i.e. {1, 2, 4, 8} or {1, 2, 4} units, inside that range. The unit boundaries are read
+ *    from the grid's own bar list, so irregular (hand-corrected) bars are followed: every bar start, plus the middle beat of each
+ *    bar of an even number of beats for half-bar units, or every q-th bar start for units of q bars; every g-th beat when the music
+ *    has no bar starts. Every cut is a unit boundary, snapped ONCE to the nearest frame; lengths are differences of snapped
+ *    boundaries (ADR-0003); spans and slot records count the real bars (else beats) between two boundaries. When music kept by
+ *    hand was moved so that no boundary lies on the film start, the first clip starts with the film and ends on a boundary; that
+ *    start is no cut on the grid and is listed in neither cuts list (said in basis).
  * 4. Spans: the allowed span nearest target/n seconds is the base; class A (both bases or a burst) one step longer, class C
  *    (flat and not active throughout, unmeasured, a still) one step shorter. Fitting happens in units, so tempo drift cannot
  *    move the film's end: too many picks for the target drop C, then B, then A picks, spread evenly over the order (never a
@@ -135,6 +139,13 @@ function activityOf(asset: Asset, r: FilmMomentsRecord | null, w: MomentWindow |
   return r.file.motion;
 }
 
+/** At most `max` lines in their order: every line of `must` is kept, the others in order while room is left. */
+function capKeeping(lines: readonly string[], must: readonly string[], max: number): string[] {
+  if (lines.length <= max) return [...lines];
+  const keep = new Set(must);
+  let room = max - lines.filter((x) => keep.has(x)).length;
+  return lines.filter((x) => keep.has(x) || room-- > 0);
+}
 /** Spread `count` choices evenly over `list` (never a run from one end). */
 function spread<X>(list: readonly X[], count: number): X[] {
   if (count <= 0) return [];
@@ -210,6 +221,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   const excludeSet = new Set(P.picks.exclude), includeSet = new Set(P.picks.include);
   const seen = new Set<string>();
   const cands: Cand[] = [];
+  const staleWindows: { wanted: number; name: string; have: number }[] = [];
   for (const [given, id] of P.assetIds.entries()) {
     if (seen.has(id)) continue;
     seen.add(id);
@@ -224,12 +236,15 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
     const wanted = own(P.picks.window, id);
     const ws = measured(rec) && !rec.flat ? rec.windows : [];
     const chosen = wanted !== undefined && wanted < ws.length;
-    if (wanted !== undefined && !chosen) basis.push(clipText(`window ${wanted} of "${quote(a.name)}" was asked for, but it has ${ws.length} measured window(s); its first one is used`));
+    if (wanted !== undefined && !chosen) staleWindows.push({ wanted, name: quote(a.name), have: ws.length });
     const windowIndex = ws.length ? (chosen ? wanted! : 0) : null;
     const capRaw = own(ctx.capture, id) ?? null;
     const captureAt = typeof capRaw === 'string' && WALL_DATE_TIME.test(capRaw) ? capRaw : null;
     cands.push({ asset: a, given, rec, windowIndex, chosen, second: false, cls: classOf(a, rec, windowIndex !== null ? ws[windowIndex]! : null), include: includeSet.has(id), capacity, captureAt, si: 0 });
   }
+  // one line for every window asked for that does not exist (a stale choice after measuring again), so they never crowd the basis
+  if (staleWindows.length === 1) { const w = staleWindows[0]!; basis.push(clipText(`window ${w.wanted} of "${w.name}" was asked for, but it has ${w.have} measured window(s); its first one is used`)); }
+  else if (staleWindows.length > 1) basis.push(clipText(`${staleWindows.length} window choices were asked for that the files do not have, so their first measured window is used: ${staleWindows.map((w) => `window ${w.wanted} of "${w.name}" (${w.have} measured)`).join(', ')}`));
   if (!cands.length && !keptPictures.length) throw new FilmError('nothing_to_do', 'none of the chosen files can go into the film (no picture, too short, left out or kept by hand)', 'Choose pictures or videos of at least 1.6 seconds.');
 
   // ===== 2. order =====
@@ -300,10 +315,51 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   }
   if (every > 1) basis.push(`the music is fast: counted on every ${every === 2 ? 'second' : 'fourth'} beat, so every slot lasts at least ${FILM.minSlotSeconds} s`);
   const unitSec = g * beatSec;
+  // The unit boundaries, read from the grid's own bar list (bar starts may be irregular: measured so, or corrected by hand).
+  // Half-bar units (g = m/2): every bar start, and the middle beat of every bar of an even number of beats (a bar of an odd
+  // number has no half-bar cut). Units of q = g/m bars: every q-th bar start from the first one at or after the film start.
+  // Music without bar starts: every g-th beat. The steady grid is regular (a bar every m beats from the film start) and endless.
+  type Bound = { t: RT; beat: number; bar: number | null };
+  let bounds: Bound[] | null = null;
+  let irregularBars = 0;
+  if (music) {
+    const beats: RT[] = [];
+    for (let k = 0; k < beatCount; k++) beats.push(beatK(k)!);
+    bounds = [];
+    if (music.bars) {
+      const starts: number[] = [];
+      for (let n = 1, k = 0; ; n++) {
+        const d = grid.barAfter(T.sub(at, TICK), n);
+        if (!d) break;
+        while (k < beats.length && T.lt(beats[k]!, d)) k++;
+        if (k >= beats.length) break;
+        if (T.eq(beats[k]!, d)) starts.push(k); // every bar start is one of the beats (edit_analysis, attach_analysis)
+      }
+      const perUnit = 2 * g === m ? 0 : g / m;
+      for (const [i, p] of starts.entries()) {
+        const next = starts[i + 1];
+        if (next !== undefined && next - p !== m) irregularBars++;
+        if (perUnit === 0) {
+          bounds.push({ t: beats[p]!, beat: p, bar: i });
+          const len = next !== undefined ? next - p : m;
+          if (len % 2 === 0 && p + len / 2 < beats.length) bounds.push({ t: beats[p + len / 2]!, beat: p + len / 2, bar: null });
+        } else if (i % perUnit === 0) bounds.push({ t: beats[p]!, beat: p, bar: i });
+      }
+    } else for (let k = 0; k < beats.length; k += g) bounds.push({ t: beats[k]!, beat: k, bar: null });
+  }
   /** the j-th unit boundary (j >= 0), exact; null past the music's last usable beat */
-  const bound = (j: number): RT | null => (j === 0 ? at : beatK(j * g));
+  const unitAt = (j: number): Bound | null => {
+    if (bounds) return bounds[j] ?? null;
+    const t = beatK(j * g);
+    return t ? { t, beat: j * g, bar: (j * g) % m === 0 ? (j * g) / m : null } : null;
+  };
+  const bound = (j: number): RT | null => unitAt(j)?.t ?? null;
   const boundF = (j: number): number | null => { const b = bound(j); return b ? nf(b) : null; };
-  const maxJ = music ? Math.floor((beatCount - 1) / g) : Infinity;
+  const maxJ = bounds ? bounds.length - 1 : Infinity;
+  /** The film start is a unit boundary, unless the music kept by hand was moved so that its first bar start (beat) lies later. */
+  const startOnGrid = boundF(0) === nf(at);
+  if (irregularBars) basis.push(`${irregularBars} bar(s) of the music do not have ${m} beats; the cuts follow the measured bar starts${2 * g === m ? ', and a bar of an odd number of beats has no half-bar cut' : ''}`);
+  if (!startOnGrid) basis.push(bound(0) ? `the music kept by hand has its first ${music?.bars ? 'bar start' : 'beat'} ${T.toSeconds(T.sub(bound(0)!, at)).toFixed(2)} s after the start of the film; the first clip starts with the film and its end, like every cut after it, is on the grid` : 'no bar start of the music kept by hand lies after the start of the film');
   const tempoText = music ? (music.bpm ? `${music.bpm.toFixed(1)} BPM` : 'unknown tempo') : `${FILM.fallbackBpm} BPM`;
   basis.unshift(music
     ? `${music.beatCount} measured beats of "${quote(music.name)}" (${tempoText}, confidence ${music.confidence ?? 'n/a'}${music.edited ? ', corrected by hand' : ''}${music.bars ? ', with bar starts' : ''}${music.kept ? ', placed by hand' : ''}); method: ${music.method}`
@@ -412,7 +468,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   };
   const slots: Slot[] = [];
   const dropped: Cand[] = [];
-  let curF = atF, curJ: number | null = 0;
+  let curF = atF, curJ: number | null = startOnGrid ? 0 : null;
   for (let i = 0; i < pool.length; i++) {
     const c = pool[i]!;
     for (const k of keptPictures) if (k.s <= curF && curF < k.e) { curF = k.e; curJ = null; }
@@ -499,8 +555,8 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   };
   const spanOf = (s: Slot): FilmPick['span'] => {
     if (s.startJ === null || s.endJ === null) return null;
-    const from = s.startJ * g, count = (s.endJ - s.startJ) * g;
-    return hasBars && count % m === 0 && from % m === 0 ? { count: count / m, unit: 'bar' } : { count, unit: 'beat' };
+    const a = unitAt(s.startJ)!, b = unitAt(s.endJ)!;
+    return hasBars && a.bar !== null && b.bar !== null ? { count: b.bar - a.bar, unit: 'bar' } : { count: b.beat - a.beat, unit: 'beat' };
   };
   const ownOn = P.ownSound !== 'mute';
   for (const [i, s] of slots.entries()) {
@@ -549,7 +605,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
       ...(k.sourceInFrame !== null ? { sourceIn: sourceTimeOfFrame(a, k.sourceInFrame) } : {}),
       withLinkedAudio: k.ownSound, ...(k.ownSound && ownTrack ? { audioTrackId: ownTrack.arg } : {}),
     }, bind: k.key });
-    plannedSlots.push({ key: k.key, kind: 'picture', clipId: ref(k.key), accept: isStill(a) ? 'image' : 'video', ...(k.span && s.startJ !== null && k.span.count <= 64 ? { beats: k.span.unit === 'bar' ? { from: (s.startJ * g) / m, count: k.span.count, unit: 'bar' as const } : { from: s.startJ * g, count: k.span.count, unit: 'beat' as const } } : {}) });
+    plannedSlots.push({ key: k.key, kind: 'picture', clipId: ref(k.key), accept: isStill(a) ? 'image' : 'video', ...(k.span && s.startJ !== null && k.span.count <= 64 ? { beats: k.span.unit === 'bar' ? { from: unitAt(s.startJ)!.bar!, count: k.span.count, unit: 'bar' as const } : { from: unitAt(s.startJ)!.beat, count: k.span.count, unit: 'beat' as const } } : {}) });
   }
   const shownFades = Math.min(fadeF, Math.floor(Math.min(...picks.map((k) => k.frames)) / 2));
   for (const k of sounding) {
@@ -626,7 +682,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
     const lastSlot = slots[slots.length - 1];
     const onGrid = lastSlot && lastSlot.endF === picturesEnd && lastSlot.endJ !== null ? lastSlot.endJ : null;
     const startT = ft(picturesEnd);
-    const exact = onGrid !== null ? beatK(onGrid * g + closingBeats) : grid.beatAfter(startT, closingBeats);
+    const exact = onGrid !== null ? beatK(unitAt(onGrid)!.beat + closingBeats) : grid.beatAfter(startT, closingBeats);
     const lo = Math.round(FILM.closingMinSeconds * fps), hi = Math.round(FILM.closingMaxSeconds * fps);
     let endF = exact ? nf(exact) : picturesEnd + lo;
     if (endF - picturesEnd < lo - 1 || endF - picturesEnd > hi + 1) endF = picturesEnd + lo;
@@ -646,7 +702,9 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   // ===== what the plan rests on, and what it predicts =====
   const offGrid = new Set<number>(), cuts = new Set<number>();
   for (const s of slots) {
-    (s.startJ !== null ? cuts : offGrid).add(s.startF);
+    // the film's own start, before the first bar start of music moved by hand, is no cut between clips and is not listed
+    if (s.startJ !== null) cuts.add(s.startF);
+    else if (!(s.startF === atF && !startOnGrid && !keptPictures.some((k) => k.e === atF))) offGrid.add(s.startF);
     (s.endJ !== null ? cuts : offGrid).add(s.endF);
   }
   for (const f of offGrid) cuts.delete(f);
@@ -665,10 +723,14 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
     w.message = `${w.message}; with them the film is ${seconds} s long`;
   }
   const videos = [...new Set(slots.filter((s) => !isStill(s.c.asset)).map((s) => s.c.asset.id))];
-  basis.push(
+  // every plan says it is a heuristic draft and that faces are not used: these lines survive any cap of the basis
+  const required = [
     clipText(`${FAMILY_FILM_METHOD}: ${FAMILY_FILM_DRAFT_LABEL.en}`),
-    `${videos.length - needsMeasurement.length} of ${videos.length} video(s) have measured moments (heuristic: motion, sharpness, brightness and sound level; no model)${needsMeasurement.length ? `; ${needsMeasurement.length} are not measured yet, so their middle is used` : ''}`,
-    FAMILY_FILM_FACES_NOTE,
+    clipText(`${videos.length - needsMeasurement.length} of ${videos.length} video(s) have measured moments (heuristic: motion, sharpness, brightness and sound level; no model)${needsMeasurement.length ? `; ${needsMeasurement.length} are not measured yet, so their middle is used` : ''}`),
+    clipText(FAMILY_FILM_FACES_NOTE),
+  ];
+  basis.push(
+    ...required,
     `${P.assetIds.length} chosen file(s), ${slots.length} clip(s) in the film; ${rate.num}/${rate.den} frames a second; cuts at least ${Math.max(gap, minF)} frames apart (flash safety)`,
   );
   if (kept.length) basis.push(`${kept.length} clip(s) edited by hand are kept; the new clips are laid around ${keptPictures.length} kept picture(s)`);
@@ -685,7 +747,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   ];
   return {
     recipeId: FAMILY_FILM_RECIPE_ID, templateId: FAMILY_FILM_TEMPLATE_ID, version: FAMILY_FILM_VERSION, params: P,
-    steps: steps.slice(0, FILM.maxSteps).map(clipText), basis: basis.slice(0, FILM.maxSteps).map(clipText), warnings, blocking, alternatives,
+    steps: steps.slice(0, FILM.maxSteps).map(clipText), basis: capKeeping(basis.map(clipText), required, FILM.maxSteps), warnings, blocking, alternatives,
     picks, excluded, needsMeasurement, ops, slots: plannedSlots,
     predicted: { startFrame: filmStartF, endFrame: filmEndF, cuts: [...cuts].sort((a, b) => a - b), offGridCuts: [...offGrid].sort((a, b) => a - b), gapFrames, seconds, targetSeconds: P.targetSeconds },
     method: FAMILY_FILM_METHOD,

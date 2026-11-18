@@ -7,7 +7,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  canonical, clipEnd, FamilyFilmParamsSchema, FILM, FILM_BINDS, FILM_FORBIDDEN_WORDS, FILM_FORBIDDEN_WORDS_HE, FILM_PICK_KEY, FilmError, findClip, flashGapFrames, sourceTimeOfFrame, validateProject, videoFrames,
+  canonical, clipEnd, FAMILY_FILM_DRAFT_LABEL, FAMILY_FILM_FACES_NOTE, FamilyFilmParamsSchema, FILM, FILM_BINDS, FILM_FORBIDDEN_WORDS, FILM_FORBIDDEN_WORDS_HE, FILM_PICK_KEY, FilmError, findClip, flashGapFrames, sourceTimeOfFrame, validateProject, videoFrames,
   type FamilyFilmPlan, type FilmPlanContext, type ProjectDocument,
 } from './index.ts';
 import { FAMILY_FILM_BUILT, filmPickKey, planFamilyFilm } from './familyFilm.ts';
@@ -155,6 +155,90 @@ describe('property: 200 seeded grids with +-3 % tempo drift', () => {
         if (c.type === 'media' && out.doc.assets[c.assetId]!.kind !== 'image') expect(T.lte(T.add(c.sourceIn, c.duration), out.doc.assets[c.assetId]!.duration)).toBe(true);
       }
     }), { numRuns: 200, seed: 20261118 });
+  }, 120_000);
+});
+
+/** Replace the bar starts of `mus` by a hand-corrected, irregular list: bar i lasts lens(i) beats, from the first beat. */
+const irregularBars = (d: ProjectDocument, lens: (i: number) => number) => {
+  const an = d.analyses.mus!.beats!;
+  const downs: T.RationalTime[] = [];
+  for (let k = 0, i = 0; k < an.beats.length; k += lens(i++)) downs.push(an.beats[k]!);
+  d.analyses.mus = { ...d.analyses.mus!, beats: { ...an, downbeats: downs, origin: { ...an.origin, edited: true } } };
+  return d;
+};
+/**
+ * The measured bars of the music as the planner must cut on them (the music starts at its first bar start, at the film start):
+ * per bar start and half-bar (the middle beat of a bar of an even number of beats, even meter) its frame, bar index and beat index.
+ */
+const measuredBars = (d: ProjectDocument, meter: number, start: T.RationalTime = T.ZERO) => {
+  const an = d.analyses.mus!.beats!, rate = d.settings.frameRate;
+  const first = an.downbeats![0]!;
+  const beats = an.beats.filter((b) => !T.lt(b, first));
+  const idx = (t: T.RationalTime) => beats.findIndex((b) => T.eq(b, t));
+  const starts = an.downbeats!.map(idx);
+  const frame = (k: number) => T.nearestFrameIndex(T.add(start, T.sub(beats[k]!, first)), rate);
+  const bars = new Map<number, { bar: number; beat: number }>(), halves = new Map<number, number>();
+  starts.forEach((p, i) => {
+    bars.set(frame(p), { bar: i, beat: p });
+    const len = (starts[i + 1] ?? p + meter) - p;
+    if (meter % 2 === 0 && len % 2 === 0 && p + len / 2 < beats.length) halves.set(frame(p + len / 2), p + len / 2);
+  });
+  const beatOf = (f: number) => bars.get(f)?.beat ?? halves.get(f);
+  return { bars, halves, beatOf };
+};
+/** Every cut, pick span and slot record of `p` against the measured bars. */
+const expectOnMeasuredBars = (p: FamilyFilmPlan, mb: ReturnType<typeof measuredBars>) => {
+  for (const c of p.predicted.cuts) expect(mb.beatOf(c), `cut at frame ${c} is neither a measured bar start nor a half-bar`).not.toBeUndefined();
+  for (const [i, k] of p.picks.entries()) {
+    if (!k.span) continue;
+    const a = k.startFrame, b = k.startFrame + k.frames;
+    if (k.span.unit === 'bar') {
+      expect(mb.bars.has(a) && mb.bars.has(b), `pick ${i} is labelled in bars but does not run from bar start to bar start`).toBe(true);
+      expect(k.span.count).toBe(mb.bars.get(b)!.bar - mb.bars.get(a)!.bar);
+      expect(p.slots.find((s) => s.key === k.key)!.beats).toEqual({ from: mb.bars.get(a)!.bar, count: k.span.count, unit: 'bar' });
+    } else {
+      expect(k.span.count).toBe(mb.beatOf(b)! - mb.beatOf(a)!);
+      expect(p.slots.find((s) => s.key === k.key)!.beats).toEqual({ from: mb.beatOf(a)!, count: k.span.count, unit: 'beat' });
+    }
+  }
+};
+
+describe('hand-corrected, irregular bar starts', () => {
+  it('one bar of three beats in 4/4: every cut is still on a measured bar start or half-bar, and the spans count the real bars', () => {
+    const d = irregularBars(withSong(clips(12, 12), 120, 200), (i) => (i === 2 ? 3 : 4));
+    expect(d.analyses.mus!.beats!.downbeats!.slice(0, 6).map((b) => d.analyses.mus!.beats!.beats.findIndex((x) => T.eq(x, b)))).toEqual([0, 4, 8, 11, 15, 19]);
+    const p = plan(d, { assetIds: ids(12), musicAssetId: 'mus', targetSeconds: 60, order: 'given' });
+    expect(p.predicted.cuts.length).toBeGreaterThan(8);
+    expectOnMeasuredBars(p, measuredBars(d, 4));
+    expect(p.basis.join(' ')).toMatch(/1 bar\(s\) of the music do not have 4 beats/);
+    applied(d, p);
+  });
+  it('property: 150 seeded irregular bar lists (meter 3, 4, 6; bars one beat shorter or longer), with tempo drift', () => {
+    fc.assert(fc.property(fc.record({
+      seed: fc.integer({ min: 1, max: 1_000_000 }), bpm: fc.integer({ min: 60, max: 180 }), meter: fc.constantFrom(3, 4, 6), n: fc.integer({ min: 2, max: 12 }),
+      target: fc.constantFrom(30, 60, 90), rate: fc.constantFrom(...RATES), odd: fc.integer({ min: 2, max: 6 }),
+    }), (r) => {
+      const rnd = seeded(r.seed);
+      let d = project(r.rate);
+      const list: string[] = [];
+      for (let i = 0; i < r.n; i++) {
+        const id = `v${i}`;
+        d.assets[id] = video(id, 3 + Math.floor(rnd() * 25), { rate: r.rate });
+        const frames = videoFrames(d.assets[id]!)!;
+        if (rnd() < 0.7) d = withMoments(d, id, { windows: [win({ peakFrame: Math.floor(frames / 2), fromFrame: Math.floor(frames / 4), toFrame: Math.floor((3 * frames) / 4) })] });
+        list.push(id);
+      }
+      withSong(d, r.bpm, r.target + 40, { drift: 0.03, seed: r.seed, meter: r.meter });
+      const lens = Array.from({ length: 400 }, () => (rnd() < 1 / r.odd ? r.meter + (rnd() < 0.5 ? -1 : 1) : r.meter));
+      irregularBars(d, (i) => lens[i % lens.length]!);
+      const p = plan(d, { assetIds: list, targetSeconds: r.target, musicAssetId: 'mus', order: 'given' });
+      expectOnMeasuredBars(p, measuredBars(d, r.meter));
+      expect(p.predicted.offGridCuts).toEqual([]);
+      const all = [...p.predicted.cuts, p.predicted.endFrame].sort((a, b) => a - b);
+      const gap = flashGapFrames(r.rate.num / r.rate.den);
+      for (let i = 1; i < all.length; i++) expect(all[i]! - all[i - 1]!).toBeGreaterThanOrEqual(gap);
+      applied(d, p);
+    }), { numRuns: 150, seed: 20261119 });
   }, 120_000);
 });
 
@@ -489,6 +573,20 @@ describe('regeneration', () => {
     expect(r.plan.slots.map((s) => s.key)).not.toContain(pic.key);
     expect(r.plan.picks.map((k) => k.assetId)).not.toContain('v11');
   });
+  it('kept music moved by hand off the film start: the film start is not listed as a cut on the grid, and every cut is on its bars', () => {
+    const { doc, runId } = first();
+    const music = doc.recipeRuns[runId]!.slots!.find((s) => s.key === FILM_BINDS.music)!;
+    const c = findClip(doc, music.clipId)!.clip;
+    const moved = edit(doc, [{ op: 'move_clip', args: { clipId: music.clipId, start: T.add(c.start, fr(7)) } }]);
+    const r = regenerateFilm(moved, runId);
+    check(moved, runId, r);
+    expect(r.plan.predicted.startFrame).toBe(0);
+    expect(r.plan.predicted.cuts).not.toContain(0);
+    expect(r.plan.predicted.offGridCuts).toEqual([]);
+    expect(r.plan.picks[0]!.span).toBeNull();
+    expectOnMeasuredBars(r.plan, measuredBars(moved, 4, fr(7)));
+    expect(r.plan.basis.join(' ')).toMatch(/first bar start/);
+  });
   it('kept music defines the grid; music played backwards blocks the plan', () => {
     const { doc, runId } = first();
     const music = doc.recipeRuns[runId]!.slots!.find((s) => s.key === FILM_BINDS.music)!;
@@ -548,6 +646,18 @@ describe('determinism, frozen input and caps', () => {
     const picked = p.picks.map((k) => ({ key: k.key, assetId: k.assetId, kind: k.kind, windowIndex: k.windowIndex, reasons: k.reasons }));
     expect(JSON.stringify({ ...p.params, picked }).length).toBeLessThanOrEqual(FILM.runRecordBytes);
     applied(d, p);
+  });
+  it('60 stale window choices do not push the draft label, the heuristic line or the faces note out of the basis', () => {
+    const d = clips(60, 12);
+    const window = Object.fromEntries(ids(60).map((id) => [id, 2]));
+    const p = plan(d, { assetIds: ids(60), targetSeconds: 90, picks: { window } });
+    expect(p.basis.length).toBeLessThanOrEqual(FILM.maxSteps);
+    expect(p.basis).toContain(FAMILY_FILM_FACES_NOTE);
+    expect(p.basis.some((s) => s.includes(FAMILY_FILM_DRAFT_LABEL.en))).toBe(true);
+    expect(p.basis.some((s) => /have measured moments \(heuristic/.test(s))).toBe(true);
+    const notes = p.basis.filter((s) => /was asked for|were asked for/.test(s));
+    expect(notes.length).toBe(1);
+    expect(notes[0]).toMatch(/60 window choices/);
   });
 });
 
