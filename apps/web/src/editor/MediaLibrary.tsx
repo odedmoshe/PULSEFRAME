@@ -11,6 +11,9 @@ import { CHROME_STRINGS } from './chrome.strings.ts';
 import { onMenuKeyDown } from './menuKeys.ts';
 import { InlineRename } from './InlineRename.tsx';
 import { MEDIA_STRINGS } from './media.strings.ts';
+import { CaptureEditor, DateBadge } from './lifeline/CaptureEditor.tsx';
+import { LIFE_STRINGS } from './lifeline/lifeline.strings.ts';
+import { LIFE_TESTIDS } from './lifeline/lifeline.testids.ts';
 import './mediaLibrary.css';
 
 type Loaded = LoadedDerivative<ImageBitmap> | null;
@@ -99,6 +102,7 @@ function CardMenu({ a, doc, isLut, isUsed, onView }: { a: Asset; doc: ProjectDoc
   const S = CHROME_STRINGS[state.lang];
   const M = MEDIA_STRINGS[state.lang];
   const [at, setAt] = useState<{ top: number; left: number } | null>(null);
+  const [dating, setDating] = useState(false); // the capture date dialog (life line, ADR-0021)
   const btn = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
   const notices = assetNotices(a);
@@ -144,12 +148,14 @@ function CardMenu({ a, doc, isLut, isUsed, onView }: { a: Asset; doc: ProjectDoc
           )}
           <div className="pf-mc-menu" role="menu" aria-label={`${S.cardMore}: ${a.name}`} onKeyDown={(e) => { if (e.key === 'Tab') close(); else onMenuKeyDown(e); }}>
           {a.kind !== 'image' && !isLut && <button type="button" role="menuitem" className="pf-mc-item" data-testid={`view-${a.id}`} onClick={() => { setAt(null); onView(a.id); }}><Eye size={16} strokeWidth={1.75} aria-hidden="true" />{t('source.open')}</button>}
+          {(a.kind === 'video' || a.kind === 'image') && <button type="button" role="menuitem" className="pf-mc-item" data-testid={LIFE_TESTIDS.captureEdit} onClick={() => { setAt(null); setDating(true); }}>{LIFE_STRINGS[state.lang].captureMenu}</button>}
           <div role="separator" className="pf-mc-sep" />
           <button type="button" role="menuitem" className="pf-mc-item is-danger" disabled={isUsed} aria-disabled={isUsed || undefined} aria-describedby={isUsed ? `why-${a.id}` : undefined} title={isUsed ? (isLut ? M.lutRemoveUsed : t('media.remove.used')) : undefined} data-testid={`remove-${a.id}`}
             onClick={() => { close(); void editor.commit([{ op: 'remove_asset', args: { assetId: a.id } }], 'Remove file'); }}><Trash2 size={16} strokeWidth={1.75} aria-hidden="true" />{S.cardRemove}</button>
           </div>
           {isUsed && <p className="pf-mc-why" id={`why-${a.id}`}>{isLut ? M.lutRemoveUsed : t('media.remove.used')}</p>}
         </div>, document.body)}
+      {dating && <CaptureEditor assetId={a.id} onClose={() => { setDating(false); btn.current?.focus(); }} />}
     </>
   );
 }
@@ -195,6 +201,7 @@ export function MediaGrid({ onView, query = '', filter = 'all', only }: { onView
             </div>
             <span className="pf-mc-name"><span className="asset-name" dir="auto" title={a.name}>{stem(a.name)}</span>
               <InlineRename value={a.name} label={`${t('media.rename')}: ${a.name}`} testid={`rename-${a.id}`} className="pf-mc-rename" onCommit={(name) => void editor.commit([{ op: 'rename_asset', args: { assetId: a.id, name } }], 'Rename file')} /></span>
+            <DateBadge assetId={a.id} />
             {(bpm || shots || lang) && (
               <span className="pf-mc-glyphs">
                 {bpm && <span title={C.badgeBeat}><bdi className="num">{bpm}</bdi> {C.bpmWord}</span>}

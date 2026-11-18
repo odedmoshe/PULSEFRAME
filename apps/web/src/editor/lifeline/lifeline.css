@@ -121,3 +121,13 @@
 .pf-fam { display: flex; flex-direction: column; gap: var(--pf-sp-3); }
 .pf-fam-list { margin: 0; padding-inline-start: var(--pf-sp-7); color: var(--pf-text); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
 @media (max-width: 520px) { .pf-pp-row { grid-template-columns: 1fr; } }
+
+/* ---- mounts of the packs, the music and the fonts in the browser drawer (PacksMount.tsx) ---- */
+.pf-bw-audio > .pf-tabs { margin: var(--pf-sp-3) var(--pf-sp-6) var(--pf-sp-4); }
+.pf-bw-audio > [role='tabpanel'] { min-block-size: 0; }
+.pf-bw-audio > [role='tabpanel']:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: -2px; }
+.pf-packs-mount { display: flex; flex-direction: column; gap: var(--pf-sp-5); min-inline-size: 0; }
+.pf-fonts-mount { display: flex; flex-direction: column; gap: var(--pf-sp-4); margin-block-start: var(--pf-sp-6); min-inline-size: 0; }
+.pf-fonts-mount .pf-bw-title { margin: 0; font-size: var(--pf-fs-md); line-height: var(--pf-lh-md); font-weight: 600; color: var(--pf-text); }
+/* the media drawer's view switch sits between the filter chips and the cards */
+.pf-bw-pane > .pf-life-view { margin-block-end: var(--pf-sp-2); }

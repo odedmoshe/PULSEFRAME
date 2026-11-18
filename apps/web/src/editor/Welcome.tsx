@@ -17,6 +17,7 @@ import { useEditorState } from './store.ts';
 import { TEMPLATE_TESTIDS } from './templates.testids.ts';
 import { templateApi } from './templateDialog.logic.ts';
 import { WELCOME_STRINGS } from './welcome.strings.ts';
+import { OnThisDayCard } from './lifeline/OnThisDayCard.tsx';
 import '../ds/chrome.css';
 import './welcome.css';
 import './templates.css';
@@ -74,6 +75,9 @@ export function Welcome() {
           <input ref={inputRef} type="file" multiple accept={ACCEPT} hidden tabIndex={-1} data-testid="welcome-input"
             onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; take(fs); }} />
         </div>
+
+        {/* life line: files of this day of an earlier year; absent when there are none or this is not the owner's session; «פתיחה» opens that project with the event in view */}
+        <OnThisDayCard onOpen={(projectId, assetId) => { location.assign(`/?project=${encodeURIComponent(projectId)}#life-asset=${encodeURIComponent(assetId)}`); }} />
 
         <div className="pf-hub-cols">
           <section className="pf-hub-sec" aria-labelledby="pf-hub-fmt">

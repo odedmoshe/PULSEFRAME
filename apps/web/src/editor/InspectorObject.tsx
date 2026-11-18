@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import type { Asset, Clip, OpCall, ProjectDocument } from '@pulseframe/core';
-import { beatPositionAt, clipEnd, findClip, findEffect, fitScale, FONT_CATALOG, speedValue, TEXT_PRESETS, transitionDef } from '@pulseframe/core';
+import { beatPositionAt, clipEnd, findClip, findEffect, fitScale, speedValue, TEXT_PRESETS, transitionDef } from '@pulseframe/core';
 import { effectParamLabel, type Key } from '@pulseframe/i18n';
 import { chordLabel, COMMANDS, coverEditOps, keyframeProps, type Keymap } from './commands.ts';
 import { ADJUST_STRINGS } from './adjust.strings.ts';
@@ -41,6 +41,8 @@ import { cutBefore, keyframeSummary, matchingPreset, objectActions, secondsText,
 import { TextStyles } from './TextStyles.tsx';
 import { CutPanel, TransitionPanel } from './InspectorCut.tsx';
 import { ProjectPanel } from './InspectorProject.tsx';
+import { FontPicker } from './FontPicker.tsx';
+import { FieldLiveLine, FieldMenu, FieldTextBox } from './lifeline/FieldMenu.tsx';
 
 type Media = Extract<Clip, { type: 'media' }>;
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -793,6 +795,7 @@ function TextTab({ clip, viewClip }: PanelProps) {
   const { editor, state, t } = useEditorState();
   const S = INSPECTOR_STRINGS[state.lang];
   const tx = useText(clip, viewClip);
+  const [caret, setCaret] = useState<number | null>(null); // where the field menu puts a field (life line, ADR-0021)
   if (clip.type !== 'text') return null;
   const variantId = tx.variantId;
   const hasTextOverride = !!(tx.textOverride && (tx.textOverride.text !== undefined || tx.textOverride.textStyle));
@@ -803,10 +806,15 @@ function TextTab({ clip, viewClip }: PanelProps) {
   return (
     <>
       <Section id="text" title={S.secWords}>
-        <label className="insp-area"><span className="sr-only">{t('text.content')}</span>
-          <textarea dir="auto" rows={3} value={tx.text} data-testid="text-content" onChange={(e) => tx.setText(e.target.value)} onBlur={tx.commit} />
-          <span className="insp-count num" aria-hidden="true">{tx.text.length}</span>
-        </label>
+        {/* a title with live fields shows its readable form (FieldTextBox); every other title keeps the plain box, which only reports its caret */}
+        {clip.fields && !variantId ? <FieldTextBox clipId={clip.id} onCaret={setCaret} /> : (
+          <label className="insp-area"><span className="sr-only">{t('text.content')}</span>
+            <textarea dir="auto" rows={3} value={tx.text} data-testid="text-content" onChange={(e) => { tx.setText(e.target.value); setCaret(e.target.selectionStart); }} onSelect={(e) => setCaret(e.currentTarget.selectionStart)} onBlur={tx.commit} />
+            <span className="insp-count num" aria-hidden="true">{tx.text.length}</span>
+          </label>
+        )}
+        <FieldMenu clipId={clip.id} caret={caret} />
+        <FieldLiveLine clipId={clip.id} />
         {variantId && (
           <p className="muted" data-testid="text-format-note">{t(hasTextOverride ? 'text.formatOnly.set' : 'text.formatOnly.hint')}
             {hasTextOverride && <> <button type="button" className="ghost" data-testid="text-format-reset" onClick={() => void editor.commit([{ op: 'set_variant_override', args: { variantId, clipId: clip.id, text: null, textStyle: null } }], 'Reset format text')}>{t('text.formatOnly.reset')}</button></>}
@@ -814,11 +822,9 @@ function TextTab({ clip, viewClip }: PanelProps) {
         )}
       </Section>
       <Section id="font" title={S.secFont}>
-        <label>{t('font.family')}
-          <select value={clip.style.fontFamily} data-testid="text-font" onChange={(e) => void editor.commit([{ op: 'update_text', args: { clipId: clip.id, style: { fontFamily: e.target.value } } }], 'Font')}>
-            {FONT_CATALOG.map((f) => <option key={f.family} value={f.family} style={{ fontFamily: `"${f.family}"` }}>{f.family}</option>)}
-          </select>
-        </label>
+        {/* the font picker (ADR-0022): each face drawn in itself, category chips, «ניקוד נבדק», pairings; one update_text */}
+        <FontPicker label={t('font.family')} lang={state.lang} value={{ family: clip.style.fontFamily, weight: clip.style.fontWeight }}
+          onChange={(f) => void editor.commit([{ op: 'update_text', args: { clipId: clip.id, style: { fontFamily: f.family, fontWeight: f.weight } } }], 'Font')} />
         <SizeRow key={variantId ?? 'master'} size={size} commit={sizeCommit} />
       </Section>
     </>

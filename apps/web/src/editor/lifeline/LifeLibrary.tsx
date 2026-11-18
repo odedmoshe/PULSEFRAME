@@ -10,6 +10,7 @@ import { CalendarDays } from 'lucide-react';
 import { eventOfAsset } from '@pulseframe/core';
 import { Button, Seg } from '../../ds/index.ts';
 import { ApiFailure } from '../../api.ts';
+import { setRail } from '../chromeState.ts';
 import { MediaGrid } from '../MediaLibrary.tsx';
 import { useEditorState } from '../store.ts';
 import { EventRow } from './EventRow.tsx';
@@ -152,7 +153,7 @@ export function LifeHost(): ReactElement | null {
     const id = m[1]!;
     try { history.replaceState(null, '', location.pathname + location.search); } catch { /* ignore */ }
     const e = Object.hasOwn(doc.assets, id) ? eventOfAsset(doc, id) : null;
-    if (e) showEvent(e.id); else setLifeView('date');
+    if (e) showEvent(e.id); else { setRail('media'); setLifeView('date'); }
   }, [doc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   return <PeopleSheet open={ui.peopleOpen} focusPersonId={ui.peopleFocus} onClose={closePeople} />;
 }

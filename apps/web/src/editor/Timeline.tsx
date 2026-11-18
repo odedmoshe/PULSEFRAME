@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import {
-  toSourceSpan, clipEnd, findAudioEffect, findEffect, getOp, sortAudioFx, sourceEnd, speedValue, timelineAt, timelineMarkers, transcriptFor, velocityLimit, MARKER_COLORS,
+  toSourceSpan, clipEnd, fieldsToDisplay, findAudioEffect, findEffect, getOp, sortAudioFx, sourceEnd, speedValue, timelineAt, timelineMarkers, transcriptFor, velocityLimit, MARKER_COLORS,
   type Clip, type Marker, type ProjectDocument, type Track,
 } from '@pulseframe/core';
 import { duckEnvelope, flashSchedule, speechRanges } from '@pulseframe/engine';
@@ -31,7 +31,7 @@ import './timeline.css';
 const MAX_MARKERS = 3000;
 type MediaClip = Extract<Clip, { type: 'media' }>;
 
-export const clipLabel = (doc: ProjectDocument, c: Clip) => (c.type === 'media' ? doc.assets[c.assetId]?.name ?? c.assetId : c.type === 'adjustment' ? c.label ?? '' : c.text);
+export const clipLabel = (doc: ProjectDocument, c: Clip, lang: 'he' | 'en' = 'he') => (c.type === 'media' ? doc.assets[c.assetId]?.name ?? c.assetId : c.type === 'adjustment' ? c.label ?? '' : c.type === 'text' && c.fields ? fieldsToDisplay(lang, c.text, doc) : c.text); // a title with live fields shows the readable form, `{תאריך}`, never the stored `{date}`
 /** A file name as the timeline shows it: without its extension. */
 const bare = (name: string) => name.replace(/\.[a-z0-9]{2,5}$/i, '');
 
@@ -385,7 +385,7 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
           const tail = p.tails.get(c.id);
           // an adjustment clip (ADR-0016) is named by its label, else by the track kind and its effects
           const adjFx = c.type === 'adjustment' ? (c.effects ?? []).filter((x) => x.enabled).map((x) => findEffect(x.type)?.name[lang] ?? x.type) : [];
-          const label = c.type === 'adjustment' && !c.label ? `${t('track.adjustment')}${adjFx.length ? `: ${adjFx.join(', ')}` : ''}` : c.type === 'media' ? bare(clipLabel(doc, c)) : clipLabel(doc, c);
+          const label = c.type === 'adjustment' && !c.label ? `${t('track.adjustment')}${adjFx.length ? `: ${adjFx.join(', ')}` : ''}` : c.type === 'media' ? bare(clipLabel(doc, c)) : clipLabel(doc, c, lang);
           const tailS = tail && tail.seconds >= 0.05 ? tail.seconds : 0;
           const fxLabel = `${fxNames.length ? `; ${t('timeline.fx')}: ${fxNames.join(', ')}` : ''}${tailS ? `; ${t('timeline.fx.tail')} ${tailS.toFixed(1)} ${t('sound.fx.seconds')}` : ''}`;
           const kind = kindOf(doc, lane, c);

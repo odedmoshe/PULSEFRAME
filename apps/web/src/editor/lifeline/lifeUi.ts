@@ -4,6 +4,7 @@
  * thing of the life line kept in browser storage (every access guarded); nothing here is a project edit.
  */
 import { useSyncExternalStore } from 'react';
+import { setRail } from '../chromeState.ts';
 import { readLifeView, writeLifeView, type LifeView } from './lifeLibrary.logic.ts';
 
 interface Ui { view: LifeView; peopleOpen: boolean; peopleFocus: string | null; /** an event to bring into view in the events list (a request counter makes each one new) */ showEvent: { eventId: string; n: number } | null }
@@ -19,4 +20,4 @@ export function setLifeView(view: LifeView): void { writeLifeView(view); set({ v
 export function openPeople(focusPersonId: string | null = null): void { set({ peopleOpen: true, peopleFocus: focusPersonId }); }
 export function closePeople(): void { set({ peopleOpen: false, peopleFocus: null }); }
 /** Bring an event into view: the media drawer shows the events view and the row scrolls to the middle and takes the focus. */
-export function showEvent(eventId: string): void { setLifeView('events'); set({ showEvent: { eventId, n: ++requests } }); }
+export function showEvent(eventId: string): void { setRail('media'); setLifeView('events'); set({ showEvent: { eventId, n: ++requests } }); }
