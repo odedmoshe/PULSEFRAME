@@ -310,7 +310,10 @@ export class ShortsError extends Error {
 }
 interface ShortsRefusalRow<A extends unknown[]> { code: ShortsErrorCode; message: (...a: A) => string; hint?: string }
 const shortsRow = <A extends unknown[]>(code: ShortsErrorCode, message: (...a: A) => string, hint?: string): ShortsRefusalRow<A> => ({ code, message, ...(hint ? { hint } : {}) });
-/** Every refusal of the finder, the planner and the routes, with fixed English wording (Hebrew: packages/i18n/src/shorts.ts HE_SHORTS). */
+/**
+ * Every refusal of the finder, the planner and the routes, with fixed English wording (Hebrew: packages/i18n/src/shorts.ts
+ * HE_SHORTS). Pick numbers (`i`) count from 1, as a person reads the list; details carry `pick` (0-based index) beside them.
+ */
 export const SHORTS_REFUSALS = {
   notBuilt: shortsRow('not_built', (what: string) => `${what} is not built yet`, 'This build has the contract of shorts but not this part.'),
   assetNotFound: shortsRow('not_found', (assetId: string) => `file ${assetId} is not in the library of this project`, 'get_summary lists the files.'),

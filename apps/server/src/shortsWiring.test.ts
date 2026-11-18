@@ -13,6 +13,8 @@ import { applyTransaction, createProject, summarize, type MediaClip, type OpCall
 import { Exporter, outputDoc, usesGpuEffects } from './export.ts';
 import { preflight } from './preflight.ts';
 import { exportCaptions, startExportBatch } from './http.ts';
+import { registerBrowserExportRoutes } from './browser-export.ts';
+import { Hono } from 'hono';
 import { ApiError, Store } from './store.ts';
 import type { Governance, Principal } from './governance.ts';
 
@@ -132,5 +134,36 @@ describe('captions, summary and batch', () => {
     expect(fails(() => startExportBatch(store, gov, exporter, pr, p.doc.id, { items: [{ sequenceId: 'seq_none' }, { sequenceId: 'seq_short' }] }))).toMatchObject({ status: 404, code: 'not_found' });
     expect(fails(() => startExportBatch(store, gov, exporter, pr, p.doc.id, { items: [{ sequenceId: 'seq_short' }], variantIds: ['var_x'] }))).toMatchObject({ status: 400 });
     expect(store.db.prepare("SELECT COUNT(*) AS n FROM jobs WHERE project_id = ? AND type = 'export'").get(p.doc.id)).toEqual({ n: 0 });
+  });
+});
+
+describe('browser export of a short', () => {
+  it('the tab is handed the short alone as its snapshot (it renders the snapshot as it is), at the short\'s frame', async () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-shorts-bx-'));
+    fs.mkdirSync(path.join(d, 'web/assets'), { recursive: true });
+    fs.writeFileSync(path.join(d, 'web/assets/heebo-latin-400.woff2'), 'x');
+    const st = new Store(path.join(d, 'data'));
+    const ex = new Exporter(st, {} as never, () => '', path.join(d, 'web'));
+    const p = st.createProject({ name: 'bx' });
+    // titles only (no media files needed): the short of project() without its picture, and the main edit's title
+    const doc = project();
+    for (const seq of Object.values(doc.sequences)) for (const t of seq.tracks) if (t.kind === 'video') t.clips = [];
+    doc.assets = {};
+    st.db.prepare('UPDATE projects SET doc = ? WHERE id = ?').run(JSON.stringify({ ...doc, id: p.doc.id }), p.doc.id);
+    const app = new Hono<any>();
+    app.onError((e, ctx) => (e instanceof ApiError ? ctx.json(e.toJSON(), e.status as any) : ctx.json({ error: { code: 'internal', message: String(e) } }, 500)));
+    app.use('*', async (ctx, next) => { ctx.set('principal', { actor: 'user:a', kind: 'user', scopes: ['observe', 'edit'] } satisfies Principal); await next(); });
+    const be = registerBrowserExportRoutes(app, st, ex, { now: () => 1_000_000, sweepIntervalMs: 0 });
+    try {
+      const r = await app.request(`/api/v1/projects/${p.doc.id}/exports/browser`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: 'session-short', sequenceId: 'seq_short' }) });
+      const body = (await r.json()) as any;
+      expect(r.status, JSON.stringify(body).slice(0, 300)).toBe(201);
+      expect(Object.keys(body.snapshot.sequences)).toEqual(['seq_short']);
+      expect(body.snapshot.mainSequenceId).toBe('seq_short');
+      expect(body.snapshot.settings).toMatchObject({ width: 720, height: 1280 });
+      expect(body.manifest.output).toMatchObject({ width: 720, height: 1280, frames: 60 });
+    } finally {
+      be.stop(); st.close(); fs.rmSync(d, { recursive: true, force: true });
+    }
   });
 });
