@@ -4,6 +4,9 @@
  * (beats.golden.test.ts).
  */
 
+/** No analysis process may run longer than this; it is killed and the measurement fails (the value analysis.ts uses). */
+export const ANALYSIS_TIMEOUT_MS = 10 * 60_000;
+
 /** In-place radix-2 complex FFT of (re, im); the length must be a power of two. After it, |X[k]| = hypot(re[k], im[k]). */
 export function fftMag(re: Float64Array, im: Float64Array) {
   const n = re.length;
