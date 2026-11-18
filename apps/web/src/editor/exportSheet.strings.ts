@@ -24,6 +24,12 @@ export const EXPORT_STRINGS = {
     preflightFail: 'הבדיקה לא הושלמה', retry: 'ניסיון חוזר',
     flashRow: 'בדיקת הבהובים', flashPending: 'תרוץ בסוף הייצוא ותוצג כאן, עם קפיצה לקטע אם יימצא',
     loud: 'עוצמת שמע', loudMeasuring: 'מודדים…', loudOk: (v: string) => `${v} LUFS · מתאים לרשתות`, loudLow: (v: string) => `${v} LUFS · שקט מדי לרשתות`, loudHigh: (v: string) => `${v} LUFS · חזק מדי לרשתות`, loudSet: 'יישור ל־14−', loudNone: 'אין שמע בסרטון',
+    // the labels of the fix buttons the server's checks offer (apps/server preflight.ts words them in English), read by exportSheet.logic.ts fixLabel
+    fix: {
+      removeStretch: 'להסיר את הקטע הזה מכל הערוצים', removeTransition: 'להסיר את המעבר', removeRamp: 'להסיר את שינוי המהירות במעבר',
+      shorten: (m: string) => `לקצר את המעבר ל־${m} פריימים`, lowerRamp: (v: string) => `להקטין את שינוי המהירות ל־×${v}`,
+      atVelocity: (v: string) => `עם שינוי מהירות ×${v}`, noRamp: 'בלי שינוי המהירות', noBeatLock: 'בלי נעילה לקצב', and: ' ו',
+    },
     issue: {
       outside_safe_area: ['כותרת מחוץ לאזור הבטוח', 'אפליקציות עלולות לכסות אותה בפורמט הזה', 'התאמה לאזור הבטוח'],
       captions_outside_safe_area: ['כתוביות מחוץ לאזור הבטוח', 'אפליקציות עלולות לכסות אותן בפורמט הזה', 'התאמה לאזור הבטוח'],
@@ -78,6 +84,11 @@ export const EXPORT_STRINGS = {
     preflightFail: 'The check did not finish', retry: 'Try again',
     flashRow: 'Flash check', flashPending: 'Runs at the end of the export and shows here, with a jump to the stretch if one is found',
     loud: 'Sound level', loudMeasuring: 'Measuring…', loudOk: (v: string) => `${v} LUFS · fits social networks`, loudLow: (v: string) => `${v} LUFS · too quiet for social networks`, loudHigh: (v: string) => `${v} LUFS · too loud for social networks`, loudSet: 'Set to −14', loudNone: 'The video has no sound',
+    fix: {
+      removeStretch: 'Remove this stretch from every track', removeTransition: 'Remove the transition', removeRamp: 'Remove the velocity ramp',
+      shorten: (m: string) => `Shorten the transition to ${m} frames`, lowerRamp: (v: string) => `Lower the velocity ramp to ×${v}`,
+      atVelocity: (v: string) => `at velocity ×${v}`, noRamp: 'without its velocity ramp', noBeatLock: 'without the beat lock', and: ' and ',
+    },
     issue: {
       outside_safe_area: ['Title outside the safe area', 'Apps may cover it in this format', 'Fit to the safe area'],
       captions_outside_safe_area: ['Captions outside the safe area', 'Apps may cover them in this format', 'Fit to the safe area'],

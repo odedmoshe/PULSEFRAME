@@ -50,6 +50,17 @@ function sayFailure(lang: 'he' | 'en', f: { code?: string | null; message?: stri
 export function installerDetail(detail: string | undefined | null, lang: 'he' | 'en'): string | null {
   if (!detail) return null;
   const setting = lang === 'he' ? 'הגדרת החיבור' : 'the connection setting';
+  if (lang === 'he') {
+    // "<SETTING> is not set: <reason>" is the server's English sentence; in Hebrew it is said whole, never half-and-half
+    const unset = /^(?:PF_[A-Z0-9_]+|the engine setting) is not set(?:: (.*))?$/i.exec(detail.trim());
+    if (unset) {
+      const why = unset[1] ?? '';
+      if (!why) return null;
+      if (/^no tools environment/i.test(why)) return 'הגדרת החיבור חסרה: לא הוגדרה סביבת כלים לעיבוד';
+      if (/^no engine is installed/i.test(why)) return 'הגדרת החיבור חסרה: לא הותקן מנוע לכלי הזה (ההתקנה היא של מי שמתקין, לא של התוכנה)';
+      return 'הגדרת החיבור חסרה';
+    }
+  }
   const out = detail
     .replace(/\bhttps?:\/\/\S+/gi, lang === 'he' ? 'כתובת' : 'an address')
     .replace(/\bPF_[A-Z0-9_]+\b/g, setting)

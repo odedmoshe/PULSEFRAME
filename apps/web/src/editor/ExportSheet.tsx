@@ -26,6 +26,7 @@ import { EXPORT_STRINGS, type ExportStrings } from './exportSheet.strings.ts';
 import {
   alsoSuggestion, DEFAULT_CHOICES, DESTINATIONS, describeExport, jobsOnOpen, mergeJobViews, destinationKey, exportOptions, exportTargets, formatFileSize, formatLength, fourKReachable, isActiveJob, jobFraction, overallFraction,
   parseStage, scaledSize, shortSideLabel, STAGE_ORDER, type Destination, type ExportCaptions, type ExportChoices, type ExportQuality, type ExportScale, type ExportTarget,
+  fixLabel as fixLabelOf,
 } from './exportSheet.logic.ts';
 import './exportSheet.css';
 
@@ -369,7 +370,7 @@ function Checks({ editor, S, lead }: { editor: Editor; S: ExportStrings; lead: E
             <li key={`${i.code}${n}`} className={`pf-xs-check ${i.severity === 'note' ? '' : 'is-warn'}`} data-testid="export-check" data-code={i.code} data-severity={i.severity}>
               <TriangleAlert size={16} aria-hidden="true" />
               <span><b>{head}</b>{detail && <small>{detail}</small>}<small className="pf-xs-sev">{i.severity === 'blocker' ? S.blocker : i.severity === 'warning' ? S.warning : ''}</small></span>
-              {i.fix && <Button size="sm" variant="secondary" onClick={() => void fix(i)}>{fixLabel || i.fix.label}</Button>}
+              {i.fix && <Button size="sm" variant="secondary" onClick={() => void fix(i)}>{fixLabel || fixLabelOf(S.fix, i.fix.label)}</Button>}
             </li>
           );
         })}
