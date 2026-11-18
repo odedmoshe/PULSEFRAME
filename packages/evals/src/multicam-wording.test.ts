@@ -68,6 +68,8 @@ describe('Hebrew wording of the multicam refusals (ADR-0020)', () => {
       const elsewhere = ELSEWHERE[key];
       if (elsewhere) { expect(hits, key).toEqual([]); expect(elsewhere.filter((re) => re.test(message)), key).toHaveLength(1); continue; }
       expect(hits.length, `${key} is recognised by exactly one multicam pattern`).toBe(1);
+      // the Hebrew sentence carries the way forward too (the hint itself is English-only)
+      expect(he, `${key}: the Hebrew says what to do`).toMatch(/אפשר|יש ל|כדאי/);
       // and no earlier table catches it first: the wording shown is this row's
       const [re, say] = HE_MULTICAM[hits[0]!]!;
       expect(he, key).toBe(say(re.exec(message)!));
@@ -79,6 +81,10 @@ describe('Hebrew wording of the multicam refusals (ADR-0020)', () => {
     expect(translateRefusal('he', SENTENCES.tooManyChanges)).toMatch(/4612.*4500/);
     expect(translateRefusal('he', SENTENCES.tagsExist)).toContain('14');
     expect(translateRefusal('he', SENTENCES.notSynced)).toContain('Cam B');
+  });
+  it('every refusal carries a hint: a way forward, not only what is wrong (and its Hebrew sentence carries it, above)', () => {
+    const rows = Object.entries(MULTICAM_REFUSALS) as [MulticamRefusalKey, { hint?: string }][];
+    expect(rows.filter(([, r]) => !r.hint || r.hint.trim().length < 12 || !/[.)]$/.test(r.hint)).map(([k]) => k)).toEqual([]);
   });
   it('the refusals existing edits raise today are the ones the table words', () => {
     const v = { kind: 'video' as const, name: 'a.mp4', contentHash: `sha256:${'a'.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(10, 1), video: { width: 640, height: 360, frameRate: { num: 30, den: 1 }, codec: 'h264', rotation: 0, frameCount: 300 }, provenance: { origin: 'fixture' as const, importedAt: '2026-11-18T00:00:00Z', importedBy: 't' } };
