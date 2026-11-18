@@ -8,6 +8,7 @@ import { PACKS_EN, PACKS_HE } from './packs.ts';
 import { PEOPLE_EN, PEOPLE_HE } from './people.ts';
 import { PHONE_DROP_EN, PHONE_DROP_HE } from './phoneDrop.ts';
 import { RENDER_CACHE_EN, RENDER_CACHE_HE } from './renderCache.ts';
+import { SHORTS_EN, SHORTS_HE } from './shorts.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
@@ -204,6 +205,7 @@ export const he = {
   ...PEOPLE_HE,
   ...PHONE_DROP_HE,
   ...RENDER_CACHE_HE,
+  ...SHORTS_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -400,6 +402,7 @@ export const en: Record<keyof typeof he, string> = {
   ...PEOPLE_EN,
   ...PHONE_DROP_EN,
   ...RENDER_CACHE_EN,
+  ...SHORTS_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -415,3 +418,4 @@ export * from './ui.ts';
 export * from './lifeline.ts';
 export * from './packs.ts';
 export * from './people.ts';
+export * from './shorts.ts';

@@ -65,3 +65,11 @@ export * from './peopleOps.ts';
 export * from './importView.ts';
 // segmented export and render cache (ADR-0024)
 export * from './renderCache.ts';
+// shorts (ADR-0018): the sequence lifecycle and the shorts contract; statements/highlights/shortsPlan/reframe/quotes are worker stubs
+export * from './shortsContract.ts';
+export * from './sequenceOps.ts';
+export * from './statements.ts';
+export * from './highlights.ts';
+export * from './shortsPlan.ts';
+export * from './reframe.ts';
+export * from './quotes.ts';

@@ -9,7 +9,7 @@ import * as T from '@pulseframe/time';
 import {
   applyTransaction, collectCreated, createProject, CREATED_OUTPUT_KEYS, frameOf, isLiveCreated, migrateProject, OutputTargetError, outputSafeArea, outputWarnings,
   projectOutput, projectSequence, ProjectSchema, SCHEMA_VERSION, SequenceFormatSchema, SequenceOriginSchema, SequenceSchema, sequenceList, validateProject,
-  type OpCall, type ProjectDocument, type Sequence, type SequenceFormat, type SequenceOrigin,
+  type MediaClip, type OpCall, type ProjectDocument, type Sequence, type SequenceFormat, type SequenceOrigin,
 } from './index.ts';
 
 const R = { num: 30, den: 1 };
@@ -32,7 +32,7 @@ function twoSequences(): ProjectDocument {
   r = tx(r.doc, [{ op: 'add_clip', args: { assetId, start: f(0), duration: f(300) } }, { op: 'add_text', args: { text: 'כותרת', start: f(0), duration: f(60) } }, { op: 'add_marker', args: { time: f(30), label: 'main' } }]);
   const doc = structuredClone(r.doc);
   const main = doc.sequences[doc.mainSequenceId]!;
-  const clip = structuredClone(main.tracks[0]!.clips[0]!);
+  const clip = structuredClone(main.tracks[0]!.clips[0]!) as MediaClip;
   const short: Sequence = {
     id: 'seq_short', name: 'Short 1', format: FORMAT, origin: { ...ORIGIN, assetId },
     tracks: [{ id: 'trk_sv', kind: 'video', name: 'V1', locked: false, muted: false, hidden: false, clips: [{ ...clip, id: 'clp_short', start: f(0), duration: f(90), linkGroupId: null }] }],

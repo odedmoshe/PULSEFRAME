@@ -113,6 +113,8 @@ const STAGE_WORDS: Record<string, { he: string; en: string }> = {
   // motion tracking jobs (core trackingStage, ADR-0015); 'tracking forward 12/240' keeps its count
   'reading frames': { he: 'קורא פריימים', en: 'reading frames' }, 'tracking forward': { he: 'עוקב קדימה', en: 'tracking forward' },
   'tracking backward': { he: 'עוקב אחורה', en: 'tracking backward' }, 'saving track': { he: 'שומר את המסלול', en: 'saving the track' },
+  // the shorts finder's measuring job (core shortsContract.ts SHORTS_STAGES, ADR-0018)
+  'measuring audio features': { he: 'מודד את הקול', en: 'measuring the sound' }, 'ranking moments': { he: 'מדרג רגעים', en: 'ranking moments' },
 };
 export function jobStageLabel(stage: string | null | undefined, lang: 'he' | 'en'): string {
   if (!stage) return '';
