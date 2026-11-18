@@ -32,6 +32,14 @@ const rest = async (method: string, p: string, body: unknown, t = auth.tokens.ag
   const r = await app.fetch(new Request(`http://127.0.0.1:${cfg.port}/api/v1${p}`, { method, headers: { host: `127.0.0.1:${cfg.port}`, authorization: `Bearer ${t}`, 'content-type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }));
   return { status: r.status, body: (await r.json()) as any };
 };
+let rpc = 0;
+const tool = async (name: string, args: Record<string, unknown>, t = auth.tokens.agent) => {
+  const r = await mcp(new Request(`http://127.0.0.1:${cfg.port}/mcp`, { method: 'POST', headers: { host: `127.0.0.1:${cfg.port}`, authorization: `Bearer ${t}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rpc, method: 'tools/call', params: { name, arguments: args } }) }));
+  const text = await r.text();
+  const msg = JSON.parse((r.headers.get('content-type') ?? '').includes('text/event-stream') ? text.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5)).join('') : text);
+  if (msg.error) throw new Error(`MCP protocol error: ${JSON.stringify(msg.error)}`);
+  return { isError: msg.result.isError === true, body: JSON.parse(msg.result.content[0].text) as any };
+};
 const prov = { origin: 'fixture' as const, importedAt: '2026-11-18T00:00:00Z', importedBy: 'test' };
 function importWav(name: string, x: Float32Array): string {
   const bytes = wav(x, SR), hash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
@@ -190,6 +198,25 @@ describe('multicam sync refusals and the job', () => {
     expect(g.angles.find((a) => a.id === 'plus')!.pieces[0]!.anchors).toEqual([{ group: T.rt(57321, SR), source: T.rt(0, SR) }]);
     expect(g.angles.find((a) => a.id === 'paused')!.pieces[0]!.anchors).toEqual([]);
     expect(g.origin.params).toMatchObject({ confidentPeakZ: 10, ambiguousBelowPeakRatio: 1.2 });
+  }, 120_000);
+});
+
+describe('MCP', () => {
+  it('sync_multicam (a dry run with an observe credential, refused to commit), get_multicam, and cancel_job on a multicam-sync job', async () => {
+    const dry = await tool('sync_multicam', { projectId: pid, groupId: 'mcg_room', dryRun: true }, auth.tokens.observer);
+    expect(dry.isError, JSON.stringify(dry.body)).toBe(false);
+    expect(dry.body.pieces.find((p: any) => p.angleId === 'loop').verdict).toBe('ambiguous');
+    const commit = await tool('sync_multicam', { projectId: pid, groupId: 'mcg_room' }, auth.tokens.observer);
+    expect([commit.isError, commit.body.error.code]).toEqual([true, 'insufficient_scope']);
+    const view = await tool('get_multicam', { projectId: pid, groupId: 'mcg_room' }, auth.tokens.observer);
+    expect(view.isError).toBe(false);
+    expect(view.body.group.id).toBe('mcg_room');
+    expect(view.body.envelopes.every((e: any) => e.status === 'ready')).toBe(true);
+    expect(view.body.coverage).toEqual([{ angleId: 'room', pieceIndex: 0, startSeconds: 0, endSeconds: 90 }]);
+    const queued = store.createJob(pid, 'analysis', 'agent:local', { kind: 'multicam-sync', groupId: 'mcg_room', options: { dryRun: true }, projectRevision: 0 });
+    const c = await tool('cancel_job', { jobId: queued.id });
+    expect([c.isError, c.body.outcome]).toEqual([false, 'removed-from-queue']);
+    expect(store.getJob(queued.id).status).toBe('canceled');
   }, 120_000);
 });
 
