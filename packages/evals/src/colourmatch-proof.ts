@@ -36,6 +36,7 @@ import { paramRange } from '@pulseframe/core';
 import { statsDistance, type GradeParams, type PictureStats } from '@pulseframe/engine';
 import { verdictOf } from '@pulseframe/engine/colourMatch.ts';
 import { startServer } from '@pulseframe/server';
+import { openInspectorPage } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/colourmatch-proof');
@@ -280,7 +281,8 @@ async function main() {
       await page.locator('.clip').first().waitFor();
       const openClip = async (p: Page, id: string) => {
         await p.getByTestId(`clip-${id}`).click();
-        await p.getByTestId('inspector-tab-clip').click().catch(() => {});
+        // the clip's panel with every section open: the all-tools view since the redesign (sections-open-all is its bar's button)
+        await openInspectorPage(p, 'all');
         await p.getByTestId('sections-open-all').click().catch(() => {});
         await p.getByTestId('colour-match').waitFor({ timeout: 20_000 });
       };
