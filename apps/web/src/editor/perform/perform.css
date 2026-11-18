@@ -1,0 +1,74 @@
+/* Perform mode (ADR-0025): the pad row, the take lane, the calibration and the camera. Prefix .pf-perform. Tokens of the redesign
+   (ds/tokens.css): the view sits over the stage and re-applies the dark tokens (.pf-force-dark). Logical properties throughout, so
+   the right-to-left page mirrors; the pad row is dir=ltr on purpose (it mirrors the physical number row). Not looked at in a
+   browser in this session (see the worker report). */
+.app > .stage > .pf-perform { grid-row: 2; grid-column: 1; z-index: 4; }
+.pf-perform { position: relative; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); min-block-size: 0; pointer-events: none; color: var(--pf-text); font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); }
+.pf-perform > * { pointer-events: auto; }
+.pf-perform > .pf-sr { pointer-events: none; }
+.pf-perform-panel { grid-area: 1 / 1; align-self: end; display: grid; gap: var(--pf-sp-3); padding: var(--pf-sp-4) var(--pf-sp-5); max-block-size: 100%; overflow: auto;
+  background: var(--pf-plate); border-block-start: 2px solid var(--pf-m-perform); box-shadow: 0 -8px 24px rgb(0 0 0 / 0.28); }
+.pf-perform-top { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-4); justify-content: space-between; }
+.pf-perform-transport, .pf-perform-cal { display: flex; align-items: center; gap: var(--pf-sp-3); flex-wrap: wrap; }
+.pf-perform-badge { padding: var(--pf-sp-1) var(--pf-sp-4); border-radius: var(--pf-r-pill); box-shadow: inset 0 0 0 1px var(--pf-line-strong); font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
+.pf-perform-badge[data-state='none'], .pf-perform-badge[data-state='stale'] { color: var(--pf-attention); box-shadow: inset 0 0 0 1px var(--pf-attention); }
+.pf-perform-hint { margin: 0; color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-perform-note { margin: 0; padding: var(--pf-sp-3) var(--pf-sp-4); border-radius: var(--pf-r-md); background: var(--pf-surface-2); color: var(--pf-text); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-perform-error { margin: 0; color: var(--pf-danger); }
+
+/* pads */
+.pf-perform-pads { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: var(--pf-sp-3); }
+.pf-perform-padcell { display: grid; gap: var(--pf-sp-2); align-content: start; min-inline-size: 0; }
+.pf-perform-padcell[data-hidden-by] .pf-perform-pad { visibility: hidden; }
+.pf-perform-pad { display: grid; gap: var(--pf-sp-1); place-items: center; min-block-size: 76px; padding: var(--pf-sp-3); border: 0; border-radius: var(--pf-r-lg); cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none;
+  background: var(--pf-surface-3); color: var(--pf-text); box-shadow: inset 0 0 0 1px var(--pf-line-control); font: inherit; transition: background var(--pf-dur-fast) var(--pf-ease-out), transform var(--pf-dur-press) var(--pf-ease-out); }
+.pf-perform-pad:hover { background: var(--pf-surface-4); }
+.pf-perform-pad:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+.pf-perform-pad[data-state='held-down'], .pf-perform-pad[aria-pressed='true'] { background: var(--pf-m-perform); color: var(--pf-on-plate); transform: scale(0.97); }
+.pf-perform-pad[data-state='empty'] { background: transparent; border: 1px dashed var(--pf-line-strong); color: var(--pf-text-3); }
+.pf-perform-pad[data-state='disabled'] { cursor: not-allowed; color: var(--pf-text-disabled); background: var(--pf-surface-1); border: 1px dashed var(--pf-line-strong); }
+.pf-perform-padkey { font-family: var(--pf-font-mono); font-size: var(--pf-fs-lg); font-weight: var(--pf-fw-semibold); line-height: 1; }
+.pf-perform-padname { font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); text-align: center; overflow-wrap: anywhere; }
+.pf-perform-padreason { font-size: var(--pf-fs-xs); color: var(--pf-attention); text-align: center; }
+.pf-perform-padedit { justify-self: center; }
+
+/* settings */
+.pf-perform-settings { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-4) var(--pf-sp-5); }
+.pf-perform-strength { display: grid; grid-template-columns: minmax(120px, 200px); gap: var(--pf-sp-1); }
+.pf-perform-strength-label { font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
+
+/* the take lane */
+.pf-perform-lane { display: grid; gap: var(--pf-sp-2); }
+.pf-perform-ghost { margin: 0; padding: var(--pf-sp-2) var(--pf-sp-4); border-radius: var(--pf-r-md); background: var(--pf-m-perform); color: var(--pf-on-plate); font-weight: var(--pf-fw-semibold); font-size: var(--pf-fs-xs); }
+.pf-perform-counts { margin: 0; color: var(--pf-text-2); font-size: var(--pf-fs-xs); }
+.pf-perform-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--pf-sp-2); max-block-size: 120px; overflow: auto; }
+.pf-perform-chip { display: inline-flex; align-items: center; gap: var(--pf-sp-2); padding: var(--pf-sp-1) var(--pf-sp-3); border-radius: var(--pf-r-md); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); border: 1px solid var(--pf-line-strong); }
+.pf-perform-chip:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 1px; }
+.pf-perform-chip[data-state='kept'] { background: var(--pf-surface-3); border-style: solid; border-color: var(--pf-m-perform); }
+.pf-perform-chip[data-state='merged'] { background: var(--pf-surface-3); border-style: double; border-width: 3px; border-color: var(--pf-m-perform); }
+.pf-perform-chip[data-state='held'] { background: transparent; border-style: dashed; color: var(--pf-text-2); }
+.pf-perform-chip-pad { font-family: var(--pf-font-mono); font-weight: var(--pf-fw-semibold); }
+.pf-perform-chip-why { color: var(--pf-attention); }
+
+/* forms (dialogs) */
+.pf-perform-form { display: grid; gap: var(--pf-sp-4); }
+.pf-perform-field { display: grid; gap: var(--pf-sp-2); }
+.pf-perform-field select, .pf-perform-field input[type='text'] { min-block-size: var(--pf-h-md); padding-inline: var(--pf-sp-3); border-radius: var(--pf-r-md); border: 1px solid var(--pf-line-control); background: var(--pf-surface-2); color: var(--pf-text); font: inherit; }
+.pf-perform-field small { color: var(--pf-text-2); }
+
+/* the camera */
+.pf-perform-camera { grid-area: 1 / 1; display: grid; gap: var(--pf-sp-3); align-content: start; padding: var(--pf-sp-4) var(--pf-sp-5); overflow: auto; background: var(--pf-plate); border-block-start: 2px solid var(--pf-m-perform); }
+.pf-perform-camera-head { display: flex; align-items: center; justify-content: space-between; gap: var(--pf-sp-3); }
+.pf-perform-camera-head h2 { margin: 0; font-size: var(--pf-fs-md); }
+.pf-perform-camera-picture { position: relative; justify-self: center; inline-size: min(100%, 640px); max-block-size: 46vh; background: #000; border-radius: var(--pf-r-md); overflow: hidden; cursor: crosshair; touch-action: none; }
+.pf-perform-camera-picture:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+.pf-perform-camera-canvas { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; object-fit: contain; }
+.pf-perform-camera-crop { position: absolute; box-sizing: border-box; border: 2px solid var(--pf-m-perform); box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.5); pointer-events: none; }
+.pf-perform-camera-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3); }
+.pf-perform-zoom { font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
+.pf-perform-dials { display: flex; flex-wrap: wrap; gap: var(--pf-sp-5); }
+.pf-perform-dial { display: grid; gap: var(--pf-sp-1); min-inline-size: 160px; font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
+.pf-perform-camera-review { display: grid; gap: var(--pf-sp-3); }
+
+@media (max-width: 900px) { .pf-perform-pads { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (prefers-reduced-motion: reduce) { .pf-perform-pad { transition: none; } .pf-perform-pad[aria-pressed='true'], .pf-perform-pad[data-state='held-down'] { transform: none; } }

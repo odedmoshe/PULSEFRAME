@@ -29,6 +29,8 @@ export interface CaptureEnv {
   keyContext(): PadKeyContext;
   /** The hits changed (the view re-plans the live picture at most once per animation frame). */
   onChange(): void;
+  /** Whether a pad may be pressed now (a ready pad: not empty, hidden or disabled for a reason). Default: every pad. */
+  padUsable?(pad: number): boolean;
   /** A pad went down (the view plays a sound pad's monitor sound). */
   onPadDown?(pad: number, tapIndex: number): void;
 }
@@ -62,7 +64,7 @@ export class TapCapture {
     return s === null || !Number.isFinite(s) ? null : Math.max(0, s - this.env.offsetSeconds());
   }
   private press(source: string, pad: number, perfMs: number): boolean {
-    if (!this.recording || this.open.has(source)) return false;
+    if (!this.recording || this.open.has(source) || this.env.padUsable?.(pad) === false) return false;
     for (const o of this.open.values()) if (o.pad === pad) return false; // the pad is already held (by another key or finger)
     const t = this.secondsOf(perfMs);
     if (t === null) { this.ignoredNotPlaying++; return false; }

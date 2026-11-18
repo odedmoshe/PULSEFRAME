@@ -85,6 +85,13 @@ describe('TapCapture keys', () => {
     expect(c.snapshot()).toEqual([{ pad: 0, down: 10, up: 10.8 }, { pad: 4, down: 10.1, up: 10.8 }]);
     expect(c.blur(2000)).toBe(0);
   });
+  it('a pad that is not ready (empty, hidden, disabled with a reason) takes no tap', () => {
+    const { c } = mk({ padUsable: (p) => p !== 2 });
+    expect(c.keyDown(key('Digit3'))).toBe(false);
+    expect(c.pointerDown(2, 1, 1000)).toBe(false);
+    expect(c.keyDown(key('Digit4'))).toBe(true);
+    expect(c.count).toBe(1);
+  });
   it('a pad held by one source cannot be pressed again by another until it is released', () => {
     const { c } = mk();
     c.keyDown(key('Digit1', { timeStamp: 1000 }));
