@@ -43,3 +43,7 @@
 .pf-pinput:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
 .pf-pinput[aria-invalid='true'] { box-shadow: 0 0 0 1.5px var(--pf-danger); }
 @media (prefers-reduced-motion: no-preference) { .pf-pack-row, .pf-shelf-item { transition: background-color var(--pf-dur-fast) var(--pf-ease-out); } }
+
+/* Six tabs do not fit one row in a narrow drawer: two rows of three, each label whole (the ds tab is a flex row of equal shares). */
+.pf-pack .pf-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pf-pack .pf-tab { min-block-size: 40px; padding-inline: 6px; }
