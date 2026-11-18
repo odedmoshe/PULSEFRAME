@@ -144,7 +144,7 @@ describe('the templates', () => {
   it('every template carries a built-in music suggestion, a pack field or a live field in a title, and a token-free fallback for each', () => {
     for (const p of PACKS) for (const t of p.templates) {
       expect(t.music.builtin, t.id).toMatch(/^music\./);
-      expect(t.genre).toBe('celebration');
+      expect(t.genre, t.id).toBe(p.id === 'pack.hanukkah' ? 'holiday' : 'celebration'); // the holiday genre (chip «חג») holds the Hanukkah templates
       for (const x of t.texts) {
         const holds = packFieldsIn(x.default.he).length > 0 || /\{(date|hebrewDate|year|hebrewYear|event)\}/.test(x.default.he);
         if (holds) { expect(x.fallback, `${t.id}.${x.key}`).toBeDefined(); expect(x.fallback!.he + x.fallback!.en).not.toMatch(/[{}]/); }
