@@ -45,6 +45,7 @@ import { CutPanel, TransitionPanel } from './InspectorCut.tsx';
 import { ProjectPanel } from './InspectorProject.tsx';
 import { FontPicker } from './FontPicker.tsx';
 import { FieldLiveLine, FieldMenu, FieldTextBox } from './lifeline/FieldMenu.tsx';
+import { MulticamClipBlock } from './MulticamClipBlock.tsx';
 
 type Media = Extract<Clip, { type: 'media' }>;
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -613,6 +614,7 @@ function BasicTab({ clip, viewClip, shown, keymap }: PanelProps) {
       {media && <Section id="fill" title={S.secFill}><FrameFill clip={media} shown={shown} /></Section>}
       <BeatRow clip={clip} onOpen={() => editor.openInspectorTab('effects')} />
       {media && !variantId && <CutLink clip={media} />}
+      {media && <MulticamClipBlock clip={media} />}
       <Section id="keys" title={S.secKeys} defaultOpen={false} summary={ks.count ? S.keysCount(ks.count) : S.keysNone}><KeyframeButtons clip={clip} keymap={keymap} /></Section>
       <Section id="blend" title={S.secBlend} defaultOpen={false} summary={S.blend[blend] ?? blend}><BlendField clip={clip} /></Section>
       <Section id="time" title={S.secTime} defaultOpen={false} summary={`${shortTimecode(T.frameIndexAt(clip.start, editor.rate), fps)} · ${secondsText(T.toSeconds(clip.duration))} ${S.seconds}`}><TimeBlock clip={clip} keymap={keymap} /></Section>

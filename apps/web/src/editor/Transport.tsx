@@ -14,6 +14,7 @@ import { useEditorState, type Editor } from './store.ts';
 import { IconLoop, IconNextFrame, IconPause, IconPlay, IconPrevFrame } from './icons.tsx';
 import { Scopes } from './Scopes.tsx';
 import { CutLoupe } from './CutLoupe.tsx';
+import { MulticamPanel } from './MulticamPanel.tsx';
 import { STAGE_STRINGS } from './stage.strings.ts';
 import './stage.css';
 
@@ -83,6 +84,8 @@ export function Transport() {
     <>
       <StageOverlay />
       {state.workspace === 'color' && wide && <aside className="stage-side pf-ds pf-insp pf-force-dark" aria-label={S.scopes} data-testid="stage-scopes"><Scopes /></aside>}
+      {/* multicam (ADR-0020): the docked angle panel takes the same side slot whenever the scopes do not */}
+      {!(state.workspace === 'color' && wide) && <MulticamPanel />}
       <div className="transport pf-ds pf-force-dark" dir="ltr" role="group" aria-label={t('cmd.playPause')}>
         <div className="tp-time">
           <span className="timecode tc" data-testid="timecode">{T.toTimecode(editor.playhead, rate)}</span>

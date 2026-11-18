@@ -28,6 +28,7 @@ import { MUSIC_TESTIDS } from './packs.testids.ts';
 import { ImportCards } from './ImportCards.tsx';
 import { DropChip, ImportMenu } from './ImportHosts.tsx';
 import { collectDropped } from './imports.logic.ts';
+import { MulticamLibraryEntry } from './MulticamLibraryEntry.tsx';
 import '../ds/chrome.css';
 
 const ACCEPT = 'video/*,audio/*,image/png,image/jpeg,image/webp,.cube';
@@ -141,6 +142,7 @@ function MediaDrawer({ onView }: { onView: (id: string) => void }) {
           </div>
           <LifeViewSwitch view={view} onChange={setLifeView} />
           <div className="pf-bw-scroll">{view === 'all' ? <MediaGrid onView={onView} query={q} filter={filter} /> : <LifeLibrary view={view} onView={onView} />}</div>
+          <MulticamLibraryEntry lang={state.lang} />
         </>
       )}
     </Pane>
