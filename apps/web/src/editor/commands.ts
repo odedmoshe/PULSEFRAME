@@ -290,7 +290,7 @@ export const keyTarget = (e: Editor): { clip: Clip; track: Track; sel: NonNullab
   const f = findClip(doc, ks.clipId);
   return f && !f.track.locked ? { clip: f.clip, track: f.track, sel: ks } : null;
 };
-/** Set one curve on the selected keys (the segment after each key, or `side`): one transaction. */
+/** Set one curve on the selected keys (the segment after each key, or `side`): one transaction. S and L (smooth, straight) pass 'both': a key is smoothed or straightened on both of its sides, as on a path vertex (keyframes-plan §5, P3). */
 export const curveSelected = (e: Editor, easing: Easing, bezier?: CurveHandles, side: 'after' | 'before' | 'both' = 'after') =>
   e.commit(() => { const t = keyTarget(e); return t ? curveOps(t.clip, e.rate, t.sel.keys, side, easing, bezier) : null; }, 'Keyframe curve');
 export const deleteSelectedKeys = (e: Editor) => e.commit(() => { const t = keyTarget(e); return t ? deleteKeysOps(t.clip, e.rate, t.sel.keys) : null; }, 'Remove keyframes');
@@ -452,8 +452,8 @@ export const COMMANDS: Command[] = [
   { id: 'keyframe.next', label: 'cmd.keyframeNext', group: 'keyframe', keys: ['Period'], enabled: (e) => hasAnyKey(sel(e)), run: gotoKeyframe(1) },
   // keyframe curves and strip (ADR-0019). Only focus has a default chord; the rest are remappable and in the palette.
   { id: 'keyframe.focus', label: 'cmd.keyframeFocus', group: 'keyframe', keys: ['Alt+KeyK'], enabled: (e) => hasAnyKey(sel(e)), run: () => document.querySelector<HTMLElement>('[data-testid=key-strip-key]')?.focus() },
-  { id: 'keyframe.smooth', label: 'cmd.keyframeSmooth', group: 'keyframe', keys: [], enabled: (e) => CURVES_BUILT && canEditKeys(e), run: (e) => curveSelected(e, 'smooth') },
-  { id: 'keyframe.linear', label: 'cmd.keyframeLinear', group: 'keyframe', keys: [], enabled: canEditKeys, run: (e) => curveSelected(e, 'linear') },
+  { id: 'keyframe.smooth', label: 'cmd.keyframeSmooth', group: 'keyframe', keys: [], enabled: (e) => CURVES_BUILT && canEditKeys(e), run: (e) => curveSelected(e, 'smooth', undefined, 'both') },
+  { id: 'keyframe.linear', label: 'cmd.keyframeLinear', group: 'keyframe', keys: [], enabled: canEditKeys, run: (e) => curveSelected(e, 'linear', undefined, 'both') },
   { id: 'keyframe.curve', label: 'cmd.keyframeCurve', group: 'keyframe', keys: [], enabled: canEditKeys, run: (e) => { const ks = e.getState().keySel; if (keysOnSelection(e) && ks?.keys.length) e.openCurvePicker(ks.clipId, ks.keys[0]!.frame, ks.keys.filter((k) => k.frame === ks.keys[0]!.frame).map((k) => k.channel)); } },
   { id: 'keyframe.copy', label: 'cmd.keyframeCopy', group: 'keyframe', keys: [], enabled: (e) => keysOnSelection(e) && !!e.getState().keySel?.keys.length, run: copySelectedKeys },
   { id: 'keyframe.paste', label: 'cmd.keyframePaste', group: 'keyframe', keys: [], enabled: (e) => !!e.getState().keyClipboard && !e.selectionLocked && !e.getState().viewVariantId && e.playheadOnSelection, run: pasteKeys },

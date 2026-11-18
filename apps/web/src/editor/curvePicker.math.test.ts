@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { CURVES, CURVES_BUILT, sampleKeyframes, type CurveHandles, type Easing } from '@pulseframe/core';
-import { CURVE_POINTS, TILE_RANGE, dragHandle, handleFromPoint, nudgeHandle, pointFromHandle, previewPoints, setHandleField, tilePoints, turnsBackLocal } from './curvePicker.math.ts';
+import { CURVE_POINTS, TILE_RANGE, dragHandle, fieldDraft, handleFromPoint, nudgeHandle, pointFromHandle, previewPoints, setHandleField, tilePoints, turnsBackLocal } from './curvePicker.math.ts';
 
 const keys = (easing: Easing, bezier?: CurveHandles) => [{ time: T.rt(0, 1), value: 0, easing, ...(bezier ? { bezier } : {}) }, { time: T.rt(1, 1), value: 1, easing: 'linear' as const }];
 const V1: Easing[] = ['linear', 'hold', 'ease-in', 'ease-out', 'ease-in-out'];
@@ -53,6 +53,18 @@ describe('handle maths', () => {
     expect(setHandleField(h, 3, '9')).toEqual([0.2, 0.2, 0.8, 2]);
     expect(setHandleField(h, 1, '')).toBe(h);
     expect(setHandleField(h, 1, 'abc')).toBe(h);
+  });
+  it('a negative value can be typed from its sign: the partial text is kept as typed, the handles change only on a number', () => {
+    // what Chromium reports for the keystrokes of «-0.3» in a number input (the value, and validity.badInput)
+    const strokes: [string, boolean][] = [['', true], ['-0', false], ['-0.3', false]];
+    let h: CurveHandles = [0.25, 0.1, 0.25, 1];
+    for (const [text, bad] of strokes) {
+      // the draft is the input's value prop: '' while the DOM holds a partial number, so React does not put 0.1 back
+      expect(fieldDraft(text, bad)).toBe(text);
+      h = setHandleField(h, 1, text);
+    }
+    expect(h).toEqual([0.25, -0.3, 0.25, 1]);
+    expect(fieldDraft('abc', true)).toBe('');
   });
   it('knows which curves turn back', () => {
     expect(turnsBackLocal('overshoot')).toBe(true);

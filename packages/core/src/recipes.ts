@@ -18,7 +18,7 @@ import { MULTICAM_AUTO_RECIPE_ID, MulticamAutoParams } from './multicamApi.ts';
 import { planMulticamAuto } from './multicamAuto.ts';
 
 export class RecipeError extends Error {
-  /** not_built: a recipe whose planner is only a contract in this build (multicam-auto until ADR-0020 W2); the server answers 501. */
+  /** not_built: a recipe whose planner is only a contract in this build (none at present; multicam-auto was until ADR-0020 W2); the server answers 501. */
   constructor(public code: 'not_found' | 'needs_analysis' | 'invalid_args' | 'nothing_to_do' | 'not_built', message: string, public hint?: string) { super(message); }
 }
 export interface RecipePlan {

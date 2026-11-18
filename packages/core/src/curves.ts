@@ -51,11 +51,40 @@ export function bounceShape(u: number): number {
   const x = u - 2.625 / D1;
   return N1 * x * x + 0.984375;
 }
+// e^x and cos x for the spring in + − × ÷ only (Cody–Waite reduction, then Taylor series): Math.exp and Math.cos are not the
+// same function in every JavaScript engine (Node 22 and Chromium 153 differ in the last bit for some arguments), and the
+// sampler must give the same bits in the server and the editor (keyframes-proof P12). Within 2 ulp of Math (curves.test.ts).
+const LN2_HI = 6.93147180369123816490e-01; // the high 33 bits of ln 2 (fdlibm ln2HI): k · LN2_HI is exact for small k
+const LN2_LO = 1.90821492927058770002e-10;
+const PIO2_HI = 1.57079632673412561417e+00; // the high 33 bits of π/2 (fdlibm pio2_1)
+const PIO2_LO = 6.07710050650619224932e-11;
+/** e^x for −8 ≤ x ≤ 8 (the spring uses −4 ≤ x ≤ 0). */
+export function expDet(x: number): number {
+  const k = Math.round(x / LN2_HI);
+  const r = (x - k * LN2_HI) - k * LN2_LO; // |r| ≤ 0.35
+  let p = 1;
+  for (let n = 18; n >= 1; n--) p = 1 + (r * p) / n;
+  let scale = 1;
+  for (let i = 0; i < Math.abs(k); i++) scale *= k < 0 ? 0.5 : 2; // exact
+  return p * scale;
+}
+/** cos x for 0 ≤ x ≤ 8π (the spring uses 0 ≤ x ≤ 3π). */
+export function cosDet(x: number): number {
+  const q = Math.round(x / PIO2_HI);
+  const r = (x - q * PIO2_HI) - q * PIO2_LO; // |r| ≤ π/4 + ε
+  const r2 = r * r;
+  let c = 1, sn = 1;
+  for (let n = 22; n >= 2; n -= 2) c = 1 - (r2 * c) / (n * (n - 1));
+  for (let n = 21; n >= 3; n -= 2) sn = 1 - (r2 * sn) / (n * (n - 1));
+  sn *= r;
+  const m = ((q % 4) + 4) % 4;
+  return m === 0 ? c : m === 1 ? -sn : m === 2 ? -c : sn;
+}
 /** 1 − (1−u)·e^(−4u)·cos(3πu): peaks at about 1.2059 near u = 0.278, three turns. */
 export function springShape(u: number): number {
   if (u <= 0) return 0;
   if (u >= 1) return 1;
-  return 1 - (1 - u) * Math.exp(-4 * u) * Math.cos(3 * Math.PI * u);
+  return 1 - (1 - u) * expDet(-4 * u) * cosDet(3 * Math.PI * u);
 }
 /** The shape (0 at u = 0, 1 at u = 1, unclamped) of gentle, sharp, overshoot, anticipate, bounce, spring or bezier. */
 export function curveShape(easing: Exclude<Easing, V1Easing | 'smooth'>, bezier: CurveHandles | undefined, u: number): number {

@@ -38,7 +38,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import * as T from '@pulseframe/time';
-import { CURVES_BUILT, KEYFRAME_OPS_BUILT, KEYFRAME_REFUSALS, NAMED_BEZIER, TRANSFORM_RANGE, transformAt, type Clip, type ProjectDocument } from '@pulseframe/core';
+import { CURVES_BUILT, EASINGS, KEYFRAME_OPS_BUILT, KEYFRAME_REFUSALS, NAMED_BEZIER, V1_EASINGS, TRANSFORM_RANGE, transformAt, type Clip, type ProjectDocument } from '@pulseframe/core';
 import { startServer } from '@pulseframe/server';
 import { translateRefusal } from '../../i18n/src/index.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
@@ -479,10 +479,16 @@ async function main() {
       const st = await ctx.newPage();
       await st.goto(`${s.url}/selftest.html`);
       await st.waitForFunction(() => document.body.dataset.ready === '1', undefined, { timeout: 120_000 });
-      const chromiumHash = await st.evaluate(() => (window as unknown as { __pfCurveHash: () => Promise<{ sha256: string; samples: number; nsPerSample: number }> }).__pfCurveHash());
+      const chromiumHash = await st.evaluate(() => (window as unknown as { __pfCurveHash: () => Promise<{ sha256: string; samples: number; nsPerSample: number; byEasing?: Record<string, string> }> }).__pfCurveHash());
       const chromiumPath = await st.evaluate(() => (window as unknown as { __pfPathPointsMs: () => { ms: number; points: number } }).__pfPathPointsMs());
       await st.close();
-      check('P12', 'the SHA-256 of 100 000 curve samples (every easing, shutter taps) in Chromium equals the Node hash', chromiumHash.sha256 === node.sha256 && chromiumHash.samples === 100_000, { node: node.sha256, chromium: chromiumHash.sha256 });
+      // the whole hash and, to say which curve a difference is in, one hash per easing; the v1 easings are checked on their own
+      // (they are kept bit-identical with keys-baseline.json, which is Node's arithmetic), with the same strictness
+      const differ = EASINGS.filter((e) => chromiumHash.byEasing?.[e] !== node.byEasing[e]);
+      const v1 = new Set<string>(V1_EASINGS);
+      check('P12', 'the SHA-256 of 100 000 curve samples (every easing, shutter taps) in Chromium equals the Node hash', chromiumHash.sha256 === node.sha256 && chromiumHash.samples === 100_000, { node: node.sha256, chromium: chromiumHash.sha256, easingsThatDiffer: differ });
+      check('P12', 'the curves of ADR-0019 (named, smooth, bounce, spring, custom) sample to the same bits in Chromium and Node, each easing hashed alone', differ.filter((e) => !v1.has(e)).length === 0, { differ: differ.filter((e) => !v1.has(e)) });
+      check('P12', 'the v1 easings (linear, hold, ease-in, ease-out, ease-in-out) sample to the same bits in Chromium and Node, each easing hashed alone', differ.filter((e) => v1.has(e)).length === 0, { differ: differ.filter((e) => v1.has(e)) });
       measure('sampler ns/sample (Chromium)', chromiumHash.nsPerSample, '≤ 2000 ns', chromiumHash.nsPerSample <= 2000);
       measure('sampler ns/sample (Node)', node.nsPerSample, '≤ 2000 ns', node.nsPerSample <= 2000);
       measure('pathPoints ms for 600 points (Chromium, median of 15)', chromiumPath.ms, '≤ 16 ms', chromiumPath.ms <= 16 && chromiumPath.points === 600, { points: chromiumPath.points });

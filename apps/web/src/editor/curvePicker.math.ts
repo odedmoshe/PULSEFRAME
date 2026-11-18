@@ -79,5 +79,13 @@ export function setHandleField(h: CurveHandles, index: 0 | 1 | 2 | 3, text: stri
   return next;
 }
 
+/**
+ * The text a custom field shows while it is typed in. A number input whose text is not a number yet ('-', '-0.' in Chromium)
+ * reports value '' with validity.badInput; the draft is then '' too, so React finds the DOM value equal to its value prop and
+ * leaves the partial text alone. With the handle's number as the prop instead, React restores it after every such keystroke,
+ * and a negative value (y1, y2 go to -1) cannot be typed from its sign. null after blur: the field shows the handle again.
+ */
+export const fieldDraft = (text: string, badInput: boolean): string => (badInput ? '' : text);
+
 /** True when two handle sets differ: a field blur commits only then (tabbing through the dialog must not rewrite a key's curve). */
 export const handlesDiffer = (a: CurveHandles, b: CurveHandles): boolean => a.some((v, i) => v !== b[i]);

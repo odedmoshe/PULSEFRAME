@@ -36,6 +36,7 @@ import * as T from '@pulseframe/time';
 import {
   capturePriors, MULTICAM_SYNC_KIND, MULTICAM_SYNC_METHOD, MULTICAM_REFUSALS, multicamGroupOf, multicamSyncStage, segmentSyncOffset, SYNC_THRESHOLDS, isPlacedVerdict, timeOriginSeconds,
   MAX_ANCHORS_PER_PIECE, MAX_SYNC_CANDIDATES,
+  groupGrid, pieceCoverage, type MulticamPiece,
   type Asset, type MulticamGroup, type MulticamPieceReport, type MulticamPieceWhy, type MulticamSyncReport, type MulticamSyncRequest, type MulticamView, type ProjectDocument, type SyncAnchor, type SyncQuality, type SyncVerdict,
 } from '@pulseframe/core';
 import { heavy } from './analysis.ts';
@@ -154,6 +155,46 @@ export function coarseMatch(pieceFlux: ArrayLike<number>, bed: Bed, o: { minOver
   return { lagFrames: L1, peakZ: r3(peakZ), peakRatio: r3(peakRatio), overlapFrames: covered(L1 - bed.start, L1 - bed.start + P), candidates: cands.map((c) => ({ lagFrames: c.lagFrames, score: r3(c.score / (c1 || 1)) })) };
 }
 
+/**
+ * A file whose recording paused inside it (two stretches, each at its own offset) has two coarse peaks of nearly the same
+ * height, which alone reads as 'ambiguous' (several offsets fit everywhere, as for a loop). Told apart by WHERE each fits:
+ * blocks of 5 s of the file are correlated with the bed at the two best offsets; a pause shows as blocks that clearly
+ * prefer one offset followed by blocks that clearly prefer the other (one switch, at least two blocks each), whereas a
+ * repeated sound fits both offsets in the same blocks. True → the verdict is 'inconsistent' (no anchors either way).
+ */
+export function pausedInside(pieceFlux: ArrayLike<number>, bed: Bed, candidates: readonly { lagFrames: number }[]): boolean {
+  if (candidates.length < 2) return false;
+  const p = prepFlux(pieceFlux), b = prepFlux(bed.values, bed.covered);
+  const [L1, L2] = [candidates[0]!.lagFrames, candidates[1]!.lagFrames];
+  const BLOCK = 5 * FRAME_RATE;
+  const corr = (s0: number, L: number): number | null => {
+    let n = 0, ma = 0, mb = 0;
+    for (let s = s0; s < s0 + BLOCK; s++) { const j = s + L - bed.start; if (j < 0 || j >= b.length || !bed.covered[j]) continue; ma += p[s]!; mb += b[j]!; n++; }
+    if (n < BLOCK / 2) return null;
+    ma /= n; mb /= n;
+    let sab = 0, saa = 0, sbb = 0;
+    for (let s = s0; s < s0 + BLOCK; s++) { const j = s + L - bed.start; if (j < 0 || j >= b.length || !bed.covered[j]) continue; const x = p[s]! - ma, y = b[j]! - mb; sab += x * y; saa += x * x; sbb += y * y; }
+    return saa > 0 && sbb > 0 ? sab / Math.sqrt(saa * sbb) : null;
+  };
+  const prefs: (1 | 2)[] = [];
+  for (let s0 = 0; s0 + BLOCK <= p.length; s0 += BLOCK) {
+    const c1 = corr(s0, L1), c2 = corr(s0, L2);
+    if (c1 === null || c2 === null || Math.max(c1, c2) < PAUSE_BLOCK_MIN_R || Math.min(c1, c2) > PAUSE_BLOCK_OTHER_MAX) continue;
+    prefs.push(c1 > c2 ? 1 : 2);
+  }
+  const n1 = prefs.filter((x) => x === 1).length, n2 = prefs.length - n1;
+  if (n1 < 2 || n2 < 2) return false;
+  let switches = 0;
+  for (let i = 1; i < prefs.length; i++) if (prefs[i] !== prefs[i - 1]) switches++;
+  return switches === 1;
+}
+/**
+ * A 5 s block "clearly prefers" an offset when it fits there (correlation ≥ 0.6) and NOT at the other (≤ 0.3): in a stretch
+ * of repeated sound (a backing loop) a block fits both offsets in part, and must not count. Tuned on the synthetic fixture.
+ */
+const PAUSE_BLOCK_MIN_R = 0.6;
+const PAUSE_BLOCK_OTHER_MAX = 0.3;
+
 const dbfs = (x: ArrayLike<number>) => { let s = 0; for (let i = 0; i < x.length; i++) s += x[i]! * x[i]!; return s > 0 ? 10 * Math.log10(s / x.length) : -Infinity; };
 /**
  * The fine lag of window `a` in `b` (b = a's span plus `margin` samples each side; lag d: a[i] matches b[i + margin + d]).
@@ -224,7 +265,10 @@ export function verdictOf(v: VerdictInput): Exclude<SyncVerdict, 'reference' | '
   if (v.peakRatio === null || v.peakRatio < th.ambiguousBelowPeakRatio) return 'ambiguous';
   if (!v.fit || v.measured < 2) return 'no-shared-sound';
   const resMs = v.fit.residualSamples / v.oneMs;
-  if (resMs > th.inconsistentAboveResidualMs || (v.fit.dropped + v.rejected) > REJECTED_SHARE_MAX * v.measured) return 'inconsistent';
+  // more than a quarter of the windows disagreeing says the file is not one recording at one offset; but with three windows,
+  // one window (in a pause or a turn change) against two that agree is not that
+  const disagree = v.fit.dropped + v.rejected;
+  if (resMs > th.inconsistentAboveResidualMs || (disagree > REJECTED_SHARE_MAX * v.measured && (disagree >= 2 || v.fit.kept < 2))) return 'inconsistent';
   if (v.fit.model !== 'piecewise' && v.peakZ >= th.confident.peakZ && v.peakRatio >= th.confident.peakRatio && v.fit.kept >= Math.min(th.confident.minAnchors, v.windows) && resMs <= th.confident.residualMs) return 'confident';
   if (v.peakRatio >= th.check.peakRatio && v.fit.kept >= th.check.minAnchors && resMs <= th.check.residualMs) return 'check';
   return 'inconsistent';
@@ -365,8 +409,8 @@ async function measureGroup(store: Store, doc: ProjectDocument, group: MulticamG
       if (coarse.lagFrames === null) { results.set(key(t), { ...base, verdict: 'unsynced', why: 'too_short', anchors: [], quality: quality({ verdict: 'unsynced', jobId: o.jobId, chainDepth: round }), offsetSamples: null, attach: false }); continue; }
       const overlapSeconds = r3(coarse.overlapFrames / FRAME_RATE);
       const common = { peakZ: coarse.peakZ, peakRatio: coarse.peakRatio, overlapSeconds, candidates, chainDepth: round, jobId: o.jobId };
-      const early = coarse.peakZ! < SYNC_THRESHOLDS.noSharedSoundBelowPeakZ ? 'no-shared-sound' : coarse.peakRatio! < SYNC_THRESHOLDS.ambiguousBelowPeakRatio ? 'ambiguous' : null;
-      if (early) { results.set(key(t), { ...base, verdict: early, why: early === 'ambiguous' ? 'ambiguous' : 'no_shared_sound', anchors: [], quality: quality({ verdict: early, ...common }), offsetSamples: null, attach: true }); continue; }
+      const early = coarse.peakZ! < SYNC_THRESHOLDS.noSharedSoundBelowPeakZ ? 'no-shared-sound' : pausedInside(f, bed, coarse.candidates) ? 'inconsistent' : coarse.peakRatio! < SYNC_THRESHOLDS.ambiguousBelowPeakRatio ? 'ambiguous' : null;
+      if (early) { results.set(key(t), { ...base, verdict: early, why: early === 'ambiguous' ? 'ambiguous' : early === 'inconsistent' ? 'inconsistent' : 'no_shared_sound', anchors: [], quality: quality({ verdict: early, ...common }), offsetSamples: null, attach: true }); continue; }
       // 3. fine
       o.stage(multicamSyncStage('fitting sync', i, pending.length));
       const tf = Date.now();
@@ -470,11 +514,57 @@ const pieceReport = (m: Measured, sr: number): MulticamPieceReport => ({
   anchors: m.anchors.length, chainDepth: m.quality.chainDepth, candidates: m.quality.candidates.map((c) => ({ offsetSeconds: Number(T.toSeconds(c.offset).toFixed(3)), score: c.score })), captureOffsetSeconds: m.captureOffsetSeconds, why: m.why,
 });
 
+/** Two files of one angle measured to overlap by at most this much in group time are one recording split in two (a card change). */
+const ABUT_MS = 2;
+/**
+ * One camera records one file at a time, so its files may not overlap in group time (attach_multicam_sync refuses, and with it
+ * the whole sync). A file split at a card change is contiguous: measured, the second can start a sample or two before the
+ * first ends. Such an overlap of at most ABUT_MS moves the later file (when it is the one being measured now) by the overlap,
+ * in whole samples, within the measurement's own accuracy; a larger overlap leaves that file without anchors, said as
+ * 'inconsistent', instead of refusing every angle's sync.
+ */
+export function abutFiles(doc: ProjectDocument, group: MulticamGroup, results: Measured[]): void {
+  const sr = group.sampleRate, tol = Math.round((ABUT_MS * sr) / 1000);
+  for (const angle of group.angles) {
+    // the spans as attach_multicam_sync will check them (core pieceCoverage on the group's grid)
+    const grid = groupGrid(doc, group);
+    const spanOf = (piece: MulticamPiece, anchors: SyncAnchor[]) => { const asset = Object.hasOwn(doc.assets, piece.assetId) ? doc.assets[piece.assetId] : undefined; return asset ? pieceCoverage({ ...piece, anchors }, asset.duration, grid) : null; };
+    const spans: { start: T.RationalTime; end: T.RationalTime; m: Measured | null; piece: MulticamPiece }[] = [];
+    angle.pieces.forEach((piece, i) => {
+      const m = results.find((x) => x.angleId === angle.id && x.pieceIndex === i) ?? null;
+      const c = spanOf(piece, m && m.attach ? m.anchors : piece.anchors);
+      if (c) spans.push({ ...c, m: m && m.attach ? m : null, piece });
+    });
+    spans.sort((a, b) => T.cmp(a.start, b.start));
+    for (let k = 1; k < spans.length; k++) {
+      const prev = spans[k - 1]!, cur = spans[k]!;
+      if (!T.lt(cur.start, prev.end) || !cur.m) continue;
+      const ov = Math.ceil(T.toSeconds(T.sub(prev.end, cur.start)) * sr);
+      if (ov <= tol) {
+        let by = ov, moved = cur.m.anchors;
+        for (let tries = 0; tries < 3; tries++, by++) {
+          moved = cur.m.anchors.map((a) => ({ group: T.rt(T.sampleIndexAt(a.group, sr) + by, sr), source: a.source }));
+          const c = spanOf(cur.piece, moved);
+          if (c && !T.lt(c.start, prev.end)) { cur.start = c.start; cur.end = c.end; break; }
+        }
+        cur.m.anchors = moved;
+        if (cur.m.offsetSamples !== null) cur.m.offsetSamples += by;
+      } else {
+        cur.m.anchors = [];
+        cur.m.verdict = 'inconsistent'; cur.m.why = 'inconsistent'; cur.m.offsetSamples = null;
+        cur.m.quality = { ...cur.m.quality, verdict: 'inconsistent' };
+        spans.splice(k, 1); k--;
+      }
+    }
+  }
+}
+
 async function runSync(store: Store, actor: string, projectId: string, groupId: string, body: MulticamSyncRequest, o: { jobId: string | null; abandoned: () => boolean; stage: (s: string) => void }): Promise<MulticamSyncReport> {
   const { doc, group } = precheck(store, projectId, groupId, body);
   const { results, reference, timingsMs } = await measureGroup(store, doc, group, body, o);
   if (o.abandoned()) throw new SyncAbandoned();
   const refRow: MulticamPieceReport = { angleId: reference.angleId, pieceIndex: 0, assetId: reference.assetId, verdict: 'reference', offsetSeconds: 0, driftPpm: 0, peakZ: null, peakRatio: null, residualMs: 0, anchors: 1, chainDepth: 0, candidates: [], captureOffsetSeconds: 0, why: null };
+  abutFiles(doc, group, results);
   const pieces = [refRow, ...results.map((m) => pieceReport(m, group.sampleRate))];
   const attach = results.filter((m) => m.attach);
   const p = store.getProject(projectId);

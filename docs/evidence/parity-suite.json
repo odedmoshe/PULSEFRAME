@@ -2156,14 +2156,15 @@
     "caveat": "One synthetic scene (white text with black stroke over saturated flat colour edges incl. a yellow flash band) on one encoder setting (x264 crf per quality high, 4:2:0). Not a general guarantee."
   },
   "test2": {
-    "pass": true,
+    "pass": false,
     "thresholds": {
       "ssim": 0.985,
       "psnrDb": 36,
       "regionalPsnrFailDb": 30,
       "regionalPsnrWarnDb": 33,
       "colourTolPerChannel": 6,
-      "displacementTolPx": 1
+      "displacementTolPx": 1,
+      "curveCentroidTolPx": 1
     },
     "method": "PSNR over all RGB samples; SSIM computed in-process on BT.709 luma, 8x8 uniform window, stride 4, L=255, k1=0.01, k2=0.03; export decoded with ffmpeg scale=in_color_matrix=bt709:in_range=limited to rgb24",
     "frames": [
@@ -2223,39 +2224,39 @@
     },
     "summary": {
       "psnr": {
-        "min": 36.7831,
-        "median": 39.2807,
+        "min": 35.7301,
+        "median": 38.4885,
         "max": 44.5387,
         "worstFrame": 91
       },
       "ssim": {
-        "min": 0.9971,
+        "min": 0.9969,
         "median": 0.9978,
         "max": 0.9996,
         "worstFrame": 64
       },
       "largeTextPsnr": {
-        "min": 36.5567,
-        "median": 37.946,
+        "min": 36.5493,
+        "median": 37.9124,
         "max": 48.3571,
         "worstFrame": 62
       },
       "smallTextPsnr": {
-        "min": 29.1008,
-        "median": 33.631,
+        "min": 29.1293,
+        "median": 33.6656,
         "max": 42.1102,
         "worstFrame": 120
       },
       "imageBandPsnr": {
-        "min": 38.668,
-        "median": 39.8051,
-        "max": 41.3746,
+        "min": 38.8011,
+        "median": 39.9101,
+        "max": 41.4118,
         "worstFrame": 62
       }
     },
     "worstFramesSavedAsPng": [
       91,
-      120,
+      90,
       61
     ],
     "colour": [
@@ -3195,9 +3196,9 @@
           61
         ],
         "referenceDx": 4.3703,
-        "exportDx": 4.3248,
+        "exportDx": 4.2418,
         "evaluatorDx": 4.3742,
-        "absError": 0.0454
+        "absError": 0.1285
       },
       {
         "pair": [
@@ -3205,9 +3206,9 @@
           62
         ],
         "referenceDx": 4.6012,
-        "exportDx": 4.5573,
+        "exportDx": 4.4802,
         "evaluatorDx": 4.5929,
-        "absError": 0.0439
+        "absError": 0.121
       },
       {
         "pair": [
@@ -3215,9 +3216,9 @@
           63
         ],
         "referenceDx": 4.8114,
-        "exportDx": 4.8816,
+        "exportDx": 4.8008,
         "evaluatorDx": 4.8169,
-        "absError": 0.0702
+        "absError": 0.0106
       },
       {
         "pair": [
@@ -3225,9 +3226,9 @@
           64
         ],
         "referenceDx": 5.0356,
-        "exportDx": 4.8663,
+        "exportDx": 4.9494,
         "evaluatorDx": 5.0462,
-        "absError": 0.1694
+        "absError": 0.0862
       },
       {
         "pair": [
@@ -3235,9 +3236,9 @@
           65
         ],
         "referenceDx": 5.2945,
-        "exportDx": 5.33,
+        "exportDx": 5.2811,
         "evaluatorDx": 5.2809,
-        "absError": 0.0355
+        "absError": 0.0134
       },
       {
         "pair": [
@@ -3245,9 +3246,9 @@
           66
         ],
         "referenceDx": 5.5033,
-        "exportDx": 5.5443,
+        "exportDx": 5.5259,
         "evaluatorDx": 5.5209,
-        "absError": 0.041
+        "absError": 0.0226
       },
       {
         "pair": [
@@ -3255,9 +3256,9 @@
           67
         ],
         "referenceDx": 5.7845,
-        "exportDx": 5.8941,
+        "exportDx": 5.8083,
         "evaluatorDx": 5.7662,
-        "absError": 0.1095
+        "absError": 0.0238
       },
       {
         "pair": [
@@ -3265,9 +3266,9 @@
           68
         ],
         "referenceDx": 6.0325,
-        "exportDx": 5.8305,
+        "exportDx": 5.8823,
         "evaluatorDx": 6.0169,
-        "absError": 0.202
+        "absError": 0.1502
       },
       {
         "pair": [
@@ -3275,9 +3276,9 @@
           69
         ],
         "referenceDx": 6.2472,
-        "exportDx": 6.3555,
+        "exportDx": 6.4031,
         "evaluatorDx": 6.2729,
-        "absError": 0.1084
+        "absError": 0.156
       },
       {
         "pair": [
@@ -3285,34 +3286,326 @@
           70
         ],
         "referenceDx": 6.5397,
-        "exportDx": 6.4685,
+        "exportDx": 6.5405,
         "evaluatorDx": 6.5342,
-        "absError": 0.0712
+        "absError": 0.0009
+      }
+    ],
+    "curveLayer": [
+      {
+        "frame": 37,
+        "evaluator": {
+          "x": 509.7055,
+          "y": 288.5758
+        },
+        "stillPx": 0.219,
+        "exportPx": 0.8232,
+        "stillVsExportPx": 0.7071
+      },
+      {
+        "frame": 38,
+        "evaluator": {
+          "x": 510.1662,
+          "y": 288.741
+        },
+        "stillPx": 0.4117,
+        "exportPx": 0.8731,
+        "stillVsExportPx": 0.7071
+      },
+      {
+        "frame": 49,
+        "evaluator": {
+          "x": 521.9205,
+          "y": 291.4933
+        },
+        "stillPx": 0.0048,
+        "exportPx": 0.0502,
+        "stillVsExportPx": 0.0547
+      },
+      {
+        "frame": 50,
+        "evaluator": {
+          "x": 523.3791,
+          "y": 291.8016
+        },
+        "stillPx": 0.0105,
+        "exportPx": 0.0065,
+        "stillVsExportPx": 0.0138
+      },
+      {
+        "frame": 51,
+        "evaluator": {
+          "x": 524.8766,
+          "y": 292.1151
+        },
+        "stillPx": 0.0208,
+        "exportPx": 0.0463,
+        "stillVsExportPx": 0.0271
+      },
+      {
+        "frame": 52,
+        "evaluator": {
+          "x": 526.4086,
+          "y": 292.4327
+        },
+        "stillPx": 0.0708,
+        "exportPx": 0.0442,
+        "stillVsExportPx": 0.0487
+      },
+      {
+        "frame": 56,
+        "evaluator": {
+          "x": 532.8022,
+          "y": 293.7238
+        },
+        "stillPx": 0.0999,
+        "exportPx": 0.1624,
+        "stillVsExportPx": 0.1501
+      },
+      {
+        "frame": 60,
+        "evaluator": {
+          "x": 539.4584,
+          "y": 294.9984
+        },
+        "stillPx": 0.0137,
+        "exportPx": 0.0408,
+        "stillVsExportPx": 0.032
+      },
+      {
+        "frame": 61,
+        "evaluator": {
+          "x": 541.1415,
+          "y": 295.3067
+        },
+        "stillPx": 0.0052,
+        "exportPx": 0.145,
+        "stillVsExportPx": 0.1424
+      },
+      {
+        "frame": 62,
+        "evaluator": {
+          "x": 542.8271,
+          "y": 295.6087
+        },
+        "stillPx": 0.0788,
+        "exportPx": 0.0858,
+        "stillVsExportPx": 0.164
+      },
+      {
+        "frame": 63,
+        "evaluator": {
+          "x": 544.5128,
+          "y": 295.9035
+        },
+        "stillPx": 0.0405,
+        "exportPx": 0.0504,
+        "stillVsExportPx": 0.0826
+      },
+      {
+        "frame": 64,
+        "evaluator": {
+          "x": 546.1965,
+          "y": 296.19
+        },
+        "stillPx": 0.0656,
+        "exportPx": 0.0937,
+        "stillVsExportPx": 0.071
+      },
+      {
+        "frame": 65,
+        "evaluator": {
+          "x": 547.8758,
+          "y": 296.4672
+        },
+        "stillPx": 0.0805,
+        "exportPx": 0.1597,
+        "stillVsExportPx": 0.1115
+      },
+      {
+        "frame": 66,
+        "evaluator": {
+          "x": 549.5489,
+          "y": 296.734
+        },
+        "stillPx": 0.032,
+        "exportPx": 0.0745,
+        "stillVsExportPx": 0.0993
+      },
+      {
+        "frame": 67,
+        "evaluator": {
+          "x": 551.2137,
+          "y": 296.9894
+        },
+        "stillPx": 0.0195,
+        "exportPx": 0.1141,
+        "stillVsExportPx": 0.1039
+      },
+      {
+        "frame": 68,
+        "evaluator": {
+          "x": 552.8682,
+          "y": 297.2324
+        },
+        "stillPx": 0.0091,
+        "exportPx": 0.0963,
+        "stillVsExportPx": 0.0886
+      },
+      {
+        "frame": 69,
+        "evaluator": {
+          "x": 554.5106,
+          "y": 297.4618
+        },
+        "stillPx": 0.0396,
+        "exportPx": 0.1004,
+        "stillVsExportPx": 0.0661
+      },
+      {
+        "frame": 70,
+        "evaluator": {
+          "x": 556.1392,
+          "y": 297.6768
+        },
+        "stillPx": 0.0412,
+        "exportPx": 0.0876,
+        "stillVsExportPx": 0.0464
+      },
+      {
+        "frame": 79,
+        "evaluator": {
+          "x": 569.9028,
+          "y": 298.7872
+        },
+        "stillPx": 0.0657,
+        "exportPx": 0.066,
+        "stillVsExportPx": 0.0664
+      },
+      {
+        "frame": 80,
+        "evaluator": {
+          "x": 571.305,
+          "y": 298.8
+        },
+        "stillPx": 0.039,
+        "exportPx": 0.1016,
+        "stillVsExportPx": 0.0626
+      },
+      {
+        "frame": 81,
+        "evaluator": {
+          "x": 572.6766,
+          "y": 298.7801
+        },
+        "stillPx": 0.0644,
+        "exportPx": 0.04,
+        "stillVsExportPx": 0.0293
+      },
+      {
+        "frame": 88,
+        "evaluator": {
+          "x": 581.3097,
+          "y": 297.6768
+        },
+        "stillPx": 0.0471,
+        "exportPx": 0.1019,
+        "stillVsExportPx": 0.0551
+      },
+      {
+        "frame": 89,
+        "evaluator": {
+          "x": 582.3894,
+          "y": 297.4058
+        },
+        "stillPx": 0.1232,
+        "exportPx": 0.1027,
+        "stillVsExportPx": 0.0397
+      },
+      {
+        "frame": 90,
+        "evaluator": {
+          "x": 583.4269,
+          "y": 297.1125
+        },
+        "stillPx": 0.0062,
+        "exportPx": 0.1325,
+        "stillVsExportPx": 0.1264
+      },
+      {
+        "frame": 91,
+        "evaluator": {
+          "x": 584.421,
+          "y": 296.799
+        },
+        "stillPx": 0.023,
+        "exportPx": 0.1024,
+        "stillVsExportPx": 0.1061
+      },
+      {
+        "frame": 100,
+        "evaluator": {
+          "x": 591.2146,
+          "y": 293.4
+        },
+        "stillPx": 0.0211,
+        "exportPx": 0.1441,
+        "stillVsExportPx": 0.1268
+      },
+      {
+        "frame": 109,
+        "evaluator": {
+          "x": 593.5007,
+          "y": 290.001
+        },
+        "stillPx": 0.0178,
+        "exportPx": 0.0574,
+        "stillVsExportPx": 0.0434
+      },
+      {
+        "frame": 120,
+        "evaluator": {
+          "x": 588.8,
+          "y": 288
+        },
+        "stillPx": 0.0263,
+        "exportPx": 0.1114,
+        "stillVsExportPx": 0.1375
+      },
+      {
+        "frame": 129,
+        "evaluator": {
+          "x": 588.8,
+          "y": 288
+        },
+        "stillPx": 0.0104,
+        "exportPx": 0.1166,
+        "stillVsExportPx": 0.1267
       }
     ],
     "qualityLadderReportOnly": {
       "high": {
-        "bytes": 498424,
-        "wallSeconds": 2.759,
+        "bytes": 518989,
+        "wallSeconds": 3.634,
         "psnr": {
-          "min": 36.7831,
-          "median": 39.2807,
+          "min": 35.7301,
+          "median": 38.4885,
           "max": 44.5387,
           "worstFrame": 91
         },
         "ssim": {
-          "min": 0.9971,
+          "min": 0.9969,
           "median": 0.9978,
           "max": 0.9996,
           "worstFrame": 64
         }
       },
       "mp4-standard": {
-        "bytes": 326088,
-        "wallSeconds": 2.822,
+        "bytes": 339200,
+        "wallSeconds": 3.859,
         "psnr": {
-          "min": 35.7055,
-          "median": 37.8109,
+          "min": 34.7948,
+          "median": 37.1162,
           "max": 44.0834
         },
         "ssim": {
@@ -3322,25 +3615,25 @@
         }
       },
       "mp4-draft": {
-        "bytes": 180200,
-        "wallSeconds": 2.585,
+        "bytes": 187647,
+        "wallSeconds": 3.331,
         "psnr": {
-          "min": 32.0091,
-          "median": 33.6122,
+          "min": 31.4545,
+          "median": 33.1362,
           "max": 40.9701
         },
         "ssim": {
           "min": 0.979,
-          "median": 0.9872,
+          "median": 0.9871,
           "max": 0.9978
         }
       },
       "webm-vp9-standard": {
-        "bytes": 404210,
-        "wallSeconds": 3.207,
+        "bytes": 413867,
+        "wallSeconds": 4.604,
         "psnr": {
-          "min": 35.6529,
-          "median": 37.4064,
+          "min": 34.7936,
+          "median": 37.1597,
           "max": 45.165
         },
         "ssim": {
@@ -3398,397 +3691,399 @@
       },
       {
         "frame": 18,
-        "psnr": 38.7598,
+        "psnr": 38.7374,
         "ssim": 0.9976,
-        "largeTextPsnr": 38.8252,
-        "smallTextPsnr": 32.7119,
+        "largeTextPsnr": 38.7749,
+        "smallTextPsnr": 32.6965,
         "imageBandPsnr": null,
         "barcode": 18
       },
       {
         "frame": 19,
-        "psnr": 40.4242,
+        "psnr": 40.4296,
         "ssim": 0.9983,
-        "largeTextPsnr": 39.6125,
-        "smallTextPsnr": 33.4981,
+        "largeTextPsnr": 39.624,
+        "smallTextPsnr": 33.5055,
         "imageBandPsnr": null,
         "barcode": 19
       },
       {
         "frame": 20,
-        "psnr": 39.6492,
-        "ssim": 0.9977,
-        "largeTextPsnr": 38.5885,
-        "smallTextPsnr": 33.7765,
-        "imageBandPsnr": 39.7524,
+        "psnr": 39.7028,
+        "ssim": 0.9978,
+        "largeTextPsnr": 38.7283,
+        "smallTextPsnr": 33.787,
+        "imageBandPsnr": 39.8821,
         "barcode": 20
       },
       {
         "frame": 21,
-        "psnr": 39.6556,
+        "psnr": 39.6688,
         "ssim": 0.9978,
-        "largeTextPsnr": 39.3455,
-        "smallTextPsnr": 33.9226,
-        "imageBandPsnr": 40.9448,
+        "largeTextPsnr": 39.3574,
+        "smallTextPsnr": 33.9431,
+        "imageBandPsnr": 40.9498,
         "barcode": 21
       },
       {
         "frame": 24,
-        "psnr": 38.9096,
+        "psnr": 38.9295,
         "ssim": 0.9972,
-        "largeTextPsnr": 37.162,
-        "smallTextPsnr": 33.705,
-        "imageBandPsnr": 39.0466,
+        "largeTextPsnr": 37.2139,
+        "smallTextPsnr": 33.716,
+        "imageBandPsnr": 39.2921,
         "barcode": 24
       },
       {
         "frame": 25,
-        "psnr": 39.7616,
+        "psnr": 39.7825,
         "ssim": 0.998,
-        "largeTextPsnr": 38.9729,
-        "smallTextPsnr": 33.631,
-        "imageBandPsnr": 41.2115,
+        "largeTextPsnr": 38.9716,
+        "smallTextPsnr": 33.6742,
+        "imageBandPsnr": 41.1406,
         "barcode": 25
       },
       {
         "frame": 26,
-        "psnr": 39.565,
+        "psnr": 39.5681,
         "ssim": 0.9975,
-        "largeTextPsnr": 38.7562,
-        "smallTextPsnr": 33.3794,
-        "imageBandPsnr": 40.66,
+        "largeTextPsnr": 38.6861,
+        "smallTextPsnr": 33.449,
+        "imageBandPsnr": 40.8932,
         "barcode": 26
       },
       {
         "frame": 37,
-        "psnr": 39.9621,
+        "psnr": 37.7013,
         "ssim": 0.9979,
-        "largeTextPsnr": 38.3042,
-        "smallTextPsnr": 34.2289,
-        "imageBandPsnr": 40.7523,
+        "largeTextPsnr": 38.2064,
+        "smallTextPsnr": 34.2147,
+        "imageBandPsnr": 40.6497,
         "barcode": 37
       },
       {
         "frame": 38,
-        "psnr": 39.374,
+        "psnr": 37.1651,
         "ssim": 0.9975,
-        "largeTextPsnr": 37.1955,
-        "smallTextPsnr": 34.0179,
-        "imageBandPsnr": 39.2613,
+        "largeTextPsnr": 37.1396,
+        "smallTextPsnr": 34.0108,
+        "imageBandPsnr": 39.2238,
         "barcode": 38
       },
       {
         "frame": 49,
-        "psnr": 39.9621,
-        "ssim": 0.9981,
-        "largeTextPsnr": 38.0905,
-        "smallTextPsnr": 34.1962,
-        "imageBandPsnr": 40.0989,
+        "psnr": 38.1912,
+        "ssim": 0.998,
+        "largeTextPsnr": 38.1203,
+        "smallTextPsnr": 34.1885,
+        "imageBandPsnr": 40.2626,
         "barcode": 49
       },
       {
         "frame": 50,
-        "psnr": 39.7338,
-        "ssim": 0.9976,
-        "largeTextPsnr": 38.0675,
-        "smallTextPsnr": 33.9199,
-        "imageBandPsnr": 39.8567,
+        "psnr": 38.0981,
+        "ssim": 0.9978,
+        "largeTextPsnr": 37.9643,
+        "smallTextPsnr": 33.9118,
+        "imageBandPsnr": 39.935,
         "barcode": 50
       },
       {
         "frame": 51,
-        "psnr": 38.2831,
+        "psnr": 37.1003,
         "ssim": 0.9973,
-        "largeTextPsnr": 36.996,
-        "smallTextPsnr": 33.0518,
-        "imageBandPsnr": 38.9021,
+        "largeTextPsnr": 36.974,
+        "smallTextPsnr": 33.0714,
+        "imageBandPsnr": 39.0194,
         "barcode": 51
       },
       {
         "frame": 52,
-        "psnr": 39.2807,
+        "psnr": 37.9043,
         "ssim": 0.998,
-        "largeTextPsnr": 37.6833,
-        "smallTextPsnr": 33.377,
-        "imageBandPsnr": 39.8051,
+        "largeTextPsnr": 37.6368,
+        "smallTextPsnr": 33.4302,
+        "imageBandPsnr": 39.9101,
         "barcode": 52
       },
       {
         "frame": 56,
-        "psnr": 39.6962,
-        "ssim": 0.9974,
-        "largeTextPsnr": 37.6377,
-        "smallTextPsnr": 34.1919,
-        "imageBandPsnr": 39.346,
+        "psnr": 38.4462,
+        "ssim": 0.9973,
+        "largeTextPsnr": 37.567,
+        "smallTextPsnr": 34.2691,
+        "imageBandPsnr": 39.1321,
         "barcode": 56
       },
       {
         "frame": 60,
-        "psnr": 37.2375,
-        "ssim": 0.9974,
-        "largeTextPsnr": 38.0151,
-        "smallTextPsnr": 29.178,
-        "imageBandPsnr": 39.7726,
+        "psnr": 36.6833,
+        "ssim": 0.9973,
+        "largeTextPsnr": 37.9124,
+        "smallTextPsnr": 29.1455,
+        "imageBandPsnr": 39.7293,
         "barcode": 60
       },
       {
         "frame": 61,
-        "psnr": 37.0347,
-        "ssim": 0.9978,
-        "largeTextPsnr": 37.8635,
-        "smallTextPsnr": 29.1394,
-        "imageBandPsnr": 40.0536,
+        "psnr": 36.5842,
+        "ssim": 0.9977,
+        "largeTextPsnr": 37.876,
+        "smallTextPsnr": 29.1639,
+        "imageBandPsnr": 39.9547,
         "barcode": 61
       },
       {
         "frame": 62,
-        "psnr": 38.4055,
+        "psnr": 37.8587,
         "ssim": 0.9974,
-        "largeTextPsnr": 36.5567,
-        "smallTextPsnr": 33.4665,
-        "imageBandPsnr": 38.668,
+        "largeTextPsnr": 36.5493,
+        "smallTextPsnr": 33.5545,
+        "imageBandPsnr": 38.8011,
         "barcode": 62
       },
       {
         "frame": 63,
-        "psnr": 39.2749,
-        "ssim": 0.998,
-        "largeTextPsnr": 37.3878,
-        "smallTextPsnr": 34.0474,
-        "imageBandPsnr": 39.2031,
+        "psnr": 38.6044,
+        "ssim": 0.9979,
+        "largeTextPsnr": 37.3814,
+        "smallTextPsnr": 34.0756,
+        "imageBandPsnr": 39.2514,
         "barcode": 63
       },
       {
         "frame": 64,
-        "psnr": 39.2669,
-        "ssim": 0.9971,
-        "largeTextPsnr": 36.9068,
-        "smallTextPsnr": 34.1672,
-        "imageBandPsnr": 38.9669,
+        "psnr": 38.6568,
+        "ssim": 0.9969,
+        "largeTextPsnr": 36.978,
+        "smallTextPsnr": 34.2082,
+        "imageBandPsnr": 39.042,
         "barcode": 64
       },
       {
         "frame": 65,
-        "psnr": 39.324,
+        "psnr": 38.7969,
         "ssim": 0.9982,
-        "largeTextPsnr": 38.264,
-        "smallTextPsnr": 33.7168,
-        "imageBandPsnr": 40.3676,
+        "largeTextPsnr": 38.2836,
+        "smallTextPsnr": 33.7386,
+        "imageBandPsnr": 40.4771,
         "barcode": 65
       },
       {
         "frame": 66,
-        "psnr": 38.6482,
-        "ssim": 0.9978,
-        "largeTextPsnr": 36.7952,
-        "smallTextPsnr": 33.5202,
-        "imageBandPsnr": 38.9454,
+        "psnr": 38.1468,
+        "ssim": 0.9977,
+        "largeTextPsnr": 36.7632,
+        "smallTextPsnr": 33.5674,
+        "imageBandPsnr": 38.8695,
         "barcode": 66
       },
       {
         "frame": 67,
-        "psnr": 38.9537,
-        "ssim": 0.998,
-        "largeTextPsnr": 37.9382,
-        "smallTextPsnr": 33.1678,
-        "imageBandPsnr": 40.29,
+        "psnr": 38.4927,
+        "ssim": 0.9979,
+        "largeTextPsnr": 37.8548,
+        "smallTextPsnr": 33.2013,
+        "imageBandPsnr": 40.0709,
         "barcode": 67
       },
       {
         "frame": 68,
-        "psnr": 38.4383,
-        "ssim": 0.9977,
-        "largeTextPsnr": 36.6827,
-        "smallTextPsnr": 32.8927,
-        "imageBandPsnr": 38.7511,
+        "psnr": 38.0239,
+        "ssim": 0.9976,
+        "largeTextPsnr": 36.6199,
+        "smallTextPsnr": 32.9097,
+        "imageBandPsnr": 38.8126,
         "barcode": 68
       },
       {
         "frame": 69,
-        "psnr": 38.6883,
-        "ssim": 0.9976,
-        "largeTextPsnr": 37.8908,
-        "smallTextPsnr": 32.745,
-        "imageBandPsnr": 41.0943,
+        "psnr": 38.3977,
+        "ssim": 0.9977,
+        "largeTextPsnr": 38.0201,
+        "smallTextPsnr": 32.7757,
+        "imageBandPsnr": 41.0463,
         "barcode": 69
       },
       {
         "frame": 70,
-        "psnr": 39.2275,
+        "psnr": 38.8993,
         "ssim": 0.998,
-        "largeTextPsnr": 38.7922,
-        "smallTextPsnr": 33.277,
-        "imageBandPsnr": 41.3746,
+        "largeTextPsnr": 39.0032,
+        "smallTextPsnr": 33.325,
+        "imageBandPsnr": 41.4118,
         "barcode": 70
       },
       {
         "frame": 79,
-        "psnr": 38.9078,
-        "ssim": 0.9977,
-        "largeTextPsnr": 37.042,
-        "smallTextPsnr": 33.9461,
-        "imageBandPsnr": 38.7599,
+        "psnr": 37.9403,
+        "ssim": 0.9976,
+        "largeTextPsnr": 37.0268,
+        "smallTextPsnr": 33.7595,
+        "imageBandPsnr": 39.0625,
         "barcode": 79
       },
       {
         "frame": 80,
-        "psnr": 39.6518,
-        "ssim": 0.9979,
-        "largeTextPsnr": 37.7161,
-        "smallTextPsnr": 34.5919,
-        "imageBandPsnr": 39.4059,
+        "psnr": 38.4885,
+        "ssim": 0.9978,
+        "largeTextPsnr": 37.7844,
+        "smallTextPsnr": 34.3014,
+        "imageBandPsnr": 39.7004,
         "barcode": 80
       },
       {
         "frame": 81,
-        "psnr": 39.6952,
-        "ssim": 0.9979,
-        "largeTextPsnr": 37.6557,
-        "smallTextPsnr": 34.5323,
-        "imageBandPsnr": 39.6166,
+        "psnr": 38.3366,
+        "ssim": 0.9977,
+        "largeTextPsnr": 37.5889,
+        "smallTextPsnr": 34.1989,
+        "imageBandPsnr": 39.5382,
         "barcode": 81
       },
       {
         "frame": 88,
-        "psnr": 39.6267,
-        "ssim": 0.9977,
-        "largeTextPsnr": 38.2789,
-        "smallTextPsnr": 33.3958,
-        "imageBandPsnr": 40.4812,
+        "psnr": 38.0725,
+        "ssim": 0.9976,
+        "largeTextPsnr": 38.3106,
+        "smallTextPsnr": 33.3099,
+        "imageBandPsnr": 40.5301,
         "barcode": 88
       },
       {
         "frame": 89,
-        "psnr": 38.2999,
+        "psnr": 37.061,
         "ssim": 0.9973,
-        "largeTextPsnr": 37.403,
-        "smallTextPsnr": 32.664,
-        "imageBandPsnr": 39.622,
+        "largeTextPsnr": 37.4589,
+        "smallTextPsnr": 32.5411,
+        "imageBandPsnr": 39.8438,
         "barcode": 89
       },
       {
         "frame": 90,
-        "psnr": 37.142,
-        "ssim": 0.9972,
-        "largeTextPsnr": 37.946,
-        "smallTextPsnr": 29.2703,
-        "imageBandPsnr": 39.8845,
+        "psnr": 36.1872,
+        "ssim": 0.9976,
+        "largeTextPsnr": 38.0012,
+        "smallTextPsnr": 29.2717,
+        "imageBandPsnr": 40.0865,
         "barcode": 90
       },
       {
         "frame": 91,
-        "psnr": 36.7831,
-        "ssim": 0.9974,
-        "largeTextPsnr": 37.4521,
-        "smallTextPsnr": 29.1865,
-        "imageBandPsnr": 39.4896,
+        "psnr": 35.7301,
+        "ssim": 0.997,
+        "largeTextPsnr": 37.4253,
+        "smallTextPsnr": 29.1561,
+        "imageBandPsnr": 39.5513,
         "barcode": 91
       },
       {
         "frame": 100,
-        "psnr": 39.6955,
-        "ssim": 0.998,
-        "largeTextPsnr": 37.3929,
-        "smallTextPsnr": 34.2891,
-        "imageBandPsnr": 39.2467,
+        "psnr": 38.0613,
+        "ssim": 0.9979,
+        "largeTextPsnr": 37.3818,
+        "smallTextPsnr": 34.34,
+        "imageBandPsnr": 39.2754,
         "barcode": 100
       },
       {
         "frame": 109,
-        "psnr": 39.0634,
+        "psnr": 38.1092,
         "ssim": 0.9978,
-        "largeTextPsnr": 37.0318,
-        "smallTextPsnr": 34.2281,
-        "imageBandPsnr": 38.9888,
+        "largeTextPsnr": 36.9118,
+        "smallTextPsnr": 34.2467,
+        "imageBandPsnr": 39.0122,
         "barcode": 109
       },
       {
         "frame": 120,
-        "psnr": 36.872,
+        "psnr": 36.6861,
         "ssim": 0.9976,
-        "largeTextPsnr": 37.7283,
-        "smallTextPsnr": 29.1008,
-        "imageBandPsnr": 40.2911,
+        "largeTextPsnr": 37.6514,
+        "smallTextPsnr": 29.1293,
+        "imageBandPsnr": 40.3588,
         "barcode": 120
       },
       {
         "frame": 129,
-        "psnr": 39.0181,
-        "ssim": 0.998,
-        "largeTextPsnr": 38.0933,
-        "smallTextPsnr": 33.4173,
-        "imageBandPsnr": 40.927,
+        "psnr": 38.0658,
+        "ssim": 0.9978,
+        "largeTextPsnr": 37.8013,
+        "smallTextPsnr": 33.3965,
+        "imageBandPsnr": 40.9016,
         "barcode": 129
       },
       {
         "frame": 130,
-        "psnr": 38.9846,
-        "ssim": 0.9979,
-        "largeTextPsnr": 38.4274,
-        "smallTextPsnr": 33.5615,
-        "imageBandPsnr": 40.458,
+        "psnr": 38.8659,
+        "ssim": 0.9978,
+        "largeTextPsnr": 38.2509,
+        "smallTextPsnr": 33.5701,
+        "imageBandPsnr": 40.3269,
         "barcode": 130
       },
       {
         "frame": 131,
-        "psnr": 40.2651,
-        "ssim": 0.9983,
-        "largeTextPsnr": 39.5914,
-        "smallTextPsnr": 34.3115,
-        "imageBandPsnr": 41.3441,
+        "psnr": 40.267,
+        "ssim": 0.9982,
+        "largeTextPsnr": 39.6903,
+        "smallTextPsnr": 34.3496,
+        "imageBandPsnr": 41.1336,
         "barcode": 131
       },
       {
         "frame": 139,
-        "psnr": 39.8646,
-        "ssim": 0.9974,
-        "largeTextPsnr": 38.663,
-        "smallTextPsnr": 33.9689,
-        "imageBandPsnr": 40.4768,
+        "psnr": 39.886,
+        "ssim": 0.9972,
+        "largeTextPsnr": 38.5067,
+        "smallTextPsnr": 33.9359,
+        "imageBandPsnr": 40.947,
         "barcode": 139
       },
       {
         "frame": 140,
-        "psnr": 39.8855,
-        "ssim": 0.9985,
-        "largeTextPsnr": 38.4563,
-        "smallTextPsnr": 33.8485,
+        "psnr": 39.8271,
+        "ssim": 0.9982,
+        "largeTextPsnr": 38.1403,
+        "smallTextPsnr": 33.7874,
         "imageBandPsnr": null,
         "barcode": 140
       },
       {
         "frame": 145,
-        "psnr": 39.0297,
-        "ssim": 0.9982,
-        "largeTextPsnr": 37.3099,
-        "smallTextPsnr": 32.6228,
+        "psnr": 39.1362,
+        "ssim": 0.998,
+        "largeTextPsnr": 37.259,
+        "smallTextPsnr": 32.6751,
         "imageBandPsnr": null,
         "barcode": 145
       },
       {
         "frame": 149,
-        "psnr": 39.1955,
+        "psnr": 39.2344,
         "ssim": 0.9979,
-        "largeTextPsnr": 37.3624,
-        "smallTextPsnr": 33.4638,
+        "largeTextPsnr": 37.3027,
+        "smallTextPsnr": 33.5561,
         "imageBandPsnr": null,
         "barcode": 149
       }
     ]
   },
-  "pass": true,
-  "failures": [],
+  "pass": false,
+  "failures": [
+    "test2 global frame 91: PSNR 35.7301 SSIM 0.997"
+  ],
   "warnings": [
-    "test2 smallTextPsnr frame 18: 32.7119 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 60: 29.178 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 61: 29.1394 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 68: 32.8927 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 69: 32.745 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 89: 32.664 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 90: 29.2703 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 91: 29.1865 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 120: 29.1008 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 145: 32.6228 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)"
+    "test2 smallTextPsnr frame 18: 32.6965 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 60: 29.1455 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 61: 29.1639 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 68: 32.9097 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 69: 32.7757 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 89: 32.5411 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 90: 29.2717 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 91: 29.1561 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 120: 29.1293 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 145: 32.6751 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)"
   ],
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
@@ -3810,7 +4105,8 @@
     "V2": "alpha image frames 20..140, scale 0.6, rotation 20, opacity 0.8, y -0.15, x keyframes -0.3 -> 0.3 ease-in-out",
     "T1": "Hebrew+niqqud+Latin text frames 10..150 sizeFrac 0.12 stroke, background #101418CC, y 0.1, opacity key 0->1 over 15 frames, rotation keys 0/4/-4/0 at +0/40/80/120",
     "T2": "small text sizeFrac 0.04 weight 400 white, y 0.42",
-    "T3": "six NBSP with background box (flat colour reference) sizeFrac 0.06 at x -0.44 y 0.3"
+    "T3": "six NBSP with background box (flat colour reference) sizeFrac 0.06 at x -0.44 y 0.3",
+    "V3": "keyframe curves (ADR-0019): 64x64 green PNG frames 30..130, scale 0.07; x bezier(0.2,-0.3,0.6,1.4) 0.3 -> 0.42, y smooth 0.3/0.33/0.3, scale spring 0.07 -> 0.09, rotation overshoot 0 -> 30"
   },
   "regions": {
     "largeText": {
@@ -3843,5 +4139,5 @@
     "Test 1 (i) and (ii) are both strict; the paused preview decodes the original media (data-source=original), playback uses the proxy.",
     "Small-text (14.4 px) regional PSNR in Test 2 is report+warning only; the pass/fail criterion is textSizeEnvelope."
   ],
-  "runtimeSeconds": 103.7
+  "runtimeSeconds": 153.8
 }

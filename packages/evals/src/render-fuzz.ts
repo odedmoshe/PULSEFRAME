@@ -49,7 +49,9 @@ async function main() {
   };
   const waitJob = async (id: string) => { for (;;) { const j = (await call(`/jobs/${id}`)).body; if (['succeeded', 'failed', 'canceled'].includes(j.status)) return j; await sleep(100); } };
   const rows: any[] = [];
-  const browser = await chromium.launch();
+  // the editor's browser gets WebGPU as the render worker's does (apps/renderer index.ts, default mode): without it the preview
+  // draws GPU effects (color.grade among them) as unavailable while the server still has them, and the routes cannot agree
+  const browser = await chromium.launch({ args: ['--enable-unsafe-webgpu'] });
   const context = await browser.newContext({ viewport: { width: 1500, height: 950 } });
   { const k = await context.newPage(); await k.goto(s.ownerUrl); await k.waitForTimeout(400); await k.close(); } // owner session cookie for the editor pages
   try {
@@ -131,8 +133,23 @@ async function main() {
       row.preflight = pre.status === 200 ? { blockers: pre.body.blockers, warnings: pre.body.warnings } : null;
       // 2. stills at the first, a middle and the last frame
       for (const i of [0, Math.floor(frames / 2), frames - 1]) { const st = await call(`/projects/${pid}/frame?index=${i}`); if (st.status !== 200) problems.push(`still ${i}: ${st.body?.error?.code ?? st.status}`); }
-      // 3. picture + sound export: succeeds, decodes without errors, has exactly the timeline's frames
-      const started = await call(`/projects/${pid}/exports`, { quality: 'high' });
+      // 3. picture + sound export: succeeds, decodes without errors, has exactly the timeline's frames.
+      // A title with a live field the project cannot fill (no capture date, a person removed since) is an honest preflight
+      // blocker (ADR-0021), and a person's age needs the people scope this agent credential lacks: both refusals are by design.
+      // Each must be the refusal preflight announced; the titles are then made plain text, and the export must succeed.
+      let started = await call(`/projects/${pid}/exports`, { quality: 'high' });
+      const fieldBlockers = ((pre.body?.issues ?? []) as { code: string; severity: string; ids?: string[] }[]).filter((x) => x.severity === 'blocker' && x.code === 'field_no_data');
+      const byDesign = started.status === 422 && started.body?.error?.code === 'render_blocked' && (started.body.error.details?.blockers ?? []).every((b: { code: string }) => b.code === 'field_no_data')
+        || started.status === 403 && started.body?.error?.code === 'people_scope_required';
+      if (byDesign) {
+        if (!fieldBlockers.length) problems.push(`export refused ${started.body.error.code}, but preflight announced no field blocker`);
+        row.fieldTitlesMadePlain = { refusal: started.body.error.code, titles: fieldBlockers.flatMap((b) => b.ids ?? []) };
+        for (const id of new Set(fieldBlockers.flatMap((b) => b.ids ?? []))) {
+          const r = await call(`/projects/${pid}/transactions`, { ops: [{ op: 'update_text', args: { clipId: id, text: 'plain' } }, { op: 'set_text_fields', args: { clipId: id, enabled: false } }] });
+          if (r.status !== 200) problems.push(`title ${id} could not be made plain text: ${r.body?.error?.code}`);
+        }
+        started = await call(`/projects/${pid}/exports`, { quality: 'high' });
+      }
       if (started.status >= 400) problems.push(`export refused: ${started.body?.error?.code}`);
       else {
         const job = await waitJob(started.body.jobId);

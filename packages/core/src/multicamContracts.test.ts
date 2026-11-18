@@ -1,6 +1,6 @@
 /**
  * Lead contracts of multicam (ADR-0020), the parts the lead builds itself: the optional schema fields (no version bump), the
- * 'multicamGroup' entity and its exact undo, the registry rows (every operation refuses honestly until W1), the validation of
+ * 'multicamGroup' entity and its exact undo, the registry rows, the validation of
  * groups and tags, the refusals other edits now raise (remove_asset, remove_motion_track, replace_clip_asset,
  * replace_clip_media), the capture-time priors, syncGrid, the in-place recipe row and the sequence origin member. The bodies of
  * multicam.ts and multicamOps.ts are W1's (multicam.test.ts, multicamOps.test.ts).
@@ -229,10 +229,19 @@ describe('small fixed parts', () => {
     expect(MulticamOpArgs.create_multicam.shape.referenceAngleIndex.description).toMatch(/^default: the first sound angle, else 0/);
     expect(MulticamOpArgs.place_multicam.shape.sound.description).toMatch(/default the first sound angle, else the reference$/);
   });
-  it('the auto-switch recipe is in place and refuses honestly until W2 builds its planner', () => {
+  it('the auto-switch recipe is in place, and its planner refuses honestly for what it lacks: speakers, a program, the level envelopes', () => {
     expect(isInPlaceRecipe('multicam-auto')).toBe(true);
     expect(isInPlaceRecipe('beat-montage')).toBe(false);
     const s = setup();
-    try { planRecipe(withGroup(s.doc, s.group), 'multicam-auto', { groupId: 'mcg_1' }); throw new Error('planned'); } catch (e) { expect(e).toBeInstanceOf(RecipeError); expect((e as RecipeError).code).toBe('not_built'); }
+    const refusedBy = (doc: ProjectDocument, ctx = {}): RecipeError => { try { planRecipe(doc, 'multicam-auto', { groupId: 'mcg_1' }, ctx); } catch (e) { if (e instanceof RecipeError) return e; throw e; } throw new Error('planned'); };
+    const noSpeakers = refusedBy(withGroup(s.doc, { ...s.group, speakers: [] }));
+    expect([noSpeakers.code, noSpeakers.message]).toEqual(['invalid_args', 'the group has no speakers mapped to mics']);
+    // the clip of camera A is not a segment of the group, so there is no program to cut
+    const noProgram = refusedBy(withGroup(s.doc, s.group));
+    expect([noProgram.code, noProgram.message]).toEqual(['nothing_to_do', 'multicam group mcg_1 has no program on a picture track yet']);
+    // a program, but the mic's level envelope is not supplied: needs_analysis (the server builds it on demand), never a guess
+    const noLevels = refusedBy(tagged(withGroup(s.doc, s.group), s.clipId));
+    expect(noLevels.code).toBe('needs_analysis');
+    expect(noLevels.message).toBe(`the level envelope of file ${s.MIC} (mic of "מארחת") is not loaded`);
   });
 });

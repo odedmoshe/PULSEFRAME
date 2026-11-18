@@ -105,8 +105,8 @@ export function KeyStrip(props: KeyStripProps): ReactElement | null {
       }
       switch (e.code) {
         case 'ArrowLeft': case 'ArrowRight': own(); void nudgeSelectedKeys(editor, (e.code === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 10 : 1)); return true;
-        case 'KeyS': own(); if (CURVES_BUILT) void curveSelected(editor, 'smooth'); return true;
-        case 'KeyL': own(); void curveSelected(editor, 'linear'); return true;
+        case 'KeyS': own(); if (CURVES_BUILT) void curveSelected(editor, 'smooth', undefined, 'both'); return true;
+        case 'KeyL': own(); void curveSelected(editor, 'linear', undefined, 'both'); return true;
         case 'Enter': case 'NumpadEnter': openPicker(at); return true;
         case 'Space': editor.setKeySel(selectFrame(sel, clip.id, at, true)); return true;
         case 'Delete': case 'Backspace': own(); void deleteSelectedKeys(editor); return true;
@@ -159,8 +159,8 @@ function KeyMenu({ x, y, sel, onClose }: { x: number; y: number; sel: KeySel | n
     return () => window.removeEventListener('pointerdown', away, true);
   }, [onClose]);
   const items: { action: string; label: string; disabled?: string; run: () => void }[] = [
-    { action: 'smooth', label: t('curve.smooth'), disabled: CURVES_BUILT ? undefined : t('curve.notBuilt'), run: () => void curveSelected(editor, 'smooth') },
-    { action: 'straight', label: t('curve.straight'), run: () => void curveSelected(editor, 'linear') },
+    { action: 'smooth', label: t('curve.smooth'), disabled: CURVES_BUILT ? undefined : t('curve.notBuilt'), run: () => void curveSelected(editor, 'smooth', undefined, 'both') },
+    { action: 'straight', label: t('curve.straight'), run: () => void curveSelected(editor, 'linear', undefined, 'both') },
     { action: 'curve', label: t('keys.menu.curve'), run: () => { const k = sel?.keys[0]; if (sel && k) editor.openCurvePicker(sel.clipId, k.frame, sel.keys.filter((q) => q.frame === k.frame).map((q) => q.channel)); } },
     { action: 'copy', label: t('keys.menu.copy'), run: () => copySelectedKeys(editor) },
     { action: 'paste', label: t('keys.menu.paste'), disabled: state.keyClipboard && editor.playheadOnSelection ? undefined : t('keys.menu.paste'), run: () => void pasteKeys(editor) },

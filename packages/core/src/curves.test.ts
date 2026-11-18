@@ -8,7 +8,7 @@ import fc from 'fast-check';
 import * as T from '@pulseframe/time';
 import {
   bounceShape, BISECTION_STEPS, cubicBezierShape, CURVES, CURVES_BUILT, curveShape, EASINGS, exactHandles, isV1Easing, NAMED_BEZIER, NO_RANGE,
-  sampleKeyframes, smoothValue, splitSegment, springShape, steffenSlope, turnsBack, TRANSFORM_RANGE, type CurveHandles, type Easing, type Keyframe,
+  sampleKeyframes, smoothValue, splitSegment, springShape, cosDet, expDet, steffenSlope, turnsBack, TRANSFORM_RANGE, type CurveHandles, type Easing, type Keyframe,
 } from './index.ts';
 
 /** Deterministic random numbers (mulberry32). */
@@ -119,6 +119,19 @@ describe('U5: the shape table of the named curves', () => {
     expect(Math.abs(s.value - 1.2059)).toBeLessThanOrEqual(1e-4);
     expect(Math.abs(s.at - 0.278)).toBeLessThan(0.005);
     console.log(`U5: overshoot max ${o.value.toFixed(6)} at ${o.at}, anticipate min ${a.value.toFixed(6)} at ${a.at}, spring max ${s.value.toFixed(6)} at ${s.at}`);
+  });
+  it('spring uses no engine Math.exp or Math.cos (they differ between Node and Chromium), and stays within 4e-16 of them', () => {
+    const { exp, cos } = Math;
+    try {
+      Math.exp = () => { throw new Error('Math.exp'); };
+      Math.cos = () => { throw new Error('Math.cos'); };
+      for (let i = 1; i < 1000; i++) springShape(i / 1000);
+    } finally { Math.exp = exp; Math.cos = cos; }
+    let worst = 0;
+    for (let i = 0; i <= 100_000; i++) { const u = i / 100_000; worst = Math.max(worst, Math.abs(springShape(u) - (u <= 0 ? 0 : u >= 1 ? 1 : 1 - (1 - u) * exp(-4 * u) * cos(3 * Math.PI * u)))); }
+    expect(worst).toBeLessThanOrEqual(4e-16);
+    for (let i = 0; i <= 1000; i++) { const x = (i / 1000) * 8 * Math.PI; expect(Math.abs(cosDet(x) - cos(x)), `cos ${x}`).toBeLessThanOrEqual(4e-16); }
+    for (let i = 0; i <= 1000; i++) { const x = -8 + (i / 1000) * 16; expect(Math.abs(expDet(x) - exp(x)) / exp(x), `exp ${x}`).toBeLessThanOrEqual(4.5e-16); }
   });
   it('bounce: f(0.5) === 0.765625 and |f(1/2.75) − 1| ≤ 2e-16', () => {
     expect(bounceShape(0.5)).toBe(0.765625);

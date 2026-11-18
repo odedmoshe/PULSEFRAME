@@ -13,8 +13,10 @@ const stubExporter = { plan: () => ({ blockers: [], warnings: [] }) } as unknown
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
 const prov = { origin: 'fixture' as const, importedAt: '2026-11-18T00:00:00Z', importedBy: 'test' };
-const cam = (c: string): Omit<Asset, 'id'> => ({ kind: 'video', name: `${c}.mp4`, contentHash: `sha256:${c.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(60, 1), video: { width: 640, height: 360, frameRate: R, codec: 'h264', rotation: 0, frameCount: 1800 }, provenance: prov });
-const rec = (c: string): Omit<Asset, 'id'> => ({ kind: 'audio', name: `${c}.wav`, contentHash: `sha256:${c.repeat(64)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(62, 1), audio: { sampleRate: 48000, channels: 1, codec: 'pcm_s16le' }, provenance: prov });
+/** A content hash for a one-letter name: the import_asset schema wants 64 lowercase hex digits. */
+const hashOf = (c: string) => `sha256:${c.charCodeAt(0).toString(16).padStart(2, '0').repeat(32)}`;
+const cam = (c: string): Omit<Asset, 'id'> => ({ kind: 'video', name: `${c}.mp4`, contentHash: hashOf(c), byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(60, 1), video: { width: 640, height: 360, frameRate: R, codec: 'h264', rotation: 0, frameCount: 1800 }, provenance: prov });
+const rec = (c: string): Omit<Asset, 'id'> => ({ kind: 'audio', name: `${c}.wav`, contentHash: hashOf(c), byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(62, 1), audio: { sampleRate: 48000, channels: 1, codec: 'pcm_s16le' }, provenance: prov });
 let n = 0;
 const tx = (doc: ProjectDocument, ops: OpCall[], allowInternal = false) => applyTransaction(doc, ops, { idSeed: `pfm${n++}_`, actor: 'test', allowInternal });
 const mc = (doc: ProjectDocument) => preflight(stubExporter, doc, 1).issues.filter((i) => i.code === MULTICAM_PREFLIGHT_CODE);
