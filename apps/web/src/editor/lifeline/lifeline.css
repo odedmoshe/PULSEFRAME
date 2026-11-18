@@ -62,6 +62,8 @@
 .pf-life-file { margin: 0; color: var(--pf-text-2); font-size: var(--pf-fs-sm); overflow-wrap: anywhere; }
 .pf-life-field { display: flex; flex-direction: column; gap: var(--pf-sp-2); color: var(--pf-text-2); font-size: var(--pf-fs-xs); min-inline-size: 0; }
 .pf-life-field input, .pf-life-field select { inline-size: 100%; min-inline-size: 0; }
+/* a visible ring on every field of the life screens; a date input is focused in its parts and its calendar button, where only :focus-within reaches the input */
+.pf-life-field :is(input, select):focus-visible, .pf-life-field input[type='date']:focus-within { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
 .pf-life-field.is-num { flex: 1 1 0; }
 .pf-life-row { display: flex; gap: var(--pf-sp-4); }
 .pf-life-check { display: flex; align-items: center; gap: var(--pf-sp-4); min-block-size: var(--pf-h-md); color: var(--pf-text); font-size: var(--pf-fs-sm); cursor: pointer; min-inline-size: 0; }
