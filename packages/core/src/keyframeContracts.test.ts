@@ -134,4 +134,13 @@ describe('channels and the keyframe operations', () => {
     findClip(bad, clipId)!.clip.keyframes = { x: [{ time: t(0), value: 0, easing: 'bezier' }], opacity: [{ time: t(0), value: 0, easing: 'bounce' }, { time: t(9), value: 1, easing: 'linear' }] };
     expect(validateProject(bad).map((i) => i.code).sort()).toEqual(['keyframe_curve', 'keyframe_curve_flash']);
   });
+  it('W1: an unknown effect type named after an Object.prototype member gets the honest issues, not a TypeError', () => {
+    // validateProject runs on imported archives (apps/server archive.ts): a crafted type must yield the typed refusal
+    const { doc, clipId } = title();
+    for (const type of ['nonexistent.fx', 'constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      const bad = structuredClone(doc);
+      findClip(bad, clipId)!.clip.effects = [{ id: 'e1', type, enabled: true, params: {}, keyframes: { a: [{ time: t(0), value: 1, easing: 'bounce' }] } }] as never;
+      expect(validateProject(bad).map((i) => i.code).sort(), type).toEqual(['effect_keyframes', 'unknown_effect']);
+    }
+  });
 });

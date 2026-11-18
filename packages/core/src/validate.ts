@@ -165,7 +165,9 @@ export function validateProject(doc: ProjectDocument): Issue[] {
             if (!ok) issues.push({ code: 'effect_keyframes', message: `clip ${c.id} effect ${fx.type}: keyframes of "${param}" are not animatable, out of range, unsorted or off the frame grid`, ids: [c.id] });
             const odd = keys.find(curveMismatch);
             if (odd) issues.push({ code: 'keyframe_curve', message: `clip ${c.id} effect ${fx.type}: a keyframe of "${param}" has the curve "${odd.easing}" ${odd.bezier ? 'with' : 'without'} handles: handles go exactly with "bezier"`, ids: [c.id] });
-            const back = !modulatableParams(fx.type).includes(param) && keys.find((k) => turnsBack(k.easing, k.bezier));
+            // only for a known effect: an unknown type already gets unknown_effect, and its name must not reach the
+            // plain-object tables of effects.ts (a type named "constructor" or "__proto__" would read Object.prototype)
+            const back = !!d && !modulatableParams(fx.type).includes(param) && keys.find((k) => turnsBack(k.easing, k.bezier));
             if (back) issues.push({ code: 'keyframe_curve_flash', message: `clip ${c.id} effect ${fx.type}: a keyframe of "${param}" has the curve "${back.easing}", which turns back on a parameter that cannot follow the beat (a flash)`, ids: [c.id] });
           }
           // Time effects and beat modulators are new fields: these rules can only fire on documents that use them, so an
