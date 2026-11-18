@@ -24,7 +24,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import * as T from '@pulseframe/time';
-import type { OpCall, ProjectDocument } from '@pulseframe/core';
+import { ageHe, ageParts, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { evaluate } from './evaluate.ts';
 import { frameInputs, frameKey } from './frameKey.ts';
 import { baseEnv, ctxFor, DEFAULT_SHAPE, f, richDoc, tx, type Rich, type Shape, type TestEnv } from './frameKey.testDocs.ts';
@@ -42,7 +42,6 @@ const clip = (spans: Span[]): Span[] => spans.map(([a, b]) => [Math.max(0, a), M
 const inSpans = (spans: Span[], frame: number) => spans.some(([a, b]) => frame >= a && frame < b);
 const complement = (spans: Span[]): Span[] => { const out: Span[] = []; let at = 0; for (const [a, b] of [...clip(spans)].sort((x, y) => x[0] - y[0])) { if (a > at) out.push([at, a]); at = Math.max(at, b); } if (at < TOTAL) out.push([at, TOTAL]); return out; };
 /** A random frame inside these spans. */
-const frameIn = (spans: Span[]) => { const s = clip(spans); const n = s.reduce((t, [a, b]) => t + b - a, 0); return fc.integer({ min: 0, max: n - 1 }).map((i) => { for (const [a, b] of s) { if (i < b - a) return a + i; i -= b - a; } throw new Error('unreachable'); }); };
 const ops = (r: Rich, calls: OpCall[], internal = false): Edit => ({ doc: tx(r.doc, calls, internal).doc });
 const withEnv = (change: (e: TestEnv) => void): Edit => { const e = baseEnv(); change(e); return { env: e }; };
 const keyOf = (r: Rich, e: Edit, frame: number) => { const doc = e.doc ?? r.doc; return frameKey(doc, frame, ctxFor(doc, e.env ?? baseEnv())); };
@@ -51,6 +50,15 @@ const word = fc.stringMatching(/^[a-zא-ת]{1,8}( [a-zא-ת]{1,8}){0,2}$/);
 const day = fc.record({ y: fc.integer({ min: 2000, max: 2015 }), m: fc.integer({ min: 1, max: 12 }), d: fc.integer({ min: 1, max: 28 }) }).map(({ y, m, d }) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
 /** The x of a motion-track sample of the rich document at source frame k (attached as 4000 + 7·(k − 31) from frame 31). */
 const sampleX = (r: Rich, k: number) => { const t = r.doc.motionTracks[r.motionTrack]!; return t.x[k - t.from]!; };
+
+/**
+ * The days T2's {age} field is read on (the capture day of the picture under it): file A on 100–120, file B on 120–160.
+ * A birth-date edit changes a frame only where the shown age changes: from six the age is whole years, so 2016-11-04 and
+ * 2015-12-27 are both «בת 8» on 2024-12-26 (fast-check found it), and that frame must keep its key.
+ */
+const AGE_DAYS: readonly (readonly [Span, string])[] = [[[100, 120], '2021-06-01'], [[120, 160], '2024-12-26']];
+const shownAge = (birth: string, day: string) => { const p = ageParts(birth, day); return p ? ageHe(p, 'f', 'digits') : null; };
+const ageReach = (from: string, to: string): Span[] => AGE_DAYS.filter(([, day]) => shownAge(from, day) !== shownAge(to, day)).map(([span]) => span);
 
 // ---------- the catalogue of edits, with where each one reaches ----------
 const EFFECT_SPANS: Record<string, Span[]> = {
@@ -98,7 +106,7 @@ const E = {
   split: entry({ name: 'time.split lag', arb: fc.integer({ min: 1, max: 15 }), apply: (r, lag) => ops(r, [{ op: 'update_effect', args: { clipId: r.clips.E, effectId: r.effects.Esplit, params: { lag } } }]), must: (s, lag) => (lag === s.lag ? [] : [[60, 120]]), may: () => [[60, 120]] }),
   stutter: entry({ name: 'stutter hold', arb: fc.integer({ min: 2, max: 12 }), apply: (r, hold) => ops(r, [{ op: 'update_effect', args: { clipId: r.clips.D, effectId: r.effects.Dstutter, params: { hold } } }]), must: () => [], may: () => [[120, 180]] }),
   capture: entry({ name: 'capture date of file B (a live {date} field)', arb: day, apply: (r, at) => ops(r, [{ op: 'set_asset_capture', args: { assetId: r.assets.B, capture: { at } } }]), must: () => [[120, 160]], may: () => [[100, 160]] }),
-  birthDate: entry({ name: 'a person\'s birth date (an {age} field)', arb: day, apply: (r, birthDate) => ops(r, [{ op: 'update_person', args: { personId: r.person, birthDate } }]), must: () => [[100, 160]], may: () => [[100, 160]] }),
+  birthDate: entry({ name: 'a person\'s birth date (an {age} field)', arb: day, apply: (r, birthDate) => ops(r, [{ op: 'update_person', args: { personId: r.person, birthDate } }]), must: (s, birthDate) => ageReach(s.birthDate, birthDate), may: () => [[100, 160]] }),
   personName: entry({ name: 'a person\'s name (a {name} field)', arb: fc.stringMatching(/^[א-ת]{2,8}$/).filter((n) => n !== 'נועה'), apply: (r, name) => ops(r, [{ op: 'update_person', args: { personId: r.person, name } }]), must: () => [[100, 160]], may: () => [[100, 160]] }),
   eventName: entry({ name: 'event name (an {event} field)', arb: fc.stringMatching(/^[א-ת]{2,8}( [א-ת]{2,8})?$/), apply: (r, name) => ops(r, [{ op: 'update_event', args: { eventId: 'evt_b', name } }]), must: () => [[120, 160]], may: () => [[100, 160]] }),
   transition: entry({ name: 'transition length', arb: fc.integer({ min: 1, max: 30 }), apply: (r, frames) => ops(r, [{ op: 'set_transition', args: { clipId: r.clips.B1, type: 'dissolve', frames } }]), must: (s, n) => (n === s.trFrames ? [] : [[90, 90 + Math.min(n, s.trFrames)]]), may: (s, n) => [[90, 90 + Math.max(n, s.trFrames)]] }),
@@ -135,9 +143,13 @@ const E = {
 const RICH = richDoc();
 const BASE_KEYS = Array.from({ length: TOTAL }, (_, i) => keyOf(RICH, {}, i));
 
-/** The key of a random frame in `frames` changes under every random edit of this kind. */
-function changes(e: Entry, frames: Span[]) {
-  fc.assert(fc.property(e.arb, frameIn(frames), (v, frame) => {
+/** The key of a random frame in `frames` (default: where the edit must reach on the default document) changes under every random edit of this kind. */
+function changes(e: Entry, frames?: Span[]) {
+  fc.assert(fc.property(e.arb, fc.nat(), (v, n) => {
+    const spans = clip(frames ?? e.must(DEFAULT_SHAPE, v));
+    fc.pre(spans.length > 0);
+    const [a, b] = spans[n % spans.length]!;
+    const frame = a + (n % (b - a));
     const k = keyOf(RICH, e.apply(RICH, v), frame);
     expect(k, `${e.name} must change frame ${frame} (value ${JSON.stringify(v)})`).not.toBe(BASE_KEYS[frame]);
   }), { numRuns: RUNS });
@@ -215,7 +227,7 @@ describe('sensitivity: an edit that changes what a frame shows changes its key (
     }), { numRuns: RUNS });
   }, TIMEOUT);
   it('live fields: the capture date of the picture under the title', () => changes(E.capture, [[120, 160]]), TIMEOUT);
-  it('people ages: a birth date', () => changes(E.birthDate, [[100, 160]]), TIMEOUT);
+  it('people ages: a birth date', () => { changes(E.birthDate); expect(ageReach('2016-11-04', '2015-12-27')).toEqual([[100, 120]]); }, TIMEOUT);
   it('people names and event names', () => { changes(E.personName, [[100, 160]]); changes(E.eventName, [[120, 160]]); }, TIMEOUT);
 });
 
