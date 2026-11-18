@@ -178,7 +178,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     }
     return new Response(Readable.toWeb(fs.createReadStream(file)) as any, { headers: { ...headers, 'Content-Length': String(size) } });
   };
-  app.get('/api/v1/render/:token/snapshot', (c) => { const s = session(c.req.param('token')); return c.json({ doc: s.doc, revision: s.revision, frameCount: s.totalFrames, firstFrame: s.firstFrame, outWidth: s.outWidth, outHeight: s.outHeight }); });
+  app.get('/api/v1/render/:token/snapshot', (c) => { const s = session(c.req.param('token')); return c.json({ doc: s.doc, revision: s.revision, frameCount: s.totalFrames, firstFrame: s.firstFrame, outWidth: s.outWidth, outHeight: s.outHeight, ...(s.runs ? { runs: s.runs.map((r) => [r.first, r.count]) } : {}) }); });
   app.get('/api/v1/render/:token/assets/:assetId', (c) => {
     const a = session(c.req.param('token')).doc.assets[c.req.param('assetId')];
     if (!a) throw new ApiError(404, 'asset_not_found', 'asset not in snapshot');
