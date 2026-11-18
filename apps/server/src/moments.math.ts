@@ -14,6 +14,9 @@
  *   so it is never crossed), at most maxStretchSeconds each way.
  * - Window values are taken over the peak ± coreSeconds inside the clean stretch: motion = mean inner, level = mean sample
  *   level minus the file's median hop level (dB, one decimal), sharp = mean sharp / the file's median sharp, luma = mean luma.
+ * - Suppression after each peak covers its activity: the run of its clean stretch, around it, where the smoothed interest stays
+ *   at least minInterest, and at least ±separationSeconds; so a further window is a distinct activity (the smoothed interest
+ *   fell under minInterest between them, or a gate lies between them), never the shoulder of the same one.
  * - A window's basis lists each signal whose share of the peak's smoothed interest is at least minInterest / 2; when neither
  *   reaches that, the larger share (inner motion on a tie).
  */
@@ -263,10 +266,16 @@ export function findMoments(picture: PictureSeries | null, sound: SoundSeries | 
     let best = -1;
     for (let k = 0; k < K; k++) if (!suppressed[k] && gate[k] && partI[k]! + partL[k]! >= G.minInterest && (best < 0 || score[k]! > score[best]!)) best = k;
     if (best < 0 || !(score[best]! >= G.minInterest)) break;
-    for (let j = Math.max(0, best - sep); j <= Math.min(K - 1, best + sep); j++) suppressed[j] = 1;
     let a = best, b = best;
     while (a > 0 && gate[a - 1] && best - (a - 1) <= maxStretch) a--;
     while (b + 1 < K && gate[b + 1] && b + 1 - best <= maxStretch) b++;
+    // non-maximum suppression over the peak's whole activity (the run of its clean stretch where the smoothed interest stays
+    // at least minInterest), and at least ±separationSeconds: a second moment is a distinct activity, never the shoulder of
+    // this one (the film fixture's film-a: an encoder pre-echo 0.1 s before its activity, just past ±4 s of its peak)
+    let u = best, v = best;
+    while (u > a && score[u - 1]! >= G.minInterest) u--;
+    while (v < b && score[v + 1]! >= G.minInterest) v++;
+    for (let j = Math.max(0, Math.min(u, best - sep)); j <= Math.min(K - 1, Math.max(v, best + sep)); j++) suppressed[j] = 1;
     const fromFrame = a * step, toFrame = Math.min(frames, (b + 1) * step), peakFrame = best * step;
     const c0 = Math.max(a, best - R), c1 = Math.min(b, best + R), cn = c1 - c0 + 1;
     const mean = (xs: readonly number[]) => { let s = 0; for (let j = c0; j <= c1; j++) s += xs[j]!; return s / cn; };

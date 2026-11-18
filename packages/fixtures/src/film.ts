@@ -27,8 +27,10 @@
  * film-f 12 s, constant noise, the disc moves from 1.8 s to the end (85 % active; see activeShare), no truth window.
  * Truth frames are frames of the video stream (source frames), half-open. Capture: the clips carry the UTC instant in the
  * container's creation_time (the life line shows it on the home zone's wall clock, Israel = UTC+2 in December); the still
- * carries its wall clock in its file name (IMG_YYYYMMDD_HHMMSS, read as approximate). The day is 6 December 2026 (26 Kislev
- * 5787, Hanukkah), mid-morning, so no evening rule applies.
+ * carries its wall clock in its file name (IMG_YYYYMMDD_HHMMSS, read as approximate). The day is Tuesday 16 December 2025
+ * (26 Kislev 5786, the second day of Hanukkah; checked with core's calendar and the Intl Hebrew calendar in
+ * packages/evals/src/family-film-fixture.test.ts), mid-morning, so no evening rule applies. It lies in the past, so the upload
+ * reads these dates (a capture date more than 48 hours after the import is refused as a wrong clock).
  */
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -52,14 +54,14 @@ export const FILM_FIXTURE = {
   noisePeak: 0.01, burst: { amplitude: 0.5, hz: 1000, onMs: 150, everyMs: 500 },
   darkGrey: 4,
   clips: [
-    { name: 'film-a.mp4', seconds: 14, sound: true, offset: 15, truth: [4, 10], capture: '2026-12-06T08:09:00.000000Z' },
-    { name: 'film-b.mp4', seconds: 15, sound: true, offset: 0, truth: [7, 13], decoy: [1.5, 3], capture: '2026-12-06T08:00:00.000000Z' },
-    { name: 'film-c.mp4', seconds: 13, sound: true, offset: 0, truth: [2.5, 8.5], dark: [9.5, 12], capture: '2026-12-06T08:20:00.000000Z' },
-    { name: 'film-d.mp4', seconds: 16, sound: false, offset: 0, truth: [5, 11], capture: '2026-12-06T08:04:00.000000Z' },
-    { name: 'film-e.mp4', seconds: 12, sound: false, offset: 0, capture: '2026-12-06T08:26:00.000000Z' },
-    { name: 'film-f.mp4', seconds: 12, sound: true, offset: 0, activeFrom: 1.8, capture: '2026-12-06T08:13:00.000000Z' },
+    { name: 'film-a.mp4', seconds: 14, sound: true, offset: 15, truth: [4, 10], capture: '2025-12-16T08:09:00.000000Z' },
+    { name: 'film-b.mp4', seconds: 15, sound: true, offset: 0, truth: [7, 13], decoy: [1.5, 3], capture: '2025-12-16T08:00:00.000000Z' },
+    { name: 'film-c.mp4', seconds: 13, sound: true, offset: 0, truth: [2.5, 8.5], dark: [9.5, 12], capture: '2025-12-16T08:20:00.000000Z' },
+    { name: 'film-d.mp4', seconds: 16, sound: false, offset: 0, truth: [5, 11], capture: '2025-12-16T08:04:00.000000Z' },
+    { name: 'film-e.mp4', seconds: 12, sound: false, offset: 0, capture: '2025-12-16T08:26:00.000000Z' },
+    { name: 'film-f.mp4', seconds: 12, sound: true, offset: 0, activeFrom: 1.8, capture: '2025-12-16T08:13:00.000000Z' },
   ] as ClipSpec[],
-  still: { name: 'IMG_20261206_102300.png', capture: '2026-12-06T10:23:00' },
+  still: { name: 'IMG_20251216_102300.png', capture: '2025-12-16T10:23:00' },
   music: { name: 'music-120bpm.m4a', bpm: 120, meter: 4, seconds: 96 },
 } as const;
 

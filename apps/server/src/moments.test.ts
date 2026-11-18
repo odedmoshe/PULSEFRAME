@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MOMENTS_DATA_BYTES_PER_MINUTE, MOMENTS_JOB_TYPE, MOMENTS_MAX_OPEN_JOBS, MOMENTS_MAX_WINDOWS, momentsStep, type MomentsData, type MomentsJobOutput, type ProjectDocument } from '@pulseframe/core';
+import { MOMENTS_ALGO, MOMENTS_DATA_BYTES_PER_MINUTE, MOMENTS_JOB_TYPE, MOMENTS_MAX_OPEN_JOBS, MOMENTS_MAX_WINDOWS, momentsStep, type MomentsData, type MomentsJobOutput, type ProjectDocument } from '@pulseframe/core';
 import { filmBarcodeValue, generateFilmFixtures, readFilmBarcode, type FilmFixtureTruth } from '../../../packages/fixtures/src/film.ts';
 import { Derivatives } from './derive.ts';
 import { Governance, type Principal } from './governance.ts';
@@ -158,7 +158,7 @@ describe('the moments job on the film fixtures', () => {
     for (const c of truth.clips) {
       const m = doc(main.pid).analyses[main.ids[c.clip]!]!.moments!;
       const { data, bytes } = dataOf(m.data);
-      expect(data).toMatchObject({ algo: 1, asset: { frames: c.frames, rate: R30, startOffsetFrames: c.startOffsetFrames, measuredFrames: c.frames, truncated: false }, flat: m.flat, windows: m.windows, file: m.file });
+      expect(data).toMatchObject({ algo: MOMENTS_ALGO, asset: { frames: c.frames, rate: R30, startOffsetFrames: c.startOffsetFrames, measuredFrames: c.frames, truncated: false }, flat: m.flat, windows: m.windows, file: m.file });
       const p = data.picture!;
       expect(p).toMatchObject({ source: 'proxy', step: S, count: Math.ceil(c.frames / S), width: 320, height: 180 });
       for (const k of ['luma', 'sharp', 'inner', 'pan', 'change', 'gated'] as const) { expect(p[k].length).toBe(p.count); expect(p[k].every(Number.isInteger)).toBe(true); }

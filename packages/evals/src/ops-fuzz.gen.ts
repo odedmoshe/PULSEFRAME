@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS } from '@pulseframe/core';
+import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -103,7 +103,7 @@ export function createFuzz(seed: number) {
     if (!t) return [];
     const k = 199, st = Array.from({ length: k }, (_, i) => (i % 50 >= 40 ? 3 : i % 50 >= 35 ? 2 : i % 97 === 5 ? 0 : 1));
     // measured moments of the video (ADR-0026), as the moments job attaches them: a full record (two windows, both bases, a burst)
-    const moments: OpCall = { op: 'attach_moments', args: { method: 'fuzz moments', createdAt: '2026-11-18T00:00:00Z', items: [{ assetId: vid, algo: 1, data: `sha256:${'b'.repeat(64)}`, measured: { picture: true, sound: true }, file: { motion: 18, level: -300 }, flat: false,
+    const moments: OpCall = { op: 'attach_moments', args: { method: 'fuzz moments', createdAt: '2026-11-18T00:00:00Z', items: [{ assetId: vid, algo: MOMENTS_ALGO, data: `sha256:${'b'.repeat(64)}`, measured: { picture: true, sound: true }, file: { motion: 18, level: -300 }, flat: false,
       windows: [{ peakFrame: 60, fromFrame: 20, toFrame: 110, basis: ['inner-motion', 'sound'], motion: 70, level: 8.5, sharp: 1.4, luma: 120, burstFrame: 64 }, { peakFrame: 190, fromFrame: 150, toFrame: 240, basis: ['inner-motion'], motion: 30, level: null, sharp: 1.1, luma: 90 }] }] } };
     return [moments, { op: 'attach_motion_track', args: { motionTrackId: t.id, from: 1, x: Array.from({ length: k }, (_, i) => 3000 + i * 20), y: Array.from({ length: k }, (_, i) => 5000 + Math.round(1500 * Math.sin(i / 15))), s: Array.from({ length: k }, (_, i) => 900 + (i % 40) * 5), q: st.map((v) => (v === 1 ? 90 : 30)), st, method: 'fuzz', params: {}, createdAt: '2026-11-17T00:00:00Z' } }];
   };

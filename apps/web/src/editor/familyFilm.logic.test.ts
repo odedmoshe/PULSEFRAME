@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { ApiFailure } from '../api.ts';
-import { FamilyFilmParamsSchema, type Asset, type FamilyFilmParams, type FamilyFilmPlanView, type FilmExclusion, type MediaClip, type MomentsData, type ProjectDocument } from '@pulseframe/core';
+import { FamilyFilmParamsSchema, MOMENTS_ALGO, type Asset, type FamilyFilmParams, type FamilyFilmPlanView, type FilmExclusion, type MediaClip, type MomentsData, type ProjectDocument } from '@pulseframe/core';
 import {
   buildParams, choicesOf, defaultChoices, filmFailure, filmFlow, findFilmTransaction, formatCapture, nextBlocked, nextWindow, otherLengths, otherMomentsParams, parseStage, planRows, progressDue, runMeasurement, spriteStyle, spriteTileIndex, stripGeometry,
   windowSourceIn, withIncluded, withNextWindow, withOtherClip, withRemoved, MAX_FILM_ASSETS, FILM_PROGRESS_EVERY_MS,
@@ -177,7 +177,7 @@ describe('pictures', () => {
     expect(spriteStyle(5, 2, 9)).toEqual({ backgroundSize: '500% 200%', backgroundPosition: '100% 100%' });
   });
   const data = (offset: number): MomentsData => ({
-    algo: 1, method: 'm', asset: { contentHash: 'h', frames: 300, rate, startOffsetFrames: offset, measuredFrames: 300, truncated: false },
+    algo: MOMENTS_ALGO, method: 'm', asset: { contentHash: 'h', frames: 300, rate, startOffsetFrames: offset, measuredFrames: 300, truncated: false },
     picture: { source: 'proxy', step: 6, count: 50, width: 1, height: 1, luma: [], sharp: [], inner: Array.from({ length: 50 }, (_, i) => i * 10), pan: [], change: [], gated: [], digest: '' },
     sound: { source: 'waveform-peaks', hopMs: 100, count: 100, level: Array.from({ length: 100 }, () => -300) }, file: { motion: 10, level: -300 }, flat: false, windows: [],
   } as unknown as MomentsData);

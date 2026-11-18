@@ -1,9 +1,59 @@
 {
   "proof": "family-film",
-  "status": "failed",
-  "at": "2026-11-18T17:51:54.152Z",
-  "summary": "39/40 checks passed, 0 section(s) blocked",
+  "status": "passed",
+  "at": "2026-11-18T18:10:26.576Z",
+  "summary": "41/41 checks passed, 0 section(s) blocked",
   "checks": [
+    {
+      "id": "F7",
+      "name": "the upload reads every file's capture date: each clip's container creation time on Israel's wall clock, the still's from its file name (approximate); none entered by hand",
+      "value": {
+        "film-a.mp4": {
+          "at": "2025-12-16T10:09:00",
+          "utcOffsetMinutes": null,
+          "source": "container",
+          "assumedZone": "Asia/Jerusalem"
+        },
+        "film-b.mp4": {
+          "at": "2025-12-16T10:00:00",
+          "utcOffsetMinutes": null,
+          "source": "container",
+          "assumedZone": "Asia/Jerusalem"
+        },
+        "film-c.mp4": {
+          "at": "2025-12-16T10:20:00",
+          "utcOffsetMinutes": null,
+          "source": "container",
+          "assumedZone": "Asia/Jerusalem"
+        },
+        "film-d.mp4": {
+          "at": "2025-12-16T10:04:00",
+          "utcOffsetMinutes": null,
+          "source": "container",
+          "assumedZone": "Asia/Jerusalem"
+        },
+        "film-e.mp4": {
+          "at": "2025-12-16T10:26:00",
+          "utcOffsetMinutes": null,
+          "source": "container",
+          "assumedZone": "Asia/Jerusalem"
+        },
+        "film-f.mp4": {
+          "at": "2025-12-16T10:13:00",
+          "utcOffsetMinutes": null,
+          "source": "container",
+          "assumedZone": "Asia/Jerusalem"
+        },
+        "IMG_20251216_102300.png": {
+          "at": "2025-12-16T10:23:00",
+          "utcOffsetMinutes": null,
+          "source": "filename",
+          "circa": true
+        }
+      },
+      "budget": "equal to the fixture's dates, typed",
+      "pass": true
+    },
     {
       "id": "F4",
       "name": "cancel mid-run ends canceled and changes nothing",
@@ -11,8 +61,8 @@
         "statusWhenCanceled": "running",
         "cancel": 200,
         "final": "canceled",
-        "revisionBefore": 25,
-        "revisionAfter": 25
+        "revisionBefore": 24,
+        "revisionAfter": 24
       },
       "budget": "canceled while running; revision unchanged",
       "pass": true
@@ -26,13 +76,13 @@
           "measured": 6,
           "cached": 0,
           "attached": 6,
-          "revision": 26,
+          "revision": 25,
           "skipped": [],
-          "wallSeconds": 5.578,
+          "wallSeconds": 6.73,
           "mediaSeconds": 82
         },
-        "revisionBefore": 25,
-        "revisionAfter": 26
+        "revisionBefore": 24,
+        "revisionAfter": 25
       },
       "budget": "succeeded, 6 attached, +1 revision",
       "pass": true
@@ -47,9 +97,9 @@
           "measured": 0,
           "cached": 6,
           "attached": 6,
-          "revision": 28,
+          "revision": 27,
           "skipped": [],
-          "wallSeconds": 0.008,
+          "wallSeconds": 0.673,
           "mediaSeconds": 82
         },
         "sameRecords": true,
@@ -70,24 +120,24 @@
           "attached": 0,
           "revision": null,
           "skipped": [],
-          "wallSeconds": 1.228,
+          "wallSeconds": 1.297,
           "mediaSeconds": 82
         },
         "digests": {
-          "film-a.mp4": "4740da220ab32439be4b4055407f3409d9d4816ca4f7827ee7bf753d6d7fbbde",
-          "film-b.mp4": "cd7f7659990d569c4abaa6fe41351103c14c33427ceb4602951005ab75e55813",
-          "film-c.mp4": "9605cafb9172c6bb589b4ba7a47957832314d1c0477f7c77a2bafb3aa73ad5dc",
-          "film-d.mp4": "957039defdcf5daa96d31520138cdf525628efab006cca0fab1c19e9b05973b2",
-          "film-e.mp4": "0d7749c60d648ee42862d4d220dbd5a24fb5eb9ea02579ea5c0cb06d95412b2f",
-          "film-f.mp4": "4cd217abb4a373cdb01c48cdff31150a10a62aff7eb7390048b487ffd6567bc5"
+          "film-a.mp4": "1963baac5af0a351ccf3f48690923c8d77869ffce53f447437c1c9a784e48a57",
+          "film-b.mp4": "aaba0978f60a05d21cb15f9c47dc58d487b0634a5e39237f4c6d73f184e21d67",
+          "film-c.mp4": "9c3db14445273fcee1af9ba83bd44aa9f9633d7f2d6534bfd050d11fbc8093ae",
+          "film-d.mp4": "1f182a9fbf822b62719ef1725d47f9b31f2bdbbce9fb9750fdd2a896686b4868",
+          "film-e.mp4": "22381f26fb261fb262684086a8cda531689e2f84f2712cdb3fb146dfafa95911",
+          "film-f.mp4": "db320f7fc049a876c820feae4b57f4983d1585959323fcda0c4ffbb4b274abda"
         },
         "firstDigests": {
-          "film-a.mp4": "4740da220ab32439be4b4055407f3409d9d4816ca4f7827ee7bf753d6d7fbbde",
-          "film-b.mp4": "cd7f7659990d569c4abaa6fe41351103c14c33427ceb4602951005ab75e55813",
-          "film-c.mp4": "9605cafb9172c6bb589b4ba7a47957832314d1c0477f7c77a2bafb3aa73ad5dc",
-          "film-d.mp4": "957039defdcf5daa96d31520138cdf525628efab006cca0fab1c19e9b05973b2",
-          "film-e.mp4": "0d7749c60d648ee42862d4d220dbd5a24fb5eb9ea02579ea5c0cb06d95412b2f",
-          "film-f.mp4": "4cd217abb4a373cdb01c48cdff31150a10a62aff7eb7390048b487ffd6567bc5"
+          "film-a.mp4": "1963baac5af0a351ccf3f48690923c8d77869ffce53f447437c1c9a784e48a57",
+          "film-b.mp4": "aaba0978f60a05d21cb15f9c47dc58d487b0634a5e39237f4c6d73f184e21d67",
+          "film-c.mp4": "9c3db14445273fcee1af9ba83bd44aa9f9633d7f2d6534bfd050d11fbc8093ae",
+          "film-d.mp4": "1f182a9fbf822b62719ef1725d47f9b31f2bdbbce9fb9750fdd2a896686b4868",
+          "film-e.mp4": "22381f26fb261fb262684086a8cda531689e2f84f2712cdb3fb146dfafa95911",
+          "film-f.mp4": "db320f7fc049a876c820feae4b57f4983d1585959323fcda0c4ffbb4b274abda"
         }
       },
       "budget": "measured 6, equal digests",
@@ -111,7 +161,7 @@
               "sound"
             ]
           },
-          "windows": 2,
+          "windows": 1,
           "ok": true
         },
         "film-b.mp4": {
@@ -252,7 +302,7 @@
       "id": "F6",
       "name": "each moments record in the document is within 1100 bytes",
       "value": {
-        "film-a.mp4": 685,
+        "film-a.mp4": 541,
         "film-b.mp4": 544,
         "film-c.mp4": 541,
         "film-d.mp4": 517,
@@ -272,7 +322,7 @@
           "film-a.mp4",
           "film-f.mp4",
           "film-c.mp4",
-          "IMG_20261206_102300.png",
+          "IMG_20251216_102300.png",
           "film-e.mp4"
         ],
         "expected": [
@@ -281,11 +331,11 @@
           "film-a.mp4",
           "film-f.mp4",
           "film-c.mp4",
-          "IMG_20261206_102300.png",
+          "IMG_20251216_102300.png",
           "film-e.mp4"
         ],
         "givenOrder": [
-          "IMG_20261206_102300.png",
+          "IMG_20251216_102300.png",
           "film-a.mp4",
           "film-b.mp4",
           "film-c.mp4",
@@ -312,7 +362,6 @@
           3,
           2,
           3,
-          3,
           1,
           3,
           1,
@@ -336,10 +385,10 @@
       "id": "F8",
       "name": "apply is one revision and one history transaction",
       "value": {
-        "revisionBefore": 43,
-        "revisionAfter": 44,
-        "historyBefore": 43,
-        "historyAfter": 44
+        "revisionBefore": 42,
+        "revisionAfter": 43,
+        "historyBefore": 42,
+        "historyAfter": 43
       },
       "budget": "+1 revision, +1 transaction",
       "pass": true
@@ -348,7 +397,7 @@
       "id": "F6",
       "name": "the run record is within 16 000 bytes",
       "value": {
-        "bytes": 5123
+        "bytes": 4637
       },
       "budget": "≤ 16 000 bytes",
       "pass": true
@@ -405,15 +454,9 @@
             "beat": 51,
             "kind": "bar",
             "followed": true
-          },
-          {
-            "frame": 840,
-            "beat": 59,
-            "kind": "bar",
-            "followed": true
           }
         ],
-        "bars": 7,
+        "bars": 6,
         "halfBars": 0
       },
       "budget": "every cut",
@@ -433,9 +476,9 @@
       "id": "F9",
       "name": "every exported frame of a video pick shows the source frame the plan predicts (barcode)",
       "value": {
-        "framesChecked": 840,
+        "framesChecked": 720,
         "wrong": [],
-        "exportFrames": 1080
+        "exportFrames": 960
       },
       "budget": "all equal",
       "pass": true
@@ -481,23 +524,6 @@
         {
           "asset": "film-a.mp4",
           "range": [
-            66,
-            186
-          ],
-          "peak": 114,
-          "stretch": [
-            0,
-            420
-          ],
-          "truth": {
-            "fromFrame": 120,
-            "toFrame": 300
-          },
-          "ok": false
-        },
-        {
-          "asset": "film-a.mp4",
-          "range": [
             192,
             312
           ],
@@ -531,7 +557,7 @@
         }
       ],
       "budget": "every measured slot",
-      "pass": false
+      "pass": true
     },
     {
       "id": "F14",
@@ -545,7 +571,7 @@
     },
     {
       "id": "F11",
-      "name": "the opening title is a live {hebrewDate} field whose still equals «כ״ו בכסלו תשפ״ז» typed by hand; control: «כ״ה בכסלו תשפ״ז» typed differs",
+      "name": "the opening title is a live {hebrewDate} field whose still equals «כ״ו בכסלו תשפ״ו» typed by hand; control: «כ״ה בכסלו תשפ״ו» typed differs",
       "value": {
         "text": "{hebrewDate}",
         "fields": true,
@@ -569,10 +595,10 @@
         {
           "frame": 300,
           "png": 0,
-          "mp4": 0.88
+          "mp4": 0.9
         },
         {
-          "frame": 980,
+          "frame": 860,
           "png": 0,
           "mp4": 0.01
         }
@@ -596,11 +622,11 @@
       "name": "R1: the moved clip and the trimmed clip are byte-identical and present after regenerating at 30 s",
       "value": {
         "protected": [
-          "clp_d07978b54a4",
-          "clp_d07978b54a6",
-          "clp_d07978b54a7"
+          "clp_19a03bc41d4",
+          "clp_19a03bc41d6",
+          "clp_19a03bc41d7"
         ],
-        "replaced": 13
+        "replaced": 11
       },
       "budget": "both equal",
       "pass": true
@@ -662,14 +688,13 @@
       "id": "F13",
       "name": "R2: the kept clip that runs past the shorter target stays, the film runs up to it with no frame without a picture, and the plan says it is longer",
       "value": {
-        "keptClipEndsAt": 32,
-        "filmPicturesEndAt": 32,
+        "keptClipEndsAt": 31,
+        "filmPicturesEndAt": 31,
         "holes": 0,
         "repicked": [],
         "warnings": [
           "kept_by_hand",
-          "longer_than_target",
-          "cut_off_grid_next_to_kept"
+          "longer_than_target"
         ]
       },
       "budget": "kept, covered, longer_than_target",
@@ -681,16 +706,16 @@
       "value": {
         "holes": 90,
         "firstHoles": [
-          840,
-          841,
-          842,
-          843,
-          844,
-          845,
-          846,
-          847,
-          848,
-          849
+          720,
+          721,
+          722,
+          723,
+          724,
+          725,
+          726,
+          727,
+          728,
+          729
         ],
         "warned": {
           "gapFrames": 90,
@@ -708,12 +733,6 @@
           "asset": "film-b.mp4",
           "exportDb": -23.36,
           "sourceDb": -11.32,
-          "diff": -12.04
-        },
-        {
-          "asset": "film-a.mp4",
-          "exportDb": -25.84,
-          "sourceDb": -13.8,
           "diff": -12.04
         },
         {
@@ -741,10 +760,6 @@
           {
             "asset": "film-b.mp4",
             "diff": -8.65
-          },
-          {
-            "asset": "film-a.mp4",
-            "diff": -8.73
           },
           {
             "asset": "film-a.mp4",
@@ -776,12 +791,6 @@
           "asset": "film-b.mp4",
           "exportDb": -11.48,
           "sourceDb": -11.48,
-          "diff": 0
-        },
-        {
-          "asset": "film-a.mp4",
-          "exportDb": -13.95,
-          "sourceDb": -13.95,
           "diff": 0
         },
         {
@@ -877,11 +886,10 @@
       "id": "F7",
       "name": "every plan row of the dialog shows its reason in Hebrew, with none of the forbidden words",
       "value": {
-        "rows": 8,
+        "rows": 7,
         "reasons": [
           "תנועה בתוך התמונה בשניות 8.5–11.5 · קול חזק מהרגיל בקליפ (+19.9 dB) · חדות גבוהה מהרגיל בקובץ (פי 1.2)",
           "תנועה בתוך התמונה בשניות 6.5–9.5 · חדות גבוהה מהרגיל בקובץ (פי 1.2)",
-          "רגע שני מאותו קובץ · תנועה בתוך התמונה בשניות 2.8–5.8 · פרץ קול בשנייה 4.5",
           "תנועה בתוך התמונה בשניות 7–10 · קול חזק מהרגיל בקליפ (+20.5 dB) · חדות גבוהה מהרגיל בקובץ (פי 1.2)",
           "תנועה לאורך כל הקליפ (37‰)",
           "תנועה בתוך התמונה בשניות 4.5–7.5 · קול חזק מהרגיל בקליפ (+19.9 dB) · חדות גבוהה מהרגיל בקובץ (פי 1.2)",
@@ -897,8 +905,8 @@
       "name": "the dialog driven by the keyboard alone (palette, three steps, apply) makes the film as one revision",
       "value": {
         "musicChosen": true,
-        "revisionBefore": 11,
-        "revisionAfter": 12,
+        "revisionBefore": 10,
+        "revisionAfter": 11,
         "runs": 1,
         "pageErrors": []
       },
@@ -909,8 +917,8 @@
       "id": "F19",
       "name": "after a reload, «אורך אחר» → 30 in the film bar regenerates the film from the document's run",
       "value": {
-        "revisionBefore": 12,
-        "revisionAfter": 13,
+        "revisionBefore": 11,
+        "revisionAfter": 12,
         "targetSeconds": 30
       },
       "budget": "+1 revision, target 30",
@@ -970,52 +978,93 @@
           "offset": 0
         }
       ],
-      "generateSeconds": 12.02
+      "generateSeconds": 11.65
     },
     "capturesReadOnUpload": {
-      "film-a.mp4": null,
-      "film-b.mp4": null,
-      "film-c.mp4": null,
-      "film-d.mp4": null,
-      "film-e.mp4": null,
-      "film-f.mp4": null,
-      "IMG_20261206_102300.png": null
+      "film-a.mp4": {
+        "at": "2025-12-16T10:09:00",
+        "utcOffsetMinutes": null,
+        "source": "container",
+        "assumedZone": "Asia/Jerusalem"
+      },
+      "film-b.mp4": {
+        "at": "2025-12-16T10:00:00",
+        "utcOffsetMinutes": null,
+        "source": "container",
+        "assumedZone": "Asia/Jerusalem"
+      },
+      "film-c.mp4": {
+        "at": "2025-12-16T10:20:00",
+        "utcOffsetMinutes": null,
+        "source": "container",
+        "assumedZone": "Asia/Jerusalem"
+      },
+      "film-d.mp4": {
+        "at": "2025-12-16T10:04:00",
+        "utcOffsetMinutes": null,
+        "source": "container",
+        "assumedZone": "Asia/Jerusalem"
+      },
+      "film-e.mp4": {
+        "at": "2025-12-16T10:26:00",
+        "utcOffsetMinutes": null,
+        "source": "container",
+        "assumedZone": "Asia/Jerusalem"
+      },
+      "film-f.mp4": {
+        "at": "2025-12-16T10:13:00",
+        "utcOffsetMinutes": null,
+        "source": "container",
+        "assumedZone": "Asia/Jerusalem"
+      },
+      "IMG_20251216_102300.png": {
+        "at": "2025-12-16T10:23:00",
+        "utcOffsetMinutes": null,
+        "source": "filename",
+        "circa": true
+      }
     },
     "captures": {
       "film-a.mp4": {
-        "at": "2026-12-06T10:09:00",
-        "utcOffsetMinutes": 120,
-        "source": "manual"
+        "at": "2025-12-16T10:09:00",
+        "utcOffsetMinutes": null,
+        "source": "container",
+        "assumedZone": "Asia/Jerusalem"
       },
       "film-b.mp4": {
-        "at": "2026-12-06T10:00:00",
-        "utcOffsetMinutes": 120,
-        "source": "manual"
+        "at": "2025-12-16T10:00:00",
+        "utcOffsetMinutes": null,
+        "source": "container",
+        "assumedZone": "Asia/Jerusalem"
       },
       "film-c.mp4": {
-        "at": "2026-12-06T10:20:00",
-        "utcOffsetMinutes": 120,
-        "source": "manual"
+        "at": "2025-12-16T10:20:00",
+        "utcOffsetMinutes": null,
+        "source": "container",
+        "assumedZone": "Asia/Jerusalem"
       },
       "film-d.mp4": {
-        "at": "2026-12-06T10:04:00",
-        "utcOffsetMinutes": 120,
-        "source": "manual"
+        "at": "2025-12-16T10:04:00",
+        "utcOffsetMinutes": null,
+        "source": "container",
+        "assumedZone": "Asia/Jerusalem"
       },
       "film-e.mp4": {
-        "at": "2026-12-06T10:26:00",
-        "utcOffsetMinutes": 120,
-        "source": "manual"
+        "at": "2025-12-16T10:26:00",
+        "utcOffsetMinutes": null,
+        "source": "container",
+        "assumedZone": "Asia/Jerusalem"
       },
       "film-f.mp4": {
-        "at": "2026-12-06T10:13:00",
-        "utcOffsetMinutes": 120,
-        "source": "manual"
-      },
-      "IMG_20261206_102300.png": {
-        "at": "2026-12-06T10:23:00",
+        "at": "2025-12-16T10:13:00",
         "utcOffsetMinutes": null,
-        "source": "manual",
+        "source": "container",
+        "assumedZone": "Asia/Jerusalem"
+      },
+      "IMG_20251216_102300.png": {
+        "at": "2025-12-16T10:23:00",
+        "utcOffsetMinutes": null,
+        "source": "filename",
         "circa": true
       }
     },
@@ -1033,16 +1082,16 @@
       "downbeats": 47
     },
     "measureSpeed": {
-      "wallSeconds": 5.59,
+      "wallSeconds": 6.79,
       "mediaSeconds": 82,
-      "timesRealTime": 14.68,
+      "timesRealTime": 12.08,
       "output": {
         "measured": 6,
         "cached": 0,
         "attached": 6,
-        "revision": 26,
+        "revision": 25,
         "skipped": [],
-        "wallSeconds": 5.578,
+        "wallSeconds": 6.73,
         "mediaSeconds": 82
       }
     },
@@ -1050,8 +1099,8 @@
       "origin"
     ],
     "commitLatencyMs": {
-      "before": 4.09,
-      "afterMeasuring": 4.11
+      "before": 21.41,
+      "afterMeasuring": 4.71
     },
     "plan": {
       "picks": [
@@ -1091,22 +1140,6 @@
           "kind": "measured",
           "startFrame": 240,
           "frames": 120,
-          "sourceInFrame": 66,
-          "span": {
-            "count": 2,
-            "unit": "bar"
-          },
-          "reasons": [
-            "second_moment",
-            "inner_motion",
-            "sound_burst"
-          ]
-        },
-        {
-          "asset": "film-a.mp4",
-          "kind": "measured",
-          "startFrame": 360,
-          "frames": 120,
           "sourceInFrame": 192,
           "span": {
             "count": 2,
@@ -1121,7 +1154,7 @@
         {
           "asset": "film-f.mp4",
           "kind": "default-middle",
-          "startFrame": 480,
+          "startFrame": 360,
           "frames": 120,
           "sourceInFrame": 120,
           "span": {
@@ -1135,7 +1168,7 @@
         {
           "asset": "film-c.mp4",
           "kind": "measured",
-          "startFrame": 600,
+          "startFrame": 480,
           "frames": 120,
           "sourceInFrame": 132,
           "span": {
@@ -1149,9 +1182,9 @@
           ]
         },
         {
-          "asset": "IMG_20261206_102300.png",
+          "asset": "IMG_20251216_102300.png",
           "kind": "still",
-          "startFrame": 720,
+          "startFrame": 600,
           "frames": 120,
           "sourceInFrame": null,
           "span": {
@@ -1165,7 +1198,7 @@
         {
           "asset": "film-e.mp4",
           "kind": "default-middle",
-          "startFrame": 840,
+          "startFrame": 720,
           "frames": 120,
           "sourceInFrame": 120,
           "span": {
@@ -1188,11 +1221,11 @@
         "rule-based first cut from measurements (heuristic); no model: A first draft built from measurements and rules (heuristic), not an AI model",
         "6 of 6 video(s) have measured moments (heuristic: motion, sharpness, brightness and sound level; no model)",
         "faces: not used (no approved face model)",
-        "7 chosen file(s), 8 clip(s) in the film; 30/1 frames a second; cuts at least 48 frames apart (flash safety)"
+        "7 chosen file(s), 7 clip(s) in the film; 30/1 frames a second; cuts at least 48 frames apart (flash safety)"
       ],
       "predicted": {
         "startFrame": 0,
-        "endFrame": 1080,
+        "endFrame": 960,
         "cuts": [
           0,
           120,
@@ -1201,19 +1234,18 @@
           480,
           600,
           720,
-          840,
-          960
+          840
         ],
         "offGridCuts": [],
         "gapFrames": 0,
-        "seconds": 36,
+        "seconds": 32,
         "targetSeconds": 60
       },
       "needsMeasurement": []
     },
     "cutKinds": {
       "note": "at 120 BPM in 4/4 the fixture gives spans of whole bars or half-bars; counted above",
-      "bars": 7,
+      "bars": 6,
       "halfBars": 0
     },
     "regenerations": [
@@ -1261,7 +1293,7 @@
             "kept": false
           },
           {
-            "asset": "IMG_20261206_102300.png",
+            "asset": "IMG_20251216_102300.png",
             "span": [
               540,
               660
@@ -1283,11 +1315,11 @@
           "shorter_than_target"
         ],
         "protected": [
-          "clp_d07978b54a4",
-          "clp_d07978b54a6",
-          "clp_d07978b54a7"
+          "clp_19a03bc41d4",
+          "clp_19a03bc41d6",
+          "clp_19a03bc41d7"
         ],
-        "replaced": 13
+        "replaced": 11
       },
       {
         "label": "R2 the last clip trimmed",
@@ -1317,7 +1349,7 @@
             "kept": false
           },
           {
-            "asset": "film-a.mp4",
+            "asset": "film-f.mp4",
             "span": [
               360,
               480
@@ -1325,7 +1357,7 @@
             "kept": false
           },
           {
-            "asset": "film-f.mp4",
+            "asset": "film-c.mp4",
             "span": [
               480,
               600
@@ -1333,7 +1365,7 @@
             "kept": false
           },
           {
-            "asset": "film-c.mp4",
+            "asset": "IMG_20251216_102300.png",
             "span": [
               600,
               720
@@ -1341,31 +1373,22 @@
             "kept": false
           },
           {
-            "asset": "IMG_20261206_102300.png",
-            "span": [
-              720,
-              855
-            ],
-            "kept": false
-          },
-          {
             "asset": "film-e.mp4",
             "span": [
-              855,
-              960
+              720,
+              930
             ],
             "kept": true
           }
         ],
         "warnings": [
           "kept_by_hand",
-          "longer_than_target",
-          "cut_off_grid_next_to_kept"
+          "longer_than_target"
         ],
         "protected": [
-          "clp_d07978b54ai"
+          "clp_19a03bc41df"
         ],
-        "replaced": 15
+        "replaced": 13
       },
       {
         "label": "R3 the last clip moved 3 s later",
@@ -1395,7 +1418,7 @@
             "kept": false
           },
           {
-            "asset": "film-a.mp4",
+            "asset": "film-f.mp4",
             "span": [
               360,
               480
@@ -1403,7 +1426,7 @@
             "kept": false
           },
           {
-            "asset": "film-f.mp4",
+            "asset": "film-c.mp4",
             "span": [
               480,
               600
@@ -1411,7 +1434,7 @@
             "kept": false
           },
           {
-            "asset": "film-c.mp4",
+            "asset": "IMG_20251216_102300.png",
             "span": [
               600,
               720
@@ -1419,18 +1442,10 @@
             "kept": false
           },
           {
-            "asset": "IMG_20261206_102300.png",
-            "span": [
-              720,
-              840
-            ],
-            "kept": false
-          },
-          {
             "asset": "film-e.mp4",
             "span": [
-              930,
-              1050
+              810,
+              930
             ],
             "kept": true
           }
@@ -1441,9 +1456,9 @@
           "pictures_missing"
         ],
         "protected": [
-          "clp_d07978b54ai"
+          "clp_19a03bc41df"
         ],
-        "replaced": 15
+        "replaced": 13
       }
     ],
     "f13Note": "R3 is the only case with not enough material; it records how the planner answers (a warned gap). R1 and R2 have material to spare and must show a picture on every frame.",
