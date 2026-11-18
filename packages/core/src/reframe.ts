@@ -24,7 +24,7 @@ import type { Keyframe, MediaClip, ProjectDocument } from './schema.ts';
 import { fitScale } from './geometry.ts';
 import { frameOf, sequenceOf } from './sequences.ts';
 import { sourceFrameIndexAt } from './speed.ts';
-import { isUsable, lossFlags, TRACK_UNIT, trackSampleAt } from './tracking.ts';
+import { isUsable, lossFlags, TRACK_UNIT, trackSampleAt, type MotionTrack } from './tracking.ts';
 
 /** The coverage clamp: the largest |x| that keeps the frame covered by a cover-fitted source at `framing`. */
 export const coverLimit = (frameW: number, srcW: number, fitScaleValue: number, framing: number): number => Math.max(0, ((srcW * fitScaleValue * framing) / frameW - 1) / 2);
@@ -118,6 +118,21 @@ export function planReframe(i: ReframeInput): ReframeResult {
 }
 
 /**
+ * The subject's centre for each clip-local frame of `clip` (one per frame of its duration): the motion track's sample at the
+ * source frame the clip shows there (speed.ts sourceFrameIndexAt), smoothed over ±2 source frames (trackSampleAt), and
+ * unusable (u null) outside the track, where isUsable says so, or where lossFlags (weak counted as lost) flags it.
+ */
+export function trackSamples(asset: { duration: T.RationalTime; video: NonNullable<ProjectDocument['assets'][string]['video']> }, clip: MediaClip, mt: MotionTrack, rate: { num: number; den: number }): ReframeSample[] {
+  const flags = lossFlags(mt, asset.video.frameRate.num / asset.video.frameRate.den, true);
+  return Array.from({ length: T.frameIndexAt(clip.duration, rate) }, (_, j) => {
+    const idx = sourceFrameIndexAt(asset, clip, T.add(clip.start, T.frameTime(j, rate)), rate);
+    const s = trackSampleAt(mt, idx, 2);
+    const usable = !s.outside && isUsable(s.st) && !flags[idx - mt.from];
+    return { u: usable ? s.x / TRACK_UNIT : null, conf: s.q / 100 };
+  });
+}
+
+/**
  * The reframe of a sequence's own media clips (POST /sequences/:id/reframe-plan, plan_reframe): per picture clip on a video
  * track, the samples of the motion track (trackSampleAt smoothed over ±2 source frames, unusable where lossFlags or
  * isUsable say so) or the centre, turned into replace_clip_keyframes x keys (or a static x through set_clip_transform),
@@ -150,13 +165,7 @@ export function reframeOps(doc: ProjectDocument, sequenceId: string, body: Refra
         if (clip.transform.rotation !== 0 || clip.keyframes?.rotation?.length) throw shortsRefusal('rotatedClip', { clipId: clip.id });
         const video = asset.video;
         if (!video) throw shortsRefusal('motionTrackOtherFile', { motionTrackId: mt.id, clipId: clip.id }, mt.id);
-        const flags = lossFlags(mt, video.frameRate.num / video.frameRate.den, true);
-        samples = Array.from({ length: n }, (_, j) => {
-          const idx = sourceFrameIndexAt({ duration: asset.duration, video }, clip, T.add(clip.start, T.frameTime(j, rate)), rate);
-          const s = trackSampleAt(mt, idx, 2);
-          const usable = !s.outside && isUsable(s.st) && !flags[idx - mt.from];
-          return { u: usable ? s.x / TRACK_UNIT : null, conf: s.q / 100 };
-        });
+        samples = trackSamples({ duration: asset.duration, video }, clip, mt, rate);
       } else samples = Array.from({ length: n }, () => ({ u: 0.5, conf: 1 }));
       // the formula assumes a cover fit; a contain frame is the same picture at a smaller effective framing
       const fitRatio = frame.fit === 'cover' ? 1 : fitScale(frame.width, frame.height, size.width, size.height, 'contain') / fitScale(frame.width, frame.height, size.width, size.height, 'cover');
