@@ -307,13 +307,18 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
     try {
       try {
         // A running server export goes first; then the lane, once per file (a speech or AI job waits for at most one conversion).
-        if (lane.exportActive()) {
-          store.updateJob(jobId, { status: 'running', stage: IMPORT_STAGE.waitingExport });
-          await lane.waitForExportIdle(ac.signal);
+        // Exports never take the lane, so one that began while this file waited for it is waited for too (as framejobs does).
+        for (;;) {
+          if (lane.exportActive()) {
+            store.updateJob(jobId, { status: 'running', stage: IMPORT_STAGE.waitingExport });
+            await lane.waitForExportIdle(ac.signal);
+          }
+          const busy = lane.busy();
+          if (busy.holder !== null || busy.waiting > 0) store.updateJob(jobId, { status: 'running', stage: IMPORT_STAGE.waitingCompute });
+          release = await lane.acquire(`import ${input.name} (${jobId})`, ac.signal);
+          if (!lane.exportActive()) break;
+          release(); release = null; // an export began meanwhile: give the lane back and wait for it
         }
-        const busy = lane.busy();
-        if (busy.holder !== null || busy.waiting > 0) store.updateJob(jobId, { status: 'running', stage: IMPORT_STAGE.waitingCompute });
-        release = await lane.acquire(`import ${input.name} (${jobId})`, ac.signal);
       } catch (e) {
         if (stopped) return;
         if (ac.signal.aborted) return void finishCanceled(job, '');

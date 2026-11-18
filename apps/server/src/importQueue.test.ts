@@ -193,6 +193,28 @@ describe('import queue: the lane, progress and order', () => {
     expect(w.lane.busy()).toEqual({ holder: null, waiting: 0 }); // the lane was taken for the file and given back
   }, 120_000);
 
+  it('an export that starts while the file waits for the compute lane is waited for too: no ffmpeg runs during it', async () => {
+    const base = world();
+    const spawnedDuringExport: boolean[] = [];
+    const w = { ...base, queue: createImportQueue({
+      store: base.store, lane: base.lane, maxUploadBytes: GiB, reserveBytes: 2 * GiB, homeZone: 'Asia/Jerusalem',
+      derivatives: { ensure: () => [] }, // labelled fake: thumbnails are not under test
+      freeBytes: () => 100 * GiB,
+      spawnFfmpeg: (args) => { spawnedDuringExport.push(base.lane.exportActive()); return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] }); },
+    }) };
+    const holder = await w.lane.acquire('speech recognition (test holder)');
+    const job = await send(w, hevc('export-meanwhile'));
+    await until(() => w.store.getJob(job.id).stage === 'waiting-compute');
+    w.lane.setExportActive(true); // an export begins while the file waits for the lane
+    holder();
+    await until(() => w.store.getJob(job.id).stage === 'waiting-export');
+    expect(w.lane.busy()).toEqual({ holder: null, waiting: 0 }); // the lane was given back to the export's other users
+    expect(spawnedDuringExport).toEqual([]);
+    w.lane.setExportActive(false);
+    expect((await w.queue.wait(job.id)).status).toBe('succeeded');
+    expect(spawnedDuringExport).toEqual([false]);
+  }, 120_000);
+
   it('a file that needs no conversion finishes before a long conversion ahead of it', async () => {
     const w = world({ slowStart: 3 });
     const long = await send(w, hevc('long-ahead'));
