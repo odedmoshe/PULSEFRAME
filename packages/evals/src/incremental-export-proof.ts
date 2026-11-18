@@ -10,8 +10,9 @@
  *
  * The deliberate mutation (a key that ignores one input): (a) I8 stores the stored segment of one stretch under the key of another
  * through the SegmentStore API, which is what a key that ignored the picture would do, and the self-check must catch it; (b) I8c
- * computes the engine's real frame key for the frames of a title before and after a text edit, and again with a digest that ignores
- * the title's text: the real keys differ, the mutated keys are equal, so the proof can tell a key that ignores an input.
+ * runs the frame comparator (the one I5 uses) on a known-bad file, the export from before the title edit, which is what a key that
+ * ignored the title text would publish: it must differ from the clean export, and only inside the title's frames; it also checks
+ * that the engine's real frame keys differ across the edit.
  * An edit set after the first export: one title inside one segment (I4), a new title across a join (I4b), a keyframe edit whose
  * echo reaches into the next segment (I4c), an edit to a clip a transition reaches back into (I4d), a sound-only change and a
  * sound tail (I6), a privacy-region change that must purge the project's segments at once (I20). After each: the incremental
@@ -221,7 +222,7 @@ function wellFormed(run: Run, frames: number): { ok: boolean; numbers: unknown }
   return { ok, numbers: { route: run.job.output?.route, cfr: c, validationFrames: run.job.output?.validation?.frames, wantFrames: frames } };
 }
 
-interface Against { framesEqual: boolean; firstDiff: number; psnr: { min: number; average: number } | null; pcmEqual: boolean; pcm: ReturnType<typeof pcmDiff>; keysCovered: boolean; rgbaEqual: boolean; rgbaChecked: number; videoBytesEqual: number; keys: number; cleanSeconds: number; ok: boolean }
+interface Against { framesEqual: boolean; firstDiff: number; psnr: { min: number; average: number } | null; pcmEqual: boolean; pcm: ReturnType<typeof pcmDiff>; keysCovered: boolean; rgbaEqual: boolean; rgbaChecked: number; videoBytesEqual: number; keys: number; cleanSeconds: number; cleanFile: string; ok: boolean }
 /** Encoder determinism, decided by I3 (null until then): decoded md5 equality is claimed only when it held. */
 let encoderDeterministic: boolean | null = null;
 /**
@@ -253,7 +254,7 @@ async function againstClean(pid: string, inc: Run, tag: string): Promise<Against
   const pcmEqual = pa.equals(pb);
   // frame equality is the claim only when the encoder is deterministic; otherwise the RGBA hashes carry it, with a decoded PSNR floor
   const frameOk = encoderDeterministic === true ? framesEqual : framesEqual || (ps !== null && ps.min >= PSNR_FLOOR_DB);
-  return { framesEqual, firstDiff, psnr: ps, pcmEqual, pcm: pd, keysCovered, rgbaEqual, rgbaChecked, videoBytesEqual, keys: snapClean.size, cleanSeconds: clean.seconds, ok: frameOk && pcmEqual && rgbaEqual && keysCovered && clean.job.status === 'succeeded' };
+  return { framesEqual, firstDiff, psnr: ps, pcmEqual, pcm: pd, keysCovered, rgbaEqual, rgbaChecked, videoBytesEqual, keys: snapClean.size, cleanSeconds: clean.seconds, cleanFile: clean.file, ok: frameOk && pcmEqual && rgbaEqual && keysCovered && clean.job.status === 'succeeded' };
 }
 
 // =====================================================================================================================
@@ -291,6 +292,7 @@ async function main() {
   // frames whose picture is the source frame unchanged: outside grain, the transition, the echo, the snow and the captions
   const caption = (n: number) => A_LAYOUT.cues.some((c) => n >= c.start && n < c.start + c.frames);
   const plain = (n: number) => !(n >= 300 && n < 450) && !(n >= 600 && n < 615) && !(n >= 960 && n < 1080) && !(n >= 1500 && n < 1650) && !caption(n);
+  const plainFrames = Array.from({ length: FRAMES_A }, (_, n) => n).filter(plain).length; // typed by the layout: 1801 frames less the effect stretches and the captions (1096 for this fixture)
   const [bcInc, bcSingle] = [await barcodes(e0.file, plain), await barcodes(single.file, plain)];
   let wrongInc = 0, wrongSingle = 0, readFrames = 0;
   for (const [n, code] of bcInc) { readFrames++; if (code !== n) wrongInc++; }
@@ -299,7 +301,7 @@ async function main() {
   const sizeRatio = (e0.job.output.bytes as number) / (single.job.output.bytes as number);
   measurements.sizeRatio = +sizeRatio.toFixed(4); measurements.minPsnrDb = +ps2.min.toFixed(2); measurements.singlePassSeconds = +single.seconds.toFixed(1); measurements.cleanSegmentedSeconds = +cleanSeconds.toFixed(1);
   check('I2', `fast export against the single pass at one revision: every unchanged frame reads back its own barcode in both, minimum PSNR >= ${PSNR_FLOOR_DB} dB, size ratio <= ${SIZE_RATIO_CEILING}`,
-    readFrames > 1300 && wrongInc === 0 && wrongSingle === 0 && ps2.min >= PSNR_FLOOR_DB && sizeRatio <= SIZE_RATIO_CEILING, { barcodeFramesRead: readFrames, wrongInSegmented: wrongInc, wrongInSinglePass: wrongSingle, minPsnrDb: ps2.min, averagePsnrDb: ps2.average, sizeRatio, bytes: { segmented: e0.job.output.bytes, single: single.job.output.bytes } });
+    readFrames === plainFrames && plainFrames > 1000 && wrongInc === 0 && wrongSingle === 0 && ps2.min >= PSNR_FLOOR_DB && sizeRatio <= SIZE_RATIO_CEILING, { barcodeFramesRead: readFrames, plainFrames, wrongInSegmented: wrongInc, wrongInSinglePass: wrongSingle, minPsnrDb: ps2.min, averagePsnrDb: ps2.average, sizeRatio, bytes: { segmented: e0.job.output.bytes, single: single.job.output.bytes } });
 
   console.log('\n# I3 determinism');
   const before = snapshot();
@@ -323,7 +325,9 @@ async function main() {
   const soundGain = i6.file ? pcm(i6.file) : Buffer.alloc(0);
   const fr6 = i6.file ? frameMd5(i6.file) : [];
   const gainDiff = pcmDiff(soundBefore, soundGain);
-  const gainWindow = { from: 300 * 1600, to: 450 * 1600 }; // the gain clip sits on frames 300..449; 1600 samples a frame at 48 kHz (a stereo pair counts once)
+  // the gain clip sits on frames 300..449; 1600 samples a frame at 48 kHz (a stereo pair counts once). The sound is compared after AAC: its long blocks overlap by 1024 samples, so a gain step changes the block before it too; the window is the clip widened by two AAC frames (2 x 1024 samples) each side
+  const AAC_SLACK = 2048;
+  const gainWindow = { from: 300 * 1600 - AAC_SLACK, to: 450 * 1600 + AAC_SLACK };
   check('I6', 'a sound gain change only: every segment reused and none rendered; the picture frames equal the earlier export; the sound differs where the clip is',
     p6.status === 200 && p6.view.segments.cached === SEGMENTS_A && p6.view.framesToRender === 0 && i6.report?.reused === SEGMENTS_A && i6.report?.rendered === 0 && same(fr6, framesBefore) && gainDiff.differing > 0 && gainDiff.firstSample >= gainWindow.from && gainDiff.lastSample < gainWindow.to,
     { plan: p6.view?.segments, report: i6.report && { reused: i6.report.reused, rendered: i6.report.rendered, selfCheck: i6.report.selfCheck, ms: i6.report.ms }, picturesEqual: same(fr6, framesBefore), soundDiff: gainDiff, seconds: i6.seconds });
@@ -362,6 +366,10 @@ async function main() {
   const ref4 = await againstClean(pid, i4, 'i4');
   check('I5', 'the incremental file equals a clean segmented export of the same revision: stored stretches equal by per-frame RGBA hash, decoded frames equal (md5 when the encoder is deterministic, PSNR floor otherwise), decoded sound equal sample by sample',
     ref4.ok, { encoderDeterministic, ...ref4 });
+  // the comparator's negative control: the file of the revision before the title edit is exactly what a key that ignored the title text would publish
+  const staleTitle = e0b.file ? frameMd5(e0b.file) : [], cleanTitle = frameMd5(ref4.cleanFile);
+  const diffAt = staleTitle.map((v, i) => (v !== cleanTitle[i] ? i : -1)).filter((i) => i >= 0);
+  const comparatorControl = { stale: !!e0b.file, differingFrames: diffAt.length, first: diffAt[0] ?? -1, last: diffAt[diffAt.length - 1] ?? -1, staleFileVerdict: !!e0b.file && !same(staleTitle, cleanTitle) };
   const sound4 = pcm(i4.file!);
   measurements.soundUnchangedByTitleEdit = pcmDiff(rev0Pcm, sound4).differing === 0;
 
@@ -396,12 +404,13 @@ async function main() {
   const cacheBefore = await cacheStatus();
   await api.tx(pid, [{ op: 'set_redact_region', args: { clipId: A.clips.p1, regionId: A.regionId, region: { strength: 0.4 } } }]);
   let purged = await cacheStatus();
-  for (let k = 0; k < 40 && purged.segments > 0; k++) { await sleep(100); purged = await cacheStatus(); }
+  for (let k = 0; k < 40 && (purged.segments > 0 || cacheKeys().size > 0); k++) { await sleep(100); purged = await cacheStatus(); }
+  const filesLeft = cacheKeys().size, bytesOnDisk = dirBytes(cacheDir()); // the un-redacted pictures and their sidecars must be gone from the disk, not only from the index
   const p20 = await planOf(pid);
   const i20 = await exportRun(pid, INC, 'i20-privacy');
   const ref20 = i20.file ? await againstClean(pid, i20, 'i20') : null;
   check('I20', 'a privacy-region change purges the project\'s stored segments at once (the cache holds none of them before the next plan), the plan then marks every segment, and the export equals a clean one',
-    cacheBefore.segments >= SEGMENTS_A && purged.segments === 0 && p20.view.segments.render === SEGMENTS_A && i20.report?.reused === 0 && i20.report?.rendered === SEGMENTS_A && !!ref20?.ok, { segmentsBefore: cacheBefore.segments, segmentsAfterTheEdit: purged.segments, bytesAfter: purged.usedBytes, plan: p20.view?.segments, report: i20.report && { reused: i20.report.reused, rendered: i20.report.rendered }, against: ref20 });
+    cacheBefore.segments >= SEGMENTS_A && purged.segments === 0 && filesLeft === 0 && p20.view.segments.render === SEGMENTS_A && i20.report?.reused === 0 && i20.report?.rendered === SEGMENTS_A && !!ref20?.ok, { segmentsBefore: cacheBefore.segments, segmentsAfterTheEdit: purged.segments, segmentFilesLeftOnDisk: filesLeft, bytesLeftOnDisk: bytesOnDisk, bytesAfter: purged.usedBytes, plan: p20.view?.segments, report: i20.report && { reused: i20.report.reused, rendered: i20.report.rendered }, against: ref20 });
 
   // ---------------------------------------------------------------- I15 ranges off the grid (the cache holds the full export of this revision)
   console.log('\n# I15 ranges');
@@ -543,7 +552,7 @@ async function main() {
 
   // ---------------------------------------------------------------- I8c the offline mutation
   console.log('\n# I8c a key that ignores the title text');
-  mutationCheck(A);
+  mutationCheck(A, comparatorControl);
 
   // ---------------------------------------------------------------- I18 UI
   console.log('\n# I18 UI');
@@ -741,7 +750,7 @@ async function runKeying() {
 }
 
 /** I8c: the engine's real frame key for the frames of a title before and after a text edit, and with a digest that ignores the text. */
-function mutationCheck(A: FixtureA) {
+function mutationCheck(A: FixtureA, control: { stale: boolean; differingFrames: number; first: number; last: number; staleFileVerdict: boolean }) {
   try {
     const doc = s.store.getProject(A.pid).doc as ProjectDocument;
     const after = structuredClone(doc);
@@ -750,13 +759,13 @@ function mutationCheck(A: FixtureA) {
       digest, output: { width: W, height: H }, gpu: null,
       assetHash: (id) => (d.assets[id] as { contentHash?: string } | undefined)?.contentHash ?? null, fontHash: () => 'bundled-font', effectVersion: (t) => findEffect(t)?.version ?? 0,
     });
-    const ignoresText = (t: string) => sha256(t.split(was ?? '\u0000').join('').split('מילה אחרת לגמרי').join(''));
     // frame 700 is under the first title (frames 600..719); frame 10 is not
     const real = [frameKey(doc, 700, base(doc, sha256)), frameKey(after, 700, base(after, sha256))];
-    const mutated = [frameKey(doc, 700, base(doc, ignoresText)), frameKey(after, 700, base(after, ignoresText))];
     const away = [frameKey(doc, 10, base(doc, sha256)), frameKey(after, 10, base(after, sha256))];
-    check('I8c', 'a key that ignores one input (the title text) is detectable: the real keys of a frame under the title differ across a text edit, the mutated keys are equal, and a frame away from the title keeps its key',
-      was !== null && real[0] !== real[1] && mutated[0] === mutated[1] && away[0] === away[1], { realDiffer: real[0] !== real[1], mutatedEqual: mutated[0] === mutated[1], awayEqual: away[0] === away[1], editedText: was });
+    // the negative control runs the proof's own comparator on a known-bad file: the pre-edit export stands for what a key ignoring the title text would publish
+    const inTitle = (n: number) => n >= A_LAYOUT.t1.start && n < A_LAYOUT.t1.start + A_LAYOUT.t1.frames;
+    check('I8c', 'the comparator catches a key that ignores one input (the title text): the engine\'s real keys of a frame under the title differ across the text edit and a frame away from it keeps its key; the frame comparator, given the pre-edit file as a stand-in for what such a key would publish, reports it unequal to the clean export, and only inside the title\'s frames',
+      was !== null && real[0] !== real[1] && away[0] === away[1] && control.stale && control.staleFileVerdict && control.differingFrames > 0 && inTitle(control.first) && inTitle(control.last), { realDiffer: real[0] !== real[1], awayEqual: away[0] === away[1], editedText: was, comparator: control });
   } catch (e) {
     check('I8c', 'a key that ignores one input (the title text) is detectable', false, { error: String((e as Error).stack ?? e).slice(0, 600) });
   }
