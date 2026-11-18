@@ -14,7 +14,6 @@ import { IconBeatLock, IconOnBeat } from './icons.tsx';
 import { Switch } from '../ds/index.ts';
 import { INSPECTOR_STRINGS } from './inspector.strings.ts';
 import { cutBefore, framesToNearestBeat, rollCutOps, secondsText } from './inspector.model.ts';
-import { selectCut, setLoupe, useInspectorView } from './inspector.bus.ts';
 
 type Media = Extract<Clip, { type: 'media' }>;
 /** The transitions offered first on a cut: one of each family people reach for, all drawn without a graphics adapter. Each tile
@@ -39,7 +38,6 @@ function Meter({ label, frames, fps }: { label: string; frames: number | null; f
 export function CutPanel({ clip }: { clip: Media }) {
   const { editor, state, t } = useEditorState();
   const S = INSPECTOR_STRINGS[state.lang];
-  const view = useInspectorView();
   const doc = state.doc;
   const cut = doc ? cutBefore(doc, clip.id) : null;
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -65,8 +63,8 @@ export function CutPanel({ clip }: { clip: Media }) {
   return (
     <>
       <div className="cut-loupe-row">
-        <Switch checked={view.loupe} onChange={setLoupe} label={S.loupe} testId="cut-loupe-toggle" />
-        <button type="button" className="oh-more" aria-label={S.backToClip} title={S.backToClip} data-testid="cut-close" onClick={() => selectCut(null)}><X size={16} strokeWidth={1.75} aria-hidden="true" /></button>
+        <Switch checked={state.loupe} onChange={(on) => editor.setLoupe(on)} label={S.loupe} testId="cut-loupe-toggle" />
+        <button type="button" className="oh-more" aria-label={S.backToClip} title={S.backToClip} data-testid="cut-close" onClick={() => editor.selectCut(null)}><X size={16} strokeWidth={1.75} aria-hidden="true" /></button>
       </div>
       <Section id="roll" title={S.secRoll} help>
         <div className="cut-roll" dir="ltr" role="group" aria-label={S.secRoll}>

@@ -8,7 +8,7 @@
  * contact sheet).
  */
 import type { PackDef } from './contract.ts';
-import { TemplateDefSchema, PACK_ID, type TemplateDef } from '../templateContract.ts';
+import { elementIdChoices, TemplateDefSchema, PACK_ID, type TemplateDef } from '../templateContract.ts';
 import { BUILTIN_TEMPLATES } from '../templateCatalog.ts';
 import { BUILTIN_TEXT_PRESETS } from '../textPresets.ts';
 import { BUILTIN_CAPTION_LOOKS } from '../captionPresets.ts';
@@ -124,7 +124,10 @@ export function packIssues(pack: PackDef, others: readonly PackDef[] = []): stri
     if (t.pack !== pack.id) bad(`${where} must name this pack in its pack field`);
     if (builtinTemplates.has(t.id) || otherTemplates.has(t.id)) bad(`${where} exists already`);
     if (t.music.builtin !== undefined && !findMusicStyle(t.music.builtin)) bad(`${where}: there is no built-in music style "${t.music.builtin}"`);
-    for (const e of t.elements) if (e.elementId === NEVER_IN_A_PACK) bad(`${where}: ${NEVER_IN_A_PACK} is never part of a pack template`);
+    for (const e of t.elements) for (const id of elementIdChoices(e, t.slots.length)) {
+      if (id === NEVER_IN_A_PACK) bad(`${where}: ${NEVER_IN_A_PACK} is never part of a pack template`);
+      if (!pack.elementIds.includes(id)) bad(`${where}: element ${e.key} can draw ${id}, which the pack does not list`);
+    }
     for (const a of t.adjust) effects(a.effects, `${where}, look ${a.key}`);
     for (const s of t.slots) {
       if (!s.transitionIn) continue;

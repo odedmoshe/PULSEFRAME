@@ -26,6 +26,12 @@ export const PEOPLE_STRINGS = {
     archiveFamily: 'בלי פרטי משפחה',
     archiveFamilyNote: 'הארכיון ייכתב בלי האנשים: שדות של שם וגיל ייקבעו כטקסט רגיל, כפי שהם מוצגים כעת. קובצי המדיה עצמם לא משתנים.',
     archiveFamilyVarying: 'הכותרות האלה משתנות לאורכן, ויישמרו עם הערך שבתחילתן:', archiveFamilyEmpty: 'בכותרות האלה יש שדה בלי נתון, והוא יישאר ריק:',
+    // W3: the sheet, the field menu and the archive option
+    sheetClose: 'סגירה', personNone: 'עדיין לא נוספו אנשים', personNamePlaceholder: 'שם', personBirthClear: 'הסרת תאריך לידה', personRowLabel: 'פרטי {name}', personNew: 'אדם חדש', personNameBusy: 'השם כבר קיים או אינו תקין',
+    copyHeading: 'אנשים מפרויקטים אחרים', copyAdd: 'הוספה', copyLoading: 'טוען…', copyFailed: 'טעינת האנשים מפרויקטים אחרים לא הצליחה: {why}', copyUnavailable: 'ההעתקה מפרויקט אחר אינה זמינה בשרת הזה', copyAlready: 'כבר בפרויקט',
+    fieldAge: 'גיל: {name}', fieldAgeWords: 'גיל במילים: {name}', fieldName: 'שם: {name}', fieldAddPerson: 'הוספת אדם…', fieldPeopleGroup: 'אנשים',
+    fieldUnknownPerson: 'אין בפרויקט אדם בשם הזה: {group}', fieldFixPeople: 'פתיחת רשימת האנשים',
+    archiveFamilyChecking: 'בודק מה ישתנה…', archiveFamilyFailed: 'לא ניתן לבדוק מה ישתנה בארכיון: {why}', archiveFamilyUnavailable: 'הארכיון בלי פרטי משפחה אינו זמין בשרת הזה',
   },
   en: {
     sheetTitle: 'People', personAdd: 'Add a person', name: 'Name', birthDate: 'Birth date', birthDateHebrew: 'Hebrew calendar: {date}', noBirthDate: 'Without a birth date the age is not shown',
@@ -36,9 +42,16 @@ export const PEOPLE_STRINGS = {
     archiveFamily: 'Without family details',
     archiveFamilyNote: 'The archive is written without the people: name and age fields become plain text, as they show now. The media files themselves are not changed.',
     archiveFamilyVarying: 'These titles change along their length and keep the value at their start:', archiveFamilyEmpty: 'These titles hold a field without data, which stays empty:',
+    sheetClose: 'Close', personNone: 'No people have been added yet', personNamePlaceholder: 'Name', personBirthClear: 'Remove the birth date', personRowLabel: 'Details of {name}', personNew: 'New person', personNameBusy: 'That name is already taken or is not valid',
+    copyHeading: 'People from other projects', copyAdd: 'Add', copyLoading: 'Loading…', copyFailed: 'Loading the people of other projects failed: {why}', copyUnavailable: 'Copying from another project is not available on this server', copyAlready: 'Already in the project',
+    fieldAge: 'Age: {name}', fieldAgeWords: 'Age in words: {name}', fieldName: 'Name: {name}', fieldAddPerson: 'Add a person…', fieldPeopleGroup: 'People',
+    fieldUnknownPerson: 'There is nobody with that name in the project: {group}', fieldFixPeople: 'Open the people list',
+    archiveFamilyChecking: 'Checking what will change…', archiveFamilyFailed: 'What the archive will change could not be checked: {why}', archiveFamilyUnavailable: 'The archive without family details is not available on this server',
   },
 } as const satisfies Record<PeopleLang, Record<string, string>>;
 export type PeopleKey = keyof typeof PEOPLE_STRINGS.he;
+/** One language's strings, as the components take them. */
+export type PeopleWords = Record<PeopleKey, string>;
 /** A string in the interface language; `{name}` marks are filled with `fill` (lifeline.strings.ts). */
 export const peopleT = (lang: PeopleLang) => (key: PeopleKey): string => PEOPLE_STRINGS[lang][key];
 export { fill };

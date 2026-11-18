@@ -9,32 +9,38 @@
  *   - the chip, its handle and the "+" only where the clips on both sides are wide enough to keep their own click (cutRoom):
  *     on a short clip only the band is drawn, and the transition is reached from the clip's ride bar;
  *   - a gold diamond on a cut that lands on an analysed beat.
- * Every change is the registered op set_transition through the editor's commit. Nothing here is stored outside the project,
- * except which cut is selected: a view state of this browser tab, held in `cutSelection` below until the store has a field
- * for it (the cut inspector and the ride bar read it).
+ * Every change is the registered op set_transition through the editor's commit. Which cut is chosen is the editor's view
+ * state (store.ts cutClipId, editor.selectCut): the cut inspector, the ride bar and the loupe read it from there.
  */
-import { memo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { memo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { TriangleAlert } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { transitionDef, type Clip } from '@pulseframe/core';
 import type { Lang } from '@pulseframe/i18n';
 import { Tooltip } from '../ds/index.ts';
 import { IconBeatLock, IconCutPlus, IconFlashShield, IconOnBeat } from './icons.tsx';
-import type { Editor } from './store.ts';
+import { useEditorState, type Editor } from './store.ts';
 import { TL_STRINGS } from './timeline.strings.ts';
 
 type MediaClip = Extract<Clip, { type: 'media' }>;
 
-// ---- which cut is selected (view state of this tab) ----
-let selectedCut: string | null = null; // the id of the clip AFTER the cut (the one a transition sits on)
-const listeners = new Set<() => void>();
+// ---- which cut is chosen: the editor's cutClipId (the id of the clip AFTER the cut, the one a transition sits on) ----
+/** The editor of the timeline that reads the chosen cut last (one per page); `cutSelection` below acts on it. */
+let bound: Editor | null = null;
+/**
+ * The chosen cut for code that has no editor at hand (Timeline.tsx): `set` is editor.selectCut without the loupe change of a
+ * click on a chip (selecting the clip after the cut with it), `set(null)` lets the cut go; `get` reads it.
+ */
 export const cutSelection = {
-  get: () => selectedCut,
-  set(clipId: string | null) { if (clipId === selectedCut) return; selectedCut = clipId; for (const l of listeners) l(); },
-  subscribe(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; },
+  get: (): string | null => bound?.getState().cutClipId ?? null,
+  set(clipId: string | null) { if (bound) bound.selectCut(clipId); },
 };
-/** The id of the clip after the selected cut, or null. */
-export function useSelectedCut(): string | null { return useSyncExternalStore(cutSelection.subscribe, cutSelection.get); }
+/** The id of the clip after the chosen cut, or null (the editor's state; re-renders when it changes). */
+export function useSelectedCut(): string | null {
+  const { editor, state } = useEditorState();
+  bound = editor;
+  return state.cutClipId;
+}
 
 /** The length given to a transition added from the "+": half a second, or as much as the spare video allows. */
 export function defaultTransitionFrames(rate: T.Rate, spare: number | null): number {
@@ -95,7 +101,7 @@ export const CutChip = memo(function CutChip({ editor, lang, clip, before, befor
   const frames = dragFrames ?? tr?.frames ?? 0;
   const short = !!tr && spare !== null && spare < tr.frames;
   const tcAt = T.toTimecode(clip.start, rate);
-  const select = () => { editor.select(clip.id); cutSelection.set(clip.id); };
+  const select = () => editor.selectCut(clip.id);
 
   const setLength = (next: number) => {
     if (!tr) return;

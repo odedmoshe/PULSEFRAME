@@ -170,6 +170,18 @@ export function createFuzz(seed: number) {
     const media = clips.filter((x) => x.c.type === 'media');
     const mediaId = () => (media.length ? pick(media).c.id : any());
     const audioClips = clips.filter((x) => x.t.kind === 'audio');
+    /**
+     * A detached picture and sound (or two pictures) that still cover the same stretch, neither a freeze, at the same speed and
+     * direction: the clips link_clips accepts. Such pairs are rare (an unlink, or a still laid over the music by the first
+     * add_clip row, makes one; most other edits break it), so the link row links one whenever it exists and the unlink row
+     * now and then does too. Left to chance, link_clips was never accepted in 60 seeds once the people rows joined the menu.
+     */
+    const linkablePair = (): [string, string] | null => {
+      const sp = (c: { speed?: { num: number; den: number } | null }) => (c.speed ? c.speed.num / c.speed.den : 1);
+      const free = tracks.flatMap((t) => t.clips.flatMap((c) => (c.type === 'media' && !c.linkGroupId && !c.freeze ? [{ c, t: t.id }] : [])));
+      for (const x of free) { const y = free.find((z) => z.t !== x.t && T.eq(z.c.start, x.c.start) && T.eq(z.c.duration, x.c.duration) && sp(z.c) === sp(x.c) && !!z.c.reverse === !!x.c.reverse); if (y) return [x.c.id, y.c.id]; }
+      return null;
+    };
     const audioId = () => (audioClips.length ? pick(audioClips).c.id : any());
     const videoClips = clips.filter((x) => x.t.kind === 'video');
     const videoId = () => (videoClips.length ? pick(videoClips).c.id : any());
@@ -218,7 +230,14 @@ export function createFuzz(seed: number) {
         const assetId = made.length && rnd() < 0.85 ? pick(made).id : derivedAssets.length && rnd() < 0.8 ? pick(derivedAssets).id : pick(assetIds);
         return { op: 'replace_clip_asset', args: { clipId: x?.id ?? any(), assetId } };
       },
-      () => ({ op: 'add_clip', args: { assetId: pick(assetIds), start: fr(), ...(rnd() < 0.5 ? { duration: dur() } : {}), ...(rnd() < 0.3 ? { sourceIn: T.frameTime(int(120), SRC) } : {}) } }),
+      () => {
+        // now and then the still picture over exactly the stretch of a sound clip that has no picture (the music): a pair that
+        // link_clips can link; without it such pairs came about only by chance and link_clips went whole runs without one
+        const lone = audioClips.filter((x) => x.c.type === 'media' && !x.c.linkGroupId && !x.c.reverse && (!x.c.speed || x.c.speed.num === x.c.speed.den));
+        const still = assetIds.find((id) => doc.assets[id]?.kind === 'image');
+        if (lone.length && still && rnd() < 0.5) { const x = pick(lone).c; return { op: 'add_clip', args: { assetId: still, start: x.start, duration: x.duration } }; }
+        return { op: 'add_clip', args: { assetId: pick(assetIds), start: fr(), ...(rnd() < 0.5 ? { duration: dur() } : {}), ...(rnd() < 0.3 ? { sourceIn: T.frameTime(int(120), SRC) } : {}) } };
+      },
       () => ({ op: 'add_clip', args: { assetId: pick(assetIds), start: fr(), trackId: trackId() } }),
       () => { const x = media.length ? pick(media) : null; return { op: 'add_clip', args: { assetId: x && x.c.type === 'media' ? x.c.assetId : pick(assetIds), start: x ? T.add(x.c.start, x.c.duration) : fr(), ...(x ? { trackId: x.t.id } : {}), duration: f(10 + int(60)), sourceIn: T.frameTime(int(60), SRC) } }; },
       () => ({ op: 'add_text', args: { text: pick(['שלום', 'Hello עולם 123', 'בְּרֵאשִׁית']), start: fr(), duration: dur() } }),
@@ -300,12 +319,12 @@ export function createFuzz(seed: number) {
         return { op: 'fit_music', args: { clipId: sounds.length && rnd() < 0.8 ? pick(sounds).id : any(), ...(rnd() < 0.3 ? { to: fr() } : {}) } };
       },
       () => {
-        // prefer a pair that can really be linked (a detached picture and sound that still cover the same stretch); otherwise any two clips
-        const all = tracks.flatMap((t) => t.clips.filter((c) => c.type === 'media' && !c.linkGroupId).map((c) => ({ c, t: t.id })));
-        for (const x of all) { const y = all.find((z) => z.t !== x.t && T.eq(z.c.start, x.c.start) && T.eq(z.c.duration, x.c.duration)); if (y && rnd() < 0.8) return { op: 'link_clips', args: { clipIds: [x.c.id, y.c.id] } }; }
+        // a pair that can really be linked whenever one exists (see linkablePair); otherwise any two clips, for the refusals
+        const pair = linkablePair();
+        if (pair) return { op: 'link_clips', args: { clipIds: pair } };
         return { op: 'link_clips', args: { clipIds: [any(), any()] } };
       },
-      () => ({ op: 'unlink_clip', args: { clipId: any() } }),
+      () => { const pair = linkablePair(); return pair && rnd() < 0.5 ? { op: 'link_clips', args: { clipIds: pair } } : { op: 'unlink_clip', args: { clipId: any() } }; },
       () => ({ op: 'set_clip_reverse', args: { clipId: any(), reverse: rnd() < 0.75 } }),
       () => ({ op: 'set_clip_pitch', args: { clipId: any(), keepPitch: rnd() < 0.7 } }),
       () => { const a0 = int(40), b0 = a0 + int(60); return { op: 'draw_volume', args: { clipId: audioClips.length && rnd() < 0.9 ? pick(audioClips).c.id : any(), from: f(a0), to: f(b0), keys: Array.from({ length: int(5) }, (_, i) => ({ time: f(Math.min(b0, a0 + i * 7)), value: Number((rnd() * 2).toFixed(2)), ...(rnd() < 0.3 ? { curve: 'smooth' as const } : {}) })).filter((k, i, all) => i === 0 || !T.eq(all[i - 1]!.time, k.time)) } }; },
@@ -393,6 +412,10 @@ export function createFuzz(seed: number) {
       // replace media (ADR-0016): another of the files for a clip, its linked sound following or detached; refused for a file
       // without what the clip plays, too short, or a still in place of a clip at another speed
       () => ({ op: 'replace_clip_media', args: { clipId: media.length && rnd() < 0.9 ? pick(media).c.id : any(), assetId: pick(assetIds), ...(rnd() < 0.3 ? { sourceIn: T.frameTime(int(150), SRC) } : {}), ...(rnd() < 0.4 ? { linked: pick(['follow', 'detach'] as const) } : {}) } }),
+      // timeline behaviour (UX redesign wave A): the per-project magnet and ripple-delete switches, and ripple delete itself on
+      // clips of the main track mostly, sometimes of any track, with the picture alone or an unknown clip (refused)
+      () => ({ op: 'set_timeline_behaviour', args: rnd() < 0.1 ? {} : { ...(rnd() < 0.6 ? { mainMagnet: rnd() < 0.5 } : {}), ...(rnd() < 0.6 ? { rippleDelete: rnd() < 0.5 } : {}) } }),
+      () => ({ op: 'ripple_delete_clips', args: { clipIds: Array.from({ length: 1 + int(2) }, () => (videoClips.length && rnd() < 0.75 ? pick(videoClips).c.id : any())), ...(rnd() < 0.15 ? { includeLinked: false } : {}) } }),
       // life line (ADR-0021): capture dates, events and title fields, once their operations are built
       ...(LIFE_OPS_BUILT ? lifeMenu(doc) : []),
       // people (ADR-0021, people section): once their operations are built

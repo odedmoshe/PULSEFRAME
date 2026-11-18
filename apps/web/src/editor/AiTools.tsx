@@ -43,8 +43,22 @@ function sayFailure(lang: 'he' | 'en', f: { code?: string | null; message?: stri
   const detail = f.message ? translateRefusal(lang, f.message) ?? f.message : '';
   return head ? (detail ? `${head}: ${detail}` : head) : detail;
 }
-/** What the engine setting is called for a tool (the variable the operator sets), for the setup steps. */
-const engineVar = (c: CapInfo) => (c.task === 'translate' ? 'PF_TOOLS_PYTHON' : c.task === 'voice-clean' ? 'PF_DENOISE_BIN' : c.task === 'vocals-classic' ? 'ffmpeg (PATH)' : 'PF_COMFYUI_URL');
+/**
+ * A detail the server or the engine reported, as it may be shown under "details for whoever installs": never an environment
+ * variable name, an address or a file path (owner rule: no developer language on the cards). Null when nothing is left to say.
+ */
+export function installerDetail(detail: string | undefined | null, lang: 'he' | 'en'): string | null {
+  if (!detail) return null;
+  const setting = lang === 'he' ? 'הגדרת החיבור' : 'the connection setting';
+  const out = detail
+    .replace(/\bhttps?:\/\/\S+/gi, lang === 'he' ? 'כתובת' : 'an address')
+    .replace(/\bPF_[A-Z0-9_]+\b/g, setting)
+    .replace(/(?:^|\s)(?:[A-Za-z]:)?(?:[\\/][^\s\\/:]+){2,}/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+  return out && out !== setting && !/^(the connection setting|הגדרת החיבור) is not set$/i.test(out) ? out : null;
+}
+/** The name of a model file without its folders (the card says which file, not where it lives). */
+const fileName = (p: string) => p.split(/[\\/]/).pop() || p;
 
 /** The connection check (a graph with no model): shown to whoever installs, under a disclosure, not as a tool among the owner's tools. */
 export const isConnectionCheck = (c: { id: string }) => /\.smoke\./.test(c.id);
@@ -231,17 +245,15 @@ function ToolCard({ cap: c, tab, S, editor, job, run, onStarted }: { cap: CapInf
   const canAsk = (setup.code === 'model_missing' || setup.code === 'disk_insufficient' || setup.code === 'host_not_allowed') && missingBytes > 0;
   const runBusy = !!job && OPEN.includes(job.status);
   const blockedBy = (c.blockers ?? []).filter((b) => !EARNED.has(b.code)).map((b) => S.blockers[b.code] ?? `${S.unknownBlocker}: ${b.message}`);
-  const stepArg = setup.code === 'host_not_allowed' ? (setup.hosts ?? []).join(', ') : setup.code === 'disk_insufficient' ? size(missingBytes) : engineVar(c);
-  const steps = (S.setupSteps[setup.code] ?? S.setupSteps.ready)(stepArg);
   // each model file that is not ready, as the model store reports it (size still to download, damaged, cannot be verified)
   const modelLines = (c.models ?? []).flatMap((m) => {
     const st = m.status;
     if (!st || st.state === 'ready') return [];
-    if (st.state === 'missing') return [S.modelMissing(m.path, size(st.missingBytes))];
-    if (st.state === 'partial-download') return [S.modelPartial(m.path, size(st.missingBytes))];
-    if (st.state === 'corrupt') return [S.modelCorrupt(m.path)];
-    if (st.state === 'unverifiable') return [S.modelUnverifiable(m.path)];
-    return [S.modelUnresolved(m.path)];
+    if (st.state === 'missing') return [S.modelMissing(fileName(m.path), size(st.missingBytes))];
+    if (st.state === 'partial-download') return [S.modelPartial(fileName(m.path), size(st.missingBytes))];
+    if (st.state === 'corrupt') return [S.modelCorrupt(fileName(m.path))];
+    if (st.state === 'unverifiable') return [S.modelUnverifiable(fileName(m.path))];
+    return [S.modelUnresolved(fileName(m.path))];
   });
 
   const recheck = async () => {
@@ -282,6 +294,8 @@ function ToolCard({ cap: c, tab, S, editor, job, run, onStarted }: { cap: CapInf
   const gb = missingBytes ? size(missingBytes) : '';
   const kindLabel = kind === 'ready' ? H.pill.ready : kind === 'running' ? (pct == null ? H.pill.runningNoPct : H.pill.running(`${pct}%`)) : kind === 'prep' ? H.pill.prep(gb) : kind === 'off' ? H.pill.off : H.pill.setup;
   const gpuNote = (c.blockers ?? []).some((b) => /gpu|cuda|graphics/i.test(b.code + b.message)) || /gpu|cuda/i.test(setup.detail ?? '');
+  // the connection steps already say what is missing; an engine's own error text is kept for whoever installs, without variable names or addresses
+  const techDetail = setup.code === 'provider_not_configured' || setup.code === 'provider_unreachable' ? null : installerDetail(setup.detail, lang);
   return (
     <article className={`pf-ai-card pf-hub-card is-${kind}`} data-testid="ai-tool" data-id={c.id} data-runnable={c.runnable ? 'true' : 'false'} data-setup={setup.code} data-tab={tab} aria-labelledby={`${uid}-h`}>
       <div className="pf-hub-card-top">
@@ -320,8 +334,8 @@ function ToolCard({ cap: c, tab, S, editor, job, run, onStarted }: { cap: CapInf
             <Button size="sm" variant="secondary" onClick={() => void recheck()} data-testid="ai-tool-recheck">{S.checkAgain}</Button>
             <span role="status" className={`muted${check?.failed ? ' danger' : ''}`} data-testid="ai-tool-recheck-status">{check?.text ?? ''}</span>
           </div>
-          {setup.detail && (
-            <details className="pf-hub-tech"><summary>{H.technical}</summary><p className="muted">{S.stateDetail} <bdi dir="auto" data-testid="ai-state-detail">{setup.detail}</bdi> <span className="muted">· {engineVar(c)}</span></p></details>
+          {techDetail && (
+            <details className="pf-hub-tech"><summary>{H.technical}</summary><p className="muted">{S.stateDetail} <bdi dir="auto" data-testid="ai-state-detail">{techDetail}</bdi></p></details>
           )}
         </details>
       )}

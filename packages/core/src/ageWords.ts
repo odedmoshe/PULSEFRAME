@@ -4,7 +4,7 @@
  *
  * The lead's contract fixes the signatures and the WORDING TABLE below (AGE_FORMS), which is data for the owner's review:
  * every Hebrew form, for «בן», «בת» and no word choice, in digits and in words, with the English form. The three functions
- * are W1's; until they are built they refuse to answer (and fields.ts documentPeople knows nobody, so nothing calls them).
+ * are W1's (built: fields.ts documentPeople calls them when a frame is evaluated).
  *
  * RULES
  * - The age is the calendar difference of two wall days (schema.ts WALL_DATE). The n-th month of a life is full on the day
@@ -26,21 +26,66 @@
  * - English: "born today", "1 day old", "N days old", "1 week old", "N weeks old", "1 month old", "N months old",
  *   "1 year old", "N years old", and "N½ years old" where Hebrew says «וחצי».
  */
+import { isValidGregorian, rdFromGregorian, type GDate } from './hebrewCalendar.ts';
+
 export interface AgeParts { years: number; months: number; days: number; totalDays: number }
 export type AgeForm = 'm' | 'f' | undefined;
 export type AgeStyle = 'digits' | 'words';
 
-/** The age on wall day `at` of someone born on wall day `birth` (both YYYY-MM-DD, real days); null when `at` is before `birth`. W1. */
-export function ageParts(_birth: string, _at: string): AgeParts | null {
-  throw new Error('people: ageParts is not built yet');
+/** A wall day (YYYY-MM-DD, the first ten characters of a WALL_DATE or WALL_DATE_TIME) as a Gregorian day that exists; RangeError otherwise. */
+function wallDay(s: string): GDate {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  const g: GDate | null = m ? { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) } : null;
+  if (!g || !isValidGregorian(g)) throw new RangeError(`not a calendar day: ${JSON.stringify(s.slice(0, 32))}`);
+  return g;
 }
+/** The day the n-th month of a life born on `b` is full: the same day of the month, or the 1st of the next month when that month has no such day. */
+function monthFull(b: GDate, n: number): number {
+  const index = b.m - 1 + n, y = b.y + Math.floor(index / 12), m = (index % 12) + 1;
+  return isValidGregorian({ y, m, d: b.d }) ? rdFromGregorian({ y, m, d: b.d }) : rdFromGregorian({ y: m === 12 ? y + 1 : y, m: m === 12 ? 1 : m + 1, d: 1 });
+}
+/**
+ * The age on wall day `at` of someone born on wall day `birth` (both YYYY-MM-DD, real days; a time after the day is ignored);
+ * null when `at` is before `birth`. RangeError when either is not a calendar day. W1.
+ */
+export function ageParts(birth: string, at: string): AgeParts | null {
+  const b = wallDay(birth), a = wallDay(at);
+  const from = rdFromGregorian(b), to = rdFromGregorian(a);
+  if (to < from) return null;
+  // the months that are full on `at`: at most the months between the two dates, one fewer when the last of them is not full yet
+  let n = (a.y - b.y) * 12 + (a.m - b.m);
+  while (n > 0 && monthFull(b, n) > to) n--;
+  return { years: Math.floor(n / 12), months: n % 12, days: to - monthFull(b, n), totalDays: to - from };
+}
+const HE_WORD: Readonly<Record<'m' | 'f' | 'none', string>> = { m: 'בן', f: 'בת', none: 'גיל' };
+const HE_BIRTH_DAY: Readonly<Record<'m' | 'f' | 'none', string>> = { m: 'בן יומו', f: 'בת יומה', none: 'יום הלידה' };
+/** «וחצי»: from six full months, from the first birthday until the sixth. */
+const half = (p: AgeParts): boolean => p.years >= 1 && p.years < 6 && p.months >= 6;
 /** The Hebrew wording of an age (AGE_FORMS `he`, or `heWords` for style 'words' where a row has it). W1. */
-export function ageHe(_p: AgeParts, _form: AgeForm, _style: AgeStyle): string {
-  throw new Error('people: ageHe is not built yet');
+export function ageHe(p: AgeParts, form: AgeForm, style: AgeStyle): string {
+  const who = form === 'm' || form === 'f' ? form : 'none';
+  if (p.totalDays === 0) return HE_BIRTH_DAY[who];
+  let age: string;
+  if (p.years === 0 && p.months === 0) {
+    const d = p.days, w = Math.floor(d / 7);
+    age = d === 1 ? 'יום' : d === 2 ? 'יומיים' : d < 7 ? `${d} ימים` : w === 1 ? 'שבוע' : w === 2 ? 'שבועיים' : `${w} שבועות`;
+  } else if (p.years === 0) age = p.months === 1 ? 'חודש' : p.months === 2 ? 'חודשיים' : `${p.months} חודשים`;
+  else {
+    age = p.years === 1 ? 'שנה' : p.years === 2 ? 'שנתיים' : style === 'words' && Object.hasOwn(AGE_YEAR_WORDS_HE, p.years) ? AGE_YEAR_WORDS_HE[p.years]! : String(p.years);
+    if (half(p)) age += ' וחצי';
+  }
+  return `${HE_WORD[who]} ${age}`;
 }
 /** The English wording of an age (AGE_FORMS `en`). W1. */
-export function ageEn(_p: AgeParts): string {
-  throw new Error('people: ageEn is not built yet');
+export function ageEn(p: AgeParts): string {
+  if (p.totalDays === 0) return 'born today';
+  if (p.years === 0 && p.months === 0) {
+    const d = p.days, w = Math.floor(d / 7);
+    return d < 7 ? (d === 1 ? '1 day old' : `${d} days old`) : w === 1 ? '1 week old' : `${w} weeks old`;
+  }
+  if (p.years === 0) return p.months === 1 ? '1 month old' : `${p.months} months old`;
+  if (half(p)) return `${p.years}½ years old`;
+  return p.years === 1 ? '1 year old' : `${p.years} years old`;
 }
 
 /** The years that style 'words' writes as a word. */

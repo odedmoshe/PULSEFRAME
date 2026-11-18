@@ -40,6 +40,7 @@ import * as T from '@pulseframe/time';
 import { TEXT_PRESETS } from '@pulseframe/core';
 import { FlashAnalyser, flashCells } from '@pulseframe/engine';
 import { startServer } from '@pulseframe/server';
+import { chooseFormat } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/trend-text');
@@ -631,10 +632,10 @@ async function main() {
       measurements.x10master = { reachedByTab: reached, glow: on ? clipOf(on).style.glow : null, op: evOn?.ops, undoReachedByTab: undoReached, undoEvent: evUndo?.kind, restored: !!undone };
       check('X10', 'keyboard only: Tab to the glow checkbox and Space commits update_text with the glow; Tab to undo and Enter restores the title exactly', reached && !!on && JSON.stringify(evOn?.ops) === '["update_text"]' && undoReached && evUndo?.kind === 'undo' && !!undone, measurements.x10master);
       // a format view (switched with the format menu; the panel then by keyboard again)
-      await page.getByTestId('format-switch').selectOption(variantId);
+      await chooseFormat(page, variantId);
       await page.getByTestId('format-badge').waitFor({ timeout: 10000 }).catch(() => {});
       await page.getByTestId('text-effects').waitFor({ timeout: 10000 });
-      await page.getByTestId('format-switch').focus();
+      await page.locator('[data-testid=format-switch] [role=radio][aria-checked=true]').focus(); // the viewed format's chip in the FormatPrism (the old select)
       const reached2 = await tabTo('text-fx-glow');
       await page.keyboard.press('Space');
       const inFormat = await until((d) => !!d.variants?.[variantId]?.overrides?.[c]?.textStyle?.glow);

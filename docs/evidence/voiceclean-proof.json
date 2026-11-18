@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-17T21:01:04.183Z",
+  "ranAt": "2026-11-18T01:21:23.229Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v553 x64",
+    "platform": "Linux 6.18.44-fc-v595 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "cores": 4,
     "gpu": "none"
@@ -61,11 +61,11 @@
           {
             "op": "clean_voice",
             "args": {
-              "clipId": "clp_6826b69bde0",
+              "clipId": "clp_253392808d0",
               "includeLinked": false,
               "strength": 0.6,
               "profile": "KtKlLDL6M1NiOZO3PRPiPkPjPdPYPPPEPAO_PDPOPhP5QWQ3",
-              "source": "ast_bffaa5159d0",
+              "source": "ast_256e9772810",
               "mainsHz": "50"
             }
           }
@@ -231,11 +231,11 @@
         ],
         "weakestNormalisedCorrelation": 0.981,
         "cleanVoice": {
-          "clipId": "clp_476abdb0420",
+          "clipId": "clp_4a7590ae2e0",
           "includeLinked": false,
           "strength": 0.6,
           "profile": "F9F8GiLyMyNkOQO1PPPiPqPpPkPYPNPFO_O-PEPOPhP5QWQ4",
-          "source": "ast_fdfe6aead00",
+          "source": "ast_952928b9fc0",
           "mainsHz": "50"
         }
       }
@@ -246,19 +246,19 @@
       "detail": [
         {
           "effects": "cleanup.dehum",
-          "realtime": 119
+          "realtime": 187
         },
         {
           "effects": "cleanup.denoise",
-          "realtime": 52
+          "realtime": 69
         },
         {
           "effects": "cleanup.speech",
-          "realtime": 104
+          "realtime": 116
         },
         {
           "effects": "cleanup.dehum + cleanup.denoise + cleanup.speech",
-          "realtime": 27
+          "realtime": 32
         }
       ]
     },
@@ -334,19 +334,19 @@
         "machineLoad": {
           "cores": 4,
           "loadAverageBefore": [
-            5.69,
-            7.82,
-            7.47
+            3.6,
+            4.18,
+            4.23
           ],
           "loadAverageAfter": [
-            4.18,
-            7.11,
-            7.25
+            4.2,
+            4.26,
+            4.25
           ]
         },
         "comparedRun": {
           "fxVoices": 4,
-          "fxPrimeMs": 188,
+          "fxPrimeMs": 161,
           "fxLateStarts": 0,
           "fxLateSkips": 0,
           "firstWindowAtSeconds": -0.12
@@ -430,7 +430,7 @@
           }
         ],
         "prime": {
-          "fxPrimeMs": 339,
+          "fxPrimeMs": 297,
           "fxPrimeTimedOut": false,
           "fxLateStarts": 0
         },
@@ -439,8 +439,8 @@
             "fxVoices": 4,
             "fxLateStarts": 0,
             "fxLateSkips": 0,
-            "longTaskMs": 58,
-            "longTasks": 1
+            "longTaskMs": 0,
+            "longTasks": 0
           },
           "bypassed": {
             "fxVoices": 0,
@@ -551,11 +551,11 @@
         {
           "op": "clean_voice",
           "args": {
-            "clipId": "clp_6826b69bde0",
+            "clipId": "clp_253392808d0",
             "includeLinked": false,
             "strength": 0.6,
             "profile": "KtKlLDL6M1NiOZO3PRPiPkPjPdPYPPPEPAO_PDPOPhP5QWQ3",
-            "source": "ast_bffaa5159d0",
+            "source": "ast_256e9772810",
             "mainsHz": "50"
           }
         }
@@ -709,30 +709,30 @@
       ],
       "weakestNormalisedCorrelation": 0.981,
       "cleanVoice": {
-        "clipId": "clp_476abdb0420",
+        "clipId": "clp_4a7590ae2e0",
         "includeLinked": false,
         "strength": 0.6,
         "profile": "F9F8GiLyMyNkOQO1PPPiPqPpPkPYPNPFO_O-PEPOPhP5QWQ4",
-        "source": "ast_fdfe6aead00",
+        "source": "ast_952928b9fc0",
         "mainsHz": "50"
       }
     },
     "C6": [
       {
         "effects": "cleanup.dehum",
-        "realtime": 119
+        "realtime": 187
       },
       {
         "effects": "cleanup.denoise",
-        "realtime": 52
+        "realtime": 69
       },
       {
         "effects": "cleanup.speech",
-        "realtime": 104
+        "realtime": 116
       },
       {
         "effects": "cleanup.dehum + cleanup.denoise + cleanup.speech",
-        "realtime": 27
+        "realtime": 32
       }
     ],
     "C8": {
@@ -792,19 +792,19 @@
       "machineLoad": {
         "cores": 4,
         "loadAverageBefore": [
-          5.69,
-          7.82,
-          7.47
+          3.6,
+          4.18,
+          4.23
         ],
         "loadAverageAfter": [
-          4.18,
-          7.11,
-          7.25
+          4.2,
+          4.26,
+          4.25
         ]
       },
       "comparedRun": {
         "fxVoices": 4,
-        "fxPrimeMs": 188,
+        "fxPrimeMs": 161,
         "fxLateStarts": 0,
         "fxLateSkips": 0,
         "firstWindowAtSeconds": -0.12
@@ -888,7 +888,7 @@
         }
       ],
       "prime": {
-        "fxPrimeMs": 339,
+        "fxPrimeMs": 297,
         "fxPrimeTimedOut": false,
         "fxLateStarts": 0
       },
@@ -897,8 +897,8 @@
           "fxVoices": 4,
           "fxLateStarts": 0,
           "fxLateSkips": 0,
-          "longTaskMs": 58,
-          "longTasks": 1
+          "longTaskMs": 0,
+          "longTasks": 0
         },
         "bypassed": {
           "fxVoices": 0,
@@ -913,42 +913,42 @@
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 21.2
+        "chromiumMs": 18.2
       },
       {
         "type": "cleanup.dehum",
         "params": "{\"mainsHz\":\"60\",\"harmonics\":8,\"width\":1}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 24.5
+        "chromiumMs": 25
       },
       {
         "type": "cleanup.denoise",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 54.3
+        "chromiumMs": 42
       },
       {
         "type": "cleanup.denoise",
         "params": "{\"reductionDb\":30,\"sensitivityDb\":10,\"profile\":\"MgMgMgMgMgMgMgMgMgMgMgMgMgMgMgMg",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 38.9
+        "chromiumMs": 32.7
       },
       {
         "type": "cleanup.speech",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 53.6
+        "chromiumMs": 36.5
       },
       {
         "type": "cleanup.speech",
         "params": "{\"lowCutHz\":150,\"presence\":1,\"levelDb\":15,\"targetDb\":-12,\"ceilingDb\":-6}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 45.8
+        "chromiumMs": 39.2
       }
     ]
   }

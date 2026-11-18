@@ -8,7 +8,7 @@
  * as the video will, and the loupe says so.
  * Left is earlier and right is later in every language: the loupe is never mirrored.
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { X } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { useEditorState } from './store.ts';
@@ -16,8 +16,6 @@ import { Kbd } from '../ds/index.ts';
 import { IconCutPlus } from './icons.tsx';
 import { STAGE_STRINGS } from './stage.strings.ts';
 import { cutBefore, secondsText } from './inspector.model.ts';
-import { selectCut, setLoupe, useInspectorView } from './inspector.bus.ts';
-import { cutToBeat, rollCut } from './cutActions.ts';
 
 function Still({ src, alt }: { src: string; alt: string }) {
   const { state } = useEditorState();
@@ -40,30 +38,12 @@ function Still({ src, alt }: { src: string; alt: string }) {
 
 export function CutLoupe() {
   const { editor, state } = useEditorState();
-  const view = useInspectorView();
   const S = STAGE_STRINGS[state.lang];
   const doc = state.doc;
-  const cut = doc && view.cutClipId ? cutBefore(doc, view.cutClipId) : null;
-  const open = !!cut && view.loupe;
-  const clipId = view.cutClipId;
-  // , and . roll the cut one frame (Shift: five); Shift+B rolls it to the nearest beat. Only while the loupe is open and
-  // nobody is typing; the keys are taken before the editor's own shortcuts see them.
-  useEffect(() => {
-    if (!open || !clipId) return;
-    const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement;
-      if (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('[aria-modal="true"]')) return;
-      let frames = 0;
-      if (e.code === 'Comma') frames = e.shiftKey ? -5 : -1;
-      else if (e.code === 'Period') frames = e.shiftKey ? 5 : 1;
-      else if (e.code === 'KeyB' && e.shiftKey) frames = cutToBeat(editor, clipId) ?? 0;
-      else return;
-      e.preventDefault(); e.stopPropagation();
-      if (frames) void rollCut(editor, clipId, frames);
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [open, clipId, editor]);
+  const cut = doc && state.cutClipId ? cutBefore(doc, state.cutClipId) : null;
+  const open = !!cut && state.loupe;
+  // , and . roll the cut one frame (Shift: five) and Shift+B rolls it to the nearest beat while a cut is chosen: they are
+  // registered commands (commands.ts cut.*), listed with the shortcuts and taken ahead of keyframe.prev / keyframe.next.
   if (!doc || !cut || !open) return null;
   const rate = editor.rate, fps = rate.num / rate.den;
   const variant = state.viewVariantId ? `&variant=${encodeURIComponent(state.viewVariantId)}` : '';
@@ -97,7 +77,7 @@ export function CutLoupe() {
       <div className="loupe-bar" dir={state.lang === 'he' ? 'rtl' : 'ltr'}>
         <span className="loupe-chip"><IconCutPlus size={16} /> {S.loupe}</span>
         <span className="loupe-keys"><Kbd k="," he={false} /><Kbd k="." he={false} /> {S.rollKeys} · <Kbd k="Shift" /><Kbd k="B" /> {S.toBeat}</span>
-        <button type="button" className="stage-btn" aria-label={S.loupeClose} title={S.loupeClose} data-testid="cut-loupe-close" onClick={() => setLoupe(false)}><X size={16} strokeWidth={1.75} aria-hidden="true" /></button>
+        <button type="button" className="stage-btn" aria-label={S.loupeClose} title={S.loupeClose} data-testid="cut-loupe-close" onClick={() => editor.setLoupe(false)}><X size={16} strokeWidth={1.75} aria-hidden="true" /></button>
       </div>
       <div className="loupe-pair">
         {side('out')}
@@ -108,4 +88,3 @@ export function CutLoupe() {
     </div>
   );
 }
-export { selectCut };

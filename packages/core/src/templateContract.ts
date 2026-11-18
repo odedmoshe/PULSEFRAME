@@ -51,7 +51,7 @@ export type ApplyTemplateArgs = z.infer<typeof ApplyTemplateArgsSchema>;
 /** apply_template OpResult.output. The run record: recipeRuns[runId] = { recipeId: `template:${templateId}`, params: {...params, templateVersion}, createdIds, fingerprints, steps, slots }. */
 export interface ApplyTemplateOutput { runId: string; createdIds: string[]; slots: SlotRecord[]; assetIds: Record<string, string> }
 
-export const TEMPLATE_GENRES = ['montage', 'celebration', 'promo', 'quote', 'list', 'memories'] as const;
+export const TEMPLATE_GENRES = ['montage', 'celebration', 'promo', 'quote', 'list', 'memories', 'holiday'] as const;
 /** The id of a content pack (packs/contract.ts). */
 export const PACK_ID = /^pack\.[a-z0-9-]{1,24}$/;
 const Colour = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
@@ -132,8 +132,27 @@ export const TextDefSchema = z.object({
   perSlot: z.enum(['none', 'count-down', 'count-up']).optional(),
   place: PlaceSchema,
 }).strict();
-/** color / color2: left out = the element's own default colours (ElementDef.defaults), else white and teal. */
-export const ElementDefSchema = z.object({ key: BindName, elementId: z.string().max(64), color: Colour.optional(), color2: Colour.optional(), at: TimingSchema, perSlot: z.enum(['none', 'count-down', 'count-up']).optional(), place: PlaceSchema, motion: z.object({ presetId: z.string().max(48) }).strict().optional() }).strict();
+/**
+ * color / color2: left out = the element's own default colours (ElementDef.defaults), else white and teal.
+ * An element that shows a number the titles say (ADR-0022): `elementId` may hold the planner's per-slot counter `{n}` (with
+ * perSlot) and pack fields (`{night}`, `{age}`…), e.g. 'element.holiday.hanukkiah-{night}': the planner writes them in, and
+ * when a field has no value or the id it gives does not exist (a night of «שלישי» or 9), `fallbackElementId` is drawn instead
+ * (notice field_missing). `fallbackElementId` is required exactly when `elementId` holds a brace group, and names no number.
+ */
+export const ElementDefSchema = z.object({ key: BindName, elementId: z.string().max(64), fallbackElementId: z.string().max(64).optional(), color: Colour.optional(), color2: Colour.optional(), at: TimingSchema, perSlot: z.enum(['none', 'count-down', 'count-up']).optional(), place: PlaceSchema, motion: z.object({ presetId: z.string().max(48) }).strict().optional() }).strict();
+/** The brace groups an element id may hold (ElementDefSchema): the per-slot counter and the pack fields. */
+export const ELEMENT_ID_TOKEN = /\{([a-z0-9]+)\}/g;
+/**
+ * Every element an ElementDef can draw: its id as it stands, or, when it holds a brace group, its id with `{n}` = 1..slotCount and
+ * `{night}` = 1..8 written in (the values other fields may take cannot be listed) and its fallback. For the checks of the catalogue.
+ */
+export function elementIdChoices(e: { elementId: string; fallbackElementId?: string | undefined }, slotCount: number): string[] {
+  if (!e.elementId.includes('{')) return [e.elementId];
+  let ids = [e.elementId];
+  for (const [token, count] of [['{n}', slotCount], ['{night}', 8]] as const)
+    if (e.elementId.includes(token)) ids = ids.flatMap((id) => Array.from({ length: count }, (_, i) => id.replaceAll(token, String(i + 1))));
+  return [...ids.filter((id) => !id.includes('{')), ...(e.fallbackElementId !== undefined ? [e.fallbackElementId] : [])];
+}
 export const SfxDefSchema = z.object({
   key: BindName, sfxId: z.string().max(48),
   /** boundaries = every slot start except the first (every everyN-th); first = template start; last = last slot start; {slot}/{text} = that item's start. */

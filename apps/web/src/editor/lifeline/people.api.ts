@@ -1,7 +1,8 @@
 /**
  * REST calls of the people step (ADR-0021, people section). Every persistent edit of people is an operation through
  * Editor.commit (add_person, update_person, remove_person); these are reads. Both answer the owner's own session only
- * (403 owner_required for any token), and both answer 501 until W2 builds them.
+ * (403 owner_required for any token). The server serves both (apps/server/src/http.ts: GET /people-suggestions and
+ * GET /projects/:id/archive/family-check).
  */
 import { ApiFailure } from '../../api.ts';
 

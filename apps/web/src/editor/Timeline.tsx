@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import {
-  toSourceSpan, clipEnd, findAudioEffect, findEffect, getOp, sortAudioFx, sourceEnd, speedValue, timelineAt, timelineMarkers, transcriptFor, velocityLimit, MARKER_COLORS,
+  toSourceSpan, clipEnd, fieldsToDisplay, findAudioEffect, findEffect, getOp, sortAudioFx, sourceEnd, speedValue, timelineAt, timelineMarkers, transcriptFor, velocityLimit, MARKER_COLORS,
   type Clip, type Marker, type ProjectDocument, type Track,
 } from '@pulseframe/core';
 import { duckEnvelope, flashSchedule, speechRanges } from '@pulseframe/engine';
@@ -31,7 +31,7 @@ import './timeline.css';
 const MAX_MARKERS = 3000;
 type MediaClip = Extract<Clip, { type: 'media' }>;
 
-export const clipLabel = (doc: ProjectDocument, c: Clip) => (c.type === 'media' ? doc.assets[c.assetId]?.name ?? c.assetId : c.type === 'adjustment' ? c.label ?? '' : c.text);
+export const clipLabel = (doc: ProjectDocument, c: Clip, lang: 'he' | 'en' = 'he') => (c.type === 'media' ? doc.assets[c.assetId]?.name ?? c.assetId : c.type === 'adjustment' ? c.label ?? '' : c.type === 'text' && c.fields ? fieldsToDisplay(lang, c.text, doc) : c.text); // a title with live fields shows the readable form, `{תאריך}`, never the stored `{date}`
 /** A file name as the timeline shows it: without its extension. */
 const bare = (name: string) => name.replace(/\.[a-z0-9]{2,5}$/i, '');
 
@@ -214,7 +214,8 @@ function PlayheadCap({ pps, beatSeconds, markerFrames }: { pps: number; beatSeco
     const under = new Set(labelsUnder(boxes, from - 2, from + w + 2));
     // a marker's flag hides the labels it lies over too
     for (const m of ruler.querySelectorAll<HTMLElement>(':scope > .user-marker')) for (const k of labelsUnder(boxes, m.offsetLeft - 2, m.offsetLeft + m.offsetWidth + 2)) under.add(k);
-    spans.forEach((sp, k) => sp.classList.toggle('under-cap', under.has(k)));
+    // a covered label is hidden from sight (timeline.css) and from assistive technology alike: the cap above it says the time
+    spans.forEach((sp, k) => { const u = under.has(k); sp.classList.toggle('under-cap', u); if (u) sp.setAttribute('aria-hidden', 'true'); else sp.removeAttribute('aria-hidden'); });
   });
   return (
     <>
@@ -385,7 +386,7 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
           const tail = p.tails.get(c.id);
           // an adjustment clip (ADR-0016) is named by its label, else by the track kind and its effects
           const adjFx = c.type === 'adjustment' ? (c.effects ?? []).filter((x) => x.enabled).map((x) => findEffect(x.type)?.name[lang] ?? x.type) : [];
-          const label = c.type === 'adjustment' && !c.label ? `${t('track.adjustment')}${adjFx.length ? `: ${adjFx.join(', ')}` : ''}` : c.type === 'media' ? bare(clipLabel(doc, c)) : clipLabel(doc, c);
+          const label = c.type === 'adjustment' && !c.label ? `${t('track.adjustment')}${adjFx.length ? `: ${adjFx.join(', ')}` : ''}` : c.type === 'media' ? bare(clipLabel(doc, c, lang)) : clipLabel(doc, c, lang);
           const tailS = tail && tail.seconds >= 0.05 ? tail.seconds : 0;
           const fxLabel = `${fxNames.length ? `; ${t('timeline.fx')}: ${fxNames.join(', ')}` : ''}${tailS ? `; ${t('timeline.fx.tail')} ${tailS.toFixed(1)} ${t('sound.fx.seconds')}` : ''}`;
           const kind = kindOf(doc, lane, c);
@@ -444,7 +445,7 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
               {volLine && <VolumeLine clip={c as MediaClip} selected={only} editable={!tr.locked} pps={pps} left={left} width={width} clipHeight={clipH} clipTop={CLIP_PAD} />}
               {tailS > 0 && <div className="clip-tail" aria-hidden="true" data-testid="clip-tail" data-tail-of={c.id} data-cut={tail!.cut ? 'true' : undefined} style={{ left: T.toSeconds(clipEnd(c)) * pps, width: Math.max(2, tailS * pps), top: CLIP_PAD + clipH * 0.25, height: clipH * 0.5 }} />}
               {hasCut && (
-                <CutChip editor={editor} lang={lang} clip={c as MediaClip} before={before} beforeName={before ? bare(clipLabel(doc, before)) : ''} afterName={label} x={left} pps={pps} rate={rate} locked={tr.locked}
+                <CutChip editor={editor} lang={lang} clip={c as MediaClip} before={before} beforeName={before ? bare(clipLabel(doc, before, lang)) : ''} afterName={label} x={left} pps={pps} rate={rate} locked={tr.locked}
                   onBeat={!!before && !!p.grid?.at(startFrame)?.onBeat} held={p.heldLights.has(c.id)} spare={(c as MediaClip).transition || before ? velocityLimit(doc, c.id).haveOutFrames : null}
                   selected={p.selectedCut === c.id} dropping={p.dropCut === c.id} nearSelected={selected || (!!before && selection.includes(before.id))}
                   roomAdd={room.add} roomChip={room.chip} />
@@ -681,7 +682,7 @@ export function Timeline() {
     if (!drop.on) return { ok: false, text: s.dropNotHere };
     const clip = doc.sequences[doc.mainSequenceId]!.tracks.flatMap((tr) => tr.clips).find((c) => c.id === drop.on!.clipId);
     if (!clip) return { ok: false, text: s.dropNotHere };
-    if (drop.on.type === 'clip') return { ok: true, text: s.dropOnClip(name, clip.type === 'media' ? bare(clipLabel(doc, clip)) : clipLabel(doc, clip) || t('track.adjustment')) };
+    if (drop.on.type === 'clip') return { ok: true, text: s.dropOnClip(name, clip.type === 'media' ? bare(clipLabel(doc, clip, lang)) : clipLabel(doc, clip, lang) || t('track.adjustment')) };
     const tr = clip.type === 'media' ? clip.transition : undefined;
     const frames = tr?.frames ?? Math.max(1, Math.round(rate.num / rate.den / 2));
     const len = s.seconds((Math.round(((frames * rate.den) / rate.num) * 10) / 10).toFixed(1));

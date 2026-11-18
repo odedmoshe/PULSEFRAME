@@ -5,13 +5,24 @@
  */
 import * as T from '@pulseframe/time';
 import type { Key } from '@pulseframe/i18n';
-import { adjustmentRefusal, COLOR_LOOKS, findClip, type Clip, type OpCall, type ProjectDocument, type Track, clipEnd } from '@pulseframe/core';
-import type { Editor } from './store.ts';
+import { adjustmentRefusal, COLOR_LOOKS, findClip, getOp, type Clip, type OpCall, type ProjectDocument, type Track, clipEnd } from '@pulseframe/core';
+import type { Editor, Notice } from './store.ts';
+import { COMMAND_STRINGS } from './commands.strings.ts';
+import { cutBefore } from './inspector.model.ts';
+import { cutToBeat, rollCut } from './cutActions.ts';
+import { arrangeByEvents, canArrange, freezeSelectedTitle, liveTitleId, openPeopleSheet, readCaptureDates } from './lifeline/lifeCommands.ts';
 
 export interface Command {
   id: string;
   label: Key;
   group: 'transport' | 'edit' | 'history' | 'keyframe' | 'view' | 'file';
+  /** The words shown for it when the shared dictionary has no entry yet (the palette and the shortcuts list prefer them to `label`). */
+  text?: { he: string; en: string };
+  /**
+   * 'cut': acts only while a cut is chosen (the cut loupe's keys) and takes its keys ahead of the other commands bound to the
+   * same chord, which act whenever no cut is chosen (the dispatcher runs the first enabled command of a chord).
+   */
+  context?: 'cut';
   /** Default bindings, e.g. 'Space', 'Shift+ArrowRight', 'Mod+KeyZ' (Mod = Ctrl or Cmd). */
   keys: string[];
   enabled?(e: Editor): boolean;
@@ -147,13 +158,90 @@ const nudge = (frames: number) => (e: Editor) => {
   }
   return e.commit([{ op: 'move_clips', args: { clipIds: clips.map((c) => c.id), delta: T.frameTime(frames, e.rate) } }], 'Nudge clips');
 };
-/** Delete every selected clip in one transaction. A linked partner is removed by its clip's own delete, so it is not listed twice. */
-const deleteSelected = (e: Editor) => {
-  const clips = selectedClips(e);
+// ---------- delete, and ripple delete on the main track (UX_REDESIGN §4.7, §5) ----------
+/** The op that stores the project's timeline behaviour (core integrator); ripple delete waits for it to be registered. */
+export const BEHAVIOUR_OP = 'set_timeline_behaviour';
+/** The project's own editing behaviour (settings.timeline): absent means off, as for every project made before it existed. */
+export const timelineBehaviour = (doc: ProjectDocument): { mainMagnet?: boolean; rippleDelete?: boolean } => (doc.settings as { timeline?: { mainMagnet?: boolean; rippleDelete?: boolean } }).timeline ?? {};
+/** The main picture track V1: the first video track of the main sequence (the timeline draws it as the magnetic main lane). */
+export const mainTrackId = (doc: ProjectDocument): string | null => doc.sequences[doc.mainSequenceId]?.tracks.find((t) => t.kind === 'video')?.id ?? null;
+/** Delete closes the gap on V1: the project turned ripple delete on, and this build knows the op that stores it. */
+export const rippleDeleteOn = (doc: ProjectDocument): boolean => !!getOp(BEHAVIOUR_OP) && !!timelineBehaviour(doc).rippleDelete;
+/**
+ * The ops of a delete of `ids`, in one transaction. A linked partner is removed by its clip's own delete, so it is not listed
+ * twice. With `ripple`, the clips of V1 that come after a deleted V1 clip move earlier by the length deleted before them
+ * (move_clips, their linked sound along with them), the earliest group first so each lands where the space is already free;
+ * the other tracks keep their gaps. `moved` counts the V1 clips that move. Null when nothing is selected.
+ */
+export function deleteOps(doc: ProjectDocument, ids: readonly string[], ripple: boolean): { ops: OpCall[]; moved: number; deleted: number; first: string } | null {
   const seen = new Set<string>();
-  const ops = clips.filter((c) => { const g = c.type === 'media' ? c.linkGroupId : null; if (!g) return true; if (seen.has(g)) return false; seen.add(g); return true; }).map((c) => ({ op: 'delete_clip', args: { clipId: c.id } }));
-  return ops.length ? e.commit(ops, 'Delete') : undefined;
+  const clips = ids.map((id) => findClip(doc, id)).filter((f): f is NonNullable<typeof f> => !!f)
+    .filter(({ clip: c }) => { const g = c.type === 'media' ? c.linkGroupId : null; if (!g) return true; if (seen.has(g)) return false; seen.add(g); return true; });
+  if (!clips.length) return null;
+  const ops: OpCall[] = clips.map(({ clip }) => ({ op: 'delete_clip', args: { clipId: clip.id } }));
+  const main = mainTrackId(doc);
+  const track = main ? doc.sequences[doc.mainSequenceId]!.tracks.find((t) => t.id === main) : undefined;
+  if (!ripple || !track || track.locked) return { ops, moved: 0, deleted: clips.length, first: clips[0]!.clip.id };
+  // every clip that goes from V1: the selected ones, and the V1 partners of selected clips elsewhere (a delete takes the link along)
+  const gone = new Set<string>();
+  for (const { clip } of clips) {
+    gone.add(clip.id);
+    const g = clip.type === 'media' ? clip.linkGroupId : null;
+    if (g) for (const c of track.clips) if (c.type === 'media' && c.linkGroupId === g) gone.add(c.id);
+  }
+  const removed = track.clips.filter((c) => gone.has(c.id));
+  if (!removed.length) return { ops, moved: 0, deleted: clips.length, first: clips[0]!.clip.id };
+  let moved = 0;
+  for (const c of [...track.clips].sort((a, b) => T.cmp(a.start, b.start))) {
+    if (gone.has(c.id)) continue;
+    if (removed.some((r) => !T.lt(c.start, clipEnd(r)))) moved++;
+  }
+  // One core op closes the gap (ADR: ripple_delete_clips — exact undo, linked sound moves with its picture, a J-cut that would
+  // land before 0 is refused with its own wording). It names the V1 clips; selected clips elsewhere keep their gap (delete_clip).
+  const mainIds = removed.map((c) => c.id);
+  const elsewhere = clips.filter(({ clip }) => !gone.has(clip.id) && !(clip.type === 'media' && clip.linkGroupId && removed.some((r) => r.type === 'media' && r.linkGroupId === clip.linkGroupId)));
+  const rippled: OpCall[] = [...elsewhere.map(({ clip }) => ({ op: 'delete_clip', args: { clipId: clip.id } })), { op: 'ripple_delete_clips', args: { clipIds: mainIds } }];
+  return { ops: rippled, moved, deleted: clips.length, first: clips[0]!.clip.id };
+}
+/**
+ * Delete the selection in one transaction (one undo), with an undo toast. `keepGap` (Shift+Delete) never ripples; Delete
+ * ripples on V1 when the project has ripple delete on (and this build has the op that stores it). Worked out when the write's
+ * turn comes, from the document as it is then.
+ */
+const deleteSelected = (keepGap: boolean) => async (e: Editor) => {
+  const ids = [...e.getState().selection];
+  let said: { moved: number; deleted: number; ripple: boolean; name: string | null } | null = null;
+  const r = await e.commit(() => {
+    const doc = e.doc;
+    if (!doc) return null;
+    const ripple = !keepGap && rippleDeleteOn(doc);
+    const plan = deleteOps(doc, ids, ripple);
+    said = plan ? { moved: plan.moved, deleted: plan.deleted, ripple: ripple && plan.ops.length > plan.deleted, name: plan.deleted === 1 ? deletedName(doc, plan.first) : null } : null;
+    return plan?.ops ?? null;
+  }, keepGap ? 'Delete, keep the gap' : 'Delete');
+  const s = said as { moved: number; deleted: number; ripple: boolean; name: string | null } | null;
+  if (r && s) e.notify(deleteNotice(e.getState().lang, s, r.transactionId ?? null));
+  return r;
 };
+/** What a deleted clip is called in its toast: the file's name, the title's words or the adjustment's label; null when it has none. */
+function deletedName(doc: ProjectDocument, clipId: string): string | null {
+  const c = findClip(doc, clipId)?.clip;
+  if (!c) return null;
+  const name = c.type === 'media' ? doc.assets[c.assetId]?.name : c.type === 'adjustment' ? c.label : c.type === 'text' ? c.text : undefined;
+  const one = name?.replace(/\s+/g, ' ').trim();
+  return one ? (one.length > 40 ? `${one.slice(0, 39)}…` : one) : null;
+}
+/**
+ * The undo toast of a delete: it names the clip (or the count) and the transaction it reports, so its button undoes exactly
+ * that delete. A commit that made no transaction gets no undo button (an info toast), never one that would undo another edit.
+ */
+export function deleteNotice(lang: 'he' | 'en', s: { moved: number; deleted: number; ripple: boolean; name: string | null }, transactionId: string | null): Notice {
+  const S = COMMAND_STRINGS[lang];
+  return { kind: transactionId ? 'undo' : 'info', title: S.deleted(s.deleted, s.name), ...(s.ripple ? { body: S.rippled(s.moved) } : {}), ...(transactionId ? { undoes: transactionId } : {}) };
+}
+/** Roll the chosen cut by `frames` (the cut loupe's keys; the same two trims as the inspector's roll buttons, cutActions.ts). */
+const cutChosen = (e: Editor) => { const id = e.getState().cutClipId, d = e.doc; return !!id && !!d && !!cutBefore(d, id); };
+const rollChosen = (frames: number) => (e: Editor) => { const id = e.getState().cutClipId; return id ? rollCut(e, id, frames) : undefined; };
 const step = (frames: number) => (e: Editor) => e.seek(e.frame + frames);
 /** Add keyframes for position, scale, rotation and opacity at the playhead with the values currently shown. */
 const addKeyframe = (e: Editor) => {
@@ -216,7 +304,8 @@ export const COMMANDS: Command[] = [
   { id: 'marker.next', label: 'marker.next', group: 'transport', keys: ['Shift+KeyM'], enabled: (e) => markerFrames(e).some((f) => f > e.frame), run: gotoMarker(1) },
   { id: 'marker.prev', label: 'marker.prev', group: 'transport', keys: ['Alt+KeyM'], enabled: (e) => markerFrames(e).some((f) => f < e.frame), run: gotoMarker(-1) },
   { id: 'edit.split', label: 'split', group: 'edit', keys: ['KeyS'], enabled: (e) => e.playheadInsideSelection, run: (e) => e.commit([{ op: 'split_clip', args: { clipId: sel(e)!.id, at: e.playhead } }], 'Split') },
-  { id: 'edit.delete', label: 'delete', group: 'edit', keys: ['Delete', 'Backspace'], enabled: (e) => !!sel(e), run: deleteSelected },
+  { id: 'edit.delete', label: 'delete', group: 'edit', keys: ['Delete', 'Backspace'], enabled: (e) => !!sel(e), run: deleteSelected(false) },
+  { id: 'edit.deleteKeepGap', label: 'delete', text: { he: COMMAND_STRINGS.he.deleteKeepGap, en: COMMAND_STRINGS.en.deleteKeepGap }, group: 'edit', keys: ['Shift+Delete', 'Shift+Backspace'], enabled: (e) => !!sel(e), run: deleteSelected(true) },
   { id: 'edit.cut', label: 'cmd.cut', group: 'edit', keys: ['Mod+KeyX'], enabled: (e) => e.getState().selection.length > 0, run: (e) => e.cutSelection() },
   { id: 'edit.copy', label: 'cmd.copy', group: 'edit', keys: ['Mod+KeyC'], enabled: (e) => e.getState().selection.length > 0, run: (e) => e.copySelection() },
   { id: 'edit.paste', label: 'cmd.paste', group: 'edit', keys: ['Mod+KeyV'], enabled: (e) => e.clipboardLive.length > 0, run: (e) => e.pasteClipboard() },
@@ -251,14 +340,27 @@ export const COMMANDS: Command[] = [
   // An adjustment layer over the whole edit (ADR-0016): empty until an effect is added to it in the Look panel (it is selected).
   { id: 'edit.addAdjustment', label: 'cmd.addAdjustment', group: 'edit', keys: [], enabled: (e) => !!e.doc && T.lt(T.ZERO, editEnd(e.doc)), run: (e) => e.addWholeEditAdjustment() },
   { id: 'view.openTemplates', label: 'cmd.openTemplates', group: 'view', keys: [], enabled: (e) => !!e.doc, run: (e) => e.openTemplates() },
+  // life line (ADR-0021): arrange the library by events, read capture dates, make the selected title plain text, the people sheet
+  { id: 'life.arrangeEvents', label: 'cmd.arrangeEvents', group: 'edit', keys: [], enabled: canArrange, run: (e) => arrangeByEvents(e) },
+  { id: 'life.readDates', label: 'cmd.readCaptureDates', group: 'edit', keys: [], enabled: (e) => !!e.doc, run: (e) => readCaptureDates(e) },
+  { id: 'life.freezeFields', label: 'cmd.freezeFields', group: 'edit', keys: [], enabled: (e) => liveTitleId(e) !== null, run: (e) => freezeSelectedTitle(e) },
+  { id: 'life.people', label: 'cmd.people', group: 'edit', keys: [], enabled: (e) => !!e.doc, run: () => openPeopleSheet() },
   // K stops playback or a shuttle (the J K L convention); when nothing is playing it adds a keyframe.
   { id: 'keyframe.add', label: 'cmd.keyframeAddOrStop', group: 'keyframe', keys: ['KeyK'], enabled: (e) => !!e.player?.playing || (!e.selectionLocked && e.playheadOnSelection), run: (e) => (e.player?.playing ? e.player.pause() : addKeyframe(e)) }, // stopping is allowed whatever is selected; adding a key is not on a locked track
   { id: 'keyframe.remove', label: 'cmd.keyframeRemove', group: 'keyframe', keys: ['Shift+KeyK'], enabled: (e) => e.playheadOnSelection && !!sel(e)?.keyframes, run: removeKeyframe },
+  // While a cut is chosen (the loupe shows it), , and . roll it a frame (Shift: five) and Shift+B moves it to the nearest beat,
+  // ahead of the keyframe steps that share , and . (the dispatcher runs the first enabled command of a chord).
+  { id: 'cut.rollEarlier', label: 'cmd.rollEarlier', context: 'cut', group: 'edit', keys: ['Comma'], enabled: cutChosen, run: rollChosen(-1) },
+  { id: 'cut.rollLater', label: 'cmd.rollLater', context: 'cut', group: 'edit', keys: ['Period'], enabled: cutChosen, run: rollChosen(1) },
+  { id: 'cut.rollEarlier5', label: 'cmd.rollEarlier', text: { he: COMMAND_STRINGS.he.cutRollEarlier5, en: COMMAND_STRINGS.en.cutRollEarlier5 }, context: 'cut', group: 'edit', keys: ['Shift+Comma'], enabled: cutChosen, run: rollChosen(-5) },
+  { id: 'cut.rollLater5', label: 'cmd.rollLater', text: { he: COMMAND_STRINGS.he.cutRollLater5, en: COMMAND_STRINGS.en.cutRollLater5 }, context: 'cut', group: 'edit', keys: ['Shift+Period'], enabled: cutChosen, run: rollChosen(5) },
+  { id: 'cut.toBeat', label: 'cmd.rollLater', text: { he: COMMAND_STRINGS.he.cutToBeat, en: COMMAND_STRINGS.en.cutToBeat }, context: 'cut', group: 'edit', keys: ['Shift+KeyB'], enabled: (e) => cutChosen(e) && !!cutToBeat(e, e.getState().cutClipId!), run: (e) => { const id = e.getState().cutClipId; const f = id ? cutToBeat(e, id) : null; return id && f ? rollCut(e, id, f) : undefined; } },
   { id: 'keyframe.prev', label: 'cmd.keyframePrev', group: 'keyframe', keys: ['Comma'], enabled: (e) => !!sel(e)?.keyframes, run: gotoKeyframe(-1) },
   { id: 'keyframe.next', label: 'cmd.keyframeNext', group: 'keyframe', keys: ['Period'], enabled: (e) => !!sel(e)?.keyframes, run: gotoKeyframe(1) },
   { id: 'history.undo', label: 'undo', group: 'history', keys: ['Mod+KeyZ'], run: (e) => e.history('undo') },
   { id: 'history.redo', label: 'redo', group: 'history', keys: ['Mod+Shift+KeyZ', 'Mod+KeyY'], run: (e) => e.history('redo') },
-  { id: 'file.export', label: 'export', group: 'file', keys: ['Mod+KeyE'], enabled: (e) => (e.player?.frameCount ?? 0) > 0, run: (e) => e.startExport() },
+  // Export always opens the export sheet (owner decision): the sheet starts the export (ExportSheet.tsx).
+  { id: 'file.export', label: 'export', text: { he: COMMAND_STRINGS.he.exportOpen, en: COMMAND_STRINGS.en.exportOpen }, group: 'file', keys: ['Mod+KeyE'], enabled: (e) => !!e.doc && (e.player?.frameCount ?? 0) > 0, run: (e) => e.openExportSheet() },
   { id: 'view.palette', label: 'cmd.palette', group: 'view', keys: ['Mod+KeyK'], run: (e) => e.set({ paletteOpen: !e.getState().paletteOpen }) },
   { id: 'view.language', label: 'lang.label', group: 'view', keys: [], run: (e) => e.setLang(e.getState().lang === 'he' ? 'en' : 'he') },
   { id: 'view.zoomIn', label: 'cmd.zoomIn', group: 'view', keys: ['Equal'], run: (e) => e.set({ pxPerSecond: Math.min(720, e.getState().pxPerSecond * 1.5) }) },
@@ -278,8 +380,10 @@ export class Keymap {
     this.overrides = o && typeof o === 'object' ? (o as Record<string, string[]>) : {};
   }
   keysFor(id: string): string[] { return this.overrides[id] ?? COMMANDS.find((c) => c.id === id)?.keys ?? []; }
-  /** Command bound to a chord, if any. */
+  /** Command bound to a chord, if any (the first in the registry when several are). */
   lookup(chord: string): Command | undefined { return COMMANDS.find((c) => this.keysFor(c.id).includes(chord)); }
+  /** Every command bound to a chord, in registry order: the dispatcher runs the first one that is enabled (the cut's keys before the keyframe steps). */
+  lookupAll(chord: string): Command[] { return COMMANDS.filter((c) => this.keysFor(c.id).includes(chord)); }
   /** Rebind. A chord can belong to one command only: it is removed from any other command. Returns the commands that lost it. */
   bind(id: string, keys: string[]): string[] {
     const displaced: string[] = [];
@@ -302,6 +406,6 @@ export function chordLabel(chord: string, mac = typeof navigator !== 'undefined'
 }
 
 // Commands that change the selected clips do nothing while a selected clip is on a locked track.
-const CHANGES_SELECTION = new Set(['edit.rollLater', 'edit.rollEarlier', 'edit.slideLater', 'edit.slideEarlier', 'edit.split', 'edit.delete', 'edit.cut', 'edit.duplicate', 'edit.trimStart', 'edit.trimEnd', 'edit.nudgeLeft', 'edit.nudgeRight', 'edit.nudgeLeft10', 'edit.nudgeRight10', 'edit.slipLater', 'edit.slipEarlier', 'edit.slipLater10', 'edit.slipEarlier10', 'keyframe.remove']);
+const CHANGES_SELECTION = new Set(['edit.rollLater', 'edit.rollEarlier', 'edit.slideLater', 'edit.slideEarlier', 'edit.split', 'edit.delete', 'edit.deleteKeepGap', 'cut.rollEarlier', 'cut.rollLater', 'cut.rollEarlier5', 'cut.rollLater5', 'cut.toBeat', 'edit.cut', 'edit.duplicate', 'edit.trimStart', 'edit.trimEnd', 'edit.nudgeLeft', 'edit.nudgeRight', 'edit.nudgeLeft10', 'edit.nudgeRight10', 'edit.slipLater', 'edit.slipEarlier', 'edit.slipLater10', 'edit.slipEarlier10', 'keyframe.remove']);
 for (const c of COMMANDS) if (CHANGES_SELECTION.has(c.id)) { const was = c.enabled; c.enabled = (e) => !e.selectionLocked && (!was || was(e)); }
 

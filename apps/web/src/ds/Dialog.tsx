@@ -46,7 +46,12 @@ export function Dialog({ open, onClose, title, variant = 'dialog', size = 'md', 
       e.preventDefault(); (e.shiftKey ? its[its.length - 1] : its[0] ?? el)?.focus();
     };
     document.addEventListener('keydown', onDoc);
-    return () => { document.removeEventListener('keydown', onDoc); for (const n of made) n.inert = false; const o = opener.current; if (o && o.isConnected) o.focus(); };
+    // A step that replaces the focused control (a sheet moving from its settings to its progress, from progress to done) would
+    // drop the focus on the body (so would a focused button that becomes disabled), where Escape and the screen reader no longer
+    // reach the dialog: the dialog itself takes it.
+    const keep = new MutationObserver(() => { const a = document.activeElement; if (!a || a === document.body) el.focus(); });
+    keep.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'hidden'] });
+    return () => { keep.disconnect(); document.removeEventListener('keydown', onDoc); for (const n of made) n.inert = false; const o = opener.current; if (o && o.isConnected) o.focus(); };
   }, [open]);
   if (!open) return null;
   const key = (e: KeyboardEvent) => {

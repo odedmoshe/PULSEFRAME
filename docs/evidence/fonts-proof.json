@@ -1,0 +1,5686 @@
+{
+  "proof": "fonts (ADR-0022)",
+  "commit": "da14222b2876fb9b12883f1871d5485468198e7c",
+  "chromium": "153.0.8010.12",
+  "at": "2026-11-18T01:40:59.019Z",
+  "size": {
+    "w": 1920,
+    "h": 1080
+  },
+  "families": [
+    {
+      "family": "Heebo",
+      "weights": [
+        400,
+        700
+      ],
+      "category": "sans"
+    },
+    {
+      "family": "Rubik",
+      "weights": [
+        400,
+        700
+      ],
+      "category": "sans"
+    },
+    {
+      "family": "Assistant",
+      "weights": [
+        400,
+        700
+      ],
+      "category": "sans"
+    },
+    {
+      "family": "Frank Ruhl Libre",
+      "weights": [
+        400,
+        700
+      ],
+      "category": "serif"
+    },
+    {
+      "family": "Secular One",
+      "weights": [
+        400
+      ],
+      "category": "display"
+    },
+    {
+      "family": "Suez One",
+      "weights": [
+        400
+      ],
+      "category": "display"
+    },
+    {
+      "family": "David Libre",
+      "weights": [
+        400,
+        700
+      ],
+      "category": "serif"
+    },
+    {
+      "family": "Karantina",
+      "weights": [
+        400,
+        700
+      ],
+      "category": "display"
+    },
+    {
+      "family": "Amatic SC",
+      "weights": [
+        400,
+        700
+      ],
+      "category": "handwriting"
+    },
+    {
+      "family": "Fredoka",
+      "weights": [
+        400,
+        700
+      ],
+      "category": "sans"
+    },
+    {
+      "family": "Gveret Levin",
+      "weights": [
+        400
+      ],
+      "category": "handwriting"
+    }
+  ],
+  "checks": [
+    {
+      "id": "F1",
+      "name": "every one of the 16 vowel points of every face (19 family and weight pairs) is drawn and sits in its zone",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "id": "F1",
+      "name": "controls (the face's own point moved): with its centre on the edge of its letter (the pen origin) it is rejected by the horizontal rule, 0.55 em to the right and to the left it is rejected, and moved wholly above or wholly below its letter it is rejected on one side, for 33 (face, point) cases",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "id": "F2",
+      "name": "19 goldens, all pairwise different (no family fell back to another face)",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "id": "F2",
+      "name": "the 19 goldens equal the recording for Chromium 153.0.8010.12",
+      "ok": true,
+      "detail": {
+        "differ": [],
+        "missing": [],
+        "extra": []
+      }
+    },
+    {
+      "id": "F2",
+      "name": "the golden line starts and ends with an unpointed wide letter and holds the line of the task",
+      "ok": true
+    },
+    {
+      "id": "F3",
+      "name": "the paused editor preview is byte-identical to the worker's still for Fredoka, Frank Ruhl Libre, Secular One, Amatic SC (one family per category)",
+      "ok": true,
+      "detail": [
+        {
+          "f": "Fredoka",
+          "same": true,
+          "max": 0
+        },
+        {
+          "f": "Frank Ruhl Libre",
+          "same": true,
+          "max": 0
+        },
+        {
+          "f": "Secular One",
+          "same": true,
+          "max": 0
+        },
+        {
+          "f": "Amatic SC",
+          "same": true,
+          "max": 0
+        }
+      ]
+    },
+    {
+      "id": "F3",
+      "name": "and the exported frame is the still in the export's own planes: Y, U and V each at least 50 dB",
+      "ok": true,
+      "detail": [
+        {
+          "f": "Fredoka",
+          "psnr": 56.95
+        },
+        {
+          "f": "Frank Ruhl Libre",
+          "psnr": 59.88
+        },
+        {
+          "f": "Secular One",
+          "psnr": 55.06
+        },
+        {
+          "f": "Amatic SC",
+          "psnr": 59.54
+        }
+      ]
+    },
+    {
+      "id": "F3",
+      "name": "control: each export is under 50 dB against another family's still",
+      "ok": true,
+      "detail": [
+        {
+          "export": "Fredoka",
+          "stillOf": "Frank Ruhl Libre",
+          "planePsnr": {
+            "y": 21.54,
+            "u": 99,
+            "v": 99,
+            "min": 21.54
+          }
+        },
+        {
+          "export": "Frank Ruhl Libre",
+          "stillOf": "Secular One",
+          "planePsnr": {
+            "y": 22.03,
+            "u": 99,
+            "v": 99,
+            "min": 22.03
+          }
+        },
+        {
+          "export": "Secular One",
+          "stillOf": "Amatic SC",
+          "planePsnr": {
+            "y": 21.65,
+            "u": 99,
+            "v": 99,
+            "min": 21.65
+          }
+        },
+        {
+          "export": "Amatic SC",
+          "stillOf": "Fredoka",
+          "planePsnr": {
+            "y": 20.88,
+            "u": 99,
+            "v": 99,
+            "min": 20.88
+          }
+        }
+      ]
+    },
+    {
+      "id": "F4",
+      "name": "every face of the catalogue (19) loads in the browser for Hebrew and Latin (ensureFonts would not throw); 0 ms",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "id": "F4",
+      "name": "the build emitted every catalogue file exactly once (woff2 and woff, hebrew and latin, each weight)",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "id": "F4",
+      "name": "bundle: woff2 472476 bytes for the catalogue, 284416 for the six title families (243100 not already in the interface), woff2 + woff 956192",
+      "ok": true
+    }
+  ],
+  "measurements": {
+    "placement": {
+      "rules": {
+        "centreSlack": 0.1,
+        "holamLeftSlack": 0.2,
+        "centreFrac": 0.4,
+        "belowSlack": 0.04,
+        "aboveShare": 0.3,
+        "insideSlack": 0.02,
+        "halfSlack": 0.03,
+        "minChanged": 30,
+        "changedThreshold": 24
+      },
+      "em": 200,
+      "faces": {
+        "Heebo|400": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 379,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 65.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.384,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 953,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 66,
+                "centreRight": 68,
+                "centreFrac": 0.389,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 751,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 66,
+                "centreRight": 68,
+                "centreFrac": 0.389,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1015,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 66,
+                "centreRight": 68,
+                "centreFrac": 0.389,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 190,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 65.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.384,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 387,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 65.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.384,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 575,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 65.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.384,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 400,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 65.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.384,
+                "belowBaseline": 28
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 651,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 65.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.384,
+                "belowBaseline": 28
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 192,
+              "centreOffsetEm": -0.258,
+              "margins": {
+                "centreLeft": 35.5,
+                "centreRight": 118.5,
+                "halfSide": 50,
+                "aboveRow": 50.5
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 192,
+              "centreOffsetEm": -0.258,
+              "margins": {
+                "centreLeft": 35.5,
+                "centreRight": 118.5,
+                "halfSide": 50,
+                "aboveRow": 50.5
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 565,
+              "centreOffsetEm": 0.055,
+              "margins": {
+                "centreLeft": 78,
+                "centreRight": 56,
+                "centreFrac": 0.284,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 189,
+              "centreOffsetEm": -0.077,
+              "margins": {
+                "centreLeft": 51.5,
+                "centreRight": 82.5,
+                "centreFrac": 0.237,
+                "insideLeft": 28,
+                "insideRight": 59,
+                "insideTop": 53,
+                "insideBottom": 55
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 190,
+              "centreOffsetEm": 0.26,
+              "margins": {
+                "centreLeft": 133.5,
+                "centreRight": 29.5,
+                "halfSide": 50.5,
+                "aboveRow": 51.39999999999998
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 189,
+              "centreOffsetEm": -0.265,
+              "margins": {
+                "centreLeft": 28.5,
+                "centreRight": 134.5,
+                "halfSide": 51.5,
+                "aboveRow": 51.39999999999998
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 684,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 65.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.384,
+                "belowBaseline": 28
+              }
+            }
+          ],
+          "control": [
+            {
+              "cp": 1463,
+              "name": "patah",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": true,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": false,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": false,
+                "leftRejected": true,
+                "drawn": true
+              }
+            }
+          ]
+        },
+        "Heebo|700": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 570,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 70.5,
+                "centreRight": 70.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1430,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 70.5,
+                "centreRight": 70.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1172,
+              "centreOffsetEm": -0.003,
+              "margins": {
+                "centreLeft": 70,
+                "centreRight": 71,
+                "centreFrac": 0.395,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1576,
+              "centreOffsetEm": -0.003,
+              "margins": {
+                "centreLeft": 70,
+                "centreRight": 71,
+                "centreFrac": 0.395,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 286,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 70.5,
+                "centreRight": 70.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 573,
+              "centreOffsetEm": -0.003,
+              "margins": {
+                "centreLeft": 70,
+                "centreRight": 71,
+                "centreFrac": 0.395,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 858,
+              "centreOffsetEm": -0.003,
+              "margins": {
+                "centreLeft": 70,
+                "centreRight": 71,
+                "centreFrac": 0.395,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 611,
+              "centreOffsetEm": -0.003,
+              "margins": {
+                "centreLeft": 70,
+                "centreRight": 71,
+                "centreFrac": 0.395,
+                "belowBaseline": 27
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 930,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 70.5,
+                "centreRight": 70.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 27
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 291,
+              "centreOffsetEm": -0.27,
+              "margins": {
+                "centreLeft": 36.5,
+                "centreRight": 124.5,
+                "halfSide": 50.5,
+                "aboveRow": 50.10000000000002
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 291,
+              "centreOffsetEm": -0.27,
+              "margins": {
+                "centreLeft": 36.5,
+                "centreRight": 124.5,
+                "halfSide": 50.5,
+                "aboveRow": 50.10000000000002
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 862,
+              "centreOffsetEm": 0.068,
+              "margins": {
+                "centreLeft": 84,
+                "centreRight": 57,
+                "centreFrac": 0.268,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 290,
+              "centreOffsetEm": -0.105,
+              "margins": {
+                "centreLeft": 49.5,
+                "centreRight": 91.5,
+                "centreFrac": 0.194,
+                "insideLeft": 24,
+                "insideRight": 66,
+                "insideTop": 53,
+                "insideBottom": 54
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 288,
+              "centreOffsetEm": 0.27,
+              "margins": {
+                "centreLeft": 143.5,
+                "centreRight": 35.5,
+                "halfSide": 50.5,
+                "aboveRow": 51.299999999999955
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 291,
+              "centreOffsetEm": -0.28,
+              "margins": {
+                "centreLeft": 33.5,
+                "centreRight": 145.5,
+                "halfSide": 52.5,
+                "aboveRow": 51.299999999999955
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 963,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 70.5,
+                "centreRight": 70.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 27
+              }
+            }
+          ],
+          "control": null
+        },
+        "Rubik|400": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 483,
+              "centreOffsetEm": -0.013,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.373,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1211,
+              "centreOffsetEm": -0.018,
+              "margins": {
+                "centreLeft": 62.5,
+                "centreRight": 69.5,
+                "centreFrac": 0.362,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1181,
+              "centreOffsetEm": -0.015,
+              "margins": {
+                "centreLeft": 63,
+                "centreRight": 69,
+                "centreFrac": 0.368,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1449,
+              "centreOffsetEm": -0.015,
+              "margins": {
+                "centreLeft": 63,
+                "centreRight": 69,
+                "centreFrac": 0.368,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 244,
+              "centreOffsetEm": -0.013,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.373,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 483,
+              "centreOffsetEm": -0.013,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.373,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 724,
+              "centreOffsetEm": -0.013,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.373,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 699,
+              "centreOffsetEm": -0.013,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.373,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 945,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 64,
+                "centreRight": 68,
+                "centreFrac": 0.378,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 240,
+              "centreOffsetEm": -0.318,
+              "margins": {
+                "centreLeft": 22.5,
+                "centreRight": 129.5,
+                "halfSide": 62,
+                "aboveRow": 47.5
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 244,
+              "centreOffsetEm": -0.333,
+              "margins": {
+                "centreLeft": 19.5,
+                "centreRight": 132.5,
+                "halfSide": 65,
+                "aboveRow": 47.5
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 722,
+              "centreOffsetEm": 0.02,
+              "margins": {
+                "centreLeft": 70,
+                "centreRight": 62,
+                "centreFrac": 0.357,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 230,
+              "centreOffsetEm": -0.077,
+              "margins": {
+                "centreLeft": 50.5,
+                "centreRight": 81.5,
+                "centreFrac": 0.233,
+                "insideLeft": 27,
+                "insideRight": 58,
+                "insideTop": 53,
+                "insideBottom": 54
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 225,
+              "centreOffsetEm": 0.237,
+              "margins": {
+                "centreLeft": 125.5,
+                "centreRight": 30.5,
+                "halfSide": 46,
+                "aboveRow": 47.10000000000002
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 219,
+              "centreOffsetEm": -0.24,
+              "margins": {
+                "centreLeft": 30,
+                "centreRight": 126,
+                "halfSide": 47,
+                "aboveRow": 47.10000000000002
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 962,
+              "centreOffsetEm": -0.013,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.373,
+                "belowBaseline": 24
+              }
+            }
+          ],
+          "control": [
+            {
+              "cp": 1463,
+              "name": "patah",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": true,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": false,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": false,
+                "leftRejected": true,
+                "drawn": true
+              }
+            }
+          ]
+        },
+        "Rubik|700": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 738,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 69.5,
+                "centreRight": 72.5,
+                "centreFrac": 0.385,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1876,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 69,
+                "centreRight": 73,
+                "centreFrac": 0.381,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1681,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 69,
+                "centreRight": 73,
+                "centreFrac": 0.381,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1926,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 69.5,
+                "centreRight": 72.5,
+                "centreFrac": 0.385,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 372,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 69,
+                "centreRight": 73,
+                "centreFrac": 0.381,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 761,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 69.5,
+                "centreRight": 72.5,
+                "centreFrac": 0.385,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1140,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 69.5,
+                "centreRight": 72.5,
+                "centreFrac": 0.385,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 916,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 69.5,
+                "centreRight": 72.5,
+                "centreFrac": 0.385,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1186,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 70,
+                "centreRight": 72,
+                "centreFrac": 0.39,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 383,
+              "centreOffsetEm": -0.325,
+              "margins": {
+                "centreLeft": 26,
+                "centreRight": 136,
+                "halfSide": 61,
+                "aboveRow": 47.5
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 382,
+              "centreOffsetEm": -0.345,
+              "margins": {
+                "centreLeft": 22,
+                "centreRight": 140,
+                "halfSide": 65,
+                "aboveRow": 47.5
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1130,
+              "centreOffsetEm": 0.01,
+              "margins": {
+                "centreLeft": 73,
+                "centreRight": 69,
+                "centreFrac": 0.381,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 350,
+              "centreOffsetEm": -0.11,
+              "margins": {
+                "centreLeft": 49,
+                "centreRight": 93,
+                "centreFrac": 0.186,
+                "insideLeft": 24,
+                "insideRight": 68,
+                "insideTop": 51,
+                "insideBottom": 53
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 349,
+              "centreOffsetEm": 0.223,
+              "margins": {
+                "centreLeft": 129.5,
+                "centreRight": 40.5,
+                "halfSide": 41,
+                "aboveRow": 43.10000000000002
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 358,
+              "centreOffsetEm": -0.233,
+              "margins": {
+                "centreLeft": 38.5,
+                "centreRight": 131.5,
+                "halfSide": 43,
+                "aboveRow": 43.10000000000002
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1198,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 69.5,
+                "centreRight": 72.5,
+                "centreFrac": 0.385,
+                "belowBaseline": 24
+              }
+            }
+          ],
+          "control": null
+        },
+        "Assistant|400": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 261,
+              "centreOffsetEm": -0.05,
+              "margins": {
+                "centreLeft": 53.5,
+                "centreRight": 73.5,
+                "centreFrac": 0.286,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 654,
+              "centreOffsetEm": -0.05,
+              "margins": {
+                "centreLeft": 53.5,
+                "centreRight": 73.5,
+                "centreFrac": 0.286,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 492,
+              "centreOffsetEm": -0.05,
+              "margins": {
+                "centreLeft": 53.5,
+                "centreRight": 73.5,
+                "centreFrac": 0.286,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 642,
+              "centreOffsetEm": -0.045,
+              "margins": {
+                "centreLeft": 54.5,
+                "centreRight": 72.5,
+                "centreFrac": 0.298,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 129,
+              "centreOffsetEm": -0.048,
+              "margins": {
+                "centreLeft": 54,
+                "centreRight": 73,
+                "centreFrac": 0.292,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 258,
+              "centreOffsetEm": -0.05,
+              "margins": {
+                "centreLeft": 53.5,
+                "centreRight": 73.5,
+                "centreFrac": 0.286,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 388,
+              "centreOffsetEm": -0.05,
+              "margins": {
+                "centreLeft": 53.5,
+                "centreRight": 73.5,
+                "centreFrac": 0.286,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 256,
+              "centreOffsetEm": -0.05,
+              "margins": {
+                "centreLeft": 53.5,
+                "centreRight": 73.5,
+                "centreFrac": 0.286,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 400,
+              "centreOffsetEm": -0.05,
+              "margins": {
+                "centreLeft": 53.5,
+                "centreRight": 73.5,
+                "centreFrac": 0.286,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 137,
+              "centreOffsetEm": -0.247,
+              "margins": {
+                "centreLeft": 34,
+                "centreRight": 113,
+                "halfSide": 49.5,
+                "aboveRow": 47.299999999999955
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 133,
+              "centreOffsetEm": -0.247,
+              "margins": {
+                "centreLeft": 34,
+                "centreRight": 113,
+                "halfSide": 49.5,
+                "aboveRow": 39.299999999999955
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 402,
+              "centreOffsetEm": -0.003,
+              "margins": {
+                "centreLeft": 63,
+                "centreRight": 64,
+                "centreFrac": 0.394,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 136,
+              "centreOffsetEm": -0.085,
+              "margins": {
+                "centreLeft": 46.5,
+                "centreRight": 80.5,
+                "centreFrac": 0.207,
+                "insideLeft": 25,
+                "insideRight": 59,
+                "insideTop": 49,
+                "insideBottom": 56
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 133,
+              "centreOffsetEm": 0.22,
+              "margins": {
+                "centreLeft": 117,
+                "centreRight": 29,
+                "halfSide": 44,
+                "aboveRow": 47.89999999999998
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 134,
+              "centreOffsetEm": -0.237,
+              "margins": {
+                "centreLeft": 25.5,
+                "centreRight": 120.5,
+                "halfSide": 48,
+                "aboveRow": 47.89999999999998
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 281,
+              "centreOffsetEm": -0.05,
+              "margins": {
+                "centreLeft": 53.5,
+                "centreRight": 73.5,
+                "centreFrac": 0.286,
+                "belowBaseline": 20
+              }
+            }
+          ],
+          "control": [
+            {
+              "cp": 1463,
+              "name": "patah",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": true,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": false,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": false,
+                "leftRejected": true,
+                "drawn": true
+              }
+            }
+          ]
+        },
+        "Assistant|700": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 331,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 71.5,
+                "centreFrac": 0.358,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 830,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 71.5,
+                "centreFrac": 0.358,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 600,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 71.5,
+                "centreFrac": 0.358,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 775,
+              "centreOffsetEm": -0.018,
+              "margins": {
+                "centreLeft": 64,
+                "centreRight": 71,
+                "centreFrac": 0.364,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 164,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 71.5,
+                "centreFrac": 0.358,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 331,
+              "centreOffsetEm": -0.022,
+              "margins": {
+                "centreLeft": 63,
+                "centreRight": 72,
+                "centreFrac": 0.353,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 492,
+              "centreOffsetEm": -0.022,
+              "margins": {
+                "centreLeft": 63,
+                "centreRight": 72,
+                "centreFrac": 0.353,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 306,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 71.5,
+                "centreFrac": 0.358,
+                "belowBaseline": 19
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 482,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 71.5,
+                "centreFrac": 0.358,
+                "belowBaseline": 19
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 165,
+              "centreOffsetEm": -0.255,
+              "margins": {
+                "centreLeft": 36.5,
+                "centreRight": 118.5,
+                "halfSide": 50.5,
+                "aboveRow": 47.5
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 157,
+              "centreOffsetEm": -0.255,
+              "margins": {
+                "centreLeft": 36.5,
+                "centreRight": 118.5,
+                "halfSide": 50.5,
+                "aboveRow": 28.5
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 499,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 66.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.39,
+                "belowBaseline": 19
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 170,
+              "centreOffsetEm": -0.11,
+              "margins": {
+                "centreLeft": 45.5,
+                "centreRight": 89.5,
+                "centreFrac": 0.171,
+                "insideLeft": 23,
+                "insideRight": 67,
+                "insideTop": 53,
+                "insideBottom": 55
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 164,
+              "centreOffsetEm": 0.223,
+              "margins": {
+                "centreLeft": 124.5,
+                "centreRight": 35.5,
+                "halfSide": 44,
+                "aboveRow": 45.10000000000002
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 164,
+              "centreOffsetEm": -0.247,
+              "margins": {
+                "centreLeft": 30.5,
+                "centreRight": 129.5,
+                "halfSide": 49,
+                "aboveRow": 45.10000000000002
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 346,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 71.5,
+                "centreFrac": 0.358,
+                "belowBaseline": 19
+              }
+            }
+          ],
+          "control": null
+        },
+        "Frank Ruhl Libre|400": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 364,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 63,
+                "centreFrac": 0.376,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 902,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 63,
+                "centreFrac": 0.376,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 770,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 63,
+                "centreFrac": 0.376,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1023,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 63,
+                "centreFrac": 0.376,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 181,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 63,
+                "centreFrac": 0.376,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 355,
+              "centreOffsetEm": -0.013,
+              "margins": {
+                "centreLeft": 58.5,
+                "centreRight": 63.5,
+                "centreFrac": 0.37,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 542,
+              "centreOffsetEm": -0.013,
+              "margins": {
+                "centreLeft": 58.5,
+                "centreRight": 63.5,
+                "centreFrac": 0.37,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 408,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 63,
+                "centreFrac": 0.376,
+                "belowBaseline": 26
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 662,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 63,
+                "centreFrac": 0.376,
+                "belowBaseline": 26
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 183,
+              "centreOffsetEm": -0.215,
+              "margins": {
+                "centreLeft": 38,
+                "centreRight": 104,
+                "halfSide": 42,
+                "aboveRow": 40.39999999999998
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 183,
+              "centreOffsetEm": -0.215,
+              "margins": {
+                "centreLeft": 38,
+                "centreRight": 104,
+                "halfSide": 42,
+                "aboveRow": 40.39999999999998
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 537,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 63,
+                "centreFrac": 0.376,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 182,
+              "centreOffsetEm": -0.03,
+              "margins": {
+                "centreLeft": 55,
+                "centreRight": 67,
+                "centreFrac": 0.328,
+                "insideLeft": 32,
+                "insideRight": 44,
+                "insideTop": 59,
+                "insideBottom": 52
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 182,
+              "centreOffsetEm": 0.212,
+              "margins": {
+                "centreLeft": 116,
+                "centreRight": 31,
+                "halfSide": 41.5,
+                "aboveRow": 40.39999999999998
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 183,
+              "centreOffsetEm": -0.188,
+              "margins": {
+                "centreLeft": 36,
+                "centreRight": 111,
+                "halfSide": 36.5,
+                "aboveRow": 40.39999999999998
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 795,
+              "centreOffsetEm": -0.018,
+              "margins": {
+                "centreLeft": 57.5,
+                "centreRight": 64.5,
+                "centreFrac": 0.358,
+                "belowBaseline": 26
+              }
+            }
+          ],
+          "control": [
+            {
+              "cp": 1463,
+              "name": "patah",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": true,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": false,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": false,
+                "leftRejected": true,
+                "drawn": true
+              }
+            }
+          ]
+        },
+        "Frank Ruhl Libre|700": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 536,
+              "centreOffsetEm": -0.015,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 65,
+                "centreFrac": 0.365,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1331,
+              "centreOffsetEm": -0.013,
+              "margins": {
+                "centreLeft": 59.5,
+                "centreRight": 64.5,
+                "centreFrac": 0.371,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1079,
+              "centreOffsetEm": -0.015,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 65,
+                "centreFrac": 0.365,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1418,
+              "centreOffsetEm": -0.015,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 65,
+                "centreFrac": 0.365,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 270,
+              "centreOffsetEm": -0.015,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 65,
+                "centreFrac": 0.365,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 522,
+              "centreOffsetEm": -0.015,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 65,
+                "centreFrac": 0.365,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 802,
+              "centreOffsetEm": -0.013,
+              "margins": {
+                "centreLeft": 59.5,
+                "centreRight": 64.5,
+                "centreFrac": 0.371,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 551,
+              "centreOffsetEm": -0.015,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 65,
+                "centreFrac": 0.365,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 897,
+              "centreOffsetEm": -0.015,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 65,
+                "centreFrac": 0.365,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 264,
+              "centreOffsetEm": -0.215,
+              "margins": {
+                "centreLeft": 39,
+                "centreRight": 105,
+                "halfSide": 40,
+                "aboveRow": 38
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 264,
+              "centreOffsetEm": -0.215,
+              "margins": {
+                "centreLeft": 39,
+                "centreRight": 105,
+                "halfSide": 40,
+                "aboveRow": 38
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 765,
+              "centreOffsetEm": -0.018,
+              "margins": {
+                "centreLeft": 58.5,
+                "centreRight": 65.5,
+                "centreFrac": 0.359,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 266,
+              "centreOffsetEm": -0.028,
+              "margins": {
+                "centreLeft": 56.5,
+                "centreRight": 67.5,
+                "centreFrac": 0.335,
+                "insideLeft": 32,
+                "insideRight": 43,
+                "insideTop": 59,
+                "insideBottom": 51
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 268,
+              "centreOffsetEm": 0.237,
+              "margins": {
+                "centreLeft": 126,
+                "centreRight": 31,
+                "halfSide": 44.5,
+                "aboveRow": 38
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 268,
+              "centreOffsetEm": -0.188,
+              "margins": {
+                "centreLeft": 41,
+                "centreRight": 116,
+                "halfSide": 34.5,
+                "aboveRow": 38
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1066,
+              "centreOffsetEm": -0.022,
+              "margins": {
+                "centreLeft": 57.5,
+                "centreRight": 66.5,
+                "centreFrac": 0.347,
+                "belowBaseline": 25
+              }
+            }
+          ],
+          "control": null
+        },
+        "Secular One|400": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 740,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 64.5,
+                "centreRight": 72.5,
+                "centreFrac": 0.359,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1854,
+              "centreOffsetEm": -0.022,
+              "margins": {
+                "centreLeft": 64,
+                "centreRight": 73,
+                "centreFrac": 0.354,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1488,
+              "centreOffsetEm": -0.018,
+              "margins": {
+                "centreLeft": 65,
+                "centreRight": 72,
+                "centreFrac": 0.364,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1946,
+              "centreOffsetEm": -0.018,
+              "margins": {
+                "centreLeft": 65,
+                "centreRight": 72,
+                "centreFrac": 0.364,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 375,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 64.5,
+                "centreRight": 72.5,
+                "centreFrac": 0.359,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 745,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 64.5,
+                "centreRight": 72.5,
+                "centreFrac": 0.359,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1111,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 64.5,
+                "centreRight": 72.5,
+                "centreFrac": 0.359,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 751,
+              "centreOffsetEm": -0.022,
+              "margins": {
+                "centreLeft": 64,
+                "centreRight": 73,
+                "centreFrac": 0.354,
+                "belowBaseline": 29
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1205,
+              "centreOffsetEm": -0.022,
+              "margins": {
+                "centreLeft": 64,
+                "centreRight": 73,
+                "centreFrac": 0.354,
+                "belowBaseline": 29
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 371,
+              "centreOffsetEm": -0.255,
+              "margins": {
+                "centreLeft": 37.5,
+                "centreRight": 119.5,
+                "halfSide": 46.5,
+                "aboveRow": 41.39999999999998
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 371,
+              "centreOffsetEm": -0.255,
+              "margins": {
+                "centreLeft": 37.5,
+                "centreRight": 119.5,
+                "halfSide": 46.5,
+                "aboveRow": 41.39999999999998
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1110,
+              "centreOffsetEm": 0.075,
+              "margins": {
+                "centreLeft": 83.5,
+                "centreRight": 53.5,
+                "centreFrac": 0.247,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 365,
+              "centreOffsetEm": -0.11,
+              "margins": {
+                "centreLeft": 46.5,
+                "centreRight": 90.5,
+                "centreFrac": 0.176,
+                "insideLeft": 20,
+                "insideRight": 64,
+                "insideTop": 47,
+                "insideBottom": 47
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 374,
+              "centreOffsetEm": 0.255,
+              "margins": {
+                "centreLeft": 134.5,
+                "centreRight": 32.5,
+                "halfSide": 46.5,
+                "aboveRow": 42.299999999999955
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 374,
+              "centreOffsetEm": -0.26,
+              "margins": {
+                "centreLeft": 31.5,
+                "centreRight": 135.5,
+                "halfSide": 47.5,
+                "aboveRow": 42.299999999999955
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1205,
+              "centreOffsetEm": -0.022,
+              "margins": {
+                "centreLeft": 64,
+                "centreRight": 73,
+                "centreFrac": 0.354,
+                "belowBaseline": 29
+              }
+            }
+          ],
+          "control": [
+            {
+              "cp": 1463,
+              "name": "patah",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": true,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": false,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": false,
+                "leftRejected": true,
+                "drawn": true
+              }
+            }
+          ]
+        },
+        "Suez One|400": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 572,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 64.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.379,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1438,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 64.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.379,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1162,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 64.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.379,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1423,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 64.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.379,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 412,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 64.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.379,
+                "belowBaseline": 19
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 575,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 64.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.379,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 862,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 64.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.379,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 627,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 64.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.379,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 911,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 64.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.379,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 344,
+              "centreOffsetEm": -0.263,
+              "margins": {
+                "centreLeft": 34,
+                "centreRight": 119,
+                "halfSide": 46.5,
+                "aboveRow": 38.39999999999998
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 344,
+              "centreOffsetEm": -0.263,
+              "margins": {
+                "centreLeft": 34,
+                "centreRight": 119,
+                "halfSide": 46.5,
+                "aboveRow": 38.39999999999998
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 865,
+              "centreOffsetEm": 0.077,
+              "margins": {
+                "centreLeft": 82,
+                "centreRight": 51,
+                "centreFrac": 0.235,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 349,
+              "centreOffsetEm": -0.092,
+              "margins": {
+                "centreLeft": 48,
+                "centreRight": 85,
+                "centreFrac": 0.203,
+                "insideLeft": 20,
+                "insideRight": 57,
+                "insideTop": 56,
+                "insideBottom": 46
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 345,
+              "centreOffsetEm": 0.255,
+              "margins": {
+                "centreLeft": 134,
+                "centreRight": 32,
+                "halfSide": 45,
+                "aboveRow": 41.700000000000045
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 345,
+              "centreOffsetEm": -0.205,
+              "margins": {
+                "centreLeft": 42,
+                "centreRight": 124,
+                "halfSide": 35,
+                "aboveRow": 41.700000000000045
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 911,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 64.5,
+                "centreRight": 68.5,
+                "centreFrac": 0.379,
+                "belowBaseline": 22
+              }
+            }
+          ],
+          "control": [
+            {
+              "cp": 1463,
+              "name": "patah",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": true,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": false,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": false,
+                "leftRejected": true,
+                "drawn": true
+              }
+            }
+          ]
+        },
+        "David Libre|400": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 354,
+              "centreOffsetEm": -0.018,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 66,
+                "centreFrac": 0.359,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 890,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 58.5,
+                "centreRight": 66.5,
+                "centreFrac": 0.353,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 816,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 58.5,
+                "centreRight": 66.5,
+                "centreFrac": 0.353,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1072,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 58.5,
+                "centreRight": 66.5,
+                "centreFrac": 0.353,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 177,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 58.5,
+                "centreRight": 66.5,
+                "centreFrac": 0.353,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 353,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 58.5,
+                "centreRight": 66.5,
+                "centreFrac": 0.353,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 531,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 58.5,
+                "centreRight": 66.5,
+                "centreFrac": 0.353,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 622,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 58.5,
+                "centreRight": 66.5,
+                "centreFrac": 0.353,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 712,
+              "centreOffsetEm": -0.018,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 66,
+                "centreFrac": 0.359,
+                "belowBaseline": 21
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 174,
+              "centreOffsetEm": -0.223,
+              "margins": {
+                "centreLeft": 38,
+                "centreRight": 107,
+                "halfSide": 43.5,
+                "aboveRow": 36.799999999999955
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 178,
+              "centreOffsetEm": -0.223,
+              "margins": {
+                "centreLeft": 38,
+                "centreRight": 107,
+                "halfSide": 43.5,
+                "aboveRow": 36.799999999999955
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 526,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 58.5,
+                "centreRight": 66.5,
+                "centreFrac": 0.353,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 176,
+              "centreOffsetEm": -0.048,
+              "margins": {
+                "centreLeft": 53,
+                "centreRight": 72,
+                "centreFrac": 0.29,
+                "insideLeft": 30,
+                "insideRight": 49,
+                "insideTop": 54,
+                "insideBottom": 45
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 178,
+              "centreOffsetEm": 0.163,
+              "margins": {
+                "centreLeft": 104.5,
+                "centreRight": 39.5,
+                "halfSide": 31,
+                "aboveRow": 37.700000000000045
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 176,
+              "centreOffsetEm": -0.13,
+              "margins": {
+                "centreLeft": 46,
+                "centreRight": 98,
+                "halfSide": 25,
+                "aboveRow": 37.700000000000045
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 712,
+              "centreOffsetEm": -0.018,
+              "margins": {
+                "centreLeft": 59,
+                "centreRight": 66,
+                "centreFrac": 0.359,
+                "belowBaseline": 21
+              }
+            }
+          ],
+          "control": [
+            {
+              "cp": 1463,
+              "name": "patah",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": true,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": false,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": false,
+                "leftRejected": true,
+                "drawn": true
+              }
+            }
+          ]
+        },
+        "David Libre|700": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 358,
+              "centreOffsetEm": -0.003,
+              "margins": {
+                "centreLeft": 63,
+                "centreRight": 64,
+                "centreFrac": 0.394,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 889,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 63.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 812,
+              "centreOffsetEm": -0.003,
+              "margins": {
+                "centreLeft": 63,
+                "centreRight": 64,
+                "centreFrac": 0.394,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1025,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 63.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 179,
+              "centreOffsetEm": -0.003,
+              "margins": {
+                "centreLeft": 63,
+                "centreRight": 64,
+                "centreFrac": 0.394,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 353,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 63.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 533,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 63.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 606,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 63.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 670,
+              "centreOffsetEm": -0.003,
+              "margins": {
+                "centreLeft": 63,
+                "centreRight": 64,
+                "centreFrac": 0.394,
+                "belowBaseline": 21
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 177,
+              "centreOffsetEm": -0.207,
+              "margins": {
+                "centreLeft": 42,
+                "centreRight": 105,
+                "halfSide": 40.5,
+                "aboveRow": 33.799999999999955
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 177,
+              "centreOffsetEm": -0.207,
+              "margins": {
+                "centreLeft": 42,
+                "centreRight": 105,
+                "halfSide": 40.5,
+                "aboveRow": 33.799999999999955
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 525,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 63.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 22
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 174,
+              "centreOffsetEm": -0.063,
+              "margins": {
+                "centreLeft": 51,
+                "centreRight": 76,
+                "centreFrac": 0.258,
+                "insideLeft": 28,
+                "insideRight": 53,
+                "insideTop": 54,
+                "insideBottom": 45
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 178,
+              "centreOffsetEm": 0.152,
+              "margins": {
+                "centreLeft": 104,
+                "centreRight": 43,
+                "halfSide": 29.5,
+                "aboveRow": 38
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 178,
+              "centreOffsetEm": -0.14,
+              "margins": {
+                "centreLeft": 45.5,
+                "centreRight": 101.5,
+                "halfSide": 26.5,
+                "aboveRow": 38
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 674,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 63.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 21
+              }
+            }
+          ],
+          "control": null
+        },
+        "Karantina|400": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 256,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 47.5,
+                "centreRight": 47.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 18
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 643,
+              "centreOffsetEm": -0.015,
+              "margins": {
+                "centreLeft": 44.5,
+                "centreRight": 50.5,
+                "centreFrac": 0.346,
+                "belowBaseline": 18
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 547,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 47.5,
+                "centreRight": 47.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 18
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 684,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 46.5,
+                "centreRight": 48.5,
+                "centreFrac": 0.382,
+                "belowBaseline": 18
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 124,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 47.5,
+                "centreRight": 47.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 256,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 46.5,
+                "centreRight": 48.5,
+                "centreFrac": 0.382,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 386,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 47.5,
+                "centreRight": 47.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 288,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 47.5,
+                "centreRight": 47.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 408,
+              "centreOffsetEm": 0.005,
+              "margins": {
+                "centreLeft": 48.5,
+                "centreRight": 46.5,
+                "centreFrac": 0.382,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 126,
+              "centreOffsetEm": -0.138,
+              "margins": {
+                "centreLeft": 40,
+                "centreRight": 75,
+                "halfSide": 27.5,
+                "aboveRow": 43
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 128,
+              "centreOffsetEm": -0.172,
+              "margins": {
+                "centreLeft": 33,
+                "centreRight": 82,
+                "halfSide": 34.5,
+                "aboveRow": 43
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 384,
+              "centreOffsetEm": -0.01,
+              "margins": {
+                "centreLeft": 45.5,
+                "centreRight": 49.5,
+                "centreFrac": 0.364,
+                "belowBaseline": 18
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 126,
+              "centreOffsetEm": -0.072,
+              "margins": {
+                "centreLeft": 33,
+                "centreRight": 62,
+                "centreFrac": 0.141,
+                "insideLeft": 11,
+                "insideRight": 40,
+                "insideTop": 58,
+                "insideBottom": 58
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 128,
+              "centreOffsetEm": 0.19,
+              "margins": {
+                "centreLeft": 99,
+                "centreRight": 23,
+                "halfSide": 38,
+                "aboveRow": 43
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 124,
+              "centreOffsetEm": -0.193,
+              "margins": {
+                "centreLeft": 22.5,
+                "centreRight": 99.5,
+                "halfSide": 39,
+                "aboveRow": 43
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 256,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 46.5,
+                "centreRight": 48.5,
+                "centreFrac": 0.382,
+                "belowBaseline": 22
+              }
+            }
+          ],
+          "control": [
+            {
+              "cp": 1463,
+              "name": "patah",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": true,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": false,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": false,
+                "leftRejected": true,
+                "drawn": true
+              }
+            }
+          ]
+        },
+        "Karantina|700": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 361,
+              "centreOffsetEm": 0.003,
+              "margins": {
+                "centreLeft": 51,
+                "centreRight": 50,
+                "centreFrac": 0.392,
+                "belowBaseline": 19
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 902,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 49.5,
+                "centreRight": 51.5,
+                "centreFrac": 0.384,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 786,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 50.5,
+                "centreRight": 50.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 19
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 905,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 50.5,
+                "centreRight": 50.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 19
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 181,
+              "centreOffsetEm": 0.003,
+              "margins": {
+                "centreLeft": 51,
+                "centreRight": 50,
+                "centreFrac": 0.392,
+                "belowBaseline": 19
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 359,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 50.5,
+                "centreRight": 50.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 19
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 541,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 49.5,
+                "centreRight": 51.5,
+                "centreFrac": 0.384,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 416,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 50.5,
+                "centreRight": 50.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 528,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 50.5,
+                "centreRight": 50.5,
+                "centreFrac": 0.4,
+                "belowBaseline": 20
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 181,
+              "centreOffsetEm": -0.098,
+              "margins": {
+                "centreLeft": 51,
+                "centreRight": 70,
+                "halfSide": 18.5,
+                "aboveRow": 42
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 181,
+              "centreOffsetEm": -0.083,
+              "margins": {
+                "centreLeft": 54,
+                "centreRight": 67,
+                "halfSide": 15.5,
+                "aboveRow": 42
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 546,
+              "centreOffsetEm": -0.022,
+              "margins": {
+                "centreLeft": 46,
+                "centreRight": 55,
+                "centreFrac": 0.327,
+                "belowBaseline": 17
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 181,
+              "centreOffsetEm": -0.092,
+              "margins": {
+                "centreLeft": 32,
+                "centreRight": 69,
+                "centreFrac": 0.102,
+                "insideLeft": 9,
+                "insideRight": 46,
+                "insideTop": 56,
+                "insideBottom": 56
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 179,
+              "centreOffsetEm": 0.228,
+              "margins": {
+                "centreLeft": 116,
+                "centreRight": 25,
+                "halfSide": 44.5,
+                "aboveRow": 42
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 183,
+              "centreOffsetEm": -0.158,
+              "margins": {
+                "centreLeft": 39,
+                "centreRight": 102,
+                "halfSide": 30.5,
+                "aboveRow": 42
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 528,
+              "centreOffsetEm": 0.1,
+              "margins": {
+                "centreLeft": 70.5,
+                "centreRight": 30.5,
+                "centreFrac": 0.077,
+                "belowBaseline": 30
+              }
+            }
+          ],
+          "control": null
+        },
+        "Amatic SC|400": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 93,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 42,
+                "centreRight": 44,
+                "centreFrac": 0.379,
+                "belowBaseline": 16
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 245,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 42,
+                "centreRight": 44,
+                "centreFrac": 0.379,
+                "belowBaseline": 16
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 192,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 41.5,
+                "centreRight": 44.5,
+                "centreFrac": 0.368,
+                "belowBaseline": 16
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 242,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 41.5,
+                "centreRight": 44.5,
+                "centreFrac": 0.368,
+                "belowBaseline": 16
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 46,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 42,
+                "centreRight": 44,
+                "centreFrac": 0.379,
+                "belowBaseline": 16
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 100,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 42,
+                "centreRight": 44,
+                "centreFrac": 0.379,
+                "belowBaseline": 16
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 150,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 42,
+                "centreRight": 44,
+                "centreFrac": 0.379,
+                "belowBaseline": 16
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 96,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 41.5,
+                "centreRight": 44.5,
+                "centreFrac": 0.368,
+                "belowBaseline": 15
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 147,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 41.5,
+                "centreRight": 44.5,
+                "centreFrac": 0.368,
+                "belowBaseline": 14
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 49,
+              "centreOffsetEm": -0.152,
+              "margins": {
+                "centreLeft": 32.5,
+                "centreRight": 73.5,
+                "halfSide": 33,
+                "aboveRow": 49.60000000000002
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 49,
+              "centreOffsetEm": -0.152,
+              "margins": {
+                "centreLeft": 32.5,
+                "centreRight": 73.5,
+                "halfSide": 33,
+                "aboveRow": 49.60000000000002
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 146,
+              "centreOffsetEm": 0.045,
+              "margins": {
+                "centreLeft": 52,
+                "centreRight": 34,
+                "centreFrac": 0.209,
+                "belowBaseline": 16
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 46,
+              "centreOffsetEm": -0.065,
+              "margins": {
+                "centreLeft": 30,
+                "centreRight": 56,
+                "centreFrac": 0.123,
+                "insideLeft": 11,
+                "insideRight": 37,
+                "insideTop": 58,
+                "insideBottom": 74
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 46,
+              "centreOffsetEm": 0.115,
+              "margins": {
+                "centreLeft": 69.5,
+                "centreRight": 23.5,
+                "halfSide": 25.5,
+                "aboveRow": 52.5
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 47,
+              "centreOffsetEm": -0.115,
+              "margins": {
+                "centreLeft": 23.5,
+                "centreRight": 69.5,
+                "halfSide": 25.5,
+                "aboveRow": 52.5
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 130,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 42,
+                "centreRight": 44,
+                "centreFrac": 0.379,
+                "belowBaseline": 14
+              }
+            }
+          ],
+          "control": [
+            {
+              "cp": 1463,
+              "name": "patah",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": true,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": false,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": false,
+                "leftRejected": true,
+                "drawn": true
+              }
+            }
+          ]
+        },
+        "Amatic SC|700": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 131,
+              "centreOffsetEm": 0.013,
+              "margins": {
+                "centreLeft": 47,
+                "centreRight": 42,
+                "centreFrac": 0.35,
+                "belowBaseline": 14
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 318,
+              "centreOffsetEm": 0.013,
+              "margins": {
+                "centreLeft": 47,
+                "centreRight": 42,
+                "centreFrac": 0.35,
+                "belowBaseline": 14
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 260,
+              "centreOffsetEm": 0.013,
+              "margins": {
+                "centreLeft": 47,
+                "centreRight": 42,
+                "centreFrac": 0.35,
+                "belowBaseline": 14
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 315,
+              "centreOffsetEm": 0.013,
+              "margins": {
+                "centreLeft": 47,
+                "centreRight": 42,
+                "centreFrac": 0.35,
+                "belowBaseline": 14
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 64,
+              "centreOffsetEm": 0.013,
+              "margins": {
+                "centreLeft": 47,
+                "centreRight": 42,
+                "centreFrac": 0.35,
+                "belowBaseline": 13
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 124,
+              "centreOffsetEm": 0.013,
+              "margins": {
+                "centreLeft": 47,
+                "centreRight": 42,
+                "centreFrac": 0.35,
+                "belowBaseline": 14
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 189,
+              "centreOffsetEm": 0.013,
+              "margins": {
+                "centreLeft": 47,
+                "centreRight": 42,
+                "centreFrac": 0.35,
+                "belowBaseline": 14
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 117,
+              "centreOffsetEm": 0.013,
+              "margins": {
+                "centreLeft": 47,
+                "centreRight": 42,
+                "centreFrac": 0.35,
+                "belowBaseline": 13
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 190,
+              "centreOffsetEm": 0.013,
+              "margins": {
+                "centreLeft": 47,
+                "centreRight": 42,
+                "centreFrac": 0.35,
+                "belowBaseline": 13
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 67,
+              "centreOffsetEm": -0.138,
+              "margins": {
+                "centreLeft": 37,
+                "centreRight": 72,
+                "halfSide": 29.5,
+                "aboveRow": 49.799999999999955
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 67,
+              "centreOffsetEm": -0.138,
+              "margins": {
+                "centreLeft": 37,
+                "centreRight": 72,
+                "halfSide": 29.5,
+                "aboveRow": 49.799999999999955
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 193,
+              "centreOffsetEm": 0.052,
+              "margins": {
+                "centreLeft": 55,
+                "centreRight": 34,
+                "centreFrac": 0.19,
+                "belowBaseline": 14
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 62,
+              "centreOffsetEm": -0.06,
+              "margins": {
+                "centreLeft": 32.5,
+                "centreRight": 56.5,
+                "centreFrac": 0.16,
+                "insideLeft": 13,
+                "insideRight": 37,
+                "insideTop": 59,
+                "insideBottom": 76
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 66,
+              "centreOffsetEm": 0.113,
+              "margins": {
+                "centreLeft": 71,
+                "centreRight": 26,
+                "halfSide": 24.5,
+                "aboveRow": 52.39999999999998
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 64,
+              "centreOffsetEm": -0.113,
+              "margins": {
+                "centreLeft": 26,
+                "centreRight": 71,
+                "halfSide": 24.5,
+                "aboveRow": 52.39999999999998
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 155,
+              "centreOffsetEm": 0.013,
+              "margins": {
+                "centreLeft": 47,
+                "centreRight": 42,
+                "centreFrac": 0.35,
+                "belowBaseline": 13
+              }
+            }
+          ],
+          "control": null
+        },
+        "Fredoka|400": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 416,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 71.5,
+                "centreRight": 73.5,
+                "centreFrac": 0.391,
+                "belowBaseline": 18
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1044,
+              "centreOffsetEm": -0.013,
+              "margins": {
+                "centreLeft": 70,
+                "centreRight": 75,
+                "centreFrac": 0.376,
+                "belowBaseline": 17
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 806,
+              "centreOffsetEm": 0.005,
+              "margins": {
+                "centreLeft": 73.5,
+                "centreRight": 71.5,
+                "centreFrac": 0.391,
+                "belowBaseline": 18
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1074,
+              "centreOffsetEm": 0.005,
+              "margins": {
+                "centreLeft": 73.5,
+                "centreRight": 71.5,
+                "centreFrac": 0.391,
+                "belowBaseline": 18
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 205,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 71.5,
+                "centreRight": 73.5,
+                "centreFrac": 0.391,
+                "belowBaseline": 19
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 419,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 71.5,
+                "centreRight": 73.5,
+                "centreFrac": 0.391,
+                "belowBaseline": 19
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 633,
+              "centreOffsetEm": -0.007,
+              "margins": {
+                "centreLeft": 71,
+                "centreRight": 74,
+                "centreFrac": 0.386,
+                "belowBaseline": 18
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 391,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 71.5,
+                "centreRight": 73.5,
+                "centreFrac": 0.391,
+                "belowBaseline": 19
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 644,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 71.5,
+                "centreRight": 73.5,
+                "centreFrac": 0.391,
+                "belowBaseline": 19
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 219,
+              "centreOffsetEm": -0.31,
+              "margins": {
+                "centreLeft": 30.5,
+                "centreRight": 134.5,
+                "halfSide": 60.5,
+                "aboveRow": 52.700000000000045
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 213,
+              "centreOffsetEm": -0.31,
+              "margins": {
+                "centreLeft": 30.5,
+                "centreRight": 134.5,
+                "halfSide": 60.5,
+                "aboveRow": 52.700000000000045
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 636,
+              "centreOffsetEm": 0.087,
+              "margins": {
+                "centreLeft": 90,
+                "centreRight": 55,
+                "centreFrac": 0.235,
+                "belowBaseline": 15
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 190,
+              "centreOffsetEm": -0.107,
+              "margins": {
+                "centreLeft": 51,
+                "centreRight": 94,
+                "centreFrac": 0.197,
+                "insideLeft": 28,
+                "insideRight": 71,
+                "insideTop": 52,
+                "insideBottom": 58
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 213,
+              "centreOffsetEm": 0.25,
+              "margins": {
+                "centreLeft": 130.5,
+                "centreRight": 30.5,
+                "halfSide": 48.5,
+                "aboveRow": 52
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 214,
+              "centreOffsetEm": -0.25,
+              "margins": {
+                "centreLeft": 30.5,
+                "centreRight": 130.5,
+                "halfSide": 48.5,
+                "aboveRow": 52
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 605,
+              "centreOffsetEm": -0.003,
+              "margins": {
+                "centreLeft": 72,
+                "centreRight": 73,
+                "centreFrac": 0.395,
+                "belowBaseline": 17
+              }
+            }
+          ],
+          "control": [
+            {
+              "cp": 1463,
+              "name": "patah",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": true,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": false,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": false,
+                "leftRejected": true,
+                "drawn": true
+              }
+            }
+          ]
+        },
+        "Fredoka|700": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 716,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 77,
+                "centreRight": 77,
+                "centreFrac": 0.4,
+                "belowBaseline": 15
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1779,
+              "centreOffsetEm": -0.003,
+              "margins": {
+                "centreLeft": 76.5,
+                "centreRight": 77.5,
+                "centreFrac": 0.396,
+                "belowBaseline": 12
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1203,
+              "centreOffsetEm": 0.005,
+              "margins": {
+                "centreLeft": 78,
+                "centreRight": 76,
+                "centreFrac": 0.391,
+                "belowBaseline": 15
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1505,
+              "centreOffsetEm": 0.01,
+              "margins": {
+                "centreLeft": 79,
+                "centreRight": 75,
+                "centreFrac": 0.383,
+                "belowBaseline": 15
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 356,
+              "centreOffsetEm": 0,
+              "margins": {
+                "centreLeft": 77,
+                "centreRight": 77,
+                "centreFrac": 0.4,
+                "belowBaseline": 16
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 704,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 76,
+                "centreRight": 78,
+                "centreFrac": 0.391,
+                "belowBaseline": 16
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1065,
+              "centreOffsetEm": -0.005,
+              "margins": {
+                "centreLeft": 76,
+                "centreRight": 78,
+                "centreFrac": 0.391,
+                "belowBaseline": 15
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 494,
+              "centreOffsetEm": -0.003,
+              "margins": {
+                "centreLeft": 76.5,
+                "centreRight": 77.5,
+                "centreFrac": 0.396,
+                "belowBaseline": 17
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 787,
+              "centreOffsetEm": -0.003,
+              "margins": {
+                "centreLeft": 76.5,
+                "centreRight": 77.5,
+                "centreFrac": 0.396,
+                "belowBaseline": 17
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 362,
+              "centreOffsetEm": -0.29,
+              "margins": {
+                "centreLeft": 39,
+                "centreRight": 135,
+                "halfSide": 54,
+                "aboveRow": 48
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 360,
+              "centreOffsetEm": -0.29,
+              "margins": {
+                "centreLeft": 39,
+                "centreRight": 135,
+                "halfSide": 54,
+                "aboveRow": 48
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1055,
+              "centreOffsetEm": 0.083,
+              "margins": {
+                "centreLeft": 93.5,
+                "centreRight": 60.5,
+                "centreFrac": 0.257,
+                "belowBaseline": 13
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 240,
+              "centreOffsetEm": -0.125,
+              "margins": {
+                "centreLeft": 52,
+                "centreRight": 102,
+                "centreFrac": 0.183,
+                "insideLeft": 28,
+                "insideRight": 78,
+                "insideTop": 55,
+                "insideBottom": 55
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 357,
+              "centreOffsetEm": 0.24,
+              "margins": {
+                "centreLeft": 134,
+                "centreRight": 38,
+                "halfSide": 44,
+                "aboveRow": 47.60000000000002
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 357,
+              "centreOffsetEm": -0.235,
+              "margins": {
+                "centreLeft": 39,
+                "centreRight": 133,
+                "halfSide": 43,
+                "aboveRow": 47.60000000000002
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 737,
+              "centreOffsetEm": -0.003,
+              "margins": {
+                "centreLeft": 76.5,
+                "centreRight": 77.5,
+                "centreFrac": 0.396,
+                "belowBaseline": 16
+              }
+            }
+          ],
+          "control": null
+        },
+        "Gveret Levin|400": {
+          "marks": [
+            {
+              "cp": 1456,
+              "name": "sheva",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 390,
+              "centreOffsetEm": -0.015,
+              "margins": {
+                "centreLeft": 81.5,
+                "centreRight": 87.5,
+                "centreFrac": 0.377,
+                "belowBaseline": 24
+              }
+            },
+            {
+              "cp": 1457,
+              "name": "hataf segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 970,
+              "centreOffsetEm": -0.037,
+              "margins": {
+                "centreLeft": 77,
+                "centreRight": 92,
+                "centreFrac": 0.342,
+                "belowBaseline": 16
+              }
+            },
+            {
+              "cp": 1458,
+              "name": "hataf patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 876,
+              "centreOffsetEm": -0.06,
+              "margins": {
+                "centreLeft": 72.5,
+                "centreRight": 96.5,
+                "centreFrac": 0.308,
+                "belowBaseline": 5
+              }
+            },
+            {
+              "cp": 1459,
+              "name": "hataf qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 1151,
+              "centreOffsetEm": -0.055,
+              "margins": {
+                "centreLeft": 73.5,
+                "centreRight": 95.5,
+                "centreFrac": 0.315,
+                "belowBaseline": 9
+              }
+            },
+            {
+              "cp": 1460,
+              "name": "hiriq",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 257,
+              "centreOffsetEm": -0.025,
+              "margins": {
+                "centreLeft": 79.5,
+                "centreRight": 89.5,
+                "centreFrac": 0.362,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1461,
+              "name": "tsere",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 381,
+              "centreOffsetEm": 0.003,
+              "margins": {
+                "centreLeft": 85,
+                "centreRight": 84,
+                "centreFrac": 0.396,
+                "belowBaseline": 26
+              }
+            },
+            {
+              "cp": 1462,
+              "name": "segol",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 586,
+              "centreOffsetEm": -0.02,
+              "margins": {
+                "centreLeft": 80.5,
+                "centreRight": 88.5,
+                "centreFrac": 0.369,
+                "belowBaseline": 23
+              }
+            },
+            {
+              "cp": 1463,
+              "name": "patah",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 519,
+              "centreOffsetEm": -0.018,
+              "margins": {
+                "centreLeft": 81,
+                "centreRight": 88,
+                "centreFrac": 0.373,
+                "belowBaseline": 32
+              }
+            },
+            {
+              "cp": 1464,
+              "name": "qamats",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 861,
+              "centreOffsetEm": -0.013,
+              "margins": {
+                "centreLeft": 82,
+                "centreRight": 87,
+                "centreFrac": 0.381,
+                "belowBaseline": 26
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 256,
+              "centreOffsetEm": -0.16,
+              "margins": {
+                "centreLeft": 72.5,
+                "centreRight": 116.5,
+                "halfSide": 29.5,
+                "aboveRow": 55.39999999999998
+              }
+            },
+            {
+              "cp": 1466,
+              "name": "holam haser for vav",
+              "zone": "holam",
+              "pass": true,
+              "reasons": [],
+              "changed": 249,
+              "centreOffsetEm": -0.18,
+              "margins": {
+                "centreLeft": 68.5,
+                "centreRight": 120.5,
+                "halfSide": 33.5,
+                "aboveRow": 54.39999999999998
+              }
+            },
+            {
+              "cp": 1467,
+              "name": "qubuts",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 579,
+              "centreOffsetEm": 0.065,
+              "margins": {
+                "centreLeft": 97.5,
+                "centreRight": 71.5,
+                "centreFrac": 0.3,
+                "belowBaseline": 25
+              }
+            },
+            {
+              "cp": 1468,
+              "name": "dagesh",
+              "zone": "inside",
+              "pass": true,
+              "reasons": [],
+              "changed": 194,
+              "centreOffsetEm": 0.037,
+              "margins": {
+                "centreLeft": 92,
+                "centreRight": 77,
+                "centreFrac": 0.342,
+                "insideLeft": 69,
+                "insideRight": 54,
+                "insideTop": 44,
+                "insideBottom": 66
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "zone": "shin",
+              "pass": true,
+              "reasons": [],
+              "changed": 249,
+              "centreOffsetEm": 0.362,
+              "margins": {
+                "centreLeft": 153.5,
+                "centreRight": 8.5,
+                "halfSide": 70,
+                "aboveRow": 33.5
+              }
+            },
+            {
+              "cp": 1474,
+              "name": "sin dot",
+              "zone": "sin",
+              "pass": true,
+              "reasons": [],
+              "changed": 250,
+              "centreOffsetEm": -0.087,
+              "margins": {
+                "centreLeft": 63.5,
+                "centreRight": 98.5,
+                "halfSide": 15,
+                "aboveRow": 26.5
+              }
+            },
+            {
+              "cp": 1479,
+              "name": "qamats qatan",
+              "zone": "below",
+              "pass": true,
+              "reasons": [],
+              "changed": 396,
+              "centreOffsetEm": -0.028,
+              "margins": {
+                "centreLeft": 79,
+                "centreRight": 90,
+                "centreFrac": 0.358,
+                "belowBaseline": 30
+              }
+            }
+          ],
+          "control": [
+            {
+              "cp": 1463,
+              "name": "patah",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": true,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1465,
+              "name": "holam",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": true,
+                "leftRejected": false,
+                "drawn": true
+              }
+            },
+            {
+              "cp": 1473,
+              "name": "shin dot",
+              "ok": true,
+              "sidewaysRejected": true,
+              "verticalRejected": true,
+              "drawn": true,
+              "penOrigin": {
+                "ok": true,
+                "rightRejected": false,
+                "leftRejected": true,
+                "drawn": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    "goldens": {
+      "chromium": "153.0.8010.12",
+      "firstRecording": false,
+      "compared": 19,
+      "differ": [],
+      "missing": [],
+      "extra": [],
+      "runs": 4,
+      "verdict": "matches the recording of 2026-11-18T00:30:08.643Z (comparison 4)"
+    },
+    "parity": {
+      "rows": [
+        {
+          "category": "sans",
+          "family": "Fredoka",
+          "weight": 700,
+          "previewIdentical": true,
+          "maxDifference": 0,
+          "planePsnr": {
+            "y": 56.95,
+            "u": 99,
+            "v": 99,
+            "min": 56.95
+          }
+        },
+        {
+          "category": "serif",
+          "family": "Frank Ruhl Libre",
+          "weight": 700,
+          "previewIdentical": true,
+          "maxDifference": 0,
+          "planePsnr": {
+            "y": 59.88,
+            "u": 99,
+            "v": 99,
+            "min": 59.88
+          }
+        },
+        {
+          "category": "display",
+          "family": "Secular One",
+          "weight": 400,
+          "previewIdentical": true,
+          "maxDifference": 0,
+          "planePsnr": {
+            "y": 55.06,
+            "u": 99,
+            "v": 99,
+            "min": 55.06
+          }
+        },
+        {
+          "category": "handwriting",
+          "family": "Amatic SC",
+          "weight": 700,
+          "previewIdentical": true,
+          "maxDifference": 0,
+          "planePsnr": {
+            "y": 59.54,
+            "u": 99,
+            "v": 99,
+            "min": 59.54
+          }
+        }
+      ],
+      "barDb": 50,
+      "pageErrors": [],
+      "controls": [
+        {
+          "export": "Fredoka",
+          "stillOf": "Frank Ruhl Libre",
+          "planePsnr": {
+            "y": 21.54,
+            "u": 99,
+            "v": 99,
+            "min": 21.54
+          }
+        },
+        {
+          "export": "Frank Ruhl Libre",
+          "stillOf": "Secular One",
+          "planePsnr": {
+            "y": 22.03,
+            "u": 99,
+            "v": 99,
+            "min": 22.03
+          }
+        },
+        {
+          "export": "Secular One",
+          "stillOf": "Amatic SC",
+          "planePsnr": {
+            "y": 21.65,
+            "u": 99,
+            "v": 99,
+            "min": 21.65
+          }
+        },
+        {
+          "export": "Amatic SC",
+          "stillOf": "Fredoka",
+          "planePsnr": {
+            "y": 20.88,
+            "u": 99,
+            "v": 99,
+            "min": 20.88
+          }
+        }
+      ],
+      "method": "the first frame of the export decoded to its own planes (yuv420p) against the still converted to them (scale=in_range=full:out_range=tv:out_color_matrix=bt709:flags=accurate_rnd+full_chroma_int,format=yuv420p); per plane, 255 as the peak"
+    },
+    "cost": {
+      "ensureFontsLikeMs": 0,
+      "faces": 19,
+      "missing": [],
+      "loadedFontFiles": 46,
+      "loadedWoff2Bytes": 579340,
+      "note": "ensureFontsLikeMs: the browser loading every face of FONT_CATALOG for Hebrew and Latin samples from a page that has not used them yet (the work of ensureFonts, apps/web/src/fonts.ts), on this machine over loopback.",
+      "bundle": {
+        "builtFrom": "apps/web/dist",
+        "catalogueWoff2Bytes": 472476,
+        "catalogueWoffBytes": 483716,
+        "catalogueWoff2PlusWoffBytes": 956192,
+        "titleFamiliesWoff2Bytes": 284416,
+        "titleFamiliesWoff2PlusWoffBytes": 541476,
+        "karantinaAlreadyInInterfaceBytes": 41316,
+        "titleFamiliesNewWoff2Bytes": 243100,
+        "emittedWoff2Bytes": 472476,
+        "emittedWoff2PlusWoffBytes": 956192,
+        "perFamily": [
+          {
+            "family": "Heebo",
+            "woff2": 34372,
+            "woff": 44532,
+            "emittedWoff2": 34372,
+            "emittedWoff": 44532,
+            "onceEach": true,
+            "built": true
+          },
+          {
+            "family": "Rubik",
+            "woff2": 48824,
+            "woff": 61760,
+            "emittedWoff2": 48824,
+            "emittedWoff": 61760,
+            "onceEach": true,
+            "built": true
+          },
+          {
+            "family": "Assistant",
+            "woff2": 33204,
+            "woff": 42592,
+            "emittedWoff2": 33204,
+            "emittedWoff": 42592,
+            "onceEach": true,
+            "built": true
+          },
+          {
+            "family": "Frank Ruhl Libre",
+            "woff2": 44348,
+            "woff": 55444,
+            "emittedWoff2": 44348,
+            "emittedWoff": 55444,
+            "onceEach": true,
+            "built": true
+          },
+          {
+            "family": "Secular One",
+            "woff2": 27312,
+            "woff": 22328,
+            "emittedWoff2": 27312,
+            "emittedWoff": 22328,
+            "onceEach": true,
+            "built": true
+          },
+          {
+            "family": "Suez One",
+            "woff2": 21820,
+            "woff": 26248,
+            "emittedWoff2": 21820,
+            "emittedWoff": 26248,
+            "onceEach": true,
+            "built": true
+          },
+          {
+            "family": "David Libre",
+            "woff2": 76292,
+            "woff": 63920,
+            "emittedWoff2": 76292,
+            "emittedWoff": 63920,
+            "onceEach": true,
+            "built": true
+          },
+          {
+            "family": "Karantina",
+            "woff2": 41316,
+            "woff": 30696,
+            "emittedWoff2": 41316,
+            "emittedWoff": 30696,
+            "onceEach": true,
+            "built": true
+          },
+          {
+            "family": "Amatic SC",
+            "woff2": 74380,
+            "woff": 59308,
+            "emittedWoff2": 74380,
+            "emittedWoff": 59308,
+            "onceEach": true,
+            "built": true
+          },
+          {
+            "family": "Fredoka",
+            "woff2": 42048,
+            "woff": 52892,
+            "emittedWoff2": 42048,
+            "emittedWoff": 52892,
+            "onceEach": true,
+            "built": true
+          },
+          {
+            "family": "Gveret Levin",
+            "woff2": 28560,
+            "woff": 23996,
+            "emittedWoff2": 28560,
+            "emittedWoff": 23996,
+            "onceEach": true,
+            "built": true
+          }
+        ],
+        "planExpected": 374552,
+        "note": "Alef and Varela Round are not in this build (held for the owner: reserved font names), so the plan's 374,552 bytes of woff2 for eight families does not apply; the figure below is for the families that are."
+      }
+    }
+  },
+  "passed": true,
+  "seconds": 189,
+  "note": "Goldens are recorded in docs/evidence/fonts-golden.json. A first recording of goldens proves nothing by itself."
+}

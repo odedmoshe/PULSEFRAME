@@ -18,6 +18,7 @@ import type { ProjectDocument } from '@pulseframe/core';
 import { evaluate } from '@pulseframe/engine';
 import { generateBarcodeFixture, readBarcode } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
+import { startExport } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/proof');
@@ -112,6 +113,7 @@ async function main() {
 
   // --- Hebrew text
   rev = await uiRevision();
+  await page.getByTestId('rail-text').click(); // "add text" is the rail's Text category's button (UX_REDESIGN §4.3)
   await page.getByTestId('add-text').click();
   await waitRevision(rev + 1);
   const HEB = 'שָׁלוֹם עולם 2026 PULSEFRAME';
@@ -271,7 +273,7 @@ async function main() {
   console.log('\n# export (started from the UI button)');
   const tExport = Date.now();
   const saved = page.waitForEvent('download', { timeout: 300_000 }).then((d) => d.suggestedFilename(), () => null);
-  await page.getByTestId('export').click();
+  await startExport(page); // Export opens the export sheet; its start button starts the job (owner decision 2026-11-17)
   // Editing continues while the export runs: the job must keep its immutable snapshot.
   const snapshotRevision = rev;
   const late = await rest(`/projects/${projectId}/transactions`, { method: 'POST', body: JSON.stringify({ label: 'Edit during export', ops: [{ op: 'update_text', args: { clipId: textClip.id, text: 'EDITED AFTER EXPORT STARTED' } }] }) });
@@ -280,6 +282,8 @@ async function main() {
   const savedName = await saved;
   check('when the export finishes the editor says so and the file starts saving by itself; the link stays for another copy', (await page.getByTestId('export-finished').count()) === 1 && !!savedName && /\.mp4$/.test(savedName), { savedName });
   const href = await page.getByTestId('export-download').getAttribute('href');
+  await page.keyboard.press('Escape'); // the export sheet is modal: closed again before the editor is used
+  await page.getByTestId('export-sheet').waitFor({ state: 'detached', timeout: 10000 });
   const jobId = href!.split('/').at(-2)!;
   const job = await (await rest(`/jobs/${jobId}`)).json();
   const mp4 = path.join(art, 'phase0-export.mp4');

@@ -44,7 +44,9 @@
  */
 import * as T from '@pulseframe/time';
 import type { OpCall } from './ops.ts';
-import type { Capture, Clip, LifeEvent, MediaClip, ProjectDocument, TextClip } from './schema.ts';
+import { isRealWallDate, type Capture, type Clip, type LifeEvent, type MediaClip, type ProjectDocument, type TextClip } from './schema.ts';
+import { personNameKey, peopleOf, personOf } from './people.ts';
+import { ageEn, ageHe, ageParts } from './ageWords.ts';
 import { projectVariant } from './variants.ts';
 import { pictureSourceAt } from './speed.ts';
 import { addWallSeconds, captureOf, hebrewDayReadings, parseWall } from './capture.ts';
@@ -160,33 +162,70 @@ export interface PeopleSource {
 /** Knows nobody: every people field resolves to no data (reason unknown_person). */
 export const NO_PEOPLE: PeopleSource = Object.freeze({ resolve: () => null });
 /**
- * True when documentPeople, fieldUsersOfPerson and ageWords.ts are built (W1). While false, documentPeople knows nobody, so
- * a people field has no words and the export preflight stops on it: nothing is drawn that is not the finished wording.
+ * True when documentPeople, fieldUsersOfPerson and ageWords.ts are built (W1, done). Before that documentPeople knew nobody,
+ * so a people field had no words and the export preflight stopped on it.
  */
-export const PEOPLE_FIELDS_BUILT = false;
+export const PEOPLE_FIELDS_BUILT = true;
+/** Marks a source made by documentPeople with the document it reads, so resolveIn may keep its answers in that document's index. */
+const OWN_DOCUMENT: unique symbol = Symbol('documentPeople');
+type DocumentSource = PeopleSource & { readonly [OWN_DOCUMENT]: ProjectDocument };
+/** True when `people` is documentPeople(doc) of this very document (its answers are a pure function of the document). */
+const isSourceOf = (people: PeopleSource, doc: ProjectDocument): boolean => (people as Partial<DocumentSource>)[OWN_DOCUMENT] === doc;
+/** A capture day as a real wall day (the first ten characters of a WALL_DATE or WALL_DATE_TIME), or null. */
+const dayOf = (day: string | null): string | null => (day !== null && /^\d{4}-\d{2}-\d{2}$/.test(day.slice(0, 10)) && isRealWallDate(day.slice(0, 10)) ? day.slice(0, 10) : null);
 /**
- * The people source of a document: what resolveFields uses when the caller gives none.
- *
- * W1 fills this (pure, no Intl, no Date, never throws on a schema-valid document; people.ts personOf for the lookup):
+ * The people source of a document: what resolveFields uses when the caller gives none. Pure, no Intl, no Date, never throws on
+ * a schema-valid document; people are looked up by own property (people.ts personOf), and read again at every question (no
+ * cache: operations and validation may call it on a draft).
  * - `{name:<id>}` → the person's name; a person who is not in the document → { missing: 'unknown_person' }.
- * - An {age:…} with a format outside AGE_FORMATS never reaches a source (valueOf answers unknown_age_format first).
+ * - An {age:…} with a format outside AGE_FORMATS never reaches a source (valueOf answers unknown_age_format first); asked
+ *   anyway, it has no words.
  * - `{age:<id>}` / `{age:<id>:words}` / `{age:<id>:en}`: no such person → unknown_person; the person has no birth date →
  *   no_birth_date; `day` is null → no_date; `day` is before the birth date → before_birth; else
  *   ageHe(ageParts(birthDate, day)!, person.form, 'digits' | 'words') or ageEn(ageParts(birthDate, day)!) (ageWords.ts).
- * - It is a pure function of the document, so its answers may be kept in a FieldIndex of that document: resolveIn keeps
- *   answers only for NO_PEOPLE today, and W1 extends that to this source when it builds it.
- * Until then it is NO_PEOPLE.
+ * - The source is the document's own (marked), so resolveIn keeps its answers in a FieldIndex of that same document, as it
+ *   does for NO_PEOPLE. A document without birth dates (what the server hands a credential without the people scope,
+ *   apps/server/src/peoplePrivacy.ts) gives no age at all: no_birth_date.
  */
-export function documentPeople(_doc: ProjectDocument): PeopleSource {
-  return NO_PEOPLE;
+export function documentPeople(doc: ProjectDocument): PeopleSource {
+  const source: DocumentSource = {
+    [OWN_DOCUMENT]: doc,
+    resolve(token, day) {
+      const person = personOf(doc, token.personId);
+      if (!person) return null;
+      if (token.name === 'name') return person.name;
+      if (isUnknownAgeFormat(token)) return null; // never asked (see above); no words
+      if (person.birthDate === null || !isRealWallDate(person.birthDate)) return { missing: 'no_birth_date' };
+      const on = dayOf(day);
+      if (on === null) return { missing: 'no_date' };
+      const parts = ageParts(person.birthDate, on);
+      if (!parts) return { missing: 'before_birth' };
+      return token.format === 'en' ? ageEn(parts) : ageHe(parts, person.form, token.format === 'words' ? 'words' : 'digits');
+    },
+  };
+  return Object.freeze(source);
+}
+/** True when the text holds a field (any format, live fields on or off) that names this person. */
+function namesPerson(text: string, personId: string): boolean {
+  return text.includes(personId) && parseFields(text).some((p) => 'token' in p && isPersonToken(p.token) && p.token.personId === personId);
 }
 /**
  * The titles that hold a field naming this person, in their own text or in a format's wording of them (whether or not live
- * fields are on for the title): clip ids, each once, in document order. remove_person refuses while this is not empty.
- * W1 fills it; until then it refuses to answer.
+ * fields are on for the title, and whatever the age format, also one outside AGE_FORMATS): clip ids, each once, in document
+ * order. remove_person refuses while this is not empty. Pure and uncached (operations call it on a draft).
  */
-export function fieldUsersOfPerson(_doc: ProjectDocument, _personId: string): string[] {
-  throw new Error('people: fieldUsersOfPerson is not built yet');
+export function fieldUsersOfPerson(doc: ProjectDocument, personId: string): string[] {
+  const worded = new Set<string>();
+  for (const v of Object.values(doc.variants ?? {}))
+    for (const [clipId, ov] of Object.entries(v.overrides)) if (ov.text !== undefined && namesPerson(ov.text, personId)) worded.add(clipId);
+  const users: string[] = [], seen = new Set<string>();
+  for (const seq of Object.values(doc.sequences))
+    for (const track of seq.tracks)
+      for (const c of track.clips) {
+        if (c.type !== 'text' || seen.has(c.id)) continue;
+        if (worded.has(c.id) || namesPerson(c.text, personId)) { users.push(c.id); seen.add(c.id); }
+      }
+  return users;
 }
 /**
  * True when a title with live fields, or a format's wording of one, holds an {age:…} field: the document can draw words
@@ -435,11 +474,13 @@ function valueOf(ix: FieldIndex, token: FieldToken, m: Moment | null, people: Pe
   }
 }
 function resolveIn(ix: FieldIndex, clip: TextClip, m: Moment | null, people: PeopleSource): ResolvedFields {
-  if (people !== NO_PEOPLE) return resolveNow(ix, clip, m, people); // another source may answer differently each time it is asked
+  // another source may answer differently each time it is asked; NO_PEOPLE and this document's own people never do
+  if (people !== NO_PEOPLE && !isSourceOf(people, ix.doc)) return resolveNow(ix, clip, m, people);
   // the words change only when the picture or its wall-clock second does: a kept index answers the frames in between from memory
   let byMoment = ix.memo.resolved.get(clip.text);
   if (!byMoment) { byMoment = new Map(); ix.memo.resolved.set(clip.text, byMoment); }
-  const key = m ? `${m.anchor.clipId}\n${m.anchor.how}\n${m.anchor.wall}` : '';
+  // the two sources answer people fields differently, so each keeps its own answers
+  const key = `${people === NO_PEOPLE ? 'none' : 'own'}\n${m ? `${m.anchor.clipId}\n${m.anchor.how}\n${m.anchor.wall}` : ''}`;
   let known = byMoment.get(key);
   if (!known) {
     known = resolveNow(ix, clip, m, people);
@@ -572,29 +613,46 @@ function fromWords<X extends string>(names: readonly X[], words: Readonly<Record
   const w = typed(word);
   return names.find((n) => typed(n) === w || typed(words[n]!.he) === w || typed(words[n]!.en) === w);
 }
+/** The readable form of a people field whose person is in `doc`: `{גיל: נועה}`, `{age: Noa: in words}`; null when it is shown as written. */
+function personToDisplay(lang: 'he' | 'en', t: PersonFieldToken, doc: ProjectDocument | undefined): string | null {
+  const person = doc ? personOf(doc, t.personId) : null;
+  // a person who is not there, and an age format outside AGE_FORMATS, are shown as written (fieldsFromDisplay refuses the latter)
+  if (!person || isUnknownAgeFormat(t)) return null;
+  const word = PERSON_FIELD_WORDS[t.name][lang];
+  return t.format === null ? `{${word}: ${person.name}}` : `{${word}: ${person.name}: ${AGE_FORMAT_WORDS[t.format as AgeFormat][lang]}}`;
+}
 /**
  * The text of a title with fields as the editor shows it: `{date}` ↔ `{תאריך}` / `{date}`, `{hebrewDate:noYear}` ↔
  * `{תאריך עברי: בלי שנה}`. Bad groups are shown as written.
- * People fields: with `doc`, a field whose person is in the document is shown by name (`{גיל: נועה}`, PERSON_FIELD_WORDS,
- * AGE_FORMAT_WORDS); a field whose person is not there, and every people field when no `doc` is given, is shown as written.
- * (The people half is W1's; until it is built people fields are always shown as written, which fieldsFromDisplay reads back.)
+ * People fields: with `doc`, a field whose person is in the document is shown by name (`{גיל: נועה}`, `{גיל: נועה: במילים}`,
+ * `{שם: נועה}`; PERSON_FIELD_WORDS, AGE_FORMAT_WORDS); a field whose person is not there, an age field whose format is none
+ * of AGE_FORMATS, and every people field when no `doc` is given, are shown as written.
  */
-export function fieldsToDisplay(lang: 'he' | 'en', text: string, _doc?: ProjectDocument): string {
+export function fieldsToDisplay(lang: 'he' | 'en', text: string, doc?: ProjectDocument): string {
   return parseFields(text).map((p) => {
     if ('literal' in p) return escapeFieldText(p.literal);
     if ('bad' in p) return p.bad;
-    if (isPersonToken(p.token)) return p.raw;
+    if (isPersonToken(p.token)) return personToDisplay(lang, p.token, doc) ?? p.raw;
     const name = FIELD_WORDS[p.token.name][lang], format = 'format' in p.token && p.token.format !== formatsOf(p.token.name)[0] ? p.token.format : null;
     return format === null ? `{${name}}` : `{${name}: ${FORMAT_WORDS[format]![lang]}}`;
   }).join('');
 }
+/** The person a typed name (or id) stands for: the one whose name is the same (people.ts personNameKey), else the one with that id. */
+function personTyped(doc: ProjectDocument, typedName: string): string | null {
+  const key = personNameKey(typedName);
+  if (!key) return null;
+  for (const p of Object.values(peopleOf(doc))) if (personNameKey(p.name) === key) return p.id;
+  return personOf(doc, typedName.trim())?.id ?? null;
+}
 /**
  * The stored text for what was typed in the editor form; accepts canonical tokens and the readable names of both languages.
- * People fields: with `doc`, `{גיל: נועה}` / `{age: Noa}` / `{שם: נועה}` (and an age format's word after a second colon)
- * become `{age:<id>}` / `{name:<id>}` for the person of that name (personNameKey); a name that is nobody in the document is
- * a problem with reason unknown_person. Without `doc` the readable people form is an unknown field, as today. (W1's half.)
+ * People fields: with `doc`, `{גיל: נועה}` / `{age: Noa}` / `{שם: נועה}` (and an age format's word after a second colon,
+ * AGE_FORMAT_WORDS in either language or the stored name) become `{age:<id>}` / `{name:<id>}` for the person of that name
+ * (personNameKey; a person's id is accepted too); a name that is nobody in the document is a problem with reason
+ * unknown_person. A canonical people token is kept as written, except that with `doc` its id may be a person's name (`{name:Noa}`
+ * for the person called Noa). Without `doc` the readable people form is an unknown field.
  */
-export function fieldsFromDisplay(_lang: 'he' | 'en', text: string, _doc?: ProjectDocument): { ok: true; text: string } | { ok: false; problems: { token: string; reason: DisplayProblemReason }[] } {
+export function fieldsFromDisplay(_lang: 'he' | 'en', text: string, doc?: ProjectDocument): { ok: true; text: string } | { ok: false; problems: { token: string; reason: DisplayProblemReason }[] } {
   const problems: { token: string; reason: DisplayProblemReason }[] = [];
   let out = '';
   for (const p of scanBraces(text)) {
@@ -603,7 +661,22 @@ export function fieldsFromDisplay(_lang: 'he' | 'en', text: string, _doc?: Proje
     const stored = tokenOf(p.content);
     if (typeof stored !== 'string') {
       // a new field: an age format outside AGE_FORMATS is only kept where it is already stored, never typed in
-      if (isUnknownAgeFormat(stored)) problems.push({ token: p.group, reason: 'unknown_format' }); else out += serialiseToken(stored);
+      if (isUnknownAgeFormat(stored)) { problems.push({ token: p.group, reason: 'unknown_format' }); continue; }
+      // `{name:Noa}`: an id that is nobody in the document but the name of someone in it means that person
+      if (doc && isPersonToken(stored) && !personOf(doc, stored.personId)) { const id = personTyped(doc, stored.personId); if (id) stored.personId = id; }
+      out += serialiseToken(stored);
+      continue;
+    }
+    const segments = p.content.split(':');
+    // the readable people form, when the people are known
+    const personField = doc ? fromWords(PERSON_FIELD_NAMES, PERSON_FIELD_WORDS, segments[0]!) : undefined;
+    if (personField && doc) {
+      if (segments.length < 2 || segments.length > (personField === 'age' ? 3 : 2)) { problems.push({ token: p.group, reason: 'unknown_format' }); continue; }
+      const format = segments.length === 3 ? fromWords(AGE_FORMATS, AGE_FORMAT_WORDS, segments[2]!) : AGE_FORMATS[0];
+      if (format === undefined) { problems.push({ token: p.group, reason: 'unknown_format' }); continue; }
+      const personId = personTyped(doc, segments[1]!);
+      if (!personId) { problems.push({ token: p.group, reason: 'unknown_person' }); continue; }
+      out += serialiseToken({ name: personField, personId, format: format === AGE_FORMATS[0] ? null : format });
       continue;
     }
     // the readable form: a field's word, then optionally a colon and a format's word

@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-17T18:20:51.378Z",
+  "ranAt": "2026-11-18T01:19:19.871Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v553 x64",
+    "platform": "Linux 6.18.44-fc-v595 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none",
     "browser": "headless Chromium (Playwright)"
@@ -15,7 +15,7 @@
       "name": "Tab reaches the character-voice strip («דמות קול») at its chosen chip («ללא»)",
       "ok": true,
       "detail": {
-        "tabsFromFadeOut": 5,
+        "tabsFromFadeOut": 6,
         "at": {
           "testid": "afx-voice-none",
           "role": "radio",
@@ -33,38 +33,38 @@
         "chips": [
           {
             "value": "none",
-            "left": 270,
-            "right": 313,
-            "top": 325.9,
-            "bottom": 349.3
+            "left": 276,
+            "right": 314,
+            "top": 347,
+            "bottom": 375
           },
           {
             "value": "voice.telephone",
-            "left": 181.9,
-            "right": 232,
-            "top": 325.9,
-            "bottom": 349.3
+            "left": 195.3,
+            "right": 241.4,
+            "top": 347,
+            "bottom": 375
           },
           {
             "value": "voice.megaphone",
-            "left": 95.1,
-            "right": 143.9,
-            "top": 325.9,
-            "bottom": 349.3
+            "left": 115,
+            "right": 160.7,
+            "top": 347,
+            "bottom": 375
           },
           {
             "value": "voice.radio",
-            "left": 271.7,
-            "right": 313,
-            "top": 355.3,
-            "bottom": 378.7
+            "left": 277,
+            "right": 314,
+            "top": 381,
+            "bottom": 409
           },
           {
             "value": "voice.robot",
-            "left": 185,
-            "right": 233.7,
-            "top": 355.3,
-            "bottom": 378.7
+            "left": 196.7,
+            "right": 242.4,
+            "top": 381,
+            "bottom": 409
           }
         ]
       }
@@ -133,7 +133,7 @@
         "revision": 5,
         "restored": [
           {
-            "id": "afx_948304f1fa0",
+            "id": "afx_2ab96a66f40",
             "type": "voice.telephone",
             "enabled": true,
             "params": {
@@ -146,7 +146,7 @@
         ],
         "before": [
           {
-            "id": "afx_948304f1fa0",
+            "id": "afx_2ab96a66f40",
             "type": "voice.telephone",
             "enabled": true,
             "params": {
@@ -192,8 +192,8 @@
           "clock": "audio",
           "fxVoices": 1,
           "windows": 66,
-          "beepMax": 0.481,
-          "gapMax": 0.1234,
+          "beepMax": 0.4804,
+          "gapMax": 0.124,
           "gapWindows": 42
         },
         "bypassed": {
@@ -221,9 +221,9 @@
       "name": "«השוואה בלי אפקטים» (pressed, from the keyboard) changes what the tap hears: the beeps stay, the echo between them goes; the switch is not stored (no revision)",
       "ok": true,
       "detail": {
-        "wetGap": 0.1234,
+        "wetGap": 0.124,
         "dryGap": 0,
-        "wetBeep": 0.481,
+        "wetBeep": 0.4804,
         "dryBeep": 0.5047
       }
     },
@@ -239,7 +239,7 @@
       "name": "timeline: «∿» on the clip, its accessible name lists the effects and the tail («אפקטים: טלפון, הד; זנב 1.0 שניות»), and the tail is static hatching of 1 s that is hidden from assistive technology, not a pointer target and not a clip",
       "ok": true,
       "detail": {
-        "label": "fixture.mp4 00:00:00:00–00:00:04:00; אפקטים: טלפון, הד; זנב 1.0 שניות",
+        "label": "fixture 00:00:00:00–00:00:04:00; אפקטים: טלפון, הד; זנב 1.0 שניות",
         "badge": true,
         "clipWidth": 359,
         "tail": {
@@ -527,13 +527,13 @@
       "ok": true,
       "detail": {
         "affectedIds": [
-          "clp_24d34898a02"
+          "clp_23e0689d562"
         ],
         "output": {
           "effects": [
             {
-              "clipId": "clp_24d34898a02",
-              "effectId": "afx_9c78fc1eb40",
+              "clipId": "clp_23e0689d562",
+              "effectId": "afx_515654bc5f0",
               "params": {
                 "amount": 0.5,
                 "delayMs": 250,
@@ -555,7 +555,7 @@
         "sound": {
           "audioFx": [
             {
-              "id": "afx_9c78fc1eb40",
+              "id": "afx_515654bc5f0",
               "type": "space.echo",
               "enabled": true,
               "params": {
@@ -602,9 +602,9 @@
       "detail": {
         "frame60": [
           {
-            "clipId": "clp_24d34898a02",
+            "clipId": "clp_23e0689d562",
             "trackId": "trk_audio",
-            "assetId": "ast_d3796af3870",
+            "assetId": "ast_6e9b3b86290",
             "sourceTime": {
               "value": "2",
               "timescale": 1
@@ -617,9 +617,9 @@
         ],
         "frame135": [
           {
-            "clipId": "clp_24d34898a02",
+            "clipId": "clp_23e0689d562",
             "trackId": "trk_audio",
-            "assetId": "ast_d3796af3870",
+            "assetId": "ast_6e9b3b86290",
             "tail": true,
             "secondsAfterEnd": 0.5,
             "fx": [
@@ -653,8 +653,8 @@
       "name": "K: «נקה את הקול» (Tab, Space) measures and commits ONE revision: the three cleanup effects in their fixed order (hum removal, noise reduction, speech enhancer), the noise profile measured on this recording; three rows in that order in the block",
       "ok": true,
       "detail": {
-        "tabsToRun": 3,
-        "measureAndCommitSeconds": 0.37,
+        "tabsToRun": 5,
+        "measureAndCommitSeconds": 0.35,
         "status": "נמדד: רעש רקע -50.8 דציבל ביחס לשיא · זמזום חשמל 50 הרץ (-40.0 דציבל ביחס לשיא) · דיבור -21.9 דציבל ביחס לשיא · יחס אות לרעש 17.5 דציבל · ביטחון במדידת הרעש 100%. הניקוי הוחל על הקטע. אפשר לבטל ב־Ctrl+Z.",
         "rows": [
           "cleanup.dehum",
@@ -663,7 +663,7 @@
         ],
         "effects": [
           {
-            "id": "afx_cc49338f4d0",
+            "id": "afx_468f6ded420",
             "type": "cleanup.dehum",
             "enabled": true,
             "params": {
@@ -674,7 +674,7 @@
             }
           },
           {
-            "id": "afx_cc49338f4d1",
+            "id": "afx_468f6ded421",
             "type": "cleanup.denoise",
             "enabled": true,
             "params": {
@@ -682,11 +682,11 @@
               "reductionDb": 15.2,
               "sensitivityDb": 1,
               "profile": "PnPmPkPqPnPlPkPrPnPpPpPpPoPqPnPpPpPqPnPpPpPpPoPo",
-              "source": "ast_8152f88ce00"
+              "source": "ast_f1d0ba2f710"
             }
           },
           {
-            "id": "afx_cc49338f4d2",
+            "id": "afx_468f6ded422",
             "type": "cleanup.speech",
             "enabled": true,
             "params": {
@@ -841,8 +841,8 @@
         "clock": "audio",
         "fxVoices": 1,
         "windows": 66,
-        "beepMax": 0.481,
-        "gapMax": 0.1234,
+        "beepMax": 0.4804,
+        "gapMax": 0.124,
         "gapWindows": 42
       },
       "bypassed": {
@@ -866,7 +866,7 @@
       "note": "peaks of 50 ms windows at the output tap; gaps are 0.2–0.9 s after each beep, where only the echo (and the telephone hiss) can sound"
     },
     "timeline": {
-      "label": "fixture.mp4 00:00:00:00–00:00:04:00; אפקטים: טלפון, הד; זנב 1.0 שניות",
+      "label": "fixture 00:00:00:00–00:00:04:00; אפקטים: טלפון, הד; זנב 1.0 שניות",
       "badge": true,
       "clipWidth": 359,
       "tail": {
@@ -1080,7 +1080,7 @@
       "he": {
         "lang": "he",
         "dir": "rtl",
-        "controls": 688,
+        "controls": 455,
         "controlsInBlock": 49,
         "unnamed": [],
         "lowContrast": [],
@@ -1093,7 +1093,7 @@
       "en": {
         "lang": "en",
         "dir": "ltr",
-        "controls": 688,
+        "controls": 455,
         "controlsInBlock": 49,
         "unnamed": [],
         "lowContrast": [],
@@ -1256,7 +1256,7 @@
       "sound": {
         "audioFx": [
           {
-            "id": "afx_9c78fc1eb40",
+            "id": "afx_515654bc5f0",
             "type": "space.echo",
             "enabled": true,
             "params": {
@@ -1299,9 +1299,9 @@
     "describeMoment": {
       "frame60": [
         {
-          "clipId": "clp_24d34898a02",
+          "clipId": "clp_23e0689d562",
           "trackId": "trk_audio",
-          "assetId": "ast_d3796af3870",
+          "assetId": "ast_6e9b3b86290",
           "sourceTime": {
             "value": "2",
             "timescale": 1
@@ -1314,9 +1314,9 @@
       ],
       "frame135": [
         {
-          "clipId": "clp_24d34898a02",
+          "clipId": "clp_23e0689d562",
           "trackId": "trk_audio",
-          "assetId": "ast_d3796af3870",
+          "assetId": "ast_6e9b3b86290",
           "tail": true,
           "secondsAfterEnd": 0.5,
           "fx": [
@@ -1327,8 +1327,8 @@
       "frame160": []
     },
     "voiceClean": {
-      "tabsToRun": 3,
-      "measureAndCommitSeconds": 0.37,
+      "tabsToRun": 5,
+      "measureAndCommitSeconds": 0.35,
       "status": "נמדד: רעש רקע -50.8 דציבל ביחס לשיא · זמזום חשמל 50 הרץ (-40.0 דציבל ביחס לשיא) · דיבור -21.9 דציבל ביחס לשיא · יחס אות לרעש 17.5 דציבל · ביטחון במדידת הרעש 100%. הניקוי הוחל על הקטע. אפשר לבטל ב־Ctrl+Z.",
       "rows": [
         "cleanup.dehum",
@@ -1337,7 +1337,7 @@
       ],
       "effects": [
         {
-          "id": "afx_cc49338f4d0",
+          "id": "afx_468f6ded420",
           "type": "cleanup.dehum",
           "enabled": true,
           "params": {
@@ -1348,7 +1348,7 @@
           }
         },
         {
-          "id": "afx_cc49338f4d1",
+          "id": "afx_468f6ded421",
           "type": "cleanup.denoise",
           "enabled": true,
           "params": {
@@ -1356,11 +1356,11 @@
             "reductionDb": 15.2,
             "sensitivityDb": 1,
             "profile": "PnPmPkPqPnPlPkPrPnPpPpPpPoPqPnPpPpPqPnPpPpPpPoPo",
-            "source": "ast_8152f88ce00"
+            "source": "ast_f1d0ba2f710"
           }
         },
         {
-          "id": "afx_cc49338f4d2",
+          "id": "afx_468f6ded422",
           "type": "cleanup.speech",
           "enabled": true,
           "params": {

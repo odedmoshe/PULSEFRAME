@@ -84,6 +84,8 @@ const styles = parse('./styles.css');
 const componentFiles = ['./ds/shell.css', ...readdirSync(new URL('./editor/', import.meta.url)).filter((f) => f.endsWith('.css')).sort().map((f) => `./editor/${f}`), './clip-visuals.css'];
 const components = componentFiles.flatMap((f) => parse(f));
 const theme = parse('./theme.css');
+// the sheets of the redesigned chrome (top bar, rail, drawer) and of the design-system primitives; they are loaded before the legacy ones
+const chrome = ['./ds/chrome.css', './ds/primitives.css'].flatMap((f) => parse(f));
 const all = [...styles, ...components, ...theme];
 const pick = (rules: Rule[], test: (selector: string) => boolean) => rules.flatMap((rule) => rule.selectors.filter(test).map((selector) => ({ rule, selector })));
 
@@ -100,6 +102,15 @@ describe('the specificity helper', () => {
 });
 
 describe('design tokens (ds/tokens.css)', () => {
+  it('only ds/tokens.css defines the theme tokens: no other sheet redefines them, so no rule on a primitive can beat a .pf-force-dark subtree', () => {
+    const names = ['--pf-surface-2', '--pf-surface-3', '--pf-text', '--pf-focus'];
+    const others = [...styles, ...components, ...theme, ...chrome];
+    // the one refinement is the stage's own (editor/stage.css), which is scoped to the stage and .pf-force-dark roots themselves
+    const redefined = others.filter((r) => names.some((n) => n in r.decls) && !r.selectors.every((sel) => /\.pf-force-dark|\.app > \.stage/.test(sel))).map((r) => r.selectors.join(', '));
+    expect(redefined).toEqual([]);
+    expect(tokens).toMatch(/\.pf-force-dark\s*\{/);
+  });
+
   const tokens = read('./ds/tokens.css').replace(/\/\*[\s\S]*?\*\//g, '');
   const brand = readFileSync(new URL('../../../packages/brand/src/tokens.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   const declared = (css: string) => new Set([...css.matchAll(/(--pf-[\w-]+)\s*:/g)].map((m) => m[1]!));
@@ -186,24 +197,32 @@ describe('editor stylesheets', () => {
       const named = excluded.some((c) => o.selector.startsWith(`${c}[`));
       expect(named || cmp(specificity(o.selector), specificity(generic.selector)) > 0, o.selector).toBe(true);
     }
-    // the header keeps its flat buttons (the pause toggle there has its own .paused look): same weight, declared later
-    const header = pick(theme, (s) => s === '.header button')[0]!;
-    expect(cmp(specificity(header.selector), specificity(generic.selector))).toBe(0);
-    expect(header.rule.order).toBeGreaterThan(generic.rule.order);
+    // the design-system controls draw their own pressed / on state (chips, switches, the drawer's chip rows): each rule is more
+    // specific than the generic one, so a legacy rule can never flatten it back to the plain toggle look
+    const ds = pick(chrome, (s) => /\[aria-(pressed|checked)=["']true["']\]/.test(s));
+    expect(ds.map((o) => o.selector)).toEqual(expect.arrayContaining([".pf-chip[aria-pressed='true']", ".pf-switch[aria-checked='true']"]));
+    for (const o of ds.filter((o) => /aria-pressed/.test(o.selector))) expect(cmp(specificity(o.selector), specificity(generic.selector)), o.selector).toBeGreaterThan(0);
   });
 
-  it('the header and the panels that hold dialogs create no stacking context, so a dialog opened from them is on top of the page', () => {
+  it('the top bar, the toolbar and the panels that hold dialogs create no stacking context, so a dialog opened from them is on top of the page', () => {
     const traps = ['z-index', 'opacity', 'transform', 'filter', 'backdrop-filter', 'perspective', 'clip-path', 'mask', 'isolation', 'mix-blend-mode', 'contain', 'will-change', 'container-type'];
-    // the shell sheet names the panes as children of the grid (`.app > .header`): those rules are held to the same list
-    const holders = pick(all, (s) => ['.app', '.header', '.library', '.inspector'].includes(s.replace(/^\.app > /, '')));
-    expect(holders.some((h) => h.selector === '.header' && h.rule.file === './theme.css')).toBe(true);
+    // the redesigned top bar is .pf-top (ds/chrome.css); the shell sheet names the panes as children of the grid (`.app > .pf-top`): held to the same list
+    const bare = (s: string) => s.replace(/^\.app > /, '');
+    const holders = pick([...all, ...chrome], (s) => ['.app', '.pf-top', '.library', '.inspector', '.tl-snap'].includes(bare(s)));
+    expect(holders.some((h) => h.selector === '.pf-top' && h.rule.file === './ds/chrome.css')).toBe(true);
     for (const h of holders) for (const prop of traps) expect(h.rule.decls[prop], `${h.selector} { ${prop} } in ${h.rule.file}`).toBeUndefined();
-    // what the dialogs must stay above
-    const z = (sel: string) => Number(pick(all, (s) => s === sel).map((r) => r.rule.decls['z-index']).filter(Boolean).at(-1));
+    // the bar's own box and its direct children (the project name, the menus) are held to it too
+    const bars = pick([...all, ...chrome], (s) => /^(\.app > )?\.pf-top( > \*)?$/.test(s) || /^\.timeline\.pf-ds \.tl-(bar|tools|view)$/.test(s));
+    expect(bars.some((h) => h.selector === '.timeline.pf-ds .tl-bar')).toBe(true);
+    for (const h of bars) for (const prop of traps) expect(h.rule.decls[prop], `${h.selector} { ${prop} } in ${h.rule.file}`).toBeUndefined();
+    // what the dialogs must stay above; a control in the normal flow (the snap toggle, the add-track box) has no z-index and is the page's level 0
+    const z = (sel: string) => Number(pick(all, (s) => s === sel).map((r) => r.rule.decls['z-index']).filter(Boolean).at(-1) ?? 0);
     for (const dialog of ['.pf-dlg-backdrop', '.pf-pal-backdrop', '.pf-gal-backdrop']) {
       expect(pick(all, (s) => s === dialog)[0]!.rule.decls.position, dialog).toBe('fixed');
       for (const under of ['.welcome', '.marker-bar', '.tl-snap', '.tl-add-track', '.clip-menu']) expect(z(dialog), `${dialog} over ${under}`).toBeGreaterThan(z(under));
     }
+    // the snap toggle really is in the flow: no rule positions it above the page
+    for (const r of pick(all, (s) => s === '.tl-snap' || s === '.tl-add-track')) expect(r.rule.decls['z-index'] === undefined || Number(r.rule.decls['z-index']) < z('.pf-dlg-backdrop'), r.selector).toBe(true);
   });
 
   it('the shell is one fixed grid the size of the window: the page cannot scroll and the top bar is one row that cannot grow', () => {
@@ -219,7 +238,7 @@ describe('editor stylesheets', () => {
     const areas = decl('grid-template-areas')!;
     for (const area of ['top', 'err', 'rail', 'browser', 'stage', 'inspector', 'split', 'tl', 'status']) expect(areas, area).toMatch(new RegExp(`\\b${area}\\b`));
     const placed = Object.fromEntries(shell.flatMap((r) => r.selectors.filter((sel) => sel.startsWith('.app > ') && r.decls['grid-area']).map((sel) => [sel.slice(7), r.decls['grid-area']])));
-    expect(placed).toEqual({ '.header': 'top', '.error': 'err', "[data-shell-slot='rail']": 'rail', '.library': 'browser', '.stage': 'stage', '.inspector': 'inspector', "[data-shell-slot='splitter']": 'split', '.timeline': 'tl', "[data-shell-slot='status']": 'status' });
+    expect(placed).toEqual({ '.pf-top': 'top', '.error': 'err', "[data-shell-slot='rail']": 'rail', '.library': 'browser', '.stage': 'stage', '.inspector': 'inspector', "[data-shell-slot='splitter']": 'split', '.timeline': 'tl', "[data-shell-slot='status']": 'status' });
     const elsewhere = [...styles, ...components.filter((r) => r.file !== './ds/shell.css'), ...theme];
     expect(elsewhere.filter((r) => 'grid-area' in r.decls && r.selectors.some((sel) => ['.header', '.error', '.library', '.inspector', '.stage', '.timeline'].includes(sel))).map((r) => `${r.file}: ${r.selectors.join(', ')}`)).toEqual([]);
     expect(pick(elsewhere, (s) => s === '.app')).toEqual([]); // the grid rules left styles.css and theme.css
@@ -231,11 +250,12 @@ describe('editor stylesheets', () => {
     // list of flashing stretches and the glow of Export are drawn outside it)
     expect(decl('grid-template-rows')!.startsWith('var(--pf-shell-top) ')).toBe(true);
     expect(decl('--pf-shell-top')).toMatch(/^[\d.]+px$/);
-    const bar = pick(shell, (s) => s === '.app > .header');
+    const bar = pick(chrome, (s) => s === '.pf-top');
     expect(winner(bar, 'flex-wrap')?.rule.decls['flex-wrap']).toBe('nowrap');
     for (const r of bar) for (const prop of ['overflow', 'overflow-x', 'overflow-y']) expect(r.rule.decls[prop], prop).toBeUndefined();
-    // Export and the logo never narrow: everything in the bar is rigid unless a later rule lets it give way, and none names .primary or .logo
-    expect(pick(shell, (s) => s === '.app > .header > *')[0]!.rule.decls.flex).toBe('0 0 auto');
+    // the bar's children are rigid (ds/chrome.css), and the shell sheet carries no rule about the bar's content at all: no legacy `.header` ladder
+    expect(pick(chrome, (s) => s === '.pf-top > *')[0]!.rule.decls.flex).toBe('0 0 auto');
+    expect(shell.filter((r) => r.selectors.some((sel) => /\.header\b|\.hd-label/.test(sel)))).toEqual([]);
     expect(shell.filter((r) => r.decls.flex && r.selectors.some((sel) => /\.primary|\.logo/.test(sel) && !/:not\([^)]*\.primary/.test(sel)))).toEqual([]);
     // the mounts that are still empty take no room; the App renders them in the grid
     const src = read('./App.tsx');
@@ -252,43 +272,33 @@ describe('editor stylesheets', () => {
   });
 
   it('no child of the top bar takes its width from the bar: the field that edits the project name has a width of its own', () => {
-    // Every child of the bar is rigid at its own width unless a shell rule lets it give way (pinned above). A child whose
-    // width is a share of its container is then a share of the whole bar: the rename field (100% wide everywhere else) was
-    // 1416px in a 1440px window and pushed the selects, undo, redo and Export out of it.
-    expect(read('./editor/Header.tsx')).toMatch(/<InlineRename [^>]*testid="project-rename"/);
-    expect(read('./editor/InlineRename.tsx')).toMatch(/<input [^>]*className=\{`inline-rename-input /);
-    expect(winner(pick(styles, (s) => s === '.inline-rename-input'), 'inline-size')?.rule.decls['inline-size']).toBe('100%');
-    // the classes the direct children of <header> carry (Header.tsx, InlineRename.tsx), and the rules that can reach such a child
-    const childClasses = ['logo', 'brand', 'title', 'inline-rename-btn', 'inline-rename-input', 'track-btn', 'format-switch', 'format-badge', 'check', 'format-safe', 'spacer', 'save', 'warn', 'rev', 'ghost', 'paused', 'danger', 'export-finished', 'flash-result', 'primary'];
+    // Every child of the bar is rigid at its own width (`.pf-top > *`), and the bar never wraps. A child whose width is a share of
+    // its container would be a share of the whole bar: the rename field (100% wide everywhere else, styles.css) was 1416px in a
+    // 1440px window and pushed the menus, undo, redo and Export out of it.
     const header = read('./editor/Header.tsx');
-    for (const c of ['logo', 'brand', 'title', 'format-switch', 'format-badge', 'check format-safe', 'spacer', 'rev', 'primary', 'flash-result']) expect(header, c).toContain(`className="${c}"`);
-    const compounds = (sel: string) => sel.split(/\s*>\s*|\s+/).filter(Boolean);
-    const reaches = (sel: string, cls: string) => {
-      const parts = compounds(sel), last = parts.at(-1)!;
-      if (!parts.slice(0, -1).every((p) => ['.app', '.header', 'header'].includes(p))) return false; // scoped to another container
-      const base = last.replace(/:(?:not|is|where)\([^)]*\)|::?[\w-]+|\[[^\]]*\]/g, '');
-      const named = [...base.matchAll(/\.([\w-]+)/g)].map((m) => m[1]!);
-      return named.length ? named.includes(cls) && named.every((n) => childClasses.includes(n)) : /^(\*|button|a|input|span|strong|label|details)$/.test(base);
-    };
-    const widthOf = (cls: string) => {
-      const rules = pick(all, (s) => reaches(s, cls)).flatMap((r) => (['inline-size', 'width'] as const).filter((p) => p in r.rule.decls).map((p) => ({ ...r, value: r.rule.decls[p]! })));
-      return rules.sort((a, b) => cmp(specificity(a.selector), specificity(b.selector)) || a.rule.order - b.rule.order).at(-1)?.value ?? 'auto';
-    };
-    for (const cls of childClasses) expect(widthOf(cls), `.header > .${cls} { inline-size }`).not.toMatch(/%|v[wi]\b|stretch|fill-available/);
-    // the field: 12rem to type in, not growing, and narrowing in the same step as the project name it edits
-    expect(widthOf('inline-rename-input')).toBe('auto');
-    const shell = parse('./ds/shell.css');
-    const field = pick(shell, (s) => s === '.app > .header > .inline-rename-input');
+    expect(header).toMatch(/<InlineRename [^>]*testid="project-rename"/);
+    expect(read('./editor/InlineRename.tsx')).toMatch(/<input [^>]*className=\{`inline-rename-input /);
+    expect(winner(pick(styles, (s) => s === '.inline-rename-input'), 'inline-size')?.rule.decls['inline-size']).toBe('100%'); // the legacy width, the one that must not win here
+    const bar = pick([...all, ...chrome], (s) => s === '.pf-top');
+    expect(winner(bar, 'display')?.rule.decls.display).toBe('flex');
+    expect(winner(bar, 'flex-wrap')?.rule.decls['flex-wrap']).toBe('nowrap');
+    for (const r of bar) for (const prop of ['overflow', 'overflow-x', 'overflow-y']) expect(r.rule.decls[prop], prop).toBeUndefined();
+    expect(pick(chrome, (s) => s === '.pf-top > *')[0]!.rule.decls.flex).toBe('0 0 auto');
+    // nothing that reaches a child of the bar gives it a width that is a share of the bar
+    const inBar = (sel: string) => /^\.pf-top[ >]/.test(sel) || /^\.app > \.pf-top[ >]/.test(sel);
+    for (const r of pick([...all, ...chrome], inBar)) for (const prop of ['inline-size', 'width']) if (prop in r.rule.decls) expect(r.rule.decls[prop], `${r.selector} { ${prop} }`).not.toMatch(/%|v[wi]\b|stretch|fill-available/);
+    // the field: its own basis in rem to type in, one that can narrow, never smaller than a field one can still type in
+    const field = pick(chrome, (s) => s === '.pf-top .inline-rename-input');
     expect(field.length).toBe(1);
     const [grow, shrink, basis] = field[0]!.rule.decls.flex!.split(/\s+/);
-    expect(grow).toBe('0');
     expect(basis).toMatch(/^[\d.]+(rem|px|ch)$/);
-    const step = pick(shell, (s) => s === '.app > .header > :is(.title, .format-safe, .format-switch)')[0]!.rule.decls.flex!.split(/\s+/)[1];
+    expect(Number(grow)).toBeLessThanOrEqual(1);
     expect(Number(shrink)).toBeGreaterThan(0);
-    expect(shrink).toBe(step);
-    expect(field[0]!.rule.decls['min-inline-size']).toMatch(/^[1-9][\d.]*(rem|px|ch)$/); // still a field one can type in when the bar is at its narrowest
+    expect(field[0]!.rule.decls['min-inline-size']).toMatch(/^[1-9][\d.]*(rem|px|ch)$/);
+    // the cell that holds the name is bounded as well, so a long name cannot push the rest of the bar out
+    expect(pick(chrome, (s) => s === '.pf-top-id')[0]!.rule.decls['max-inline-size']).toMatch(/^[\d.]+(rem|px|ch)$/);
     // nothing after it in the sheets widens it again (theme.css is loaded last)
-    expect(pick(theme, (s) => /inline-rename-input/.test(s) && compounds(s).slice(0, -1).every((p) => ['.app', '.header'].includes(p)))).toEqual([]);
+    expect(pick(theme, (s) => /inline-rename-input/.test(s))).toEqual([]);
   });
 
   it('what the preview draws above the stage is cut off at the stage edge, so the handles of an enlarged clip cannot lie over the header', () => {
@@ -351,45 +361,39 @@ describe('editor stylesheets', () => {
     expect(base.rule.decls['inline-size']).toBe('fit-content');
   });
 
-  it('the zoom control costs the tracks no height where it can share the clip actions line, and pushes nothing under the pinned controls from 1024 to 1920px', () => {
-    const sheet = parse('./editor/timelineZoom.css');
-    const px = (media: string | null, edge: 'min' | 'max') => Number(new RegExp(`${edge}-width:\\s*([\\d.]+)px`).exec(media ?? '')?.[1] ?? NaN);
-    // the three forms, read from the sheet
-    const inline = sheet.filter((r) => r.selectors.includes('.tl-zoom') && r.decls.display === 'inline-flex');
-    expect(inline.length).toBe(1);
-    const inlineFrom = px(inline[0]!.media, 'min');
-    const short = sheet.filter((r) => r.selectors.includes('.tl-zoom-slider') && r.decls.display === 'none');
-    expect(short.length).toBe(1);
-    expect(short[0]!.selectors).toContain('.tl-zoom-fit-label');
-    expect(px(short[0]!.media, 'min')).toBe(inlineFrom); // the short form starts where the control joins the clip actions line
-    const wholeFrom = Math.ceil(px(short[0]!.media, 'max'));
-    expect(wholeFrom).toBeGreaterThan(inlineFrom);
-    // Fit always shows something: the icon exactly where the label is hidden, and nowhere else
-    const icon = sheet.filter((r) => r.selectors.includes('.tl-zoom-fit-ico'));
-    expect(icon.map((r) => [r.media, r.decls.display])).toEqual([[null, 'none'], [short[0]!.media, 'block']]);
-    const tsx = read('./editor/TimelineZoom.tsx');
-    expect(tsx).toMatch(/data-testid="tl-zoom-fit" aria-label=\{s\.fit\}/); // named by its label at every width
-    expect(tsx).toContain('className="tl-zoom-fit-ico"');
-    expect(tsx).toContain('className="tl-zoom-fit-label"');
-
-    // Widths in px. MEASURED, not live: read off a 1280px screenshot of the Hebrew editor (the 3ad2e49 build:
-    // clip actions 12-425, zoom 507-751, add-track box 827-1030) and reproduced from the Heebo advance widths, which also
-    // give the English labels and the marker bar. Hebrew has the widest Fit label, English the widest marker bar.
-    const BTN = 28, GAP = 4, SLIDER = 100, MARGIN = 12, ROOM = 8;
-    const FIT = { he: 77, en: 27 }, ACTIONS = { he: 414, en: 416 }, MARKER_BAR = { he: 388, en: 427 };
-    const addTrackFrom = (w: number) => w - 250 - 203, markerBarFrom = (w: number, lang: 'he' | 'en') => w - 200 - MARKER_BAR[lang];
-    const tiers = new Set<string>();
-    for (const lang of ['he', 'en'] as const) for (let w = 1024; w <= 1920; w++) {
-      const tier = w < inlineFrom ? 'own line' : w < wholeFrom ? 'short' : 'whole';
-      tiers.add(tier);
-      const zoomEnd = MARGIN + (tier === 'short' ? 3 * BTN + 2 * GAP : 2 * BTN + SLIDER + FIT[lang] + 3 * GAP);
-      const pinned = Math.min(addTrackFrom(w), markerBarFrom(w, lang)); // both sit on the bar's first line, where the zoom always is
-      expect(zoomEnd + ROOM, `zoom, ${lang} ${w}px (${tier})`).toBeLessThanOrEqual(pinned);
-      if (tier === 'own line') continue; // the clip actions are where they were before the zoom control existed
-      expect(zoomEnd + MARGIN + ACTIONS[lang] + ROOM, `clip actions, ${lang} ${w}px (${tier})`).toBeLessThanOrEqual(pinned);
+  it('the zoom control costs the lanes no height: it sits at the end of the one-row toolbar, which never wraps and has a fixed height', () => {
+    // UX_REDESIGN §4.7: the toolbar is one row of fixed height (tools, ride bar, then the ruler mode and the zoom at the end),
+    // so the lanes get exactly the height that is left whatever the window width. The old layout had three tiers of zoom (whole /
+    // short / own line) to keep a second line off the lanes; there is one form now.
+    const tsx = read('./editor/Timeline.tsx');
+    const bar = tsx.indexOf('className="tl-bar"');
+    const view = tsx.indexOf('className="tl-view"');
+    expect(bar).toBeGreaterThan(-1);
+    expect(view).toBeGreaterThan(bar);
+    expect(tsx.indexOf('<TimelineZoom', view)).toBeGreaterThan(view);
+    expect(tsx.indexOf('<TimelineZoom', view)).toBeLessThan(tsx.indexOf('className="tl-scroll"')); // in the bar, above the lanes
+    expect(tsx.indexOf('className="tl-ride-zone"')).toBeLessThan(view); // the zoom is the end of the row, after the ride bar
+    const sheet = parse('./editor/timeline.css');
+    const rows = pick(sheet, (s) => s === '.timeline.pf-ds .tl-bar');
+    expect(rows.length).toBeGreaterThan(0);
+    const all2 = (prop: string) => rows.filter((r) => prop in r.rule.decls);
+    expect(winner(rows, 'display')?.rule.decls.display).toBe('flex');
+    expect(winner(rows, 'flex')?.rule.decls.flex).toBe('none'); // the bar never takes lane height by growing
+    expect(winner(rows, 'block-size')?.rule.decls['block-size']).toMatch(/^\d+px$/); // a fixed height
+    // at no width does the bar wrap or change its height
+    for (const r of rows) for (const prop of ['flex-wrap', 'height', 'min-height', 'min-block-size', 'max-block-size', 'max-height', 'flex-flow']) expect(r.rule.decls[prop] === undefined || r.rule.decls[prop] === 'nowrap', `${r.selector} { ${prop} } ${r.rule.media ?? ''}`).toBe(true);
+    for (const r of all2('block-size')) expect(r.rule.decls['block-size'], r.rule.media ?? 'base').toBe(winner(rows, 'block-size')!.rule.decls['block-size']);
+    // the groups inside it do not wrap either, and the zoom is one rigid group, not a second line
+    for (const sel of ['.timeline.pf-ds .tl-tools', '.timeline.pf-ds .tl-view']) {
+      const group = pick(sheet, (s) => s === sel);
+      expect(winner(group, 'flex')?.rule.decls.flex, sel).toBe('none');
+      for (const r of group) expect(r.rule.decls['flex-wrap'] ?? 'nowrap', sel).toBe('nowrap');
     }
-    expect([...tiers].sort()).toEqual(['own line', 'short', 'whole']);
-    // the common laptop width keeps the bar on one line (at 1280x720 a second line cut the bottom track of four)
-    expect(inlineFrom).toBeLessThanOrEqual(1280);
+    for (const r of pick([...sheet, ...parse('./editor/timelineZoom.css')], (s) => /\.tl-zoom$/.test(s))) expect(r.rule.decls['flex-wrap'] ?? 'nowrap').toBe('nowrap');
+    // the lanes are the rest of the column
+    expect(winner(pick(components, (s) => s === '.tl-scroll'), 'min-height')?.rule.decls['min-height']).toBe('0');
+    // the three-tier form is gone: no hidden label or icon swapping between breakpoints
+    expect(read('./editor/timelineZoom.css')).not.toMatch(/tl-zoom-fit-(label|ico)/);
+    expect(read('./editor/TimelineZoom.tsx')).not.toMatch(/tl-zoom-fit-(label|ico)/);
   });
 });

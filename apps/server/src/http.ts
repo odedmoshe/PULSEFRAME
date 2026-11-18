@@ -21,7 +21,8 @@ import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
-import { applyTransaction, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, OpError, WALL_DATE, type Asset, type OpCall, TemplateBodySchema } from '@pulseframe/core';
+import { applyTransaction, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema } from '@pulseframe/core';
+import { addMusic, MusicBody, musicPreview } from './music.ts';
 import { onThisDayFor, readMissingCaptures } from './lifeline.ts';
 import { preflight } from './preflight.ts';
 import { collectGarbage, deleteProject, assertStorageRoom, storageReport } from './storage.ts';
@@ -580,6 +581,29 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const bytes = await sfxPreview(store.tmpDir, c.req.param('sfxId'));
     return c.body(new Uint8Array(bytes), 200, { 'content-type': 'audio/wav', 'content-length': String(bytes.length), 'cache-control': 'private, max-age=3600' });
   });
+  // ----- content packs and built-in music (ADR-0022) -----
+  app.get('/api/v1/packs', (c) => { need(c, 'observe'); return c.json({ packs: PACKS.map(summarizePack) }); });
+  // The packs to suggest on the caller's own local day; with projectId, also the birthdays of that project's people, as the
+  // credential may read them (a credential without the people scope reads no birth dates, so it gets no birthday hints).
+  app.get('/api/v1/packs/suggest', (c) => {
+    const p = need(c, 'observe');
+    return c.json(packSuggestions(store, gov, p, c.req.query('date') ?? '', c.req.query('projectId')));
+  });
+  app.get('/api/v1/music', (c) => { need(c, 'observe'); return c.json({ styles: listMusicStyles() }); });
+  // Listening before adding: the same bytes adding it would store (at most 32 bars); cancelled when the request goes away.
+  app.get('/api/v1/music/:styleId/audio', async (c) => {
+    need(c, 'observe');
+    const int = (v: string | undefined, d: number) => (v === undefined || v === '' ? d : /^\d{1,7}$/.test(v) ? Number(v) : Number.NaN);
+    const bytes = await musicPreview(c.req.param('styleId'), int(c.req.query('bars'), 16), int(c.req.query('seed'), 1), { signal: c.req.raw.signal });
+    return c.body(new Uint8Array(bytes), 200, { 'content-type': 'audio/wav', 'content-length': String(bytes.length), 'cache-control': 'private, max-age=3600' });
+  });
+  // As for templates: the credential's own mode decides (addMusic refuses observe and propose modes with the reason).
+  app.post('/api/v1/projects/:id/music', async (c) => {
+    const p = need(c, 'observe');
+    const projectId = c.req.param('id');
+    store.getProject(projectId);
+    return c.json(await addMusic(store, gov, p, projectId, await body(c, MusicBody)), 201);
+  });
   // Graphic elements: the same route for the editor and for agents. Element pictures count against the storage ceiling like
   // uploads; makeElement checks it (store.maxStorageBytes), so the agent tool is held to it as well.
   app.get('/api/v1/elements', async (c) => { need(c, 'observe'); return c.json({ available: await canRasteriseSvg(), count: ELEMENTS.length, note: 'Elements are listed in the catalog. available=false means this machine\'s ffmpeg cannot read SVG, so elements cannot be made here.' }); });
@@ -845,6 +869,8 @@ export const catalog = () => ({
   formatProfiles: FORMAT_PROFILES.map((p) => ({ ...p, note: 'Generic safe-area guide, editable per variant; not a platform specification.' })),
   soundEffects: SFX.map((s) => ({ id: s.id, version: s.version, name: s.name, seconds: s.seconds, category: s.category, source: 'synthesised by formula in this build; no third-party content' })),
   fonts: FONT_CATALOG,
+  packs: PACKS.map(summarizePack),
+  music: listMusicStyles().map((m) => ({ ...m, note: 'Add with add_builtin_music (POST /api/v1/projects/{id}/music), or as builtinMusic of a template. Synthesised by formula in this build; its beats, bars and sections are known from the recipe. review "unheard": nobody has listened to it yet.' })),
   note: 'This is the complete list for this build; anything not listed here does not exist. Picture entries render through the Canvas2D compositor (GPU passes where listed); sound entries through the shared engine DSP in preview and export alike. audioEffects are effects applied to sound clips (add_audio_effect, apply_audio_preset); soundEffects are sound files of the sound library.',
 });
 
@@ -925,6 +951,30 @@ export async function addSfx(store: Store, gov: Governance, principal: Principal
   gov.assertUnrestricted(principal, 'add media to the library');
   const asset = await makeSfx(store, a.sfxId, principal.actor);
   return attachGenerated(store, gov, principal, projectId, asset, 'sound', a.start ? { start: a.start, ...(a.trackId ? { trackId: a.trackId } : {}) } : null);
+}
+
+/**
+ * GET /api/v1/packs/suggest and MCP suggest_packs: the packs to suggest on `date`, nearest first (core suggestPacks). With a
+ * project, the birthdays of its people are hints (core birthdayHints), read through the store as the credential may read
+ * them: a credential without the people scope reads no birth dates, so its answer never depends on one.
+ */
+export function packSuggestions(store: Store, gov: Governance, p: Principal, date: string, projectId?: string) {
+  if (!WALL_DATE.test(date) || !isRealWallDate(date)) throw new ApiError(400, 'invalid_request', 'date must be a real day written YYYY-MM-DD (the day on the viewer\'s own clock)', { date: date.slice(0, 32) });
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  const today = { y, m, d };
+  let hints: ReturnType<typeof birthdayHints> = [];
+  let birthdays: 'none' | 'not_readable' | 'used' = 'none';
+  if (projectId !== undefined) {
+    gov.assertMayAct(p, projectId, 'observe');
+    const doc = store.getProject(projectId).doc;
+    hints = birthdayHints(doc.people, today);
+    const people = Object.values(doc.people ?? {});
+    birthdays = hints.length ? 'used' : people.length && peopleAccess(p) !== 'full' ? 'not_readable' : 'none';
+  }
+  return {
+    suggestions: suggestPacks(PACKS, today, hints), birthdays,
+    note: birthdays === 'not_readable' ? 'This credential may not read birth dates, so the people\'s birthdays were not looked at; packs are suggested from the date only.' : 'Packs whose occasion is near this day, nearest first. A dismissal is the viewer\'s own preference; nothing is stored.',
+  };
 }
 
 const secs = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));

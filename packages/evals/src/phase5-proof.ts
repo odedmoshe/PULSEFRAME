@@ -14,6 +14,7 @@ import * as T from '@pulseframe/time';
 import type { ProjectDocument } from '@pulseframe/core';
 import { generateBarcodeFixture, readBarcode } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
+import { pauseAgent } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/phase5');
@@ -191,8 +192,8 @@ async function main() {
     }
 
     console.log('\n# human control and authorization boundaries');
-    // Pause Agent from the editor.
-    await page.getByTestId('pause-agent').click();
+    // Pause Agent from the editor (an item of the agent avatar's menu since the redesign).
+    await pauseAgent(page);
     await page.getByTestId('agents-paused').waitFor();
     const revP = (await doc()).revision;
     const blocked = await A.call('set_clip_transform', { projectId: pid, clipId: titleId, transform: { x: 0.1 } });
@@ -206,7 +207,7 @@ async function main() {
     const pausedAsk = await rest(`/projects/${pid}/capabilities/comfy.image.remove-background/models/request`, {}, bearer(editor.token));
     check('while paused, every job-starting or requesting route refuses agents too (retry, browser export, model request)', [pausedRetry, pausedBrowser, pausedAsk].every((r) => r.status === 423 && r.body.error.code === 'agent_paused'), [pausedRetry.status, pausedBrowser.status, pausedAsk.status]);
     check('an agent cannot resume itself, create grants, or decide proposals and approvals', (await rest(`/projects/${pid}/agents/resume`, {}, bearer(editor.token))).status === 403 && (await rest('/grants', { name: 'x', mode: 'autopilot' }, bearer(editor.token))).status === 403 && (await rest('/grants', undefined, bearer(editor.token))).status === 403);
-    await page.getByTestId('pause-agent').click();
+    await pauseAgent(page); // the same menu item resumes
     await page.waitForFunction(() => !document.querySelector('[data-testid=agents-paused]'));
     check('Resume is a deliberate owner action; afterwards the agent can edit again', !(await A.call('set_clip_transform', { projectId: pid, clipId: titleId, transform: { x: 0 } })).isError);
     // Stale proposal is not applied over newer work.

@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-17T17:38:57.126Z",
+  "ranAt": "2026-11-18T01:26:16.664Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v553 x64",
+    "platform": "Linux 6.18.44-fc-v595 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
@@ -34,13 +34,13 @@
     "trackingJob": {
       "status": "succeeded",
       "output": {
-        "motionTrackId": "mtk_3b85b3370f0",
+        "motionTrackId": "mtk_fce121a70e0",
         "revision": 4,
         "from": 0,
         "to": 240,
         "frames": 240,
         "decodedFrames": 240,
-        "trackingFps": 52.46,
+        "trackingFps": 63.22,
         "input": "proxy",
         "counts": {
           "unknown": 0,
@@ -258,22 +258,22 @@
       }
     ],
     "P13": {
-      "trackingFps": 52.46,
+      "trackingFps": 63.22,
       "framesTracked": 240,
       "framesDecoded": 240,
       "input": "proxy",
       "eventLoopLagMs": {
-        "p50": 12.8,
-        "p99": 62.6,
-        "max": 77.9,
+        "p50": 12.1,
+        "p99": 68.5,
+        "max": 71,
         "budgetP99": 100,
         "withinBudget": true
       },
       "commitMs": {
         "samples": 43200,
-        "baselineP95": 8.6,
-        "withSamplesP95": 115.7,
-        "deltaP95": 107.1,
+        "baselineP95": 3,
+        "withSamplesP95": 82.3,
+        "deltaP95": 79.3,
         "budgetDelta": 15,
         "withinBudget": false
       }
@@ -374,13 +374,13 @@
       "detail": {
         "stageWhenCanceled": "reading frames",
         "cancel": {
-          "jobId": "job_zUpmkES3Nk0",
+          "jobId": "job_LxItmInss8A",
           "status": "cancel-requested",
           "outcome": "stopping",
           "note": "the tracker is being stopped; nothing will be attached"
         },
         "status": "canceled",
-        "ms": 12,
+        "ms": 6,
         "ffmpegLeft": 0,
         "revision": [
           8,

@@ -25,6 +25,7 @@ import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
 import { dictionaries, effectParamLabel, translateRefusal, fillIn, TREND_PACK_HE } from '../../i18n/src/index.ts';
 import { creativeProjection, beatSwitchFrame, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 import { TEMPLATE_TESTIDS } from '../../../apps/web/src/editor/templates.testids.ts';
+import { chooseFormat } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/editor-interactions');
@@ -79,7 +80,7 @@ async function main() {
     await page.getByTestId('deliver-panel').waitFor();
 
     console.log('\n# format-only override by dragging on the canvas; hide in format');
-    await page.getByTestId('format-switch').selectOption(tall);
+    await chooseFormat(page, tall);
     await page.getByTestId('format-badge').waitFor();
     await page.locator(`.clip[data-clip-id="${title}"]`).click();
     await page.getByTestId('canvas-handles').waitFor();
@@ -101,7 +102,7 @@ async function main() {
     await page.getByTestId('format-clear-override').click();
     const cleared = await until((x2) => !x2.variants[tall].overrides[title]);
     check('"hide in this format" hides the clip there only; "clear override" removes the override', hidden && cleared);
-    await page.getByTestId('format-switch').selectOption('');
+    await chooseFormat(page, '');
 
     console.log('\n# clip moves snap to beats');
     d = await doc();
@@ -175,7 +176,7 @@ async function main() {
     await page.keyboard.press('Control+d');
     const duplicated = await until((x2) => x2.sequences.seq_main.tracks.filter((t: any) => t.kind === 'video').flatMap((t: any) => t.clips).length === v0 + 2);
     check('Ctrl+C then Ctrl+V pastes a full copy at the playhead (same source, trim and length) and selects it; Ctrl+D duplicates the selection right after itself', pasted && !!paste && fr(paste.duration) === fr(srcClip.duration) && fr(paste.sourceIn) === fr(srcClip.sourceIn) && duplicated, { pastedAtFrame: paste ? fr(paste.start) : null });
-    await page.getByTestId('format-switch').selectOption(tall);
+    await chooseFormat(page, tall);
     await page.locator(`.clip[data-clip-id="${title}"]`).click();
     await page.mouse.click(rb.x + 30, rb.y + rb.height / 2); // playhead inside the title: the sliders are enabled only while the clip is on screen
     await page.locator('[data-testid=transform-scope][data-scope=format]').waitFor();
@@ -187,7 +188,7 @@ async function main() {
     const kfDisabled = await page.getByTestId('keyframe-add').isDisabled();
     await page.getByTestId('transform-reset-format').click();
     const resetOk = await until((x2) => !x2.variants[tall].overrides[title]);
-    await page.getByTestId('format-switch').selectOption('');
+    await chooseFormat(page, '');
     const scopeMaster = (await page.locator('[data-testid=transform-scope]').getAttribute('data-scope')) === 'master';
     check('while a format is viewed, the Inspector scale slider writes a format-only override (master unchanged), keyframe buttons are disabled, and "reset to master" removes the override; back on the master the controls edit the master again', sliderOverride && masterKept && kfDisabled && resetOk && scopeMaster, { sliderOverride, masterKept, kfDisabled, resetOk, scopeMaster });
 
@@ -196,7 +197,7 @@ async function main() {
     const sq = Object.values((await doc()).variants as Record<string, any>).find((v: any) => v.name === 'Square').id as string;
     const wBefore = { master: await frameBytes(), tall: await frameBytes(tall), sq: await frameBytes(sq) };
     await page.locator(`.clip[data-clip-id="${title}"]`).click();
-    await page.getByTestId('format-switch').selectOption(tall);
+    await chooseFormat(page, tall);
     await page.getByTestId('text-format-note').waitFor();
     const hintBefore = (await page.getByTestId('text-format-reset').count()) === 0;
     await page.getByTestId('text-content').fill('קצר');
@@ -204,16 +205,16 @@ async function main() {
     const wordingSet = await until((x2) => x2.variants[tall].overrides[title]?.text === 'קצר' && clipOf(x2, title).text === 'כותרת');
     await page.getByTestId('text-format-reset').waitFor();
     const wAfter = { master: await frameBytes(), tall: await frameBytes(tall), sq: await frameBytes(sq) };
-    await page.getByTestId('format-switch').selectOption('');
+    await chooseFormat(page, '');
     const masterField = await page.getByTestId('text-content').inputValue();
-    await page.getByTestId('format-switch').selectOption(tall);
+    await chooseFormat(page, tall);
     const tallField = await page.getByTestId('text-content').inputValue();
     await page.getByTestId('text-format-reset').click();
     const wordingCleared = await until((x2) => !x2.variants[tall].overrides[title]);
     await page.waitForFunction(() => (document.querySelector('[data-testid=text-content]') as HTMLTextAreaElement | null)?.value === 'כותרת', undefined, { timeout: 5000 }).catch(() => {});
     const fieldBack = await page.getByTestId('text-content').inputValue();
     const wRestored = await frameBytes(tall);
-    await page.getByTestId('format-switch').selectOption('');
+    await chooseFormat(page, '');
     check('while a format is viewed, editing the title text changes the wording in that format only: the rendered frame of that format changes, the master and another format render byte-identically, the field shows each wording in its own view, and "back to the master text" restores it', hintBefore && wordingSet && !wAfter.tall.equals(wBefore.tall) && wAfter.master.equals(wBefore.master) && wAfter.sq.equals(wBefore.sq) && masterField === 'כותרת' && tallField === 'קצר' && wordingCleared && fieldBack === 'כותרת' && wRestored.equals(wBefore.tall), { hintBefore, wordingSet, tallChanged: !wAfter.tall.equals(wBefore.tall), masterSame: wAfter.master.equals(wBefore.master), squareSame: wAfter.sq.equals(wBefore.sq), masterField, tallField, wordingCleared, fieldBack, restoredSame: wRestored.equals(wBefore.tall) });
 
     console.log('\n# effect parameter keyframes; cut and paste');
@@ -481,7 +482,9 @@ async function main() {
     await mpage.keyboard.press('Control+a');
     const allSelected = await mpage.locator('.clip.selected').count();
     await clipEl(mC).click({ modifiers: ['Shift'] }); // toggle C off
-    await mpage.keyboard.press('Delete');
+    // Shift+Delete keeps the gap: a new project ripples on Delete (owner decision 2026-11-17), and this check is about a
+    // multi-selection removed in one transaction with the third clip left where it was
+    await mpage.keyboard.press('Shift+Delete');
     const revDelete = await mUntil([null, null, 120]);
     await mpage.keyboard.press('Control+z');
     const revUndo = await mUntil([21, 66, 120]);
@@ -590,7 +593,7 @@ async function main() {
       const vclipNow = async () => clipOf((await call(`/projects/${vp}`)).body.project, vclip);
       const vuntil = async (pred: (c: any) => boolean, ms = 8000) => { const t0 = Date.now(); for (;;) { const c = await vclipNow(); if (c && pred(c)) return true; if (Date.now() - t0 > ms) return false; await sleep(100); } };
       const vctx = await browser.newContext({ viewport: { width: 1500, height: 3200 }, reducedMotion: 'reduce' });
-      await vctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'clip'); } catch { /* storage unavailable */ } });
+      await vctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
       const vpage = await vctx.newPage();
       const vErrors: string[] = [];
       vpage.on('pageerror', (e) => vErrors.push(String(e)));
@@ -686,7 +689,7 @@ async function main() {
       const tracksNow = (d2: any) => Object.values(d2?.motionTracks ?? {}) as any[];
       const tjob = async (id: string, ms = 120000) => { const t0 = Date.now(); for (;;) { const j = (await call(`/jobs/${id}`)).body; if (['succeeded', 'failed', 'canceled'].includes(j.status) || Date.now() - t0 > ms) return j; await sleep(100); } };
       const tctx = await browser.newContext({ viewport: { width: 1500, height: 1800 }, reducedMotion: 'reduce' });
-      await tctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'clip'); } catch { /* storage unavailable */ } });
+      await tctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
       const tpage = await tctx.newPage();
       const tErrors: string[] = [];
       tpage.on('pageerror', (e) => tErrors.push(String(e)));
@@ -834,7 +837,7 @@ async function main() {
       const opsSince = async (rev: number) => ((await call(`/projects/${tp}/history?since=${rev}`)).body.events as any[]).filter((e) => e.revision > rev).map((e) => e.ops);
       const adjOf = (d: any) => d.sequences.seq_main.tracks.filter((t: any) => t.kind === 'adjustment').flatMap((t: any) => t.clips);
       const tctx = await browser.newContext({ viewport: { width: 1500, height: 3200 }, reducedMotion: 'reduce' });
-      await tctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'clip'); } catch { /* storage unavailable */ } });
+      await tctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
       const tpage = await tctx.newPage();
       const tErrors: string[] = [];
       tpage.on('pageerror', (e) => tErrors.push(String(e)));
@@ -901,7 +904,8 @@ async function main() {
 
       // the Templates drawer
       const list = (await call('/templates')).body?.templates as any[] | undefined;
-      await tpage.getByTestId('templates-toggle').click();
+      await tpage.getByTestId('rail-templates').click(); // the Templates drawer is mounted in the rail's Templates category (UX_REDESIGN §4.3)
+      if ((await tpage.getByTestId('templates-toggle').getAttribute('aria-expanded')) !== 'true') await tpage.getByTestId('templates-toggle').click();
       await tpage.locator(`[data-testid=${TID.card}]`).first().waitFor({ timeout: 10000 }).catch(() => {});
       const cards = await tpage.locator(`[data-testid=${TID.card}]`).evaluateAll((els) => els.map((e) => ({ id: e.getAttribute('data-template-id'), available: e.getAttribute('data-available') === 'true', reason: e.querySelector('[data-testid=template-unavailable-reason]')?.textContent ?? null })));
       const he = dictionaries.he as Record<string, string>;
@@ -1019,7 +1023,7 @@ async function main() {
       const trOf = async () => (clipOf((await tdoc()).project, tb) as MediaClip).transition;
       const tuntil = async (pred: (t: any) => boolean, ms = 8000) => { const t0 = Date.now(); for (;;) { if (pred(await trOf())) return true; if (Date.now() - t0 > ms) return false; await sleep(100); } };
       const tctx = await browser.newContext({ viewport: { width: 1500, height: 3200 }, reducedMotion: 'reduce' });
-      await tctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'clip'); } catch { /* storage unavailable */ } });
+      await tctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
       const tpage = await tctx.newPage();
       const tErrors: string[] = [];
       tpage.on('pageerror', (e) => tErrors.push(String(e)));

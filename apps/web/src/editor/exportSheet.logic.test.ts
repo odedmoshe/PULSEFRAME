@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createProject } from '@pulseframe/core';
-import { destinationKey, DESTINATIONS, exportOptions, DEFAULT_CHOICES, exportTargets, fourKReachable, formatFileSize, alsoSuggestion, jobFraction, mergeJobViews, overallFraction, parseStage, scaledSize, shortSideLabel } from './exportSheet.logic.ts';
+import { describeExport, destinationKey, DESTINATIONS, jobsOnOpen, exportOptions, DEFAULT_CHOICES, exportTargets, fourKReachable, formatFileSize, alsoSuggestion, jobFraction, mergeJobViews, overallFraction, parseStage, scaledSize, shortSideLabel } from './exportSheet.logic.ts';
 
 describe('export sheet logic', () => {
   it('reads the stage words and frame counts the server reports', () => {
@@ -69,5 +69,32 @@ describe('alsoSuggestion', () => {
   });
   it('offers the wide shape after a vertical export', () => {
     expect(alsoSuggestion([t('master', 1080, 1920, 'master'), t('profile:y', 1920, 1080, 'profile')], new Set([null]))?.key).toBe('profile:y');
+  });
+});
+
+describe('the sheet opened from the chip shows the export the chip follows', () => {
+  const job = (id: string, status: string) => ({ id, status, stage: null, output: null, error: null });
+  it('shows an export the sheet did not start (an agent over REST), with nothing of its own', () => {
+    // review: the ring followed a REST-started export; the chip opened the sheet on its settings, with no progress or cancel
+    const agent = job('job_rest', 'running');
+    expect(jobsOnOpen([], { last: true }, agent)).toEqual([agent]);
+  });
+  it('puts it next to the sheet\'s own running files, and in place of a finished run', () => {
+    const mine = job('job_mine', 'running');
+    const agent = job('job_rest', 'running');
+    expect(jobsOnOpen([mine], { last: true }, agent)).toEqual([mine, agent]);
+    expect(jobsOnOpen([job('job_mine', 'succeeded')], { last: true }, agent)).toEqual([agent]);
+    expect(jobsOnOpen([mine], { last: true }, mine)).toEqual([mine]);
+  });
+  it('keeps the earlier rules: the Export button clears a finished run, and keeps a running one', () => {
+    expect(jobsOnOpen([job('a', 'failed')], {}, job('b', 'running'))).toEqual([]);
+    expect(jobsOnOpen([job('a', 'running')], {}, null)).toHaveLength(1);
+    expect(jobsOnOpen([job('a', 'succeeded')], { last: true }, null)).toHaveLength(1);
+  });
+  it('names a followed export from the options the server stored with it', () => {
+    const doc = createProject({ id: 'prj_x', name: 'X', width: 1920, height: 1080 });
+    expect(describeExport(doc, null, 'en')).toMatchObject({ variantId: null, ext: 'mp4', w: 1920, h: 1080 });
+    expect(describeExport(doc, { format: 'webm-vp9-opus', scale: 0.5 }, 'en')).toMatchObject({ ext: 'webm', w: 960, h: 540 });
+    expect(describeExport(doc, { variantId: 'var_gone' }, 'en').variantId).toBeNull();
   });
 });

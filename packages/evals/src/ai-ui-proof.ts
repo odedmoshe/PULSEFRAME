@@ -72,14 +72,22 @@ async function main() {
       await page.goto(`${s.ownerUrl}&project=${pid}`);
       await page.getByTestId('timecode').waitFor();
       await page.locator(`.clip[data-clip-id="${clipId}"]`).click();
+      await page.getByTestId('rail-ai').click(); // the AI tools are the rail's AI category since the redesign (UX_REDESIGN §4.11)
       await page.locator('[data-testid=ai-tab][data-tab=sound]').click();
 
       // the AI voice cleanup, its engine not set up: an honest setup state with its steps
       const voice = page.locator(`[data-testid=ai-tool][data-id="${VOICE}"]`);
       await voice.waitFor({ timeout: 15000 });
       const voiceState = await voice.locator('[data-testid=ai-state]').getAttribute('data-code');
+      // the steps sit in the card's "how to set up" disclosure and are in the owner's language: since the redesign no variable
+      // name appears anywhere on the card, the installer's technical detail included (owner rule, AiTools.tsx installerDetail)
+      await voice.getByTestId('ai-setup-how').locator('summary').first().click();
       const voiceSteps = await voice.locator('[data-testid=ai-setup-steps] li').allTextContents();
-      check('with PF_DENOISE_BIN unset the AI voice-cleanup card says engine_not_configured, with steps naming the variable', voiceState === 'engine_not_configured' && voiceSteps.length >= 2 && voiceSteps.join(' ').includes('PF_DENOISE_BIN'), { voiceState, voiceSteps });
+      const techSummary = voice.locator('[data-testid=ai-setup-how] .pf-hub-tech > summary');
+      if (await techSummary.count()) await techSummary.first().click();
+      const voiceTech = (await voice.getByTestId('ai-state-detail').textContent().catch(() => null)) ?? '';
+      const cardText = (await voice.textContent()) ?? '';
+      check('with PF_DENOISE_BIN unset the AI voice-cleanup card says engine_not_configured; its setup steps (shown on request) are at least two, in Hebrew owner language, and no environment variable is named anywhere on the card (technical detail included)', voiceState === 'engine_not_configured' && voiceSteps.length >= 2 && voiceSteps.every((x) => /[\u0590-\u05FF]/.test(x)) && !/\bPF_[A-Z0-9_]+/.test(cardText) && !/\bPF_[A-Z0-9_]+/.test(voiceTech), { voiceTech, voiceState, voiceSteps });
       check('its run button is not offered while the engine is not set up', await voice.getByTestId('ai-open-run').isDisabled());
 
       // the classic vocal remover on the selected sound clip, in place of its file
@@ -133,7 +141,8 @@ async function main() {
       }
       check('undo restores the clip\'s original file', back === original, { back });
 
-      // the typed translation, side by side
+      // the typed translation, side by side (in the inspector, which holds the Copilot while the rail is on AI)
+      await page.getByTestId('rail-media').click();
       const review = page.getByTestId('translation-review');
       await review.waitFor({ timeout: 10000 });
       const badge = (await review.getByTestId('translation-unreviewed').textContent()) ?? '';
