@@ -75,7 +75,7 @@ const dissolve = (seconds: number) => ({ type: 'dissolve', seconds, dir: 'fixed'
 
 /** The candle lighting: three calm moments; the first keeps its own sound (the family's voices), with the candle of the night as the title. */
 const candles: TemplateDef = {
-  id: 'tpl.hanukkah-candles', version: 1, pack: 'pack.hanukkah',
+  id: 'tpl.hanukkah-candles', version: 2, pack: 'pack.hanukkah',
   name: { he: 'הדלקת נרות', en: 'Candle lighting' },
   hint: { he: 'שלושה רגעים רגועים: ההדלקה (עם הקול שלה), המשפחה והשולחן. הכותרת: «נר {night} של חנוכה»', en: 'Three calm moments: the lighting (with its own sound), the family and the table. The title says which night it is' },
   genre: 'holiday', designedFor: 'tall',
@@ -105,7 +105,7 @@ const candles: TemplateDef = {
 
 /** Eight nights: one slot for each night, each with its own hanukkiah, one more candle lit every time. */
 const eightNights: TemplateDef = {
-  id: 'tpl.hanukkah-eight-nights', version: 1, pack: 'pack.hanukkah',
+  id: 'tpl.hanukkah-eight-nights', version: 2, pack: 'pack.hanukkah',
   name: { he: 'שמונה לילות', en: 'Eight nights' },
   hint: { he: 'רגע מכל לילה, ועל כל אחד חנוכייה עם נר אחד יותר', en: 'One moment from every night, each with a hanukkiah that has one more candle lit' },
   genre: 'holiday', designedFor: 'tall',

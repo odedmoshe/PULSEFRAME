@@ -139,7 +139,7 @@ const cake: TemplateDef = {
  * «מזמינים אותך!» is on one line and «ליום ההולדת של {name}» may take two (proof:packs P13 measures it).
  */
 const invite: TemplateDef = {
-  id: 'tpl.birthday-invite', version: 1, pack: 'pack.birthday',
+  id: 'tpl.birthday-invite', version: 2, pack: 'pack.birthday',
   name: { he: 'הזמנה ליום הולדת', en: 'Birthday invitation' },
   hint: { he: 'כרטיס ריבועי על תמונה אחת: שם החוגג, מתי ואיפה', en: 'A square card over one picture: whose it is, when and where' },
   genre: 'celebration', designedFor: 'square',

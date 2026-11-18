@@ -22,7 +22,8 @@ describe('built-in templates', () => {
     for (const t of TEMPLATES) {
       const parsed = TemplateDefSchema.safeParse(t);
       expect(parsed.success, `${t.id}: ${parsed.success ? '' : JSON.stringify(parsed.error.issues.slice(0, 3))}`).toBe(true);
-      expect(t.version).toBe(1);
+      // version 1 each, except the pack templates whose data changed on 2026-11-18 (the hanukkiah of the night, the invite's layout)
+      expect([t.id, t.version]).toEqual([t.id, ['tpl.hanukkah-candles', 'tpl.hanukkah-eight-nights', 'tpl.birthday-invite'].includes(t.id) ? 2 : 1]);
       expect(findTemplate(t.id)).toBe(t);
     }
     // the model-gated ones are never built-ins

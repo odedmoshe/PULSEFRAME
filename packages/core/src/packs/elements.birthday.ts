@@ -16,17 +16,20 @@ const BALLOON = 'M30 4C50 4 57 22 57 38C57 56 42 68 30 70C18 68 3 56 3 38C3 22 1
 const knot = (c: string) => fillD('M25 78L30 69L35 78Z', c);
 const string = (k: string, x = 30, y = 78, y2 = 98) => strokeD(`M${n(x)} ${n(y)}Q${n(x - 9)} ${n(y + 7)} ${n(x)} ${n(y + 12)}T${n(x)} ${n(y2)}`, k, 2.2);
 
-const balloon: Body = (c, k) => fillD(BALLOON, c) + knot(c) + string(k) + strokeD('M14 32Q14 20 22 14', k, 3.4);
+// The strings are drawn in the balloon's own colour (they were white and vanished on a light picture); the shine stays light.
+const balloon: Body = (c, k) => fillD(BALLOON, c) + knot(c) + string(c) + strokeD('M14 32Q14 20 22 14', k, 3.4);
 const balloonShine: Body = (c, k) =>
-  fillD('M30 3C52 3 58 24 57 40C56 58 42 69 30 70C18 69 4 58 3 40C2 24 8 3 30 3Z', c) + knot(c) + string(k) +
+  fillD('M30 3C52 3 58 24 57 40C56 58 42 69 30 70C18 69 4 58 3 40C2 24 8 3 30 3Z', c) + knot(c) + string(c) +
   fillD('M12 36C10 24 14 14 22 10C16 18 15 28 18 38C16 40 13 40 12 36Z', k) + disc(25, 8.5, 1.6, k);
 const balloonHeart: Body = (c, k) =>
-  fillD('M30 72C6 52 -1 36 6 22C13 10 26 12 30 24C34 12 47 10 54 22C61 36 54 52 30 72Z', c) + fillD('M25 80L30 71L35 80Z', c) + string(k, 30, 80, 100) +
+  fillD('M30 72C6 52 -1 36 6 22C13 10 26 12 30 24C34 12 47 10 54 22C61 36 54 52 30 72Z', c) + fillD('M25 80L30 71L35 80Z', c) + string(c, 30, 80, 100) +
   strokeD('M12 28Q12 20 19 18', k, 3.2);
+/** Three balloons in the two colours (the two behind in the first, the one in front in the second), tied together, strings in the first. */
 const balloonsBunch: Body = (c, k) => {
-  const b = (x: number, y: number, s: number) => g(fillD(BALLOON, c) + `<path d="${BALLOON}" fill="none" stroke="${k}" stroke-width="${n(2.4 / s)}"/>`, `matrix(${n(s)} 0 0 ${n(s)} ${n(x)} ${n(y)})`);
-  return strokeD('M40 70Q46 84 50 98M70 66Q60 84 50 98M96 70Q80 84 50 98', k, 2) + b(8, 4, 0.9) + b(64, 6, 0.84) + b(34, 14, 0.9)
-    + fillD('M45 62L40 72L50 72Z', c) + fillD('M80 58L74 67L86 67Z', c) + fillD('M52 74L57 64L62 74Z', c);
+  const b = (x: number, y: number, s: number, fill: string, edge: string) => g(fillD(BALLOON, fill) + `<path d="${BALLOON}" fill="none" stroke="${edge}" stroke-width="${n(2.4 / s)}"/>`, `matrix(${n(s)} 0 0 ${n(s)} ${n(x)} ${n(y)})`);
+  return strokeD('M40 70Q46 84 50 98M70 66Q60 84 50 98M96 70Q80 84 50 98', c, 2.2) + b(8, 4, 0.9, c, k) + b(64, 6, 0.84, c, k) + b(34, 14, 0.9, k, c)
+    + fillD('M45 62L40 72L50 72Z', c) + fillD('M80 58L74 67L86 67Z', c) + fillD('M52 74L57 64L62 74Z', k)
+    + strokeD('M18 26Q18 18 24 14', k, 3) + strokeD('M44 36Q44 28 50 24', c, 3);
 };
 
 // ---- cakes
@@ -135,7 +138,7 @@ const frameBunting: Body = (c, k) => {
 // ---- sweets and faces
 const lollipop: Body = (c, k) => {
   const spiral = Array.from({ length: 60 }, (_, i) => polar(50, 38, 2 + i * 0.56, i * 28) as Pt).map(([x, y], i) => `${i ? 'L' : 'M'}${n(x)} ${n(y)}`).join('');
-  return box(46, 64, 8, 34, k, 4) + disc(50, 38, 34, c) + strokeD(spiral, k, 4.4);
+  return box(46, 64, 8, 34, c, 4) + disc(50, 38, 34, c) + strokeD(spiral, k, 4.4); // the stick in the sweet's colour (white vanished on light)
 };
 const iceCream: Body = (c, k) =>
   fillD('M26 54H74L50 98Z', k) + strokeD('M34 64L58 80M42 58L66 74M66 58L42 74M58 58L34 74M50 98L34 74M50 98L66 74', c, 1.8) +
@@ -144,14 +147,16 @@ const partyFace: Body = (c, k) =>
   disc(50, 62, 34, c) + disc(38, 58, 4.6, k) + disc(62, 58, 4.6, k) + strokeD('M33 72Q50 88 67 72', k, 4.6) +
   g(fillD('M0 -26L14 8H-14Z', k) + disc(0, -28, 5, c), 'translate(52 32) rotate(-14)') ;
 
-const e = (slug: string, he: string, en: string, width: number, height: number, colors: 1 | 2, color: string, color2: string | undefined, body: Body): PackElementEntry =>
-  ({ slug, category: 'party', he, en, width, height, colors, defaults: { color, ...(color2 ? { color2 } : {}) }, body });
+const e = (slug: string, he: string, en: string, width: number, height: number, colors: 1 | 2, color: string, color2: string | undefined, body: Body, version?: number): PackElementEntry =>
+  ({ slug, category: 'party', he, en, width, height, colors, defaults: { color, ...(color2 ? { color2 } : {}) }, body, ...(version !== undefined ? { version } : {}) });
+/** Picture version of the drawings changed on 2026-11-18 (strings and stick no longer white; the bunch in two colours): elements.ts ELEMENT_PICTURE_VERSION + 1. */
+const REDRAWN = 3;
 
 export const BIRTHDAY_ELEMENTS: readonly PackElementEntry[] = [
-  e('balloon', 'בלון', 'Balloon', 60, 100, 2, PINK, WHITE, balloon),
-  e('balloon-shine', 'בלון מבריק', 'Shiny balloon', 60, 100, 2, SKY, WHITE, balloonShine),
-  e('balloons-bunch', 'צרור בלונים', 'Bunch of balloons', 120, 100, 2, SUN, WHITE, balloonsBunch),
-  e('balloon-heart', 'בלון לב', 'Heart balloon', 60, 100, 2, PINK, WHITE, balloonHeart),
+  e('balloon', 'בלון', 'Balloon', 60, 100, 2, PINK, WHITE, balloon, REDRAWN),
+  e('balloon-shine', 'בלון מבריק', 'Shiny balloon', 60, 100, 2, SKY, WHITE, balloonShine, REDRAWN),
+  e('balloons-bunch', 'צרור בלונים', 'Bunch of balloons', 120, 100, 2, PINK, SKY, balloonsBunch, REDRAWN),
+  e('balloon-heart', 'בלון לב', 'Heart balloon', 60, 100, 2, PINK, WHITE, balloonHeart, REDRAWN),
   e('cake', 'עוגה', 'Cake', 100, 100, 2, PINK, CREAMY, cake),
   e('cake-candles', 'עוגה עם נרות', 'Cake with candles', 100, 100, 2, PINK, CREAMY, cakeCandles),
   e('cupcake', 'קאפקייק', 'Cupcake', 100, 100, 2, SKY, WHITE, cupcake),
@@ -170,7 +175,7 @@ export const BIRTHDAY_ELEMENTS: readonly PackElementEntry[] = [
   e('ribbon-banner', 'סרט כותרת', 'Ribbon banner', 160, 80, 2, PINK, '#C21D63', ribbonBanner),
   e('frame-polaroid', 'מסגרת פולארויד', 'Polaroid frame', 100, 120, 2, WHITE, SUN, framePolaroid),
   e('frame-bunting', 'מסגרת דגלונים', 'Frame with bunting', 160, 100, 2, PINK, SUN, frameBunting),
-  e('lollipop', 'סוכריה על מקל', 'Lollipop', 100, 100, 2, PINK, WHITE, lollipop),
+  e('lollipop', 'סוכריה על מקל', 'Lollipop', 100, 100, 2, PINK, WHITE, lollipop, REDRAWN),
   e('ice-cream', 'גלידה', 'Ice cream', 100, 100, 2, '#FF8FB1', '#E8B66E', iceCream),
   e('party-face', 'פרצוף חוגג', 'Party face', 100, 100, 2, SUN, INK, partyFace),
 ];
