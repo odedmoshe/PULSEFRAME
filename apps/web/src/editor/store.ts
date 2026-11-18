@@ -155,7 +155,7 @@ export interface EditorState {
   performGhost?: ProjectDocument | null;
   /** A take is being recorded (Editor.setPerformRecording): the shortcut gate lets only Space through, and loads draw without stopping the sound when they can. */
   performRecording?: boolean;
-  /** The linked format that was viewed when the perform workspace was entered (the view works on the master and says so), or null. */
+  /** The linked format that was viewed when the perform workspace was entered, or that was chosen inside it (setViewVariant refuses it there: the view works on the master and says so, perform.masterOnly), or null. */
   performLeftVariant?: string | null;
   /** The family film dialog (ADR-0026) is open. Session state only. */
   filmOpen: boolean;
@@ -384,6 +384,9 @@ export class Editor {
   setViewVariant(id: string | null) {
     const doc = this.state.doc;
     const next = id && doc?.variants?.[id] ? id : null;
+    // perform mode (ADR-0025) works on the master only: takes and camera keys are planned for it, so a linked format is not
+    // shown there; the refused format is remembered for the view's note (perform.masterOnly), as on entering the workspace
+    if (next && this.state.workspace === 'perform') { this.set({ performLeftVariant: next }); return; }
     if (next === this.state.viewVariantId) return;
     this.set({ viewVariantId: next });
     const vd = this.viewDoc;
