@@ -61,7 +61,7 @@ export function buildOpenApi(): Record<string, unknown> {
         affectedIds: { type: 'array', items: { type: 'string' } }, summary: { type: 'string' },
         results: { type: 'array', items: { type: 'object', required: ['op', 'summary', 'affectedIds'], properties: { op: { type: 'string' }, summary: { type: 'string' }, affectedIds: { type: 'array', items: { type: 'string' } }, output: { type: 'object', additionalProperties: true } } } },
         warnings: { type: 'array', items: { type: 'string' } },
-        kind: { enum: ['edit', 'undo', 'redo'] }, undoes: { type: 'string' }, rebasedFrom: { type: 'integer' },
+        kind: { enum: ['edit', 'undo', 'redo', 'background'] }, undoes: { type: 'string' }, rebasedFrom: { type: 'integer' },
       },
     },
     Proposal: {
