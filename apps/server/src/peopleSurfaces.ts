@@ -150,6 +150,14 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`POST ${P}/sequences/:sequenceId/reframe-plan`]: ['reader-document'],
   // perform mode (ADR-0025): planned from the reader's document (clips, beats; no people data), committed as one internal step
   [`POST ${P}/takes`]: ['reader-document', 'write'],
+  // the command bar's language assistant (ADR-0027): the status holds settings, ids and money only; everything else is the owner's
+  // own session (a model is sent only the allowlisted summary, built without birth dates whatever the switches)
+  'GET /api/v1/assistant/status': ['no-document'],
+  [`GET ${P}/assistant/summary`]: ['owner-only'],
+  'PUT /api/v1/assistant/config': ['owner-only'],
+  'PUT /api/v1/assistant/key': ['owner-only'],
+  'DELETE /api/v1/assistant/key': ['owner-only'],
+  [`POST ${P}/assistant/requests`]: ['owner-only'],
   // proposals and approvals
   [`GET ${P}/proposals`]: ['rows-scrubbed'],
   [`POST ${P}/proposals`]: ['write'],

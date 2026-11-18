@@ -9,6 +9,8 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+/** Files of the data directory a backup never holds (the assistant's key and its config: assistant/contract.ts ASSISTANT_KEY_FILE, ASSISTANT_CONFIG_FILE). */
+export const NEVER_BACKED_UP = ['assistant.key', 'assistant.json'] as const;
 export interface BackupResult { dest: string; /** Projects in the verified database copy. */ projects: number; databaseBytes: number; filesCopied: number; /** Newly copied media files whose content hash was checked against their name. */ filesVerified: number; filesSkipped: number; bytesCopied: number }
 
 const sha256File = (file: string) => new Promise<string>((resolve, reject) => {
@@ -69,6 +71,9 @@ export async function backupDataDir(src: string, dest: string): Promise<BackupRe
   // 3. credentials
   const tokens = path.join(src, 'tokens.json');
   if (fs.existsSync(tokens)) { fs.copyFileSync(tokens, path.join(dest, 'tokens.json')); fs.chmodSync(path.join(dest, 'tokens.json'), 0o600); }
+  // 4. never: the language assistant's key and config (ADR-0027, lead decision 9) — the owner enters them again after a restore.
+  //    Nothing above copies them; a copy left in the destination by hand is removed so a backup never holds one.
+  for (const name of NEVER_BACKED_UP) fs.rmSync(path.join(dest, name), { force: true });
   return r;
 }
 

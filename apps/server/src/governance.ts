@@ -5,7 +5,7 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import * as T from '@pulseframe/time';
-import { applyTransaction, canonical, clipEnd, diffEntities, OpError, RationalTimeSchema, type EntityChange, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, ASSISTANT_ACTOR, ASSISTANT_GRANT_ID, canonical, clipEnd, diffEntities, OpError, RationalTimeSchema, type EntityChange, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { z } from 'zod';
 import { ApiError, type CommitRequest, type CommitResult, type Store } from './store.ts';
 import { assertMayWritePeople, docForPrincipal, docForReader, PEOPLE_ACCESS, type PeopleAccess } from './peoplePrivacy.ts';
@@ -58,6 +58,8 @@ export class Governance {
     const p = GrantInput.safeParse(raw);
     if (!p.success) throw new ApiError(400, 'invalid_request', z.prettifyError(p.error), { issues: p.error.issues });
     const g = p.data;
+    // agent:assistant is the in-editor assistant's own in-memory principal (ADR-0027): no credential may act under that name
+    if (`agent:${g.name}` === ASSISTANT_ACTOR) throw new ApiError(400, 'invalid_request', `the name "${g.name}" is reserved for the in-editor language assistant`, { name: g.name }, 'Choose another name for this agent.');
     if (g.range && !T.lt(g.range.start, g.range.end)) throw new ApiError(400, 'invalid_request', 'range.start must be before range.end');
     const id = rid('grt');
     const token = `pfg_${randomBytes(24).toString('base64url')}`;
@@ -305,6 +307,50 @@ export class Governance {
       if (spentCents + reservedCents + cents > g.budgetCents) throw new ApiError(402, 'budget_exceeded', `this would exceed the grant's budget`, { budgetCents: g.budgetCents, spentCents, reservedCents, requestedCents: cents }, 'Ask the owner for a larger budget or an approval.');
       this.store.db.prepare('INSERT INTO budget_ledger (job_id, grant_id, reserved_cents, state, created_at, updated_at) VALUES (?,?,?,?,?,?)').run(jobId, g.id, cents, 'reserved', now(), now());
     }).immediate();
+  }
+  // ---------- the command bar's assistant (ADR-0027): the owner's money, spent by a propose-only principal ----------
+  /** The UTC calendar month the assistant's limit counts, as 'YYYY-MM', and its bounds as ISO strings. */
+  assistantMonth(at = this.clock()): { month: string; from: string; to: string } {
+    const d = new Date(at);
+    const from = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)), to = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
+    return { month: from.toISOString().slice(0, 7), from: from.toISOString(), to: to.toISOString() };
+  }
+  /** What the assistant spent (settled) and holds (reserved or unknown) in the month of `at`, from budget_ledger rows with grant_id 'assistant'. */
+  assistantSpend(at = this.clock()): { month: string; spentCents: number; reservedCents: number } {
+    const m = this.assistantMonth(at);
+    const r = this.store.db.prepare("SELECT COALESCE(SUM(CASE WHEN state = 'settled' THEN actual_cents ELSE 0 END),0) AS spent, COALESCE(SUM(CASE WHEN state IN ('reserved','unknown') THEN reserved_cents ELSE 0 END),0) AS reserved FROM budget_ledger WHERE grant_id = ? AND created_at >= ? AND created_at < ?").get(ASSISTANT_GRANT_ID, m.from, m.to) as any;
+    return { month: m.month, spentCents: r.spent as number, reservedCents: r.reserved as number };
+  }
+  /**
+   * Reserve `cents` for one assistant job before anything is sent (plan §7.4 step 2; lead decision 8). The assistant is
+   * propose-only, so Governance.reserve (Autopilot grants) cannot hold it; this is its own method on the same ledger and the
+   * same settlement by job state (settleFor). Atomic: concurrent requests never reserve past the limit. Refused unless the
+   * principal is the in-memory assistant (agent:assistant, propose, grant 'assistant', covering the project), agents are not
+   * paused there, both limits are set (> 0), the estimate is within the per-request cap, and the month's settled + held
+   * amount plus this one stays within the monthly limit. An 'unknown' reservation stays counted (SPEC §20).
+   */
+  reserveAssistant(p: Principal, projectId: string, jobId: string, cents: number, limits: { monthlyLimitCents: number; perRequestCapCents: number }): void {
+    if (p.kind !== 'agent' || p.actor !== ASSISTANT_ACTOR || modeOf(p) !== 'propose' || p.grant?.id !== ASSISTANT_GRANT_ID) throw new ApiError(403, 'insufficient_scope', 'only the in-editor assistant reserves the assistant\'s spending');
+    this.assertMayAct(p, projectId, 'propose'); // out of scope, paused (423)
+    if (!Number.isInteger(cents) || cents <= 0) throw new ApiError(400, 'invalid_request', 'a reservation is a whole, positive number of cents', { cents });
+    if (!(limits.monthlyLimitCents > 0) || !(limits.perRequestCapCents > 0)) throw new ApiError(409, 'assistant_not_connected', 'the owner has not set both the monthly limit and the per-request cap', { setup: 'limit_missing' }, 'Set both limits in Settings, under the language assistant.');
+    if (cents > limits.perRequestCapCents) throw new ApiError(402, 'budget_exceeded', 'this request could cost more than the per-request cap', { perRequestCapCents: limits.perRequestCapCents, requestedCents: cents }, 'Shorten the request, or raise the per-request cap in Settings.');
+    this.store.db.transaction(() => {
+      const { month, spentCents, reservedCents } = this.assistantSpend();
+      if (spentCents + reservedCents + cents > limits.monthlyLimitCents) throw new ApiError(402, 'budget_exceeded', 'this would exceed the monthly limit of the language assistant', { month, monthlyLimitCents: limits.monthlyLimitCents, spentCents, reservedCents, requestedCents: cents }, 'Wait for next month, or raise the monthly limit in Settings.');
+      const at = new Date(this.clock()).toISOString();
+      this.store.db.prepare('INSERT INTO budget_ledger (job_id, grant_id, reserved_cents, state, created_at, updated_at) VALUES (?,?,?,?,?,?)').run(jobId, ASSISTANT_GRANT_ID, cents, 'reserved', at, at);
+    }).immediate();
+  }
+  /**
+   * Settle an assistant job at the cost the provider reported (at the owner's prices), BEFORE the job is marked succeeded, so
+   * settleFor finds nothing left to settle at the reserved amount. An actual above the reservation is recorded as it is (the
+   * next request is then refused if the limit is reached). Only a 'reserved' assistant row is settled; anything else is left.
+   */
+  settleAssistant(jobId: string, actualCents: number): boolean {
+    if (!Number.isInteger(actualCents) || actualCents < 0) throw new ApiError(400, 'invalid_request', 'an actual cost is a whole, non-negative number of cents', { actualCents });
+    const r = this.store.db.prepare("UPDATE budget_ledger SET state = 'settled', actual_cents = ?, updated_at = ? WHERE job_id = ? AND grant_id = ? AND state = 'reserved'").run(actualCents, now(), jobId, ASSISTANT_GRANT_ID);
+    return r.changes === 1;
   }
   /**
    * Ledger outcome for a finished job. succeeded -> settled at the reserved amount. Canceled before it ever started -> released.
