@@ -256,6 +256,7 @@ export function CameraOverlay({ lang, camera, onCamera, say, onClose }: CameraOv
           <p data-testid={ID.cameraConfirm} data-count={plan.replacedKeys} role="status">{plan.replacedKeys > 0 ? S('pv.cam.confirm', { n: plan.replacedKeys }) : S('pv.cam.confirmNone')} <bdi dir="ltr">{S('pv.cam.keys', { n: plan.keys.length })}</bdi></p>
           {plan.overTolerance && <p role="alert" className="pf-perform-error" data-testid={ID.cameraOverTolerance}>{S('pv.cam.over', { n: (plan.residual * 100).toFixed(2) })}</p>}
           {plan.warnings.includes('linked_formats') && <p role="note" data-testid={ID.cameraLinkedFormats}>{t('perform.linkedFormats')}</p>}
+          {plan.warnings.includes('cannot_reach_ends') && <p role="note" data-testid={ID.cameraCannotReach}>{t('perform.cannotReachEnds')}</p>}
           <div className="pf-perform-camera-bar">
             <Button variant="primary" busy={busy} disabled={plan.overTolerance} disabledReason={plan.overTolerance ? S('pv.cam.over', { n: (plan.residual * 100).toFixed(2) }) : undefined} onClick={() => void accept()} data-testid={ID.accept}>{S('pv.cam.accept')}</Button>
             <Button variant="ghost" onClick={discard} data-testid={ID.discard}>{S('pv.cam.discard')}</Button>

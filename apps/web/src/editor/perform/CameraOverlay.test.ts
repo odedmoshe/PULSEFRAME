@@ -95,7 +95,7 @@ describe('camera samples are timeline frames (performContract.ts CameraSample), 
     if ('refused' in plan) return;
     expect(plan.keys[0]!.frame).toBe(0);
     expect(plan.keys.at(-1)!.frame).toBe(20);
-    expect(plan.keys.at(-1)!.scale).toBeGreaterThan(1.2); // the zoom that was filmed, not a held first pose
+    expect(Math.max(...plan.keys.map((k) => k.scale))).toBeGreaterThan(1.2); // the zoom that was filmed shows inside the range (its edges hold the clip's framing)
     // the clip-local samples the overlay used to send name timeline frames 0..20, before the clip: nothing to plan
     const local = samples.map((x) => ({ ...x, frame: x.frame - 90 }));
     expect(planCamera(d, { clipId: clip.id, from: 0, to: 20, samples: local, settings: DEFAULT_CAMERA })).toEqual({ refused: 'no_samples' });
