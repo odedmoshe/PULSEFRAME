@@ -67,6 +67,15 @@ function PersonRow({ person, focus, fail }: { person: Person; focus: boolean; fa
     const r = await editor.commit([{ op: 'remove_person', args: { personId: person.id } }], 'Remove person');
     if (!r) fail(editor.getState().error); else if (r.transactionId) editor.notify({ kind: 'undo', title: t('op.remove_person' as Key), undoes: r.transactionId });
   };
+  const [birth, setBirth] = useState(person.birthDate ?? '');
+  useEffect(() => { setBirth(person.birthDate ?? ''); }, [person.birthDate]);
+  const saveBirth = (el: HTMLInputElement) => {
+    const v = el.value;
+    if (!v && el.validity.badInput) { setBirth(person.birthDate ?? ''); return; } // a half-typed date: keep the stored one
+    if (v === (person.birthDate ?? '')) return;
+    if (v && !isRealWallDate(v)) { fail(PEOPLE_STRINGS[lang].noBirthDate); setBirth(person.birthDate ?? ''); return; }
+    void run({ birthDate: v || null }, 'Birth date');
+  };
   const whyId = `life-person-why-${person.id}`;
   return (
     <li className="pf-pp-row" data-testid={PEOPLE_TESTIDS.personRow(person.id)} data-person-id={person.id}>
@@ -75,8 +84,10 @@ function PersonRow({ person, focus, fail }: { person: Person; focus: boolean; fa
           onBlur={() => void saveName()} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void saveName(); } }} />
       </label>
       <div className="pf-life-field"><label htmlFor={`life-birth-${person.id}`}>{P.birthDate}</label>
-        <input id={`life-birth-${person.id}`} type="date" className="num" dir="ltr" min="1900-01-01" max="2100-12-31" value={person.birthDate ?? ''} data-testid={PEOPLE_TESTIDS.personBirth(person.id)}
-          onChange={(e) => { const v = e.target.value; if (v === (person.birthDate ?? '')) return; if (v && !isRealWallDate(v)) { fail(PEOPLE_STRINGS[lang].noBirthDate); return; } void run({ birthDate: v || null }, 'Birth date'); }} />
+        <input id={`life-birth-${person.id}`} type="date" className="num" dir="ltr" min="1900-01-01" max="2100-12-31" value={birth} data-testid={PEOPLE_TESTIDS.personBirth(person.id)}
+          // the date is kept as a draft while it is typed (a browser reports '' while one part of it is cleared) and saved once,
+          // when the field is left or Enter is pressed; a half-typed date is never saved and never clears the stored one
+          onChange={(e) => setBirth(e.target.value)} onBlur={(e) => saveBirth(e.currentTarget)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveBirth(e.currentTarget); } }} />
         <span className="pf-pp-heb" data-testid={PEOPLE_TESTIDS.personBirthHebrew(person.id)} aria-live="polite">{heb ? fill(P.birthDateHebrew, { date: heb }) : P.noBirthDate}</span>
       </div>
       <div className="pf-pp-formrow" data-testid={PEOPLE_TESTIDS.personForm(person.id)}>

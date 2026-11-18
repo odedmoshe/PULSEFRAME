@@ -54,7 +54,7 @@ export function CaptureEditor({ assetId, onClose }: { assetId: string; onClose: 
   const save = async () => {
     if (!parsed.ok) { setProblem(reasonText(S, parsed.reason)); return; }
     setBusy(true);
-    const r = await editor.commit([saveCaptureOp(assetId, parsed)], 'Capture date');
+    const r = await editor.commit([saveCaptureOp(assetId, parsed, asset.capture)], 'Capture date');
     setBusy(false);
     if (r) { onClose(); if (r.transactionId) editor.notify({ kind: 'undo', title: S.captureSaved, undoes: r.transactionId }); }
   };

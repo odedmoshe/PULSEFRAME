@@ -385,7 +385,7 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
           const tail = p.tails.get(c.id);
           // an adjustment clip (ADR-0016) is named by its label, else by the track kind and its effects
           const adjFx = c.type === 'adjustment' ? (c.effects ?? []).filter((x) => x.enabled).map((x) => findEffect(x.type)?.name[lang] ?? x.type) : [];
-          const label = c.type === 'adjustment' && !c.label ? `${t('track.adjustment')}${adjFx.length ? `: ${adjFx.join(', ')}` : ''}` : c.type === 'media' ? bare(clipLabel(doc, c)) : clipLabel(doc, c, lang);
+          const label = c.type === 'adjustment' && !c.label ? `${t('track.adjustment')}${adjFx.length ? `: ${adjFx.join(', ')}` : ''}` : c.type === 'media' ? bare(clipLabel(doc, c, lang)) : clipLabel(doc, c, lang);
           const tailS = tail && tail.seconds >= 0.05 ? tail.seconds : 0;
           const fxLabel = `${fxNames.length ? `; ${t('timeline.fx')}: ${fxNames.join(', ')}` : ''}${tailS ? `; ${t('timeline.fx.tail')} ${tailS.toFixed(1)} ${t('sound.fx.seconds')}` : ''}`;
           const kind = kindOf(doc, lane, c);
@@ -444,7 +444,7 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
               {volLine && <VolumeLine clip={c as MediaClip} selected={only} editable={!tr.locked} pps={pps} left={left} width={width} clipHeight={clipH} clipTop={CLIP_PAD} />}
               {tailS > 0 && <div className="clip-tail" aria-hidden="true" data-testid="clip-tail" data-tail-of={c.id} data-cut={tail!.cut ? 'true' : undefined} style={{ left: T.toSeconds(clipEnd(c)) * pps, width: Math.max(2, tailS * pps), top: CLIP_PAD + clipH * 0.25, height: clipH * 0.5 }} />}
               {hasCut && (
-                <CutChip editor={editor} lang={lang} clip={c as MediaClip} before={before} beforeName={before ? bare(clipLabel(doc, before)) : ''} afterName={label} x={left} pps={pps} rate={rate} locked={tr.locked}
+                <CutChip editor={editor} lang={lang} clip={c as MediaClip} before={before} beforeName={before ? bare(clipLabel(doc, before, lang)) : ''} afterName={label} x={left} pps={pps} rate={rate} locked={tr.locked}
                   onBeat={!!before && !!p.grid?.at(startFrame)?.onBeat} held={p.heldLights.has(c.id)} spare={(c as MediaClip).transition || before ? velocityLimit(doc, c.id).haveOutFrames : null}
                   selected={p.selectedCut === c.id} dropping={p.dropCut === c.id} nearSelected={selected || (!!before && selection.includes(before.id))}
                   roomAdd={room.add} roomChip={room.chip} />
@@ -681,7 +681,7 @@ export function Timeline() {
     if (!drop.on) return { ok: false, text: s.dropNotHere };
     const clip = doc.sequences[doc.mainSequenceId]!.tracks.flatMap((tr) => tr.clips).find((c) => c.id === drop.on!.clipId);
     if (!clip) return { ok: false, text: s.dropNotHere };
-    if (drop.on.type === 'clip') return { ok: true, text: s.dropOnClip(name, clip.type === 'media' ? bare(clipLabel(doc, clip)) : clipLabel(doc, clip) || t('track.adjustment')) };
+    if (drop.on.type === 'clip') return { ok: true, text: s.dropOnClip(name, clip.type === 'media' ? bare(clipLabel(doc, clip, lang)) : clipLabel(doc, clip, lang) || t('track.adjustment')) };
     const tr = clip.type === 'media' ? clip.transition : undefined;
     const frames = tr?.frames ?? Math.max(1, Math.round(rate.num / rate.den / 2));
     const len = s.seconds((Math.round(((frames * rate.den) / rate.num) * 10) / 10).toFixed(1));

@@ -178,3 +178,15 @@ describe('the clock shift', () => {
     expect(shiftMinutes({ days: -1, hours: 0, minutes: 0, later: true })).toBeNull();
   });
 });
+
+describe('saving the capture popover', () => {
+  it('keeps the file\'s seconds and stated offset when only «משוער» changes, and drops the offset when the day or time changes', async () => {
+    const { saveCaptureOp: save } = await import('./lifeLibrary.logic.ts');
+    const own = { at: '2024-12-25T18:15:10', utcOffsetMinutes: 120 };
+    expect(save('a', { at: '2024-12-25T18:15:00', circa: true }, own).args).toEqual({ assetId: 'a', capture: { at: '2024-12-25T18:15:10', utcOffsetMinutes: 120, circa: true } });
+    expect(save('a', { at: '2024-12-25T18:16:00', circa: false }, own).args).toEqual({ assetId: 'a', capture: { at: '2024-12-25T18:16:00', utcOffsetMinutes: null } });
+    expect(save('a', { at: '2024-12-26', circa: false }, own).args).toEqual({ assetId: 'a', capture: { at: '2024-12-26', utcOffsetMinutes: null } });
+    expect(save('a', { at: '2024-12-25T18:15:00', circa: false }, null).args).toEqual({ assetId: 'a', capture: { at: '2024-12-25T18:15:00', utcOffsetMinutes: null } });
+    expect(save('a', { at: '2024-12-25', circa: true }, { at: '2024-12-25', utcOffsetMinutes: null }).args).toEqual({ assetId: 'a', capture: { at: '2024-12-25', utcOffsetMinutes: null, circa: true } });
+  });
+});

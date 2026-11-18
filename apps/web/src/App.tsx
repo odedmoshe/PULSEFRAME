@@ -108,7 +108,7 @@ function PreviewNotice() {
   const sound = editor.player?.unavailableAudioFx ?? {};
   const soundIds = Object.keys(sound);
   if (ids.length === 0 && budget.length === 0 && soundIds.length === 0) return null;
-  const nameOf = (clipId: string) => { const f = state.doc ? findClip(state.doc, clipId) : undefined; return f && state.doc ? clipLabel(state.doc, f.clip) : clipId; };
+  const nameOf = (clipId: string) => { const f = state.doc ? findClip(state.doc, clipId) : undefined; return f && state.doc ? clipLabel(state.doc, f.clip, state.lang) : clipId; };
   return (
     <div className="preview-notice" role="status" data-testid="effect-unavailable">
       {budget.length > 0 && <div data-testid="decode-budget-notice">

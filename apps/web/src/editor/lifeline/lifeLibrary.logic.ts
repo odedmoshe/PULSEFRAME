@@ -96,8 +96,16 @@ export function captureInputOf(doc: ProjectDocument, assetId: string): { date: s
   const at = shown?.wall ?? '';
   return { date: at.slice(0, 10), time: at.length > 10 ? at.slice(11, 16) : '', circa: shown?.capture.circa === true, inherited: !!shown?.inherited, hasOwn: !!own, source: shown?.capture.source ?? null, assumedZone: shown?.capture.assumedZone ?? null };
 }
-/** The operation of the popover's save: set_asset_capture with the typed day (offset not stated: null). */
-export const saveCaptureOp = (assetId: string, p: { at: string; circa: boolean }): OpCall => ({ op: 'set_asset_capture', args: { assetId, capture: { at: p.at, utcOffsetMinutes: null, ...(p.circa ? { circa: true } : {}) } } });
+/**
+ * The operation of the popover's save: set_asset_capture with the typed day. When the typed day and minute are the file's own
+ * capture (the person only ticked or cleared «משוער»), the file's seconds and stated UTC offset are kept; a changed day or time
+ * has no stated offset (null). The op marks the result as set by hand either way.
+ */
+export const saveCaptureOp = (assetId: string, p: { at: string; circa: boolean }, own?: Pick<Capture, 'at' | 'utcOffsetMinutes'> | null): OpCall => {
+  const same = !!own && (own.at.length > 10 ? own.at.slice(0, 16) : own.at) === (p.at.length > 10 ? p.at.slice(0, 16) : p.at);
+  const at = same ? own!.at : p.at;
+  return { op: 'set_asset_capture', args: { assetId, capture: { at, utcOffsetMinutes: same ? own!.utcOffsetMinutes : null, ...(p.circa ? { circa: true } : {}) } } };
+};
 export const removeCaptureOp = (assetId: string): OpCall => ({ op: 'set_asset_capture', args: { assetId, capture: null } });
 
 // ---------------------------------------------------------------- the library by date
