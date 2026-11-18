@@ -21,7 +21,8 @@
  *       the same data digests;
  * - F6  each moments record within MOMENTS_RECORD_BUDGET_BYTES (1100), the run record within 16 000 bytes, at most 3 reasons a
  *       pick; median commit latency before and after measuring, reported;
- * - F7  capture order (control: the 'given' order differs); a reason on every pick, said in Hebrew in the dialog's own words with
+ * - F7  the upload reads every file's capture date (container creation time, the still's file name; none entered by hand);
+ *       capture order (control: the 'given' order differs); a reason on every pick, said in Hebrew in the dialog's own words with
  *       none of the forbidden words; the static clip says default middle; the 85 %-active clip says active throughout; faces are
  *       not used and the plan says so;
  * - F8  apply is one revision and one history transaction;
@@ -29,8 +30,8 @@
  *       stretch and overlaps the truth window by at least 90 % of the slot;
  * - F10 every picture cut is the nearest frame of a bar start or half-bar of the placed music; followedBeats agrees within 1e-6 s;
  *       consecutive cuts are never closer than the flash gap (11 frames at 30 fps; control: the alternation project's are);
- * - F11 the opening title is a live {hebrewDate} field and its still equals the still of «כ״ו בכסלו תשפ״ז» typed by hand
- *       (control: «כ״ה בכסלו תשפ״ז» typed by hand differs);
+ * - F11 the opening title is a live {hebrewDate} field and its still equals the still of «כ״ו בכסלו תשפ״ו» typed by hand
+ *       (control: «כ״ה בכסלו תשפ״ו» typed by hand differs);
  * - F12 one undo restores the document byte for byte (sha256); redo restores the film byte for byte;
  * - F13 move one clip and trim another, set a gain by hand on the own-sound track, regenerate at another length: both clips
  *       byte-identical and present; no asset twice; no slot key twice; every frame of [first slot start, last slot end) has a
@@ -71,9 +72,10 @@ const PORT = 8871;
 const W = 640, H = 360, FPS = 30;
 const R = { num: 30, den: 1 };
 /** Typed from the fixture, on Israel's wall clock (UTC + 2 h): b 10:00, d 10:04, a 10:09, f 10:13, c 10:20, the still 10:23, e 10:26. */
-const CAPTURE_ORDER = ['film-b.mp4', 'film-d.mp4', 'film-a.mp4', 'film-f.mp4', 'film-c.mp4', 'IMG_20261206_102300.png', 'film-e.mp4'];
-/** 6 December 2026 (the fixture's day, mid-morning in Israel) is 26 Kislev 5787; the day before is 25 Kislev. */
-const HEBREW_DAY = 'כ״ו בכסלו תשפ״ז', HEBREW_DAY_BEFORE = 'כ״ה בכסלו תשפ״ז';
+const CAPTURE_ORDER = ['film-b.mp4', 'film-d.mp4', 'film-a.mp4', 'film-f.mp4', 'film-c.mp4', 'IMG_20251216_102300.png', 'film-e.mp4'];
+/** 16 December 2025 (the fixture's day, mid-morning in Israel) is 26 Kislev 5786, the second day of Hanukkah; the day before is
+ *  25 Kislev (both checked with core's calendar and the Intl Hebrew calendar in family-film-fixture.test.ts). */
+const HEBREW_DAY = 'כ״ו בכסלו תשפ״ו', HEBREW_DAY_BEFORE = 'כ״ה בכסלו תשפ״ו';
 /** At 30 fps no two cuts may be closer than 11 frames (three flashes a second at most). */
 const FLASH_GAP = 11;
 /** One sample every 6 frames at 30 fps (about 5 a second); the grey picture is 320x180 for a 640x360 file. */
@@ -186,15 +188,24 @@ async function main() {
     return { cached: false, job: await waitJob(r.body.jobId) };
   };
   /**
-   * The fixture's day (6 December 2026) is after this machine's clock, and the life line rightly refuses a capture date ahead of
-   * the import time, so the files' own dates are not read on upload (recorded as capturesReadOnUpload). The same instants, typed
-   * from the fixture (UTC + 2 h in Israel in December; the still's wall clock is approximate, from its name), are entered with the
-   * public op set_asset_capture, one transaction.
+   * The capture dates the upload must read from the files themselves (the fixture's day, 16 December 2025, is in the past), typed
+   * from the fixture: each clip's container creation time (a UTC instant) on Israel's wall clock (UTC + 2 h in December), the
+   * zone recorded as assumed; the still's wall clock from its file name, approximate. Nothing is entered by hand.
    */
-  const setCaptures = async (p: string, byName: Record<string, string>) => {
-    const wall = (utc: string) => { const d = new Date(Date.parse(utc) + 120 * 60_000); return d.toISOString().slice(0, 19); };
-    await tx(p, [...truth.clips.map((c) => ({ op: 'set_asset_capture', args: { assetId: byName[c.name]!, capture: { at: wall(c.capture), utcOffsetMinutes: 120 } } })),
-      { op: 'set_asset_capture', args: { assetId: byName[truth.still.name]!, capture: { at: truth.still.capture, utcOffsetMinutes: null, circa: true } } }]);
+  const wall = (utc: string) => { const d = new Date(Date.parse(utc) + 120 * 60_000); return d.toISOString().slice(0, 19); };
+  const expectedCaptures = (): Record<string, Record<string, unknown>> => Object.fromEntries([
+    ...truth.clips.map((c) => [c.name, { at: wall(c.capture), utcOffsetMinutes: null, source: 'container', assumedZone: 'Asia/Jerusalem' }]),
+    [truth.still.name, { at: truth.still.capture, utcOffsetMinutes: null, source: 'filename', circa: true }]]);
+  const keyed = (o: unknown) => (o && typeof o === 'object' ? JSON.stringify(Object.keys(o).sort().map((k) => [k, (o as Record<string, unknown>)[k]])) : JSON.stringify(o));
+  const capturesRead = async (p: string, byName: Record<string, string>) => {
+    const d = await getDoc(p), want = expectedCaptures();
+    const got = Object.fromEntries(Object.keys(want).map((f) => [f, (d.assets[byName[f]!] as any)?.capture ?? null]));
+    return { ok: Object.keys(want).every((f) => keyed(got[f]) === keyed(want[f])), got, want };
+  };
+  /** Every other project of the proof uploads the same files: their dates must have been read too, or the section stops. */
+  const mustReadCaptures = async (p: string, byName: Record<string, string>) => {
+    const r = await capturesRead(p, byName);
+    if (!r.ok) throw new Error(`the upload did not read the files' capture dates: ${JSON.stringify(r.got).slice(0, 400)}`);
   };
   const beats = async (pid: string, assetId: string) => must(`/projects/${pid}/assets/${assetId}/analyze`, { kind: 'beats' });
   const commitMedian = async (pid: string, n = 15) => { const d = await getDoc(pid); const trackId = Object.values(d.sequences)[0]!.tracks[0]!.id; const ms: number[] = []; for (let i = 0; i < n; i++) { const t0 = performance.now(); await tx(pid, [{ op: 'update_track', args: { trackId, name: `V1 ${i}` } }]); ms.push(performance.now() - t0); } return r2(median(ms)); };
@@ -220,9 +231,11 @@ async function main() {
   const ids: Record<string, string> = {};
   for (const f of files) ids[f] = await upload(pid, path.join(fx, f));
   const musicId = await upload(pid, path.join(fx, truth.music!.name));
-  measurements.capturesReadOnUpload = Object.fromEntries(files.map((f) => [f, null as unknown]));
-  { const d = await getDoc(pid); for (const f of files) (measurements.capturesReadOnUpload as Record<string, unknown>)[f] = (d.assets[ids[f]!] as any).capture ?? null; }
-  await setCaptures(pid, ids);
+  {
+    const r = await capturesRead(pid, ids);
+    measurements.capturesReadOnUpload = r.got;
+    check('F7', 'the upload reads every file\'s capture date: each clip\'s container creation time on Israel\'s wall clock, the still\'s from its file name (approximate); none entered by hand', r.ok, r.got, 'equal to the fixture\'s dates, typed');
+  }
   const nameOfAsset = (assetId: string) => Object.keys(ids).find((k) => ids[k] === assetId) ?? assetId;
   const videoIds = truth.clips.map((c) => ids[c.name]!);
   await beats(pid, musicId);
@@ -516,9 +529,11 @@ async function main() {
     const back = await getDoc(pid);
     check('F13', 'undoing the regeneration and the hand edits gives back the film byte for byte', sha(JSON.stringify(back)) === sha(JSON.stringify(d0)) && (await revision(pid)) > edits0, { equal: sha(JSON.stringify(back)) === sha(JSON.stringify(d0)) }, 'sha256 equal');
 
-    // R2: the last clip's start trimmed by 15 frames: it still ends after the shorter 30 s target, so the film runs up to it
-    await tx(pid, [{ op: 'trim_clip', args: { clipId: lastPic.clip.id, edge: 'start', to: T.add(lastPic.clip.start, q) } }]);
-    const lastEndS = sec(T.add(lastPic.clip.start, lastPic.clip.duration));
+    // R2: the last clip's end trimmed 3 s later (lengthened by hand from its own file): it ends after the shorter 30 s target,
+    // so the film runs up to it. (The 60 s film is 28 s: seven clips of one 4 s span each, the most at 120 BPM; its last clip
+    // ends at 28 s and is lengthened so that it runs past 30 s, which this case is about.)
+    await tx(pid, [{ op: 'trim_clip', args: { clipId: lastPic.clip.id, edge: 'end', to: T.add(T.add(lastPic.clip.start, lastPic.clip.duration), T.frameTime(90, R)) } }]);
+    const lastEndS = sec(T.add(T.add(lastPic.clip.start, lastPic.clip.duration), T.frameTime(90, R)));
     const b = await regenerate('R2 the last clip trimmed', [lastPic.clip.id]);
     check('F13', 'R2: the kept clip that runs past the shorter target stays, the film runs up to it with no frame without a picture, and the plan says it is longer', b.keptOk && lastEndS > 30 && b.to >= Math.round(lastEndS * FPS) && b.holes === 0 && b.repicked.length === 0 && (b.r.warnings as any[]).some((w) => w.code === 'longer_than_target'), { keptClipEndsAt: r2(lastEndS), filmPicturesEndAt: r2(b.to / FPS), holes: b.holes, repicked: b.repicked, warnings: (b.r.warnings as any[]).map((w) => w.code) }, 'kept, covered, longer_than_target');
     for (let i = 0; i < 2; i++) await call(`/projects/${pid}/undo`, {});
@@ -537,7 +552,7 @@ async function main() {
     const mp = await newProject('film mix');
     const mids: Record<string, string> = {};
     for (const f of files) mids[f] = await upload(mp, path.join(fx, f));
-    await setCaptures(mp, mids);
+    await mustReadCaptures(mp, mids);
     const mm = await upload(mp, path.join(fx, truth.music!.name));
     await beats(mp, mm);
     await measure(mp, truth.clips.map((c) => mids[c.name]!));
@@ -588,7 +603,7 @@ async function main() {
     const ap = await newProject('film agents');
     const aids: string[] = [];
     for (const f of files) aids.push(await upload(ap, path.join(fx, f)));
-    await setCaptures(ap, Object.fromEntries(files.map((f, i) => [f, aids[i]!])));
+    await mustReadCaptures(ap, Object.fromEntries(files.map((f, i) => [f, aids[i]!])));
     await measure(ap, aids.slice(0, 6));
     const plan = await mcp('plan_recipe', { projectId: ap, recipeId: 'family-film', params: { assetIds: aids, targetSeconds: 30 } });
     const apply = await mcp('apply_recipe', { projectId: ap, recipeId: 'family-film', params: { assetIds: aids, targetSeconds: 30 } });
@@ -640,7 +655,7 @@ async function main() {
     const up = await newProject('film ui');
     const uids: Record<string, string> = {};
     for (const f of files) uids[f] = await upload(up, path.join(fx, f));
-    await setCaptures(up, uids);
+    await mustReadCaptures(up, uids);
     const um = await upload(up, path.join(fx, truth.music!.name));
     await beats(up, um);
     const browser = await chromium.launch();
