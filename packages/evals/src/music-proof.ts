@@ -81,7 +81,7 @@ async function main() {
   const upload = async (pid: string, file: string) => { const r = await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': path.basename(file) }, body: fs.readFileSync(file) }); const b = (await r.json()) as any; if (!b.assetId) throw new Error(`upload failed: ${JSON.stringify(b).slice(0, 300)}`); return b.assetId as string; };
   const doc = async (pid: string) => (await call(`/projects/${pid}`)).body.project as any;
   const waitJob = async (id: string) => { for (;;) { const j = (await call(`/jobs/${id}`)).body; if (['succeeded', 'failed', 'canceled'].includes(j.status)) return j; await sleep(200); } };
-  const newProject = async (name: string) => (await call('/projects', { name, width: 540, height: 960, frameRate: R })).body.id as string;
+  const newProject = async (name: string) => (await call('/projects', { name, width: 540, height: 960, frameRate: R })).body.project.id as string; // POST /projects answers { project, revision }
   const clipsOf = (d: any) => Object.values(d.sequences ?? {}).flatMap((q: any) => q.tracks.flatMap((t: any) => t.clips.map((c: any) => ({ ...c, trackId: t.id, trackKind: t.kind }))));
   const exportWav = async (pid: string, name: string) => {
     const j = await waitJob((await call(`/projects/${pid}/exports`, { format: 'wav' })).body.jobId);
@@ -98,14 +98,18 @@ async function main() {
     check('GET /music lists the six styles, each labelled unheard', list.status === 200 && Array.isArray(styles) && styles.length === 6 && styles.every((x) => x.review === 'unheard' && x.label?.he === MUSIC_UNHEARD_LABEL.he), { status: list.status, count: Array.isArray(styles) ? styles.length : null });
 
     // ------------------------------------------------------------ P6: a template with built-in music, exported as WAV
-    const stills = ['testsrc2', 'smptebars', 'rgbtestsrc', 'mandelbrot'].map((src, i) => { const f = path.join(art, `still_${i}.png`); ff(['-f', 'lavfi', '-i', `${src}=s=540x960`, '-frames:v', '1', f]); return f; });
+    // Eight stills at half tempo: long enough that the plan keeps the track's own composed ending (4 stills give 2.9 s of
+    // pictures against 7.68 s of music, so the plan cuts and fades it, and the checks below, which compare the export with the
+    // whole synthesised track and its silent end, would measure the fade instead).
+    const stills = ['testsrc2', 'smptebars', 'rgbtestsrc', 'mandelbrot', 'testsrc', 'smptehdbars', 'yuvtestsrc', 'pal75bars'].map((src, i) => { const f = path.join(art, `still_${i}.png`); ff(['-f', 'lavfi', '-i', `${src}=s=540x960`, '-frames:v', '1', f]); return f; });
     const p6 = await newProject('music-p6');
     const media: string[] = [];
     for (const f of stills) media.push(await upload(p6, f));
-    const params = { media, builtinMusic: { styleId: 'music.festive', seed: 3 }, musicAssetId: null };
+    const params = { media, builtinMusic: { styleId: 'music.festive', seed: 3 }, musicAssetId: null, tempo: 'half' };
     const plan = await call(`/projects/${p6}/templates/tpl.photo-dump/plan`, { params });
     check('P6 the plan asks for built-in music and has nothing blocking', plan.status === 200 && !(plan.body.blocking ?? []).length, { status: plan.status, notices: plan.body.notices });
     const faded = (plan.body.notices ?? []).some((n: any) => (n.code ?? n) === 'builtin_music_faded');
+    check('P6 setup: the pictures are long enough that the plan keeps the composed ending (no builtin_music_faded)', !faded, { faded });
     const applied = await call(`/projects/${p6}/templates/tpl.photo-dump/apply`, { params });
     check('P6 apply succeeds', applied.status === 200, { status: applied.status, body: applied.status === 200 ? undefined : applied.body });
     const d6 = await doc(p6);
