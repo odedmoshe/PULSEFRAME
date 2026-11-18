@@ -56,7 +56,7 @@ describe('MCP resources and prompts', () => {
     const c = await connect(s.auth.tokens.agent);
     const tools = new Set((await c.listTools()).tools.map((t) => t.name));
     const prompts = (await c.listPrompts()).prompts;
-    expect(prompts.map((p) => p.name).sort()).toEqual(['captions-pass', 'review-edit', 'rough-cut', 'social-cutdown']);
+    expect(prompts.map((p) => p.name).sort()).toEqual(['captions-pass', 'long-to-shorts', 'review-edit', 'rough-cut', 'social-cutdown']);
     expect(prompts.every((p) => /playbook v1/.test(p.title ?? ''))).toBe(true);
     const texts: string[] = [textOf(await c.readResource({ uri: 'pulseframe://guide' }))];
     for (const p of prompts) {
