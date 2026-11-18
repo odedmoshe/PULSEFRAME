@@ -1086,9 +1086,9 @@ attached provider image verified by pixel through `render_frame`, undo of the pl
 - Unit suite at the end of this checkpoint: 257 files, 2977 tests passing (after fixing three tests that assumed no packs existed and making the fuzz coverage draw not-yet-accepted operations every sixth step).
 
 ## In progress
-- Wave 4 open proof items (P12 cross-host bound, M6 overlap rule, parity lossless control, media-card badge overlap): one integration agent.
 - Perform mode (ADR-0025): integrated and proven on the CPU profile (below); open: the live-path budget for 200 hits (at the edge of one frame period here), latency (not checked), the owner's calibration and review of the pad names and sounds.
-- Next: the Hebrew command bar (approved; model-free grammar, honest «לא מחובר» until the owner's key).
+- Hebrew command bar (ADR-0027): contracts merged (strict commit at the shown revision, undo state on history events, a monthly and per-request spending limit, key never backed up); three builders running (grammar, the model path to an honest «עוזר השפה לא מחובר», the bar in the palette).
+- Follow-ups recorded: the take lane works out a shape hold from the ghost's flash model with the planner's rule (`capture.ts` `markShapeHolds`) — the planner should name it in its chip so there is one source; the transport timecode overlaps its total at 1280 px in every mode; commit cost grows with the document (2000 keys 31 ms; perform's 200-hit live path at the edge of one frame period here).
 - Waiting on the owner: `docs/OWNER_REVIEW.he.md`, listening to the music and the pad sounds, the laptop GPU checks (`docs/QUICKSTART.he.md` §10), a real phone and home network for the phone drop, the tap calibration.
 
 ## Blocked / unverified (with what would unblock)
