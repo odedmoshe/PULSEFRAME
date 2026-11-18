@@ -18,6 +18,8 @@ import { TEMPLATE_TESTIDS } from './templates.testids.ts';
 import { templateApi } from './templateDialog.logic.ts';
 import { WELCOME_STRINGS } from './welcome.strings.ts';
 import { OnThisDayCard } from './lifeline/OnThisDayCard.tsx';
+import { FamilyFilmEntry } from './FamilyFilmEntry.tsx';
+import { sourceFromSelection } from './familyFilm.logic.ts';
 import '../ds/chrome.css';
 import './welcome.css';
 import './templates.css';
@@ -42,6 +44,16 @@ export function Welcome() {
   const [offline, setOffline] = useState(false);
   const [templates, setTemplates] = useState<TemplateSummary[] | null>(null);
   const [all, setAll] = useState(false);
+  // the family film card of an empty project chooses files first; once they are all in, the film dialog opens on them
+  const filmIntent = useRef(false);
+  const [filmNext, setFilmNext] = useState(false);
+  useEffect(() => {
+    if (!filmNext || !doc || uploading) return;
+    const src = sourceFromSelection(doc, []);
+    if (!src.assetIds.length) return;
+    setFilmNext(false);
+    editor.openFilm(src);
+  }, [filmNext, uploading, doc]); // eslint-disable-line react-hooks/exhaustive-deps
   const load = () => {
     setOffline(false);
     api.listProjectsFull().then((r) => setProjects(r.projects)).catch(() => { setOffline(true); setProjects([]); });
@@ -71,7 +83,7 @@ export function Welcome() {
           onDrop={(e) => { setOver(false); const fs = [...(e.dataTransfer.files ?? [])]; if (!fs.length) return; e.preventDefault(); e.stopPropagation(); take(fs); }}>
           <span className="pf-hub-dropIc" aria-hidden="true"><ImagePlus size={26} strokeWidth={1.5} /></span>
           <span className="pf-hub-dropText"><strong>{C.hubDrop}</strong><span>{C.hubDropSub}</span></span>
-          <button type="button" className="pf-btn pf-btn-primary pf-btn-lg" aria-busy={uploading || undefined} data-testid="welcome-import" onClick={() => inputRef.current?.click()}>
+          <button type="button" className="pf-btn pf-btn-primary pf-btn-lg" aria-busy={uploading || undefined} data-testid="welcome-import" onClick={() => { filmIntent.current = false; inputRef.current?.click(); }}>
             <ArrowUpFromLine size={18} strokeWidth={1.75} aria-hidden="true" /><span className="pf-btn-label">{uploading ? C.hubUploading : C.hubPick}</span>
           </button>
           {/* the phone drop (ADR-0023): the owner's own session only, since a code is the owner's to issue */}
@@ -81,7 +93,7 @@ export function Welcome() {
             </button>
           )}
           <input ref={inputRef} type="file" multiple accept={ACCEPT} hidden tabIndex={-1} data-testid="welcome-input"
-            onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; take(fs); }} />
+            onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length && filmIntent.current) setFilmNext(true); filmIntent.current = false; take(fs); }} />
         </div>
 
         {/* life line: files of this day of an earlier year; absent when there are none or this is not the owner's session; «פתיחה» opens that project with the event in view */}
@@ -127,9 +139,11 @@ export function Welcome() {
           </section>
         </div>
 
-        {templates && templates.length > 0 && (
-          <section className="pf-hub-sec" aria-labelledby="pf-hub-start">
-            <div className="pf-hub-hrow"><h3 id="pf-hub-start" className="pf-hub-h">{C.hubStart}</h3><span className="pf-hub-sub">{C.hubStartNote}</span></div>
+        <section className="pf-hub-sec" aria-labelledby="pf-hub-start">
+          <div className="pf-hub-hrow"><h3 id="pf-hub-start" className="pf-hub-h">{C.hubStart}</h3>{templates && templates.length > 0 && <span className="pf-hub-sub">{C.hubStartNote}</span>}</div>
+          {/* the family film (ADR-0026) beside the moments: in an empty project it asks for the files first */}
+          <div className="pf-hub-film"><FamilyFilmEntry variant="start-hub" source={null} lang={lang} onEmpty={() => { filmIntent.current = true; inputRef.current?.click(); }} /></div>
+          {templates && templates.length > 0 && (
             <ul className="pf-hub-cards">
               {templates.slice(0, 6).map((tp) => (
                 <li key={tp.id}>
@@ -141,8 +155,8 @@ export function Welcome() {
                 </li>
               ))}
             </ul>
-          </section>
-        )}
+          )}
+        </section>
 
         <footer className="pf-hub-foot">
           <button type="button" className="welcome-template pf-hub-ghost" data-testid={TEMPLATE_TESTIDS.welcomeTemplate} aria-describedby="welcome-template-hint" onClick={startFrom}><Plus size={14} aria-hidden="true" /> {s.s4}</button>

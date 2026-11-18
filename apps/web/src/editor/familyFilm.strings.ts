@@ -45,7 +45,7 @@ export interface FamilyFilmStrings {
   // the inspector section
   whyHeading: string; edited: string; editedShort: string; notMeasured: string; measure: string; measuringOne: string; noReason: string; swapDone: string;
   // the entry
-  entry: { 'event-card': string; 'start-hub': string; palette: string }; entryHint: string;
+  entry: { 'event-card': string; 'start-hub': string; palette: string }; entryHint: string; entryHintEmpty: string;
   reason(r: FilmReason): string;
   exclusion(e: FilmExclusion): string;
   warning(w: FilmWarning): string;
@@ -77,7 +77,7 @@ const he: FamilyFilmStrings = {
   soundNote: { under: 'הקול המקורי נשמע חלש מתחת למוזיקה.', lead: 'המוזיקה מורדת ב־9 dB בזמן שיש קול בקליפ, ולכן היא עולה מעל תמונות וקליפים שקטים.', mute: 'רק המוזיקה נשמעת.' },
   underWithoutMusic: 'הקול המקורי בעוצמה מלאה',
   orderLabel: 'סדר הקליפים', order: { capture: 'לפי זמן הצילום', given: 'לפי סדר הבחירה', arc: 'קשת אנרגיה' },
-  orderNote: { capture: 'לפי מועד הצילום שנקרא מהקובץ. קובץ בלי זמן צילום יושב בסוף.', given: 'כמו בסדר שבו הקבצים מופיעים כאן.', arc: 'רגוע בהתחלה, והערוך ביותר בשני השליש של הסרט. הדירוג לפי תנועה וקול שנמדדו, לא לפי תוכן.' },
+  orderNote: { capture: 'לפי מועד הצילום שנקרא מהקובץ. קובץ בלי זמן צילום יושב בסוף.', given: 'כמו בסדר שבו הקבצים מופיעים כאן.', arc: 'רגוע בהתחלה, התוסס ביותר אחרי שני שלישים מהסרט. הדירוג לפי תנועה וקול שנמדדו, לא לפי תוכן.' },
   titleLabel: 'כותרת פתיחה', titleHint: 'השאירו ריק לכותרת אוטומטית עם שם האירוע והתאריך. טקסט שתקלידו יוצג בדיוק כפי שהוא.',
   titlePlaceholder: (name) => (name ? `ברירת מחדל: ${name}` : 'ברירת מחדל: כותרת לפי תאריך הצילום'),
   notPlanned: 'אין עדיין תוכנית. אפשר לנסות שוב.', retry: 'ניסיון חוזר', undoUnavailable: 'אי אפשר לבטל את הסרט מכאן: יצירתו כבר רחוקה ברשימת העריכות.',
@@ -98,7 +98,7 @@ const he: FamilyFilmStrings = {
   noOtherMoments: 'אין בקבצים רגעים אחרים שנמדדו', working: 'מעדכן את הסרט…', whyList: 'הקליפים והסיבה לכל אחד', whyListItem: (name, reasons) => `${name}: ${reasons}`,
   undoFailed: 'אי אפשר לבטל את הסרט, כי נערכו בו פריטים מאז שנוצר', notInProject: 'הסרט כבר אינו בציר הזמן',
   whyHeading: 'למה הקליפ הזה', editedShort: 'נערך ידנית', edited: 'נערך ידנית: הקליפ שונה ממה שהתוכנית יצרה, והסיבה נבדקת לפי מה שמנגן בו עכשיו', notMeasured: 'הקובץ עוד לא נמדד', measure: 'מדידת רגעים', measuringOne: 'מודד רגעים…', noReason: 'הקליפ הזה לא מנגן אף רגע שנמדד', swapDone: 'הקליפ הוחלף',
-  entry: { 'event-card': 'סרט מהאירוע', 'start-hub': 'סרט משפחתי בלחיצה', palette: 'סרט משפחתי בלחיצה' }, entryHint: 'טיוטה ראשונה שאפשר לערוך',
+  entry: { 'event-card': 'סרט מהאירוע', 'start-hub': 'סרט משפחתי בלחיצה', palette: 'סרט משפחתי בלחיצה' }, entryHint: 'טיוטה ראשונה שאפשר לערוך', entryHintEmpty: 'קודם בוחרים תמונות וסרטונים, ואז נפתח הסרט',
   reason(r) {
     switch (r.code) {
       case 'inner_motion': return `תנועה בתוך התמונה בשניות ${range(r)}`;
@@ -185,7 +185,7 @@ const en: FamilyFilmStrings = {
   noOtherMoments: 'The files have no other measured moments', working: 'Updating the film…', whyList: 'The clips and the reason for each', whyListItem: (name, reasons) => `${name}: ${reasons}`,
   undoFailed: 'The film cannot be undone because items of it were edited since it was made', notInProject: 'The film is no longer on the timeline',
   whyHeading: 'Why this clip', editedShort: 'Edited by hand', edited: 'Edited by hand: the clip differs from what the plan made, and the reason is checked against what it plays now', notMeasured: 'The file is not measured yet', measure: 'Measure moments', measuringOne: 'Measuring moments…', noReason: 'This clip plays none of the measured moments', swapDone: 'The clip was replaced',
-  entry: { 'event-card': 'Film from this event', 'start-hub': 'Family film in one click', palette: 'Family film in one click' }, entryHint: 'A first draft you can edit',
+  entry: { 'event-card': 'Film from this event', 'start-hub': 'Family film in one click', palette: 'Family film in one click' }, entryHint: 'A first draft you can edit', entryHintEmpty: 'Choose pictures and videos first; the film opens next',
   reason(r) {
     switch (r.code) {
       case 'inner_motion': return `Movement inside the picture at ${range(r)} s`;

@@ -16,18 +16,21 @@ export interface FamilyFilmEntryProps {
   /** What the dialog opens with; null = the editor's current selection (its clips' files, else the library's pictures and videos). */
   source: FilmSource | null;
   lang: 'he' | 'en';
+  /** What a click does while there is nothing to film (the start hub: choose files first); without it the entry is disabled then. */
+  onEmpty?: () => void;
 }
-export function FamilyFilmEntry({ variant, source, lang }: FamilyFilmEntryProps): ReactElement | null {
+export function FamilyFilmEntry({ variant, source, lang, onEmpty }: FamilyFilmEntryProps): ReactElement | null {
   const { editor, state } = useEditorState();
   const S = familyFilmStrings(lang);
   const doc = state.doc;
   if (!doc) return null;
-  const open = () => { if (!empty) editor.openFilm(source ?? sourceFromSelection(doc, state.selection)); };
   const empty = !source && sourceFromSelection(doc, state.selection).assetIds.length === 0;
+  const open = () => { if (!empty) editor.openFilm(source ?? sourceFromSelection(doc, state.selection)); else onEmpty?.(); };
+  const disabled = empty && !onEmpty;
   return (
-    <button type="button" className={`pf-film-entry is-${variant}`} data-testid={TID.open} data-variant={variant} onClick={open} aria-disabled={empty || undefined} title={empty ? S.emptySource : undefined}>
+    <button type="button" className={`pf-film-entry is-${variant}`} data-testid={TID.open} data-variant={variant} onClick={open} aria-disabled={disabled || undefined} title={disabled ? S.emptySource : undefined}>
       <Film size={variant === 'start-hub' ? 20 : 16} aria-hidden="true" />
-      <span className="pf-film-entry-text"><b>{S.entry[variant]}</b>{variant === 'start-hub' && <span>{S.entryHint}</span>}</span>
+      <span className="pf-film-entry-text"><b>{S.entry[variant]}</b>{variant === 'start-hub' && <span>{empty && onEmpty ? S.entryHintEmpty : S.entryHint}</span>}</span>
     </button>
   );
 }

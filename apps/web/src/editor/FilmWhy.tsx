@@ -6,6 +6,7 @@
  * Inspector.tsx; it draws nothing for a clip that is not in a film.
  */
 import { useState, type ReactElement } from 'react';
+import { FAMILY_FILM_DRAFT_LABEL } from '@pulseframe/core';
 import { AnchoredError, Button, Menu } from '../ds/index.ts';
 import { isolate } from '../ds/util.tsx';
 import { api } from '../api.ts';
@@ -48,6 +49,7 @@ export function FilmWhy({ clipId, lang }: FilmWhyProps): ReactElement | null {
       <h4>{S.whyHeading}</h4>
       <p className="pf-film-reason" data-testid={TID.whyReason}>{isolate(reasonLine(why.reasons, lang) || S.noReason)}</p>
       {why.edited && <p className="pf-film-muted" data-testid={TID.whyEdited}>{S.edited}</p>}
+      <p className="pf-film-muted">{FAMILY_FILM_DRAFT_LABEL[lang]}</p>
       {!why.measured && <Button size="sm" data-testid={TID.whyMeasure} busy={busy} onClick={() => void measure()}>{busy ? S.measuringOne : S.measure}</Button>}
       <div className="pf-film-why-actions">
           {!why.still && <Button size="sm" data-testid={TID.whyWindow} disabled={busy} disabledReason={swapWindow ? undefined : S.noOtherWindow} onClick={() => void commit(swapWindow)}>{S.swapWindow}</Button>}
