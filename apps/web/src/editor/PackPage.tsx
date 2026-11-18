@@ -22,6 +22,7 @@ import { PackFields } from './PackFields.tsx';
 import {
   captionAction, captionTargets, elementColours, isPackTab, lookAction, packView, pickCaptionTarget, tabSpecs, titleAction, titleFieldValues,
   type PackView,
+  readableHint,
 } from './packs.logic.ts';
 import './packs.css';
 
@@ -58,6 +59,7 @@ export function PackPageView(p: PackPageViewProps) {
   const { pack, view, lang, tab } = p;
   const S: PackStrings = PACK_STRINGS[lang];
   const colours = elementColours(pack);
+  const rh = (text: string) => readableHint(text, S.hintField);
   const specs = tabSpecs(pack, S.tab);
   const act = (id: string, label: string, run: () => void, variant: 'primary' | 'secondary' = 'secondary', reason?: string) => (
     <Button size="sm" variant={variant} busy={p.busy === id} disabledReason={reason} onClick={() => { if (p.busy === null) run(); }}>{p.busy === id ? S.working : label}</Button>
@@ -67,7 +69,7 @@ export function PackPageView(p: PackPageViewProps) {
     switch (tab) {
       case 'templates':
         return view.templates.length === 0 ? empty : (
-          <ul className="pf-pack-list">{view.templates.map((t) => <Row key={t.id} testId={TID.template} dataKey="data-template-id" id={t.id} name={t.name[lang]} hint={t.hint[lang]} action={<Button size="sm" variant="primary" onClick={() => p.onOpenTemplate(t.id)}>{S.openTemplate}</Button>} />)}</ul>
+          <ul className="pf-pack-list">{view.templates.map((t) => <Row key={t.id} testId={TID.template} dataKey="data-template-id" id={t.id} name={t.name[lang]} hint={rh(t.hint[lang])} action={<Button size="sm" variant="primary" onClick={() => p.onOpenTemplate(t.id)}>{S.openTemplate}</Button>} />)}</ul>
         );
       case 'titles':
         return (
@@ -106,7 +108,7 @@ export function PackPageView(p: PackPageViewProps) {
       case 'looks':
         return view.looks.length === 0 ? empty : (
           <>
-            <ul className="pf-pack-list">{view.looks.map((l) => <Row key={l.id} testId={TID.look} dataKey="data-look-id" id={l.id} name={l.name[lang]} hint={l.hint[lang]} action={act(l.id, S.applyLook, () => p.onApplyLook(l))} />)}</ul>
+            <ul className="pf-pack-list">{view.looks.map((l) => <Row key={l.id} testId={TID.look} dataKey="data-look-id" id={l.id} name={l.name[lang]} hint={rh(l.hint[lang])} action={act(l.id, S.applyLook, () => p.onApplyLook(l))} />)}</ul>
             <p className="pf-pack-note">{S.lookNote} {S.oneUndo}</p>
           </>
         );
@@ -120,7 +122,7 @@ export function PackPageView(p: PackPageViewProps) {
               </label>
             )}
             <ul className="pf-pack-list">
-              {view.captionLooks.map((l) => <Row key={l.id} testId={TID.captionLook} dataKey="data-caption-look-id" id={l.id} name={l.name[lang]} hint={<>{l.hint[lang]}{l.needsWordTiming && <> · {S.captionNeedsWords}</>}</>} action={act(l.id, S.applyCaption, () => p.onApplyCaption(l.id), 'secondary', none ? S.noCaptionTrack : undefined)} />)}
+              {view.captionLooks.map((l) => <Row key={l.id} testId={TID.captionLook} dataKey="data-caption-look-id" id={l.id} name={l.name[lang]} hint={<>{rh(l.hint[lang])}{l.needsWordTiming && <> · {S.captionNeedsWords}</>}</>} action={act(l.id, S.applyCaption, () => p.onApplyCaption(l.id), 'secondary', none ? S.noCaptionTrack : undefined)} />)}
             </ul>
             <p className="pf-pack-note">{S.oneUndo}</p>
           </>
@@ -136,7 +138,7 @@ export function PackPageView(p: PackPageViewProps) {
             </>)}
             {view.music.length > 0 && (<>
               <h4 className="pf-pack-sub">{S.musicTitle}</h4>
-              <ul className="pf-pack-list">{view.music.map((m) => <Row key={m.id} testId={TID.sound} dataKey="data-style-id" id={m.id} name={m.name[lang]} hint={m.hint[lang]} action={<Badge tone="attention">{S.musicUnheard}</Badge>} />)}</ul>
+              <ul className="pf-pack-list">{view.music.map((m) => <Row key={m.id} testId={TID.sound} dataKey="data-style-id" id={m.id} name={m.name[lang]} hint={rh(m.hint[lang])} action={<Badge tone="attention">{S.musicUnheard}</Badge>} />)}</ul>
               <p className="pf-pack-note">{S.musicNote}</p>
             </>)}
           </>
@@ -149,7 +151,7 @@ export function PackPageView(p: PackPageViewProps) {
         <Button size="sm" variant="ghost" data-testid={TID.back} onClick={p.onBack}>{S.back}</Button>
         <h3 className="pf-pack-title" dir="auto">{pack.name[lang]}</h3>
       </div>
-      <p className="pf-pack-hint" dir="auto">{pack.hint[lang]}</p>
+      <p className="pf-pack-hint" dir="auto">{rh(pack.hint[lang])}</p>
       <Tabs label={S.tabsLabel} value={tab} onChange={(id) => { if (isPackTab(id)) p.onTab(id); }} panelPrefix="pf-pack-panel" tabs={specs.map((s) => ({ id: s.id, label: s.label, count: s.count, testId: TID.tab(s.id) }))} />
       <div role="tabpanel" id={`pf-pack-panel-${tab}`} aria-labelledby={`pf-pack-panel-tab-${tab}`} tabIndex={0} className="pf-pack-panel" data-testid={TID.panel(tab)}>{panel()}</div>
       <div aria-live="polite" role="status">{p.status && <p className={cx('pf-pack-status', p.status.kind === 'err' && 'is-err')}>{p.status.kind === 'ok' && <CheckIcon size={14} />} {p.status.text}</p>}</div>

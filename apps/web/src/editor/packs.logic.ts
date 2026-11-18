@@ -198,3 +198,11 @@ export const wallDate = (g: GDate): string => `${g.y}-${String(g.m).padStart(2, 
 export const addDays = (g: GDate, n: number): GDate => gregorianFromRd(rdFromGregorian(g) + n);
 /** The browser's own local day as a GDate: the caller passes `new Date()`, nothing here reads a clock. */
 export const localDay = (now: Date): GDate => ({ y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() });
+
+/**
+ * A pack's own hint as the owner reads it: a field key in braces ({night}) becomes the readable words in brackets
+ * («[מספר הלילה]»); a key that is not a pack field is left out of the braces, never shown raw.
+ */
+export function readableHint(text: string, words: Record<string, string>): string {
+  return text.replace(/\{([A-Za-z0-9_]+)\}/g, (_m, k: string) => `[${words[k] ?? k}]`);
+}

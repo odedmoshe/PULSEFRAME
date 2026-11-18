@@ -25,13 +25,14 @@ import { PulseStrip, TempoHead, type PulseModel } from './PulseStrip.tsx';
 import { RideBar } from './RideBar.tsx';
 import { barGrid, capPlacement, catalogDragFrom, cutRoom, cutsOf, labelsUnder, laneOrder, lastAtOrBefore, pickSpoken, rulerLabel, rulerStep, signedTimecode, type SpokenChip, type BarGrid, type CatalogDragItem, type Lane, type LaneRole } from './interactions.math.ts';
 import { TL_STRINGS, type TlStrings } from './timeline.strings.ts';
+import { assetDisplayName } from './assetLabel.ts';
 import './templates.css';
 import './timeline.css';
 
 const MAX_MARKERS = 3000;
 type MediaClip = Extract<Clip, { type: 'media' }>;
 
-export const clipLabel = (doc: ProjectDocument, c: Clip, lang: 'he' | 'en' = 'he') => (c.type === 'media' ? doc.assets[c.assetId]?.name ?? c.assetId : c.type === 'adjustment' ? c.label ?? '' : c.type === 'text' && c.fields ? fieldsToDisplay(lang, c.text, doc) : c.text); // a title with live fields shows the readable form, `{תאריך}`, never the stored `{date}`
+export const clipLabel = (doc: ProjectDocument, c: Clip, lang: 'he' | 'en' = 'he') => (c.type === 'media' ? assetDisplayName(doc.assets[c.assetId], lang) ?? c.assetId : c.type === 'adjustment' ? c.label ?? '' : c.type === 'text' && c.fields ? fieldsToDisplay(lang, c.text, doc) : c.text); // a title with live fields shows the readable form, `{תאריך}`, never the stored `{date}`
 /** A file name as the timeline shows it: without its extension. */
 const bare = (name: string) => name.replace(/\.[a-z0-9]{2,5}$/i, '');
 
