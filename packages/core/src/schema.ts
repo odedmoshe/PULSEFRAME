@@ -707,5 +707,9 @@ export function migrateProject(raw: unknown): ProjectDocument {
     if (!step) throw new Error(`no migration from schema ${doc.schemaVersion}`);
     doc = step(doc);
   }
-  return ProjectSchema.parse(doc);
+  const out = ProjectSchema.parse(doc);
+  // A project without people has no `people` key (entities.ts: undoing the first add_person deletes the emptied map), so a
+  // stored or imported `people: {}` reads as absent and the undo of the first add_person gives the document back exactly.
+  if (out.people && Object.keys(out.people).length === 0) delete out.people;
+  return out;
 }
