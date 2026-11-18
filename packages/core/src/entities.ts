@@ -6,7 +6,7 @@
  * if nobody changed them since" — a compensating transaction, never a history rewrite.
  */
 import * as T from '@pulseframe/time';
-import type { Analysis, Asset, Clip, LifeEvent, Marker, Person, ProjectDocument, RecipeRun, Track, Transcript, Variant } from './schema.ts';
+import type { Analysis, Asset, Clip, LifeEvent, Marker, Person, ProjectDocument, RecipeRun, Sequence, Track, Transcript, Variant } from './schema.ts';
 import type { MotionTrack } from './tracking.ts';
 
 export type EntityState =
@@ -29,6 +29,18 @@ export type EntityState =
    * (apps/server/src/peoplePrivacy.ts).
    */
   | { kind: 'person'; person: Person }
+  /**
+   * A sequence's own fields (ADR-0018): id, name, format and origin. Entity id = the sequence id. Its tracks, track order,
+   * clips and markers stay their own entities. CONTRACT for W1 (entityMap / restoreEntities bodies):
+   * - entityMap emits it for every sequence, keyed by the sequence id;
+   * - restoreEntities step 0 (before step 1) creates a missing sequence with tracks [] or replaces its own fields (keys absent
+   *   from the target are deleted, `tracks` is never touched); a final step deletes the sequences whose target is null,
+   *   throws for mainSequenceId and throws while the sequence still holds tracks;
+   * - the stricter undo rule (wave4-decisions.md, project-wide): step 1 throws `track <id> holds clips added later` when a
+   *   track whose target is null still holds a clip the targets do not also set to null. A throw becomes invalid_result in
+   *   restore_entities and then 409 undo_conflict in apps/server/src/store.ts undo(), so nothing is ever deleted silently.
+   */
+  | { kind: 'sequence'; sequence: Omit<Sequence, 'tracks'> }
   /** The stacking order of a sequence's tracks. Compared only over the tracks both sides have, so adding or removing a track is not an order change. */
   | { kind: 'trackOrder'; sequenceId: string; ids: string[] };
 /** Entity id of an asset's analysis results. */

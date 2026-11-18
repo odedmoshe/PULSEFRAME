@@ -30,7 +30,7 @@ const withEvents = (doc: ProjectDocument, events: LifeEvent[]): ProjectDocument 
 
 describe('life line: schema (optional fields, no version bump)', () => {
   it('the schema version is unchanged and a document from before this build still parses, with no events', () => {
-    expect(SCHEMA_VERSION).toBe(2);
+    expect(SCHEMA_VERSION).toBe(3); // wave 4's one bump (ADR-0018, identity MIGRATIONS[2]); this track added no version of its own
     const { events: _e, ...old } = createProject({ id: 'p', name: 'P' });
     const parsed = ProjectSchema.parse(old);
     expect(parsed.events).toEqual({});

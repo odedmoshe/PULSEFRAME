@@ -1,5 +1,6 @@
 /**
- * Canonical ProjectDocument (SPEC §5), schema version 2 (v2 adds adjustment clips and tracks and template slot records, ADR-0016).
+ * Canonical ProjectDocument (SPEC §5), schema version 3 (v2 adds adjustment clips and tracks and template slot records, ADR-0016;
+ * v3 is wave 4's one bump, ADR-0018: a sequence may carry its own format and measured origin).
  * JSON-serializable; binary media stays outside and is referenced by asset id.
  * Transient state (selection, playhead, presence, panel layout) is NOT part of this document.
  */
@@ -8,7 +9,7 @@ import { AudioFxInstanceSchema, MAX_AUDIO_FX } from './audioEffects.ts';
 import { BLEND_MODES, EffectInstanceSchema, MaskSchema, TransitionSchema } from './effects.ts';
 import { FollowSchema, MAX_REDACT_REGIONS, MotionTrackSchema, RedactRegionSchema } from './tracking.ts';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const RationalTimeSchema = z
   .object({
@@ -603,7 +604,88 @@ export const timelineBehaviour = (doc: { settings: { timeline?: TimelineBehaviou
 export const mainTrackOf = (doc: { sequences: Record<string, { tracks: { id: string; kind: string }[] }>; mainSequenceId: string }, sequenceId?: string) =>
   doc.sequences[sequenceId ?? doc.mainSequenceId]?.tracks.find((t) => t.kind === 'video');
 
-export const SequenceSchema = z.object({ id: Id, name: z.string().max(128), tracks: z.array(TrackSchema).describe('Bottom-most layer first') }).strict();
+// ---------- sequences of one project (ADR-0018 shorts): optional fields; schema version 3 is the wave-4 bump (identity migration) ----------
+/** A project holds at most this many sequences (every commit rewrites the whole document). */
+export const MAX_SEQUENCES = 64;
+/** Loudness of an export: one static gain to `target` LUFS (integrated), lowered if needed to keep true peak under `truePeak` dBTP. */
+export const LoudnessTargetSchema = z.object({ target: z.number().min(-40).max(-5), truePeak: z.number().min(-9).max(0) }).strict();
+/**
+ * A sequence's own output frame (ADR-0018). Never set on the main sequence: the project settings are its frame (validate.ts
+ * main_sequence_format). The frame RATE is always the project's: every sequence of a project runs at settings.frameRate.
+ */
+export const SequenceFormatSchema = z
+  .object({
+    width: z.number().int().min(16).max(8192),
+    height: z.number().int().min(16).max(8192),
+    fit: z.enum(['contain', 'cover']),
+    /** FORMAT_PROFILES id it was made from (variants.ts): generic guides, not platform numbers. */
+    profileId: z.string().max(64).nullable(),
+    safeArea: SafeAreaSchema.nullable(),
+    /** Absent: the project's settings.loudness applies. null: this sequence is exported without normalisation. */
+    loudness: LoudnessTargetSchema.nullable().optional(),
+  })
+  .strict();
+export type SequenceFormat = z.infer<typeof SequenceFormatSchema>;
+/** Why a moment was ranked where it was: measured signals and verbatim quotes (ADR-0018). Never a prediction of views. */
+export const SHORT_REASON_CODES = [
+  'complete_statements', 'ends_on_sentence', 'starts_with_reference', 'context_added', 'opens_with_question', 'hook_word',
+  'number_in_opening', 'speaks_to_viewer', 'quick_start', 'dead_air_start', 'louder_than_usual', 'lively_dynamics', 'pace',
+  'fillers', 'long_pauses', 'reaction_burst_heuristic', 'shot_changes', 'topic_word', 'low_confidence_words',
+  'segment_timing', 'approximate_timing', 'no_transcript', 'missing_input',
+] as const;
+export type ShortReasonCode = (typeof SHORT_REASON_CODES)[number];
+export const SHORT_REASON_UNITS = ['dB', 'words_per_s', 'per_min', 's', 'percent', 'count'] as const;
+export const ShortReasonSchema = z
+  .object({
+    code: z.enum(SHORT_REASON_CODES),
+    sign: z.enum(['plus', 'minus', 'note']),
+    value: z.number().nullable(),
+    unit: z.enum(SHORT_REASON_UNITS).nullable(),
+    /** SOURCE time of the evidence, when it has one. */
+    at: RationalTimeSchema.nullable(),
+    /** Verbatim transcript words only; never reworded. */
+    quote: z.string().max(200).nullable(),
+  })
+  .strict();
+export type ShortReason = z.infer<typeof ShortReasonSchema>;
+/** A stretch of SOURCE time [start, end) of one asset. */
+export const SourceSpanSchema = z.object({ start: RationalTimeSchema, end: RationalTimeSchema }).strict();
+export type SourceSpan = z.infer<typeof SourceSpanSchema>;
+/** 'cand_' + core fingerprint() (16 hex digits, entities.ts). */
+export const CANDIDATE_ID = /^cand_[0-9a-f]{16}$/;
+/**
+ * Measured provenance of a sequence (ADR-0018). Written ONLY by the internal apply_sequence_plan, onto sequences created by
+ * that same op; no public op sets it, so nobody can type a score or a reason. Informational: ids in it are NOT validated as
+ * references (the asset or motion track may be removed later). The score is a relative heuristic within ONE video, never a
+ * prediction (SPEC.md:624). ADR-0020 (multicam) adds its own member; wave 2 adds 'cover'.
+ */
+export const SequenceOriginSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('short'),
+    assetId: Id,
+    candidateId: z.string().regex(CANDIDATE_ID).nullable(),
+    excerpt: SourceSpanSchema,
+    kept: z.array(SourceSpanSchema).min(1).max(40),
+    score: z.number().int().min(0).max(100).nullable(),
+    reasons: z.array(ShortReasonSchema).max(12),
+    reframe: z.enum(['track', 'centre', 'backdrop']),
+    motionTrackId: Id.nullable(),
+    method: z.string().max(200),
+    createdAt: z.string().max(40),
+  }).strict(),
+]);
+export type SequenceOrigin = z.infer<typeof SequenceOriginSchema>;
+export const SequenceSchema = z
+  .object({
+    id: Id,
+    name: z.string().max(128),
+    tracks: z.array(TrackSchema).describe('Bottom-most layer first'),
+    /** Own output frame (ADR-0018); absent = the project frame. Never on the main sequence. */
+    format: SequenceFormatSchema.optional(),
+    /** Measured provenance (ADR-0018); see SequenceOriginSchema. Never on the main sequence. */
+    origin: SequenceOriginSchema.optional(),
+  })
+  .strict();
 
 export const ProjectSchema = z
   .object({
@@ -719,6 +801,13 @@ export function createProject(o: NewProjectOptions): ProjectDocument {
 const MIGRATIONS: Record<number, (doc: any) => any> = {
   /** v1 -> v2 (ADR-0016): adjustment clips/tracks and template slot records are new and optional; nothing to rewrite. */
   1: (doc) => ({ ...doc, schemaVersion: 2 }),
+  /**
+   * v2 -> v3 (wave 4, ADR-0018/0019/0020): sequences may carry `format` and `origin`, and the wave-4 tracks add optional fields
+   * only. Identity apart from the version: every field a v2 document holds (people, events, captures, settings.timeline,
+   * provenance.upload, …) is carried over unchanged, so stored documents and op logs replay exactly as before
+   * (sequences.test.ts replays every fixture and op log through it).
+   */
+  2: (doc) => ({ ...doc, schemaVersion: 3 }),
 };
 export function migrateProject(raw: unknown): ProjectDocument {
   let doc = raw as { schemaVersion?: number };

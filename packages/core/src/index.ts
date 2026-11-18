@@ -15,6 +15,7 @@ export * from './align.ts';
 export * from './fonts.ts';
 export * from './effects.ts';
 export * from './variants.ts';
+export * from './sequences.ts';
 export * from './recipes.ts';
 export * from './speed.ts';
 export * from './speedCurves.ts';

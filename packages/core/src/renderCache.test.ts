@@ -10,7 +10,7 @@ import {
 
 describe('render cache contracts (ADR-0024)', () => {
   it('add no schema version and no operation: the cache is derived data, Store.commit stays the only authority', () => {
-    expect(SCHEMA_VERSION).toBe(2);
+    expect(SCHEMA_VERSION).toBe(3); // wave 4's one bump (ADR-0018, identity MIGRATIONS[2]); this track added no version of its own
     expect(describeOps({ includeInternal: true }).map((o) => o.name).filter((n) => /cache|segment/i.test(n))).toEqual([]);
   });
   it('fix the grid constants: 2-second cells, no segment under 3 frames unless alone, 3 frames per segment in every-segment mode, 20 clean exports', () => {
