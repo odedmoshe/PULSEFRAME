@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { MOMENTS_GATES, momentsStep, type PictureSeries, type SoundSeries } from '@pulseframe/core';
-import { bestShift, boxImage, findMoments, frameOfHop, hopsOfSample, median, percentile, pictureGates, pictureSample, robustZ, soundLevels, type PictureSample } from './moments.math.ts';
+import { bestShift, boxImage, changedExtent, findMoments, frameOfHop, hopsOfSample, median, percentile, pictureGates, pictureSample, robustZ, soundLevels, type PictureSample } from './moments.math.ts';
 import { frameOf, texture } from './vision/synthetic.ts';
 import type { GreyFrame } from './vision/types.ts';
 
@@ -71,6 +71,47 @@ describe('pictureSample', () => {
     for (const dx of [52, 61, 77, 90, 130]) for (const dy of [0, 9]) expect(pictureSample(still, shifted(dx, dy), SPS).border, `${dx},${dy}`).toBe(true);
     // a subject moving over a still background is not a camera move
     for (let k = 0; k < 6; k++) expect(pictureSample(discAt(k), discAt(k + 1), SPS).border).toBe(false);
+  });
+  it('a large fast subject is gated no more than by the contract rule (border of the search or pan over the threshold)', () => {
+    // textured rectangles of 25..56 % of the picture moving 40..100 px a sample (10..25 box pixels: inside and beyond the
+    // search) at every 10 px start position, at the top, middle and bottom, horizontally and vertically, over the still texture
+    // and over flat grey: the widened rule (pictureSample.border beyond the contract's rule) gates none of them
+    const subj = texture(97, [16, 8, 4]), grey = () => 128;
+    const rect = (x0: number, y0: number, w: number, h: number, bg: (x: number, y: number) => number) => frameOf(W, H, (x, y) => (x >= x0 && x < x0 + w && y >= y0 && y < y0 + h ? subj(x - x0, y - y0) : bg(x, y)));
+    const gate = MOMENTS_GATES.whipPanPermillePerSecond;
+    let cases = 0, contractGated = 0;
+    const widenedOnly: string[] = [];
+    const check = (a: GreyFrame, b: GreyFrame, label: string) => {
+      const s = pictureSample(a, b, SPS), A = boxImage(a), B = boxImage(b), bs = bestShift(A.data, B.data, A.w, A.h);
+      const contract = Math.max(Math.abs(bs.dx), Math.abs(bs.dy)) === bs.search || s.pan > gate;
+      cases++;
+      if (contract) contractGated++;
+      if ((s.border || s.pan > gate) && !contract) widenedOnly.push(label);
+    };
+    for (const bg of [tex, grey])
+      for (const [w, h, v] of [[120, 120, 40], [120, 120, 60], [140, 110, 70], [160, 120, 80], [200, 150, 80], [160, 180, 80], [180, 180, 100]] as const) {
+        for (const y0 of [0, (H - h) >> 1, H - h]) for (let x0 = 0; x0 + w + v <= W; x0 += 10) check(rect(x0, y0, w, h, bg), rect(x0 + v, y0, w, h, bg), `${w}x${h} +${v},0 at ${x0},${y0}`);
+        if (h + v <= H) for (const x0 of [0, (W - w) >> 1, W - w]) for (let y0 = 0; y0 + h + v <= H; y0 += 10) check(rect(x0, y0, w, h, bg), rect(x0, y0 + v, w, h, bg), `${w}x${h} +0,${v} at ${x0},${y0}`);
+      }
+    expect(cases).toBeGreaterThan(200);
+    expect(widenedOnly).toEqual([]);
+    console.log(`[moments.math] large fast subjects: ${cases} cases, ${contractGated} gated by the contract rule itself (border or pan), none by the widened rule alone`);
+  });
+  it('the widened rule counts only lines with detail: a pan under a flat band is still caught; a swept area under 90 % of the width is not', () => {
+    // the film fixture's layout: a flat band over the top sixth (no detail, cannot change), the texture panning below it
+    const band = (dx: number) => frameOf(W, H, (x, y) => (y < 32 ? 128 : tex(x - dx, y)));
+    const e = (a: GreyFrame, b: GreyFrame) => { const A = boxImage(a), B = boxImage(b); return changedExtent(A.data, B.data, A.w, A.h); };
+    const p = e(band(0), band(77)); // the band rows do not count; only its edge row has detail that may not change
+    expect(p.cols).toBe(1);
+    expect(p.rows).toBeGreaterThanOrEqual(0.9);
+    for (const dx of [52, 77, 90]) expect(pictureSample(band(0), band(dx), SPS).border, `${dx}`).toBe(true);
+    // a full-height subject sweeping 75 % of the width reaches every row but not 90 % of the columns
+    const subj = texture(97, [16, 8, 4]);
+    const tall = (x0: number) => frameOf(W, H, (x, y) => (x >= x0 && x < x0 + 160 ? subj(x - x0, y) : tex(x, y)));
+    const t = e(tall(60), tall(140));
+    expect(t.rows).toBe(1);
+    expect(t.cols).toBeLessThan(0.9);
+    expect(e(still, still)).toEqual({ cols: 0, rows: 0 });
   });
   it('a translation by a non-multiple of 4 px on a 1/f texture reports its residual (the stated limit)', () => {
     const s = pictureSample(still, shifted(6, 2), SPS);

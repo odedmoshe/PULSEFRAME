@@ -21,7 +21,7 @@ import { MOMENTS_GATES, MOMENTS_HOP_MS, momentsStep, hopOfBucket, type MOMENT_BA
 import type { GreyFrame } from './vision/types.ts';
 
 type MomentBasis = (typeof MOMENT_BASES)[number];
-export interface PictureSample { luma: number; sharp: number; inner: number; pan: number; change: number; /** the search could not measure the camera move (a whip pan): the best shift lies on the border of the search, or a nonzero best shift leaves at least 80 % of a clear unshifted difference spread over half the picture */ border: boolean }
+export interface PictureSample { luma: number; sharp: number; inner: number; pan: number; change: number; /** the search could not measure the camera move (a whip pan): the best shift lies on the border of the search, or a nonzero best shift leaves at least 80 % of a clear unshifted difference that reaches 90 % of the detailed box columns and rows */ border: boolean }
 
 const G = MOMENTS_GATES;
 /** A 4×4 box sum (0..4080) is full scale at this value. */
@@ -47,12 +47,10 @@ export const searchOf = (bw: number, bh: number): number => Math.max(0, Math.min
  * the sum of |cur(x, y) - prev(x + dx, y + dy)| over the same inner window (margin s); ties to the smallest |d|, then the
  * lowest dy, then the lowest dx. Returns the shift, its SAD, the SAD without a shift (sad0) and the window's pixel count.
  */
-export function bestShift(prev: Int32Array, cur: Int32Array, bw: number, bh: number): { dx: number; dy: number; sad: number; sad0: number; spread0: number; n: number; search: number } {
+export function bestShift(prev: Int32Array, cur: Int32Array, bw: number, bh: number): { dx: number; dy: number; sad: number; sad0: number; n: number; search: number } {
   const s = searchOf(bw, bh);
   const x0 = s, x1 = bw - s, y0 = s, y1 = bh - s, n = Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
-  if (n === 0) return { dx: 0, dy: 0, sad: 0, sad0: 0, spread0: 0, n: 0, search: s };
-  let changed = 0;
-  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const d = cur[y * bw + x]! - prev[y * bw + x]!; if (d > SPREAD_BOX_DIFF || d < -SPREAD_BOX_DIFF) changed++; }
+  if (n === 0) return { dx: 0, dy: 0, sad: 0, sad0: 0, n: 0, search: s };
   const sadAt = (dx: number, dy: number, limit: number) => {
     let sad = 0;
     for (let y = y0; y < y1 && sad <= limit; y++) {
@@ -71,14 +69,49 @@ export function bestShift(prev: Int32Array, cur: Int32Array, bw: number, bh: num
       if (sad > best) continue;
       if (sad < best || dx * dx + dy * dy < bdx * bdx + bdy * bdy) { best = sad; bdx = dx; bdy = dy; } // a tie: smaller |d| (lower dy, dx are visited first)
     }
-  return { dx: bdx, dy: bdy, sad: best, sad0, spread0: changed / n, n, search: s };
+  return { dx: bdx, dy: bdy, sad: best, sad0, n, search: s };
 }
 /** A nonzero best shift that removes less than a fifth of the unshifted difference does not explain the change (see pictureSample). */
 export const UNEXPLAINED_SHIFT_RATIO = 0.8;
-/** ... when the unshifted difference is spread over at least this share of the window (a camera move changes the whole picture; a subject changes a part). */
-export const UNEXPLAINED_SPREAD = 0.5;
-/** A box pixel counts as changed when its 4×4 sum moves by more than this (8 grey levels on average). */
+/**
+ * ... when the unshifted difference reaches at least this share of the picture's box columns AND of its box rows, both counted
+ * among the lines that have detail (a camera move changes the picture across its whole width and height wherever there is
+ * detail to move; a flat band such as a clear sky or the film fixture's barcode strip cannot change and does not count). A
+ * subject over a still detailed background changes only what it sweeps, so it trips this only when its swept area spans 90 %
+ * of both the width and the height.
+ */
+export const UNEXPLAINED_EXTENT = 0.9;
+/** A box column (row) is reached when at least this share of its box pixels changed, and has detail when at least this share of them has detail. */
+export const EXTENT_LINE_SHARE = 0.25;
+/** A box pixel counts as changed when its 4×4 sum moves by more than this (8 grey levels on average); it has detail when it differs by more than this from its right or lower neighbour in either frame. */
 const SPREAD_BOX_DIFF = 128;
+const spans = (e: { cols: number; rows: number }): boolean => e.cols >= UNEXPLAINED_EXTENT && e.rows >= UNEXPLAINED_EXTENT;
+
+/**
+ * The shares of the box columns and box rows of the whole box image that the unshifted difference reaches, each among the
+ * lines that have detail or are reached (see EXTENT_LINE_SHARE); 0 when no line counts.
+ */
+export function changedExtent(prev: Int32Array, cur: Int32Array, bw: number, bh: number): { cols: number; rows: number } {
+  const colC = new Int32Array(bw), rowC = new Int32Array(bh), colD = new Int32Array(bw), rowD = new Int32Array(bh);
+  const far = (a: number, b: number) => a - b > SPREAD_BOX_DIFF || b - a > SPREAD_BOX_DIFF;
+  for (let y = 0; y < bh; y++)
+    for (let x = 0; x < bw; x++) {
+      const i = y * bw + x;
+      if (far(cur[i]!, prev[i]!)) { colC[x]!++; rowC[y]!++; }
+      const detail = (x + 1 < bw && (far(prev[i]!, prev[i + 1]!) || far(cur[i]!, cur[i + 1]!))) || (y + 1 < bh && (far(prev[i]!, prev[i + bw]!) || far(cur[i]!, cur[i + bw]!)));
+      if (detail) { colD[x]!++; rowD[y]!++; }
+    }
+  const share = (changed: Int32Array, detail: Int32Array, len: number) => {
+    let reached = 0, counted = 0;
+    for (let k = 0; k < changed.length; k++) {
+      const r = changed[k]! >= EXTENT_LINE_SHARE * len;
+      if (r) reached++;
+      if (r || detail[k]! >= EXTENT_LINE_SHARE * len) counted++;
+    }
+    return counted ? reached / counted : 0;
+  };
+  return { cols: share(colC, colD, bh), rows: share(rowC, rowD, bw) };
+}
 
 /** Mean Sobel gradient energy (gx² + gy²) over the interior pixels, divided by 16, rounded, capped at 65535. */
 export function sharpness(f: GreyFrame): number {
@@ -120,11 +153,14 @@ export function pictureSample(prev: GreyFrame | null, cur: GreyFrame, samplesPer
   const pan = Math.min(10000, Math.round((1000 * Math.sqrt(s.dx * s.dx + s.dy * s.dy) * samplesPerSecond) / Math.max(B.w, B.h)));
   // The search could not measure the camera move (gated as a whip pan): its best shift lies on the border of the search, OR
   // (heuristic, added after the film fixture's 1219 permille/s decoy showed the border rule alone misses most of a fast pan)
-  // a nonzero best shift explains less than a fifth of a clear unshifted difference that covers at least half the window: a
-  // move beyond the search makes every shift about equally wrong, so the minimum lands on a random shift, and the whole picture
-  // changed. A subject moving over a still background changes only a part of it (and usually keeps the shift at (0, 0)).
+  // a nonzero best shift explains less than a fifth of a clear unshifted difference that reaches at least 90 % of the
+  // box columns and of the box rows that have detail: a move beyond the search makes every shift about equally wrong, so the
+  // minimum lands on a random shift, and the picture changed across its whole width and height wherever it has detail (a flat
+  // band, such as a clear sky or the film fixture's barcode strip, cannot change and does not count). A subject moving over a
+  // still detailed background changes only what it sweeps: unless the swept area spans 90 % of both the width and the height,
+  // this rule leaves it alone. (A subject moving faster than the search can still trip the contract's border rule.)
   const onBorder = s.search > 0 && Math.max(Math.abs(s.dx), Math.abs(s.dy)) === s.search;
-  const unexplained = (s.dx !== 0 || s.dy !== 0) && Math.round((1000 * s.sad0) / (s.n * BOX_FULL)) >= G.activeMotionPermille && s.sad >= UNEXPLAINED_SHIFT_RATIO * s.sad0 && s.spread0 >= UNEXPLAINED_SPREAD;
+  const unexplained = (s.dx !== 0 || s.dy !== 0) && Math.round((1000 * s.sad0) / (s.n * BOX_FULL)) >= G.activeMotionPermille && s.sad >= UNEXPLAINED_SHIFT_RATIO * s.sad0 && spans(changedExtent(P.data, B.data, B.w, B.h));
   const border = onBorder || unexplained;
   return { luma, sharp, inner, pan, change, border };
 }
