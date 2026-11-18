@@ -513,6 +513,46 @@ async function main() {
       await page.locator('[data-testid^="life-event-"][data-event-id]').first().waitFor({ timeout: 10000 }).catch(() => {});
       const lifeEvents = { events: await page.locator('[data-testid^="life-event-"][data-event-id]').count(), sunsetRadios: await page.locator('[data-testid^="life-sunset-"] input[type=radio]').count() };
       await auditState('life-library-events', { shown: lifeEvents.events >= 2 && lifeEvents.sunsetRadios === 2, ...lifeEvents });
+      // the family film (ADR-0026) from the event card: the dialog's three steps (a modal: focus inside, Escape, focus back to the
+      // card's «סרט מהאירוע»), then the film made, its bar with the «why» list, and the inspector's reasons of a film clip; undone after
+      {
+        const opener = '[data-testid=film-open][data-variant=event-card]';
+        await page.locator(opener).first().waitFor({ timeout: 8000 }).catch(() => {});
+        const hasOpener = (await page.locator(opener).count()) >= 1;
+        await auditState('film-entry-event-card', { shown: hasOpener });
+        if (hasOpener) {
+          const fd = await dialogBehaviour('film-dialog', async () => { await page.locator(opener).first().click(); }, opener);
+          await auditState('film-dialog-what', { startsInside: fd.startsInside, tabStepsThatLeftTheDialog: fd.tabStepsThatLeftTheDialog, shown: (await page.getByTestId('film-step-what').count()) === 1 }, true);
+          await page.getByTestId('film-next').click();
+          await page.getByTestId('film-step-length').waitFor({ timeout: 8000 }).catch(() => {});
+          await auditState('film-dialog-length', { shown: (await page.getByTestId('film-step-length').count()) === 1 }, true);
+          await page.getByTestId('film-next').click();
+          await page.locator('[data-testid=film-plan-row]').first().waitFor({ timeout: 60000 }).catch(() => {});
+          await auditState('film-dialog-plan', { shown: (await page.locator('[data-testid=film-plan-row]').count()) >= 1 && (await page.locator('[data-testid=film-reason]').count()) >= 1 }, true);
+          Object.assign(states.at(-1), await fd.close());
+          // make the film (the same three steps, then «יצירת הסרט»)
+          await page.locator(opener).first().click();
+          await page.getByTestId('film-dialog').waitFor({ timeout: 8000 }).catch(() => {});
+          await page.getByTestId('film-next').click(); await page.getByTestId('film-next').click();
+          await page.locator('[data-testid=film-plan-row]').first().waitFor({ timeout: 60000 }).catch(() => {});
+          await page.getByTestId('film-apply').click();
+          await page.getByTestId('film-bar').waitFor({ timeout: 30000 }).catch(() => {});
+          await auditState('film-bar', { shown: (await page.getByTestId('film-bar').count()) === 1 });
+          await page.getByTestId('film-bar-why').click().catch(() => {});
+          await page.getByTestId('film-bar-why-list').waitFor({ timeout: 5000 }).catch(() => {});
+          await auditState('film-bar-why', { shown: (await page.getByTestId('film-bar-why-list').count()) === 1 });
+          const lifeDoc: any = (await (await fetch(`${s.url}/api/v1/projects/${lifePid}`, { headers: h })).json()).project;
+          const filmRun: any = Object.values(lifeDoc.recipeRuns ?? {}).find((r: any) => r.recipeId === 'template:tpl.family-film');
+          const filmClip = filmRun?.slots?.find((x: any) => x.kind === 'picture')?.clipId as string | undefined;
+          if (filmClip) {
+            await page.locator(`.clip[data-clip-id="${filmClip}"]`).click().catch(() => {});
+            await page.getByTestId('film-why').waitFor({ timeout: 8000 }).catch(() => {});
+          }
+          await auditState('film-why', { shown: (await page.getByTestId('film-why').count()) === 1 && (await page.getByTestId('film-why-reason').count()) === 1 });
+          if (await page.getByTestId('film-bar-undo').count()) { await page.getByTestId('film-bar-undo').click(); await page.getByTestId('film-bar').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {}); }
+          await railOn('media');
+        }
+      }
       await page.getByTestId('life-view-all').click();
       // the title with a live field: its field menu (a menu), then the people sheet opened from it (a modal dialog)
       await page.locator(`.clip[data-clip-id="${lifeTitle}"]`).click();

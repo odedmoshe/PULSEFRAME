@@ -139,7 +139,8 @@ function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasEle
       <ErrorBar />
       <Rail />
       <Library />
-      <main className="stage">
+      {/* the stage and the timeline show the active sequence: the sequence tabs (SequenceSwitcher) control them */}
+      <main className="stage" id="pf-stage">
         <StageHeader />
         <div className="canvas-wrap">
           <canvas ref={(el) => { (canvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = el; setCanvasEl(el); }} aria-label={t('preview')} data-testid="preview" />

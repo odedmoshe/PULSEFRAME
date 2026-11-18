@@ -84,7 +84,7 @@ export function SequenceSwitcher() {
     <div className="seq-switch pf-ds" data-testid={ID.switcher}>
       <div role="tablist" aria-label={t['sequence.switcher']} onKeyDown={onKey} className="seq-tabs">
         {list.map((s) => (
-          <button key={s.id} type="button" role="tab" id={`sequence-tab-${s.id}`} aria-selected={s.id === active} tabIndex={s.id === active ? 0 : -1}
+          <button key={s.id} type="button" role="tab" id={`sequence-tab-${s.id}`} aria-selected={s.id === active} aria-controls="pf-stage pf-timeline" tabIndex={s.id === active ? 0 : -1}
             className={`seq-tab${s.id === active ? ' is-active' : ''}`} data-testid={s.main ? ID.tabMain : ID.tab} data-sequence-id={s.id} onClick={() => go(s.id)}>
             {s.main ? t['sequence.main'] : <><span className="seq-name" dir="auto">{s.name}</span> · <bdi dir="ltr">{clock(s.durationSeconds)}</bdi></>}
           </button>

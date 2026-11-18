@@ -736,7 +736,7 @@ export function Timeline() {
   })();
 
   return (
-    <section ref={root} className="timeline pf-ds" dir="ltr" aria-label={t('timeline')} data-mode={mode} data-tool={tool} style={pulse.bpm ? ({ '--pf-bpm': Math.round(pulse.bpm) } as React.CSSProperties) : undefined}>
+    <section ref={root} id="pf-timeline" className="timeline pf-ds" dir="ltr" aria-label={t('timeline')} data-mode={mode} data-tool={tool} style={pulse.bpm ? ({ '--pf-bpm': Math.round(pulse.bpm) } as React.CSSProperties) : undefined}>
       {/* The toolbar is one row of fixed height, so the lanes below it get exactly the height that is left (timeline.css). It mirrors with the interface; the lanes never do. */}
       <div className="tl-bar" dir={uiDir} role="group" aria-label={s.toolbar}>
         <div className="tl-tools">
