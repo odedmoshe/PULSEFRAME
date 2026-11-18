@@ -1,6 +1,6 @@
 {
- "ranAt": "2026-11-18T02:55:26.118Z",
- "commit": "21719a89b057e67ad8f7c296c3f23eeed885a220",
+ "ranAt": "2026-11-18T03:26:12.957Z",
+ "commit": "a30feaffd5112496809e1b0316f2e39d3614d604",
  "baselineCommit": "33a78fce3ea78f9c37867a3d07efdf5722f3be05",
  "machine": {
   "platform": "Linux 6.18.44-fc-v595 x64",
@@ -8,7 +8,7 @@
   "gpu": "none used: every title look is Canvas2D; the editor browser has no WebGPU; the render worker started as for the trend baseline (PF_RENDER_GPU unset), and no project here uses a GPU effect"
  },
  "scope": "Server stills and exports at 1080x1920 through the render worker, and the editor in headless Chromium (Playwright), on this container. X1 compares pixel hashes with docs/evidence/trend-baseline.json, which holds only on the machine and build that recorded it. Nobody has judged the looks on a video by eye.",
- "result": "FAILED",
+ "result": "PASSED",
  "checks": [
   {
    "id": "X1",
@@ -23,7 +23,7 @@
   {
    "id": "X1",
    "name": "the ten new styles each render a still, all different",
-   "ok": false
+   "ok": true
   },
   {
    "id": "X2",
@@ -567,7 +567,7 @@
   {
    "id": "X7",
    "name": "server exports of every new style with blur-in and write-on, at the default length and at one frame: the FlashAnalyser reads every frame and passes each",
-   "ok": false,
+   "ok": true,
    "detail": [
     {
      "preset": "neon-tube-pink",
@@ -628,78 +628,6 @@
      "frames": 180,
      "verdict": "pass",
      "ranges": []
-    },
-    {
-     "preset": "hanukkah-gold",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "hanukkah-blue-box",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "hanukkah-glow",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "hanukkah-big",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "hanukkah-soft",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "hanukkah-ribbon",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "birthday-bubble",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "birthday-sunny",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "birthday-pink-box",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "birthday-blue-box",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "birthday-soft",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "birthday-neon",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
     }
    ]
   },
@@ -709,43 +637,29 @@
    "ok": true,
    "detail": {
     "method": "median of 5 server stills (frame 40, at rest) of the decorated title, minus the same for a plain clean-white title: render, read-back and PNG included in both",
-    "plainStillMs": 376.7,
+    "plainStillMs": 355,
     "addedMsPerFrame": {
-     "neon-tube-pink": 122,
-     "neon-tube-cyan": 126.6,
-     "gradient-sunset": 9,
-     "gradient-ocean": -15.2,
-     "gradient-gold": 22.2,
-     "double-outline-pop": -4.9,
-     "extrude-retro": 131,
-     "extrude-block": 198.5,
-     "long-shadow-flat": 62.3,
-     "wide-minimal": -12.9,
-     "hanukkah-gold": 58.7,
-     "hanukkah-blue-box": -12.2,
-     "hanukkah-glow": 127.3,
-     "hanukkah-big": -11.9,
-     "hanukkah-soft": 53.3,
-     "hanukkah-ribbon": -15.4,
-     "birthday-bubble": 48.6,
-     "birthday-sunny": 6.4,
-     "birthday-pink-box": 15.2,
-     "birthday-blue-box": -24.1,
-     "birthday-soft": 63.1,
-     "birthday-neon": 152.1
+     "neon-tube-pink": 141.3,
+     "neon-tube-cyan": 193.7,
+     "gradient-sunset": 36.6,
+     "gradient-ocean": 29.3,
+     "gradient-gold": 38.4,
+     "double-outline-pop": 57.8,
+     "extrude-retro": 186.4,
+     "extrude-block": 226.4,
+     "long-shadow-flat": 132.3,
+     "wide-minimal": 15.2
     },
     "over25ms": [
      "neon-tube-pink",
      "neon-tube-cyan",
+     "gradient-sunset",
+     "gradient-ocean",
+     "gradient-gold",
+     "double-outline-pop",
      "extrude-retro",
      "extrude-block",
-     "long-shadow-flat",
-     "hanukkah-gold",
-     "hanukkah-glow",
-     "hanukkah-soft",
-     "birthday-bubble",
-     "birthday-soft",
-     "birthday-neon"
+     "long-shadow-flat"
     ]
    }
   },
@@ -820,19 +734,7 @@
    "extrude-retro": "701faaf4926bcad49d8e353cf39b92712a07251381253408a905ebd3c9a3695a",
    "extrude-block": "9f88dfc46d6313dd3286fef52149d82f6385e1ad3e667030cfd5ea35dceb1887",
    "long-shadow-flat": "a13108674270915dccb42979b17c6efdc72c9f39a2e4dc761195a1961197e620",
-   "wide-minimal": "e8f18ee71dfb573fe98dec079cc4668b32f8a0252fb1fc088b3321cae3329600",
-   "hanukkah-gold": "aea53fd79582073facb49df939e3cc7f53f6b29ff8b5e8c4c98b74cb7cf3340f",
-   "hanukkah-blue-box": "23899b84f49c268d793240568818a3e9bc71aee320d83e6a7de7571b05ad8844",
-   "hanukkah-glow": "0de55bf3a0359b36b00818f5953c4726f32aa8b706417719981c2b3dbf8f1da6",
-   "hanukkah-big": "3f95f9792019b599ba2ec186d7d47dbc3ba194a6fa79a9c73eef3b6f53451d1d",
-   "hanukkah-soft": "bca38529392ec2582c7214884ba336f3d23b9662d95f4da106cbff6737692c5a",
-   "hanukkah-ribbon": "41d03fce8330594c2990d3552238d4cb4d0e626b6285e35d0562f1acbf4482f8",
-   "birthday-bubble": "ce1cead98530eee1f8e4abfc1b2398a220f39db2dddd125563cabcea661dc3a7",
-   "birthday-sunny": "4fdc46dc8163e4d8395272830067f71a5f5ca6e2aa5b3dde5f9e180aabaa5fd5",
-   "birthday-pink-box": "6a461073013cf54a84f7d880ac808315841c78f6d6d7b0225a8c6403052c4c25",
-   "birthday-blue-box": "824301b0857d12fc900f651649f989605ec11d3d0556aaa4a67e677767a4acda",
-   "birthday-soft": "4c7beafdaba3f1116c12f583b45c03986da4147af489d87af95f89340c357826",
-   "birthday-neon": "cd5189a0687334d0d2366b4dc2aeea6cf534ae5901f1fb0b661a25077eca4131"
+   "wide-minimal": "e8f18ee71dfb573fe98dec079cc4668b32f8a0252fb1fc088b3321cae3329600"
   },
   "x2": [
    {
@@ -1434,120 +1336,34 @@
      "frames": 180,
      "verdict": "pass",
      "ranges": []
-    },
-    {
-     "preset": "hanukkah-gold",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "hanukkah-blue-box",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "hanukkah-glow",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "hanukkah-big",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "hanukkah-soft",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "hanukkah-ribbon",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "birthday-bubble",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "birthday-sunny",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "birthday-pink-box",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "birthday-blue-box",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "birthday-soft",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
-    },
-    {
-     "preset": "birthday-neon",
-     "frames": 180,
-     "verdict": "pass",
-     "ranges": []
     }
    ]
   },
   "x8": {
    "method": "median of 5 server stills (frame 40, at rest) of the decorated title, minus the same for a plain clean-white title: render, read-back and PNG included in both",
-   "plainStillMs": 376.7,
+   "plainStillMs": 355,
    "addedMsPerFrame": {
-    "neon-tube-pink": 122,
-    "neon-tube-cyan": 126.6,
-    "gradient-sunset": 9,
-    "gradient-ocean": -15.2,
-    "gradient-gold": 22.2,
-    "double-outline-pop": -4.9,
-    "extrude-retro": 131,
-    "extrude-block": 198.5,
-    "long-shadow-flat": 62.3,
-    "wide-minimal": -12.9,
-    "hanukkah-gold": 58.7,
-    "hanukkah-blue-box": -12.2,
-    "hanukkah-glow": 127.3,
-    "hanukkah-big": -11.9,
-    "hanukkah-soft": 53.3,
-    "hanukkah-ribbon": -15.4,
-    "birthday-bubble": 48.6,
-    "birthday-sunny": 6.4,
-    "birthday-pink-box": 15.2,
-    "birthday-blue-box": -24.1,
-    "birthday-soft": 63.1,
-    "birthday-neon": 152.1
+    "neon-tube-pink": 141.3,
+    "neon-tube-cyan": 193.7,
+    "gradient-sunset": 36.6,
+    "gradient-ocean": 29.3,
+    "gradient-gold": 38.4,
+    "double-outline-pop": 57.8,
+    "extrude-retro": 186.4,
+    "extrude-block": 226.4,
+    "long-shadow-flat": 132.3,
+    "wide-minimal": 15.2
    },
    "over25ms": [
     "neon-tube-pink",
     "neon-tube-cyan",
+    "gradient-sunset",
+    "gradient-ocean",
+    "gradient-gold",
+    "double-outline-pop",
     "extrude-retro",
     "extrude-block",
-    "long-shadow-flat",
-    "hanukkah-gold",
-    "hanukkah-glow",
-    "hanukkah-soft",
-    "birthday-bubble",
-    "birthday-soft",
-    "birthday-neon"
+    "long-shadow-flat"
    ]
   },
   "x9": {
