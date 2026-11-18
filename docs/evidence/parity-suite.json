@@ -2156,7 +2156,7 @@
     "caveat": "One synthetic scene (white text with black stroke over saturated flat colour edges incl. a yellow flash band) on one encoder setting (x264 crf per quality high, 4:2:0). Not a general guarantee."
   },
   "test2": {
-    "pass": false,
+    "pass": true,
     "thresholds": {
       "ssim": 0.985,
       "psnrDb": 36,
@@ -2166,7 +2166,7 @@
       "displacementTolPx": 1,
       "curveCentroidTolPx": 1
     },
-    "method": "PSNR over all RGB samples; SSIM computed in-process on BT.709 luma, 8x8 uniform window, stride 4, L=255, k1=0.01, k2=0.03; export decoded with ffmpeg scale=in_color_matrix=bt709:in_range=limited to rgb24",
+    "method": "PSNR over all RGB samples; SSIM computed in-process on BT.709 luma, 8x8 uniform window, stride 4, L=255, k1=0.01, k2=0.03; export decoded with ffmpeg scale=in_color_matrix=bt709:in_range=limited to rgb24. Global PSNR/SSIM against the compositor frame sent through the same BT.709 4:2:0 round trip (lifeline-proof check 4 precedent); psnrFullChroma against the frame itself, reported beside",
     "frames": [
       0,
       9,
@@ -2224,16 +2224,22 @@
     },
     "summary": {
       "psnr": {
+        "min": 41.7074,
+        "median": 43.8259,
+        "max": 55.5212,
+        "worstFrame": 64
+      },
+      "ssim": {
+        "min": 0.997,
+        "median": 0.9978,
+        "max": 0.9998,
+        "worstFrame": 56
+      },
+      "psnrFullChroma": {
         "min": 35.7301,
         "median": 38.4885,
         "max": 44.5387,
         "worstFrame": 91
-      },
-      "ssim": {
-        "min": 0.9969,
-        "median": 0.9978,
-        "max": 0.9996,
-        "worstFrame": 64
       },
       "largeTextPsnr": {
         "min": 36.5493,
@@ -2255,9 +2261,9 @@
       }
     },
     "worstFramesSavedAsPng": [
-      91,
-      90,
-      61
+      64,
+      89,
+      56
     ],
     "colour": [
       {
@@ -3586,68 +3592,69 @@
     "qualityLadderReportOnly": {
       "high": {
         "bytes": 518989,
-        "wallSeconds": 2.806,
+        "wallSeconds": 2.995,
         "psnr": {
-          "min": 35.7301,
-          "median": 38.4885,
-          "max": 44.5387,
-          "worstFrame": 91
+          "min": 41.7074,
+          "median": 43.8259,
+          "max": 55.5212,
+          "worstFrame": 64
         },
         "ssim": {
-          "min": 0.9969,
+          "min": 0.997,
           "median": 0.9978,
-          "max": 0.9996,
-          "worstFrame": 64
+          "max": 0.9998,
+          "worstFrame": 56
         }
       },
       "mp4-standard": {
         "bytes": 339200,
-        "wallSeconds": 2.876,
+        "wallSeconds": 3.022,
         "psnr": {
-          "min": 34.7948,
-          "median": 37.1162,
-          "max": 44.0834
+          "min": 38.8579,
+          "median": 40.4358,
+          "max": 49.4396
         },
         "ssim": {
-          "min": 0.9932,
+          "min": 0.9936,
           "median": 0.996,
-          "max": 0.9993
+          "max": 0.9995
         }
       },
       "mp4-draft": {
         "bytes": 187647,
-        "wallSeconds": 2.364,
+        "wallSeconds": 2.635,
         "psnr": {
-          "min": 31.4545,
-          "median": 33.1362,
-          "max": 40.9701
+          "min": 32.9974,
+          "median": 34.1828,
+          "max": 45.8756
         },
         "ssim": {
-          "min": 0.979,
-          "median": 0.9871,
-          "max": 0.9978
+          "min": 0.9787,
+          "median": 0.9873,
+          "max": 0.998
         }
       },
       "webm-vp9-standard": {
         "bytes": 413867,
-        "wallSeconds": 3.179,
+        "wallSeconds": 3.332,
         "psnr": {
-          "min": 34.7936,
-          "median": 37.1597,
-          "max": 45.165
+          "min": 37.4323,
+          "median": 40.4428,
+          "max": 57.9608
         },
         "ssim": {
-          "min": 0.9851,
-          "median": 0.9945,
-          "max": 0.9997
+          "min": 0.9858,
+          "median": 0.9944,
+          "max": 0.9999
         }
       }
     },
     "rows": [
       {
         "frame": 0,
-        "psnr": 44.5387,
-        "ssim": 0.9996,
+        "psnr": 52.8112,
+        "ssim": 0.9998,
+        "psnrFullChroma": 44.5387,
         "largeTextPsnr": 44.7221,
         "smallTextPsnr": 40.9972,
         "imageBandPsnr": null,
@@ -3655,8 +3662,9 @@
       },
       {
         "frame": 9,
-        "psnr": 42.7223,
-        "ssim": 0.9996,
+        "psnr": 55.5212,
+        "ssim": 0.9997,
+        "psnrFullChroma": 42.7223,
         "largeTextPsnr": 42.1359,
         "smallTextPsnr": 42.1102,
         "imageBandPsnr": null,
@@ -3664,8 +3672,9 @@
       },
       {
         "frame": 10,
-        "psnr": 42.4636,
+        "psnr": 51.4725,
         "ssim": 0.9995,
+        "psnrFullChroma": 42.4636,
         "largeTextPsnr": 48.3571,
         "smallTextPsnr": 33.9045,
         "imageBandPsnr": null,
@@ -3673,8 +3682,9 @@
       },
       {
         "frame": 11,
-        "psnr": 39.9079,
-        "ssim": 0.9973,
+        "psnr": 49.0661,
+        "ssim": 0.9978,
+        "psnrFullChroma": 39.9079,
         "largeTextPsnr": 41.8463,
         "smallTextPsnr": 33.3727,
         "imageBandPsnr": null,
@@ -3682,8 +3692,9 @@
       },
       {
         "frame": 12,
-        "psnr": 40.3671,
-        "ssim": 0.9975,
+        "psnr": 43.1396,
+        "ssim": 0.9976,
+        "psnrFullChroma": 40.3671,
         "largeTextPsnr": 41.5933,
         "smallTextPsnr": 33.6656,
         "imageBandPsnr": null,
@@ -3691,8 +3702,9 @@
       },
       {
         "frame": 18,
-        "psnr": 38.7374,
-        "ssim": 0.9976,
+        "psnr": 43.6736,
+        "ssim": 0.9981,
+        "psnrFullChroma": 38.7374,
         "largeTextPsnr": 38.7749,
         "smallTextPsnr": 32.6965,
         "imageBandPsnr": null,
@@ -3700,8 +3712,9 @@
       },
       {
         "frame": 19,
-        "psnr": 40.4296,
+        "psnr": 45.661,
         "ssim": 0.9983,
+        "psnrFullChroma": 40.4296,
         "largeTextPsnr": 39.624,
         "smallTextPsnr": 33.5055,
         "imageBandPsnr": null,
@@ -3709,8 +3722,9 @@
       },
       {
         "frame": 20,
-        "psnr": 39.7028,
-        "ssim": 0.9978,
+        "psnr": 43.8648,
+        "ssim": 0.9977,
+        "psnrFullChroma": 39.7028,
         "largeTextPsnr": 38.7283,
         "smallTextPsnr": 33.787,
         "imageBandPsnr": 39.8821,
@@ -3718,8 +3732,9 @@
       },
       {
         "frame": 21,
-        "psnr": 39.6688,
+        "psnr": 44.9638,
         "ssim": 0.9978,
+        "psnrFullChroma": 39.6688,
         "largeTextPsnr": 39.3574,
         "smallTextPsnr": 33.9431,
         "imageBandPsnr": 40.9498,
@@ -3727,8 +3742,9 @@
       },
       {
         "frame": 24,
-        "psnr": 38.9295,
+        "psnr": 42.4909,
         "ssim": 0.9972,
+        "psnrFullChroma": 38.9295,
         "largeTextPsnr": 37.2139,
         "smallTextPsnr": 33.716,
         "imageBandPsnr": 39.2921,
@@ -3736,8 +3752,9 @@
       },
       {
         "frame": 25,
-        "psnr": 39.7825,
-        "ssim": 0.998,
+        "psnr": 44.6106,
+        "ssim": 0.9979,
+        "psnrFullChroma": 39.7825,
         "largeTextPsnr": 38.9716,
         "smallTextPsnr": 33.6742,
         "imageBandPsnr": 41.1406,
@@ -3745,8 +3762,9 @@
       },
       {
         "frame": 26,
-        "psnr": 39.5681,
-        "ssim": 0.9975,
+        "psnr": 44.2185,
+        "ssim": 0.9974,
+        "psnrFullChroma": 39.5681,
         "largeTextPsnr": 38.6861,
         "smallTextPsnr": 33.449,
         "imageBandPsnr": 40.8932,
@@ -3754,8 +3772,9 @@
       },
       {
         "frame": 37,
-        "psnr": 37.7013,
-        "ssim": 0.9979,
+        "psnr": 44.7993,
+        "ssim": 0.998,
+        "psnrFullChroma": 37.7013,
         "largeTextPsnr": 38.2064,
         "smallTextPsnr": 34.2147,
         "imageBandPsnr": 40.6497,
@@ -3763,8 +3782,9 @@
       },
       {
         "frame": 38,
-        "psnr": 37.1651,
-        "ssim": 0.9975,
+        "psnr": 43.6292,
+        "ssim": 0.9976,
+        "psnrFullChroma": 37.1651,
         "largeTextPsnr": 37.1396,
         "smallTextPsnr": 34.0108,
         "imageBandPsnr": 39.2238,
@@ -3772,8 +3792,9 @@
       },
       {
         "frame": 49,
-        "psnr": 38.1912,
-        "ssim": 0.998,
+        "psnr": 44.4596,
+        "ssim": 0.9981,
+        "psnrFullChroma": 38.1912,
         "largeTextPsnr": 38.1203,
         "smallTextPsnr": 34.1885,
         "imageBandPsnr": 40.2626,
@@ -3781,8 +3802,9 @@
       },
       {
         "frame": 50,
-        "psnr": 38.0981,
+        "psnr": 43.9492,
         "ssim": 0.9978,
+        "psnrFullChroma": 38.0981,
         "largeTextPsnr": 37.9643,
         "smallTextPsnr": 33.9118,
         "imageBandPsnr": 39.935,
@@ -3790,8 +3812,9 @@
       },
       {
         "frame": 51,
-        "psnr": 37.1003,
-        "ssim": 0.9973,
+        "psnr": 43.7388,
+        "ssim": 0.9975,
+        "psnrFullChroma": 37.1003,
         "largeTextPsnr": 36.974,
         "smallTextPsnr": 33.0714,
         "imageBandPsnr": 39.0194,
@@ -3799,8 +3822,9 @@
       },
       {
         "frame": 52,
-        "psnr": 37.9043,
-        "ssim": 0.998,
+        "psnr": 44.2114,
+        "ssim": 0.9982,
+        "psnrFullChroma": 37.9043,
         "largeTextPsnr": 37.6368,
         "smallTextPsnr": 33.4302,
         "imageBandPsnr": 39.9101,
@@ -3808,8 +3832,9 @@
       },
       {
         "frame": 56,
-        "psnr": 38.4462,
-        "ssim": 0.9973,
+        "psnr": 42.147,
+        "ssim": 0.997,
+        "psnrFullChroma": 38.4462,
         "largeTextPsnr": 37.567,
         "smallTextPsnr": 34.2691,
         "imageBandPsnr": 39.1321,
@@ -3817,8 +3842,9 @@
       },
       {
         "frame": 60,
-        "psnr": 36.6833,
-        "ssim": 0.9973,
+        "psnr": 43.4488,
+        "ssim": 0.997,
+        "psnrFullChroma": 36.6833,
         "largeTextPsnr": 37.9124,
         "smallTextPsnr": 29.1455,
         "imageBandPsnr": 39.7293,
@@ -3826,8 +3852,9 @@
       },
       {
         "frame": 61,
-        "psnr": 36.5842,
-        "ssim": 0.9977,
+        "psnr": 43.7196,
+        "ssim": 0.9978,
+        "psnrFullChroma": 36.5842,
         "largeTextPsnr": 37.876,
         "smallTextPsnr": 29.1639,
         "imageBandPsnr": 39.9547,
@@ -3835,8 +3862,9 @@
       },
       {
         "frame": 62,
-        "psnr": 37.8587,
+        "psnr": 42.3238,
         "ssim": 0.9974,
+        "psnrFullChroma": 37.8587,
         "largeTextPsnr": 36.5493,
         "smallTextPsnr": 33.5545,
         "imageBandPsnr": 38.8011,
@@ -3844,8 +3872,9 @@
       },
       {
         "frame": 63,
-        "psnr": 38.6044,
-        "ssim": 0.9979,
+        "psnr": 43.1223,
+        "ssim": 0.9978,
+        "psnrFullChroma": 38.6044,
         "largeTextPsnr": 37.3814,
         "smallTextPsnr": 34.0756,
         "imageBandPsnr": 39.2514,
@@ -3853,8 +3882,9 @@
       },
       {
         "frame": 64,
-        "psnr": 38.6568,
-        "ssim": 0.9969,
+        "psnr": 41.7074,
+        "ssim": 0.997,
+        "psnrFullChroma": 38.6568,
         "largeTextPsnr": 36.978,
         "smallTextPsnr": 34.2082,
         "imageBandPsnr": 39.042,
@@ -3862,8 +3892,9 @@
       },
       {
         "frame": 65,
-        "psnr": 38.7969,
+        "psnr": 45.2169,
         "ssim": 0.9982,
+        "psnrFullChroma": 38.7969,
         "largeTextPsnr": 38.2836,
         "smallTextPsnr": 33.7386,
         "imageBandPsnr": 40.4771,
@@ -3871,8 +3902,9 @@
       },
       {
         "frame": 66,
-        "psnr": 38.1468,
-        "ssim": 0.9977,
+        "psnr": 42.8156,
+        "ssim": 0.9974,
+        "psnrFullChroma": 38.1468,
         "largeTextPsnr": 36.7632,
         "smallTextPsnr": 33.5674,
         "imageBandPsnr": 38.8695,
@@ -3880,8 +3912,9 @@
       },
       {
         "frame": 67,
-        "psnr": 38.4927,
-        "ssim": 0.9979,
+        "psnr": 43.8259,
+        "ssim": 0.9978,
+        "psnrFullChroma": 38.4927,
         "largeTextPsnr": 37.8548,
         "smallTextPsnr": 33.2013,
         "imageBandPsnr": 40.0709,
@@ -3889,8 +3922,9 @@
       },
       {
         "frame": 68,
-        "psnr": 38.0239,
-        "ssim": 0.9976,
+        "psnr": 42.6398,
+        "ssim": 0.9975,
+        "psnrFullChroma": 38.0239,
         "largeTextPsnr": 36.6199,
         "smallTextPsnr": 32.9097,
         "imageBandPsnr": 38.8126,
@@ -3898,8 +3932,9 @@
       },
       {
         "frame": 69,
-        "psnr": 38.3977,
-        "ssim": 0.9977,
+        "psnr": 44.891,
+        "ssim": 0.9978,
+        "psnrFullChroma": 38.3977,
         "largeTextPsnr": 38.0201,
         "smallTextPsnr": 32.7757,
         "imageBandPsnr": 41.0463,
@@ -3907,8 +3942,9 @@
       },
       {
         "frame": 70,
-        "psnr": 38.8993,
-        "ssim": 0.998,
+        "psnr": 45.8431,
+        "ssim": 0.9982,
+        "psnrFullChroma": 38.8993,
         "largeTextPsnr": 39.0032,
         "smallTextPsnr": 33.325,
         "imageBandPsnr": 41.4118,
@@ -3916,8 +3952,9 @@
       },
       {
         "frame": 79,
-        "psnr": 37.9403,
-        "ssim": 0.9976,
+        "psnr": 42.5103,
+        "ssim": 0.9975,
+        "psnrFullChroma": 37.9403,
         "largeTextPsnr": 37.0268,
         "smallTextPsnr": 33.7595,
         "imageBandPsnr": 39.0625,
@@ -3925,8 +3962,9 @@
       },
       {
         "frame": 80,
-        "psnr": 38.4885,
+        "psnr": 43.204,
         "ssim": 0.9978,
+        "psnrFullChroma": 38.4885,
         "largeTextPsnr": 37.7844,
         "smallTextPsnr": 34.3014,
         "imageBandPsnr": 39.7004,
@@ -3934,8 +3972,9 @@
       },
       {
         "frame": 81,
-        "psnr": 38.3366,
-        "ssim": 0.9977,
+        "psnr": 42.6729,
+        "ssim": 0.9976,
+        "psnrFullChroma": 38.3366,
         "largeTextPsnr": 37.5889,
         "smallTextPsnr": 34.1989,
         "imageBandPsnr": 39.5382,
@@ -3943,8 +3982,9 @@
       },
       {
         "frame": 88,
-        "psnr": 38.0725,
-        "ssim": 0.9976,
+        "psnr": 44.3133,
+        "ssim": 0.9977,
+        "psnrFullChroma": 38.0725,
         "largeTextPsnr": 38.3106,
         "smallTextPsnr": 33.3099,
         "imageBandPsnr": 40.5301,
@@ -3952,8 +3992,9 @@
       },
       {
         "frame": 89,
-        "psnr": 37.061,
-        "ssim": 0.9973,
+        "psnr": 41.9436,
+        "ssim": 0.9976,
+        "psnrFullChroma": 37.061,
         "largeTextPsnr": 37.4589,
         "smallTextPsnr": 32.5411,
         "imageBandPsnr": 39.8438,
@@ -3961,8 +4002,9 @@
       },
       {
         "frame": 90,
-        "psnr": 36.1872,
-        "ssim": 0.9976,
+        "psnr": 43.2857,
+        "ssim": 0.9974,
+        "psnrFullChroma": 36.1872,
         "largeTextPsnr": 38.0012,
         "smallTextPsnr": 29.2717,
         "imageBandPsnr": 40.0865,
@@ -3970,8 +4012,9 @@
       },
       {
         "frame": 91,
-        "psnr": 35.7301,
+        "psnr": 43.2397,
         "ssim": 0.997,
+        "psnrFullChroma": 35.7301,
         "largeTextPsnr": 37.4253,
         "smallTextPsnr": 29.1561,
         "imageBandPsnr": 39.5513,
@@ -3979,8 +4022,9 @@
       },
       {
         "frame": 100,
-        "psnr": 38.0613,
+        "psnr": 43.4261,
         "ssim": 0.9979,
+        "psnrFullChroma": 38.0613,
         "largeTextPsnr": 37.3818,
         "smallTextPsnr": 34.34,
         "imageBandPsnr": 39.2754,
@@ -3988,8 +4032,9 @@
       },
       {
         "frame": 109,
-        "psnr": 38.1092,
-        "ssim": 0.9978,
+        "psnr": 43.2954,
+        "ssim": 0.9976,
+        "psnrFullChroma": 38.1092,
         "largeTextPsnr": 36.9118,
         "smallTextPsnr": 34.2467,
         "imageBandPsnr": 39.0122,
@@ -3997,8 +4042,9 @@
       },
       {
         "frame": 120,
-        "psnr": 36.6861,
+        "psnr": 43.2304,
         "ssim": 0.9976,
+        "psnrFullChroma": 36.6861,
         "largeTextPsnr": 37.6514,
         "smallTextPsnr": 29.1293,
         "imageBandPsnr": 40.3588,
@@ -4006,8 +4052,9 @@
       },
       {
         "frame": 129,
-        "psnr": 38.0658,
+        "psnr": 43.909,
         "ssim": 0.9978,
+        "psnrFullChroma": 38.0658,
         "largeTextPsnr": 37.8013,
         "smallTextPsnr": 33.3965,
         "imageBandPsnr": 40.9016,
@@ -4015,8 +4062,9 @@
       },
       {
         "frame": 130,
-        "psnr": 38.8659,
-        "ssim": 0.9978,
+        "psnr": 44.7491,
+        "ssim": 0.9979,
+        "psnrFullChroma": 38.8659,
         "largeTextPsnr": 38.2509,
         "smallTextPsnr": 33.5701,
         "imageBandPsnr": 40.3269,
@@ -4024,8 +4072,9 @@
       },
       {
         "frame": 131,
-        "psnr": 40.267,
+        "psnr": 44.965,
         "ssim": 0.9982,
+        "psnrFullChroma": 40.267,
         "largeTextPsnr": 39.6903,
         "smallTextPsnr": 34.3496,
         "imageBandPsnr": 41.1336,
@@ -4033,8 +4082,9 @@
       },
       {
         "frame": 139,
-        "psnr": 39.886,
+        "psnr": 44.4106,
         "ssim": 0.9972,
+        "psnrFullChroma": 39.886,
         "largeTextPsnr": 38.5067,
         "smallTextPsnr": 33.9359,
         "imageBandPsnr": 40.947,
@@ -4042,8 +4092,9 @@
       },
       {
         "frame": 140,
-        "psnr": 39.8271,
-        "ssim": 0.9982,
+        "psnr": 45.183,
+        "ssim": 0.9984,
+        "psnrFullChroma": 39.8271,
         "largeTextPsnr": 38.1403,
         "smallTextPsnr": 33.7874,
         "imageBandPsnr": null,
@@ -4051,8 +4102,9 @@
       },
       {
         "frame": 145,
-        "psnr": 39.1362,
-        "ssim": 0.998,
+        "psnr": 44.54,
+        "ssim": 0.9982,
+        "psnrFullChroma": 39.1362,
         "largeTextPsnr": 37.259,
         "smallTextPsnr": 32.6751,
         "imageBandPsnr": null,
@@ -4060,8 +4112,9 @@
       },
       {
         "frame": 149,
-        "psnr": 39.2344,
-        "ssim": 0.9979,
+        "psnr": 43.6041,
+        "ssim": 0.9982,
+        "psnrFullChroma": 39.2344,
         "largeTextPsnr": 37.3027,
         "smallTextPsnr": 33.5561,
         "imageBandPsnr": null,
@@ -4088,10 +4141,8 @@
       "settings": "The export is the product route with its default quality (high): x264 preset medium, CRF 16, profile high, 4:2:0 (export.ts CRF and exportSegments.ts SEGMENT_CRF agree), BT.709 limited range. The control takes the same compositor frames through the same conversion and decode at qp 0."
     }
   },
-  "pass": false,
-  "failures": [
-    "test2 global frame 91: PSNR 35.7301 SSIM 0.997"
-  ],
+  "pass": true,
+  "failures": [],
   "warnings": [
     "test2 smallTextPsnr frame 18: 32.6965 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
     "test2 smallTextPsnr frame 60: 29.1455 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
@@ -4158,5 +4209,5 @@
     "Test 1 (i) and (ii) are both strict; the paused preview decodes the original media (data-source=original), playback uses the proxy.",
     "Small-text (14.4 px) regional PSNR in Test 2 is report+warning only; the pass/fail criterion is textSizeEnvelope."
   ],
-  "runtimeSeconds": 106.1
+  "runtimeSeconds": 120.4
 }

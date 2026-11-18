@@ -1,8 +1,8 @@
 {
   "proof": "multicam",
   "adr": "ADR-0020",
-  "status": "fail",
-  "generatedAt": "2026-11-18T22:51:41.101Z",
+  "status": "pass",
+  "generatedAt": "2026-11-18T23:09:11.617Z",
   "machine": {
     "platform": "linux",
     "cpus": 4,
@@ -189,8 +189,8 @@
       "value": {
         "segments": 1001,
         "documentBytes": 412272,
-        "commitP95Ms": 40.91,
-        "getProjectP95Ms": 15.65
+        "commitP95Ms": 38.89,
+        "getProjectP95Ms": 17.01
       },
       "budget": "recorded",
       "pass": true
@@ -199,8 +199,8 @@
       "id": "M5",
       "name": "undo of a 1000-cut switch gives an equal creativeProjection",
       "value": {
-        "switchMs": 73.42,
-        "undoMs": 84.17
+        "switchMs": 83.46,
+        "undoMs": 106.7
       },
       "budget": "equal",
       "pass": true
@@ -216,7 +216,7 @@
       "id": "M6",
       "name": "active speaker shown on single-speaker speech",
       "value": {
-        "share": 0.93,
+        "share": 0.92,
         "frames": 1505
       },
       "budget": "≥ 90 %",
@@ -226,11 +226,11 @@
       "id": "M6",
       "name": "wide shown on overlaps of ≥ 1 s",
       "value": {
-        "share": 0.5,
+        "share": 0.91,
         "frames": 185
       },
       "budget": "≥ 80 %",
-      "pass": false
+      "pass": true
     },
     {
       "id": "M6",
@@ -245,7 +245,7 @@
       "id": "M6",
       "name": "planning time for a 60-minute program (recorded)",
       "value": {
-        "ms": 371.89,
+        "ms": 321.41,
         "ops": 1
       },
       "budget": "recorded",
@@ -255,11 +255,11 @@
       "id": "M3",
       "name": "envelope + sync of 3 × 10 min on this CPU (a miss is reported)",
       "value": {
-        "wallSeconds": 12.59,
+        "wallSeconds": 12.84,
         "timingsMs": {
-          "envelope": 5404,
-          "coarse": 408,
-          "fine": 6700
+          "envelope": 6109,
+          "coarse": 482,
+          "fine": 6160
         },
         "verdicts": [
           "reference",
@@ -314,12 +314,12 @@
         }
       ],
       "turns": 21,
-      "generateSeconds": 40.48
+      "generateSeconds": 40.51
     },
     "dryRunTimingsMs": {
-      "envelope": 3204,
-      "coarse": 336,
-      "fine": 5491
+      "envelope": 3010,
+      "coarse": 334,
+      "fine": 5849
     },
     "m4": {
       "segments": 81,
@@ -333,12 +333,12 @@
     "m8": {
       "segments": 1001,
       "documentBytes": 412272,
-      "commitP95Ms": 40.91,
-      "getProjectP95Ms": 15.65
+      "commitP95Ms": 38.89,
+      "getProjectP95Ms": 17.01
     },
     "m5": {
-      "switchMs": 73.42,
-      "undoMs": 84.17,
+      "switchMs": 83.46,
+      "undoMs": 106.7,
       "segments": 1001
     },
     "dialogueSync": [
@@ -368,17 +368,17 @@
       "bothFrames": 185,
       "shots": 24,
       "shortestShot": 2,
-      "segments": 25,
-      "planning60minMs": 371.89,
+      "segments": 24,
+      "planning60minMs": 321.41,
       "planning60minOps": 1
     },
     "m3": {
       "threeTimesTenMinutes": {
-        "wallSeconds": 12.59,
+        "wallSeconds": 12.84,
         "timingsMs": {
-          "envelope": 5404,
-          "coarse": 408,
-          "fine": 6700
+          "envelope": 6109,
+          "coarse": 482,
+          "fine": 6160
         },
         "verdicts": [
           "reference",

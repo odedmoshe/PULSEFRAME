@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { CURVES_BUILT, EASINGS, pathPoints, transformAt } from '@pulseframe/core';
-import { CURVE_HASH_SAMPLES, curveHash, curveHashKeys, curveHashTime, curveSamples, pathPointsMs, pathTimingClip, ulpDistance } from './curveHash.ts';
+import { CURVE_HASH_SAMPLES, curveHash, curveHashKeys, curveHashTime, curveSampleBound, curveSamples, pathPointsMs, pathTimingClip, ulpDistance, ulpOf } from './curveHash.ts';
 
 describe('curve hash', () => {
   it('covers every easing and the shutter taps of 8 and 16, with frames before the first key', () => {
@@ -25,6 +25,15 @@ describe('curve hash', () => {
     expect(ulpDistance(0, -0)).toBe(1);
     expect(ulpDistance(5e-324, -5e-324)).toBe(3);
     expect(ulpDistance(-0.5, -0.5 - 2 ** -53)).toBe(1);
+  });
+  it('ulpOf and the per-sample bound: one ulp of the larger key value of the segment, 0 outside the keys', () => {
+    expect(ulpOf(1)).toBe(Number.EPSILON);
+    expect(ulpOf(0.95)).toBe(2 ** -53);
+    expect(ulpOf(-0.4)).toBe(2 ** -54);
+    expect(ulpOf(0)).toBe(2 ** -1074);
+    expect(curveSampleBound(0)).toBe(0); // frame −5: before the first key
+    // sample 13 × 16 × 40 is frame 35 (between the keys at 32: −0.95 and 61: 0.2): one ulp of 0.95
+    expect(curveSampleBound(13 * 16 * 40)).toBe(2 ** -53);
   });
   it('curveSamples are the samples the hash is taken of', async () => {
     const xs = curveSamples(), buf = new ArrayBuffer(xs.length * 8), v = new DataView(buf);
