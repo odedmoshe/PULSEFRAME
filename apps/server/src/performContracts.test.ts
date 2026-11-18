@@ -2,7 +2,7 @@
  * Lead contracts of perform mode on the server (ADR-0025): POST /api/v1/projects/:id/takes and the MCP tool perform_take, the
  * refusals that come BEFORE any planning (permission, propose mode, limited grants, a malformed body), and a take committed
  * the way the route commits it (one internal apply_take): one history entry, exact undo and redo, replay equality.
- * The planner is W1's (core moves.ts): its success path through the route is todo; nothing here pins the stub.
+ * The planner is W1's (core moves.ts); its built path through the route (dry run, commit, take_empty, MCP) is tested here.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -120,8 +120,6 @@ describe('POST /takes and perform_take: refusals before planning (wired by the l
     expect(viaMcp.body.chips.map((c: { reason?: string; since?: number }) => [c.reason, c.since])).toEqual([['flash_limit', 0], ['flash_limit', 0]]);
     expect(revision(pid)).toBe(before + 1);
   });
-  it.todo('W1: a seeded take through POST /takes commits ONE revision with one perform:take run; dryRun gives the same args as the browser (perform W1)');
-  it.todo('W1: a take whose every tap is held answers 409 take_empty with the chips, and nothing changes');
 });
 
 describe('a take committed as the route commits it (one internal apply_take)', () => {
