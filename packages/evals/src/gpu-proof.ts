@@ -427,10 +427,12 @@ async function main() {
       // is a rise of its mean brightness by more than 8 of 255 above the lowest since the last fall, a fall the same below
       // the highest since the rise. That the guard was needed is measured too, not assumed: the frames that were on screen
       // are evaluated again without the guard, and must there rise more than three times in some second.
-      // The editor has to paint more than six frames a second for that (a rise needs a darker frame and a brighter one). On
-      // a busy machine the software adapter paints fewer, the guard has nothing to hold, and a fixed 2.5 s window said
-      // nothing about it (the check failed with 0 frames held at 4 to 6 paints a second). So the shuttle goes on until the
-      // guard was needed, at least 2.5 s and at most 55 s; if it never was, the check fails as "blocked by load".
+      // The editor has to paint more than six frames a second for that (a rise needs a darker frame and a brighter one), and
+      // a pass must tell the right guard from a wrong one: the shuttle goes on for 5 s after the guard was first needed
+      // (at least 2.5 s, at most 55 s) and passes only with a margin of need: five or more flashes in some second without the
+      // guard, and the same paints through guards with a wrong gap of 0.25 s and of 0.2 s judged unsafe. Without it the verdict is
+      // `blocked` ("too few paints for the guard to be needed"), which fails; the 1-minute load and the CPU seconds per
+      // paint are recorded beside it and the cause is not judged. "Keeps flashing" has a floor that grows with the window.
       // An 8-minute timeline (at 8x the shuttle needs 60 s to cross it): the picture with two strobes and a strobing title over it.
       const LONG = 14_400;
       const long = (await call('/projects', { name: 'strobes-shuttle', width: W, height: H })).body.project.id as string;
@@ -445,8 +447,8 @@ async function main() {
       await sp8.goto(`${s.ownerUrl}&project=${long}`);
       await sp8.locator('.clip').first().waitFor();
       await sp8.waitForFunction(() => Number(document.querySelector('canvas[data-testid=preview]')?.getAttribute('data-frame') ?? -1) >= 0, undefined, { timeout: 30_000 });
-      const run8 = await shuttleAt8(sp8, longDoc, { minMs: 2500, deadlineMs: 55_000 });
-      check('Strobes together, in the editor shuttled at 8x: the preview keeps flashing but shows at most three flashes in any second of real time (sampled on every animation frame); the frames it showed would have flashed more than three times in a second without the player\'s safety guard, and the guard held flashes back', run8.verdict === 'ok', { verdict: run8.verdict, shuttle: run8.shuttle, seconds: run8.seconds, ...run8.measure, framesHeldBack: run8.held, load1: Number(os.loadavg()[0]!.toFixed(2)), ...(run8.blockedByLoad ? { blockedByLoad: run8.blockedByLoad } : {}) });
+      const run8 = await shuttleAt8(sp8, longDoc, { minMs: 2500, afterNeedMs: 5000, deadlineMs: 55_000 });
+      check('Strobes together, in the editor shuttled at 8x: the preview keeps flashing but shows at most three flashes in any second of real time (sampled on every animation frame); the frames it showed would have flashed five or more times in a second without the player\'s safety guard and more than three through a guard with a wrong gap of 0.25 s or 0.2 s, and the guard held flashes back', run8.verdict === 'ok', { verdict: run8.verdict, shuttle: run8.shuttle, seconds: run8.seconds, ...run8.measure, framesHeldBack: run8.held, ...run8.machine, ...(run8.blocked ? { blocked: run8.blocked } : {}) });
       fs.writeFileSync(path.join(art, 'shuttle-samples.json'), JSON.stringify(run8.samples.map(([t, m, f]) => [Number(t.toFixed(3)), Math.round(m), f])));
       await sp8.close();
     }
