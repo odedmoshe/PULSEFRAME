@@ -238,6 +238,11 @@ describe('small fixed parts', () => {
     expect(syncGrid(48000, { num: 30000, den: 1001 })).toBe(240000);
     expect(syncGrid(44100, { num: 24000, den: 1001 })).toBe(3528000);
   });
+  it('group time and program sound both follow the main sound recorder (plan §5): the defaults say so', () => {
+    // A camera with sound chosen as reference (referenceAngleIndex) does not make its built-in sound the program sound when the group has a recorder.
+    expect(MulticamOpArgs.create_multicam.shape.referenceAngleIndex.description).toMatch(/^default: the first sound angle, else 0/);
+    expect(MulticamOpArgs.place_multicam.shape.sound.description).toMatch(/default the first sound angle, else the reference$/);
+  });
   it('the auto-switch recipe is in place and refuses honestly until W2 builds its planner', () => {
     expect(isInPlaceRecipe('multicam-auto')).toBe(true);
     expect(isInPlaceRecipe('beat-montage')).toBe(false);

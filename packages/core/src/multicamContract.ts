@@ -76,7 +76,7 @@ export const PlaceMulticamArgs = z.object({
   newSequence: z.object({ name: z.string().min(1).max(128) }).strict().optional().describe('lay the program in a new sequence (origin kind "multicam"), not with sequenceId or trackId'),
   at: RT,
   range: z.object({ from: RT, to: RT }).strict().optional().describe('group time; default the coverage of the sound sources'),
-  angleId: z.string(), sound: z.array(z.string()).max(8).optional().describe('angles whose sound plays continuously; default the reference angle when it has sound, else the first sound angle'),
+  angleId: z.string(), sound: z.array(z.string()).max(8).optional().describe('angles whose sound plays continuously; default the first sound angle, else the reference'),
   trackId: z.string().optional(), fill: z.boolean().optional(), driftToleranceFrames: z.number().min(0.1).max(2).optional(),
 }).strict();
 const PointArgs = z.object({ at: RT.optional(), groupTime: RT.optional() }).strict(); // exactly one (pointForm)
