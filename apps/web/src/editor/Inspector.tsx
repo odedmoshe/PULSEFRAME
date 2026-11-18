@@ -17,6 +17,7 @@ import { Scopes } from './Scopes.tsx';
 import { useEditorState, type PanelTarget } from './store.ts';
 import { actorKind, actorWord } from './actorLabel.ts';
 import { DeliverPanel } from './DeliverPanel.tsx';
+import { ShortsPanel } from './ShortsPanel.tsx';
 import { RecipesPanel } from './RecipesPanel.tsx';
 import { SoundPanel } from './SoundPanel.tsx';
 import { PacingPanel } from './PacingPanel.tsx';
@@ -110,7 +111,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
   const flat = page === 'all';
   // The custom workspace offers the panels the user ticked (kept in this browser), in the usual order; at least one.
   const [custom, setCustom] = useState<InspectorPage[]>(loadCustomTabs);
-  const toggleCustom = (id: Exclude<InspectorPage, 'all'>) => {
+  const toggleCustom = (id: (typeof REAL_PAGES)[number]) => {
     const next = REAL_PAGES.filter((x) => (x === id ? !custom.includes(x) : custom.includes(x)));
     if (!next.length) return; // the last panel stays
     setCustom(next);
@@ -207,7 +208,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
     className: 'inspector-panel',
     'data-testid': `inspector-panel-${id}`,
   });
-  const pageLabel = (id: InspectorPage) => (id === 'all' ? S.allTools : id === 'clip' ? S.pageObject : id === 'sound' ? S.pageSound : id === 'speech' ? S.pageSpeech : t(`inspector.tab.${id}` as Key));
+  const pageLabel = (id: InspectorPage) => (id === 'shorts' ? t('shorts.title') : id === 'all' ? S.allTools : id === 'clip' ? S.pageObject : id === 'sound' ? S.pageSound : id === 'speech' ? S.pageSpeech : t(`inspector.tab.${id}` as Key));
   const colour = state.workspace === 'color';
   const wide = useWideStage(); // at wide windows the scopes dock beside the viewer (Transport.tsx)
   const motionOnly = state.workspace === 'motion';
@@ -287,6 +288,9 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
         <h2>{t('inspector.tab.deliver')}</h2>
         <DeliverPanel />
         <PacingPanel />
+      </div>
+      <div {...panelProps('shorts')}>
+        <ShortsPanel />
       </div>
       <div {...panelProps('recipes')}>
         <h2>{t('inspector.tab.recipes')}</h2>

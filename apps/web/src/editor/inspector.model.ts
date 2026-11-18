@@ -8,8 +8,9 @@ import type { Workspace } from './store.ts';
 
 /** The panels of the inspector column. `clip` is whatever is selected; `all` is every panel on one screen. */
 export const INSPECTOR_PAGES = ['clip', 'speech', 'captions', 'sound', 'review', 'deliver', 'recipes', 'all'] as const;
-export type InspectorPage = (typeof INSPECTOR_PAGES)[number];
-export const REAL_PAGES = INSPECTOR_PAGES.filter((p): p is Exclude<InspectorPage, 'all'> => p !== 'all');
+/** `shorts` is the Shorts panel (ADR-0018): offered only by the Shorts mode, so it is not one of the pages "all" lays out or the custom mode ticks. */
+export type InspectorPage = (typeof INSPECTOR_PAGES)[number] | 'shorts';
+export const REAL_PAGES = INSPECTOR_PAGES.filter((p): p is Exclude<(typeof INSPECTOR_PAGES)[number], 'all'> => p !== 'all');
 
 /**
  * The panels a mode offers, in order; the first is shown when the mode is chosen. Edit, Look and Motion show the selection
@@ -24,6 +25,7 @@ export function pagesFor(workspace: Workspace, opts: { custom: readonly Inspecto
     captions: ['captions', 'speech', 'clip'],
     sound: ['sound', 'clip'],
     deliver: ['deliver', 'review', 'recipes'],
+    shorts: ['shorts', 'deliver'],
     custom: opts.custom,
   };
   const pages = base[workspace];

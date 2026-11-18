@@ -10,6 +10,7 @@ import { INSPECTOR_STRINGS } from './inspector.strings.ts';
 import { trackRole } from './inspector.model.ts';
 import { Switch } from '../ds/index.ts';
 import { IconOnBeat } from './icons.tsx';
+import { isShortActive, loudnessOps } from './shorts.view.ts';
 
 type Track = ProjectDocument['sequences'][string]['tracks'][number];
 
@@ -381,9 +382,12 @@ export function SoundPanel() {
   const S = INSPECTOR_STRINGS[state.lang];
   const tracks = (doc.sequences[doc.mainSequenceId]?.tracks ?? []).filter((x) => x.kind === 'audio');
   const target = doc.settings.loudness?.target ?? null;
+  // a short has its own loudness target (format.loudness); the project's is left alone
+  const setTarget = (v: number | null) => { if (state.rawDoc) void editor.commit(loudnessOps(state.rawDoc, state.activeSequenceId, v), 'Loudness target'); };
+  const shortId = isShortActive(state.rawDoc, state.activeSequenceId) ? state.activeSequenceId : undefined;
   const measure = async () => {
     setBusy(true); setErr(null);
-    try { setRes(await api.measureLoudness(doc.id)); setResRev(state.revision); }
+    try { setRes(await api.measureLoudness(doc.id, shortId)); setResRev(state.revision); }
     catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   };
@@ -407,11 +411,11 @@ export function SoundPanel() {
             <strong>{t('sound.loudness')}</strong>
             <span className="muted">{res && res.integratedLufs !== null ? <bdi dir="ltr" className="num">{fmt(res.integratedLufs, 'LUFS')}</bdi> : S.loudUnknown}{target !== null && <> · {S.loudTarget} <bdi dir="ltr" className="num">{target} LUFS</bdi></>}</span>
           </div>
-          {target !== -14 && <button type="button" className="primary" data-testid="sound-loudness-14" onClick={() => void editor.commit([{ op: 'set_loudness_target', args: { target: -14 } }], 'Loudness target')}>{S.loudAlign}</button>}
+          {target !== -14 && <button type="button" className="primary" data-testid="sound-loudness-14" onClick={() => setTarget(-14)}>{S.loudAlign}</button>}
         </div>
         <label>{t('sound.loudness.target')}
           <select value={target === null ? '' : String(target)} data-testid="sound-loudness-target"
-            onChange={(e) => void editor.commit([{ op: 'set_loudness_target', args: { target: e.target.value === '' ? null : Number(e.target.value) } }], 'Loudness target')}>
+            onChange={(e) => setTarget(e.target.value === '' ? null : Number(e.target.value))}>
             <option value="">{t('sound.loudness.off')}</option>
             {TARGETS.map((x) => <option key={x} value={x}>{`${x} LUFS (${t(x === -14 ? 'sound.loudness.social' : x === -16 ? 'sound.loudness.podcast' : 'sound.loudness.broadcast')})`}</option>)}
           </select>

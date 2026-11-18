@@ -26,12 +26,15 @@ import { dictionaries, effectParamLabel, translateRefusal, fillIn, TREND_PACK_HE
 import { creativeProjection, beatSwitchFrame, BUILTIN_TEMPLATES, MODEL_GATED_TEMPLATES, PACKS, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 import { TEMPLATE_TESTIDS } from '../../../apps/web/src/editor/templates.testids.ts';
 import { chooseFormat } from './editor-ui.ts';
+import { generateShortsFixture } from '../../fixtures/src/shorts.ts';
+import { SHORTS_TESTIDS } from '../../../apps/web/src/editor/shorts.testids.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/editor-interactions');
 const checks: { name: string; ok: boolean; detail?: unknown }[] = [];
 const check = (name: string, ok: boolean, detail?: unknown) => { checks.push({ name, ok, detail }); console.log(`${ok ? '  ok  ' : ' FAIL '} ${name}${detail !== undefined ? `  ${JSON.stringify(detail)}` : ''}`); };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const until2 = async (get: () => Promise<any>, pred: (d: any) => boolean, ms = 20000) => { const t0 = Date.now(); for (;;) { if (pred(await get())) return true; if (Date.now() - t0 > ms) return false; await sleep(150); } };
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
 const fr = (t: any) => T.frameIndexAt(t, R);
@@ -1069,6 +1072,80 @@ async function main() {
       check('trend pack: from the keyboard, Space on "נעילה לפעימה" and ArrowDown on the velocity choice set the beat lock and ×2, each in one transaction and one undo step (Undo with Enter takes back ×2, then the lock); the Hebrew status line is a live region the checkbox points to, saying where the beat is (the model\'s frame); ×3 is disabled and says what it needs', analysedT.status === 200 && locked && r1 === r0 + 1 && statusText === want && /[א-ת]/.test(statusText) && statusRole === 'status' && !!statusId && describedBy.split(' ').includes(statusId) && announced >= 1 && onVelocity === 'transition-velocity' && opt3.disabled && opt3.text.includes(wantNeed) && ramped && r2 === r1 + 1 && undoVelocity && undoSync, { beatFrame: k === null ? null : 50 + k, statusText, want, statusRole, describedBy, announced, onVelocity, opt3, wantNeed, revisions: [r0, r1, r2], locked, ramped, undoVelocity, undoSync });
       check('no uncaught errors in the page with the transition options', tErrors.length === 0, tErrors.slice(0, 4));
       await tctx.close();
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // shorts (ADR-0018): a keyboard-only Hebrew run (measure, select 2, plan, create); focus on the first new tab; the 9:16
+    // canvas; a title added while the short is active lands in that sequence and the main one is unchanged; [ and ] in the
+    // list commit no trim_clip. Needs the shorts bodies (W1 and W2) merged: until then the run stops at the first refusal.
+    // ---------------------------------------------------------------------------------------------------------------
+    {
+      console.log('\n# shorts: keyboard-only run, the active short, [ and ] without a trim');
+      const ID = SHORTS_TESTIDS;
+      const truth = await generateShortsFixture({ out: path.join(art, 'shorts.mp4') });
+      const sp = (await call('/projects', { name: 'shorts-ui', width: 1280, height: 720 })).body.project.id as string;
+      const asset = await upload(sp, path.join(art, 'shorts.mp4'));
+      await txs(sp, [{ op: 'set_transcript', args: { assetId: asset.assetId, ...truth.transcript } }]);
+      const sdoc = async () => (await call(`/projects/${sp}`)).body.project;
+      const trims = async () => ((await call(`/projects/${sp}/history?since=0`)).body.events as { ops?: string[] }[]).filter((e) => e.ops?.includes('trim_clip')).length;
+      const sctx = await browser.newContext({ viewport: { width: 1500, height: 1000 }, reducedMotion: 'reduce', locale: 'he-IL' });
+      const sPage = await sctx.newPage();
+      const sErrors: string[] = [];
+      sPage.on('pageerror', (e) => sErrors.push(String(e)));
+      await sPage.goto(`${s.ownerUrl}&project=${sp}`);
+      await sPage.getByTestId('timecode').waitFor();
+      if ((await sPage.evaluate(() => document.documentElement.lang)) !== 'he') await sPage.locator('[data-testid=lang-toggle]').click().catch(() => {});
+      // the mode button takes the focus and Enter opens the panel: no pointer
+      await sPage.getByTestId('workspace-shorts').focus();
+      await sPage.keyboard.press('Enter');
+      await sPage.getByTestId(ID.panel).waitFor({ timeout: 8000 });
+      const stepsShown = await sPage.locator(`[data-testid=${ID.step}]`).count();
+      await sPage.getByTestId(ID.measure).focus();
+      await sPage.keyboard.press('Enter');
+      const listed = await sPage.getByTestId(ID.list).waitFor({ timeout: 180000 }).then(() => true, () => false);
+      const rows = listed ? await sPage.locator(`[data-testid=${ID.candidate}]`).count() : 0;
+      const scoreText = listed ? (await sPage.locator(`[data-testid=${ID.score}]`).first().textContent()) ?? '' : '';
+      check('shorts, step 1 to 3 by keyboard: the panel shows its four steps; Enter on «מדוד» lists candidates, each with its relative score «ציון יחסי N (היוריסטיקה)» (no «viral», no prediction)', stepsShown === 4 && rows >= 2 && /^ציון יחסי \u2066?\d+\u2069? \(היוריסטיקה\)$/.test(scoreText.replace(/\s+/g, ' ').trim()) && !/viral|ויראל/i.test(await sPage.getByTestId(ID.panel).innerText()), { stepsShown, rows, scoreText });
+      if (listed && rows >= 2) {
+        const row = (i: number) => sPage.locator(`[data-testid=${ID.candidate}]`).nth(i);
+        // [ ] and Shift+[ ] in a row move edges by statements; Alt by a word; no trim_clip is committed
+        const before = await trims();
+        const rangeOf = async () => (await row(0).locator('.sh-range').textContent()) ?? '';
+        const r0 = await rangeOf();
+        await row(0).focus();
+        const revBefore = (await sdoc()).revision ?? 0;
+        for (const key of ['BracketLeft', 'BracketRight', 'Shift+BracketLeft', 'Shift+BracketRight', 'Alt+BracketRight', 'Alt+Shift+BracketLeft']) await sPage.keyboard.press(key);
+        const after = await trims();
+        const live = (await sPage.getByTestId(ID.live).textContent()) ?? '';
+        const r1 = await rangeOf();
+        check('shorts, review keys: [ ] Shift+[ ] and Alt move the edges of the focused candidate (its range changes, a live region names the new edge in Hebrew) and commit NO trim_clip and no revision', before === after && (r0 !== r1 || /לא ניתן/.test(live)) && /[א-ת]/.test(live) && ((await sdoc()).revision ?? 0) === revBefore, { trimsBefore: before, trimsAfter: after, r0, r1, live });
+        await row(0).focus(); await sPage.keyboard.press('Enter');
+        await row(1).focus(); await sPage.keyboard.press('Enter');
+        const picked = await sPage.locator(`[data-testid=${ID.candidate}][data-selected=true]`).count();
+        await sPage.getByTestId(ID.plan).focus();
+        await sPage.keyboard.press('Enter');
+        const dialog = await sPage.getByTestId(ID.planDialog).waitFor({ timeout: 30000 }).then(() => true, () => false);
+        const planOps = dialog ? Number(((await sPage.getByTestId(ID.planOps).textContent()) ?? '').replace(/\D+/g, '')) : 0;
+        const mainBefore = JSON.stringify((await sdoc()).sequences.seq_main);
+        await sPage.getByTestId(ID.create).focus();
+        await sPage.keyboard.press('Enter');
+        const made = await until2(sdoc, (d) => Object.keys(d.sequences).length === 3);
+        const nd = await sdoc();
+        const newIds = Object.keys(nd.sequences).filter((id) => id !== 'seq_main');
+        await sleep(600);
+        const focused = await sPage.evaluate(() => { const a = document.activeElement as HTMLElement | null; return { id: a?.dataset?.testid ?? null, seq: a?.dataset?.sequenceId ?? null, selected: a?.getAttribute('aria-selected') ?? null }; });
+        check('shorts, plan and create by keyboard: 2 selected; the plan dialog shows operations; Enter on «צור 2 קטעים» makes 2 sequences as ONE revision; the focus lands on the first new short\'s tab (aria-selected)', picked === 2 && dialog && planOps > 0 && made && newIds.length === 2 && focused.id === ID.tab && focused.seq === newIds[0] && focused.selected === 'true', { picked, dialog, planOps, newIds, focused });
+        const cb = (await sPage.getByTestId('preview').boundingBox())!;
+        check('shorts, the canvas of the active short is 720:1280 (9:16) within 1 px', Math.abs(cb.width - (cb.height * 720) / 1280) <= 1, { w: cb.width, h: cb.height });
+        // a title added while the short is active lands in that sequence; the main sequence is unchanged
+        await sPage.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+        await sPage.keyboard.press('KeyT');
+        const landed = await until2(sdoc, (d) => d.sequences[newIds[0]!].tracks.some((t: any) => t.clips.some((c: any) => c.type === 'text')));
+        const fin = await sdoc();
+        check('shorts, a title added (T) while the short is active lands in that sequence; the main sequence is exactly as before', landed && JSON.stringify(fin.sequences.seq_main) === mainBefore, { landed, mainUnchanged: JSON.stringify(fin.sequences.seq_main) === mainBefore });
+      }
+      check('no uncaught errors in the page with the shorts run', sErrors.length === 0, sErrors.slice(0, 4));
+      await sctx.close();
     }
 
     await page.close();
