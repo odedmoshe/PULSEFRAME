@@ -11,11 +11,16 @@ export const SEGMENT_KEY_PREFIX = 'pf-seg/1\n';
 
 /**
  * `index` = grid cell number counted from programme frame 0 (for a merged segment: the cell holding its first frame);
- * `first` = first frame relative to the exported range; `frames` = its length (3 … segFrames + 2, unless it is the only segment).
+ * `first` = first frame relative to the exported range; `frames` = its length: 3 … segFrames + 2, or segFrames + 4 when one whole
+ * cell takes a short head and a short tail; only a lone segment (a range of 1 or 2 frames) may be shorter than 3.
  */
 export interface Segment { index: number; first: number; frames: number }
 
-/** max(1, round(seconds * num / den)); `seconds` defaults to core SEGMENT_SECONDS (60 at 30000/1001, 48 at 24000/1001, 50 at 25). */
+/**
+ * max(core MIN_SEGMENT_FRAMES, round(seconds * num / den)); `seconds` defaults to core SEGMENT_SECONDS (60 at 30000/1001, 48 at
+ * 24000/1001, 50 at 25; 3 at 1/1 and 1/2, where 2 seconds is 2 or 1 frames). The floor keeps every interior cell joinable: the
+ * merge rule below joins only head and tail parts, so a cell of 1–2 frames at a low rate would lose a frame at the join.
+ */
 export function segmentFrames(rate: T.Rate, seconds?: number): number {
   void rate; void seconds;
   throw new Error('segmentFrames: not built yet (segment cache W1)');

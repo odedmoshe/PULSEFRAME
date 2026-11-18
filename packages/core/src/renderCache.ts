@@ -13,12 +13,19 @@
  * - the engine fingerprint's `browser` is `${version}|launch=${mode}` of the browser that renders THIS job.
  */
 
-/** Seconds of one grid cell (plan §3): segFrames = max(1, round(SEGMENT_SECONDS · num / den)). */
+/**
+ * Seconds of one grid cell (plan §3): segFrames = max(MIN_SEGMENT_FRAMES, round(SEGMENT_SECONDS · num / den)). The floor matters
+ * below 1.25 fps (any positive rate is a valid project rate): there 2 seconds is 1 or 2 frames, every interior cell would be
+ * shorter than MIN_SEGMENT_FRAMES, and the merge rule (which joins only a head or a tail part) could not prevent the lost frame.
+ * So a cell is 2 seconds, or 3 frames when that is longer.
+ */
 export const SEGMENT_SECONDS = 2;
 /**
- * No segment is shorter than this unless it is the only one: a 1- or 2-frame head or tail part joins its neighbour (so a segment
- * may hold up to segFrames + 2 frames). Measured by the verifier on ffmpeg 6.1.1: libx264 writes a 1–2 frame segment with
- * PTS = DTS while longer ones start two frames earlier in DTS, and the stream-copy join then loses a frame.
+ * No segment is shorter than this unless it is the only one: a 1- or 2-frame head or tail part joins its neighbour, and no cell is
+ * shorter than this (segFrames has it as its floor). A segment therefore holds 3 to segFrames + 2 frames, or segFrames + 4 when a
+ * range takes exactly one whole cell with a short part at each end (both join it). Measured by the verifier on ffmpeg 6.1.1:
+ * libx264 writes a 1–2 frame segment with PTS = DTS while longer ones start two frames earlier in DTS, and the stream-copy join
+ * then loses a frame.
  */
 export const MIN_SEGMENT_FRAMES = 3;
 /** Clean incremental exports (per engine fingerprint) before `selfCheck: 'auto'` moves from every segment to a sample. Reset to 0 by any self-check failure. */
