@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-17T23:26:26.792Z",
+  "ranAt": "2026-11-18T02:02:15.919Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v553 x64",
+    "platform": "Linux 6.18.44-fc-v595 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
@@ -268,9 +268,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2.08,
+        "fwd2": 1.99,
         "sh2": "◀◀ ×1",
-        "back1": -0.99,
+        "back1": -1.03,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -284,9 +284,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 0.96,
+        "playSpeed": 0.99,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.97,
+        "shuttleSpeed": 2.01,
         "staysPaused": true
       }
     },
@@ -314,30 +314,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_5fa0f1bc810",
-          "clp_5fa0f1bc811"
+          "clp_a0346c343c0",
+          "clp_a0346c343c1"
         ],
         "afterAB": [
-          "clp_5fa0f1bc810",
-          "clp_5fa0f1bc811"
+          "clp_a0346c343c0",
+          "clp_a0346c343c1"
         ],
         "afterAdd": [
-          "clp_5fa0f1bc810",
-          "clp_5fa0f1bc811",
-          "clp_5fa0f1bc812"
+          "clp_a0346c343c0",
+          "clp_a0346c343c1",
+          "clp_a0346c343c2"
         ],
         "midEscape": [
-          "clp_5fa0f1bc811"
+          "clp_a0346c343c1"
         ],
         "afterEscape": [
-          "clp_5fa0f1bc810",
-          "clp_5fa0f1bc811",
-          "clp_5fa0f1bc812"
+          "clp_a0346c343c0",
+          "clp_a0346c343c1",
+          "clp_a0346c343c2"
         ],
         "afterEscapeUp": [
-          "clp_5fa0f1bc810",
-          "clp_5fa0f1bc811",
-          "clp_5fa0f1bc812"
+          "clp_a0346c343c0",
+          "clp_a0346c343c1",
+          "clp_a0346c343c2"
         ]
       }
     },
@@ -403,7 +403,7 @@
         "wantRefusal": "בטקסט של חותמת התאריך מותרים רק ספרות, רווחים והסימנים ⁦. : ' / -⁩, עד 20 תווים",
         "invalid": "true",
         "kept": true,
-        "today": "'26 11 17",
+        "today": "'26 11 18",
         "todaySet": true,
         "refusalGone": true
       }
@@ -499,7 +499,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 16/1799",
+        "valueText": "עוקב קדימה 24/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -693,18 +693,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_445df66f250",
-          "ast_ee5fd5b3da0",
-          "ast_1e19b7fa2e0",
-          "ast_18d0c2ecd80",
-          "ast_9e53a42f2d0"
+          "ast_ab251da8350",
+          "ast_f89e19aca80",
+          "ast_58e215fad10",
+          "ast_a4da00bd910",
+          "ast_d30e7d6ff40"
         ],
         "order1": [
-          "ast_445df66f250",
-          "ast_18d0c2ecd80",
-          "ast_ee5fd5b3da0",
-          "ast_1e19b7fa2e0",
-          "ast_9e53a42f2d0"
+          "ast_ab251da8350",
+          "ast_a4da00bd910",
+          "ast_f89e19aca80",
+          "ast_58e215fad10",
+          "ast_d30e7d6ff40"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -728,7 +728,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-17T23:26:16.268Z",
+          "createdAt": "2026-11-18T02:02:08.676Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
