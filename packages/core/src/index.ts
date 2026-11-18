@@ -95,3 +95,10 @@ export * from './multicam.ts';
 export * from './multicamOps.ts';
 export * from './multicamEnvelope.ts';
 export * from './multicamAuto.ts';
+// perform mode (ADR-0025): the contract, the flash rule and the internal op apply_take are lead-built; moves.ts / cameraPath.ts are worker stubs
+export * from './performContract.ts';
+export * from './performRefusals.ts';
+export * from './performFlash.ts';
+export * from './moves.ts';
+export * from './cameraPath.ts';
+export * from './takeOps.ts';

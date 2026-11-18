@@ -14,6 +14,7 @@ import type { Asset, Clip, OpCall, ProjectDocument } from '@pulseframe/core';
 import { assetDisplayName } from './assetLabel.ts';
 import { beatPositionAt, clipEnd, fieldsToDisplay, findClip, findEffect, fitScale, speedValue, TEXT_PRESETS, transitionDef } from '@pulseframe/core';
 import { effectParamLabel, type Key } from '@pulseframe/i18n';
+import { CurveChip } from './CurvePicker.tsx';
 import { chordLabel, COMMANDS, coverEditOps, keyframeProps, type Keymap } from './commands.ts';
 import { ADJUST_STRINGS } from './adjust.strings.ts';
 import { DerivativeLoader, thumbTileAt, type LoadedDerivative } from './mediaThumb.ts';
@@ -240,9 +241,9 @@ function TransformRow({ fld, clip, viewClip, shown, on, beat }: { fld: TField; c
     <Row label={label} modified={Math.abs(now - fld.neutral) > 1e-6}
       value={<ScrubField label={label} value={+(live * fld.show).toFixed(fld.decimals)} min={fld.min * fld.show} max={fld.max * fld.show} step={fld.show === 100 ? 1 : fld.step} unit={fld.unit} defaultValue={fld.neutral * fld.show} disabled={!on}
         onChange={(v) => setDraft(v / fld.show)} onCommit={(v) => commit(v / fld.show)} />}
-      kf={<button type="button" className={`pf-kf${here ? (beat ? ' is-on-beat' : ' is-at-playhead') : animated ? ' is-animated' : ''}`} disabled={!on || !!variantId} aria-pressed={here}
+      kf={<><button type="button" className={`pf-kf${here ? (beat ? ' is-on-beat' : ' is-at-playhead') : animated ? ' is-animated' : ''}`} disabled={!on || !!variantId} aria-pressed={here}
         aria-label={`${S.kfToggle}: ${label}`} title={variantId ? t('transform.keyframesMasterOnly') : here ? S.kfHere : animated ? S.kfAnimated : S.kfToggle} data-testid={`kf-${fld.prop}`} onClick={toggleKey}>
-        {here && beat ? <IconOnBeat size={16} /> : <Kf size={16} />}</button>}>
+        {here && beat ? <IconOnBeat size={16} /> : <Kf size={16} />}</button><CurveChip clipId={clip.id} channel={{ property: fld.prop }} /></>}>
       <span className="sr-only val">{+now.toFixed(3)}{animated ? ` ${t('keyframes.animated')}` : ''}</span>
       <input type="range" dir={fld.spatial ? 'ltr' : undefined} className={fld.spatial ? 'is-bipolar' : undefined} min={fld.min} max={fld.max} step={fld.step} value={live} disabled={!on} aria-label={label}
         data-testid={clip.type === 'adjustment' ? TID.adjustOpacity : `transform-${fld.prop}`} aria-valuetext={text}

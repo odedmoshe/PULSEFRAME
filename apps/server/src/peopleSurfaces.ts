@@ -148,6 +148,8 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`GET ${P}/multicam/:groupId`]: ['reader-document'],
   [`POST ${P}/assets/:assetId/derivatives/envelope`]: ['no-document'],
   [`POST ${P}/sequences/:sequenceId/reframe-plan`]: ['reader-document'],
+  // perform mode (ADR-0025): planned from the reader's document (clips, beats; no people data), committed as one internal step
+  [`POST ${P}/takes`]: ['reader-document', 'write'],
   // proposals and approvals
   [`GET ${P}/proposals`]: ['rows-scrubbed'],
   [`POST ${P}/proposals`]: ['write'],
@@ -206,6 +208,10 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   // shorts (ADR-0018)
   list_sequences: ['reader-document'], find_short_candidates: ['reader-document'], plan_shorts: ['reader-document'], make_shorts: ['reader-document', 'write'],
   plan_reframe: ['reader-document'], export_batch: ['rendered-refused', 'reader-document'],
+  // multicam (ADR-0020): sync measured from media (attaches maps, no people data); the group view from the reader's document
+  sync_multicam: ['reader-document', 'write'], get_multicam: ['reader-document'],
+  // perform mode (ADR-0025)
+  perform_take: ['reader-document', 'write'],
 };
 /** MCP resources and prompts (every resource answer passes forPrincipal; prompts carry no project content). */
 export const PEOPLE_MCP_RESOURCES: Readonly<Record<string, readonly PeopleFilter[]>> = {

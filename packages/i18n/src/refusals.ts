@@ -8,6 +8,7 @@ import { HE_FAMILY_FILM } from './familyFilm.ts';
 import { HE_SHORTS } from './shorts.ts';
 import { HE_KEYFRAMES } from './keyframesWave.ts';
 import { HE_MULTICAM } from './multicam.ts';
+import { HE_PERFORM } from './perform.ts';
 
 /**
  * Hebrew wording for the detail text of the refusals a person meets most often in the editor. The server's messages are
@@ -234,10 +235,28 @@ const HE_TIMELINE: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^closing the gap would put clip \S+ over clip \S+ on track \S+$/, () => `סגירת הרווח הייתה מניחה קליפ על קליפ אחר שנשאר במקומו. אפשר למחוק ולהשאיר את הרווח (${ltr('Shift+Delete')}), או להזיז קודם את הקליפ שמפריע`],
   [/^clip \S+ on locked track \S+ is linked to a clip this edit removes or divides, and would be left linked to nothing$/, () => 'קליפ ברצועה נעולה מקושר לקליפ שהפעולה מוחקת או מחלקת, והקישור שלו היה נשאר בלי בן זוג. יש לבטל קודם את נעילת הרצועה'],
 ];
+/**
+ * Multicam operation bodies (ADR-0020 W1, core multicamOps.ts): the refusals they raise outside the contract table
+ * (multicamRefusals.ts, worded in multicam.ts HE_MULTICAM), and a stretch of group time given before group time 0 (a camera that
+ * started before the reference), which the table's pattern does not read. packages/evals/src/refusal-wording.test.ts provokes
+ * each through its operation.
+ */
+const HE_MULTICAM_W1: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^referenceAngleIndex (\d+) names no angle: the group has (\d+) angles$/, (m) => `לזווית הייחוס צוין מספר ${m[1]}, אבל בקבוצה יש רק ${m[2]} זוויות. אפשר לבחור זווית קיימת, או לא לבחור, ואז זמן הקבוצה ילך לפי המקליט הראשון`],
+  [/^"(.+)" is a sound angle; a program shows a camera angle$/, (m) => `${ltr(m[1]!)} היא זווית קול, ותוכנית מציגה זווית מצלמה. אפשר לבחור זווית מצלמה; הקול של זווית קול מתנגן לצד התמונה`],
+  [/^the group-time range from (-?[\d.]+)s to (-?[\d.]+)s is shorter than one frame$/, (m) => `הטווח מ־${ltr(m[1]!)} עד ${ltr(m[2]!)} שניות בזמן הקבוצה קצר מפריים אחד. אפשר לתת טווח ארוך יותר, או לא לתת טווח ולהציב את כל ההקלטה`],
+  [/^after this sync change, segment \S+ would show source outside its file$/, () => 'אחרי תיקון הסנכרון הזה, קטע בתוכנית היה מציג חומר מחוץ לקובץ שלו. אפשר לנתק את הקטע קודם, לקצר אותו, או לתקן את הסנכרון במידה קטנה יותר'],
+  [/^files (\d+) and (\d+) of angle "(.+)" would overlap in group time$/, (m) => `הקבצים ${m[1]} ו־${m[2]} של הזווית ${ltr(m[3]!)} היו חופפים בזמן הקבוצה, ומצלמה אחת מקליטה קובץ אחד בכל רגע. אפשר לתקן את הסנכרון של אחד מהם, או לשים אותם בזוויות נפרדות`],
+  [/^the shot of speaker "(.+)" must be a picture angle of this group$/, (m) => `הצילום של ${ltr(m[1]!)} חייב להיות זווית מצלמה של הקבוצה. אפשר לבחור זווית מצלמה, או להשאיר ריק ואז תשמש הזווית הרחבה`],
+  [/^speaker id "(.*)" is used twice or is not 1 to 64 characters$/, () => 'מזהה הדובר כבר בשימוש, או שאורכו אינו בין תו אחד ל־64. אפשר לתת לכל דובר מזהה קצר משלו, או לא לתת מזהה ואז ייווצר אחד'],
+  [/^a file with verdict \S+ (needs at least one anchor|cannot carry anchors)$/, (m) => (m[1] === 'cannot carry anchors' ? 'לתוצאת סנכרון שלא מיקמה את הקובץ אין נקודות סנכרון. יש לשלוח אותה בלי נקודות' : 'לתוצאת סנכרון שמיקמה את הקובץ חייבת להיות לפחות נקודת סנכרון אחת. יש לשלוח את הנקודות שנמדדו')],
+  [/^angle "(.+)" has no picture from (-?[\d.]+)s to (-?[\d.]+)s of group time$/, (m) => `לזווית ${ltr(m[1]!)} אין תמונה מ־${ltr(m[2]!)} עד ${ltr(m[3]!)} שניות. אפשר לדלג על מה שאינו מכוסה, או לחתוך שם לזווית אחרת`],
+  [/^start must be >= 0$/, () => 'ההתחלה אינה יכולה להיות לפני תחילת ציר הזמן. אפשר לבחור נקודה מ־0 והלאה'],
+];
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM]) { const m = re.exec(message); if (m) return say(m); }
   for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
   // The export routes wrap the first blocker (Exporter.start, the browser export): worded only when the blocker itself is.
   const start = /^export cannot start: ([\s\S]+)$/.exec(message);
@@ -280,3 +299,7 @@ export const SHORTS_REFUSAL_PATTERNS: readonly RegExp[] = HE_SHORTS.map(([re]) =
 export const KEYFRAME_REFUSAL_PATTERNS: readonly RegExp[] = HE_KEYFRAMES.map(([re]) => re);
 /** The patterns of multicam (multicam.ts HE_MULTICAM, ADR-0020), for multicam-wording.test.ts. */
 export const MULTICAM_REFUSAL_PATTERNS: readonly RegExp[] = HE_MULTICAM.map(([re]) => re);
+/** The patterns of the multicam operation bodies (HE_MULTICAM_W1, ADR-0020 W1), for their own case of refusal-wording.test.ts. */
+export const MULTICAM_W1_REFUSAL_PATTERNS: readonly RegExp[] = HE_MULTICAM_W1.map(([re]) => re);
+/** The patterns of perform mode (perform.ts HE_PERFORM, ADR-0025), for perform-wording.test.ts. */
+export const PERFORM_REFUSAL_PATTERNS: readonly RegExp[] = HE_PERFORM.map(([re]) => re);

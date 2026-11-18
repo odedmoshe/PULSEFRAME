@@ -236,6 +236,40 @@ async function main() {
     const secondKey = await until((x2) => clipOf(x2, picClip).effects?.[0]?.keyframes?.radius?.length === 2);
     const keys = clipOf(await doc(), picClip).effects[0].keyframes?.radius ?? [];
     check('effect keyframes in the editor: the ◆ button sets a key at the playhead; moving the playhead and changing the slider adds a second key 20 frames later instead of changing the static value', firstKey && secondKey && fr(keys[1]?.time ?? f(0)) - fr(keys[0]?.time ?? f(0)) === 20 && Math.abs((keys[1]?.value ?? 0) - 0.1) < 1e-6, { keys: keys.map((k: any) => [fr(k.time), k.value]) });
+    {
+      // keyframe curves (ADR-0019): one diamond per distinct key frame, effect keys included, on the keyframe strip of the
+      // selected clip and as passive diamonds once it is not selected. x keys: one on the frame of the first radius key, one apart.
+      const radiusFrames = keys.map((k: any) => fr(k.time));
+      await txs(pid, [{ op: 'set_keyframe', args: { clipId: picClip, property: 'x', time: f(radiusFrames[0] ?? 5), value: 0, easing: 'linear' } }, { op: 'set_keyframe', args: { clipId: picClip, property: 'x', time: f((radiusFrames[0] ?? 5) + 3), value: 0.05, easing: 'linear' } }]);
+      const pc = clipOf(await doc(), picClip);
+      const len = fr(pc.duration);
+      const all = [...Object.values(pc.keyframes ?? {}).flat(), ...(pc.effects ?? []).flatMap((e: any) => Object.values(e.keyframes ?? {}).flat())] as any[];
+      const distinct = [...new Set(all.map((k) => fr(k.time)).filter((x) => x >= 0 && x <= len))].sort((a, b) => a - b);
+      await page.locator(`.clip[data-clip-id="${picClip}"]`).click();
+      await page.locator('[data-testid=key-strip-key]').first().waitFor({ timeout: 5000 }).catch(() => {});
+      const stripFrames = (await page.locator('[data-testid=key-strip-key]').evaluateAll((els) => els.map((e) => Number(e.getAttribute('data-frame'))))).sort((a, b) => a - b);
+      // keyboard only: Alt+K puts the focus on the strip, Enter on a key opens the curve picker with the focus inside, Escape closes it
+      // and gives the focus back to the same key; nothing is committed on the way
+      const focused = () => page.evaluate(() => { const a = document.activeElement as HTMLElement | null; return { id: a?.dataset.testid ?? null, frame: a?.dataset.frame ?? null, inPicker: !!a?.closest('[data-testid=curve-picker]') }; });
+      const revK = (await call(`/projects/${pid}`)).body.revision as number;
+      await page.locator(`.clip[data-clip-id="${picClip}"]`).focus();
+      await page.keyboard.press('Alt+KeyK');
+      const afterAltK = await focused();
+      await page.keyboard.press('Enter');
+      await page.getByTestId('curve-picker').waitFor({ timeout: 5000 }).catch(() => {});
+      const pickerOpen = (await page.getByTestId('curve-picker').count()) === 1;
+      const inPicker = await focused();
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => !document.querySelector('[data-testid=curve-picker]'), undefined, { timeout: 5000 }).catch(() => {});
+      const afterEsc = await focused();
+      const revK2 = (await call(`/projects/${pid}`)).body.revision as number;
+      check('keyframe strip by keyboard: Alt+K focuses a strip key, Enter opens the curve picker with the focus inside, Escape closes it and the focus is back on the same key; no commit', afterAltK.id === 'key-strip-key' && pickerOpen && inPicker.inPicker && (await page.getByTestId('curve-picker').count()) === 0 && afterEsc.id === 'key-strip-key' && afterEsc.frame === afterAltK.frame && revK2 === revK, { afterAltK, pickerOpen, inPicker, afterEsc, revisions: [revK, revK2] });
+      await page.locator(`.clip[data-clip-id="${title}"]`).click();
+      await page.waitForFunction((id) => document.querySelectorAll(`.clip[data-clip-id="${id}"] i.kf`).length > 0, picClip, { timeout: 5000 }).catch(() => {});
+      const passive = await page.locator(`.clip[data-clip-id="${picClip}"] i.kf`).count();
+      check('keyframe diamonds: the selected clip\'s keyframe strip and its passive diamonds once unselected each show one diamond per distinct key frame, effect keys included (an x key on the frame of a radius key counts once)', distinct.length === 3 && all.length === 4 && JSON.stringify(stripFrames) === JSON.stringify(distinct) && passive === distinct.length, { distinct, keys: all.length, stripFrames, passive });
+      await txs(pid, [{ op: 'replace_clip_keyframes', args: { clipId: picClip, property: 'x', keys: null } }]);
+    }
     const revOf = async () => (await call(`/projects/${pid}`)).body.revision as number;
     const r1 = await revOf();
     await page.locator(`.clip[data-clip-id="${picClip}"]`).click();

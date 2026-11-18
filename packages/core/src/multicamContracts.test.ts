@@ -1,6 +1,6 @@
 /**
  * Lead contracts of multicam (ADR-0020), the parts the lead builds itself: the optional schema fields (no version bump), the
- * 'multicamGroup' entity and its exact undo, the registry rows (every operation refuses honestly until W1), the validation of
+ * 'multicamGroup' entity and its exact undo, the registry rows, the validation of
  * groups and tags, the refusals other edits now raise (remove_asset, remove_motion_track, replace_clip_asset,
  * replace_clip_media), the capture-time priors, syncGrid, the in-place recipe row and the sequence origin member. The bodies of
  * multicam.ts and multicamOps.ts are W1's (multicam.test.ts, multicamOps.test.ts).
@@ -109,30 +109,16 @@ describe('registry rows', () => {
     for (const op of MULTICAM_OPS) { expect(pub).toContain(op); expect(getOp(op)!.version).toBe(1); expect(getOp(op)!.args).toBe(MulticamOpArgs[op]); }
     expect(pub).not.toContain(MULTICAM_SYNC_OP);
     expect(getOp(MULTICAM_SYNC_OP)!.internal).toBe(true);
-    expect(MULTICAM_OPS_BUILT).toBe(false);
+    expect(MULTICAM_OPS_BUILT).toBe(true); // W1 built the bodies (multicamOps.test.ts)
   });
-  it('until W1 builds them, every operation refuses with the not-built refusal and changes nothing (an internal one only with allowInternal)', () => {
+  it('the internal one runs only with allowInternal; a refused call changes nothing (bodies: multicamOps.test.ts)', () => {
     const s = setup();
     const d = withGroup(s.doc, s.group);
-    const calls: OpCall[] = [
-      { op: 'create_multicam', args: { angles: [{ assetIds: [s.A] }, { assetIds: [s.MIC] }] } },
-      { op: 'set_multicam_sync', args: { groupId: 'mcg_1', angleId: 'ang_b', pieceIndex: 0, offset: T.rt(1, 1) } },
-      { op: 'update_multicam', args: { groupId: 'mcg_1', name: 'x' } },
-      { op: 'set_angle_look', args: { groupId: 'mcg_1', angleId: 'ang_a', clear: true } },
-      { op: 'place_multicam', args: { groupId: 'mcg_1', at: T.ZERO, angleId: 'ang_a' } },
-      { op: 'switch_angles', args: { groupId: 'mcg_1', cuts: [{ at: T.ZERO, angleId: 'ang_b' }] } },
-      { op: 'detach_from_multicam', args: { clipIds: [s.clipId] } },
-      { op: 'remove_multicam', args: { groupId: 'mcg_1' } },
-      { op: 'attach_multicam_sync', args: { groupId: 'mcg_1', createdAt: '2026-11-18T00:00:00Z', method: 'm', params: {}, pieces: [{ angleId: 'ang_b', pieceIndex: 0, anchors: [], quality: quality('ambiguous') }] } },
-    ];
     const json = JSON.stringify(d);
-    for (const call of calls) {
-      const e = refusal(() => tx(d, [call], true));
-      expect(e.code, call.op).toBe('unknown_op');
-      expect(e.message).toBe(MULTICAM_REFUSALS.notBuilt.message(call.op));
-      expect(e.hint).toBe(MULTICAM_REFUSALS.notBuilt.hint);
-    }
-    expect(refusal(() => tx(d, [calls[8]!])).code).toBe('forbidden_op');
+    const attach: OpCall = { op: 'attach_multicam_sync', args: { groupId: 'mcg_1', createdAt: '2026-11-18T00:00:00Z', method: 'm', params: {}, pieces: [{ angleId: 'ang_b', pieceIndex: 0, anchors: [], quality: quality('ambiguous') }] } };
+    expect(refusal(() => tx(d, [attach])).code).toBe('forbidden_op');
+    expect(tx(d, [attach], true).doc.multicam!.mcg_1!.angles[2]!.pieces[0]!.quality.verdict).toBe('ambiguous');
+    expect(refusal(() => tx(d, [{ op: 'set_multicam_sync', args: { groupId: 'mcg_1', angleId: 'ang_mic', pieceIndex: 0, offset: T.rt(1, 1) } }])).message).toBe(MULTICAM_REFUSALS.referenceFixed.message());
     expect(JSON.stringify(d)).toBe(json);
   });
 });
@@ -243,16 +229,19 @@ describe('small fixed parts', () => {
     expect(MulticamOpArgs.create_multicam.shape.referenceAngleIndex.description).toMatch(/^default: the first sound angle, else 0/);
     expect(MulticamOpArgs.place_multicam.shape.sound.description).toMatch(/default the first sound angle, else the reference$/);
   });
-  it('the auto-switch recipe is in place and refuses honestly until W2 builds its planner', () => {
+  it('the auto-switch recipe is in place, and its planner refuses honestly for what it lacks: speakers, a program, the level envelopes', () => {
     expect(isInPlaceRecipe('multicam-auto')).toBe(true);
     expect(isInPlaceRecipe('beat-montage')).toBe(false);
     const s = setup();
-    try { planRecipe(withGroup(s.doc, s.group), 'multicam-auto', { groupId: 'mcg_1' }); throw new Error('planned'); } catch (e) { expect(e).toBeInstanceOf(RecipeError); expect((e as RecipeError).code).toBe('not_built'); }
+    const refusedBy = (doc: ProjectDocument, ctx = {}): RecipeError => { try { planRecipe(doc, 'multicam-auto', { groupId: 'mcg_1' }, ctx); } catch (e) { if (e instanceof RecipeError) return e; throw e; } throw new Error('planned'); };
+    const noSpeakers = refusedBy(withGroup(s.doc, { ...s.group, speakers: [] }));
+    expect([noSpeakers.code, noSpeakers.message]).toEqual(['invalid_args', 'the group has no speakers mapped to mics']);
+    // the clip of camera A is not a segment of the group, so there is no program to cut
+    const noProgram = refusedBy(withGroup(s.doc, s.group));
+    expect([noProgram.code, noProgram.message]).toEqual(['nothing_to_do', 'multicam group mcg_1 has no program on a picture track yet']);
+    // a program, but the mic's level envelope is not supplied: needs_analysis (the server builds it on demand), never a guess
+    const noLevels = refusedBy(tagged(withGroup(s.doc, s.group), s.clipId));
+    expect(noLevels.code).toBe('needs_analysis');
+    expect(noLevels.message).toBe(`the level envelope of file ${s.MIC} (mic of "מארחת") is not loaded`);
   });
-});
-
-describe('W1 bodies (multicam.ts, multicamOps.ts)', () => {
-  it.todo('maps, remap, coverage, planPicture/planSound, lookOfClip, multiviewDocument: multicam.test.ts');
-  it.todo('the nine operation bodies, their refusals and outputs: multicamOps.test.ts');
-  it.todo('validation: the pieces of one angle do not overlap in group time (multicamValidate.ts, needs pieceCoverage)');
 });

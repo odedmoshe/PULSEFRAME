@@ -3,7 +3,9 @@
  * (replace what the last run created and nobody touched; keep what was edited by hand).
  */
 import * as T from '@pulseframe/time';
-import { FAMILY_FILM_RECIPE_ID, FAMILY_FILM_RUN_RECIPE_ID, timeOriginSeconds, findClip, fingerprint, planRecipe, RecipeError, type PlanContext, type RecipePlan, type TimeRange } from '@pulseframe/core';
+import { FAMILY_FILM_RECIPE_ID, FAMILY_FILM_RUN_RECIPE_ID, timeOriginSeconds, findClip, fingerprint, isInPlaceRecipe, MULTICAM_AUTO_RECIPE_ID, multicamGroupOf, planRecipe, RecipeError, type LevelEnvelope, type PlanContext, type RecipePlan, type TimeRange } from '@pulseframe/core';
+import { envelopeOf } from './envelope.ts';
+import { multicamDerivatives } from './multicamSync.ts';
 import { applyFamilyFilmFor, planFamilyFilmFor, regenerateFamilyFilmFor } from './familyFilm.ts';
 import { own } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
@@ -24,6 +26,18 @@ async function context(store: Store, projectId: string, recipeId: string, params
   if (recipeId === 'tidy-speech' && typeof params?.assetId === 'string') {
     const asset = own(store.getProject(projectId).doc.assets, params.assetId);
     if (asset?.audio) ctx.silences = { [params.assetId]: await heavy(() => detectSilences(store.blobPath(asset.contentHash), { thresholdDb: -35, minSeconds: 0.5 }, timeOriginSeconds(asset))) };
+  }
+  // multicam auto-switch (ADR-0020): the level envelopes of the speakers' mic files, built under heavy() where missing
+  if (recipeId === MULTICAM_AUTO_RECIPE_ID && typeof params?.groupId === 'string') {
+    const doc = store.getProject(projectId).doc;
+    const group = multicamGroupOf(doc, params.groupId);
+    const levels: Record<string, LevelEnvelope> = {};
+    for (const s of group?.speakers ?? []) for (const piece of group!.angles.find((a) => a.id === s.micAngleId)?.pieces ?? []) {
+      const asset = Object.hasOwn(doc.assets, piece.assetId) ? doc.assets[piece.assetId] : undefined;
+      if (!piece.anchors.length || !asset?.audio || levels[piece.assetId]) continue;
+      levels[piece.assetId] = await envelopeOf(store, multicamDerivatives(), asset);
+    }
+    ctx.multicamLevels = levels;
   }
   return ctx;
 }
@@ -64,7 +78,10 @@ export async function regenerateRecipe(store: Store, gov: Governance, principal:
   // so the answer does not depend on history: an undo that restores a hand edit restores its protection too).
   const live = run.createdIds.filter((id) => !!findClip(p.doc, id));
   const protectedIds = live.filter((id) => fingerprint(findClip(p.doc, id)!.clip) !== run.fingerprints?.[id]);
-  const removable = live.filter((id) => !protectedIds.includes(id));
+  // A recipe regenerated IN PLACE (multicam auto-switch, ADR-0020) re-cuts the segments where they are: nothing is removed,
+  // it plans on the current document around the protected ranges, and the hand-edited segments are kept (keepIds).
+  const inPlace = isInPlaceRecipe(run.recipeId);
+  const removable = inPlace ? [] : live.filter((id) => !protectedIds.includes(id));
   const protectedRanges = protectedIds.map((id) => { const c = findClip(p.doc, id)!.clip; return { start: c.start, end: T.add(c.start, c.duration) }; });
   // Plan against the document as it will be once the untouched clips are gone.
   const without = structuredClone(p.doc);

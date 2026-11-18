@@ -25,7 +25,7 @@
   --pf-on-plate:#EDEFF3; --pf-on-plate-pulse:#FFC54D;   /* foregrounds on --pf-plate / over images: same in both themes, because the plate is black in both */
   --pf-v1-tint:#16302C;                     /* main-track lane tint */
   /* mode tints, equal OKLCH lightness ~0.84; used only on the active pill underline/icon and the playhead cap */
-  --pf-m-edit:#45E6D0; --pf-m-look:#FFA88A; --pf-m-sound:#7EE08A; --pf-m-captions:#C9A8FF; --pf-m-deliver:#73C9FF;
+  --pf-m-edit:#45E6D0; --pf-m-look:#FFA88A; --pf-m-sound:#7EE08A; --pf-m-captions:#C9A8FF; --pf-m-deliver:#73C9FF; --pf-m-perform:#FF9CC8;
   /* elevation */
   --pf-e1:0 0 0 1px var(--pf-line),0 10px 30px -18px rgba(0,0,0,.8);
   --pf-e2:0 0 0 1px var(--pf-line-strong),0 14px 36px -10px rgba(0,0,0,.7);
@@ -50,7 +50,7 @@
   --pf-k-video:#5B6B82; --pf-k-overlay:#3256B0; --pf-k-text:#A42C70; --pf-k-caption:#8A2F62;
   --pf-k-voice:#16693B; --pf-k-music:#8C5300; --pf-k-sfx:#145F8F; --pf-k-adjust:#6B7280;
   --pf-v1-tint:#DDF1EC;
-  --pf-m-edit:#06705F; --pf-m-look:#A0441F; --pf-m-sound:#246A2E; --pf-m-captions:#7346C4; --pf-m-deliver:#1867A8;
+  --pf-m-edit:#06705F; --pf-m-look:#A0441F; --pf-m-sound:#246A2E; --pf-m-captions:#7346C4; --pf-m-deliver:#1867A8; --pf-m-perform:#A3245E;
   --pf-e1:0 0 0 1px var(--pf-line),0 1px 2px rgba(16,22,34,.06);
   --pf-e2:0 0 0 1px var(--pf-line-strong),0 10px 28px -10px rgba(16,22,34,.22);
   --pf-e3:0 0 0 1px var(--pf-line-strong),0 30px 70px -20px rgba(16,22,34,.35);
@@ -74,7 +74,7 @@
   --pf-ok:#62DB98; --pf-attention:#FF9F5A; --pf-info:#73C9FF; --pf-neutral:#AEB4BF;
   --pf-danger:#FF6B81; --pf-danger-soft:rgba(255,107,129,.12); --pf-danger-fill:#B83039; --pf-on-danger:#FFFFFF;
   --pf-focus:#86F3E3;
-  --pf-m-edit:#45E6D0; --pf-m-look:#FFA88A; --pf-m-sound:#7EE08A; --pf-m-captions:#C9A8FF; --pf-m-deliver:#73C9FF;
+  --pf-m-edit:#45E6D0; --pf-m-look:#FFA88A; --pf-m-sound:#7EE08A; --pf-m-captions:#C9A8FF; --pf-m-deliver:#73C9FF; --pf-m-perform:#FF9CC8;
   --pf-e1:0 0 0 1px var(--pf-line),0 10px 30px -18px rgba(0,0,0,.8);
   --pf-e2:0 0 0 1px var(--pf-line-strong),0 14px 36px -10px rgba(0,0,0,.7);
   --pf-e3:0 0 0 1px var(--pf-line-strong),0 40px 90px -20px rgba(0,0,0,.85);

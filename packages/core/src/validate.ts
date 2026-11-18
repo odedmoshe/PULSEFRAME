@@ -8,16 +8,16 @@ import { lifeIssues } from './fields.ts';
 import { isInheritedName, own } from './own.ts';
 import { MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, TRACK_STATES } from './tracking.ts';
 import { momentsProblem } from './momentsContract.ts';
-import { isV1Easing, type Keyframe } from './keyframe.ts';
-import { CURVES_BUILT } from './curves.ts';
+import { type Keyframe } from './keyframe.ts';
+import { turnsBack } from './curves.ts';
 
 /**
- * PLACEHOLDER of the ADR-0019 contracts commit, until curves.ts CURVES_BUILT: a key with a curve of ADR-0019 or with handles is
- * not renderable in this build. These fields are new, so this can only fire on documents that use them. W1 replaces it with
- * the rules 'keyframe_curve' (bezier present exactly when easing is 'bezier') and 'keyframe_curve_flash' (no turn-back curve
- * on a light channel: keyframeChannels.ts isLightChannel).
+ * Keyframe curves (ADR-0019). Both rules can fire only on documents that use the new fields (`bezier`, the new easings).
+ * - 'keyframe_curve': `bezier` is present exactly when easing is 'bezier'.
+ * - 'keyframe_curve_flash': no curve that turns back on a light channel: opacity (an adjustment's too) and every effect
+ *   parameter that may not follow the beat (keyframeChannels.ts isLightChannel; effects.ts modulatableParams).
  */
-const unbuiltCurve = (k: Keyframe) => !CURVES_BUILT && (!isV1Easing(k.easing) || k.bezier !== undefined);
+const curveMismatch = (k: Keyframe) => (k.easing === 'bezier') !== (k.bezier !== undefined);
 import { multicamIssues } from './multicamValidate.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
@@ -160,7 +160,8 @@ export function validateProject(doc: ProjectDocument): Issue[] {
             if (i > 0 && !T.lt(keys[i - 1]!.time, k.time)) issues.push({ code: 'unsorted_keyframes', message: `clip ${c.id} ${prop} keyframes are not strictly increasing in time`, ids: [c.id] });
             if (!T.isFrameAligned(k.time, rate)) issues.push({ code: 'not_frame_aligned', message: `clip ${c.id} ${prop} keyframe is not on a frame boundary`, ids: [c.id] });
             if (!TransformSchema.shape[prop].safeParse(k.value).success) issues.push({ code: 'keyframe_out_of_range', message: `clip ${c.id} ${prop} keyframe value ${k.value} is out of range`, ids: [c.id] });
-            if (unbuiltCurve(k)) issues.push({ code: 'keyframe_curve', message: `clip ${c.id} ${prop} keyframe uses the curve "${k.easing}", which this build cannot draw yet`, ids: [c.id] });
+            if (curveMismatch(k)) issues.push({ code: 'keyframe_curve', message: `clip ${c.id} ${prop} keyframe has the curve "${k.easing}" ${k.bezier ? 'with' : 'without'} handles: handles go exactly with "bezier"`, ids: [c.id] });
+            if (prop === 'opacity' && turnsBack(k.easing, k.bezier)) issues.push({ code: 'keyframe_curve_flash', message: `clip ${c.id} opacity keyframe has the curve "${k.easing}", which turns back: a change of brightness that turns back is a flash`, ids: [c.id] });
           });
         }
         const seenFx = new Set<string>();
@@ -177,8 +178,12 @@ export function validateProject(doc: ProjectDocument): Issue[] {
             if (d && NOT_ANIMATABLE[fx.type]?.includes(param)) continue;
             const ok = !!d && animatableParams(fx.type).includes(param) && keys.every((k, i) => (i === 0 || T.lt(keys[i - 1]!.time, k.time)) && T.isFrameAligned(k.time, rate) && d.params.safeParse({ ...fx.params, [param]: k.value }).success);
             if (!ok) issues.push({ code: 'effect_keyframes', message: `clip ${c.id} effect ${fx.type}: keyframes of "${param}" are not animatable, out of range, unsorted or off the frame grid`, ids: [c.id] });
-            const odd = keys.find(unbuiltCurve);
-            if (odd) issues.push({ code: 'keyframe_curve', message: `clip ${c.id} effect ${fx.type}: a keyframe of "${param}" uses the curve "${odd.easing}", which this build cannot draw yet`, ids: [c.id] });
+            const odd = keys.find(curveMismatch);
+            if (odd) issues.push({ code: 'keyframe_curve', message: `clip ${c.id} effect ${fx.type}: a keyframe of "${param}" has the curve "${odd.easing}" ${odd.bezier ? 'with' : 'without'} handles: handles go exactly with "bezier"`, ids: [c.id] });
+            // only for a known effect: an unknown type already gets unknown_effect, and its name must not reach the
+            // plain-object tables of effects.ts (a type named "constructor" or "__proto__" would read Object.prototype)
+            const back = !!d && !modulatableParams(fx.type).includes(param) && keys.find((k) => turnsBack(k.easing, k.bezier));
+            if (back) issues.push({ code: 'keyframe_curve_flash', message: `clip ${c.id} effect ${fx.type}: a keyframe of "${param}" has the curve "${back.easing}", which turns back on a parameter that cannot follow the beat (a flash)`, ids: [c.id] });
           }
           // Time effects and beat modulators are new fields: these rules can only fire on documents that use them, so an
           // older project stays editable (see the note on NOT_ANIMATABLE keys above).

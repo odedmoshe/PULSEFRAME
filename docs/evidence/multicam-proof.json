@@ -1,0 +1,394 @@
+{
+  "proof": "multicam",
+  "adr": "ADR-0020",
+  "status": "fail",
+  "generatedAt": "2026-11-18T22:51:41.101Z",
+  "machine": {
+    "platform": "linux",
+    "cpus": 4,
+    "node": "v22.23.4"
+  },
+  "note": "CPU only, no model; synthetic speech built from the narration sample; thresholds tuned on synthetic speech only; the sound-chunk joins were NOT listened to; one run on one machine.",
+  "checks": [
+    {
+      "id": "M1",
+      "name": "Camera 1: offset to the sample (in the request, as a job, committed)",
+      "value": {
+        "truth": -30000,
+        "inRequest": -30000,
+        "job": -30000,
+        "committed": -30000
+      },
+      "budget": "≤ 1 sample",
+      "pass": true
+    },
+    {
+      "id": "M1",
+      "name": "Camera 2: offset to the sample (in the request, as a job, committed)",
+      "value": {
+        "truth": 57321,
+        "inRequest": 57321,
+        "job": 57321,
+        "committed": 57321
+      },
+      "budget": "≤ 1 sample",
+      "pass": true
+    },
+    {
+      "id": "M2",
+      "name": "drift of camera 3",
+      "value": [
+        100.07,
+        99.86
+      ],
+      "budget": "|ppm − 100| ≤ 2 on both files",
+      "pass": true
+    },
+    {
+      "id": "M2",
+      "name": "map error at 10 probes per file",
+      "value": {
+        "maxSamples": 0.24
+      },
+      "budget": "≤ 2 samples",
+      "pass": true
+    },
+    {
+      "id": "M2",
+      "name": "the second file after the card change is placed",
+      "value": [
+        [
+          "confident",
+          0
+        ],
+        [
+          "confident",
+          0
+        ]
+      ],
+      "budget": "placed",
+      "pass": true
+    },
+    {
+      "id": "M7",
+      "name": "Camera 4 (loop only)",
+      "value": {
+        "verdict": "ambiguous",
+        "anchors": 0,
+        "jobNames": "Camera 4 (loop only)"
+      },
+      "budget": "ambiguous, 0 anchors, named in the job output",
+      "pass": true
+    },
+    {
+      "id": "M7",
+      "name": "Camera 5 (noise only)",
+      "value": {
+        "verdict": "no-shared-sound",
+        "anchors": 0,
+        "jobNames": "Camera 5 (noise only)"
+      },
+      "budget": "no-shared-sound, 0 anchors, named in the job output",
+      "pass": true
+    },
+    {
+      "id": "M7",
+      "name": "Camera 6 (paused inside)",
+      "value": {
+        "verdict": "inconsistent",
+        "anchors": 0,
+        "jobNames": "Camera 6 (paused inside)"
+      },
+      "budget": "inconsistent, 0 anchors, named in the job output",
+      "pass": true
+    },
+    {
+      "id": "M4",
+      "name": "barcode at every cut ±2 frames: planned angle and exact group frame",
+      "value": {
+        "checked": 394,
+        "mismatches": 0,
+        "offByOneAgainstProgramGroupTime": 298,
+        "plannedCuts": 60,
+        "samples": []
+      },
+      "budget": "0 mismatches",
+      "pass": true
+    },
+    {
+      "id": "M4",
+      "name": "exported sound against the recorder (avsync method)",
+      "value": {
+        "windows": 20,
+        "noSoundedWindow": 0,
+        "lags": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "budget": "lag 0 ± 1 sample at ≥ 15 windows with sound",
+      "pass": true
+    },
+    {
+      "id": "M4",
+      "name": "sound chunks of the drifting camera against the recorder",
+      "value": {
+        "chunks": 27,
+        "windows": 20,
+        "noSoundedWindow": 0,
+        "lagsSamples": [
+          22,
+          22,
+          12,
+          16,
+          20,
+          1,
+          13,
+          15,
+          23,
+          7,
+          9,
+          17,
+          16,
+          22,
+          20,
+          32,
+          24,
+          1,
+          9,
+          14
+        ],
+        "g0Samples": 24000,
+        "pictureGroupTimeAtZero": 0.5,
+        "listened": "NOT done"
+      },
+      "budget": "± 1 ms (48 samples) at ≥ 15 windows with sound",
+      "pass": true
+    },
+    {
+      "id": "M8",
+      "name": "document bytes, commit p95, GET project p95 at 1000 segments (recorded)",
+      "value": {
+        "segments": 1001,
+        "documentBytes": 412272,
+        "commitP95Ms": 40.91,
+        "getProjectP95Ms": 15.65
+      },
+      "budget": "recorded",
+      "pass": true
+    },
+    {
+      "id": "M5",
+      "name": "undo of a 1000-cut switch gives an equal creativeProjection",
+      "value": {
+        "switchMs": 73.42,
+        "undoMs": 84.17
+      },
+      "budget": "equal",
+      "pass": true
+    },
+    {
+      "id": "M6",
+      "name": "the heuristic label is the first step",
+      "value": "Heuristic: the clearly loudest mic decides the shot; this is not speaker identification",
+      "budget": "Heuristic: the clearly loudest mic decides the shot; this is not speaker identification",
+      "pass": true
+    },
+    {
+      "id": "M6",
+      "name": "active speaker shown on single-speaker speech",
+      "value": {
+        "share": 0.93,
+        "frames": 1505
+      },
+      "budget": "≥ 90 %",
+      "pass": true
+    },
+    {
+      "id": "M6",
+      "name": "wide shown on overlaps of ≥ 1 s",
+      "value": {
+        "share": 0.5,
+        "frames": 185
+      },
+      "budget": "≥ 80 %",
+      "pass": false
+    },
+    {
+      "id": "M6",
+      "name": "no shot shorter than minShot (2 s), the last excepted where the program ends",
+      "value": {
+        "shortest": 2
+      },
+      "budget": "0 shots < 2 s",
+      "pass": true
+    },
+    {
+      "id": "M6",
+      "name": "planning time for a 60-minute program (recorded)",
+      "value": {
+        "ms": 371.89,
+        "ops": 1
+      },
+      "budget": "recorded",
+      "pass": true
+    },
+    {
+      "id": "M3",
+      "name": "envelope + sync of 3 × 10 min on this CPU (a miss is reported)",
+      "value": {
+        "wallSeconds": 12.59,
+        "timingsMs": {
+          "envelope": 5404,
+          "coarse": 408,
+          "fine": 6700
+        },
+        "verdicts": [
+          "reference",
+          "confident",
+          "confident"
+        ]
+      },
+      "budget": "≤ 60 s",
+      "pass": true
+    }
+  ],
+  "blocked": [],
+  "measurements": {
+    "fixtures": {
+      "mainSeconds": 150,
+      "dialogueSeconds": 120,
+      "angles": [
+        {
+          "label": "Recorder",
+          "files": 1,
+          "expect": "reference"
+        },
+        {
+          "label": "Camera 1",
+          "files": 1,
+          "expect": "confident"
+        },
+        {
+          "label": "Camera 2",
+          "files": 1,
+          "expect": "confident"
+        },
+        {
+          "label": "Camera 3",
+          "files": 2,
+          "expect": "confident"
+        },
+        {
+          "label": "Camera 4 (loop only)",
+          "files": 1,
+          "expect": "ambiguous"
+        },
+        {
+          "label": "Camera 5 (noise only)",
+          "files": 1,
+          "expect": "no-shared-sound"
+        },
+        {
+          "label": "Camera 6 (paused inside)",
+          "files": 1,
+          "expect": "inconsistent"
+        }
+      ],
+      "turns": 21,
+      "generateSeconds": 40.48
+    },
+    "dryRunTimingsMs": {
+      "envelope": 3204,
+      "coarse": 336,
+      "fine": 5491
+    },
+    "m4": {
+      "segments": 81,
+      "frames": 3710
+    },
+    "soundChunks": {
+      "chunks": 27,
+      "maxSoundErrorSeconds": 0.000499885,
+      "listened": false
+    },
+    "m8": {
+      "segments": 1001,
+      "documentBytes": 412272,
+      "commitP95Ms": 40.91,
+      "getProjectP95Ms": 15.65
+    },
+    "m5": {
+      "switchMs": 73.42,
+      "undoMs": 84.17,
+      "segments": 1001
+    },
+    "dialogueSync": [
+      [
+        "reference",
+        0
+      ],
+      [
+        "confident",
+        -0.625
+      ],
+      [
+        "confident",
+        1.194187
+      ],
+      [
+        "confident",
+        0.5
+      ],
+      [
+        "check",
+        61.706125
+      ]
+    ],
+    "m6": {
+      "singleFrames": 1505,
+      "bothFrames": 185,
+      "shots": 24,
+      "shortestShot": 2,
+      "segments": 25,
+      "planning60minMs": 371.89,
+      "planning60minOps": 1
+    },
+    "m3": {
+      "threeTimesTenMinutes": {
+        "wallSeconds": 12.59,
+        "timingsMs": {
+          "envelope": 5404,
+          "coarse": 408,
+          "fine": 6700
+        },
+        "verdicts": [
+          "reference",
+          "confident",
+          "confident"
+        ]
+      },
+      "cpus": 4,
+      "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+      "sixtyMinutes": "not run (PF_MULTICAM_LONG=0)"
+    }
+  }
+}

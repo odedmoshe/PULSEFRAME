@@ -1,7 +1,7 @@
 /**
  * The contract of keyframe curves (ADR-0019; keyframe.ts): one keyframe definition shared by transform and effect keys, the
  * curve library, the channel references, the argument schemas of the keyframe operations and their registry rows. The bodies
- * are the workers'; what they must make true is listed as todo here and in their own test files.
+ * are the workers' (W1 built them: the last three checks below; the full coverage is keyframeOps.test.ts).
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
@@ -12,6 +12,7 @@ import {
   KeyframeSchema, MAX_EFFECT_KEYS, MAX_TRANSFORM_KEYS, NAMED_BEZIER, RationalTimeSchema, ReplaceEffectKeyframesArgsSchema, SequenceOpArgs, SetKeyframeCurveArgsSchema, TRANSFORM_RANGE,
   TransformSchema, TURN_BACK_EASINGS, V1_EASINGS,
 } from './index.ts';
+import { applyTransaction, createProject, findClip, OpError, validateProject, type OpCall, type ProjectDocument } from './index.ts';
 
 const t = (n: number) => T.frameTime(n, { num: 30, den: 1 });
 
@@ -105,7 +106,41 @@ describe('channels and the keyframe operations', () => {
     for (const [k, r] of Object.entries(KEYFRAME_REFUSALS)) { expect(r.code, k).toBeTruthy(); expect(typeof r.message, k).toBe('function'); }
     expect(KEYFRAME_REFUSALS.notBuilt.message('set_keyframe_curve')).toBe('set_keyframe_curve is not built yet');
   });
-  it.todo('W1: set_keyframe / set_effect_keyframe keep easing and handles when easing is left out, refuse bezier/easing mismatches and turn-back curves on light channels, insert into a non-v1 segment with splitSegment (output.split)');
-  it.todo('W1: replace_clip_keyframes range form keeps keys outside [from, to] (also before the clip start) and copies handles; replace_effect_keyframes and set_keyframe_curve with every refusal of KEYFRAME_REFUSALS provoked once; exact undo');
-  it.todo('W1: validate.ts keyframe_curve (bezier iff easing bezier) and keyframe_curve_flash (no turn-back curve on opacity, adjustment opacity or a non-modulatable effect parameter)');
+  // W1 (ADR-0019): the bodies are built; keyframeOps.test.ts, curves.test.ts and animation.test.ts hold the full coverage
+  const run = (doc: ProjectDocument, ops: OpCall[]) => applyTransaction(doc, ops, { idSeed: `kc${n++}_`, actor: 't' });
+  let n = 0;
+  const title = () => { const r = run(createProject({ id: 'p', name: 'p' }), [{ op: 'add_text', args: { text: 'א', start: t(0), duration: t(60) } }]); return { doc: r.doc, clipId: r.results[0]!.output!.clipId as string }; };
+  const code = (fn: () => unknown) => { try { fn(); } catch (e) { return e instanceof OpError ? e.code : String(e); } return 'ok'; };
+  it('W1: set_keyframe keeps easing and handles when easing is left out, refuses bezier/easing mismatches and turn-back curves on light channels, inserts into a non-v1 segment with splitSegment (output.split)', () => {
+    const { doc, clipId } = title();
+    let d = run(doc, [{ op: 'set_keyframe', args: { clipId, property: 'x', time: t(0), value: 0, easing: 'bezier', bezier: [0.2, 0, 0.6, 1] } }, { op: 'set_keyframe', args: { clipId, property: 'x', time: t(30), value: 0.5 } }]).doc;
+    d = run(d, [{ op: 'set_keyframe', args: { clipId, property: 'x', time: t(0), value: 0.1 } }]).doc;
+    expect(findClip(d, clipId)!.clip.keyframes!.x![0]).toEqual({ time: t(0), value: 0.1, easing: 'bezier', bezier: [0.2, 0, 0.6, 1] });
+    expect(code(() => run(d, [{ op: 'set_keyframe', args: { clipId, property: 'x', time: t(0), value: 0, easing: 'linear', bezier: [0, 0, 1, 1] } }]))).toBe('invalid_args');
+    expect(code(() => run(d, [{ op: 'set_keyframe', args: { clipId, property: 'opacity', time: t(0), value: 0, easing: 'spring' } }]))).toBe('invalid_args');
+    expect(run(d, [{ op: 'set_keyframe', args: { clipId, property: 'x', time: t(10), value: 0.2 } }]).results[0]!.output!.split).toBe('exact');
+  });
+  it('W1: replace_clip_keyframes range form keeps keys outside [from, to] and copies handles; replace_effect_keyframes and set_keyframe_curve are built', () => {
+    const { doc, clipId } = title();
+    const d = run(doc, [{ op: 'replace_clip_keyframes', args: { clipId, property: 'y', keys: [{ time: t(0), value: 0, easing: 'linear' }, { time: t(20), value: 0.2, easing: 'linear' }] } },
+      { op: 'replace_clip_keyframes', args: { clipId, property: 'y', from: t(10), to: t(30), keys: [{ time: t(15), value: 0.3, easing: 'bezier', bezier: [0.1, 0.2, 0.3, 0.4] }] } },
+      { op: 'set_keyframe_curve', args: { clipId, channels: [{ property: 'y' }], times: [t(0)], side: 'after', easing: 'smooth' } }]).doc;
+    expect(findClip(d, clipId)!.clip.keyframes!.y).toEqual([{ time: t(0), value: 0, easing: 'smooth' }, { time: t(15), value: 0.3, easing: 'bezier', bezier: [0.1, 0.2, 0.3, 0.4] }]);
+    expect(code(() => run(d, [{ op: 'replace_effect_keyframes', args: { clipId, effectId: 'fx_none', param: 'radius', keys: null } }]))).toBe('not_found');
+  });
+  it('W1: validate.ts keyframe_curve (bezier iff easing bezier) and keyframe_curve_flash (no turn-back curve on opacity)', () => {
+    const { doc, clipId } = title();
+    const bad = structuredClone(doc);
+    findClip(bad, clipId)!.clip.keyframes = { x: [{ time: t(0), value: 0, easing: 'bezier' }], opacity: [{ time: t(0), value: 0, easing: 'bounce' }, { time: t(9), value: 1, easing: 'linear' }] };
+    expect(validateProject(bad).map((i) => i.code).sort()).toEqual(['keyframe_curve', 'keyframe_curve_flash']);
+  });
+  it('W1: an unknown effect type named after an Object.prototype member gets the honest issues, not a TypeError', () => {
+    // validateProject runs on imported archives (apps/server archive.ts): a crafted type must yield the typed refusal
+    const { doc, clipId } = title();
+    for (const type of ['nonexistent.fx', 'constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      const bad = structuredClone(doc);
+      findClip(bad, clipId)!.clip.effects = [{ id: 'e1', type, enabled: true, params: {}, keyframes: { a: [{ time: t(0), value: 1, easing: 'bounce' }] } }] as never;
+      expect(validateProject(bad).map((i) => i.code).sort(), type).toEqual(['effect_keyframes', 'unknown_effect']);
+    }
+  });
 });

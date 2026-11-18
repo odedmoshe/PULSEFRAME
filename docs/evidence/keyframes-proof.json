@@ -1,0 +1,481 @@
+{
+  "proof": "keyframes",
+  "adr": "ADR-0019",
+  "ranAt": "2026-11-18T22:58:57.411Z",
+  "result": "FAILED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v595 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "logicalCpus": 4,
+    "node": "v22.23.4"
+  },
+  "scope": "Keyframe curves and motion paths, wave 1: the curve picker, the keyframe strip and the motion path in headless Chromium, REST and MCP refusals, stills (render_frame) and an mp4 export decoded with ffmpeg, against closed forms written out in this proof. Synthetic titles and a synthetic white square only; nobody looked at the pictures.",
+  "passed": 14,
+  "total": 15,
+  "missing": [],
+  "overBudget": [],
+  "recordedNotGated": [
+    "replace_clip_keyframes commit p95: 2000 keys minus 1 key (ms)"
+  ],
+  "measurements": {
+    "sampler ns/sample (Chromium)": {
+      "value": 1473,
+      "budget": "≤ 2000 ns",
+      "ok": true,
+      "gated": true
+    },
+    "sampler ns/sample (Node)": {
+      "value": 1809.8,
+      "budget": "≤ 2000 ns",
+      "ok": true,
+      "gated": true
+    },
+    "pathPoints ms for 600 points (Chromium, median of 15)": {
+      "value": 1.8,
+      "budget": "≤ 16 ms",
+      "ok": true,
+      "gated": true,
+      "detail": {
+        "points": 600
+      }
+    },
+    "pathPoints ms for 600 points (Node, median of 15)": {
+      "value": 3.171,
+      "budget": "≤ 16 ms",
+      "ok": true,
+      "gated": true,
+      "detail": {
+        "points": 600
+      }
+    },
+    "replace_clip_keyframes commit p95: 2000 keys minus 1 key (ms)": {
+      "value": 195.05,
+      "budget": "≤ +15 ms",
+      "ok": false,
+      "gated": false,
+      "detail": {
+        "p95_1key": 36.25,
+        "p95_2000keys": 231.3,
+        "documentBytes": 153647,
+        "finding": "per-commit cost over the whole document (parse + migrate, applyTransaction, structuredClone, entity diff, SQLite write), growing with document size; not keyframe-specific (CPU profile of Store.commit with 2000 keys)",
+        "label": "recorded, not gated"
+      }
+    }
+  },
+  "checks": [
+    {
+      "id": "P1",
+      "name": "the keyboard-only picker sets Overshoot on x in one revision; frames 0..30 within 1e-12 of the Cardano closed form",
+      "ok": true,
+      "detail": {
+        "revisions": 1,
+        "easing": "overshoot",
+        "maxError": 3.164135620181696e-15
+      }
+    },
+    {
+      "id": "P2",
+      "name": "the custom curve typed into the four inputs is stored exactly and renders within 1e-12 of the closed form",
+      "ok": true,
+      "detail": {
+        "stored": {
+          "time": {
+            "value": "0",
+            "timescale": 1
+          },
+          "value": -0.3,
+          "easing": "bezier",
+          "bezier": [
+            0.2,
+            -0.3,
+            0.6,
+            1.4
+          ]
+        },
+        "maxError": 1.3877787807814457e-15
+      }
+    },
+    {
+      "id": "P3",
+      "name": "S then L on the middle key (keyframe strip and path vertex) set the curve on both sides of it, one revision each; after S the slope is continuous at the key (≤ 1e-4 relative)",
+      "ok": true,
+      "detail": {
+        "strip": {
+          "afterS": [
+            [
+              0,
+              "smooth"
+            ],
+            [
+              15,
+              "smooth"
+            ],
+            [
+              30,
+              "linear"
+            ]
+          ],
+          "slope": {
+            "left": 0.3000001040003031,
+            "right": 0.3000000399998315,
+            "relative": 2.1333483134055658e-7
+          },
+          "afterL": [
+            [
+              0,
+              "linear"
+            ],
+            [
+              15,
+              "linear"
+            ],
+            [
+              30,
+              "linear"
+            ]
+          ],
+          "revisions": 2,
+          "good": true
+        },
+        "path": {
+          "afterS": [
+            [
+              0,
+              "smooth"
+            ],
+            [
+              15,
+              "smooth"
+            ],
+            [
+              30,
+              "linear"
+            ]
+          ],
+          "slope": {
+            "left": 0.3000001040003031,
+            "right": 0.3000000399998315,
+            "relative": 2.1333483134055658e-7
+          },
+          "afterL": [
+            [
+              0,
+              "linear"
+            ],
+            [
+              15,
+              "linear"
+            ],
+            [
+              30,
+              "linear"
+            ]
+          ],
+          "revisions": 2,
+          "good": true
+        }
+      }
+    },
+    {
+      "id": "P4",
+      "name": "the overlay's points are within 0.5 px of transformAt mapped onto the viewer on every frame, and the layer box centre is on the path at the playhead (he and en; motion-path-he.png, motion-path-en.png)",
+      "ok": true,
+      "detail": {
+        "he": {
+          "points": 60,
+          "maxPx": 0.0006,
+          "boxCentrePx": 0.0139,
+          "vertices": 3
+        },
+        "en": {
+          "points": 60,
+          "maxPx": 0.0006,
+          "boxCentrePx": 0.0139,
+          "vertices": 3
+        }
+      }
+    },
+    {
+      "id": "P5",
+      "name": "a 40 px vertex drag is one revision; Δx = 40 / rect.width ± 1e-4; y (untouched, its key at the vertex off the 1e-4 grid) is unchanged on every frame, and x (keyed by the drag) keeps its static value outside the two segments around the vertex",
+      "ok": true,
+      "detail": {
+        "revisions": 1,
+        "dx": 0.052799999999999986,
+        "want": 0.052770448548812667,
+        "yExact": true,
+        "xOutside": true,
+        "xKeys": [
+          [
+            0,
+            0.1,
+            "linear"
+          ],
+          [
+            15,
+            0.1528,
+            "linear"
+          ],
+          [
+            30,
+            0.1,
+            "linear"
+          ]
+        ],
+        "yKeys": [
+          [
+            0,
+            -0.2,
+            "linear"
+          ],
+          [
+            15,
+            0.0987654321,
+            "linear"
+          ],
+          [
+            30,
+            -0.1,
+            "linear"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "P5",
+      "name": "ArrowRight on the vertex is one revision; Δx = 0.01 ± 1e-4; y (untouched) is still unchanged on every frame, so no op was made for it",
+      "ok": true,
+      "detail": {
+        "revisions": 2,
+        "nx": 0.010000000000000009,
+        "yExact": true,
+        "yKeys": [
+          [
+            0,
+            -0.2,
+            "linear"
+          ],
+          [
+            15,
+            0.0987654321,
+            "linear"
+          ],
+          [
+            30,
+            -0.1,
+            "linear"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "P6",
+      "name": "the bend grip inserts an x+y vertex at the middle frame (20), smooth on both sides, within 1 px of the pointer, in one revision (bend-before.png, bend-after.png)",
+      "ok": true,
+      "detail": {
+        "revisions": 1,
+        "pointerErrorPx": 0.0253,
+        "x": [
+          [
+            0,
+            "smooth"
+          ],
+          [
+            20,
+            "smooth"
+          ],
+          [
+            40,
+            "linear"
+          ]
+        ],
+        "y": [
+          [
+            0,
+            "smooth"
+          ],
+          [
+            20,
+            "smooth"
+          ],
+          [
+            40,
+            "linear"
+          ]
+        ],
+        "note": ""
+      }
+    },
+    {
+      "id": "P7",
+      "name": "keyboard walk: Alt+K focuses the strip, Period/Comma visit the keys, → → ← move the key one frame each in one revision each, Delete removes it; the clip count and clip start are unchanged",
+      "ok": true,
+      "detail": {
+        "focused": "key-strip-key",
+        "afterPeriod": 190,
+        "afterComma": 180,
+        "revisions": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "moved": [
+          1,
+          10,
+          20
+        ],
+        "afterDelete": [
+          10,
+          20
+        ],
+        "clips": [
+          7,
+          7
+        ]
+      }
+    },
+    {
+      "id": "P8",
+      "name": "copied keys (x and y of clip D) paste onto clip E at the playhead offset (+5 frames) with exact values and curves, in one revision",
+      "ok": true,
+      "detail": {
+        "revisions": 1,
+        "x": [
+          [
+            0,
+            0,
+            "linear"
+          ],
+          [
+            5,
+            -0.2,
+            "ease-in"
+          ],
+          [
+            15,
+            0.1,
+            "ease-out"
+          ],
+          [
+            25,
+            0.25,
+            "linear"
+          ]
+        ],
+        "y": [
+          [
+            15,
+            0.05,
+            "linear"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "P9",
+      "name": "in a format view the path is drawn read-only (aria-disabled vertices, the stated reason): a drag, arrow keys, S, Delete and a bend make 0 revisions",
+      "ok": true,
+      "detail": {
+        "revisions": 0,
+        "editable": "false",
+        "reason": 1,
+        "disabled": "true"
+      }
+    },
+    {
+      "id": "P10",
+      "name": "the opacity picker disables the turn-back tiles (overshoot, anticipate, bounce, spring) and leaves the others; REST and MCP refuse Overshoot on opacity with the curve-flash refusal, which has its Hebrew wording",
+      "ok": true,
+      "detail": {
+        "tiles": {
+          "overshoot": "true",
+          "anticipate": "true",
+          "bounce": "true",
+          "spring": "true",
+          "gentle": null,
+          "smooth": null,
+          "sharp": null
+        },
+        "rest": {
+          "status": 422,
+          "code": "invalid_args",
+          "message": "the curve \"overshoot\" goes back and forth past its end value, which is not allowed on opacity: a change of brightness that turns back is a flash"
+        },
+        "mcp": {
+          "isError": true,
+          "message": "the curve \"overshoot\" goes back and forth past its end value, which is not allowed on opacity: a change of brightness that turns back is a flash"
+        },
+        "hebrew": "העקומה ⁦overshoot⁩ חוזרת אחורה מעבר לערך הסיום, וזה אסור על ⁦opacity⁩: שינוי בהירות הלוך ושוב הוא הבהוב. אפשר לבחור עקומה שאינה חוזרת אחורה"
+      }
+    },
+    {
+      "id": "P13",
+      "name": "a clip that follows a motion track shows no path, and says why (keys.path.follower)",
+      "ok": true,
+      "detail": {
+        "drawn": 0,
+        "text": "הקליפ הזה עוקב אחרי מסלול מעקב. המסלול שלו על המסך יוצג בגרסה הבאה, יחד עם מסלול המעקב"
+      }
+    },
+    {
+      "id": "P12",
+      "name": "the curves of ADR-0019 (named, smooth, bounce, spring, custom) sample to the same bits in Chromium and Node, each easing hashed alone (100 000 samples, shutter taps)",
+      "ok": true,
+      "detail": {
+        "differ": [],
+        "wholeSet": {
+          "node": "c20b7fee5bb10a0df00736ae2bf94876a4d9000306e42a04b80ce1820ee501ad",
+          "chromium": "31c201b1c9418a09c6ecf0f7080345a79c72791389b405f7ee1147c2650da9c4"
+        }
+      }
+    },
+    {
+      "id": "P12",
+      "name": "the v1 easings (linear, hold, ease-in, ease-out, ease-in-out) differ between Chromium and Node by at most 1 ulp on every sample (the full sample set); the difference is measured and reported",
+      "ok": false,
+      "detail": {
+        "maxUlp": 16,
+        "differingSamples": 147,
+        "v1Samples": 38464,
+        "ulpHistogram": {
+          "1": 25,
+          "2": 82,
+          "3": 5,
+          "4": 25,
+          "16": 10
+        },
+        "maxAbsoluteDifference": 2.220446049250313e-16,
+        "note": "ulps of the sample: a 1-ulp difference of the easing shape near 1 becomes several ulps of a sample whose value is near 0 (the segment value a + (b − a)·shape)",
+        "easingsThatDiffer": [
+          "ease-out",
+          "ease-in-out"
+        ],
+        "worst": {
+          "sample": 10130,
+          "easing": "ease-out",
+          "node": -0.04467139937173925,
+          "chromium": -0.04467139937173914
+        },
+        "why": "V8 `**` (ease-out, ease-in-out) differs in the last bit between Node 22 and Chromium 153; the v1 arithmetic is kept so old projects sample exactly as before on the host they always rendered on; pixels come from one host (the Chromium renderer) for preview, still and export"
+      }
+    },
+    {
+      "id": "P11",
+      "name": "export of 60 frames 640×360 (x overshoot, y smooth): the white square's centroid on every decoded frame is within 0.5 px of the closed form; render_frame at 5 frames meets the same bound",
+      "ok": true,
+      "detail": {
+        "frames": 60,
+        "maxPx": 0.0945,
+        "worstFrame": 10,
+        "stills": {
+          "0": 0,
+          "12": 0.0122,
+          "25": 0.0189,
+          "40": 0.0277,
+          "59": 0
+        }
+      }
+    }
+  ]
+}

@@ -63,12 +63,18 @@ export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_
  * `genKeyframes(doc)` returns a random call with the curves of ADR-0019: set_keyframe / set_effect_keyframe with every easing and
  * handles, replace_clip_keyframes in both forms, replace_effect_keyframes and set_keyframe_curve, valid most of the time and
  * sometimes refused (handles without 'bezier', a turn-back curve on opacity or a colour parameter, a range turned round, a key
- * outside its range). `gen` draws from these rows too once W1 has built them (KEYFRAME_OPS_BUILT); until then the seeded fuzz
- * runs exactly as before.
+ * outside its range). `gen` draws from these rows too now that W1 has built them (KEYFRAME_OPS_BUILT); createFuzz(seed,
+ * { v1Replay: true }) leaves them out, so the seeded corpus without the new curves runs exactly as before (keyframe-replay.test.ts).
  * `genMulticam(doc)` returns a random call of the eight public multicam operations (ADR-0020). `gen` draws from these rows too
  * once W1 has built them (MULTICAM_OPS_BUILT).
+ * `genTake(doc)` returns a random apply_take call (perform mode, ADR-0025; internal), for perform-fuzz.test.ts; `gen` never draws it.
  */
-export function createFuzz(seed: number) {
+/**
+ * Options of createFuzz. `v1Replay` (ADR-0019): draw no keyframe-curve rows and no multicam rows, so the seeded corpus is the one
+ * recorded before the keyframe curves were built (keyframe-replay.test.ts compares the documents it makes, byte for byte).
+ */
+export interface FuzzOptions { v1Replay?: boolean }
+export function createFuzz(seed: number, opts: FuzzOptions = {}) {
   const rnd = mulberry32(seed);
   const int = (n: number) => Math.floor(rnd() * n);
   const pick = <X,>(xs: readonly X[]): X => xs[int(xs.length)]!;
@@ -248,14 +254,30 @@ export function createFuzz(seed: number) {
     const val = (p: string) => () => (p === 'scale' ? Number((0.5 + rnd() * 1.5).toFixed(4)) : p === 'opacity' ? Number(rnd().toFixed(4)) : p === 'rotation' ? Number((rnd() * 90 - 45).toFixed(2)) : Number((rnd() * 1.6 - 0.8).toFixed(5)));
     const range = () => { const a = int(60), b = a + int(60); return rnd() < 0.08 ? { from: f(b + 1), to: f(a) } : { from: f(a), to: f(b) }; };
     const channel = () => { if (rnd() < 0.6 || !withFx.length) return { property: prop() }; const { fx } = pick(withFx); return { effectId: fx.id, param: param(fx.type) }; };
-    return [
+    /** Channels that hold keys now (transform properties and effect parameters), with their key times. */
+    const keyedChannels = clips.flatMap((c) => [
+      ...Object.entries(c.keyframes ?? {}).filter(([, ks]) => ks?.length).map(([property, ks]) => ({ clipId: c.id, channel: { property } as Record<string, string>, times: ks!.map((x) => x.time) })),
+      ...(c.effects ?? []).flatMap((fx) => Object.entries(fx.keyframes ?? {}).filter(([, ks]) => ks?.length).map(([param, ks]) => ({ clipId: c.id, channel: { effectId: fx.id, param } as Record<string, string>, times: ks.map((x) => x.time) }))),
+    ]);
+    const rows: (() => OpCall)[] = [
       () => ({ op: 'set_keyframe', args: { clipId: clipId(), property: prop(), time: f(int(90)), value: Number((rnd() * 0.8 + 0.1).toFixed(3)), ...(rnd() < 0.85 ? curve() : {}) } }),
       () => { const { clipId: id, fx } = fxPick(); return { op: 'set_effect_keyframe', args: { clipId: id, effectId: fx?.id ?? 'fx_none', param: param(fx?.type), time: f(int(90)), value: Number((rnd() * 4).toFixed(2)), ...(rnd() < 0.85 ? curve() : {}) } }; },
       () => { const p = prop(); return { op: 'replace_clip_keyframes', args: { clipId: clipId(), property: p, keys: keys(int(3), 1 + int(20), val(p)) } }; },
       () => { const p = prop(), r = range(); return { op: 'replace_clip_keyframes', args: { clipId: clipId(), property: p, ...r, keys: rnd() < 0.2 ? null : keys(T.frameIndexAt(r.from, rate) + (rnd() < 0.1 ? -3 : 0), 1 + int(6), val(p)) } }; },
       () => { const { clipId: id, fx } = fxPick(), r = rnd() < 0.5 ? range() : null; return { op: 'replace_effect_keyframes', args: { clipId: id, effectId: fx?.id ?? 'fx_none', param: param(fx?.type), keys: rnd() < 0.15 ? null : keys(r ? T.frameIndexAt(r.from, rate) : int(3), 1 + int(10), () => Number((rnd() * 4).toFixed(2))), ...(r ?? {}), ...(rnd() < 0.2 ? { at: f(int(30)) } : {}) } }; },
-      () => ({ op: 'set_keyframe_curve', args: { clipId: clipId(), channels: Array.from({ length: 1 + int(3) }, channel), times: Array.from({ length: 1 + int(4) }, () => f(int(60))), side: pick(['after', 'before', 'both'] as const), ...curve() } }),
+      () => {
+        // most calls aim at channels that have keys and at times that are keys (else the op answers noKeysAtTimes);
+        // the rest are blind, so the refusals stay exercised too
+        const k = keyedChannels.length && rnd() < 0.8 ? pick(keyedChannels) : null;
+        if (!k) return { op: 'set_keyframe_curve', args: { clipId: clipId(), channels: Array.from({ length: 1 + int(3) }, channel), times: Array.from({ length: 1 + int(4) }, () => f(int(60))), side: pick(['after', 'before', 'both'] as const), ...curve() } };
+        const same = keyedChannels.filter((x) => x.clipId === k.clipId);
+        const chans = [k, ...(rnd() < 0.3 ? [pick(same)] : [])];
+        const times = Array.from({ length: 1 + int(3) }, () => (rnd() < 0.85 ? pick(pick(chans).times) : f(int(60))));
+        return { op: 'set_keyframe_curve', args: { clipId: k.clipId, channels: chans.map((x) => x.channel), times, side: pick(['after', 'before', 'both'] as const), ...curve() } };
+      },
     ];
+    // set_keyframe_curve needs keys to be there first: once some are, it gets a second draw
+    return keyedChannels.length ? [...rows, rows[rows.length - 1]!] : rows;
   };
   const genKeyframes = (doc: ProjectDocument): OpCall => pick(keyframeMenu(doc))();
   /**
@@ -269,30 +291,46 @@ export function createFuzz(seed: number) {
     const g = () => (groups.length && rnd() < 0.9 ? pick(groups) : null);
     const groupId = () => g()?.id ?? 'mcg_none';
     const angleOf = (x: ReturnType<typeof g>, kind?: 'picture' | 'sound') => { const as = (x?.angles ?? []).filter((a) => !kind || a.kind === kind); return as.length && rnd() < 0.9 ? pick(as).id : 'ang_none'; };
+    // W1: most draws name an angle the call can work on (a synced camera to lay or cut to; a file other than the reference to sync), so the
+    // chain create → sync → place → switch is reached within a run; the rest still draw any angle, unknown ids included
+    const placedPicture = (x: ReturnType<typeof g>, p = 0.85) => { const as = (x?.angles ?? []).filter((a) => a.kind === 'picture' && a.pieces.some((pc) => pc.anchors.length)); return as.length && rnd() < p ? pick(as).id : angleOf(x, 'picture'); };
+    const syncable = (x: ReturnType<typeof g>) => { const as = (x?.angles ?? []).filter((a) => a.id !== x?.referenceAngleId); return as.length && rnd() < 0.85 ? pick(as).id : angleOf(x); };
     const sr = 48000;
     const samples = (n: number) => T.rt(n, sr);
     const tagged = Object.values(doc.sequences).flatMap((sq) => sq.tracks.flatMap((t) => t.clips.filter((c) => c.type === 'media' && c.multicam).map((c) => c.id)));
     const late = assetIds[3] ?? vid;
-    return [
+    const taggedPictures = Object.values(doc.sequences).flatMap((sq) => sq.tracks.filter((t) => t.kind === 'video').flatMap((t) => t.clips.flatMap((c) => (c.type === 'media' && c.multicam ? [{ id: c.id, ...c.multicam }] : []))));
+    const programGroups = groups.filter((x) => Object.values(doc.sequences).some((sq) => sq.tracks.some((t) => t.kind === 'video' && t.clips.some((c) => c.type === 'media' && c.multicam?.groupId === x.id))));
+    const rows: (() => OpCall)[] = [
       () => ({ op: 'create_multicam', args: { angles: rnd() < 0.1 ? [{ assetIds: [vid] }, { assetIds: [vid] }] : [{ assetIds: [aud] }, { assetIds: [vid] }, ...(rnd() < 0.6 ? [{ assetIds: [late], ...(rnd() < 0.3 ? { label: 'מצלמה צד' } : {}) }] : []), ...(rnd() < 0.05 ? [{ assetIds: [vid] }] : [])], ...(rnd() < 0.2 ? { referenceAngleIndex: int(3) } : {}), ...(rnd() < 0.3 ? { name: 'פודקאסט' } : {}) } }),
       () => {
         const x = g(); const pieceIndex = rnd() < 0.9 ? 0 : 1 + int(2);
-        const form = int(5);
+        const form = rnd() < 0.4 ? 0 : int(5);
         const a = form === 0 ? { offset: samples(int(sr * 4) - sr) } : form === 1 ? { nudge: rnd() < 0.5 ? T.frameTime(rnd() < 0.5 ? 1 : -1, rate) : T.rt(rnd() < 0.5 ? 1 : -1, 1000) }
           : form === 2 ? { anchors: [{ group: samples(int(sr)), source: T.ZERO }, { group: samples(sr * 6 + int(600) - 300), source: samples(sr * 6) }] } : form === 3 ? { clear: true as const } : { offset: T.rt(1, 96000) };
-        return { op: 'set_multicam_sync', args: { groupId: x?.id ?? 'mcg_none', angleId: angleOf(x), pieceIndex, ...a } };
+        return { op: 'set_multicam_sync', args: { groupId: x?.id ?? 'mcg_none', angleId: syncable(x), pieceIndex, ...a } };
       },
       () => { const x = g(); return { op: 'update_multicam', args: { groupId: x?.id ?? 'mcg_none', ...(rnd() < 0.4 ? { name: 'ראיון' } : {}), ...(rnd() < 0.4 ? { wideAngleId: rnd() < 0.2 ? null : angleOf(x, 'picture') } : {}), ...(rnd() < 0.4 ? { speakers: [{ label: 'דוברת', micAngleId: angleOf(x, 'sound'), channel: rnd() < 0.5 ? null : int(2), shotAngleId: rnd() < 0.3 ? null : angleOf(x, 'picture') }] } : {}) } }; },
-      () => { const x = g(); return { op: 'set_angle_look', args: { groupId: x?.id ?? 'mcg_none', angleId: angleOf(x, 'picture'), ...(rnd() < 0.3 ? { clear: true as const } : { fromClipId: tagged.length && rnd() < 0.9 ? pick(tagged) : 'clp_none' }), ...(rnd() < 0.4 ? { apply: pick(['unedited', 'all', 'none'] as const) } : {}) } }; },
-      () => { const x = g(); return { op: 'place_multicam', args: { groupId: x?.id ?? 'mcg_none', at: T.frameTime(int(120), rate), angleId: angleOf(x, 'picture'), ...(rnd() < 0.3 ? { range: { from: samples(int(sr * 2)), to: samples(sr * 2 + int(sr * 4)) } } : {}), ...(rnd() < 0.2 ? { newSequence: { name: 'תוכנית' } } : {}), ...(rnd() < 0.2 ? { fill: rnd() < 0.5 } : {}) } }; },
       () => {
-        const x = g(); const k = 1 + int(6);
-        const cuts = Array.from({ length: k }, () => (rnd() < 0.5 ? { at: T.frameTime(int(260), rate), angleId: angleOf(x, 'picture') } : { groupTime: samples(int(sr * 9)), angleId: angleOf(x, 'picture') }));
+        // most draws take the look of a segment of a program, from its own group and angle
+        const seg = taggedPictures.length && rnd() < 0.7 ? pick(taggedPictures) : null;
+        if (seg) return { op: 'set_angle_look', args: { groupId: seg.groupId, angleId: seg.angleId, fromClipId: seg.id, ...(rnd() < 0.4 ? { apply: pick(['unedited', 'all', 'none'] as const) } : {}) } };
+        const x = g(); return { op: 'set_angle_look', args: { groupId: x?.id ?? 'mcg_none', angleId: angleOf(x, 'picture'), ...(rnd() < 0.3 ? { clear: true as const } : { fromClipId: tagged.length && rnd() < 0.9 ? pick(tagged) : 'clp_none' }), ...(rnd() < 0.4 ? { apply: pick(['unedited', 'all', 'none'] as const) } : {}) } };
+      },
+      () => { const x = g(); return { op: 'place_multicam', args: { groupId: x?.id ?? 'mcg_none', at: T.frameTime(int(120), rate), angleId: placedPicture(x), ...(rnd() < 0.3 ? { range: { from: samples(int(sr * 2)), to: samples(sr * 2 + int(sr * 4)) } } : {}), ...(rnd() < 0.2 ? { newSequence: { name: 'תוכנית' } } : {}), ...(rnd() < 0.2 ? { fill: rnd() < 0.5 } : {}) } }; },
+      () => {
+        const x = programGroups.length && rnd() < 0.85 ? pick(programGroups) : g(); const k = 1 + int(4);
+        const cuts = Array.from({ length: k }, () => (rnd() < 0.5 ? { at: T.frameTime(int(260), rate), angleId: placedPicture(x, 0.95) } : { groupTime: samples(int(sr * 9)), angleId: placedPicture(x, 0.95) }));
         return { op: 'switch_angles', args: { groupId: x?.id ?? 'mcg_none', cuts, ...(rnd() < 0.3 ? { until: { at: T.frameTime(int(300), rate) } } : {}), ...(rnd() < 0.5 ? { coverage: pick(['refuse', 'clip'] as const) } : {}), ...(rnd() < 0.2 ? { heal: false } : {}) } };
       },
       () => ({ op: 'detach_from_multicam', args: { clipIds: tagged.length && rnd() < 0.9 ? [pick(tagged)] : ['clp_none'] } }),
-      () => ({ op: 'remove_multicam', args: { groupId: groupId(), ...(rnd() < 0.6 ? { detach: true } : {}) } }),
+      () => ({ op: 'remove_multicam', args: { groupId: rnd() < 0.4 ? groupId() : 'mcg_none', ...(rnd() < 0.6 ? { detach: true } : {}) } }),
     ];
+    // the chain create → sync → place → switch gets more draws once its previous link is there, so a run reaches the end of it
+    const unsynced = groups.some((x) => x.angles.some((a) => a.id !== x.referenceAngleId && !a.pieces.some((pc) => pc.anchors.length)));
+    const placed = groups.some((x) => x.angles.some((a) => a.kind === 'picture' && a.pieces.some((pc) => pc.anchors.length)));
+    const [create, sync, , look, place, cut, detach] = rows as (() => OpCall)[] as [() => OpCall, () => OpCall, () => OpCall, () => OpCall, () => OpCall, () => OpCall, () => OpCall];
+    return [...rows, ...(groups.length ? [] : [create]), ...(unsynced ? [sync, sync, sync] : []), ...(placed && !programGroups.length ? [place, place, place, place] : []), ...(programGroups.length ? [cut, cut, cut, cut, cut, cut, look, detach, detach, detach] : [])];
   };
   const genMulticam = (doc: ProjectDocument): OpCall => pick(multicamMenu(doc))();
   const soundParams = (type: string) => (type === 'utility.width' ? { stereoWidth: Number((rnd() * 2).toFixed(2)) } : { amount: rnd() < 0.1 ? 3 : Number(rnd().toFixed(2)) });
@@ -557,9 +595,9 @@ export function createFuzz(seed: number) {
       ...(PEOPLE_OPS_BUILT ? peopleMenu(doc) : []),
       // the sequence lifecycle (ADR-0018 shorts): once W1 has built the bodies
       // keyframe curves (ADR-0019): once W1 has built them
-      ...(KEYFRAME_OPS_BUILT ? keyframeMenu(doc) : []),
+      ...(KEYFRAME_OPS_BUILT && !opts.v1Replay ? keyframeMenu(doc) : []),
       // multicam (ADR-0020): once W1 has built the bodies
-      ...(MULTICAM_OPS_BUILT ? multicamMenu(doc) : []),
+      ...(MULTICAM_OPS_BUILT && !opts.v1Replay ? multicamMenu(doc) : []),
       ...(SEQUENCE_OPS_BUILT ? [...sequenceMenu(doc), () => { const others = Object.keys(doc.sequences).filter((id) => id !== doc.mainSequenceId); return { op: 'add_marker', args: { sequenceId: others.length && rnd() < 0.8 ? pick(others) : rnd() < 0.5 ? doc.mainSequenceId : 'seq_none', time: T.frameTime(int(240), rate) } }; }] : []),
     ];
     return pick(menu)();
@@ -603,6 +641,42 @@ export function createFuzz(seed: number) {
     };
   };
   /**
+   * A random apply_take call (perform mode, ADR-0025; internal: a driver commits it with allowInternal, as POST /takes does): a
+   * take's steps as the planner would emit them — adjustment hits that change light or not, a title, a sound on a lane bound to
+   * an add_track, a punch written with replace_clip_keyframes (range form) on a picture clip — at random frames, so the flash rule
+   * accepts some and refuses others; now and then a malformed take (a step a take may not run, an $asset, a repeated bind, a
+   * binding to nothing, seven tracks). Not drawn by `gen` (the shared stream stays as it was).
+   */
+  const genTake = (doc: ProjectDocument): OpCall => {
+    const steps: { op: string; args: unknown; bind?: string }[] = [];
+    const hits = 1 + int(6);
+    let at = int(200);
+    for (let h = 0; h < hits; h++) {
+      at += int(25);
+      const len = 1 + int(30), kind = rnd();
+      if (kind < 0.4) steps.push({ op: 'add_adjustment', args: { span: { start: f(at), duration: f(len) }, effects: [{ type: pick(['color.grayscale', 'color.invert', 'blur.gaussian', 'stylize.pixelate', 'digital.rgb-split', 'overlay.confetti']) }] }, bind: `a${h}` });
+      else if (kind < 0.55) steps.push({ op: 'add_text', args: { text: pick(['הופ', 'בום!', 'Yes']), start: f(at), duration: f(len) }, bind: `t${h}` });
+      else if (kind < 0.75) {
+        steps.push({ op: 'add_track', args: { kind: 'audio', name: 'הופעה' }, bind: `l${h}` });
+        steps.push({ op: 'add_clip', args: { assetId: aud || pick(assetIds), start: f(at), duration: f(len), trackId: { $ref: `l${h}`, out: 'trackId' } }, bind: `s${h}` });
+        if (rnd() < 0.7) steps.push({ op: 'set_clip_gain', args: { clipId: { $ref: `s${h}` }, gain: Number((0.2 + rnd() * 1.5).toFixed(2)) } });
+      } else {
+        const pictures = Object.values(doc.sequences).flatMap((sq) => sq.tracks.filter((t) => t.kind === 'video').flatMap((t) => t.clips)).filter((c) => c.type === 'media');
+        const c = pictures.length ? pick(pictures) : null;
+        const n = c ? Math.max(4, T.frameIndexAt(c.duration, rate)) : 30, a = int(n - 3);
+        steps.push({ op: 'replace_clip_keyframes', args: { clipId: c?.id ?? 'clp_none', property: 'scale', from: f(a), to: f(a + 3), keys: [{ time: f(a), value: 1, easing: 'hold' }, { time: f(a + 1), value: 1.18, easing: 'hold' }, { time: f(a + 2), value: 1.18, easing: 'ease-out' }, { time: f(a + 3), value: 1 }] } });
+      }
+    }
+    const fault = rnd();
+    if (fault < 0.03) steps.push({ op: 'freeze_frame', args: { clipId: 'clp_none', at: f(0), duration: f(10) } });
+    else if (fault < 0.06) steps.push({ op: 'add_clip', args: { assetId: { $asset: 'boom' }, start: f(0) } });
+    else if (fault < 0.09) steps.push({ op: 'add_track', args: { kind: 'audio' }, bind: steps.find((x) => x.bind)?.bind ?? 'x' }, { op: 'add_track', args: { kind: 'audio' }, bind: 'x' });
+    else if (fault < 0.12) steps.push({ op: 'set_clip_gain', args: { clipId: { $ref: 'nobody' }, gain: 0.5 } });
+    else if (fault < 0.14) for (let i = 0; i < 7; i++) steps.push({ op: 'add_track', args: { kind: 'audio' } });
+    if (!steps.length) steps.push({ op: 'add_text', args: { text: 'הופ', start: f(at), duration: f(15) } });
+    return { op: 'apply_take', args: { take: { snap: pick(['off', 'beat', 'half'] as const), tempo: pick(['half', 'normal', 'double'] as const), parity: pick([0, 1] as const), strength: Number(rnd().toFixed(2)), taps: hits + int(3), hits, held: int(3), summary: [`fuzz take of ${hits} hits`] }, steps } };
+  };
+  /**
    * A random add_builtin_music call (ADR-0022; internal: a driver commits it with allowInternal, as the server does): a track of
    * a style, a number of bars and a seed with its known grid, sometimes placed on the timeline; now and then the same track
    * again (deduplicated), or a malformed grid or a file that is not built-in music (refused).
@@ -627,5 +701,5 @@ export function createFuzz(seed: number) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake };
 }

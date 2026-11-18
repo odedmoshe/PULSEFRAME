@@ -19,6 +19,8 @@
  *   refuseAdjustmentTransform words); times strictly increasing (keysNotIncreasing), frame-aligned (ops.ts assertAligned),
  *   not negative (keyBeforeStart); values pass TransformSchema.shape[property] (set_keyframe's words); keys null freezes the
  *   value at `at` with animation.ts sampleKeyframes exactly like clear_keyframes. Output ReplaceClipKeyframesOutput.
+ *   ADR-0019 (keyframe W1): the range form (from/to both or neither, from ≤ to, new keys inside, keys outside kept; `replaced`
+ *   in the output) and the curve rules of ops.ts assertKeyCurve; handles are copied (storedKey).
  * - apply_sequence_plan: removeSequenceIds first (each an existing non-main sequence with origin.kind 'short', no locked
  *   track; notPlanMade otherwise); then per step: getOp → a missing or internal op is planStepForbidden → templateOps.ts
  *   resolveBindings(step.args, bound, new Map(), `plan step ${i} (${op})`) → safeParse (planStepInvalid) → refuseInheritedIds
@@ -29,12 +31,14 @@
  */
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { assertAligned, collectCreated, defineOp, keyframeRefusal, refuseUnbuiltCurve, dissolveLoneLinks, findClip, getOp, isLiveCreated, linkIdsOf, mustClip, newTrack, OpError, refuseAdjustmentTransform, refuseInheritedIds, type OpContext } from './ops.ts';
+import { assertAligned, assertKeyCurve, collectCreated, defineOp, keyframeRefusal, storedKey, dissolveLoneLinks, findClip, getOp, isLiveCreated, linkIdsOf, mustClip, newTrack, OpError, refuseAdjustmentTransform, refuseInheritedIds, type OpContext } from './ops.ts';
 import { MAX_SEQUENCES, TransformSchema, type Keyframe, type ProjectDocument, type Sequence, type SequenceFormat } from './schema.ts';
 import { ApplySequencePlanArgsSchema, SEQUENCE_PLAN_OP, SEQUENCE_SUMMARIES, SequenceOpArgs, sequenceRefusal, SHORTS_RUN_ID, type AddSequenceOutput, type ApplySequencePlanOutput, type RemoveSequenceOutput, type ReplaceClipKeyframesOutput } from './shortsContract.ts';
 import { sequenceOf } from './sequences.ts';
 import { fingerprint, trackOrderEntityId } from './entities.ts';
 import { sampleKeyframes, TRANSFORM_RANGE } from './animation.ts';
+import { channelWords, MAX_TRANSFORM_KEYS } from './keyframe.ts';
+import { isLightChannel } from './keyframeChannels.ts';
 import { resolveBindings } from './templateOps.ts';
 
 /** True once W1 has built the bodies: the operations fuzz (packages/evals/src/ops-fuzz.gen.ts) then draws the sequence rows. */
@@ -132,39 +136,49 @@ defineOp({
 defineOp({
   name: 'replace_clip_keyframes',
   version: 1,
-  description: 'Replace the whole keyframe list of one property (x, y, scale, rotation or opacity) of a clip in one step, with the rules of set_keyframe: times are clip-local, frame-aligned, not negative and strictly increasing; at most 2000 keys. keys null removes every key of that property and keeps the value it had at `at` (default the clip start), as clear_keyframes does. An adjustment clip takes opacity keys only; a caption cue has no keyframes.',
+  description: 'Replace the whole keyframe list of one property (x, y, scale, rotation or opacity) of a clip in one step, with the rules of set_keyframe: times are clip-local, frame-aligned, not negative and strictly increasing; at most 2000 keys. keys null removes every key of that property and keeps the value it had at `at` (default the clip start), as clear_keyframes does. With from and to (clip-local) only the keys between them (both included) are replaced or removed: every new key must lie there, and the other keys stay, also keys before the clip start that a trim or split left. Keys may carry any curve of list_catalog → curves, or \'bezier\' with four handles; curves that turn back are refused on opacity. An adjustment clip takes opacity keys only; a caption cue has no keyframes.',
   args: SequenceOpArgs.replace_clip_keyframes,
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
     if (clip.type === 'caption') throw sequenceRefusal('captionKeys', { clipId: clip.id });
     if (a.property !== 'opacity') refuseAdjustmentTransform(clip, { [a.property]: NaN }, 'animated'); // any key on these properties
     const p = a.property;
-    // ADR-0019 contracts: the range form and the new curves are refused as not built until keyframe W1 builds them here
-    if (a.from !== undefined || a.to !== undefined) throw keyframeRefusal('notBuilt', { clipId: clip.id }, 'the range form of replace_clip_keyframes');
-    for (const k of a.keys ?? []) refuseUnbuiltCurve(k.easing, k.bezier);
+    // ADR-0019: the range form (from/to) and the curves of keyframe.ts
+    if ((a.from === undefined) !== (a.to === undefined)) throw keyframeRefusal('rangeHalf', { clipId: clip.id });
+    const range = a.from && a.to ? { from: a.from, to: a.to } : null;
+    if (range && T.lt(range.to, range.from)) throw keyframeRefusal('rangeReversed', { clipId: clip.id, from: range.from, to: range.to });
+    const old = clip.keyframes?.[p] ?? [];
+    const inRange = (t: T.RationalTime) => !range || (T.lte(range.from, t) && T.lte(t, range.to));
+    const kept = range ? old.filter((k) => !inRange(k.time)) : [];
+    const replaced = old.length - kept.length;
     if (a.keys === null) {
-      // as clear_keyframes: the property keeps the value it had at `at`
-      const old = clip.keyframes?.[p];
-      if (old?.length) {
-        clip.transform = { ...clip.transform, [p]: sampleKeyframes(old, a.at ?? T.ZERO, TRANSFORM_RANGE[p]) };
+      // as clear_keyframes: a property left without keys keeps the value it had at `at`
+      if (replaced) {
         const kf = { ...clip.keyframes };
-        delete kf[p];
+        if (kept.length) kf[p] = kept.map((k) => storedKey(k.time, k.value, k.easing, k.bezier));
+        else { clip.transform = { ...clip.transform, [p]: sampleKeyframes(old, a.at ?? T.ZERO, TRANSFORM_RANGE[p]) }; delete kf[p]; }
         if (Object.keys(kf).length) clip.keyframes = kf; else delete clip.keyframes;
       }
-      const out: ReplaceClipKeyframesOutput = { keyframeCount: 0 };
-      return { affectedIds: old?.length ? [clip.id] : [], summary: SEQUENCE_SUMMARIES.keys(p, 0), output: { ...out } };
+      const out: ReplaceClipKeyframesOutput = { keyframeCount: kept.length, ...(range ? { replaced } : {}) };
+      return { affectedIds: replaced ? [clip.id] : [], summary: SEQUENCE_SUMMARIES.keys(p, kept.length), output: { ...out } };
     }
+    const ch = { property: p };
+    const light = isLightChannel(clip, ch), words = channelWords(ch);
     const keys: Keyframe[] = [];
     for (const [i, k] of a.keys.entries()) {
       assertAligned(d, k.time, `keyframe ${i + 1} time`);
       if (T.isNegative(k.time)) throw sequenceRefusal('keyBeforeStart', { index: i, time: k.time });
       if (i > 0 && !T.lt(a.keys[i - 1]!.time, k.time)) throw sequenceRefusal('keysNotIncreasing', { index: i });
+      if (!inRange(k.time)) throw keyframeRefusal('keyOutsideRange', { index: i, time: k.time, from: range!.from, to: range!.to }, i + 1);
       if (!TransformSchema.shape[p].safeParse(k.value).success) throw new OpError('invalid_args', `value ${k.value} is out of range for ${p}`, { property: p, index: i });
-      keys.push({ time: k.time, value: k.value, easing: k.easing });
+      assertKeyCurve(k, light, words, { clipId: clip.id, property: p, index: i });
+      keys.push(storedKey(k.time, k.value, k.easing, k.bezier));
     }
-    clip.keyframes = { ...clip.keyframes, [p]: keys };
-    const out: ReplaceClipKeyframesOutput = { keyframeCount: keys.length };
-    return { affectedIds: [clip.id], summary: SEQUENCE_SUMMARIES.keys(p, keys.length), output: { ...out } };
+    const next = range ? [...kept.map((k) => storedKey(k.time, k.value, k.easing, k.bezier)), ...keys].sort((x, y) => T.cmp(x.time, y.time)) : keys;
+    if (next.length > MAX_TRANSFORM_KEYS) throw keyframeRefusal('tooManyKeys', { clipId: clip.id, property: p, keyframes: next.length }, MAX_TRANSFORM_KEYS);
+    clip.keyframes = { ...clip.keyframes, [p]: next };
+    const out: ReplaceClipKeyframesOutput = { keyframeCount: next.length, ...(range ? { replaced } : {}) };
+    return { affectedIds: [clip.id], summary: SEQUENCE_SUMMARIES.keys(p, next.length), output: { ...out } };
   },
 });
 defineOp({

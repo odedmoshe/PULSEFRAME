@@ -27,6 +27,7 @@ import { toastOf } from './editor/undoToast.ts';
 import { Timeline } from './editor/Timeline.tsx';
 import { Welcome } from './editor/Welcome.tsx';
 import { FamilyFilmDialog } from './editor/FamilyFilmDialog.tsx';
+import { CurvePicker } from './editor/CurvePicker.tsx';
 import { findClip, findEffect } from '@pulseframe/core';
 import { isDecodeBudgetReason } from '@pulseframe/engine';
 import { clipLabel } from './editor/Timeline.tsx';
@@ -51,7 +52,7 @@ export function App() {
       const cmd = bound.find((c) => !c.enabled || c.enabled(editor)) ?? bound[0];
       if (!cmd) return;
       // any modal dialog (whatever its class) is open: editor shortcuts do not act on the timeline behind it
-      if (!shortcutAllowed(chord, cmd, { typing, paletteOpen: editor.getState().paletteOpen, modalOpen: !!document.querySelector('[aria-modal="true"]') })) return;
+      if (!shortcutAllowed(chord, cmd, { typing, paletteOpen: editor.getState().paletteOpen, modalOpen: !!document.querySelector('[aria-modal="true"]'), performRecording: !!editor.getState().performRecording })) return;
       e.preventDefault();
       if (!cmd.enabled || cmd.enabled(editor)) void cmd.run(editor);
     };
@@ -163,6 +164,8 @@ function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasEle
       <GalleryHost />
       {/* the family film dialog (ADR-0026): draws nothing until an entry, the event card or the palette opens it */}
       <FamilyFilmDialog lang={state.lang} />
+      {/* the curve picker (ADR-0019): draws nothing until a keyframe, a strip key or a curve chip opens it */}
+      <CurvePicker />
     </div>
   );
 }

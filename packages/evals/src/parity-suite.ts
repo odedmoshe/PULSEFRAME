@@ -2,6 +2,9 @@
  * Render parity suite (SPEC §8 measured tolerances, Appendix C3).
  *   Test 1: raw preview canvas vs raw headless compositor still (same compositor, two hosts): channel error <= 2/255 for >= 99.9% of samples.
  *   Test 2: headless compositor still vs decoded lossy export: SSIM >= 0.985, PSNR >= 36 dB, plus regional, colour and temporal checks.
+ *   Keyframe curves (ADR-0019): a green square layer animated with the new curves (bezier x, spring scale, smooth y, overshoot
+ *   rotation) is part of both scenes, so Tests 1 and 2 cover it at the existing thresholds; its centroid in the still and in
+ *   the export are each within 1 px of the evaluator's position, and within 1 px of each other.
  * Real server, real Chromium, real ffmpeg. Requires apps/web/dist to be built.   pnpm conformance:parity
  */
 import { execFileSync } from 'node:child_process';
@@ -25,7 +28,9 @@ const decodePng = (png: Buffer) => { const b = ff(['-i', 'pipe:0', '-f', 'rawvid
 const rgbaToRgb = (b: Buffer) => { const o = Buffer.alloc(W * H * 3); for (let i = 0, j = 0; i < W * H; i++) { o[j++] = b[i * 4]!; o[j++] = b[i * 4 + 1]!; o[j++] = b[i * 4 + 2]!; } return o; };
 
 // ---------- thresholds ----------
-const TH = { previewWithin2: 0.999, previewTol: 2, outlier: 16, ssim: 0.985, psnr: 36, regionalPsnrFail: 30, regionalPsnrWarn: 33, colourTol: 6, displacementTolPx: 1 };
+const TH = { previewWithin2: 0.999, previewTol: 2, outlier: 16, ssim: 0.985, psnr: 36, regionalPsnrFail: 30, regionalPsnrWarn: 33, colourTol: 6, displacementTolPx: 1, curveCentroidTolPx: 1 };
+/** The keyframe-curve layer (ADR-0019): a 64×64 green PNG (contain-fitted: scale 0.07 ≈ 25 px) on frames 30..130, kept clear of the regions above. */
+const CURVE_LAYER = { start: 30, frames: 100 };
 
 // ---------- layout (known from the scene) ----------
 type Rect = { x0: number; y0: number; x1: number; y1: number };
@@ -81,6 +86,16 @@ function meanRgb(b: Buffer, stride: number, cx: number, cy: number, r: number) {
   for (let y = Math.round(cy) - r; y <= Math.round(cy) + r; y++) for (let x = Math.round(cx) - r; x <= Math.round(cx) + r; x++) { for (let c = 0; c < 3; c++) m[c]! += b[(y * W + x) * stride + c]!; n++; }
   return m.map((v) => v / n);
 }
+/** Centroid of "strongly green" pixels within ±r px of the expected centre (the keyframe-curve layer). */
+function greenCentroid(b: Buffer, stride: number, cx: number, cy: number, r = 32) {
+  let sx = 0, sy = 0, n = 0;
+  for (let y = Math.max(0, Math.round(cy) - r); y < Math.min(H, Math.round(cy) + r); y++)
+    for (let x = Math.max(0, Math.round(cx) - r); x < Math.min(W, Math.round(cx) + r); x++) {
+      const o = (y * W + x) * stride;
+      if (b[o + 1]! - Math.max(b[o]!, b[o + 2]!) > 120) { sx += x + 0.5; sy += y + 0.5; n++; }
+    }
+  return n > 20 ? { x: sx / n, y: sy / n, n } : null;
+}
 /** Centroid x of "strongly red" pixels near the expected centre. */
 function redCentroid(b: Buffer, stride: number, cx: number) {
   let sx = 0, n = 0;
@@ -110,6 +125,8 @@ async function main() {
   const fixture = await generateBarcodeFixture({ out: path.join(art, 'barcode_640x360_30fps_5s.mp4'), frames: FRAMES });
   ff(['-y', '-f', 'lavfi', '-i', "color=c=red:s=200x200,format=rgba,geq=r='255':g='40':b='40':a='if(lt(max(abs(X-100),abs(Y-100)),30),255,if(lt(hypot(X-100,Y-100),90),255*(1-hypot(X-100,Y-100)/90),0))'", '-frames:v', '1', path.join(art, 'alpha.png')]);
   const alphaPng = fs.readFileSync(path.join(art, 'alpha.png'));
+  ff(['-y', '-f', 'lavfi', '-i', 'color=c=0x00ff00:s=64x64', '-frames:v', '1', path.join(art, 'green.png')]);
+  const greenPng = fs.readFileSync(path.join(art, 'green.png'));
 
   const s = await startServer({ port: 8794, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
@@ -143,13 +160,28 @@ async function main() {
       { op: 'set_keyframe', args: { clipId: big, property: 'opacity', time: f(15), value: 1, easing: 'linear' } },
       ...[[0, 0], [40, 4], [80, -4], [120, 0]].map(([t, v]) => ({ op: 'set_keyframe', args: { clipId: big, property: 'rotation', time: f(t!), value: v, easing: 'ease-in-out' } })),
     ]);
+    // keyframe curves (ADR-0019): bezier x, spring scale, smooth y, overshoot rotation, at the lower right (clear of the regions)
+    const green = await upload(pid, 'green.png', greenPng);
+    const curveClip = (await tx(pid, [{ op: 'add_clip', args: { assetId: green.assetId, start: f(CURVE_LAYER.start), duration: f(CURVE_LAYER.frames) } }])).results[0].output.clipId as string;
+    const key = (property: string, t: number, value: number, easing: string, bezier?: number[]) => ({ op: 'set_keyframe', args: { clipId: curveClip, property, time: f(t), value, easing, ...(bezier ? { bezier } : {}) } });
+    await tx(pid, [
+      { op: 'set_clip_transform', args: { clipId: curveClip, transform: { scale: 0.07, x: 0.3, y: 0.3 } } },
+      key('x', 0, 0.3, 'bezier', [0.2, -0.3, 0.6, 1.4]), key('x', 90, 0.42, 'linear'),
+      key('y', 0, 0.3, 'smooth'), key('y', 50, 0.33, 'smooth'), key('y', 90, 0.3, 'linear'),
+      key('scale', 0, 0.07, 'spring'), key('scale', 60, 0.09, 'linear'),
+      key('rotation', 10, 0, 'overshoot'), key('rotation', 70, 30, 'linear'),
+    ]);
     if (vid) await waitDerivatives(pid, vid.assetId);
     await waitDerivatives(pid, img.assetId);
+    await waitDerivatives(pid, green.assetId);
     const doc = (await call(`/projects/${pid}`)).body.project;
-    return { pid, doc, big, small, box, imgAsset: img.assetId as string };
+    return { pid, doc, big, small, box, curveClip, imgAsset: img.assetId as string };
   }
   const still = async (pid: string, n: number) => { const r = await call(`/projects/${pid}/frame?index=${n}`); if (r.status !== 200) throw new Error(`frame ${n}: ${r.status}`); return r.body as Buffer; };
-  const imageCx = (doc: any, n: number) => { const l = evaluate(doc, f(n)).layers.find((x: any) => x.kind === 'image') as any; return l ? 320 + l.transform.x * W : null; };
+  // the alpha image is the first image layer that is not the keyframe-curve layer
+  const imageCx = (doc: any, n: number, curveClip?: string) => { const l = evaluate(doc, f(n)).layers.find((x: any) => x.kind === 'image' && x.clipId !== curveClip) as any; return l ? 320 + l.transform.x * W : null; };
+  /** Where the evaluator puts the keyframe-curve layer's centre at frame n (null when it is not on screen). */
+  const curveAt = (doc: any, n: number, curveClip: string) => { const l = evaluate(doc, f(n)).layers.find((x: any) => x.clipId === curveClip) as any; return l ? { x: 320 + l.transform.x * W, y: 180 + l.transform.y * H } : null; };
 
   const browser = await chromium.launch();
   const warnings: string[] = [];
@@ -186,7 +218,7 @@ async function main() {
         if (shot.w !== W || shot.h !== H || shot.frame !== String(n)) throw new Error(`preview canvas ${shot.w}x${shot.h} frame ${shot.frame}, wanted ${W}x${H} frame ${n}`);
         sources.add(String(shot.source));
         const pv = decodePng(Buffer.from(shot.data, 'base64'));
-        const cx = imageCx(scene.doc, n);
+        const cx = imageCx(scene.doc, n, scene.curveClip);
         let band: Uint8Array | undefined;
         if (cx !== null) { const k = Math.round(cx * 10); band = bandCache.get(k) ?? annulus(cx); bandCache.set(k, band); }
         const inBand = band;
@@ -223,7 +255,7 @@ async function main() {
     const refs = new Map<number, Buffer>();
     for (const n of T2_FRAMES) refs.set(n, decodePng(await still(sceneA.pid, n)));
     const refRgb = new Map<number, Buffer>([...refs].map(([n, b]) => [n, rgbaToRgb(b)]));
-    const cxs = new Map<number, number | null>(T2_FRAMES.map((n) => [n, imageCx(sceneA.doc, n)]));
+    const cxs = new Map<number, number | null>(T2_FRAMES.map((n) => [n, imageCx(sceneA.doc, n, sceneA.curveClip)]));
     const textM = { large: rectMask(REGIONS.largeText), small: rectMask(REGIONS.smallText) };
     const bandM = new Map<number, Uint8Array>();
     const bandFor = (n: number) => { const cx = cxs.get(n); if (cx == null) return null; const k = Math.round(cx * 10); const m = bandM.get(k) ?? annulus(cx); bandM.set(k, m); return m; };
@@ -295,6 +327,18 @@ async function main() {
       temporal.push({ pair: [a, b], referenceDx: r4(dRef), exportDx: r4(dExp), evaluatorDx: r4(dEval), absError: r4(Math.abs(dRef - dExp)) });
       if (!(Math.abs(dRef - dExp) <= TH.displacementTolPx)) failures.push(`test2 temporal frames ${a}->${b}: ref dx ${r4(dRef)} export dx ${r4(dExp)}`);
     }
+    // keyframe curves (ADR-0019): the curve layer's centroid in the still and in the export against the evaluator, and each other
+    const curves: any[] = [];
+    for (const n of T2_FRAMES) {
+      const want = curveAt(sceneA.doc, n, sceneA.curveClip);
+      if (!want) continue;
+      const cs = greenCentroid(refRgb.get(n)!, 3, want.x, want.y), ce = greenCentroid(frameOf(high.raw, n), 3, want.x, want.y);
+      const dStill = cs ? Math.hypot(cs.x - want.x, cs.y - want.y) : Infinity, dExport = ce ? Math.hypot(ce.x - want.x, ce.y - want.y) : Infinity;
+      const dBoth = cs && ce ? Math.hypot(cs.x - ce.x, cs.y - ce.y) : Infinity;
+      curves.push({ frame: n, evaluator: { x: r4(want.x), y: r4(want.y) }, stillPx: r4(dStill), exportPx: r4(dExport), stillVsExportPx: r4(dBoth) });
+      if (!(Math.max(dStill, dExport, dBoth) <= TH.curveCentroidTolPx)) failures.push(`test2 curve layer frame ${n}: still ${r4(dStill)} px, export ${r4(dExport)} px, still vs export ${r4(dBoth)} px from the evaluator (> ${TH.curveCentroidTolPx})`);
+    }
+    if (!curves.length) failures.push('test2 curve layer: not on screen on any tested frame');
     const sRow = (k: string) => { const xs = rows.map((r) => r[k]).filter((v) => v !== null) as number[]; const worst = rows.filter((r) => r[k] !== null).reduce((a, b) => (b[k] < a[k] ? b : a)); const q = summ(xs); return { min: r4(q.min), median: r4(q.median), max: r4(q.max), worstFrame: worst.frame as number }; };
     const summary = { psnr: sRow('psnr'), ssim: sRow('ssim'), largeTextPsnr: sRow('largeTextPsnr'), smallTextPsnr: sRow('smallTextPsnr'), imageBandPsnr: sRow('imageBandPsnr') };
     console.log(`  high: PSNR min ${summary.psnr.min} (f${summary.psnr.worstFrame}) SSIM min ${summary.ssim.min} (f${summary.ssim.worstFrame}); large text ${summary.largeTextPsnr.min}, small text ${summary.smallTextPsnr.min}, image band ${summary.imageBandPsnr.min}`);
@@ -309,6 +353,24 @@ async function main() {
       }
       ff(['-y', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-video_size', `${W * 3}x${H}`, '-i', 'pipe:0', '-frames:v', '1', path.join(art, `worst-frame-${n}.png`)], out);
     }
+
+    // Lossless control (lead decision 2026-11-18): the same compositor frames through the same colour conversion and decode
+    // as the export, but encoded with x264 at qp 0. ≥ 50 dB here says the export's lower PSNR is the codec's loss, not a
+    // difference between the compositor and the export path. 4:4:4 is the control; 4:2:0 at qp 0 (what the export's chroma
+    // subsampling alone costs) is reported beside it.
+    const lossless = (pixFmt: 'yuv444p' | 'yuv420p') => {
+      const input = Buffer.concat(T2_FRAMES.map((n) => refRgb.get(n)!));
+      const out = path.join(art, `control-qp0-${pixFmt}.mkv`);
+      ff(['-y', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-video_size', `${W}x${H}`, '-framerate', '30', '-i', 'pipe:0', '-vf', `scale=out_color_matrix=bt709:out_range=tv,format=${pixFmt}`, '-c:v', 'libx264', '-qp', '0', '-preset', 'medium', '-pix_fmt', pixFmt, '-colorspace', 'bt709', '-color_range', 'tv', out], input);
+      const raw = ff(['-i', out, '-vf', 'scale=in_color_matrix=bt709:in_range=limited:out_range=full', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
+      const psnrs = T2_FRAMES.map((n, i) => ({ frame: n, psnr: r4(psnrRgb(refRgb.get(n)!, raw.subarray(i * W * H * 3, (i + 1) * W * H * 3), 3)) }));
+      const worst = psnrs.reduce((a, b) => (b.psnr < a.psnr ? b : a));
+      return { pixFmt, encoder: 'libx264 -qp 0 (lossless)', minPsnr: worst.psnr, worstFrame: worst.frame, frames: psnrs.length };
+    };
+    const control = { yuv444p: lossless('yuv444p'), yuv420p: lossless('yuv420p'), thresholdDb: 50 };
+    const controlOk = control.yuv444p.minPsnr >= 50;
+    if (!controlOk) failures.push(`test2 lossless control: ${control.yuv444p.minPsnr} dB at frame ${control.yuv444p.worstFrame} < 50 (the compositor and the export path differ beyond the codec)`);
+    console.log(`  lossless control (x264 qp 0): 4:4:4 min ${control.yuv444p.minPsnr} dB (f${control.yuv444p.worstFrame}); 4:2:0 min ${control.yuv420p.minPsnr} dB (f${control.yuv420p.worstFrame})`);
 
     // quality ladder (report only)
     const ladder: any = { high: { bytes: high.bytes, wallSeconds: high.wallSeconds, psnr: summary.psnr, ssim: summary.ssim } };
@@ -370,10 +432,11 @@ async function main() {
     report.textSizeEnvelope = textSizeEnvelope;
     report.test2 = {
       pass: failures.filter((x) => x.startsWith('test2') || x.startsWith('textSizeEnvelope')).length === 0,
-      thresholds: { ssim: TH.ssim, psnrDb: TH.psnr, regionalPsnrFailDb: TH.regionalPsnrFail, regionalPsnrWarnDb: TH.regionalPsnrWarn, colourTolPerChannel: TH.colourTol, displacementTolPx: TH.displacementTolPx },
+      thresholds: { ssim: TH.ssim, psnrDb: TH.psnr, regionalPsnrFailDb: TH.regionalPsnrFail, regionalPsnrWarnDb: TH.regionalPsnrWarn, colourTolPerChannel: TH.colourTol, displacementTolPx: TH.displacementTolPx, curveCentroidTolPx: TH.curveCentroidTolPx },
       method: 'PSNR over all RGB samples; SSIM computed in-process on BT.709 luma, 8x8 uniform window, stride 4, L=255, k1=0.01, k2=0.03; export decoded with ffmpeg scale=in_color_matrix=bt709:in_range=limited to rgb24',
       frames: T2_FRAMES, exportVideoStream: { codec: high.video.codec_name, pix_fmt: high.video.pix_fmt, color_space: high.video.color_space, color_range: high.video.color_range },
-      summary, worstFramesSavedAsPng: worstFrames, colour, temporal, qualityLadderReportOnly: ladder, rows,
+      summary, worstFramesSavedAsPng: worstFrames, colour, temporal, curveLayer: curves, qualityLadderReportOnly: ladder, rows,
+      losslessControl: { ...control, pass: controlOk, settings: 'The export is the product route with its default quality (high): x264 preset medium, CRF 16, profile high, 4:2:0 (export.ts CRF and exportSegments.ts SEGMENT_CRF agree), BT.709 limited range. The control takes the same compositor frames through the same conversion and decode at qp 0.' },
     };
   } catch (e) {
     // A crash must never look like a pass: record it as a failed check so the report says FAILED.
@@ -390,7 +453,7 @@ async function main() {
   report.warnings = warnings;
   report.machine = { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, memoryGiB: +(os.totalmem() / 2 ** 30).toFixed(1), gpu: 'none', node: process.version, ffmpeg: execFileSync('ffmpeg', ['-version'], { encoding: 'utf8' }).split('\n')[0] };
   report.fixture = { barcode: 'generateBarcodeFixture 640x360 30fps 150 frames H.264 crf14', image: '200x200 RGBA PNG: opaque central 60x60 square inside a radial alpha gradient (radius 90 px)', project: `${W}x${H} @30`, frameRate: '30/1' };
-  report.scene = { V1: 'barcode video frames 0..150', V2: 'alpha image frames 20..140, scale 0.6, rotation 20, opacity 0.8, y -0.15, x keyframes -0.3 -> 0.3 ease-in-out', T1: 'Hebrew+niqqud+Latin text frames 10..150 sizeFrac 0.12 stroke, background #101418CC, y 0.1, opacity key 0->1 over 15 frames, rotation keys 0/4/-4/0 at +0/40/80/120', T2: 'small text sizeFrac 0.04 weight 400 white, y 0.42', T3: 'six NBSP with background box (flat colour reference) sizeFrac 0.06 at x -0.44 y 0.3' };
+  report.scene = { V1: 'barcode video frames 0..150', V2: 'alpha image frames 20..140, scale 0.6, rotation 20, opacity 0.8, y -0.15, x keyframes -0.3 -> 0.3 ease-in-out', T1: 'Hebrew+niqqud+Latin text frames 10..150 sizeFrac 0.12 stroke, background #101418CC, y 0.1, opacity key 0->1 over 15 frames, rotation keys 0/4/-4/0 at +0/40/80/120', T2: 'small text sizeFrac 0.04 weight 400 white, y 0.42', T3: 'six NBSP with background box (flat colour reference) sizeFrac 0.06 at x -0.44 y 0.3', V3: 'keyframe curves (ADR-0019): 64x64 green PNG frames 30..130, scale 0.07; x bezier(0.2,-0.3,0.6,1.4) 0.3 -> 0.42, y smooth 0.3/0.33/0.3, scale spring 0.07 -> 0.09, rotation overshoot 0 -> 30' };
   report.regions = { ...REGIONS, imageCentreY: IMG_Y, textBoxCentre: BOX_C, colourSamples: 'red square core: 17x17 px about image centre; text box: 9x9 px about box centre' };
   report.notes = ['Test 1 (i) and (ii) are both strict; the paused preview decodes the original media (data-source=original), playback uses the proxy.', 'Small-text (14.4 px) regional PSNR in Test 2 is report+warning only; the pass/fail criterion is textSizeEnvelope.'];
   report.runtimeSeconds = +((Date.now() - t0) / 1000).toFixed(1);
