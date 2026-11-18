@@ -52,7 +52,7 @@ export function App() {
       const cmd = bound.find((c) => !c.enabled || c.enabled(editor)) ?? bound[0];
       if (!cmd) return;
       // any modal dialog (whatever its class) is open: editor shortcuts do not act on the timeline behind it
-      if (!shortcutAllowed(chord, cmd, { typing, paletteOpen: editor.getState().paletteOpen, modalOpen: !!document.querySelector('[aria-modal="true"]') })) return;
+      if (!shortcutAllowed(chord, cmd, { typing, paletteOpen: editor.getState().paletteOpen, modalOpen: !!document.querySelector('[aria-modal="true"]'), performRecording: !!editor.getState().performRecording })) return;
       e.preventDefault();
       if (!cmd.enabled || cmd.enabled(editor)) void cmd.run(editor);
     };

@@ -15,6 +15,7 @@ import { IconLoop, IconNextFrame, IconPause, IconPlay, IconPrevFrame } from './i
 import { Scopes } from './Scopes.tsx';
 import { CutLoupe } from './CutLoupe.tsx';
 import { MulticamPanel } from './MulticamPanel.tsx';
+import { PerformView } from './perform/PerformView.tsx';
 import { STAGE_STRINGS } from './stage.strings.ts';
 import './stage.css';
 
@@ -83,6 +84,8 @@ export function Transport() {
   return (
     <>
       <StageOverlay />
+      {/* perform mode (ADR-0025): the pads, the take lane and the camera live on the stage while the workspace is perform */}
+      {state.workspace === 'perform' && <PerformView />}
       {state.workspace === 'color' && wide && <aside className="stage-side pf-ds pf-insp pf-force-dark" aria-label={S.scopes} data-testid="stage-scopes"><Scopes /></aside>}
       {/* multicam (ADR-0020): the docked angle panel takes the same side slot whenever the scopes do not */}
       {!(state.workspace === 'color' && wide) && <MulticamPanel />}

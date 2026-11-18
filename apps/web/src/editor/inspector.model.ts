@@ -26,6 +26,8 @@ export function pagesFor(workspace: Workspace, opts: { custom: readonly Inspecto
     sound: ['sound', 'clip'],
     deliver: ['deliver', 'review', 'recipes'],
     shorts: ['shorts', 'deliver'],
+    // perform (ADR-0025): the view lives on the stage; the inspector keeps the selection
+    perform: ['clip'],
     custom: opts.custom,
   };
   const pages = base[workspace];

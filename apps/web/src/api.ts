@@ -1,5 +1,6 @@
 import type { Asset, BuildShortsBody, ExportMode, FindShortsBody, ReframePlanBody, ReframePlanView, SequenceSummary, ShortCandidatesView, ShortsApplyResult, ShortsPlanView, FamilyFilmApplyResult, FamilyFilmParams, FamilyFilmPlanView, FamilyFilmRegenerateResult, MomentsData, OpCall, ProjectDocument, RenderCacheStatus, SegmentPlanView, SelfCheckMode, StartMomentsBody } from '@pulseframe/core';
 import type { MulticamSyncReport, MulticamSyncRequest, MulticamView } from '@pulseframe/core';
+import type { TakePlanView, TakeRequest, TakeResult } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
 
@@ -151,6 +152,8 @@ export const api = {
   exportBatch: (id: string, variantIds: string[]) => call<{ jobs: { jobId: string; variantId: string; status: string }[] }>(`/projects/${id}/exports/batch`, json({ variantIds })),
   /** One export job per sequence (shorts), all or nothing. */
   exportSequences: (id: string, sequenceIds: string[], options?: { format?: string }) => call<{ jobs: { jobId: string; sequenceId?: string; status: string }[] }>(`/projects/${id}/exports/batch`, json({ items: sequenceIds.map((sequenceId) => ({ sequenceId })), ...(options ? { options } : {}) })),
+  // ----- perform mode (ADR-0025): a take's raw taps, planned on the server and committed as ONE undoable step (dryRun: plan only) -----
+  performTake: (id: string, body: TakeRequest) => call<TakeResult | TakePlanView>(`/projects/${id}/takes`, json(body)),
   // ----- shorts (ADR-0018): sequences, candidate moments, plan, make, reframe -----
   sequences: (id: string) => call<{ revision: number; sequences: SequenceSummary[] }>(`/projects/${id}/sequences`),
   /** The ranked candidates when the audio is already measured (200), else a measuring job to poll (202). */

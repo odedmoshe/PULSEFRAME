@@ -27,6 +27,7 @@ export const PERFORM_HE = {
   'perform.oneUndo': 'כל ההופעה נשמרת בצעד אחד, ואפשר לבטל אותה בבת אחת',
   'perform.bank.canvas': 'לחצנים רגילים', 'perform.bank.gpu': 'לחצנים לכרטיס מסך',
   'perform.recipe': 'הופעה',
+  'perform.notBuilt': 'מצב הופעה עוד לא נבנה בגרסה הזו. שום דבר לא ישתנה כאן',
   // snap, tempo
   'perform.snap.off': 'חופשי', 'perform.snap.beat': 'על הפעימה', 'perform.snap.half': 'חצי פעימה', 'perform.strength': 'עוצמת יישור',
   'perform.tempo.half': 'חצי קצב (÷2)', 'perform.tempo.normal': 'קצב רגיל (×1)', 'perform.tempo.double': 'קצב כפול (×2)',
@@ -70,6 +71,7 @@ export const PERFORM_EN: Record<keyof typeof PERFORM_HE, string> = {
   'perform.oneUndo': 'The whole take is saved as one step and undone at once',
   'perform.bank.canvas': 'Standard pads', 'perform.bank.gpu': 'Graphics-card pads',
   'perform.recipe': 'Performance',
+  'perform.notBuilt': 'Perform mode is not built in this version yet. Nothing changes here',
   'perform.snap.off': 'Free', 'perform.snap.beat': 'On the beat', 'perform.snap.half': 'Half beat', 'perform.strength': 'Snap strength',
   'perform.tempo.half': 'Half tempo (÷2)', 'perform.tempo.normal': 'Normal tempo (×1)', 'perform.tempo.double': 'Double tempo (×2)',
   'perform.held.flash_limit': 'Not shown: less than a third of a second after the previous change of light (safety limit)',
