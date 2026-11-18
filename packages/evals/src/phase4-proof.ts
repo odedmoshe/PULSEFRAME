@@ -11,6 +11,7 @@ import { chromium } from 'playwright';
 import * as T from '@pulseframe/time';
 import { generateBarcodeFixture, readBarcode } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
+import { startExport } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/phase4');
@@ -170,9 +171,11 @@ async function main() {
     await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
     await page.goto(`${s.ownerUrl}&project=${big}`);
     await page.locator('.clip').first().waitFor();
-    await page.getByTestId('export').click();
+    // Export opens the export sheet; its start button starts the job, and its progress step shows the frames done (the frame
+    // count used to be on the Export button)
+    await startExport(page);
     await page.getByTestId('export-cancel').waitFor();
-    await page.waitForFunction(() => /\d+\/\d+/.test(document.querySelector('[data-testid=export]')?.textContent ?? ''), undefined, { timeout: 30_000 });
+    await page.waitForFunction(() => /\d+\s*\/\s*\d+/.test(document.querySelector('[data-testid=export-progress] .pf-xs-big-meta .num')?.textContent ?? ''), undefined, { timeout: 30_000 });
     await page.getByTestId('export-cancel').click();
     await page.getByTestId('export-canceled').waitFor({ timeout: 15_000 });
     check('editor: Cancel stops a running export and shows that it was canceled; Retry is offered', (await page.getByTestId('export-retry').count()) === 1 && (await page.getByTestId('export-download').count()) === 0);
@@ -184,8 +187,12 @@ async function main() {
       fp.on('pageerror', (e) => fErrors.push(String(e)));
       await fp.goto(`${s.ownerUrl}&project=${flashProject}`);
       await fp.locator('.clip').first().waitFor();
-      await fp.getByTestId('export').click();
+      await startExport(fp);
       await fp.getByTestId('flash-fail').waitFor({ timeout: 120_000 });
+      // the result is in the status bar (flash-fail) and in the sheet's done step: the sheet is closed to use the status bar's
+      await fp.getByTestId('export-done').waitFor({ timeout: 30_000 }).catch(() => {});
+      await fp.keyboard.press('Escape');
+      await fp.getByTestId('export-sheet').waitFor({ state: 'detached', timeout: 10_000 });
       await fp.locator('[data-testid=flash-fail] > summary').click();
       const ranges = await fp.getByTestId('flash-range').count();
       await fp.getByTestId('flash-jump').first().click();

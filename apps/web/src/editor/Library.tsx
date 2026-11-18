@@ -45,7 +45,7 @@ export function Library() {
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false); }}
       onDrop={(e) => { setOver(false); const fs = [...(e.dataTransfer.files ?? [])]; if (!fs.length) return; e.preventDefault(); if (!uploading && doc) void editor.importFiles(fs); }}>
       {over && <div className="pf-drop-veil" aria-hidden="true"><ImagePlus size={28} />{S.dropTitle}</div>}
-      {viewing && doc?.assets[viewing] && <SourceViewer assetId={viewing} onClose={() => { const id = viewing; setViewing(null); setTimeout(() => document.querySelector<HTMLElement>(`[data-testid="view-${id}"]`)?.focus(), 0); }} />}
+      {viewing && doc?.assets[viewing] && <SourceViewer assetId={viewing} onClose={() => { const id = viewing; setViewing(null); setTimeout(() => (document.querySelector<HTMLElement>(`[data-testid="view-${id}"]`) ?? document.querySelector<HTMLElement>(`[data-testid="more-${id}"]`))?.focus(), 0); }} />}
       <LifeHost />
       {rail === 'media' && <MediaDrawer onView={setViewing} />}
       {rail === 'audio' && <AudioDrawer onView={setViewing} />}
@@ -85,7 +85,7 @@ function ImportButton() {
   const S = CHROME_STRINGS[state.lang];
   const { doc, uploading } = state;
   return (
-    <label className={`pf-btn pf-btn-primary pf-btn-sm pf-bw-import${uploading || !doc ? ' is-disabled' : ''}`}>
+    <label className={`pf-btn pf-btn-primary pf-btn-sm pf-bw-import${uploading ? ' is-busy' : !doc ? ' is-disabled' : ''}`} aria-busy={uploading || undefined}>
       <ArrowUpFromLine size={16} strokeWidth={1.75} aria-hidden="true" /><span className="pf-btn-label">{uploading ? t('media.uploading') : S.import}</span>
       <input type="file" multiple accept={ACCEPT} disabled={uploading || !doc} data-testid="file-input" onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length) void editor.importFiles(fs); }} />
     </label>

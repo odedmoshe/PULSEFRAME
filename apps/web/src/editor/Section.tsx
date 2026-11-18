@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useId, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, CircleHelp, RotateCcw } from 'lucide-react';
 import { isolate } from '../ds/util.tsx';
 import './sections.css';
@@ -49,7 +49,12 @@ export interface SectionProps {
  */
 export function Section({ id, title, icon, defaultOpen = true, summary, help, onReset, tone, children }: SectionProps) {
   const { flat, labels } = useContext(SectionsContext);
-  const [open, setOpen] = useState<boolean>(() => { if (flat) return true; const v = readMap()[id]; return typeof v === 'boolean' ? v : defaultOpen; });
+  const initial = () => { if (flat) return true; const v = readMap()[id]; return typeof v === 'boolean' ? v : defaultOpen; };
+  const [open, setOpen] = useState<boolean>(initial);
+  // the view can change under a mounted section (the all-tools button with a clip selected): every section opens in the
+  // all-tools view, and back in tabs each one is as the person left it
+  const firstFlat = useRef(flat);
+  useEffect(() => { if (firstFlat.current === flat) return; firstFlat.current = flat; setOpen(initial()); }, [flat]); // eslint-disable-line react-hooks/exhaustive-deps
   const [helpOpen, setHelpOpen] = useState(false);
   const bodyId = useId(), helpId = useId();
   useEffect(() => {

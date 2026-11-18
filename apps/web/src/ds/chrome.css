@@ -155,12 +155,17 @@
 .pf-bw-import:hover:not(.is-disabled) { background: var(--pf-surface-4); }
 .pf-bw-import svg { color: var(--pf-frame); }
 .pf-bw-import.is-disabled { opacity: .5; cursor: not-allowed; }
+/* while files upload the button says so at full contrast (a status to read, not a dimmed control) */
+.pf-bw-import.is-busy { cursor: progress; }
+.pf-bw-import.is-busy input { cursor: progress; }
 .pf-bw-import input { position: absolute; inset: 0; inline-size: 100%; opacity: 0; cursor: pointer; font-size: 0; }
 .pf-bw-import:focus-within { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
 .pf-bw-search { display: flex; align-items: center; gap: var(--pf-sp-4); flex: none; block-size: var(--pf-h-lg); padding-inline: var(--pf-sp-5); border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: 0 0 0 1px var(--pf-line-strong); color: var(--pf-text-3); }
 .pf-bw-search:focus-within { box-shadow: 0 0 0 1.5px var(--pf-frame); }
 .pf-bw-search input { flex: 1; min-inline-size: 0; block-size: 100%; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none; color: var(--pf-text); font: inherit; font-size: var(--pf-fs-sm); }
 .pf-bw-search input::placeholder { color: var(--pf-text-3); opacity: 1; }
+/* the field that holds the focus draws the focus ring itself (the box's frame-coloured line is only a hint) */
+.pf-bw-search input:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 3px; border-radius: var(--pf-r-xs); }
 .pf-bw-chips { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); flex: none; }
 .pf-bw-chips .pf-chip { flex: none; }
 .pf-bw-chips .pf-chip.is-on { background: var(--pf-text); color: var(--pf-surface-1); }

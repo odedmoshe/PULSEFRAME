@@ -23,6 +23,7 @@ import { crtMap, digicamTick, digicamTone, FlashAnalyser, flashCells, flashSched
 import { BEAT_SR } from '../../../apps/server/src/beats.ts';
 import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
 import { startServer } from '@pulseframe/server';
+import { openCardMenu } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/gpu-proof');
@@ -730,10 +731,13 @@ async function main() {
     await page.locator('.clip').first().click();
     await page.getByTestId('inspector-tab-clip').click().catch(() => {});
     await page.getByTestId('effect-lut').waitFor({ timeout: 10_000 }).catch(() => {});
+    // remove- and view- are items of the media card's ⋯ menu since the redesign: the menu is opened so they are looked for there
+    await openCardMenu(page, tableId);
     const panel = await page.evaluate((id) => {
       const sel = document.querySelector<HTMLSelectElement>('[data-testid=effect-lut]');
       return { value: sel?.value ?? null, options: sel ? [...sel.options].map((o) => o.value) : [], badge: document.querySelector(`[data-testid="lut-size-${id}"]`)?.textContent ?? null, addButtons: document.querySelectorAll(`[data-testid="add-${id}"], [data-testid="view-${id}"]`).length, removeDisabled: document.querySelector<HTMLButtonElement>(`[data-testid="remove-${id}"]`)?.disabled ?? null, used: document.querySelectorAll(`[data-testid="used-${id}"]`).length, intensity: !!document.querySelector('[data-testid=effect-param][data-param=intensity]') };
     }, tableId);
+    await page.keyboard.press('Escape');
     check('Editor: the effect shows a chooser with "none" and the project\'s table, selected; intensity keeps its slider; the library card of the table shows its size, is marked as in use, cannot be removed, and has no add-to-timeline or view button', panel.value === tableId && panel.options.length === 2 && panel.options[0] === '' && panel.intensity && panel.badge === '17³' && panel.addButtons === 0 && panel.removeDisabled === true && panel.used === 1, panel);
     // import a second table from the panel: an identity table, which the effect then points at
     const identityText = serializeCube(identityLut(9));

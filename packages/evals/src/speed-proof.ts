@@ -188,7 +188,7 @@ async function main() {
     const ea = await upload(ep, fixture.file);
     const ec = (await txs(ep, [{ op: 'add_clip', args: { assetId: ea.assetId, start: f(0) } }])).results[0].output.clipId as string;
     const page = await browser.newPage({ viewport: { width: 1500, height: 950 } });
-    await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'clip'); localStorage.setItem('pf.lang', 'en'); } catch { /* storage unavailable */ } });
+    await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); localStorage.setItem('pf.lang', 'en'); } catch { /* storage unavailable */ } });
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
@@ -244,7 +244,7 @@ async function main() {
     await txs(ep, [{ op: 'split_clip', args: { clipId: first.id, at: T.add(first.start, f(30)) } }]);
     const beforeRefusal = JSON.stringify(clipsOf(await doc(ep), 'video'));
     const hp = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-    await hp.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'clip'); localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+    await hp.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
     await hp.goto(`${s.ownerUrl}&project=${ep}`);
     await hp.locator(`.clip[data-clip-id="${first.id}"]`).click();
     await hp.getByTestId('clip-speed').fill('0.5'); // twice as long: it would run into the second half

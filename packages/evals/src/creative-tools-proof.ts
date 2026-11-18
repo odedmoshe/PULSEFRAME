@@ -161,7 +161,10 @@ async function main() {
     const five = await until(pid, (x) => clipsOf(x, 'video').length === 5);
     await page.waitForFunction(() => document.querySelectorAll('.clip.selected').length >= 5, undefined, { timeout: 5000 }).catch(() => {});
     const selected = await page.locator('.clip.selected').count();
-    const statusText = await page.getByTestId('speed-curve-status').textContent();
+    // the five parts are selected together, so the inspector shows the shared tab of a multi-selection: the curve's result is
+    // said on the stage (stage-note) since the redesign, where the curve panel's own status line is no longer on screen
+    await page.waitForFunction(() => /5/.test(document.querySelector('[data-testid=stage-note]')?.textContent ?? ''), undefined, { timeout: 5000 }).catch(() => {});
+    const statusText = await page.getByTestId('stage-note').textContent();
     check('clicking the Bullet tile divides the clip into five parts, selects them all, and says so', !!five && selected >= 5 && /5/.test(statusText ?? ''), { selected, statusText });
     await page.keyboard.press('Control+z');
     const one = await until(pid, (x) => clipsOf(x, 'video').length === 1);
@@ -231,6 +234,7 @@ async function main() {
       mp.on('pageerror', (e) => mErrors.push(String(e)));
       await mp.goto(`${s.ownerUrl}&project=${pid}`);
       await mp.locator(`.clip[data-clip-id="${clipId}"]`).click();
+      await mp.getByTestId('insp-tab-effects').click(); // this page has the tabbed inspector: the gallery button is on the clip's effects tab
       await mp.getByTestId('gallery-open').click();
       await mp.getByTestId('effect-gallery').waitFor();
       await mp.waitForFunction(() => { const t = [...document.querySelectorAll('[data-testid=gallery-panel-effects] [data-testid=gallery-tile]')]; return t.length > 0 && t.every((x) => x.getAttribute('data-rendered') === '1' || x.getAttribute('data-unavailable') === '1'); }, undefined, { timeout: 60_000 }).catch(() => {});
@@ -259,7 +263,7 @@ async function main() {
       let most = 0;
       for (let i = 0, j = 0; i < rises.length; i++) { while (rises[i]! - rises[j]! > 1) j++; most = Math.max(most, i - j + 1); }
       const span = samples.length ? samples[samples.length - 1]![0] - samples[0]![0] : 0;
-      measurements.galleryStrobeHover = { samples: samples.length, seconds: Number(span.toFixed(2)), rises: rises.length, mostInOneSecond: most, flashesHeld: held };
+      measurements.galleryStrobeHover = { samples: samples.length, seconds: Number(span.toFixed(2)), rises: rises.length, mostInOneSecond: most, flashesHeld: held, changes: samples.filter((x, i) => i > 0 && Math.abs(x[1] - samples[i - 1]![1]) > 0.5).length, levels: [Math.round(Math.min(...samples.map((x) => x[1]))), Math.round(Math.max(...samples.map((x) => x[1])))], riseTimes: rises.map((t) => Number((t - (samples[0]?.[0] ?? 0)).toFixed(3))), sampleGapsMs: { median: samples.length > 2 ? Math.round(samples.slice(1).map((x, i) => (x[0] - samples[i]![0]) * 1000).sort((p, q) => p - q)[Math.floor((samples.length - 1) / 2)]!) : null, max: samples.length > 2 ? Math.round(Math.max(...samples.slice(1).map((x, i) => (x[0] - samples[i]![0]) * 1000))) : null } };
       check('a hovered strobe tile animates (its light rises again) but shows at most three rises in any second of real time (sampled on every animation frame for at least 2 s and until 60 samples, at most 20 s), and the dialog carries data-flashes-held from its flash guard', samples.length > 30 && span >= 2 && rises.length >= 2 && most <= 3 && held !== null && Number.isFinite(Number(held)) && mErrors.length === 0, { ...(measurements.galleryStrobeHover as object), errors: mErrors.slice(0, 3) });
       await mp.close();
     }
@@ -282,18 +286,22 @@ async function main() {
     if (graded) { await page.keyboard.press('Control+z'); await until(pid, (x) => !clipsOf(x, 'video')[0].effects?.length); }
 
     console.log('\n# the sound-effects browser');
-    await page.getByTestId('sfx-browser').waitFor();
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid=sfx-row]').length > 0, undefined, { timeout: 8000 });
-    const rows = await page.getByTestId('sfx-row').count();
-    await page.getByTestId('sfx-cat-drum').click();
-    const drums = await page.getByTestId('sfx-row').count();
-    await page.getByTestId('sfx-cat-all').click();
-    await page.getByTestId('sfx-search').fill('wind');
-    const winds = await page.getByTestId('sfx-row').count();
+    // the sound effects are the rail's Audio category (UX_REDESIGN §4.3); the all-tools inspector's mixer has a second copy, so
+    // the browser is read in the drawer (data-testid=library)
+    await page.getByTestId('rail-audio').click();
+    const sfxLib = page.getByTestId('library');
+    await sfxLib.getByTestId('sfx-browser').waitFor();
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=library] [data-testid=sfx-row]').length > 0, undefined, { timeout: 8000 });
+    const rows = await sfxLib.getByTestId('sfx-row').count();
+    await sfxLib.getByTestId('sfx-cat-drum').click();
+    const drums = await sfxLib.getByTestId('sfx-row').count();
+    await sfxLib.getByTestId('sfx-cat-all').click();
+    await sfxLib.getByTestId('sfx-search').fill('wind');
+    const winds = await sfxLib.getByTestId('sfx-row').count();
     check('80 sounds listed; the drum chip and a search by English name narrow the list', rows === 80 && drums > 0 && drums < 20 && winds >= 1 && winds < 5, { rows, drums, winds });
-    const wind = page.locator('[data-testid=sfx-row][data-id="sfx.wind"]');
+    const wind = sfxLib.locator('[data-testid=sfx-row][data-id="sfx.wind"]');
     await wind.getByTestId('sfx-play').click();
-    await page.waitForFunction(() => document.querySelector('[data-testid=sfx-row][data-id="sfx.wind"] [data-testid=sfx-play]')?.getAttribute('aria-pressed') === 'true', undefined, { timeout: 8000 }).catch(() => {});
+    await page.waitForFunction(() => document.querySelector('[data-testid=library] [data-testid=sfx-row][data-id="sfx.wind"] [data-testid=sfx-play]')?.getAttribute('aria-pressed') === 'true', undefined, { timeout: 8000 }).catch(() => {});
     for (let i = 0; i < 80 && !audioRequests.length; i++) await sleep(100);
     await sleep(300);
     const pressedWhilePlaying = await wind.getByTestId('sfx-play').getAttribute('aria-pressed');
@@ -302,21 +310,22 @@ async function main() {
     const pressedAfterStop = await wind.getByTestId('sfx-play').getAttribute('aria-pressed');
     check('listen fetches the sound (HTTP 200), shows the playing state on a four-second sound, and a second press stops it', audioRequests.includes(200) && pressedWhilePlaying === 'true' && pressedAfterStop === 'false', { audioRequests, pressedWhilePlaying, pressedAfterStop });
     // a second press while the sound is still loading must cancel it, not start it again
-    const rain = page.locator('[data-testid=sfx-row][data-id="sfx.rain"]');
-    await page.getByTestId('sfx-search').fill('');
+    const rain = sfxLib.locator('[data-testid=sfx-row][data-id="sfx.rain"]');
+    await sfxLib.getByTestId('sfx-search').fill('');
     await rain.getByTestId('sfx-play').click();
     await rain.getByTestId('sfx-play').click();
     await sleep(1500);
     check('pressing listen twice quickly (before the sound has loaded) leaves nothing playing', (await rain.getByTestId('sfx-play').getAttribute('aria-pressed')) === 'false');
-    await page.getByTestId('sfx-search').fill('wind');
+    await sfxLib.getByTestId('sfx-search').fill('wind');
     const soundBefore = clipsOf(await doc(pid), 'audio').length;
     await wind.getByTestId('sfx-add').click();
     const addedSound = await until(pid, (x) => clipsOf(x, 'audio').length === soundBefore + 1);
-    await page.waitForFunction(() => /wind|רוח/i.test(document.querySelector('[data-testid=sfx-status]')?.textContent ?? ''), undefined, { timeout: 5000 }).catch(() => {});
-    const sfxStatus = await page.getByTestId('sfx-status').textContent();
+    await page.waitForFunction(() => /wind|רוח/i.test(document.querySelector('[data-testid=library] [data-testid=sfx-status]')?.textContent ?? ''), undefined, { timeout: 5000 }).catch(() => {});
+    const sfxStatus = await sfxLib.getByTestId('sfx-status').textContent();
     const windAsset = addedSound ? Object.values(addedSound.assets as Record<string, any>).find((a: any) => a.provenance?.procedural?.id === 'sfx.wind') : null;
     check('add places the sound on the timeline as an ordinary audio clip whose asset records how it was made', !!addedSound && !!windAsset && (sfxStatus ?? '').length > 0, { sfxStatus, generator: (windAsset as any)?.provenance?.procedural });
-    await page.getByTestId('sfx-search').fill('');
+    await sfxLib.getByTestId('sfx-search').fill('');
+    await page.getByTestId('rail-media').click();
 
     console.log('\n# the pacing panel');
     const strip = page.getByTestId('pacing-strip');
@@ -349,12 +358,13 @@ async function main() {
     await page.getByTestId('caption-add').click();
     const withTrack = await until(pid, (x) => x.sequences.seq_main.tracks.some((t: any) => t.kind === 'caption'));
     await page.getByTestId('caption-look').waitFor();
-    const lookOptions = await page.locator('[data-testid=caption-look] option').count();
-    await page.getByTestId('caption-look').selectOption({ index: 3 });
-    const chosen = await page.locator('[data-testid=caption-look] option').nth(3).getAttribute('value');
+    // the looks are a radiogroup of drawn tiles since the redesign (UX_REDESIGN §8): one [role=radio][data-value] per look
+    const lookOptions = await page.locator('[data-testid=caption-look] [role=radio]').count();
+    await page.locator('[data-testid=caption-look] [role=radio]').nth(3).click();
+    const chosen = await page.locator('[data-testid=caption-look] [role=radio]').nth(3).getAttribute('data-value');
     const styled = await until(pid, (x) => { const t = x.sequences.seq_main.tracks.find((y: any) => y.kind === 'caption'); return !!t && JSON.stringify(t.caption.style) !== JSON.stringify(withTrack?.sequences.seq_main.tracks.find((y: any) => y.kind === 'caption').caption.style); });
     await sleep(300);
-    const shownLook = await page.getByTestId('caption-look').inputValue();
+    const shownLook = await page.locator('[data-testid=caption-look] [role=radio][aria-checked=true]').getAttribute('data-value');
     check('the caption controls list the ready-made looks; choosing one restyles the caption track and the list then shows that look as the current one', lookOptions > 30 && !!styled && shownLook === chosen, { lookOptions, chosen, shownLook });
 
     console.log('\n# layouts for several pictures');
@@ -485,6 +495,7 @@ async function main() {
       const badColour = await call(`/projects/${ep}/elements`, { elementId: 'element.symbol.check', color: 'red' });
       check('graphic elements through the API: the catalogue lists them, one is made as a PNG picture asset that records how it was made, placed as a three-second picture clip, and drawn in the asked colour over a transparent background on a rendered still; an unknown element and a colour that is not #RRGGBB are refused', status.available === true && cat.elements.length === status.count && status.count >= 120 && viaApi.status === 201 && elAsset?.kind === 'image' && elAsset?.image?.hasAlpha === true && elAsset?.provenance?.procedural?.id === 'element.symbol.check' && !!elClip && T.frameIndexAt(elClip.duration, R) === 90 && red > 500 && other < red / 20 && unknown.status === 404 && badColour.status === 400, { count: status.count, asset: elAsset?.image, redPixels: red, otherBrightPixels: other, unknown: unknown.status, badColour: badColour.status });
       await page.goto(`${s.ownerUrl}&project=${ep}`);
+      await page.getByTestId('rail-elements').click(); // the rail's Elements category
       await page.getByTestId('elements-browser').waitFor();
       const tilesAll = await page.getByTestId('element-tile').count();
       await page.getByTestId('elements-cat-bubble').click();

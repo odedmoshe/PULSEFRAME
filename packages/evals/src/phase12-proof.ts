@@ -14,6 +14,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import * as T from '@pulseframe/time';
 import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
+import { chooseFormat, openCardMenu } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/phase12');
@@ -205,7 +206,7 @@ async function main() {
     // Wait for the first painted frame: before it the canvas still has the browser's default size (300×150, ratio 2), which this check once measured by mistake.
     await page.waitForFunction(() => (document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null)?.dataset.frame !== undefined, undefined, { timeout: 15000 });
     const masterRatio = await ratio();
-    await page.getByTestId('format-switch').selectOption(vert);
+    await chooseFormat(page, vert);
     await page.getByTestId('format-badge').waitFor();
     await page.getByTestId('safe-area').waitFor();
     await page.waitForFunction(() => { const c = document.querySelector('[data-testid=preview]') as HTMLCanvasElement; return c.width / c.height < 1; });
@@ -226,7 +227,7 @@ async function main() {
     for (let i = 0; i < 80 && target === undefined; i++) { target = (await call(`/projects/${pid}`)).body.project.settings.loudness?.target; await sleep(100); }
     check('editor: choosing a format changes the preview to its shape with a format badge and the safe-area guide; a profile button adds a format; preflight lists issues for the viewed format and its fix button applies the fix', Math.abs(masterRatio - 640 / 360) < 0.01 && Math.abs(variantRatio - 360 / 640) < 0.01 && variantsAfter === variantsBefore + 1 && shownCodes.includes('no_loudness_target') && hadFix && target === -14 && errors.length === 0, { masterRatio: Number(masterRatio.toFixed(3)), variantRatio: Number(variantRatio.toFixed(3)), shownCodes, target, errors: errors.slice(0, 3) });
     // project frame and library entries from the editor
-    await page.getByTestId('format-switch').selectOption('');
+    await chooseFormat(page, '');
     const pf0 = (await call(`/projects/${pid}`)).body;
     await page.getByTestId('frame-width').fill('481');
     const oddBlocked = await page.getByTestId('frame-apply').isDisabled() && (await page.getByTestId('frame-error').count()) === 1;
@@ -243,9 +244,13 @@ async function main() {
     let pf2: any = pf1;
     for (let i = 0; i < 80; i++) { pf2 = (await call(`/projects/${pid}`)).body; if (pf2.project.settings.width === pf0.project.settings.width) break; await sleep(100); }
     const usedAsset = Object.keys(pf2.project.assets)[0]!;
+    // "remove" is an item of the media card's ⋯ menu since the redesign (UX_REDESIGN §8)
+    await openCardMenu(page, usedAsset);
     const usedDisabled = await page.getByTestId(`remove-${usedAsset}`).isDisabled();
+    await page.keyboard.press('Escape');
     const extra: any = await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { authorization: `Bearer ${s.auth.tokens.agent}`, 'x-filename': 'unused.png' }, body: fs.readFileSync(path.join(root, 'docs/evidence/baselines/phase3-palette-en.png')) })).json();
-    await page.getByTestId(`remove-${extra.assetId}`).waitFor({ timeout: 10000 });
+    await page.getByTestId(`more-${extra.assetId}`).waitFor({ timeout: 10000 });
+    await openCardMenu(page, extra.assetId);
     await page.getByTestId(`remove-${extra.assetId}`).click();
     let pf3: any = pf2;
     for (let i = 0; i < 80; i++) { pf3 = (await call(`/projects/${pid}`)).body; if (!pf3.project.assets[extra.assetId]) break; await sleep(100); }
@@ -258,7 +263,7 @@ async function main() {
     cpage.on('console', (m) => m.type() === 'error' && cErrors.push(m.text()));
     await cpage.goto(`${s.url}/?project=${cp}`);
     await cpage.getByTestId('caption-position').waitFor();
-    await cpage.getByTestId('format-switch').selectOption(cv);
+    await chooseFormat(cpage, cv);
     await cpage.getByTestId('caption-scope').waitFor();
     await cpage.getByTestId('caption-position').selectOption('center');
     let cdoc: any;
@@ -281,7 +286,7 @@ async function main() {
     for (let i = 0; i < 80; i++) { cdoc = (await call(`/projects/${cp}`)).body.project; if (!cdoc.variants[cv].overrides[cueId]) break; await sleep(100); }
     const w2tall = (await still(cp, 10, cv)).png;
     // and on the master view the same field edits the cue itself
-    await cpage.getByTestId('format-switch').selectOption('');
+    await chooseFormat(cpage, '');
     await cpage.waitForFunction(() => !document.querySelector('[data-testid=cue-format-note]'), undefined, { timeout: 5000 }).catch(() => {});
     await cpage.getByTestId('cue-text').fill('HELLO AGAIN');
     await cpage.getByTestId('cue-text').blur();
@@ -311,7 +316,7 @@ async function main() {
     await cpage.getByTestId('cue-merge').click();
     for (let i = 0; i < 80; i++) { cdoc = (await call(`/projects/${cp}`)).body.project; if (capTrack0().clips.length === 1) break; await sleep(100); }
     const merged = capTrack0().clips[0];
-    await cpage.getByTestId('format-switch').selectOption(cv);
+    await chooseFormat(cpage, cv);
     await cpage.locator(`.clip[data-clip-id="${merged.id}"]`).click();
     const beforeHide = { master: (await still(cp, 10)).png, tall: band(await still(cp, 10, cv)) };
     await cpage.getByTestId('cue-format-hide').click();
@@ -338,7 +343,7 @@ async function main() {
     wpage.on('pageerror', (e) => wErrors.push(String(e)));
     await wpage.goto(`${s.url}/?project=${wp}`);
     await wpage.getByTestId('transcript-panel').waitFor();
-    await wpage.getByTestId('format-switch').selectOption(wv);
+    await chooseFormat(wpage, wv);
     await wpage.getByTestId('format-badge').waitFor();
     await wpage.getByTestId('transcript-edit').first().click();
     const noteShown = (await wpage.getByTestId('transcript-format-note').count()) === 1;
