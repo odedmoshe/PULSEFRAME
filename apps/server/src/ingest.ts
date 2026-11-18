@@ -255,9 +255,12 @@ export const stillArgs = (src: string, png: string): string[] => ['-hide_banner'
 /**
  * Phase 2: everything short of a video conversion. A `.cube` goes to the parser (never to ffprobe); anything else to
  * describeMedia; a still in a format the editor does not draw gets its lossless PNG copy at `${workBase}.still.png`. Throws the
- * ApiError of a file that cannot be read (415 unsupported_media). Stores nothing.
+ * ApiError of a file that cannot be read (415 unsupported_media). A still copy that failed for a fault of the machine (ConformError
+ * machineFault: timeout, killed, no ffmpeg) is unsupported_media too, as the synchronous ingest always answered, unless
+ * `machineFaults` is 'throw': then that ConformError is thrown (the import queue keeps the original and lets it be retried).
+ * Stores nothing.
  */
-export async function prepareWithoutConform(src: string, opts: { isCube: boolean; workBase: string; spawn?: SpawnFfmpeg; signal?: AbortSignal }): Promise<Prepared> {
+export async function prepareWithoutConform(src: string, opts: { isCube: boolean; workBase: string; spawn?: SpawnFfmpeg; signal?: AbortSignal; machineFaults?: 'unsupported' | 'throw' }): Promise<Prepared> {
   if (opts.isCube) return { route: 'lut', meta: lutMeta(src) };
   try {
     return { route: 'as-is', meta: await describeMedia(src) };
@@ -277,6 +280,7 @@ export async function prepareWithoutConform(src: string, opts: { isCube: boolean
       if (err instanceof ApiError) throw err;
       if (err instanceof ConformError && err.kind === 'canceled') throw err;
       if (err instanceof ConformError && err.kind === 'disk_full') throw diskFull();
+      if (err instanceof ConformError && err.machineFault && opts.machineFaults === 'throw') throw err; // the queue keeps the original
       throw new ApiError(415, 'unsupported_media', `this ${e.original.codec} picture could not be converted for editing`, {}, 'Convert it to PNG or JPEG and import that.');
     }
   }
@@ -317,9 +321,14 @@ export const conformArgsWithProgress = (src: string, out: string, needs: NeedsCo
 /** Starts ffmpeg with these arguments. */
 export type SpawnFfmpeg = (args: string[]) => ChildProcess;
 const defaultSpawn: SpawnFfmpeg = (args) => spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
-/** Why an ffmpeg run did not give a usable result. */
+/**
+ * Why an ffmpeg run did not give a usable result. 'failed' (ffmpeg ran and reported an error) and 'not_editable' are faults
+ * of the file. 'timeout', 'killed' (ended by a signal, e.g. the out-of-memory killer, or out of memory) and 'no_ffmpeg' (not
+ * installed) are faults of the machine or its setup: the same file may convert later (machineFault).
+ */
 export class ConformError extends Error {
-  constructor(public kind: 'canceled' | 'timeout' | 'disk_full' | 'failed' | 'not_editable', message: string) { super(message); }
+  constructor(public kind: 'canceled' | 'timeout' | 'disk_full' | 'failed' | 'not_editable' | 'killed' | 'no_ffmpeg', message: string) { super(message); }
+  get machineFault(): boolean { return this.kind === 'timeout' || this.kind === 'killed' || this.kind === 'no_ffmpeg'; }
 }
 /**
  * One ffmpeg run, spawned (killable) at lower priority. Kills it (SIGKILL) on `signal` or after `timeoutMs`. ENOSPC (the
@@ -347,13 +356,16 @@ export async function runFfmpeg(args: string[], opts: { spawn?: SpawnFfmpeg; tim
   try {
     await new Promise<void>((resolve, reject) => {
       child.once('error', reject);
-      child.once('close', (code) => (code === 0 && !aborted && !timedOut ? resolve() : reject(Object.assign(new Error(`ffmpeg exited with ${code}`), { exitCode: code }))));
+      child.once('close', (code, sig) => (code === 0 && !aborted && !timedOut ? resolve() : reject(Object.assign(new Error(sig ? `ffmpeg was ended by ${sig}` : `ffmpeg exited with ${code}`), { exitCode: code, exitSignal: sig }))));
     });
   } catch (e: any) {
     if (aborted) throw new ConformError('canceled', 'ffmpeg was stopped');
     if (timedOut) throw new ConformError('timeout', `ffmpeg did not finish within ${Math.round(opts.timeoutMs / 60_000)} minutes`);
     if (e?.code === 'ENOSPC' || /No space left on device|ENOSPC/i.test(stderr)) throw new ConformError('disk_full', 'the disk filled up while converting');
-    if (e?.code === 'ENOENT') throw new ConformError('failed', 'ffmpeg is not installed on this machine');
+    if (e?.code === 'ENOENT') throw new ConformError('no_ffmpeg', 'ffmpeg is not installed on this machine');
+    // Ended from outside (the out-of-memory killer sends SIGKILL) or out of memory: the machine's fault, not the file's.
+    if (e?.exitSignal || ('exitCode' in (e ?? {}) && e.exitCode === null)) throw new ConformError('killed', `ffmpeg was stopped by the system (${e.exitSignal ?? 'no exit code'}), for example for lack of memory`);
+    if (/Cannot allocate memory|ENOMEM|out of memory/i.test(stderr)) throw new ConformError('killed', 'ffmpeg ran out of memory');
     throw new ConformError('failed', stderr.trim().split('\n').pop()?.slice(0, 300) || String(e?.message ?? e));
   } finally {
     clearTimeout(timer);

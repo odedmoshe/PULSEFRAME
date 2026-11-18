@@ -118,6 +118,16 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
     if (code === 'unsupported_media' || code === 'conform_failed') dropOriginalIfUnused(job);
     settle(job.id);
   }
+  /**
+   * ffmpeg timed out, was ended by the system (the out-of-memory killer) or is not installed: a fault of the machine or its setup,
+   * not of the file. internal_error (retryable); the original is kept, so a retry needs nothing from the phone.
+   */
+  function machineFault(job: JobRow, e: ConformError, what: string, details: Record<string, unknown> = {}) {
+    const hint = e.kind === 'no_ffmpeg' ? 'Install ffmpeg on this computer, then retry the file.'
+      : e.kind === 'timeout' ? 'Retry the file when the computer is less busy.'
+      : 'Close other programs to free memory, then retry the file.';
+    fail(job, 'internal_error', `this computer could not ${what}: ${e.message}`, e.kind === 'no_ffmpeg' ? 503 : 500, { ...details, ffmpeg: e.kind }, hint);
+  }
   function finishCanceled(job: JobRow, by: string) {
     store.updateJob(job.id, { status: 'canceled', stage: null, error: errorOf(job, 'canceled', `the import was canceled${by ? ` by ${by}` : ''}`, 409) });
     settle(job.id);
@@ -264,10 +274,11 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
     const isCube = /\.cube$/i.test(input.name);
     let prepared;
     try {
-      prepared = await prepareWithoutConform(blob, { isCube, workBase: path.join(store.tmpDir, importTempName(job.id, attempt, randomBytes(4).toString('hex'))), spawn, signal: ac.signal });
+      prepared = await prepareWithoutConform(blob, { isCube, workBase: path.join(store.tmpDir, importTempName(job.id, attempt, randomBytes(4).toString('hex'))), spawn, signal: ac.signal, machineFaults: 'throw' });
     } catch (e) {
       if (stopped) return;
       if (e instanceof ConformError && e.kind === 'canceled') return void finishCanceled(job, '');
+      if (e instanceof ConformError && e.machineFault) return machineFault(job, e, 'make an editable copy of this picture');
       if (e instanceof ApiError && e.code === 'disk_full') return fail(job, 'disk_full', e.message, 507, undefined, e.hint);
       if (e instanceof ApiError && e.status === 415) return fail(job, 'unsupported_media', e.message, 415, e.details, e.hint);
       throw e;
@@ -351,6 +362,8 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
           if (e.kind === 'canceled') return void finishCanceled(job, '');
           if (e.kind === 'disk_full') return fail(job, 'disk_full', 'the disk filled up while converting this file', 507, { reasons: needs.reasons }, 'Free some disk space, then retry the file.');
           if (e.kind === 'not_editable') return fail(job, 'conform_failed', e.message, 415, { reasons: needs.reasons });
+          if (e.machineFault) return machineFault(job, e, 'convert this file', { reasons: needs.reasons });
+          // ffmpeg ran and reported an error: a fault of the file.
           return fail(job, 'conform_failed', `the file needs conforming (${needs.reasons.join(', ')}) and ffmpeg could not convert it: ${e.message}`, 415, { reasons: needs.reasons });
         }
         throw e;

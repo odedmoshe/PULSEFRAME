@@ -15,7 +15,7 @@ import type { Asset, ImportJobOutput } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import { readCapture } from './captureMeta.ts';
 import { CONFORM_RECIPE, importIdempotencyKey, type ImportQueue, type ReceiveRequest } from './importContracts.ts';
-import { conformArgs, conformArgsWithProgress, ingestUpload, NeedsConform } from './ingest.ts';
+import { ConformError, conformArgs, conformArgsWithProgress, ingestUpload, NeedsConform, runFfmpeg } from './ingest.ts';
 import { createImportQueue } from './importQueue.ts';
 import { FifoComputeLane } from './lane.ts';
 import { collectGarbage, dataDirBytes, storageReport } from './storage.ts';
@@ -61,7 +61,7 @@ beforeAll(() => {
 afterAll(() => { for (const d of [...dirs, root]) fs.rmSync(d, { recursive: true, force: true }); });
 
 interface World { store: Store; lane: FifoComputeLane; queue: ImportQueue; spawned: string[][]; ensured: string[]; free: { bytes: number | null }; pid: string; dir: string; events: { at: number; row: JobRow }[] }
-function world(opts: { maxStorageBytes?: number; slowStart?: number; store?: Store; dir?: string } = {}): World {
+function world(opts: { maxStorageBytes?: number; slowStart?: number; store?: Store; dir?: string; spawn?: (args: string[]) => ReturnType<typeof spawn> } = {}): World {
   const dir = opts.dir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'pf-importq-w-'));
   if (!opts.dir) dirs.push(dir);
   const store = opts.store ?? new Store(dir, opts.maxStorageBytes ?? 0);
@@ -77,6 +77,7 @@ function world(opts: { maxStorageBytes?: number; slowStart?: number; store?: Sto
     freeBytes: () => free.bytes,
     spawnFfmpeg: (args) => {
       spawned.push(args);
+      if (opts.spawn) return opts.spawn(args); // labelled: a test's own stand-in for ffmpeg
       // labelled: a slow start makes a conversion long without changing its arguments
       return opts.slowStart ? spawn('sh', ['-c', `sleep ${opts.slowStart}; exec ffmpeg "$@"`, 'sh', ...args], { stdio: ['ignore', 'pipe', 'pipe'] }) : spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
     },
@@ -296,6 +297,61 @@ describe('import queue: restart and recovery', () => {
     // a retry has its own key, so it imports the file
     const retried = await w.queue.wait(w.queue.retry(row.id, 'user:local').id);
     expect(retried.status).toBe('succeeded');
+  }, 60_000);
+});
+
+describe('import queue: a conversion that fails', () => {
+  const stored = (w: World, row: JobRow) => fs.existsSync(w.store.blobPath(row.input.originalHash));
+  // labelled stand-ins for ffmpeg: one ended by SIGKILL (as the out-of-memory killer ends it), one missing, one that reports a decode error
+  const killed = () => spawn('sh', ['-c', 'kill -9 $$'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const missing = () => spawn('pf-no-such-ffmpeg-binary', [], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const decodeError = () => spawn('sh', ['-c', 'echo "Invalid data found when processing input" >&2; exit 1'], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+  it('runFfmpeg tells the file\'s faults from the machine\'s: timeout, a signal, out of memory and no ffmpeg are machine faults', async () => {
+    const sh = (script: string) => () => spawn('sh', ['-c', script], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const kindOf = async (s: () => ReturnType<typeof spawn>, timeoutMs = 30_000) => {
+      const e = await runFfmpeg([], { spawn: s, timeoutMs }).then(() => null, (x) => x);
+      expect(e).toBeInstanceOf(ConformError);
+      return [(e as ConformError).kind, (e as ConformError).machineFault];
+    };
+    expect(await kindOf(sh('exec sleep 30'), 200)).toEqual(['timeout', true]);
+    expect(await kindOf(killed)).toEqual(['killed', true]);
+    expect(await kindOf(sh('echo "Cannot allocate memory" >&2; exit 1'))).toEqual(['killed', true]);
+    expect(await kindOf(missing)).toEqual(['no_ffmpeg', true]);
+    expect(await kindOf(decodeError)).toEqual(['failed', false]);
+    expect(await kindOf(sh('echo "No space left on device" >&2; exit 1'))).toEqual(['disk_full', false]);
+  }, 60_000);
+
+  it('ffmpeg ended by the system (SIGKILL, out of memory) is a server fault: internal_error, retryable, the original kept, and a retry converts it', async () => {
+    const w = world({ spawn: killed });
+    const row = await send(w, hevc('oom'));
+    const done = await w.queue.wait(row.id);
+    expect(done).toMatchObject({ status: 'failed', error: { code: 'internal_error', retryable: true, details: { ffmpeg: 'killed', reasons: ['codec'] } } });
+    expect(w.queue.view(done).error).toMatchObject({ code: 'internal_error', retryable: true });
+    expect(stored(w, row)).toBe(true);
+    // the same file, retried on the same queue once memory is back (here: a queue with the real ffmpeg on the same store)
+    await w.queue.stop();
+    const w2 = world({ store: w.store, dir: w.dir });
+    const again = await w2.queue.wait(w2.queue.retry(row.id, 'user:local').id);
+    expect(again).toMatchObject({ status: 'succeeded', output: { converted: true } });
+  }, 120_000);
+
+  it('ffmpeg not installed is an honest setup state: internal_error with an install hint, the original kept', async () => {
+    const w = world({ spawn: missing });
+    const row = await send(w, hevc('no-ffmpeg'));
+    const done = await w.queue.wait(row.id);
+    expect(done).toMatchObject({ status: 'failed', error: { code: 'internal_error', retryable: true, status: 503, details: { ffmpeg: 'no_ffmpeg' } } });
+    expect((done.error as { hint?: string }).hint).toMatch(/Install ffmpeg/);
+    expect(stored(w, row)).toBe(true);
+  }, 60_000);
+
+  it('ffmpeg that ran and reported a decode error is the file\'s fault: conform_failed, not retryable, the original removed', async () => {
+    const w = world({ spawn: decodeError });
+    const row = await send(w, hevc('decode-error'));
+    const done = await w.queue.wait(row.id);
+    expect(done).toMatchObject({ status: 'failed', error: { code: 'conform_failed', retryable: false } });
+    expect((done.error as { message: string }).message).toMatch(/Invalid data found/);
+    expect(stored(w, row)).toBe(false);
   }, 60_000);
 });
 
