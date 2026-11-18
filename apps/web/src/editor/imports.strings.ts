@@ -15,6 +15,9 @@ const he = {
   skippedNotMedia: 'דילגנו על {count} קבצים שאינם מדיה', skippedTooMany: 'דילגנו על {count} קבצים: אפשר לייבא עד 500 בבת אחת',
   announceReady: '{name} מוכן לעריכה', announceFailed: 'הייבוא של {name} נכשל',
   stored: 'הקובץ נשמר במחשב; ההמרה לעריכה נמשכת ברקע',
+  convertingPlain: 'ממיר', noProject: 'אין פרויקט פתוח', uploadInterrupted: 'ההעלאה נקטעה', failedUnknown: 'הייבוא לא הושלם',
+  listLabel: 'קבצים בייבוא', kindVideo: 'וידאו', kindSound: 'סאונד', kindImage: 'תמונה', kindFile: 'קובץ',
+  removeLocal: 'הסרה',
 } as const;
 const en: Record<keyof typeof he, string> = {
   section: 'Importing ({count})',
@@ -26,5 +29,8 @@ const en: Record<keyof typeof he, string> = {
   skippedNotMedia: 'Skipped {count} files that are not media', skippedTooMany: 'Skipped {count} files: up to 500 can be imported at once',
   announceReady: '{name} is ready to edit', announceFailed: 'Importing {name} failed',
   stored: 'The file is stored on this computer; converting it for editing continues in the background',
+  convertingPlain: 'Converting', noProject: 'No project is open', uploadInterrupted: 'The upload was interrupted', failedUnknown: 'The import did not finish',
+  listLabel: 'Files being imported', kindVideo: 'Video', kindSound: 'Sound', kindImage: 'Picture', kindFile: 'File',
+  removeLocal: 'Remove',
 };
 export const IMPORTS_STRINGS: { he: typeof he; en: Record<keyof typeof he, string> } = { he, en };
