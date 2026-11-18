@@ -16,6 +16,8 @@
  * the field menu), the Hanukkah pack page, the built-in music tab of the audio drawer and the text drawer with its fonts.
  * Keyframe curves and motion paths (ADR-0019): the keyframe strip of a selected title with the motion path on the stage
  * (vertices and bend grips), and the curve picker (a modal dialog opened from a strip key with Enter).
+ * Perform mode (ADR-0025): the perform view at rest, a take under review (ghost banner and chips), the tap calibration dialog
+ * (modal) and the camera overlay on a selected clip.
  *   pnpm build && pnpm audit:a11y
  */
 import { execFileSync } from 'node:child_process';
@@ -218,6 +220,7 @@ async function main() {
       const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
       await page.addInitScript((l) => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); localStorage.setItem('pf.lang', l); } catch { /* storage unavailable */ } }, lang);
       await page.addInitScript('globalThis.__name = (f) => f'); // tsx/esbuild helper referenced by functions passed to page.evaluate
+      await page.addInitScript(() => { (globalThis as { __pfPerformProof?: boolean }).__pfPerformProof = true; }); // perform mode's test hook (injectTaps), as proof:perform sets it
       await page.goto(`${s.ownerUrl}&project=${pid}`);
       await page.getByTestId('timecode').waitFor();
       if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
@@ -696,6 +699,32 @@ async function main() {
           keyboardOk = (await page.locator('[data-testid=multicam-entry] [data-state=done]').count()) === 1;
         }
         await auditState('multicam-keyboard-path', { keyboardOk });
+      }
+      // perform mode (ADR-0025): the view at rest, a take under review (taps injected through the view's test hook, the real
+      // planner), the tap calibration dialog (modal), and the camera overlay on a selected clip; then back to the edit mode
+      {
+        await page.goto(`${s.ownerUrl}&project=${pid}`);
+        await page.getByTestId('timecode').waitFor();
+        if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+        await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+        await page.keyboard.press('Shift+Digit7');
+        await page.getByTestId('perform-view').waitFor({ timeout: 10000 }).catch(() => {});
+        await page.waitForFunction(() => !!(window as any).__pfPerform, undefined, { timeout: 10000 }).catch(() => {});
+        await auditState('perform-view', { shown: (await page.getByTestId('perform-view').count()) === 1 && (await page.getByTestId('perform-pad').count()) === 8 });
+        await page.evaluate(() => (window as any).__pfPerform?.injectTaps([{ pad: 0, down: 0.5, up: 0.7 }, { pad: 1, down: 1, up: 1.3 }, { pad: 4, down: 1.05, up: 1.3 }]));
+        await page.getByTestId('perform-chip').first().waitFor({ timeout: 10000 }).catch(() => {});
+        await auditState('perform-take-review', { shown: (await page.getByTestId('perform-ghost-banner').count()) === 1 && (await page.getByTestId('perform-chip').count()) === 3 });
+        await page.getByTestId('perform-discard').click().catch(() => {});
+        const cd = await dialogBehaviour('perform-calibrate-dialog', async () => { await page.getByTestId('perform-calibrate').click(); }, '[data-testid=perform-calibrate]');
+        await auditState('perform-calibration-dialog', { startsInside: cd.startsInside, tabStepsThatLeftTheDialog: cd.tabStepsThatLeftTheDialog }, true);
+        Object.assign(states.at(-1), await cd.close());
+        await page.locator(`.clip[data-clip-id="${clipId}"]`).click({ position: { x: 4, y: 4 } });
+        await page.getByTestId('perform-camera').click();
+        await page.getByTestId('perform-camera-crop').waitFor({ timeout: 10000 }).catch(() => {});
+        await auditState('perform-camera-overlay', { shown: (await page.getByTestId('perform-camera-overlay').count()) === 1 && (await page.getByTestId('perform-camera-crop').count()) === 1 });
+        await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+        await page.keyboard.press('Shift+Digit1');
+        await page.waitForFunction(() => !document.querySelector('[data-testid=perform-view]'), undefined, { timeout: 10000 }).catch(() => {});
       }
       // the start hub of an empty project
       await page.goto(`${s.ownerUrl}&project=${emptyPid}`);

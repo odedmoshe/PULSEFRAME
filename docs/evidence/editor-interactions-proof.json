@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-18T21:31:24.496Z",
+  "ranAt": "2026-11-18T23:29:18.094Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 58,
-  "total": 58,
+  "passed": 64,
+  "total": 64,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -312,7 +312,7 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2.08,
+        "fwd2": 2,
         "sh2": "◀◀ ×1",
         "back1": -0.99,
         "sh3": "◀◀ ×2",
@@ -328,9 +328,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 1,
+        "playSpeed": 1.02,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 2.01,
+        "shuttleSpeed": 2.03,
         "staysPaused": true
       }
     },
@@ -358,30 +358,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_bb33304d170",
-          "clp_bb33304d171"
+          "clp_602dad6f970",
+          "clp_602dad6f971"
         ],
         "afterAB": [
-          "clp_bb33304d170",
-          "clp_bb33304d171"
+          "clp_602dad6f970",
+          "clp_602dad6f971"
         ],
         "afterAdd": [
-          "clp_bb33304d170",
-          "clp_bb33304d171",
-          "clp_bb33304d172"
+          "clp_602dad6f970",
+          "clp_602dad6f971",
+          "clp_602dad6f972"
         ],
         "midEscape": [
-          "clp_bb33304d171"
+          "clp_602dad6f971"
         ],
         "afterEscape": [
-          "clp_bb33304d170",
-          "clp_bb33304d171",
-          "clp_bb33304d172"
+          "clp_602dad6f970",
+          "clp_602dad6f971",
+          "clp_602dad6f972"
         ],
         "afterEscapeUp": [
-          "clp_bb33304d170",
-          "clp_bb33304d171",
-          "clp_bb33304d172"
+          "clp_602dad6f970",
+          "clp_602dad6f971",
+          "clp_602dad6f972"
         ]
       }
     },
@@ -543,7 +543,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 20/1799",
+        "valueText": "עוקב קדימה 15/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -804,18 +804,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_15b0955f590",
-          "ast_54ddd8385b0",
-          "ast_c5186cc5650",
-          "ast_ce1db5ba9b0",
-          "ast_10be188df50"
+          "ast_c4985b85100",
+          "ast_4abc96f94e0",
+          "ast_a13b7698020",
+          "ast_ade2bce5950",
+          "ast_244a3413970"
         ],
         "order1": [
-          "ast_15b0955f590",
-          "ast_ce1db5ba9b0",
-          "ast_54ddd8385b0",
-          "ast_c5186cc5650",
-          "ast_10be188df50"
+          "ast_c4985b85100",
+          "ast_ade2bce5950",
+          "ast_4abc96f94e0",
+          "ast_a13b7698020",
+          "ast_244a3413970"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -839,7 +839,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-18T21:28:10.820Z",
+          "createdAt": "2026-11-18T23:26:39.419Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -965,8 +965,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_cdb657b60d0",
-          "seq_cdb657b60d7"
+          "seq_79fb0a90250",
+          "seq_79fb0a90257"
         ],
         "revisions": 1,
         "transactions": [
@@ -976,7 +976,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_cdb657b60d0",
+          "seq": "seq_79fb0a90250",
           "selected": "true"
         }
       }
@@ -1007,9 +1007,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_cdb657b60d0"
+          "seq": "seq_79fb0a90250"
         },
-        "secondTab": "seq_cdb657b60d0",
+        "secondTab": "seq_79fb0a90250",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1021,6 +1021,112 @@
       "name": "no uncaught errors in the page with the shorts run",
       "ok": true,
       "detail": []
+    },
+    {
+      "name": "perform: Shift+7 enters the perform mode (its view mounts, its mode button is checked); the 7-button mode bar is one row at 1280 px",
+      "ok": true,
+      "detail": {
+        "entered": true,
+        "bar": [
+          {
+            "id": "workspace-pro",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-color",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-sound",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-captions",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-deliver",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-shorts",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-perform",
+            "top": 10,
+            "checked": "true"
+          }
+        ]
+      }
+    },
+    {
+      "name": "perform: a take recorded with R, a pad and Space, then discarded with Escape, leaves the revision and the history unchanged",
+      "ok": true,
+      "detail": {
+        "revisions": 0,
+        "entries": 0
+      }
+    },
+    {
+      "name": "perform: a keyboard-only take (R, 1 2 3, Space, Enter) gives exactly ONE new history entry (apply_take); Shift+1…7 while recording add no tap and leave the mode; the ghost banner shows in review",
+      "ok": true,
+      "detail": {
+        "stillRecording": true,
+        "tapsRec": 3,
+        "banner": true,
+        "entries": 1,
+        "ops": [
+          "apply_take"
+        ]
+      }
+    },
+    {
+      "name": "perform: Escape closes the pad editor and the calibration dialog (the focus was inside each); the focus returns to the button that opened it; nothing was recorded",
+      "ok": true,
+      "detail": {
+        "peOpen": true,
+        "peFocusInside": true,
+        "peClosed": true,
+        "peBack": true,
+        "calOpen": true,
+        "calFocusInside": true,
+        "calClosed": true,
+        "calBack": true,
+        "idle": true
+      }
+    },
+    {
+      "name": "perform: no uncaught errors in the page",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "perform: while multicam's program is live the pads take no number keys (no aria-keyshortcuts, the view says so); during a take a digit is neither a tap nor an angle switch; outside a take Digit2 switches the angle (one history entry)",
+      "ok": true,
+      "detail": {
+        "note": true,
+        "keys": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "tapsWhile": 0,
+        "entriesDuringTake": 0,
+        "switched": true,
+        "errors": []
+      }
     }
   ]
 }
