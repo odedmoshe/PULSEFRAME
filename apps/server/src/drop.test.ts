@@ -190,6 +190,26 @@ function raw(text: string | Buffer, opts: { from?: string; waitMs?: number } = {
     setTimeout(() => s.destroy(), opts.waitMs ?? 2000);
   });
 }
+/** A raw socket that writes `text` and then one more byte every 200 ms (a slowloris body); how() is 'open' until it ends. */
+function trickle(text: string, from = PHONE): { data: () => string; how: () => string; stop: () => void } {
+  const s = net.connect({ host: BIND, port: PORT, localAddress: from });
+  const parts: Buffer[] = [];
+  let how = 'open';
+  s.on('connect', () => s.write(text));
+  s.on('data', (d: Buffer) => parts.push(d));
+  s.on('error', (e: NodeJS.ErrnoException) => { if (how === 'open') how = e.code ?? 'error'; });
+  s.on('close', () => { if (how === 'open') how = 'closed'; clearInterval(drip); });
+  const drip = setInterval(() => { if (!s.destroyed && s.writable) s.write('x'); }, 200);
+  return { data: () => Buffer.concat(parts).toString('utf8'), how: () => how, stop: () => { clearInterval(drip); s.destroy(); } };
+}
+/** A raw socket that connects and sends nothing; how() is 'open' until the door drops it. */
+function hold(from: string): { how: () => string; stop: () => void } {
+  const s = net.connect({ host: BIND, port: PORT, localAddress: from });
+  let how = 'open';
+  s.on('error', (e: NodeJS.ErrnoException) => { if (how === 'open') how = e.code ?? 'error'; });
+  s.on('close', () => { if (how === 'open') how = 'closed'; });
+  return { how: () => how, stop: () => { s.destroy(); } };
+}
 /**
  * A client that keeps writing a large body in 1 MiB chunks, as a phone browser does, and reads whatever the door answers.
  * Resolves with the answer (if one arrived) and the client-side error (if any) once the exchange ends.
@@ -421,6 +441,77 @@ describe('GET / serves the page and nothing else is served', { timeout: 60_000 }
     const r = await raw(`POST /hello HTTP/1.1\r\nHost: ${BIND}:${PORT}\r\nX-Slow: `, { waitMs: 5000 });
     expect(Date.now() - t0).toBeLessThan(4000);
     expect(r.how).not.toBe('open');
+  });
+
+  it('a GET / that declares a body is refused, and a trickled body is cut after drainMs (slowloris on the page)', async () => {
+    const { door, clock } = setup();
+    await openCode(door);
+    for (const framing of ['Content-Length: 100000', 'Transfer-Encoding: chunked']) {
+      const s = trickle(`GET / HTTP/1.1\r\nHost: ${BIND}:${PORT}\r\n${framing}\r\n\r\n${framing.startsWith('Transfer') ? '10\r\n' : ''}x`, OTHER);
+      await until(() => s.data().length > 0);
+      expect(s.data()).toMatch(/^HTTP\/1\.1 400 /);
+      expect(s.data()).toMatch(/\r\nconnection: close\r\n/i);
+      expect(s.data().endsWith('{"error":{"code":"invalid_request"}}')).toBe(true);
+      await new Promise((r) => setTimeout(r, 300));
+      expect(s.how()).toBe('open'); // still draining a body a browser might be sending
+      clock.advance(DROP_DEFAULTS.drainMs);
+      await until(() => s.how() !== 'open');
+      s.stop();
+    }
+    // a GET / without a body still gets the page
+    expect((await send({ path: '/', from: OTHER })).status).toBe(200);
+  });
+
+  it('a hello, status or bye body that trickles is given up after drainMs, not headersTimeout, then drained for drainMs', async () => {
+    const { door, clock, logs } = setup();
+    const { token } = await openCode(door);
+    for (const path of ['/hello', '/status', '/bye']) {
+      const auth = path === '/hello' ? 'Content-Type: application/json' : `Authorization: Bearer ${'A'.repeat(43)}`;
+      const s = trickle(`POST ${path} HTTP/1.1\r\nHost: ${BIND}:${PORT}\r\n${auth}\r\nContent-Length: 400\r\n\r\n{`, OTHER);
+      await new Promise((r) => setTimeout(r, 300));
+      if (path === '/hello') {
+        expect(s.data()).toBe('');
+        clock.advance(DROP_DEFAULTS.drainMs);
+        await until(() => s.data().length > 0);
+        expect(s.data()).toMatch(/^HTTP\/1\.1 400 /);
+      } else {
+        expect(s.data()).toMatch(/^HTTP\/1\.1 401 /); // no session: refused before the body, then drained
+      }
+      expect(s.how()).toBe('open');
+      clock.advance(DROP_DEFAULTS.drainMs);
+      await until(() => s.how() !== 'open');
+      s.stop();
+    }
+    expect(logs.some((l) => l.includes('wrong claim'))).toBe(false); // a slow hello is not a wrong claim
+    await claim(token); // and the code is still claimable
+  });
+
+  it('one device holds at most half the connections; once claimed, the phone keeps its half and other devices are cut off', async () => {
+    const OTHER2 = '127.0.0.5';
+    const { door } = setup({ maxConnections: 4 });
+    const { token } = await openCode(door);
+    // before the claim: one device gets two of the four slots, a third socket is dropped
+    const a = [hold(OTHER), hold(OTHER)];
+    await new Promise((r) => setTimeout(r, 300));
+    const a3 = hold(OTHER);
+    await until(() => a3.how() !== 'open');
+    expect(a.map((s) => s.how())).toEqual(['open', 'open']);
+    // a second device fills the rest but one: the phone still claims on the last slot
+    const b = [hold(OTHER2)];
+    await new Promise((r) => setTimeout(r, 300));
+    const session = await claim(token);
+    // the claim cut every other device's connection, so the phone's half is free again
+    await until(() => [...a, ...b].every((s) => s.how() !== 'open'));
+    // after the claim other devices share only the other half
+    const c = [hold(OTHER), hold(OTHER2)];
+    await new Promise((r) => setTimeout(r, 300));
+    const c3 = hold(OTHER2);
+    await until(() => c3.how() !== 'open');
+    expect(c.map((s) => s.how())).toEqual(['open', 'open']);
+    // and the phone uploads while other devices hold all they may
+    expect((await upload(session, Buffer.from('abc'))).status).toBe(201);
+    expect((await send({ method: 'POST', path: '/status', headers: bearer(session) })).status).toBe(200);
+    for (const s of [...a, a3, ...b, ...c, c3]) s.stop();
   });
 
   it('oversized headers are refused (maxHeaderSize)', async () => {

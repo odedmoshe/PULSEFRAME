@@ -20,6 +20,8 @@
  * An early refusal is written with Connection: close and the request body is then drained for at most limits.drainMs or
  * limits.drainBytes before the socket is destroyed, so a phone browser still sending a large body reads the refusal instead of
  * a reset.
+ * Connections: one device holds at most half of limits.maxConnections; after the claim the other devices share the other half
+ * and lose every connection they held at the moment of the claim (admit(), cutOthers()).
  */
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { EventEmitter } from 'node:events';
@@ -78,6 +80,8 @@ interface Code {
   issuedAt: number; lastActivity: number; closedAt: number | null;
   badHellos: number; files: number; bytes: number; inFlightBytes: number;
   uploads: Set<Upload>; buckets: Map<string, Buckets>; lifeTimer: unknown; page: DropPage | null;
+  /** The open sockets by peer IP (connection admission, see admit()). */
+  sockets: Map<string, Set<Socket>>;
 }
 
 export function createDropDoor(deps: DropDoorOptions): DropDoor {
@@ -208,7 +212,10 @@ export function createDropDoor(deps: DropDoorOptions): DropDoor {
     req.resume();
   };
 
-  /** A small request body (hello, status, bye): at most `max` bytes, read within headersTimeoutMs; null when it is not. */
+  /**
+   * A small request body (hello, status, bye): at most `max` bytes, read within drainMs (a phone sends a few hundred bytes in
+   * one packet; headersTimeoutMs would let a trickled body hold a connection five times as long); null when it is not.
+   */
   const readSmall = (req: IncomingMessage, max: number): Promise<Buffer | null> => new Promise((resolve) => {
     const declared = req.headers['content-length'];
     if (declared !== undefined && (parseContentLength(declared) ?? Infinity) > max) { resolve(null); return; }
@@ -224,7 +231,7 @@ export function createDropDoor(deps: DropDoorOptions): DropDoor {
       resolve(v);
     };
     const onData = (chunk: Buffer) => { size += chunk.length; if (size > max) settle(null); else parts.push(chunk); };
-    const timer = timers.setTimer(() => settle(null), limits.headersTimeoutMs);
+    const timer = timers.setTimer(() => settle(null), limits.drainMs);
     req.on('data', onData);
     req.once('end', () => settle(Buffer.concat(parts)));
     req.once('error', () => settle(null));
@@ -255,8 +262,40 @@ export function createDropDoor(deps: DropDoorOptions): DropDoor {
     return b[cls];
   };
 
+  // ---------- connections ----------
+  /**
+   * Connection admission, on top of server.maxConnections (Node drops anything past it before this runs). One device holds at
+   * most half the slots; once a phone has claimed the code, the other devices together hold at most the other half and every
+   * connection they had is cut at the claim, so nothing on the network can lock a connected phone out of the door mid-batch,
+   * however long it keeps its own connections open.
+   */
+  const perPeer = Math.max(1, Math.floor(limits.maxConnections / 2));
+  const admit = (c: Code, socket: Socket) => {
+    const peer = plainIPv4(socket.remoteAddress);
+    if (!sameSubnet(peer, c.address, c.netmask)) { socket.destroy(); return; }
+    let set = c.sockets.get(peer);
+    if ((set?.size ?? 0) >= perPeer) { socket.destroy(); return; }
+    if (c.state === 'connected' && peer !== c.claimIp) {
+      let others = 0;
+      for (const [ip, s] of c.sockets) if (ip !== c.claimIp) others += s.size;
+      if (others >= limits.maxConnections - perPeer) { socket.destroy(); return; }
+    }
+    if (!set) c.sockets.set(peer, set = new Set());
+    const mine = set;
+    mine.add(socket);
+    socket.once('close', () => { mine.delete(socket); if (mine.size === 0 && c.sockets.get(peer) === mine) c.sockets.delete(peer); });
+  };
+  /** At the claim: every connection of every other device goes, so the phone's half of the slots is free whatever they held. */
+  const cutOthers = (c: Code, phone: string) => {
+    for (const [ip, set] of c.sockets) if (ip !== phone) for (const s of set) s.destroy();
+  };
+
   // ---------- routes ----------
-  const servePage = (c: Code, res: ServerResponse) => {
+  const servePage = (c: Code, req: IncomingMessage, res: ServerResponse) => {
+    // requestTimeout is 0 and only upload() has a stall timer, so a GET / with a body would otherwise keep its socket for as
+    // long as the body trickles: refuse any body, with the bounded drain of every early refusal.
+    const length = req.headers['content-length'];
+    if (req.headers['transfer-encoding'] !== undefined || (length !== undefined && parseContentLength(length) !== 0)) return refuse(req, res, 400, 'invalid_request');
     const page = c.page ?? (c.page = deps.page());
     res.writeHead(200, { ...BASE_HEADERS, 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': page.body.length, 'Content-Security-Policy': page.csp });
     res.end(page.body);
@@ -316,6 +355,7 @@ export function createDropDoor(deps: DropDoorOptions): DropDoor {
     c.token = null; c.pin = null;
     c.lastActivity = now();
     armLife(c);
+    cutOthers(c, peer);
     log(`[drop] code ${c.dropId} claimed by a phone (${kind === 'token' ? 'QR' : 'typed code'})`);
     emit(c);
     answer(res, 200, helloBody(c, session));
@@ -464,7 +504,7 @@ export function createDropDoor(deps: DropDoorOptions): DropDoor {
     };
     try {
       switch (route) {
-        case 'GET /': return servePage(c, res);
+        case 'GET /': return servePage(c, req, res);
         case 'POST /hello': return run(hello(c, peer, req, res));
         case 'POST /upload': return run(upload(c, peer, req, res, expectsContinue));
         case 'POST /status': return run(status(c, peer, req, res));
@@ -481,7 +521,8 @@ export function createDropDoor(deps: DropDoorOptions): DropDoor {
     const server = http.createServer({
       maxHeaderSize: limits.maxHeaderBytes,
       headersTimeout: limits.headersTimeoutMs,
-      requestTimeout: 0, // a slow phone may take long over a 2 GB file; the stall timer guards the body instead
+      requestTimeout: 0, // a slow phone may take long over a 2 GB file: the stall timer guards an upload body, and every other
+      // body is bounded by drainMs (GET / refuses one, hello/status/bye read within drainMs, refusals drain within drainMs)
       keepAliveTimeout: limits.keepAliveTimeoutMs,
       connectionsCheckingInterval: limits.connectionsCheckingIntervalMs,
       requireHostHeader: true,
@@ -490,9 +531,7 @@ export function createDropDoor(deps: DropDoorOptions): DropDoor {
     server.maxConnections = limits.maxConnections;
     // Expect: 100-continue is answered only when the upload is accepted, so a refused body is never invited.
     server.on('checkContinue', (req, res) => onRequest(c, req, res, true));
-    server.on('connection', (socket: Socket) => {
-      if (!sameSubnet(plainIPv4(socket.remoteAddress), c.address, c.netmask)) socket.destroy();
-    });
+    server.on('connection', (socket: Socket) => admit(c, socket));
     server.on('clientError', (err: NodeJS.ErrnoException, socket: Socket) => {
       if (!socket.writable || err.code === 'ECONNRESET') { socket.destroy(); return; }
       const st = err.code === 'HPE_HEADER_OVERFLOW' ? 431 : err.code === 'ERR_HTTP_REQUEST_TIMEOUT' ? 408 : 400;
@@ -524,7 +563,7 @@ export function createDropDoor(deps: DropDoorOptions): DropDoor {
       server: null as unknown as http.Server, closed,
       token, pin, tokenDigest: digest(token), pinDigest: digest(pin), sessionDigest: null, claimIp: null,
       state: 'waiting', closeReason: null, issuedAt: at, lastActivity: at, closedAt: null,
-      badHellos: 0, files: 0, bytes: 0, inFlightBytes: 0, uploads: new Set(), buckets: new Map(), lifeTimer: null, page: null,
+      badHellos: 0, files: 0, bytes: 0, inFlightBytes: 0, uploads: new Set(), buckets: new Map(), lifeTimer: null, page: null, sockets: new Map(),
     };
     c.server = createServer(c);
     c.server.once('close', () => resolveClosed());
