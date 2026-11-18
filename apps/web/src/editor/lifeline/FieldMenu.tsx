@@ -13,7 +13,7 @@
 import { useEffect, useId, useRef, useState, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, Snowflake } from 'lucide-react';
-import { eventOfAsset, findClip, type MissingReason, type TextClip } from '@pulseframe/core';
+import { eventOfAsset, fieldsToDisplay, findClip, type MissingReason, type TextClip } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { AnchoredError, Button } from '../../ds/index.ts';
 import { useEditorState } from '../store.ts';
@@ -74,7 +74,7 @@ export function FieldMenu({ clipId, caret }: { clipId: string; caret: number | n
       if (!res.ok) { held.problems = res.problems; return null; }
       return insertOps(clipId, res.value);
     }, 'Insert field');
-    if (held.problems) setProblem(fill(S.fieldInsertRefused, { why: held.problems.map((p) => p.token).join(', ') }));
+    if (held.problems) setProblem(fill(S.fieldInsertRefused, { why: held.problems.map((p) => (editor.doc ? fieldsToDisplay(lang, p.token, editor.doc) : p.token)).join(', ') }));
     else if (r) document.querySelector<HTMLElement>('[data-testid="text-content"]')?.focus();
   };
   const freeze = async () => {
@@ -85,7 +85,7 @@ export function FieldMenu({ clipId, caret }: { clipId: string; caret: number | n
       if (!d || !f || f.clip.type !== 'text' || !f.clip.fields) { held.problem = S.fieldFreezeNone; return null; }
       const m = freezeModel(d, f.seq.id, f.clip, timeInTitle(f.clip, editor.playhead));
       if (!m) { held.problem = S.fieldFreezeFailed; return null; }
-      if (m.missing.length) { held.problem = fill(S.fieldFreezeMissing, { tokens: [...new Set(m.missing.map((x) => x.token))].join(', ') }); return null; }
+      if (m.missing.length) { held.problem = fill(S.fieldFreezeMissing, { tokens: [...new Set(m.missing.map((x) => fieldsToDisplay(lang, x.token, d)))].join(', ') }); return null; }
       if (m.tooLong.length) { held.problem = S.fieldFreezeTooLong; return null; }
       held.varies = m.varies;
       return m.ops;
@@ -171,7 +171,7 @@ export function FieldLiveLine({ clipId }: { clipId: string }): ReactElement | nu
         const noEvent = reason === 'sunset_undecided' && !m.eventId;
         return (
           <AnchoredError key={reason} fix={label ?? undefined} onFix={label ? () => void fix(e.fix, reason) : undefined}>
-            {t(`life.missing.${reason}` as Key)}{e.tokens.length > 0 && <> · <bdi dir="ltr" className="num">{e.tokens.join(' ')}</bdi></>}{noEvent ? ` · ${S.fieldFixNoEvent}` : ''}
+            {t(`life.missing.${reason}` as Key)}{e.tokens.length > 0 && <> · <bdi dir="auto">{e.tokens.map((tk) => fieldsToDisplay(lang, tk, doc)).join(' ')}</bdi></>}{noEvent ? ` · ${S.fieldFixNoEvent}` : ''}
           </AnchoredError>
         );
       })}
