@@ -139,12 +139,17 @@ function checkProjectAnchors(d: ProjectDocument) {
 }
 /** The transition at the start of each clip, and at the start of the clip after it, re-checked against the handles the edit left (set_transition's words; details name the clip). */
 function checkHandles(d: ProjectDocument, list: Iterable<{ track: Track; clip: MediaClip }>) {
-  const seen = new Set<string>();
+  const seen = new Set<string>(), index = new Map<Track, Map<string, number>>();
   for (const { track, clip } of list) {
-    const end = clipEnd(clip);
-    const next = track.clips.find((c) => c.id !== clip.id && T.eq(c.start, end));
+    if (track.kind !== 'video') continue;
+    let at = index.get(track);
+    if (!at) index.set(track, (at = new Map(track.clips.map((c, i) => [c.id, i]))));
+    const i = at.get(clip.id);
+    if (i === undefined) continue;
+    const after = track.clips[i + 1];
+    const next = after && T.eq(after.start, clipEnd(clip)) ? after : undefined;
     for (const c of [clip, next]) {
-      if (!c || c.type !== 'media' || seen.has(c.id) || track.kind !== 'video') continue;
+      if (!c || c.type !== 'media' || seen.has(c.id)) continue;
       seen.add(c.id);
       try { checkTransitionAt(d, track, c); } catch (e) { if (e instanceof OpError) e.details = { ...e.details, clipId: c.id }; throw e; }
     }
@@ -669,7 +674,8 @@ function switchAngles(d: ProjectDocument, a: z.infer<typeof MulticamOpArgs.switc
     }
     i++;
   }
-  const alive = (id: string): string | null => { let x = id; while (into.has(x)) x = into.get(x)!; return track.clips.some((c) => c.id === x) ? x : null; };
+  const present = new Set(track.clips.map((c) => c.id));
+  const alive = (id: string): string | null => { let x = id; while (into.has(x)) x = into.get(x)!; return present.has(x) ? x : null; };
   checkHandles(d, track.clips.filter((c): c is MediaClip => c.type === 'media' && touched.has(c.id)).map((clip) => ({ track, clip })));
   const affected = ledger.guard(d);
   const lo = cuts[0]?.at, hi = until;
