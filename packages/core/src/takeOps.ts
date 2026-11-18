@@ -64,7 +64,7 @@ defineOp({
   args: ApplyTakeArgsSchema,
   apply(d, a, ctx) {
     const sequenceId = a.sequenceId ?? d.mainSequenceId;
-    if (!Object.hasOwn(d.sequences, sequenceId)) throw new OpError('not_found', `sequence ${sequenceId} not found`, { sequenceId });
+    if (!Object.hasOwn(d.sequences, sequenceId)) throw new OpError(R.unknownSequence.code, R.unknownSequence.message(sequenceId), { sequenceId }, R.unknownSequence.hint);
     const tracks = a.steps.filter((s) => s.op === 'add_track').length;
     if (tracks > MAX_TAKE_TRACKS) throw new OpError(R.tooManyTracks.code, R.tooManyTracks.message(tracks), { tracks, max: MAX_TAKE_TRACKS }, R.tooManyTracks.hint);
     const affected = new Set<string>();
@@ -79,8 +79,10 @@ defineOp({
       const where = `take step ${i} (${step.op})`;
       const args = resolveBindings(step.args, bound, NO_ASSETS, where);
       const parsed = def.args.safeParse(args);
-      if (!parsed.success) throw new OpError('invalid_args', `${where}: ${z.prettifyError(parsed.error)}`, { index: i });
+      if (!parsed.success) throw new OpError(R.badStep.code, R.badStep.message(where, z.prettifyError(parsed.error)), { index: i }, R.badStep.hint);
       refuseInheritedIds(parsed.data, where, '', def.checksOwnIds);
+      // pads never add people fields or ages (lead decision): a title a take adds is plain text
+      if (step.op === 'add_text' && (parsed.data as { fields?: unknown }).fields !== undefined) throw new OpError(R.peopleFields.code, R.peopleFields.message(i), { index: i, op: step.op }, R.peopleFields.hint);
       // every step works on the take's sequence (the flash rule reads that one only)
       const pa = parsed.data as Readonly<Record<string, unknown>>;
       const onSeq = SEQUENCE_STEP_OPS.has(step.op) ? (typeof pa.sequenceId === 'string' ? pa.sequenceId : d.mainSequenceId) : typeof pa.clipId === 'string' ? findClip(d, pa.clipId)?.seq.id : undefined;

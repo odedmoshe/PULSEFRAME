@@ -28,7 +28,8 @@ describe('Hebrew wording of the perform refusals (ADR-0025)', () => {
       ['forbiddenStep', provoke([{ op: 'freeze_frame', args: {} }])],
       ['bindTwice', provoke([{ op: 'add_track', args: { kind: 'audio' }, bind: 'a' }, { op: 'add_track', args: { kind: 'audio' }, bind: 'a' }])],
       ['assetBinding', provoke([{ op: 'add_clip', args: { assetId: { $asset: 'x' }, start: T.ZERO } }])],
-      ['parse', provoke([{ op: 'add_track', args: { kind: 'nonsense' } }])],
+      ['badStep', provoke([{ op: 'add_track', args: { kind: 'nonsense' } }])],
+      ['peopleFields', provoke([{ op: 'add_text', args: { text: '{hebrewDate}', start: f(30), duration: f(30), fields: true } }])],
       ['tooManyTracks', provoke(Array.from({ length: 9 }, () => ({ op: 'add_track', args: { kind: 'audio' } })))],
       ['flashGap', provoke([adj(0, 20), adj(4, 20, 'color.invert')])],
       ['flashLight', provoke([adj(60, 60, 'light.strobe'), adj(70, 20)])],
@@ -41,9 +42,15 @@ describe('Hebrew wording of the perform refusals (ADR-0025)', () => {
       expect(hits.length, `${key}: ${e.message}`).toBe(1);
       const he = translateRefusal('he', e.message)!;
       expect(he, key).toBe(HE_PERFORM.find(([re]) => re.test(e.message))![1](hits[0]!.exec(e.message)!));
-      for (const num of e.message.match(/\d+/g) ?? []) if (!['forbiddenStep', 'bindTwice', 'assetBinding', 'parse', 'lightOwned', 'otherSequence'].includes(key)) expect(he, `${key} keeps ${num}`).toContain(num);
+      for (const num of e.message.match(/\d+/g) ?? []) if (!['forbiddenStep', 'bindTwice', 'assetBinding', 'badStep', 'peopleFields', 'lightOwned', 'otherSequence'].includes(key)) expect(he, `${key} keeps ${num}`).toContain(num);
       if (key in PERFORM_REFUSALS) expect(e.hint, key).toBe(PERFORM_REFUSALS[key as keyof typeof PERFORM_REFUSALS].hint);
     }
+    // an unknown sequence: worded by the general sequence row (shorts), with the take's own hint
+    let unknown: OpError | null = null;
+    try { applyTransaction(doc(), [{ op: 'apply_take', args: { ...(take([adj(30, 20)]).args as object), sequenceId: 'seq_none' } }], { idSeed: 'pwu_', actor: 'u', allowInternal: true }); } catch (e) { if (e instanceof OpError) unknown = e; else throw e; }
+    expect(unknown?.code).toBe('not_found');
+    expect(unknown?.hint).toBe(PERFORM_REFUSALS.unknownSequence.hint);
+    expect(translateRefusal('he', unknown!.message)).toBe('הרצף לא נמצא; ייתכן שכבר נמחק');
     // the route's refusals, from the table
     for (const [key, row] of Object.entries(PERFORM_API_REFUSALS)) {
       const msg = row.message(12);

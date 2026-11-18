@@ -26,7 +26,7 @@ export const MULTICAM_KEYS: Readonly<Record<string, readonly string[]>> = {
 };
 /** Chords other parts of the shell handle outside the command registry (Header.tsx modes, Rail.tsx categories). */
 export const SHELL_DIGIT_CHORDS: readonly string[] = [
-  ...[1, 2, 3, 4, 5, 6].map((d) => `Shift+Digit${d}`),
+  ...[1, 2, 3, 4, 5, 6, 7].map((d) => `Shift+Digit${d}`),
   ...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => `Alt+Digit${d}`),
 ];
 /** The one chord a multicam command shares on purpose (with edit.deselect, never enabled at the same time). */

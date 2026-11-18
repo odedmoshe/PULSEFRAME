@@ -49,10 +49,12 @@ export function Header() {
   const exporting = !!job && ['queued', 'running', 'cancel-requested'].includes(job.status);
   const [projectsOpen, setProjectsOpen] = useState(false);
 
-  // Shift+1…7 switch modes (§5; Shift+7 is perform, ADR-0025). Not while typing, and not behind a dialog.
+  // Shift+1…7 switch modes (§5; Shift+7 is perform, ADR-0025). Not while typing, not behind a dialog, and not while a take is recorded.
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target) || document.querySelector('[aria-modal="true"]')) return;
+      // while a take is recorded only the pads, Space and Escape act: leaving perform would drop the take silently
+      if (editor.getState().performRecording) return;
       const m = /^Digit([1-7])$/.exec(e.code);
       if (m) { e.preventDefault(); editor.setWorkspace(MODES[Number(m[1]) - 1]!); }
     };

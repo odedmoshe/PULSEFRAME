@@ -104,6 +104,7 @@ export const HE_PERFORM: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^take step \d+: the bind name ".*" is used twice$/, () => `אחד השלבים של ההופעה אינו תקין, ולכן לא נשמרה. ${TAKE_FAULT_HE}`],
   [/^take step \d+: a take carries no media of its own, so "\$asset" cannot be used$/, () => 'הופעה אינה מביאה קבצים משלה. אפשר להוסיף קודם את הצליל או המדבקה לספרייה, ואז להקליט שוב'],
   [/^take step \d+ \(\S+\): [\s\S]+$/, () => `אחד השלבים של ההופעה אינו תקין, ולכן לא נשמרה. ${TAKE_FAULT_HE}`],
+  [/^take step \d+ adds a title with live fields, which a take may not add$/, () => 'ההופעה ניסתה להוסיף כותרת עם שדות חיים (תאריך, גיל או שם), ולכן לא נשמרה. הופעה מוסיפה רק כותרות רגילות; שדות חיים מוסיפים כעריכה רגילה, עם הרשאת האנשים'],
   [/^take step \d+ changes the light of clip \S+, which the take did not make \(flash safety\)$/, () => 'ההופעה ניסתה לשנות את האור (שקיפות או צבע) של קליפ שהיא לא הוסיפה, ולכן לא נשמרה (מגבלת בטיחות להבהובים). שינוי כזה עושים כעריכה רגילה'],
   [/^take step \d+ works on sequence \S+, but the take was performed on sequence \S+$/, () => `אחד השלבים של ההופעה עובד על רצף אחר מזה שעליו הוקלטה, ולכן לא נשמרה. ${TAKE_FAULT_HE}`],
   [/^a take adds at most (\d+) tracks; this one adds (\d+)$/, (m) => `הופעה מוסיפה עד ${ltr(m[1]!)} רצועות, וזו הייתה מוסיפה ${ltr(m[2]!)}. אפשר להשתמש בפחות צלילים בבת אחת`],
