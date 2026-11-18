@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { initialFocus, trapTarget, type FocusableInfo } from './logic.ts';
 import { CloseIcon, DS, FOCUSABLE, cx } from './util.tsx';
@@ -29,13 +29,23 @@ export function Dialog({ open, onClose, title, variant = 'dialog', size = 'md', 
   const titleId = useId();
   const root = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLElement | null>(null);
+  // What opened the dialog is read in a layout effect: children's (passive) effects run before this component's own, and one
+  // that focuses a control inside (the people sheet focuses a person's name) would otherwise be taken for the opener, so the
+  // focus had nowhere to go back to on close.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const a = document.activeElement;
+    opener.current = a instanceof HTMLElement && !root.current?.contains(a) ? a : null;
+  }, [open]);
   useEffect(() => {
     if (!open) return;
-    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const el = root.current!;
-    const items = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)];
-    const first = initialFocus(items.map(infoOf));
-    (items[first] ?? el).focus();
+    // a child that already put the focus inside (its own first field) keeps it; otherwise the first focusable control takes it
+    if (!el.contains(document.activeElement)) {
+      const items = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)];
+      const first = initialFocus(items.map(infoOf));
+      (items[first] ?? el).focus();
+    }
     // Everything else in the document is made inert while the modal is open, so no focus or click can reach the page behind it.
     const made: HTMLElement[] = [];
     for (const n of Array.from(document.body.children)) if (n instanceof HTMLElement && !n.contains(el) && !n.inert) { n.inert = true; made.push(n); }
