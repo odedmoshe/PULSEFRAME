@@ -7,7 +7,7 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { TRACKING_JOB_TYPE, TrackRunBody, COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeAudioCatalog, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
+import { TRACKING_JOB_TYPE, TrackRunBody, COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, describeOps, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeAudioCatalog, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
@@ -21,7 +21,7 @@ import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
-import { applyTransaction, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema } from '@pulseframe/core';
+import { applyTransaction, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema, FindShortsBodySchema, SHORTS_MEASUREMENT_KIND, sequenceList, shortsRefusal } from '@pulseframe/core';
 import { addMusic, MusicBody, musicPreview } from './music.ts';
 import { onThisDayFor, readMissingCaptures } from './lifeline.ts';
 import { preflight } from './preflight.ts';
@@ -30,7 +30,8 @@ import { importArchive, planArchive, writeArchive } from './archive.ts';
 import { pipeline } from 'node:stream/promises';
 import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
 import { applyTemplateFor, listTemplates, planTemplateFor, probeElements, regenerateTemplateFor, templateCatalog } from './templates.ts';
-import { variantDoc } from './export.ts';
+import { outputDoc } from './export.ts';
+import { applyShorts, cachedShortCandidates, findShortCandidates, planReframeFor, planShortsFor, shortsApiError, withShortsErrors } from './shorts.ts';
 import { registerBrowserExportRoutes } from './browser-export.ts';
 import { buildOpenApi } from './openapi.ts';
 import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
@@ -306,7 +307,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.get('/api/v1/projects/:id/captions', (c) => {
     need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
-    const out = exportCaptions(p.doc, c.req.query('trackId'), c.req.query('format') ?? 'srt', c.req.query('variant'));
+    const out = exportCaptions(p.doc, c.req.query('trackId'), c.req.query('format') ?? 'srt', c.req.query('variant'), c.req.query('sequence'));
     return c.body(out.text, 200, { 'content-type': `${out.mime}; charset=utf-8`, 'content-disposition': `attachment; filename="captions.${out.format}"`, 'x-pulseframe-revision': String(p.revision), 'x-pulseframe-cues': String(out.cues) });
   });
   app.post('/api/v1/projects/:id/analysis/fillers', async (c) => { need(c, 'observe'); return c.json(findFillerWords(store, c.req.param('id'), await body(c, FillerBody))); });
@@ -365,32 +366,46 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/templates/:templateId/plan', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await planTemplateFor(store, gov, p, c.req.param('id'), c.req.param('templateId'), b.params)); });
   app.post('/api/v1/projects/:id/templates/:templateId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await applyTemplateFor(store, gov, p, c.req.param('id'), c.req.param('templateId'), b.params, b.expectedRevision)); });
   app.post('/api/v1/projects/:id/template-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await regenerateTemplateFor(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params, b.expectedRevision)); });
+  // ----- shorts (ADR-0018): sequences of the project, candidate moments, plan, make (one undoable step), reframe -----
+  app.get('/api/v1/projects/:id/sequences', (c) => { need(c, 'observe'); const p = store.getProject(c.req.param('id')); return c.json({ revision: p.revision, sequences: sequenceList(p.doc) }); });
+  app.post('/api/v1/projects/:id/shorts/candidates', async (c) => {
+    const who = need(c, 'observe');
+    const projectId = c.req.param('id');
+    const b = await body(c, FindShortsBodySchema);
+    const p = store.getProject(projectId); // 404 before anything else
+    if (!Object.hasOwn(p.doc.assets, b.assetId)) throw shortsApiError(shortsRefusal('assetNotFound', { assetId: b.assetId }, b.assetId));
+    const cached = withShortsErrors(() => cachedShortCandidates(store, projectId, b));
+    if (cached) return c.json(cached);
+    const j = startMeasurementJob(store, who, projectId, SHORTS_MEASUREMENT_KIND, b);
+    return c.json({ jobId: j.id, status: j.status }, 202);
+  });
+  app.post('/api/v1/projects/:id/shorts/plan', async (c) => { need(c, 'observe'); const projectId = c.req.param('id'); store.getProject(projectId); const b = await c.req.json().catch(() => undefined); return c.json(await withShortsErrors(() => planShortsFor(store, projectId, b))); });
+  app.post('/api/v1/projects/:id/shorts', async (c) => { const pr = need(c, 'edit'); const projectId = c.req.param('id'); store.getProject(projectId); const b = await c.req.json().catch(() => undefined); return c.json(await withShortsErrors(() => applyShorts(store, gov, pr, projectId, b))); });
+  app.post('/api/v1/projects/:id/sequences/:sequenceId/reframe-plan', async (c) => {
+    need(c, 'observe');
+    const projectId = c.req.param('id');
+    outputDoc(store.getProject(projectId).doc, { sequenceId: c.req.param('sequenceId') }); // 404 for an unknown sequence
+    const b = await c.req.json().catch(() => undefined);
+    return c.json(withShortsErrors(() => planReframeFor(store, projectId, c.req.param('sequenceId'), b)));
+  });
   app.get('/api/v1/projects/:id/preflight', (c) => {
     const who = need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
     const cps = c.req.query('maxCharsPerSecond');
-    return c.json({ ...preflight(exporter, p.doc, p.revision, { variantId: c.req.query('variant'), ...(cps ? { maxCharsPerSecond: Number(cps) } : {}) }), ...peopleNote(who, p.doc) });
+    return c.json({ ...preflight(exporter, p.doc, p.revision, { variantId: c.req.query('variant'), sequenceId: c.req.query('sequence'), ...(cps ? { maxCharsPerSecond: Number(cps) } : {}) }), ...peopleNote(who, p.doc) });
   });
   app.post('/api/v1/projects/:id/exports/batch', async (c) => {
     const pr = need(c, 'edit');
-    const projectId = c.req.param('id');
-    gov.assertMayAct(pr, projectId, 'job');
-    assertStorageRoom(store, 1, 'start exports'); // once for the whole batch, before any job exists (each start below is told so)
-    const b = await body(c, z.object({ variantIds: z.array(z.string()).min(1).max(8), options: z.record(z.string(), z.unknown()).optional() }).strict());
-    assertMayTakeRendered(pr, store.wholeProject(projectId).doc, 'export this project');
-    const doc = store.getProject(projectId).doc;
-    // All-or-nothing: every variant must exist and plan without blockers before any job is created.
-    for (const id of b.variantIds) { const plan = exporter.plan(doc, store.getProject(projectId).revision, { ...b.options, variantId: id }); if (plan.blockers.length) throw new ApiError(422, 'render_blocked', `format ${id} cannot be exported: ${plan.blockers[0]!.message}`, { variantId: id, blockers: plan.blockers }); }
-    gov.takeExportQuota(pr, b.variantIds.length, true);
-    const jobs = b.variantIds.map((id) => exporter.start(projectId, pr.actor, { ...b.options, variantId: id }, undefined, { roomChecked: true }));
-    gov.takeExportQuota(pr, jobs.length);
-    return c.json({ jobs: jobs.map((j) => ({ jobId: j.id, variantId: j.input.manifest.options.variantId, status: j.status })) }, 202);
+    return c.json(startExportBatch(store, gov, exporter, pr, c.req.param('id'), await c.req.json().catch(() => undefined)), 202);
   });
   app.post('/api/v1/projects/:id/analysis/loudness', async (c) => {
     const p = need(c, 'observe');
     const b = await c.req.json().catch(() => ({}));
-    if (b && typeof b === 'object' && (b as { background?: unknown }).background === true) { const j = startMeasurementJob(store, p, c.req.param('id'), 'loudness', {}); return c.json({ jobId: j.id, status: j.status }, 202); }
-    return c.json(await programmeLoudness(store, c.req.param('id')));
+    // { sequenceId } measures that sequence (a short) as it exports (ADR-0018); absent = the main edit
+    const sequenceId = b && typeof b === 'object' && typeof (b as { sequenceId?: unknown }).sequenceId === 'string' ? (b as { sequenceId: string }).sequenceId : undefined;
+    if (sequenceId !== undefined) outputDoc(store.getProject(c.req.param('id')).doc, { sequenceId }); // 404 before any job exists
+    if (b && typeof b === 'object' && (b as { background?: unknown }).background === true) { const j = startMeasurementJob(store, p, c.req.param('id'), 'loudness', sequenceId !== undefined ? { sequenceId } : {}); return c.json({ jobId: j.id, status: j.status }, 202); }
+    return c.json(await programmeLoudness(store, c.req.param('id'), sequenceId));
   });
   app.get('/api/v1/projects/:id/history', (c) => { need(c, 'observe'); store.getProject(c.req.param('id')); return c.json({ events: store.eventsSince(c.req.param('id'), Number(c.req.query('since') ?? 0)) }); });
 
@@ -667,9 +682,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
     const index = c.req.query('index') !== undefined ? Number(c.req.query('index')) : T.frameIndexAt(T.fromSeconds(c.req.query('seconds') ?? '0'), p.doc.settings.frameRate);
-    // ?variant= renders the frame as that linked format would export it.
+    // ?sequence= renders a sequence of the project (a short) and ?variant= the frame as that linked format would export it (ADR-0018).
     // `p.doc` is what this credential may read: for one without the people scope the frame is drawn without ages, and says so.
-    const png = await exporter.renderStill(variantDoc(p.doc, c.req.query('variant')), p.revision, index);
+    const png = await exporter.renderStill(outputDoc(p.doc, { sequenceId: c.req.query('sequence'), variantId: c.req.query('variant') }), p.revision, index);
     return c.body(new Uint8Array(png), 200, { 'Content-Type': 'image/png', 'X-PF-Revision': String(p.revision), 'X-PF-Frame-Index': String(index), ...(peopleNote(c.var.principal, p.doc).peopleAccess ? { 'X-PF-People': 'names; age fields are drawn empty' } : {}) });
   });
 
@@ -806,12 +821,40 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   return app;
 }
 
+/** One output of a batch: a sequence of the project (default the main edit), in a linked format (default its own frame). */
+export const BatchItemSchema = z.object({ sequenceId: z.string().optional(), variantId: z.string().optional() }).strict();
+/** Formats of the main edit (variantIds), or outputs of any sequence (items: a short, a short in a linked format; ADR-0018). Exactly one of the two. */
+export const ExportBatchBody = z.object({ variantIds: z.array(z.string()).min(1).max(8).optional(), items: z.array(BatchItemSchema).min(1).max(8).optional(), options: z.record(z.string(), z.unknown()).optional() }).strict()
+  .refine((x) => (x.variantIds === undefined) !== (x.items === undefined), { message: 'give variantIds or items, not both' });
+/**
+ * Start one export job per output, all-or-nothing: every item must exist and plan without blockers before any job is created
+ * (REST POST /exports/batch and MCP export_batch). The same admission as one export: the job right, the storage ceiling once
+ * for the whole batch, the people rule for films, the export quota.
+ */
+export function startExportBatch(store: Store, gov: Governance, exporter: Exporter, pr: Principal, projectId: string, raw: unknown) {
+  gov.assertMayAct(pr, projectId, 'job');
+  assertStorageRoom(store, 1, 'start exports'); // once for the whole batch, before any job exists (each start below is told so)
+  const parsed = ExportBatchBody.safeParse(raw ?? {});
+  if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error), { issues: parsed.error.issues });
+  const b = parsed.data;
+  const items = b.items ?? b.variantIds!.map((variantId) => ({ variantId }));
+  assertMayTakeRendered(pr, store.wholeProject(projectId).doc, 'export this project');
+  const doc = store.getProject(projectId).doc;
+  const what = (it: z.infer<typeof BatchItemSchema>) => (it.sequenceId ? `sequence ${it.sequenceId}${it.variantId ? ` in format ${it.variantId}` : ''}` : `format ${it.variantId ?? 'of the main edit'}`);
+  for (const it of items) { const plan = exporter.plan(doc, store.getProject(projectId).revision, { ...b.options, ...it }); if (plan.blockers.length) throw new ApiError(422, 'render_blocked', `${what(it)} cannot be exported: ${plan.blockers[0]!.message}`, { ...it, blockers: plan.blockers }); }
+  gov.takeExportQuota(pr, items.length, true);
+  const jobs = items.map((it) => exporter.start(projectId, pr.actor, { ...b.options, ...it }, undefined, { roomChecked: true }));
+  gov.takeExportQuota(pr, jobs.length);
+  return { jobs: jobs.map((j) => ({ jobId: j.id, variantId: j.input.manifest.options.variantId, ...(j.input.manifest.options.sequenceId ? { sequenceId: j.input.manifest.options.sequenceId } : {}), status: j.status })) };
+}
+
 /** Serialize one caption track (default: the first) as it plays on the timeline. */
-export function exportCaptions(master: ProjectDocument, trackId: string | undefined, format: string, variantId?: string) {
+export function exportCaptions(master: ProjectDocument, trackId: string | undefined, format: string, variantId?: string, sequenceId?: string) {
   if (format !== 'srt' && format !== 'vtt' && format !== 'ass') throw new ApiError(400, 'invalid_args', 'format must be srt, vtt or ass');
-  if (variantId && !master.variants?.[variantId]) throw new ApiError(404, 'not_found', `format ${variantId} not found`, { variantId });
-  // A linked format has its own caption style, hidden or reworded cues and reworded transcript phrases.
-  const doc = variantId ? projectVariant(master, variantId) : master;
+  if (variantId && !Object.hasOwn(master.variants ?? {}, variantId)) throw new ApiError(404, 'not_found', `format ${variantId} not found`, { variantId });
+  // A linked format has its own caption style, hidden or reworded cues and reworded transcript phrases; a sequence (a short,
+  // ADR-0018) is its own timeline with its own frame.
+  const doc = outputDoc(master, { sequenceId, variantId });
   const seq = doc.sequences[doc.mainSequenceId]!;
   const track = trackId ? seq.tracks.find((t) => t.id === trackId && t.kind === 'caption') : seq.tracks.find((t) => t.kind === 'caption');
   if (!track) throw new ApiError(404, 'not_found', trackId ? `caption track ${trackId} not found` : 'the project has no caption track');
@@ -903,8 +946,10 @@ export const catalog = () => ({
 });
 
 /** Mix the current timeline exactly as export would and measure it (EBU R128). Read-only. */
-export async function programmeLoudness(store: Store, projectId: string) {
-  const p = store.getProject(projectId);
+export async function programmeLoudness(store: Store, projectId: string, sequenceId?: string) {
+  const stored = store.getProject(projectId);
+  // a sequence (a short, ADR-0018) is measured as it exports: alone, with its own loudness target
+  const p = { revision: stored.revision, doc: outputDoc(stored.doc, { sequenceId }) };
   const plan = audioPlan(p.doc);
   if (plan.totalSamples === 0 || plan.clips.length === 0) return { revision: p.revision, integratedLufs: null, truePeakDbtp: null, rangeLu: null, clips: 0, note: 'The timeline has no audible sound.' };
   if (plan.totalSamples > plan.sampleRate * 3600) throw new ApiError(422, 'too_long', 'loudness measurement is limited to one hour of programme');
@@ -1077,8 +1122,8 @@ const exporterForMeasurement = (): Exporter => {
   if (!measurementExporter) throw new ApiError(503, 'unavailable', 'colour match needs the renderer, which is not running in this process');
   return measurementExporter;
 };
-export type MeasurementKind = 'silences' | 'loudness' | 'voice' | 'colour';
-/** Start a silence, loudness, voice (ADR-0013) or colour-match (ADR-0014) measurement as a durable job of type `analysis`. It changes nothing in the project; its output carries the same object the in-request route returns. */
+export type MeasurementKind = 'silences' | 'loudness' | 'voice' | 'colour' | typeof SHORTS_MEASUREMENT_KIND;
+/** Start a silence, loudness, voice (ADR-0013), colour-match (ADR-0014) or shorts-candidates (ADR-0018) measurement as a durable job of type `analysis`. It changes nothing in the project; its output carries the same object the in-request route returns. */
 export function startMeasurementJob(store: Store, principal: Principal, projectId: string, kind: MeasurementKind, options: unknown): JobRow {
   const p = store.getProject(projectId); // 404 before any job exists
   if (kind === 'silences' && !p.doc.assets[(options as { assetId: string }).assetId]) throw new ApiError(404, 'asset_not_found', 'asset not found in this project');
@@ -1093,10 +1138,12 @@ async function runAnalysisJob(store: Store, jobId: string) {
   const j = store.getJob(jobId);
   try {
     // Measurements that attach nothing to the project (silence candidates, programme loudness, voice and colour checks): the result is the job's output.
-    if (j.input.kind === 'silences' || j.input.kind === 'loudness' || j.input.kind === 'voice' || j.input.kind === 'colour') {
+    if (j.input.kind === 'silences' || j.input.kind === 'loudness' || j.input.kind === 'voice' || j.input.kind === 'colour' || j.input.kind === SHORTS_MEASUREMENT_KIND) {
       const kind = j.input.kind as MeasurementKind;
       const result = kind === 'silences' ? await findSilences(store, j.projectId, j.input.options)
-        : kind === 'loudness' ? await programmeLoudness(store, j.projectId)
+        : kind === 'loudness' ? await programmeLoudness(store, j.projectId, typeof j.input.options?.sequenceId === 'string' ? j.input.options.sequenceId : undefined)
+        // shorts (ADR-0018): measure the audio features that are missing, then rank; stops between windows once cancel is requested
+        : kind === SHORTS_MEASUREMENT_KIND ? await withShortsErrors(() => findShortCandidates(store, j.projectId, FindShortsBodySchema.parse(j.input.options), () => store.getJob(jobId).status === 'cancel-requested'))
         : kind === 'voice' ? await measureVoiceCheck(store, j.projectId, VoiceMeasureBody.parse(j.input.options))
         : await matchColour(store, exporterForMeasurement(), j.projectId, ColourMatchBody.parse(j.input.options));
       if (store.getJob(jobId).status === 'cancel-requested') { store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'canceled while measuring; the result was discarded' } }); return; }

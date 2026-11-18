@@ -4,10 +4,10 @@
  * Blockers stop an export; warnings and notes do not. Read-only. Text extents are ESTIMATES (the server does not shape text).
  */
 import * as T from '@pulseframe/time';
-import { previousAdjacent, sequenceDuration, velocityLimit, velocityNeeds, type Clip, type FollowStateName, type MediaClip, type OpCall, type ProjectDocument, type ResolvedRegion, type Track, type Transition } from '@pulseframe/core';
+import { BACKDROP, BACKDROP_MIN_BLUR, outputSafeArea, previousAdjacent, sequenceDuration, sequenceOf, velocityLimit, velocityNeeds, type Clip, type FollowStateName, type MediaClip, type OpCall, type ProjectDocument, type ResolvedRegion, type Track, type Transition } from '@pulseframe/core';
 import { audioPlan, captionCues, decodeOverBudget, evaluate, type DecodeStretch, type Layer } from '@pulseframe/engine';
 import type { Exporter } from './export.ts';
-import { variantDoc } from './export.ts';
+import { outputDoc } from './export.ts';
 import { fieldIssues, fieldTextExtent, isFieldIssueCode } from './preflight.fields.ts';
 
 export interface PreflightIssue {
@@ -19,7 +19,8 @@ export interface PreflightIssue {
   /** A mechanical fix the caller may apply as one transaction (or propose). Absent when the fix needs judgement. */
   fix?: { label: string; ops: OpCall[] };
 }
-export interface PreflightOptions { variantId?: string; maxCharsPerSecond?: number }
+/** variantId: a linked format; sequenceId: a sequence of the project (a short, ADR-0018), default the main edit. Both: the format over the sequence. */
+export interface PreflightOptions { variantId?: string; sequenceId?: string; maxCharsPerSecond?: number }
 /** Video decoders the render worker and browser export open at most (apps/web render.ts, browserExport.ts). */
 const RENDER_DECODERS = 12;
 
@@ -89,15 +90,20 @@ function shortenTransition(clipId: string, tr: Transition, m: number, haveOut: n
 
 export function preflight(exporter: Exporter, master: ProjectDocument, revision: number, opts: PreflightOptions = {}) {
   const issues: PreflightIssue[] = [];
-  const doc = variantDoc(master, opts.variantId);
+  const target = { sequenceId: opts.sequenceId, variantId: opts.variantId };
+  const doc = outputDoc(master, target);
   const variant = opts.variantId ? master.variants[opts.variantId]! : null;
+  // The safe-area guides of this output (ADR-0018): the variant's, else the short's own format's. A short's own fixes edit the
+  // short itself (its clip's transform, its caption track); a variant's stay per format (set_variant_override).
+  const short = !variant && opts.sequenceId !== undefined && opts.sequenceId !== master.mainSequenceId ? sequenceOf(master, opts.sequenceId) ?? null : null;
+  const guide = variant ? { id: variant.id, name: variant.name, safeArea: variant.safeArea } : short ? { id: short.id, name: short.name, safeArea: outputSafeArea(master, target) } : null;
   const { width: W, height: H, frameRate: rate } = doc.settings;
   const seq = doc.sequences[doc.mainSequenceId]!;
   const total = T.frameCount(sequenceDuration(doc), rate);
   const fi = (t: T.RationalTime) => T.frameIndexAt(t, rate);
 
   // 1. what would stop the render
-  const plan = exporter.plan(master, revision, opts.variantId ? { variantId: opts.variantId } : {});
+  const plan = exporter.plan(master, revision, { ...(opts.variantId ? { variantId: opts.variantId } : {}), ...(opts.sequenceId !== undefined ? { sequenceId: opts.sequenceId } : {}) });
   // the life line's issues (ADR-0021) are listed once, below, with their frame ranges; the plan carries them without
   for (const b of plan.blockers) if (!isFieldIssueCode(b.code)) issues.push({ code: b.code, severity: 'blocker', message: b.message, ids: b.ids });
   // A sound-effect tail cut at the end of the video is how effects are designed to behave (ADR-0010), so it is a note here.
@@ -143,15 +149,17 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
         if (c.transition) { const issue = transitionSourceIssue(doc, track, c); if (issue) issues.push(issue); }
         // 5. pictures enlarged well beyond their own pixels look soft
         const dims = asset?.video ?? asset?.image;
-        if (dims) {
+        // a blurred backdrop (shorts, ADR-0018: a picture-only copy under the contained foreground) is meant to be soft
+        const backdrop = (c.effects ?? []).some((e) => e.enabled && e.type === BACKDROP.effect && typeof e.params.radius === 'number' && e.params.radius >= BACKDROP_MIN_BLUR);
+        if (dims && !backdrop) {
           const fit = (doc.settings.fit === 'cover' ? Math.max : Math.min)(W / dims.width, H / dims.height);
           const enlarge = fit * c.transform.scale;
           if (enlarge > 1.5) issues.push({ code: 'upscaled', severity: 'warning', message: `"${asset!.name}" (${dims.width}×${dims.height}) is shown ${enlarge.toFixed(2)}× larger than its own pixels in this ${W}×${H} output and will look soft`, ids: [c.id, c.assetId] });
         }
       }
       // 6. titles against the safe area (estimated extent)
-      if (c.type === 'text' && variant?.safeArea && !track.hidden) {
-        const sa = variant.safeArea;
+      if (c.type === 'text' && guide?.safeArea && !track.hidden) {
+        const sa = guide.safeArea;
         const lines = (c.fields ? fieldTextExtent(doc, seq.id, c) : c.text).split('\n'); // a title with live fields: the longest text it resolves to (ADR-0021)
         const hFrac = lines.length * c.style.sizeFrac * c.style.lineHeight * c.transform.scale;
         const wFrac = Math.min(0.9, Math.max(...lines.map((l) => l.length)) * c.style.sizeFrac * 0.55 * (H / W)) * c.transform.scale;
@@ -165,16 +173,24 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
           const w2 = wFrac * k, h2 = hFrac * k;
           const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
           const nx = clamp(cx, sa.left + w2 / 2, 1 - sa.right - w2 / 2) - 0.5, ny = clamp(cy, sa.top + h2 / 2, 1 - sa.bottom - h2 / 2) - 0.5;
-          issues.push({ code: 'outside_safe_area', severity: 'warning', message: `the title "${c.text.slice(0, 30)}" probably reaches outside the safe area of ${variant.name} (${Object.entries(out).filter(([, v]) => v).map(([k2]) => k2).join(', ')}); app interface elements may cover it. The extent is an estimate`, ids: [c.id, variant.id], fix: { label: k < 1 ? 'Shrink and move it inside the safe area in this format only' : 'Move it inside the safe area in this format only', ops: [{ op: 'set_variant_override', args: { variantId: variant.id, clipId: c.id, transform: { x: Number(nx.toFixed(4)), y: Number(ny.toFixed(4)), ...(k < 1 ? { scale: Number((c.transform.scale * k).toFixed(4)) } : {}) } } }] } });
+          const transform = { x: Number(nx.toFixed(4)), y: Number(ny.toFixed(4)), ...(k < 1 ? { scale: Number((c.transform.scale * k).toFixed(4)) } : {}) };
+          issues.push({ code: 'outside_safe_area', severity: 'warning', message: `the title "${c.text.slice(0, 30)}" probably reaches outside the safe area of ${guide.name} (${Object.entries(out).filter(([, v]) => v).map(([k2]) => k2).join(', ')}); app interface elements may cover it. The extent is an estimate`, ids: [c.id, guide.id],
+            fix: variant
+              ? { label: k < 1 ? 'Shrink and move it inside the safe area in this format only' : 'Move it inside the safe area in this format only', ops: [{ op: 'set_variant_override', args: { variantId: variant.id, clipId: c.id, transform } }] }
+              : { label: k < 1 ? 'Shrink and move it inside the safe area of this short' : 'Move it inside the safe area of this short', ops: [{ op: 'set_clip_transform', args: { clipId: c.id, transform } }] } });
         }
       }
     }
     if (track.kind === 'caption' && track.caption && !track.hidden) {
       // 7. captions against the safe area and reading speed
       const st = track.caption.style;
-      if (variant?.safeArea && st.position !== 'center') {
-        const need = st.position === 'bottom' ? variant.safeArea.bottom : variant.safeArea.top;
-        if (st.marginFrac < need) issues.push({ code: 'captions_outside_safe_area', severity: 'warning', message: `captions sit ${(st.marginFrac * 100).toFixed(0)}% from the ${st.position} edge, inside the ${(need * 100).toFixed(0)}% zone that ${variant.name} marks as likely covered. Caption style is shared by all formats`, ids: [track.id, variant.id], fix: { label: 'Raise the caption margin (all formats)', ops: [{ op: 'set_caption_style', args: { trackId: track.id, style: { marginFrac: Number(Math.min(0.45, need + 0.02).toFixed(3)) } } }] } });
+      if (guide?.safeArea && st.position !== 'center') {
+        const need = st.position === 'bottom' ? guide.safeArea.bottom : guide.safeArea.top;
+        const style = { marginFrac: Number(Math.min(0.45, need + 0.02).toFixed(3)) };
+        if (st.marginFrac < need) issues.push({ code: 'captions_outside_safe_area', severity: 'warning', message: `captions sit ${(st.marginFrac * 100).toFixed(0)}% from the ${st.position} edge, inside the ${(need * 100).toFixed(0)}% zone that ${guide.name} marks as likely covered. ${variant ? 'Caption style is shared by all formats' : 'The caption track belongs to this short'}`, ids: [track.id, guide.id],
+          fix: variant
+            ? { label: 'Raise the caption margin (all formats)', ops: [{ op: 'set_caption_style', args: { ...(opts.sequenceId !== undefined ? { sequenceId: opts.sequenceId } : {}), trackId: track.id, style } }] }
+            : { label: 'Raise the caption margin of this short', ops: [{ op: 'set_caption_style', args: { sequenceId: short!.id, trackId: track.id, style } }] } });
       }
       const limit = opts.maxCharsPerSecond ?? 20;
       const fast = captionCues(doc, seq, track).filter((q) => q.text.replace(/\s+/g, '').length / Math.max(0.001, T.toSeconds(T.sub(q.end, q.start))) > limit);
@@ -190,7 +206,7 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
 
   const count = (s: PreflightIssue['severity']) => issues.filter((i) => i.severity === s).length;
   return {
-    revision, variantId: opts.variantId ?? null, output: { width: W, height: H, frames: total, fit: doc.settings.fit ?? 'contain', safeArea: variant?.safeArea ?? null },
+    revision, variantId: opts.variantId ?? null, sequenceId: opts.sequenceId ?? null, output: { width: W, height: H, frames: total, fit: doc.settings.fit ?? 'contain', safeArea: guide?.safeArea ?? null },
     ok: count('blocker') === 0, blockers: count('blocker'), warnings: count('warning'), notes: count('note'), issues,
     scope: 'Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, video decoders needed at once, transition handles (velocity ramps included), upscaling, safe areas (estimated text extents), caption reading speed, title fields without data and capture-sourced date stamps without a date, motion tracking (clips that follow a track or blur along it, on frames where the tracking is lost or uncertain or the followed picture is absent). Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.',
   };
