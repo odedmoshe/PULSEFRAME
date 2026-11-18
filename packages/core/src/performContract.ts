@@ -274,7 +274,8 @@ export interface CameraPlan {
   overTolerance: boolean;
   /** existing x, y and scale keys inside the range that the take replaces (the confirm counts them) */
   replacedKeys: number;
-  /** codes: 'linked_formats' when a linked format does not override this clip's transform (framed differently there) */
+  /** codes: 'linked_formats' when a linked format does not override this clip's transform (framed differently there);
+   *  'cannot_reach_ends' when the picture is wider (or taller) than the camera can pan, |x|, |y| <= 4 (i18n perform.cannotReachEnds) */
   warnings: string[];
 }
 export type CameraLimits = (g: CameraGeometry) => { fill: number; maxZoom: number };

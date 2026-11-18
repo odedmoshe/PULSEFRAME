@@ -3586,7 +3586,7 @@
     "qualityLadderReportOnly": {
       "high": {
         "bytes": 518989,
-        "wallSeconds": 3.634,
+        "wallSeconds": 2.806,
         "psnr": {
           "min": 35.7301,
           "median": 38.4885,
@@ -3602,7 +3602,7 @@
       },
       "mp4-standard": {
         "bytes": 339200,
-        "wallSeconds": 3.859,
+        "wallSeconds": 2.876,
         "psnr": {
           "min": 34.7948,
           "median": 37.1162,
@@ -3616,7 +3616,7 @@
       },
       "mp4-draft": {
         "bytes": 187647,
-        "wallSeconds": 3.331,
+        "wallSeconds": 2.364,
         "psnr": {
           "min": 31.4545,
           "median": 33.1362,
@@ -3630,7 +3630,7 @@
       },
       "webm-vp9-standard": {
         "bytes": 413867,
-        "wallSeconds": 4.604,
+        "wallSeconds": 3.179,
         "psnr": {
           "min": 34.7936,
           "median": 37.1597,
@@ -4067,7 +4067,26 @@
         "imageBandPsnr": null,
         "barcode": 149
       }
-    ]
+    ],
+    "losslessControl": {
+      "yuv444p": {
+        "pixFmt": "yuv444p",
+        "encoder": "libx264 -qp 0 (lossless)",
+        "minPsnr": 50.7778,
+        "worstFrame": 18,
+        "frames": 47
+      },
+      "yuv420p": {
+        "pixFmt": "yuv420p",
+        "encoder": "libx264 -qp 0 (lossless)",
+        "minPsnr": 36.6184,
+        "worstFrame": 91,
+        "frames": 47
+      },
+      "thresholdDb": 50,
+      "pass": true,
+      "settings": "The export is the product route with its default quality (high): x264 preset medium, CRF 16, profile high, 4:2:0 (export.ts CRF and exportSegments.ts SEGMENT_CRF agree), BT.709 limited range. The control takes the same compositor frames through the same conversion and decode at qp 0."
+    }
   },
   "pass": false,
   "failures": [
@@ -4139,5 +4158,5 @@
     "Test 1 (i) and (ii) are both strict; the paused preview decodes the original media (data-source=original), playback uses the proxy.",
     "Small-text (14.4 px) regional PSNR in Test 2 is report+warning only; the pass/fail criterion is textSizeEnvelope."
   ],
-  "runtimeSeconds": 153.8
+  "runtimeSeconds": 106.1
 }
