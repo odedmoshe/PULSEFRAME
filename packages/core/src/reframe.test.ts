@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  applyTransaction, backdropScale, cameraPath, coverLimit, createProject, fitScale, placed, planReframe, REFRAME_DEFAULTS, reframeOps, sampleKeyframes, ShortsError, sourceToFrame, TRACK_UNIT,
+  applyTransaction, backdropScale, backdropScales, cameraPath, coverLimit, createProject, fitScale, placed, planReframe, REFRAME_DEFAULTS, reframeOps, sampleKeyframes, ShortsError, sourceToFrame, TRACK_UNIT,
   type OpCall, type ProjectDocument, type ReframeInput, type ReframeSample,
 } from './index.ts';
 
@@ -118,6 +118,12 @@ describe('planReframe: 500 random subject paths, 1920×1080 into 1080×1920', ()
     expect(backdropScale({ width: 1920, height: 1080 }, SRC)).toBe(1);
     expect(coverLimit(1080, 1920, 1920 / 1080, 1)).toBeCloseTo((1920 * (1920 / 1080) / 1080 - 1) / 2, 12);
     expect(coverLimit(1920, 1920, 1, 1)).toBe(0);
+  });
+  it('backdropScales: under cover the copy stays at 1 and the foreground shrinks; under contain the copy grows and the foreground stays', () => {
+    expect(backdropScales(FRAME, SRC, 'cover')).toEqual({ copy: 1, foreground: 0.31640625 });
+    expect(backdropScales({ width: 1920, height: 1080 }, { width: 1080, height: 1920 }, 'contain')).toEqual({ copy: 1 / 0.31640625, foreground: 1 });
+    expect(backdropScales({ width: 1920, height: 1080 }, SRC, 'contain')).toEqual({ copy: 1, foreground: 1 });
+    expect(backdropScales({ width: 1000, height: 10 }, { width: 10, height: 1000 }, 'contain').copy).toBe(20); // the transform's largest scale
   });
 });
 

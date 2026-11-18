@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  applyTransaction, BuildShortsBodySchema, createProject, findFillers, flashGapFrames, planShorts, SHORTS_PICK_METHOD, ShortsError, sequenceDuration, sourceFrameIndexAt, startOffsetFrames, validateProject,
+  applyTransaction, BuildShortsBodySchema, createProject, findFillers, flashGapFrames, placed, planShorts, SHORTS_PICK_METHOD, ShortsError, sequenceDuration, sourceFrameIndexAt, startOffsetFrames, validateProject,
   type ApplySequencePlanOutput, type AudioFeatures, type MediaClip, type OpCall, type ProjectDocument, type ShortCandidate, type ShortsPlanContext,
 } from './index.ts';
 
@@ -246,6 +246,112 @@ describe('planShorts: snapping, titles, origins and refusals', () => {
     expect(withCand).toMatchObject({ candidateId: cand.id, score: 72, reasons: cand.reasons });
     const without = planShorts(doc, BuildShortsBodySchema.parse({ picks: [{ assetId: asset, start, end, candidateId: 'cand_ffffffffffffffff' }] }), ctx).origins[0]!.origin;
     expect(without).toMatchObject({ candidateId: null, score: null, reasons: [], method: SHORTS_PICK_METHOD });
+  });
+  it('origin: a candidate measured for another range of the same file is not used; a nudged candidate still is', () => {
+    const { doc, asset } = talk(3, rate);
+    const mk = (start: T.RationalTime, end: T.RationalTime): ShortCandidate => ({ id: 'cand_00000000000000aa', rank: 1, assetId: asset, start, end, seconds: T.toSeconds(T.sub(end, start)), statementIds: [], firstWords: '', text: '', contextBefore: '', contextAfter: '', context: { start, end }, score: 88, components: {} as ShortCandidate['components'], reasons: [{ code: 'louder_than_usual' as const, sign: 'plus' as const, value: 6, unit: 'dB' as const, at: start, quote: null }], warnings: [] });
+    const originFor = (cand: ShortCandidate, start: T.RationalTime, end: T.RationalTime) => {
+      const plan = planShorts(doc, BuildShortsBodySchema.parse({ picks: [{ assetId: asset, start, end, candidateId: cand.id }] }), { ...ctx0, candidates: new Map([[cand.id, cand]]) });
+      return { origin: plan.origins[0]!.origin, steps: plan.steps };
+    };
+    // measured for 90–115 s, picked for 20–45 s: the score, reasons and method of the measurement do not travel
+    const far = originFor(mk(T.rt(90, 1), T.rt(115, 1)), T.rt(20, 1), T.rt(45, 1));
+    expect(far.origin).toMatchObject({ candidateId: null, score: null, reasons: [], method: SHORTS_PICK_METHOD });
+    expect(far.steps.join(' ')).toMatch(/cand_00000000000000aa .*not used/);
+    // half overlapping is not the measured window either
+    expect(originFor(mk(T.rt(30, 1), T.rt(55, 1)), T.rt(20, 1), T.rt(45, 1)).origin.candidateId).toBeNull();
+    // the same window with its edges nudged by a second or two is
+    const near = originFor(mk(T.rt(20, 1), T.rt(45, 1)), T.rt(21, 1), T.rt(46, 1)).origin;
+    expect(near).toMatchObject({ candidateId: 'cand_00000000000000aa', score: 88 });
+  });
+  it('privacy regions on clips of the same source pictures are carried onto every piece and backdrop copy of a short', () => {
+    const f = (s: number) => T.frameTime(s * 30, rate);
+    const strip = (x: { id: string }) => { const { id: _id, ...rest } = x; return rest; };
+    /** The talk with two main clips carrying privacy regions: source 5–40 s (a filled rect) and 60–70 s (a pixelated ellipse). */
+    const setup = (scenes: boolean) => {
+      const { doc: d0, asset } = talk(9, rate, { scenes });
+      let r = tx(d0, [
+        { op: 'add_clip', args: { assetId: asset, start: f(0), sourceIn: f(5), duration: f(35) } },
+        { op: 'add_clip', args: { assetId: asset, start: f(40), sourceIn: f(60), duration: f(10) } },
+      ]);
+      const [c1, c2] = r.results.map((x) => (x.output as { clipId: string }).clipId);
+      r = tx(r.doc, [
+        { op: 'set_redact_region', args: { clipId: c1, region: { shape: 'rect', x: 0.2, y: -0.1, width: 0.15, height: 0.2, style: 'fill', strength: 1 } } },
+        { op: 'set_redact_region', args: { clipId: c2, region: { shape: 'ellipse', x: -0.3, y: 0.1, width: 0.1, height: 0.1, style: 'pixelate' } } },
+      ]);
+      const doc = r.doc;
+      const regionOf = (clipId: string) => {
+        for (const t of doc.sequences[doc.mainSequenceId]!.tracks) for (const c of t.clips) if (c.id === clipId && c.type === 'media') return c.redact!.map(strip);
+        throw new Error('no clip');
+      };
+      const make = (start: number, end: number, source: 'backdrop' | 'centre') => {
+        const plan = planShorts(doc, BuildShortsBodySchema.parse({ reframe: { source }, picks: [{ assetId: asset, start: T.rt(start, 1), end: T.rt(end, 1) }] }), ctx0);
+        const out = tx(doc, [{ op: 'apply_sequence_plan', args: { planKind: 'shorts', params: {}, steps: plan.steps, ops: plan.ops, origins: plan.origins } }]);
+        expect(validateProject(out.doc)).toEqual([]);
+        const id = (out.results[0]!.output as unknown as ApplySequencePlanOutput).sequenceIds[0]!;
+        const pictures = out.doc.sequences[id]!.tracks.filter((t) => t.kind === 'video').flatMap((t) => t.clips) as MediaClip[];
+        return { pictures, plan };
+      };
+      return { r1: regionOf(c1!), r2: regionOf(c2!), make };
+    };
+    const { r1, r2, make } = setup(true);
+    // 10–30 s lies in the first clip's source range only: both layers of the backdrop carry its region, and only it
+    const a = make(10, 30, 'backdrop');
+    expect(a.pictures.length).toBeGreaterThan(1);
+    for (const p of a.pictures) expect(p.redact?.map(strip)).toEqual(r1);
+    expect(a.plan.steps.join(' ')).toMatch(/privacy regions carried onto \d+ picture clip/);
+    // 35–65 s, split at scene cuts: each piece carries the regions of the clips whose source range it meets
+    const meets = (p: MediaClip, a0: number, z: number) => T.lt(p.sourceIn, T.rt(z, 1)) && T.lt(T.rt(a0, 1), T.add(p.sourceIn, p.duration));
+    const seen = new Set<string>();
+    for (const p of make(35, 65, 'centre').pictures) {
+      const want = [...(meets(p, 5, 40) ? r1 : []), ...(meets(p, 60, 70) ? r2 : [])];
+      seen.add(`${meets(p, 5, 40)}/${meets(p, 60, 70)}`);
+      if (want.length) expect(p.redact?.map(strip)).toEqual(want); else expect(p.redact).toBeUndefined();
+    }
+    expect(seen).toEqual(new Set(['true/false', 'false/false', 'false/true']));
+    // without scene cuts the one piece of 35–65 s meets both: it carries the union (private side)
+    const whole = setup(false).make(35, 65, 'centre').pictures;
+    expect(whole).toHaveLength(1);
+    expect(whole[0]!.redact?.map(strip)).toEqual([...r1, ...r2]);
+    // 75–95 s is shown by no clip with a region: none
+    for (const p of make(75, 95, 'centre').pictures) expect(p.redact).toBeUndefined();
+  });
+  it('the backdrop fills the frame and the foreground is contained under either frame fit (contain profiles too)', () => {
+    const { doc: d0, asset: land } = talk(9, rate);
+    const portrait = { ...VIDEO, contentHash: `sha256:${'5'.repeat(64)}`, video: { ...VIDEO.video, width: 1080, height: 1920 } };
+    const doc = tx(d0, [{ op: 'import_asset', args: { asset: portrait } }]).doc;
+    const port = Object.keys(doc.assets).find((k) => k !== land)!;
+    const cases: [string, unknown][] = [
+      [port, { profileId: 'landscape-16x9' }], // fit contain
+      [port, { width: 1920, height: 1080, fit: 'cover', profileId: null, safeArea: null }],
+      [land, { profileId: 'vertical-9x16' }],
+      [land, { width: 720, height: 1280, fit: 'contain', profileId: null, safeArea: null }],
+      [land, { width: 720, height: 1280, fit: 'cover', profileId: null, safeArea: null }],
+    ];
+    const eps = 1e-6;
+    for (const [assetId, format] of cases) {
+      const plan = planShorts(doc, BuildShortsBodySchema.parse({ format, captions: null, reframe: { source: 'backdrop' }, picks: [{ assetId, start: T.rt(10, 1), end: T.rt(30, 1) }] }), ctx0);
+      const out = tx(doc, [{ op: 'apply_sequence_plan', args: { planKind: 'shorts', params: {}, steps: plan.steps, ops: plan.ops, origins: plan.origins } }]);
+      const id = (out.results[0]!.output as unknown as ApplySequencePlanOutput).sequenceIds[0]!;
+      const seq = out.doc.sequences[id]!;
+      const { width: W, height: H, fit } = seq.format!;
+      const src = out.doc.assets[assetId]!.video!;
+      const [v1, v2] = seq.tracks.filter((t) => t.kind === 'video');
+      const where = `${src.width}×${src.height} in ${W}×${H} ${fit}`;
+      expect(v1!.clips.length, where).toBeGreaterThan(0);
+      for (const c of v1!.clips) {
+        const p = placed(W, H, fit, src.width, src.height, c.transform);
+        const w = p.w * p.scale, h = p.h * p.scale;
+        expect(w >= W - eps && h >= H - eps, `${where}: the copy is ${w}×${h}`).toBe(true);
+        expect(Math.min(Math.abs(w - W), Math.abs(h - H)), where).toBeLessThan(eps); // just covers
+      }
+      for (const c of v2!.clips) {
+        const p = placed(W, H, fit, src.width, src.height, c.transform);
+        const w = p.w * p.scale, h = p.h * p.scale;
+        expect(w <= W + eps && h <= H + eps, `${where}: the foreground is ${w}×${h}`).toBe(true);
+        expect(Math.min(Math.abs(w - W), Math.abs(h - H)), where).toBeLessThan(eps); // just contained
+      }
+    }
   });
   it('refuses: an unknown file, a pick outside the file, too short or too long, an unknown profile, tightening without word timing or features', () => {
     const { doc, asset } = talk(2, rate);

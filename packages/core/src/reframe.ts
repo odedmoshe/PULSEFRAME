@@ -35,6 +35,15 @@ export function backdropScale(frame: { width: number; height: number }, src: { w
   const p = frame.width * src.height, q = frame.height * src.width;
   return Math.min(p, q) / Math.max(p, q);
 }
+/**
+ * The transform scales of the blurred backdrop under a frame fit. A clip is first fitted by the frame's own fit, so under
+ * 'cover' the copy stays at 1 (it fills) and the foreground shrinks by contain/cover; under 'contain' the foreground stays
+ * at 1 (it is contained) and the copy grows by cover/contain (capped at the transform's largest scale, 20).
+ */
+export function backdropScales(frame: { width: number; height: number }, src: { width: number; height: number }, fit: 'contain' | 'cover'): { copy: number; foreground: number } {
+  const p = frame.width * src.height, q = frame.height * src.width;
+  return fit === 'cover' ? { copy: 1, foreground: Math.min(p, q) / Math.max(p, q) } : { copy: Math.min(20, Math.max(p, q) / Math.min(p, q)), foreground: 1 };
+}
 
 const median = (xs: number[]): number => { const s = [...xs].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2; };
 const clamp = (v: number, lim: number) => Math.max(-lim, Math.min(lim, v));

@@ -19,7 +19,11 @@
  *     track, a picture-only copy under it blurred (BACKDROP) and the foreground at backdropScale; captions (a transcript
  *     caption track on the short's sound, its look, and a bottom margin above the safe area); a title (add_text with a text
  *     style, verbatim for a quote).
- * Score and reasons in an origin come only from the measured candidate (ctx.candidates); nothing is typed or made up.
+ * Privacy regions (ADR-0015) travel with the picture: every piece and backdrop copy carries the regions of each video clip
+ * in the document that shows the same file over an overlapping source range (the union, deduplicated: erring on the
+ * private side), so a face hidden in the long edit stays hidden in the short and its export.
+ * Score and reasons in an origin come only from the measured candidate (ctx.candidates) measured for this excerpt (its
+ * window and the excerpt overlap by at least SHORTS_CANDIDATE_OVERLAP of the longer one); nothing is typed or made up.
  */
 import * as T from '@pulseframe/time';
 import type { Asset, MediaClip, ProjectDocument, SequenceFormat, SequenceOrigin, ShortReason, Transcript } from './schema.ts';
@@ -31,19 +35,21 @@ import type { TemplateStep } from './templateContract.ts';
 import { findProfile } from './variants.ts';
 import { findFillers } from './fillers.ts';
 import { flashGapFrames } from './flashSafety.ts';
-import { startOffsetFrames, sourceFrameIndexAt } from './speed.ts';
+import { isFreeze, sourceEnd, startOffsetFrames, sourceFrameIndexAt } from './speed.ts';
 import { fitScale } from './geometry.ts';
-import { backdropScale, planReframe, trackSamples } from './reframe.ts';
+import { backdropScales, planReframe, trackSamples } from './reframe.ts';
 import { isVerbatim } from './quotes.ts';
 import { findCaptionLook } from './captionPresets.ts';
 import { sequenceOf } from './sequences.ts';
 import { DEFAULT_CAPTION_STYLE } from './schema.ts';
-import type { MotionTrack } from './tracking.ts';
+import { MAX_REDACT_REGIONS, type MotionTrack, type RedactRegion } from './tracking.ts';
 
 /** A silence of the measured features, for tightening without word timing. */
 export const SHORTS_SILENCE_DB = -35;
 /** Title: shown for the first seconds, styled with this text style (textPresets.ts). */
 export const SHORTS_TITLE = { seconds: 3, presetId: 'classic-outline' } as const;
+/** A named candidate counts for a pick only when its window and the excerpt overlap by at least this share of the longer of the two (nudged edges still count). */
+export const SHORTS_CANDIDATE_OVERLAP = 0.8;
 /** The method written into the origin of a short made from a pick that names no measured candidate. */
 export const SHORTS_PICK_METHOD = 'shorts-plan 1: picked range snapped to word edges; no measured candidate' as const;
 
@@ -116,6 +122,30 @@ function subtract(excerpt: Span, removals: Span[]): Span[] {
   if (T.lt(cur, excerpt.end)) out.push({ start: cur, end: excerpt.end });
   return out;
 }
+
+type RegionArgs = Omit<RedactRegion, 'id'>;
+/** The privacy regions of every video clip of `assetId` in the document whose source range meets [from, to): the union, deduplicated. */
+function regionsOver(doc: ProjectDocument, asset: Asset, from: T.RationalTime, to: T.RationalTime): RegionArgs[] {
+  const out = new Map<string, RegionArgs>();
+  const oneFrame = T.frameTime(1, asset.video!.frameRate);
+  for (const seq of Object.values(doc.sequences)) for (const track of seq.tracks) {
+    if (track.kind !== 'video') continue;
+    for (const c of track.clips) {
+      if (c.type !== 'media' || c.assetId !== asset.id || !c.redact?.length) continue;
+      const lo = c.sourceIn, end = isFreeze(c) ? T.add(c.sourceIn, oneFrame) : sourceEnd(c);
+      const hi = T.lt(lo, end) ? end : T.add(lo, oneFrame);
+      if (!T.lt(lo, to) || !T.lt(from, hi)) continue;
+      for (const r of c.redact) {
+        const { id: _id, ...rest } = r;
+        const key = JSON.stringify(Object.keys(rest).sort().map((k) => [k, (rest as Record<string, unknown>)[k]]));
+        if (!out.has(key)) out.set(key, structuredClone(rest));
+      }
+    }
+  }
+  return [...out.values()];
+}
+/** Seconds two spans share. */
+const overlapSeconds = (a: Span, b: Span) => Math.max(0, T.toSeconds(T.sub(T.min(a.end, b.end), T.max(a.start, b.start))));
 
 interface TWord { id: string; text: string; start: T.RationalTime; end: T.RationalTime; timing: 'word' | 'segment' | 'approximate' }
 const wordsOf = (tr: Transcript | undefined): TWord[] => (tr?.segments ?? []).flatMap((s) => s.words.map((w) => ({ id: w.id, text: w.text, start: w.start, end: T.add(w.start, w.duration), timing: s.timing })));
@@ -281,18 +311,25 @@ export function planShorts(doc: ProjectDocument, body: BuildShortsBody, ctx: Sho
     if (fg) ops.push({ op: 'add_track', args: { sequenceId: seqRef, kind: 'video' }, bind: fg });
     const hasAudio = !!asset.audio;
     if (!hasAudio) w('no_audio', `"${asset.name}" has no sound, so short ${i + 1} is silent`, { assetId: asset.id });
-    let keys = 0, held = 0, epsilon = 0;
-    const bScale = backdropScale(frame, src);
+    let keys = 0, held = 0, epsilon = 0, redacted = 0;
+    const bScales = backdropScales(frame, src, format.fit);
     for (const [j, p] of lay.pieces.entries()) {
       const bind = `p${i}_${j}`;
       const timing = { start: T.frameTime(p.start, rate), sourceIn: p.sourceIn, duration: T.frameTime(p.frames, rate) };
+      // the privacy regions of the same pictures elsewhere in the project: on this piece and on its backdrop copy
+      const regions = regionsOver(doc, asset, p.sourceIn, T.add(p.sourceIn, timing.duration));
+      if (regions.length > MAX_REDACT_REGIONS)
+        throw new ShortsError('invalid_args', `piece ${j + 1} of short ${i + 1} shows pictures that carry ${regions.length} different privacy regions in the project; a clip can carry at most ${MAX_REDACT_REGIONS}`, { pick: i, piece: j, regions: regions.length, max: MAX_REDACT_REGIONS }, 'Merge or remove privacy regions on the clips of this part of the file (set_redact_region), or pick another excerpt.');
+      const redact = (clipRef: string) => { for (const region of regions) ops.push({ op: 'set_redact_region', args: { clipId: { $ref: clipRef }, region: structuredClone(region) } }); if (regions.length) redacted++; };
       ops.push({ op: 'add_clip', args: { sequenceId: seqRef, assetId: asset.id, trackId: fg ? { $ref: fg, out: 'trackId' } : v1, ...(hasAudio ? { audioTrackId: a1 } : {}), ...timing }, bind });
+      redact(bind);
       if (source === 'backdrop') {
         const copy = `b${i}_${j}`;
         ops.push({ op: 'add_clip', args: { sequenceId: seqRef, assetId: asset.id, trackId: v1, withLinkedAudio: false, ...timing }, bind: copy });
+        redact(copy);
         ops.push({ op: 'add_effect', args: { clipId: { $ref: copy }, type: BACKDROP.effect, params: { radius: BACKDROP.blurRadius } } });
-        ops.push({ op: 'set_clip_transform', args: { clipId: { $ref: copy }, transform: { opacity: BACKDROP.opacity } } });
-        ops.push({ op: 'set_clip_transform', args: { clipId: { $ref: bind }, transform: { scale: bScale } } });
+        ops.push({ op: 'set_clip_transform', args: { clipId: { $ref: copy }, transform: { opacity: BACKDROP.opacity, ...(bScales.copy !== 1 ? { scale: bScales.copy } : {}) } } });
+        if (bScales.foreground !== 1) ops.push({ op: 'set_clip_transform', args: { clipId: { $ref: bind }, transform: { scale: bScales.foreground } } });
       } else {
         const samples = mt
           ? trackSamples({ duration: asset.duration, video: asset.video }, { type: 'media', ...timing } as MediaClip, mt, rate)
@@ -310,7 +347,7 @@ export function planShorts(doc: ProjectDocument, body: BuildShortsBody, ctx: Sho
     }
     if (mt && lay.frames > 0 && held * 2 > lay.frames) w('track_mostly_lost', `the subject is lost in ${held} of ${lay.frames} frames of short ${i + 1}; the camera holds there`, { heldFrames: held, frames: lay.frames, motionTrackId: mt.id });
     // the honest 'upscaled' warning, as preflight computes it: fit factor × scale above 1.5
-    const enlarge = fitScale(frame.width, frame.height, src.width, src.height, format.fit) * (source === 'backdrop' ? bScale : choice.framing);
+    const enlarge = fitScale(frame.width, frame.height, src.width, src.height, format.fit) * (source === 'backdrop' ? bScales.foreground : choice.framing);
     if (enlarge > 1.5) w('upscaled', `"${asset.name}" (${src.width}×${src.height}) is shown ${enlarge.toFixed(2)}× larger than its own pixels in short ${i + 1} (${frame.width}×${frame.height}) and will look soft`, { enlarge: Number(enlarge.toFixed(4)), source: src, frame });
     if (body.captions) {
       const c = `c${i}`;
@@ -334,8 +371,13 @@ export function planShorts(doc: ProjectDocument, body: BuildShortsBody, ctx: Sho
     }
 
     // ---- measured provenance: score and reasons only from the measured candidate ----
+    // the candidate counts only for the window it was measured for: same file, and the excerpt and its window overlap by at
+    // least SHORTS_CANDIDATE_OVERLAP of the longer one (a pick for another range of the file gets no score and no reasons)
     const cand = pick.candidateId !== undefined ? ctx.candidates.get(pick.candidateId) : undefined;
-    const measured = cand && cand.assetId === asset.id ? cand : undefined;
+    const candSpan = cand ? { start: cand.start, end: cand.end } : undefined;
+    const longer = candSpan ? Math.max(T.toSeconds(T.sub(candSpan.end, candSpan.start)), T.toSeconds(T.sub(excerpt.end, excerpt.start))) : 0;
+    const measured = cand && candSpan && cand.assetId === asset.id && overlapSeconds(candSpan, excerpt) >= SHORTS_CANDIDATE_OVERLAP * longer ? cand : undefined;
+    const candNote = cand && !measured ? `; candidate ${cand.id} was measured for ${cand.assetId === asset.id ? `${fmtS(cand.start)}–${fmtS(cand.end)} s` : 'another file'}, not this excerpt, so its score is not used` : '';
     const origin: SequenceOrigin = {
       kind: 'short', assetId: asset.id, candidateId: measured ? measured.id : null,
       excerpt: { start: excerpt.start, end: excerpt.end }, kept: spans.map((x) => ({ start: x.start, end: x.end })),
@@ -353,7 +395,7 @@ export function planShorts(doc: ProjectDocument, body: BuildShortsBody, ctx: Sho
       operations: ops.length - before,
     };
     shorts.push(planned);
-    steps.push(`${name}: ${fmtS(excerpt.start)}–${fmtS(excerpt.end)} s of "${asset.name}", ${planned.pieces} piece(s), ${accepted.length} removal(s), reframe ${source}`.slice(0, 400));
+    steps.push(`${name}: ${fmtS(excerpt.start)}–${fmtS(excerpt.end)} s of "${asset.name}", ${planned.pieces} piece(s), ${accepted.length} removal(s), reframe ${source}${redacted ? `, privacy regions carried onto ${redacted} picture clip(s)` : ''}${candNote}`.slice(0, 400));
   }
   if (ops.length > SHORTS_CAPS.maxOps) throw shortsRefusal('planTooLarge', { operations: ops.length, max: SHORTS_CAPS.maxOps }, ops.length);
   if (body.replaceSequenceIds?.length) steps.push(`Replaces ${body.replaceSequenceIds.length} short(s) made before, in the same step`);
