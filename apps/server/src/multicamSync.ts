@@ -289,9 +289,12 @@ function quality(v: Partial<SyncQuality> & { verdict: SyncVerdict }): SyncQualit
   return { peakZ: null, peakRatio: null, anchorsUsed: 0, anchorsRejected: 0, residualSamples: null, driftPpm: null, overlapSeconds: null, candidates: [], chainDepth: 0, jobId: null, ...v };
 }
 
-async function measureGroup(store: Store, doc: ProjectDocument, group: MulticamGroup, body: MulticamSyncRequest, o: { jobId: string | null; abandoned: () => boolean; stage: (s: string) => void }): Promise<{ results: Measured[]; reference: PieceRef; timingsMs: { envelope: number; coarse: number; fine: number } }> {
-  const sr = group.sampleRate, oneMs = sr / 1000, hop = sr / FRAME_RATE;
-  const angleIds = body.angleIds ?? group.angles.map((a) => a.id);
+/**
+ * The pieces to measure (every file of the chosen angles but the reference's first) and the ones they are measured against: the
+ * reference's first file and every file already placed (by sound or by hand), when it has sound.
+ */
+function splitGroup(doc: ProjectDocument, group: MulticamGroup, angleIdsAsked: string[] | undefined): { reference: PieceRef; targets: PieceRef[]; contributors: Contributor[] } {
+  const angleIds = angleIdsAsked ?? group.angles.map((a) => a.id);
   const refAngle = group.angles.find((a) => a.id === group.referenceAngleId)!;
   const reference: PieceRef = { angleId: refAngle.id, label: refAngle.label, pieceIndex: 0, assetId: refAngle.pieces[0]!.assetId };
   const targets: PieceRef[] = [];
@@ -302,8 +305,15 @@ async function measureGroup(store: Store, doc: ProjectDocument, group: MulticamG
     const isRef = angle.id === refAngle.id && pieceIndex === 0;
     if (!isRef && angleIds.includes(angle.id)) { targets.push(ref); return; }
     const asset = assetOf(piece.assetId);
-    if (asset?.audio && piece.anchors.length && isPlacedVerdict(piece.quality.verdict)) contributors.push({ ...ref, asset, map: mapOf(piece.anchors, sr), depth: isRef ? 0 : piece.quality.chainDepth, reference: isRef });
+    if (asset?.audio && piece.anchors.length && isPlacedVerdict(piece.quality.verdict)) contributors.push({ ...ref, asset, map: mapOf(piece.anchors, group.sampleRate), depth: isRef ? 0 : piece.quality.chainDepth, reference: isRef });
   });
+  return { reference, targets, contributors };
+}
+
+async function measureGroup(store: Store, doc: ProjectDocument, group: MulticamGroup, body: MulticamSyncRequest, o: { jobId: string | null; abandoned: () => boolean; stage: (s: string) => void }): Promise<{ results: Measured[]; reference: PieceRef; timingsMs: { envelope: number; coarse: number; fine: number } }> {
+  const sr = group.sampleRate, oneMs = sr / 1000, hop = sr / FRAME_RATE;
+  const { reference, targets, contributors } = splitGroup(doc, group, body.angleIds);
+  const assetOf = (id: string) => (Object.hasOwn(doc.assets, id) ? doc.assets[id]! : undefined);
   const priors = body.useCapturePriors === false ? [] : capturePriors(doc, group);
   const priorOf = (t: PieceRef) => priors.find((p) => p.angleId === t.angleId && p.pieceIndex === t.pieceIndex)?.offsetSeconds ?? null;
   const minOverlapFrames = Math.round((body.minOverlapSeconds ?? SYNC_THRESHOLDS.minOverlapSeconds) * FRAME_RATE);
@@ -446,6 +456,12 @@ function precheck(store: Store, projectId: string, groupId: string, body: Multic
   for (const id of body.angleIds ?? []) if (!group.angles.some((a) => a.id === id)) throw new ApiError(404, 'not_found', MULTICAM_REFUSALS.angleNotFound.message(id, groupId), { groupId, angleId: id }, MULTICAM_REFUSALS.angleNotFound.hint);
   const manual = manualPieces(group, body.angleIds);
   if (manual.length && !body.overwrite && !body.dryRun) throw new ApiError(409, 'would_discard_edits', MULTICAM_REFUSALS.wouldDiscardManual.message(manual[0]!), { groupId, why: 'would_discard_edits', angles: manual }, MULTICAM_REFUSALS.wouldDiscardManual.hint);
+  // files with sound to measure, but no sound to measure them against: the reference's first file has none and nothing is placed yet
+  const { reference, targets, contributors } = splitGroup(doc, group, body.angleIds);
+  const hasSound = (id: string) => !!(Object.hasOwn(doc.assets, id) && doc.assets[id]!.audio);
+  if (!contributors.length && targets.some((t) => hasSound(t.assetId))) {
+    throw new ApiError(422, 'no_audio', `the reference angle "${reference.label}" has no sound to sync the other angles by`, { groupId, angleId: reference.angleId, assetId: reference.assetId, why: 'reference_has_no_sound' }, 'Make the group again with an angle that recorded sound as the reference (create_multicam referenceAngleIndex), or sync one angle by hand first (set_multicam_sync) and measure the others against it.');
+  }
   return { doc, group };
 }
 const pieceReport = (m: Measured, sr: number): MulticamPieceReport => ({

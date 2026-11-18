@@ -23,7 +23,7 @@ import { Presence } from './presence.ts';
 import { Speech } from './speech.ts';
 import { Store } from './store.ts';
 import { addNoise, loopAt, pinkNoise, speechAt, speechBursts, wav } from './multicamSync.fixtures.ts';
-import { coarseMatch, fitSync, verdictOf } from './multicamSync.ts';
+import { coarseMatch, fitSync, runMulticamSyncJob, verdictOf } from './multicamSync.ts';
 
 const SR = 48000;
 let dir: string, cfg: Config, store: Store, auth: Auth, gov: Governance, app: ReturnType<typeof createApp>, mcp: ReturnType<typeof createMcp>, capabilities: Capabilities, derivatives: Derivatives;
@@ -51,10 +51,10 @@ function importWav(name: string, x: Float32Array): string {
   return r.results[0]!.output!.assetId as string;
 }
 const q = (verdict: SyncQuality['verdict']): SyncQuality => ({ verdict, peakZ: null, peakRatio: null, anchorsUsed: 0, anchorsRejected: 0, residualSamples: null, driftPpm: null, overlapSeconds: null, candidates: [], chainDepth: 0, jobId: null });
-function putGroup(id: string, angles: { id: string; assetId: string; verdict?: SyncQuality['verdict']; anchors?: { group: T.RationalTime; source: T.RationalTime }[] }[]) {
+function putGroup(id: string, angles: { id: string; assetId: string; kind?: 'picture' | 'sound'; verdict?: SyncQuality['verdict']; anchors?: { group: T.RationalTime; source: T.RationalTime }[] }[]) {
   const group: MulticamGroup = {
     id, name: id, sampleRate: SR, referenceAngleId: angles[0]!.id, wideAngleId: null, speakers: [], origin: { method: 'test', params: {}, createdAt: 'x', createdBy: 'test', edited: false },
-    angles: angles.map((a, i) => ({ id: a.id, label: a.id.toUpperCase(), kind: 'sound', pieces: [{ assetId: a.assetId, anchors: i === 0 ? [{ group: T.ZERO, source: T.ZERO }] : a.anchors ?? [], quality: q(i === 0 ? 'reference' : a.verdict ?? 'unsynced') }] })),
+    angles: angles.map((a, i) => ({ id: a.id, label: a.id.toUpperCase(), kind: a.kind ?? 'sound', pieces: [{ assetId: a.assetId, anchors: i === 0 ? [{ group: T.ZERO, source: T.ZERO }] : a.anchors ?? [], quality: q(i === 0 ? 'reference' : a.verdict ?? 'unsynced') }] })),
   };
   // the group as create_multicam leaves it (the operation is W1's), put in place by an undoable restore
   store.commit({ projectId: pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'restore_entities', args: { targets: [{ id, state: { kind: 'multicamGroup', group } }] } }] });
@@ -92,6 +92,12 @@ beforeAll(() => {
   putGroup('mcg_room', [{ id: 'room', assetId: room }, { id: 'loop', assetId: loopOnly }, { id: 'noise', assetId: noise }]);
   const manual = importWav('manual', render(60, (t) => S(t + 1)));
   putGroup('mcg_manual', [{ id: 'mref', assetId: ref }, { id: 'hand', assetId: manual, verdict: 'manual', anchors: [{ group: T.rt(48000, SR), source: T.ZERO }] }]);
+  // a reference camera whose file has no sound (allowed: referenceAngleIndex may pick any angle); then the same with a recorder
+  // already synced by hand, which the others are measured against
+  const silent: Omit<Asset, 'id'> = { kind: 'video', name: 'silent.mp4', contentHash: `sha256:${'5'.repeat(64)}`, byteSize: 1000, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(120, 1), video: { width: 640, height: 360, frameRate: { num: 30, den: 1 }, codec: 'h264', rotation: 0, frameCount: 3600 }, provenance: prov } as Omit<Asset, 'id'>;
+  const cam = store.commit({ projectId: pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'import_asset', args: { asset: silent } }] }).results[0]!.output!.assetId as string;
+  putGroup('mcg_silentref', [{ id: 'cam', assetId: cam, kind: 'picture' }, { id: 'mic', assetId: plus }]);
+  putGroup('mcg_silentref_hand', [{ id: 'cam2', assetId: cam, kind: 'picture' }, { id: 'mic2', assetId: ref, verdict: 'manual', anchors: [{ group: T.ZERO, source: T.ZERO }] }, { id: 'plus2', assetId: plus }]);
 }, 120_000);
 afterAll(async () => {
   (app as any).browserExport?.stop();
@@ -198,6 +204,28 @@ describe('multicam sync refusals and the job', () => {
     expect(g.angles.find((a) => a.id === 'plus')!.pieces[0]!.anchors).toEqual([{ group: T.rt(57321, SR), source: T.rt(0, SR) }]);
     expect(g.angles.find((a) => a.id === 'paused')!.pieces[0]!.anchors).toEqual([]);
     expect(g.origin.params).toMatchObject({ confidentPeakZ: 10, ambiguousBelowPeakRatio: 1.2 });
+  }, 120_000);
+});
+
+describe('a reference file with no sound', () => {
+  it('is refused 422 no_audio with a hint, in the request, at the route of a job, in a job and over MCP (never a 500)', async () => {
+    const r = await rest('POST', `/projects/${pid}/multicam/mcg_silentref/sync`, { dryRun: true }, auth.tokens.observer);
+    expect([r.status, r.body.error.code, r.body.error.details.why, r.body.error.details.angleId], JSON.stringify(r.body)).toEqual([422, 'no_audio', 'reference_has_no_sound', 'cam']);
+    expect(r.body.error.hint).toMatch(/referenceAngleIndex/);
+    const bg = await rest('POST', `/projects/${pid}/multicam/mcg_silentref/sync`, { dryRun: true, background: true }, auth.tokens.observer);
+    expect([bg.status, bg.body.error.code]).toEqual([422, 'no_audio']);
+    const job = store.createJob(pid, 'analysis', 'agent:local', { kind: 'multicam-sync', groupId: 'mcg_silentref', options: { dryRun: true }, projectRevision: 0 });
+    await runMulticamSyncJob(store, job.id);
+    expect([store.getJob(job.id).status, (store.getJob(job.id).error as { code: string }).code]).toEqual(['failed', 'no_audio']);
+    const m = await tool('sync_multicam', { projectId: pid, groupId: 'mcg_silentref', dryRun: true }, auth.tokens.observer);
+    expect([m.isError, m.body.error.code]).toEqual([true, 'no_audio']);
+  });
+  it('a file synced by hand that has sound is measured against instead', async () => {
+    const r = await rest('POST', `/projects/${pid}/multicam/mcg_silentref_hand/sync`, { dryRun: true, angleIds: ['plus2'] }, auth.tokens.observer);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    const p = row(r.body, 'plus2');
+    expect(p.verdict, JSON.stringify(p)).toBe('confident');
+    expect(Math.abs(samples(p.offsetSeconds)! - 57321)).toBeLessThanOrEqual(1);
   }, 120_000);
 });
 
