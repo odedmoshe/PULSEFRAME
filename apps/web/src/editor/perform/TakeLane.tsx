@@ -6,11 +6,11 @@
 import type { Chip } from '@pulseframe/core';
 import type { Lang } from '@pulseframe/i18n';
 import { PERFORM_TESTIDS as ID } from './perform.testids.ts';
-import { countChips } from './capture.ts';
+import { countChips, type PerformChip } from './capture.ts';
 import { performT } from './perform.strings.ts';
 
 export interface TakeLaneProps {
-  chips: readonly Chip[]; lang: Lang; ghost: boolean;
+  chips: readonly PerformChip[]; lang: Lang; ghost: boolean;
   /** i18n perform.ghostBanner and perform.held.* through the editor's `t` */
   ghostBanner: string; heldWords: (reason: NonNullable<Chip['reason']>) => string;
   /** the number of taps (in order) past the take limit, marked as they are made */
@@ -29,9 +29,10 @@ export function TakeLane({ chips, lang, ghost, ghostBanner, heldWords, overFrom 
         <ul className="pf-perform-chips">
           {sorted.map((c) => {
             const word = S(`pv.chip.${c.state}` as 'pv.chip.kept');
-            const why = c.state === 'held' && c.reason ? heldWords(c.reason) : null;
+            // a hold that came from the pad's own envelope or fade says so (capture.ts markShapeHolds), not only the general flash sentence
+            const why = c.state === 'held' && c.reason ? (c.shape ? S('pv.held.shape') : heldWords(c.reason)) : null;
             return (
-              <li key={`${c.tap}-${c.frame}`} className="pf-perform-chip" data-testid={ID.chip} data-state={c.state} data-reason={c.reason} data-frame={c.frame} data-pad={c.pad} tabIndex={0}
+              <li key={`${c.tap}-${c.frame}`} className="pf-perform-chip" data-testid={ID.chip} data-state={c.state} data-reason={c.reason} data-shape={c.shape ? 'true' : undefined} data-frame={c.frame} data-pad={c.pad} tabIndex={0}
                 aria-label={`${S('pv.chip.label', { pad: c.pad + 1, frame: c.frame, state: word })}${why ? `. ${why}` : ''}${c.tap >= overFrom ? `. ${S('pv.chip.over')}` : ''}`}>
                 <span className="pf-perform-chip-pad" aria-hidden="true"><bdi dir="ltr">{c.pad + 1}</bdi></span>
                 <span className="pf-perform-chip-state">{word}</span>

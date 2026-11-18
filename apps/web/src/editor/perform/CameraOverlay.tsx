@@ -4,7 +4,8 @@
  * timeline at half speed, silent (Player.shuttle: no sound at any speed but 1), taking ONE sample per painted frame; at the end
  * planCamera turns the samples into three replace_clip_keyframes over the filmed range (a partial retake: keys outside it stay)
  * and the result is shown as a ghost for review. Accept is ONE transaction (commitCamera). Nothing is written while filming.
- * Sample frames are CLIP-LOCAL (the basis of planCamera's from/to).
+ * Sample frames are TIMELINE frames (performContract.ts CameraSample; planCamera maps them through the clip's start), while the
+ * take's range {from, to} is clip-local: cameraSample() is the one place that turns a clip-local frame into a sample.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
 import * as T from '@pulseframe/time';
@@ -44,6 +45,8 @@ export function centreFromPointer(px: number, py: number, box: { left: number; t
 export const stepZoom = (z: number, dir: 1 | -1, max: number): number => clamp(+(dir > 0 ? z * ZOOM_STEP : z / ZOOM_STEP).toFixed(6), 1, Math.max(1, max));
 /** Clip-local frame of a timeline frame (negative before the clip). */
 export const localFrame = (clip: MediaClip, frame: number, rate: T.Rate): number => frame - T.frameIndexAt(clip.start, rate);
+/** The camera sample taken at a clip-local frame: its frame is the TIMELINE frame (the contract's basis), not the clip-local one. */
+export const cameraSample = (clip: MediaClip, local: number, rate: T.Rate, pose: { u: number; v: number; zoom: number }): CameraSample => ({ frame: local + T.frameIndexAt(clip.start, rate), u: pose.u, v: pose.v, zoom: pose.zoom });
 /** The source frame a clip shows at a clip-local frame, for the whole-clip picture (speed and reverse respected). */
 export function sourceFrameAt(clip: MediaClip, local: number, rate: T.Rate): number {
   const localS = (local * rate.den) / rate.num, sp = clip.speed ? clip.speed.num / clip.speed.den : 1, inS = T.toSeconds(clip.sourceIn);
@@ -154,7 +157,7 @@ export function CameraOverlay({ lang, camera, onCamera, say, onClose }: CameraOv
     const f = localFrame(clip, editor.frame, rate);
     if (f < 0 || f >= T.frameIndexAt(clip.duration, rate)) { setMessage('pv.cam.noPicture'); return; }
     editor.showGhost(null); setPlan(null); setRefusal(null); setMessage(null);
-    samples.current = [{ frame: f, u: poseRef.current.u, v: poseRef.current.v, zoom: poseRef.current.zoom }];
+    samples.current = [cameraSample(clip, f, rate, poseRef.current)];
     range.current = { from: f, to: f }; lastFrame.current = f;
     editor.setPerformRecording(true);
     setPhase('filming');
@@ -166,7 +169,7 @@ export function CameraOverlay({ lang, camera, onCamera, say, onClose }: CameraOv
     const p = editor.player;
     const f = localFrame(clip, editor.frame, rate);
     if (f !== lastFrame.current && f >= 0) {
-      for (let k = lastFrame.current + 1; k <= f; k++) samples.current.push({ frame: k, u: poseRef.current.u, v: poseRef.current.v, zoom: poseRef.current.zoom });
+      for (let k = lastFrame.current + 1; k <= f; k++) samples.current.push(cameraSample(clip, k, rate, poseRef.current));
       lastFrame.current = f;
     }
     if (!p?.playing || f >= T.frameIndexAt(clip.duration, rate) - 1) finish();
@@ -224,7 +227,7 @@ export function CameraOverlay({ lang, camera, onCamera, say, onClose }: CameraOv
       {ready && (
         <>
           <div className="pf-perform-camera-picture" ref={boxRef} dir="ltr" tabIndex={0} role="group" aria-label={S('pv.cam.rect')} aria-describedby="pf-perform-cam-help"
-            style={{ aspectRatio: `${geo!.srcW} / ${geo!.srcH}` }} onPointerMove={move} onPointerDown={move} onKeyDown={key}>
+            style={{ aspectRatio: `${geo!.srcW} / ${geo!.srcH}`, inlineSize: `min(100%, 480px, calc(30vh * ${geo!.srcW} / ${geo!.srcH}))` }} onPointerMove={move} onPointerDown={move} onKeyDown={key}>
             <canvas ref={canvasRef} className="pf-perform-camera-canvas" aria-hidden="true" />
             <div className="pf-perform-camera-crop" data-testid={ID.cameraCrop} data-u={pose.u.toFixed(4)} data-v={pose.v.toFixed(4)} data-zoom={pose.zoom.toFixed(4)}
               style={{ left: pct(pose.u - win.wu / 2), top: pct(pose.v - win.wv / 2), width: pct(win.wu), height: pct(win.wv) }} />
@@ -253,6 +256,7 @@ export function CameraOverlay({ lang, camera, onCamera, say, onClose }: CameraOv
           <p data-testid={ID.cameraConfirm} data-count={plan.replacedKeys} role="status">{plan.replacedKeys > 0 ? S('pv.cam.confirm', { n: plan.replacedKeys }) : S('pv.cam.confirmNone')} <bdi dir="ltr">{S('pv.cam.keys', { n: plan.keys.length })}</bdi></p>
           {plan.overTolerance && <p role="alert" className="pf-perform-error" data-testid={ID.cameraOverTolerance}>{S('pv.cam.over', { n: (plan.residual * 100).toFixed(2) })}</p>}
           {plan.warnings.includes('linked_formats') && <p role="note" data-testid={ID.cameraLinkedFormats}>{t('perform.linkedFormats')}</p>}
+          {plan.warnings.includes('cannot_reach_ends') && <p role="note" data-testid={ID.cameraCannotReach}>{t('perform.cannotReachEnds')}</p>}
           <div className="pf-perform-camera-bar">
             <Button variant="primary" busy={busy} disabled={plan.overTolerance} disabledReason={plan.overTolerance ? S('pv.cam.over', { n: (plan.residual * 100).toFixed(2) }) : undefined} onClick={() => void accept()} data-testid={ID.accept}>{S('pv.cam.accept')}</Button>
             <Button variant="ghost" onClick={discard} data-testid={ID.discard}>{S('pv.cam.discard')}</Button>

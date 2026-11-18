@@ -9,12 +9,12 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
-import { defaultBank, performGrid, type Chip, type PadBank, type Tap } from '@pulseframe/core';
+import { defaultBank, performGrid, type ApplyTakeArgs, type Chip, type PadBank, type Tap } from '@pulseframe/core';
 import { api } from '../../api.ts';
 import { Button, Dialog, Seg, Slider, Switch, Tabs } from '../../ds/index.ts';
 import { useEditorState } from '../store.ts';
 import { analyseCalibration, heardPerfMs, outputLatencyMs, scheduleClicks, type CalibrationResult, type ClickContext } from './calibration.ts';
-import { liveDocument, padStatus, planTake, resolvePadAssets, TapCapture, type PadStatus, type PlanFailure, type TakePlan } from './capture.ts';
+import { liveDocument, padStatus, planTake, resolvePadAssets, TapCapture, type PadStatus, type PerformChip, type PlanFailure, type TakePlan } from './capture.ts';
 import { CameraOverlay } from './CameraOverlay.tsx';
 import { CALIBRATION, type PerformPrefs } from './contract.ts';
 import { PadEditor } from './PadEditor.tsx';
@@ -38,7 +38,16 @@ const typingNow = (): boolean => {
 const modalNow = (): boolean => !!document.querySelector('[aria-modal="true"]');
 const hasMotionPad = (bank: PadBank) => bank.some((m) => m && (m.kind === 'punch' || (m.kind === 'adjust' && m.effects.some((e) => e.type.startsWith('motion.')))));
 
-declare global { interface Window { __pfPerform?: { injectTaps(taps: Tap[]): number; state(): { phase: string; taps: Tap[]; chips: Chip[] } }; } }
+declare global {
+  interface Window {
+    __pfPerform?: {
+      injectTaps(taps: Tap[]): number;
+      state(): { phase: string; taps: Tap[]; chips: Chip[]; args: ApplyTakeArgs | null; grid: number };
+      /** The live path's cost (liveDocument: raw taps planned and applied in memory, as the view does once per animation frame), ms per run. */
+      timeLive(taps: Tap[], runs: number): number[];
+    };
+  }
+}
 
 export function PerformView() {
   const { editor, state, t } = useEditorState();
@@ -49,7 +58,7 @@ export function PerformView() {
   const [tab, setTab] = useState<'pads' | 'camera'>('pads');
   const [phase, setPhase] = useState<Phase>('idle');
   const [take, setTake] = useState<TakePlan | null>(null);
-  const [chips, setChips] = useState<Chip[]>([]);
+  const [chips, setChips] = useState<PerformChip[]>([]);
   const [failure, setFailure] = useState<PlanFailure | null>(null);
   const [held, setHeld] = useState<ReadonlySet<number>>(new Set());
   const [editing, setEditing] = useState<number | null>(null);
@@ -219,10 +228,16 @@ export function PerformView() {
         if (live.current.phase === 'idle') { cap.reset(); const n = cap.inject(taps); setPhase('review'); live.current.phase = 'review'; hook.current.planNow(cap.snapshot()); return n; }
         return cap.inject(taps);
       },
-      state: () => ({ phase: live.current.phase, taps: cap.snapshot(), chips }),
+      state: () => ({ phase: live.current.phase, taps: cap.snapshot(), chips, args: take?.planned.args ?? null, grid: take?.grid ?? 0 }),
+      timeLive: (taps, runs) => {
+        const l = live.current, out: number[] = [];
+        if (!l.bank || !l.base) return out;
+        for (let i = 0; i < runs; i++) { const t0 = performance.now(); liveDocument(l.base, taps, ctxOf()); out.push(performance.now() - t0); }
+        return out;
+      },
     };
     return () => { delete window.__pfPerform; };
-  }, [cap, chips]);
+  }, [cap, chips, take]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- pad pointer events
   const padDown = (pad: number, id: number, ts: number) => { if (live.current.phase === 'recording') cap.pointerDown(pad, id, ts); };
@@ -249,6 +264,7 @@ export function PerformView() {
     : cal.state === 'stale' ? S('pv.cal.stale', { date: new Date(cal.calibratedAt).toLocaleDateString(lang) })
     : S('pv.cal.on', { date: new Date(cal.calibratedAt).toLocaleDateString(lang), ms: cal.offsetMs.toFixed(0) });
 
+  const lane = <TakeLane chips={chips} lang={lang} ghost={phase === 'review' && !!take?.ghost} ghostBanner={t('perform.ghostBanner')} heldWords={heldWords} overFrom={overFrom} />;
   return (
     <section className="pf-ds pf-perform pf-force-dark" data-testid={ID.view} data-phase={phase} aria-label={S('pv.aria.view')} dir={lang === 'he' ? 'rtl' : 'ltr'}>
       <p className="pf-sr" role="status" aria-live="polite" data-testid={ID.live}>{liveText}</p>
@@ -280,9 +296,11 @@ export function PerformView() {
           {reduced && !reducedDismissed && bank && hasMotionPad(bank) && (
             <p className="pf-perform-note" role="note" data-testid={ID.reducedMotion}>{S('pv.reduced')} <Button size="sm" variant="ghost" onClick={() => setReducedDismissed(true)}>{S('pv.reducedOk')}</Button></p>
           )}
+          {/* in review the take lane (the ghost banner and what became of every tap) comes first: the pads do nothing until the next take */}
+          {phase === 'review' && lane}
           <PadGrid bank={bank ?? empty} statuses={statuses} held={held} lang={lang} keysLive={!editor.multicamDigitsLive} addLabel={t('perform.addToLibrary')} adding={adding}
             onDown={padDown} onUp={padUp} onEdit={(p) => setEditing(p)} onAdd={(p) => void addToLibrary(p)} />
-          <p className="pf-perform-hint" dir="auto">{S('pv.keyHint')}</p>
+          {phase !== 'review' && lane}
           <div className="pf-perform-settings">
             <div data-testid={ID.snap} data-snap={prefs.settings.snap}>
               <Seg label={S('pv.snap')} value={prefs.settings.snap} onChange={(v) => setSettings({ snap: v })} size="sm"
@@ -307,7 +325,7 @@ export function PerformView() {
           </div>
           {!hasBeats && prefs.settings.snap !== 'off' && <p className="pf-perform-note" role="note">{S('pv.noBeats')}</p>}
           {prefs.settings.snap !== 'off' && <p className="pf-perform-hint" dir="auto">{S('pv.snapNote')}</p>}
-          <TakeLane chips={chips} lang={lang} ghost={phase === 'review' && !!take?.ghost} ghostBanner={t('perform.ghostBanner')} heldWords={heldWords} overFrom={overFrom} />
+          <p className="pf-perform-hint" dir="auto">{S('pv.keyHint')}</p>
         </div>
       )}
       <PadEditor open={editing !== null} pad={editing ?? 0} current={editing !== null ? bank?.[editing] ?? null : null} lang={lang} onClose={() => setEditing(null)}

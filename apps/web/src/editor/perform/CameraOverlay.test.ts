@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, type Asset, type CameraGeometry, type MediaClip } from '@pulseframe/core';
-import { cameraSourceDocument, centreFromPointer, clampCentre, localFrame, sourceFrameAt, stepZoom, windowFractions, ZOOM_STEP } from './CameraOverlay.tsx';
+import { applyTransaction, createProject, DEFAULT_CAMERA, planCamera, type Asset, type CameraGeometry, type MediaClip } from '@pulseframe/core';
+import { cameraSample, cameraSourceDocument, centreFromPointer, clampCentre, localFrame, sourceFrameAt, stepZoom, windowFractions, ZOOM_STEP } from './CameraOverlay.tsx';
 
 const R = { num: 30, den: 1 };
 const wide: CameraGeometry = { frameW: 1080, frameH: 1920, srcW: 1920, srcH: 1080, fit: 'contain' }; // a 16:9 source in a 9:16 frame
@@ -77,5 +77,27 @@ describe('the whole-clip picture keeps the clip\'s privacy regions (ADR-0015)', 
   it('a clip without regions shows the plain source document', () => {
     const { d, clip } = build();
     expect(shownClip(cameraSourceDocument(d, clip, d.assets['ast_a']!)).redact).toBeUndefined();
+  });
+});
+
+describe('camera samples are timeline frames (performContract.ts CameraSample), the range clip-local', () => {
+  it('a take on a clip that starts at 3 s plans the frames the overlay filmed, not 90 frames later', () => {
+    const rate = { num: 30, den: 1 };
+    const base = createProject({ id: 'prj_cam2', name: 'C', width: 1920, height: 1080, frameRate: rate });
+    base.assets['ast_a'] = { id: 'ast_a', kind: 'video', name: 'a.mp4', contentHash: `sha256:${'a'.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(10, 1), video: { width: 1920, height: 1080, frameRate: rate, codec: 'h264', rotation: 0, frameCount: 300 }, provenance: { origin: 'import', createdAt: '2026-01-01T00:00:00.000Z' } } as unknown as Asset;
+    const d = applyTransaction(base, [{ op: 'add_clip', args: { assetId: 'ast_a', start: T.rt(3, 1), duration: T.rt(4, 1) } }], { idSeed: 'c_', actor: 't' }).doc;
+    const clip = d.sequences[d.mainSequenceId]!.tracks.flatMap((t) => t.clips)[0] as MediaClip;
+    // the overlay films clip-local frames 0..20, panning right, zoomed in
+    const samples = Array.from({ length: 21 }, (_, k) => cameraSample(clip, k, rate, { u: 0.4 + k * 0.005, v: 0.5, zoom: 2 }));
+    expect(samples[0]!.frame).toBe(90);
+    const plan = planCamera(d, { clipId: clip.id, from: 0, to: 20, samples, settings: DEFAULT_CAMERA });
+    expect('refused' in plan).toBe(false);
+    if ('refused' in plan) return;
+    expect(plan.keys[0]!.frame).toBe(0);
+    expect(plan.keys.at(-1)!.frame).toBe(20);
+    expect(Math.max(...plan.keys.map((k) => k.scale))).toBeGreaterThan(1.2); // the zoom that was filmed shows inside the range (its edges hold the clip's framing)
+    // the clip-local samples the overlay used to send name timeline frames 0..20, before the clip: nothing to plan
+    const local = samples.map((x) => ({ ...x, frame: x.frame - 90 }));
+    expect(planCamera(d, { clipId: clip.id, from: 0, to: 20, samples: local, settings: DEFAULT_CAMERA })).toEqual({ refused: 'no_samples' });
   });
 });
