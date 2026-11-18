@@ -8,9 +8,12 @@
  *   property) as statements and timed words, findFillers, the scene cuts of doc.analyses, the measured sound
  *   (shortsFeatures.ts) and the excerpts of the shorts already made from the file (origin.kind 'short'). The score is a
  *   relative heuristic within one video, never a forecast of views.
- * - Candidates the finder returned are remembered in this process (by project and candidate id), so a pick that names one
- *   carries the candidate's measured score and reasons into the short's origin; a candidate id the server cannot find again
- *   is passed to the planner without them. A client never supplies a score.
+ * - Candidates the finder returned are remembered in this process (by project and candidate id, with a stamp of what they
+ *   were measured on: the file's transcript, scene cuts and measured sound), so a pick that names one carries the
+ *   candidate's measured score and reasons into the short's origin — only when the pick's start and end are the candidate's
+ *   own (before snapping) and the stamp still matches the project. Otherwise the file is ranked again with the default
+ *   settings; a candidate id that is still not found, or names another span (also for another pick of the same request), is
+ *   passed to the planner without them (it then records the excerpt as a pick). A client never supplies a score.
  * - applyShorts commits gov.commitAs({ projectId, expectedRevision: body.expectedRevision ?? the planned revision,
  *   allowInternal: true, label: 'Make shorts', ops: [apply_sequence_plan] }). Propose mode is refused with 403
  *   insufficient_scope (SHORTS_PROPOSE_REFUSED): a proposal cannot carry the internal op.
@@ -18,7 +21,7 @@
  */
 import * as T from '@pulseframe/time';
 import {
-  BuildShortsBodySchema, FindShortsBodySchema, findFillers, planShorts, rankShortCandidates, reframeOps, ReframePlanBodySchema, SHORTS_PROPOSE_REFUSED, SHORTS_RANK_METHOD,
+  BuildShortsBodySchema, FindShortsBodySchema, findFillers, fingerprint, planShorts, rankShortCandidates, reframeOps, ReframePlanBodySchema, SHORTS_PROPOSE_REFUSED, SHORTS_RANK_METHOD,
   ShortsError, SHORTS_STATUS, shortsRefusal, transcriptStatements,
   type ApplySequencePlanArgs, type ApplySequencePlanOutput, type Asset, type AudioFeatures, type BuildShortsBody, type FindShortsBody, type HighlightInputsWithWords,
   type ProjectDocument, type ReframePlanView, type ShortCandidate, type ShortCandidatesView, type ShortsApplyResult, type ShortsPlan, type ShortsPlanContext, type ShortsPlanView,
@@ -52,10 +55,16 @@ function built<R>(what: string, fn: () => R): R {
 
 // ---------- candidates remembered in this process ----------
 const REMEMBERED_MAX = 4000;
-const remembered = new Map<string, ShortCandidate>();
+const remembered = new Map<string, { candidate: ShortCandidate; stamp: string }>();
 const key = (projectId: string, candidateId: string) => `${projectId}|${candidateId}`;
-function remember(projectId: string, cands: readonly ShortCandidate[]) {
-  for (const c of cands) { const k = key(projectId, c.id); remembered.delete(k); remembered.set(k, c); }
+/** What a candidate's score was measured on: the file's transcript, its scene cuts and its measured sound. */
+function measuredOn(doc: ProjectDocument, asset: Asset, features: AudioFeatures | null): string {
+  const tr = Object.hasOwn(doc.transcripts, asset.id) ? doc.transcripts[asset.id]! : null;
+  const analysis = Object.hasOwn(doc.analyses, asset.id) ? doc.analyses[asset.id]! : null;
+  return fingerprint({ duration: T.normalize(asset.duration), tr, cuts: analysis?.scenes?.cuts ?? null, features: features ? [features.contentHash, features.version, features.hops, features.partial] : null });
+}
+function remember(projectId: string, stamp: string, cands: readonly ShortCandidate[]) {
+  for (const c of cands) { const k = key(projectId, c.id); remembered.delete(k); remembered.set(k, { candidate: c, stamp }); }
   while (remembered.size > REMEMBERED_MAX) remembered.delete(remembered.keys().next().value!);
 }
 
@@ -81,7 +90,7 @@ export function finderInputs(doc: ProjectDocument, asset: Asset, features: Audio
 }
 function rankView(projectId: string, revision: number, doc: ProjectDocument, asset: Asset, features: AudioFeatures | null, body: FindShortsBody): ShortCandidatesView {
   const r = rankShortCandidates(finderInputs(doc, asset, features), body);
-  remember(projectId, r.candidates);
+  remember(projectId, measuredOn(doc, asset, features), r.candidates);
   return { ...r, revision, assetId: asset.id, features: features ? { hops: features.hops, partial: features.partial } : null };
 }
 
@@ -120,19 +129,32 @@ function parseBuild(body: unknown): BuildShortsBody {
 export function planContext(store: Store, projectId: string, doc: ProjectDocument, body: BuildShortsBody, createdAt = new Date().toISOString()): ShortsPlanContext {
   const candidates = new Map<string, ShortCandidate>();
   const features = new Map<string, AudioFeatures>();
+  // the candidates are keyed by id: an id that some pick names for another span carries no score for any pick
+  const spanOf = new Map<string, { assetId: string; start: T.RationalTime; end: T.RationalTime } | null>();
+  for (const p of body.picks) if (p.candidateId) {
+    const had = spanOf.get(p.candidateId);
+    spanOf.set(p.candidateId, had === undefined || (had && had.assetId === p.assetId && T.eq(had.start, p.start) && T.eq(had.end, p.end)) ? { assetId: p.assetId, start: p.start, end: p.end } : null);
+  }
   for (const pick of body.picks) {
     const asset = Object.hasOwn(doc.assets, pick.assetId) ? doc.assets[pick.assetId]! : null;
     if (!asset) continue; // the planner refuses it with its own words
     if (asset.audio && !features.has(asset.id)) { const f = cachedAudioFeatures(store, asset); if (f) features.set(asset.id, f); }
-    if (!pick.candidateId || candidates.has(pick.candidateId)) continue;
-    let c = remembered.get(key(projectId, pick.candidateId)) ?? null;
-    if (!c && asset.kind === 'video' && asset.video && (!asset.audio || features.has(asset.id))) {
-      // not remembered (another process found it): rank the file again with the default settings and look for it
-      const again = rankShortCandidates(finderInputs(doc, asset, features.get(asset.id) ?? null), FindShortsBodySchema.parse({ assetId: asset.id, count: 40 }));
-      remember(projectId, again.candidates);
+    if (!pick.candidateId || candidates.has(pick.candidateId) || !spanOf.get(pick.candidateId)) continue;
+    // a candidate id is the fingerprint of its file and span (highlights.ts): an id that is not this pick's names another span
+    if (pick.candidateId !== `cand_${fingerprint({ assetId: pick.assetId, start: T.normalize(pick.start), end: T.normalize(pick.end), method: SHORTS_RANK_METHOD })}`) continue;
+    const f = features.get(asset.id) ?? null;
+    if (asset.kind !== 'video' || !asset.video || (asset.audio && !f)) continue; // not measurable as it is: no measured score to carry
+    const stamp = measuredOn(doc, asset, f);
+    const mem = remembered.get(key(projectId, pick.candidateId));
+    let c: ShortCandidate | null = mem && mem.stamp === stamp ? mem.candidate : null;
+    if (!c) {
+      // not remembered (another process found it), or measured on another transcript, cuts or sound: rank the file again with the default settings and look for it
+      const again = rankShortCandidates(finderInputs(doc, asset, f), FindShortsBodySchema.parse({ assetId: asset.id, count: 40 }));
+      remember(projectId, stamp, again.candidates);
       c = again.candidates.find((x) => x.id === pick.candidateId) ?? null;
     }
-    if (c && c.assetId === pick.assetId) candidates.set(c.id, c);
+    // the measured score and reasons describe the candidate's own span only (before snapping): another excerpt is a plain pick
+    if (c && c.assetId === pick.assetId && T.eq(c.start, pick.start) && T.eq(c.end, pick.end)) candidates.set(c.id, c);
   }
   return { createdAt, candidates, features };
 }

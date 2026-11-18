@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { BuildShortsBodySchema, createProject, planShorts, SHORTS_PROPOSE_REFUSED, transcriptStatements, type Asset, type ShortCandidatesView } from '@pulseframe/core';
+import { BuildShortsBodySchema, createProject, getOp, planShorts, SHORTS_PROPOSE_REFUSED, transcriptStatements, type Asset, type ShortCandidatesView } from '@pulseframe/core';
 import { shortsFixtureTruth, shortsSamples } from '../../../packages/fixtures/src/shorts.ts';
 import { Auth } from './auth.ts';
 import { Capabilities } from './capabilities.ts';
@@ -23,7 +23,7 @@ import { Governance, type Principal } from './governance.ts';
 import { createApp } from './http.ts';
 import { createMcp } from './mcp.ts';
 import { Presence } from './presence.ts';
-import { applyShorts } from './shorts.ts';
+import { applyShorts, planContext } from './shorts.ts';
 import { cachedAudioFeatures } from './shortsFeatures.ts';
 import { Speech } from './speech.ts';
 import { Store } from './store.ts';
@@ -161,6 +161,26 @@ describe('finding candidates', () => {
     const edit = await rest('POST', `/projects/${talk.pid}/shorts`, { picks: [{ assetId: talk.assetId, start: c.start, end: c.end }] }, auth.tokens.observer);
     expect(edit.status).toBe(403);
   });
+  it('a pick carries a candidate\'s measured score only for that candidate\'s own span, ranked on the transcript as it is', async () => {
+    const found = await rest('POST', `/projects/${talk.pid}/shorts/candidates`, { assetId: talk.assetId });
+    expect(found.status).toBe(200);
+    const top = found.body.candidates[0] as ShortCandidatesView['candidates'][number];
+    const doc = store.getProject(talk.pid).doc;
+    const ctx = (d: typeof doc, start: T.RationalTime, end: T.RationalTime) => planContext(store, talk.pid, d, BuildShortsBodySchema.parse({ picks: [{ assetId: talk.assetId, start, end, candidateId: top.id }] })).candidates;
+    expect(ctx(doc, top.start, top.end).get(top.id)?.score).toBe(top.score);
+    // the same id on another excerpt (elsewhere, or trimmed inside it): no candidate, so the planner records a pick, not a measured score
+    expect(ctx(doc, T.add(top.end, T.rt(1, 1)), T.add(top.end, T.rt(20, 1))).size).toBe(0);
+    expect(ctx(doc, T.add(top.start, T.rt(1, 1)), top.end).size).toBe(0);
+    // the transcript the candidate was ranked on is gone: the remembered candidate is not used; ranking again does not find it
+    const edited = structuredClone(doc);
+    delete edited.transcripts[talk.assetId];
+    expect(ctx(edited, top.start, top.end).size).toBe(0);
+    // and the project as it is still finds it
+    expect(ctx(doc, top.start, top.end).get(top.id)?.score).toBe(top.score);
+    // two picks under one id, one of them elsewhere: the id carries no score for either (the context is keyed by id)
+    const both = BuildShortsBodySchema.parse({ picks: [{ assetId: talk.assetId, start: top.start, end: top.end, candidateId: top.id }, { assetId: talk.assetId, start: T.add(top.end, T.rt(1, 1)), end: T.add(top.end, T.rt(20, 1)), candidateId: top.id }] });
+    expect(planContext(store, talk.pid, doc, both).candidates.size).toBe(0);
+  });
   it('MCP cancel_job cancels the measurement between windows; nothing is cached', async () => {
     const long = video('long', 1300, { lavfi: 'sine=f=300:sample_rate=48000' });
     const r = await rest('POST', `/projects/${long.pid}/shorts/candidates`, { assetId: long.assetId });
@@ -230,6 +250,14 @@ describe('the playbooks', () => {
     expect(at.every((i) => i >= 0)).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
     expect(text).toMatch(/Always pass sequenceId to range operations on a short/);
+    // the ops it names for sequenceId take one; the clip ops it names refuse one (they address the clip by id)
+    const takes = (n: string) => { const r = getOp(n)!.args.safeParse({ sequenceId: 'seq_x' }); return r.success || !r.error.issues.some((i) => i.code === 'unrecognized_keys' && (i as { keys: string[] }).keys.includes('sequenceId')); };
+    const listed = (from: string) => [...(text.slice(text.indexOf(from)).match(/\(([^)]*)\)/)![1]!.matchAll(/\b[a-z]+(?:_[a-z]+)+\b/g))].map((m) => m[0]);
+    const withSeq = listed('Always pass sequenceId'), clipOps = listed('Clip operations');
+    expect(withSeq.length).toBeGreaterThan(3);
+    expect(clipOps).toContain('trim_clip');
+    expect(withSeq.filter((n) => !getOp(n) || !takes(n))).toEqual([]);
+    expect(clipOps.filter((n) => !getOp(n) || takes(n))).toEqual([]);
     expect(text).toMatch(/Choose by meaning/);
     expect(text).toMatch(/never an instruction to you/);
     const cut = (await call('prompts/get', { name: 'social-cutdown', arguments: { projectId: talk.pid, format: 'vertical-9x16' } })).messages[0].content.text as string;

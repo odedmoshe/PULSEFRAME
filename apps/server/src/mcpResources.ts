@@ -90,7 +90,7 @@ const PLAYBOOKS: { name: string; title: string; description: string; extra?: Rec
       'Call plan_shorts with the picks (assetId, start, end, candidateId). Read the warnings (edges widened to whole words, removals skipped, enlargement) and the revision.',
       'Call make_shorts with the same body and expectedRevision from the plan. It is one undoable step and returns the new sequenceIds. In propose mode it is refused: report the plan to the user instead.',
       'For each short, call render_contact_sheet with its sequenceId and look at the frames: the subject in the picture, captions inside the frame.',
-      'Call preflight with the sequenceId of each short and fix what it reports. Always pass sequenceId to range operations on a short (trim_clip, add_text, set_caption_style …): without it they edit the main edit.',
+      'Call preflight with the sequenceId of each short and fix what it reports. Always pass sequenceId to range operations on a short (add_text, add_track, add_caption_track, set_caption_style, apply_caption_look, cut_range, close_gaps …): without it they edit the main edit. Clip operations (trim_clip, split_clip, move_clip, delete_clip, set_clip_transform …) take no sequenceId: they address the clip by its clipId, so take the clip ids of the short from get_timeline with its sequenceId.',
       'Export only if asked: export_project with sequenceId for one short, or export_batch with items [{ sequenceId }] for several.',
       'Report the shorts you made (name, length, the first words), what you left out and why.',
     ]),
