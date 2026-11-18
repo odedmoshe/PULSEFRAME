@@ -67,7 +67,9 @@ export function SequenceSwitcher() {
   const activeRow = list.find((s) => s.id === active);
   const go = (id: string) => { editor.setActiveSequence(id); requestAnimationFrame(() => focusSequenceTab(id)); };
   const onKey = (e: React.KeyboardEvent) => {
-    const i = Math.max(0, list.findIndex((s) => s.id === active));
+    // from the focused tab (the WAI-ARIA tabs pattern), else the active one
+    const from = (e.target as HTMLElement | null)?.closest?.('[role="tab"]')?.getAttribute('data-sequence-id') ?? active;
+    const i = Math.max(0, list.findIndex((s) => s.id === from));
     let n = i;
     if (e.key === 'ArrowRight') n = rtl ? i - 1 : i + 1;
     else if (e.key === 'ArrowLeft') n = rtl ? i + 1 : i - 1;
@@ -82,7 +84,7 @@ export function SequenceSwitcher() {
     <div className="seq-switch pf-ds" data-testid={ID.switcher}>
       <div role="tablist" aria-label={t['sequence.switcher']} onKeyDown={onKey} className="seq-tabs">
         {list.map((s) => (
-          <button key={s.id} type="button" role="tab" id={`sequence-tab-${s.id}`} aria-selected={s.id === active} tabIndex={s.id === active ? 0 : -1}
+          <button key={s.id} type="button" role="tab" id={`sequence-tab-${s.id}`} aria-selected={s.id === active} aria-controls="pf-stage pf-timeline" tabIndex={s.id === active ? 0 : -1}
             className={`seq-tab${s.id === active ? ' is-active' : ''}`} data-testid={s.main ? ID.tabMain : ID.tab} data-sequence-id={s.id} onClick={() => go(s.id)}>
             {s.main ? t['sequence.main'] : <><span className="seq-name" dir="auto">{s.name}</span> · <bdi dir="ltr">{clock(s.durationSeconds)}</bdi></>}
           </button>

@@ -6,7 +6,7 @@
  * It shows only while that run is in the document: an undone film takes its bar with it. FILM_TESTIDS.bar*.
  */
 import { useState, type ReactElement } from 'react';
-import type { FamilyFilmParams } from '@pulseframe/core';
+import { FAMILY_FILM_DRAFT_LABEL, type FamilyFilmParams } from '@pulseframe/core';
 import { AnchoredError, Button, Menu } from '../ds/index.ts';
 import { isolate } from '../ds/util.tsx';
 import { api } from '../api.ts';
@@ -57,6 +57,7 @@ export function FilmBar({ lang, runId }: FilmBarProps): ReactElement | null {
       <Button size="sm" variant="ghost" data-testid={TID.barWhy} aria-expanded={showWhy} onClick={() => setShowWhy((v) => !v)}>{S.whyClips}</Button>
       {busy && <span role="status" className="pf-film-muted">{S.working}</span>}
       {error && <AnchoredError onDismiss={() => setError(null)} dismissLabel={S.close}>{error}</AnchoredError>}
+      {showWhy && <p className="pf-film-muted pf-film-whynote">{FAMILY_FILM_DRAFT_LABEL[lang]}</p>}
       {showWhy && (
         <ol className="pf-film-whylist" data-testid={TID.barWhyList} aria-label={S.whyList}>
           {slots.map((slot) => {

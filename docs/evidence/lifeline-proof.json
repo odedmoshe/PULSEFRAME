@@ -1,13 +1,13 @@
 {
   "proof": "lifeline",
   "adr": "ADR-0021",
-  "ranAt": "2026-11-18T02:19:18.687Z",
+  "ranAt": "2026-11-18T17:37:27.952Z",
   "result": "PASSED",
   "passed": 17,
   "total": 17,
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "logicalCpus": 4,
     "node": "v22.23.4",
     "icu": "78.3",
@@ -281,10 +281,10 @@
       "bytes": 48128,
       "familyCheck": {
         "varying": [
-          "clp_46923a55b51"
+          "clp_d9d90947281"
         ],
         "empty": [
-          "clp_46923a55b55"
+          "clp_d9d90947285"
         ]
       },
       "frozen": {
@@ -311,22 +311,22 @@
       ]
     },
     "peopleWalk": {
-      "routes": 109,
-      "tools": 162,
+      "routes": 115,
+      "tools": 174,
       "perCredential": {
         "agent token": {
-          "answered": 31,
-          "refused": 73,
+          "answered": 32,
+          "refused": 78,
           "leaks": 0
         },
         "observer token": {
-          "answered": 30,
-          "refused": 74,
+          "answered": 31,
+          "refused": 79,
           "leaks": 0
         },
         "grant with people left at its default": {
-          "answered": 31,
-          "refused": 73,
+          "answered": 32,
+          "refused": 78,
           "leaks": 0
         }
       }
@@ -1492,20 +1492,20 @@
       "evaluate": {
         "frames": 1000,
         "liveTitles": 20,
-        "medianMsPerFrameLive": 0.021,
-        "medianMsPerFrameTyped": 0.019,
+        "medianMsPerFrameLive": 0.018,
+        "medianMsPerFrameTyped": 0.016,
         "addedMsPerFrame": 0.002,
         "budgetMs": 0.2,
         "withinBudget": true,
-        "firstFrameAfterAnEditMs": 0.051
+        "firstFrameAfterAnEditMs": 0.041
       },
       "commit": {
         "datedFiles": 500,
         "events": 60,
         "created": 60,
         "commits": 30,
-        "medianMs": 14.725,
-        "maxMs": 21.887
+        "medianMs": 13.612,
+        "maxMs": 16.206
       }
     }
   },
@@ -1779,8 +1779,8 @@
             "severity": "blocker",
             "message": "the title \"צולם ב־{date}\" has a field without data, so those words would be missing from the film ({date}: there is no capture date to take it from (the picture under the title has none, or no dated picture is on the timeline))",
             "ids": [
-              "clp_2b41c4ade10",
-              "clp_e23d4b36ff0"
+              "clp_7f6a320dfc0",
+              "clp_d98e913cc90"
             ],
             "range": {
               "startFrame": 0,
@@ -1804,8 +1804,8 @@
             "severity": "blocker",
             "message": "the title \"{hebrewDate}\" shows a Hebrew date ({hebrewDate}) for a picture taken around sunset: the Hebrew date depends on whether it was filmed before or after sunset, and that has not been answered. Answer it for the event (update_event afterSunset); it is never guessed",
             "ids": [
-              "clp_351f7f5b960",
-              "evt_31de9288030"
+              "clp_b0eb1369780",
+              "evt_78c4e6a5860"
             ],
             "range": {
               "startFrame": 0,
@@ -1909,34 +1909,34 @@
         ],
         "familyCheck": {
           "varying": [
-            "clp_46923a55b51"
+            "clp_d9d90947281"
           ],
           "empty": [
-            "clp_46923a55b55"
+            "clp_d9d90947285"
           ]
         },
         "afterTheCutTheCopyShowsTheFirstValue": true
       }
     },
     {
-      "name": "10b. the walk: with the birth date planted in the project, a proposal's arguments and entity states and an export job, every REST route of the surface table (109) and every MCP tool (162), resource and prompt, called as each credential without the people scope: 0 answers hold the birth date (any spelling, also on the Hebrew calendar), an age or the word choice",
+      "name": "10b. the walk: with the birth date planted in the project, a proposal's arguments and entity states and an export job, every REST route of the surface table (115) and every MCP tool (174), resource and prompt, called as each credential without the people scope: 0 answers hold the birth date (any spelling, also on the Hebrew calendar), an age or the word choice",
       "ok": true,
       "detail": {
         "planted": true,
         "walk": {
           "agent token": {
-            "answered": 31,
-            "refused": 73,
+            "answered": 32,
+            "refused": 78,
             "leaks": []
           },
           "observer token": {
-            "answered": 30,
-            "refused": 74,
+            "answered": 31,
+            "refused": 79,
             "leaks": []
           },
           "grant with people left at its default": {
-            "answered": 31,
-            "refused": 73,
+            "answered": 32,
+            "refused": 78,
             "leaks": []
           }
         }
@@ -1967,20 +1967,20 @@
         "evaluate": {
           "frames": 1000,
           "liveTitles": 20,
-          "medianMsPerFrameLive": 0.021,
-          "medianMsPerFrameTyped": 0.019,
+          "medianMsPerFrameLive": 0.018,
+          "medianMsPerFrameTyped": 0.016,
           "addedMsPerFrame": 0.002,
           "budgetMs": 0.2,
           "withinBudget": true,
-          "firstFrameAfterAnEditMs": 0.051
+          "firstFrameAfterAnEditMs": 0.041
         },
         "commit": {
           "datedFiles": 500,
           "events": 60,
           "created": 60,
           "commits": 30,
-          "medianMs": 14.725,
-          "maxMs": 21.887
+          "medianMs": 13.612,
+          "maxMs": 16.206
         }
       }
     }

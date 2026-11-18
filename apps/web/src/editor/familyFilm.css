@@ -68,9 +68,12 @@
 
 .pf-film-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); background: var(--pf-surface-2); }
 .pf-film-bar-title { margin-inline-end: 4px; }
+.pf-film-whynote { flex-basis: 100%; }
 .pf-film-whylist { flex-basis: 100%; margin: 0; padding-inline-start: 22px; font-size: var(--pf-fs-sm); }
 .pf-film-why { display: flex; flex-direction: column; gap: 6px; }
 .pf-film-why h4 { margin: 0; }
 .pf-film-why-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 
 @media (prefers-reduced-motion: reduce) { .pf-film-dialog *, .pf-film-bar *, .pf-film-strip * { transition: none !important; animation: none !important; } }
+.tl-film { padding: 4px 8px 0; }
+.tl-film:empty { display: none; }

@@ -1,0 +1,1456 @@
+{
+  "proof": "family-film",
+  "status": "failed",
+  "at": "2026-11-18T17:51:54.152Z",
+  "summary": "39/40 checks passed, 0 section(s) blocked",
+  "checks": [
+    {
+      "id": "F4",
+      "name": "cancel mid-run ends canceled and changes nothing",
+      "value": {
+        "statusWhenCanceled": "running",
+        "cancel": 200,
+        "final": "canceled",
+        "revisionBefore": 25,
+        "revisionAfter": 25
+      },
+      "budget": "canceled while running; revision unchanged",
+      "pass": true
+    },
+    {
+      "id": "F4",
+      "name": "a restart completes and attaches with ONE revision",
+      "value": {
+        "status": "succeeded",
+        "output": {
+          "measured": 6,
+          "cached": 0,
+          "attached": 6,
+          "revision": 26,
+          "skipped": [],
+          "wallSeconds": 5.578,
+          "mediaSeconds": 82
+        },
+        "revisionBefore": 25,
+        "revisionAfter": 26
+      },
+      "budget": "succeeded, 6 attached, +1 revision",
+      "pass": true
+    },
+    {
+      "id": "F5",
+      "name": "a second run after the records were undone decodes nothing and attaches the same records",
+      "value": {
+        "undo": 200,
+        "recordsGone": true,
+        "output": {
+          "measured": 0,
+          "cached": 6,
+          "attached": 6,
+          "revision": 28,
+          "skipped": [],
+          "wallSeconds": 0.008,
+          "mediaSeconds": 82
+        },
+        "sameRecords": true,
+        "keysDiffering": [
+          "origin"
+        ]
+      },
+      "budget": "measured 0, cached 6, equal records (but the attach time)",
+      "pass": true
+    },
+    {
+      "id": "F5",
+      "name": "a forced re-measure (overwrite) decodes again and gives the same data digests",
+      "value": {
+        "output": {
+          "measured": 6,
+          "cached": 0,
+          "attached": 0,
+          "revision": null,
+          "skipped": [],
+          "wallSeconds": 1.228,
+          "mediaSeconds": 82
+        },
+        "digests": {
+          "film-a.mp4": "4740da220ab32439be4b4055407f3409d9d4816ca4f7827ee7bf753d6d7fbbde",
+          "film-b.mp4": "cd7f7659990d569c4abaa6fe41351103c14c33427ceb4602951005ab75e55813",
+          "film-c.mp4": "9605cafb9172c6bb589b4ba7a47957832314d1c0477f7c77a2bafb3aa73ad5dc",
+          "film-d.mp4": "957039defdcf5daa96d31520138cdf525628efab006cca0fab1c19e9b05973b2",
+          "film-e.mp4": "0d7749c60d648ee42862d4d220dbd5a24fb5eb9ea02579ea5c0cb06d95412b2f",
+          "film-f.mp4": "4cd217abb4a373cdb01c48cdff31150a10a62aff7eb7390048b487ffd6567bc5"
+        },
+        "firstDigests": {
+          "film-a.mp4": "4740da220ab32439be4b4055407f3409d9d4816ca4f7827ee7bf753d6d7fbbde",
+          "film-b.mp4": "cd7f7659990d569c4abaa6fe41351103c14c33427ceb4602951005ab75e55813",
+          "film-c.mp4": "9605cafb9172c6bb589b4ba7a47957832314d1c0477f7c77a2bafb3aa73ad5dc",
+          "film-d.mp4": "957039defdcf5daa96d31520138cdf525628efab006cca0fab1c19e9b05973b2",
+          "film-e.mp4": "0d7749c60d648ee42862d4d220dbd5a24fb5eb9ea02579ea5c0cb06d95412b2f",
+          "film-f.mp4": "4cd217abb4a373cdb01c48cdff31150a10a62aff7eb7390048b487ffd6567bc5"
+        }
+      },
+      "budget": "measured 6, equal digests",
+      "pass": true
+    },
+    {
+      "id": "F1",
+      "name": "each top candidate's peak lies in its truth window and its clean stretch covers the window minus 0.4 s at each end",
+      "value": {
+        "film-a.mp4": {
+          "truth": {
+            "fromFrame": 120,
+            "toFrame": 300
+          },
+          "top": {
+            "peak": 240,
+            "from": 0,
+            "to": 420,
+            "basis": [
+              "inner-motion",
+              "sound"
+            ]
+          },
+          "windows": 2,
+          "ok": true
+        },
+        "film-b.mp4": {
+          "truth": {
+            "fromFrame": 210,
+            "toFrame": 390
+          },
+          "top": {
+            "peak": 300,
+            "from": 102,
+            "to": 450,
+            "basis": [
+              "inner-motion",
+              "sound"
+            ]
+          },
+          "windows": 1,
+          "ok": true
+        },
+        "film-c.mp4": {
+          "truth": {
+            "fromFrame": 75,
+            "toFrame": 255
+          },
+          "top": {
+            "peak": 180,
+            "from": 0,
+            "to": 282,
+            "basis": [
+              "inner-motion",
+              "sound"
+            ]
+          },
+          "windows": 1,
+          "ok": true
+        },
+        "film-d.mp4": {
+          "truth": {
+            "fromFrame": 150,
+            "toFrame": 330
+          },
+          "top": {
+            "peak": 240,
+            "from": 0,
+            "to": 480,
+            "basis": [
+              "inner-motion"
+            ]
+          },
+          "windows": 1,
+          "ok": true
+        }
+      },
+      "budget": "all four clips with a truth window",
+      "pass": true
+    },
+    {
+      "id": "F2",
+      "name": "the whip-pan decoy and the dark stretch are in no candidate and every sample inside them is gated",
+      "value": {
+        "decoy": {
+          "overlapping": 0,
+          "samples": 6,
+          "gated": 6
+        },
+        "dark": {
+          "overlapping": 0,
+          "samples": 11,
+          "gated": 11
+        }
+      },
+      "budget": "0 overlapping windows; all samples gated",
+      "pass": true
+    },
+    {
+      "id": "F3",
+      "name": "the job read exactly frames k*S: our own read of the same file gives its grey digest and the barcodes k*S, on the file it read and on the original (film-a starts 15 frames late)",
+      "value": {
+        "film-a.mp4": {
+          "source": "proxy",
+          "samples": 70,
+          "expected": 70,
+          "digestEqual": true,
+          "barcodesOnRead": true,
+          "barcodesOnOriginal": true,
+          "startOffsetFrames": 15
+        },
+        "film-b.mp4": {
+          "source": "proxy",
+          "samples": 75,
+          "expected": 75,
+          "digestEqual": true,
+          "barcodesOnRead": true,
+          "barcodesOnOriginal": true,
+          "startOffsetFrames": 0
+        },
+        "film-c.mp4": {
+          "source": "proxy",
+          "samples": 65,
+          "expected": 65,
+          "digestEqual": true,
+          "barcodesOnRead": true,
+          "barcodesOnOriginal": true,
+          "startOffsetFrames": 0
+        },
+        "film-d.mp4": {
+          "source": "proxy",
+          "samples": 80,
+          "expected": 80,
+          "digestEqual": true,
+          "barcodesOnRead": true,
+          "barcodesOnOriginal": true,
+          "startOffsetFrames": 0
+        },
+        "film-e.mp4": {
+          "source": "proxy",
+          "samples": 60,
+          "expected": 60,
+          "digestEqual": true,
+          "barcodesOnRead": true,
+          "barcodesOnOriginal": true,
+          "startOffsetFrames": 0
+        },
+        "film-f.mp4": {
+          "source": "proxy",
+          "samples": 60,
+          "expected": 60,
+          "digestEqual": true,
+          "barcodesOnRead": true,
+          "barcodesOnOriginal": true,
+          "startOffsetFrames": 0
+        }
+      },
+      "budget": "every clip",
+      "pass": true
+    },
+    {
+      "id": "F6",
+      "name": "each moments record in the document is within 1100 bytes",
+      "value": {
+        "film-a.mp4": 685,
+        "film-b.mp4": 544,
+        "film-c.mp4": 541,
+        "film-d.mp4": 517,
+        "film-e.mp4": 397,
+        "film-f.mp4": 397
+      },
+      "budget": "≤ 1100 bytes each",
+      "pass": true
+    },
+    {
+      "id": "F7",
+      "name": "the picks are in capture order (typed from the fixture); control: the same files in the given (name) order are not",
+      "value": {
+        "order": [
+          "film-b.mp4",
+          "film-d.mp4",
+          "film-a.mp4",
+          "film-f.mp4",
+          "film-c.mp4",
+          "IMG_20261206_102300.png",
+          "film-e.mp4"
+        ],
+        "expected": [
+          "film-b.mp4",
+          "film-d.mp4",
+          "film-a.mp4",
+          "film-f.mp4",
+          "film-c.mp4",
+          "IMG_20261206_102300.png",
+          "film-e.mp4"
+        ],
+        "givenOrder": [
+          "IMG_20261206_102300.png",
+          "film-a.mp4",
+          "film-b.mp4",
+          "film-c.mp4",
+          "film-d.mp4",
+          "film-e.mp4",
+          "film-f.mp4"
+        ]
+      },
+      "budget": "capture order; the control differs",
+      "pass": true
+    },
+    {
+      "id": "F7",
+      "name": "a reason on every pick (at most 3); the static clip says default middle; the 85 %-active clip says active throughout",
+      "value": {
+        "static": [
+          "no_clear_moment",
+          "default_middle"
+        ],
+        "active": [
+          "active_throughout"
+        ],
+        "counts": [
+          3,
+          2,
+          3,
+          3,
+          1,
+          3,
+          1,
+          2
+        ]
+      },
+      "budget": "every pick 1..3 reasons; codes as named",
+      "pass": true
+    },
+    {
+      "id": "F7",
+      "name": "faces are not used, and the plan says so; nothing in it uses the forbidden words",
+      "value": {
+        "basisSaysFaces": true,
+        "methodSaysFaces": true
+      },
+      "budget": "said in basis and method",
+      "pass": true
+    },
+    {
+      "id": "F8",
+      "name": "apply is one revision and one history transaction",
+      "value": {
+        "revisionBefore": 43,
+        "revisionAfter": 44,
+        "historyBefore": 43,
+        "historyAfter": 44
+      },
+      "budget": "+1 revision, +1 transaction",
+      "pass": true
+    },
+    {
+      "id": "F6",
+      "name": "the run record is within 16 000 bytes",
+      "value": {
+        "bytes": 5123
+      },
+      "budget": "≤ 16 000 bytes",
+      "pass": true
+    },
+    {
+      "id": "F12",
+      "name": "one undo restores the document byte for byte; redo restores the film byte for byte",
+      "value": {
+        "undo": 200,
+        "redo": 200,
+        "undoneEqualsBefore": true,
+        "redoneEqualsFilm": true
+      },
+      "budget": "sha256 equal",
+      "pass": true
+    },
+    {
+      "id": "F10",
+      "name": "every picture cut is the nearest frame of a bar start or half-bar of the placed music, and followedBeats agrees within 1e-6 s",
+      "value": {
+        "cuts": [
+          {
+            "frame": 120,
+            "beat": 11,
+            "kind": "bar",
+            "followed": true
+          },
+          {
+            "frame": 240,
+            "beat": 19,
+            "kind": "bar",
+            "followed": true
+          },
+          {
+            "frame": 360,
+            "beat": 27,
+            "kind": "bar",
+            "followed": true
+          },
+          {
+            "frame": 480,
+            "beat": 35,
+            "kind": "bar",
+            "followed": true
+          },
+          {
+            "frame": 600,
+            "beat": 43,
+            "kind": "bar",
+            "followed": true
+          },
+          {
+            "frame": 720,
+            "beat": 51,
+            "kind": "bar",
+            "followed": true
+          },
+          {
+            "frame": 840,
+            "beat": 59,
+            "kind": "bar",
+            "followed": true
+          }
+        ],
+        "bars": 7,
+        "halfBars": 0
+      },
+      "budget": "every cut",
+      "pass": true
+    },
+    {
+      "id": "F10",
+      "name": "no two consecutive cuts closer than the flash gap (11 frames at 30 fps)",
+      "value": {
+        "smallestGap": 120,
+        "coreFlashGap": 11
+      },
+      "budget": "≥ 11 frames",
+      "pass": true
+    },
+    {
+      "id": "F9",
+      "name": "every exported frame of a video pick shows the source frame the plan predicts (barcode)",
+      "value": {
+        "framesChecked": 840,
+        "wrong": [],
+        "exportFrames": 1080
+      },
+      "budget": "all equal",
+      "pass": true
+    },
+    {
+      "id": "F9",
+      "name": "each measured slot contains its peak, lies in its clean stretch and overlaps the truth window by at least 90 % of the slot",
+      "value": [
+        {
+          "asset": "film-b.mp4",
+          "range": [
+            252,
+            372
+          ],
+          "peak": 300,
+          "stretch": [
+            102,
+            450
+          ],
+          "truth": {
+            "fromFrame": 210,
+            "toFrame": 390
+          },
+          "ok": true
+        },
+        {
+          "asset": "film-d.mp4",
+          "range": [
+            192,
+            312
+          ],
+          "peak": 240,
+          "stretch": [
+            0,
+            480
+          ],
+          "truth": {
+            "fromFrame": 150,
+            "toFrame": 330
+          },
+          "ok": true
+        },
+        {
+          "asset": "film-a.mp4",
+          "range": [
+            66,
+            186
+          ],
+          "peak": 114,
+          "stretch": [
+            0,
+            420
+          ],
+          "truth": {
+            "fromFrame": 120,
+            "toFrame": 300
+          },
+          "ok": false
+        },
+        {
+          "asset": "film-a.mp4",
+          "range": [
+            192,
+            312
+          ],
+          "peak": 240,
+          "stretch": [
+            0,
+            420
+          ],
+          "truth": {
+            "fromFrame": 120,
+            "toFrame": 300
+          },
+          "ok": true
+        },
+        {
+          "asset": "film-c.mp4",
+          "range": [
+            132,
+            252
+          ],
+          "peak": 180,
+          "stretch": [
+            0,
+            282
+          ],
+          "truth": {
+            "fromFrame": 75,
+            "toFrame": 255
+          },
+          "ok": true
+        }
+      ],
+      "budget": "every measured slot",
+      "pass": false
+    },
+    {
+      "id": "F14",
+      "name": "the exported film's photosensitivity verdict is pass",
+      "value": {
+        "verdict": "pass",
+        "ranges": 0
+      },
+      "budget": "pass",
+      "pass": true
+    },
+    {
+      "id": "F11",
+      "name": "the opening title is a live {hebrewDate} field whose still equals «כ״ו בכסלו תשפ״ז» typed by hand; control: «כ״ה בכסלו תשפ״ז» typed differs",
+      "value": {
+        "text": "{hebrewDate}",
+        "fields": true,
+        "frame": 15,
+        "equalsTyped": true,
+        "controlDiffers": true,
+        "restored": true
+      },
+      "budget": "equal; control differs",
+      "pass": true
+    },
+    {
+      "id": "F17",
+      "name": "the still (/frame) equals the png export of the same frame and the mp4 export's frame, at three frames",
+      "value": [
+        {
+          "frame": 15,
+          "png": 0,
+          "mp4": 0.84
+        },
+        {
+          "frame": 300,
+          "png": 0,
+          "mp4": 0.88
+        },
+        {
+          "frame": 980,
+          "png": 0,
+          "mp4": 0.01
+        }
+      ],
+      "budget": "png mean |Δ| ≤ 1, mp4 ≤ 3 levels",
+      "pass": true
+    },
+    {
+      "id": "F14",
+      "name": "control: the same analyser fails a black/white alternation every 3 frames, and the cut-gap measure sees gaps under the flash gap there",
+      "value": {
+        "verdict": "fail",
+        "ranges": 1,
+        "smallestGap": 3
+      },
+      "budget": "not pass; gap < 11",
+      "pass": true
+    },
+    {
+      "id": "F13",
+      "name": "R1: the moved clip and the trimmed clip are byte-identical and present after regenerating at 30 s",
+      "value": {
+        "protected": [
+          "clp_d07978b54a4",
+          "clp_d07978b54a6",
+          "clp_d07978b54a7"
+        ],
+        "replaced": 13
+      },
+      "budget": "both equal",
+      "pass": true
+    },
+    {
+      "id": "F13",
+      "name": "R1: no kept clip's file picked again, no moment twice, no slot key twice, no frame without a picture in [first slot start, last slot end)",
+      "value": {
+        "repicked": [],
+        "windowsTwice": [],
+        "keys": 10,
+        "distinctKeys": 10,
+        "holes": 0,
+        "firstHoles": [],
+        "range": [
+          0,
+          720
+        ]
+      },
+      "budget": "none",
+      "pass": true
+    },
+    {
+      "id": "F13",
+      "name": "R1: off-grid cuts only next to kept clips",
+      "value": {
+        "offGrid": [],
+        "keptEdges": [
+          120,
+          225,
+          345
+        ]
+      },
+      "budget": "off-grid ⊆ kept edges",
+      "pass": true
+    },
+    {
+      "id": "F13",
+      "name": "R1: the gain set by hand survives on the same own-sound track, which holds the new clips' sound; no audio track is added",
+      "value": {
+        "gain": 0.6,
+        "newSoundClipsOnTrack": 3,
+        "audioTracksBefore": 2,
+        "audioTracksAfter": 2
+      },
+      "budget": "gain 0.6; new sound on it; same count",
+      "pass": true
+    },
+    {
+      "id": "F13",
+      "name": "undoing the regeneration and the hand edits gives back the film byte for byte",
+      "value": {
+        "equal": true
+      },
+      "budget": "sha256 equal",
+      "pass": true
+    },
+    {
+      "id": "F13",
+      "name": "R2: the kept clip that runs past the shorter target stays, the film runs up to it with no frame without a picture, and the plan says it is longer",
+      "value": {
+        "keptClipEndsAt": 32,
+        "filmPicturesEndAt": 32,
+        "holes": 0,
+        "repicked": [],
+        "warnings": [
+          "kept_by_hand",
+          "longer_than_target",
+          "cut_off_grid_next_to_kept"
+        ]
+      },
+      "budget": "kept, covered, longer_than_target",
+      "pass": true
+    },
+    {
+      "id": "F13",
+      "name": "R3: when the clips left cannot fill the room up to a kept clip, the plan warns pictures_missing with exactly the frames that show no picture",
+      "value": {
+        "holes": 90,
+        "firstHoles": [
+          840,
+          841,
+          842,
+          843,
+          844,
+          845,
+          846,
+          847,
+          848,
+          849
+        ],
+        "warned": {
+          "gapFrames": 90,
+          "seconds": 3
+        }
+      },
+      "budget": "a gap exists here; warned frames = measured frames",
+      "pass": true
+    },
+    {
+      "id": "F15",
+      "name": "with music, the clips' own sound in the 1 kHz band is the source -12.0 ± 0.5 dB",
+      "value": [
+        {
+          "asset": "film-b.mp4",
+          "exportDb": -23.36,
+          "sourceDb": -11.32,
+          "diff": -12.04
+        },
+        {
+          "asset": "film-a.mp4",
+          "exportDb": -25.84,
+          "sourceDb": -13.8,
+          "diff": -12.04
+        },
+        {
+          "asset": "film-a.mp4",
+          "exportDb": -23.96,
+          "sourceDb": -11.92,
+          "diff": -12.04
+        },
+        {
+          "asset": "film-c.mp4",
+          "exportDb": -23.34,
+          "sourceDb": -11.31,
+          "diff": -12.04
+        }
+      ],
+      "budget": "-12.0 ± 0.5 dB",
+      "pass": true
+    },
+    {
+      "id": "F15b",
+      "name": "'lead': the music band over a sounding clip is the music alone -9 ± 0.5 dB",
+      "value": {
+        "sameLayout": true,
+        "ducks": [
+          {
+            "asset": "film-b.mp4",
+            "diff": -8.65
+          },
+          {
+            "asset": "film-a.mp4",
+            "diff": -8.73
+          },
+          {
+            "asset": "film-a.mp4",
+            "diff": -8.65
+          },
+          {
+            "asset": "film-f.mp4",
+            "diff": -9
+          },
+          {
+            "asset": "film-c.mp4",
+            "diff": -8.67
+          }
+        ],
+        "overStillDb": 0,
+        "warnings": [
+          "lead_music_rises",
+          "shorter_than_target"
+        ]
+      },
+      "budget": "-9 ± 0.5 dB",
+      "pass": true
+    },
+    {
+      "id": "F15",
+      "name": "without music, the clips' own sound is at the source level ± 0.5 dB",
+      "value": [
+        {
+          "asset": "film-b.mp4",
+          "exportDb": -11.48,
+          "sourceDb": -11.48,
+          "diff": 0
+        },
+        {
+          "asset": "film-a.mp4",
+          "exportDb": -13.95,
+          "sourceDb": -13.95,
+          "diff": 0
+        },
+        {
+          "asset": "film-a.mp4",
+          "exportDb": -12.57,
+          "sourceDb": -12.57,
+          "diff": 0
+        },
+        {
+          "asset": "film-c.mp4",
+          "exportDb": -11.98,
+          "sourceDb": -11.98,
+          "diff": 0
+        }
+      ],
+      "budget": "0 ± 0.5 dB",
+      "pass": true
+    },
+    {
+      "id": "F15",
+      "name": "mute without music is silence",
+      "value": {
+        "rmsDbfs": -200
+      },
+      "budget": "< -80 dBFS",
+      "pass": true
+    },
+    {
+      "id": "F16",
+      "name": "an edit-mode agent plans, applies and regenerates over MCP; a propose-mode agent gets 403",
+      "value": {
+        "plan": true,
+        "apply": true,
+        "regenerate": true,
+        "proposeRest": [
+          403,
+          "insufficient_scope"
+        ],
+        "proposeMcp": true
+      },
+      "budget": "all succeed; propose 403",
+      "pass": true
+    },
+    {
+      "id": "F16",
+      "name": "an agent without the people scope is refused an {age:…} title at plan, apply and regenerate (REST and MCP), also regenerating the owner's film",
+      "value": {
+        "plan": [
+          403,
+          "people_scope_required"
+        ],
+        "apply": [
+          403,
+          "people_scope_required"
+        ],
+        "regenerate": [
+          403,
+          "people_scope_required"
+        ],
+        "regenerateOwners": [
+          403,
+          "people_scope_required"
+        ],
+        "mcpPlan": true,
+        "mcpRegenerate": true,
+        "ownerApply": 200
+      },
+      "budget": "403 people_scope_required everywhere; the owner may",
+      "pass": true
+    },
+    {
+      "id": "F16",
+      "name": "the agent's plan of a {name:…} title holds no birth date",
+      "value": {
+        "status": 200,
+        "leaks": []
+      },
+      "budget": "none",
+      "pass": true
+    },
+    {
+      "id": "F16",
+      "name": "the agent's still of the owner's film title draws no age (equals «נועה ()» typed); control: the owner's still differs",
+      "value": {
+        "agentStatus": 200,
+        "agentEqualsTyped": true,
+        "ownerDiffers": true
+      },
+      "budget": "no age for the agent; age for the owner",
+      "pass": true
+    },
+    {
+      "id": "F7",
+      "name": "every plan row of the dialog shows its reason in Hebrew, with none of the forbidden words",
+      "value": {
+        "rows": 8,
+        "reasons": [
+          "תנועה בתוך התמונה בשניות 8.5–11.5 · קול חזק מהרגיל בקליפ (+19.9 dB) · חדות גבוהה מהרגיל בקובץ (פי 1.2)",
+          "תנועה בתוך התמונה בשניות 6.5–9.5 · חדות גבוהה מהרגיל בקובץ (פי 1.2)",
+          "רגע שני מאותו קובץ · תנועה בתוך התמונה בשניות 2.8–5.8 · פרץ קול בשנייה 4.5",
+          "תנועה בתוך התמונה בשניות 7–10 · קול חזק מהרגיל בקליפ (+20.5 dB) · חדות גבוהה מהרגיל בקובץ (פי 1.2)",
+          "תנועה לאורך כל הקליפ (37‰)",
+          "תנועה בתוך התמונה בשניות 4.5–7.5 · קול חזק מהרגיל בקליפ (+19.9 dB) · חדות גבוהה מהרגיל בקובץ (פי 1.2)",
+          "תמונה",
+          "לא נמצא בקליפ רגע בולט · נבחר אמצע הקליפ"
+        ]
+      },
+      "budget": "every row",
+      "pass": true
+    },
+    {
+      "id": "F18",
+      "name": "the dialog driven by the keyboard alone (palette, three steps, apply) makes the film as one revision",
+      "value": {
+        "musicChosen": true,
+        "revisionBefore": 11,
+        "revisionAfter": 12,
+        "runs": 1,
+        "pageErrors": []
+      },
+      "budget": "one film, +1 revision, no page error",
+      "pass": true
+    },
+    {
+      "id": "F19",
+      "name": "after a reload, «אורך אחר» → 30 in the film bar regenerates the film from the document's run",
+      "value": {
+        "revisionBefore": 12,
+        "revisionAfter": 13,
+        "targetSeconds": 30
+      },
+      "budget": "+1 revision, target 30",
+      "pass": true
+    }
+  ],
+  "blocked": [],
+  "measurements": {
+    "fixtures": {
+      "clips": [
+        {
+          "name": "film-a.mp4",
+          "frames": 420,
+          "truth": {
+            "fromFrame": 120,
+            "toFrame": 300
+          },
+          "offset": 15
+        },
+        {
+          "name": "film-b.mp4",
+          "frames": 450,
+          "truth": {
+            "fromFrame": 210,
+            "toFrame": 390
+          },
+          "offset": 0
+        },
+        {
+          "name": "film-c.mp4",
+          "frames": 390,
+          "truth": {
+            "fromFrame": 75,
+            "toFrame": 255
+          },
+          "offset": 0
+        },
+        {
+          "name": "film-d.mp4",
+          "frames": 480,
+          "truth": {
+            "fromFrame": 150,
+            "toFrame": 330
+          },
+          "offset": 0
+        },
+        {
+          "name": "film-e.mp4",
+          "frames": 360,
+          "truth": null,
+          "offset": 0
+        },
+        {
+          "name": "film-f.mp4",
+          "frames": 360,
+          "truth": null,
+          "offset": 0
+        }
+      ],
+      "generateSeconds": 12.02
+    },
+    "capturesReadOnUpload": {
+      "film-a.mp4": null,
+      "film-b.mp4": null,
+      "film-c.mp4": null,
+      "film-d.mp4": null,
+      "film-e.mp4": null,
+      "film-f.mp4": null,
+      "IMG_20261206_102300.png": null
+    },
+    "captures": {
+      "film-a.mp4": {
+        "at": "2026-12-06T10:09:00",
+        "utcOffsetMinutes": 120,
+        "source": "manual"
+      },
+      "film-b.mp4": {
+        "at": "2026-12-06T10:00:00",
+        "utcOffsetMinutes": 120,
+        "source": "manual"
+      },
+      "film-c.mp4": {
+        "at": "2026-12-06T10:20:00",
+        "utcOffsetMinutes": 120,
+        "source": "manual"
+      },
+      "film-d.mp4": {
+        "at": "2026-12-06T10:04:00",
+        "utcOffsetMinutes": 120,
+        "source": "manual"
+      },
+      "film-e.mp4": {
+        "at": "2026-12-06T10:26:00",
+        "utcOffsetMinutes": 120,
+        "source": "manual"
+      },
+      "film-f.mp4": {
+        "at": "2026-12-06T10:13:00",
+        "utcOffsetMinutes": 120,
+        "source": "manual"
+      },
+      "IMG_20261206_102300.png": {
+        "at": "2026-12-06T10:23:00",
+        "utcOffsetMinutes": null,
+        "source": "manual",
+        "circa": true
+      }
+    },
+    "beats": {
+      "bpm": 120.19,
+      "meter": 4,
+      "beats": 191,
+      "firstBeats": [
+        0.493,
+        0.993,
+        1.492,
+        1.991,
+        2.49
+      ],
+      "downbeats": 47
+    },
+    "measureSpeed": {
+      "wallSeconds": 5.59,
+      "mediaSeconds": 82,
+      "timesRealTime": 14.68,
+      "output": {
+        "measured": 6,
+        "cached": 0,
+        "attached": 6,
+        "revision": 26,
+        "skipped": [],
+        "wallSeconds": 5.578,
+        "mediaSeconds": 82
+      }
+    },
+    "reattachedKeysDiffering": [
+      "origin"
+    ],
+    "commitLatencyMs": {
+      "before": 4.09,
+      "afterMeasuring": 4.11
+    },
+    "plan": {
+      "picks": [
+        {
+          "asset": "film-b.mp4",
+          "kind": "measured",
+          "startFrame": 0,
+          "frames": 120,
+          "sourceInFrame": 252,
+          "span": {
+            "count": 2,
+            "unit": "bar"
+          },
+          "reasons": [
+            "inner_motion",
+            "loud_sound",
+            "sharp"
+          ]
+        },
+        {
+          "asset": "film-d.mp4",
+          "kind": "measured",
+          "startFrame": 120,
+          "frames": 120,
+          "sourceInFrame": 192,
+          "span": {
+            "count": 2,
+            "unit": "bar"
+          },
+          "reasons": [
+            "inner_motion",
+            "sharp"
+          ]
+        },
+        {
+          "asset": "film-a.mp4",
+          "kind": "measured",
+          "startFrame": 240,
+          "frames": 120,
+          "sourceInFrame": 66,
+          "span": {
+            "count": 2,
+            "unit": "bar"
+          },
+          "reasons": [
+            "second_moment",
+            "inner_motion",
+            "sound_burst"
+          ]
+        },
+        {
+          "asset": "film-a.mp4",
+          "kind": "measured",
+          "startFrame": 360,
+          "frames": 120,
+          "sourceInFrame": 192,
+          "span": {
+            "count": 2,
+            "unit": "bar"
+          },
+          "reasons": [
+            "inner_motion",
+            "loud_sound",
+            "sharp"
+          ]
+        },
+        {
+          "asset": "film-f.mp4",
+          "kind": "default-middle",
+          "startFrame": 480,
+          "frames": 120,
+          "sourceInFrame": 120,
+          "span": {
+            "count": 2,
+            "unit": "bar"
+          },
+          "reasons": [
+            "active_throughout"
+          ]
+        },
+        {
+          "asset": "film-c.mp4",
+          "kind": "measured",
+          "startFrame": 600,
+          "frames": 120,
+          "sourceInFrame": 132,
+          "span": {
+            "count": 2,
+            "unit": "bar"
+          },
+          "reasons": [
+            "inner_motion",
+            "loud_sound",
+            "sharp"
+          ]
+        },
+        {
+          "asset": "IMG_20261206_102300.png",
+          "kind": "still",
+          "startFrame": 720,
+          "frames": 120,
+          "sourceInFrame": null,
+          "span": {
+            "count": 2,
+            "unit": "bar"
+          },
+          "reasons": [
+            "still"
+          ]
+        },
+        {
+          "asset": "film-e.mp4",
+          "kind": "default-middle",
+          "startFrame": 840,
+          "frames": 120,
+          "sourceInFrame": 120,
+          "span": {
+            "count": 2,
+            "unit": "bar"
+          },
+          "reasons": [
+            "no_clear_moment",
+            "default_middle"
+          ]
+        }
+      ],
+      "excluded": [],
+      "warnings": [
+        "shorter_than_target"
+      ],
+      "basis": [
+        "188 measured beats of \"music-120bpm.m4a\" (120.2 BPM, confidence 0.949, with bar starts); method: spectral-flux onsets + dynamic-programming beat tracking (no model); assumes a steady pulse; bar starts from the loudest beat of each bar (found in 100% of the bars)",
+        "order: by capture time (7 dated file(s))",
+        "rule-based first cut from measurements (heuristic); no model: A first draft built from measurements and rules (heuristic), not an AI model",
+        "6 of 6 video(s) have measured moments (heuristic: motion, sharpness, brightness and sound level; no model)",
+        "faces: not used (no approved face model)",
+        "7 chosen file(s), 8 clip(s) in the film; 30/1 frames a second; cuts at least 48 frames apart (flash safety)"
+      ],
+      "predicted": {
+        "startFrame": 0,
+        "endFrame": 1080,
+        "cuts": [
+          0,
+          120,
+          240,
+          360,
+          480,
+          600,
+          720,
+          840,
+          960
+        ],
+        "offGridCuts": [],
+        "gapFrames": 0,
+        "seconds": 36,
+        "targetSeconds": 60
+      },
+      "needsMeasurement": []
+    },
+    "cutKinds": {
+      "note": "at 120 BPM in 4/4 the fixture gives spans of whole bars or half-bars; counted above",
+      "bars": 7,
+      "halfBars": 0
+    },
+    "regenerations": [
+      {
+        "label": "R1 trim + move + hand gain",
+        "layout": [
+          {
+            "asset": "film-b.mp4",
+            "span": [
+              0,
+              120
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-d.mp4",
+            "span": [
+              120,
+              225
+            ],
+            "kept": true
+          },
+          {
+            "asset": "film-a.mp4",
+            "span": [
+              225,
+              345
+            ],
+            "kept": true
+          },
+          {
+            "asset": "film-f.mp4",
+            "span": [
+              345,
+              420
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-c.mp4",
+            "span": [
+              420,
+              540
+            ],
+            "kept": false
+          },
+          {
+            "asset": "IMG_20261206_102300.png",
+            "span": [
+              540,
+              660
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-e.mp4",
+            "span": [
+              660,
+              720
+            ],
+            "kept": false
+          }
+        ],
+        "warnings": [
+          "kept_by_hand",
+          "cut_off_grid_next_to_kept",
+          "shorter_than_target"
+        ],
+        "protected": [
+          "clp_d07978b54a4",
+          "clp_d07978b54a6",
+          "clp_d07978b54a7"
+        ],
+        "replaced": 13
+      },
+      {
+        "label": "R2 the last clip trimmed",
+        "layout": [
+          {
+            "asset": "film-b.mp4",
+            "span": [
+              0,
+              120
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-d.mp4",
+            "span": [
+              120,
+              240
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-a.mp4",
+            "span": [
+              240,
+              360
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-a.mp4",
+            "span": [
+              360,
+              480
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-f.mp4",
+            "span": [
+              480,
+              600
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-c.mp4",
+            "span": [
+              600,
+              720
+            ],
+            "kept": false
+          },
+          {
+            "asset": "IMG_20261206_102300.png",
+            "span": [
+              720,
+              855
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-e.mp4",
+            "span": [
+              855,
+              960
+            ],
+            "kept": true
+          }
+        ],
+        "warnings": [
+          "kept_by_hand",
+          "longer_than_target",
+          "cut_off_grid_next_to_kept"
+        ],
+        "protected": [
+          "clp_d07978b54ai"
+        ],
+        "replaced": 15
+      },
+      {
+        "label": "R3 the last clip moved 3 s later",
+        "layout": [
+          {
+            "asset": "film-b.mp4",
+            "span": [
+              0,
+              120
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-d.mp4",
+            "span": [
+              120,
+              240
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-a.mp4",
+            "span": [
+              240,
+              360
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-a.mp4",
+            "span": [
+              360,
+              480
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-f.mp4",
+            "span": [
+              480,
+              600
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-c.mp4",
+            "span": [
+              600,
+              720
+            ],
+            "kept": false
+          },
+          {
+            "asset": "IMG_20261206_102300.png",
+            "span": [
+              720,
+              840
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-e.mp4",
+            "span": [
+              930,
+              1050
+            ],
+            "kept": true
+          }
+        ],
+        "warnings": [
+          "kept_by_hand",
+          "longer_than_target",
+          "pictures_missing"
+        ],
+        "protected": [
+          "clp_d07978b54ai"
+        ],
+        "replaced": 15
+      }
+    ],
+    "f13Note": "R3 is the only case with not enough material; it records how the planner answers (a warned gap). R1 and R2 have material to spare and must show a picture on every frame.",
+    "leadOverStillDb": 0
+  },
+  "notes": [
+    "Thresholds of the moments job are tuned on synthetic fixtures only; real footage is unverified until the owner watches a film made from their own clips.",
+    "F18 covers the keyboard path; the accessibility findings are pnpm audit:a11y (it holds the film dialog, the film bar, the shorts panel and the sequence switcher)."
+  ]
+}

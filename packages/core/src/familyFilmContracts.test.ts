@@ -143,6 +143,13 @@ describe('reasons a clip states (filmReasonsFor): measured values only, at most 
     expect(filmReasonsFor(d.assets.v1!, { ...rec, algo: 99 }, 120, 120)[0]!.code).toBe('not_measured');
     expect(filmReasonsFor(d.assets.v1!, rec, 300, 60)).toEqual([]);
   });
+  it('speaks of the moment the clip shows: the window whose core the clip covers most, never seconds outside the clip', () => {
+    // two moments in one clean stretch (a second moment 4.2 s before the first): a clip over the earlier one names ITS seconds
+    const two = { ...rec, windows: [win({ peakFrame: 240, fromFrame: 0, toFrame: 360, burstFrame: undefined }), win({ peakFrame: 114, fromFrame: 0, toFrame: 360, burstFrame: undefined })] };
+    expect(filmReasonsFor(d.assets.v1!, two, 66, 120)[0]).toMatchObject({ code: 'inner_motion', fromSecond: 2.3, toSecond: 5.3 });
+    // a clip that covers no window's core (peak ± 1.5 s) shows none of the measured moments: nothing is claimed for it
+    expect(filmReasonsFor(d.assets.v1!, { ...rec, windows: [win({ peakFrame: 240, fromFrame: 0, toFrame: 360, burstFrame: undefined })] }, 20, 120)).toEqual([]);
+  });
   it('a window whose values lie under the wording thresholds (a quiet file) still states its measured moment, never nothing', () => {
     // z is centred on the file's 20th percentile, so a quiet file has real windows with motion < 15 permille and level < 6 dB
     const quiet = { algo: MOMENTS_ALGO, flat: false, file: { motion: 4, level: -300 }, windows: [win({ motion: 11, level: 4.2, sharp: 1.05, burstFrame: undefined })] };

@@ -36,7 +36,7 @@
  *
  *   pnpm build && pnpm proof:shorts
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -54,7 +54,8 @@ const R = { num: 30, den: 1 };
 const W = 720, H = 1280;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const ff = (args: string[], input?: Buffer) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', ...args], { maxBuffer: 1 << 30, ...(input ? { input } : {}) });
-const ffErr = (args: string[]) => { try { return execFileSync('ffmpeg', ['-hide_banner', '-nostats', ...args], { maxBuffer: 1 << 28, stdio: ['ignore', 'ignore', 'pipe'] }).toString(); } catch (e: any) { return String(e.stderr ?? ''); } };
+/** ffmpeg's report (stderr) of a run whose output is discarded: its filters (ebur128, ssim, silencedetect) print there. */
+const ffErr = (args: string[]) => { const r = spawnSync('ffmpeg', ['-hide_banner', '-nostats', ...args], { maxBuffer: 1 << 28, stdio: ['ignore', 'ignore', 'pipe'] }); return String(r.stderr ?? ''); };
 const probe = (file: string) => JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-count_packets', '-show_streams', '-show_format', '-of', 'json', file], { encoding: 'utf8' }));
 const r2 = (v: number) => Number(v.toFixed(2));
 const sec = (t: T.RationalTime) => T.toSeconds(t);
@@ -172,7 +173,7 @@ async function main() {
 
   try {
     // ---------- the talk: on the main edit, with its transcript and scene cuts ----------
-    const pid = (await must('/projects', { name: 'shorts proof', width: 1920, height: 1080, frameRate: R })).project.id as string;
+    const pid = (await must('/projects', { name: 'shorts proof', width: 1920, height: 1080, frameRate: R }, [201])).project.id as string;
     const up = await upload(pid, fixtureFile);
     const assetId = up.assetId as string;
     const added = await tx(pid, [{ op: 'add_clip', args: { assetId, start: T.ZERO } }]);
@@ -208,9 +209,12 @@ async function main() {
       const bad = cs.filter((c) => !edges.starts.some((e) => T.eq(e, c.start)) || !edges.ends.some((e) => T.eq(e, c.end)));
       check('S1', 'every candidate edge is T.eq a statement edge', cs.length > 0 && bad.length === 0, { candidates: cs.length, offEdge: bad.map((c) => [c.start, c.end]) }, '0 off-edge');
       const rStart = rat(word(Rs.firstWord).start);
-      const small = (await must(`/projects/${pid}/shorts/candidates`, { assetId, minSeconds: 5, maxSeconds: 15, count: 40 })).candidates as any[];
+      // R's own window (its connective statement with 7.04 s of earlier context, about 10 s) loses the greedy selection to better windows in
+      // the default lists, so it is also looked for where the windows are short and may overlap (the same rule, more of the output)
+      const small = [...(await must(`/projects/${pid}/shorts/candidates`, { assetId, minSeconds: 5, maxSeconds: 15, count: 40 })).candidates as any[],
+        ...(await must(`/projects/${pid}/shorts/candidates`, { assetId, minSeconds: 9, maxSeconds: 12, count: 40, allowOverlap: true })).candidates as any[]];
       const rc = [...cs, ...small].find((c) => (T.eq(c.start, rStart) && c.warnings.includes('starts_with_reference')) || (T.lt(c.start, rStart) && sec(T.sub(rStart, c.start)) <= 8 && c.reasons.some((x: any) => x.code === 'context_added')));
-      check('S1', 'R (opens with «אז כמו שאמרתי») carries context_added or starts_with_reference', !!rc, rc ? { start: rc.start, end: rc.end, reasons: rc.reasons.map((x: any) => x.code), warnings: rc.warnings } : null, 'one of the two');
+      check('S1', 'R (opens with «אז כמו שאמרתי») carries context_added or starts_with_reference', !!rc, rc ? { start: rc.start, end: rc.end, reasons: rc.reasons.map((x: any) => x.code), warnings: rc.warnings } : { rStart, near: [...cs, ...small].filter((c) => Math.abs(sec(T.sub(c.start, rStart))) <= 12).map((c) => ({ start: c.start, end: c.end, reasons: c.reasons.map((x: any) => x.code), warnings: c.warnings })) }, 'one of the two');
       const qc = cs.find((c) => contains(c, qStart));
       const loud = qc?.reasons.find((x: any) => x.code === 'louder_than_usual')?.value ?? null;
       check('S1', 'louder_than_usual of the +6 dB statement', loud !== null && Math.abs(loud - 6) <= 0.5, { dB: loud }, '6.0 ± 0.5 dB');
@@ -224,7 +228,7 @@ async function main() {
     });
 
     await section('S2', async () => {
-      const pid2 = (await must('/projects', { name: 'no transcript', width: 1920, height: 1080, frameRate: R })).project.id as string;
+      const pid2 = (await must('/projects', { name: 'no transcript', width: 1920, height: 1080, frameRate: R }, [201])).project.id as string;
       const up2 = await upload(pid2, fixtureFile);
       const { view } = await candidates(pid2, { assetId: up2.assetId, count: 40 });
       const planted = silenceEdges(truth);
@@ -241,6 +245,8 @@ async function main() {
     await section('S3', async () => {
       if (picks.length < 6) throw new Blocked(`S1 gave ${picks.length} candidates; 6 are needed for S3–S6`);
       const before = await doc(pid);
+      // the main edit as it is right before the make step (the commit-latency probe above renamed its track 30 times)
+      const mainBefore = JSON.stringify(before.sequences[before.mainSequenceId]);
       const rev0 = (await must(`/projects/${pid}`)).revision as number;
       const bytes0 = JSON.stringify(before).length;
       const plan = await must(`/projects/${pid}/shorts/plan`, { picks: picks.slice(3, 6).map(pickOf), format: fmt, loudness: { target: -14, truePeak: -1 } });
@@ -250,12 +256,6 @@ async function main() {
       check('S3', 'one revision and 3 sequences; operations', rev1 === rev0 + 1 && r.sequenceIds.length === 3 && plan.operations <= 2000, { revisions: rev1 - rev0, sequences: r.sequenceIds.length, operations: plan.operations }, '1 revision, 3 sequences, ≤ 2000 ops');
       [made.A1, made.A2, made.A3] = r.sequenceIds as [string, string, string];
       check('S3', 'the main edit is unchanged', JSON.stringify(after.sequences[after.mainSequenceId]) === mainBefore, null, 'identical');
-      const cpBefore = creativeProjection(before), cpAfter = creativeProjection(after);
-      await must(`/projects/${pid}/undo`, {});
-      const undone = creativeProjection(await doc(pid));
-      await must(`/projects/${pid}/redo`, {});
-      const redone = creativeProjection(await doc(pid));
-      check('S3', 'undo and redo give equal creativeProjection', undone === cpBefore && redone === cpAfter, { undoEqual: undone === cpBefore, redoEqual: redone === cpAfter }, 'equal');
       // a title on a plan-made track, then an out-of-order undo of the make step
       const d = await doc(pid);
       const textTrack = d.sequences[made.A1!]!.tracks.find((t) => t.kind === 'text')!;
@@ -266,6 +266,13 @@ async function main() {
       const ooo = await call(`/projects/${pid}/undo`, { transactionId: makeTx.transactionId });
       check('S3', 'an out-of-order undo after a title on a plan-made track is refused; document unchanged', ooo.status === 409 && ooo.body?.error?.code === 'undo_conflict' && JSON.stringify(await doc(pid)) === snap, { status: ooo.status, code: ooo.body?.error?.code }, '409 undo_conflict, unchanged');
       await must(`/projects/${pid}/undo`, {}); // the title
+      // then undo and redo of the make step itself (after the out-of-order check, which needs the make step live and not yet redone)
+      const cpBefore = creativeProjection(before), cpAfter = creativeProjection(after);
+      await must(`/projects/${pid}/undo`, {});
+      const undone = creativeProjection(await doc(pid));
+      await must(`/projects/${pid}/redo`, {});
+      const redone = creativeProjection(await doc(pid));
+      check('S3', 'undo and redo give equal creativeProjection', undone === cpBefore && redone === cpAfter, { undoEqual: undone === cpBefore, redoEqual: redone === cpAfter }, 'equal');
       const perShort = (JSON.stringify(after).length - bytes0) / 3;
       check('S3', 'document bytes per short', perShort <= 60_000, { bytes: Math.round(perShort) }, '≤ 60 KB');
       // the three single shorts of S4–S6
@@ -466,7 +473,11 @@ async function main() {
       const exJob = ex && !ex.isError ? await waitJob(ex.body.jobId) : null;
       const flow = { plan: !plan.isError, make: !made9.isError && !!sid, sheet: !!sheet && !sheet.isError && sheet.content.filter((x) => x.type === 'image').length === 3, preflight: !!pf && !pf.isError, export: exJob?.status === 'succeeded' };
       check('S9', 'find → plan → make → contact sheet (sequenceId) → preflight → export', Object.values(flow).every(Boolean), flow, 'every step succeeds');
-      const proposer = await call('/grants', { name: 'proposer', mode: 'propose' }, server.auth.tokens.owner);
+      // grants are the owner's to issue: the owner's session (the launch key opens it; the key itself is not a bearer token)
+      const origin = server.url;
+      const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': server.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
+      const pr = await fetch(`${origin}/api/v1/grants`, { method: 'POST', headers: { origin, cookie, connection: 'close', 'content-type': 'application/json' }, body: JSON.stringify({ name: 'proposer', mode: 'propose' }) });
+      const proposer = { status: pr.status, body: (await pr.json()) as any };
       if (proposer.status !== 201) throw new Error(`grant → ${proposer.status} ${JSON.stringify(proposer.body?.error)}`);
       const tokenP = proposer.body.token as string;
       const refused = await mcp('make_shorts', { projectId: pid, ...body }, tokenP);
@@ -484,7 +495,7 @@ async function main() {
       ff(['-y', '-f', 'lavfi', '-t', D, '-i', 'testsrc2=s=640x360:r=30', '-f', 'lavfi', '-t', D, '-i', 'smptebars=s=640x360:r=30', '-f', 'lavfi', '-i', `aevalsrc=0.8*sin(2*PI*1000*t)*lt(mod(t\\,0.5)\\,0.02):s=48000:d=${D}`,
         '-filter_complex', "[0:v][1:v]overlay=enable='eq(mod(floor(t/60)\\,2)\\,1)',format=yuv420p,setsar=1[v]", '-map', '[v]', '-map', '2:a',
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-g', '60', '-bf', '2', '-c:a', 'aac', '-b:a', '96k', '-ac', '2', '-movflags', '+faststart', file]);
-      const lp = (await must('/projects', { name: 'long', width: 640, height: 360, frameRate: R })).project.id as string;
+      const lp = (await must('/projects', { name: 'long', width: 640, height: 360, frameRate: R }, [201])).project.id as string;
       const lu = await upload(lp, file);
       const added10 = await tx(lp, [{ op: 'add_clip', args: { assetId: lu.assetId, start: T.ZERO } }]);
       const seconds = sec(lu.asset.duration);

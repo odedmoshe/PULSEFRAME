@@ -177,27 +177,42 @@ function keptClips(doc: ProjectDocument, protectedIds: readonly string[], slots:
 }
 
 /**
- * The tracks a film run made, by role, as the planner reuses them (FilmPlanContext.reuseTracks), from the document as it is
- * before the run's untouched clips are removed: the pictures track holds a picture slot's clip, the music track the music slot's
- * clip, the own-sound track a sound clip linked to a picture slot's clip; a single track of the run left over (its clips were
+ * The film's tracks, by role, as the planner reuses them (FilmPlanContext.reuseTracks), from the document as it is before the
+ * run's untouched clips are removed. A role is found from the clips the run placed (its slots), on ANY track of the document:
+ * the pictures track holds the picture slots' clips, the music track the music slot's clip, the own-sound track the sound clips
+ * linked to the picture slots' clips. A track the planner reused (an empty A1 or V1 that was already in the project) holds the
+ * film's clips although no step reported its id, so it is not among run.createdIds; regeneration finds it here and records it
+ * in the new run (filmRegeneration's keepIds). When clips were moved by hand to another track, the track holding the most of
+ * them wins (ties: a track the run made, then document order). A single track the run made that is left over (its clips were
  * deleted by hand) takes the single role left that the previous run had. Only tracks still in the document are named; ids are
  * compared, never used as plain-object keys.
  */
 export function filmRunTracks(doc: ProjectDocument, run: Pick<RecipeRun, 'createdIds' | 'slots' | 'params'>): NonNullable<FilmPlanContext['reuseTracks']> {
   const made = new Set(run.createdIds);
-  const tracks: Track[] = Object.values(doc.sequences).flatMap((q) => q.tracks.filter((t) => made.has(t.id)));
-  const holder = (clipId: string) => tracks.find((t) => t.clips.some((c) => c.id === clipId));
+  const all: Track[] = Object.values(doc.sequences).flatMap((q) => q.tracks);
   const slots = run.slots ?? [];
-  const pictureClips = slots.filter((x) => x.kind === 'picture').map((x) => x.clipId);
-  const groups = new Set(pictureClips.flatMap((id) => { const f = findClip(doc, id); return f && f.clip.type === 'media' && f.clip.linkGroupId ? [f.clip.linkGroupId] : []; }));
+  const pictureClips = new Set(slots.filter((x) => x.kind === 'picture').map((x) => x.clipId));
+  const musicClips = new Set(slots.filter((x) => x.kind === 'music').map((x) => x.clipId));
+  const groups = new Set(all.flatMap((t) => t.clips.flatMap((c) => (pictureClips.has(c.id) && c.type === 'media' && c.linkGroupId ? [c.linkGroupId] : []))));
+  /** The track of `kind` holding the most clips that `counts` (ties: made by the run, then document order), if any holds one. */
+  const most = (kind: Track['kind'], counts: (c: Track['clips'][number]) => boolean, not?: string) => {
+    let best: Track | undefined, bestN = 0;
+    for (const t of all) {
+      if (t.kind !== kind || t.id === not) continue;
+      const k = t.clips.filter(counts).length;
+      if (k > bestN || (k === bestN && k > 0 && best && !made.has(best.id) && made.has(t.id))) { best = t; bestN = k; }
+    }
+    return best;
+  };
   const out: NonNullable<FilmPlanContext['reuseTracks']> = {};
-  const pictures = pictureClips.map(holder).find((t) => t?.kind === 'video') ?? (tracks.filter((t) => t.kind === 'video').length === 1 ? tracks.find((t) => t.kind === 'video') : undefined);
+  const madeOf = (kind: Track['kind']) => all.filter((t) => t.kind === kind && made.has(t.id));
+  const pictures = most('video', (c) => pictureClips.has(c.id)) ?? (madeOf('video').length === 1 ? madeOf('video')[0] : undefined);
   if (pictures) out.pictures = pictures.id;
-  const music = slots.filter((x) => x.kind === 'music').map((x) => holder(x.clipId)).find((t) => t?.kind === 'audio');
+  const music = most('audio', (c) => musicClips.has(c.id));
   if (music) out.musicTrack = music.id;
-  const own = tracks.find((t) => t.kind === 'audio' && t.id !== out.musicTrack && t.clips.some((c) => c.type === 'media' && !!c.linkGroupId && groups.has(c.linkGroupId)));
+  const own = most('audio', (c) => c.type === 'media' && !!c.linkGroupId && groups.has(c.linkGroupId) && !pictureClips.has(c.id), out.musicTrack);
   if (own) out.ownSound = own.id;
-  const left = tracks.filter((t) => t.kind === 'audio' && t.id !== out.musicTrack && t.id !== out.ownSound);
+  const left = madeOf('audio').filter((t) => t.id !== out.musicTrack && t.id !== out.ownSound);
   const hadMusic = typeof run.params.musicAssetId === 'string', hadOwn = run.params.ownSound !== 'mute';
   const roles = [...(hadOwn && !out.ownSound ? ['ownSound' as const] : []), ...(hadMusic && !out.musicTrack ? ['musicTrack' as const] : [])];
   if (left.length === 1 && roles.length === 1) out[roles[0]!] = left[0]!.id;
@@ -221,7 +236,8 @@ export function filmRegeneration(doc: ProjectDocument, run: RecipeRun, params: R
   const previousMusic = typeof run.params.musicAssetId === 'string';
   const reuseTracks = filmRunTracks(doc, run);
   const trackIds = new Set(Object.values(doc.sequences).flatMap((q) => q.tracks.map((t) => t.id)));
-  const keepIds = [...protectedIds, ...run.createdIds.filter((id) => trackIds.has(id))];
+  // the run's tracks that still exist, and the tracks found by role (a reused A1 too), so they are the film's own from now on
+  const keepIds = [...new Set([...protectedIds, ...run.createdIds.filter((id) => trackIds.has(id)), ...Object.values(reuseTracks).filter((id): id is string => typeof id === 'string')])];
   const ctx = filmContext(without, params, { kept: keptClips(doc, protectedIds, run.slots ?? []), keptKeys: keepSlots.map((s) => s.key), reuseTracks, previousOwnSound, previousMusic });
   return { removable, protectedIds, keepSlots, keepIds, without, ctx };
 }

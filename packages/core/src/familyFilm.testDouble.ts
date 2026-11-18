@@ -100,9 +100,9 @@ export function regenerationPlan(doc: ProjectDocument, runId: string, newParams:
   const params = { ...filmRunParams(run.params), ...newParams };
   const prevOwn = run.params.ownSound as FilmPlanContext['previousOwnSound'];
   // the run's tracks by role (the server's filmRunTracks, in short): the tracks holding a picture slot's clip, its linked sound and the music.
-  // DIFFERENCE, reported to the lead: the own-sound track is found from the linked sound WITHOUT requiring it among run.createdIds. When
-  // the planner reuses an empty track that was already in the project (A1 of a new project), no step outputs that track's id, so it is
-  // never a created id; apps/server filmRunTracks requires one and would add a new own-sound track on regeneration.
+  // The own-sound track is found from the linked sound WITHOUT requiring it among run.createdIds: when the planner reuses an empty
+  // track that was already in the project (A1 of a new project), no step outputs that track's id. The server's filmRunTracks does the
+  // same since the lead's fix (roles from the slots' clips on any track; the found tracks are recorded in the new run's keepIds).
   const made = new Set(run.createdIds);
   const holder = (clipId: string) => findClip(doc, clipId)?.track;
   const pics = slots.filter((x) => x.kind === 'picture').map((x) => findClip(doc, x.clipId)).filter((f) => !!f);

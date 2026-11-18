@@ -186,7 +186,8 @@ describe('pictures', () => {
     expect(g.inner.startsWith('M0 ')).toBe(true); expect(g.level.startsWith('M0 ')).toBe(true);
     expect(g.window).toEqual({ x: 40, width: 40, peakX: 60 });
     const late = stripGeometry(data(30), { fromFrame: 60, toFrame: 120, peakFrame: 90 }, 200, 40);
-    expect(late.window!.x).toBeLessThan(g.window!.x + 1e9); expect(late.window!.x).not.toBe(g.window!.x);
+    // picture 30 frames late: frame f is at (f + 30) / 30 s of an 11 s file, so the window [60, 120) sits at 3–5 s, the peak at 4 s
+    expect(late.window).toEqual({ x: 54.5, width: 36.4, peakX: 72.7 });
     expect(stripGeometry({ ...data(0), picture: null, sound: null }, null, 100, 20)).toEqual({ inner: '', level: '', window: null });
     expect(g.inner.split('L').length).toBeLessThanOrEqual(120);
   });

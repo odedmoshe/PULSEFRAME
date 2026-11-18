@@ -34,6 +34,7 @@ import { LayoutPicker } from './LayoutPicker.tsx';
 import { TextAnimationField } from './TextAnimationField.tsx';
 import { TextEffectsField } from './TextEffectsField.tsx';
 import { Section, SectionsContext } from './Section.tsx';
+import { FilmWhy } from './FilmWhy.tsx';
 import { IconKeyframeFull, IconKeyframeHalf, IconKeyframeHollow, IconOnBeat } from './icons.tsx';
 import { Menu, ScrubField, Tabs, type MenuItem, type TabSpec } from '../ds/index.ts';
 import { isolate } from '../ds/util.tsx';
@@ -602,6 +603,8 @@ function BasicTab({ clip, viewClip, shown, keymap }: PanelProps) {
   const reset = () => void editor.setShownTransform(clip, shown, { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 }, 'Reset transform');
   return (
     <>
+      {/* why this clip is in the family film (ADR-0026): draws nothing for a clip that is in no film run */}
+      {media && state.selection.length === 1 && <FilmWhy key={`film-why:${media.id}`} clipId={media.id} lang={state.lang} />}
       <Section id="transform" title={S.secPlace} onReset={moved && editor.playheadOnSelection ? reset : undefined}>
         {/* Values shown are the ones rendered at the playhead. Editing an animated property writes a keyframe there. */}
         <FormatScope clip={clip} />

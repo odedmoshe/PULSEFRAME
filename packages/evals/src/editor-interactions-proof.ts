@@ -1087,6 +1087,8 @@ async function main() {
       const asset = await upload(sp, path.join(art, 'shorts.mp4'));
       await txs(sp, [{ op: 'set_transcript', args: { assetId: asset.assetId, ...truth.transcript } }]);
       const sdoc = async () => (await call(`/projects/${sp}`)).body.project;
+      /** The project's revision (the document itself holds none). */
+      const srev = async () => (await call(`/projects/${sp}`)).body.revision as number;
       const trims = async () => ((await call(`/projects/${sp}/history?since=0`)).body.events as { ops?: string[] }[]).filter((e) => e.ops?.includes('trim_clip')).length;
       const sctx = await browser.newContext({ viewport: { width: 1500, height: 1000 }, reducedMotion: 'reduce', locale: 'he-IL' });
       const sPage = await sctx.newPage();
@@ -1113,12 +1115,12 @@ async function main() {
         const rangeOf = async () => (await row(0).locator('.sh-range').textContent()) ?? '';
         const r0 = await rangeOf();
         await row(0).focus();
-        const revBefore = (await sdoc()).revision ?? 0;
+        const revBefore = await srev();
         for (const key of ['BracketLeft', 'BracketRight', 'Shift+BracketLeft', 'Shift+BracketRight', 'Alt+BracketRight', 'Alt+Shift+BracketLeft']) await sPage.keyboard.press(key);
         const after = await trims();
         const live = (await sPage.getByTestId(ID.live).textContent()) ?? '';
         const r1 = await rangeOf();
-        check('shorts, review keys: [ ] Shift+[ ] and Alt move the edges of the focused candidate (its range changes, a live region names the new edge in Hebrew) and commit NO trim_clip and no revision', before === after && (r0 !== r1 || /לא ניתן/.test(live)) && /[א-ת]/.test(live) && ((await sdoc()).revision ?? 0) === revBefore, { trimsBefore: before, trimsAfter: after, r0, r1, live });
+        check('shorts, review keys: [ ] Shift+[ ] and Alt move the edges of the focused candidate (its range changes, a live region names the new edge in Hebrew) and commit NO trim_clip and no revision', before === after && (r0 !== r1 || /אי אפשר להזיז עוד/.test(live)) && /[א-ת]/.test(live) && (await srev()) === revBefore && typeof revBefore === 'number', { trimsBefore: before, trimsAfter: after, r0, r1, live });
         await row(0).focus(); await sPage.keyboard.press('Enter');
         await row(1).focus(); await sPage.keyboard.press('Enter');
         const picked = await sPage.locator(`[data-testid=${ID.candidate}][data-selected=true]`).count();
@@ -1127,14 +1129,18 @@ async function main() {
         const dialog = await sPage.getByTestId(ID.planDialog).waitFor({ timeout: 30000 }).then(() => true, () => false);
         const planOps = dialog ? Number(((await sPage.getByTestId(ID.planOps).textContent()) ?? '').replace(/\D+/g, '')) : 0;
         const mainBefore = JSON.stringify((await sdoc()).sequences.seq_main);
+        const revPre = await srev();
         await sPage.getByTestId(ID.create).focus();
         await sPage.keyboard.press('Enter');
         const made = await until2(sdoc, (d) => Object.keys(d.sequences).length === 3);
         const nd = await sdoc();
+        // ONE revision: the document moved by exactly one revision, and that transaction is the plan's one apply_sequence_plan
+        const revMade = await srev();
+        const lastTx = ((await (await fetch(`${s.url}/api/v1/projects/${nd.id}/history?since=${revPre}`, { headers: { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' } })).json()) as { events: { ops: string[] }[] }).events;
         const newIds = Object.keys(nd.sequences).filter((id) => id !== 'seq_main');
         await sleep(600);
         const focused = await sPage.evaluate(() => { const a = document.activeElement as HTMLElement | null; return { id: a?.dataset?.testid ?? null, seq: a?.dataset?.sequenceId ?? null, selected: a?.getAttribute('aria-selected') ?? null }; });
-        check('shorts, plan and create by keyboard: 2 selected; the plan dialog shows operations; Enter on «צור 2 קטעים» makes 2 sequences as ONE revision; the focus lands on the first new short\'s tab (aria-selected)', picked === 2 && dialog && planOps > 0 && made && newIds.length === 2 && focused.id === ID.tab && focused.seq === newIds[0] && focused.selected === 'true', { picked, dialog, planOps, newIds, focused });
+        check('shorts, plan and create by keyboard: 2 selected; the plan dialog shows operations; Enter on «צור 2 קטעים» makes 2 sequences as ONE revision; the focus lands on the first new short\'s tab (aria-selected)', picked === 2 && dialog && planOps > 0 && made && newIds.length === 2 && revMade === revPre + 1 && lastTx.length === 1 && lastTx[0]!.ops.includes('apply_sequence_plan') && focused.id === ID.tab && focused.seq === newIds[0] && focused.selected === 'true', { picked, dialog, planOps, newIds, revisions: revMade - revPre, transactions: lastTx.map((e) => e.ops), focused });
         const cb = (await sPage.getByTestId('preview').boundingBox())!;
         check('shorts, the canvas of the active short is 720:1280 (9:16) within 1 px', Math.abs(cb.width - (cb.height * 720) / 1280) <= 1, { w: cb.width, h: cb.height });
         // a title added while the short is active lands in that sequence; the main sequence is unchanged
@@ -1143,6 +1149,19 @@ async function main() {
         const landed = await until2(sdoc, (d) => d.sequences[newIds[0]!].tracks.some((t: any) => t.clips.some((c: any) => c.type === 'text')));
         const fin = await sdoc();
         check('shorts, a title added (T) while the short is active lands in that sequence; the main sequence is exactly as before', landed && JSON.stringify(fin.sequences.seq_main) === mainBefore, { landed, mainUnchanged: JSON.stringify(fin.sequences.seq_main) === mainBefore });
+        // the sequence tabs by keyboard only: from the short's tab, Home reaches the main tab; the arrow toward the end (RTL: ArrowLeft)
+        // goes to the short next to it, and the arrow toward the start (RTL: ArrowRight) comes back to the main tab
+        const tabFocus = () => sPage.evaluate(() => { const a = document.activeElement as HTMLElement | null; return { id: a?.dataset?.testid ?? null, seq: a?.dataset?.sequenceId ?? null }; });
+        const secondTab = await sPage.locator('[data-testid=sequence-switcher] [role=tab]').nth(1).getAttribute('data-sequence-id');
+        await sPage.locator(`[data-testid=${ID.tab}][aria-selected=true]`).focus();
+        const rtl = await sPage.evaluate(() => getComputedStyle(document.querySelector('[data-testid=sequence-switcher] [role=tablist]') ?? document.body).direction === 'rtl');
+        await sPage.keyboard.press('Home'); await sleep(200);
+        const byHome = await tabFocus();
+        await sPage.keyboard.press(rtl ? 'ArrowLeft' : 'ArrowRight'); await sleep(200);
+        const forward = await tabFocus();
+        await sPage.keyboard.press(rtl ? 'ArrowRight' : 'ArrowLeft'); await sleep(200);
+        const byArrow = await tabFocus();
+        check('shorts, the sequence tabs by keyboard only: Home reaches the main tab; the arrow toward the end goes to the short next to it and the arrow toward the start (RTL: ArrowRight) comes back to the main tab', byHome.id === ID.tabMain && byHome.seq === 'seq_main' && forward.seq === secondTab && !!secondTab && secondTab !== 'seq_main' && byArrow.id === ID.tabMain && byArrow.seq === 'seq_main', { byHome, forward, secondTab, byArrow, rtl });
       }
       check('no uncaught errors in the page with the shorts run', sErrors.length === 0, sErrors.slice(0, 4));
       await sctx.close();
