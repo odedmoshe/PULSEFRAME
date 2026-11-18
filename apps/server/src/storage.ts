@@ -121,6 +121,66 @@ export function assertStorageRoom(store: Store, neededBytes: number, what: strin
     throw new ApiError(507, 'storage_quota_exceeded', `not enough room to ${what}: the storage ceiling is ${quotaBytes} bytes and ${usedBytes} are in use`, { quotaBytes, usedBytes, neededBytes }, 'Delete projects you no longer need and run the storage clean-up (owner: project manager → storage), or raise PF_MAX_STORAGE_BYTES.');
   return quotaBytes - usedBytes;
 }
+/**
+ * The storage ceiling's ledger of uploads still arriving. Each holds a reservation: its declared size, or, for a stream of unknown
+ * size (no Content-Length), the bytes received so far, growing as they arrive and refused (receiveOriginal's 507
+ * storage_quota_exceeded, the partial file removed) as soon as the ceiling would be passed. The data directory is counted without
+ * the uploads' partial files, so no byte is counted twice, and it is measured again whenever an upload starts or ends, so room an
+ * upload took (stored, or reserved by one that started later) is never handed out a second time. Derived data that can be made
+ * again (the render cache) gives room back before an upload is refused, as in assertStorageRoom.
+ */
+export class UploadLedger {
+  private readonly live = new Set<UploadReservation>();
+  /** Bytes under the data directory outside the partial files of live uploads, at the last start or end. */
+  private base = 0;
+  constructor(private readonly store: Store) {}
+  /** Reserved bytes not yet on disk: what assertStorageRoom must add to the directory it measures for an upload that starts now. */
+  outstanding(): number {
+    let n = 0;
+    for (const r of this.live) n += Math.max(0, r.claim - partialBytes(r.tmp));
+    return n;
+  }
+  /** Registers an upload that streams into `tmp`, reserving `declared` bytes (0 for an unknown size: it grows with grow()). */
+  open(tmp: string, declared: number | null): UploadReservation {
+    const r: UploadReservation = { tmp, declared, claim: declared ?? 0, refused: false };
+    this.live.add(r);
+    this.measure();
+    return r;
+  }
+  /** The upload has received `size` bytes in all: its reservation grows to them; refused when that would pass the ceiling. */
+  grow(r: UploadReservation, size: number): { ok: true } | { ok: false; roomBytes: number } {
+    if (r.refused) return { ok: false, roomBytes: 0 };
+    const claim = Math.max(r.declared ?? 0, size);
+    if (claim <= r.claim) return { ok: true };
+    const quota = this.store.maxStorageBytes;
+    if (!quota) { r.claim = claim; return { ok: true }; }
+    const others = () => { let n = 0; for (const o of this.live) if (o !== r) n += o.claim; return n; };
+    if (this.base + others() + claim > quota) {
+      hooksOf.get(this.store)?.reclaim(this.base + others() + claim - quota);
+      this.measure();
+    }
+    const room = quota - this.base - others();
+    // refused: this upload ends here and its partial file goes, so it holds no room from now on (close() follows)
+    if (claim > room) { r.claim = 0; r.declared = null; r.refused = true; return { ok: false, roomBytes: Math.max(0, room) }; }
+    r.claim = claim;
+    return { ok: true };
+  }
+  /** The upload ended (stored or refused): its reservation goes, and the directory is measured again with what it left there. */
+  close(r: UploadReservation): void {
+    this.live.delete(r);
+    this.measure();
+  }
+  private measure() {
+    if (!this.store.maxStorageBytes) return;
+    // partial files first, the directory after: whatever arrives in between is counted (conservatively) in the base
+    let partial = 0;
+    for (const r of this.live) partial += partialBytes(r.tmp);
+    this.base = Math.max(0, dataDirBytes(this.store.dataDir) - partial);
+  }
+}
+export interface UploadReservation { readonly tmp: string; declared: number | null; claim: number; refused?: boolean }
+const partialBytes = (file: string) => { try { return fs.statSync(file).size; } catch { return 0; } };
+
 export function storageReport(store: Store, by: Principal, now = Date.now(), quotaBytes = store.maxStorageBytes) {
   ownerOnly(by, 'inspect storage');
   const refs = referencedHashes(store, now);

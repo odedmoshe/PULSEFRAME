@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Readable } from 'node:stream';
+import { PassThrough, Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Asset, ImportJobOutput } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
@@ -427,6 +427,55 @@ describe('import queue: cancel, retry, dismiss, refusals', () => {
     expect(await code(send(d, fx.B!, { signal: ac.signal }))).toBe('400 upload_incomplete');
     expect((d.store.db.prepare('SELECT COUNT(*) AS n FROM jobs').get() as { n: number }).n).toBe(0);
     expect(tmpLeft(d)).toEqual([]);
+  }, 60_000);
+
+  it('uploads of unknown size count toward the ceiling as their bytes arrive: two streams that each fit alone cannot pass it together (one is refused, nothing partial kept)', async () => {
+    const MiB = 1024 ** 2;
+    const probe = world();
+    const used = dataDirBytes(probe.dir);
+    const ceiling = used + Math.round(1.5 * MiB) + 256 * 1024; // room for one 1 MiB file (and the job row), not for two
+    const w = world({ maxStorageBytes: ceiling });
+    const jobs = () => (w.store.db.prepare('SELECT COUNT(*) AS n FROM jobs').get() as { n: number }).n;
+    const chunk = (k: number, tag: number) => Buffer.from(Array.from({ length: 16 * 1024 }, (_, i) => (i * 31 + k * 7 + tag * 101) & 0xff));
+    const bodies = [new PassThrough(), new PassThrough()];
+    for (const b of bodies) b.on('error', () => { /* destroyed by the refusal */ });
+    const results = bodies.map((body, i) => code(w.queue.receive({ projectId: w.pid, actor: 'user:local', body, name: `stream${i}.mp4`, via: 'browser', declaredBytes: null, maxBytes: GiB, commitKind: 'background' })));
+    for (let k = 0; k < 64; k++) { // 64 × 16 KiB = 1 MiB each, sent turn by turn
+      for (const [i, b] of bodies.entries()) if (!b.destroyed && b.writable) b.write(chunk(k, i));
+      await new Promise((r) => setTimeout(r, 2));
+    }
+    for (const b of bodies) if (!b.destroyed) b.end();
+    const got = (await Promise.all(results)).sort();
+    expect(got).toEqual(['507 storage_quota_exceeded', 'ok']);
+    expect(jobs()).toBe(1);
+    expect(tmpLeft(w)).toEqual([]);
+    expect(dataDirBytes(w.dir)).toBeLessThanOrEqual(ceiling);
+  }, 60_000);
+
+  it('a stream of unknown size that started first is cut off when a declared upload took the room meanwhile (its reservation grows against the ledger, not against the room it saw at the start)', async () => {
+    const MiB = 1024 ** 2;
+    const probe = world();
+    const used = dataDirBytes(probe.dir);
+    // a real clip (a file that fails to import would give its room back at once): lossless, so it is large
+    const big = path.join(root, 'declared-lossless.mp4');
+    if (!fs.existsSync(big)) ff(['-f', 'lavfi', '-i', 'testsrc2=size=640x480:rate=30', '-t', '2', '-c:v', 'libx264', '-preset', 'veryfast', '-qp', '0', '-pix_fmt', 'yuv420p', big]);
+    const declared = fs.statSync(big).size;
+    expect(declared).toBeGreaterThan(MiB / 2);
+    const ceiling = used + declared + MiB / 2 + 256 * 1024; // room for the clip, or for the 1 MiB stream, not for both
+    const w = world({ maxStorageBytes: ceiling });
+    const body = new PassThrough();
+    body.on('error', () => { /* destroyed by the refusal */ });
+    const streamed = code(w.queue.receive({ projectId: w.pid, actor: 'user:local', body, name: 'first.mp4', via: 'browser', declaredBytes: null, maxBytes: GiB, commitKind: 'background' }));
+    const piece = (k: number) => Buffer.from(Array.from({ length: 16 * 1024 }, (_, i) => (i * 17 + k) & 0xff));
+    for (let k = 0; k < 4; k++) { body.write(piece(k)); await new Promise((r) => setTimeout(r, 2)); } // 64 KiB arrived
+    expect(await code(send(w, big))).toBe('ok'); // declared, stored while the stream waits
+    expect((await w.queue.wait((w.store.db.prepare("SELECT id FROM jobs").get() as { id: string }).id)).status).toBe('succeeded'); // and kept
+    for (let k = 4; k < 64 && !body.destroyed; k++) { body.write(piece(k)); await new Promise((r) => setTimeout(r, 2)); }
+    if (!body.destroyed) body.end();
+    expect(await streamed).toBe('507 storage_quota_exceeded');
+    expect((w.store.db.prepare('SELECT COUNT(*) AS n FROM jobs').get() as { n: number }).n).toBe(1);
+    expect(tmpLeft(w)).toEqual([]);
+    expect(dataDirBytes(w.dir)).toBeLessThanOrEqual(ceiling);
   }, 60_000);
 
   it('disk_full before a conversion is retryable, and the retry succeeds once there is room', async () => {

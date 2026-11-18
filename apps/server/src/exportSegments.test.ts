@@ -113,13 +113,25 @@ describe('trackTimescale', () => {
 });
 
 describe('encode and join arguments', () => {
-  it('a segment encode uses the single-pass filter, preset, CRF and colour tags, plus the closed-GOP arguments', () => {
-    const a = X.segmentEncodeArgs({ width: 640, height: 360, frameRate: { num: 30000, den: 1001 }, quality: 'high', segFrames: 60, threads: 4, outFile: '/w/seg.mp4' });
+  it('a segment encode uses the single-pass filter, preset, CRF, GOP and scene-cut settings and colour tags, a keyframe on the tail pad, the start zone, and a cut', () => {
+    const a = X.segmentEncodeArgs({ width: 640, height: 360, frameRate: { num: 30000, den: 1001 }, quality: 'high', segFrames: 60, threads: 4, outFile: '/w/seg.pad.mp4' });
     expect(a.join(' ')).toBe('-hide_banner -v error -y -f rawvideo -pix_fmt rgba -video_size 640x360 -framerate 30000/1001 -i pipe:0 '
       + '-vf scale=in_range=full:out_range=tv:out_color_matrix=bt709:flags=accurate_rnd+full_chroma_int,format=yuv420p '
-      + '-c:v libx264 -preset medium -crf 16 -profile:v high -threads 4 -g 60 -keyint_min 60 -sc_threshold 0 -x264-params open-gop=0 '
-      + '-color_range tv -colorspace bt709 -color_primaries bt709 -color_trc bt709 -video_track_timescale 30000 -bitexact -an -f mp4 /w/seg.mp4');
+      + '-c:v libx264 -preset medium -crf 16 -profile:v high -threads 4 -force_key_frames expr:eq(n,60) -x264-params open-gop=0:zones=0,0,b=1.4 '
+      + '-color_range tv -colorspace bt709 -color_primaries bt709 -color_trc bt709 -video_track_timescale 30000 -bitexact -an -f mp4 /w/seg.pad.mp4');
+    // no -g, -keyint_min or -sc_threshold: x264's defaults, as in the single pass (export.ts passes none of them either)
+    expect(a).not.toEqual(expect.arrayContaining(['-g']));
+    expect(a).not.toEqual(expect.arrayContaining(['-sc_threshold']));
+    expect(X.segmentCutArgs({ padded: '/w/seg.pad.mp4', frames: 60, frameRate: { num: 30000, den: 1001 }, outFile: '/w/seg.mp4' }).join(' ')).toBe(
+      '-hide_banner -v error -y -i /w/seg.pad.mp4 -map 0:v:0 -c copy -frames:v 60 -video_track_timescale 30000 -bitexact -f mp4 /w/seg.mp4');
+    expect(X.paddedPath('/w/seg-000001.mp4')).toBe('/w/seg-000001.pad.mp4');
+    expect(X.SEGMENT_TAIL_PAD).toBe(1);
     expect(X.segmentEncodeArgs({ width: 2, height: 2, frameRate: { num: 25, den: 1 }, quality: 'draft', segFrames: 50, threads: 1, outFile: 'o' })).toEqual(expect.arrayContaining(['veryfast', '28', '12800']));
+  });
+
+  it('the single pass sets no GOP or scene-cut option the segments would have to match (export.ts source)', () => {
+    const src = fs.readFileSync(new URL('./export.ts', import.meta.url), 'utf8');
+    for (const opt of ["'-g'", "'-keyint_min'", "'-sc_threshold'", "'-x264-params'", "'-force_key_frames'"]) expect(src).not.toContain(opt);
   });
 
   it('keeps the CRF table and preset rule equal to the single-pass export (export.ts holds them module-private)', () => {
@@ -184,13 +196,19 @@ describe('real encode and join (ffmpeg)', () => {
     }
   }, LONG);
 
-  it('documents why no segment may be shorter than 3 frames: a 1- or 2-frame segment beside a 60-frame one does not join exactly', async () => {
+  it('documents why no segment may be shorter than 3 frames: a 1-frame segment beside a 60-frame one does not join exactly (a 2-frame one does since the tail pad, measured; the grid keeps 3)', async () => {
     for (const parts of [[1, 60], [2, 60], [60, 1], [60, 2]]) {
       const r = await encodeAndJoin(parts);
       const exact = r.pts.length === r.total && X.cfrProblem(r.pts, r.frameTicks) === null && JSON.stringify(r.joinedMd5) === JSON.stringify(r.partsMd5);
       console.log(`[join] ${parts.join('+')}: first-packet offsets ${r.offsets.join(', ')}; ${r.pts.length} of ${r.total} packets; ${X.cfrProblem(r.pts, r.frameTicks) ?? 'exact'}`);
-      expect(new Set(r.offsets).size).toBe(2); // the short segment is written with PTS = DTS: the export's ptsOffsetTicks check refuses it
-      expect(exact).toBe(false);
+      if (parts.includes(1)) {
+        expect(new Set(r.offsets).size).toBe(2); // the 1-frame segment is written with PTS = DTS: the export's ptsOffsetTicks check refuses it
+        expect(exact).toBe(false);
+      } else {
+        // encoded as 3 frames (2 + the tail pad), the 2-frame segment gets the same B-frame delay and joins exactly
+        expect(new Set(r.offsets).size).toBe(1);
+        expect(exact).toBe(true);
+      }
     }
   }, LONG);
 
@@ -205,6 +223,51 @@ describe('real encode and join (ffmpeg)', () => {
     const { stdout } = await exec('ffmpeg', ['-version']);
     console.log(`[determinism] ${stdout.split('\n')[0]}; 60 frames ${W}×${H}, -threads ${threads}: ${a === b ? 'byte-identical' : 'DIFFERENT'} (${a.slice(0, 16)} / ${b.slice(0, 16)})`);
     expect(a).toBe(b);
+  }, LONG);
+
+  it('a segment holds exactly its own frames (the tail pad is cut) and leaves no padded file', async () => {
+    const dir = tmp('pf-cut-');
+    const out = path.join(dir, 's.mp4');
+    const frames = Array.from({ length: 17 }, (_, k) => rgba(k, 1, false));
+    await X.encodeSegmentFile(frames, { width: W, height: H, frameRate: { num: 30, den: 1 }, quality: 'standard', threads: 2, outFile: out });
+    expect((await X.packetPts(out)).length).toBe(17);
+    expect((await framemd5(out)).length).toBe(17);
+    expect(fs.readdirSync(dir)).toEqual(['s.mp4']);
+  }, LONG);
+
+  it('the frame before a join is coded at least as well as the middle of its segment (no end-of-stream quantiser climb; measurement)', async () => {
+    // A textured picture with fresh grain every frame (lavfi mandelbrot + temporal noise, fixed seed): MB-tree matters, as on the
+    // snow overlay of the proof's fixture A. Measured with the earlier settings (no tail pad): last frame 33.68 dB, frames 40–47 34.36 dB.
+    const w = 320, h = 180, n = 60;
+    const dir = tmp('pf-tail-');
+    const raw = path.join(dir, 'src.rgba');
+    await exec('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-f', 'lavfi', '-i', `mandelbrot=s=${w}x${h}:r=30,noise=alls=20:allf=t:all_seed=7`, '-frames:v', String(n), '-pix_fmt', 'rgba', '-f', 'rawvideo', raw], { timeout: LONG });
+    const all = fs.readFileSync(raw);
+    const frames = Array.from({ length: n }, (_, f) => new Uint8Array(all.subarray(f * w * h * 4, (f + 1) * w * h * 4)));
+    const out = path.join(dir, 's.mp4');
+    await X.encodeSegmentFile(frames, { width: w, height: h, frameRate: { num: 30, den: 1 }, quality: 'standard', threads: 2, outFile: out });
+    const r = await exec('ffmpeg', ['-hide_banner', '-v', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-video_size', `${w}x${h}`, '-framerate', '30', '-i', raw, '-i', out,
+      '-lavfi', '[0:v]scale=in_range=full:out_range=tv:out_color_matrix=bt709:flags=accurate_rnd+full_chroma_int,format=yuv420p,settb=1/30,setpts=N[a];[1:v]settb=1/30,setpts=N[b];[a][b]psnr=stats_file=-', '-f', 'null', '-'], { maxBuffer: 64 << 20, timeout: LONG });
+    const p = [...r.stdout.matchAll(/psnr_avg:(\S+)/g)].map((m) => Number(m[1]));
+    expect(p.length).toBe(n);
+    const meanDb = (xs: number[]) => -10 * Math.log10(xs.reduce((m, x) => m + 10 ** (-x / 10), 0) / xs.length);
+    const middle = meanDb(p.slice(40, 48)), last = p[n - 1]!;
+    console.log(`[tail] frames 40–47 ${middle.toFixed(2)} dB, last frame ${last.toFixed(2)} dB; last eight ${p.slice(n - 8).map((x) => x.toFixed(1)).join(' ')}`);
+    expect(last).toBeGreaterThanOrEqual(middle);
+  }, LONG);
+
+  it('a hard cut inside a segment gets a keyframe, as in the single pass (scene-cut detection on)', async () => {
+    const w = 320, h = 180;
+    const dir = tmp('pf-cutscene-');
+    const grab = async (src: string, file: string) => { await exec('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-f', 'lavfi', '-i', src, '-frames:v', '30', '-pix_fmt', 'rgba', '-f', 'rawvideo', file], { timeout: LONG }); const b = fs.readFileSync(file); return Array.from({ length: 30 }, (_, f) => new Uint8Array(b.subarray(f * w * h * 4, (f + 1) * w * h * 4))); };
+    const frames = [...await grab(`mandelbrot=s=${w}x${h}:r=30`, path.join(dir, 'a.rgba')), ...await grab(`testsrc2=s=${w}x${h}:r=30`, path.join(dir, 'b.rgba'))];
+    const out = path.join(dir, 's.mp4');
+    await X.encodeSegmentFile(frames, { width: w, height: h, frameRate: { num: 30, den: 1 }, quality: 'standard', threads: 2, outFile: out });
+    const { stdout } = await exec('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'frame=pict_type', '-of', 'csv=p=0', out], { timeout: LONG });
+    const types = stdout.split('\n').map((l) => l.trim().replace(/,$/, '')).filter(Boolean);
+    expect(types.length).toBe(60);
+    expect(types.flatMap((t, i) => (t === 'I' ? [i] : []))).toEqual([0, 30]);
+    expect(types[29]).toBe('P'); // the frame before the cut's keyframe references nothing after it
   }, LONG);
 
   it('incrementalAvailable runs the two-segment self-test once per process and finds this ffmpeg able', async () => {

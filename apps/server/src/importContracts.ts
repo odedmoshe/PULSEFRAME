@@ -223,6 +223,17 @@ export interface DropLimits {
   /** An early refusal (411/413/507/410/401/429) is written with Connection: close, then the body is drained for at most drainMs or drainBytes before the socket is destroyed, so a phone browser reads the refusal instead of a reset. */
   drainMs: number; drainBytes: number;
   headersTimeoutMs: number; connectionsCheckingIntervalMs: number; keepAliveTimeoutMs: number; maxConnections: number; maxHeaderBytes: number;
+  /**
+   * Absolute lifetime of every connection from a peer that has not claimed the code (every peer before the claim, every other
+   * device after it): destroyed this long after it was accepted, whatever it is doing. The phone's own connections lose the limit
+   * at its claim.
+   */
+  unclaimedConnectionMs: number;
+  /**
+   * Response bytes a connection may leave unread (written by the door, not yet handed to the network) before another response
+   * is refused by destroying the socket; one response larger than this on its own is allowed.
+   */
+  maxUnreadResponseBytes: number;
   /** x-filename as sent, percent-encoded (MAX_NAME_HEADER_BYTES). */
   maxFilenameHeaderBytes: number;
   /** POST /hello body. */
@@ -235,6 +246,7 @@ export const DROP_DEFAULTS: DropLimits = {
   maxBadHellos: 5, maxConcurrentUploads: 2,
   stallMs: 30_000, drainMs: 2_000, drainBytes: 8 * 1024 ** 2,
   headersTimeoutMs: 10_000, connectionsCheckingIntervalMs: 2_000, keepAliveTimeoutMs: 5_000, maxConnections: 16, maxHeaderBytes: 8 * 1024,
+  unclaimedConnectionMs: 30_000, maxUnreadResponseBytes: 256 * 1024,
   maxFilenameHeaderBytes: MAX_NAME_HEADER_BYTES, maxHelloBytes: 512,
 };
 /** The limits of a code on this server: the defaults with the configured lifetime, code budget and per-file cap. */

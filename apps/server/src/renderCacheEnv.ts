@@ -13,7 +13,7 @@ import { findEffect, type EngineFingerprint, type ProjectDocument } from '@pulse
 import { frameKey } from '@pulseframe/engine';
 import type { RenderHost, WorkerIdentity } from '@pulseframe/renderer';
 import { usesGpuEffects, type Manifest } from './export.ts';
-import { segmentEncodeArgs, type FrameKeyFn, type SegmentEnv } from './exportSegments.ts';
+import { SEGMENT_TAIL_PAD, segmentCutArgs, segmentEncodeArgs, type FrameKeyFn, type SegmentEnv } from './exportSegments.ts';
 import { ApiError } from './store.ts';
 
 export const sha256Hex = (text: string | Uint8Array): string => createHash('sha256').update(text).digest('hex');
@@ -78,7 +78,19 @@ export function ffmpegVersionText(): Promise<string> {
  * output parameters and the length through the number of frame keys). Draft and high exports therefore never share segments.
  */
 export function encoderIdFor(versionText: string, manifest: Pick<Manifest, 'options' | 'output'>, threads: number): string {
-  return encoderIdOf(versionText, segmentEncodeArgs({ width: 0, height: 0, frameRate: manifest.output.frameRate, quality: manifest.options.quality, segFrames: 0, threads, outFile: '<out>' }));
+  return encoderIdOf(versionText, segmentPipelineArgs(manifest.output.frameRate, manifest.options.quality, threads));
+}
+/**
+ * Everything that decides a segment's bytes besides its frames, as one argument list: the encode arguments, the tail pad and the
+ * cut (size, segment length and paths as fixed placeholders). A change to any of them changes the encoder id, so segments stored
+ * with older settings become misses.
+ */
+export function segmentPipelineArgs(frameRate: { num: number; den: number }, quality: Manifest['options']['quality'], threads: number): string[] {
+  return [
+    ...segmentEncodeArgs({ width: 0, height: 0, frameRate, quality, segFrames: 0, threads, outFile: '<padded>' }),
+    '|tail-pad', String(SEGMENT_TAIL_PAD),
+    '|cut', ...segmentCutArgs({ padded: '<padded>', frames: 0, frameRate, outFile: '<out>' }),
+  ];
 }
 export interface SegmentEnvSource {
   host: Pick<RenderHost, 'identity'>;
