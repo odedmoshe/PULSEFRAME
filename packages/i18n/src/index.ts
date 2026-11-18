@@ -10,6 +10,7 @@ import { PHONE_DROP_EN, PHONE_DROP_HE } from './phoneDrop.ts';
 import { RENDER_CACHE_EN, RENDER_CACHE_HE } from './renderCache.ts';
 import { FAMILY_FILM_EN, FAMILY_FILM_HE } from './familyFilm.ts';
 import { SHORTS_EN, SHORTS_HE } from './shorts.ts';
+import { MULTICAM_EN, MULTICAM_HE } from './multicam.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
@@ -208,6 +209,7 @@ export const he = {
   ...RENDER_CACHE_HE,
   ...FAMILY_FILM_HE,
   ...SHORTS_HE,
+  ...MULTICAM_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -406,6 +408,7 @@ export const en: Record<keyof typeof he, string> = {
   ...RENDER_CACHE_EN,
   ...FAMILY_FILM_EN,
   ...SHORTS_EN,
+  ...MULTICAM_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -423,3 +426,4 @@ export * from './packs.ts';
 export * from './people.ts';
 export * from './familyFilm.ts';
 export * from './shorts.ts';
+export * from './multicam.ts';
