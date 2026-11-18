@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-18T02:29:51.519Z",
+  "ranAt": "2026-11-18T10:34:13.254Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "logicalCpus": 4,
     "memoryGiB": 15.7,
     "gpu": "none"
@@ -11,20 +11,20 @@
   "measurements": {
     "formats": {
       "mp4Draft": {
-        "wall": 0.852,
+        "wall": 0.921,
         "bytes": 12789,
         "estimate": 30480
       },
       "webm": {
-        "wall": 1.39,
+        "wall": 1.369,
         "bytes": 54848,
         "estimate": 168960
       },
       "wav": {
-        "wall": 0.157
+        "wall": 0.155
       },
       "png": {
-        "wall": 0.386
+        "wall": 0.363
       }
     },
     "cancel": {
@@ -34,12 +34,12 @@
     "longExport": {
       "frames": 600,
       "size": "1920x1080",
-      "wallSeconds": 34.572,
-      "realtimeFactor": 0.5785028346638899,
+      "wallSeconds": 35.796,
+      "realtimeFactor": 0.5587216448765225,
       "renderStageMs": {
-        "draw": 5409,
-        "readback": 3217,
-        "upload": 23964
+        "draw": 5058,
+        "readback": 3268,
+        "upload": 26090
       },
       "bytes": 747124,
       "estimateBytes": 22252800
@@ -212,12 +212,12 @@
       "detail": {
         "frames": 600,
         "size": "1920x1080",
-        "wallSeconds": 34.572,
-        "realtimeFactor": 0.5785028346638899,
+        "wallSeconds": 35.796,
+        "realtimeFactor": 0.5587216448765225,
         "renderStageMs": {
-          "draw": 5409,
-          "readback": 3217,
-          "upload": 23964
+          "draw": 5058,
+          "readback": 3268,
+          "upload": 26090
         },
         "bytes": 747124,
         "estimateBytes": 22252800

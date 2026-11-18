@@ -1,0 +1,1400 @@
+{
+  "ranAt": "2026-11-18T10:01:00.695Z",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v595 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "logicalCpus": 4,
+    "memoryGiB": 15.7
+  },
+  "config": {
+    "segmentThreads": 4,
+    "renderCacheBytes": 2147483648
+  },
+  "quality": "standard",
+  "editedCells": {
+    "I4b": {
+      "expected": [
+        19,
+        20
+      ],
+      "plan": [
+        19,
+        20
+      ],
+      "report": {
+        "reused": 28,
+        "rendered": 2
+      }
+    },
+    "I4c": {
+      "expected": [
+        16,
+        17
+      ],
+      "plan": [
+        16,
+        17
+      ],
+      "report": {
+        "reused": 28,
+        "rendered": 2
+      }
+    },
+    "I4d": {
+      "expected": [
+        7,
+        8,
+        9,
+        10
+      ],
+      "plan": [
+        7,
+        8,
+        9,
+        10
+      ],
+      "report": {
+        "reused": 26,
+        "rendered": 4
+      }
+    }
+  },
+  "wallMinutes": 28.3,
+  "claims": {
+    "frameEquality": "encoder deterministic (I3): decoded frame md5 lists are equal, and the per-segment RGBA hashes",
+    "soundEquality": "decoded 48 kHz stereo PCM of the incremental file equals the clean segmented file sample by sample",
+    "selfCheck": "proves the frames it checked, nothing more"
+  },
+  "measurements": {
+    "sizeRatio": 0.9436,
+    "minPsnrDb": 37.87,
+    "singlePassSeconds": 28.3,
+    "cleanSegmentedSeconds": 32.1,
+    "encoderDeterministic": true,
+    "soundOnlyExportSeconds": 4.7,
+    "incrementalOneTitleSeconds": 7.4,
+    "soundUnchangedByTitleEdit": true,
+    "halfStale": {
+      "project": "fixture B, 5 segments, R <= 8 so sample mode checks every segment once",
+      "stalePositions": "frames 30..59 of the stretch",
+      "everySegmentDetected": true,
+      "everySegmentNote": "every-segment checks the first, the last and one seeded frame of each stretch; the last frame is in the stale half, so detection is asserted",
+      "sampleRuns": 20,
+      "sampleDetections": 11,
+      "sampleDetectionRate": 0.55,
+      "perRun": [
+        true,
+        false,
+        true,
+        false,
+        true,
+        true,
+        false,
+        false,
+        true,
+        false,
+        true,
+        true,
+        false,
+        false,
+        true,
+        false,
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    "photosensitivity": {
+      "single": {
+        "method": "General and red flash thresholds of WCAG 2.3.1 (ITU-R BT.1702 family), approximated on 24 × 24 cells of the rendered frames: a stretch fails when more than a quarter of a 10-degree window (a third of the width and height) flashes more than three times in a second. A guide, not a certification.",
+        "verdict": "fail",
+        "frames": 300,
+        "ranges": [
+          {
+            "from": {
+              "value": "47",
+              "timescale": 15
+            },
+            "to": {
+              "value": "34",
+              "timescale": 5
+            },
+            "kind": "general",
+            "flashesPerSecond": 5,
+            "area": 1
+          }
+        ]
+      },
+      "incremental": {
+        "method": "General and red flash thresholds of WCAG 2.3.1 (ITU-R BT.1702 family), approximated on 24 × 24 cells of the rendered frames: a stretch fails when more than a quarter of a 10-degree window (a third of the width and height) flashes more than three times in a second. A guide, not a certification.",
+        "verdict": "fail",
+        "frames": 300,
+        "ranges": [
+          {
+            "from": {
+              "value": "47",
+              "timescale": 15
+            },
+            "to": {
+              "value": "34",
+              "timescale": 5
+            },
+            "kind": "general",
+            "flashesPerSecond": 5,
+            "area": 1
+          }
+        ]
+      }
+    },
+    "strobe": {
+      "outcome": "cacheable",
+      "cachedAfterFirstExport": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "uncacheable": [],
+      "strobeCellsReusedOnSecondExport": 4,
+      "browser": "153.0.8010.12|launch=auto"
+    },
+    "keyingTenMinutes": {
+      "wallSeconds": 0.6,
+      "keyingMs": 589,
+      "maxEventLoopLagMs": 3.7,
+      "refreshOnDemand": false
+    },
+    "ui": [
+      {
+        "lang": "he",
+        "mounted": true,
+        "ok": false,
+        "laneOk": false,
+        "typedOk": true,
+        "staleRuns": [
+          {
+            "state": "render",
+            "firstSegment": 10,
+            "segments": 2,
+            "firstFrame": 600,
+            "frames": 120
+          }
+        ],
+        "labelOk": true,
+        "label": "מטמון רינדור: 28 מתוך 30 מקטעים שמורים",
+        "popoverOk": true,
+        "staleItems": 1,
+        "lineOk": true,
+        "lineText": "נעשה שימוש חוזר ב-28 מתוך 30 מקטעיםיירנדרו מחדש 2 מקטעים (4 שניות של סרטון)זמן משוער: כ-2 שניות (נמדד בייצואים קודמים במחשב הזה)",
+        "a11y": {
+          "unnamed": [],
+          "tabStopsInLane": 1,
+          "statusRole": "status",
+          "statusLive": "polite",
+          "laneDir": "ltr"
+        },
+        "viewport": "1440x900",
+        "dir": "rtl"
+      },
+      {
+        "lang": "en",
+        "mounted": true,
+        "ok": true,
+        "laneOk": true,
+        "typedOk": true,
+        "staleRuns": [
+          {
+            "state": "render",
+            "firstSegment": 10,
+            "segments": 2,
+            "firstFrame": 600,
+            "frames": 120
+          }
+        ],
+        "labelOk": true,
+        "label": "Render cache: 28 of 30 segments kept",
+        "popoverOk": true,
+        "staleItems": 1,
+        "lineOk": true,
+        "lineText": "Reusing 28 of 30 segments2 segments will be rendered again (4 seconds of video)Estimated time: about 2 seconds (measured in earlier exports on this computer)",
+        "a11y": {
+          "unnamed": [],
+          "tabStopsInLane": 1,
+          "statusRole": "status",
+          "statusLive": "polite",
+          "laneDir": "ltr"
+        },
+        "viewport": "1440x900",
+        "dir": "ltr"
+      }
+    ],
+    "avSync": {
+      "ranAt": "2026-11-18T10:25:42.959Z",
+      "machine": {
+        "platform": "Linux 6.18.44-fc-v595 x64",
+        "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+        "logicalCpus": 4,
+        "memoryGiB": 15.7,
+        "gpu": "none"
+      },
+      "fixture": {
+        "seconds": 600,
+        "frames": 18000,
+        "size": "640x360",
+        "fps": "30/1",
+        "bytes": 7730745
+      },
+      "edit": {
+        "removedFrames": 1121,
+        "atFrame": 7207,
+        "outputFrames": 16879,
+        "thenTitleAtSeconds": 300
+      },
+      "times": {
+        "singlePassSeconds": 198.1,
+        "singlePassSource": "measured here on the same project, one run",
+        "cleanSegmentedSeconds": 215.3,
+        "incrementalSeconds": 27.5,
+        "cleanOverSingle": 1.087,
+        "incrementalOverClean": 0.128
+      },
+      "clean": {
+        "wallSeconds": 215.3,
+        "frames": 16879,
+        "bytes": 8096739,
+        "route": "server-segmented-canvas2d",
+        "renderStageMs": {
+          "draw": 20264,
+          "readback": 9414,
+          "upload": 170246
+        },
+        "report": {
+          "segFrames": 60,
+          "total": 282,
+          "reused": 0,
+          "rendered": 282,
+          "uncacheable": 0,
+          "corruptDropped": 0,
+          "notStored": 0,
+          "selfCheck": {
+            "mode": "every-segment",
+            "seed": "b7c5c05c935bc6889421301e874593bb40e9126cbdb93750850e51834e46e50f",
+            "segmentsChecked": 0,
+            "framesChecked": 0,
+            "framesPerSegment": 3,
+            "mismatches": 0
+          },
+          "encoderId": "5bdb3126af906bb8520d7096e68235133127a0aef71fabf347b47a1f83201214",
+          "engine": {
+            "bundle": "9c42894e8659820c87b280445f5b482bdcdaac6561ae4d1f0abff94932d59c6a",
+            "browser": "153.0.8010.12|launch=auto",
+            "schemaVersion": 2
+          },
+          "cacheBytesAfter": 17929448,
+          "ms": {
+            "keying": 457,
+            "selfCheck": 0,
+            "render": 200367,
+            "join": 7455
+          }
+        },
+        "sync": {
+          "flashesDetected": 563,
+          "beepsDetected": 563,
+          "maxAbsOffsetMs": 0.063,
+          "meanOffsetMs": 0.063,
+          "driftFirstThirdToLastThirdMs": 0,
+          "frameMs": 33.333
+        }
+      },
+      "incremental": {
+        "wallSeconds": 27.5,
+        "frames": 16879,
+        "bytes": 8111366,
+        "route": "server-segmented-canvas2d",
+        "renderStageMs": {
+          "draw": 5889,
+          "readback": 492,
+          "upload": 5013
+        },
+        "report": {
+          "segFrames": 60,
+          "total": 282,
+          "reused": 281,
+          "rendered": 1,
+          "uncacheable": 0,
+          "corruptDropped": 0,
+          "notStored": 0,
+          "selfCheck": {
+            "mode": "every-segment",
+            "seed": "17ea792ca853d289a33fbfac980409cadddf743814456126b692fdb5c963b141",
+            "segmentsChecked": 281,
+            "framesChecked": 843,
+            "framesPerSegment": 3,
+            "mismatches": 0
+          },
+          "encoderId": "5bdb3126af906bb8520d7096e68235133127a0aef71fabf347b47a1f83201214",
+          "engine": {
+            "bundle": "9c42894e8659820c87b280445f5b482bdcdaac6561ae4d1f0abff94932d59c6a",
+            "browser": "153.0.8010.12|launch=auto",
+            "schemaVersion": 2
+          },
+          "cacheBytesAfter": 18013103,
+          "ms": {
+            "keying": 444,
+            "selfCheck": 10968,
+            "render": 874,
+            "join": 7288
+          }
+        },
+        "sync": {
+          "flashesDetected": 563,
+          "beepsDetected": 563,
+          "maxAbsOffsetMs": 0.063,
+          "meanOffsetMs": 0.063,
+          "driftFirstThirdToLastThirdMs": 0,
+          "frameMs": 33.333
+        }
+      },
+      "pass": true,
+      "criteria": "frame count exact on both files; every flash has a beep within 1 ms (max offset); no drift (last third against first third under 1 ms); clean segmented export at most 1.25 times the single pass; incremental export at most 30 % of the clean segmented export (target 15 %)"
+    }
+  },
+  "summary": {
+    "passed": 30,
+    "failed": 2,
+    "notRun": 0,
+    "blockedAtStart": false
+  },
+  "checks": [
+    {
+      "id": "I0",
+      "name": "fixture A is the typed layout: 1801 frames, 30 segments, the first plan marks all 30 as to render",
+      "pass": true,
+      "numbers": {
+        "plan": {
+          "total": 30,
+          "cached": 0,
+          "render": 30,
+          "uncacheable": 0
+        },
+        "segFrames": 60,
+        "frames": 1801
+      }
+    },
+    {
+      "id": "I1",
+      "name": "clean segmented export: exact frame count, constant frame rate (every packet 512 ticks apart from 0), 30 segments rendered, none reused",
+      "pass": true,
+      "numbers": {
+        "route": "server-segmented-canvas2d",
+        "cfr": {
+          "frames": 1801,
+          "firstPts": 0,
+          "timeBase": "1/15360",
+          "deltas": [
+            512
+          ],
+          "constant": true,
+          "ticks": 512
+        },
+        "validationFrames": 1801,
+        "wantFrames": 1801,
+        "report": {
+          "total": 30,
+          "reused": 0,
+          "rendered": 30,
+          "notStored": 0
+        }
+      }
+    },
+    {
+      "id": "I2",
+      "name": "fast export against the single pass at one revision: every unchanged frame reads back its own barcode in both, minimum PSNR >= 38 dB, size ratio <= 1.15",
+      "pass": false,
+      "numbers": {
+        "barcodeFramesRead": 1096,
+        "plainFrames": 1096,
+        "wrongInSegmented": 0,
+        "wrongInSinglePass": 0,
+        "minPsnrDb": 37.867071,
+        "averagePsnrDb": 48.413547,
+        "sizeRatio": 0.9436046467486368,
+        "bytes": {
+          "segmented": 3231376,
+          "single": 3424502
+        }
+      }
+    },
+    {
+      "id": "I3",
+      "name": "clear and export again: the same keys come back; per-segment sha256 equality is recorded (encoderDeterministic false is allowed and changes what I5 claims)",
+      "pass": true,
+      "numbers": {
+        "segments": 30,
+        "sameKeys": true,
+        "segmentsByteEqual": 30,
+        "encoderDeterministic": true,
+        "wholeFileByteEqual": true
+      }
+    },
+    {
+      "id": "I6",
+      "name": "a sound gain change only: every segment reused and none rendered; the picture frames equal the earlier export; the sound differs where the clip is (beyond one 16-bit step only inside it; the measure fails with the window on the wrong clip)",
+      "pass": true,
+      "numbers": {
+        "plan": {
+          "total": 30,
+          "cached": 30,
+          "render": 0,
+          "uncacheable": 0
+        },
+        "report": {
+          "reused": 30,
+          "rendered": 0,
+          "selfCheck": {
+            "mode": "every-segment",
+            "seed": "73078251b5170fb76347502e4a17a7d943f85f123bd01bbbc1bdf8f57ab95d34",
+            "segmentsChecked": 30,
+            "framesChecked": 90,
+            "framesPerSegment": 3,
+            "mismatches": 0
+          },
+          "ms": {
+            "keying": 93,
+            "selfCheck": 1814,
+            "render": 13,
+            "join": 865
+          }
+        },
+        "picturesEqual": true,
+        "soundDiff": {
+          "lengthA": 11530240,
+          "lengthB": 11530240,
+          "differing": 53348,
+          "firstSample": 479811,
+          "lastSample": 724890
+        },
+        "window": {
+          "from": 477952,
+          "to": 722048
+        },
+        "inClip": {
+          "insideOverStep": 50838,
+          "outsideMaxAbs": 1,
+          "outsideFirst": 722162,
+          "outsideLast": 724890,
+          "lengthsEqual": true
+        },
+        "controlWindowOnNextClip": {
+          "insideOverStep": 566,
+          "outsideMaxAbs": 8480,
+          "outsideFirst": 479811,
+          "outsideLast": 676927,
+          "lengthsEqual": true
+        },
+        "controlFails": true,
+        "seconds": 4.664
+      }
+    },
+    {
+      "id": "I6b",
+      "name": "a sound tail (reverb on the first clip): no picture segment rendered; the tail reaches past the end of its clip; the incremental file equals a clean segmented export sample by sample and frame by frame",
+      "pass": true,
+      "numbers": {
+        "plan": {
+          "total": 30,
+          "cached": 30,
+          "render": 0,
+          "uncacheable": 0
+        },
+        "samplesDifferingAfterTheClipEnds": 118006,
+        "against": {
+          "framesEqual": true,
+          "firstDiff": -1,
+          "psnr": null,
+          "pcmEqual": true,
+          "pcm": {
+            "lengthA": 11530240,
+            "lengthB": 11530240,
+            "differing": 0,
+            "firstSample": -1,
+            "lastSample": -1
+          },
+          "keysCovered": true,
+          "rgbaEqual": true,
+          "rgbaChecked": 30,
+          "videoBytesEqual": 30,
+          "keys": 30,
+          "cleanSeconds": 31.402,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-wire2/.artifacts/incremental/i6b-clean.mp4",
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "I4",
+      "name": "one title changed: the plan marks exactly segments 10 and 11 and the export renders exactly 2 (28 reused)",
+      "pass": true,
+      "numbers": {
+        "plan": {
+          "total": 30,
+          "cached": 28,
+          "render": 2,
+          "uncacheable": 0
+        },
+        "renderSegments": [
+          10,
+          11
+        ],
+        "framesToRender": 120,
+        "report": {
+          "reused": 28,
+          "rendered": 2,
+          "selfCheck": {
+            "mode": "every-segment",
+            "seed": "3df10ac7dd097a4fa8bb3f5422e9fa49bc20d55ca46c954b5c70019258af6878",
+            "segmentsChecked": 28,
+            "framesChecked": 84,
+            "framesPerSegment": 3,
+            "mismatches": 0
+          },
+          "ms": {
+            "keying": 114,
+            "selfCheck": 2003,
+            "render": 1617,
+            "join": 1248
+          }
+        },
+        "wellFormed": {
+          "route": "server-segmented-canvas2d",
+          "cfr": {
+            "frames": 1801,
+            "firstPts": 0,
+            "timeBase": "1/15360",
+            "deltas": [
+              512
+            ],
+            "constant": true,
+            "ticks": 512
+          },
+          "validationFrames": 1801,
+          "wantFrames": 1801
+        }
+      }
+    },
+    {
+      "id": "I16",
+      "name": "undo the title change: the plan shows everything reused (the old segments are still stored); redo: everything reused again (the new ones are stored)",
+      "pass": true,
+      "numbers": {
+        "undo": 200,
+        "afterUndo": {
+          "total": 30,
+          "cached": 30,
+          "render": 0,
+          "uncacheable": 0
+        },
+        "redo": 200,
+        "afterRedo": {
+          "total": 30,
+          "cached": 30,
+          "render": 0,
+          "uncacheable": 0
+        }
+      }
+    },
+    {
+      "id": "I5",
+      "name": "the incremental file equals a clean segmented export of the same revision: stored stretches equal by per-frame RGBA hash, decoded frames equal (md5 when the encoder is deterministic, PSNR floor otherwise), decoded sound equal sample by sample",
+      "pass": true,
+      "numbers": {
+        "encoderDeterministic": true,
+        "framesEqual": true,
+        "firstDiff": -1,
+        "psnr": null,
+        "pcmEqual": true,
+        "pcm": {
+          "lengthA": 11530240,
+          "lengthB": 11530240,
+          "differing": 0,
+          "firstSample": -1,
+          "lastSample": -1
+        },
+        "keysCovered": true,
+        "rgbaEqual": true,
+        "rgbaChecked": 30,
+        "videoBytesEqual": 30,
+        "keys": 30,
+        "cleanSeconds": 32.895,
+        "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-wire2/.artifacts/incremental/i4-clean.mp4",
+        "ok": true
+      }
+    },
+    {
+      "id": "I4b",
+      "name": "a new title across a join (frames 1190..1214 straddle the line at 1200): the plan marks segments 19 and 20; the export renders exactly those and equals a clean export frame by frame and sample by sample",
+      "pass": true,
+      "numbers": {
+        "expected": [
+          19,
+          20
+        ],
+        "planned": [
+          19,
+          20
+        ],
+        "uncacheable": [],
+        "report": {
+          "reused": 28,
+          "rendered": 2,
+          "selfCheck": {
+            "mode": "every-segment",
+            "seed": "db9046a4974ed96ab6a31033f6a0167e17492e47eb60fc9ba4f7dae1f0c83d79",
+            "segmentsChecked": 28,
+            "framesChecked": 84,
+            "framesPerSegment": 3,
+            "mismatches": 0
+          }
+        },
+        "wellFormed": {
+          "route": "server-segmented-canvas2d",
+          "cfr": {
+            "frames": 1801,
+            "firstPts": 0,
+            "timeBase": "1/15360",
+            "deltas": [
+              512
+            ],
+            "constant": true,
+            "ticks": 512
+          },
+          "validationFrames": 1801,
+          "wantFrames": 1801
+        },
+        "against": {
+          "framesEqual": true,
+          "firstDiff": -1,
+          "psnr": null,
+          "pcmEqual": true,
+          "pcm": {
+            "lengthA": 11530240,
+            "lengthB": 11530240,
+            "differing": 0,
+            "firstSample": -1,
+            "lastSample": -1
+          },
+          "keysCovered": true,
+          "rgbaEqual": true,
+          "rgbaChecked": 30,
+          "videoBytesEqual": 30,
+          "keys": 30,
+          "cleanSeconds": 31.302,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-wire2/.artifacts/incremental/i4b-clean.mp4",
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "I4c",
+      "name": "an edit with time reach: a keyframe inside segment 16 whose echo trail reaches into segment 17: the plan marks exactly 16 and 17; the export renders exactly those and equals a clean export frame by frame and sample by sample",
+      "pass": true,
+      "numbers": {
+        "expected": [
+          16,
+          17
+        ],
+        "planned": [
+          16,
+          17
+        ],
+        "uncacheable": [],
+        "report": {
+          "reused": 28,
+          "rendered": 2,
+          "selfCheck": {
+            "mode": "every-segment",
+            "seed": "58d74fd32e3907b01c04e578e807513c7987ee40f0bca45c5610c721fe2a50d3",
+            "segmentsChecked": 28,
+            "framesChecked": 84,
+            "framesPerSegment": 3,
+            "mismatches": 0
+          }
+        },
+        "wellFormed": {
+          "route": "server-segmented-canvas2d",
+          "cfr": {
+            "frames": 1801,
+            "firstPts": 0,
+            "timeBase": "1/15360",
+            "deltas": [
+              512
+            ],
+            "constant": true,
+            "ticks": 512
+          },
+          "validationFrames": 1801,
+          "wantFrames": 1801
+        },
+        "against": {
+          "framesEqual": true,
+          "firstDiff": -1,
+          "psnr": null,
+          "pcmEqual": true,
+          "pcm": {
+            "lengthA": 11530240,
+            "lengthB": 11530240,
+            "differing": 0,
+            "firstSample": -1,
+            "lastSample": -1
+          },
+          "keysCovered": true,
+          "rgbaEqual": true,
+          "rgbaChecked": 30,
+          "videoBytesEqual": 30,
+          "keys": 30,
+          "cleanSeconds": 30.298,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-wire2/.artifacts/incremental/i4c-clean.mp4",
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "I4d",
+      "name": "a transition reaching in: grain on the clip the dissolve plays on from; the plan marks 7, 8, 9 and 10 (the dissolve starts in 10); the export renders exactly those and equals a clean export frame by frame and sample by sample",
+      "pass": true,
+      "numbers": {
+        "expected": [
+          7,
+          8,
+          9,
+          10
+        ],
+        "planned": [
+          7,
+          8,
+          9,
+          10
+        ],
+        "uncacheable": [],
+        "report": {
+          "reused": 26,
+          "rendered": 4,
+          "selfCheck": {
+            "mode": "every-segment",
+            "seed": "bc972f067311367bf2f26c985f99510100eaa9cb51076d2f05cc4063f4598291",
+            "segmentsChecked": 26,
+            "framesChecked": 78,
+            "framesPerSegment": 3,
+            "mismatches": 0
+          }
+        },
+        "wellFormed": {
+          "route": "server-segmented-canvas2d",
+          "cfr": {
+            "frames": 1801,
+            "firstPts": 0,
+            "timeBase": "1/15360",
+            "deltas": [
+              512
+            ],
+            "constant": true,
+            "ticks": 512
+          },
+          "validationFrames": 1801,
+          "wantFrames": 1801
+        },
+        "against": {
+          "framesEqual": true,
+          "firstDiff": -1,
+          "psnr": null,
+          "pcmEqual": true,
+          "pcm": {
+            "lengthA": 11530240,
+            "lengthB": 11530240,
+            "differing": 0,
+            "firstSample": -1,
+            "lastSample": -1
+          },
+          "keysCovered": true,
+          "rgbaEqual": true,
+          "rgbaChecked": 30,
+          "videoBytesEqual": 30,
+          "keys": 30,
+          "cleanSeconds": 31.036,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-wire2/.artifacts/incremental/i4d-clean.mp4",
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "I20",
+      "name": "a privacy-region change purges the project's stored segments at once (the cache holds none of them before the next plan), the plan then marks every segment, and the export equals a clean one",
+      "pass": true,
+      "numbers": {
+        "segmentsBefore": 30,
+        "segmentsAfterTheEdit": 0,
+        "segmentFilesLeftOnDisk": 0,
+        "bytesLeftOnDisk": 4197904,
+        "bytesAfter": 0,
+        "plan": {
+          "total": 30,
+          "cached": 0,
+          "render": 30,
+          "uncacheable": 0
+        },
+        "report": {
+          "reused": 0,
+          "rendered": 30
+        },
+        "against": {
+          "framesEqual": true,
+          "firstDiff": -1,
+          "psnr": null,
+          "pcmEqual": true,
+          "pcm": {
+            "lengthA": 11530240,
+            "lengthB": 11530240,
+            "differing": 0,
+            "firstSample": -1,
+            "lastSample": -1
+          },
+          "keysCovered": true,
+          "rgbaEqual": true,
+          "rgbaChecked": 30,
+          "videoBytesEqual": 30,
+          "keys": 30,
+          "cleanSeconds": 32.722,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-wire2/.artifacts/incremental/i20-clean.mp4",
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "I15",
+      "name": "range exports 1 frame after the grid line to 2 frames past one (and a 2-frame range) equal the same frames of the full export: 19 segments, 17 reused, 2 rendered; decoded PSNR floor and barcodes; the 2-frame range is one segment",
+      "pass": true,
+      "numbers": {
+        "range": {
+          "frames": 1141,
+          "firstPts": 0,
+          "timeBase": "1/15360",
+          "deltas": [
+            512
+          ],
+          "constant": true,
+          "ticks": 512
+        },
+        "report": {
+          "total": 19,
+          "reused": 17,
+          "rendered": 2
+        },
+        "psnr": {
+          "min": 49.004743,
+          "average": 66.179846
+        },
+        "barcodeFramesRead": 100,
+        "barcodesWrong": 0,
+        "twoFrame": {
+          "total": 1,
+          "reused": 0,
+          "rendered": 1
+        },
+        "twoPsnr": {
+          "min": 53.294567,
+          "average": 53.413181
+        },
+        "twoBarcodes": [
+          100,
+          101
+        ]
+      }
+    },
+    {
+      "id": "I13",
+      "name": "cancel at about half, then retry: the stretches finished before the cancel stay, the retry reuses them and the result equals a clean export; nothing was published by the canceled job",
+      "pass": true,
+      "numbers": {
+        "canceledAt": "rendering 912/1801",
+        "status": "canceled",
+        "segmentsKeptAfterCancel": 14,
+        "resumed": {
+          "reused": 14,
+          "rendered": 16
+        },
+        "against": {
+          "framesEqual": true,
+          "firstDiff": -1,
+          "psnr": null,
+          "pcmEqual": true,
+          "pcm": {
+            "lengthA": 11530240,
+            "lengthB": 11530240,
+            "differing": 0,
+            "firstSample": -1,
+            "lastSample": -1
+          },
+          "keysCovered": true,
+          "rgbaEqual": true,
+          "rgbaChecked": 30,
+          "videoBytesEqual": 30,
+          "keys": 30,
+          "cleanSeconds": 31.655,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-wire2/.artifacts/incremental/i13-clean.mp4",
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "I9",
+      "name": "a flipped byte in one stored video: the integrity check drops it (corruptDropped 1), it is rendered again (rendered 1, reused 29) and the output equals a clean export",
+      "pass": true,
+      "numbers": {
+        "flippedKey": "1cb2bc312f16",
+        "report": {
+          "corruptDropped": 1,
+          "reused": 29,
+          "rendered": 1
+        },
+        "against": {
+          "framesEqual": true,
+          "firstDiff": -1,
+          "psnr": null,
+          "pcmEqual": true,
+          "pcm": {
+            "lengthA": 11530240,
+            "lengthB": 11530240,
+            "differing": 0,
+            "firstSample": -1,
+            "lastSample": -1
+          },
+          "keysCovered": true,
+          "rgbaEqual": true,
+          "rgbaChecked": 30,
+          "videoBytesEqual": 30,
+          "keys": 30,
+          "cleanSeconds": 31.011,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-wire2/.artifacts/incremental/i9-clean.mp4",
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "I8",
+      "name": "a planted stale segment (the stored stretch of cells 24 under the key of cell 23, differing on every frame): the plan still says cached, every-segment fails with render_cache_self_check_failed, nothing is published, the entries this export reused are purged and the clean counter is reset; the retry succeeds and equals a clean export",
+      "pass": true,
+      "numbers": {
+        "failCode": "render_cache_self_check_failed",
+        "status": "failed",
+        "planPlanted": {
+          "total": 30,
+          "cached": 30,
+          "render": 0,
+          "uncacheable": 0
+        },
+        "outFilesBefore": 22,
+        "outFilesAfter": 22,
+        "segmentsLeftInCache": 0,
+        "cleanCounterBefore": 9,
+        "cleanCounterAfter": 0,
+        "error": "the self-check found a stored segment (frames 1380–1439) that does not match the current render at frame 1380; the 30 stored segments this export reused were removed and nothing was published",
+        "hint": "Try again: the removed segments are rendered afresh. If it fails again, turn the fast export off; the ordinary export is unchanged.",
+        "retry": "succeeded",
+        "against": {
+          "framesEqual": true,
+          "firstDiff": -1,
+          "psnr": null,
+          "pcmEqual": true,
+          "pcm": {
+            "lengthA": 11530240,
+            "lengthB": 11530240,
+            "differing": 0,
+            "firstSample": -1,
+            "lastSample": -1
+          },
+          "keysCovered": true,
+          "rgbaEqual": true,
+          "rgbaChecked": 30,
+          "videoBytesEqual": 30,
+          "keys": 30,
+          "cleanSeconds": 32.183,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-wire2/.artifacts/incremental/i8-clean.mp4",
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "I8b",
+      "name": "a stretch whose stored per-frame hashes are stale in half its frames (the second half): every-segment (first, last and one seeded frame per stretch) always includes a stale frame (the last) and fails; sample mode detection over 20 seeds is reported (expected about one in two per export on a 5-segment project, since every segment is sampled once)",
+      "pass": true,
+      "numbers": {
+        "project": "fixture B, 5 segments, R <= 8 so sample mode checks every segment once",
+        "stalePositions": "frames 30..59 of the stretch",
+        "everySegmentDetected": true,
+        "everySegmentNote": "every-segment checks the first, the last and one seeded frame of each stretch; the last frame is in the stale half, so detection is asserted",
+        "sampleRuns": 20,
+        "sampleDetections": 11,
+        "sampleDetectionRate": 0.55,
+        "perRun": [
+          true,
+          false,
+          true,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          true,
+          true
+        ]
+      }
+    },
+    {
+      "id": "I7",
+      "name": "a restart with another thread count (4 -> 2): every segment misses (the encoder id differs) and the export equals a clean one; no test seam",
+      "pass": true,
+      "numbers": {
+        "threads": {
+          "was": 4,
+          "now": 2
+        },
+        "plan": {
+          "total": 30,
+          "cached": 0,
+          "render": 30,
+          "uncacheable": 0
+        },
+        "encoderIds": {
+          "before": "a4caffb2fb6cf542a795031cca9b8ba9eea92a4927c7bdeeef2534ca14e74f66",
+          "after": "1c772c1d845f92d7316aab5e079585a97c0c8c868abfd1e0980af8ab69109f7b"
+        },
+        "against": {
+          "framesEqual": true,
+          "firstDiff": -1,
+          "psnr": null,
+          "pcmEqual": true,
+          "pcm": {
+            "lengthA": 11530240,
+            "lengthB": 11530240,
+            "differing": 0,
+            "firstSample": -1,
+            "lastSample": -1
+          },
+          "keysCovered": true,
+          "rgbaEqual": true,
+          "rgbaChecked": 30,
+          "videoBytesEqual": 30,
+          "keys": 30,
+          "cleanSeconds": 33.005,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-wire2/.artifacts/incremental/i7-clean.mp4",
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "I11",
+      "name": "a cap of 70 % of the full cache (5101644 bytes): the cache stays within the cap after each export and at its high-water mark; the oldest stored stretches are evicted first (every evicted stretch is older than every surviving one of the first range)",
+      "pass": true,
+      "numbers": {
+        "capBytes": 5101644,
+        "fullCacheBytes": 7288063,
+        "used": 5048797,
+        "highWater": 5067315,
+        "range1Segments": 15,
+        "evicted": 8,
+        "survivedFromRange1": 7,
+        "lruRespected": true,
+        "notStored": [
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "I11c",
+      "name": "a cap smaller than one export (2186418 bytes): the export succeeds with notStored > 0 and the cache never passes the cap; the file equals the full export",
+      "pass": true,
+      "numbers": {
+        "capBytes": 2186418,
+        "notStored": 22,
+        "used": 2173307,
+        "highWater": 2173307,
+        "framesEqual": true,
+        "minPsnr": null,
+        "soundEqual": true
+      }
+    },
+    {
+      "id": "I11d",
+      "name": "a tight storage ceiling: the data directory never passes it at any 50 ms sample; the export succeeds, or stops with a typed 507 and nothing published; an impossible ceiling gives the typed 507 and nothing published",
+      "pass": true,
+      "numbers": {
+        "ceiling": 144202451,
+        "startBytes": 115392595,
+        "maxSampledBytes": 115310195,
+        "databaseLogBytesAtThatSample": 115392,
+        "tightOutcome": "failed",
+        "tightCode": "storage_quota_exceeded",
+        "impossibleOutcome": "failed",
+        "impossibleCode": "storage_quota_exceeded"
+      }
+    },
+    {
+      "id": "I11b",
+      "name": "the cache is full and the data directory is within 100 kB of its ceiling: an upload of a file larger than that succeeds because the cache gives room",
+      "pass": true,
+      "numbers": {
+        "ceiling": 126845569,
+        "fileBytes": 337097,
+        "cacheBytesBefore": 7288059,
+        "cacheBytesAfter": 6405776,
+        "uploadError": ""
+      }
+    },
+    {
+      "id": "I10",
+      "name": "fixture B (a flashing stretch from 3.5 s to 6.5 s across the joins at 4 s and 6 s) with an edit inside 4-6 s: the photosensitivity report of the fast export deep-equals the single pass report of the same revision, the stretch is found, one segment was rendered",
+      "pass": true,
+      "numbers": {
+        "deepEqual": true,
+        "verdict": "fail",
+        "range": {
+          "fromSeconds": 3.1333333333333333,
+          "toSeconds": 6.8,
+          "kind": "general",
+          "flashesPerSecond": 5,
+          "area": 1
+        },
+        "incrementalReport": {
+          "reused": 4,
+          "rendered": 1
+        },
+        "singleVerdict": "fail",
+        "incVerdict": "fail",
+        "frames": [
+          300,
+          300
+        ]
+      }
+    },
+    {
+      "id": "I3b",
+      "name": "a snow overlay (a speed limit of Infinity in its graph) keys without error: after one export every segment is cached, none unkeyable, and a second export reuses all",
+      "pass": true,
+      "numbers": {
+        "plan": {
+          "total": 4,
+          "cached": 4,
+          "render": 0,
+          "uncacheable": 0
+        },
+        "uncacheable": [],
+        "second": {
+          "reused": 4,
+          "rendered": 0
+        }
+      }
+    },
+    {
+      "id": "I19b",
+      "name": "a GPU effect (a strobe: Infinity before its first flash): never unkeyable; either cacheable on the software adapter or uncacheable for the stated GPU reason; the snow stretches stay cached; engine.browser carries the launch mode; what the strobe did to reuse is recorded",
+      "pass": true,
+      "numbers": {
+        "cached": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "uncacheable": [],
+        "browser": "153.0.8010.12|launch=auto",
+        "secondExport": {
+          "reused": 4,
+          "rendered": 0,
+          "uncacheable": 0
+        }
+      }
+    },
+    {
+      "id": "I14",
+      "name": "keying a ten-minute project (18000 frames, 300 segments): seconds and the maximum event-loop lag are reported; the lag stays under 100 ms (from 2 s of keying the lane refreshes on demand only; recorded)",
+      "pass": true,
+      "numbers": {
+        "wallSeconds": 0.6,
+        "keyingMs": 589,
+        "maxEventLoopLagMs": 3.7,
+        "refreshOnDemand": false,
+        "segments": {
+          "total": 300,
+          "cached": 0,
+          "render": 300,
+          "uncacheable": 0
+        }
+      }
+    },
+    {
+      "id": "I8c",
+      "name": "the comparator catches a key that ignores one input (the title text): the engine's real keys of a frame under the title differ across the text edit and a frame away from it keeps its key; the frame comparator, given the pre-edit file as a stand-in for what such a key would publish, reports it unequal to the clean export, and only inside the title's frames",
+      "pass": true,
+      "numbers": {
+        "realDiffer": true,
+        "awayEqual": true,
+        "editedText": "כותרת חדשה",
+        "comparator": {
+          "stale": true,
+          "differingFrames": 120,
+          "first": 600,
+          "last": 719,
+          "staleFileVerdict": true
+        }
+      }
+    },
+    {
+      "id": "I18",
+      "name": "UI: the sheet numbers equal the plan, the lane shows the two stale segments as one stale stretch, a11y 0 findings in Hebrew and English (screenshots of the sheet line and the lane at 1440 px in RTL in docs/evidence)",
+      "pass": false,
+      "numbers": [
+        {
+          "lang": "he",
+          "mounted": true,
+          "ok": false,
+          "laneOk": false,
+          "typedOk": true,
+          "staleRuns": [
+            {
+              "state": "render",
+              "firstSegment": 10,
+              "segments": 2,
+              "firstFrame": 600,
+              "frames": 120
+            }
+          ],
+          "labelOk": true,
+          "label": "מטמון רינדור: 28 מתוך 30 מקטעים שמורים",
+          "popoverOk": true,
+          "staleItems": 1,
+          "lineOk": true,
+          "lineText": "נעשה שימוש חוזר ב-28 מתוך 30 מקטעיםיירנדרו מחדש 2 מקטעים (4 שניות של סרטון)זמן משוער: כ-2 שניות (נמדד בייצואים קודמים במחשב הזה)",
+          "a11y": {
+            "unnamed": [],
+            "tabStopsInLane": 1,
+            "statusRole": "status",
+            "statusLive": "polite",
+            "laneDir": "ltr"
+          },
+          "viewport": "1440x900",
+          "dir": "rtl"
+        },
+        {
+          "lang": "en",
+          "mounted": true,
+          "ok": true,
+          "laneOk": true,
+          "typedOk": true,
+          "staleRuns": [
+            {
+              "state": "render",
+              "firstSegment": 10,
+              "segments": 2,
+              "firstFrame": 600,
+              "frames": 120
+            }
+          ],
+          "labelOk": true,
+          "label": "Render cache: 28 of 30 segments kept",
+          "popoverOk": true,
+          "staleItems": 1,
+          "lineOk": true,
+          "lineText": "Reusing 28 of 30 segments2 segments will be rendered again (4 seconds of video)Estimated time: about 2 seconds (measured in earlier exports on this computer)",
+          "a11y": {
+            "unnamed": [],
+            "tabStopsInLane": 1,
+            "statusRole": "status",
+            "statusLive": "polite",
+            "laneDir": "ltr"
+          },
+          "viewport": "1440x900",
+          "dir": "ltr"
+        }
+      ]
+    },
+    {
+      "id": "I17",
+      "name": "delete a project: the segments only it used are gone, the ones another project shares stay; deleting the last project that uses them empties the cache",
+      "pass": true,
+      "numbers": {
+        "keysA": 30,
+        "keysOnlyY": 30,
+        "sharedKeys": 30,
+        "reportReused": 0,
+        "afterDeletingY": 30,
+        "afterDeletingA": 0,
+        "deleteStatus": [
+          200,
+          200
+        ]
+      }
+    },
+    {
+      "id": "I12",
+      "name": "ten-minute A/V sync on the fast export route: max offset <= 1 ms and no drift on the clean segmented file and on the incremental file; wall seconds of the single pass, the clean segmented export (<= 1.25x the single pass) and the incremental export (<= 30 % of clean, target 15 %)",
+      "pass": true,
+      "numbers": {
+        "exitCode": 0,
+        "clean": {
+          "flashesDetected": 563,
+          "beepsDetected": 563,
+          "maxAbsOffsetMs": 0.063,
+          "meanOffsetMs": 0.063,
+          "driftFirstThirdToLastThirdMs": 0,
+          "frameMs": 33.333
+        },
+        "incremental": {
+          "flashesDetected": 563,
+          "beepsDetected": 563,
+          "maxAbsOffsetMs": 0.063,
+          "meanOffsetMs": 0.063,
+          "driftFirstThirdToLastThirdMs": 0,
+          "frameMs": 33.333
+        },
+        "times": {
+          "singlePassSeconds": 198.1,
+          "singlePassSource": "measured here on the same project, one run",
+          "cleanSegmentedSeconds": 215.3,
+          "incrementalSeconds": 27.5,
+          "cleanOverSingle": 1.087,
+          "incrementalOverClean": 0.128
+        },
+        "cleanOverSingle": 1.087,
+        "incrementalOverClean": 0.128,
+        "targetMet": true,
+        "selfCheckSeconds": 10968,
+        "reusedRendered": {
+          "reused": 281,
+          "rendered": 1
+        }
+      }
+    },
+    {
+      "id": "I19",
+      "name": "regressions: proof:phase4 and the parity suite (single-pass route untouched)",
+      "pass": true,
+      "numbers": {
+        "proof:phase4 exit code": 0,
+        "conformance:parity exit code": 0
+      }
+    }
+  ]
+}
