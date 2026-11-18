@@ -12,10 +12,13 @@ import type { Asset } from '@pulseframe/core';
 import { countVideoPackets, ffprobe } from './ingest.ts';
 import type { Store } from './store.ts';
 
-export type DerivativeKind = 'thumbnails' | 'waveform' | 'proxy';
+/** 'moments' (wave 5 family film, ADR-0026) is made outside the queue by the moments job and stored with put(); it is never queued on import. */
+export type DerivativeKind = 'thumbnails' | 'waveform' | 'proxy' | 'moments';
+/** Kinds the queue makes on import (moments is not one). */
+export const QUEUED_DERIVATIVE_KINDS: readonly DerivativeKind[] = ['thumbnails', 'waveform', 'proxy'];
 export interface DerivativeRow { assetHash: string; kind: DerivativeKind; status: 'queued' | 'running' | 'ready' | 'failed' | 'not-applicable'; blobHash: string | null; bytes: number | null; mimeType: string | null; meta: Record<string, unknown> | null; error: string | null; updatedAt: string }
 
-const KINDS: DerivativeKind[] = ['thumbnails', 'waveform', 'proxy'];
+const KINDS: readonly DerivativeKind[] = QUEUED_DERIVATIVE_KINDS;
 const FFMPEG_TIMEOUT_MS = 10 * 60_000;
 /** Tile height of the thumbnail sprite (a 16-bit barcode is still readable at this size). */
 export const THUMB_TILE_HEIGHT = 90;
@@ -61,7 +64,7 @@ export class Derivatives {
   ensure(asset: Asset): DerivativeRow[] {
     if (asset.kind === 'lut') return []; // a colour table has no picture or sound to derive from
     const hash = asset.contentHash;
-    const applicable: Record<DerivativeKind, boolean> = { thumbnails: asset.kind === 'video', proxy: asset.kind === 'video', waveform: asset.kind !== 'image' && !!asset.audio };
+    const applicable: Record<DerivativeKind, boolean> = { thumbnails: asset.kind === 'video', proxy: asset.kind === 'video', waveform: asset.kind !== 'image' && !!asset.audio, moments: false };
     for (const kind of KINDS) {
       if (this.get(hash, kind)) continue;
       if (!applicable[kind]) this.write(hash, kind, { status: 'not-applicable' });
@@ -71,6 +74,19 @@ export class Derivatives {
       }
     }
     return this.list(hash);
+  }
+
+  /**
+   * Store a derivative made outside the queue (the moments job, ADR-0026): interns `file` (moved into the content-addressed
+   * store; the caller's temp file is gone afterwards) and writes the row 'ready' with `meta`. Replaces an earlier row of the kind.
+   * Refused for the kinds the queue makes, so a job cannot overwrite a thumbnail sheet, waveform or proxy.
+   */
+  async put(assetHash: string, kind: DerivativeKind, file: string, mime: string, meta: Record<string, unknown>): Promise<DerivativeRow> {
+    if (KINDS.includes(kind)) throw new Error(`derivative kind ${kind} is made by the queue, not stored with put`);
+    if (!/^sha256:[0-9a-f]{64}$/.test(assetHash)) throw new Error('put: not a content hash');
+    const { blobHash, bytes } = await this.intern(file, mime);
+    this.write(assetHash, kind, { status: 'ready', blobHash, bytes, mimeType: mime, meta });
+    return this.get(assetHash, kind)!;
   }
 
   /** After a restart: rows left running go back to queued and everything queued is processed. */

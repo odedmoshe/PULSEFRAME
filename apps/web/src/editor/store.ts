@@ -24,7 +24,7 @@ import { ImportsStore, type ImportJobEvent, type ImportsState } from './imports.
 import { dropApi, importsApi } from './imports.api.ts';
 import type { PhoneDropProblem } from './phoneDrop.strings.ts';
 import { RefreshPolicy } from './renderCache.logic.ts';
-import type { DropCodeView, DropPublicView } from '@pulseframe/core';
+import type { DropCodeView, DropPublicView, FamilyFilmParams, FamilyFilmPlanView, FilmExclusion, FilmPick } from '@pulseframe/core';
 
 export type SaveState = 'save.saved' | 'save.saving' | 'save.offline' | 'save.conflict';
 export type ProviderInfo = Awaited<ReturnType<typeof api.capabilities>>;
@@ -131,7 +131,17 @@ export interface EditorState {
   dropProblem: PhoneDropProblem | null;
   /** Blocker codes of the last segment plan (422 render_blocked): the sheet's switch says why the fast export is unavailable. */
   planBlockers: string[];
+  /** The family film dialog (ADR-0026) is open. Session state only. */
+  filmOpen: boolean;
+  /** What the dialog was opened with: an event's files or the library selection (openFilm). */
+  filmSource: FilmSource | null;
+  /** The film applied from this tab, for the film bar (undo, other moments, another length, why these clips). Session state only; after a reload the document's run (recipeId template:tpl.family-film) is used. */
+  filmRun: FilmRunInfo | null;
 }
+/** What the family film dialog starts from (FamilyFilmEntry → editor.openFilm). */
+export interface FilmSource { assetIds: string[]; event: FamilyFilmParams['event'] }
+/** The film run this tab made (the film bar's and FilmWhy's state). */
+export interface FilmRunInfo { runId: string; params: FamilyFilmParams; picks: FilmPick[]; excluded: FilmExclusion[]; alternatives: FamilyFilmPlanView['alternatives'] }
 /** localStorage key of the «ייצוא מהיר» switch. */
 export const FAST_EXPORT_KEY = 'pf.fastExport';
 const readFastExport = () => { try { return localStorage.getItem(FAST_EXPORT_KEY) === '1'; } catch { return false; } };
@@ -202,6 +212,7 @@ export class Editor {
     cutClipId: null, loupe: false, inspectorTab: null, panelRequest: null, gallery: null, stageNote: null, notice: null, exportSheet: 0,
     segmentPlan: { status: 'off', view: null, revision: null }, fastExport: readFastExport(), planOptions: {}, // the export sheet's first pick (the computer destination: high quality, whose options are all defaults)
     imports: { local: [], jobs: [], room: null, skipped: null }, phoneDropOpen: false, drop: null, dropLive: null, dropProblem: null, planBlockers: [],
+    filmOpen: false, filmSource: null, filmRun: null,
   };
   /**
    * The import queue's editor side (ADR-0023): uploads one at a time to POST …/imports, cards from the job events, placement of
@@ -572,6 +583,10 @@ export class Editor {
   }
 
   // ---------- the phone drop (ADR-0023): the owner's dialog ----------
+  /** The family film dialog (ADR-0026): open it on an event's files or a selection; close it; remember the run this tab made. */
+  openFilm(source: FilmSource) { this.set({ filmOpen: true, filmSource: { assetIds: [...source.assetIds], event: source.event ?? null } }); }
+  closeFilm() { this.set({ filmOpen: false }); }
+  setFilmRun(run: FilmRunInfo | null) { this.set({ filmRun: run }); }
   openPhoneDrop() { this.set({ phoneDropOpen: true }); }
   hidePhoneDrop() { this.set({ phoneDropOpen: false }); }
   /** The live code of this project, if any (after a reload; a code never survives a server restart: then it is gone, said so). */

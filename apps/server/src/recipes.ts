@@ -3,7 +3,8 @@
  * (replace what the last run created and nobody touched; keep what was edited by hand).
  */
 import * as T from '@pulseframe/time';
-import { timeOriginSeconds, findClip, fingerprint, planRecipe, RecipeError, type PlanContext, type RecipePlan, type TimeRange } from '@pulseframe/core';
+import { FAMILY_FILM_RECIPE_ID, FAMILY_FILM_RUN_RECIPE_ID, timeOriginSeconds, findClip, fingerprint, planRecipe, RecipeError, type PlanContext, type RecipePlan, type TimeRange } from '@pulseframe/core';
+import { applyFamilyFilmFor, planFamilyFilmFor, regenerateFamilyFilmFor } from './familyFilm.ts';
 import type { Principal } from './auth.ts';
 import { detectSilences, heavy } from './analysis.ts';
 import type { Governance } from './governance.ts';
@@ -27,13 +28,24 @@ async function context(store: Store, projectId: string, recipeId: string, params
 }
 const view = (revision: number, plan: RecipePlan) => ({ revision, recipeId: plan.recipeId, params: plan.params, steps: plan.steps, basis: plan.basis, operations: plan.ops.length, alternatives: plan.alternatives, method: 'rule-based plan from project data; no language model', note: 'Nothing was changed. Apply it to make these edits as one undoable step.' });
 
-export async function planRecipeFor(store: Store, projectId: string, recipeId: string, params: unknown) {
+/**
+ * The family film (ADR-0026) is listed as recipe 'family-film' but planned by its own planner and applied through apply_template
+ * (familyFilm.ts); its runs are 'template:tpl.family-film'. The recipe routes and tools send it there. Planning it needs the
+ * caller's governance and credential (people rule, ADR-0021), which the routes and tools pass.
+ */
+const needsCaller = (gov?: Governance, principal?: Principal): { gov: Governance; principal: Principal } => {
+  if (!gov || !principal) throw new ApiError(500, 'internal_error', 'the family film needs the caller\'s credential to be planned');
+  return { gov, principal };
+};
+export async function planRecipeFor(store: Store, projectId: string, recipeId: string, params: unknown, gov?: Governance, principal?: Principal) {
+  if (recipeId === FAMILY_FILM_RECIPE_ID) { const c = needsCaller(gov, principal); return planFamilyFilmFor(store, c.gov, c.principal, projectId, params); }
   const p = store.getProject(projectId);
   const ctx = await context(store, projectId, recipeId, params);
   return view(p.revision, wrap(() => planRecipe(p.doc, recipeId, params, ctx)));
 }
 
 export async function applyRecipe(store: Store, gov: Governance, principal: Principal, projectId: string, recipeId: string, params: unknown, expectedRevision?: number) {
+  if (recipeId === FAMILY_FILM_RECIPE_ID) return applyFamilyFilmFor(store, gov, principal, projectId, params, expectedRevision);
   const p = store.getProject(projectId);
   const ctx = await context(store, projectId, recipeId, params);
   const plan = wrap(() => planRecipe(p.doc, recipeId, params, ctx));
@@ -44,8 +56,9 @@ export async function applyRecipe(store: Store, gov: Governance, principal: Prin
 
 export async function regenerateRecipe(store: Store, gov: Governance, principal: Principal, projectId: string, runId: string, newParams?: unknown) {
   const p = store.getProject(projectId);
-  const run = p.doc.recipeRuns?.[runId];
+  const run = p.doc.recipeRuns && Object.hasOwn(p.doc.recipeRuns, runId) ? p.doc.recipeRuns[runId] : undefined;
   if (!run) throw new ApiError(404, 'not_found', `recipe run ${runId} not found`, { runId });
+  if (run.recipeId === FAMILY_FILM_RUN_RECIPE_ID) return regenerateFamilyFilmFor(store, gov, principal, projectId, runId, newParams);
   // "Protected" = a clip the run created whose content no longer matches what the run left (compared by content fingerprint,
   // so the answer does not depend on history: an undo that restores a hand edit restores its protection too).
   const live = run.createdIds.filter((id) => !!findClip(p.doc, id));
