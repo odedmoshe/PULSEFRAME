@@ -6,6 +6,8 @@
  * What changes light (one source of truth, wave5-decisions.md): an effect changes light unless EVERY numeric parameter it has may
  * follow the beat (effects.ts modulatableParams — the classification the curve rule, keyframeChannels.ts isLightChannel, and the
  * beat modulators already use; default-deny, so an effect added later changes light until someone lists it in MODULATABLE). The
+ * rule reads that classification through a FlashTable FROZEN per version of apply_take (FLASH_TABLE_V1), not live, so a
+ * stored take replays to the same answer; a reclassification ships as a new apply_take version. The
  * strobe (light.strobe) and the light transitions (TransitionDef.light) are the light the flash schedule owns
  * (packages/engine/src/strobeSchedule.ts); this module reads the document only (core cannot import the engine).
  *
@@ -24,23 +26,45 @@
  */
 import * as T from '@pulseframe/time';
 import type { Clip, ProjectDocument } from './schema.ts';
-import { animatableParams, EFFECTS, findEffect, modulatableParams, transitionDef } from './effects.ts';
+import { animatableParams, EFFECTS, findEffect, modulatableParams, TRANSITIONS } from './effects.ts';
 import { flashGapFrames } from './flashSafety.ts';
 
-/** Whether an effect type changes light (see the header). Unknown types change light (the stricter answer). */
+/**
+ * The tables the rule reads, FROZEN per version of apply_take (a stored take must replay to the same answer whatever later
+ * releases do to MODULATABLE, the effect parameter schemas or the transition catalogue). A reclassification ships as a new
+ * version of apply_take with a new table; the version-1 literal is never edited (performContracts.test.ts pins it and checks it
+ * against liveFlashTable, which is only how a new version's table is worked out).
+ * - neutralEffects: the effect types that change no light (every numeric parameter may follow the beat). Every other type,
+ *   unknown types included, changes light; light.strobe is light.
+ * - lightTransitions: the transition types whose frames are light (TransitionDef.light).
+ */
+export interface FlashTable { readonly version: number; readonly neutralEffects: readonly string[]; readonly lightTransitions: readonly string[] }
+export const FLASH_TABLE_V1: FlashTable = Object.freeze({
+  version: 1,
+  neutralEffects: Object.freeze(['blur.gaussian', 'distort.fisheye', 'stylize.pixelate']),
+  lightTransitions: Object.freeze(['film-burn', 'light-leak']),
+});
+/** The table the current catalogue gives (the derivation; never read by apply_take). */
+export function liveFlashTable(version: number): FlashTable {
+  return { version, neutralEffects: EFFECTS.map((e) => e.id).filter((id) => !effectChangesLight(id)).sort(), lightTransitions: TRANSITIONS.filter((t) => t.light).map((t) => t.id).sort() };
+}
+
+/** Whether an effect type changes light by the LIVE catalogue (see the header); the derivation of a new FlashTable. Unknown types change light. */
 export function effectChangesLight(type: string): boolean {
   if (type === 'light.strobe' || !findEffect(type)) return true;
   const mod = modulatableParams(type);
   return mod.length === 0 || animatableParams(type).some((p) => !mod.includes(p));
 }
-/** The effect types that change no light, worked out from the catalogue (performContracts.test.ts pins the list, so a change is a decision). */
-export const FLASH_NEUTRAL_EFFECTS: readonly string[] = EFFECTS.map((e) => e.id).filter((id) => !effectChangesLight(id));
+/** Whether an effect type changes light by a frozen table (what the rule reads). */
+export const effectChangesLightIn = (table: FlashTable, type: string): boolean => type === 'light.strobe' || !table.neutralEffects.includes(type);
+/** The effect types that change no light under version 1 (the frozen list). */
+export const FLASH_NEUTRAL_EFFECTS: readonly string[] = FLASH_TABLE_V1.neutralEffects;
 export type FlashClass = 'none' | 'colour' | 'light';
 /** The class of a set of effects (an adjustment's, or a pad's): 'light' with an enabled strobe, else 'colour' when any enabled effect changes light, else 'none'. */
-export function flashClassOf(effects: readonly { type: string; enabled?: boolean }[]): FlashClass {
+export function flashClassOf(effects: readonly { type: string; enabled?: boolean }[], table: FlashTable = FLASH_TABLE_V1): FlashClass {
   const on = effects.filter((e) => e.enabled !== false);
   if (on.some((e) => e.type === 'light.strobe')) return 'light';
-  return on.some((e) => effectChangesLight(e.type)) ? 'colour' : 'none';
+  return on.some((e) => effectChangesLightIn(table, e.type)) ? 'colour' : 'none';
 }
 
 const firstFrameAt = (t: T.RationalTime, rate: T.Rate) => { const i = T.frameIndexAt(t, rate); return T.isFrameAligned(t, rate) ? i : i + 1; };
@@ -52,7 +76,7 @@ export interface LightRange { clipId: string; from: number; to: number; kind: 's
 export interface LightChange { clipId: string; frame: number; frames: number; kind: 'adjustment' | 'picture' | 'title' }
 
 /** Step 1 of the rule: the light ranges of a sequence. */
-export function lightRanges(doc: ProjectDocument, sequenceId = doc.mainSequenceId): LightRange[] {
+export function lightRanges(doc: ProjectDocument, sequenceId = doc.mainSequenceId, table: FlashTable = FLASH_TABLE_V1): LightRange[] {
   const seq = Object.hasOwn(doc.sequences, sequenceId) ? doc.sequences[sequenceId] : undefined;
   const rate = doc.settings.frameRate, out: LightRange[] = [];
   for (const track of seq?.tracks ?? []) {
@@ -62,21 +86,21 @@ export function lightRanges(doc: ProjectDocument, sequenceId = doc.mainSequenceI
       const { from, to } = framesOf(c, rate);
       if ((c.effects ?? []).some((e) => e.type === 'light.strobe' && e.enabled !== false) && to > from) out.push({ clipId: c.id, from, to, kind: 'strobe' });
       const tr = c.type === 'media' && track.kind === 'video' ? c.transition : undefined;
-      if (tr && transitionDef(tr.type)?.light) out.push({ clipId: c.id, from, to: Math.min(to, from + tr.frames), kind: 'transition' });
+      if (tr && table.lightTransitions.includes(tr.type)) out.push({ clipId: c.id, from, to: Math.min(to, from + tr.frames), kind: 'transition' });
     }
   }
   return out.sort((a, b) => a.from - b.from || a.to - b.to || (a.clipId < b.clipId ? -1 : a.clipId > b.clipId ? 1 : 0));
 }
 
 /** Step 2 of the rule: the changes of light of a sequence; `made` names the clips the take made (their pictures and titles count too). */
-export function lightChanges(doc: ProjectDocument, made: ReadonlySet<string>, sequenceId = doc.mainSequenceId): LightChange[] {
+export function lightChanges(doc: ProjectDocument, made: ReadonlySet<string>, sequenceId = doc.mainSequenceId, table: FlashTable = FLASH_TABLE_V1): LightChange[] {
   const seq = Object.hasOwn(doc.sequences, sequenceId) ? doc.sequences[sequenceId] : undefined;
   const rate = doc.settings.frameRate, out: LightChange[] = [];
   for (const track of seq?.tracks ?? []) {
     if (track.kind === 'audio') continue;
     for (const c of track.clips) {
       const { from, to } = framesOf(c, rate);
-      if (c.type === 'adjustment') { if (flashClassOf(c.effects ?? []) === 'colour') out.push({ clipId: c.id, frame: from, frames: to - from, kind: 'adjustment' }); }
+      if (c.type === 'adjustment') { if (flashClassOf(c.effects ?? [], table) === 'colour') out.push({ clipId: c.id, frame: from, frames: to - from, kind: 'adjustment' }); }
       else if (made.has(c.id) && c.type === 'text') out.push({ clipId: c.id, frame: from, frames: to - from, kind: 'title' });
       else if (made.has(c.id) && c.type === 'media' && track.kind === 'video') out.push({ clipId: c.id, frame: from, frames: to - from, kind: 'picture' });
     }
@@ -93,10 +117,10 @@ export function lightChanges(doc: ProjectDocument, made: ReadonlySet<string>, se
  * Also true of a strobe adjustment the take made that sits within the gap of a change of light: the light claims its range first.
  */
 export interface FlashBreach { clipId: string; frame: number; since: number; gapFrames: number; why: 'gap' | 'light' | 'short'; other?: string }
-export function takeFlashBreach(doc: ProjectDocument, sequenceId: string, madeClipIds: readonly string[]): FlashBreach | null {
+export function takeFlashBreach(doc: ProjectDocument, sequenceId: string, madeClipIds: readonly string[], table: FlashTable = FLASH_TABLE_V1): FlashBreach | null {
   const made = new Set(madeClipIds);
   const gap = flashGapFrames(doc.settings.frameRate.num / doc.settings.frameRate.den);
-  const changes = lightChanges(doc, made, sequenceId), ranges = lightRanges(doc, sequenceId);
+  const changes = lightChanges(doc, made, sequenceId, table), ranges = lightRanges(doc, sequenceId, table);
   const breaches: FlashBreach[] = [];
   for (const c of changes) {
     if (!made.has(c.clipId)) continue;

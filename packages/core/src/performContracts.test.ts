@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  applyTransaction, createProject, EFFECTS, effectChangesLight, flashClassOf, flashGapFrames, FLASH_NEUTRAL_EFFECTS, getOp, lightChanges, lightRanges, OpError,
+  applyTransaction, createProject, EFFECTS, effectChangesLight, flashClassOf, flashGapFrames, FLASH_NEUTRAL_EFFECTS, FLASH_TABLE_V1, getOp, lightChanges, lightRanges, liveFlashTable, MODULATABLE, OpError, TRANSITIONS,
   PERFORM_RECIPE_ID, PERFORM_REFUSALS, TAKE_STEP_OPS, takeFlashBreach, validateProject, ApplyTakeArgsSchema, TakeRequestSchema, PadBankSchema, MoveSpecSchema, PAD_COUNT,
   type ApplyTakeArgs, type OpCall, type ProjectDocument, type TemplateStep,
 } from './index.ts';
@@ -31,6 +31,25 @@ describe('what changes light (one source of truth: effects.ts modulatableParams)
     expect([...FLASH_NEUTRAL_EFFECTS].sort()).toEqual(['blur.gaussian', 'distort.fisheye', 'stylize.pixelate']);
     expect(effectChangesLight('light.strobe')).toBe(true);
     expect(effectChangesLight('no.such-effect')).toBe(true);
+  });
+  it('apply_take version 1 judges with the FROZEN version-1 tables, so a stored take replays whatever the catalogue says later', () => {
+    // the literal is the decision; the live derivation is only how a new version would be worked out
+    expect(FLASH_TABLE_V1).toEqual({ version: 1, neutralEffects: ['blur.gaussian', 'distort.fisheye', 'stylize.pixelate'], lightTransitions: ['film-burn', 'light-leak'] });
+    expect(Object.isFrozen(FLASH_TABLE_V1) && Object.isFrozen(FLASH_TABLE_V1.neutralEffects) && Object.isFrozen(FLASH_TABLE_V1.lightTransitions)).toBe(true);
+    // when this fails, the catalogue reclassified an effect or transition: leave the v1 literal alone and ship apply_take version 2 with a new table
+    expect(liveFlashTable(1)).toEqual(FLASH_TABLE_V1);
+    expect(TRANSITIONS.filter((t) => t.light).map((t) => t.id).sort()).toEqual([...FLASH_TABLE_V1.lightTransitions]);
+    // three 2-frame blur hits 3 frames apart: neutral under v1, so kept; still kept when the live table changes under the op
+    const steps = [adj(30, 2, 'blur.gaussian'), adj(33, 2, 'blur.gaussian'), adj(36, 2, 'blur.gaussian')];
+    const before = applyTransaction(base(), [take(steps)], { idSeed: 'frz_', actor: 'u', allowInternal: true }).doc;
+    const table = MODULATABLE as Record<string, readonly string[]>;
+    const saved = table['blur.gaussian'];
+    try {
+      table['blur.gaussian'] = [];
+      expect(effectChangesLight('blur.gaussian')).toBe(true); // the live classification moved
+      const after = applyTransaction(base(), [take(steps)], { idSeed: 'frz_', actor: 'u', allowInternal: true }).doc;
+      expect(JSON.stringify(after)).toBe(JSON.stringify(before));
+    } finally { table['blur.gaussian'] = saved!; }
   });
   it('flashClassOf: a strobe is light, any light-changing effect is colour, disabled effects do not count', () => {
     expect(flashClassOf([{ type: 'blur.gaussian' }, { type: 'stylize.pixelate' }])).toBe('none');

@@ -19,7 +19,7 @@ import { resolveBindings } from './templateOps.ts';
 import type { ProjectDocument } from './schema.ts';
 import { ApplyTakeArgsSchema, MAX_TAKE_TRACKS, PERFORM_RECIPE_ID, PERFORM_TAKE_VERSION, TAKE_STEP_OPS, type ApplyTakeOutput, type PlannedTake, type TakeRequest } from './performContract.ts';
 import { PERFORM_REFUSALS as R } from './performRefusals.ts';
-import { takeFlashBreach } from './performFlash.ts';
+import { FLASH_TABLE_V1, takeFlashBreach } from './performFlash.ts';
 import { performGrid, planPerformance, quantiseTaps } from './moves.ts';
 
 const STEP_OPS: ReadonlySet<string> = new Set(TAKE_STEP_OPS);
@@ -64,7 +64,8 @@ defineOp({
       collectCreated(out, created);
       if (step.bind !== undefined) bound.set(step.bind, out);
     }
-    const breach = takeFlashBreach(d, sequenceId, created);
+    // version 1 of this op judges with the version-1 table, frozen, so a stored take replays the same (performFlash.ts FlashTable)
+    const breach = takeFlashBreach(d, sequenceId, created, FLASH_TABLE_V1);
     if (breach) {
       const details = { reason: 'flash_limit', why: breach.why, clipId: breach.clipId, frame: breach.frame, since: breach.since, gapFrames: breach.gapFrames, ...(breach.other ? { other: breach.other } : {}) };
       const row = breach.why === 'gap' ? R.flashGap : breach.why === 'light' ? R.flashLight : R.flashShort;
