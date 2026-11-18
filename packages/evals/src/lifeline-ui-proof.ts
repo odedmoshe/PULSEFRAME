@@ -148,6 +148,17 @@ async function main() {
       const undone = await until(async () => (await doc(pid)).events[ev.id].afterSunset == null);
       check('one click on «אחרי השקיעה» stores the answer and shows it checked, names the event by its holiday, and Ctrl+Z restores it (answer unset, name as before)', answered && shownChecked && /חנוכה/.test(nameAfter) && undone && !/חנוכה/.test(nameBefore) && (await radios.evaluateAll((els) => els.filter((e) => (e as HTMLInputElement).checked).length)) === 0, { answered, shownChecked, nameBefore, nameAfter, focusedAtUndo, undone, afterSunsetAfterUndo: (await doc(pid)).events[ev.id].afterSunset ?? null });
       check('the media drawer by event has no horizontal scroll at 1440x900', await noHScroll(page, '[data-testid=life-events]'));
+      // no scroll is not enough: a squeezed column breaks a name one letter per line without any scroll. The event's name and its
+      // count must each sit on one line (height under two line heights) and be wider than they are tall
+      const [evName, evCount] = await page.evaluate((id) => ['.pf-ev-name', '.pf-ev-count'].map((sel) => {
+        const el = document.querySelector(`[data-testid="life-event-${id}"] ${sel}`) as HTMLElement | null;
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { w: Math.round(r.width), h: Math.round(r.height), lh: parseFloat(getComputedStyle(el).lineHeight) || parseFloat(getComputedStyle(el).fontSize) * 1.5 };
+      }), ev.id);
+      const evLayout = { name: evName ?? null, count: evCount ?? null };
+      const oneLine = (b: { w: number; h: number; lh: number } | null) => !!b && b.h < 2 * b.lh && b.w > b.h;
+      check('the event row at 1440x900 lays its name and its file count out on one line each (not one letter per line)', oneLine(evLayout.name) && oneLine(evLayout.count), evLayout);
 
       // ---- add the event to the timeline: existing add_clip ops, ONE transaction
       const rev0 = await revision(pid);
