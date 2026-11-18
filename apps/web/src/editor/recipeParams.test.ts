@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, describeRecipes, planRecipe, RecipeError, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, describeRecipes, FAMILY_FILM_RECIPE_ID, planRecipe, RecipeError, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { RECIPE_FORM_IDS, recipeParams, recipeSources } from './recipeParams.ts';
 
 const R = { num: 30, den: 1 };
@@ -38,11 +38,14 @@ const refusalOf = (fn: () => unknown) => { try { fn(); return null; } catch (e) 
 describe('recipes panel parameters', () => {
   it('every listed recipe gets parameters it accepts: no card sends another recipe\'s form', () => {
     const s = setup();
-    // the panel offers only the recipes it has a form for, so every recipe needs one here
-    expect(describeRecipes().map((r) => r.id).filter((id) => !RECIPE_FORM_IDS.includes(id))).toEqual([]);
+    // the panel offers only the recipes it has a form for, so every recipe needs one here — except the family film (ADR-0026),
+    // which has its own dialog (FamilyFilmDialog) and is planned by its own planner, not by planRecipe
+    const panelRecipes = describeRecipes().filter((r) => r.id !== FAMILY_FILM_RECIPE_ID);
+    expect(panelRecipes.map((r) => r.id).filter((id) => !RECIPE_FORM_IDS.includes(id))).toEqual([]);
+    expect(RECIPE_FORM_IDS).not.toContain(FAMILY_FILM_RECIPE_ID);
     for (const selected of [s.picClip, s.songClip, undefined]) {
       const src = recipeSources(s.doc, selected);
-      for (const r of describeRecipes()) {
+      for (const r of panelRecipes) {
         const err = refusalOf(() => planRecipe(s.doc, r.id, recipeParams(r.id, undefined, src)));
         expect(err?.code, `${r.id} with ${selected ?? 'nothing'} selected: ${err?.message}`).not.toBe('invalid_args');
       }
