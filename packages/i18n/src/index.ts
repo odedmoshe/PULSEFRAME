@@ -6,6 +6,7 @@ import { CLEANUP_WAVE_EN, CLEANUP_WAVE_HE } from './cleanupWave.ts';
 import { LIFELINE_EN, LIFELINE_HE } from './lifeline.ts';
 import { PACKS_EN, PACKS_HE } from './packs.ts';
 import { PEOPLE_EN, PEOPLE_HE } from './people.ts';
+import { PHONE_DROP_EN, PHONE_DROP_HE } from './phoneDrop.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
@@ -200,6 +201,7 @@ export const he = {
   ...LIFELINE_HE,
   ...PACKS_HE,
   ...PEOPLE_HE,
+  ...PHONE_DROP_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -394,6 +396,7 @@ export const en: Record<keyof typeof he, string> = {
   ...LIFELINE_EN,
   ...PACKS_EN,
   ...PEOPLE_EN,
+  ...PHONE_DROP_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
