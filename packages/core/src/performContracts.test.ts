@@ -1,12 +1,13 @@
 /**
  * Perform mode contracts (ADR-0025), lead tests: the one flash rule (performFlash.ts) and the internal op apply_take
  * (takeOps.ts) — refusals with hints, the flash re-check against what is already in the sequence, the run record, replay
- * equality and determinism. The planner (moves.ts, W1) and the camera (cameraPath.ts, W2) are not built here: their cases are todo.
+ * equality and determinism. The planner (moves.ts, W1) is not built here: its cases are todo. The camera (cameraPath.ts, W2) has its
+ * contract case at the end (cameraPath.test.ts holds the rest).
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  applyTransaction, createProject, EFFECTS, effectChangesLight, flashClassOf, flashGapFrames, FLASH_NEUTRAL_EFFECTS, FLASH_TABLE_V1, getOp, lightChanges, lightRanges, liveFlashTable, MODULATABLE, OpError,
+  applyTransaction, createProject, creativeProjection, DEFAULT_CAMERA, diffEntities, planCamera, restoreEntities, EFFECTS, effectChangesLight, flashClassOf, flashGapFrames, FLASH_NEUTRAL_EFFECTS, FLASH_TABLE_V1, getOp, lightChanges, lightRanges, liveFlashTable, MODULATABLE, OpError,
   PERFORM_RECIPE_ID, PERFORM_REFUSALS, TAKE_SEQUENCE_STEP_OPS, TAKE_STEP_OPS, takeFlashBreach, validateProject, ApplyTakeArgsSchema, TakeRequestSchema, PadBankSchema, MoveSpecSchema, PAD_COUNT,
   type ApplyTakeArgs, type OpCall, type ProjectDocument, type TemplateStep,
 } from './index.ts';
@@ -262,5 +263,42 @@ describe('request and bank schemas', () => {
 describe('workers (todo until built)', () => {
   it.todo('W1 moves.ts: planTakeRequest on a seeded take gives args that apply_take accepts and that pass validateProject (perform W1)');
   it.todo('W1 moves.ts: every hit the planner keeps passes takeFlashBreach; every hit it holds flash_limit would breach it');
-  it.todo('W2 cameraPath.ts: the camera plan is three replace_clip_keyframes calls with the take range, and keys outside the range stay');
+});
+
+describe('W2 cameraPath.ts: a camera take', () => {
+  it('is three replace_clip_keyframes calls with the take range: keys outside the range stay, regions stay, one transaction undoes exactly', () => {
+    const prov = { origin: 'fixture' as const, importedAt: '2026-11-18T00:00:00Z', importedBy: 'test' };
+    const asset = { kind: 'video' as const, name: 'v.mp4', contentHash: `sha256:${'9'.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(20, 1), video: { width: 1920, height: 1080, frameRate: R30, codec: 'h264', rotation: 0, frameCount: 600 }, audio: { sampleRate: 48000, channels: 2, codec: 'aac' }, provenance: prov };
+    const d0 = run(createProject({ id: 'prj_cam', name: 'camera', width: 640, height: 360, frameRate: R30 }), [{ op: 'import_asset', args: { asset } }]).doc;
+    const trackId = d0.sequences[d0.mainSequenceId]!.tracks.find((t) => t.kind === 'video')!.id;
+    const c = run(d0, [{ op: 'add_clip', args: { assetId: Object.keys(d0.assets)[0]!, trackId, start: f(30), duration: f(300) } }]);
+    const clipId = (c.results[0]!.output as { clipId: string }).clipId;
+    const old = (vals: number[]) => vals.map((v, i) => ({ time: f(i * 100), value: v, easing: 'linear' as const }));
+    const before = run(c.doc, [
+      { op: 'set_redact_region', args: { clipId, region: { shape: 'rect' } } },
+      { op: 'replace_clip_keyframes', args: { clipId, property: 'x', keys: old([0, 0.1, 0.2]) } },
+      { op: 'replace_clip_keyframes', args: { clipId, property: 'scale', keys: old([1.2, 1.3, 1.4]) } },
+    ]).doc;
+    // the pointer, on timeline frames (the clip starts at timeline frame 30): clip-local frames 80..180
+    const samples = Array.from({ length: 101 }, (_, i) => ({ frame: 110 + i, u: 0.4 + i / 1000, v: 0.55, zoom: 1.5 }));
+    const p = planCamera(before, { clipId, from: 80, to: 180, samples, settings: DEFAULT_CAMERA });
+    if ('refused' in p) throw new Error(p.refused);
+    expect(p.ops.map((o) => o.op)).toEqual(['replace_clip_keyframes', 'replace_clip_keyframes', 'replace_clip_keyframes']);
+    for (const o of p.ops) { const a = o.args as { from: unknown; to: unknown }; expect([a.from, a.to]).toEqual([f(80), f(180)]); }
+    expect(p.range).toEqual({ from: f(80), to: f(180) });
+    expect(p.replacedKeys).toBe(2); // x and scale at frame 100
+    const r = run(before, p.ops);
+    const clip = r.doc.sequences[r.doc.mainSequenceId]!.tracks.find((t) => t.id === trackId)!.clips.find((x) => x.id === clipId)!;
+    expect(clip.keyframes!.x!.filter((k) => T.lt(k.time, f(80)) || T.lt(f(180), k.time))).toEqual(old([0, 0.1, 0.2]).filter((_, i) => i !== 1));
+    expect(clip.keyframes!.scale!.filter((k) => T.lt(k.time, f(80)) || T.lt(f(180), k.time))).toEqual(old([1.2, 1.3, 1.4]).filter((_, i) => i !== 1));
+    expect(clip.keyframes!.y!.map((k) => k.time)).toEqual(p.keys.map((k) => f(k.frame)));
+    const redactOf = (d: ProjectDocument) => { const x = d.sequences[d.mainSequenceId]!.tracks.find((t) => t.id === trackId)!.clips.find((k) => k.id === clipId)!; return x.type === 'media' ? x.redact : undefined; };
+    expect(redactOf(before)).toHaveLength(1);
+    expect(redactOf(r.doc)).toEqual(redactOf(before));
+    expect(validateProject(r.doc)).toEqual([]);
+    // one transaction: its entity diff restores the document exactly
+    const back = structuredClone(r.doc);
+    restoreEntities(back, diffEntities(before, r.doc).map((x) => ({ id: x.id, state: x.before })));
+    expect(creativeProjection(back)).toBe(creativeProjection(before));
+  });
 });
