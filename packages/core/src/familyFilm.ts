@@ -712,6 +712,8 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   let covered = 0, reach = picturesStart;
   for (const [s, e] of allPictures) { if (e <= reach) continue; covered += e - Math.max(s, reach); reach = e; }
   const gapFrames = Math.max(0, picturesEnd - picturesStart - covered);
+  // never a silent black stretch: when the chosen material cannot fill the room up to a clip kept by hand, the plan says how long
+  if (gapFrames > 0) warn('pictures_missing', `${Math.round((gapFrames / fps) * 100) / 100} s of the film show no picture: the chosen clips do not fill the room up to the clips kept by hand`, { gapFrames, seconds: Math.round((gapFrames / fps) * 100) / 100 });
   const seconds = Math.round(((filmEndF - filmStartF) / fps) * 100) / 100;
   const bar = m * beatSec;
   const pictureSeconds = Math.round(((picturesEnd - picturesStart) / fps) * 100) / 100;

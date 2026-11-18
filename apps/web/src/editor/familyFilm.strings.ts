@@ -143,6 +143,7 @@ const he: FamilyFilmStrings = {
       case 'title_resolved_static': return 'הכותרת קבועה, ולא תתעדכן לפי תאריך הצילום';
       case 'kept_music_not_followable': return 'המוזיקה שכבר בפרויקט נשארה, והחיתוכים אינם עוקבים אחרי הפעימות שלה';
       case 'lead_music_rises': return 'במצב «הקולות מובילים» המוזיקה מורדת ב־9 dB בזמן שיש קול בקליפ, ולכן היא עולה מעל תמונות וקליפים שקטים';
+      case 'pictures_missing': return s !== null ? `ב־${num1(s)} שנ׳ של הסרט אין תמונה: הקליפים שנבחרו לא ממלאים את המקום עד הקליפים שנשארו במקומם` : 'בחלק מהסרט אין תמונה: הקליפים שנבחרו לא ממלאים את המקום עד הקליפים שנשארו במקומם';
     }
   },
 };
@@ -230,6 +231,7 @@ const en: FamilyFilmStrings = {
       case 'title_resolved_static': return 'The title is fixed and will not update from the capture date';
       case 'kept_music_not_followable': return 'The music already in the project was kept, and the cuts do not follow its beats';
       case 'lead_music_rises': return 'In "Voices lead" the music is lowered 9 dB while a clip has sound, so it rises over pictures and silent clips';
+      case 'pictures_missing': return s !== null ? `${num1(s)} s of the film show no picture: the chosen clips do not fill the room up to the clips kept by hand` : 'Part of the film shows no picture: the chosen clips do not fill the room up to the clips kept by hand';
     }
   },
 };

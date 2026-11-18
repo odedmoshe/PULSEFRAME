@@ -538,6 +538,19 @@ describe('regeneration', () => {
     expect(r.plan.predicted.gapFrames).toBe(0);
     for (let i = 1; i < ranges.length; i++) expect(ranges[i]!.s).toBe(ranges[i - 1]!.e);
   });
+  it('when the material cannot fill the room up to a kept clip, the plan says how long the film shows no picture (pictures_missing)', () => {
+    const d0 = withSong(clips(3, 12), 120, 200);
+    const p = plan(d0, { assetIds: ids(3), musicAssetId: 'mus', targetSeconds: 30, order: 'given' });
+    const doc = applied(d0, p).doc, runId = runIdOf(doc);
+    const last = doc.recipeRuns[runId]!.slots!.filter((s) => s.kind === 'picture').at(-1)!;
+    const moved = edit(doc, [{ op: 'move_clip', args: { clipId: last.clipId, start: fr(p.predicted.endFrame + 300) } }]);
+    const r = regenerateFilm(moved, runId);
+    expect(r.plan.predicted.gapFrames).toBeGreaterThan(0);
+    const w = r.plan.warnings.find((x) => x.code === 'pictures_missing');
+    expect(w?.details).toMatchObject({ gapFrames: r.plan.predicted.gapFrames, seconds: Math.round((r.plan.predicted.gapFrames / 30) * 100) / 100 });
+    // a film with no hole says nothing of the kind
+    expect(p.warnings.map((x) => x.code)).not.toContain('pictures_missing');
+  });
   it('a trimmed clip is kept; the cuts next to it are off the grid and listed so', () => {
     const { doc, runId } = first();
     const slot = doc.recipeRuns[runId]!.slots!.filter((s) => s.kind === 'picture')[2]!;
