@@ -23,6 +23,7 @@ import { Governance, type Principal } from './governance.ts';
 import { createApp } from './http.ts';
 import { createMcp } from './mcp.ts';
 import { Presence } from './presence.ts';
+import { applyShorts } from './shorts.ts';
 import { cachedAudioFeatures } from './shortsFeatures.ts';
 import { Speech } from './speech.ts';
 import { Store } from './store.ts';
@@ -192,9 +193,16 @@ describe.runIf(W1_BUILT)('making shorts (with W1 merged)', () => {
   it('propose mode gives 403 insufficient_scope', async () => {
     const t = gov.createGrant({ name: 'proposer', mode: 'propose' }, USER).token;
     const r = await rest('POST', `/projects/${talk.pid}/shorts`, { picks: [await pick()], format }, t);
-    expect(r).toMatchObject({ status: 403, body: { error: { code: 'insufficient_scope', message: SHORTS_PROPOSE_REFUSED } } });
+    // the route asks for the edit scope first (a propose grant has observe only): 403 insufficient_scope there already
+    expect(r).toMatchObject({ status: 403, body: { error: { code: 'insufficient_scope' } } });
     const m = await tool('make_shorts', { projectId: talk.pid, picks: [await pick()], format }, t);
     expect(m.isError).toBe(true);
+    expect(JSON.stringify(m.body)).toContain('insufficient_scope');
+    // a principal in propose mode that does hold the edit scope meets applyShorts' own refusal, with its words
+    const proposer: Principal = { actor: 'agent:proposer', kind: 'agent', scopes: ['observe', 'edit'], mode: 'propose' };
+    const before = store.getProject(talk.pid).revision;
+    await expect(applyShorts(store, gov, proposer, talk.pid, { picks: [await pick()], format })).rejects.toMatchObject({ status: 403, code: 'insufficient_scope', message: SHORTS_PROPOSE_REFUSED });
+    expect(store.getProject(talk.pid).revision).toBe(before);
   });
   it('a stale expectedRevision gives 409; a reworded quote title gives 422 not_verbatim', async () => {
     const p = await pick();

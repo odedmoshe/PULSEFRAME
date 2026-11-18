@@ -219,10 +219,8 @@ async function main() {
       const text = JSON.stringify(a);
       check('S1', 'no viral wording; the method says heuristic', !/viral|virality|ויראל|retention/i.test(affirmative(text)) && /heuristic/.test(a.method) && a.method === SHORTS_RANK_METHOD, { method: a.method }, 'no match; "heuristic"');
       check('S1', 'ranking time with cached features', rankMs <= 2000, { ms: r2(rankMs) }, '≤ 2000 ms');
-      // picks for the shorts: three non-overlapping candidates; one of them holds P (for the tightened short)
-      const pStart = rat(word(P.firstWord).start);
-      const withP = [...cs].filter((c) => contains(c, pStart)).sort((x, y) => x.rank - y.rank)[0];
-      picks = [...(withP ? [withP] : []), ...cs.filter((c) => c !== withP)].slice(0, 6);
+      // picks for the shorts: the best candidates (they do not overlap)
+      picks = cs.slice(0, 6);
     });
 
     await section('S2', async () => {
@@ -271,7 +269,10 @@ async function main() {
       const perShort = (JSON.stringify(after).length - bytes0) / 3;
       check('S3', 'document bytes per short', perShort <= 60_000, { bytes: Math.round(perShort) }, '≤ 60 KB');
       // the three single shorts of S4–S6
-      const tight = await make(pid, { picks: [pickOf(picks[0])], format: { ...fmt, safeArea: null }, tighten: { pauses: true, minPauseSeconds: 0.7, fillers: true }, captions: null, loudness: null });
+      // the tightened short is picked by hand around statement P (its 0.8 s and 1.5 s pauses and two «אממ»), with the statement after it
+      const afterP = truth.statements[truth.statements.indexOf(P) + 1]!;
+      const tightPick = { assetId, start: rat(word(P.firstWord).start), end: rat(word(afterP.lastWord).end), name: 'P tightened' };
+      const tight = await make(pid, { picks: [tightPick], format: { ...fmt, safeArea: null }, tighten: { pauses: true, minPauseSeconds: 0.7, fillers: true }, captions: null, loudness: null });
       made.tight = tight.sequenceIds[0]!;
       const c1 = picks[1];
       const f0 = T.frameIndexAt(c1.start, R), f1 = T.frameIndexAt(c1.end, R) + 1;
