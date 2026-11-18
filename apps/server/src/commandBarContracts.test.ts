@@ -3,8 +3,9 @@
  * bar previews the exact undo target), the strict commit refuses a stale revision and replays a repeated key, the
  * assistant's own spending method (monthly limit + per-request cap, propose-only principal, settlement), the reserved
  * actor name, the backup never holding the assistant's key or config, PF_ASSISTANT_HOSTS, the chat descriptor outside the
- * capability union, and the assistant's routes answering 501 not_built (owner-only routes refuse agents first).
- * Nothing here pins W2's handlers: their tests are W2's.
+ * capability union, and the assistant's routes refusing honestly (owner-only routes refuse agents with 403 first; the
+ * owner routes create no job). Nothing here pins W2's handlers: GET …/assistant/status may answer 501 not_built (the
+ * placeholder) or W2's status, which on a fresh data directory is not 'ready' and never holds a key. Their tests are W2's.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -166,15 +167,48 @@ describe('configuration and descriptor', () => {
   });
 });
 
-describe('the assistant routes are registered and refuse honestly until W2', () => {
+/**
+ * What an agent may get from GET …/assistant/status on a fresh data directory: the placeholder's 501 not_built, or W2's
+ * AssistantStatus, which cannot be 'ready' (nothing is configured) and holds no key field nor the key's text.
+ */
+const KEY_FIELDS = ['key', 'apikey', 'api_key', 'secret', 'token', 'authorization']; // compared lowercased
+function freshStatusVerdict(r: { status: number; code?: string; body: unknown }, keyText: string): string {
+  if (r.status === 501) return r.code === 'not_built' ? 'ok' : `501 with code ${r.code}`;
+  if (r.status !== 200) return `status ${r.status} (${r.code})`;
+  const b = r.body as Record<string, unknown> | null;
+  if (!b || typeof b !== 'object' || Array.isArray(b)) return 'body is not an object';
+  if (typeof b.setup !== 'string' || !(ASSISTANT_SETUP_CODES as readonly string[]).includes(b.setup)) return `setup ${String(b.setup)} is not a setup code`;
+  if (b.setup === 'ready') return 'ready on a fresh data directory';
+  const keyed = Object.keys(b).filter((k) => KEY_FIELDS.includes(k.toLowerCase()));
+  if (keyed.length > 0) return `key field ${keyed.join(',')}`;
+  if (JSON.stringify(b).includes(keyText)) return 'holds the key text';
+  return 'ok';
+}
+
+describe('the status verdict accepts the placeholder and W2\'s status alike', () => {
+  const K = 'TEST-DOUBLE-NOT-A-KEY';
+  it('accepts 501 not_built and a not-ready status without a key; refuses ready, a key field, the key text and other answers', () => {
+    expect(freshStatusVerdict({ status: 501, code: 'not_built', body: {} }, K)).toBe('ok');
+    expect(freshStatusVerdict({ status: 200, body: { setup: 'provider_not_configured', detail: '', keySet: false, keyAddedAt: null } }, K)).toBe('ok');
+    expect(freshStatusVerdict({ status: 200, body: { setup: 'ready' } }, K)).toBe('ready on a fresh data directory');
+    expect(freshStatusVerdict({ status: 200, body: { setup: 'limit_missing', apiKey: 'x' } }, K)).toBe('key field apiKey');
+    expect(freshStatusVerdict({ status: 200, body: { setup: 'limit_missing', detail: K } }, K)).toBe('holds the key text');
+    expect(freshStatusVerdict({ status: 200, body: { setup: 'whatever' } }, K)).toMatch(/not a setup code/);
+    expect(freshStatusVerdict({ status: 501, code: 'other', body: {} }, K)).toBe('501 with code other');
+    expect(freshStatusVerdict({ status: 403, code: 'owner_required', body: {} }, K)).toMatch(/^status 403/);
+  });
+});
+
+describe('the assistant routes are registered and refuse honestly', () => {
   let s: Awaited<ReturnType<typeof startServer>> | undefined;
   afterAll(async () => { await s?.close(); });
-  it('owner-only routes refuse an agent with 403 owner_required; everything else answers 501 not_built and creates no job', async () => {
+  it('owner-only routes refuse an agent with 403 owner_required; status answers 501 not_built or a not-ready status without a key; no job', async () => {
     s = await startServer({ port: 8987, dataDir: tmp('pf-cb-routes-') });
     const pid = s.store.createProject({ name: 'p' }).doc.id;
     const call = async (method: string, p: string, token: string | null, body?: unknown) => {
       const r = await fetch(`${s!.url}${p}`, { method, headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), 'content-type': 'application/json', connection: 'close' }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
-      return { status: r.status, code: ((await r.json().catch(() => ({}))) as { error?: { code?: string } }).error?.code };
+      const json = (await r.json().catch(() => ({}))) as { error?: { code?: string } };
+      return { status: r.status, code: json.error?.code, body: json as unknown };
     };
     const reqBody = { text: 'חתוך כאן', selection: [], playheadFrame: 0 };
     const config = { adapter: null, host: null, model: null, pricesCentsPerMTok: null, monthlyLimitCents: 0, perRequestCapCents: 0, toggles: { titlesAndMarkers: false, peopleNames: false } };
@@ -183,8 +217,8 @@ describe('the assistant routes are registered and refuse honestly until W2', () 
       const p = r.path.replace(':id', pid);
       const b = r.method === 'POST' ? reqBody : r.path.endsWith('/config') ? config : r.path.endsWith('/key') && r.method === 'PUT' ? { key: 'TEST-DOUBLE-NOT-A-KEY' } : undefined;
       const agent = await call(r.method, p, s.auth.tokens.agent, b);
-      if (r.access === 'owner') expect(agent, `${r.method} ${r.path}`).toEqual({ status: 403, code: 'owner_required' });
-      else expect(agent, `${r.method} ${r.path}`).toEqual({ status: 501, code: 'not_built' });
+      if (r.access === 'owner') expect({ status: agent.status, code: agent.code }, `${r.method} ${r.path}`).toEqual({ status: 403, code: 'owner_required' });
+      else { expect(`${r.method} ${r.path}`).toBe('GET /api/v1/assistant/status'); expect(freshStatusVerdict(agent, 'TEST-DOUBLE-NOT-A-KEY'), `${r.method} ${r.path}`).toBe('ok'); }
     }
     expect(s.store.db.prepare("SELECT COUNT(*) AS n FROM jobs WHERE type = 'assistant.propose'").get()).toEqual({ n: 0 });
   });
