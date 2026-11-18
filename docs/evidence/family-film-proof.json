@@ -1,7 +1,7 @@
 {
   "proof": "family-film",
   "status": "failed",
-  "at": "2026-11-18T16:54:59.089Z",
+  "at": "2026-11-18T17:51:54.152Z",
   "summary": "39/40 checks passed, 0 section(s) blocked",
   "checks": [
     {
@@ -28,7 +28,7 @@
           "attached": 6,
           "revision": 26,
           "skipped": [],
-          "wallSeconds": 5.068,
+          "wallSeconds": 5.578,
           "mediaSeconds": 82
         },
         "revisionBefore": 25,
@@ -70,7 +70,7 @@
           "attached": 0,
           "revision": null,
           "skipped": [],
-          "wallSeconds": 1.162,
+          "wallSeconds": 1.228,
           "mediaSeconds": 82
         },
         "digests": {
@@ -596,9 +596,9 @@
       "name": "R1: the moved clip and the trimmed clip are byte-identical and present after regenerating at 30 s",
       "value": {
         "protected": [
-          "clp_93d42a10fd4",
-          "clp_93d42a10fd6",
-          "clp_93d42a10fd7"
+          "clp_d07978b54a4",
+          "clp_d07978b54a6",
+          "clp_d07978b54a7"
         ],
         "replaced": 13
       },
@@ -970,7 +970,7 @@
           "offset": 0
         }
       ],
-      "generateSeconds": 11.84
+      "generateSeconds": 12.02
     },
     "capturesReadOnUpload": {
       "film-a.mp4": null,
@@ -1033,16 +1033,16 @@
       "downbeats": 47
     },
     "measureSpeed": {
-      "wallSeconds": 5.11,
+      "wallSeconds": 5.59,
       "mediaSeconds": 82,
-      "timesRealTime": 16.03,
+      "timesRealTime": 14.68,
       "output": {
         "measured": 6,
         "cached": 0,
         "attached": 6,
         "revision": 26,
         "skipped": [],
-        "wallSeconds": 5.068,
+        "wallSeconds": 5.578,
         "mediaSeconds": 82
       }
     },
@@ -1050,8 +1050,8 @@
       "origin"
     ],
     "commitLatencyMs": {
-      "before": 5.22,
-      "afterMeasuring": 5.11
+      "before": 4.09,
+      "afterMeasuring": 4.11
     },
     "plan": {
       "picks": [
@@ -1283,9 +1283,9 @@
           "shorter_than_target"
         ],
         "protected": [
-          "clp_93d42a10fd4",
-          "clp_93d42a10fd6",
-          "clp_93d42a10fd7"
+          "clp_d07978b54a4",
+          "clp_d07978b54a6",
+          "clp_d07978b54a7"
         ],
         "replaced": 13
       },
@@ -1363,7 +1363,7 @@
           "cut_off_grid_next_to_kept"
         ],
         "protected": [
-          "clp_93d42a10fdi"
+          "clp_d07978b54ai"
         ],
         "replaced": 15
       },
@@ -1441,7 +1441,7 @@
           "pictures_missing"
         ],
         "protected": [
-          "clp_93d42a10fdi"
+          "clp_d07978b54ai"
         ],
         "replaced": 15
       }
