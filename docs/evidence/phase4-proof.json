@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-17T11:43:25.522Z",
+  "ranAt": "2026-11-18T02:29:51.519Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v553 x64",
+    "platform": "Linux 6.18.44-fc-v595 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "memoryGiB": 15.7,
@@ -11,42 +11,42 @@
   "measurements": {
     "formats": {
       "mp4Draft": {
-        "wall": 1.529,
+        "wall": 0.852,
         "bytes": 12789,
         "estimate": 30480
       },
       "webm": {
-        "wall": 1.759,
+        "wall": 1.39,
         "bytes": 54848,
         "estimate": 168960
       },
       "wav": {
-        "wall": 0.228
+        "wall": 0.157
       },
       "png": {
-        "wall": 1.947
+        "wall": 0.386
       }
     },
     "cancel": {
-      "stageAtCancel": "rendering 0/600",
-      "msToCanceled": 75
+      "stageAtCancel": "rendering 9/600",
+      "msToCanceled": 12
     },
     "longExport": {
       "frames": 600,
       "size": "1920x1080",
-      "wallSeconds": 52.711,
-      "realtimeFactor": 0.3794274439870236,
+      "wallSeconds": 34.572,
+      "realtimeFactor": 0.5785028346638899,
       "renderStageMs": {
-        "draw": 7343,
-        "readback": 4626,
-        "upload": 38408
+        "draw": 5409,
+        "readback": 3217,
+        "upload": 23964
       },
       "bytes": 747124,
       "estimateBytes": 22252800
     },
     "cancelAtRenderStart": {
       "stageAtCancel": "rendering 0/600",
-      "msToCanceled": 19
+      "msToCanceled": 13
     },
     "photosensitivity": {
       "flashing": {
@@ -93,9 +93,15 @@
             "Rubik",
             "Assistant",
             "Frank Ruhl Libre",
-            "Secular One"
+            "Secular One",
+            "Suez One",
+            "David Libre",
+            "Karantina",
+            "Amatic SC",
+            "Fredoka",
+            "Gveret Levin"
           ],
-          "schemaVersion": 1
+          "schemaVersion": 2
         }
       }
     },
@@ -188,8 +194,8 @@
       "name": "a running export is canceled promptly: encoder stopped, no partial file published, scratch removed",
       "ok": true,
       "detail": {
-        "stageAtCancel": "rendering 0/600",
-        "msToCanceled": 75
+        "stageAtCancel": "rendering 9/600",
+        "msToCanceled": 12
       }
     },
     {
@@ -206,12 +212,12 @@
       "detail": {
         "frames": 600,
         "size": "1920x1080",
-        "wallSeconds": 52.711,
-        "realtimeFactor": 0.3794274439870236,
+        "wallSeconds": 34.572,
+        "realtimeFactor": 0.5785028346638899,
         "renderStageMs": {
-          "draw": 7343,
-          "readback": 4626,
-          "upload": 38408
+          "draw": 5409,
+          "readback": 3217,
+          "upload": 23964
         },
         "bytes": 747124,
         "estimateBytes": 22252800
@@ -226,7 +232,7 @@
       "ok": true,
       "detail": {
         "stageAtCancel": "rendering 0/600",
-        "msToCanceled": 19
+        "msToCanceled": 13
       }
     },
     {

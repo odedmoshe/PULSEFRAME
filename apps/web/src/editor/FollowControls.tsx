@@ -100,7 +100,7 @@ function FollowFields({ clipId }: { clipId: string }) {
               onPointerUp={(e) => { const v = Number(e.currentTarget.value); if (v !== smooth) void attach({ ...follow, smooth: v }); }}
               onKeyUp={(e) => { const v = Number(e.currentTarget.value); if (v !== smooth) void attach({ ...follow, smooth: v }); }} />
           </label>
-          <p className="muted">{tt('follow.offsetNote')}</p>
+          <p className="muted pf-help">{tt('follow.offsetNote')}</p>
         </>
       )}
     </div>

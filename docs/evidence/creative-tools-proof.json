@@ -1,7 +1,7 @@
 {
- "generatedAt": "2026-11-17T09:44:50.132Z",
+ "generatedAt": "2026-11-18T02:29:02.176Z",
  "profile": {
-  "os": "Linux 6.18.44-fc-v553",
+  "os": "Linux 6.18.44-fc-v595",
   "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
   "note": "CPU-only container; Chromium with the software WebGPU adapter. Functional checks only; nothing here judges how a curve, motion, thumbnail or sound looks or sounds."
  },
@@ -220,10 +220,29 @@
    "ok": true,
    "detail": {
     "samples": 61,
-    "seconds": 70.83,
-    "rises": 4,
-    "mostInOneSecond": 1,
+    "seconds": 12.35,
+    "rises": 8,
+    "mostInOneSecond": 2,
     "flashesHeld": "0",
+    "changes": 22,
+    "levels": [
+     75,
+     183
+    ],
+    "riseTimes": [
+     3.898,
+     5.033,
+     5.582,
+     6.154,
+     8.057,
+     9.538,
+     10.105,
+     11.047
+    ],
+    "sampleGapsMs": {
+     "median": 184,
+     "max": 965
+    },
     "errors": []
    }
   },
@@ -314,9 +333,9 @@
    "name": "the caption controls list the ready-made looks; choosing one restyles the caption track and the list then shows that look as the current one",
    "ok": true,
    "detail": {
-    "lookOptions": 41,
-    "chosen": "caption.outline-only",
-    "shownLook": "caption.outline-only"
+    "lookOptions": 46,
+    "chosen": "caption.documentary",
+    "shownLook": "caption.documentary"
    }
   },
   {
@@ -478,12 +497,12 @@
     "widthAfterZoomOut": 179,
     "widthFarIn": 2049,
     "fit": {
-     "right": 1134,
-     "scrollRight": 1500,
-     "left": 76,
-     "scrollLeft": 0,
-     "width": 1058,
-     "viewWidth": 1500,
+     "right": 1096,
+     "scrollRight": 1420,
+     "left": 164,
+     "scrollLeft": 8,
+     "width": 932,
+     "viewWidth": 1412,
      "scrolledBy": 0,
      "canScroll": true
     }
@@ -493,7 +512,7 @@
    "name": "graphic elements through the API: the catalogue lists them, one is made as a PNG picture asset that records how it was made, placed as a three-second picture clip, and drawn in the asked colour over a transparent background on a rendered still; an unknown element and a colour that is not #RRGGBB are refused",
    "ok": true,
    "detail": {
-    "count": 252,
+    "count": 302,
     "asset": {
      "width": 1024,
      "height": 1024,
@@ -510,7 +529,7 @@
    "name": "the elements browser in the library shows every element as a drawn thumbnail, filters by category, and a click adds the element at the playhead as a picture clip",
    "ok": true,
    "detail": {
-    "tilesAll": 252,
+    "tilesAll": 302,
     "bubbles": 25,
     "statusText": "נוסף לציר הזמן: בועת דיבור מלבנית, זנב למטה"
    }
@@ -587,10 +606,29 @@
   },
   "galleryStrobeHover": {
    "samples": 61,
-   "seconds": 70.83,
-   "rises": 4,
-   "mostInOneSecond": 1,
-   "flashesHeld": "0"
+   "seconds": 12.35,
+   "rises": 8,
+   "mostInOneSecond": 2,
+   "flashesHeld": "0",
+   "changes": 22,
+   "levels": [
+    75,
+    183
+   ],
+   "riseTimes": [
+    3.898,
+    5.033,
+    5.582,
+    6.154,
+    8.057,
+    9.538,
+    10.105,
+    11.047
+   ],
+   "sampleGapsMs": {
+    "median": 184,
+    "max": 965
+   }
   }
  },
  "passed": 41,

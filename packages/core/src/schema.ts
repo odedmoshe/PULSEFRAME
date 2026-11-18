@@ -54,6 +54,108 @@ export const VariantTranslationSchema = z
   })
   .strict();
 
+// ---------- life line (ADR-0021): capture dates, events and live title fields. Optional fields only; no schema version bump. ----------
+/** A calendar day on the wall where the picture was taken. */
+export const WALL_DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+/** A day, or a day and the wall-clock time. Never a UTC instant, never a zone suffix. */
+export const WALL_DATE_TIME = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(T([01]\d|2[0-3]):[0-5]\d:[0-5]\d)?$/;
+/** Capture dates are kept inside these years (both included); a camera clock outside them is not a date anyone filmed on. */
+export const CAPTURE_MIN_YEAR = 1900;
+export const CAPTURE_MAX_YEAR = 2100;
+/**
+ * The most a file's clock can have been moved by in all (Capture.shiftedMinutes, either sign): the minutes of the 73,414 days
+ * from 1 January CAPTURE_MIN_YEAR to 31 December CAPTURE_MAX_YEAR. A date that started inside those years and is still inside
+ * them is never further than this from where it started, however many shifts took it there, so the total of a file whose date
+ * the operations kept in range always fits. (Only a document whose total does not match its date, such as an archive made by
+ * hand, can meet the bound; shift_asset_captures then refuses with shiftTooFar.)
+ */
+export const MAX_CAPTURE_SHIFT_MINUTES = 73414 * 1440;
+/**
+ * True for a WALL_DATE or WALL_DATE_TIME string whose day exists (no 30 February) in a year from CAPTURE_MIN_YEAR to
+ * CAPTURE_MAX_YEAR. Integers only: calendar data is never a float and never goes through Date or Intl (ADR-0021).
+ */
+export function isRealWallDate(at: string): boolean {
+  if (!WALL_DATE_TIME.test(at)) return false;
+  const y = Number(at.slice(0, 4)), m = Number(at.slice(5, 7)), d = Number(at.slice(8, 10));
+  if (y < CAPTURE_MIN_YEAR || y > CAPTURE_MAX_YEAR) return false;
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  return d <= [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1]!;
+}
+/**
+ * When a picture or video was taken (ADR-0021). Calendar data on the wall clock of the place it was filmed, not timeline time
+ * (ADR-0003 is untouched): the conversion from a file's UTC instant happens once, at import, on the server; everything that
+ * renders does integer arithmetic on the stored wall clock.
+ */
+export const CaptureSchema = z
+  .object({
+    /** YYYY-MM-DD (only the day is known) or YYYY-MM-DDTHH:MM:SS, as the wall clock read at the file's first picture. A real day, 1900–2100. */
+    at: z.string().regex(WALL_DATE_TIME).refine(isRealWallDate, { message: 'not a real calendar day between 1900 and 2100' }),
+    /** Minutes east of UTC at `at` when the FILE states it (Apple creationdate, EXIF OffsetTimeOriginal); null = not stated. */
+    utcOffsetMinutes: z.number().int().min(-840).max(840).nullable(),
+    /** Where the date came from: the container's tags, the picture's EXIF, a pattern in the file name, or a person. */
+    source: z.enum(['container', 'exif', 'filename', 'manual']),
+    /** An estimate: a file name gives the day a file was saved or sent, not necessarily the day it was filmed. */
+    circa: z.literal(true).optional(),
+    /** The file gave a UTC instant only; the wall clock was worked out for this IANA zone at import (server config homeZone). */
+    assumedZone: z.string().min(1).max(64).optional(),
+    /** Minutes a person moved the file's own clock by, in all (shift_asset_captures adds each step); `at` already includes them. */
+    shiftedMinutes: z.number().int().min(-MAX_CAPTURE_SHIFT_MINUTES).max(MAX_CAPTURE_SHIFT_MINUTES).optional(),
+  })
+  .strict();
+export type Capture = z.infer<typeof CaptureSchema>;
+/** A project holds at most this many events. */
+export const MAX_LIFE_EVENTS = 2000;
+/** An event holds at most this many files (and at least one). */
+export const MAX_EVENT_FILES = 5000;
+/**
+ * An event (ADR-0021): library files grouped by when they were taken. Only what a person typed or chose is stored: a holiday
+ * name is derived when it is read (events.ts eventDisplayName), never written here, so a corrected holiday table never
+ * changes what an old operation log replays to.
+ */
+export const LifeEventSchema = z
+  .object({
+    id: Id,
+    /** The name a person typed, one line; '' = none (the event is then shown by its derived name, or by its date). */
+    name: z.string().max(120).regex(/^[^\n\r]*$/),
+    /** Was it filmed after sunset? null = not decided; true = the Hebrew date of the next day; false = of the same day. Never guessed. */
+    afterSunset: z.boolean().nullable(),
+    /** Pictures and videos of the library; a file sits in at most one event (validate.ts). */
+    assetIds: z.array(Id).min(1).max(MAX_EVENT_FILES),
+    /** How the grouping was made. No timestamps: operations are pure and replayable. `edited` = a person changed it, so cluster_events leaves it alone. */
+    origin: z.object({ method: z.enum(['gap', 'manual']), gapMinutes: z.number().int().min(30).max(1440).nullable(), createdBy: z.string(), edited: z.boolean() }).strict(),
+  })
+  .strict();
+export type LifeEvent = z.infer<typeof LifeEventSchema>;
+
+// ---------- people (ADR-0021, people section). Optional; no schema version bump. ----------
+/** A project holds at most this many people. */
+export const MAX_PEOPLE = 200;
+/** The longest name of a person. */
+export const MAX_PERSON_NAME = 80;
+/** A person's id as a live field writes it: `{age:<id>}`, `{name:<id>}` (fields.ts PERSON_ID_IN_FIELD is the same shape). */
+export const PERSON_ID = /^[A-Za-z0-9_-]{1,64}$/;
+/** A name is one line and holds none of the characters the field grammar uses: braces, a colon, a bar. */
+export const PERSON_NAME = /^[^{}:|\n\r]+$/;
+/**
+ * A person named in titles (ADR-0021, people section): a name, an optional birth date and an optional word choice for the
+ * Hebrew age wording. Nothing else is ever stored about a person: no picture, no face data, no place, no relation.
+ *
+ * PRIVACY: `birthDate` and `form` leave the server only for the owner's own session or a credential whose grant says
+ * people: 'full' (apps/server/src/peoplePrivacy.ts). Every other credential reads the id and the name only.
+ */
+export const PersonSchema = z
+  .object({
+    id: z.string().regex(PERSON_ID),
+    /** As typed, in Unicode NFC and without spaces around it; unique in the project when compared by people.ts personNameKey. */
+    name: z.string().min(1).max(MAX_PERSON_NAME).regex(PERSON_NAME).refine((n) => n === n.trim() && n === n.normalize('NFC'), { message: 'a name is stored trimmed and in Unicode NFC' }),
+    /** The day of birth on the Gregorian calendar, YYYY-MM-DD (a real day in 1900–2100), or null = not given: age fields of this person then have no words. */
+    birthDate: z.string().regex(WALL_DATE).refine(isRealWallDate, { message: 'not a real calendar day between 1900 and 2100' }).nullable(),
+    /** The Hebrew word before the age: 'm' = «בן», 'f' = «בת»; absent = «גיל» (ageWords.ts). A wording choice, not a record of anything. */
+    form: z.enum(['m', 'f']).optional(),
+  })
+  .strict();
+export type Person = z.infer<typeof PersonSchema>;
+
 export const AssetSchema = z
   .object({
     id: Id,
@@ -87,6 +189,8 @@ export const AssetSchema = z
     image: z.object({ width: z.number().int().positive(), height: z.number().int().positive(), codec: z.string(), hasAlpha: z.boolean() }).strict().optional(),
     /** Present for kind 'lut': a 3D colour lookup table (.cube). The stored bytes are the original file text; `size` is its entries per axis. It is applied to clips as the effect color.lut and never placed on the timeline. */
     lut: z.object({ size: z.number().int().min(2).max(65), title: z.string().max(256).nullable() }).strict().optional(),
+    /** When the picture was taken, read from the ORIGINAL file at import or set by hand (life line, ADR-0021). Absent = unknown. */
+    capture: CaptureSchema.optional(),
     /**
      * Present when the stored media is a conformed copy (SPEC §7): the original could not be edited directly
      * (variable frame rate, rotation metadata, or a codec the editor cannot decode). The original bytes are kept.
@@ -108,8 +212,13 @@ export const AssetSchema = z
         origin: z.enum(['upload', 'fixture', 'generated', 'derived']),
         importedAt: z.string(),
         importedBy: z.string(),
-        /** Present for built-in synthesised sounds: which formula made this file. */
-        procedural: z.object({ id: z.string(), version: z.number().int(), generator: z.string() }).strict().optional(),
+        /**
+         * Present for media made by a formula of this build (built-in sounds, graphic elements, built-in music): which formula
+         * made this file. `params` (ADR-0022) is what the formula was asked for when the id alone does not say it: built-in music
+         * records bars, seed, bpm, meter and synth (musicStyles.ts musicProvenanceParams). At most 8 entries.
+         */
+        procedural: z.object({ id: z.string(), version: z.number().int(), generator: z.string(),
+          params: z.record(z.string().min(1).max(24), z.union([z.number(), z.string().max(64)])).refine((r) => Object.keys(r).length <= 8, { message: 'at most 8 entries' }).optional() }).strict().optional(),
         /** Present for generated speech (SPEC §17): what was said, by which engine and model, in which voice. A voice taken from a recording carries the consent statement its owner made; an agent cannot make one. */
         voice: z
           .object({
@@ -284,7 +393,9 @@ export const TextAnimationSchema = z
   .strict();
 export type TextAnimation = z.infer<typeof TextAnimationSchema>;
 export const DEFAULT_TEXT_ANIMATION = { by: 'word', in: null, out: null, loop: null, inFrames: 20, outFrames: 15 } as const satisfies TextAnimation;
-export const TextClipSchema = z.object({ ...ClipBase, type: z.literal('text'), text: z.string().max(2000), style: TextStyleSchema, animation: TextAnimationSchema.optional() }).strict();
+export const TextClipSchema = z.object({ ...ClipBase, type: z.literal('text'), text: z.string().max(2000), style: TextStyleSchema, animation: TextAnimationSchema.optional(),
+  /** Live fields (life line, ADR-0021): `{date}`, `{hebrewDate}`, `{event}` … in `text` are resolved by the evaluator (core fields.ts); `{{` and `}}` are braces. Absent = the text is drawn verbatim, as before. */
+  fields: z.literal(true).optional() }).strict();
 
 // ---------- captions and transcripts (SPEC §16) ----------
 export const CAPTION_PRESETS = ['classic', 'karaoke', 'word-pop', 'box-highlight', 'reveal', 'underline', 'dim-ahead'] as const;
@@ -398,6 +509,16 @@ export const RecipeRunSchema = z.object({ id: Id, recipeId: z.string().max(64), 
 export type RecipeRun = z.infer<typeof RecipeRunSchema>;
 
 // ---------- analysis results (SPEC §19): measured from a source file, stored in SOURCE time, editable ----------
+/**
+ * Sections of a piece of music (ADR-0022): the one shape for built-in music (known by construction, musicStyles.ts) and for
+ * any later music analysis. A section starts at `start` (source time) and ends where the next one starts; the last ends with
+ * the file. `level` is how full the arrangement is, 0 (sparse) to 3 (fullest).
+ */
+export const MUSIC_SECTION_KINDS = ['intro', 'build', 'peak', 'break', 'ending'] as const;
+export const MusicSectionSchema = z.object({ start: RationalTimeSchema, kind: z.enum(MUSIC_SECTION_KINDS), level: z.number().int().min(0).max(3) }).strict();
+export type MusicSection = z.infer<typeof MusicSectionSchema>;
+/** A beat analysis holds at most this many sections. */
+export const MAX_MUSIC_SECTIONS = 200;
 const AnalysisOrigin = z.object({ method: z.string().max(200), params: z.record(z.string(), z.union([z.number(), z.string()])), createdAt: z.string(), createdBy: z.string(), edited: z.boolean().describe('true once a person or agent corrected the result by hand') }).strict();
 export const AnalysisSchema = z
   .object({
@@ -405,7 +526,9 @@ export const AnalysisSchema = z
     /** Picture cuts inside the source file (the first frame of each new shot), ascending. */
     scenes: z.object({ origin: AnalysisOrigin, cuts: z.array(RationalTimeSchema).max(20000) }).strict().optional(),
     /** Beat grid of the source audio, ascending. bpm and confidence describe the detector's estimate; beats are what editing tools use. */
-    beats: z.object({ origin: AnalysisOrigin, bpm: z.number().min(20).max(400).nullable(), confidence: z.number().min(0).max(1).nullable(), beats: z.array(RationalTimeSchema).max(50000), /** Beats that start a bar (each is one of `beats`); absent when no bar pattern was found or entered. */ downbeats: z.array(RationalTimeSchema).max(50000).optional(), /** Beats per bar behind `downbeats`, when known. */ meter: z.number().int().min(2).max(12).nullable().optional() }).strict().optional(),
+    beats: z.object({ origin: AnalysisOrigin, bpm: z.number().min(20).max(400).nullable(), confidence: z.number().min(0).max(1).nullable(), beats: z.array(RationalTimeSchema).max(50000), /** Beats that start a bar (each is one of `beats`); absent when no bar pattern was found or entered. */ downbeats: z.array(RationalTimeSchema).max(50000).optional(), /** Beats per bar behind `downbeats`, when known. */ meter: z.number().int().min(2).max(12).nullable().optional(),
+      /** Sections of the music, ascending, the first at 0 (validate.ts). Present for built-in music; attach_analysis (a measurement) never writes them. */
+      sections: z.array(MusicSectionSchema).max(MAX_MUSIC_SECTIONS).optional() }).strict().optional(),
   })
   .strict();
 
@@ -442,6 +565,22 @@ export const MARKER_COLORS = ['blue', 'green', 'yellow', 'red', 'purple'] as con
 export const MarkerSchema = z.object({ id: Id, sequenceId: Id, time: RationalTimeSchema.describe('Timeline time, frame-aligned'), label: z.string().max(200), color: z.enum(MARKER_COLORS) }).strict();
 export type Marker = z.infer<typeof MarkerSchema>;
 
+/** The per-project editing behaviour of the timeline (ProjectDocument.settings.timeline). */
+export const TimelineBehaviourSchema = z.object({ mainMagnet: z.boolean(), rippleDelete: z.boolean() }).strict();
+export type TimelineBehaviour = z.infer<typeof TimelineBehaviourSchema>;
+/** What a project without settings.timeline does: today's behaviour, both off. */
+export const LEGACY_TIMELINE: Readonly<TimelineBehaviour> = Object.freeze({ mainMagnet: false, rippleDelete: false });
+/** What a new project starts with (owner decision, UX redesign wave A): the main-track magnet and ripple delete both on. */
+export const NEW_PROJECT_TIMELINE: Readonly<TimelineBehaviour> = Object.freeze({ mainMagnet: true, rippleDelete: true });
+/** The timeline behaviour of a project, with an absent field read as both off. */
+export const timelineBehaviour = (doc: { settings: { timeline?: TimelineBehaviour } }): TimelineBehaviour => ({ ...LEGACY_TIMELINE, ...doc.settings.timeline });
+/**
+ * The main track of a sequence (the editor's V1, where the magnet and ripple delete act): its bottom-most picture track.
+ * Undefined when the sequence has no picture track.
+ */
+export const mainTrackOf = (doc: { sequences: Record<string, { tracks: { id: string; kind: string }[] }>; mainSequenceId: string }, sequenceId?: string) =>
+  doc.sequences[sequenceId ?? doc.mainSequenceId]?.tracks.find((t) => t.kind === 'video');
+
 export const SequenceSchema = z.object({ id: Id, name: z.string().max(128), tracks: z.array(TrackSchema).describe('Bottom-most layer first') }).strict();
 
 export const ProjectSchema = z
@@ -454,7 +593,16 @@ export const ProjectSchema = z
         /** How pictures are placed before their own transform: contain (default) or cover. Set by format variants. */
         fit: z.enum(['contain', 'cover']).optional(),
         /** Export loudness: one static gain so the whole programme measures `target` LUFS (integrated), lowered if needed to keep true peak under `truePeak` dBTP. Absent = no normalisation. */
-        loudness: z.object({ target: z.number().min(-40).max(-5), truePeak: z.number().min(-9).max(0) }).strict().optional() })
+        loudness: z.object({ target: z.number().min(-40).max(-5), truePeak: z.number().min(-9).max(0) }).strict().optional(),
+        /**
+         * How the timeline edits for this project (set_timeline_behaviour; docs/design/UX_REDESIGN.md §2 decision 6, §5 Delete).
+         * OPTIONAL: absent = both off, which is how every project behaved before the field existed, so stored documents and op
+         * logs replay as they always did. createProject writes both on for new projects (NEW_PROJECT_TIMELINE).
+         * No operation reads it: it is the editor's choice of which operation a key sends (rippleDelete: Delete sends
+         * ripple_delete_clips for clips on the main track, Shift+Delete keeps the gap with delete_clip; mainMagnet: the main
+         * track keeps its clips together while dragging). Agents choose their operations explicitly.
+         */
+        timeline: TimelineBehaviourSchema.optional() })
       .strict(),
     assets: z.record(Id, AssetSchema),
     sequences: z.record(Id, SequenceSchema),
@@ -471,6 +619,13 @@ export const ProjectSchema = z
     markers: z.record(Id, MarkerSchema).default({}),
     /** Motion tracks by track id (ADR-0015): positions of a point or box per source frame of a video asset. */
     motionTracks: z.record(Id, MotionTrackSchema).default({}),
+    /** Events (life line, ADR-0021): groups of library files by capture time, by event id. */
+    events: z.record(Id, LifeEventSchema).default({}),
+    /**
+     * People named in titles (ADR-0021, people section), by person id. OPTIONAL and absent until the first person is added
+     * (no default, so a project without people is stored exactly as before); read it as `doc.people ?? {}` (people.ts peopleOf).
+     */
+    people: z.record(Id, PersonSchema).optional(),
   })
   .strict();
 
@@ -499,13 +654,22 @@ export type Sequence = z.infer<typeof SequenceSchema>;
 export type ProjectDocument = z.infer<typeof ProjectSchema>;
 export type { MotionTrack, Follow, RedactRegion } from './tracking.ts';
 
-export interface NewProjectOptions { id: string; name: string; width?: number; height?: number; frameRate?: { num: number; den: number }; sampleRate?: number }
+export interface NewProjectOptions {
+  id: string; name: string; width?: number; height?: number; frameRate?: { num: number; den: number }; sampleRate?: number;
+  /**
+   * The timeline behaviour the new project starts with. Default NEW_PROJECT_TIMELINE (magnet and ripple delete on); null leaves
+   * the field out, as projects made before it existed (read as both off). It is part of the project's initial document, not an
+   * operation, so it is not undone and an existing project's op log replays exactly as before.
+   */
+  timeline?: TimelineBehaviour | null;
+}
 export function createProject(o: NewProjectOptions): ProjectDocument {
+  const timeline = o.timeline === undefined ? { ...NEW_PROJECT_TIMELINE } : o.timeline === null ? undefined : TimelineBehaviourSchema.parse(o.timeline);
   return {
     schemaVersion: SCHEMA_VERSION,
     id: o.id,
     name: o.name,
-    settings: { width: o.width ?? 1080, height: o.height ?? 1920, frameRate: o.frameRate ?? { num: 30, den: 1 }, sampleRate: o.sampleRate ?? 48000, background: '#000000' },
+    settings: { width: o.width ?? 1080, height: o.height ?? 1920, frameRate: o.frameRate ?? { num: 30, den: 1 }, sampleRate: o.sampleRate ?? 48000, background: '#000000', ...(timeline ? { timeline } : {}) },
     assets: {},
     sequences: {
       seq_main: {
@@ -525,6 +689,7 @@ export function createProject(o: NewProjectOptions): ProjectDocument {
     recipeRuns: {},
     markers: {},
     motionTracks: {},
+    events: {},
   };
 }
 
@@ -542,5 +707,9 @@ export function migrateProject(raw: unknown): ProjectDocument {
     if (!step) throw new Error(`no migration from schema ${doc.schemaVersion}`);
     doc = step(doc);
   }
-  return ProjectSchema.parse(doc);
+  const out = ProjectSchema.parse(doc);
+  // A project without people has no `people` key (entities.ts: undoing the first add_person deletes the emptied map), so a
+  // stored or imported `people: {}` reads as absent and the undo of the first add_person gives the document back exactly.
+  if (out.people && Object.keys(out.people).length === 0) delete out.people;
+  return out;
 }

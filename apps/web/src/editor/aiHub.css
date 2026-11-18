@@ -1,0 +1,52 @@
+/* AI hub (UX_REDESIGN §4.11). Scoped under .pf-hub (which is also .pf-ds); ds tokens only. Overrides the legacy .pf-ai rules of aiTools.css. */
+.pf-hub { container-type: inline-size; display: flex; flex-direction: column; gap: var(--pf-sp-5); color: var(--pf-text); font-family: var(--pf-font); }
+.pf-hub-head { display: flex; flex-direction: column; gap: var(--pf-sp-2); }
+.pf-hub .pf-hub-title { margin: 0; font-size: var(--pf-fs-lg); line-height: var(--pf-lh-lg); font-weight: var(--pf-fw-semibold); color: var(--pf-text); letter-spacing: 0; font-family: var(--pf-font); }
+.pf-hub-counts { margin: 0; display: flex; flex-wrap: wrap; gap: var(--pf-sp-2) var(--pf-sp-5); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); color: var(--pf-text-2); }
+.pf-hub-privacy { color: var(--pf-text-3); }
+.pf-hub-jobs { display: flex; flex-direction: column; gap: var(--pf-sp-3); padding: var(--pf-sp-4); border-radius: var(--pf-r-lg); background: var(--pf-surface-2); box-shadow: var(--pf-e1); }
+.pf-hub-status { font-size: var(--pf-fs-xs); color: var(--pf-text-3); }
+.pf-hub-status p { margin: 0; }
+
+.pf-hub .pf-ai-tabs { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); border: 0; padding: 0; }
+.pf-hub .pf-ai-tabs [role=tab] { min-block-size: var(--pf-h-sm); padding: 0 var(--pf-sp-5); border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-pill); background: var(--pf-surface-2); color: var(--pf-text-2); font: inherit; font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-medium); cursor: pointer; }
+.pf-hub .pf-ai-tabs [role=tab]:hover { color: var(--pf-text); background: var(--pf-surface-3); }
+.pf-hub .pf-ai-tabs [role=tab][aria-selected=true] { background: var(--pf-frame-soft); border-color: var(--pf-frame); color: var(--pf-text); font-weight: var(--pf-fw-semibold); }
+
+.pf-hub .pf-ai-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: var(--pf-sp-5); align-items: start; }
+.pf-hub-card { display: flex; flex-direction: column; gap: var(--pf-sp-4); padding: var(--pf-sp-6); background: var(--pf-surface-2); border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-lg); box-shadow: var(--pf-hilite); min-inline-size: 0; }
+.pf-hub-card.is-running { border-color: var(--pf-agent); }
+.pf-hub-card.is-setup, .pf-hub-card.is-off { border-style: dashed; background: transparent; }
+.pf-hub-card-top { display: flex; align-items: center; gap: var(--pf-sp-4); }
+.pf-hub-card h3 { flex: 1; margin: 0; font-size: var(--pf-fs-md); line-height: var(--pf-lh-md); font-weight: var(--pf-fw-semibold); color: var(--pf-text); letter-spacing: 0; }
+.pf-hub-ico { display: grid; place-items: center; flex: none; inline-size: 36px; block-size: 36px; border-radius: var(--pf-r-md); background: var(--pf-surface-4); color: var(--pf-info); }
+.is-ready .pf-hub-ico { color: var(--pf-frame); background: var(--pf-frame-soft); }
+.is-running .pf-hub-ico { color: var(--pf-agent); background: var(--pf-agent-soft); }
+.pf-hub-purpose { margin: 0; font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); color: var(--pf-text-2); }
+.pf-hub-state { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3); }
+.pf-hub-pill { display: inline-flex; align-items: center; padding: 2px var(--pf-sp-4); border-radius: var(--pf-r-pill); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); font-weight: var(--pf-fw-medium); border: 1px solid var(--pf-line-control); color: var(--pf-text-2); }
+.pf-hub-pill.is-ready { border-color: var(--pf-frame); color: var(--pf-frame); background: var(--pf-frame-soft); }
+.pf-hub-pill.is-running { border-color: var(--pf-agent); color: var(--pf-agent); background: var(--pf-agent-soft); }
+.pf-hub-pill.is-off { border-style: dashed; color: var(--pf-text-3); }
+.pf-hub-pill.is-prep { color: var(--pf-text-2); }
+
+.pf-hub details { border: 0; padding: 0; background: transparent; font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-hub summary { cursor: pointer; color: var(--pf-info); font-weight: var(--pf-fw-medium); min-block-size: 24px; display: flex; align-items: center; }
+.pf-hub summary:hover { text-decoration: underline; }
+.pf-hub details[open] > summary { margin-block-end: var(--pf-sp-3); }
+.pf-hub-how { padding: var(--pf-sp-4) var(--pf-sp-5) !important; background: var(--pf-surface-1) !important; border-radius: var(--pf-r-md); }
+.pf-hub-how ol, .pf-hub-how ul { margin: 0 0 var(--pf-sp-4); padding-inline-start: var(--pf-sp-7); display: grid; gap: var(--pf-sp-3); color: var(--pf-text-2); }
+.pf-hub-how .pf-ai-why { color: var(--pf-attention); }
+.pf-hub-tech { margin-block-start: var(--pf-sp-3); }
+.pf-hub .muted { color: var(--pf-text-3); }
+.pf-hub .danger { color: var(--pf-danger); }
+.pf-hub .pf-ai-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3); }
+.pf-hub .pf-ai-badge { padding: 0 var(--pf-sp-3); border: 1px solid var(--pf-line-control); color: var(--pf-text-2); border-radius: var(--pf-r-pill); font-size: 12px; line-height: 18px; }
+.pf-hub .pf-ai-model { margin: 0; }
+.pf-hub .pf-ai-model summary { color: var(--pf-text-3); font-weight: var(--pf-fw-regular); }
+.pf-hub .pf-ai-sheet { display: grid; gap: var(--pf-sp-4); padding: var(--pf-sp-5); background: var(--pf-surface-1); border: 1px solid var(--pf-line); border-radius: var(--pf-r-md); }
+.pf-hub .pf-ai-sheet select, .pf-hub .pf-ai-sheet input[type=number], .pf-hub .pf-ai-sheet input[type=text] { min-block-size: var(--pf-h-md); background: var(--pf-surface-2); color: var(--pf-text); border: 1px solid var(--pf-line-control); border-radius: var(--pf-r-sm); font: inherit; font-size: var(--pf-fs-xs); }
+.pf-hub .pf-ai-job { display: grid; gap: var(--pf-sp-3); padding-block-start: var(--pf-sp-4); border-block-start: 1px solid var(--pf-line); }
+.pf-hub [role=progressbar][data-testid=ai-progress] { block-size: 6px; border-radius: var(--pf-r-pill); background: var(--pf-surface-4); overflow: hidden; }
+.pf-hub .pf-ai-bar { block-size: 100%; background: var(--pf-agent); border-radius: inherit; }
+.pf-hub button:focus-visible, .pf-hub summary:focus-visible, .pf-hub [role=tab]:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }

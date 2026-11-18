@@ -25,6 +25,7 @@ import { assertStorageRoom } from './storage.ts';
 import { FrameFlashCheck, type PhotosensitivityReport } from './flashCheck.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 import type { ComputeLane } from './aiContracts.ts';
+import { fieldIssues } from './preflight.fields.ts';
 
 const exec = promisify(execFile);
 
@@ -63,6 +64,13 @@ export function variantDoc(doc: ProjectDocument, variantId?: string): ProjectDoc
   if (!doc.variants?.[variantId]) throw new ApiError(404, 'not_found', `format variant ${variantId} not found`, { variantId, available: Object.keys(doc.variants ?? {}) }, 'get_summary lists the variants.');
   return projectVariant(doc, variantId);
 }
+/**
+ * How the rendered RGBA frames become the picture a video codec encodes: BT.709, limited range, 4:2:0 (two chroma samples
+ * per 2×2 pixels). Exported so a proof can put a still through the same conversion without a codec's loss.
+ */
+export const EXPORT_PIXEL_FILTER = 'scale=in_range=full:out_range=tv:out_color_matrix=bt709:flags=accurate_rnd+full_chroma_int,format=yuv420p';
+/** The colour tags written with it. */
+export const EXPORT_COLOR_TAGS = ['-color_range', 'tv', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709'] as const;
 const CRF = { 'mp4-h264-aac': { draft: 28, standard: 21, high: 16 }, 'webm-vp9-opus': { draft: 40, standard: 32, high: 24 } } as const;
 /** Rough bits per pixel per frame, used ONLY for the labelled size estimate. */
 const BPP = { draft: 0.03, standard: 0.07, high: 0.14 } as const;
@@ -149,6 +157,14 @@ export class Exporter {
       if (frames <= 0) blockers.push({ code: 'empty_range', message: `range [${options.range.startFrame}, ${options.range.endFrame}) contains no frames (sequence has ${total})`, ids: [] });
     }
     if (total === 0) blockers.push({ code: 'empty_sequence', message: 'the sequence has no clips to export', ids: [] });
+    // life line (ADR-0021): a title field without data would silently leave out words the author placed, so it stops an export of
+    // moving picture, like a missing font. A still is never stopped (the editor's own frames must draw, with the field empty),
+    // and sound alone has no titles. The preflight report lists the same issues with their frame ranges (preflight.ts).
+    if (options.format !== 'png' && options.format !== 'wav')
+      for (const i of fieldIssues(doc, { startFrame: first, endFrame: first + Math.max(0, frames) })) {
+        if (i.severity === 'blocker') blockers.push({ code: i.code, message: i.message, ids: i.ids });
+        else if (i.severity === 'warning') warnings.push({ code: i.code, message: i.message, ids: i.ids });
+      }
     const seq = doc.sequences[doc.mainSequenceId]!;
     const used = new Map<string, number>();
     const families = new Set<string>();
@@ -424,9 +440,9 @@ export class Exporter {
             '-hide_banner', '-v', 'error', '-y',
             '-f', 'rawvideo', '-pix_fmt', 'rgba', '-video_size', `${output.width}x${output.height}`, '-framerate', `${frameRate.num}/${frameRate.den}`, '-i', 'pipe:0',
             '-i', wav, '-map', '0:v:0', '-map', '1:a:0',
-            '-vf', 'scale=in_range=full:out_range=tv:out_color_matrix=bt709:flags=accurate_rnd+full_chroma_int,format=yuv420p',
+            '-vf', EXPORT_PIXEL_FILTER,
             ...(mp4 ? ['-c:v', 'libx264', '-preset', options.quality === 'draft' ? 'veryfast' : 'medium', '-crf', crf, '-profile:v', 'high'] : ['-c:v', 'libvpx-vp9', '-crf', crf, '-b:v', '0', '-row-mt', '1', '-deadline', 'good', '-cpu-used', options.quality === 'high' ? '2' : '4']),
-            '-color_range', 'tv', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709',
+            ...EXPORT_COLOR_TAGS,
             ...(mp4 ? ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-f', 'mp4'] : ['-c:a', 'libopus', '-b:a', '160k', '-f', 'webm']), partial,
           ]);
           this.running.ff = ff;

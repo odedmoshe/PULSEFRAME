@@ -20,6 +20,7 @@ import type { Principal } from './auth.ts';
 import type { Exporter, Manifest } from './export.ts';
 import { PHOTOSENSITIVITY_METHOD } from './flashCheck.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
+import { assertMayTakeRendered } from './peoplePrivacy.ts';
 
 export const LEASE_SECONDS = 15;
 export const HEARTBEAT_SECONDS = 5;
@@ -139,6 +140,10 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
     const sid = SessionId.safeParse(sessionId);
     if (!sid.success) throw new ApiError(400, 'invalid_request', 'sessionId (string, 8..128 chars) is required');
     const projectId = c.req.param('id')!;
+    // The answer carries the document the tab renders the film from. A credential without the people scope is handed it
+    // without birth dates (the store answers so), and is refused altogether when a title shows an age: the film would silently
+    // lack it (ADR-0021, people section; peoplePrivacy.ts rule 2b).
+    assertMayTakeRendered(p, store.wholeProject(projectId).doc, 'export this project');
     const { doc, revision } = store.getProject(projectId);
     const { manifest, blockers, warnings } = exporter.plan(doc, revision, rawOptions);
     // Loudness normalisation needs the R128 measurement pass, which only the server route has. Refuse rather than export at a different level.

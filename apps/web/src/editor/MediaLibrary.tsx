@@ -1,18 +1,33 @@
 import { useEffect, useRef, useState } from 'react';
-import { AudioLines, Eye, FileMusic, Film, Image as ImageIcon, Palette, Plus, Trash, Upload, CircleCheck } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { AudioLines, Check, Ellipsis, Eye, FileMusic, Film, Image as ImageIcon, Palette, Plus, Trash2, Info } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { assetNotices, lutUsers, type Asset, type ProjectDocument } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { peaksForColumns, pickWaveformLevel } from '../clipVisuals.math.ts';
 import { DerivativeLoader, thumbTileAt, type LoadedDerivative } from './mediaThumb.ts';
 import { ASSET_DRAG_TYPE, useEditorState } from './store.ts';
+import { CHROME_STRINGS } from './chrome.strings.ts';
+import { onMenuKeyDown } from './menuKeys.ts';
 import { InlineRename } from './InlineRename.tsx';
 import { MEDIA_STRINGS } from './media.strings.ts';
+import { CaptureEditor, DateBadge } from './lifeline/CaptureEditor.tsx';
+import { LIFE_STRINGS } from './lifeline/lifeline.strings.ts';
+import { LIFE_TESTIDS } from './lifeline/lifeline.testids.ts';
+import { assetDisplayName } from './assetLabel.ts';
 import './mediaLibrary.css';
 
 type Loaded = LoadedDerivative<ImageBitmap> | null;
 
 const fmtDur = (s: number) => { const t = Math.max(0, Math.round(s)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+const stem = (name: string) => name.replace(/\.[A-Za-z0-9]{1,5}$/, '');
+const formatOf = (a: Asset) => (/\.([A-Za-z0-9]{1,5})$/.exec(a.name)?.[1] ?? a.mimeType.split('/')[1] ?? a.kind).toUpperCase();
+export type MediaFilter = 'all' | 'video' | 'audio' | 'image' | 'unused';
+/** The assets a filter and a search word keep (the drawer's chips and search box). */
+export function filterAssets(doc: ProjectDocument, query: string, filter: MediaFilter): Asset[] {
+  const used = usedAssets(doc); const q = query.trim().toLowerCase();
+  return Object.values(doc.assets).filter((a) => (filter === 'all' || (filter === 'unused' ? a.kind !== 'lut' && !used.has(a.id) : a.kind === filter)) && (!q || a.name.toLowerCase().includes(q)));
+}
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
@@ -63,7 +78,7 @@ function Thumb({ projectId, a, refreshKey }: { projectId: string; a: Asset; refr
       const m = cur.meta;
       const level = pickWaveformLevel(m.levels, m.totalSamples, W);
       const peaks = peaksForColumns({ view: new DataView(cur.buffer), level, firstSample: 0, sampleCount: m.totalSamples, columns: W });
-      ctx.fillStyle = '#d2e1ff'; const k = H / 2 / 32768;
+      ctx.fillStyle = getComputedStyle(c).getPropertyValue('--pf-k-sfx').trim() || 'currentColor'; const k = H / 2 / 32768;
       for (let x = 0; x < W; x++) { const top = Math.max(0, H / 2 - peaks[x * 2 + 1]! * k), bot = Math.min(H, H / 2 - peaks[x * 2]! * k); ctx.fillRect(x, top, 1, Math.max(1, bot - top)); }
     }
     c.setAttribute('data-drawn', '1');
@@ -81,16 +96,84 @@ function Thumb({ projectId, a, refreshKey }: { projectId: string; a: Asset; refr
   return a.kind === 'video' ? <Film size={24} aria-hidden="true" /> : <FileMusic size={24} aria-hidden="true" />;
 }
 
-export function MediaGrid({ onView }: { onView: (id: string) => void }) {
+
+/** One card's ⋯ menu: view, notes about the file, remove. A popover placed from the button, closed by Esc, a click away or a choice. */
+function CardMenu({ a, doc, isLut, isUsed, onView }: { a: Asset; doc: ProjectDocument; isLut: boolean; isUsed: boolean; onView: (id: string) => void }) {
+  const { editor, state, t } = useEditorState();
+  const S = CHROME_STRINGS[state.lang];
+  const M = MEDIA_STRINGS[state.lang];
+  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
+  const [dating, setDating] = useState(false); // the capture date dialog (life line, ADR-0021)
+  const btn = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
+  const notices = assetNotices(a);
+  useEffect(() => {
+    if (!at) return;
+    const away = (e: MouseEvent) => { if (!pop.current?.contains(e.target as Node) && !btn.current?.contains(e.target as Node)) setAt(null); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); setAt(null); btn.current?.focus(); } };
+    document.addEventListener('mousedown', away); document.addEventListener('keydown', esc, true);
+    pop.current?.querySelector<HTMLElement>('[role^="menuitem"]:not(:disabled),select')?.focus();
+    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc, true); };
+  }, [at]);
+  const open = () => {
+    const r = btn.current!.getBoundingClientRect();
+    const rtl = document.documentElement.dir === 'rtl';
+    setAt({ top: Math.min(r.bottom + 4, window.innerHeight - 260), left: Math.max(8, Math.min(rtl ? r.right - 232 : r.left, window.innerWidth - 240)) });
+  };
+  const close = () => { setAt(null); btn.current?.focus(); };
+  return (
+    <>
+      <button ref={btn} type="button" className="pf-mc-btn" aria-haspopup="menu" aria-expanded={!!at} aria-label={`${S.cardMore}: ${a.name}`} title={S.cardMore} data-testid={`more-${a.id}`} onClick={() => (at ? setAt(null) : open())}><Ellipsis size={16} strokeWidth={1.75} aria-hidden="true" /></button>
+      {at && createPortal(
+        <div ref={pop} className="pf-ds pf-mc-pop" style={{ top: at.top, left: at.left }}>
+          {notices.length > 0 && (
+            <details className="pf-mc-notes" data-testid={`notes-${a.id}`} open>
+              <summary><Info size={16} strokeWidth={1.75} aria-hidden="true" />{S.fixNotes} <bdi className="num">({notices.length})</bdi></summary>
+              {notices.map((n) => (
+                <span key={n.code} className="pf-mc-note" data-testid="asset-notice" data-code={n.code}>
+                  {n.code === 'converted' ? `${t('notice.converted')}: ${n.reasons.map((r) => t(`notice.reason.${r}` as Key)).join(', ')}`
+                    : n.code === 'picture-starts-late' ? `${t('notice.pictureLate')} (${n.frames})`
+                    : n.code === 'sound-offset' ? `${n.seconds > 0 ? t('notice.soundLate') : t('notice.soundEarly')} (${Math.abs(n.seconds).toFixed(2)}s)`
+                    : t('notice.colourUntagged')}
+                  {n.code === 'colour-untagged' && (
+                    <label className="pf-mc-choice">{t('notice.colourReadAs')}{' '}
+                      <select value={n.readAs} data-testid={`colour-read-${a.id}`} onChange={(e) => void editor.commit([{ op: 'set_asset_colour', args: { assetId: a.id, readAs: e.target.value } }], 'Colour reading')}>
+                        <option value="auto">{t('notice.colourReadAs.auto')}</option>
+                        <option value="bt601">{t('notice.colourReadAs.bt601')}</option>
+                      </select>
+                    </label>
+                  )}
+                </span>
+              ))}
+            </details>
+          )}
+          <div className="pf-mc-menu" role="menu" aria-label={`${S.cardMore}: ${a.name}`} onKeyDown={(e) => { if (e.key === 'Tab') close(); else onMenuKeyDown(e); }}>
+          {a.kind !== 'image' && !isLut && <button type="button" role="menuitem" className="pf-mc-item" data-testid={`view-${a.id}`} onClick={() => { setAt(null); onView(a.id); }}><Eye size={16} strokeWidth={1.75} aria-hidden="true" />{t('source.open')}</button>}
+          {(a.kind === 'video' || a.kind === 'image') && <button type="button" role="menuitem" className="pf-mc-item" data-testid={LIFE_TESTIDS.captureEdit} onClick={() => { setAt(null); setDating(true); }}>{LIFE_STRINGS[state.lang].captureMenu}</button>}
+          <div role="separator" className="pf-mc-sep" />
+          <button type="button" role="menuitem" className="pf-mc-item is-danger" disabled={isUsed} aria-disabled={isUsed || undefined} aria-describedby={isUsed ? `why-${a.id}` : undefined} title={isUsed ? (isLut ? M.lutRemoveUsed : t('media.remove.used')) : undefined} data-testid={`remove-${a.id}`}
+            onClick={() => { close(); void editor.commit([{ op: 'remove_asset', args: { assetId: a.id } }], 'Remove file'); }}><Trash2 size={16} strokeWidth={1.75} aria-hidden="true" />{S.cardRemove}</button>
+          </div>
+          {isUsed && <p className="pf-mc-why" id={`why-${a.id}`}>{isLut ? M.lutRemoveUsed : t('media.remove.used')}</p>}
+        </div>, document.body)}
+      {dating && <CaptureEditor assetId={a.id} onClose={() => { setDating(false); btn.current?.focus(); }} />}
+    </>
+  );
+}
+
+export function MediaGrid({ onView, query = '', filter = 'all', only }: { onView: (id: string) => void; query?: string; filter?: MediaFilter; only?: readonly string[] }) {
   const { editor, state, t } = useEditorState();
   const { doc, derivativeTick } = state;
   const S = MEDIA_STRINGS[state.lang];
+  const C = CHROME_STRINGS[state.lang];
   if (!doc) return null;
   const used = usedAssets(doc);
-  const assets = Object.values(doc.assets);
-  if (assets.length === 0) return <p className="media-empty" data-testid="media-empty"><Upload size={22} aria-hidden="true" /><span>{t('media.empty')}</span></p>;
+  const all = Object.values(doc.assets);
+  if (all.length === 0) return null; // the drawer shows the drop zone (Library.tsx)
+  const assets = only ? only.flatMap((id) => (Object.hasOwn(doc.assets, id) ? [doc.assets[id]!] : [])) : filterAssets(doc, query, filter); // `only`: the files of one group of the life-line views, in the order given
+  if (assets.length === 0) return <p className="pf-mc-none" role="status" data-testid="media-nomatch">{C.noMatch(query.trim() || C.filters)}</p>;
   return (
-    <ul className="assets media-grid" aria-label={S.grid}>
+    <ul className="assets media-grid pf-mc-grid" aria-label={S.grid}>
       {assets.map((a) => {
         // A colour table (LUT) is not timeline material: it is applied to clips as an effect, and counts as used while an effect names it.
         const isLut = a.kind === 'lut';
@@ -98,46 +181,35 @@ export function MediaGrid({ onView }: { onView: (id: string) => void }) {
         const usedLabel = isLut ? S.lutInUse : S.inUse;
         const KindIcon = isLut ? Palette : a.kind === 'image' ? ImageIcon : a.kind === 'video' ? Film : AudioLines;
         const add = () => void editor.addAsset(a.id);
+        const an = doc.analyses[a.id];
+        const bpm = an?.beats?.bpm ? Math.round(an.beats.bpm) : null;
+        const shots = an?.scenes ? an.scenes.cuts.length + 1 : null;
+        const lang = doc.transcripts[a.id]?.language.split('-')[0]?.toUpperCase() ?? null;
         return (
-          <li key={a.id} className="media-card" draggable={!isLut} data-testid={`asset-${a.id}`} data-kind={a.kind} title={isLut ? S.lutHint : t('media.dragHint')}
+          <li key={a.id} className="media-card pf-mc" draggable={!isLut} data-testid={`asset-${a.id}`} data-kind={a.kind} title={isLut ? S.lutHint : t('media.dragHint')}
             onDragStart={isLut ? undefined : (e) => { e.dataTransfer.setData(ASSET_DRAG_TYPE, a.id); e.dataTransfer.effectAllowed = 'copy'; }}>
-            <div className="mc-thumb" onDoubleClick={isLut ? undefined : add}>
+            <div className="mc-thumb pf-mc-thumb" onDoubleClick={isLut ? undefined : add}>
               <Thumb projectId={doc.id} a={a} refreshKey={derivativeTick} />
-              <span className="mc-kind" aria-hidden="true"><KindIcon size={12} /></span>
-              {isLut
-                ? <span className="mc-badge mc-dur" dir="ltr" data-testid={`lut-size-${a.id}`} title={`${S.lut}: ${S.lutSize}`}>{a.lut ? `${a.lut.size}³` : 'LUT'}</span>
-                : <span className="mc-badge mc-dur" dir="ltr">{a.kind === 'image' ? `${a.image?.width}×${a.image?.height}` : fmtDur(T.toSeconds(a.duration))}</span>}
-              {isUsed && <span className="mc-used" title={usedLabel} role="img" aria-label={usedLabel} data-testid={`used-${a.id}`}><CircleCheck size={12} aria-hidden="true" /></span>}
-            </div>
-            <span className="mc-name"><span className="asset-name" dir="auto" title={a.name}>{a.name}</span>
-              <InlineRename value={a.name} label={`${t('media.rename')}: ${a.name}`} testid={`rename-${a.id}`} onCommit={(name) => void editor.commit([{ op: 'rename_asset', args: { assetId: a.id, name } }], 'Rename file')} /></span>
-            {assetNotices(a).length > 0 && (
-            <details className="mc-notes" data-testid={`notes-${a.id}`}>
-            <summary><span aria-hidden="true">ⓘ </span>{S.notes} <bdi>({assetNotices(a).length})</bdi></summary>
-            {assetNotices(a).map((n) => (
-              <span key={n.code} className="asset-notice" data-testid="asset-notice" data-code={n.code}>
-                <span aria-hidden="true">ⓘ </span>
-                {n.code === 'converted' ? `${t('notice.converted')}: ${n.reasons.map((r) => t(`notice.reason.${r}` as Key)).join(', ')}`
-                  : n.code === 'picture-starts-late' ? `${t('notice.pictureLate')} (${n.frames})`
-                  : n.code === 'sound-offset' ? `${n.seconds > 0 ? t('notice.soundLate') : t('notice.soundEarly')} (${Math.abs(n.seconds).toFixed(2)}s)`
-                  : t('notice.colourUntagged')}
-                {n.code === 'colour-untagged' && (
-                  <label className="notice-choice">{t('notice.colourReadAs')}{' '}
-                    <select value={n.readAs} data-testid={`colour-read-${a.id}`} onChange={(e) => void editor.commit([{ op: 'set_asset_colour', args: { assetId: a.id, readAs: e.target.value } }], 'Colour reading')}>
-                      <option value="auto">{t('notice.colourReadAs.auto')}</option>
-                      <option value="bt601">{t('notice.colourReadAs.bt601')}</option>
-                    </select>
-                  </label>
-                )}
+              <span className="pf-mc-badge pf-mc-fmt num"><bdi dir="ltr">{isLut ? 'CUBE' : formatOf(a)}</bdi></span>
+              <span className="pf-mc-badge pf-mc-dur num"><bdi dir="ltr" className="pf-mc-durIn">
+                <KindIcon size={11} aria-hidden="true" />{isLut ? <span data-testid={`lut-size-${a.id}`} title={`${S.lut}: ${S.lutSize}`}>{a.lut ? `${a.lut.size}³` : 'LUT'}</span> : a.kind === 'image' ? `${a.image?.width}×${a.image?.height}` : fmtDur(T.toSeconds(a.duration))}
+              </bdi></span>
+              {isUsed && <span className="pf-mc-used" title={usedLabel} role="img" aria-label={usedLabel} data-testid={`used-${a.id}`}><Check size={12} strokeWidth={2.5} aria-hidden="true" /></span>}
+              <span className="pf-mc-hover">
+                {!isLut && <button type="button" className="pf-mc-add" onClick={add} data-testid={`add-${a.id}`} aria-label={`${t('media.add')}: ${a.name}`} title={C.cardAdd}><Plus size={18} strokeWidth={2} aria-hidden="true" /></button>}
+                <CardMenu a={a} doc={doc} isLut={isLut} isUsed={isUsed} onView={onView} />
               </span>
-            ))}
-            </details>
-            )}
-            <div className="mc-actions">
-              {!isLut && <button className="ghost" onClick={add} data-testid={`add-${a.id}`} aria-label={`${t('media.add')}: ${a.name}`} title={t('media.add')}><Plus size={16} aria-hidden="true" /></button>}
-              {a.kind !== 'image' && !isLut && <button className="ghost" onClick={() => onView(a.id)} data-testid={`view-${a.id}`} aria-label={`${t('source.open')}: ${a.name}`} title={t('source.open')}><Eye size={16} aria-hidden="true" /></button>}
-              <button className="ghost danger" disabled={isUsed} title={isUsed ? (isLut ? S.lutRemoveUsed : t('media.remove.used')) : t('media.remove')} aria-label={`${t('media.remove')}: ${a.name}`} onClick={() => void editor.commit([{ op: 'remove_asset', args: { assetId: a.id } }], 'Remove file')} data-testid={`remove-${a.id}`}><Trash size={16} aria-hidden="true" /></button>
             </div>
+            <span className="pf-mc-name"><span className="asset-name" dir="auto" title={a.name}>{stem(assetDisplayName(a, state.lang) ?? a.name)}</span>
+              <InlineRename value={a.name} label={`${t('media.rename')}: ${a.name}`} testid={`rename-${a.id}`} className="pf-mc-rename" onCommit={(name) => void editor.commit([{ op: 'rename_asset', args: { assetId: a.id, name } }], 'Rename file')} /></span>
+            <DateBadge assetId={a.id} />
+            {(bpm || shots || lang) && (
+              <span className="pf-mc-glyphs">
+                {bpm && <span title={C.badgeBeat}><bdi className="num">{bpm}</bdi> {C.bpmWord}</span>}
+                {shots && shots > 1 && <span title={C.badgeShots}><bdi className="num">{shots}</bdi> {C.shotsWord}</span>}
+                {lang && <span title={C.badgeVoice}><bdi className="num">{lang}</bdi></span>}
+              </span>
+            )}
           </li>
         );
       })}

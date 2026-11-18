@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-17T10:34:52.846Z",
+  "ranAt": "2026-11-18T02:17:34.104Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v553 x64",
+    "platform": "Linux 6.18.44-fc-v595 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
@@ -20,7 +20,7 @@
       "name": "import control is reachable with Tab and shows a visible focus ring",
       "ok": true,
       "detail": {
-        "tabs": 11
+        "tabs": 13
       }
     },
     {
@@ -53,7 +53,7 @@
         ],
         [
           20,
-          -0.01
+          0.01
         ]
       ]
     },
@@ -61,7 +61,7 @@
       "name": "the property interpolates between the two keys",
       "ok": true,
       "detail": {
-        "at10": -0.005
+        "at10": 0.005
       }
     },
     {
@@ -123,8 +123,8 @@
       "ok": true,
       "detail": {
         "xBefore": 0,
-        "xAfter": 0.1588,
-        "expectedDelta": 0.1588
+        "xAfter": 0.1587,
+        "expectedDelta": 0.1587
       }
     },
     {
@@ -147,23 +147,23 @@
       "name": "English: library on the left, inspector on the right; timeline stays LTR in both languages",
       "ok": true,
       "detail": {
-        "libraryLeft": 0,
-        "inspectorLeft": 1110,
+        "libraryLeft": 80,
+        "inspectorLeft": 1114,
         "timelineDir": "ltr"
       }
     },
     {
       "name": "activity feed is written in the interface language (Hebrew), not in server English",
       "ok": true,
-      "detail": "את/הקיפריים#15"
+      "detail": "את/הקיפריים"
     },
     {
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
       "ok": true,
       "detail": {
-        "editor-he": 1,
-        "editor-en": 1,
-        "palette-en": 1
+        "editor-he": 0.988114,
+        "editor-en": 0.988175,
+        "palette-en": 0.99116
       }
     },
     {
@@ -562,14 +562,34 @@
       }
     },
     {
-      "name": "\"move track up\" from the palette swaps the selected clip's track with the one above it (list order and the timeline rows both change), and Ctrl+Z restores the order",
+      "name": "\"move track up\" from the palette swaps the selected clip's track with the one above it in the list, the timeline rows before and after are exactly the lane order of that list (titles, captions, picture stack front-most first, sound in list order), and Ctrl+Z restores the order",
       "ok": true,
       "detail": {
         "upCmd": "track.moveUp",
         "before": 3,
         "moved": true,
         "shownMatches": true,
-        "restored": true
+        "restored": true,
+        "kinds": [
+          "video",
+          "text",
+          "audio"
+        ],
+        "shownBefore": [
+          "trk_text",
+          "trk_video",
+          "trk_audio"
+        ],
+        "shownAfter": [
+          "trk_text",
+          "trk_video",
+          "trk_audio"
+        ],
+        "rowsBefore": [
+          "trk_text",
+          "trk_video",
+          "trk_audio"
+        ]
       }
     },
     {
@@ -607,22 +627,27 @@
       "detail": {
         "sampled": 40,
         "movingFramesCompared": 38,
-        "differentSourceFrames": 29,
+        "differentSourceFrames": 28,
         "firstFrames": [
           {
-            "frame": 1,
+            "frame": 3,
             "quality": "draft",
-            "code": 1
+            "code": 3
           },
           {
-            "frame": 8,
+            "frame": 6,
             "quality": "draft",
-            "code": 8
+            "code": 6
           },
           {
-            "frame": 10,
+            "frame": 9,
             "quality": "draft",
-            "code": 10
+            "code": 9
+          },
+          {
+            "frame": 12,
+            "quality": "draft",
+            "code": 12
           },
           {
             "frame": 15,
@@ -633,11 +658,6 @@
             "frame": 18,
             "quality": "draft",
             "code": 18
-          },
-          {
-            "frame": 21,
-            "quality": "draft",
-            "code": 21
           }
         ],
         "mismatches": []
@@ -655,29 +675,27 @@
         "stillMin": 0,
         "stillMax": 255,
         "histInk": 306,
-        "waveInk": 1934,
-        "vecInk": 56,
+        "waveInk": 1913,
+        "vecInk": 54,
         "saturation": 10.6
       }
     },
     {
-      "name": "workspaces Motion and Color: both offer the clip panel only; Motion shows position/size, speed and entrances without the look controls; Color shows the look controls without them; Pro shows all of it",
+      "name": "workspaces Motion and Look: both offer the selection only (no panel tabs); Motion opens the picture clip on its motion tab (entrances shown, no look controls, no position or speed on screen); Look opens it on its colour tab (the look controls without position, speed or entrances); Edit opens it on its basic tab (position/size, no look controls); the all-tools view shows all of it with every panel",
       "ok": true,
       "detail": {
         "motion": {
-          "tabs": [
-            "clip"
-          ],
-          "transform": 1,
-          "speed": 1,
+          "tabs": [],
+          "objectTab": "motion",
+          "transform": 0,
+          "speed": 0,
           "animate": 1,
           "look": 0,
           "analysis": 0
         },
         "color": {
-          "tabs": [
-            "clip"
-          ],
+          "tabs": [],
+          "objectTab": "colour",
           "transform": 0,
           "speed": 0,
           "animate": 0,
@@ -685,6 +703,15 @@
           "analysis": 0
         },
         "proParts": {
+          "tabs": [],
+          "objectTab": "basic",
+          "transform": 1,
+          "speed": 0,
+          "animate": 0,
+          "look": 0,
+          "analysis": 0
+        },
+        "allParts": {
           "tabs": [
             "clip",
             "speech",
@@ -695,6 +722,7 @@
             "recipes",
             "all"
           ],
+          "objectTab": "basic",
           "transform": 1,
           "speed": 1,
           "animate": 1,
@@ -729,7 +757,7 @@
       }
     },
     {
-      "name": "workspaces: Quick offers recipes, speech, captions and deliver and shows the recipes panel; Sound offers sound and clip; the choice survives a reload, and so does a chosen target track; Pro offers every panel again; the project is not changed by any of it",
+      "name": "workspaces: Quick offers recipes, speech, captions and deliver and shows the recipes panel; Sound offers sound and clip; Captions offers captions, speech and clip; Deliver offers deliver, review and recipes; each shows its first panel; the choice survives a reload, and so does a chosen target track; Edit shows the selection only, with the all-tools button that offers every panel again; the project is not changed by any of it",
       "ok": true,
       "detail": {
         "proTabs": 8,
@@ -753,6 +781,26 @@
             "sound"
           ]
         },
+        "captions": {
+          "tabs": [
+            "captions",
+            "speech",
+            "clip"
+          ],
+          "panels": [
+            "captions"
+          ]
+        },
+        "deliver": {
+          "tabs": [
+            "deliver",
+            "review",
+            "recipes"
+          ],
+          "panels": [
+            "deliver"
+          ]
+        },
         "afterReload": {
           "ws": "sound",
           "tabs": [
@@ -760,7 +808,9 @@
             "clip"
           ]
         },
-        "back": 8
+        "back": [],
+        "allButton": 1,
+        "allAgain": 8
       }
     },
     {
@@ -768,7 +818,7 @@
       "ok": true,
       "detail": {
         "unexpected": [],
-        "leftOut": 1
+        "leftOut": 0
       }
     }
   ]

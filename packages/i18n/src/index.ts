@@ -3,6 +3,9 @@ import { VISUAL_WAVE_EN, VISUAL_WAVE_HE } from './visualWave.ts';
 import { TEMPLATES_EN, TEMPLATES_HE } from './templates.ts';
 import { TREND_PACK_EN, TREND_PACK_HE } from './trendPack.ts';
 import { CLEANUP_WAVE_EN, CLEANUP_WAVE_HE } from './cleanupWave.ts';
+import { LIFELINE_EN, LIFELINE_HE } from './lifeline.ts';
+import { PACKS_EN, PACKS_HE } from './packs.ts';
+import { PEOPLE_EN, PEOPLE_HE } from './people.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
@@ -88,7 +91,7 @@ export const he = {
   'import.encodingGuessed': 'הקובץ אינו מציין קידוד תווים; הוא נקרא כ־',
   'op.freeze_frame': 'הקפאת פריים', 'freeze.seconds': 'הקפאת הפריים בסמן הניגון (שניות)', 'freeze.apply': 'הקפאת פריים', 'freeze.hint': 'התמונה בסמן הניגון מוחזקת למשך הזמן שנבחר; כל מה שאחריה זז מאוחר יותר.', 'freeze.note': 'זהו פריים מוקפא: אפשר לקצר או להאריך אותו בגרירת הקצה.',
   'op.set_clip_speed': 'מהירות קליפ', 'speed.label': 'מהירות (×)', 'speed.keepPitch': 'לשמור על גובה הצליל (מתאים לדיבור ולמוזיקה, בערך בין חצי מהירות לכפולה)', 'speed.presets': 'מהירויות נפוצות', 'speed.hint': 'אורך הקליפ משתנה עם המהירות. גובה הצליל עולה ויורד יחד עם המהירות, אלא אם נבחר לשמור עליו.',
-  'op.set_clip_fades': 'פייד לקליפ', 'op.set_track_audio': 'שמע רצועה', 'op.set_ducking': 'הנמכה אוטומטית', 'op.set_loudness_target': 'יעד עוצמה', 'op.add_effect': 'הוספת אפקט', 'op.update_effect': 'עדכון אפקט', 'op.remove_effect': 'הסרת אפקט', 'op.set_clip_blend': 'מצב מיזוג', 'op.set_clip_mask': 'מסכה', 'op.set_transition': 'מעבר',
+  'op.set_clip_fades': 'פייד לקליפ', 'op.set_track_audio': 'שמע רצועה', 'op.set_ducking': 'הנמכה אוטומטית', 'op.set_loudness_target': 'יעד עוצמה', 'op.set_timeline_behaviour': 'התנהגות ציר הזמן', 'op.ripple_delete_clips': 'מחיקה וסגירת הרווח', 'op.add_effect': 'הוספת אפקט', 'op.update_effect': 'עדכון אפקט', 'op.remove_effect': 'הסרת אפקט', 'op.set_clip_blend': 'מצב מיזוג', 'op.set_clip_mask': 'מסכה', 'op.set_transition': 'מעבר',
   'animate': 'אנימציית כניסה ויציאה', 'animate.in': 'כניסה', 'animate.out': 'יציאה', 'animate.frames': 'משך (פריימים)', 'animate.apply': 'החלה', 'animate.note': 'כניסה מחליפה רק את מה שנמצא בתחילת הקליפ, ויציאה רק את מה שבסופו (גם תנועה מספריית התנועות). צד שנשאר על "ללא" לא משתנה, וקיפריימים באמצע הקליפ נשמרים.',
   'animate.none': 'ללא', 'animate.fade': 'עמעום', 'animate.pop': 'קפיצה', 'animate.slide-up': 'החלקה מלמטה', 'animate.slide-down': 'החלקה מלמעלה', 'animate.slide-left': 'החלקה משמאל', 'animate.slide-right': 'החלקה מימין',
   'look': 'מראה', 'look.effects': 'אפקטים', 'look.effects.none': 'אין אפקטים על הקליפ', 'look.effect.add': 'הוספת אפקט…', 'look.effect.bypass': 'פעיל', 'look.effect.up': 'הזזה למעלה', 'look.effect.down': 'הזזה למטה', 'look.effect.remove': 'הסרת אפקט', 'look.blend': 'מצב מיזוג',
@@ -194,6 +197,9 @@ export const he = {
   ...TEMPLATES_HE,
   ...TREND_PACK_HE,
   ...CLEANUP_WAVE_HE,
+  ...LIFELINE_HE,
+  ...PACKS_HE,
+  ...PEOPLE_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -279,7 +285,7 @@ export const en: Record<keyof typeof he, string> = {
   'import.encodingGuessed': 'The file does not declare its character encoding; it was read as',
   'op.freeze_frame': 'Freeze frame', 'freeze.seconds': 'Hold the frame at the playhead (seconds)', 'freeze.apply': 'Freeze frame', 'freeze.hint': 'The picture at the playhead is held for the chosen time; everything after it moves later.', 'freeze.note': 'This is a freeze frame: drag its edge to make it shorter or longer.',
   'op.set_clip_speed': 'Clip speed', 'speed.label': 'Speed (×)', 'speed.keepPitch': 'Keep the pitch of the sound (for speech and music, roughly half to double speed)', 'speed.presets': 'Common speeds', 'speed.hint': 'The clip gets shorter or longer with its speed. Sound pitch rises and falls with the speed unless you choose to keep it.',
-  'op.set_clip_fades': 'Clip fades', 'op.set_track_audio': 'Track audio', 'op.set_ducking': 'Auto ducking', 'op.set_loudness_target': 'Loudness target', 'op.add_effect': 'Added effect', 'op.update_effect': 'Updated effect', 'op.remove_effect': 'Removed effect', 'op.set_clip_blend': 'Blend mode', 'op.set_clip_mask': 'Mask', 'op.set_transition': 'Transition',
+  'op.set_clip_fades': 'Clip fades', 'op.set_track_audio': 'Track audio', 'op.set_ducking': 'Auto ducking', 'op.set_loudness_target': 'Loudness target', 'op.set_timeline_behaviour': 'Timeline behaviour', 'op.ripple_delete_clips': 'Delete and close the gap', 'op.add_effect': 'Added effect', 'op.update_effect': 'Updated effect', 'op.remove_effect': 'Removed effect', 'op.set_clip_blend': 'Blend mode', 'op.set_clip_mask': 'Mask', 'op.set_transition': 'Transition',
   'animate': 'Entrance and exit animation', 'animate.in': 'Entrance', 'animate.out': 'Exit', 'animate.frames': 'Length (frames)', 'animate.apply': 'Apply', 'animate.note': 'An entrance replaces only what is at the start of the clip, and an exit only what is at its end (a motion from the library too). A side left at "none" is kept, and keyframes further in stay.',
   'animate.none': 'None', 'animate.fade': 'Fade', 'animate.pop': 'Pop', 'animate.slide-up': 'Slide up', 'animate.slide-down': 'Slide down', 'animate.slide-left': 'Slide left', 'animate.slide-right': 'Slide right',
   'look': 'Look', 'look.effects': 'Effects', 'look.effects.none': 'No effects on this clip', 'look.effect.add': 'Add effect…', 'look.effect.bypass': 'Enabled', 'look.effect.up': 'Move up', 'look.effect.down': 'Move down', 'look.effect.remove': 'Remove effect', 'look.blend': 'Blend mode',
@@ -385,6 +391,9 @@ export const en: Record<keyof typeof he, string> = {
   ...TEMPLATES_EN,
   ...TREND_PACK_EN,
   ...CLEANUP_WAVE_EN,
+  ...LIFELINE_EN,
+  ...PACKS_EN,
+  ...PEOPLE_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -396,3 +405,7 @@ export * from './visualWave.ts';
 export * from './templates.ts';
 export * from './trendPack.ts';
 export * from './cleanupWave.ts';
+export * from './ui.ts';
+export * from './lifeline.ts';
+export * from './packs.ts';
+export * from './people.ts';

@@ -9,6 +9,7 @@ import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
 import { applyTransaction, canonical, createProject, diffEntities, entityMap, migrateProject, OpError, referencedIds, sameEntity, type EntityChange, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { docForReader } from './peoplePrivacy.ts';
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string, public details: Record<string, unknown> = {}, public hint?: string) {
@@ -124,12 +125,26 @@ export class Store {
   listProjects() {
     return (this.db.prepare('SELECT id, revision, doc, updated_at FROM projects ORDER BY updated_at DESC').all() as any[]).map((r) => ({ id: r.id, name: JSON.parse(r.doc).name as string, revision: r.revision as number, updatedAt: r.updated_at as string }));
   }
+  /**
+   * The project as the credential of the current request may read it (ADR-0021, people section; peoplePrivacy.ts): for a
+   * credential without the people scope the document comes without birth dates, so nothing computed from it for that
+   * credential (a summary, a frame, a preflight report) can hold one. Outside a request, and for the owner, the whole
+   * document. NEVER write back what this returns: writes read wholeProject.
+   */
   getProject(projectId: string): { doc: ProjectDocument; revision: number } {
+    const p = this.wholeProject(projectId);
+    return { doc: docForReader(p.doc), revision: p.revision };
+  }
+  /**
+   * The stored document, whoever asks. For the store's own writes (commit, undo) and for the few checks that must see what a
+   * film would be rendered from (peoplePrivacy.ts assertMayTakeRendered). Its document is never put into an answer.
+   */
+  wholeProject(projectId: string): { doc: ProjectDocument; revision: number } {
     const row = this.db.prepare('SELECT doc, revision FROM projects WHERE id = ?').get(projectId) as any;
     if (!row) throw new ApiError(404, 'project_not_found', `project ${projectId} not found`, { projectId }, 'Call list_projects.');
     return { doc: migrateProject(JSON.parse(row.doc)), revision: row.revision };
   }
-  /** Rebuild any revision purely from the initial document and the op log (also the crash/replay check). */
+  /** Rebuild any revision purely from the initial document and the op log (also the crash/replay check). Answers as getProject does: what the current request's credential may read. */
   replay(projectId: string, revision?: number): { doc: ProjectDocument; revision: number } {
     const row = this.db.prepare('SELECT initial_doc, revision FROM projects WHERE id = ?').get(projectId) as any;
     if (!row) throw new ApiError(404, 'project_not_found', `project ${projectId} not found`, { projectId });
@@ -139,13 +154,13 @@ export class Store {
     const txs = this.db.prepare('SELECT ops, id_seed, actor, allow_internal FROM transactions WHERE project_id = ? AND revision <= ? ORDER BY revision').all(projectId, target) as any[];
     for (const t of txs) doc = applyTransaction(doc, JSON.parse(t.ops), { idSeed: t.id_seed, actor: t.actor, allowInternal: !!t.allow_internal }).doc;
     // Re-parse so key order is canonical (same normalisation as getProject) and the result is schema-checked.
-    return { doc: migrateProject(doc), revision: target };
+    return { doc: docForReader(migrateProject(doc)), revision: target };
   }
 
   // ---------- commits ----------
   commit(req: CommitRequest): CommitResult {
     const run = this.db.transaction((): CommitResult => {
-      const { doc, revision } = this.getProject(req.projectId);
+      const { doc, revision } = this.wholeProject(req.projectId); // a write: the whole document, whoever commits
       if (req.idempotencyKey && !req.dryRun) {
         const prior = this.db.prepare('SELECT id, revision, ops, result FROM transactions WHERE project_id = ? AND actor = ? AND idempotency_key = ?').get(req.projectId, req.actor, req.idempotencyKey) as any;
         if (prior) {
@@ -225,7 +240,7 @@ export class Store {
    */
   undo(projectId: string, actor: string, mode: 'undo' | 'redo', transactionId?: string, guard?: CommitRequest['guard'], anyActor = false): CommitResult {
     const run = this.db.transaction((): CommitRequest => {
-      const { doc } = this.getProject(projectId);
+      const { doc } = this.wholeProject(projectId); // the stored states are compared with the whole document
       const kinds = mode === 'undo' ? "('edit','redo')" : "('undo')";
       const target = (transactionId
         ? (anyActor ? this.db.prepare(`SELECT * FROM transactions WHERE project_id = ? AND id = ?`).get(projectId, transactionId) : this.db.prepare(`SELECT * FROM transactions WHERE project_id = ? AND id = ? AND actor = ?`).get(projectId, transactionId, actor))

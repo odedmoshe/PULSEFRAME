@@ -4,6 +4,8 @@
  * refusals), and the hint. The samples are the server's sentences (packages/core/src/templatePlan.ts, apps/server/src/templates.ts).
  */
 import { describe, expect, it } from 'vitest';
+import * as T from '@pulseframe/time';
+import { createProject, planTemplate, TemplateError, type TemplateDef } from '@pulseframe/core';
 import { ApiFailure } from '../api.ts';
 import { templateRefusal } from './templateRefusals.ts';
 import { TEMPLATE_STRINGS } from './templates.strings.ts';
@@ -65,6 +67,25 @@ describe('template refusals', () => {
       expect(en.message.endsWith(message)).toBe(true);
       if (hint) expect(en.hint, hint).not.toMatch(/\/api\/|POST |Pass |edit_analysis|plan_template|\(at\)|runId/);
     }
+  });
+  it('the planner\'s built-in-music refusals, provoked for real, are worded in Hebrew with their hints; English hints speak to a person', () => {
+    const doc = createProject({ id: 'prj_bm', name: 'BM', width: 1080, height: 1920, frameRate: { num: 30, den: 1 } });
+    const prov = { origin: 'fixture' as const, importedAt: '2026-11-17T00:00:00Z', importedBy: 'test' };
+    doc.assets.img = { id: 'img', kind: 'image', name: 'i.png', contentHash: `sha256:${'6'.repeat(64)}`, byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.ZERO, image: { width: 1080, height: 1920, codec: 'png', hasAlpha: false }, provenance: prov };
+    doc.assets.snd = { id: 'snd', kind: 'audio', name: 's.wav', contentHash: `sha256:${'4'.repeat(64)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(60, 1), audio: { sampleRate: 48000, channels: 2, codec: 'pcm_s16le' }, provenance: prov };
+    const w = (en: string) => ({ he: `${en} בעברית`, en });
+    const def: TemplateDef = { id: 'tpl.bm', version: 1, name: w('BM'), hint: w('BM'), genre: 'celebration', designedFor: 'tall', tempo: { fallbackBpm: 120 }, music: { need: 'optional', startAt: 'zero' }, slots: Array.from({ length: 10 }, (_, i) => ({ key: `s${i}`, role: w('S'), accept: 'any' as const, span: { bars: 16 } })), slotUse: { mode: 'all', min: 1 }, texts: [], elements: [], sfx: [], adjust: [] };
+    const refusal = (input: unknown) => { try { planTemplate(doc, def, input); } catch (e) { if (e instanceof TemplateError) return new ApiFailure(400, e.code, e.message, {}, e.hint); throw e; } throw new Error('not refused'); };
+    const cases = [
+      refusal({ media: ['img'], musicAssetId: 'snd', builtinMusic: { styleId: 'music.pop' } }),
+      refusal({ media: ['img'], builtinMusic: { styleId: 'music.unknown' } }),
+      refusal({ media: ['img'], builtinMusic: { styleId: 'music.cinematic' } }),
+    ];
+    const he = cases.map((e) => templateRefusal('he', e));
+    expect(he.map((f) => f.hint)).toEqual(['יש לבחור מקור מוזיקה אחד: קובץ מהספרייה או מוזיקה מובנית.', 'אפשר לבחור אחד מסגנונות המוזיקה המובנית שברשימה.', 'אפשר לבחור קצב כפול או פחות קבצים, או לבחור קובץ מוזיקה מהספרייה.']);
+    for (const f of he) expect(latin(f.message), f.message).toEqual([]);
+    expect(he[2]!.message).toMatch(/534.*160.*300/);
+    for (const e of cases) expect(templateRefusal('en', e).hint).not.toMatch(/\/api\/|musicAssetId|builtinMusic|tempo:/);
   });
   it('an unknown refusal is shown as the server wrote it; an error that is not a refusal shows its message', () => {
     expect(templateRefusal('he', new ApiFailure(500, 'internal', 'something new', {}, 'a new hint'))).toEqual({ code: 'internal', message: 'something new', hint: 'a new hint' });

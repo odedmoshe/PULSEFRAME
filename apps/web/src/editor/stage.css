@@ -1,0 +1,191 @@
+/*
+ * The stage (UX_REDESIGN §4.5): the stage header with the format prism, the viewer (canvas wrap, preview notices, safe-area
+ * guides), the cut loupe, the transport bar, the source viewer and the scopes. Owned by the stage and inspector worker (W3).
+ * The canvas handles are in interactions.css.
+ * App.tsx imports this sheet before every component sheet; theme.css is loaded after it and still carries the older look of
+ * .stage, .transport and .timecode, so the rules here are written under `.app > .stage` (and the transport under its own
+ * .pf-ds root) to outrank it; the lead removes those dead rules. The bare `canvas` rule stays in styles.css.
+ * theme.cascade.test.ts pins .stage { overflow-y: clip } (theme.css) and .canvas-wrap { position: relative } (here).
+ * The viewer surround is the hue-free --pf-stage in both themes, so footage stays the brightest thing on screen.
+ */
+.stage { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr) auto; min-height: 0; }
+.canvas-wrap { min-height: 0; display: flex; align-items: center; justify-content: center; padding: var(--pf-s-4); }
+.canvas-wrap { position: relative; }
+.app > .stage { --pf-ar: 1.777778; position: relative; margin: 4px; border-radius: var(--pf-r-lg, 14px); background: var(--pf-stage); box-shadow: var(--pf-e1); color: var(--pf-text); }
+.app > .stage > .stage-head { grid-row: 1; grid-column: 1 / -1; }
+.app > .stage > .canvas-wrap { grid-row: 2; grid-column: 1; padding: var(--pf-sp-4) var(--pf-sp-6); container-type: size; }
+.app > .stage > .stage-loupe, .app > .stage > .stage-over { grid-row: 2; grid-column: 1; }
+.app > .stage > .stage-side { grid-row: 2; grid-column: 2; }
+.app > .stage > .transport { grid-row: 3; grid-column: 1 / -1; }
+.app > .stage:fullscreen { margin: 0; border-radius: 0; }
+
+/* the viewer frame: as large as the stage allows in the picture's own shape (the --pf-ar property, which the stage sets from
+   the viewed format), whatever resolution the preview is being drawn at */
+.app > .stage canvas[data-testid='preview'] { border-radius: var(--pf-r-sm, 6px); box-shadow: var(--pf-e2); }
+.app > .stage canvas[data-testid='preview'] { inline-size: min(100cqw, 100cqh * var(--pf-ar)); block-size: auto; aspect-ratio: var(--pf-ar); max-inline-size: none; max-block-size: none; }
+
+/* The stage keeps its dark surround in the light theme (tokens.css --pf-stage), so what stands on it takes the dark side:
+   the plate foregrounds, which are the same in both themes, and mixes of them over the stage colour (mixes of tokens only;
+   a token cannot refer to itself here, so the accents start from tokens this rule leaves alone). This is the .pf-force-dark
+   that tokens.css names; stage.light.test.ts holds every pair to the same contrast as the token test. */
+:root[data-theme='light'] :is(.app > .stage, .pf-force-dark) {
+  color-scheme: dark;
+  --pf-canvas: var(--pf-stage);
+  --pf-surface-1: color-mix(in srgb, var(--pf-on-plate) 4%, var(--pf-stage));
+  --pf-surface-2: color-mix(in srgb, var(--pf-on-plate) 7%, var(--pf-stage));
+  --pf-surface-3: color-mix(in srgb, var(--pf-on-plate) 10%, var(--pf-stage));
+  --pf-surface-4: color-mix(in srgb, var(--pf-on-plate) 14%, var(--pf-stage));
+  --pf-line: color-mix(in srgb, var(--pf-on-plate) 8%, transparent);
+  --pf-line-strong: color-mix(in srgb, var(--pf-on-plate) 14%, transparent);
+  --pf-line-control: color-mix(in srgb, var(--pf-on-plate) 46%, var(--pf-stage));
+  --pf-text: var(--pf-on-plate);
+  --pf-text-2: color-mix(in srgb, var(--pf-on-plate) 78%, var(--pf-stage));
+  --pf-text-3: color-mix(in srgb, var(--pf-on-plate) 68%, var(--pf-stage));
+  --pf-text-disabled: color-mix(in srgb, var(--pf-on-plate) 38%, var(--pf-stage));
+  --pf-frame: color-mix(in srgb, var(--pf-m-edit) 45%, var(--pf-on-plate));
+  --pf-frame-strong: color-mix(in srgb, var(--pf-m-edit) 30%, var(--pf-on-plate));
+  --pf-frame-ink: var(--pf-stage);
+  --pf-frame-soft: color-mix(in srgb, var(--pf-m-edit) 34%, transparent);
+  --pf-frame-glow: color-mix(in srgb, var(--pf-m-edit) 50%, transparent);
+  --pf-focus: color-mix(in srgb, var(--pf-m-edit) 30%, var(--pf-on-plate));
+  --pf-pulse: var(--pf-on-plate-pulse);
+  --pf-pulse-ink: var(--pf-stage);
+  --pf-pulse-soft: color-mix(in srgb, var(--pf-on-plate-pulse) 13%, transparent);
+  --pf-pulse-glow: color-mix(in srgb, var(--pf-on-plate-pulse) 45%, transparent);
+  --pf-ok: color-mix(in srgb, var(--pf-k-voice) 40%, var(--pf-on-plate));
+  --pf-attention: color-mix(in srgb, var(--pf-m-look) 40%, var(--pf-on-plate));
+  --pf-danger: color-mix(in srgb, var(--pf-danger-fill) 45%, var(--pf-on-plate));
+  --pf-hilite: inset 0 1px 0 color-mix(in srgb, var(--pf-on-plate) 5%, transparent);
+}
+
+/* ---------- header ---------- */
+.stage-head { display: flex; align-items: center; gap: var(--pf-sp-4); min-block-size: 44px; padding: var(--pf-sp-3) var(--pf-sp-5) 0; min-inline-size: 0; container-type: inline-size; }
+.stage-head-space { flex: 1; }
+.stage-head .stage-view { flex: none; }
+.stage-btn { flex: none; display: grid; place-items: center; inline-size: var(--pf-h-sm); block-size: var(--pf-h-sm); padding: 0; border: 0; border-radius: var(--pf-r-sm); background: transparent; box-shadow: none; color: var(--pf-text-2); cursor: pointer; }
+.stage-btn:hover { background: var(--pf-surface-3); color: var(--pf-text); border: 0; }
+.stage-btn[aria-pressed='true'] { background: var(--pf-frame-soft); color: var(--pf-frame); }
+.stage-toggle { position: relative; flex: none; display: inline-flex; align-items: center; gap: var(--pf-sp-3); block-size: var(--pf-h-sm); padding-inline: var(--pf-sp-4); border-radius: var(--pf-r-sm); color: var(--pf-text-2); font-size: var(--pf-fs-xs); cursor: pointer; white-space: nowrap; }
+.stage-toggle input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.stage-toggle:hover { background: var(--pf-surface-3); color: var(--pf-text); }
+.stage-toggle:has(input:checked) { background: var(--pf-frame-soft); color: var(--pf-frame); }
+.stage-toggle:has(input:focus-visible) { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+
+.prism { flex: 0 1 auto; min-inline-size: 0; display: inline-flex; align-items: center; gap: var(--pf-sp-1); padding: 3px; border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: 0 0 0 1px var(--pf-line); }
+.prism-chips { display: inline-flex; gap: var(--pf-sp-1); min-inline-size: 0; overflow: hidden; }
+.prism-chip { position: relative; flex: none; display: inline-flex; align-items: center; gap: var(--pf-sp-3); block-size: var(--pf-h-sm); padding: 0 var(--pf-sp-4); border: 0; border-radius: var(--pf-r-sm); background: transparent; box-shadow: none; color: var(--pf-text-2); font-size: var(--pf-fs-digits); cursor: pointer; }
+.prism-chip:hover { background: var(--pf-surface-3); color: var(--pf-text); border: 0; }
+.prism-chip.is-on { background: var(--pf-surface-4); color: var(--pf-text); box-shadow: 0 0 0 1px var(--pf-line-strong), var(--pf-hilite); }
+.prism-shape { display: grid; place-items: center; inline-size: 22px; block-size: 18px; }
+.prism-shape > i { display: block; border-radius: 2px; background: color-mix(in oklab, var(--pf-k-video) 45%, var(--pf-surface-2)); box-shadow: inset 0 0 0 1px var(--pf-k-video); }
+.prism-chip.is-on .prism-shape > i { background: color-mix(in oklab, var(--pf-frame) 35%, var(--pf-surface-2)); box-shadow: inset 0 0 0 1px var(--pf-frame); }
+.prism-dot { position: absolute; inset-block-start: 3px; inset-inline-start: 4px; inline-size: 6px; block-size: 6px; border-radius: 50%; background: var(--pf-pulse); box-shadow: var(--pf-glow-pulse); }
+.prism-add { flex: none; display: grid; place-items: center; inline-size: var(--pf-h-sm); block-size: var(--pf-h-sm); padding: 0; border: 0; border-radius: var(--pf-r-sm); background: transparent; box-shadow: none; color: var(--pf-text-2); cursor: pointer; }
+.prism-add:hover, .prism-add[aria-expanded='true'] { background: var(--pf-surface-3); color: var(--pf-text); border: 0; }
+/* a narrow stage keeps the prism only */
+@container (max-width: 520px) { .stage-head .stage-view, .stage-toggle-label { display: none; } }
+@container (max-width: 380px) { .stage-head .stage-btn, .stage-toggle { display: none; } }
+
+/* ---------- over the viewer ---------- */
+.stage-over { position: relative; z-index: 3; pointer-events: none; display: grid; justify-items: center; align-content: space-between; padding: var(--pf-sp-5); min-block-size: 0; }
+.stage-note { margin: 0; max-inline-size: min(420px, 90%); padding: var(--pf-sp-3) var(--pf-sp-5); border-radius: var(--pf-r-pill); background: var(--pf-plate); color: var(--pf-text); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); box-shadow: 0 0 0 1px var(--pf-line-strong);
+  opacity: 0; transition: opacity var(--pf-dur-base) var(--pf-ease-out); }
+.stage-note[data-on='true'] { opacity: 1; }
+.stage-note:empty { display: none; }
+.stage-empty { align-self: center; grid-row: 1 / -1; margin: 0; display: grid; gap: var(--pf-sp-2); justify-items: center; padding: var(--pf-sp-8) var(--pf-sp-9); border-radius: var(--pf-r-lg); box-shadow: inset 0 0 0 1px var(--pf-line-control); background: var(--pf-plate); color: var(--pf-text-2); font-size: var(--pf-fs-sm); text-align: center;
+  background-image: repeating-linear-gradient(135deg, var(--pf-line) 0 1px, transparent 1px 10px); }
+.stage-empty strong { color: var(--pf-text); font-size: var(--pf-fs-md); font-weight: var(--pf-fw-semibold); }
+.stage-empty b { display: inline-grid; place-items: center; inline-size: 20px; block-size: 20px; border-radius: 50%; background: var(--pf-frame); color: var(--pf-frame-ink); }
+
+.preview-notice { position: absolute; inset-inline-start: var(--pf-sp-6); inset-inline-end: auto; bottom: var(--pf-sp-5); z-index: 3; max-inline-size: min(380px, calc(100% - 32px)); padding: var(--pf-sp-4) var(--pf-sp-5); border: 0; border-radius: var(--pf-r-md);
+  background: var(--pf-surface-3); box-shadow: var(--pf-e2), inset 0 0 0 1px color-mix(in srgb, var(--pf-attention) 45%, transparent); color: var(--pf-text); font: var(--pf-fw-regular) var(--pf-fs-xs)/var(--pf-lh-xs) var(--pf-font); pointer-events: none; }
+.preview-notice p { margin: 0; color: var(--pf-text); }
+.preview-notice p:first-child { color: var(--pf-attention); font-weight: var(--pf-fw-medium); }
+.preview-notice ul { margin: 4px 0 0; padding: 0; list-style: none; overflow-wrap: anywhere; color: var(--pf-text-2); }
+.safe-clip { position: absolute; pointer-events: none; overflow: hidden; border-radius: var(--pf-r-sm, 6px); }
+.safe-area { position: absolute; pointer-events: none; box-shadow: 0 0 0 9999px var(--pf-scrim); outline: 1.5px dashed var(--pf-text); outline-offset: -1px; }
+/* outside the safe area the platform's own buttons and captions sit: hatched, so it reads as "not yours" and not as a darker picture */
+.safe-clip::before { content: ''; position: absolute; inset: 0; background-image: repeating-linear-gradient(135deg, var(--pf-line-strong) 0 2px, transparent 2px 9px); }
+.safe-area::before { content: ''; position: absolute; inset: 0; background: transparent; }
+
+/* ---------- the cut loupe: two real frames, left is earlier ---------- */
+.stage-loupe { position: relative; z-index: 6; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: var(--pf-sp-4); min-block-size: 0; padding: var(--pf-sp-4) var(--pf-sp-6) var(--pf-sp-3); background: var(--pf-stage); color: var(--pf-text); }
+.loupe-bar { display: flex; align-items: center; gap: var(--pf-sp-5); min-inline-size: 0; }
+.loupe-chip { flex: none; display: inline-flex; align-items: center; gap: var(--pf-sp-3); block-size: var(--pf-h-sm); padding-inline: var(--pf-sp-5); border-radius: var(--pf-r-pill); background: var(--pf-frame-soft); color: var(--pf-frame); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pf-frame) 40%, transparent); font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-semibold); white-space: nowrap; }
+.loupe-keys { flex: 1; min-inline-size: 0; display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--pf-sp-2); color: var(--pf-text-2); font-size: var(--pf-fs-xs); white-space: nowrap; overflow: hidden; }
+.loupe-pair { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: var(--pf-sp-5); min-block-size: 0; align-items: stretch; }
+.loupe-side { margin: 0; min-inline-size: 0; min-block-size: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: var(--pf-sp-3); }
+.loupe-side figcaption { display: flex; align-items: baseline; gap: var(--pf-sp-3); font-size: var(--pf-fs-xs); min-inline-size: 0; }
+.loupe-what { flex: none; color: var(--pf-text-2); white-space: nowrap; }
+.loupe-name { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--pf-fw-semibold); color: var(--pf-text); }
+.loupe-side figcaption .tc { flex: none; margin-inline-start: auto; color: var(--pf-text-2); font-size: var(--pf-fs-digits); }
+.loupe-still { position: relative; min-block-size: 0; display: grid; place-items: center; border-radius: var(--pf-r-sm); background: var(--pf-canvas); box-shadow: 0 0 0 1px var(--pf-line-strong); overflow: hidden; }
+.loupe-side.is-in .loupe-still { box-shadow: 0 0 0 1px var(--pf-line-strong); }
+.loupe-still img { display: block; max-inline-size: 100%; max-block-size: 100%; inline-size: 100%; block-size: 100%; object-fit: contain; }
+.loupe-still img.loupe-next { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }
+.loupe-still[data-state='loading'] img:not(.loupe-next) { opacity: .55; }
+.loupe-wait { position: absolute; inset-inline: 0; inset-block-end: var(--pf-sp-4); margin-inline: auto; inline-size: fit-content; max-inline-size: 90%; padding: var(--pf-sp-2) var(--pf-sp-5); border-radius: var(--pf-r-pill); background: var(--pf-plate); color: var(--pf-text); font-size: var(--pf-fs-xs); }
+.loupe-retry { border: 0; background: none; padding: 0; color: var(--pf-frame); font: inherit; text-decoration: underline; cursor: pointer; }
+.loupe-handle { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--pf-sp-2) var(--pf-sp-4); font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
+.loupe-handle .num { color: var(--pf-ok); font-size: var(--pf-fs-digits); }
+.loupe-handle.is-short .num { color: var(--pf-attention); }
+.loupe-meter { grid-column: 1 / -1; block-size: 5px; border-radius: 5px; background: var(--pf-surface-4); overflow: hidden; direction: ltr; }
+.loupe-side.is-out .loupe-meter { direction: rtl; }
+.loupe-meter > i { display: block; block-size: 100%; border-radius: 5px; background: var(--pf-ok); }
+.loupe-handle.is-short .loupe-meter > i { background: var(--pf-attention); }
+.loupe-mid { align-self: center; display: grid; justify-items: center; gap: var(--pf-sp-3); color: var(--pf-frame); }
+.loupe-mid .tc { color: var(--pf-text-2); font-size: var(--pf-fs-digits); }
+.loupe-note { margin: 0; color: var(--pf-text-3); font-size: var(--pf-fs-xs); text-align: center; }
+
+/* ---------- scopes: docked beside the viewer in Look mode at wide windows; otherwise they stand in the inspector ---------- */
+.stage-side { inline-size: 288px; min-block-size: 0; overflow-y: auto; margin: var(--pf-sp-4); margin-inline-start: 0; padding: var(--pf-sp-5); border-radius: var(--pf-r-md); background: var(--pf-surface-1); box-shadow: var(--pf-e1); }
+.scopes { margin: 0; padding: 0; border: 0; min-inline-size: 0; display: grid; gap: var(--pf-sp-3); }
+.scopes > legend { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+.scopes figure { margin: 0; display: grid; gap: 2px; }
+.scopes .scope { display: block; inline-size: 100%; max-inline-size: 256px; background: var(--pf-canvas); border: 0; border-radius: var(--pf-r-sm, 6px); box-shadow: 0 0 0 1px var(--pf-line-strong); image-rendering: pixelated; }
+.scopes .scope.vec { max-inline-size: 128px; }
+.scope-stats { display: grid; grid-template-columns: auto auto; gap: 2px 10px; margin: 4px 0; font-size: var(--pf-fs-xs); }
+.scope-stats dt { color: var(--pf-text-2); }
+.scope-stats dd { margin: 0; font-family: var(--pf-font-mono); text-align: end; }
+.pf-insp .scopes { box-shadow: none; padding: 0; }
+/* in the inspector (Look mode below the wide width): the three scopes in one row; their names are on the pictures for
+   assistive technology, and the numbers wait behind "?" */
+.pf-insp .insp-scopes .scopes { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.25fr) minmax(0, 1fr); align-items: end; gap: var(--pf-sp-3); }
+.pf-insp .insp-scopes .scopes figcaption { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+.pf-insp .insp-scopes .scopes .scope { block-size: 72px; max-inline-size: none; }
+.pf-insp .insp-scopes .scopes .scope.vec { inline-size: 72px; max-inline-size: 100%; justify-self: center; }
+.pf-insp .insp-scopes .scopes > :is(dl, p) { grid-column: 1 / -1; }
+.pf-insp .insp-scopes .pf-section:not([data-help='open']) .scope-stats { display: none; }
+
+/* ---------- transport: 52px, left to right in every language ---------- */
+.transport.pf-ds { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--pf-sp-5); min-block-size: 52px; padding: 0 var(--pf-sp-6) var(--pf-sp-2); border: 0; background: none; container-type: inline-size; }
+.transport .tp-time { display: flex; align-items: baseline; gap: var(--pf-sp-4); min-inline-size: 0; }
+.transport .timecode { min-inline-size: 0; padding: 0; border: 0; border-radius: 0; background: none; color: var(--pf-text); font: var(--pf-fw-medium) var(--pf-fs-timecode)/1 var(--pf-font-mono); font-variant-numeric: tabular-nums; letter-spacing: 0; text-align: start; }
+.transport .tp-total { color: var(--pf-text-3); font-size: var(--pf-fs-digits); white-space: nowrap; }
+.transport .tp-keys { display: flex; align-items: center; gap: var(--pf-sp-3); }
+.transport .tp-btn { display: grid; place-items: center; inline-size: var(--pf-h-md); block-size: var(--pf-h-md); min-inline-size: 0; min-block-size: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; box-shadow: none; color: var(--pf-text-2); cursor: pointer; }
+.transport .tp-btn:hover { background: var(--pf-surface-3); color: var(--pf-text); border: 0; }
+.transport .tp-btn[aria-pressed='true'] { background: var(--pf-frame-soft); color: var(--pf-frame); border: 0; }
+.transport .tp-play { display: grid; place-items: center; inline-size: 44px; block-size: 44px; min-inline-size: 44px; min-block-size: 44px; padding: 0; border: 0; border-radius: 50%; margin-inline: var(--pf-sp-3);
+  background-color: var(--pf-frame); background-image: linear-gradient(180deg, var(--pf-frame-strong), var(--pf-frame) 60%); color: var(--pf-frame-ink); box-shadow: 0 0 0 4px var(--pf-frame-soft), 0 8px 22px -8px var(--pf-frame-glow); cursor: pointer; }
+.transport .tp-play:hover { filter: brightness(1.06); border: 0; background-color: var(--pf-frame); }
+.transport .tp-play:active { transform: translateY(.5px); filter: brightness(.94); }
+.transport .tp-play .pf-ico { fill: currentColor; }
+.transport .shuttle { padding-inline: var(--pf-sp-4); color: var(--pf-frame); font-size: var(--pf-fs-digits); white-space: nowrap; }
+.transport .tp-end { display: flex; align-items: center; justify-content: flex-end; gap: var(--pf-sp-4); min-inline-size: 0; }
+.tp-beat { display: inline-flex; align-items: center; gap: var(--pf-sp-3); block-size: var(--pf-h-sm); padding-inline: var(--pf-sp-5); border-radius: var(--pf-r-pill); background: var(--pf-pulse-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pf-pulse) 40%, transparent); color: var(--pf-pulse); font-size: var(--pf-fs-digits); white-space: nowrap; }
+.tp-beat-word { font-family: var(--pf-font); font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
+.tp-beat-dot { inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--pf-pulse); box-shadow: var(--pf-glow-pulse); }
+/* the one chrome motion the transport has while the edit plays: the dot answers each new beat */
+.tp-beat-dot[data-playing='true'] { animation: tp-beat var(--pf-dur-beat) var(--pf-ease-pulse) 1; }
+@keyframes tp-beat { from { transform: scale(1.7); } to { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .tp-beat-dot[data-playing='true'] { animation: none; } .stage-note { transition: none; } }
+/* a narrow stage drops the total and the outer buttons; a very narrow one keeps play alone */
+@container (max-width: 520px) { .transport .tp-total, .transport .tp-outer, .tp-beat-word { display: none; } }
+@container (max-width: 340px) { .transport .tp-btn, .transport .tp-time, .transport .tp-end { display: none; } .transport.pf-ds { grid-template-columns: minmax(0, 1fr); justify-items: center; } }
+@media (max-height: 780px) { .transport.pf-ds { min-block-size: 46px; } .transport .tp-play { inline-size: 38px; block-size: 38px; min-inline-size: 38px; min-block-size: 38px; } .stage-head { min-block-size: 38px; } }
+
+/* ---------- source viewer (the dialog the "source" side of the stage opens) ---------- */
+.source-viewer .source-canvas { inline-size: 100%; max-block-size: 46vh; object-fit: contain; background: var(--pf-stage); border-radius: var(--pf-r-sm); }
+.source-viewer .source-canvas.sound-only { block-size: 48px; }
+.source-viewer input[type=range] { inline-size: 100%; }

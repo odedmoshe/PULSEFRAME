@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-17T09:27:35.008Z",
+  "ranAt": "2026-11-18T02:16:12.803Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v553 x64",
+    "platform": "Linux 6.18.44-fc-v595 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "memoryGiB": 15.7,
@@ -21,7 +21,7 @@
     "exportedFrames": 105
   },
   "measurements": {
-    "editorShellInteractiveMs": 656,
+    "editorShellInteractiveMs": 648,
     "mcp": {
       "negotiatedProtocolVersion": "2026-07-28",
       "server": {
@@ -30,18 +30,18 @@
       }
     },
     "agentEdit": {
-      "requestToCommitMs": 15,
-      "requestToVisibleInEditorMs": 51.4,
+      "requestToCommitMs": 17.6,
+      "requestToVisibleInEditorMs": 164.3,
       "note": "single sample, loopback, includes Playwright polling overhead"
     },
     "restCommitLatencyMs": {
       "samples": 30,
-      "median": 6.03,
-      "p95": 9.06,
-      "max": 9.3
+      "median": 4.65,
+      "p95": 10.39,
+      "max": 14.35
     },
     "export": {
-      "file": "job_PF6FLrosRV8.mp4",
+      "file": "job_AV7HhyzBIbs.mp4",
       "mimeType": "video/mp4",
       "captions": null,
       "bytes": 107979,
@@ -63,13 +63,19 @@
             "Rubik",
             "Assistant",
             "Frank Ruhl Libre",
-            "Secular One"
+            "Secular One",
+            "Suez One",
+            "David Libre",
+            "Karantina",
+            "Amatic SC",
+            "Fredoka",
+            "Gveret Levin"
           ],
-          "schemaVersion": 1
+          "schemaVersion": 2
         },
         "assets": [
           {
-            "id": "ast_cb5f3d46b20",
+            "id": "ast_32ba9742310",
             "contentHash": "sha256:c7e7258d199ae386d741322d2a22c5d626d2af5e3bd3822625e430fb09f7066d",
             "byteSize": 49384,
             "kind": "video",
@@ -117,6 +123,12 @@
         "basis": "heuristic bits-per-pixel for the chosen quality; real size depends on content",
         "actualBytes": 107979
       },
+      "photosensitivity": {
+        "method": "General and red flash thresholds of WCAG 2.3.1 (ITU-R BT.1702 family), approximated on 24 × 24 cells of the rendered frames: a stretch fails when more than a quarter of a 10-degree window (a third of the width and height) flashes more than three times in a second. A guide, not a certification.",
+        "verdict": "pass",
+        "frames": 105,
+        "ranges": []
+      },
       "audioClipsMixed": 2,
       "audio": {
         "mixPeakDbfs": -5.72,
@@ -137,13 +149,13 @@
         "durationSeconds": 3.5
       },
       "renderStageMs": {
-        "draw": 735,
-        "readback": 739,
-        "upload": 5458
+        "draw": 584,
+        "readback": 685,
+        "upload": 4715
       },
-      "wallSeconds": 8.106,
-      "realtimeFactor": 0.4317789291882556,
-      "uiWallSeconds": 8.605
+      "wallSeconds": 7.042,
+      "realtimeFactor": 0.4970178926441352,
+      "uiWallSeconds": 8.073
     },
     "parityFrame70": {
       "psnrDb": 46.687164,
@@ -175,10 +187,10 @@
       "maxStills": 16,
       "decoderByteCacheBytes": 16777216,
       "sources": {
-        "ast_cb5f3d46b20": "original"
+        "ast_32ba9742310": "original"
       },
       "sourcesUsed": {
-        "ast_cb5f3d46b20": [
+        "ast_32ba9742310": [
           "original"
         ]
       },
@@ -188,7 +200,7 @@
       "refused": 0,
       "rangedResponses": 2,
       "statuses": [
-        "ast_cb5f3d46b20/content:206"
+        "ast_32ba9742310/content:206"
       ]
     },
     "previewSync": {
@@ -196,7 +208,7 @@
       "audioContextState": "running",
       "audioSampleRate": 48000,
       "outputLatencyMs": 42.02,
-      "audioScheduledAheadMaxMs": 2069.3,
+      "audioScheduledAheadMaxMs": 2090.7,
       "audioLookaheadMs": 1500,
       "liveAudioNodes": 0,
       "loops": 0,
@@ -207,7 +219,7 @@
       ],
       "audioLevels": [
         {
-          "t": -0.1307,
+          "t": -0.130667,
           "peak": 0
         },
         {
@@ -376,7 +388,7 @@
         },
         {
           "t": 1.98,
-          "peak": 0.0058
+          "peak": 0.0038
         },
         {
           "t": 2.03,
@@ -455,7 +467,7 @@
           "peak": 0
         },
         {
-          "t": 2.9773,
+          "t": 2.98,
           "peak": 0
         },
         {
@@ -498,9 +510,9 @@
       "framesRequested": 104,
       "framesPainted": 104,
       "paintLatenessMs": {
-        "median": 13.33,
-        "p95": 30.67,
-        "max": 36
+        "median": 14.67,
+        "p95": 25.33,
+        "max": 46.67
       },
       "fxVoices": 0,
       "fxPrimeMs": 0,
@@ -629,7 +641,7 @@
       "name": "MCP: tools are generated from the operation registry (internal ops hidden)",
       "ok": true,
       "detail": {
-        "count": 126
+        "count": 162
       }
     },
     {
@@ -637,7 +649,7 @@
       "ok": true,
       "detail": {
         "right": {
-          "id": "clp_275485b2531",
+          "id": "clp_89fbf36bf01",
           "start": {
             "value": "2",
             "timescale": 1
@@ -657,8 +669,8 @@
       "name": "live UI update: agent edit appears in the open editor without reload",
       "ok": true,
       "detail": {
-        "requestToCommitMs": 15,
-        "requestToVisibleInEditorMs": 51.4,
+        "requestToCommitMs": 17.6,
+        "requestToVisibleInEditorMs": 164.3,
         "note": "single sample, loopback, includes Playwright polling overhead"
       }
     },
@@ -672,11 +684,11 @@
       "detail": {
         "before": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_67d0dcbdeb0"
+          "selected": "clip-clp_08aff4837d0"
         },
         "after": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_67d0dcbdeb0"
+          "selected": "clip-clp_08aff4837d0"
         }
       }
     },
@@ -722,7 +734,7 @@
       "ok": true,
       "detail": [
         {
-          "entityId": "clp_67d0dcbdeb0",
+          "entityId": "clp_08aff4837d0",
           "changedAtRevision": 7,
           "by": "agent:local",
           "deleted": false
@@ -778,7 +790,7 @@
       "name": "when the export finishes the editor says so and the file starts saving by itself; the link stays for another copy",
       "ok": true,
       "detail": {
-        "savedName": "pulseframe-job_PF6FLrosRV8.mp4"
+        "savedName": "pulseframe-job_AV7HhyzBIbs.mp4"
       }
     },
     {
@@ -866,10 +878,10 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_cb5f3d46b20": "original"
+            "ast_32ba9742310": "original"
           },
           "sourcesUsed": {
-            "ast_cb5f3d46b20": [
+            "ast_32ba9742310": [
               "original"
             ]
           },
@@ -879,7 +891,7 @@
           "refused": 0,
           "rangedResponses": 2,
           "statuses": [
-            "ast_cb5f3d46b20/content:206"
+            "ast_32ba9742310/content:206"
           ]
         }
       }
@@ -892,7 +904,7 @@
         "audioContextState": "running",
         "audioSampleRate": 48000,
         "outputLatencyMs": 42.02,
-        "audioScheduledAheadMaxMs": 2069.3,
+        "audioScheduledAheadMaxMs": 2090.7,
         "audioLookaheadMs": 1500,
         "liveAudioNodes": 0,
         "loops": 0,
@@ -903,7 +915,7 @@
         ],
         "audioLevels": [
           {
-            "t": -0.1307,
+            "t": -0.130667,
             "peak": 0
           },
           {
@@ -1072,7 +1084,7 @@
           },
           {
             "t": 1.98,
-            "peak": 0.0058
+            "peak": 0.0038
           },
           {
             "t": 2.03,
@@ -1151,7 +1163,7 @@
             "peak": 0
           },
           {
-            "t": 2.9773,
+            "t": 2.98,
             "peak": 0
           },
           {
@@ -1194,9 +1206,9 @@
         "framesRequested": 104,
         "framesPainted": 104,
         "paintLatenessMs": {
-          "median": 13.33,
-          "p95": 30.67,
-          "max": 36
+          "median": 14.67,
+          "p95": 25.33,
+          "max": 46.67
         },
         "fxVoices": 0,
         "fxPrimeMs": 0,
@@ -1220,7 +1232,7 @@
           2.50006
         ],
         "maxErrorMs": 0.06,
-        "scheduledAheadMaxMs": 2069.3
+        "scheduledAheadMaxMs": 2090.7
       }
     },
     {
@@ -1228,7 +1240,7 @@
       "ok": true,
       "detail": {
         "sourcesUsed": {
-          "ast_cb5f3d46b20": [
+          "ast_32ba9742310": [
             "original",
             "proxy"
           ]

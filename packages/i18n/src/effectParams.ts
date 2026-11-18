@@ -27,6 +27,8 @@ export const EFFECT_PARAM_LABELS: Record<string, L> = {
   focus: { he: 'גודל המרכז הנקי', en: 'Clear centre size' }, reach: { he: 'תנודת קצות הקווים', en: 'Line tip wander' }, thickness: { he: 'עובי', en: 'Thickness' },
   // date stamp
   text: { he: 'טקסט', en: 'Text' }, corner: { he: 'פינה', en: 'Corner' }, glow: { he: 'זוהר', en: 'Glow' },
+  // date stamp from the capture date (life line, ADR-0021)
+  source: { he: 'מקור התאריך', en: 'Date from' }, clock: { he: 'שעון', en: 'Clock' }, dateOrder: { he: 'סדר התאריך', en: 'Date order' },
   // old digicam, CRT
   sharpen: { he: 'חידוד', en: 'Sharpening' }, noise: { he: 'רעש צבעוני', en: 'Colour noise' }, bloom: { he: 'זליגת אורות', en: 'Highlight bloom' }, cool: { he: 'גוון קר', en: 'Cool cast' },
   curvature: { he: 'עקמומיות המסך', en: 'Screen curvature' }, phosphor: { he: 'מסכת זרחן', en: 'Phosphor mask' }, pitch: { he: 'רוחב שלישיית הצבעים', en: 'Triad width' },
@@ -46,6 +48,8 @@ export const EFFECT_OPTION_LABELS: Record<string, L> = {
   circle: { he: 'עיגול', en: 'Circle' }, hexagon: { he: 'משושה', en: 'Hexagon' },
   // date stamp
   'bottom-right': { he: 'למטה מימין', en: 'Bottom right' }, 'bottom-left': { he: 'למטה משמאל', en: 'Bottom left' }, 'top-right': { he: 'למעלה מימין', en: 'Top right' }, 'top-left': { he: 'למעלה משמאל', en: 'Top left' },
+  // date stamp from the capture date (life line, ADR-0021)
+  text: { he: 'טקסט שהוקלד', en: 'Typed text' }, capture: { he: 'מתאריך הצילום', en: 'From the capture date' }, ymd: { he: 'שנה, חודש, יום', en: 'Year, month, day' }, dmy: { he: 'יום, חודש, שנה', en: 'Day, month, year' },
   // CRT
   grille: { he: 'סורג אנכי', en: 'Aperture grille' }, dots: { he: 'נקודות', en: 'Dots' }, slot: { he: 'חריצים', en: 'Slot mask' },
 };

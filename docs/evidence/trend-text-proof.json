@@ -1,14 +1,14 @@
 {
- "ranAt": "2026-11-17T17:54:08.289Z",
- "commit": "54abcdcce61c3816ad5425eb5c333afa33d07c6f",
+ "ranAt": "2026-11-18T03:26:12.957Z",
+ "commit": "a30feaffd5112496809e1b0316f2e39d3614d604",
  "baselineCommit": "33a78fce3ea78f9c37867a3d07efdf5722f3be05",
  "machine": {
-  "platform": "Linux 6.18.44-fc-v553 x64",
+  "platform": "Linux 6.18.44-fc-v595 x64",
   "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
   "gpu": "none used: every title look is Canvas2D; the editor browser has no WebGPU; the render worker started as for the trend baseline (PF_RENDER_GPU unset), and no project here uses a GPU effect"
  },
  "scope": "Server stills and exports at 1080x1920 through the render worker, and the editor in headless Chromium (Playwright), on this container. X1 compares pixel hashes with docs/evidence/trend-baseline.json, which holds only on the machine and build that recorded it. Nobody has judged the looks on a video by eye.",
- "result": "FAILED",
+ "result": "PASSED",
  "checks": [
   {
    "id": "X1",
@@ -54,7 +54,7 @@
   {
    "id": "X3",
    "name": "gradient 90°: the top and bottom ink rows (fully covered pixels) are within 3/255 of the two stops, and every row between moves toward the bottom stop",
-   "ok": false,
+   "ok": true,
    "detail": {
     "topRow": 803,
     "top": [
@@ -64,9 +64,9 @@
     ],
     "bottomRow": 1096,
     "bottom": [
-     61.9,
-     93.5,
-     251.7
+     59.1,
+     91.5,
+     254.3
     ],
     "stops": [
      [
@@ -142,21 +142,39 @@
   },
   {
    "id": "X3",
-   "name": "longShadow: the ink box grows by L toward 45° (±1 px); every shadow pixel off the edges is exactly the colour; 0 gaps along its direction",
-   "ok": false,
+   "name": "longShadow: the ink grows by L toward 45° (±1 px, the edges of the letter and of the shadow taken at the same coverage, one half) and not at all up or left; every shadow pixel off the edges is exactly the colour; 0 gaps along its direction",
+   "ok": true,
    "detail": {
     "lengthPx": 307.2,
     "expectedGrowth": 217.22,
     "grow": {
      "left": 0,
      "top": 0,
-     "right": 216,
+     "right": 217,
      "bottom": 217
     },
+    "edges": "right and bottom: where the largest coverage of a column or row falls through one half (letter: red/255; shadow: blue/64), to a fraction of a pixel; left and top: the box of everything brighter than 3/255",
     "exactColourPixels": 60417,
     "notTheColourInside": 0,
     "walks": 1515,
     "gaps": 0
+   }
+  },
+  {
+   "id": "X3",
+   "name": "longShadow control: the same title with a shadow one pixel shorter per axis measures one pixel less and is outside the ±1 px of L",
+   "ok": true,
+   "detail": {
+    "lengthFrac": 0.79632,
+    "lengthPx": 305.79,
+    "perAxisPx": 216.22,
+    "grow": {
+     "left": 0,
+     "top": 0,
+     "right": 216,
+     "bottom": 216
+    },
+    "expectedGrowthOfTheFullLength": 217.22
    }
   },
   {
@@ -392,7 +410,7 @@
     ],
     "compared": 38,
     "moved": 12,
-    "worstDifference": 1.04,
+    "worstDifference": 1.27,
     "bad": []
    }
   },
@@ -404,61 +422,147 @@
     {
      "preset": "neon-tube-pink",
      "previewIdentical": true,
-     "maxDifference": 0,
-     "psnr": 46.13
+     "maxDifference": 0
     },
     {
      "preset": "gradient-sunset",
      "previewIdentical": true,
-     "maxDifference": 0,
-     "psnr": 46.34
+     "maxDifference": 0
     },
     {
      "preset": "double-outline-pop",
      "previewIdentical": true,
-     "maxDifference": 0,
-     "psnr": 41.36
+     "maxDifference": 0
     },
     {
      "preset": "extrude-retro",
      "previewIdentical": true,
-     "maxDifference": 0,
-     "psnr": 35.93
+     "maxDifference": 0
     },
     {
      "preset": "long-shadow-flat",
      "previewIdentical": true,
-     "maxDifference": 0,
-     "psnr": 56.59
+     "maxDifference": 0
     }
    ]
   },
   {
    "id": "X6",
-   "name": "and the exported frame reaches PSNR ≥ 40 dB against the still",
-   "ok": false,
+   "name": "and the exported frame is the still as the export's format carries it: H.264 yuv420p, bt709, limited range, and PSNR ≥ 50 dB in each of its Y, U and V planes against the still converted to those planes",
+   "ok": true,
    "detail": [
     {
      "preset": "neon-tube-pink",
-     "psnr": 46.13
+     "planePsnr": {
+      "y": 61.21,
+      "u": 61.9,
+      "v": 61.58,
+      "min": 61.21
+     },
+     "rgbPsnr": 46.13,
+     "rgbPsnrOfTheStillIn420": 46.5
     },
     {
      "preset": "gradient-sunset",
-     "psnr": 46.34
+     "planePsnr": {
+      "y": 61.62,
+      "u": 62.14,
+      "v": 61.91,
+      "min": 61.62
+     },
+     "rgbPsnr": 46.34,
+     "rgbPsnrOfTheStillIn420": 46.76
     },
     {
      "preset": "double-outline-pop",
-     "psnr": 41.36
+     "planePsnr": {
+      "y": 59.83,
+      "u": 61.44,
+      "v": 61.07,
+      "min": 59.83
+     },
+     "rgbPsnr": 41.36,
+     "rgbPsnrOfTheStillIn420": 41.52
     },
     {
      "preset": "extrude-retro",
-     "psnr": 35.93
+     "planePsnr": {
+      "y": 61.35,
+      "u": 60.92,
+      "v": 61.67,
+      "min": 60.92
+     },
+     "rgbPsnr": 35.93,
+     "rgbPsnrOfTheStillIn420": 35.97
     },
     {
      "preset": "long-shadow-flat",
-     "psnr": 56.59
+     "planePsnr": {
+      "y": 57.74,
+      "u": 99,
+      "v": 99,
+      "min": 57.74
+     },
+     "rgbPsnr": 56.59,
+     "rgbPsnrOfTheStillIn420": 77.05
     }
    ]
+  },
+  {
+   "id": "X6",
+   "name": "controls: by the same measure each export is under 50 dB against the next style's still, and against the still of its own title without its look (glow, gradient, second outline, extrusion)",
+   "ok": true,
+   "detail": {
+    "anotherStylesStill": [
+     {
+      "export": "neon-tube-pink",
+      "still": "gradient-sunset",
+      "min": 19.98
+     },
+     {
+      "export": "gradient-sunset",
+      "still": "double-outline-pop",
+      "min": 23.33
+     },
+     {
+      "export": "double-outline-pop",
+      "still": "extrude-retro",
+      "min": 19.4
+     },
+     {
+      "export": "extrude-retro",
+      "still": "long-shadow-flat",
+      "min": 18.91
+     },
+     {
+      "export": "long-shadow-flat",
+      "still": "neon-tube-pink",
+      "min": 16.27
+     }
+    ],
+    "theTitleWithoutItsLook": [
+     {
+      "export": "neon-tube-pink",
+      "without": "glow",
+      "min": 30.08
+     },
+     {
+      "export": "gradient-sunset",
+      "without": "gradient",
+      "min": 29.87
+     },
+     {
+      "export": "double-outline-pop",
+      "without": "stroke2",
+      "min": 41.53
+     },
+     {
+      "export": "extrude-retro",
+      "without": "extrude",
+      "min": 31.05
+     }
+    ]
+   }
   },
   {
    "id": "X7",
@@ -533,28 +637,29 @@
    "ok": true,
    "detail": {
     "method": "median of 5 server stills (frame 40, at rest) of the decorated title, minus the same for a plain clean-white title: render, read-back and PNG included in both",
-    "plainStillMs": 499.2,
+    "plainStillMs": 355,
     "addedMsPerFrame": {
-     "neon-tube-pink": 157,
-     "neon-tube-cyan": 150.6,
-     "gradient-sunset": 31.6,
-     "gradient-ocean": 7.2,
-     "gradient-gold": -5.1,
-     "double-outline-pop": 31.8,
-     "extrude-retro": 210.9,
-     "extrude-block": 317.4,
-     "long-shadow-flat": 479.6,
-     "wide-minimal": 56.5
+     "neon-tube-pink": 141.3,
+     "neon-tube-cyan": 193.7,
+     "gradient-sunset": 36.6,
+     "gradient-ocean": 29.3,
+     "gradient-gold": 38.4,
+     "double-outline-pop": 57.8,
+     "extrude-retro": 186.4,
+     "extrude-block": 226.4,
+     "long-shadow-flat": 132.3,
+     "wide-minimal": 15.2
     },
     "over25ms": [
      "neon-tube-pink",
      "neon-tube-cyan",
      "gradient-sunset",
+     "gradient-ocean",
+     "gradient-gold",
      "double-outline-pop",
      "extrude-retro",
      "extrude-block",
-     "long-shadow-flat",
-     "wide-minimal"
+     "long-shadow-flat"
     ]
    }
   },
@@ -732,9 +837,9 @@
     ],
     "bottomRow": 1096,
     "bottom": [
-     61.9,
-     93.5,
-     251.7
+     59.1,
+     91.5,
+     254.3
     ],
     "stops": [
      [
@@ -803,13 +908,26 @@
     "grow": {
      "left": 0,
      "top": 0,
-     "right": 216,
+     "right": 217,
      "bottom": 217
     },
+    "edges": "right and bottom: where the largest coverage of a column or row falls through one half (letter: red/255; shadow: blue/64), to a fraction of a pixel; left and top: the box of everything brighter than 3/255",
     "exactColourPixels": 60417,
     "notTheColourInside": 0,
     "walks": 1515,
     "gaps": 0
+   },
+   "longShadowOnePixelShort": {
+    "lengthFrac": 0.79632,
+    "lengthPx": 305.79,
+    "perAxisPx": 216.22,
+    "grow": {
+     "left": 0,
+     "top": 0,
+     "right": 216,
+     "bottom": 216
+    },
+    "expectedGrowthOfTheFullLength": 217.22
    },
    "tracking": {
     "graphemes": 9,
@@ -965,7 +1083,7 @@
    ],
    "compared": 38,
    "moved": 12,
-   "worstDifference": 1.04,
+   "worstDifference": 1.27,
    "bad": []
   },
   "editorCanvas": {
@@ -979,34 +1097,182 @@
      "preset": "neon-tube-pink",
      "previewIdentical": true,
      "maxDifference": 0,
-     "psnr": 46.13
+     "format": "codec_name=h264 color_range=tv color_space=bt709 height=1920 pix_fmt=yuv420p width=1080",
+     "planePsnr": {
+      "y": 61.21,
+      "u": 61.9,
+      "v": 61.58,
+      "min": 61.21
+     },
+     "rgbPsnr": 46.13,
+     "rgbPsnrOfTheStillIn420": 46.5
     },
     {
      "preset": "gradient-sunset",
      "previewIdentical": true,
      "maxDifference": 0,
-     "psnr": 46.34
+     "format": "codec_name=h264 color_range=tv color_space=bt709 height=1920 pix_fmt=yuv420p width=1080",
+     "planePsnr": {
+      "y": 61.62,
+      "u": 62.14,
+      "v": 61.91,
+      "min": 61.62
+     },
+     "rgbPsnr": 46.34,
+     "rgbPsnrOfTheStillIn420": 46.76
     },
     {
      "preset": "double-outline-pop",
      "previewIdentical": true,
      "maxDifference": 0,
-     "psnr": 41.36
+     "format": "codec_name=h264 color_range=tv color_space=bt709 height=1920 pix_fmt=yuv420p width=1080",
+     "planePsnr": {
+      "y": 59.83,
+      "u": 61.44,
+      "v": 61.07,
+      "min": 59.83
+     },
+     "rgbPsnr": 41.36,
+     "rgbPsnrOfTheStillIn420": 41.52
     },
     {
      "preset": "extrude-retro",
      "previewIdentical": true,
      "maxDifference": 0,
-     "psnr": 35.93
+     "format": "codec_name=h264 color_range=tv color_space=bt709 height=1920 pix_fmt=yuv420p width=1080",
+     "planePsnr": {
+      "y": 61.35,
+      "u": 60.92,
+      "v": 61.67,
+      "min": 60.92
+     },
+     "rgbPsnr": 35.93,
+     "rgbPsnrOfTheStillIn420": 35.97
     },
     {
      "preset": "long-shadow-flat",
      "previewIdentical": true,
      "maxDifference": 0,
-     "psnr": 56.59
+     "format": "codec_name=h264 color_range=tv color_space=bt709 height=1920 pix_fmt=yuv420p width=1080",
+     "planePsnr": {
+      "y": 57.74,
+      "u": 99,
+      "v": 99,
+      "min": 57.74
+     },
+     "rgbPsnr": 56.59,
+     "rgbPsnrOfTheStillIn420": 77.05
     }
    ],
-   "pageErrors": []
+   "pageErrors": [],
+   "barDb": 50,
+   "expectedFormat": "codec_name=h264 color_range=tv color_space=bt709 height=1920 pix_fmt=yuv420p width=1080",
+   "method": "planePsnr: the first frame of the export decoded to its own planes (yuv420p) against the worker's still converted to them (scale=in_range=full:out_range=tv:out_color_matrix=bt709:flags=accurate_rnd+full_chroma_int,format=yuv420p); per plane, 255 as the peak. rgbPsnr: the same frame decoded to RGB against the still, recorded only; rgbPsnrOfTheStillIn420 is the still itself taken to those planes and back with no encoder, i.e. the most any 4:2:0 export can score on rgbPsnr.",
+   "controls": {
+    "anotherStylesStill": [
+     {
+      "export": "neon-tube-pink",
+      "still": "gradient-sunset",
+      "planePsnr": {
+       "y": 19.98,
+       "u": 29.44,
+       "v": 30.76,
+       "min": 19.98
+      }
+     },
+     {
+      "export": "gradient-sunset",
+      "still": "double-outline-pop",
+      "planePsnr": {
+       "y": 23.33,
+       "u": 31.63,
+       "v": 25.1,
+       "min": 23.33
+      }
+     },
+     {
+      "export": "double-outline-pop",
+      "still": "extrude-retro",
+      "planePsnr": {
+       "y": 19.4,
+       "u": 22.59,
+       "v": 26.73,
+       "min": 19.4
+      }
+     },
+     {
+      "export": "extrude-retro",
+      "still": "long-shadow-flat",
+      "planePsnr": {
+       "y": 18.91,
+       "u": 22.84,
+       "v": 31.1,
+       "min": 18.91
+      }
+     },
+     {
+      "export": "long-shadow-flat",
+      "still": "neon-tube-pink",
+      "planePsnr": {
+       "y": 16.27,
+       "u": 34.18,
+       "v": 30.1,
+       "min": 16.27
+      }
+     }
+    ],
+    "theTitleWithoutItsLook": [
+     {
+      "export": "neon-tube-pink",
+      "stillWithout": "glow",
+      "planePsnr": {
+       "y": 30.08,
+       "u": 34.36,
+       "v": 30.27,
+       "min": 30.08
+      }
+     },
+     {
+      "export": "gradient-sunset",
+      "stillWithout": "gradient",
+      "planePsnr": {
+       "y": 29.87,
+       "u": 34.23,
+       "v": 35.23,
+       "min": 29.87
+      }
+     },
+     {
+      "export": "double-outline-pop",
+      "stillWithout": "stroke2",
+      "planePsnr": {
+       "y": 41.53,
+       "u": 61.44,
+       "v": 61.07,
+       "min": 41.53
+      }
+     },
+     {
+      "export": "extrude-retro",
+      "stillWithout": "extrude",
+      "planePsnr": {
+       "y": 37.76,
+       "u": 31.05,
+       "v": 43.82,
+       "min": 31.05
+      }
+     }
+    ]
+   },
+   "longShadowNote": {
+    "planePsnrAgainstTheStillWithoutTheLongShadow": {
+     "y": 57.74,
+     "u": 99,
+     "v": 99,
+     "min": 57.74
+    },
+    "note": "long-shadow-flat's shadow is #0000004D, black at 30%, and the frame behind this title is black: the shadow does not show, so for this style X6 compares the letters only (its shadow is measured in X3, in an opaque colour)"
+   }
   },
   "x7": {
    "layout": "per style one export of 180 frames: blur-in 20, blur-in 1, write-on 20, write-on 1 (each title 30 frames after 15 black frames), the sample title at 1080x1920; frames decoded at 270x480 by point sampling for the FlashAnalyser (it samples every 4th pixel of a full frame)",
@@ -1075,28 +1341,29 @@
   },
   "x8": {
    "method": "median of 5 server stills (frame 40, at rest) of the decorated title, minus the same for a plain clean-white title: render, read-back and PNG included in both",
-   "plainStillMs": 499.2,
+   "plainStillMs": 355,
    "addedMsPerFrame": {
-    "neon-tube-pink": 157,
-    "neon-tube-cyan": 150.6,
-    "gradient-sunset": 31.6,
-    "gradient-ocean": 7.2,
-    "gradient-gold": -5.1,
-    "double-outline-pop": 31.8,
-    "extrude-retro": 210.9,
-    "extrude-block": 317.4,
-    "long-shadow-flat": 479.6,
-    "wide-minimal": 56.5
+    "neon-tube-pink": 141.3,
+    "neon-tube-cyan": 193.7,
+    "gradient-sunset": 36.6,
+    "gradient-ocean": 29.3,
+    "gradient-gold": 38.4,
+    "double-outline-pop": 57.8,
+    "extrude-retro": 186.4,
+    "extrude-block": 226.4,
+    "long-shadow-flat": 132.3,
+    "wide-minimal": 15.2
    },
    "over25ms": [
     "neon-tube-pink",
     "neon-tube-cyan",
     "gradient-sunset",
+    "gradient-ocean",
+    "gradient-gold",
     "double-outline-pop",
     "extrude-retro",
     "extrude-block",
-    "long-shadow-flat",
-    "wide-minimal"
+    "long-shadow-flat"
    ]
   },
   "x9": {

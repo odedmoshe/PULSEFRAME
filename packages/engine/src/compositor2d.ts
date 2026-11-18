@@ -14,7 +14,7 @@ import { textAtRest, unitPose } from './textAnimation.ts';
 import { applyColourMatrix, applyEffects, hasGpuEffect, applyMask, applyRegions, BT709_AS_BT601, COMPOSITE, compositeLayer, scratch, type Buf, type LayerBox, type LookEnv } from './look.ts';
 import { fitScale } from '@pulseframe/core';
 import { TAP_PLACE_SLOT, tapMerger } from './taps.ts';
-import { enterUnit, paintTitle, paragraphSpacing, restPoses, type Box, type TextNote, type TitleUnit } from './textEffects.ts';
+import { enterUnit, INK_METRICS_MAX_PX, paintTitle, paragraphSpacing, restPoses, type Box, type TextNote, type TitleUnit } from './textEffects.ts';
 
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 /** Something that can paint a decoded source frame into a rectangle. */
@@ -76,7 +76,8 @@ const TRACKING_UNAVAILABLE = "this browser's canvas has no letterSpacing, so the
 function drawText(ctx: Ctx2D, g: RenderGraph, layer: TextLayer, note?: TextNote) {
   const s = layer.style;
   const px = s.sizeFrac * g.height;
-  ctx.font = `${s.fontWeight} ${px}px "${s.fontFamily}"`;
+  const fontAt = (size: number) => `${s.fontWeight} ${size}px "${s.fontFamily}"`;
+  ctx.font = fontAt(px);
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
   ctx.lineJoin = 'round';
@@ -91,9 +92,24 @@ function drawText(ctx: Ctx2D, g: RenderGraph, layer: TextLayer, note?: TextNote)
   // Every wrapped line keeps its paragraph's base direction. Words are never split; an over-long word overflows.
   const maxWidth = (g.width * TEXT_MAX_WIDTH_FRAC) / layer.transform.scale;
   const measured: MeasuredLine[] = [];
+  /**
+   * The ink box of a line (of a title with look fields), from its origin. Above INK_METRICS_MAX_PX of font size the browser
+   * gives it only in steps of 1/64 of the font size, so the line is measured again at that size and the box scaled up: it is
+   * then at most px/256 outside the ink, and a gradient's first and last colour fall on the ink's edges.
+   */
+  const inkOf = (line: string, m: TextMetrics, spacing: number): [number, number, number, number] => {
+    if (!(px > INK_METRICS_MAX_PX)) return [m.actualBoundingBoxLeft, m.actualBoundingBoxRight, m.actualBoundingBoxAscent, m.actualBoundingBoxDescent];
+    const k = px / INK_METRICS_MAX_PX;
+    ctx.font = fontAt(INK_METRICS_MAX_PX);
+    if (spaced) ctx.letterSpacing = `${spacing / k}px`;
+    const r = ctx.measureText(line);
+    ctx.font = fontAt(px);
+    if (spaced) ctx.letterSpacing = `${spacing}px`;
+    return [r.actualBoundingBoxLeft * k, r.actualBoundingBoxRight * k, r.actualBoundingBoxAscent * k, r.actualBoundingBoxDescent * k];
+  };
   const done = (line: string, dir: 'rtl' | 'ltr', spacing: number): MeasuredLine => {
     const m = ctx.measureText(line);
-    return { line, dir, width: m.width, ...(spaced ? { spacing } : {}), ...(look ? { ink: [m.actualBoundingBoxLeft, m.actualBoundingBoxRight, m.actualBoundingBoxAscent, m.actualBoundingBoxDescent] as [number, number, number, number] } : {}) };
+    return { line, dir, width: m.width, ...(spaced ? { spacing } : {}), ...(look ? { ink: inkOf(line, m, spacing) } : {}) };
   };
   for (const paragraph of layer.text.split('\n')) {
     const dir = resolveDirection(paragraph, s.direction);

@@ -12,11 +12,16 @@
  * - X2  for each look field, and for the blur and write-on entrances: a title at rest after its entrance is byte-identical
  *       to the same title without animation.
  * - X3  measured: second outline ring widths, gradient ends, glow fall-off, extrusion growth and shading, long shadow
- *       growth, colour and gaps, tracking width, niqqud with tracking, and an Arabic line unchanged by tracking.
+ *       growth (edges at half coverage, with a control one pixel short), colour and gaps, tracking width, niqqud with
+ *       tracking, and an Arabic line unchanged by tracking.
  * - X4  blur-in sharpens (Sobel edge energy never falls); write-on starts in the rightmost letter of a Hebrew title and in
  *       the leftmost of an English one, and its ink never shrinks.
  * - X5  during a rise with a gradient, every letter keeps the colours it has at rest.
- * - X6  five looks: the paused editor preview is byte-identical to the worker's still; the export reaches PSNR ≥ 40 dB.
+ * - X6  five looks: the paused editor preview is byte-identical to the worker's still; the exported frame is the still as
+ *       the export's format carries it: H.264 4:2:0, BT.709, limited range, and PSNR ≥ 50 dB in each of its Y, U and V
+ *       planes against the still converted to those planes. Controls: another style's still, and the same title without
+ *       its look, are below that. (The RGB PSNR against the still is recorded with what 4:2:0 alone leaves of it: it
+ *       measures the colour detail of the picture, not the export; see the note at X6.)
  * - X7  exports of every new style with blur-in and write-on, at the default length and at one frame: the flash check passes.
  * - X8  time per decorated title per frame (server still minus a plain title's), stated where it is over 25 ms.
  * - X9  'letterSpacing' in the canvas context: in the editor's browser, and in the render worker (a tracked still is
@@ -32,9 +37,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { chromium, type Page } from 'playwright';
 import * as T from '@pulseframe/time';
-import { TEXT_PRESETS } from '@pulseframe/core';
+import { BUILTIN_TEXT_PRESETS, TREND_TEXT_PRESET_IDS } from '@pulseframe/core';
 import { FlashAnalyser, flashCells } from '@pulseframe/engine';
 import { startServer } from '@pulseframe/server';
+import { chooseFormat } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/trend-text');
@@ -45,7 +51,9 @@ const W = 1080, H = 1920;
 const R30 = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R30);
 const SAMPLE = 'שָׁלוֹם עולם 2026';
-const NEW_PRESETS = TEXT_PRESETS.slice(40).map((p) => p.id);
+/** The ten trend styles by their ids from core (not "the last ten of TEXT_PRESETS": content packs append their styles after the built-ins). */
+const NEW_PRESETS: string[] = [...TREND_TEXT_PRESET_IDS];
+if (BUILTIN_TEXT_PRESETS.slice(40).map((p) => p.id).join() !== NEW_PRESETS.join()) throw new Error('TREND_TEXT_PRESET_IDS is not the built-in styles 41..50 any more: the proof would measure the wrong styles');
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const ff = (args: string[], input?: Buffer) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', ...args], { maxBuffer: 1 << 30, ...(input ? { input } : {}) });
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
@@ -92,6 +100,39 @@ function psnr(a: Img, b: Img): number {
   let s = 0, n = 0;
   for (let i = 0; i < a.d.length; i += 4) for (let j = 0; j < 3; j++) { const e = a.d[i + j]! - b.d[i + j]!; s += e * e; n++; }
   return s === 0 ? Infinity : 10 * Math.log10((255 * 255) / (s / n));
+}
+/**
+ * Where a profile of coverage (one value 0…1 per column or row: the largest in it) falls through one half, coming from its
+ * far end: the outer edge of the ink to a fraction of a pixel (between pixel centres). An edge found this way is at the
+ * same coverage whatever the colour of the ink, which a brightness threshold is not: a pixel a quarter covered is brighter
+ * than 24/255 in a white letter and darker than that in a shadow of colour #203040.
+ */
+function farEdge(profile: ArrayLike<number>): number {
+  for (let i = profile.length - 1; i >= 0; i--) if (profile[i]! >= 0.5) { const next = i + 1 < profile.length ? profile[i + 1]! : 0; return i + 0.5 + (profile[i]! - 0.5) / (profile[i]! - next); }
+  return NaN;
+}
+/** The largest coverage in every column and in every row of a picture. */
+function coverageProfiles(m: Img, coverage: (i: number) => number) {
+  const cols = new Float64Array(m.w), rows = new Float64Array(m.h);
+  for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) { const c = coverage((y * m.w + x) * 4); if (c > cols[x]!) cols[x] = c; if (c > rows[y]!) rows[y] = c; }
+  return { cols, rows };
+}
+/**
+ * The export's picture format (apps/server export.ts): H.264 yuv420p, BT.709, limited range. `planesOfRgba` is a picture as
+ * that format carries it (its Y plane, then U and V at half the size each way), by the conversion the export declares.
+ */
+const EXPORT_FORMAT = { pixFmt: 'yuv420p', range: 'tv', matrix: 'bt709' };
+const TO_EXPORT_PLANES = 'scale=in_range=full:out_range=tv:out_color_matrix=bt709:flags=accurate_rnd+full_chroma_int,format=yuv420p';
+const planesOfRgba = (rgba: Buffer, w = W, h = H) => ff(['-f', 'rawvideo', '-pix_fmt', 'rgba', '-video_size', `${w}x${h}`, '-i', 'pipe:0', '-vf', TO_EXPORT_PLANES, '-f', 'rawvideo', '-pix_fmt', 'yuv420p', '-'], rgba);
+/** Those planes shown again as RGB the way this proof decodes an export (ffmpeg's default conversion): what 4:2:0 alone leaves of a picture, no encoder involved. */
+const rgbaOfPlanes = (planes: Buffer, w = W, h = H) => ff(['-f', 'rawvideo', '-pix_fmt', 'yuv420p', '-video_size', `${w}x${h}`, '-i', 'pipe:0', '-vf', 'scale=in_color_matrix=bt709:in_range=tv:out_range=full,format=rgba', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-'], planes);
+/** PSNR of each plane of two yuv420p pictures, and the least of the three (a plane without any difference: 99). */
+function planePsnr(a: Buffer, b: Buffer, w = W, h = H) {
+  const n = w * h, q = (w / 2) * (h / 2);
+  if (a.length !== n + 2 * q || b.length !== n + 2 * q) return { y: 0, u: 0, v: 0, min: 0 };
+  const db = (from: number, len: number) => { let s = 0; for (let i = from; i < from + len; i++) { const e = a[i]! - b[i]!; s += e * e; } return s === 0 ? 99 : Number((10 * Math.log10((255 * 255) / (s / len))).toFixed(2)); };
+  const y = db(0, n), u = db(n, q), v = db(n + q, q);
+  return { y, u, v, min: Math.min(y, u, v) };
 }
 const maxDiff = (a: Img, b: Img) => { let m = 0; for (let i = 0; i < a.d.length; i++) m = Math.max(m, Math.abs(a.d[i]! - b.d[i]!)); return m; };
 
@@ -282,8 +323,16 @@ async function main() {
       const ls = await solo('x3 long shadow', 'ו', { ...BASE, sizeFrac: 0.2, longShadow: { color: '#203040', lengthFrac: 0.8, angle: 45 } });
       const twin = await solo('x3 long shadow twin', 'ו', { ...BASE, sizeFrac: 0.2 });
       const m = await still(ls.pid, 0), t = await still(twin.pid, 0);
-      const a = inkBox(t), b = inkBox(m);
-      const grow = { left: a.x0 - b.x0, top: a.y0 - b.y0, right: b.x1 - a.x1, bottom: b.y1 - a.y1 };
+      const a = inkBox(t);
+      // The growth toward the shadow: the far edges of the ink at half coverage, of the letter in the twin (white: red/255)
+      // and of the shadow in the title (the colour's blue is 64: blue/64, the letter itself counting as covered). Up and to
+      // the left nothing may be added at all: there the boxes of everything that is not black are compared.
+      const lit = (im: Img) => (x: number, y: number) => { const i = idx(im, x, y); return Math.max(im.d[i]!, im.d[i + 1]!, im.d[i + 2]!) > 3; };
+      const reach = (im: Img, coverage: (i: number) => number) => { const p = coverageProfiles(im, coverage); return { right: farEdge(p.cols), bottom: farEdge(p.rows) }; };
+      const shadowed = (im: Img) => reach(im, (i) => Math.min(1, im.d[i + 2]! / C[2]!));
+      const letter = reach(t, (i) => t.d[i]! / 255), far = shadowed(m), la = inkBox(t, lit(t)), lb = inkBox(m, lit(m));
+      const grow = { left: la.x0 - lb.x0, top: la.y0 - lb.y0, right: Number((far.right - letter.right).toFixed(2)), bottom: Number((far.bottom - letter.bottom).toFixed(2)) };
+      const b = lb;
       const kind = (x: number, y: number) => { const [r, g, bl] = px(m, x, y); if (r === C[0] && g === C[1] && bl === C[2]) return 'shadow'; if (Math.max(r!, g!, bl!) <= 3) return 'black'; if (r! > 245 && g! > 245 && bl! > 245) return 'text'; return 'edge'; };
       let exact = 0, inner = 0;
       // a pixel that is neither the colour, the letter nor the background must be an edge: within 2 px of the background or the letter
@@ -301,8 +350,16 @@ async function main() {
         let seenShadow = false, holeAfterShadow = false;
         for (let k = 1; k < dx + 4; k++) { const X = x + k, Y = y + k; if (X >= W || Y >= H) break; const q = kind(X, Y); if (q === 'shadow') { if (holeAfterShadow) { gaps++; break; } seenShadow = true; } else if (q === 'black' && seenShadow) holeAfterShadow = true; }
       }
-      x3.longShadow = { lengthPx: Number(L.toFixed(1)), expectedGrowth: Number(dx.toFixed(2)), grow, exactColourPixels: exact, notTheColourInside: inner, walks, gaps };
-      check('X3', 'longShadow: the ink box grows by L toward 45° (±1 px); every shadow pixel off the edges is exactly the colour; 0 gaps along its direction', Math.abs(grow.right - dx) <= 1 && Math.abs(grow.bottom - dx) <= 1 && Math.abs(grow.left) <= 1 && Math.abs(grow.top) <= 1 && inner === 0 && exact > 10000 && gaps === 0 && walks > 50, x3.longShadow);
+      const within = (g: { left: number; top: number; right: number; bottom: number }) => Math.abs(g.right - dx) <= 1 && Math.abs(g.bottom - dx) <= 1 && Math.abs(g.left) <= 1 && Math.abs(g.top) <= 1;
+      x3.longShadow = { lengthPx: Number(L.toFixed(1)), expectedGrowth: Number(dx.toFixed(2)), grow, edges: 'right and bottom: where the largest coverage of a column or row falls through one half (letter: red/255; shadow: blue/64), to a fraction of a pixel; left and top: the box of everything brighter than 3/255', exactColourPixels: exact, notTheColourInside: inner, walks, gaps };
+      check('X3', 'longShadow: the ink grows by L toward 45° (±1 px, the edges of the letter and of the shadow taken at the same coverage, one half) and not at all up or left; every shadow pixel off the edges is exactly the colour; 0 gaps along its direction', within(grow) && inner === 0 && exact > 10000 && gaps === 0 && walks > 50, x3.longShadow);
+      // control: the same title with a shadow one pixel shorter along each axis must fall outside the ±1 px of L
+      const shortFrac = (dx - 1) / Math.SQRT1_2 / PX;
+      const short = await solo('x3 long shadow one pixel short', 'ו', { ...BASE, sizeFrac: 0.2, longShadow: { color: '#203040', lengthFrac: shortFrac, angle: 45 } });
+      const ms = await still(short.pid, 0), farShort = shadowed(ms), lc = inkBox(ms, lit(ms));
+      const growShort = { left: la.x0 - lc.x0, top: la.y0 - lc.y0, right: Number((farShort.right - letter.right).toFixed(2)), bottom: Number((farShort.bottom - letter.bottom).toFixed(2)) };
+      x3.longShadowOnePixelShort = { lengthFrac: Number(shortFrac.toFixed(5)), lengthPx: Number((shortFrac * PX).toFixed(2)), perAxisPx: Number((shortFrac * PX * Math.SQRT1_2).toFixed(2)), grow: growShort, expectedGrowthOfTheFullLength: Number(dx.toFixed(2)) };
+      check('X3', 'longShadow control: the same title with a shadow one pixel shorter per axis measures one pixel less and is outside the ±1 px of L', !within(growShort) && Math.abs(grow.right - growShort.right - 1) <= 0.1 && Math.abs(grow.bottom - growShort.bottom - 1) <= 0.1, x3.longShadowOnePixelShort);
     }
     {
       // tracking: the ink of 'שלום עולם' grows by t·px·(graphemes − 1)
@@ -438,21 +495,60 @@ async function main() {
         const c2 = document.createElement('canvas').getContext('2d')!, off = new OffscreenCanvas(1, 1).getContext('2d')!;
         return { letterSpacing: 'letterSpacing' in c2 && 'letterSpacing' in off, filter: 'filter' in c2 && 'filter' in off, webgpu: !!(navigator as any).gpu };
       });
-      const rows: { preset: string; previewIdentical: boolean; maxDifference: number | null; psnr: number | null; exportError?: unknown }[] = [];
-      for (const id of ['neon-tube-pink', 'gradient-sunset', 'double-outline-pop', 'extrude-retro', 'long-shadow-flat']) {
+      // The export against the still. An export is H.264 in 4:2:0: its colour planes have half the still's resolution each
+      // way, so against the still's RGB a title with fine edges between saturated colours loses several dB whatever the
+      // encoder does ('extrude-retro', orange on violet: 35.93 dB, where a lossless H.264 encode of the very still, decoded
+      // the same way, gives 35.97 dB and the same still in 4:4:4 gives 65.6 dB). That number measures the picture, so the
+      // export is compared where it can be the still: in its own planes, against the still converted to them by the
+      // conversion the export declares. There only the encoder's loss is left (58 to 62 dB here), and BAR is set where a
+      // title that lost its look is caught for every look that shows on black (the least clear case, a missing second
+      // outline, is 41.5 dB in the planes, and was 37.75 dB in RGB under the earlier bar of 40).
+      const BAR = 50;
+      const X6_STYLES = ['neon-tube-pink', 'gradient-sunset', 'double-outline-pop', 'extrude-retro', 'long-shadow-flat'];
+      const LOOK_OF: Record<string, string | null> = { 'neon-tube-pink': 'glow', 'gradient-sunset': 'gradient', 'double-outline-pop': 'stroke2', 'extrude-retro': 'extrude', 'long-shadow-flat': null }; // long-shadow-flat: its shadow is black at 30% on the black frame, so it does not show here
+      type Row = { preset: string; previewIdentical: boolean; maxDifference: number | null; format: string | null; planePsnr: { y: number; u: number; v: number; min: number } | null; rgbPsnr: number | null; rgbPsnrOfTheStillIn420: number; exportError?: unknown };
+      const rows: Row[] = [];
+      const refPlanes: Record<string, Buffer> = {}, expPlanes: Record<string, Buffer> = {};
+      for (const id of X6_STYLES) {
         await preset(pid, c, id);
         const ref = await still(pid, 0);
         let prev: Img | null = null, same = false;
         for (let i = 0; i < 200 && !same; i++) { await sleep(100); prev = await previewRgba(page); same = !!prev && prev.w === W && prev.h === H && maxDiff(prev, ref) === 0; }
+        refPlanes[id] = planesOfRgba(ref.d);
         const out = await exportFile(pid, `x6-${id}.mp4`);
-        let p: number | null = null;
-        if (typeof out === 'string') p = psnr({ w: W, h: H, d: ff(['-i', out, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']) }, ref);
-        rows.push({ preset: id, previewIdentical: same, maxDifference: prev && prev.w === W && prev.h === H ? maxDiff(prev, ref) : null, psnr: p === null ? null : Number(p.toFixed(2)), ...(typeof out === 'string' ? {} : { exportError: out.error }) });
+        let p: number | null = null, format: string | null = null, planes: Row['planePsnr'] = null;
+        if (typeof out === 'string') {
+          format = execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_name,pix_fmt,color_range,color_space,width,height', '-of', 'default=nw=1', out]).toString().trim().split('\n').sort().join(' ');
+          p = psnr({ w: W, h: H, d: ff(['-i', out, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']) }, ref);
+          expPlanes[id] = ff(['-i', out, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'yuv420p', '-']); // the decoded planes as they are: no conversion for a yuv420p stream
+          planes = planePsnr(expPlanes[id]!, refPlanes[id]!);
+        }
+        rows.push({ preset: id, previewIdentical: same, maxDifference: prev && prev.w === W && prev.h === H ? maxDiff(prev, ref) : null, format, planePsnr: planes, rgbPsnr: p === null ? null : Number(p.toFixed(2)), rgbPsnrOfTheStillIn420: Number(psnr({ w: W, h: H, d: rgbaOfPlanes(refPlanes[id]!) }, ref).toFixed(2)), ...(typeof out === 'string' ? {} : { exportError: out.error }) });
       }
       await page.close();
-      measurements.x6 = { rows, pageErrors: errors.slice(0, 5) };
-      check('X6', 'five looks (glow, gradient, double outline, extrusion, long shadow): the paused editor preview (no graphics adapter) is byte-identical to the worker\'s still', rows.every((r) => r.previewIdentical), rows);
-      check('X6', 'and the exported frame reaches PSNR ≥ 40 dB against the still', rows.every((r) => r.psnr !== null && r.psnr >= 40), rows.map((r) => ({ preset: r.preset, psnr: r.psnr })));
+      // controls, on stills only: the same measure must fail for another picture and for a title without its look
+      const wrong = X6_STYLES.map((id, i) => { const other = X6_STYLES[(i + 1) % X6_STYLES.length]!; return { export: id, still: other, planePsnr: expPlanes[id] ? planePsnr(expPlanes[id]!, refPlanes[other]!) : null }; });
+      const bare: { export: string; stillWithout: string; planePsnr: Row['planePsnr'] }[] = [];
+      for (const id of X6_STYLES) {
+        const look = LOOK_OF[id];
+        if (!look) continue;
+        await preset(pid, c, id);
+        await style(pid, c, { [look]: null });
+        bare.push({ export: id, stillWithout: look, planePsnr: expPlanes[id] ? planePsnr(expPlanes[id]!, planesOfRgba((await still(pid, 0)).d)) : null });
+      }
+      await preset(pid, c, 'long-shadow-flat');
+      await style(pid, c, { longShadow: null });
+      const noShadow = expPlanes['long-shadow-flat'] ? planePsnr(expPlanes['long-shadow-flat']!, planesOfRgba((await still(pid, 0)).d)) : null;
+      const wantFormat = `codec_name=h264 color_range=${EXPORT_FORMAT.range} color_space=${EXPORT_FORMAT.matrix} height=${H} pix_fmt=${EXPORT_FORMAT.pixFmt} width=${W}`;
+      measurements.x6 = {
+        rows, pageErrors: errors.slice(0, 5), barDb: BAR, expectedFormat: wantFormat,
+        method: `planePsnr: the first frame of the export decoded to its own planes (yuv420p) against the worker's still converted to them (${TO_EXPORT_PLANES}); per plane, 255 as the peak. rgbPsnr: the same frame decoded to RGB against the still, recorded only; rgbPsnrOfTheStillIn420 is the still itself taken to those planes and back with no encoder, i.e. the most any 4:2:0 export can score on rgbPsnr.`,
+        controls: { anotherStylesStill: wrong, theTitleWithoutItsLook: bare },
+        longShadowNote: { planePsnrAgainstTheStillWithoutTheLongShadow: noShadow, note: "long-shadow-flat's shadow is #0000004D, black at 30%, and the frame behind this title is black: the shadow does not show, so for this style X6 compares the letters only (its shadow is measured in X3, in an opaque colour)" },
+      };
+      check('X6', 'five looks (glow, gradient, double outline, extrusion, long shadow): the paused editor preview (no graphics adapter) is byte-identical to the worker\'s still', rows.every((r) => r.previewIdentical), rows.map((r) => ({ preset: r.preset, previewIdentical: r.previewIdentical, maxDifference: r.maxDifference })));
+      check('X6', `and the exported frame is the still as the export's format carries it: H.264 ${EXPORT_FORMAT.pixFmt}, ${EXPORT_FORMAT.matrix}, limited range, and PSNR ≥ ${BAR} dB in each of its Y, U and V planes against the still converted to those planes`, rows.every((r) => r.format === wantFormat && r.planePsnr !== null && r.planePsnr.min >= BAR), rows.map((r) => ({ preset: r.preset, planePsnr: r.planePsnr, rgbPsnr: r.rgbPsnr, rgbPsnrOfTheStillIn420: r.rgbPsnrOfTheStillIn420, ...(r.format === wantFormat ? {} : { format: r.format }), ...(r.exportError ? { exportError: r.exportError } : {}) })));
+      check('X6', `controls: by the same measure each export is under ${BAR} dB against the next style's still, and against the still of its own title without its look (glow, gradient, second outline, extrusion)`, wrong.length === 5 && wrong.every((r) => r.planePsnr !== null && r.planePsnr.min < BAR) && bare.length === 4 && bare.every((r) => r.planePsnr !== null && r.planePsnr.min < BAR), { anotherStylesStill: wrong.map((r) => ({ export: r.export, still: r.still, min: r.planePsnr?.min })), theTitleWithoutItsLook: bare.map((r) => ({ export: r.export, without: r.stillWithout, min: r.planePsnr?.min })) });
     }
     lap('X6');
 
@@ -538,10 +634,10 @@ async function main() {
       measurements.x10master = { reachedByTab: reached, glow: on ? clipOf(on).style.glow : null, op: evOn?.ops, undoReachedByTab: undoReached, undoEvent: evUndo?.kind, restored: !!undone };
       check('X10', 'keyboard only: Tab to the glow checkbox and Space commits update_text with the glow; Tab to undo and Enter restores the title exactly', reached && !!on && JSON.stringify(evOn?.ops) === '["update_text"]' && undoReached && evUndo?.kind === 'undo' && !!undone, measurements.x10master);
       // a format view (switched with the format menu; the panel then by keyboard again)
-      await page.getByTestId('format-switch').selectOption(variantId);
+      await chooseFormat(page, variantId);
       await page.getByTestId('format-badge').waitFor({ timeout: 10000 }).catch(() => {});
       await page.getByTestId('text-effects').waitFor({ timeout: 10000 });
-      await page.getByTestId('format-switch').focus();
+      await page.locator('[data-testid=format-switch] [role=radio][aria-checked=true]').focus(); // the viewed format's chip in the FormatPrism (the old select)
       const reached2 = await tabTo('text-fx-glow');
       await page.keyboard.press('Space');
       const inFormat = await until((d) => !!d.variants?.[variantId]?.overrides?.[c]?.textStyle?.glow);

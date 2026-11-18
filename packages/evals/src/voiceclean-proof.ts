@@ -6,8 +6,10 @@
  *   C1  measure_voice: band floors, hum, pauses against the known truth; the revision is unchanged (REST and MCP agree)
  *   C2  clean_voice: one op set (REST, then MCP), the export, then one undo restores the document
  *   C3  a range of the mix equals that part of the full mix
- *   C4  sync: burst onsets of the cleaned export against the dry export
- *   C5  preview = export: four cleaned clips, 50 ms windows, priming, late starts, main-thread long tasks
+ *   C4  sync: bursts with hard onsets, the cleaned mix against the dry mix. White-noise bursts show the latency (the place of the
+ *       chain's impulse response); the carrier of the 1 kHz bursts shows the phase its filters have at 1 kHz by design
+ *   C5  preview = export: four cleaned clips; the samples the preview schedules against the export, 50 ms windows of what is
+ *       heard, priming, late starts, main-thread long tasks
  *   C6  each cleanup voice in Node at least 20× real time
  *   C7  the cleanup kernels in Chromium against Node within 1e-6
  *   C8  a split at a non-multiple of the STFT hop: the parts sum to the unsplit mix
@@ -33,7 +35,7 @@ import { fxFixture, renderFx } from '@pulseframe/engine/audiofx/kernels/index.ts
 import { startServer, type RunningServer } from '@pulseframe/server';
 import { mixToRaw } from '@pulseframe/server/audiomix.ts';
 import { readStereo } from './voicefx-fixtures.ts';
-import { band, bestLag, between, burstRecording, coverage, lineOver, rmsDbOver, voiceRecording, VC_SR, writeWavF32, type Span } from './voiceclean-fixtures.ts';
+import { band, between, burstRecording, cleanupPhaseDelay, coverage, lagAndMatch, lineOver, rmsDbOver, voiceRecording, VC_SR, writeWavF32, type Span } from './voiceclean-fixtures.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/voiceclean');
@@ -56,11 +58,12 @@ const VARIANTS: Record<string, AudioFxParams> = {
 const maxDiff = (a: Float32Array, aFrom: number, b: Float32Array, bFrom: number, frames: number) => { let m = 0; for (let i = 0; i < frames * 2; i++) m = Math.max(m, Math.abs((a[aFrom * 2 + i] ?? 0) - (b[bFrom * 2 + i] ?? 0))); return m; };
 const identical = (a: Float32Array, aFrom: number, b: Float32Array, bFrom: number, frames: number) => { for (let i = 0; i < frames * 2; i++) if (!Object.is(a[aFrom * 2 + i], b[bFrom * 2 + i])) return false; return true; };
 const peakOf = (x: Float32Array) => { let p = 0; for (const v of x) p = Math.max(p, Math.abs(v)); return p; };
-const peakOver = (pcm: Float32Array, from: number, to: number) => { let p = 0; for (let i = Math.max(0, Math.round(from * SR)); i < Math.min(pcm.length / 2, Math.round(to * SR)); i++) p = Math.max(p, Math.abs(pcm[i * 2]!), Math.abs(pcm[i * 2 + 1]!)); return p; };
+/** Peak of the LEFT channel over [from, to) seconds: what the preview's measurement tap hears (pf-onset-tap.js reads channel 0). */
+const peakLeftOver = (pcm: Float32Array, from: number, to: number) => { let p = 0; for (let i = Math.max(0, Math.round(from * SR)); i < Math.min(pcm.length / 2, Math.round(to * SR)); i++) p = Math.max(p, Math.abs(pcm[i * 2]!)); return p; };
 /** Strip what changes with every revision, to compare documents. */
 const docKey = (d: ProjectDocument) => JSON.stringify({ sequences: d.sequences, assets: d.assets, settings: d.settings });
 
-interface PreviewRun { stats: any; longTasks: { start: number; ms: number }[]; wallMs: number }
+interface PreviewRun { stats: any; longTasks: { start: number; ms: number }[]; wallMs: number; scheduled: { buffers: number; offGrid: number; frames: number; base64: string } | null }
 
 async function main() {
   fs.rmSync(art, { recursive: true, force: true });
@@ -219,10 +222,24 @@ async function main() {
       const dry = (await floatMix(B.pid)).pcm;
       const m = await measure(B.pid, { clipId: B.clipId, strength: 0.6 });
       await tx(B.pid, m.body.ops, { expectedRevision: m.body.revision });
-      const wet = (await floatMix(B.pid)).pcm;
-      const lags = bursts.onsets.map((n0) => bestLag(dry, wet, n0 - 240, 0.05 * SR));
-      measurements.C4 = { bursts: lags.length, lagsSamples: lags, effects: m.body.ops[0]?.args };
-      check('C4 1 kHz bursts with hard onsets through the cleanup: every burst of the cleaned mix lines up with the dry mix within 1 sample (cross-correlation)', lags.length >= 10 && lags.every((l) => Math.abs(l) <= 1), measurements.C4);
+      const cleaned = await floatMix(B.pid), wet = cleaned.pcm;
+      const effects: { type: string; params: AudioFxParams }[] = ((cleaned.doc.sequences[cleaned.doc.mainSequenceId]!.tracks.flatMap((t) => t.clips).find((c) => c.id === B.clipId) as any)?.audioFx ?? []).map((x: any) => ({ type: x.type, params: x.params }));
+      const at = (onsets: number[]) => onsets.map((n0) => lagAndMatch(dry, wet, n0 - 240, 0.05 * SR));
+      // Broadband bursts: the cross-correlation peaks where the impulse response of dry → cleaned is largest, so its lag IS the latency.
+      const bb = at(bursts.noiseOnsets), broadband = bb.map((x) => x.lag);
+      // 1 kHz bursts: the lag of a tone is its phase at 1 kHz in samples: the latency PLUS the phase the chain's minimum-phase filters
+      // turn (low cut, presence, hum notches: they lead a 1 kHz tone and delay nothing). Compared with that phase by design.
+      const tn = at(bursts.onsets), tone = tn.map((x) => x.lag), designed = cleanupPhaseDelay(effects, 1000);
+      // a lag counts only where the cleaned burst is the dry burst (normalised correlation; silence or a broken mix matches nothing)
+      const weakest = Math.min(...bb.map((x) => x.match), ...tn.map((x) => x.match));
+      measurements.C4 = {
+        effects: effects.map((e) => e.type), broadbandBursts: broadband.length, broadbandLagsSamples: broadband,
+        toneBursts: tone.length, toneCarrierLagsSamples: tone, designedPhaseDelayAt1kHzSamples: r3(designed),
+        designedPhaseDelayPerEffect: Object.fromEntries(effects.map((e) => [e.type, r3(cleanupPhaseDelay([e], 1000))])),
+        toneAgainstDesignSamples: tone.map((l) => r3(l - designed)), weakestNormalisedCorrelation: r3(weakest), cleanVoice: m.body.ops[0]?.args,
+      };
+      check('C4 bursts with hard onsets through the cleanup (dehum, denoise, speech enhancer), the cleaned mix against the dry mix by cross-correlation (every burst correlates at 0.9 or more): every white-noise burst lines up within 1 sample (the chain delays nothing); the carrier of every 1 kHz burst sits within 1 sample of the phase delay the chain\'s filters have at 1 kHz by design (the low cut, the presence EQ and the hum notches turn the phase of a tone; that is not a delay)',
+        effects.length === 3 && CLEANUP_TYPES.every((t) => effects.some((e) => e.type === t)) && weakest >= 0.9 && broadband.length >= 10 && broadband.every((l) => Math.abs(l) <= 1) && tone.length >= 10 && tone.every((l) => Math.abs(l - designed) < 1), measurements.C4);
     });
 
     // ============================== C6 speed in Node ==============================
@@ -311,6 +328,15 @@ async function main() {
       await page.addInitScript(() => {
         (window as any).__pfAudioTap = true;
         (window as any).__pfLongTasks = [];
+        // Every buffer the player schedules, as it is handed to the audio device (kept only while a run asks for it): the samples
+        // of the preview themselves, whatever the clock does afterwards.
+        (window as any).__pfScheduled = null;
+        const start = AudioBufferSourceNode.prototype.start;
+        AudioBufferSourceNode.prototype.start = function (this: AudioBufferSourceNode, when?: number, offset?: number, duration?: number) {
+          const cap = (window as any).__pfScheduled as unknown[] | null, b = this.buffer;
+          if (cap && b) cap.push({ when: when ?? 0, offset: offset ?? 0, l: b.getChannelData(0).slice(), r: (b.numberOfChannels > 1 ? b.getChannelData(1) : b.getChannelData(0)).slice() });
+          return start.call(this, when, offset, duration);
+        };
         try { new PerformanceObserver((list) => { for (const e of list.getEntries()) (window as any).__pfLongTasks.push({ start: e.startTime, ms: e.duration }); }).observe({ type: 'longtask', buffered: true }); } catch { /* no long-task timing in this browser */ }
       });
       await page.goto(`${s.ownerUrl}&project=${pid}`);
@@ -318,18 +344,39 @@ async function main() {
       await page.waitForFunction(() => !!(window as any).__pfPlayer?.doc, undefined, { timeout: 30000 });
       return page;
     };
-    const playFor = (page: Page, from: number, seconds: number, bypass = false): Promise<PreviewRun> => page.evaluate(async ({ from, seconds, bypass, fps }) => {
+    /** Play `seconds` from `from`. With `capture`, also the mix of every buffer scheduled, on the timeline from sample 0 (interleaved stereo float, base64). */
+    const playFor = (page: Page, from: number, seconds: number, bypass = false, capture = false): Promise<PreviewRun> => page.evaluate(async ({ from, seconds, bypass, capture, fps, sr }) => {
       const p = (window as any).__pfPlayer;
       p.setBypassAudioFx(bypass);
       p.seek(Math.round(from * fps));
       (window as any).__pfLongTasks.length = 0;
+      (window as any).__pfScheduled = capture ? [] : null;
       const t = performance.now();
       await p.play();
       await new Promise((r) => setTimeout(r, seconds * 1000));
       const stats = p.syncStats();
       p.pause();
-      return { stats, longTasks: [...(window as any).__pfLongTasks], wallMs: performance.now() - t };
-    }, { from, seconds, bypass, fps: FPS });
+      const run = { stats, longTasks: [...(window as any).__pfLongTasks], wallMs: performance.now() - t, scheduled: null as PreviewRun['scheduled'] };
+      const cap = (window as any).__pfScheduled as { when: number; offset: number; l: Float32Array; r: Float32Array }[] | null;
+      (window as any).__pfScheduled = null;
+      if (cap) {
+        // timeline sample n plays at device frame K + n; the picture clock's origin is device frame K + (the sample of `from`)
+        const originClock = p.origin?.clock;
+        if (typeof originClock !== 'number') throw new Error('the player no longer exposes its clock origin (origin.clock)');
+        const K = Math.round(originClock * sr) - Math.round(from * sr), frames = Math.round((from + seconds) * sr), mix = new Float32Array(frames * 2);
+        let offGrid = 0;
+        for (const c of cap) {
+          const at = c.when * sr, skip = Math.round(c.offset * sr); // a late buffer starts `offset` seconds in: what it skips is not heard
+          if (Math.abs(at - Math.round(at)) > 1e-3 || Math.abs(c.offset * sr - skip) > 1e-3) offGrid++;
+          for (let i = skip, n = Math.round(at) - K; i < c.l.length; i++, n++) if (n >= 0 && n < frames) { mix[n * 2] = mix[n * 2]! + c.l[i]!; mix[n * 2 + 1] = mix[n * 2 + 1]! + c.r[i]!; }
+        }
+        const u8 = new Uint8Array(mix.buffer);
+        let bin = '';
+        for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode(...u8.subarray(i, i + 0x8000));
+        run.scheduled = { buffers: cap.length, offGrid, frames, base64: btoa(bin) };
+      }
+      return run;
+    }, { from, seconds, bypass, capture, fps: FPS, sr: SR });
     const effectsRan = (run: PreviewRun, voices: number) => run.stats.clock === 'audio' && run.stats.fxVoices === voices && Object.keys(run.stats.unavailableAudioFx ?? {}).length === 0;
 
     console.log('# C5 preview = export');
@@ -340,19 +387,46 @@ async function main() {
       for (const at of [0, 0.5, 1, 1.5]) { const clipId = await addClip(pid, assetId, Math.round(at * FPS), 20 * FPS); ids.push(clipId); await tx(pid, [{ op: 'set_clip_gain', args: { clipId, gain: 0.3 } }]); }
       const m = await measure(pid, { clipId: ids[0], strength: 0.6, scope: 'asset' });
       await tx(pid, m.body.ops, { expectedRevision: m.body.revision });
-      const exp = await exportJob(pid, 'c5-export.wav');
+      const exp = await exportJob(pid, 'c5-export.wav'), serverMix = (await floatMix(pid)).pcm;
+      const load = () => os.loadavg().map(r2);
+      const loadBefore = load();
       const page = await openEditor(pid);
-      const run = await playFor(page, 0, 12.3);
+      const run = await playFor(page, 0, 12.3, false, true);
       const prime = await playFor(page, 10, 2);
       const withFx = await playFor(page, 0, 15);
       const baseline = await playFor(page, 0, 15, true);
       await page.close();
-      const windows = (run.stats.audioLevels ?? []).filter((l: { t: number; peak: number }) => l.t >= 0.2 && l.t <= 12 && peakOver(exp, l.t, l.t + 0.05) > 10 ** (-40 / 20)).map((l: { t: number; peak: number }) => ({ t: l.t, previewDb: r2(db(l.peak)), exportDb: r2(db(peakOver(exp, l.t, l.t + 0.05))) }));
+      // (a) the samples: every buffer the preview scheduled, summed on the timeline, against the export (16 bit) and the server's float mix
+      const upTo = 12 * SR;
+      let scheduled: Record<string, unknown> = { captured: false }, samplesOk = false;
+      if (run.scheduled) {
+        const buf = Buffer.from(run.scheduled.base64, 'base64'), prev = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
+        const dExport = maxDiff(prev, 0, exp, 0, upTo), dFloat = maxDiff(prev, 0, serverMix, 0, upTo);
+        samplesOk = prev.length >= upTo * 2 && run.scheduled.buffers >= 4 && run.scheduled.offGrid === 0 && dExport <= LSB;
+        scheduled = { captured: true, buffers: run.scheduled.buffers, notOnTheSampleGrid: run.scheduled.offGrid, comparedSeconds: upTo / SR, maxDifferenceFromExportIn16BitSteps: r3(dExport / LSB), maxDifferenceFromServerFloatMix: dFloat, peak: r3(peakOf(serverMix.subarray(0, upTo * 2))) };
+      }
+      // (b) what is heard: the tap's 50 ms windows (left channel, timeline seconds exact to the sample) against the same windows of the export
+      const windows = (run.stats.audioLevels ?? []).filter((l: { t: number; peak: number }) => l.t >= 0.2 && l.t <= 12 && peakLeftOver(exp, l.t, l.t + 0.05) > 10 ** (-40 / 20)).map((l: { t: number; peak: number }) => ({ t: l.t, previewDb: r2(db(l.peak)), exportDb: r2(db(peakLeftOver(exp, l.t, l.t + 0.05))) }));
       const worst = windows.reduce((mx: number, x: { previewDb: number; exportDb: number }) => Math.max(mx, Math.abs(x.previewDb - x.exportDb)), 0);
+      const worstWindow = windows.find((x: { previewDb: number; exportDb: number }) => Math.abs(x.previewDb - x.exportDb) === worst) ?? null;
+      const firstWindow = (run.stats.audioLevels ?? [])[0]?.t;
       const total = (r: PreviewRun) => Math.round(r.longTasks.reduce((a, x) => a + x.ms, 0));
-      measurements.C5 = { opsApplied: m.body.ops.length, windows: windows.length, worstWindowDb: r2(worst), sample: windows.filter((_: unknown, i: number) => i % 20 === 0), prime: { fxPrimeMs: prime.stats.fxPrimeMs, fxPrimeTimedOut: prime.stats.fxPrimeTimedOut, fxLateStarts: prime.stats.fxLateStarts }, cost: { withEffects: { fxVoices: withFx.stats.fxVoices, fxLateStarts: withFx.stats.fxLateStarts, fxLateSkips: withFx.stats.fxLateSkips, longTaskMs: total(withFx), longTasks: withFx.longTasks.length }, bypassed: { fxVoices: baseline.stats.fxVoices, longTaskMs: total(baseline), longTasks: baseline.longTasks.length } } };
-      check('C5 four clips cleaned in one transaction (scope asset), played in the editor preview: every 50 ms window above -40 dBFS within 0.5 dB of the export; starting 10 s in, the voices are primed within 500 ms with no late start; main-thread long tasks at most twice the bypassed playback (100 ms allowed over a near-zero baseline)',
-        m.body.ops.length === 4 && effectsRan(run, 4) && windows.length >= 100 && worst <= 0.5 && effectsRan(prime, 4) && prime.stats.fxPrimeTimedOut === false && prime.stats.fxPrimeMs <= 500 && prime.stats.fxLateStarts === 0 && withFx.stats.fxLateStarts === 0 && baseline.stats.fxVoices === 0 && total(withFx) <= Math.max(2 * total(baseline), total(baseline) + 100), measurements.C5);
+      const conditions: Record<string, boolean> = {
+        'four ops applied': m.body.ops.length === 4,
+        'the compared run played four voices on the audio clock': effectsRan(run, 4),
+        'the compared run scheduled nothing late': run.stats.fxLateStarts === 0 && run.stats.fxLateSkips === 0,
+        'the scheduled samples are the export within one 16-bit step': samplesOk,
+        'at least 100 windows above -40 dBFS': windows.length >= 100,
+        'every window within 0.5 dB': worst <= 0.5,
+        'from 10 s: four voices, primed within 500 ms, no late start': effectsRan(prime, 4) && prime.stats.fxPrimeTimedOut === false && prime.stats.fxPrimeMs <= 500 && prime.stats.fxLateStarts === 0,
+        'the 15 s run with effects started nothing late': withFx.stats.fxLateStarts === 0,
+        'the bypassed run played no effect voice': baseline.stats.fxVoices === 0,
+        'long tasks at most twice the bypassed run (100 ms allowed over a near-zero baseline)': total(withFx) <= Math.max(2 * total(baseline), total(baseline) + 100),
+      };
+      const failing = Object.entries(conditions).filter(([, ok]) => !ok).map(([name]) => name);
+      measurements.C5 = { failing, opsApplied: m.body.ops.length, machineLoad: { cores: os.cpus().length, loadAverageBefore: loadBefore, loadAverageAfter: load() }, comparedRun: { fxVoices: run.stats.fxVoices, fxPrimeMs: run.stats.fxPrimeMs, fxLateStarts: run.stats.fxLateStarts, fxLateSkips: run.stats.fxLateSkips, firstWindowAtSeconds: firstWindow }, scheduledSamples: scheduled, windows: windows.length, worstWindowDb: r2(worst), worstWindow, sample: windows.filter((_: unknown, i: number) => i % 20 === 0), prime: { fxPrimeMs: prime.stats.fxPrimeMs, fxPrimeTimedOut: prime.stats.fxPrimeTimedOut, fxLateStarts: prime.stats.fxLateStarts }, cost: { withEffects: { fxVoices: withFx.stats.fxVoices, fxLateStarts: withFx.stats.fxLateStarts, fxLateSkips: withFx.stats.fxLateSkips, longTaskMs: total(withFx), longTasks: withFx.longTasks.length }, bypassed: { fxVoices: baseline.stats.fxVoices, longTaskMs: total(baseline), longTasks: baseline.longTasks.length } } };
+      check('C5 four clips cleaned in one transaction (scope asset), played in the editor preview with nothing scheduled late: the samples the preview schedules are the export within one 16-bit step; every 50 ms window above -40 dBFS, as heard at the output (left channel), within 0.5 dB of the export; starting 10 s in, the voices are primed within 500 ms with no late start; main-thread long tasks at most twice the bypassed playback (100 ms allowed over a near-zero baseline)',
+        failing.length === 0, measurements.C5);
     });
 
     console.log('# C7 kernels in Chromium against Node');

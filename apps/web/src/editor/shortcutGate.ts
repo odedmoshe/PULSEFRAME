@@ -18,3 +18,20 @@ export function shortcutAllowed(chord: string, cmd: { id: string; group: string 
   // Any other modal dialog (projects, activity, source viewer, effects gallery, …): no editor shortcut acts behind it.
   return !ctx.modalOpen;
 }
+
+/** The element the key was pressed in, as far as the gate needs it (an HTMLElement fits). */
+export interface KeyTarget { tagName: string; isContentEditable: boolean; type?: string }
+/** Inputs that take no text: a click on one leaves the focus there, and Mod+ chords have no meaning of their own in them. */
+const CHOICE_INPUTS = new Set(['checkbox', 'radio', 'range']);
+
+/**
+ * Whether a key counts as typing (ShortcutContext.typing). Text fields, selects and editable text keep every key. A checkbox,
+ * radio or slider keeps its own keys (Space toggles, the arrows move), but not the Mod+ chords: after one click on a radio,
+ * Ctrl+Z must undo that answer instead of doing nothing (the focus stays on the radio).
+ */
+export function isTyping(el: KeyTarget | null, chord: string): boolean {
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  if (el.tagName === 'INPUT' && CHOICE_INPUTS.has((el.type ?? '').toLowerCase())) return !chord.startsWith('Mod+');
+  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+}

@@ -2,7 +2,9 @@ import * as T from '@pulseframe/time';
 import { animatableParams, findEffect, isTimeEffect, modulatableParams, NOT_ANIMATABLE, paramRange, transitionDef } from './effects.ts';
 import { sourceEnd, speedValue } from './speed.ts';
 import { findAudioEffect } from './audioEffects.ts';
-import { ANIMATABLE, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
+import { ANIMATABLE, CaptureSchema, LifeEventSchema, MAX_LIFE_EVENTS, MAX_PEOPLE, PersonSchema, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
+import { personNameKey } from './people.ts';
+import { lifeIssues } from './fields.ts';
 import { MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, TRACK_STATES } from './tracking.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
@@ -278,6 +280,9 @@ export function validateProject(doc: ProjectDocument): Issue[] {
     if (key !== an.assetId || !doc.assets[an.assetId]) issues.push({ code: 'missing_asset', message: `analysis ${key} refers to a missing asset`, ids: [key] });
     for (const [name, list] of [['scene cuts', an.scenes?.cuts], ['beats', an.beats?.beats], ['bar starts', an.beats?.downbeats]] as const)
       if (list?.some((t, i) => T.isNegative(t) || (i > 0 && !T.lt(list[i - 1]!, t)))) issues.push({ code: 'analysis_order', message: `${name} of asset ${key} must be non-negative and strictly ascending`, ids: [key] });
+    // music sections (ADR-0022): each ends where the next starts, so they are ascending and the first starts with the file
+    const sections = an.beats?.sections;
+    if (sections?.length && (!T.isZero(sections[0]!.start) || sections.some((x, i) => i > 0 && !T.lt(sections[i - 1]!.start, x.start)))) issues.push({ code: 'analysis_sections', message: `music sections of asset ${key} must start at 0 and be strictly ascending`, ids: [key] });
   }
   for (const [key, tr] of Object.entries(doc.transcripts ?? {})) {
     if (key !== tr.assetId) issues.push({ code: 'key_mismatch', message: `transcript key ${key} != assetId ${tr.assetId}`, ids: [key] });
@@ -296,5 +301,53 @@ export function validateProject(doc: ProjectDocument): Issue[] {
       }
     }
   }
+  // life line (ADR-0021): the structure of the events; the grammar of live title fields is checked by lifeIssues (fields.ts).
+  // A capture date and an event must also be ones the stored format holds (a real day inside the years, a total shift inside
+  // its bound, 1 to MAX_EVENT_FILES files, a one-line name): the store writes a committed document as it is and parses it
+  // only when it is read again, so anything the schema refuses here would be a project that no longer opens. An operation
+  // that would leave one is refused (invalid_result) instead; the operations' own refusals (lifeOps.ts) come first.
+  const storedAs = (schema: { safeParse(v: unknown): { success: true } | { success: false; error: { issues: { path: PropertyKey[]; message: string }[] } } }, value: unknown): string | null => {
+    const parsed = schema.safeParse(value);
+    if (parsed.success) return null;
+    const first = parsed.error.issues[0];
+    return first ? `${first.path.map(String).join('.') || 'value'}: ${first.message}` : 'not the stored shape';
+  };
+  for (const asset of Object.values(doc.assets)) {
+    const why = asset.capture === undefined ? null : storedAs(CaptureSchema, asset.capture);
+    if (why) issues.push({ code: 'life_capture', message: `file ${asset.id} has a capture date that cannot be stored (${why})`, ids: [asset.id] });
+  }
+  const inEvent = new Map<string, string>();
+  for (const [key, ev] of Object.entries(doc.events ?? {})) {
+    if (key !== ev.id) issues.push({ code: 'key_mismatch', message: `event key ${key} != id ${ev.id}`, ids: [key] });
+    const why = storedAs(LifeEventSchema, ev);
+    if (why) issues.push({ code: 'life_event_shape', message: `event ${ev.id} cannot be stored (${why})`, ids: [ev.id] });
+    uniq(ev.id); // an entity of its own (entities.ts): its id must not be another entity's
+    for (const assetId of ev.assetIds) {
+      const asset = Object.hasOwn(doc.assets, assetId) ? doc.assets[assetId] : undefined;
+      if (!asset || (asset.kind !== 'video' && asset.kind !== 'image')) issues.push({ code: 'life_event_asset', message: `event ${ev.id} lists file ${assetId}, which is missing or is not a picture or a video`, ids: [ev.id, assetId] });
+      const other = inEvent.get(assetId);
+      if (other !== undefined) issues.push({ code: 'life_event_overlap', message: other === ev.id ? `event ${ev.id} lists file ${assetId} twice` : `file ${assetId} is in two events (${other} and ${ev.id})`, ids: [ev.id, assetId] });
+      inEvent.set(assetId, ev.id);
+    }
+  }
+  if (Object.keys(doc.events ?? {}).length > MAX_LIFE_EVENTS) issues.push({ code: 'life_event_limit', message: `the project has more than ${MAX_LIFE_EVENTS} events`, ids: [] });
+  // people (ADR-0021, people section): the same net as for events. A person must be one the stored format holds, an entity
+  // of its own, and the only one with that name (compared as people.ts personNameKey does). A live field that names a
+  // person who is not here is NOT an issue: it has no words and the export preflight reports it (field_no_data), so that
+  // undoing an add_person never leaves a document that cannot be stored. No message here ever holds a birth date.
+  const names = new Map<string, string>();
+  for (const [key, person] of Object.entries(doc.people ?? {})) {
+    if (key !== person.id) issues.push({ code: 'key_mismatch', message: `person key ${key} != id ${person.id}`, ids: [key] });
+    const parsed = PersonSchema.safeParse(person);
+    // only the name of the field that is wrong is given: the schema's own message could quote a value
+    if (!parsed.success) issues.push({ code: 'life_person_shape', message: `person ${person.id} cannot be stored (${parsed.error.issues[0]?.path.map(String).join('.') || 'value'})`, ids: [person.id] });
+    uniq(person.id);
+    const nameKey = typeof person.name === 'string' ? personNameKey(person.name) : '';
+    const other = names.get(nameKey);
+    if (other !== undefined) issues.push({ code: 'life_person_name', message: `people ${other} and ${person.id} have the same name`, ids: [other, person.id] });
+    names.set(nameKey, person.id);
+  }
+  if (Object.keys(doc.people ?? {}).length > MAX_PEOPLE) issues.push({ code: 'life_person_limit', message: `the project has more than ${MAX_PEOPLE} people`, ids: [] });
+  issues.push(...lifeIssues(doc));
   return issues;
 }

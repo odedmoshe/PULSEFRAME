@@ -83,7 +83,7 @@ export class Player {
   static readonly FX_PRIME_MAX_MS = 500;
   private scheduledAheadMax = 0;
   private onsets: number[] = [];
-  /** Measurement only (tests set window.__pfAudioTap): output level per 50 ms window, in timeline seconds. */
+  /** Measurement only (tests set window.__pfAudioTap): output level (left channel peak) per 50 ms window, in timeline seconds exact to the sample. */
   private levels: { t: number; peak: number }[] = [];
   private tap: AudioWorkletNode | null = null;
   private tapLoaded = false;
@@ -409,7 +409,9 @@ export class Player {
       const tap = new AudioWorkletNode(ctx, 'pf-onset-tap', { numberOfOutputs: 0 });
       tap.port.onmessage = (e) => {
         if (typeof e.data === 'number') this.onsets.push(+(e.data - originClock + t0).toFixed(5));
-        else this.levels.push({ t: +((e.data as { t: number }).t - originClock + t0).toFixed(4), peak: +(e.data as { peak: number }).peak.toFixed(4) });
+        // t to the microsecond: a window starts on a device sample, and a reader must be able to find that sample again (at 0.1 ms it
+        // could be 2 samples off whenever the tap's first block does not fall on the 0.1 ms grid, and a peak at the edge changed windows)
+        else this.levels.push({ t: +((e.data as { t: number }).t - originClock + t0).toFixed(6), peak: +(e.data as { peak: number }).peak.toFixed(4) });
       };
       master.connect(tap);
       this.tap = tap;

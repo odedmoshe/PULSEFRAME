@@ -32,7 +32,7 @@ export interface Proposal { id: string; actor: string; label: string | null; sum
 export interface JobEvent { id: string; type: string; status: string; stage: string | null; output: any; error: any }
 export interface PreflightIssue { code: string; severity: 'blocker' | 'warning' | 'note'; message: string; ids: string[]; range?: { startFrame: number; endFrame: number }; fix?: { label: string; ops: OpCall[] } }
 export interface PreflightReport { revision: number; ok: boolean; blockers: number; warnings: number; notes: number; issues: PreflightIssue[]; output: unknown; scope: string }
-export interface CommitResult { revision: number; committed: boolean; summary: string; affectedIds: string[]; results: { op: string; output?: Record<string, any> }[] }
+export interface CommitResult { revision: number; committed: boolean; /** the transaction this commit made (null when nothing changed): undo names it to reverse exactly this edit */ transactionId?: string | null; summary: string; affectedIds: string[]; results: { op: string; output?: Record<string, any> }[] }
 export interface SilenceResult { revision: number; candidates: { start: unknown; end: unknown; startSeconds: number; seconds: number }[]; removableSeconds: number; ops: OpCall[]; note?: string }
 /** measure_voice (ADR-0013; apps/server/src/voiceClean.ts): the same shapes as the server's VoiceMeasureBody and VoiceCheck. */
 export interface VoiceMeasureRequest { clipId: string; strength?: number; /** SOURCE-time stretches that hold only noise */ noiseRanges?: { start: RationalTime; end: RationalTime }[]; scope?: 'clip' | 'asset' }
@@ -103,7 +103,8 @@ export const api = {
   history: (id: string) => call<{ events: RevisionEvent[] }>(`/projects/${id}/history?since=0`),
   commit: (id: string, baseRevision: number, ops: OpCall[], label?: string) =>
     call<CommitResult>(`/projects/${id}/transactions`, json({ baseRevision, idempotencyKey: crypto.randomUUID(), label, ops })),
-  undo: (id: string, mode: 'undo' | 'redo') => call<CommitResult>(`/projects/${id}/${mode}`, json({})),
+  /** Without `transactionId` the server reverses the caller's own newest edit; with it, exactly that transaction (the owner may name an agent's). */
+  undo: (id: string, mode: 'undo' | 'redo', transactionId?: string) => call<CommitResult>(`/projects/${id}/${mode}`, json(transactionId ? { transactionId } : {})),
   upload: (id: string, file: File) =>
     call<{ assetId: string; revision: number; asset: Asset }>(`/projects/${id}/assets`, { method: 'POST', headers: { 'x-filename': encodeURIComponent(file.name), 'content-type': 'application/octet-stream' }, body: file }),
   assetBlob: async (id: string, assetId: string) => {
@@ -141,7 +142,7 @@ export const api = {
   decideProposal: (id: string, proposalId: string, decision: 'accept' | 'reject') => call<{ proposal: Proposal }>(`/projects/${id}/proposals/${proposalId}/${decision}`, json({})),
   startExport: (id: string, options?: { variantId?: string }) => call<{ jobId: string }>(`/projects/${id}/exports`, options ? json(options) : { method: 'POST' }),
   exportBatch: (id: string, variantIds: string[]) => call<{ jobs: { jobId: string; variantId: string; status: string }[] }>(`/projects/${id}/exports/batch`, json({ variantIds })),
-  job: (jobId: string) => call<JobEvent & { status: string }>(`/jobs/${jobId}`),
+  job: (jobId: string) => call<JobEvent & { status: string; /** an export's stored options (POST /exports body) */ options?: { variantId?: string; format?: string; scale?: number; quality?: string; captions?: string } }>(`/jobs/${jobId}`),
   preflight: (id: string, variantId: string | null) => call<PreflightReport>(`/projects/${id}/preflight${variantId ? `?variant=${encodeURIComponent(variantId)}` : ''}`),
   planRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipePlanResult>(`/projects/${id}/recipes/${recipeId}/plan`, json({ params })),
   applyRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipeApplyResult>(`/projects/${id}/recipes/${recipeId}/apply`, json({ params })),

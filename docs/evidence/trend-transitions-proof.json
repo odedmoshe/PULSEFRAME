@@ -1,11 +1,11 @@
 {
- "ranAt": "2026-11-17T17:34:41.752Z",
- "commit": "faa7c63170ecd66449a500617f9b112171618412",
- "result": "FAILED",
- "passed": 13,
+ "ranAt": "2026-11-18T01:46:16.892Z",
+ "commit": "487861300c75af88c8e073e3cfd798556f1510a4",
+ "result": "PASSED",
+ "passed": 15,
  "total": 15,
  "machine": {
-  "platform": "Linux 6.18.44-fc-v553 x64",
+  "platform": "Linux 6.18.44-fc-v595 x64",
   "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
   "logicalCpus": 4,
   "node": "v22.23.4"
@@ -156,28 +156,48 @@
     "ok": true
    },
    "page-turn-left 360x640": {
-    "worstShareLosingBlue": 0.08056,
+    "shareGoingBackFromIncoming": 0,
+    "shareLosingBlueWhileIncoming": 0,
+    "shareBetweenPageAndIncoming": 0,
+    "largestBlueLossOnThePage": 19,
+    "shareOffTheModelEdge": 0,
+    "shareLosingBlueOnThePagesBack": 0.08056,
     "blueMean61": 0,
     "blueMean87": 252,
-    "ok": false
+    "ok": true
    },
    "page-turn-left 640x360": {
-    "worstShareLosingBlue": 0.08125,
+    "shareGoingBackFromIncoming": 0,
+    "shareLosingBlueWhileIncoming": 0,
+    "shareBetweenPageAndIncoming": 0,
+    "largestBlueLossOnThePage": 19,
+    "shareOffTheModelEdge": 0,
+    "shareLosingBlueOnThePagesBack": 0.08125,
     "blueMean61": 0,
     "blueMean87": 252.1,
-    "ok": false
+    "ok": true
    },
    "page-turn-right 360x640": {
-    "worstShareLosingBlue": 0.08056,
+    "shareGoingBackFromIncoming": 0,
+    "shareLosingBlueWhileIncoming": 0,
+    "shareBetweenPageAndIncoming": 0,
+    "largestBlueLossOnThePage": 19,
+    "shareOffTheModelEdge": 0,
+    "shareLosingBlueOnThePagesBack": 0.08056,
     "blueMean61": 0,
     "blueMean87": 252,
-    "ok": false
+    "ok": true
    },
    "page-turn-right 640x360": {
-    "worstShareLosingBlue": 0.08125,
+    "shareGoingBackFromIncoming": 0,
+    "shareLosingBlueWhileIncoming": 0,
+    "shareBetweenPageAndIncoming": 0,
+    "largestBlueLossOnThePage": 19,
+    "shareOffTheModelEdge": 0,
+    "shareLosingBlueOnThePagesBack": 0.08125,
     "blueMean61": 0,
     "blueMean87": 252.1,
-    "ok": false
+    "ok": true
    }
   },
   "geometry": {
@@ -852,6 +872,12 @@
   },
   "agreement": {
    "punch-in": {
+    "export": {
+     "exportMinPsnrDb": 46.55,
+     "nearerItsOwnFrameByDb": 9.23,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 43.58,
+     "conversionAloneMinPsnrDb": 44.57
+    },
     "previewVsStill": {
      "70": {
       "identical": true,
@@ -871,10 +897,15 @@
       "maxDifference": 0,
       "meanDifference": 0
      }
-    },
-    "exportMinPsnrDb": 43.58
+    }
    },
    "shape-heart": {
+    "export": {
+     "exportMinPsnrDb": 45.86,
+     "nearerItsOwnFrameByDb": 32.07,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 32.94,
+     "conversionAloneMinPsnrDb": 33.32
+    },
     "previewVsStill": {
      "70": {
       "identical": true,
@@ -894,10 +925,15 @@
       "maxDifference": 0,
       "meanDifference": 0
      }
-    },
-    "exportMinPsnrDb": 32.94
+    }
    },
    "blur-dissolve": {
+    "export": {
+     "exportMinPsnrDb": 46.37,
+     "nearerItsOwnFrameByDb": 19.94,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 43.99,
+     "conversionAloneMinPsnrDb": 45.05
+    },
     "previewVsStill": {
      "70": {
       "identical": true,
@@ -917,10 +953,15 @@
       "maxDifference": 0,
       "meanDifference": 0
      }
-    },
-    "exportMinPsnrDb": 43.99
+    }
    },
    "slices-h": {
+    "export": {
+     "exportMinPsnrDb": 46.03,
+     "nearerItsOwnFrameByDb": 20.52,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 36.52,
+     "conversionAloneMinPsnrDb": 36.82
+    },
     "previewVsStill": {
      "70": {
       "identical": true,
@@ -940,9 +981,17 @@
       "maxDifference": 0,
       "meanDifference": 0
      }
-    },
-    "exportMinPsnrDb": 36.52
-   }
+    }
+   },
+   "wipe-left (from before the pack)": {
+    "export": {
+     "exportMinPsnrDb": 49.1,
+     "nearerItsOwnFrameByDb": 33.33,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 37.78,
+     "conversionAloneMinPsnrDb": 37.96
+    }
+   },
+   "note": "exportMinPsnrDb: the export against the stills through the export's own 4:2:0 conversion and a lossless encode (the gate, with nearerItsOwnFrameByDb); conversionAloneMinPsnrDb: those against the stills as rendered, which is what 4:2:0 costs the picture with no codec loss; exportAgainstTheStillsAsRenderedMinPsnrDb: both together (recorded)"
   },
   "cost": {
    "size": "1080x1920",
@@ -950,76 +999,76 @@
    "raster": "canvas 2d, willReadFrequently (the render page's CPU raster path)",
    "results": {
     "none": {
-     "medianMs": 1.6,
-     "meanMs": 2.34,
-     "maxMs": 21.3
+     "medianMs": 1.1,
+     "meanMs": 1.39,
+     "maxMs": 10.3
     },
     "punch-in": {
-     "medianMs": 88.1,
-     "meanMs": 91.86,
-     "maxMs": 124.7
+     "medianMs": 76.5,
+     "meanMs": 75.99,
+     "maxMs": 87
     },
     "punch-out": {
-     "medianMs": 106.3,
-     "meanMs": 105.35,
-     "maxMs": 154.1
+     "medianMs": 69.7,
+     "meanMs": 66.18,
+     "maxMs": 86.5
     },
     "blur-dissolve": {
-     "medianMs": 121.1,
-     "meanMs": 108.47,
-     "maxMs": 147.5
+     "medianMs": 74.6,
+     "meanMs": 68.33,
+     "maxMs": 108.7
     },
     "split-open-h": {
-     "medianMs": 42.8,
-     "meanMs": 43.8,
-     "maxMs": 61.2
+     "medianMs": 30.2,
+     "meanMs": 30.51,
+     "maxMs": 39.9
     },
     "split-open-v": {
-     "medianMs": 41.5,
-     "meanMs": 42.25,
-     "maxMs": 62.6
+     "medianMs": 29.7,
+     "meanMs": 30.17,
+     "maxMs": 47.5
     },
     "shape-heart": {
-     "medianMs": 12.6,
-     "meanMs": 13.16,
-     "maxMs": 22.1
+     "medianMs": 5,
+     "meanMs": 5.19,
+     "maxMs": 11.2
     },
     "shape-star": {
-     "medianMs": 14.7,
-     "meanMs": 15.17,
-     "maxMs": 22.9
+     "medianMs": 5,
+     "meanMs": 5.05,
+     "maxMs": 8.4
     },
     "block-left": {
-     "medianMs": 14.4,
-     "meanMs": 13.93,
-     "maxMs": 17.8
+     "medianMs": 6,
+     "meanMs": 5.64,
+     "maxMs": 9.4
     },
     "block-right": {
-     "medianMs": 17.5,
-     "meanMs": 15.72,
-     "maxMs": 23.1
+     "medianMs": 5.9,
+     "meanMs": 5.71,
+     "maxMs": 9.6
     },
     "slices-h": {
-     "medianMs": 19.5,
-     "meanMs": 19.25,
-     "maxMs": 24.5
+     "medianMs": 8.8,
+     "meanMs": 8.44,
+     "maxMs": 12
     },
     "slices-v": {
-     "medianMs": 25.6,
-     "meanMs": 25.65,
-     "maxMs": 31
+     "medianMs": 12.1,
+     "meanMs": 11.99,
+     "maxMs": 15.7
     },
     "dissolve": {
-     "medianMs": 15.3,
-     "meanMs": 15.71,
-     "maxMs": 19.2
+     "medianMs": 7.3,
+     "meanMs": 7.23,
+     "maxMs": 9.1
     }
    },
-   "noTransitionMedianMs": 1.6,
+   "noTransitionMedianMs": 1.1,
    "over60ms": [
-    "punch-in: 88.1 ms",
-    "punch-out: 106.3 ms",
-    "blur-dissolve: 121.1 ms"
+    "punch-in: 76.5 ms",
+    "punch-out: 69.7 ms",
+    "blur-dissolve: 74.6 ms"
    ],
    "note": "Lab page in the proof's headless Chromium, one run on this machine; median of the 29 frames of a 29-frame transition; recorded, not a target",
    "pageErrors": []
@@ -1078,9 +1127,10 @@
    }
   },
   {
-   "name": "T2 11 single-crossing ids at 360×640 and 640×360, frames 60..88: at most 0.1 % of pixels lose more than 6/255 of blue between frames; blue mean < 70 on frame 61 and > 185 on frame 87",
-   "ok": false,
+   "name": "T2 11 single-crossing ids at 360×640 and 640×360, frames 60..88: at most 0.1 % of pixels lose more than 6/255 of blue between frames (page turn, whose page shows its whitened, shaded back: at most 0.1 % go back from the incoming picture, blue >= 128, to the page or lose blue while incoming, the page loses at most 20/255, and the incoming region is s > pageFold(p).edge); blue mean < 70 on frame 61 and > 185 on frame 87",
+   "ok": true,
    "detail": {
+    "notOk": {},
     "split-open-h 360x640": {
      "worstShareLosingBlue": 0,
      "blueMean61": 0,
@@ -1190,28 +1240,48 @@
      "ok": true
     },
     "page-turn-left 360x640": {
-     "worstShareLosingBlue": 0.08056,
+     "shareGoingBackFromIncoming": 0,
+     "shareLosingBlueWhileIncoming": 0,
+     "shareBetweenPageAndIncoming": 0,
+     "largestBlueLossOnThePage": 19,
+     "shareOffTheModelEdge": 0,
+     "shareLosingBlueOnThePagesBack": 0.08056,
      "blueMean61": 0,
      "blueMean87": 252,
-     "ok": false
+     "ok": true
     },
     "page-turn-left 640x360": {
-     "worstShareLosingBlue": 0.08125,
+     "shareGoingBackFromIncoming": 0,
+     "shareLosingBlueWhileIncoming": 0,
+     "shareBetweenPageAndIncoming": 0,
+     "largestBlueLossOnThePage": 19,
+     "shareOffTheModelEdge": 0,
+     "shareLosingBlueOnThePagesBack": 0.08125,
      "blueMean61": 0,
      "blueMean87": 252.1,
-     "ok": false
+     "ok": true
     },
     "page-turn-right 360x640": {
-     "worstShareLosingBlue": 0.08056,
+     "shareGoingBackFromIncoming": 0,
+     "shareLosingBlueWhileIncoming": 0,
+     "shareBetweenPageAndIncoming": 0,
+     "largestBlueLossOnThePage": 19,
+     "shareOffTheModelEdge": 0,
+     "shareLosingBlueOnThePagesBack": 0.08056,
      "blueMean61": 0,
      "blueMean87": 252,
-     "ok": false
+     "ok": true
     },
     "page-turn-right 640x360": {
-     "worstShareLosingBlue": 0.08125,
+     "shareGoingBackFromIncoming": 0,
+     "shareLosingBlueWhileIncoming": 0,
+     "shareBetweenPageAndIncoming": 0,
+     "largestBlueLossOnThePage": 19,
+     "shareOffTheModelEdge": 0,
+     "shareLosingBlueOnThePagesBack": 0.08125,
      "blueMean61": 0,
      "blueMean87": 252.1,
-     "ok": false
+     "ok": true
     }
    }
   },
@@ -1928,106 +1998,48 @@
    }
   },
   {
-   "name": "T7 punch-in, shape-heart, blur-dissolve and slices-h: the paused editor preview is byte-identical to the still (frames 70, 74, 78) and the export reaches PSNR ≥ 40 dB against the stills; no page errors",
-   "ok": false,
+   "name": "T7 punch-in, shape-heart, blur-dissolve and slices-h: the paused editor preview is byte-identical to the still (frames 70, 74, 78); the export reaches PSNR ≥ 40 dB against the stills as its 4:2:0 conversion carries them without codec loss (frames 61, 66, 70, 73, 74, 75, 78, 82, 87) and on 73, 74 and 75 is at least 6 dB nearer its own frame than the one before or after; wipe-left, from before the pack, the same; no page errors",
+   "ok": true,
    "detail": {
     "punch-in": {
-     "previewVsStill": {
-      "70": {
-       "identical": true,
-       "differingValues": 0,
-       "maxDifference": 0,
-       "meanDifference": 0
-      },
-      "74": {
-       "identical": true,
-       "differingValues": 0,
-       "maxDifference": 0,
-       "meanDifference": 0
-      },
-      "78": {
-       "identical": true,
-       "differingValues": 0,
-       "maxDifference": 0,
-       "meanDifference": 0
-      }
-     },
-     "exportMinPsnrDb": 43.58
+     "exportMinPsnrDb": 46.55,
+     "nearerItsOwnFrameByDb": 9.23,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 43.58,
+     "conversionAloneMinPsnrDb": 44.57,
+     "previewIdentical": true
     },
     "shape-heart": {
-     "previewVsStill": {
-      "70": {
-       "identical": true,
-       "differingValues": 0,
-       "maxDifference": 0,
-       "meanDifference": 0
-      },
-      "74": {
-       "identical": true,
-       "differingValues": 0,
-       "maxDifference": 0,
-       "meanDifference": 0
-      },
-      "78": {
-       "identical": true,
-       "differingValues": 0,
-       "maxDifference": 0,
-       "meanDifference": 0
-      }
-     },
-     "exportMinPsnrDb": 32.94
+     "exportMinPsnrDb": 45.86,
+     "nearerItsOwnFrameByDb": 32.07,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 32.94,
+     "conversionAloneMinPsnrDb": 33.32,
+     "previewIdentical": true
     },
     "blur-dissolve": {
-     "previewVsStill": {
-      "70": {
-       "identical": true,
-       "differingValues": 0,
-       "maxDifference": 0,
-       "meanDifference": 0
-      },
-      "74": {
-       "identical": true,
-       "differingValues": 0,
-       "maxDifference": 0,
-       "meanDifference": 0
-      },
-      "78": {
-       "identical": true,
-       "differingValues": 0,
-       "maxDifference": 0,
-       "meanDifference": 0
-      }
-     },
-     "exportMinPsnrDb": 43.99
+     "exportMinPsnrDb": 46.37,
+     "nearerItsOwnFrameByDb": 19.94,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 43.99,
+     "conversionAloneMinPsnrDb": 45.05,
+     "previewIdentical": true
     },
     "slices-h": {
-     "previewVsStill": {
-      "70": {
-       "identical": true,
-       "differingValues": 0,
-       "maxDifference": 0,
-       "meanDifference": 0
-      },
-      "74": {
-       "identical": true,
-       "differingValues": 0,
-       "maxDifference": 0,
-       "meanDifference": 0
-      },
-      "78": {
-       "identical": true,
-       "differingValues": 0,
-       "maxDifference": 0,
-       "meanDifference": 0
-      }
-     },
-     "exportMinPsnrDb": 36.52
+     "exportMinPsnrDb": 46.03,
+     "nearerItsOwnFrameByDb": 20.52,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 36.52,
+     "conversionAloneMinPsnrDb": 36.82,
+     "previewIdentical": true
+    },
+    "wipe-left": {
+     "exportMinPsnrDb": 49.1,
+     "nearerItsOwnFrameByDb": 33.33,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 37.78,
+     "conversionAloneMinPsnrDb": 37.96
     },
     "pageErrors": []
    }
   },
   {
-   "name": "T8 recorded (not a gate): median ms per frame at 1080×1920 for each new Canvas2D id; over 60 ms: punch-in: 88.1 ms, punch-out: 106.3 ms, blur-dissolve: 121.1 ms",
+   "name": "T8 recorded (not a gate): median ms per frame at 1080×1920 for each new Canvas2D id; over 60 ms: punch-in: 76.5 ms, punch-out: 69.7 ms, blur-dissolve: 74.6 ms",
    "ok": true,
    "detail": {
     "size": "1080x1920",
@@ -2035,76 +2047,76 @@
     "raster": "canvas 2d, willReadFrequently (the render page's CPU raster path)",
     "results": {
      "none": {
-      "medianMs": 1.6,
-      "meanMs": 2.34,
-      "maxMs": 21.3
+      "medianMs": 1.1,
+      "meanMs": 1.39,
+      "maxMs": 10.3
      },
      "punch-in": {
-      "medianMs": 88.1,
-      "meanMs": 91.86,
-      "maxMs": 124.7
+      "medianMs": 76.5,
+      "meanMs": 75.99,
+      "maxMs": 87
      },
      "punch-out": {
-      "medianMs": 106.3,
-      "meanMs": 105.35,
-      "maxMs": 154.1
+      "medianMs": 69.7,
+      "meanMs": 66.18,
+      "maxMs": 86.5
      },
      "blur-dissolve": {
-      "medianMs": 121.1,
-      "meanMs": 108.47,
-      "maxMs": 147.5
+      "medianMs": 74.6,
+      "meanMs": 68.33,
+      "maxMs": 108.7
      },
      "split-open-h": {
-      "medianMs": 42.8,
-      "meanMs": 43.8,
-      "maxMs": 61.2
+      "medianMs": 30.2,
+      "meanMs": 30.51,
+      "maxMs": 39.9
      },
      "split-open-v": {
-      "medianMs": 41.5,
-      "meanMs": 42.25,
-      "maxMs": 62.6
+      "medianMs": 29.7,
+      "meanMs": 30.17,
+      "maxMs": 47.5
      },
      "shape-heart": {
-      "medianMs": 12.6,
-      "meanMs": 13.16,
-      "maxMs": 22.1
+      "medianMs": 5,
+      "meanMs": 5.19,
+      "maxMs": 11.2
      },
      "shape-star": {
-      "medianMs": 14.7,
-      "meanMs": 15.17,
-      "maxMs": 22.9
+      "medianMs": 5,
+      "meanMs": 5.05,
+      "maxMs": 8.4
      },
      "block-left": {
-      "medianMs": 14.4,
-      "meanMs": 13.93,
-      "maxMs": 17.8
+      "medianMs": 6,
+      "meanMs": 5.64,
+      "maxMs": 9.4
      },
      "block-right": {
-      "medianMs": 17.5,
-      "meanMs": 15.72,
-      "maxMs": 23.1
+      "medianMs": 5.9,
+      "meanMs": 5.71,
+      "maxMs": 9.6
      },
      "slices-h": {
-      "medianMs": 19.5,
-      "meanMs": 19.25,
-      "maxMs": 24.5
+      "medianMs": 8.8,
+      "meanMs": 8.44,
+      "maxMs": 12
      },
      "slices-v": {
-      "medianMs": 25.6,
-      "meanMs": 25.65,
-      "maxMs": 31
+      "medianMs": 12.1,
+      "meanMs": 11.99,
+      "maxMs": 15.7
      },
      "dissolve": {
-      "medianMs": 15.3,
-      "meanMs": 15.71,
-      "maxMs": 19.2
+      "medianMs": 7.3,
+      "meanMs": 7.23,
+      "maxMs": 9.1
      }
     },
-    "noTransitionMedianMs": 1.6,
+    "noTransitionMedianMs": 1.1,
     "over60ms": [
-     "punch-in: 88.1 ms",
-     "punch-out: 106.3 ms",
-     "blur-dissolve: 121.1 ms"
+     "punch-in: 76.5 ms",
+     "punch-out: 69.7 ms",
+     "blur-dissolve: 74.6 ms"
     ],
     "note": "Lab page in the proof's headless Chromium, one run on this machine; median of the 29 frames of a 29-frame transition; recorded, not a target",
     "pageErrors": []

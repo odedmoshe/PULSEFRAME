@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, COLOR_LOOKS, createProject, findFont, hasTextLook, lookParams, TEXT_LOOK_FIELDS, TEXT_PRESETS, TextStyleSchema, TREND_TEXT_PRESET_IDS, type ProjectDocument } from './index.ts';
+import { applyTransaction, BUILTIN_TEXT_PRESETS, COLOR_LOOKS, PACKS, createProject, findFont, hasTextLook, lookParams, TEXT_LOOK_FIELDS, TEXT_PRESETS, TextStyleSchema, TREND_TEXT_PRESET_IDS, type ProjectDocument } from './index.ts';
 
 let n = 0;
 const ctxOf = () => ({ idSeed: `p${n++}`, actor: 'test' });
@@ -13,10 +13,13 @@ describe('colour looks', () => {
   });
 });
 describe('text styles', () => {
-  it('there are 50, distinct, valid as text style, using only bundled fonts and weights', () => {
-    expect(TEXT_PRESETS).toHaveLength(50);
-    expect(new Set(TEXT_PRESETS.map((p) => p.id)).size).toBe(50);
-    expect(new Set(TEXT_PRESETS.map((p) => JSON.stringify([p.style, p.shadow]))).size).toBe(50);
+  it('there are 50 of their own and then those of the content packs, distinct, valid as text style, using only bundled fonts and weights', () => {
+    // ADR-0022: the content packs add their text styles after the fifty built-in ones
+    expect(BUILTIN_TEXT_PRESETS).toHaveLength(50);
+    expect(TEXT_PRESETS).toHaveLength(50 + PACKS.reduce((k, p) => k + p.textPresets.length, 0));
+    expect(TEXT_PRESETS.slice(0, 50)).toEqual(BUILTIN_TEXT_PRESETS);
+    expect(new Set(TEXT_PRESETS.map((p) => p.id)).size).toBe(TEXT_PRESETS.length);
+    expect(new Set(TEXT_PRESETS.map((p) => JSON.stringify([p.style, p.shadow]))).size).toBe(TEXT_PRESETS.length);
     for (const p of TEXT_PRESETS) {
       expect(() => TextStyleSchema.partial().strict().parse(p.style)).not.toThrow();
       const font = findFont(p.style.fontFamily);
@@ -26,12 +29,12 @@ describe('text styles', () => {
     }
   });
   it('the trend-pack styles (ADR-0012) are the last ten, each with a look field and no shadow effect; the forty before them have none', () => {
-    expect(TEXT_PRESETS.slice(40).map((p) => p.id)).toEqual([...TREND_TEXT_PRESET_IDS]);
-    for (const p of TEXT_PRESETS.slice(40)) { expect(hasTextLook(p.style), p.id).toBe(true); expect(p.shadow, p.id).toBeNull(); }
-    for (const p of TEXT_PRESETS.slice(0, 40)) expect(TEXT_LOOK_FIELDS.some((k) => k in p.style), p.id).toBe(false);
+    expect(BUILTIN_TEXT_PRESETS.slice(40).map((p) => p.id)).toEqual([...TREND_TEXT_PRESET_IDS]);
+    for (const p of BUILTIN_TEXT_PRESETS.slice(40)) { expect(hasTextLook(p.style), p.id).toBe(true); expect(p.shadow, p.id).toBeNull(); }
+    for (const p of BUILTIN_TEXT_PRESETS.slice(0, 40)) expect(TEXT_LOOK_FIELDS.some((k) => k in p.style), p.id).toBe(false);
     // the flat long shadow's colour keeps its red share of the light low (a 30% black), and no glow is near the saturated-red flash rule
     const lin = (c: number) => { const s = c / 255; return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
-    for (const p of TEXT_PRESETS.slice(40)) if (p.style.glow) { const n = parseInt(p.style.glow.color.slice(1, 7), 16), [r, g, b] = [lin(n >> 16), lin((n >> 8) & 255), lin(n & 255)]; expect(r / (r + g + b), p.id).toBeLessThan(0.8); }
+    for (const p of BUILTIN_TEXT_PRESETS.slice(40)) if (p.style.glow) { const n = parseInt(p.style.glow.color.slice(1, 7), 16), [r, g, b] = [lin(n >> 16), lin((n >> 8) & 255), lin(n & 255)]; expect(r / (r + g + b), p.id).toBeLessThan(0.8); }
   });
   it('a style owns the look fields: applying another clears the ones it does not set', () => {
     let doc: ProjectDocument = createProject({ id: 'p', name: 'p' });

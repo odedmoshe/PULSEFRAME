@@ -8,6 +8,7 @@ import { audioEffectParams, type AudioFxParams } from '@pulseframe/core';
 import { mixClip, type PlannedAudioClip } from '@pulseframe/engine';
 import { FX_FIXTURE_SECONDS, fxFixture, renderFx } from '@pulseframe/engine/audiofx/kernels/index.ts';
 import { plannedClipInput } from './audioGraph.ts';
+import './editor/lifeline/lifeline.selftest.ts'; // life line (ADR-0021): window.__pfLife, the core calendar in this browser, for proof:lifeline
 
 /**
  * Sound-effect kernels in this browser (ADR-0010 D6): window.__pfFxRun(type, params) runs one kernel over the fixed fixture

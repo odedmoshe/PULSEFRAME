@@ -7,7 +7,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  applyTransaction, canonical, createProject, flashGapFrames, MOTION_PRESETS, sourceTimesToTimeline, TEMPLATES, TemplateError, TRANSITION_IDS, validateProject,
+  applyTransaction, canonical, createProject, flashGapFrames, MOTION_PRESETS, packLookOp, packLookOps, PACKS, sourceTimesToTimeline, TEMPLATES, TemplateError, TRANSITION_IDS, validateProject,
   type Asset, type ProjectDocument, type TemplateDef, type TemplatePlan,
 } from './index.ts';
 import { MAX_TEMPLATE_OPS, mirrorForReading, planTemplate, summarizeTemplate } from './templatePlan.ts';
@@ -298,7 +298,9 @@ describe('planTemplate: what it refuses, blocks and reports', () => {
     expect(code(() => planTemplate(doc, def, { media: ['snd'] }))).toBe('invalid_args');
     expect(code(() => planTemplate(doc, def, { media: ['vid_a'], at: T.rt(1, 1000) }))).toBe('invalid_args');
     expect(code(() => planTemplate(doc, { ...def, slots: [{ ...one({ seconds: '1' }), key: 's1' }], elements: PROP.elements }, { media: ['vid_a'] }, { elementsAvailable: false }))).toBe('needs_capability');
-    const many: TemplateDef = { ...def, slots: Array.from({ length: 40 }, (_, i) => ({ ...one({ seconds: '1' }), key: `k${i}` })), elements: Array.from({ length: 20 }, (_, i) => ({ key: `e${i}`, elementId: 'element.symbol.location-pin', perSlot: 'count-up' as const, at: { slot: 'k0' }, place: { x: 0, y: 0 }, motion: { presetId: 'motion.in.drop' } })) };
+    // forty titles on each of forty slots: 1600 titles of two operations each. (Until ADR-0022 this was provoked with twenty
+    // elements on every slot; elements that would share a track range are now left out of the plan, so they no longer add up.)
+    const many: TemplateDef = { ...def, slots: Array.from({ length: 40 }, (_, i) => ({ ...one({ seconds: '1' }), key: `k${i}` })), texts: Array.from({ length: 40 }, (_, i) => ({ key: `t${i}`, role: { he: 'כותרת', en: 'Title' }, default: { he: 'מספר {n}', en: 'Number {n}' }, maxChars: 20, presetId: 'clean-white', perSlot: 'count-up' as const, at: { slot: 'k0' }, place: { x: 0, y: 0 } })) };
     expect(code(() => planTemplate(doc, many, { media: ['vid_a'] }))).toBe('invalid_args');
     expect(code(() => planTemplate(doc, { ...def, slots: [one({ seconds: '1' }), one({ seconds: '1' })] }, { media: ['vid_a'] }))).toBe('invalid_args'); // duplicate key
   });
@@ -324,6 +326,88 @@ describe('planTemplate: what it refuses, blocks and reports', () => {
     // 10 slots: 1,2,4,3,1,2,4,3,1,2 beats = 23 beats at 120 BPM
     expect(s.seconds).toBe(11.5);
     expect(summarizeTemplate(PROP, { elementsAvailable: false })).toMatchObject({ available: false, unavailableReason: expect.stringContaining('librsvg') });
+  });
+});
+
+describe('a look of a template never covers its graphic elements or its titles (ADR-0022)', () => {
+  /** What a look covers wrongly: every adjustment track is drawn over the tracks below it, so each element and title track must lie above all of them. */
+  const covered = (doc: ProjectDocument, elementAssets: ReadonlySet<string>) => {
+    const tracks = doc.sequences[doc.mainSequenceId]!.tracks;
+    const topLook = tracks.reduce((top, t, i) => (t.kind === 'adjustment' && t.clips.length ? i : top), -1);
+    return tracks.flatMap((t, i) => t.clips.filter((c) => (c.type === 'media' && elementAssets.has(c.assetId)) || c.type === 'text').filter(() => i < topLook).map((c) => `${c.type} ${c.id} on track ${i} under the look on track ${topLook}`));
+  };
+  const elementAssetsOf = (plan: TemplatePlan, out: { assetIds: Record<string, string> }) => new Set(plan.assetsNeeded.filter((x) => x.kind === 'element').map((x) => out.assetIds[x.key]!));
+  /** A project that already has a look over everything, a picture above the pictures and a title, before the template is added. */
+  const busy = (doc: ProjectDocument) => applyTransaction(doc, [
+    { op: 'add_clip', args: { assetId: 'img_a', start: T.ZERO, duration: T.rt(2, 1) } },
+    { op: 'add_track', args: { kind: 'video' } },
+    { op: 'add_adjustment', args: { span: 'edit', effects: [{ type: 'color.adjust', params: { saturation: 0.5 } }] } },
+    { op: 'add_text', args: { text: 'כותרת', start: T.ZERO, duration: T.rt(1, 1) } },
+  ], { idSeed: 'busy', actor: 'test' }).doc;
+  it('every template with elements and looks, on an empty project and on a busy one: elements and titles lie above every look', () => {
+    const rate = { num: 30, den: 1 };
+    let withBoth = 0;
+    for (const def of TEMPLATES.filter((t) => t.elements.length && t.adjust.length)) for (const start of ['empty', 'busy'] as const) {
+      const doc0 = project(rate, Array.from({ length: 200 }, (_, i) => ms(400 + i * 500)));
+      const doc = start === 'busy' ? busy(doc0) : doc0;
+      const plan = planTemplate(doc, def, { media: MEDIA, musicAssetId: def.music.need === 'none' ? null : 'mus', lang: 'he', fields: { night: '3', age: '7', name: 'נועה' } });
+      const r = apply(doc, plan);
+      expect(validateProject(r.doc), def.id).toEqual([]);
+      expect(covered(r.doc, elementAssetsOf(plan, r.results[0]!.output as unknown as { assetIds: Record<string, string> })), `${def.id} (${start})`).toEqual([]);
+      withBoth++;
+    }
+    expect(withBoth).toBeGreaterThanOrEqual(2 * 10); // four built-ins and the seven pack templates have both
+  });
+  it('control: without the move (the plan as it was before), the same check finds the element under the look', () => {
+    const rate = { num: 30, den: 1 };
+    const def = TEMPLATES.find((t) => t.id === 'tpl.hanukkah-greeting')!;
+    const doc = project(rate, null);
+    const plan = planTemplate(doc, def, { media: MEDIA, musicAssetId: null, lang: 'he' });
+    expect(plan.ops.filter((o) => o.op === 'move_track')).toHaveLength(1);
+    const without = { ...plan, ops: plan.ops.filter((o) => o.op !== 'move_track') };
+    const r = apply(doc, without);
+    expect(covered(r.doc, elementAssetsOf(plan, r.results[0]!.output as unknown as { assetIds: Record<string, string> }))).not.toEqual([]);
+  });
+  it('a pack look applied afterwards (the pack page: packLookOps, one transaction) colours the footage and not the graphics', () => {
+    const rate = { num: 30, den: 1 };
+    /** As madeAssets, with the provenance the element route gives (procedural id element.…), which packLookOps reads. */
+    const withProvenance = (plan: TemplatePlan) => madeAssets(plan).map((a, i) => (plan.assetsNeeded[i]!.kind === 'element' ? { ...a, asset: { ...a.asset, provenance: { ...a.asset.provenance, procedural: { id: plan.assetsNeeded[i]!.id, version: 2, generator: 'test' } } } } : a));
+    let applied = 0;
+    for (const id of ['tpl.hanukkah-greeting', 'tpl.birthday-invite', 'tpl.hanukkah-party']) for (const look of PACKS.flatMap((p) => p.looks)) {
+      const doc = project(rate, null);
+      const plan = planTemplate(doc, TEMPLATES.find((t) => t.id === id)!, { media: MEDIA, musicAssetId: null, lang: 'he' });
+      const r = applyTransaction(doc, [{ op: 'apply_template', args: { templateId: plan.templateId, templateVersion: plan.version, params: plan.params, steps: plan.steps, assets: withProvenance(plan), ops: plan.ops, slots: plan.slots } }], { idSeed: 'lk', actor: 'test', allowInternal: true });
+      const els = elementAssetsOf(plan, r.results[0]!.output as unknown as { assetIds: Record<string, string> });
+      const after = applyTransaction(r.doc, packLookOps(look, 'he', r.doc), { idSeed: 'lk2', actor: 'test' });
+      expect(after.results.length, `${id} ${look.id}`).toBeGreaterThanOrEqual(1);
+      expect(validateProject(after.doc)).toEqual([]);
+      expect(covered(after.doc, els), `${id} + ${look.id}`).toEqual([]);
+      // control: the add_adjustment alone (as before) puts the look over the template's graphics
+      const alone = applyTransaction(r.doc, [packLookOp(look, 'he')], { idSeed: 'lk3', actor: 'test' });
+      expect(covered(alone.doc, els), `${id} + ${look.id} without the move`).not.toEqual([]);
+      applied++;
+    }
+    expect(applied).toBe(18);
+  });
+  it('packLookOps leaves a track that also holds pictures where it is: the look colours every picture', () => {
+    const doc = project({ num: 30, den: 1 }, null);
+    const look = PACKS[0]!.looks[0]!;
+    const mixed = applyTransaction(doc, [{ op: 'add_clip', args: { assetId: 'img_a', start: T.ZERO, duration: T.rt(2, 1) } }], { idSeed: 'mx', actor: 'test' }).doc;
+    expect(packLookOps(look, 'he', mixed)).toHaveLength(1);
+  });
+  it('graphicsTrackIndex replays the track placement of the real ops: the move lands right above the topmost look', () => {
+    const rate = { num: 30, den: 1 };
+    for (const start of ['empty', 'busy'] as const) for (const id of ['tpl.hanukkah-party', 'tpl.birthday-cake', 'tpl.quote-card']) {
+      const doc0 = project(rate, null);
+      const doc = start === 'busy' ? busy(doc0) : doc0;
+      const plan = planTemplate(doc, TEMPLATES.find((t) => t.id === id)!, { media: MEDIA, musicAssetId: null, lang: 'he' });
+      const r = apply(doc, plan);
+      const tracks = r.doc.sequences[r.doc.mainSequenceId]!.tracks;
+      const els = elementAssetsOf(plan, r.results[0]!.output as unknown as { assetIds: Record<string, string> });
+      const at = tracks.findIndex((t) => t.clips.some((c) => c.type === 'media' && els.has(c.assetId)));
+      const topLook = tracks.reduce((top, t, i) => (t.kind === 'adjustment' ? i : top), -1);
+      expect([id, start, at]).toEqual([id, start, topLook + 1]);
+    }
   });
 });
 

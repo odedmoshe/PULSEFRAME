@@ -6,7 +6,7 @@ import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import {
   ANIMATABLE, AssetSchema, EASINGS, DEFAULT_TEXT_ANIMATION, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, TextAnimationSchema, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
-  normaliseTextStyle, TEXT_LOOK_FIELDS,
+  normaliseTextStyle, TEXT_LOOK_FIELDS, timelineBehaviour,
   CaptionStyleSchema, DEFAULT_CAPTION_STYLE, SafeAreaSchema, MARKER_COLORS, VariantTranslationSchema,
   type AdjustmentClip, type Asset, type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
 } from './schema.ts';
@@ -28,6 +28,8 @@ import { velocityNeeds } from './transitionTiming.ts';
 import { adjustmentRefusal, clipEnd, forbidsOverlap, lutAssets, lutUsers, sequenceDuration, validateProject } from './validate.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
 import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
+import { detachAssetFromEvents } from './events.ts';
+import { handDownCapture } from './capture.ts';
 import { DEFAULT_REDACT_REGION, isUsable, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, roundHalfUp, SIZE_UNIT, ST, TrackOpArgs, trackSampleAt, type MotionTrack, type RedactRegion } from './tracking.ts';
 
 export type OpErrorCode =
@@ -114,7 +116,8 @@ export function findClip(d: ProjectDocument, clipId: string): { seq: Sequence; t
     }
   return undefined;
 }
-const mustClip = (d: ProjectDocument, clipId: string) => {
+/** The clip, refused when it does not exist or its track is locked. Exported for op families kept in their own file (lifeOps.ts). */
+export const mustClip = (d: ProjectDocument, clipId: string) => {
   const f = findClip(d, clipId);
   if (!f) throw new OpError('not_found', `clip ${clipId} not found`, { clipId }, 'Call get_timeline to list current clip ids.');
   if (f.track.locked) throw new OpError('track_locked', `track ${f.track.id} is locked`, { trackId: f.track.id, clipId });
@@ -358,7 +361,7 @@ defineOp({
 defineOp({
   name: 'remove_asset',
   version: 1,
-  description: 'Remove a file from the project library, together with its transcript, analysis results and motion tracks. Refused while any clip uses it, while a colour table (LUT) effect on any clip refers to it, or while a clip follows one of its motion tracks (or hides a region with one). The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
+  description: 'Remove a file from the project library, together with its transcript, analysis results and motion tracks; it also leaves the event it was in (an event left without files is removed), and a copy made from it that took its capture date from it keeps that date. Refused while any clip uses it, while a colour table (LUT) effect on any clip refers to it, or while a clip follows one of its motion tracks (or hides a region with one). The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
   args: z.object({ assetId: z.string() }).strict(),
   apply(d, a) {
     const asset = d.assets[a.assetId];
@@ -376,8 +379,10 @@ defineOp({
     for (const id of tracks) { delete d.motionTracks[id]; affected.push(id); }
     if (d.transcripts?.[asset.id]) { delete d.transcripts[asset.id]; affected.push(transcriptEntityId(asset.id)); }
     if (d.analyses?.[asset.id]) { delete d.analyses[asset.id]; affected.push(analysisEntityId(asset.id)); }
+    // life line (ADR-0021): a copy that took its capture date from this file keeps it, and the file leaves its event
+    affected.push(...handDownCapture(d, asset.id), ...detachAssetFromEvents(d, asset.id));
     delete d.assets[asset.id];
-    return { affectedIds: affected, summary: `Removed "${asset.name.slice(0, 60)}" from the library` };
+    return { affectedIds: [...new Set(affected)], summary: `Removed "${asset.name.slice(0, 60)}" from the library` };
   },
 });
 
@@ -516,9 +521,15 @@ defineOp({
 defineOp({
   name: 'add_text',
   version: 1,
-  description: 'Add a text layer. Text is shaped with bidi support; Hebrew defaults to right-to-left. Position is the layer centre relative to frame centre (x,y fractions).',
+  description: 'Add a text layer. Text is shaped with bidi support; Hebrew defaults to right-to-left. Position is the layer centre relative to frame centre (x,y fractions). A finished title in one step: presetId gives it a named text style exactly as apply_text_preset does (the explicit style is then set on top of it, as update_text would), animation animates it exactly as set_text_animation does, and fields: true turns its live fields on exactly as set_text_fields does (the text then holds fields such as {hebrewDate}, and plain braces are written doubled). Each of the three refuses as its own operation does, and then nothing is added.',
   args: z
-    .object({ sequenceId: z.string().optional(), trackId: z.string().optional(), text: z.string().min(1).max(2000), start: RT, duration: RT, style: TextStyleSchema.partial().optional(), transform: TransformSchema.partial().optional() })
+    .object({
+      sequenceId: z.string().optional(), trackId: z.string().optional(), text: z.string().min(1).max(2000), start: RT, duration: RT, style: TextStyleSchema.partial().optional(), transform: TransformSchema.partial().optional(),
+      // ADR-0022: optional on a v1 operation, so logs written before it replay unchanged
+      presetId: z.string().optional().describe('A text style of list_catalog → textPresets, applied before `style`'),
+      animation: TextAnimationSchema.partial().optional().describe('As set_text_animation'),
+      fields: z.literal(true).optional().describe('Live fields on, as set_text_fields enabled: true'),
+    })
     .strict(),
   apply(d, a, ctx) {
     const seq = seqOf(d, a.sequenceId);
@@ -529,13 +540,41 @@ defineOp({
     const track = a.trackId ? mustTrack(seq, a.trackId) : placeTrack(seq, 'text', a.start, end, ctx);
     if (track.kind !== 'text') throw new OpError('incompatible', `text cannot go on ${track.kind} track`, { trackId: track.id });
     assertFree(track, a.start, end);
-    const clip: Clip = { id: ctx.newId('clp'), type: 'text', text: a.text, start: a.start, duration: a.duration, style: normaliseTextStyle({ ...DEFAULT_TEXT_STYLE, ...a.style }), transform: { ...DEFAULT_TRANSFORM, ...a.transform } };
+    const clip: Extract<Clip, { type: 'text' }> = { id: ctx.newId('clp'), type: 'text', text: a.text, start: a.start, duration: a.duration, style: normaliseTextStyle({ ...DEFAULT_TEXT_STYLE, ...a.style }), transform: { ...DEFAULT_TRANSFORM, ...a.transform } };
     track.clips.push(clip);
     sortClips(track);
+    // A finished title in one step (ADR-0022). Each part runs the body of the operation it stands for, so the result is what
+    // add_text, apply_text_preset, update_text (style), set_text_animation and set_text_fields would leave, and a refusal of
+    // any of them refuses the whole add.
+    if (a.presetId !== undefined) {
+      applyTextPreset(clip, a.presetId, ctx);
+      if (a.style) clip.style = normaliseTextStyle({ ...clip.style, ...a.style });
+    }
+    if (a.animation !== undefined) sameOp('set_text_animation').apply(d, { clipId: clip.id, animation: a.animation }, ctx);
+    if (a.fields) sameOp('set_text_fields').apply(d, { clipId: clip.id, enabled: true }, ctx);
     return { affectedIds: [clip.id], summary: `Added text "${a.text.slice(0, 40)}" at ${fmt(a.start)}`, output: { clipId: clip.id, trackId: track.id } };
   },
 });
 
+/** The registered operation `name`, for an operation that includes another's body (looked up when it runs, so the order of the files does not matter). */
+function sameOp(name: string): OpDefinition {
+  const def = registry.get(name);
+  if (!def) throw new OpError('unknown_op', `operation ${name} is not registered in this build`, { op: name });
+  return def;
+}
+/** apply_text_preset's body (also the presetId of add_text). */
+function applyTextPreset(clip: Extract<Clip, { type: 'text' }>, presetId: string, ctx: OpContext): void {
+  const preset = findTextPreset(presetId);
+  if (!preset) throw new OpError('not_found', `text style "${presetId}" does not exist`, { presetId }, 'Call list_catalog for the text styles.');
+  // The preset owns the look fields (ADR-0012): a look from an earlier preset or edit is cleared, then the preset's own are set.
+  const base: Record<string, unknown> = { ...clip.style };
+  for (const k of TEXT_LOOK_FIELDS) delete base[k];
+  clip.style = normaliseTextStyle({ ...(base as typeof clip.style), ...preset.style });
+  // The preset owns the clip's drop shadow: replaced, added or removed. Other effects are left alone.
+  const others = (clip.effects ?? []).filter((e) => e.type !== 'stylize.shadow');
+  const list = preset.shadow ? [...others, { id: ctx.newId('fx'), type: 'stylize.shadow', enabled: true, params: parseEffect('stylize.shadow', preset.shadow) }] : others;
+  if (list.length) clip.effects = list; else delete clip.effects;
+}
 defineOp({
   name: 'apply_text_preset',
   version: 1,
@@ -544,16 +583,7 @@ defineOp({
   apply(d, a, ctx) {
     const { clip } = mustClip(d, a.clipId);
     if (clip.type !== 'text') throw new OpError('incompatible', `clip ${a.clipId} is not a text clip`, { clipId: a.clipId });
-    const preset = findTextPreset(a.presetId);
-    if (!preset) throw new OpError('not_found', `text style "${a.presetId}" does not exist`, { presetId: a.presetId }, 'Call list_catalog for the text styles.');
-    // The preset owns the look fields (ADR-0012): a look from an earlier preset or edit is cleared, then the preset's own are set.
-    const base: Record<string, unknown> = { ...clip.style };
-    for (const k of TEXT_LOOK_FIELDS) delete base[k];
-    clip.style = normaliseTextStyle({ ...(base as typeof clip.style), ...preset.style });
-    // The preset owns the clip's drop shadow: replaced, added or removed. Other effects are left alone.
-    const others = (clip.effects ?? []).filter((e) => e.type !== 'stylize.shadow');
-    const list = preset.shadow ? [...others, { id: ctx.newId('fx'), type: 'stylize.shadow', enabled: true, params: parseEffect('stylize.shadow', preset.shadow) }] : others;
-    if (list.length) clip.effects = list; else delete clip.effects;
+    applyTextPreset(clip, a.presetId, ctx);
     return { affectedIds: [clip.id], summary: `Applied text style ${a.presetId}`, output: { style: clip.style } };
   },
 });
@@ -1380,6 +1410,78 @@ defineOp({
   },
 });
 
+/** The length of time the spans cover before `at`, counting time that two spans share once (spans may overlap on a sound track). */
+function coveredBefore(spans: readonly { s: T.RationalTime; e: T.RationalTime }[], at: T.RationalTime): T.RationalTime {
+  let total = T.ZERO, reach: T.RationalTime | null = null;
+  for (const sp of spans) { // sorted by start
+    if (!T.lt(sp.s, at)) break;
+    const s = reach && T.lt(sp.s, reach) ? reach : sp.s, e = T.min(sp.e, at);
+    if (T.lt(s, e)) total = T.add(total, T.sub(e, s));
+    if (!reach || T.lt(reach, sp.e)) reach = sp.e;
+  }
+  return total;
+}
+defineOp({
+  name: 'ripple_delete_clips',
+  version: 1,
+  description: 'Delete clips and close the gap they leave, in one step (ripple delete; the editor sends it for Delete on the main track when the project has rippleDelete on, see set_timeline_behaviour). The clips go, with their linked clips unless includeLinked=false. On each track one of the named clips was on, every later clip moves earlier by the length deleted before it on that track, so nothing is left where they were. A clip linked to a clip that moves moves with it by the same amount (a picture\'s sound follows its picture, wherever it is). Everything else stays where it is: other tracks such as music, titles, captions and overlays, gaps that were already there (close_gaps removes empty time on every track) and markers. All or nothing: refused when a clip that would move is on a locked track, when two linked clips would have to move by different amounts, when a clip that moves would land on a clip that does not move with it (also on a sound track: a sound is never slid over another), or when a linked clip that starts before its partner (a sound that starts before its picture, a J-cut) would move before 0. delete_clip deletes and keeps the gap.',
+  args: z.object({ clipIds: z.array(z.string()).min(1).max(500), includeLinked: z.boolean().optional() }).strict(),
+  apply(d, a) {
+    // what goes: the named clips, and their linked clips unless includeLinked=false; the tracks of the named clips close up
+    const gone = new Map<string, { track: Track; clip: Clip }>();
+    const closing = new Set<Track>();
+    for (const id of a.clipIds) { const f = mustClip(d, id); gone.set(f.clip.id, { track: f.track, clip: f.clip }); closing.add(f.track); }
+    if (a.includeLinked !== false) for (const g of [...gone.values()]) for (const l of linked(d, g.clip)) gone.set(l.clip.id, l);
+    const spans = new Map<Track, { s: T.RationalTime; e: T.RationalTime }[]>();
+    for (const t of closing) spans.set(t, [...gone.values()].filter((g) => g.track === t).map((g) => ({ s: g.clip.start, e: clipEnd(g.clip) })).sort((x, y) => T.cmp(x.s, y.s)));
+    for (const { track, clip } of gone.values()) track.clips.splice(track.clips.indexOf(clip), 1);
+    const unlinked = dissolveLoneLinks(d, linkIdsOf([...gone.values()].map((g) => g.clip)));
+    // how far each clip moves: on a closing track, the deleted time before it; a linked clip moves with its partner
+    const shift = new Map<string, { track: Track; clip: Clip; by: T.RationalTime }>();
+    for (const t of closing) for (const c of t.clips) shift.set(c.id, { track: t, clip: c, by: coveredBefore(spans.get(t)!, c.start) });
+    for (const m of [...shift.values()]) {
+      if (T.isZero(m.by)) continue;
+      for (const p of partnersOf(d, m.clip)) {
+        const had = shift.get(p.clip.id);
+        if (had) {
+          if (!T.eq(had.by, m.by)) throw new OpError('incompatible', `linked clips ${m.clip.id} and ${p.clip.id} would move by different amounts`, { clipId: m.clip.id, otherClipId: p.clip.id, by: m.by, otherBy: had.by }, 'Delete the clips of one track at a time, or unlink those two clips first.');
+          continue;
+        }
+        if (p.track.locked) throw new OpError('track_locked', `linked clip ${p.clip.id} is on locked track ${p.track.id}`, { trackId: p.track.id, clipId: p.clip.id }, 'Unlock the track, or delete with delete_clip to keep the gap.');
+        shift.set(p.clip.id, { ...p, by: m.by });
+      }
+    }
+    const moved = [...shift.values()].filter((m) => !T.isZero(m.by));
+    // A clip on a closing track never goes before 0 (it moves by at most the time before it), but a linked clip that starts
+    // earlier than its partner does (a sound that starts before its picture: a J-cut) can; it keeps its offset, so refuse.
+    for (const m of moved) if (T.lt(m.clip.start, m.by)) throw new OpError('out_of_bounds', `closing the gap would place clip ${m.clip.id} before 0`, { clipId: m.clip.id, trackId: m.track.id, start: m.clip.start, by: m.by }, 'Delete with delete_clip to keep the gap, or trim the start of that clip (it starts before the clip it is linked to) first.');
+    for (const m of moved) m.clip.start = T.sub(m.clip.start, m.by);
+    // A clip that moved may not land on one that did not move with it, on any track: sounds that already overlapped
+    // (a crossfade) and moved together keep their overlap, but a sound is never slid over another one that stays.
+    const by = (c: Clip) => shift.get(c.id)?.by ?? T.ZERO;
+    for (const track of new Set([...closing, ...moved.map((m) => m.track)])) {
+      sortClips(track);
+      for (let i = 0; i < track.clips.length; i++) {
+        const cur = track.clips[i]!;
+        for (let k = i + 1; k < track.clips.length && T.lt(track.clips[k]!.start, clipEnd(cur)); k++) {
+          const other = track.clips[k]!;
+          if (T.eq(by(cur), by(other))) continue;
+          const [mover, still] = T.lt(by(other), by(cur)) ? [cur, other] : [other, cur];
+          throw new OpError('overlap', `closing the gap would put clip ${mover.id} over clip ${still.id} on track ${track.id}`, { trackId: track.id, clipId: mover.id, otherClipId: still.id }, 'Delete with delete_clip to keep the gap, or move the clip that is in the way first.');
+        }
+      }
+    }
+    // per closing track, the time taken out of it (all of its deleted time)
+    const closed = [...closing].map((t) => { const sp = spans.get(t)!; return { trackId: t.id, removed: coveredBefore(sp, sp.reduce((e, x) => T.max(e, x.e), T.ZERO)) }; });
+    const deletedClipIds = [...gone.keys()], movedClipIds = moved.map((m) => m.clip.id);
+    return {
+      affectedIds: [...new Set([...deletedClipIds, ...movedClipIds, ...unlinked])],
+      summary: `Deleted ${deletedClipIds.length} clip(s) and closed the gap${movedClipIds.length ? `; ${movedClipIds.length} clip(s) moved earlier` : ''}${unlinked.length ? `; ${unlinked.length} clip(s) no longer linked` : ''}`,
+      output: { deletedClipIds, movedClipIds, unlinkedClipIds: unlinked, closed },
+    };
+  },
+});
+
 defineOp({
   name: 'restore_entities',
   version: 1,
@@ -1918,7 +2020,9 @@ defineOp({
     if (a.downbeats && !a.downbeats.every(isBeat)) throw new OpError('invalid_args', 'every bar start must be one of the beats', {}, 'Add the beat first, or pass it in the same edit.');
     const bars = a.downbeats === null ? [] : a.downbeats ? sortedUnique(a.downbeats) : (cur.beats?.downbeats ?? []).filter(isBeat);
     const meter = a.meter !== undefined ? a.meter : cur.beats?.meter ?? null;
-    d.analyses[a.assetId] = a.kind === 'scenes' ? { ...cur, scenes: { origin, cuts: list } } : { ...cur, beats: { origin, bpm: a.bpm !== undefined ? a.bpm : cur.beats?.bpm ?? null, confidence: cur.beats?.confidence ?? null, beats: list, ...(bars.length ? { downbeats: bars, meter } : {}) } };
+    d.analyses[a.assetId] = a.kind === 'scenes' ? { ...cur, scenes: { origin, cuts: list } } : { ...cur, beats: { origin, bpm: a.bpm !== undefined ? a.bpm : cur.beats?.bpm ?? null, confidence: cur.beats?.confidence ?? null, beats: list, ...(bars.length ? { downbeats: bars, meter } : {}),
+      // the sections of built-in music (ADR-0022) are not beats: a correction of the beats leaves them exactly as they are
+      ...(cur.beats?.sections ? { sections: cur.beats.sections } : {}) } };
     return { affectedIds: [analysisEntityId(a.assetId)], summary: `Edited ${a.kind === 'scenes' ? 'scene cuts' : 'beats'} (${list.length})` };
   },
 });
@@ -2080,6 +2184,21 @@ defineOp({
   apply(d, a) {
     if (a.target === null) delete d.settings.loudness; else d.settings.loudness = { target: a.target, truePeak: a.truePeak ?? d.settings.loudness?.truePeak ?? -1 };
     return { affectedIds: [d.id], summary: a.target === null ? 'Loudness normalisation off' : `Loudness target ${a.target} LUFS` };
+  },
+});
+
+defineOp({
+  name: 'set_timeline_behaviour',
+  version: 1,
+  description: 'Turn the main-track magnet and ripple delete on or off for this project (settings.timeline); a value left out keeps its setting. They choose what the editor does, not what operations do: with rippleDelete, Delete on the main track (the bottom-most picture track) sends ripple_delete_clips and Shift+Delete keeps the gap (delete_clip); with mainMagnet, clips dragged on the main track stay together. A project that never set them has both off; new projects start with both on. Agents choose ripple_delete_clips or delete_clip themselves either way.',
+  args: z.object({ mainMagnet: z.boolean().optional(), rippleDelete: z.boolean().optional() }).strict(),
+  apply(d, a) {
+    if (a.mainMagnet === undefined && a.rippleDelete === undefined) throw new OpError('invalid_args', 'nothing to change: give mainMagnet or rippleDelete');
+    const now = timelineBehaviour(d);
+    const next = { mainMagnet: a.mainMagnet ?? now.mainMagnet, rippleDelete: a.rippleDelete ?? now.rippleDelete };
+    d.settings.timeline = next;
+    const word = (on: boolean) => (on ? 'on' : 'off');
+    return { affectedIds: [d.id], summary: `Timeline: main-track magnet ${word(next.mainMagnet)}, ripple delete ${word(next.rippleDelete)}`, output: { timeline: next } };
   },
 });
 

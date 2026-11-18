@@ -4,8 +4,9 @@
  * touched; keep what was edited by hand, by content fingerprint). Rule-based; no model.
  * - Templates that need a model this build does not have (MODEL_GATED_TEMPLATES) are listed as unavailable and refused with
  *   409 needs_capability before anything is planned; nothing is downloaded for them.
- * - The procedural media a plan needs (sound effects, graphic elements) are made here (makeSfx, makeElement) and travel inside
- *   the op's arguments, so replay never reads the template catalogue or the synthesisers.
+ * - The procedural media a plan needs (sound effects, graphic elements, built-in music) are made here (makeSfx, makeElement,
+ *   makeMusic) and travel inside the op's arguments, so replay never reads the template catalogue or the synthesisers. A
+ *   built-in music track travels with its known beat grid (assets[].analysis, ADR-0022).
  * - Agents in propose mode are refused (403 insufficient_scope): a template is applied through an internal op, which a proposal
  *   cannot carry (governance.ts propose/decide commit without internal ops). A grant limited to tracks or a time range is
  *   refused too (403 out_of_scope): a template adds tracks, assets and run records.
@@ -13,12 +14,13 @@
 import * as T from '@pulseframe/time';
 import {
   clipEnd, findClip, findGatedTemplate, findTemplate, fingerprint, gatedTemplateError, gatedTemplateSummary, MODEL_GATED_TEMPLATES, planTemplate, summarizeTemplate, TemplateError, TEMPLATE_METHOD, TEMPLATES,
-  type Asset, type ProjectDocument, type SlotRecord, type TemplateApplyResult, type TemplateDef, type TemplatePlan, type TemplatePlanView, type TemplateRegenerateResult, type TemplateSummary,
+  type Asset, type KnownGrid, type ProjectDocument, type SlotRecord, type TemplateApplyResult, type TemplateDef, type TemplatePlan, type TemplatePlanView, type TemplateRegenerateResult, type TemplateSummary,
 } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
 import type { Governance } from './governance.ts';
 import { makeSfx } from './sfx.ts';
+import { makeMusic } from './music.ts';
 import { ApiError, type Store } from './store.ts';
 
 const STATUS: Record<TemplateError['code'], number> = { not_found: 404, needs_analysis: 409, needs_capability: 409, invalid_args: 400, nothing_to_do: 409 };
@@ -64,7 +66,7 @@ function templateOf(templateId: string): TemplateDef {
 
 const NOTE = 'Nothing was changed. Apply it to make these edits as one undoable step; everything it makes stays an ordinary editable clip.';
 const view = (revision: number, plan: TemplatePlan): TemplatePlanView => ({
-  revision, templateId: plan.templateId, version: plan.version, params: plan.params, steps: plan.steps, basis: plan.basis, warnings: plan.warnings, blocking: plan.blocking,
+  revision, templateId: plan.templateId, version: plan.version, params: plan.params, steps: plan.steps, basis: plan.basis, warnings: plan.warnings, notices: plan.notices, blocking: plan.blocking,
   alternatives: plan.alternatives, operations: plan.ops.length, predicted: plan.predicted, method: TEMPLATE_METHOD, note: plan.blocking.length ? 'Nothing was changed. This plan cannot be applied as it is: see blocking.' : NOTE,
 });
 const refuseBlocked = (plan: TemplatePlan) => {
@@ -81,9 +83,16 @@ export async function planTemplateFor(store: Store, gov: Governance, principal: 
 }
 
 /** The procedural media of a plan, made now (content-addressed, so the same sound or picture is stored once). */
-async function makeAssets(store: Store, principal: Principal, plan: TemplatePlan): Promise<{ key: string; asset: Omit<Asset, 'id'> }[]> {
-  const out: { key: string; asset: Omit<Asset, 'id'> }[] = [];
-  for (const n of plan.assetsNeeded) out.push({ key: n.key, asset: n.kind === 'sfx' ? await makeSfx(store, n.id, principal.actor) : await makeElement(store, n.id, n.color ? { color: n.color } : {}, principal.actor) });
+async function makeAssets(store: Store, principal: Principal, plan: TemplatePlan): Promise<{ key: string; asset: Omit<Asset, 'id'>; analysis?: KnownGrid }[]> {
+  const out: { key: string; asset: Omit<Asset, 'id'>; analysis?: KnownGrid }[] = [];
+  for (const n of plan.assetsNeeded) {
+    if (n.kind === 'music') {
+      // built-in music, made to measure: exactly the plan's bars, with the grid known from its recipe (ADR-0022)
+      const made = await makeMusic(store, { styleId: n.id, bars: n.bars, seed: n.seed }, principal.actor);
+      out.push({ key: n.key, asset: made.asset, analysis: made.grid });
+    } else if (n.kind === 'sfx') out.push({ key: n.key, asset: await makeSfx(store, n.id, principal.actor) });
+    else out.push({ key: n.key, asset: await makeElement(store, n.id, { ...(n.color ? { color: n.color } : {}), ...(n.color2 ? { color2: n.color2 } : {}) }, principal.actor) });
+  }
   return out;
 }
 /** Checks before a template may change a project: edit rights (propose mode refused), not paused, no track/range limit. */
@@ -118,7 +127,7 @@ export async function applyTemplateFor(store: Store, gov: Governance, principal:
     ops: [{ op: 'apply_template', args: { templateId: def.id, templateVersion: def.version, params: plan.params, steps: plan.steps, ...(assets.length ? { assets } : {}), ops: plan.ops, slots: plan.slots } }],
   }) as CommitOut;
   const out = r.results?.[0]?.output ?? {};
-  return { revision: r.revision, runId: out.runId ?? '', createdIds: out.createdIds ?? [], slots: out.slots ?? [], steps: plan.steps, warnings: plan.warnings };
+  return { revision: r.revision, runId: out.runId ?? '', createdIds: out.createdIds ?? [], slots: out.slots ?? [], steps: plan.steps, warnings: plan.warnings, notices: plan.notices };
 }
 
 /**
@@ -187,5 +196,5 @@ export async function regenerateTemplateFor(store: Store, gov: Governance, princ
     ops: [{ op: 'apply_template', args: { runId, templateId: def.id, templateVersion: def.version, params: plan.params, steps: plan.steps, ...(assets.length ? { assets } : {}), removeClipIds: removable, keepIds: protectedIds, keepSlots, ops: plan.ops, slots: plan.slots } }],
   }) as CommitOut;
   const out = r.results?.[0]?.output ?? {};
-  return { revision: r.revision, runId, createdIds: out.createdIds ?? [], slots: out.slots ?? [], steps: plan.steps, warnings: plan.warnings, replaced: removable.length, protected: protectedIds };
+  return { revision: r.revision, runId, createdIds: out.createdIds ?? [], slots: out.slots ?? [], steps: plan.steps, warnings: plan.warnings, notices: plan.notices, replaced: removable.length, protected: protectedIds };
 }

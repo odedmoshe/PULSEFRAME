@@ -1,0 +1,127 @@
+/* apps/web/src/ds/tokens.css. Dark is the default regardless of OS; light is an explicit setting. */
+:root, :root[data-theme="dark"] {
+  color-scheme: dark;
+  /* surfaces: lightness steps, one shadow per elevation, no glass over video */
+  --pf-canvas:#08090B; --pf-surface-1:#111216; --pf-surface-2:#181A1F; --pf-surface-3:#1F2228; --pf-surface-4:#282B32;
+  --pf-stage:#0B0B0C;                       /* hue-free viewer surround, both themes */
+  --pf-line:rgba(255,255,255,.075); --pf-line-strong:rgba(255,255,255,.13); --pf-line-strong-solid:#2A2D34;
+  --pf-line-control:#666D7A;                /* input/checkbox edges: 3.34:1 on surface-2 */
+  /* text */
+  --pf-text:#EDEFF3; --pf-text-2:#AEB4BF; --pf-text-3:#959CA8; --pf-text-disabled:#5C626D;
+  /* FRAME light = space: selection, focus, playhead, primary action */
+  --pf-frame:#45E6D0; --pf-frame-strong:#86F3E3; --pf-frame-ink:#04211D; --pf-frame-soft:rgba(69,230,208,.14); --pf-frame-glow:rgba(69,230,208,.42);
+  /* PULSE light = time: beats, bars, sections, beat-locked items, "now" */
+  --pf-pulse:#FFC54D; --pf-pulse-hot:#FF9A3D; --pf-pulse-ink:#2A1A00; --pf-pulse-soft:rgba(255,197,77,.13); --pf-pulse-glow:rgba(255,184,64,.5);
+  /* the connected agent only */
+  --pf-agent:#C3A6FF; --pf-agent-soft:rgba(195,166,255,.14);
+  /* status (neutral tones for "needs setup"/"unavailable"; red only for real errors) */
+  --pf-ok:#62DB98; --pf-attention:#FF9F5A; --pf-info:#73C9FF; --pf-neutral:#AEB4BF;
+  --pf-danger:#FF6B81; --pf-danger-soft:rgba(255,107,129,.12); --pf-danger-fill:#B83039; --pf-on-danger:#FFFFFF;
+  --pf-focus:#86F3E3;                       /* 2px ring, 2px offset; 14.2:1 on surface-1 */
+  /* clip kinds: stripe + icon + lane; body = color-mix(in oklab, kind 20%, var(--pf-surface-2)); labels sit on --pf-plate */
+  --pf-k-video:#8EA3BF; --pf-k-overlay:#7FA8FF; --pf-k-text:#FF8FD0; --pf-k-caption:#FFC2E0;
+  --pf-k-voice:#6EDC9A; --pf-k-music:#FFC54D; --pf-k-sfx:#67C7FF; --pf-k-adjust:#D8DCE3;
+  --pf-plate:rgba(0,0,0,.62);
+  --pf-on-plate:#EDEFF3; --pf-on-plate-pulse:#FFC54D;   /* foregrounds on --pf-plate / over images: same in both themes, because the plate is black in both */
+  --pf-v1-tint:#16302C;                     /* main-track lane tint */
+  /* mode tints, equal OKLCH lightness ~0.84; used only on the active pill underline/icon and the playhead cap */
+  --pf-m-edit:#45E6D0; --pf-m-look:#FFA88A; --pf-m-sound:#7EE08A; --pf-m-captions:#C9A8FF; --pf-m-deliver:#73C9FF;
+  /* elevation */
+  --pf-e1:0 0 0 1px var(--pf-line),0 10px 30px -18px rgba(0,0,0,.8);
+  --pf-e2:0 0 0 1px var(--pf-line-strong),0 14px 36px -10px rgba(0,0,0,.7);
+  --pf-e3:0 0 0 1px var(--pf-line-strong),0 40px 90px -20px rgba(0,0,0,.85);
+  --pf-hilite:inset 0 1px 0 rgba(255,255,255,.045);
+  --pf-glow-frame:0 0 0 1.5px var(--pf-frame),0 0 22px -4px var(--pf-frame-glow);
+  --pf-glow-pulse:0 0 14px var(--pf-pulse-glow);
+  --pf-scrim:rgba(4,5,7,.62);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --pf-canvas:#E4E7EC; --pf-surface-1:#F6F7F9; --pf-surface-2:#FFFFFF; --pf-surface-3:#FFFFFF; --pf-surface-4:#ECEEF2;
+  --pf-stage:#1C1D1F;                       /* the viewer stays dark; .pf-force-dark re-applies dark tokens inside the stage */
+  --pf-line:rgba(16,22,34,.09); --pf-line-strong:rgba(16,22,34,.16); --pf-line-strong-solid:#D3D8DF; --pf-line-control:#878E9B;
+  --pf-text:#12151A; --pf-text-2:#4A5260; --pf-text-3:#5F6775; --pf-text-disabled:#9AA1AB;
+  --pf-frame:#06705F; --pf-frame-strong:#055C4F; --pf-frame-ink:#FFFFFF; --pf-frame-soft:rgba(10,133,116,.11); --pf-frame-glow:rgba(10,133,116,.30);
+  --pf-pulse:#8C5300; --pf-pulse-hot:#9E4708; --pf-pulse-ink:#FFFFFF; --pf-pulse-soft:rgba(214,140,0,.13); --pf-pulse-glow:rgba(214,140,0,.35);
+  --pf-agent:#6B45C8; --pf-agent-soft:rgba(107,69,200,.10);
+  --pf-ok:#126A3E; --pf-attention:#9A420A; --pf-info:#1867A8; --pf-neutral:#4A5260;
+  --pf-danger:#C42343; --pf-danger-soft:rgba(196,35,67,.09); --pf-danger-fill:#B83039; --pf-on-danger:#FFFFFF;
+  --pf-focus:#055C4F;
+  --pf-k-video:#5B6B82; --pf-k-overlay:#3256B0; --pf-k-text:#A42C70; --pf-k-caption:#8A2F62;
+  --pf-k-voice:#16693B; --pf-k-music:#8C5300; --pf-k-sfx:#145F8F; --pf-k-adjust:#6B7280;
+  --pf-v1-tint:#DDF1EC;
+  --pf-m-edit:#06705F; --pf-m-look:#A0441F; --pf-m-sound:#246A2E; --pf-m-captions:#7346C4; --pf-m-deliver:#1867A8;
+  --pf-e1:0 0 0 1px var(--pf-line),0 1px 2px rgba(16,22,34,.06);
+  --pf-e2:0 0 0 1px var(--pf-line-strong),0 10px 28px -10px rgba(16,22,34,.22);
+  --pf-e3:0 0 0 1px var(--pf-line-strong),0 30px 70px -20px rgba(16,22,34,.35);
+  --pf-hilite:inset 0 1px 0 rgba(255,255,255,.7);
+  --pf-scrim:rgba(20,24,32,.38);
+}
+/* A subtree that stays dark whatever the theme (the stage, its overlays and the transport; also anything that sits over video).
+   The dark values of the first rule, minus --pf-canvas and --pf-stage (those belong to the theme: the stage surround is the same in
+   both). Custom properties that refer to other tokens are declared again here, because a var() is resolved where it is declared,
+   so inheriting the light root's resolved --pf-e1/--pf-glow-* would keep the light colours inside the subtree. Under
+   :root[data-theme="light"] editor/stage.css refines this with mixes over --pf-stage for the surfaces and accents (it has the higher
+   specificity and wins). */
+.pf-force-dark {
+  color-scheme: dark;
+  --pf-surface-1:#111216; --pf-surface-2:#181A1F; --pf-surface-3:#1F2228; --pf-surface-4:#282B32;
+  --pf-line:rgba(255,255,255,.075); --pf-line-strong:rgba(255,255,255,.13); --pf-line-strong-solid:#2A2D34; --pf-line-control:#666D7A;
+  --pf-text:#EDEFF3; --pf-text-2:#AEB4BF; --pf-text-3:#959CA8; --pf-text-disabled:#5C626D;
+  --pf-frame:#45E6D0; --pf-frame-strong:#86F3E3; --pf-frame-ink:#04211D; --pf-frame-soft:rgba(69,230,208,.14); --pf-frame-glow:rgba(69,230,208,.42);
+  --pf-pulse:#FFC54D; --pf-pulse-hot:#FF9A3D; --pf-pulse-ink:#2A1A00; --pf-pulse-soft:rgba(255,197,77,.13); --pf-pulse-glow:rgba(255,184,64,.5);
+  --pf-agent:#C3A6FF; --pf-agent-soft:rgba(195,166,255,.14);
+  --pf-ok:#62DB98; --pf-attention:#FF9F5A; --pf-info:#73C9FF; --pf-neutral:#AEB4BF;
+  --pf-danger:#FF6B81; --pf-danger-soft:rgba(255,107,129,.12); --pf-danger-fill:#B83039; --pf-on-danger:#FFFFFF;
+  --pf-focus:#86F3E3;
+  --pf-m-edit:#45E6D0; --pf-m-look:#FFA88A; --pf-m-sound:#7EE08A; --pf-m-captions:#C9A8FF; --pf-m-deliver:#73C9FF;
+  --pf-e1:0 0 0 1px var(--pf-line),0 10px 30px -18px rgba(0,0,0,.8);
+  --pf-e2:0 0 0 1px var(--pf-line-strong),0 14px 36px -10px rgba(0,0,0,.7);
+  --pf-e3:0 0 0 1px var(--pf-line-strong),0 40px 90px -20px rgba(0,0,0,.85);
+  --pf-hilite:inset 0 1px 0 rgba(255,255,255,.045);
+  --pf-glow-frame:0 0 0 1.5px var(--pf-frame),0 0 22px -4px var(--pf-frame-glow);
+  --pf-glow-pulse:0 0 14px var(--pf-pulse-glow);
+  --pf-scrim:rgba(4,5,7,.62);
+  color:var(--pf-text);
+}
+:root {
+  /* type */
+  --pf-font:'IBM Plex Sans Hebrew','Heebo',system-ui,sans-serif;
+  --pf-font-display:'Karantina','IBM Plex Sans Hebrew',sans-serif;   /* only at >= 28px */
+  --pf-font-mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace; /* timecode, digits */
+  --pf-fs-digits:12px; --pf-lh-digits:16px;   /* mono digits / Latin badges / key caps only */
+  --pf-fs-xs:13px; --pf-lh-xs:18px;           /* Hebrew minimum */
+  --pf-fs-sm:14px; --pf-lh-sm:20px;           /* body, controls */
+  --pf-fs-md:16px; --pf-lh-md:24px;           /* object name, sheet body */
+  --pf-fs-lg:20px; --pf-lh-lg:28px;           /* panel titles, 600 */
+  --pf-fs-xl:28px; --pf-lh-xl:36px;           /* dialog titles */
+  --pf-fs-2xl:40px; --pf-lh-2xl:44px;         /* start-hub hero */
+  --pf-fs-3xl:64px; --pf-lh-3xl:64px;         /* Karantina: export %, hero word */
+  --pf-fs-timecode:17px;                      /* mono 500, tabular */
+  --pf-fw-regular:400; --pf-fw-medium:500; --pf-fw-semibold:600; --pf-fw-bold:700;
+  /* spacing, 4px base */
+  --pf-sp-1:2px; --pf-sp-2:4px; --pf-sp-3:6px; --pf-sp-4:8px; --pf-sp-5:12px; --pf-sp-6:16px; --pf-sp-7:20px; --pf-sp-8:24px; --pf-sp-9:32px; --pf-sp-10:40px; --pf-sp-11:56px;
+  /* radii */
+  --pf-r-xs:4px; --pf-r-sm:6px; --pf-r-clip:7px; --pf-r-md:10px; --pf-r-lg:14px; --pf-r-xl:20px; --pf-r-pill:999px;
+  /* control heights */
+  --pf-h-xs:24px; --pf-h-sm:28px; --pf-h-md:32px; --pf-h-lg:40px; --pf-hit-touch:44px;
+  /* motion */
+  --pf-dur-press:80ms; --pf-dur-fast:140ms; --pf-dur-base:200ms; --pf-dur-slow:320ms;
+  --pf-bpm:120; --pf-dur-beat:calc(60000ms / var(--pf-bpm));   /* set from measured BPM; never from a guess */
+  --pf-ease-out:cubic-bezier(.2,.8,.2,1); --pf-ease-in-out:cubic-bezier(.65,0,.35,1);
+  --pf-ease-snap:cubic-bezier(.34,1.56,.64,1); --pf-ease-pulse:cubic-bezier(.1,.75,.25,1);
+  /* layout (1440x900 reference) */
+  --pf-topbar:52px; --pf-statusbar:24px; --pf-rail:72px; --pf-browser:300px; --pf-inspector:332px; --pf-gutter:8px;
+  --pf-splitter:8px; --pf-tl-h:clamp(248px,38dvh,560px); --pf-track-head:156px;
+  --pf-lane-pulse:22px; --pf-lane-ruler:24px; --pf-lane-flash:4px; --pf-lane-t:30px; --pf-lane-c:28px; --pf-lane-v2:30px;
+  --pf-lane-v1:64px; --pf-lane-a1:40px; --pf-lane-a2:40px; --pf-lane-a3:26px;
+}
+@media (min-width:1800px){:root{--pf-browser:348px;--pf-inspector:372px;--pf-lane-v1:86px;--pf-lane-a1:52px;--pf-lane-a2:52px}}
+@media (min-width:2300px){:root{--pf-topbar:60px;--pf-rail:84px;--pf-browser:440px;--pf-inspector:430px;--pf-lane-v1:118px;--pf-lane-a1:72px;--pf-lane-a2:72px;--pf-lane-a3:36px}}
+@media (max-width:1366px){:root{--pf-browser:268px;--pf-inspector:304px;--pf-track-head:128px}}
+@media (max-height:780px){:root{--pf-topbar:48px;--pf-lane-t:24px;--pf-lane-c:24px;--pf-lane-v2:26px;--pf-lane-v1:50px;--pf-lane-a1:34px;--pf-lane-a2:34px;--pf-lane-a3:22px}}
+@media (prefers-reduced-motion:reduce){:root{--pf-dur-press:1ms;--pf-dur-fast:1ms;--pf-dur-base:120ms;--pf-dur-slow:120ms;--pf-ease-snap:linear}}
+@media (forced-colors:active){/* rings become Highlight outlines; kind stripes keep icons; no information by colour alone */}
+.num,.tc{font-family:var(--pf-font-mono);font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
+:lang(he){letter-spacing:0;text-transform:none}
+/* spec says `:lang(en){font-size:.97em}`; applied per element it compounds per nesting level and shrinks the legacy editor, so it is not applied. See ux-a report. */

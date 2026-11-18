@@ -19,7 +19,7 @@ export function useMarquee(editor: Editor): { marqueeProps: { onPointerDown: (e:
     if (e.button !== 0 || session.current) return;
     const target = e.target as HTMLElement;
     // only from empty space: a track lane or the area below the tracks (not clips, the ruler, markers or controls)
-    if (!(target === e.currentTarget || target.classList.contains('track'))) return;
+    if (!(target === e.currentTarget || target.classList.contains('track') || target.classList.contains('track-lane'))) return;
     // No text selection and no native drag: with text selected (Shift+drag extends a text selection) the browser would start
     // dragging it and cancel the pointer. Focus is moved off any field by hand, since preventing the default also keeps focus where it was.
     e.preventDefault();

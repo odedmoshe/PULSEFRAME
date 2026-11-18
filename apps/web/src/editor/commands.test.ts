@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dictionaries } from '@pulseframe/i18n';
-import { COMMANDS, Keymap, chordLabel, chordOf } from './commands.ts';
+import { COMMANDS, Keymap, chordLabel, chordOf, type Command } from './commands.ts';
 
 const ev = (code: string, m: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) => ({ code, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...m });
 const fakeStorage = (initial?: string) => {
@@ -72,15 +72,23 @@ describe('COMMANDS registry', () => {
     const ids = COMMANDS.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
-  it('has no default chord shared by two commands', () => {
-    const seen = new Map<string, string>();
+  it('has no default chord shared by two commands, except a cut command ahead of one that acts when no cut is chosen', () => {
+    const seen = new Map<string, Command>();
     const dupes: string[] = [];
     for (const c of COMMANDS) for (const k of c.keys) {
       const prev = seen.get(k);
-      if (prev) dupes.push(`${k}: ${prev} / ${c.id}`);
-      seen.set(k, c.id);
+      // the cut's keys (, . while a cut is chosen) come first in the registry, so the dispatcher tries them first
+      if (prev && !(prev.context === 'cut' && c.context !== 'cut')) dupes.push(`${k}: ${prev.id} / ${c.id}`);
+      if (!prev) seen.set(k, c);
     }
     expect(dupes).toEqual([]);
+  });
+  it('lists every command bound to a chord in registry order, the cut first', () => {
+    const km = new Keymap(fakeStorage());
+    expect(km.lookupAll('Comma').map((c) => c.id)).toEqual(['cut.rollEarlier', 'keyframe.prev']);
+    expect(km.lookupAll('Period').map((c) => c.id)).toEqual(['cut.rollLater', 'keyframe.next']);
+    expect(km.lookupAll('Shift+KeyB').map((c) => c.id)).toEqual(['cut.toBeat']);
+    expect(km.lookupAll('Shift+Delete').map((c) => c.id)).toEqual(['edit.deleteKeepGap']);
   });
   it('has every label key in both dictionaries', () => {
     for (const c of COMMANDS) {

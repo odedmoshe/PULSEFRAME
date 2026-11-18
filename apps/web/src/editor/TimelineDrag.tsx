@@ -4,14 +4,22 @@ import * as T from '@pulseframe/time';
 import { clipEnd, timelineMarkers, type Clip } from '@pulseframe/core';
 import { readSnapBeats } from '../api.ts';
 import { useEditor } from './store.ts';
-import { markerSnapCandidates, overlapsOnTrack, snapTime } from './interactions.math.ts';
-import './interactions.css';
+import { beatSnapTargets, markerSnapCandidates, overlapsOnTrack, snapToTargets, type SnapKind, type SnapTarget } from './interactions.math.ts';
+import './timeline.css';
 
 type Mode = 'move' | 'trim-start' | 'trim-end';
-type SnapKind = 'playhead' | 'clip-edge' | 'zero' | 'marker';
-export interface TimelineGhost { clipId: string; mode: Mode; leftPx: number; widthPx: number; snappedTo: SnapKind | null; invalid: boolean }
+export type { SnapKind };
+export interface TimelineGhost {
+  clipId: string; mode: Mode; leftPx: number; widthPx: number; snappedTo: SnapKind | null; invalid: boolean;
+  /** The edge that is being moved, as a timeline frame: the start for a move or a start trim, the end for an end trim (the end too when a move snapped by its end). */
+  edgeFrame: number;
+  /** How far that edge moved from where it was, in frames (the live chip beside the pointer). */
+  deltaFrames: number;
+  /** The clip's length as it would be, in frames. */
+  durationFrames: number;
+}
 
-const EDGE_PX = 6;
+const EDGE_PX = 8;
 const CLICK_PX = 4;
 const SNAP_PX = 8;
 
@@ -49,8 +57,9 @@ interface Session {
  * Nothing is committed while dragging; one transaction on pointer up.
  * Spread `containerProps` on the scroll container. Leaves click handling (selection) to the clip buttons.
  */
-export function useTimelineDrag(): { containerProps: Record<string, unknown>; ghost: TimelineGhost | null } {
+export function useTimelineDrag(opts: { /** the blade tool is active: a press on a clip cuts it, so nothing is dragged */ disabled?: boolean } = {}): { containerProps: Record<string, unknown>; ghost: TimelineGhost | null } {
   const editor = useEditor();
+  const disabled = !!opts.disabled;
   const [ghost, setGhost] = useState<TimelineGhost | null>(null);
   const session = useRef<Session | null>(null);
   const container = useRef<HTMLElement | null>(null);
@@ -96,7 +105,7 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
   }, [end]);
 
   const onPointerDown = useCallback((e: ReactPointerEvent<HTMLElement>) => {
-    if (e.button !== 0 || session.current) return;
+    if (e.button !== 0 || session.current || disabled) return;
     // `data-drag-clip`: an overlay drawn over a clip (its volume line) that should drag the clip like the clip itself
     const el = (e.target as Element).closest?.('[data-clip-id], [data-drag-clip]') as HTMLElement | null;
     const doc = editor.doc;
@@ -106,7 +115,10 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
     if (!found) return;
     if (found.tr.locked) return;
     const rect = el.getBoundingClientRect();
-    const mode: Mode = rect.width >= 16 && e.clientX - rect.left <= EDGE_PX ? 'trim-start' : rect.width >= 16 && rect.right - e.clientX <= EDGE_PX ? 'trim-end' : 'move';
+    // the grips of a selected clip are its edges whatever their width; otherwise the outer few pixels of the clip are
+    const grip = (e.target as Element).closest?.('[data-grip]')?.getAttribute('data-grip');
+    const mode: Mode = grip === 'start' ? 'trim-start' : grip === 'end' ? 'trim-end'
+      : rect.width >= 16 && e.clientX - rect.left <= EDGE_PX ? 'trim-start' : rect.width >= 16 && rect.right - e.clientX <= EDGE_PX ? 'trim-end' : 'move';
     container.current = e.currentTarget;
     session.current = {
       pointerId: e.pointerId, clipId: id, mode, startX: e.clientX, captured: false, start: found.clip.start, duration: found.clip.duration,
@@ -130,7 +142,7 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
       session.current.companions = others.map((c) => c.id);
       session.current.groupMin = others.reduce((m, c) => T.min(m, c.start), found.clip.start);
     }
-  }, [editor]);
+  }, [editor, disabled]);
 
   const onPointerMove = useCallback((e: ReactPointerEvent<HTMLElement>) => {
     const s = session.current;
@@ -158,30 +170,28 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
     const lgs = new Set(tracks.flatMap((tr) => tr.clips).filter((c) => s.companions.includes(c.id)).map(link).filter(Boolean));
     if (lgs.size) for (const tr of tracks) for (const c of tr.clips) if (lgs.has(link(c))) group.add(c.id);
 
-    // Snap candidates: exact times from the document.
-    const cands: T.RationalTime[] = [T.ZERO, editor.playhead];
-    const kinds: SnapKind[] = ['zero', 'playhead'];
+    // Snap targets: exact times from the document. Cuts and the playhead always; beats, bar starts, scene cuts and the
+    // user's markers while "snap to beats" is on (for a move and for a trim alike). Alt suspends snapping.
+    const targets: SnapTarget[] = [{ time: T.ZERO, kind: 'zero' }, { time: editor.playhead, kind: 'playhead' }];
     for (const tr of tracks) for (const c of tr.clips) {
       if (group.has(c.id)) continue;
-      cands.push(c.start, clipEnd(c));
-      kinds.push('clip-edge', 'clip-edge');
+      targets.push({ time: c.start, kind: 'clip-edge' }, { time: clipEnd(c), kind: 'clip-edge' });
     }
-    if (s.mode === 'move' && readSnapBeats()) {
+    if (readSnapBeats()) {
       const m = timelineMarkers(doc);
-      for (const c of markerSnapCandidates([...m.beats, ...m.sceneCuts], rate)) { cands.push(c); kinds.push('marker'); }
+      targets.push(...beatSnapTargets(m.beats, m.downbeats, rate));
+      for (const c of markerSnapCandidates(m.sceneCuts, rate)) targets.push({ time: c, kind: 'scene' });
+      for (const mk of Object.values(doc.markers ?? {})) if (mk.sequenceId === doc.mainSequenceId) targets.push({ time: T.snapToFrame(mk.time, rate), kind: 'marker' });
     }
     if (s.roll) {
       // The cut being rolled is where it starts: edges of other clips at that same time (linked sound, other tracks) must not hold it there.
       const cut = s.mode === 'trim-start' ? s.start : T.add(s.start, s.duration);
-      for (let i = cands.length - 1; i >= 0; i--) if (T.eq(cands[i]!, cut)) { cands.splice(i, 1); kinds.splice(i, 1); }
+      for (let i = targets.length - 1; i >= 0; i--) if (targets[i]!.kind === 'clip-edge' && T.eq(targets[i]!.time, cut)) targets.splice(i, 1);
     }
     const snapping = !e.altKey && !s.slide; // a slide moves between its two neighbours by whole frames; there is nothing useful to snap to
     let snappedTo: SnapKind | null = null;
-    const trySnap = (time: T.RationalTime) => {
-      if (!snapping) return null;
-      const r = snapTime({ time, candidates: cands, pxPerSecond: pps, thresholdPx: SNAP_PX });
-      return r.snapped ? r : null;
-    };
+    let byEnd = false;
+    const trySnap = (time: T.RationalTime) => (snapping ? snapToTargets({ time, targets, pxPerSecond: pps, thresholdPx: SNAP_PX }) : null);
     const delta = T.fromSeconds(dx / pps);
     const origEnd = T.add(s.start, s.duration);
     let start = s.start;
@@ -192,8 +202,8 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
       const b = trySnap(T.add(rawStart, s.duration));
       const da = a ? Math.abs(T.toSeconds(T.sub(a.time, rawStart))) : Infinity;
       const db = b ? Math.abs(T.toSeconds(T.sub(T.sub(b.time, s.duration), rawStart))) : Infinity;
-      if (a && da <= db) { start = a.time; snappedTo = kinds[a.index]!; }
-      else if (b) { start = T.sub(b.time, s.duration); snappedTo = kinds[b.index]!; }
+      if (a && da <= db) { start = a.time; snappedTo = a.kind; }
+      else if (b) { start = T.sub(b.time, s.duration); snappedTo = b.kind; byEnd = true; }
       else start = rawStart;
       start = T.snapToFrame(start, rate);
       // The earliest moving clip stops at 0, so the group keeps its shape.
@@ -204,7 +214,7 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
     } else if (s.mode === 'trim-start') {
       const raw = T.add(s.start, delta);
       const a = trySnap(raw);
-      if (a) snappedTo = kinds[a.index]!;
+      if (a) snappedTo = a.kind;
       start = T.snapToFrame(a ? a.time : raw, rate);
       if (T.isNegative(start)) start = T.ZERO;
       const latest = T.sub(origEnd, frame);
@@ -213,7 +223,7 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
     } else {
       const raw = T.add(origEnd, delta);
       const a = trySnap(raw);
-      if (a) snappedTo = kinds[a.index]!;
+      if (a) snappedTo = a.kind;
       endT = T.snapToFrame(a ? a.time : raw, rate);
       const earliest = T.add(s.start, frame);
       if (T.lt(endT, earliest)) endT = earliest;
@@ -222,8 +232,14 @@ export function useTimelineDrag(): { containerProps: Record<string, unknown>; gh
     s.result = { start, end: endT };
     const track = tracks.find((t) => t.id === s.trackId);
     const invalid = !!track && s.trackKind !== 'audio' && overlapsOnTrack(track.clips, group, start, endT);
+    const fr = (t: T.RationalTime) => T.frameIndexAt(t, rate);
+    const endEdge = s.mode === 'trim-end' || (s.mode === 'move' && byEnd);
+    // a snap that the limits above pulled the edge away from is no longer a snap
+    const edge = endEdge ? endT : start;
+    if (snappedTo && !targets.some((t) => t.kind === snappedTo && T.eq(t.time, edge))) snappedTo = null;
     setGhost({
       clipId: s.clipId, mode: s.mode, leftPx: T.toSeconds(start) * pps, widthPx: Math.max(4, T.toSeconds(T.sub(endT, start)) * pps - 1), snappedTo, invalid,
+      edgeFrame: fr(edge), deltaFrames: s.mode === 'trim-end' ? fr(endT) - fr(origEnd) : fr(start) - fr(s.start), durationFrames: fr(endT) - fr(start),
     });
   }, [editor, end]);
 

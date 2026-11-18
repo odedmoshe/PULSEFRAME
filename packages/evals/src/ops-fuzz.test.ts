@@ -16,7 +16,7 @@ import { createFuzz } from './ops-fuzz.gen.ts';
 const SEEDS = Math.max(1, Number(process.env.PF_FUZZ_SEEDS ?? 60));
 const STEPS = Math.max(1, Number(process.env.PF_FUZZ_STEPS ?? 90));
 
-function run(seed: number) {
+function run(seed: number, focus: () => string[] = () => []) {
   const fz = createFuzz(seed);
   const { rate, f, int } = fz;
   let n = 0;
@@ -25,11 +25,13 @@ function run(seed: number) {
   doc = applyTransaction(doc, fz.setup(doc), ctx()).doc;
   doc = applyTransaction(doc, fz.aiSetup(doc), ctx(true)).doc; // ADR-0017 fixtures: derived copies and a translation (internal operations)
   { const ops = fz.setupInternal(doc); if (ops.length) doc = applyTransaction(doc, ops, ctx(true)).doc; } // ADR-0015: measured samples for the motion track (an internal operation)
-  const gen = () => fz.gen(doc);
+  // Every sixth step draws among the operations no earlier step of the run has seen accepted (the menu grows with every
+  // feature, so plain draws can miss one by chance after an unrelated row changes the stream); every other step draws as before.
+  const gen = (step: number) => { const f = step % 6 === 5 ? focus() : []; return f.length ? fz.genFocused(doc, f) : fz.gen(doc); };
 
   const stats = { accepted: 0, refused: 0, byOp: {} as Record<string, [number, number]> };
   for (let step = 0; step < STEPS; step++) {
-    const call = gen();
+    const call = gen(step);
     const where = `seed ${seed} (${rate.num}/${rate.den}) step ${step}: ${JSON.stringify(call).slice(0, 300)}`;
     const before = doc;
     const beforeJson = JSON.stringify(doc);
@@ -74,7 +76,7 @@ describe('fuzz: all editing operations, five frame rates', () => {
   const total = { accepted: 0, refused: 0, byOp: {} as Record<string, [number, number]> };
   for (let seed = 1; seed <= SEEDS; seed++) {
     it(`seed ${seed}`, () => {
-      const s = run(seed);
+      const s = run(seed, () => Object.entries(total.byOp).filter(([, [a]]) => a === 0).map(([k]) => k));
       total.accepted += s.accepted; total.refused += s.refused;
       for (const [k, [a, r]] of Object.entries(s.byOp)) { const t = (total.byOp[k] ??= [0, 0]); t[0] += a; t[1] += r; }
     });

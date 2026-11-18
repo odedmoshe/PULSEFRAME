@@ -93,9 +93,12 @@ describe('strings: every setup state and every publication blocker has Hebrew an
       }
       expect(Object.keys(AI_STRINGS[lang].setupSteps).sort()).toEqual([...SETUP_CODES].sort());
     }
-    // the steps name what to set: the hosts that are missing, the engine variable
-    expect(AI_STRINGS.he.setupSteps.host_not_allowed('raw.githubusercontent.com').join(' ')).toContain('raw.githubusercontent.com');
-    expect(AI_STRINGS.en.setupSteps.engine_not_configured('PF_DENOISE_BIN').join(' ')).toContain('PF_DENOISE_BIN');
+    // the steps are the owner's words: no environment variable names, addresses or hosts (those are for whoever installs)
+    for (const lang of ['he', 'en'] as const) for (const code of SETUP_CODES) {
+      const text = AI_STRINGS[lang].setupSteps[code](code === 'host_not_allowed' ? 'raw.githubusercontent.com' : code === 'disk_insufficient' ? '3 GB' : 'PF_DENOISE_BIN').join(' ');
+      expect(text, `${lang} ${code}`).not.toMatch(/PF_[A-Z_]+|https?:\/\/|githubusercontent/);
+    }
+    for (const lang of ['he', 'en'] as const) expect(JSON.stringify(AI_STRINGS[lang].steps) + AI_STRINGS[lang].modelsDirNote + AI_STRINGS[lang].modelUnverifiable('m.safetensors')).not.toMatch(/PF_[A-Z_]+|https?:\/\//);
   });
   it('each code publicationBlockers can emit (read from descriptor.ts) has wording in both languages, and the two languages have the same keys', () => {
     const src = fs.readFileSync(new URL('../../../../packages/providers/src/descriptor.ts', import.meta.url), 'utf8');

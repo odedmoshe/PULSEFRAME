@@ -63,6 +63,10 @@ const HINTS: [RegExp, (m: RegExpExecArray) => string, ((m: RegExpExecArray) => s
   [/^Ask the project owner to apply the template, or for a grant in edit mode\.( plan_template still shows what it would do\.)?$/, () => 'אפשר לבקש מבעל/ת הפרויקט להחיל את התבנית, או לבקש הרשאה במצב עריכה.', () => 'Ask the project owner to apply the template, or for a grant in edit mode.'],
   [/^Choose one of the available templates \(GET \/api\/v1\/templates\)\.$|^Available: .* \(GET \/api\/v1\/templates\)\.$/, () => 'אפשר לבחור אחת מהתבניות הזמינות.', () => 'Choose one of the available templates.'],
   [/^A template run id is returned by apply \(runId\)\.$/, () => 'אפשר להחיל את התבנית שוב.', () => 'Apply the template again.'],
+  // the planner's built-in-music refusals (templatePlan.ts; their details are worded in i18n HE_PACKS)
+  [/^Send musicAssetId: null together with builtinMusic, and builtinMusic: null together with musicAssetId/, () => 'יש לבחור מקור מוזיקה אחד: קובץ מהספרייה או מוזיקה מובנית.', () => 'Choose one source of music: a file from the library or built-in music.'],
+  [/^The styles are: .* \(GET \/api\/v1\/music\)\.$/, () => 'אפשר לבחור אחד מסגנונות המוזיקה המובנית שברשימה.', () => 'Choose one of the built-in music styles in the list.'],
+  [/^Use fewer or shorter slots \(tempo: double\), or choose a music file instead \(musicAssetId\)\.$/, () => 'אפשר לבחור קצב כפול או פחות קבצים, או לבחור קובץ מוזיקה מהספרייה.', () => 'Choose double tempo or fewer files, or a music file from the library.'],
 ];
 
 /** The hint for a person in the interface language; the server's own when it is not one of the above. */

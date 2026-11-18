@@ -11,6 +11,9 @@
  * start), the template dialog (first step and plan step) and the post-apply bar.
  * The trend pack's panels (ADR-0012): the title effects panel with all six look fields on, and the transition options of a light
  * transition (beat lock, velocity, colour, seed, light status).
+ * The life line (ADR-0021) and the content-pack mounts: the media drawer by date and by event (with the sunset choice), the
+ * field menu of a title (a menu), the live line with its anchored error and fix, the people sheet (a modal dialog opened from
+ * the field menu), the Hanukkah pack page, the built-in music tab of the audio drawer and the text drawer with its fonts.
  *   pnpm build && pnpm audit:a11y
  */
 import { execFileSync } from 'node:child_process';
@@ -22,6 +25,8 @@ import * as T from '@pulseframe/time';
 import { sha256Hex } from '@pulseframe/core';
 import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
+import { withExif } from '../../../apps/server/src/captureMeta.fixtures.ts';
+import { chooseFormat, formatOptions, openCardMenu } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/a11y');
@@ -77,6 +82,21 @@ function auditInPage() {
 }
 
 /** Tab through the page and report focused elements that show no visible focus indicator. */
+/**
+ * Clicks a timeline clip of the top lane. The marker card now floats under the ruler at the marker while the playhead rests on
+ * it and covers the start of the top lane (reported as a product fault in the proof-migration report): the playhead is first
+ * moved off the marker with a click on the ruler above the clip's end, as a user would, so the card goes away.
+ */
+async function clickClipEnd(page: Page, clipId: string) {
+  const el = page.locator(`.clip[data-clip-id="${clipId}"]`);
+  const b = (await el.boundingBox())!;
+  if (await page.getByTestId('marker-bar').count()) {
+    const r = (await page.getByTestId('ruler').boundingBox())!;
+    await page.mouse.click(b.x + b.width - 8, r.y + r.height / 2);
+    await page.getByTestId('marker-bar').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+  }
+  await el.click({ position: { x: Math.max(2, b.width - 8), y: b.height / 2 } });
+}
 async function focusAudit(page: Page, steps: number, clickFirst = true) {
   const missing: string[] = [];
   const reached = new Set<string>();
@@ -124,6 +144,8 @@ async function main() {
     s.store.commit({ projectId: pid, actor: 'fixture', allowInternal: true, ops: [{ op: 'attach_translation', args: { baseVariantId: null, name: 'English', language: 'en', translation: { from: 'he', to: 'en', engine: 'typed fixture (no model ran)', model: 'none', createdAt: new Date().toISOString(), createdBy: 'fixture', sources: { [seg]: sha256Hex('שלום לכולם') } }, phraseText: { [seg]: 'Hello everyone' }, cueText: {} } }] });
     // templates and adjustment layers (ADR-0016): a project of four still pictures with an adjustment layer over the edit
     const tplPid = (await post('/projects', { name: 'a11y-templates', width: 640, height: 360 })).project.id as string;
+    // an empty project: the start hub covers the stage, the inspector and the timeline (UX_REDESIGN §4.14)
+    const emptyPid = (await post('/projects', { name: 'a11y-empty', width: 1920, height: 1080 })).project.id as string;
     for (const [i, c] of ['0x4a6f8c', '0x8c5a4a', '0x5a8c6a', '0x7a5a8c'].entries()) {
       const file = path.join(art, `still-${i}.png`);
       execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-f', 'lavfi', '-i', `color=c=${c}:s=640x360,drawbox=x=${60 + i * 100}:y=90:w=120:h=180:color=0xc0b07a:t=fill`, '-frames:v', '1', file]);
@@ -132,6 +154,32 @@ async function main() {
     const tplAssets = Object.keys(((await (await fetch(`${s.url}/api/v1/projects/${tplPid}`, { headers: h })).json()) as any).project.assets);
     await post(`/projects/${tplPid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: tplAssets[0], start: f(0), duration: f(60) } }] });
     const adjClip = (await post(`/projects/${tplPid}/transactions`, { ops: [{ op: 'add_adjustment', args: { span: 'edit', effects: [{ type: 'color.grayscale' }] } }] })).results?.[0]?.output?.clipId as string | undefined;
+    // the life line (ADR-0021): pictures with capture dates (two of one Hanukkah evening, one of 2023, one without a date),
+    // arranged by events; a person (added through a grant with people:'full': the agent token writes names only); and a title
+    // with a live {year} field over the evening picture
+    const lifePid = (await post('/projects', { name: 'a11y-life', width: 640, height: 360 })).project.id as string;
+    const lifeBase = path.join(art, 'life-base.jpg');
+    execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=640x360', '-frames:v', '1', '-q:v', '3', lifeBase]);
+    const lifePhoto = async (name: string, date: string | null, n: number) => {
+      const bytes = Buffer.concat([withExif(fs.readFileSync(lifeBase), date === null ? { date: null } : { date, offset: '+02:00' }), Buffer.from(`\n${n}`)]);
+      const r: any = await (await fetch(`${s.url}/api/v1/projects/${lifePid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': name }, body: new Uint8Array(bytes) })).json();
+      if (!r.assetId) throw new Error(`life fixture ${name}: ${JSON.stringify(r).slice(0, 200)}`);
+      return r.assetId as string;
+    };
+    const lifeEvening = await lifePhoto('evening.jpg', '2024:12:25 18:00:00', 1);
+    await lifePhoto('evening-early.jpg', '2024:12:25 17:30:00', 2);
+    await lifePhoto('spring.jpg', '2023:03:10 12:00:00', 3);
+    const lifeUndated = await lifePhoto('nodate.jpg', null, 4);
+    const lifeTx = async (ops: unknown[]) => { const r = await post(`/projects/${lifePid}/transactions`, { ops }); if (!r.results) throw new Error(`life fixture transaction: ${JSON.stringify(r).slice(0, 300)}`); return r; };
+    let lifePicture = (await lifeTx([{ op: 'add_clip', args: { assetId: lifeEvening, start: f(0), duration: f(60) } }])).results[0].output.clipId as string;
+    const lifeTitle = (await lifeTx([{ op: 'add_text', args: { text: 'שלום', start: f(0), duration: f(60) } }])).results[0].output.clipId as string;
+    await lifeTx([{ op: 'update_text', args: { clipId: lifeTitle, text: 'שלום {year}' } }, { op: 'set_text_fields', args: { clipId: lifeTitle, enabled: true } }]);
+    await lifeTx([{ op: 'cluster_events', args: {} }]);
+    {
+      const full = s.governance.createGrant({ name: 'a11y-people', mode: 'edit', people: 'full' }, { actor: 'user:local', kind: 'user', scopes: ['observe', 'edit'] }).token;
+      const r = await fetch(`${s.url}/api/v1/projects/${lifePid}/transactions`, { method: 'POST', headers: { authorization: `Bearer ${full}`, 'content-type': 'application/json', connection: 'close' }, body: JSON.stringify({ ops: [{ op: 'add_person', args: { name: 'נועה', birthDate: '2023-03-10', form: 'f' } }] }) });
+      if (r.status !== 200) throw new Error(`the people fixture was refused: ${r.status} ${(await r.text()).slice(0, 300)}`);
+    }
     const tplList = (((await (await fetch(`${s.url}/api/v1/templates`, { headers: h })).json()) as any).templates ?? []) as any[];
     const tplPick = tplList.find((t) => t.available && t.needs.music !== 'beats' && t.slots.every((x: any) => x.accept !== 'video')) ?? tplList.find((t) => t.available);
     for (const lang of ['he', 'en'] as const) {
@@ -149,6 +197,9 @@ async function main() {
         host.id = 'pf-a11y-planted';
         host.innerHTML = '<button id="planted-unnamed"></button><p id="planted-contrast">low contrast text</p><button id="planted-nofocus">no focus ring</button>';
         document.body.prepend(host);
+        // The shell is a fixed grid that covers the window (ds/shell.css): the planted controls are lifted above it, so the
+        // click at the corner that starts the focus walk lands on them, as it did while the shell was in the page flow.
+        host.style.position = 'relative'; host.style.zIndex = '1000';
         // Styles are set through the DOM API: the page's content security policy blocks inline style attributes in markup.
         const low = host.querySelector<HTMLElement>('#planted-contrast')!, nf = host.querySelector<HTMLElement>('#planted-nofocus')!;
         low.style.color = '#3a3f47'; low.style.background = '#30343b';
@@ -186,10 +237,11 @@ async function main() {
       await page.locator('[data-testid=marker-bar]').waitFor({ timeout: 5000 }).catch(() => {});
       await auditState('marker-bar', { shown: (await page.getByTestId('marker-bar').count()) === 1 });
       // a linked format selected: format badge, safe-area guide, "edited for this format only" notes
-      const variantId = await page.getByTestId('format-switch').evaluate((el) => Array.from((el as HTMLSelectElement).options).map((o) => o.value).find((v) => v && v !== 'master') ?? '');
-      if (variantId) { await page.getByTestId('format-switch').selectOption(variantId); await page.getByTestId('format-badge').waitFor({ timeout: 5000 }).catch(() => {}); }
+      // the format chooser is the stage header's FormatPrism radiogroup (UX_REDESIGN §8): one chip per linked format, '' the master
+      const variantId = (await formatOptions(page))[0] ?? '';
+      if (variantId) { await chooseFormat(page, variantId); await page.getByTestId('format-badge').waitFor({ timeout: 5000 }).catch(() => {}); }
       await auditState('format-view', { formatSelected: !!variantId, scopeNotes: await page.locator('[data-testid=transform-scope][data-scope=format], [data-testid=caption-scope]').count() });
-      if (variantId) await page.getByTestId('format-switch').selectOption({ index: 0 });
+      if (variantId) await chooseFormat(page, '');
       // project manager dialog
       const pd = await dialogBehaviour('projects-dialog', async () => { await page.getByTestId('projects-open').click(); }, '[data-testid=projects-open]');
       await auditState('projects-dialog', { startsInside: pd.startsInside, tabStepsThatLeftTheDialog: pd.tabStepsThatLeftTheDialog }, true);
@@ -223,16 +275,22 @@ async function main() {
       await auditState('error-bar', { shown: errShown, text: errShown ? ((await page.locator('.error[role=alert]').textContent()) ?? '').slice(0, 120) : '' });
       if (errShown) await page.locator('.error[role=alert] button').click();
       Object.assign(states.at(-1), { closed: (await page.locator('.error[role=alert]').count()) === 0 });
-      // an export in progress: the export button reads "exporting", a cancel button is offered; the export is then cancelled
-      await page.getByTestId('export').click();
+      // the export sheet (owner decision 2026-11-17: Export always opens it): a modal dialog, audited on its settings step with
+      // the dialog checks, then an export in progress: the sheet shows a progressbar and a cancel button, the top bar's ring
+      // chip says it runs (Export itself starts nothing, so it is not disabled any more); the export is then cancelled
+      const xs = await dialogBehaviour('export-sheet', async () => { await page.getByTestId('export').click(); }, '[data-testid=export]');
+      await auditState('export-sheet', { startsInside: xs.startsInside, tabStepsThatLeftTheDialog: xs.tabStepsThatLeftTheDialog, shown: (await page.getByTestId('export-start').count()) === 1 }, true);
+      await page.getByTestId('export-start').click();
       await page.getByTestId('export-cancel').waitFor({ timeout: 10000 }).catch(() => {});
-      await auditState('export-busy', { shown: (await page.getByTestId('export-cancel').count()) === 1 && await page.getByTestId('export').isDisabled() });
+      await auditState('export-busy', { shown: (await page.getByTestId('export-cancel').count()) === 1 && (await page.locator('[data-testid=export-progress] [role=progressbar]').count()) >= 1 && (await page.locator('[data-testid=export-ring][data-status=running]').count()) === 1 }, true);
       if (await page.getByTestId('export-cancel').count()) await page.getByTestId('export-cancel').click();
       await page.getByTestId('export-cancel').waitFor({ state: 'detached', timeout: 30000 }).catch(() => {});
-      Object.assign(states.at(-1), { closed: (await page.getByTestId('export-cancel').count()) === 0 });
+      Object.assign(states.at(-1), { closed: (await page.getByTestId('export-cancel').count()) === 0, canceledShown: (await page.getByTestId('export-canceled').count()) === 1 });
+      Object.assign(states.at(-2), await xs.close());
       if (await page.locator('.error[role=alert] button').count()) await page.locator('.error[role=alert] button').click(); // a cancelled export is not reported as an error; close one if it is
       // source viewer dialog
-      const sv = await dialogBehaviour('source-viewer', async () => { await page.getByTestId(`view-${up.assetId}`).click(); }, `[data-testid="view-${up.assetId}"]`);
+      // the media card's "view" is an item of its ⋯ menu (UX_REDESIGN §8); the menu closes as the viewer opens, so the focus goes back to the ⋯ button
+      const sv = await dialogBehaviour('source-viewer', async () => { await openCardMenu(page, up.assetId); await page.getByTestId(`view-${up.assetId}`).click(); }, `[data-testid="view-${up.assetId}"], [data-testid="more-${up.assetId}"]`);
       await auditState('source-viewer', { startsInside: sv.startsInside, tabStepsThatLeftTheDialog: sv.tabStepsThatLeftTheDialog }, true);
       Object.assign(states.at(-1), await sv.close());
       // full history dialog
@@ -243,6 +301,27 @@ async function main() {
       const cp = await dialogBehaviour('palette-dialog', async () => { await page.getByTestId('projects-open').focus(); await page.keyboard.press('Control+k'); }, '[data-testid=projects-open]');
       await auditState('command-palette', { startsInside: cp.startsInside, tabStepsThatLeftTheDialog: cp.tabStepsThatLeftTheDialog }, true);
       Object.assign(states.at(-1), await cp.close());
+      // the redesign's menus (UX_REDESIGN §4.2, §4.4): the agent avatar's menu and a media card's ⋯ menu. Focus starts on the
+      // first item, Escape closes the menu and gives the focus back to its button. Audited before the focus walk (Tab closes a menu).
+      const menuBehaviour = async (name: string, button: string) => {
+        await page.locator(button).click();
+        await page.locator('[role=menu]').first().waitFor({ timeout: 5000 }).catch(() => {});
+        await page.waitForTimeout(150);
+        const startsInside = await page.evaluate(() => !!document.activeElement?.closest('[role=menu]'));
+        const items = await page.locator('[role=menu] [role^=menuitem]').count();
+        await auditState(name, { startsInside, shown: items > 0 }, true);
+        if (await page.locator('[role=menu]').count()) { await page.locator(button).focus().catch(() => {}); await page.locator(button).click(); }
+        await page.locator(button).click(); await page.locator('[role=menu]').first().waitFor({ timeout: 5000 }).catch(() => {});
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(150);
+        Object.assign(states.at(-1), { closed: (await page.locator('[role=menu]').count()) === 0, focusReturned: await page.evaluate((sel) => !!document.activeElement?.matches(sel), button) });
+      };
+      await menuBehaviour('agent-menu', '[data-testid=agent-menu]');
+      await menuBehaviour('media-card-menu', `[data-testid="more-${up.assetId}"]`);
+      // the settings dialog (the rail's settings button)
+      const sd = await dialogBehaviour('settings-dialog', async () => { await page.getByTestId('rail-settings').click(); }, '[data-testid=rail-settings]');
+      await auditState('settings-dialog', { startsInside: sd.startsInside, tabStepsThatLeftTheDialog: sd.tabStepsThatLeftTheDialog }, true);
+      Object.assign(states.at(-1), await sd.close());
       // the effect gallery (ADR-0011: its time and overlay tiles animate on hover, through a FlashGuard); opened from the look panel of the selected clip
       await page.locator(`.clip[data-clip-id="${clipId}"]`).click();
       await page.getByTestId('gallery-open').waitFor({ timeout: 8000 });
@@ -266,6 +345,7 @@ async function main() {
       // ---- AI-model wave (ADR-0017) ----
       // the AI tools panel, sound tab, with the classic vocal remover's run sheet open on the selected stereo clip
       await page.locator(`.clip[data-clip-id="${mixClip}"]`).click();
+      await page.getByTestId('rail-ai').click(); // the AI tools are the rail's AI category (UX_REDESIGN §4.11)
       const soundTab = page.locator('[data-testid=ai-tab][data-tab=sound]');
       if (await soundTab.count()) await soundTab.click();
       const vocals = page.locator('[data-testid=ai-tool][data-id="local.audio.vocals-classic"]');
@@ -283,7 +363,8 @@ async function main() {
       }
       await auditState('ai-result-compare', { shown: compareShown, progressbar: await vocals.locator('[role=progressbar]').count() }, true);
       if (compareShown) { await vocals.getByTestId('ai-undo').click().catch(() => {}); await page.waitForTimeout(500); }
-      // the translation review in the transcript panel (all Inspector panels are shown)
+      // the translation review in the transcript panel (all Inspector panels are shown; the rail back on media gives the inspector back its panels)
+      await page.getByTestId('rail-media').click();
       const review = page.getByTestId('translation-review');
       await review.waitFor({ timeout: 8000 }).catch(() => {});
       const reviewShown = (await review.count()) === 1;
@@ -306,7 +387,7 @@ async function main() {
       await page.getByTestId('tracking-panel').scrollIntoViewIfNeeded().catch(() => {});
       const trackingShown = { panel: await page.getByTestId('tracking-panel').count(), items: await page.getByTestId('mtrack-item').count(), follow: await page.getByTestId('follow-controls').count(), redact: await page.getByTestId('redact-controls').count(), warning: await page.getByTestId('redact-warning').count(), warningRole: await page.getByTestId('redact-warning').getAttribute('role').catch(() => null) };
       await auditState('tracking-video-clip', { shown: trackingShown.panel === 1 && trackingShown.items === 1 && trackingShown.follow === 1 && trackingShown.redact === 1 && trackingShown.warning === 1 && trackingShown.warningRole === 'status', ...trackingShown });
-      await page.locator(`.clip[data-clip-id="${titleId}"]`).click();
+      await clickClipEnd(page, titleId);
       await page.getByTestId('follow-detach').waitFor({ timeout: 8000 }).catch(() => {});
       await page.getByTestId('follow-controls').scrollIntoViewIfNeeded().catch(() => {});
       const followShown = { detach: await page.getByTestId('follow-detach').count(), scale: await page.getByTestId('follow-scale').count(), smooth: await page.getByTestId('follow-smooth').count(), state: await page.getByTestId('follow-state').count() };
@@ -330,7 +411,7 @@ async function main() {
       const looks = { gradient: { colors: ['#FFD166', '#3A5BFF', '#8A2BE2'], angle: 90 }, tracking: 0.1, stroke2: { color: '#111111', widthFrac: 0.06 }, glow: { color: '#FF2BD6', radiusFrac: 0.5, intensity: 0.8 }, extrude: { color: '#1D3557', depthFrac: 0.15, angle: 45, shade: 0.5 }, longShadow: { color: '#0000004D', lengthFrac: 1.5, angle: 45 } };
       const fxOn = await post(`/projects/${pid}/transactions`, { ops: [{ op: 'update_text', args: { clipId: textClipId, style: looks } }] });
       if (!fxOn.results) throw new Error(`turning the title looks on failed: ${JSON.stringify(fxOn).slice(0, 300)}`);
-      await page.locator(`.clip[data-clip-id="${textClipId}"]`).click();
+      await clickClipEnd(page, textClipId);
       await page.getByTestId('text-effects').waitFor({ timeout: 8000 }).catch(() => {});
       await page.waitForFunction(() => document.querySelectorAll('[data-testid=text-effects] input[type=checkbox]:checked').length >= 7, undefined, { timeout: 8000 }).catch(() => {});
       await page.getByTestId('text-effects').scrollIntoViewIfNeeded().catch(() => {});
@@ -365,8 +446,9 @@ async function main() {
       await page.locator('.track.video .clip').first().click();
       await page.getByTestId('apply-to-edit').check().catch(() => {});
       await auditState('apply-to-whole-edit', { shown: (await page.getByTestId('apply-to-edit').isChecked().catch(() => false)) === true });
-      // the Templates drawer: its first card sits at the inline start (the right edge in Hebrew)
-      await page.getByTestId('templates-toggle').click();
+      // the Templates drawer (the rail's Templates category): its first card sits at the inline start (the right edge in Hebrew)
+      await page.getByTestId('rail-templates').click();
+      if ((await page.getByTestId('templates-toggle').getAttribute('aria-expanded')) !== 'true') await page.getByTestId('templates-toggle').click();
       await page.locator('[data-testid=template-card]').first().waitFor({ timeout: 10000 }).catch(() => {});
       const cards = await page.locator('[data-testid=template-card]').count();
       const edge = await page.evaluate((rtl) => {
@@ -395,6 +477,52 @@ async function main() {
       if (await page.getByTestId('template-dialog').count()) await page.keyboard.press('Escape');
       await auditState('template-applied', { shown: (await page.getByTestId('template-applied').count()) === 1, template: tplPick?.id ?? null });
       if (await page.getByTestId('template-undo').count()) { await page.getByTestId('template-undo').click(); await page.getByTestId('template-applied').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {}); await page.waitForTimeout(500); }
+      // the life line and the pack mounts, in the life project (the picture under the title is restored for the second language)
+      await page.goto(`${s.ownerUrl}&project=${lifePid}`);
+      await page.getByTestId('timecode').waitFor();
+      if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+      /** Opens a rail category (a click on the category already open would close its drawer). */
+      const railOn = async (c: string) => { if (!/\bis-on\b/.test((await page.getByTestId(`rail-${c}`).getAttribute('class')) ?? '')) await page.getByTestId(`rail-${c}`).click(); await page.waitForTimeout(300); };
+      await railOn('media');
+      await page.getByTestId('life-view-date').click();
+      await page.getByTestId('life-year-2024').waitFor({ timeout: 10000 }).catch(() => {});
+      await auditState('life-library-dates', { shown: (await page.getByTestId('life-year-2024').count()) === 1 && (await page.getByTestId('life-year-2023').count()) === 1 && (await page.getByTestId('life-undated').count()) === 1 && (await page.getByTestId(`life-date-${lifeEvening}`).count()) === 1 });
+      await page.getByTestId('life-view-events').click();
+      await page.locator('[data-testid^="life-event-"][data-event-id]').first().waitFor({ timeout: 10000 }).catch(() => {});
+      const lifeEvents = { events: await page.locator('[data-testid^="life-event-"][data-event-id]').count(), sunsetRadios: await page.locator('[data-testid^="life-sunset-"] input[type=radio]').count() };
+      await auditState('life-library-events', { shown: lifeEvents.events >= 2 && lifeEvents.sunsetRadios === 2, ...lifeEvents });
+      await page.getByTestId('life-view-all').click();
+      // the title with a live field: its field menu (a menu), then the people sheet opened from it (a modal dialog)
+      await page.locator(`.clip[data-clip-id="${lifeTitle}"]`).click();
+      await page.getByTestId('field-add').waitFor({ timeout: 8000 }).catch(() => {});
+      await menuBehaviour('field-menu', '[data-testid=field-add]');
+      const ps = await dialogBehaviour('life-people', async () => { await page.getByTestId('field-add').click(); await page.getByTestId('field-item-add-person').click(); }, '[data-testid=field-add]');
+      await auditState('people-sheet', { startsInside: ps.startsInside, tabStepsThatLeftTheDialog: ps.tabStepsThatLeftTheDialog, shown: (await page.locator('[data-testid^="life-person-"][data-person-id]').count()) >= 1 && (await page.getByTestId('life-people-privacy').count()) === 1 }, true);
+      Object.assign(states.at(-1), await ps.close());
+      // the live line with an anchored error and its fix: the picture under the title is replaced by the one without a date
+      const lifeUnder = (await lifeTx([{ op: 'delete_clip', args: { clipId: lifePicture } }, { op: 'add_clip', args: { assetId: lifeUndated, start: f(0), duration: f(60) } }])).results[1].output.clipId as string;
+      await page.locator('[data-testid=field-live] .pf-anchored').first().waitFor({ timeout: 10000 }).catch(() => {});
+      await auditState('field-live-error', { shown: (await page.locator('[data-testid=field-live] .pf-anchored').count()) >= 1 && (await page.locator('[data-testid=field-live] .pf-anchored button').count()) >= 1 });
+      lifePicture = (await lifeTx([{ op: 'delete_clip', args: { clipId: lifeUnder } }, { op: 'add_clip', args: { assetId: lifeEvening, start: f(0), duration: f(60) } }])).results[1].output.clipId as string;
+      // the content packs: the Hanukkah pack page (from the shelf of the Templates drawer), the built-in music tab, the text drawer's fonts
+      await railOn('templates');
+      await page.locator('[data-pack-id="pack.hanukkah"] [data-testid=pack-card]').first().click({ timeout: 10000 }).catch(() => {});
+      await page.getByTestId('pack-page').waitFor({ timeout: 10000 }).catch(() => {});
+      await auditState('pack-page', { shown: (await page.getByTestId('pack-page').getAttribute('data-pack-id').catch(() => null)) === 'pack.hanukkah' && (await page.locator('[data-testid^="pack-tab-"]').count()) >= 2 });
+      if (await page.getByTestId('pack-back').count()) await page.getByTestId('pack-back').click();
+      await railOn('audio');
+      await page.getByTestId('music-tab').click({ timeout: 8000 }).catch(() => {});
+      await page.locator('[data-testid=music-row]').first().waitFor({ timeout: 10000 }).catch(() => {});
+      await auditState('music-browser', { shown: (await page.locator('[data-testid=music-row]').count()) >= 1 });
+      await railOn('text');
+      await page.locator('[data-testid=font-option]').first().waitFor({ timeout: 8000 }).catch(() => {});
+      await auditState('text-drawer-fonts', { shown: (await page.locator('[data-testid=font-option]').count()) >= 1 });
+      await railOn('media');
+      // the start hub of an empty project
+      await page.goto(`${s.ownerUrl}&project=${emptyPid}`);
+      await page.getByTestId('welcome').waitFor({ timeout: 10000 }).catch(() => {});
+      if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+      await auditState('start-hub', { shown: (await page.getByTestId('welcome').count()) === 1 && (await page.getByTestId('welcome-import').count()) === 1 });
       for (const st of states) console.log(`[${lang}] state ${st.state}: controls=${st.controls} unnamed=${st.unnamed.length} lowContrast=${st.lowContrast.length} tabIssues=${st.tabIssues.length} noFocusRing=${st.noFocusRing.length}${st.startsInside !== undefined ? ` startsInside=${st.startsInside} leftDialog=${st.tabStepsThatLeftTheDialog} openUntilEscape=${st.openUntilEscape} closed=${st.closed} focusReturned=${st.focusReturned} (focus after close: ${st.focusAfterClose})` : ''}${st.shown !== undefined ? ` shown=${st.shown}` : ''}${st.formatSelected !== undefined ? ` formatSelected=${st.formatSelected} scopeNotes=${st.scopeNotes}` : ''}`);
       report.runs.push({ ...found, uiLanguage: lang, focus, plantedDefectsDetected: sensitivity, states });
       console.log(`[${lang}] lang=${found.lang} dir=${found.dir} controls=${found.controls} unnamed=${found.unnamed.length} lowContrast=${found.lowContrast.length} tabIssues=${found.tabIssues.length} focusReached=${focus.reached} noFocusRing=${focus.missing.length}`);

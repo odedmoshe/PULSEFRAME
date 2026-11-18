@@ -40,6 +40,27 @@ function everyday(seed: number, n = 4096): PictureSample {
   for (let i = 0; i < n; i++) { const g = 0.05 + 0.9 * ((i + r()) / n); pts.push([0, 1, 2].map(() => Math.min(1, Math.max(0, g * (1 + (r() - 0.5) * 0.4))))); }
   return sampleOf(pts);
 }
+/**
+ * Colour bars as the match samples a still of them (the picture the proof first used): six flat saturated colours side by side
+ * with soft edges, 85 × 48 points row by row, stored in 8 bits; each further frame has its edges a little further along. Every
+ * channel is 0 or 1 nearly everywhere, so most of what a grade does to it is clipped away: several sets of values give the same
+ * statistics, and tint (green is absent from the three bars that make up most of the mid-tones) is hardly seen at all.
+ */
+function colourBars(frames: number): PictureSample {
+  const cols = [[1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1]], w = 85, h = 48, soft = 0.3;
+  return mergeSamples(Array.from({ length: frames }, (_, frame) => {
+    const rgb = new Float64Array(w * h * 3);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const u = Math.min(5.999, ((x + 0.5) / w) * 6 + frame * 0.02), i = Math.floor(u), f = u - i;
+      let t = i < 5 && f > 1 - soft ? (f - (1 - soft)) / soft : 0;
+      t = t * t * (3 - 2 * t);
+      for (let c = 0; c < 3; c++) rgb[(y * w + x) * 3 + c] = Math.round((cols[i]![c]! * (1 - t) + cols[Math.min(5, i + 1)]![c]! * t) * 255) / 255;
+    }
+    return { rgb, count: w * h };
+  }));
+}
+/** A sample as a still stores it: every value rounded to 8 bits. */
+const stored8 = (s: PictureSample): PictureSample => ({ rgb: s.rgb.map((v) => Math.round(v * 255) / 255), count: s.count });
 const castOf = (s: PictureSample, k: readonly [number, number, number]): PictureSample => {
   const rgb = new Float64Array(s.count * 3);
   for (let i = 0; i < s.count * 3; i++) rgb[i] = Math.min(1, s.rgb[i]! * k[i % 3]!);
@@ -153,6 +174,49 @@ describe('fitGrade', { timeout: 60_000 }, () => {
     for (const seed of [1, 2, 3]) {
       const s = everyday(seed), fit = fitGrade(s, pictureStats(s), { hold: hold0, amount: 1 });
       for (const k of KEYS) expect(Math.abs(fit.params[k] - GRADE_DEFAULTS[k]), k).toBeLessThan(0.01);
+      expect(fit.limitedBy).toEqual([]);
+    }
+  });
+  // The proof's first run: a match of colour bars to a graded copy of themselves came back with tint −0.996 (the grade had −0.2),
+  // and parts of the same stills ended with temperature and tint at −1 and a difference of 5.7 where 0.05 was in reach. Two causes:
+  // the few points of the coarse stage were an even stride through the picture, which took uneven shares of the bars, and the
+  // pull toward no change was weaker than the 8-bit rounding of a still, so rounding chose the values the picture does not show.
+  it('colour bars, a picture that hides most of a grade: the fit reaches the statistics and leaves tint, which it cannot see, near no change', () => {
+    const known: GradeParams = { exposure: 0.3, temperature: 0.35, tint: -0.2, contrast: 1.15, saturation: 0.85, shadows: 0.2, highlights: 0.1, fade: 0.05 };
+    const found: Record<string, unknown> = {};
+    for (const frames of [1, 2, 3, 4]) {
+      const target = colourBars(frames), reference = pictureStats(stored8(gradeSample(target, known)));
+      // the known values themselves: what the 8-bit rounding of the reference alone leaves
+      const reachable = statsDistance(pictureStats(gradeSample(target, known)), reference);
+      const fit = fitGrade(target, reference, { hold: { shadows: 0.2, highlights: 0.1, fade: 0.05 }, amount: 1 });
+      found[`${frames} frame(s), ${target.count} points`] = { ...fit.params, residual: Number(fit.residual.toFixed(3)), reachable: Number(reachable.toFixed(3)) };
+      expect(reachable, `${frames} frames`).toBeLessThan(0.1);
+      expect(fit.residual, `${frames} frames: residual`).toBeLessThanOrEqual(0.1);
+      expect(Math.abs(fit.params.tint), `${frames} frames: tint ${fit.params.tint}`).toBeLessThanOrEqual(0.2);
+      expect(fit.limitedBy, `${frames} frames`).toEqual([]);
+      expect(inRange(fit.params)).toBe(true);
+    }
+    console.log('fitGrade on colour bars:', found);
+  });
+  // The distance a match reports is the mean absolute error of the five L* percentiles plus the mid-tone colour difference; the
+  // fit's stages before the last minimise a sum of squares instead, which spreads one percentile it cannot meet over all five. A
+  // picture whose middle is lighter than the reference's while its ends are the same: no grade value moves only the median, so the
+  // best by the reported distance meets the other four and leaves the median off. The sum-of-squares fit alone ended further from
+  // the reference than no change at all (bump 0.06: 1.56 before, 2.03 after, verdict 'noticeable').
+  it('a match finishes on the distance it reports: a picture with a lighter middle ends nearer than no change', () => {
+    const ramp = (seed: number, bump: number, n = 4096): PictureSample => {
+      const r = rng(seed), pts: number[][] = [];
+      for (let i = 0; i < n; i++) {
+        const u = (i + r()) / n, g = 0.08 + 0.84 * u + (u > 0.3 && u < 0.7 ? bump * Math.sin(((u - 0.3) / 0.4) * Math.PI) : 0);
+        pts.push([0, 1, 2].map(() => Math.min(1, Math.max(0, g * (1 + (r() - 0.5) * 0.2)))));
+      }
+      return sampleOf(pts);
+    };
+    for (const seed of [1, 2]) {
+      const reference = pictureStats(ramp(100 + seed, 0)), target = ramp(seed, 0.06);
+      const before = statsDistance(pictureStats(target), reference), fit = fitGrade(target, reference, { hold: hold0, amount: 1 });
+      expect(fit.residual, `seed ${seed}: before ${before.toFixed(3)}`).toBeLessThanOrEqual(0.9 * before);
+      expect(fit.verdict).toBe('close');
       expect(fit.limitedBy).toEqual([]);
     }
   });
