@@ -227,6 +227,8 @@ export class Player {
     this.request(this.frame);
     return true;
   }
+  /** Playing, or asked to play and waiting for the audio device (a pause-and-resume inside setDoc passes through neither). */
+  get active(): boolean { return this.playing || this.starting; }
   /** Draw `frame` of the current document now (coalesced like request()); no transport, no sound. */
   follow(frame: number): void {
     if (!this.doc) return;

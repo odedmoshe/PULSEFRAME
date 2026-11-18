@@ -12,6 +12,9 @@ import { cutBefore } from './inspector.model.ts';
 import { cutToBeat, rollCut } from './cutActions.ts';
 import { arrangeByEvents, canArrange, freezeSelectedTitle, liveTitleId, openPeopleSheet, readCaptureDates } from './lifeline/lifeCommands.ts';
 import { sourceFromSelection } from './familyFilm.logic.ts';
+import { MULTICAM_ANGLE_COMMANDS, MULTICAM_CUT_COMMANDS, MULTICAM_KEYS } from './multicam.keys.ts';
+import { angleForDigit } from './multicamSession.ts';
+import { MULTICAM_STRINGS } from './multicam.strings.ts';
 
 export interface Command {
   id: string;
@@ -289,6 +292,26 @@ const selectAdjacent = (dir: 1 | -1) => (e: Editor) => {
   e.select(all[(i + dir + all.length) % all.length]!);
 };
 
+
+// ---------- multicam (ADR-0020): digits switch angles on the program the video target track holds ----------
+/** The angle a multicam digit names in the group of the program, or null (no program on the video target track, or no such angle). */
+export function multicamAngleFor(e: Editor, digit: number): { groupId: string; angleId: string } | null {
+  const prog = e.multicamProgram(), d = e.doc;
+  const g = prog && d ? d.multicam?.[prog.groupId] : undefined;
+  const a = g ? angleForDigit(g, digit) : null;
+  return prog && a ? { groupId: prog.groupId, angleId: a.id } : null;
+}
+const mcText = (f: (S: (typeof MULTICAM_STRINGS)['he']) => string) => ({ he: f(MULTICAM_STRINGS.he), en: f(MULTICAM_STRINGS.en) });
+/** The multicam commands, with exactly the ids and keys of multicam.keys.ts. */
+export const MULTICAM_COMMANDS: Command[] = [
+  ...MULTICAM_ANGLE_COMMANDS.map((id, i): Command => ({ id, label: 'multicam.title', text: mcText((S) => S.angleCmd(i + 1)), group: 'edit', keys: [...(MULTICAM_KEYS[id] ?? [])], enabled: (e) => !!multicamAngleFor(e, i + 1), run: (e) => { const a = multicamAngleFor(e, i + 1); if (a) return e.switchAngle(a.angleId); } })),
+  { id: 'multicam.wide', label: 'multicam.wide', text: mcText((S) => S.wideCmd), group: 'edit', keys: [...(MULTICAM_KEYS['multicam.wide'] ?? [])], enabled: (e) => !!multicamAngleFor(e, 0), run: (e) => { const a = multicamAngleFor(e, 0); if (a) return e.switchAngle(a.angleId); } },
+  ...MULTICAM_CUT_COMMANDS.map((id, i): Command => ({ id, label: 'multicam.title', text: mcText((S) => S.cutAt(i + 1)), group: 'edit', keys: [], enabled: (e) => !e.recordingSwitches && !!multicamAngleFor(e, i + 1), run: (e) => { const a = multicamAngleFor(e, i + 1); if (a) return e.switchAngle(a.angleId, true); } })),
+  { id: 'multicam.cutWide', label: 'multicam.wide', text: mcText((S) => S.cutAt(0)), group: 'edit', keys: [], enabled: (e) => !e.recordingSwitches && !!multicamAngleFor(e, 0), run: (e) => { const a = multicamAngleFor(e, 0); if (a) return e.switchAngle(a.angleId, true); } },
+  { id: 'multicam.record', label: 'multicam.record', group: 'edit', keys: [], enabled: (e) => e.recordingSwitches || !!e.multicamProgram(), run: (e) => (e.recordingSwitches ? e.stopRecording() : e.startRecording()) },
+  { id: 'multicam.discard', label: 'multicam.recordStop', text: mcText((S) => S.discardCmd), group: 'edit', keys: [...(MULTICAM_KEYS['multicam.discard'] ?? [])], enabled: (e) => e.recordingSwitches, run: (e) => e.discardRecording() },
+];
+
 export const COMMANDS: Command[] = [
   { id: 'transport.toggle', label: 'cmd.playPause', group: 'transport', keys: ['Space'], run: (e) => (e.player?.playing ? e.player.pause() : e.player?.play()) },
   // Shuttle: L forwards (play, then 2×, 4×, 8×), J backwards (1×, 2×, 4×, 8×). Faster than 1× and backwards are silent. Space stops.
@@ -336,7 +359,7 @@ export const COMMANDS: Command[] = [
   { id: 'edit.selectAll', label: 'cmd.selectAll', group: 'edit', keys: ['Mod+KeyA'], enabled: (e) => !!e.doc, run: (e) => e.selectAll() },
   { id: 'edit.selectNext', label: 'cmd.selectNext', group: 'edit', keys: ['Alt+ArrowDown'], run: selectAdjacent(1) },
   { id: 'edit.selectPrev', label: 'cmd.selectPrev', group: 'edit', keys: ['Alt+ArrowUp'], run: selectAdjacent(-1) },
-  { id: 'edit.deselect', label: 'cmd.deselect', group: 'edit', keys: ['Escape'], enabled: (e) => (!!sel(e) || e.getState().cutPending.length > 0) && !e.getState().paletteOpen, run: (e) => { e.clearCut(); e.select(null); } },
+  { id: 'edit.deselect', label: 'cmd.deselect', group: 'edit', keys: ['Escape'], enabled: (e) => !e.recordingSwitches && (!!sel(e) || e.getState().cutPending.length > 0) && !e.getState().paletteOpen, run: (e) => { e.clearCut(); e.select(null); } },
   { id: 'edit.addText', label: 'text.add', group: 'edit', keys: ['KeyT'], run: (e) => e.addText() },
   // An adjustment layer over the whole edit (ADR-0016): empty until an effect is added to it in the Look panel (it is selected).
   { id: 'edit.addAdjustment', label: 'cmd.addAdjustment', group: 'edit', keys: [], enabled: (e) => !!e.doc && T.lt(T.ZERO, editEnd(e.doc)), run: (e) => e.addWholeEditAdjustment() },
@@ -371,6 +394,7 @@ export const COMMANDS: Command[] = [
   { id: 'view.language', label: 'lang.label', group: 'view', keys: [], run: (e) => e.setLang(e.getState().lang === 'he' ? 'en' : 'he') },
   { id: 'view.zoomIn', label: 'cmd.zoomIn', group: 'view', keys: ['Equal'], run: (e) => e.set({ pxPerSecond: Math.min(720, e.getState().pxPerSecond * 1.5) }) },
   { id: 'view.zoomOut', label: 'cmd.zoomOut', group: 'view', keys: ['Minus'], run: (e) => e.set({ pxPerSecond: Math.max(10, e.getState().pxPerSecond / 1.5) }) },
+  ...MULTICAM_COMMANDS,
 ];
 
 /** Canonical chord for an event: modifiers in fixed order + physical key code. */

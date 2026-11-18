@@ -78,7 +78,8 @@ describe('COMMANDS registry', () => {
     for (const c of COMMANDS) for (const k of c.keys) {
       const prev = seen.get(k);
       // the cut's keys (, . while a cut is chosen) come first in the registry, so the dispatcher tries them first
-      if (prev && !(prev.context === 'cut' && c.context !== 'cut')) dupes.push(`${k}: ${prev.id} / ${c.id}`);
+      // Escape is shared on purpose by edit.deselect and multicam.discard: never enabled at the same time (multicam.commands.test.ts)
+      if (prev && !(prev.context === 'cut' && c.context !== 'cut') && !(k === 'Escape' && c.id === 'multicam.discard')) dupes.push(`${k}: ${prev.id} / ${c.id}`);
       if (!prev) seen.set(k, c);
     }
     expect(dupes).toEqual([]);

@@ -1,4 +1,5 @@
 import type { Asset, BuildShortsBody, ExportMode, FindShortsBody, ReframePlanBody, ReframePlanView, SequenceSummary, ShortCandidatesView, ShortsApplyResult, ShortsPlanView, FamilyFilmApplyResult, FamilyFilmParams, FamilyFilmPlanView, FamilyFilmRegenerateResult, MomentsData, OpCall, ProjectDocument, RenderCacheStatus, SegmentPlanView, SelfCheckMode, StartMomentsBody } from '@pulseframe/core';
+import type { MulticamSyncReport, MulticamSyncRequest, MulticamView } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
 
@@ -184,6 +185,17 @@ export const api = {
   applyFilm: (projectId: string, params: FamilyFilmParams, expectedRevision: number) => call<FamilyFilmApplyResult>(`/projects/${projectId}/recipes/family-film/apply`, json({ params, expectedRevision })),
   /** Regenerate a film run (from this tab's filmRun or the document's run after a reload) with changed parameters. */
   regenerateFilm: (projectId: string, runId: string, params?: Partial<FamilyFilmParams>) => call<FamilyFilmRegenerateResult>(`/projects/${projectId}/recipe-runs/${runId}/regenerate`, json(params ? { params } : {})),
+  // ----- multicam (ADR-0020): the routes of core multicamApi.ts -----
+  /** The group's view: coverage, program tracks, out-of-sync segments, envelope states and capture-time priors. */
+  multicamView: (id: string, groupId: string) => call<MulticamView>(`/projects/${id}/multicam/${encodeURIComponent(groupId)}`),
+  /** Sync by sound. Without `background` the report (200); with it a durable job to poll (202). A hand-synced file measured again without `overwrite` answers 409 would_discard_edits. */
+  multicamSync: (id: string, groupId: string, body: MulticamSyncRequest = {}) => call<MulticamSyncReport | { jobId: string; status: string }>(`/projects/${id}/multicam/${encodeURIComponent(groupId)}/sync`, json(body)),
+  /** Build (on demand) the level envelope of a file; its bytes come from envelopeBytes. */
+  buildEnvelope: (id: string, assetId: string) => call<{ kind: string; status: string }>(`/projects/${id}/assets/${assetId}/derivatives/envelope`, { method: 'POST' }),
+  envelopeBytes: async (id: string, assetId: string): Promise<Uint8Array | null> => {
+    const r = await fetch(`/api/v1/projects/${id}/assets/${assetId}/derivatives/envelope`, { credentials: 'same-origin' });
+    return r.ok ? new Uint8Array(await r.arrayBuffer()) : null;
+  },
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }

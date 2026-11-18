@@ -7,7 +7,7 @@
  * when there are several; a 409 re-sends once at the fresh revision with the same group-time cuts (store.ts does the sending).
  */
 import * as T from '@pulseframe/time';
-import { applyTransaction, MAX_CUTS, multicamGroupOf, OpError, type OpCall, type ProjectDocument, type SwitchAnglesOutput } from '@pulseframe/core';
+import { applyTransaction, MAX_CUTS, multicamGroupOf, OpError, type MulticamAngle, type MulticamGroup, type OpCall, type ProjectDocument, type SwitchAnglesOutput } from '@pulseframe/core';
 
 export interface MulticamCut { groupTime: T.RationalTime; angleId: string }
 export interface MulticamSession { groupId: string; sequenceId: string; trackId: string; cuts: MulticamCut[]; baseRevision: number; reactionFrames: number }
@@ -98,4 +98,20 @@ export function reportOf(outputs: readonly (SwitchAnglesOutput | undefined | nul
     dropped.push(...o.dropped); warnings.push(...o.warnings);
   }
   return { saved, skipped: [...skipped].map(([reason, count]) => ({ reason, count })), dropped, warnings };
+}
+
+/** The picture angles of a group in the order the tiles and the digits use (1..9); the digits never name a sound angle. */
+export const pictureAngles = (group: MulticamGroup): MulticamAngle[] => group.angles.filter((a) => a.kind === 'picture');
+/** The angle a digit names: 1..9 = the n-th picture angle, 0 = the wide angle (null when there is none). */
+export function angleForDigit(group: MulticamGroup, digit: number): MulticamAngle | null {
+  if (digit === 0) return group.angles.find((a) => a.id === group.wideAngleId) ?? null;
+  return pictureAngles(group)[digit - 1] ?? null;
+}
+
+/**
+ * Where tile n (1-based, reading order) sits in a grid of `cols` columns: row from the top, and the VISUAL column from the left.
+ * In a right-to-left interface reading starts at the top right, so tile 1 is the right-most cell of the first row.
+ */
+export function tilePositions(count: number, cols: number, rtl: boolean): { tile: number; row: number; col: number }[] {
+  return Array.from({ length: count }, (_, i) => ({ tile: i + 1, row: Math.floor(i / cols), col: rtl ? cols - 1 - (i % cols) : i % cols }));
 }
