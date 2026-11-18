@@ -118,6 +118,10 @@ export async function runRenderCacheUiChecks(o: { browser: Browser; ownerUrl: st
     const lane = page.getByTestId(TID.lane);
     await lane.waitFor({ timeout: 25000 }).catch(() => {});
     if ((await lane.count()) === 0) return { lang: o.lang, mounted: false, ok: false, reason: `no [data-testid=${TID.lane}] in the editor (RenderCacheLane is not mounted in Timeline.tsx, or the plan never became ready)` };
+    // the lane exists (aria-busy, no stretches) while its first plan is asked for: it is read once the summary is there and the
+    // lane is no longer busy (run 5: the Hebrew context, the first to ask, was counted while busy; English, served the memoised
+    // keys, was ready at once)
+    await page.waitForFunction((ids) => { const l = document.querySelector(`[data-testid=${ids.lane}]`); return !!l && !l.getAttribute('aria-busy') && !!l.querySelector(`[data-testid=${ids.summary}]`); }, { lane: TID.lane, summary: TID.summary }, { timeout: 30000 }).catch(() => {});
     const sum = o.plan.segments;
     const stretch = page.locator(`[data-testid=${TID.stretch}][data-state=render]`);
     const staleRuns = o.plan.runs.filter((r) => r.state === 'render');
@@ -149,7 +153,7 @@ export async function runRenderCacheUiChecks(o: { browser: Browser; ownerUrl: st
     await page.getByTestId('export-sheet').screenshot({ path: path.join(o.shotDir, `incremental-export-sheet-full-${o.lang}.png`) });
     const found = await page.evaluate(inspectInPage, { lane: TID.lane, summary: TID.summary, reuseLine: TID.reuseLine });
     const a11yOk = found.unnamed.length === 0 && found.tabStopsInLane === 1 && found.statusRole === 'status' && found.statusLive === 'polite' && found.laneDir === 'ltr';
-    return { lang: o.lang, mounted: true, ok: laneOk && labelOk && popoverOk && lineOk && a11yOk, laneOk, typedOk, staleRuns, labelOk, label, popoverOk, staleItems: stale, lineOk, lineText: text, a11y: found, viewport: '1440x900', dir: await page.evaluate(() => document.documentElement.dir) };
+    return { lang: o.lang, mounted: true, ok: laneOk && labelOk && popoverOk && lineOk && a11yOk, laneOk, typedOk, staleRuns, laneDrawn: { renderStretches: await page.locator(`[data-testid=${TID.stretch}][data-state=render]`).count() }, labelOk, label, popoverOk, staleItems: stale, lineOk, lineText: text, a11y: found, viewport: '1440x900', dir: await page.evaluate(() => document.documentElement.dir) };
   } finally { await ctx.close(); }
 }
 
