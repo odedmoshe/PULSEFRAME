@@ -426,8 +426,11 @@ export function lookOfClip(doc: ProjectDocument, clip: MediaClip): { look: Angle
 const clampN = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 /** Layout of n live tiles (layouts.ts): 2 side by side, 3–4 a 2×2 grid, 5–9 a 3×3 grid; one tile fills the frame. */
 const viewerLayout = (n: number): string | null => (n <= 1 ? null : n === 2 ? 'layout.side-by-side' : n <= 4 ? 'layout.grid-2x2' : 'layout.grid-3x3');
-/** Never-saved grid document of the live angles over group span [g0, g0+duration): one video track per piece, cells from layoutPlacements, label text clips, no sound. Frame f shows group time g0 + frameTime(f). */
-export function multiviewDocument(doc: ProjectDocument, groupId: string, opts: { liveAngleIds: string[]; g0: T.RationalTime; duration: T.RationalTime; width: number; height: number }): ProjectDocument {
+/**
+ * Never-saved grid document of the live angles over group span [g0, g0+duration): one video track per piece, cells from layoutPlacements, label text clips, no sound. Frame f shows group time g0 + frameTime(f).
+ * `rtl`: the cells are mirrored left-right so tile 1 sits top right, as a right-to-left reader reads it (the tile buttons' order); each picture's own framing is not mirrored.
+ */
+export function multiviewDocument(doc: ProjectDocument, groupId: string, opts: { liveAngleIds: string[]; g0: T.RationalTime; duration: T.RationalTime; width: number; height: number; rtl?: boolean }): ProjectDocument {
   const group = multicamGroupOf(doc, groupId);
   if (!group) throw new RangeError(`multicam: group ${groupId} not found`);
   const rate = doc.settings.frameRate;
@@ -442,7 +445,8 @@ export function multiviewDocument(doc: ProjectDocument, groupId: string, opts: {
   const tracks: Track[] = [];
   const labels: TextClip[] = []; // one text track each (titles on one track may not overlap)
   live.forEach((angle, i) => {
-    const slot = slots[i]!, place = placements[i]!, look = angle.look?.transform;
+    const m = opts.rtl === true, s0 = slots[i]!, slot = m ? { ...s0, x: 1 - s0.x - s0.w } : s0, p0 = placements[i]!, look = angle.look?.transform;
+    const place = m ? { ...p0, transform: { ...p0.transform, x: -p0.transform.x } } : p0; // the cell mirrored about the frame's centre line
     const pic = size(angle), f = (fit === 'cover' ? Math.max : Math.min)(W / pic.width, H / pic.height), w0 = (pic.width * f) / W, h0 = (pic.height * f) / H;
     const s = place.transform.scale * (look?.scale ?? 1);
     const transform = { x: clampN(place.transform.x + (look?.x ?? 0) * slot.w, -4, 4), y: clampN(place.transform.y + (look?.y ?? 0) * slot.h, -4, 4), scale: clampN(s, 0.01, 20), rotation: look?.rotation ?? 0, opacity: 1 };
