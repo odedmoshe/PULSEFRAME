@@ -14,7 +14,7 @@ const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
 let seed = 0;
 const tx = (doc: ProjectDocument, ops: OpCall[]) => applyTransaction(doc, ops, { idSeed: `pe${seed++}_`, actor: 'test' });
-const restore = (doc: ProjectDocument, changes: EntityChange[], side: 'before' | 'after') => tx(doc, [{ op: 'restore_entities', args: { targets: changes.map((c) => ({ id: c.id, state: c[side] })) } }]);
+const restore = (doc: ProjectDocument, changes: EntityChange[], side: 'before' | 'after') => applyTransaction(doc, [{ op: 'restore_entities', args: { targets: changes.map((c) => ({ id: c.id, state: c[side] })) } }], { idSeed: `pu${seed++}_`, actor: 'test', allowInternal: true });
 const built = it.skipIf(!CURVES_BUILT); // needs keyframe W1 (range form, splitSegment)
 
 /** A 90-frame title with x keyed at the given frames (values and easings), y static at 0.2. */
@@ -75,6 +75,11 @@ describe('pathPoints and vertexFrames', () => {
     expect(vertexFrames(c, R)).toEqual([10, 40]);
     for (const p of pathPoints(c, R)) expect(Object.is(p.x, shown(c, p.frame).x)).toBe(true);
   });
+  built('with the new curves (overshoot, smooth, bounce, bezier) too', () => {
+    const { doc, clipId } = titled([[0, -0.3, 'overshoot'], [30, 0.25, 'smooth'], [50, 0.05, 'bounce'], [75, 0.3, 'linear']], [[10, -0.1, 'spring'], [50, 0.3, 'linear']]);
+    const c = clipOf(doc, clipId);
+    for (const p of pathPoints(c, R)) { const tr = shown(c, p.frame); expect(Object.is(p.x, tr.x) && Object.is(p.y, tr.y)).toBe(true); }
+  });
 });
 
 describe('moveVertexOps', () => {
@@ -126,6 +131,26 @@ describe('moveVertexOps', () => {
     const after = clipOf(applyExact(doc, ops), clipId);
     expect(after.keyframes!.x!.map((k) => k.time)).toEqual([f(0), f(30), f(60)]);
     expect(shown(after, 30).x).toBeCloseTo(0.05, 12);
+  });
+  built('every gesture on random paths makes at most 2 ops, and they apply', () => {
+    let rnd = 7;
+    const r = () => ((rnd = (rnd * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const easings = ['linear', 'ease-in', 'ease-out', 'ease-in-out', 'hold', 'smooth', 'gentle', 'overshoot', 'spring'];
+    for (let n = 0; n < 40; n++) {
+      const xs: [number, number, string][] = [[0, r() - 0.5, easings[n % easings.length]!], [20 + Math.floor(r() * 20), r() - 0.5, easings[(n + 3) % easings.length]!], [70, r() - 0.5, 'linear']];
+      const ys: [number, number, string][] = n % 2 ? [[10, r() - 0.5, easings[(n + 5) % easings.length]!], [60, r() - 0.5, 'linear']] : [];
+      const { doc, clipId } = titled(xs, ys);
+      const c = clipOf(doc, clipId);
+      const v = vertexFrames(c, R);
+      const fr = v[Math.floor(r() * v.length)]!;
+      const mv = moveVertexOps(c, R, fr, r() - 0.5, r() - 0.5);
+      expect(mv.ops.length).toBeLessThanOrEqual(2);
+      tx(doc, mv.ops);
+      const i = Math.floor(r() * (v.length - 1));
+      const bd = bendOps(c, R, v[i]!, v[i + 1]!, r() - 0.5, r() - 0.5);
+      expect(bd.ops.length).toBeLessThanOrEqual(2);
+      tx(doc, bd.ops);
+    }
   });
 });
 
