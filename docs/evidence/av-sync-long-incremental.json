@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-18T12:26:28.589Z",
+  "ranAt": "2026-11-18T13:11:55.688Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
@@ -21,22 +21,22 @@
     "thenTitleAtSeconds": 300
   },
   "times": {
-    "singlePassSeconds": 214.6,
+    "singlePassSeconds": 189.8,
     "singlePassSource": "measured here on the same project, one run",
-    "cleanSegmentedSeconds": 236.7,
-    "incrementalSeconds": 27.3,
-    "cleanOverSingle": 1.103,
-    "incrementalOverClean": 0.116
+    "cleanSegmentedSeconds": 203.5,
+    "incrementalSeconds": 26.1,
+    "cleanOverSingle": 1.072,
+    "incrementalOverClean": 0.128
   },
   "clean": {
-    "wallSeconds": 236.7,
+    "wallSeconds": 203.5,
     "frames": 16879,
     "bytes": 8121232,
     "route": "server-segmented-canvas2d",
     "renderStageMs": {
-      "draw": 21314,
-      "readback": 9756,
-      "upload": 187839
+      "draw": 18455,
+      "readback": 8747,
+      "upload": 161568
     },
     "report": {
       "segFrames": 60,
@@ -48,7 +48,7 @@
       "notStored": 0,
       "selfCheck": {
         "mode": "every-segment",
-        "seed": "eef63b24e903d1c65df4239de71f19cf6b4ee5619766ca7def169cca7e10898f",
+        "seed": "c3b9fc5bc631ae3fc3da861d34f631f007ef6b881d79f937d853762e4a1df192",
         "segmentsChecked": 0,
         "framesChecked": 0,
         "framesPerSegment": 3,
@@ -60,12 +60,12 @@
         "browser": "153.0.8010.12|launch=auto",
         "schemaVersion": 2
       },
-      "cacheBytesAfter": 17953943,
+      "cacheBytesAfter": 17953940,
       "ms": {
-        "keying": 584,
+        "keying": 420,
         "selfCheck": 0,
-        "render": 219369,
-        "join": 8386
+        "render": 189169,
+        "join": 7320
       }
     },
     "sync": {
@@ -78,14 +78,14 @@
     }
   },
   "incremental": {
-    "wallSeconds": 27.3,
+    "wallSeconds": 26.1,
     "frames": 16879,
     "bytes": 8136127,
     "route": "server-segmented-canvas2d",
     "renderStageMs": {
-      "draw": 6008,
-      "readback": 486,
-      "upload": 4769
+      "draw": 5504,
+      "readback": 450,
+      "upload": 4554
     },
     "report": {
       "segFrames": 60,
@@ -97,7 +97,7 @@
       "notStored": 0,
       "selfCheck": {
         "mode": "every-segment",
-        "seed": "b2a6239900c4fb4d8366c1de64c91a9ca0ad355dc449f6e37cfe5f8ca0199936",
+        "seed": "2fe738a5452f8be2b6d34423a8c41cf18f882ab22514efd25896f6c85c1c6051",
         "segmentsChecked": 281,
         "framesChecked": 843,
         "framesPerSegment": 3,
@@ -109,12 +109,12 @@
         "browser": "153.0.8010.12|launch=auto",
         "schemaVersion": 2
       },
-      "cacheBytesAfter": 18038024,
+      "cacheBytesAfter": 18038021,
       "ms": {
-        "keying": 560,
-        "selfCheck": 10887,
-        "render": 864,
-        "join": 7949
+        "keying": 458,
+        "selfCheck": 10068,
+        "render": 916,
+        "join": 7501
       }
     },
     "sync": {

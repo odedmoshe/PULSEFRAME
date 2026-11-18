@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-18T11:59:22.965Z",
+  "ranAt": "2026-11-18T12:47:38.169Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
@@ -59,7 +59,7 @@
       }
     }
   },
-  "wallMinutes": 30.7,
+  "wallMinutes": 27.9,
   "claims": {
     "frameEquality": "encoder deterministic (I3): decoded frame md5 lists are equal, and the per-segment RGBA hashes",
     "soundEquality": "decoded 48 kHz stereo PCM of the incremental file equals the clean segmented file sample by sample",
@@ -68,11 +68,11 @@
   "measurements": {
     "sizeRatio": 1.0281,
     "minPsnrDb": 38.35,
-    "singlePassSeconds": 29,
-    "cleanSegmentedSeconds": 32.4,
+    "singlePassSeconds": 27.6,
+    "cleanSegmentedSeconds": 33.2,
     "encoderDeterministic": true,
-    "soundOnlyExportSeconds": 5.5,
-    "incrementalOneTitleSeconds": 7.2,
+    "soundOnlyExportSeconds": 4.9,
+    "incrementalOneTitleSeconds": 6.5,
     "soundUnchangedByTitleEdit": true,
     "halfStale": {
       "project": "fixture B, 5 segments, R <= 8 so sample mode checks every segment once",
@@ -80,29 +80,29 @@
       "everySegmentDetected": true,
       "everySegmentNote": "every-segment checks the first, the last and one seeded frame of each stretch; the last frame is in the stale half, so detection is asserted",
       "sampleRuns": 20,
-      "sampleDetections": 12,
-      "sampleDetectionRate": 0.6,
+      "sampleDetections": 11,
+      "sampleDetectionRate": 0.55,
       "perRun": [
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
         false,
         true,
-        true,
-        true,
-        true,
-        false,
         false,
         false,
         false,
         true,
         true,
+        true,
         false,
+        true,
         false,
-        false
+        true,
+        true,
+        false,
+        true,
+        false,
+        true,
+        false,
+        true,
+        true
       ]
     },
     "photosensitivity": {
@@ -160,9 +160,9 @@
       "browser": "153.0.8010.12|launch=auto"
     },
     "keyingTenMinutes": {
-      "wallSeconds": 0.7,
-      "keyingMs": 688,
-      "maxEventLoopLagMs": 2.5,
+      "wallSeconds": 0.67,
+      "keyingMs": 657,
+      "maxEventLoopLagMs": 7.6,
       "refreshOnDemand": false
     },
     "ui": [
@@ -236,7 +236,7 @@
       }
     ],
     "avSync": {
-      "ranAt": "2026-11-18T12:26:28.589Z",
+      "ranAt": "2026-11-18T13:11:55.688Z",
       "machine": {
         "platform": "Linux 6.18.44-fc-v595 x64",
         "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
@@ -258,22 +258,22 @@
         "thenTitleAtSeconds": 300
       },
       "times": {
-        "singlePassSeconds": 214.6,
+        "singlePassSeconds": 189.8,
         "singlePassSource": "measured here on the same project, one run",
-        "cleanSegmentedSeconds": 236.7,
-        "incrementalSeconds": 27.3,
-        "cleanOverSingle": 1.103,
-        "incrementalOverClean": 0.116
+        "cleanSegmentedSeconds": 203.5,
+        "incrementalSeconds": 26.1,
+        "cleanOverSingle": 1.072,
+        "incrementalOverClean": 0.128
       },
       "clean": {
-        "wallSeconds": 236.7,
+        "wallSeconds": 203.5,
         "frames": 16879,
         "bytes": 8121232,
         "route": "server-segmented-canvas2d",
         "renderStageMs": {
-          "draw": 21314,
-          "readback": 9756,
-          "upload": 187839
+          "draw": 18455,
+          "readback": 8747,
+          "upload": 161568
         },
         "report": {
           "segFrames": 60,
@@ -285,7 +285,7 @@
           "notStored": 0,
           "selfCheck": {
             "mode": "every-segment",
-            "seed": "eef63b24e903d1c65df4239de71f19cf6b4ee5619766ca7def169cca7e10898f",
+            "seed": "c3b9fc5bc631ae3fc3da861d34f631f007ef6b881d79f937d853762e4a1df192",
             "segmentsChecked": 0,
             "framesChecked": 0,
             "framesPerSegment": 3,
@@ -297,12 +297,12 @@
             "browser": "153.0.8010.12|launch=auto",
             "schemaVersion": 2
           },
-          "cacheBytesAfter": 17953943,
+          "cacheBytesAfter": 17953940,
           "ms": {
-            "keying": 584,
+            "keying": 420,
             "selfCheck": 0,
-            "render": 219369,
-            "join": 8386
+            "render": 189169,
+            "join": 7320
           }
         },
         "sync": {
@@ -315,14 +315,14 @@
         }
       },
       "incremental": {
-        "wallSeconds": 27.3,
+        "wallSeconds": 26.1,
         "frames": 16879,
         "bytes": 8136127,
         "route": "server-segmented-canvas2d",
         "renderStageMs": {
-          "draw": 6008,
-          "readback": 486,
-          "upload": 4769
+          "draw": 5504,
+          "readback": 450,
+          "upload": 4554
         },
         "report": {
           "segFrames": 60,
@@ -334,7 +334,7 @@
           "notStored": 0,
           "selfCheck": {
             "mode": "every-segment",
-            "seed": "b2a6239900c4fb4d8366c1de64c91a9ca0ad355dc449f6e37cfe5f8ca0199936",
+            "seed": "2fe738a5452f8be2b6d34423a8c41cf18f882ab22514efd25896f6c85c1c6051",
             "segmentsChecked": 281,
             "framesChecked": 843,
             "framesPerSegment": 3,
@@ -346,12 +346,12 @@
             "browser": "153.0.8010.12|launch=auto",
             "schemaVersion": 2
           },
-          "cacheBytesAfter": 18038024,
+          "cacheBytesAfter": 18038021,
           "ms": {
-            "keying": 560,
-            "selfCheck": 10887,
-            "render": 864,
-            "join": 7949
+            "keying": 458,
+            "selfCheck": 10068,
+            "render": 916,
+            "join": 7501
           }
         },
         "sync": {
@@ -461,17 +461,17 @@
           "rendered": 0,
           "selfCheck": {
             "mode": "every-segment",
-            "seed": "69092cf66b2d0ea89d5592adc5b3ee6216ae48d9e2a2c7fcbf3094f406a8bd8c",
+            "seed": "04264253d0b3d4fb59a6033f10e6c86fde6445e33041bb0b5c07162d936ec0d7",
             "segmentsChecked": 30,
             "framesChecked": 90,
             "framesPerSegment": 3,
             "mismatches": 0
           },
           "ms": {
-            "keying": 137,
-            "selfCheck": 2065,
-            "render": 22,
-            "join": 1114
+            "keying": 79,
+            "selfCheck": 1982,
+            "render": 28,
+            "join": 839
           }
         },
         "picturesEqual": true,
@@ -501,7 +501,7 @@
           "lengthsEqual": true
         },
         "controlFails": true,
-        "seconds": 5.463
+        "seconds": 4.941
       }
     },
     {
@@ -533,8 +533,8 @@
           "rgbaChecked": 30,
           "videoBytesEqual": 30,
           "keys": 30,
-          "cleanSeconds": 43.156,
-          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-fix/.artifacts/incremental/i6b-clean.mp4",
+          "cleanSeconds": 30.386,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/incremental/i6b-clean.mp4",
           "ok": true
         }
       }
@@ -560,17 +560,17 @@
           "rendered": 2,
           "selfCheck": {
             "mode": "every-segment",
-            "seed": "9648147cfee797b21b12f3f59e6a027d48d367c221e58d193132f15adf2cde57",
+            "seed": "e8a813aeeb0946f26d48edc1bea43b6126a0a4eb10f318157f8e451909571b07",
             "segmentsChecked": 28,
             "framesChecked": 84,
             "framesPerSegment": 3,
             "mismatches": 0
           },
           "ms": {
-            "keying": 90,
-            "selfCheck": 1933,
-            "render": 1645,
-            "join": 1277
+            "keying": 120,
+            "selfCheck": 1733,
+            "render": 1628,
+            "join": 985
           }
         },
         "wellFormed": {
@@ -633,8 +633,8 @@
         "rgbaChecked": 30,
         "videoBytesEqual": 30,
         "keys": 30,
-        "cleanSeconds": 35.387,
-        "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-fix/.artifacts/incremental/i4-clean.mp4",
+        "cleanSeconds": 30.874,
+        "cleanFile": "/home/user/PULSEFRAME/.artifacts/incremental/i4-clean.mp4",
         "ok": true
       }
     },
@@ -657,7 +657,7 @@
           "rendered": 2,
           "selfCheck": {
             "mode": "every-segment",
-            "seed": "473af7fd3310a714246d52d25affd170b117be2d62ffcbc623b8597e60906c48",
+            "seed": "9d7d28fd2b8fdf4ee8bcf1eeacc0d2613e2e2fee475498a54330aedaff5a0d85",
             "segmentsChecked": 28,
             "framesChecked": 84,
             "framesPerSegment": 3,
@@ -696,8 +696,8 @@
           "rgbaChecked": 30,
           "videoBytesEqual": 30,
           "keys": 30,
-          "cleanSeconds": 37.872,
-          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-fix/.artifacts/incremental/i4b-clean.mp4",
+          "cleanSeconds": 30.567,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/incremental/i4b-clean.mp4",
           "ok": true
         }
       }
@@ -721,7 +721,7 @@
           "rendered": 2,
           "selfCheck": {
             "mode": "every-segment",
-            "seed": "509529fa2b9004a4816f19942d01a5b4b148e9e2f3ea54882c7ff8bf2a4d8a34",
+            "seed": "8171502dfc94c40dfd0ed8847560e1a986fbbac005ec7e97c7804c87dbceda48",
             "segmentsChecked": 28,
             "framesChecked": 84,
             "framesPerSegment": 3,
@@ -760,8 +760,8 @@
           "rgbaChecked": 30,
           "videoBytesEqual": 30,
           "keys": 30,
-          "cleanSeconds": 38.186,
-          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-fix/.artifacts/incremental/i4c-clean.mp4",
+          "cleanSeconds": 31.081,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/incremental/i4c-clean.mp4",
           "ok": true
         }
       }
@@ -789,7 +789,7 @@
           "rendered": 4,
           "selfCheck": {
             "mode": "every-segment",
-            "seed": "52f9fa4d666ae7d61b14b53865376536b2234a65436f3c07ab7bc91c07433706",
+            "seed": "ba881de52bbc2b29fa72b971584a13167d0dcfec3cdd7b65bc4080b3727171f4",
             "segmentsChecked": 26,
             "framesChecked": 78,
             "framesPerSegment": 3,
@@ -828,8 +828,8 @@
           "rgbaChecked": 30,
           "videoBytesEqual": 30,
           "keys": 30,
-          "cleanSeconds": 32.831,
-          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-fix/.artifacts/incremental/i4d-clean.mp4",
+          "cleanSeconds": 31.691,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/incremental/i4d-clean.mp4",
           "ok": true
         }
       }
@@ -871,8 +871,8 @@
           "rgbaChecked": 30,
           "videoBytesEqual": 30,
           "keys": 30,
-          "cleanSeconds": 34.286,
-          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-fix/.artifacts/incremental/i20-clean.mp4",
+          "cleanSeconds": 31.24,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/incremental/i20-clean.mp4",
           "ok": true
         }
       }
@@ -947,8 +947,8 @@
           "rgbaChecked": 30,
           "videoBytesEqual": 30,
           "keys": 30,
-          "cleanSeconds": 35.026,
-          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-fix/.artifacts/incremental/i13-clean.mp4",
+          "cleanSeconds": 32.288,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/incremental/i13-clean.mp4",
           "ok": true
         }
       }
@@ -958,7 +958,7 @@
       "name": "a flipped byte in one stored video: the integrity check drops it (corruptDropped 1), it is rendered again (rendered 1, reused 29) and the output equals a clean export",
       "pass": true,
       "numbers": {
-        "flippedKey": "50cff40f8d7f",
+        "flippedKey": "0413f8bc701f",
         "report": {
           "corruptDropped": 1,
           "reused": 29,
@@ -981,8 +981,8 @@
           "rgbaChecked": 30,
           "videoBytesEqual": 30,
           "keys": 30,
-          "cleanSeconds": 35.441,
-          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-fix/.artifacts/incremental/i9-clean.mp4",
+          "cleanSeconds": 32.178,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/incremental/i9-clean.mp4",
           "ok": true
         }
       }
@@ -1025,8 +1025,8 @@
           "rgbaChecked": 30,
           "videoBytesEqual": 30,
           "keys": 30,
-          "cleanSeconds": 35.422,
-          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-fix/.artifacts/incremental/i8-clean.mp4",
+          "cleanSeconds": 32.752,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/incremental/i8-clean.mp4",
           "ok": true
         }
       }
@@ -1041,29 +1041,29 @@
         "everySegmentDetected": true,
         "everySegmentNote": "every-segment checks the first, the last and one seeded frame of each stretch; the last frame is in the stale half, so detection is asserted",
         "sampleRuns": 20,
-        "sampleDetections": 12,
-        "sampleDetectionRate": 0.6,
+        "sampleDetections": 11,
+        "sampleDetectionRate": 0.55,
         "perRun": [
-          true,
-          true,
-          true,
-          true,
-          true,
-          true,
           false,
           true,
-          true,
-          true,
-          true,
-          false,
           false,
           false,
           false,
           true,
           true,
+          true,
           false,
+          true,
           false,
-          false
+          true,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          true
         ]
       }
     },
@@ -1103,21 +1103,21 @@
           "rgbaChecked": 30,
           "videoBytesEqual": 30,
           "keys": 30,
-          "cleanSeconds": 33.087,
-          "cleanFile": "/home/user/PULSEFRAME/.artifacts/wt/w5-fix/.artifacts/incremental/i7-clean.mp4",
+          "cleanSeconds": 31.893,
+          "cleanFile": "/home/user/PULSEFRAME/.artifacts/incremental/i7-clean.mp4",
           "ok": true
         }
       }
     },
     {
       "id": "I11",
-      "name": "a cap of 70 % of the full cache (5376087 bytes): the cache stays within the cap after each export and at its high-water mark; the oldest stored stretches are evicted first (every evicted stretch is older than every surviving one of the first range)",
+      "name": "a cap of 70 % of the full cache (5376083 bytes): the cache stays within the cap after each export and at its high-water mark; the oldest stored stretches are evicted first (every evicted stretch is older than every surviving one of the first range)",
       "pass": true,
       "numbers": {
-        "capBytes": 5376087,
-        "fullCacheBytes": 7680125,
-        "used": 5173937,
-        "highWater": 5264444,
+        "capBytes": 5376083,
+        "fullCacheBytes": 7680119,
+        "used": 5173935,
+        "highWater": 5264442,
         "range1Segments": 15,
         "evicted": 8,
         "survivedFromRange1": 7,
@@ -1130,13 +1130,13 @@
     },
     {
       "id": "I11c",
-      "name": "a cap smaller than one export (2304037 bytes): the export succeeds with notStored > 0 and the cache never passes the cap; the file equals the full export",
+      "name": "a cap smaller than one export (2304035 bytes): the export succeeds with notStored > 0 and the cache never passes the cap; the file equals the full export",
       "pass": true,
       "numbers": {
-        "capBytes": 2304037,
+        "capBytes": 2304035,
         "notStored": 16,
-        "used": 2286995,
-        "highWater": 2286995,
+        "used": 2286992,
+        "highWater": 2286992,
         "framesEqual": true,
         "minPsnr": null,
         "soundEqual": true
@@ -1147,9 +1147,9 @@
       "name": "a tight storage ceiling: the data directory never passes it at any 50 ms sample; the export succeeds, or stops with a typed 507 and nothing published; an impossible ceiling gives the typed 507 and nothing published",
       "pass": true,
       "numbers": {
-        "ceiling": 154387986,
-        "startBytes": 125382099,
-        "maxSampledBytes": 125151379,
+        "ceiling": 154375695,
+        "startBytes": 125369811,
+        "maxSampledBytes": 125139091,
         "databaseLogBytesAtThatSample": 115392,
         "tightOutcome": "failed",
         "tightCode": "storage_quota_exceeded",
@@ -1162,10 +1162,10 @@
       "name": "the cache is full and the data directory is within 100 kB of its ceiling: an upload of a file larger than that succeeds because the cache gives room",
       "pass": true,
       "numbers": {
-        "ceiling": 137471162,
+        "ceiling": 137458869,
         "fileBytes": 337097,
-        "cacheBytesBefore": 7680123,
-        "cacheBytesAfter": 6688279,
+        "cacheBytesBefore": 7680118,
+        "cacheBytesAfter": 6688277,
         "uploadError": ""
       }
     },
@@ -1238,9 +1238,9 @@
       "name": "keying a ten-minute project (18000 frames, 300 segments): seconds and the maximum event-loop lag are reported; the lag stays under 100 ms (from 2 s of keying the lane refreshes on demand only; recorded)",
       "pass": true,
       "numbers": {
-        "wallSeconds": 0.7,
-        "keyingMs": 688,
-        "maxEventLoopLagMs": 2.5,
+        "wallSeconds": 0.67,
+        "keyingMs": 657,
+        "maxEventLoopLagMs": 7.6,
         "refreshOnDemand": false,
         "segments": {
           "total": 300,
@@ -1382,17 +1382,17 @@
           "frameMs": 33.333
         },
         "times": {
-          "singlePassSeconds": 214.6,
+          "singlePassSeconds": 189.8,
           "singlePassSource": "measured here on the same project, one run",
-          "cleanSegmentedSeconds": 236.7,
-          "incrementalSeconds": 27.3,
-          "cleanOverSingle": 1.103,
-          "incrementalOverClean": 0.116
+          "cleanSegmentedSeconds": 203.5,
+          "incrementalSeconds": 26.1,
+          "cleanOverSingle": 1.072,
+          "incrementalOverClean": 0.128
         },
-        "cleanOverSingle": 1.103,
-        "incrementalOverClean": 0.115,
+        "cleanOverSingle": 1.072,
+        "incrementalOverClean": 0.128,
         "targetMet": true,
-        "selfCheckSeconds": 10887,
+        "selfCheckSeconds": 10068,
         "reusedRendered": {
           "reused": 281,
           "rendered": 1
