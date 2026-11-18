@@ -2,7 +2,7 @@ import { createElement, type ComponentType, type SVGProps } from 'react';
 import {
   Captions, ClipboardCheck, ClipboardPaste, Columns2, Copy, CopyPlus, Crosshair, Download, Eye, EyeOff, FolderOpen,
   AudioWaveform, Clock, LayoutList, Languages, Lock, LockOpen, Mic, Pause, Pencil, Play, Redo2, Repeat, Scissors, Search, Send,
-  SlidersHorizontal, StepBack, StepForward, Trash2, Undo2, Volume2, VolumeX, WandSparkles, AudioLines, X,
+  SlidersHorizontal, Smartphone, StepBack, StepForward, Trash2, Undo2, Volume2, VolumeX, WandSparkles, AudioLines, X,
   type LucideProps,
 } from 'lucide-react';
 import './icons.css';
@@ -61,13 +61,14 @@ export const IconTabDeliver = wrap(Send);
 export const IconTabRecipes = wrap(WandSparkles);
 export const IconTabReview = wrap(ClipboardCheck);
 export const IconTabAll = wrap(LayoutList);
+export const IconTabShorts = wrap(Smartphone);
 
 /** Clip action icons by command id, shared by the edit bar and the clip menu. */
 export const BAR_ICON_COMPONENTS: Record<string, ComponentType<LucideProps>> = {
   'edit.split': IconSplit, 'edit.delete': IconDelete, 'edit.duplicate': IconDuplicate, 'edit.copy': IconCopy, 'edit.paste': IconPaste, 'edit.cut': IconCut,
 };
 export const TAB_ICON_COMPONENTS: Record<string, ComponentType<LucideProps>> = {
-  clip: IconTabClip, speech: IconTabSpeech, captions: IconTabCaptions, sound: IconTabSound, deliver: IconTabDeliver, recipes: IconTabRecipes, review: IconTabReview, all: IconTabAll,
+  clip: IconTabClip, speech: IconTabSpeech, captions: IconTabCaptions, sound: IconTabSound, deliver: IconTabDeliver, recipes: IconTabRecipes, review: IconTabReview, all: IconTabAll, shorts: IconTabShorts,
 };
 
 /* ---- PULSEFRAME glyphs (UX_REDESIGN §3.4): the same 24 grid, 1.75 stroke, round caps and joins as the lucide set, drawn here. ----

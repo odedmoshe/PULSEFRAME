@@ -6,7 +6,7 @@
  */
 import { createContext, useContext, useSyncExternalStore } from 'react';
 import * as T from '@pulseframe/time';
-import { clipEnd, findClip, projectVariant, sequenceDuration, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun, type TemplateInput, type ExportMode, type SegmentPlanView } from '@pulseframe/core';
+import { clipEnd, findClip, projectOutput, projectSequence, sequenceDuration, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun, type TemplateInput, type ExportMode, type SegmentPlanView } from '@pulseframe/core';
 import { createT, dictionaries, dirOf, translateRefusal, type Key, type Lang } from '@pulseframe/i18n';
 import { initGpu, type GpuStatus, type ImageLayer, type RenderGraph, type TextLayer, type VideoLayer } from '@pulseframe/engine';
 import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
@@ -17,6 +17,7 @@ import { timelineDerivatives } from '../clipVisuals.cache.ts';
 import { failureOf, rememberJob, type ProviderFailure } from './aiTools.recheck.ts';
 import { aiApi, type ApplyMode, type RunSource } from './api.ts';
 import { addAssetArgs, dropAssetArgs } from './placement.ts';
+import { injectSequenceId } from './shorts.view.ts';
 import { followFactor, followOffsetAt, layerOf, ownFromResolved } from './tracking.math.ts';
 import { wholeEditOps, type WholeEditPick } from './commands.ts';
 import { cutBefore, type ObjectTab } from './inspector.model.ts';
@@ -30,7 +31,12 @@ export type SaveState = 'save.saved' | 'save.saving' | 'save.offline' | 'save.co
 export type ProviderInfo = Awaited<ReturnType<typeof api.capabilities>>;
 export interface EditorState {
   lang: Lang;
+  /** The document the editor works on: the ACTIVE sequence's projection of rawDoc (the same object for a single-sequence project). */
   doc: ProjectDocument | null;
+  /** The stored document as the server holds it (every sequence). Read-only: edits go through ops. */
+  rawDoc: ProjectDocument | null;
+  /** The sequence shown and edited (session state, never stored); the main one by default, reset to it when its sequence is gone. */
+  activeSequenceId: string;
   revision: number;
   selection: string[];
   save: SaveState;
@@ -155,7 +161,7 @@ export type GalleryTab = 'effects' | 'looks' | 'transitions' | 'text' | 'motion'
  */
 export interface Notice { kind: 'undo' | 'info'; title: string; body?: string; undoes?: string }
 /** What an export is started with (POST /exports): the defaults are left out, as exportSheet.logic.ts exportOptions builds it. */
-export interface ExportRequest { variantId?: string; quality?: string; captions?: string; format?: string; scale?: number; /** «ייצוא מהיר» (ADR-0024): 'incremental' when the viewer's switch is on and the format is MP4. */ mode?: ExportMode }
+export interface ExportRequest { variantId?: string; /** a sequence of the project (a short) instead of the main edit (ADR-0018) */ sequenceId?: string; /** frame index of a png still */ frame?: number; quality?: string; captions?: string; format?: string; scale?: number; /** «ייצוא מהיר» (ADR-0024): 'incremental' when the viewer's switch is on and the format is MP4. */ mode?: ExportMode }
 /**
  * The fast export's segment plan as the sheet line and the timeline lane read it (ADR-0024). `off`: the lane is hidden (the
  * cache is off, or this project never used the fast export); `updating`: a plan is being made (aria-busy); `error`: the last
@@ -195,7 +201,7 @@ const readTargets = (projectId: string): { video: string | null; audio: string |
 };
 /** Drag-and-drop type of a library file dragged onto the timeline (the payload is the asset id). */
 export const ASSET_DRAG_TYPE = 'application/x-pulseframe-asset';
-export const WORKSPACES = ['pro', 'quick', 'motion', 'color', 'captions', 'sound', 'deliver', 'custom'] as const;
+export const WORKSPACES = ['pro', 'quick', 'motion', 'color', 'captions', 'sound', 'deliver', 'shorts', 'custom'] as const;
 export type Workspace = (typeof WORKSPACES)[number];
 const WS_KEY = 'pf.workspace.v1';
 const readWorkspace = (): Workspace => { try { const v = localStorage.getItem(WS_KEY); return (WORKSPACES as readonly string[]).includes(v ?? '') ? (v as Workspace) : 'pro'; } catch { return 'pro'; } };
@@ -205,7 +211,7 @@ export interface Ghost { sessionId: string; actor: string; kind: 'user' | 'agent
 
 export class Editor {
   private state: EditorState = {
-    lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null, capJobs: {},
+    lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, rawDoc: null, activeSequenceId: '', revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null, capJobs: {},
     provider: null, providerAsking: false, providerError: null, gpu: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), targets: { video: null, audio: null }, clipboard: [], cutPending: [], actor: null,
     trackJobs: {}, trackJobFor: {}, picker: null, activeTrackId: null,
     templatesOpen: false, templatesFocus: 0, templateRun: null,
@@ -257,10 +263,10 @@ export class Editor {
   get doc() { return this.state.doc; }
   /** The document the preview shows: the master, or the master projected into the viewed format (same projection as export). */
   get viewDoc(): ProjectDocument | null {
-    const { doc, viewVariantId: id } = this.state;
-    if (!doc || !id || !doc.variants?.[id]) return doc;
+    const { doc, rawDoc, activeSequenceId: seq, viewVariantId: id } = this.state;
+    if (!doc || !rawDoc || !id || !doc.variants?.[id]) return doc;
     if (this.viewCache?.doc === doc && this.viewCache.id === id) return this.viewCache.out;
-    const out = projectVariant(doc, id);
+    const out = projectOutput(rawDoc, { sequenceId: seq || rawDoc.mainSequenceId, variantId: id });
     this.viewCache = { doc, id, out };
     return out;
   }
@@ -295,22 +301,37 @@ export class Editor {
   async load(projectId: string) {
     const p = await api.getProject(projectId);
     if (p.revision >= this.state.revision || !this.state.doc) {
-      const selection = this.state.selection.filter((id) => findClip(p.project, id));
+      // the active sequence resets to the main one when it is gone (as the viewed format does); the editor works on its projection
+      const activeSequenceId = Object.hasOwn(p.project.sequences, this.state.activeSequenceId) ? this.state.activeSequenceId : p.project.mainSequenceId;
+      const projected = projectSequence(p.project, activeSequenceId);
+      const selection = this.state.selection.filter((id) => findClip(projected, id));
       const viewVariantId = this.state.viewVariantId && p.project.variants?.[this.state.viewVariantId] ? this.state.viewVariantId : null;
       // A document change that removes cut-pending clips cancels the cut.
-      const cutAlive = this.state.cutPending.filter((id) => findClip(p.project, id));
+      const cutAlive = this.state.cutPending.filter((id) => findClip(projected, id));
       const cut = cutAlive.length === this.state.cutPending.length ? {} : { cutPending: [] as string[], clipboard: [] as string[] };
       // target tracks are remembered per project in this browser
       const targets = this.state.doc?.id === p.project.id ? {} : { targets: readTargets(p.project.id) };
       // the track picker closes when the clip it picks on is gone
-      const picker = this.state.picker && !findClip(p.project, this.state.picker.clipId) ? { picker: null } : {};
+      const picker = this.state.picker && !findClip(projected, this.state.picker.clipId) ? { picker: null } : {};
       // the chosen cut goes when it is no longer a cut (its clips were moved apart, or one of them is gone)
-      const cutGone = this.state.cutClipId && (!selection.includes(this.state.cutClipId) || !cutBefore(p.project, this.state.cutClipId)) ? { cutClipId: null, loupe: false } : {};
-      this.set({ doc: p.project, revision: p.revision, selection, viewVariantId, ...cut, ...targets, ...picker, ...cutGone });
+      const cutGone = this.state.cutClipId && (!selection.includes(this.state.cutClipId) || !cutBefore(projected, this.state.cutClipId)) ? { cutClipId: null, loupe: false } : {};
+      this.set({ doc: projected, rawDoc: p.project, activeSequenceId, revision: p.revision, selection, viewVariantId, ...cut, ...targets, ...picker, ...cutGone });
       const vd = this.viewDoc;
       if (vd) this.player?.setDoc(vd);
     }
     return p;
+  }
+  /** Show and edit another sequence (a short, or the main edit): the editor's document becomes its projection. Session state only. */
+  setActiveSequence(id: string) {
+    const raw = this.state.rawDoc;
+    if (!raw) return;
+    const next = Object.hasOwn(raw.sequences, id) ? id : raw.mainSequenceId;
+    if (next === this.state.activeSequenceId) return;
+    const doc = projectSequence(raw, next);
+    // a linked format is project-wide and would replace a short's own frame: back to the sequence itself
+    this.set({ activeSequenceId: next, doc, viewVariantId: null, selection: this.state.selection.filter((id2) => findClip(doc, id2)), cutClipId: null, loupe: false, picker: null });
+    const vd = this.viewDoc;
+    if (vd) this.player?.setDoc(vd);
   }
   /** Switch the preview to a linked format (or back to the master with null). */
   setViewVariant(id: string | null) {
@@ -462,8 +483,11 @@ export class Editor {
   private async commitNow(given: OpCall[] | (() => OpCall[] | null), label?: string): Promise<CommitResult | null> {
     const { doc, revision } = this.state;
     if (!doc) return null;
-    const ops = typeof given === 'function' ? given() : given;
-    if (!ops?.length) return null;
+    const made = typeof given === 'function' ? given() : given;
+    if (!made?.length) return null;
+    // an operation that names a sequence and omits it works on the one shown (derived from the registered schemas)
+    const raw = this.state.rawDoc;
+    const ops = raw ? made.map((c) => injectSequenceId(c, this.state.activeSequenceId, raw.mainSequenceId)) : made;
     this.set({ save: 'save.saving', error: null });
     try {
       const r = await api.commit(doc.id, revision, ops, label);

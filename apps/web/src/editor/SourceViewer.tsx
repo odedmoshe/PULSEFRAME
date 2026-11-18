@@ -20,7 +20,8 @@ export function sourceDocument(project: ProjectDocument, asset: Asset): ProjectD
   return applyTransaction(base, [{ op: 'add_clip', args: { assetId: asset.id, start: T.ZERO } }], { idSeed: 'src_', actor: 'source-viewer' }).doc;
 }
 
-export function SourceViewer({ assetId, onClose }: { assetId: string; onClose: () => void }) {
+/** `startAt`: where the viewer opens, in the file's own time (the Shorts review opens a candidate at its context start). A view only, never an edit. */
+export function SourceViewer({ assetId, onClose, startAt }: { assetId: string; onClose: () => void; startAt?: T.RationalTime }) {
   const { editor, state, t } = useEditorState();
   const asset = state.doc?.assets[assetId];
   const rate = editor.rate;
@@ -46,6 +47,7 @@ export function SourceViewer({ assetId, onClose }: { assetId: string; onClose: (
     const p = new Player(canvas, editor.pool, () => setTick((x) => x + 1), (e) => setErr(describeError(e)));
     playerRef.current = p;
     p.setDoc(doc);
+    if (startAt) { const f = Math.max(0, T.frameIndexAt(startAt, editor.rate)); void Promise.resolve().then(() => playerRef.current === p && p.seek(Math.min(f, Math.max(0, p.frameCount - 1)))); }
     closeRef.current?.focus();
     return () => { playerRef.current = null; p.dispose(); };
   }, [doc, editor]);

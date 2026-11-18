@@ -7,6 +7,7 @@ import { Maximize, Minimize, ScanLine } from 'lucide-react';
 import { useEditorState } from './store.ts';
 import { SourceViewer } from './SourceViewer.tsx';
 import { FormatPrism } from './FormatPrism.tsx';
+import { SequenceSwitcher } from './SequenceSwitcher.tsx';
 import { Seg } from '../ds/index.ts';
 import { STAGE_STRINGS } from './stage.strings.ts';
 import './stage.css';
@@ -36,6 +37,7 @@ export function StageHeader() {
         options={[{ value: 'program', label: S.program, testId: 'stage-view-program' }, { value: 'source', label: S.source, disabled: !assetId, ariaLabel: assetId ? undefined : `${S.source}: ${S.sourceNone}`, testId: 'stage-view-source' }]}
         onChange={(v) => setSource(v === 'source' ? assetId : null)} />
       <FormatPrism />
+      <SequenceSwitcher />
       <span className="stage-head-space" />
       {viewed?.safeArea && (
         <label className="stage-toggle" title={S.safeArea}>

@@ -8,6 +8,7 @@ import { EXPORT_STRINGS } from './exportSheet.strings.ts';
 import { formatFileSize } from './exportSheet.logic.ts';
 import './deliverPanel.css';
 import { ArchiveFamilyOption } from './lifeline/ArchiveFamilyOption.tsx';
+import { addVariantGuard, frameOps, isShortActive } from './shorts.view.ts';
 
 interface BatchJob { jobId: string; variantId: string; status: string; stage: string | null }
 const ACTIVE = ['queued', 'running', 'cancel-requested'];
@@ -17,6 +18,7 @@ const ACTIVE = ['queued', 'running', 'cancel-requested'];
 function ProjectFrame() {
   const { editor, state, t } = useEditorState();
   const st = state.doc?.settings;
+  const short = isShortActive(state.rawDoc, state.activeSequenceId); // a short has its own frame; the background stays the project's
   const [w, setW] = useState(String(st?.width ?? ''));
   const [h, setH] = useState(String(st?.height ?? ''));
   const [bg, setBg] = useState(st?.background.slice(0, 7) ?? '#000000');
@@ -25,8 +27,9 @@ function ProjectFrame() {
   if (!st) return null;
   const width = Math.round(Number(w)), height = Math.round(Number(h));
   const sizeOk = Number.isFinite(width) && Number.isFinite(height) && width >= 16 && height >= 16 && width <= 8192 && height <= 8192 && width % 2 === 0 && height % 2 === 0;
-  const changed = width !== st.width || height !== st.height || bg.toLowerCase() !== st.background.slice(0, 7).toLowerCase() || fit !== (st.fit ?? 'contain');
-  const apply = () => void editor.commit([{ op: 'set_project_format', args: { ...(width !== st.width ? { width } : {}), ...(height !== st.height ? { height } : {}), ...(bg.toLowerCase() !== st.background.slice(0, 7).toLowerCase() ? { background: bg } : {}), ...(fit !== (st.fit ?? 'contain') ? { fit } : {}) } }], 'Project frame');
+  const changed = width !== st.width || height !== st.height || (!short && bg.toLowerCase() !== st.background.slice(0, 7).toLowerCase()) || fit !== (st.fit ?? 'contain');
+  const bgChanged = !short && bg.toLowerCase() !== st.background.slice(0, 7).toLowerCase();
+  const apply = () => { if (state.rawDoc) void editor.commit(frameOps(state.rawDoc, state.activeSequenceId, { ...(width !== st.width ? { width } : {}), ...(height !== st.height ? { height } : {}), ...(bgChanged ? { background: bg } : {}), ...(fit !== (st.fit ?? 'contain') ? { fit } : {}) }), short ? 'Short frame' : 'Project frame'); };
   return (
     <section aria-labelledby="deliver-frame-h" data-testid="project-frame">
       <h3 id="deliver-frame-h">{t('frame.title')}</h3>
@@ -35,7 +38,7 @@ function ProjectFrame() {
           <label>{t('frame.width')}<input type="number" dir="ltr" min={16} max={8192} step={2} value={w} onChange={(e) => setW(e.target.value)} data-testid="frame-width" /></label>
           <label>{t('frame.height')}<input type="number" dir="ltr" min={16} max={8192} step={2} value={h} onChange={(e) => setH(e.target.value)} data-testid="frame-height" /></label>
         </div>
-        <label>{t('frame.background')}<input type="color" value={bg} onChange={(e) => setBg(e.target.value)} data-testid="frame-background" /></label>
+        <label>{t('frame.background')}<input type="color" value={bg} disabled={short} onChange={(e) => setBg(e.target.value)} data-testid="frame-background" /></label>
         <label>{t('frame.fit')}
           <select value={fit} onChange={(e) => setFit(e.target.value as 'contain' | 'cover')} data-testid="frame-fit">
             <option value="contain">{t('frame.fit.contain')}</option>
@@ -86,6 +89,7 @@ export function DeliverPanel() {
   }, [batchActive]);
 
   const exporting = !!exportJob && ACTIVE.includes(exportJob.status);
+  const variantGuard = addVariantGuard(state.rawDoc, state.activeSequenceId, lang);
   const addProfile = async (p: (typeof FORMAT_PROFILES)[number]) => {
     const r = await editor.commit([{ op: 'add_variant', args: { profileId: p.id, name: p.name[lang] } }], 'Add format');
     const id = r?.results[0]?.output?.variantId;
@@ -117,9 +121,10 @@ export function DeliverPanel() {
       <section aria-labelledby="deliver-formats-h">
         <h3 id="deliver-formats-h">{t('deliver.formats')}</h3>
         <p className="muted">{t('deliver.formats.note')}</p>
+        {variantGuard.disabled && <p className="muted" id="deliver-variant-reason" data-testid="format-add-reason">{variantGuard.reason}</p>}
         <div className="row deliver-add" role="group" aria-label={t('deliver.add')}>
           {FORMAT_PROFILES.map((p) => (
-            <button key={p.id} type="button" className="ghost small" disabled={!doc} data-testid="format-add" data-profile-id={p.id} onClick={() => void addProfile(p)}>+ {p.name[lang]}</button>
+            <button key={p.id} type="button" className="ghost small" disabled={!doc || variantGuard.disabled} title={variantGuard.reason ?? undefined} aria-describedby={variantGuard.disabled ? 'deliver-variant-reason' : undefined} data-testid="format-add" data-profile-id={p.id} onClick={() => void addProfile(p)}>+ {p.name[lang]}</button>
           ))}
         </div>
         {variants.length === 0 ? <p className="muted">{t('deliver.none')}</p> : (
