@@ -4,6 +4,7 @@
  * (hebrewCalendar.ts: the holiday table on the Israeli schedule); nothing about the Hebrew calendar is worked out here.
  */
 import { GREGORIAN_MONTH_NAMES, gregorianFromRd, hanukkahDay, hebrewFromRd, HOLIDAY_FAMILIES, holidayTable, isValidGregorian, rdFromGregorian, type GDate } from '../hebrewCalendar.ts';
+import type { Person } from '../schema.ts';
 import type { LifeEventHint, PackDef, PackSuggestion, PackWords } from './contract.ts';
 
 /**
@@ -81,4 +82,31 @@ export function suggestPacks(packs: readonly PackDef[], today: GDate, hints: rea
     }
   }
   return found.sort((a, b) => Math.abs(a.daysAway) - Math.abs(b.daysAway) || a.order - b.order).map(({ order: _order, ...s }) => s);
+}
+
+/**
+ * The birthdays of a project's people as suggestion hints for `today`: for each person with a birth date, the anniversary
+ * nearest to `today` (last year's, this year's or next year's; never one before the day of birth), named. A person born on
+ * 29 February has a birthday on 1 March in common years (as ageWords.ts counts). Pure. PRIVACY: a hint holds the birthday's
+ * day and month, so it is made only from a document the caller may read whole: the server gives a credential without the
+ * people scope a document without birth dates (peoplePrivacy.ts), and then there are no hints.
+ */
+export function birthdayHints(people: Readonly<Record<string, Person>> | undefined, today: GDate): LifeEventHint[] {
+  if (!people || !isValidGregorian(today)) return [];
+  const now = rdFromGregorian(today);
+  const out: LifeEventHint[] = [];
+  for (const p of Object.values(people)) {
+    const m = p.birthDate ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(p.birthDate) : null;
+    if (!m) continue;
+    const birth = { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) };
+    if (!isValidGregorian(birth)) continue;
+    let best: GDate | null = null;
+    for (const y of [today.y - 1, today.y, today.y + 1]) {
+      if (y < birth.y) continue;
+      const on = isValidGregorian({ y, m: birth.m, d: birth.d }) ? { y, m: birth.m, d: birth.d } : gregorianFromRd(rdFromGregorian({ y, m: birth.m, d: 28 }) + 1);
+      if (!best || Math.abs(rdFromGregorian(on) - now) < Math.abs(rdFromGregorian(best) - now)) best = on;
+    }
+    if (best) out.push({ kind: 'birthday', on: best, name: p.name });
+  }
+  return out;
 }

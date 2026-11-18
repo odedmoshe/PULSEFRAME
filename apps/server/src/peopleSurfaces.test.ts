@@ -9,7 +9,10 @@
  *     key, string and number of every answer is searched for the birth date in any spelling, the age it gives at the
  *     capture date under the title (in Hebrew and English), and the word choice; so is every document the renderer is
  *     handed for those credentials. Controls prove the plant: the owner and a grant with people 'full' do read it.
- * The people operations are W1's: until they are built the plant is made as an archive or a later build would hold it.
+ * The walk runs twice: once on a document planted as an archive would hold it (with a proposal, an export job and events),
+ * and once on a project whose people were planted by real add_person / update_person commits of a grant with people 'full'
+ * (so its history, undo entries and an idempotent replay hold them too). The archive «בלי פרטי משפחה» (family=omit) and the
+ * family check are walked in peoplePrivacy.test.ts.
  */
 import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
@@ -17,7 +20,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, describeOps, type OpCall, type Person, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, canonical, createProject, describeOps, type OpCall, type Person, type ProjectDocument } from '@pulseframe/core';
 import { Auth } from './auth.ts';
 import { Capabilities } from './capabilities.ts';
 import { loadConfig, type Config } from './config.ts';
@@ -39,6 +42,7 @@ const CAPTURE = '2023-01-15';
 const NEEDLES: readonly RegExp[] = [
   /2014/, /14-11-04|11-04|04-11/, /\b4[./]11\b|\b11[./]4\b|04[./]11|11[./]04/,
   /בת 8|בן 8|גיל 8|בת שמונה|8 years|8½|שמונה וחצי/, /כ״?ב בחשוון|חשוון תשע״ה|תשע״ה/, // the age, and the birth date on the Hebrew calendar (22 Heshvan 5775)
+  /4 בנובמבר|4 November|November 4/, // the birthday in words (a pack suggestion's badge names it)
 ];
 /** The first place in these values where the birth date, the age or the word choice shows, or null. */
 function familyLeak(...values: unknown[]): string | null {
@@ -72,7 +76,7 @@ class RecordingExporter extends Exporter {
 }
 let dir: string, cfg: Config, store: Store, auth: Auth, gov: Governance, app: ReturnType<typeof createApp>, mcp: ReturnType<typeof createMcp>, exporter: RecordingExporter;
 let capabilities: Capabilities, derivatives: Derivatives, speech: Speech, presence: Presence;
-let pid = '', assetId = '', titleId = '', proposalId = '', exportJobId = '', ownerCookie = '', namesGrant = '', fullGrant = '';
+let pid = '', assetId = '', titleId = '', proposalId = '', exportJobId = '', ownerCookie = '', namesGrant = '', fullGrant = '', personId = NOA.id, contentHash = '';
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
 const base = () => `http://127.0.0.1:${cfg.port}`;
@@ -118,7 +122,7 @@ beforeAll(() => {
   app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, gov, undefined, speech);
   ownerCookie = auth.issueSession(new Request(`${base()}/api/v1/session`, { headers: { origin: base(), 'x-pf-owner-key': auth.tokens.owner } })).split(';')[0]!;
   // the media file, so that an archive can be written
-  let bytes = randomBytes(64), contentHash = '';
+  let bytes = randomBytes(64);
   // a hash that does not spell a needle by chance
   for (;;) { contentHash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`; if (!familyLeak(contentHash)) break; bytes = randomBytes(64); }
   const tmp = path.join(store.tmpDir, `walk_${randomBytes(4).toString('hex')}`);
@@ -155,26 +159,32 @@ afterAll(async () => {
 const PARAMS: Record<string, () => string> = {
   id: () => pid, jobId: () => exportJobId, proposalId: () => proposalId, assetId: () => assetId, token: () => 'rnd_none', kind: () => 'thumb', motionTrackId: () => 'mtk_none',
   capabilityId: () => 'none.cap', recipeId: () => 'none', runId: () => 'run_none', templateId: () => 'none', variantId: () => 'var_none', approvalId: () => 'apr_none', grantId: () => 'grt_none',
-  sfxId: () => 'none', modelId: () => 'none', index: () => '0',
+  sfxId: () => 'none', modelId: () => 'none', index: () => '0', styleId: () => 'none',
 };
 /** Queries and bodies that reach the part of a route that reads the project; any other POST gets a body its schema refuses. */
-const QUERY: Record<string, string> = { [`GET /api/v1/projects/:id/frame`]: '?index=10', 'GET /api/v1/on-this-day': '?date=2024-11-04', [`GET /api/v1/projects/:id/proposals/:proposalId/frame`]: '?index=10' };
-const RENAME: OpCall = { op: 'update_person', args: { personId: NOA.id, name: 'נועה' } };
-const BODIES: Record<string, unknown> = {
-  'POST /api/v1/projects/:id/transactions': { ops: [RENAME] },
-  'POST /api/v1/projects/:id/operations': { ops: [RENAME] },
-  'POST /api/v1/projects/:id/operations/validate': { ops: [RENAME] },
-  'POST /api/v1/projects/:id/proposals': { ops: [RENAME] },
+const QUERY: Record<string, () => string> = {
+  [`GET /api/v1/projects/:id/frame`]: () => '?index=10', 'GET /api/v1/on-this-day': () => '?date=2024-11-04', [`GET /api/v1/projects/:id/proposals/:proposalId/frame`]: () => '?index=10',
+  // three days before Noa's birthday, with the project: the birthday pack would be suggested from her birth date, its badge
+  // naming the day («… בעוד 3 ימים · 4 בנובמבר», which the needles find)
+  'GET /api/v1/packs/suggest': () => `?date=2024-11-01&projectId=${encodeURIComponent(pid)}`,
+};
+const RENAME = (): OpCall => ({ op: 'update_person', args: { personId, name: 'נועה' } });
+const bodies = (): Record<string, unknown> => ({
+  'POST /api/v1/projects/:id/transactions': { ops: [RENAME()] },
+  'POST /api/v1/projects/:id/operations': { ops: [RENAME()] },
+  'POST /api/v1/projects/:id/operations/validate': { ops: [RENAME()] },
+  'POST /api/v1/projects/:id/proposals': { ops: [RENAME()] },
   'POST /api/v1/projects/:id/exports': {},
   'POST /api/v1/projects/:id/exports/plan': {},
   'POST /api/v1/projects/:id/exports/batch': { variantIds: ['var_none'] },
   'POST /api/v1/projects/:id/exports/browser': { sessionId: 'walk-session-1' },
   'POST /api/v1/projects/:id/undo': {}, 'POST /api/v1/projects/:id/redo': {},
   'POST /api/v1/jobs/:jobId/retry': {},
-};
-const urlOf = (key: string) => { const [method, route] = key.split(' ') as [string, string]; return { method, url: `${base()}${route.replace(/:([A-Za-z]+)/g, (_, k: string) => encodeURIComponent(PARAMS[k]!()))}${QUERY[key] ?? ''}` }; };
+});
+const urlOf = (key: string) => { const [method, route] = key.split(' ') as [string, string]; return { method, url: `${base()}${route.replace(/:([A-Za-z]+)/g, (_, k: string) => encodeURIComponent(PARAMS[k]!()))}${QUERY[key]?.() ?? ''}` }; };
 async function call(who: Who, key: string): Promise<{ status: number; body: unknown }> {
   const { method, url } = urlOf(key);
+  const BODIES = bodies();
   const body = method === 'GET' ? undefined : JSON.stringify(Object.hasOwn(BODIES, key) ? BODIES[key] : { __walk: 1 });
   const r = await app.fetch(new Request(url, { method, headers: who.headers(), ...(body === undefined ? {} : { body }) }));
   const type = r.headers.get('content-type') ?? '';
@@ -195,16 +205,54 @@ async function rpc(who: Who, method: string, params: unknown): Promise<any> {
 const unpack = (res: any) => ({ ...res, content: (res?.content ?? []).map((c: any) => (c.type === 'text' ? (() => { try { return JSON.parse(c.text); } catch { return c.text; } })() : c)) });
 const TOOL_ARGS: Record<string, Record<string, unknown>> = {
   describe_moment: { frameIndex: 10 }, render_frame: { frameIndex: 10 }, render_contact_sheet: { frames: [0, 10, 60] }, get_job: { jobId: '' }, retry_job: { jobId: '' },
-  get_transcript: { assetId: '' }, get_analysis: { assetId: '' }, apply_transaction: { ops: [RENAME], dryRun: true }, propose_transaction: { ops: [RENAME] }, export_captions: {},
-  export_project: {}, plan_export: {}, preflight: {}, list_proposals: {}, set_view: { frame: 10 }, update_person: { personId: NOA.id, name: 'נועה' }, remove_person: { personId: NOA.id },
-  add_person: { name: 'איתי' },
+  get_transcript: { assetId: '' }, get_analysis: { assetId: '' }, apply_transaction: { ops: [], dryRun: true }, propose_transaction: { ops: [] }, export_captions: {},
+  export_project: {}, plan_export: {}, preflight: {}, list_proposals: {}, set_view: { frame: 10 }, update_person: { personId: '', name: 'נועה' }, remove_person: { personId: '' },
+  add_person: { name: 'איתי' }, suggest_packs: { date: '2024-11-01' }, add_builtin_music: { styleId: 'music.none', bars: 4 },
 };
 const toolArgs = (name: string) => {
   const extra = { ...(TOOL_ARGS[name] ?? {}) };
+  if ('personId' in extra) extra.personId = personId;
+  if ('ops' in extra) extra.ops = [RENAME()];
   if ('jobId' in extra) extra.jobId = exportJobId;
   if ('assetId' in extra) extra.assetId = assetId;
   return { projectId: pid, ...extra };
 };
+
+/** Every listed REST route called as `who` on the current plant; every answer and every document handed to the renderer searched. */
+async function walkRest(who: Who) {
+  exporter.rendered = [];
+  const leaks: string[] = [];
+  let answered = 0;
+  for (const key of Object.keys(PEOPLE_REST_SURFACES)) {
+    if (PEOPLE_REST_SURFACES[key]!.includes('renderer-only') || key === 'ALL /mcp' || key === `GET /api/v1/projects/:id/events`) continue;
+    const r = await call(who, key);
+    if (r.status < 300) answered++;
+    const leak = familyLeak(r.body);
+    if (leak) leaks.push(`${key} → ${r.status}: ${leak}`);
+  }
+  expect(answered, 'routes that answered with content, not a refusal').toBeGreaterThan(25);
+  if (who !== OBSERVER) expect(exporter.rendered.length, 'documents handed to the renderer').toBeGreaterThan(0);
+  const rendered = familyLeak(exporter.rendered);
+  if (rendered) leaks.push(`a document handed to the renderer: ${rendered}`);
+  expect(leaks).toEqual([]);
+}
+/** Every MCP tool, resource and prompt called as `who` on the current plant. */
+async function walkMcp(who: Who) {
+  exporter.rendered = [];
+  const leaks: string[] = [];
+  const tools: string[] = (await rpc(who, 'tools/list', {})).tools.map((t: { name: string }) => t.name);
+  for (const name of tools) {
+    const res = unpack(await rpc(who, 'tools/call', { name, arguments: toolArgs(name) }));
+    const leak = familyLeak(res);
+    if (leak) leaks.push(`tool ${name}: ${leak}`);
+  }
+  const uris = [...(await rpc(who, 'resources/list', {})).resources.map((r: { uri: string }) => r.uri), 'pulseframe://guide', 'pulseframe://ops', 'pulseframe://catalog'];
+  for (const uri of new Set(uris)) { const leak = familyLeak(unpack({ content: ((await rpc(who, 'resources/read', { uri })).contents ?? []).map((c: any) => ({ type: 'text', text: c.text })) })); if (leak) leaks.push(`resource ${uri}: ${leak}`); }
+  for (const p of (await rpc(who, 'prompts/list', {})).prompts ?? []) { const leak = familyLeak(await rpc(who, 'prompts/get', { name: p.name, arguments: { projectId: pid } })); if (leak) leaks.push(`prompt ${p.name}: ${leak}`); }
+  const rendered = familyLeak(exporter.rendered);
+  if (rendered) leaks.push(`a document handed to the renderer: ${rendered}`);
+  expect(leaks).toEqual([]);
+}
 
 describe('every surface an agent can reach is classified (peopleSurfaces.ts)', () => {
   it('the REST table lists exactly the registered routes', () => {
@@ -255,42 +303,8 @@ describe('the walk: a planted birth date never reaches a credential without the 
     }
   });
 
-  for (const who of WITHOUT_SCOPE)
-    it(`REST, every route, as the ${who.name}`, async () => {
-      exporter.rendered = [];
-      const leaks: string[] = [];
-      let answered = 0;
-      for (const key of Object.keys(PEOPLE_REST_SURFACES)) {
-        if (PEOPLE_REST_SURFACES[key]!.includes('renderer-only') || key === 'ALL /mcp' || key === `GET /api/v1/projects/:id/events`) continue;
-        const r = await call(who, key);
-        if (r.status < 300) answered++;
-        const leak = familyLeak(r.body);
-        if (leak) leaks.push(`${key} → ${r.status}: ${leak}`);
-      }
-      expect(answered, 'routes that answered with content, not a refusal').toBeGreaterThan(25);
-      if (who !== OBSERVER) expect(exporter.rendered.length, 'documents handed to the renderer').toBeGreaterThan(0);
-      const rendered = familyLeak(exporter.rendered);
-      if (rendered) leaks.push(`a document handed to the renderer: ${rendered}`);
-      expect(leaks).toEqual([]);
-    }, 120_000);
-
-  for (const who of WITHOUT_SCOPE)
-    it(`MCP, every tool, resource and prompt, as the ${who.name}`, async () => {
-      exporter.rendered = [];
-      const leaks: string[] = [];
-      const tools: string[] = (await rpc(who, 'tools/list', {})).tools.map((t: { name: string }) => t.name);
-      for (const name of tools) {
-        const res = unpack(await rpc(who, 'tools/call', { name, arguments: toolArgs(name) }));
-        const leak = familyLeak(res);
-        if (leak) leaks.push(`tool ${name}: ${leak}`);
-      }
-      const uris = [...(await rpc(who, 'resources/list', {})).resources.map((r: { uri: string }) => r.uri), 'pulseframe://guide', 'pulseframe://ops', 'pulseframe://catalog'];
-      for (const uri of new Set(uris)) { const leak = familyLeak(unpack({ content: ((await rpc(who, 'resources/read', { uri })).contents ?? []).map((c: any) => ({ type: 'text', text: c.text })) })); if (leak) leaks.push(`resource ${uri}: ${leak}`); }
-      for (const p of (await rpc(who, 'prompts/list', {})).prompts ?? []) { const leak = familyLeak(await rpc(who, 'prompts/get', { name: p.name, arguments: { projectId: pid } })); if (leak) leaks.push(`prompt ${p.name}: ${leak}`); }
-      const rendered = familyLeak(exporter.rendered);
-      if (rendered) leaks.push(`a document handed to the renderer: ${rendered}`);
-      expect(leaks).toEqual([]);
-    }, 120_000);
+  for (const who of WITHOUT_SCOPE) it(`REST, every route, as the ${who.name}`, () => walkRest(who), 120_000);
+  for (const who of WITHOUT_SCOPE) it(`MCP, every tool, resource and prompt, as the ${who.name}`, () => walkMcp(who), 120_000);
 
   it('server-sent events: each event is reduced for the credential that listens', async () => {
     const r = await app.fetch(new Request(`${base()}/api/v1/projects/${pid}/events`, { headers: AGENT.headers() }));
@@ -350,6 +364,63 @@ describe('the walk: a planted birth date never reaches a credential without the 
     expect(owner.text).toContain('2014-11-04');
   });
 
-  it.todo('W2: family=omit (withoutFamily) gives an archive without people whose titles are plain text, for every credential; the family-check lists varying and empty titles');
-  it.todo('W1: after PEOPLE_OPS_BUILT, the same walk with the people planted by real add_person / update_person commits of a grant with people "full" (history, undo entries and idempotent replays included)');
+  // The archive «בלי פרטי משפחה» (family=omit) and the family check, for every credential: peoplePrivacy.test.ts.
+});
+
+describe('the walk again, with the people planted by real add_person / update_person commits of a grant with people "full"', () => {
+  let before = '', stored = '';
+  beforeAll(async () => {
+    // a project as an archive of an older build holds it: an empty people map, which reads as absent
+    const prov = { origin: 'upload' as const, importedAt: '2026-11-17T00:00:00Z', importedBy: 'user:local' };
+    const video = { kind: 'video' as const, name: 'birthday.mp4', contentHash, byteSize: 64, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(8, 1), video: { width: 640, height: 360, frameRate: R, codec: 'h264', rotation: 0, frameCount: 240 }, provenance: prov, capture: { at: CAPTURE, utcOffsetMinutes: null, source: 'manual' as const } };
+    const a = applyTransaction(createProject({ id: 'prj_walk2', name: 'משפחה 2', width: 640, height: 360, frameRate: R }), [{ op: 'import_asset', args: { asset: video } }], { idSeed: 'walk2a_', actor: 'user:local', allowInternal: true });
+    assetId = a.results[0]!.output!.assetId as string;
+    const doc = applyTransaction(a.doc, [{ op: 'add_clip', args: { assetId, start: f(0), duration: f(120) } }], { idSeed: 'walk2b_', actor: 'user:local' }).doc;
+    pid = store.importProject({ ...doc, people: {} }).doc.id;
+    before = canonical(store.wholeProject(pid).doc);
+    const commit = async (ops: OpCall[], extra: Record<string, unknown> = {}) => {
+      const r = await app.fetch(new Request(`${base()}/api/v1/projects/${pid}/transactions`, { method: 'POST', headers: FULL.headers(), body: JSON.stringify({ ops, ...extra }) }));
+      const b = (await r.json()) as any;
+      expect(r.status, JSON.stringify(b).slice(0, 300)).toBe(200);
+      return b;
+    };
+    const undoRedo = async (mode: 'undo' | 'redo') => { const r = await app.fetch(new Request(`${base()}/api/v1/projects/${pid}/${mode}`, { method: 'POST', headers: FULL.headers(), body: '{}' })); expect(r.status, mode).toBe(200); };
+    const add: OpCall = { op: 'add_person', args: { name: NOA.name, birthDate: NOA.birthDate, form: 'm' } };
+    const first = await commit([add], { idempotencyKey: 'walk-add-noa' });
+    personId = first.results[0].output.personId;
+    const replay = await commit([add], { idempotencyKey: 'walk-add-noa' });
+    expect([replay.replayed, replay.revision]).toEqual([true, first.revision]);
+    // undo of the first add_person gives the document back exactly, though it was imported with `people: {}`
+    await undoRedo('undo');
+    expect(canonical(store.wholeProject(pid).doc)).toBe(before);
+    await undoRedo('redo');
+    await commit([{ op: 'update_person', args: { personId, form: 'f' } }]);
+    await undoRedo('undo');
+    await undoRedo('redo');
+    const titleAt = (text: string, at: number): OpCall => ({ op: 'add_text', args: { text, start: f(at), duration: f(30) } });
+    const placed = await commit([titleAt('x', 0)]);
+    const clipId = placed.results[0].output.clipId;
+    await commit([{ op: 'update_text', args: { clipId, text: `{name:${personId}} {age:${personId}} · {age:${personId}:en}` } }, { op: 'set_text_fields', args: { clipId, enabled: true } }]);
+    stored = (store.db.prepare('SELECT ops, changes, result FROM transactions WHERE project_id = ?').all(pid) as { ops: string; changes: string; result: string }[]).map((r) => `${r.ops}\n${r.changes}\n${r.result}`).join('\n');
+  });
+
+  it('controls: the birth date is in the stored history (operations and undo entries), and the owner and the grant with people "full" read it', async () => {
+    expect(stored).toContain(NOA.birthDate);
+    expect(stored).toMatch(/"form":"m"/);
+    for (const who of [OWNER_WHO, FULL]) expect(familyLeak((await call(who, `GET /api/v1/projects/:id`)).body), who.name).not.toBeNull();
+    expect(store.wholeProject(pid).doc.people?.[personId]).toEqual({ id: personId, name: NOA.name, birthDate: NOA.birthDate, form: 'f' });
+  });
+  it('a credential without the scope reads the person\'s id and name only, and its pack suggestions do not use the birthday', async () => {
+    for (const who of WITHOUT_SCOPE) {
+      const content = ((await call(who, `GET /api/v1/projects/:id`)).body as { content: any }).content;
+      expect(content.project.people, who.name).toEqual({ [personId]: { id: personId, name: NOA.name, birthDate: null } });
+      const suggest = ((await call(who, 'GET /api/v1/packs/suggest')).body as { content: any }).content;
+      expect([suggest.suggestions, suggest.birthdays], who.name).toEqual([[], 'not_readable']);
+    }
+    const owners = ((await call(OWNER_WHO, 'GET /api/v1/packs/suggest')).body as { content: any }).content;
+    expect(owners.suggestions.map((x: { packId: string }) => x.packId)).toEqual(['pack.birthday']);
+    expect(familyLeak(owners)).toMatch(/4 בנובמבר/); // «… בעוד 3 ימים · 4 בנובמבר»: the needle finds the birthday in words
+  });
+  for (const who of WITHOUT_SCOPE) it(`REST, every route, as the ${who.name}`, () => walkRest(who), 120_000);
+  for (const who of WITHOUT_SCOPE) it(`MCP, every tool, resource and prompt, as the ${who.name}`, () => walkMcp(who), 120_000);
 });

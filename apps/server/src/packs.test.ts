@@ -6,8 +6,8 @@
  *   blocker or applies, and an apply after a clean plan never fails;
  * - the sounds the packs name exist in this server's list of built-in sounds;
  * - all 50 elements rasterise through the server's own path and cover between 2 and 90 percent of their box, each its own picture;
- * - built-in music is asked for by every template: the plan is clean, and the apply either works (undo exact) or says honestly
- *   that the synthesiser is not built (501 music_not_built) and commits nothing. Nothing here depends on the synthesiser.
+ * - built-in music is asked for by every template: the plan is clean, the apply works with the track in the same transaction,
+ *   and one undo gives the exact previous document.
  */
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -165,9 +165,9 @@ describe('plan and apply over media counts, tempos and frame rates', () => {
   }
 });
 
-describe('built-in music (the synthesiser is another worker\'s: nothing here depends on it)', () => {
+describe('built-in music', () => {
   for (const id of TEMPLATE_IDS) {
-    it(`${id}: asking for its music style plans cleanly; the apply works with an exact undo, or says 501 music_not_built and commits nothing`, async () => {
+    it(`${id}: asking for its music style plans cleanly; the apply works with an exact undo`, async () => {
       const { pid, media } = fixtures[30]!;
       const style = findTemplate(id)!.music.builtin ?? 'music.birthday';
       const params = { media: mediaOf(media, 6), musicAssetId: null, builtinMusic: { styleId: style, seed: 2 }, fields: FIELDS };
@@ -176,7 +176,6 @@ describe('built-in music (the synthesiser is another worker\'s: nothing here dep
       expect(plan.body.blocking).toEqual([]);
       const before = hash(whole(pid)), revision = store.getProject(pid).revision;
       const r = await rest('POST', `/projects/${pid}/templates/${id}/apply`, { params });
-      if (r.status === 501) { expect(r.body.error.code).toBe('music_not_built'); expect(store.getProject(pid).revision).toBe(revision); expect(hash(whole(pid))).toBe(before); return; }
       expect(r.status).toBe(200);
       expect(store.getProject(pid).revision).toBe(revision + 1);
       expect((await rest('POST', `/projects/${pid}/undo`, {})).status).toBe(200);
