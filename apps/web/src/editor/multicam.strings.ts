@@ -17,7 +17,7 @@ export interface MulticamStrings {
   libSelect: (name: string) => string; libCount: (n: number) => string; libHint: string; libNeed: string; libTooMany: string; libClear: string;
   stepCreate: string; stepSync: string; stepReview: string; stepPlace: string; stepDone: string; stepFailed: (why: string) => string; reviewIntro: string; reviewContinue: string; reviewCancel: string; reviewSyncDialog: string; syncAgain: string;
   clipBlockTitle: string; angleList: string; appliedLook: (n: number) => string; droppedLine: (what: string, n: number) => string;
-  badge: (n: number, label: string) => string; dualMonoDone: string;
+  badge: (n: number | string, label: string) => string; dualMonoDone: string;
   groupsLabel: string;
 }
 const ARROW = (v: number) => (v > 0 ? `+${v}` : `${v}`);

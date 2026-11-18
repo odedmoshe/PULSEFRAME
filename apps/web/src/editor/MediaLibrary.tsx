@@ -15,7 +15,10 @@ import { CaptureEditor, DateBadge } from './lifeline/CaptureEditor.tsx';
 import { LIFE_STRINGS } from './lifeline/lifeline.strings.ts';
 import { LIFE_TESTIDS } from './lifeline/lifeline.testids.ts';
 import { assetDisplayName } from './assetLabel.ts';
+import { togglePick, usePicks } from './MulticamLibraryEntry.tsx';
+import { MULTICAM_STRINGS } from './multicam.strings.ts';
 import './mediaLibrary.css';
+import './multicam.css';
 
 type Loaded = LoadedDerivative<ImageBitmap> | null;
 
@@ -167,6 +170,7 @@ export function MediaGrid({ onView, query = '', filter = 'all', only }: { onView
   const S = MEDIA_STRINGS[state.lang];
   const C = CHROME_STRINGS[state.lang];
   if (!doc) return null;
+  const picked = usePicks(); // the multicam selection (ADR-0020)
   const used = usedAssets(doc);
   const all = Object.values(doc.assets);
   if (all.length === 0) return null; // the drawer shows the drop zone (Library.tsx)
@@ -190,6 +194,7 @@ export function MediaGrid({ onView, query = '', filter = 'all', only }: { onView
             onDragStart={isLut ? undefined : (e) => { e.dataTransfer.setData(ASSET_DRAG_TYPE, a.id); e.dataTransfer.effectAllowed = 'copy'; }}>
             <div className="mc-thumb pf-mc-thumb" onDoubleClick={isLut ? undefined : add}>
               <Thumb projectId={doc.id} a={a} refreshKey={derivativeTick} />
+              {(a.kind === 'video' || a.kind === 'audio') && <input type="checkbox" className="mc-pick" checked={picked.includes(a.id)} onChange={() => togglePick(a.id)} aria-label={MULTICAM_STRINGS[state.lang].libSelect(a.name)} data-testid={`pick-${a.id}`} />}
               <span className="pf-mc-badge pf-mc-fmt num"><bdi dir="ltr">{isLut ? 'CUBE' : formatOf(a)}</bdi></span>
               <span className="pf-mc-badge pf-mc-dur num"><bdi dir="ltr" className="pf-mc-durIn">
                 <KindIcon size={11} aria-hidden="true" />{isLut ? <span data-testid={`lut-size-${a.id}`} title={`${S.lut}: ${S.lutSize}`}>{a.lut ? `${a.lut.size}³` : 'LUT'}</span> : a.kind === 'image' ? `${a.image?.width}×${a.image?.height}` : fmtDur(T.toSeconds(a.duration))}
