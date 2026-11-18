@@ -25,10 +25,12 @@
  *     (MARGIN_GAPS) would each have been judged `unsafe` (more than three flashes in some second). Otherwise nothing is
  *     shown about the guard: a wrong gap would have looked the same. The words say "too few paints for the guard to be needed" with the
  *     paint rate; the cause is not judged here (the run records the 1-minute load and the CPU seconds per paint apart).
- *  5. `guard-idle`: the guard's counter says it held nothing.
- *  6. `not-flashing` again, on a run that could pass: fewer than the floor, 1 + FLOOR_PER_SECOND x the window in seconds
+ *  5. `too-close`: two rises on screen closer than the rule's third of a second (less half a 60 Hz refresh, the sampling).
+ *     Since 2026-11-18: a guard with a wrong gap can stay at three a second on a short run and pass everything else.
+ *  6. `guard-idle`: the guard's counter says it held nothing.
+ *  7. `not-flashing` again, on a run that could pass: fewer than the floor, 1 + FLOOR_PER_SECOND x the window in seconds
  *     (rounded up), and never under three.
- *  7. `ok`.
+ *  8. `ok`.
  *
  * WHY A MARGIN. A rise needs a darker frame and then a brighter one, so a preview that paints six frames a second or fewer
  * cannot show more than three rises a second whatever the timeline holds. Just above that, the unguarded screen reaches
@@ -66,6 +68,8 @@ export type ShuttleSample = [t: number, mean: number, frame: number];
 export const SCREEN_STEP = 8;
 /** The rule (ADR-0009): flash starts on screen at least a third of a second apart, and the step of light the guard counts as a rise. Stated here, not read from the product. */
 export const RIGHT_GAP = 1 / 3 + 1e-3, GUARD_STEP = 0.02;
+/** The rule (FlashGuard.shown): a rise not yet this far above the light before it is timed again from a further step up through frames that jump. Stated here, not read from the product. */
+export const GUARD_SEEN = 0.1;
 /** Gaps a wrong guard could have, replayed on every run and recorded. */
 export const WRONG_GAPS = [0.2, 0.25, 0.3] as const;
 /** Margin of need: this many flashes in some second without the guard (more than 3 is the bare need) … */
@@ -74,6 +78,12 @@ export const MARGIN_FLASHES = 5;
 export const MARGIN_GAPS = [0.25, 0.2] as const;
 /** Keeps flashing: at least this share of the flashes the right guard lets through on the same paints, and at least 1 + this many a second of the window (and three). */
 export const KEEP_SHARE = 0.5, KEEP_SLACK = 2, FLOOR_PER_SECOND = 0.6;
+/**
+ * Two rises on screen closer than RIGHT_GAP less this are a fault of the guard (`too-close`): half a refresh of a 60 Hz
+ * display, for the samples are taken once a refresh (a guard that times rises by the frames' real times can show them a
+ * refresh apart less than its gap on the samples: 20 refreshes for its 0.334 s; a gap of 0.25 s shows 19 or fewer).
+ */
+export const SPACING_SLACK = 1 / 120;
 /** A frame on screen is explained when it shows what the document gives with or without the guard, within this (of 255). */
 export const MODEL_TOLERANCE = 4;
 
@@ -97,24 +107,29 @@ export function mostInOneSecond(times: readonly number[], span = 1): number {
 
 /** What a frame of the timeline carries, read from `evaluate` as the passes compute it (not from the guard's bookkeeping). */
 export interface FrameLight {
-  /** The light the guard follows: the strongest strobe on the frame or the light of a light transition (0..1). */
+  /** The light the guard follows, per layer (its kind and clip): the layer's strobes mixed, 1 − (1 − a)(1 − b)…, with its light transition's light (0..1), layers without light left out; and under '*' the strongest of them. */
+  layers: (readonly [layer: string, light: number])[];
+  /** The strongest of them (0..1). */
   guard: number;
   /** The strobes on pictures (video, image, adjustment: they cover the frame), in drawing order: [brightness of the strobe's colour 0..255, its light 0..1]. */
   picture: (readonly [colour: number, light: number])[];
 }
 export function frameLight(g: RenderGraph): FrameLight {
   let guard = 0;
-  const picture: [number, number][] = [];
-  for (const l of g.layers) {
+  const picture: [number, number][] = [], layers: [string, number][] = [];
+  g.layers.forEach((l, i) => {
+    let dark = 1;
     for (const fx of 'effects' in l ? l.effects ?? [] : []) {
       if (fx.type !== 'light.strobe') continue;
       const [r, gr, b, light] = GPU_EFFECTS['light.strobe']!.params(fx.params, { width: g.width, height: g.height, seconds: T.toSeconds(g.time), beat: null }) as [number, number, number, number];
-      guard = Math.max(guard, light);
+      dark *= 1 - light;
       if (l.kind !== 'text') picture.push([(255 * (r + gr + b)) / 3, light]); // a title's strobe lights its letters only: under 2 of 255 of the mean
     }
-    if ('transition' in l && l.transition) guard = Math.max(guard, l.transition.light ?? 0);
-  }
-  return { guard, picture };
+    if ('transition' in l && l.transition) dark *= 1 - (l.transition.light ?? 0);
+    if (dark < 1) { layers.push(['clipId' in l ? `${l.kind}\n${l.clipId}` : `#${i}`, 1 - dark]); guard = Math.max(guard, 1 - dark); }
+  });
+  if (layers.length) layers.push(['*', guard]); // the strongest light, followed as one more layer (FlashGuard: layerLights)
+  return { layers, guard, picture };
 }
 /** The light the strobes and light transitions of a graph add (0..1), as the guard follows it. */
 export const graphLight = (g: RenderGraph): number => frameLight(g).guard;
@@ -130,29 +145,49 @@ export function unguarded(doc: ProjectDocument, frame: number): FrameLight {
 /** The mean brightness of a frame with its strobes mixed in (the pass: mix(picture, colour, light)), over a picture of mean brightness `base`. */
 export const litBrightness = (base: number, f: FrameLight): number => f.picture.reduce((m, [colour, light]) => m * (1 - light) + colour * light, base);
 
-/** One frame coming on screen: when, which, how bright it was, and what the document gives for it. */
-export interface Paint { t: number; frame: number; mean: number; light: FrameLight }
+/** One frame coming on screen: when, which (and its second on the timeline), how bright it was, and what the document gives for it. */
+export interface Paint { t: number; frame: number; seconds: number; mean: number; light: FrameLight }
 /** Each time another frame came on screen. */
 export function paintsOf(samples: readonly ShuttleSample[], doc: ProjectDocument): Paint[] {
   const out: Paint[] = [];
-  for (let i = 0; i < samples.length; i++) if (i === 0 || samples[i]![2] !== samples[i - 1]![2]) out.push({ t: samples[i]![0], frame: samples[i]![2], mean: samples[i]![1], light: unguarded(doc, samples[i]![2]) });
+  const { num, den } = doc.settings.frameRate;
+  for (let i = 0; i < samples.length; i++) if (i === 0 || samples[i]![2] !== samples[i - 1]![2]) out.push({ t: samples[i]![0], frame: samples[i]![2], seconds: (samples[i]![2] * den) / num, mean: samples[i]![1], light: unguarded(doc, samples[i]![2]) });
   return out;
 }
 /**
- * The rule of the player's guard with any gap, on recorded paints: a rise of the light that would begin less than `gap`
- * seconds after the last one began is held back (the frame is drawn without its light). Returns, per paint, whether it is held.
+ * The rule of the player's guard with any gap, on recorded paints drawn and shown at their time: a rise of the light that
+ * would begin less than `gap` seconds after the last rise is held back (the frame is drawn without its light). While the
+ * light is rising and not yet GUARD_SEEN above the light before it, a further step up through frames that jump (not the
+ * next frames at about the pace of real time) times the rise from there (FlashGuard.shown, 2026-11-18). Returns, per paint,
+ * whether it is held.
  * The rule is restated here so that a wrong guard can be replayed without touching the product.
  */
-export function replayGuard(paints: readonly Pick<Paint, 't' | 'light'>[], gap: number): boolean[] {
-  let last = -Infinity, rising = false, low = 0, high = 0;
-  return paints.map(({ t, light }) => {
-    let shown = light.guard, held = false;
-    if (!rising && shown > low + GUARD_STEP) {
-      if (t - last >= gap) { last = t; rising = true; high = shown; }
-      else { held = true; shown = 0; }
+export function replayGuard(paints: readonly Pick<Paint, 't' | 'light' | 'frame' | 'seconds'>[], gap: number): boolean[] {
+  let last = -Infinity;
+  const lamps = new Map<string, { rising: boolean; low: number; high: number }>();
+  let on: { tl: number; frame: number; at: number } | null = null;
+  return paints.map(({ t, light, frame, seconds }) => {
+    const lights = new Map(light.layers), keys = new Set([...lamps.keys(), ...lights.keys()]);
+    let rise = false, further = false;
+    for (const k of keys) {
+      const lamp = lamps.get(k) ?? { rising: false, low: 0, high: 0 }, v = lights.get(k) ?? 0;
+      if (!lamp.rising && v > lamp.low + GUARD_STEP) rise = true;
+      else if (lamp.rising && lamp.high - lamp.low < GUARD_SEEN && v > lamp.high + GUARD_STEP) further = true;
     }
-    if (rising) { high = Math.max(high, shown); if (shown < high - GUARD_STEP) { rising = false; low = shown; } }
-    else low = Math.min(low, shown);
+    if (!rise && further) {
+      const real = t - (on?.at ?? -Infinity), step = seconds - (on?.tl ?? Infinity);
+      further = !(on !== null && real >= 0 && real <= 0.25 && step > 0 && step <= 1.25 * real + 1.01 * on.frame);
+    } else further = false;
+    const held = rise && t - last < gap;
+    if (!held && (rise || further)) last = t;
+    on = { tl: seconds, frame: frame > 0 ? seconds / frame : 1 / 24, at: t };
+    for (const k of keys) {
+      const lamp = { ...(lamps.get(k) ?? { rising: false, low: 0, high: 0 }) }, v = held ? 0 : lights.get(k) ?? 0;
+      if (!lamp.rising && v > lamp.low + GUARD_STEP) { lamp.rising = true; lamp.high = v; }
+      else if (lamp.rising) { lamp.high = Math.max(lamp.high, v); if (v < lamp.high - GUARD_STEP) { lamp.rising = false; lamp.low = v; } }
+      else lamp.low = Math.min(lamp.low, v);
+      if (!lamp.rising && lamp.low <= 0) lamps.delete(k); else lamps.set(k, lamp);
+    }
     return held;
   });
 }
@@ -177,10 +212,12 @@ export interface ShuttleMeasure {
   flashesPerSecond: number;
   mostInOneSecond: number;
   /**
-   * Seconds between the two closest rises on screen (null with fewer than two). Told, not judged: it can be shorter than the
-   * guard's third of a second without a fault, because the guard times a rise that builds over several paints from its first
-   * step of 0.02 of the light and this measure from the first step of 8 of 255 (measured: 0.246 s where the guard's own
-   * starts were 0.33 s apart on screen).
+   * Seconds between the two closest rises on screen (null with fewer than two). Judged since 2026-11-18 (`too-close`): until
+   * then it could be shorter than the guard's third of a second without the guard counting a fault, because the guard timed
+   * a rise that builds over several paints from its first step of 0.02 of the light and this measure from the first step of
+   * 8 of 255 (measured: 0.246 s where the guard's own starts were 0.33 s apart on screen), and from its decision before the
+   * draw rather than from the frame reaching the screen. The guard now times a rise from the paint where a viewer can see it
+   * (FlashGuard.shown, `further`) and from the frame reaching the screen.
    */
   closestOnScreen: number | null;
   /** The picture's own brightness: the median of the frames on screen that carry no light (under 0.004); the lowest brightness seen when there is none. */
@@ -243,6 +280,8 @@ export type ShuttleVerdict =
   | 'ok'
   /** More than three flashes in a second of real time on the screen. */
   | 'unsafe'
+  /** No more than three in a second, but two rises on screen closer than the guard's rule allows (RIGHT_GAP less SPACING_SLACK). */
+  | 'too-close'
   /** The paints had the margin of need and the guard's counter says it held nothing. */
   | 'guard-idle'
   /** The measurement did not happen as set up: too few samples, not at 8x, or the screen is not what the document gives with or without the guard. */
@@ -257,6 +296,7 @@ export function judgeShuttle(m: ShuttleMeasure, held: number, shuttleShown: stri
   if (m.unexplained > m.paints / 20) return 'not-measured';
   if (m.flashesOnScreen + KEEP_SLACK < KEEP_SHARE * m.flashesWithRightGuard) return 'not-flashing';
   if (!m.margin) return 'blocked';
+  if (m.closestOnScreen !== null && m.closestOnScreen < RIGHT_GAP - SPACING_SLACK) return 'too-close';
   if (!(held > 0)) return 'guard-idle';
   if (m.flashesOnScreen < m.flashFloor) return 'not-flashing';
   return 'ok';

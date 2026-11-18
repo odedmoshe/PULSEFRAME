@@ -11,7 +11,9 @@
  *
  * RECORDED ON 2026-11-18 (shuttle-flash.recorded.ts): the real editor and guard on a quiet machine (18.5 paints a second),
  * beside two busy loops (9.6 paints a second, the margin still reached), and a quiet run whose screen rose four times in a
- * second with the real guard.
+ * second with the real guard. All three were recorded with the guard as it was before the repair of 2026-11-18 (it timed a
+ * rise from its decision before the asynchronous draw and did not know what a frame really painted); the replays of their
+ * paint times through FlashGuard below use today's guard.
  *
  * SIMULATED: a player shuttles at 8x and paints `paints` frames a second, each through a FlashGuard with the real time of
  * painting, as apps/web/src/player.ts does. A display refreshes 60 times a second and samples what is on it: the brightness
@@ -133,13 +135,18 @@ describe('shuttle check, objection 1: a pass must be able to tell the right guar
     }
   });
 
-  it('a guard with a gap of 0.25 s or 0.2 s is never ok at any paint rate, and unsafe once the editor paints 13 frames a second or more', () => {
+  it('a guard with a gap of 0.25 s or 0.2 s is never ok at any paint rate, and caught as a fault of the guard once the editor paints 13 frames a second or more', () => {
     for (const gap of [0.25, 0.2]) {
       for (const paints of [5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 20, 24, 30, 45, 60]) {
         for (const seconds of [6, 20]) {
           const v = verdict(shuttle(new FlashGuard(gap), paints, seconds));
           expect(v, `gap ${gap}, ${paints} paints a second, ${seconds} s`).not.toBe('ok');
-          if (paints >= 13 && seconds === 20) expect(v, `gap ${gap}, ${paints} paints a second`).toBe('unsafe');
+          // Since the guard times a rise from where a viewer sees it (2026-11-18), a gap of 0.25 s at 13 paints a second stays
+          // at three a second and is caught by its spacing (rises 0.317 s apart on screen); at 20 paints a second the paints
+          // fall in step with the strobes and the screen without any guard reaches only four in a second: no margin, blocked
+          // (it was unsafe there only while the guard followed the strongest strobe and not the picture's strobes mixed,
+          // which made the right guard unsafe there too: see "the check judges the screen, not the guard" below).
+          if (paints >= 13 && seconds === 20) expect(v, `gap ${gap}, ${paints} paints a second`).toBe(gap === 0.25 && paints === 13 ? 'too-close' : gap === 0.25 && paints === 20 ? 'blocked' : 'unsafe');
         }
       }
       expect(verdict(shuttle(new FlashGuard(gap), slowThenFast, 55)), `gap ${gap}, slow then fast`).toBe('unsafe');
@@ -160,14 +167,17 @@ describe('shuttle check, objection 1: a pass must be able to tell the right guar
     }
   });
 
-  it('the real guard on the recorded runs with the margin (quiet, 18.5 paints a second; busy, 9.6): ok; the same busy run cut before the margin, and the slow run (5.7): blocked', () => {
+  it('the real guard on the recorded runs with the margin (quiet, 18.5 paints a second; busy, 9.6): ok, but the busy run showed two rises 0.321 s apart (too-close); the same paints through today\'s guard: ok; the same busy run cut before the margin, and the slow run (5.7): blocked', () => {
     for (const [name, run, held] of [['quiet', QUIET, QUIET_HELD], ['busy', BUSY, BUSY_HELD]] as const) {
       const m = measure({ samples: run });
       expect(m.unexplained, name).toBe(0);
       expect(m.mostInOneSecondWithoutGuard, name).toBeGreaterThanOrEqual(MARGIN_FLASHES);
       expect(m.wrongGapsCaught, name).toEqual(expect.arrayContaining([0.25, 0.2]));
       expect(m.margin, name).toBe(true);
-      expect(judgeShuttle(m, held, '▶▶ ×8'), name).toBe('ok');
+      // recorded with the guard as it was: it timed a rise from its decision before the draw, and on the busy machine two
+      // rises reached the screen 0.321 s apart (5.042 and 5.363 s), which the spacing check now calls a fault
+      expect(judgeShuttle(m, held, '▶▶ ×8'), name).toBe(name === 'busy' ? 'too-close' : 'ok');
+      if (name === 'busy') expect(m.closestOnScreen).toBe(0.321);
       // the real guard replayed on the same paint times holds frames and passes too
       expect(verdict(through(new FlashGuard(), paintTimes(run))), `${name}, replayed`).toBe('ok');
     }
