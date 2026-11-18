@@ -8,6 +8,7 @@ import { audioEffectParams, type AudioFxParams } from '@pulseframe/core';
 import { mixClip, type PlannedAudioClip } from '@pulseframe/engine';
 import { FX_FIXTURE_SECONDS, fxFixture, renderFx } from '@pulseframe/engine/audiofx/kernels/index.ts';
 import { plannedClipInput } from './audioGraph.ts';
+import { curveHash, pathPointsMs } from './curveHash.ts';
 import './editor/lifeline/lifeline.selftest.ts'; // life line (ADR-0021): window.__pfLife, the core calendar in this browser, for proof:lifeline
 
 /**
@@ -27,6 +28,10 @@ function fxRun(type: string, params: AudioFxParams = {}): { base64: string; fram
 }
 (window as unknown as { __pfFxRun: typeof fxRun; __pfFxFixtureSeconds: number }).__pfFxRun = fxRun;
 (window as unknown as { __pfFxFixtureSeconds: number }).__pfFxFixtureSeconds = FX_FIXTURE_SECONDS;
+// keyframe curves (ADR-0019, keyframes-proof P12): the SHA-256 of 1e5 samples of the one sampler over every easing and the
+// shutter-tap times (curveHash.ts, the same module Node runs), with the sampler's ns/sample here, and pathPoints' cost
+(window as unknown as { __pfCurveHash: typeof curveHash }).__pfCurveHash = curveHash;
+(window as unknown as { __pfPathPointsMs: typeof pathPointsMs }).__pfPathPointsMs = pathPointsMs;
 
 async function audioChainMatchesReference() {
   const sr = 48000, total = 60000;

@@ -104,7 +104,7 @@ async function main() {
     await key('Comma');
     const atPrev = await tc();
     await key('Period');
-    check('previous/next keyframe navigation ( , and . )', atPrev === '00:00:00:00' && (await tc()) === '00:00:00:20' && (await page.locator('.clip.selected .kf').count()) >= 2);
+    check('previous/next keyframe navigation ( , and . )', atPrev === '00:00:00:00' && (await tc()) === '00:00:00:20' && (await page.locator('.clip.selected .kf, [data-testid=key-strip-key]').count()) >= 2); // the selected clip's keys show on its keyframe strip (ADR-0019), other clips keep the diamonds
     r0 = await rev();
     await key('Control+KeyZ');
     await waitRev(r0 + 1);
