@@ -561,6 +561,30 @@ async function main() {
       await auditState('cache-storage-row', { shown: (await page.getByTestId('cache-storage-row').count()) === 1 && (await page.getByTestId('cache-clear').count()) === 1 }, true);
       await page.keyboard.press('Escape');
       await page.getByTestId('settings-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      // shorts (ADR-0018): the Shorts panel (its four steps) and the sequence switcher with a short present, with the delete
+      // confirmation. The short is added through the public add_sequence operation and removed again, so every language starts alike.
+      {
+        const shApi = makeApi(s.url, s.auth.tokens.agent);
+        await page.goto(`${s.ownerUrl}&project=${pid}`);
+        await page.getByTestId('timecode').waitFor();
+        if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+        await page.getByTestId('workspace-shorts').click({ timeout: 8000 }).catch(() => {});
+        await page.getByTestId('shorts-panel').waitFor({ timeout: 8000 }).catch(() => {});
+        await auditState('shorts-panel', { shown: (await page.getByTestId('shorts-panel').count()) === 1 && (await page.locator('[data-testid=shorts-step]').count()) === 4 });
+        const made = await shApi.tx(pid, [{ op: 'add_sequence', args: { name: lang === 'he' ? 'קטע בדיקה' : 'Test short', format: { width: 720, height: 1280, fit: 'cover', profileId: 'vertical-9x16', safeArea: null } } }]).catch(() => null);
+        const shortId = made?.results?.[0]?.output?.sequenceId as string | undefined;
+        if (shortId) {
+          await page.getByTestId('sequence-switcher').waitFor({ timeout: 8000 }).catch(() => {});
+          await auditState('shorts-switcher', { shown: (await page.getByTestId('sequence-switcher').count()) === 1 && (await page.locator('[data-testid=sequence-switcher] [role=tab]').count()) === 2 });
+          await page.locator(`[data-testid=sequence-tab][data-sequence-id="${shortId}"]`).click();
+          await page.getByTestId('sequence-tab-delete').waitFor({ timeout: 5000 }).catch(() => {});
+          const sd = await dialogBehaviour('sequence-delete-dialog', async () => { await page.getByTestId('sequence-tab-delete').click(); }, '[data-testid=sequence-tab-delete]');
+          await auditState('shorts-delete-dialog', { startsInside: sd.startsInside, tabStepsThatLeftTheDialog: sd.tabStepsThatLeftTheDialog }, true);
+          Object.assign(states.at(-1), await sd.close());
+          await shApi.tx(pid, [{ op: 'remove_sequence', args: { sequenceId: shortId, withContents: true } }]).catch(() => null);
+        }
+        await page.getByTestId('workspace-pro').click().catch(() => {});
+      }
       // the start hub of an empty project
       await page.goto(`${s.ownerUrl}&project=${emptyPid}`);
       await page.getByTestId('welcome').waitFor({ timeout: 10000 }).catch(() => {});
