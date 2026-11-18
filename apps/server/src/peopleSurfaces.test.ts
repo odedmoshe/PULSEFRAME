@@ -178,6 +178,8 @@ const PARAMS: Record<string, () => string> = {
   sfxId: () => 'none', modelId: () => 'none', index: () => '0', styleId: () => 'none',
   // shorts (ADR-0018): the main sequence of the walked project (every project made by createProject has it)
   sequenceId: () => 'seq_main',
+  // multicam (ADR-0020): a group the walked project does not have (the routes answer 404 before reading anything)
+  groupId: () => 'mcg_none',
 };
 /** Queries and bodies that reach the part of a route that reads the project; any other POST gets a body its schema refuses. */
 const QUERY: Record<string, () => string> = {
