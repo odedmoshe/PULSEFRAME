@@ -115,3 +115,12 @@ export function angleForDigit(group: MulticamGroup, digit: number): MulticamAngl
 export function tilePositions(count: number, cols: number, rtl: boolean): { tile: number; row: number; col: number }[] {
   return Array.from({ length: count }, (_, i) => ({ tile: i + 1, row: Math.floor(i / cols), col: rtl ? cols - 1 - (i % cols) : i % cols }));
 }
+
+/** The privacy/look side of a report in words: what a switch dropped, then the warnings (redaction_missing is the only signal, policy is warn, never block). */
+export function reportNotes(rep: Pick<SessionReport, 'dropped' | 'warnings'>, dict: Record<string, string>, droppedLine: (what: string, n: number) => string): string[] {
+  const by = new Map<string, number>();
+  for (const d of rep.dropped) by.set(d.what, (by.get(d.what) ?? 0) + 1);
+  const out = [...by].map(([w, n]) => droppedLine(dict[`multicam.dropped.${w}`] ?? w, n));
+  for (const code of new Set(rep.warnings.map((w) => w.code))) out.push(dict[`multicam.warn.${code}`] ?? code);
+  return out;
+}

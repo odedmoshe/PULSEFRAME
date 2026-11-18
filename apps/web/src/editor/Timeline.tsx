@@ -36,6 +36,10 @@ const MAX_MARKERS = 3000;
 type MediaClip = Extract<Clip, { type: 'media' }>;
 
 /** «N · label» of a multicam tag: N is the angle's place among the group's picture angles (a sound angle has the mark ♪). */
+/** Whether the clip's badge strip renders at all: the multicam «N · label» badge is one of its reasons (a plain switched segment has no other). */
+export function hasClipBadges(b: { mcBadge: string | null; fxCount: number; speed: number; ai: unknown; onBeatFx: unknown; media: boolean }): boolean {
+  return !!b.mcBadge || b.fxCount > 0 || b.speed !== 1 || !!b.ai || !!b.onBeatFx || b.media;
+}
 export function mcBadgeText(doc: ProjectDocument, tag: { groupId: string; angleId: string }, lang: 'he' | 'en'): string | null {
   const g = doc.multicam?.[tag.groupId];
   const a = g?.angles.find((x) => x.id === tag.angleId);
@@ -441,7 +445,7 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
                   {fxNames.length ? <span className="clip-fx-badge" aria-hidden="true" data-testid="clip-fx-badge">∿</span> : null}
                   <span dir="auto" className="clip-label">{label || (missing ? s.clipMissing : '')}</span>
                 </span>
-                {(fxCount > 0 || speed !== 1 || ai || onBeatFx || (c.type === 'media' && (c.freeze || c.reverse || c.speedEnd))) && (
+                {hasClipBadges({ mcBadge, fxCount, speed, ai, onBeatFx, media: c.type === 'media' && !!(c.freeze || c.reverse || c.speedEnd) }) && (
                   <span className="clip-badges" aria-hidden="true">
                     {mcBadge && <span className="clip-badge mc-clip-badge" data-testid="multicam-badge" data-angle-id={c.type === 'media' ? c.multicam?.angleId : undefined}>{mcBadge}</span>}
                     {c.type === 'media' && c.freeze && <span className="clip-badge" title={s.clipFreeze}><Snowflake size={11} strokeWidth={1.75} /></span>}

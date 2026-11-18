@@ -21,7 +21,7 @@ import { addAssetArgs, dropAssetArgs } from './placement.ts';
 import { injectSequenceId } from './shorts.view.ts';
 import { followFactor, followOffsetAt, layerOf, ownFromResolved } from './tracking.math.ts';
 import { wholeEditOps, type WholeEditPick } from './commands.ts';
-import { commitParts, projectionResult, record, reportOf, startSession, type MulticamSession } from './multicamSession.ts';
+import { commitParts, projectionResult, record, reportNotes, reportOf, startSession, type MulticamSession } from './multicamSession.ts';
 import { MULTICAM_STRINGS } from './multicam.strings.ts';
 import { cutBefore, type ObjectTab } from './inspector.model.ts';
 import { ImportsStore, type ImportJobEvent, type ImportsState } from './imports.ts';
@@ -516,7 +516,8 @@ export class Editor {
     const under = tagged.find((c) => T.lte(c.start, t) && T.lt(t, clipEnd(c))) ?? tagged[0]!;
     return { groupId: (under as { multicam: { groupId: string } }).multicam.groupId, sequenceId: d.mainSequenceId, trackId };
   }
-  get recordingSwitches(): boolean { return !!this.state.multicamRec; }
+  /** A session is recording only until stop begins to commit it: from then on digits, Escape and a second stop do nothing. */
+  get recordingSwitches(): boolean { return !!this.state.multicamRec && !this.committingSession; }
   private say(text: string) { this.set({ multicamLive: { text, n: (this.state.multicamLive?.n ?? 0) + 1 } }); }
   private ms() { return MULTICAM_STRINGS[this.state.lang]; }
   setMulticamReaction(frames: number) {
@@ -536,7 +537,7 @@ export class Editor {
   /** Record a cut to `angleId` at the group time of the frame on screen minus the reaction offset. Never pauses or restarts anything. */
   recordCut(angleId: string): void {
     const s = this.state.multicamRec, p = this.player, doc = this.state.doc;
-    if (!s || !p || !doc) return;
+    if (!s || !p || !doc || this.committingSession) return;
     const shown = p.painted >= 0 ? p.painted : p.frame;
     const f = Math.max(0, shown - s.reactionFrames);
     const gt = groupTimeAt(doc, s.sequenceId, s.trackId, T.frameTime(f, this.rate));
@@ -548,7 +549,7 @@ export class Editor {
   /** Called on every player tick: a pause or the end of the program (not a pause-and-resume inside setDoc) commits the recording. */
   private multicamTick() {
     const s = this.state.multicamRec, p = this.player;
-    if (!s || !p) return;
+    if (!s || !p || this.committingSession) return;
     if (p.active) { this.recSaw = true; if (this.recTimer) { clearTimeout(this.recTimer); this.recTimer = 0; } return; }
     if (!this.recSaw || this.recTimer) return;
     this.recTimer = window.setTimeout(() => { this.recTimer = 0; if (this.state.multicamRec && !this.player?.active) void this.stopRecording(); }, 200);
@@ -556,7 +557,7 @@ export class Editor {
   /** One switch_angles (or labelled parts over MAX_CUTS cuts) from the session. A 409 re-sends once at the fresh revision: group-time cuts stay valid. */
   stopRecording(): Promise<void> {
     const s = this.state.multicamRec;
-    if (!s) return Promise.resolve();
+    if (!s || this.committingSession) return Promise.resolve();
     if (this.recTimer) { clearTimeout(this.recTimer); this.recTimer = 0; }
     const S = this.ms();
     const parts = commitParts(s);
@@ -564,7 +565,7 @@ export class Editor {
     this.committingSession = true;
     return this.enqueue(async () => {
       const id = this.state.doc?.id;
-      if (!id) return;
+      if (!id) { this.committingSession = false; return; }
       const outputs: (SwitchAnglesOutput | undefined)[] = [];
       let revision = s.baseRevision, failed = false;
       this.set({ save: 'save.saving', error: null });
@@ -589,12 +590,13 @@ export class Editor {
       const rep = reportOf(outputs);
       const skipped = rep.skipped.reduce((n, k) => n + k.count, 0);
       const why = rep.skipped.map((k) => (dictionaries[this.state.lang] as Record<string, string>)[`multicam.skip.${k.reason}`] ?? k.reason).join(', ');
-      this.say(failed ? S.commitFailed : [S.saved(rep.saved), skipped ? S.skippedSome(skipped, why) : '', parts.length > 1 ? S.partsNote(parts.length) : ''].filter(Boolean).join('. '));
+      const notes = reportNotes(rep, dictionaries[this.state.lang] as Record<string, string>, S.droppedLine);
+      this.say(failed ? S.commitFailed : [S.saved(rep.saved), skipped ? S.skippedSome(skipped, why) : '', ...notes, parts.length > 1 ? S.partsNote(parts.length) : ''].filter(Boolean).join('. '));
     });
   }
   /** Escape: the recording is dropped, nothing is saved, and the program shows as it is. */
   discardRecording(): void {
-    if (!this.state.multicamRec) return;
+    if (!this.state.multicamRec || this.committingSession) return;
     if (this.recTimer) { clearTimeout(this.recTimer); this.recTimer = 0; }
     this.set({ multicamRec: null });
     const vd = this.viewDoc;
@@ -627,9 +629,10 @@ export class Editor {
   private async commitSwitch(args: Record<string, unknown>) {
     const r = await this.commit([{ op: 'switch_angles', args }], 'Switch angles');
     const o = r?.results[0]?.output as SwitchAnglesOutput | undefined;
-    if (o?.skipped.length) {
-      const k = o.skipped[0]!.reason;
-      this.sayOnStage((dictionaries[this.state.lang] as Record<string, string>)[`multicam.skip.${k}`] ?? k);
+    if (o) {
+      const D = dictionaries[this.state.lang] as Record<string, string>;
+      const text = [...o.skipped.map((k) => D[`multicam.skip.${k.reason}`] ?? k.reason), ...reportNotes(o, D, this.ms().droppedLine)].join('. ');
+      if (text) this.sayOnStage(text);
     }
     return r;
   }

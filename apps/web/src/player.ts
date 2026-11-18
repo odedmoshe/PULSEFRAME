@@ -221,6 +221,7 @@ export class Player {
    */
   setPictureDoc(doc: ProjectDocument): boolean {
     const old = this.doc;
+    if (this.starting) { this.setDoc(doc); return false; } // play() is still waiting for the audio device: it planned its sound from the old document, so it starts again (setDoc)
     if (!old || this.opts.draftOnly) { this.doc = doc; this.painted = -1; this.request(this.frame); return true; }
     const key = (d: ProjectDocument) => { const p = audioPlan(d, undefined, { bypassFx: this.bypassAudioFx }); return canonical({ clips: p.clips, totalSamples: p.totalSamples, loudness: p.loudness }); };
     if (key(old) !== key(doc)) { this.setDoc(doc); return false; }
