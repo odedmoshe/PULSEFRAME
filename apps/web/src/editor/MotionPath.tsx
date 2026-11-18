@@ -8,7 +8,8 @@
  * - an aria-hidden dual-stroke polyline (a dark stroke under a light one, readable on any picture), with frame dots where they
  *   are at least 4 px apart; its points (CSS px, relative to the root) are on data-points for the proofs;
  * - one <button> per vertex (a frame inside the clip where x or y has a key), named with timecode and values. Pointer: drag
- *   after 3 px, with the centre snap of CanvasHandles (6 px), one commit on release (pathEdits.ts moveVertexOps: ≤ 2 ops);
+ *   after 3 px, with the centre snap of CanvasHandles (6 px), one commit on release (pathEdits.ts moveVertexOps: ≤ 2 ops; only
+ *   the axes the pointer or arrow moved are snapped, rounded to 1e-4 and written, pathMove.ts);
  *   Escape cancels. Keyboard (handled here, stopPropagation, as VolumeLine): arrows move 0.01 (Shift 0.05), Alt+←/→ move the
  *   vertex's keys one frame (Shift 10), S smooth, L straight, Enter opens the curve picker, Space toggles the selection,
  *   Delete removes, Mod+A selects every vertex, Mod+C copies, Mod+V pastes at the playhead, Escape clears the selection and
@@ -28,11 +29,12 @@ import { useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, ReactElement } from 'react';
 import * as T from '@pulseframe/time';
 import {
-  bendOps, copyKeys, curveOps, deleteKeysOps, findClip, moveKeysOps, moveVertexOps, pasteKeysOps, pathPoints, transformAt, vertexFrames,
+  bendOps, copyKeys, curveOps, deleteKeysOps, findClip, moveKeysOps, pasteKeysOps, pathPoints, transformAt, vertexFrames,
   type Clip, type KeyRef, type OpCall, type ProjectDocument, type Track,
 } from '@pulseframe/core';
 import { useEditorState } from './store.ts';
 import { KF_TESTIDS } from './keyframes.testids.ts';
+import { dragTarget, round4, vertexMoveOps, vertexNudgeOps, type VertexTarget } from './pathMove.ts';
 import './motionPath.css';
 
 export interface MotionPathProps {
@@ -61,7 +63,6 @@ const DOT_GAP_PX = 4;
 /** Half the size of a vertex (motionPath.css): stand-ins sit this far inside the viewer edge. */
 const VERTEX_HALF_PX = 6;
 const LAYER_CLEAR_PX = 12;
-const round4 = (v: number) => Math.round(v * 1e4) / 1e4;
 const AXES = [{ property: 'x' as const }, { property: 'y' as const }];
 
 interface PathDrag { kind: 'vertex' | 'bend'; frame: number; a: number; b: number; pointerId: number; startX: number; startY: number; sx: number; sy: number; moved: boolean }
@@ -106,24 +107,19 @@ export function MotionPath(props: MotionPathProps): ReactElement | null {
     void editor.commit(() => { const m = master(); return m ? make(m.clip, m.track) : null; }, label);
   };
 
-  const snap = (x: number, y: number) => {
-    let sx = x, sy = y;
-    if (Math.abs(sx * W) <= CENTRE_SNAP_PX) sx = 0;
-    if (Math.abs(sy * H) <= CENTRE_SNAP_PX) sy = 0;
-    return { x: sx, y: sy };
-  };
-  const placeFor = (d: PathDrag, e: { clientX: number; clientY: number }) => {
+  /** A vertex drag moves (and snaps, rounds, writes) only the axes the pointer moved along (pathMove.ts); a bend takes both. */
+  const placeFor = (d: PathDrag, e: { clientX: number; clientY: number }): VertexTarget => {
     if (d.kind === 'bend') {
       const r = root.current!.getBoundingClientRect();
       return fromScreen(e.clientX - r.left, e.clientY - r.top);
     }
-    return snap(d.sx + (e.clientX - d.startX) / W, d.sy + (e.clientY - d.startY) / H);
+    return dragTarget({ x: d.sx, y: d.sy }, { x: e.clientX - d.startX, y: e.clientY - d.startY }, { w: W, h: H }, CENTRE_SNAP_PX);
   };
-  const finish = (d: PathDrag, at: { x: number; y: number }) => {
+  const finish = (d: PathDrag, to: VertexTarget) => {
     if (d.kind === 'vertex') {
-      commit('Move path point', (c) => moveVertexOps(c, rate, d.frame, round4(at.x), round4(at.y)).ops);
+      commit('Move path point', (c) => { const ops = vertexMoveOps(c, rate, d.frame, to); return ops.length ? ops : null; });
       setNote('');
-    } else bend(d.a, d.b, at);
+    } else bend(d.a, d.b, { x: to.x ?? d.sx, y: to.y ?? d.sy });
   };
   const bend = (a: number, b: number, at: { x: number; y: number }) => {
     if (!editable) return;
@@ -150,8 +146,8 @@ export function MotionPath(props: MotionPathProps): ReactElement | null {
     if (!d || e.pointerId !== d.pointerId) return;
     if (!d.moved && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < DRAG_THRESHOLD_PX) return;
     d.moved = true;
-    const at = placeFor(d, e);
-    setPreview({ ...at, frame: d.kind === 'bend' ? Math.floor((d.a + d.b) / 2) : d.frame, kind: d.kind });
+    const to = placeFor(d, e);
+    setPreview({ x: to.x ?? d.sx, y: to.y ?? d.sy, frame: d.kind === 'bend' ? Math.floor((d.a + d.b) / 2) : d.frame, kind: d.kind });
   };
   const onUp = (e: ReactPointerEvent<HTMLElement>) => {
     const d = drag.current;
@@ -183,7 +179,7 @@ export function MotionPath(props: MotionPathProps): ReactElement | null {
     if (a) {
       handled();
       const step = e.shiftKey ? 0.05 : 0.01;
-      commit('Move path point', (c) => { const tr = transformAt(c, T.add(c.start, T.frameTime(f, rate))); return moveVertexOps(c, rate, f, round4(tr.x + a[0] * step), round4(tr.y + a[1] * step)).ops; });
+      commit('Move path point', (c) => { const ops = vertexNudgeOps(c, rate, f, a[0] * step, a[1] * step); return ops.length ? ops : null; });
       return;
     }
     if (mod(e) && e.code === 'KeyA') { handled(); editor.set({ keySel: { clipId: clip.id, keys: vertices.flatMap(refsAt) } }); return; }
