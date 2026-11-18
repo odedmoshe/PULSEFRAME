@@ -67,6 +67,11 @@ describe('pictureSample', () => {
     expect(s.border).toBe(true);
     expect(s.pan).toBeGreaterThan(MOMENTS_GATES.whipPanPermillePerSecond);
   });
+  it('a pan far beyond the search is flagged at every distance, even when its best in-range shift is not on the border', () => {
+    for (const dx of [52, 61, 77, 90, 130]) for (const dy of [0, 9]) expect(pictureSample(still, shifted(dx, dy), SPS).border, `${dx},${dy}`).toBe(true);
+    // a subject moving over a still background is not a camera move
+    for (let k = 0; k < 6; k++) expect(pictureSample(discAt(k), discAt(k + 1), SPS).border).toBe(false);
+  });
   it('a translation by a non-multiple of 4 px on a 1/f texture reports its residual (the stated limit)', () => {
     const s = pictureSample(still, shifted(6, 2), SPS);
     expect(s.border).toBe(false);

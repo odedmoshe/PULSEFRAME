@@ -9,7 +9,8 @@
  * - The z statistics (p20, MAD) are taken over every sample of the file, gated or not.
  * - A picture sample stands for its own source frame k·S and covers [k·S, (k+1)·S); its sound level is the loudest hop whose
  *   time [0.1h, 0.1(h+1)) meets the sample's source time span (core sourceTimeOfFrame, so the start offset counts).
- * - A peak lies on a sample that is not gated; its clean stretch is the run of ungated samples around it (a hard cut is gated,
+ * - A peak lies on a sample that is not gated and has interest of its own of at least minInterest (so a peak never sits on a still sample next to a
+ *   moment, reached only by the smoothing); its clean stretch is the run of ungated samples around it (a hard cut is gated,
  *   so it is never crossed), at most maxStretchSeconds each way.
  * - Window values are taken over the peak ± coreSeconds inside the clean stretch: motion = mean inner, level = mean sample
  *   level minus the file's median hop level (dB, one decimal), sharp = mean sharp / the file's median sharp, luma = mean luma.
@@ -20,7 +21,7 @@ import { MOMENTS_GATES, MOMENTS_HOP_MS, momentsStep, hopOfBucket, type MOMENT_BA
 import type { GreyFrame } from './vision/types.ts';
 
 type MomentBasis = (typeof MOMENT_BASES)[number];
-export interface PictureSample { luma: number; sharp: number; inner: number; pan: number; change: number; /** the best shift lies on the border of the search (a whip pan the search cannot measure) */ border: boolean }
+export interface PictureSample { luma: number; sharp: number; inner: number; pan: number; change: number; /** the search could not measure the camera move (a whip pan): the best shift lies on the border of the search, or a nonzero best shift leaves at least 80 % of a clear unshifted difference spread over half the picture */ border: boolean }
 
 const G = MOMENTS_GATES;
 /** A 4×4 box sum (0..4080) is full scale at this value. */
@@ -44,27 +45,40 @@ export const searchOf = (bw: number, bh: number): number => Math.max(0, Math.min
 /**
  * The best whole-picture shift of `cur` against `prev` (box images of the same size): every (dx, dy) in [-s, s]² compared by
  * the sum of |cur(x, y) - prev(x + dx, y + dy)| over the same inner window (margin s); ties to the smallest |d|, then the
- * lowest dy, then the lowest dx. Returns the shift, its SAD and the window's pixel count.
+ * lowest dy, then the lowest dx. Returns the shift, its SAD, the SAD without a shift (sad0) and the window's pixel count.
  */
-export function bestShift(prev: Int32Array, cur: Int32Array, bw: number, bh: number): { dx: number; dy: number; sad: number; n: number; search: number } {
+export function bestShift(prev: Int32Array, cur: Int32Array, bw: number, bh: number): { dx: number; dy: number; sad: number; sad0: number; spread0: number; n: number; search: number } {
   const s = searchOf(bw, bh);
   const x0 = s, x1 = bw - s, y0 = s, y1 = bh - s, n = Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
-  let best = Infinity, bdx = 0, bdy = 0;
-  if (n === 0) return { dx: 0, dy: 0, sad: 0, n: 0, search: s };
+  if (n === 0) return { dx: 0, dy: 0, sad: 0, sad0: 0, spread0: 0, n: 0, search: s };
+  let changed = 0;
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const d = cur[y * bw + x]! - prev[y * bw + x]!; if (d > SPREAD_BOX_DIFF || d < -SPREAD_BOX_DIFF) changed++; }
+  const sadAt = (dx: number, dy: number, limit: number) => {
+    let sad = 0;
+    for (let y = y0; y < y1 && sad <= limit; y++) {
+      const oc = y * bw, op = (y + dy) * bw + dx;
+      for (let x = x0; x < x1; x++) { const d = cur[oc + x]! - prev[op + x]!; sad += d < 0 ? -d : d; }
+    }
+    return sad;
+  };
+  // (0, 0) first: it wins every tie, so a sum that grows past the best so far can stop early without changing the result
+  const sad0 = sadAt(0, 0, Infinity);
+  let best = sad0, bdx = 0, bdy = 0;
   for (let dy = -s; dy <= s; dy++)
     for (let dx = -s; dx <= s; dx++) {
-      let sad = 0;
-      for (let y = y0; y < y1 && sad <= best; y++) {
-        const oc = y * bw, op = (y + dy) * bw + dx;
-        for (let x = x0; x < x1; x++) { const d = cur[oc + x]! - prev[op + x]!; sad += d < 0 ? -d : d; }
-      }
+      if (dx === 0 && dy === 0) continue;
+      const sad = sadAt(dx, dy, best);
       if (sad > best) continue;
-      if (sad < best) { best = sad; bdx = dx; bdy = dy; continue; }
-      // a tie: smaller |d|, then lower dy, then lower dx (the loop already visits lower dy, dx first)
-      if (dx * dx + dy * dy < bdx * bdx + bdy * bdy) { bdx = dx; bdy = dy; }
+      if (sad < best || dx * dx + dy * dy < bdx * bdx + bdy * bdy) { best = sad; bdx = dx; bdy = dy; } // a tie: smaller |d| (lower dy, dx are visited first)
     }
-  return { dx: bdx, dy: bdy, sad: best, n, search: s };
+  return { dx: bdx, dy: bdy, sad: best, sad0, spread0: changed / n, n, search: s };
 }
+/** A nonzero best shift that removes less than a fifth of the unshifted difference does not explain the change (see pictureSample). */
+export const UNEXPLAINED_SHIFT_RATIO = 0.8;
+/** ... when the unshifted difference is spread over at least this share of the window (a camera move changes the whole picture; a subject changes a part). */
+export const UNEXPLAINED_SPREAD = 0.5;
+/** A box pixel counts as changed when its 4×4 sum moves by more than this (8 grey levels on average). */
+const SPREAD_BOX_DIFF = 128;
 
 /** Mean Sobel gradient energy (gx² + gy²) over the interior pixels, divided by 16, rounded, capped at 65535. */
 export function sharpness(f: GreyFrame): number {
@@ -104,7 +118,14 @@ export function pictureSample(prev: GreyFrame | null, cur: GreyFrame, samplesPer
   if (s.n === 0) return { luma, sharp, inner: change, pan: 0, change, border: false };
   const inner = Math.min(1000, Math.round((1000 * s.sad) / (s.n * BOX_FULL)));
   const pan = Math.min(10000, Math.round((1000 * Math.sqrt(s.dx * s.dx + s.dy * s.dy) * samplesPerSecond) / Math.max(B.w, B.h)));
-  const border = s.search > 0 && Math.max(Math.abs(s.dx), Math.abs(s.dy)) === s.search;
+  // The search could not measure the camera move (gated as a whip pan): its best shift lies on the border of the search, OR
+  // (heuristic, added after the film fixture's 1219 permille/s decoy showed the border rule alone misses most of a fast pan)
+  // a nonzero best shift explains less than a fifth of a clear unshifted difference that covers at least half the window: a
+  // move beyond the search makes every shift about equally wrong, so the minimum lands on a random shift, and the whole picture
+  // changed. A subject moving over a still background changes only a part of it (and usually keeps the shift at (0, 0)).
+  const onBorder = s.search > 0 && Math.max(Math.abs(s.dx), Math.abs(s.dy)) === s.search;
+  const unexplained = (s.dx !== 0 || s.dy !== 0) && Math.round((1000 * s.sad0) / (s.n * BOX_FULL)) >= G.activeMotionPermille && s.sad >= UNEXPLAINED_SHIFT_RATIO * s.sad0 && s.spread0 >= UNEXPLAINED_SPREAD;
+  const border = onBorder || unexplained;
   return { luma, sharp, inner, pan, change, border };
 }
 
@@ -129,8 +150,8 @@ export function soundLevels(peaks: Int16Array, totalSamples: number): number[] {
 }
 
 /**
- * The gate series of measured picture samples (1 = gated): dark, blown, whip pan (pan over the threshold OR the best shift on
- * the border of the search; widened by one sample each side), blur (sharp under blurRatio × the file's median), and hard cut
+ * The gate series of measured picture samples (1 = gated): dark, blown, whip pan (pan over the threshold OR the search could
+ * not measure the move: the sample's border flag, see pictureSample; widened by one sample each side), blur (sharp under blurRatio × the file's median), and hard cut
  * (change and inner both over their thresholds: splits the clean stretch and has zero interest).
  */
 export function pictureGates(s: { luma: readonly number[]; sharp: readonly number[]; inner: readonly number[]; pan: readonly number[]; change: readonly number[]; border: readonly boolean[] }): number[] {
@@ -204,7 +225,7 @@ export function findMoments(picture: PictureSeries | null, sound: SoundSeries | 
   const fileLevel = file.level;
   while (windows.length < 4) {
     let best = -1;
-    for (let k = 0; k < K; k++) if (!suppressed[k] && gate[k] && (best < 0 || score[k]! > score[best]!)) best = k;
+    for (let k = 0; k < K; k++) if (!suppressed[k] && gate[k] && partI[k]! + partL[k]! >= G.minInterest && (best < 0 || score[k]! > score[best]!)) best = k;
     if (best < 0 || !(score[best]! >= G.minInterest)) break;
     for (let j = Math.max(0, best - sep); j <= Math.min(K - 1, best + sep); j++) suppressed[j] = 1;
     let a = best, b = best;
