@@ -63,8 +63,8 @@ export const LIFE_FUZZ_OPS = ['set_asset_capture', 'shift_asset_captures', 'set_
  * `genKeyframes(doc)` returns a random call with the curves of ADR-0019: set_keyframe / set_effect_keyframe with every easing and
  * handles, replace_clip_keyframes in both forms, replace_effect_keyframes and set_keyframe_curve, valid most of the time and
  * sometimes refused (handles without 'bezier', a turn-back curve on opacity or a colour parameter, a range turned round, a key
- * outside its range). `gen` draws from these rows too once W1 has built them (KEYFRAME_OPS_BUILT); until then the seeded fuzz
- * runs exactly as before.
+ * outside its range). `gen` draws from these rows too now that W1 has built them (KEYFRAME_OPS_BUILT); createFuzz(seed,
+ * { v1Replay: true }) leaves them out, so the seeded corpus without the new curves runs exactly as before (keyframe-replay.test.ts).
  * `genMulticam(doc)` returns a random call of the eight public multicam operations (ADR-0020). `gen` draws from these rows too
  * once W1 has built them (MULTICAM_OPS_BUILT).
  */

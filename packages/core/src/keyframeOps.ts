@@ -5,7 +5,7 @@
  * The lead's contract fixes the names, versions, descriptions and argument schemas (keyframe.ts
  * ReplaceEffectKeyframesArgsSchema, SetKeyframeCurveArgsSchema), the outputs, and every refusal with its code, English wording
  * and hint (keyframe.ts KEYFRAME_REFUSALS; the Hebrew wording is packages/i18n/src/keyframesWave.ts HE_KEYFRAMES).
- * KEYFRAME_OPS_BUILT turns the fuzz rows on.
+ * KEYFRAME_OPS_BUILT turns the fuzz rows on. W1 (ADR-0019) built both bodies; the tests are keyframeOps.test.ts.
  *
  * RULES OF THE BODIES (W1; keyframe.ts and keyframes-plan.md §3)
  * - replace_effect_keyframes: ops.ts mustClip + the picture rule of the effect ops (a caption cue or a sound clip is refused in

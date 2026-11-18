@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, timeline, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, EASINGS, timeline, transformAt, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, describeMoment, evaluate, kernelFor, resolveDirection, soundAt, soundTailsOf, type AudioPlan, type PlannedAudioClip } from './index.ts';
 
 const R = { num: 30, den: 1 };
@@ -58,6 +58,44 @@ describe('animated layers', () => {
     expect(layer(55).transform.y).toBeCloseTo(-0.1, 10);
     const seq = Array.from({ length: 15 }, (_, i) => JSON.stringify(layer(45 + i).transform));
     for (const i of [14, 0, 7, 3, 11]) expect(JSON.stringify(layer(45 + i).transform)).toBe(seq[i]);
+  });
+});
+
+describe('keyframe curves in the evaluator (ADR-0019)', () => {
+  /** Keys with every easing (a custom curve with handles that turn back, too) on x, scale and rotation of both clips. */
+  function curved() {
+    let doc = project();
+    const tracks = doc.sequences.seq_main!.tracks;
+    const video = tracks.find((t) => t.kind === 'video')!.clips[0]!, text = tracks.find((t) => t.kind === 'text')!.clips[0]!;
+    const ops = [video, text].flatMap((c) => EASINGS.flatMap((easing, i) => (['x', 'scale', 'rotation'] as const).map((property) => ({
+      op: 'set_keyframe', args: { clipId: c.id, property, time: f(i * 4), value: property === 'scale' ? 1 + (i % 3) * 0.4 : property === 'rotation' ? (i % 2 ? 30 : -15) : (i % 2 ? 0.3 : -0.2), easing, ...(easing === 'bezier' ? { bezier: [0.2, -0.6, 0.7, 1.7] } : {}) },
+    }))));
+    doc = applyTransaction(doc, ops, { idSeed: 'kc', actor: 't' }).doc;
+    return { doc, videoId: video.id, textId: text.id };
+  }
+  it('random access equals sequential evaluation with every easing', () => {
+    const { doc } = curved();
+    const seq = Array.from({ length: 100 }, (_, i) => JSON.stringify(evaluate(doc, f(i))));
+    const order = Array.from({ length: 100 }, (_, i) => (i * 37) % 100);
+    for (const i of order) expect(JSON.stringify(evaluate(doc, f(i))), `frame ${i}`).toBe(seq[i]);
+    // the curves do move the layers (not one static transform)
+    expect(new Set(seq.slice(30, 90)).size).toBeGreaterThan(40);
+  });
+  it('each shutter tap equals transformAt at that tap\'s time', () => {
+    const c = curved();
+    const doc = applyTransaction(c.doc, [{ op: 'add_effect', args: { clipId: c.videoId, type: 'time.shutter', params: { samples: 8 } } }], { idSeed: 'ks', actor: 't' }).doc;
+    const clip = doc.sequences.seq_main!.tracks.find((t) => t.kind === 'video')!.clips[0]!;
+    let taps = 0;
+    for (let fr = 30; fr < 90; fr++) {
+      const layer = evaluate(doc, f(fr)).layers.find((l) => l.clipId === clip.id)!;
+      expect(layer.time?.type).toBe('time.shutter');
+      for (const tap of layer.time!.taps) {
+        const want = transformAt(clip, tap.time);
+        for (const p of ['x', 'y', 'scale', 'rotation', 'opacity'] as const) expect(Object.is(tap.layer.transform[p], want[p]), `frame ${fr} ${p}`).toBe(true);
+        taps++;
+      }
+    }
+    expect(taps).toBe(60 * 8);
   });
 });
 
