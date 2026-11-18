@@ -23,7 +23,7 @@ import { IMPORT_STAGE, convertingStage, importCardState, importErrorRetryable, L
 import { readCapture } from './captureMeta.ts';
 import { CONFORM_RECIPE, diskReserveRefuses, IMPORT_JOB_TYPE, importIdempotencyKey, importTempName, type ImportJobError, type ImportJobInput, type ImportJobOutput, type ImportQueue, type ImportQueueDeps, type ReceiveRequest } from './importContracts.ts';
 import { buildImportedAsset, cleanRelativePath, cleanUploadName, ConformError, conformRecord, conformVideo, describeMedia, NeedsConform, prepareWithoutConform, receiveOriginal, type MediaMeta } from './ingest.ts';
-import { assertStorageRoom, dataDirBytes, freeDiskBytes } from './storage.ts';
+import { assertStorageRoom, dataDirBytes, freeDiskBytes, UploadLedger } from './storage.ts';
 import { ApiError, type JobRow } from './store.ts';
 
 /** Probes (and still copies) run two at a time, outside the compute lane. */
@@ -58,7 +58,8 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
   const waiters = new Map<string, { resolve: (row: JobRow) => void; reject: (e: unknown) => void }[]>();
   const receives = new Set<{ ac: AbortController }>();
   const tasks = new Set<Promise<void>>();
-  let inFlightBytes = 0;
+  /** Uploads still arriving, counted against the storage ceiling as their bytes arrive (a stream of unknown size included). */
+  const ledger = new UploadLedger(store);
   let stopped = false;
   let pumpScheduled = false;
 
@@ -391,45 +392,52 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
       const declared = req.declaredBytes !== null && Number.isFinite(req.declaredBytes) && req.declaredBytes >= 0 ? req.declaredBytes : null;
       if (declared !== null && isCube && declared > LUT_MAX_TEXT_LENGTH) throw new ApiError(413, 'upload_too_large', `a colour table (.cube) file can be at most ${LUT_MAX_TEXT_LENGTH} bytes`, { maxBytes: LUT_MAX_TEXT_LENGTH });
       if (declared !== null && declared > cap) throw new ApiError(413, 'upload_too_large', `upload exceeds ${cap} bytes`, { maxBytes: cap });
-      // The ceiling counts what is already arriving; a stream of unknown size is cut off at the room left.
-      const room = assertStorageRoom(store, (declared ?? 0) + inFlightBytes || 1, 'store this upload');
+      // The ceiling counts what is already arriving (reserved and not yet on disk); this upload reserves its declared size, or,
+      // of unknown size, grows its reservation as its bytes arrive and is cut off as soon as the ceiling would be passed.
+      assertStorageRoom(store, (declared ?? 1) + ledger.outstanding(), 'store this upload');
       if (diskReserveRefuses(freeBytes(store.dataDir), deps.reserveBytes, declared)) throw new ApiError(507, 'disk_full', 'there is not enough free disk space for this file', { declaredBytes: declared, reserveBytes: deps.reserveBytes }, 'Free some disk space, then send the file again.');
-      const reserved = declared ?? 0;
-      const roomBytes = room === Infinity ? Infinity : room - inFlightBytes;
-      inFlightBytes += reserved;
+      const tmpName = `up_${randomBytes(8).toString('hex')}`;
+      const reservation = ledger.open(path.join(store.tmpDir, tmpName), declared);
       const entry = { ac: new AbortController() };
       const onAbort = () => entry.ac.abort();
       if (req.signal?.aborted) entry.ac.abort(); else req.signal?.addEventListener('abort', onAbort, { once: true });
       receives.add(entry);
       let rec;
       try {
-        rec = await receiveOriginal(store, req.body, { maxBytes: cap, isCube, roomBytes, signal: entry.ac.signal, fsync: true });
+        rec = await receiveOriginal(store, req.body, { maxBytes: cap, isCube, reserve: (size) => ledger.grow(reservation, size), signal: entry.ac.signal, fsync: true, tmpName });
+      } catch (e) {
+        ledger.close(reservation); // the partial file is gone: its room is free again
+        throw e;
       } finally {
-        inFlightBytes -= reserved;
         receives.delete(entry);
         req.signal?.removeEventListener('abort', onAbort);
       }
-      if (declared !== null && rec.size !== declared) { fs.rmSync(rec.tmp, { force: true }); throw new ApiError(400, 'upload_incomplete', `the upload ended after ${rec.size} of ${declared} bytes; nothing was stored`, { receivedBytes: rec.size, declaredBytes: declared }); }
-      if (stopped) { fs.rmSync(rec.tmp, { force: true }); throw new ApiError(503, 'shutting_down', 'the server is stopping; send the file again once it is back'); }
-      const input: ImportJobInput = {
-        originalHash: rec.hash, byteSize: rec.size, name, via: req.via,
-        ...(req.via === 'phone' && req.dropId ? { dropId: req.dropId } : {}),
-        ...(req.issuedBy ? { issuedBy: req.issuedBy } : {}),
-        ...(relativePath ? { relativePath } : {}),
-        ...(req.declaredLastModified ? { declaredLastModified: req.declaredLastModified } : {}),
-        receivedAt: new Date(now()).toISOString(), commitKind: req.commitKind,
-        ...(req.batchId ? { batchId: req.batchId } : {}),
-        retryOf: null,
-      };
-      // Stored and enqueued in one synchronous step: no job without its bytes, no bytes without a job.
-      const row = store.db.transaction(() => {
-        store.putBlob(rec.hash, rec.tmp, rec.size, isCube ? 'text/plain' : 'application/octet-stream');
-        return store.createJob(req.projectId, IMPORT_JOB_TYPE, req.actor, input);
-      })();
-      emit(row);
-      probeQueue.push(row.id);
-      schedule();
-      return row;
+      // From here the bytes are on disk (then in the blob store, or removed): the reservation ends with this step either way.
+      try {
+        if (declared !== null && rec.size !== declared) { fs.rmSync(rec.tmp, { force: true }); throw new ApiError(400, 'upload_incomplete', `the upload ended after ${rec.size} of ${declared} bytes; nothing was stored`, { receivedBytes: rec.size, declaredBytes: declared }); }
+        if (stopped) { fs.rmSync(rec.tmp, { force: true }); throw new ApiError(503, 'shutting_down', 'the server is stopping; send the file again once it is back'); }
+        const input: ImportJobInput = {
+          originalHash: rec.hash, byteSize: rec.size, name, via: req.via,
+          ...(req.via === 'phone' && req.dropId ? { dropId: req.dropId } : {}),
+          ...(req.issuedBy ? { issuedBy: req.issuedBy } : {}),
+          ...(relativePath ? { relativePath } : {}),
+          ...(req.declaredLastModified ? { declaredLastModified: req.declaredLastModified } : {}),
+          receivedAt: new Date(now()).toISOString(), commitKind: req.commitKind,
+          ...(req.batchId ? { batchId: req.batchId } : {}),
+          retryOf: null,
+        };
+        // Stored and enqueued in one synchronous step: no job without its bytes, no bytes without a job.
+        const row = store.db.transaction(() => {
+          store.putBlob(rec.hash, rec.tmp, rec.size, isCube ? 'text/plain' : 'application/octet-stream');
+          return store.createJob(req.projectId, IMPORT_JOB_TYPE, req.actor, input);
+        })();
+        emit(row);
+        probeQueue.push(row.id);
+        schedule();
+        return row;
+      } finally {
+        ledger.close(reservation);
+      }
     },
 
     wait(jobId: string): Promise<JobRow> {

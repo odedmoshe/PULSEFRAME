@@ -197,11 +197,12 @@ export interface ReceivedOriginal { /** The temporary file (mode 0600) in store.
 /**
  * Phase 1: stream the body to a temporary file while counting and hashing it. Refuses (and removes the partial file):
  * 413 upload_too_large past `maxBytes` (a `.cube` name also past LUT_MAX_TEXT_LENGTH, the parser's own limit), 507
- * storage_quota_exceeded past `roomBytes` (the storage ceiling's room, when the caller gives it), 507 disk_full when the disk
+ * storage_quota_exceeded past `roomBytes` (the storage ceiling's room, when the caller gives it) or as soon as `reserve` refuses
+ * the size received so far (a reservation that grows as the bytes arrive: storage.ts UploadLedger), 507 disk_full when the disk
  * fills, 400 upload_incomplete when `signal` aborts, 400 empty_upload for no bytes. `fsync` flushes the file before returning
  * (the queue answers the sender once this returns: a promise to another device).
  */
-export async function receiveOriginal(store: Store, body: Readable, opts: { maxBytes: number; isCube: boolean; roomBytes?: number; signal?: AbortSignal; fsync?: boolean; tmpName?: string }): Promise<ReceivedOriginal> {
+export async function receiveOriginal(store: Store, body: Readable, opts: { maxBytes: number; isCube: boolean; roomBytes?: number; reserve?: (sizeSoFar: number) => { ok: true } | { ok: false; roomBytes: number }; signal?: AbortSignal; fsync?: boolean; tmpName?: string }): Promise<ReceivedOriginal> {
   const tmp = path.join(store.tmpDir, opts.tmpName ?? `up_${randomBytes(8).toString('hex')}`);
   const hash = createHash('sha256');
   let size = 0;
@@ -211,7 +212,8 @@ export async function receiveOriginal(store: Store, body: Readable, opts: { maxB
       size += chunk.length;
       if (opts.isCube && size > LUT_MAX_TEXT_LENGTH) return cb(new ApiError(413, 'upload_too_large', `a colour table (.cube) file can be at most ${LUT_MAX_TEXT_LENGTH} bytes`, { maxBytes: LUT_MAX_TEXT_LENGTH }));
       if (size > opts.maxBytes) return cb(new ApiError(413, 'upload_too_large', `upload exceeds ${opts.maxBytes} bytes`));
-      if (size > room) return cb(new ApiError(507, 'storage_quota_exceeded', 'not enough room to store this upload: the storage ceiling would be passed', { roomBytes: room }, 'Delete projects you no longer need and run the storage clean-up (owner: project manager → storage), or raise PF_MAX_STORAGE_BYTES.'));
+      const r = size > room ? { ok: false as const, roomBytes: room } : opts.reserve ? opts.reserve(size) : null;
+      if (r && !r.ok) return cb(new ApiError(507, 'storage_quota_exceeded', 'not enough room to store this upload: the storage ceiling would be passed', { roomBytes: r.roomBytes }, 'Delete projects you no longer need and run the storage clean-up (owner: project manager → storage), or raise PF_MAX_STORAGE_BYTES.'));
       hash.update(chunk);
       cb(null, chunk);
     },
