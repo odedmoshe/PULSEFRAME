@@ -45,6 +45,22 @@ const NEEDLES: readonly RegExp[] = [
   /4 בנובמבר|4 November|November 4/, // the birthday in words (a pack suggestion's badge names it)
 ];
 /** The first place in these values where the birth date, the age or the word choice shows, or null. */
+/**
+ * The text of every file in a tar archive, without the 512-byte headers: a header holds the entry's modification time and
+ * checksum as octal digits, which can spell "2014" by chance (the clock decides), so the leak search reads only what the
+ * archive carries.
+ */
+function tarContents(buf: Buffer): string {
+  const parts: string[] = [];
+  for (let at = 0; at + 512 <= buf.length;) {
+    const header = buf.subarray(at, at + 512);
+    if (header.every((b) => b === 0)) break;
+    const size = parseInt(header.subarray(124, 136).toString('ascii').replace(/\0/g, '').trim() || '0', 8);
+    parts.push(buf.subarray(at + 512, at + 512 + size).toString('utf8'));
+    at += 512 + Math.ceil(size / 512) * 512;
+  }
+  return parts.join('\n');
+}
 function familyLeak(...values: unknown[]): string | null {
   let found: string | null = null;
   const text = (s: string, where: string) => { for (const re of NEEDLES) { const m = s.match(re); if (m && found === null) found = `"${m[0]}" in ${where}: ${JSON.stringify(s.slice(Math.max(0, (m.index ?? 0) - 60), (m.index ?? 0) + 60))}`; } };
@@ -354,7 +370,7 @@ describe('the walk: a planted birth date never reaches a credential without the 
   });
 
   it('the archive of a credential without the scope holds the names and no birth date; the owner\'s holds them', async () => {
-    const tar = async (who: Who) => { const r = await app.fetch(new Request(`${base()}/api/v1/projects/${pid}/archive`, { headers: who.headers() })); return { status: r.status, text: Buffer.from(await r.arrayBuffer()).toString('utf8') }; };
+    const tar = async (who: Who) => { const r = await app.fetch(new Request(`${base()}/api/v1/projects/${pid}/archive`, { headers: who.headers() })); return { status: r.status, text: tarContents(Buffer.from(await r.arrayBuffer())) }; };
     const agent = await tar(AGENT);
     expect(agent.status).toBe(200);
     expect(agent.text).toContain('נועה');
