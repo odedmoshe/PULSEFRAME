@@ -29,8 +29,9 @@
  *   elementKit.ts and from each other; everything else is `import type`. The registries import the packs, so a run-time
  *   import of a registry from a pack file would be a cycle.
  *
- * How a pack is used (packs/use.ts): a title is ONE add_text (packTitleOp), a look is ONE add_adjustment (packLookOp), a
- * caption look is ONE apply_caption_look, a template goes through the template routes. Each is one undo. An element or a
+ * How a pack is used (packs/use.ts): a title is ONE add_text (packTitleOp), a look is ONE add_adjustment (packLookOp) in one
+ * transaction with the move_track that keeps graphic elements above it (packLookOps: a look colours the footage, never a pack's
+ * graphics or titles), a caption look is ONE apply_caption_look, a template goes through the template routes. Each is one undo. An element or a
  * sound from a pack goes through the existing element and sound routes: the clip is one undo, the file stays in the library.
  */
 import type { CaptionLook } from '../captionPresets.ts';
@@ -39,7 +40,7 @@ import type { PackFieldKey, TemplateDef } from '../templateContract.ts';
 import type { GDate } from '../hebrewCalendar.ts';
 
 export type PackWords = { he: string; en: string };
-/** An adjustment look of a pack: applied as ONE add_adjustment over the whole edit (packLookOp). No fade: fades stay a template feature. */
+/** An adjustment look of a pack: applied as ONE add_adjustment over the whole edit, under the graphic elements (packLookOps). No fade: fades stay a template feature. */
 export interface PackLook { id: `look.${string}`; name: PackWords; hint: PackWords; effects: readonly { type: string; params?: Record<string, number | string | boolean> }[] }
 /** A ready title of a pack: placed as ONE add_text (packTitleOp). */
 export interface PackTitle {

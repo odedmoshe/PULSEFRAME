@@ -8,14 +8,21 @@
  * What it checks, and what each check is able to fail for:
  * - F1 placement, for every family and every weight of FONT_CATALOG: for each of the 16 vowel points, the letter with the point
  *   and the letter alone are drawn at 200 px; the pixels that changed are the point. Their horizontal centre must lie within 40 % of
- *   the letter's own width of its middle (and inside its ink box ± 10 % of the em); the below-points (U+05B0–05B8, U+05BB, U+05C7) must lie below the letter's baseline row;
+ *   the letter's own width of its middle (and inside its ink box ± 10 % of the em; a holam ± 20 % on its left, see Zone); the
+ *   below-points (U+05B0–05B8, U+05BB, U+05C7) must lie below the letter's ink in the columns they cover (a handwriting letter
+ *   whose tail reaches lower elsewhere, as Gveret Levin's bet does, is judged where the point is, not by its tail);
  *   holam (U+05B9, and U+05BA) in the upper part of the letter; dagesh (U+05BC) inside the ink box; the shin dot (U+05C1) in the
  *   upper right half and the sin dot (U+05C2) in the upper left half of a shin. A point that draws nothing fails (a fallback font
  *   or a missing glyph). The width rule of the plan (pointed width = unpointed width) is not used: a mark has no advance wherever
- *   it is drawn, so it cannot fail for a misplaced mark. Control (first weight of each family): the point drawn as a separate
- *   title with its centre on the letter's right and on its left edge (the pen-origin failure of an unpositioned mark; each must be
- *   rejected by the horizontal rule), and the point drawn as a title of its own, 0.55 em to the side of its letter, must be rejected by the horizontal rule, and drawn 0.6 em above or below its place
- *   it must be rejected on at least one side by the vertical rule: a check that cannot reject these proves nothing.
+ *   it is drawn, so it cannot fail for a misplaced mark. Controls (first weight of each family, three points): deliberate
+ *   mutations of the face's own pictures. The point's own pixels (pointed minus alone) are moved (moveMark) and the check runs
+ *   on the result: 0.55 em to the right and to the left (both must be rejected), up until it is wholly above the letter and down
+ *   until it is wholly below it, CONTROL_GAP_EM clear of the letter's ink box (at least one must be rejected; a move by a fixed
+ *   0.6 em hid a patah inside the bet's ink in five faces, where nothing can be measured), and with the point's centre on the
+ *   letter's right and left edge, the pen-origin failure of an unpositioned mark (rejected by the horizontal rule, except on the
+ *   edge where the point belongs). Each mutation must have drawn the point: a
+ *   check that cannot reject these proves nothing. (The earlier controls drew the point as a title of its own on a no-break
+ *   space; several faces draw nothing for a mark on a no-break space, so those controls proved nothing.)
  *   The thresholds are constants below; the evidence records every measured margin, so a threshold can be tuned from numbers.
  * - F2 goldens: one pointed line per family and weight, starting and ending with an unpointed wide letter; SHA-256 of the decoded
  *   pixels, all pairwise different (so no family fell back to another face), compared with docs/evidence/fonts-golden.json for
@@ -66,14 +73,46 @@ export const MARKS: { cp: number; name: string; base: string; zone: Zone }[] = [
  * Where a point belongs: under the letter, above it, inside it, or (holam, and the dots of shin and sin) above it on one side.
  * A holam on a letter other than vav sits at the letter's upper left corner, by Hebrew convention: its centre lies on the left
  * edge of the letter (measured: 0.24–0.33 em left of the middle in every catalogue face), so it is judged by side, like the sin
- * dot, and not by the distance of its centre from the middle (which every correctly drawn holam broke).
+ * dot, and not by the distance of its centre from the middle (which every correctly drawn holam broke). Some faces hang it past
+ * the corner, between the letter and the next one (Rubik: centre 0.10 em left of the bet's ink, looked at at 648 px on
+ * 2026-11-18), so on its left side a holam's centre may lie up to holamLeftSlack outside the ink box; on the right the ordinary
+ * slack holds, and the side rule rejects a holam right of the middle.
  */
 export type Zone = 'below' | 'above' | 'inside' | 'shin' | 'sin' | 'holam';
 /** The thresholds, in em (200 px). Written down here and in the header; the evidence records the measured margins. */
-export const RULES = { centreSlack: 0.10, centreFrac: 0.40, belowSlack: 0.04, aboveShare: 0.30, insideSlack: 0.02, halfSlack: 0.03, minChanged: 30, changedThreshold: 24 } as const;
+export const RULES = { centreSlack: 0.10, holamLeftSlack: 0.20, centreFrac: 0.40, belowSlack: 0.04, aboveShare: 0.30, insideSlack: 0.02, halfSlack: 0.03, minChanged: 30, changedThreshold: 24 } as const;
 /** The weights the controls run at: the first weight of each family only (the controls are about the check, not the font). */
 export const CONTROL_MARKS = [0x5b7, 0x5b9, 0x5c1];
-export const CONTROL_SIDE_EM = 0.55, CONTROL_UP_EM = 0.6;
+export const CONTROL_SIDE_EM = 0.55, CONTROL_GAP_EM = 0.1;
+/**
+ * The lowest row of the letter's ink in the columns x0..x1 (brightest channel over the threshold), or -1 when it has no ink there.
+ * A below-point is judged against this row, not against the lowest row of the whole letter.
+ */
+export function lowestInkIn(m: Img, x0: number, x1: number, t = 24): number {
+  let low = -1;
+  for (let x = Math.max(0, x0); x <= Math.min(m.w - 1, x1); x++) for (let y = m.h - 1; y > low; y--) {
+    const i = (y * m.w + x) * 4;
+    if (Math.max(m.d[i]!, m.d[i + 1]!, m.d[i + 2]!) > t) { low = y; break; }
+  }
+  return low;
+}
+/**
+ * A deliberate mutation for the controls: the point's own pixels (where `pointed` differs from `alone` by more than the
+ * threshold) moved by (dx, dy) px and drawn over the letter alone (light on dark: the brighter value wins). Pure.
+ */
+export function moveMark(alone: Img, pointed: Img, dx: number, dy: number, t = RULES.changedThreshold): Img {
+  const out: Img = { w: alone.w, h: alone.h, d: alone.d.slice() };
+  dx = Math.round(dx); dy = Math.round(dy);
+  for (let y = 0; y < alone.h; y++) for (let x = 0; x < alone.w; x++) {
+    const i = idx(alone, x, y);
+    if (!(Math.abs(alone.d[i]! - pointed.d[i]!) > t || Math.abs(alone.d[i + 1]! - pointed.d[i + 1]!) > t || Math.abs(alone.d[i + 2]! - pointed.d[i + 2]!) > t)) continue;
+    const X = x + dx, Y = y + dy;
+    if (X < 0 || Y < 0 || X >= alone.w || Y >= alone.h) continue;
+    const j = idx(alone, X, Y);
+    for (let c = 0; c < 4; c++) out.d[j + c] = Math.max(out.d[j + c]!, pointed.d[i + c]!);
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------- pictures
 export interface Img { w: number; h: number; d: Uint8Array }
@@ -116,8 +155,8 @@ export function checkMark(alone: Img, pointed: Img, mark: { cp: number; name: st
   if (ch.count < RULES.minChanged) { fail(`the point drew ${ch.count} changed pixels (fewer than ${RULES.minChanged}): not drawn`); return r; }
   const h = box.y1 - box.y0 + 1, cx = (box.x0 + box.x1) / 2, cxm = (ch.x0 + ch.x1) / 2;
   r.centreOffsetEm = Number(((cxm - cx) / EM).toFixed(3));
-  const slack = RULES.centreSlack * EM;
-  r.margins.centreLeft = box.x0 - slack <= cxm ? Number((cxm - (box.x0 - slack)).toFixed(1)) : Number((cxm - (box.x0 - slack)).toFixed(1));
+  const slack = RULES.centreSlack * EM, leftSlack = (mark.zone === 'holam' ? RULES.holamLeftSlack : RULES.centreSlack) * EM;
+  r.margins.centreLeft = Number((cxm - (box.x0 - leftSlack)).toFixed(1));
   r.margins.centreRight = Number(((box.x1 + slack) - cxm).toFixed(1));
   // the centre lies in the middle of the letter: within centreFrac of the letter's own width of its middle (a point hanging off an edge, which is
   // what a point drawn at the pen origin looks like, has its centre at the edge = 0.5 of the width from the middle, and is rejected)
@@ -126,11 +165,13 @@ export function checkMark(alone: Img, pointed: Img, mark: { cp: number; name: st
   const sided = mark.zone === 'shin' || mark.zone === 'sin' || mark.zone === 'holam';
   if (!sided) r.margins.centreFrac = Number((RULES.centreFrac - frac).toFixed(3));
   if (!sided && frac > RULES.centreFrac) fail(`the point's horizontal centre ${cxm.toFixed(1)} is ${(frac * 100).toFixed(0)} % of the letter's width from its middle ${cx.toFixed(1)} (limit ${RULES.centreFrac * 100} %)`);
-  if (cxm < box.x0 - slack || cxm > box.x1 + slack) fail(`the point's horizontal centre ${cxm.toFixed(1)} is outside the letter's ink box ${box.x0}..${box.x1} ± ${slack} px`);
+  if (cxm < box.x0 - leftSlack || cxm > box.x1 + slack) fail(`the point's horizontal centre ${cxm.toFixed(1)} is outside the letter's ink box ${box.x0}..${box.x1} (− ${leftSlack} / + ${slack} px)`);
   switch (mark.zone) {
     case 'below': {
-      r.margins.belowBaseline = ch.y0 - (box.y1 - RULES.belowSlack * EM);
-      if (ch.y0 < box.y1 - RULES.belowSlack * EM) fail(`a changed pixel at row ${ch.y0} is above the baseline row ${box.y1} (slack ${RULES.belowSlack * EM} px)`);
+      // the letter's lowest ink in the columns the point covers; where the letter has none there, its lowest row overall
+      const local = lowestInkIn(alone, ch.x0, ch.x1), base = local >= 0 ? local : box.y1;
+      r.margins.belowBaseline = ch.y0 - (base - RULES.belowSlack * EM);
+      if (ch.y0 < base - RULES.belowSlack * EM) fail(`a changed pixel at row ${ch.y0} is above the letter's lowest ink ${base} in the point's columns ${ch.x0}..${ch.x1} (slack ${RULES.belowSlack * EM} px)`);
       break;
     }
     case 'above': {
@@ -159,20 +200,22 @@ export function checkMark(alone: Img, pointed: Img, mark: { cp: number; name: st
   return r;
 }
 /**
- * The control: the point drawn as its own title away from its letter. `sideways` is the picture with it 0.55 em to the side; `up` and
- * `down` the pictures with it 0.6 em above and below its place. The check is able to fail when it rejects the sideways one
- * (horizontal rule) and at least one of the vertical ones (vertical rule), and each of them did draw the point.
+ * The control: the point moved away from its place (moveMark). `right` and `left` are the pictures with it 0.55 em to each side, `up`
+ * and `down` with it wholly above and wholly below the letter. The check is able to fail when it rejects both sideways ones and at least one
+ * vertical one, and each of those drew the point (a vertical move that hides the point inside the letter's ink counts as not drawn,
+ * so the other one must then be drawn and rejected).
  */
-export function controlRejects(alone: Img, sideways: Img, up: Img, down: Img, mark: { cp: number; name: string; zone: Zone }): { ok: boolean; sidewaysRejected: boolean; verticalRejected: boolean; drawn: boolean } {
-  const rs = checkMark(alone, sideways, mark), ru = checkMark(alone, up, mark), rd = checkMark(alone, down, mark);
-  const drawn = [rs, ru, rd].every((x) => x.changed >= RULES.minChanged);
-  const sidewaysRejected = !rs.pass, verticalRejected = !ru.pass || !rd.pass;
+export function controlRejects(alone: Img, right: Img, left: Img, up: Img, down: Img, mark: { cp: number; name: string; zone: Zone }): { ok: boolean; sidewaysRejected: boolean; verticalRejected: boolean; drawn: boolean } {
+  const [rr, rl, ru, rd] = [right, left, up, down].map((p) => checkMark(alone, p, mark)) as [MarkResult, MarkResult, MarkResult, MarkResult];
+  const seen = (x: MarkResult) => x.changed >= RULES.minChanged;
+  const drawn = seen(rr) && seen(rl) && (seen(ru) || seen(rd));
+  const sidewaysRejected = !rr.pass && !rl.pass, verticalRejected = (seen(ru) && !ru.pass) || (seen(rd) && !rd.pass);
   return { ok: drawn && sidewaysRejected && verticalRejected, sidewaysRejected, verticalRejected, drawn };
 }
 
 /**
- * The control the contract named: the point drawn as a separate fillText at the pen origin, i.e. with its centre on the edge of its letter
- * (`atRight` and `atLeft`: the pictures with the point's centre on the letter's right and left edge). The check must reject both on the
+ * The control the contract named: the point drawn at the pen origin, i.e. with its centre on the edge of its letter (`atRight` and
+ * `atLeft`: the pictures with the point's centre moved onto the letter's right and left edge, moveMark). The check must reject both on the
  * horizontal rule, and each must have drawn the point.
  */
 export function penOriginRejects(alone: Img, atRight: Img, atLeft: Img, mark: { cp: number; name: string; zone: Zone }): { ok: boolean; rightRejected: boolean; leftRejected: boolean; drawn: boolean } {
@@ -279,7 +322,6 @@ async function main() {
     (await tx(pid, [{ op: 'add_text', args: { text, start: f(0), duration: f(30), style: { ...STYLE, fontFamily: family, fontWeight: weight, sizeFrac }, ...(transform ? { transform } : {}) } }])).results[0].output.clipId as string;
   const setTitle = (pid: string, clipId: string, text: string, family?: string, weight?: number) =>
     tx(pid, [{ op: 'update_text', args: { clipId, text, ...(family ? { style: { fontFamily: family, fontWeight: weight } } : {}) } }]);
-  const removeClip = (pid: string, clipId: string) => tx(pid, [{ op: 'delete_clip', args: { clipId } }]);
   const waitJob = async (jobId: string) => { for (;;) { const j = (await call(`/jobs/${jobId}`)).body; if (['succeeded', 'failed', 'canceled'].includes(j.status)) return j; await sleep(250); } };
   const exportFile = async (pid: string, name: string): Promise<string | { error: unknown }> => {
     const j = await waitJob((await call(`/projects/${pid}/exports`, {})).body.jobId);
@@ -307,38 +349,31 @@ async function main() {
         await setTitle(pid, clip, SHIN);
         const aloneShin = await still(pid);
         const marks: MarkResult[] = [];
+        const pointedOf = new Map<number, Img>();
         for (const m of MARKS) {
           const base = m.base === BET ? BET : SHIN;
           await setTitle(pid, clip, base + String.fromCodePoint(m.cp));
-          marks.push(checkMark(base === BET ? aloneBet : aloneShin, await still(pid), m));
+          const pointed = await still(pid);
+          if (CONTROL_MARKS.includes(m.cp)) pointedOf.set(m.cp, pointed);
+          marks.push(checkMark(base === BET ? aloneBet : aloneShin, pointed, m));
         }
-        // controls, at the first weight of the family
+        // controls, at the first weight of the family: deliberate mutations of this face's own pictures (moveMark)
         let control: (typeof placement)[string]['control'] = null;
         if (w === fam.weights[0]) {
           control = [];
-          const side = CONTROL_SIDE_EM * EM / W, vert = CONTROL_UP_EM * EM / H;
           for (const cp of CONTROL_MARKS) {
             const m = MARKS.find((x) => x.cp === cp)!;
-            const base = m.base === BET ? BET : SHIN;
-            await setTitle(pid, clip, base);
-            const alone = base === BET ? aloneBet : aloneShin;
-            const pic = async (transform: { x: number; y: number }) => {
-              // the mark as a title of its own (on a no-break space), away from its letter
-              const own = await addTitle(pid, ' ' + String.fromCodePoint(cp), fam.family, w, SIZE_FRAC, transform);
-              const img = await still(pid);
-              await removeClip(pid, own);
-              return img;
-            };
-            const sideways = await pic({ x: side, y: 0 }), up = await pic({ x: 0, y: -vert }), down = await pic({ x: 0, y: vert });
-            // the pen-origin control: the point's centre moved onto the right and onto the left edge of its letter (x measured from the
-            // point's own picture, which is above the letter so that nothing overlaps)
-            const lb = inkBox(alone), ub = changedBox(alone, up);
-            // a mark that drew nothing above its letter (or a letter that drew nothing) gives no x to move it to: the
-            // pen-origin control cannot be drawn for this face, and is recorded as failed (drawn: false), never skipped
-            if (!lb.count || !ub.count) { control.push({ cp, name: m.name, ...controlRejects(alone, sideways, up, down, m), penOrigin: { ok: false, rightRejected: false, leftRejected: false, drawn: false } }); continue; }
-            const cx0 = (ub.x0 + ub.x1) / 2;
-            const atRight = await pic({ x: (lb.x1 - cx0) / W, y: 0 }), atLeft = await pic({ x: (lb.x0 - cx0) / W, y: 0 });
-            control.push({ cp, name: m.name, ...controlRejects(alone, sideways, up, down, m), penOrigin: penOriginRejects(alone, atRight, atLeft, m) });
+            const alone = m.base === BET ? aloneBet : aloneShin, pointed = pointedOf.get(cp)!;
+            const side = CONTROL_SIDE_EM * EM, gap = CONTROL_GAP_EM * EM;
+            const moved = (dx: number, dy: number) => moveMark(alone, pointed, dx, dy);
+            const lb = inkBox(alone), pb = changedBox(alone, pointed);
+            // up: the point's lowest row `gap` above the letter's top row; down: its top row `gap` below the letter's lowest row
+            const rejects = controlRejects(alone, moved(side, 0), moved(-side, 0), moved(0, lb.y0 - gap - pb.y1), moved(0, lb.y1 + gap - pb.y0), m);
+            // the pen-origin control: the point's centre moved onto the right and onto the left edge of its letter
+            // a point that drew nothing (or a letter that drew nothing) gives nothing to move: recorded as failed (drawn: false), never skipped
+            if (!lb.count || !pb.count) { control.push({ cp, name: m.name, ...rejects, penOrigin: { ok: false, rightRejected: false, leftRejected: false, drawn: false } }); continue; }
+            const cx0 = (pb.x0 + pb.x1) / 2;
+            control.push({ cp, name: m.name, ...rejects, penOrigin: penOriginRejects(alone, moved(lb.x1 - cx0, 0), moved(lb.x0 - cx0, 0), m) });
           }
         }
         placement[key] = { marks, control };
@@ -350,7 +385,7 @@ async function main() {
       check('F1', `every one of the ${MARKS.length} vowel points of every face (${combos.length} family and weight pairs) is drawn and sits in its zone`, failing.length === 0, failing.slice(0, 8));
       const badControl = Object.entries(placement).flatMap(([k, v]) => (v.control ?? []).filter((c) => !c.ok || !c.penOrigin.ok).map((c) => ({ face: k, mark: c.name, ...c })));
       const controlCount = Object.values(placement).reduce((n, v) => n + (v.control?.length ?? 0), 0);
-      check('F1', `controls: a point drawn as a separate title with its centre on the edge of its letter (the pen origin) is rejected by the horizontal rule, a point drawn 0.55 em to the side of its letter is rejected, and drawn 0.6 em above or below its place is rejected on one side, for ${controlCount} (face, point) cases`, controlCount === FONT_CATALOG.length * CONTROL_MARKS.length && badControl.length === 0, badControl.slice(0, 6));
+      check('F1', `controls (the face's own point moved): with its centre on the edge of its letter (the pen origin) it is rejected by the horizontal rule, 0.55 em to the right and to the left it is rejected, and moved wholly above or wholly below its letter it is rejected on one side, for ${controlCount} (face, point) cases`, controlCount === FONT_CATALOG.length * CONTROL_MARKS.length && badControl.length === 0, badControl.slice(0, 6));
     }
 
     // ======================================================== F2 goldens

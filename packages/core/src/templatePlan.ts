@@ -42,7 +42,7 @@ import * as T from '@pulseframe/time';
 import { z } from 'zod';
 import type { Asset, Clip, ProjectDocument, Track } from './schema.ts';
 import {
-  PACK_FIELD_KEYS, TemplateDefSchema, TemplateError, TemplateInputSchema, TEMPLATE_METHOD,
+  ELEMENT_ID_TOKEN, fillFields, PACK_FIELD_KEYS, TemplateDefSchema, TemplateError, TemplateInputSchema, TEMPLATE_METHOD,
   type PackFieldKey, type PackFieldsInput, type PackFieldValues, type PlannedSlot, type PredictedSlot, type TemplateDef, type TemplateInput, type TemplateNotice, type TemplatePlan, type TemplatePlanContext, type TemplateStep, type TemplateSummary, type TemplateWarning,
 } from './templateContract.ts';
 import { barsForDuration, findMusicStyle, listMusicStyles, MUSIC_MAX_SECONDS, type MusicStyle } from './musicStyles.ts';
@@ -138,6 +138,35 @@ function steadyGrid(at: RT, bpm: number): Grid {
   };
 }
 
+// ---------- where the graphic elements' track goes (ADR-0022) ----------
+/**
+ * The list index move_track needs to put the plan's new graphic-element track right above the topmost adjustment track, or null
+ * when it is already above them all. It replays, on the track kinds alone, what the plan's ops do to the list before the move:
+ * add_track video for the pictures (when `newPictureTrack`) and for the elements (ops.ts newTrack: a picture track goes above the
+ * picture tracks, below the rest), then each add_adjustment of `lookRanges` (ops.ts placeTrack: the first unlocked adjustment
+ * track free over the range, else a new one below the first title, caption or sound track). Pure; templatePlan.test.ts holds it
+ * to the real ops.
+ */
+export function graphicsTrackIndex(tracks: readonly Track[], o: { newPictureTrack: boolean; lookRanges: readonly (readonly [RT, RT])[] }): number | null {
+  type Sim = { kind: Track['kind']; locked: boolean; ranges: [RT, RT][]; graphics?: true };
+  const list: Sim[] = tracks.map((t) => ({ kind: t.kind, locked: t.locked, ranges: t.clips.map((c) => [c.start, clipEnd(c)] as [RT, RT]) }));
+  const insertAt = (kind: Track['kind']) => {
+    const i = kind === 'video' ? list.findIndex((t) => t.kind !== 'video') : list.findIndex((t) => t.kind === 'text' || t.kind === 'caption' || t.kind === 'audio');
+    return i < 0 ? list.length : i;
+  };
+  if (o.newPictureTrack) list.splice(insertAt('video'), 0, { kind: 'video', locked: false, ranges: [] });
+  list.splice(insertAt('video'), 0, { kind: 'video', locked: false, ranges: [], graphics: true });
+  for (const [s, e] of o.lookRanges) {
+    const free = list.find((t) => t.kind === 'adjustment' && !t.locked && !t.ranges.some(([a, b]) => T.lt(a, e) && T.lt(s, b)));
+    if (free) free.ranges.push([s, e]);
+    else list.splice(insertAt('adjustment'), 0, { kind: 'adjustment', locked: false, ranges: [[s, e]] });
+  }
+  const from = list.findIndex((t) => t.graphics);
+  let top = -1;
+  list.forEach((t, i) => { if (t.kind === 'adjustment') top = i; });
+  return top > from ? top : null;
+}
+
 // ---------- the template definition ----------
 /** Parse the definition and check what the schema cannot: unique keys, no reserved names, catalogue ids that exist. */
 function checkDef(raw: TemplateDef): TemplateDef {
@@ -169,7 +198,16 @@ function checkDef(raw: TemplateDef): TemplateDef {
     if (!slotKeys.has(x.at.slot)) throw bad(`text ${x.key} starts at slot "${x.at.slot}", which the template does not have`);
   }
   for (const x of def.elements) {
-    if (!ELEMENTS.has(x.elementId)) throw bad(`element ${x.key}: "${x.elementId}" does not exist`);
+    const tokens = [...x.elementId.matchAll(ELEMENT_ID_TOKEN)].map((m) => m[1]!);
+    if (tokens.length) {
+      for (const k of tokens) {
+        if (k === 'n' ? !x.perSlot || x.perSlot === 'none' : !(PACK_FIELD_KEYS as readonly string[]).includes(k)) throw bad(`element ${x.key}: "{${k}}" in its id is ${k === 'n' ? 'the per-slot counter, and the element is not per slot' : 'not a pack field'}`);
+      }
+      if (x.fallbackElementId === undefined || !ELEMENTS.has(x.fallbackElementId)) throw bad(`element ${x.key}: an id with a field needs a fallbackElementId that exists`);
+    } else {
+      if (!ELEMENTS.has(x.elementId)) throw bad(`element ${x.key}: "${x.elementId}" does not exist`);
+      if (x.fallbackElementId !== undefined) throw bad(`element ${x.key}: fallbackElementId is only for an id with a field`);
+    }
     if (x.motion && !MOTION_IDS.has(x.motion.presetId)) throw bad(`element ${x.key}: motion "${x.motion.presetId}" does not exist`);
     if (!slotKeys.has(x.at.slot)) throw bad(`element ${x.key} starts at slot "${x.at.slot}", which the template does not have`);
   }
@@ -211,7 +249,7 @@ export function summarizeTemplate(def: TemplateDef, env: { elementsAvailable: bo
     available,
     unavailableReason: available ? null : 'this template places graphic elements, which this machine cannot draw: its ffmpeg has no SVG decoder (librsvg)',
     method: TEMPLATE_METHOD,
-    pack: def.pack ?? null, fields: PACK_FIELD_KEYS.filter((k) => uses.some((u) => u.pack.includes(k))), liveFields: uses.some((u) => u.live),
+    pack: def.pack ?? null, fields: PACK_FIELD_KEYS.filter((k) => uses.some((u) => u.pack.includes(k)) || def.elements.some((e) => e.elementId.includes(`{${k}}`))), liveFields: uses.some((u) => u.live),
     builtinMusic: def.music.builtin !== undefined && findMusicStyle(def.music.builtin) ? def.music.builtin : null,
   };
 }
@@ -294,12 +332,25 @@ function packFieldValues(input: PackFieldsInput | undefined): PackFieldValues {
   const out: Partial<Record<PackFieldKey, string>> = {};
   if (!input) return out;
   for (const k of PACK_FIELD_KEYS) { const v = Object.hasOwn(input, k) ? input[k] : undefined; if (v !== undefined) out[k] = v; }
+  // a night that is no Hanukkah candle (9, «מחר») is no value: the title says its fallback words and the drawing shows no count
+  if (out.night !== undefined && nightNumber(out.night) === null) delete out.night;
   if (out.night === undefined && input.date !== undefined) {
     const [y, m, day] = input.date.split('-').map(Number) as [number, number, number];
     const candle = candleNight({ y, m, d: day }, input.atLighting ?? true);
     if (candle !== null) out.night = String(candle);
   }
   return out;
+}
+
+/** Hanukkah candle words a caller may type for {night}: 1–8, the ordinals «ראשון»…«שמיני» and the letters א–ח (with or without geresh). */
+const NIGHT_WORDS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שביעי', 'שמיני'], NIGHT_LETTERS = 'אבגדהוזח';
+/** The candle (1–8) a {night} value names, or null. «נר שלישי» and «נר ג׳» name the third, as «נר 3» does. */
+export function nightNumber(value: string): number | null {
+  const v = value.trim().replace(/[׳']$/, '');
+  if (/^[1-8]$/.test(v)) return Number(v);
+  const w = NIGHT_WORDS.indexOf(v);
+  if (w >= 0) return w + 1;
+  return v.length === 1 && NIGHT_LETTERS.includes(v) ? NIGHT_LETTERS.indexOf(v) + 1 : null;
 }
 
 /**
@@ -525,7 +576,23 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
     assetsNeeded.push({ key, kind, id, ...(color ? { color } : {}), ...(color2 ? { color2 } : {}) });
     return key;
   };
-  const allElementCopies = d.elements.flatMap((e) => copiesOf(e.at, e.perSlot).map((c) => ({ e, ...c, bind: `${e.key}${c.suffix}` }))).filter((c) => !keep.has(c.bind));
+  const fieldValues = packFieldValues(p.fields);
+  /** The element a copy draws: its id with the counter and the pack fields written in, or its fallback (ElementDefSchema). */
+  const elementOf = (e: TemplateDef['elements'][number], n: number): { id: string; missing: string[] } => {
+    if (!e.elementId.includes('{')) return { id: e.elementId, missing: [] };
+    const night = fieldValues.night !== undefined ? nightNumber(fieldValues.night) : null;
+    const filled = fillFields(e.elementId.replaceAll('{n}', String(n)), { ...fieldValues, ...(night !== null ? { night: String(night) } : {}) });
+    return !filled.missing.length && ELEMENTS.has(filled.text) ? { id: filled.text, missing: [] } : { id: e.fallbackElementId!, missing: filled.missing.length ? filled.missing : [...e.elementId.matchAll(ELEMENT_ID_TOKEN)].map((m) => m[1]!).filter((k) => k !== 'n') };
+  };
+  const toldElement = new Set<string>();
+  const allElementCopies = d.elements.flatMap((e) => copiesOf(e.at, e.perSlot).map((c) => {
+    const drawn = elementOf(e, c.n);
+    if (drawn.missing.length && !toldElement.has(e.key)) {
+      toldElement.add(e.key);
+      notice('field_missing', `element ${e.key} shows ${drawn.missing.map((k) => `{${k}}`).join(', ')}, which has no usable value; ${drawn.id} is drawn instead`, { key: e.key, fields: drawn.missing, elementId: drawn.id });
+    }
+    return { e, ...c, id: drawn.id, bind: `${e.key}${c.suffix}` };
+  })).filter((c) => !keep.has(c.bind));
   // all copies go on one track: where two would share a range (an element of an unused slot is moved to the last used one, a
   // merged slot's element to the slot it was merged into), the earlier one is left out, so apply never meets an overlap
   const overlapped = allElementCopies.filter((c, i) => allElementCopies.slice(i + 1).some((o) => o.start < c.end && c.start < o.end));
@@ -534,13 +601,19 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
     notice('element_dropped', `${overlapped.length} graphic element(s) would lie on the same track range as a later one of this template and were left out`, { keys: overlapped.map((c) => c.bind) });
     basis.push(`graphic element(s) ${overlapped.map((c) => c.bind).join(', ')} would share a track range with a later element (fewer slots are used than the template has, or cuts were merged) and were left out`);
   }
+  // A look of the template colours the pictures, never its graphics (ADR-0022): when it has looks, its elements go on a track of
+  // their own, which is moved above every adjustment track once the looks are placed (below).
+  const looksPlanned = d.adjust.length > 0;
+  let elTrackArg: string | { $ref: string; out?: string } | null = null;
+  let elTrackNew = false;
   if (elementCopies.length) {
     const below = pictureTrack ? seq.tracks.indexOf(pictureTrack) : seq.tracks.length;
-    const elTrack = pictureTrack ? seq.tracks.find((t, i) => i > below && t.kind === 'video' && freeOver(t, ranges(elementCopies.map((c) => ({ startFrame: c.start, endFrame: c.end }))))) : undefined;
+    const elTrack = pictureTrack && !looksPlanned ? seq.tracks.find((t, i) => i > below && t.kind === 'video' && freeOver(t, ranges(elementCopies.map((c) => ({ startFrame: c.start, endFrame: c.end }))))) : undefined;
     if (!elTrack) ops.push({ op: 'add_track', args: { kind: 'video' }, bind: TEMPLATE_RESERVED_BINDS.elements });
     const trackArg = elTrack ? elTrack.id : ref(TEMPLATE_RESERVED_BINDS.elements, 'trackId');
+    elTrackArg = trackArg; elTrackNew = !elTrack;
     for (const c of elementCopies) {
-      ops.push({ op: 'add_clip', args: { assetId: { $asset: assetKey('element', c.e.elementId, c.e.color, c.e.color2) }, trackId: trackArg, start: ft(c.start), duration: ft(c.end - c.start), withLinkedAudio: false }, bind: c.bind });
+      ops.push({ op: 'add_clip', args: { assetId: { $asset: assetKey('element', c.id, c.e.color, c.e.color2) }, trackId: trackArg, start: ft(c.start), duration: ft(c.end - c.start), withLinkedAudio: false }, bind: c.bind });
       ops.push({ op: 'set_clip_transform', args: { clipId: ref(c.bind), transform: { x: c.e.place.x, y: c.e.place.y, ...(c.e.place.scale !== undefined ? { scale: c.e.place.scale } : {}) } } });
       if (c.e.motion && p.motion === 'full') {
         const presetId = mirrorForReading(c.e.motion.presetId, lang);
@@ -549,11 +622,12 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
       }
       slots.push({ key: c.bind, kind: 'element', clipId: ref(c.bind) });
     }
-    steps.push(`Add ${elementCopies.length} graphic element(s) (${[...new Set(elementCopies.map((c) => c.e.elementId))].join(', ')}) on ${elTrack ? `track ${elTrack.name}` : 'a new picture track'} above the pictures`);
+    steps.push(`Add ${elementCopies.length} graphic element(s) (${[...new Set(elementCopies.map((c) => c.id))].join(', ')}) on ${elTrack ? `track ${elTrack.name}` : 'a new picture track'} above the pictures`);
   }
 
   // adjustment looks
   let looks = 0;
+  const lookRanges: [number, number][] = [];
   for (const a of d.adjust) {
     const runs: { start: number; end: number }[] = [];
     if (a.span === 'all') runs.push({ start: startFrame, end: endFrame });
@@ -572,6 +646,7 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
       const bind = multi ? `${a.key}--${j + 1}` : a.key;
       if (keep.has(bind) || r.end <= r.start) continue;
       ops.push({ op: 'add_adjustment', args: { span: { start: ft(r.start), duration: ft(r.end - r.start) }, effects: a.effects.map((e) => ({ type: e.type, ...(e.params ? { params: e.params } : {}) })) }, bind });
+      lookRanges.push([r.start, r.end]);
       const len = r.end - r.start;
       const fade = a.fadeSeconds ? Math.min(Math.round(a.fadeSeconds * fps), Math.floor(len / 2)) : 0;
       if (fade >= 1) {
@@ -582,12 +657,19 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
       looks++;
     }
   }
-  if (looks) steps.push(`Add ${looks} adjustment look(s) over the pictures (${[...new Set(d.adjust.flatMap((a) => a.effects.map((e) => e.type)))].join(', ')}); titles stay clean`);
+  if (looks) steps.push(`Add ${looks} adjustment look(s) over the pictures (${[...new Set(d.adjust.flatMap((a) => a.effects.map((e) => e.type)))].join(', ')}); titles${elTrackArg ? ' and graphic elements' : ''} stay clean`);
+  // the graphic elements' own track goes above every adjustment track: a look colours (or blurs) the pictures, never the graphics
+  if (looks && elTrackArg !== null && elTrackNew) {
+    const toIndex = graphicsTrackIndex(seq.tracks, { newPictureTrack: emitted.length > 0 && !pictureTrack, lookRanges: lookRanges.map(([a, b]) => [ft(a), ft(b)] as const) });
+    if (toIndex !== null) {
+      ops.push({ op: 'move_track', args: { trackId: elTrackArg, toIndex } });
+      steps.push('Move the graphic elements\' track above the looks, so that a look colours the pictures and never the graphics (titles stay above both)');
+    }
+  }
 
   // titles
   const textStart = new Map<string, number>();
   let titles = 0, liveTitles = 0;
-  const fieldValues = packFieldValues(p.fields);
   for (const t of d.texts) {
     const given = Object.hasOwn(p.texts, t.key) ? p.texts[t.key] : undefined;
     if (given !== undefined && given.length > t.maxChars) warn('text_too_long', `the text for ${t.key} has ${given.length} characters; this template is designed for at most ${t.maxChars}`, { key: t.key, length: given.length, maxChars: t.maxChars });

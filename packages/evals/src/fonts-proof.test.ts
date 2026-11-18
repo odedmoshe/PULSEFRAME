@@ -3,7 +3,7 @@
  * sideways, on the wrong side or in a fallback place fails; the control logic rejects what it must; the golden helpers.
  */
 import { describe, expect, it } from 'vitest';
-import { RULES, checkMark, compareGolden, controlRejects, penOriginRejects, duplicateHashes, GOLDEN_LINE, TASK_LINE, MARKS, EM, type Img } from './fonts-proof.ts';
+import { RULES, checkMark, compareGolden, controlRejects, penOriginRejects, duplicateHashes, lowestInkIn, moveMark, GOLDEN_LINE, TASK_LINE, MARKS, EM, type Img } from './fonts-proof.ts';
 
 const W = 600, H = 600;
 const blank = (): Img => ({ w: W, h: H, d: new Uint8Array(W * H * 4) });
@@ -69,14 +69,65 @@ describe('a point hanging off the letter\'s edge (drawn at the pen origin) is re
 });
 
 describe('controlRejects', () => {
-  it('is satisfied only when the sideways and a vertical displacement are rejected', () => {
-    const c = controlRejects(letter(), withMark(480, 350, 520, 370), withMark(280, 150, 320, 170), withMark(280, 450, 320, 470), M(0x5b7));
+  it('is satisfied only when both sideways moves and a vertical move are rejected', () => {
+    const c = controlRejects(letter(), withMark(480, 350, 520, 370), withMark(80, 350, 120, 370), withMark(280, 150, 320, 170), withMark(280, 450, 320, 470), M(0x5b7));
     expect(c).toEqual({ ok: true, sidewaysRejected: true, verticalRejected: true, drawn: true });
+    // a move to one side only that stays in the zone is not enough
+    expect(controlRejects(letter(), withMark(480, 350, 520, 370), withMark(280, 350, 320, 370), withMark(280, 150, 320, 170), withMark(280, 450, 320, 470), M(0x5b7)).ok).toBe(false);
   });
   it('is not when the check cannot reject (a displacement that stays in its zone) or the point is not drawn', () => {
     const inZone = withMark(280, 350, 320, 370);
-    expect(controlRejects(letter(), inZone, inZone, inZone, M(0x5b7)).ok).toBe(false);
-    expect(controlRejects(letter(), letter(), letter(), letter(), M(0x5b7)).drawn).toBe(false);
+    expect(controlRejects(letter(), inZone, inZone, inZone, inZone, M(0x5b7)).ok).toBe(false);
+    expect(controlRejects(letter(), letter(), letter(), letter(), letter(), M(0x5b7)).drawn).toBe(false);
+  });
+  it('a vertical move that hides the point in the letter counts as not drawn (why the proof moves it wholly clear of the letter); the other vertical move must then be rejected', () => {
+    // up = hidden inside the letter's ink (nothing changed), down = still under the letter (in its zone): no vertical rejection
+    expect(controlRejects(letter(), withMark(480, 350, 520, 370), withMark(80, 350, 120, 370), letter(), withMark(280, 450, 320, 470), M(0x5b7))).toMatchObject({ ok: false, verticalRejected: false, drawn: true });
+  });
+});
+
+describe('moveMark: the controls\' mutation', () => {
+  it('moves only the point\'s own pixels and leaves the letter', () => {
+    const pointed = withMark(280, 350, 320, 370), moved = moveMark(letter(), pointed, 200, 0);
+    const lit = (m: Img, x: number, y: number) => m.d[(y * W + x) * 4]! > 0;
+    expect(lit(moved, 300, 360)).toBe(false);
+    expect(lit(moved, 500, 360)).toBe(true);
+    expect(lit(moved, 300, 300)).toBe(true); // the letter
+    expect(checkMark(letter(), pointed, M(0x5b7)).pass).toBe(true);
+    expect(checkMark(letter(), moved, M(0x5b7)).pass).toBe(false);
+  });
+  it('the shin dot moved 0.55 em sideways either way is rejected (the rejection the old centre rule gave)', () => {
+    const dot = withMark(318, 170, 340, 192);
+    expect(checkMark(letter(), dot, M(0x5c1)).pass).toBe(true);
+    expect(checkMark(letter(), moveMark(letter(), dot, 0.55 * EM, 0), M(0x5c1)).pass).toBe(false);
+    expect(checkMark(letter(), moveMark(letter(), dot, -0.55 * EM, 0), M(0x5c1)).pass).toBe(false);
+  });
+});
+
+describe('a below-point is judged against the letter\'s ink in its own columns', () => {
+  // a handwriting bet: a bowl 250..349 x 200..300 and a tail on its left that reaches lower, 250..265 x 300..339
+  const tailed = () => rect(rect(blank(), 250, 200, 349, 300), 250, 300, 265, 339);
+  const pointed = (y0: number, y1: number) => rect(tailed(), 290, y0, 320, y1);
+  it('a point under the bowl, above the tail\'s lowest row, is in its place', () => {
+    expect(lowestInkIn(tailed(), 290, 320)).toBe(300);
+    expect(lowestInkIn(tailed(), 250, 349)).toBe(339);
+    expect(checkMark(tailed(), pointed(318, 330), M(0x5b7)).pass).toBe(true);
+  });
+  it('a point moved up into the bowl, or 0.6 em up, is still rejected; one under the tail columns is judged by the tail', () => {
+    expect(checkMark(tailed(), pointed(250, 262), M(0x5b7)).pass).toBe(false);
+    expect(checkMark(tailed(), moveMark(tailed(), pointed(318, 330), 0, -0.6 * EM), M(0x5b7)).pass).toBe(false);
+    // under the tail: above the tail's lowest row is not below the letter there
+    expect(checkMark(tailed(), rect(tailed(), 252, 318, 262, 330), M(0x5b7)).pass).toBe(false);
+  });
+});
+
+describe('a holam may hang past the upper left corner, never past the middle', () => {
+  it('centre up to 0.2 em left of the ink box passes; 0.3 em left, or right of the middle, fails', () => {
+    // box x 250..349: centre 230 = 0.1 em left (Rubik), 215 = 0.175 em left, 190 = 0.3 em left
+    expect(checkMark(letter(), withMark(222, 160, 238, 176), M(0x5ba)).pass).toBe(true);
+    expect(checkMark(letter(), withMark(207, 160, 223, 176), M(0x5ba)).pass).toBe(true);
+    expect(checkMark(letter(), withMark(182, 160, 198, 176), M(0x5ba)).pass).toBe(false);
+    expect(checkMark(letter(), withMark(322, 160, 338, 176), M(0x5ba)).pass).toBe(false);
   });
 });
 

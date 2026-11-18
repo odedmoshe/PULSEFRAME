@@ -1,13 +1,15 @@
 /**
  * Using a pack (ADR-0022): the operations that place a pack's title and its look, and the pack as the API lists it. Pure.
  * - A title is ONE add_text (text, place, size, text style, animation, live fields): one transaction, one undo.
- * - A look is ONE add_adjustment over the whole edit: one transaction, one undo. No fade (fades stay a template feature).
+ * - A look is ONE add_adjustment over the whole edit (packLookOps adds the move_track that keeps graphic elements above it): one
+ *   transaction, one undo. No fade (fades stay a template feature).
  * - A caption look is ONE apply_caption_look {trackId, lookId} (an existing operation; nothing to build here).
  * - A template goes through the template routes; an element or a sound through the existing element and sound routes (the
  *   clip is one undo, the file stays in the library).
  */
 import * as T from '@pulseframe/time';
 import type { OpCall } from '../ops.ts';
+import type { ProjectDocument, Track } from '../schema.ts';
 import type { PackFieldKey, PackFieldValues } from '../templateContract.ts';
 import { PACK_FIELD_KEYS } from '../templateContract.ts';
 import { resolveTitleText, titleFieldUse, type ResolvedTitleText } from '../titleFields.ts';
@@ -56,9 +58,40 @@ export function packTitleOp(title: PackTitle, o: PackTitleOptions): { op: OpCall
   };
   return { op: { op: 'add_text', args }, words };
 }
-/** The ONE operation that applies a pack look: an adjustment clip over the whole edit, labelled with the look's name. */
+/** The add_adjustment that applies a pack look: an adjustment clip over the whole edit, labelled with the look's name. */
 export function packLookOp(look: PackLook, lang: 'he' | 'en', sequenceId?: string): OpCall {
   return { op: 'add_adjustment', args: { span: 'edit', effects: look.effects.map((e) => ({ type: e.type, ...(e.params ? { params: e.params } : {}) })), label: look.name[lang].slice(0, 80), ...(sequenceId !== undefined ? { sequenceId } : {}) } };
+}
+/** A picture track that holds only graphic elements (pictures made from ELEMENTS: provenance.procedural.id `element.…`). */
+const graphicsOnly = (doc: ProjectDocument, t: Track) => t.kind === 'video' && t.clips.length > 0 && t.clips.every((c) => c.type === 'media' && (doc.assets[c.assetId]?.provenance.procedural?.id ?? '').startsWith('element.'));
+/**
+ * The operations of ONE transaction (one undo) that apply a pack look so that it colours the footage and never the graphics
+ * (ADR-0022): packLookOp, then a move_track for each track of graphic elements that would lie under the look, putting it right
+ * above the topmost adjustment track (titles stay above). A track that also holds pictures is left where it is: the look colours
+ * it, as it colours every picture. The new look's track is found as add_adjustment finds it (ops.ts placeTrack: the first unlocked
+ * adjustment track free over the whole edit, else a new one below the first title, caption or sound track).
+ */
+export function packLookOps(look: PackLook, lang: 'he' | 'en', doc: ProjectDocument, sequenceId?: string): OpCall[] {
+  const first = packLookOp(look, lang, sequenceId);
+  const seq = doc.sequences[sequenceId ?? doc.mainSequenceId];
+  if (!seq) return [first];
+  let end: T.RationalTime = T.ZERO;
+  for (const t of seq.tracks) if (t.kind === 'video' || t.kind === 'text') for (const c of t.clips) end = T.max(end, T.add(c.start, c.duration));
+  type Sim = { id: string | null; kind: Track['kind']; graphics: boolean };
+  const list: Sim[] = seq.tracks.map((t) => ({ id: t.id, kind: t.kind, graphics: graphicsOnly(doc, t) }));
+  const free = seq.tracks.find((t) => t.kind === 'adjustment' && !t.locked && !t.clips.some((c) => T.lt(c.start, end) && T.lt(T.ZERO, T.add(c.start, c.duration))));
+  if (!free) { const i = list.findIndex((t) => t.kind === 'text' || t.kind === 'caption' || t.kind === 'audio'); list.splice(i < 0 ? list.length : i, 0, { id: null, kind: 'adjustment', graphics: false }); }
+  const ops: OpCall[] = [first];
+  for (;;) {
+    let top = -1;
+    list.forEach((t, i) => { if (t.kind === 'adjustment') top = i; });
+    const from = list.findIndex((t, i) => t.graphics && i < top);
+    if (from < 0) break;
+    const [moved] = list.splice(from, 1);
+    list.splice(top, 0, moved!); // after the removal the topmost look is at top - 1: the graphics go right above it
+    ops.push({ op: 'move_track', args: { trackId: moved!.id!, toIndex: top, ...(sequenceId !== undefined ? { sequenceId } : {}) } });
+  }
+  return ops;
 }
 
 /** The pack as the API lists it (GET /api/v1/packs, catalog().packs). */

@@ -1,7 +1,8 @@
 /**
  * A pack's page (ADR-0022; plan §8): a back button and Tabs תבניות / כותרות / אלמנטים / מראה / כתוביות / צליל (PACK_TABS).
  * Every action is ONE transaction through existing operations and routes: a template opens the template dialog; a title is one
- * add_text (packTitleOp); a look is one add_adjustment (packLookOp); a caption look is one apply_caption_look; an element or a
+ * add_text (packTitleOp); a look is one add_adjustment, with the move_track that keeps graphic elements above it, in one commit
+ * (packLookOps); a caption look is one apply_caption_look; an element or a
  * sound goes through the existing element and sound routes (the clip is one undo, the file stays in the library, and the page
  * says so). Test ids: PACK_TESTIDS.page, back, tab(t), panel(t) and the item ids (each item is a list item carrying its
  * data-*-id, with the action button inside).
@@ -192,7 +193,7 @@ export function PackPage({ pack, projectId, lang, initialTab, onBack, onOpenTemp
       captionTracks={tracks} captionTrackId={pickCaptionTarget(tracks, trackChoice)} onCaptionTrack={setTrackChoice}
       fields={fields} onFields={setFields} motionNone={motionNone} onMotionNone={setMotionNone} busy={busy} status={status}
       onAddTitle={(t) => { const a = titleAction(t, { lang, start: editor.playhead, rate: editor.rate, fields, motion: motionNone ? 'none' : 'full' }); void run(t.id, () => commit([a.op], a.label), a.label); }}
-      onApplyLook={(l) => { const a = lookAction(l, lang); void run(l.id, () => commit([a.op], a.label), a.label); }}
+      onApplyLook={(l) => { const a = lookAction(l, lang, state.doc); if (a.ops.length) void run(l.id, () => commit(a.ops, a.label), a.label); }}
       onApplyCaption={(id) => { const track = pickCaptionTarget(tracks, trackChoice); const l = view.captionLooks.find((x) => x.id === id); if (track && l) void run(id, () => commit([captionAction(track, id)], l.name[lang]), l.name[lang]); }}
       onAddElement={(id, name) => void run(id, async () => { await api.addElement(projectId, { elementId: id, ...elementColours(pack), start: editor.playhead }); return true; }, name[lang])}
       onAddSound={(id, name) => void run(id, async () => { await api.addSoundEffect(projectId, { sfxId: id, start: editor.playhead }); return true; }, name)}

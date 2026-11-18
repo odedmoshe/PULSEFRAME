@@ -75,7 +75,7 @@ const dissolve = (seconds: number) => ({ type: 'dissolve', seconds, dir: 'fixed'
 
 /** The candle lighting: three calm moments; the first keeps its own sound (the family's voices), with the candle of the night as the title. */
 const candles: TemplateDef = {
-  id: 'tpl.hanukkah-candles', version: 1, pack: 'pack.hanukkah',
+  id: 'tpl.hanukkah-candles', version: 2, pack: 'pack.hanukkah',
   name: { he: 'הדלקת נרות', en: 'Candle lighting' },
   hint: { he: 'שלושה רגעים רגועים: ההדלקה (עם הקול שלה), המשפחה והשולחן. הכותרת: «נר {night} של חנוכה»', en: 'Three calm moments: the lighting (with its own sound), the family and the table. The title says which night it is' },
   genre: 'holiday', designedFor: 'tall',
@@ -95,8 +95,9 @@ const candles: TemplateDef = {
     { key: 'house', role: { he: 'שם המשפחה', en: 'Family' }, default: { he: 'משפחת {name}', en: 'The {name} family' }, fallback: { he: 'המשפחה שלנו', en: 'Our family' }, maxChars: 30, presetId: 'hanukkah-soft',
       anim: A('word', 'fade', 'fade', 0.5), at: { slot: 'table', offsetBeats: 1 }, place: { x: 0, y: 0.3, sizeFrac: 0.05 } },
   ],
+  // the hanukkiah of the night the title names: {night} candles lit from the right and the shamash; without a night, the outline (no count)
   elements: [
-    { key: 'lights', elementId: el('hanukkiah-outline'), at: { slot: 'lighting' }, place: { x: 0, y: 0.32, scale: 0.5 }, motion: { presetId: 'motion.in.fade' } },
+    { key: 'lights', elementId: el('hanukkiah-{night}'), fallbackElementId: el('hanukkiah-outline'), at: { slot: 'lighting' }, place: { x: 0, y: 0.32, scale: 0.5 }, motion: { presetId: 'motion.in.fade' } },
   ],
   sfx: [{ key: 'chime', sfxId: 'sfx.chime', at: 'first', gain: 0.5 }],
   adjust: [{ key: 'candlelight', span: 'all', effects: [{ type: 'color.adjust', params: { saturation: 1.08, contrast: 1.05 } }, { type: 'color.tint', params: { color: '#FFB454', amount: 0.16, mode: 'soft-light' } }, { type: 'light.vignette', params: { amount: 0.4 } }], fadeSeconds: 0.6 }],
@@ -104,7 +105,7 @@ const candles: TemplateDef = {
 
 /** Eight nights: one slot for each night, each with its own hanukkiah, one more candle lit every time. */
 const eightNights: TemplateDef = {
-  id: 'tpl.hanukkah-eight-nights', version: 1, pack: 'pack.hanukkah',
+  id: 'tpl.hanukkah-eight-nights', version: 2, pack: 'pack.hanukkah',
   name: { he: 'שמונה לילות', en: 'Eight nights' },
   hint: { he: 'רגע מכל לילה, ועל כל אחד חנוכייה עם נר אחד יותר', en: 'One moment from every night, each with a hanukkiah that has one more candle lit' },
   genre: 'holiday', designedFor: 'tall',
@@ -118,7 +119,9 @@ const eightNights: TemplateDef = {
     { key: 'light', role: { he: 'כותרת הפתיחה', en: 'Opening title' }, default: { he: 'שמונה ימים של אור', en: 'Eight days of light' }, maxChars: 30, presetId: 'hanukkah-soft',
       anim: A('line', 'fade', 'fade', 0.6), at: { slot: 'night1' }, place: { x: 0, y: -0.2, sizeFrac: 0.04 } },
   ],
-  elements: Array.from({ length: 8 }, (_, i): TemplateDef['elements'][number] => ({ key: `lit${i + 1}`, elementId: el(`hanukkiah-${i + 1}`), at: { slot: `night${i + 1}` }, place: { x: 0, y: 0.3, scale: 0.7 } })),
+  // one hanukkiah per used slot with as many candles lit as the counter says ({n}, counted like «לילה {n}»), so the words and the
+  // drawing agree even when a slot is merged or dropped
+  elements: [{ key: 'lit', elementId: el('hanukkiah-{n}'), fallbackElementId: el('hanukkiah-outline'), perSlot: 'count-up', at: { slot: 'night1' }, place: { x: 0, y: 0.3, scale: 0.7 } }],
   sfx: [{ key: 'ding', sfxId: 'sfx.ding', at: 'boundaries', gain: 0.4 }, { key: 'end', sfxId: 'sfx.success', at: 'last', gain: 0.5 }],
   adjust: [{ key: 'candlelight', span: 'all', effects: [{ type: 'color.adjust', params: { saturation: 1.08, contrast: 1.05 } }, { type: 'color.tint', params: { color: '#FFB454', amount: 0.15, mode: 'soft-light' } }, { type: 'light.vignette', params: { amount: 0.45 } }] }],
 };

@@ -273,8 +273,11 @@ describe('element version: a new recipe is a new identity, and old projects keep
     return args;
   };
 
-  it('every element is at version 2 and the asset made now records it', async () => {
-    expect(new Set(ELEMENTS.map((e) => e.version))).toEqual(new Set([2]));
+  it('every element is at version 2, except the pack drawings changed on 2026-11-18 at version 3, and the asset made now records it', async () => {
+    expect(ELEMENTS.filter((e) => e.version !== 2).map((e) => [e.id, e.version])).toEqual([
+      ...['hanukkiah-1', 'hanukkiah-2', 'hanukkiah-3', 'hanukkiah-4', 'hanukkiah-5', 'hanukkiah-6', 'hanukkiah-7', 'hanukkiah-8', 'candle', 'candle-lit', 'candle-row', 'dreidel-spinning', 'latke', 'oil-jug', 'lights-garland', 'frame-candles'].map((s) => [`element.holiday.${s}`, 3]),
+      ...['balloon', 'balloon-shine', 'balloons-bunch', 'balloon-heart', 'lollipop'].map((s) => [`element.party.${s}`, 3]),
+    ]);
     const { ELEMENT_PICTURE_VERSION } = await import('@pulseframe/core');
     expect(ELEMENT_PICTURE_VERSION).toBe(2);
   });

@@ -17,7 +17,14 @@
  *   canvas is NOT measured here (the same evaluate is measured against stills by proof:lifeline check 5); the evidence says so;
  * - P10: check:notices passes and lists the six title families; the size of their font files in the bundle is recorded;
  * - P11: GET /packs/suggest: 2026-11-17 → Hanukkah first, 17 days to the evening of 4 December; 2027-01-05 → none;
- * - P12: an element and a sound added from a pack, placed: one undo removes the clip, and the file stays in the library.
+ * - P12: an element and a sound added from a pack, placed: one undo removes the clip, and the file stays in the library;
+ * - P13: no two titles of a pack template overlap on screen at its defaults, with the stills' fields and with none (the fallback
+ *   words), at 1080 x 1920 (what packs:sheet draws) and in the shape it is designed for. Measured from the pixels of the still
+ *   route: a title's box is what changes when that title alone is hidden (titleBoxes.ts), at the middle of each title, with the
+ *   titles at rest (motion none). Control: the same measurement on tpl.birthday-invite with its name title moved onto the
+ *   invitation title must find the overlap;
+ * - P14: in every applied pack template (P1), no graphic element and no title lies under a look (track order: every adjustment
+ *   track is drawn over the tracks below it).
  * Expected strings and ids are typed in this file, never computed by the code under test.
  */
 import { execFileSync } from 'node:child_process';
@@ -27,6 +34,7 @@ import path from 'node:path';
 import * as T from '@pulseframe/time';
 import { FlashAnalyser, flashCells } from '@pulseframe/engine';
 import { startServer } from '@pulseframe/server';
+import { diffBox, overlappingPairs, type Box } from './titleBoxes.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/packs-proof');
@@ -115,6 +123,13 @@ async function main() {
     }
     const mediaOf = (m: string[], n: number) => Array.from({ length: n }, (_, i) => m[i % m.length]!);
     const p1: Record<string, unknown> = {};
+    /** P14: the graphic elements (pictures made from an element) and titles of the main sequence that lie under an adjustment track. */
+    const underLook: Record<string, string[]> = {};
+    const coveredByLook = (doc: any): string[] => {
+      const tracks = doc.sequences[doc.mainSequenceId].tracks as any[];
+      const top = tracks.reduce((m: number, t: any, i: number) => (t.kind === 'adjustment' && t.clips.length ? i : m), -1);
+      return tracks.flatMap((t: any, i: number) => (i >= top ? [] : t.clips.filter((c: any) => c.type === 'text' || (c.type === 'media' && String(doc.assets[c.assetId]?.provenance?.procedural?.id ?? '').startsWith('element.'))).map((c: any) => `${c.type} ${c.id} (track ${i}, look on track ${top})`)));
+    };
     let musicPid = '', musicTemplate = '';
     for (const id of TEMPLATE_IDS) {
       const { pid, media } = fixtures[30]!;
@@ -132,11 +147,14 @@ async function main() {
       const redone = await hashOf(pid);
       const row = { style, plan: plan.status, blocking: plan.body.blocking?.length ?? null, apply: applied.status, oneTransaction: after.revision === rev0 + 1, music: !!music, undo: u.status, undoExact: undone === before, redo: r.status, redoExact: redone === appliedHash };
       p1[id] = row;
+      underLook[id] = coveredByLook(after.project);
       check(`P1 ${id}: plan clean, apply is one transaction with its built-in music (${style}), undo gives the previous document, redo the applied one`, !!style && plan.status === 200 && row.blocking === 0 && applied.status === 200 && row.oneTransaction && row.music && u.status === 200 && row.undoExact && r.status === 200 && row.redoExact, row);
       if (id === 'tpl.hanukkah-candles' && applied.status === 200) { musicPid = pid; musicTemplate = id; }
       if (r.status === 200) await undo(pid); // leave the fixture project as it was for the next template
     }
     measurements.p1 = p1;
+    measurements.underLook = underLook;
+    check('P14 in every applied pack template no graphic element and no title lies under a look', TEMPLATE_IDS.every((id) => Array.isArray(underLook[id]) && underLook[id]!.length === 0), underLook);
     lap('P1 templates');
 
     console.log('\n# P1 matrix: media 1, 3, 8, 12 × tempo × 24, 25, 30 fps');
@@ -238,6 +256,70 @@ async function main() {
     } else check('P5 a Hanukkah template with its music applied in P1, for the parity project', false);
     measurements.parity = p5;
     lap('P5 parity');
+
+    // ---------------------------------------------------------------- P13
+    console.log('\n# P13 no two titles of a pack template overlap at its defaults');
+    {
+      const rgba = (png: Buffer) => new Uint8Array(ff(['-i', 'pipe:0', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-'], png));
+      const grey = path.join(art, 'grey.png');
+      ff(['-f', 'lavfi', '-i', 'color=c=0x5a5a5a:s=1080x1920', '-frames:v', '1', grey]);
+      const frame = async (pid: string, n: number) => { const r = await call(`/projects/${pid}/frame?index=${n}`); if (r.status !== 200) throw new Error(`still refused ${r.status}`); return rgba(r.body as Buffer); };
+      /** The title boxes at the middle of each title, and the pairs that overlap. */
+      const measure = async (pid: string, w: number, hh: number, textIds: Map<string, string>) => {
+        const doc = (await getDoc(pid)).project;
+        const clips = new Map<string, any>(Object.values(doc.sequences).flatMap((q: any) => q.tracks.flatMap((t: any) => t.clips)).map((c: any) => [c.id, c]));
+        const fr = (t: any) => Math.round((Number(t.value) / t.timescale) * 30);
+        const span = (id: string) => { const c = clips.get(id); return [fr(c.start), fr(c.start) + fr(c.duration)] as const; };
+        const moments: { at: number; boxes: { key: string; box: Box }[]; overlaps: [string, string, Box][] }[] = [];
+        const keys = [...textIds.keys()];
+        for (const key of keys) {
+          const [a, b] = span(textIds.get(key)!);
+          const at = Math.floor((a + b) / 2);
+          const visible = keys.filter((k) => { const [x, y] = span(textIds.get(k)!); return x <= at && at < y; });
+          if (visible.length < 2 || moments.some((m) => m.boxes.length === visible.length && visible.every((v) => m.boxes.some((x) => x.key === v)))) continue;
+          const all = await frame(pid, at);
+          const boxes: { key: string; box: Box }[] = [];
+          for (const v of visible) {
+            await txs(pid, [{ op: 'set_clip_transform', args: { clipId: textIds.get(v), transform: { opacity: 0 } } }]);
+            const without = await frame(pid, at);
+            await undo(pid);
+            const box = diffBox(all, without, w, hh);
+            if (box) boxes.push({ key: v, box });
+          }
+          moments.push({ at, boxes, overlaps: overlappingPairs(boxes) });
+        }
+        return moments;
+      };
+      const SHAPES: Record<string, [number, number]> = { tall: [1080, 1920], square: [1080, 1080], wide: [1920, 1080] };
+      const rows: { id: string; shape: string; fields: string; moments: number; overlaps: unknown[] }[] = [];
+      for (const id of TEMPLATE_IDS) {
+        const def = tplRows.get(id);
+        const shapes = [...new Set(['tall', def?.designedFor ?? 'tall'])];
+        for (const shape of shapes) for (const [fname, fields] of [['stills', FIELDS], ['none', undefined]] as const) {
+          const [w, hh] = SHAPES[shape]!;
+          const pid = await newProject(`p13-${id}-${shape}-${fname}`, { num: 30, den: 1 }, w, hh);
+          const g = await upload(pid, grey);
+          const ap = await call(`/projects/${pid}/templates/${id}/apply`, { params: { media: Array.from({ length: 8 }, () => g), musicAssetId: null, lang: 'he', motion: 'none', ...(fields ? { fields } : {}) } });
+          if (ap.status !== 200) { rows.push({ id, shape, fields: fname, moments: 0, overlaps: [`apply ${ap.status} ${ap.body?.error?.code}`] }); continue; }
+          const textIds = new Map<string, string>((ap.body.slots as any[]).filter((x) => x.kind === 'text').map((x) => [x.key, x.clipId]));
+          const moments = await measure(pid, w, hh, textIds);
+          rows.push({ id, shape, fields: fname, moments: moments.length, overlaps: moments.flatMap((m) => m.overlaps.map(([a, b, box]) => ({ at: m.at, a, b, box }))) });
+          if (id === 'tpl.birthday-invite' && shape === 'tall' && fname === 'stills') {
+            // control: the name title moved onto the invitation title must be found
+            const inv = (await getDoc(pid)).project;
+            const clipOf = (k: string) => Object.values(inv.sequences).flatMap((q: any) => q.tracks.flatMap((t: any) => t.clips)).find((c: any) => c.id === textIds.get(k)) as any;
+            await txs(pid, [{ op: 'set_clip_transform', args: { clipId: textIds.get('name'), transform: { x: clipOf('invite').transform.x, y: clipOf('invite').transform.y } } }]);
+            const moved = await measure(pid, w, hh, textIds);
+            const found = moved.flatMap((m) => m.overlaps).some(([a, b]) => [a, b].includes('name') && [a, b].includes('invite'));
+            measurements.titleOverlapControl = { moved: 'name onto invite', found, moments: moved.map((m) => ({ at: m.at, overlaps: m.overlaps })) };
+            check('P13 control: tpl.birthday-invite with its name title moved onto the invitation title: the measurement finds the overlap', found, measurements.titleOverlapControl);
+          }
+        }
+      }
+      measurements.titleOverlap = rows;
+      check(`P13 no two titles overlap on screen in any pack template at its defaults (${rows.length} cases: 1080 x 1920 and the designed shape, the stills' fields and none)`, rows.length > 0 && rows.every((r) => r.overlaps.length === 0) && rows.some((r) => r.moments > 0), rows.filter((r) => r.overlaps.length));
+      lap('P13 title boxes');
+    }
 
     // ---------------------------------------------------------------- P10
     console.log('\n# P10 notices and the bundle');

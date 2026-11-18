@@ -5,16 +5,28 @@
  * lozenge, not a letter), no text, no gradient, no six-point star; at most two colours, the second one for the accents.
  * Pure: the same arguments always give the same markup.
  */
-import { box, boxS, disc, fillD, g, n, poly, polar, smoothClosed, star, strokeD, type Body, type PackElementEntry, type Pt } from '../elementKit.ts';
+import { both, box, boxS, disc, fillD, g, n, poly, polar, smoothClosed, star, strokeD, type Body, type PackElementEntry, type Pt } from '../elementKit.ts';
 
-const GOLD = '#F5C542', WAX = '#D6E6FF', BLUE = '#3A6BD8', CREAM = '#FFF4D6';
+/**
+ * WAX: the candles' blue. It was a pale #D6E6FF that vanished on a light picture (contrast 1.1:1 on cream); this blue reads on
+ * light and on dark pictures alike (about 3.4:1 on cream #F3EFE6 and 4.2:1 on night blue #16202C), and the flame's inner core,
+ * drawn in the same colour, is the blue base of a real flame.
+ */
+const GOLD = '#F5C542', WAX = '#4F7FE0', BLUE = '#3A6BD8', CREAM = '#FFF4D6';
+/** Picture version of the drawings changed on 2026-11-18 (the candles' colour, the oil jug and the latke): elements.ts ELEMENT_PICTURE_VERSION + 1. */
+const REDRAWN = 3;
 const EVENODD = ' fill-rule="evenodd"';
 
-/** A flame (teardrop) whose base sits on y = yb; h is its height. With `core` a smaller flame in the second colour sits inside. */
+/**
+ * A flame (teardrop) whose base sits on y = yb; h is its height. With `core` a smaller flame in the second colour sits in its lower
+ * part, as the blue base of a real flame (scaled about a point just above the base; until 2026-11-18 it was scaled about the
+ * origin and landed below the flame, on the candle or under the frame).
+ */
 const flame = (x: number, yb: number, h: number, c: string, core?: string): string => {
   const w = h * 0.32, r = w, top = yb - h;
   const d = `M${n(x)} ${n(top)}C${n(x + r * 0.45)} ${n(top + h * 0.3)} ${n(x + w)} ${n(yb - r * 1.15)} ${n(x + w)} ${n(yb - r * 0.7)}A${n(w)} ${n(w)} 0 0 1 ${n(x - w)} ${n(yb - r * 0.7)}C${n(x - w)} ${n(yb - r * 1.15)} ${n(x - r * 0.45)} ${n(top + h * 0.3)} ${n(x)} ${n(top)}Z`;
-  return fillD(d, c) + (core ? g(fillD(d, core), `matrix(0.45 0 0 0.45 ${n(x * 0.55)} ${n(yb - (yb - top) * 0.45 - 1)})`) : '');
+  const k = 0.45, py = yb - h * 0.1; // the core: the flame scaled by k about (x, py)
+  return fillD(d, c) + (core ? g(fillD(d, core), `matrix(${k} 0 0 ${k} ${n(x * (1 - k))} ${n(py * (1 - k))})`) : '');
 };
 /** The outline of a flame, for the outlined hanukkiah. */
 const flameLine = (x: number, yb: number, h: number, c: string, w: number): string => {
@@ -88,7 +100,7 @@ const dreidelTwo: Body = (c, k) =>
   fillD('M14 73H66L40 97Z', k);
 const dreidelSpin: Body = (c, k) => {
   const tilted = g(box(36, 6, 8, 18, c, 3) + fillD('M28 26H52L64 36H16Z', c) + box(14, 39, 52, 31, c, 2) + fillD(lozenge(40, 54.5, 10), k) + fillD('M14 73H66L40 97Z', c), 'rotate(12 40 97) translate(10 -2)');
-  const swish = strokeD('M10 30Q2 52 12 74', k, 3.6) + strokeD('M90 26Q99 50 88 72', k, 3.6) + strokeD('M18 40Q12 54 18 66', k, 2.6) + strokeD('M82 38Q88 52 82 64', k, 2.6) + strokeD('M24 98Q50 105 76 98', k, 3);
+  const swish = strokeD('M10 30Q2 52 12 74', k, 3.6) + strokeD('M90 26Q99 50 88 72', k, 3.6) + strokeD('M18 40Q12 54 18 66', k, 2.6) + strokeD('M82 38Q88 52 82 64', k, 2.6) + strokeD('M24 95Q50 101 76 95', k, 3);
   return swish + tilted;
 };
 
@@ -109,18 +121,44 @@ const sufganiyotPlate: Body = (c, k) => {
 };
 
 // ---------------------------------------------------------------- latke, oil, gelt
-const LATKE: Pt[] = Array.from({ length: 14 }, (_, i) => polar(50, 52, 37 + [0, 3, -2, 4, 1, -3, 2, 4, -2, 1, 3, -3, 2, -1][i]!, (360 * i) / 14 + 8));
-const latke: Body = (c, k) => {
-  const rim = smoothClosed(LATKE.map(([x, y]) => [50 + (x - 50) * 0.84, 52 + (y - 52) * 0.84] as Pt));
-  const shreds = [[28, 40, 38, 36], [44, 34, 56, 38], [62, 38, 72, 44], [24, 54, 36, 58], [46, 50, 58, 48], [64, 56, 76, 54], [30, 68, 42, 72], [52, 66, 62, 70], [68, 68, 74, 64], [38, 46, 44, 56]] as const;
-  return fillD(smoothClosed(LATKE), k) + fillD(rim, c) + shreds.map(([a, b, x, y]) => strokeD(`M${a} ${b}Q${(a + x) / 2} ${(b + y) / 2 - 4} ${x} ${y}`, k, 3)).join('');
+/** A stack of three latkes seen from the side, the top one from above: a crisp brown edge, a golden face and its shreds of potato. */
+const latkeTop = (cx: number, cy: number, rx: number, ry: number, seed: number): string => {
+  const edge: Pt[] = Array.from({ length: 16 }, (_, i) => { const a = (2 * Math.PI * i) / 16, j = [0, 1.8, -1.2, 2.2, 0.4, -1.4, 1.4, 2.2, -0.8, 0.6, 1.8, -1.2, 1, -0.6, 2, -1.6][(i + seed) % 16]!; return [cx + (rx + j) * Math.cos(a), cy + (ry + j * 0.5) * Math.sin(a)]; });
+  return smoothClosed(edge);
 };
+const latke: Body = (c, k) => {
+  let body = '';
+  // the two lower latkes: a brown crisp edge (k) with a sliver of golden face (c)
+  for (const [cy, dx] of [[74, -3], [62, 4]] as const) body += fillD(latkeTop(50 + dx, cy + 3, 40, 12, cy), k) + fillD(latkeTop(50 + dx, cy - 1, 36, 9, cy + 5), c);
+  // the top latke: a thick brown rim, a golden face, shreds of potato in two directions and a few crisp specks
+  body += fillD(latkeTop(50, 47, 41, 15, 3), k) + fillD(latkeTop(50, 44, 35, 11, 9), c);
+  const shreds = [[24, 42, 34, 39], [36, 37, 47, 40], [52, 36, 62, 39], [66, 40, 75, 44], [28, 49, 38, 52], [44, 45, 55, 47], [60, 47, 71, 50], [40, 51, 49, 54], [56, 52, 64, 53]] as const;
+  body += shreds.map(([a, b, x, y]) => strokeD(`M${a} ${b}Q${(a + x) / 2} ${(b + y) / 2 - 2.5} ${x} ${y}`, k, 2.2)).join('');
+  body += disc(31, 45, 1.4, k) + disc(58, 42, 1.4, k) + disc(68, 47, 1.2, k);
+  // steam
+  body += strokeD('M38 24Q34 18 38 13Q42 8 38 3', k, 2.4) + strokeD('M52 25Q48 18 52 12Q56 6 52 1', k, 2.4) + strokeD('M66 24Q62 18 66 13Q70 8 66 3', k, 2.4);
+  return body;
+};
+/**
+ * The jug of oil of the story: a small clay jug with a narrow neck, a lip, a handle, a band, the round seal on its shoulder, and
+ * a drop of oil at the spout. The drop and the band are in the oil's colour with a rim of clay, so they show on light pictures too.
+ */
 const oilJug: Body = (c, k) =>
-  fillD('M38 12H62L60 25C78 31 86 48 84 66C82 82 72 92 50 92C28 92 18 82 16 66C14 48 22 31 40 25Z', c) +
-  fillD('M35 6H65Q67 6 67 9V13Q67 14 65 14H35Q33 14 33 13V9Q33 6 35 6Z', c) +
-  strokeD('M82 40C100 36 100 68 82 72', c, 6) +
-  strokeD('M17 56Q50 66 83 56', k, 4) + strokeD('M18 72Q50 82 82 72', k, 4) +
-  fillD('M12 12C15 19 20 23 20 28A8 8 0 0 1 4 28C4 23 9 19 12 12Z', k);
+  // body and neck
+  fillD('M41 16H59L58 30C75 36 85 50 84 66C83 82 70 94 50 94C30 94 17 82 16 66C15 50 25 36 42 30Z', c) +
+  // the lip, with a spout on the left
+  fillD('M37 9H63Q67 9 67 12.5Q67 16 63 16H38Q35 16 33 14L28 10.5Q27 9 29 9Z', c) +
+  // the handle
+  strokeD('M59 24C76 20 86 30 80 46', c, 6) +
+  // a band of oil colour round the belly, with a row of small diamonds of clay on it
+  fillD('M18.5 58Q50 66 81.5 58L82.5 66Q50 74 17.5 66Z', k) +
+  [26, 38, 50, 62, 74].map((x) => fillD(`M${x} ${x === 50 ? 63.2 : x === 38 || x === 62 ? 62.8 : 61.6}l2.6 3l-2.6 3l-2.6-3Z`, c)).join('') +
+  // the seal on the shoulder: a ring of oil colour with a dot
+  `<circle cx="50" cy="44" r="7.5" fill="none" stroke="${k}" stroke-width="2.6"/>` + disc(50, 44, 2.6, k) +
+  // a shine on the clay, above the band
+  strokeD('M30 42Q25 47 23 53', k, 2.6) +
+  // the drop of oil leaving the spout: oil colour with a clay rim
+  both('M22 17C24 23 27 26 27 30A5 5 0 0 1 17 30C17 26 20 23 22 17Z', k, c, 2);
 const geltCoin: Body = (c, k) => {
   const ticks = Array.from({ length: 28 }, (_, i) => { const a = polar(50, 50, 38.5, (360 * i) / 28), b = polar(50, 50, 43, (360 * i) / 28); return `M${n(a[0])} ${n(a[1])}L${n(b[0])} ${n(b[1])}`; }).join('');
   return disc(50, 50, 45, c) + strokeD(ticks, k, 2.2) + `<circle cx="50" cy="50" r="33" fill="none" stroke="${k}" stroke-width="3"/>` + fillD(poly(star(50, 50, 24, 12, 8)), k) + disc(50, 50, 6, c);
@@ -154,25 +192,25 @@ const frameCandles: Body = (c, k) => {
   return body;
 };
 
-const e = (slug: string, he: string, en: string, width: number, height: number, colors: 1 | 2, defaults: { color: string; color2?: string }, body: Body): PackElementEntry => ({ slug, category: 'holiday', he, en, width, height, colors, defaults, body });
+const e = (slug: string, he: string, en: string, width: number, height: number, colors: 1 | 2, defaults: { color: string; color2?: string }, body: Body, version?: number): PackElementEntry => ({ slug, category: 'holiday', he, en, width, height, colors, defaults, body, ...(version !== undefined ? { version } : {}) });
 
 export const HANUKKAH_ELEMENTS: readonly PackElementEntry[] = [
-  ...Array.from({ length: 8 }, (_, i) => e(`hanukkiah-${i + 1}`, `חנוכייה, ${['נר ראשון', 'שני נרות', 'שלושה נרות', 'ארבעה נרות', 'חמישה נרות', 'שישה נרות', 'שבעה נרות', 'שמונה נרות'][i]}`, `Hanukkiah, ${i + 1} ${i ? 'candles' : 'candle'} lit`, 120, 100, 2, { color: GOLD, color2: WAX }, hanukkiah(i + 1))),
+  ...Array.from({ length: 8 }, (_, i) => e(`hanukkiah-${i + 1}`, `חנוכייה, ${['נר ראשון', 'שני נרות', 'שלושה נרות', 'ארבעה נרות', 'חמישה נרות', 'שישה נרות', 'שבעה נרות', 'שמונה נרות'][i]}`, `Hanukkiah, ${i + 1} ${i ? 'candles' : 'candle'} lit`, 120, 100, 2, { color: GOLD, color2: WAX }, hanukkiah(i + 1), REDRAWN)),
   e('hanukkiah-outline', 'חנוכייה בקו מתאר', 'Hanukkiah outline', 120, 100, 1, { color: GOLD }, hanukkiahOutline),
-  e('candle', 'נר', 'Candle', 60, 100, 2, { color: GOLD, color2: WAX }, (c, k) => candleBody(c, k, false)),
-  e('candle-lit', 'נר דולק', 'Lit candle', 60, 100, 2, { color: GOLD, color2: WAX }, (c, k) => candleBody(c, k, true)),
-  e('candle-row', 'שורת נרות', 'Row of candles', 160, 80, 2, { color: GOLD, color2: WAX }, candleRow),
+  e('candle', 'נר', 'Candle', 60, 100, 2, { color: GOLD, color2: WAX }, (c, k) => candleBody(c, k, false), REDRAWN),
+  e('candle-lit', 'נר דולק', 'Lit candle', 60, 100, 2, { color: GOLD, color2: WAX }, (c, k) => candleBody(c, k, true), REDRAWN),
+  e('candle-row', 'שורת נרות', 'Row of candles', 160, 80, 2, { color: GOLD, color2: WAX }, candleRow, REDRAWN),
   e('dreidel', 'סביבון', 'Dreidel', 80, 100, 1, { color: BLUE }, dreidelOne),
   e('dreidel-two-colour', 'סביבון בשני צבעים', 'Two-colour dreidel', 80, 100, 2, { color: BLUE, color2: GOLD }, dreidelTwo),
-  e('dreidel-spinning', 'סביבון מסתובב', 'Spinning dreidel', 100, 100, 2, { color: BLUE, color2: GOLD }, dreidelSpin),
+  e('dreidel-spinning', 'סביבון מסתובב', 'Spinning dreidel', 100, 100, 2, { color: BLUE, color2: GOLD }, dreidelSpin, REDRAWN),
   e('sufganiya', 'סופגנייה', 'Sufganiya', 100, 100, 2, { color: '#E0A458', color2: CREAM }, sufganiya),
   e('sufganiya-bitten', 'סופגנייה עם נגיסה', 'Sufganiya with a bite out', 100, 100, 2, { color: '#E0A458', color2: CREAM }, sufganiyaBitten),
   e('sufganiyot-plate', 'צלחת סופגניות', 'Plate of sufganiyot', 140, 100, 2, { color: '#E0A458', color2: CREAM }, sufganiyotPlate),
-  e('latke', 'לביבה', 'Latke', 100, 100, 2, { color: '#E8B64C', color2: '#B7721E' }, latke),
-  e('oil-jug', 'פך שמן', 'Jug of oil', 100, 100, 2, { color: '#C96A2B', color2: CREAM }, oilJug),
+  e('latke', 'לביבות', 'Latkes', 100, 100, 2, { color: '#E8B64C', color2: '#8A4E14' }, latke, REDRAWN),
+  e('oil-jug', 'פך שמן', 'Jug of oil', 100, 100, 2, { color: '#B4582A', color2: '#F2B634' }, oilJug, REDRAWN),
   e('gelt-coin', 'דמי חנוכה, מטבע', 'Gelt coin', 100, 100, 2, { color: GOLD, color2: '#A9741A' }, geltCoin),
   e('gelt-stack', 'ערימת מטבעות', 'Stack of gelt', 100, 100, 2, { color: GOLD, color2: '#A9741A' }, geltStack),
   e('gift', 'מתנה', 'Gift', 100, 100, 2, { color: BLUE, color2: GOLD }, gift),
-  e('lights-garland', 'שרשרת אורות', 'String of lights', 200, 60, 2, { color: GOLD, color2: '#8FA6C9' }, garland),
-  e('frame-candles', 'מסגרת נרות', 'Frame with candles', 160, 100, 2, { color: GOLD, color2: WAX }, frameCandles),
+  e('lights-garland', 'שרשרת אורות', 'String of lights', 200, 60, 2, { color: GOLD, color2: '#5A6F94' }, garland, REDRAWN),
+  e('frame-candles', 'מסגרת נרות', 'Frame with candles', 160, 100, 2, { color: GOLD, color2: WAX }, frameCandles, REDRAWN),
 ];

@@ -134,9 +134,12 @@ const cake: TemplateDef = {
   ],
 };
 
-/** A square invitation card: the name, the day and the place. */
+/**
+ * A square invitation card: the name, the day and the place. Laid out so that no two titles overlap even in a tall frame, where
+ * «מזמינים אותך!» is on one line and «ליום ההולדת של {name}» may take two (proof:packs P13 measures it).
+ */
 const invite: TemplateDef = {
-  id: 'tpl.birthday-invite', version: 1, pack: 'pack.birthday',
+  id: 'tpl.birthday-invite', version: 2, pack: 'pack.birthday',
   name: { he: 'הזמנה ליום הולדת', en: 'Birthday invitation' },
   hint: { he: 'כרטיס ריבועי על תמונה אחת: שם החוגג, מתי ואיפה', en: 'A square card over one picture: whose it is, when and where' },
   genre: 'celebration', designedFor: 'square',
@@ -146,13 +149,13 @@ const invite: TemplateDef = {
   slotUse: { mode: 'all', min: 1 },
   texts: [
     { key: 'invite', role: { he: 'ההזמנה', en: 'Invitation' }, default: { he: 'מזמינים אותך!', en: 'You are invited!' }, maxChars: 30, presetId: 'birthday-bubble',
-      anim: A('letter', 'pop', 'fade', 0.8, 0.5), at: { slot: 'card' }, place: { x: 0, y: -0.2, sizeFrac: 0.09 } },
+      anim: A('letter', 'pop', 'fade', 0.8, 0.5), at: { slot: 'card' }, place: { x: 0, y: -0.24, sizeFrac: 0.075 } },
     { key: 'name', role: { he: 'שם החוגג', en: 'Name' }, default: { he: 'ליום ההולדת של {name}', en: "{name}'s birthday party" }, fallback: { he: 'ליום ההולדת שלנו', en: 'To our birthday party' }, maxChars: 40, presetId: 'birthday-sunny',
-      anim: A('word', 'rise', 'fade', 0.5), at: { slot: 'card', offsetBeats: 2 }, place: { x: 0, y: -0.06, sizeFrac: 0.06 } },
+      anim: A('word', 'rise', 'fade', 0.5), at: { slot: 'card', offsetBeats: 2 }, place: { x: 0, y: -0.06, sizeFrac: 0.055 } },
     { key: 'when', role: { he: 'מתי', en: 'When' }, default: { he: 'מתי: {when}', en: 'When: {when}' }, fallback: { he: 'המועד יפורסם בקרוב', en: 'The time will follow soon' }, maxChars: 40, presetId: 'birthday-pink-box',
       anim: A('line', 'fade', 'fade', 0.5), at: { slot: 'card', offsetBeats: 4 }, place: { x: 0, y: 0.1, sizeFrac: 0.05 } },
     { key: 'place', role: { he: 'איפה', en: 'Where' }, default: { he: 'איפה: {place}', en: 'Where: {place}' }, fallback: { he: 'המקום יפורסם בקרוב', en: 'The place will follow soon' }, maxChars: 40, presetId: 'birthday-soft',
-      anim: A('line', 'fade', 'fade', 0.5), at: { slot: 'card', offsetBeats: 5 }, place: { x: 0, y: 0.22, sizeFrac: 0.05 } },
+      anim: A('line', 'fade', 'fade', 0.5), at: { slot: 'card', offsetBeats: 5 }, place: { x: 0, y: 0.24, sizeFrac: 0.05 } },
   ],
   elements: [
     { key: 'bunting', elementId: el('bunting'), at: { slot: 'card' }, place: { x: 0, y: -0.42, scale: 1 }, motion: { presetId: 'motion.in.drop' } },
