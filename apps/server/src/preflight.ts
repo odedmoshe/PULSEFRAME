@@ -4,7 +4,7 @@
  * Blockers stop an export; warnings and notes do not. Read-only. Text extents are ESTIMATES (the server does not shape text).
  */
 import * as T from '@pulseframe/time';
-import { BACKDROP, BACKDROP_MIN_BLUR, outputSafeArea, previousAdjacent, sequenceDuration, sequenceOf, velocityLimit, velocityNeeds, type Clip, type FollowStateName, type MediaClip, type OpCall, type ProjectDocument, type ResolvedRegion, type Track, type Transition } from '@pulseframe/core';
+import { BACKDROP, BACKDROP_MIN_BLUR, MULTICAM_PREFLIGHT_CODE, multicamGroupOf, segmentSyncOffset, outputSafeArea, previousAdjacent, sequenceDuration, sequenceOf, velocityLimit, velocityNeeds, type Clip, type FollowStateName, type MediaClip, type OpCall, type ProjectDocument, type ResolvedRegion, type Track, type Transition } from '@pulseframe/core';
 import { audioPlan, captionCues, decodeOverBudget, evaluate, type DecodeStretch, type Layer } from '@pulseframe/engine';
 import type { Exporter } from './export.ts';
 import { outputDoc } from './export.ts';
@@ -203,13 +203,46 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
   // 9. life line (ADR-0021): a title field without data or with an undecided sunset answer (blockers: the film would lack words the
   // author placed), a date taken from a file-name estimate (note), a capture-sourced date stamp that draws nothing (warning)
   issues.push(...fieldIssues(doc));
+  // 10. multicam (ADR-0020): a program segment out of step with the master sound by more than half a frame (warning; fix: slip)
+  issues.push(...multicamIssues(master, opts.sequenceId ?? master.mainSequenceId));
 
   const count = (s: PreflightIssue['severity']) => issues.filter((i) => i.severity === s).length;
   return {
     revision, variantId: opts.variantId ?? null, sequenceId: opts.sequenceId ?? null, output: { width: W, height: H, frames: total, fit: doc.settings.fit ?? 'contain', safeArea: guide?.safeArea ?? null },
     ok: count('blocker') === 0, blockers: count('blocker'), warnings: count('warning'), notes: count('note'), issues,
-    scope: 'Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, video decoders needed at once, transition handles (velocity ramps included), upscaling, safe areas (estimated text extents), caption reading speed, title fields without data and capture-sourced date stamps without a date, motion tracking (clips that follow a track or blur along it, on frames where the tracking is lost or uncertain or the followed picture is absent). Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.',
+    scope: 'Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, video decoders needed at once, transition handles (velocity ramps included), upscaling, safe areas (estimated text extents), caption reading speed, title fields without data and capture-sourced date stamps without a date, motion tracking (clips that follow a track or blur along it, on frames where the tracking is lost or uncertain or the followed picture is absent), multicam segments out of step with the master sound by more than half a frame. Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.',
   };
+}
+
+/**
+ * Multicam (ADR-0020 plan §7): every tagged picture segment of the sequence whose group time at its start or end differs from
+ * the master sound's by more than half a frame (core segmentSyncOffset: positive = picture late). A warning, never a blocker;
+ * the fix slips the picture alone (includeLinked false) by the whole frames that bring it back, when that is not zero.
+ */
+export function multicamIssues(master: ProjectDocument, sequenceId: string): PreflightIssue[] {
+  if (!master.multicam) return [];
+  const seq = sequenceOf(master, sequenceId);
+  if (!seq) return [];
+  const rate = master.settings.frameRate, fps = rate.num / rate.den;
+  const out: PreflightIssue[] = [];
+  for (const track of seq.tracks) {
+    if (track.kind !== 'video') continue;
+    for (const c of track.clips) {
+      if (c.type !== 'media' || !c.multicam) continue;
+      const off = segmentSyncOffset(master, c.id);
+      if (!off || (Math.abs(off.startFrames) <= 0.5 && Math.abs(off.endFrames) <= 0.5)) continue;
+      const worst = Math.abs(off.startSeconds) >= Math.abs(off.endSeconds) ? off.startSeconds : off.endSeconds;
+      const label = multicamGroupOf(master, c.multicam.groupId)?.angles.find((a) => a.id === c.multicam!.angleId)?.label ?? c.multicam.angleId;
+      const slipFrames = Math.round(T.toSeconds(off.slipBy) * fps);
+      out.push({
+        code: MULTICAM_PREFLIGHT_CODE, severity: 'warning',
+        message: `the picture of angle "${label}" is ${Math.round(Math.abs(worst) * 1000)} ms ${worst > 0 ? 'late' : 'early'} against the master sound (${Math.abs(worst * fps).toFixed(1)} frames)`,
+        ids: [c.id], range: { startFrame: T.frameIndexAt(c.start, rate), endFrame: T.frameIndexAt(T.add(c.start, c.duration), rate) },
+        ...(T.isZero(off.slipBy) ? {} : { fix: { label: `Slip the picture by ${slipFrames} frame(s) to match the sound`, ops: [{ op: 'slip_clip', args: { clipId: c.id, by: off.slipBy, includeLinked: false } }] } }),
+      });
+    }
+  }
+  return out;
 }
 
 /** Stretches listed per clip and kind of problem; any more are counted in one further issue. */
