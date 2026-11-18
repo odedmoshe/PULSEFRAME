@@ -259,8 +259,35 @@ describe('request and bank schemas', () => {
   });
 });
 
+import { defaultBank, planTakeRequest } from './index.ts';
 describe('workers (todo until built)', () => {
-  it.todo('W1 moves.ts: planTakeRequest on a seeded take gives args that apply_take accepts and that pass validateProject (perform W1)');
-  it.todo('W1 moves.ts: every hit the planner keeps passes takeFlashBreach; every hit it holds flash_limit would breach it');
+  // W1 (moves.ts): built
+  const mash = (n: number, pads: number[]) => Array.from({ length: n }, (_, i) => ({ pad: pads[i % pads.length]!, down: 0.2 + i / 20, up: 0.2 + i / 20 + 0.03 }));
+  const request = (taps: { pad: number; down: number; up: number }[]) => ({ taps, bank: defaultBank('canvas'), assets: Array(PAD_COUNT).fill(null), settings: { snap: 'beat' as const, tempo: 'normal' as const, strength: 1, parity: 0 as const }, gpu: false });
+  it('W1 moves.ts: planTakeRequest on a seeded take gives args that apply_take accepts and that pass validateProject (perform W1)', () => {
+    const d0 = base();
+    const plan = planTakeRequest(d0, request(mash(60, [1, 2, 3, 4, 5, 7])));
+    expect(plan.args).not.toBeNull();
+    const r = run(d0, [{ op: 'apply_take', args: plan.args! }]);
+    expect(validateProject(r.doc)).toEqual([]);
+    expect(Object.values(r.doc.recipeRuns).filter((x) => x.recipeId === PERFORM_RECIPE_ID)).toHaveLength(1);
+    // same document, same taps: byte-identical arguments
+    expect(JSON.stringify(planTakeRequest(base(), request(mash(60, [1, 2, 3, 4, 5, 7]))).args)).toBe(JSON.stringify(plan.args));
+  });
+  it('W1 moves.ts: every hit the planner keeps passes takeFlashBreach; every hit it holds flash_limit would breach it', () => {
+    const d0 = base();
+    const plan = planTakeRequest(d0, request(mash(80, [4, 1]))); // black-and-white and colour split, 20 taps a second
+    const r = run(d0, [{ op: 'apply_take', args: plan.args! }]);
+    const created = (r.results[0]!.output as { createdIds: string[] }).createdIds;
+    expect(takeFlashBreach(r.doc, r.doc.mainSequenceId, created)).toBeNull();
+    const held = plan.chips.filter((c) => c.reason === 'flash_limit');
+    expect(held.length).toBeGreaterThan(10);
+    for (const c of held.slice(0, 12)) {
+      const effect = c.pad === 4 ? { type: 'color.grayscale', params: { amount: 1 } } : { type: 'digital.rgb-split', params: { amount: 0.02 } };
+      const forced = { ...plan.args!, steps: [...plan.args!.steps, { op: 'add_adjustment', args: { span: { start: f(c.frame), duration: f(c.frames) }, effects: [effect] } }] };
+      const e = refusal(() => run(d0, [{ op: 'apply_take', args: forced }]));
+      expect(e.details, `tap ${c.tap}`).toMatchObject({ reason: 'flash_limit' });
+    }
+  });
   it.todo('W2 cameraPath.ts: the camera plan is three replace_clip_keyframes calls with the take range, and keys outside the range stay');
 });
