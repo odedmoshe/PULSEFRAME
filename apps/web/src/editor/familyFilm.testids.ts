@@ -21,7 +21,7 @@ export const FILM_TESTIDS = {
   measureProgress: 'film-measure-progress', measureCancel: 'film-measure-cancel',
   planRow: 'film-plan-row', reason: 'film-reason', strip: 'film-strip', swapWindow: 'film-swap-window', swapClip: 'film-swap-clip', remove: 'film-remove',
   excludedToggle: 'film-excluded-toggle', excluded: 'film-excluded', include: 'film-include', warning: 'film-warning',
-  footer: 'film-footer', apply: 'film-apply', error: 'film-error',
+  footer: 'film-footer', apply: 'film-apply', error: 'film-error', retry: 'film-retry',
   // after apply: the film bar and its actions; the inspector section of a film clip and its two swaps
   bar: 'film-bar', barUndo: 'film-bar-undo', barMoments: 'film-bar-moments', barLength: 'film-bar-length', barWhy: 'film-bar-why', barWhyList: 'film-bar-why-list',
   why: 'film-why', whyReason: 'film-why-reason', whyEdited: 'film-why-edited', whyWindow: 'film-why-window', whyClip: 'film-why-clip', whyMeasure: 'film-why-measure',
