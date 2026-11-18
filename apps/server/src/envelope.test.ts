@@ -8,16 +8,18 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { decodeEnvelope, encodeEnvelope, isDualMono, levelAt, type Asset } from '@pulseframe/core';
 import { Derivatives } from './derive.ts';
-import { buildEnvelope, envelopeMeasurer, envelopeOf, envelopeStatus, storedEnvelope } from './envelope.ts';
+import { buildEnvelope, EnvelopeAbandoned, envelopeMeasurer, envelopeOf, envelopeStatus, storedEnvelope } from './envelope.ts';
 import { Store } from './store.ts';
 
-let dir = '', late = '';
+let dir = '', late = '', long = '';
 const ff = (args: string[]) => { const r = spawnSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', ...args]); if (r.status !== 0) throw new Error(String(r.stderr)); };
 beforeAll(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-envelope-'));
   late = path.join(dir, 'late.mkv');
   // picture from file time 1.4 s; the sound starts 0.5 s later; a 1 kHz burst 1.0 s into the sound = SOURCE time 1.5 s
   ff(['-f', 'lavfi', '-i', 'color=c=gray:s=64x36:r=30:d=4', '-itsoffset', '0.5', '-f', 'lavfi', '-i', "aevalsrc='if(between(t,1,1.05),0.5*sin(2*PI*1000*t),0)':s=48000:d=3", '-map', '0:v', '-map', '1:a', '-c:v', 'libx264', '-c:a', 'pcm_s16le', '-output_ts_offset', '1.4', late]);
+  long = path.join(dir, 'long.wav'); // 120 s, so a build is read in many chunks
+  ff(['-f', 'lavfi', '-i', 'sine=f=440:r=48000:d=120', '-c:a', 'pcm_s16le', long]);
 });
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 const lateAsset = { id: 'ast_late', timeOrigin: T.fromSeconds('1.4'), audio: { sampleRate: 48000, channels: 1, codec: 'pcm_s16le' } } as Pick<Asset, 'id' | 'timeOrigin' | 'audio'>;
@@ -98,5 +100,52 @@ describe('level envelope', () => {
       await envelopeOf(store, d, asset);
       expect(seen).toEqual(['running', 'ready']); // read, not rebuilt
     } finally { await d.stop(); store.close(); }
+  });
+  describe('a shared build', () => {
+    const longAsset = { id: 'ast_long', timeOrigin: T.fromSeconds('0'), audio: { sampleRate: 48000, channels: 1, codec: 'pcm_s16le' } } as Pick<Asset, 'id' | 'timeOrigin' | 'audio'>;
+    const put = (store: Store) => {
+      const bytes = fs.readFileSync(long);
+      const hash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+      const tmp = path.join(dir, `long-${Math.random().toString(36).slice(2)}.tmp`);
+      fs.copyFileSync(long, tmp);
+      store.putBlob(hash, tmp, bytes.length, 'audio/wav');
+      return { ...longAsset, contentHash: hash } as Asset;
+    };
+    const outcome = (p: Promise<unknown>) => p.then((e) => e, (err: unknown) => (err instanceof EnvelopeAbandoned ? 'abandoned' : err));
+    it('a caller that cancels is dropped on its own; one that did not cancel still gets the envelope', async () => {
+      const store = new Store(path.join(dir, 'store-share'));
+      const d = new Derivatives(store);
+      try {
+        const asset = put(store);
+        let checks = 0;
+        const job = outcome(envelopeOf(store, d, asset, () => ++checks > 3)); // cancels mid-decode, on its 4th check
+        const other = outcome(envelopeOf(store, d, { ...asset, id: 'ast_other' }));
+        const [j, o] = await Promise.all([job, other]);
+        expect(j).toBe('abandoned');
+        expect(checks).toBeGreaterThan(3);
+        const e = o as Awaited<ReturnType<typeof envelopeOf>>;
+        expect(e.assetId).toBe('ast_other');
+        expect(e.frames).toBe(12000);
+        expect(d.get(asset.contentHash, 'envelope')!.status).toBe('ready');
+        expect(encodeEnvelope({ ...e, assetId: asset.id })).toEqual(encodeEnvelope(await buildEnvelope(long, asset)));
+      } finally { await d.stop(); store.close(); }
+    }, 60_000);
+    it('stops only when every waiting caller canceled; the next caller builds afresh', async () => {
+      const store = new Store(path.join(dir, 'store-cancel'));
+      const d = new Derivatives(store);
+      try {
+        const asset = put(store);
+        let cancel = false;
+        const a = outcome(envelopeOf(store, d, asset, () => cancel));
+        const b = outcome(envelopeOf(store, d, asset, () => cancel));
+        cancel = true;
+        expect(await Promise.all([a, b])).toEqual(['abandoned', 'abandoned']);
+        expect(d.get(asset.contentHash, 'envelope')).toMatchObject({ status: 'failed', error: 'canceled' });
+        expect(envelopeStatus(d, asset)).toBe('failed');
+        const e = await envelopeOf(store, d, asset);
+        expect(e.frames).toBe(12000);
+        expect(envelopeStatus(d, asset)).toBe('ready');
+      } finally { await d.stop(); store.close(); }
+    }, 60_000);
   });
 });

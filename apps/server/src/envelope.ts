@@ -148,7 +148,11 @@ export function buildEnvelope(file: string, asset: Pick<Asset, 'id' | 'timeOrigi
   });
 }
 
-const inflight = new Map<string, Promise<LevelEnvelope>>();
+/** A caller waiting on a shared build; `abandoned` is its own cancel test (none: it never cancels). */
+interface Waiter { abandoned?: () => boolean; resolve: (e: LevelEnvelope) => void; reject: (e: unknown) => void }
+/** One build per content hash, shared by every caller of that file while it runs. */
+interface Build { waiters: Set<Waiter> }
+const inflight = new Map<string, Build>();
 const metaOf = (e: LevelEnvelope) => ({ version: ENVELOPE_VERSION, rate: ENVELOPE_RATE, decodeRate: ENVELOPE_DECODE_RATE, frames: e.frames, channels: e.channels.length, method: ENVELOPE_METHOD });
 const usable = (row: DerivativeRow | null): row is DerivativeRow & { blobHash: string } => !!row && row.status === 'ready' && !!row.blobHash && (row.meta as { version?: number } | null)?.version === ENVELOPE_VERSION;
 
@@ -168,27 +172,45 @@ export function envelopeStatus(derivatives: Derivatives | null, asset: Asset): '
 
 /**
  * The envelope of `asset`: read from the derivative store, or built under heavy() and stored there (announced over SSE).
- * Concurrent requests for one file share one build. Without a derivative store (a process with no Derivatives) it is built and
- * not kept.
+ * Concurrent requests for one file share one build. A caller that abandons (its `abandoned()` turned true) is rejected with
+ * EnvelopeAbandoned on its own; the build itself stops only when every caller waiting on it has abandoned, so a canceled job
+ * never takes the envelope away from an in-request sync, a recipe or the envelope route. Without a derivative store (a process
+ * with no Derivatives) it is built and not kept.
  */
-export async function envelopeOf(store: Store, derivatives: Derivatives | null, asset: Asset, abandoned?: () => boolean): Promise<LevelEnvelope> {
+export function envelopeOf(store: Store, derivatives: Derivatives | null, asset: Asset, abandoned?: () => boolean): Promise<LevelEnvelope> {
   const have = storedEnvelope(store, derivatives, asset);
-  if (have) return have;
+  if (have) return Promise.resolve(have);
   const key = asset.contentHash;
-  const running = inflight.get(key);
-  if (running) return { ...(await running), assetId: asset.id };
-  const job = (async () => {
-    derivatives?.markOutside(key, 'envelope', 'running');
-    try {
-      const e = await heavy(() => buildEnvelope(store.blobPath(key), asset, abandoned));
-      if (derivatives) await derivatives.putBytes(key, 'envelope', encodeEnvelope(e), 'application/octet-stream', metaOf(e));
-      return e;
-    } catch (err) {
-      if (err instanceof EnvelopeAbandoned) { if (derivatives?.get(key, 'envelope')?.status === 'running') derivatives.markOutside(key, 'envelope', 'failed', 'canceled'); }
-      else derivatives?.markOutside(key, 'envelope', 'failed', err instanceof Error ? err.message : String(err));
-      throw err;
-    }
-  })();
-  inflight.set(key, job);
-  try { return { ...(await job), assetId: asset.id }; } finally { inflight.delete(key); }
+  return new Promise<LevelEnvelope>((resolve, reject) => {
+    const waiter: Waiter = { abandoned, resolve: (e) => resolve({ ...e, assetId: asset.id }), reject };
+    const running = inflight.get(key);
+    if (running) { running.waiters.add(waiter); return; }
+    const build: Build = { waiters: new Set([waiter]) };
+    inflight.set(key, build);
+    const done = () => { if (inflight.get(key) === build) inflight.delete(key); };
+    /**
+     * Drops (and rejects) every waiter that abandoned while another still waits, and is true once every waiter abandoned, which
+     * stops the build; those last waiters are rejected after the build has cleaned up (below).
+     */
+    const nobodyWaits = (): boolean => {
+      const gone = [...build.waiters].filter((w) => w.abandoned?.());
+      if (gone.length === build.waiters.size) { done(); return true; } // a caller arriving from now on starts its own build
+      for (const w of gone) { build.waiters.delete(w); w.reject(new EnvelopeAbandoned()); }
+      return false;
+    };
+    void (async () => {
+      derivatives?.markOutside(key, 'envelope', 'running');
+      try {
+        const e = await heavy(() => (nobodyWaits() ? Promise.reject(new EnvelopeAbandoned()) : buildEnvelope(store.blobPath(key), asset, nobodyWaits)));
+        if (derivatives) await derivatives.putBytes(key, 'envelope', encodeEnvelope(e), 'application/octet-stream', metaOf(e));
+        done();
+        for (const w of build.waiters) w.resolve(e);
+      } catch (err) {
+        done();
+        if (err instanceof EnvelopeAbandoned) { if (!inflight.has(key) && derivatives?.get(key, 'envelope')?.status === 'running') derivatives.markOutside(key, 'envelope', 'failed', 'canceled'); }
+        else derivatives?.markOutside(key, 'envelope', 'failed', err instanceof Error ? err.message : String(err));
+        for (const w of build.waiters) w.reject(err);
+      }
+    })();
+  });
 }
