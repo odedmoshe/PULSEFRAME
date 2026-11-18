@@ -2,7 +2,7 @@ import * as T from '@pulseframe/time';
 import { animatableParams, findEffect, isTimeEffect, modulatableParams, NOT_ANIMATABLE, paramRange, transitionDef } from './effects.ts';
 import { sourceEnd, speedValue } from './speed.ts';
 import { findAudioEffect } from './audioEffects.ts';
-import { ANIMATABLE, CaptureSchema, LifeEventSchema, MAX_LIFE_EVENTS, MAX_PEOPLE, PersonSchema, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
+import { ANIMATABLE, CaptureSchema, LifeEventSchema, MAX_LIFE_EVENTS, MAX_PEOPLE, MAX_SEQUENCES, PersonSchema, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
 import { personNameKey } from './people.ts';
 import { lifeIssues } from './fields.ts';
 import { MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, TRACK_STATES } from './tracking.ts';
@@ -95,9 +95,14 @@ export function validateProject(doc: ProjectDocument): Issue[] {
     const rangeStart = a.provenance.derived?.sourceRangeStart;
     if (rangeStart && T.isNegative(rangeStart)) issues.push({ code: 'derived_range', message: `asset ${a.id}: its source range cannot start before 0`, ids: [a.id] });
   }
+  // Sequences of one project (ADR-0018): at most MAX_SEQUENCES, and the main one takes its frame from the settings and has no
+  // measured origin. Ids inside an origin are informational and deliberately not checked (the file may be removed later).
+  const sequenceCount = Object.keys(doc.sequences).length;
+  if (sequenceCount > MAX_SEQUENCES) issues.push({ code: 'too_many_sequences', message: `a project holds at most ${MAX_SEQUENCES} sequences; this one holds ${sequenceCount}`, ids: [] });
   for (const [key, seq] of Object.entries(doc.sequences)) {
     if (key !== seq.id) issues.push({ code: 'key_mismatch', message: `sequence key ${key} != id ${seq.id}`, ids: [key] });
     uniq(seq.id);
+    if (key === doc.mainSequenceId && (seq.format !== undefined || seq.origin !== undefined)) issues.push({ code: 'main_sequence_format', message: `the main sequence ${seq.id} takes its frame from the project settings and has no format or origin of its own`, ids: [seq.id] });
     for (const tr of seq.tracks) {
       uniq(tr.id);
       if ((tr.kind === 'caption') !== !!tr.caption) issues.push({ code: 'caption_config', message: `track ${tr.id}: caption settings must exist exactly on caption tracks`, ids: [tr.id] });

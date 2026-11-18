@@ -26,6 +26,7 @@ import { CAPTION_LOOK_IDS, findCaptionLook } from './captionPresets.ts';
 import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, findEffect, isTimeEffect, MaskSchema, modulatableParams, ModulatorSchema, paramRange, TRANSITION_IDS, TransitionColor, transitionDef, type EffectInstance, type Modulator, type Transition } from './effects.ts';
 import { velocityNeeds } from './transitionTiming.ts';
 import { adjustmentRefusal, clipEnd, forbidsOverlap, lutAssets, lutUsers, sequenceDuration, validateProject } from './validate.ts';
+import { frameOf } from './sequences.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
 import { effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt } from './animation.ts';
 import { detachAssetFromEvents } from './events.ts';
@@ -137,11 +138,13 @@ function assertFree(t: Track, start: T.RationalTime, end: T.RationalTime, ignore
   const hit = overlaps(t, start, end, ignore);
   if (hit) throw new OpError('overlap', `range overlaps clip ${hit.id} on track ${t.id}`, { trackId: t.id, clipId: hit.id, clipStart: hit.start, clipEnd: clipEnd(hit) }, 'Choose a free range, another track, or omit trackId to auto-place.');
 }
-function assertAligned(d: ProjectDocument, t: T.RationalTime, what: string) {
+/** Refuse a time off the project's frame grid, with the nearest frame. Exported for op families kept in their own file (sequenceOps.ts). */
+export function assertAligned(d: ProjectDocument, t: T.RationalTime, what: string) {
   if (!T.isFrameAligned(t, d.settings.frameRate))
     throw new OpError('invalid_args', `${what} must fall on a ${d.settings.frameRate.num}/${d.settings.frameRate.den} fps frame boundary`, { value: t, nearest: T.snapToFrame(t, d.settings.frameRate) }, 'Use the returned nearest value.');
 }
-function newTrack(seq: Sequence, kind: Track['kind'], ctx: OpContext, name?: string): Track {
+/** A new empty track of `kind` in its stacking slot (default name V1, A1, T1, C1, FX1 …). Exported for add_sequence (sequenceOps.ts). */
+export function newTrack(seq: Sequence, kind: Track['kind'], ctx: OpContext, name?: string): Track {
   const count = seq.tracks.filter((t) => t.kind === kind).length + 1;
   const prefix = kind === 'video' ? 'V' : kind === 'audio' ? 'A' : kind === 'caption' ? 'C' : kind === 'adjustment' ? 'FX' : 'T';
   const track: Track = { id: ctx.newId('trk'), kind, name: name ?? `${prefix}${count}`, locked: false, muted: false, hidden: false, clips: [] };
@@ -178,7 +181,7 @@ const linked = (d: ProjectDocument, clip: Clip) => {
   return out;
 };
 /** The link ids the given clips carry. */
-const linkIdsOf = (clips: Iterable<Clip>) => {
+export const linkIdsOf = (clips: Iterable<Clip>) => {
   const out = new Set<string>();
   for (const c of clips) if (c.type === 'media' && c.linkGroupId) out.add(c.linkGroupId);
   return out;
@@ -190,7 +193,7 @@ const linkIdsOf = (clips: Iterable<Clip>) => {
  * unlink_clip it is refused while the clip is on a locked track. Groups that keep two or more members are left as they
  * are. Returns the ids of the clips that were unlinked, in document order.
  */
-function dissolveLoneLinks(d: ProjectDocument, groups: Iterable<string>): string[] {
+export function dissolveLoneLinks(d: ProjectDocument, groups: Iterable<string>): string[] {
   const want = new Set(groups);
   if (!want.size) return [];
   const members = new Map<string, { track: Track; clip: MediaClip }[]>();
@@ -271,7 +274,7 @@ const ADJUSTMENT_FIXED = ['x', 'y', 'scale', 'rotation'] as const;
  * An adjustment clip's transform is the identity apart from its opacity (its box is the whole frame). A position, size or
  * turn other than the identity is refused here, with a way to limit the look to part of the frame.
  */
-function refuseAdjustmentTransform(clip: Clip, transform: Partial<Record<(typeof ADJUSTMENT_FIXED)[number], number>> | null | undefined, verb: 'set' | 'animated') {
+export function refuseAdjustmentTransform(clip: Clip, transform: Partial<Record<(typeof ADJUSTMENT_FIXED)[number], number>> | null | undefined, verb: 'set' | 'animated') {
   if (clip.type !== 'adjustment' || !transform) return;
   const moved = ADJUSTMENT_FIXED.filter((p) => transform[p] !== undefined && transform[p] !== DEFAULT_TRANSFORM[p]);
   if (moved.length) throw new OpError('incompatible', `only the opacity of an adjustment clip can be ${verb}: it has no picture of its own to move, scale or turn`, { clipId: clip.id, properties: moved }, 'Set opacity only. To limit the look to part of the frame, give the adjustment a mask (set_clip_mask).');
@@ -1688,7 +1691,7 @@ export const isLiveCreated = (d: ProjectDocument, id: string): boolean =>
  * stay recognisable as hand-edited next time too.
  */
 export function runFingerprints(d: ProjectDocument, created: readonly string[], keepIds: readonly string[], previous: Readonly<Record<string, string>>): { createdIds: string[]; fingerprints: Record<string, string> } {
-  const createdIds = [...new Set(created)].filter((x) => !!findClip(d, x) || !!d.variants[x] || Object.values(d.sequences).some((s) => s.tracks.some((t) => t.id === x)));
+  const createdIds = [...new Set(created)].filter((x) => isLiveCreated(d, x));
   const fingerprints: Record<string, string> = {};
   for (const cid of createdIds) {
     const f = findClip(d, cid);
@@ -1714,7 +1717,7 @@ defineOp({
       refuseInheritedIds(parsed.data, `recipe step ${i} (${call.op})`, '', def.checksOwnIds);
       const r = def.apply(d, parsed.data, ctx);
       for (const id of r.affectedIds) affected.add(id);
-      created.push(...createdIdsOf(r.output ?? {}));
+      collectCreated(r.output, created);
     }
     const id = a.runId ?? ctx.newId('run');
     const previous = a.runId ? d.recipeRuns[a.runId]?.fingerprints ?? {} : {};
@@ -1786,13 +1789,14 @@ defineOp({
   name: 'add_marker',
   version: 1,
   description: 'Put a named marker on the timeline at a frame-aligned time: a note, a to-do or a sync point for people and agents. Markers stay at their time when clips are moved; they do move when time itself is inserted or removed on every track (insert_gap, cut_range with ripple). One marker per frame.',
-  args: z.object({ time: RT, label: z.string().max(200).optional(), color: z.enum(MARKER_COLORS).optional() }).strict(),
+  args: z.object({ sequenceId: z.string().optional().describe('The sequence to mark (a short, say); default the main sequence'), time: RT, label: z.string().max(200).optional(), color: z.enum(MARKER_COLORS).optional() }).strict(),
   apply(d, a, ctx) {
+    const seq = seqOf(d, a.sequenceId);
     assertAligned(d, a.time, 'time');
     if (T.isNegative(a.time)) throw new OpError('out_of_bounds', 'a marker cannot sit before the start', { time: a.time });
-    const taken = markerAt(d, d.mainSequenceId, a.time);
+    const taken = markerAt(d, seq.id, a.time);
     if (taken) throw new OpError('overlap', 'there is already a marker on this frame', { markerId: taken.id }, 'Use update_marker to change it.');
-    const m: Marker = { id: ctx.newId('mrk'), sequenceId: d.mainSequenceId, time: a.time, label: a.label ?? '', color: a.color ?? 'blue' };
+    const m: Marker = { id: ctx.newId('mrk'), sequenceId: seq.id, time: a.time, label: a.label ?? '', color: a.color ?? 'blue' };
     (d.markers ??= {})[m.id] = m;
     return { affectedIds: [m.id], summary: `Added marker${m.label ? ` "${m.label}"` : ''}`, output: { markerId: m.id } };
   },
@@ -2724,7 +2728,9 @@ defineOp({
       return { clip: f.clip as MediaClip, track: f.track, size: { width: size.width, height: size.height } };
     }).sort((x, y) => order.get(x.track)! - order.get(y.track)! || T.cmp(x.clip.start, y.clip.start) || (x.clip.id < y.clip.id ? -1 : 1));
     let placements;
-    try { placements = layoutPlacements(layout.id, { frame: { width: d.settings.width, height: d.settings.height }, fit: d.settings.fit ?? 'contain', pictures: sorted.map((x) => x.size) }); }
+    // the frame of the sequence the clips are in (ADR-0018: a short has its own), not the project settings
+    const frame = frameOf(d, found[0]!.seq.id);
+    try { placements = layoutPlacements(layout.id, { frame: { width: frame.width, height: frame.height }, fit: frame.fit, pictures: sorted.map((x) => x.size) }); }
     catch (e) { throw new OpError('out_of_bounds', `this layout cannot be computed for these pictures: ${e instanceof Error ? e.message : String(e)}`, { layoutId: layout.id }); }
     sorted.forEach(({ clip }, i) => {
       const p = placements[i]!;

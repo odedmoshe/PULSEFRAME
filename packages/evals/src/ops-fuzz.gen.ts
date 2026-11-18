@@ -174,7 +174,9 @@ export function createFuzz(seed: number) {
    * The rows of the sequence lifecycle (ADR-0018 shorts). Lead rows (contracts pre-pass): every call has arguments its
    * operation's schema accepts; what is refused is refused by the operation: the main sequence (removed, or given a format),
    * a sequence that is not there, an odd frame, a sequence that still has clips, keys out of order or off a frame boundary,
-   * an x value outside the transform's range, keys on a caption cue. W1 completes them with its bodies and the 65th sequence.
+   * an x value outside the transform's range, keys on a caption cue. W1 rows: key lists every rule accepts on every
+   * property (also opacity on an adjustment, and refused off-opacity there), a rename, the removal of an empty short. A
+   * marker on a short is a row of `gen` (add_marker with sequenceId). The 65th sequence is refused in packages/core/src/sequenceOps.test.ts (the fuzz never holds 64).
    */
   const sequenceMenu = (doc: ProjectDocument): (() => OpCall)[] => {
     const ids = Object.keys(doc.sequences);
@@ -196,8 +198,24 @@ export function createFuzz(seed: number) {
       else if (r < 0.24) ks[n - 1] = { ...ks[n - 1]!, value: 4.5 }; // outside the range of x
       return ks;
     };
+    /** A key list every rule accepts (W1 rows): whole frames, strictly increasing, values inside the property's range, any easing. */
+    const validKeys = (property: 'x' | 'y' | 'scale' | 'rotation' | 'opacity') => {
+      const n = 1 + int(40);
+      let frame = int(3);
+      return Array.from({ length: n }, () => {
+        const time = T.frameTime(frame, rate);
+        frame += 1 + int(8);
+        const value = property === 'scale' ? Number((0.5 + rnd() * 1.5).toFixed(4)) : property === 'opacity' ? Number(rnd().toFixed(4)) : property === 'rotation' ? Number((rnd() * 90 - 45).toFixed(2)) : Number((rnd() * 1.6 - 0.8).toFixed(5));
+        return { time, value, easing: pick(['linear', 'linear', 'hold', 'ease-in', 'ease-out', 'ease-in-out'] as const) };
+      });
+    };
     return [
       () => ({ op: 'add_sequence', args: { name: pick(['Short 1', 'קטע קצר', 'B']), ...(rnd() < 0.7 ? { format: format() } : {}), ...(rnd() < 0.4 ? { tracks: pick(['standard', 'empty'] as const) } : {}) } }),
+      // W1 rows: edits that succeed most of the time, so later steps meet sequences that hold keys and markers
+      () => { const property = pick(['x', 'x', 'y', 'scale', 'rotation', 'opacity'] as const); return { op: 'replace_clip_keyframes', args: { clipId: clipId(), property, keys: validKeys(property) } }; },
+      () => ({ op: 'update_sequence', args: { sequenceId: others.length ? pick(others) : sequenceId(), name: pick(['Short A', 'קטע ב', 'x']) } }),
+      // an empty sequence goes without withContents; one with clips is refused without it
+      () => ({ op: 'remove_sequence', args: { sequenceId: others.length ? pick(others) : 'seq_none' } }),
       () => ({ op: 'update_sequence', args: { sequenceId: sequenceId(), ...(rnd() < 0.5 ? { name: 'שם אחר' } : {}), ...(rnd() < 0.6 ? { format: rnd() < 0.3 ? null : format() } : {}) } }),
       () => ({ op: 'remove_sequence', args: { sequenceId: sequenceId(), ...(rnd() < 0.6 ? { withContents: rnd() < 0.8 } : {}) } }),
       () => ({ op: 'replace_clip_keyframes', args: { clipId: clipId(), property: pick(['x', 'x', 'y', 'scale', 'opacity'] as const), keys: rnd() < 0.15 ? null : keys(), ...(rnd() < 0.2 ? { at: T.frameTime(int(30), rate) } : {}) } }),
@@ -465,7 +483,7 @@ export function createFuzz(seed: number) {
       // people (ADR-0021, people section): once their operations are built
       ...(PEOPLE_OPS_BUILT ? peopleMenu(doc) : []),
       // the sequence lifecycle (ADR-0018 shorts): once W1 has built the bodies
-      ...(SEQUENCE_OPS_BUILT ? sequenceMenu(doc) : []),
+      ...(SEQUENCE_OPS_BUILT ? [...sequenceMenu(doc), () => { const others = Object.keys(doc.sequences).filter((id) => id !== doc.mainSequenceId); return { op: 'add_marker', args: { sequenceId: others.length && rnd() < 0.8 ? pick(others) : rnd() < 0.5 ? doc.mainSequenceId : 'seq_none', time: T.frameTime(int(240), rate) } }; }] : []),
     ];
     return pick(menu)();
   };
