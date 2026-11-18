@@ -1,0 +1,96 @@
+/**
+ * apply_take (internal, v1; ADR-0025 perform mode): a performance take as ONE step — ordinary public operations from
+ * TAKE_STEP_OPS with {$ref} bindings to earlier steps — and its run record (recipeId PERFORM_RECIPE_ID). Lead-built.
+ * Issued only by the server from a plan it built (apps/server/src/perform.ts, POST /api/v1/projects/:id/takes), like
+ * apply_template (ADR-0016 decision 5): the arguments carry the resolved steps, so replay never reads the pad catalogue.
+ * The browser runs the same op on an in-memory document for its preview (applyTransaction with allowInternal; nothing is sent).
+ *
+ * The op does not trust the plan:
+ * - every step must be in TAKE_STEP_OPS (forbidden_op otherwise); $asset bindings are refused (a take carries no media);
+ * - at most MAX_TAKE_STEPS steps (schema) and MAX_TAKE_TRACKS add_track steps;
+ * - after the steps ran, the flash rule (performFlash.ts takeFlashBreach) is checked on the sequence; a breach refuses the
+ *   whole take with incompatible, details.reason 'flash_limit'.
+ * A step's own refusal is passed on in its own words, with details.step and details.stepOp. Undo is the store's ordinary undo of
+ * one transaction (entity diffs), so the take undoes exactly.
+ */
+import { z } from 'zod';
+import { collectCreated, defineOp, getOp, OpError, refuseInheritedIds, runFingerprints } from './ops.ts';
+import { resolveBindings } from './templateOps.ts';
+import type { ProjectDocument } from './schema.ts';
+import { ApplyTakeArgsSchema, MAX_TAKE_TRACKS, PERFORM_RECIPE_ID, PERFORM_TAKE_VERSION, TAKE_STEP_OPS, type ApplyTakeOutput, type PlannedTake, type TakeRequest } from './performContract.ts';
+import { PERFORM_REFUSALS as R } from './performRefusals.ts';
+import { takeFlashBreach } from './performFlash.ts';
+import { performGrid, planPerformance, quantiseTaps } from './moves.ts';
+
+const STEP_OPS: ReadonlySet<string> = new Set(TAKE_STEP_OPS);
+const NO_ASSETS: ReadonlyMap<string, string> = new Map();
+const hasAssetBinding = (v: unknown, depth = 0): boolean => {
+  if (depth > 64 || typeof v !== 'object' || v === null) return false;
+  if (Array.isArray(v)) return v.some((x) => hasAssetBinding(x, depth + 1));
+  return Object.hasOwn(v, '$asset') || Object.values(v).some((x) => hasAssetBinding(x, depth + 1));
+};
+
+defineOp({
+  name: 'apply_take',
+  version: 1,
+  internal: true,
+  description: 'Apply a performance take (perform mode): ordinary public operations (tracks, adjustment clips, sounds, titles, stickers and keys) with bindings to earlier steps, as one step, and record the run. Issued by the server from the taps it planned (POST /takes); refused when a step is not one a take may run, or when the result would change light faster than three times a second (flash safety).',
+  args: ApplyTakeArgsSchema,
+  apply(d, a, ctx) {
+    const sequenceId = a.sequenceId ?? d.mainSequenceId;
+    if (!Object.hasOwn(d.sequences, sequenceId)) throw new OpError('not_found', `sequence ${sequenceId} not found`, { sequenceId });
+    const tracks = a.steps.filter((s) => s.op === 'add_track').length;
+    if (tracks > MAX_TAKE_TRACKS) throw new OpError(R.tooManyTracks.code, R.tooManyTracks.message(tracks), { tracks, max: MAX_TAKE_TRACKS }, R.tooManyTracks.hint);
+    const affected = new Set<string>();
+    const bound = new Map<string, Readonly<Record<string, unknown>>>();
+    const created: string[] = [];
+    for (const [i, step] of a.steps.entries()) {
+      const def = getOp(step.op);
+      if (!STEP_OPS.has(step.op) || !def || def.internal) throw new OpError(R.forbiddenStep.code, R.forbiddenStep.message(i, step.op), { index: i, op: step.op, allowed: [...TAKE_STEP_OPS] }, R.forbiddenStep.hint);
+      if (step.bind !== undefined && bound.has(step.bind)) throw new OpError(R.bindTwice.code, R.bindTwice.message(i, step.bind), { index: i, bind: step.bind }, R.bindTwice.hint);
+      if (hasAssetBinding(step.args)) throw new OpError(R.assetBinding.code, R.assetBinding.message(i), { index: i }, R.assetBinding.hint);
+      const where = `take step ${i} (${step.op})`;
+      const args = resolveBindings(step.args, bound, NO_ASSETS, where);
+      const parsed = def.args.safeParse(args);
+      if (!parsed.success) throw new OpError('invalid_args', `${where}: ${z.prettifyError(parsed.error)}`, { index: i });
+      refuseInheritedIds(parsed.data, where, '', def.checksOwnIds);
+      let r;
+      try { r = def.apply(d, parsed.data, ctx); } catch (e) {
+        if (e instanceof OpError) throw new OpError(e.code, e.message, { ...e.details, step: i, stepOp: step.op }, e.hint);
+        throw e;
+      }
+      for (const id of r.affectedIds) affected.add(id);
+      const out = r.output ?? {};
+      collectCreated(out, created);
+      if (step.bind !== undefined) bound.set(step.bind, out);
+    }
+    const breach = takeFlashBreach(d, sequenceId, created);
+    if (breach) {
+      const details = { reason: 'flash_limit', why: breach.why, clipId: breach.clipId, frame: breach.frame, since: breach.since, gapFrames: breach.gapFrames, ...(breach.other ? { other: breach.other } : {}) };
+      const row = breach.why === 'gap' ? R.flashGap : breach.why === 'light' ? R.flashLight : R.flashShort;
+      const message = breach.why === 'gap' ? R.flashGap.message(breach.frame, breach.since, breach.gapFrames) : breach.why === 'light' ? R.flashLight.message(breach.frame, breach.gapFrames) : R.flashShort.message(breach.frame, breach.since, breach.gapFrames);
+      throw new OpError(row.code, message, details, row.hint);
+    }
+    const { createdIds, fingerprints } = runFingerprints(d, created, [], {});
+    const id = ctx.newId('run');
+    const t = a.take;
+    d.recipeRuns[id] = {
+      id, recipeId: PERFORM_RECIPE_ID,
+      params: { version: PERFORM_TAKE_VERSION, sequenceId, snap: t.snap, tempo: t.tempo, parity: t.parity, strength: t.strength, taps: t.taps, hits: t.hits, held: t.held },
+      createdIds, fingerprints, steps: t.summary,
+    };
+    affected.add(id);
+    const output: ApplyTakeOutput = { runId: id, createdIds };
+    return { affectedIds: [...affected], summary: `Performance take: ${t.hits} hit${t.hits === 1 ? '' : 's'} kept, ${t.held} held`.slice(0, 200), output: { ...output } };
+  },
+});
+
+/**
+ * The whole take as the server (and the browser, for its ghost) plans it: the grid, quantise, then the planner — W1's functions
+ * (moves.ts), composed here once so both sides compose them the same way. Throws while they are not built (PERFORM_PLANNER_BUILT).
+ */
+export function planTakeRequest(doc: ProjectDocument, req: Pick<TakeRequest, 'sequenceId' | 'taps' | 'bank' | 'assets' | 'settings' | 'gpu'>): PlannedTake {
+  const grid = performGrid(doc, req.settings, req.sequenceId);
+  const hits = quantiseTaps(req.taps, grid, req.settings, doc.settings.frameRate, req.bank);
+  return planPerformance(doc, { ...(req.sequenceId ? { sequenceId: req.sequenceId } : {}), hits, bank: req.bank, assets: req.assets, settings: req.settings, gpu: req.gpu });
+}
