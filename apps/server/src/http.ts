@@ -21,7 +21,7 @@ import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
-import { applyTransaction, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema, FindShortsBodySchema, SHORTS_MEASUREMENT_KIND, sequenceList, shortsRefusal, MulticamSyncBody, multicamGroupOf, MULTICAM_REFUSALS } from '@pulseframe/core';
+import { applyTransaction, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema, FindShortsBodySchema, SHORTS_MEASUREMENT_KIND, sequenceList, shortsRefusal, MulticamSyncBody, multicamGroupOf, MULTICAM_REFUSALS, MULTICAM_SYNC_KIND } from '@pulseframe/core';
 import { addMusic, MusicBody, musicPreview } from './music.ts';
 import { onThisDayFor, readMissingCaptures } from './lifeline.ts';
 import { preflight } from './preflight.ts';
@@ -31,7 +31,7 @@ import { pipeline } from 'node:stream/promises';
 import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
 import { applyTemplateFor, listTemplates, planTemplateFor, probeElements, regenerateTemplateFor, templateCatalog } from './templates.ts';
 import { outputDoc } from './export.ts';
-import { envelopeDerivative, multicamView, syncMulticam } from './multicamSync.ts';
+import { envelopeDerivative, multicamView, runMulticamSyncJob, setMulticamDerivatives, syncMulticam } from './multicamSync.ts';
 import { applyShorts, cachedShortCandidates, findShortCandidates, planReframeFor, planShortsFor, shortsApiError, withShortsErrors } from './shorts.ts';
 import { registerBrowserExportRoutes } from './browser-export.ts';
 import { buildOpenApi } from './openapi.ts';
@@ -376,6 +376,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/templates/:templateId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await applyTemplateFor(store, gov, p, c.req.param('id'), c.req.param('templateId'), b.params, b.expectedRevision)); });
   app.post('/api/v1/projects/:id/template-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await regenerateTemplateFor(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params, b.expectedRevision)); });
   // ----- multicam (ADR-0020): sync a group by sound (edit; dryRun observe), the group view, a file's level envelope -----
+  setMulticamDerivatives(derivatives); // the sync job and the envelope route store envelopes there (recovered jobs too)
   const mustGroup = (projectId: string, groupId: string) => {
     if (!multicamGroupOf(store.getProject(projectId).doc, groupId)) throw new ApiError(404, 'not_found', MULTICAM_REFUSALS.groupNotFound.message(groupId), { groupId }, MULTICAM_REFUSALS.groupNotFound.hint);
   };
@@ -1163,6 +1164,7 @@ export function startMeasurementJob(store: Store, principal: Principal, projectI
 }
 async function runAnalysisJob(store: Store, jobId: string) {
   if (store.getJob(jobId).status !== 'queued') return;
+  if (store.getJob(jobId).input?.kind === MULTICAM_SYNC_KIND) return runMulticamSyncJob(store, jobId); // multicam (ADR-0020): its own runner
   store.updateJob(jobId, { status: 'running', stage: 'measuring' });
   const j = store.getJob(jobId);
   try {

@@ -12,8 +12,12 @@ import type { Asset } from '@pulseframe/core';
 import { countVideoPackets, ffprobe } from './ingest.ts';
 import type { Store } from './store.ts';
 
-/** 'moments' (wave 5 family film, ADR-0026) is made outside the queue by the moments job and stored with put(); it is never queued on import. */
-export type DerivativeKind = 'thumbnails' | 'waveform' | 'proxy' | 'moments';
+/**
+ * 'moments' (wave 5 family film, ADR-0026) is made outside the queue by the moments job and stored with put(); it is never queued on import.
+ * 'envelope' (multicam, ADR-0020): the level envelope of a file's sound (core multicamEnvelope.ts), built on demand by the multicam
+ * sync job or the envelope route under heavy() and stored with putBytes(); it is never queued on import either.
+ */
+export type DerivativeKind = 'thumbnails' | 'waveform' | 'proxy' | 'moments' | 'envelope';
 /** Kinds the queue makes on import (moments is not one). */
 export const QUEUED_DERIVATIVE_KINDS: readonly DerivativeKind[] = ['thumbnails', 'waveform', 'proxy'];
 export interface DerivativeRow { assetHash: string; kind: DerivativeKind; status: 'queued' | 'running' | 'ready' | 'failed' | 'not-applicable'; blobHash: string | null; bytes: number | null; mimeType: string | null; meta: Record<string, unknown> | null; error: string | null; updatedAt: string }
@@ -64,7 +68,7 @@ export class Derivatives {
   ensure(asset: Asset): DerivativeRow[] {
     if (asset.kind === 'lut') return []; // a colour table has no picture or sound to derive from
     const hash = asset.contentHash;
-    const applicable: Record<DerivativeKind, boolean> = { thumbnails: asset.kind === 'video', proxy: asset.kind === 'video', waveform: asset.kind !== 'image' && !!asset.audio, moments: false };
+    const applicable: Record<DerivativeKind, boolean> = { thumbnails: asset.kind === 'video', proxy: asset.kind === 'video', waveform: asset.kind !== 'image' && !!asset.audio, moments: false, envelope: false };
     for (const kind of KINDS) {
       if (this.get(hash, kind)) continue;
       if (!applicable[kind]) this.write(hash, kind, { status: 'not-applicable' });
@@ -89,8 +93,28 @@ export class Derivatives {
     return this.get(assetHash, kind)!;
   }
 
+  /** put() for a derivative held in memory (the multicam level envelope): written to a temp file, then interned. */
+  async putBytes(assetHash: string, kind: DerivativeKind, bytes: Uint8Array, mime: string, meta: Record<string, unknown>): Promise<DerivativeRow> {
+    if (KINDS.includes(kind)) throw new Error(`derivative kind ${kind} is made by the queue, not stored with put`);
+    const file = this.tmp('bin');
+    fs.writeFileSync(file, bytes, { mode: 0o600 });
+    try { return await this.put(assetHash, kind, file, mime, meta); } finally { fs.rmSync(file, { force: true }); }
+  }
+  /**
+   * The state of a derivative made outside the queue while it is being built, or why it failed (announced over SSE like every
+   * row). Refused for the queue's kinds. A 'running' row of such a kind is not resumed by recover(): its builder reruns it.
+   */
+  markOutside(assetHash: string, kind: DerivativeKind, status: 'running' | 'failed', error?: string): DerivativeRow {
+    if (KINDS.includes(kind)) throw new Error(`derivative kind ${kind} is made by the queue`);
+    if (!/^sha256:[0-9a-f]{64}$/.test(assetHash)) throw new Error('markOutside: not a content hash');
+    this.write(assetHash, kind, { status, ...(error ? { error: error.slice(0, 1000) } : {}) });
+    return this.get(assetHash, kind)!;
+  }
+
   /** After a restart: rows left running go back to queued and everything queued is processed. */
   recover(): void {
+    // kinds made outside the queue (moments, envelope) are rebuilt by their own job; a row left running is dropped, not queued
+    this.store.db.prepare(`DELETE FROM derivatives WHERE status = 'running' AND kind NOT IN (${KINDS.map(() => '?').join(',')})`).run(...KINDS);
     this.store.db.prepare("UPDATE derivatives SET status = 'queued', updated_at = ? WHERE status = 'running'").run(new Date().toISOString());
     for (const r of this.store.db.prepare("SELECT asset_hash, kind FROM derivatives WHERE status = 'queued' ORDER BY updated_at").all() as any[]) this.enqueue(r.asset_hash, r.kind);
   }
