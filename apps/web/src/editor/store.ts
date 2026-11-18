@@ -26,6 +26,7 @@ import { dropApi, importsApi } from './imports.api.ts';
 import type { PhoneDropProblem } from './phoneDrop.strings.ts';
 import { RefreshPolicy } from './renderCache.logic.ts';
 import type { DropCodeView, DropPublicView, FamilyFilmParams, FamilyFilmPlanView, FilmExclusion, FilmPick } from '@pulseframe/core';
+import type { ChannelRef, KeyClipboard, KeyRef } from '@pulseframe/core';
 
 export type SaveState = 'save.saved' | 'save.saving' | 'save.offline' | 'save.conflict';
 export type ProviderInfo = Awaited<ReturnType<typeof api.capabilities>>;
@@ -143,6 +144,15 @@ export interface EditorState {
   filmSource: FilmSource | null;
   /** The film applied from this tab, for the film bar (undo, other moments, another length, why these clips). Session state only; after a reload the document's run (recipeId template:tpl.family-film) is used. */
   filmRun: FilmRunInfo | null;
+  // ---- keyframe curves and motion paths (ADR-0019): session state, never stored in the document or sent in presence ----
+  /** The selected keys of the keyframe strip (one clip at a time); pruned on load when the clip is gone (W2). */
+  keySel: { clipId: string; keys: KeyRef[] } | null;
+  /** Copied keys (values and curves, core keyEdits.ts copyKeys); kept across clips and loads. */
+  keyClipboard: KeyClipboard | null;
+  /** The curve picker is open for these channels at this clip-local frame (CurvePicker.tsx). */
+  curvePicker: { clipId: string; frame: number; channels: ChannelRef[] } | null;
+  /** Show the motion path on the stage: a setting of this browser (localStorage 'pf.motionPath'), default on. */
+  pathOn: boolean;
 }
 /** What the family film dialog starts from (FamilyFilmEntry → editor.openFilm). */
 export interface FilmSource { assetIds: string[]; event: FamilyFilmParams['event'] }
@@ -150,6 +160,9 @@ export interface FilmSource { assetIds: string[]; event: FamilyFilmParams['event
 export interface FilmRunInfo { runId: string; params: FamilyFilmParams; picks: FilmPick[]; excluded: FilmExclusion[]; alternatives: FamilyFilmPlanView['alternatives'] }
 /** localStorage key of the «ייצוא מהיר» switch. */
 export const FAST_EXPORT_KEY = 'pf.fastExport';
+/** localStorage key of the motion path switch (ADR-0019; view.motionPath). */
+export const MOTION_PATH_KEY = 'pf.motionPath';
+const readPathOn = () => { try { return localStorage.getItem(MOTION_PATH_KEY) !== '0'; } catch { return true; } };
 const readFastExport = () => { try { return localStorage.getItem(FAST_EXPORT_KEY) === '1'; } catch { return false; } };
 /** A place the ride bar can ask the editor to show: a tab of the inspector, or a gallery (RideBar.tsx, Inspector.tsx). */
 export type PanelTarget = 'speed' | 'animation' | 'effects' | 'transition' | 'transitions-gallery' | 'sound' | 'replace';
@@ -219,6 +232,7 @@ export class Editor {
     segmentPlan: { status: 'off', view: null, revision: null }, fastExport: readFastExport(), planOptions: {}, // the export sheet's first pick (the computer destination: high quality, whose options are all defaults)
     imports: { local: [], jobs: [], room: null, skipped: null }, phoneDropOpen: false, drop: null, dropLive: null, dropProblem: null, planBlockers: [],
     filmOpen: false, filmSource: null, filmRun: null,
+    keySel: null, keyClipboard: null, curvePicker: null, pathOn: readPathOn(),
   };
   /**
    * The import queue's editor side (ADR-0023): uploads one at a time to POST …/imports, cards from the job events, placement of
