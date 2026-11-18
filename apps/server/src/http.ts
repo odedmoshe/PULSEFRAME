@@ -48,6 +48,9 @@ import { declaredLength, registerImportRoutes } from './importRoutes.ts';
 import { registerRenderCacheRoutes, type RenderCacheService } from './renderCacheRoutes.ts';
 import { peopleSuggestions } from './lifeline.ts';
 import { takeFor } from './perform.ts';
+import { AssistantConfigBodySchema, AssistantKeyBodySchema, AssistantRequestBodySchema } from '@pulseframe/core';
+import { isOwnerSession, type AssistantDeps } from './assistant/contract.ts';
+import { createAssistantHandlers } from './assistant/routes.ts';
 
 const TxBody = z
   .object({
@@ -115,7 +118,7 @@ export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self';
 export const DATA_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
 
 /** Services wired by the server (index.ts) that tests may leave out: the import queue and the phone drop (ADR-0023), the render cache (ADR-0024). */
-export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService }
+export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps }
 export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler, speechService?: Speech, extras: AppExtras = {}) {
   setMeasurementExporter(exporter); // colour-match jobs render stills, also when they are recovered after a restart
   const gov = governance ?? new Governance(store);
@@ -766,6 +769,33 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // ----- import queue and phone drop (ADR-0023); render cache (ADR-0024) -----
   if (extras.imports) registerImportRoutes(app, { cfg, store, gov, imports: extras.imports, door: extras.door ?? null, need });
   if (extras.renderCache) registerRenderCacheRoutes(app, extras.renderCache, need);
+
+  // ----- the command bar's language assistant (ADR-0027; assistant/contract.ts ASSISTANT_ROUTES): status for any observer, the
+  // rest for the owner's own session only (the money and the key are the owner's). The handlers are W2's (assistant/routes.ts).
+  const assistant = createAssistantHandlers({ cfg, store, gov, deps: extras.assistant ?? { adapters: new Map(), endpoint: () => null } });
+  const assistantOwner = (c: Context<Env>) => {
+    const p = need(c, 'observe');
+    if (!isOwnerSession(p)) throw new ApiError(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only', undefined, 'The owner sets it up in Settings.');
+    return p;
+  };
+  app.get('/api/v1/assistant/status', async (c) => c.json(await assistant.status(need(c, 'observe'))));
+  app.get('/api/v1/projects/:id/assistant/summary', async (c) => {
+    const p = assistantOwner(c);
+    const projectId = c.req.param('id');
+    store.getProject(projectId); // 404 first
+    const frame = Number(c.req.query('playheadFrame') ?? 0), sel = c.req.query('selection'), seq = c.req.query('sequenceId');
+    if (!Number.isInteger(frame) || frame < 0) throw new ApiError(400, 'invalid_request', 'playheadFrame is a whole, non-negative frame index');
+    return c.json(await assistant.summary(p, projectId, { playheadFrame: frame, selection: sel ? sel.split(',').filter(Boolean).slice(0, 2000) : [], ...(seq ? { sequenceId: seq } : {}) }));
+  });
+  app.put('/api/v1/assistant/config', async (c) => { const p = assistantOwner(c); return c.json(await assistant.putConfig(p, await body(c, AssistantConfigBodySchema))); });
+  app.put('/api/v1/assistant/key', async (c) => { const p = assistantOwner(c); return c.json(await assistant.putKey(p, (await body(c, AssistantKeyBodySchema)).key)); });
+  app.delete('/api/v1/assistant/key', async (c) => c.json(await assistant.deleteKey(assistantOwner(c))));
+  app.post('/api/v1/projects/:id/assistant/requests', async (c) => {
+    const p = assistantOwner(c);
+    const projectId = c.req.param('id');
+    store.getProject(projectId);
+    return c.json(await assistant.request(p, projectId, await body(c, AssistantRequestBodySchema)), 202);
+  });
 
   // ----- optional provider capabilities (Amendment A1). No route accepts a raw graph for execution. -----
   app.get('/api/v1/catalog', (c) => { need(c, 'observe'); return c.json(catalog()); });

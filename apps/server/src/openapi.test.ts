@@ -100,7 +100,7 @@ describe('openapi against the real server', () => {
   it('every documented route exists (not the catch-all 404)', async () => {
     for (const { path: p, method } of entries) {
       const url = p.replace(/\{[^}]+\}/g, 'dummy');
-      const init: RequestInit = method === 'post' ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' } : method === 'delete' ? { method: 'DELETE' } : { method: 'GET' };
+      const init: RequestInit = method === 'post' || method === 'put' ? { method: method.toUpperCase(), headers: { 'content-type': 'application/json' }, body: '{}' } : method === 'delete' ? { method: 'DELETE' } : { method: 'GET' };
       const res = await f(url, init);
       const text = await res.text().catch(() => '');
       const isCatchAll = res.status === 404 && (() => { try { const e = JSON.parse(text).error; return e.code === 'not_found' && e.message === 'no such API route'; } catch { return false; } })();

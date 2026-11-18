@@ -13,6 +13,7 @@ import { SHORTS_EN, SHORTS_HE } from './shorts.ts';
 import { KEYFRAMES_WAVE_EN, KEYFRAMES_WAVE_HE } from './keyframesWave.ts';
 import { MULTICAM_EN, MULTICAM_HE } from './multicam.ts';
 import { PERFORM_EN, PERFORM_HE } from './perform.ts';
+import { COMMAND_BAR_EN, COMMAND_BAR_HE } from './commandBar.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
@@ -214,6 +215,7 @@ export const he = {
   ...KEYFRAMES_WAVE_HE,
   ...MULTICAM_HE,
   ...PERFORM_HE,
+  ...COMMAND_BAR_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -415,6 +417,7 @@ export const en: Record<keyof typeof he, string> = {
   ...KEYFRAMES_WAVE_EN,
   ...MULTICAM_EN,
   ...PERFORM_EN,
+  ...COMMAND_BAR_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };

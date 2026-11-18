@@ -18,6 +18,11 @@ export interface Config {
   comfyuiModelsDir: string | null;
   /** Hosts model files may be downloaded from (redirect targets must match too; a leading dot means any subdomain). */
   modelHosts: string[];
+  /**
+   * Hosts the in-editor language assistant may send its allowlisted summary to (PF_ASSISTANT_HOSTS, comma-separated exact
+   * host names; default none). The owner's configured host must be listed here and reached over https (ADR-0027).
+   */
+  assistantHosts: string[];
   /** Ceiling for everything in the data directory (media, derivatives, exports, database), in bytes; 0 = no ceiling (the default). New uploads and exports are refused once it is reached. */
   maxStorageBytes: number;
   /**
@@ -135,6 +140,7 @@ export function loadConfig(env = process.env): Config {
     comfyuiAllowRemote: env.PF_COMFYUI_ALLOW_REMOTE === '1',
     comfyuiModelsDir: env.PF_COMFYUI_MODELS_DIR ? path.resolve(env.PF_COMFYUI_MODELS_DIR) : null,
     modelHosts: env.PF_MODEL_HOSTS !== undefined ? env.PF_MODEL_HOSTS.split(',').filter(Boolean) : [...DEFAULT_MODEL_HOSTS],
+    assistantHosts: (env.PF_ASSISTANT_HOSTS ?? '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean),
     maxStorageBytes: Math.max(0, Number(env.PF_MAX_STORAGE_BYTES ?? 0)) || 0,
     agentRequestsPerMinute: Math.max(0, Number(env.PF_AGENT_RPM ?? 0)) || 0,
     secureCookie: env.PF_SECURE_COOKIE === '1',

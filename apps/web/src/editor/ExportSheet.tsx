@@ -24,7 +24,7 @@ import { api, ApiFailure, type PreflightIssue, type PreflightReport } from '../a
 import { useEditorState, type Editor, type ExportRequest } from './store.ts';
 import { EXPORT_STRINGS, type ExportStrings } from './exportSheet.strings.ts';
 import {
-  alsoSuggestion, DEFAULT_CHOICES, DESTINATIONS, describeExport, jobsOnOpen, mergeJobViews, destinationKey, exportOptions, exportTargets, formatFileSize, formatLength, fourKReachable, isActiveJob, jobFraction, overallFraction,
+  alsoSuggestion, DEFAULT_CHOICES, DESTINATIONS, describeExport, destinationPick, jobsOnOpen, mergeJobViews, destinationKey, exportOptions, exportTargets, formatFileSize, formatLength, fourKReachable, isActiveJob, jobFraction, overallFraction,
   parseStage, scaledSize, shortSideLabel, STAGE_ORDER, type Destination, type ExportCaptions, type ExportChoices, type ExportQuality, type ExportScale, type ExportTarget,
   fixLabel as fixLabelOf,
 } from './exportSheet.logic.ts';
@@ -53,7 +53,10 @@ const useSheet = () => useSyncExternalStore(subscribe, () => sheet);
  * export the chip follows: when the sheet did not start it (the agent, another tab, a reload), it is shown all the same, with
  * its progress and cancel, or its file and retry (exportSheet.logic.ts jobsOnOpen).
  */
-export function openExportSheet(opts: { last?: boolean; followed?: SheetJob | null } = {}) {
+export function openExportSheet(opts: { last?: boolean; followed?: SheetJob | null; destination?: Exclude<Destination['id'], 'custom'> } = {}) {
+  // a destination asked for (the command bar's «ייצא לוואטסאפ», ADR-0027) is chosen as by a click on its tile once the settings
+  // know the project's formats (Settings); nothing is exported until the sheet's own button
+  if (opts.destination) setPick({ want: opts.destination });
   setSheet({ open: true, error: null, blockers: [], jobs: jobsOnOpen(sheet.jobs, opts, opts.followed ?? null) });
 }
 /** The runs of the sheet's last export and whether the sheet is open (the top bar's export chip reads them). */
@@ -116,7 +119,8 @@ export function ExportSheetHost() {
   // the palette's command asks through the editor (editor.openExportSheet)
   const asked = state.exportSheet;
   const seenAsk = useRef(asked);
-  useEffect(() => { if (primary && asked !== seenAsk.current) { seenAsk.current = asked; openExportSheet(); } }, [primary, asked]);
+  const askedDest = state.exportSheetDestination ?? null;
+  useEffect(() => { if (primary && asked !== seenAsk.current) { seenAsk.current = asked; openExportSheet(askedDest ? { destination: askedDest } : {}); } }, [primary, asked, askedDest]);
   if (!primary || !state.doc) return null;
   return <Sheet editor={editor} />;
 }
@@ -143,7 +147,7 @@ function Sheet({ editor }: { editor: Editor }) {
 
 // ---------------------------------------------------------------- settings
 /** The choices live above the footer and the body so the primary button can read them. */
-interface Pick { keys: string[]; choices: ExportChoices; dest: Destination['id'] | null }
+interface Pick { keys: string[]; choices: ExportChoices; dest: Destination['id'] | null; /** a destination openExportSheet was asked to choose, applied by Settings (destinationPick) */ want?: Destination['id'] | null }
 // a destination is chosen from the start (saving a file on this computer: the original shape, full quality), so the sheet never opens on nothing
 const FIRST = DESTINATIONS.find((d) => d.id === 'computer')!;
 let pick: Pick = { keys: ['master'], choices: { ...DEFAULT_CHOICES, ...FIRST.choices }, dest: FIRST.id };
@@ -165,10 +169,9 @@ function Settings({ editor, S }: { editor: Editor; S: ExportStrings }) {
   useEffect(() => { const ok = p.keys.filter((k) => targets.some((t) => t.key === k)); if (ok.length !== p.keys.length) setPick({ keys: ok.length ? ok : ['master'] }); }, [targets]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = (key: string) => setPick({ dest: 'custom', keys: p.keys.includes(key) ? p.keys.filter((k) => k !== key) : [...p.keys, key] });
-  const chooseDest = (d: Destination) => {
-    const key = destinationKey(d, targets);
-    setPick({ dest: d.id, ...(key ? { keys: [key] } : {}), choices: { ...p.choices, ...d.choices } });
-  };
+  const chooseDest = (d: Destination) => setPick({ ...destinationPick(d, targets, p.choices), want: null });
+  // the destination openExportSheet was asked for (the command bar), chosen exactly as a click on its tile
+  useEffect(() => { const d = p.want ? DESTINATIONS.find((x) => x.id === p.want) : undefined; if (d) chooseDest(d); else if (p.want) setPick({ want: null }); }, [p.want, targets]); // eslint-disable-line react-hooks/exhaustive-deps
   const setChoice = (patch: Partial<ExportChoices>) => setPick({ dest: 'custom', choices: { ...p.choices, ...patch } });
 
   const sec = doc.settings.frameRate ? T.toSeconds(editor.duration) : 0;
