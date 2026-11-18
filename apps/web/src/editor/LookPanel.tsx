@@ -14,6 +14,8 @@ import { Seg } from '../ds/index.ts';
 import { INSPECTOR_STRINGS } from './inspector.strings.ts';
 import { IconKeyframeFull, IconKeyframeHalf, IconKeyframeHollow, IconOnBeat } from './icons.tsx';
 import { StampSource, STAMP_SOURCE_PARAMS } from './lifeline/StampSource.tsx';
+import { CurveChip } from './CurvePicker.tsx';
+import type { ChannelRef } from '@pulseframe/core';
 
 type Prop = { type?: string; minimum?: number; maximum?: number; enum?: string[]; pattern?: string; default?: unknown };
 type Params = Record<string, number | string | boolean>;
@@ -33,7 +35,7 @@ function propsOf(type: string): Record<string, Prop> {
 const stepOf = (min: number, max: number) => { const s = (max - min) / 200; return +s.toPrecision(2) || 0.01; };
 
 /** One control generated from a JSON-Schema property. Commits on pointer-up / key-up / change, never on drag ticks. */
-interface Keyer { animated: boolean; pressed: boolean; enabled: boolean; title: string; animatedTitle: string; onToggle: () => void }
+interface Keyer { animated: boolean; pressed: boolean; enabled: boolean; title: string; animatedTitle: string; onToggle: () => void; /** the curve chip beside the diamond (ADR-0019) */ curve?: { clipId: string; channel: ChannelRef } }
 /**
  * The ♪ of a parameter that may follow the beat (core MODULATABLE; ADR-0011): on, it makes the parameter kick on the beats of
  * the music under the clip and settle back (op set_effect_modulator); its settings are shown in a fieldset under the slider.
@@ -119,6 +121,7 @@ function ParamControl({ name, prop, value, onCommit, keyer, effectType, beat }: 
       <div className="effect-param-row">
         {slider}
         <button type="button" className="ghost effect-key" data-testid="effect-key" data-param={name} aria-pressed={keyer.pressed} disabled={!keyer.enabled} title={keyer.title} aria-label={`${keyer.title}: ${name}`} onClick={keyer.onToggle}>{keyer.pressed ? <IconKeyframeFull size={16} /> : keyer.animated ? <IconKeyframeHalf size={16} /> : <IconKeyframeHollow size={16} />}</button>
+        {keyer.curve && <CurveChip clipId={keyer.curve.clipId} channel={keyer.curve.channel} />}
         {beat && (
           <button type="button" className="ghost effect-beat" data-testid="beat-toggle" data-param={name} aria-pressed={!!beat.modulator}
             disabled={!beat.modulator && !beat.music} aria-describedby={!beat.music ? beat.noteId : undefined}
@@ -296,7 +299,7 @@ function EffectRow({ clipId, fx, index, count, timeFirst, run }: { clipId: strin
           const liveFx = () => { const c = editor.doc ? findClip(editor.doc, clipId)?.clip : undefined; return c?.effects?.find((e) => e.id === fx.id); };
           const keyOp = (at: T.RationalTime, value: number) => ({ op: 'set_effect_keyframe', args: { clipId, effectId: fx.id, param: name, time: at, value } });
           const keyer: Keyer = {
-            animated, pressed: hasKey, enabled: inside, title: t('cmd.keyframeAdd'), animatedTitle: t('keyframes.animated'),
+            animated, pressed: hasKey, enabled: inside, title: t('cmd.keyframeAdd'), animatedTitle: t('keyframes.animated'), curve: { clipId, channel: { effectId: fx.id, param: name } },
             onToggle: () => {
               const at = liveLocal();
               if (!at) return;

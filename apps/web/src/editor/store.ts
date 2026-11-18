@@ -27,6 +27,7 @@ import type { PhoneDropProblem } from './phoneDrop.strings.ts';
 import { RefreshPolicy } from './renderCache.logic.ts';
 import type { DropCodeView, DropPublicView, FamilyFilmParams, FamilyFilmPlanView, FilmExclusion, FilmPick } from '@pulseframe/core';
 import type { ChannelRef, KeyClipboard, KeyRef } from '@pulseframe/core';
+import { pruneKeySel } from './keyStrip.math.ts';
 
 export type SaveState = 'save.saved' | 'save.saving' | 'save.offline' | 'save.conflict';
 export type ProviderInfo = Awaited<ReturnType<typeof api.capabilities>>;
@@ -329,7 +330,10 @@ export class Editor {
       const picker = this.state.picker && !findClip(projected, this.state.picker.clipId) ? { picker: null } : {};
       // the chosen cut goes when it is no longer a cut (its clips were moved apart, or one of them is gone)
       const cutGone = this.state.cutClipId && (!selection.includes(this.state.cutClipId) || !cutBefore(projected, this.state.cutClipId)) ? { cutClipId: null, loupe: false } : {};
-      this.set({ doc: projected, rawDoc: p.project, activeSequenceId, revision: p.revision, selection, viewVariantId, ...cut, ...targets, ...picker, ...cutGone });
+      // keyframe strip (ADR-0019): selected keys whose clip or key is gone go; the curve picker closes with its clip
+      const keySel = pruneKeySel(this.state.keySel, (id) => findClip(projected, id)?.clip, projected.settings.frameRate);
+      const curvePicker = this.state.curvePicker && !findClip(projected, this.state.curvePicker.clipId) ? null : this.state.curvePicker;
+      this.set({ doc: projected, rawDoc: p.project, activeSequenceId, revision: p.revision, selection, viewVariantId, ...cut, ...targets, ...picker, ...cutGone, keySel, curvePicker });
       const vd = this.viewDoc;
       if (vd) this.player?.setDoc(vd);
     }
@@ -676,6 +680,16 @@ export class Editor {
   }
   /** Show or hide the cut loupe (only while a cut is chosen). */
   setLoupe(on: boolean) { const loupe = on && !!this.state.cutClipId; if (loupe !== this.state.loupe) this.set({ loupe }); }
+  // ---------- keyframe strip, curve picker, motion path (ADR-0019): session state only ----------
+  /** Select keys of one clip (null clears). The selection is never stored in the document. */
+  setKeySel(sel: { clipId: string; keys: KeyRef[] } | null) { this.set({ keySel: sel && sel.keys.length ? sel : null }); }
+  /** Keep the copied keys (values and curves) for pastes on this or another clip. */
+  setKeyClipboard(cb: KeyClipboard | null) { this.set({ keyClipboard: cb }); }
+  /** Open the curve picker for these channels at this clip-local frame. */
+  openCurvePicker(clipId: string, frame: number, channels: ChannelRef[]) { this.set({ curvePicker: { clipId, frame, channels } }); }
+  closeCurvePicker() { if (this.state.curvePicker) this.set({ curvePicker: null }); }
+  /** Show or hide the motion path on the stage: a setting of this browser (localStorage 'pf.motionPath'). */
+  setPathOn(on: boolean) { try { localStorage.setItem(MOTION_PATH_KEY, on ? '1' : '0'); } catch { /* ignore */ } this.set({ pathOn: on }); }
   /** Ask the inspector to show a tab of the selected object (it ignores a tab the object does not have). */
   openInspectorTab(tab: ObjectTab) { this.set({ inspectorTab: { tab, n: ++this.requests } }); }
   /**
