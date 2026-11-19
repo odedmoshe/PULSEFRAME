@@ -43,7 +43,9 @@
 .pf-ev-meta { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--pf-sp-2) var(--pf-sp-4); color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
 .pf-ev-meta .num { font-size: var(--pf-fs-digits); }
 .pf-ev-heb { color: var(--pf-text); }
-.pf-ev-actions { display: flex; align-items: center; gap: var(--pf-sp-3); }
+/* the actions wrap: «add the event», «a film from the event» (ADR-0026) and the menu are wider together than the media drawer,
+   and on one line they ran out of the event card and gave the drawer a horizontal scroll (lifeline-ui proof, 1440x900) */
+.pf-ev-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3); min-inline-size: 0; }
 .pf-ev-rename { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3); inline-size: 100%; }
 .pf-ev-rename label { flex: 1 1 140px; min-inline-size: 0; }
 .pf-ev-rename input { inline-size: 100%; }
