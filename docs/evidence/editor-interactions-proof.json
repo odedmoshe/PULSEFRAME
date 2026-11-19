@@ -1,15 +1,15 @@
 {
-  "ranAt": "2026-11-18T21:31:24.496Z",
+  "ranAt": "2026-11-19T03:13:11.818Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v595 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 58,
-  "total": 58,
+  "passed": 70,
+  "total": 70,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -312,7 +312,7 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2.08,
+        "fwd2": 2,
         "sh2": "◀◀ ×1",
         "back1": -0.99,
         "sh3": "◀◀ ×2",
@@ -328,9 +328,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 1,
+        "playSpeed": 0.99,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 2.01,
+        "shuttleSpeed": 2,
         "staysPaused": true
       }
     },
@@ -358,30 +358,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_bb33304d170",
-          "clp_bb33304d171"
+          "clp_672de0983a0",
+          "clp_672de0983a1"
         ],
         "afterAB": [
-          "clp_bb33304d170",
-          "clp_bb33304d171"
+          "clp_672de0983a0",
+          "clp_672de0983a1"
         ],
         "afterAdd": [
-          "clp_bb33304d170",
-          "clp_bb33304d171",
-          "clp_bb33304d172"
+          "clp_672de0983a0",
+          "clp_672de0983a1",
+          "clp_672de0983a2"
         ],
         "midEscape": [
-          "clp_bb33304d171"
+          "clp_672de0983a1"
         ],
         "afterEscape": [
-          "clp_bb33304d170",
-          "clp_bb33304d171",
-          "clp_bb33304d172"
+          "clp_672de0983a0",
+          "clp_672de0983a1",
+          "clp_672de0983a2"
         ],
         "afterEscapeUp": [
-          "clp_bb33304d170",
-          "clp_bb33304d171",
-          "clp_bb33304d172"
+          "clp_672de0983a0",
+          "clp_672de0983a1",
+          "clp_672de0983a2"
         ]
       }
     },
@@ -447,7 +447,7 @@
         "wantRefusal": "בטקסט של חותמת התאריך מותרים רק ספרות, רווחים והסימנים ⁦. : ' / -⁩, עד 20 תווים",
         "invalid": "true",
         "kept": true,
-        "today": "'26 11 18",
+        "today": "'26 11 19",
         "todaySet": true,
         "refusalGone": true
       }
@@ -543,7 +543,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 20/1799",
+        "valueText": "עוקב קדימה 15/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -804,18 +804,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_15b0955f590",
-          "ast_54ddd8385b0",
-          "ast_c5186cc5650",
-          "ast_ce1db5ba9b0",
-          "ast_10be188df50"
+          "ast_2d80fec2100",
+          "ast_0288b7793a0",
+          "ast_d9f221c93b0",
+          "ast_d9283ed4630",
+          "ast_32c04c99a20"
         ],
         "order1": [
-          "ast_15b0955f590",
-          "ast_ce1db5ba9b0",
-          "ast_54ddd8385b0",
-          "ast_c5186cc5650",
-          "ast_10be188df50"
+          "ast_2d80fec2100",
+          "ast_d9283ed4630",
+          "ast_0288b7793a0",
+          "ast_d9f221c93b0",
+          "ast_32c04c99a20"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -839,7 +839,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-18T21:28:10.820Z",
+          "createdAt": "2026-11-19T03:09:08.736Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -965,8 +965,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_cdb657b60d0",
-          "seq_cdb657b60d7"
+          "seq_f4f871fc690",
+          "seq_f4f871fc697"
         ],
         "revisions": 1,
         "transactions": [
@@ -976,7 +976,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_cdb657b60d0",
+          "seq": "seq_f4f871fc690",
           "selected": "true"
         }
       }
@@ -1007,9 +1007,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_cdb657b60d0"
+          "seq": "seq_f4f871fc690"
         },
-        "secondTab": "seq_cdb657b60d0",
+        "secondTab": "seq_f4f871fc690",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1019,6 +1019,173 @@
     },
     {
       "name": "no uncaught errors in the page with the shorts run",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "perform: Shift+7 enters the perform mode (its view mounts, its mode button is checked); the 7-button mode bar is one row at 1280 px",
+      "ok": true,
+      "detail": {
+        "entered": true,
+        "bar": [
+          {
+            "id": "workspace-pro",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-color",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-sound",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-captions",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-deliver",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-shorts",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-perform",
+            "top": 10,
+            "checked": "true"
+          }
+        ]
+      }
+    },
+    {
+      "name": "perform: a take recorded with R, a pad and Space, then discarded with Escape, leaves the revision and the history unchanged",
+      "ok": true,
+      "detail": {
+        "revisions": 0,
+        "entries": 0
+      }
+    },
+    {
+      "name": "perform: a keyboard-only take (R, 1 2 3, Space, Enter) gives exactly ONE new history entry (apply_take); Shift+1…7 while recording add no tap and leave the mode; the ghost banner shows in review",
+      "ok": true,
+      "detail": {
+        "stillRecording": true,
+        "tapsRec": 3,
+        "banner": true,
+        "entries": 1,
+        "ops": [
+          "apply_take"
+        ]
+      }
+    },
+    {
+      "name": "perform: Escape closes the pad editor and the calibration dialog (the focus was inside each); the focus returns to the button that opened it; nothing was recorded",
+      "ok": true,
+      "detail": {
+        "peOpen": true,
+        "peFocusInside": true,
+        "peClosed": true,
+        "peBack": true,
+        "calOpen": true,
+        "calFocusInside": true,
+        "calClosed": true,
+        "calBack": true,
+        "idle": true
+      }
+    },
+    {
+      "name": "perform: no uncaught errors in the page",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "perform: while multicam's program is live the pads take no number keys (no aria-keyshortcuts, the view says so); during a take a digit is neither a tap nor an angle switch; outside a take Digit2 switches the angle (one history entry)",
+      "ok": true,
+      "detail": {
+        "note": true,
+        "keys": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "tapsWhile": 0,
+        "entriesDuringTake": 0,
+        "switched": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "command bar: «חתוך כאן» — the bar's row is on screen (not clipped), the first option and active (aria-activedescendant), ↓ moves to the next option (wraps when it is the only one) and Home back; Enter commits ONE transaction labelled «Command bar: split_here»",
+      "ok": true,
+      "detail": {
+        "rowSeen": true,
+        "first": "pf-palette-opt-bar",
+        "options": 1,
+        "a0": "pf-palette-opt-bar",
+        "a1": "pf-palette-opt-bar",
+        "a2": "pf-palette-opt-bar",
+        "revisions": 1,
+        "label": "Command bar: split_here"
+      }
+    },
+    {
+      "name": "command bar: «הגבר את הקול ב־3 דציבל» asks; ↓ makes the first choice active with its own preview (a step), Enter commits exactly that choice (one transaction, set_track_audio)",
+      "ok": true,
+      "detail": {
+        "kind": "ambiguous",
+        "choiceActive": "pf-palette-opt-bar-choice-0",
+        "stepOp": "set_track_audio",
+        "ops": [
+          "set_track_audio"
+        ]
+      }
+    },
+    {
+      "name": "command bar: «תעשה שמח» is not understood and offers example sentences; ↓ and Enter put one in the input (its own preview shows) and nothing is committed",
+      "ok": true,
+      "detail": {
+        "examples": 3,
+        "value": "חתוך כאן",
+        "kind": "plan",
+        "open": true,
+        "focus": "palette-input",
+        "revisions": 0
+      }
+    },
+    {
+      "name": "command bar: the listbox owns only options and groups — the bar's live region and preview and the assistant's row are outside it",
+      "ok": true,
+      "detail": {
+        "row": true,
+        "preview": true,
+        "live": true,
+        "roles": []
+      }
+    },
+    {
+      "name": "command bar: the assistant row reads «עוזר השפה לא מחובר»; «איך מחברים» opens Settings at «עוזר השפה» (provider_not_configured); a refused save reads in Hebrew with its next step and without the server's English hint",
+      "ok": true,
+      "detail": {
+        "setup": "provider_not_configured",
+        "refused": "ההגדרות לא נשמרו: הכתובת ⁦api.example.test⁩ אינה ברשימה ⁦PF_ASSISTANT_HOSTS⁩; הוסיפו בדיוק את הכתובת הזאת לרשימה, הפעילו את השרת מחדש ושמרו שוב"
+      }
+    },
+    {
+      "name": "command bar: no uncaught errors in the page",
       "ok": true,
       "detail": []
     }

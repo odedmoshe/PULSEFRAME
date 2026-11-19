@@ -275,7 +275,12 @@ async function main() {
       return { raw, file: out, bytes: fs.statSync(out).size, wallSeconds: (Date.now() - started) / 1000, video: probe.streams.find((x: any) => x.codec_type === 'video') };
     }
     const frameOf = (raw: Buffer, n: number) => raw.subarray(n * W * H * 3, (n + 1) * W * H * 3);
-    const global = (raw: Buffer) => T2_FRAMES.map((n) => { const e = frameOf(raw, n), r = refRgb.get(n)!; return { frame: n, psnr: psnrRgb(r, e, 3), ssim: ssim(r, e) }; });
+    // The global PSNR/SSIM compare the export with the compositor frame sent through the same BT.709 4:2:0 round trip the export
+    // takes (the lifeline-proof check 4 precedent, as420): chroma subsampling is a property of the delivery format, so what is
+    // left is the codec's loss. The PSNR against the full-chroma frame is reported beside it, with the lossless controls.
+    const as420 = (rgb: Buffer) => { const b = ff(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-video_size', `${W}x${H}`, '-i', 'pipe:0', '-vf', 'scale=out_color_matrix=bt709:out_range=limited,format=yuv420p,scale=in_color_matrix=bt709:in_range=limited:out_range=full', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], rgb); if (b.length !== W * H * 3) throw new Error(`unexpected 4:2:0 reference size ${b.length}`); return b; };
+    const ref420 = new Map<number, Buffer>([...refRgb].map(([n, b]) => [n, as420(b)]));
+    const global = (raw: Buffer) => T2_FRAMES.map((n) => { const e = frameOf(raw, n), r = ref420.get(n)!; return { frame: n, psnr: psnrRgb(r, e, 3), ssim: ssim(r, e) }; });
 
     const high = await exportAndDecode({ format: 'mp4-h264-aac', quality: 'high' }, 'export-high.mp4');
     if (high.video.color_space !== 'bt709') warnings.push(`export colour_space tag is ${high.video.color_space}, expected bt709`);
@@ -291,7 +296,8 @@ async function main() {
     };
     for (const n of T2_FRAMES) {
       const e = frameOf(high.raw, n), r = refRgb.get(n)!;
-      const row: any = { frame: n, psnr: r4(psnrRgb(r, e, 3)), ssim: r4(ssim(r, e)), largeTextPsnr: r4(region('large', n, e, textM.large)!), smallTextPsnr: r4(region('small', n, e, textM.small)!), imageBandPsnr: null as number | null, barcode: readBarcode(e, W, 3, { x: 0, y: 0, w: W, h: H }) };
+      const r420 = ref420.get(n)!;
+      const row: any = { frame: n, psnr: r4(psnrRgb(r420, e, 3)), ssim: r4(ssim(r420, e)), psnrFullChroma: r4(psnrRgb(r, e, 3)), largeTextPsnr: r4(region('large', n, e, textM.large)!), smallTextPsnr: r4(region('small', n, e, textM.small)!), imageBandPsnr: null as number | null, barcode: readBarcode(e, W, 3, { x: 0, y: 0, w: W, h: H }) };
       const bm = bandFor(n); const bp = region('band', n, e, bm); row.imageBandPsnr = bp === null ? null : r4(bp);
       rows.push(row);
     }
@@ -340,8 +346,8 @@ async function main() {
     }
     if (!curves.length) failures.push('test2 curve layer: not on screen on any tested frame');
     const sRow = (k: string) => { const xs = rows.map((r) => r[k]).filter((v) => v !== null) as number[]; const worst = rows.filter((r) => r[k] !== null).reduce((a, b) => (b[k] < a[k] ? b : a)); const q = summ(xs); return { min: r4(q.min), median: r4(q.median), max: r4(q.max), worstFrame: worst.frame as number }; };
-    const summary = { psnr: sRow('psnr'), ssim: sRow('ssim'), largeTextPsnr: sRow('largeTextPsnr'), smallTextPsnr: sRow('smallTextPsnr'), imageBandPsnr: sRow('imageBandPsnr') };
-    console.log(`  high: PSNR min ${summary.psnr.min} (f${summary.psnr.worstFrame}) SSIM min ${summary.ssim.min} (f${summary.ssim.worstFrame}); large text ${summary.largeTextPsnr.min}, small text ${summary.smallTextPsnr.min}, image band ${summary.imageBandPsnr.min}`);
+    const summary = { psnr: sRow('psnr'), ssim: sRow('ssim'), psnrFullChroma: sRow('psnrFullChroma'), largeTextPsnr: sRow('largeTextPsnr'), smallTextPsnr: sRow('smallTextPsnr'), imageBandPsnr: sRow('imageBandPsnr') };
+    console.log(`  high: PSNR min ${summary.psnr.min} (f${summary.psnr.worstFrame}) against the 4:2:0 round trip, ${summary.psnrFullChroma.min} (f${summary.psnrFullChroma.worstFrame}) against full chroma; SSIM min ${summary.ssim.min} (f${summary.ssim.worstFrame}); large text ${summary.largeTextPsnr.min}, small text ${summary.smallTextPsnr.min}, image band ${summary.imageBandPsnr.min}`);
 
     // worst-frame side-by-sides
     const worstFrames = [...rows].sort((a, b) => a.psnr - b.psnr).slice(0, 3).map((r) => r.frame);
@@ -433,7 +439,7 @@ async function main() {
     report.test2 = {
       pass: failures.filter((x) => x.startsWith('test2') || x.startsWith('textSizeEnvelope')).length === 0,
       thresholds: { ssim: TH.ssim, psnrDb: TH.psnr, regionalPsnrFailDb: TH.regionalPsnrFail, regionalPsnrWarnDb: TH.regionalPsnrWarn, colourTolPerChannel: TH.colourTol, displacementTolPx: TH.displacementTolPx, curveCentroidTolPx: TH.curveCentroidTolPx },
-      method: 'PSNR over all RGB samples; SSIM computed in-process on BT.709 luma, 8x8 uniform window, stride 4, L=255, k1=0.01, k2=0.03; export decoded with ffmpeg scale=in_color_matrix=bt709:in_range=limited to rgb24',
+      method: 'PSNR over all RGB samples; SSIM computed in-process on BT.709 luma, 8x8 uniform window, stride 4, L=255, k1=0.01, k2=0.03; export decoded with ffmpeg scale=in_color_matrix=bt709:in_range=limited to rgb24. Global PSNR/SSIM against the compositor frame sent through the same BT.709 4:2:0 round trip (lifeline-proof check 4 precedent); psnrFullChroma against the frame itself, reported beside',
       frames: T2_FRAMES, exportVideoStream: { codec: high.video.codec_name, pix_fmt: high.video.pix_fmt, color_space: high.video.color_space, color_range: high.video.color_range },
       summary, worstFramesSavedAsPng: worstFrames, colour, temporal, curveLayer: curves, qualityLadderReportOnly: ladder, rows,
       losslessControl: { ...control, pass: controlOk, settings: 'The export is the product route with its default quality (high): x264 preset medium, CRF 16, profile high, 4:2:0 (export.ts CRF and exportSegments.ts SEGMENT_CRF agree), BT.709 limited range. The control takes the same compositor frames through the same conversion and decode at qp 0.' },

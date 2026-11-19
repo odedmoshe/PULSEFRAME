@@ -16,6 +16,11 @@
  * the field menu), the Hanukkah pack page, the built-in music tab of the audio drawer and the text drawer with its fonts.
  * Keyframe curves and motion paths (ADR-0019): the keyframe strip of a selected title with the motion path on the stage
  * (vertices and bend grips), and the curve picker (a modal dialog opened from a strip key with Enter).
+ * Perform mode (ADR-0025): the perform view at rest, a take under review (ghost banner and chips), the tap calibration dialog
+ * (modal) and the camera overlay on a selected clip.
+ * The Hebrew command bar (ADR-0027): a plan's preview, a question's choices, and Settings «עוזר השפה».
+ * The light theme: the resting editor, a media card under the pointer and its ⋯ menu, the export sheet, Settings, perform mode, an
+ * asset whose stored file is missing on disk (library card and timeline clip), and the start hub, in both languages.
  *   pnpm build && pnpm audit:a11y
  */
 import { execFileSync } from 'node:child_process';
@@ -32,61 +37,13 @@ import { chooseFormat, formatOptions, openCardMenu } from './editor-ui.ts';
 import { makeRenderCacheCtx, renderCacheA11yScenarios } from './a11y-render-cache.ts';
 import { makeApi, ownerApi } from './incremental-fixtures.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
+import { auditInPage, focusAudit } from './a11y-lib.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/a11y');
 const f = (n: number) => T.frameTime(n, { num: 30, den: 1 });
 
-/** Runs in the page. Returns findings; selectors are short descriptions for a person to locate the element. */
-function auditInPage() {
-  const describe = (el: Element) => `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}${(el as HTMLElement).dataset?.testid ? `[data-testid=${(el as HTMLElement).dataset.testid}]` : ''}${el.className && typeof el.className === 'string' ? `.${el.className.split(' ').filter(Boolean).slice(0, 2).join('.')}` : ''}`;
-  const visible = (el: Element) => { const r = (el as HTMLElement).getBoundingClientRect(); const s = getComputedStyle(el as HTMLElement); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && !(el as HTMLElement).closest('[hidden]'); };
-  const nameOf = (el: Element): string => {
-    const h = el as HTMLElement;
-    const lb = h.getAttribute('aria-labelledby');
-    if (lb) { const t = lb.split(/\s+/).map((id) => document.getElementById(id)?.textContent ?? '').join(' ').trim(); if (t) return t; }
-    const al = h.getAttribute('aria-label'); if (al?.trim()) return al.trim();
-    if (h instanceof HTMLInputElement || h instanceof HTMLSelectElement || h instanceof HTMLTextAreaElement) {
-      if (h.id) { const l = document.querySelector(`label[for="${CSS.escape(h.id)}"]`); if (l?.textContent?.trim()) return l.textContent.trim(); }
-      const wrap = h.closest('label'); if (wrap?.textContent?.trim()) return wrap.textContent.trim();
-      if (h instanceof HTMLInputElement && ['button', 'submit'].includes(h.type) && h.value) return h.value;
-    }
-    const txt = h.textContent?.trim(); if (txt) return txt;
-    const title = h.getAttribute('title'); if (title?.trim()) return title.trim();
-    return '';
-  };
-  const unnamed: string[] = [];
-  const controls = [...document.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea, [role=button], [role=tab], [role=slider], [role=checkbox], [role=meter]')].filter(visible);
-  for (const c of controls) if (!nameOf(c)) unnamed.push(describe(c));
 
-  // contrast of visible text against the nearest opaque background
-  const parse = (c: string) => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const p = m[1]!.split(/[,/ ]+/).filter(Boolean).map(Number); return { r: p[0]!, g: p[1]!, b: p[2]!, a: p[3] ?? 1 }; };
-  const lum = (c: { r: number; g: number; b: number }) => { const k = [c.r, c.g, c.b].map((v) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; }); return 0.2126 * k[0]! + 0.7152 * k[1]! + 0.0722 * k[2]!; };
-  const bgOf = (el: Element) => { let e: Element | null = el; let acc = { r: 13, g: 16, b: 21 }; const stack: { r: number; g: number; b: number; a: number }[] = []; while (e) { const c = parse(getComputedStyle(e).backgroundColor); if (c && c.a > 0) { stack.push(c); if (c.a >= 1) break; } e = e.parentElement; } for (const c of stack.reverse()) acc = { r: c.r * c.a + acc.r * (1 - c.a), g: c.g * c.a + acc.g * (1 - c.a), b: c.b * c.a + acc.b * (1 - c.a) }; return acc; };
-  const lowContrast: { el: string; ratio: number; text: string; size: number }[] = [];
-  const seen = new Set<Element>();
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-    const el = n.parentElement;
-    if (!el || seen.has(el) || !n.textContent?.trim() || !visible(el) || el.closest('canvas, [aria-hidden=true]')) continue;
-    seen.add(el);
-    const st = getComputedStyle(el);
-    const fg = parse(st.color); if (!fg) continue;
-    const bg = bgOf(el);
-    const f2 = { r: fg.r * fg.a + bg.r * (1 - fg.a), g: fg.g * fg.a + bg.g * (1 - fg.a), b: fg.b * fg.a + bg.b * (1 - fg.a) };
-    const a = lum(f2), b = lum(bg);
-    const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-    const size = parseFloat(st.fontSize), bold = Number(st.fontWeight) >= 700;
-    const need = size >= 24 || (size >= 18.66 && bold) ? 3 : 4.5;
-    const disabled = !!el.closest(':disabled, [aria-disabled=true]');
-    if (!disabled && ratio < need) lowContrast.push({ el: describe(el), ratio: Number(ratio.toFixed(2)), text: n.textContent.trim().slice(0, 30), size });
-  }
-  const tabs = [...document.querySelectorAll('[role=tab]')];
-  const tabIssues = tabs.filter((t) => !t.getAttribute('aria-controls') || !['true', 'false'].includes(t.getAttribute('aria-selected') ?? '')).map(describe);
-  return { lang: document.documentElement.lang, dir: document.documentElement.dir, title: document.title, controls: controls.length, unnamed, lowContrast, tabIssues };
-}
-
-/** Tab through the page and report focused elements that show no visible focus indicator. */
 /**
  * Clicks a timeline clip of the top lane. The marker card now floats under the ruler at the marker while the playhead rests on
  * it and covers the start of the top lane (reported as a product fault in the proof-migration report): the playhead is first
@@ -102,27 +59,6 @@ async function clickClipEnd(page: Page, clipId: string) {
   }
   await el.click({ position: { x: Math.max(2, b.width - 8), y: b.height / 2 } });
 }
-async function focusAudit(page: Page, steps: number, clickFirst = true) {
-  const missing: string[] = [];
-  const reached = new Set<string>();
-  // Start from the page corner — except inside a modal dialog, where a click outside it could close it.
-  if (clickFirst) await page.locator('body').click({ position: { x: 2, y: 2 } }).catch(() => {});
-  for (let i = 0; i < steps; i++) {
-    await page.keyboard.press('Tab');
-    const r = await page.evaluate(() => {
-      const el = document.activeElement as HTMLElement | null;
-      if (!el || el === document.body) return null;
-      const s = getComputedStyle(el);
-      const outline = s.outlineStyle !== 'none' && parseFloat(s.outlineWidth) > 0;
-      const ring = s.boxShadow !== 'none';
-      return { id: `${el.tagName.toLowerCase()}${el.dataset.testid ? `[data-testid=${el.dataset.testid}]` : ''}${el.className && typeof el.className === 'string' ? `.${el.className.split(' ')[0]}` : ''}`, ok: outline || ring };
-    });
-    if (!r) continue;
-    reached.add(r.id);
-    if (!r.ok && !missing.includes(r.id)) missing.push(r.id);
-  }
-  return { reached: reached.size, missing };
-}
 
 async function main() {
   fs.rmSync(art, { recursive: true, force: true });
@@ -133,7 +69,7 @@ async function main() {
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const post = async (p: string, body: unknown) => (await fetch(`${s.url}/api/v1${p}`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) })).json() as Promise<any>;
   const browser = await chromium.launch();
-  const report: any = { ranAt: new Date().toISOString(), machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, browser: browser.version() }, scope: 'Automated heuristic audit of the editor with all Inspector panels shown and one clip selected. Not a WCAG conformance claim; no screen-reader or user testing.', runs: [] };
+  const report: any = { ranAt: new Date().toISOString(), machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, browser: browser.version() }, scope: 'Automated heuristic audit of the editor with all Inspector panels shown and one clip selected, in the dark theme (every state) and the light theme (the main states), in Hebrew and English. Not a WCAG conformance claim; no screen-reader or user testing.', runs: [] };
   try {
     const pid = (await post('/projects', { name: 'a11y', width: 640, height: 360 })).project.id;
     const up: any = await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'fixture.mp4' }, body: fs.readFileSync(fixture.file) })).json();
@@ -218,6 +154,7 @@ async function main() {
       const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
       await page.addInitScript((l) => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); localStorage.setItem('pf.lang', l); } catch { /* storage unavailable */ } }, lang);
       await page.addInitScript('globalThis.__name = (f) => f'); // tsx/esbuild helper referenced by functions passed to page.evaluate
+      await page.addInitScript(() => { (globalThis as { __pfPerformProof?: boolean }).__pfPerformProof = true; }); // perform mode's test hook (injectTaps), as proof:perform sets it
       await page.goto(`${s.ownerUrl}&project=${pid}`);
       await page.getByTestId('timecode').waitFor();
       if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
@@ -351,6 +288,40 @@ async function main() {
       const cp = await dialogBehaviour('palette-dialog', async () => { await page.getByTestId('projects-open').focus(); await page.keyboard.press('Control+k'); }, '[data-testid=projects-open]');
       await auditState('command-palette', { startsInside: cp.startsInside, tabStepsThatLeftTheDialog: cp.tabStepsThatLeftTheDialog }, true);
       Object.assign(states.at(-1), await cp.close());
+      // the Hebrew command bar (ADR-0027): a plan's preview (the bar's row first and active, its steps, the live region and the
+      // preview outside the listbox), a question's choices with the first choice active, and Settings «עוזר השפה» (owner only)
+      {
+        const openBar = async (text: string) => {
+          await page.getByTestId('open-palette').focus();
+          await page.keyboard.press('Control+k');
+          await page.getByTestId('palette-input').waitFor({ timeout: 8000 });
+          await page.keyboard.type(text);
+          await page.waitForFunction((q) => document.querySelector<HTMLInputElement>('[data-testid=palette-input]')?.value === q && !!document.querySelector<HTMLElement>('[data-testid=bar-result]')?.dataset.kind, text, { timeout: 8000 }).catch(() => {});
+          await page.waitForTimeout(700); // the live region speaks after 500 ms of quiet
+        };
+        const outside = () => page.evaluate(() => [...document.querySelectorAll('[role=listbox] [role]')].every((e) => ['option', 'group'].includes(e.getAttribute('role') ?? '')) && !document.querySelector('[role=listbox] #pf-bar-preview, [role=listbox] [data-testid=bar-live]'));
+        const rowSeen = () => page.evaluate(() => { const el = document.querySelector('[data-testid=bar-result]'); if (!el) return false; const r = el.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return r.height >= 30 && !!hit?.closest('[data-testid=bar-result]'); });
+        const activeId = () => page.evaluate(() => document.querySelector('[data-testid=palette-input]')?.getAttribute('aria-activedescendant'));
+        await openBar(lang === 'he' ? 'הוסף כותרת "בדיקה" כאן' : 'add title "test" here');
+        await auditState('command-bar-preview', { shown: (await page.locator('[data-testid=bar-result][data-kind=plan]').count()) === 1 && (await page.getByTestId('bar-step').count()) === 1 && (await activeId()) === 'pf-palette-opt-bar' && (await outside()) && (await rowSeen()) }, true);
+        await page.keyboard.press('Escape');
+        await page.getByTestId('palette-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+        // a question with two or more choices in this project (its two audio tracks and the clip; «סנכרן לקצב» has one choice
+        // here because no music of this project has a beat analysis)
+        await openBar(lang === 'he' ? 'הגבר את הקול ב־3 דציבל' : 'turn the sound up 3 dB');
+        await page.keyboard.press('ArrowDown');
+        await page.waitForTimeout(200);
+        await auditState('command-bar-choices', { shown: (await page.locator('[data-testid=bar-result][data-kind=ambiguous]').count()) === 1 && (await page.getByTestId('bar-choice').count()) >= 2 && (await activeId()) === 'pf-palette-opt-bar-choice-0' && (await outside()) }, true);
+        await page.keyboard.press('Escape');
+        await page.getByTestId('palette-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+        await page.getByTestId('rail-settings').click();
+        await page.getByTestId('assistant-settings').waitFor({ timeout: 8000 }).catch(() => {});
+        await page.getByTestId('assistant-setup').waitFor({ timeout: 8000 }).catch(() => {});
+        await page.getByTestId('assistant-settings').scrollIntoViewIfNeeded().catch(() => {});
+        await auditState('assistant-settings', { shown: (await page.getByTestId('assistant-settings').count()) === 1 && (await page.getByTestId('assistant-setup').getAttribute('data-setup').catch(() => null)) === 'provider_not_configured' && (await page.getByTestId('assistant-key').getAttribute('type').catch(() => null)) === 'password' }, true);
+        await page.keyboard.press('Escape');
+        await page.getByTestId('settings-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      }
       // the redesign's menus (UX_REDESIGN §4.2, §4.4): the agent avatar's menu and a media card's ⋯ menu. Focus starts on the
       // first item, Escape closes the menu and gives the focus back to its button. Audited before the focus walk (Tab closes a menu).
       const menuBehaviour = async (name: string, button: string) => {
@@ -697,14 +668,118 @@ async function main() {
         }
         await auditState('multicam-keyboard-path', { keyboardOk });
       }
+      // perform mode (ADR-0025): the view at rest, a take under review (taps injected through the view's test hook, the real
+      // planner), the tap calibration dialog (modal), and the camera overlay on a selected clip; then back to the edit mode
+      {
+        await page.goto(`${s.ownerUrl}&project=${pid}`);
+        await page.getByTestId('timecode').waitFor();
+        if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+        await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+        await page.keyboard.press('Shift+Digit7');
+        await page.getByTestId('perform-view').waitFor({ timeout: 10000 }).catch(() => {});
+        await page.waitForFunction(() => !!(window as any).__pfPerform, undefined, { timeout: 10000 }).catch(() => {});
+        await auditState('perform-view', { shown: (await page.getByTestId('perform-view').count()) === 1 && (await page.getByTestId('perform-pad').count()) === 8 });
+        await page.evaluate(() => (window as any).__pfPerform?.injectTaps([{ pad: 0, down: 0.5, up: 0.7 }, { pad: 1, down: 1, up: 1.3 }, { pad: 4, down: 1.05, up: 1.3 }]));
+        await page.getByTestId('perform-chip').first().waitFor({ timeout: 10000 }).catch(() => {});
+        await auditState('perform-take-review', { shown: (await page.getByTestId('perform-ghost-banner').count()) === 1 && (await page.getByTestId('perform-chip').count()) === 3 });
+        await page.getByTestId('perform-discard').click().catch(() => {});
+        const cd = await dialogBehaviour('perform-calibrate-dialog', async () => { await page.getByTestId('perform-calibrate').click(); }, '[data-testid=perform-calibrate]');
+        await auditState('perform-calibration-dialog', { startsInside: cd.startsInside, tabStepsThatLeftTheDialog: cd.tabStepsThatLeftTheDialog }, true);
+        Object.assign(states.at(-1), await cd.close());
+        await page.locator(`.clip[data-clip-id="${clipId}"]`).click({ position: { x: 4, y: 4 } });
+        await page.getByTestId('perform-camera').click();
+        await page.getByTestId('perform-camera-crop').waitFor({ timeout: 10000 }).catch(() => {});
+        await auditState('perform-camera-overlay', { shown: (await page.getByTestId('perform-camera-overlay').count()) === 1 && (await page.getByTestId('perform-camera-crop').count()) === 1 });
+        await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+        await page.keyboard.press('Shift+Digit1');
+        await page.waitForFunction(() => !document.querySelector('[data-testid=perform-view]'), undefined, { timeout: 10000 }).catch(() => {});
+      }
       // the start hub of an empty project
       await page.goto(`${s.ownerUrl}&project=${emptyPid}`);
       await page.getByTestId('welcome').waitFor({ timeout: 10000 }).catch(() => {});
       if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
       await auditState('start-hub', { shown: (await page.getByTestId('welcome').count()) === 1 && (await page.getByTestId('welcome-import').count()) === 1 });
       for (const st of states) console.log(`[${lang}] state ${st.state}: controls=${st.controls} unnamed=${st.unnamed.length} lowContrast=${st.lowContrast.length} tabIssues=${st.tabIssues.length} noFocusRing=${st.noFocusRing.length}${st.startsInside !== undefined ? ` startsInside=${st.startsInside} leftDialog=${st.tabStepsThatLeftTheDialog} openUntilEscape=${st.openUntilEscape} closed=${st.closed} focusReturned=${st.focusReturned} (focus after close: ${st.focusAfterClose})` : ''}${st.shown !== undefined ? ` shown=${st.shown}` : ''}${st.formatSelected !== undefined ? ` formatSelected=${st.formatSelected} scopeNotes=${st.scopeNotes}` : ''}`);
-      report.runs.push({ ...found, uiLanguage: lang, focus, plantedDefectsDetected: sensitivity, states });
+      report.runs.push({ ...found, uiLanguage: lang, theme: 'dark', focus, plantedDefectsDetected: sensitivity, states });
       console.log(`[${lang}] lang=${found.lang} dir=${found.dir} controls=${found.controls} unnamed=${found.unnamed.length} lowContrast=${found.lowContrast.length} tabIssues=${found.tabIssues.length} focusReached=${focus.reached} noFocusRing=${focus.missing.length}`);
+      await page.close();
+    }
+    // ---- the light theme (Settings «ערכת צבעים: בהיר» / "Theme: Light"), both languages: the main editor states again. Contrast in the
+    // light theme does not follow from the dark pass: until 2026-11-19 the media card painted a dark-only surface under the light
+    // theme's dark text (asset names at 1.0, the rename pencil at 3.18). Also audited here: an asset whose stored file is missing on disk
+    // (its own project and picture, so removing the file touches nothing else), which the library card and the timeline say plainly.
+    const missPng = path.join(art, 'missing.png');
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=0x2a6f97:s=160x90', '-frames:v', '1', missPng]);
+    const missPid = (await post('/projects', { name: 'a11y-missing', width: 640, height: 360 })).project.id as string;
+    const missUp: any = await (await fetch(`${s.url}/api/v1/projects/${missPid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'missing.png' }, body: fs.readFileSync(missPng) })).json();
+    await post(`/projects/${missPid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: missUp.assetId, start: f(0), duration: f(30) } }] });
+    const missHash = ((await (await fetch(`${s.url}/api/v1/projects/${missPid}`, { headers: h })).json()) as any).project.assets[missUp.assetId].contentHash as string;
+    fs.rmSync(path.join(art, 'data', 'blobs', missHash.replace(/^sha256:/, '')));
+    for (const lang of ['he', 'en'] as const) {
+      const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
+      await page.addInitScript((l) => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); localStorage.setItem('pf.lang', l); localStorage.setItem('pf.theme', 'light'); } catch { /* storage unavailable */ } }, lang);
+      await page.addInitScript('globalThis.__name = (f) => f');
+      await page.addInitScript(() => { (globalThis as { __pfPerformProof?: boolean }).__pfPerformProof = true; });
+      const open = async (projectId: string, ready = 'timecode') => {
+        await page.goto(`${s.ownerUrl}&project=${projectId}`);
+        await page.getByTestId(ready).waitFor({ timeout: 15000 });
+        if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+      };
+      await open(pid);
+      const theme = await page.evaluate(() => document.documentElement.dataset.theme);
+      if (theme !== 'light') throw new Error(`the light pass did not get the light theme (data-theme=${theme})`);
+      await clickClipEnd(page, clipId);
+      await page.waitForTimeout(300);
+      const found = await page.evaluate(auditInPage);
+      const focus = await focusAudit(page, 60);
+      await page.screenshot({ path: path.join(art, `editor-${lang}-light.png`) });
+      const states: any[] = [];
+      const auditState = async (name: string, extra: Record<string, unknown> = {}, modal = false) => {
+        const r = await page.evaluate(auditInPage);
+        const fr = await focusAudit(page, 14, !modal);
+        states.push({ state: name, controls: r.controls, unnamed: r.unnamed, lowContrast: r.lowContrast, tabIssues: r.tabIssues, noFocusRing: fr.missing, ...extra });
+        await page.screenshot({ path: path.join(art, `state-${name}-${lang}-light.png`) });
+      };
+      const closeWith = async (testId: string) => { await page.keyboard.press('Escape'); await page.getByTestId(testId).waitFor({ state: 'detached', timeout: 5000 }).catch(() => {}); await page.waitForTimeout(150); };
+      // the media library: a card under the pointer (its add and ⋯ buttons and the rename pencil show), then its ⋯ menu
+      await page.getByTestId(`asset-${up.assetId}`).hover();
+      await page.waitForTimeout(200);
+      const pencil = await page.getByTestId(`rename-${up.assetId}`).evaluate((el) => getComputedStyle(el).opacity).catch(() => '0');
+      await auditState('media-card-hover', { shown: (await page.getByTestId(`asset-${up.assetId}`).count()) === 1 && Number(pencil) > 0 });
+      await openCardMenu(page, up.assetId);
+      await page.locator('[role=menu]').first().waitFor({ timeout: 5000 }).catch(() => {});
+      await auditState('media-card-menu', { shown: (await page.locator('[role=menu] [role^=menuitem]').count()) > 0 }, true);
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(150);
+      // the export sheet and the settings dialog
+      await page.getByTestId('export').click();
+      await page.getByTestId('export-sheet').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.waitForTimeout(300);
+      await auditState('export-sheet', { shown: (await page.getByTestId('export-start').count()) === 1 }, true);
+      await closeWith('export-sheet');
+      await page.getByTestId('rail-settings').click();
+      await page.getByTestId('settings-dialog').waitFor({ timeout: 8000 }).catch(() => {});
+      await auditState('settings-dialog', { shown: (await page.getByTestId('settings-dialog').count()) === 1 }, true);
+      await closeWith('settings-dialog');
+      // perform mode at rest
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await page.keyboard.press('Shift+Digit7');
+      await page.getByTestId('perform-view').waitFor({ timeout: 10000 }).catch(() => {});
+      await auditState('perform-view', { shown: (await page.getByTestId('perform-view').count()) === 1 && (await page.getByTestId('perform-pad').count()) === 8 });
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await page.keyboard.press('Shift+Digit1');
+      await page.waitForFunction(() => !document.querySelector('[data-testid=perform-view]'), undefined, { timeout: 10000 }).catch(() => {});
+      // an asset whose stored file is missing: the card and the timeline clip say so, the preview is not an error
+      await open(missPid);
+      await page.getByTestId(`missing-${missUp.assetId}`).waitFor({ timeout: 10000 }).catch(() => {});
+      await page.waitForTimeout(500);
+      await auditState('missing-media', { shown: (await page.getByTestId(`missing-${missUp.assetId}`).count()) === 1 && (await page.locator('.clip.missing').count()) >= 1 && (await page.locator('.error[role=alert]').count()) === 0 });
+      // the start hub of an empty project
+      await open(emptyPid, 'welcome');
+      await auditState('start-hub', { shown: (await page.getByTestId('welcome').count()) === 1 });
+      for (const st of states) console.log(`[${lang} light] state ${st.state}: controls=${st.controls} unnamed=${st.unnamed.length} lowContrast=${st.lowContrast.length} tabIssues=${st.tabIssues.length} noFocusRing=${st.noFocusRing.length}${st.shown !== undefined ? ` shown=${st.shown}` : ''}`);
+      report.runs.push({ ...found, uiLanguage: lang, theme: 'light', focus, states });
+      console.log(`[${lang} light] controls=${found.controls} unnamed=${found.unnamed.length} lowContrast=${found.lowContrast.length} tabIssues=${found.tabIssues.length} focusReached=${focus.reached} noFocusRing=${focus.missing.length}`);
       await page.close();
     }
   } finally {
@@ -715,11 +790,14 @@ async function main() {
     + (st.keyboardOk === false ? 1 : 0) + (st.startsInside === false ? 1 : 0) + (st.tabStepsThatLeftTheDialog ? 1 : 0) + (st.openUntilEscape === false ? 1 : 0) + (st.closed === false ? 1 : 0) + (st.focusReturned === false ? 1 : 0) + (st.shown === false ? 1 : 0) + (st.formatSelected === false ? 1 : 0) + (st.firstCardAtInlineStart === false ? 1 : 0);
   const total = report.runs.reduce((n: number, r: any) => n + r.unnamed.length + r.lowContrast.length + r.tabIssues.length + r.focus.missing.length + (r.states ?? []).reduce((m: number, st: any) => m + stateFindings(st), 0), 0);
   report.findings = total;
+  const runFindings = (r: any) => r.unnamed.length + r.lowContrast.length + r.tabIssues.length + r.focus.missing.length + (r.states ?? []).reduce((m: number, st: any) => m + stateFindings(st), 0);
+  report.findingsByRun = report.runs.map((r: any) => ({ theme: r.theme, uiLanguage: r.uiLanguage, states: (r.states ?? []).length, findings: runFindings(r) }));
+  for (const r of report.findingsByRun) console.log(`  ${r.theme} ${r.uiLanguage}: ${r.findings} finding(s) over the resting page and ${r.states} states`);
   report.result = total === 0 ? 'NO FINDINGS (heuristic)' : 'FINDINGS';
   fs.writeFileSync(path.join(root, 'docs/evidence/a11y-audit.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(`a11y audit: ${report.result}, ${total} finding(s). Evidence: docs/evidence/a11y-audit.json`);
-  for (const r of report.runs) for (const st of r.states ?? []) if (stateFindings(st)) console.log(`  [${r.uiLanguage}] state ${st.state}:`, JSON.stringify({ unnamed: st.unnamed.slice(0, 6), lowContrast: st.lowContrast.slice(0, 6), tabIssues: st.tabIssues.slice(0, 6), noFocusRing: st.noFocusRing.slice(0, 6), startsInside: st.startsInside, leftDialog: st.tabStepsThatLeftTheDialog, closed: st.closed, focusReturned: st.focusReturned, shown: st.shown, formatSelected: st.formatSelected }));
-  for (const r of report.runs) { console.log(`  [${r.uiLanguage}] unnamed:`, r.unnamed.slice(0, 12)); console.log(`  [${r.uiLanguage}] low contrast:`, r.lowContrast.slice(0, 12)); console.log(`  [${r.uiLanguage}] no focus ring:`, r.focus.missing.slice(0, 12)); }
+  for (const r of report.runs) for (const st of r.states ?? []) if (stateFindings(st)) console.log(`  [${r.uiLanguage} ${r.theme}] state ${st.state}:`, JSON.stringify({ unnamed: st.unnamed.slice(0, 6), lowContrast: st.lowContrast.slice(0, 6), tabIssues: st.tabIssues.slice(0, 6), noFocusRing: st.noFocusRing.slice(0, 6), startsInside: st.startsInside, leftDialog: st.tabStepsThatLeftTheDialog, closed: st.closed, focusReturned: st.focusReturned, shown: st.shown, formatSelected: st.formatSelected }));
+  for (const r of report.runs) { console.log(`  [${r.uiLanguage} ${r.theme}] unnamed:`, r.unnamed.slice(0, 12)); console.log(`  [${r.uiLanguage} ${r.theme}] low contrast:`, r.lowContrast.slice(0, 12)); console.log(`  [${r.uiLanguage} ${r.theme}] no focus ring:`, r.focus.missing.slice(0, 12)); }
   if (process.env.PF_A11Y_STRICT === '1' && total > 0) process.exitCode = 1;
 }
 main().catch((e) => { console.error(e); process.exit(1); });

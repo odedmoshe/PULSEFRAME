@@ -284,3 +284,29 @@ describe('markStrobeHolds and counts', () => {
     expect(flashSchedule).not.toHaveBeenCalled();
   });
 });
+
+describe('shape holds come from the planner (the real planner and op: a hold that came from the pad\'s own envelope says so)', () => {
+  // grey with a 0.1 s envelope: its inner key change comes 3 frames after the hit's start, inside the 11-frame gap at 30 fps
+  const shaped: MoveSpec = { id: 'move.grey-env', kind: 'adjust', minSeconds: 0.5, effects: [{ type: 'color.grayscale', params: { amount: 1 }, envelope: { param: 'amount', from: 1, to: 0, shape: 'decay', seconds: 0.1 } }], fadeOutSeconds: 0 };
+  const plain: MoveSpec = { id: 'move.grey', kind: 'adjust', minSeconds: 0.5, effects: [{ type: 'color.grayscale', params: { amount: 1 } }], fadeOutSeconds: 0 };
+  const bank: PadBank = [plain, shaped, null, null, null, null, null, null];
+  const settings = { snap: 'off' as const, tempo: 'normal' as const, strength: 0, parity: 0 as const };
+  it('a take\'s chips keep the planner\'s why: the shape hold, and not a hold whose start was too soon after another change of light', () => {
+    const { doc } = project();
+    // tap 0: plain at 1 s (kept); tap 1: shaped at 3 s (its start fits, its envelope does not); tap 2: shaped at 1.1 s (its start is 3 frames after tap 0)
+    const r = planTake(doc, [{ pad: 0, down: 1, up: 1.5 }, { pad: 1, down: 3, up: 3.5 }, { pad: 1, down: 1.1, up: 1.6 }], { bank, assets: Array(8).fill(null), settings, gpu: false });
+    if ('kind' in r) throw new Error(JSON.stringify(r));
+    const byTap = (t: number) => r.chips.find((c) => c.tap === t)!;
+    expect(byTap(0).state).toBe('kept');
+    expect(byTap(1)).toMatchObject({ state: 'held', reason: 'flash_limit', why: 'shape' });
+    expect(byTap(2)).toMatchObject({ state: 'held', reason: 'flash_limit' });
+    expect(byTap(2).why).toBeUndefined();
+  });
+  it('with nothing kept (no ghost) the chip still says so', () => {
+    const { doc } = project();
+    const r = planTake(doc, [{ pad: 1, down: 3, up: 3.5 }], { bank, assets: Array(8).fill(null), settings, gpu: false });
+    if ('kind' in r) throw new Error(JSON.stringify(r));
+    expect(r.ghost).toBeNull();
+    expect(r.chips[0]).toMatchObject({ state: 'held', reason: 'flash_limit', why: 'shape' });
+  });
+});

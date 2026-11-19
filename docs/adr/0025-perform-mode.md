@@ -1,6 +1,6 @@
 # ADR-0025: Perform mode — effects on the beat, a virtual camera, one take one undo
 
-Status: **Accepted — built; the end-to-end proof is being run at the time of writing** (2026-11-18) for wave 1.
+Status: **Accepted — built and verified on the CPU profile (see PROGRESS)** (2026-11-18) for wave 1.
 Built by three workers on shared contracts, each reviewed and repaired, merged; then six review findings fixed by
 the lead's decisions. Latency is not checked, and nothing is called "in sync" until the owner calibrates.
 
@@ -60,5 +60,5 @@ the lead's decisions. Latency is not checked, and nothing is called "in sync" un
 - Unit and property tests (one run each, this CPU): 64 jittered taps land on their beat frame at five frame
   rates; 200 random documents apply and validate; key-mashing at 20 taps a second keeps the gap through the real
   op; a retake on a clip with no keys leaves all 300 outside frames unchanged; replay is byte-identical.
-- The end-to-end proof `pnpm proof:perform` is being run; its result goes to PROGRESS.
+- `pnpm proof:perform` 28/28 (one run; F2, the strobe, on the software WebGPU adapter and labelled so; the 200-hit live path within one frame period on that run, 35.5 ms against 33.3 ms on the run before — at the edge), editor interactions 64/64, accessibility 0 findings in both languages, test-id inventory 0 lost.
 - Not verified: the laptop, a person's ears and eyes, real music.

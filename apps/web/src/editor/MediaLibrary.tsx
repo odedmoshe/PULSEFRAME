@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AudioLines, Check, Ellipsis, Eye, FileMusic, Film, Image as ImageIcon, Palette, Plus, Trash2, Info } from 'lucide-react';
+import { AudioLines, Check, Ellipsis, Eye, FileMusic, Film, Image as ImageIcon, Palette, Plus, Trash2, Info, TriangleAlert } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { assetNotices, lutUsers, type Asset, type ProjectDocument } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
@@ -17,6 +17,7 @@ import { LIFE_TESTIDS } from './lifeline/lifeline.testids.ts';
 import { assetDisplayName } from './assetLabel.ts';
 import { togglePick, usePicks } from './MulticamLibraryEntry.tsx';
 import { MULTICAM_STRINGS } from './multicam.strings.ts';
+import { TL_STRINGS } from './timeline.strings.ts';
 import './mediaLibrary.css';
 import './multicam.css';
 
@@ -61,7 +62,7 @@ function useDerivative(projectId: string, a: Asset, refreshKey: number): { loade
   return { loaded, live, loads };
 }
 
-function Thumb({ projectId, a, refreshKey }: { projectId: string; a: Asset; refreshKey: number }) {
+function Thumb({ projectId, a, refreshKey, missing }: { projectId: string; a: Asset; refreshKey: number; missing: boolean }) {
   const { loaded, live, loads } = useDerivative(projectId, a, refreshKey);
   const canvas = useRef<HTMLCanvasElement>(null);
   const draw = (frac: number) => {
@@ -89,6 +90,7 @@ function Thumb({ projectId, a, refreshKey }: { projectId: string; a: Asset; refr
   };
   useEffect(() => { draw(0); }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
   if (a.kind === 'lut') return <Palette size={24} aria-hidden="true" />;
+  if (a.kind === 'image' && missing) return <ImageIcon size={24} aria-hidden="true" />; // its file is missing: no broken picture
   if (a.kind === 'image') return <img src={`/api/v1/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(a.id)}/content`} alt="" loading="lazy" draggable={false} />;
   if (loaded) {
     const scrub = loaded.kind === 'thumbnails' && loaded.meta.frameIndices.length > 1 && !reduced();
@@ -172,6 +174,7 @@ export function MediaGrid({ onView, query = '', filter = 'all', only }: { onView
   if (!doc) return null;
   const picked = usePicks(); // the multicam selection (ADR-0020)
   const used = usedAssets(doc);
+  const missingFiles = state.missingMedia; // stored files missing on disk: said on the card with the timeline's own words (clipMissing)
   const all = Object.values(doc.assets);
   if (all.length === 0) return null; // the drawer shows the drop zone (Library.tsx)
   const assets = only ? only.flatMap((id) => (Object.hasOwn(doc.assets, id) ? [doc.assets[id]!] : [])) : filterAssets(doc, query, filter); // `only`: the files of one group of the life-line views, in the order given
@@ -182,6 +185,7 @@ export function MediaGrid({ onView, query = '', filter = 'all', only }: { onView
         // A colour table (LUT) is not timeline material: it is applied to clips as an effect, and counts as used while an effect names it.
         const isLut = a.kind === 'lut';
         const isUsed = isLut ? lutUsers(doc, a.id).length > 0 : used.has(a.id);
+        const isMissing = missingFiles.includes(a.id);
         const usedLabel = isLut ? S.lutInUse : S.inUse;
         const KindIcon = isLut ? Palette : a.kind === 'image' ? ImageIcon : a.kind === 'video' ? Film : AudioLines;
         const add = () => void editor.addAsset(a.id);
@@ -190,10 +194,11 @@ export function MediaGrid({ onView, query = '', filter = 'all', only }: { onView
         const shots = an?.scenes ? an.scenes.cuts.length + 1 : null;
         const lang = doc.transcripts[a.id]?.language.split('-')[0]?.toUpperCase() ?? null;
         return (
-          <li key={a.id} className="media-card pf-mc" draggable={!isLut} data-testid={`asset-${a.id}`} data-kind={a.kind} title={isLut ? S.lutHint : t('media.dragHint')}
+          <li key={a.id} className={`media-card pf-mc${isMissing ? ' is-missing' : ''}`} draggable={!isLut} data-testid={`asset-${a.id}`} data-kind={a.kind} data-missing={isMissing || undefined} title={isLut ? S.lutHint : t('media.dragHint')}
             onDragStart={isLut ? undefined : (e) => { e.dataTransfer.setData(ASSET_DRAG_TYPE, a.id); e.dataTransfer.effectAllowed = 'copy'; }}>
             <div className="mc-thumb pf-mc-thumb" onDoubleClick={isLut ? undefined : add}>
-              <Thumb projectId={doc.id} a={a} refreshKey={derivativeTick} />
+              <Thumb projectId={doc.id} a={a} refreshKey={derivativeTick} missing={isMissing} />
+              {isMissing && <span className="pf-mc-missing" data-testid={`missing-${a.id}`}><TriangleAlert size={12} strokeWidth={2} aria-hidden="true" />{TL_STRINGS[state.lang].clipMissing}</span>}
               {(a.kind === 'video' || a.kind === 'audio') && <input type="checkbox" className="mc-pick" checked={picked.includes(a.id)} onChange={() => togglePick(a.id)} aria-label={MULTICAM_STRINGS[state.lang].libSelect(a.name)} data-testid={`pick-${a.id}`} />}
               <span className="pf-mc-badge pf-mc-fmt num"><bdi dir="ltr">{isLut ? 'CUBE' : formatOf(a)}</bdi></span>
               <span className="pf-mc-badge pf-mc-dur num"><bdi dir="ltr" className="pf-mc-durIn">

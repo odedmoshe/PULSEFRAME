@@ -6,13 +6,17 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { dictionaries, type Key, type Lang } from '@pulseframe/i18n';
 import { COMMANDS, chordLabel, chordOf, type Command, type Keymap } from './commands.ts';
 import { COLOR_LOOKS, EFFECTS, TRANSITIONS } from '@pulseframe/core';
-import { Bot, Film, Search, Sparkles } from 'lucide-react';
+import { Film, Search, Sparkles } from 'lucide-react';
 import { CHROME_STRINGS } from './chrome.strings.ts';
 import { getChrome, setPaletteView } from './chromeState.ts';
 import { pickCall, type PickKind } from './gallery.pick.ts';
 import { normalize, rankCommands, rankWithRescue } from './palette.search.ts';
 import { useEditorState } from './store.ts';
 import './command-palette.css';
+// the Hebrew command bar (ADR-0027): its rows come first in the one listbox (commandBar/contract.ts)
+import { AssistantRow } from './commandBar/AssistantRow.tsx';
+import { BarPanel, BarSection } from './commandBar/BarSection.tsx';
+import { useBarSlot } from './commandBar/useBarResult.ts';
 
 const MODIFIER_CODES = new Set(['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight', 'OS', 'AltGraph']);
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -73,6 +77,7 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
   }, [view]);
 
   const close = () => editor.set({ paletteOpen: false });
+  const bar = useBarSlot(query, { lang, close, setQuery: (q: string) => { setQuery(q); setActiveId(null); inputRef.current?.focus(); } });
   const label = (c: Command, l: Lang = lang) => c.text?.[l] ?? dictionaries[l][c.label];
   const enabled = (c: Command) => !c.enabled || c.enabled(editor);
   const chords = (c: Command) => keymap.keysFor(c.id);
@@ -104,7 +109,8 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
   const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);
   const clip = editor.selected?.clip;
   // One cursor over every selectable row: commands, catalogue entries, media. The assistant row is shown but cannot be chosen.
-  const keys = useMemo(() => [...flat.map((c) => c.id), ...catShown.map((c) => c.key), ...mediaShown.map((a) => `media:${a.id}`)], [flat, catShown, mediaShown]);
+  const barKeys = scope === 'assistant' ? [] : bar.keys;
+  const keys = useMemo(() => [...barKeys, ...flat.map((c) => c.id), ...catShown.map((c) => c.key), ...mediaShown.map((a) => `media:${a.id}`)], [barKeys, flat, catShown, mediaShown]);
   const active = flat.find((c) => c.id === activeId) ?? (activeId ? undefined : flat[0]);
   const activeKey = activeId && keys.includes(activeId) ? activeId : keys[0] ?? null;
   const counts = { catalogue: catRows.length, media: mediaRows.length };
@@ -122,6 +128,7 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
   };
   const runKey = (key: string | null) => {
     if (!key) return;
+    if (barKeys.includes(key)) { bar.activate(key); return; }
     if (key.startsWith('media:')) { close(); const id = key.slice(6); setTimeout(() => void editor.addAsset(id), 0); return; }
     const cat = catById.get(key);
     if (cat) {
@@ -194,6 +201,7 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
                 aria-autocomplete="list"
                 aria-controls={listId}
                 aria-activedescendant={activeKey ? optionDomId(activeKey) : undefined}
+                aria-describedby={scope !== 'assistant' && bar.describedBy ? bar.describedBy : undefined}
                 aria-label={t('cmd.palette')}
                 placeholder={C.cmdPlaceholder}
                 value={query}
@@ -211,6 +219,7 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
             </div>
             {rescued && <p className="pf-pal-note" role="status" data-testid="palette-rescued">{C.palRescued(rescued)}</p>}
             <div id={listId} className="pf-pal-list" role="listbox" aria-label={t('cmd.palette')}>
+              {scope !== 'assistant' && <BarSection slot={bar} query={query} activeKey={activeKey} onHover={(k) => k !== activeKey && setActiveId(k)} optionDomId={optionDomId} />}
               {scope !== 'assistant' && groups.map((g) => (
                 <div key={g.group ?? 'results'} role="group" aria-label={g.group ? t(`group.${g.group}` as Key) : scope === 'all' ? C.scopeCommands : undefined}>
                   {(g.group || (searching && scope === 'all')) && <div className="pf-pal-heading" aria-hidden="true">{g.group ? t(`group.${g.group}` as Key) : C.scopeCommands}</div>}
@@ -269,17 +278,18 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
                   ))}
                 </div>
               )}
-              {scope !== 'assistant' && keys.length === 0 && <div className="pf-pal-empty" role="status">{searching ? C.palEmpty : t('palette.empty')}</div>}
-              {/* The assistant: honest about not being connected. It never pretends to understand free language. */}
-              {(scope === 'all' || scope === 'assistant') && searching && (
-                <div role="group" aria-label={C.scopeAssistant}>
-                  <div className="pf-pal-option is-assistant" role="option" aria-selected="false" aria-disabled="true" id={optionDomId('assistant')} data-testid="palette-assistant">
-                    <span className="pf-pal-names"><Bot size={14} strokeWidth={1.75} aria-hidden="true" className="pf-pal-ic is-agent" /><span className="pf-pal-label">{C.palAssistantRow(query.trim())}</span><span className="pf-pal-unavail">{C.palNoModel.split(' · ')[0]}</span></span>
-                  </div>
-                </div>
-              )}
-              {scope === 'assistant' && <p className="pf-pal-note is-block" role="status" data-testid="palette-assistant-note">{C.palAssistantOff}</p>}
             </div>
+            {/* Outside the listbox (it owns only options and groups): the empty line, and the assistant, which is not an option
+                (the arrows never reach it) and holds real buttons — «איך מחברים», send, accept and reject (ADR-0027). */}
+            {scope !== 'assistant' && keys.length === 0 && <div className="pf-pal-empty pf-pal-extra" role="status">{searching ? C.palEmpty : t('palette.empty')}</div>}
+            {(scope === 'all' || scope === 'assistant') && searching && (
+              <div className="pf-pal-extra" role="group" aria-label={C.scopeAssistant}>
+                <AssistantRow query={query} lang={lang} optionDomId={optionDomId} />
+              </div>
+            )}
+            {scope === 'assistant' && <p className="pf-pal-note is-block pf-pal-extra" role="status" data-testid="palette-assistant-note">{C.palAssistantOff}</p>}
+            {/* the bar's live region and preview: outside the listbox, which owns only options and groups (ADR-0027) */}
+            <BarPanel slot={bar} query={query} activeKey={activeKey} off={scope === 'assistant'} />
             <div className="pf-pal-footer">
               <span className="pf-pal-hints" aria-hidden="true"><span><kbd>↑↓</kbd> {C.palFooter.nav}</span><span><kbd>Enter</kbd> {C.palFooter.apply}</span><span><kbd>Esc</kbd> {C.palFooter.close}</span></span>
               <button type="button" className="pf-pal-btn" data-testid="palette-shortcuts" onClick={() => setView('shortcuts')}>{t('shortcuts')}</button>

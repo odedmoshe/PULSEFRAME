@@ -28,6 +28,8 @@ import { frameKeyFor } from './renderCacheEnv.ts';
 import { createRenderCacheService, type RenderCacheService } from './renderCacheRoutes.ts';
 import { RENDER_CACHE_DIR, SegmentStore } from './segmentStore.ts';
 import { dataDirBytes, setStorageHooks } from './storage.ts';
+import { recoverAssistantJobs } from './assistant/job.ts'; // command bar assistant recovery (ADR-0027)
+import type { AssistantDeps } from './assistant/contract.ts';
 
 export { loadConfig, type Config } from './config.ts';
 export interface RunningServer {
@@ -37,7 +39,11 @@ export interface RunningServer {
   close(): Promise<void>;
 }
 
-export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter } = {}): Promise<RunningServer> {
+/**
+ * `deps.assistant`: the command bar assistant's installed adapters (ADR-0027). Wave 1 ships none, so the CLI passes nothing and
+ * the setup state is honest (provider_not_configured); tests and pnpm proof:command-bar install the labelled MOCK adapter here.
+ */
+export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter; assistant?: AssistantDeps } = {}): Promise<RunningServer> {
   const cfg = { ...loadConfig(), ...overrides };
   if (overrides.dataDir && !overrides.speechModelsDir && !process.env.PF_SPEECH_MODELS_DIR) cfg.speechModelsDir = path.join(cfg.dataDir, 'speech-models');
   const backup = new BackupScheduler(cfg.dataDir, cfg.backupDir, cfg.backupEveryHours, cfg.backupKeep); // throws on a destination inside the data directory, before anything is opened
@@ -90,7 +96,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   exporter.incremental = { status: cacheStatus, join: () => joinResult };
   exporter.segmented = { store: segments, env: renderCache.env, keyOf: frameKeyFor, run: runSegmentedExport };
   const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { imports, renderCache });
-  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { imports, door, renderCache });
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { imports, door, renderCache, ...(deps.assistant ? { assistant: deps.assistant } : {}) });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   if ((server.address() as AddressInfo).port !== cfg.port) throw new Error('unexpected port');
@@ -108,6 +114,10 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   recoverMomentsJobs(store, { derivatives, lane });
   speech.recover();
   derivatives.recover();
+  // ---- command bar assistant (ADR-0027, W2): a request cut off by the restart is never sent again; failed submission_unknown,
+  // its reservation released when nothing was sent, kept as unknown when the send had started ----
+  recoverAssistantJobs(store, governance);
+  // ---- end command bar assistant recovery ----
   backup.start();
   return {
     url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance, backup, imports, door, renderCache,

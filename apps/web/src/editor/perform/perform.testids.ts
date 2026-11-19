@@ -28,6 +28,8 @@ export const PERFORM_TESTIDS = {
   camera: 'perform-camera', cameraOverlay: 'perform-camera-overlay', cameraCrop: 'perform-camera-crop', cameraSettle: 'perform-camera-settle',
   cameraLead: 'perform-camera-lead', cameraSway: 'perform-camera-sway', cameraConfirm: 'perform-camera-confirm', cameraOverTolerance: 'perform-camera-over',
   cameraLinkedFormats: 'perform-camera-linked', cameraRefusal: 'perform-camera-refusal',
+  // the panorama note: the picture is wider (or taller) than the camera can pan, so it cannot reach its ends (warning cannot_reach_ends)
+  cameraCannotReach: 'perform-camera-cannot-reach',
   // a placeholder of this pre-pass: the view is not built yet (removed by W3)
   notBuilt: 'perform-not-built',
 } as const;

@@ -160,6 +160,11 @@ export function destinationKey(d: Destination, targets: ExportTarget[]): string 
   const p = FORMAT_PROFILES.find((x) => x.id === d.format);
   return p && targets[0] && targets[0].width === p.width && targets[0].height === p.height ? 'master' : null;
 }
+/** What choosing destination `d` sets in the sheet (a click on its tile, or openExportSheet({ destination })): the destination, its format when the project has it, and its quality and size over the current choices. */
+export function destinationPick(d: Destination, targets: ExportTarget[], choices: ExportChoices): { dest: Destination['id']; keys?: string[]; choices: ExportChoices } {
+  const key = destinationKey(d, targets);
+  return { dest: d.id, ...(key ? { keys: [key] } : {}), choices: { ...choices, ...d.choices } };
+}
 
 /** Size of the output of a target at a scale: even numbers, as the server rounds them. */
 export function scaledSize(t: { width: number; height: number }, scale: ExportScale): { width: number; height: number } {

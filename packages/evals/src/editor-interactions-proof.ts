@@ -28,6 +28,7 @@ import { TEMPLATE_TESTIDS } from '../../../apps/web/src/editor/templates.testids
 import { chooseFormat } from './editor-ui.ts';
 import { generateShortsFixture } from '../../fixtures/src/shorts.ts';
 import { SHORTS_TESTIDS } from '../../../apps/web/src/editor/shorts.testids.ts';
+import { PERFORM_TESTIDS } from '../../../apps/web/src/editor/perform/perform.testids.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/editor-interactions');
@@ -1199,6 +1200,214 @@ async function main() {
       }
       check('no uncaught errors in the page with the shorts run', sErrors.length === 0, sErrors.slice(0, 4));
       await sctx.close();
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // perform mode (ADR-0025): Shift+7 enters it; the mode bar does not wrap at 1280 px; a keyboard-only take (R, pads, Space,
+    // Enter) is ONE history entry; Shift+1…7 are ignored while recording; discard leaves the revision unchanged; Escape closes
+    // the pad editor and the calibration dialog and the focus returns to what opened them. The full take proof is proof:perform.
+    // ---------------------------------------------------------------------------------------------------------------
+    {
+      console.log('\n# perform mode (ADR-0025): keyboard paths');
+      const PID = PERFORM_TESTIDS;
+      const pp = (await call('/projects', { name: 'perform-keys', width: 640, height: 360 })).body.project.id as string;
+      const pm = await upload(pp, musicFile), pv = await upload(pp, picFile);
+      await txs(pp, [{ op: 'add_clip', args: { assetId: pm.assetId, start: f(0) } }]);
+      await txs(pp, [{ op: 'add_clip', args: { assetId: pv.assetId, start: f(0), withLinkedAudio: false } }]);
+      await call(`/projects/${pp}/assets/${pm.assetId}/analyze`, { kind: 'beats' });
+      const prev = async () => (await call(`/projects/${pp}`)).body.revision as number;
+      const phist = async () => ((await call(`/projects/${pp}/history?since=0`)).body.events as { ops: string[] }[]);
+      const pctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+      await pctx.addInitScript(() => { (globalThis as any).__pfPerformProof = true; try { localStorage.setItem('pf.lang', 'he'); localStorage.removeItem('pf.perform.v1'); } catch { /* storage unavailable */ } });
+      const ppage = await pctx.newPage();
+      const pErrors: string[] = [];
+      ppage.on('pageerror', (e) => pErrors.push(String(e)));
+      await ppage.goto(`${s.ownerUrl}&project=${pp}`);
+      await ppage.getByTestId('project-name').waitFor();
+      await ppage.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await ppage.keyboard.press('Shift+Digit7');
+      const entered = await ppage.getByTestId(PID.view).waitFor({ timeout: 10000 }).then(() => true, () => false);
+      const bar = await ppage.locator('[data-testid=workspace-switch] [data-testid^=workspace-]').evaluateAll((els) => els.map((e) => ({ id: (e as HTMLElement).dataset.testid, top: Math.round(e.getBoundingClientRect().top), checked: e.getAttribute('aria-checked') })));
+      const oneRow = bar.length === 7 && new Set(bar.map((b) => b.top)).size === 1;
+      check('perform: Shift+7 enters the perform mode (its view mounts, its mode button is checked); the 7-button mode bar is one row at 1280 px', entered && bar.find((b) => b.id === 'workspace-perform')?.checked === 'true' && oneRow, { entered, bar });
+      // discard: a take recorded and thrown away changes nothing
+      const r0 = await prev(), h0 = (await phist()).length;
+      await ppage.keyboard.press('KeyR');
+      await ppage.waitForFunction(() => document.querySelector('[data-testid=perform-view]')?.getAttribute('data-phase') === 'recording', undefined, { timeout: 10000 });
+      await sleep(500);
+      await ppage.keyboard.press('Digit1'); await sleep(400);
+      await ppage.keyboard.press('Space');
+      await ppage.waitForFunction(() => document.querySelector('[data-testid=perform-view]')?.getAttribute('data-phase') === 'review', undefined, { timeout: 10000 });
+      await ppage.keyboard.press('Escape');
+      await ppage.waitForFunction(() => document.querySelector('[data-testid=perform-view]')?.getAttribute('data-phase') === 'idle', undefined, { timeout: 10000 });
+      await sleep(300);
+      check('perform: a take recorded with R, a pad and Space, then discarded with Escape, leaves the revision and the history unchanged', (await prev()) === r0 && (await phist()).length === h0, { revisions: (await prev()) - r0, entries: (await phist()).length - h0 });
+      // a keyboard-only take: R, pads 1 2 3, Shift+1…7 (ignored while recording), Space, Enter
+      await ppage.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await ppage.keyboard.press('KeyR');
+      await ppage.waitForFunction(() => document.querySelector('[data-testid=perform-view]')?.getAttribute('data-phase') === 'recording', undefined, { timeout: 10000 });
+      await sleep(400);
+      for (const code of ['Digit1', 'Digit2', 'Digit3']) { await ppage.keyboard.press(code); await sleep(450); }
+      for (let i = 1; i <= 7; i++) await ppage.keyboard.press(`Shift+Digit${i}`);
+      const stillRecording = (await ppage.getByTestId(PID.view).getAttribute('data-phase')) === 'recording' && (await ppage.locator('[data-testid=workspace-perform][aria-checked=true]').count()) === 1;
+      const tapsRec = (await ppage.evaluate(() => (window as any).__pfPerform?.state().taps.length)) as number;
+      await ppage.keyboard.press('Space');
+      await ppage.waitForFunction(() => document.querySelector('[data-testid=perform-view]')?.getAttribute('data-phase') === 'review', undefined, { timeout: 10000 });
+      const banner = await ppage.getByTestId(PID.ghostBanner).isVisible().catch(() => false);
+      const rReview = await prev();
+      await ppage.keyboard.press('Enter');
+      await ppage.waitForFunction(() => document.querySelector('[data-testid=perform-view]')?.getAttribute('data-phase') === 'idle', undefined, { timeout: 30000 });
+      await sleep(300);
+      const h1 = await phist();
+      check('perform: a keyboard-only take (R, 1 2 3, Space, Enter) gives exactly ONE new history entry (apply_take); Shift+1…7 while recording add no tap and leave the mode; the ghost banner shows in review', stillRecording && tapsRec === 3 && banner && rReview === r0 && (await prev()) === r0 + 1 && h1.length === h0 + 1 && h1.at(-1)!.ops.join() === 'apply_take', { stillRecording, tapsRec, banner, entries: h1.length - h0, ops: h1.at(-1)?.ops });
+      // Escape and focus return: the pad editor (opened from pad 3's edit button) and the calibration dialog (from its button)
+      const edit = ppage.locator('[data-testid=perform-pads] .pf-perform-padcell').nth(2).locator('.pf-perform-padedit');
+      await edit.focus(); await ppage.keyboard.press('Enter');
+      const peOpen = await ppage.getByTestId(PID.padEditor).waitFor({ timeout: 5000 }).then(() => true, () => false);
+      const peFocusInside = await ppage.evaluate(() => !!document.activeElement?.closest('[data-testid=perform-pad-editor]'));
+      await ppage.keyboard.press('Escape');
+      const peClosed = await ppage.getByTestId(PID.padEditor).waitFor({ state: 'detached', timeout: 5000 }).then(() => true, () => false);
+      const peBack = await ppage.evaluate(() => !!document.activeElement?.classList.contains("pf-perform-padedit") && !!document.activeElement?.getAttribute("aria-label")?.includes("3"));
+      const cal = ppage.getByTestId(PID.calibrate);
+      await cal.focus(); await ppage.keyboard.press('Enter');
+      const calOpen = await ppage.getByTestId(PID.calibrateDialog).waitFor({ timeout: 5000 }).then(() => true, () => false);
+      const calFocusInside = await ppage.evaluate(() => !!document.activeElement?.closest('[data-testid=perform-calibrate-dialog]'));
+      await ppage.keyboard.press('Escape');
+      const calClosed = await ppage.getByTestId(PID.calibrateDialog).waitFor({ state: 'detached', timeout: 5000 }).then(() => true, () => false);
+      const calBack = await ppage.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.testid === 'perform-calibrate');
+      const idle = (await ppage.getByTestId(PID.view).getAttribute('data-phase')) === 'idle';
+      check('perform: Escape closes the pad editor and the calibration dialog (the focus was inside each); the focus returns to the button that opened it; nothing was recorded', peOpen && peFocusInside && peClosed && peBack && calOpen && calFocusInside && calClosed && calBack && idle && (await phist()).length === h0 + 1, { peOpen, peFocusInside, peClosed, peBack, calOpen, calFocusInside, calClosed, calBack, idle });
+      check('perform: no uncaught errors in the page', pErrors.length === 0, pErrors.slice(0, 4));
+      await pctx.close();
+      // multicam owns the digits while its program is live (ADR-0020): the pads take none (no aria-keyshortcuts, the view says
+      // so); while a take is recorded a digit is neither a tap nor an angle switch; outside a take the digit switches the angle
+      {
+        const pic2 = path.join(art, 'pic2.mp4');
+        ff(['-f', 'lavfi', '-t', '4', '-i', 'smptebars=s=640x360:r=30', '-vf', 'format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', pic2]);
+        const mp = (await call('/projects', { name: 'perform-multicam', width: 640, height: 360 })).body.project.id as string;
+        const a1 = await upload(mp, picFile), a2 = await upload(mp, pic2);
+        const made = (await txs(mp, [{ op: 'create_multicam', args: { name: 'mc', angles: [{ assetIds: [a1.assetId] }, { assetIds: [a2.assetId] }] } }])).results[0].output as { groupId: string; angleIds: string[] };
+        await txs(mp, [{ op: 'set_multicam_sync', args: { groupId: made.groupId, angleId: made.angleIds[1], pieceIndex: 0, offset: { value: '0', timescale: 1 } } }]);
+        const placed = (await txs(mp, [{ op: 'place_multicam', args: { groupId: made.groupId, at: f(0), angleId: made.angleIds[0] } }])).results[0].output as { videoTrackId: string };
+        const mctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+        await mctx.addInitScript(([id, track]) => { (globalThis as any).__pfPerformProof = true; try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.workspace.v1', 'perform'); localStorage.setItem(`pf.targets.v1.${id}`, JSON.stringify({ video: track, audio: null })); } catch { /* storage unavailable */ } }, [mp, placed.videoTrackId]);
+        const mpage = await mctx.newPage();
+        const mErrors: string[] = [];
+        mpage.on('pageerror', (e) => mErrors.push(String(e)));
+        await mpage.goto(`${s.ownerUrl}&project=${mp}`);
+        await mpage.getByTestId(PID.view).waitFor({ timeout: 30000 });
+        const note = await mpage.getByTestId(PID.multicamDigits).waitFor({ timeout: 10000 }).then(() => true, () => false);
+        const keys = await mpage.locator(`[data-testid=${PID.pad}]`).evaluateAll((els) => els.map((e) => e.getAttribute('aria-keyshortcuts')));
+        const mh = async () => ((await call(`/projects/${mp}/history?since=0`)).body.events as unknown[]).length;
+        const m0 = await mh();
+        await mpage.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+        await mpage.keyboard.press('KeyR');
+        await mpage.waitForFunction(() => document.querySelector('[data-testid=perform-view]')?.getAttribute('data-phase') === 'recording', undefined, { timeout: 10000 });
+        await sleep(400);
+        await mpage.keyboard.press('Digit2'); await sleep(400);
+        const tapsWhile = (await mpage.evaluate(() => (window as any).__pfPerform?.state().taps.length)) as number;
+        await mpage.keyboard.press('Space');
+        await mpage.waitForFunction(() => document.querySelector('[data-testid=perform-view]')?.getAttribute('data-phase') !== 'recording', undefined, { timeout: 10000 });
+        await sleep(400);
+        const m1 = await mh();
+        await mpage.evaluate(() => (window as any).__pfPlayer?.seek?.(30));
+        await mpage.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+        await mpage.keyboard.press('Digit2');
+        const switched = await until2(mh, (n) => n === m1 + 1, 8000);
+        check('perform: while multicam\'s program is live the pads take no number keys (no aria-keyshortcuts, the view says so); during a take a digit is neither a tap nor an angle switch; outside a take Digit2 switches the angle (one history entry)', note && keys.length === 8 && keys.every((k) => k === null) && tapsWhile === 0 && m1 === m0 && switched && mErrors.length === 0, { note, keys, tapsWhile, entriesDuringTake: m1 - m0, switched, errors: mErrors.slice(0, 3) });
+        await mctx.close();
+      }
+    }
+
+    // the Hebrew command bar (ADR-0027): keyboard paths through the palette's one listbox — the bar's row first and active,
+    // the arrows over a question's choices with each choice's own preview, an example row that only fills the input, the
+    // assistant's «איך מחברים» into Settings, and a Settings refusal in Hebrew with its next step (the full proof is proof:command-bar)
+    {
+      console.log('\n# command bar (ADR-0027): keyboard paths');
+      const cp = (await call('/projects', { name: 'command-bar-keys', width: 640, height: 360 })).body.project.id as string;
+      const ca = await upload(cp, picFile), cm = await upload(cp, musicFile);
+      const c1 = (await txs(cp, [{ op: 'add_clip', args: { assetId: ca.assetId, start: f(0), duration: f(60), withLinkedAudio: false } }])).results[0].output.clipId as string;
+      await txs(cp, [{ op: 'add_clip', args: { assetId: cm.assetId, start: f(0), duration: f(90) } }]);
+      const cctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+      await cctx.addInitScript('globalThis.__name = (f) => f');
+      await cctx.addInitScript(() => { (globalThis as any).__pfAudioTap = true; try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const cpage = await cctx.newPage();
+      const cErrors: string[] = [];
+      cpage.on('pageerror', (e) => cErrors.push(String(e)));
+      await cpage.goto(`${s.ownerUrl}&project=${cp}`);
+      await cpage.getByTestId('timecode').waitFor({ timeout: 30000 });
+      await cpage.waitForFunction(() => !!(window as any).__pfPlayer, undefined, { timeout: 30000 });
+      const crev = async () => (await call(`/projects/${cp}`)).body.revision as number;
+      const chist = async () => (await call(`/projects/${cp}/history?since=0`)).body.events as { label: string | null; ops: string[] }[];
+      await cpage.locator(`.clip[data-clip-id="${c1}"]`).click({ position: { x: 6, y: 6 } });
+      await cpage.evaluate(() => (window as any).__pfPlayer.seek(30));
+      const typeBar = async (text: string) => {
+        if (!(await cpage.getByTestId('palette-dialog').count())) { await cpage.getByTestId('open-palette').focus(); await cpage.keyboard.press('Control+k'); await cpage.getByTestId('palette-input').waitFor({ timeout: 5000 }); }
+        await cpage.getByTestId('palette-input').press('Control+a'); await cpage.keyboard.press('Backspace');
+        await cpage.keyboard.type(text);
+        await cpage.waitForFunction((q) => document.querySelector<HTMLInputElement>('[data-testid=palette-input]')?.value === q && !!document.querySelector<HTMLElement>('[data-testid=bar-result]')?.dataset.kind, text, { timeout: 8000 });
+        await sleep(150);
+      };
+      const active = () => cpage.evaluate(() => document.querySelector('[data-testid=palette-input]')?.getAttribute('aria-activedescendant'));
+      // 1: «חתוך כאן» — the bar's row is the first option and active; ↓ leaves it, Home comes back; Enter commits one labelled transaction
+      const r0 = await crev(), h0 = (await chist()).length;
+      await typeBar('חתוך כאן');
+      const first = await cpage.evaluate(() => document.querySelector('[role=listbox] [role=option]')?.id);
+      const options = await cpage.locator('[role=listbox] [role=option]').count();
+      const rowSeen = await cpage.evaluate(() => { const r = document.querySelector('[data-testid=bar-result]')!.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return r.height >= 30 && !!hit?.closest('[data-testid=bar-result]'); });
+      const a0 = await active();
+      await cpage.keyboard.press('ArrowDown'); const a1 = await active();
+      await cpage.keyboard.press('Home'); const a2 = await active();
+      const moved = options > 1 ? a1 !== a0 : a1 === a0; // with one option the cursor wraps onto it
+      await cpage.waitForFunction(() => (window as any).__pfBar?.lastPlan?.planHash === document.querySelector<HTMLElement>('[data-testid=bar-result]')?.dataset.planHash, undefined, { timeout: 5000 }).catch(() => {});
+      await cpage.keyboard.press('Enter');
+      const committed = await until2(crev, (n) => n === r0 + 1, 10000);
+      const h1 = await chist();
+      check('command bar: «חתוך כאן» — the bar\'s row is on screen (not clipped), the first option and active (aria-activedescendant), ↓ moves to the next option (wraps when it is the only one) and Home back; Enter commits ONE transaction labelled «Command bar: split_here»', rowSeen && first === 'pf-palette-opt-bar' && a0 === 'pf-palette-opt-bar' && moved && a2 === a0 && committed && h1.length === h0 + 1 && h1.at(-1)!.label === 'Command bar: split_here', { rowSeen, first, options, a0, a1, a2, revisions: (await crev()) - r0, label: h1.at(-1)?.label });
+      await sleep(400);
+      // 2: a question: ↓ to a choice shows that choice's own preview; Enter commits exactly that choice
+      await typeBar('הגבר את הקול ב־3 דציבל');
+      const kind = await cpage.getByTestId('bar-result').getAttribute('data-kind');
+      await cpage.keyboard.press('ArrowDown');
+      await sleep(200);
+      const choiceActive = await active();
+      const stepOp = await cpage.locator('[data-testid=bar-step]').first().getAttribute('data-op').catch(() => null);
+      const r1 = await crev();
+      await cpage.waitForFunction(() => !!(window as any).__pfBar?.lastPlan, undefined, { timeout: 5000 }).catch(() => {});
+      await cpage.keyboard.press('Enter');
+      const chose = await until2(crev, (n) => n === r1 + 1, 10000);
+      const h2 = await chist();
+      check('command bar: «הגבר את הקול ב־3 דציבל» asks; ↓ makes the first choice active with its own preview (a step), Enter commits exactly that choice (one transaction, set_track_audio)', kind === 'ambiguous' && choiceActive === 'pf-palette-opt-bar-choice-0' && stepOp === 'set_track_audio' && chose && h2.at(-1)!.ops.join() === 'set_track_audio' && h2.at(-1)!.label === 'Command bar: gain_change', { kind, choiceActive, stepOp, ops: h2.at(-1)?.ops });
+      await sleep(400);
+      // 3: an example row under a request the bar did not understand: Enter fills the input, nothing runs
+      const r2 = await crev();
+      await typeBar('תעשה שמח');
+      const examples = await cpage.locator('[data-testid=bar-nearest][data-example=true]').count();
+      await cpage.keyboard.press('ArrowDown');
+      await sleep(150);
+      await cpage.keyboard.press('Enter');
+      await sleep(400);
+      const filled = await cpage.evaluate(() => ({ value: document.querySelector<HTMLInputElement>('[data-testid=palette-input]')?.value ?? '', kind: document.querySelector<HTMLElement>('[data-testid=bar-result]')?.dataset.kind ?? null, open: !!document.querySelector('[data-testid=palette-dialog]'), focus: document.activeElement?.getAttribute('data-testid') }));
+      check('command bar: «תעשה שמח» is not understood and offers example sentences; ↓ and Enter put one in the input (its own preview shows) and nothing is committed', examples > 0 && filled.open && filled.value !== 'תעשה שמח' && filled.value.length > 0 && filled.kind !== 'unknown' && filled.focus === 'palette-input' && (await crev()) === r2, { examples, ...filled, revisions: (await crev()) - r2 });
+      // 4: the assistant row: «עוזר השפה לא מחובר», «איך מחברים» opens Settings at the assistant's section (owner session)
+      await typeBar('בקשה לעוזר');
+      const rowText = await cpage.getByTestId('palette-assistant').textContent();
+      const outside = await cpage.evaluate(() => ({ row: !document.querySelector('[role=listbox] [data-testid=palette-assistant]'), preview: !document.querySelector('[role=listbox] #pf-bar-preview'), live: !document.querySelector('[role=listbox] [data-testid=bar-live]'), roles: [...document.querySelectorAll('[role=listbox] [role]')].map((e) => e.getAttribute('role')).filter((r) => r !== 'option' && r !== 'group') }));
+      check('command bar: the listbox owns only options and groups — the bar\'s live region and preview and the assistant\'s row are outside it', outside.row && outside.preview && outside.live && outside.roles.length === 0, outside);
+      await cpage.getByTestId('bar-assistant-connect').click();
+      const settings = await cpage.getByTestId('assistant-settings').waitFor({ timeout: 8000 }).then(() => true, () => false);
+      await cpage.getByTestId('assistant-setup').waitFor({ timeout: 8000 }).catch(() => {});
+      const setup = await cpage.getByTestId('assistant-setup').getAttribute('data-setup').catch(() => null);
+      // 5: a Settings refusal in Hebrew with its next step: this server allows no assistant host, so saving one is refused (409)
+      await cpage.getByTestId('assistant-host').fill('api.example.test');
+      await cpage.getByTestId('assistant-model').fill('m');
+      await cpage.getByTestId('assistant-price-in').fill('300'); await cpage.getByTestId('assistant-price-out').fill('1500');
+      await cpage.getByTestId('assistant-monthly-limit').fill('500'); await cpage.getByTestId('assistant-request-cap').fill('50');
+      await cpage.locator('[data-testid=assistant-settings] button.pf-btn-primary').first().click();
+      const refused = await cpage.getByTestId('assistant-refused').waitFor({ timeout: 8000 }).then(async () => (await cpage.getByTestId('assistant-refused').textContent()) ?? '', () => '');
+      check('command bar: the assistant row reads «עוזר השפה לא מחובר»; «איך מחברים» opens Settings at «עוזר השפה» (provider_not_configured); a refused save reads in Hebrew with its next step and without the server\'s English hint', !!rowText?.includes('עוזר השפה לא מחובר') && settings && setup === 'provider_not_configured' && /PF_ASSISTANT_HOSTS/.test(refused) && /[א-ת]/.test(refused) && refused.includes('; ') && !/restart the server/i.test(refused) && !/לא תורגם/.test(refused), { setup, refused });
+      check('command bar: no uncaught errors in the page', cErrors.length === 0, cErrors.slice(0, 4));
+      await cctx.close();
     }
 
     await page.close();

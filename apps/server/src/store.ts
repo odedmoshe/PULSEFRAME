@@ -62,7 +62,9 @@ export interface CommitResult {
   undoes?: string;
   rebasedFrom?: number;
 }
-export interface RevisionEvent { seq: number; projectId: string; revision: number; transactionId: string; actor: string; label: string | null; summary: string; affectedIds: string[]; at: string; kind?: string; /** Operation names, so clients can describe the change in their own language. */ ops?: string[] }
+export interface RevisionEvent { seq: number; projectId: string; revision: number; transactionId: string; actor: string; label: string | null; summary: string; affectedIds: string[]; at: string; kind?: string; /** Operation names, so clients can describe the change in their own language. */ ops?: string[];
+  /** The transaction this one reverses (an undo or redo), else null. */ undoes?: string | null;
+  /** The undo or redo that reversed this transaction, else null (ADR-0027: the bar previews the exact undo target). A live event is always null: the reversal's own event names it in `undoes`. */ undoneBy?: string | null }
 export interface JobRow { id: string; projectId: string; type: string; actor: string; status: string; stage: string | null; attempt: number; input: any; output: any; error: any; createdAt: string; updatedAt: string }
 
 const id = (prefix: string, bytes = 8) => `${prefix}_${randomBytes(bytes).toString('base64url').replace(/[-_]/g, 'x')}`;
@@ -230,7 +232,7 @@ export class Store {
       if (req.undoes) this.db.prepare('UPDATE transactions SET undone_by = ? WHERE project_id = ? AND id = ?').run(txId, req.projectId, req.undoes);
       const setVersion = this.db.prepare('INSERT INTO entity_versions (project_id, entity_id, revision, deleted, actor) VALUES (?,?,?,?,?) ON CONFLICT(project_id, entity_id) DO UPDATE SET revision = excluded.revision, deleted = excluded.deleted, actor = excluded.actor');
       for (const c of changes) setVersion.run(req.projectId, c.id, next, c.after ? 0 : 1, req.actor);
-      const event: Omit<RevisionEvent, 'seq'> = { projectId: req.projectId, revision: next, transactionId: txId, actor: req.actor, label: req.label ?? null, summary: applied.summary, affectedIds, at, kind: req.kind ?? 'edit', ops: [...new Set(req.ops.map((o) => o.op))] };
+      const event: Omit<RevisionEvent, 'seq'> = { projectId: req.projectId, revision: next, transactionId: txId, actor: req.actor, label: req.label ?? null, summary: applied.summary, affectedIds, at, kind: req.kind ?? 'edit', ops: [...new Set(req.ops.map((o) => o.op))], undoes: req.undoes ?? null, undoneBy: null };
       this.db.prepare('INSERT INTO outbox (project_id, kind, payload, created_at) VALUES (?, ?, ?, ?)').run(req.projectId, 'revision', JSON.stringify(event), at);
       return { ...base, transactionId: txId, revision: next, committed: true, replayed: false, ...(privacy ? { privacyChanged: true } : {}) };
     });
@@ -297,9 +299,9 @@ export class Store {
   }
   /** Committed revision events after `sinceRevision`, for reconnect/resync. */
   eventsSince(projectId: string, sinceRevision: number): RevisionEvent[] {
-    return (this.db.prepare('SELECT revision, id, actor, label, result, created_at, kind, ops FROM transactions WHERE project_id = ? AND revision > ? ORDER BY revision').all(projectId, sinceRevision) as any[]).map((t) => {
+    return (this.db.prepare('SELECT revision, id, actor, label, result, created_at, kind, ops, undoes, undone_by FROM transactions WHERE project_id = ? AND revision > ? ORDER BY revision').all(projectId, sinceRevision) as any[]).map((t) => {
       const r = JSON.parse(t.result);
-      return { seq: 0, projectId, revision: t.revision, transactionId: t.id, actor: t.actor, label: t.label, summary: r.summary, affectedIds: r.affectedIds, at: t.created_at, kind: t.kind, ops: [...new Set((JSON.parse(t.ops) as { op: string }[]).map((o) => o.op))] };
+      return { seq: 0, projectId, revision: t.revision, transactionId: t.id, actor: t.actor, label: t.label, summary: r.summary, affectedIds: r.affectedIds, at: t.created_at, kind: t.kind, ops: [...new Set((JSON.parse(t.ops) as { op: string }[]).map((o) => o.op))], undoes: t.undoes ?? null, undoneBy: t.undone_by ?? null };
     });
   }
 

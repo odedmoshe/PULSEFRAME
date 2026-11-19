@@ -7,16 +7,22 @@
 import { useId, type KeyboardEvent, type PointerEvent } from 'react';
 import { ELEMENTS, type MoveSpec, type PadBank } from '@pulseframe/core';
 import type { Lang } from '@pulseframe/i18n';
-import { Button } from '../../ds/index.ts';
+import { Pencil } from 'lucide-react';
+import { Button, IconButton } from '../../ds/index.ts';
 import { PERFORM_TESTIDS as ID } from './perform.testids.ts';
 import type { PadStatus } from './capture.ts';
-import { performT } from './perform.strings.ts';
+import { PERFORM_STRINGS, performT, type PerformKey } from './perform.strings.ts';
 
-/** What a pad is called: a title's own text, an element's name, else its catalogue id read as words. The catalogue has no display names yet. */
+/**
+ * What a pad is called: a title's own text, an element's name, a catalogue move's name in the page's language (perform.strings.ts
+ * pv.move.*), else (a move the pad editor made) its id read as words.
+ */
 export function moveLabel(m: MoveSpec | null, lang: Lang): string {
   if (!m) return '';
   if (m.kind === 'title') return m.text;
   if (m.kind === 'sticker') { const e = ELEMENTS.find((x) => x.id === m.source.elementId); if (e) return e.name[lang]; }
+  const key = `pv.move.${m.id.replace(/^move\./, '')}` as PerformKey;
+  if (Object.hasOwn(PERFORM_STRINGS[lang], key)) return PERFORM_STRINGS[lang][key];
   return m.id.replace(/^move\./, '').replace(/[-_.]/g, ' ');
 }
 /** Synthetic pointer id of a pad pressed with Enter (a real pointer id is never this large). */
@@ -65,7 +71,9 @@ export function PadGrid({ bank, statuses, held, lang, onDown, onUp, onEdit, onAd
             {st.reason === 'missing_asset' && (
               <Button size="sm" variant="secondary" busy={adding === i} data-testid={ID.padAddToLibrary} data-pad={i} onClick={() => onAdd(i)}>{adding === i ? S('pv.adding') : addLabel}</Button>
             )}
-            <Button size="sm" variant="ghost" className="pf-perform-padedit" aria-label={S('pv.editPad', { n: i + 1 })} onClick={() => onEdit(i)} disabled={false}>{S('pv.edit')}</Button>
+            {/* in the pad's top corner (perform.css), not on a line of its own under it: the cell stays short enough for a pad's reason and
+                its add button to show above the transport in a short stage */}
+            <IconButton size="sm" className="pf-perform-padedit" label={S('pv.editPad', { n: i + 1 })} icon={<Pencil size={14} strokeWidth={1.75} aria-hidden="true" />} onClick={() => onEdit(i)} />
           </div>
         );
       })}

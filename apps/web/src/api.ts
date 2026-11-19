@@ -1,6 +1,7 @@
 import type { Asset, BuildShortsBody, ExportMode, FindShortsBody, ReframePlanBody, ReframePlanView, SequenceSummary, ShortCandidatesView, ShortsApplyResult, ShortsPlanView, FamilyFilmApplyResult, FamilyFilmParams, FamilyFilmPlanView, FamilyFilmRegenerateResult, MomentsData, OpCall, ProjectDocument, RenderCacheStatus, SegmentPlanView, SelfCheckMode, StartMomentsBody } from '@pulseframe/core';
 import type { MulticamSyncReport, MulticamSyncRequest, MulticamView } from '@pulseframe/core';
 import type { TakePlanView, TakeRequest, TakeResult } from '@pulseframe/core';
+import type { AssistantConfigBody, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantSummary } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
 
@@ -29,7 +30,9 @@ async function call<R>(path: string, init?: RequestInit): Promise<R> {
 }
 const json = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
-export interface RevisionEvent { projectId: string; revision: number; transactionId: string; actor: string; label: string | null; summary: string; affectedIds: string[]; at: string; kind?: string; ops?: string[] }
+export interface RevisionEvent { projectId: string; revision: number; transactionId: string; actor: string; label: string | null; summary: string; affectedIds: string[]; at: string; kind?: string; ops?: string[];
+  /** The transaction this one reverses (an undo or redo), else null. */ undoes?: string | null;
+  /** The undo or redo that reversed this one, else null (ADR-0027: the bar names its exact undo target). */ undoneBy?: string | null }
 export interface Proposal { id: string; actor: string; label: string | null; summary: string; status: string; baseRevision: number; createdAt: string; previewFrame: number }
 export interface JobEvent { id: string; type: string; status: string; stage: string | null; output: any; error: any }
 export interface PreflightIssue { code: string; severity: 'blocker' | 'warning' | 'note'; message: string; ids: string[]; range?: { startFrame: number; endFrame: number }; fix?: { label: string; ops: OpCall[] } }
@@ -110,6 +113,20 @@ export const api = {
   history: (id: string) => call<{ events: RevisionEvent[] }>(`/projects/${id}/history?since=0`),
   commit: (id: string, baseRevision: number, ops: OpCall[], label?: string) =>
     call<CommitResult>(`/projects/${id}/transactions`, json({ baseRevision, idempotencyKey: crypto.randomUUID(), label, ops })),
+  /**
+   * The command bar's STRICT commit (ADR-0027): refused with 409 stale_revision unless `expectedRevision` is current (never
+   * rebased onto a newer revision), and replayed, not applied twice, when `idempotencyKey` was used with the same ops.
+   */
+  commitExact: (id: string, expectedRevision: number, ops: OpCall[], label: string, idempotencyKey: string) =>
+    call<CommitResult & { replayed?: boolean }>(`/projects/${id}/transactions`, json({ expectedRevision, idempotencyKey, label, ops })),
+  // the command bar's language assistant (ADR-0027): the status never holds the key; the rest is the owner's session only
+  assistantStatus: () => call<AssistantStatus>('/assistant/status'),
+  assistantSummary: (id: string, q: { playheadFrame: number; selection: readonly string[]; sequenceId?: string }) =>
+    call<AssistantSummary>(`/projects/${id}/assistant/summary?${new URLSearchParams({ playheadFrame: String(q.playheadFrame), selection: q.selection.join(','), ...(q.sequenceId ? { sequenceId: q.sequenceId } : {}) })}`),
+  setAssistantConfig: (body: AssistantConfigBody) => call<AssistantStatus>('/assistant/config', { ...json(body), method: 'PUT' }),
+  setAssistantKey: (key: string) => call<AssistantKeyState>('/assistant/key', { ...json({ key }), method: 'PUT' }),
+  deleteAssistantKey: () => call<AssistantKeyState>('/assistant/key', { method: 'DELETE' }),
+  askAssistant: (id: string, body: AssistantRequestBody) => call<{ jobId: string }>(`/projects/${id}/assistant/requests`, json(body)),
   /** Without `transactionId` the server reverses the caller's own newest edit; with it, exactly that transaction (the owner may name an agent's). */
   undo: (id: string, mode: 'undo' | 'redo', transactionId?: string) => call<CommitResult>(`/projects/${id}/${mode}`, json(transactionId ? { transactionId } : {})),
   upload: (id: string, file: File) =>
@@ -132,6 +149,8 @@ export const api = {
   startColourMatchJob: (id: string, body: ColourMatchRequest) => call<{ jobId: string; status: string }>(`/projects/${id}/analysis/colour-match`, json({ ...body, background: true })),
   capabilities: () => call<{ provider: { configured: boolean; reason: string | null; readiness: { reachable: boolean; runtimeVersion: string | null; device: { name: string; type: string } | null } | null }; capabilities: { id: string; runnable: boolean; title: { he: string; en: string } }[] }>('/capabilities'),
   runCapability: (id: string, capabilityId: string, params: Record<string, unknown>) => call<{ jobId: string }>(`/projects/${id}/capabilities/${capabilityId}/runs`, json({ params, idempotencyKey: crypto.randomUUID() })),
+  /** Assets whose stored file is missing on disk (the server's one check: gone, or no longer its imported size). */
+  missingMedia: (id: string) => call<{ missing: string[] }>(`/projects/${id}/missing-media`),
   derivatives: (id: string, assetId: string) => call<{ derivatives: { kind: string; status: string; meta: any }[] }>(`/projects/${id}/assets/${assetId}/derivatives`),
   presence: (id: string, sessionId: string, frame: number, selection: string[]) => call<unknown>(`/projects/${id}/presence`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId, frame, selection }) }),
   speech: () => call<SpeechStatus>('/speech'),

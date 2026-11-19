@@ -9,6 +9,7 @@ import * as T from '@pulseframe/time';
 import { clipEnd, findClip, projectOutput, projectSequence, sequenceDuration, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun, type TemplateInput, type ExportMode, type SegmentPlanView } from '@pulseframe/core';
 import { groupTimeAt, multicamGroupOf, projectVariant, type SwitchAnglesOutput } from '@pulseframe/core';
 import type { TakeRequest, TakeResult } from '@pulseframe/core';
+import { defaultTitleDuration, type ExportDestinationId } from '@pulseframe/core';
 import { createT, dictionaries, dirOf, translateRefusal, type Key, type Lang } from '@pulseframe/i18n';
 import { initGpu, type GpuStatus, type ImageLayer, type RenderGraph, type TextLayer, type VideoLayer } from '@pulseframe/engine';
 import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
@@ -33,6 +34,15 @@ import type { DropCodeView, DropPublicView, FamilyFilmParams, FamilyFilmPlanView
 import type { ChannelRef, KeyClipboard, KeyRef } from '@pulseframe/core';
 import { pruneKeySel } from './keyStrip.math.ts';
 
+/**
+ * The activity list after a live revision event: newest first, at most 50. An undo or redo marks the transaction it reversed
+ * (undoneBy), so the command bar's exact undo target stays right without reading the history again (ADR-0027).
+ */
+export function withRevisionEvent(activity: readonly RevisionEvent[], e: RevisionEvent): RevisionEvent[] {
+  return [e, ...activity.map((x) => (e.undoes && x.transactionId === e.undoes ? { ...x, undoneBy: e.transactionId } : x))].slice(0, 50);
+}
+/** What Editor.commitExact answers (the command bar): committed (replayed = a repeated key), stale (409 stale_revision), or failed. */
+export type ExactCommit = { kind: 'committed'; result: CommitResult; replayed: boolean } | { kind: 'stale'; currentRevision: number | null } | { kind: 'failed'; code: string; message: string; hint?: string };
 export type SaveState = 'save.saved' | 'save.saving' | 'save.offline' | 'save.conflict';
 export type ProviderInfo = Awaited<ReturnType<typeof api.capabilities>>;
 export interface EditorState {
@@ -123,6 +133,8 @@ export interface EditorState {
   stageNote: { text: string; at: number } | null;
   /** Bumped by openExportSheet: the export sheet's host opens the sheet (ExportSheet.tsx). */
   exportSheet: number;
+  /** The destination the last openExportSheet asked to have chosen (the command bar's «ייצא לוואטסאפ»), null = the sheet's own default. */
+  exportSheetDestination?: ExportDestinationId | null;
   /** The last notice for the toast queue (App.tsx ToastBridge); `n` makes each one new. Session state only. */
   notice: (Notice & { n: number }) | null;
   /** Render cache (ADR-0024): the latest segment plan of the fast export. Session state only. */
@@ -143,6 +155,8 @@ export interface EditorState {
   dropProblem: PhoneDropProblem | null;
   /** Blocker codes of the last segment plan (422 render_blocked): the sheet's switch says why the fast export is unavailable. */
   planBlockers: string[];
+  /** Assets whose stored file the server reports missing on disk (GET …/missing-media): the library card and the timeline clips say so, the preview leaves them out. */
+  missingMedia: string[];
   // ---- multicam live switching (ADR-0020): session state, never stored or sent in presence ----
   /** The recording of switches in progress (cuts in group time), or null/absent. */
   multicamRec?: MulticamSession | null;
@@ -241,6 +255,9 @@ const readSafeArea = () => { try { return localStorage.getItem(SAFE_KEY) !== '0'
 
 export interface Ghost { sessionId: string; actor: string; kind: 'user' | 'agent'; frame: number | null; selection: string[]; label: string | null }
 
+/** The asset set of a document (ids and content hashes): the missing-media list is asked for again when it changes. */
+const mediaKey = (doc: ProjectDocument) => Object.values(doc.assets).map((a) => `${a.id}:${a.contentHash}`).sort().join('|');
+
 export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, rawDoc: null, activeSequenceId: '', revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null, capJobs: {},
@@ -249,7 +266,7 @@ export class Editor {
     templatesOpen: false, templatesFocus: 0, templateRun: null,
     cutClipId: null, loupe: false, inspectorTab: null, panelRequest: null, gallery: null, stageNote: null, notice: null, exportSheet: 0,
     segmentPlan: { status: 'off', view: null, revision: null }, fastExport: readFastExport(), planOptions: {}, // the export sheet's first pick (the computer destination: high quality, whose options are all defaults)
-    imports: { local: [], jobs: [], room: null, skipped: null }, phoneDropOpen: false, drop: null, dropLive: null, dropProblem: null, planBlockers: [],
+    imports: { local: [], jobs: [], room: null, skipped: null }, phoneDropOpen: false, drop: null, dropLive: null, dropProblem: null, planBlockers: [], missingMedia: [],
     filmOpen: false, filmSource: null, filmRun: null,
     keySel: null, keyClipboard: null, curvePicker: null, pathOn: readPathOn(),
   };
@@ -339,6 +356,37 @@ export class Editor {
     const detail = e instanceof ApiFailure ? translateRefusal(this.state.lang, e.message) ?? e.message : e instanceof Error ? e.message : String(e);
     this.set({ error: headline ? `${headline}: ${detail}` : detail, errorHeadline: headline ?? null });
   };
+  /** The asset set the missing-media list was last asked for (ids and content hashes). */
+  private mediaChecked = '';
+  /**
+   * Ask the server which assets' stored files are missing, and show them as missing: the library card and the timeline clips say
+   * so (the timeline's own missing-file look), and the preview leaves their pictures out instead of failing the frame. True when
+   * the list changed. A failed request changes nothing.
+   */
+  async checkMedia(projectId: string): Promise<boolean> {
+    let missing: unknown;
+    try { missing = (await api.missingMedia(projectId))?.missing; } catch { return false; }
+    if (!Array.isArray(missing) || !missing.every((id) => typeof id === 'string')) return false; // not an answer this editor knows: nothing changes
+    if (this.disposed || this.state.doc?.id !== projectId) return false;
+    const changed = this.pool?.setMissing(missing) ?? false;
+    if (changed || missing.join() !== (this.state.missingMedia ?? []).join()) this.set({ missingMedia: missing });
+    if (changed && this.player && !this.player.playing) this.player.seek(this.player.frame);
+    return changed;
+  }
+  /** A preview frame failed: when a stored file went missing meanwhile, the asset is marked missing and the frame drawn without it; otherwise the error is shown. */
+  private async previewFailed(projectId: string, e: unknown) {
+    const changed = await this.checkMedia(projectId);
+    // The frame may have failed just before the list (asked for on load) arrived: it is drawn again once per list, never in a loop.
+    const key = this.state.missingMedia.join();
+    if (changed || (key && this.mediaRetried !== key)) {
+      this.mediaRetried = key;
+      console.warn('preview: a stored media file is missing; its clips are shown as missing', e);
+      if (!changed && this.player && !this.player.playing) this.player.seek(this.player.frame);
+      return;
+    }
+    this.fail(e);
+  }
+  private mediaRetried = '';
   async load(projectId: string) {
     const p = await api.getProject(projectId);
     if (p.revision >= this.state.revision || !this.state.doc) {
@@ -360,6 +408,8 @@ export class Editor {
       const keySel = pruneKeySel(this.state.keySel, (id) => findClip(projected, id)?.clip, projected.settings.frameRate);
       const curvePicker = this.state.curvePicker && !findClip(projected, this.state.curvePicker.clipId) ? null : this.state.curvePicker;
       this.set({ doc: projected, rawDoc: p.project, activeSequenceId, revision: p.revision, selection, viewVariantId, ...cut, ...targets, ...picker, ...cutGone, keySel, curvePicker });
+      const media = mediaKey(p.project);
+      if (media !== this.mediaChecked) { this.mediaChecked = media; void this.checkMedia(p.project.id); }
       const vd = this.viewDoc;
       // while switches are being recorded (or committed) the sound plan is unchanged, so playback is not stopped (ADR-0020)
       // perform mode (ADR-0025): a ghost under review stays on screen (the view re-plans it on the new revision and shows it again);
@@ -423,7 +473,7 @@ export class Editor {
       // Preview decodes the frame-identical proxy once it exists; export always uses the original.
       previewUrl: async (assetId) => ((await api.derivatives(projectId, assetId)).derivatives.find((d) => d.kind === 'proxy')?.status === 'ready' ? `/api/v1/projects/${projectId}/assets/${assetId}/derivatives/proxy` : null),
     });
-    this.player = new Player(canvas, this.pool, () => { this.set({ tick: this.state.tick + 1 }); this.announce(projectId); this.multicamTick(); }, this.fail);
+    this.player = new Player(canvas, this.pool, () => { this.set({ tick: this.state.tick + 1 }); this.announce(projectId); this.multicamTick(); }, (e) => void this.previewFailed(projectId, e));
     (window as any).__pfMedia = () => this.pool?.stats();
     (window as any).__pfSync = () => this.player?.syncStats();
     const p = await this.load(projectId);
@@ -435,7 +485,7 @@ export class Editor {
     const es = (this.es = api.events(projectId, p.revision));
     es.addEventListener('revision', (m) => {
       const e: RevisionEvent = JSON.parse((m as MessageEvent).data);
-      if (!this.state.activity.some((x) => x.revision === e.revision)) this.set({ activity: [e, ...this.state.activity].slice(0, 50) });
+      if (!this.state.activity.some((x) => x.revision === e.revision)) this.set({ activity: withRevisionEvent(this.state.activity, e) });
       // Committed remote or local change: converge on the server document. Playhead and selection are local and stay put.
       if (e.revision > this.state.revision) void this.load(projectId).catch(this.fail);
       if (this.state.fastExport) this.planPolicy.changed(e.revision);
@@ -715,6 +765,36 @@ export class Editor {
    * already undone (Ctrl+Z got there first) is left as it is.
    */
   undoTransaction(id: string): Promise<void> { return this.enqueue(() => this.historyNow('undo', id)); }
+  /** Redo exactly the undo `id` (the command bar's «בצע שוב» names it in its preview). */
+  redoTransaction(id: string): Promise<void> { return this.enqueue(() => this.historyNow('redo', id)); }
+  /**
+   * The command bar's commit (ADR-0027, lead contract (b)): exactly `ops` (already injected and previewed: NOT injected again),
+   * as one transaction, STRICT at `expectedRevision` — never rebased onto a newer revision, so nothing runs that the owner did
+   * not see — with the given idempotency key ('bar:' + planHash), so a second Enter replays instead of applying twice. Queued
+   * like commit. 'stale': the project moved on (the document is reloaded; the bar plans again and shows the new preview).
+   * 'failed': refused (an op's own reason, or the network); nothing was applied and the bar shows it (no error bar here).
+   */
+  commitExact(ops: OpCall[], label: string, expectedRevision: number, idempotencyKey: string): Promise<ExactCommit> { return this.enqueue(() => this.commitExactNow(ops, label, expectedRevision, idempotencyKey)); }
+  private async commitExactNow(ops: OpCall[], label: string, expectedRevision: number, idempotencyKey: string): Promise<ExactCommit> {
+    const { doc } = this.state;
+    if (!doc) return { kind: 'failed', code: 'no_project', message: 'no project is open' };
+    if (!ops.length) return { kind: 'failed', code: 'no_change', message: 'nothing to commit' };
+    this.set({ save: 'save.saving', error: null });
+    try {
+      const r = await api.commitExact(doc.id, expectedRevision, ops, label, idempotencyKey);
+      await this.load(doc.id);
+      this.set({ save: 'save.saved' });
+      return { kind: 'committed', result: r, replayed: !!r.replayed };
+    } catch (e) {
+      this.set({ save: 'save.saved' });
+      if (e instanceof ApiFailure && e.code === 'stale_revision') {
+        await this.load(doc.id).catch(() => undefined);
+        const cur = (e.details as { currentRevision?: unknown } | undefined)?.currentRevision;
+        return { kind: 'stale', currentRevision: typeof cur === 'number' ? cur : null };
+      }
+      return e instanceof ApiFailure ? { kind: 'failed', code: e.code, message: e.message, ...(e.hint ? { hint: e.hint } : {}) } : { kind: 'failed', code: 'network', message: e instanceof Error ? e.message : String(e) };
+    }
+  }
   private async commitNow(given: OpCall[] | (() => OpCall[] | null), label?: string): Promise<CommitResult | null> {
     const { doc, revision } = this.state;
     if (!doc) return null;
@@ -936,7 +1016,12 @@ export class Editor {
   /** Say a quiet line over the viewer; null takes it away. */
   sayOnStage(text: string | null) { this.set({ stageNote: text ? { text, at: Date.now() } : null }); }
   /** Open the export sheet (for callers that do not import ExportSheet.tsx, such as the command registry). */
-  openExportSheet() { this.set({ exportSheet: this.state.exportSheet + 1 }); }
+  /**
+   * Open the export sheet (for callers that do not import ExportSheet.tsx, such as the command registry and the command bar).
+   * With a destination it opens with that destination chosen, exactly as a click on its tile; nothing is exported until the
+   * sheet's own button (the owner's decision: Export always opens the sheet).
+   */
+  openExportSheet(destination: ExportDestinationId | null = null) { this.set({ exportSheet: this.state.exportSheet + 1, exportSheetDestination: destination }); }
   /** Show a toast (App.tsx mounts the queue). */
   notify(notice: Notice) { this.set({ notice: { ...notice, n: ++this.requests } }); }
   selectAll() {
@@ -1072,7 +1157,7 @@ export class Editor {
   }
   async addText() {
     const rate = this.rate;
-    const r = await this.commit([{ op: 'add_text', args: { text: this.t('text.default'), start: this.playhead, duration: T.frameTime(Math.round((2 * rate.num) / rate.den), rate) } }], 'Add text');
+    const r = await this.commit([{ op: 'add_text', args: { text: this.t('text.default'), start: this.playhead, duration: defaultTitleDuration(rate) } }], 'Add text');
     const id = r?.results[0]?.output?.clipId;
     if (id) this.select(id);
   }

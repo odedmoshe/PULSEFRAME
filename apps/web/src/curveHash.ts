@@ -8,7 +8,7 @@
  * Also measured here, the same way on both hosts: the sampler's cost per sample and pathPoints for a 600-frame clip.
  */
 import * as T from '@pulseframe/time';
-import { EASINGS, pathPoints, sampleKeyframes, TRANSFORM_RANGE, type Clip, type CurveHandles, type Easing, type Keyframe } from '@pulseframe/core';
+import { EASINGS, pathPoints, sampleKeyframes, TRANSFORM_RANGE, v1Shape, type Clip, type CurveHandles, type Easing, type Keyframe, type V1Easing } from '@pulseframe/core';
 
 export const CURVE_HASH_SAMPLES = 100_000;
 const R = { num: 30, den: 1 };
@@ -31,6 +31,34 @@ export interface CurveHashResult { sha256: string; samples: number; nsPerSample:
 export function curveSamples(): number[] {
   const lists = EASINGS.map(curveHashKeys), range = TRANSFORM_RANGE.x;
   return Array.from({ length: CURVE_HASH_SAMPLES }, (_, i) => sampleKeyframes(lists[i % EASINGS.length]!, curveHashTime(i), range));
+}
+/** One ulp of |x|: the gap from |x| to the next double above it (2^(exponent − 52); the smallest subnormal for 0). */
+export function ulpOf(x: number): number {
+  const v = new DataView(new ArrayBuffer(8));
+  v.setFloat64(0, Math.abs(x));
+  const e = (v.getUint16(0) >> 4) & 0x7ff;
+  return e === 0 ? 2 ** -1074 : 2 ** (e - 1075);
+}
+/**
+ * The cross-host bound of sample i for the v1 easings (keyframes-proof P12): one ulp of max(|a|, |b|), a and b the key values
+ * of the segment the sample falls in (the easing's shape may differ by 2^-52, which moves a + (b − a)·shape by about that).
+ * Outside the keys the value is a key's own: the bound is 0 there (it must be bit-identical).
+ */
+/** Sample i's segment: its easing, the key values a and b, and u exactly as sampleKeyframes computes it; null outside the keys. */
+export function curveSampleSegment(i: number): { easing: Easing; a: number; b: number; u: number } | null {
+  const t = curveHashTime(i), easing = EASINGS[i % EASINGS.length]!, keys = curveHashKeys(easing);
+  for (let k = 0; k + 1 < keys.length; k++) {
+    const A = keys[k]!, B = keys[k + 1]!;
+    if (T.lte(A.time, t) && T.lt(t, B.time)) return { easing, a: A.value, b: B.value, u: T.toSeconds(T.sub(t, A.time)) / T.toSeconds(T.sub(B.time, A.time)) };
+  }
+  return null;
+}
+/** The v1 easing shapes at the given (easing, u) pairs, on this host (selftest window.__pfV1Shapes). */
+export const v1Shapes = (pairs: readonly [V1Easing, number][]): number[] => pairs.map(([e, u]) => v1Shape(e, u));
+export function curveSampleBound(i: number): number {
+  const t = curveHashTime(i), keys = curveHashKeys(EASINGS[i % EASINGS.length]!);
+  for (let k = 0; k + 1 < keys.length; k++) if (T.lte(keys[k]!.time, t) && T.lt(t, keys[k + 1]!.time)) return ulpOf(Math.max(Math.abs(keys[k]!.value), Math.abs(keys[k + 1]!.value)));
+  return 0;
 }
 /** The distance in ulps between two finite doubles (0 when bit-identical; +0 and −0 are 1 apart). */
 export function ulpDistance(a: number, b: number): number {

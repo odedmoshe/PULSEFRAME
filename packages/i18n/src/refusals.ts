@@ -9,6 +9,7 @@ import { HE_SHORTS } from './shorts.ts';
 import { HE_KEYFRAMES } from './keyframesWave.ts';
 import { HE_MULTICAM } from './multicam.ts';
 import { HE_PERFORM } from './perform.ts';
+import { HE_ASSISTANT } from './commandBar.ts';
 
 /**
  * Hebrew wording for the detail text of the refusals a person meets most often in the editor. The server's messages are
@@ -253,10 +254,22 @@ const HE_MULTICAM_W1: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^angle "(.+)" has no picture from (-?[\d.]+)s to (-?[\d.]+)s of group time$/, (m) => `לזווית ${ltr(m[1]!)} אין תמונה מ־${ltr(m[2]!)} עד ${ltr(m[3]!)} שניות. אפשר לדלג על מה שאינו מכוסה, או לחתוך שם לזווית אחרת`],
   [/^start must be >= 0$/, () => 'ההתחלה אינה יכולה להיות לפני תחילת ציר הזמן. אפשר לבחור נקודה מ־0 והלאה'],
 ];
+/** A name of the user's (a file name, which may be Hebrew or not) isolated inside the Hebrew sentence in its own direction. */
+const iso = (s: string) => `⁨${s}⁩`;
+/**
+ * A stored media file that is missing on disk (apps/server mediaPresence.ts): the content route (404 missing_media), and the
+ * blockers of a still and of an export (422 render_blocked, blocker missing_media). apps/server/src/mediaMissing.test.ts provokes
+ * each for real.
+ */
+const HE_MEDIA: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^the stored file of asset \S+ is missing$/, () => 'הקובץ השמור של הפריט הזה לא נמצא בתיקיית הנתונים. אפשר לשחזר אותו מגיבוי, או לייבא את הקובץ שוב ולהחליף בו את הקליפים שמשתמשים בו (החלפת מדיה במאפיינים)'],
+  [/^source media for "(.+)" is not available to the render worker$/, (m) => `קובץ המקור ${iso(m[1]!)} חסר, ולכן אי אפשר לצייר אותו. אפשר לשחזר אותו מגיבוי, או לייבא אותו שוב ולהחליף בו את הקליפים שמשתמשים בו`],
+  [/^source media \S+ is no longer available$/, () => 'קובץ מקור של הייצוא כבר לא נמצא בתיקיית הנתונים. אפשר לשחזר אותו מגיבוי, או לייבא אותו שוב ולהחליף בו את הקליפים שמשתמשים בו'],
+];
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA]) { const m = re.exec(message); if (m) return say(m); }
   for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
   // The export routes wrap the first blocker (Exporter.start, the browser export): worded only when the blocker itself is.
   const start = /^export cannot start: ([\s\S]+)$/.exec(message);
@@ -303,3 +316,7 @@ export const MULTICAM_REFUSAL_PATTERNS: readonly RegExp[] = HE_MULTICAM.map(([re
 export const MULTICAM_W1_REFUSAL_PATTERNS: readonly RegExp[] = HE_MULTICAM_W1.map(([re]) => re);
 /** The patterns of perform mode (perform.ts HE_PERFORM, ADR-0025), for perform-wording.test.ts. */
 export const PERFORM_REFUSAL_PATTERNS: readonly RegExp[] = HE_PERFORM.map(([re]) => re);
+/** The patterns of the command bar's language assistant (commandBar.ts HE_ASSISTANT, ADR-0027), for command-bar-wording.test.ts. */
+export const ASSISTANT_REFUSAL_PATTERNS: readonly RegExp[] = HE_ASSISTANT.map(([re]) => re);
+/** The patterns of a missing stored media file (HE_MEDIA), for apps/server/src/mediaMissing.test.ts. */
+export const MEDIA_REFUSAL_PATTERNS: readonly RegExp[] = HE_MEDIA.map(([re]) => re);

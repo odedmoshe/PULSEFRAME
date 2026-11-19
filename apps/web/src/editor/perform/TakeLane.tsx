@@ -29,9 +29,10 @@ export function TakeLane({ chips, lang, ghost, ghostBanner, heldWords, overFrom 
         <ul className="pf-perform-chips">
           {sorted.map((c) => {
             const word = S(`pv.chip.${c.state}` as 'pv.chip.kept');
-            const why = c.state === 'held' && c.reason ? heldWords(c.reason) : null;
+            // a hold the planner names as the pad's own envelope or fade (why 'shape', core moves.ts) says so, not only the general flash sentence
+            const why = c.state === 'held' && c.reason ? (c.reason === 'flash_limit' && c.why === 'shape' ? S('pv.held.shape') : heldWords(c.reason)) : null;
             return (
-              <li key={`${c.tap}-${c.frame}`} className="pf-perform-chip" data-testid={ID.chip} data-state={c.state} data-reason={c.reason} data-frame={c.frame} data-pad={c.pad} tabIndex={0}
+              <li key={`${c.tap}-${c.frame}`} className="pf-perform-chip" data-testid={ID.chip} data-state={c.state} data-reason={c.reason} data-shape={c.reason === 'flash_limit' && c.why === 'shape' ? 'true' : undefined} data-frame={c.frame} data-pad={c.pad} tabIndex={0}
                 aria-label={`${S('pv.chip.label', { pad: c.pad + 1, frame: c.frame, state: word })}${why ? `. ${why}` : ''}${c.tap >= overFrom ? `. ${S('pv.chip.over')}` : ''}`}>
                 <span className="pf-perform-chip-pad" aria-hidden="true"><bdi dir="ltr">{c.pad + 1}</bdi></span>
                 <span className="pf-perform-chip-state">{word}</span>

@@ -5,10 +5,11 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { Chip, MoveSpec, PadBank } from '@pulseframe/core';
-import { PadGrid } from './PadGrid.tsx';
+import { MOVES, type Chip, type MoveSpec, type PadBank } from '@pulseframe/core';
+import { moveLabel, PadGrid } from './PadGrid.tsx';
 import { TakeLane } from './TakeLane.tsx';
 import type { PadStatus } from './capture.ts';
+import { performT } from './perform.strings.ts';
 
 const punch: MoveSpec = { id: 'move.punch', kind: 'punch', minSeconds: 0.1, scale: 1.2, releaseSeconds: 0.2 };
 const sound: MoveSpec = { id: 'move.hit', kind: 'sound', minSeconds: 0.1, source: { sfxId: 'sfx.boom' }, gain: 1 };
@@ -66,9 +67,33 @@ describe('TakeLane markup', () => {
     expect(h).toContain('4 פריימים אחרי הקודם');
     expect(h).toMatch(/data-testid="perform-counts"[^>]*>נשמרו 1 · אוחדו 1 · לא יוצגו 1</);
   });
+  it('a flash_limit chip the planner names why \'shape\' is worded pv.held.shape (both languages), a plain one by its reason', () => {
+    const shape: Chip = { tap: 5, pad: 1, moveId: 'move.custom', frame: 60, frames: 15, state: 'held', reason: 'flash_limit', since: 3, why: 'shape' };
+    const plainHold: Chip = { tap: 6, pad: 1, moveId: 'move.custom', frame: 90, frames: 15, state: 'held', reason: 'flash_limit', since: 3 };
+    for (const lang of ['he', 'en'] as const) {
+      const h = renderToStaticMarkup(createElement(TakeLane, { chips: [shape, plainHold], lang, ghost: false, ghostBanner: '', heldWords: (r) => `reason:${r}` }));
+      const words = performT(lang)('pv.held.shape');
+      expect(h).toMatch(/data-frame="60"[^>]*data-pad="1"/);
+      expect(h).toMatch(/data-shape="true"[^>]*data-frame="60"/);
+      expect(h.split(words.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' })[c]!)).length - 1).toBeGreaterThanOrEqual(1);
+      expect(h.match(/reason:flash_limit/g)).toHaveLength(2); // the plain hold only: in its aria-label and its words
+      expect(h).not.toMatch(/data-shape="true"[^>]*data-frame="90"/);
+    }
+  });
   it('without a ghost there is no banner; with no chips it says what will appear', () => {
     const h = lane([], false);
     expect(h).not.toContain('perform-ghost-banner');
     expect(h).toContain('אחרי העצירה');
+  });
+});
+
+describe('pad names', () => {
+  it('every catalogue move has a name in the page\'s language (no move id read as English words in a Hebrew page)', () => {
+    for (const m of MOVES) {
+      const he = moveLabel(m, 'he'), en = moveLabel(m, 'en');
+      expect(/[\u0590-\u05ff]/.test(he), `he ${m.id}: ${he}`).toBe(true);
+      if (m.kind !== 'title') expect(/[\u0590-\u05ff]/.test(en), `en ${m.id}: ${en}`).toBe(false);
+      expect(en).not.toMatch(/^[a-z]+( [a-z]+)*$/); // not the bare id
+    }
   });
 });

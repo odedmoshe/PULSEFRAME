@@ -66,6 +66,19 @@ describe('delete on the main track', () => {
     expect(plan.ops).toHaveLength(1);
     expect(plan.moved).toBe(0);
   });
+  it('a mixed selection (V1 clips and a clip on another track) deletes every selected clip: V1 ripples, the other keeps its gap', () => {
+    const plan = deleteOps(p.doc, [p.first, p.song], true)!;
+    expect(plan.deleted).toBe(2);
+    expect(plan.ops).toEqual([{ op: 'delete_clip', args: { clipId: p.song } }, { op: 'ripple_delete_clips', args: { clipIds: [p.first] } }]);
+    const out = tx(p.doc, plan.ops).doc;
+    expect(findClip(out, p.first)).toBeUndefined();
+    expect(findClip(out, p.song)).toBeUndefined(); // before the fix the song was silently left in place while deleted said 2
+    expect(startOf(out, p.second)).toBe(0);
+    // every clip of the project at once (what «מחק את הקליפים» with nothing selected names): nothing is left behind
+    const all = deleteOps(p.doc, [p.first, p.second, p.third, p.song], true)!;
+    const empty = tx(p.doc, all.ops).doc;
+    for (const id of [p.first, p.second, p.third, p.song]) expect(findClip(empty, id), id).toBeUndefined();
+  });
   it('ripples only when the project turned it on and the op that stores it exists', () => {
     // a project made before the behaviour existed (no settings.timeline) never ripples; a new project has it on (core createProject)
     const legacy = { ...p.doc, settings: { ...p.doc.settings, timeline: undefined } } as ProjectDocument;

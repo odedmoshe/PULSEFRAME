@@ -5,7 +5,7 @@
  */
 import * as T from '@pulseframe/time';
 import { effectParamLabel, type Key } from '@pulseframe/i18n';
-import { adjustmentRefusal, carriedChannels, CURVES_BUILT, COLOR_LOOKS, copyKeys, curveOps, deleteKeysOps, findClip, findEffect, getOp, keyTimes, moveKeysOps, pasteKeysOps, channelKey, type ChannelRef, type Clip, type CurveHandles, type Easing, type OpCall, type ProjectDocument, type Track, clipEnd } from '@pulseframe/core';
+import { adjustmentRefusal, carriedChannels, CURVES_BUILT, COLOR_LOOKS, copyKeys, curveOps, deleteKeysOps, findClip, findEffect, getOp, keyTimes, moveKeysOps, pasteKeysOps, channelKey, type ChannelRef, type Clip, type CurveHandles, type Easing, type OpCall, type ProjectDocument, type Track, clipEnd, deleteOps, editEnd, emptyTrackIds, rippleDeleteOn } from '@pulseframe/core';
 import type { Editor, Notice } from './store.ts';
 import { COMMAND_STRINGS } from './commands.strings.ts';
 import { cutBefore } from './inspector.model.ts';
@@ -38,12 +38,6 @@ const sel = (e: Editor) => e.selected?.clip;
 
 // ---------- adjustment layers over the whole edit (ADR-0016) ----------
 type AdjustmentClip = Extract<Clip, { type: 'adjustment' }>;
-/** End of the edit as add_adjustment's span 'edit' measures it: the end of the last picture or title clip of the main sequence. */
-export function editEnd(doc: ProjectDocument): T.RationalTime {
-  let end = T.ZERO;
-  for (const t of doc.sequences[doc.mainSequenceId]?.tracks ?? []) if (t.kind === 'video' || t.kind === 'text') for (const c of t.clips) end = T.max(end, clipEnd(c));
-  return end;
-}
 /**
  * The adjustment clip that already covers the whole edit (from 0 to at least its end) on a shown, unlocked adjustment track:
  * what "apply to the whole edit" adds to. The topmost such clip when there are several; null when there is none.
@@ -108,13 +102,8 @@ const slip = (frames: number) => (e: Editor) => {
   const by = T.frameTime(Math.abs(frames), e.rate);
   return e.commit([{ op: 'slip_clip', args: { clipId: c.id, by: frames < 0 ? T.sub(T.ZERO, by) : by } }], 'Slip clip');
 };
-/** Tracks that can be removed: no clips, not locked, not the speech source of a ducking setting, not followed by a caption track. At least one track of each kind that has clips elsewhere is irrelevant: only empties go. */
-const emptyTracks = (e: Editor): string[] => {
-  const d = e.doc;
-  if (!d) return [];
-  const tracks = d.sequences[d.mainSequenceId]!.tracks;
-  return tracks.filter((t) => t.clips.length === 0 && !t.locked && !tracks.some((x) => x.id !== t.id && (x.audio?.duck?.sourceTrackIds.includes(t.id) || x.caption?.linkedTrackId === t.id))).map((t) => t.id);
-};
+/** Tracks that can be removed (core editHelpers.ts emptyTrackIds, shared with the command bar). */
+const emptyTracks = (e: Editor): string[] => (e.doc ? emptyTrackIds(e.doc) : []);
 /** Where the selected clip's track would go when moved by `by` places in the list, or null when it cannot move. */
 const trackMove = (e: Editor, by: number): { trackId: string; toIndex: number } | null => {
   const d = e.doc, s = e.selected;
@@ -168,50 +157,11 @@ const nudge = (frames: number) => (e: Editor) => {
   return e.commit([{ op: 'move_clips', args: { clipIds: clips.map((c) => c.id), delta: T.frameTime(frames, e.rate) } }], 'Nudge clips');
 };
 // ---------- delete, and ripple delete on the main track (UX_REDESIGN §4.7, §5) ----------
-/** The op that stores the project's timeline behaviour (core integrator); ripple delete waits for it to be registered. */
-export const BEHAVIOUR_OP = 'set_timeline_behaviour';
 /** The project's own editing behaviour (settings.timeline): absent means off, as for every project made before it existed. */
 export const timelineBehaviour = (doc: ProjectDocument): { mainMagnet?: boolean; rippleDelete?: boolean } => (doc.settings as { timeline?: { mainMagnet?: boolean; rippleDelete?: boolean } }).timeline ?? {};
-/** The main picture track V1: the first video track of the main sequence (the timeline draws it as the magnetic main lane). */
-export const mainTrackId = (doc: ProjectDocument): string | null => doc.sequences[doc.mainSequenceId]?.tracks.find((t) => t.kind === 'video')?.id ?? null;
-/** Delete closes the gap on V1: the project turned ripple delete on, and this build knows the op that stores it. */
-export const rippleDeleteOn = (doc: ProjectDocument): boolean => !!getOp(BEHAVIOUR_OP) && !!timelineBehaviour(doc).rippleDelete;
-/**
- * The ops of a delete of `ids`, in one transaction. A linked partner is removed by its clip's own delete, so it is not listed
- * twice. With `ripple`, the clips of V1 that come after a deleted V1 clip move earlier by the length deleted before them
- * (move_clips, their linked sound along with them), the earliest group first so each lands where the space is already free;
- * the other tracks keep their gaps. `moved` counts the V1 clips that move. Null when nothing is selected.
- */
-export function deleteOps(doc: ProjectDocument, ids: readonly string[], ripple: boolean): { ops: OpCall[]; moved: number; deleted: number; first: string } | null {
-  const seen = new Set<string>();
-  const clips = ids.map((id) => findClip(doc, id)).filter((f): f is NonNullable<typeof f> => !!f)
-    .filter(({ clip: c }) => { const g = c.type === 'media' ? c.linkGroupId : null; if (!g) return true; if (seen.has(g)) return false; seen.add(g); return true; });
-  if (!clips.length) return null;
-  const ops: OpCall[] = clips.map(({ clip }) => ({ op: 'delete_clip', args: { clipId: clip.id } }));
-  const main = mainTrackId(doc);
-  const track = main ? doc.sequences[doc.mainSequenceId]!.tracks.find((t) => t.id === main) : undefined;
-  if (!ripple || !track || track.locked) return { ops, moved: 0, deleted: clips.length, first: clips[0]!.clip.id };
-  // every clip that goes from V1: the selected ones, and the V1 partners of selected clips elsewhere (a delete takes the link along)
-  const gone = new Set<string>();
-  for (const { clip } of clips) {
-    gone.add(clip.id);
-    const g = clip.type === 'media' ? clip.linkGroupId : null;
-    if (g) for (const c of track.clips) if (c.type === 'media' && c.linkGroupId === g) gone.add(c.id);
-  }
-  const removed = track.clips.filter((c) => gone.has(c.id));
-  if (!removed.length) return { ops, moved: 0, deleted: clips.length, first: clips[0]!.clip.id };
-  let moved = 0;
-  for (const c of [...track.clips].sort((a, b) => T.cmp(a.start, b.start))) {
-    if (gone.has(c.id)) continue;
-    if (removed.some((r) => !T.lt(c.start, clipEnd(r)))) moved++;
-  }
-  // One core op closes the gap (ADR: ripple_delete_clips — exact undo, linked sound moves with its picture, a J-cut that would
-  // land before 0 is refused with its own wording). It names the V1 clips; selected clips elsewhere keep their gap (delete_clip).
-  const mainIds = removed.map((c) => c.id);
-  const elsewhere = clips.filter(({ clip }) => !gone.has(clip.id) && !(clip.type === 'media' && clip.linkGroupId && removed.some((r) => r.type === 'media' && r.linkGroupId === clip.linkGroupId)));
-  const rippled: OpCall[] = [...elsewhere.map(({ clip }) => ({ op: 'delete_clip', args: { clipId: clip.id } })), { op: 'ripple_delete_clips', args: { clipIds: mainIds } }];
-  return { ops: rippled, moved, deleted: clips.length, first: clips[0]!.clip.id };
-}
+// BEHAVIOUR_OP, mainTrackId, rippleDeleteOn, deleteOps and editEnd moved to core (editHelpers.ts, ADR-0027 lead contract (e)) so the
+// Delete key and the command bar build the same operations; re-exported here under the same names.
+export { BEHAVIOUR_OP, deleteOps, editEnd, mainTrackId, rippleDeleteOn } from '@pulseframe/core';
 /**
  * Delete the selection in one transaction (one undo), with an undo toast. `keepGap` (Shift+Delete) never ripples; Delete
  * ripples on V1 when the project has ripple delete on (and this build has the op that stores it). Worked out when the write's

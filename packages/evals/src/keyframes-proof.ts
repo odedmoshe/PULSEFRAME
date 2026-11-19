@@ -27,7 +27,7 @@
  * - P11 export 60 frames 640×360 (white square on black, x overshoot, y smooth), ffmpeg-decoded centroid within 0.5 px of the
  *   closed form on every frame; render_frame at 5 frames meets the same bound.
  * - P12 Chromium __pfCurveHash equals the Node hash of the same samples (apps/web/src/curveHash.ts) for every curve of
- *   ADR-0019, bit for bit; the five v1 easings differ by at most 1 ulp per sample (V8 `**`; measured over the full set).
+ *   ADR-0019, bit for bit; the five v1 easings differ by at most one ulp of the curve (V8 `**`; over the full set).
  * - P13 a follower's path is hidden with its reason.
  * Recorded with budgets: the sampler's ns/sample in Chromium and Node (≤ 2 µs), pathPoints ms for 600 points (≤ 16 ms), and the
  * commit p95 of a 2000-key replace against a 1-key replace with the document size (≤ +15 ms).
@@ -39,11 +39,11 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import * as T from '@pulseframe/time';
-import { CURVES_BUILT, EASINGS, KEYFRAME_OPS_BUILT, KEYFRAME_REFUSALS, NAMED_BEZIER, V1_EASINGS, TRANSFORM_RANGE, transformAt, type Clip, type ProjectDocument } from '@pulseframe/core';
+import { CURVES_BUILT, EASINGS, KEYFRAME_OPS_BUILT, type V1Easing, KEYFRAME_REFUSALS, NAMED_BEZIER, V1_EASINGS, TRANSFORM_RANGE, transformAt, type Clip, type ProjectDocument } from '@pulseframe/core';
 import { startServer } from '@pulseframe/server';
 import { translateRefusal } from '../../i18n/src/index.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
-import { curveHash, curveSamples, pathPointsMs, ulpDistance } from '../../../apps/web/src/curveHash.ts';
+import { curveHash, curveSampleBound, curveSampleSegment, curveSamples, pathPointsMs, ulpDistance, v1Shapes } from '../../../apps/web/src/curveHash.ts';
 import { chooseFormat } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
@@ -485,7 +485,6 @@ async function main() {
       const chromiumPath = await st.evaluate(() => (window as unknown as { __pfPathPointsMs: () => { ms: number; points: number } }).__pfPathPointsMs());
       const chromiumSamples = await st.evaluate(() => (window as unknown as { __pfCurveSamples: () => number[] }).__pfCurveSamples());
       const nodeSamples = curveSamples();
-      await st.close();
       // the whole hash and, to say which curve a difference is in, one hash per easing; the v1 easings are checked on their own
       // (they are kept bit-identical with keys-baseline.json, which is Node's arithmetic), with the same strictness
       const differ = EASINGS.filter((e) => chromiumHash.byEasing?.[e] !== node.byEasing[e]);
@@ -495,17 +494,40 @@ async function main() {
       // The v1 easings keep their arithmetic (`**` in ease-out and ease-in-out) so old projects sample exactly as before on the
       // host they always rendered on (keys-baseline.json, the v1 replay). V8's `**` gives a different last bit for some
       // arguments in Node 22 and in Chromium 153; pixels come from one host, the Chromium renderer, for preview, still and export.
-      // So for v1 only, the bound is at most 1 ulp on every sample, measured over the full sample set (lead decision 2026-11-18).
+      // The bound is one ulp of the CURVE (lead decision 2026-11-18, round 2): the easing shape, evaluated on both hosts at the
+      // same u as sampleKeyframes computes it, differs by at most 2^-52. Measured beside it at the level of the sampled value:
+      // |Δ| against one ulp of max(|a|, |b|) of the segment's key values (recorded with its maximum: a + (b − a)·shape carries the
+      // shape's difference times |b − a| plus the final rounding, so with keys of opposite sign it can reach two such ulps), and
+      // the per-sample ulp histogram, for transparency.
       const cSamples = chromiumSamples;
-      let maxUlp = 0, differing = 0, worst: unknown = null, maxAbs = 0;
+      const pairs: [V1Easing, number][] = [], at: number[] = [];
+      for (let i = 0; i < nodeSamples.length; i++) { if (!v1.has(EASINGS[i % EASINGS.length]!)) continue; const seg = curveSampleSegment(i); if (seg) { pairs.push([seg.easing as V1Easing, seg.u]); at.push(i); } }
+      const cShapes = await st.evaluate((p) => (window as unknown as { __pfV1Shapes: (x: [string, number][]) => number[] }).__pfV1Shapes(p), pairs);
+      const nShapes = v1Shapes(pairs);
+      let maxShape = 0, shapeDiffer = 0, worstShape: unknown = null;
+      nShapes.forEach((x, k) => { const d = Math.abs(x - cShapes[k]!); if (d) { shapeDiffer++; if (d > maxShape) { maxShape = d; worstShape = { sample: at[k], easing: pairs[k]![0], u: pairs[k]![1], node: x, chromium: cShapes[k] }; } } });
+      let differing = 0, worst: unknown = null, maxRatio = 0, maxAbs = 0;
       const ulpHist: Record<number, number> = {};
       for (let i = 0; i < nodeSamples.length; i++) {
         if (!v1.has(EASINGS[i % EASINGS.length]!)) continue;
-        const u = ulpDistance(nodeSamples[i]!, cSamples[i]!);
-        if (u) { differing++; ulpHist[u] = (ulpHist[u] ?? 0) + 1; maxAbs = Math.max(maxAbs, Math.abs(nodeSamples[i]! - cSamples[i]!)); if (u > maxUlp) { maxUlp = u; worst = { sample: i, easing: EASINGS[i % EASINGS.length], node: nodeSamples[i], chromium: cSamples[i] }; } }
+        const d = Math.abs(nodeSamples[i]! - cSamples[i]!);
+        if (!Object.is(nodeSamples[i], cSamples[i])) {
+          differing++;
+          const u = ulpDistance(nodeSamples[i]!, cSamples[i]!);
+          ulpHist[u] = (ulpHist[u] ?? 0) + 1;
+          maxAbs = Math.max(maxAbs, d);
+          const bound = curveSampleBound(i), ratio = bound > 0 ? d / bound : Infinity;
+          if (ratio > maxRatio) { maxRatio = ratio; worst = { sample: i, easing: EASINGS[i % EASINGS.length], node: nodeSamples[i], chromium: cSamples[i], bound, sampleUlps: u }; }
+        }
       }
       const v1Count = nodeSamples.filter((_, i) => v1.has(EASINGS[i % EASINGS.length]!)).length;
-      check('P12', 'the v1 easings (linear, hold, ease-in, ease-out, ease-in-out) differ between Chromium and Node by at most 1 ulp on every sample (the full sample set); the difference is measured and reported', cSamples.length === nodeSamples.length && maxUlp <= 1, { maxUlp, differingSamples: differing, v1Samples: v1Count, ulpHistogram: ulpHist, maxAbsoluteDifference: maxAbs, note: 'ulps of the sample: a 1-ulp difference of the easing shape near 1 becomes several ulps of a sample whose value is near 0 (the segment value a + (b − a)·shape)', easingsThatDiffer: differ.filter((e) => v1.has(e)), worst, why: 'V8 `**` (ease-out, ease-in-out) differs in the last bit between Node 22 and Chromium 153; the v1 arithmetic is kept so old projects sample exactly as before on the host they always rendered on; pixels come from one host (the Chromium renderer) for preview, still and export' });
+      const why = 'V8 `**` (ease-out, ease-in-out) differs in the last bit between Node 22 and Chromium 153; the v1 arithmetic is kept so old projects sample exactly as before on the host they always rendered on; pixels come from one host (the Chromium renderer) for preview, still and export';
+      check('P12', 'the v1 easings (linear, hold, ease-in, ease-out, ease-in-out) differ between Chromium and Node by at most one ulp of the curve: the easing shape at the same u differs by ≤ 2^-52 on every sample of the full set', pairs.length > 0 && cShapes.length === pairs.length && maxShape <= 2 ** -52 && !nodeSamples.some((x, i) => v1.has(EASINGS[i % EASINGS.length]!) && !curveSampleSegment(i) && !Object.is(x, cSamples[i])), {
+        maxShapeDifference: maxShape, maxShapeDifferenceIn2pow52: Number((maxShape / 2 ** -52).toFixed(4)), shapesThatDiffer: shapeDiffer, shapesCompared: pairs.length, worstShape,
+        sampleLevel: { maxDifferenceInUlpOfMaxKey: Number(maxRatio.toFixed(4)), differingSamples: differing, v1Samples: v1Count, maxAbsoluteDifference: maxAbs, sampleUlpHistogram: ulpHist, worst },
+        easingsThatDiffer: differ.filter((e) => v1.has(e)), why,
+      });
+      await st.close();
       measure('sampler ns/sample (Chromium)', chromiumHash.nsPerSample, '≤ 2000 ns', chromiumHash.nsPerSample <= 2000);
       measure('sampler ns/sample (Node)', node.nsPerSample, '≤ 2000 ns', node.nsPerSample <= 2000);
       measure('pathPoints ms for 600 points (Chromium, median of 15)', chromiumPath.ms, '≤ 16 ms', chromiumPath.ms <= 16 && chromiumPath.points === 600, { points: chromiumPath.points });

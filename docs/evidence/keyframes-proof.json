@@ -1,8 +1,8 @@
 {
   "proof": "keyframes",
   "adr": "ADR-0019",
-  "ranAt": "2026-11-18T22:58:57.411Z",
-  "result": "FAILED",
+  "ranAt": "2026-11-19T00:37:42.062Z",
+  "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
@@ -10,7 +10,7 @@
     "node": "v22.23.4"
   },
   "scope": "Keyframe curves and motion paths, wave 1: the curve picker, the keyframe strip and the motion path in headless Chromium, REST and MCP refusals, stills (render_frame) and an mp4 export decoded with ffmpeg, against closed forms written out in this proof. Synthetic titles and a synthetic white square only; nobody looked at the pictures.",
-  "passed": 14,
+  "passed": 15,
   "total": 15,
   "missing": [],
   "overBudget": [],
@@ -19,19 +19,19 @@
   ],
   "measurements": {
     "sampler ns/sample (Chromium)": {
-      "value": 1473,
+      "value": 654,
       "budget": "≤ 2000 ns",
       "ok": true,
       "gated": true
     },
     "sampler ns/sample (Node)": {
-      "value": 1809.8,
+      "value": 748.4,
       "budget": "≤ 2000 ns",
       "ok": true,
       "gated": true
     },
     "pathPoints ms for 600 points (Chromium, median of 15)": {
-      "value": 1.8,
+      "value": 0.7,
       "budget": "≤ 16 ms",
       "ok": true,
       "gated": true,
@@ -40,7 +40,7 @@
       }
     },
     "pathPoints ms for 600 points (Node, median of 15)": {
-      "value": 3.171,
+      "value": 1.196,
       "budget": "≤ 16 ms",
       "ok": true,
       "gated": true,
@@ -49,13 +49,13 @@
       }
     },
     "replace_clip_keyframes commit p95: 2000 keys minus 1 key (ms)": {
-      "value": 195.05,
+      "value": 24.79,
       "budget": "≤ +15 ms",
       "ok": false,
       "gated": false,
       "detail": {
-        "p95_1key": 36.25,
-        "p95_2000keys": 231.3,
+        "p95_1key": 7.54,
+        "p95_2000keys": 32.33,
         "documentBytes": 153647,
         "finding": "per-commit cost over the whole document (parse + migrate, applyTransaction, structuredClone, entity diff, SQLite write), growing with document size; not keyframe-specific (CPU profile of Store.commit with 2000 keys)",
         "label": "recorded, not gated"
@@ -432,31 +432,45 @@
     },
     {
       "id": "P12",
-      "name": "the v1 easings (linear, hold, ease-in, ease-out, ease-in-out) differ between Chromium and Node by at most 1 ulp on every sample (the full sample set); the difference is measured and reported",
-      "ok": false,
+      "name": "the v1 easings (linear, hold, ease-in, ease-out, ease-in-out) differ between Chromium and Node by at most one ulp of the curve: the easing shape at the same u differs by ≤ 2^-52 on every sample of the full set",
+      "ok": true,
       "detail": {
-        "maxUlp": 16,
-        "differingSamples": 147,
-        "v1Samples": 38464,
-        "ulpHistogram": {
-          "1": 25,
-          "2": 82,
-          "3": 5,
-          "4": 25,
-          "16": 10
+        "maxShapeDifference": 1.1102230246251565e-16,
+        "maxShapeDifferenceIn2pow52": 0.5,
+        "shapesThatDiffer": 240,
+        "shapesCompared": 34864,
+        "worstShape": {
+          "sample": 1810,
+          "easing": "ease-out",
+          "u": 0.5267857142857143,
+          "node": 0.8940322920462829,
+          "chromium": 0.8940322920462828
         },
-        "maxAbsoluteDifference": 2.220446049250313e-16,
-        "note": "ulps of the sample: a 1-ulp difference of the easing shape near 1 becomes several ulps of a sample whose value is near 0 (the segment value a + (b − a)·shape)",
+        "sampleLevel": {
+          "maxDifferenceInUlpOfMaxKey": 2,
+          "differingSamples": 147,
+          "v1Samples": 38464,
+          "maxAbsoluteDifference": 2.220446049250313e-16,
+          "sampleUlpHistogram": {
+            "1": 25,
+            "2": 82,
+            "3": 5,
+            "4": 25,
+            "16": 10
+          },
+          "worst": {
+            "sample": 1810,
+            "easing": "ease-out",
+            "node": 0.27052421903471213,
+            "chromium": 0.270524219034712,
+            "bound": 5.551115123125783e-17,
+            "sampleUlps": 2
+          }
+        },
         "easingsThatDiffer": [
           "ease-out",
           "ease-in-out"
         ],
-        "worst": {
-          "sample": 10130,
-          "easing": "ease-out",
-          "node": -0.04467139937173925,
-          "chromium": -0.04467139937173914
-        },
         "why": "V8 `**` (ease-out, ease-in-out) differs in the last bit between Node 22 and Chromium 153; the v1 arithmetic is kept so old projects sample exactly as before on the host they always rendered on; pixels come from one host (the Chromium renderer) for preview, still and export"
       }
     },

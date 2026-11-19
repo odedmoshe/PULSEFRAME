@@ -5,6 +5,7 @@ import { CHROME_STRINGS } from './chrome.strings.ts';
 import { setSettingsOpen, useChrome } from './chromeState.ts';
 import { useEditorState } from './store.ts';
 import { RenderCacheStorage } from './RenderCacheStorage.tsx';
+import { AssistantSettings } from './commandBar/AssistantSettings.tsx';
 
 const THEME_KEY = 'pf.theme';
 export const readTheme = (): 'dark' | 'light' => { try { return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark'; } catch { return 'dark'; } };
@@ -45,6 +46,8 @@ export function SettingsDialog() {
         </ul>
         {/* the render cache of the fast export (ADR-0024): its size and «ניקוי» (the owner's own session) */}
         {settingsOpen && <RenderCacheStorage />}
+        {/* the command bar's language assistant (ADR-0027): the owner's own session only (AssistantSettings decides) */}
+        {settingsOpen && <AssistantSettings />}
       </div>
     </Dialog>
   );

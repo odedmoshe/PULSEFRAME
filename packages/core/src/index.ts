@@ -102,3 +102,10 @@ export * from './performFlash.ts';
 export * from './moves.ts';
 export * from './cameraPath.ts';
 export * from './takeOps.ts';
+// Hebrew command bar (ADR-0027): the contract and the shared edit helpers are lead-built; commandBar/ (the grammar) is W1's
+export * from './editHelpers.ts';
+export * from './commandBarContract.ts';
+export * from './assistantContract.ts';
+export * from './commandBar/index.ts';
+export * from './commandBar/numbers.ts';
+export * from './commandBar/time.ts';

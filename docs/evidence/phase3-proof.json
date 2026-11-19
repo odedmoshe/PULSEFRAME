@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-18T22:47:57.871Z",
-  "result": "PASSED",
+  "ranAt": "2026-11-19T03:17:13.352Z",
+  "result": "FAILED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v595 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
   },
@@ -161,9 +161,9 @@
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
       "ok": true,
       "detail": {
-        "editor-he": 0.993208,
-        "editor-en": 0.994291,
-        "palette-en": 1
+        "editor-he": 0.993053,
+        "editor-en": 0.994136,
+        "palette-en": 0.999771
       }
     },
     {
@@ -563,11 +563,11 @@
     },
     {
       "name": "\"move track up\" from the palette swaps the selected clip's track with the one above it in the list, the timeline rows before and after are exactly the lane order of that list (titles, captions, picture stack front-most first, sound in list order), and Ctrl+Z restores the order",
-      "ok": true,
+      "ok": false,
       "detail": {
         "upCmd": "track.moveUp",
         "before": 3,
-        "moved": true,
+        "moved": false,
         "shownMatches": true,
         "restored": true,
         "kinds": [
@@ -593,233 +593,9 @@
       }
     },
     {
-      "name": "\"full history\" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus",
-      "ok": true,
-      "detail": {
-        "revision": 71,
-        "allRows": 71,
-        "firstRev": "71",
-        "rawNames": 0,
-        "agentRows": 7,
-        "agentOnly": true,
-        "closedH": true,
-        "focusH": true
-      }
-    },
-    {
-      "name": "\"close empty gaps\" from the command palette removes all time that was empty on every track (including the 90 frames before a late title) in one transaction: the timeline is exactly as long as its covered frames, and nothing covered was lost",
-      "ok": true,
-      "detail": {
-        "gapCmd": "edit.closeGaps",
-        "endBefore": 223,
-        "coveredBefore": 182,
-        "endAfter": 212,
-        "coveredAfter": 212,
-        "revisions": [
-          71,
-          73
-        ]
-      }
-    },
-    {
-      "name": "during playback the preview draws, for every frame it reports, the same source frame as the server still of that timeline frame (read by barcode from the moving canvas)",
-      "ok": true,
-      "detail": {
-        "sampled": 40,
-        "movingFramesCompared": 38,
-        "differentSourceFrames": 29,
-        "firstFrames": [
-          {
-            "frame": 3,
-            "quality": "draft",
-            "code": 3
-          },
-          {
-            "frame": 6,
-            "quality": "draft",
-            "code": 6
-          },
-          {
-            "frame": 9,
-            "quality": "draft",
-            "code": 9
-          },
-          {
-            "frame": 13,
-            "quality": "draft",
-            "code": 13
-          },
-          {
-            "frame": 16,
-            "quality": "draft",
-            "code": 16
-          },
-          {
-            "frame": 19,
-            "quality": "draft",
-            "code": 19
-          }
-        ],
-        "mismatches": []
-      }
-    },
-    {
-      "name": "Color workspace scopes: drawn (histogram, waveform and vectorscope all have ink) for the frame the preview shows, and their average luma is within 3 levels of the server still of that frame (range within 12: the scope reads a scaled-down preview)",
-      "ok": true,
-      "detail": {
-        "frame": "0",
-        "mean": 24.2,
-        "stillMean": 24.3,
-        "min": 0,
-        "max": 255,
-        "stillMin": 0,
-        "stillMax": 255,
-        "histInk": 306,
-        "waveInk": 1913,
-        "vecInk": 54,
-        "saturation": 10.6
-      }
-    },
-    {
-      "name": "workspaces Motion and Look: both offer the selection only (no panel tabs); Motion opens the picture clip on its motion tab (entrances shown, no look controls, no position or speed on screen); Look opens it on its colour tab (the look controls without position, speed or entrances); Edit opens it on its basic tab (position/size, no look controls); the all-tools view shows all of it with every panel",
-      "ok": true,
-      "detail": {
-        "motion": {
-          "tabs": [],
-          "objectTab": "motion",
-          "transform": 0,
-          "speed": 0,
-          "animate": 1,
-          "look": 0,
-          "analysis": 0
-        },
-        "color": {
-          "tabs": [],
-          "objectTab": "colour",
-          "transform": 0,
-          "speed": 0,
-          "animate": 0,
-          "look": 1,
-          "analysis": 0
-        },
-        "proParts": {
-          "tabs": [],
-          "objectTab": "basic",
-          "transform": 1,
-          "speed": 0,
-          "animate": 0,
-          "look": 0,
-          "analysis": 0
-        },
-        "allParts": {
-          "tabs": [
-            "clip",
-            "speech",
-            "captions",
-            "sound",
-            "review",
-            "deliver",
-            "recipes",
-            "all"
-          ],
-          "objectTab": "basic",
-          "transform": 1,
-          "speed": 1,
-          "animate": 1,
-          "look": 1,
-          "analysis": 1
-        }
-      }
-    },
-    {
-      "name": "custom workspace: starts with clip, sound and deliver; ticking and unticking panels changes the tabs on offer; the choice survives a reload; the last remaining panel cannot be unticked",
-      "ok": true,
-      "detail": {
-        "customDefault": [
-          "clip",
-          "sound",
-          "deliver"
-        ],
-        "customChosen": [
-          "clip",
-          "captions",
-          "deliver"
-        ],
-        "customKept": {
-          "ws": "custom",
-          "tabs": [
-            "clip",
-            "captions",
-            "deliver"
-          ]
-        },
-        "lastLocked": true
-      }
-    },
-    {
-      "name": "workspaces: Quick offers recipes, speech, captions and deliver and shows the recipes panel; Sound offers sound and clip; Captions offers captions, speech and clip; Deliver offers deliver, review and recipes; each shows its first panel; the choice survives a reload, and so does a chosen target track; Edit shows the selection only, with the all-tools button that offers every panel again; the project is not changed by any of it",
-      "ok": true,
-      "detail": {
-        "proTabs": 8,
-        "quick": {
-          "tabs": [
-            "recipes",
-            "speech",
-            "captions",
-            "deliver"
-          ],
-          "panels": [
-            "recipes"
-          ]
-        },
-        "sound": {
-          "tabs": [
-            "sound",
-            "clip"
-          ],
-          "panels": [
-            "sound"
-          ]
-        },
-        "captions": {
-          "tabs": [
-            "captions",
-            "speech",
-            "clip"
-          ],
-          "panels": [
-            "captions"
-          ]
-        },
-        "deliver": {
-          "tabs": [
-            "deliver",
-            "review",
-            "recipes"
-          ],
-          "panels": [
-            "deliver"
-          ]
-        },
-        "afterReload": {
-          "ws": "sound",
-          "tabs": [
-            "sound",
-            "clip"
-          ]
-        },
-        "back": [],
-        "allButton": 1,
-        "allAgain": 8
-      }
-    },
-    {
-      "name": "no uncaught errors in the editor page (404s for derived files of library files this proof had just removed are left out)",
-      "ok": true,
-      "detail": {
-        "unexpected": [],
-        "leftOut": 0
-      }
+      "name": "proof ran to completion",
+      "ok": false,
+      "detail": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('activity-open')\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"ghost\" data-testid=\"activity-open\">כל ההיסטוריה</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div role=\"option\" aria-selected=\"false\" class=\"pf-pal-option\" data-testid=\"palette-option\" data-command-id=\"transp"
     }
   ]
 }
