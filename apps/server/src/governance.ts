@@ -82,6 +82,7 @@ export class Governance {
     this.store.db.prepare('UPDATE grants SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?').run(now(), id);
     return this.getGrant(id);
   }
+  private reservedNameWarned = new Set<string>();
   /** Resolve a bearer token to a principal, or null if it is not a grant token. Revoked/expired tokens are rejected, not ignored. */
   principalForToken(token: string): Principal | null {
     if (!token.startsWith('pfg_')) return null;
@@ -90,6 +91,12 @@ export class Governance {
     const g = this.grantRow(r);
     if (g.revokedAt) throw new ApiError(401, 'grant_revoked', 'this agent grant was revoked');
     if (g.expiresAt && Date.parse(g.expiresAt) <= this.clock()) throw new ApiError(401, 'grant_expired', 'this agent grant has expired');
+    // agent:assistant is the in-editor assistant's own in-memory principal (ADR-0027): a grant stored under that name (made
+    // before createGrant refused it) authenticates as nothing, and the server says so once, naming the grant, never the token
+    if (`agent:${g.name}` === ASSISTANT_ACTOR) {
+      if (!this.reservedNameWarned.has(g.id)) { this.reservedNameWarned.add(g.id); console.warn(`[pulseframe] setup: agent grant ${g.id} is named "${g.name}", a name reserved for the in-editor language assistant; its token is refused. Revoke it and create a grant with another name.`); }
+      throw new ApiError(401, 'invalid_token', 'this agent grant has a name reserved for the in-editor language assistant, so its token is refused', { grantId: g.id }, 'Ask the owner to revoke this grant and create one with another name.');
+    }
     return { actor: `agent:${g.name}`, kind: 'agent', scopes: g.mode === 'observe' || g.mode === 'propose' ? ['observe'] : ['observe', 'edit'], mode: g.mode, grant: g };
   }
 
@@ -330,9 +337,9 @@ export class Governance {
    * amount plus this one stays within the monthly limit. An 'unknown' reservation stays counted (SPEC §20).
    */
   reserveAssistant(p: Principal, projectId: string, jobId: string, cents: number, limits: { monthlyLimitCents: number; perRequestCapCents: number }): void {
-    if (p.kind !== 'agent' || p.actor !== ASSISTANT_ACTOR || modeOf(p) !== 'propose' || p.grant?.id !== ASSISTANT_GRANT_ID) throw new ApiError(403, 'insufficient_scope', 'only the in-editor assistant reserves the assistant\'s spending');
+    if (p.kind !== 'agent' || p.actor !== ASSISTANT_ACTOR || modeOf(p) !== 'propose' || p.grant?.id !== ASSISTANT_GRANT_ID) throw new ApiError(403, 'insufficient_scope', 'only the in-editor assistant reserves the assistant\'s spending', {}, 'Ask from the command bar in the owner\'s editor; agents cannot spend the assistant\'s budget.');
     this.assertMayAct(p, projectId, 'propose'); // out of scope, paused (423)
-    if (!Number.isInteger(cents) || cents <= 0) throw new ApiError(400, 'invalid_request', 'a reservation is a whole, positive number of cents', { cents });
+    if (!Number.isInteger(cents) || cents <= 0) throw new ApiError(400, 'invalid_request', 'a reservation is a whole, positive number of cents', { cents }, 'Check that both prices in Settings are more than 0; the estimate is computed from them.');
     if (!(limits.monthlyLimitCents > 0) || !(limits.perRequestCapCents > 0)) throw new ApiError(409, 'assistant_not_connected', 'the owner has not set both the monthly limit and the per-request cap', { setup: 'limit_missing' }, 'Set both limits in Settings, under the language assistant.');
     if (cents > limits.perRequestCapCents) throw new ApiError(402, 'budget_exceeded', 'this request could cost more than the per-request cap', { perRequestCapCents: limits.perRequestCapCents, requestedCents: cents }, 'Shorten the request, or raise the per-request cap in Settings.');
     this.store.db.transaction(() => {
@@ -348,7 +355,7 @@ export class Governance {
    * next request is then refused if the limit is reached). Only a 'reserved' assistant row is settled; anything else is left.
    */
   settleAssistant(jobId: string, actualCents: number): boolean {
-    if (!Number.isInteger(actualCents) || actualCents < 0) throw new ApiError(400, 'invalid_request', 'an actual cost is a whole, non-negative number of cents', { actualCents });
+    if (!Number.isInteger(actualCents) || actualCents < 0) throw new ApiError(400, 'invalid_request', 'an actual cost is a whole, non-negative number of cents', { actualCents }, 'Round the cost up to whole cents before settling.');
     const r = this.store.db.prepare("UPDATE budget_ledger SET state = 'settled', actual_cents = ?, updated_at = ? WHERE job_id = ? AND grant_id = ? AND state = 'reserved'").run(actualCents, now(), jobId, ASSISTANT_GRANT_ID);
     return r.changes === 1;
   }

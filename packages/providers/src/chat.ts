@@ -93,7 +93,73 @@ export interface ChatSetupInput {
   pricesCentsPerMTok: { input: number; output: number } | null; monthlyLimitCents: number; perRequestCapCents: number;
   adapters: readonly string[]; allowedHosts: readonly string[]; promptDigest: string;
 }
-/** Every reason the assistant may not send, in the order the owner fixes them; empty = ready. W2 builds it (plan §7.1). */
-export function chatBlockers(_d: ChatCapabilityDescriptor, _cfg: ChatSetupInput): ChatBlocker[] {
-  throw new Error('chatBlockers: not built yet (ADR-0027 W2); the assistant stays «לא מחובר»');
+/** A host name as PF_ASSISTANT_HOSTS lists them: two or more lowercase DNS labels, the last with a letter (so no IPv4 literal); no scheme, port or path. */
+export const CHAT_HOST_PATTERN = /^(?=.{1,253}$)(?:(?!-)[a-z0-9-]{1,63}(?<!-)\.)+(?!-)(?=[a-z0-9-]*[a-z])[a-z0-9-]{1,63}(?<!-)$/;
+
+/**
+ * Every reason the assistant may not send, in the order the owner fixes them (plan §7.1); empty = ready. Pure: it reads only
+ * what it is handed (never the key itself, only whether one is stored).
+ *  - provider_not_configured: no adapter chosen, the chosen adapter is not installed in this build (none is, in wave 1), no
+ *    host, no model, or no key;
+ *  - prices_missing: no prices, or a price that is not more than 0;
+ *  - limit_missing: the monthly limit or the per-request cap is 0 (not set) — decision 8, nothing is sent until both are set;
+ *  - host_not_allowed: the host is not a plain host name (requests go to https://<host> only) or is not in PF_ASSISTANT_HOSTS;
+ *  - prompt_digest_mismatch: the prompt and tool schema this server would send are not the reviewed ones the descriptor pins.
+ */
+export function chatBlockers(d: ChatCapabilityDescriptor, cfg: ChatSetupInput): ChatBlocker[] {
+  const out: ChatBlocker[] = [];
+  const missing: string[] = [];
+  if (!cfg.adapter) missing.push('no adapter is chosen');
+  else if (!cfg.adapters.includes(cfg.adapter)) missing.push(cfg.adapters.length ? `the adapter "${cfg.adapter}" is not installed (installed: ${cfg.adapters.join(', ')})` : `the adapter "${cfg.adapter}" is not installed: this build has no network adapter`);
+  if (!cfg.host) missing.push('no host is set');
+  if (!cfg.model) missing.push('no model is set');
+  if (!cfg.keySet) missing.push('no key is stored');
+  if (missing.length) out.push({ code: 'provider_not_configured', message: `the language assistant is not connected: ${missing.join('; ')}` });
+  const p = cfg.pricesCentsPerMTok;
+  if (!p || !(p.input > 0) || !(p.output > 0) || !Number.isFinite(p.input) || !Number.isFinite(p.output)) out.push({ code: 'prices_missing', message: 'the prices per million input and output tokens are not set (each must be more than 0, typed in from the provider\'s price list)' });
+  if (!(cfg.monthlyLimitCents > 0) || !(cfg.perRequestCapCents > 0)) out.push({ code: 'limit_missing', message: `spending is not limited yet: ${[!(cfg.monthlyLimitCents > 0) ? 'the monthly limit' : '', !(cfg.perRequestCapCents > 0) ? 'the per-request cap' : ''].filter(Boolean).join(' and ')} must be set (more than 0)` });
+  if (cfg.host && (!CHAT_HOST_PATTERN.test(cfg.host) || !cfg.allowedHosts.includes(cfg.host))) out.push({ code: 'host_not_allowed', message: CHAT_HOST_PATTERN.test(cfg.host) ? `the host ${cfg.host} is not listed in PF_ASSISTANT_HOSTS` : `"${cfg.host}" is not a host name (requests go to https://<host> only)` });
+  if (cfg.promptDigest !== d.promptDigest) out.push({ code: 'prompt_digest_mismatch', message: `the prompt and tool schema this server would send (${cfg.promptDigest}) are not the reviewed ones (${d.promptDigest})` });
+  return out;
 }
+
+/**
+ * The top-level fields of the summary that may leave the machine: the same list as core ASSISTANT_SUMMARY_FIELDS (this
+ * package does not depend on core; apps/server/src/assistant/summary.test.ts keeps the two equal).
+ */
+export const ASSISTANT_DATA_SENT = ['format', 'version', 'settings', 'duration', 'playheadFrame', 'selection', 'sequenceId', 'tracks', 'clips', 'folded', 'music', 'markers', 'people', 'sent'] as const;
+/**
+ * sha256 of canonical({ system, tool }) of the reviewed prompt (apps/server/src/assistant/prompt.ts). Pinned: when the system
+ * text or any op schema the tool offers changes, the server's digest differs, the setup state becomes prompt_digest_mismatch
+ * and nothing is sent until the new prompt is reviewed and this pin is updated (prompt.test.ts prints the new digest).
+ */
+export const ASSISTANT_PROMPT_DIGEST = 'sha256:be49337a799f70911112f8f4ff4d92076eba11482beb047dccef90e68b3671c8';
+/**
+ * The chat capability of wave 1 (plan §7.1): a DRAFT. No adapter exists, so it was never executed, and nothing about its
+ * quality is claimed; only its schema is checked (chat.test.ts). Hosts are empty here: they come from the owner's config.
+ */
+export const ASSISTANT_CAPABILITY: ChatCapabilityDescriptor = ChatCapabilityDescriptorSchema.parse({
+  id: 'assistant.edit-proposal',
+  version: '0.1.0',
+  state: 'draft',
+  provider: 'chat',
+  title: { he: 'עוזר השפה: הצעת עריכה', en: 'Language assistant: edit proposal' },
+  description: {
+    he: 'מודל שפה שהבעלים בוחר מקבל סיכום מצומצם של העריכה ומציע פעולות עריכה. ההצעה נבדקת ומחכה לאישור; שום דבר לא משתנה בלי אישור.',
+    en: 'A language model the owner chooses receives an allowlisted summary of the edit and proposes editing operations. The proposal is checked and waits for the owner; nothing changes without their accept.',
+  },
+  promptDigest: ASSISTANT_PROMPT_DIGEST,
+  egress: { kind: 'remote-api', hosts: [] },
+  dataSent: [...ASSISTANT_DATA_SENT],
+  cost: { basis: 'per token at owner-entered prices', perRequestCapCents: 0 },
+  languages: ['he', 'en'],
+  qualification: {
+    schemaValid: { status: 'pass', evidence: 'ChatCapabilityDescriptorSchema parses it (packages/providers/src/chat.test.ts)' },
+    dependencyReady: { status: 'not_assessed', evidence: 'no network adapter exists in this build' },
+    licenseReviewed: { status: 'not_assessed', evidence: 'no provider is chosen' },
+    executed: { status: 'not_assessed', evidence: 'never run: no provider was called' },
+    qualityReviewed: { status: 'not_assessed' },
+    hebrewQualified: { status: 'not_assessed' },
+    hardwareQualified: { status: 'not_assessed' },
+  },
+});

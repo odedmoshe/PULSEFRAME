@@ -45,8 +45,9 @@ export const ASSISTANT_EXCLUDED_OPS = [
   'import_asset', 'remove_asset', 'rename_asset', 'set_asset_colour', 'set_project_format', 'set_timeline_behaviour', 'set_loudness_target', 'edit_analysis',
   // people, capture dates, events and live fields (life line, ADR-0021)
   'add_person', 'update_person', 'remove_person', 'set_asset_capture', 'shift_asset_captures', 'add_event', 'update_event', 'remove_event', 'cluster_events', 'set_text_fields',
-  // transcripts and imported captions (never sent, so never edited blind)
+  // transcripts, captions and caption wording (never sent, so never edited blind; lead decision after the contracts review)
   'set_transcript', 'import_transcript', 'correct_transcript', 'delete_transcript_range', 'import_captions',
+  'add_cue', 'update_cue', 'merge_cues', 'set_caption_style', 'set_variant_phrase_text',
   // privacy regions and the motion tracks they follow (a proposal must never take a redaction away)
   'set_redact_region', 'create_motion_track', 'edit_motion_track', 'remove_motion_track',
 ] as const;
@@ -84,7 +85,13 @@ export interface AssistantStatus {
   adapters: string[];
 }
 const Cents = z.number().int().nonnegative().max(10_000_000);
-const Price = z.number().nonnegative().max(1_000_000).refine((n) => Number.isFinite(n));
+/**
+ * Cents per million tokens, typed in by the owner. More than 0 (lead decision after the contracts review): a price of 0
+ * would estimate a reservation of 0 cents, which Governance.reserveAssistant refuses, so an accepted config can always reserve.
+ */
+const Price = z.number().max(1_000_000).refine((n) => Number.isFinite(n) && n > 0, {
+  message: 'a price is more than 0 cents per million tokens: type the price from the provider\'s price list (for example 300 for $3 per million tokens)',
+});
 /** PUT /api/v1/assistant/config (owner only). No key in it: the key has its own route. */
 export const AssistantConfigBodySchema = z.object({
   adapter: z.string().min(1).max(64).nullable(),
@@ -112,7 +119,8 @@ export interface AssistantJobOutput { proposalId: string; explanation: string | 
 /**
  * The project summary a model receives (plan §7.3): an ALLOWLIST, built field by field (never a spread document object).
  * Assets appear only as aliases A1, A2… by first use. Text clips carry `text` only with toggles.titlesAndMarkers (live-field
- * tokens written as {שדה}), else `chars` and `hasFields`; markers carry `label` only with that toggle; `people` exists only
+ * tokens written as {שדה}), else `chars` and `hasFields`; markers carry `label` and tracks their own `name` only with that
+ * toggle (else «רצועת וידאו 2»); `people` exists only
  * with toggles.peopleNames and then holds ids and names only. `folded` lists the per-track counts of clips left out to stay
  * under SUMMARY_MAX_BYTES (null when nothing was folded).
  */
@@ -121,6 +129,11 @@ export interface AssistantSummary {
   settings: { width: number; height: number; frameRate: { num: number; den: number } };
   duration: { time: T.RationalTime; seconds: number };
   playheadFrame: number; selection: string[]; sequenceId: string;
+  /**
+   * `name` is the owner's own track name (cut to 40 characters) ONLY with toggles.titlesAndMarkers: track names are
+   * owner-typed free text and may hold a child's name (lead decision after the contracts review). With the switch off it is
+   * the track's kind and its position among the tracks of that kind, «רצועת וידאו 2».
+   */
   tracks: { id: string; kind: string; name: string; locked: boolean; muted: boolean; gain: number | null }[];
   clips: {
     id: string; trackId: string; type: string; start: T.RationalTime; duration: T.RationalTime;

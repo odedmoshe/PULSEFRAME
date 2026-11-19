@@ -28,6 +28,7 @@ import { frameKeyFor } from './renderCacheEnv.ts';
 import { createRenderCacheService, type RenderCacheService } from './renderCacheRoutes.ts';
 import { RENDER_CACHE_DIR, SegmentStore } from './segmentStore.ts';
 import { dataDirBytes, setStorageHooks } from './storage.ts';
+import { recoverAssistantJobs } from './assistant/job.ts'; // command bar assistant recovery (ADR-0027)
 
 export { loadConfig, type Config } from './config.ts';
 export interface RunningServer {
@@ -108,6 +109,10 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   recoverMomentsJobs(store, { derivatives, lane });
   speech.recover();
   derivatives.recover();
+  // ---- command bar assistant (ADR-0027, W2): a request cut off by the restart is never sent again; failed submission_unknown,
+  // its reservation released when nothing was sent, kept as unknown when the send had started ----
+  recoverAssistantJobs(store, governance);
+  // ---- end command bar assistant recovery ----
   backup.start();
   return {
     url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance, backup, imports, door, renderCache,
