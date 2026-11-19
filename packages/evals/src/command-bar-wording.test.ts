@@ -34,7 +34,18 @@ describe('command bar wording (ADR-0027)', () => {
     expect(he['bar.projectChanged']).toBe('הפרויקט השתנה — בדקו שוב');
     expect(he['assistant.toggle.titlesAndMarkers']).toBe('לשלוח נוסח כותרות וסמנים');
     expect(he['assistant.toggle.peopleNames']).toBe('לשלוח שמות אנשים');
-    expect(he['bar.refusal.half_frame']).toBe('פריים הוא היחידה הקטנה ביותר');
+    expect(he['bar.refusal.half_frame']!.startsWith('פריים הוא היחידה הקטנה ביותר; ')).toBe(true);
+  });
+  it('every bar refusal pairs the reason with the next step, in both languages (house rule)', () => {
+    for (const c of BAR_REFUSAL_CODES) {
+      for (const [lang, d] of [['he', he], ['en', en]] as const) {
+        const v = d[`bar.refusal.${c}`]!;
+        const [reason, next, ...rest] = v.split('; ');
+        expect(rest.length, `${lang} ${c}: one reason, one next step: ${v}`).toBe(0);
+        expect(reason?.trim().length, `${lang} ${c}: reason`).toBeGreaterThan(3);
+        expect(next?.trim().length ?? 0, `${lang} ${c}: next step missing: ${v}`).toBeGreaterThan(3);
+      }
+    }
   });
   it('numbers in Hebrew sentences are isolated left to right', () => {
     for (const [k, v] of Object.entries(COMMAND_BAR_HE)) for (const m of v.matchAll(/\d+/g)) expect(v.slice(0, m.index).endsWith('⁦') || /⁦[^⁩]*$/.test(v.slice(0, m.index)), `${k}: ${v}`).toBe(true);
