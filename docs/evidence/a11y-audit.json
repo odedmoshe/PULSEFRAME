@@ -1,10 +1,10 @@
 {
-  "ranAt": "2026-11-19T01:41:38.614Z",
+  "ranAt": "2026-11-19T03:17:24.191Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v653 x64",
     "browser": "153.0.8010.12"
   },
-  "scope": "Automated heuristic audit of the editor with all Inspector panels shown and one clip selected. Not a WCAG conformance claim; no screen-reader or user testing.",
+  "scope": "Automated heuristic audit of the editor with all Inspector panels shown and one clip selected, in the dark theme (every state) and the light theme (the main states), in Hebrew and English. Not a WCAG conformance claim; no screen-reader or user testing.",
   "runs": [
     {
       "lang": "he",
@@ -15,6 +15,7 @@
       "lowContrast": [],
       "tabIssues": [],
       "uiLanguage": "he",
+      "theme": "dark",
       "focus": {
         "reached": 50,
         "missing": []
@@ -144,7 +145,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_8370ea33060]",
+          "focusAfterClose": "button[data-testid=more-ast_8f3f09c6530]",
           "focusReturned": true
         },
         {
@@ -612,7 +613,7 @@
         },
         {
           "state": "cache-sheet-first",
-          "controls": 475,
+          "controls": 476,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -733,7 +734,7 @@
         },
         {
           "state": "multicam-panel",
-          "controls": 382,
+          "controls": 381,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -831,6 +832,7 @@
       "lowContrast": [],
       "tabIssues": [],
       "uiLanguage": "en",
+      "theme": "dark",
       "focus": {
         "reached": 51,
         "missing": []
@@ -960,7 +962,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_8370ea33060]",
+          "focusAfterClose": "button[data-testid=more-ast_8f3f09c6530]",
           "focusReturned": true
         },
         {
@@ -1428,7 +1430,7 @@
         },
         {
           "state": "cache-sheet-first",
-          "controls": 476,
+          "controls": 475,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1637,8 +1639,194 @@
           "shown": true
         }
       ]
+    },
+    {
+      "lang": "he",
+      "dir": "rtl",
+      "title": "PULSEFRAME Studio",
+      "controls": 597,
+      "unnamed": [],
+      "lowContrast": [],
+      "tabIssues": [],
+      "uiLanguage": "he",
+      "theme": "light",
+      "focus": {
+        "reached": 51,
+        "missing": []
+      },
+      "states": [
+        {
+          "state": "media-card-hover",
+          "controls": 597,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "media-card-menu",
+          "controls": 600,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "export-sheet",
+          "controls": 472,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "settings-dialog",
+          "controls": 462,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "perform-view",
+          "controls": 138,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "missing-media",
+          "controls": 328,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "start-hub",
+          "controls": 337,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        }
+      ]
+    },
+    {
+      "lang": "en",
+      "dir": "ltr",
+      "title": "PULSEFRAME Studio",
+      "controls": 597,
+      "unnamed": [],
+      "lowContrast": [],
+      "tabIssues": [],
+      "uiLanguage": "en",
+      "theme": "light",
+      "focus": {
+        "reached": 51,
+        "missing": []
+      },
+      "states": [
+        {
+          "state": "media-card-hover",
+          "controls": 597,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "media-card-menu",
+          "controls": 600,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "export-sheet",
+          "controls": 472,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "settings-dialog",
+          "controls": 462,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "perform-view",
+          "controls": 138,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "missing-media",
+          "controls": 328,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "start-hub",
+          "controls": 337,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        }
+      ]
     }
   ],
   "findings": 0,
+  "findingsByRun": [
+    {
+      "theme": "dark",
+      "uiLanguage": "he",
+      "states": 72,
+      "findings": 0
+    },
+    {
+      "theme": "dark",
+      "uiLanguage": "en",
+      "states": 72,
+      "findings": 0
+    },
+    {
+      "theme": "light",
+      "uiLanguage": "he",
+      "states": 7,
+      "findings": 0
+    },
+    {
+      "theme": "light",
+      "uiLanguage": "en",
+      "states": 7,
+      "findings": 0
+    }
+  ],
   "result": "NO FINDINGS (heuristic)"
 }

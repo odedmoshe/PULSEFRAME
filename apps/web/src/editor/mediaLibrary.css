@@ -1,5 +1,8 @@
 ul.assets.media-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
-.assets.media-grid > li.media-card { display: flex; flex-direction: column; gap: 4px; padding: 6px; min-width: 0; background: var(--pf-surface); }
+/* No background of its own: the card sits on the drawer's surface in both themes. It used to paint --pf-surface (theme.css), which
+   is dark in the light theme too, and outranked .pf-mc.media-card's transparent: the light theme's dark name text then sat on a
+   dark card (contrast 1.0) and the rename pencil at 3.18 (pnpm audit:a11y, light pass). */
+.assets.media-grid > li.media-card { display: flex; flex-direction: column; gap: 4px; padding: 6px; min-width: 0; background: transparent; }
 .media-card .mc-thumb { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: var(--pf-r-sm); overflow: hidden; display: grid; place-items: center; color: var(--pf-text-muted); }
 .media-card .mc-thumb canvas, .media-card .mc-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 /* The picture keeps its own aspect inside the 16:9 box, on black: a portrait or square video is pillarboxed, a wider one letterboxed. A canvas, like an img, is stretched to its box unless told otherwise. */

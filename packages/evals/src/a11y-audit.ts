@@ -19,6 +19,8 @@
  * Perform mode (ADR-0025): the perform view at rest, a take under review (ghost banner and chips), the tap calibration dialog
  * (modal) and the camera overlay on a selected clip.
  * The Hebrew command bar (ADR-0027): a plan's preview, a question's choices, and Settings «עוזר השפה».
+ * The light theme: the resting editor, a media card under the pointer and its ⋯ menu, the export sheet, Settings, perform mode, an
+ * asset whose stored file is missing on disk (library card and timeline clip), and the start hub, in both languages.
  *   pnpm build && pnpm audit:a11y
  */
 import { execFileSync } from 'node:child_process';
@@ -67,7 +69,7 @@ async function main() {
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const post = async (p: string, body: unknown) => (await fetch(`${s.url}/api/v1${p}`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) })).json() as Promise<any>;
   const browser = await chromium.launch();
-  const report: any = { ranAt: new Date().toISOString(), machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, browser: browser.version() }, scope: 'Automated heuristic audit of the editor with all Inspector panels shown and one clip selected. Not a WCAG conformance claim; no screen-reader or user testing.', runs: [] };
+  const report: any = { ranAt: new Date().toISOString(), machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, browser: browser.version() }, scope: 'Automated heuristic audit of the editor with all Inspector panels shown and one clip selected, in the dark theme (every state) and the light theme (the main states), in Hebrew and English. Not a WCAG conformance claim; no screen-reader or user testing.', runs: [] };
   try {
     const pid = (await post('/projects', { name: 'a11y', width: 640, height: 360 })).project.id;
     const up: any = await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'fixture.mp4' }, body: fs.readFileSync(fixture.file) })).json();
@@ -698,8 +700,86 @@ async function main() {
       if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
       await auditState('start-hub', { shown: (await page.getByTestId('welcome').count()) === 1 && (await page.getByTestId('welcome-import').count()) === 1 });
       for (const st of states) console.log(`[${lang}] state ${st.state}: controls=${st.controls} unnamed=${st.unnamed.length} lowContrast=${st.lowContrast.length} tabIssues=${st.tabIssues.length} noFocusRing=${st.noFocusRing.length}${st.startsInside !== undefined ? ` startsInside=${st.startsInside} leftDialog=${st.tabStepsThatLeftTheDialog} openUntilEscape=${st.openUntilEscape} closed=${st.closed} focusReturned=${st.focusReturned} (focus after close: ${st.focusAfterClose})` : ''}${st.shown !== undefined ? ` shown=${st.shown}` : ''}${st.formatSelected !== undefined ? ` formatSelected=${st.formatSelected} scopeNotes=${st.scopeNotes}` : ''}`);
-      report.runs.push({ ...found, uiLanguage: lang, focus, plantedDefectsDetected: sensitivity, states });
+      report.runs.push({ ...found, uiLanguage: lang, theme: 'dark', focus, plantedDefectsDetected: sensitivity, states });
       console.log(`[${lang}] lang=${found.lang} dir=${found.dir} controls=${found.controls} unnamed=${found.unnamed.length} lowContrast=${found.lowContrast.length} tabIssues=${found.tabIssues.length} focusReached=${focus.reached} noFocusRing=${focus.missing.length}`);
+      await page.close();
+    }
+    // ---- the light theme (Settings «ערכת צבעים: בהיר» / "Theme: Light"), both languages: the main editor states again. Contrast in the
+    // light theme does not follow from the dark pass: until 2026-11-19 the media card painted a dark-only surface under the light
+    // theme's dark text (asset names at 1.0, the rename pencil at 3.18). Also audited here: an asset whose stored file is missing on disk
+    // (its own project and picture, so removing the file touches nothing else), which the library card and the timeline say plainly.
+    const missPng = path.join(art, 'missing.png');
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=0x2a6f97:s=160x90', '-frames:v', '1', missPng]);
+    const missPid = (await post('/projects', { name: 'a11y-missing', width: 640, height: 360 })).project.id as string;
+    const missUp: any = await (await fetch(`${s.url}/api/v1/projects/${missPid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'missing.png' }, body: fs.readFileSync(missPng) })).json();
+    await post(`/projects/${missPid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: missUp.assetId, start: f(0), duration: f(30) } }] });
+    const missHash = ((await (await fetch(`${s.url}/api/v1/projects/${missPid}`, { headers: h })).json()) as any).project.assets[missUp.assetId].contentHash as string;
+    fs.rmSync(path.join(art, 'data', 'blobs', missHash.replace(/^sha256:/, '')));
+    for (const lang of ['he', 'en'] as const) {
+      const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
+      await page.addInitScript((l) => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); localStorage.setItem('pf.lang', l); localStorage.setItem('pf.theme', 'light'); } catch { /* storage unavailable */ } }, lang);
+      await page.addInitScript('globalThis.__name = (f) => f');
+      await page.addInitScript(() => { (globalThis as { __pfPerformProof?: boolean }).__pfPerformProof = true; });
+      const open = async (projectId: string, ready = 'timecode') => {
+        await page.goto(`${s.ownerUrl}&project=${projectId}`);
+        await page.getByTestId(ready).waitFor({ timeout: 15000 });
+        if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+      };
+      await open(pid);
+      const theme = await page.evaluate(() => document.documentElement.dataset.theme);
+      if (theme !== 'light') throw new Error(`the light pass did not get the light theme (data-theme=${theme})`);
+      await clickClipEnd(page, clipId);
+      await page.waitForTimeout(300);
+      const found = await page.evaluate(auditInPage);
+      const focus = await focusAudit(page, 60);
+      await page.screenshot({ path: path.join(art, `editor-${lang}-light.png`) });
+      const states: any[] = [];
+      const auditState = async (name: string, extra: Record<string, unknown> = {}, modal = false) => {
+        const r = await page.evaluate(auditInPage);
+        const fr = await focusAudit(page, 14, !modal);
+        states.push({ state: name, controls: r.controls, unnamed: r.unnamed, lowContrast: r.lowContrast, tabIssues: r.tabIssues, noFocusRing: fr.missing, ...extra });
+        await page.screenshot({ path: path.join(art, `state-${name}-${lang}-light.png`) });
+      };
+      const closeWith = async (testId: string) => { await page.keyboard.press('Escape'); await page.getByTestId(testId).waitFor({ state: 'detached', timeout: 5000 }).catch(() => {}); await page.waitForTimeout(150); };
+      // the media library: a card under the pointer (its add and ⋯ buttons and the rename pencil show), then its ⋯ menu
+      await page.getByTestId(`asset-${up.assetId}`).hover();
+      await page.waitForTimeout(200);
+      const pencil = await page.getByTestId(`rename-${up.assetId}`).evaluate((el) => getComputedStyle(el).opacity).catch(() => '0');
+      await auditState('media-card-hover', { shown: (await page.getByTestId(`asset-${up.assetId}`).count()) === 1 && Number(pencil) > 0 });
+      await openCardMenu(page, up.assetId);
+      await page.locator('[role=menu]').first().waitFor({ timeout: 5000 }).catch(() => {});
+      await auditState('media-card-menu', { shown: (await page.locator('[role=menu] [role^=menuitem]').count()) > 0 }, true);
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(150);
+      // the export sheet and the settings dialog
+      await page.getByTestId('export').click();
+      await page.getByTestId('export-sheet').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.waitForTimeout(300);
+      await auditState('export-sheet', { shown: (await page.getByTestId('export-start').count()) === 1 }, true);
+      await closeWith('export-sheet');
+      await page.getByTestId('rail-settings').click();
+      await page.getByTestId('settings-dialog').waitFor({ timeout: 8000 }).catch(() => {});
+      await auditState('settings-dialog', { shown: (await page.getByTestId('settings-dialog').count()) === 1 }, true);
+      await closeWith('settings-dialog');
+      // perform mode at rest
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await page.keyboard.press('Shift+Digit7');
+      await page.getByTestId('perform-view').waitFor({ timeout: 10000 }).catch(() => {});
+      await auditState('perform-view', { shown: (await page.getByTestId('perform-view').count()) === 1 && (await page.getByTestId('perform-pad').count()) === 8 });
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await page.keyboard.press('Shift+Digit1');
+      await page.waitForFunction(() => !document.querySelector('[data-testid=perform-view]'), undefined, { timeout: 10000 }).catch(() => {});
+      // an asset whose stored file is missing: the card and the timeline clip say so, the preview is not an error
+      await open(missPid);
+      await page.getByTestId(`missing-${missUp.assetId}`).waitFor({ timeout: 10000 }).catch(() => {});
+      await page.waitForTimeout(500);
+      await auditState('missing-media', { shown: (await page.getByTestId(`missing-${missUp.assetId}`).count()) === 1 && (await page.locator('.clip.missing').count()) >= 1 && (await page.locator('.error[role=alert]').count()) === 0 });
+      // the start hub of an empty project
+      await open(emptyPid, 'welcome');
+      await auditState('start-hub', { shown: (await page.getByTestId('welcome').count()) === 1 });
+      for (const st of states) console.log(`[${lang} light] state ${st.state}: controls=${st.controls} unnamed=${st.unnamed.length} lowContrast=${st.lowContrast.length} tabIssues=${st.tabIssues.length} noFocusRing=${st.noFocusRing.length}${st.shown !== undefined ? ` shown=${st.shown}` : ''}`);
+      report.runs.push({ ...found, uiLanguage: lang, theme: 'light', focus, states });
+      console.log(`[${lang} light] controls=${found.controls} unnamed=${found.unnamed.length} lowContrast=${found.lowContrast.length} tabIssues=${found.tabIssues.length} focusReached=${focus.reached} noFocusRing=${focus.missing.length}`);
       await page.close();
     }
   } finally {
@@ -710,11 +790,14 @@ async function main() {
     + (st.keyboardOk === false ? 1 : 0) + (st.startsInside === false ? 1 : 0) + (st.tabStepsThatLeftTheDialog ? 1 : 0) + (st.openUntilEscape === false ? 1 : 0) + (st.closed === false ? 1 : 0) + (st.focusReturned === false ? 1 : 0) + (st.shown === false ? 1 : 0) + (st.formatSelected === false ? 1 : 0) + (st.firstCardAtInlineStart === false ? 1 : 0);
   const total = report.runs.reduce((n: number, r: any) => n + r.unnamed.length + r.lowContrast.length + r.tabIssues.length + r.focus.missing.length + (r.states ?? []).reduce((m: number, st: any) => m + stateFindings(st), 0), 0);
   report.findings = total;
+  const runFindings = (r: any) => r.unnamed.length + r.lowContrast.length + r.tabIssues.length + r.focus.missing.length + (r.states ?? []).reduce((m: number, st: any) => m + stateFindings(st), 0);
+  report.findingsByRun = report.runs.map((r: any) => ({ theme: r.theme, uiLanguage: r.uiLanguage, states: (r.states ?? []).length, findings: runFindings(r) }));
+  for (const r of report.findingsByRun) console.log(`  ${r.theme} ${r.uiLanguage}: ${r.findings} finding(s) over the resting page and ${r.states} states`);
   report.result = total === 0 ? 'NO FINDINGS (heuristic)' : 'FINDINGS';
   fs.writeFileSync(path.join(root, 'docs/evidence/a11y-audit.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(`a11y audit: ${report.result}, ${total} finding(s). Evidence: docs/evidence/a11y-audit.json`);
-  for (const r of report.runs) for (const st of r.states ?? []) if (stateFindings(st)) console.log(`  [${r.uiLanguage}] state ${st.state}:`, JSON.stringify({ unnamed: st.unnamed.slice(0, 6), lowContrast: st.lowContrast.slice(0, 6), tabIssues: st.tabIssues.slice(0, 6), noFocusRing: st.noFocusRing.slice(0, 6), startsInside: st.startsInside, leftDialog: st.tabStepsThatLeftTheDialog, closed: st.closed, focusReturned: st.focusReturned, shown: st.shown, formatSelected: st.formatSelected }));
-  for (const r of report.runs) { console.log(`  [${r.uiLanguage}] unnamed:`, r.unnamed.slice(0, 12)); console.log(`  [${r.uiLanguage}] low contrast:`, r.lowContrast.slice(0, 12)); console.log(`  [${r.uiLanguage}] no focus ring:`, r.focus.missing.slice(0, 12)); }
+  for (const r of report.runs) for (const st of r.states ?? []) if (stateFindings(st)) console.log(`  [${r.uiLanguage} ${r.theme}] state ${st.state}:`, JSON.stringify({ unnamed: st.unnamed.slice(0, 6), lowContrast: st.lowContrast.slice(0, 6), tabIssues: st.tabIssues.slice(0, 6), noFocusRing: st.noFocusRing.slice(0, 6), startsInside: st.startsInside, leftDialog: st.tabStepsThatLeftTheDialog, closed: st.closed, focusReturned: st.focusReturned, shown: st.shown, formatSelected: st.formatSelected }));
+  for (const r of report.runs) { console.log(`  [${r.uiLanguage} ${r.theme}] unnamed:`, r.unnamed.slice(0, 12)); console.log(`  [${r.uiLanguage} ${r.theme}] low contrast:`, r.lowContrast.slice(0, 12)); console.log(`  [${r.uiLanguage} ${r.theme}] no focus ring:`, r.focus.missing.slice(0, 12)); }
   if (process.env.PF_A11Y_STRICT === '1' && total > 0) process.exitCode = 1;
 }
 main().catch((e) => { console.error(e); process.exit(1); });
