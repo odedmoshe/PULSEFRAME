@@ -157,11 +157,15 @@
 .pf-insp .insp-scopes .scopes > :is(dl, p) { grid-column: 1 / -1; }
 .pf-insp .insp-scopes .pf-section:not([data-help='open']) .scope-stats { display: none; }
 
-/* ---------- transport: 52px, left to right in every language ---------- */
-.transport.pf-ds { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--pf-sp-5); min-block-size: 52px; padding: 0 var(--pf-sp-6) var(--pf-sp-2); border: 0; background: none; container-type: inline-size; }
-.transport .tp-time { display: flex; align-items: baseline; gap: var(--pf-sp-4); min-inline-size: 0; }
-.transport .timecode { min-inline-size: 0; padding: 0; border: 0; border-radius: 0; background: none; color: var(--pf-text); font: var(--pf-fw-medium) var(--pf-fs-timecode)/1 var(--pf-font-mono); font-variant-numeric: tabular-nums; letter-spacing: 0; text-align: start; }
-.transport .tp-total { color: var(--pf-text-3); font-size: var(--pf-fs-digits); white-space: nowrap; }
+/* ---------- transport: 52px, left to right in every language ----------
+   Each part keeps its own column (time, keys, end), so the keys stay in the middle whatever is hidden. The timecode never
+   shrinks under its digits and its column is never narrower than it; the total sits after it and, where the column has no
+   room for both on one line, goes under it, so the two never overlap (1024 to 1440 px, both languages, every mode). */
+.transport.pf-ds { display: grid; grid-template-columns: minmax(min-content, 1fr) auto minmax(min-content, 1fr); align-items: center; gap: var(--pf-sp-5); min-block-size: 52px; padding: 0 var(--pf-sp-6) var(--pf-sp-2); border: 0; background: none; container-type: inline-size; }
+.transport > .tp-time { grid-column: 1; } .transport > .tp-keys { grid-column: 2; } .transport > .tp-end { grid-column: 3; }
+.transport .tp-time { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--pf-sp-4); row-gap: var(--pf-sp-1); min-inline-size: 0; }
+.transport .timecode { flex: none; white-space: nowrap; min-inline-size: 0; padding: 0; border: 0; border-radius: 0; background: none; color: var(--pf-text); font: var(--pf-fw-medium) var(--pf-fs-timecode)/1 var(--pf-font-mono); font-variant-numeric: tabular-nums; letter-spacing: 0; text-align: start; }
+.transport .tp-total { flex: none; color: var(--pf-text-3); font-size: var(--pf-fs-digits); white-space: nowrap; }
 .transport .tp-keys { display: flex; align-items: center; gap: var(--pf-sp-3); }
 .transport .tp-btn { display: grid; place-items: center; inline-size: var(--pf-h-md); block-size: var(--pf-h-md); min-inline-size: 0; min-block-size: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; box-shadow: none; color: var(--pf-text-2); cursor: pointer; }
 .transport .tp-btn:hover { background: var(--pf-surface-3); color: var(--pf-text); border: 0; }
@@ -180,9 +184,11 @@
 .tp-beat-dot[data-playing='true'] { animation: tp-beat var(--pf-dur-beat) var(--pf-ease-pulse) 1; }
 @keyframes tp-beat { from { transform: scale(1.7); } to { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .tp-beat-dot[data-playing='true'] { animation: none; } .stage-note { transition: none; } }
-/* a narrow stage drops the total and the outer buttons; a very narrow one keeps play alone */
+/* a narrow stage drops the total and the outer buttons; a very narrow one keeps the timecode and play; the narrowest, play alone
+   (a container query styles what is inside the transport, never the transport itself: the keys keep the middle column) */
 @container (max-width: 520px) { .transport .tp-total, .transport .tp-outer, .tp-beat-word { display: none; } }
-@container (max-width: 340px) { .transport .tp-btn, .transport .tp-time, .transport .tp-end { display: none; } .transport.pf-ds { grid-template-columns: minmax(0, 1fr); justify-items: center; } }
+@container (max-width: 340px) { .transport .tp-btn, .transport .tp-end { display: none; } }
+@container (max-width: 220px) { .transport .tp-time { display: none; } }
 @media (max-height: 780px) { .transport.pf-ds { min-block-size: 46px; } .transport .tp-play { inline-size: 38px; block-size: 38px; min-inline-size: 38px; min-block-size: 38px; } .stage-head { min-block-size: 38px; } }
 
 /* ---------- source viewer (the dialog the "source" side of the stage opens) ---------- */
