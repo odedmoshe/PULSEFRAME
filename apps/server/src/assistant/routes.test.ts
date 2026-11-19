@@ -167,6 +167,38 @@ describe('the owner sets it up', () => {
     const status = await rest('GET', '/assistant/status', ownerHeaders());
     expect(status.body.spentCents).toBe(job.output.costCents);
   });
+  it('the summary route refuses a playhead that is not a frame number with a hint and the value it was given', async () => {
+    for (const bad of ['1.5', '-3', 'abc']) {
+      const r = await rest('GET', `/projects/${pid}/assistant/summary?playheadFrame=${bad}`, ownerHeaders());
+      expect(r.status, bad).toBe(400);
+      expect(r.body.error, bad).toMatchObject({ code: 'invalid_request', details: { playheadFrame: bad }, hint: 'Send the playhead as a frame number, for example playheadFrame=90.' });
+    }
+  });
+  it('POST /jobs/:jobId/cancel reaches an assistant job (AssistantJobs.cancel), not the capability jobs\' 409 cancel_not_supported', async () => {
+    let sent!: () => void;
+    const sentNow = new Promise<void>((r) => { sent = r; });
+    adapter.queue({ wait: (signal) => new Promise((_res, rej) => { sent(); signal.addEventListener('abort', () => rej(new Error('MOCK: aborted'))); }) });
+    const r = await rest('POST', `/projects/${pid}/assistant/requests`, ownerHeaders(), { text: 'חתוך בשנייה 2', selection: [videoClip], playheadFrame: 0 });
+    expect(r.status).toBe(202);
+    const jobId = r.body.jobId as string;
+    await sentNow;
+    // an agent did not start it: refused before the assistant's handler
+    const agent = await rest('POST', `/jobs/${jobId}/cancel`, bearer(auth.tokens.agent));
+    expect(agent.status).toBe(403);
+    const c = await rest('POST', `/jobs/${jobId}/cancel`, ownerHeaders());
+    expect(c.status).toBe(200);
+    expect(c.body).toMatchObject({ jobId, outcome: 'requested' });
+    let job: any;
+    for (let i = 0; i < 200; i++) {
+      job = (await rest('GET', `/jobs/${jobId}`, ownerHeaders())).body;
+      if (['succeeded', 'failed', 'submission-unknown', 'canceled'].includes(job.status)) break;
+      await new Promise((res) => setTimeout(res, 10));
+    }
+    expect(job).toMatchObject({ status: 'canceled', attempt: 1 });
+    expect(gov.ledgerFor(jobId)!.state).toBe('unknown'); // sent before the cancel: the service may have charged
+    const again = await rest('POST', `/jobs/${jobId}/cancel`, ownerHeaders());
+    expect(again.body).toMatchObject({ jobId, outcome: 'already-finished' });
+  });
   it('the owner can delete the key; the setup is then not ready again', async () => {
     const d = await rest('DELETE', '/assistant/key', ownerHeaders());
     expect(d.body).toEqual({ keySet: false, keyAddedAt: null });

@@ -259,6 +259,31 @@ describe('restart recovery', () => {
     expect(s.adapter.calls).toBe(0);
     expect(recoverAssistantJobs(s.store, s.gov)).toEqual([]);
   });
+  it('a job that stopped while its answer was checked (cost already settled) is not sent to the owner to release anything', () => {
+    const s = setup();
+    const p = { actor: ASSISTANT_ACTOR, kind: 'agent', scopes: ['observe'], mode: 'propose', grant: { id: 'assistant', name: 'assistant', mode: 'propose', projectIds: [s.pid], trackIds: null, range: null, budgetCents: 100, requestsPerMinute: null, exportsPerDay: null, people: 'names', expiresAt: null, revokedAt: null, createdAt: '', createdBy: 'user:local' } } as Principal;
+    const checking = s.store.createJob(s.pid, ASSISTANT_JOB_TYPE, ASSISTANT_ACTOR, {}).id;
+    const waiting = s.store.createJob(s.pid, ASSISTANT_JOB_TYPE, ASSISTANT_ACTOR, {}).id;
+    for (const j of [checking, waiting]) s.gov.reserveAssistant(p, s.pid, j, 5, { monthlyLimitCents: 100, perRequestCapCents: 10 });
+    s.store.updateJob(waiting, { status: 'running', stage: 'awaiting-provider', attempt: 1 });
+    s.gov.settleAssistant(checking, 3);
+    s.store.updateJob(checking, { status: 'running', stage: 'checking', attempt: 1 });
+    recoverAssistantJobs(s.store, s.gov);
+    const settled = s.store.getJob(checking);
+    expect(settled).toMatchObject({ status: 'failed', error: { code: 'submission_unknown', retryable: false } });
+    expect(s.gov.ledgerFor(checking)).toMatchObject({ state: 'settled', actualCents: 3 });
+    expect(settled.error.message).not.toMatch(/until the owner releases/);
+    expect(settled.error.message).toMatch(/nothing is left to release/);
+    expect(settled.error.hint).not.toMatch(/release/i);
+    // releasing it really would be refused: the message must not send the owner there
+    expect(() => s.gov.releaseUnknown(owner, checking)).toThrow(/no unresolved reservation/);
+    // the one whose answer never came keeps the release advice, and its reservation is releasable
+    const unknown = s.store.getJob(waiting);
+    expect(s.gov.ledgerFor(waiting)!.state).toBe('unknown');
+    expect(unknown.error.message).toMatch(/until the owner releases it/);
+    expect(unknown.error.hint).toMatch(/release the reservation/);
+    expect(() => s.gov.releaseUnknown(owner, waiting)).not.toThrow();
+  });
   it('leaves alone a job this process is still driving', async () => {
     let release!: () => void;
     const s = setup({ script: [{ wait: () => new Promise((r) => { release = () => r({ toolInput: { ops: [split(s.videoClip)] }, text: null, finish: 'tool', usage: null }); }) }] });

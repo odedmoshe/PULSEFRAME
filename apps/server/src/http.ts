@@ -48,7 +48,7 @@ import { declaredLength, registerImportRoutes } from './importRoutes.ts';
 import { registerRenderCacheRoutes, type RenderCacheService } from './renderCacheRoutes.ts';
 import { peopleSuggestions } from './lifeline.ts';
 import { takeFor } from './perform.ts';
-import { AssistantConfigBodySchema, AssistantKeyBodySchema, AssistantRequestBodySchema } from '@pulseframe/core';
+import { ASSISTANT_JOB_TYPE, AssistantConfigBodySchema, AssistantKeyBodySchema, AssistantRequestBodySchema } from '@pulseframe/core';
 import { isOwnerSession, type AssistantDeps } from './assistant/contract.ts';
 import { createAssistantHandlers } from './assistant/routes.ts';
 
@@ -784,7 +784,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const projectId = c.req.param('id');
     store.getProject(projectId); // 404 first
     const frame = Number(c.req.query('playheadFrame') ?? 0), sel = c.req.query('selection'), seq = c.req.query('sequenceId');
-    if (!Number.isInteger(frame) || frame < 0) throw new ApiError(400, 'invalid_request', 'playheadFrame is a whole, non-negative frame index');
+    if (!Number.isInteger(frame) || frame < 0) throw new ApiError(400, 'invalid_request', 'playheadFrame is a whole, non-negative frame index', { playheadFrame: c.req.query('playheadFrame') ?? null }, 'Send the playhead as a frame number, for example playheadFrame=90.');
     return c.json(await assistant.summary(p, projectId, { playheadFrame: frame, selection: sel ? sel.split(',').filter(Boolean).slice(0, 2000) : [], ...(seq ? { sequenceId: seq } : {}) }));
   });
   app.put('/api/v1/assistant/config', async (c) => { const p = assistantOwner(c); return c.json(await assistant.putConfig(p, await body(c, AssistantConfigBodySchema))); });
@@ -863,6 +863,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const j = store.getJob(c.req.param('jobId'));
     if (j.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, p, j, 'cancel'); return c.json(extras.imports.cancel(j.id, p.actor)); }
     assertMayCancel(gov, p, j);
+    if (j.type === ASSISTANT_JOB_TYPE) return c.json(assistant.cancel(p, j.id));
     if (j.type === 'export' && j.input.route === 'browser') return c.json(browserExport.requestCancel(j.id));
     if (j.type === 'analysis') return c.json(cancelAnalysisJob(store, j.id, p.actor));
     if (j.type === TRACKING_JOB_TYPE) return c.json(cancelTrackingJob(store, j.id, p.actor));
