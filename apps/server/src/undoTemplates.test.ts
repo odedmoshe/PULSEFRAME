@@ -79,7 +79,8 @@ describe('undo-all / redo-all with templates and adjustment layers (property, si
           return ok;
         } finally { s.close(); }
       }),
-      { numRuns: Number(process.env.PF_PROPERTY_RUNS ?? 60) },
+      // seeded so the coverage line below is the same on every run (set PF_PROPERTY_SEED to explore other seeds)
+      { numRuns: Number(process.env.PF_PROPERTY_RUNS ?? 60), seed: Number(process.env.PF_PROPERTY_SEED ?? 20261119) },
     );
     console.log(`undo-all/redo-all with templates and adjustment layers: ${Number(process.env.PF_PROPERTY_RUNS ?? 60)} runs, ${mismatches} mismatches; accepted: ${Object.entries(accepted).sort().map(([k, v]) => `${k} ${v}`).join(', ')}`);
     for (const op of ['add_adjustment', 'replace_clip_media', 'apply_template', 'set_clip_mask']) if (!accepted[op]) throw new Error(`${op} was never accepted`);
