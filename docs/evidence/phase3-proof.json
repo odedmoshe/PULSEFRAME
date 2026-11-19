@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-19T03:28:33.207Z",
+  "ranAt": "2026-11-19T04:13:07.464Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v653 x64",
@@ -629,17 +629,17 @@
       "detail": {
         "sampled": 40,
         "movingFramesCompared": 38,
-        "differentSourceFrames": 29,
+        "differentSourceFrames": 28,
         "firstFrames": [
           {
-            "frame": 4,
+            "frame": 3,
             "quality": "draft",
-            "code": 4
+            "code": 3
           },
           {
-            "frame": 8,
+            "frame": 7,
             "quality": "draft",
-            "code": 8
+            "code": 7
           },
           {
             "frame": 10,
@@ -652,14 +652,14 @@
             "code": 14
           },
           {
-            "frame": 17,
+            "frame": 18,
             "quality": "draft",
-            "code": 17
+            "code": 18
           },
           {
-            "frame": 20,
+            "frame": 21,
             "quality": "draft",
-            "code": 20
+            "code": 21
           }
         ],
         "mismatches": []

@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-18T01:19:19.871Z",
+  "ranAt": "2026-11-19T04:33:44.592Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v595 x64",
+    "platform": "Linux 6.18.44-fc-v653 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none",
     "browser": "headless Chromium (Playwright)"
@@ -133,7 +133,7 @@
         "revision": 5,
         "restored": [
           {
-            "id": "afx_2ab96a66f40",
+            "id": "afx_1b3a3126e50",
             "type": "voice.telephone",
             "enabled": true,
             "params": {
@@ -146,7 +146,7 @@
         ],
         "before": [
           {
-            "id": "afx_2ab96a66f40",
+            "id": "afx_1b3a3126e50",
             "type": "voice.telephone",
             "enabled": true,
             "params": {
@@ -191,9 +191,9 @@
         "withEffects": {
           "clock": "audio",
           "fxVoices": 1,
-          "windows": 66,
-          "beepMax": 0.4804,
-          "gapMax": 0.124,
+          "windows": 64,
+          "beepMax": 0.4807,
+          "gapMax": 0.1239,
           "gapWindows": 42
         },
         "bypassed": {
@@ -221,9 +221,9 @@
       "name": "«השוואה בלי אפקטים» (pressed, from the keyboard) changes what the tap hears: the beeps stay, the echo between them goes; the switch is not stored (no revision)",
       "ok": true,
       "detail": {
-        "wetGap": 0.124,
+        "wetGap": 0.1239,
         "dryGap": 0,
-        "wetBeep": 0.4804,
+        "wetBeep": 0.4807,
         "dryBeep": 0.5047
       }
     },
@@ -527,13 +527,13 @@
       "ok": true,
       "detail": {
         "affectedIds": [
-          "clp_23e0689d562"
+          "clp_b9c12c603f2"
         ],
         "output": {
           "effects": [
             {
-              "clipId": "clp_23e0689d562",
-              "effectId": "afx_515654bc5f0",
+              "clipId": "clp_b9c12c603f2",
+              "effectId": "afx_7a74e55bbd0",
               "params": {
                 "amount": 0.5,
                 "delayMs": 250,
@@ -555,7 +555,7 @@
         "sound": {
           "audioFx": [
             {
-              "id": "afx_515654bc5f0",
+              "id": "afx_7a74e55bbd0",
               "type": "space.echo",
               "enabled": true,
               "params": {
@@ -602,9 +602,9 @@
       "detail": {
         "frame60": [
           {
-            "clipId": "clp_23e0689d562",
+            "clipId": "clp_b9c12c603f2",
             "trackId": "trk_audio",
-            "assetId": "ast_6e9b3b86290",
+            "assetId": "ast_70bb88d95d0",
             "sourceTime": {
               "value": "2",
               "timescale": 1
@@ -617,9 +617,9 @@
         ],
         "frame135": [
           {
-            "clipId": "clp_23e0689d562",
+            "clipId": "clp_b9c12c603f2",
             "trackId": "trk_audio",
-            "assetId": "ast_6e9b3b86290",
+            "assetId": "ast_70bb88d95d0",
             "tail": true,
             "secondsAfterEnd": 0.5,
             "fx": [
@@ -654,7 +654,7 @@
       "ok": true,
       "detail": {
         "tabsToRun": 5,
-        "measureAndCommitSeconds": 0.35,
+        "measureAndCommitSeconds": 0.38,
         "status": "נמדד: רעש רקע -50.8 דציבל ביחס לשיא · זמזום חשמל 50 הרץ (-40.0 דציבל ביחס לשיא) · דיבור -21.9 דציבל ביחס לשיא · יחס אות לרעש 17.5 דציבל · ביטחון במדידת הרעש 100%. הניקוי הוחל על הקטע. אפשר לבטל ב־Ctrl+Z.",
         "rows": [
           "cleanup.dehum",
@@ -663,7 +663,7 @@
         ],
         "effects": [
           {
-            "id": "afx_468f6ded420",
+            "id": "afx_fefac869950",
             "type": "cleanup.dehum",
             "enabled": true,
             "params": {
@@ -674,7 +674,7 @@
             }
           },
           {
-            "id": "afx_468f6ded421",
+            "id": "afx_fefac869951",
             "type": "cleanup.denoise",
             "enabled": true,
             "params": {
@@ -682,11 +682,11 @@
               "reductionDb": 15.2,
               "sensitivityDb": 1,
               "profile": "PnPmPkPqPnPlPkPrPnPpPpPpPoPqPnPpPpPqPnPpPpPpPoPo",
-              "source": "ast_f1d0ba2f710"
+              "source": "ast_fb8820101f0"
             }
           },
           {
-            "id": "afx_468f6ded422",
+            "id": "afx_fefac869952",
             "type": "cleanup.speech",
             "enabled": true,
             "params": {
@@ -753,7 +753,7 @@
           "pressedWhilePlaying": "true",
           "animated": 0,
           "stopped": true,
-          "windows": 31,
+          "windows": 27,
           "peak": 0.5548,
           "revisionBefore": 4,
           "revisionAfter": 4,
@@ -840,9 +840,9 @@
       "withEffects": {
         "clock": "audio",
         "fxVoices": 1,
-        "windows": 66,
-        "beepMax": 0.4804,
-        "gapMax": 0.124,
+        "windows": 64,
+        "beepMax": 0.4807,
+        "gapMax": 0.1239,
         "gapWindows": 42
       },
       "bypassed": {
@@ -1080,7 +1080,7 @@
       "he": {
         "lang": "he",
         "dir": "rtl",
-        "controls": 455,
+        "controls": 483,
         "controlsInBlock": 49,
         "unnamed": [],
         "lowContrast": [],
@@ -1093,7 +1093,7 @@
       "en": {
         "lang": "en",
         "dir": "ltr",
-        "controls": 455,
+        "controls": 483,
         "controlsInBlock": 49,
         "unnamed": [],
         "lowContrast": [],
@@ -1256,7 +1256,7 @@
       "sound": {
         "audioFx": [
           {
-            "id": "afx_515654bc5f0",
+            "id": "afx_7a74e55bbd0",
             "type": "space.echo",
             "enabled": true,
             "params": {
@@ -1299,9 +1299,9 @@
     "describeMoment": {
       "frame60": [
         {
-          "clipId": "clp_23e0689d562",
+          "clipId": "clp_b9c12c603f2",
           "trackId": "trk_audio",
-          "assetId": "ast_6e9b3b86290",
+          "assetId": "ast_70bb88d95d0",
           "sourceTime": {
             "value": "2",
             "timescale": 1
@@ -1314,9 +1314,9 @@
       ],
       "frame135": [
         {
-          "clipId": "clp_23e0689d562",
+          "clipId": "clp_b9c12c603f2",
           "trackId": "trk_audio",
-          "assetId": "ast_6e9b3b86290",
+          "assetId": "ast_70bb88d95d0",
           "tail": true,
           "secondsAfterEnd": 0.5,
           "fx": [
@@ -1328,7 +1328,7 @@
     },
     "voiceClean": {
       "tabsToRun": 5,
-      "measureAndCommitSeconds": 0.35,
+      "measureAndCommitSeconds": 0.38,
       "status": "נמדד: רעש רקע -50.8 דציבל ביחס לשיא · זמזום חשמל 50 הרץ (-40.0 דציבל ביחס לשיא) · דיבור -21.9 דציבל ביחס לשיא · יחס אות לרעש 17.5 דציבל · ביטחון במדידת הרעש 100%. הניקוי הוחל על הקטע. אפשר לבטל ב־Ctrl+Z.",
       "rows": [
         "cleanup.dehum",
@@ -1337,7 +1337,7 @@
       ],
       "effects": [
         {
-          "id": "afx_468f6ded420",
+          "id": "afx_fefac869950",
           "type": "cleanup.dehum",
           "enabled": true,
           "params": {
@@ -1348,7 +1348,7 @@
           }
         },
         {
-          "id": "afx_468f6ded421",
+          "id": "afx_fefac869951",
           "type": "cleanup.denoise",
           "enabled": true,
           "params": {
@@ -1356,11 +1356,11 @@
             "reductionDb": 15.2,
             "sensitivityDb": 1,
             "profile": "PnPmPkPqPnPlPkPrPnPpPpPpPoPqPnPpPpPqPnPpPpPpPoPo",
-            "source": "ast_f1d0ba2f710"
+            "source": "ast_fb8820101f0"
           }
         },
         {
-          "id": "afx_468f6ded422",
+          "id": "afx_fefac869952",
           "type": "cleanup.speech",
           "enabled": true,
           "params": {
@@ -1404,7 +1404,7 @@
         "pressedWhilePlaying": "true",
         "animated": 0,
         "stopped": true,
-        "windows": 31,
+        "windows": 27,
         "peak": 0.5548,
         "revisionBefore": 4,
         "revisionAfter": 4,

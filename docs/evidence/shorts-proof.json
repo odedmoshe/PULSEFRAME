@@ -2,7 +2,7 @@
   "proof": "shorts",
   "adr": "ADR-0018",
   "status": "pass",
-  "generatedAt": "2026-11-18T17:20:23.733Z",
+  "generatedAt": "2026-11-19T06:32:05.069Z",
   "machine": {
     "platform": "linux",
     "cpus": 4,
@@ -125,7 +125,7 @@
       "id": "S1",
       "name": "ranking time with cached features",
       "value": {
-        "ms": 49.16
+        "ms": 37.43
       },
       "budget": "≤ 2000 ms",
       "pass": true
@@ -209,8 +209,8 @@
       "id": "S3",
       "name": "commit p95 with six shorts in the project",
       "value": {
-        "beforeMs": 14.03,
-        "afterMs": 17.4
+        "beforeMs": 16.84,
+        "afterMs": 18.43
       },
       "budget": "≤ +15 ms",
       "pass": true
@@ -513,8 +513,8 @@
       "name": "real-time factor of measuring 20 minutes",
       "value": {
         "seconds": 1200,
-        "wallSeconds": 5.16,
-        "rtf": 232.78
+        "wallSeconds": 7.35,
+        "rtf": 163.29
       },
       "budget": "≥ 20×",
       "pass": true
@@ -523,9 +523,9 @@
       "id": "S10",
       "name": "RSS growth while measuring",
       "value": {
-        "baselineMB": 393,
-        "peakMB": 397,
-        "growthMB": 4
+        "baselineMB": 436,
+        "peakMB": 442,
+        "growthMB": 5
       },
       "budget": "≤ 400 MB",
       "pass": true
@@ -574,8 +574,8 @@
       "id": "S10",
       "name": "commit p95 on the 20-minute project",
       "value": {
-        "ms": 4.85,
-        "baselineMs": 14.03
+        "ms": 4.89,
+        "baselineMs": 16.84
       },
       "budget": "≤ +15 ms over the 4-minute project",
       "pass": true
@@ -593,7 +593,7 @@
         4200,
         5700
       ],
-      "generateSeconds": 141.76
+      "generateSeconds": 154.28
     },
     "sceneCuts": {
       "planted": [
@@ -606,18 +606,18 @@
     },
     "s1MeasuredByJob": true,
     "commitP95": {
-      "beforeMs": 14.03,
-      "afterMs": 17.4,
+      "beforeMs": 16.84,
+      "afterMs": 18.43,
       "shorts": 6
     },
     "long": {
       "seconds": 1200,
-      "wallSeconds": 5.16,
-      "realtimeFactor": 232.78,
-      "rssBaselineMB": 393,
-      "rssPeakMB": 397,
+      "wallSeconds": 7.35,
+      "realtimeFactor": 163.29,
+      "rssBaselineMB": 436,
+      "rssPeakMB": 442,
       "cpus": 4
     },
-    "longCommitP95Ms": 4.85
+    "longCommitP95Ms": 4.89
   }
 }

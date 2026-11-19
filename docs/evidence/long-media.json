@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-16T23:05:27.768Z",
+  "ranAt": "2026-11-19T07:20:46.971Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v509 x64",
+    "platform": "Linux 6.18.44-fc-v653 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
@@ -13,34 +13,34 @@
   "measurements": {
     "minutes": 20,
     "fileMB": 37.9,
-    "generateSeconds": 65.1,
-    "ingestSeconds": 0.4,
+    "generateSeconds": 66.6,
+    "ingestSeconds": 0.5,
     "analysis": {
       "beats": {
         "status": "succeeded",
-        "seconds": 13.6
+        "seconds": 12.8
       },
       "scenes": {
         "status": "succeeded",
-        "seconds": 14.6
+        "seconds": 15
       }
     },
     "editsDuringAnalysis": {
-      "count": 38,
-      "medianMs": 11,
-      "p95Ms": 24,
-      "maxMs": 27
+      "count": 39,
+      "medianMs": 13,
+      "p95Ms": 32,
+      "maxMs": 41
     },
     "timeline": {
       "shots": 20,
-      "splitMs": 18,
-      "timelineQueryMs": 35,
+      "splitMs": 20,
+      "timelineQueryMs": 29,
       "beatMarkers": 2000,
-      "userMarkers": 38
+      "userMarkers": 39
     },
     "editor": {
-      "openSeconds": 2.6,
-      "seekToLastFrameSeconds": 0.4,
+      "openSeconds": 1.3,
+      "seekToLastFrameSeconds": 0.5,
       "meanLevelOfMiddleRow": 111.2,
       "timecode": "00:19:59:29"
     }
@@ -52,14 +52,14 @@
       "detail": {
         "seconds": 1200,
         "frames": 36000,
-        "ingestSeconds": 0.4
+        "ingestSeconds": 0.5
       }
     },
     {
       "name": "scene job: finishes and finds all 19 cuts on the exact frames, no false cuts",
       "ok": true,
       "detail": {
-        "seconds": 14.6,
+        "seconds": 15,
         "found": 19,
         "firstWrong": null
       }
@@ -68,7 +68,7 @@
       "name": "beat job: finishes with a tempo within 1 BPM of 120 and a beat count within 2% of 2400",
       "ok": true,
       "detail": {
-        "seconds": 13.6,
+        "seconds": 12.8,
         "bpm": 120.19,
         "count": 2399,
         "confidence": 0.992
@@ -78,10 +78,10 @@
       "name": "edits made while both jobs ran all succeeded and stayed prompt (median under 100 ms, worst under 2 s)",
       "ok": true,
       "detail": {
-        "count": 38,
-        "medianMs": 11,
-        "p95Ms": 24,
-        "maxMs": 27
+        "count": 39,
+        "medianMs": 13,
+        "p95Ms": 32,
+        "maxMs": 41
       }
     },
     {
@@ -89,18 +89,18 @@
       "ok": true,
       "detail": {
         "shots": 20,
-        "splitMs": 18,
-        "timelineQueryMs": 35,
+        "splitMs": 20,
+        "timelineQueryMs": 29,
         "beatMarkers": 2000,
-        "userMarkers": 38
+        "userMarkers": 39
       }
     },
     {
       "name": "editor: opens the 20-minute project and paints the very last frame (35999) after a jump to the end, picture not black, no page errors",
       "ok": true,
       "detail": {
-        "openSeconds": 2.6,
-        "seekToLastFrameSeconds": 0.4,
+        "openSeconds": 1.3,
+        "seekToLastFrameSeconds": 0.5,
         "meanLevelOfMiddleRow": 111.2,
         "timecode": "00:19:59:29",
         "errors": []

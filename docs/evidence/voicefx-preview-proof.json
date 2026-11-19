@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-18T01:18:49.734Z",
+  "ranAt": "2026-11-19T04:33:15.097Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v595 x64",
+    "platform": "Linux 6.18.44-fc-v653 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "cores": 4,
     "gpu": "none"
@@ -56,7 +56,7 @@
           10
         ],
         "clock": "audio",
-        "fxPrimeMs": 40,
+        "fxPrimeMs": 28,
         "fxPrimeTimedOut": false,
         "unavailable": {}
       }
@@ -130,7 +130,7 @@
       "name": "D4 starting the preview 20 s into a clip with a 3 s hall reverb: the effects are rendered ahead (their whole warm-up) in at most 500 ms, and the first sound is on time",
       "ok": true,
       "detail": {
-        "fxPrimeMs": 284,
+        "fxPrimeMs": 316,
         "fxPrimeTimedOut": false,
         "fxLateStarts": 0,
         "warmUpSeconds": 11.281
@@ -142,63 +142,63 @@
       "detail": [
         {
           "type": "cleanup.dehum",
-          "realtime": 136,
-          "kernelRealtime": 324
+          "realtime": 157,
+          "kernelRealtime": 293
         },
         {
           "type": "cleanup.denoise",
-          "realtime": 51,
-          "kernelRealtime": 66
+          "realtime": 54,
+          "kernelRealtime": 63
         },
         {
           "type": "cleanup.speech",
-          "realtime": 96,
-          "kernelRealtime": 107
+          "realtime": 100,
+          "kernelRealtime": 117
         },
         {
           "type": "tone.bassboost",
-          "realtime": 274,
-          "kernelRealtime": 943
+          "realtime": 278,
+          "kernelRealtime": 830
         },
         {
           "type": "voice.telephone",
-          "realtime": 71,
-          "kernelRealtime": 188
+          "realtime": 94,
+          "kernelRealtime": 117
         },
         {
           "type": "voice.megaphone",
-          "realtime": 131,
-          "kernelRealtime": 178
+          "realtime": 158,
+          "kernelRealtime": 230
         },
         {
           "type": "voice.radio",
-          "realtime": 114,
-          "kernelRealtime": 126
+          "realtime": 111,
+          "kernelRealtime": 154
         },
         {
           "type": "voice.robot",
-          "realtime": 234,
-          "kernelRealtime": 568
+          "realtime": 291,
+          "kernelRealtime": 607
         },
         {
           "type": "texture.8bit",
-          "realtime": 261,
-          "kernelRealtime": 529
+          "realtime": 337,
+          "kernelRealtime": 721
         },
         {
           "type": "space.echo",
-          "realtime": 280,
-          "kernelRealtime": 587
+          "realtime": 291,
+          "kernelRealtime": 577
         },
         {
           "type": "space.reverb",
-          "realtime": 76,
-          "kernelRealtime": 96
+          "realtime": 79,
+          "kernelRealtime": 98
         },
         {
           "type": "utility.width",
-          "realtime": 316,
-          "kernelRealtime": 3286
+          "realtime": 429,
+          "kernelRealtime": 3123
         }
       ]
     },
@@ -208,7 +208,7 @@
       "detail": {
         "withEffects": {
           "fxVoices": 4,
-          "fxPrimeMs": 202,
+          "fxPrimeMs": 119,
           "fxLateStarts": 0,
           "fxLateSkips": 0,
           "audioScheduledAheadMaxMs": 1485.9,
@@ -216,15 +216,15 @@
           "longTaskMs": 0,
           "longestTaskMs": 0,
           "paintLatenessMs": {
-            "median": 12,
-            "p95": 20,
-            "max": 40
+            "median": 10.67,
+            "p95": 16,
+            "max": 32
           }
         },
         "baseline": {
           "fxVoices": 0,
-          "longTasks": 3,
-          "longTaskMs": 205,
+          "longTasks": 0,
+          "longTaskMs": 0,
           "audioScheduledAheadMaxMs": 1552
         }
       }
@@ -235,7 +235,7 @@
       "detail": {
         "withEffects": {
           "fxVoices": 4,
-          "fxPrimeMs": 202,
+          "fxPrimeMs": 119,
           "fxLateStarts": 0,
           "fxLateSkips": 0,
           "audioScheduledAheadMaxMs": 1485.9,
@@ -243,15 +243,15 @@
           "longTaskMs": 0,
           "longestTaskMs": 0,
           "paintLatenessMs": {
-            "median": 12,
-            "p95": 20,
-            "max": 40
+            "median": 10.67,
+            "p95": 16,
+            "max": 32
           }
         },
         "baseline": {
           "fxVoices": 0,
-          "longTasks": 3,
-          "longTaskMs": 205,
+          "longTasks": 0,
+          "longTaskMs": 0,
           "audioScheduledAheadMaxMs": 1552
         }
       }
@@ -314,7 +314,7 @@
         10
       ],
       "clock": "audio",
-      "fxPrimeMs": 40,
+      "fxPrimeMs": 28,
       "fxPrimeTimedOut": false,
       "unavailable": {}
     },
@@ -376,7 +376,7 @@
       ]
     },
     "priming": {
-      "fxPrimeMs": 284,
+      "fxPrimeMs": 316,
       "fxPrimeTimedOut": false,
       "fxLateStarts": 0,
       "warmUpSeconds": 11.281
@@ -384,69 +384,69 @@
     "nodeCost": [
       {
         "type": "cleanup.dehum",
-        "realtime": 136,
-        "kernelRealtime": 324
+        "realtime": 157,
+        "kernelRealtime": 293
       },
       {
         "type": "cleanup.denoise",
-        "realtime": 51,
-        "kernelRealtime": 66
+        "realtime": 54,
+        "kernelRealtime": 63
       },
       {
         "type": "cleanup.speech",
-        "realtime": 96,
-        "kernelRealtime": 107
+        "realtime": 100,
+        "kernelRealtime": 117
       },
       {
         "type": "tone.bassboost",
-        "realtime": 274,
-        "kernelRealtime": 943
+        "realtime": 278,
+        "kernelRealtime": 830
       },
       {
         "type": "voice.telephone",
-        "realtime": 71,
-        "kernelRealtime": 188
+        "realtime": 94,
+        "kernelRealtime": 117
       },
       {
         "type": "voice.megaphone",
-        "realtime": 131,
-        "kernelRealtime": 178
+        "realtime": 158,
+        "kernelRealtime": 230
       },
       {
         "type": "voice.radio",
-        "realtime": 114,
-        "kernelRealtime": 126
+        "realtime": 111,
+        "kernelRealtime": 154
       },
       {
         "type": "voice.robot",
-        "realtime": 234,
-        "kernelRealtime": 568
+        "realtime": 291,
+        "kernelRealtime": 607
       },
       {
         "type": "texture.8bit",
-        "realtime": 261,
-        "kernelRealtime": 529
+        "realtime": 337,
+        "kernelRealtime": 721
       },
       {
         "type": "space.echo",
-        "realtime": 280,
-        "kernelRealtime": 587
+        "realtime": 291,
+        "kernelRealtime": 577
       },
       {
         "type": "space.reverb",
-        "realtime": 76,
-        "kernelRealtime": 96
+        "realtime": 79,
+        "kernelRealtime": 98
       },
       {
         "type": "utility.width",
-        "realtime": 316,
-        "kernelRealtime": 3286
+        "realtime": 429,
+        "kernelRealtime": 3123
       }
     ],
     "previewCost": {
       "withEffects": {
         "fxVoices": 4,
-        "fxPrimeMs": 202,
+        "fxPrimeMs": 119,
         "fxLateStarts": 0,
         "fxLateSkips": 0,
         "audioScheduledAheadMaxMs": 1485.9,
@@ -454,15 +454,15 @@
         "longTaskMs": 0,
         "longestTaskMs": 0,
         "paintLatenessMs": {
-          "median": 12,
-          "p95": 20,
-          "max": 40
+          "median": 10.67,
+          "p95": 16,
+          "max": 32
         }
       },
       "baseline": {
         "fxVoices": 0,
-        "longTasks": 3,
-        "longTaskMs": 205,
+        "longTasks": 0,
+        "longTaskMs": 0,
         "audioScheduledAheadMaxMs": 1552
       }
     },
@@ -472,21 +472,21 @@
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 19.5
+        "chromiumMs": 19.2
       },
       {
         "type": "cleanup.dehum",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 12.8
+        "chromiumMs": 14.8
       },
       {
         "type": "cleanup.denoise",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 56.9
+        "chromiumMs": 52.5
       },
       {
         "type": "cleanup.denoise",
@@ -500,140 +500,140 @@
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 50.9
+        "chromiumMs": 48.5
       },
       {
         "type": "cleanup.speech",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 59.7
+        "chromiumMs": 29.1
       },
       {
         "type": "tone.bassboost",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 13.7
+        "chromiumMs": 14.1
       },
       {
         "type": "tone.bassboost",
         "params": "{\"gainDb\":15,\"freqHz\":150}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 6.2
+        "chromiumMs": 6.1
       },
       {
         "type": "voice.telephone",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 20.8
+        "chromiumMs": 19.4
       },
       {
         "type": "voice.telephone",
         "params": "{\"grit\":1,\"hiss\":1}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 21.8
+        "chromiumMs": 18.7
       },
       {
         "type": "voice.megaphone",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 18.2
+        "chromiumMs": 38.5
       },
       {
         "type": "voice.megaphone",
         "params": "{\"drive\":1,\"amount\":0.7}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 13.8
+        "chromiumMs": 14.4
       },
       {
         "type": "voice.radio",
         "params": "{}",
         "maxAbsDiff": 3.3306690738754696e-16,
         "bitEqual": false,
-        "chromiumMs": 34.9
+        "chromiumMs": 24.6
       },
       {
         "type": "voice.radio",
         "params": "{\"noise\":1}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 49.7
+        "chromiumMs": 22
       },
       {
         "type": "voice.robot",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 6.9
+        "chromiumMs": 7
       },
       {
         "type": "voice.robot",
         "params": "{\"pitchHz\":200,\"metal\":1}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 7.6
+        "chromiumMs": 7.1
       },
       {
         "type": "texture.8bit",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 4.5
+        "chromiumMs": 3.8
       },
       {
         "type": "texture.8bit",
         "params": "{\"bits\":3,\"rateKhz\":3}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 6.2
+        "chromiumMs": 3.3
       },
       {
         "type": "space.echo",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 11
+        "chromiumMs": 7.6
       },
       {
         "type": "space.echo",
         "params": "{\"pingPong\":true,\"tone\":0.6,\"repeats\":8,\"delayMs\":120}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 17.8
+        "chromiumMs": 12.1
       },
       {
         "type": "space.reverb",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 70.7
+        "chromiumMs": 54.6
       },
       {
         "type": "space.reverb",
         "params": "{\"room\":\"cave\",\"decaySeconds\":3,\"damping\":1,\"spread\":0.3,\"predelayMs\":100,\"amount\":1}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 44.3
+        "chromiumMs": 43.8
       },
       {
         "type": "utility.width",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 2.2
+        "chromiumMs": 3.2
       },
       {
         "type": "utility.width",
         "params": "{\"stereoWidth\":0}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 1.1
+        "chromiumMs": 2.1
       }
     ]
   }

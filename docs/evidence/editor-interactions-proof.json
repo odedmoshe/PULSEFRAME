@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-19T03:45:14.741Z",
+  "ranAt": "2026-11-19T06:45:27.004Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v653 x64",
@@ -59,7 +59,7 @@
       "name": "while the drum loop plays, the meter shows a real level (above -40 dB and not above 0)",
       "ok": true,
       "detail": {
-        "peakDbShown": 0
+        "peakDbShown": -8
       }
     },
     {
@@ -312,7 +312,7 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 1.98,
+        "fwd2": 2.04,
         "sh2": "◀◀ ×1",
         "back1": -0.99,
         "sh3": "◀◀ ×2",
@@ -328,9 +328,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 1.01,
+        "playSpeed": 0.99,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.97,
+        "shuttleSpeed": 1.99,
         "staysPaused": true
       }
     },
@@ -358,30 +358,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_923e1cb5130",
-          "clp_923e1cb5131"
+          "clp_b398c736980",
+          "clp_b398c736981"
         ],
         "afterAB": [
-          "clp_923e1cb5130",
-          "clp_923e1cb5131"
+          "clp_b398c736980",
+          "clp_b398c736981"
         ],
         "afterAdd": [
-          "clp_923e1cb5130",
-          "clp_923e1cb5131",
-          "clp_923e1cb5132"
+          "clp_b398c736980",
+          "clp_b398c736981",
+          "clp_b398c736982"
         ],
         "midEscape": [
-          "clp_923e1cb5131"
+          "clp_b398c736981"
         ],
         "afterEscape": [
-          "clp_923e1cb5130",
-          "clp_923e1cb5131",
-          "clp_923e1cb5132"
+          "clp_b398c736980",
+          "clp_b398c736981",
+          "clp_b398c736982"
         ],
         "afterEscapeUp": [
-          "clp_923e1cb5130",
-          "clp_923e1cb5131",
-          "clp_923e1cb5132"
+          "clp_b398c736980",
+          "clp_b398c736981",
+          "clp_b398c736982"
         ]
       }
     },
@@ -543,7 +543,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 22/1799",
+        "valueText": "עוקב קדימה 25/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -804,18 +804,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_6cc763ee140",
-          "ast_4987fca9fc0",
-          "ast_d2c4e124300",
-          "ast_3c2fc41ba00",
-          "ast_c0e451b3eb0"
+          "ast_2e14db238b0",
+          "ast_c760e923060",
+          "ast_e1f580b91c0",
+          "ast_5413964bed0",
+          "ast_007429a0060"
         ],
         "order1": [
-          "ast_6cc763ee140",
-          "ast_3c2fc41ba00",
-          "ast_4987fca9fc0",
-          "ast_d2c4e124300",
-          "ast_c0e451b3eb0"
+          "ast_2e14db238b0",
+          "ast_5413964bed0",
+          "ast_c760e923060",
+          "ast_e1f580b91c0",
+          "ast_007429a0060"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -839,7 +839,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-19T03:41:12.627Z",
+          "createdAt": "2026-11-19T06:42:07.954Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -965,8 +965,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_15970d6da50",
-          "seq_15970d6da57"
+          "seq_e0773aea410",
+          "seq_e0773aea417"
         ],
         "revisions": 1,
         "transactions": [
@@ -976,7 +976,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_15970d6da50",
+          "seq": "seq_e0773aea410",
           "selected": "true"
         }
       }
@@ -1007,9 +1007,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_15970d6da50"
+          "seq": "seq_e0773aea410"
         },
-        "secondTab": "seq_15970d6da50",
+        "secondTab": "seq_e0773aea410",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"

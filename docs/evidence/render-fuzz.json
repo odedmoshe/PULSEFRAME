@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-18T22:19:01.841Z",
+  "ranAt": "2026-11-19T06:56:05.946Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v595 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none"
   },
   "scope": "10 random sessions of 160 steps each, at five frame rates, on synthetic media. Checks that rendering succeeds and has the right shape (frame count, rate, clean decode, equal picture and sound length); it checks that the preview, the server still and the export AGREE on the picture at three frames per project; it does NOT check against an independent reference that the picture or the sound is the right one.",
@@ -41,7 +41,7 @@
       "fieldTitlesMadePlain": {
         "refusal": "render_blocked",
         "titles": [
-          "clp_df55e31d320"
+          "clp_c9429c38600"
         ]
       },
       "export": {
@@ -49,7 +49,7 @@
         "rate": "25/1",
         "videoSeconds": 13.2,
         "audioSeconds": 13.2,
-        "bytes": 1056383
+        "bytes": 1055690
       },
       "features": {
         "videoClips": 2,
@@ -211,7 +211,7 @@
         "rate": "24000/1001",
         "videoSeconds": 10.26,
         "audioSeconds": 10.26,
-        "bytes": 111259
+        "bytes": 111273
       },
       "features": {
         "videoClips": 0,
@@ -621,7 +621,7 @@
         "rate": "25/1",
         "videoSeconds": 8.52,
         "audioSeconds": 8.52,
-        "bytes": 52026
+        "bytes": 51788
       },
       "features": {
         "videoClips": 0,
@@ -709,7 +709,7 @@
       "fieldTitlesMadePlain": {
         "refusal": "people_scope_required",
         "titles": [
-          "clp_684bc7978d0"
+          "clp_b897ab2c920"
         ]
       },
       "export": {

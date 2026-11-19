@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-11-18T03:33:51.054Z",
-  "machine": "Linux 6.18.44-fc-v595 x64",
+  "ranAt": "2026-11-19T05:36:52.147Z",
+  "machine": "Linux 6.18.44-fc-v653 x64",
   "browser": "Playwright Chromium (headless)",
   "checks": [
     {
@@ -151,7 +151,7 @@
       "name": "the family option of the archive changes the download address to the family-free archive",
       "ok": true,
       "detail": {
-        "hrefAfter": "/api/v1/projects/prj_xm2V2m6mi54/archive?family=omit"
+        "hrefAfter": "/api/v1/projects/prj_xRLS7iZpja8/archive?family=omit"
       }
     },
     {
@@ -166,7 +166,7 @@
       "name": "the pack suggestion names the start of Hanukkah 2026, the evening of 4 December",
       "ok": true,
       "detail": {
-        "reason": "מוצע לפי התאריך: חנוכה מתחיל בערב 4 בדצמבר · בעוד 16 ימיםלא עכשיו"
+        "reason": "מוצע לפי התאריך: חנוכה מתחיל בערב 4 בדצמבר · בעוד 15 ימיםלא עכשיו"
       }
     },
     {

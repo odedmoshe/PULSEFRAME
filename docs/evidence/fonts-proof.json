@@ -1,8 +1,8 @@
 {
   "proof": "fonts (ADR-0022)",
-  "commit": "21719a89b057e67ad8f7c296c3f23eeed885a220",
+  "commit": "cef8a432509456e95c32c2ef0449256beaf79531",
   "chromium": "153.0.8010.12",
-  "at": "2026-11-18T02:25:38.966Z",
+  "at": "2026-11-19T05:35:13.090Z",
   "size": {
     "w": 1920,
     "h": 1080
@@ -227,7 +227,7 @@
     },
     {
       "id": "F4",
-      "name": "every face of the catalogue (19) loads in the browser for Hebrew and Latin (ensureFonts would not throw); 0 ms",
+      "name": "every face of the catalogue (19) loads in the browser for Hebrew and Latin (ensureFonts would not throw); 1 ms",
       "ok": true,
       "detail": []
     },
@@ -5452,8 +5452,8 @@
       "differ": [],
       "missing": [],
       "extra": [],
-      "runs": 5,
-      "verdict": "matches the recording of 2026-11-18T00:30:08.643Z (comparison 5)"
+      "runs": 6,
+      "verdict": "matches the recording of 2026-11-18T00:30:08.643Z (comparison 6)"
     },
     "parity": {
       "rows": [
@@ -5557,7 +5557,7 @@
       "method": "the first frame of the export decoded to its own planes (yuv420p) against the still converted to them (scale=in_range=full:out_range=tv:out_color_matrix=bt709:flags=accurate_rnd+full_chroma_int,format=yuv420p); per plane, 255 as the peak"
     },
     "cost": {
-      "ensureFontsLikeMs": 0,
+      "ensureFontsLikeMs": 1,
       "faces": 19,
       "missing": [],
       "loadedFontFiles": 46,
@@ -5681,6 +5681,6 @@
     }
   },
   "passed": true,
-  "seconds": 158,
+  "seconds": 236,
   "note": "Goldens are recorded in docs/evidence/fonts-golden.json. A first recording of goldens proves nothing by itself."
 }

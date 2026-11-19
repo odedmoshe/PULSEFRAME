@@ -1,11 +1,11 @@
 {
- "ranAt": "2026-11-18T01:46:16.892Z",
- "commit": "487861300c75af88c8e073e3cfd798556f1510a4",
+ "ranAt": "2026-11-19T05:05:13.857Z",
+ "commit": "cef8a432509456e95c32c2ef0449256beaf79531",
  "result": "PASSED",
  "passed": 15,
  "total": 15,
  "machine": {
-  "platform": "Linux 6.18.44-fc-v595 x64",
+  "platform": "Linux 6.18.44-fc-v653 x64",
   "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
   "logicalCpus": 4,
   "node": "v22.23.4"
@@ -1000,75 +1000,75 @@
    "results": {
     "none": {
      "medianMs": 1.1,
-     "meanMs": 1.39,
-     "maxMs": 10.3
+     "meanMs": 1.72,
+     "maxMs": 13.5
     },
     "punch-in": {
-     "medianMs": 76.5,
-     "meanMs": 75.99,
-     "maxMs": 87
+     "medianMs": 87.9,
+     "meanMs": 86.17,
+     "maxMs": 102.2
     },
     "punch-out": {
-     "medianMs": 69.7,
-     "meanMs": 66.18,
-     "maxMs": 86.5
+     "medianMs": 84.4,
+     "meanMs": 77.6,
+     "maxMs": 92.5
     },
     "blur-dissolve": {
-     "medianMs": 74.6,
-     "meanMs": 68.33,
-     "maxMs": 108.7
+     "medianMs": 106.4,
+     "meanMs": 93.77,
+     "maxMs": 127.8
     },
     "split-open-h": {
-     "medianMs": 30.2,
-     "meanMs": 30.51,
-     "maxMs": 39.9
+     "medianMs": 43.1,
+     "meanMs": 42.92,
+     "maxMs": 57.5
     },
     "split-open-v": {
-     "medianMs": 29.7,
-     "meanMs": 30.17,
-     "maxMs": 47.5
+     "medianMs": 42.2,
+     "meanMs": 42.04,
+     "maxMs": 60.6
     },
     "shape-heart": {
-     "medianMs": 5,
-     "meanMs": 5.19,
-     "maxMs": 11.2
+     "medianMs": 7.8,
+     "meanMs": 8.46,
+     "maxMs": 18.2
     },
     "shape-star": {
-     "medianMs": 5,
-     "meanMs": 5.05,
-     "maxMs": 8.4
+     "medianMs": 6.5,
+     "meanMs": 6.61,
+     "maxMs": 8.8
     },
     "block-left": {
-     "medianMs": 6,
-     "meanMs": 5.64,
-     "maxMs": 9.4
+     "medianMs": 9.8,
+     "meanMs": 8.13,
+     "maxMs": 12.3
     },
     "block-right": {
-     "medianMs": 5.9,
-     "meanMs": 5.71,
-     "maxMs": 9.6
+     "medianMs": 10.3,
+     "meanMs": 8.59,
+     "maxMs": 13.7
     },
     "slices-h": {
-     "medianMs": 8.8,
-     "meanMs": 8.44,
-     "maxMs": 12
+     "medianMs": 13.8,
+     "meanMs": 12.56,
+     "maxMs": 21
     },
     "slices-v": {
-     "medianMs": 12.1,
-     "meanMs": 11.99,
-     "maxMs": 15.7
+     "medianMs": 20.2,
+     "meanMs": 18.39,
+     "maxMs": 28.5
     },
     "dissolve": {
-     "medianMs": 7.3,
-     "meanMs": 7.23,
-     "maxMs": 9.1
+     "medianMs": 10.8,
+     "meanMs": 11.21,
+     "maxMs": 15.4
     }
    },
    "noTransitionMedianMs": 1.1,
    "over60ms": [
-    "punch-in: 76.5 ms",
-    "punch-out: 69.7 ms",
-    "blur-dissolve: 74.6 ms"
+    "punch-in: 87.9 ms",
+    "punch-out: 84.4 ms",
+    "blur-dissolve: 106.4 ms"
    ],
    "note": "Lab page in the proof's headless Chromium, one run on this machine; median of the 29 frames of a 29-frame transition; recorded, not a target",
    "pageErrors": []
@@ -2039,7 +2039,7 @@
    }
   },
   {
-   "name": "T8 recorded (not a gate): median ms per frame at 1080×1920 for each new Canvas2D id; over 60 ms: punch-in: 76.5 ms, punch-out: 69.7 ms, blur-dissolve: 74.6 ms",
+   "name": "T8 recorded (not a gate): median ms per frame at 1080×1920 for each new Canvas2D id; over 60 ms: punch-in: 87.9 ms, punch-out: 84.4 ms, blur-dissolve: 106.4 ms",
    "ok": true,
    "detail": {
     "size": "1080x1920",
@@ -2048,75 +2048,75 @@
     "results": {
      "none": {
       "medianMs": 1.1,
-      "meanMs": 1.39,
-      "maxMs": 10.3
+      "meanMs": 1.72,
+      "maxMs": 13.5
      },
      "punch-in": {
-      "medianMs": 76.5,
-      "meanMs": 75.99,
-      "maxMs": 87
+      "medianMs": 87.9,
+      "meanMs": 86.17,
+      "maxMs": 102.2
      },
      "punch-out": {
-      "medianMs": 69.7,
-      "meanMs": 66.18,
-      "maxMs": 86.5
+      "medianMs": 84.4,
+      "meanMs": 77.6,
+      "maxMs": 92.5
      },
      "blur-dissolve": {
-      "medianMs": 74.6,
-      "meanMs": 68.33,
-      "maxMs": 108.7
+      "medianMs": 106.4,
+      "meanMs": 93.77,
+      "maxMs": 127.8
      },
      "split-open-h": {
-      "medianMs": 30.2,
-      "meanMs": 30.51,
-      "maxMs": 39.9
+      "medianMs": 43.1,
+      "meanMs": 42.92,
+      "maxMs": 57.5
      },
      "split-open-v": {
-      "medianMs": 29.7,
-      "meanMs": 30.17,
-      "maxMs": 47.5
+      "medianMs": 42.2,
+      "meanMs": 42.04,
+      "maxMs": 60.6
      },
      "shape-heart": {
-      "medianMs": 5,
-      "meanMs": 5.19,
-      "maxMs": 11.2
+      "medianMs": 7.8,
+      "meanMs": 8.46,
+      "maxMs": 18.2
      },
      "shape-star": {
-      "medianMs": 5,
-      "meanMs": 5.05,
-      "maxMs": 8.4
+      "medianMs": 6.5,
+      "meanMs": 6.61,
+      "maxMs": 8.8
      },
      "block-left": {
-      "medianMs": 6,
-      "meanMs": 5.64,
-      "maxMs": 9.4
+      "medianMs": 9.8,
+      "meanMs": 8.13,
+      "maxMs": 12.3
      },
      "block-right": {
-      "medianMs": 5.9,
-      "meanMs": 5.71,
-      "maxMs": 9.6
+      "medianMs": 10.3,
+      "meanMs": 8.59,
+      "maxMs": 13.7
      },
      "slices-h": {
-      "medianMs": 8.8,
-      "meanMs": 8.44,
-      "maxMs": 12
+      "medianMs": 13.8,
+      "meanMs": 12.56,
+      "maxMs": 21
      },
      "slices-v": {
-      "medianMs": 12.1,
-      "meanMs": 11.99,
-      "maxMs": 15.7
+      "medianMs": 20.2,
+      "meanMs": 18.39,
+      "maxMs": 28.5
      },
      "dissolve": {
-      "medianMs": 7.3,
-      "meanMs": 7.23,
-      "maxMs": 9.1
+      "medianMs": 10.8,
+      "meanMs": 11.21,
+      "maxMs": 15.4
      }
     },
     "noTransitionMedianMs": 1.1,
     "over60ms": [
-     "punch-in: 76.5 ms",
-     "punch-out: 69.7 ms",
-     "blur-dissolve: 74.6 ms"
+     "punch-in: 87.9 ms",
+     "punch-out: 84.4 ms",
+     "blur-dissolve: 106.4 ms"
     ],
     "note": "Lab page in the proof's headless Chromium, one run on this machine; median of the 29 frames of a 29-frame transition; recorded, not a target",
     "pageErrors": []

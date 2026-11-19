@@ -12,6 +12,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import * as T from '@pulseframe/time';
 import { startServer } from '@pulseframe/server';
+import { openCardMenu } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/image-matrix');
@@ -177,6 +178,10 @@ async function main() {
         const shot = await page.evaluate(() => { const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement; const d = cv.getContext('2d')!.getImageData(0, 0, cv.width, cv.height); return { w: cv.width, h: cv.height, data: Array.from(d.data) }; });
         const pj = judge(c, (x, y) => { const X = Math.round((x / W) * shot.w), Y = Math.round((y / H) * shot.h), o = (Y * shot.w + X) * 4; return [shot.data[o]!, shot.data[o + 1]!, shot.data[o + 2]!]; });
         row.preview = pj;
+        // since the redesigned library the notices are in the card's ⋯ menu: open it (and see it open, so an empty list is read
+        // from the open menu, not from a closed one) before reading them
+        await openCardMenu(page, up.assetId);
+        await page.locator(`[data-testid="more-${up.assetId}"][aria-expanded=true]`).waitFor({ timeout: 5000 });
         row.notices = await page.locator('[data-testid=asset-notice]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.code));
         if (pj.worst > 24) problems.push('preview');
         if (errs.length) { problems.push('page error'); row.errors = errs.slice(0, 2); }
