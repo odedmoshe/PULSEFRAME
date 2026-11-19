@@ -18,6 +18,7 @@
  * (vertices and bend grips), and the curve picker (a modal dialog opened from a strip key with Enter).
  * Perform mode (ADR-0025): the perform view at rest, a take under review (ghost banner and chips), the tap calibration dialog
  * (modal) and the camera overlay on a selected clip.
+ * The Hebrew command bar (ADR-0027): a plan's preview, a question's choices, and Settings «עוזר השפה».
  *   pnpm build && pnpm audit:a11y
  */
 import { execFileSync } from 'node:child_process';
@@ -285,6 +286,40 @@ async function main() {
       const cp = await dialogBehaviour('palette-dialog', async () => { await page.getByTestId('projects-open').focus(); await page.keyboard.press('Control+k'); }, '[data-testid=projects-open]');
       await auditState('command-palette', { startsInside: cp.startsInside, tabStepsThatLeftTheDialog: cp.tabStepsThatLeftTheDialog }, true);
       Object.assign(states.at(-1), await cp.close());
+      // the Hebrew command bar (ADR-0027): a plan's preview (the bar's row first and active, its steps, the live region and the
+      // preview outside the listbox), a question's choices with the first choice active, and Settings «עוזר השפה» (owner only)
+      {
+        const openBar = async (text: string) => {
+          await page.getByTestId('open-palette').focus();
+          await page.keyboard.press('Control+k');
+          await page.getByTestId('palette-input').waitFor({ timeout: 8000 });
+          await page.keyboard.type(text);
+          await page.waitForFunction((q) => document.querySelector<HTMLInputElement>('[data-testid=palette-input]')?.value === q && !!document.querySelector<HTMLElement>('[data-testid=bar-result]')?.dataset.kind, text, { timeout: 8000 }).catch(() => {});
+          await page.waitForTimeout(700); // the live region speaks after 500 ms of quiet
+        };
+        const outside = () => page.evaluate(() => [...document.querySelectorAll('[role=listbox] [role]')].every((e) => ['option', 'group'].includes(e.getAttribute('role') ?? '')) && !document.querySelector('[role=listbox] #pf-bar-preview, [role=listbox] [data-testid=bar-live]'));
+        const rowSeen = () => page.evaluate(() => { const el = document.querySelector('[data-testid=bar-result]'); if (!el) return false; const r = el.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return r.height >= 30 && !!hit?.closest('[data-testid=bar-result]'); });
+        const activeId = () => page.evaluate(() => document.querySelector('[data-testid=palette-input]')?.getAttribute('aria-activedescendant'));
+        await openBar(lang === 'he' ? 'הוסף כותרת "בדיקה" כאן' : 'add title "test" here');
+        await auditState('command-bar-preview', { shown: (await page.locator('[data-testid=bar-result][data-kind=plan]').count()) === 1 && (await page.getByTestId('bar-step').count()) === 1 && (await activeId()) === 'pf-palette-opt-bar' && (await outside()) && (await rowSeen()) }, true);
+        await page.keyboard.press('Escape');
+        await page.getByTestId('palette-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+        // a question with two or more choices in this project (its two audio tracks and the clip; «סנכרן לקצב» has one choice
+        // here because no music of this project has a beat analysis)
+        await openBar(lang === 'he' ? 'הגבר את הקול ב־3 דציבל' : 'turn the sound up 3 dB');
+        await page.keyboard.press('ArrowDown');
+        await page.waitForTimeout(200);
+        await auditState('command-bar-choices', { shown: (await page.locator('[data-testid=bar-result][data-kind=ambiguous]').count()) === 1 && (await page.getByTestId('bar-choice').count()) >= 2 && (await activeId()) === 'pf-palette-opt-bar-choice-0' && (await outside()) }, true);
+        await page.keyboard.press('Escape');
+        await page.getByTestId('palette-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+        await page.getByTestId('rail-settings').click();
+        await page.getByTestId('assistant-settings').waitFor({ timeout: 8000 }).catch(() => {});
+        await page.getByTestId('assistant-setup').waitFor({ timeout: 8000 }).catch(() => {});
+        await page.getByTestId('assistant-settings').scrollIntoViewIfNeeded().catch(() => {});
+        await auditState('assistant-settings', { shown: (await page.getByTestId('assistant-settings').count()) === 1 && (await page.getByTestId('assistant-setup').getAttribute('data-setup').catch(() => null)) === 'provider_not_configured' && (await page.getByTestId('assistant-key').getAttribute('type').catch(() => null)) === 'password' }, true);
+        await page.keyboard.press('Escape');
+        await page.getByTestId('settings-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      }
       // the redesign's menus (UX_REDESIGN §4.2, §4.4): the agent avatar's menu and a media card's ⋯ menu. Focus starts on the
       // first item, Escape closes the menu and gives the focus back to its button. Audited before the focus walk (Tab closes a menu).
       const menuBehaviour = async (name: string, button: string) => {

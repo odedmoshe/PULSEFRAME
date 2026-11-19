@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-19T01:18:38.318Z",
+  "ranAt": "2026-11-19T01:52:29.670Z",
   "result": "PASSED",
   "counts": {
     "pass": 23,
@@ -307,14 +307,14 @@
       "detail": [
         {
           "text": "חתוך כאן",
-          "browser": "2613e478665273b9d1b39c56a977c8fa8250e0ff64a83129841921a55199de6e",
-          "node": "2613e478665273b9d1b39c56a977c8fa8250e0ff64a83129841921a55199de6e",
+          "browser": "1a9027ddef6ddeb1af76e80229ffb6adf621bac872c68e414c68f1a4f9d69ccd",
+          "node": "1a9027ddef6ddeb1af76e80229ffb6adf621bac872c68e414c68f1a4f9d69ccd",
           "same": true
         },
         {
           "text": "מחק את הקליפ",
-          "browser": "27200338a9e552c4ec80c9641e9cf680f8ebe263da23a651395c32e7bb579416",
-          "node": "27200338a9e552c4ec80c9641e9cf680f8ebe263da23a651395c32e7bb579416",
+          "browser": "9043bd5b260cb30ddfcb1e258029d56e7616ffe72750a33e3019c63928177003",
+          "node": "9043bd5b260cb30ddfcb1e258029d56e7616ffe72750a33e3019c63928177003",
           "same": true
         },
         {
@@ -331,8 +331,8 @@
         },
         {
           "text": "הוסף מעבר בין כל הקליפים",
-          "browser": "80102e26448198e277d6b3a5f2c62fb508845a1cd284454cf0bb5166caeee88c",
-          "node": "80102e26448198e277d6b3a5f2c62fb508845a1cd284454cf0bb5166caeee88c",
+          "browser": "e17e5b911e22abc40b8c066e079d967ca373c7012c7a332efba4ae838b57bffc",
+          "node": "e17e5b911e22abc40b8c066e079d967ca373c7012c7a332efba4ae838b57bffc",
           "same": true
         }
       ]
@@ -611,14 +611,14 @@
       "detail": [
         {
           "text": "split here",
-          "browser": "d092dcc36ac38920aab88a0e9dca58ed5ed1cb8c467053a84ece4d965d46b6d7",
-          "node": "d092dcc36ac38920aab88a0e9dca58ed5ed1cb8c467053a84ece4d965d46b6d7",
+          "browser": "daeecab873c38090885371f1be0f8f9b8ac1f291f3ea2b13144bad51987d86c9",
+          "node": "daeecab873c38090885371f1be0f8f9b8ac1f291f3ea2b13144bad51987d86c9",
           "same": true
         },
         {
           "text": "delete the clip",
-          "browser": "6dfc370736d3dc9ed880a02ee9c75f8927889a3f631badc3c57453d2887bf69b",
-          "node": "6dfc370736d3dc9ed880a02ee9c75f8927889a3f631badc3c57453d2887bf69b",
+          "browser": "fdbfed30fcea9e51c9059ebbe97a2f888015759e092e84866654afa8a86e3795",
+          "node": "fdbfed30fcea9e51c9059ebbe97a2f888015759e092e84866654afa8a86e3795",
           "same": true
         },
         {
@@ -635,8 +635,8 @@
         },
         {
           "text": "add transitions between all clips",
-          "browser": "cd007c4613d1f2edb8aa588b3ab33250be7358e4738493c38ec2b8b536c7ea7e",
-          "node": "cd007c4613d1f2edb8aa588b3ab33250be7358e4738493c38ec2b8b536c7ea7e",
+          "browser": "b769289c508dfd2a8bdf1bdd55e5e68216f94364dcded284e10fa975b29877ae",
+          "node": "b769289c508dfd2a8bdf1bdd55e5e68216f94364dcded284e10fa975b29877ae",
           "same": true
         }
       ]
@@ -680,7 +680,7 @@
       "detail": {
         "proposer": {
           "status": 200,
-          "proposalId": "prp_KiztZ6PSnYI"
+          "proposalId": "prp_6rMlWKhHqcs"
         },
         "observer": 403,
         "revisionsMoved": 0
@@ -712,12 +712,13 @@
     },
     {
       "id": "13",
-      "name": "accessibility: Ctrl+K, «חתוך כאן» / \"split here\", the polite status speaks, Enter, focus back on open-palette, Ctrl+Z — keyboard only; aria-activedescendant names the bar row, aria-describedby the preview; the live region and the preview are outside the listbox; heuristic audit of the open preview: 0 findings in Hebrew and English (dark: the whole page; light: the palette dialog)",
+      "name": "accessibility: Ctrl+K, «חתוך כאן» / \"split here\", the polite status speaks, Enter, focus back on open-palette, Ctrl+Z — keyboard only; the bar's row is on screen (not clipped: the element at its centre is the row); aria-activedescendant names the bar row, aria-describedby the preview; the live region and the preview are outside the listbox; heuristic audit of the open preview: 0 findings in Hebrew and English (dark: the whole page; light: the palette dialog)",
       "status": "pass",
       "detail": [
         {
           "lang": "he",
           "theme": "dark",
+          "rowSeenOnScreen": true,
           "scope": "whole page",
           "outsideTheDialogInLight": null,
           "activedescendant": "pf-palette-opt-bar",
@@ -736,6 +737,7 @@
         {
           "lang": "he",
           "theme": "light",
+          "rowSeenOnScreen": true,
           "scope": "palette dialog",
           "outsideTheDialogInLight": {
             "lowContrast": 10,
@@ -748,7 +750,7 @@
                 "size": 14
               },
               {
-                "el": "button[data-testid=rename-ast_3bcaf1196b0].track-btn.inline-rename-btn",
+                "el": "button[data-testid=rename-ast_3b5bec4abe0].track-btn.inline-rename-btn",
                 "ratio": 3.18,
                 "text": "✎",
                 "size": 13
@@ -760,7 +762,7 @@
                 "size": 14
               },
               {
-                "el": "button[data-testid=rename-ast_f9468c79f20].track-btn.inline-rename-btn",
+                "el": "button[data-testid=rename-ast_847e4508bb0].track-btn.inline-rename-btn",
                 "ratio": 3.18,
                 "text": "✎",
                 "size": 13
@@ -783,6 +785,7 @@
         {
           "lang": "en",
           "theme": "dark",
+          "rowSeenOnScreen": true,
           "scope": "whole page",
           "outsideTheDialogInLight": null,
           "activedescendant": "pf-palette-opt-bar",
@@ -801,6 +804,7 @@
         {
           "lang": "en",
           "theme": "light",
+          "rowSeenOnScreen": true,
           "scope": "palette dialog",
           "outsideTheDialogInLight": {
             "lowContrast": 10,
@@ -813,7 +817,7 @@
                 "size": 14
               },
               {
-                "el": "button[data-testid=rename-ast_f671bd4f330].track-btn.inline-rename-btn",
+                "el": "button[data-testid=rename-ast_a5a413d7f00].track-btn.inline-rename-btn",
                 "ratio": 3.18,
                 "text": "✎",
                 "size": 13
@@ -825,7 +829,7 @@
                 "size": 14
               },
               {
-                "el": "button[data-testid=rename-ast_64a28b155c0].track-btn.inline-rename-btn",
+                "el": "button[data-testid=rename-ast_431c1b1dcf0].track-btn.inline-rename-btn",
                 "ratio": 3.18,
                 "text": "✎",
                 "size": 13
@@ -973,7 +977,7 @@
         "assistantFilesInBackup": [],
         "filesHoldingTheKey": [],
         "scanned": {
-          "responses": 533,
+          "responses": 534,
           "logLines": 60
         },
         "inResponses": 0,
@@ -1354,6 +1358,7 @@
       {
         "lang": "he",
         "theme": "dark",
+        "rowSeenOnScreen": true,
         "scope": "whole page",
         "outsideTheDialogInLight": null,
         "activedescendant": "pf-palette-opt-bar",
@@ -1372,6 +1377,7 @@
       {
         "lang": "he",
         "theme": "light",
+        "rowSeenOnScreen": true,
         "scope": "palette dialog",
         "outsideTheDialogInLight": {
           "lowContrast": 10,
@@ -1384,7 +1390,7 @@
               "size": 14
             },
             {
-              "el": "button[data-testid=rename-ast_3bcaf1196b0].track-btn.inline-rename-btn",
+              "el": "button[data-testid=rename-ast_3b5bec4abe0].track-btn.inline-rename-btn",
               "ratio": 3.18,
               "text": "✎",
               "size": 13
@@ -1396,7 +1402,7 @@
               "size": 14
             },
             {
-              "el": "button[data-testid=rename-ast_f9468c79f20].track-btn.inline-rename-btn",
+              "el": "button[data-testid=rename-ast_847e4508bb0].track-btn.inline-rename-btn",
               "ratio": 3.18,
               "text": "✎",
               "size": 13
@@ -1419,6 +1425,7 @@
       {
         "lang": "en",
         "theme": "dark",
+        "rowSeenOnScreen": true,
         "scope": "whole page",
         "outsideTheDialogInLight": null,
         "activedescendant": "pf-palette-opt-bar",
@@ -1437,6 +1444,7 @@
       {
         "lang": "en",
         "theme": "light",
+        "rowSeenOnScreen": true,
         "scope": "palette dialog",
         "outsideTheDialogInLight": {
           "lowContrast": 10,
@@ -1449,7 +1457,7 @@
               "size": 14
             },
             {
-              "el": "button[data-testid=rename-ast_f671bd4f330].track-btn.inline-rename-btn",
+              "el": "button[data-testid=rename-ast_a5a413d7f00].track-btn.inline-rename-btn",
               "ratio": 3.18,
               "text": "✎",
               "size": 13
@@ -1461,7 +1469,7 @@
               "size": 14
             },
             {
-              "el": "button[data-testid=rename-ast_64a28b155c0].track-btn.inline-rename-btn",
+              "el": "button[data-testid=rename-ast_431c1b1dcf0].track-btn.inline-rename-btn",
               "ratio": 3.18,
               "text": "✎",
               "size": 13
