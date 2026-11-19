@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-19T03:17:24.191Z",
+  "ranAt": "2026-11-19T03:50:15.082Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v653 x64",
     "browser": "153.0.8010.12"
@@ -145,7 +145,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_8f3f09c6530]",
+          "focusAfterClose": "button[data-testid=more-ast_32e7b282720]",
           "focusReturned": true
         },
         {
@@ -734,7 +734,7 @@
         },
         {
           "state": "multicam-panel",
-          "controls": 381,
+          "controls": 382,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -962,7 +962,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_8f3f09c6530]",
+          "focusAfterClose": "button[data-testid=more-ast_32e7b282720]",
           "focusReturned": true
         },
         {

@@ -11,6 +11,7 @@ import { CHROME_STRINGS } from './chrome.strings.ts';
 import { getChrome, setPaletteView } from './chromeState.ts';
 import { pickCall, type PickKind } from './gallery.pick.ts';
 import { normalize, rankCommands, rankWithRescue } from './palette.search.ts';
+import { defaultActiveKey, exactCommandId } from './palette.enter.ts';
 import { useEditorState } from './store.ts';
 import './command-palette.css';
 // the Hebrew command bar (ADR-0027): its rows come first in the one listbox (commandBar/contract.ts)
@@ -112,7 +113,10 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
   const barKeys = scope === 'assistant' ? [] : bar.keys;
   const keys = useMemo(() => [...barKeys, ...flat.map((c) => c.id), ...catShown.map((c) => c.key), ...mediaShown.map((a) => `media:${a.id}`)], [barKeys, flat, catShown, mediaShown]);
   const active = flat.find((c) => c.id === activeId) ?? (activeId ? undefined : flat[0]);
-  const activeKey = activeId && keys.includes(activeId) ? activeId : keys[0] ?? null;
+  // Enter's default: the bar's answer (plan §6), unless the text is exactly a command's name and the bar has nothing to run for it (palette.enter.ts).
+  const exactId = useMemo(() => exactCommandId(query, SEARCH_ITEMS) ?? exactCommandId(rescued, SEARCH_ITEMS), [query, rescued]);
+  const barRuns = barKeys.length > 0 && !bar.pending && bar.view.query === query && !!bar.view.entries[0]?.target;
+  const activeKey = activeId && keys.includes(activeId) ? activeId : defaultActiveKey({ keys, barRuns, exactId });
   const counts = { catalogue: catRows.length, media: mediaRows.length };
   const optionDomId = (id: string) => `pf-palette-opt-${id.replace(/[^A-Za-z0-9_-]/g, '-')}`;
 
