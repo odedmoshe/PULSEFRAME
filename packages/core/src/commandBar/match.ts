@@ -109,11 +109,21 @@ const words = (key: string, role: BarReadingRole, list: readonly string[], value
 };
 const table = (key: string, role: BarReadingRole, rows: Readonly<Record<string, readonly string[]>>, head = false): Matcher => (tokens, i) =>
   Object.entries(rows).flatMap(([value, list]) => words(key, role, list, value, head)(tokens, i));
+const catalogPhrases = new WeakMap<readonly { id: string; phrase: string }[], { id: string; ph: Phrase }[]>();
+/** A catalogue's names as phrases (tokenized once per catalogue). */
+function phrasesOf(list: readonly { id: string; phrase: string }[]): { id: string; ph: Phrase }[] {
+  let out = catalogPhrases.get(list);
+  if (!out) {
+    out = list.map((n) => ({ id: n.id, ph: tokenize(n.phrase, () => true).tokens.map((t, k): WordSpec => ({ w: t.norm, pre: k === 0 ? 'any' : 'default' })) })).filter((n) => n.ph.length > 0);
+    catalogPhrases.set(list, out);
+  }
+  return out;
+}
 function catalog(key: string, list: readonly { id: string; phrase: string }[], head = false): Matcher {
   return (tokens, i) => {
     let best: Hit | null = null;
-    for (const n of list) {
-      const ph = tokenize(n.phrase, () => true).tokens.map((t, k): WordSpec => ({ w: t.norm, pre: k === 0 ? 'any' : 'default' }));
+    for (const n of phrasesOf(list)) {
+      const ph = n.ph;
       const e = matchPhrase(tokens, i, ph);
       if (e > i && (!best || e > best.end)) best = { start: i, end: e, role: 'style', key, value: n.id, head };
     }

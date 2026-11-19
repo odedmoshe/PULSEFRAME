@@ -50,6 +50,7 @@ export const interpret: Interpret = (text: string, ctx: BarContext): BarResult =
       if (r.kind === 'plan' || r.kind === 'action') choices.push({ ...INTENT_NAMES[r.intent], result: r });
       else if (r.kind === 'ambiguous') choices.push(...r.choices);
     }
+    if (!choices.length) return full[0]!;
     const readings = full.flatMap((r) => r.readings);
     return { kind: 'ambiguous', intent: null, tokens, readings, choices, question: { he: 'יש כמה אפשרויות:', en: 'There are several readings:' } };
   }
