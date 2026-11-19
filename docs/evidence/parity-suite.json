@@ -3592,7 +3592,7 @@
     "qualityLadderReportOnly": {
       "high": {
         "bytes": 518989,
-        "wallSeconds": 2.995,
+        "wallSeconds": 3.389,
         "psnr": {
           "min": 41.7074,
           "median": 43.8259,
@@ -3608,7 +3608,7 @@
       },
       "mp4-standard": {
         "bytes": 339200,
-        "wallSeconds": 3.022,
+        "wallSeconds": 3.229,
         "psnr": {
           "min": 38.8579,
           "median": 40.4358,
@@ -3622,7 +3622,7 @@
       },
       "mp4-draft": {
         "bytes": 187647,
-        "wallSeconds": 2.635,
+        "wallSeconds": 3.471,
         "psnr": {
           "min": 32.9974,
           "median": 34.1828,
@@ -3636,7 +3636,7 @@
       },
       "webm-vp9-standard": {
         "bytes": 413867,
-        "wallSeconds": 3.332,
+        "wallSeconds": 3.947,
         "psnr": {
           "min": 37.4323,
           "median": 40.4428,
@@ -4156,8 +4156,8 @@
     "test2 smallTextPsnr frame 145: 32.6751 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)"
   ],
   "machine": {
-    "platform": "Linux 6.18.44-fc-v595 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "memoryGiB": 15.7,
     "gpu": "none",
@@ -4209,5 +4209,5 @@
     "Test 1 (i) and (ii) are both strict; the paused preview decodes the original media (data-source=original), playback uses the proxy.",
     "Small-text (14.4 px) regional PSNR in Test 2 is report+warning only; the pass/fail criterion is textSizeEnvelope."
   ],
-  "runtimeSeconds": 120.4
+  "runtimeSeconds": 126.6
 }

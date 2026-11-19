@@ -1,10 +1,10 @@
 {
-  "ranAt": "2026-11-18T01:08:07.721Z",
+  "ranAt": "2026-11-19T04:27:56.050Z",
   "result": "PASSED",
   "passed": 26,
   "total": 26,
   "machine": {
-    "platform": "Linux 6.18.44-fc-v595 x64",
+    "platform": "Linux 6.18.44-fc-v653 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none used: the render worker ran without WebGPU (PF_RENDER_GPU=off)",
@@ -13,7 +13,7 @@
   },
   "scope": "Time effects (echo, time split, shutter, stutter) on synthetic fixtures: a 640x360 frame-barcode video, a 320x180 flat-grey lossless video, a white bar and a coloured still image, a generated click track; server stills and exports, one browser export, the paused editor preview. Correctness, agreement, decoder budget and flash safety at defaults; one cost sample. Not covered: real footage, playback frame rate in the editor, a hardware graphics adapter, the owner's laptop.",
   "measurements": {
-    "stillMs": 325,
+    "stillMs": 378,
     "greyDecoded": {
       "frames": 29,
       "differentFromEncodedLevel": 3,
@@ -26,7 +26,7 @@
           "sampleRate": 22050,
           "hop": 256
         },
-        "createdAt": "2026-11-18T01:07:18.361Z",
+        "createdAt": "2026-11-19T04:27:05.588Z",
         "createdBy": "agent:local",
         "edited": false,
         "bpm": 132.51,
@@ -81,7 +81,7 @@
       "opened": 10,
       "disposed": 0,
       "refused": 0,
-      "wallMs": 4224,
+      "wallMs": 4584,
       "frames": 120
     },
     "previewVsStill": {
@@ -124,12 +124,12 @@
       "size": "1080x1920",
       "frames": 30,
       "drawMsPerFrame": {
-        "noEffect": 6.8,
-        "echo5": 138.8
+        "noEffect": 6.4,
+        "echo5": 139.3
       },
       "wallSeconds": {
-        "noEffect": 2.894,
-        "echo5": 6.885
+        "noEffect": 2.884,
+        "echo5": 7.118
       },
       "note": "server export, software canvas, one run on this machine; not a target"
     }
@@ -435,9 +435,9 @@
         ],
         "frames": 120,
         "renderStageMs": {
-          "draw": 3212,
-          "readback": 108,
-          "upload": 1279
+          "draw": 3279,
+          "readback": 106,
+          "upload": 1311
         }
       }
     },
@@ -450,7 +450,7 @@
         "opened": 10,
         "disposed": 0,
         "refused": 0,
-        "wallMs": 4224,
+        "wallMs": 4584,
         "frames": 120
       }
     },
@@ -459,7 +459,7 @@
       "ok": true,
       "detail": {
         "status": 503,
-        "error": "the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: time.echo: decode_budget: this frame needs more than 12 video decoders\n    at v (http://127.0.0.1:8877"
+        "error": "the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: time.echo: decode_budget: this frame needs more than 12 video decoders\n    at y (http://127.0.0.1:8877"
       }
     },
     {
@@ -474,9 +474,9 @@
             "toFrame": 40,
             "peak": 15,
             "clipIds": [
-              "clp_d0f003b5d30",
-              "clp_a089c34f3f1",
-              "clp_6ab621c04a1"
+              "clp_3a78873a120",
+              "clp_91931e370c1",
+              "clp_1db211df961"
             ]
           }
         ]
@@ -491,9 +491,9 @@
           "severity": "warning",
           "message": "on frames 24–39, more video pictures must be decoded at once than the 12 the renderer can open (up to 15); those frames would be refused. Time effects such as echo and time split decode each earlier picture separately (a picture shown more than once in a frame is decoded once). Lower the count of a time effect, remove one, or move the overlapping clips apart",
           "ids": [
-            "clp_d0f003b5d30",
-            "clp_a089c34f3f1",
-            "clp_6ab621c04a1"
+            "clp_3a78873a120",
+            "clp_91931e370c1",
+            "clp_1db211df961"
           ],
           "range": {
             "startFrame": 24,
@@ -573,12 +573,12 @@
         "size": "1080x1920",
         "frames": 30,
         "drawMsPerFrame": {
-          "noEffect": 6.8,
-          "echo5": 138.8
+          "noEffect": 6.4,
+          "echo5": 139.3
         },
         "wallSeconds": {
-          "noEffect": 2.894,
-          "echo5": 6.885
+          "noEffect": 2.884,
+          "echo5": 7.118
         },
         "note": "server export, software canvas, one run on this machine; not a target"
       }

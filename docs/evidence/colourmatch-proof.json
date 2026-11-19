@@ -1,10 +1,10 @@
 {
-  "ranAt": "2026-11-18T02:56:33.010Z",
+  "ranAt": "2026-11-19T04:36:30.944Z",
   "result": "PASSED",
   "passed": 17,
   "total": 17,
   "machine": {
-    "platform": "Linux 6.18.44-fc-v595 x64",
+    "platform": "Linux 6.18.44-fc-v653 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none: the WebGPU adapter here is a software one"
   },
@@ -43,7 +43,7 @@
       },
       "verified": 0.05,
       "model": 0.06,
-      "seconds": 3.654
+      "seconds": 4.589
     },
     "m2b": {
       "known": {
@@ -120,35 +120,35 @@
     "m5": {
       "targets": [
         {
-          "clipId": "clp_91ee81c2cf0",
+          "clipId": "clp_cbcd8805610",
           "verdict": "close",
           "verified": 0.43,
           "limitedBy": [],
           "warnings": []
         },
         {
-          "clipId": "clp_b2552785fe0",
+          "clipId": "clp_57c0f4ad4f0",
           "verdict": "close",
           "verified": 0.38,
           "limitedBy": [],
           "warnings": []
         },
         {
-          "clipId": "clp_a24e00ef490",
+          "clipId": "clp_8e224476ae0",
           "verdict": "close",
           "verified": 0.13,
           "limitedBy": [],
           "warnings": []
         },
         {
-          "clipId": "clp_ade0a04c230",
+          "clipId": "clp_bb7fad19070",
           "verdict": "close",
           "verified": 0.14,
           "limitedBy": [],
           "warnings": []
         },
         {
-          "clipId": "clp_71f40c8ebb0",
+          "clipId": "clp_8dd5eec7aa0",
           "verdict": "close",
           "verified": 0.27,
           "limitedBy": [],
@@ -276,38 +276,38 @@
       {
         "check": "M2",
         "targets": 1,
-        "seconds": 3.65,
-        "secondsPerTarget": 3.65
+        "seconds": 4.59,
+        "secondsPerTarget": 4.59
       },
       {
         "check": "M2b",
         "targets": 1,
-        "seconds": 3.06,
-        "secondsPerTarget": 3.06
+        "seconds": 4.56,
+        "secondsPerTarget": 4.56
       },
       {
         "check": "M3",
         "targets": 1,
-        "seconds": 3.17,
-        "secondsPerTarget": 3.17
+        "seconds": 3.68,
+        "secondsPerTarget": 3.68
       },
       {
         "check": "M5",
         "targets": 5,
-        "seconds": 10.43,
-        "secondsPerTarget": 2.09
+        "seconds": 14.7,
+        "secondsPerTarget": 2.94
       },
       {
         "check": "M6",
         "targets": 2,
-        "seconds": 5.04,
-        "secondsPerTarget": 2.52
+        "seconds": 6.79,
+        "secondsPerTarget": 3.4
       },
       {
         "check": "M9",
         "targets": 1,
-        "seconds": 2.02,
-        "secondsPerTarget": 2.02
+        "seconds": 3.05,
+        "secondsPerTarget": 3.05
       }
     ]
   },
@@ -348,7 +348,7 @@
         },
         "verified": 0.05,
         "model": 0.06,
-        "seconds": 3.654
+        "seconds": 4.589
       }
     },
     {
@@ -441,35 +441,35 @@
       "detail": {
         "targets": [
           {
-            "clipId": "clp_91ee81c2cf0",
+            "clipId": "clp_cbcd8805610",
             "verdict": "close",
             "verified": 0.43,
             "limitedBy": [],
             "warnings": []
           },
           {
-            "clipId": "clp_b2552785fe0",
+            "clipId": "clp_57c0f4ad4f0",
             "verdict": "close",
             "verified": 0.38,
             "limitedBy": [],
             "warnings": []
           },
           {
-            "clipId": "clp_a24e00ef490",
+            "clipId": "clp_8e224476ae0",
             "verdict": "close",
             "verified": 0.13,
             "limitedBy": [],
             "warnings": []
           },
           {
-            "clipId": "clp_ade0a04c230",
+            "clipId": "clp_bb7fad19070",
             "verdict": "close",
             "verified": 0.14,
             "limitedBy": [],
             "warnings": []
           },
           {
-            "clipId": "clp_71f40c8ebb0",
+            "clipId": "clp_8dd5eec7aa0",
             "verdict": "close",
             "verified": 0.27,
             "limitedBy": [],
@@ -693,7 +693,7 @@
       "ok": true,
       "detail": {
         "status": 503,
-        "error": "the reference clip clp_7a432efe1b0 uses an effect that needs a graphics adapter, and the render worker has none, so it cannot be measured: the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_u"
+        "error": "the reference clip clp_6e5916c4dd0 uses an effect that needs a graphics adapter, and the render worker has none, so it cannot be measured: the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_u"
       }
     },
     {
@@ -703,38 +703,38 @@
         {
           "check": "M2",
           "targets": 1,
-          "seconds": 3.65,
-          "secondsPerTarget": 3.65
+          "seconds": 4.59,
+          "secondsPerTarget": 4.59
         },
         {
           "check": "M2b",
           "targets": 1,
-          "seconds": 3.06,
-          "secondsPerTarget": 3.06
+          "seconds": 4.56,
+          "secondsPerTarget": 4.56
         },
         {
           "check": "M3",
           "targets": 1,
-          "seconds": 3.17,
-          "secondsPerTarget": 3.17
+          "seconds": 3.68,
+          "secondsPerTarget": 3.68
         },
         {
           "check": "M5",
           "targets": 5,
-          "seconds": 10.43,
-          "secondsPerTarget": 2.09
+          "seconds": 14.7,
+          "secondsPerTarget": 2.94
         },
         {
           "check": "M6",
           "targets": 2,
-          "seconds": 5.04,
-          "secondsPerTarget": 2.52
+          "seconds": 6.79,
+          "secondsPerTarget": 3.4
         },
         {
           "check": "M9",
           "targets": 1,
-          "seconds": 2.02,
-          "secondsPerTarget": 2.02
+          "seconds": 3.05,
+          "secondsPerTarget": 3.05
         }
       ]
     }

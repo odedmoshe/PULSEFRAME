@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-19T01:53:28.789Z",
+  "ranAt": "2026-11-19T06:49:47.088Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v653 x64",
     "browser": "153.0.8010.12"
@@ -34,11 +34,11 @@
     "13-export-finished"
   ],
   "summary": {
-    "ids": 645,
-    "patterns": 27,
+    "ids": 646,
+    "patterns": 28,
     "staticMissing": [],
     "inTheDomOfAState": 279,
-    "onlyInItsOwnProofScenario": 366,
+    "onlyInItsOwnProofScenario": 367,
     "lostSinceTheLastReport": [],
     "acceptedWithLosses": false,
     "unreadableReferences": 46
@@ -110,7 +110,7 @@
     {"id":"asr","kind":"exact","usedBy":["speech-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/TranscriptPanel.tsx"]},"dynamic":["02-main","03-clip-selected","04-format-9x16","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates"]},
     {"id":"asr-progress","kind":"exact","usedBy":["speech-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/TranscriptPanel.tsx"]},"dynamic":[]},
     {"id":"asr-run","kind":"exact","usedBy":["speech-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/TranscriptPanel.tsx"]},"dynamic":[]},
-    {"id":"asset-*","kind":"pattern","usedBy":["phase3-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/MediaLibrary.tsx"]},"dynamic":["02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","13-export-finished"]},
+    {"id":"asset-*","kind":"pattern","usedBy":["a11y-audit.ts","phase3-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/MediaLibrary.tsx"]},"dynamic":["02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","13-export-finished"]},
     {"id":"asset-notice","kind":"exact","usedBy":["image-matrix.ts","input-matrix.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/MediaLibrary.tsx"]},"dynamic":["x-card-menu"]},
     {"id":"assistant-host","kind":"exact","usedBy":["editor-interactions-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/commandBar/commandBar.testids.ts"]},"dynamic":[]},
     {"id":"assistant-key","kind":"exact","usedBy":["a11y-audit.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/commandBar/commandBar.testids.ts"]},"dynamic":[]},
@@ -372,6 +372,7 @@
     {"id":"mask-enabled","kind":"exact","usedBy":["phase7-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/LookPanel.tsx"]},"dynamic":["03-clip-selected","04-format-9x16","06-gallery-transitions","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu"]},
     {"id":"mask-shape","kind":"exact","usedBy":["phase7-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/LookPanel.tsx"]},"dynamic":["03-clip-selected","04-format-9x16","06-gallery-transitions","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu"]},
     {"id":"menu-delete","kind":"exact","usedBy":["editor-interactions-proof.ts"],"static":{"found":true,"how":"template","where":["apps/web/src/editor/Timeline.tsx","apps/web/src/editor/Timeline.tsx (template literal)"],"via":["menu-*"]},"dynamic":["x-clip-menu"]},
+    {"id":"missing-*","kind":"pattern","usedBy":["a11y-audit.ts"],"static":{"found":true,"how":"template","where":["apps/web/src/editor/MediaLibrary.tsx","apps/web/src/editor/MediaLibrary.tsx (template literal)"],"via":["missing-*"]},"dynamic":[]},
     {"id":"more-*","kind":"pattern","usedBy":["a11y-audit.ts","editor-ui.ts","phase12-proof.ts","phase3-proof.ts"],"static":{"found":true,"how":"template","where":["apps/web/src/editor/MediaLibrary.tsx","apps/web/src/editor/MediaLibrary.tsx (template literal)"],"via":["more-*"]},"dynamic":["02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","13-export-finished"]},
     {"id":"motion-path","kind":"exact","usedBy":["a11y-audit.ts","keyframes-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/keyframes.testids.ts"]},"dynamic":[]},
     {"id":"motion-path-bend","kind":"exact","usedBy":["a11y-audit.ts","keyframes-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/keyframes.testids.ts"]},"dynamic":[]},
@@ -502,7 +503,7 @@
     {"id":"redact-warning","kind":"exact","usedBy":["a11y-audit.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/RedactControls.tsx","apps/web/src/editor/tracking.strings.ts"]},"dynamic":[]},
     {"id":"redo","kind":"exact","usedBy":["phase0-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/Header.tsx"]},"dynamic":["01-start-empty","02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates","x-rail-ai","13-export-finished"]},
     {"id":"remove-*","kind":"pattern","usedBy":["gpu-proof.ts","phase12-proof.ts"],"static":{"found":true,"how":"template","where":["apps/web/src/editor/MediaLibrary.tsx","apps/web/src/editor/MediaLibrary.tsx (template literal)"],"via":["remove-*"]},"dynamic":["x-card-menu"]},
-    {"id":"rename-*","kind":"pattern","usedBy":["phase3-proof.ts"],"static":{"found":true,"how":"template","where":["apps/web/src/editor/MediaLibrary.tsx","apps/web/src/editor/MediaLibrary.tsx (template literal)"],"via":["rename-*"]},"dynamic":["02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","13-export-finished"]},
+    {"id":"rename-*","kind":"pattern","usedBy":["a11y-audit.ts","phase3-proof.ts"],"static":{"found":true,"how":"template","where":["apps/web/src/editor/MediaLibrary.tsx","apps/web/src/editor/MediaLibrary.tsx (template literal)"],"via":["rename-*"]},"dynamic":["02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","13-export-finished"]},
     {"id":"rename-*-input","kind":"pattern","usedBy":["phase3-proof.ts"],"static":{"found":true,"how":"template","where":["apps/web/src/editor/MediaLibrary.tsx","apps/web/src/editor/MediaLibrary.tsx (template literal)"],"via":["rename-*"]},"dynamic":[]},
     {"id":"replace-media","kind":"exact","usedBy":["editor-interactions-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/templates.testids.ts"]},"dynamic":["03-clip-selected","06-gallery-transitions","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu"]},
     {"id":"replace-media-option","kind":"exact","usedBy":["editor-interactions-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/templates.testids.ts"]},"dynamic":[]},
@@ -692,7 +693,7 @@
     {"id":"workspace-switch","kind":"exact","usedBy":["editor-interactions-proof.ts","editor-ui.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/Header.tsx"]},"dynamic":["01-start-empty","02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates","x-rail-ai","13-export-finished"]}
   ],
   "unreadableReferences": [
-    {"file":"packages/evals/src/a11y-audit.ts","line":196,"text":"data-testid=${id}]","why":"no call passes a literal for \"id\""},
+    {"file":"packages/evals/src/a11y-audit.ts","line":198,"text":"data-testid=${id}]","why":"no call passes a literal for \"id\""},
     {"file":"packages/evals/src/a11y-render-cache.ts","line":61,"text":"data-testid=${id}]","why":"no call passes a literal for \"id\""},
     {"file":"packages/evals/src/a11y-render-cache.ts","line":66,"text":"data-testid=${id}]","why":"no call passes a literal for \"id\""},
     {"file":"packages/evals/src/a11y-render-cache.ts","line":71,"text":"data-testid=${id}]","why":"no call passes a literal for \"id\""},

@@ -1,7 +1,7 @@
 {
- "generatedAt": "2026-11-18T05:31:32.139Z",
+ "generatedAt": "2026-11-19T05:50:01.444Z",
  "profile": {
-  "os": "Linux 6.18.44-fc-v595",
+  "os": "Linux 6.18.44-fc-v653",
   "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
   "note": "CPU-only container; Chromium with the software WebGPU adapter. Functional checks only; nothing here judges how a curve, motion, thumbnail or sound looks or sounds."
  },
@@ -219,28 +219,25 @@
    "name": "a hovered strobe tile animates (its light rises again) but shows at most three rises in any second of real time (sampled on every animation frame for at least 2 s and until 60 samples, at most 20 s), and the dialog carries data-flashes-held from its flash guard",
    "ok": true,
    "detail": {
-    "samples": 64,
-    "seconds": 11.05,
-    "rises": 7,
+    "samples": 62,
+    "seconds": 11.62,
+    "rises": 4,
     "mostInOneSecond": 2,
-    "flashesHeld": "1",
-    "changes": 25,
+    "flashesHeld": "0",
+    "changes": 19,
     "levels": [
      75,
      183
     ],
     "riseTimes": [
-     2.498,
-     3.579,
-     5.573,
-     6.495,
-     7.749,
-     8.421,
-     9.677
+     3.438,
+     5.452,
+     8.964,
+     9.877
     ],
     "sampleGapsMs": {
-     "median": 172,
-     "max": 687
+     "median": 176,
+     "max": 697
     },
     "errors": []
    }
@@ -604,28 +601,25 @@
    "stutter": 338
   },
   "galleryStrobeHover": {
-   "samples": 64,
-   "seconds": 11.05,
-   "rises": 7,
+   "samples": 62,
+   "seconds": 11.62,
+   "rises": 4,
    "mostInOneSecond": 2,
-   "flashesHeld": "1",
-   "changes": 25,
+   "flashesHeld": "0",
+   "changes": 19,
    "levels": [
     75,
     183
    ],
    "riseTimes": [
-    2.498,
-    3.579,
-    5.573,
-    6.495,
-    7.749,
-    8.421,
-    9.677
+    3.438,
+    5.452,
+    8.964,
+    9.877
    ],
    "sampleGapsMs": {
-    "median": 172,
-    "max": 687
+    "median": 176,
+    "max": 697
    }
   }
  },

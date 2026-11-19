@@ -1,7 +1,7 @@
 {
   "proof": "family-film",
   "status": "passed",
-  "at": "2026-11-18T18:10:26.576Z",
+  "at": "2026-11-19T06:26:27.894Z",
   "summary": "41/41 checks passed, 0 section(s) blocked",
   "checks": [
     {
@@ -78,7 +78,7 @@
           "attached": 6,
           "revision": 25,
           "skipped": [],
-          "wallSeconds": 6.73,
+          "wallSeconds": 6.774,
           "mediaSeconds": 82
         },
         "revisionBefore": 24,
@@ -99,7 +99,7 @@
           "attached": 6,
           "revision": 27,
           "skipped": [],
-          "wallSeconds": 0.673,
+          "wallSeconds": 0.009,
           "mediaSeconds": 82
         },
         "sameRecords": true,
@@ -120,7 +120,7 @@
           "attached": 0,
           "revision": null,
           "skipped": [],
-          "wallSeconds": 1.297,
+          "wallSeconds": 1.407,
           "mediaSeconds": 82
         },
         "digests": {
@@ -622,9 +622,9 @@
       "name": "R1: the moved clip and the trimmed clip are byte-identical and present after regenerating at 30 s",
       "value": {
         "protected": [
-          "clp_19a03bc41d4",
-          "clp_19a03bc41d6",
-          "clp_19a03bc41d7"
+          "clp_7a798e10fe4",
+          "clp_7a798e10fe6",
+          "clp_7a798e10fe7"
         ],
         "replaced": 11
       },
@@ -978,7 +978,7 @@
           "offset": 0
         }
       ],
-      "generateSeconds": 11.65
+      "generateSeconds": 13.49
     },
     "capturesReadOnUpload": {
       "film-a.mp4": {
@@ -1082,16 +1082,16 @@
       "downbeats": 47
     },
     "measureSpeed": {
-      "wallSeconds": 6.79,
+      "wallSeconds": 6.82,
       "mediaSeconds": 82,
-      "timesRealTime": 12.08,
+      "timesRealTime": 12.03,
       "output": {
         "measured": 6,
         "cached": 0,
         "attached": 6,
         "revision": 25,
         "skipped": [],
-        "wallSeconds": 6.73,
+        "wallSeconds": 6.774,
         "mediaSeconds": 82
       }
     },
@@ -1099,8 +1099,8 @@
       "origin"
     ],
     "commitLatencyMs": {
-      "before": 21.41,
-      "afterMeasuring": 4.71
+      "before": 5.55,
+      "afterMeasuring": 4.77
     },
     "plan": {
       "picks": [
@@ -1315,9 +1315,9 @@
           "shorter_than_target"
         ],
         "protected": [
-          "clp_19a03bc41d4",
-          "clp_19a03bc41d6",
-          "clp_19a03bc41d7"
+          "clp_7a798e10fe4",
+          "clp_7a798e10fe6",
+          "clp_7a798e10fe7"
         ],
         "replaced": 11
       },
@@ -1386,7 +1386,7 @@
           "longer_than_target"
         ],
         "protected": [
-          "clp_19a03bc41df"
+          "clp_7a798e10fef"
         ],
         "replaced": 13
       },
@@ -1456,7 +1456,7 @@
           "pictures_missing"
         ],
         "protected": [
-          "clp_19a03bc41df"
+          "clp_7a798e10fef"
         ],
         "replaced": 13
       }
