@@ -66,8 +66,8 @@ export const FILLERS = ['את', 'של', 'בבקשה', 'תודה', 'עכשיו', 
 const x = (verbs: readonly string[], objects: readonly string[]): string[] => verbs.flatMap((v) => objects.map((o) => `${v} ${o}`));
 
 // ---------- nouns and target words ----------
-export const CLIP_ONE = ['קליפ', 'קליפ הזה', 'נבחר', 'קליפ הנבחר', 'ל:קליפ', 'ב:קליפ', 'clip', 'this clip', 'selected clip', 'selection', 'בחירה'];
-export const CLIP_MANY = ['קליפים', 'כל הקליפים', 'קליפים הנבחרים', 'נבחרים', 'ל:קליפים', 'clips', 'all clips', 'all the clips', 'selected clips'];
+export const CLIP_ONE = ['קליפ', 'קליפ הזה', 'נבחר', 'קליפ הנבחר', 'ל:קליפ', 'ב:קליפ', 'על קליפ', 'על קליפ הזה', 'on the clip', 'to the clip', 'clip', 'this clip', 'selected clip', 'selection', 'בחירה'];
+export const CLIP_MANY = ['קליפים', 'כל הקליפים', 'קליפים הנבחרים', 'נבחרים', 'ל:קליפים', 'על קליפים', 'על כל הקליפים', 'ל:כל הקליפים', 'on all clips', 'clips', 'all clips', 'all the clips', 'selected clips'];
 /** «המוזיקה»: the audio track whose trackRole is 'music'. REVIEW: שיר, פסקול. */
 export const MUSIC = ['מוזיקה', 'מוסיקה', 'ל:מוזיקה', 'ל:מוסיקה', 'ב:מוזיקה', 'שיר', 'ל:שיר', 'פסקול', 'music', 'song', 'soundtrack'];
 /** «הקול / הסאונד» alone: always ambiguous (clip, track or master). */
