@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-18T23:29:18.094Z",
+  "ranAt": "2026-11-19T00:02:41.796Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v595 x64",
@@ -312,9 +312,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2,
+        "fwd2": 2.01,
         "sh2": "◀◀ ×1",
-        "back1": -0.99,
+        "back1": -1,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -328,9 +328,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 1.02,
+        "playSpeed": 1,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 2.03,
+        "shuttleSpeed": 2.02,
         "staysPaused": true
       }
     },
@@ -358,30 +358,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_602dad6f970",
-          "clp_602dad6f971"
+          "clp_6c446135c60",
+          "clp_6c446135c61"
         ],
         "afterAB": [
-          "clp_602dad6f970",
-          "clp_602dad6f971"
+          "clp_6c446135c60",
+          "clp_6c446135c61"
         ],
         "afterAdd": [
-          "clp_602dad6f970",
-          "clp_602dad6f971",
-          "clp_602dad6f972"
+          "clp_6c446135c60",
+          "clp_6c446135c61",
+          "clp_6c446135c62"
         ],
         "midEscape": [
-          "clp_602dad6f971"
+          "clp_6c446135c61"
         ],
         "afterEscape": [
-          "clp_602dad6f970",
-          "clp_602dad6f971",
-          "clp_602dad6f972"
+          "clp_6c446135c60",
+          "clp_6c446135c61",
+          "clp_6c446135c62"
         ],
         "afterEscapeUp": [
-          "clp_602dad6f970",
-          "clp_602dad6f971",
-          "clp_602dad6f972"
+          "clp_6c446135c60",
+          "clp_6c446135c61",
+          "clp_6c446135c62"
         ]
       }
     },
@@ -543,7 +543,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 15/1799",
+        "valueText": "עוקב קדימה 18/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -804,18 +804,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_c4985b85100",
-          "ast_4abc96f94e0",
-          "ast_a13b7698020",
-          "ast_ade2bce5950",
-          "ast_244a3413970"
+          "ast_b76cf2ef970",
+          "ast_eb5a74f4740",
+          "ast_f83eaf06b70",
+          "ast_1fa52bf9e60",
+          "ast_e08d47bff40"
         ],
         "order1": [
-          "ast_c4985b85100",
-          "ast_ade2bce5950",
-          "ast_4abc96f94e0",
-          "ast_a13b7698020",
-          "ast_244a3413970"
+          "ast_b76cf2ef970",
+          "ast_1fa52bf9e60",
+          "ast_eb5a74f4740",
+          "ast_f83eaf06b70",
+          "ast_e08d47bff40"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -839,7 +839,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-18T23:26:39.419Z",
+          "createdAt": "2026-11-18T23:59:47.315Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -965,8 +965,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_79fb0a90250",
-          "seq_79fb0a90257"
+          "seq_e2a2f722910",
+          "seq_e2a2f722917"
         ],
         "revisions": 1,
         "transactions": [
@@ -976,7 +976,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_79fb0a90250",
+          "seq": "seq_e2a2f722910",
           "selected": "true"
         }
       }
@@ -1007,9 +1007,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_79fb0a90250"
+          "seq": "seq_e2a2f722910"
         },
-        "secondTab": "seq_79fb0a90250",
+        "secondTab": "seq_e2a2f722910",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"

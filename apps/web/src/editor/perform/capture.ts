@@ -11,7 +11,7 @@
  * worker's moves.ts; the defaults are the real ones.
  */
 import {
-  applyTransaction, effectChangesLightIn, FLASH_TABLE_V1, GPU_EFFECT_IDS, flashClassOf, flashGapFrames, lightChanges, lightRanges, MAX_TAKE_HITS, MAX_TAKE_TAPS, PAD_COUNT, performGrid as realGrid, planPerformance as realPlan, quantiseTaps as realQuantise, sequenceDuration,
+  applyTransaction, GPU_EFFECT_IDS, flashClassOf, MAX_TAKE_HITS, MAX_TAKE_TAPS, PAD_COUNT, performGrid as realGrid, planPerformance as realPlan, quantiseTaps as realQuantise, sequenceDuration,
   type Chip, type Hit, type MoveSpec, type PadBank, type PlannedTake, type PlanInput, type ProjectDocument, type QuantiseSettings, type Tap,
 } from '@pulseframe/core';
 import { flashSchedule as realSchedule, type FlashSchedule } from '@pulseframe/engine';
@@ -193,9 +193,7 @@ export function liveDocument(base: ProjectDocument, taps: readonly Tap[], c: Tak
   } catch (e) { return { doc: null, failure: failure(e) }; }
 }
 
-/** A chip as the view words it: `shape` marks a flash_limit hold that came from the pad's own envelope or fade (markShapeHolds). */
-export type PerformChip = Chip & { shape?: true };
-export interface TakePlan { hits: Hit[]; planned: PlannedTake; ghost: ProjectDocument | null; chips: PerformChip[]; grid: number }
+export interface TakePlan { hits: Hit[]; planned: PlannedTake; ghost: ProjectDocument | null; chips: Chip[]; grid: number }
 /**
  * After the stop: the beat grid, the snapped hits, the plan, and the ghost (the plan applied in memory, WITH its sound, shown for
  * review while the revision does not move). Chips of strobe hits the flash schedule did not keep on the ghost are marked held.
@@ -207,7 +205,7 @@ export function planTake(base: ProjectDocument, taps: readonly Tap[], c: TakeCon
     const input: PlanInput = { ...(c.sequenceId ? { sequenceId: c.sequenceId } : {}), hits, bank: c.bank, assets: c.assets, settings: c.settings, gpu: c.gpu };
     const planned = planner.planPerformance(base, input);
     const ghost = planned.args ? applyTransaction(base, [{ op: 'apply_take', args: planned.args }], COMMIT).doc : null;
-    const chips = markShapeHolds(base, ghost, ghost ? markStrobeHolds(base, ghost, planned.chips, c.bank, planner, c.sequenceId) : planned.chips, c.bank, c.sequenceId);
+    const chips = ghost ? markStrobeHolds(base, ghost, planned.chips, c.bank, planner, c.sequenceId) : planned.chips;
     return { hits, planned, ghost, chips, grid: grid.length };
   } catch (e) { return failure(e); }
 }
@@ -238,29 +236,6 @@ export function markStrobeHolds(base: ProjectDocument, ghost: ProjectDocument, c
     if (!m || (m.shown && Array.from(m.shown).some((f) => f >= m.from && f < m.to))) return chip;
     return { ...chip, state: 'held' as const, reason: 'flash_limit' as const };
   });
-}
-
-/** Whether a move has a shape on a channel that changes light: an envelope on an effect that changes light, or a fade of a light-changing adjustment. */
-export const moveHasLightShape = (m: MoveSpec | null | undefined): boolean =>
-  !!m && m.kind === 'adjust' && flashClassOf(m.effects.map((e) => ({ type: e.type })), FLASH_TABLE_V1) === 'colour'
-  && (m.fadeOutSeconds > 0 || m.effects.some((e) => !!e.envelope && e.envelope.from !== e.envelope.to && effectChangesLightIn(FLASH_TABLE_V1, e.type)));
-/**
- * Which flash_limit holds came from the hit's own envelope or fade (the planner holds such a hit rather than stretching it into
- * another shape, but its chip carries only the reason). Derived, never guessed: the planner judges a hit's START against the
- * changes of light kept so far, which are all in the ghost (kept hits stay kept), so a held colour hit of a pad with a light
- * shape, at least the gap long, whose start breaks nothing in the ghost's flash model (lightChanges, lightRanges: the same
- * rule) was held for a change of light inside it: its shape does not fit safely in the clip. A doubtful case keeps the plain words.
- */
-export function markShapeHolds(base: ProjectDocument, ghost: ProjectDocument | null, chips: readonly PerformChip[], bank: PadBank, sequenceId?: string): PerformChip[] {
-  if (!chips.some((c) => c.state === 'held' && c.reason === 'flash_limit' && moveHasLightShape(bank[c.pad]))) return [...chips];
-  const d = ghost ?? base, seqId = sequenceId ?? d.mainSequenceId;
-  const rate = d.settings.frameRate, gap = flashGapFrames(rate.num / rate.den);
-  const before = new Set((base.sequences[seqId]?.tracks ?? []).flatMap((t) => t.clips.map((c) => c.id)));
-  const made = new Set((d.sequences[seqId]?.tracks ?? []).flatMap((t) => t.clips.map((c) => c.id)).filter((id) => !before.has(id)));
-  const changes = lightChanges(d, made, seqId, FLASH_TABLE_V1).map((c) => c.frame);
-  const ranges = lightRanges(d, seqId, FLASH_TABLE_V1);
-  const startFits = (a: number) => !ranges.some((r) => a >= r.from - gap && a < r.to + gap) && !changes.some((f) => Math.abs(f - a) < gap);
-  return chips.map((c) => (c.state === 'held' && c.reason === 'flash_limit' && moveHasLightShape(bank[c.pad]) && c.frames >= gap && startFits(c.frame) ? { ...c, shape: true as const } : c));
 }
 
 export interface ChipCounts { kept: number; merged: number; held: number; byReason: Partial<Record<NonNullable<Chip['reason']>, number>> }
