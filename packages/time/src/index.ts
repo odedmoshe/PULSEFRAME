@@ -6,6 +6,7 @@
  * Intervals are half-open: [start, start + duration).
  * Nothing here accumulates rounded durations; frame k starts at exactly k * den / num.
  */
+import * as X from './exact.ts';
 export interface RationalTime {
   /** Integer numerator as a decimal string (may be negative). */
   value: string;
@@ -16,13 +17,6 @@ export interface Rate {
   num: number;
   den: number;
 }
-
-const gcd = (a: bigint, b: bigint): bigint => {
-  a = a < 0n ? -a : a;
-  b = b < 0n ? -b : b;
-  while (b) [a, b] = [b, a % b];
-  return a;
-};
 
 export function isRationalTime(x: unknown): x is RationalTime {
   if (typeof x !== 'object' || x === null) return false;
@@ -40,68 +34,115 @@ export function rt(value: bigint | number | string, timescale: number): Rational
 }
 export const ZERO: RationalTime = rt(0, 1);
 
-const n = (t: RationalTime) => BigInt(t.value);
-const d = (t: RationalTime) => BigInt(t.timescale);
+/*
+ * Fast paths (2026-11-19): when every value involved is an integer of at most 15 digits and every timescale and rate field a
+ * safe integer, the products and sums below are computed in JS numbers, exactly: a product or sum of integers whose true
+ * value is at most Number.MAX_SAFE_INTEGER is exact in a double, and one whose true value is larger comes out larger than
+ * MAX_SAFE_INTEGER, which sends the call to the BigInt reference (exact.ts) instead. Lowest terms with the sign of the
+ * denominator are unique, so both paths give the same value and timescale; anything unusual (a longer value, a value that is
+ * not plain digits, a fractional or unsafe timescale or rate, a zero divisor) takes the reference path and so also throws as
+ * it does. Never floats for times (ADR-0003): these are integer operations.
+ */
+const MAX = Number.MAX_SAFE_INTEGER;
+/** Test hook (packages/evals commit-equivalence.test.ts): true sends every call to the BigInt reference. Never set outside tests. */
+export const TIME_REFERENCE = { on: false };
+const safe = Number.isSafeInteger;
+const fits = (x: number) => x <= MAX && x >= -MAX;
+/** The value as an exact number when it is plain decimal digits (optional minus) of at most 15 digits; else undefined. */
+function small(v: string): number | undefined {
+  if (typeof v !== 'string' || TIME_REFERENCE.on) return undefined;
+  const len = v.length;
+  let i = len > 0 && v.charCodeAt(0) === 45 ? 1 : 0;
+  if (i === len || len - i > 15) return undefined;
+  for (; i < len; i++) { const c = v.charCodeAt(i); if (c < 48 || c > 57) return undefined; }
+  return Number(v) + 0; // '-0' reads as 0, as BigInt reads it
+}
+/** num/den in lowest terms, the denominator keeping den's sign (as exact.ts make). Both are exact integers within MAX. */
+function makeSmall(num: number, den: number): RationalTime {
+  let x = num < 0 ? -num : num, y = den < 0 ? -den : den;
+  while (y) { const r = x % y; x = y; y = r; }
+  const g = x || 1;
+  return { value: String(num / g), timescale: den / g + 0 };
+}
 
 /** Reduce to lowest terms. Canonical form used when comparing documents. */
 export function normalize(t: RationalTime): RationalTime {
-  const g = gcd(n(t), d(t)) || 1n;
-  return { value: (n(t) / g).toString(), timescale: Number(d(t) / g) };
+  const v = small(t.value);
+  return v !== undefined && safe(t.timescale) ? makeSmall(v, t.timescale) : X.normalize(t);
 }
-function make(num: bigint, den: bigint): RationalTime {
-  const g = gcd(num, den) || 1n;
-  const ts = den / g;
-  if (ts > BigInt(Number.MAX_SAFE_INTEGER)) throw new RangeError('timescale overflow');
-  return { value: (num / g).toString(), timescale: Number(ts) };
+function addSub(a: RationalTime, b: RationalTime, minus: boolean): RationalTime {
+  const av = small(a.value), bv = small(b.value), at = a.timescale, bt = b.timescale;
+  if (av !== undefined && bv !== undefined && safe(at) && safe(bt)) {
+    if (at === bt && at > 0) { const num = minus ? av - bv : av + bv; if (fits(num)) return makeSmall(num, at); }
+    else {
+      const l = av * bt, r = bv * at, den = at * bt, num = minus ? l - r : l + r;
+      if (fits(l) && fits(r) && fits(num) && fits(den)) return makeSmall(num, den);
+    }
+  }
+  return minus ? X.sub(a, b) : X.add(a, b);
 }
-export const add = (a: RationalTime, b: RationalTime) => make(n(a) * d(b) + n(b) * d(a), d(a) * d(b));
-export const sub = (a: RationalTime, b: RationalTime) => make(n(a) * d(b) - n(b) * d(a), d(a) * d(b));
+export const add = (a: RationalTime, b: RationalTime) => addSub(a, b, false);
+export const sub = (a: RationalTime, b: RationalTime) => addSub(a, b, true);
 export function cmp(a: RationalTime, b: RationalTime): -1 | 0 | 1 {
-  const l = n(a) * d(b);
-  const r = n(b) * d(a);
-  return l < r ? -1 : l > r ? 1 : 0;
+  const av = small(a.value), bv = small(b.value), at = a.timescale, bt = b.timescale;
+  if (av !== undefined && bv !== undefined && safe(at) && safe(bt)) {
+    if (at === bt && at > 0) return av < bv ? -1 : av > bv ? 1 : 0;
+    const l = av * bt, r = bv * at;
+    if (fits(l) && fits(r)) return l < r ? -1 : l > r ? 1 : 0;
+  }
+  return X.cmp(a, b);
 }
 export const eq = (a: RationalTime, b: RationalTime) => cmp(a, b) === 0;
 export const lt = (a: RationalTime, b: RationalTime) => cmp(a, b) < 0;
 export const lte = (a: RationalTime, b: RationalTime) => cmp(a, b) <= 0;
 export const min = (a: RationalTime, b: RationalTime) => (lte(a, b) ? a : b);
 export const max = (a: RationalTime, b: RationalTime) => (lte(a, b) ? b : a);
-export const isNegative = (t: RationalTime) => n(t) < 0n;
-export const isZero = (t: RationalTime) => n(t) === 0n;
+export const isNegative = (t: RationalTime) => { const v = small(t.value); return v !== undefined ? v < 0 : X.isNegative(t); };
+export const isZero = (t: RationalTime) => { const v = small(t.value); return v !== undefined ? v === 0 : X.isZero(t); };
 
 /** Lossy; for display and for APIs that only take float seconds. */
-export const toSeconds = (t: RationalTime) => Number(n(t)) / t.timescale;
+export const toSeconds = (t: RationalTime) => { const v = small(t.value); return v !== undefined ? v / t.timescale : X.toSeconds(t); };
 
-const floorDiv = (a: bigint, b: bigint) => {
-  const q = a / b;
-  return a % b !== 0n && a < 0n !== b < 0n ? q - 1n : q;
-};
+const n = (t: RationalTime) => BigInt(t.value);
+const d = (t: RationalTime) => BigInt(t.timescale);
 /** Round half away from zero on the absolute value (documented API-boundary rounding). */
-const roundDiv = (a: bigint, b: bigint) => {
-  const neg = a < 0n !== b < 0n;
-  const aa = a < 0n ? -a : a;
-  const bb = b < 0n ? -b : b;
-  const q = (2n * aa + bb) / (2n * bb);
-  return neg ? -q : q;
-};
+const roundDiv = X.roundDiv;
+/** t * rate.num and t.timescale * rate.den as exact numbers, or null when the reference path must answer. */
+function scaled(t: RationalTime, rate: Rate): [number, number] | null {
+  const v = small(t.value);
+  if (v === undefined || !safe(t.timescale) || !safe(rate.num) || !safe(rate.den)) return null;
+  const a = v * rate.num, b = t.timescale * rate.den;
+  return fits(a) && fits(b) && b !== 0 ? [a, b] : null;
+}
 
 /** Index of the frame whose half-open interval contains `t` (floor). */
 export function frameIndexAt(t: RationalTime, rate: Rate): number {
-  return Number(floorDiv(n(t) * BigInt(rate.num), d(t) * BigInt(rate.den)));
+  const s = scaled(t, rate);
+  if (!s) return X.frameIndexAt(t, rate);
+  const [a, b] = s, r = a % b;
+  const q = (a - r) / b;
+  return (r !== 0 && a < 0 !== b < 0 ? q - 1 : q) + 0;
 }
 /** Index of the frame boundary nearest to `t` (ties round up). Used for snapping. */
 export function nearestFrameIndex(t: RationalTime, rate: Rate): number {
-  return Number(roundDiv(n(t) * BigInt(rate.num), d(t) * BigInt(rate.den)));
+  const s = scaled(t, rate);
+  if (s) {
+    const [a, b] = s, aa = a < 0 ? -a : a, bb = b < 0 ? -b : b, x = 2 * aa + bb, y = 2 * bb;
+    if (fits(x) && fits(y)) { const q = (x - (x % y)) / y; return (a < 0 !== b < 0 ? -q : q) + 0; }
+  }
+  return X.nearestFrameIndex(t, rate);
 }
 /** Exact start time of frame `index`. */
 export function frameTime(index: number, rate: Rate): RationalTime {
-  return make(BigInt(index) * BigInt(rate.den), BigInt(rate.num));
+  if (!TIME_REFERENCE.on && safe(index) && safe(rate.num) && safe(rate.den)) { const num = index * rate.den; if (fits(num)) return makeSmall(num, rate.num); }
+  return X.frameTime(index, rate);
 }
 /** Exact number of whole frames in a duration (floor). */
 export const frameCount = (duration: RationalTime, rate: Rate) => frameIndexAt(duration, rate);
 export const snapToFrame = (t: RationalTime, rate: Rate) => frameTime(nearestFrameIndex(t, rate), rate);
 export function isFrameAligned(t: RationalTime, rate: Rate): boolean {
-  return (n(t) * BigInt(rate.num)) % (d(t) * BigInt(rate.den)) === 0n;
+  const s = scaled(t, rate);
+  return s ? s[0] % s[1] === 0 : X.isFrameAligned(t, rate);
 }
 /** Exact sample index containing `t` at `sampleRate` (floor). */
 export const sampleIndexAt = (t: RationalTime, sampleRate: number) => frameIndexAt(t, { num: sampleRate, den: 1 });
