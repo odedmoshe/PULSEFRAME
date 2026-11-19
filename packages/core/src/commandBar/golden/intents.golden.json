@@ -1,0 +1,1318 @@
+{
+ "split_here · חתוך כאן": {
+  "kind": "plan",
+  "intent": "split_here",
+  "ops": [
+   {
+    "args": {
+     "at": {
+      "t": "4/1"
+     },
+     "clipId": "clp_fx1_2"
+    },
+    "op": "split_clip"
+   }
+  ],
+  "notes": [
+   "alternative_reading"
+  ]
+ },
+ "split_here · פצל כאן": {
+  "kind": "plan",
+  "intent": "split_here",
+  "ops": [
+   {
+    "args": {
+     "at": {
+      "t": "4/1"
+     },
+     "clipId": "clp_fx1_2"
+    },
+    "op": "split_clip"
+   }
+  ],
+  "notes": []
+ },
+ "split_here · פצלי את הקליפ פה": {
+  "kind": "plan",
+  "intent": "split_here",
+  "ops": [
+   {
+    "args": {
+     "at": {
+      "t": "4/1"
+     },
+     "clipId": "clp_fx1_2"
+    },
+    "op": "split_clip"
+   }
+  ],
+  "notes": []
+ },
+ "split_here · split here": {
+  "kind": "plan",
+  "intent": "split_here",
+  "ops": [
+   {
+    "args": {
+     "at": {
+      "t": "4/1"
+     },
+     "clipId": "clp_fx1_2"
+    },
+    "op": "split_clip"
+   }
+  ],
+  "notes": []
+ },
+ "split_here · cut here": {
+  "kind": "plan",
+  "intent": "split_here",
+  "ops": [
+   {
+    "args": {
+     "at": {
+      "t": "4/1"
+     },
+     "clipId": "clp_fx1_2"
+    },
+    "op": "split_clip"
+   }
+  ],
+  "notes": [
+   "alternative_reading"
+  ]
+ },
+ "split_at · פצל בשנייה 4": {
+  "kind": "plan",
+  "intent": "split_at",
+  "ops": [
+   {
+    "args": {
+     "at": {
+      "t": "4/1"
+     },
+     "clipId": "clp_fx1_2"
+    },
+    "op": "split_clip"
+   }
+  ],
+  "notes": []
+ },
+ "split_at · חתוך ב־0:04": {
+  "kind": "plan",
+  "intent": "split_at",
+  "ops": [
+   {
+    "args": {
+     "at": {
+      "t": "4/1"
+     },
+     "clipId": "clp_fx1_2"
+    },
+    "op": "split_clip"
+   }
+  ],
+  "notes": []
+ },
+ "split_at · split at 4s": {
+  "kind": "plan",
+  "intent": "split_at",
+  "ops": [
+   {
+    "args": {
+     "at": {
+      "t": "4/1"
+     },
+     "clipId": "clp_fx1_2"
+    },
+    "op": "split_clip"
+   }
+  ],
+  "notes": []
+ },
+ "trim_start_here · חתוך את ההתחלה עד כאן": {
+  "kind": "plan",
+  "intent": "trim_start_here",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_2",
+     "edge": "start",
+     "to": {
+      "t": "4/1"
+     }
+    },
+    "op": "trim_clip"
+   }
+  ],
+  "notes": []
+ },
+ "trim_start_here · trim the start to here": {
+  "kind": "plan",
+  "intent": "trim_start_here",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_2",
+     "edge": "start",
+     "to": {
+      "t": "4/1"
+     }
+    },
+    "op": "trim_clip"
+   }
+  ],
+  "notes": []
+ },
+ "trim_end_here · קצץ את הסוף מכאן": {
+  "kind": "plan",
+  "intent": "trim_end_here",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_2",
+     "edge": "end",
+     "to": {
+      "t": "4/1"
+     }
+    },
+    "op": "trim_clip"
+   }
+  ],
+  "notes": []
+ },
+ "trim_end_here · trim the end from here": {
+  "kind": "plan",
+  "intent": "trim_end_here",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_2",
+     "edge": "end",
+     "to": {
+      "t": "4/1"
+     }
+    },
+    "op": "trim_clip"
+   }
+  ],
+  "notes": []
+ },
+ "delete_clip · מחק את הקליפ": {
+  "kind": "plan",
+  "intent": "delete_clip",
+  "ops": [
+   {
+    "args": {
+     "clipIds": [
+      "clp_fx1_2"
+     ]
+    },
+    "op": "ripple_delete_clips"
+   }
+  ],
+  "notes": [
+   "ripple_moves"
+  ]
+ },
+ "delete_clip · מחקי את הקליפים": {
+  "kind": "plan",
+  "intent": "delete_clip",
+  "ops": [
+   {
+    "args": {
+     "clipIds": [
+      "clp_fx1_2"
+     ]
+    },
+    "op": "ripple_delete_clips"
+   }
+  ],
+  "notes": [
+   "ripple_moves"
+  ]
+ },
+ "delete_clip · delete the clip": {
+  "kind": "plan",
+  "intent": "delete_clip",
+  "ops": [
+   {
+    "args": {
+     "clipIds": [
+      "clp_fx1_2"
+     ]
+    },
+    "op": "ripple_delete_clips"
+   }
+  ],
+  "notes": [
+   "ripple_moves"
+  ]
+ },
+ "delete_keep_gap · מחק והשאר רווח": {
+  "kind": "plan",
+  "intent": "delete_keep_gap",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_2"
+    },
+    "op": "delete_clip"
+   }
+  ],
+  "notes": []
+ },
+ "delete_keep_gap · delete and keep the gap": {
+  "kind": "plan",
+  "intent": "delete_keep_gap",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_2"
+    },
+    "op": "delete_clip"
+   }
+  ],
+  "notes": []
+ },
+ "add_title · הוסף כותרת \"יום הולדת 5\" בשנייה 3": {
+  "kind": "plan",
+  "intent": "add_title",
+  "ops": [
+   {
+    "args": {
+     "duration": {
+      "t": "2/1"
+     },
+     "start": {
+      "t": "3/1"
+     },
+     "text": "יום הולדת 5"
+    },
+    "op": "add_text"
+   }
+  ],
+  "notes": [
+   "default_used"
+  ]
+ },
+ "add_title · כתוב \"מזל טוב\" כאן למשך 4 שניות": {
+  "kind": "plan",
+  "intent": "add_title",
+  "ops": [
+   {
+    "args": {
+     "duration": {
+      "t": "4/1"
+     },
+     "start": {
+      "t": "4/1"
+     },
+     "text": "מזל טוב"
+    },
+    "op": "add_text"
+   }
+  ],
+  "notes": []
+ },
+ "add_title · add title \"Happy birthday\" at 3s": {
+  "kind": "plan",
+  "intent": "add_title",
+  "ops": [
+   {
+    "args": {
+     "duration": {
+      "t": "2/1"
+     },
+     "start": {
+      "t": "3/1"
+     },
+     "text": "Happy birthday"
+    },
+    "op": "add_text"
+   }
+  ],
+  "notes": [
+   "default_used"
+  ]
+ },
+ "gain_change · הגבר את המוזיקה ב־3 דציבל": {
+  "kind": "plan",
+  "intent": "gain_change",
+  "ops": [
+   {
+    "args": {
+     "gain": 1.412538,
+     "trackId": "trk_fx2_1"
+    },
+    "op": "set_track_audio"
+   }
+  ],
+  "notes": []
+ },
+ "gain_change · הנמך את הקליפ ב־6 דצ״ב": {
+  "kind": "plan",
+  "intent": "gain_change",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_3",
+     "gain": 0.501187
+    },
+    "op": "set_clip_gain"
+   }
+  ],
+  "notes": []
+ },
+ "gain_change · turn the music up 3 dB": {
+  "kind": "plan",
+  "intent": "gain_change",
+  "ops": [
+   {
+    "args": {
+     "gain": 1.412538,
+     "trackId": "trk_fx2_1"
+    },
+    "op": "set_track_audio"
+   }
+  ],
+  "notes": []
+ },
+ "mute · השתק את המוזיקה": {
+  "kind": "plan",
+  "intent": "mute",
+  "ops": [
+   {
+    "args": {
+     "muted": true,
+     "trackId": "trk_fx2_1"
+    },
+    "op": "set_track_audio"
+   }
+  ],
+  "notes": []
+ },
+ "mute · mute the music": {
+  "kind": "plan",
+  "intent": "mute",
+  "ops": [
+   {
+    "args": {
+     "muted": true,
+     "trackId": "trk_fx2_1"
+    },
+    "op": "set_track_audio"
+   }
+  ],
+  "notes": []
+ },
+ "unmute · בטל השתקה למוזיקה": {
+  "kind": "plan",
+  "intent": "unmute",
+  "ops": [
+   {
+    "args": {
+     "muted": false,
+     "trackId": "trk_fx2_1"
+    },
+    "op": "set_track_audio"
+   }
+  ],
+  "notes": []
+ },
+ "unmute · unmute the music": {
+  "kind": "plan",
+  "intent": "unmute",
+  "ops": [
+   {
+    "args": {
+     "muted": false,
+     "trackId": "trk_fx2_1"
+    },
+    "op": "set_track_audio"
+   }
+  ],
+  "notes": []
+ },
+ "transitions_all · הוסף מעבר בין כל הקליפים": {
+  "kind": "plan",
+  "intent": "transitions_all",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_2",
+     "frames": 15,
+     "type": "dissolve"
+    },
+    "op": "set_transition"
+   },
+   {
+    "args": {
+     "clipId": "clp_fx1_4",
+     "frames": 15,
+     "type": "dissolve"
+    },
+    "op": "set_transition"
+   },
+   {
+    "args": {
+     "clipId": "clp_fx2_0",
+     "frames": 15,
+     "type": "dissolve"
+    },
+    "op": "set_transition"
+   }
+  ],
+  "notes": [
+   "default_used",
+   "default_used",
+   "skipped_no_handle"
+  ]
+ },
+ "transitions_all · מעבר רך בין כל הקליפים": {
+  "kind": "plan",
+  "intent": "transitions_all",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_2",
+     "frames": 15,
+     "type": "dissolve"
+    },
+    "op": "set_transition"
+   },
+   {
+    "args": {
+     "clipId": "clp_fx1_4",
+     "frames": 15,
+     "type": "dissolve"
+    },
+    "op": "set_transition"
+   },
+   {
+    "args": {
+     "clipId": "clp_fx2_0",
+     "frames": 15,
+     "type": "dissolve"
+    },
+    "op": "set_transition"
+   }
+  ],
+  "notes": [
+   "default_used",
+   "skipped_no_handle"
+  ]
+ },
+ "transitions_all · add transitions between all clips": {
+  "kind": "plan",
+  "intent": "transitions_all",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_2",
+     "frames": 15,
+     "type": "dissolve"
+    },
+    "op": "set_transition"
+   },
+   {
+    "args": {
+     "clipId": "clp_fx1_4",
+     "frames": 15,
+     "type": "dissolve"
+    },
+    "op": "set_transition"
+   },
+   {
+    "args": {
+     "clipId": "clp_fx2_0",
+     "frames": 15,
+     "type": "dissolve"
+    },
+    "op": "set_transition"
+   }
+  ],
+  "notes": [
+   "default_used",
+   "default_used",
+   "skipped_no_handle"
+  ]
+ },
+ "transition_here · הוסף מעבר כאן": {
+  "kind": "plan",
+  "intent": "transition_here",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_2",
+     "frames": 15,
+     "type": "dissolve"
+    },
+    "op": "set_transition"
+   }
+  ],
+  "notes": [
+   "default_used",
+   "default_used"
+  ]
+ },
+ "transition_here · add a transition here": {
+  "kind": "plan",
+  "intent": "transition_here",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_2",
+     "frames": 15,
+     "type": "dissolve"
+    },
+    "op": "set_transition"
+   }
+  ],
+  "notes": [
+   "default_used",
+   "default_used"
+  ]
+ },
+ "add_marker · הוסף סמן": {
+  "kind": "plan",
+  "intent": "add_marker",
+  "ops": [
+   {
+    "args": {
+     "time": {
+      "t": "4/1"
+     }
+    },
+    "op": "add_marker"
+   }
+  ],
+  "notes": [
+   "default_used"
+  ]
+ },
+ "add_marker · סמן כאן \"עוגה\"": {
+  "kind": "plan",
+  "intent": "add_marker",
+  "ops": [
+   {
+    "args": {
+     "label": "עוגה",
+     "time": {
+      "t": "4/1"
+     }
+    },
+    "op": "add_marker"
+   }
+  ],
+  "notes": []
+ },
+ "add_marker · add a marker": {
+  "kind": "plan",
+  "intent": "add_marker",
+  "ops": [
+   {
+    "args": {
+     "time": {
+      "t": "4/1"
+     }
+    },
+    "op": "add_marker"
+   }
+  ],
+  "notes": [
+   "default_used"
+  ]
+ },
+ "close_gaps · סגור רווחים": {
+  "kind": "plan",
+  "intent": "close_gaps",
+  "ops": [
+   {
+    "args": {},
+    "op": "close_gaps"
+   }
+  ],
+  "notes": []
+ },
+ "close_gaps · close gaps": {
+  "kind": "plan",
+  "intent": "close_gaps",
+  "ops": [
+   {
+    "args": {},
+    "op": "close_gaps"
+   }
+  ],
+  "notes": []
+ },
+ "freeze · הקפא את הפריים לשנייה וחצי": {
+  "kind": "plan",
+  "intent": "freeze",
+  "ops": [
+   {
+    "args": {
+     "at": {
+      "t": "4/1"
+     },
+     "clipId": "clp_fx1_2",
+     "duration": {
+      "t": "3/2"
+     }
+    },
+    "op": "freeze_frame"
+   }
+  ],
+  "notes": [
+   "default_used"
+  ]
+ },
+ "freeze · freeze frame for 2 seconds": {
+  "kind": "plan",
+  "intent": "freeze",
+  "ops": [
+   {
+    "args": {
+     "at": {
+      "t": "4/1"
+     },
+     "clipId": "clp_fx1_2",
+     "duration": {
+      "t": "2/1"
+     }
+    },
+    "op": "freeze_frame"
+   }
+  ],
+  "notes": [
+   "default_used"
+  ]
+ },
+ "speed · האט פי 2": {
+  "kind": "plan",
+  "intent": "speed",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_5",
+     "speed": 0.5
+    },
+    "op": "set_clip_speed"
+   }
+  ],
+  "notes": []
+ },
+ "speed · מהירות כפולה": {
+  "kind": "plan",
+  "intent": "speed",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_5",
+     "speed": 2
+    },
+    "op": "set_clip_speed"
+   }
+  ],
+  "notes": []
+ },
+ "speed · מהירות 0.5": {
+  "kind": "plan",
+  "intent": "speed",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_5",
+     "speed": 0.5
+    },
+    "op": "set_clip_speed"
+   }
+  ],
+  "notes": []
+ },
+ "speed · speed 0.5": {
+  "kind": "plan",
+  "intent": "speed",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_5",
+     "speed": 0.5
+    },
+    "op": "set_clip_speed"
+   }
+  ],
+  "notes": []
+ },
+ "fades · עמעום בהתחלה של חצי שנייה": {
+  "kind": "plan",
+  "intent": "fades",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_3",
+     "fadeIn": {
+      "t": "1/2"
+     }
+    },
+    "op": "set_clip_fades"
+   }
+  ],
+  "notes": []
+ },
+ "fades · fade out 1 second": {
+  "kind": "plan",
+  "intent": "fades",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_3",
+     "fadeOut": {
+      "t": "1/1"
+     }
+    },
+    "op": "set_clip_fades"
+   }
+  ],
+  "notes": []
+ },
+ "fit_music · סיים את המוזיקה עם התמונה": {
+  "kind": "plan",
+  "intent": "fit_music",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx3_0"
+    },
+    "op": "fit_music"
+   }
+  ],
+  "notes": []
+ },
+ "fit_music · fit the music": {
+  "kind": "plan",
+  "intent": "fit_music",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx3_0"
+    },
+    "op": "fit_music"
+   }
+  ],
+  "notes": []
+ },
+ "effect · הוסף אפקט שחור לבן": {
+  "kind": "plan",
+  "intent": "effect",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_2",
+     "type": "color.grayscale"
+    },
+    "op": "add_effect"
+   }
+  ],
+  "notes": []
+ },
+ "effect · add effect black & white": {
+  "kind": "plan",
+  "intent": "effect",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_2",
+     "type": "color.grayscale"
+    },
+    "op": "add_effect"
+   }
+  ],
+  "notes": []
+ },
+ "look · החל מראה חם": {
+  "kind": "plan",
+  "intent": "look",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_2",
+     "lookId": "warm-sun"
+    },
+    "op": "apply_look"
+   }
+  ],
+  "notes": []
+ },
+ "look · apply look vintage": {
+  "kind": "plan",
+  "intent": "look",
+  "ops": [
+   {
+    "args": {
+     "clipId": "clp_fx1_2",
+     "lookId": "vintage"
+    },
+    "op": "apply_look"
+   }
+  ],
+  "notes": []
+ },
+ "rename_project · שנה את שם הפרויקט ל\"גן רימון\"": {
+  "kind": "plan",
+  "intent": "rename_project",
+  "ops": [
+   {
+    "args": {
+     "name": "גן רימון"
+    },
+    "op": "rename_project"
+   }
+  ],
+  "notes": []
+ },
+ "rename_project · rename the project to \"Rimon kindergarten\"": {
+  "kind": "plan",
+  "intent": "rename_project",
+  "ops": [
+   {
+    "args": {
+     "name": "Rimon kindergarten"
+    },
+    "op": "rename_project"
+   }
+  ],
+  "notes": []
+ },
+ "remove_empty_tracks · הסר רצועות ריקות": {
+  "kind": "plan",
+  "intent": "remove_empty_tracks",
+  "ops": [
+   {
+    "args": {
+     "trackId": "trk_ve_0"
+    },
+    "op": "remove_track"
+   }
+  ],
+  "notes": []
+ },
+ "remove_empty_tracks · remove empty tracks": {
+  "kind": "plan",
+  "intent": "remove_empty_tracks",
+  "ops": [
+   {
+    "args": {
+     "trackId": "trk_ve_0"
+    },
+    "op": "remove_track"
+   }
+  ],
+  "notes": []
+ },
+ "undo · בטל": {
+  "kind": "action",
+  "intent": "undo",
+  "action": {
+   "kind": "undo",
+   "transactionId": "tx_last",
+   "ops": [
+    "split_clip"
+   ]
+  }
+ },
+ "undo · ביטול": {
+  "kind": "action",
+  "intent": "undo",
+  "action": {
+   "kind": "undo",
+   "transactionId": "tx_last",
+   "ops": [
+    "split_clip"
+   ]
+  }
+ },
+ "undo · undo": {
+  "kind": "action",
+  "intent": "undo",
+  "action": {
+   "kind": "undo",
+   "transactionId": "tx_last",
+   "ops": [
+    "split_clip"
+   ]
+  }
+ },
+ "redo · בצע שוב": {
+  "kind": "action",
+  "intent": "redo",
+  "action": {
+   "kind": "redo",
+   "transactionId": "tx_undone",
+   "ops": [
+    "split_clip"
+   ]
+  }
+ },
+ "redo · בצע מחדש": {
+  "kind": "action",
+  "intent": "redo",
+  "action": {
+   "kind": "redo",
+   "transactionId": "tx_undone",
+   "ops": [
+    "split_clip"
+   ]
+  }
+ },
+ "redo · redo": {
+  "kind": "action",
+  "intent": "redo",
+  "action": {
+   "kind": "redo",
+   "transactionId": "tx_undone",
+   "ops": [
+    "split_clip"
+   ]
+  }
+ },
+ "workspace · עבור למצב הופעה": {
+  "kind": "action",
+  "intent": "workspace",
+  "action": {
+   "kind": "workspace",
+   "workspace": "perform"
+  }
+ },
+ "workspace · מצב סאונד": {
+  "kind": "action",
+  "intent": "workspace",
+  "action": {
+   "kind": "workspace",
+   "workspace": "sound"
+  }
+ },
+ "workspace · switch to perform mode": {
+  "kind": "action",
+  "intent": "workspace",
+  "action": {
+   "kind": "workspace",
+   "workspace": "perform"
+  }
+ },
+ "export_to · ייצא לוואטסאפ": {
+  "kind": "action",
+  "intent": "export_to",
+  "action": {
+   "kind": "export_sheet",
+   "destination": "whatsapp"
+  }
+ },
+ "export_to · שמור למחשב": {
+  "kind": "action",
+  "intent": "export_to",
+  "action": {
+   "kind": "export_sheet",
+   "destination": "computer"
+  }
+ },
+ "export_to · ייצוא לרילס": {
+  "kind": "action",
+  "intent": "export_to",
+  "action": {
+   "kind": "export_sheet",
+   "destination": "reels"
+  }
+ },
+ "export_to · export to whatsapp": {
+  "kind": "action",
+  "intent": "export_to",
+  "action": {
+   "kind": "export_sheet",
+   "destination": "whatsapp"
+  }
+ },
+ "seek · עבור לשנייה 10": {
+  "kind": "action",
+  "intent": "seek",
+  "action": {
+   "kind": "seek",
+   "frame": 300
+  }
+ },
+ "seek · קפוץ להתחלה": {
+  "kind": "action",
+  "intent": "seek",
+  "action": {
+   "kind": "seek",
+   "frame": 0
+  }
+ },
+ "seek · לך לסוף": {
+  "kind": "action",
+  "intent": "seek",
+  "action": {
+   "kind": "seek",
+   "frame": 450
+  }
+ },
+ "seek · go to the end": {
+  "kind": "action",
+  "intent": "seek",
+  "action": {
+   "kind": "seek",
+   "frame": 450
+  }
+ },
+ "play · נגן": {
+  "kind": "action",
+  "intent": "play",
+  "action": {
+   "kind": "play"
+  }
+ },
+ "play · play": {
+  "kind": "action",
+  "intent": "play",
+  "action": {
+   "kind": "play"
+  }
+ },
+ "pause · עצור": {
+  "kind": "action",
+  "intent": "pause",
+  "action": {
+   "kind": "pause"
+  }
+ },
+ "pause · pause": {
+  "kind": "action",
+  "intent": "pause",
+  "action": {
+   "kind": "pause"
+  }
+ },
+ "select_all · בחר הכול": {
+  "kind": "action",
+  "intent": "select_all",
+  "action": {
+   "kind": "select_all"
+  }
+ },
+ "select_all · select all": {
+  "kind": "action",
+  "intent": "select_all",
+  "action": {
+   "kind": "select_all"
+  }
+ },
+ "deselect · בטל בחירה": {
+  "kind": "action",
+  "intent": "deselect",
+  "action": {
+   "kind": "deselect"
+  }
+ },
+ "deselect · deselect": {
+  "kind": "action",
+  "intent": "deselect",
+  "action": {
+   "kind": "deselect"
+  }
+ },
+ "zoom_in · הגדל": {
+  "kind": "action",
+  "intent": "zoom_in",
+  "action": {
+   "kind": "zoom",
+   "dir": 1
+  }
+ },
+ "zoom_in · zoom in": {
+  "kind": "action",
+  "intent": "zoom_in",
+  "action": {
+   "kind": "zoom",
+   "dir": 1
+  }
+ },
+ "zoom_out · הקטן": {
+  "kind": "action",
+  "intent": "zoom_out",
+  "action": {
+   "kind": "zoom",
+   "dir": -1
+  }
+ },
+ "zoom_out · zoom out": {
+  "kind": "action",
+  "intent": "zoom_out",
+  "action": {
+   "kind": "zoom",
+   "dir": -1
+  }
+ },
+ "language · עבור לאנגלית": {
+  "kind": "action",
+  "intent": "language",
+  "action": {
+   "kind": "language",
+   "to": "en"
+  }
+ },
+ "language · switch to hebrew": {
+  "kind": "action",
+  "intent": "language",
+  "action": {
+   "kind": "language",
+   "to": "he"
+  }
+ },
+ "open · פתח תבניות": {
+  "kind": "action",
+  "intent": "open",
+  "action": {
+   "kind": "command",
+   "commandId": "view.openTemplates"
+  }
+ },
+ "open · סרט משפחתי": {
+  "kind": "action",
+  "intent": "open",
+  "action": {
+   "kind": "command",
+   "commandId": "view.openFamilyFilm"
+  }
+ },
+ "open · העלאה מהטלפון": {
+  "kind": "action",
+  "intent": "open",
+  "action": {
+   "kind": "command",
+   "commandId": "file.phoneDrop"
+  }
+ },
+ "open · open templates": {
+  "kind": "action",
+  "intent": "open",
+  "action": {
+   "kind": "command",
+   "commandId": "view.openTemplates"
+  }
+ },
+ "sync_beat · סנכרן לקצב": {
+  "kind": "ambiguous",
+  "intent": "sync_beat",
+  "choices": [
+   {
+    "en": "Move the chosen cut to a beat",
+    "kind": "action",
+    "intent": "sync_beat",
+    "action": {
+     "kind": "command",
+     "commandId": "cut.toBeat"
+    }
+   },
+   {
+    "en": "Beat montage (opens the recipes)",
+    "kind": "action",
+    "intent": "sync_beat",
+    "action": {
+     "kind": "recipe",
+     "recipeId": "beat-montage"
+    }
+   },
+   {
+    "en": "End the music on a beat",
+    "kind": "plan",
+    "intent": "fit_music",
+    "ops": [
+     {
+      "args": {
+       "clipId": "clp_fx3_0"
+      },
+      "op": "fit_music"
+     }
+    ],
+    "notes": []
+   }
+  ]
+ },
+ "sync_beat · על הקצב": {
+  "kind": "ambiguous",
+  "intent": "sync_beat",
+  "choices": [
+   {
+    "en": "Move the chosen cut to a beat",
+    "kind": "action",
+    "intent": "sync_beat",
+    "action": {
+     "kind": "command",
+     "commandId": "cut.toBeat"
+    }
+   },
+   {
+    "en": "Beat montage (opens the recipes)",
+    "kind": "action",
+    "intent": "sync_beat",
+    "action": {
+     "kind": "recipe",
+     "recipeId": "beat-montage"
+    }
+   },
+   {
+    "en": "End the music on a beat",
+    "kind": "plan",
+    "intent": "fit_music",
+    "ops": [
+     {
+      "args": {
+       "clipId": "clp_fx3_0"
+      },
+      "op": "fit_music"
+     }
+    ],
+    "notes": []
+   }
+  ]
+ },
+ "sync_beat · sync to the beat": {
+  "kind": "ambiguous",
+  "intent": "sync_beat",
+  "choices": [
+   {
+    "en": "Move the chosen cut to a beat",
+    "kind": "action",
+    "intent": "sync_beat",
+    "action": {
+     "kind": "command",
+     "commandId": "cut.toBeat"
+    }
+   },
+   {
+    "en": "Beat montage (opens the recipes)",
+    "kind": "action",
+    "intent": "sync_beat",
+    "action": {
+     "kind": "recipe",
+     "recipeId": "beat-montage"
+    }
+   },
+   {
+    "en": "End the music on a beat",
+    "kind": "plan",
+    "intent": "fit_music",
+    "ops": [
+     {
+      "args": {
+       "clipId": "clp_fx3_0"
+      },
+      "op": "fit_music"
+     }
+    ],
+    "notes": []
+   }
+  ]
+ }
+}

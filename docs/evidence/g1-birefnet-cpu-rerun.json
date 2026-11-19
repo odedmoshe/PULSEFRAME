@@ -1,0 +1,151 @@
+{
+  "ranAt": "2026-11-17T15:46:13.165Z",
+  "result": "PASSED",
+  "scope": "Bounded CPU functional trial of one model workflow. Not GPU qualification. Not a quality review. One synthetic input.",
+  "limits": {
+    "maxDownloadBytes": 1000000000,
+    "maxInferenceMs": 600000
+  },
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v553 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "memoryGiB": 15.7,
+    "gpu": "none"
+  },
+  "provider": {
+    "comfyui": "0.45.0",
+    "device": {
+      "name": "cpu",
+      "type": "cpu",
+      "vramTotalBytes": null
+    }
+  },
+  "outcome": {
+    "modelBefore": {
+      "path": "background_removal/birefnet.safetensors",
+      "expectedBytes": 444473596,
+      "presentBytes": 444473596,
+      "missingBytes": 0,
+      "state": "ready",
+      "detail": "size and SHA-256 verified"
+    },
+    "download": {
+      "status": "already-present-and-verified",
+      "bytes": 0
+    },
+    "inference": {
+      "status": "succeeded",
+      "stageSeconds": {
+        "preparing": 0.211,
+        "staging": 0.007,
+        "submit": 0.007,
+        "providerQueueAndInference": 36.01,
+        "transfer": 0.016,
+        "validation": 0.221,
+        "attachment": 0.014,
+        "basis": "measured (wall clock, includes 200 ms polling granularity)"
+      },
+      "error": null
+    },
+    "synthetic": {
+      "fixture": "shaded disc r=120 on gradient, 640x480 (synthetic, generated here)",
+      "matteIoU": 0.9997,
+      "cutoutAlphaIoU": 0.9997,
+      "note": "one synthetic image; says nothing about hair, motion blur, occlusion or real footage"
+    }
+  },
+  "checks": [
+    {
+      "name": "capability is listed as experimental with its open reviews, licence record and separate resource quantities",
+      "ok": true,
+      "detail": {
+        "openReviews": [
+          "qualityReviewed"
+        ],
+        "model": {
+          "path": "background_removal/birefnet.safetensors",
+          "expectedBytes": 444473596,
+          "presentBytes": 444473596,
+          "missingBytes": 0,
+          "state": "ready",
+          "detail": "size and SHA-256 verified"
+        }
+      }
+    },
+    {
+      "name": "after verification the capability is runnable and still experimental",
+      "ok": true
+    },
+    {
+      "name": "BiRefNet ran on CPU through the durable job path",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "stageSeconds": {
+          "preparing": 0.211,
+          "staging": 0.007,
+          "submit": 0.007,
+          "providerQueueAndInference": 36.01,
+          "transfer": 0.016,
+          "validation": 0.221,
+          "attachment": 0.014,
+          "basis": "measured (wall clock, includes 200 ms polling granularity)"
+        },
+        "error": null
+      }
+    },
+    {
+      "name": "typed output bundle: RGBA cutout (primary) and matte, both the source size, each digested",
+      "ok": true,
+      "detail": {
+        "cutout": {
+          "pixFmt": "rgba",
+          "bytes": 24652
+        },
+        "matte": {
+          "pixFmt": "rgb24",
+          "bytes": 10076
+        }
+      }
+    },
+    {
+      "name": "matte polarity and placement: foreground is white and overlaps the known disc (IoU > 0.9 on this one synthetic image)",
+      "ok": true,
+      "detail": {
+        "fixture": "shaded disc r=120 on gradient, 640x480 (synthetic, generated here)",
+        "matteIoU": 0.9997,
+        "cutoutAlphaIoU": 0.9997,
+        "note": "one synthetic image; says nothing about hair, motion blur, occlusion or real footage"
+      }
+    },
+    {
+      "name": "cutout alpha agrees with the matte (opaque subject, transparent background)",
+      "ok": true
+    },
+    {
+      "name": "cutout entered the project as a derived RGBA asset with source lineage and an \"experimental\" recipe",
+      "ok": true
+    },
+    {
+      "name": "compositor honours the alpha: subject pixels visible, removed background shows the project background (black)",
+      "ok": true,
+      "detail": {
+        "inside": [
+          195,
+          64,
+          60
+        ],
+        "outside": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "after the run: executed is recorded for this CPU profile; quality review remains open, so it stays experimental",
+      "ok": true
+    }
+  ]
+}

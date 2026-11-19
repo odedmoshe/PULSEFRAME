@@ -1,0 +1,706 @@
+{
+  "ranAt": "2026-11-19T04:18:41.475Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "scope": "Canvas2D look system on one synthetic fixture, and the Lab page for every registered entry. GPU passes, time effects, overlays against their model and speed ramps have their own proofs (proof:gpu, proof:time, proof:overlays, proof:speed).",
+  "measurements": {
+    "distinctBlendResults": "10 of 17 modes give a distinct result when a picture is blended with itself (several are mathematically identical in that special case)",
+    "exportWithLooks": {
+      "frames": 30,
+      "wallMs": 1317,
+      "minPsnrDb": 42.16,
+      "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
+    },
+    "lab": {
+      "gpuEffectTilesUnavailable": 0,
+      "tiles": 633,
+      "effects": 53,
+      "blends": 17,
+      "transitions": 69,
+      "masks": 5
+    },
+    "labWave": [
+      {
+        "id": "time.echo",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "time.split",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "time.shutter",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "time.stutter",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "overlay.snow",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "overlay.confetti",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "overlay.hearts",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "overlay.bokeh",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "overlay.speed-lines",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "stylize.date-stamp",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "stylize.digicam",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "stylize.crt",
+        "ok": true,
+        "tiles": 4,
+        "unavailable": false
+      },
+      {
+        "id": "whip-left",
+        "ok": true,
+        "tiles": 10,
+        "unavailable": false
+      },
+      {
+        "id": "whip-right",
+        "ok": true,
+        "tiles": 10,
+        "unavailable": false
+      },
+      {
+        "id": "whip-up",
+        "ok": true,
+        "tiles": 10,
+        "unavailable": false
+      },
+      {
+        "id": "whip-down",
+        "ok": true,
+        "tiles": 10,
+        "unavailable": false
+      },
+      {
+        "id": "spin-cw",
+        "ok": true,
+        "tiles": 10,
+        "unavailable": false
+      },
+      {
+        "id": "spin-ccw",
+        "ok": true,
+        "tiles": 10,
+        "unavailable": false
+      }
+    ],
+    "labTrend": [
+      {
+        "id": "punch-in",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "punch-out",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "blur-dissolve",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "split-open-h",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "split-open-v",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "shape-heart",
+        "ok": true,
+        "tiles": 10,
+        "bothShapes": true,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "shape-star",
+        "ok": true,
+        "tiles": 10,
+        "bothShapes": true,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "block-left",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": [
+          "16:9 step 3/5 (frame +7 of 15)"
+        ]
+      },
+      {
+        "id": "block-right",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": [
+          "16:9 step 3/5 (frame +7 of 15)"
+        ]
+      },
+      {
+        "id": "slices-h",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "slices-v",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "film-burn",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "light-leak",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "ink-bleed",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "brush-left",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "brush-right",
+        "ok": true,
+        "tiles": 5,
+        "bothShapes": false,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "page-turn-left",
+        "ok": true,
+        "tiles": 10,
+        "bothShapes": true,
+        "unavailable": false,
+        "flat": []
+      },
+      {
+        "id": "page-turn-right",
+        "ok": true,
+        "tiles": 10,
+        "bothShapes": true,
+        "unavailable": false,
+        "flat": []
+      }
+    ]
+  },
+  "passed": 33,
+  "total": 33,
+  "checks": [
+    {
+      "name": "catalog lists exactly what is registered: 53 effects with parameter schemas and defaults, 69 transitions, 17 blend modes",
+      "ok": true,
+      "detail": {
+        "effects": [
+          "color.adjust",
+          "color.grayscale",
+          "color.sepia",
+          "color.invert",
+          "color.tint",
+          "blur.gaussian",
+          "light.vignette",
+          "light.diffusion",
+          "stylize.shadow",
+          "stylize.pixelate",
+          "stylize.grain",
+          "digital.rgb-split",
+          "key.chroma",
+          "distort.wave",
+          "distort.bulge",
+          "distort.swirl",
+          "distort.mirror",
+          "blur.zoom",
+          "stylize.posterize",
+          "stylize.edges",
+          "digital.glitch",
+          "color.grade",
+          "color.lut",
+          "stylize.duotone",
+          "stylize.halftone",
+          "stylize.scanlines",
+          "stylize.vhs",
+          "distort.kaleidoscope",
+          "distort.fisheye",
+          "blur.directional",
+          "blur.tilt-shift",
+          "light.glow",
+          "motion.shake",
+          "motion.pulse",
+          "motion.sway",
+          "motion.spin",
+          "light.leak",
+          "light.strobe",
+          "stylize.film",
+          "digital.rgb-shake",
+          "light.sparkle",
+          "time.echo",
+          "time.split",
+          "time.shutter",
+          "time.stutter",
+          "overlay.snow",
+          "overlay.confetti",
+          "overlay.hearts",
+          "overlay.bokeh",
+          "overlay.speed-lines",
+          "stylize.date-stamp",
+          "stylize.digicam",
+          "stylize.crt"
+        ]
+      }
+    },
+    {
+      "name": "color.grayscale: every pixel is neutral (R=G=B within 2)",
+      "ok": true
+    },
+    {
+      "name": "color.invert: pixel + original = 255",
+      "ok": true
+    },
+    {
+      "name": "color.adjust: brightness 0 is black; saturation 0 is neutral",
+      "ok": true
+    },
+    {
+      "name": "blur.gaussian: the steepest edge is less than half as steep, and the frame edges are not darkened (edge pixels are extended, not faded to transparent)",
+      "ok": true,
+      "detail": {
+        "sharpBase": 134,
+        "sharpBlur": 5,
+        "leftEdge": [
+          101,
+          101
+        ]
+      }
+    },
+    {
+      "name": "stylize.pixelate: pixels inside one 36 px block are identical; neighbouring blocks can differ",
+      "ok": true
+    },
+    {
+      "name": "color.tint (multiply, red, full): green and blue are removed, red is kept",
+      "ok": true,
+      "detail": {
+        "r": [
+          "36.3",
+          "36.3"
+        ]
+      }
+    },
+    {
+      "name": "light.vignette: corners are much darker, the centre is untouched",
+      "ok": true,
+      "detail": {
+        "corner": [
+          102,
+          2
+        ]
+      }
+    },
+    {
+      "name": "stylize.grain: changes the picture, keeps average brightness, is identical when the same frame is rendered again, and differs on the next frame",
+      "ok": true,
+      "detail": {
+        "meanBase": "93.71",
+        "meanGrain": "93.43"
+      }
+    },
+    {
+      "name": "digital.rgb-split: red and blue separate at edges (many more pixels with a large red-blue gap); green stays in place",
+      "ok": true,
+      "detail": {
+        "fringeBase": 0,
+        "fringeSplit": 658
+      }
+    },
+    {
+      "name": "light.diffusion: never darker than the original, brighter overall",
+      "ok": true,
+      "detail": {
+        "meanBase": "93.7",
+        "meanGlow": "133.7"
+      }
+    },
+    {
+      "name": "bypass and remove both give back the exact original frame",
+      "ok": true
+    },
+    {
+      "name": "effect order matters and is honoured: tint→grayscale is neutral, grayscale→tint is coloured; the export manifest lists both effects with versions",
+      "ok": true,
+      "detail": [
+        {
+          "type": "color.tint",
+          "version": 1,
+          "clips": 1
+        },
+        {
+          "type": "color.grayscale",
+          "version": 1,
+          "clips": 1
+        }
+      ]
+    },
+    {
+      "name": "stylize.shadow on a title: black pixels appear below the letters; the letters themselves stay",
+      "ok": true,
+      "detail": {
+        "before": 0,
+        "after": 1983
+      }
+    },
+    {
+      "name": "keyframed effect parameter: a blur radius animated from 0 to its end value makes the picture progressively softer, holds after the last key, and a frame in the middle is the same when rendered again",
+      "ok": true,
+      "detail": {
+        "steepestEdgeAtFrames10to50": [
+          117,
+          9.6,
+          5.4,
+          3.7,
+          3.6
+        ]
+      }
+    },
+    {
+      "name": "difference of a picture with itself is black; add doubles (clamped); multiply squares; screen is the inverse of multiply — all within 2 levels",
+      "ok": true,
+      "detail": {
+        "difference": 0,
+        "add": {
+          "mean": 0,
+          "max": 0,
+          "samples": 172800
+        },
+        "multiply": {
+          "mean": 0.321,
+          "max": 0.9254901960784312,
+          "samples": 172800
+        },
+        "screen": {
+          "mean": 0.186,
+          "max": 0.4745098039215634,
+          "samples": 172800
+        }
+      }
+    },
+    {
+      "name": "every blend mode renders without error",
+      "ok": true,
+      "detail": "10 of 17 modes give a distinct result when a picture is blended with itself (several are mathematically identical in that special case)"
+    },
+    {
+      "name": "ellipse mask: inside is the picture, outside is background; invert swaps them; feather makes a soft edge; the mask moves with the clip",
+      "ok": true,
+      "detail": {
+        "softEdgePixels": [
+          2,
+          114
+        ]
+      }
+    },
+    {
+      "name": "removing the mask restores the exact original frame",
+      "ok": true
+    },
+    {
+      "name": "dissolve: frame 64 is exactly (1-p)·A + p·B of the two source frames; the frames just outside the transition are untouched",
+      "ok": true,
+      "detail": {
+        "p": 0.3757,
+        "mean": 0.171,
+        "max": 0.9203606311044439,
+        "samples": 172800
+      }
+    },
+    {
+      "name": "random access: frame 64 rendered alone, and again after rendering other frames, is byte-identical",
+      "ok": true
+    },
+    {
+      "name": "wipe-left: right of the moving edge is B, left of it is still A",
+      "ok": true,
+      "detail": {
+        "edgeX": 400,
+        "mean": 0,
+        "max": 0,
+        "samples": 171180
+      }
+    },
+    {
+      "name": "push-left: A slides out to the left while B slides in from the right (compared below the barcode strip; sub-pixel offsets allow small differences)",
+      "ok": true,
+      "detail": {
+        "mean": 0,
+        "max": 5,
+        "samples": 137460
+      }
+    },
+    {
+      "name": "dip-black: before the midpoint the outgoing picture fades toward black by exactly 2p",
+      "ok": true,
+      "detail": {
+        "mean": 0.221,
+        "max": 0.735537190082646,
+        "samples": 172800
+      }
+    },
+    {
+      "name": "zoom: differs from both sides and from a plain dissolve",
+      "ok": true
+    },
+    {
+      "name": "all 69 transitions render a mid-frame that differs from both sides",
+      "ok": true,
+      "detail": [
+        "dissolve:ok",
+        "dip-black:ok",
+        "dip-white:ok",
+        "wipe-left:ok",
+        "wipe-right:ok",
+        "wipe-up:ok",
+        "wipe-down:ok",
+        "push-left:ok",
+        "push-right:ok",
+        "push-up:ok",
+        "push-down:ok",
+        "zoom:ok",
+        "cross-zoom-in:ok",
+        "cross-zoom-out:ok",
+        "swirl-cw:ok",
+        "swirl-ccw:ok",
+        "wave-h:ok",
+        "wave-v:ok",
+        "glitch-cut:ok",
+        "pixelate:ok",
+        "clock-cw:ok",
+        "clock-ccw:ok",
+        "soft-wipe-right:ok",
+        "soft-wipe-left:ok",
+        "soft-wipe-down:ok",
+        "soft-wipe-up:ok",
+        "soft-wipe-down-right:ok",
+        "soft-wipe-down-left:ok",
+        "soft-wipe-up-right:ok",
+        "soft-wipe-up-left:ok",
+        "blinds-h:ok",
+        "blinds-v:ok",
+        "iris-open:ok",
+        "iris-close:ok",
+        "diamond-open:ok",
+        "diamond-close:ok",
+        "flash:ok",
+        "luma-bright:ok",
+        "luma-dark:ok",
+        "squeeze-h:ok",
+        "squeeze-v:ok",
+        "checker:ok",
+        "bars-h:ok",
+        "bars-v:ok",
+        "ripple:ok",
+        "whip-left:ok",
+        "whip-right:ok",
+        "whip-up:ok",
+        "whip-down:ok",
+        "spin-cw:ok",
+        "spin-ccw:ok",
+        "punch-in:ok",
+        "punch-out:ok",
+        "blur-dissolve:ok",
+        "split-open-h:ok",
+        "split-open-v:ok",
+        "shape-heart:ok",
+        "shape-star:ok",
+        "block-left:ok",
+        "block-right:ok",
+        "slices-h:ok",
+        "slices-v:ok",
+        "film-burn:ok",
+        "light-leak:ok",
+        "ink-bleed:ok",
+        "brush-left:ok",
+        "brush-right:ok",
+        "page-turn-left:ok",
+        "page-turn-right:ok"
+      ]
+    },
+    {
+      "name": "no unused source after the previous clip: the transition is refused with the usable length, not faked with a freeze",
+      "ok": true,
+      "detail": "the previous clip has only 0 unused source frames after its end; the transition needs 10"
+    },
+    {
+      "name": "export of a range with a dissolve and two effects: 30 frames, and 9 checked frames match the stills of the same frames (PSNR ≥ 32 dB after H.264)",
+      "ok": true,
+      "detail": {
+        "frames": 30,
+        "wallMs": 1317,
+        "minPsnrDb": 42.16,
+        "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
+      }
+    },
+    {
+      "name": "agent discovers the catalog, adds an effect, sees it in describe_moment, and gets a clear refusal for an effect that does not exist",
+      "ok": true,
+      "detail": {
+        "refusal": "{\"error\":{\"code\":\"not_found\",\"message\":\"effect \\\"film.halation\\\" does not exist\",\"details\":{\"index\":0,\"op\":\"add_effect\",\"type\":\"film.halation\",\"available\":[\"col"
+      }
+    },
+    {
+      "name": "editor: add an effect from the catalog, change a generated parameter slider, reorder, bypass, set blend, mask and transition — each lands in the document",
+      "ok": true,
+      "detail": {
+        "addedFx": true,
+        "changed": true,
+        "reordered": true,
+        "bypass": true,
+        "rest": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "Lab: every registered effect, blend mode and transition has tiles drawn by the shared compositor, in 16:9 and 9:16, none blank (except the midpoint of a dip or of the flash, which is meant to be a flat colour, the middle step of the colour blocks, which cover the whole frame on the switch frame, the chroma key at full tolerance, which removes the whole picture, and the strobe at full amount at the instant of its flash, which is the flash colour), default and extreme variants differ (where the default is not already the maximum), no page errors",
+      "ok": true,
+      "detail": {
+        "gpuEffectTilesUnavailable": 0,
+        "tiles": 633,
+        "effects": 53,
+        "blends": 17,
+        "transitions": 69,
+        "masks": 5,
+        "sameVariants": [
+          "color.grayscale",
+          "color.sepia",
+          "color.invert",
+          "distort.mirror",
+          "color.lut",
+          "stylize.duotone"
+        ],
+        "aspects": [
+          "16:9",
+          "9:16"
+        ],
+        "bodyErrors": null,
+        "flat": [
+          "effect:key.chroma:extreme",
+          "effect:key.chroma:extreme",
+          "effect:light.strobe:extreme",
+          "effect:light.strobe:extreme",
+          "transition:flash:step 3/5 (frame +7 of 15)",
+          "transition:block-left:step 3/5 (frame +7 of 15)"
+        ],
+        "labErrors": []
+      }
+    },
+    {
+      "name": "Lab, visual wave: the 12 new effects and 6 new transitions are tiled in 16:9 and 9:16, none flat; each effect's default and extreme differ and each transition's steps differ (a tile without a graphics adapter says so)",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "Lab, trend pack: the 18 new transitions are tiled in five steps (in 16:9 and 9:16 where the registry marks them shape-dependent), none flat except the colour blocks' switch frame, at least three different steps in each shape (a tile without a graphics adapter says so)",
+      "ok": true,
+      "detail": []
+    }
+  ]
+}

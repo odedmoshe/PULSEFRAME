@@ -1,0 +1,612 @@
+{
+ "generatedAt": "2026-11-19T04:29:14.364Z",
+ "result": "PASSED",
+ "profile": {
+  "os": "Linux 6.18.44-fc-v653 x64",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "logicalCpus": 4,
+  "gpu": "none used (Canvas2D effects)"
+ },
+ "scope": "overlay.snow, confetti, hearts, bokeh, speed-lines and stylize.date-stamp on the shared compositor: stills, the editor preview and exports, checked against the closed-form model (packages/engine/src/overlays.ts, stamp.ts). Not judged: how they look to a person.",
+ "measurements": {
+  "model": {
+   "overlay.snow": {
+    "particles": 2548,
+    "considered": 2403,
+    "faint": 0,
+    "litPct": 100,
+    "farPixels": 245548,
+    "farUnchangedPct": 100,
+    "rMax": 5.76,
+    "misses": [],
+    "msForEditAndStill": 515
+   },
+   "overlay.confetti": {
+    "particles": 603,
+    "considered": 555,
+    "faint": 0,
+    "litPct": 100,
+    "farPixels": 610580,
+    "farUnchangedPct": 100,
+    "rMax": 7.04,
+    "misses": [],
+    "msForEditAndStill": 430
+   },
+   "overlay.hearts": {
+    "particles": 68,
+    "considered": 63,
+    "faint": 3,
+    "litPct": 100,
+    "farPixels": 762377,
+    "farUnchangedPct": 100,
+    "rMax": 14.36,
+    "misses": [],
+    "msForEditAndStill": 497
+   },
+   "overlay.bokeh": {
+    "particles": 21,
+    "considered": 12,
+    "faint": 0,
+    "litPct": 100,
+    "farPixels": 633943,
+    "farUnchangedPct": 100,
+    "rMax": 43.2,
+    "misses": [],
+    "msForEditAndStill": 456
+   },
+   "overlay.bokeh {\"shape\":\"hexagon\"}": {
+    "particles": 21,
+    "considered": 12,
+    "faint": 0,
+    "litPct": 100,
+    "farPixels": 633943,
+    "farUnchangedPct": 100,
+    "rMax": 43.2,
+    "misses": [],
+    "msForEditAndStill": 408
+   }
+  },
+  "speedLines": {
+   "wedges": 90,
+   "insidePixels": 24942,
+   "insideLitPct": 100,
+   "outsidePixels": 810895,
+   "outsideUnchangedPct": 100
+  },
+  "threeHours": {
+   "particles": 2580,
+   "considered": 2454,
+   "faint": 0,
+   "litPct": 100,
+   "farPixels": 242416,
+   "farUnchangedPct": 100,
+   "rMax": 5.76,
+   "misses": []
+  },
+  "burst": {
+   "rendered": {
+    "x": 663.89,
+    "y": 365.35,
+    "weight": 1642
+   },
+   "model": {
+    "x": 664.83,
+    "y": 364.89,
+    "weight": 1617
+   },
+   "offPx": 1.047
+  },
+  "stamp": {
+   "16:9 '05 7 14": {
+    "iou": 0.9955,
+    "modelPixels": 4420
+   },
+   "16:9 12:34": {
+    "iou": 0.9916,
+    "modelPixels": 3546
+   },
+   "glowHaloPixels": 6949,
+   "9:16 '05 7 14": {
+    "iou": 0.9925,
+    "modelPixels": 13856
+   },
+   "9:16 12:34": {
+    "iou": 0.9964,
+    "modelPixels": 11232
+   }
+  },
+  "previewVsStill": {
+   "atStart": {
+    "within2Pct": 100,
+    "max": 0,
+    "mean": 0,
+    "frame": "0",
+    "quality": "full"
+   },
+   "atThreeHours": {
+    "within2Pct": 100,
+    "max": 0,
+    "mean": 0,
+    "frame": "324059",
+    "quality": "full"
+   }
+  },
+  "flash": {
+   "snow at defaults": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "confetti at defaults": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "confetti burst": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "hearts at defaults": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "bokeh at defaults": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "speed lines at defaults": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "date stamp at defaults": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "speed lines at their extremes (every number at its maximum)": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "speed lines at their extremes, sweeping the whole frame (focus 0)": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "snow at its extremes (largest flakes, top speed, full density and opacity)": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "snow with mid-size flakes at top speed, full density and opacity, wind to the left": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "hearts at their extremes (every number at its maximum)": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "hearts of mid size at top speed, full density and opacity, in their own red": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "pure red hearts of size 0.015 at top speed, full density and opacity": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "confetti at its extremes (every number at its maximum)": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "red confetti of mid size at top speed, full density and opacity": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "snow getting heavier (density keyed 0.3 → 1 over the clip)": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   },
+   "snowflakes growing (size keyed 0.008 → 0.03 over the clip)": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  }
+ },
+ "passed": 40,
+ "total": 40,
+ "checks": [
+  {
+   "name": "overlay.snow: ≥ 99 % of the model's particle centres are lit to at least half their model brightness, and ≥ 99 % of the pixels farther than 2·(largest reach) from every particle are unchanged",
+   "ok": true,
+   "detail": {
+    "particles": 2548,
+    "considered": 2403,
+    "faint": 0,
+    "litPct": 100,
+    "farPixels": 245548,
+    "farUnchangedPct": 100,
+    "rMax": 5.76,
+    "misses": []
+   }
+  },
+  {
+   "name": "overlay.snow: the same still rendered twice, and again after another frame, is byte-identical",
+   "ok": true
+  },
+  {
+   "name": "overlay.confetti: ≥ 99 % of the model's particle centres are lit to at least half their model brightness, and ≥ 99 % of the pixels farther than 2·(largest reach) from every particle are unchanged",
+   "ok": true,
+   "detail": {
+    "particles": 603,
+    "considered": 555,
+    "faint": 0,
+    "litPct": 100,
+    "farPixels": 610580,
+    "farUnchangedPct": 100,
+    "rMax": 7.04,
+    "misses": []
+   }
+  },
+  {
+   "name": "overlay.confetti: the same still rendered twice, and again after another frame, is byte-identical",
+   "ok": true
+  },
+  {
+   "name": "overlay.hearts: ≥ 99 % of the model's particle centres are lit to at least half their model brightness, and ≥ 99 % of the pixels farther than 2·(largest reach) from every particle are unchanged",
+   "ok": true,
+   "detail": {
+    "particles": 68,
+    "considered": 63,
+    "faint": 3,
+    "litPct": 100,
+    "farPixels": 762377,
+    "farUnchangedPct": 100,
+    "rMax": 14.36,
+    "misses": []
+   }
+  },
+  {
+   "name": "overlay.hearts: the same still rendered twice, and again after another frame, is byte-identical",
+   "ok": true
+  },
+  {
+   "name": "overlay.bokeh: ≥ 99 % of the model's particle centres are lit to at least half their model brightness, and ≥ 99 % of the pixels farther than 2·(largest reach) from every particle are unchanged",
+   "ok": true,
+   "detail": {
+    "particles": 21,
+    "considered": 12,
+    "faint": 0,
+    "litPct": 100,
+    "farPixels": 633943,
+    "farUnchangedPct": 100,
+    "rMax": 43.2,
+    "misses": []
+   }
+  },
+  {
+   "name": "overlay.bokeh: the same still rendered twice, and again after another frame, is byte-identical",
+   "ok": true
+  },
+  {
+   "name": "overlay.bokeh {\"shape\":\"hexagon\"}: ≥ 99 % of the model's particle centres are lit to at least half their model brightness, and ≥ 99 % of the pixels farther than 2·(largest reach) from every particle are unchanged",
+   "ok": true,
+   "detail": {
+    "particles": 21,
+    "considered": 12,
+    "faint": 0,
+    "litPct": 100,
+    "farPixels": 633943,
+    "farUnchangedPct": 100,
+    "rMax": 43.2,
+    "misses": []
+   }
+  },
+  {
+   "name": "overlay.bokeh {\"shape\":\"hexagon\"}: the same still rendered twice, and again after another frame, is byte-identical",
+   "ok": true
+  },
+  {
+   "name": "overlay.speed-lines at its defaults: ≥ 99 % of the pixels inside the model's wedges are lit, ≥ 99 % of those outside are unchanged (pixels within 1.5 px of a wedge edge left out)",
+   "ok": true,
+   "detail": {
+    "wedges": 90,
+    "insidePixels": 24942,
+    "insideLitPct": 100,
+    "outsidePixels": 810895,
+    "outsideUnchangedPct": 100
+   }
+  },
+  {
+   "name": "overlay.speed-lines move: the next frame differs (the tips wander), and the angles stay where they are",
+   "ok": true
+  },
+  {
+   "name": "area=layer keeps the snow inside the (half-size) picture: nothing is drawn outside it, flakes are drawn inside it",
+   "ok": true,
+   "detail": {
+    "insideLitPct": 19.515,
+    "outsideLitPixels": 0
+   }
+  },
+  {
+   "name": "a clip with snow and bokeh (seed 42) cut at frame 40: two clips with the same seed, and the frames on both sides of the cut are byte-identical to the uncut clip",
+   "ok": true,
+   "detail": {
+    "clips": 2
+   }
+  },
+  {
+   "name": "snow at 3 h + 1 s on the timeline: the same model match (≥ 99 % of centres lit, ≥ 99 % of far pixels unchanged)",
+   "ok": true,
+   "detail": {
+    "particles": 2580,
+    "considered": 2454,
+    "faint": 0,
+    "litPct": 100,
+    "farPixels": 242416,
+    "farUnchangedPct": 100,
+    "rMax": 5.76,
+    "misses": []
+   }
+  },
+  {
+   "name": "confetti burst (48 pieces at the clip start): 0.5 s in, the brightness-weighted centroid is within 2 px of the closed form's, with about the same amount of confetti",
+   "ok": true,
+   "detail": {
+    "rendered": {
+     "x": 663.89,
+     "y": 365.35,
+     "weight": 1642
+    },
+    "model": {
+     "x": 664.83,
+     "y": 364.89,
+     "weight": 1617
+    },
+    "offPx": 1.047
+   }
+  },
+  {
+   "name": "the burst is over after 1.6 s: frame 50 is the plain picture",
+   "ok": true
+  },
+  {
+   "name": "date stamp text outside digits, space and . : ' / - is refused with invalid_args (on add and on update), and the stamp stays as it was",
+   "ok": true,
+   "detail": {
+    "update": [
+     422,
+     "invalid_args"
+    ],
+    "add": [
+     422,
+     "invalid_args"
+    ]
+   }
+  },
+  {
+   "name": "date stamp \"'05 7 14\" and \"12:34\" (glow 0): the drawn segments match the model polygons with IoU ≥ 0.95 at 16:9 and 9:16; with the default glow a soft halo surrounds them",
+   "ok": true,
+   "detail": {
+    "16:9 '05 7 14": {
+     "iou": 0.9955,
+     "modelPixels": 4420
+    },
+    "16:9 12:34": {
+     "iou": 0.9916,
+     "modelPixels": 3546
+    },
+    "glowHaloPixels": 6949,
+    "9:16 '05 7 14": {
+     "iou": 0.9925,
+     "modelPixels": 13856
+    },
+    "9:16 12:34": {
+     "iou": 0.9964,
+     "modelPixels": 11232
+    }
+   }
+  },
+  {
+   "name": "all six (bokeh, snow, confetti, hearts, speed lines, date stamp) on one picture: the paused editor preview at frame 0 matches the still within 2/255 on ≥ 99.9 % of samples",
+   "ok": true,
+   "detail": {
+    "within2Pct": 100,
+    "max": 0,
+    "mean": 0,
+    "frame": "0",
+    "quality": "full"
+   }
+  },
+  {
+   "name": "three hours in (frame 324059): the same agreement between preview and still",
+   "ok": true,
+   "detail": {
+    "within2Pct": 100,
+    "max": 0,
+    "mean": 0,
+    "frame": "324059",
+    "quality": "full"
+   }
+  },
+  {
+   "name": "no page errors in the editor",
+   "ok": true,
+   "detail": []
+  },
+  {
+   "name": "snow at defaults: the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "confetti at defaults: the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "confetti burst: the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "hearts at defaults: the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "bokeh at defaults: the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "speed lines at defaults: the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "date stamp at defaults: the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "speed lines at their extremes (every number at its maximum): the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "speed lines at their extremes, sweeping the whole frame (focus 0): the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "snow at its extremes (largest flakes, top speed, full density and opacity): the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "snow with mid-size flakes at top speed, full density and opacity, wind to the left: the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "hearts at their extremes (every number at its maximum): the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "hearts of mid size at top speed, full density and opacity, in their own red: the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "pure red hearts of size 0.015 at top speed, full density and opacity: the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "confetti at its extremes (every number at its maximum): the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "red confetti of mid size at top speed, full density and opacity: the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "snow getting heavier (density keyed 0.3 → 1 over the clip): the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  },
+  {
+   "name": "snowflakes growing (size keyed 0.008 → 0.03 over the clip): the flash analyser passes on its 3-second export (90 frames)",
+   "ok": true,
+   "detail": {
+    "frames": 90,
+    "verdict": "pass",
+    "ranges": []
+   }
+  }
+ ]
+}

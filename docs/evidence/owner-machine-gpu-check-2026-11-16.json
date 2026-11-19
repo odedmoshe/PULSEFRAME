@@ -1,0 +1,113 @@
+{
+ "what": "Result of /gpu.html (version 1) opened by the owner in their own Chrome on the reference laptop, pasted by the owner. One run.",
+ "readThisFirst": [
+  "The adapter Chrome used is the laptop's integrated Intel graphics, for both power preferences. The NVIDIA RTX 3050 was not used by the browser in this run.",
+  "The readback numbers of this version are invalid: the copy used a row length that WebGPU rejects (not a multiple of 256 bytes), so the buffer stayed empty (firstPixel 0,0,0,0) and readbackOfOneFrameMs measured an empty map. Fixed in version 2 of the page, which also reports validation errors. msPerFrame is the time of the render passes and is not affected.",
+  "One timing sample of one simple workload on one machine: not a performance figure."
+ ],
+ "browser": "Chrome 157 on Windows (64-bit)",
+ "hardwareConcurrency": 8,
+ "deviceMemoryGb": 32,
+ "webgpu": {
+  "api": true,
+  "preferredCanvasFormat": "bgra8unorm",
+  "adapterForHighPerformanceAndLowPower": {
+   "vendor": "intel",
+   "architecture": "gen-9",
+   "isFallbackAdapter": false
+  },
+  "features": [
+   "bgra8unorm-storage",
+   "clip-distances",
+   "core-features-and-limits",
+   "depth-clip-control",
+   "depth32float-stencil8",
+   "dual-source-blending",
+   "float32-blendable",
+   "float32-filterable",
+   "indirect-first-instance",
+   "primitive-index",
+   "rg11b10ufloat-renderable",
+   "shader-f16",
+   "texture-component-swizzle",
+   "texture-compression-bc",
+   "texture-compression-bc-sliced-3d",
+   "texture-compression-unaligned",
+   "texture-formats-tier1",
+   "texture-formats-tier2",
+   "timestamp-query"
+  ],
+  "limits": {
+   "maxTextureDimension2D": 16384,
+   "maxBufferSize": 2147483648,
+   "maxColorAttachments": 8
+  },
+  "oneTimingSample": {
+   "workload": "120 full-frame passes of a 16-step fragment shader at 1080x1920, rgba8",
+   "msPerFrame": 4.775,
+   "readbackOfOneFrameMs": "invalid in this version",
+   "firstPixel": [
+    0,
+    0,
+    0,
+    0
+   ]
+  }
+ },
+ "webgl2": {
+  "renderer": "ANGLE (Intel, Intel(R) UHD Graphics (0x00009BC4) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "maxTextureSize": 16384,
+  "floatRenderTargets": true
+ },
+ "codecs": {
+  "h264-high": {
+   "encode": true,
+   "encodeHardware": false,
+   "decode": true,
+   "decodeHardware": true
+  },
+  "hevc": {
+   "encode": false,
+   "encodeHardware": false,
+   "decode": true,
+   "decodeHardware": true
+  },
+  "vp9": {
+   "encode": true,
+   "encodeHardware": false,
+   "decode": true,
+   "decodeHardware": true
+  },
+  "av1": {
+   "encode": true,
+   "encodeHardware": false,
+   "decode": true,
+   "decodeHardware": false
+  },
+  "aacEncode": true
+ },
+ "secondRunWithCorrectedPage": {
+  "pageVersion": 2,
+  "at": "2026-11-16T17:49:43Z",
+  "adapter": "intel gen-9 for both power preferences (unchanged)",
+  "validationErrors": [],
+  "oneTimingSample": {
+   "msPerFrame": 4.749,
+   "readbackOfOneFrameMs": 9,
+   "firstPixel": [
+    133,
+    133,
+    138,
+    255
+   ],
+   "middlePixel": [
+    116,
+    128,
+    133,
+    255
+   ],
+   "pixelsLookRendered": true
+  },
+  "note": "Readback is valid in this run. The two pixels equal those from the software adapter in the development container. Whether the owner changed the Windows graphics preference for Chrome before this run was not stated."
+ }
+}

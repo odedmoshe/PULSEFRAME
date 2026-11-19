@@ -1,0 +1,276 @@
+import { describe, expect, it } from 'vitest';
+import fc from 'fast-check';
+import * as T from '@pulseframe/time';
+import { applyTransaction, createProject, findClip, sequenceDuration, sourceAt, sourceEnd, sourceRangesToTimeline, speedFromNumber, timelineAt, toSourceSpan, validateProject, OpError, type MediaClip, type OpCall, type ProjectDocument } from './index.ts';
+
+const R = { num: 30, den: 1 };
+const f = (n: number) => T.frameTime(n, R);
+let n = 0;
+const tx = (doc: ProjectDocument, ops: OpCall[], allowInternal = false) => applyTransaction(doc, ops, { idSeed: `s${n++}_`, actor: 'test', allowInternal });
+const asset = {
+  kind: 'video' as const, name: 'a.mp4', contentHash: `sha256:${'d'.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(8, 1),
+  video: { width: 640, height: 360, frameRate: R, codec: 'h264', rotation: 0, frameCount: 240 }, audio: { sampleRate: 48000, channels: 2, codec: 'aac' },
+  provenance: { origin: 'fixture' as const, importedAt: '2026-11-15T00:00:00Z', importedBy: 'test' },
+};
+function project() {
+  let r = tx(createProject({ id: 'prj_s', name: 'S' }), [{ op: 'import_asset', args: { asset } }], true);
+  const assetId = r.results[0]!.output!.assetId as string;
+  r = tx(r.doc, [{ op: 'add_clip', args: { assetId, start: f(0) } }]);
+  return { doc: r.doc, assetId, clipId: r.results[0]!.output!.clipId as string };
+}
+const media = (d: ProjectDocument, id: string) => findClip(d, id)!.clip as MediaClip;
+const linkedOf = (d: ProjectDocument, id: string) => Object.values(d.sequences)[0]!.tracks.flatMap((t) => t.clips).filter((c) => c.id !== id && c.type === 'media' && c.linkGroupId && c.linkGroupId === media(d, id).linkGroupId) as MediaClip[];
+
+describe('clip speed', () => {
+  it('decimal speeds become exact ratios', () => {
+    expect(speedFromNumber(0.5)).toEqual({ num: 1, den: 2 });
+    expect(speedFromNumber(2)).toEqual({ num: 2, den: 1 });
+    expect(speedFromNumber(1.25)).toEqual({ num: 5, den: 4 });
+    expect(speedFromNumber(1)).toEqual({ num: 1, den: 1 });
+  });
+  it('set_clip_speed keeps the source span and changes the length; linked sound follows; 1 removes the field', () => {
+    const { doc, clipId } = project();
+    const fast = tx(doc, [{ op: 'set_clip_speed', args: { clipId, speed: 2 } }]).doc;
+    expect(validateProject(fast)).toEqual([]);
+    const c = media(fast, clipId);
+    expect(c.speed).toEqual({ num: 2, den: 1 });
+    expect(T.eq(c.duration, f(120))).toBe(true);
+    expect(T.eq(sourceEnd(c), T.rt(8, 1))).toBe(true);
+    expect(T.eq(sourceAt(c, f(30)), T.rt(2, 1))).toBe(true); // one timeline second in = two source seconds in
+    expect(T.eq(timelineAt(c, T.rt(2, 1)), f(30))).toBe(true);
+    for (const l of linkedOf(fast, clipId)) { expect(l.speed).toEqual({ num: 2, den: 1 }); expect(T.eq(l.duration, f(120))).toBe(true); }
+    expect(linkedOf(fast, clipId).length).toBeGreaterThan(0);
+    const back = tx(fast, [{ op: 'set_clip_speed', args: { clipId, speed: 1 } }]).doc;
+    expect(media(back, clipId).speed).toBeUndefined();
+    expect(T.eq(media(back, clipId).duration, f(240))).toBe(true);
+  });
+  it('slow motion lengthens the clip and refuses to overlap a neighbour', () => {
+    const { doc, clipId, assetId } = project();
+    const short = tx(doc, [{ op: 'trim_clip', args: { clipId, edge: 'end', to: f(60) } }]).doc;
+    const slow = tx(short, [{ op: 'set_clip_speed', args: { clipId, speed: 0.5 } }]).doc;
+    expect(T.eq(media(slow, clipId).duration, f(120))).toBe(true);
+    expect(T.eq(sourceEnd(media(slow, clipId)), T.rt(2, 1))).toBe(true);
+    expect(validateProject(slow)).toEqual([]);
+    const crowded = tx(short, [{ op: 'add_clip', args: { assetId, start: f(60), trackId: findClip(short, clipId)!.track.id } }]).doc;
+    expect(() => tx(crowded, [{ op: 'set_clip_speed', args: { clipId, speed: 0.5 } }])).toThrow(OpError);
+  });
+  it('trim, split and source-range mapping work in source time on a sped clip', () => {
+    const { doc, clipId, assetId } = project();
+    const fast = tx(doc, [{ op: 'set_clip_speed', args: { clipId, speed: 2 } }]).doc;
+    // trimming the start to timeline frame 30 skips two source seconds
+    const trimmed = tx(fast, [{ op: 'trim_clip', args: { clipId, edge: 'start', to: f(30) } }]).doc;
+    expect(T.eq(media(trimmed, clipId).sourceIn, T.rt(2, 1))).toBe(true);
+    expect(T.eq(sourceEnd(media(trimmed, clipId)), T.rt(8, 1))).toBe(true);
+    // the end cannot be dragged past the end of the source: 8 s of source is 120 timeline frames
+    expect(() => tx(fast, [{ op: 'trim_clip', args: { clipId, edge: 'end', to: f(150) } }])).toThrow(OpError);
+    const r = tx(fast, [{ op: 'split_clip', args: { clipId, at: f(60) } }]);
+    expect(validateProject(r.doc)).toEqual([]);
+    const right = Object.values(r.doc.sequences)[0]!.tracks.flatMap((t) => t.clips).filter((c): c is MediaClip => c.type === 'media' && T.eq(c.start, f(60)));
+    expect(right.length).toBeGreaterThan(0);
+    for (const c of right) { expect(T.eq(c.sourceIn, T.rt(4, 1))).toBe(true); expect(c.speed).toEqual({ num: 2, den: 1 }); }
+    // a source range 2..4 s sits at timeline 1..2 s on the double-speed clip
+    expect(sourceRangesToTimeline(fast, assetId, [{ start: T.rt(2, 1), end: T.rt(4, 1) }])).toEqual([{ start: f(30), end: f(60) }]);
+    expect(T.eq(sequenceDuration(fast), f(120))).toBe(true);
+  });
+  it('freeze_frame holds one picture, inserts time across the sequence, splits crossing media (linked sound included) and keeps titles up through the hold', () => {
+    const { doc, clipId } = project(); // 8 s clip: frames 0..240 with linked sound
+    let d = tx(doc, [{ op: 'add_text', args: { text: 'title', start: f(30), duration: f(60) } }, { op: 'add_text', args: { text: 'later', start: f(120), duration: f(30) } }]).doc;
+    const [title, later] = Object.values(d.sequences)[0]!.tracks.flatMap((t) => t.clips).filter((c) => c.type === 'text').map((c) => c.id) as [string, string];
+    const r = tx(d, [{ op: 'freeze_frame', args: { clipId, at: f(45), duration: f(30) } }]);
+    d = r.doc;
+    expect(validateProject(d)).toEqual([]);
+    const held = media(d, r.results[0]!.output!.freezeClipId as string);
+    expect(held.freeze).toBe(true);
+    expect([T.frameIndexAt(held.start, R), T.frameIndexAt(held.duration, R)]).toEqual([45, 30]);
+    expect(T.eq(held.sourceIn, T.rt(3, 2))).toBe(true); // source 1.5 s = the frame shown at timeline frame 45
+    expect(T.eq(sourceAt(held, f(60)), held.sourceIn)).toBe(true); // every moment of the hold shows the same picture
+    expect(T.eq(sourceEnd(held), held.sourceIn)).toBe(true);
+    expect(held.linkGroupId).toBeNull();
+    // the original is split: left 0..45, right 75..270 continuing from source 1.5 s; sound likewise, still linked pairwise
+    const left = media(d, clipId);
+    expect(T.frameIndexAt(left.duration, R)).toBe(45);
+    const rights = Object.values(d.sequences)[0]!.tracks.flatMap((t) => t.clips).filter((c): c is MediaClip => c.type === 'media' && T.frameIndexAt(c.start, R) === 75);
+    expect(rights).toHaveLength(2);
+    for (const c of rights) { expect(T.eq(c.sourceIn, T.rt(3, 2))).toBe(true); expect(T.frameIndexAt(c.duration, R)).toBe(195); }
+    expect(rights[0]!.linkGroupId).toBe(rights[1]!.linkGroupId);
+    expect(rights[0]!.linkGroupId).not.toBe(left.linkGroupId);
+    // a title crossing the point stays up through the hold; one after it moves later
+    expect([T.frameIndexAt(findClip(d, title)!.clip.start, R), T.frameIndexAt(findClip(d, title)!.clip.duration, R)]).toEqual([30, 90]);
+    expect(T.frameIndexAt(findClip(d, later)!.clip.start, R)).toBe(150);
+    expect(T.eq(sequenceDuration(d), f(270))).toBe(true);
+    // the hold can be trimmed freely (it reads no stretch of source) but has no speed, and cannot be frozen again
+    const longer = tx(tx(d, [{ op: 'move_clips', args: { clipIds: rights.map((c) => c.id), delta: f(30) } }]).doc, [{ op: 'trim_clip', args: { clipId: held.id, edge: 'end', to: f(105) } }]).doc;
+    expect(validateProject(longer)).toEqual([]);
+    expect(T.eq(media(longer, held.id).sourceIn, T.rt(3, 2))).toBe(true);
+    expect(() => tx(d, [{ op: 'set_clip_speed', args: { clipId: held.id, speed: 2 } }])).toThrow(OpError);
+    expect(() => tx(d, [{ op: 'freeze_frame', args: { clipId: held.id, at: f(50), duration: f(10) } }])).toThrow(OpError);
+    expect(() => tx(doc, [{ op: 'freeze_frame', args: { clipId, at: f(240), duration: f(10) } }])).toThrow(OpError); // outside the clip
+    expect(() => tx(doc, [{ op: 'freeze_frame', args: { clipId, at: f(10), duration: f(0) } }])).toThrow(OpError);
+    // holding the very first frame needs no split
+    const first = tx(doc, [{ op: 'freeze_frame', args: { clipId, at: f(0), duration: f(15) } }]).doc;
+    expect(validateProject(first)).toEqual([]);
+    expect(T.frameIndexAt(media(first, clipId).start, R)).toBe(15);
+  });
+  it('property: any speed keeps the project valid, never reads past the source, and maps round-trip', () => {
+    fc.assert(fc.property(fc.integer({ min: 100, max: 8000 }), fc.integer({ min: 0, max: 200 }), (milli, trim) => {
+      const { doc, clipId } = project();
+      const base = trim ? tx(doc, [{ op: 'trim_clip', args: { clipId, edge: 'start', to: f(trim) } }]).doc : doc;
+      const d = tx(base, [{ op: 'set_clip_speed', args: { clipId, speed: milli / 1000 } }]).doc;
+      const c = media(d, clipId);
+      expect(validateProject(d)).toEqual([]);
+      expect(T.lte(sourceEnd(c), T.rt(8, 1))).toBe(true);
+      expect(T.eq(c.duration, f(T.frameIndexAt(c.duration, R)))).toBe(true); // whole frames
+      const mid = T.add(c.start, f(Math.floor(T.frameIndexAt(c.duration, R) / 2)));
+      expect(T.eq(timelineAt(c, sourceAt(c, mid)), mid)).toBe(true);
+      expect(T.eq(toSourceSpan(c, c.duration), T.sub(sourceEnd(c), c.sourceIn))).toBe(true);
+    }), { numRuns: 60 });
+  });
+});
+
+describe('continuous speed ramp', () => {
+  const code = (fn: () => unknown) => { try { fn(); } catch (e) { return e instanceof OpError ? e.code : `non-op:${e}`; } return 'ok'; };
+  it('set_clip_speed_ramp keeps one clip, shows the same stretch of source, and maps time by the exact ramp formula', () => {
+    const { doc, clipId } = project(); // 8 s of source at 1×
+    const r = tx(doc, [{ op: 'set_clip_speed_ramp', args: { clipId, from: 1, to: 3 } }]);
+    const c = media(r.doc, clipId);
+    // average speed 2: 8 s of source in 4 s (120 frames)
+    expect([T.frameIndexAt(c.duration, R), c.speed, c.speedEnd]).toEqual([120, undefined, { num: 3, den: 1 }]);
+    expect(T.eq(sourceEnd(c), T.rt(8, 1))).toBe(true);
+    // after τ seconds: τ + (3 − 1)·τ²/(2·4) = τ + τ²/4
+    expect(T.eq(sourceAt(c, T.rt(2, 1)), T.rt(3, 1))).toBe(true);
+    expect(T.eq(sourceAt(c, f(30)), T.rt(5, 4))).toBe(true);
+    expect(T.eq(sourceAt(c, f(1)), T.rt(121, 3600))).toBe(true); // 1/30 + 1/3600: exact, not rounded
+    // never backwards, and the linked sound has the same shape
+    let prev = T.ZERO;
+    for (let i = 0; i <= 120; i++) { const s = sourceAt(c, f(i)); expect(T.lte(prev, s)).toBe(true); prev = s; }
+    const a = linkedOf(r.doc, clipId)[0]!;
+    expect([T.frameIndexAt(a.duration, R), a.speedEnd]).toEqual([120, { num: 3, den: 1 }]);
+    expect(validateProject(r.doc)).toEqual([]);
+    // the inverse is approximate but within a microsecond here
+    expect(Math.abs(T.toSeconds(timelineAt(c, T.rt(3, 1))) - 2)).toBeLessThan(2e-6);
+    expect(Math.abs(T.toSeconds(timelineAt(c, T.rt(5, 4))) - 1)).toBeLessThan(2e-6);
+  });
+  it('easing into slow motion: 1 → 0.25 lengthens the clip; a length that is not whole frames is rounded down and never reads past the source', () => {
+    const { doc, clipId } = project();
+    const half = tx(doc, [{ op: 'trim_clip', args: { clipId, edge: 'end', to: f(60) } }]).doc; // 2 s of source
+    const r = tx(half, [{ op: 'set_clip_speed_ramp', args: { clipId, from: 1, to: 0.25 } }]);
+    const c = media(r.doc, clipId);
+    expect(T.frameIndexAt(c.duration, R)).toBe(96); // 2 s ÷ 0.625 = 3.2 s
+    expect(T.lte(sourceEnd(c), T.rt(2, 1))).toBe(true);
+    const odd = tx(half, [{ op: 'set_clip_speed_ramp', args: { clipId, from: 0.7, to: 1.9 } }]).doc; // 2 ÷ 1.3 = 1.538… s → 46 frames
+    expect(T.frameIndexAt(media(odd, clipId).duration, R)).toBe(46);
+    expect(T.lte(sourceEnd(media(odd, clipId)), T.rt(2, 1))).toBe(true);
+    expect(validateProject(odd)).toEqual([]);
+  });
+  it('set_clip_speed gives the clip one speed again with the same stretch of source; a ramp can be applied on top of a ramp', () => {
+    const { doc, clipId } = project();
+    const ramped = tx(doc, [{ op: 'set_clip_speed_ramp', args: { clipId, from: 1, to: 3 } }]).doc;
+    const again = tx(ramped, [{ op: 'set_clip_speed_ramp', args: { clipId, from: 2, to: 2.5 } }]).doc; // 8 s ÷ 2.25 = 3.555… s → 106 frames
+    expect([T.frameIndexAt(media(again, clipId).duration, R), media(again, clipId).speed]).toEqual([106, { num: 2, den: 1 }]);
+    const one = tx(ramped, [{ op: 'set_clip_speed', args: { clipId, speed: 1 } }]).doc;
+    const c = media(one, clipId);
+    expect([c.speedEnd, c.speed, T.frameIndexAt(c.duration, R)]).toEqual([undefined, undefined, 240]);
+    expect(linkedOf(one, clipId)[0]!.speedEnd).toBeUndefined();
+  });
+  it('while ramped, a clip refuses to be slipped, reversed, frozen, given a transition, divided into steps or set to keep pitch; moving and removing it work', () => {
+    const { doc, clipId, assetId } = project();
+    let d = tx(doc, [{ op: 'set_clip_speed_ramp', args: { clipId, from: 1, to: 3 } }]).doc;
+    const audioId = linkedOf(d, clipId)[0]!.id;
+    const refused = (ops: OpCall[]) => code(() => tx(d, ops));
+    expect(refused([{ op: 'slip_clip', args: { clipId, by: f(5) } }])).toBe('incompatible');
+    expect(refused([{ op: 'set_clip_reverse', args: { clipId, reverse: true } }])).toBe('incompatible');
+    expect(refused([{ op: 'freeze_frame', args: { clipId, at: f(30), duration: f(30) } }])).toBe('incompatible');
+    expect(refused([{ op: 'set_transition', args: { clipId, type: 'dissolve' } }])).toBe('incompatible');
+    expect(refused([{ op: 'set_clip_pitch', args: { clipId: audioId, keepPitch: true } }])).toBe('incompatible');
+    expect(refused([{ op: 'speed_ramp', args: { clipId, from: 1, to: 2 } }])).toBe('incompatible');
+    expect(refused([{ op: 'set_clip_speed_ramp', args: { clipId, from: 2, to: 2 } }])).toBe('invalid_args');
+    const after = tx(d, [{ op: 'add_clip', args: { assetId, start: f(120), duration: f(30) } }]);
+    expect(code(() => tx(after.doc, [{ op: 'set_transition', args: { clipId: after.results[0]!.output!.clipId as string, type: 'dissolve', frames: 5 } }]))).toBe('incompatible');
+    d = tx(d, [{ op: 'move_clip', args: { clipId, start: f(30) } }]).doc;
+    expect(T.frameIndexAt(media(d, clipId).start, R)).toBe(30);
+    expect(findClip(tx(d, [{ op: 'cut_range', args: { start: f(0), end: f(200), ripple: false } }]).doc, clipId)).toBeUndefined();
+    expect(validateProject(d)).toEqual([]);
+  });
+  /** Source time shown at every timeline frame of the picture track, by whichever clip covers it (null in a gap). */
+  const shownAt = (d: ProjectDocument, frames: number) => {
+    const clips = Object.values(d.sequences)[0]!.tracks.find((t) => t.kind === 'video')!.clips as MediaClip[];
+    return Array.from({ length: frames }, (_, i) => { const c = clips.find((x) => T.lte(x.start, f(i)) && T.lt(f(i), T.add(x.start, x.duration))); return c ? JSON.stringify(sourceAt(c, f(i))) : null; });
+  };
+  it.each([['even'], ['smooth']] as const)('a ramped clip (%s) can be split, trimmed and cut: every part shows, frame for frame, exactly what the whole clip showed there', (curve) => {
+    const { doc, clipId } = project();
+    const whole = tx(doc, [{ op: 'set_clip_speed_ramp', args: { clipId, from: 0.5, to: 2.5, curve } }]).doc; // 8 s ÷ 1.5 = 5.33 s → 160 frames
+    const frames = T.frameIndexAt(media(whole, clipId).duration, R);
+    const want = shownAt(whole, frames);
+    // split in three
+    let d = tx(whole, [{ op: 'split_clip', args: { clipId, at: f(47) } }]).doc;
+    const right = Object.values(d.sequences)[0]!.tracks.find((t) => t.kind === 'video')!.clips[1]!.id;
+    d = tx(d, [{ op: 'split_clip', args: { clipId: right, at: f(113) } }]).doc;
+    expect(Object.values(d.sequences)[0]!.tracks.find((t) => t.kind === 'video')!.clips.length).toBe(3);
+    expect(shownAt(d, frames)).toEqual(want);
+    expect(validateProject(d)).toEqual([]);
+    // the linked sound was split the same way and carries the same windows
+    const windows = (kind: string) => Object.values(d.sequences)[0]!.tracks.find((t) => t.kind === kind)!.clips.map((c) => JSON.stringify((c as MediaClip).rampWindow));
+    expect(windows('audio')).toEqual(windows('video'));
+    // trim the middle part at both ends, then extend it back: what remains still shows the same frames, the trimmed frames are gaps
+    const mid = Object.values(d.sequences)[0]!.tracks.find((t) => t.kind === 'video')!.clips[1]!.id;
+    let t2 = tx(d, [{ op: 'trim_clip', args: { clipId: mid, edge: 'start', to: f(60) } }, { op: 'trim_clip', args: { clipId: mid, edge: 'end', to: f(100) } }]).doc;
+    expect(shownAt(t2, frames)).toEqual(want.map((w, i) => ((i >= 47 && i < 60) || (i >= 100 && i < 113) ? null : w)));
+    t2 = tx(t2, [{ op: 'trim_clip', args: { clipId: mid, edge: 'start', to: f(47) } }, { op: 'trim_clip', args: { clipId: mid, edge: 'end', to: f(113) } }]).doc;
+    expect(shownAt(t2, frames)).toEqual(want);
+    // a ripple cut out of the middle: the frames after it are the ones that followed the cut
+    const cut = tx(whole, [{ op: 'cut_range', args: { start: f(40), end: f(70), ripple: true } }]).doc;
+    expect(shownAt(cut, frames - 30)).toEqual([...want.slice(0, 40), ...want.slice(70)]);
+    // a gap opened in the middle
+    const gap = tx(whole, [{ op: 'insert_gap', args: { at: f(80), duration: f(15) } }]).doc;
+    expect(shownAt(gap, frames + 15)).toEqual([...want.slice(0, 80), ...Array(15).fill(null), ...want.slice(80)]);
+    expect(validateProject(gap)).toEqual([]);
+    // one speed again clears the window and the curve
+    const last = Object.values(d.sequences)[0]!.tracks.find((t) => t.kind === 'video')!.clips[2]!.id; // the last part: nothing after it to run into
+    const flat = media(tx(d, [{ op: 'set_clip_speed', args: { clipId: last, speed: 1 } }]).doc, last);
+    expect([flat.speedEnd, flat.rampWindow, flat.speedCurve]).toEqual([undefined, undefined, undefined]);
+  });
+  it('a trimmed ramp can be extended past its ends: it plays on at its first or last speed, as far as the source goes', () => {
+    const { doc, clipId } = project();
+    // use the middle of the source: 2 s..6 s, ramp 1 → 2 (4 s ÷ 1.5 = 2.67 s → 80 frames)
+    let d = tx(doc, [{ op: 'trim_clip', args: { clipId, edge: 'start', to: f(60) } }, { op: 'trim_clip', args: { clipId, edge: 'end', to: f(180) } }, { op: 'move_clip', args: { clipId, start: f(60) } }]).doc;
+    d = tx(d, [{ op: 'set_clip_speed_ramp', args: { clipId, from: 1, to: 2 } }]).doc;
+    const c0 = media(d, clipId);
+    expect(T.frameIndexAt(c0.duration, R)).toBe(80);
+    d = tx(d, [{ op: 'trim_clip', args: { clipId, edge: 'end', to: f(60 + 80 + 15) } }, { op: 'trim_clip', args: { clipId, edge: 'start', to: f(30) } }]).doc;
+    const c = media(d, clipId);
+    // 30 frames (1 s) earlier at 1×: the source starts 1 s earlier; 15 frames later at 2×: one more second of source
+    expect(T.eq(c.sourceIn, T.rt(1, 1))).toBe(true);
+    expect(T.eq(sourceAt(c, f(60)), T.rt(2, 1))).toBe(true);
+    expect(T.eq(sourceEnd(c), T.add(sourceEnd({ ...c0 }), T.rt(1, 1)))).toBe(true);
+    expect(validateProject(d)).toEqual([]);
+    // further than the source allows is refused
+    expect(code(() => tx(d, [{ op: 'trim_clip', args: { clipId, edge: 'end', to: f(60 + 80 + 60) } }]))).toBe('out_of_bounds');
+  });
+  it('the eased ramp shows the same stretch of source in the same time as the even one, but stays near the first speed longer and catches up at the end', () => {
+    const { doc, clipId } = project();
+    const even = media(tx(doc, [{ op: 'set_clip_speed_ramp', args: { clipId, from: 1, to: 3 } }]).doc, clipId);
+    const smooth = media(tx(doc, [{ op: 'set_clip_speed_ramp', args: { clipId, from: 1, to: 3, curve: 'smooth' } }]).doc, clipId);
+    expect([T.frameIndexAt(smooth.duration, R), smooth.speedCurve]).toEqual([120, 'smooth']);
+    expect(T.eq(sourceEnd(smooth), sourceEnd(even))).toBe(true);
+    expect(T.eq(sourceAt(smooth, T.rt(2, 1)), T.rt(11, 4))).toBe(true); // half way: 2 + 2·4·(1/8 − 1/32) = 2.75 s, where the even ramp has played 3 s
+    expect(T.lt(sourceAt(smooth, T.rt(1, 1)), sourceAt(even, T.rt(1, 1)))).toBe(true);  // early on: less source played (it is still near the first speed)
+    // exact value a quarter of the way: 1 + 2·4·(1/64 − 1/512) = 1.109375 s
+    expect(T.eq(sourceAt(smooth, T.rt(1, 1)), T.rt(1109375, 1000000))).toBe(true);
+    expect(Math.abs(T.toSeconds(timelineAt(smooth, T.rt(1109375, 1000000))) - 1)).toBeLessThan(2e-6);
+  });
+  it('property: any pair of speeds keeps the project valid, never reads past the source and never goes backwards', () => {
+    fc.assert(fc.property(fc.integer({ min: 1, max: 80 }), fc.integer({ min: 1, max: 80 }), fc.integer({ min: 1, max: 239 }), (x, y, cut) => {
+      fc.pre(x !== y);
+      const { doc, clipId } = project();
+      const trimmed = tx(doc, [{ op: 'trim_clip', args: { clipId, edge: 'end', to: f(cut) } }]).doc;
+      const before = sourceEnd(media(trimmed, clipId));
+      const d = tx(trimmed, [{ op: 'set_clip_speed_ramp', args: { clipId, from: x / 10, to: y / 10 } }]).doc;
+      const c = media(d, clipId);
+      expect(validateProject(d)).toEqual([]);
+      const frames = T.frameIndexAt(c.duration, R);
+      expect(T.lte(sourceEnd(c), frames === 1 ? T.rt(8, 1) : before)).toBe(true); // a one-frame clip may show slightly more than before, never past the file
+      let prev = T.sub(T.ZERO, T.rt(1, 1000000));
+      for (let i = 0; i <= frames; i += Math.max(1, Math.floor(frames / 40))) { const s = sourceAt(c, f(i)); expect(T.lt(prev, s) || i === 0).toBe(true); prev = s; }
+    }), { numRuns: 150 });
+  });
+});

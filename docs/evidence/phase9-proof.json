@@ -1,0 +1,391 @@
+{
+  "ranAt": "2026-11-19T04:19:52.316Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "scope": "Model-free analysis on synthetic corpora with known ground truth. Real footage, real music and all model-based analysis are not exercised.",
+  "measurements": {
+    "scenes": {
+      "truthFrames": [
+        60,
+        105,
+        165,
+        195,
+        270
+      ],
+      "foundFrames": [
+        60,
+        105,
+        165,
+        195,
+        270
+      ],
+      "precision": 1,
+      "recall": 1,
+      "analysisMs": 224,
+      "clipSeconds": 10,
+      "note": "one synthetic clip with 5 hard cuts between very different pictures; H.264 with B-frames"
+    },
+    "sceneLimits": {
+      "continuousShotFalseCuts": 0,
+      "dissolveDetected": 0
+    },
+    "beats": {
+      "tolerance": "±70 ms",
+      "rows": [
+        {
+          "loop": "90",
+          "bpmFound": 90.66,
+          "bpmError": 0.66,
+          "f1": 1,
+          "medianErrorMs": 4.667,
+          "p95ErrorMs": 10.667,
+          "confidence": 0.787,
+          "analysisMs": 387
+        },
+        {
+          "loop": "100",
+          "bpmFound": 99.39,
+          "bpmError": 0.61,
+          "f1": 0.987,
+          "medianErrorMs": 5,
+          "p95ErrorMs": 10,
+          "confidence": 0.873,
+          "analysisMs": 346
+        },
+        {
+          "loop": "120",
+          "bpmFound": 120.19,
+          "bpmError": 0.19,
+          "f1": 0.989,
+          "medianErrorMs": 5,
+          "p95ErrorMs": 10,
+          "confidence": 0.986,
+          "analysisMs": 317
+        },
+        {
+          "loop": "128",
+          "bpmFound": 129.2,
+          "bpmError": 1.2,
+          "f1": 1,
+          "medianErrorMs": 5.25,
+          "p95ErrorMs": 10,
+          "confidence": 0.814,
+          "analysisMs": 323
+        },
+        {
+          "loop": "140",
+          "bpmFound": 139.66,
+          "bpmError": 0.34,
+          "f1": 1,
+          "medianErrorMs": 4,
+          "p95ErrorMs": 9.429,
+          "confidence": 0.984,
+          "analysisMs": 374
+        },
+        {
+          "loop": "drift-120-127",
+          "bpmFound": 123.05,
+          "bpmError": 0.45,
+          "f1": 0.99,
+          "medianErrorMs": 4.496,
+          "p95ErrorMs": 10.126,
+          "confidence": 0.571,
+          "analysisMs": 350
+        }
+      ],
+      "note": "24 s synthetic loops (kick with attack click on the beat, quieter hat off the beat, bass tone, noise). Not real music."
+    },
+    "bars": {
+      "tolerance": "±70 ms",
+      "rows": [
+        {
+          "loop": "4-120",
+          "meterFound": 4,
+          "meter": 4,
+          "bars": 14,
+          "precision": 1,
+          "recall": 0.933
+        },
+        {
+          "loop": "4-96",
+          "meterFound": 4,
+          "meter": 4,
+          "bars": 12,
+          "precision": 1,
+          "recall": 1
+        },
+        {
+          "loop": "3-132",
+          "meterFound": 3,
+          "meter": 3,
+          "bars": 21,
+          "precision": 1,
+          "recall": 0.955
+        }
+      ],
+      "plainLoopBars": 0,
+      "note": "30 s synthetic loops with an accented first beat. Not real music: real accents are subtler and often on other beats."
+    },
+    "beatLimits": {
+      "steadyNoiseConfidence": 0.049,
+      "loopConfidences": [
+        0.787,
+        0.873,
+        0.986,
+        0.814,
+        0.984,
+        0.571
+      ]
+    },
+    "cutOnBeat": {
+      "cuts": 6,
+      "worstDistanceToTrueBeatMs": 3.333,
+      "frameMs": 33.3
+    }
+  },
+  "passed": 14,
+  "total": 14,
+  "checks": [
+    {
+      "name": "hard cuts: all 5 found on the exact frame, no false cuts",
+      "ok": true,
+      "detail": {
+        "truthFrames": [
+          60,
+          105,
+          165,
+          195,
+          270
+        ],
+        "foundFrames": [
+          60,
+          105,
+          165,
+          195,
+          270
+        ],
+        "precision": 1,
+        "recall": 1,
+        "analysisMs": 224,
+        "clipSeconds": 10,
+        "note": "one synthetic clip with 5 hard cuts between very different pictures; H.264 with B-frames"
+      }
+    },
+    {
+      "name": "a continuous moving shot gives no cuts; a one-second dissolve is NOT detected (stated limit of this method)",
+      "ok": true,
+      "detail": {
+        "continuousShotFalseCuts": 0,
+        "dissolveDetected": 0
+      }
+    },
+    {
+      "name": "beat corpus: F1 ≥ 0.92 on all six loops, tempo within 1.5 BPM on the five steady ones",
+      "ok": true,
+      "detail": [
+        {
+          "loop": "90",
+          "bpmFound": 90.66,
+          "bpmError": 0.66,
+          "f1": 1,
+          "medianErrorMs": 4.667,
+          "p95ErrorMs": 10.667,
+          "confidence": 0.787,
+          "analysisMs": 387
+        },
+        {
+          "loop": "100",
+          "bpmFound": 99.39,
+          "bpmError": 0.61,
+          "f1": 0.987,
+          "medianErrorMs": 5,
+          "p95ErrorMs": 10,
+          "confidence": 0.873,
+          "analysisMs": 346
+        },
+        {
+          "loop": "120",
+          "bpmFound": 120.19,
+          "bpmError": 0.19,
+          "f1": 0.989,
+          "medianErrorMs": 5,
+          "p95ErrorMs": 10,
+          "confidence": 0.986,
+          "analysisMs": 317
+        },
+        {
+          "loop": "128",
+          "bpmFound": 129.2,
+          "bpmError": 1.2,
+          "f1": 1,
+          "medianErrorMs": 5.25,
+          "p95ErrorMs": 10,
+          "confidence": 0.814,
+          "analysisMs": 323
+        },
+        {
+          "loop": "140",
+          "bpmFound": 139.66,
+          "bpmError": 0.34,
+          "f1": 1,
+          "medianErrorMs": 4,
+          "p95ErrorMs": 9.429,
+          "confidence": 0.984,
+          "analysisMs": 374
+        },
+        {
+          "loop": "drift-120-127",
+          "bpmFound": 123.05,
+          "bpmError": 0.45,
+          "f1": 0.99,
+          "medianErrorMs": 4.496,
+          "p95ErrorMs": 10.126,
+          "confidence": 0.571,
+          "analysisMs": 350
+        }
+      ]
+    },
+    {
+      "name": "bar starts on the accented corpus: the right number of beats to the bar on all three loops, precision ≥ 0.95 and recall ≥ 0.85; the loop without an accent gets no bars",
+      "ok": true,
+      "detail": {
+        "tolerance": "±70 ms",
+        "rows": [
+          {
+            "loop": "4-120",
+            "meterFound": 4,
+            "meter": 4,
+            "bars": 14,
+            "precision": 1,
+            "recall": 0.933
+          },
+          {
+            "loop": "4-96",
+            "meterFound": 4,
+            "meter": 4,
+            "bars": 12,
+            "precision": 1,
+            "recall": 1
+          },
+          {
+            "loop": "3-132",
+            "meterFound": 3,
+            "meter": 3,
+            "bars": 21,
+            "precision": 1,
+            "recall": 0.955
+          }
+        ],
+        "plainLoopBars": 0,
+        "note": "30 s synthetic loops with an accented first beat. Not real music: real accents are subtler and often on other beats."
+      }
+    },
+    {
+      "name": "material without a pulse (steady noise) is reported with much lower confidence than every loop, so the UI can warn",
+      "ok": true,
+      "detail": {
+        "steadyNoiseConfidence": 0.049,
+        "loopConfidences": [
+          0.787,
+          0.873,
+          0.986,
+          0.814,
+          0.984,
+          0.571
+        ]
+      }
+    },
+    {
+      "name": "split_at_scenes: one transaction turns the clip into 6 shots (picture and linked sound) starting exactly on the cuts",
+      "ok": true,
+      "detail": {
+        "videoStarts": [
+          0,
+          60,
+          105,
+          165,
+          195,
+          270
+        ]
+      }
+    },
+    {
+      "name": "one undo puts the single clip back; the analysis data stays",
+      "ok": true
+    },
+    {
+      "name": "timeline markers are derived through the current clips: after a trim and a move every cut marker moved with the picture",
+      "ok": true,
+      "detail": [
+        3,
+        4.5,
+        6.5,
+        7.5,
+        10
+      ]
+    },
+    {
+      "name": "manual correction: remove a cut and add one, marked as edited; analysing again refuses to discard the corrections unless overwrite is given",
+      "ok": true,
+      "detail": {
+        "refusal": "this result was corrected by hand; analysing again would discard those corrections"
+      }
+    },
+    {
+      "name": "observer cannot run an analysis; beats on a file without sound is a clear 422",
+      "ok": true
+    },
+    {
+      "name": "agent analyses the music, reads beat markers from the timeline and places picture cuts on bar lines: every cut is within one frame of a true beat",
+      "ok": true,
+      "detail": {
+        "cuts": 6,
+        "worstDistanceToTrueBeatMs": 3.333,
+        "frameMs": 33.3
+      }
+    },
+    {
+      "name": "get_analysis returns tempo, confidence and method for the agent",
+      "ok": true
+    },
+    {
+      "name": "editor: \"find scene cuts\" draws 5 markers on the exact frames; \"split into shots\" makes 6 clips; no page errors",
+      "ok": true,
+      "detail": {
+        "markerFrames": [
+          60,
+          105,
+          165,
+          195,
+          270
+        ],
+        "shots": 6,
+        "beatMarkersOnASineTone": 20,
+        "errors": []
+      }
+    },
+    {
+      "name": "editor: bar starts of an analysed loop are drawn as taller beat markers at their timeline frames (the clip starts at frame 600) and the analysis panel shows their number; the project summary reports bars and beats to the bar",
+      "ok": true,
+      "detail": {
+        "wantBars": 14,
+        "barMarkers": 14,
+        "firstBarFrame": "671",
+        "panelBars": "14",
+        "summary": {
+          "assetId": "ast_08fd821ff90",
+          "sceneCuts": null,
+          "beats": 58,
+          "bpm": 120.19,
+          "bars": 14,
+          "meter": 4
+        }
+      }
+    }
+  ]
+}

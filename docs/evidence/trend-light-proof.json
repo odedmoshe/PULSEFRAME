@@ -1,0 +1,1078 @@
+{
+  "ranAt": "2026-11-19T05:14:11.940Z",
+  "commit": "cef8a432509456e95c32c2ef0449256beaf79531",
+  "result": "PASSED",
+  "passed": 15,
+  "total": 15,
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "gpu": "none: the WebGPU adapter here is a software one"
+  },
+  "scope": "The seven trend-pack WGSL transitions and the light plan (ADR-0012) on synthetic still pictures at 360x640 (timing at 1080x1920), through the server API and its render worker on a software WebGPU adapter. Correctness of the passes, of the flash schedule and of the export flash check only: no speed claim, no real footage, no hardware adapter (the owner's run is still needed, ADR-0011:85), nobody looked at the pictures.",
+  "measurements": {
+    "baseline": {
+      "line": "trend baseline --check PASSED against 33a78fc: 348 pixel hashes and 0 refusals compared, 0 differ (report: .artifacts/trend-baseline/check.json)",
+      "compared": {
+        "pixelHashes": 348,
+        "refused": 0
+      },
+      "differences": 0
+    },
+    "pageTurn": {
+      "progress": 0.5,
+      "fold": 0.5,
+      "mirror": 0.6885,
+      "columnsMeasured": 38,
+      "worstPixels": 1.31,
+      "rows": [
+        {
+          "id": "page-turn-left",
+          "corners": {
+            "farIncoming": true,
+            "nearOutgoing": true
+          }
+        },
+        {
+          "id": "page-turn-right",
+          "corners": {
+            "farIncoming": true,
+            "nearOutgoing": true
+          }
+        }
+      ]
+    },
+    "ink": {
+      "incomingArea": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.018,
+        0.198,
+        0.484,
+        0.88,
+        0.992,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "seedsDifferIn": 0.288
+    },
+    "lightOnGrey": [
+      {
+        "id": "film-burn",
+        "kept": true,
+        "pearson": 0.9916,
+        "outsideWindow": 0,
+        "linearRedShare": 0.504,
+        "peakMeanAdded": 68.9,
+        "ok": true
+      },
+      {
+        "id": "light-leak",
+        "kept": true,
+        "pearson": 1,
+        "outsideWindow": 0,
+        "linearRedShare": 0.525,
+        "peakMeanAdded": 80.8,
+        "ok": true
+      }
+    ],
+    "hold": {
+      "lightStartsAt": {
+        "held": 70,
+        "kept": 82
+      },
+      "held": {
+        "plan": {
+          "frame": 70,
+          "kept": false,
+          "since": 4
+        },
+        "mostMeanLight": 0
+      },
+      "kept": {
+        "plan": {
+          "frame": 82,
+          "kept": true,
+          "since": null
+        },
+        "mostMeanLight": 68.928
+      }
+    },
+    "backToBack": {
+      "burn": {
+        "status": "succeeded",
+        "manifest": {
+          "verdict": "pass",
+          "ranges": 0
+        },
+        "lights": 59,
+        "keptLights": 30,
+        "mostKeptStartsInASecond": 2,
+        "local": {
+          "verdict": "pass",
+          "peak": {
+            "general": 4,
+            "red": 0
+          },
+          "ranges": 0
+        },
+        "frames": 900
+      },
+      "flash": {
+        "status": "succeeded",
+        "manifest": {
+          "verdict": "fail",
+          "ranges": 1
+        },
+        "lights": 0,
+        "keptLights": 0,
+        "mostKeptStartsInASecond": 0,
+        "local": {
+          "verdict": "fail",
+          "peak": {
+            "general": 8,
+            "red": 0
+          },
+          "ranges": 1
+        },
+        "frames": 900
+      }
+    },
+    "defaults": {
+      "film-burn": {
+        "status": "succeeded",
+        "exportVerdict": "pass",
+        "frames": 180,
+        "instances": [
+          {
+            "fixture": "halves",
+            "verdict": "pass",
+            "peak": {
+              "general": 1,
+              "red": 0
+            },
+            "ranges": 0
+          },
+          {
+            "fixture": "checker",
+            "verdict": "pass",
+            "peak": {
+              "general": 1,
+              "red": 0
+            },
+            "ranges": 0
+          },
+          {
+            "fixture": "red-green",
+            "verdict": "pass",
+            "peak": {
+              "general": 2,
+              "red": 1
+            },
+            "ranges": 0
+          }
+        ],
+        "ok": true
+      },
+      "light-leak": {
+        "status": "succeeded",
+        "exportVerdict": "pass",
+        "frames": 180,
+        "instances": [
+          {
+            "fixture": "halves",
+            "verdict": "pass",
+            "peak": {
+              "general": 1,
+              "red": 0
+            },
+            "ranges": 0
+          },
+          {
+            "fixture": "checker",
+            "verdict": "pass",
+            "peak": {
+              "general": 1,
+              "red": 0
+            },
+            "ranges": 0
+          },
+          {
+            "fixture": "red-green",
+            "verdict": "pass",
+            "peak": {
+              "general": 2,
+              "red": 1
+            },
+            "ranges": 0
+          }
+        ],
+        "ok": true
+      },
+      "ink-bleed": {
+        "status": "succeeded",
+        "exportVerdict": "pass",
+        "frames": 180,
+        "instances": [
+          {
+            "fixture": "halves",
+            "verdict": "pass",
+            "peak": {
+              "general": 1,
+              "red": 0
+            },
+            "ranges": 0
+          },
+          {
+            "fixture": "checker",
+            "verdict": "pass",
+            "peak": {
+              "general": 1,
+              "red": 0
+            },
+            "ranges": 0
+          },
+          {
+            "fixture": "red-green",
+            "verdict": "pass",
+            "peak": {
+              "general": 1,
+              "red": 1
+            },
+            "ranges": 0
+          }
+        ],
+        "ok": true
+      },
+      "brush-left": {
+        "status": "succeeded",
+        "exportVerdict": "pass",
+        "frames": 180,
+        "instances": [
+          {
+            "fixture": "halves",
+            "verdict": "pass",
+            "peak": {
+              "general": 1,
+              "red": 0
+            },
+            "ranges": 0
+          },
+          {
+            "fixture": "checker",
+            "verdict": "pass",
+            "peak": {
+              "general": 1,
+              "red": 0
+            },
+            "ranges": 0
+          },
+          {
+            "fixture": "red-green",
+            "verdict": "pass",
+            "peak": {
+              "general": 1,
+              "red": 1
+            },
+            "ranges": 0
+          }
+        ],
+        "ok": true
+      },
+      "brush-right": {
+        "status": "succeeded",
+        "exportVerdict": "pass",
+        "frames": 180,
+        "instances": [
+          {
+            "fixture": "halves",
+            "verdict": "pass",
+            "peak": {
+              "general": 1,
+              "red": 0
+            },
+            "ranges": 0
+          },
+          {
+            "fixture": "checker",
+            "verdict": "pass",
+            "peak": {
+              "general": 1,
+              "red": 0
+            },
+            "ranges": 0
+          },
+          {
+            "fixture": "red-green",
+            "verdict": "pass",
+            "peak": {
+              "general": 1,
+              "red": 1
+            },
+            "ranges": 0
+          }
+        ],
+        "ok": true
+      },
+      "page-turn-left": {
+        "status": "succeeded",
+        "exportVerdict": "pass",
+        "frames": 180,
+        "instances": [
+          {
+            "fixture": "halves",
+            "verdict": "pass",
+            "peak": {
+              "general": 3,
+              "red": 0
+            },
+            "ranges": 0
+          },
+          {
+            "fixture": "checker",
+            "verdict": "pass",
+            "peak": {
+              "general": 3,
+              "red": 0
+            },
+            "ranges": 0
+          },
+          {
+            "fixture": "red-green",
+            "verdict": "pass",
+            "peak": {
+              "general": 3,
+              "red": 3
+            },
+            "ranges": 0
+          }
+        ],
+        "ok": true
+      },
+      "page-turn-right": {
+        "status": "succeeded",
+        "exportVerdict": "pass",
+        "frames": 180,
+        "instances": [
+          {
+            "fixture": "halves",
+            "verdict": "pass",
+            "peak": {
+              "general": 3,
+              "red": 0
+            },
+            "ranges": 0
+          },
+          {
+            "fixture": "checker",
+            "verdict": "pass",
+            "peak": {
+              "general": 3,
+              "red": 0
+            },
+            "ranges": 0
+          },
+          {
+            "fixture": "red-green",
+            "verdict": "pass",
+            "peak": {
+              "general": 3,
+              "red": 3
+            },
+            "ranges": 0
+          }
+        ],
+        "ok": true
+      }
+    },
+    "timing1080x1920": {
+      "plainStillMs": 350,
+      "film-burn": {
+        "stillMs": 1059,
+        "passMsEstimate": 709
+      },
+      "light-leak": {
+        "stillMs": 1182,
+        "passMsEstimate": 832
+      },
+      "ink-bleed": {
+        "stillMs": 1455,
+        "passMsEstimate": 1104
+      },
+      "brush-left": {
+        "stillMs": 962,
+        "passMsEstimate": 612
+      },
+      "brush-right": {
+        "stillMs": 1006,
+        "passMsEstimate": 656
+      },
+      "page-turn-left": {
+        "stillMs": 790,
+        "passMsEstimate": 440
+      },
+      "page-turn-right": {
+        "stillMs": 756,
+        "passMsEstimate": 406
+      }
+    }
+  },
+  "checks": [
+    {
+      "name": "L0 trend-baseline --check: the 51 legacy transitions × 3 frames × 2 shapes (and the legacy titles) are byte-identical after uniform v2",
+      "ok": true,
+      "detail": {
+        "line": "trend baseline --check PASSED against 33a78fc: 348 pixel hashes and 0 refusals compared, 0 differ (report: .artifacts/trend-baseline/check.json)",
+        "compared": {
+          "pixelHashes": 348,
+          "refused": 0
+        },
+        "differences": 0
+      }
+    },
+    {
+      "name": "L1 the 7 new GPU ids on the blue fixture: early blue below 70, late above 185, and (all but the 2 light ids, whose middle frame is lit) never backwards",
+      "ok": true,
+      "detail": [
+        {
+          "id": "film-burn",
+          "incomingShare": [
+            0,
+            0.44,
+            1
+          ],
+          "monotone": true,
+          "repeat": true,
+          "ok": true
+        },
+        {
+          "id": "light-leak",
+          "incomingShare": [
+            0,
+            0.67,
+            1
+          ],
+          "monotone": true,
+          "repeat": true,
+          "ok": true
+        },
+        {
+          "id": "ink-bleed",
+          "incomingShare": [
+            0,
+            0.48,
+            1
+          ],
+          "monotone": true,
+          "repeat": true,
+          "ok": true
+        },
+        {
+          "id": "brush-left",
+          "incomingShare": [
+            0,
+            0.61,
+            1
+          ],
+          "monotone": true,
+          "repeat": true,
+          "ok": true
+        },
+        {
+          "id": "brush-right",
+          "incomingShare": [
+            0,
+            0.61,
+            1
+          ],
+          "monotone": true,
+          "repeat": true,
+          "ok": true
+        },
+        {
+          "id": "page-turn-left",
+          "incomingShare": [
+            0,
+            0.43,
+            0.99
+          ],
+          "monotone": true,
+          "repeat": true,
+          "ok": true
+        },
+        {
+          "id": "page-turn-right",
+          "incomingShare": [
+            0,
+            0.43,
+            0.99
+          ],
+          "monotone": true,
+          "repeat": true,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "L1 the middle frame of each new id is identical when rendered again",
+      "ok": true
+    },
+    {
+      "name": "L1 46 GPU transitions, 46 distinct middle frames",
+      "ok": true,
+      "detail": {
+        "gpuTransitions": 46,
+        "distinctMiddleFrames": 46
+      }
+    },
+    {
+      "name": "L1 the light ids with their light held by a kept strobe flash 4 frames earlier: early/late as above and never backwards",
+      "ok": true,
+      "detail": [
+        {
+          "id": "film-burn",
+          "plan": {
+            "frame": 69,
+            "kept": false,
+            "since": 4
+          },
+          "incomingShare": [
+            0,
+            0.33,
+            1
+          ],
+          "ok": true
+        },
+        {
+          "id": "light-leak",
+          "plan": {
+            "frame": 69,
+            "kept": false,
+            "since": 4
+          },
+          "incomingShare": [
+            0,
+            0.5,
+            1
+          ],
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "L2 brush-left half-way: the right side shows the incoming picture and the left side the outgoing one; brush-right the opposite (15 rows)",
+      "ok": true,
+      "detail": {
+        "rows": 15
+      }
+    },
+    {
+      "name": "L2 page-turn half-way: the back of the page shows the outgoing picture mirrored about the model fold (within 3 px), the corners on the side the page left are incoming and the others still outgoing",
+      "ok": true,
+      "detail": {
+        "progress": 0.5,
+        "fold": 0.5,
+        "mirror": 0.6885,
+        "columnsMeasured": 38,
+        "worstPixels": 1.31,
+        "rows": [
+          {
+            "id": "page-turn-left",
+            "corners": {
+              "farIncoming": true,
+              "nearOutgoing": true
+            }
+          },
+          {
+            "id": "page-turn-right",
+            "corners": {
+              "farIncoming": true,
+              "nearOutgoing": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "L2 ink-bleed: the incoming area never shrinks; seed 1 draws the same frame again after seed 2; seeds 1 and 2 differ in at least 20% of the pixels",
+      "ok": true,
+      "detail": {
+        "incomingArea": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0.018,
+          0.198,
+          0.484,
+          0.88,
+          0.992,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "seedsDifferIn": 0.288
+      }
+    },
+    {
+      "name": "L3 on flat grey 128 (light kept): the mean added light per frame follows lightEnvelope (Pearson r >= 0.98), at most 0.5/255 outside its window, linear red share of the added light <= 0.75",
+      "ok": true,
+      "detail": [
+        {
+          "id": "film-burn",
+          "kept": true,
+          "pearson": 0.9916,
+          "outsideWindow": 0,
+          "linearRedShare": 0.504,
+          "peakMeanAdded": 68.9,
+          "ok": true
+        },
+        {
+          "id": "light-leak",
+          "kept": true,
+          "pearson": 1,
+          "outsideWindow": 0,
+          "linearRedShare": 0.525,
+          "peakMeanAdded": 80.8,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "L4 film-burn whose light would start 4 frames after a kept strobe flash (frame 66): held (kept false, since 4) and it shows at most 0.5/255 of light; moved 12 frames later it is kept and lights",
+      "ok": true,
+      "detail": {
+        "lightStartsAt": {
+          "held": 70,
+          "kept": 82
+        },
+        "held": {
+          "plan": {
+            "frame": 70,
+            "kept": false,
+            "since": 4
+          },
+          "mostMeanLight": 0
+        },
+        "kept": {
+          "plan": {
+            "frame": 82,
+            "kept": true,
+            "since": null
+          },
+          "mostMeanLight": 68.928
+        }
+      }
+    },
+    {
+      "name": "L5 60 back-to-back 15-frame clips at 60 fps, all film-burn: the export passes its flash check and the schedule keeps at most 3 light starts in any second",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "manifest": {
+          "verdict": "pass",
+          "ranges": 0
+        },
+        "lights": 59,
+        "keptLights": 30,
+        "mostKeptStartsInASecond": 2,
+        "local": {
+          "verdict": "pass",
+          "peak": {
+            "general": 4,
+            "red": 0
+          },
+          "ranges": 0
+        },
+        "frames": 900
+      }
+    },
+    {
+      "name": "L5 contrast: the same timeline with the legacy flash transition (outside the schedule, ADR-0011) fails the flash check",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "manifest": {
+          "verdict": "fail",
+          "ranges": 1
+        },
+        "lights": 0,
+        "keptLights": 0,
+        "mostKeptStartsInASecond": 0,
+        "local": {
+          "verdict": "fail",
+          "peak": {
+            "general": 8,
+            "red": 0
+          },
+          "ranges": 1
+        },
+        "frames": 900
+      }
+    },
+    {
+      "name": "L5 each new GPU id at its defaults on black|white halves, a 3×3 checker and red|green (each to its inverse) at 30 fps: the export passes its flash check, and every instance passes with peak().general <= 3",
+      "ok": true,
+      "detail": {
+        "film-burn": {
+          "status": "succeeded",
+          "exportVerdict": "pass",
+          "frames": 180,
+          "instances": [
+            {
+              "fixture": "halves",
+              "verdict": "pass",
+              "peak": {
+                "general": 1,
+                "red": 0
+              },
+              "ranges": 0
+            },
+            {
+              "fixture": "checker",
+              "verdict": "pass",
+              "peak": {
+                "general": 1,
+                "red": 0
+              },
+              "ranges": 0
+            },
+            {
+              "fixture": "red-green",
+              "verdict": "pass",
+              "peak": {
+                "general": 2,
+                "red": 1
+              },
+              "ranges": 0
+            }
+          ],
+          "ok": true
+        },
+        "light-leak": {
+          "status": "succeeded",
+          "exportVerdict": "pass",
+          "frames": 180,
+          "instances": [
+            {
+              "fixture": "halves",
+              "verdict": "pass",
+              "peak": {
+                "general": 1,
+                "red": 0
+              },
+              "ranges": 0
+            },
+            {
+              "fixture": "checker",
+              "verdict": "pass",
+              "peak": {
+                "general": 1,
+                "red": 0
+              },
+              "ranges": 0
+            },
+            {
+              "fixture": "red-green",
+              "verdict": "pass",
+              "peak": {
+                "general": 2,
+                "red": 1
+              },
+              "ranges": 0
+            }
+          ],
+          "ok": true
+        },
+        "ink-bleed": {
+          "status": "succeeded",
+          "exportVerdict": "pass",
+          "frames": 180,
+          "instances": [
+            {
+              "fixture": "halves",
+              "verdict": "pass",
+              "peak": {
+                "general": 1,
+                "red": 0
+              },
+              "ranges": 0
+            },
+            {
+              "fixture": "checker",
+              "verdict": "pass",
+              "peak": {
+                "general": 1,
+                "red": 0
+              },
+              "ranges": 0
+            },
+            {
+              "fixture": "red-green",
+              "verdict": "pass",
+              "peak": {
+                "general": 1,
+                "red": 1
+              },
+              "ranges": 0
+            }
+          ],
+          "ok": true
+        },
+        "brush-left": {
+          "status": "succeeded",
+          "exportVerdict": "pass",
+          "frames": 180,
+          "instances": [
+            {
+              "fixture": "halves",
+              "verdict": "pass",
+              "peak": {
+                "general": 1,
+                "red": 0
+              },
+              "ranges": 0
+            },
+            {
+              "fixture": "checker",
+              "verdict": "pass",
+              "peak": {
+                "general": 1,
+                "red": 0
+              },
+              "ranges": 0
+            },
+            {
+              "fixture": "red-green",
+              "verdict": "pass",
+              "peak": {
+                "general": 1,
+                "red": 1
+              },
+              "ranges": 0
+            }
+          ],
+          "ok": true
+        },
+        "brush-right": {
+          "status": "succeeded",
+          "exportVerdict": "pass",
+          "frames": 180,
+          "instances": [
+            {
+              "fixture": "halves",
+              "verdict": "pass",
+              "peak": {
+                "general": 1,
+                "red": 0
+              },
+              "ranges": 0
+            },
+            {
+              "fixture": "checker",
+              "verdict": "pass",
+              "peak": {
+                "general": 1,
+                "red": 0
+              },
+              "ranges": 0
+            },
+            {
+              "fixture": "red-green",
+              "verdict": "pass",
+              "peak": {
+                "general": 1,
+                "red": 1
+              },
+              "ranges": 0
+            }
+          ],
+          "ok": true
+        },
+        "page-turn-left": {
+          "status": "succeeded",
+          "exportVerdict": "pass",
+          "frames": 180,
+          "instances": [
+            {
+              "fixture": "halves",
+              "verdict": "pass",
+              "peak": {
+                "general": 3,
+                "red": 0
+              },
+              "ranges": 0
+            },
+            {
+              "fixture": "checker",
+              "verdict": "pass",
+              "peak": {
+                "general": 3,
+                "red": 0
+              },
+              "ranges": 0
+            },
+            {
+              "fixture": "red-green",
+              "verdict": "pass",
+              "peak": {
+                "general": 3,
+                "red": 3
+              },
+              "ranges": 0
+            }
+          ],
+          "ok": true
+        },
+        "page-turn-right": {
+          "status": "succeeded",
+          "exportVerdict": "pass",
+          "frames": 180,
+          "instances": [
+            {
+              "fixture": "halves",
+              "verdict": "pass",
+              "peak": {
+                "general": 3,
+                "red": 0
+              },
+              "ranges": 0
+            },
+            {
+              "fixture": "checker",
+              "verdict": "pass",
+              "peak": {
+                "general": 3,
+                "red": 0
+              },
+              "ranges": 0
+            },
+            {
+              "fixture": "red-green",
+              "verdict": "pass",
+              "peak": {
+                "general": 3,
+                "red": 3
+              },
+              "ranges": 0
+            }
+          ],
+          "ok": true
+        }
+      }
+    },
+    {
+      "name": "L7 time per pass at 1080x1920 recorded for each kernel (median of 3 still round trips with the transition, minus the same still without one; software adapter, no speed claim)",
+      "ok": true,
+      "detail": {
+        "plainStillMs": 350,
+        "film-burn": {
+          "stillMs": 1059,
+          "passMsEstimate": 709
+        },
+        "light-leak": {
+          "stillMs": 1182,
+          "passMsEstimate": 832
+        },
+        "ink-bleed": {
+          "stillMs": 1455,
+          "passMsEstimate": 1104
+        },
+        "brush-left": {
+          "stillMs": 962,
+          "passMsEstimate": 612
+        },
+        "brush-right": {
+          "stillMs": 1006,
+          "passMsEstimate": 656
+        },
+        "page-turn-left": {
+          "stillMs": 790,
+          "passMsEstimate": 440
+        },
+        "page-turn-right": {
+          "stillMs": 756,
+          "passMsEstimate": 406
+        }
+      }
+    },
+    {
+      "name": "L6 with PF_RENDER_GPU=off a still of each new GPU id is refused, naming the transition (never drawn as a cut)",
+      "ok": true,
+      "detail": {
+        "film-burn": {
+          "status": 503,
+          "names": true,
+          "error": "the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses film-burn, which needs a graphics "
+        },
+        "light-leak": {
+          "status": 503,
+          "names": true,
+          "error": "the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses light-leak, which needs a graphics"
+        },
+        "ink-bleed": {
+          "status": 503,
+          "names": true,
+          "error": "the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses ink-bleed, which needs a graphics "
+        },
+        "brush-left": {
+          "status": 503,
+          "names": true,
+          "error": "the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses brush-left, which needs a graphics"
+        },
+        "brush-right": {
+          "status": 503,
+          "names": true,
+          "error": "the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses brush-right, which needs a graphic"
+        },
+        "page-turn-left": {
+          "status": 503,
+          "names": true,
+          "error": "the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses page-turn-left, which needs a grap"
+        },
+        "page-turn-right": {
+          "status": 503,
+          "names": true,
+          "error": "the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses page-turn-right, which needs a gra"
+        }
+      }
+    }
+  ]
+}

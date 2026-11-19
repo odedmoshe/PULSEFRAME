@@ -1,0 +1,542 @@
+{
+  "ranAt": "2026-11-19T04:19:35.480Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "scope": "Synthetic sine signals. Real speech/music, perceptual quality, EQ/dynamics, SFX, recording and voice providers are not exercised.",
+  "measurements": {
+    "volumeAutomation": {
+      "keys": "1.0 at 1 s, 0.2 at 3 s, 1.5 at 4 s on a 0.5-amplitude tone",
+      "expected": [
+        0.5,
+        0.3,
+        0.1,
+        0.425,
+        0.75
+      ],
+      "exported": [
+        0.5,
+        0.3,
+        0.1053,
+        0.425,
+        0.75
+      ],
+      "afterTrimAndMove": [
+        0.3,
+        0.1053,
+        0.425,
+        0.75
+      ],
+      "afterClearing": 0.5
+    },
+    "smoothVolume": {
+      "keys": "0 at 1 s (smooth) to 1.0 at 5 s on a 0.5-amplitude tone",
+      "expectedSmooth": [
+        0.0215,
+        0.0781,
+        0.25,
+        0.4219
+      ],
+      "straightLineWouldBe": [
+        0.0625,
+        0.125,
+        0.25,
+        0.375
+      ],
+      "exported": [
+        0.0217,
+        0.0783,
+        0.25,
+        0.4217
+      ]
+    },
+    "longMix": {
+      "seconds": 320,
+      "clips": 40,
+      "wallMs": 6478,
+      "realtimeFactor": 49.398,
+      "serverRssGrowthMb": 246,
+      "note": "one run on this CPU profile; RSS includes the proof harness holding the decoded result"
+    },
+    "browserAudioChain": {
+      "samples": 60000,
+      "maxAbsError": 6.854534149169922e-7,
+      "worstSample": 44542,
+      "maxAbsErrorMidClipStart": 6.854534149169922e-7
+    },
+    "livePlayback": {
+      "clock": "audio",
+      "audioContextState": "running",
+      "windows": 151,
+      "expected": [
+        0.25,
+        0.5,
+        0.1256,
+        0.3128,
+        0.5,
+        0.25
+      ],
+      "measured": [
+        0.2645,
+        0.5,
+        0.1256,
+        0.349,
+        0.5,
+        0.2549
+      ],
+      "maxAbsError": 0.0362,
+      "note": "peak of 50 ms windows at the output stage during real-time playback in headless Chromium; a window spans part of a ramp, so ramps carry about ±0.02 of inherent error"
+    }
+  },
+  "passed": 21,
+  "total": 21,
+  "checks": [
+    {
+      "name": "baseline: exported amplitude equals the source amplitude (0.5) on both channels, exact length",
+      "ok": true,
+      "detail": {
+        "amplitude": 0.5,
+        "samples": 384000
+      }
+    },
+    {
+      "name": "track gain 0.5 lowers the level by 6.02 dB",
+      "ok": true,
+      "detail": {
+        "changeDb": -6.0206
+      }
+    },
+    {
+      "name": "pan: fully left silences the right channel and keeps the left; pan +0.5 halves the left and keeps the right",
+      "ok": true,
+      "detail": {
+        "left": [
+          0.5,
+          0
+        ],
+        "right": [
+          0.25,
+          0.5
+        ]
+      }
+    },
+    {
+      "name": "fades are linear: 1 s fade-in and 2 s fade-out measured at 8 points, each within 1% of the expected gain; first and last samples are silent",
+      "ok": true,
+      "detail": {
+        "maxError": 0,
+        "measured": [
+          0.25,
+          0.5,
+          0.75,
+          1,
+          1,
+          0.75,
+          0.5,
+          0.25
+        ]
+      }
+    },
+    {
+      "name": "ducking: music is exactly 12 dB down while the phrase is spoken, the 100 ms attack ends when speech starts, the 300 ms release starts when it ends (9 points within 1.5%); the voice itself is untouched",
+      "ok": true,
+      "detail": {
+        "maxError": 0,
+        "duckedDb": -12.0001,
+        "measured": [
+          1,
+          1,
+          0.6256,
+          0.2512,
+          0.2512,
+          0.2512,
+          0.6256,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "name": "ducking follows the edit: moving the voice 2 s later moves the dip; muting the voice track removes it",
+      "ok": true,
+      "detail": {
+        "at3s": 1,
+        "at5s": 0.2512
+      }
+    },
+    {
+      "name": "loudness target -16 LUFS: export measures the mix, applies one static gain, and an independent measurement of the exported file is within 0.2 LU of the target with true peak under the ceiling",
+      "ok": true,
+      "detail": {
+        "before": -7.7,
+        "appliedGainDb": -8.3,
+        "exported": {
+          "lufs": -16,
+          "peak": -14.3
+        }
+      }
+    },
+    {
+      "name": "loudness sense reports the same measurement and the gain export will apply, without editing",
+      "ok": true,
+      "detail": {
+        "integratedLufs": -7.7,
+        "truePeakDbtp": -6,
+        "rangeLu": 3.1,
+        "exportWouldApplyGainDb": -8.3
+      }
+    },
+    {
+      "name": "an unreachable target is limited by the true-peak ceiling instead of clipping: reported as such, and the exported peak stays at or under the -9 dBTP ceiling",
+      "ok": true,
+      "detail": {
+        "appliedGainDb": -3,
+        "exported": {
+          "lufs": -10.7,
+          "peak": -9
+        }
+      }
+    },
+    {
+      "name": "without a target, a mix that exceeds full scale is reported as clipped with its peak",
+      "ok": true,
+      "detail": {
+        "mixPeakDbfs": 6.02,
+        "clipped": true,
+        "loudness": null
+      }
+    },
+    {
+      "name": "browser export refuses a project with a loudness target (it cannot measure) and says to use the server route; undo restores the previous setting",
+      "ok": true,
+      "detail": "this project has a loudness target; the browser export route cannot measure and normalise loudness"
+    },
+    {
+      "name": "crossfade between two clips of one continuous tone at different levels: without it the level steps at the cut; with it the level moves linearly from the first clip's level to the second's over the crossfade, with no dip (5 points within 1.5%)",
+      "ok": true,
+      "detail": {
+        "hardCut": [
+          0.5,
+          0.25
+        ],
+        "crossfade": [
+          0.5,
+          0.4375,
+          0.375,
+          0.3125,
+          0.25
+        ],
+        "expected": [
+          0.5,
+          0.4375,
+          0.375,
+          0.3125,
+          0.25
+        ],
+        "maxError": 0
+      }
+    },
+    {
+      "name": "volume automation in the exported mix: level held before the first key, straight lines between keys (also above 1), held after the last — 5 points within 0.006; after a start trim the same levels are heard earlier; clearing the keys restores the plain level",
+      "ok": true,
+      "detail": {
+        "keys": "1.0 at 1 s, 0.2 at 3 s, 1.5 at 4 s on a 0.5-amplitude tone",
+        "expected": [
+          0.5,
+          0.3,
+          0.1,
+          0.425,
+          0.75
+        ],
+        "exported": [
+          0.5,
+          0.3,
+          0.1053,
+          0.425,
+          0.75
+        ],
+        "afterTrimAndMove": [
+          0.3,
+          0.1053,
+          0.425,
+          0.75
+        ],
+        "afterClearing": 0.5
+      }
+    },
+    {
+      "name": "a smooth volume stretch in the exported mix follows the S-curve (4 points within 0.006), which differs clearly from the straight line at the quarter points",
+      "ok": true,
+      "detail": {
+        "keys": "0 at 1 s (smooth) to 1.0 at 5 s on a 0.5-amplitude tone",
+        "expectedSmooth": [
+          0.0215,
+          0.0781,
+          0.25,
+          0.4219
+        ],
+        "straightLineWouldBe": [
+          0.0625,
+          0.125,
+          0.25,
+          0.375
+        ],
+        "exported": [
+          0.0217,
+          0.0783,
+          0.25,
+          0.4217
+        ]
+      }
+    },
+    {
+      "name": "320 s mix of 40 back-to-back clips: exact length, and the tone is continuous across every one of the 39 joins (no gap, overlap or drift)",
+      "ok": true,
+      "detail": {
+        "seconds": 320,
+        "clips": 40,
+        "wallMs": 6478,
+        "realtimeFactor": 49.398,
+        "serverRssGrowthMb": 246,
+        "note": "one run on this CPU profile; RSS includes the proof harness holding the decoded result"
+      }
+    },
+    {
+      "name": "in real WebAudio, gain + fades + ducking + balance from the shared plan match the reference mixer to better than 1e-4 of full scale, also when playback starts in the middle of a clip",
+      "ok": true,
+      "detail": {
+        "samples": 60000,
+        "maxAbsError": 6.854534149169922e-7,
+        "worstSample": 44542,
+        "maxAbsErrorMidClipStart": 6.854534149169922e-7
+      }
+    },
+    {
+      "name": "all 80 built-in sounds are synthesised, stored as content-addressed audio assets with their recipe in provenance, placed as clips, audible in the export at their positions and silent elsewhere; adding the same sound twice reuses the asset",
+      "ok": true,
+      "detail": {
+        "ids": [
+          "sfx.click",
+          "sfx.pop",
+          "sfx.beep",
+          "sfx.ding",
+          "sfx.impact",
+          "sfx.whoosh",
+          "sfx.riser",
+          "sfx.tick",
+          "sfx.tick-soft",
+          "sfx.toggle-on",
+          "sfx.toggle-off",
+          "sfx.key-press",
+          "sfx.shutter",
+          "sfx.tap",
+          "sfx.select",
+          "sfx.swipe-tick",
+          "sfx.whoosh-short",
+          "sfx.whoosh-long",
+          "sfx.whoosh-low",
+          "sfx.whoosh-high",
+          "sfx.whoosh-reverse",
+          "sfx.whoosh-swirl",
+          "sfx.whoosh-air",
+          "sfx.boom",
+          "sfx.hit",
+          "sfx.thud",
+          "sfx.slam",
+          "sfx.punch",
+          "sfx.cinematic-hit",
+          "sfx.metal-clang",
+          "sfx.riser-short",
+          "sfx.riser-long",
+          "sfx.riser-tonal",
+          "sfx.riser-pulse",
+          "sfx.downer",
+          "sfx.downer-tonal",
+          "sfx.bass-drop",
+          "sfx.blip",
+          "sfx.blip-double",
+          "sfx.stutter",
+          "sfx.digital-noise",
+          "sfx.zap",
+          "sfx.laser",
+          "sfx.glitch-bits",
+          "sfx.chime",
+          "sfx.success",
+          "sfx.error-buzz",
+          "sfx.message-pop",
+          "sfx.coin",
+          "sfx.notify-soft",
+          "sfx.warning-double",
+          "sfx.boing",
+          "sfx.whistle-up",
+          "sfx.whistle-down",
+          "sfx.bubble",
+          "sfx.bonk",
+          "sfx.wobble",
+          "sfx.wind",
+          "sfx.rain",
+          "sfx.room-tone",
+          "sfx.vinyl-crackle",
+          "sfx.electric-hum",
+          "sfx.kick",
+          "sfx.kick-808",
+          "sfx.snare",
+          "sfx.hihat-closed",
+          "sfx.hihat-open",
+          "sfx.clap",
+          "sfx.tom-low",
+          "sfx.tom-high",
+          "sfx.rimshot",
+          "sfx.beep-high",
+          "sfx.beep-low",
+          "sfx.beep-double",
+          "sfx.countdown-beep",
+          "sfx.countdown-final",
+          "sfx.heartbeat",
+          "sfx.alarm-soft",
+          "sfx.sonar-ping",
+          "sfx.tuning-a440"
+        ],
+        "heard": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      }
+    },
+    {
+      "name": "an unknown sound is refused with the list of available ones",
+      "ok": true
+    },
+    {
+      "name": "editor Sound tab: volume in dB, mute, ducking source, loudness target, measured loudness shown, fade-in on the selected clip — each lands in the document; no page errors",
+      "ok": true,
+      "detail": {
+        "gainOk": true,
+        "muteOk": true,
+        "duckOk": true,
+        "targetOk": true,
+        "shownLufs": -12.7,
+        "apiLufs": -12.7,
+        "fadeOk": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "during real-time playback the output level follows the plan: fade-in, steady level, 12 dB duck while the phrase is spoken, release, fade-out (6 points within 0.04 of full scale)",
+      "ok": true,
+      "detail": {
+        "clock": "audio",
+        "audioContextState": "running",
+        "windows": 151,
+        "expected": [
+          0.25,
+          0.5,
+          0.1256,
+          0.3128,
+          0.5,
+          0.25
+        ],
+        "measured": [
+          0.2645,
+          0.5,
+          0.1256,
+          0.349,
+          0.5,
+          0.2549
+        ],
+        "maxAbsError": 0.0362,
+        "note": "peak of 50 ms windows at the output stage during real-time playback in headless Chromium; a window spans part of a ramp, so ramps carry about ±0.02 of inherent error"
+      }
+    },
+    {
+      "name": "agent measures loudness, turns ducking off, measures again and sees the programme get louder",
+      "ok": true,
+      "detail": {
+        "before": -12.8,
+        "after": -11.8
+      }
+    }
+  ]
+}

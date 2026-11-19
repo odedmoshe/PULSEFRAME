@@ -16,3 +16,7 @@ Adopted 2026-11-14 at the owner's request. Goal: lowest total cost and time per 
 9. **Record** in `docs/PROGRESS.md` at each milestone: requested model per worker, resolved model only when observable, token figures only when the harness reports them.
 
 Reusable agent definitions: `.claude/agents/pf-scout.md` (economical, read-only) and `.claude/agents/pf-implementer.md` (balanced, scoped writes).
+
+## Owner instruction, 2026-11-17
+Work in parallel with several agents under the lead's full management, and route work by cost: tasks that do not need the strongest model go to cheaper ones (inventories, licence evidence, mechanical edits and string work to the economical tier; scoped implementation against a settled contract and UI components to the balanced tier), as long as the result's quality does not suffer. Architecture, time and undo semantics, render parity, safety, authorization, licence qualification and adversarial review stay on the strong tier. Each milestone in PROGRESS records the requested model per worker.
+

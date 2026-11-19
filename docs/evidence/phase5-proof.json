@@ -1,0 +1,285 @@
+{
+  "ranAt": "2026-11-19T04:15:54.711Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "agent": "deterministic script over the official MCP client (protocol 2026-07-28); not a language model",
+  "notDone": [
+    "MCP Tasks extension (jobs are polled by jobId)",
+    "MCP resources/prompts/playbooks",
+    "OAuth for remote MCP",
+    "third-party MCP hosts",
+    "paid-provider budget flow end to end (ledger is unit-tested; no paid provider exists)",
+    "range-limited grant in this proof (unit-tested)",
+    "transcript and audio-analysis senses",
+    "preview-clip sense"
+  ],
+  "checks": [
+    {
+      "name": "discovery: editing, senses, proposals, jobs and control tools are all listed from one registry",
+      "ok": true,
+      "detail": {
+        "tools": 187
+      }
+    },
+    {
+      "name": "goal 1 — rough cut of two clips in one transaction; describe_moment confirms the source frame at the join",
+      "ok": true,
+      "detail": {
+        "revision": 2
+      }
+    },
+    {
+      "name": "goal 2 — tighten: trim and close the gap; linked audio follows; total is 225 frames",
+      "ok": true
+    },
+    {
+      "name": "goal 3 — Hebrew title with a keyframed fade-in, verified from the contact-sheet stills (title area brightens 0 → 6 → 12)",
+      "ok": true,
+      "detail": {
+        "meanDarkestChannel": [
+          40,
+          44.7,
+          55.2
+        ]
+      }
+    },
+    {
+      "name": "goal 4 — reorder: clips swapped atomically (second clip now first, full 120 frames then the trimmed 105)",
+      "ok": true
+    },
+    {
+      "name": "goal 5 — remove frames 45..74 and close the gaps: source jumps 44 → 75 at the cut and the tail follows",
+      "ok": true
+    },
+    {
+      "name": "goal 6 — inspect, correct, re-inspect: rendered frames show the title moved from the lower half to the upper half",
+      "ok": true,
+      "detail": {
+        "before": [
+          112,
+          249
+        ],
+        "after": [
+          192,
+          169
+        ]
+      }
+    },
+    {
+      "name": "goal 7a — Propose mode: an ordinary editing tool returns a proposal and commits nothing",
+      "ok": true,
+      "detail": {
+        "proposed": true,
+        "committed": false,
+        "proposalId": "prp_ofHZqLKQQiQ",
+        "baseRevision": 10,
+        "summary": "Updated text \"פתיחה חלופית\"",
+        "changedIds": [
+          "clp_a6d0eb3e940"
+        ],
+        "status": "open"
+      }
+    },
+    {
+      "name": "goal 7b — the owner sees the proposal with before/after stills in the editor and accepts it; it is committed under the owner",
+      "ok": true
+    },
+    {
+      "name": "goal 7c — the owner undoes the accepted proposal with Ctrl+Z; independent agent edits remain",
+      "ok": true
+    },
+    {
+      "name": "goal 8 — export frames [30,60) through MCP; the file shows source frames 30..44 then 75..89 (the cut is inside the range)",
+      "ok": true,
+      "detail": {
+        "first": 30,
+        "atCut": [
+          44,
+          75
+        ],
+        "last": 89
+      }
+    },
+    {
+      "name": "goal 9 — agent undo reverses only its own last edit; the owner's later clip is kept",
+      "ok": true
+    },
+    {
+      "name": "goal 10 — scoped agent: may edit the text track; video, mixed transactions and other projects are refused with typed errors, and nothing partial is applied",
+      "ok": true,
+      "detail": {
+        "entityId": "clp_2cd84d6f714",
+        "reason": "track trk_video is outside the grant"
+      }
+    },
+    {
+      "name": "an agent (or any local program) cannot mint an owner session: without the launch secret the session route answers 401 and sets no cookie",
+      "ok": true,
+      "detail": {
+        "noKey": 401,
+        "agent": 401
+      }
+    },
+    {
+      "name": "a grant limited to certain tracks cannot change things outside clips through side doors: upload, analysis data and sound-effect import are refused as out of scope",
+      "ok": true,
+      "detail": {
+        "upload": 403,
+        "analyze": "out_of_scope",
+        "sfx": 403
+      }
+    },
+    {
+      "name": "an agent cannot reverse the owner's transaction by naming its id; the owner can",
+      "ok": true,
+      "detail": {
+        "agent": "nothing_to_undo"
+      }
+    },
+    {
+      "name": "a grant limited to one project cannot show presence in, or read controls of, another project through MCP",
+      "ok": true,
+      "detail": {
+        "set_view": "out_of_scope",
+        "get_controls": "out_of_scope"
+      }
+    },
+    {
+      "name": "an agent cannot cancel a job the owner started; the owner can cancel it",
+      "ok": true,
+      "detail": {
+        "agent": "not_your_job"
+      }
+    },
+    {
+      "name": "deleting a project and cleaning storage are owner-only: an editing agent gets 403 for delete, clean-up and the storage report; the owner needs the exact project name",
+      "ok": true,
+      "detail": {
+        "agent": [
+          403,
+          403,
+          403
+        ],
+        "wrongName": "confirmation_mismatch"
+      }
+    },
+    {
+      "name": "a playlist file (which could point at other files or URLs) is not accepted as media",
+      "ok": true,
+      "detail": {
+        "status": 415
+      }
+    },
+    {
+      "name": "Pause Agent (clicked in the editor): agent edits, jobs and proposals are refused server-side with agent_paused; reading and the owner's own edits continue",
+      "ok": true
+    },
+    {
+      "name": "while paused, every job-starting or requesting route refuses agents too (retry, browser export, model request)",
+      "ok": true,
+      "detail": [
+        423,
+        423,
+        423
+      ]
+    },
+    {
+      "name": "an agent cannot resume itself, create grants, or decide proposals and approvals",
+      "ok": true
+    },
+    {
+      "name": "Resume is a deliberate owner action; afterwards the agent can edit again",
+      "ok": true
+    },
+    {
+      "name": "a proposal written against older text goes stale instead of overwriting the owner's newer wording",
+      "ok": true
+    },
+    {
+      "name": "agents cannot accept proposals (their own or anyone's)",
+      "ok": true
+    },
+    {
+      "name": "approvals: an agent can request a model download but cannot approve it or start it; a rejected request cannot be reused",
+      "ok": true,
+      "detail": {
+        "action": 444473596
+      }
+    },
+    {
+      "name": "the editor lists an agent's model-download request with the capability, the download size and who asked; rejecting it there closes the request and starts no download",
+      "ok": true,
+      "detail": {
+        "sizeText": "גודל ההורדה: 423.9 MB · 1 קבצים",
+        "status": "rejected",
+        "noJob": 0
+      }
+    },
+    {
+      "name": "a project-limited grant sees only its project (REST and MCP lists), cannot create projects, and cannot read another project's job by id",
+      "ok": true,
+      "detail": {
+        "otherJobStatus": 403
+      }
+    },
+    {
+      "name": "a revoked grant stops working immediately (401 grant_revoked)",
+      "ok": true
+    },
+    {
+      "name": "grant tokens are never returned again after creation",
+      "ok": true
+    },
+    {
+      "name": "every response carries nosniff, no-referrer and a frame ban; pages allow only same-origin scripts (no inline, eval or blob:), no plugins and no framing; API and media responses allow nothing and are sandboxed",
+      "ok": true,
+      "detail": {
+        "page": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+        "api": "default-src 'none'; frame-ancestors 'none'; sandbox",
+        "media": {
+          "content-security-policy": "default-src 'none'; frame-ancestors 'none'; sandbox",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "no-referrer",
+          "x-frame-options": "DENY"
+        }
+      }
+    },
+    {
+      "name": "stored markup in a project name, a title and a marker name is shown as text and runs nothing; in the live page inline scripts, blob: scripts, remote scripts, inline event handlers and eval are all blocked by the policy",
+      "ok": true,
+      "detail": {
+        "stored": {
+          "pwn": null,
+          "injectedImgs": 0,
+          "markerText": "<img src=x onerror=\"window.__pwn=1\"><script>window.__pwn=2</script>",
+          "violations": 0,
+          "atLoad": []
+        },
+        "active": {
+          "inline": null,
+          "blob": null,
+          "handler": null,
+          "evalRan": null,
+          "evalBlocked": true,
+          "violations": [
+            "script-src-elem|inline|:1:119",
+            "script-src-elem|blob|:1:276",
+            "script-src-elem|https://example.invalid/x.js|:1:386",
+            "script-src-attr|inline|:1:0",
+            "script-src|eval|:1:578"
+          ]
+        }
+      }
+    },
+    {
+      "name": "no uncaught errors in the editor page",
+      "ok": true,
+      "detail": []
+    }
+  ]
+}

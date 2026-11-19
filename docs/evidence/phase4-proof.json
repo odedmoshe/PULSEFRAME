@@ -1,0 +1,273 @@
+{
+  "ranAt": "2026-11-19T06:22:19.600Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "memoryGiB": 15.7,
+    "gpu": "none"
+  },
+  "measurements": {
+    "formats": {
+      "mp4Draft": {
+        "wall": 0.921,
+        "bytes": 12789,
+        "estimate": 30480
+      },
+      "webm": {
+        "wall": 1.48,
+        "bytes": 54848,
+        "estimate": 168960
+      },
+      "wav": {
+        "wall": 0.21
+      },
+      "png": {
+        "wall": 0.412
+      }
+    },
+    "cancel": {
+      "stageAtCancel": "rendering 6/600",
+      "msToCanceled": 18
+    },
+    "longExport": {
+      "frames": 600,
+      "size": "1920x1080",
+      "wallSeconds": 38.884,
+      "realtimeFactor": 0.5143503754757741,
+      "renderStageMs": {
+        "draw": 5373,
+        "readback": 3357,
+        "upload": 28296
+      },
+      "bytes": 747124,
+      "estimateBytes": 22252800
+    },
+    "cancelAtRenderStart": {
+      "stageAtCancel": "rendering 0/600",
+      "msToCanceled": 15
+    },
+    "photosensitivity": {
+      "flashing": {
+        "verdict": "fail",
+        "frames": 150,
+        "ranges": [
+          {
+            "fromSeconds": 0.6333333333333333,
+            "toSeconds": 4.3,
+            "kind": "general",
+            "flashesPerSecond": 5,
+            "area": 1
+          }
+        ]
+      },
+      "calm": "pass"
+    }
+  },
+  "notDone": [
+    "browser export route",
+    "GIF/animated WebP",
+    "subtitle sidecars",
+    "project archive",
+    "batch variants",
+    "checkpoint/resume of a partially rendered job (a retry restarts from frame 0)"
+  ],
+  "checks": [
+    {
+      "name": "plan lists exact dependencies: asset content hash, bundled font files with SHA-256, engine versions, output geometry",
+      "ok": true,
+      "detail": {
+        "fonts": [
+          "heebo-hebrew-400-normal-CVTJgQVK.woff2",
+          "heebo-hebrew-700-normal-BmueYKsA.woff2",
+          "heebo-latin-400-normal-BGyEuwIV.woff2",
+          "heebo-latin-700-normal-PoyjiH5f.woff2"
+        ],
+        "engine": {
+          "compositor": "canvas2d/1",
+          "evaluator": "evaluate/1",
+          "audio": "plan/2 voice/1",
+          "fontFamilies": [
+            "Heebo",
+            "Rubik",
+            "Assistant",
+            "Frank Ruhl Libre",
+            "Secular One",
+            "Suez One",
+            "David Libre",
+            "Karantina",
+            "Amatic SC",
+            "Fredoka",
+            "Gveret Levin"
+          ],
+          "schemaVersion": 3
+        }
+      }
+    },
+    {
+      "name": "size estimate is labelled as an estimate with its basis",
+      "ok": true,
+      "detail": {
+        "bytes": 579840,
+        "basis": "heuristic bits-per-pixel for the chosen quality; real size depends on content"
+      }
+    },
+    {
+      "name": "planning started nothing",
+      "ok": true
+    },
+    {
+      "name": "missing font: export is refused with a typed render blocker instead of silently falling back",
+      "ok": true,
+      "detail": [
+        {
+          "code": "missing_font",
+          "message": "font \"Not Installed Sans\" is not bundled with the renderer; text would silently fall back",
+          "ids": []
+        }
+      ]
+    },
+    {
+      "name": "a blocker outside the exported range does not block that range",
+      "ok": true
+    },
+    {
+      "name": "missing media: refused with the asset named",
+      "ok": true
+    },
+    {
+      "name": "bad options are rejected before any job exists",
+      "ok": true
+    },
+    {
+      "name": "MP4 range [45,75) at half size, draft: exactly 30 frames, 320x180, each showing source frames 45..74",
+      "ok": true,
+      "detail": {
+        "codes": [
+          45,
+          74
+        ],
+        "bytes": 12789,
+        "estimate": {
+          "bytes": 30480,
+          "basis": "heuristic bits-per-pixel for the chosen quality; real size depends on content",
+          "actualBytes": 12789
+        }
+      }
+    },
+    {
+      "name": "range audio is cut by absolute samples: 1.000 s, and the beep of second 2 lands 0.5 s into the range",
+      "ok": true,
+      "detail": {
+        "audioSeconds": "1.000000"
+      }
+    },
+    {
+      "name": "WebM VP9 + Opus: validated codecs, 60 frames, every frame the right source frame",
+      "ok": true,
+      "detail": {
+        "error": null,
+        "bytes": 54848
+      }
+    },
+    {
+      "name": "WAV audio-only: exact sample count for the range (2 s = 96,000 samples) without rendering video",
+      "ok": true,
+      "detail": {
+        "audioCodec": "pcm_s16le",
+        "audioSampleRate": 48000,
+        "channels": 2,
+        "samples": 96000,
+        "expectedSamples": 96000
+      }
+    },
+    {
+      "name": "PNG still of frame 50: correct source frame, and byte-identical pixels to the agent render_frame sense",
+      "ok": true
+    },
+    {
+      "name": "a queued export is removed from the queue",
+      "ok": true
+    },
+    {
+      "name": "a running export is canceled promptly: encoder stopped, no partial file published, scratch removed",
+      "ok": true,
+      "detail": {
+        "stageAtCancel": "rendering 6/600",
+        "msToCanceled": 18
+      }
+    },
+    {
+      "name": "canceled output cannot be downloaded",
+      "ok": true
+    },
+    {
+      "name": "retry of a succeeded job is refused; retry of the canceled job creates a new job",
+      "ok": true
+    },
+    {
+      "name": "retry renders the same immutable snapshot (revision before the mid-export edit), although the project moved on",
+      "ok": true,
+      "detail": {
+        "frames": 600,
+        "size": "1920x1080",
+        "wallSeconds": 38.884,
+        "realtimeFactor": 0.5143503754757741,
+        "renderStageMs": {
+          "draw": 5373,
+          "readback": 3357,
+          "upload": 28296
+        },
+        "bytes": 747124,
+        "estimateBytes": 22252800
+      }
+    },
+    {
+      "name": "the retried output records the manifest it was rendered from",
+      "ok": true
+    },
+    {
+      "name": "an export canceled as its picture render is starting stops promptly too",
+      "ok": true,
+      "detail": {
+        "stageAtCancel": "rendering 0/600",
+        "msToCanceled": 15
+      }
+    },
+    {
+      "name": "photosensitivity: an export that alternates black and white every 3 frames for 3 s reports dangerous flashing over the whole frame in that stretch (and succeeds: nothing is changed or blocked); the calm fixture export passed",
+      "ok": true,
+      "detail": {
+        "flashing": {
+          "verdict": "fail",
+          "frames": 150,
+          "ranges": [
+            {
+              "fromSeconds": 0.6333333333333333,
+              "toSeconds": 4.3,
+              "kind": "general",
+              "flashesPerSecond": 5,
+              "area": 1
+            }
+          ]
+        },
+        "calm": "pass"
+      }
+    },
+    {
+      "name": "editor: Cancel stops a running export and shows that it was canceled; Retry is offered",
+      "ok": true
+    },
+    {
+      "name": "editor: after exporting the flashing project the header warns of dangerous flashing (Hebrew), lists the one stretch, and its button moves the playhead to its start",
+      "ok": true,
+      "detail": {
+        "ranges": 1,
+        "playheadFrame": 19,
+        "wanted": 19,
+        "errors": []
+      }
+    }
+  ]
+}

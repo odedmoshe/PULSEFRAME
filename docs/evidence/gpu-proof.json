@@ -1,0 +1,1702 @@
+{
+  "ranAt": "2026-11-19T04:24:41.798Z",
+  "result": "PASSED",
+  "passed": 92,
+  "total": 92,
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "gpu": "none: the WebGPU adapter here is a software one"
+  },
+  "scope": "Thirty-one effects (one of them a .cube colour table, imported through the upload route and through the editor), the colour looks and forty-six transitions (the seven of the trend pack, ADR-0012, included; their own proof is proof:trend-light) on synthetic still images at 360x640, on a software WebGPU adapter. Correctness of the passes and of the refusals only: no speed claim, no real footage, no hardware adapter, nobody looked at the pictures.",
+  "measurements": {
+    "previewVsStill": {
+      "meanDifference": 0,
+      "maxDifference": 0
+    },
+    "whip": [
+      {
+        "id": "whip-right",
+        "light": 9216,
+        "x": 90,
+        "y": 320,
+        "varX": 2481.4,
+        "varY": 2.9,
+        "alongOverAcross": 855.7,
+        "expectedCentre": 90,
+        "ok": true
+      },
+      {
+        "id": "whip-left",
+        "light": 9216,
+        "x": 270,
+        "y": 320,
+        "varX": 2481.4,
+        "varY": 2.9,
+        "alongOverAcross": 855.7,
+        "expectedCentre": 270,
+        "ok": true
+      },
+      {
+        "id": "whip-down",
+        "light": 9216,
+        "x": 180,
+        "y": 160,
+        "varX": 2.9,
+        "varY": 7837.1,
+        "alongOverAcross": 2702.4,
+        "expectedCentre": 160,
+        "ok": true
+      },
+      {
+        "id": "whip-up",
+        "light": 9216,
+        "x": 180,
+        "y": 480,
+        "varX": 2.9,
+        "varY": 7837.1,
+        "alongOverAcross": 2702.4,
+        "expectedCentre": 480,
+        "ok": true
+      }
+    ],
+    "lut": {
+      "gridPoints": 288,
+      "worstFromModel": 0.5,
+      "meanChange": 77.563
+    },
+    "lutPreviewRecovery": {
+      "seconds": 1.2,
+      "meanDifferenceFromStill": 0
+    },
+    "lutPreviewVsStill": {
+      "meanDifference": 0,
+      "maxDifference": 0
+    },
+    "lutUnalignedDomains": {
+      "0..1.5": {
+        "fileSize": 17,
+        "stripSize": 33,
+        "worstFromModel": 0.5,
+        "worstFromDefinition": 0.8,
+        "limit": 3
+      },
+      "0.0625..0.9375": {
+        "fileSize": 17,
+        "stripSize": 65,
+        "worstFromModel": 0.5,
+        "worstFromDefinition": 0.84,
+        "limit": 4
+      }
+    },
+    "lutAlpha": {
+      "grid": {
+        "points": 288,
+        "translucent": 144,
+        "blueTop": 48,
+        "allTop": 1,
+        "translucentBlueTop": 24
+      },
+      "worstOf255": {
+        "opaque": 0.49,
+        "translucent": 0.78,
+        "blueTop": 0.65,
+        "withoutUnpremultiply": 54.3
+      }
+    },
+    "lutExportVsStill": {
+      "meanDifferenceFromStill": 1.385,
+      "meanDifferenceFromPlain": 77.617
+    },
+    "digicamTone": {
+      "worstOf255": 0.48,
+      "rows": [
+        {
+          "at": [
+            90,
+            160
+          ],
+          "plain": [
+            128,
+            128,
+            128
+          ],
+          "still": [
+            126,
+            128,
+            131
+          ],
+          "model": [
+            126,
+            128.4,
+            131.3
+          ]
+        },
+        {
+          "at": [
+            270,
+            160
+          ],
+          "plain": [
+            205,
+            150,
+            120
+          ],
+          "still": [
+            202,
+            150,
+            123
+          ],
+          "model": [
+            201.7,
+            150.5,
+            123.1
+          ]
+        },
+        {
+          "at": [
+            90,
+            480
+          ],
+          "plain": [
+            240,
+            236,
+            225
+          ],
+          "still": [
+            252,
+            251,
+            249
+          ],
+          "model": [
+            252,
+            251.2,
+            249
+          ]
+        },
+        {
+          "at": [
+            270,
+            480
+          ],
+          "plain": [
+            40,
+            70,
+            200
+          ],
+          "still": [
+            39,
+            70,
+            205
+          ],
+          "model": [
+            39.4,
+            70.2,
+            205.1
+          ]
+        }
+      ]
+    },
+    "digicamNoise": {
+      "grey": {
+        "meanOffset": [
+          0.442,
+          -0.488,
+          0.099
+        ],
+        "meanSize": 3.82,
+        "largest": 8
+      },
+      "skin": {
+        "meanOffset": [
+          -0.1,
+          -0.404,
+          -0.164
+        ],
+        "meanSize": 3.83,
+        "largest": 8
+      }
+    },
+    "digicamPreviewVsStill": {
+      "meanDifference": 0,
+      "maxDifference": 0
+    },
+    "digicamFlash": {
+      "frames": 150,
+      "verdict": "pass",
+      "ranges": []
+    },
+    "crtMaskPeriod": {
+      "pitch0010": {
+        "expected": 6.4,
+        "measured": 6.4
+      },
+      "pitch0007": {
+        "expected": 4.48,
+        "measured": 4.481
+      }
+    },
+    "crtCurve": {
+      "worstPixels": 0.05,
+      "points": 82,
+      "largestDisplacement": 8.6,
+      "flatVsPlain": 0
+    },
+    "gradeGrid": {
+      "patches": 729,
+      "sets": [
+        {
+          "params": {
+            "exposure": 1.128,
+            "temperature": -0.827,
+            "tint": 0.996,
+            "contrast": 0.309,
+            "saturation": 0.392,
+            "shadows": -0.689,
+            "highlights": 0.316,
+            "fade": 0.627
+          },
+          "worst": 0.5,
+          "changed": 57.412
+        },
+        {
+          "params": {
+            "exposure": -1.056,
+            "temperature": 0.199,
+            "tint": -0.169,
+            "contrast": 0.389,
+            "saturation": 0.091,
+            "shadows": -0.737,
+            "highlights": -0.193,
+            "fade": 0.808
+          },
+          "worst": 0.5,
+          "changed": 70.013
+        },
+        {
+          "params": {
+            "exposure": -1.442,
+            "temperature": 0.159,
+            "tint": -0.44,
+            "contrast": 0.309,
+            "saturation": 1.581,
+            "shadows": 0.024,
+            "highlights": 0.618,
+            "fade": 0.059
+          },
+          "worst": 0.5,
+          "changed": 63.824
+        },
+        {
+          "params": {
+            "exposure": -0.784,
+            "temperature": -0.084,
+            "tint": 0.515,
+            "contrast": 0.353,
+            "saturation": 1.13,
+            "shadows": 0.553,
+            "highlights": -0.241,
+            "fade": 0.143
+          },
+          "worst": 0.5,
+          "changed": 59.32
+        },
+        {
+          "params": {
+            "exposure": -1.36,
+            "temperature": 0.093,
+            "tint": 0.178,
+            "contrast": 0.777,
+            "saturation": 1.829,
+            "shadows": -0.305,
+            "highlights": 0.84,
+            "fade": 0.446
+          },
+          "worst": 0.5,
+          "changed": 59.309
+        },
+        {
+          "params": {
+            "exposure": -0.839,
+            "temperature": -0.497,
+            "tint": 0.365,
+            "contrast": 0.482,
+            "saturation": 0.866,
+            "shadows": 0.996,
+            "highlights": -0.007,
+            "fade": 0.245
+          },
+          "worst": 0.5,
+          "changed": 59.079
+        }
+      ]
+    }
+  },
+  "checks": [
+    {
+      "name": "Fixture as imported: green background, red square in the middle",
+      "ok": true,
+      "detail": {
+        "corner": [
+          0,
+          254,
+          0
+        ],
+        "centre": [
+          253,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "key.chroma (still): the green background is gone (the black project background shows) and the red square is untouched",
+      "ok": true,
+      "detail": {
+        "corner": [
+          0,
+          0,
+          0
+        ],
+        "centre": [
+          253,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "The same still rendered twice is identical",
+      "ok": true,
+      "detail": {
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "key.chroma follows its parameters: keying red instead removes the square and keeps the green",
+      "ok": true,
+      "detail": {
+        "corner": [
+          0,
+          254,
+          0
+        ],
+        "centre": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "key.chroma (editor preview): same result on the preview canvas",
+      "ok": true,
+      "detail": {
+        "corner": [
+          0,
+          0,
+          0
+        ],
+        "centre": [
+          253,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "Preview and still agree (mean difference under 0.5 of 255)",
+      "ok": true,
+      "detail": {
+        "meanDifference": 0,
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "key.chroma (export): the exported frame shows the same (within video compression)",
+      "ok": true,
+      "detail": {
+        "corner": [
+          0,
+          0,
+          0
+        ],
+        "centre": [
+          251,
+          0,
+          0
+        ],
+        "meanDifferenceFromStill": 0.047
+      }
+    },
+    {
+      "name": "distort.wave: before the effect the stripe is straight",
+      "ok": true,
+      "detail": {
+        "centre": 179.5
+      }
+    },
+    {
+      "name": "distort.wave: each row of the stripe is displaced by the sine the parameters describe (within 1 pixel)",
+      "ok": true,
+      "detail": [
+        {
+          "y": 40,
+          "measured": 156.5,
+          "expected": 156.65
+        },
+        {
+          "y": 80,
+          "measured": 147.5,
+          "expected": 147.5
+        },
+        {
+          "y": 160,
+          "measured": 179.5,
+          "expected": 179.81
+        },
+        {
+          "y": 240,
+          "measured": 211.5,
+          "expected": 211.5
+        },
+        {
+          "y": 320,
+          "measured": 179.5,
+          "expected": 179.19
+        },
+        {
+          "y": 400,
+          "measured": 147.5,
+          "expected": 147.5
+        },
+        {
+          "y": 480,
+          "measured": 179.5,
+          "expected": 179.81
+        },
+        {
+          "y": 560,
+          "measured": 211.5,
+          "expected": 211.5
+        },
+        {
+          "y": 600,
+          "measured": 201.5,
+          "expected": 201.9
+        }
+      ]
+    },
+    {
+      "name": "distort.wave travels by itself: 0.5 s later the stripe is where a quarter-wave shift puts it (within 1 pixel), and that frame alone gives the same picture again",
+      "ok": true,
+      "detail": [
+        {
+          "y": 40,
+          "measured": 157.5,
+          "expected": 157.1
+        },
+        {
+          "y": 80,
+          "measured": 179.5,
+          "expected": 179.81
+        },
+        {
+          "y": 160,
+          "measured": 211.5,
+          "expected": 211.5
+        },
+        {
+          "y": 240,
+          "measured": 179.5,
+          "expected": 179.19
+        },
+        {
+          "y": 320,
+          "measured": 147.5,
+          "expected": 147.5
+        },
+        {
+          "y": 400,
+          "measured": 179.5,
+          "expected": 179.81
+        },
+        {
+          "y": 480,
+          "measured": 211.5,
+          "expected": 211.5
+        },
+        {
+          "y": 560,
+          "measured": 179.5,
+          "expected": 179.19
+        },
+        {
+          "y": 600,
+          "measured": 156.5,
+          "expected": 156.65
+        }
+      ]
+    },
+    {
+      "name": "distort.wave with speed 0 stays still",
+      "ok": true
+    },
+    {
+      "name": "distort.wave: preview and still agree (mean difference under 0.5 of 255)",
+      "ok": true,
+      "detail": {
+        "meanDifference": 0,
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "No uncaught errors in the editor page",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "Ramp fixture reads back as itself (the measuring stick: within 1.5 pixels)",
+      "ok": true,
+      "detail": {
+        "worstPixels": 1.22,
+        "points": 48
+      }
+    },
+    {
+      "name": "distort.bulge: every sampled pixel comes from where the formula says (within 2.5 pixels), and differs from the plain picture",
+      "ok": true,
+      "detail": {
+        "worstPixels": 1.6,
+        "points": 48
+      }
+    },
+    {
+      "name": "distort.swirl: matches its formula (within 2.5 pixels)",
+      "ok": true,
+      "detail": {
+        "worstPixels": 1.7,
+        "points": 48
+      }
+    },
+    {
+      "name": "distort.mirror: the right half shows the left half mirrored (within 1.5 pixels)",
+      "ok": true,
+      "detail": {
+        "worstPixels": 1.22,
+        "points": 48,
+        "at300": 59.12941176470588
+      }
+    },
+    {
+      "name": "blur.zoom: each pixel is the average along its streak toward the centre (within 2.5 pixels on a linear ramp)",
+      "ok": true,
+      "detail": {
+        "worstPixels": 1.23,
+        "points": 48
+      }
+    },
+    {
+      "name": "stylize.posterize with 4 levels leaves only four values per channel",
+      "ok": true,
+      "detail": {
+        "values": [
+          0,
+          85,
+          170,
+          255
+        ]
+      }
+    },
+    {
+      "name": "digital.glitch: each band jumps sideways by exactly what the integer hash gives (within 1.5 pixels), some bands jump and some do not, rows never move up or down",
+      "ok": true,
+      "detail": {
+        "worstPixels": 0.88,
+        "bandsThatJump": 7,
+        "of": 16
+      }
+    },
+    {
+      "name": "digital.glitch: the same frame is identical when rendered again; half a second later the pattern is another one",
+      "ok": true
+    },
+    {
+      "name": "distort.fisheye: matches its formula (within 2.5 pixels)",
+      "ok": true,
+      "detail": {
+        "worstPixels": 1.14,
+        "points": 36
+      }
+    },
+    {
+      "name": "distort.kaleidoscope: every wedge shows the first half-wedge, mirrored (within 2.5 pixels away from the folds)",
+      "ok": true,
+      "detail": {
+        "worstPixels": 1.47,
+        "points": 40
+      }
+    },
+    {
+      "name": "color.grade, saturation 0: every pixel is the grey of its own brightness (within 2 of 255)",
+      "ok": true,
+      "detail": {
+        "worst": 0.5
+      }
+    },
+    {
+      "name": "color.grade: one stop of exposure doubles the values; a warmer temperature raises red by a tenth and lowers blue by a tenth",
+      "ok": true,
+      "detail": {
+        "plain": [
+          64,
+          64,
+          128
+        ],
+        "plusOneStop": [
+          128,
+          128,
+          255
+        ],
+        "warm": [
+          70,
+          64,
+          115
+        ]
+      }
+    },
+    {
+      "name": "Colour looks: 40 are listed; applying one sets the clip's colour grade (noir is black and white), applying another replaces it instead of stacking, an unknown look is refused",
+      "ok": true,
+      "detail": {
+        "looks": 40,
+        "effectsOnClip": 1,
+        "unknown": 404
+      }
+    },
+    {
+      "name": "stylize.halftone: white paper shows between the dots, the dark corner is darker than the bright corner, and the same frame is identical again",
+      "ok": true,
+      "detail": {
+        "paperShare": 0.208,
+        "darkCorner": 50,
+        "brightCorner": 240
+      }
+    },
+    {
+      "name": "stylize.vhs: at amount 0 the picture is unchanged; at 0.6 it changes, the same frame is identical again, and another frame has another pattern",
+      "ok": true,
+      "detail": {
+        "amount0": 0,
+        "changed": 8.998,
+        "nextFrame": 5.082
+      }
+    },
+    {
+      "name": "blur.directional: sideways, pixels near the stripe take the share of the 17 samples that fall on it; along the stripe, nothing changes",
+      "ok": true,
+      "detail": {
+        "measured": [
+          60,
+          75,
+          75,
+          75,
+          30
+        ],
+        "expected": [
+          60,
+          75,
+          75,
+          75,
+          30
+        ],
+        "alongStripe": 0
+      }
+    },
+    {
+      "name": "blur.tilt-shift: the band stays sharp, far rows are blurred",
+      "ok": true,
+      "detail": {
+        "bandOutside": 0,
+        "bandInside": 255,
+        "farOutside": 102,
+        "farInside": 117
+      }
+    },
+    {
+      "name": "light.glow: light spills next to the bright stripe, not far from it, and the stripe itself stays",
+      "ok": true,
+      "detail": {
+        "near": 80,
+        "far": 0,
+        "stripe": 255
+      }
+    },
+    {
+      "name": "stylize.duotone: black becomes the dark colour and white the light colour",
+      "ok": true,
+      "detail": {
+        "black": [
+          27,
+          20,
+          100
+        ],
+        "white": [
+          255,
+          209,
+          102
+        ]
+      }
+    },
+    {
+      "name": "stylize.scanlines: every other line of the 64 is darkened by the amount",
+      "ok": true,
+      "detail": {
+        "line0": 255,
+        "line1": 128,
+        "line2": 255
+      }
+    },
+    {
+      "name": "light.sparkle: a streak reaches sideways from the bright stripe, fading with distance, and nothing appears far away",
+      "ok": true,
+      "detail": {
+        "near": 133,
+        "farther": 51,
+        "far": 0
+      }
+    },
+    {
+      "name": "motion.shake, pulse, sway and spin: the still at 7/30 s matches the transform the same code computes (within 3 pixels), is identical when rendered again, and differs at another moment",
+      "ok": true,
+      "detail": [
+        {
+          "type": "motion.shake",
+          "at": {
+            "scale": 1.072,
+            "rotation": 0.006,
+            "dx": -0.0172,
+            "dy": -0.0002
+          },
+          "worstPixels": 1.65,
+          "points": 48,
+          "ok": true
+        },
+        {
+          "type": "motion.pulse",
+          "at": {
+            "scale": 1.012,
+            "rotation": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          "worstPixels": 1.33,
+          "points": 48,
+          "ok": true
+        },
+        {
+          "type": "motion.sway",
+          "at": {
+            "scale": 1.12,
+            "rotation": 0.033,
+            "dx": 0.0179,
+            "dy": 0
+          },
+          "worstPixels": 1.54,
+          "points": 48,
+          "ok": true
+        },
+        {
+          "type": "motion.spin",
+          "at": {
+            "scale": 1.2,
+            "rotation": 0.367,
+            "dx": 0,
+            "dy": 0
+          },
+          "worstPixels": 1.57,
+          "points": 47,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "motion.pulse is largest exactly on the beat (every half second at 120 beats per minute) and has settled before the next one",
+      "ok": true,
+      "detail": {
+        "onBeat": 1.2,
+        "justBeforeNext": 1.0009
+      }
+    },
+    {
+      "name": "motion.pulse set to follow the music: on a clip under a drum loop whose beats were detected by the analysis, the stills at the frame soonest after a beat and at the frame latest in a beat match the pulse computed from the detected beats (within 3 pixels); the picture is larger near the beat",
+      "ok": true,
+      "detail": {
+        "detectedBeats": 8,
+        "detectedBpm": 93.97,
+        "rows": [
+          {
+            "frame": 12,
+            "beatsIntoBar": -1,
+            "scale": 1.2,
+            "worstPixels": 1.59,
+            "points": 48
+          },
+          {
+            "frame": 31,
+            "beatsIntoBar": -0.009,
+            "scale": 1.0005,
+            "worstPixels": 1.33,
+            "points": 48
+          }
+        ]
+      }
+    },
+    {
+      "name": "with the music track muted the same effect falls back to its own tempo setting",
+      "ok": true,
+      "detail": {
+        "frame": 12,
+        "scale": 1.0092,
+        "worstPixels": 1.22,
+        "points": 48
+      }
+    },
+    {
+      "name": "light.leak: nothing at amount 0; otherwise it only ever adds light, and the light has moved two seconds later",
+      "ok": true,
+      "detail": {
+        "added": 48.981,
+        "moved": 9.65,
+        "darkerPixels": 0
+      }
+    },
+    {
+      "name": "light.strobe: brightest at the start of each cycle and nearly gone before the next; a rate above three flashes per second is refused",
+      "ok": true,
+      "detail": {
+        "atFlash": 102,
+        "before_next": 0,
+        "fivePerSecond": 422
+      }
+    },
+    {
+      "name": "Strobes together, on an exported file: two strobes on a picture and a strobing title over it start at most three flashes in any one second (30 frames), and do keep flashing (at least 2.4 starts a second on average)",
+      "ok": true,
+      "detail": {
+        "frames": 150,
+        "flashStarts": [
+          0,
+          11,
+          22,
+          33,
+          44,
+          55,
+          66,
+          77,
+          88,
+          99,
+          110,
+          121,
+          132,
+          143
+        ],
+        "mostInOneSecond": 3,
+        "perSecond": 2.8
+      }
+    },
+    {
+      "name": "Strobes together, in the editor shuttled at 8x: the preview keeps flashing but shows at most three flashes in any second of real time (sampled on every animation frame); the frames it showed would have flashed five or more times in a second without the player's safety guard and more than three through a guard with a wrong gap of 0.25 s or 0.2 s, and the guard held flashes back",
+      "ok": true,
+      "detail": {
+        "verdict": "ok",
+        "shuttle": "▶▶ ×8",
+        "seconds": 7.8,
+        "samples": 483,
+        "windowSeconds": 8.06,
+        "paints": 111,
+        "paintsPerSecond": 13.8,
+        "flashesOnScreen": 21,
+        "flashesPerSecond": 2.6,
+        "mostInOneSecond": 3,
+        "closestOnScreen": 0.346,
+        "pictureBrightness": 127.4,
+        "unexplained": 0,
+        "heldOnScreen": 20,
+        "flashesWithoutGuard": 34,
+        "mostInOneSecondWithoutGuard": 6,
+        "guardNeeded": true,
+        "flashesWithRightGuard": 20,
+        "wrongGuards": [
+          {
+            "gap": 0.2,
+            "flashes": 20,
+            "mostInOneSecond": 4,
+            "unsafe": true
+          },
+          {
+            "gap": 0.25,
+            "flashes": 18,
+            "mostInOneSecond": 4,
+            "unsafe": true
+          },
+          {
+            "gap": 0.3,
+            "flashes": 20,
+            "mostInOneSecond": 3,
+            "unsafe": false
+          }
+        ],
+        "wrongGapsCaught": [
+          0.2,
+          0.25
+        ],
+        "margin": true,
+        "flashFloor": 6,
+        "framesHeldBack": 25,
+        "load1Before": 3.14,
+        "load1After": 3.29,
+        "cpus": 4,
+        "childCpuPerSecond": 2.8,
+        "childCpuSecondsPerPaint": 0.203
+      }
+    },
+    {
+      "name": "stylize.film: changes the picture, is identical for the same frame, and differs on another frame",
+      "ok": true,
+      "detail": {
+        "changed": 19.598
+      }
+    },
+    {
+      "name": "digital.rgb-shake: red is taken from exactly the seeded offset (within 1.5 pixels), green stays where it is, another step has another offset, and a frame is identical when rendered again",
+      "ok": true,
+      "detail": {
+        "frame": 0,
+        "sidewaysPixels": 26.66,
+        "redOff": 0.73,
+        "greenMoved": 0
+      }
+    },
+    {
+      "name": "All 46 GPU transitions start mostly on the outgoing picture, end mostly on the incoming one and never go backwards in between (the flash and the 2 light transitions are checked at their ends only here)",
+      "ok": true,
+      "detail": {
+        "transitions": 46,
+        "light": [
+          "film-burn",
+          "light-leak"
+        ]
+      }
+    },
+    {
+      "name": "The light transitions with their light held by the flash schedule (a strobe flash 4 frames before): start on the outgoing picture, end on the incoming one, never go backwards",
+      "ok": true,
+      "detail": [
+        {
+          "id": "film-burn",
+          "plan": {
+            "frame": 69,
+            "kept": false,
+            "since": 4
+          },
+          "incomingShare": [
+            0,
+            0.33,
+            1
+          ],
+          "ok": true
+        },
+        {
+          "id": "light-leak",
+          "plan": {
+            "frame": 69,
+            "kept": false,
+            "since": 4
+          },
+          "incomingShare": [
+            0,
+            0.5,
+            1
+          ],
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "Every GPU transition gives the identical middle frame when rendered again, and no two of them give the same middle frame",
+      "ok": true,
+      "detail": {
+        "repeatable": true,
+        "distinctMiddleFrames": 46
+      }
+    },
+    {
+      "name": "Soft wipe right, half-way: the left side already shows the incoming picture and the right side still the outgoing one; wipe left is the opposite",
+      "ok": true
+    },
+    {
+      "name": "Iris open, half-way: the centre shows the incoming picture and the corners the outgoing one; iris close is the opposite",
+      "ok": true
+    },
+    {
+      "name": "Clock wipe, half-way: the right half is the incoming picture and the left half the outgoing one; reversed is the opposite",
+      "ok": true
+    },
+    {
+      "name": "Squeeze, half-way: each picture is squeezed into its half, with columns taken from twice as far (within 3 pixels)",
+      "ok": true,
+      "detail": {
+        "leftFrom": 119.7,
+        "rightFrom": 239.3
+      }
+    },
+    {
+      "name": "Blinds, half-way: in each of the nine slats the first half shows the incoming picture and the second half the outgoing one",
+      "ok": true
+    },
+    {
+      "name": "Spin (both directions): the centre of the frame shows the outgoing picture before progress 0.45 and the incoming one after 0.55 (blue 0 = outgoing, 255 = incoming)",
+      "ok": true,
+      "detail": [
+        {
+          "id": "spin-cw",
+          "centreBlueAtP0.407": 0,
+          "centreBlueAtP0.593": 255
+        },
+        {
+          "id": "spin-ccw",
+          "centreBlueAtP0.407": 0,
+          "centreBlueAtP0.593": 255
+        }
+      ]
+    },
+    {
+      "name": "Whip (four directions), middle frame: a dot of the outgoing picture is smeared along the move (variance along at least 4 times across) and lies where the moving strip puts it (within 4 pixels)",
+      "ok": true,
+      "detail": [
+        {
+          "id": "whip-right",
+          "light": 9216,
+          "x": 90,
+          "y": 320,
+          "varX": 2481.4,
+          "varY": 2.9,
+          "alongOverAcross": 855.7,
+          "expectedCentre": 90,
+          "ok": true
+        },
+        {
+          "id": "whip-left",
+          "light": 9216,
+          "x": 270,
+          "y": 320,
+          "varX": 2481.4,
+          "varY": 2.9,
+          "alongOverAcross": 855.7,
+          "expectedCentre": 270,
+          "ok": true
+        },
+        {
+          "id": "whip-down",
+          "light": 9216,
+          "x": 180,
+          "y": 160,
+          "varX": 2.9,
+          "varY": 7837.1,
+          "alongOverAcross": 2702.4,
+          "expectedCentre": 160,
+          "ok": true
+        },
+        {
+          "id": "whip-up",
+          "light": 9216,
+          "x": 180,
+          "y": 480,
+          "varX": 2.9,
+          "varY": 7837.1,
+          "alongOverAcross": 2702.4,
+          "expectedCentre": 480,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "A GPU transition in an export: the half-way frame of the file shows the iris as the still does",
+      "ok": true,
+      "detail": {
+        "centreBlue": 255,
+        "cornerBlue": 0
+      }
+    },
+    {
+      "name": "stylize.edges: the border of the square is bright and the flat areas are dark",
+      "ok": true,
+      "detail": {
+        "leftBorder": [
+          255,
+          255,
+          255
+        ],
+        "topBorder": [
+          255,
+          255,
+          255
+        ],
+        "inside": [
+          0,
+          0,
+          0
+        ],
+        "background": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "Editor with an adapter: the GPU effects are offered and no warning is shown",
+      "ok": true,
+      "detail": {
+        "disabled": false,
+        "text": "מסך ירוק (הסרת צבע רקע)"
+      }
+    },
+    {
+      "name": "A .cube file uploaded through the asset route becomes a library entry of kind lut with its size; a junk file and a 1D table named .cube are refused with a typed error and add nothing",
+      "ok": true,
+      "detail": {
+        "upload": 201,
+        "kind": "lut",
+        "size": 17,
+        "junk": 415,
+        "junkCode": "unsupported_media",
+        "oneD": 415,
+        "assets": 2
+      }
+    },
+    {
+      "name": "color.lut with no table chosen: the still is delivered and is exactly the plain picture",
+      "ok": true,
+      "detail": {
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "color.lut, intensity 1: every grid pixel of the still is what core sampleStrip gives for the plain still's pixel (within 3 of 255), and the picture did change",
+      "ok": true,
+      "detail": {
+        "gridPoints": 288,
+        "worstFromModel": 0.5,
+        "meanChange": 77.563
+      }
+    },
+    {
+      "name": "color.lut: the same still rendered again is identical",
+      "ok": true
+    },
+    {
+      "name": "color.lut, intensity 0.5: every grid pixel lies half-way between the plain picture and the table (within 3 of 255); apply_lut replaced the effect instead of stacking a second one",
+      "ok": true,
+      "detail": {
+        "worstFromModel": 0.5,
+        "effectsOnClip": 1
+      }
+    },
+    {
+      "name": "color.lut, intensity 0: the plain picture (largest difference 1 of 255)",
+      "ok": true,
+      "detail": {
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "Removing the table while the effect uses it is refused, so is placing a table on the timeline, and so is naming a table that does not exist (the refusal lists the tables there are)",
+      "ok": true,
+      "detail": {
+        "remove": 422,
+        "removeCode": "incompatible",
+        "place": 422,
+        "unknown": 404
+      }
+    },
+    {
+      "name": "A table that cannot be read is not rendered around: the still is refused and the reason names the colour table, not a missing graphics adapter; a table whose bytes are gone blocks the render up front; with the bytes back the still is as before",
+      "ok": true,
+      "detail": {
+        "unreadable": 503,
+        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_c1a91b84f90 could not be loaded: Missing LUT_",
+        "gone": 422,
+        "blocker": "missing_media"
+      }
+    },
+    {
+      "name": "Editor while the table cannot be read: the preview shows the plain picture and a notice over it names the effect and the colour table, not a missing graphics adapter",
+      "ok": true,
+      "detail": {
+        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_c1a91b84f90 could not be loaded: Missing LUT_3D_SIZE",
+        "previewVsPlain": 0
+      }
+    },
+    {
+      "name": "Editor after the table's bytes are back: without any action the paused preview becomes the graded picture and the notice goes away",
+      "ok": true,
+      "detail": {
+        "seconds": 1.2,
+        "meanDifferenceFromStill": 0,
+        "errors": []
+      }
+    },
+    {
+      "name": "color.lut: the editor preview and the still agree (mean difference under 0.5 of 255)",
+      "ok": true,
+      "detail": {
+        "meanDifference": 0,
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "Editor: the effect shows a chooser with \"none\" and the project's table, selected; intensity keeps its slider; the library card of the table shows its size, is marked as in use, cannot be removed, and has no add-to-timeline or view button",
+      "ok": true,
+      "detail": {
+        "value": "ast_c1a91b84f90",
+        "options": [
+          "",
+          "ast_c1a91b84f90"
+        ],
+        "badge": "17³",
+        "addButtons": 0,
+        "removeDisabled": true,
+        "used": 1,
+        "intensity": true
+      }
+    },
+    {
+      "name": "Editor: \"import .cube\" on the effect uploads the file into the library and selects it for that effect; an identity table changes nothing beyond 2 of 255",
+      "ok": true,
+      "detail": {
+        "selected": "ast_6bd77293da0",
+        "kind": "lut",
+        "maxDifferenceFromPlain": 0,
+        "worstFromModel": 0.47
+      }
+    },
+    {
+      "name": "Once no effect refers to it, the first table can be removed (and the removal undone)",
+      "ok": true,
+      "detail": {
+        "remove": 200,
+        "undo": 200
+      }
+    },
+    {
+      "name": "color.lut with a table declared over the domain 0..2: the still follows the strip model (within 3 of 255) and the file's own definition, core sampleLut (within 4 of 255)",
+      "ok": true,
+      "detail": {
+        "worstFromModel": 0.5,
+        "worstFromDefinition": 0.88
+      }
+    },
+    {
+      "name": "color.lut with input domains that do not line up with the table's grid (0..1.5, and video range 0.0625..0.9375): the still follows the file's own definition, core sampleLut, within 3 of 255 where a finer grid holds every entry and within 4 where none up to 65 does",
+      "ok": true,
+      "detail": {
+        "0..1.5": {
+          "fileSize": 17,
+          "stripSize": 33,
+          "worstFromModel": 0.5,
+          "worstFromDefinition": 0.8,
+          "limit": 3
+        },
+        "0.0625..0.9375": {
+          "fileSize": 17,
+          "stripSize": 65,
+          "worstFromModel": 0.5,
+          "worstFromDefinition": 0.84,
+          "limit": 4
+        }
+      }
+    },
+    {
+      "name": "Fixture with translucent pixels, as imported: over the black background every grid pixel is its colour times its alpha (within 1 of 255); the grid has translucent pixels, pixels with blue = 255 (also translucent ones) and the corner where all three channels are 255",
+      "ok": true,
+      "detail": {
+        "worst": 0.45,
+        "points": 288,
+        "translucent": 144,
+        "blueTop": 48,
+        "allTop": 1,
+        "translucentBlueTop": 24
+      }
+    },
+    {
+      "name": "color.lut on translucent pixels and at the top of every channel: every grid pixel is the table's answer for the straight colour, times the pixel's alpha (within 3 of 255), also where blue is 255 (the last slice of the table); a lookup of the premultiplied colour would be far off",
+      "ok": true,
+      "detail": {
+        "grid": {
+          "points": 288,
+          "translucent": 144,
+          "blueTop": 48,
+          "allTop": 1,
+          "translucentBlueTop": 24
+        },
+        "worstOf255": {
+          "opaque": 0.49,
+          "translucent": 0.78,
+          "blueTop": 0.65,
+          "withoutUnpremultiply": 54.3
+        }
+      }
+    },
+    {
+      "name": "color.lut, intensity 0, on translucent pixels: the plain picture (largest difference 1 of 255), so taking the colour out of its premultiplied form and putting it back loses nothing",
+      "ok": true,
+      "detail": {
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "color.lut (export): the exported frame is the graded picture (within video compression), far from the plain one",
+      "ok": true,
+      "detail": {
+        "meanDifferenceFromStill": 1.385,
+        "meanDifferenceFromPlain": 77.617
+      }
+    },
+    {
+      "name": "No uncaught errors in the editor page with a colour table",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "stylize.digicam, noise 0: on every flat patch (grey, skin, a near-white that blooms, blue) each pixel is what digicamTone gives for the plain pixel (within 2 of 255), and the picture did change",
+      "ok": true,
+      "detail": {
+        "worstOf255": 0.48,
+        "rows": [
+          {
+            "at": [
+              90,
+              160
+            ],
+            "plain": [
+              128,
+              128,
+              128
+            ],
+            "still": [
+              126,
+              128,
+              131
+            ],
+            "model": [
+              126,
+              128.4,
+              131.3
+            ]
+          },
+          {
+            "at": [
+              270,
+              160
+            ],
+            "plain": [
+              205,
+              150,
+              120
+            ],
+            "still": [
+              202,
+              150,
+              123
+            ],
+            "model": [
+              201.7,
+              150.5,
+              123.1
+            ]
+          },
+          {
+            "at": [
+              90,
+              480
+            ],
+            "plain": [
+              240,
+              236,
+              225
+            ],
+            "still": [
+              252,
+              251,
+              249
+            ],
+            "model": [
+              252,
+              251.2,
+              249
+            ]
+          },
+          {
+            "at": [
+              270,
+              480
+            ],
+            "plain": [
+              40,
+              70,
+              200
+            ],
+            "still": [
+              39,
+              70,
+              205
+            ],
+            "model": [
+              39.4,
+              70.2,
+              205.1
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "stylize.digicam, amount 0 (with the noise at 1): the plain picture (largest difference 1 of 255)",
+      "ok": true,
+      "detail": {
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "stylize.digicam noise at 1: it is there (mean size over 1 of 255), no channel moves by more than 0.03 of the range (+1 for rounding), and over the area its mean is zero (within 0.5 of 255): it adds no brightness",
+      "ok": true,
+      "detail": {
+        "grey": {
+          "meanOffset": [
+            0.442,
+            -0.488,
+            0.099
+          ],
+          "meanSize": 3.82,
+          "largest": 8
+        },
+        "skin": {
+          "meanOffset": [
+            -0.1,
+            -0.404,
+            -0.164
+          ],
+          "meanSize": 3.83,
+          "largest": 8
+        }
+      }
+    },
+    {
+      "name": "stylize.digicam: the same tick gives the identical picture (also rendered again), and the noise changes exactly where digicamTick changes (15 times a second: every second frame at 30 fps)",
+      "ok": true,
+      "detail": [
+        {
+          "frames": [
+            0,
+            1
+          ],
+          "ticks": [
+            0,
+            0
+          ],
+          "identical": true
+        },
+        {
+          "frames": [
+            1,
+            2
+          ],
+          "ticks": [
+            0,
+            1
+          ],
+          "identical": false
+        },
+        {
+          "frames": [
+            2,
+            3
+          ],
+          "ticks": [
+            1,
+            1
+          ],
+          "identical": true
+        },
+        {
+          "frames": [
+            3,
+            4
+          ],
+          "ticks": [
+            1,
+            2
+          ],
+          "identical": false
+        },
+        {
+          "frames": [
+            4,
+            5
+          ],
+          "ticks": [
+            2,
+            2
+          ],
+          "identical": true
+        },
+        {
+          "frames": [
+            5,
+            6
+          ],
+          "ticks": [
+            2,
+            3
+          ],
+          "identical": false
+        },
+        {
+          "frames": [
+            6,
+            7
+          ],
+          "ticks": [
+            3,
+            3
+          ],
+          "identical": true
+        },
+        {
+          "frames": [
+            7,
+            8
+          ],
+          "ticks": [
+            3,
+            4
+          ],
+          "identical": false
+        }
+      ]
+    },
+    {
+      "name": "stylize.digicam: the editor preview and the still agree (mean difference under 0.5 of 255)",
+      "ok": true,
+      "detail": {
+        "meanDifference": 0,
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "stylize.digicam at noise 1 and amount 1, exported: the FlashAnalyser reads every frame of the file and its verdict is pass",
+      "ok": true,
+      "detail": {
+        "frames": 150,
+        "verdict": "pass",
+        "ranges": []
+      }
+    },
+    {
+      "name": "stylize.crt: along a row the phosphor mask repeats every pitch x frame height pixels (within 0.1 pixel; pitch 0.01 and 0.007 on a 640-pixel-high frame)",
+      "ok": true,
+      "detail": {
+        "pitch0010": {
+          "expected": 6.4,
+          "measured": 6.4
+        },
+        "pitch0007": {
+          "expected": 4.48,
+          "measured": 4.481
+        }
+      }
+    },
+    {
+      "name": "stylize.crt reads no time: frames 0, 15 and 90 are identical; the corner outside the curved glass is black and the centre is not",
+      "ok": true,
+      "detail": {
+        "frames15": 0,
+        "frames90": 0,
+        "corner": [
+          0,
+          0,
+          0
+        ],
+        "centre": [
+          139,
+          139,
+          230
+        ]
+      }
+    },
+    {
+      "name": "stylize.crt: with no curvature and amount 0 the picture is unchanged (largest difference 1); at curvature 0.2 every measured line lies where crtMap puts it (within 1.5 pixels) on at least 30 points, and lines near the edge moved by more than 3 pixels",
+      "ok": true,
+      "detail": {
+        "worstPixels": 0.05,
+        "points": 82,
+        "largestDisplacement": 8.6,
+        "flatVsPlain": 0
+      }
+    },
+    {
+      "name": "No uncaught errors in the editor page with the digicam preview",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "M1 color.grade against gradePixel: a 9×9×9 colour grid at 6 seeded sets of all eight values, every patch within 2 of 255, and every set changed the picture",
+      "ok": true,
+      "detail": {
+        "worst": 0.5,
+        "perSet": [
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5
+        ]
+      }
+    },
+    {
+      "name": "Editor without an adapter: the clip is shown WITHOUT the effect (green still there), a warning says why, and the effect cannot be added",
+      "ok": true,
+      "detail": {
+        "corner": [
+          0,
+          254,
+          0
+        ],
+        "warned": 1,
+        "option": {
+          "disabled": true,
+          "text": "מסך ירוק (הסרת צבע רקע) — דורש כרטיס מסך"
+        }
+      }
+    },
+    {
+      "name": "Worker without an adapter: a still is refused with the reason, not delivered without the effect",
+      "ok": true,
+      "detail": {
+        "status": 503,
+        "error": "the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses key.chroma, which needs a graphics adapter in the render worker; the brows"
+      }
+    },
+    {
+      "name": "Worker without an adapter: the export fails with the reason",
+      "ok": true,
+      "detail": {
+        "status": "failed",
+        "error": "{\"code\":\"export_failed\",\"message\":\"render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses key.chroma, which needs a graphics adapter in the render worker; the browser offers WebGPU but gave no graphics adapter\\n    a"
+      }
+    }
+  ]
+}

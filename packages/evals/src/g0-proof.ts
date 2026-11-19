@@ -7,6 +7,7 @@
  */
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -89,7 +90,9 @@ async function main() {
   const px = execFileSync('ffmpeg', ['-v', 'error', '-i', path.join(art, 'smoke.png'), '-vf', 'crop=1:1:160:96', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
   check('output pixels match the requested colour (decoded, not assumed)', px[0] === 0x3d && px[1] === 0xe0 && px[2] === 0xc8, [...px]);
   check('recipe is recorded: capability version, graph digest, resolved params, runtime and device', jRest.output.recipe.graphDigest === cap.graphDigest && jRest.output.recipe.params.width === 320 && !!jRest.output.recipe.provider.runtimeVersion);
-  check('output is NOT reported as attached to the timeline (not implemented yet)', jRest.output.attachment.status === 'not-attached');
+  const lib = (await call(`/projects/${pid}`)).body.project.assets[jRest.output.attachment.assetId];
+  check('result enters the project as a derived asset with lineage (job, capability version, graph digest, params, provider)', jRest.output.attachment.status === 'imported' && lib?.kind === 'image' && lib.provenance.origin === 'derived' && lib.provenance.derived.jobId === jRest.id && lib.provenance.derived.graphDigest === cap.graphDigest && lib.image.width === 320, lib?.provenance?.derived && { capability: lib.provenance.derived.capabilityId, version: lib.provenance.derived.capabilityVersion });
+  check('no placement was requested, so nothing was put on the timeline', (await call(`/projects/${pid}/timeline`)).body.tracks.every((t: any) => t.clips.length === 0));
   const again = await call(`/projects/${pid}/capabilities/${SMOKE}/runs`, { params, idempotencyKey: 'k-rest-1' });
   check('idempotency key: second request returns the same job; provider ran once', again.body.jobId === r1.body.jobId && (await historyCount()) === h0 + 1);
 
@@ -114,7 +117,7 @@ async function main() {
   // UI
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  await page.goto(`${s.url}/?project=${pid}`);
+  await page.goto(`${s.ownerUrl}&project=${pid}`);
   await page.locator('[data-testid=provider-status][data-state=ready]').waitFor();
   await page.getByTestId('provider-smoke').click();
   await page.locator('[data-testid=provider-result][data-job]').waitFor({ timeout: 60_000 });
@@ -124,6 +127,57 @@ async function main() {
   await browser.close();
   const after = (await call('/capabilities')).body.capabilities[0];
   check('run-earned evidence now cites the recorded job and names the profile it applies to', after.qualification.executed.status === 'pass' && /job_/.test(after.qualification.executed.evidence) && /only for this profile/.test(after.qualification.hardwareQualified.evidence), after.qualification.executed.evidence);
+
+  console.log('\n# media-input workflow: a project still is staged to the provider (model-free blur)');
+  const BLUR = 'comfy.image.soft-blur';
+  const srcPng = path.join(art, 'edge.png');
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=white:s=320x180', '-vf', 'drawbox=x=0:y=0:w=160:h=180:color=black:t=fill', '-frames:v', '1', srcPng]);
+  const up = await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { authorization: `Bearer ${s.auth.tokens.agent}`, 'x-filename': 'edge.png', connection: 'close' }, body: fs.readFileSync(srcPng) });
+  const upBody: any = await up.json();
+  check('still image upload: probed as an image asset with exact dimensions', up.status === 201 && upBody.asset.kind === 'image' && upBody.asset.image.width === 320 && upBody.asset.image.height === 180 && upBody.asset.image.hasAlpha === false, upBody.asset?.image);
+  const hBlur = await historyCount();
+  const bl = await call(`/projects/${pid}/capabilities/${BLUR}/runs`, { params: { image: upBody.assetId, radius: 12, sigma: 6 } });
+  const jBl = await waitJob(call, bl.body.jobId);
+  const blOut = jBl.output?.bundle?.[0];
+  const blPng = path.join(art, 'blurred.png');
+  fs.writeFileSync(blPng, Buffer.from((await call(`/jobs/${jBl.id}/outputs/0`)).body));
+  const row = execFileSync('ffmpeg', ['-v', 'error', '-i', blPng, '-vf', 'crop=320:1:0:90', '-f', 'rawvideo', '-pix_fmt', 'gray', '-']);
+  check('media workflow ran on the staged source: output keeps the source size and the hard edge became a gradient', jBl.status === 'succeeded' && blOut.width === 320 && blOut.height === 180 && row[20]! < 8 && row[300]! > 247 && row[160]! > 60 && row[160]! < 195 && row[152]! < row[168]!, { stageSeconds: jBl.output?.stageSeconds, edgeProfile: [row[20], row[150], row[160], row[170], row[300]] });
+  const blAsset = (await call(`/projects/${pid}`)).body.project.assets[jBl.output.attachment.assetId];
+  check('lineage: the derived asset records its source asset, and the job records the source content hash that was staged', blAsset.provenance.derived.sourceAssetIds[0] === upBody.assetId && jBl.output.recipe.sources[0].contentHash === upBody.asset.contentHash && jBl.output.recipe.sources[0].bytes === upBody.asset.byteSize);
+  const badAsset = await call(`/projects/${pid}/capabilities/${BLUR}/runs`, { params: { image: 'ast_doesnotexist' } });
+  const pathParam = await call(`/projects/${pid}/capabilities/${BLUR}/runs`, { params: { image: '../../../etc/passwd' } });
+  const urlParam = await call(`/projects/${pid}/capabilities/${BLUR}/runs`, { params: { image: 'https://example.com/x.png' } });
+  check('media parameters accept only project asset ids: unknown asset 404, file path and URL rejected, nothing submitted', badAsset.status === 404 && pathParam.status === 422 && urlParam.status === 422 && (await historyCount()) === hBlur + 1, [badAsset.body.error.code, pathParam.body.error.code, urlParam.body.error.code]);
+
+  console.log('\n# attachment through operations, and stale-result protection');
+  const T30 = (n: number) => ({ value: String(n), timescale: 30 });
+  const at = await call(`/projects/${pid}/capabilities/${SMOKE}/runs`, { params: { width: 256, height: 256, color: 0xff8800 }, attach: { start: T30(0), duration: T30(60) } });
+  const jAt = await waitJob(call, at.body.jobId);
+  const tlA = (await call(`/projects/${pid}/timeline`)).body;
+  const placed = tlA.tracks.flatMap((t: any) => t.clips).find((c: any) => c.id === jAt.output.attachment.clipId);
+  check('requested placement: output is attached as a normal clip via add_clip, in its own revision, by the requesting actor', jAt.output.attachment.status === 'attached' && placed?.assetId === jAt.output.attachment.assetId && placed.endSeconds === 2, { revision: jAt.output.attachment.revision });
+  const fr = await fetch(`${s.url}/api/v1/projects/${pid}/frame?index=10`, { headers: { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' } });
+  fs.writeFileSync(path.join(art, 'attached-frame.png'), Buffer.from(await fr.arrayBuffer()));
+  const cpx = execFileSync('ffmpeg', ['-v', 'error', '-i', path.join(art, 'attached-frame.png'), '-vf', 'crop=1:1:540:960', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
+  check('the attached provider image renders through the shared compositor (pixel read from render_frame)', fr.status === 200 && cpx[0] === 0xff && cpx[1] === 0x88 && cpx[2] === 0x00, [...cpx]);
+  const undoAttach = await call(`/projects/${pid}/undo`, {});
+  check('the placement is an ordinary transaction: undo removes the clip and keeps the derived asset', undoAttach.body.committed === true && !(await call(`/projects/${pid}/timeline`)).body.tracks.flatMap((t: any) => t.clips).some((c: any) => c.id === placed.id) && !!(await call(`/projects/${pid}`)).body.project.assets[jAt.output.attachment.assetId]);
+  // Stale result: the placement depends on a clip that is edited while the job waits in the provider queue.
+  const dep = (await call(`/projects/${pid}/transactions`, { ops: [{ op: 'add_text', args: { text: 'כותרת', start: T30(0), duration: T30(60) } }] })).body.results[0].output.clipId;
+  const hold = await (async () => { const g: Record<string, any> = { '1': { class_type: 'EmptyImage', inputs: { width: 1024, height: 1024, batch_size: 4, color: Date.now() % 0xffffff } } }; for (let i = 2; i < 6; i++) g[i] = { class_type: 'ImageBlur', inputs: { image: [String(i - 1), 0], blur_radius: 31, sigma: 10 } }; g['9'] = { class_type: 'PreviewImage', inputs: { images: ['5', 0] } }; return real.submit(g, `hold-${Date.now()}`); })();
+  const st = await call(`/projects/${pid}/capabilities/${SMOKE}/runs`, { params: { width: 128, height: 128, color: 0x0000ff }, attach: { start: T30(90), duration: T30(30) }, dependsOn: [dep] });
+  for (let i = 0; i < 100 && !/queued \(position/.test((await call(`/jobs/${st.body.jobId}`)).body.stage ?? ''); i++) await sleep(50);
+  const edit = await call(`/projects/${pid}/transactions`, { ops: [{ op: 'update_text', args: { clipId: dep, text: 'כותרת חדשה' } }] });
+  await real.cancel(hold.providerJobId);
+  const jSt = await waitJob(call, st.body.jobId);
+  const tlS = (await call(`/projects/${pid}/timeline`)).body;
+  const docS = (await call(`/projects/${pid}`)).body;
+  check('stale result: the job finished but its dependency was edited meanwhile -> nothing placed, newer edit intact', jSt.status === 'succeeded' && jSt.output.attachment.status === 'proposed' && jSt.output.attachment.conflicts[0].entityId === dep && jSt.output.attachment.conflicts[0].currentVersion === edit.body.revision && tlS.tracks.flatMap((t: any) => t.clips).length === 1 && tlS.tracks.flatMap((t: any) => t.clips)[0].text === 'כותרת חדשה', jSt.output.attachment.conflicts);
+  check('stale result: the output is kept as a derived asset the user can still place manually', !!docS.project.assets[jSt.output.attachment.assetId] && jSt.output.attachment.proposal.start.value === '90');
+  const manual = await call(`/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: jSt.output.attachment.assetId, start: T30(90), duration: T30(30) } }] });
+  check('the proposed asset can be placed with the normal add_clip operation', manual.body.committed === true);
+  await waitIdle();
 
   console.log('\n# cancellation and restart recovery (provider queue held busy by a harness-only blocker job)');
   // Harness-only: the proof talks to ComfyUI directly to occupy its single worker. Studio clients have no such route.
@@ -159,7 +213,7 @@ async function main() {
 
   console.log('\n# fault injection around the real provider (labelled: injected faults, real execution)');
   const wrap = (over: Partial<ProviderAdapter>): ProviderAdapter => Object.assign(Object.create(real), over);
-  s = await boot({}, wrap({ collect: async (d, id) => (await real.collect(d, id)).map((o) => ({ ...o, bytes: o.bytes.subarray(0, 40) })) }));
+  s = await boot({}, wrap({ collect: async (d, id, dir) => (await real.collect(d, id, dir)).map((o) => { fs.truncateSync(o.path, 40); return { ...o, bytes: 40, sha256: createHash('sha256').update(fs.readFileSync(o.path)).digest('hex') }; }) }));
   call = api(s);
   pid = (await call('/projects', { name: 'f' })).body.project.id;
   let fj = await waitJob(call, (await call(`/projects/${pid}/capabilities/${SMOKE}/runs`, { params })).body.jobId);
@@ -192,7 +246,7 @@ async function main() {
   const failed = checks.filter((c) => !c.ok);
   const report = {
     ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED',
-    scope: 'Amendment A1 G0, first half: model-free smoke workflow only. No model, no GPU, no media workflow, no timeline attachment, no stale-result case.',
+    scope: 'Amendment A1 G0 on the model-free smoke workflow: provider path, attachment through operations and stale-result protection. No model, no GPU, no media-input workflow.',
     machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, memoryGiB: +(os.totalmem() / 2 ** 30).toFixed(1), gpu: 'none' },
     provider: { url: COMFY, comfyui: ready.runtimeVersion, device: ready.device },
     measuredProfile: { capability: SMOKE, workload: '320x192 solid image, batch 1', stageSeconds: jRest.output.stageSeconds, peakDeviceMemoryBytes: null, note: 'CPU device: no device-memory measurement available' },

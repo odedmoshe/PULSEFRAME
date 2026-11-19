@@ -41,6 +41,9 @@ importers:
       '@pulseframe/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@pulseframe/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
       '@pulseframe/providers':
         specifier: workspace:*
         version: link:../../packages/providers
@@ -66,7 +69,43 @@ importers:
 
   apps/web:
     dependencies:
+      '@fontsource/amatic-sc':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/assistant':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/david-libre':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/frank-ruhl-libre':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/fredoka':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/gveret-levin':
+        specifier: 5.3.0
+        version: 5.3.0
       '@fontsource/heebo':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/ibm-plex-mono':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/ibm-plex-sans-hebrew':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/karantina':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/rubik':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/secular-one':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/suez-one':
         specifier: 5.3.0
         version: 5.3.0
       '@pulseframe/brand':
@@ -84,6 +123,9 @@ importers:
       '@pulseframe/time':
         specifier: workspace:*
         version: link:../../packages/time
+      lucide-react:
+        specifier: 1.73.0
+        version: 1.73.0(@types/react@19.3.0)(react@19.3.1)
       mediabunny:
         specifier: 1.66.0
         version: 1.66.0
@@ -153,6 +195,10 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+    devDependencies:
+      jsqr:
+        specifier: 1.4.0
+        version: 1.4.0
 
   packages/fixtures: {}
 
@@ -333,8 +379,44 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@fontsource/amatic-sc@5.3.0':
+    resolution: {integrity: sha512-qGAftmq7o21ViixCApztfLOe6TP0VFp3x9ac5KVTwBqW6SU8YJeGWgcLHOfBkooAI+/411R/flMqXos8GseNkA==}
+
+  '@fontsource/assistant@5.3.0':
+    resolution: {integrity: sha512-FJ0gSxkCdNeZgd2yIGmIkjU5SZOpDYs0j5IEWMQPBT5bRuvDqLA4T03KwmvMgWvov966coRVp0dcdd+oAo/MrA==}
+
+  '@fontsource/david-libre@5.3.0':
+    resolution: {integrity: sha512-esxHLO+pEmhnCb4HG4gRUfICz1xQyF+8EMH1rY76kaDl+IbqJmOTl3QuD9ddMnjElv48cCa5msmQymDA5vqr5Q==}
+
+  '@fontsource/frank-ruhl-libre@5.3.0':
+    resolution: {integrity: sha512-t9cbVzyuEJZGYafP01s7FQ1KAkh/Fs2nakfPzZpPY8BtfvGlZxQRxXAqJ/qluyfZXilpqw0Hk+GlYiWfmSSRTg==}
+
+  '@fontsource/fredoka@5.3.0':
+    resolution: {integrity: sha512-s2IhjQ50wDnKkkaKmjhtL0rxQg6ITsVusiipM3m7zUwVZZbbCKsscNDkngwp28xVzfIt7neWrkgU1qKqyTycQg==}
+
+  '@fontsource/gveret-levin@5.3.0':
+    resolution: {integrity: sha512-Jwp7PGMg63rJtkzYo/PwnPHnEvJy6uJ7EG94LLIhnD7sBxHAhK+8ifymz3BcRw/5UJ3CfekSY4Cyl/bXXP7VYQ==}
+
   '@fontsource/heebo@5.3.0':
     resolution: {integrity: sha512-Z01U2fWWrfJnSE6SmDYtZJ1uCnKs8V3WSdip/lVDfKnsC1ASumb7IZmOrXjaYK+PVm7qGD3+4cwTAFOxG5uMaw==}
+
+  '@fontsource/ibm-plex-mono@5.3.0':
+    resolution: {integrity: sha512-eTgnZjZEGk1QtD3ZstF+Vclo2HLAni8YMy34/DxllwZvyz1lR/1RF/xTiAquOBO7MvqBx8D2Ig2WCPMVfdZu7Q==}
+
+  '@fontsource/ibm-plex-sans-hebrew@5.3.0':
+    resolution: {integrity: sha512-6sYM3VzG65AnG1jul3dl+H8eBWYfx6Rqzm7946VNBIXx/ArU1NR5ZKdFx80EDehVqdbPsLOpP1fjImQFjVMopg==}
+
+  '@fontsource/karantina@5.3.0':
+    resolution: {integrity: sha512-+IYC+UR+1yPS6g631hJreAsdyLHwroCa+MMzJnlkP8WJrcvDZr2wgvGj6WGOzgK3I4xTTvgWhFPLBQz/dnRozw==}
+
+  '@fontsource/rubik@5.3.0':
+    resolution: {integrity: sha512-Nks2mn7vlE1jZVHuVgoKU2Ejqjvd+GJzLRdraCjo1xc79oo7O6vJ8pcvSfmKPGX3/Ln7nt09XWFzPeu2jWf0xQ==}
+
+  '@fontsource/secular-one@5.3.0':
+    resolution: {integrity: sha512-T9g2sz5egZ8DrZOMCbefurb98ZIJV50lexM83Mxk3rkvrZKIseyzH5PAbtRNtwTGXwPqlXORokFOStIZXixqvg==}
+
+  '@fontsource/suez-one@5.3.0':
+    resolution: {integrity: sha512-YOa3AShfn9vKIiouTstu+jtxxi5ruovegmKOG/kPxqwJoymvaHBINzHZuPazsviwEslEMCkNo+F0TMXpwFXLRg==}
 
   '@hono/node-server@2.1.8':
     resolution: {integrity: sha512-jdf7FHh6A1lzjpHHQUgxsg2GeER2vMetnAOfeActzcoli6jamlK+NAwL6Dsr5Fl3BS3tYUQzCdtZjU8Qxv7bEA==}
@@ -728,6 +810,9 @@ packages:
   jose@6.2.17:
     resolution: {integrity: sha512-wOuK9V1yujQFH5S0ZWmLcDZN7+IKh9bUCC2ZPCf2HDlol3WWHy+PPyNjEI75FXRLMp3vDKQcupP59xhVU95hcg==}
 
+  jsqr@1.4.0:
+    resolution: {integrity: sha512-dxLob7q65Xg2DvstYkRpkYtmKm2sPJ9oFhrhmudT1dZvNFFTlroai3AWSpLey/w5vMcLBXRgOJsbXpdN9HzU/A==}
+
   lightningcss-android-arm64@1.33.0:
     resolution: {integrity: sha512-gEpRTalKdosp4Bb8qWtc2iOgE5SeIHlpS1up9bFq2wAyYhl1UdTObYiHe98zEM9SQvSoqQZ1IQD0JNpg3Ml5pg==}
     engines: {node: '>= 12.0.0'}
@@ -797,6 +882,15 @@ packages:
   lightningcss@1.33.0:
     resolution: {integrity: sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA==}
     engines: {node: '>= 12.0.0'}
+
+  lucide-react@1.73.0:
+    resolution: {integrity: sha512-fVOzGviL9mTfHenG1PbCfIceavyGlnpYNSYr+aGZHLRymAJ7DTP6KHuqt0uBkCKAoenr1UVkwSbDIYt2xIesEQ==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
 
   magic-string@1.4.5:
     resolution: {integrity: sha512-oLLC2+YvQUfAa+vxoufE/yc1icb87M9iXIRqAoR/2EhE/8cb3SF/+Gi0c2By1B+5Vz2e2vQtUvHiu1+63Znh+w==}
@@ -1102,7 +1196,31 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
+  '@fontsource/amatic-sc@5.3.0': {}
+
+  '@fontsource/assistant@5.3.0': {}
+
+  '@fontsource/david-libre@5.3.0': {}
+
+  '@fontsource/frank-ruhl-libre@5.3.0': {}
+
+  '@fontsource/fredoka@5.3.0': {}
+
+  '@fontsource/gveret-levin@5.3.0': {}
+
   '@fontsource/heebo@5.3.0': {}
+
+  '@fontsource/ibm-plex-mono@5.3.0': {}
+
+  '@fontsource/ibm-plex-sans-hebrew@5.3.0': {}
+
+  '@fontsource/karantina@5.3.0': {}
+
+  '@fontsource/rubik@5.3.0': {}
+
+  '@fontsource/secular-one@5.3.0': {}
+
+  '@fontsource/suez-one@5.3.0': {}
 
   '@hono/node-server@2.1.8(hono@4.13.18)':
     dependencies:
@@ -1389,6 +1507,8 @@ snapshots:
 
   jose@6.2.17: {}
 
+  jsqr@1.4.0: {}
+
   lightningcss-android-arm64@1.33.0:
     optional: true
 
@@ -1437,6 +1557,12 @@ snapshots:
       lightningcss-linux-x64-musl: 1.33.0
       lightningcss-win32-arm64-msvc: 1.33.0
       lightningcss-win32-x64-msvc: 1.33.0
+
+  lucide-react@1.73.0(@types/react@19.3.0)(react@19.3.1):
+    dependencies:
+      react: 19.3.1
+    optionalDependencies:
+      '@types/react': 19.3.0
 
   magic-string@1.4.5:
     dependencies:

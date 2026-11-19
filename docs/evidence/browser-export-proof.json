@@ -1,0 +1,429 @@
+{
+  "ranAt": "2026-11-19T04:15:42.787Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "memoryGiB": 15.7,
+    "gpu": "none (software)",
+    "node": "v22.23.4",
+    "chromium": "153.0.8010.12",
+    "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers"
+  },
+  "project": {
+    "width": 640,
+    "height": 360,
+    "frameRate": {
+      "num": 30,
+      "den": 1
+    },
+    "exportedFrames": 105
+  },
+  "limitations": [
+    "output goes to an in-memory BufferTarget (StreamTarget/OPFS streaming is a follow-up)",
+    "audio is mixed from whole decoded assets with OfflineAudioContext (long media: streaming mix is a follow-up)",
+    "lease expiry lives in server memory; after a server restart unfinished browser jobs are failed as lease_lost"
+  ],
+  "measurements": {
+    "capabilityReport": {
+      "video": {
+        "avc": true,
+        "vp9": true
+      },
+      "audio": {
+        "aac": false,
+        "opus": true
+      },
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+      "probedFor": {
+        "width": 640,
+        "height": 360,
+        "frameRate": 30,
+        "sampleRate": 48000
+      }
+    },
+    "avSync": {
+      "expectedOnsetsSeconds": [
+        0,
+        1,
+        2.5
+      ],
+      "measuredOnsetsSeconds": [
+        0.0001,
+        1.0001,
+        2.5001
+      ],
+      "maxAbsErrorMs": 0.06,
+      "audioCodec": "opus"
+    },
+    "browserExport": {
+      "frames": 105,
+      "wallSeconds": 0.95,
+      "realtimeFactor": 3.696,
+      "bytes": 283785,
+      "wallInPageMs": 924,
+      "note": "headless Chromium, software (no GPU), 640x360 high quality; wall time includes asset fetch, audio mix, encode, SHA-256, base64 transfer"
+    },
+    "parity": {
+      "serverRouteWallSeconds": 2.094,
+      "serverBytes": 76665,
+      "browserBytes": 283785,
+      "ssimByFrame": {
+        "3": 0.998028,
+        "30": 0.997123,
+        "59": 0.997168,
+        "61": 0.997037,
+        "100": 0.996517
+      },
+      "threshold": 0.97,
+      "note": "two different encoders (WebCodecs H.264 vs libx264 crf16), decoded frames compared as PNG"
+    },
+    "photosensitivity": {
+      "browser": {
+        "verdict": "fail",
+        "ranges": [
+          {
+            "from": 0.6333333333333333,
+            "to": 4.3,
+            "kind": "general",
+            "perSecond": 5,
+            "area": 1
+          }
+        ]
+      },
+      "server": {
+        "verdict": "fail",
+        "ranges": [
+          {
+            "from": 0.6333333333333333,
+            "to": 4.3,
+            "kind": "general",
+            "perSecond": 5,
+            "area": 1
+          }
+        ]
+      }
+    },
+    "leaseLoss": {
+      "closedTabToFailedSeconds": 12.41,
+      "leaseSeconds": 15
+    }
+  },
+  "checks": [
+    {
+      "name": "capabilities probed in the page; chosen codecs follow them (H.264 via WebCodecs; AAC if encodable else Opus)",
+      "ok": true,
+      "detail": {
+        "caps": {
+          "video": {
+            "avc": true,
+            "vp9": true
+          },
+          "audio": {
+            "aac": false,
+            "opus": true
+          }
+        },
+        "chosen": {
+          "video": "avc",
+          "audio": "opus"
+        }
+      }
+    },
+    {
+      "name": "AAC to Opus substitution is declared, never silent",
+      "ok": true,
+      "detail": [
+        "audio: AAC cannot be encoded by this browser; Opus in the MP4 container was used instead (not every player accepts Opus-in-MP4)"
+      ]
+    },
+    {
+      "name": "file: MP4 container, H.264, expected audio codec, exact frame count/size/rate",
+      "ok": true,
+      "detail": {
+        "container": "mov,mp4,m4a,3gp,3g2,mj2",
+        "video": "h264 High 640x360 30/1 yuvj420p cs=bt709",
+        "audio": "opus 48000Hz 2ch",
+        "frames": 105,
+        "bytes": 283785
+      }
+    },
+    {
+      "name": "file: H.264 profile reported (not guaranteed on every browser)",
+      "ok": true,
+      "detail": {
+        "profile": "High"
+      }
+    },
+    {
+      "name": "ffmpeg decodes the whole file with no errors",
+      "ok": true
+    },
+    {
+      "name": "every one of 105 frames shows the source frame the evaluator selected (split, trim, move)",
+      "ok": true,
+      "detail": {
+        "mismatched": []
+      }
+    },
+    {
+      "name": "audio beep onsets land within one frame of the edit (and the trimmed beep is gone)",
+      "ok": true,
+      "detail": {
+        "expectedOnsetsSeconds": [
+          0,
+          1,
+          2.5
+        ],
+        "measuredOnsetsSeconds": [
+          0.0001,
+          1.0001,
+          2.5001
+        ],
+        "maxAbsErrorMs": 0.06,
+        "audioCodec": "opus"
+      }
+    },
+    {
+      "name": "audio and video durations agree within one frame",
+      "ok": true,
+      "detail": {
+        "audio": "3.513500",
+        "video": "3.500000"
+      }
+    },
+    {
+      "name": "server job succeeded on the same snapshot",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "error": null
+      }
+    },
+    {
+      "name": "parity: 5 frames browser vs server route, SSIM >= 0.97",
+      "ok": true,
+      "detail": {
+        "3": 0.998028,
+        "30": 0.997123,
+        "59": 0.997168,
+        "61": 0.997037,
+        "100": 0.996517
+      }
+    },
+    {
+      "name": "range [30,60) at 0.5: 30 frames, 320x180, barcodes equal the evaluator for timeline frames 30..59",
+      "ok": true,
+      "detail": {
+        "first": 30,
+        "last": 59,
+        "size": "320x180",
+        "frames": "30"
+      }
+    },
+    {
+      "name": "range audio: one beep at the start of the range (timeline 1.0 s), nothing else",
+      "ok": true,
+      "detail": {
+        "onsets": [
+          0.0000625
+        ]
+      }
+    },
+    {
+      "name": "a timeline flashing 5 times a second for 3 s, exported in the browser: the tab reports one failing stretch over the whole frame, recorded on its job, and the export still succeeds",
+      "ok": true,
+      "detail": {
+        "browser": {
+          "verdict": "fail",
+          "ranges": [
+            {
+              "from": 0.6333333333333333,
+              "to": 4.3,
+              "kind": "general",
+              "perSecond": 5,
+              "area": 1
+            }
+          ]
+        },
+        "server": {
+          "verdict": "fail",
+          "ranges": [
+            {
+              "from": 0.6333333333333333,
+              "to": 4.3,
+              "kind": "general",
+              "perSecond": 5,
+              "area": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "the server export of the same timeline reports the same stretch (same analyser, same frames)",
+      "ok": true,
+      "detail": {
+        "browser": {
+          "verdict": "fail",
+          "ranges": [
+            {
+              "from": 0.6333333333333333,
+              "to": 4.3,
+              "kind": "general",
+              "perSecond": 5,
+              "area": 1
+            }
+          ]
+        },
+        "server": {
+          "verdict": "fail",
+          "ranges": [
+            {
+              "from": 0.6333333333333333,
+              "to": 4.3,
+              "kind": "general",
+              "perSecond": 5,
+              "area": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "job row: succeeded, route browser, location client-download, frames correct",
+      "ok": true,
+      "detail": {
+        "output": {
+          "route": "browser",
+          "location": "client-download",
+          "note": "the media bytes were produced and stay in the browser tab that held the lease; the server stores only this record",
+          "bytes": 283785,
+          "sha256": "c06576e4598917b7941f89acb044e42d98df6eef9bf04f38c5a0d5ea8a6dbefe",
+          "videoCodec": "avc",
+          "audioCodec": "opus",
+          "frames": 105,
+          "container": "mp4",
+          "mimeType": "video/mp4",
+          "revision": 4,
+          "options": {
+            "format": "mp4-h264-aac",
+            "captions": "burned",
+            "quality": "high",
+            "scale": 1
+          },
+          "photosensitivity": {
+            "method": "General and red flash thresholds of WCAG 2.3.1 (ITU-R BT.1702 family), approximated on 24 × 24 cells of the rendered frames: a stretch fails when more than a quarter of a 10-degree window (a third of the width and height) flashes more than three times in a second. A guide, not a certification.",
+            "measuredBy": "browser",
+            "verdict": "pass",
+            "frames": 105,
+            "ranges": []
+          }
+        }
+      }
+    },
+    {
+      "name": "job row: the tab checked every encoded frame for flashing (ADR-0009) and the server recorded it with its method text",
+      "ok": true,
+      "detail": {
+        "verdict": "pass",
+        "frames": 105,
+        "ranges": 0
+      }
+    },
+    {
+      "name": "job row sha256 and bytes equal those of the file the proof received",
+      "ok": true,
+      "detail": {
+        "server": "c06576e4598917b7941f89acb044e42d98df6eef9bf04f38c5a0d5ea8a6dbefe",
+        "received": "c06576e4598917b7941f89acb044e42d98df6eef9bf04f38c5a0d5ea8a6dbefe"
+      }
+    },
+    {
+      "name": "a second complete is refused with 409 already_completed; the recorded output is unchanged",
+      "ok": true,
+      "detail": "already_completed"
+    },
+    {
+      "name": "a stalled-but-open tab keeps its lease through heartbeats beyond the lease length (stage reports browser progress)",
+      "ok": true,
+      "detail": {
+        "status": "running",
+        "stage": "rendering 10/105 (browser)",
+        "error": null
+      }
+    },
+    {
+      "name": "another session cannot heartbeat or complete (409 lease_not_owned), nor can another actor that knows the session id",
+      "ok": true,
+      "detail": {
+        "other": {
+          "hb": {
+            "status": 409,
+            "code": "lease_not_owned"
+          },
+          "done": {
+            "status": 409,
+            "code": "lease_not_owned"
+          }
+        },
+        "wrongActor": "lease_not_owned"
+      }
+    },
+    {
+      "name": "closed tab: job becomes failed / lease_lost (retryable) within lease + 5 s, with no output",
+      "ok": true,
+      "detail": {
+        "status": "failed",
+        "error": "lease_lost",
+        "afterSeconds": 12.41
+      }
+    },
+    {
+      "name": "a tab that reappears after expiry is told lease_lost (409) and must start a new job",
+      "ok": true,
+      "detail": {
+        "status": 409,
+        "code": "lease_lost"
+      }
+    },
+    {
+      "name": "restart: a NEW job over a fresh snapshot succeeds; exactly one succeeded job carries its output; the lost job published nothing",
+      "ok": true,
+      "detail": {
+        "newJob": "job_zqAe2s1PGhI",
+        "lostJob": "job_b3nYqj8Sbd0"
+      }
+    },
+    {
+      "name": "non-bundled font: the browser route refuses with render_blocked (client and server), and no job row was created",
+      "ok": true,
+      "detail": {
+        "client": "render_blocked",
+        "server": [
+          {
+            "code": "missing_font",
+            "message": "font \"Not Installed Sans\" is not bundled with the renderer; text would silently fall back",
+            "ids": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "missing video encoder (isConfigSupported forced false in the page): typed browser_export_unsupported before any job exists",
+      "ok": true,
+      "detail": {
+        "code": "browser_export_unsupported",
+        "missing": [
+          "video:avc (H.264)"
+        ]
+      }
+    },
+    {
+      "name": "no uncaught errors in the pages",
+      "ok": true,
+      "detail": []
+    }
+  ]
+}

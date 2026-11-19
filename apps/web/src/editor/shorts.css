@@ -1,0 +1,36 @@
+/* The Shorts panel and the sequence switcher (ADR-0018, W3). Logical properties only, so Hebrew and English mirror. */
+.seq-switch { display: flex; align-items: center; gap: var(--pf-sp-2, 6px); min-inline-size: 0; flex: 1 1 auto; max-inline-size: 100%; }
+.seq-tabs { display: flex; gap: var(--pf-sp-2, 6px); overflow-x: auto; min-inline-size: 0; padding-block: 2px; }
+.seq-tab { flex: none; padding: 4px 12px; border-radius: var(--pf-r-md, 8px); border: 1px solid var(--pf-line, #3a3f4a); background: transparent; color: inherit; font: inherit; cursor: pointer; white-space: nowrap; min-block-size: 28px; }
+.seq-tab:hover { background: var(--pf-surface-3, rgba(255,255,255,.06)); }
+.seq-tab.is-active { background: var(--pf-frame-soft, rgba(69,230,208,.16)); border-color: var(--pf-frame, #45E6D0); font-weight: 600; }
+.seq-tab:focus-visible, .seq-delete:focus-visible, .sh-q:focus-visible, .sh-tag:focus-visible, .sh-row:focus-visible { outline: 2px solid var(--pf-focus, #73C9FF); outline-offset: 2px; }
+.seq-delete { flex: none; display: inline-grid; place-items: center; inline-size: 28px; block-size: 28px; border-radius: var(--pf-r-md, 8px); border: 1px solid transparent; background: transparent; color: inherit; cursor: pointer; }
+.seq-delete:hover { background: var(--pf-surface-3, rgba(255,255,255,.06)); }
+
+.shorts-panel { display: flex; flex-direction: column; gap: var(--pf-sp-5, 12px); }
+.shorts-panel .sh-step { display: flex; flex-direction: column; gap: var(--pf-sp-3, 8px); padding-block-end: var(--pf-sp-4, 10px); border-block-end: 1px solid var(--pf-line, #3a3f4a); }
+.shorts-panel .sh-chips { display: flex; flex-wrap: wrap; gap: var(--pf-sp-2, 6px); }
+.shorts-panel .sh-state { padding: var(--pf-sp-3, 8px); border: 1px dashed var(--pf-line, #3a3f4a); border-radius: var(--pf-r-md, 8px); }
+.shorts-panel .row { display: flex; flex-wrap: wrap; gap: var(--pf-sp-2, 6px); align-items: center; }
+.shorts-panel .danger { color: var(--pf-danger, #ff9b9b); }
+.sh-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--pf-sp-3, 8px); }
+.sh-row { display: flex; flex-direction: column; gap: var(--pf-sp-2, 6px); padding: var(--pf-sp-3, 10px); border: 1px solid var(--pf-line, #3a3f4a); border-radius: var(--pf-r-md, 10px); }
+.sh-row.is-selected { border-color: var(--pf-frame, #45E6D0); border-inline-start-width: 4px; }
+.sh-row-head { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3, 8px); align-items: baseline; }
+.sh-rank { font-weight: 700; }
+.sh-quote { font-size: var(--pf-fs-md, 14px); }
+.sh-score-line { margin: 0; display: flex; align-items: center; gap: var(--pf-sp-2, 6px); }
+.sh-q { inline-size: 24px; block-size: 24px; border-radius: 50%; border: 1px solid currentColor; background: transparent; color: inherit; cursor: pointer; font: inherit; line-height: 1; }
+.sh-comps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.sh-comps li { display: grid; grid-template-columns: 7rem 1fr 6rem; align-items: center; gap: var(--pf-sp-2, 6px); }
+.sh-bar { display: block; block-size: 8px; border-radius: 4px; background: var(--pf-line, #3a3f4a); overflow: hidden; }
+.sh-bar > i { display: block; block-size: 100%; background: var(--pf-frame, #45E6D0); }
+.sh-reasons, .sh-warns, .sh-tags { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--pf-sp-2, 6px); }
+.sh-chip { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--pf-line, #3a3f4a); font-size: var(--pf-fs-xs, 12px); }
+.sh-chip[data-sign='minus'] { border-style: dashed; }
+.sh-warns li { font-size: var(--pf-fs-xs, 12px); }
+.sh-tag { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--pf-line, #3a3f4a); background: transparent; color: inherit; cursor: pointer; font: inherit; }
+.sh-built { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--pf-sp-3, 8px); }
+.sh-built li { display: flex; flex-direction: column; gap: var(--pf-sp-2, 6px); }
+.sh-edited { font-size: var(--pf-fs-xs, 12px); font-style: italic; }

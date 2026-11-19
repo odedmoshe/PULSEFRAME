@@ -1,0 +1,321 @@
+{
+ "what": "Per-frame PSNR (ffmpeg psnr, psnr_avg) of proof:incremental fixture A at standard quality: the clean segmented export against the single-pass export of the same revision, and each against the lossless source frames (the single pass's RGBA input, captured through the export pixel filter into FFV1). Frame types from ffprobe pict_type. Position = frame index mod 60 (the 2 s segment grid).",
+ "ranAt": "2026-11-18",
+ "fixture": "incremental-export-proof.ts fixture A, 1801 frames 640x360 @ 30 fps; snow overlay 1500-1649, scene cut at 1650",
+ "before": {
+  "settings": "segments: -g S -keyint_min S -sc_threshold 0 -x264-params open-gop=0 (commit 200ee7e; same bytes as the failing run of 983248c)",
+  "minSegVsSingleDb": 37.87,
+  "minSegVsSourceDb": 37.29,
+  "minSingleVsSourceDb": 37.66,
+  "worstFrames": [
+   {
+    "frame": 1649,
+    "posInSegment": 29,
+    "segType": "B",
+    "singleType": "P",
+    "segVsSingleDb": 37.87,
+    "segVsSourceDb": 37.79,
+    "singleVsSourceDb": 37.66
+   },
+   {
+    "frame": 1559,
+    "posInSegment": 59,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 38.18,
+    "segVsSourceDb": 37.29,
+    "singleVsSourceDb": 39.26
+   },
+   {
+    "frame": 1560,
+    "posInSegment": 0,
+    "segType": "I",
+    "singleType": "P",
+    "segVsSingleDb": 38.36,
+    "segVsSourceDb": 40.47,
+    "singleVsSourceDb": 39.28
+   },
+   {
+    "frame": 1619,
+    "posInSegment": 59,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 38.67,
+    "segVsSourceDb": 37.95,
+    "singleVsSourceDb": 39.83
+   },
+   {
+    "frame": 1620,
+    "posInSegment": 0,
+    "segType": "I",
+    "singleType": "P",
+    "segVsSingleDb": 38.76,
+    "segVsSourceDb": 41.03,
+    "singleVsSourceDb": 39.82
+   },
+   {
+    "frame": 1648,
+    "posInSegment": 28,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 38.79,
+    "segVsSourceDb": 38.3,
+    "singleVsSourceDb": 38.32
+   },
+   {
+    "frame": 317,
+    "posInSegment": 17,
+    "segType": "B",
+    "singleType": "I",
+    "segVsSingleDb": 38.87,
+    "segVsSourceDb": 39.12,
+    "singleVsSourceDb": 43.19
+   },
+   {
+    "frame": 1561,
+    "posInSegment": 1,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 38.94,
+    "segVsSourceDb": 39.71,
+    "singleVsSourceDb": 39.37
+   },
+   {
+    "frame": 1646,
+    "posInSegment": 26,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 38.97,
+    "segVsSourceDb": 38.66,
+    "singleVsSourceDb": 38.63
+   },
+   {
+    "frame": 1526,
+    "posInSegment": 26,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 39.1,
+    "segVsSourceDb": 39.18,
+    "singleVsSourceDb": 39.23
+   },
+   {
+    "frame": 1543,
+    "posInSegment": 43,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 39.11,
+    "segVsSourceDb": 38.93,
+    "singleVsSourceDb": 38.98
+   },
+   {
+    "frame": 1558,
+    "posInSegment": 58,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 39.12,
+    "segVsSourceDb": 38.29,
+    "singleVsSourceDb": 39.36
+   }
+  ],
+  "minByPositionDb": {
+   "0": 38.36,
+   "1": 38.94,
+   "2": 39.35,
+   "29": 37.87,
+   "57": 39.56,
+   "58": 39.12,
+   "59": 38.18
+  }
+ },
+ "after": {
+  "settings": "segments: x264 GOP/scene-cut defaults, one tail-pad frame behind a forced IDR cut off by stream copy, zones=0,0,b=1.4 (commit d68610a); the files of the proof run of 2026-11-18T11:59Z",
+  "minSegVsSingleDb": 38.35,
+  "minSegVsSourceDb": 37.6,
+  "minSingleVsSourceDb": 37.66,
+  "worstFrames": [
+   {
+    "frame": 1649,
+    "posInSegment": 29,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 38.35,
+    "segVsSourceDb": 37.6,
+    "singleVsSourceDb": 37.66
+   },
+   {
+    "frame": 1560,
+    "posInSegment": 0,
+    "segType": "I",
+    "singleType": "P",
+    "segVsSingleDb": 38.68,
+    "segVsSourceDb": 42.93,
+    "singleVsSourceDb": 39.28
+   },
+   {
+    "frame": 1648,
+    "posInSegment": 28,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 38.91,
+    "segVsSourceDb": 38.35,
+    "singleVsSourceDb": 38.32
+   },
+   {
+    "frame": 1526,
+    "posInSegment": 26,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 39.05,
+    "segVsSourceDb": 39.18,
+    "singleVsSourceDb": 39.23
+   },
+   {
+    "frame": 1561,
+    "posInSegment": 1,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 39.08,
+    "segVsSourceDb": 40.43,
+    "singleVsSourceDb": 39.37
+   },
+   {
+    "frame": 1646,
+    "posInSegment": 26,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 39.08,
+    "segVsSourceDb": 38.66,
+    "singleVsSourceDb": 38.63
+   },
+   {
+    "frame": 1620,
+    "posInSegment": 0,
+    "segType": "I",
+    "singleType": "P",
+    "segVsSingleDb": 39.11,
+    "segVsSourceDb": 43.47,
+    "singleVsSourceDb": 39.82
+   },
+   {
+    "frame": 1559,
+    "posInSegment": 59,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 39.12,
+    "segVsSourceDb": 38.58,
+    "singleVsSourceDb": 39.26
+   },
+   {
+    "frame": 1525,
+    "posInSegment": 25,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 39.14,
+    "segVsSourceDb": 39.23,
+    "singleVsSourceDb": 39.2
+   },
+   {
+    "frame": 1542,
+    "posInSegment": 42,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 39.17,
+    "segVsSourceDb": 39.06,
+    "singleVsSourceDb": 39.02
+   },
+   {
+    "frame": 1543,
+    "posInSegment": 43,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 39.17,
+    "segVsSourceDb": 38.91,
+    "singleVsSourceDb": 38.98
+   },
+   {
+    "frame": 1529,
+    "posInSegment": 29,
+    "segType": "P",
+    "singleType": "P",
+    "segVsSingleDb": 39.21,
+    "segVsSourceDb": 39.06,
+    "singleVsSourceDb": 39.06
+   }
+  ],
+  "minByPositionDb": {
+   "0": 38.68,
+   "1": 39.08,
+   "2": 39.48,
+   "29": 38.35,
+   "57": 39.8,
+   "58": 39.52,
+   "59": 39.12
+  }
+ },
+ "qpEvidence": {
+  "note": "x264 per-frame QP (ffmpeg -v debug), segments 1500-1679 against the single pass, before the fix",
+  "frame1559_pos59": {
+   "single": 25.87,
+   "segment": 28.9
+  },
+  "frames1555to1559_segment": [
+   26.01,
+   26.39,
+   26.73,
+   27.28,
+   28.9
+  ],
+  "frames1555to1559_single": [
+   25.6,
+   25.7,
+   25.69,
+   25.66,
+   25.87
+  ],
+  "frame1560_pos0": {
+   "single": "P 25.6",
+   "segmentStartIdr": "I 25.46",
+   "keyframeMidStreamOnTheGrid": "I 22.58"
+  },
+  "frame1649": {
+   "single": "P 29.25 (before its scene-cut IDR at 1650)",
+   "segment": "B 29.1"
+  }
+ },
+ "alternativesMeasured": {
+  "segmentCrf20": {
+   "min": 38.11,
+   "sizeRatio": 1.144
+  },
+  "segmentCrf19": {
+   "min": 38.21,
+   "sizeRatio": 1.401
+  },
+  "segmentCrf18": {
+   "min": 38.19,
+   "sizeRatio": 1.677
+  },
+  "singlePassOnTheSegmentGrid": {
+   "min": 38.18
+  },
+  "sceneCutsOnly": {
+   "min": 38.18,
+   "sizeRatio": 0.992
+  },
+  "sceneCutsAndTailPad1": {
+   "min": 38.22,
+   "sizeRatio": 1.0089
+  },
+  "final": {
+   "min": 38.35,
+   "sizeRatio": 1.028
+  },
+  "finalThreads2": {
+   "min": 38.32
+  },
+  "finalThreads8": {
+   "min": 38.34
+  },
+  "sizeRatioNote": "scratch encodes of the captured source: video packet bytes plus the 255729 bytes of sound and container of the single pass"
+ }
+}

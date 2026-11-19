@@ -1,0 +1,1621 @@
+{
+  "ranAt": "2026-11-19T07:13:30.291Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "gpu": "none"
+  },
+  "scope": "Synthetic four-quadrant pictures made with Pillow, each stored in a different way; checked at four points (six for the portrait picture) with a tolerance of 24 of 255 per channel, on a server-rendered still and on the editor preview. Not checked: fine detail, gradients, colour profiles (ICC), HDR, very large files beyond one 20-megapixel JPEG, real photographs.",
+  "passed": 3,
+  "total": 3,
+  "tally": {
+    "shown-correctly": 22,
+    "refused-as-expected": 2
+  },
+  "rows": [
+    {
+      "case": "PNG, 8-bit RGB",
+      "file": "rgb.png",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "png",
+          "hasAlpha": false
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            30
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ]
+        },
+        "worst": 0
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            30
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ]
+        },
+        "worst": 0
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "PNG with a transparent quadrant",
+      "file": "alpha.png",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "png",
+          "hasAlpha": true
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            0,
+            0,
+            0
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ]
+        },
+        "worst": 0
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            0,
+            0,
+            0
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ]
+        },
+        "worst": 0
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "PNG, indexed colours",
+      "file": "palette.png",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "png",
+          "hasAlpha": true
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            30
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ]
+        },
+        "worst": 0
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            30
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ]
+        },
+        "worst": 0
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "PNG, greyscale",
+      "file": "gray.png",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "png",
+          "hasAlpha": false
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            87,
+            87,
+            87
+          ],
+          "tr": [
+            130,
+            130,
+            130
+          ],
+          "bl": [
+            52,
+            52,
+            52
+          ],
+          "br": [
+            194,
+            194,
+            194
+          ]
+        },
+        "worst": 0
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            87,
+            87,
+            87
+          ],
+          "tr": [
+            130,
+            130,
+            130
+          ],
+          "bl": [
+            52,
+            52,
+            52
+          ],
+          "br": [
+            194,
+            194,
+            194
+          ]
+        },
+        "worst": 0
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "PNG, 16-bit greyscale",
+      "file": "gray16.png",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "png",
+          "hasAlpha": false
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            87,
+            87,
+            87
+          ],
+          "tr": [
+            130,
+            130,
+            130
+          ],
+          "bl": [
+            52,
+            52,
+            52
+          ],
+          "br": [
+            194,
+            194,
+            194
+          ]
+        },
+        "worst": 0
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            87,
+            87,
+            87
+          ],
+          "tr": [
+            130,
+            130,
+            130
+          ],
+          "bl": [
+            52,
+            52,
+            52
+          ],
+          "br": [
+            194,
+            194,
+            194
+          ]
+        },
+        "worst": 0
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "JPEG, baseline",
+      "file": "baseline.jpg",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "mjpeg",
+          "hasAlpha": false
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            31
+          ],
+          "bl": [
+            31,
+            30,
+            220
+          ],
+          "br": [
+            229,
+            210,
+            20
+          ]
+        },
+        "worst": 1
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            31
+          ],
+          "bl": [
+            31,
+            30,
+            220
+          ],
+          "br": [
+            229,
+            210,
+            20
+          ]
+        },
+        "worst": 1
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "JPEG, progressive",
+      "file": "progressive.jpg",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "mjpeg",
+          "hasAlpha": false
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            31
+          ],
+          "bl": [
+            31,
+            30,
+            220
+          ],
+          "br": [
+            229,
+            210,
+            20
+          ]
+        },
+        "worst": 1
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            31
+          ],
+          "bl": [
+            31,
+            30,
+            220
+          ],
+          "br": [
+            229,
+            210,
+            20
+          ]
+        },
+        "worst": 1
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "JPEG, greyscale",
+      "file": "gray.jpg",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "mjpeg",
+          "hasAlpha": false
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            87,
+            87,
+            87
+          ],
+          "tr": [
+            130,
+            130,
+            130
+          ],
+          "bl": [
+            52,
+            52,
+            52
+          ],
+          "br": [
+            194,
+            194,
+            194
+          ]
+        },
+        "worst": 0
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            87,
+            87,
+            87
+          ],
+          "tr": [
+            130,
+            130,
+            130
+          ],
+          "bl": [
+            52,
+            52,
+            52
+          ],
+          "br": [
+            194,
+            194,
+            194
+          ]
+        },
+        "worst": 0
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "JPEG, CMYK",
+      "file": "cmyk.jpg",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "mjpeg",
+          "hasAlpha": true
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            30
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ]
+        },
+        "worst": 0
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            30
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ]
+        },
+        "worst": 0
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "JPEG stored sideways with orientation tag 6 (phone portrait/landscape)",
+      "file": "exif6.jpg",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "mjpeg",
+          "hasAlpha": false
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            31
+          ],
+          "bl": [
+            31,
+            30,
+            220
+          ],
+          "br": [
+            229,
+            210,
+            20
+          ]
+        },
+        "worst": 1
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            31
+          ],
+          "bl": [
+            31,
+            30,
+            220
+          ],
+          "br": [
+            229,
+            210,
+            20
+          ]
+        },
+        "worst": 1
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "JPEG stored upside down with orientation tag 3",
+      "file": "exif3.jpg",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "mjpeg",
+          "hasAlpha": false
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            31
+          ],
+          "bl": [
+            31,
+            30,
+            220
+          ],
+          "br": [
+            229,
+            210,
+            20
+          ]
+        },
+        "worst": 1
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            31
+          ],
+          "bl": [
+            31,
+            30,
+            220
+          ],
+          "br": [
+            229,
+            210,
+            20
+          ]
+        },
+        "worst": 1
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "JPEG stored sideways with orientation tag 8",
+      "file": "exif8.jpg",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "mjpeg",
+          "hasAlpha": false
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            31
+          ],
+          "bl": [
+            31,
+            30,
+            220
+          ],
+          "br": [
+            229,
+            210,
+            20
+          ]
+        },
+        "worst": 1
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            31
+          ],
+          "bl": [
+            31,
+            30,
+            220
+          ],
+          "br": [
+            229,
+            210,
+            20
+          ]
+        },
+        "worst": 1
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "JPEG stored mirrored with orientation tag 2",
+      "file": "exif2.jpg",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "mjpeg",
+          "hasAlpha": false
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            31
+          ],
+          "bl": [
+            31,
+            30,
+            220
+          ],
+          "br": [
+            229,
+            210,
+            20
+          ]
+        },
+        "worst": 1
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            31
+          ],
+          "bl": [
+            31,
+            30,
+            220
+          ],
+          "br": [
+            229,
+            210,
+            20
+          ]
+        },
+        "worst": 1
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "WebP, lossy",
+      "file": "lossy.webp",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "webp",
+          "hasAlpha": false
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            221,
+            30,
+            31
+          ],
+          "tr": [
+            30,
+            201,
+            30
+          ],
+          "bl": [
+            29,
+            30,
+            221
+          ],
+          "br": [
+            230,
+            210,
+            21
+          ]
+        },
+        "worst": 1
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            221,
+            30,
+            31
+          ],
+          "tr": [
+            30,
+            201,
+            30
+          ],
+          "bl": [
+            29,
+            30,
+            221
+          ],
+          "br": [
+            230,
+            210,
+            21
+          ]
+        },
+        "worst": 1
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "WebP, lossless with a transparent quadrant",
+      "file": "lossless-alpha.webp",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "webp",
+          "hasAlpha": true
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            0,
+            0,
+            0
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ]
+        },
+        "worst": 0
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            0,
+            0,
+            0
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ]
+        },
+        "worst": 0
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "WebP, animated (two frames)",
+      "file": "animated.webp",
+      "outcome": "refused-as-expected",
+      "detail": "unsupported_media: this WebP could not be read as a single picture (animated WebP is not supported)",
+      "typed": true
+    },
+    {
+      "case": "GIF, single frame",
+      "file": "static.gif",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "png",
+          "hasAlpha": true
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": [
+          "still-format"
+        ]
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            30
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ]
+        },
+        "worst": 0
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            30
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ]
+        },
+        "worst": 0
+      },
+      "notices": [
+        "converted"
+      ],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "GIF, animated (two frames)",
+      "file": "animated.gif",
+      "asset": {
+        "kind": "video",
+        "image": null,
+        "video": "h264 640x360",
+        "seconds": 1.001,
+        "conformed": [
+          "variable-frame-rate",
+          "codec"
+        ]
+      },
+      "still": {
+        "got": {
+          "tl": [
+            219,
+            30,
+            32
+          ],
+          "tr": [
+            29,
+            200,
+            35
+          ],
+          "bl": [
+            30,
+            30,
+            210
+          ],
+          "br": [
+            229,
+            211,
+            28
+          ]
+        },
+        "worst": 10
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            219,
+            30,
+            32
+          ],
+          "tr": [
+            29,
+            200,
+            35
+          ],
+          "bl": [
+            30,
+            30,
+            210
+          ],
+          "br": [
+            229,
+            211,
+            28
+          ]
+        },
+        "worst": 10
+      },
+      "notices": [
+        "converted"
+      ],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "BMP",
+      "file": "plain.bmp",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "png",
+          "hasAlpha": false
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": [
+          "still-format"
+        ]
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            30
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ]
+        },
+        "worst": 0
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            30
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ]
+        },
+        "worst": 0
+      },
+      "notices": [
+        "converted"
+      ],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "TIFF",
+      "file": "plain.tiff",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "png",
+          "hasAlpha": false
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": [
+          "still-format"
+        ]
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            30
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ]
+        },
+        "worst": 0
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            30
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ]
+        },
+        "worst": 0
+      },
+      "notices": [
+        "converted"
+      ],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "AVIF",
+      "file": "plain.avif",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 640,
+          "height": 360,
+          "codec": "png",
+          "hasAlpha": false
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": [
+          "still-format"
+        ]
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            29,
+            200,
+            28
+          ],
+          "bl": [
+            29,
+            30,
+            220
+          ],
+          "br": [
+            229,
+            210,
+            18
+          ]
+        },
+        "worst": 2
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            29,
+            200,
+            28
+          ],
+          "bl": [
+            29,
+            30,
+            220
+          ],
+          "br": [
+            229,
+            210,
+            18
+          ]
+        },
+        "worst": 2
+      },
+      "notices": [
+        "converted"
+      ],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "JPEG, 6000×3375 (20 megapixels)",
+      "file": "big-6000.jpg",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 6000,
+          "height": 3375,
+          "codec": "mjpeg",
+          "hasAlpha": false
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            31
+          ],
+          "bl": [
+            31,
+            30,
+            220
+          ],
+          "br": [
+            229,
+            210,
+            20
+          ]
+        },
+        "worst": 1
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            31
+          ],
+          "bl": [
+            31,
+            30,
+            220
+          ],
+          "br": [
+            229,
+            210,
+            20
+          ]
+        },
+        "worst": 1
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "PNG, portrait 360×640 in a landscape project",
+      "file": "portrait.png",
+      "asset": {
+        "kind": "image",
+        "image": {
+          "width": 360,
+          "height": 640,
+          "codec": "png",
+          "hasAlpha": false
+        },
+        "video": null,
+        "seconds": 0,
+        "conformed": false
+      },
+      "still": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            30
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ],
+          "barLeft": [
+            0,
+            0,
+            0
+          ],
+          "barRight": [
+            0,
+            0,
+            0
+          ]
+        },
+        "worst": 0
+      },
+      "preview": {
+        "got": {
+          "tl": [
+            220,
+            30,
+            30
+          ],
+          "tr": [
+            30,
+            200,
+            30
+          ],
+          "bl": [
+            30,
+            30,
+            220
+          ],
+          "br": [
+            230,
+            210,
+            20
+          ],
+          "barLeft": [
+            0,
+            0,
+            0
+          ],
+          "barRight": [
+            0,
+            0,
+            0
+          ]
+        },
+        "worst": 0
+      },
+      "notices": [],
+      "outcome": "shown-correctly"
+    },
+    {
+      "case": "SVG containing a script",
+      "file": "vector.svg",
+      "outcome": "refused-as-expected",
+      "detail": "unsupported_media: still image format svg is not supported yet",
+      "typed": true
+    }
+  ],
+  "checks": [
+    {
+      "name": "no image is accepted and then shown wrongly, sideways, stretched or not at all (24 files tried)",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "pictures converted at import say so in the library (5: static.gif, animated.gif, plain.bmp, plain.tiff, plain.avif); the others show no notice",
+      "ok": true,
+      "detail": [
+        {
+          "file": "static.gif",
+          "notices": [
+            "converted"
+          ]
+        },
+        {
+          "file": "animated.gif",
+          "notices": [
+            "converted"
+          ]
+        },
+        {
+          "file": "plain.bmp",
+          "notices": [
+            "converted"
+          ]
+        },
+        {
+          "file": "plain.tiff",
+          "notices": [
+            "converted"
+          ]
+        },
+        {
+          "file": "plain.avif",
+          "notices": [
+            "converted"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "every refusal is a typed error (2 refusal(s))",
+      "ok": true,
+      "detail": [
+        {
+          "case": "WebP, animated (two frames)",
+          "detail": "unsupported_media: this WebP could not be read as a single picture (animated WebP is not supported)"
+        },
+        {
+          "case": "SVG containing a script",
+          "detail": "unsupported_media: still image format svg is not supported yet"
+        }
+      ]
+    }
+  ]
+}

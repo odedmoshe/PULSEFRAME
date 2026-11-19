@@ -1,0 +1,509 @@
+{
+  "ranAt": "2026-11-19T05:50:25.779Z",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpus": 4,
+    "memoryGiB": 15.7,
+    "loadAtStart": [
+      2.78,
+      3.47,
+      3.21
+    ]
+  },
+  "freeDiskBytesAtStart": 5595459584,
+  "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
+  "notVerifiedHere": [
+    "a real phone and its pickers (iOS, Android; whether they hand over the original HEVC with its date)",
+    "HEIC pictures",
+    "the camera reading the on-screen QR",
+    "a real home network, router client isolation",
+    "the Windows firewall prompt and the \"public network\" profile",
+    "a VPN as the default route",
+    "a phone browser's own local-network permission prompt",
+    "the laptop's ffmpeg (this run used the container's)",
+    "Chrome's HTTPS-by-default exemption for private addresses"
+  ],
+  "fixtures": {
+    "A": "dcd692efe9c224d0c96b4449a349fc55439197b18a84bb8a77b09e547489082e",
+    "B": "128af7d26d02ea7996787c5a605b979e1e06f6244a9eb98790bdd4d48c584eeb",
+    "C": "83d986c20d5156220f4e311da51950f7e6582666d995cba2239ad9122df5d71a",
+    "cReadByFfprobe": {
+      "dateTimeOriginal": "2023:12:31 21:45:10",
+      "orientation": "6"
+    },
+    "clips": 20
+  },
+  "checks": [
+    {
+      "id": "F0",
+      "name": "the EXIF fixture is what it says, read by an independent reader (ffprobe -show_frames): DateTimeOriginal 2023:12:31 21:45:10, Orientation 6",
+      "pass": true,
+      "numbers": {
+        "dateTimeOriginal": "2023:12:31 21:45:10",
+        "orientation": "6"
+      }
+    },
+    {
+      "id": "P1",
+      "name": "the main server: its port on the machine's network address is refused, a spoofed Host gets 403 forbidden_host, PF_HOST=0.0.0.0 refuses to start",
+      "pass": true,
+      "numbers": {
+        "lan": "192.0.2.2",
+        "lanRefused": true,
+        "spoof": 403,
+        "code": "forbidden_host",
+        "hostThrows": true
+      }
+    },
+    {
+      "id": "P2",
+      "name": "no code: the door port refuses connections",
+      "pass": true,
+      "numbers": {
+        "port": 8952
+      }
+    },
+    {
+      "id": "P3",
+      "name": "an agent token cannot open a code (403 owner_required); the owner can; it expires 600 s after it was issued",
+      "pass": true,
+      "numbers": {
+        "agent": 403,
+        "code": "owner_required",
+        "lifeSeconds": 600
+      }
+    },
+    {
+      "id": "P3c",
+      "name": "closing the code closes its listener",
+      "pass": true,
+      "numbers": {}
+    },
+    {
+      "id": "P3b",
+      "name": "without the override this machine has no private address: GET /drop/addresses is empty and POST …/drop answers 409 no_private_network",
+      "pass": true,
+      "numbers": {
+        "status": 409,
+        "code": "no_private_network",
+        "addresses": []
+      }
+    },
+    {
+      "id": "P8b",
+      "name": "an unclaimed code with a 1-minute lifetime (PF_DROP_TTL_MINUTES=1, the shortest allowed) is gone 61.5 s after it was issued, and its port refuses (the 10-minute default is held by drop.test.ts with a fake clock)",
+      "pass": true,
+      "numbers": {
+        "openAtStart": true,
+        "after": null,
+        "portGone": true
+      }
+    },
+    {
+      "id": "P4",
+      "name": "the dialog (1440×900, Hebrew): the QR drawn is the encoding of exactly the issued URL (same modules), the typed address and the PIN match the code, the dialog is named and holds the focus",
+      "pass": true,
+      "numbers": {
+        "qrPathEqual": true,
+        "typed": "127.0.0.1:8952",
+        "pinMatches": true,
+        "dialogName": "dialog|ייבוא מהטלפון",
+        "focusInside": true
+      }
+    },
+    {
+      "id": "P4b",
+      "name": "the QR as shown on screen, read by an independent decoder (jsQR), gives exactly the issued URL; with one finder corner wiped it does not",
+      "pass": true,
+      "numbers": {
+        "size": [
+          280,
+          281
+        ],
+        "decodedVersion": 4,
+        "equalsUrl": true,
+        "controlRead": null
+      }
+    },
+    {
+      "id": "P4c",
+      "name": "Esc hides the dialog and leaves the chip in the drawer header with the time left (m:ss); the chip opens it again",
+      "pass": true,
+      "numbers": {
+        "chip": "קוד לטלפון פתוח · 10:00",
+        "reopened": true
+      }
+    },
+    {
+      "id": "P5",
+      "name": "the phone (iPhone viewport, he-IL): the page is Hebrew, right to left, sets no cookie, and stores A, B and C; A's 201 arrives while its job is still waiting or converting",
+      "pass": true,
+      "numbers": {
+        "langDir": "he|rtl",
+        "cookies": 0,
+        "aJobAtItsSave": {
+          "state": "waiting",
+          "waitingFor": "check"
+        },
+        "aSavedMs": 91,
+        "allSavedMs": 115
+      }
+    },
+    {
+      "id": "P6",
+      "name": "each stored original (A, B and C) equals its source byte for byte; A is converted for editing and names its original; B is stored as it is",
+      "pass": true,
+      "numbers": {
+        "A": {
+          "converted": true,
+          "reasons": [
+            "variable-frame-rate",
+            "rotation",
+            "codec"
+          ]
+        },
+        "B": {
+          "converted": false
+        },
+        "C": {
+          "kind": "image",
+          "converted": false
+        }
+      }
+    },
+    {
+      "id": "P7",
+      "name": "capture dates read from the ORIGINAL files: A from Apple's creationdate (18:03:22, +3 h), B from creation_time (UTC, worn as Israel time, zone recorded), C from EXIF (21:45:10, +2 h); the stored original still carries its tags",
+      "pass": true,
+      "numbers": {
+        "A": {
+          "at": "2025-08-14T18:03:22",
+          "utcOffsetMinutes": 180,
+          "source": "container"
+        },
+        "B": {
+          "at": "2024-03-01T11:30:00",
+          "utcOffsetMinutes": null,
+          "source": "container",
+          "assumedZone": "Asia/Jerusalem"
+        },
+        "C": {
+          "at": "2023-12-31T21:45:10",
+          "utcOffsetMinutes": 120,
+          "source": "exif"
+        },
+        "storedOriginalTags": {
+          "compatible_brands": "isomiso2mp41",
+          "major_brand": "isom",
+          "minor_version": "512",
+          "creation_time": "2025-08-14T15:03:22.000000Z",
+          "com.apple.quicktime.creationdate": "2025-08-14T18:03:22+0300"
+        }
+      }
+    },
+    {
+      "id": "P8",
+      "name": "a reload in the phone continues the batch (same address: the original token claims again); a second device (127.0.0.3) is refused 409 code_already_used, and the PIN no longer works",
+      "pass": true,
+      "numbers": {
+        "afterReload": "clip-00.mp484 KBנשמר במחשב ✓",
+        "second": [
+          409,
+          "code_already_used"
+        ],
+        "pin": [
+          409,
+          "code_already_used"
+        ]
+      }
+    },
+    {
+      "id": "P9",
+      "name": "every API path and method of the main server, plus /mcp, the app's pages and traversal forms, answers 404 on the door with an empty body, no cookie and no CORS header (544 requests); the page holds no project id or name and no main-server token",
+      "pass": true,
+      "numbers": {
+        "requests": 544,
+        "bad": [],
+        "leaks": []
+      }
+    },
+    {
+      "id": "P10",
+      "name": "a valid session can read nothing: GET /upload and an API path are 404",
+      "pass": true,
+      "numbers": {
+        "session": true,
+        "upload": 404,
+        "api": 404
+      }
+    },
+    {
+      "id": "P17b",
+      "name": "the phone case: owner edit, then a phone import lands; the owner's Ctrl+Z undoes the owner's edit and the phone file stays",
+      "pass": true,
+      "numbers": {
+        "mark": 200,
+        "phone": 201,
+        "undo": 200,
+        "markers": 0
+      }
+    },
+    {
+      "id": "P15",
+      "name": "converted files' cards in the editor: one goes «ממתין» → «ממיר N%» → «מוכן» in that order, a conversion shows at least two increasing percentages, and both end as asset cards",
+      "pass": true,
+      "numbers": {
+        "states": {
+          "card-hevc.mp4": [
+            "ממתין",
+            "ממיר 0%",
+            "ממיר 21%",
+            "ממיר 53%",
+            "ממיר 98%",
+            "מוכן"
+          ],
+          "card2-hevc.mp4": [
+            "ממתין",
+            "ממיר 0%",
+            "ממיר 14%",
+            "ממיר 53%",
+            "מוכן"
+          ]
+        },
+        "assetCards": true
+      }
+    },
+    {
+      "id": "P15b",
+      "name": "random bytes named .mp4 end as «נכשל» with a reason, and «הסרה» removes the card",
+      "pass": true,
+      "numbers": {
+        "failedCard": true,
+        "reason": "הקובץ אינו סרטון, צליל או תמונה שאפשר לקרוא",
+        "removed": true
+      }
+    },
+    {
+      "id": "P15c",
+      "name": "a retry after an injected disk_full succeeds",
+      "pass": null,
+      "numbers": {},
+      "blocked": "the running server has no seam to inject a full disk (freeBytes is fixed to statfs in index.ts); retry after disk_full is covered by importQueue.test.ts with an injected freeBytes"
+    },
+    {
+      "id": "P16",
+      "name": "a folder of 25 files (3 not media): 22 imports and the skipped notice «דילגנו על 3 קבצים שאינם מדיה»",
+      "pass": true,
+      "numbers": {
+        "folderAssets": 22,
+        "skipped": "דילגנו על 3 קבצים שאינם מדיה"
+      }
+    },
+    {
+      "id": "P17",
+      "name": "one actor: owner edit, then the owner's background import (POST …/imports): Ctrl+Z undoes the edit, the import stays, redo is available; control: the synchronous POST …/assets (kind edit) is removed by Ctrl+Z",
+      "pass": true,
+      "numbers": {
+        "edit": 200,
+        "undo": 200,
+        "markerUndone": true,
+        "bgKept": true,
+        "redo": 200,
+        "control": {
+          "sync": 201,
+          "undo": 200,
+          "removed": true
+        }
+      }
+    },
+    {
+      "id": "P12",
+      "name": "the per-file cap (64 MiB): an 80 MiB body is refused 413 upload_too_large before it is read, while the client is still sending (a JSON answer, not a reset); the phone page refuses the file itself in Hebrew; a browser still sending reads the door's refusal",
+      "pass": true,
+      "numbers": {
+        "wire": [
+          413,
+          "upload_too_large",
+          null
+        ],
+        "pageText": "big-80m.mp480 MBנכשל · הקובץ גדול מדי להעלאה.נסו שוב",
+        "inBrowser": {
+          "status": 413,
+          "body": "{\"error\":{\"code\":\"upload_too_large\"}}"
+        }
+      }
+    },
+    {
+      "id": "P11",
+      "name": "a refused upload stores nothing: the blobs directory and the job rows are as before, without running clean-up",
+      "pass": true,
+      "numbers": {
+        "blobs": [
+          14431024,
+          14431024,
+          14431024
+        ],
+        "jobs": [
+          32,
+          32
+        ]
+      }
+    },
+    {
+      "id": "P11b",
+      "name": "the storage ceiling: with 40 MiB of room, a 20 MiB file is accepted and a declared 50 MiB file (under the per-file cap) is refused 507 storage_quota_exceeded while it is still being sent",
+      "pass": true,
+      "numbers": {
+        "first": 201,
+        "second": [
+          507,
+          "storage_quota_exceeded",
+          null
+        ]
+      }
+    },
+    {
+      "id": "P11c",
+      "name": "a junk upload that was accepted and then refused as unsupported leaves the blobs directory at its earlier size, with no clean-up run",
+      "pass": true,
+      "numbers": {
+        "before": 14431024,
+        "after": 14431024,
+        "job": "unsupported_media"
+      }
+    },
+    {
+      "id": "P12b",
+      "name": "the code budget (10 MiB): a declared 12 MiB file is refused 413 code_budget while it is still being sent",
+      "pass": true,
+      "numbers": {
+        "status": 413,
+        "code": "code_budget"
+      }
+    },
+    {
+      "id": "P13",
+      "name": "killed with SIGKILL during a conversion and restarted: the code is gone (its port refuses), all 20 files import exactly once (20 assets whose originals are the 20 sources), the interrupted job ran again (attempt 2), and no temporary file is left once any orphan ffmpeg has exited",
+      "pass": true,
+      "numbers": {
+        "killedPid": 4739,
+        "convertingSeen": true,
+        "doorClosed": true,
+        "jobs": 20,
+        "succeeded": 20,
+        "assets": 20,
+        "distinctOriginals": 20,
+        "interruptedAttempt": 2,
+        "orphanFfmpegAfterKill": "4787",
+        "leftovers": [],
+        "secondsToAllImported": 9.307
+      }
+    },
+    {
+      "id": "P14",
+      "name": "owner commits stay responsive: while imports convert and while a 300 MB phone upload arrives, p95 <= max(4 × idle p95, 120 ms) and the slowest <= 1 s",
+      "pass": true,
+      "numbers": {
+        "idle": {
+          "p50": 3.4,
+          "p95": 6.9,
+          "max": 22.6
+        },
+        "convertingImports": {
+          "p50": 3.6,
+          "p95": 8.3,
+          "max": 18.4
+        },
+        "during300MBUpload": {
+          "p50": 4.7,
+          "p95": 11.3,
+          "max": 15.5
+        },
+        "limitMs": 120,
+        "upload": 201,
+        "load": [
+          1.86,
+          2.72,
+          2.96
+        ]
+      }
+    },
+    {
+      "id": "P14b",
+      "name": "in the editor, key-to-DOM time of split and move during a conversion (p95 <= 150 ms) with the picker enabled",
+      "pass": null,
+      "numbers": {},
+      "blocked": "not built in this run: the editor-interactions proof measures key-to-DOM without a conversion; this proof measured the server side only"
+    },
+    {
+      "id": "P18",
+      "name": "the same assets as before the queue: A–E uploaded in a fresh data directory through today's POST …/assets (the queue) equal the step-0 record (docs/evidence/phone-drop-baseline.json, recorded before ingest.ts changed), conformed bytes included",
+      "pass": true,
+      "numbers": {
+        "exit": 0,
+        "lines": [
+          "A: same asset and conformed bytes as recorded",
+          "B: same asset and conformed bytes as recorded",
+          "C: same asset and conformed bytes as recorded",
+          "D: same asset and conformed bytes as recorded",
+          "E: same asset and conformed bytes as recorded"
+        ],
+        "stderr": ""
+      }
+    },
+    {
+      "id": "P19",
+      "name": "the phone page in Hebrew and in English: every visible control has a name, a status live region exists (Hebrew first: he/rtl for a Hebrew phone); no door answer carried a stack trace (the editor dialog and cards are audited by audit:a11y)",
+      "pass": true,
+      "numbers": {
+        "he": {
+          "lang": "he",
+          "dir": "rtl",
+          "controls": 3,
+          "unnamed": [],
+          "live": true
+        },
+        "en": {
+          "lang": "en",
+          "dir": "ltr",
+          "controls": 3,
+          "unnamed": [],
+          "live": true
+        },
+        "doorAnswersRead": 581,
+        "stackTraces": 0
+      }
+    },
+    {
+      "id": "P20",
+      "name": "SIGTERM with an upload in flight: the server exits, the door port refuses, the upload does not end as stored, and no temporary file is left",
+      "pass": true,
+      "numbers": {
+        "exit": 0,
+        "upload": [
+          0,
+          "ECONNRESET",
+          null
+        ],
+        "leftovers": []
+      }
+    }
+  ],
+  "notes": {
+    "admittedOverride": [
+      "127.0.0.1"
+    ],
+    "secondDeviceInABrowser": "not verified: a browser from another address cannot be made in this container; the page's Hebrew text for 409 is held by dropPage.test.ts",
+    "p18Frames": "barcode frames at three positions between preview, server still and export: not run in this proof (the parity suite and proof:phase4 hold the shared compositor)",
+    "pageLanguage": "the page follows navigator.language: an English-locale phone gets the English page first (review item; the owner decides whether a Hebrew household with en-US phones should get Hebrew first)"
+  },
+  "seconds": 140,
+  "summary": {
+    "passed": 31,
+    "failed": [],
+    "blocked": [
+      "P15c",
+      "P14b"
+    ]
+  }
+}

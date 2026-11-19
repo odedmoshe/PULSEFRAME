@@ -1,0 +1,17 @@
+/* The filmstrip or waveform inside a timeline clip (ClipVisuals.tsx). The waveform is drawn in this layer's own `color`,
+   which is the colour of the clip's kind (--k: voice, music, sound effect), so it follows the theme. The label of the clip
+   sits on its own plate (timeline.css), so no gradient is laid over the picture. */
+.timeline.pf-ds .clip .clip-visual { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: inherit; color: color-mix(in srgb, var(--k) 78%, transparent); }
+.timeline.pf-ds .clip .clip-visual[data-kind='video'] { inset-block-start: 2px; border-radius: 0 0 var(--pf-r-clip) var(--pf-r-clip); }
+.timeline.pf-ds .clip .clip-visual canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; background: transparent; box-shadow: none; border-radius: 0; }
+.timeline.pf-ds .track .clip .clip-visual[data-derivative-state]::after { content: none; }
+/* still being prepared: a quiet moving hatch (static under reduced motion); never black */
+.timeline.pf-ds .clip .clip-visual[data-derivative-state='processing'] {
+  background: repeating-linear-gradient(-45deg, var(--pf-line-strong) 0 6px, transparent 6px 12px);
+  background-size: 17px 17px;
+  animation: clip-visual-stripes 1.2s linear infinite;
+}
+@keyframes clip-visual-stripes { to { background-position: 17px 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .timeline.pf-ds .clip .clip-visual[data-derivative-state='processing'] { animation: none; }
+}

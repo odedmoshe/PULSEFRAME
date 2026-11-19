@@ -1,9 +1,16 @@
-import { describe, expect, it } from 'vitest';
-import { CapabilityError, ComfyUIAdapter, graphDigest, importComfyWorkflow, ImportError, ProviderError, publicationBlockers, resolveGraph, SMOKE_SOLID_IMAGE, type CapabilityDescriptor } from './index.ts';
+import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterAll, describe, expect, it } from 'vitest';
+import { BUILTIN_CAPABILITIES, CapabilityError, ComfyUIAdapter, graphDigest, importComfyWorkflow, ImportError, ProviderError, publicationBlockers, resolveGraph, SMOKE_SOLID_IMAGE, IMAGE_UPSCALE, IMAGE_UPSCALE_4X, VIDEO_SMOOTH_SLOWMO, type CapabilityDescriptor } from './index.ts';
+
+const tmpDirs: string[] = [];
+afterAll(() => { for (const d of tmpDirs) fs.rmSync(d, { recursive: true, force: true }); });
 
 const codes = (d: CapabilityDescriptor, profile: 'commercial' | 'research' = 'commercial') => publicationBlockers(d, profile).map((b) => b.code);
 const thrown = (fn: () => unknown) => { try { fn(); } catch (e: any) { return e.code as string; } return 'ok'; };
-const withFlags = (d: CapabilityDescriptor): CapabilityDescriptor => ({ ...d, qualification: Object.fromEntries(Object.keys(d.qualification).map((k) => [k, { status: 'pass' }])) as any });
+const withFlags = <D extends CapabilityDescriptor>(d: D): D => ({ ...d, qualification: Object.fromEntries(Object.keys(d.qualification).map((k) => [k, { status: 'pass' }])) as any });
 
 // A graph shaped like a typical model workflow, including a custom node and a URL.
 const modelGraph = {
@@ -22,8 +29,8 @@ describe('workflow import (FF-03)', () => {
     expect(draft.state).toBe('draft');
     expect(draft.models.map((m) => m.path)).toEqual(['some_model.safetensors', 'cameraman_v2.safetensors', 'https://example.com/weights.bin']);
     expect(draft.models.every((m) => m.sha256 === null && m.commercialUse === 'unknown')).toBe(true);
-    expect(draft.inputs.find((i) => i.binding.input === 'seed')?.type).toBe('seed');
-    expect(draft.inputs.find((i) => i.binding.nodeId === '8')?.type).toBe('image');
+    expect(draft.inputs.find((i) => i.binding?.input === 'seed')?.type).toBe('seed');
+    expect(draft.inputs.find((i) => i.binding?.nodeId === '8')?.type).toBe('image');
     expect(draft.outputs.map((o) => o.nodeId)).toEqual(['10']);
     expect(draft.egress).toBe('graph-defined');
     const c = new Set(blockers.map((b) => b.code));
@@ -53,12 +60,12 @@ describe('qualification and licensing (FF-04, §8 of the addendum)', () => {
     expect(codes(SMOKE_SOLID_IMAGE).sort()).toEqual(['not_executed', 'not_hardwareQualified']);
   });
   it('a research-only model excludes the workflow from the commercial profile even when everything else passes', () => {
-    const d = withFlags({ ...SMOKE_SOLID_IMAGE, id: 'test.camera-copy', models: [{ role: 'lora', path: 'cameraman_v2.safetensors', publisher: 'Cseti', revision: 'abc', sha256: 'a'.repeat(64), bytes: 1000, license: 'research-only', licenseEvidence: 'publisher model card', commercialUse: 'prohibited', gated: false }] });
+    const d = withFlags({ ...SMOKE_SOLID_IMAGE, id: 'test.camera-copy', models: [{ role: 'lora', path: 'cameraman_v2.safetensors', publisher: 'Cseti', revision: 'abc', sha256: 'a'.repeat(64), bytes: 1000, license: 'research-only', licenseEvidence: 'publisher model card', commercialUse: 'prohibited', gated: false, source: null, attribution: null }] });
     expect(codes(d, 'commercial')).toEqual(['model_not_commercially_eligible']);
     expect(codes(d, 'research')).toEqual([]);
   });
   it('a size or a file name is not integrity: a model without a digest stays unresolved', () => {
-    const d = withFlags({ ...SMOKE_SOLID_IMAGE, models: [{ role: 'ckpt', path: 'm.safetensors', publisher: 'p', revision: 'r', sha256: null, bytes: 123, license: 'x', licenseEvidence: 'y', commercialUse: 'allowed', gated: false }] });
+    const d = withFlags({ ...SMOKE_SOLID_IMAGE, models: [{ role: 'ckpt', path: 'm.safetensors', publisher: 'p', revision: 'r', sha256: null, bytes: 123, license: 'x', licenseEvidence: 'y', commercialUse: 'allowed', gated: false, source: null, attribution: null }] });
     expect(codes(d)).toEqual(['unresolved_model']);
   });
   it('editing a reviewed graph invalidates its digest', () => {
@@ -98,5 +105,78 @@ describe('ComfyUI adapter policy', () => {
     const r = await a.probe(SMOKE_SOLID_IMAGE);
     expect(r).toMatchObject({ reachable: false, wokeWorker: false });
     expect(r.problems.length).toBe(1);
+  });
+});
+
+describe('comfy.image.upscale-4x is replaced by comfy.image.upscale 0.2.0', () => {
+  it('the registry lists the new descriptor once and not the old id; the old export name is an alias of the new descriptor', () => {
+    expect(BUILTIN_CAPABILITIES.map((d) => d.id)).not.toContain('comfy.image.upscale-4x');
+    expect(BUILTIN_CAPABILITIES.filter((d) => d.id === 'comfy.image.upscale')).toEqual([IMAGE_UPSCALE]);
+    expect(IMAGE_UPSCALE_4X).toBe(IMAGE_UPSCALE);
+  });
+});
+
+/**
+ * The ComfyUI adapter's transfer path (ADR-0017). The provider is a LABELLED FAKE `fetch` in this process: it answers the few ComfyUI
+ * routes the adapter calls (/history, /view, /queue) from memory. No ComfyUI runs and no network is used.
+ */
+describe('ComfyUI adapter transfers (labelled fake fetch, no ComfyUI)', () => {
+  const frames = [Buffer.alloc(300_000, 7), Buffer.from('second frame'), Buffer.alloc(64, 1)];
+  const history = { p1: { status: { completed: true }, outputs: { '5': { images: frames.map((_, i) => ({ filename: `ComfyUI_temp_${i}.png`, subfolder: '', type: 'temp' })), animated: [false] } } } };
+  const fakeFetch = (opts: { stall?: boolean; lie?: boolean } = {}) => (async (url: string | URL, init?: RequestInit) => {
+    const u = new URL(String(url));
+    if (u.pathname.startsWith('/history/')) return Response.json(history);
+    if (u.pathname === '/queue') return Response.json({ queue_running: [[1, 'p9', {}, { pulseframe_request: 'base:0' }, []], [2, 'p8', {}, { client_id: 'someone' }, []]], queue_pending: [] });
+    if (u.pathname === '/view') {
+      const i = Number(/_(\d+)\.png$/.exec(u.searchParams.get('filename')!)![1]);
+      const body = frames[i]!;
+      if (opts.stall) {
+        // sends the first bytes, then nothing: the allowance (base + bytes / rate) must end the transfer
+        const stream = new ReadableStream({ start(c) { c.enqueue(body.subarray(0, 10)); init?.signal?.addEventListener('abort', () => c.error(new Error('aborted'))); } });
+        return new Response(stream, { headers: { 'content-length': String(body.length) } });
+      }
+      return new Response(body, { headers: { 'content-length': String(opts.lie ? body.length + 5 : body.length) } });
+    }
+    return new Response('not found', { status: 404 });
+  }) as typeof fetch;
+  const outDir = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-comfy-collect-')); tmpDirs.push(d); return d; };
+  it('collect streams every file of the declared output into destDir, in the provider\'s order, with exact bytes and sha256', async () => {
+    const a = new ComfyUIAdapter('http://127.0.0.1:8188', { fetch: fakeFetch() });
+    const dir = outDir();
+    const out = await a.collect(VIDEO_SMOOTH_SLOWMO, 'p1', dir);
+    expect(out.map((o) => o.fileName)).toEqual(['ComfyUI_temp_0.png', 'ComfyUI_temp_1.png', 'ComfyUI_temp_2.png']);
+    for (const [i, o] of out.entries()) {
+      expect(path.dirname(o.path)).toBe(dir);
+      expect(o.bytes).toBe(frames[i]!.length);
+      expect(o.sha256).toBe(createHash('sha256').update(frames[i]!).digest('hex'));
+      expect(fs.readFileSync(o.path).equals(frames[i]!)).toBe(true);
+      expect(o).toMatchObject({ name: 'video', role: 'primary', mediaType: 'video' });
+    }
+  });
+  it('a transfer that stalls ends within base + bytes / rate as output_missing and leaves no partial file', async () => {
+    const a = new ComfyUIAdapter('http://127.0.0.1:8188', { fetch: fakeFetch({ stall: true }), timeouts: { baseMs: 150, bytesPerSecond: 10_000_000 } });
+    expect(a.transferTimeoutMs(300_000)).toBe(180);
+    const dir = outDir();
+    const t0 = Date.now();
+    const e = await a.collect(VIDEO_SMOOTH_SLOWMO, 'p1', dir).catch((x) => x);
+    expect(e).toBeInstanceOf(ProviderError);
+    expect(e.code).toBe('output_missing');
+    expect(e.message).toMatch(/time allowance/);
+    expect(Date.now() - t0).toBeLessThan(5_000);
+    expect(fs.readdirSync(dir)).toEqual([]);
+  });
+  it('a body shorter than its stated length is output_missing, never a silently truncated file', async () => {
+    const a = new ComfyUIAdapter('http://127.0.0.1:8188', { fetch: fakeFetch({ lie: true }) });
+    const e = await a.collect(VIDEO_SMOOTH_SLOWMO, 'p1', outDir()).catch((x) => x);
+    expect(e).toMatchObject({ code: 'output_missing' });
+  });
+  it('the default allowance is 15 s plus 1 s per 20 MB, for stage and /view alike', () => {
+    const a = new ComfyUIAdapter('http://127.0.0.1:8188');
+    expect(a.transferTimeoutMs(0)).toBe(15_000);
+    expect(a.transferTimeoutMs(200_000_000)).toBe(25_000);
+  });
+  it('running() lists the running prompts with the request id we stored (null for prompts that are not ours)', async () => {
+    const a = new ComfyUIAdapter('http://127.0.0.1:8188', { fetch: fakeFetch() });
+    expect(await a.running()).toEqual([{ promptId: 'p9', clientRequestId: 'base:0' }, { promptId: 'p8', clientRequestId: null }]);
   });
 });

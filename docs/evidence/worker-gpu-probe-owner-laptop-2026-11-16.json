@@ -1,0 +1,20 @@
+{
+ "what": "Output table of `pnpm probe:gpu` on the reference laptop (Windows 11, Intel UHD + NVIDIA RTX 3050 Laptop 4 GB), pasted by the owner. One run. Timings are one sample of one simple workload (60 full-frame passes of a 16-step shader at 1080x1920): not performance figures.",
+ "results": [
+  { "variant": "default headless", "adapter": null },
+  { "variant": "headless + software adapter (SwiftShader)", "adapter": null },
+  { "variant": "headless + webgpu enabled", "adapter": null },
+  { "variant": "headless + gpu enabled", "error": "requestDevice failed: DynamicLib.Open: dxil.dll Windows Error: 87" },
+  { "variant": "headless + gpu enabled + D3D11", "error": "requestDevice failed: DynamicLib.Open: dxil.dll Windows Error: 87" },
+  { "variant": "headless + gpu enabled + high-performance GPU", "error": "requestDevice failed: DynamicLib.Open: dxil.dll Windows Error: 87" },
+  { "variant": "window off-screen (not headless)", "adapter": "hardware, intel gen-9", "msPerFrame": 4.71, "pixelsMatchReference": true },
+  { "variant": "window off-screen + high-performance GPU", "adapter": "hardware, nvidia ampere", "msPerFrame": 0.34, "pixelsMatchReference": true },
+  { "variant": "installed Chrome, headless + gpu enabled", "adapter": "hardware, nvidia ampere", "msPerFrame": 0.33, "pixelsMatchReference": true }
+ ],
+ "reading": [
+  "The bundled Chromium in headless mode cannot use WebGPU on this machine: no adapter, or the device cannot be created (dxil.dll cannot be loaded).",
+  "The bundled Chromium with a real window placed off-screen gets a hardware adapter; with --force_high_performance_gpu that adapter is the RTX 3050.",
+  "The installed Chrome in headless mode with the GPU enabled also gets the RTX 3050.",
+  "The fixed shader gives the reference pixels on Intel, on NVIDIA and on the software adapter of the development container."
+ ]
+}

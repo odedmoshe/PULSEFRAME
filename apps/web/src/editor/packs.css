@@ -1,0 +1,49 @@
+/* The pack shelf, the pack page and the pack fields (ADR-0022). Tokens and the .pf-ds root come from the redesign (ds/tokens.css,
+   ds/primitives.css). Logical properties only (RTL first); no animation outside prefers-reduced-motion: no-preference. */
+.pf-shelf { display: grid; gap: var(--pf-sp-5); color: var(--pf-text); }
+.pf-shelf-head { margin: 0; font-size: var(--pf-fs-md); line-height: var(--pf-lh-md); font-weight: var(--pf-fw-semibold); }
+.pf-shelf-intro, .pf-shelf-empty { margin: 0; color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-shelf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--pf-sp-5); margin: 0; padding: 0; list-style: none; }
+.pf-shelf-item { display: grid; gap: var(--pf-sp-3); align-content: start; }
+.pf-shelf-item.is-suggested { padding: var(--pf-sp-3); border-radius: var(--pf-r-lg); background: var(--pf-pulse-soft); box-shadow: 0 0 0 1px var(--pf-pulse); }
+.pf-shelf-suggest { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3); }
+.pf-shelf-reason { color: var(--pf-pulse); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); font-weight: var(--pf-fw-medium); }
+.pf-shelf-count { color: var(--pf-text-2); font-size: var(--pf-fs-digits); line-height: var(--pf-lh-digits); }
+.pf-shelf-cover { display: grid; grid-template-columns: repeat(3, 1fr); align-items: center; gap: var(--pf-sp-3); inline-size: 100%; block-size: 100%; padding: var(--pf-sp-5); box-sizing: border-box; }
+.pf-shelf-cover img { inline-size: 100%; block-size: 48px; object-fit: contain; }
+
+.pf-pack { display: grid; gap: var(--pf-sp-5); color: var(--pf-text); }
+.pf-pack-top { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-4); }
+.pf-pack-title { margin: 0; font-size: var(--pf-fs-lg); line-height: var(--pf-lh-lg); font-weight: var(--pf-fw-semibold); }
+.pf-pack-hint, .pf-pack-note { margin: 0; color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-pack-panel { display: grid; gap: var(--pf-sp-4); }
+.pf-pack-list { display: grid; gap: var(--pf-sp-3); margin: 0; padding: 0; list-style: none; }
+.pf-pack-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--pf-sp-4); padding: var(--pf-sp-4) var(--pf-sp-5); border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: 0 0 0 1px var(--pf-line-strong); }
+.pf-pack-row-text { display: grid; gap: var(--pf-sp-1); min-inline-size: 0; }
+.pf-pack-row-name { font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); font-weight: var(--pf-fw-medium); overflow-wrap: anywhere; }
+.pf-pack-row-hint { color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); overflow-wrap: anywhere; }
+.pf-pack-row-pic { inline-size: 40px; block-size: 40px; object-fit: contain; margin-inline-end: var(--pf-sp-4); }
+.pf-pack-elements { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: var(--pf-sp-4); margin: 0; padding: 0; list-style: none; }
+.pf-pack-sub { margin: var(--pf-sp-4) 0 0; color: var(--pf-text-2); font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-medium); }
+.pf-pack-status { margin: 0; padding: var(--pf-sp-3) var(--pf-sp-5); border-radius: var(--pf-r-sm); background: var(--pf-surface-3); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-pack-status.is-err { color: var(--pf-danger); background: var(--pf-danger-soft); }
+.pf-pack-select { display: grid; gap: var(--pf-sp-2); }
+.pf-pack-select select { block-size: var(--pf-h-md); padding-inline: var(--pf-sp-4); border-radius: var(--pf-r-sm); border: 0; background: var(--pf-surface-2); color: var(--pf-text); box-shadow: 0 0 0 1px var(--pf-line-control); font: inherit; }
+.pf-pack-select select:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+
+.pf-pfields { display: grid; gap: var(--pf-sp-5); margin: 0; padding: var(--pf-sp-5); border: 0; border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: 0 0 0 1px var(--pf-line-strong); min-inline-size: 0; color: var(--pf-text); }
+.pf-pfields-legend { padding-inline: var(--pf-sp-3); font-size: var(--pf-fs-sm); font-weight: var(--pf-fw-semibold); }
+.pf-pfield { display: grid; gap: var(--pf-sp-2); }
+.pf-pfield-label { color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); font-weight: var(--pf-fw-medium); }
+.pf-pfield-why { color: var(--pf-text-3); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-pfield-candles { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-4); }
+.pf-pfield-heb { margin: 0; font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); min-block-size: var(--pf-lh-sm); }
+.pf-pfield-evening { color: var(--pf-text-2); }
+.pf-pinput { block-size: var(--pf-h-md); padding-inline: var(--pf-sp-5); border: 0; border-radius: var(--pf-r-sm); background: var(--pf-surface-1); color: var(--pf-text); box-shadow: 0 0 0 1px var(--pf-line-control); font: inherit; font-size: var(--pf-fs-sm); box-sizing: border-box; inline-size: 100%; }
+.pf-pinput:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+.pf-pinput[aria-invalid='true'] { box-shadow: 0 0 0 1.5px var(--pf-danger); }
+@media (prefers-reduced-motion: no-preference) { .pf-pack-row, .pf-shelf-item { transition: background-color var(--pf-dur-fast) var(--pf-ease-out); } }
+
+/* Six tabs do not fit one row in a narrow drawer: two rows of three, each label whole (the ds tab is a flex row of equal shares). */
+.pf-pack .pf-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pf-pack .pf-tab { min-block-size: 40px; padding-inline: 6px; }

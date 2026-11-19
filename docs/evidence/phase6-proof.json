@@ -1,0 +1,432 @@
+{
+  "ranAt": "2026-11-19T04:16:43.000Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "scope": "Synthetic transcript on a beep fixture. Speech recognition, forced alignment and real speech are not exercised.",
+  "passed": 37,
+  "total": 37,
+  "checks": [
+    {
+      "name": "no transcript: the panel says so and offers import; it does not invent text",
+      "ok": true,
+      "detail": "אין תמלול לקליפ הזה. אפשר לייבא קובץ כתוביות, או לזהות את הדיבור אוטומטית אם הזיהוי מותקן במחשב הזה."
+    },
+    {
+      "name": "editor: 8 word buttons; clicking word 6 seeks to 00:00:05:00; shift-click selects 2 words; delete cuts them from every track and marks them as cut",
+      "ok": true,
+      "detail": {
+        "words": 8,
+        "tcAfterClick": "00:00:05:00",
+        "selected": 2
+      }
+    },
+    {
+      "name": "editor: correcting a phrase commits correct_transcript and keeps the original",
+      "ok": true
+    },
+    {
+      "name": "editor: no uncaught errors",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "transcript, caption track and clip are created through the normal transaction path",
+      "ok": true,
+      "detail": {
+        "revision": 2
+      }
+    },
+    {
+      "name": "transcript sense returns phrase and word ids with source times and the timing grade",
+      "ok": true
+    },
+    {
+      "name": "a client cannot label typed text as speech recognition (set_transcript refuses origin=asr)",
+      "ok": true
+    },
+    {
+      "name": "observer token cannot change a transcript",
+      "ok": true
+    },
+    {
+      "name": "frame 1 (0.033 s): first word is current; frame 15 (0.5 s): nothing is current; frame 31: second word",
+      "ok": true,
+      "detail": [
+        "שלום* עולם Hello 2026",
+        "שלום עולם Hello 2026",
+        "שלום עולם* Hello 2026"
+      ]
+    },
+    {
+      "name": "rendered karaoke frames: highlighted pixels grow as words are spoken (1 word < 2 words < 4 words)",
+      "ok": true,
+      "detail": {
+        "k0": 360,
+        "k45": 687,
+        "k100": 1484
+      }
+    },
+    {
+      "name": "delete_transcript_range reports the exact frame range it removed",
+      "ok": true,
+      "detail": {
+        "ranges": [
+          {
+            "start": {
+              "value": "2",
+              "timescale": 1
+            },
+            "end": {
+              "value": "31",
+              "timescale": 10
+            }
+          }
+        ],
+        "words": 2
+      }
+    },
+    {
+      "name": "captions follow the cut with no re-timing op: removed words are gone; phrase 1 holds until its source end; \"בדיקה\" (source 4.0 s) becomes current exactly at timeline frame 87",
+      "ok": true,
+      "detail": [
+        "שלום עולם*",
+        "שלום עולם",
+        "בדיקה* כתוביות PULSEFRAME סוף"
+      ]
+    },
+    {
+      "name": "export: 207 frames; frame 59 shows source 59 and frame 60 shows source 93 (exact cut)",
+      "ok": true,
+      "detail": {
+        "frames": 207,
+        "at59": 59,
+        "at60": 93,
+        "last": 239
+      }
+    },
+    {
+      "name": "export audio: the two deleted beeps are gone and the next word is heard at 2.900 s (within 2 ms)",
+      "ok": true,
+      "detail": {
+        "onsets": [
+          0,
+          1,
+          2.9,
+          3.9,
+          4.9,
+          5.9
+        ],
+        "maxErrMs": 0.042
+      }
+    },
+    {
+      "name": "export picture: the caption changes phrase on the same frame as the beep (87): exported frames 86 and 87 match the stills of those frames and differ from each other",
+      "ok": true,
+      "detail": {
+        "lit86": 588,
+        "still86": 673,
+        "lit87": 267,
+        "still87": 344
+      }
+    },
+    {
+      "name": "SRT export reflects the edit and matches the picture: phrase 1 without the deleted words until 2.9 s, then phrase 2",
+      "ok": true,
+      "detail": [
+        [
+          0,
+          2.9,
+          "שלום עולם"
+        ],
+        [
+          2.9,
+          6.9,
+          "בדיקה כתוביות PULSEFRAME סוף"
+        ]
+      ]
+    },
+    {
+      "name": "undo restores the cut on every track and the captions",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "caption": "שלום עולם Hello* 2026",
+        "clips": [
+          "video:1",
+          "text:0",
+          "caption:0",
+          "audio:1"
+        ]
+      }
+    },
+    {
+      "name": "correcting a word changes the caption, keeps word timing, keeps the original text, and leaves exported audio bit-identical",
+      "ok": true,
+      "detail": {
+        "caption": "שלום חברים*",
+        "audioIdentical": true
+      }
+    },
+    {
+      "name": "changing the word count marks times as estimates: no word highlight is drawn, and a word-precise cut is refused with a reason",
+      "ok": true,
+      "detail": {
+        "refuse": "these words only have estimated times, so a word-precise cut would be a guess"
+      }
+    },
+    {
+      "name": "SRT import creates frame-snapped cues and reports the largest timing shift",
+      "ok": true,
+      "detail": {
+        "maxShiftSeconds": 0.01
+      }
+    },
+    {
+      "name": "VTT export round-trips text exactly and times to the frame grid",
+      "ok": true,
+      "detail": [
+        [
+          0,
+          1.5
+        ],
+        [
+          1.5,
+          3
+        ],
+        [
+          3,
+          4
+        ]
+      ]
+    },
+    {
+      "name": "ASS export carries the play resolution and the cues",
+      "ok": true
+    },
+    {
+      "name": "overlapping import is rejected as a whole, not partly applied",
+      "ok": true
+    },
+    {
+      "name": "a caption font that is not bundled blocks export instead of silently falling back",
+      "ok": true,
+      "detail": [
+        {
+          "code": "missing_font",
+          "message": "font \"Not Installed Sans\" is not bundled with the renderer; text would silently fall back",
+          "ids": []
+        }
+      ]
+    },
+    {
+      "name": "later caption presets, measured on the frame where a word in the middle of the phrase is being spoken: \"reveal\" shows fewer text pixels than the whole phrase and never more than it later on; \"underline\" shows the whole phrase plus a bar in the highlight colour; \"dim ahead\" shows fewer full-white pixels than the whole phrase and faint ones in their place; the whole phrase itself has no highlight colour",
+      "ok": true,
+      "detail": {
+        "classic118": {
+          "white": 2125,
+          "faint": 442,
+          "accent": 0
+        },
+        "reveal118": {
+          "white": 766,
+          "faint": 183,
+          "accent": 0
+        },
+        "reveal140": {
+          "white": 814,
+          "faint": 183,
+          "accent": 0
+        },
+        "classic140": {
+          "white": 2173,
+          "faint": 442,
+          "accent": 0
+        },
+        "underline118": {
+          "white": 2125,
+          "faint": 442,
+          "accent": 168
+        },
+        "dimAhead118": {
+          "white": 766,
+          "faint": 1809,
+          "accent": 0
+        }
+      }
+    },
+    {
+      "name": "word entrance, measured: 33 ms after a word starts, \"fade\" shows fewer full-white pixels than the plain frame and \"pop\" a different picture with more of them (the word is drawn larger); 200 ms after it both give exactly the plain frame",
+      "ok": true,
+      "detail": {
+        "none118": {
+          "white": 2125,
+          "faint": 442,
+          "accent": 0,
+          "sha": "99ea3c413445"
+        },
+        "fade118": {
+          "white": 1698,
+          "faint": 347,
+          "accent": 0,
+          "sha": "ee63bedd62da"
+        },
+        "pop118": {
+          "white": 2320,
+          "faint": 467,
+          "accent": 0,
+          "sha": "64e0f086ab1a"
+        },
+        "none123": {
+          "white": 2125,
+          "faint": 442,
+          "accent": 0,
+          "sha": "28c342604854"
+        },
+        "fade123": {
+          "white": 2125,
+          "faint": 442,
+          "accent": 0,
+          "sha": "28c342604854"
+        },
+        "pop123": {
+          "white": 2125,
+          "faint": 442,
+          "accent": 0,
+          "sha": "28c342604854"
+        }
+      }
+    },
+    {
+      "name": "caption renders match the committed baselines (SSIM ≥ 0.995), or were written on first run",
+      "ok": true,
+      "detail": {
+        "classic-mixed": 1,
+        "classic-long-wrap": 1,
+        "top-stroke": 1,
+        "karaoke": 1,
+        "box-highlight": 1,
+        "word-pop": 1
+      }
+    },
+    {
+      "name": "silence analysis finds the 8 gaps between beeps, proposes 8 frame-aligned cuts, and edits nothing",
+      "ok": true,
+      "detail": {
+        "first": {
+          "startSeconds": 0.1,
+          "endSeconds": 1.00002
+        },
+        "removableSeconds": 5.6
+      }
+    },
+    {
+      "name": "applying the candidates as one transaction keeps every beep (8 onsets), closes the gaps evenly, and cannot be applied twice",
+      "ok": true,
+      "detail": {
+        "onsets": [
+          0,
+          0.3,
+          0.6,
+          0.9,
+          1.2,
+          1.5,
+          1.8,
+          2.1
+        ],
+        "frames": 72,
+        "secondApply": "stale_revision"
+      }
+    },
+    {
+      "name": "animate_clip: title is invisible on its first frame, partly visible mid-entrance, fully visible at rest, fading again near the end",
+      "ok": true,
+      "detail": {
+        "g0": 0,
+        "g6": 270,
+        "g30": 301,
+        "g58": 0
+      }
+    },
+    {
+      "name": "all 11 catalog families render differently from each other (none fell back to another face), and the export manifest pins the font files by SHA-256",
+      "ok": true,
+      "detail": {
+        "families": [
+          "Heebo",
+          "Rubik",
+          "Assistant",
+          "Frank Ruhl Libre",
+          "Secular One",
+          "Suez One",
+          "David Libre",
+          "Karantina",
+          "Amatic SC",
+          "Fredoka",
+          "Gveret Levin"
+        ],
+        "manifestFonts": [
+          "Gveret Levin:2"
+        ]
+      }
+    },
+    {
+      "name": "editor: \"find silences\" lists candidates without editing; \"remove\" applies them as one undoable step",
+      "ok": true,
+      "detail": {
+        "found": 7,
+        "framesBefore": 207,
+        "framesAfter": 60
+      }
+    },
+    {
+      "name": "editor: one Ctrl+Z restores every removed silence",
+      "ok": true
+    },
+    {
+      "name": "editor: entrance preset writes keyframes on the selected title; font picker changes its family; no uncaught errors",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "\"sidecar\" export: the picture has no captions while the default export has them burned in; the subtitle file is timed to the exported range (cues shifted by the 1 s range start and clipped at its end)",
+      "ok": true,
+      "detail": {
+        "burnedLit": 779,
+        "cleanLit": 0,
+        "cues": [
+          [
+            0,
+            3,
+            "שלום עולם Hello 2026"
+          ],
+          [
+            3,
+            4,
+            "בדיקה כתוביות PULSEFRAME סוף"
+          ]
+        ]
+      }
+    },
+    {
+      "name": "animated GIF export: 30 frames at 320×180, looping, each frame close to the still of the same frame (256-colour palette), and the plan warns that a GIF is silent",
+      "ok": true,
+      "detail": {
+        "psnrDb": 38.1,
+        "bytes": 61603
+      }
+    },
+    {
+      "name": "agent reads the transcript, deletes one word by id, and reads back captions without that word",
+      "ok": true,
+      "detail": {
+        "cut": "Removed \"PULSEFRAME\" from the timeline",
+        "cues": 2
+      }
+    }
+  ]
+}

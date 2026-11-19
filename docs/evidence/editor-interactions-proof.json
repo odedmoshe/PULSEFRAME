@@ -1,0 +1,1193 @@
+{
+  "ranAt": "2026-11-19T06:45:27.004Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
+  "passed": 70,
+  "total": 70,
+  "checks": [
+    {
+      "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
+      "ok": true,
+      "detail": {
+        "override": {
+          "x": 0.0396,
+          "y": 0.0445
+        },
+        "expected": {
+          "dx": 0.04,
+          "dy": 0.045
+        },
+        "canvas": [
+          758,
+          1348
+        ]
+      }
+    },
+    {
+      "name": "\"hide in this format\" hides the clip there only; \"clear override\" removes the override",
+      "ok": true
+    },
+    {
+      "name": "with snapping on, a clip dropped near a beat lands exactly on it; with snapping off the same drag lands on a plain frame",
+      "ok": true,
+      "detail": {
+        "beatFrames": [
+          15,
+          30,
+          45,
+          60,
+          75
+        ],
+        "afterSnap": 15,
+        "afterFree": 22
+      }
+    },
+    {
+      "name": "\"add beat at playhead\" and \"remove nearest beat\" change the stored beat grid and mark it as corrected by hand",
+      "ok": true,
+      "detail": {
+        "beats": 23
+      }
+    },
+    {
+      "name": "while the drum loop plays, the meter shows a real level (above -40 dB and not above 0)",
+      "ok": true,
+      "detail": {
+        "peakDbShown": -8
+      }
+    },
+    {
+      "name": "\"export all formats\" lists one job per format and each finishes with a download of the right size",
+      "ok": true,
+      "detail": {
+        "sizes": [
+          "360x360",
+          "360x640"
+        ]
+      }
+    },
+    {
+      "name": "Ctrl+C then Ctrl+V pastes a full copy at the playhead (same source, trim and length) and selects it; Ctrl+D duplicates the selection right after itself",
+      "ok": true,
+      "detail": {
+        "pastedAtFrame": 200
+      }
+    },
+    {
+      "name": "while a format is viewed, the Inspector scale slider writes a format-only override (master unchanged), keyframe buttons are disabled, and \"reset to master\" removes the override; back on the master the controls edit the master again",
+      "ok": true,
+      "detail": {
+        "sliderOverride": true,
+        "masterKept": true,
+        "kfDisabled": true,
+        "resetOk": true,
+        "scopeMaster": true
+      }
+    },
+    {
+      "name": "while a format is viewed, editing the title text changes the wording in that format only: the rendered frame of that format changes, the master and another format render byte-identically, the field shows each wording in its own view, and \"back to the master text\" restores it",
+      "ok": true,
+      "detail": {
+        "hintBefore": true,
+        "wordingSet": true,
+        "tallChanged": true,
+        "masterSame": true,
+        "squareSame": true,
+        "masterField": "כותרת",
+        "tallField": "קצר",
+        "wordingCleared": true,
+        "fieldBack": "כותרת",
+        "restoredSame": true
+      }
+    },
+    {
+      "name": "effect keyframes in the editor: the ◆ button sets a key at the playhead; moving the playhead and changing the slider adds a second key 20 frames later instead of changing the static value",
+      "ok": true,
+      "detail": {
+        "keys": [
+          [
+            5,
+            0.01
+          ],
+          [
+            25,
+            0.1
+          ]
+        ]
+      }
+    },
+    {
+      "name": "keyframe strip by keyboard: Alt+K focuses a strip key, Enter opens the curve picker with the focus inside, Escape closes it and the focus is back on the same key; no commit",
+      "ok": true,
+      "detail": {
+        "afterAltK": {
+          "id": "key-strip-key",
+          "frame": "5",
+          "inPicker": false
+        },
+        "pickerOpen": true,
+        "inPicker": {
+          "id": null,
+          "frame": null,
+          "inPicker": true
+        },
+        "afterEsc": {
+          "id": "key-strip-key",
+          "frame": "5",
+          "inPicker": false
+        },
+        "revisions": [
+          24,
+          24
+        ]
+      }
+    },
+    {
+      "name": "keyframe diamonds: the selected clip's keyframe strip and its passive diamonds once unselected each show one diamond per distinct key frame, effect keys included (an x key on the frame of a radius key counts once)",
+      "ok": true,
+      "detail": {
+        "distinct": [
+          5,
+          8,
+          25
+        ],
+        "keys": 4,
+        "stripFrames": [
+          5,
+          8,
+          25
+        ],
+        "passive": 3
+      }
+    },
+    {
+      "name": "cut then paste moves the clip in one transaction (effects and keyframes come along); nothing is committed by the cut itself; one undo puts it back",
+      "ok": true,
+      "detail": {
+        "pending": 1,
+        "revisions": [
+          25,
+          25,
+          26
+        ],
+        "landedAt": 300
+      }
+    },
+    {
+      "name": "Sound tab: typing a level writes a volume key at the playhead; between two keys the field shows the interpolated level (0.85 halfway between 0.5 and 1.2); \"remove this key\" removes only that key",
+      "ok": true,
+      "detail": {
+        "midShown": "0.85",
+        "keys": [
+          [
+            30,
+            0.5
+          ]
+        ]
+      }
+    },
+    {
+      "name": "volume line: the key is drawn at its frame; dragging it changes time and level in one edit (30→40, 0.5→1.5); a double-click on the line adds a key at the level there; arrow keys nudge the focused key without moving the playhead; Delete removes the key, not the clip; the key is named for assistive technology; a drag on the line moves the clip",
+      "ok": true,
+      "detail": {
+        "handleAt": true,
+        "vl1": true,
+        "vl2": true,
+        "vl3": true,
+        "vl4": true,
+        "vl5": true,
+        "tcBefore": "00:00:03:00",
+        "tcAfter": "00:00:03:00",
+        "namedKey": "נקודת עוצמה 00:00:02:20 · 140%",
+        "keys": [
+          [
+            40,
+            1.5
+          ]
+        ]
+      }
+    },
+    {
+      "name": "volume line: S on a key makes the stretch to the next key smooth (the level a quarter of the way is 0.609, not the straight line's 0.675); Alt + drag draws the level — one edit replaces the keys under the stroke with keys along it (from frame 110 at 1.2 down to 170 at about 0.4), the earlier keys stay",
+      "ok": true,
+      "detail": {
+        "smoothSet": true,
+        "quarterShown": "0.609",
+        "revisions": 1,
+        "drawnKeys": [
+          [
+            110,
+            1.2
+          ],
+          [
+            116,
+            1.12
+          ],
+          [
+            122,
+            1.04
+          ],
+          [
+            128,
+            0.96
+          ],
+          [
+            134,
+            0.88
+          ],
+          [
+            140,
+            0.8
+          ],
+          [
+            146,
+            0.72
+          ],
+          [
+            152,
+            0.64
+          ],
+          [
+            158,
+            0.56
+          ],
+          [
+            164,
+            0.48
+          ],
+          [
+            170,
+            0.4
+          ]
+        ]
+      }
+    },
+    {
+      "name": "Sound tab: \"end the music with the picture\" trims the music to the last detected beat before the picture ends and gives it a fade-out, in one transaction; undo restores it",
+      "ok": true,
+      "detail": {
+        "pictureEnd": 245,
+        "wantEnd": 239,
+        "gotEnd": 239,
+        "fadeOutFrames": 30,
+        "fitUndone": true
+      }
+    },
+    {
+      "name": "markers: M adds one at the playhead; name (Hebrew + Latin) and colour are committed edits; a marker added by an agent appears; Shift+M / Alt+M jump between them; remove and undo work; the timeline query lists both",
+      "ok": true,
+      "detail": {
+        "shownMarkers": [
+          {
+            "frame": 60,
+            "name": "פזמון chorus 00:00:02:00"
+          },
+          {
+            "frame": 150,
+            "name": "agent note 00:00:05:00"
+          }
+        ],
+        "hops": [
+          "00:00:02:00",
+          "00:00:05:00",
+          "00:00:02:00"
+        ],
+        "removed": true,
+        "undone": true
+      }
+    },
+    {
+      "name": "shuttle: K stops it and the frame holds",
+      "ok": true
+    },
+    {
+      "name": "shuttle: L plays, L again goes to 2× (indicator shown, measured speed about 2×); J goes backwards at 1× and J again at 2×; Space stops and the frame holds; shuttling backwards stops at the first frame",
+      "ok": true,
+      "detail": {
+        "sh0": "",
+        "sh1": "▶▶ ×2",
+        "fwd2": 2.04,
+        "sh2": "◀◀ ×1",
+        "back1": -0.99,
+        "sh3": "◀◀ ×2",
+        "sh4": "",
+        "still": true,
+        "pausedIcon": true,
+        "atStart": 0,
+        "shEnd": ""
+      }
+    },
+    {
+      "name": "a project change by another participant during playback does not stop it (normal speed and 2× shuttle both continue at their speed); a change while paused does not start it",
+      "ok": true,
+      "detail": {
+        "keptPlaying": true,
+        "playSpeed": 0.99,
+        "keptShuttle": "▶▶ ×2",
+        "shuttleSpeed": 1.99,
+        "staysPaused": true
+      }
+    },
+    {
+      "name": "multi-select: Ctrl+click adds a clip to the selection; dragging one moves both by the same 20 frames in one transaction and a third clip stays; Alt+→ nudges both; Ctrl+A selects all, Shift+click removes one; Delete removes the two selected in one transaction and one undo restores them",
+      "ok": true,
+      "detail": {
+        "twoSelected": 2,
+        "stillTwo": 2,
+        "allSelected": 3,
+        "revisions": [
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "errors": []
+      }
+    },
+    {
+      "name": "marquee: dragging a box over empty timeline space selects exactly the clips it touches (live while dragging); Shift+drag adds to the selection; Escape during a drag restores the selection from before it; a plain click on empty space clears it; none of this changes the project",
+      "ok": true,
+      "detail": {
+        "cleared0": 0,
+        "boxShown": 1,
+        "during": [
+          "clp_b398c736980",
+          "clp_b398c736981"
+        ],
+        "afterAB": [
+          "clp_b398c736980",
+          "clp_b398c736981"
+        ],
+        "afterAdd": [
+          "clp_b398c736980",
+          "clp_b398c736981",
+          "clp_b398c736982"
+        ],
+        "midEscape": [
+          "clp_b398c736981"
+        ],
+        "afterEscape": [
+          "clp_b398c736980",
+          "clp_b398c736981",
+          "clp_b398c736982"
+        ],
+        "afterEscapeUp": [
+          "clp_b398c736980",
+          "clp_b398c736981",
+          "clp_b398c736982"
+        ]
+      }
+    },
+    {
+      "name": "a Hebrew subtitle file saved as Windows-1255 is imported with its Hebrew text intact and the editor says it had to guess the encoding; a UTF-16 file with a byte-order mark is imported too, without that note",
+      "ok": true,
+      "detail": {
+        "note": "windows-1255",
+        "cues": [
+          "שלום עולם, מה נשמע?",
+          "PULSEFRAME 2026",
+          "עוד שורה בעברית",
+          "UTF-16 file"
+        ],
+        "noteAfterMarked": 0
+      }
+    },
+    {
+      "name": "download the project archive in the editor, import it back, and the editor opens a new project with the same content",
+      "ok": true,
+      "detail": {
+        "file": "interactions.pulseframe.tar",
+        "bytes": 2795008
+      }
+    },
+    {
+      "name": "no uncaught errors in the page during these interactions",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "a clip is removed from the timeline in one step three ways: the action bar above the tracks (disabled until a clip is selected), the right-click menu (opens with the keyboard focus inside and closes after use), and a button in the clip panel; undo brings it back",
+      "ok": true,
+      "detail": {
+        "idle": true,
+        "armed": true,
+        "focused": "menu-duplicate",
+        "menuClosed": true
+      }
+    },
+    {
+      "name": "♪ on the blur radius (music with detected beats under the clip): it is named \"פעימה על <label>\", turning it on commits set_effect_modulator (every second beat) and opens its fieldset; choosing every 4 commits that; one undo takes back the change, a second the modulator, and the clip is as before",
+      "ok": true,
+      "detail": {
+        "toggleName": "פעימה על רדיוס",
+        "wantName": "פעימה על רדיוס",
+        "on": true,
+        "pressedOn": "true",
+        "legend": "פעימה על רדיוס",
+        "every4": true,
+        "undo1": true,
+        "undo2": true,
+        "pressedOff": "false"
+      }
+    },
+    {
+      "name": "date stamp: its text field reads left to right; typed text is committed on Enter; letters are refused by the op and the refusal is shown under the field in Hebrew (the field marked invalid, the stored text kept); \"תאריך היום\" commits today as 'YY M D and the refusal goes",
+      "ok": true,
+      "detail": {
+        "fieldDir": "ltr",
+        "typed": true,
+        "refusal": "ערך לא תקין: בטקסט של חותמת התאריך מותרים רק ספרות, רווחים והסימנים ⁦. : ' / -⁩, עד 20 תווים",
+        "wantRefusal": "בטקסט של חותמת התאריך מותרים רק ספרות, רווחים והסימנים ⁦. : ' / -⁩, עד 20 תווים",
+        "invalid": "true",
+        "kept": true,
+        "today": "'26 11 19",
+        "todaySet": true,
+        "refusalGone": true
+      }
+    },
+    {
+      "name": "time effect first: echo added after two effects is placed first; a separator (role separator, named by the rule) closes its row; moving the next effect up and the echo down are aria-disabled and change nothing; the cost line counts its pictures; a second time effect is refused and the refusal is shown in the panel in Hebrew",
+      "ok": true,
+      "detail": {
+        "order0": [
+          "time.echo",
+          "blur.gaussian",
+          "stylize.date-stamp"
+        ],
+        "order1": [
+          "time.echo",
+          "blur.gaussian",
+          "stylize.date-stamp"
+        ],
+        "revisions": [
+          14,
+          14
+        ],
+        "separator": {
+          "count": 1,
+          "role": "separator",
+          "name": "אפקט זמן תמיד ראשון; האפקטים שאחריו חלים על התמונה הממוזגת",
+          "inFirstRow": 1
+        },
+        "blocked": {
+          "up": "true",
+          "down": "true",
+          "otherDown": null
+        },
+        "cost": "תמונות לכל פריים (בווידאו כל אחת מפוענחת בנפרד): 4",
+        "panelRefusal": "הפעולה אינה מתאימה לפריט הזה: לקליפ יכול להיות אפקט זמן אחד בלבד (הד, פיצול זמן, צמצם או קפיצות פריים)",
+        "wantTime": "לקליפ יכול להיות אפקט זמן אחד בלבד (הד, פיצול זמן, צמצם או קפיצות פריים)"
+      }
+    },
+    {
+      "name": "no uncaught errors in the page with the visual-wave controls",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "tracking, keyboard only: the \"new point\" button opens the picker with the focus on the picture; ten Shift+→ and five ↓ move the pick 100 and 5 frame pixels from the centre, announced in Hebrew; Enter commits create_motion_track at the SOURCE frame the playhead shows (60 at timeline frame 30, speed 2); the focus goes back and the panel says so",
+      "ok": true,
+      "detail": {
+        "got": {
+          "kind": "point",
+          "from": 60,
+          "x": 5781,
+          "y": 5069
+        },
+        "want": {
+          "kind": "point",
+          "from": 60,
+          "x": 5781,
+          "y": 5069
+        },
+        "said": "נקודה ב־58% מהרוחב וב־51% מהגובה, פריים מקור 60",
+        "focusBack": "mtrack-new-point",
+        "status": "נוצר מסלול מעקב. אפשר להתחיל במעקב."
+      }
+    },
+    {
+      "name": "tracking, box drag: dragging over the disc picks an area; confirming commits a region track whose centre and size are the dragged box in 1/10000 of the picture (within 2 frame pixels), on source frame 60",
+      "ok": true,
+      "detail": {
+        "got": {
+          "x": 7099,
+          "y": 4657,
+          "box": {
+            "w": 1312,
+            "h": 2333
+          },
+          "from": 60
+        },
+        "want": {
+          "x": 7099,
+          "y": 4657,
+          "w": 1313,
+          "h": 2333
+        },
+        "markKind": "region"
+      }
+    },
+    {
+      "name": "tracking, progress and Stop: \"Track\" starts the job; the role=progressbar rises (aria-valuenow), its value text is the stage in Hebrew; \"Stop\" ends it canceled and nothing is attached",
+      "ok": true,
+      "detail": {
+        "seen": [
+          0,
+          1
+        ],
+        "role": "progressbar",
+        "valueText": "עוקב קדימה 25/1799",
+        "jobStatus": "canceled",
+        "samples": 1
+      }
+    },
+    {
+      "name": "tracking, follow: after tracking the area, \"attach without a jump\" on a magenta title commits set_clip_follow with an offset that keeps it where it was: its centre on the still of the same frame moves at most 1 px",
+      "ok": true,
+      "detail": {
+        "tracked": "succeeded",
+        "jumpPx": 0,
+        "before": {
+          "x": 769.0768972464741,
+          "y": 255.1944257891202
+        },
+        "after": {
+          "x": 769.0768972464741,
+          "y": 255.1944257891202
+        }
+      }
+    },
+    {
+      "name": "tracking, handle drag on a follower: dragging its move handle by 40×30 screen px changes its own offset by that fraction of the frame and moves it on the still by 40/k × 30/k frame px (within 2 px); it still follows",
+      "ok": true,
+      "detail": {
+        "own0": {
+          "x": -0.10990000000000003,
+          "y": -0.11569999999999997
+        },
+        "own1": {
+          "x": -0.0571,
+          "y": -0.0453
+        },
+        "shift": {
+          "x": 66.63,
+          "y": 50.06
+        },
+        "wantShift": {
+          "x": 67.55,
+          "y": 50.66
+        }
+      }
+    },
+    {
+      "name": "tracking, preview: the follower's centre in the editor preview is within 2 px of the still of the same frame (one evaluator); no page errors",
+      "ok": true,
+      "detail": {
+        "px": 0,
+        "preview": {
+          "x": 835.7035763411279,
+          "y": 305.2572214580468
+        },
+        "still": {
+          "x": 835.7035763411279,
+          "y": 305.2572214580468
+        },
+        "errors": []
+      }
+    },
+    {
+      "name": "adjustment layers: the timeline's add-track button adds an FX track in one transaction, shown as an adjustment track («התאמה»)",
+      "ok": true,
+      "detail": {
+        "fxLabel": "התאמה FX1"
+      }
+    },
+    {
+      "name": "\"apply to: the whole edit\" (Look panel): exactly 1 transaction containing add_adjustment over the whole edit with the effect on it, the clip itself untouched; a second effect joins the same layer (add_effect)",
+      "ok": true,
+      "detail": {
+        "ops1": [
+          [
+            "add_adjustment"
+          ]
+        ],
+        "ops2": [
+          [
+            "add_effect"
+          ]
+        ],
+        "covers": true,
+        "clipUntouched": true
+      }
+    },
+    {
+      "name": "an adjustment clip's inspector offers its opacity (no place, size or turn), the Look panel and the mask; moving the opacity commits one opacity-only change (set_clip_transform; nothing else on the clip changes)",
+      "ok": true,
+      "detail": {
+        "panel": {
+          "opacity": 1,
+          "placeOrSize": 0,
+          "look": 1,
+          "mask": 1,
+          "note": 1
+        },
+        "ops3": [
+          [
+            "set_clip_transform"
+          ]
+        ],
+        "transform": {
+          "x": 0,
+          "y": 0,
+          "scale": 1,
+          "rotation": 0,
+          "opacity": 0.5
+        }
+      }
+    },
+    {
+      "name": "\"cover the whole edit\" stretches the layer to the new end of the edit (frame 120) in one transaction of trim_clip",
+      "ok": true,
+      "detail": {
+        "ops": [
+          [
+            "trim_clip"
+          ]
+        ]
+      }
+    },
+    {
+      "name": "\"Replace media…\" commits replace_clip_media: the same clip id, place and length, now showing the chosen file",
+      "ok": true,
+      "detail": {
+        "ops": [
+          [
+            "replace_clip_media"
+          ]
+        ]
+      }
+    },
+    {
+      "name": "the Templates drawer lists 15 cards in order: the 6 built-ins, available, then the content packs' 7 templates (pack.hanukkah, pack.birthday), available, each with its genre from core, then Text-Behind-Subject and 3D-Zoom, unavailable with their Hebrew reason (template.unavailable.<model>)",
+      "ok": true,
+      "detail": {
+        "cards": [
+          {
+            "id": "tpl.travel-montage",
+            "genre": "montage",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.photo-dump",
+            "genre": "montage",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.birthday",
+            "genre": "celebration",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.quote-card",
+            "genre": "quote",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.countdown-list",
+            "genre": "list",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.home-video",
+            "genre": "memories",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.hanukkah-candles",
+            "genre": "holiday",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.hanukkah-eight-nights",
+            "genre": "holiday",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.hanukkah-party",
+            "genre": "holiday",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.hanukkah-greeting",
+            "genre": "holiday",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.birthday-age",
+            "genre": "celebration",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.birthday-cake",
+            "genre": "celebration",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.birthday-invite",
+            "genre": "celebration",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "tpl.text-behind-subject",
+            "genre": "promo",
+            "available": false,
+            "reason": "דורשת מודל שמפריד את הדמות מהרקע בכל פריים, והוא אינו מותקן במחשב הזה. תבנית לעולם אינה מורידה מודלים."
+          },
+          {
+            "id": "tpl.3d-zoom",
+            "genre": "memories",
+            "available": false,
+            "reason": "דורשת מודל שמעריך עומק (כמה רחוקה כל נקודה מהמצלמה), והוא אינו מותקן במחשב הזה. תבנית לעולם אינה מורידה מודלים."
+          }
+        ],
+        "want": [
+          "tpl.travel-montage",
+          "tpl.photo-dump",
+          "tpl.birthday",
+          "tpl.quote-card",
+          "tpl.countdown-list",
+          "tpl.home-video",
+          "tpl.hanukkah-candles",
+          "tpl.hanukkah-eight-nights",
+          "tpl.hanukkah-party",
+          "tpl.hanukkah-greeting",
+          "tpl.birthday-age",
+          "tpl.birthday-cake",
+          "tpl.birthday-invite",
+          "tpl.text-behind-subject",
+          "tpl.3d-zoom"
+        ]
+      }
+    },
+    {
+      "name": "a genre chip is an aria-pressed toggle that narrows the cards to its kind and, pressed again, shows them all",
+      "ok": true,
+      "detail": {
+        "genre": "montage",
+        "filtered": 2,
+        "unfiltered": 15
+      }
+    },
+    {
+      "name": "keyboard only, in Hebrew: a card opens the template dialog (focus inside), Escape closes it and the focus is back on the card; then pick → leave the video out and move a picture earlier → music → a Hebrew text (its counter counts it) → plan (a polite live region, nothing blocking) → Use adds exactly 1 revision (apply_template) with that text on a title, and the post-apply bar appears",
+      "ok": true,
+      "detail": {
+        "template": "tpl.travel-montage",
+        "order0": [
+          "ast_2e14db238b0",
+          "ast_c760e923060",
+          "ast_e1f580b91c0",
+          "ast_5413964bed0",
+          "ast_007429a0060"
+        ],
+        "order1": [
+          "ast_2e14db238b0",
+          "ast_5413964bed0",
+          "ast_c760e923060",
+          "ast_e1f580b91c0",
+          "ast_007429a0060"
+        ],
+        "videoOut": true,
+        "musicChosen": true,
+        "textKey": "place",
+        "counted": "13",
+        "planned": {
+          "summary": 1,
+          "blocking": 0,
+          "error": null,
+          "live": "polite"
+        },
+        "applyOps": [
+          [
+            "apply_template"
+          ]
+        ],
+        "hebrewOnTitle": true,
+        "beats": {
+          "method": "spectral-flux onsets + dynamic-programming beat tracking (no model); assumes a steady pulse; no regular bar accent found",
+          "params": {
+            "sampleRate": 22050,
+            "hop": 256
+          },
+          "createdAt": "2026-11-19T06:42:07.954Z",
+          "createdBy": "agent:local",
+          "edited": false,
+          "bpm": 120.19,
+          "confidence": 0.986,
+          "count": 23,
+          "beatSeconds": [
+            0.493,
+            0.993,
+            1.492,
+            1.991,
+            2.49,
+            3.001,
+            3.5,
+            4,
+            4.499,
+            4.998,
+            5.497,
+            5.997,
+            6.496,
+            6.995,
+            7.494,
+            7.994,
+            8.493,
+            8.992,
+            9.491,
+            9.99,
+            10.49,
+            11.001,
+            11.5
+          ]
+        }
+      }
+    },
+    {
+      "name": "Shuffle on the post-apply bar (regenerate with the next seed, shuffled) adds exactly 1 revision",
+      "ok": true,
+      "detail": {
+        "ops": [
+          [
+            "apply_template"
+          ]
+        ]
+      }
+    },
+    {
+      "name": "undo restores an equal creativeProjection: once after Shuffle (the applied template), once more after Use (the project before the template)",
+      "ok": true,
+      "detail": {
+        "undoShuffle": true,
+        "undoApply": true
+      }
+    },
+    {
+      "name": "Welcome (an empty project) offers «התחל מתבנית», which opens the Templates drawer with the focus on its first card",
+      "ok": true,
+      "detail": {
+        "opened": true,
+        "cardFocused": true
+      }
+    },
+    {
+      "name": "no uncaught errors in the page with the adjustment and template controls",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "trend pack: from the keyboard, Space on \"נעילה לפעימה\" and ArrowDown on the velocity choice set the beat lock and ×2, each in one transaction and one undo step (Undo with Enter takes back ×2, then the lock); the Hebrew status line is a live region the checkbox points to, saying where the beat is (the model's frame); ×3 is disabled and says what it needs",
+      "ok": true,
+      "detail": {
+        "beatFrame": 60,
+        "statusText": "הפעימה בפריים 60 (⁦00:00:02:00⁩)",
+        "want": "הפעימה בפריים 60 (⁦00:00:02:00⁩)",
+        "statusRole": "status",
+        "describedBy": "_r_36_",
+        "announced": 1,
+        "onVelocity": "transition-velocity",
+        "opt3": {
+          "disabled": true,
+          "text": "×3 — נדרשים 29 פריימים אחרי הקליפ הקודם ו־14 לפני תחילת הקליפ"
+        },
+        "wantNeed": "נדרשים 29 פריימים אחרי הקליפ הקודם ו־14 לפני תחילת הקליפ",
+        "revisions": [
+          6,
+          7,
+          8
+        ],
+        "locked": true,
+        "ramped": true,
+        "undoVelocity": true,
+        "undoSync": true
+      }
+    },
+    {
+      "name": "no uncaught errors in the page with the transition options",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "shorts, step 1 to 3 by keyboard: the panel shows its four steps; Enter on «מדוד» lists candidates, each with its relative score «ציון יחסי N (היוריסטיקה)» (no «viral», no prediction)",
+      "ok": true,
+      "detail": {
+        "stepsShown": 4,
+        "rows": 7,
+        "scoreText": "ציון יחסי 72 (היוריסטיקה)"
+      }
+    },
+    {
+      "name": "shorts, review keys: [ ] Shift+[ ] and Alt move the edges of the focused candidate (its range changes, a live region names the new edge in Hebrew) and commit NO trim_clip and no revision",
+      "ok": true,
+      "detail": {
+        "trimsBefore": 0,
+        "trimsAfter": 0,
+        "r0": "0:25.9–0:53.0 · 27.0 שניות",
+        "r1": "0:26.3–0:52.6 · 26.2 שניות",
+        "live": "הסוף של רגע 1 זז אל 0:52.6, המילה מתחיל"
+      }
+    },
+    {
+      "name": "shorts, plan and create by keyboard: 2 selected; the plan dialog shows operations; Enter on «צור 2 קטעים» makes 2 sequences as ONE revision; the focus lands on the first new short's tab (aria-selected)",
+      "ok": true,
+      "detail": {
+        "picked": 2,
+        "dialog": true,
+        "planOps": 4,
+        "newIds": [
+          "seq_e0773aea410",
+          "seq_e0773aea417"
+        ],
+        "revisions": 1,
+        "transactions": [
+          [
+            "apply_sequence_plan"
+          ]
+        ],
+        "focused": {
+          "id": "sequence-tab",
+          "seq": "seq_e0773aea410",
+          "selected": "true"
+        }
+      }
+    },
+    {
+      "name": "shorts, the canvas of the active short is 720:1280 (9:16) within 1 px",
+      "ok": true,
+      "detail": {
+        "w": 308.25,
+        "h": 548
+      }
+    },
+    {
+      "name": "shorts, a title added (T) while the short is active lands in that sequence; the main sequence is exactly as before",
+      "ok": true,
+      "detail": {
+        "landed": true,
+        "mainUnchanged": true
+      }
+    },
+    {
+      "name": "shorts, the sequence tabs by keyboard only: Home reaches the main tab; the arrow toward the end goes to the short next to it and the arrow toward the start (RTL: ArrowRight) comes back to the main tab",
+      "ok": true,
+      "detail": {
+        "byHome": {
+          "id": "sequence-tab-main",
+          "seq": "seq_main"
+        },
+        "forward": {
+          "id": "sequence-tab",
+          "seq": "seq_e0773aea410"
+        },
+        "secondTab": "seq_e0773aea410",
+        "byArrow": {
+          "id": "sequence-tab-main",
+          "seq": "seq_main"
+        },
+        "rtl": true
+      }
+    },
+    {
+      "name": "no uncaught errors in the page with the shorts run",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "perform: Shift+7 enters the perform mode (its view mounts, its mode button is checked); the 7-button mode bar is one row at 1280 px",
+      "ok": true,
+      "detail": {
+        "entered": true,
+        "bar": [
+          {
+            "id": "workspace-pro",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-color",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-sound",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-captions",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-deliver",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-shorts",
+            "top": 10,
+            "checked": "false"
+          },
+          {
+            "id": "workspace-perform",
+            "top": 10,
+            "checked": "true"
+          }
+        ]
+      }
+    },
+    {
+      "name": "perform: a take recorded with R, a pad and Space, then discarded with Escape, leaves the revision and the history unchanged",
+      "ok": true,
+      "detail": {
+        "revisions": 0,
+        "entries": 0
+      }
+    },
+    {
+      "name": "perform: a keyboard-only take (R, 1 2 3, Space, Enter) gives exactly ONE new history entry (apply_take); Shift+1…7 while recording add no tap and leave the mode; the ghost banner shows in review",
+      "ok": true,
+      "detail": {
+        "stillRecording": true,
+        "tapsRec": 3,
+        "banner": true,
+        "entries": 1,
+        "ops": [
+          "apply_take"
+        ]
+      }
+    },
+    {
+      "name": "perform: Escape closes the pad editor and the calibration dialog (the focus was inside each); the focus returns to the button that opened it; nothing was recorded",
+      "ok": true,
+      "detail": {
+        "peOpen": true,
+        "peFocusInside": true,
+        "peClosed": true,
+        "peBack": true,
+        "calOpen": true,
+        "calFocusInside": true,
+        "calClosed": true,
+        "calBack": true,
+        "idle": true
+      }
+    },
+    {
+      "name": "perform: no uncaught errors in the page",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "perform: while multicam's program is live the pads take no number keys (no aria-keyshortcuts, the view says so); during a take a digit is neither a tap nor an angle switch; outside a take Digit2 switches the angle (one history entry)",
+      "ok": true,
+      "detail": {
+        "note": true,
+        "keys": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "tapsWhile": 0,
+        "entriesDuringTake": 0,
+        "switched": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "command bar: «חתוך כאן» — the bar's row is on screen (not clipped), the first option and active (aria-activedescendant), ↓ moves to the next option (wraps when it is the only one) and Home back; Enter commits ONE transaction labelled «Command bar: split_here»",
+      "ok": true,
+      "detail": {
+        "rowSeen": true,
+        "first": "pf-palette-opt-bar",
+        "options": 1,
+        "a0": "pf-palette-opt-bar",
+        "a1": "pf-palette-opt-bar",
+        "a2": "pf-palette-opt-bar",
+        "revisions": 1,
+        "label": "Command bar: split_here"
+      }
+    },
+    {
+      "name": "command bar: «הגבר את הקול ב־3 דציבל» asks; ↓ makes the first choice active with its own preview (a step), Enter commits exactly that choice (one transaction, set_track_audio)",
+      "ok": true,
+      "detail": {
+        "kind": "ambiguous",
+        "choiceActive": "pf-palette-opt-bar-choice-0",
+        "stepOp": "set_track_audio",
+        "ops": [
+          "set_track_audio"
+        ]
+      }
+    },
+    {
+      "name": "command bar: «תעשה שמח» is not understood and offers example sentences; ↓ and Enter put one in the input (its own preview shows) and nothing is committed",
+      "ok": true,
+      "detail": {
+        "examples": 3,
+        "value": "חתוך כאן",
+        "kind": "plan",
+        "open": true,
+        "focus": "palette-input",
+        "revisions": 0
+      }
+    },
+    {
+      "name": "command bar: the listbox owns only options and groups — the bar's live region and preview and the assistant's row are outside it",
+      "ok": true,
+      "detail": {
+        "row": true,
+        "preview": true,
+        "live": true,
+        "roles": []
+      }
+    },
+    {
+      "name": "command bar: the assistant row reads «עוזר השפה לא מחובר»; «איך מחברים» opens Settings at «עוזר השפה» (provider_not_configured); a refused save reads in Hebrew with its next step and without the server's English hint",
+      "ok": true,
+      "detail": {
+        "setup": "provider_not_configured",
+        "refused": "ההגדרות לא נשמרו: הכתובת ⁦api.example.test⁩ אינה ברשימה ⁦PF_ASSISTANT_HOSTS⁩; הוסיפו בדיוק את הכתובת הזאת לרשימה, הפעילו את השרת מחדש ושמרו שוב"
+      }
+    },
+    {
+      "name": "command bar: no uncaught errors in the page",
+      "ok": true,
+      "detail": []
+    }
+  ]
+}

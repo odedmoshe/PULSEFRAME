@@ -1,343 +1,171 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import * as T from '@pulseframe/time';
-import { BRAND, LOGO_SVG } from '@pulseframe/brand';
-import { clipEnd, findClip, sequenceDuration, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { createT, dirOf, type Key, type Lang } from '@pulseframe/i18n';
-import { api, ApiFailure, type JobEvent, type RevisionEvent } from './api.ts';
-import { ensureFonts } from './fonts.ts';
-import { MediaPool } from './media.ts';
-import { Player } from './player.ts';
-
-const PX_PER_SECOND = 90;
-type SaveState = 'save.saved' | 'save.saving' | 'save.offline' | 'save.conflict';
+// These sheets come before every component sheet (the first imports of this file). The shell grid first; then the stage and
+// timeline rules, which stood in styles.css, ahead of all the components' own sheets, and keep that place in the cascade.
+import './ds/shell.css';
+import './editor/stage.css';
+import './editor/timeline.css';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ToastProvider, useToasts } from './ds/index.ts';
+import { CanvasHandles } from './editor/CanvasHandles.tsx';
+import { TrackPicker } from './editor/TrackPicker.tsx';
+import { CommandPalette } from './editor/CommandPalette.tsx';
+import { chordOf, Keymap } from './editor/commands.ts';
+import { ErrorBar } from './editor/ErrorBar.tsx';
+import { GalleryHost } from './editor/EffectGallery.tsx';
+import { ExportSheetHost } from './editor/ExportSheet.tsx';
+import { FolderPicker, PhoneDropHost } from './editor/ImportHosts.tsx';
+import { Header } from './editor/Header.tsx';
+import { Inspector } from './editor/Inspector.tsx';
+import { Library } from './editor/Library.tsx';
+import { Rail } from './editor/Rail.tsx';
+import { Splitter } from './editor/Splitter.tsx';
+import { StageHeader } from './editor/StageHeader.tsx';
+import { StatusBar } from './editor/StatusBar.tsx';
+import { Transport } from './editor/Transport.tsx';
+import { isTyping, shortcutAllowed } from './editor/shortcutGate.ts';
+import { Editor, EditorContext, useEditorState } from './editor/store.ts';
+import { toastOf } from './editor/undoToast.ts';
+import { Timeline } from './editor/Timeline.tsx';
+import { Welcome } from './editor/Welcome.tsx';
+import { FamilyFilmDialog } from './editor/FamilyFilmDialog.tsx';
+import { CurvePicker } from './editor/CurvePicker.tsx';
+import { findClip, findEffect } from '@pulseframe/core';
+import { isDecodeBudgetReason } from '@pulseframe/engine';
+import { clipLabel } from './editor/Timeline.tsx';
 
 export function App() {
-  const [lang, setLang] = useState<Lang>(() => (localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he'));
-  const t = useMemo(() => createT(lang), [lang]);
-  const [doc, setDoc] = useState<ProjectDocument | null>(null);
-  const [revision, setRevision] = useState(0);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [save, setSave] = useState<SaveState>('save.saved');
-  const [activity, setActivity] = useState<RevisionEvent[]>([]);
-  const [job, setJob] = useState<JobEvent | null>(null);
-  const [capJob, setCapJob] = useState<JobEvent | null>(null);
-  const [provider, setProvider] = useState<Awaited<ReturnType<typeof api.capabilities>> | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [, force] = useState(0);
+  const editor = useMemo(() => new Editor(), []);
+  const keymap = useMemo(() => new Keymap(), []);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const playerRef = useRef<Player | null>(null);
-  const poolRef = useRef<MediaPool | null>(null);
-  const state = useRef({ doc, revision });
-  state.current = { doc, revision };
 
   useEffect(() => {
-    document.documentElement.lang = lang;
-    document.documentElement.dir = dirOf(lang);
-    localStorage.setItem('pf.lang', lang);
-  }, [lang]);
+    void editor.boot(canvasRef.current!).catch(editor.fail);
+    return () => editor.dispose();
+  }, [editor]);
 
-  const fail = useCallback((e: unknown) => {
-    console.error(e);
-    setError(e instanceof Error ? e.message : String(e));
-  }, []);
-
-  const load = useCallback(async (projectId: string) => {
-    const p = await api.getProject(projectId);
-    if (p.revision >= state.current.revision || !state.current.doc) {
-      setDoc(p.project);
-      setRevision(p.revision);
-      playerRef.current?.setDoc(p.project);
-    }
-    return p;
-  }, []);
-
-  // Boot: session -> project -> fonts -> player -> live revision stream.
-  useEffect(() => {
-    let es: EventSource | undefined;
-    let closed = false;
-    (async () => {
-      await api.session();
-      await ensureFonts();
-      let id = new URLSearchParams(location.search).get('project');
-      if (!id) {
-        const { projects } = await api.listProjects();
-        id = projects[0]?.id ?? (await api.createProject(lang === 'he' ? 'הפרויקט שלי' : 'My project')).project.id;
-      }
-      const projectId = id;
-      poolRef.current = new MediaPool((assetId) => api.assetBlob(projectId, assetId));
-      playerRef.current = new Player(canvasRef.current!, poolRef.current, () => force((n) => n + 1), fail);
-      const p = await load(projectId);
-      setActivity((await api.history(projectId)).events.reverse());
-      if (closed) return;
-      es = api.events(projectId, p.revision);
-      es.addEventListener('revision', (m) => {
-        const e: RevisionEvent = JSON.parse((m as MessageEvent).data);
-        setActivity((a) => (a.some((x) => x.revision === e.revision) ? a : [e, ...a].slice(0, 50)));
-        // Committed remote or local change: converge on the server document. The playhead and selection are local and stay put.
-        if (e.revision > state.current.revision) void load(projectId).catch(fail);
-      });
-      es.addEventListener('job', (m) => { const j: JobEvent = JSON.parse((m as MessageEvent).data); (j.type === 'capability' ? setCapJob : setJob)(j); });
-      // Listing capabilities only reads provider status; it never starts a worker.
-      void api.capabilities().then(setProvider).catch(() => setProvider(null));
-      es.onerror = () => setSave('save.offline');
-      es.onopen = () => setSave('save.saved');
-    })().catch(fail);
-    return () => {
-      closed = true;
-      es?.close();
-      playerRef.current?.dispose();
-      void poolRef.current?.dispose();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const commit = useCallback(async (ops: OpCall[], label?: string) => {
-    const { doc, revision } = state.current;
-    if (!doc) return null;
-    setSave('save.saving');
-    setError(null);
-    try {
-      const r = await api.commit(doc.id, revision, ops, label);
-      await load(doc.id);
-      setSave('save.saved');
-      return r;
-    } catch (e) {
-      if (e instanceof ApiFailure && e.code === 'stale_revision') {
-        await load(doc.id);
-        setSave('save.conflict');
-      } else {
-        setSave('save.saved');
-        fail(e);
-      }
-      return null;
-    }
-  }, [fail, load]);
-
-  const player = playerRef.current;
-  const rate = doc?.settings.frameRate ?? { num: 30, den: 1 };
-  const frame = player?.frame ?? 0;
-  const playhead = T.frameTime(frame, rate);
-  const sel = doc && selected ? findClip(doc, selected) : undefined;
-  useEffect(() => { if (selected && doc && !findClip(doc, selected)) setSelected(null); }, [doc, selected]);
-
-  const importFile = async (file: File) => {
-    if (!doc) return;
-    setUploading(true);
-    setError(null);
-    try {
-      const r = await api.upload(doc.id, file);
-      poolRef.current?.provideLocal(r.assetId, file);
-      await load(doc.id);
-    } catch (e) {
-      fail(e instanceof ApiFailure && e.code === 'unsupported_media' ? new Error(`${t('media.unsupported')}: ${e.message}`) : e);
-    } finally {
-      setUploading(false);
-    }
-  };
-  const addAsset = (assetId: string) => doc && commit([{ op: 'add_clip', args: { assetId, start: T.snapToFrame(videoEnd(doc), rate) } }], 'Add clip');
-  const addText = async () => {
-    if (!doc) return;
-    const r = await commit([{ op: 'add_text', args: { text: t('text.default'), start: playhead, duration: T.frameTime(Math.round((2 * rate.num) / rate.den), rate) } }], 'Add text');
-    const id = r?.results[0]?.output?.clipId;
-    if (id) setSelected(id);
-  };
-  const inside = sel && T.lt(sel.clip.start, playhead) && T.lt(playhead, clipEnd(sel.clip));
-  const split = () => sel && inside && commit([{ op: 'split_clip', args: { clipId: sel.clip.id, at: playhead } }], 'Split');
-  const remove = () => sel && commit([{ op: 'delete_clip', args: { clipId: sel.clip.id } }], 'Delete');
-  const trim = (edge: 'start' | 'end') => sel && inside && commit([{ op: 'trim_clip', args: { clipId: sel.clip.id, edge, to: playhead } }], 'Trim');
-
-  // Keyboard: uses physical key codes so shortcuts survive a Hebrew layout; disabled while typing.
+  // One keyboard dispatcher for every command. Editing shortcuts are disabled while typing (SPEC §3).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement;
-      if (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;
-      const p = playerRef.current;
-      if (!p) return;
-      const step = e.shiftKey ? 10 : 1;
-      const map: Record<string, () => void> = {
-        Space: () => (p.playing ? p.pause() : void p.play()),
-        ArrowLeft: () => p.seek(p.frame - step),
-        ArrowRight: () => p.seek(p.frame + step),
-        Home: () => p.seek(0),
-        End: () => p.seek(p.frameCount - 1),
-        KeyS: () => void split(),
-        Delete: () => void remove(),
-        Backspace: () => void remove(),
-        BracketLeft: () => void trim('start'),
-        BracketRight: () => void trim('end'),
-      };
-      const fn = map[e.code];
-      if (fn) { e.preventDefault(); fn(); }
+      const chord = chordOf(e);
+      const typing = isTyping(e.target as HTMLInputElement | null, chord);
+      // a chord may belong to more than one command (the cut's , and . before the keyframe steps): the first that can run now acts
+      const bound = keymap.lookupAll(chord);
+      const cmd = bound.find((c) => !c.enabled || c.enabled(editor)) ?? bound[0];
+      if (!cmd) return;
+      // any modal dialog (whatever its class) is open: editor shortcuts do not act on the timeline behind it
+      if (!shortcutAllowed(chord, cmd, { typing, paletteOpen: editor.getState().paletteOpen, modalOpen: !!document.querySelector('[aria-modal="true"]'), performRecording: !!editor.getState().performRecording })) return;
+      e.preventDefault();
+      if (!cmd.enabled || cmd.enabled(editor)) void cmd.run(editor);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  });
-
-  const duration = doc ? sequenceDuration(doc) : T.ZERO;
-  const totalSeconds = Math.max(T.toSeconds(duration) + 2, 8);
-  const exporting = job && (job.status === 'queued' || job.status === 'running');
+  }, [editor, keymap]);
 
   return (
+    <EditorContext.Provider value={editor}>
+      <Toasts>
+        <Shell canvasRef={canvasRef} keymap={keymap} />
+      </Toasts>
+    </EditorContext.Provider>
+  );
+}
+
+const APP_STRINGS = { he: { close: 'סגירה', undo: 'ביטול' }, en: { close: 'Close', undo: 'Undo' } } as const;
+/** The toast queue of the editor (ds ToastProvider), in the interface language. */
+function Toasts({ children }: { children: React.ReactNode }) {
+  const { state } = useEditorState();
+  return <ToastProvider closeLabel={APP_STRINGS[state.lang].close}>{children}<ToastBridge /></ToastProvider>;
+}
+/** The editor's notices (editor.notify) go to the toast queue; an undo toast undoes exactly the transaction it names (undoToast.ts). */
+function ToastBridge() {
+  const { editor, state } = useEditorState();
+  const toasts = useToasts();
+  const seen = useRef(0);
+  const n = state.notice;
+  useEffect(() => {
+    if (!n || n.n === seen.current) return;
+    seen.current = n.n;
+    toasts.push(toastOf(n, APP_STRINGS[state.lang].undo, editor));
+  }, [n?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+const NOTICE_STRINGS = {
+  he: { without: 'התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.',
+    budget: 'בפריים הזה יש יותר תמונות וידאו לפענוח בבת אחת ממה שהעורך פותח, ולכן הוא מוצג בלי אפקט הזמן. ניסיון חוזר לא יעזור: אפשר להקטין את מספר ההדים, להסיר אפקט זמן או להרחיק זה מזה את הקליפים החופפים. בדיקה לפני ייצוא מראה אילו פריימים יסורבו בייצוא.' },
+  en: { without: 'The picture is shown without this effect for now, because its material could not be loaded. Loading is tried again automatically; stills and exports are refused until it loads.',
+    budget: 'This frame needs more video pictures decoded at once than the editor opens, so it is shown without its time effect. Trying again will not help: lower the count of a time effect, remove one, or move the overlapping clips apart. Preflight lists the frames an export would refuse.' },
+} as const;
+/**
+ * The frame on screen had to be drawn without an effect whose own material could not be loaded (a colour table whose file
+ * could not be fetched or read): say so over the preview, with the effect and the reason, instead of showing it silently.
+ * A missing graphics adapter is a different state with its own notice (Look panel).
+ */
+function PreviewNotice() {
+  const { editor, state, t } = useEditorState(); // the player ticks the state after every painted frame
+  const reasons = editor.player?.unavailableReasons ?? {};
+  // A frame over the decoder budget (ADR-0011) is a different state from material that failed to load: no retry helps it.
+  const budget = Object.keys(reasons).filter((id) => isDecodeBudgetReason(reasons[id]));
+  const ids = Object.keys(reasons).filter((id) => !isDecodeBudgetReason(reasons[id]));
+  // Sound clips whose effects cannot run in this browser play without them (ADR-0010 D7): said here too, never silently.
+  const sound = editor.player?.unavailableAudioFx ?? {};
+  const soundIds = Object.keys(sound);
+  if (ids.length === 0 && budget.length === 0 && soundIds.length === 0) return null;
+  const nameOf = (clipId: string) => { const f = state.doc ? findClip(state.doc, clipId) : undefined; return f && state.doc ? clipLabel(state.doc, f.clip, state.lang) : clipId; };
+  return (
+    <div className="preview-notice" role="status" data-testid="effect-unavailable">
+      {budget.length > 0 && <div data-testid="decode-budget-notice">
+        <p>{NOTICE_STRINGS[state.lang].budget}</p>
+        <ul>{budget.map((id) => <li key={id}><strong><bdi>{findEffect(id)?.name[state.lang] ?? id}</bdi></strong></li>)}</ul>
+      </div>}
+      {ids.length > 0 && <>
+        <p>{NOTICE_STRINGS[state.lang].without}</p>
+        <ul>{ids.map((id) => <li key={id}><strong><bdi>{findEffect(id)?.name[state.lang] ?? id}</bdi></strong> — <bdi dir="ltr">{reasons[id]}</bdi></li>)}</ul>
+      </>}
+      {soundIds.length > 0 && <div data-testid="audio-fx-unavailable">
+        <p>{t('sound.fx.unavailable.title')}</p>
+        <ul>{soundIds.map((id) => <li key={id}><strong><bdi>{nameOf(id)}</bdi></strong> — <bdi dir="ltr">{sound[id]}</bdi></li>)}</ul>
+      </div>}
+    </div>
+  );
+}
+
+function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasElement | null>; keymap: Keymap }) {
+  const { t, state } = useEditorState();
+  const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
+  return (
+    // The shell grid (ds/shell.css): top bar, error bar, rail, browser, stage, inspector, splitter, timeline, status bar.
+    // The rail, the splitter and the status bar are mounts: empty, and without room in the grid, until they are built.
     <div className="app">
-      <header className="header">
-        <span className="logo" dangerouslySetInnerHTML={{ __html: LOGO_SVG }} />
-        <strong className="brand">{BRAND.name}</strong>
-        <span className="title" data-testid="project-name">{doc?.name ?? t('app.loading')}</span>
-        <span className="badge">{t('phase0.badge')}</span>
-        <span className="spacer" />
-        <span className={`save ${save === 'save.conflict' || save === 'save.offline' ? 'warn' : ''}`} role="status" data-testid="save-state">{t(save)}</span>
-        <span className="rev" data-testid="revision">{t('revision')} <bdi>{revision}</bdi></span>
-        <button className="ghost" onClick={() => setLang(lang === 'he' ? 'en' : 'he')} aria-label={t('lang.label')} data-testid="lang-toggle">{t('lang.toggle')}</button>
-        {job?.status === 'succeeded' && <a className="ghost" href={`/api/v1/jobs/${job.id}/output`} data-testid="export-download">{t('export.done')}</a>}
-        <button className="primary" disabled={!doc || !!exporting || player?.frameCount === 0} onClick={() => doc && api.startExport(doc.id).then((j) => setJob({ id: j.jobId, type: 'export', status: 'queued', stage: null, output: null, error: null })).catch(fail)} data-testid="export">
-          {exporting ? `${t('export.running')} ${job?.stage ?? ''}` : t('export')}
-        </button>
-      </header>
-      {(error || job?.status === 'failed') && (
-        <div className="error" role="alert">
-          {error ?? `${t('export.failed')}: ${job?.error?.message ?? ''}`}
-          <button className="ghost" onClick={() => { setError(null); if (job?.status === 'failed') setJob(null); }} aria-label="×">×</button>
+      <Header />
+      <ErrorBar />
+      <Rail />
+      <Library />
+      {/* the stage and the timeline show the active sequence: the sequence tabs (SequenceSwitcher) control them */}
+      <main className="stage" id="pf-stage">
+        <StageHeader />
+        <div className="canvas-wrap">
+          <canvas ref={(el) => { (canvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = el; setCanvasEl(el); }} aria-label={t('preview')} data-testid="preview" />
+          <CanvasHandles canvas={canvasEl} />
+          <TrackPicker canvas={canvasEl} />
+          <PreviewNotice />
+          <Welcome />
         </div>
-      )}
-      <aside className="library" aria-label={t('media')}>
-        <h2>{t('media')}</h2>
-        <label className="primary file">
-          {uploading ? t('media.uploading') : t('media.import')}
-          <input type="file" accept="video/mp4,video/webm,audio/*" disabled={uploading || !doc} data-testid="file-input" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importFile(f); }} />
-        </label>
-        {doc && Object.keys(doc.assets).length === 0 && <p className="muted">{t('media.empty')}</p>}
-        <ul className="assets">
-          {doc && Object.values(doc.assets).map((a) => (
-            <li key={a.id}>
-              <span className="asset-name" dir="auto" title={a.name}>{a.name}</span>
-              <span className="muted"><bdi>{T.toSeconds(a.duration).toFixed(2)}s{a.video ? ` · ${a.video.width}×${a.video.height}` : ''}</bdi></span>
-              <button className="ghost" onClick={() => void addAsset(a.id)} data-testid={`add-${a.id}`}>{t('media.add')}</button>
-            </li>
-          ))}
-        </ul>
-        <h2>{t('text')}</h2>
-        <button className="ghost" disabled={!doc} onClick={() => void addText()} data-testid="add-text">{t('text.add')}</button>
-        <h2>{t('providers')}</h2>
-        <ProviderPanel t={t} lang={lang} provider={provider} job={capJob} onRun={(capId) => doc && api.runCapability(doc.id, capId, {}).then((j) => setCapJob({ id: j.jobId, type: 'capability', status: 'queued', stage: null, output: null, error: null })).catch(fail)} />
-      </aside>
-      <main className="stage">
-        <div className="canvas-wrap"><canvas ref={canvasRef} aria-label={t('preview')} data-testid="preview" /></div>
-        <div className="transport" dir="ltr">
-          <button className="ghost" onClick={() => player?.seek(frame - 1)} aria-label={t('frame.prev')}>◀︎</button>
-          <button className="primary" onClick={() => (player?.playing ? player.pause() : void player?.play())} aria-label={player?.playing ? t('pause') : t('play')} data-testid="play">{player?.playing ? '❚❚' : '▶'}</button>
-          <button className="ghost" onClick={() => player?.seek(frame + 1)} aria-label={t('frame.next')}>▶︎</button>
-          <span className="timecode" data-testid="timecode">{T.toTimecode(playhead, rate)}</span>
-          <span className="muted">/ {T.toTimecode(duration, rate)} · {doc?.settings.width}×{doc?.settings.height} · {(rate.num / rate.den).toFixed(rate.den === 1 ? 0 : 2)} fps</span>
-        </div>
+        <Transport />
       </main>
-      <aside className="inspector" aria-label={t('inspector')}>
-        <h2>{t('inspector')}</h2>
-        {!sel ? <p className="muted">{t('inspector.none')}</p> : (
-          <Inspector key={sel.clip.id} clip={sel.clip} t={t} onCommit={commit} canCut={!!inside} onSplit={() => void split()} onDelete={() => void remove()} onTrim={(e) => void trim(e)} />
-        )}
-        <h2>{t('activity')}</h2>
-        <ol className="activity" data-testid="activity" aria-live="polite">
-          {activity.length === 0 && <li className="muted">{t('activity.empty')}</li>}
-          {activity.map((e) => (
-            <li key={e.revision} data-actor={e.actor}>
-              <span className={`actor ${e.actor.startsWith('agent') ? 'agent' : ''}`}>{e.actor.startsWith('agent') ? t('actor.agent') : t('actor.user')}</span>
-              <span dir="auto">{e.summary}</span>
-              <span className="muted"><bdi>#{e.revision}</bdi></span>
-            </li>
-          ))}
-        </ol>
-      </aside>
-      {/* Time always progresses left-to-right, also in the Hebrew interface (SPEC §3). */}
-      <section className="timeline" dir="ltr" aria-label={t('timeline')}>
-        <div className="tl-scroll">
-          <div className="tl-inner" style={{ width: totalSeconds * PX_PER_SECOND + 80 }}>
-            <div className="ruler" onPointerDown={(e) => { const x = e.clientX - e.currentTarget.getBoundingClientRect().left; player?.seek(Math.round(((x / PX_PER_SECOND) * rate.num) / rate.den)); }} data-testid="ruler">
-              {Array.from({ length: Math.ceil(totalSeconds) + 1 }, (_, s) => <span key={s} style={{ left: s * PX_PER_SECOND }}>{s}s</span>)}
-            </div>
-            {doc && [...doc.sequences[doc.mainSequenceId]!.tracks].reverse().map((tr) => (
-              <div className={`track ${tr.kind}`} key={tr.id} role="list" aria-label={`${t(`track.${tr.kind}` as Key)} ${tr.name}`}>
-                <span className="track-name">{tr.name}</span>
-                {tr.clips.map((c) => (
-                  <button key={c.id} role="listitem" className={`clip ${c.id === selected ? 'selected' : ''}`} data-testid={`clip-${c.id}`} data-clip-type={c.type} data-track-kind={tr.kind}
-                    style={{ left: T.toSeconds(c.start) * PX_PER_SECOND, width: Math.max(4, T.toSeconds(c.duration) * PX_PER_SECOND - 1) }}
-                    onClick={() => setSelected(c.id)} aria-pressed={c.id === selected}
-                    aria-label={`${clipLabel(doc, c)} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}`}>
-                    <span dir="auto">{clipLabel(doc, c)}</span>
-                  </button>
-                ))}
-              </div>
-            ))}
-            <div className="playhead" style={{ left: T.toSeconds(playhead) * PX_PER_SECOND }} />
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-const clipLabel = (doc: ProjectDocument, c: Clip) => (c.type === 'text' ? c.text : doc.assets[c.assetId]?.name ?? c.assetId);
-function videoEnd(doc: ProjectDocument) {
-  let end = T.ZERO;
-  for (const tr of doc.sequences[doc.mainSequenceId]!.tracks) if (tr.kind !== 'text') for (const c of tr.clips) end = T.max(end, clipEnd(c));
-  return end;
-}
-
-function ProviderPanel(p: { t: (k: Key) => string; lang: Lang; provider: Awaited<ReturnType<typeof api.capabilities>> | null; job: JobEvent | null; onRun(capabilityId: string): void }) {
-  const { t, provider, job } = p;
-  if (!provider) return null;
-  const pr = provider.provider;
-  if (!pr.configured) return <p className="muted" data-testid="provider-status" data-state="not-configured">{t('providers.notConfigured')}</p>;
-  if (!pr.readiness?.reachable) return <p className="muted" data-testid="provider-status" data-state="unreachable">{t('providers.unreachable')}</p>;
-  const smoke = provider.capabilities.find((c) => c.id === 'comfy.smoke.solid-image');
-  const busy = job && ['queued', 'running', 'cancel-requested'].includes(job.status);
-  return (
-    <div className="fields">
-      <p className="muted" data-testid="provider-status" data-state="ready">{t('providers.ready')} · <bdi>{pr.readiness.runtimeVersion} · {pr.readiness.device?.type}</bdi></p>
-      {smoke && <button className="ghost" disabled={!smoke.runnable || !!busy} onClick={() => p.onRun(smoke.id)} data-testid="provider-smoke">{busy ? `${t('providers.running')} ${job?.stage ?? ''}` : t('providers.smoke')}</button>}
-      {job?.status === 'succeeded' && (
-        <p className="muted" data-testid="provider-result" data-job={job.id}>
-          <img src={`/api/v1/jobs/${job.id}/outputs/0`} alt="" width={48} height={48} style={{ verticalAlign: 'middle', borderRadius: 4, marginInlineEnd: 8 }} />
-          {t('providers.ok')} · <bdi>{job.output?.bundle?.[0]?.width}×{job.output?.bundle?.[0]?.height}</bdi>
-        </p>
-      )}
-      {job?.status === 'failed' && <p className="muted danger" data-testid="provider-result" role="alert">{t('providers.failed')}: {job.error?.message}</p>}
-    </div>
-  );
-}
-
-function Inspector(p: { clip: Clip; t: (k: Key) => string; onCommit: (ops: OpCall[], label?: string) => Promise<unknown>; canCut: boolean; onSplit(): void; onDelete(): void; onTrim(e: 'start' | 'end'): void }) {
-  const { clip, t } = p;
-  const [text, setText] = useState(clip.type === 'text' ? clip.text : '');
-  useEffect(() => { if (clip.type === 'text') setText(clip.text); }, [clip]);
-  return (
-    <div className="fields">
-      {clip.type === 'text' && (
-        <>
-          <label>{t('text.content')}
-            <textarea dir="auto" rows={3} value={text} data-testid="text-content" onChange={(e) => setText(e.target.value)}
-              onBlur={() => text && text !== clip.text && void p.onCommit([{ op: 'update_text', args: { clipId: clip.id, text } }], 'Edit text')} />
-          </label>
-          <label>{t('text.size')}
-            <input type="range" min={0.02} max={0.2} step={0.005} defaultValue={clip.style.sizeFrac} onPointerUp={(e) => void p.onCommit([{ op: 'update_text', args: { clipId: clip.id, style: { sizeFrac: Number(e.currentTarget.value) } } }], 'Text size')}
-              onKeyUp={(e) => void p.onCommit([{ op: 'update_text', args: { clipId: clip.id, style: { sizeFrac: Number(e.currentTarget.value) } } }], 'Text size')} />
-          </label>
-          <label>{t('text.y')}
-            <input type="range" min={-0.45} max={0.45} step={0.01} defaultValue={clip.transform.y} onPointerUp={(e) => void p.onCommit([{ op: 'set_clip_transform', args: { clipId: clip.id, transform: { y: Number(e.currentTarget.value) } } }], 'Move text')}
-              onKeyUp={(e) => void p.onCommit([{ op: 'set_clip_transform', args: { clipId: clip.id, transform: { y: Number(e.currentTarget.value) } } }], 'Move text')} />
-          </label>
-        </>
-      )}
-      <dl>
-        <dt>{t('clip.start')}</dt><dd><bdi>{T.toSeconds(clip.start).toFixed(3)}s</bdi></dd>
-        <dt>{t('clip.duration')}</dt><dd><bdi>{T.toSeconds(clip.duration).toFixed(3)}s</bdi></dd>
-      </dl>
-      <div className="row">
-        <button className="ghost" disabled={!p.canCut} onClick={p.onSplit} data-testid="split">{t('split')} <kbd>S</kbd></button>
-        <button className="ghost" disabled={!p.canCut} onClick={() => p.onTrim('start')}>{t('trim.start')} <kbd>[</kbd></button>
-        <button className="ghost" disabled={!p.canCut} onClick={() => p.onTrim('end')}>{t('trim.end')} <kbd>]</kbd></button>
-        <button className="ghost danger" onClick={p.onDelete} data-testid="delete">{t('delete')} <kbd>Del</kbd></button>
-      </div>
+      <Inspector keymap={keymap} />
+      <Splitter />
+      <Timeline />
+      <StatusBar />
+      <CommandPalette keymap={keymap} />
+      {/* one host each: the export sheet (the top bar's Export, the palette and the Deliver panel open it) and the effects gallery (the rail, the ride bar and the inspector open it) */}
+      <ExportSheetHost />
+      <PhoneDropHost />
+      <FolderPicker />
+      <GalleryHost />
+      {/* the family film dialog (ADR-0026): draws nothing until an entry, the event card or the palette opens it */}
+      <FamilyFilmDialog lang={state.lang} />
+      {/* the curve picker (ADR-0019): draws nothing until a keyframe, a strip key or a curve chip opens it */}
+      <CurvePicker />
     </div>
   );
 }

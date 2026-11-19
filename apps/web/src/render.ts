@@ -4,9 +4,11 @@
  * and streams raw RGBA to the server. A 2D context with willReadFrequently keeps the canvas on the
  * CPU raster path, so output does not depend on a GPU.
  */
+import './strictPage.ts';
 import * as T from '@pulseframe/time';
 import type { ProjectDocument } from '@pulseframe/core';
-import { drawGraph, evaluate } from '@pulseframe/engine';
+import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS } from '@pulseframe/core';
+import { drawGraph, evaluate, gpuStatus, initGpu } from '@pulseframe/engine';
 import { ensureFonts } from './fonts.ts';
 import { MediaPool } from './media.ts';
 
@@ -14,35 +16,48 @@ const token = new URLSearchParams(location.hash.slice(1)).get('token');
 const base = `/api/v1/render/${token}`;
 let doc: ProjectDocument;
 let frameCount = 0;
+let firstFrame = 0;
+let outWidth = 0;
+let outHeight = 0;
+/** Segmented export (ADR-0024): only these [first, count] runs of the range are drawn, in this order; null = every frame in order. */
+let runs: [number, number][] | null = null;
 let ctx: CanvasRenderingContext2D;
-const pool = new MediaPool(async (assetId) => {
-  const r = await fetch(`${base}/assets/${assetId}`);
-  if (!r.ok) throw new Error(`asset ${assetId}: HTTP ${r.status}`);
-  return r.blob();
-});
+// Export always decodes the ORIGINAL bytes (never a proxy), read by HTTP range requests.
+// 12 decoders: two echo-5 clips under a transition, plus room (ADR-0005 budget, to be amended for ADR-0011 decode lanes).
+const pool = new MediaPool({ assetUrl: (assetId) => `${base}/assets/${assetId}`, maxDecoders: 12 });
 
 async function draw(index: number) {
-  const g = evaluate(doc, T.frameTime(index, doc.settings.frameRate));
-  const { missing } = await drawGraph(ctx, g, pool.frames);
-  // Final renders never substitute black for media that failed to decode.
-  if (missing.length) throw new Error(`frame ${index}: source frame unavailable for clips ${missing.join(', ')}`);
+  // `index` is relative to the exported range. Layout is resolution-independent, so a scaled output only changes the raster size.
+  const g = evaluate(doc, T.frameTime(firstFrame + index, doc.settings.frameRate));
+  const { missing, missingReasons, unavailableEffects, unavailableReasons } = await drawGraph(ctx, { ...g, width: outWidth, height: outHeight }, pool.frames);
+  // Final renders never substitute black for media that failed to decode, and never leave out an effect that could not run.
+  if (missing.length) throw new Error(`frame ${index}: source frame unavailable for clips ${missing.map((id) => (missingReasons?.[id] ? `${id} (${missingReasons[id]})` : id)).join(', ')}`);
+  // An effect whose own material is missing (a colour table that could not be loaded) says so; the others need the adapter.
+  const told = unavailableEffects.filter((id) => unavailableReasons?.[id]);
+  const adapter = unavailableEffects.filter((id) => !unavailableReasons?.[id]);
+  if (adapter.length) throw new Error(`gpu_effect_unavailable: frame ${index} uses ${adapter.join(', ')}, which needs a graphics adapter in the render worker; ${gpuStatus().reason}${told.map((id) => `; ${id}: ${unavailableReasons![id]}`).join('')}`);
+  if (told.length) throw new Error(`effect_unavailable: frame ${index} cannot be drawn faithfully: ${told.map((id) => `${id}: ${unavailableReasons![id]}`).join('; ')}`);
 }
 
-window.__pf = {
+const page = {
+  /** Decoder counts of this page's pool (diagnostics and proofs: ADR-0011 decode lanes). */
+  stats: () => pool.stats(),
   ready: (async () => {
     if (!token) throw new Error('missing render token');
     const r = await fetch(`${base}/snapshot`);
     if (!r.ok) throw new Error(`snapshot: HTTP ${r.status}`);
-    ({ doc, frameCount } = await r.json());
+    ({ doc, frameCount, firstFrame, outWidth, outHeight, runs = null } = await r.json());
     await ensureFonts();
+    // Only when the project uses a GPU effect: the adapter check costs time and a GPU device.
+    if (JSON.stringify(doc.sequences).match(new RegExp([...GPU_EFFECT_IDS, ...GPU_TRANSITION_IDS].map((id) => `"${id.replace('.', '\\.')}"`).join('|')))) await initGpu();
     const canvas = document.createElement('canvas');
-    canvas.width = doc.settings.width;
-    canvas.height = doc.settings.height;
+    canvas.width = outWidth;
+    canvas.height = outHeight;
     ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false, colorSpace: 'srgb' })!;
     document.body.append(canvas);
     return { frameCount };
   })(),
-  async renderPng(index) {
+  async renderPng(index: number) {
     await draw(index);
     const blob: Blob = await new Promise((res, rej) => ctx.canvas.toBlob((b) => (b ? res(b) : rej(new Error('toBlob failed'))), 'image/png'));
     const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -51,7 +66,8 @@ window.__pf = {
     return btoa(s);
   },
   async exportAll() {
-    const { width, height } = doc.settings;
+    const width = outWidth;
+    const height = outHeight;
     const frameBytes = width * height * 4;
     const perBatch = Math.max(1, Math.min(16, Math.floor((24 << 20) / frameBytes)));
     let batch = new Uint8Array(frameBytes * perBatch);
@@ -70,7 +86,10 @@ window.__pf = {
       n = 0;
       lap('upload');
     };
-    for (let i = 0; i < frameCount; i++) {
+    // The frames to draw, in stream order. `first` in the POST stays the position in this stream; the server maps it to the runs.
+    const order: number[] = runs ? runs.flatMap(([at, count]) => Array.from({ length: count }, (_, k) => at + k)) : Array.from({ length: frameCount }, (_, i) => i);
+    if (order.length !== frameCount) throw new Error(`render runs hold ${order.length} frames, the snapshot ${frameCount}`);
+    for (const i of order) {
       await draw(i);
       lap('draw');
       batch.set(ctx.getImageData(0, 0, width, height).data, n * frameBytes);
@@ -78,7 +97,10 @@ window.__pf = {
       if (++n === perBatch) await flush();
     }
     await flush();
+    const media = pool.stats();
     await pool.dispose();
-    return { frames: frameCount, stageMs: { draw: Math.round(ms.draw), readback: Math.round(ms.readback), upload: Math.round(ms.upload) } };
+    const stats = { frames: frameCount, stageMs: { draw: Math.round(ms.draw), readback: Math.round(ms.readback), upload: Math.round(ms.upload) }, decoders: { peak: media.peakDecoders, max: media.maxDecoders, opened: media.opened, disposed: media.disposed, refused: media.refused } };
+    return stats;
   },
 };
+window.__pf = page;

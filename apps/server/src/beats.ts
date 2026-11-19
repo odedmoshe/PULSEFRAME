@@ -1,0 +1,132 @@
+/**
+ * Beat tracking by signal analysis (no model). Spectral-flux onset envelope, tempo from its autocorrelation,
+ * beats from dynamic programming (after Ellis, "Beat Tracking by Dynamic Programming", 2007), so the grid can follow
+ * moderate tempo drift. It assumes music with a steady pulse; speech, ambient sound or rubato give low confidence.
+ * Known limits: it locks onto the strongest broadband onsets, so music whose off-beats are louder than its beats can be
+ * tracked half a beat off, and tempo can be reported at double or half the musical tempo. Results are editable for that reason.
+ */
+import { onsetStrength } from './dsp.ts';
+
+export interface BeatResult {
+  bpm: number | null; confidence: number; beats: number[] /* seconds */;
+  /** Beats that start a bar, when one beat in every three or four is consistently the strongest; otherwise empty. */
+  downbeats: number[];
+  /** Beats per bar behind `downbeats` (3 or 4), or null when no bar pattern was found. */
+  meter: 3 | 4 | null;
+  /** Share of whole bars whose first beat is the strongest of the bar (chance is 1/meter); 0 without a bar pattern. */
+  barConfidence: number;
+}
+const NO_BEATS: BeatResult = { bpm: null, confidence: 0, beats: [], downbeats: [], meter: null, barConfidence: 0 };
+
+/**
+ * Which beat starts the bar, from one number per beat (the caller passes how loud the sound just after each beat is). Tried for bars of four and of three beats:
+ * the phase whose beat is the strongest of its bar most often wins. Reported only when that holds in at least 70 % of the
+ * bars and the accented beats are clearly stronger than the rest; music without a regular accent gets no bars rather than a guess.
+ * Exported for tests.
+ */
+export function estimateBars(strength: number[]): { meter: 3 | 4; phase: number; confidence: number } | null {
+  const n = strength.length;
+  if (n < 12) return null;
+  const mean = strength.reduce((a, b) => a + b, 0) / n;
+  const sd = Math.sqrt(strength.reduce((a, b) => a + (b - mean) ** 2, 0) / n) || 1e-9;
+  let best: { meter: 3 | 4; phase: number; confidence: number; contrast: number } | null = null;
+  for (const meter of [4, 3] as const) {
+    for (let phase = 0; phase < meter; phase++) {
+      let bars = 0, wins = 0, inSum = 0, inN = 0, outSum = 0, outN = 0;
+      for (let i = phase; i + meter <= n; i += meter) {
+        bars++;
+        let top = i;
+        for (let k = i + 1; k < i + meter; k++) if (strength[k]! > strength[top]!) top = k;
+        if (top === i) wins++;
+      }
+      for (let i = 0; i < n; i++) { if ((((i - phase) % meter) + meter) % meter === 0) { inSum += strength[i]!; inN++; } else { outSum += strength[i]!; outN++; } }
+      if (bars < 3 || !inN || !outN) continue;
+      const confidence = wins / bars, contrast = (inSum / inN - outSum / outN) / sd;
+      // above chance by the same margin counts the same for both bar lengths; the larger margin wins, four beats on a tie
+      const margin = confidence - 1 / meter, bestMargin = best ? best.confidence - 1 / best.meter : -Infinity;
+      if (margin > bestMargin + 1e-9) best = { meter, phase, confidence, contrast };
+    }
+  }
+  if (!best || best.confidence < 0.7 || best.contrast < 0.5) return null;
+  return { meter: best.meter, phase: best.phase, confidence: Number(best.confidence.toFixed(3)) };
+}
+
+export const BEAT_SR = 22050;
+const N = 1024, HOP = 256;
+const FPS = BEAT_SR / HOP;
+
+/** Onset strength per hop of the beat tracker (dsp.ts onsetStrength at the tracker's window and hop). */
+export const onsetEnvelope = (x: Float32Array): Float64Array => onsetStrength(x, N, HOP, FPS);
+
+/**
+ * An onset is strongest in the envelope at the first frame whose window fully contains it, so its time is the frame's start
+ * plus about one window minus one and a half hops (measured on synthetic clicks in beats.test.ts; resolution is one hop, 11.6 ms).
+ */
+export const ONSET_OFFSET_S = (N - 1.5 * HOP) / BEAT_SR;
+
+export function detectBeats(x: Float32Array): BeatResult {
+  const o = onsetEnvelope(x);
+  const T_ = o.length;
+  if (T_ < FPS * 4) return { ...NO_BEATS };
+  // --- tempo: autocorrelation with a broad preference around 120 BPM (resolves the octave ambiguity the usual way)
+  const minLag = Math.floor((60 / 200) * FPS), maxLag = Math.ceil((60 / 60) * FPS);
+  const ac = new Float64Array(maxLag * 2 + 2);
+  for (let lag = 0; lag < ac.length; lag++) { let s = 0; for (let t = lag; t < T_; t++) s += o[t]! * o[t - lag]!; ac[lag] = s / (T_ - lag); }
+  let best = -1, bestScore = -Infinity;
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    const bpm = (60 * FPS) / lag;
+    const prior = Math.exp(-0.5 * (Math.log2(bpm / 120) / 0.8) ** 2);
+    const score = (ac[lag]! + 0.5 * ac[lag * 2]!) * prior;
+    if (score > bestScore) { bestScore = score; best = lag; }
+  }
+  if (best < 0 || ac[0]! <= 0) return { ...NO_BEATS };
+  // parabolic refinement of the autocorrelation peak
+  const y0 = ac[best - 1] ?? ac[best]!, y1 = ac[best]!, y2 = ac[best + 1] ?? ac[best]!;
+  const denom = y0 - 2 * y1 + y2;
+  const period = best + (denom < 0 ? (0.5 * (y0 - y2)) / denom : 0);
+  // Confidence: how periodic the onset pattern is at the chosen tempo, with the envelope's mean removed
+  // (the envelope is non-negative, so its raw autocorrelation is far above zero even for noise).
+  let mean = 0;
+  for (let t = 0; t < T_; t++) mean += o[t]!;
+  mean /= T_;
+  const confidence = Math.max(0, Math.min(1, (y1 - mean * mean) / Math.max(1e-9, ac[0]! - mean * mean)));
+  // --- beats: dynamic programming. score[t] = onset[t] + max over previous beats of (score - penalty for deviating from the period)
+  const alpha = 100;
+  const score = new Float64Array(T_), back = new Int32Array(T_).fill(-1);
+  const lo = Math.round(period / 2), hi = Math.round(period * 2);
+  for (let t = 0; t < T_; t++) {
+    let bestPrev = -1, bestVal = 0;
+    for (let d = lo; d <= hi && t - d >= 0; d++) {
+      const v = score[t - d]! - alpha * Math.log(d / period) ** 2;
+      if (bestPrev < 0 || v > bestVal) { bestVal = v; bestPrev = t - d; }
+    }
+    score[t] = o[t]! + (bestPrev >= 0 ? bestVal : 0);
+    back[t] = bestPrev;
+  }
+  let end = T_ - 1;
+  for (let t = Math.max(0, T_ - Math.round(period)); t < T_; t++) if (score[t]! > score[end]!) end = t;
+  const frames: number[] = [];
+  for (let t = end; t >= 0; t = back[t]!) frames.push(t);
+  frames.reverse();
+  // The tracker extends the grid at the period through silence. Drop leading and trailing beats that have no onset under them,
+  // so the grid starts and ends with the music.
+  const strength = frames.map((f) => { let m = 0; for (let k = Math.max(0, f - 3); k <= Math.min(T_ - 1, f + 3); k++) m = Math.max(m, o[k]!); return m; });
+  const sorted = strength.slice().sort((a, b) => a - b);
+  const floor = 0.25 * (sorted[sorted.length >> 1] ?? 0);
+  let a = 0, b = frames.length;
+  while (a < b && strength[a]! < floor) a++;
+  while (b > a && strength[b - 1]! < floor) b--;
+  frames.splice(b);
+  frames.splice(0, a);
+  const beats = frames.map((f) => Number((f / FPS + ONSET_OFFSET_S).toFixed(4)));
+  // tempo reported from the tracked beats (median interval), which follows the music better than the single autocorrelation lag
+  const iv = beats.slice(1).map((b, i) => b - beats[i]!).sort((a, b) => a - b);
+  const med = iv.length ? iv[iv.length >> 1]! : (period / FPS);
+  // Bars are judged by loudness, not by onset strength: the log-spectral flux under a beat is nearly the same for an accented and
+  // a plain hit (measured on the synthetic loops), while the level of the tenth of a second after the beat is not.
+  const span = Math.round(0.1 * BEAT_SR);
+  const loud = beats.map((bt) => { const s0 = Math.round(bt * BEAT_SR); let e = 0; for (let i = s0; i < s0 + span && i < x.length; i++) e += x[i]! * x[i]!; return Math.sqrt(e / span); });
+  const bars = estimateBars(loud);
+  const downbeats = bars ? beats.filter((_, i) => (i - bars.phase) % bars.meter === 0 && i >= bars.phase) : [];
+  return { bpm: Number((60 / med).toFixed(2)), confidence: Number(confidence.toFixed(3)), beats, downbeats, meter: bars?.meter ?? null, barConfidence: bars?.confidence ?? 0 };
+}

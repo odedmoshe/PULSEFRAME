@@ -1,0 +1,159 @@
+import { describe, expect, it } from 'vitest';
+import fc from 'fast-check';
+import { FLASH_GRID, FlashAnalyser, flashCells } from './flashAnalysis.ts';
+
+const W = 96, H = 96;
+/** An RGBA frame: `paint(x, y)` gives [r, g, b] in 0…255. */
+function frame(paint: (x: number, y: number) => [number, number, number]): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(W * H * 4);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const [r, g, b] = paint(x, y); out.set([r, g, b, 255], (y * W + x) * 4); }
+  return out;
+}
+const flat = (v: number) => frame(() => [v, v, v]);
+/** Analyse `seconds` of video at `fps`, frame k drawn by `at(k)`. */
+function analyse(fps: number, seconds: number, at: (k: number) => Uint8ClampedArray) {
+  const a = new FlashAnalyser(fps);
+  const cache = new Map<Uint8ClampedArray, ReturnType<typeof flashCells>>();
+  for (let k = 0; k < Math.round(fps * seconds); k++) { const f = at(k); let c = cache.get(f); if (!c) cache.set(f, (c = flashCells(f, W, H))); a.push(c); }
+  return a.report();
+}
+const BLACK = flat(0), WHITE = flat(255), GREY = flat(128);
+/** Alternates two frames `perSecond` full cycles a second (each cycle = one flash: up and down). */
+const alternate = (fps: number, perSecond: number, a: Uint8ClampedArray, b: Uint8ClampedArray) => (k: number) => (Math.floor((k / fps) * perSecond * 2) % 2 === 0 ? a : b);
+
+describe('photosensitivity check of rendered frames', () => {
+  it('full-frame black/white: three flashes a second pass, four fail, at 24, 30 and 60 frames a second', () => {
+    for (const fps of [24, 30, 60]) {
+      expect(analyse(fps, 4, alternate(fps, 3, BLACK, WHITE)).verdict, `${fps} fps, 3/s`).toBe('pass');
+      const r = analyse(fps, 4, alternate(fps, 4, BLACK, WHITE));
+      expect(r.verdict, `${fps} fps, 4/s`).toBe('fail');
+      expect(r.ranges[0]!.kind).toBe('general');
+      expect(r.ranges[0]!.flashesPerSecond).toBeGreaterThanOrEqual(4);
+      expect(r.ranges[0]!.area).toBe(1); // every cell of the frame flashed
+    }
+  });
+
+  it('a change smaller than a tenth of the luminance range, or one whose darker state is above 0.8, is no flash', () => {
+    const a = flat(200), b = flat(214); // luminance 0.58 → 0.67: less than 0.1 apart
+    expect(analyse(30, 3, alternate(30, 10, a, b)).verdict).toBe('pass');
+    const c = flat(236), d = flat(255); // 0.84 ↔ 1.0: the darker state is above 0.8
+    expect(analyse(30, 3, alternate(30, 10, c, d)).verdict).toBe('pass');
+  });
+
+  it('a slow fade is no flash; a flash at the very start of the video is counted', () => {
+    expect(analyse(30, 5, (k) => flat(Math.round(127 + 127 * Math.sin(k / 30 * Math.PI)))).verdict).toBe('pass'); // half a cycle a second
+    const r = analyse(30, 2, alternate(30, 5, WHITE, BLACK));
+    expect(r.verdict).toBe('fail');
+    expect(r.ranges[0]!.from).toBe(0);
+  });
+
+  it('area: a small patch flashing fast passes; a third of the frame flashing fails, wherever it is, and the range says how much of the frame', () => {
+    const patch = (on: boolean, x0: number, y0: number, size: number) => frame((x, y) => (on && x >= x0 && x < x0 + size && y >= y0 && y < y0 + size ? [255, 255, 255] : [0, 0, 0]));
+    // 1/8 of the width and height: about 1.6% of the frame, 14% of a 10-degree window
+    const small = [patch(false, 40, 40, 12), patch(true, 40, 40, 12)];
+    expect(analyse(30, 3, (k) => small[Math.floor(k / 3) % 2]!).verdict).toBe('pass');
+    for (const [x0, y0] of [[0, 0], [32, 32], [64, 64], [16, 48]] as const) {
+      const big = [patch(false, x0, y0, 32), patch(true, x0, y0, 32)];
+      const r = analyse(30, 3, (k) => big[Math.floor(k / 3) % 2]!);
+      expect(r.verdict, `${x0},${y0}`).toBe('fail');
+      expect(r.ranges[0]!.area).toBeGreaterThan(0.05);
+      expect(r.ranges[0]!.area).toBeLessThan(1);
+    }
+  });
+
+  it('red: saturated red alternating with black four times a second fails as a red flash even when its luminance change alone would be small', () => {
+    const DARK_RED = frame(() => [120, 0, 0]); // luminance of 120 linear red ≈ 0.04: no general transition from black
+    const r = analyse(30, 3, alternate(30, 4, BLACK, DARK_RED));
+    expect(r.ranges.map((x) => x.kind)).toEqual(['red']);
+    // the same rate in a red that is not saturated (red with as much green and blue) is no red flash
+    const PINK = frame(() => [120, 70, 70]);
+    expect(analyse(30, 3, alternate(30, 4, BLACK, PINK)).ranges.filter((x) => x.kind === 'red')).toEqual([]);
+  });
+
+  it('ranges: a burst of flashing in the middle is reported with its place; before and after it the video passes', () => {
+    // 2 s grey, 1.5 s of 5 flashes a second, 2 s grey
+    const r = analyse(30, 5.5, (k) => (k >= 60 && k < 105 ? alternate(30, 5, BLACK, WHITE)(k) : GREY));
+    expect(r.verdict).toBe('fail');
+    expect(r.ranges).toHaveLength(1);
+    expect(r.ranges[0]!.from).toBeGreaterThanOrEqual(60 - 30);
+    expect(r.ranges[0]!.to).toBeLessThan(105 + 30);
+    expect(r.frames).toBe(165);
+  });
+
+  it('any steady alternation: the verdict is "fail" exactly when it is faster than three flashes a second (property)', () => {
+    fc.assert(fc.property(fc.constantFrom(24, 25, 30, 50, 60), fc.integer({ min: 1, max: 14 }), (fps, halfPeriodFrames) => {
+      // a square wave that changes every `halfPeriodFrames` frames: fps / (2 · halfPeriodFrames) flashes a second
+      const perSecond = fps / (2 * halfPeriodFrames);
+      const r = analyse(fps, 4, (k) => (Math.floor(k / halfPeriodFrames) % 2 === 0 ? BLACK : WHITE));
+      // more than six transitions fit in one second exactly when 7 changes fit in a window of fps frames
+      const transitionsInASecond = Math.floor((Math.round(fps) - 1) / halfPeriodFrames) + 1;
+      expect(r.verdict, `${fps} fps, ${perSecond.toFixed(2)}/s`).toBe(transitionsInASecond > 6 ? 'fail' : 'pass');
+    }), { numRuns: 70 });
+  });
+
+  it('cells are block means of linear light; a frame of any size gives the same cells for the same picture', () => {
+    const c = flashCells(WHITE, W, H);
+    expect(c.cols).toBe(FLASH_GRID);
+    expect(Math.min(...c.rgb)).toBeCloseTo(1, 6);
+    const big = new Uint8ClampedArray(640 * 360 * 4).fill(255);
+    expect(Math.min(...flashCells(big, 640, 360).rgb)).toBeCloseTo(1, 6);
+    const half = flashCells(frame((x) => (x < W / 2 ? [255, 255, 255] : [0, 0, 0])), W, H);
+    expect(half.rgb[0]).toBeCloseTo(1, 6);
+    expect(half.rgb[(FLASH_GRID - 1) * 3]).toBeCloseTo(0, 6);
+  });
+});
+
+describe('peak(): the most transitions any one cell had in any one second', () => {
+  /** Push `seconds` of frames and return the analyser (for peak) as well as its report. */
+  function run(fps: number, seconds: number, at: (k: number) => Uint8ClampedArray) {
+    const a = new FlashAnalyser(fps);
+    const cache = new Map<Uint8ClampedArray, ReturnType<typeof flashCells>>();
+    for (let k = 0; k < Math.round(fps * seconds); k++) { const f = at(k); let c = cache.get(f); if (!c) cache.set(f, (c = flashCells(f, W, H))); a.push(c); }
+    return { peak: a.peak(), report: a.report() };
+  }
+  it('is 0 before anything is pushed and on a still picture', () => {
+    expect(new FlashAnalyser(30).peak()).toEqual({ general: 0, red: 0 });
+    expect(run(30, 2, () => GREY).peak).toEqual({ general: 0, red: 0 });
+  });
+  it('square waves: equals the number of changes that fit in one second, and the verdict fails exactly above 6 (property)', () => {
+    fc.assert(fc.property(fc.constantFrom(24, 25, 30, 50, 60), fc.integer({ min: 1, max: 14 }), (fps, half) => {
+      // black, then a change every `half` frames: every change is one luminance transition, in every cell
+      const r = run(fps, 4, (k) => (Math.floor(k / half) % 2 === 0 ? BLACK : WHITE));
+      const fit = Math.floor((Math.round(fps) - 1) / half) + 1;
+      expect(r.peak, `${fps} fps, a change every ${half} frames`).toEqual({ general: fit, red: 0 });
+      expect(r.report.verdict).toBe(r.peak.general > 6 ? 'fail' : 'pass');
+    }), { numRuns: 70 });
+  });
+  it('counts red transitions apart: saturated red against black changes the red value and hardly the luminance', () => {
+    const DARK_RED = frame(() => [120, 0, 0]);
+    const r = run(30, 3, (k) => (Math.floor(k / 10) % 2 === 0 ? BLACK : DARK_RED)); // a change every 10 frames: 3 in any second
+    expect(r.peak).toEqual({ general: 0, red: 3 });
+    expect(r.report.verdict).toBe('pass');
+  });
+  it('a single change, and a flash that rises over several frames and falls, count once per direction', () => {
+    expect(run(30, 2, (k) => (k < 20 ? BLACK : WHITE)).peak.general).toBe(1);
+    const levels = [0, 60, 120, 180, 255, 180, 120, 60, 0]; // up over four frames, down over four
+    expect(run(30, 2, (k) => flat(levels[Math.min(k, levels.length - 1)]!)).peak.general).toBe(2);
+  });
+  it('only the busiest cell counts: a patch flashing in a corner sets the peak, the rest of the frame does not lower it', () => {
+    const on = frame((x, y) => (x < 24 && y < 24 ? [255, 255, 255] : [0, 0, 0])), off = BLACK;
+    const r = run(30, 3, (k) => (Math.floor(k / 5) % 2 ? on : off)); // a change every 5 frames: 6 in a second
+    expect(r.peak.general).toBe(6);
+  });
+});
+
+describe('built-ins kept below the flash threshold by construction', () => {
+  it('old film: on a white picture at full amount, no two frames differ by a tenth of the luminance range, for any seed', async () => {
+    const { GPU_EFFECTS } = await import('./gpu.ts');
+    const film = GPU_EFFECTS['stylize.film']!;
+    const lin = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    let widest = 0;
+    for (let seed = 0; seed < 300; seed++) {
+      const levels: number[] = [];
+      for (let k = 0; k < 90; k++) levels.push(lin(film.params({ amount: 1, seed }, { width: 64, height: 64, seconds: k / 30, beat: null })[4]!));
+      widest = Math.max(widest, Math.max(...levels) - Math.min(...levels));
+    }
+    expect(widest).toBeLessThan(0.1);
+    expect(widest).toBeGreaterThan(0.05); // and it still flickers visibly
+  });
+});

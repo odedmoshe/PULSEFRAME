@@ -1,0 +1,189 @@
+{
+  "ranAt": "2026-11-19T05:36:52.147Z",
+  "machine": "Linux 6.18.44-fc-v653 x64",
+  "browser": "Playwright Chromium (headless)",
+  "checks": [
+    {
+      "name": "the on-this-day card is absent when no file was taken on this day of an earlier year",
+      "ok": true
+    },
+    {
+      "name": "the view by date shows the fixture's years and months (newest year first), a month header with the Gregorian and the Hebrew month, and the group of files without a date with its read-dates action",
+      "ok": true,
+      "detail": {
+        "monthHeader": "דצמבר 2024 · כסלו תשפ״ה3",
+        "order": [
+          "life-year-2024",
+          "life-year-2023"
+        ]
+      }
+    },
+    {
+      "name": "the date badge is on the cards of dated files and absent on the undated one",
+      "ok": true
+    },
+    {
+      "name": "the media drawer by date has no horizontal scroll at 1440x900",
+      "ok": true
+    },
+    {
+      "name": "nothing of the life line is kept in browser storage except the chosen library view",
+      "ok": true,
+      "detail": [
+        "pf.life.view"
+      ]
+    },
+    {
+      "name": "the sunset choice of an evening event shows two options and starts unselected",
+      "ok": true,
+      "detail": {
+        "options": 2,
+        "checkedBefore": 0
+      }
+    },
+    {
+      "name": "one click on «אחרי השקיעה» stores the answer and shows it checked, names the event by its holiday, and Ctrl+Z restores it (answer unset, name as before)",
+      "ok": true,
+      "detail": {
+        "answered": true,
+        "shownChecked": true,
+        "nameBefore": "25.12.24",
+        "nameAfter": "חנוכה — נר ראשון",
+        "focusedAtUndo": "input[type=radio]",
+        "undone": true,
+        "afterSunsetAfterUndo": null
+      }
+    },
+    {
+      "name": "the media drawer by event has no horizontal scroll at 1440x900",
+      "ok": true
+    },
+    {
+      "name": "the event row at 1440x900 lays its name and its file count out on one line each (not one letter per line)",
+      "ok": true,
+      "detail": {
+        "name": {
+          "w": 77,
+          "h": 24,
+          "lh": 24
+        },
+        "count": {
+          "w": 45,
+          "h": 18,
+          "lh": 18
+        }
+      }
+    },
+    {
+      "name": "\"add the event to the timeline\" puts every file of the event on the timeline in capture order as ONE transaction",
+      "ok": true,
+      "detail": {
+        "files": 2,
+        "clips": 2,
+        "inCaptureOrder": true,
+        "revisionDelta": 1
+      }
+    },
+    {
+      "name": "«קריאת תאריכים מהקבצים» answers in words (honestly: the file has no date inside it)",
+      "ok": true,
+      "detail": {
+        "ok": "true",
+        "text": "נבדקו 1 קבצים; ל־0 נמצא תאריך"
+      }
+    },
+    {
+      "name": "inserting the year field turns fields on and stores the token in ONE transaction; the server still equals the same words typed by hand, and the live line reads the same words",
+      "ok": true,
+      "detail": {
+        "stored": "שלום{year}",
+        "live": "מוצג כעת: שלום2024"
+      }
+    },
+    {
+      "name": "the title tab has no horizontal scroll at 1440x900",
+      "ok": true
+    },
+    {
+      "name": "an undated picture under a {date} field shows an anchored error with a fix button",
+      "ok": true
+    },
+    {
+      "name": "the fix dates the picture (one operation) and the anchored error goes away",
+      "ok": true
+    },
+    {
+      "name": "\"make it plain text\" leaves the still byte-identical, the title holds the words and no fields",
+      "ok": true,
+      "detail": {
+        "text": "שלום20229 באוגוסט 2022"
+      }
+    },
+    {
+      "name": "Ctrl+Z after freezing brings the live fields back",
+      "ok": true
+    },
+    {
+      "name": "the stamp source switch changes the effect to the capture date (a different still) and shows the clock switch and the date order",
+      "ok": true,
+      "detail": {
+        "clock": 1,
+        "order": 1,
+        "differentStill": true
+      }
+    },
+    {
+      "name": "Ctrl+Z after the source switch restores the typed stamp (source text, the typed still again, unlike the capture still)",
+      "ok": true,
+      "detail": {
+        "source": "text",
+        "text": "'99 01 01"
+      }
+    },
+    {
+      "name": "the palette opens the people sheet with the privacy line exactly as in people.strings.ts, the people of the project, and an add action",
+      "ok": true,
+      "detail": {
+        "rows": 1
+      }
+    },
+    {
+      "name": "the family option of the archive changes the download address to the family-free archive",
+      "ok": true,
+      "detail": {
+        "hrefAfter": "/api/v1/projects/prj_xRLS7iZpja8/archive?family=omit"
+      }
+    },
+    {
+      "name": "the on-this-day card appears for the owner on the start hub with a file taken on this day last year, and has an open button",
+      "ok": true
+    },
+    {
+      "name": "the Hanukkah pack is two clicks from an open project (the Templates rail, then its tile) and opens its page",
+      "ok": true
+    },
+    {
+      "name": "the pack suggestion names the start of Hanukkah 2026, the evening of 4 December",
+      "ok": true,
+      "detail": {
+        "reason": "מוצע לפי התאריך: חנוכה מתחיל בערב 4 בדצמבר · בעוד 15 ימיםלא עכשיו"
+      }
+    },
+    {
+      "name": "the media drawer by date has no horizontal scroll at 1920x1080 in English",
+      "ok": true
+    },
+    {
+      "name": "English: the events view lists the arranged event",
+      "ok": true
+    },
+    {
+      "name": "no page error or console error in any run",
+      "ok": true,
+      "detail": []
+    }
+  ],
+  "result": "PASS",
+  "passed": 27,
+  "total": 27
+}

@@ -1,0 +1,1417 @@
+{
+  "ranAt": "2026-11-19T04:33:44.592Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "gpu": "none",
+    "browser": "headless Chromium (Playwright)"
+  },
+  "scope": "Plan section 9, check I (the «אפקטי קול» block in the editor: keyboard flow in Hebrew, listen, A/B, names, accessibility heuristics, timeline tail, clip-tab disclosure), the agent part of check J (list_catalog, add_audio_effect on a picture over MCP, get_timeline, describe_moment) and K, the voice cleanup block «ניקוי קול» (ADR-0013) on a synthetic 9-second recording (measure, one commit, strength, before/after, undo). One synthetic 4-second fixture (frame barcode with a 1 kHz beep at every second). Levels come from the measurement tap at the preview output; nobody has listened, and nothing here says how the effects sound. The accessibility checks are the a11y-audit.ts heuristics (copied: that script runs its own flow), not a WCAG conformance claim and no screen-reader or user testing. The notice of a clip played without its effects is checked with a reason set by the script, not with a real failure.",
+  "passed": 36,
+  "total": 36,
+  "checks": [
+    {
+      "name": "Tab reaches the character-voice strip («דמות קול») at its chosen chip («ללא»)",
+      "ok": true,
+      "detail": {
+        "tabsFromFadeOut": 6,
+        "at": {
+          "testid": "afx-voice-none",
+          "role": "radio",
+          "value": "none",
+          "group": "afx-voice",
+          "inBlock": true
+        }
+      }
+    },
+    {
+      "name": "the strip reads right to left: each next chip lies to the left of the one before on its line, or starts the next line (the chips, each with its ▶, wrap in the inspector)",
+      "ok": true,
+      "detail": {
+        "dir": "rtl",
+        "chips": [
+          {
+            "value": "none",
+            "left": 276,
+            "right": 314,
+            "top": 347,
+            "bottom": 375
+          },
+          {
+            "value": "voice.telephone",
+            "left": 195.3,
+            "right": 241.4,
+            "top": 347,
+            "bottom": 375
+          },
+          {
+            "value": "voice.megaphone",
+            "left": 115,
+            "right": 160.7,
+            "top": 347,
+            "bottom": 375
+          },
+          {
+            "value": "voice.radio",
+            "left": 277,
+            "right": 314,
+            "top": 381,
+            "bottom": 409
+          },
+          {
+            "value": "voice.robot",
+            "left": 196.7,
+            "right": 242.4,
+            "top": 381,
+            "bottom": 409
+          }
+        ]
+      }
+    },
+    {
+      "name": "the arrows follow the visual order (ArrowLeft = next chip, ArrowRight = previous, wrapping; Home and End to the ends), and moving commits nothing, moves no playhead and starts no playback",
+      "ok": true,
+      "detail": {
+        "keys": [
+          "ArrowLeft",
+          "ArrowLeft",
+          "ArrowRight",
+          "End",
+          "Home",
+          "ArrowRight",
+          "ArrowLeft",
+          "ArrowLeft"
+        ],
+        "want": [
+          "voice.telephone",
+          "voice.megaphone",
+          "voice.telephone",
+          "voice.robot",
+          "none",
+          "voice.robot",
+          "none",
+          "voice.telephone"
+        ],
+        "got": [
+          "voice.telephone",
+          "voice.megaphone",
+          "voice.telephone",
+          "voice.robot",
+          "none",
+          "voice.robot",
+          "none",
+          "voice.telephone"
+        ]
+      }
+    },
+    {
+      "name": "Space commits the focused chip as one revision: the telephone voice on the sound clip; focus stays on the chip, now chosen; no playback started",
+      "ok": true,
+      "detail": {
+        "revision": 3,
+        "effects": [
+          "voice.telephone"
+        ]
+      }
+    },
+    {
+      "name": "choosing another voice replaces the first in one revision (one transaction)",
+      "ok": true,
+      "detail": {
+        "onRobot": "voice.robot",
+        "revision": 4,
+        "effects": [
+          "voice.robot"
+        ]
+      }
+    },
+    {
+      "name": "Ctrl+Z (focus still on the chip) undoes it as one compensating revision and restores the previous effect list exactly (same effect id and parameters)",
+      "ok": true,
+      "detail": {
+        "revision": 5,
+        "restored": [
+          {
+            "id": "afx_1b3a3126e50",
+            "type": "voice.telephone",
+            "enabled": true,
+            "params": {
+              "amount": 1,
+              "grit": 0.4,
+              "hiss": 0.3,
+              "seed": 1
+            }
+          }
+        ],
+        "before": [
+          {
+            "id": "afx_1b3a3126e50",
+            "type": "voice.telephone",
+            "enabled": true,
+            "params": {
+              "amount": 1,
+              "grit": 0.4,
+              "hiss": 0.3,
+              "seed": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "▶ «השמעה לדוגמה: רובוט (לא נשמר)» plays the robot voice from a scratch copy: the tap shows signal while the revision and the stored project are unchanged; the button is pressed (a steady state, nothing animated)",
+      "ok": true,
+      "detail": {
+        "tabsToButton": 1,
+        "windows": 31,
+        "peak": 0.6774,
+        "auditioning": true
+      }
+    },
+    {
+      "name": "pressing ▶ again stops it; it is no longer pressed and still nothing was stored",
+      "ok": true
+    },
+    {
+      "name": "the «הד» toggle adds an echo in one revision; the list stays in the fixed order (voice, then echo)",
+      "ok": true,
+      "detail": {
+        "tabs": 7,
+        "effects": [
+          "voice.telephone",
+          "space.echo"
+        ]
+      }
+    },
+    {
+      "name": "playback with the effects: the beeps and, between them, the echo reach the tap",
+      "ok": true,
+      "detail": {
+        "withEffects": {
+          "clock": "audio",
+          "fxVoices": 1,
+          "windows": 64,
+          "beepMax": 0.4807,
+          "gapMax": 0.1239,
+          "gapWindows": 42
+        },
+        "bypassed": {
+          "clock": "audio",
+          "fxVoices": 0,
+          "windows": 66,
+          "beepMax": 0.5047,
+          "gapMax": 0,
+          "gapWindows": 42
+        },
+        "bypassOn": {
+          "pressed": "true",
+          "player": true,
+          "revision": 6
+        },
+        "bypassOff": {
+          "pressed": "false",
+          "player": false
+        },
+        "tabsToBypass": 13,
+        "note": "peaks of 50 ms windows at the output tap; gaps are 0.2–0.9 s after each beep, where only the echo (and the telephone hiss) can sound"
+      }
+    },
+    {
+      "name": "«השוואה בלי אפקטים» (pressed, from the keyboard) changes what the tap hears: the beeps stay, the echo between them goes; the switch is not stored (no revision)",
+      "ok": true,
+      "detail": {
+        "wetGap": 0.1239,
+        "dryGap": 0,
+        "wetBeep": 0.4807,
+        "dryBeep": 0.5047
+      }
+    },
+    {
+      "name": "switched back, the A/B switch is released",
+      "ok": true,
+      "detail": {
+        "pressed": "false",
+        "player": false
+      }
+    },
+    {
+      "name": "timeline: «∿» on the clip, its accessible name lists the effects and the tail («אפקטים: טלפון, הד; זנב 1.0 שניות»), and the tail is static hatching of 1 s that is hidden from assistive technology, not a pointer target and not a clip",
+      "ok": true,
+      "detail": {
+        "label": "fixture 00:00:00:00–00:00:04:00; אפקטים: טלפון, הד; זנב 1.0 שניות",
+        "badge": true,
+        "clipWidth": 359,
+        "tail": {
+          "ariaHidden": "true",
+          "pointerEvents": "none",
+          "width": 90,
+          "clipId": null,
+          "animation": "none"
+        },
+        "tailNote": "הצליל ממשיך להדהד עוד 1.0 שניות אחרי סוף הקליפ."
+      }
+    },
+    {
+      "name": "nothing in the block is animated, and under reduced motion nothing in it transitions either",
+      "ok": true,
+      "detail": {
+        "elements": 132,
+        "animated": [],
+        "transitioning": [],
+        "reducedMotion": true
+      }
+    },
+    {
+      "name": "every control of the block (chips, ▶, toggles, switches, sliders, settings, presets, A/B, apply to the track) has a Hebrew accessible name, with every settings panel open",
+      "ok": true,
+      "detail": {
+        "settingsLeftClosed": 0,
+        "controls": 49,
+        "notHebrew": [],
+        "sample": [
+          {
+            "el": "button[data-testid=voice-clean-run]",
+            "name": "נקה את הקול"
+          },
+          {
+            "el": "input[data-testid=voice-clean-scope-asset]",
+            "name": "החל על כל הקטעים מאותה הקלטה"
+          },
+          {
+            "el": "input[data-testid=voice-clean-strength]",
+            "name": "עוצמת הניקוי"
+          },
+          {
+            "el": "button[data-testid=voice-clean-before]",
+            "name": "לפני: השמעה לדוגמה בלי הניקוי (לא נשמר)"
+          },
+          {
+            "el": "button[data-testid=voice-clean-after]",
+            "name": "אחרי: השמעה לדוגמה עם הניקוי (לא נשמר)"
+          },
+          {
+            "el": "button[data-testid=voice-clean-remove]",
+            "name": "הסר ניקוי"
+          }
+        ]
+      }
+    },
+    {
+      "name": "the echo's settings say their numbers as they are: «מספר חזרות» 4 (a count, not 400%), the time between repeats 250 with its unit word, the level of each repeat 50%",
+      "ok": true,
+      "detail": {
+        "repeats": "4",
+        "delayMs": "250 אלפיות שנייה",
+        "feedback": "50%"
+      }
+    },
+    {
+      "name": "[he] the a11y-audit heuristics with the block and its settings open: no unnamed control, no low-contrast text, no tab defect in the block or anywhere on the page; every Tab stop in the block shows a focus ring",
+      "ok": true,
+      "detail": {
+        "settingsLeftClosed": 0,
+        "lang": "he",
+        "dir": "rtl",
+        "controlsInBlock": 49,
+        "inBlock": 0,
+        "elsewhere": 0,
+        "unnamed": [],
+        "lowContrast": [],
+        "tabIssues": [],
+        "focusStops": 36,
+        "noFocusRing": []
+      }
+    },
+    {
+      "name": "[en] the a11y-audit heuristics with the block and its settings open: no unnamed control, no low-contrast text, no tab defect in the block or anywhere on the page; every Tab stop in the block shows a focus ring",
+      "ok": true,
+      "detail": {
+        "settingsLeftClosed": 0,
+        "lang": "en",
+        "dir": "ltr",
+        "controlsInBlock": 49,
+        "inBlock": 0,
+        "elsewhere": 0,
+        "unnamed": [],
+        "lowContrast": [],
+        "tabIssues": [],
+        "focusStops": 36,
+        "noFocusRing": []
+      }
+    },
+    {
+      "name": "the clip tab of the picture: «אפקטי קול…» (Space) opens the same block for the linked sound, with its two effects",
+      "ok": true,
+      "detail": {
+        "expanded": "true",
+        "rows": 2,
+        "blocks": 1
+      }
+    },
+    {
+      "name": "a reason the player gives for playing a clip without its effects is shown next to the picture notices and in the block, with the clip named (reason injected by this script: display only)",
+      "ok": true,
+      "detail": {
+        "notice": "קליפים שמתנגנים כרגע בתצוגה המקדימה בלי אפקטי הקול שלהם:fixture.mp4 — proof: a reason set by the script (display check only)",
+        "inBlockNote": "בדפדפן הזה הקליפ מתנגן בתצוגה המקדימה בלי אפקטי הקול שלו: proof: a reason set by the script (display check only)",
+        "gone": true
+      }
+    },
+    {
+      "name": "no page errors in the editor",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "MCP: the five sound-effect operations are tools (generated from the operation registry)",
+      "ok": true,
+      "detail": {
+        "missing": []
+      }
+    },
+    {
+      "name": "list_catalog lists audioEffects (all nine, with JSON schemas, defaults, version, latency and the shared implementation) and audioPresets; sound files of the library stay apart (soundEffects)",
+      "ok": true,
+      "detail": {
+        "audioEffects": [
+          {
+            "id": "cleanup.dehum",
+            "version": 1,
+            "stage": 2,
+            "params": [
+              "amount",
+              "mainsHz",
+              "harmonics",
+              "width"
+            ]
+          },
+          {
+            "id": "cleanup.denoise",
+            "version": 1,
+            "stage": 2,
+            "params": [
+              "amount",
+              "reductionDb",
+              "sensitivityDb",
+              "profile",
+              "source"
+            ]
+          },
+          {
+            "id": "cleanup.speech",
+            "version": 1,
+            "stage": 2,
+            "params": [
+              "amount",
+              "lowCutHz",
+              "presence",
+              "levelDb",
+              "targetDb",
+              "ceilingDb"
+            ]
+          },
+          {
+            "id": "tone.bassboost",
+            "version": 1,
+            "stage": 2,
+            "params": [
+              "amount",
+              "gainDb",
+              "freqHz"
+            ]
+          },
+          {
+            "id": "voice.telephone",
+            "version": 1,
+            "stage": 3,
+            "params": [
+              "amount",
+              "grit",
+              "hiss",
+              "seed"
+            ]
+          },
+          {
+            "id": "voice.megaphone",
+            "version": 1,
+            "stage": 3,
+            "params": [
+              "amount",
+              "drive"
+            ]
+          },
+          {
+            "id": "voice.radio",
+            "version": 1,
+            "stage": 3,
+            "params": [
+              "amount",
+              "noise",
+              "seed"
+            ]
+          },
+          {
+            "id": "voice.robot",
+            "version": 1,
+            "stage": 3,
+            "params": [
+              "amount",
+              "pitchHz",
+              "metal"
+            ]
+          },
+          {
+            "id": "texture.8bit",
+            "version": 1,
+            "stage": 3,
+            "params": [
+              "amount",
+              "bits",
+              "rateKhz"
+            ]
+          },
+          {
+            "id": "space.echo",
+            "version": 1,
+            "stage": 4,
+            "params": [
+              "amount",
+              "delayMs",
+              "repeats",
+              "feedback",
+              "pingPong",
+              "tone"
+            ]
+          },
+          {
+            "id": "space.reverb",
+            "version": 1,
+            "stage": 4,
+            "params": [
+              "amount",
+              "room",
+              "decaySeconds",
+              "predelayMs",
+              "damping",
+              "spread"
+            ]
+          },
+          {
+            "id": "utility.width",
+            "version": 1,
+            "stage": 6,
+            "params": [
+              "stereoWidth"
+            ]
+          }
+        ],
+        "audioPresets": [
+          "telephone",
+          "megaphone",
+          "radio",
+          "robot",
+          "8bit",
+          "room",
+          "hall",
+          "cave",
+          "bathroom",
+          "stadium",
+          "thoughts"
+        ],
+        "note": "This is the complete list for this build; anything not listed here does not exist. Picture entries render through the Canvas2D compositor (GPU passes where listed); sound entries through the shared engine DSP in preview and export alike. audioEffects are effects applied to sound clips (add_audio_effect, apply_audio_preset); soundEffects are sound files of the sound library."
+      }
+    },
+    {
+      "name": "MCP add_audio_effect on the PICTURE clip lands on the sound linked to it (one revision; the output names the sound clip and the planned tail of 1 s)",
+      "ok": true,
+      "detail": {
+        "affectedIds": [
+          "clp_b9c12c603f2"
+        ],
+        "output": {
+          "effects": [
+            {
+              "clipId": "clp_b9c12c603f2",
+              "effectId": "afx_7a74e55bbd0",
+              "params": {
+                "amount": 0.5,
+                "delayMs": 250,
+                "repeats": 4,
+                "feedback": 0.5,
+                "pingPong": false,
+                "tone": 0
+              }
+            }
+          ],
+          "tailSeconds": 1
+        }
+      }
+    },
+    {
+      "name": "get_timeline shows the sound clip's audioFx (type, enabled, params), its fades, reverse and tailSeconds (1 s); the picture clip carries no sound fields; tracks say whether they are muted",
+      "ok": true,
+      "detail": {
+        "sound": {
+          "audioFx": [
+            {
+              "id": "afx_7a74e55bbd0",
+              "type": "space.echo",
+              "enabled": true,
+              "params": {
+                "amount": 0.5,
+                "delayMs": 250,
+                "repeats": 4,
+                "feedback": 0.5,
+                "pingPong": false,
+                "tone": 0
+              }
+            }
+          ],
+          "fadeIn": null,
+          "fadeOut": {
+            "value": "1",
+            "timescale": 2
+          },
+          "fadeOutSeconds": 0.5,
+          "reverse": true,
+          "keepPitch": false,
+          "volumeKeys": 0,
+          "tailSeconds": 1
+        },
+        "pictureHasAudioFx": false,
+        "tracks": [
+          {
+            "kind": "video",
+            "muted": false
+          },
+          {
+            "kind": "text",
+            "muted": false
+          },
+          {
+            "kind": "audio",
+            "muted": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "describe_moment: inside the clip the sound entry names its effects (fx); half a second after its end it is listed as heard only through its tail ({tail: true, secondsAfterEnd 0.5, fx}); after the tail it is gone",
+      "ok": true,
+      "detail": {
+        "frame60": [
+          {
+            "clipId": "clp_b9c12c603f2",
+            "trackId": "trk_audio",
+            "assetId": "ast_70bb88d95d0",
+            "sourceTime": {
+              "value": "2",
+              "timescale": 1
+            },
+            "gain": 1,
+            "fx": [
+              "space.echo"
+            ]
+          }
+        ],
+        "frame135": [
+          {
+            "clipId": "clp_b9c12c603f2",
+            "trackId": "trk_audio",
+            "assetId": "ast_70bb88d95d0",
+            "tail": true,
+            "secondsAfterEnd": 0.5,
+            "fx": [
+              "space.echo"
+            ]
+          }
+        ],
+        "frame160": []
+      }
+    },
+    {
+      "name": "K: the «ניקוי קול» block sits at the top of «אפקטי קול», with the steady badge «טרם נבדק בהאזנה» and a polite status line; before any cleanup, strength, ▶ «לפני», ▶ «אחרי» and «הסר ניקוי» are disabled",
+      "ok": true,
+      "detail": {
+        "status": "",
+        "statusRole": "status",
+        "statusLive": "polite",
+        "numbersIsolated": false,
+        "badge": "טרם נבדק בהאזנה",
+        "runDisabled": false,
+        "disabled": [
+          true,
+          true,
+          true,
+          true
+        ],
+        "strength": "60%"
+      }
+    },
+    {
+      "name": "K: «נקה את הקול» (Tab, Space) measures and commits ONE revision: the three cleanup effects in their fixed order (hum removal, noise reduction, speech enhancer), the noise profile measured on this recording; three rows in that order in the block",
+      "ok": true,
+      "detail": {
+        "tabsToRun": 5,
+        "measureAndCommitSeconds": 0.38,
+        "status": "נמדד: רעש רקע -50.8 דציבל ביחס לשיא · זמזום חשמל 50 הרץ (-40.0 דציבל ביחס לשיא) · דיבור -21.9 דציבל ביחס לשיא · יחס אות לרעש 17.5 דציבל · ביטחון במדידת הרעש 100%. הניקוי הוחל על הקטע. אפשר לבטל ב־Ctrl+Z.",
+        "rows": [
+          "cleanup.dehum",
+          "cleanup.denoise",
+          "cleanup.speech"
+        ],
+        "effects": [
+          {
+            "id": "afx_fefac869950",
+            "type": "cleanup.dehum",
+            "enabled": true,
+            "params": {
+              "amount": 1,
+              "mainsHz": "50",
+              "harmonics": 4,
+              "width": 0.5
+            }
+          },
+          {
+            "id": "afx_fefac869951",
+            "type": "cleanup.denoise",
+            "enabled": true,
+            "params": {
+              "amount": 1,
+              "reductionDb": 15.2,
+              "sensitivityDb": 1,
+              "profile": "PnPmPkPqPnPlPkPrPnPpPpPpPoPqPnPpPpPqPnPpPpPpPoPo",
+              "source": "ast_fb8820101f0"
+            }
+          },
+          {
+            "id": "afx_fefac869952",
+            "type": "cleanup.speech",
+            "enabled": true,
+            "params": {
+              "amount": 1,
+              "lowCutHz": 80,
+              "presence": 0.53,
+              "levelDb": 8.9,
+              "targetDb": -20,
+              "ceilingDb": -1
+            }
+          }
+        ],
+        "note": "synthetic recording; levels and numbers are measurements, nobody has listened"
+      }
+    },
+    {
+      "name": "K: the status line says what was measured, in Hebrew, with the numbers in left-to-right isolates (background noise, the 50 Hz hum, speech level, signal to noise, confidence), and that the cleanup was applied",
+      "ok": true,
+      "detail": {
+        "status": "נמדד: רעש רקע -50.8 דציבל ביחס לשיא · זמזום חשמל 50 הרץ (-40.0 דציבל ביחס לשיא) · דיבור -21.9 דציבל ביחס לשיא · יחס אות לרעש 17.5 דציבל · ביטחון במדידת הרעש 100%. הניקוי הוחל על הקטע. אפשר לבטל ב־Ctrl+Z.",
+        "numbersIsolated": true
+      }
+    },
+    {
+      "name": "K: «החל על כל הקטעים מאותה הקלטה» is reached by Tab and toggled by Space; it changes nothing stored",
+      "ok": true,
+      "detail": {
+        "tabs": 1
+      }
+    },
+    {
+      "name": "K: the strength slider, right to left, ArrowLeft is more (the order it is seen): one revision, the same three effects (same ids) with the measured profile, source and mains frequency kept and a stronger noise reduction",
+      "ok": true,
+      "detail": {
+        "tabs": 1,
+        "direction": "rtl",
+        "before": "65%",
+        "afterArrowLeft": "70%",
+        "reductionDb": [
+          15.2,
+          15.8
+        ]
+      }
+    },
+    {
+      "name": "K: ▶ «לפני» and ▶ «אחרי» (Tab, Space) play the clip from a scratch copy (before: its cleanup switched off in the copy): the tap shows signal, the button is pressed while it plays (nothing animated), Space stops it, and the revision and the stored project do not change",
+      "ok": true,
+      "detail": {
+        "before": {
+          "tabs": 1,
+          "auditioning": true,
+          "pressedWhilePlaying": "true",
+          "animated": 0,
+          "stopped": true,
+          "windows": 30,
+          "peak": 0.3959,
+          "revisionBefore": 4,
+          "revisionAfter": 4,
+          "stored": 4
+        },
+        "after": {
+          "tabs": 1,
+          "auditioning": true,
+          "pressedWhilePlaying": "true",
+          "animated": 0,
+          "stopped": true,
+          "windows": 27,
+          "peak": 0.5548,
+          "revisionBefore": 4,
+          "revisionAfter": 4,
+          "stored": 4
+        },
+        "note": "peaks of 50 ms windows at the preview output tap while each played; nobody has listened"
+      }
+    },
+    {
+      "name": "K: nothing in the «ניקוי קול» block is animated or transitions",
+      "ok": true,
+      "detail": {
+        "elements": 25,
+        "animated": 0,
+        "transitioning": 0,
+        "reducedMotion": true
+      }
+    },
+    {
+      "name": "K: the a11y-audit heuristics find no unnamed control and no low-contrast text in the block; every control has a Hebrew name; every Tab stop in it shows a focus ring",
+      "ok": true,
+      "detail": {
+        "inBlock": 0,
+        "unnamed": [],
+        "lowContrast": [],
+        "names": [
+          {
+            "el": "button[data-testid=voice-clean-run]",
+            "name": "נקה את הקול"
+          },
+          {
+            "el": "input[data-testid=voice-clean-scope-asset]",
+            "name": "החל על כל הקטעים מאותה הקלטה"
+          },
+          {
+            "el": "input[data-testid=voice-clean-strength]",
+            "name": "עוצמת הניקוי"
+          },
+          {
+            "el": "button[data-testid=voice-clean-before]",
+            "name": "לפני: השמעה לדוגמה בלי הניקוי (לא נשמר)"
+          },
+          {
+            "el": "button[data-testid=voice-clean-after]",
+            "name": "אחרי: השמעה לדוגמה עם הניקוי (לא נשמר)"
+          },
+          {
+            "el": "button[data-testid=voice-clean-remove]",
+            "name": "הסר ניקוי"
+          }
+        ],
+        "focus": {
+          "stops": 6,
+          "missing": []
+        }
+      }
+    },
+    {
+      "name": "K: Ctrl+Z restores: once, the effects as «נקה את הקול» left them (same ids and settings); twice, the clip without any cleanup",
+      "ok": true,
+      "detail": {
+        "afterFirst": [
+          "cleanup.dehum",
+          "cleanup.denoise",
+          "cleanup.speech"
+        ],
+        "afterSecond": []
+      }
+    },
+    {
+      "name": "K: no page errors",
+      "ok": true,
+      "detail": []
+    }
+  ],
+  "measurements": {
+    "listen": {
+      "tabsToButton": 1,
+      "windows": 31,
+      "peak": 0.6774,
+      "auditioning": true
+    },
+    "bypass": {
+      "withEffects": {
+        "clock": "audio",
+        "fxVoices": 1,
+        "windows": 64,
+        "beepMax": 0.4807,
+        "gapMax": 0.1239,
+        "gapWindows": 42
+      },
+      "bypassed": {
+        "clock": "audio",
+        "fxVoices": 0,
+        "windows": 66,
+        "beepMax": 0.5047,
+        "gapMax": 0,
+        "gapWindows": 42
+      },
+      "bypassOn": {
+        "pressed": "true",
+        "player": true,
+        "revision": 6
+      },
+      "bypassOff": {
+        "pressed": "false",
+        "player": false
+      },
+      "tabsToBypass": 13,
+      "note": "peaks of 50 ms windows at the output tap; gaps are 0.2–0.9 s after each beep, where only the echo (and the telephone hiss) can sound"
+    },
+    "timeline": {
+      "label": "fixture 00:00:00:00–00:00:04:00; אפקטים: טלפון, הד; זנב 1.0 שניות",
+      "badge": true,
+      "clipWidth": 359,
+      "tail": {
+        "ariaHidden": "true",
+        "pointerEvents": "none",
+        "width": 90,
+        "clipId": null,
+        "animation": "none"
+      },
+      "tailNote": "הצליל ממשיך להדהד עוד 1.0 שניות אחרי סוף הקליפ."
+    },
+    "controlNames": [
+      {
+        "el": "button[data-testid=voice-clean-run]",
+        "name": "נקה את הקול"
+      },
+      {
+        "el": "input[data-testid=voice-clean-scope-asset]",
+        "name": "החל על כל הקטעים מאותה הקלטה"
+      },
+      {
+        "el": "input[data-testid=voice-clean-strength]",
+        "name": "עוצמת הניקוי"
+      },
+      {
+        "el": "button[data-testid=voice-clean-before]",
+        "name": "לפני: השמעה לדוגמה בלי הניקוי (לא נשמר)"
+      },
+      {
+        "el": "button[data-testid=voice-clean-after]",
+        "name": "אחרי: השמעה לדוגמה עם הניקוי (לא נשמר)"
+      },
+      {
+        "el": "button[data-testid=voice-clean-remove]",
+        "name": "הסר ניקוי"
+      },
+      {
+        "el": "button[data-testid=afx-voice-none][role=radio]",
+        "name": "ללא"
+      },
+      {
+        "el": "button[data-testid=afx-voice-listen-none]",
+        "name": "השמעה לדוגמה: ללא (לא נשמר)"
+      },
+      {
+        "el": "button[data-testid=afx-voice-voice.telephone][role=radio]",
+        "name": "טלפון"
+      },
+      {
+        "el": "button[data-testid=afx-voice-listen-voice.telephone]",
+        "name": "השמעה לדוגמה: טלפון (לא נשמר)"
+      },
+      {
+        "el": "button[data-testid=afx-voice-voice.megaphone][role=radio]",
+        "name": "מגפון"
+      },
+      {
+        "el": "button[data-testid=afx-voice-listen-voice.megaphone]",
+        "name": "השמעה לדוגמה: מגפון (לא נשמר)"
+      },
+      {
+        "el": "button[data-testid=afx-voice-voice.radio][role=radio]",
+        "name": "רדיו"
+      },
+      {
+        "el": "button[data-testid=afx-voice-listen-voice.radio]",
+        "name": "השמעה לדוגמה: רדיו (לא נשמר)"
+      },
+      {
+        "el": "button[data-testid=afx-voice-voice.robot][role=radio]",
+        "name": "רובוט"
+      },
+      {
+        "el": "button[data-testid=afx-voice-listen-voice.robot]",
+        "name": "השמעה לדוגמה: רובוט (לא נשמר)"
+      },
+      {
+        "el": "button[data-testid=afx-space-none][role=radio]",
+        "name": "ללא"
+      },
+      {
+        "el": "button[data-testid=afx-space-listen-none]",
+        "name": "השמעה לדוגמה: ללא (לא נשמר)"
+      },
+      {
+        "el": "button[data-testid=afx-space-room][role=radio]",
+        "name": "חדר"
+      },
+      {
+        "el": "button[data-testid=afx-space-listen-room]",
+        "name": "השמעה לדוגמה: חדר (לא נשמר)"
+      },
+      {
+        "el": "button[data-testid=afx-space-hall][role=radio]",
+        "name": "אולם"
+      },
+      {
+        "el": "button[data-testid=afx-space-listen-hall]",
+        "name": "השמעה לדוגמה: אולם (לא נשמר)"
+      },
+      {
+        "el": "button[data-testid=afx-space-cave][role=radio]",
+        "name": "מערה"
+      },
+      {
+        "el": "button[data-testid=afx-space-listen-cave]",
+        "name": "השמעה לדוגמה: מערה (לא נשמר)"
+      },
+      {
+        "el": "button[data-testid=afx-space-bathroom][role=radio]",
+        "name": "מקלחת"
+      },
+      {
+        "el": "button[data-testid=afx-space-listen-bathroom]",
+        "name": "השמעה לדוגמה: מקלחת (לא נשמר)"
+      },
+      {
+        "el": "button[data-testid=afx-echo]",
+        "name": "הד"
+      },
+      {
+        "el": "button[data-testid=afx-tone-tone.bassboost]",
+        "name": "הגברת באס"
+      },
+      {
+        "el": "button[data-testid=afx-tone-texture.8bit]",
+        "name": "8 ביט"
+      },
+      {
+        "el": "button[data-testid=afx-tone-utility.width]",
+        "name": "רוחב סטריאו"
+      },
+      {
+        "el": "button[data-testid=afx-enabled][role=switch]",
+        "name": "פעיל: טלפון"
+      },
+      {
+        "el": "button[data-testid=afx-settings]",
+        "name": "הגדרות: טלפון"
+      },
+      {
+        "el": "button[data-testid=afx-remove]",
+        "name": "הסרת טלפון"
+      },
+      {
+        "el": "input[data-testid=afx-amount]",
+        "name": "עוצמה: טלפון"
+      },
+      {
+        "el": "input[data-testid=afx-param-grit]",
+        "name": "חספוס: טלפון"
+      },
+      {
+        "el": "input[data-testid=afx-param-hiss]",
+        "name": "רחש הקו: טלפון"
+      },
+      {
+        "el": "input[data-testid=afx-param-seed]",
+        "name": "דפוס הרעש"
+      },
+      {
+        "el": "button[data-testid=afx-enabled][role=switch]",
+        "name": "פעיל: הד"
+      },
+      {
+        "el": "button[data-testid=afx-settings]",
+        "name": "הגדרות: הד"
+      },
+      {
+        "el": "button[data-testid=afx-remove]",
+        "name": "הסרת הד"
+      },
+      {
+        "el": "input[data-testid=afx-amount]",
+        "name": "עוצמה: הד"
+      },
+      {
+        "el": "input[data-testid=afx-param-delayMs]",
+        "name": "זמן בין חזרות: הד"
+      },
+      {
+        "el": "input[data-testid=afx-param-repeats]",
+        "name": "מספר חזרות: הד"
+      },
+      {
+        "el": "input[data-testid=afx-param-feedback]",
+        "name": "עוצמת כל חזרה: הד"
+      },
+      {
+        "el": "input[data-testid=afx-param-pingPong]",
+        "name": "החזרות קופצות בין ימין לשמאל"
+      },
+      {
+        "el": "input[data-testid=afx-param-tone]",
+        "name": "כהות החזרות: הד"
+      },
+      {
+        "el": "select[data-testid=afx-preset]",
+        "name": "מתכונים מוכניםבחירת מתכון…טלפוןמגפוןרדיורובוט8 ביטחדראולםמערהמקלחתכרוז באצטדיוןמ"
+      },
+      {
+        "el": "button[data-testid=afx-bypass]",
+        "name": "השוואה בלי אפקטים"
+      },
+      {
+        "el": "button[data-testid=afx-apply-track]",
+        "name": "החלה על כל הקליפים ברצועה"
+      }
+    ],
+    "a11y": {
+      "he": {
+        "lang": "he",
+        "dir": "rtl",
+        "controls": 483,
+        "controlsInBlock": 49,
+        "unnamed": [],
+        "lowContrast": [],
+        "tabIssues": [],
+        "focus": {
+          "stops": 36,
+          "missing": []
+        }
+      },
+      "en": {
+        "lang": "en",
+        "dir": "ltr",
+        "controls": 483,
+        "controlsInBlock": 49,
+        "unnamed": [],
+        "lowContrast": [],
+        "tabIssues": [],
+        "focus": {
+          "stops": 36,
+          "missing": []
+        }
+      }
+    },
+    "catalog": {
+      "audioEffects": [
+        {
+          "id": "cleanup.dehum",
+          "version": 1,
+          "stage": 2,
+          "params": [
+            "amount",
+            "mainsHz",
+            "harmonics",
+            "width"
+          ]
+        },
+        {
+          "id": "cleanup.denoise",
+          "version": 1,
+          "stage": 2,
+          "params": [
+            "amount",
+            "reductionDb",
+            "sensitivityDb",
+            "profile",
+            "source"
+          ]
+        },
+        {
+          "id": "cleanup.speech",
+          "version": 1,
+          "stage": 2,
+          "params": [
+            "amount",
+            "lowCutHz",
+            "presence",
+            "levelDb",
+            "targetDb",
+            "ceilingDb"
+          ]
+        },
+        {
+          "id": "tone.bassboost",
+          "version": 1,
+          "stage": 2,
+          "params": [
+            "amount",
+            "gainDb",
+            "freqHz"
+          ]
+        },
+        {
+          "id": "voice.telephone",
+          "version": 1,
+          "stage": 3,
+          "params": [
+            "amount",
+            "grit",
+            "hiss",
+            "seed"
+          ]
+        },
+        {
+          "id": "voice.megaphone",
+          "version": 1,
+          "stage": 3,
+          "params": [
+            "amount",
+            "drive"
+          ]
+        },
+        {
+          "id": "voice.radio",
+          "version": 1,
+          "stage": 3,
+          "params": [
+            "amount",
+            "noise",
+            "seed"
+          ]
+        },
+        {
+          "id": "voice.robot",
+          "version": 1,
+          "stage": 3,
+          "params": [
+            "amount",
+            "pitchHz",
+            "metal"
+          ]
+        },
+        {
+          "id": "texture.8bit",
+          "version": 1,
+          "stage": 3,
+          "params": [
+            "amount",
+            "bits",
+            "rateKhz"
+          ]
+        },
+        {
+          "id": "space.echo",
+          "version": 1,
+          "stage": 4,
+          "params": [
+            "amount",
+            "delayMs",
+            "repeats",
+            "feedback",
+            "pingPong",
+            "tone"
+          ]
+        },
+        {
+          "id": "space.reverb",
+          "version": 1,
+          "stage": 4,
+          "params": [
+            "amount",
+            "room",
+            "decaySeconds",
+            "predelayMs",
+            "damping",
+            "spread"
+          ]
+        },
+        {
+          "id": "utility.width",
+          "version": 1,
+          "stage": 6,
+          "params": [
+            "stereoWidth"
+          ]
+        }
+      ],
+      "audioPresets": [
+        "telephone",
+        "megaphone",
+        "radio",
+        "robot",
+        "8bit",
+        "room",
+        "hall",
+        "cave",
+        "bathroom",
+        "stadium",
+        "thoughts"
+      ],
+      "note": "This is the complete list for this build; anything not listed here does not exist. Picture entries render through the Canvas2D compositor (GPU passes where listed); sound entries through the shared engine DSP in preview and export alike. audioEffects are effects applied to sound clips (add_audio_effect, apply_audio_preset); soundEffects are sound files of the sound library."
+    },
+    "getTimeline": {
+      "sound": {
+        "audioFx": [
+          {
+            "id": "afx_7a74e55bbd0",
+            "type": "space.echo",
+            "enabled": true,
+            "params": {
+              "amount": 0.5,
+              "delayMs": 250,
+              "repeats": 4,
+              "feedback": 0.5,
+              "pingPong": false,
+              "tone": 0
+            }
+          }
+        ],
+        "fadeIn": null,
+        "fadeOut": {
+          "value": "1",
+          "timescale": 2
+        },
+        "fadeOutSeconds": 0.5,
+        "reverse": true,
+        "keepPitch": false,
+        "volumeKeys": 0,
+        "tailSeconds": 1
+      },
+      "pictureHasAudioFx": false,
+      "tracks": [
+        {
+          "kind": "video",
+          "muted": false
+        },
+        {
+          "kind": "text",
+          "muted": false
+        },
+        {
+          "kind": "audio",
+          "muted": false
+        }
+      ]
+    },
+    "describeMoment": {
+      "frame60": [
+        {
+          "clipId": "clp_b9c12c603f2",
+          "trackId": "trk_audio",
+          "assetId": "ast_70bb88d95d0",
+          "sourceTime": {
+            "value": "2",
+            "timescale": 1
+          },
+          "gain": 1,
+          "fx": [
+            "space.echo"
+          ]
+        }
+      ],
+      "frame135": [
+        {
+          "clipId": "clp_b9c12c603f2",
+          "trackId": "trk_audio",
+          "assetId": "ast_70bb88d95d0",
+          "tail": true,
+          "secondsAfterEnd": 0.5,
+          "fx": [
+            "space.echo"
+          ]
+        }
+      ],
+      "frame160": []
+    },
+    "voiceClean": {
+      "tabsToRun": 5,
+      "measureAndCommitSeconds": 0.38,
+      "status": "נמדד: רעש רקע -50.8 דציבל ביחס לשיא · זמזום חשמל 50 הרץ (-40.0 דציבל ביחס לשיא) · דיבור -21.9 דציבל ביחס לשיא · יחס אות לרעש 17.5 דציבל · ביטחון במדידת הרעש 100%. הניקוי הוחל על הקטע. אפשר לבטל ב־Ctrl+Z.",
+      "rows": [
+        "cleanup.dehum",
+        "cleanup.denoise",
+        "cleanup.speech"
+      ],
+      "effects": [
+        {
+          "id": "afx_fefac869950",
+          "type": "cleanup.dehum",
+          "enabled": true,
+          "params": {
+            "amount": 1,
+            "mainsHz": "50",
+            "harmonics": 4,
+            "width": 0.5
+          }
+        },
+        {
+          "id": "afx_fefac869951",
+          "type": "cleanup.denoise",
+          "enabled": true,
+          "params": {
+            "amount": 1,
+            "reductionDb": 15.2,
+            "sensitivityDb": 1,
+            "profile": "PnPmPkPqPnPlPkPrPnPpPpPpPoPqPnPpPpPqPnPpPpPpPoPo",
+            "source": "ast_fb8820101f0"
+          }
+        },
+        {
+          "id": "afx_fefac869952",
+          "type": "cleanup.speech",
+          "enabled": true,
+          "params": {
+            "amount": 1,
+            "lowCutHz": 80,
+            "presence": 0.53,
+            "levelDb": 8.9,
+            "targetDb": -20,
+            "ceilingDb": -1
+          }
+        }
+      ],
+      "note": "synthetic recording; levels and numbers are measurements, nobody has listened"
+    },
+    "voiceCleanStrength": {
+      "tabs": 1,
+      "direction": "rtl",
+      "before": "65%",
+      "afterArrowLeft": "70%",
+      "reductionDb": [
+        15.2,
+        15.8
+      ]
+    },
+    "voiceCleanListen": {
+      "before": {
+        "tabs": 1,
+        "auditioning": true,
+        "pressedWhilePlaying": "true",
+        "animated": 0,
+        "stopped": true,
+        "windows": 30,
+        "peak": 0.3959,
+        "revisionBefore": 4,
+        "revisionAfter": 4,
+        "stored": 4
+      },
+      "after": {
+        "tabs": 1,
+        "auditioning": true,
+        "pressedWhilePlaying": "true",
+        "animated": 0,
+        "stopped": true,
+        "windows": 27,
+        "peak": 0.5548,
+        "revisionBefore": 4,
+        "revisionAfter": 4,
+        "stored": 4
+      },
+      "note": "peaks of 50 ms windows at the preview output tap while each played; nobody has listened"
+    },
+    "voiceCleanAxe": "axe-core is not installed in this repository: only the a11y-audit heuristics above ran (no axe check, not a pass)"
+  }
+}

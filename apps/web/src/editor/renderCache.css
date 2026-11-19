@@ -1,0 +1,45 @@
+/* Render cache (ADR-0024): the timeline lane (RenderCacheLane.tsx) and the export sheet's fast-export block (ExportReuseLine.tsx).
+   Tokens only; the lane token --pf-lane-cache is declared here (4 px, under the flash lane). Time chrome stays left to right in
+   both languages (the lane's inner box is dir=ltr); everything else uses logical properties. State is never colour alone:
+   cached = solid line, to render = dashed amber, uncacheable = dotted. Nothing moves, blinks or pulses. */
+:root { --pf-lane-cache: 4px; }
+
+.rc-lane-wrap { position: relative; block-size: var(--pf-lane-cache); min-inline-size: 0; }
+.rc-lane { position: absolute; inset: 0; direction: ltr; overflow: hidden; background: var(--pf-surface-1); }
+.rc-stretch { position: absolute; inset-block: 0; box-sizing: border-box; min-inline-size: 2px; }
+/* a 2 px line through the middle of the 4 px lane; the pattern carries the state */
+.rc-stretch[data-state='cached'] { background: linear-gradient(var(--pf-text-2), var(--pf-text-2)) center / 100% 2px no-repeat; }
+.rc-stretch[data-state='render'] { background: repeating-linear-gradient(90deg, var(--pf-attention) 0 6px, transparent 6px 10px) center / 100% 2px no-repeat; }
+.rc-stretch[data-state='uncacheable'] { background: repeating-linear-gradient(90deg, var(--pf-text-3) 0 2px, transparent 2px 5px) center / 100% 2px no-repeat; }
+.rc-lane-wrap[aria-busy='true'] .rc-lane { opacity: .6; }
+
+/* the ONE focusable summary: a transparent hit area over the 4 px lane, with a visible focus ring */
+.rc-summary { position: absolute; inset-block: -6px; inset-inline: 0; margin: 0; padding: 0; border: 0; border-radius: var(--pf-r-xs); background: transparent; color: inherit; cursor: pointer; }
+.rc-summary:hover { background: color-mix(in oklab, var(--pf-text) 6%, transparent); }
+.rc-summary:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 1px; }
+
+.rc-popover { position: absolute; z-index: 40; inset-block-start: calc(100% + 8px); inset-inline-start: 0; box-sizing: border-box; inline-size: max-content; min-inline-size: 260px; max-inline-size: min(420px, 90vw); display: grid; gap: var(--pf-sp-3); padding: var(--pf-sp-5); border-radius: var(--pf-r-md); background: var(--pf-surface-3); color: var(--pf-text); box-shadow: var(--pf-e2); font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); }
+.rc-popover h4 { margin: 0; font-size: var(--pf-fs-sm); font-weight: var(--pf-fw-semibold); }
+.rc-popover p { margin: 0; color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.rc-stale-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--pf-sp-2); }
+.rc-stale { display: flex; align-items: center; gap: var(--pf-sp-4); justify-content: space-between; }
+.rc-stale-text { display: grid; min-inline-size: 0; }
+.rc-stale-text small { color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.rc-more { color: var(--pf-text-2); font-size: var(--pf-fs-xs); }
+.rc-refresh { position: absolute; inset-block-end: calc(100% + 2px); inset-inline-end: 0; }
+
+/* export sheet */
+.rc-export { display: grid; gap: var(--pf-sp-3); min-inline-size: 0; }
+.rc-fast-row { display: grid; gap: var(--pf-sp-2); }
+.rc-hint, .rc-reason, .rc-note { margin: 0; font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); color: var(--pf-text-2); }
+.rc-reason { color: var(--pf-text); }
+.rc-status { display: grid; gap: var(--pf-sp-2); margin: 0; font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); color: var(--pf-text); }
+.rc-status:empty { display: none; }
+.rc-status p { margin: 0; }
+.rc-status [data-testid='cache-eta'] { color: var(--pf-text-2); }
+.rc-notes { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--pf-sp-2); }
+.rc-done, .rc-failed { margin: 0; font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); }
+.rc-failed { color: var(--pf-text); }
+.rc-export bdi, .rc-popover bdi, .rc-done bdi { unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+/* the fast export's switch when it cannot be used: its label stays readable (the reason under it says why), not dimmed */
+.rc-export .pf-switch-row.is-disabled { color: var(--pf-text-2); }

@@ -1,0 +1,127 @@
+{
+  "ranAt": "2026-11-19T04:20:00.856Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "scope": "Three rule-based recipes on synthetic material. No language-model Director and no generative steps.",
+  "passed": 12,
+  "total": 12,
+  "checks": [
+    {
+      "name": "the three phase 11 recipes are listed, and every recipe has a parameter schema and states plainly that no language model is used",
+      "ok": true,
+      "detail": [
+        "beat-montage",
+        "social-pack",
+        "tidy-speech",
+        "portrait-blur",
+        "family-film",
+        "multicam-auto"
+      ]
+    },
+    {
+      "name": "without beat data the recipe refuses and says what to run first; with it, the plan lists steps, the data it rests on (tempo, confidence, method) and alternatives — and changes nothing",
+      "ok": true,
+      "detail": {
+        "steps": [
+          "Place 8 picture clips, one every 4 beat(s), order: sequence"
+        ],
+        "basis": [
+          "31 beats of the music clip (120.2 BPM, confidence 0.988)",
+          "method: spectral-flux onsets + dynamic-programming beat tracking (no model); assumes a steady pulse; no regular bar accent found"
+        ]
+      }
+    },
+    {
+      "name": "apply: one revision; picture cuts fall on bar lines of the real beat grid (within one frame), alternating between the chosen assets; the run is recorded",
+      "ok": true,
+      "detail": {
+        "clips": 8,
+        "worstMs": 0
+      }
+    },
+    {
+      "name": "whole-task undo: one undo removes every clip the recipe placed and its run record; redo brings them back",
+      "ok": true
+    },
+    {
+      "name": "regenerate with new settings: the two hand-edited clips are kept byte-for-byte (trim and effect intact), every untouched clip is replaced, the new cut is denser, nothing overlaps, one revision",
+      "ok": true,
+      "detail": {
+        "replaced": 6,
+        "protected": 2,
+        "clipsBefore": 8,
+        "clipsAfter": 15
+      }
+    },
+    {
+      "name": "one undo of the regeneration restores the previous cut exactly",
+      "ok": true
+    },
+    {
+      "name": "a plan made for an older revision is refused; an observer cannot apply a recipe",
+      "ok": true,
+      "detail": {
+        "stale": "stale_revision",
+        "observer": "insufficient_scope"
+      }
+    },
+    {
+      "name": "social pack: adds three formats and a loudness target in one step, says no captions were added because there is no transcript, and refuses to run twice with nothing left to do",
+      "ok": true,
+      "detail": {
+        "steps": [
+          "Add format Vertical 9:16 (1080×1920)",
+          "Add format Square 1:1 (1080×1080)",
+          "Add format Portrait 4:5 (1080×1350)",
+          "Set the loudness target to -14 LUFS"
+        ]
+      }
+    },
+    {
+      "name": "after a transcript exists the same recipe plans only the missing part (captions)",
+      "ok": true,
+      "detail": [
+        "Show the transcript as captions (classic)"
+      ]
+    },
+    {
+      "name": "tidy speech: measured pauses are removed from every track, captions from the transcript are shown, loudness set to -16 — one step, one undo",
+      "ok": true,
+      "detail": {
+        "framesBefore": 240,
+        "framesAfter": 88,
+        "steps": [
+          "Remove 8 pause(s), 5.1 s in total, from every track (keeping 0.12 s around speech)",
+          "Show the transcript as captions",
+          "Set the loudness target to -16 LUFS"
+        ]
+      }
+    },
+    {
+      "name": "agent previews a recipe, regenerates the existing run with other settings (protected clips reported), and sees the run in the summary",
+      "ok": true,
+      "detail": {
+        "plan": [
+          "Place 4 picture clips, one every 8 beat(s), order: sequence"
+        ],
+        "replaced": 6
+      }
+    },
+    {
+      "name": "editor: preview shows steps and alternatives; apply places the clips; after a hand edit, regenerate with another setting keeps that clip (shown as 1 protected) and re-cuts the rest; Ctrl+Z undoes the regeneration",
+      "ok": true,
+      "detail": {
+        "placed": 8,
+        "afterRegen": 15,
+        "protectedShown": 1,
+        "restored": 8,
+        "errors": []
+      }
+    }
+  ]
+}

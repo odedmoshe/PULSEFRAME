@@ -1,0 +1,17 @@
+ul.assets.media-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+/* No background of its own: the card sits on the drawer's surface in both themes. It used to paint --pf-surface (theme.css), which
+   is dark in the light theme too, and outranked .pf-mc.media-card's transparent: the light theme's dark name text then sat on a
+   dark card (contrast 1.0) and the rename pencil at 3.18 (pnpm audit:a11y, light pass). */
+.assets.media-grid > li.media-card { display: flex; flex-direction: column; gap: 4px; padding: 6px; min-width: 0; background: transparent; }
+.media-card .mc-thumb { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: var(--pf-r-sm); overflow: hidden; display: grid; place-items: center; color: var(--pf-text-muted); }
+.media-card .mc-thumb canvas, .media-card .mc-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* The picture keeps its own aspect inside the 16:9 box, on black: a portrait or square video is pillarboxed, a wider one letterboxed. A canvas, like an img, is stretched to its box unless told otherwise. */
+.media-card .mc-thumb canvas, .media-card .mc-thumb img { object-fit: contain; }
+.media-card .asset-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--pf-fs-sm); color: var(--pf-text); }
+.media-card .asset-notice { font-size: 11px; color: var(--pf-text-muted); line-height: 1.3; overflow-wrap: anywhere; }
+.media-card .asset-notice select { max-width: 100%; }
+.media-card button:focus-visible, .media-card select:focus-visible, .media-card input:focus-visible { outline: 2px solid var(--pf-accent-2); outline-offset: 1px; }
+/* A file whose stored copy is missing on disk (GET …/missing-media): the timeline's missing-file look (timeline.css .clip.missing:
+   danger hatching) and its words, «הקובץ לא נמצא» / "The file is missing", over the picture. White on --pf-danger-fill is 5.9:1. */
+.media-card.is-missing .mc-thumb { box-shadow: inset 0 0 0 2px var(--pf-danger); background-image: repeating-linear-gradient(135deg, var(--pf-danger-soft) 0 6px, transparent 6px 12px); }
+.media-card .pf-mc-missing { position: absolute; inset-inline: 6px; inset-block-start: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; gap: 4px; padding: 2px 6px; border-radius: var(--pf-r-xs); background: var(--pf-danger-fill); color: var(--pf-on-danger); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); font-weight: var(--pf-fw-medium); text-align: center; pointer-events: none; z-index: 1; }

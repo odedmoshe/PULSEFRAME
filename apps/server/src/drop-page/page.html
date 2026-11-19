@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<meta name="referrer" content="no-referrer">
+<title>העלאה מהטלפון</title>
+<style>{{css}}</style>
+</head>
+<body>
+<main>
+<header>
+<h1 data-i="title"></h1>
+<button type="button" id="lang" class="ghost" data-testid="drop-lang"></button>
+</header>
+<p id="status" class="status" role="status" data-testid="drop-status"></p>
+<section id="pinbox" hidden>
+<label for="pin" data-i="pinLabel"></label>
+<input id="pin" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="7" dir="ltr" data-testid="drop-pin">
+<button type="button" id="pingo" class="primary" data-testid="drop-pin-submit" data-i="pinGo"></button>
+</section>
+<section id="picker" hidden>
+<label class="pick primary" for="pickMedia"><span data-i="pickMedia"></span><input id="pickMedia" type="file" accept="image/*,video/*" multiple data-testid="drop-pick-media"></label>
+<label class="pick" for="pickOriginal"><span data-i="pickOriginal"></span><input id="pickOriginal" type="file" multiple data-testid="drop-pick-original"></label>
+<p class="note" data-i="pickHint"></p>
+</section>
+<section id="list" hidden>
+<p id="total" class="total" data-testid="drop-total"></p>
+<ul id="files"></ul>
+<p class="note" data-i="savedNote"></p>
+<p class="note keep" data-i="keepOpen"></p>
+<button type="button" id="done" class="done" data-testid="drop-done" data-i="done"></button>
+</section>
+</main>
+<script>{{js}}</script>
+</body>
+</html>

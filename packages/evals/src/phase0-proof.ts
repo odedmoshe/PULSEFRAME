@@ -18,6 +18,7 @@ import type { ProjectDocument } from '@pulseframe/core';
 import { evaluate } from '@pulseframe/engine';
 import { generateBarcodeFixture, readBarcode } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
+import { startExport } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/proof');
@@ -55,6 +56,9 @@ async function main() {
   check('no credential -> 401', (await rest('/projects', {}, null)).status === 401);
   check('unknown bearer token -> 401', (await rest('/projects', {}, 'pfa_wrong')).status === 401);
   check('observe-only token cannot create a project -> 403', (await rest('/projects', { method: 'POST', body: JSON.stringify({ name: 'x' }) }, observerToken)).status === 403);
+  const sess = async (headers: Record<string, string>) => (await fetch(`${base}/api/v1/session`, { headers: { connection: 'close', ...headers } }));
+  const noKey = await sess({ origin: base }), badKey = await sess({ origin: base, 'x-pf-owner-key': 'pfk_wrong' }), agentTry = await sess({ origin: base, authorization: `Bearer ${server.auth.tokens.agent}` }), goodKey = await sess({ origin: base, 'x-pf-owner-key': server.auth.tokens.owner });
+  check('the owner session needs the launch secret: no key, a wrong key, or an agent token with a same-origin header all get 401; the right key gets a cookie', noKey.status === 401 && badKey.status === 401 && agentTry.status === 401 && !noKey.headers.get('set-cookie') && goodKey.status === 200 && /pf_session=/.test(goodKey.headers.get('set-cookie') ?? ''), { noKey: noKey.status, badKey: badKey.status, agent: agentTry.status, good: goodKey.status });
   check('cross-origin page cannot obtain a browser session -> 403', (await fetch(`${base}/api/v1/session`, { headers: { origin: 'https://evil.example' } })).status === 403);
   const rebind = await new Promise<number>((resolve) => {
     // fetch() will not let us forge Host, so speak HTTP directly.
@@ -66,11 +70,12 @@ async function main() {
   const browser = await chromium.launch();
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
+  await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
   const pageErrors: string[] = [];
   page.on('pageerror', (e) => pageErrors.push(String(e)));
   page.on('console', (m) => m.type() === 'error' && pageErrors.push(m.text()));
   const tLoad = Date.now();
-  await page.goto(base);
+  await page.goto(server.ownerUrl);
   await page.waitForFunction(() => document.querySelector('[data-testid=project-name]')?.textContent === 'הפרויקט שלי');
   measurements.editorShellInteractiveMs = Date.now() - tLoad;
   check('UI boots in Hebrew, RTL, and creates the first project itself', (await page.evaluate(() => document.documentElement.dir)) === 'rtl');
@@ -87,13 +92,17 @@ async function main() {
   let { project: doc } = await getDoc();
   const asset = Object.values(doc.assets)[0]!;
   check('import: server probed the real container/codecs and content-addressed the file', asset.video?.codec === 'h264' && asset.audio?.codec === 'aac' && asset.video.frameCount === 120 && T.eq(asset.duration, T.rt(4, 1)) && /^sha256:[0-9a-f]{64}$/.test(asset.contentHash), { codec: asset.video?.codec, frames: asset.video?.frameCount, duration: asset.duration, audio: asset.audio });
-  await page.locator('.assets li button').first().click();
+  let der: any;
+  for (let i = 0; i < 100; i++) { der = (await (await rest(`/projects/${projectId}/assets/${asset.id}/derivatives`)).json()).derivatives; if (der.every((d: any) => d.status !== 'queued' && d.status !== 'running')) break; await new Promise((r) => setTimeout(r, 100)); }
+  const proxy = der.find((d: any) => d.kind === 'proxy');
+  check('ingest derivatives: thumbnails, waveform peaks and a frame-identical proxy are produced in the background', der.every((d: any) => d.status === 'ready') && proxy.meta.frameMapping === 'identity' && proxy.meta.proxy.frameCount === 120 && (await rest(`/projects/${projectId}/assets/${asset.id}/derivatives/thumbnails`)).headers.get('content-type') === 'image/jpeg', der.map((d: any) => `${d.kind}:${d.status}:${d.bytes}`));
+  await page.locator('.assets li [data-testid^=add-]').first().click(); // the "add to timeline" button (not simply the first button: a rename button precedes it)
   await page.locator('[data-track-kind=video][data-clip-type=media]').first().waitFor();
   check('edit: add to timeline creates linked picture + audio clips', (await page.locator('[data-track-kind=video]').count()) === 1 && (await page.locator('[data-track-kind=audio]').count()) === 1);
 
   // --- edit via keyboard (physical key codes; works on a Hebrew layout)
   await page.locator('[data-track-kind=video]').first().click();
-  await page.locator('canvas').click();
+  await page.getByTestId('preview').click({ position: { x: 5, y: 5 } });
   for (let i = 0; i < 6; i++) await page.keyboard.press('Shift+ArrowRight');
   await waitPainted(60);
   check('preview: frame-step keyboard navigation paints the exact requested frame', (await page.getByTestId('timecode').textContent()) === '00:00:02:00');
@@ -104,6 +113,7 @@ async function main() {
 
   // --- Hebrew text
   rev = await uiRevision();
+  await page.getByTestId('rail-text').click(); // "add text" is the rail's Text category's button (UX_REDESIGN §4.3)
   await page.getByTestId('add-text').click();
   await waitRevision(rev + 1);
   const HEB = 'שָׁלוֹם עולם 2026 PULSEFRAME';
@@ -115,16 +125,21 @@ async function main() {
   check('edit: Hebrew + niqqud + digits + Latin text stored verbatim', textClip.type === 'text' && textClip.text === HEB);
 
   // --- preview pixels: the canvas must show the source frame the evaluator selected
+  /** One pixel row through the barcode strip of the preview canvas (the canvas may be full resolution, so do not ship it all). */
   const previewBarcode = async () => {
     return page.evaluate(() => {
       const c = document.querySelector('[data-testid=preview]') as HTMLCanvasElement;
-      const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height);
-      return { w: c.width, h: c.height, frame: Number(c.dataset.frame), data: Array.from(d.data.filter((_, i) => i % 4 !== 3)) };
+      const fit = Math.min(c.width / 640, c.height / 360);
+      const y = Math.round((c.height - 360 * fit) / 2 + (360 * fit) / 12);
+      const d = c.getContext('2d')!.getImageData(0, y, c.width, 1);
+      return { w: c.width, h: c.height, y, frame: Number(c.dataset.frame), quality: c.dataset.quality, data: Array.from(d.data.filter((_, i) => i % 4 !== 3)) };
     });
   };
+  /** Barcode from that single row: horizontal placement as in the frame, vertical position collapsed to row 0. */
+  const rowRect = (W: number, H: number) => { const fit = Math.min(W / 640, H / 360); return { x: (W - 640 * fit) / 2, y: 0, w: 640 * fit, h: 0 }; };
   const srcRect = (W: number, H: number) => { const fit = Math.min(W / 640, H / 360); return { x: (W - 640 * fit) / 2, y: (H - 360 * fit) / 2, w: 640 * fit, h: 360 * fit }; };
   const pv = await previewBarcode();
-  check('preview: canvas shows source frame 60 at timeline frame 60 (barcode read from preview pixels)', readBarcode(Uint8Array.from(pv.data), pv.w, 3, srcRect(pv.w, pv.h)) === 60, { canvas: `${pv.w}x${pv.h}` });
+  check('preview: paused canvas is full project resolution and shows source frame 60 at timeline frame 60 (barcode read from preview pixels)', readBarcode(Uint8Array.from(pv.data), pv.w, 3, rowRect(pv.w, pv.h)) === 60 && pv.quality === 'full' && pv.w === 1080, { canvas: `${pv.w}x${pv.h}`, quality: pv.quality });
 
   // --- playback
   await page.keyboard.press('Home');
@@ -194,6 +209,37 @@ async function main() {
   check('off-frame time is rejected and the error offers the nearest valid value', bad.isError && bad.data.error.code === 'invalid_args' && !!bad.data.error.details.nearest, bad.data?.error?.details?.nearest);
   check('rejected edits did not change the revision', (await getDoc()).revision === rev + 1);
 
+  console.log('\n# Phase 1: semantic rebase, conflicts and compensating undo');
+  const b0 = (await getDoc()).revision;
+  await rest(`/projects/${projectId}/transactions`, { method: 'POST', body: JSON.stringify({ ops: [{ op: 'set_clip_transform', args: { clipId: textClip.id, transform: { y: 0.31 } } }] }) });
+  const rebased = await call('set_clip_gain', { projectId, baseRevision: b0, clipId: tl.tracks.find((t: any) => t.kind === 'audio').clips[0].id, gain: 0.9 });
+  check('rebase: an agent edit based on an older revision is accepted when it touches items nobody changed since', !rebased.isError && rebased.data.committed && rebased.data.rebasedFrom === b0 && rebased.data.revision === b0 + 2, { rebasedFrom: rebased.data.rebasedFrom, revision: rebased.data.revision });
+  const clash = await call('update_text', { projectId, baseRevision: b0, clipId: textClip.id, text: 'stale intent' });
+  check('conflict: the same stale base is refused for an item that changed, naming the item, revision and actor', clash.isError && clash.data.error.code === 'conflict' && clash.data.error.details.conflicts[0].entityId === textClip.id && clash.data.error.details.conflicts[0].changedAtRevision === b0 + 1, clash.data.error?.details?.conflicts);
+  const agentUndo = await call('undo', { projectId });
+  check('agent undo: reverses its own last edit as a new revision', !agentUndo.isError && agentUndo.data.kind === 'undo' && agentUndo.data.revision === b0 + 3);
+  await waitRevision(b0 + 3);
+  // Human: delete a clip in the UI, then Ctrl+Z. The agent's edits made in between must survive.
+  const clipsBefore = await page.locator('.clip').count();
+  const docBefore = JSON.stringify((await getDoc()).project.sequences);
+  await page.locator('[data-track-kind=video]').first().click();
+  await page.getByTestId('preview').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('Delete');
+  await page.waitForFunction((n) => document.querySelectorAll('.clip').length === n - 2, clipsBefore);
+  const mid = await call('set_clip_transform', { projectId, clipId: textClip.id, transform: { x: 0.01 } });
+  await waitRevision(mid.data.revision);
+  await page.keyboard.press('Control+KeyZ');
+  await page.waitForFunction((n) => document.querySelectorAll('.clip').length === n, clipsBefore);
+  const afterUndo = (await getDoc()).project;
+  const tc = afterUndo.sequences.seq_main!.tracks.find((t) => t.kind === 'text')!.clips[0]!;
+  check('human undo (Ctrl+Z) restores the deleted clip and its linked audio; the agent edit made in between is kept', tc.transform.x === 0.01 && JSON.stringify({ ...afterUndo.sequences, }) !== docBefore && afterUndo.sequences.seq_main!.tracks.filter((t) => t.kind !== 'text').every((t) => t.clips.length === 2));
+  await call('set_clip_transform', { projectId, clipId: textClip.id, transform: { x: 0 } });
+  await page.getByTestId('redo').click();
+  await page.waitForFunction((n) => document.querySelectorAll('.clip').length === n - 2, clipsBefore);
+  await page.getByTestId('undo').click();
+  await page.waitForFunction((n) => document.querySelectorAll('.clip').length === n, clipsBefore);
+  check('redo then undo via the header buttons round-trips', true);
+
   // This client uses the SDK default (2025-era handshake), exercising the server's stateless legacy fallback.
   const observer = new Client({ name: 'phase0-observer', version: '0.0.0' });
   await observer.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: { authorization: `Bearer ${observerToken}` } } }));
@@ -226,13 +272,18 @@ async function main() {
 
   console.log('\n# export (started from the UI button)');
   const tExport = Date.now();
-  await page.getByTestId('export').click();
+  const saved = page.waitForEvent('download', { timeout: 300_000 }).then((d) => d.suggestedFilename(), () => null);
+  await startExport(page); // Export opens the export sheet; its start button starts the job (owner decision 2026-11-17)
   // Editing continues while the export runs: the job must keep its immutable snapshot.
   const snapshotRevision = rev;
   const late = await rest(`/projects/${projectId}/transactions`, { method: 'POST', body: JSON.stringify({ label: 'Edit during export', ops: [{ op: 'update_text', args: { clipId: textClip.id, text: 'EDITED AFTER EXPORT STARTED' } }] }) });
   check('editing continues while the export job runs', late.ok);
   await page.getByTestId('export-download').waitFor({ timeout: 300_000 });
+  const savedName = await saved;
+  check('when the export finishes the editor says so and the file starts saving by itself; the link stays for another copy', (await page.getByTestId('export-finished').count()) === 1 && !!savedName && /\.mp4$/.test(savedName), { savedName });
   const href = await page.getByTestId('export-download').getAttribute('href');
+  await page.keyboard.press('Escape'); // the export sheet is modal: closed again before the editor is used
+  await page.getByTestId('export-sheet').waitFor({ state: 'detached', timeout: 10000 });
   const jobId = href!.split('/').at(-2)!;
   const job = await (await rest(`/jobs/${jobId}`)).json();
   const mp4 = path.join(art, 'phase0-export.mp4');
@@ -294,6 +345,41 @@ async function main() {
   const live = await getDoc();
   const replay = await (await rest(`/projects/${projectId}?revision=${live.revision}`)).json();
   check('replaying the op log from revision 0 reproduces the materialized document exactly', JSON.stringify(replay.project) === JSON.stringify(live.project), { revision: live.revision });
+  console.log('\n# Phase 2: range reads, proxy preview, bounded decoders (fresh page: no local file)');
+  const ranged: { url: string; status: number }[] = [];
+  page.on('response', (r) => { if (/\/(content|derivatives\/proxy)$/.test(new URL(r.url()).pathname)) ranged.push({ url: new URL(r.url()).pathname.split('/').slice(-2).join('/'), status: r.status() }); });
+  await page.goto(`${base}/?project=${projectId}`); // same browser context: the owner session cookie is already held, no key needed
+  await page.waitForFunction(() => (document.querySelector('[data-testid=preview]') as HTMLCanvasElement)?.dataset.frame === '0');
+  await page.getByTestId('preview').click({ position: { x: 5, y: 5 } });
+  const wrong: number[] = [];
+  const visited = [0, 59, 60, 61, 104, 30, 90, 7, 100, 45, 75, 15];
+  for (const target of visited) {
+    await page.evaluate((x) => { const el = document.querySelector('[data-testid=ruler]')!; const r = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent('pointerdown', { clientX: r.left + x, clientY: r.top + 5, bubbles: true })); }, (target / 30) * 90 + 0.5);
+    await waitPainted(target);
+    const shot = await previewBarcode();
+    const layer = evaluate(live.project, T.frameTime(target, live.project.settings.frameRate)).layers.find((l) => l.kind === 'video');
+    if (!layer || layer.kind !== 'video' || readBarcode(Uint8Array.from(shot.data), shot.w, 3, rowRect(shot.w, shot.h)) !== layer.sourceFrameIndex) wrong.push(target);
+  }
+  const media = await page.evaluate(() => (window as any).__pfMedia());
+  measurements.previewMedia = { ...media, rangedResponses: ranged.length, statuses: [...new Set(ranged.map((r) => `${r.url}:${r.status}`))] };
+  check('paused preview after reload decodes the ORIGINAL by HTTP range requests (no whole-file download) and shows the exact source frame on 12 random-access seeks', wrong.length === 0 && ranged.some((r) => r.status === 206 && r.url.endsWith('content')) && !ranged.some((r) => r.url.endsWith('content') && r.status === 200), { wrong, statuses: measurements.previewMedia });
+  await page.evaluate(() => { (window as any).__pfAudioTap = true; });
+  await page.keyboard.press('Home');
+  await waitPainted(0);
+  await page.getByTestId('play').click();
+  await page.waitForFunction(() => (window as any).__pfSync().framesPainted > 0 && document.querySelector('[data-testid=play]')?.getAttribute('data-playing') === 'false', undefined, { timeout: 30_000 });
+  const sync = await page.evaluate(() => (window as any).__pfSync());
+  measurements.previewSync = { ...sync, note: 'one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it' };
+  check('preview playback ran to the end on a measured clock; paint lateness recorded (measurement, not a pass/fail target)', sync.framesPainted > 10 && sync.paintLatenessMs.median !== null, measurements.previewSync);
+  // Preview audio: where do the beeps land on the playback clock, compared with where the edit puts them?
+  const expectBeeps = [0, 1, 2.5];
+  const onsetErr = sync.clock === 'audio' ? Math.max(...expectBeeps.map((e, i) => Math.abs((sync.audioOnsetsTimelineSeconds[i] ?? 99) - e))) : null;
+  (measurements.previewSync as any).audioOnsetMaxErrorMs = onsetErr === null ? null : +(onsetErr * 1000).toFixed(2);
+  if (sync.clock === 'audio') check('preview audio (streamed, bounded lookahead): beeps reach the output stage within one frame of their timeline positions on the audio clock', sync.audioOnsetsTimelineSeconds.length === 3 && onsetErr! < 1 / 30 && sync.audioScheduledAheadMaxMs < sync.audioLookaheadMs + 650 /* one decoded chunk (~590 ms) plus scheduling jitter; 600 failed once at 601.3 under load */, { onsets: sync.audioOnsetsTimelineSeconds, maxErrorMs: (measurements.previewSync as any).audioOnsetMaxErrorMs, scheduledAheadMaxMs: sync.audioScheduledAheadMaxMs });
+  else check('preview audio clock unavailable in this browser session: playback used the monotonic fallback (audio sync NOT measured)', true, { audioContextState: sync.audioContextState });
+  const media2 = await page.evaluate(() => (window as any).__pfMedia());
+  check('playback used the frame-identical proxy (draft quality), also read by range requests', Object.values(media2.sourcesUsed as Record<string, string[]>).every((u) => u.includes('proxy') && u.includes('original')) && ranged.some((r) => r.status === 206 && r.url.includes('proxy')), { sourcesUsed: media2.sourcesUsed });
+  check('decoder count stays within its budget', media.decoders <= media.maxDecoders, { decoders: media.decoders, max: media.maxDecoders, opened: media.opened, disposed: media.disposed });
   await page.screenshot({ path: path.join(evidenceDir, 'phase0-editor-after-agent-he.png') });
   await page.getByTestId('lang-toggle').click();
   await page.waitForFunction(() => document.documentElement.dir === 'ltr');

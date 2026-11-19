@@ -71,7 +71,17 @@ Bundled font files and their SHA-256 hashes (verified against the installed pack
 | heebo-latin-400-normal.woff2 | 2fbe59e5561759450e111cff78825304c9278ec6ba5e808cbaff1c4a97dfa6fa |
 | heebo-latin-700-normal.woff2 | 2dd5f140b9902257dc0f38e89f47f79d40b31438abef118637d916861fd370bb |
 
-The OFL requires the licence text to accompany the font. The web bundle does not currently copy `node_modules/@fontsource/heebo/LICENSE` into `apps/web/dist` (see section 6).
+The OFL requires the licence text to accompany the font. The full OFL-1.1 text and copyright line from `@fontsource/heebo/LICENSE` are emitted into `apps/web/dist/THIRD_PARTY_NOTICES.txt` at build time (served at `/THIRD_PARTY_NOTICES.txt`).
+
+### Interface fonts (UI redesign "Pulse", `apps/web/src/ds/uiFonts.css`)
+
+Bundled for the interface only; the canvas and export fonts above are unchanged. All three are SIL Open Font License, Version 1.1 (OFL-1.1), recorded in each package's `package.json` and `LICENSE`, pinned exactly (5.3.0).
+
+- **IBM Plex Sans Hebrew** (400/500/600/700, Hebrew and Latin subsets), `@fontsource/ibm-plex-sans-hebrew` 5.3.0. Copyright 2019 IBM Corp. All rights reserved.
+- **IBM Plex Mono** (400/500, Latin subset), `@fontsource/ibm-plex-mono` 5.3.0. Copyright 2017 IBM Corp. All rights reserved.
+- **Karantina** (400/700, Hebrew and Latin subsets; display sizes only), `@fontsource/karantina` 5.3.0. Copyright 2020 The Karantina Project Authors (https://github.com/ronykoch/Karantina).
+
+`apps/web/notices-plugin.ts` emits the full OFL-1.1 text and copyright lines of these three packages into `apps/web/dist/THIRD_PARTY_NOTICES.txt` at build time, next to the Heebo notice.
 
 ## 4. External runtimes used but NOT distributed by this repository
 
@@ -86,13 +96,11 @@ The items below are system-installed or operator-installed. They are not vendore
 
 mediabunny 1.66.0 is licensed MPL-2.0 and is bundled unmodified into the web app. Files covered by MPL-2.0 keep their licence, and the source-availability and notice duties of MPL-2.0 apply on distribution. See https://www.mozilla.org/en-US/MPL/2.0/FAQ/
 
-A notices file in the built bundle has not been created yet.
+The build emits `THIRD_PARTY_NOTICES.txt` with the full MPL-2.0 text, the package repository URL, the npm tarball URL for the exact version (`https://registry.npmjs.org/mediabunny/-/mediabunny-1.66.0.tgz`) and a statement that it is bundled unmodified.
 
 ## 6. Open compliance items
 
-- No NOTICE or licence bundle is emitted into `apps/web/dist`. `apps/web/vite.config.ts` contains no step that copies licence files.
-- The OFL licence text is not shipped with the Heebo font.
-- The MPL-2.0 notice for mediabunny is not shipped with the web bundle.
+- Done: `apps/web/notices-plugin.ts` emits `apps/web/dist/THIRD_PARTY_NOTICES.txt` listing every third-party package in the bundle (heebo, mediabunny, react, react-dom, scheduler, zod at the last build) with full licence texts; the build fails if a bundled package has no licence file and no `license` field. `pnpm check:notices` verifies the output after `pnpm build`.
 - The transitive licence review is an automated listing from `pnpm licenses list`. It is not a legal review.
 - No model or media licences apply yet, because no model weights or media assets are shipped.
 

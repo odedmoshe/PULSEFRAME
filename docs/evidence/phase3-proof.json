@@ -1,0 +1,827 @@
+{
+  "ranAt": "2026-11-19T04:13:07.464Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "notDone": [
+    "automated accessibility audit (no axe run)",
+    "screen-reader walkthrough",
+    "pointer drag across tracks",
+    "multi-select and marquee",
+    "source viewer",
+    "minimap and loop range"
+  ],
+  "checks": [
+    {
+      "name": "import control is reachable with Tab and shows a visible focus ring",
+      "ok": true,
+      "detail": {
+        "tabs": 13
+      }
+    },
+    {
+      "name": "arrange: \"add to timeline\" activated with Enter creates the linked clips",
+      "ok": true
+    },
+    {
+      "name": "select next clip from the keyboard",
+      "ok": true
+    },
+    {
+      "name": "split with S at the playhead (frame 30): one transaction",
+      "ok": true
+    },
+    {
+      "name": "trim start with [ : clip now starts at frame 40 and its source in-point advanced with it",
+      "ok": true
+    },
+    {
+      "name": "nudge with Alt+→ moves the clip and its linked audio by exactly one frame",
+      "ok": true
+    },
+    {
+      "name": "keyframe workflow: K sets keys at the playhead; changing an animated property 20 frames later adds a second key",
+      "ok": true,
+      "detail": [
+        [
+          0,
+          0
+        ],
+        [
+          20,
+          0.01
+        ]
+      ]
+    },
+    {
+      "name": "the property interpolates between the two keys",
+      "ok": true,
+      "detail": {
+        "at10": 0.005
+      }
+    },
+    {
+      "name": "previous/next keyframe navigation ( , and . )",
+      "ok": true
+    },
+    {
+      "name": "undo from the keyboard removes the second keyframe",
+      "ok": true
+    },
+    {
+      "name": "Ctrl+K opens a modal dialog and focuses the search field",
+      "ok": true
+    },
+    {
+      "name": "editing shortcuts are inert while the palette is open",
+      "ok": true
+    },
+    {
+      "name": "search finds commands in either language regardless of the interface language",
+      "ok": true,
+      "detail": {
+        "firstEn": "history.redo",
+        "firstHe": "edit.split"
+      }
+    },
+    {
+      "name": "Enter runs the command (redo) and closes the palette",
+      "ok": true
+    },
+    {
+      "name": "remapped shortcut: split now runs on X and no longer on S; the setting is personal (localStorage), not in the project",
+      "ok": true
+    },
+    {
+      "name": "drag to move: a ghost previews the move, nothing is committed mid-drag, release commits exactly one transaction on a frame boundary",
+      "ok": true,
+      "detail": {
+        "startBefore": 41,
+        "startAfter": 101,
+        "idMoved": "other",
+        "firstWidth": 29
+      }
+    },
+    {
+      "name": "drag the right edge to trim: one transaction, duration shortened by the dragged distance (20 frames at 90 px/s)",
+      "ok": true,
+      "detail": {
+        "durBefore": 80,
+        "durAfter": 60
+      }
+    },
+    {
+      "name": "a plain click selects without committing anything",
+      "ok": true
+    },
+    {
+      "name": "canvas handle: dragging the layer moves it by the dragged fraction of the frame in one transaction",
+      "ok": true,
+      "detail": {
+        "xBefore": 0,
+        "xAfter": 0.1587,
+        "expectedDelta": 0.1587
+      }
+    },
+    {
+      "name": "canvas handle keyboard equivalent: Shift+→ on the rotation handle rotates by 15°",
+      "ok": true
+    },
+    {
+      "name": "agent ghost: labelled marker and dashed outline appear; my playhead, selection and the revision are untouched",
+      "ok": true
+    },
+    {
+      "name": "Follow Agent (opt-in): my playhead follows the agent",
+      "ok": true
+    },
+    {
+      "name": "a manual seek ends Follow Agent; later agent moves no longer move my view",
+      "ok": true
+    },
+    {
+      "name": "English: library on the left, inspector on the right; timeline stays LTR in both languages",
+      "ok": true,
+      "detail": {
+        "libraryLeft": 80,
+        "inspectorLeft": 1114,
+        "timelineDir": "ltr"
+      }
+    },
+    {
+      "name": "activity feed is written in the interface language (Hebrew), not in server English",
+      "ok": true,
+      "detail": "את/הקיפריים"
+    },
+    {
+      "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
+      "ok": true,
+      "detail": {
+        "editor-he": 0.993053,
+        "editor-en": 0.994136,
+        "palette-en": 0.999771
+      }
+    },
+    {
+      "name": "source viewer: opens from the library by keyboard, shows the file's own frames (0, 30, 71 by barcode), plays; I and O mark a range of 42 frames; \"add\" places exactly that range at the end of the timeline as one transaction (picture + linked sound) and the timeline then shows source frames 30 and 71 at its first and last frame; shortcuts typed in the viewer do not move the timeline behind it; focus returns to the button",
+      "ok": true,
+      "detail": {
+        "svFirst": 0,
+        "at30": 30,
+        "at71": 71,
+        "svRange": {
+          "in": 30,
+          "out": 72
+        },
+        "untouched": true,
+        "svPlayed": true,
+        "focusBack": true,
+        "revisions": [
+          15,
+          16
+        ],
+        "svAdded": 2,
+        "clipsBefore": 7,
+        "sourceIn": 30,
+        "frames": 42,
+        "shownFirst": 30,
+        "shownLast": 71
+      }
+    },
+    {
+      "name": "\"insert at the playhead\" from the source viewer is one transaction: the clip under the playhead is split there, the 20-frame range sits in the gap, everything later moves 20 frames, and the timeline shows the frames in order (…, before the cut, the inserted 100–119, then the continuation)",
+      "ok": true,
+      "detail": {
+        "atFrame": 171,
+        "startOf": 161,
+        "row": [
+          [
+            0,
+            10,
+            30
+          ],
+          [
+            10,
+            20,
+            100
+          ],
+          [
+            30,
+            32,
+            40
+          ]
+        ],
+        "shown": [
+          39,
+          100,
+          119,
+          40,
+          71
+        ],
+        "lenBefore": 203,
+        "lenAfter": 223,
+        "revisions": [
+          16,
+          17
+        ]
+      }
+    },
+    {
+      "name": "\"overwrite at the playhead\" replaces exactly the range's length on the picture and sound tracks in one transaction: the timeline keeps its length, nothing later moves, and it shows the new frames 60–69 followed by what was already there (110–119, then the continuation)",
+      "ok": true,
+      "detail": {
+        "oShown": [
+          39,
+          60,
+          69,
+          110,
+          119,
+          40
+        ],
+        "lengths": [
+          223,
+          223
+        ],
+        "overlaps": false,
+        "revisions": [
+          17,
+          18
+        ]
+      }
+    },
+    {
+      "name": "timeline target tracks: with ◎ pressed on a picture track and a sound track, \"add to timeline\" puts the file's picture and sound on those tracks and a paste of the copied picture clip puts the copy on the target picture track (the sound clip was not selected, so it is not copied); every other track is untouched",
+      "ok": true,
+      "detail": {
+        "pressedTargets": 2,
+        "addedOnTargets": [
+          1,
+          1,
+          true
+        ],
+        "pastedOnTargets": [
+          2,
+          1,
+          true
+        ]
+      }
+    },
+    {
+      "name": "source viewer target tracks: with a picture track and a sound track chosen, \"overwrite\" puts the range (source 20–29) on exactly those tracks at the playhead in one transaction, leaves every other track as it was, and the frame there now shows the new picture on top; undo and removing the two tracks restore the timeline",
+      "ok": true,
+      "detail": {
+        "picture": [
+          [
+            171,
+            10,
+            20
+          ]
+        ],
+        "sound": [
+          [
+            171,
+            10,
+            20
+          ]
+        ],
+        "othersUntouched": true,
+        "revisions": 1,
+        "shown": 20
+      }
+    },
+    {
+      "name": "dragging a file from the library onto a picture track puts it on that track at the frame under the pointer (within one frame), with its linked sound, in one transaction; the drop marker goes away; undo removes it",
+      "ok": true,
+      "detail": {
+        "dropFrame": 233,
+        "droppedInfo": {
+          "frame": 233,
+          "asset": true,
+          "linked": true,
+          "lineGone": true
+        }
+      }
+    },
+    {
+      "name": "a file dropped from the computer onto a picture track is imported into the library and placed on that track at the frame under the pointer (within one frame)",
+      "ok": true,
+      "detail": {
+        "imported": "dropped.mp4",
+        "clipFrame": 243,
+        "wanted": 243
+      }
+    },
+    {
+      "name": "two files dropped together are both imported and placed one after the other in name order, the first at the frame under the pointer",
+      "ok": true,
+      "detail": {
+        "names": [
+          "two-a.mp4",
+          "two-b.mp4"
+        ],
+        "frames": [
+          [
+            243,
+            273
+          ],
+          [
+            273,
+            309
+          ]
+        ],
+        "wanted": 243
+      }
+    },
+    {
+      "name": "slip by keyboard (three single frames and one step of ten): the selected clip keeps its place and length and now shows source 73–82; its neighbours are unchanged",
+      "ok": true,
+      "detail": {
+        "slipShown": [
+          39,
+          73,
+          82,
+          110
+        ],
+        "sourceIn": 73,
+        "revisions": [
+          37,
+          41
+        ]
+      }
+    },
+    {
+      "name": "roll by keyboard: the cut before the selected clip moves two frames later (the earlier clip plays two frames more, the selected clip starts two frames later with the same picture at every other frame), the timeline keeps its length, and rolling back restores it",
+      "ok": true,
+      "detail": {
+        "rolled": [
+          39,
+          40,
+          41,
+          75,
+          82,
+          110
+        ],
+        "unrolled": [
+          39,
+          73,
+          82
+        ],
+        "lengths": [
+          223,
+          223
+        ],
+        "revisions": [
+          41,
+          45
+        ]
+      }
+    },
+    {
+      "name": "roll by dragging: Ctrl + dragging the start edge of a clip two frames later moves the cut exactly as the keyboard roll does, in one transaction, without changing the timeline length; one undo restores it",
+      "ok": true,
+      "detail": {
+        "rolledByDrag": [
+          39,
+          40,
+          41,
+          75,
+          82,
+          110
+        ],
+        "rolled": [
+          39,
+          40,
+          41,
+          75,
+          82,
+          110
+        ],
+        "revisions": 1,
+        "undragged": [
+          39,
+          73,
+          82
+        ]
+      }
+    },
+    {
+      "name": "slide by keyboard: three presses move the selected clip three frames later between its neighbours (same ten pictures; the clip before it plays three frames more, the clip after it starts three frames later), the timeline keeps its length, and sliding back restores it",
+      "ok": true,
+      "detail": {
+        "slid": [
+          39,
+          40,
+          42,
+          73,
+          82,
+          113
+        ],
+        "unslid": [
+          39,
+          73,
+          82,
+          110
+        ],
+        "lengths": [
+          223,
+          223
+        ],
+        "revisions": [
+          47,
+          53
+        ]
+      }
+    },
+    {
+      "name": "slide by dragging: Ctrl + dragging the clip three frames later gives the same frames as three keyboard slides, in one transaction, with the timeline length unchanged; one undo restores it",
+      "ok": true,
+      "detail": {
+        "slidByDrag": [
+          39,
+          40,
+          42,
+          73,
+          82,
+          113
+        ],
+        "slid": [
+          39,
+          40,
+          42,
+          73,
+          82,
+          113
+        ],
+        "revisions": 1,
+        "unslidDrag": [
+          39,
+          73,
+          82,
+          110
+        ]
+      }
+    },
+    {
+      "name": "\"play backwards\" in the Inspector: the clip keeps its place and length and its ten frames now show source 82 down to 73 on server stills (neighbours unchanged), the paused preview shows the same frame as the still, an exported file of that stretch shows the same twelve frames in the same order, the clip is marked on the timeline, and unchecking restores 73…82",
+      "ok": true,
+      "detail": {
+        "revShown": [
+          39,
+          82,
+          81,
+          80,
+          79,
+          78,
+          77,
+          76,
+          75,
+          74,
+          73,
+          110
+        ],
+        "exported": [
+          39,
+          82,
+          81,
+          80,
+          79,
+          78,
+          77,
+          76,
+          75,
+          74,
+          73,
+          110
+        ],
+        "exStatus": "succeeded",
+        "previewFrame": 173,
+        "previewCode": 80,
+        "marked": "true",
+        "fwdAgain": [
+          73,
+          82
+        ]
+      }
+    },
+    {
+      "name": "\"detach picture from sound\" in the Inspector unlinks the selected picture clip and its sound clip in one transaction; the button is then no longer offered",
+      "ok": true,
+      "detail": {
+        "found": true,
+        "detached": true,
+        "partnerFree": true,
+        "oneRevision": true,
+        "buttonGone": true
+      }
+    },
+    {
+      "name": "track buttons: hiding a picture track removes its picture from the server still and marks the track; showing it restores the same frame; locking marks the track and an edit to its clips is refused (API and Delete key in the editor); unlocking clears it",
+      "ok": true,
+      "detail": {
+        "hiddenFlag": true,
+        "levelHidden": 0,
+        "levelShown": 85.2,
+        "offMark": "true",
+        "lockMark": "true",
+        "refused": "track_locked",
+        "stillThere": true
+      }
+    },
+    {
+      "name": "editor: a track is added from the timeline; a track and a library file are renamed in place (Hebrew + Latin), Enter commits and focus returns to the rename button, Escape discards; three transactions in all",
+      "ok": true,
+      "detail": {
+        "added": "text",
+        "trackName": "ראשי Main",
+        "assetName": "ראיון.mp4",
+        "focusOnRename": true,
+        "revisions": [
+          62,
+          65
+        ]
+      }
+    },
+    {
+      "name": "editor: the project is renamed in the header; \"clear all keyframes\" removes a clip's animation; \"remove empty tracks\" from the palette removes the empty track added earlier, in one transaction each",
+      "ok": true,
+      "detail": {
+        "name": "סרט הדגמה Demo",
+        "shownName": "סרט הדגמה Demo",
+        "keyed": true,
+        "cleared": true,
+        "emptyBefore": 1,
+        "emptyCmd": "track.removeEmpty",
+        "revisions": [
+          65,
+          68
+        ]
+      }
+    },
+    {
+      "name": "\"move track up\" from the palette (its exact name, so Enter runs that command, not the command bar's unknown answer) swaps the selected clip's track with the one above it in the list, the timeline rows before and after are exactly the lane order of that list (titles, captions, picture stack front-most first, sound in list order), and Ctrl+Z restores the order",
+      "ok": true,
+      "detail": {
+        "upCmd": "track.moveUp",
+        "upActive": "pf-palette-opt-track-moveUp",
+        "before": 3,
+        "moved": true,
+        "shownMatches": true,
+        "restored": true,
+        "kinds": [
+          "video",
+          "text",
+          "audio"
+        ],
+        "shownBefore": [
+          "trk_text",
+          "trk_video",
+          "trk_audio"
+        ],
+        "shownAfter": [
+          "trk_text",
+          "trk_video",
+          "trk_audio"
+        ],
+        "rowsBefore": [
+          "trk_text",
+          "trk_video",
+          "trk_audio"
+        ]
+      }
+    },
+    {
+      "name": "\"full history\" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus",
+      "ok": true,
+      "detail": {
+        "revision": 71,
+        "allRows": 71,
+        "firstRev": "71",
+        "rawNames": 0,
+        "agentRows": 7,
+        "agentOnly": true,
+        "closedH": true,
+        "focusH": true
+      }
+    },
+    {
+      "name": "\"close empty gaps\" from the command palette removes all time that was empty on every track (including the 90 frames before a late title) in one transaction: the timeline is exactly as long as its covered frames, and nothing covered was lost",
+      "ok": true,
+      "detail": {
+        "gapCmd": "edit.closeGaps",
+        "gapActive": "pf-palette-opt-edit-closeGaps",
+        "endBefore": 223,
+        "coveredBefore": 182,
+        "endAfter": 212,
+        "coveredAfter": 212,
+        "revisions": [
+          71,
+          73
+        ]
+      }
+    },
+    {
+      "name": "during playback the preview draws, for every frame it reports, the same source frame as the server still of that timeline frame (read by barcode from the moving canvas)",
+      "ok": true,
+      "detail": {
+        "sampled": 40,
+        "movingFramesCompared": 38,
+        "differentSourceFrames": 28,
+        "firstFrames": [
+          {
+            "frame": 3,
+            "quality": "draft",
+            "code": 3
+          },
+          {
+            "frame": 7,
+            "quality": "draft",
+            "code": 7
+          },
+          {
+            "frame": 10,
+            "quality": "draft",
+            "code": 10
+          },
+          {
+            "frame": 14,
+            "quality": "draft",
+            "code": 14
+          },
+          {
+            "frame": 18,
+            "quality": "draft",
+            "code": 18
+          },
+          {
+            "frame": 21,
+            "quality": "draft",
+            "code": 21
+          }
+        ],
+        "mismatches": []
+      }
+    },
+    {
+      "name": "Color workspace scopes: drawn (histogram, waveform and vectorscope all have ink) for the frame the preview shows, and their average luma is within 3 levels of the server still of that frame (range within 12: the scope reads a scaled-down preview)",
+      "ok": true,
+      "detail": {
+        "frame": "0",
+        "mean": 24.2,
+        "stillMean": 24.3,
+        "min": 0,
+        "max": 255,
+        "stillMin": 0,
+        "stillMax": 255,
+        "histInk": 306,
+        "waveInk": 1913,
+        "vecInk": 54,
+        "saturation": 10.6
+      }
+    },
+    {
+      "name": "workspaces Motion and Look: both offer the selection only (no panel tabs); Motion opens the picture clip on its motion tab (entrances shown, no look controls, no position or speed on screen); Look opens it on its colour tab (the look controls without position, speed or entrances); Edit opens it on its basic tab (position/size, no look controls); the all-tools view shows all of it with every panel",
+      "ok": true,
+      "detail": {
+        "motion": {
+          "tabs": [],
+          "objectTab": "motion",
+          "transform": 0,
+          "speed": 0,
+          "animate": 1,
+          "look": 0,
+          "analysis": 0
+        },
+        "color": {
+          "tabs": [],
+          "objectTab": "colour",
+          "transform": 0,
+          "speed": 0,
+          "animate": 0,
+          "look": 1,
+          "analysis": 0
+        },
+        "proParts": {
+          "tabs": [],
+          "objectTab": "basic",
+          "transform": 1,
+          "speed": 0,
+          "animate": 0,
+          "look": 0,
+          "analysis": 0
+        },
+        "allParts": {
+          "tabs": [
+            "clip",
+            "speech",
+            "captions",
+            "sound",
+            "review",
+            "deliver",
+            "recipes",
+            "all"
+          ],
+          "objectTab": "basic",
+          "transform": 1,
+          "speed": 1,
+          "animate": 1,
+          "look": 1,
+          "analysis": 1
+        }
+      }
+    },
+    {
+      "name": "custom workspace: starts with clip, sound and deliver; ticking and unticking panels changes the tabs on offer; the choice survives a reload; the last remaining panel cannot be unticked",
+      "ok": true,
+      "detail": {
+        "customDefault": [
+          "clip",
+          "sound",
+          "deliver"
+        ],
+        "customChosen": [
+          "clip",
+          "captions",
+          "deliver"
+        ],
+        "customKept": {
+          "ws": "custom",
+          "tabs": [
+            "clip",
+            "captions",
+            "deliver"
+          ]
+        },
+        "lastLocked": true
+      }
+    },
+    {
+      "name": "workspaces: Quick offers recipes, speech, captions and deliver and shows the recipes panel; Sound offers sound and clip; Captions offers captions, speech and clip; Deliver offers deliver, review and recipes; each shows its first panel; the choice survives a reload, and so does a chosen target track; Edit shows the selection only, with the all-tools button that offers every panel again; the project is not changed by any of it",
+      "ok": true,
+      "detail": {
+        "proTabs": 8,
+        "quick": {
+          "tabs": [
+            "recipes",
+            "speech",
+            "captions",
+            "deliver"
+          ],
+          "panels": [
+            "recipes"
+          ]
+        },
+        "sound": {
+          "tabs": [
+            "sound",
+            "clip"
+          ],
+          "panels": [
+            "sound"
+          ]
+        },
+        "captions": {
+          "tabs": [
+            "captions",
+            "speech",
+            "clip"
+          ],
+          "panels": [
+            "captions"
+          ]
+        },
+        "deliver": {
+          "tabs": [
+            "deliver",
+            "review",
+            "recipes"
+          ],
+          "panels": [
+            "deliver"
+          ]
+        },
+        "afterReload": {
+          "ws": "sound",
+          "tabs": [
+            "sound",
+            "clip"
+          ]
+        },
+        "back": [],
+        "allButton": 1,
+        "allAgain": 8
+      }
+    },
+    {
+      "name": "no uncaught errors in the editor page (404s for derived files of library files this proof had just removed are left out)",
+      "ok": true,
+      "detail": {
+        "unexpected": [],
+        "leftOut": 0
+      }
+    }
+  ]
+}

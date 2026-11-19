@@ -1,0 +1,62 @@
+/*
+ * The start hub (docs/design/UX_REDESIGN.md §4.14): shown over the stage while the project is empty. Tokens only; logical
+ * properties; the hero word is Karantina (display font, at 28px and above only), the gold word is the time colour.
+ * The class names .welcome and .welcome-drop stay (proofs and the drop handling find them by test id and class).
+ */
+.welcome { z-index: 5; }
+.welcome.pf-hub { position: fixed; inset-block: var(--pf-shell-top, var(--pf-topbar)) var(--pf-statusbar); inset-inline-start: var(--pf-shell-rail, var(--pf-rail)); inset-inline-end: 0; padding-inline-start: var(--pf-shell-browser, var(--pf-browser)); z-index: 5; display: block; overflow-y: auto; background: var(--pf-surface-1); color: var(--pf-text); font-family: var(--pf-font); text-align: start; scrollbar-width: thin;
+  background-image: radial-gradient(900px 340px at 50% -80px, color-mix(in srgb, var(--pf-frame) 9%, transparent), transparent 70%), radial-gradient(500px 260px at 90% 0, color-mix(in srgb, var(--pf-pulse) 7%, transparent), transparent 70%); }
+.pf-hub-inner { display: flex; flex-direction: column; gap: var(--pf-sp-8); inline-size: min(760px, 100%); margin-inline: auto; padding: var(--pf-sp-9) var(--pf-sp-8) var(--pf-sp-9); }
+.pf-hub-hero { display: flex; flex-direction: column; gap: var(--pf-sp-3); }
+.pf-hub-title { margin: 0; font-family: var(--pf-font-display); font-weight: 700; font-size: clamp(44px, 7.5dvh, var(--pf-fs-3xl)); line-height: 1; letter-spacing: 0; color: var(--pf-text); }
+.pf-hub-title em { font-style: normal; color: var(--pf-pulse); text-shadow: var(--pf-glow-pulse); }
+.pf-hub-lead { margin: 0; color: var(--pf-text-2); font-size: var(--pf-fs-md); line-height: var(--pf-lh-md); }
+.welcome-drop.pf-hub-drop { display: flex; flex-direction: row; align-items: center; gap: var(--pf-sp-6); padding: var(--pf-sp-7) var(--pf-sp-8); text-align: start; border: 1.5px dashed var(--pf-line-control); border-radius: var(--pf-r-lg); background: color-mix(in srgb, var(--pf-surface-2) 70%, transparent); font-size: var(--pf-fs-sm); transition: border-color var(--pf-dur-fast), background-color var(--pf-dur-fast); }
+.pf-hub-drop.over { border-color: var(--pf-frame); background: var(--pf-frame-soft); }
+.pf-hub-dropIc { display: grid; place-items: center; flex: none; inline-size: 52px; block-size: 52px; border-radius: var(--pf-r-md); background: var(--pf-frame-soft); color: var(--pf-frame); }
+.pf-hub-dropText { display: flex; flex-direction: column; gap: 2px; flex: 1; min-inline-size: 0; }
+.pf-hub-dropText strong { font-size: var(--pf-fs-md); line-height: var(--pf-lh-md); font-weight: var(--pf-fw-semibold); }
+.pf-hub-dropText span { color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-hub-drop .pf-btn { flex: none; }
+.pf-hub-cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: var(--pf-sp-8); }
+.pf-hub-sec { display: flex; flex-direction: column; gap: var(--pf-sp-5); min-inline-size: 0; }
+.pf-hub-hrow { display: flex; align-items: baseline; gap: var(--pf-sp-5); flex-wrap: wrap; }
+.pf-hub-h { margin: 0; font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); font-weight: var(--pf-fw-semibold); color: var(--pf-text-2); text-transform: none; letter-spacing: 0; }
+.pf-hub-sub { color: var(--pf-text-3); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-hub-formats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--pf-sp-4); }
+.pf-hub-fmt { display: flex; flex-direction: column; align-items: center; gap: var(--pf-sp-3); padding: var(--pf-sp-5) var(--pf-sp-3) var(--pf-sp-4); border: 0; border-radius: var(--pf-r-md); background: var(--pf-surface-2); color: var(--pf-text-2); font: inherit; font-size: var(--pf-fs-xs); cursor: pointer; box-shadow: 0 0 0 1px var(--pf-line), var(--pf-hilite); }
+.pf-hub-fmt:hover { background: var(--pf-surface-3); color: var(--pf-text); }
+.pf-hub-fmt.is-on { color: var(--pf-text); background: var(--pf-frame-soft); box-shadow: var(--pf-glow-frame); }
+.pf-hub-fmtShape { display: block; block-size: 38px; max-inline-size: 64px; border-radius: 4px; background: var(--pf-surface-4); box-shadow: inset 0 0 0 1.5px var(--pf-line-control); }
+.pf-hub-fmt.is-on .pf-hub-fmtShape { background: color-mix(in srgb, var(--pf-frame) 30%, var(--pf-surface-4)); box-shadow: inset 0 0 0 1.5px var(--pf-frame); }
+.pf-hub-fmtName { font-weight: var(--pf-fw-medium); }
+.pf-hub-fmtRatio { color: var(--pf-text-3); font-size: var(--pf-fs-digits); }
+.pf-hub-note { margin: 0; padding: var(--pf-sp-5); border-radius: var(--pf-r-md); background: var(--pf-surface-2); color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); box-shadow: 0 0 0 1px var(--pf-line); }
+.pf-hub-note.is-warn { display: flex; align-items: center; justify-content: space-between; gap: var(--pf-sp-4); color: var(--pf-attention); }
+.pf-hub-recent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.pf-hub-proj { display: flex; align-items: center; gap: var(--pf-sp-4); min-block-size: 40px; padding: 0 var(--pf-sp-4); border-radius: var(--pf-r-md); color: var(--pf-text); text-decoration: none; font-size: var(--pf-fs-sm); }
+.pf-hub-proj:hover { background: var(--pf-surface-3); }
+.pf-hub-projIc { display: grid; place-items: center; flex: none; inline-size: 28px; block-size: 28px; border-radius: var(--pf-r-sm); background: var(--pf-surface-3); color: var(--pf-text-2); }
+.pf-hub-projName { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-hub-projDate { color: var(--pf-text-3); font-size: var(--pf-fs-digits); }
+.pf-hub-chev { color: var(--pf-text-3); flex: none; }
+:root[dir='ltr'] .pf-hub-chev { transform: scaleX(-1); }
+.pf-hub-more, .pf-hub-ghost { align-self: flex-start; display: inline-flex; align-items: center; gap: var(--pf-sp-3); block-size: var(--pf-h-sm); padding: 0 var(--pf-sp-4); border: 0; border-radius: var(--pf-r-sm); background: transparent; color: var(--pf-text-2); font: inherit; font-size: var(--pf-fs-xs); cursor: pointer; box-shadow: none; }
+.pf-hub-more:hover, .pf-hub-ghost:hover { background: var(--pf-surface-3); color: var(--pf-text); }
+.pf-hub-cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--pf-sp-5); }
+.pf-hub-card { display: flex; flex-direction: column; align-items: stretch; gap: var(--pf-sp-3); inline-size: 100%; padding: 0; border: 0; background: transparent; color: var(--pf-text); font: inherit; text-align: start; cursor: pointer; box-shadow: none; }
+.pf-hub-skel { display: flex; align-items: stretch; gap: 3px; aspect-ratio: 16 / 10; padding: var(--pf-sp-4); border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: 0 0 0 1px var(--pf-line), var(--pf-hilite); transition: box-shadow var(--pf-dur-fast); }
+.pf-hub-card:hover .pf-hub-skel, .pf-hub-card:focus-visible .pf-hub-skel { box-shadow: 0 0 0 1.5px var(--pf-frame); }
+.pf-hub-skel i { flex-basis: 0; min-inline-size: 0; border-radius: 3px; background: color-mix(in srgb, var(--pf-k-video) 45%, var(--pf-surface-2)); align-self: center; block-size: 100%; }
+.pf-hub-skel i:nth-child(3n+2) { block-size: 72%; background: color-mix(in srgb, var(--pf-pulse) 38%, var(--pf-surface-2)); }
+.pf-hub-skel i:nth-child(3n) { block-size: 86%; background: color-mix(in srgb, var(--pf-frame) 36%, var(--pf-surface-2)); }
+.pf-hub-cardName { font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); font-weight: var(--pf-fw-medium); }
+.pf-hub-cardMeta { color: var(--pf-text-3); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-hub-foot { display: flex; align-items: center; flex-wrap: wrap; gap: var(--pf-sp-4); padding-block-start: var(--pf-sp-5); box-shadow: inset 0 1px 0 var(--pf-line); }
+.pf-hub-foot .pf-hub-ghost:last-child { margin-inline-start: auto; }
+@media (max-width: 1500px), (max-height: 820px) {
+  .pf-hub-inner { gap: var(--pf-sp-6); padding: var(--pf-sp-7) var(--pf-sp-7); }
+  .pf-hub-cols { grid-template-columns: 1fr; gap: var(--pf-sp-6); }
+  .welcome-drop.pf-hub-drop { padding: var(--pf-sp-5) var(--pf-sp-6); }
+}
+@media (prefers-reduced-motion: reduce) { .welcome.pf-hub, .welcome.pf-hub * { transition: none !important; animation: none !important; } }
