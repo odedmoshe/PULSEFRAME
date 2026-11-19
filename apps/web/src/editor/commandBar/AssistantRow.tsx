@@ -11,7 +11,7 @@ import type { Lang } from '@pulseframe/i18n';
 import { api, ApiFailure } from '../../api.ts';
 import { CHROME_STRINGS } from '../chrome.strings.ts';
 import { setSettingsOpen } from '../chromeState.ts';
-import { useEditorState } from '../store.ts';
+import { useBarEditor } from './useBarResult.ts';
 import { COMMAND_BAR_TESTIDS as TID } from './commandBar.testids.ts';
 import { auto, barText, dict, ltr } from './commandBar.strings.ts';
 import type { AssistantRowProps } from './contract.ts';
@@ -41,7 +41,7 @@ export const resetStatusCache = (): void => { cache = null; };
 type Job = { phase: 'idle' } | { phase: 'running'; jobId: string; stage: string | null } | { phase: 'failed'; reason: string } | { phase: 'proposal'; proposalId: string; ops: OpCall[] | null; explanation: string | null; count: number };
 
 export function AssistantRow({ query, lang, optionDomId }: AssistantRowProps): ReactElement {
-  const { editor, state } = useEditorState();
+  const { editor, state } = useBarEditor();
   const C = CHROME_STRINGS[lang];
   const [status, setStatus] = useState<StatusState>(null);
   const [job, setJob] = useState<Job>({ phase: 'idle' });

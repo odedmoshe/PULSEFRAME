@@ -9,7 +9,7 @@ import { ASSISTANT_NEVER_SENT, AssistantConfigBodySchema, type AssistantConfigBo
 import type { Lang } from '@pulseframe/i18n';
 import { Button, Switch } from '../../ds/index.ts';
 import { api, ApiFailure } from '../../api.ts';
-import { useEditorState } from '../store.ts';
+import { useBarEditor } from './useBarResult.ts';
 import { COMMAND_BAR_TESTIDS as TID } from './commandBar.testids.ts';
 import { barText, dict, ltr } from './commandBar.strings.ts';
 import { Rich } from './BarPreview.tsx';
@@ -48,7 +48,7 @@ export function configBodyOf(f: ConfigForm): AssistantConfigBody | null {
 const reasonOf = (e: unknown): string => (e instanceof ApiFailure ? e.message : e instanceof Error ? e.message : String(e));
 
 export function AssistantSettings(): ReactElement | null {
-  const { editor, state } = useEditorState();
+  const { editor, state } = useBarEditor();
   const lang: Lang = state.lang;
   const owner = settingsVisible(state.actor);
   const [status, setStatus] = useState<AssistantStatus | null>(null);

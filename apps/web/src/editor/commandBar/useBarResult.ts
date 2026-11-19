@@ -9,7 +9,7 @@ import { BAR_RECENT_MAX, BAR_PREFS_KEY, INTENT_COMMANDS, barIdempotencyKey, inte
 import { dictionaries, translateRefusal, type Lang } from '@pulseframe/i18n';
 import { COMMANDS } from '../commands.ts';
 import { normalize, rankWithRescue } from '../palette.search.ts';
-import { useEditorState, type Editor, type ExactCommit, type Notice, type Workspace } from '../store.ts';
+import { useEditor, type Editor, type EditorState, type ExactCommit, type Notice, type Workspace } from '../store.ts';
 import { BAR_DOM_IDS, BAR_KEYS, BAR_TEST_HOOK } from './commandBar.testids.ts';
 import { barText, dict, plain } from './commandBar.strings.ts';
 import { buildBarContext } from './context.ts';
@@ -158,6 +158,8 @@ export class BarSession {
   busy = false;
   failure: BarFailure | null = null;
   version = 0;
+  /** The grammar (replaceable in tests). */
+  interpret: (text: string, ctx: BarContext) => BarResult = coreInterpret;
   readonly live: LiveAnnouncer;
   private listeners = new Set<() => void>();
   constructor(public port: BarPort, public host: BarPaletteHost, timers: Timers = realTimers, private win: Record<string, unknown> | null = typeof window === 'undefined' ? null : (window as unknown as Record<string, unknown>)) {
@@ -238,7 +240,7 @@ export class BarSession {
     if (r.kind === 'stale') {
       // the editor reloaded the document: plan again on it and show the new preview; nothing the owner did not see is committed
       this.stale = true; this.rendered = null;
-      this.view = viewOf(this.view.query, this.port.context());
+      this.view = viewOf(this.view.query, this.port.context(), this.interpret);
       this.live.say(dict(lang, 'bar.projectChanged'));
       this.bump();
       return 'stale';
@@ -253,6 +255,12 @@ export class BarSession {
 }
 
 // ---- the hook ----
+/** The editor and its state (the same as useEditorState, with the server snapshot too so the components render to markup in tests). */
+export function useBarEditor(): { editor: Editor; state: EditorState } {
+  const editor = useEditor();
+  const state = useSyncExternalStore(editor.subscribe, editor.getState, editor.getState);
+  return { editor, state };
+}
 /** A document with more clips than this plans after 150 ms of quiet instead of on every key (the dry run applies the ops to a copy). */
 export const LARGE_DOC_CLIPS = 400;
 export const LARGE_DOC_DEBOUNCE_MS = 150;
@@ -263,7 +271,7 @@ export interface BarSlot extends BarPaletteSlot { session: BarSession; view: Bar
 export const isBarSlot = (s: BarPaletteSlot): s is BarSlot => 'session' in s;
 
 export function useBarSlot(query: string, host: BarPaletteHost): BarSlot {
-  const { editor, state } = useEditorState();
+  const { editor, state } = useBarEditor();
   const ref = useRef<BarSession | null>(null);
   if (!ref.current) ref.current = new BarSession(portOf(editor), host);
   const session = ref.current;

@@ -10,8 +10,7 @@ import { barText, plain } from './commandBar.strings.ts';
 import type { BarSectionProps } from './contract.ts';
 import { PreviewPanel, Rich, Typed, commandLabel, readWords, refusalReason } from './BarPreview.tsx';
 import { describeAction, intentName } from './describe.ts';
-import { sigOf, isBarSlot, type BarEntry, type BarSlot } from './useBarResult.ts';
-import { useEditorState } from '../store.ts';
+import { sigOf, isBarSlot, useBarEditor, type BarEntry, type BarSlot } from './useBarResult.ts';
 import './commandBar.css';
 
 export function BarSection(props: BarSectionProps): ReactElement | null {
@@ -20,7 +19,7 @@ export function BarSection(props: BarSectionProps): ReactElement | null {
 }
 
 function Section({ slot, query, activeKey, onHover, optionDomId }: BarSectionProps & { slot: BarSlot }): ReactElement {
-  const { state } = useEditorState();
+  const { state } = useBarEditor();
   const lang = state.lang;
   const { view, session } = slot;
   const rate = state.doc?.settings.frameRate;
