@@ -50,6 +50,11 @@ export const COMMAND_BAR_HE = {
   'error.code.assistant_not_connected': 'עוזר השפה לא מחובר', 'error.code.budget_exceeded': 'הבקשה הייתה עוברת את מגבלת ההוצאה, ולא נשלחה',
   'error.code.invalid_model_output': 'התשובה של העוזר לא תקינה, ושום דבר לא שונה', 'error.code.provider_error': 'שירות העוזר החזיר שגיאה',
   'error.code.submission_unknown': 'לא ידוע אם הבקשה הגיעה לשירות, וייתכן שחויבה. היא לא תישלח שוב לבד',
+  // headlines of the other codes the assistant's routes and job answer with (ASSISTANT_EXTRA_ERROR_CODES)
+  'error.code.summary_too_large': 'התיאור של הפרויקט ארוך מדי לשליחה', 'error.code.agent_paused': 'הסוכנים מושהים בפרויקט הזה',
+  'error.code.budget_error': 'לא הצלחנו לשמור סכום לבקשה, ולכן היא לא נשלחה', 'error.code.nothing_to_release': 'אין סכום שמור לשחרר',
+  // the bar and Settings: a server sentence that has no Hebrew wording is shown as sent, marked
+  'refusal.untranslated': 'בלשון השרת, לא תורגם',
 };
 export const COMMAND_BAR_EN: Record<keyof typeof COMMAND_BAR_HE, string> = {
   'bar.title': 'Command bar',
@@ -85,4 +90,52 @@ export const COMMAND_BAR_EN: Record<keyof typeof COMMAND_BAR_HE, string> = {
   'error.code.assistant_not_connected': 'Language assistant not connected', 'error.code.budget_exceeded': 'The request would pass the spending limit and was not sent',
   'error.code.invalid_model_output': 'The assistant\'s answer was not valid; nothing was changed', 'error.code.provider_error': 'The assistant\'s service returned an error',
   'error.code.submission_unknown': 'It is not known whether the request reached the service, and it may have been charged. It will not be sent again by itself',
+  'error.code.summary_too_large': 'The project description is too long to send', 'error.code.agent_paused': 'Agents are paused on this project',
+  'error.code.budget_error': 'No amount could be reserved for the request, so it was not sent', 'error.code.nothing_to_release': 'There is no reserved amount to release',
+  'refusal.untranslated': 'in the server\'s words, not translated',
 };
+/** Codes the assistant's routes and job answer with besides core ASSISTANT_ERROR_CODES (host_not_allowed's headline is index.ts's, worded for any site). */
+export const ASSISTANT_EXTRA_ERROR_CODES = ['summary_too_large', 'host_not_allowed', 'agent_paused', 'budget_error', 'nothing_to_release', 'invalid_request', 'not_found', 'internal_error'] as const;
+
+/**
+ * The Hebrew wording of the assistant's server refusals (apps/server/src/assistant/*.ts, governance.ts reserveAssistant, the
+ * summary route in http.ts and the job errors), which refusals.ts adds to translateRefusal. Each sentence is the reason, then
+ * «; » and the next step, so the Hebrew owner never needs the server's English hint (lead decision: a refusal in the bar or in
+ * Settings gives a Hebrew next step). command-bar-wording.test.ts provokes each message from the server's own code and checks
+ * it is worded here.
+ */
+const SETUP_HE: Record<string, string> = {
+  provider_not_configured: 'עוזר השפה לא מחובר: בגרסה הזו אין מתאם רשת, ולכן עוד אי אפשר לחבר אותו; שורת הפקודות עובדת גם בלעדיו',
+  prices_missing: 'חסרים מחירים לעוזר השפה; הקלידו בהגדרות, בחלק «עוזר השפה», את המחיר למיליון אסימונים של הקלט ושל הפלט',
+  limit_missing: 'חסרה מגבלת הוצאה לעוזר השפה; קבעו בהגדרות, בחלק «עוזר השפה», גם מגבלה חודשית וגם תקרה לבקשה אחת',
+  host_not_allowed: `כתובת השירות של עוזר השפה אינה ברשימת הכתובות המותרות; הוסיפו אותה ל־${ltr('PF_ASSISTANT_HOSTS')} והפעילו את השרת מחדש, או בחרו כתובת מהרשימה`,
+  prompt_digest_mismatch: 'ההנחיות לעוזר השפה השתנו מאז שנבדקו; שום דבר לא יישלח עד שההנחיות החדשות ייבדקו',
+  ready: 'עוזר השפה מוגדר; אפשר לבקש שוב',
+};
+const BILLING_HE = 'בדקו את החיובים אצל השירות, ואם לא חויבתם, שחררו את הסכום השמור של הבקשה הזו';
+export const HE_ASSISTANT: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^the language assistant is set up and used from the owner's own session only$/, () => 'את עוזר השפה מגדירים ומפעילים רק מהחיבור של בעלי הפרויקט; פתחו את העורך מהקישור של הבעלים והגדירו אותו בהגדרות'],
+  [/^the language assistant is reached over https only$/, () => `הפנייה לעוזר השפה נעשית רק ב־${ltr('https')}; כתבו רק את שם השרת, למשל ${ltr('api.example.com')}`],
+  [/^the host (\S+) is not listed in PF_ASSISTANT_HOSTS$/, (m) => `הכתובת ${ltr(m[1]!)} אינה ברשימה ${ltr('PF_ASSISTANT_HOSTS')}; הוסיפו בדיוק את הכתובת הזאת לרשימה, הפעילו את השרת מחדש ושמרו שוב`],
+  [/^this request (?:is estimated to|could) cost more than the per-request cap$/, () => 'הבקשה עלולה לעלות יותר מהתקרה לבקשה אחת, ולכן לא נשלחה; קצרו את הבקשה, או הגדילו בהגדרות את התקרה לבקשה אחת'],
+  [/^this would exceed the monthly limit of the language assistant$/, () => 'הבקשה הייתה עוברת את המגבלה החודשית של עוזר השפה, ולכן לא נשלחה; חכו לחודש הבא, או הגדילו בהגדרות את המגבלה החודשית'],
+  [/^the owner has not set both the monthly limit and the per-request cap$/, () => SETUP_HE.limit_missing!],
+  [/^the language assistant is not set up \((\w+)\): /, (m) => SETUP_HE[m[1]!] ?? 'עוזר השפה לא מוגדר; פתחו את ההגדרות, בחלק «עוזר השפה», והשלימו את מה שחסר'],
+  [/^the selection and the tracks alone take more than (\d+) bytes to describe$/, (m) => `הקליפים הנבחרים והרצועות לבדם ארוכים מדי לתיאור (יותר מ־${ltr(m[1]!)} בתים); בחרו פחות קליפים ובקשו שוב`],
+  [/a price is more than 0 cents per million tokens/, () => `מחיר חייב להיות יותר מ־${ltr('0')} סנט למיליון אסימונים; הקלידו את המחיר מרשימת המחירים של השירות (למשל ${ltr('300')} עבור ${ltr('$3')} למיליון אסימונים)`],
+  [/^playheadFrame is a whole, non-negative frame index$/, () => `מיקום הסמן צריך להיות מספר פריים שלם, לא שלילי; שלחו את הסמן כמספר פריים, למשל ${ltr('playheadFrame=90')}`],
+  // the job's own errors (job.ts), shown when a request ends without a proposal
+  [/^the server stopped before the request was sent; nothing was sent and the reservation was released$/, () => 'השרת נעצר לפני שהבקשה נשלחה, ושום דבר לא נשלח; הסכום השמור שוחרר, ואפשר לבקש שוב'],
+  [/^the server stopped after the service answered and before its answer was checked; the cost is recorded as spent and nothing is left to release; no proposal was made$/, () => 'השרת נעצר אחרי שהשירות ענה ולפני שהתשובה נבדקה: העלות נרשמה כהוצאה ואין סכום לשחרר, ולא נוצרה הצעה; אפשר לבקש שוב אם עדיין רוצים את השינוי'],
+  [/^the server stopped while the request was with the service; it may have been charged/, () => `השרת נעצר בזמן שהבקשה הייתה אצל השירות, ייתכן שחויבה, והיא לא תישלח שוב לבד; ${BILLING_HE}`],
+  [/^it is not known whether the service received the request; it may have been charged and it is not sent again/, () => `לא ידוע אם השירות קיבל את הבקשה, ייתכן שחויבה, והיא לא תישלח שוב לבד; ${BILLING_HE}`],
+  [/^the service could not be reached; nothing was sent/, () => 'לא הצלחנו להגיע לשירות, ושום דבר לא נשלח; בדקו את החיבור לרשת ואת כתובת השירות בהגדרות, ובקשו שוב'],
+  [/^the service refused the request \((\w+)\)/, (m) => `השירות סירב לבקשה (${ltr(m[1]!)}); בדקו בהגדרות את המפתח, את הכתובת ואת שם המודל, ובקשו שוב`],
+  [/^the project owner has paused agents on this project$/, () => 'הסוכנים מושהים בפרויקט הזה, ולכן הבקשה לעוזר השפה לא נשלחה; חדשו את פעולת הסוכנים ובקשו שוב'],
+  [/^the owner paused agents on this project/, () => 'הסוכנים מושהים בפרויקט הזה, ולכן לא נוצרה הצעה; חדשו את פעולת הסוכנים ובקשו שוב'],
+  [/^the adapter or the key went away before the request was sent; nothing was sent$/, () => 'המתאם או המפתח הוסרו לפני שהבקשה נשלחה, ושום דבר לא נשלח; בדקו את ההגדרות של עוזר השפה ובקשו שוב'],
+  [/^canceled by \S+ before anything was sent$/, () => 'הבקשה בוטלה לפני שנשלח משהו, ושום דבר לא חויב; אפשר לבקש שוב'],
+  [/^canceled; the service was not reached, nothing was sent$/, () => 'הבקשה בוטלה, השירות לא הושג ושום דבר לא נשלח; אפשר לבקש שוב'],
+  [/^canceled while the request was with the service; it may have been charged$/, () => `הבקשה בוטלה בזמן שהייתה אצל השירות, וייתכן שחויבה; ${BILLING_HE}`],
+  [/^canceled; the answer that arrived was discarded$/, () => 'הבקשה בוטלה, והתשובה שהגיעה נזרקה; אפשר לבקש שוב'],
+];

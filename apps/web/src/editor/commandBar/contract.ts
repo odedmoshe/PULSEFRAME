@@ -32,4 +32,6 @@ export interface BarSectionProps {
   /** The palette's option DOM id for a key (the result row: BAR_DOM_IDS.result). */
   optionDomId(key: string): string;
 }
+/** The live region and the preview, mounted OUTSIDE the listbox (after it, before the footer). */
+export interface BarPanelProps { slot: BarPaletteSlot; query: string; activeKey: string | null; /** the assistant scope: the live region only, no preview */ off?: boolean }
 export interface AssistantRowProps { query: string; lang: Lang; optionDomId(key: string): string }

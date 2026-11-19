@@ -10,7 +10,7 @@ import type * as T from '@pulseframe/time';
 import { translateRefusal, type Lang } from '@pulseframe/i18n';
 import { BAR_DOM_IDS, COMMAND_BAR_TESTIDS as TID } from './commandBar.testids.ts';
 import { FSI, LRI, PDI, barText, dict, type BarTextKey } from './commandBar.strings.ts';
-import { describeAction, describeNote, describeStep, intentName } from './describe.ts';
+import { describeAction, describeNote, describeStep, intentName, type RefusalWords } from './describe.ts';
 import type { BarEntry, BarTarget } from './useBarResult.ts';
 import { COMMANDS } from '../commands.ts';
 import { dictionaries } from '@pulseframe/i18n';
@@ -70,6 +70,21 @@ export const refusalReason = (r: Extract<BarResult, { kind: 'refused' }>, lang: 
   const base = dict(lang, `bar.refusal.${r.code}`);
   return (r.opError ? translateRefusal(lang, r.opError.message) ?? (lang === 'he' ? base : r.opError.message) : base);
 };
+
+/** The server's own English words, shown only when no Hebrew wording exists, marked as not translated. */
+export function Untranslated({ message, hint, lang }: { message: string; hint?: string | null; lang: Lang }): ReactElement {
+  return <span className="pf-bar-untranslated" data-testid={TID.untranslated}>({dict(lang, 'refusal.untranslated')}: <span lang="en" dir="ltr">{[message, hint].filter(Boolean).join(' ')}</span>)</span>;
+}
+/** A refusal in words (describe.ts refusalWords): the reason, the next step, and the unworded English when there is no Hebrew. */
+export function RefusalText({ words, lang }: { words: RefusalWords; lang: Lang }): ReactElement {
+  return <><bdi dir="auto">{words.reason}</bdi>{words.next && <> {words.next}</>}{words.untranslated && <> <Untranslated message={words.untranslated.message} hint={words.untranslated.hint} lang={lang} /></>}</>;
+}
+
+/** A bar string with a {reason} slot, filled with a refusal in words (the English part keeps its own language mark). */
+export function WithReason({ lang, k, words }: { lang: Lang; k: BarTextKey; words: RefusalWords }): ReactElement {
+  const [before = '', after = ''] = barText(lang, k, { reason: '\u0000' }).split('\u0000');
+  return <>{before}<RefusalText words={words} lang={lang} />{after}</>;
+}
 
 function PlanBody({ plan, lang, query }: { plan: Extract<BarTarget, { kind: 'plan' }>; lang: Lang; query: string }): ReactElement {
   const t = (k: BarTextKey, v?: Record<string, string | number>) => barText(lang, k, v);
@@ -132,7 +147,8 @@ export function ResultMessage({ result, lang, query }: { result: BarResult; lang
     }
     case 'refused': return (
       <div data-testid={TID.refused} data-code={result.code} data-op-code={result.opError?.code}>
-        <p className="pf-bar-understood"><span className="pf-bar-lead">{t('refused.heading')}</span> <bdi dir="auto">{refusalReason(result, lang)}</bdi></p>
+        <p className="pf-bar-understood"><span className="pf-bar-lead">{t('refused.heading')}</span> <bdi dir="auto">{refusalReason(result, lang)}</bdi>
+          {lang === 'he' && result.opError && !translateRefusal('he', result.opError.message) && <> <Untranslated message={result.opError.message} lang={lang} /></>}</p>
         <p className="pf-bar-hint">{t(`hint.${result.code}` as BarTextKey)}</p>
         {result.choices && result.choices.length > 0 && <p className="pf-bar-hint">{t('refused.choices')}</p>}
         <p className="pf-bar-footer">{result.choices?.length ? t('footer.choose') : t('footer.nothing')}</p>

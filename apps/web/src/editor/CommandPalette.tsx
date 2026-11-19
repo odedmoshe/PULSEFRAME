@@ -15,7 +15,7 @@ import { useEditorState } from './store.ts';
 import './command-palette.css';
 // the Hebrew command bar (ADR-0027): its rows come first in the one listbox (commandBar/contract.ts)
 import { AssistantRow } from './commandBar/AssistantRow.tsx';
-import { BarSection } from './commandBar/BarSection.tsx';
+import { BarPanel, BarSection } from './commandBar/BarSection.tsx';
 import { useBarSlot } from './commandBar/useBarResult.ts';
 
 const MODIFIER_CODES = new Set(['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight', 'OS', 'AltGraph']);
@@ -287,6 +287,8 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
               )}
               {scope === 'assistant' && <p className="pf-pal-note is-block" role="status" data-testid="palette-assistant-note">{C.palAssistantOff}</p>}
             </div>
+            {/* the bar's live region and preview: outside the listbox, which owns only options and groups (ADR-0027) */}
+            <BarPanel slot={bar} query={query} activeKey={activeKey} off={scope === 'assistant'} />
             <div className="pf-pal-footer">
               <span className="pf-pal-hints" aria-hidden="true"><span><kbd>↑↓</kbd> {C.palFooter.nav}</span><span><kbd>Enter</kbd> {C.palFooter.apply}</span><span><kbd>Esc</kbd> {C.palFooter.close}</span></span>
               <button type="button" className="pf-pal-btn" data-testid="palette-shortcuts" onClick={() => setView('shortcuts')}>{t('shortcuts')}</button>

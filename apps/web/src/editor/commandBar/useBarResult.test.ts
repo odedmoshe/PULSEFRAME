@@ -10,6 +10,7 @@ vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {}, removeIt
 vi.stubGlobal('window', globalThis);
 const U = await import('./useBarResult.ts');
 const { BAR_KEYS } = await import('./commandBar.testids.ts');
+const { barText } = await import('./commandBar.strings.ts');
 
 const R = { num: 30, den: 1 };
 const doc = applyTransaction(createProject({ id: 'prj_b', name: 'B', width: 1920, height: 1080, frameRate: R }), [], { idSeed: 'b_', actor: 't' }).doc;
@@ -108,7 +109,10 @@ describe('the strict commit', () => {
     const { calls, session, show } = make(() => planAt(7), async () => ({ kind: 'failed', code: 'overlap', message: 'no room' }));
     show('x'); session.markRendered(session.view.entries[0]!.target);
     expect(await session.activate(BAR_KEYS.result)).toBe('failed');
-    expect(session.failure).toEqual({ code: 'overlap', text: 'no room' });
+    // Hebrew interface: the code's Hebrew headline and the bar's Hebrew next step; the English message is not shown
+    expect(session.failure).toEqual({ code: 'overlap', reason: 'אין מקום פנוי ברצועה', next: barText('he', 'fail.hint'), untranslated: null });
+    expect(session.live.text).toContain('אין מקום פנוי ברצועה');
+    expect(session.live.text).not.toContain('no room');
     expect(calls.closed).toBe(0);
   });
 });
@@ -132,11 +136,18 @@ describe('the re-plan on 409', () => {
     expect(session.rendered).not.toBeNull();
     expect(await session.activate(BAR_KEYS.result)).toBe('committed');
   });
-  it('a refusal shows the server next step when it gave one', async () => {
-    const { session, show } = make(() => planAt(7), async () => ({ kind: 'failed', code: 'overlap', message: 'no room', hint: 'move the clip' }));
+  it('a refusal worded in Hebrew is shown in Hebrew only (its sentence carries the next step); the server hint is not shown', async () => {
+    const { session, show } = make(() => planAt(7), async () => ({ kind: 'failed', code: 'track_locked', message: 'track trk_a is locked', hint: 'Unlock the track.' }));
     show('x'); session.markRendered(session.view.entries[0]!.target);
     await session.activate(BAR_KEYS.result);
-    expect(session.failure).toEqual({ code: 'overlap', text: 'no room', hint: 'move the clip' });
+    expect(session.failure).toEqual({ code: 'track_locked', reason: 'הרצועה נעולה; יש לבטל את הנעילה כדי לערוך בה', next: null, untranslated: null });
+  });
+  it('a refusal with no Hebrew wording at all shows the server\'s English words marked as not translated, beside a Hebrew next step', async () => {
+    const { session, show } = make(() => planAt(7), async () => ({ kind: 'failed', code: 'some_new_code', message: 'no room', hint: 'move the clip' }));
+    show('x'); session.markRendered(session.view.entries[0]!.target);
+    await session.activate(BAR_KEYS.result);
+    expect(session.failure).toEqual({ code: 'some_new_code', reason: 'הפעולה נכשלה', next: barText('he', 'fail.hint'), untranslated: { message: 'no room', hint: 'move the clip' } });
+    expect(session.live.text).toContain('לא תורגם');
   });
 
   it('plans again on the new revision, shows «הפרויקט השתנה — בדקו שוב», keeps the palette open and commits nothing more', async () => {

@@ -7,8 +7,8 @@ import { useEffect, type ReactElement } from 'react';
 import { Terminal } from 'lucide-react';
 import { COMMAND_BAR_TESTIDS as TID, BAR_DOM_IDS } from './commandBar.testids.ts';
 import { barText, plain } from './commandBar.strings.ts';
-import type { BarSectionProps } from './contract.ts';
-import { PreviewPanel, Rich, Typed, commandLabel, readWords, refusalReason } from './BarPreview.tsx';
+import type { BarPanelProps, BarSectionProps } from './contract.ts';
+import { PreviewPanel, RefusalText, Rich, Typed, commandLabel, readWords, refusalReason } from './BarPreview.tsx';
 import { describeAction, intentName } from './describe.ts';
 import { sigOf, isBarSlot, useBarEditor, type BarEntry, type BarSlot } from './useBarResult.ts';
 import './commandBar.css';
@@ -18,19 +18,13 @@ export function BarSection(props: BarSectionProps): ReactElement | null {
   return <Section {...props} slot={props.slot} />;
 }
 
-function Section({ slot, query, activeKey, onHover, optionDomId }: BarSectionProps & { slot: BarSlot }): ReactElement {
+function Section({ slot, query, activeKey, onHover, optionDomId }: BarSectionProps & { slot: BarSlot }): ReactElement | null {
   const { state } = useBarEditor();
   const lang = state.lang;
-  const { view, session } = slot;
+  const { view } = slot;
   const rate = state.doc?.settings.frameRate;
-  const shown = view.entries.find((e) => e.key === activeKey) ?? view.entries[0];
-  const shownSig = shown?.target ? sigOf(shown.target) : null;
-  // Enter acts only on a preview that is on the screen: this effect runs after the preview was painted
-  useEffect(() => { session.markRendered(shown?.target ?? null); }, [session, shownSig]); // eslint-disable-line react-hooks/exhaustive-deps
-  const live = (
-    <div role="status" aria-live="polite" className="pf-bar-sr" data-testid={TID.live}>{session.live.text}</div>
-  );
-  if (!view.result || view.entries.length === 0) return live;
+  // the rows only: the listbox owns options and groups, nothing else (the live region and the preview are BarPanel's, outside it)
+  if (!view.result || view.entries.length === 0) return null;
   const r = view.result;
   const act = (e: BarEntry) => { if (e.key !== activeKey) onHover(e.key); else slot.activate(e.key); };
 
@@ -48,7 +42,6 @@ function Section({ slot, query, activeKey, onHover, optionDomId }: BarSectionPro
 
   return (
     <div role="group" aria-label={barText(lang, 'bar.label')} className="pf-bar" data-testid="bar-section">
-      {live}
       <div
         id={optionDomId(resultRow.key)} role="option" className="pf-pal-option pf-bar-row" data-testid={TID.result}
         aria-selected={resultRow.key === activeKey} aria-describedby={resultRow.key === activeKey ? BAR_DOM_IDS.preview : undefined} data-active={resultRow.key === activeKey || undefined}
@@ -58,7 +51,7 @@ function Section({ slot, query, activeKey, onHover, optionDomId }: BarSectionPro
         <span className="pf-pal-names"><Terminal size={14} strokeWidth={1.75} aria-hidden="true" className="pf-pal-ic" /><span className="pf-pal-label">{summary}</span></span>
         {kind && <span className="pf-pal-kind"><Rich text={kind} /></span>}
       </div>
-      {r.kind === 'unknown' && view.entries.length > 1 && <p className="pf-bar-nearest-head">{barText(lang, 'unknown.nearest')}</p>}
+      {r.kind === 'unknown' && view.entries.length > 1 && <div className="pf-bar-nearest-head" aria-hidden="true">{barText(lang, 'unknown.nearest')}</div>}
       {view.entries.slice(1).map((e, i) => {
         const nearest = e.target?.kind === 'nearest';
         const label = nearest ? commandLabel((e.target as { commandId: string }).commandId, lang) : e.label?.[lang] ?? '';
@@ -74,10 +67,37 @@ function Section({ slot, query, activeKey, onHover, optionDomId }: BarSectionPro
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * The live region and the preview of the active row, OUTSIDE the palette's listbox (a listbox owns only options and groups;
+ * the input's aria-describedby names the preview by id). The one polite live region is always mounted, so an announcement
+ * is heard even while the query is empty. Enter acts only on a preview that is on the screen: the effect marks it after paint.
+ */
+export function BarPanel(props: BarPanelProps): ReactElement | null {
+  if (!isBarSlot(props.slot)) return null;
+  return <Panel {...props} slot={props.slot} />;
+}
+function Panel({ slot, query, activeKey, off }: BarPanelProps & { slot: BarSlot }): ReactElement {
+  const { state } = useBarEditor();
+  const lang = state.lang;
+  const { view, session } = slot;
+  const rate = state.doc?.settings.frameRate;
+  const shown = off ? undefined : view.entries.find((e) => e.key === activeKey) ?? view.entries[0];
+  const shownSig = shown?.target ? sigOf(shown.target) : null;
+  useEffect(() => { session.markRendered(shown?.target ?? null); }, [session, shownSig]); // eslint-disable-line react-hooks/exhaustive-deps
+  const live = <div role="status" aria-live="polite" className="pf-bar-sr" data-testid={TID.live}>{session.live.text}</div>;
+  const r = view.result;
+  if (off || !r || view.entries.length === 0) return <div className="pf-bar-panel">{live}</div>;
+  return (
+    <div className="pf-bar-panel" data-testid="bar-panel">
+      {live}
       <PreviewPanel entry={shown} result={r} lang={lang} query={query} rate={rate} busy={slot.pending || session.busy} />
-      {session.busy && <p className="pf-bar-hint" role="presentation">{barText(lang, 'busy.line')}</p>}
+      {session.busy && <p className="pf-bar-hint">{barText(lang, 'busy.line')}</p>}
       {session.stale && <p className="pf-bar-stale" data-testid={TID.stale}>{barText(lang, 'stale.line')}</p>}
-      {session.failure && <p className="pf-bar-stale" data-testid={TID.refused} data-code={session.failure.code}><bdi dir="auto">{session.failure.text}</bdi> {session.failure.hint ?? barText(lang, 'fail.hint')}</p>}
+      {session.failure && <p className="pf-bar-stale" data-testid={TID.refused} data-code={session.failure.code}><RefusalText words={session.failure} lang={lang} /></p>}
     </div>
   );
 }

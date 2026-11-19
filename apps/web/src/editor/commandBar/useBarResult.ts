@@ -14,7 +14,7 @@ import { BAR_DOM_IDS, BAR_KEYS, BAR_TEST_HOOK } from './commandBar.testids.ts';
 import { barText, dict, plain } from './commandBar.strings.ts';
 import { buildBarContext } from './context.ts';
 import type { BarPaletteHost, BarPaletteSlot } from './contract.ts';
-import { describeAction, intentName, opWords } from './describe.ts';
+import { describeAction, intentName, opWords, refusalLine, refusalWords, type RefusalWords } from './describe.ts';
 
 /** A nearest command offered under an unknown request (runs that registry command). */
 export interface NearestTarget { kind: 'nearest'; commandId: string }
@@ -146,7 +146,8 @@ export function portOf(editor: Editor): BarPort {
 }
 
 export type Activation = 'committed' | 'action' | 'stale' | 'failed' | 'blocked' | 'not_rendered' | 'nothing';
-export interface BarFailure { code: string; text: string; /** the server's own next step, when it gave one */ hint?: string }
+/** A refused commit in words (describe.ts refusalWords): Hebrew in a Hebrew interface, the server's English only when unworded, marked. */
+export interface BarFailure extends RefusalWords { code: string }
 
 /** Everything between the rows and the editor: the shown view, what was rendered, the strict commit, the actions. */
 export class BarSession {
@@ -247,9 +248,9 @@ export class BarSession {
       this.bump();
       return 'stale';
     }
-    const reason = translateRefusal(lang, r.message) ?? r.message;
-    this.failure = { code: r.code, text: reason, ...(r.hint ? { hint: r.hint } : {}) };
-    this.live.say(plain(barText(lang, 'live.failed', { reason })));
+    const words = refusalWords(lang, r);
+    this.failure = { code: r.code, ...words };
+    this.live.say(plain(barText(lang, 'live.failed', { reason: refusalLine(lang, words) })));
     this.bump();
     return 'failed';
   }

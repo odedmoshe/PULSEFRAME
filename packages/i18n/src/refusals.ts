@@ -9,6 +9,7 @@ import { HE_SHORTS } from './shorts.ts';
 import { HE_KEYFRAMES } from './keyframesWave.ts';
 import { HE_MULTICAM } from './multicam.ts';
 import { HE_PERFORM } from './perform.ts';
+import { HE_ASSISTANT } from './commandBar.ts';
 
 /**
  * Hebrew wording for the detail text of the refusals a person meets most often in the editor. The server's messages are
@@ -256,7 +257,7 @@ const HE_MULTICAM_W1: [RegExp, (m: RegExpExecArray) => string][] = [
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT]) { const m = re.exec(message); if (m) return say(m); }
   for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
   // The export routes wrap the first blocker (Exporter.start, the browser export): worded only when the blocker itself is.
   const start = /^export cannot start: ([\s\S]+)$/.exec(message);
@@ -303,3 +304,5 @@ export const MULTICAM_REFUSAL_PATTERNS: readonly RegExp[] = HE_MULTICAM.map(([re
 export const MULTICAM_W1_REFUSAL_PATTERNS: readonly RegExp[] = HE_MULTICAM_W1.map(([re]) => re);
 /** The patterns of perform mode (perform.ts HE_PERFORM, ADR-0025), for perform-wording.test.ts. */
 export const PERFORM_REFUSAL_PATTERNS: readonly RegExp[] = HE_PERFORM.map(([re]) => re);
+/** The patterns of the command bar's language assistant (commandBar.ts HE_ASSISTANT, ADR-0027), for command-bar-wording.test.ts. */
+export const ASSISTANT_REFUSAL_PATTERNS: readonly RegExp[] = HE_ASSISTANT.map(([re]) => re);
