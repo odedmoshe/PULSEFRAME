@@ -71,6 +71,8 @@ export const CLIP_ONE = ['קליפ', 'קליפ הזה', 'נבחר', 'קליפ ה
 export const CLIP_MANY = ['קליפים', 'כל הקליפים', 'קליפים הנבחרים', 'נבחרים', 'ל:קליפים', 'על קליפים', 'על כל הקליפים', 'ל:כל הקליפים', 'on all clips', 'clips', 'all clips', 'all the clips', 'selected clips'];
 /** «המוזיקה»: the audio track whose trackRole is 'music'. REVIEW: שיר, פסקול. */
 export const MUSIC = ['מוזיקה', 'מוסיקה', 'ל:מוזיקה', 'ל:מוסיקה', 'ב:מוזיקה', 'שיר', 'ל:שיר', 'פסקול', 'music', 'song', 'soundtrack'];
+/** «הכותרת»: the selected text clip, or the only text clip (plan §4.4 target words). REVIEW: «הטקסט» is not listed (it would read «הוסף טקסט» apart). */
+export const TITLE = ['כותרת', 'כותרת הזאת', 'כותרת הזו', 'ל:כותרת', 'על כותרת', 'על כותרת הזאת', 'title', 'this title', 'on the title', 'to the title', 'the title text'];
 /** «הקול / הסאונד» alone: always ambiguous (clip, track or master). */
 export const SOUND = ['קול', 'סאונד', 'שמע', 'עוצמה', 'ווליום', 'ל:קול', 'ל:סאונד', 'sound', 'audio', 'volume'];
 export const HERE = ['כאן', 'פה', 'ב:סמן', 'עד כאן', 'עד פה', 'עד הסמן', 'מ:כאן', 'מ:פה', 'מ:סמן', 'here', 'at the playhead', 'at playhead', 'from here'];
@@ -105,17 +107,19 @@ export interface FamilySpec {
 }
 
 const CLIP_WORDS = (role: 'object' | 'target' = 'object'): FamilyWords[] => [{ key: 'clip', role, phrases: CLIP_ONE, value: 'one' }, { key: 'clip', role, phrases: CLIP_MANY, value: 'many' }];
+/** The clip words plus «הכותרת», for the families whose op takes a text clip (split, trim, delete, effect, look). */
+const CLIP_OR_TITLE = (role: 'object' | 'target' = 'object'): FamilyWords[] => [...CLIP_WORDS(role), { key: 'clip', role, phrases: TITLE, value: 'title' }];
 
 export const FAMILIES: readonly FamilySpec[] = [
-  { id: 'split', intents: ['split_here', 'split_at'], heads: [{ phrases: [...VERBS.cut, ...VERBS.split] }], words: CLIP_WORDS(), slots: ['here', 'pos'] },
+  { id: 'split', intents: ['split_here', 'split_at'], heads: [{ phrases: [...VERBS.cut, ...VERBS.split] }], words: CLIP_OR_TITLE(), slots: ['here', 'pos'] },
   {
     id: 'trim', intents: ['trim_start_here', 'trim_end_here'], heads: [{ phrases: [...VERBS.cut, ...VERBS.trim] }],
-    words: [{ key: 'edge', role: 'object', phrases: ['התחלה', 'start', 'beginning'], value: 'start' }, { key: 'edge', role: 'object', phrases: ['סוף', 'end'], value: 'end' }, ...CLIP_WORDS('target')],
+    words: [{ key: 'edge', role: 'object', phrases: ['התחלה', 'start', 'beginning'], value: 'start' }, { key: 'edge', role: 'object', phrases: ['סוף', 'end'], value: 'end' }, ...CLIP_OR_TITLE('target')],
     slots: ['here'],
   },
   {
     id: 'delete', intents: ['delete_clip', 'delete_keep_gap'], heads: [{ phrases: [...VERBS.delete, ...VERBS.remove] }],
-    words: [...CLIP_WORDS(), { key: 'keepGap', role: 'mode', phrases: [...x(VERBS.keep, ['רווח', 'את הרווח', 'gap', 'the gap']), 'בלי לסגור רווח', 'בלי לסגור את הרווח', 'עם רווח', 'without closing the gap'], value: true }],
+    words: [...CLIP_OR_TITLE(), { key: 'keepGap', role: 'mode', phrases: [...x(VERBS.keep, ['רווח', 'את הרווח', 'gap', 'the gap']), 'בלי לסגור רווח', 'בלי לסגור את הרווח', 'עם רווח', 'without closing the gap'], value: true }],
   },
   {
     id: 'add_title', intents: ['add_title'], heads: [{ phrases: [...x(VERBS.add, ['כותרת', 'טקסט', 'title', 'text', 'a title']), ...VERBS.write] }],
@@ -151,8 +155,8 @@ export const FAMILIES: readonly FamilySpec[] = [
     id: 'fit_music', intents: ['fit_music'], heads: [{ phrases: [...x([...VERBS.finish, ...VERBS.fit], ['מוזיקה', 'מוסיקה', 'music', 'the music'])] }],
     words: [{ key: 'with', role: 'filler', phrases: ['עם התמונה', 'עם הסרט', 'עם הסוף', 'ל:סרט', 'ל:תמונה', 'with the picture', 'with the video', 'picture', 'video'] }],
   },
-  { id: 'effect', intents: ['effect'], heads: [{ phrases: x([...VERBS.add, ...VERBS.apply], ['אפקט', 'effect', 'the effect', 'an effect']) }], words: CLIP_WORDS('target'), slots: ['effect'] },
-  { id: 'look', intents: ['look'], heads: [{ phrases: [...x([...VERBS.apply, ...VERBS.add], ['מראה', 'look', 'the look', 'a look'])] }], words: CLIP_WORDS('target'), slots: ['look'] },
+  { id: 'effect', intents: ['effect'], heads: [{ phrases: x([...VERBS.add, ...VERBS.apply], ['אפקט', 'effect', 'the effect', 'an effect']) }], words: CLIP_OR_TITLE('target'), slots: ['effect'] },
+  { id: 'look', intents: ['look'], heads: [{ phrases: [...x([...VERBS.apply, ...VERBS.add], ['מראה', 'look', 'the look', 'a look'])] }], words: CLIP_OR_TITLE('target'), slots: ['look'] },
   {
     id: 'rename_project', intents: ['rename_project'],
     heads: [{ phrases: [...x(VERBS.change, ['שם הפרויקט', 'project name', 'the project name', 'the name of the project']), 'rename project', 'rename the project', 'קרא לפרויקט', 'קראי לפרויקט', 'קראו לפרויקט'] }],

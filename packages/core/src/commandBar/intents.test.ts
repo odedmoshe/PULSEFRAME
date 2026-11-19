@@ -8,10 +8,11 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { canonical, INTENT_IDS, type BarContext, type BarResult, type IntentId } from '../index.ts';
+import * as T from '@pulseframe/time';
+import { canonical, deleteOps, INTENT_IDS, rippleDeleteOn, type BarContext, type BarResult, type IntentId } from '../index.ts';
 import { interpret } from './index.ts';
 import { INTENT_EXAMPLES } from './lexicon.ts';
-import { context, ctxFor, fixture, variants } from './fixture.testFixture.ts';
+import { context, ctxFor, fixture, R30, tx, variants } from './fixture.testFixture.ts';
 
 const fx = fixture();
 const ACTIONS: ReadonlySet<IntentId> = new Set(['undo', 'redo', 'workspace', 'export_to', 'seek', 'play', 'pause', 'select_all', 'deselect', 'zoom_in', 'zoom_out', 'language', 'open']);
@@ -180,9 +181,58 @@ describe('resolve: the target words', () => {
     expect(two.kind).toBe('ambiguous');
     expect(two.choices.length).toBe(2);
   });
-  it('«הקול» alone is always asked (music track or the clip)', () => {
+  it('«הקול» alone is always asked: every unlocked audio track (the music first) or the clip', () => {
     const r = interpret('הגבר את הקול ב־3 דציבל', ctxFor('gain_change')) as Extract<BarResult, { kind: 'ambiguous' }>;
     expect(r.kind).toBe('ambiguous');
-    expect(r.choices.map((c) => (c.result as Extract<BarResult, { kind: 'plan' }>).ops[0]!.op)).toEqual(['set_track_audio', 'set_clip_gain']);
+    const audio = fx.doc.sequences.seq_main!.tracks.filter((t) => t.kind === 'audio');
+    expect(audio.length).toBe(2);
+    const ops = r.choices.map((c) => plan(c.result).ops[0]!);
+    expect(ops.map((o) => o.op)).toEqual(['set_track_audio', 'set_track_audio', 'set_clip_gain']);
+    expect(ops.slice(0, 2).map((o) => (o.args as { trackId: string }).trackId)).toEqual([fx.musicTrack, ...audio.map((t) => t.id).filter((id) => id !== fx.musicTrack)]);
+    expect(r.choices[0]!.he).toBe('רצועת המוזיקה');
+    // a locked audio track is not offered
+    const locked = interpret('הגבר את הקול ב־3 דציבל', context(variants.lockedTrack(fx.doc, fx.musicTrack), { selection: [fx.c2] })) as Extract<BarResult, { kind: 'ambiguous' }>;
+    expect(locked.choices.map((c) => (plan(c.result).ops[0]!.args as { trackId?: string }).trackId)).not.toContain(fx.musicTrack);
+  });
+});
+
+describe('resolve: «הכותרת» (plan §4.4 target words): the selected text clip, or the only text clip', () => {
+  const plan = (r: BarResult) => r as Extract<BarResult, { kind: 'plan' }>;
+  const ids = (r: BarResult) => plan(r).ops.map((o) => (o.args as { clipId?: string; clipIds?: string[] }).clipId ?? (o.args as { clipIds: string[] }).clipIds);
+  /** A second title on the text track, at 300–360. */
+  const twoTitles = () => tx(fx.doc, [{ op: 'add_text', args: { text: 'סוף', start: T.frameTime(300, R30), duration: T.frameTime(60, R30), trackId: fx.textTrack } }], 'tt_');
+  const noTitle = () => tx(fx.doc, deleteOps(fx.doc, [fx.title], false)!.ops, 'nt_').doc;
+  it('the only title is the target of delete, effect, look and trim, in Hebrew and English', () => {
+    const c = context(fx.doc, { selection: [fx.c2] });
+    for (const t of ['מחק את הכותרת', 'מחקי את הכותרת', 'delete the title']) {
+      const r = interpret(t, c);
+      expect(r.kind, t).toBe('plan');
+      expect(plan(r).ops).toEqual(deleteOps(fx.doc, [fx.title], rippleDeleteOn(fx.doc))!.ops);
+    }
+    expect(plan(interpret('הוסף אפקט שחור לבן לכותרת', c)).ops).toEqual([{ op: 'add_effect', args: { clipId: fx.title, type: 'color.grayscale' } }]);
+    expect(plan(interpret('החל מראה חם על הכותרת', c)).ops).toEqual([{ op: 'apply_look', args: { clipId: fx.title, lookId: 'warm-sun' } }]);
+    expect(plan(interpret('מחק את הכותרת הזאת', c)).ops).toEqual(deleteOps(fx.doc, [fx.title], rippleDeleteOn(fx.doc))!.ops);
+    expect(ids(interpret('קצץ את הסוף של הכותרת מכאן', context(fx.doc, { selection: [fx.c2], playheadFrame: 30 })))).toEqual([fx.title]);
+  });
+  it('split: the title when the playhead is inside it; else no_clip_here (never another clip)', () => {
+    expect(plan(interpret('פצל את הכותרת כאן', context(fx.doc, { selection: [fx.c2], playheadFrame: 30 }))).ops).toEqual([{ op: 'split_clip', args: { clipId: fx.title, at: T.frameTime(30, R30) } }]);
+    expect(interpret('פצל את הכותרת כאן', context(fx.doc, { selection: [fx.c2], playheadFrame: 120 }))).toMatchObject({ kind: 'refused', code: 'no_clip_here' });
+  });
+  it('two titles: the selected one; none selected → asked, each title a choice', () => {
+    const doc = twoTitles().doc;
+    const second = twoTitles().results[0]!.output!.clipId as string;
+    expect(ids(interpret('מחק את הכותרת', context(doc, { selection: [second, fx.c2] })))).toEqual([second]);
+    const r = interpret('מחק את הכותרת', context(doc, { selection: [fx.c2] })) as Extract<BarResult, { kind: 'ambiguous' }>;
+    expect(r.kind).toBe('ambiguous');
+    expect(r.question.he).toBe('יש 2 כותרות — איזו?');
+    expect(r.choices.map((c) => ids(c.result))).toEqual([[fx.title], [second]]);
+  });
+  it('no title → refused no_title; a title only on a locked track → refused locked', () => {
+    expect(interpret('מחק את הכותרת', context(noTitle(), { selection: [fx.c2] }))).toMatchObject({ kind: 'refused', code: 'no_title' });
+    expect(interpret('delete the title', context(variants.lockedTrack(fx.doc, fx.textTrack), { selection: [fx.c2] }))).toMatchObject({ kind: 'refused', code: 'locked' });
+  });
+  it('«הוסף כותרת» still adds a title (the target word does not take the head)', () => {
+    expect(interpret('הוסף כותרת "x" כאן', context(fx.doc))).toMatchObject({ kind: 'plan', intent: 'add_title' });
+    expect(interpret('הוסף את הכותרת "x" כאן', context(fx.doc))).toMatchObject({ kind: 'plan', intent: 'add_title' });
   });
 });

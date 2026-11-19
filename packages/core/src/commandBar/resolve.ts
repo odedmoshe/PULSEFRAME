@@ -7,6 +7,8 @@
  * - «הקליפים / כל הקליפים»: every selected clip, or every clip on unlocked tracks when nothing is selected.
  * - «המוזיקה»: the audio track whose trackRole is 'music'; none → refused no_music_track with the audio tracks as choices;
  *   two or more → ambiguous.
+ * - «הכותרת»: the selected text clip, else the only text clip on an unlocked track; none → refused no_title (locked when the
+ *   only titles are on locked tracks); two or more → ambiguous, each title a choice.
  * - The split rule (plan §4.4 row 1): the selected clip when the frame is strictly inside it, else the one clip strictly
  *   under the frame on an unlocked track; several → choices plus «כל הקליפים בסמן».
  */
@@ -80,7 +82,8 @@ export function resolveSplit(ctx: BarContext, frame: number): Resolved<Found> {
  * «הקליפ» (word 'one') or «הקליפים» (word 'many'); with no word, an op that takes one clip reads it as 'one' and the delete
  * as the selection. `atFrame` is where the clip offered for an empty selection is looked for (covering, not strict).
  */
-export function resolveClips(ctx: BarContext, word: 'one' | 'many' | null, pred: (f: Found) => boolean, opts: { allowMany: boolean; atFrame: number; selectionAsMany?: boolean }): Resolved<Found> {
+export function resolveClips(ctx: BarContext, word: 'one' | 'many' | 'title' | null, pred: (f: Found) => boolean, opts: { allowMany: boolean; atFrame: number; selectionAsMany?: boolean }): Resolved<Found> {
+  if (word === 'title') return resolveTitle(ctx, pred);
   const doc = ctx.doc;
   const sel = selectedClips(ctx, pred);
   const notes = lockedNote(doc, sel.locked);
@@ -103,6 +106,29 @@ export function resolveClips(ctx: BarContext, word: 'one' | 'many' | null, pred:
     kind: 'ambiguous', notes,
     options: [...(opts.allowMany ? [{ items: sel.open, he: `כל ${n} הקליפים`, en: `All ${n} clips` }] : []), ...sel.open.slice(0, 8).map((f) => clipOption(doc, f))],
     question: { he: `נבחרו ${n} קליפים — לכולם?`, en: `${n} clips are selected — all of them?` },
+  };
+}
+
+export const isTitle = (f: Found) => f.clip.type === 'text';
+/** «הכותרת» (plan §4.4): the selected text clip, or the only text clip. `pred` narrows further (the op's own kind of clip). */
+export function resolveTitle(ctx: BarContext, pred: (f: Found) => boolean = () => true): Resolved<Found> {
+  const doc = ctx.doc;
+  const want = (f: Found) => isTitle(f) && pred(f);
+  const sel = selectedClips(ctx, want);
+  if (sel.open.length === 1) return { kind: 'ok', items: sel.open, notes: lockedNote(doc, sel.locked) };
+  const pool = sel.open.length ? sel : (() => {
+    const open: Found[] = [], locked: Found[] = [];
+    for (const track of tracksOf(doc)) for (const clip of track.clips) if (want({ clip, track })) (track.locked ? locked : open).push({ clip, track });
+    return { open, locked };
+  })();
+  const notes = lockedNote(doc, pool.locked);
+  if (pool.open.length === 1) return { kind: 'ok', items: pool.open, notes };
+  if (!pool.open.length) return { kind: 'refused', code: pool.locked.length ? 'locked' : 'no_title', options: [], notes };
+  const n = pool.open.length;
+  return {
+    kind: 'ambiguous', notes,
+    options: pool.open.slice(0, 8).map((f) => { const name = clipName(doc, f.clip); return { items: [f], he: name ? `הכותרת «${name}»` : 'הכותרת', en: name ? `Title “${name}”` : 'The title' }; }),
+    question: sel.open.length ? { he: `נבחרו ${n} כותרות — איזו?`, en: `${n} titles are selected — which one?` } : { he: `יש ${n} כותרות — איזו?`, en: `There are ${n} titles — which one?` },
   };
 }
 

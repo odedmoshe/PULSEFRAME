@@ -18,7 +18,7 @@ import { clipEnd } from '../validate.ts';
 import { VERBS } from './lexicon.ts';
 import type { FamilyParse, Hit, SpeedSpec, TimeSpec } from './match.ts';
 import { ex, exNeg, exText } from './numbers.ts';
-import { clipName, clipOption, clipsAt, findIn, isMedia, isPicture, isVideoClip, resolveClips, resolveMusic, resolveSplit, soundClipOf, tracksOf, type Found, type Option, type Resolved } from './resolve.ts';
+import { clipName, clipOption, clipsAt, findIn, isMedia, isPicture, isVideoClip, resolveClips, resolveMusic, resolveSplit, resolveTitle, soundClipOf, tracksOf, type Found, type Option, type Resolved } from './resolve.ts';
 import { toBarTime, wholeFrames } from './time.ts';
 import type { BarExact } from '../commandBarContract.ts';
 
@@ -109,7 +109,7 @@ const trackStep = (op: string, t: Track): PlanStep => ({ op, detail: { kind: 'tr
 /** A value said in the request (the chosen reading set). */
 const v = <X>(env: PlanEnv, key: string) => env.values.get(key) as X | undefined;
 const headValue = (env: PlanEnv): string | null => (env.heads.find((h) => h.value !== null)?.value as string | undefined) ?? null;
-const clipWord = (env: PlanEnv): 'one' | 'many' | null => (v<string>(env, 'clip') as 'one' | 'many' | undefined) ?? null;
+const clipWord = (env: PlanEnv): 'one' | 'many' | 'title' | null => (v<string>(env, 'clip') as 'one' | 'many' | 'title' | undefined) ?? null;
 
 // ---------- the planners, one per family ----------
 type Planner = (env: PlanEnv) => BarResult;
@@ -124,9 +124,19 @@ const split: Planner = (env) => {
   // «חתוך כאן» is split by its declared primary reading; the trim readings are named beside it (lead decision 1)
   const saidCut = env.heads.some((h) => env.tokens.slice(h.start, h.end).some((t) => CUT_VERBS.has(t.norm)));
   const alt: BarNote[] = intent === 'split_here' && saidCut ? [{ code: 'alternative_reading', data: { intents: ['trim_start_here', 'trim_end_here'] } }] : [];
-  return withTargets(env, intent, resolveSplit(env.ctx, p.frame), (items, notes) =>
+  // «פצל את הכותרת כאן»: the title, and only when the frame is strictly inside it — never another clip under the playhead
+  const targets = clipWord(env) === 'title' ? titleAt(env, p.frame) : resolveSplit(env.ctx, p.frame);
+  return withTargets(env, intent, targets, (items, notes) =>
     finishPlan(env, intent, items.map((f) => ({ op: 'split_clip', args: { clipId: f.clip.id, at: at(env, p.frame) } })), items.map(() => atStep(env, 'split_clip', p)), [...notes, ...roundedNote(env, p, 'at'), ...alt]));
 };
+
+/** «הכותרת» at a frame: the resolved title when the frame is strictly inside it, else no_clip_here. */
+function titleAt(env: PlanEnv, frame: number): Resolved<Found> {
+  const r = resolveTitle(env.ctx);
+  if (r.kind !== 'ok') return r;
+  const t = at(env, frame), f = r.items[0]!;
+  return T.lt(f.clip.start, t) && T.lt(t, clipEnd(f.clip)) ? r : { kind: 'refused', code: 'no_clip_here', options: [], notes: r.notes };
+}
 
 const trim: Planner = (env) => {
   const edge = v<'start' | 'end'>(env, 'edge');
@@ -211,13 +221,21 @@ const gain: Planner = (env) => {
   if (target === 'music') return withTargets(env, 'gain_change', resolveMusic(env.ctx), (items, notes) => onTrack(items[0]!, notes));
   const clipRes = () => resolveClips(env.ctx, 'one', isMedia, { allowMany: false, atFrame: env.ctx.playheadFrame });
   if (target === 'clip') return withTargets(env, 'gain_change', clipRes(), (items, notes) => onClip(items[0]!, notes));
-  // «הקול / הסאונד» alone: always asked — the music track or the chosen clip (plan §4.4 target words)
+  // «הקול / הסאונד» alone: always asked — every unlocked audio track (the music first) or the chosen clip (plan §4.4 target
+  // words). The plan also names the master: no registered op changes a master gain in dB (set_loudness_target is an export
+  // LUFS target), so it is not offered rather than approximated.
   const choices: BarChoice[] = [];
   const m = resolveMusic(env.ctx);
+  const musicId = m.kind === 'ok' ? m.items[0]!.id : null;
   if (m.kind === 'ok') { const r = onTrack(m.items[0]!, m.notes); if (r.kind === 'plan') choices.push({ he: 'רצועת המוזיקה', en: 'The music track', result: r }); }
+  for (const t of tracksOf(env.ctx.doc)) {
+    if (t.kind !== 'audio' || t.locked || t.id === musicId) continue;
+    const r = onTrack(t, []);
+    if (r.kind === 'plan') choices.push({ he: `רצועה «${t.name}»`, en: `Track “${t.name}”`, result: r });
+  }
   const c = clipRes();
   if (c.kind === 'ok') { const r = onClip(c.items[0]!, c.notes); if (r.kind === 'plan') choices.push({ he: 'הקליפ הנבחר', en: 'The selected clip', result: r }); }
-  return { kind: 'ambiguous', intent: 'gain_change', ...base(env), choices, question: { he: 'איזה קול — של המוזיקה או של הקליפ?', en: 'Which sound — the music or the clip?' } };
+  return { kind: 'ambiguous', intent: 'gain_change', ...base(env), choices, question: { he: 'איזה קול — של רצועה או של הקליפ?', en: 'Which sound — a track or the clip?' } };
 };
 
 const muteFamily = (intent: 'mute' | 'unmute'): Planner => (env) => {
