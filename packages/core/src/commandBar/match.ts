@@ -131,7 +131,7 @@ function catalog(key: string, list: readonly { id: string; phrase: string }[], h
   };
 }
 
-/** Seconds of an amount, as words for a choice label ("3", "1.5", "1 s + 12 frames"). */
+/** Seconds of an amount, as words for a choice label ("3", "1.5", "1 s + 12 frames"). Never a timecode: a timecode has no alternatives and is never asked as «בנקודה / למשך». */
 export function amountWords(a: TimeAmount): { he: string; en: string } {
   const s = exText(a.secs), f = exText(a.frames);
   if (a.frames.num === 0n) return { he: `${s} שניות`, en: `${s} s` };

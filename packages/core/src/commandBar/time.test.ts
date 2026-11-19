@@ -20,7 +20,7 @@ export const TIME_TABLE: [string, bigint, bigint, bigint][] = [
   ['דקה ו־10 שניות', 70n, 1n, 0n], ['דקה ועשר שניות', 70n, 1n, 0n], ['דקה ועשר', 70n, 1n, 0n], ['2 דקות ו־5 שניות', 125n, 1n, 0n], ['שנייה ו־12 פריימים', 1n, 1n, 12n],
   ['שבע שניות ו־3 פריימים', 7n, 1n, 3n], ['שעה ועשרים', 4800n, 1n, 0n], ['שעה ועשרים דקות', 4800n, 1n, 0n], ['שעה ו־2 דקות ו־3 שניות', 3723n, 1n, 0n], ['ארבע דקות ושלושים שניות', 270n, 1n, 0n],
   ['שלוש וחצי שניות', 7n, 2n, 0n], ['חמש דקות וחצי', 330n, 1n, 0n], ['שנייה אחת', 1n, 1n, 0n], ['דקה אחת', 60n, 1n, 0n],
-  ['1:10', 70n, 1n, 0n], ['0:05', 5n, 1n, 0n], ['10:00', 600n, 1n, 0n], ['1:02:03', 3723n, 1n, 0n], ['00:00:03:12', 3n, 1n, 12n], ['00:01:00:00', 60n, 1n, 0n],
+  ['1:10', 70n, 1n, 0n], ['0:05', 5n, 1n, 0n], ['10:00', 600n, 1n, 0n], ['1:02:03', 3723n, 1n, 0n], ['0:59', 59n, 1n, 0n], ['1:00:00', 3600n, 1n, 0n],
   ['בשנייה 3', 3n, 1n, 0n], ['בדקה 2', 120n, 1n, 0n], ['בפריים 30', 0n, 1n, 30n], ['לשנייה וחצי', 3n, 2n, 0n], ['ב־3 שניות', 3n, 1n, 0n], ['ל־4 שניות', 4n, 1n, 0n], ['ב־1:10', 70n, 1n, 0n],
   ['one second', 1n, 1n, 0n], ['two seconds', 2n, 1n, 0n], ['half a second', 1n, 2n, 0n], ['one and a half seconds', 3n, 2n, 0n], ['ten minutes', 600n, 1n, 0n], ['1 minute and 10 seconds', 70n, 1n, 0n],
 ];
@@ -52,7 +52,6 @@ describe('the one conversion to frames', () => {
   for (const rate of RATES) {
     it(`at ${rate.num}/${rate.den} every phrase lands on the integer oracle's frame`, () => {
       for (const [phrase, num, den, frames] of TIME_TABLE) {
-        if (phrase.startsWith('00:00:03:12') && Math.ceil(rate.num / rate.den) <= 12) continue;
         const r = parseTime(tokenizeBar(phrase).tokens, 0, rate);
         expect(r && 'time' in r, phrase).toBe(true);
         const t = (r as { time: { frame: number; rounded: boolean } }).time;
@@ -75,6 +74,37 @@ describe('the one conversion to frames', () => {
   it('frames said as frames are added after the one rounding, as integers', () => {
     const r = parseTime(tokenizeBar('שנייה ו־12 פריימים').tokens, 0, { num: 30000, den: 1001 }) as { time: { frame: number; seconds: unknown; frames: number } };
     expect(r.time).toMatchObject({ frame: 30 + 12, seconds: { num: 1n, den: 1n }, frames: 12 });
+  });
+});
+
+describe('hh:mm:ss:ff is a frame count, the inverse of T.toTimecode (what the editor shows)', () => {
+  /** Frames the 4-field form must land on: hours, minutes, seconds at the nominal base, plus ff. */
+  const oracle4 = (h: number, m: number, s: number, ff: number, rate: T.Rate) => ((h * 60 + m) * 60 + s) * Math.ceil(rate.num / rate.den) + ff;
+  it('00:00:03:12 and 00:01:00:00 at every rate', () => {
+    for (const rate of RATES) {
+      expect(parseTime(tokenizeBar('00:00:03:12').tokens, 0, rate), `${rate.num}/${rate.den}`).toMatchObject({ time: { frame: oracle4(0, 0, 3, 12, rate), seconds: null, frames: oracle4(0, 0, 3, 12, rate), rounded: false } });
+      expect(parseTime(tokenizeBar('00:01:00:00').tokens, 0, rate), `${rate.num}/${rate.den}`).toMatchObject({ time: { frame: oracle4(0, 1, 0, 0, rate), rounded: false } });
+    }
+  });
+  it('a timecode copied from the editor lands on the frame it was written from, at every rate (30000/1001 included)', () => {
+    const rnd = (() => { let s = 20261119; return (n: number) => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s % n; }; })();
+    for (const rate of RATES) {
+      const frames = [0, 1, 29, 30, 59, 17982, 18000, 107784, 107892, 1798200, ...Array.from({ length: 200 }, () => rnd(99 * 3600 * Math.ceil(rate.num / rate.den)))];
+      for (const f of frames) {
+        const tc = T.toTimecode(T.frameTime(f, rate), rate);
+        const r = parseTime(tokenizeBar(tc).tokens, 0, rate);
+        expect(r && 'time' in r ? r.time.frame : r, `${tc} @ ${rate.num}/${rate.den}`).toBe(f);
+      }
+    }
+  });
+  it('the 30000/1001 cases of the review: 00:10:00:00 is frame 18000 and 00:59:56:12 is frame 107892', () => {
+    const ntsc = { num: 30000, den: 1001 };
+    expect(parseTime(tokenizeBar('00:10:00:00').tokens, 0, ntsc)).toMatchObject({ time: { frame: 18000 } });
+    expect(parseTime(tokenizeBar('00:59:56:12').tokens, 0, ntsc)).toMatchObject({ time: { frame: 107892 } });
+  });
+  it('m:ss and h:mm:ss stay real seconds, rounded once (1:10 at 30000/1001 is frame 2098)', () => {
+    const ntsc = { num: 30000, den: 1001 };
+    expect(parseTime(tokenizeBar('1:10').tokens, 0, ntsc)).toMatchObject({ time: { frame: 2098, seconds: { num: 70n, den: 1n }, rounded: true } });
   });
 });
 

@@ -131,6 +131,18 @@ describe('injection, the dry run and refusals', () => {
     expect(T.eq((r.ops[0]!.args as { start: T.RationalTime }).start, T.frameTime(90, rate))).toBe(true);
     expect(r.notes).toContainEqual({ code: 'rounded_to_frame', data: { field: 'start', frame: 90, time: T.frameTime(90, rate), seconds: '3' } });
   });
+  it('a timecode copied from the editor at 30000/1001 is the frame it names, as a position and after «מכאן»', () => {
+    const rate = { num: 30000, den: 1001 };
+    const f = fixture(rate);
+    const tc = T.toTimecode(T.frameTime(300, rate), rate); // 00:00:10:00
+    const r = interpret(`הוסף סמן ב־${tc}`, context(f.doc)) as BarPlan;
+    expect(r.kind).toBe('plan');
+    expect(T.eq((r.ops[0]!.args as { time: T.RationalTime }).time, T.frameTime(300, rate))).toBe(true);
+    expect(r.notes.map((n) => n.code)).not.toContain('rounded_to_frame');
+    const rel = interpret('הוסף סמן אחרי 00:00:01:12 מכאן', context(f.doc, { playheadFrame: 100 })) as BarPlan;
+    expect(T.eq((rel.ops[0]!.args as { time: T.RationalTime }).time, T.frameTime(100 + 30 + 12, rate))).toBe(true);
+    expect(interpret('הוסף סמן ב־00:00:01:30', context(f.doc))).toMatchObject({ kind: 'refused', code: 'out_of_range' });
+  });
   it('a linked format being viewed is noted: the change applies to the original', () => {
     const r = interpret('הוסף סמן', context(fx.doc, { viewVariantId: 'var_9x16' })) as BarPlan;
     expect(r.notes).toContainEqual({ code: 'applies_to_master', data: { variantId: 'var_9x16' } });

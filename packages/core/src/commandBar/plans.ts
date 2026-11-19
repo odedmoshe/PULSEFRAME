@@ -17,9 +17,9 @@ import { speedValue } from '../speed.ts';
 import { clipEnd } from '../validate.ts';
 import { VERBS } from './lexicon.ts';
 import type { FamilyParse, Hit, SpeedSpec, TimeSpec } from './match.ts';
-import { ex, exCmp, exNeg, exText } from './numbers.ts';
+import { ex, exNeg, exText } from './numbers.ts';
 import { clipName, clipOption, clipsAt, findIn, isMedia, isPicture, isVideoClip, resolveClips, resolveMusic, resolveSplit, soundClipOf, tracksOf, type Found, type Option, type Resolved } from './resolve.ts';
-import { nominalBase, toBarTime } from './time.ts';
+import { toBarTime, wholeFrames } from './time.ts';
 import type { BarExact } from '../commandBarContract.ts';
 
 /** Everything a planner needs. */
@@ -81,7 +81,6 @@ function timeOf(env: PlanEnv, spec: TimeSpec): PlacedOr {
   if (spec.kind === 'start') return { frame: 0, rounded: false, seconds: null };
   if (spec.kind === 'end') return { frame: T.nearestFrameIndex(editEnd(env.ctx.doc), rate), rounded: false, seconds: null };
   if (spec.kind === 'abs') {
-    if (spec.form === 'timecode' && spec.saidFrames && exCmp(spec.amount.frames, ex(BigInt(nominalBase(rate)))) >= 0) return { refused: 'out_of_range' };
     const t = toBarTime(spec.amount, rate, spec.saidSeconds, spec.saidFrames);
     return t ? { frame: t.frame, rounded: t.rounded, seconds: t.seconds } : { refused: 'out_of_range' };
   }
@@ -89,8 +88,9 @@ function timeOf(env: PlanEnv, spec: TimeSpec): PlacedOr {
   const now = T.frameTime(ph, rate);
   const secs = spec.sign > 0 ? spec.amount.secs : exNeg(spec.amount.secs);
   const tExact = T.add(now, T.rt(secs.num, Number(secs.den)));
-  const frames = Number(spec.amount.frames.num) * spec.sign;
-  const frame = T.nearestFrameIndex(tExact, rate) + frames;
+  const whole = wholeFrames(spec.amount, rate);
+  if (whole === null) return { refused: 'out_of_range' };
+  const frame = T.nearestFrameIndex(tExact, rate) + whole * spec.sign;
   if (frame < 0) return { refused: 'out_of_range' };
   return { frame, rounded: !T.isFrameAligned(tExact, rate), seconds: null };
 }
