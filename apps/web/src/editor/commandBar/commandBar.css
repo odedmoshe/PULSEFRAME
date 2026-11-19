@@ -1,0 +1,39 @@
+/*
+ * The command bar inside the palette and the «עוזר השפה» Settings section (ADR-0027). Tokens of ds/tokens.css only; logical
+ * properties (RTL first); both themes through the tokens. The rows reuse the palette's .pf-pal-option.
+ */
+.pf-bar { display: flex; flex-direction: column; gap: var(--pf-sp-2); padding-block-end: var(--pf-sp-3); }
+.pf-bar-sr { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.pf-bar-row .pf-pal-label { overflow-wrap: anywhere; }
+.pf-bar-lead { color: var(--pf-text-2); font-weight: var(--pf-fw-semibold); }
+.pf-bar-typed mark { background: var(--pf-frame-soft); color: var(--pf-text); border-radius: var(--pf-r-xs); padding-inline: 2px; }
+.pf-bar-nearest-head { margin: 0; padding: var(--pf-sp-3) var(--pf-sp-5) 0; color: var(--pf-text-3); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); font-weight: var(--pf-fw-semibold); }
+.pf-bar-preview { margin: var(--pf-sp-2) var(--pf-sp-3) 0; padding: var(--pf-sp-4) var(--pf-sp-5); border-radius: var(--pf-r-md); background: var(--pf-surface-1); color: var(--pf-text); font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); box-shadow: inset 0 0 0 1px var(--pf-line); }
+.pf-bar-preview p { margin: 0; }
+.pf-bar-preview p + p, .pf-bar-preview ol, .pf-bar-preview ul { margin-block-start: var(--pf-sp-3); }
+.pf-bar-steps { margin: 0; padding-inline-start: var(--pf-sp-7); display: flex; flex-direction: column; gap: var(--pf-sp-2); }
+.pf-bar-steps li::marker { color: var(--pf-text-3); }
+.pf-bar-op { font-weight: var(--pf-fw-semibold); }
+.pf-bar-quote { color: var(--pf-text); }
+.pf-bar-notes { margin: 0; padding-inline-start: var(--pf-sp-7); color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-bar-hint, .pf-bar-example { color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-bar-footer { color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-bar-stale { margin: var(--pf-sp-2) var(--pf-sp-3) 0; padding: var(--pf-sp-3) var(--pf-sp-5); border-radius: var(--pf-r-md); color: var(--pf-text); background: color-mix(in srgb, var(--pf-attention) 14%, transparent); box-shadow: inset 0 0 0 1px var(--pf-attention); font-size: var(--pf-fs-xs); }
+.num { font-variant-numeric: tabular-nums; }
+/* the assistant's row */
+.pf-pal-option.is-assistant.is-live { flex-direction: column; align-items: stretch; cursor: default; }
+.pf-bar-asst-line { color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-bar-asst-actions { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); align-items: center; }
+.pf-bar-link { background: none; border: 0; padding: 0; font: inherit; font-size: var(--pf-fs-xs); color: var(--pf-frame); text-decoration: underline; cursor: pointer; }
+.pf-bar-link:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; border-radius: var(--pf-r-xs); }
+.pf-bar-asst-stage { color: var(--pf-agent); font-size: var(--pf-fs-xs); }
+/* Settings */
+.pf-asst { display: flex; flex-direction: column; gap: var(--pf-sp-4); }
+.pf-asst-field { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr); align-items: center; gap: var(--pf-sp-4); }
+.pf-asst-field input, .pf-asst-field select { min-inline-size: 0; block-size: var(--pf-h-md, 32px); padding-inline: var(--pf-sp-4); background: var(--pf-surface-1); color: var(--pf-text); border: 0; border-radius: var(--pf-r-sm); box-shadow: inset 0 0 0 1px var(--pf-line-control); font: inherit; font-size: var(--pf-fs-sm); }
+.pf-asst-field input:focus-visible, .pf-asst-field select:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 1px; }
+.pf-asst-note { margin: 0; color: var(--pf-text-3); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-asst-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-4); }
+.pf-asst-json { margin: 0; max-block-size: 240px; overflow: auto; padding: var(--pf-sp-4); border-radius: var(--pf-r-sm); background: var(--pf-surface-1); color: var(--pf-text); font-family: var(--pf-font-mono); font-size: var(--pf-fs-xs); direction: ltr; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pf-asst-bad { color: var(--pf-attention); font-size: var(--pf-fs-xs); }
+@media (max-width: 560px) { .pf-asst-field { grid-template-columns: 1fr; } }
