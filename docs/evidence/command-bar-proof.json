@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-19T01:52:29.670Z",
+  "ranAt": "2026-11-19T03:29:39.295Z",
   "result": "PASSED",
   "counts": {
     "pass": 23,
@@ -307,14 +307,14 @@
       "detail": [
         {
           "text": "חתוך כאן",
-          "browser": "1a9027ddef6ddeb1af76e80229ffb6adf621bac872c68e414c68f1a4f9d69ccd",
-          "node": "1a9027ddef6ddeb1af76e80229ffb6adf621bac872c68e414c68f1a4f9d69ccd",
+          "browser": "8a22080a065d9bd60adf40ae50c85d54fcd1025fd3eb4dff1324168fe5b67eba",
+          "node": "8a22080a065d9bd60adf40ae50c85d54fcd1025fd3eb4dff1324168fe5b67eba",
           "same": true
         },
         {
           "text": "מחק את הקליפ",
-          "browser": "9043bd5b260cb30ddfcb1e258029d56e7616ffe72750a33e3019c63928177003",
-          "node": "9043bd5b260cb30ddfcb1e258029d56e7616ffe72750a33e3019c63928177003",
+          "browser": "3be21057dc1b72592a521ae66da9a9d6c3d9202fc191b9558a18628c0a00294c",
+          "node": "3be21057dc1b72592a521ae66da9a9d6c3d9202fc191b9558a18628c0a00294c",
           "same": true
         },
         {
@@ -331,8 +331,8 @@
         },
         {
           "text": "הוסף מעבר בין כל הקליפים",
-          "browser": "e17e5b911e22abc40b8c066e079d967ca373c7012c7a332efba4ae838b57bffc",
-          "node": "e17e5b911e22abc40b8c066e079d967ca373c7012c7a332efba4ae838b57bffc",
+          "browser": "f3fa69cced79eec565afecbec11a046d7f7de3461c0a3226908d8e318073c4c9",
+          "node": "f3fa69cced79eec565afecbec11a046d7f7de3461c0a3226908d8e318073c4c9",
           "same": true
         }
       ]
@@ -611,14 +611,14 @@
       "detail": [
         {
           "text": "split here",
-          "browser": "daeecab873c38090885371f1be0f8f9b8ac1f291f3ea2b13144bad51987d86c9",
-          "node": "daeecab873c38090885371f1be0f8f9b8ac1f291f3ea2b13144bad51987d86c9",
+          "browser": "6feb663ea8780a1d9efcc81913c140bc69c1476ba8f4256311defa3738e98392",
+          "node": "6feb663ea8780a1d9efcc81913c140bc69c1476ba8f4256311defa3738e98392",
           "same": true
         },
         {
           "text": "delete the clip",
-          "browser": "fdbfed30fcea9e51c9059ebbe97a2f888015759e092e84866654afa8a86e3795",
-          "node": "fdbfed30fcea9e51c9059ebbe97a2f888015759e092e84866654afa8a86e3795",
+          "browser": "e99eb7a1f83787d8a87b5c00f9df84aa325c399fe1421ee10d5e34676b38eb81",
+          "node": "e99eb7a1f83787d8a87b5c00f9df84aa325c399fe1421ee10d5e34676b38eb81",
           "same": true
         },
         {
@@ -635,8 +635,8 @@
         },
         {
           "text": "add transitions between all clips",
-          "browser": "b769289c508dfd2a8bdf1bdd55e5e68216f94364dcded284e10fa975b29877ae",
-          "node": "b769289c508dfd2a8bdf1bdd55e5e68216f94364dcded284e10fa975b29877ae",
+          "browser": "860430130df57bb6af02c674364d484767aec86cbd2be0c7180210489842c35e",
+          "node": "860430130df57bb6af02c674364d484767aec86cbd2be0c7180210489842c35e",
           "same": true
         }
       ]
@@ -680,7 +680,7 @@
       "detail": {
         "proposer": {
           "status": 200,
-          "proposalId": "prp_6rMlWKhHqcs"
+          "proposalId": "prp_RCl8bfxR1C0"
         },
         "observer": 403,
         "revisionsMoved": 0
@@ -740,34 +740,9 @@
           "rowSeenOnScreen": true,
           "scope": "palette dialog",
           "outsideTheDialogInLight": {
-            "lowContrast": 10,
+            "lowContrast": 0,
             "unnamed": 0,
-            "sample": [
-              {
-                "el": "span.asset-name",
-                "ratio": 1.01,
-                "text": "long",
-                "size": 14
-              },
-              {
-                "el": "button[data-testid=rename-ast_3b5bec4abe0].track-btn.inline-rename-btn",
-                "ratio": 3.18,
-                "text": "✎",
-                "size": 13
-              },
-              {
-                "el": "span.asset-name",
-                "ratio": 1.01,
-                "text": "short",
-                "size": 14
-              },
-              {
-                "el": "button[data-testid=rename-ast_847e4508bb0].track-btn.inline-rename-btn",
-                "ratio": 3.18,
-                "text": "✎",
-                "size": 13
-              }
-            ]
+            "sample": []
           },
           "activedescendant": "pf-palette-opt-bar",
           "describedby": "pf-bar-preview",
@@ -807,34 +782,9 @@
           "rowSeenOnScreen": true,
           "scope": "palette dialog",
           "outsideTheDialogInLight": {
-            "lowContrast": 10,
+            "lowContrast": 0,
             "unnamed": 0,
-            "sample": [
-              {
-                "el": "span.asset-name",
-                "ratio": 1.01,
-                "text": "long",
-                "size": 14
-              },
-              {
-                "el": "button[data-testid=rename-ast_a5a413d7f00].track-btn.inline-rename-btn",
-                "ratio": 3.18,
-                "text": "✎",
-                "size": 13
-              },
-              {
-                "el": "span.asset-name",
-                "ratio": 1.01,
-                "text": "short",
-                "size": 14
-              },
-              {
-                "el": "button[data-testid=rename-ast_431c1b1dcf0].track-btn.inline-rename-btn",
-                "ratio": 3.18,
-                "text": "✎",
-                "size": 13
-              }
-            ]
+            "sample": []
           },
           "activedescendant": "pf-palette-opt-bar",
           "describedby": "pf-bar-preview",
@@ -977,8 +927,8 @@
         "assistantFilesInBackup": [],
         "filesHoldingTheKey": [],
         "scanned": {
-          "responses": 534,
-          "logLines": 60
+          "responses": 549,
+          "logLines": 48
         },
         "inResponses": 0,
         "inLogs": 0
@@ -1380,34 +1330,9 @@
         "rowSeenOnScreen": true,
         "scope": "palette dialog",
         "outsideTheDialogInLight": {
-          "lowContrast": 10,
+          "lowContrast": 0,
           "unnamed": 0,
-          "sample": [
-            {
-              "el": "span.asset-name",
-              "ratio": 1.01,
-              "text": "long",
-              "size": 14
-            },
-            {
-              "el": "button[data-testid=rename-ast_3b5bec4abe0].track-btn.inline-rename-btn",
-              "ratio": 3.18,
-              "text": "✎",
-              "size": 13
-            },
-            {
-              "el": "span.asset-name",
-              "ratio": 1.01,
-              "text": "short",
-              "size": 14
-            },
-            {
-              "el": "button[data-testid=rename-ast_847e4508bb0].track-btn.inline-rename-btn",
-              "ratio": 3.18,
-              "text": "✎",
-              "size": 13
-            }
-          ]
+          "sample": []
         },
         "activedescendant": "pf-palette-opt-bar",
         "describedby": "pf-bar-preview",
@@ -1447,34 +1372,9 @@
         "rowSeenOnScreen": true,
         "scope": "palette dialog",
         "outsideTheDialogInLight": {
-          "lowContrast": 10,
+          "lowContrast": 0,
           "unnamed": 0,
-          "sample": [
-            {
-              "el": "span.asset-name",
-              "ratio": 1.01,
-              "text": "long",
-              "size": 14
-            },
-            {
-              "el": "button[data-testid=rename-ast_a5a413d7f00].track-btn.inline-rename-btn",
-              "ratio": 3.18,
-              "text": "✎",
-              "size": 13
-            },
-            {
-              "el": "span.asset-name",
-              "ratio": 1.01,
-              "text": "short",
-              "size": 14
-            },
-            {
-              "el": "button[data-testid=rename-ast_431c1b1dcf0].track-btn.inline-rename-btn",
-              "ratio": 3.18,
-              "text": "✎",
-              "size": 13
-            }
-          ]
+          "sample": []
         },
         "activedescendant": "pf-palette-opt-bar",
         "describedby": "pf-bar-preview",
