@@ -126,6 +126,7 @@ export function TargetPreview({ target, lang, query, rate }: { target: BarTarget
       </>
     );
   }
+  if (target.kind === 'example') return <p className="pf-bar-action"><bdi dir="auto">{barText(lang, 'example.preview', { text: target.text })}</bdi></p>;
   return <p className="pf-bar-action"><span className="pf-bar-lead">{t('action.lead')}</span> <Rich text={describeAction({ kind: 'command', commandId: target.commandId }, lang)} /></p>;
 }
 

@@ -232,7 +232,10 @@ describe('rows of a request', () => {
     expect(near.length).toBeGreaterThan(0);
     expect(near.length).toBeLessThanOrEqual(5);
     expect(near.map((e) => (e.target as { commandId: string }).commandId)[0]).toBe('edit.split');
-    expect(new Set(near.map((e) => (e.target as { commandId: string }).commandId)).size).toBe(near.length);
+    const cmds = near.filter((e) => e.target?.kind === 'nearest');
+    expect(new Set(cmds.map((e) => (e.target as { commandId: string }).commandId)).size).toBe(cmds.length);
+    // the rest of the five are the partial readings' example sentences (plan §6), never a duplicate
+    expect(near.filter((e) => e.target?.kind === 'example').every((e) => ['split_here', 'undo', 'play'].includes((e.target as { intent: string }).intent))).toBe(true);
     session.markRendered(near[0]!.target);
     expect(await session.activate(near[0]!.key)).toBe('action');
     vi.runAllTimers();
@@ -251,6 +254,45 @@ describe('rows of a request', () => {
     expect(JSON.parse(JSON.stringify(win.__pfBar)).lastPlan.planHash).toBe(p.planHash);
     s.markRendered(null);
     expect((win.__pfBar as { lastPlan: unknown }).lastPlan).toBeNull();
+  });
+  it('the hook also carries the plan\'s context without the documents (the proof rebuilds it in Node)', () => {
+    const win: Record<string, unknown> = {};
+    const s = new U.BarSession({ context: () => ({ ...ctx(7), selection: ['clp_a'], playheadFrame: 42 }) } as never, { lang: 'he', close: () => {} }, undefined, win);
+    s.markRendered(planAt(7));
+    const hook = JSON.parse(JSON.stringify(win.__pfBar)) as { context: Record<string, unknown> };
+    expect(hook.context).toMatchObject({ revision: 7, selection: ['clp_a'], playheadFrame: 42, lang: 'he' });
+    expect(Object.keys(hook.context)).not.toContain('doc');
+    expect(Object.keys(hook.context)).not.toContain('rawDoc');
+  });
+  it('when no nearer command exists, an example sentence is offered (partial readings, else common ones); Enter on it only fills the input', async () => {
+    const none = U.entriesOf({ kind: 'unknown', tokens: [], readings: [], unread: [[0, 9]], partial: [] }, 'תעשה שמח');
+    const ex = none.slice(1).map((e) => e.target as { kind: string; text: string });
+    expect(ex.length).toBeGreaterThan(0);
+    expect(ex.every((t) => t.kind === 'example' && /[א-ת]/.test(t.text))).toBe(true);
+    const partial = U.entriesOf({ kind: 'unknown', tokens: [], readings: [], unread: [[6, 9]], partial: ['gain_change'] }, 'הגבר ב־3');
+    expect((partial[1]!.target as { kind: string; intent: string }).intent).toBe('gain_change');
+    const english = U.entriesOf({ kind: 'unknown', tokens: [], readings: [], unread: [[0, 5]], partial: [] }, 'hello world');
+    expect(/[a-z]/i.test((english.slice(1).find((e) => e.target?.kind === 'example')!.target as { text: string }).text)).toBe(true);
+    const inc = U.entriesOf({ kind: 'incomplete', intent: 'speed', tokens: [], readings: [], missing: ['amount'], example: { he: 'האט פי 2', en: 'speed 0.5' } }, 'מהירות');
+    expect(inc.slice(1).map((e) => (e.target as { text?: string }).text)).toContain('האט פי 2');
+    // Enter on an example: nothing committed, nothing closed, the input gets the sentence
+    const set: string[] = [];
+    const { calls, session, show } = make(() => ({ kind: 'unknown', tokens: [], readings: [], unread: [[0, 3]], partial: [] }), async () => { throw new Error('no commit'); });
+    session.host = { ...session.host, setQuery: (q: string) => set.push(q) };
+    show('xyz');
+    const key = session.view.entries[1]!.key;
+    session.markRendered(session.view.entries[1]!.target);
+    expect(await session.activate(key)).toBe('nothing');
+    expect(set.length).toBe(1);
+    expect(calls.commit.length).toBe(0);
+    expect(calls.closed).toBe(0);
+  });
+  it('incomplete, and refused with no choice, offer the command the intent stands beside as a nearest command', () => {
+    const inc = U.entriesOf({ kind: 'incomplete', intent: 'add_title', tokens: [], readings: [], missing: ['text'], example: { he: 'x', en: 'x' } }, 'הוסף כותרת');
+    expect(inc.slice(1).map((e) => (e.target as { commandId: string }).commandId)[0]).toBe('edit.addText');
+    const ref = U.entriesOf({ kind: 'refused', intent: 'split_here', tokens: [], readings: [], code: 'no_clip_here' }, 'פצל כאן');
+    expect(ref.slice(1).map((e) => (e.target as { commandId: string }).commandId)[0]).toBe('edit.split');
+    expect(ref.length).toBeLessThanOrEqual(6);
   });
 });
 

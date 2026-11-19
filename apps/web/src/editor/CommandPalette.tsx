@@ -77,7 +77,7 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
   }, [view]);
 
   const close = () => editor.set({ paletteOpen: false });
-  const bar = useBarSlot(query, { lang, close });
+  const bar = useBarSlot(query, { lang, close, setQuery: (q: string) => { setQuery(q); setActiveId(null); inputRef.current?.focus(); } });
   const label = (c: Command, l: Lang = lang) => c.text?.[l] ?? dictionaries[l][c.label];
   const enabled = (c: Command) => !c.enabled || c.enabled(editor);
   const chords = (c: Command) => keymap.keysFor(c.id);

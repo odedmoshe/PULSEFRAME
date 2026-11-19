@@ -51,16 +51,17 @@ function Section({ slot, query, activeKey, onHover, optionDomId }: BarSectionPro
         <span className="pf-pal-names"><Terminal size={14} strokeWidth={1.75} aria-hidden="true" className="pf-pal-ic" /><span className="pf-pal-label">{summary}</span></span>
         {kind && <span className="pf-pal-kind"><Rich text={kind} /></span>}
       </div>
-      {r.kind === 'unknown' && view.entries.length > 1 && <div className="pf-bar-nearest-head" aria-hidden="true">{barText(lang, 'unknown.nearest')}</div>}
+      {view.entries.some((e) => e.target?.kind === 'nearest' || e.target?.kind === 'example') && <div className="pf-bar-nearest-head" aria-hidden="true">{barText(lang, 'unknown.nearest')}</div>}
       {view.entries.slice(1).map((e, i) => {
-        const nearest = e.target?.kind === 'nearest';
-        const label = nearest ? commandLabel((e.target as { commandId: string }).commandId, lang) : e.label?.[lang] ?? '';
-        const alt = nearest ? commandLabel((e.target as { commandId: string }).commandId, lang === 'he' ? 'en' : 'he') : null;
+        const nearest = e.target?.kind === 'nearest' || e.target?.kind === 'example';
+        const example = e.target?.kind === 'example' ? e.target : null;
+        const label = example ? barText(lang, 'example.row', { text: example.text }) : nearest ? commandLabel((e.target as { commandId: string }).commandId, lang) : e.label?.[lang] ?? '';
+        const alt = nearest && !example ? commandLabel((e.target as { commandId: string }).commandId, lang === 'he' ? 'en' : 'he') : null;
         return (
           <div
             key={e.key} id={optionDomId(e.key)} role="option" className="pf-pal-option pf-bar-row" aria-selected={e.key === activeKey} data-active={e.key === activeKey || undefined}
             aria-describedby={e.key === activeKey ? BAR_DOM_IDS.preview : undefined}
-            {...(nearest ? { 'data-testid': TID.nearest, 'data-command-id': (e.target as { commandId: string }).commandId } : { 'data-testid': TID.choice, 'data-index': i })}
+            {...(example ? { 'data-testid': TID.nearest, 'data-intent': example.intent, 'data-example': 'true' } : nearest ? { 'data-testid': TID.nearest, 'data-command-id': (e.target as { commandId: string }).commandId } : { 'data-testid': TID.choice, 'data-index': i })}
             onMouseMove={() => e.key !== activeKey && onHover(e.key)} onClick={() => act(e)}
           >
             <span className="pf-pal-names"><span className="pf-pal-label" lang={lang}><bdi dir="auto">{label}</bdi></span>{alt && alt !== label && <span className="pf-pal-alt" lang={lang === 'he' ? 'en' : 'he'}>{alt}</span>}</span>

@@ -5,7 +5,7 @@
  * DOM; useBarSlot is the thin hook the palette calls.
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { BAR_RECENT_MAX, BAR_PREFS_KEY, INTENT_COMMANDS, barIdempotencyKey, interpret as coreInterpret, type BarActionResult, type BarContext, type BarPlan, type BarResult, type BarResultKind, type BarAction, type ProjectDocument } from '@pulseframe/core';
+import { BAR_RECENT_MAX, BAR_PREFS_KEY, INTENT_COMMANDS, INTENT_EXAMPLES, type IntentId, barIdempotencyKey, interpret as coreInterpret, type BarActionResult, type BarContext, type BarPlan, type BarResult, type BarResultKind, type BarAction, type ProjectDocument } from '@pulseframe/core';
 import { dictionaries, translateRefusal, type Lang } from '@pulseframe/i18n';
 import { COMMANDS } from '../commands.ts';
 import { normalize, rankWithRescue } from '../palette.search.ts';
@@ -18,7 +18,9 @@ import { describeAction, intentName, opWords, refusalLine, refusalWords, type Re
 
 /** A nearest command offered under an unknown request (runs that registry command). */
 export interface NearestTarget { kind: 'nearest'; commandId: string }
-export type BarTarget = BarPlan | BarActionResult | NearestTarget;
+/** An example sentence the grammar understands (a partial reading's, or a common one): Enter puts it in the input, nothing runs. */
+export interface ExampleTarget { kind: 'example'; text: string; intent: IntentId }
+export type BarTarget = BarPlan | BarActionResult | NearestTarget | ExampleTarget;
 export interface BarEntry { key: string; /** null: the row only says something (a choice question, an unknown request) and Enter runs nothing */ target: BarTarget | null; label: { he: string; en: string } | null }
 export interface BarView { query: string; result: BarResult | null; entries: BarEntry[]; kind: BarResultKind | null; intent: string | null }
 export const EMPTY_VIEW: BarView = Object.freeze({ query: '', result: null, entries: [], kind: null, intent: null }) as BarView;
@@ -27,30 +29,58 @@ export const EMPTY_VIEW: BarView = Object.freeze({ query: '', result: null, entr
 export function sigOf(t: BarTarget): string {
   if (t.kind === 'plan') return t.planHash;
   if (t.kind === 'action') return `action:${t.intent}:${JSON.stringify(t.action)}`;
+  if (t.kind === 'example') return `example:${t.text}`;
   return `command:${t.commandId}`;
 }
 
 const SEARCH_ITEMS = COMMANDS.map((c) => ({ id: c.id, he: c.text?.he ?? dictionaries.he[c.label], en: c.text?.en ?? dictionaries.en[c.label] }));
 const KNOWN = new Set(COMMANDS.map((c) => c.id));
 export const MAX_NEAREST = 5;
-/** The nearest commands under an unknown request: the commands of the intents that partly matched, then the palette's own ranking. At most 5. */
+/**
+ * The nearest commands under a request that runs nothing and offers no choice (plan §6, proof check 6: «at least one nearest
+ * command or choice»): unknown — the commands of the intents that partly matched; incomplete, or refused without choices — the
+ * command the intent stands beside; then the palette's own ranking. At most 5.
+ */
 export function nearestCommandIds(result: BarResult, query: string): string[] {
-  if (result.kind !== 'unknown') return [];
+  if (result.kind !== 'unknown' && result.kind !== 'incomplete' && !(result.kind === 'refused' && !result.choices?.length)) return [];
   const out: string[] = [];
   const add = (id: string | null | undefined) => { if (id && KNOWN.has(id) && !out.includes(id)) out.push(id); };
-  for (const p of result.partial) add(INTENT_COMMANDS[p]);
+  if (result.kind === 'unknown') for (const p of result.partial) add(INTENT_COMMANDS[p]);
+  else add(INTENT_COMMANDS[result.intent]);
   if (normalize(query)) for (const id of rankWithRescue(query, SEARCH_ITEMS).ids) add(id);
   return out.slice(0, MAX_NEAREST);
 }
 
+/** Sentences offered when no nearer command exists (plan §6: the grammar's partial readings): the intents that partly matched or
+ * the one that lacks a word; when the grammar read nothing at all, a few common ones, so the owner sees what the bar understands. */
+export const COMMON_EXAMPLE_INTENTS: readonly IntentId[] = ['split_here', 'add_title', 'delete_clip'];
+export function exampleTargets(result: BarResult, query: string, room: number): ExampleTarget[] {
+  if (room <= 0) return [];
+  const he = /[\u0590-\u05FF]/.test(query) || !/[a-z]/i.test(query);
+  const intents: IntentId[] = result.kind === 'unknown' ? [...result.partial] : result.kind === 'incomplete' || result.kind === 'refused' ? [result.intent] : [];
+  const pool = intents.length ? intents : result.kind === 'unknown' ? [...COMMON_EXAMPLE_INTENTS] : [];
+  const out: ExampleTarget[] = [];
+  for (const intent of pool) {
+    const list = INTENT_EXAMPLES[intent]?.[he ? 'he' : 'en'] ?? [];
+    const text = result.kind === 'incomplete' && result.intent === intent ? result.example[he ? 'he' : 'en'] : list[0];
+    if (text && text !== query.trim() && !out.some((x) => x.text === text)) out.push({ kind: 'example', text, intent });
+    if (out.length >= room) break;
+  }
+  return out;
+}
+
 export function entriesOf(result: BarResult, query: string): BarEntry[] {
   const bar = (target: BarTarget | null): BarEntry => ({ key: BAR_KEYS.result, target, label: null });
+  const nearest = (): BarEntry[] => {
+    const cmds = nearestCommandIds(result, query);
+    const ex = exampleTargets(result, query, MAX_NEAREST - cmds.length);
+    return [...cmds.map((id): BarTarget => ({ kind: 'nearest', commandId: id })), ...ex].map((target, i) => ({ key: BAR_KEYS.nearest(i), target, label: null }));
+  };
   switch (result.kind) {
     case 'plan': case 'action': return [bar(result)];
     case 'ambiguous': return [bar(null), ...result.choices.map((c, i) => ({ key: BAR_KEYS.choice(i), target: c.result, label: { he: c.he, en: c.en } }))];
-    case 'refused': return [bar(null), ...(result.choices ?? []).map((c, i) => ({ key: BAR_KEYS.choice(i), target: c.result, label: { he: c.he, en: c.en } }))];
-    case 'unknown': return [bar(null), ...nearestCommandIds(result, query).map((id, i) => ({ key: BAR_KEYS.nearest(i), target: { kind: 'nearest', commandId: id } as NearestTarget, label: null }))];
-    case 'incomplete': return [bar(null)];
+    case 'refused': return result.choices?.length ? [bar(null), ...result.choices.map((c, i) => ({ key: BAR_KEYS.choice(i), target: c.result, label: { he: c.he, en: c.en } }))] : [bar(null), ...nearest()];
+    case 'unknown': case 'incomplete': return [bar(null), ...nearest()];
   }
 }
 export const intentOf = (r: BarResult | null): string | null => (!r ? null : r.kind === 'unknown' ? null : r.intent);
@@ -181,7 +211,13 @@ export class BarSession {
   markRendered(target: BarTarget | null): void {
     this.rendered = target ? sigOf(target) : null;
     const hook = this.win;
-    if (hook) hook[BAR_TEST_HOOK] = { lastPlan: target && target.kind === 'plan' ? JSON.parse(JSON.stringify(target, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))) : null };
+    if (hook) {
+      // the context the plan was made in, without the documents (the proof rebuilds it in Node on the server's document at
+      // `revision` and compares the plan hash: one grammar, the same answer in Node and in the browser)
+      const c = target && target.kind === 'plan' && typeof this.port.context === 'function' ? this.port.context() : null;
+      const context = c ? { revision: c.revision, activeSequenceId: c.activeSequenceId, selection: [...c.selection], playheadFrame: c.playheadFrame, cutClipId: c.cutClipId, workspace: c.workspace, performRecording: c.performRecording, viewVariantId: c.viewVariantId, lang: c.lang, undoTarget: c.undoTarget, redoTarget: c.redoTarget } : null;
+      hook[BAR_TEST_HOOK] = { lastPlan: target && target.kind === 'plan' ? JSON.parse(JSON.stringify(target, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))) : null, context };
+    }
   }
 
   entry(key: string): BarEntry | undefined { return this.view.entries.find((e) => e.key === key); }
@@ -196,6 +232,7 @@ export class BarSession {
     if (this.rendered !== sigOf(target)) return 'not_rendered'; // the first Enter renders the preview, the second acts
     if (target.kind === 'plan') return this.commitPlan(target);
     if (target.kind === 'nearest') { this.host.close(); setTimeout(() => this.port.runCommand(target.commandId), 0); return 'action'; }
+    if (target.kind === 'example') { this.host.setQuery?.(target.text); return 'nothing'; } // nothing runs: the example's own preview comes next
     this.runAction(target.action);
     rememberIntent(target.intent);
     this.live.say(barText(this.lang, 'live.doneAction', { what: plain(describeAction(target.action, this.lang)) }));

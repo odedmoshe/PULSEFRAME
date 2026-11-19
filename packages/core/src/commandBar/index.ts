@@ -17,6 +17,8 @@ import { parseFamily, readingsOf, spansOf, tokenizeBar, type FamilyParse } from 
 import { PLANNERS, readingSets, type PlanEnv } from './plans.ts';
 
 export { tokenizeBar } from './match.ts';
+/** Example sentences of every intent, Hebrew and English (the bar offers them when nothing nearer exists). */
+export { INTENT_EXAMPLES } from './lexicon.ts';
 
 /** Plan one family's parse: every reading set, an ambiguous answer when the words allow more than one. */
 function planFamily(p: FamilyParse, env: Omit<PlanEnv, 'values' | 'heads'>): BarResult {
