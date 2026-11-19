@@ -73,7 +73,7 @@ export const CLIP_MANY = ['קליפים', 'כל הקליפים', 'קליפים �
 export const MUSIC = ['מוזיקה', 'מוסיקה', 'ל:מוזיקה', 'ל:מוסיקה', 'ב:מוזיקה', 'שיר', 'ל:שיר', 'פסקול', 'music', 'song', 'soundtrack'];
 /** «הכותרת»: the selected text clip, or the only text clip (plan §4.4 target words). REVIEW: «הטקסט» is not listed (it would read «הוסף טקסט» apart). */
 export const TITLE = ['כותרת', 'כותרת הזאת', 'כותרת הזו', 'ל:כותרת', 'על כותרת', 'על כותרת הזאת', 'title', 'this title', 'on the title', 'to the title', 'the title text'];
-/** «הקול / הסאונד» alone: always ambiguous (clip, track or master). */
+/** «הקול / הסאונד» alone: always ambiguous (a track or the clip; no master: no registered op changes a master gain in dB). */
 export const SOUND = ['קול', 'סאונד', 'שמע', 'עוצמה', 'ווליום', 'ל:קול', 'ל:סאונד', 'sound', 'audio', 'volume'];
 export const HERE = ['כאן', 'פה', 'ב:סמן', 'עד כאן', 'עד פה', 'עד הסמן', 'מ:כאן', 'מ:פה', 'מ:סמן', 'here', 'at the playhead', 'at playhead', 'from here'];
 export const AT_START = ['ב:התחלה', 'at the start', 'at the beginning'];

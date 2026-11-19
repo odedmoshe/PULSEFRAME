@@ -20,8 +20,8 @@ import type { OpCall } from './ops.ts';
 import type { ProjectDocument } from './schema.ts';
 import { sha256Hex } from './sha256.ts';
 
-/** False until W1's grammar is merged (the lead flips it at the merge); until then interpret() understands nothing and says so. */
-export const COMMAND_BAR_GRAMMAR_BUILT = false;
+/** True since W1's grammar is merged (it was false while interpret() was the lead's placeholder that understood nothing). */
+export const COMMAND_BAR_GRAMMAR_BUILT = true;
 
 /** At most this many operations in one request: the REST and MCP limit of one transaction (http.ts TxBody, mcp.ts propose_transaction). Never split into several undos. */
 export const MAX_BAR_OPS = 200;
