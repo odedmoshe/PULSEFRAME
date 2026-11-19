@@ -44,10 +44,12 @@ export function deleteOps(doc: ProjectDocument, ids: readonly string[], ripple: 
   const main = mainTrackId(doc);
   const track = main ? doc.sequences[doc.mainSequenceId]!.tracks.find((t) => t.id === main) : undefined;
   if (!ripple || !track || track.locked) return { ops, moved: 0, deleted: clips.length, first: clips[0]!.clip.id };
-  // every clip that goes from V1: the selected ones, and the V1 partners of selected clips elsewhere (a delete takes the link along)
+  // every clip that goes from V1: the selected ones ON V1, and the V1 partners of selected clips elsewhere (a delete takes the
+  // link along). A selected clip on another track is not V1's: it keeps its gap and is deleted by its own delete_clip below.
+  const onMain = new Set(track.clips.map((c) => c.id));
   const gone = new Set<string>();
   for (const { clip } of clips) {
-    gone.add(clip.id);
+    if (onMain.has(clip.id)) gone.add(clip.id);
     const g = clip.type === 'media' ? clip.linkGroupId : null;
     if (g) for (const c of track.clips) if (c.type === 'media' && c.linkGroupId === g) gone.add(c.id);
   }

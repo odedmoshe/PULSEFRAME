@@ -11,6 +11,8 @@ export interface BarPaletteHost {
   lang: Lang;
   /** Closes the palette; focus returns to what had it (the header button), as for every palette action. */
   close(): void;
+  /** Puts text in the palette's input (an example row: the owner reads its preview, edits it, and presses Enter again). */
+  setQuery?(text: string): void;
 }
 /** What the bar gives the palette, for the current query. */
 export interface BarPaletteSlot {
@@ -32,4 +34,6 @@ export interface BarSectionProps {
   /** The palette's option DOM id for a key (the result row: BAR_DOM_IDS.result). */
   optionDomId(key: string): string;
 }
+/** The live region and the preview, mounted OUTSIDE the listbox (after it, before the footer). */
+export interface BarPanelProps { slot: BarPaletteSlot; query: string; activeKey: string | null; /** the assistant scope: the live region only, no preview */ off?: boolean }
 export interface AssistantRowProps { query: string; lang: Lang; optionDomId(key: string): string }

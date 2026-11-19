@@ -12,7 +12,8 @@ import { api, ApiFailure } from '../../api.ts';
 import { useBarEditor } from './useBarResult.ts';
 import { COMMAND_BAR_TESTIDS as TID } from './commandBar.testids.ts';
 import { barText, dict, ltr } from './commandBar.strings.ts';
-import { Rich } from './BarPreview.tsx';
+import { Rich, WithReason } from './BarPreview.tsx';
+import { refusalWords, type RefusalWords } from './describe.ts';
 import './commandBar.css';
 
 export const OWNER_ACTOR = 'user:local';
@@ -45,24 +46,26 @@ export function configBodyOf(f: ConfigForm): AssistantConfigBody | null {
   const parsed = AssistantConfigBodySchema.safeParse(body);
   return parsed.success ? parsed.data : null;
 }
-const reasonOf = (e: unknown): string => (e instanceof ApiFailure ? e.message : e instanceof Error ? e.message : String(e));
+/** A server refusal in words: Hebrew (with its next step) in a Hebrew interface; the English only when unworded, marked (describe.ts). */
+export const wordsOf = (lang: Lang, e: unknown): RefusalWords => refusalWords(lang, e instanceof ApiFailure ? { code: e.code, message: e.message, hint: e.hint ?? null } : { message: e instanceof Error ? e.message : String(e) });
+type Note = { ok: string } | { failed: RefusalWords };
 
 export function AssistantSettings(): ReactElement | null {
   const { editor, state } = useBarEditor();
   const lang: Lang = state.lang;
   const owner = settingsVisible(state.actor);
   const [status, setStatus] = useState<AssistantStatus | null>(null);
-  const [loaded, setLoaded] = useState<'loading' | 'ok' | string>('loading');
+  const [loaded, setLoaded] = useState<'loading' | 'ok' | RefusalWords>('loading');
   const [form, setForm] = useState<ConfigForm>(formOf(null));
   const [key, setKey] = useState('');
-  const [note, setNote] = useState<string | null>(null);
-  const [summary, setSummary] = useState<{ state: 'idle' | 'loading' | 'ok' | 'failed'; text: string }>({ state: 'idle', text: '' });
+  const [note, setNote] = useState<Note | null>(null);
+  const [summary, setSummary] = useState<{ state: 'idle' | 'loading' | 'ok'; text: string } | { state: 'failed'; words: RefusalWords }>({ state: 'idle', text: '' });
   const t = (k: Parameters<typeof barText>[1], v?: Record<string, string | number>) => barText(lang, k, v);
 
   useEffect(() => {
     if (!owner) return;
     let alive = true;
-    api.assistantStatus().then((s) => { if (alive) { setStatus(s); setForm(formOf(s)); setLoaded('ok'); } }, (e) => { if (alive) setLoaded(reasonOf(e)); });
+    api.assistantStatus().then((s) => { if (alive) { setStatus(s); setForm(formOf(s)); setLoaded('ok'); } }, (e) => { if (alive) setLoaded(wordsOf(lang, e)); });
     return () => { alive = false; };
   }, [owner]);
   if (!owner) return null;
@@ -70,24 +73,24 @@ export function AssistantSettings(): ReactElement | null {
   const set = <K extends keyof ConfigForm>(k: K, v: ConfigForm[K]) => setForm((f) => ({ ...f, [k]: v }));
   const save = async () => {
     const body = configBodyOf(form);
-    if (!body) { setNote(t('set.invalid')); return; }
-    try { const s = await api.setAssistantConfig(body); setStatus(s); setForm(formOf(s)); setNote(t('set.saved')); } catch (e) { setNote(t('set.saveFailed', { reason: reasonOf(e) })); }
+    if (!body) { setNote({ ok: t('set.invalid') }); return; }
+    try { const s = await api.setAssistantConfig(body); setStatus(s); setForm(formOf(s)); setNote({ ok: t('set.saved') }); } catch (e) { setNote({ failed: wordsOf(lang, e) }); }
   };
   const saveKey = async () => {
     const k = key;
     setKey(''); // never kept in the page
     if (!k) return;
-    try { const r = await api.setAssistantKey(k); setStatus((s) => (s ? { ...s, keySet: r.keySet, keyAddedAt: r.keyAddedAt } : s)); setNote(t('set.saved')); } catch (e) { setNote(t('set.saveFailed', { reason: reasonOf(e) })); }
+    try { const r = await api.setAssistantKey(k); setStatus((s) => (s ? { ...s, keySet: r.keySet, keyAddedAt: r.keyAddedAt } : s)); setNote({ ok: t('set.saved') }); } catch (e) { setNote({ failed: wordsOf(lang, e) }); }
   };
   const removeKey = async () => {
-    try { const r = await api.deleteAssistantKey(); setStatus((s) => (s ? { ...s, keySet: r.keySet, keyAddedAt: r.keyAddedAt } : s)); } catch (e) { setNote(t('set.saveFailed', { reason: reasonOf(e) })); }
+    try { const r = await api.deleteAssistantKey(); setStatus((s) => (s ? { ...s, keySet: r.keySet, keyAddedAt: r.keyAddedAt } : s)); } catch (e) { setNote({ failed: wordsOf(lang, e) }); }
   };
   const showSummary = async () => {
     const doc = state.doc;
     if (!doc) return;
     setSummary({ state: 'loading', text: '' });
     try { const s = await api.assistantSummary(doc.id, { playheadFrame: editor.frame, selection: state.selection, ...(state.activeSequenceId ? { sequenceId: state.activeSequenceId } : {}) }); setSummary({ state: 'ok', text: JSON.stringify(s, null, 2) }); }
-    catch (e) { setSummary({ state: 'failed', text: reasonOf(e) }); }
+    catch (e) { setSummary({ state: 'failed', words: wordsOf(lang, e) }); }
   };
   const date = status?.keyAddedAt ? new Date(status.keyAddedAt).toLocaleDateString(lang === 'he' ? 'he-IL' : 'en-GB') : '';
   const money = (c: number) => ltr(`${c}¢`);
@@ -100,7 +103,7 @@ export function AssistantSettings(): ReactElement | null {
       <h3 id="pf-asst-h" className="pf-set-h">{dict(lang, 'assistant.title')}</h3>
       <p className="pf-asst-note">{t('set.intro')}</p>
       {loaded === 'loading' && <p className="pf-asst-note" role="status">{t('set.loading')}</p>}
-      {loaded !== 'loading' && loaded !== 'ok' && <p className="pf-asst-bad" role="status" data-testid={TID.settingsSetup}>{dict(lang, 'assistant.notConnected')} · {t('set.unavailable', { reason: loaded })}</p>}
+      {loaded !== 'loading' && loaded !== 'ok' && <p className="pf-asst-bad" role="status" data-testid={TID.settingsSetup}>{dict(lang, 'assistant.notConnected')} · <WithReason lang={lang} k="set.unavailable" words={loaded} /></p>}
       {loaded === 'ok' && status && (
         <>
           <p className="pf-asst-row" role="status" data-testid={TID.settingsSetup} data-setup={status.setup}><strong>{t('set.status')}:</strong> {dict(lang, `assistant.setup.${status.setup}`)}</p>
@@ -137,7 +140,7 @@ export function AssistantSettings(): ReactElement | null {
           </div>
           <div className="pf-asst-row">
             <Button size="sm" variant="primary" onClick={() => void save()}>{t('set.save')}</Button>
-            {note && <span role="status" className="pf-asst-note">{note}</span>}
+            {note && <span role="status" className={'ok' in note ? 'pf-asst-note' : 'pf-asst-bad'} data-testid={'ok' in note ? undefined : TID.settingsRefused}>{'ok' in note ? note.ok : <WithReason lang={lang} k="set.saveFailed" words={note.failed} />}</span>}
           </div>
           <div className="pf-asst" data-testid={TID.settingsWhatIsSent}>
             <h4 className="pf-set-h">{t('set.whatSent')}</h4>
@@ -146,7 +149,7 @@ export function AssistantSettings(): ReactElement | null {
               ? <Button size="sm" variant="secondary" disabled={!state.doc} onClick={() => void showSummary()}>{t('set.whatSent.show')}</Button>
               : <Button size="sm" variant="ghost" onClick={() => setSummary({ state: 'idle', text: '' })}>{t('set.whatSent.hide')}</Button>}
             {summary.state === 'loading' && <p className="pf-asst-note" role="status">{t('set.whatSent.loading')}</p>}
-            {summary.state === 'failed' && <p className="pf-asst-bad" role="status">{t('set.whatSent.failed', { reason: summary.text })}</p>}
+            {summary.state === 'failed' && <p className="pf-asst-bad" role="status"><WithReason lang={lang} k="set.whatSent.failed" words={summary.words} /></p>}
             {summary.state === 'ok' && (<><p className="pf-asst-note">{t('set.whatSent.note')}</p><pre className="pf-asst-json" tabIndex={0} aria-label={t('set.whatSent')}>{summary.text}</pre></>)}
           </div>
         </>

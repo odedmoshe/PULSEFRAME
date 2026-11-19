@@ -212,6 +212,7 @@ const gain: Planner = (env) => {
   };
   const onClip = (f: Found, notes: BarNote[]): BarResult => {
     const s = soundClipOf(env.ctx.doc, f) ?? f;
+    if (s.track.locked) return refused(env, 'gain_change', 'locked'); // a picture's sound on a locked track: never a target
     if (s.clip.type !== 'media') return refused(env, 'gain_change', 'nothing_to_do');
     const from = s.clip.gain, to = gainAfter(from, db);
     if (to > 8) return refused(env, 'gain_change', 'gain_ceiling');
@@ -222,8 +223,8 @@ const gain: Planner = (env) => {
   const clipRes = () => resolveClips(env.ctx, 'one', isMedia, { allowMany: false, atFrame: env.ctx.playheadFrame });
   if (target === 'clip') return withTargets(env, 'gain_change', clipRes(), (items, notes) => onClip(items[0]!, notes));
   // «הקול / הסאונד» alone: always asked — every unlocked audio track (the music first) or the chosen clip (plan §4.4 target
-  // words). The plan also names the master: no registered op changes a master gain in dB (set_loudness_target is an export
-  // LUFS target), so it is not offered rather than approximated.
+  // words). Lead decision: the master is NOT offered. No registered op changes a master gain in dB (set_loudness_target is an
+  // export LUFS target), and inventing one would be a fabricated plan; the question says so, so the owner knows why.
   const choices: BarChoice[] = [];
   const m = resolveMusic(env.ctx);
   const musicId = m.kind === 'ok' ? m.items[0]!.id : null;
@@ -235,7 +236,7 @@ const gain: Planner = (env) => {
   }
   const c = clipRes();
   if (c.kind === 'ok') { const r = onClip(c.items[0]!, c.notes); if (r.kind === 'plan') choices.push({ he: 'הקליפ הנבחר', en: 'The selected clip', result: r }); }
-  return { kind: 'ambiguous', intent: 'gain_change', ...base(env), choices, question: { he: 'איזה קול — של רצועה או של הקליפ?', en: 'Which sound — a track or the clip?' } };
+  return { kind: 'ambiguous', intent: 'gain_change', ...base(env), choices, question: { he: 'איזה קול — של רצועה או של הקליפ? (עוצמה כללית לכל הסרט אין אפשרות לשנות מכאן)', en: 'Which sound — a track or the clip? (The overall volume of the whole film cannot be changed from here.)' } };
 };
 
 const muteFamily = (intent: 'mute' | 'unmute'): Planner => (env) => {
@@ -355,6 +356,7 @@ const fades: Planner = (env) => {
   const len = at(env, d.frame);
   const onClip = (f: Found, notes: BarNote[]): BarResult => {
     const s = soundClipOf(env.ctx.doc, f) ?? f;
+    if (s.track.locked) return refused(env, 'fades', 'locked'); // a picture's sound on a locked track: never a target
     const startF = T.frameIndexAt(s.clip.start, rateOf(env)), endF = T.frameIndexAt(clipEnd(s.clip), rateOf(env));
     return finishPlan(env, 'fades', [{ op: 'set_clip_fades', args: { clipId: s.clip.id, ...(edge === 'in' ? { fadeIn: len } : { fadeOut: len }) } }],
       [{ op: 'set_clip_fades', detail: { kind: 'span', fromFrame: edge === 'in' ? startF : endF - d.frame, toFrame: edge === 'in' ? startF + d.frame : endF } }], [...notes, ...roundedNote(env, d, 'duration')]);

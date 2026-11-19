@@ -1,15 +1,15 @@
 {
-  "ranAt": "2026-11-19T00:02:41.796Z",
+  "ranAt": "2026-11-19T01:51:03.072Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v595 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 64,
-  "total": 64,
+  "passed": 70,
+  "total": 70,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -204,7 +204,7 @@
         "vl5": true,
         "tcBefore": "00:00:03:00",
         "tcAfter": "00:00:03:00",
-        "namedKey": "נקודת עוצמה 00:00:02:20 · 140%",
+        "namedKey": "נקודת עוצמה 00:00:02:19 · 140%",
         "keys": [
           [
             40,
@@ -312,9 +312,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2.01,
+        "fwd2": 1.99,
         "sh2": "◀◀ ×1",
-        "back1": -1,
+        "back1": -0.99,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -328,9 +328,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 1,
+        "playSpeed": 1.01,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 2.02,
+        "shuttleSpeed": 2.08,
         "staysPaused": true
       }
     },
@@ -358,30 +358,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_6c446135c60",
-          "clp_6c446135c61"
+          "clp_785cbc16c90",
+          "clp_785cbc16c91"
         ],
         "afterAB": [
-          "clp_6c446135c60",
-          "clp_6c446135c61"
+          "clp_785cbc16c90",
+          "clp_785cbc16c91"
         ],
         "afterAdd": [
-          "clp_6c446135c60",
-          "clp_6c446135c61",
-          "clp_6c446135c62"
+          "clp_785cbc16c90",
+          "clp_785cbc16c91",
+          "clp_785cbc16c92"
         ],
         "midEscape": [
-          "clp_6c446135c61"
+          "clp_785cbc16c91"
         ],
         "afterEscape": [
-          "clp_6c446135c60",
-          "clp_6c446135c61",
-          "clp_6c446135c62"
+          "clp_785cbc16c90",
+          "clp_785cbc16c91",
+          "clp_785cbc16c92"
         ],
         "afterEscapeUp": [
-          "clp_6c446135c60",
-          "clp_6c446135c61",
-          "clp_6c446135c62"
+          "clp_785cbc16c90",
+          "clp_785cbc16c91",
+          "clp_785cbc16c92"
         ]
       }
     },
@@ -447,7 +447,7 @@
         "wantRefusal": "בטקסט של חותמת התאריך מותרים רק ספרות, רווחים והסימנים ⁦. : ' / -⁩, עד 20 תווים",
         "invalid": "true",
         "kept": true,
-        "today": "'26 11 18",
+        "today": "'26 11 19",
         "todaySet": true,
         "refusalGone": true
       }
@@ -543,7 +543,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 18/1799",
+        "valueText": "עוקב קדימה 23/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -804,18 +804,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_b76cf2ef970",
-          "ast_eb5a74f4740",
-          "ast_f83eaf06b70",
-          "ast_1fa52bf9e60",
-          "ast_e08d47bff40"
+          "ast_dacaa1a5e80",
+          "ast_7458915d410",
+          "ast_a701d28fc00",
+          "ast_776e6a9fd90",
+          "ast_e8060ceb7e0"
         ],
         "order1": [
-          "ast_b76cf2ef970",
-          "ast_1fa52bf9e60",
-          "ast_eb5a74f4740",
-          "ast_f83eaf06b70",
-          "ast_e08d47bff40"
+          "ast_dacaa1a5e80",
+          "ast_776e6a9fd90",
+          "ast_7458915d410",
+          "ast_a701d28fc00",
+          "ast_e8060ceb7e0"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -839,7 +839,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-18T23:59:47.315Z",
+          "createdAt": "2026-11-19T01:46:57.544Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -965,8 +965,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_e2a2f722910",
-          "seq_e2a2f722917"
+          "seq_a22b008b770",
+          "seq_a22b008b777"
         ],
         "revisions": 1,
         "transactions": [
@@ -976,7 +976,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_e2a2f722910",
+          "seq": "seq_a22b008b770",
           "selected": "true"
         }
       }
@@ -1007,9 +1007,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_e2a2f722910"
+          "seq": "seq_a22b008b770"
         },
-        "secondTab": "seq_e2a2f722910",
+        "secondTab": "seq_a22b008b770",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1127,6 +1127,67 @@
         "switched": true,
         "errors": []
       }
+    },
+    {
+      "name": "command bar: «חתוך כאן» — the bar's row is on screen (not clipped), the first option and active (aria-activedescendant), ↓ moves to the next option (wraps when it is the only one) and Home back; Enter commits ONE transaction labelled «Command bar: split_here»",
+      "ok": true,
+      "detail": {
+        "rowSeen": true,
+        "first": "pf-palette-opt-bar",
+        "options": 1,
+        "a0": "pf-palette-opt-bar",
+        "a1": "pf-palette-opt-bar",
+        "a2": "pf-palette-opt-bar",
+        "revisions": 1,
+        "label": "Command bar: split_here"
+      }
+    },
+    {
+      "name": "command bar: «הגבר את הקול ב־3 דציבל» asks; ↓ makes the first choice active with its own preview (a step), Enter commits exactly that choice (one transaction, set_track_audio)",
+      "ok": true,
+      "detail": {
+        "kind": "ambiguous",
+        "choiceActive": "pf-palette-opt-bar-choice-0",
+        "stepOp": "set_track_audio",
+        "ops": [
+          "set_track_audio"
+        ]
+      }
+    },
+    {
+      "name": "command bar: «תעשה שמח» is not understood and offers example sentences; ↓ and Enter put one in the input (its own preview shows) and nothing is committed",
+      "ok": true,
+      "detail": {
+        "examples": 3,
+        "value": "חתוך כאן",
+        "kind": "plan",
+        "open": true,
+        "focus": "palette-input",
+        "revisions": 0
+      }
+    },
+    {
+      "name": "command bar: the listbox owns only options and groups — the bar's live region and preview and the assistant's row are outside it",
+      "ok": true,
+      "detail": {
+        "row": true,
+        "preview": true,
+        "live": true,
+        "roles": []
+      }
+    },
+    {
+      "name": "command bar: the assistant row reads «עוזר השפה לא מחובר»; «איך מחברים» opens Settings at «עוזר השפה» (provider_not_configured); a refused save reads in Hebrew with its next step and without the server's English hint",
+      "ok": true,
+      "detail": {
+        "setup": "provider_not_configured",
+        "refused": "ההגדרות לא נשמרו: הכתובת ⁦api.example.test⁩ אינה ברשימה ⁦PF_ASSISTANT_HOSTS⁩; הוסיפו בדיוק את הכתובת הזאת לרשימה, הפעילו את השרת מחדש ושמרו שוב"
+      }
+    },
+    {
+      "name": "command bar: no uncaught errors in the page",
+      "ok": true,
+      "detail": []
     }
   ]
 }

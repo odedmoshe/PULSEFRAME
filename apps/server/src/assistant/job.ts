@@ -228,9 +228,15 @@ export function recoverAssistantJobs(store: Store, gov: Governance): JobRow[] {
     if (LIVE.has(job.id)) continue; // this process is driving it
     const sent = job.status !== 'queued' || job.attempt > 0 || job.stage !== null;
     if (!sent && gov.ledgerFor(job.id)?.state === 'reserved') gov.resolve(job.id, 'released');
-    store.updateJob(job.id, { status: 'failed', stage: null, error: { code: 'submission_unknown', retryable: false,
-      message: sent ? 'the server stopped while the request was with the service; it may have been charged and it is not sent again (its reservation stays counted until the owner releases it)'
-        : 'the server stopped before the request was sent; nothing was sent and the reservation was released. Ask again.' } });
+    // a job that stopped while its answer was being checked has already settled its cost (settleAssistant runs before the
+    // check): there is nothing to release, so the owner is not told to release it (POST …/budget/release would answer 409)
+    const settled = sent && gov.ledgerFor(job.id)?.state === 'settled';
+    const words = !sent
+      ? { message: 'the server stopped before the request was sent; nothing was sent and the reservation was released', hint: 'Ask again.' }
+      : settled
+        ? { message: 'the server stopped after the service answered and before its answer was checked; the cost is recorded as spent and nothing is left to release; no proposal was made', hint: 'Ask again if you still want the change.' }
+        : { message: 'the server stopped while the request was with the service; it may have been charged and it is not sent again (its reservation stays counted until the owner releases it)', hint: 'Check the service\'s billing; if nothing was charged, release the reservation of this job.' };
+    store.updateJob(job.id, { status: 'failed', stage: null, error: { code: 'submission_unknown', retryable: false, ...words } });
     out.push(store.getJob(job.id));
   }
   return out;

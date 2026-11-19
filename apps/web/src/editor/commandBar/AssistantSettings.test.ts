@@ -35,6 +35,23 @@ describe('AssistantSettings', () => {
     expect(S.configBodyOf(S.formOf(null))).toMatchObject({ pricesCentsPerMTok: null, monthlyLimitCents: 0, perRequestCapCents: 0, toggles: { titlesAndMarkers: false, peopleNames: false } });
   });
   it('the toggles default to off', () => { expect(S.formOf(null)).toMatchObject({ titles: false, people: false }); });
+  it('a server refusal of a save reads in Hebrew with its next step, never the English message or hint (lead decision)', async () => {
+    const { ApiFailure } = await import('../../api.ts');
+    const cases = [
+      new ApiFailure(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only', undefined, 'The owner sets it up in Settings.'),
+      new ApiFailure(409, 'host_not_allowed', 'the host evil.example.test is not listed in PF_ASSISTANT_HOSTS', { host: 'evil.example.test' }, 'Add exactly this host to PF_ASSISTANT_HOSTS and restart the server, then save again.'),
+      new ApiFailure(400, 'invalid_request', '✖ a price is more than 0 cents per million tokens: type the price from the provider\'s price list (for example 300 for $3 per million tokens)\n  → at pricesCentsPerMTok.input'),
+      new ApiFailure(400, 'invalid_request', 'the language assistant is reached over https only', { host: 'http://x' }, 'Give the service\'s host name, for example api.example.com; requests go to https://<host>.'),
+    ];
+    for (const e of cases) {
+      const w = S.wordsOf('he', e);
+      expect(w.untranslated, e.message).toBeNull();
+      expect(/[א-ת]/.test(w.reason), e.message).toBe(true);
+      expect(w.reason.split('; ').length, `${e.message}: reason; next step`).toBe(2);
+      expect(w.reason, e.message).not.toContain(e.hint ?? '@@');
+    }
+    expect(S.wordsOf('en', cases[0]!)).toMatchObject({ reason: cases[0]!.message, next: 'The owner sets it up in Settings.' });
+  });
 });
 
 describe('AssistantRow', () => {
@@ -42,7 +59,10 @@ describe('AssistantRow', () => {
   it('reads «עוזר השפה לא מחובר» with «איך מחברים» for the owner until the status says ready', () => {
     const html = render(createElement(Row.AssistantRow, { query: 'חתוך הכול', lang: 'he', optionDomId: opt }), 'user:local');
     expect(html).toContain(`data-testid="${TID.assistantRow}"`);
-    expect(html).toContain('aria-disabled="true"');
+    // not an option (the palette mounts it outside the listbox) and not disabled: its «איך מחברים» is a working button
+    expect(html).not.toContain('role="option"');
+    expect(html).not.toContain('aria-disabled');
+    expect(html).toContain('data-connected="false"');
     expect(html).toContain('עוזר השפה לא מחובר');
     expect(html).toContain('איך מחברים');
     expect(html).toContain(`data-testid="${TID.assistantConnect}"`);

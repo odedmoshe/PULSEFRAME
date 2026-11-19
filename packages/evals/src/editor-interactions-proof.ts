@@ -1319,6 +1319,97 @@ async function main() {
       }
     }
 
+    // the Hebrew command bar (ADR-0027): keyboard paths through the palette's one listbox — the bar's row first and active,
+    // the arrows over a question's choices with each choice's own preview, an example row that only fills the input, the
+    // assistant's «איך מחברים» into Settings, and a Settings refusal in Hebrew with its next step (the full proof is proof:command-bar)
+    {
+      console.log('\n# command bar (ADR-0027): keyboard paths');
+      const cp = (await call('/projects', { name: 'command-bar-keys', width: 640, height: 360 })).body.project.id as string;
+      const ca = await upload(cp, picFile), cm = await upload(cp, musicFile);
+      const c1 = (await txs(cp, [{ op: 'add_clip', args: { assetId: ca.assetId, start: f(0), duration: f(60), withLinkedAudio: false } }])).results[0].output.clipId as string;
+      await txs(cp, [{ op: 'add_clip', args: { assetId: cm.assetId, start: f(0), duration: f(90) } }]);
+      const cctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+      await cctx.addInitScript('globalThis.__name = (f) => f');
+      await cctx.addInitScript(() => { (globalThis as any).__pfAudioTap = true; try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const cpage = await cctx.newPage();
+      const cErrors: string[] = [];
+      cpage.on('pageerror', (e) => cErrors.push(String(e)));
+      await cpage.goto(`${s.ownerUrl}&project=${cp}`);
+      await cpage.getByTestId('timecode').waitFor({ timeout: 30000 });
+      await cpage.waitForFunction(() => !!(window as any).__pfPlayer, undefined, { timeout: 30000 });
+      const crev = async () => (await call(`/projects/${cp}`)).body.revision as number;
+      const chist = async () => (await call(`/projects/${cp}/history?since=0`)).body.events as { label: string | null; ops: string[] }[];
+      await cpage.locator(`.clip[data-clip-id="${c1}"]`).click({ position: { x: 6, y: 6 } });
+      await cpage.evaluate(() => (window as any).__pfPlayer.seek(30));
+      const typeBar = async (text: string) => {
+        if (!(await cpage.getByTestId('palette-dialog').count())) { await cpage.getByTestId('open-palette').focus(); await cpage.keyboard.press('Control+k'); await cpage.getByTestId('palette-input').waitFor({ timeout: 5000 }); }
+        await cpage.getByTestId('palette-input').press('Control+a'); await cpage.keyboard.press('Backspace');
+        await cpage.keyboard.type(text);
+        await cpage.waitForFunction((q) => document.querySelector<HTMLInputElement>('[data-testid=palette-input]')?.value === q && !!document.querySelector<HTMLElement>('[data-testid=bar-result]')?.dataset.kind, text, { timeout: 8000 });
+        await sleep(150);
+      };
+      const active = () => cpage.evaluate(() => document.querySelector('[data-testid=palette-input]')?.getAttribute('aria-activedescendant'));
+      // 1: «חתוך כאן» — the bar's row is the first option and active; ↓ leaves it, Home comes back; Enter commits one labelled transaction
+      const r0 = await crev(), h0 = (await chist()).length;
+      await typeBar('חתוך כאן');
+      const first = await cpage.evaluate(() => document.querySelector('[role=listbox] [role=option]')?.id);
+      const options = await cpage.locator('[role=listbox] [role=option]').count();
+      const rowSeen = await cpage.evaluate(() => { const r = document.querySelector('[data-testid=bar-result]')!.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return r.height >= 30 && !!hit?.closest('[data-testid=bar-result]'); });
+      const a0 = await active();
+      await cpage.keyboard.press('ArrowDown'); const a1 = await active();
+      await cpage.keyboard.press('Home'); const a2 = await active();
+      const moved = options > 1 ? a1 !== a0 : a1 === a0; // with one option the cursor wraps onto it
+      await cpage.waitForFunction(() => (window as any).__pfBar?.lastPlan?.planHash === document.querySelector<HTMLElement>('[data-testid=bar-result]')?.dataset.planHash, undefined, { timeout: 5000 }).catch(() => {});
+      await cpage.keyboard.press('Enter');
+      const committed = await until2(crev, (n) => n === r0 + 1, 10000);
+      const h1 = await chist();
+      check('command bar: «חתוך כאן» — the bar\'s row is on screen (not clipped), the first option and active (aria-activedescendant), ↓ moves to the next option (wraps when it is the only one) and Home back; Enter commits ONE transaction labelled «Command bar: split_here»', rowSeen && first === 'pf-palette-opt-bar' && a0 === 'pf-palette-opt-bar' && moved && a2 === a0 && committed && h1.length === h0 + 1 && h1.at(-1)!.label === 'Command bar: split_here', { rowSeen, first, options, a0, a1, a2, revisions: (await crev()) - r0, label: h1.at(-1)?.label });
+      await sleep(400);
+      // 2: a question: ↓ to a choice shows that choice's own preview; Enter commits exactly that choice
+      await typeBar('הגבר את הקול ב־3 דציבל');
+      const kind = await cpage.getByTestId('bar-result').getAttribute('data-kind');
+      await cpage.keyboard.press('ArrowDown');
+      await sleep(200);
+      const choiceActive = await active();
+      const stepOp = await cpage.locator('[data-testid=bar-step]').first().getAttribute('data-op').catch(() => null);
+      const r1 = await crev();
+      await cpage.waitForFunction(() => !!(window as any).__pfBar?.lastPlan, undefined, { timeout: 5000 }).catch(() => {});
+      await cpage.keyboard.press('Enter');
+      const chose = await until2(crev, (n) => n === r1 + 1, 10000);
+      const h2 = await chist();
+      check('command bar: «הגבר את הקול ב־3 דציבל» asks; ↓ makes the first choice active with its own preview (a step), Enter commits exactly that choice (one transaction, set_track_audio)', kind === 'ambiguous' && choiceActive === 'pf-palette-opt-bar-choice-0' && stepOp === 'set_track_audio' && chose && h2.at(-1)!.ops.join() === 'set_track_audio' && h2.at(-1)!.label === 'Command bar: gain_change', { kind, choiceActive, stepOp, ops: h2.at(-1)?.ops });
+      await sleep(400);
+      // 3: an example row under a request the bar did not understand: Enter fills the input, nothing runs
+      const r2 = await crev();
+      await typeBar('תעשה שמח');
+      const examples = await cpage.locator('[data-testid=bar-nearest][data-example=true]').count();
+      await cpage.keyboard.press('ArrowDown');
+      await sleep(150);
+      await cpage.keyboard.press('Enter');
+      await sleep(400);
+      const filled = await cpage.evaluate(() => ({ value: document.querySelector<HTMLInputElement>('[data-testid=palette-input]')?.value ?? '', kind: document.querySelector<HTMLElement>('[data-testid=bar-result]')?.dataset.kind ?? null, open: !!document.querySelector('[data-testid=palette-dialog]'), focus: document.activeElement?.getAttribute('data-testid') }));
+      check('command bar: «תעשה שמח» is not understood and offers example sentences; ↓ and Enter put one in the input (its own preview shows) and nothing is committed', examples > 0 && filled.open && filled.value !== 'תעשה שמח' && filled.value.length > 0 && filled.kind !== 'unknown' && filled.focus === 'palette-input' && (await crev()) === r2, { examples, ...filled, revisions: (await crev()) - r2 });
+      // 4: the assistant row: «עוזר השפה לא מחובר», «איך מחברים» opens Settings at the assistant's section (owner session)
+      await typeBar('בקשה לעוזר');
+      const rowText = await cpage.getByTestId('palette-assistant').textContent();
+      const outside = await cpage.evaluate(() => ({ row: !document.querySelector('[role=listbox] [data-testid=palette-assistant]'), preview: !document.querySelector('[role=listbox] #pf-bar-preview'), live: !document.querySelector('[role=listbox] [data-testid=bar-live]'), roles: [...document.querySelectorAll('[role=listbox] [role]')].map((e) => e.getAttribute('role')).filter((r) => r !== 'option' && r !== 'group') }));
+      check('command bar: the listbox owns only options and groups — the bar\'s live region and preview and the assistant\'s row are outside it', outside.row && outside.preview && outside.live && outside.roles.length === 0, outside);
+      await cpage.getByTestId('bar-assistant-connect').click();
+      const settings = await cpage.getByTestId('assistant-settings').waitFor({ timeout: 8000 }).then(() => true, () => false);
+      await cpage.getByTestId('assistant-setup').waitFor({ timeout: 8000 }).catch(() => {});
+      const setup = await cpage.getByTestId('assistant-setup').getAttribute('data-setup').catch(() => null);
+      // 5: a Settings refusal in Hebrew with its next step: this server allows no assistant host, so saving one is refused (409)
+      await cpage.getByTestId('assistant-host').fill('api.example.test');
+      await cpage.getByTestId('assistant-model').fill('m');
+      await cpage.getByTestId('assistant-price-in').fill('300'); await cpage.getByTestId('assistant-price-out').fill('1500');
+      await cpage.getByTestId('assistant-monthly-limit').fill('500'); await cpage.getByTestId('assistant-request-cap').fill('50');
+      await cpage.locator('[data-testid=assistant-settings] button.pf-btn-primary').first().click();
+      const refused = await cpage.getByTestId('assistant-refused').waitFor({ timeout: 8000 }).then(async () => (await cpage.getByTestId('assistant-refused').textContent()) ?? '', () => '');
+      check('command bar: the assistant row reads «עוזר השפה לא מחובר»; «איך מחברים» opens Settings at «עוזר השפה» (provider_not_configured); a refused save reads in Hebrew with its next step and without the server\'s English hint', !!rowText?.includes('עוזר השפה לא מחובר') && settings && setup === 'provider_not_configured' && /PF_ASSISTANT_HOSTS/.test(refused) && /[א-ת]/.test(refused) && refused.includes('; ') && !/restart the server/i.test(refused) && !/לא תורגם/.test(refused), { setup, refused });
+      check('command bar: no uncaught errors in the page', cErrors.length === 0, cErrors.slice(0, 4));
+      await cctx.close();
+    }
+
     await page.close();
   } catch (e) {
     console.error(e);

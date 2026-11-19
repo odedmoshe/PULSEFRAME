@@ -190,9 +190,27 @@ describe('resolve: the target words', () => {
     expect(ops.map((o) => o.op)).toEqual(['set_track_audio', 'set_track_audio', 'set_clip_gain']);
     expect(ops.slice(0, 2).map((o) => (o.args as { trackId: string }).trackId)).toEqual([fx.musicTrack, ...audio.map((t) => t.id).filter((id) => id !== fx.musicTrack)]);
     expect(r.choices[0]!.he).toBe('רצועת המוזיקה');
+    // lead decision: no master choice (no registered op changes a master gain in dB); the question says so in both languages
+    expect(ops.every((o) => ['set_track_audio', 'set_clip_gain'].includes(o.op))).toBe(true);
+    expect(r.choices.some((c) => /master|כללי|ראשי/i.test(c.he + c.en))).toBe(false);
+    expect(r.question.he).toMatch(/רצועה או של הקליפ/);
+    expect(r.question.he).toMatch(/עוצמה כללית/);
+    expect(r.question.en).toMatch(/overall volume/);
     // a locked audio track is not offered
     const locked = interpret('הגבר את הקול ב־3 דציבל', context(variants.lockedTrack(fx.doc, fx.musicTrack), { selection: [fx.c2] })) as Extract<BarResult, { kind: 'ambiguous' }>;
     expect(locked.choices.map((c) => (plan(c.result).ops[0]!.args as { trackId?: string }).trackId)).not.toContain(fx.musicTrack);
+  });
+});
+
+describe('resolve: a picture\'s sound on a locked track', () => {
+  it('is refused as locked (the bar\'s own reason and hint), not as the op\'s refusal', () => {
+    const audioTrack = fx.doc.sequences.seq_main!.tracks.find((t) => t.clips.some((c) => c.id === fx.c2a))!.id;
+    const c = context(variants.lockedTrack(fx.doc, audioTrack), { selection: [fx.c2] });
+    for (const t of ['הגבר את הקליפ ב־3 דציבל', 'עמעום בהתחלה של חצי שנייה', 'turn the clip up 3 dB']) {
+      const r = interpret(t, c);
+      expect(r, t).toMatchObject({ kind: 'refused', code: 'locked' });
+      expect((r as Extract<BarResult, { kind: 'refused' }>).opError, t).toBeUndefined();
+    }
   });
 });
 

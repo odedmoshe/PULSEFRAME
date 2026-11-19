@@ -15,8 +15,8 @@ import { useBarEditor } from './useBarResult.ts';
 import { COMMAND_BAR_TESTIDS as TID } from './commandBar.testids.ts';
 import { auto, barText, dict, ltr } from './commandBar.strings.ts';
 import type { AssistantRowProps } from './contract.ts';
-import { describeCall } from './describe.ts';
-import { Rich } from './BarPreview.tsx';
+import { describeCall, refusalWords, type RefusalWords } from './describe.ts';
+import { Rich, WithReason } from './BarPreview.tsx';
 import './commandBar.css';
 
 export const OWNER_ACTOR = 'user:local';
@@ -38,7 +38,7 @@ export function loadStatus(now = Date.now(), fetcher: () => Promise<AssistantSta
 }
 export const resetStatusCache = (): void => { cache = null; };
 
-type Job = { phase: 'idle' } | { phase: 'running'; jobId: string; stage: string | null } | { phase: 'failed'; reason: string } | { phase: 'proposal'; proposalId: string; ops: OpCall[] | null; explanation: string | null; count: number };
+type Job = { phase: 'idle' } | { phase: 'running'; jobId: string; stage: string | null } | { phase: 'failed'; words: RefusalWords } | { phase: 'proposal'; proposalId: string; ops: OpCall[] | null; explanation: string | null; count: number };
 
 export function AssistantRow({ query, lang, optionDomId }: AssistantRowProps): ReactElement {
   const { editor, state } = useBarEditor();
@@ -63,23 +63,23 @@ export function AssistantRow({ query, lang, optionDomId }: AssistantRowProps): R
         const j = await api.job(jobId);
         if (j.status === 'succeeded') {
           const out = j.output as { proposalId?: string; explanation?: string | null; opsCount?: number } | null;
-          if (!out?.proposalId) { setJob({ phase: 'failed', reason: dict(lang, 'error.code.invalid_model_output') }); return; }
+          if (!out?.proposalId) { setJob({ phase: 'failed', words: refusalWords(lang, { code: 'invalid_model_output' }) }); return; }
           const list = await api.proposals(doc.id).catch(() => ({ proposals: [] }));
           const found = list.proposals.find((p) => p.id === out.proposalId) as ({ ops?: OpCall[] } | undefined);
           setJob({ phase: 'proposal', proposalId: out.proposalId, ops: found?.ops ?? null, explanation: out.explanation ?? null, count: out.opsCount ?? found?.ops?.length ?? 0 });
           return;
         }
-        if (j.status === 'failed' || j.status === 'canceled') { setJob({ phase: 'failed', reason: failureWords(lang, j.error) }); return; }
+        if (j.status === 'failed' || j.status === 'canceled' || j.status === 'submission-unknown') { setJob({ phase: 'failed', words: refusalWords(lang, j.error as { code?: string; message?: string; hint?: string } | null) }); return; }
         setJob({ phase: 'running', jobId, stage: j.stage });
       }
-    } catch (e) { if (alive.current) setJob({ phase: 'failed', reason: failureWords(lang, e instanceof ApiFailure ? { code: e.code, message: e.message } : e) }); }
+    } catch (e) { if (alive.current) setJob({ phase: 'failed', words: refusalWords(lang, e instanceof ApiFailure ? { code: e.code, message: e.message, hint: e.hint ?? null } : { message: e instanceof Error ? e.message : String(e) }) }); }
   };
   const decide = async (id: string, d: 'accept' | 'reject') => { await editor.decideProposal(id, d); if (alive.current) { setJob({ phase: 'idle' }); if (d === 'accept') editor.set({ paletteOpen: false }); } };
 
   return (
     <div
-      className={`pf-pal-option is-assistant${ready ? ' is-live' : ''}`} role="option" aria-selected="false" aria-disabled={ready ? undefined : 'true'}
-      id={optionDomId('assistant')} data-testid={TID.assistantRow} data-ready={ready || undefined}
+      className={`pf-pal-option is-assistant${ready ? ' is-live' : ''}`}
+      id={optionDomId('assistant')} data-testid={TID.assistantRow} data-ready={ready || undefined} data-connected={ready ? 'true' : 'false'}
     >
       <span className="pf-pal-names"><Bot size={14} strokeWidth={1.75} aria-hidden="true" className="pf-pal-ic is-agent" /><span className="pf-pal-label"><bdi dir="auto">{C.palAssistantRow(q)}</bdi></span>
         {!ready && <span className="pf-pal-unavail">{setupWords(lang, status)}</span>}</span>
@@ -94,7 +94,7 @@ export function AssistantRow({ query, lang, optionDomId }: AssistantRowProps): R
           <span className="pf-bar-asst-line"><Rich text={sendLine(lang, status)} /> · {dict(lang, 'assistant.proposeOnly')}</span>
           {job.phase === 'idle' && owner && <span className="pf-bar-asst-actions"><button type="button" className="pf-bar-link" disabled={!q} onClick={() => void ask()}>{barText(lang, 'assistant.row.send')}</button></span>}
           {job.phase === 'running' && <span className="pf-bar-asst-stage" role="status" data-testid={TID.assistantStage} data-stage={job.stage ?? undefined}>{barText(lang, 'assistant.row.stage', { stage: stageWords(lang, job.stage) })}</span>}
-          {job.phase === 'failed' && <span className="pf-asst-bad" role="status"><bdi dir="auto">{barText(lang, 'assistant.row.failed', { reason: job.reason })}</bdi></span>}
+          {job.phase === 'failed' && <span className="pf-asst-bad" role="status"><WithReason lang={lang} k="assistant.row.failed" words={job.words} /></span>}
           {job.phase === 'proposal' && (
             <span className="pf-bar-asst-proposal" data-testid={TID.assistantProposal}>
               <strong>{barText(lang, 'assistant.proposal.heading')}</strong>
@@ -115,11 +115,5 @@ export function AssistantRow({ query, lang, optionDomId }: AssistantRowProps): R
       )}
     </div>
   );
-}
-function failureWords(lang: Lang, e: unknown): string {
-  const code = (e as { code?: string } | null)?.code;
-  const known = code ? dict(lang, `error.code.${code}`) : '';
-  if (code && known !== `error.code.${code}`) return known;
-  return (e as { message?: string } | null)?.message ?? dict(lang, 'error.code.provider_error');
 }
 export { auto };

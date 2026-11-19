@@ -6,7 +6,7 @@
  */
 import * as T from '@pulseframe/time';
 import { TRANSITIONS, findClip, type BarAction, type BarNote, type OpCall, type PlanStep, type ProjectDocument, type StepDetail } from '@pulseframe/core';
-import { dictionaries, type Lang } from '@pulseframe/i18n';
+import { dictionaries, translateRefusal, type Lang } from '@pulseframe/i18n';
 import { CHROME_STRINGS } from '../chrome.strings.ts';
 import { COMMANDS } from '../commands.ts';
 import { auto, barText, ltr, type BarTextKey } from './commandBar.strings.ts';
@@ -49,26 +49,47 @@ export function describeStep(step: PlanStep, lang: Lang): StepWords {
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
 const int = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+/** The names in a note's list: plain strings, or the grammar's {clipId|trackId, name} rows (core commandBar plans.ts, resolve.ts). */
+export const noteNames = (v: unknown): string[] => (Array.isArray(v) ? v : []).map((x) => (typeof x === 'string' ? x : x && typeof x === 'object' ? str((x as { name?: unknown }).name) ?? str((x as { clipId?: unknown }).clipId) ?? str((x as { trackId?: unknown }).trackId) : null)).filter((x): x is string => !!x);
 const names = (lang: Lang, v: unknown): string => {
-  const list = Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x).slice(0, 8) : [];
-  return list.length ? barText(lang, 'note.names', { list: list.map(auto).join(', ') }) : '';
+  const all = noteNames(v);
+  const list = all.slice(0, 8);
+  return list.length ? barText(lang, 'note.names', { list: list.map(auto).join(', ') + (all.length > list.length ? ` (+${ltr(all.length - list.length)})` : '') }) : '';
 };
-/** A time in a note's data: a RationalTime, or seconds as a number. */
-const noteTime = (v: unknown): string | null => (T.isRationalTime(v) ? showTime(v) : int(v) !== null ? showTime(T.fromSeconds(String(v))) : null);
+/** A time in a note's data: a RationalTime, or seconds as a number or an exact decimal or fraction text ('3/2'). */
+const noteTime = (v: unknown): string | null => {
+  if (T.isRationalTime(v)) return showTime(v);
+  if (int(v) !== null) return showTime(T.fromSeconds(String(v)));
+  const m = typeof v === 'string' ? /^(\d+)(?:\/(\d+))?$/.exec(v) : null;
+  return m ? showTime(T.rt(m[1]!, Number(m[2] ?? 1))) : null;
+};
+/** What a default stood for (the grammar's {field, value, seconds, frames, frame}). */
+function defaultWhat(d: Record<string, unknown>, lang: Lang): string | null {
+  const he = lang === 'he';
+  const field = str(d.field);
+  if (str(d.what)) return str(d.what);
+  if (d.value === 'playhead') return int(d.frame) !== null ? (he ? `הסמן, פריים ${ltr(d.frame as number)}` : `the playhead, frame ${ltr(d.frame as number)}`) : (he ? 'הסמן' : 'the playhead');
+  if (field === 'type' && str(d.value)) return transitionName(d.value as string, lang);
+  if (int(d.seconds) !== null) return he ? `${ltr(num(d.seconds as number))} שניות` : `${ltr(num(d.seconds as number))} seconds`;
+  if (int(d.frames) !== null) return he ? `${ltr(d.frames as number)} פריימים` : `${ltr(d.frames as number)} frames`;
+  return str(d.text);
+}
 
 /**
- * A note in words. The data's shape belongs to the grammar (core commandBar/); the keys read here are optional and every note
- * has a sentence without them: what, seconds|time, frame, n|count, names|clips|list.
+ * A note in words. The data's shape belongs to the grammar (core commandBar/: default_used {field, value, seconds, frames,
+ * frame}; rounded_to_frame {frame, time}; skipped_* {clips | tracks: [{…Id, name}]}; ripple_moves {moved}; alternative_reading
+ * {intents}); plain lists and the keys n/count/names are read too, and every note has a sentence without any data.
  */
 export function describeNote(note: BarNote, lang: Lang): string {
   const t = (k: BarTextKey, v?: Record<string, string | number>) => barText(lang, k, v);
   const d = note.data ?? {};
-  const n = int(d.n) ?? int(d.count) ?? (Array.isArray(d.clips) ? d.clips.length : null);
-  const list = names(lang, d.names ?? d.clips ?? d.list);
+  const listed = d.names ?? d.clips ?? d.tracks ?? d.list;
+  const n = int(d.n) ?? int(d.count) ?? int(d.moved) ?? (Array.isArray(listed) ? listed.length : null);
+  const list = names(lang, listed);
   switch (note.code) {
     case 'default_used': {
-      const what = str(d.what) ?? str(d.text) ?? (int(d.seconds) !== null ? lang === 'he' ? `${ltr(num(d.seconds as number))} שניות` : `${ltr(num(d.seconds as number))} seconds` : null);
-      return what ? t('note.default_used', { what: auto(what) }) : t('note.default_used.plain');
+      const what = defaultWhat(d, lang);
+      return what ? t('note.default_used', { what }) : t('note.default_used.plain');
     }
     case 'rounded_to_frame': {
       const time = noteTime(d.time ?? d.seconds ?? d.to);
@@ -82,9 +103,9 @@ export function describeNote(note: BarNote, lang: Lang): string {
     case 'applies_to_master': return t('note.applies_to_master');
     case 'alternative_reading': {
       const what = str(d[lang]) ?? str(d.what);
-      const intent = str(d.intent);
-      const words = what ?? (intent ? barText(lang, `intent.${intent}` as BarTextKey) : null);
-      return words && !words.startsWith('intent.') ? t('note.alternative_reading', { what: auto(words) }) : t('note.alternative_reading.plain');
+      const intents = (Array.isArray(d.intents) ? d.intents : str(d.intent) ? [d.intent] : []).filter((x): x is string => typeof x === 'string');
+      const words = what ?? (intents.length ? intents.map((i) => intentName(i, lang)).join(lang === 'he' ? ' או ' : ' or ') : null);
+      return words ? t('note.alternative_reading', { what: auto(words) }) : t('note.alternative_reading.plain');
     }
     case 'no_beat_analysis': return t('note.no_beat_analysis');
   }
@@ -152,3 +173,28 @@ export const intentName = (intent: string, lang: Lang): string => {
   const w = barText(lang, k);
   return w === `intent.${intent}` || !w ? intent : w;
 };
+
+/**
+ * A server refusal (a commit the server refused, an assistant route or job error) in the interface language, with the next
+ * step (lead decision: a refusal shown in the bar or in Settings gives the owner a Hebrew next step when the UI is Hebrew).
+ * Hebrew: the refusal's own Hebrew sentence (translateRefusal; it carries the way forward), else the code's headline
+ * (error.code.*) with the bar's Hebrew next step; the server's English sentence and hint are shown ONLY when no Hebrew
+ * wording exists, and then marked as not translated (`untranslated`), beside a Hebrew next step. English: the server's own
+ * sentence and hint.
+ */
+export interface RefusalWords { reason: string; next: string | null; untranslated: { message: string; hint: string | null } | null }
+export function refusalWords(lang: Lang, e: { code?: string | null; message?: string | null; hint?: string | null } | null | undefined): RefusalWords {
+  const code = e?.code ?? null, message = e?.message?.trim() || null, hint = e?.hint?.trim() || null;
+  const d = dictionaries[lang] as Record<string, string>;
+  const headline = code ? d[`error.code.${code}`] ?? null : null;
+  if (lang === 'en') return { reason: message ?? headline ?? d['error.generic'] ?? 'The action failed', next: hint ?? barText('en', 'fail.hint'), untranslated: null };
+  const said = message ? translateRefusal('he', message) : undefined;
+  if (said) return { reason: said, next: null, untranslated: null };
+  if (headline) return { reason: headline, next: barText('he', 'fail.hint'), untranslated: null };
+  return { reason: d['error.generic'] ?? 'הפעולה נכשלה', next: barText('he', 'fail.hint'), untranslated: message || hint ? { message: message ?? '', hint } : null };
+}
+/** The same words as one plain line (a live region, a note in Settings): the untranslated part follows its Hebrew mark. */
+export function refusalLine(lang: Lang, w: RefusalWords): string {
+  const tail = w.untranslated ? ` (${(dictionaries[lang] as Record<string, string>)['refusal.untranslated']}: ${[w.untranslated.message, w.untranslated.hint].filter(Boolean).join(' ')})` : '';
+  return `${w.reason}${w.next ? `. ${w.next}` : ''}${tail}`;
+}

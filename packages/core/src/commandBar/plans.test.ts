@@ -65,6 +65,22 @@ describe('delete is the Delete key', () => {
       expect(JSON.stringify(k.ops), sel.join()).toBe(JSON.stringify(deleteOps(fx.doc, sel, false)!.ops));
     }
   });
+  it('«מחק את הקליפים» with nothing selected deletes every clip on unlocked tracks, the title and the music too, as deleteOps does', () => {
+    for (const text of ['מחק את הקליפים', 'מחקי את הקליפים', 'delete the clips']) {
+      const c = context(fx.doc, { selection: [] });
+      const r = interpret(text, c) as BarPlan;
+      expect(r.kind, text).toBe('plan');
+      const all = fx.doc.sequences.seq_main!.tracks.filter((t) => !t.locked).flatMap((t) => t.clips.map((x) => x.id));
+      const after = applyTransaction(c.rawDoc, r.ops, { ...BAR_PREVIEW_OPTIONS }).doc;
+      const left = after.sequences.seq_main!.tracks.flatMap((t) => t.clips.map((x) => x.id)).filter((id) => all.includes(id));
+      expect(left, text).toEqual([]); // nothing left behind silently (the title and the song were, before deleteOps was fixed)
+      expect(r.steps.map((s) => s.op), text).toEqual(r.ops.map((o) => o.op));
+    }
+    // a locked track is left alone and named
+    const locked = interpret('מחק את הקליפים', context(variants.lockedTrack(fx.doc, fx.musicTrack), { selection: [] })) as BarPlan;
+    expect(JSON.stringify(locked.ops)).not.toContain(fx.song);
+    expect(locked.notes.map((n) => n.code)).toContain('skipped_locked');
+  });
   it('says how many later clips move', () => {
     const r = interpret('מחק את הקליפ', context(fx.doc, { selection: [fx.c2] })) as BarPlan;
     expect(r.notes).toContainEqual({ code: 'ripple_moves', data: { moved: deleteOps(fx.doc, [fx.c2], true)!.moved } });

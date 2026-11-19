@@ -16,6 +16,8 @@ export const COMMAND_BAR_TESTIDS = {
   incomplete: 'bar-incomplete', refused: 'bar-refused', unknown: 'bar-unknown',
   // a nearest command offered under an unknown request (role=option, data-command-id or data-intent), at most 5
   nearest: 'bar-nearest',
+  // the server's English words beside a refusal that has no Hebrew wording, marked «בלשון השרת, לא תורגם» (lang=en)
+  untranslated: 'bar-untranslated',
   // «הפרויקט השתנה — בדקו שוב» after a 409 (the plan was made again)
   stale: 'bar-stale',
   // the one polite live region of the dialog (role=status aria-live=polite)
@@ -30,6 +32,8 @@ export const COMMAND_BAR_TESTIDS = {
   settingsPriceIn: 'assistant-price-in', settingsPriceOut: 'assistant-price-out', settingsMonthly: 'assistant-monthly-limit', settingsCap: 'assistant-request-cap',
   settingsSpent: 'assistant-spent', settingsToggleTitles: 'assistant-send-titles', settingsTogglePeople: 'assistant-send-people',
   settingsWhatIsSent: 'assistant-what-is-sent', settingsSetup: 'assistant-setup',
+  // a refusal of a Settings save (owner_required, host_not_allowed, a price of 0…) in words, with its next step
+  settingsRefused: 'assistant-refused',
 } as const;
 export type CommandBarTestId = (typeof COMMAND_BAR_TESTIDS)[keyof typeof COMMAND_BAR_TESTIDS];
 /** DOM ids: the result row is an option of the palette (CommandPalette.tsx optionDomId('bar')), the preview is what the input's aria-describedby names. */
