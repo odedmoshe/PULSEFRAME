@@ -114,6 +114,31 @@ describe('the strict commit', () => {
 });
 
 describe('the re-plan on 409', () => {
+  it('keeps the mark of a re-planned preview that was rendered before the commit resumed, so Enter commits it', async () => {
+    const rev = { n: 7 };
+    let n = 0;
+    const ref: { show?: (q: string) => void; session?: ReturnType<typeof make>['session'] } = {};
+    const ok = committed();
+    const { session, show } = make((_q, c) => planAt(c.revision), async () => {
+      if (n++) return ok();
+      rev.n = 9;
+      // the store reload re-plans and the palette renders and marks the new preview before commitExact returns
+      ref.show!('x'); ref.session!.markRendered(ref.session!.view.entries[0]!.target);
+      return { kind: 'stale', currentRevision: 9 };
+    }, rev);
+    ref.show = show; ref.session = session;
+    show('x'); session.markRendered(session.view.entries[0]!.target);
+    expect(await session.activate(BAR_KEYS.result)).toBe('stale');
+    expect(session.rendered).not.toBeNull();
+    expect(await session.activate(BAR_KEYS.result)).toBe('committed');
+  });
+  it('a refusal shows the server next step when it gave one', async () => {
+    const { session, show } = make(() => planAt(7), async () => ({ kind: 'failed', code: 'overlap', message: 'no room', hint: 'move the clip' }));
+    show('x'); session.markRendered(session.view.entries[0]!.target);
+    await session.activate(BAR_KEYS.result);
+    expect(session.failure).toEqual({ code: 'overlap', text: 'no room', hint: 'move the clip' });
+  });
+
   it('plans again on the new revision, shows «הפרויקט השתנה — בדקו שוב», keeps the palette open and commits nothing more', async () => {
     const rev = { n: 7 };
     const { calls, session, show } = make((_q, c) => planAt(c.revision), async () => { rev.n = 9; return { kind: 'stale', currentRevision: 9 }; }, rev);

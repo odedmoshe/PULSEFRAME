@@ -77,7 +77,7 @@ function Section({ slot, query, activeKey, onHover, optionDomId }: BarSectionPro
       <PreviewPanel entry={shown} result={r} lang={lang} query={query} rate={rate} busy={slot.pending || session.busy} />
       {session.busy && <p className="pf-bar-hint" role="presentation">{barText(lang, 'busy.line')}</p>}
       {session.stale && <p className="pf-bar-stale" data-testid={TID.stale}>{barText(lang, 'stale.line')}</p>}
-      {session.failure && <p className="pf-bar-stale" data-testid={TID.refused} data-code={session.failure.code}><bdi dir="auto">{session.failure.text}</bdi> {barText(lang, 'fail.hint')}</p>}
+      {session.failure && <p className="pf-bar-stale" data-testid={TID.refused} data-code={session.failure.code}><bdi dir="auto">{session.failure.text}</bdi> {session.failure.hint ?? barText(lang, 'fail.hint')}</p>}
     </div>
   );
 }

@@ -146,7 +146,7 @@ export function portOf(editor: Editor): BarPort {
 }
 
 export type Activation = 'committed' | 'action' | 'stale' | 'failed' | 'blocked' | 'not_rendered' | 'nothing';
-export interface BarFailure { code: string; text: string }
+export interface BarFailure { code: string; text: string; /** the server's own next step, when it gave one */ hint?: string }
 
 /** Everything between the rows and the editor: the shown view, what was rendered, the strict commit, the actions. */
 export class BarSession {
@@ -239,14 +239,16 @@ export class BarSession {
     }
     if (r.kind === 'stale') {
       // the editor reloaded the document: plan again on it and show the new preview; nothing the owner did not see is committed
-      this.stale = true; this.rendered = null;
+      this.stale = true;
+      // clear only the mark of the plan that was just refused: the re-plan may already be on screen and marked (the reload renders before this resumes)
+      if (this.rendered === plan.planHash) this.rendered = null;
       this.view = viewOf(this.view.query, this.port.context(), this.interpret);
       this.live.say(dict(lang, 'bar.projectChanged'));
       this.bump();
       return 'stale';
     }
     const reason = translateRefusal(lang, r.message) ?? r.message;
-    this.failure = { code: r.code, text: reason };
+    this.failure = { code: r.code, text: reason, ...(r.hint ? { hint: r.hint } : {}) };
     this.live.say(plain(barText(lang, 'live.failed', { reason })));
     this.bump();
     return 'failed';
