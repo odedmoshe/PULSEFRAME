@@ -8,6 +8,7 @@
  * "and a half". Signs: מינוס / פחות / minus / - / +. «1,5» is ambiguous (a decimal comma or a thousands comma) and asks.
  */
 import { BAR_NUMBER_MAX, type BarExact, type BarToken, type ParseNumber } from '../commandBarContract.ts';
+import { dict } from './dict.ts';
 
 // ---------- exact arithmetic ----------
 const gcd = (a: bigint, b: bigint): bigint => { a = a < 0n ? -a : a; b = b < 0n ? -b : b; while (b) [a, b] = [b, a % b]; return a; };
@@ -48,7 +49,7 @@ export function exFromDecimal(s: string): BarExact | null {
 
 // ---------- the word tables (every form listed) ----------
 /** 1–9: feminine, masculine and construct forms, with the common spellings. */
-export const HE_UNITS: Readonly<Record<string, number>> = {
+export const HE_UNITS: Readonly<Record<string, number>> = dict({
   'אחת': 1, 'אחד': 1,
   'שתיים': 2, 'שתים': 2, 'שניים': 2, 'שנים': 2, 'שתי': 2, 'שני': 2,
   'שלוש': 3, 'שלש': 3, 'שלושה': 3, 'שלשה': 3, 'שלושת': 3, 'שלשת': 3,
@@ -58,32 +59,32 @@ export const HE_UNITS: Readonly<Record<string, number>> = {
   'שבע': 7, 'שבעה': 7, 'שבעת': 7,
   'שמונה': 8, 'שמונת': 8,
   'תשע': 9, 'תשעה': 9, 'תשעת': 9,
-};
+});
 /** 10 alone. */
-export const HE_TEN: Readonly<Record<string, number>> = { 'עשר': 10, 'עשרה': 10, 'עשרת': 10 };
+export const HE_TEN: Readonly<Record<string, number>> = dict({ 'עשר': 10, 'עשרה': 10, 'עשרת': 10 });
 /** The teens, two words each, both genders (11–19). The second word is עשרה (feminine) or עשר (masculine). */
-export const HE_TEENS: Readonly<Record<string, number>> = {
+export const HE_TEENS: Readonly<Record<string, number>> = dict({
   'אחת עשרה': 11, 'אחד עשר': 11, 'שתים עשרה': 12, 'שתיים עשרה': 12, 'שנים עשר': 12, 'שניים עשר': 12, 'שלוש עשרה': 13, 'שלושה עשר': 13,
   'ארבע עשרה': 14, 'ארבעה עשר': 14, 'חמש עשרה': 15, 'חמישה עשר': 15, 'חמשה עשר': 15, 'שש עשרה': 16, 'שישה עשר': 16, 'ששה עשר': 16,
   'שבע עשרה': 17, 'שבעה עשר': 17, 'שמונה עשרה': 18, 'שמונה עשר': 18, 'תשע עשרה': 19, 'תשעה עשר': 19,
-};
-export const HE_TENS: Readonly<Record<string, number>> = { 'עשרים': 20, 'שלושים': 30, 'שלשים': 30, 'ארבעים': 40, 'חמישים': 50, 'חמשים': 50, 'שישים': 60, 'ששים': 60, 'שבעים': 70, 'שמונים': 80, 'תשעים': 90 };
-export const HE_HUNDREDS: Readonly<Record<string, number>> = {
+});
+export const HE_TENS: Readonly<Record<string, number>> = dict({ 'עשרים': 20, 'שלושים': 30, 'שלשים': 30, 'ארבעים': 40, 'חמישים': 50, 'חמשים': 50, 'שישים': 60, 'ששים': 60, 'שבעים': 70, 'שמונים': 80, 'תשעים': 90 });
+export const HE_HUNDREDS: Readonly<Record<string, number>> = dict({
   'מאה': 100, 'מאתיים': 200, 'שלוש מאות': 300, 'ארבע מאות': 400, 'חמש מאות': 500, 'שש מאות': 600, 'שבע מאות': 700, 'שמונה מאות': 800, 'תשע מאות': 900,
-};
-export const HE_THOUSANDS: Readonly<Record<string, number>> = {
+});
+export const HE_THOUSANDS: Readonly<Record<string, number>> = dict({
   'אלף': 1000, 'אלפיים': 2000, 'שלושת אלפים': 3000, 'ארבעת אלפים': 4000, 'חמשת אלפים': 5000, 'ששת אלפים': 6000, 'שבעת אלפים': 7000, 'שמונת אלפים': 8000, 'תשעת אלפים': 9000,
   'מיליון': 1_000_000,
-};
-export const EN_UNITS: Readonly<Record<string, number>> = {
+});
+export const EN_UNITS: Readonly<Record<string, number>> = dict({
   one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15,
   sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
-};
-export const EN_TENS: Readonly<Record<string, number>> = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+});
+export const EN_TENS: Readonly<Record<string, number>> = dict({ twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 });
 /** Fractions said alone or after a whole («וחצי»); the plural forms only after a count («שני שלישים», «שלושה רבעים»). */
-export const FRACTIONS: Readonly<Record<string, BarExact>> = { 'חצי': ex(1n, 2n), 'רבע': ex(1n, 4n), 'שליש': ex(1n, 3n), half: ex(1n, 2n), quarter: ex(1n, 4n), third: ex(1n, 3n) };
-export const FRACTION_PLURALS: Readonly<Record<string, bigint>> = { 'רבעים': 4n, 'רבעי': 4n, 'שלישים': 3n, 'שלישי': 3n, quarters: 4n, thirds: 3n };
-export const SIGN_WORDS: Readonly<Record<string, -1 | 1>> = { 'מינוס': -1, 'פחות': -1, minus: -1, '-': -1, '+': 1, 'פלוס': 1, plus: 1 };
+export const FRACTIONS: Readonly<Record<string, BarExact>> = dict({ 'חצי': ex(1n, 2n), 'רבע': ex(1n, 4n), 'שליש': ex(1n, 3n), half: ex(1n, 2n), quarter: ex(1n, 4n), third: ex(1n, 3n) });
+export const FRACTION_PLURALS: Readonly<Record<string, bigint>> = dict({ 'רבעים': 4n, 'רבעי': 4n, 'שלישים': 3n, 'שלישי': 3n, quarters: 4n, thirds: 3n });
+export const SIGN_WORDS: Readonly<Record<string, -1 | 1>> = dict({ 'מינוס': -1, 'פחות': -1, minus: -1, '-': -1, '+': 1, 'פלוס': 1, plus: 1 });
 /** English helpers inside a number ("a hundred", "and a half"). */
 const EN_HUNDRED = 'hundred', EN_THOUSAND = 'thousand', EN_MILLION = 'million';
 

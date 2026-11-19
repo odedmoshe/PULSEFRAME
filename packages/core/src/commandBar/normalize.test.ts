@@ -6,6 +6,9 @@
 import { describe, expect, it } from 'vitest';
 import { normWord, stripProclitics, tokenize } from './normalize.ts';
 import { tokenizeBar } from './match.ts';
+import { readAmount } from './time.ts';
+import { interpret } from './index.ts';
+import { context, fixture } from './fixture.testFixture.ts';
 
 const toks = (s: string) => tokenizeBar(s).tokens;
 const kinds = (s: string) => toks(s).map((t) => `${t.kind}:${t.prefixes.join('')}${t.prefixes.length ? '+' : ''}${t.norm}`);
@@ -102,5 +105,42 @@ describe('proclitics', () => {
   });
   it('strips nothing when no word is known', () => {
     expect(tokenize('בשנייה', () => false).tokens[0]).toMatchObject({ norm: 'בשנייה', prefixes: [] });
+  });
+});
+
+describe('words that are Object.prototype keys are plain words', () => {
+  const PROTO = ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf', 'isPrototypeOf'];
+  it('every token norm is a string, and none of these words is a unit', () => {
+    for (const w of PROTO) {
+      for (const text of [w, `3${w}`, `x${w}`, `ב${w}`, `${w} 3 שניות`]) {
+        for (const t of toks(text)) {
+          expect(typeof t.norm, `${text}: ${t.raw}`).toBe('string');
+          expect(t.kind === 'unit' && t.raw.toLowerCase().includes(w.toLowerCase()), `${text}: ${t.raw} is a unit`).toBe(false);
+        }
+      }
+    }
+    expect(kinds('constructor __proto__')).toEqual(['word:constructor', 'word:__proto__']);
+  });
+  it('the time reader does not take them for units, duals or ordinals', () => {
+    for (const w of PROTO) {
+      for (const text of [w, `3 ${w}`, `בשנייה ה${w}`, `שנייה ו${w}`]) {
+        const tokens = toks(text);
+        // a hand-made unit token with that norm, as the time reader would see it from any other tokenizer
+        const forged = [{ kind: 'unit' as const, raw: w, norm: w, start: 0, end: w.length, prefixes: [], maqaf: false }];
+        expect(() => readAmount(tokens, 0), text).not.toThrow();
+        expect(readAmount(forged, 0), `${w} as a unit token`).toBeNull();
+        // «בשנייה ה<w>» is one second followed by an unread word, never an ordinal
+        const ord = readAmount([{ ...toks('בשנייה')[0]! }, { ...forged[0]!, kind: 'word', prefixes: ['ה'] }], 0);
+        expect(ord?.alternatives, `בשנייה ה${w}`).toBeUndefined();
+        expect(ord?.end, `בשנייה ה${w}`).toBe(1);
+      }
+    }
+  });
+  it('interpret keeps them as unread words', () => {
+    for (const w of PROTO) {
+      const r = interpret(w, context(fixture().doc));
+      expect(JSON.parse(JSON.stringify(r.tokens))).toEqual(r.tokens.map((t) => ({ ...t })));
+      for (const t of r.tokens) expect(typeof t.norm).toBe('string');
+    }
   });
 });

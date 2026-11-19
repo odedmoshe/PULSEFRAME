@@ -13,24 +13,25 @@
 import * as T from '@pulseframe/time';
 import { BAR_NUMBER_MAX, type BarExact, type BarTime, type BarToken, type ParseTime } from '../commandBarContract.ts';
 import { ex, exAdd, exCmp, exIsInt, exMul, fractionTail, readNumber } from './numbers.ts';
+import { dict } from './dict.ts';
 
 export type TimeUnit = 'frame' | 'second' | 'minute' | 'hour';
 /** Unit words, as the tokenizer leaves them (unit tokens are already canonical: s, f, min). Every form listed. */
-export const UNIT_FORMS: Readonly<Record<string, TimeUnit>> = {
+export const UNIT_FORMS: Readonly<Record<string, TimeUnit>> = dict({
   'פריים': 'frame', 'פריימים': 'frame', frame: 'frame', frames: 'frame', f: 'frame',
   'שנייה': 'second', 'שניה': 'second', 'שניות': 'second', s: 'second', second: 'second', seconds: 'second',
   'דקה': 'minute', 'דקות': 'minute', min: 'minute', minute: 'minute', minutes: 'minute',
   'שעה': 'hour', 'שעות': 'hour', hour: 'hour', hours: 'hour',
-};
+});
 /** The singular forms, which take the ordinal position form «בשנייה 3». */
 export const SINGULAR_UNITS: ReadonlySet<string> = new Set(['פריים', 'שנייה', 'שניה', 'דקה', 'שעה', 'frame', 'second', 'minute', 'hour', 's', 'f', 'min']);
 /** Duals: two of the unit in one word. */
-export const DUAL_FORMS: Readonly<Record<string, TimeUnit>> = { 'דקותיים': 'minute', 'שעתיים': 'hour' };
+export const DUAL_FORMS: Readonly<Record<string, TimeUnit>> = dict({ 'דקותיים': 'minute', 'שעתיים': 'hour' });
 /** Ordinal words (masculine and feminine) for «בשנייה השלישית». */
-export const ORDINALS: Readonly<Record<string, number>> = {
+export const ORDINALS: Readonly<Record<string, number>> = dict({
   'ראשון': 1, 'ראשונה': 1, 'שני': 2, 'שנייה': 2, 'שניה': 2, 'שלישי': 3, 'שלישית': 3, 'רביעי': 4, 'רביעית': 4, 'חמישי': 5, 'חמישית': 5,
   'שישי': 6, 'שישית': 6, 'שביעי': 7, 'שביעית': 7, 'שמיני': 8, 'שמינית': 8, 'תשיעי': 9, 'תשיעית': 9, 'עשירי': 10, 'עשירית': 10,
-};
+});
 export const timeWords = (): string[] => [...Object.keys(UNIT_FORMS), ...Object.keys(DUAL_FORMS), ...Object.keys(ORDINALS)];
 
 /** An exact amount of time: rational seconds plus frames (frames must come out whole). */

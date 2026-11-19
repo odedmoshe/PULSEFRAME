@@ -18,6 +18,7 @@ import type { BarWorkspace, ExportDestinationId, IntentId } from '../commandBarC
 import { COLOR_LOOKS } from '../looks.ts';
 import { EFFECTS, TRANSITIONS } from '../effects.ts';
 import { TEXT_PRESETS } from '../textPresets.ts';
+import { dict } from './dict.ts';
 
 // ---------- verbs: every form listed ----------
 /** Imperative m., f., pl., future as imperative (m., f., pl. where in use), infinitive; then English. */
@@ -209,12 +210,12 @@ export const DESTINATION_WORDS: Readonly<Record<ExportDestinationId, readonly st
 };
 export const LANGUAGE_WORDS: Readonly<Record<'he' | 'en', readonly string[]>> = { he: ['*:עברית', 'hebrew'], en: ['*:אנגלית', 'english'] };
 /** What «פתח …» opens (core BAR_OPEN_COMMANDS). REVIEW: העלאה מהנייד, סרט המשפחה. */
-export const OPEN_WORDS: Readonly<Record<string, readonly string[]>> = {
+export const OPEN_WORDS: Readonly<Record<string, readonly string[]>> = dict({
   'view.openTemplates': ['תבניות', 'את התבניות', 'templates'],
   'view.openFamilyFilm': ['סרט משפחתי', 'סרט המשפחה', 'family film'],
   'file.phoneDrop': ['העלאה מהטלפון', 'העלאה מהנייד', 'העלה מהטלפון', 'מ:טלפון', 'מ:נייד', 'phone upload', 'upload from phone', 'from phone'],
   'life.people': ['אנשים', 'people'],
-};
+});
 /** Words for a fade's edge. */
 export const FADE_EDGE: Readonly<Record<'in' | 'out', readonly string[]>> = {
   in: ['ב:התחלה', 'פנימה', 'כניסה', 'in', 'at the start'],
@@ -227,7 +228,7 @@ export const STYLE_MARK = ['ב:סגנון', 'סגנון', 'in style', 'style', '
  * Look synonyms not in the catalogue (REVIEW, all of them): the plan's example «החל מראה חם» names no catalogue look, so
  * «חם» is listed here as 'warm-sun' and «קר» as 'cool-morning'. The owner decides whether they stay.
  */
-export const LOOK_SYNONYMS: Readonly<Record<string, string>> = { 'חם': 'warm-sun', 'חמים': 'warm-sun', 'קר': 'cool-morning', warm: 'warm-sun', cool: 'cool-morning' };
+export const LOOK_SYNONYMS: Readonly<Record<string, string>> = dict({ 'חם': 'warm-sun', 'חמים': 'warm-sun', 'קר': 'cool-morning', warm: 'warm-sun', cool: 'cool-morning' });
 
 export interface CatalogName { id: string; phrase: string }
 /** Every name of a catalogue, Hebrew and English. */

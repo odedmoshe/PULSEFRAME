@@ -12,6 +12,7 @@
  *   proclitic before a maqaf, a number, a timecode or a quote («ב־3», «ו־10», ל"…") becomes that token's prefix.
  */
 import type { BarToken } from '../commandBarContract.ts';
+import { dict } from './dict.ts';
 
 const HEB = /[א-ת]/;
 const isHeb = (c: string | undefined) => !!c && HEB.test(c);
@@ -26,7 +27,7 @@ export const PROCLITIC_PAIRS = ['וה', 'וב', 'ול', 'ומ', 'וש', 'שה', 
 const LONE_PROCLITIC = new Set<string>([...PROCLITICS, ...PROCLITIC_PAIRS]);
 
 /** Quote openers and the closers each accepts. */
-const QUOTES: Record<string, string[]> = { '"': ['"', '״', '”'], '״': ['״', '"', '”'], '“': ['”', '“', '"'], '„': ['“', '”', '"'], '«': ['»'], "'": ["'", '’'] };
+const QUOTES: Readonly<Record<string, string[]>> = dict({ '"': ['"', '״', '”'], '״': ['״', '"', '”'], '“': ['”', '“', '"'], '„': ['“', '”', '"'], '«': ['»'], "'": ["'", '’'] });
 
 /** Lower-case Latin, NFC, niqqud out, geresh and gershayim unified. Not for quoted text. */
 export function normWord(raw: string): string {
@@ -36,7 +37,7 @@ export function normWord(raw: string): string {
 }
 
 /** The unit abbreviations a token can be (normal form → canonical unit). */
-const UNIT_WORDS: Record<string, string> = { s: 's', sec: 's', secs: 's', f: 'f', fr: 'f', min: 'min', db: 'db', '%': '%', x: 'x', '×': 'x', 'ש׳': 's', 'שנ׳': 's', 'דק׳': 'min', 'דצ״ב': 'db' };
+const UNIT_WORDS: Readonly<Record<string, string>> = dict({ s: 's', sec: 's', secs: 's', f: 'f', fr: 'f', min: 'min', db: 'db', '%': '%', x: 'x', '×': 'x', 'ש׳': 's', 'שנ׳': 's', 'דק׳': 'min', 'דצ״ב': 'db' });
 const TRAIL_PUNCT = /[.,!?;:)\]}…»”"״]+$/;
 const LEAD_PUNCT = /^[([{«“„]+/;
 

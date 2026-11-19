@@ -75,3 +75,18 @@ describe('what is not one number', () => {
     expect([exText(ex(3n, 2n)), exText(ex(-1n, 4n)), exText(ex(1n, 3n)), exText(ex(7n)), exText(ex(1n, 1000000n))]).toEqual(['1.5', '-0.25', '1/3', '7', '0.000001']);
   });
 });
+
+describe('Object.prototype keys are not number words', () => {
+  it('«constructor», «__proto__», «toString» and «valueOf» read as no number, alone and in a phrase', () => {
+    for (const w of ['constructor', '__proto__', 'toString', 'valueOf', 'hasOwnProperty']) {
+      for (const text of [w, `${w} ${w}`, `מינוס ${w}`, `3 ${w}`, `שלוש ו${w}`]) {
+        const tokens = tokenizeBar(text).tokens;
+        const at = tokens.findIndex((t) => t.raw.includes(w));
+        expect(readNumber(tokens, at), text).toBeNull();
+      }
+      // a hand-made word token with that exact norm (the tokenizer lower-cases; other callers may not)
+      expect(readNumber([{ kind: 'word', raw: w, norm: w, start: 0, end: w.length, prefixes: [], maqaf: false }], 0), w).toBeNull();
+    }
+    expect(readNumber(tokenizeBar('שלוש constructor').tokens, 0)).toMatchObject({ value: { num: 3n, den: 1n }, end: 1 });
+  });
+});
