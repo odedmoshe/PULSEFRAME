@@ -9,7 +9,8 @@
  *     maxOutputTokens, the byte bound and the reservation in cents;
  *  2. reserve: Governance.reserveAssistant, atomic against the monthly limit and the per-request cap (402 budget_exceeded,
  *     the job is closed as failed, nothing is sent). The amount is the byte-bound estimate
- *     ceil((B·pIn + maxOut·pOut) / 1e6) when the adapter declares bytesBoundTokens, else the whole per-request cap;
+ *     ceil((B·pIn + maxOut·pOut) / 1e6) when the adapter declares bytesBoundTokens, else the whole per-request cap
+ *     (and then a request whose estimate is above the cap is refused with 402 before the reservation);
  *  3. submit (running; stage sending, then awaiting-provider) with the cancel's abort signal and the job id as the
  *     idempotency key. `unknown_after_send`, or any failure the adapter does not classify, after the call started →
  *     submission-unknown: the ledger stays unknown (counted) and NOTHING is retried (SPEC §20);
@@ -112,6 +113,10 @@ export class AssistantJobs {
       reservedCents: reserveCents, reservationBasis: adapter.bytesBoundTokens ? 'byte-bound estimate' : 'per-request cap',
     });
     try {
+      // plan §7.4 step 2: tokens not bounded by bytes → the reservation is the whole cap, so the cap check inside
+      // reserveAssistant cannot see the estimate; refuse here when the estimate itself is above the cap (nothing is sent)
+      if (!adapter.bytesBoundTokens && estimate > c.perRequestCapCents)
+        throw new ApiError(402, 'budget_exceeded', 'this request is estimated to cost more than the per-request cap', { perRequestCapCents: c.perRequestCapCents, estimateCents: estimate, bytesBoundTokens: false }, 'Shorten the request, or raise the per-request cap in Settings.');
       gov.reserveAssistant(principal, projectId, job.id, reserveCents, { monthlyLimitCents: c.monthlyLimitCents, perRequestCapCents: c.perRequestCapCents });
     } catch (e) {
       store.updateJob(job.id, { status: 'failed', stage: null, error: e instanceof ApiError ? e.toJSON().error : { code: 'budget_error', message: String(e) } });

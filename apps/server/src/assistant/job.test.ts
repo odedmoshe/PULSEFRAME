@@ -78,6 +78,18 @@ describe('the reservation', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(s.adapter.calls).toBe(0);
   });
+  it('tokens not bounded by bytes and the estimate above the per-request cap → 402 before the reservation; the adapter was called 0 times', async () => {
+    const s = setup({ bytesBoundTokens: false, cap: 5, script: [mockToolAnswer([split('x')], 'MOCK proposal', { inputTokens: 140_000, outputTokens: 100 })] });
+    const r = refusal(() => s.jobs.start(owner, s.pid, s.body));
+    expect(r).toMatchObject({ status: 402, code: 'budget_exceeded', details: { perRequestCapCents: 5 } });
+    expect((r.details as { estimateCents: number }).estimateCents).toBeGreaterThan(5);
+    expect(r.hint).toBeTruthy();
+    const job = s.store.db.prepare('SELECT id, status FROM jobs WHERE type = ?').get(ASSISTANT_JOB_TYPE) as { id: string; status: string };
+    expect(job.status).toBe('failed');
+    expect(s.gov.ledgerFor(job.id)).toBeNull();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(s.adapter.calls).toBe(0);
+  });
   it('budget exceeded (monthly limit) → 402; nothing sent', () => {
     const s = setup({ monthly: 20, cap: 10_000 });
     expect(refusal(() => s.jobs.start(owner, s.pid, s.body))).toMatchObject({ status: 402, code: 'budget_exceeded' });
