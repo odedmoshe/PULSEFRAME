@@ -16,6 +16,7 @@
 import * as T from '@pulseframe/time';
 import type { Clip, MediaClip, ProjectDocument } from './schema.ts';
 import { sourceAt, sourceEnd, timelineAt } from './speed.ts';
+import { own } from './own.ts';
 
 /** How far before and after a moment the beats around it are listed (seconds of timeline). */
 export const BEAT_WINDOW_SECONDS = 2;
@@ -128,7 +129,7 @@ export function followedBeats(doc: ProjectDocument, from: number, to: number, se
 }
 
 export function beatPositionAt(doc: ProjectDocument, time: T.RationalTime, sequenceId = doc.mainSequenceId): BeatPosition | null {
-  const seq = doc.sequences[sequenceId];
+  const seq = own(doc.sequences, sequenceId);
   if (!seq) return null;
   const now = T.toSeconds(time), from = now - BEAT_WINDOW_SECONDS, to = now + BEAT_WINDOW_SECONDS;
   // Every followable clip that plays within the window, in the order in which they are preferred: at each moment the

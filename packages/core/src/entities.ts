@@ -8,6 +8,7 @@
  */
 import * as T from '@pulseframe/time';
 import type { Analysis, Asset, Clip, LifeEvent, Marker, MulticamGroup, Person, ProjectDocument, RecipeRun, Sequence, Track, Transcript, Variant } from './schema.ts';
+import { isInheritedName, own } from './own.ts';
 import type { MotionTrack } from './tracking.ts';
 
 export type EntityState =
@@ -143,6 +144,8 @@ export interface RestoreTarget { id: string; state: EntityState | null }
 /** Set each listed entity to the given state (null = absent). Mutates `draft`. Order-independent. */
 export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]): void {
   const removeClip = (id: string) => { for (const s of Object.values(draft.sequences)) for (const t of s.tracks) { const i = t.clips.findIndex((c) => c.id === id); if (i >= 0) t.clips.splice(i, 1); } };
+  // An entry is stored under the id its recorded state carries. `record['__proto__'] = entry` would replace the record's prototype instead of adding an entry, so such an id is refused.
+  const put = <V>(record: Record<string, V>, key: string, value: V) => { if (isInheritedName(key)) throw new Error(`id "${key}" is reserved and cannot name an item`); record[key] = value; };
   const targeted = new Set(targets.map((t) => t.id));
   const removedSequences: string[] = [];
   // 0. sequences' own fields (ADR-0018), so restored tracks have a home: a missing sequence is created with no tracks, an
@@ -150,11 +153,11 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
   for (const { id, state } of targets) {
     if (state?.kind !== 'sequence') continue;
     const fields = structuredClone(state.sequence);
-    const existing = Object.hasOwn(draft.sequences, id) ? draft.sequences[id] : undefined;
+    const existing = own(draft.sequences, id);
     if (existing) {
       for (const k of Object.keys(existing)) if (k !== 'tracks' && !(k in fields)) delete (existing as Record<string, unknown>)[k];
       Object.assign(existing, fields);
-    } else draft.sequences[id] = { ...fields, tracks: [] };
+    } else put(draft.sequences, id, { ...fields, tracks: [] });
   }
   // 1. removals and in-place header/asset changes
   for (const { id, state } of targets) {
@@ -174,7 +177,7 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
       if (cur?.kind === 'person' && draft.people) { delete draft.people[cur.person.id]; if (Object.keys(draft.people).length === 0) delete draft.people; }
       if (cur?.kind === 'multicamGroup' && draft.multicam) { delete draft.multicam[cur.group.id]; if (Object.keys(draft.multicam).length === 0) delete draft.multicam; }
       if (cur?.kind === 'track') {
-        const seq = draft.sequences[cur.sequenceId]!;
+        const seq = own(draft.sequences, cur.sequenceId)!;
         const track = seq.tracks.find((t) => t.id === id)!;
         // The stricter undo rule (wave4-decisions.md, project-wide): a track goes only together with every clip it holds. A
         // clip the targets do not name was added later, and removing the track would delete it silently: refuse instead
@@ -184,21 +187,21 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
         seq.tracks.splice(seq.tracks.indexOf(track), 1);
       }
     } else if (state.kind === 'project') { draft.name = state.name; draft.settings = structuredClone(state.settings); }
-    else if (state.kind === 'asset') draft.assets[id] = structuredClone(state.asset);
-    else if (state.kind === 'transcript') draft.transcripts[state.transcript.assetId] = structuredClone(state.transcript);
-    else if (state.kind === 'analysis') draft.analyses[state.analysis.assetId] = structuredClone(state.analysis);
-    else if (state.kind === 'variant') draft.variants[state.variant.id] = structuredClone(state.variant);
-    else if (state.kind === 'recipeRun') draft.recipeRuns[state.run.id] = structuredClone(state.run);
-    else if (state.kind === 'marker') (draft.markers ??= {})[state.marker.id] = structuredClone(state.marker);
-    else if (state.kind === 'motionTrack') (draft.motionTracks ??= {})[state.track.id] = structuredClone(state.track);
-    else if (state.kind === 'lifeEvent') (draft.events ??= {})[state.event.id] = structuredClone(state.event);
-    else if (state.kind === 'person') (draft.people ??= {})[state.person.id] = structuredClone(state.person);
-    else if (state.kind === 'multicamGroup') (draft.multicam ??= {})[state.group.id] = structuredClone(state.group);
+    else if (state.kind === 'asset') put(draft.assets, id, structuredClone(state.asset));
+    else if (state.kind === 'transcript') put(draft.transcripts, state.transcript.assetId, structuredClone(state.transcript));
+    else if (state.kind === 'analysis') put(draft.analyses, state.analysis.assetId, structuredClone(state.analysis));
+    else if (state.kind === 'variant') put(draft.variants, state.variant.id, structuredClone(state.variant));
+    else if (state.kind === 'recipeRun') put(draft.recipeRuns, state.run.id, structuredClone(state.run));
+    else if (state.kind === 'marker') put((draft.markers ??= {}), state.marker.id, structuredClone(state.marker));
+    else if (state.kind === 'motionTrack') put((draft.motionTracks ??= {}), state.track.id, structuredClone(state.track));
+    else if (state.kind === 'lifeEvent') put((draft.events ??= {}), state.event.id, structuredClone(state.event));
+    else if (state.kind === 'person') put((draft.people ??= {}), state.person.id, structuredClone(state.person));
+    else if (state.kind === 'multicamGroup') put((draft.multicam ??= {}), state.group.id, structuredClone(state.group));
   }
   // 2. tracks (so restored clips have a home), lowest original index first
   for (const { id, state } of targets.filter((t) => t.state?.kind === 'track').sort((x, y) => (x.state as any).index - (y.state as any).index)) {
     if (state?.kind !== 'track') continue;
-    const seq = draft.sequences[state.sequenceId];
+    const seq = own(draft.sequences, state.sequenceId);
     if (!seq) throw new Error(`sequence ${state.sequenceId} missing`);
     const existing = seq.tracks.find((t) => t.id === id);
     if (existing) {
@@ -211,7 +214,7 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
   // 2b. track order: the tracks named in the target take that relative order, in the slots they occupy now; other tracks stay put
   for (const { state } of targets) {
     if (state?.kind !== 'trackOrder') continue;
-    const seq = draft.sequences[state.sequenceId];
+    const seq = own(draft.sequences, state.sequenceId);
     if (!seq) continue;
     const want = state.ids.filter((id) => seq.tracks.some((t) => t.id === id));
     const wanted = new Set(want);
@@ -222,7 +225,7 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
   // 3. clips
   for (const { state } of targets) {
     if (state?.kind !== 'clip') continue;
-    const track = draft.sequences[state.sequenceId]?.tracks.find((t) => t.id === state.trackId);
+    const track = own(draft.sequences, state.sequenceId)?.tracks.find((t) => t.id === state.trackId);
     if (!track) throw new Error(`track ${state.trackId} missing`);
     track.clips.push(structuredClone(state.clip));
     track.clips.sort((x, y) => T.cmp(x.start, y.start) || (x.id < y.id ? -1 : 1));

@@ -14,7 +14,7 @@ import { promisify } from 'node:util';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { AUTO_SELF_CHECK_CLEAN_EXPORTS, EXPORT_MODES, INCREMENTAL_NOT_BUILT_REASON, RENDER_CACHE_BLOCKERS, SEGMENTED_ROUTE, SELF_CHECK_MODES, type RenderCacheStatus, type SegmentedExportReport } from '@pulseframe/core';
-import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
+import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, own, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { AUDIO_FX_ENGINE, audioPlan, captionCues, soundEnd, type AudioPlan, type PlannedAudioClip } from '@pulseframe/engine';
 import { renderMix, type MixResult } from './audiomix.ts';
@@ -290,7 +290,7 @@ export class Exporter {
     // runs its voice, which reads the clip's source from before the range. That source is pinned and checked like any clip's file.
     if (sound) for (const c of sound.plan.clips) if (c.voice && !drawn.has(c.clipId) && sounds(c, sound.a, sound.b)) used.set(c.assetId, (used.get(c.assetId) ?? 0) + 1);
     const assets = [...used].flatMap(([id, clips]) => {
-      const a = Object.hasOwn(doc.assets, id) ? doc.assets[id] : undefined;
+      const a = own(doc.assets, id);
       if (!a) { blockers.push({ code: 'missing_media', message: `colour table ${id} named by an effect is not in the project library`, ids: [id] }); return []; }
       if (!blobPresent(this.store, a)) blockers.push({ code: 'missing_media', message: `source media for "${a.name}" is not available to the render worker`, ids: [id], hint: MISSING_MEDIA_HINT });
       return [{ id, contentHash: a.contentHash, byteSize: a.byteSize, kind: a.kind, clips }];
