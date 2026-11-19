@@ -27,6 +27,7 @@ import { animatableParams, BLEND_MODES, DEFAULT_MASK, EFFECTS, effectParams, fin
 import { velocityNeeds } from './transitionTiming.ts';
 import { adjustmentRefusal, clipEnd, forbidsOverlap, lutAssets, lutUsers, sequenceDuration, validateProject } from './validate.ts';
 import { frameOf } from './sequences.ts';
+import { cloneDocument } from './clone.ts';
 import { analysisEntityId, fingerprint, restoreEntities, trackOrderEntityId, transcriptEntityId, type EntityState } from './entities.ts';
 import { effectParamRange, effectParamsAt, sampleKeyframes, shiftKeyframes, transformAt, TRANSFORM_RANGE } from './animation.ts';
 import { channelWords, CurveHandlesSchema, isV1Easing, KEYFRAME_REFUSALS, MAX_EFFECT_KEYS, MAX_TRANSFORM_KEYS, type CurveHandles, type Easing, type InsertSplit, type Keyframe, type KeyframeRefusalKey, type ValueRange } from './keyframe.ts';
@@ -3871,11 +3872,17 @@ export function makeIdSource(seed: string): (prefix: string) => string {
 }
 
 /**
+ * Test hook (commit-equivalence.test.ts): true makes applyTransaction copy the document with structuredClone, as it did before
+ * cloneDocument (clone.ts), so the tests can run the reference path beside the fast one. Never set outside tests.
+ */
+export const REFERENCE_PATH = { on: false };
+
+/**
  * Apply ops all-or-nothing to a private copy. Never mutates `doc`. Throws OpError.
  * `allowInternal` is set only by trusted server code paths, never from request data.
  */
 export function applyTransaction(doc: ProjectDocument, ops: OpCall[], opts: { idSeed: string; actor: string; allowInternal?: boolean }): TransactionResult {
-  const draft = structuredClone(doc);
+  const draft = REFERENCE_PATH.on ? structuredClone(doc) : cloneDocument(doc);
   const ctx: OpContext = { newId: makeIdSource(opts.idSeed), actor: opts.actor };
   const results: TransactionResult['results'] = [];
   ops.forEach((call, index) => {

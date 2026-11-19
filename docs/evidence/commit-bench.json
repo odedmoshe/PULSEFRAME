@@ -1,0 +1,427 @@
+{
+  "about": "pnpm bench:commit (packages/evals/src/commit-bench.ts). Milliseconds per commit: median and p95 per phase, over `runs` runs after 5 warm-ups. `sum` adds the phases of the instrumented copy of Store.commit; `commit` is the real Store.commit on the same edit. One machine, one sample of it, under whatever else ran.",
+  "before": {
+    "ranAt": "2026-11-19T00:20:38.115Z",
+    "machine": "Intel(R) Xeon(R) Processor @ 2.30GHz ×4, node v22.23.4",
+    "quick": false,
+    "rows": [
+      {
+        "scenario": "10 clips: set_clip_transform on one clip",
+        "runs": 200,
+        "documentBytes": 4308,
+        "median": {
+          "load": 0.331,
+          "clone": 0.103,
+          "parse": 0.018,
+          "apply": 0.007,
+          "validate": 0.063,
+          "diff": 0.046,
+          "serialise": 0.068,
+          "write": 0.526,
+          "emit": 0.364,
+          "sum": 1.669,
+          "commit": 1.645
+        },
+        "p95": {
+          "load": 0.502,
+          "clone": 0.151,
+          "parse": 0.026,
+          "apply": 0.01,
+          "validate": 0.125,
+          "diff": 0.08,
+          "serialise": 0.122,
+          "write": 3.389,
+          "emit": 2.848,
+          "sum": 6.807,
+          "commit": 6.511
+        }
+      },
+      {
+        "scenario": "100 clips: set_clip_transform on one clip",
+        "runs": 200,
+        "documentBytes": 31629,
+        "median": {
+          "load": 0.612,
+          "clone": 0.392,
+          "parse": 0.016,
+          "apply": 0.008,
+          "validate": 0.158,
+          "diff": 0.159,
+          "serialise": 0.139,
+          "write": 0.694,
+          "emit": 0.328,
+          "sum": 2.658,
+          "commit": 2.715
+        },
+        "p95": {
+          "load": 0.995,
+          "clone": 0.616,
+          "parse": 0.038,
+          "apply": 0.013,
+          "validate": 0.29,
+          "diff": 0.274,
+          "serialise": 0.209,
+          "write": 5.161,
+          "emit": 2.399,
+          "sum": 7.539,
+          "commit": 8.641
+        }
+      },
+      {
+        "scenario": "1000 clips: set_clip_transform on one clip",
+        "runs": 60,
+        "documentBytes": 306794,
+        "median": {
+          "load": 5.1,
+          "clone": 3.555,
+          "parse": 0.032,
+          "apply": 0.028,
+          "validate": 1.388,
+          "diff": 1.717,
+          "serialise": 1.072,
+          "write": 2.672,
+          "emit": 0.394,
+          "sum": 17.135,
+          "commit": 16.334
+        },
+        "p95": {
+          "load": 8.747,
+          "clone": 6.986,
+          "parse": 0.051,
+          "apply": 0.058,
+          "validate": 4.265,
+          "diff": 3.761,
+          "serialise": 1.354,
+          "write": 11.414,
+          "emit": 0.73,
+          "sum": 26.907,
+          "commit": 27.692
+        }
+      },
+      {
+        "scenario": "2000 keys: set_keyframe (one key)",
+        "runs": 60,
+        "documentBytes": 150623,
+        "median": {
+          "load": 1.882,
+          "clone": 1.993,
+          "parse": 0.03,
+          "apply": 0.135,
+          "validate": 0.553,
+          "diff": 0.277,
+          "serialise": 1.624,
+          "write": 2.425,
+          "emit": 0.43,
+          "sum": 10.498,
+          "commit": 10.573
+        },
+        "p95": {
+          "load": 3.432,
+          "clone": 3.835,
+          "parse": 0.036,
+          "apply": 0.17,
+          "validate": 0.63,
+          "diff": 0.396,
+          "serialise": 3.409,
+          "write": 10.341,
+          "emit": 4.384,
+          "sum": 20.231,
+          "commit": 18.07
+        }
+      },
+      {
+        "scenario": "2000 keys: replace_clip_keyframes (2000 keys)",
+        "runs": 60,
+        "documentBytes": 150623,
+        "median": {
+          "load": 1.924,
+          "clone": 2.158,
+          "parse": 1.518,
+          "apply": 0.772,
+          "validate": 0.606,
+          "diff": 0.075,
+          "serialise": 2.169,
+          "write": 2.717,
+          "emit": 0.509,
+          "sum": 16.156,
+          "commit": 16.42
+        },
+        "p95": {
+          "load": 4.249,
+          "clone": 5.046,
+          "parse": 5.522,
+          "apply": 3.608,
+          "validate": 1.064,
+          "diff": 0.246,
+          "serialise": 4.637,
+          "write": 11.546,
+          "emit": 4.229,
+          "sum": 27.878,
+          "commit": 27.19
+        }
+      },
+      {
+        "scenario": "take: apply_take of 167 hits (299 steps)",
+        "runs": 40,
+        "documentBytes": 1767,
+        "median": {
+          "load": 0.307,
+          "clone": 0.086,
+          "parse": 1.208,
+          "apply": 13.992,
+          "validate": 0.514,
+          "diff": 0.085,
+          "serialise": 0.752,
+          "write": 3.288,
+          "emit": 0.588,
+          "sum": 21.496,
+          "commit": 19.896
+        },
+        "p95": {
+          "load": 0.578,
+          "clone": 0.148,
+          "parse": 4.237,
+          "apply": 26.984,
+          "validate": 1.787,
+          "diff": 0.145,
+          "serialise": 1.109,
+          "write": 13.405,
+          "emit": 4.177,
+          "sum": 41.763,
+          "commit": 33.978
+        }
+      }
+    ],
+    "live": {
+      "scenario": "perform live path: 200 taps, plan + applyTransaction in memory (Node)",
+      "runs": 40,
+      "plan": {
+        "median": 3.029,
+        "p95": 8.365,
+        "max": 9.61
+      },
+      "applyTransaction": {
+        "median": 13.302,
+        "p95": 22.619,
+        "max": 33.295
+      },
+      "total": {
+        "median": 16.581,
+        "p95": 27.849,
+        "max": 36.111
+      }
+    }
+  },
+  "after": {
+    "ranAt": "2026-11-19T00:37:15.813Z",
+    "machine": "Intel(R) Xeon(R) Processor @ 2.30GHz ×4, node v22.23.4",
+    "quick": false,
+    "rows": [
+      {
+        "scenario": "10 clips: set_clip_transform on one clip",
+        "runs": 200,
+        "documentBytes": 4308,
+        "median": {
+          "load": 0.297,
+          "clone": 0.052,
+          "parse": 0.016,
+          "apply": 0.007,
+          "validate": 0.05,
+          "diff": 0.038,
+          "serialise": 0.063,
+          "write": 0.463,
+          "emit": 0.271,
+          "sum": 1.279,
+          "commit": 1.293
+        },
+        "p95": {
+          "load": 0.406,
+          "clone": 0.082,
+          "parse": 0.021,
+          "apply": 0.008,
+          "validate": 0.105,
+          "diff": 0.082,
+          "serialise": 0.106,
+          "write": 0.748,
+          "emit": 0.474,
+          "sum": 2.107,
+          "commit": 2.003
+        }
+      },
+      {
+        "scenario": "100 clips: set_clip_transform on one clip",
+        "runs": 200,
+        "documentBytes": 31629,
+        "median": {
+          "load": 0.578,
+          "clone": 0.138,
+          "parse": 0.014,
+          "apply": 0.007,
+          "validate": 0.079,
+          "diff": 0.107,
+          "serialise": 0.128,
+          "write": 0.64,
+          "emit": 0.278,
+          "sum": 2.033,
+          "commit": 2.032
+        },
+        "p95": {
+          "load": 0.762,
+          "clone": 0.188,
+          "parse": 0.018,
+          "apply": 0.008,
+          "validate": 0.174,
+          "diff": 0.153,
+          "serialise": 0.176,
+          "write": 1.082,
+          "emit": 0.452,
+          "sum": 3.345,
+          "commit": 3.134
+        }
+      },
+      {
+        "scenario": "1000 clips: set_clip_transform on one clip",
+        "runs": 60,
+        "documentBytes": 306794,
+        "median": {
+          "load": 5.258,
+          "clone": 1.536,
+          "parse": 0.026,
+          "apply": 0.022,
+          "validate": 0.691,
+          "diff": 1.1,
+          "serialise": 1.093,
+          "write": 2.673,
+          "emit": 0.404,
+          "sum": 12.919,
+          "commit": 12.752
+        },
+        "p95": {
+          "load": 8.101,
+          "clone": 2.858,
+          "parse": 0.053,
+          "apply": 0.04,
+          "validate": 2.025,
+          "diff": 2.011,
+          "serialise": 1.727,
+          "write": 10.211,
+          "emit": 0.718,
+          "sum": 22.573,
+          "commit": 21.419
+        }
+      },
+      {
+        "scenario": "2000 keys: set_keyframe (one key)",
+        "runs": 60,
+        "documentBytes": 150623,
+        "median": {
+          "load": 1.973,
+          "clone": 0.528,
+          "parse": 0.023,
+          "apply": 0.088,
+          "validate": 0.389,
+          "diff": 0.206,
+          "serialise": 1.721,
+          "write": 2.361,
+          "emit": 0.398,
+          "sum": 7.848,
+          "commit": 8.105
+        },
+        "p95": {
+          "load": 4.376,
+          "clone": 0.868,
+          "parse": 0.049,
+          "apply": 0.131,
+          "validate": 0.683,
+          "diff": 0.277,
+          "serialise": 2.204,
+          "write": 9.789,
+          "emit": 0.672,
+          "sum": 15.343,
+          "commit": 16.524
+        }
+      },
+      {
+        "scenario": "2000 keys: replace_clip_keyframes (2000 keys)",
+        "runs": 60,
+        "documentBytes": 150623,
+        "median": {
+          "load": 1.9,
+          "clone": 0.521,
+          "parse": 1.313,
+          "apply": 0.494,
+          "validate": 0.359,
+          "diff": 0.061,
+          "serialise": 2.158,
+          "write": 2.521,
+          "emit": 0.401,
+          "sum": 10.842,
+          "commit": 11.401
+        },
+        "p95": {
+          "load": 3.347,
+          "clone": 0.82,
+          "parse": 3.022,
+          "apply": 1.734,
+          "validate": 1.655,
+          "diff": 0.102,
+          "serialise": 2.941,
+          "write": 11.233,
+          "emit": 0.674,
+          "sum": 19.415,
+          "commit": 20.85
+        }
+      },
+      {
+        "scenario": "take: apply_take of 167 hits (299 steps)",
+        "runs": 40,
+        "documentBytes": 1767,
+        "median": {
+          "load": 0.252,
+          "clone": 0.046,
+          "parse": 1.052,
+          "apply": 7.416,
+          "validate": 0.457,
+          "diff": 0.093,
+          "serialise": 0.79,
+          "write": 1.661,
+          "emit": 0.479,
+          "sum": 12.768,
+          "commit": 12.348
+        },
+        "p95": {
+          "load": 0.317,
+          "clone": 0.072,
+          "parse": 2.217,
+          "apply": 8.207,
+          "validate": 0.628,
+          "diff": 0.136,
+          "serialise": 0.915,
+          "write": 10.828,
+          "emit": 0.88,
+          "sum": 22.07,
+          "commit": 14.125
+        }
+      }
+    ],
+    "live": {
+      "scenario": "perform live path: 200 taps, plan + applyTransaction in memory (Node)",
+      "runs": 40,
+      "plan": {
+        "median": 2.205,
+        "p95": 3.559,
+        "max": 4.713
+      },
+      "applyTransaction": {
+        "median": 8.604,
+        "p95": 9.481,
+        "max": 10.844
+      },
+      "total": {
+        "median": 11.025,
+        "p95": 12.573,
+        "max": 13.824
+      }
+    }
+  }
+}
