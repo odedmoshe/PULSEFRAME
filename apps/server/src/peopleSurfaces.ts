@@ -104,6 +104,7 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   // media
   [`POST ${P}/assets`]: ['no-document'],
   [`GET ${P}/assets/:assetId/content`]: ['no-document'],
+  [`GET ${P}/missing-media`]: ['reader-document'], // asset ids only, from the document the credential may read
   [`GET ${P}/assets/:assetId/derivatives`]: ['no-document'],
   [`GET ${P}/assets/:assetId/derivatives/:kind`]: ['no-document'],
   [`GET ${P}/assets/:assetId/analysis`]: ['reader-document'],

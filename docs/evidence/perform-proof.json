@@ -1,13 +1,13 @@
 {
-  "ranAt": "2026-11-19T00:39:51.804Z",
+  "ranAt": "2026-11-19T03:15:18.434Z",
   "result": "PASS",
   "passed": 28,
   "failed": 0,
   "blocked": 0,
   "total": 28,
   "machine": {
-    "platform": "Linux 6.18.44-fc-v595 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "webgpu": "present (on this Linux container it is a software adapter, as in proof:gpu)"
   },
@@ -122,9 +122,9 @@
       "name": "SHA-256 of the canonical apply_take args: equal across two server dry runs and the browser view",
       "status": "pass",
       "detail": {
-        "browser": "a9668e08d34e2380a0e3f4218eae37500178a74446bf9645e2c2bc411cd5fb8d",
-        "server1": "a9668e08d34e2380a0e3f4218eae37500178a74446bf9645e2c2bc411cd5fb8d",
-        "server2": "a9668e08d34e2380a0e3f4218eae37500178a74446bf9645e2c2bc411cd5fb8d"
+        "browser": "fd0a25f6b9caa1e0dbc8af0c136544eda69e9c4559af697f1c53578511cc1bbb",
+        "server1": "fd0a25f6b9caa1e0dbc8af0c136544eda69e9c4559af697f1c53578511cc1bbb",
+        "server2": "fd0a25f6b9caa1e0dbc8af0c136544eda69e9c4559af697f1c53578511cc1bbb"
       }
     },
     {
@@ -144,11 +144,11 @@
       "name": "undo (Ctrl+Z in the editor): the document hash equals the one before the take; redo (Ctrl+Shift+Z) equals the one after; Store.replay of that revision equals the stored document",
       "status": "pass",
       "detail": {
-        "before": "9b91cf1059a55c08",
-        "after": "2bd723554cb06033",
-        "undone": "9b91cf1059a55c08",
-        "redone": "2bd723554cb06033",
-        "replay": "2bd723554cb06033"
+        "before": "22047f1df49fb6c2",
+        "after": "2812745bc626db03",
+        "undone": "22047f1df49fb6c2",
+        "redone": "2812745bc626db03",
+        "replay": "2812745bc626db03"
       }
     },
     {
@@ -409,33 +409,33 @@
         "rows": [
           {
             "pad": 0,
-            "down": 2.012,
-            "clock": 2.018068333333333,
-            "diffMs": -6.1
+            "down": 2.01,
+            "clock": 2.013368333332961,
+            "diffMs": -3.4
           },
           {
             "pad": 1,
-            "down": 2.2752,
-            "clock": 2.2887788333348236,
-            "diffMs": -13.6
+            "down": 2.2711,
+            "clock": 2.271556000000186,
+            "diffMs": -0.5
           },
           {
             "pad": 2,
-            "down": 2.5553,
-            "clock": 2.561533166668157,
-            "diffMs": -6.2
+            "down": 2.5424,
+            "clock": 2.5428295000001864,
+            "diffMs": -0.4
           },
           {
             "pad": 3,
-            "down": 2.8322,
-            "clock": 2.8346576666651764,
-            "diffMs": -2.5
+            "down": 2.8105,
+            "clock": 2.827034833333892,
+            "diffMs": -16.5
           },
           {
             "pad": 5,
-            "down": 3.1078,
-            "clock": 3.1118921666636865,
-            "diffMs": -4.13
+            "down": 3.0841,
+            "clock": 3.0846255,
+            "diffMs": -0.5
           }
         ]
       }
@@ -457,21 +457,21 @@
       "detail": {
         "hits": 200,
         "runsMs": [
-          14.1,
-          16.9,
-          17.6,
-          11.9,
-          17.9,
-          19.2,
-          9.7,
-          18,
-          10.1,
-          10.4
+          18.6,
+          14.4,
+          13.9,
+          21.9,
+          17.7,
+          22.3,
+          19.4,
+          12.6,
+          14.4,
+          13.3
         ],
-        "warmupMs": 25.1,
-        "slowestMs": 19.2,
+        "warmupMs": 25.2,
+        "slowestMs": 22.3,
         "budgetMs": 33.33,
-        "machine": "Intel(R) Xeon(R) Processor @ 2.30GHz ×4",
+        "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4",
         "note": "one sample of this machine, under whatever else ran on it; not a general claim"
       }
     },
@@ -883,7 +883,7 @@
       "name": "the camera overlay from the keyboard (+ to zoom, Enter, Shift+→ while filming at half speed, Enter): a review with the confirm saying the framing outside the range stays, nothing written while filming, accept = one transaction (history lists its op once: replace_clip_keyframes) that keyed x, y and scale",
       "status": "pass",
       "detail": {
-        "confirm": "הצילום יחליף 30 נקודות מפתח של מיקום וגודל בטווח שצולם. המסגור מחוץ לטווח נשאר כמו שהוא. אפשר לבטל בבת אחת. נקודות מפתח חדשות: 11",
+        "confirm": "הצילום יחליף 30 נקודות מפתח של מיקום וגודל בטווח שצולם. המסגור מחוץ לטווח נשאר כמו שהוא. אפשר לבטל בבת אחת. נקודות מפתח חדשות: 12",
         "revisions": 1,
         "ops": [
           "replace_clip_keyframes"
@@ -891,15 +891,15 @@
         "keys": [
           {
             "p": "x",
-            "keys": 33
+            "keys": 34
           },
           {
             "p": "y",
-            "keys": 33
+            "keys": 34
           },
           {
             "p": "scale",
-            "keys": 33
+            "keys": 34
           }
         ],
         "errors": []
@@ -1122,21 +1122,21 @@
     "n1LivePath": {
       "hits": 200,
       "runsMs": [
-        14.1,
-        16.9,
-        17.6,
-        11.9,
-        17.9,
-        19.2,
-        9.7,
-        18,
-        10.1,
-        10.4
+        18.6,
+        14.4,
+        13.9,
+        21.9,
+        17.7,
+        22.3,
+        19.4,
+        12.6,
+        14.4,
+        13.3
       ],
-      "warmupMs": 25.1,
-      "slowestMs": 19.2,
+      "warmupMs": 25.2,
+      "slowestMs": 22.3,
       "budgetMs": 33.33,
-      "machine": "Intel(R) Xeon(R) Processor @ 2.30GHz ×4",
+      "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4",
       "note": "one sample of this machine, under whatever else ran on it; not a general claim"
     },
     "F1": {

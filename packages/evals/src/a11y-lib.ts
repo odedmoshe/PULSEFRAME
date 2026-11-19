@@ -32,7 +32,16 @@ export function auditInPage(rootSelector?: string | void) {
   for (const c of controls) if (!nameOf(c)) unnamed.push(describe(c));
 
   // contrast of visible text against the nearest opaque background
-  const parse = (c: string) => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const p = m[1]!.split(/[,/ ]+/).filter(Boolean).map(Number); return { r: p[0]!, g: p[1]!, b: p[2]!, a: p[3] ?? 1 }; };
+  // rgb()/rgba(), and color(srgb r g b / a) with channels 0..1: what the browser gives for a color-mix() of tokens (the stage's
+  // surfaces and accents in the light theme). Before, such a colour was not read at all: a text in it was skipped, and a background
+  // in it was looked through to the next one (or to the dark default), so the light theme's stage buttons read as 1:1.
+  const parse = (c: string) => {
+    const m = c.match(/rgba?\(([^)]+)\)/);
+    if (m) { const p = m[1]!.split(/[,/ ]+/).filter(Boolean).map(Number); return { r: p[0]!, g: p[1]!, b: p[2]!, a: p[3] ?? 1 }; }
+    const s = c.match(/color\(srgb ([^)]+)\)/);
+    if (s) { const p = s[1]!.split(/[ /]+/).filter(Boolean).map(Number); return { r: p[0]! * 255, g: p[1]! * 255, b: p[2]! * 255, a: p[3] ?? 1 }; }
+    return null;
+  };
   const lum = (c: { r: number; g: number; b: number }) => { const k = [c.r, c.g, c.b].map((v) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; }); return 0.2126 * k[0]! + 0.7152 * k[1]! + 0.0722 * k[2]!; };
   const bgOf = (el: Element) => { let e: Element | null = el; let acc = { r: 13, g: 16, b: 21 }; const stack: { r: number; g: number; b: number; a: number }[] = []; while (e) { const c = parse(getComputedStyle(e).backgroundColor); if (c && c.a > 0) { stack.push(c); if (c.a >= 1) break; } e = e.parentElement; } for (const c of stack.reverse()) acc = { r: c.r * c.a + acc.r * (1 - c.a), g: c.g * c.a + acc.g * (1 - c.a), b: c.b * c.a + acc.b * (1 - c.a) }; return acc; };
   const lowContrast: { el: string; ratio: number; text: string; size: number }[] = [];

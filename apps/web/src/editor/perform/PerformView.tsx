@@ -288,6 +288,12 @@ export function PerformView() {
               <Button size="sm" variant="secondary" onClick={() => setCalOpen(true)} data-testid={ID.calibrate}>{t('perform.calibrate')}</Button>
             </div>
           </div>
+          {/* in review the take lane (the ghost banner and what became of every tap) comes first: the pads do nothing until the next take */}
+          {phase === 'review' && lane}
+          {/* the pad row comes before the notes: in a short stage (1280×800) the row is 55 % of it and scrolls inside, and the notes above
+              the pads pushed pad 7's «עוד לא בספרייה» / "Not in the library yet" and its add button under the transport */}
+          <PadGrid bank={bank ?? empty} statuses={statuses} held={held} lang={lang} keysLive={!editor.multicamDigitsLive} addLabel={t('perform.addToLibrary')} adding={adding}
+            onDown={padDown} onUp={padUp} onEdit={(p) => setEditing(p)} onAdd={(p) => void addToLibrary(p)} />
           <p className="pf-perform-hint" dir="auto">{S(`pv.hint.${phase === 'idle' ? 'idle' : phase === 'recording' ? 'recording' : 'review'}` as PerformKey)}</p>
           {state.performLeftVariant && <p className="pf-perform-note" role="note" data-testid={ID.masterOnly}>{t('perform.masterOnly')}</p>}
           {editor.multicamDigitsLive && <p className="pf-perform-note" role="note" data-testid={ID.multicamDigits}>{t('perform.multicamDigits')}</p>}
@@ -296,10 +302,6 @@ export function PerformView() {
           {reduced && !reducedDismissed && bank && hasMotionPad(bank) && (
             <p className="pf-perform-note" role="note" data-testid={ID.reducedMotion}>{S('pv.reduced')} <Button size="sm" variant="ghost" onClick={() => setReducedDismissed(true)}>{S('pv.reducedOk')}</Button></p>
           )}
-          {/* in review the take lane (the ghost banner and what became of every tap) comes first: the pads do nothing until the next take */}
-          {phase === 'review' && lane}
-          <PadGrid bank={bank ?? empty} statuses={statuses} held={held} lang={lang} keysLive={!editor.multicamDigitsLive} addLabel={t('perform.addToLibrary')} adding={adding}
-            onDown={padDown} onUp={padUp} onEdit={(p) => setEditing(p)} onAdd={(p) => void addToLibrary(p)} />
           {phase !== 'review' && lane}
           <div className="pf-perform-settings">
             <div data-testid={ID.snap} data-snap={prefs.settings.snap}>

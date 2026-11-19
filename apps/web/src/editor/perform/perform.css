@@ -3,7 +3,9 @@
    mirrors; the pad row is dir=ltr on purpose (it mirrors the physical number row).
    Layout (looked at in Chromium at 1280×800 and 1500×1000, Hebrew and English): the view is a row of the stage UNDER the viewer
    and above the transport, never over the picture ("a large viewer; under it the pad row"). The row is fit-content(55%): it is as
-   tall as its content up to 55 % of the stage, and scrolls inside past that; the viewer keeps the rest (at least 120 px). */
+   tall as its content up to 55 % of the stage, and scrolls inside past that; the viewer keeps the rest (at least 120 px). The pad row
+   is the first thing in it (the notes and hints follow it), so that in a short stage the pads and what a pad says about itself (pad 7:
+   «עוד לא בספרייה», its add button) stay in view above the transport: looked at in Chromium at 1024, 1280 and 1440 × 800, both languages. */
 .app > .stage:has(> .pf-perform) { grid-template-rows: auto minmax(120px, 1fr) fit-content(55%) auto; }
 .app > .stage > .pf-perform { grid-row: 3; grid-column: 1 / -1; z-index: 4; }
 .app > .stage:has(> .pf-perform) > .transport { grid-row: 4; }
@@ -35,7 +37,13 @@
 .pf-perform-padname { font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); text-align: center; overflow-wrap: break-word; hyphens: auto; max-inline-size: 100%; }
 .pf-perform-padreason { font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); color: var(--pf-attention); text-align: center; }
 .pf-perform-padcell .pf-btn { white-space: normal; block-size: auto; min-block-size: var(--pf-h-sm, 28px); text-align: center; }
-.pf-perform-padedit { justify-self: center; }
+/* the pad's edit pencil sits in the pad's top corner (the key number is centred, the name starts under it), so a cell is the pad, then
+   only what the pad says about itself and its add button; with the pencil on a line of its own under every pad, pad 7's reason and
+   its add button went under the transport at 1280 × 800 */
+.pf-perform-padcell { position: relative; }
+/* (the pencil is an IconButton: its tooltip anchor, a span, is the cell's child) */
+.pf-perform-padcell > .pf-tip-anchor:has(> .pf-perform-padedit) { position: absolute; inset-block-start: 2px; inset-inline-end: 2px; z-index: 1; display: block; line-height: 0; }
+.pf-perform-padcell .pf-perform-padedit { inline-size: 24px; block-size: 24px; min-block-size: 24px; }
 
 /* settings */
 .pf-perform-settings { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-4) var(--pf-sp-5); }
@@ -78,5 +86,5 @@
 .pf-perform-camera-review { display: grid; gap: var(--pf-sp-3); }
 
 /* the pad row needs about 56 px a pad; a narrower stage takes two rows of four */
-@container (max-width: 460px) { .pf-perform-pads { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container (max-width: 460px) { .pf-perform-pads { grid-template-columns: repeat(4, minmax(0, 1fr)); } .pf-perform-pad { min-block-size: 52px; } }
 @media (prefers-reduced-motion: reduce) { .pf-perform-pad { transition: none; } .pf-perform-pad[aria-pressed='true'], .pf-perform-pad[data-state='held-down'] { transform: none; } }

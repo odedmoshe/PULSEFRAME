@@ -118,6 +118,9 @@ export interface MediaPoolStats {
   refused: number;
 }
 
+/** The code of a stored file that is missing on disk: the server's answer (404 missing_media) and the reason a picture is left out. */
+export const MISSING_MEDIA = 'missing_media';
+
 let pools = 0;
 export class MediaPool {
   private local = new Map<string, Blob>();
@@ -153,6 +156,21 @@ export class MediaPool {
     this.byteCache = opts.decoderByteCache ?? 16 << 20;
   }
 
+  /**
+   * Assets whose stored file the server reports missing (GET …/missing-media; editor only). Their pictures are not asked for:
+   * the layer is left out of the frame with the reason `missing_media`, the same thing the compositor does for any picture it
+   * cannot have, and their sound is not opened. The render worker never sets this: the export plan refuses such an asset first.
+   */
+  private missing = new Set<string>();
+  setMissing(ids: readonly string[]): boolean {
+    const next = new Set(ids);
+    if (next.size === this.missing.size && [...next].every((id) => this.missing.has(id))) return false;
+    for (const id of this.missing) if (!next.has(id)) this.invalidate(id); // a file put back is decoded afresh
+    for (const id of next) if (!this.missing.has(id)) { this.invalidate(id); this.blobs.delete(id); this.stills.delete(id); }
+    this.missing = next;
+    return true;
+  }
+  isMissing(assetId: string) { return this.missing.has(assetId); }
   /** Use an already-local File (e.g. just picked by the user) instead of fetching it. */
   provideLocal(assetId: string, blob: Blob) {
     this.local.set(assetId, blob);
@@ -258,7 +276,10 @@ export class MediaPool {
     else void v.dec.then((x) => x.dispose()).catch(() => {});
   }
   private keyOf(layer: PictureLayer, quality: 'draft' | 'full') { return `${layer.clipId}:${quality}:${layer.kind === 'video' ? layer.lane ?? 0 : 0}`; }
-  private refusal(layer: PictureLayer, quality: 'draft' | 'full'): string | null { return layer.kind === 'image' ? null : this.refusals.get(this.keyOf(layer, quality)) ?? null; }
+  private refusal(layer: PictureLayer, quality: 'draft' | 'full'): string | null {
+    if (this.missing.has(layer.assetId) && !this.local.has(layer.assetId)) return `${MISSING_MEDIA}: the stored file of asset ${layer.assetId} is missing`;
+    return layer.kind === 'image' ? null : this.refusals.get(this.keyOf(layer, quality)) ?? null;
+  }
   /**
    * The decoder for a key, opened if need be. Everything up to the open happens synchronously, so the requests of one frame
    * (all made at once by drawGraph) are pinned in the order they are made. Null: the budget is full of pinned decoders.
@@ -284,6 +305,7 @@ export class MediaPool {
     return d.dec;
   }
   private frame(layer: PictureLayer, quality: 'draft' | 'full'): Promise<FrameImage | null> {
+    if (this.missing.has(layer.assetId) && !this.local.has(layer.assetId)) return Promise.resolve(null);
     if (layer.kind === 'image') return this.still(layer.assetId);
     const key = this.keyOf(layer, quality);
     const dec = this.decoderFor(layer, quality, key);
@@ -333,6 +355,7 @@ export class MediaPool {
    */
   async openAudio(assetId: string): Promise<{ sink: AudioBufferSink; /** This reader's time zero for the file (see Asset.timeOrigin): subtract it from the sink's timestamps. */ origin: number; /** The track's sample rate as the container states it (sound effects open their voice at the decoder's rate; the first decoded buffer confirms it). */ sampleRate: number; dispose(): void } | null> {
     const l = this.local.get(assetId);
+    if (!l && this.missing.has(assetId)) return null;
     const source = l ? new BlobSource(l) : new UrlSource(this.opts.assetUrl(assetId), { requestInit: { credentials: 'same-origin' }, maxCacheSize: 8 << 20, getRetryDelay: (n) => (n < 3 ? 0.2 * 2 ** n : null) });
     const input = new Input({ source, formats: ALL_FORMATS });
     try {
