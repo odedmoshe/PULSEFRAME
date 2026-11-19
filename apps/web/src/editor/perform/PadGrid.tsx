@@ -71,6 +71,8 @@ export function PadGrid({ bank, statuses, held, lang, onDown, onUp, onEdit, onAd
             {st.reason === 'missing_asset' && (
               <Button size="sm" variant="secondary" busy={adding === i} data-testid={ID.padAddToLibrary} data-pad={i} onClick={() => onAdd(i)}>{adding === i ? S('pv.adding') : addLabel}</Button>
             )}
+            {/* in the pad's top corner (perform.css), not on a line of its own under it: the cell stays short enough for a pad's reason and
+                its add button to show above the transport in a short stage */}
             <IconButton size="sm" className="pf-perform-padedit" label={S('pv.editPad', { n: i + 1 })} icon={<Pencil size={14} strokeWidth={1.75} aria-hidden="true" />} onClick={() => onEdit(i)} />
           </div>
         );
