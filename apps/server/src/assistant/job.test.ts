@@ -258,3 +258,14 @@ describe('restart recovery', () => {
     expect(s.store.getJob(jobId).status).toBe('succeeded');
   });
 });
+
+describe('the ledger refusals say what to do next', () => {
+  it('reserveAssistant and settleAssistant refusals carry a hint', () => {
+    const s = setup();
+    const j = s.store.createJob(s.pid, ASSISTANT_JOB_TYPE, ASSISTANT_ACTOR, {}).id;
+    const limits = { monthlyLimitCents: 100, perRequestCapCents: 10 };
+    const p = { actor: ASSISTANT_ACTOR, kind: 'agent', scopes: ['observe'], mode: 'propose', grant: { id: 'assistant', name: 'assistant', mode: 'propose', projectIds: [s.pid], trackIds: null, range: null, budgetCents: 100, requestsPerMinute: null, exportsPerDay: null, people: 'names', expiresAt: null, revokedAt: null, createdAt: '', createdBy: 'user:local' } } as Principal;
+    for (const r of [refusal(() => s.gov.reserveAssistant(owner, s.pid, j, 5, limits)), refusal(() => s.gov.reserveAssistant(p, s.pid, j, 0, limits)), refusal(() => s.gov.reserveAssistant(p, s.pid, j, 11, limits)), refusal(() => s.gov.settleAssistant(j, -1))])
+      expect(r.hint, r.code).toBeTruthy();
+  });
+});
