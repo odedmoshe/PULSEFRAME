@@ -321,6 +321,8 @@ interface LaneProps {
   selection: string[]; ghostSel: ReadonlySet<string>; cutPending: string[]; ghost: TimelineGhost | null; tails: ReadonlyMap<string, { seconds: number; cut: boolean }>;
   grid: BarGrid | null; heldLights: ReadonlySet<string>; selectedCut: string | null; dropClip: string | null; dropCut: string | null; anchorClip: string | null;
   blade: boolean; empty: boolean; onMenu: (clipId: string, x: number, y: number) => void;
+  /** Assets whose stored file is missing on disk (state.missingMedia): their clips get the missing-file look, as a clip whose asset is gone. */
+  missingMedia: readonly string[];
 }
 const TrackRow = memo(function TrackRow(p: LaneProps) {
   const editor = useEditor();
@@ -394,7 +396,7 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
           const left = T.toSeconds(c.start) * pps;
           const width = Math.max(4, T.toSeconds(c.duration) * pps - 1);
           const asset = c.type === 'media' ? doc.assets[c.assetId] : undefined;
-          const missing = c.type === 'media' && !asset;
+          const missing = c.type === 'media' && (!asset || p.missingMedia.includes(c.assetId));
           const selected = selection.includes(c.id);
           const only = selection.length === 1 && selected;
           const volLine = c.type === 'media' && tr.kind === 'audio' && asset?.kind !== 'image' && ((c.volume?.length ?? 0) > 0 || only);
@@ -439,14 +441,14 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
                 }}
                 onContextMenu={(e) => { e.preventDefault(); p.onMenu(c.id, e.clientX, e.clientY); }}
                 aria-label={`${label} ${T.toTimecode(c.start, rate)}–${T.toTimecode(clipEnd(c), rate)}${fxLabel}${mcBadge ? `; ${mcBadge}` : ''}${missing ? `; ${s.clipMissing}` : ''}`} data-fx={fxNames.length ? 'true' : undefined}>
-                {asset?.kind === 'image' && tr.kind === 'video' && <span className="clip-still" aria-hidden="true" style={{ backgroundImage: `url("/api/v1/projects/${encodeURIComponent(doc.id)}/assets/${encodeURIComponent(asset.id)}/content")` }} />}
+                {asset?.kind === 'image' && tr.kind === 'video' && !missing && <span className="clip-still" aria-hidden="true" style={{ backgroundImage: `url("/api/v1/projects/${encodeURIComponent(doc.id)}/assets/${encodeURIComponent(asset.id)}/content")` }} />}
                 {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (
                   <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as MediaClip).sourceIn} duration={c.type === 'media' && c.freeze ? T.frameTime(1, rate) : toSourceSpan(c, c.duration) /* the stretch of SOURCE shown, so thumbnails and waveform follow the clip speed; a freeze frame shows one picture */} widthPx={width} heightPx={clipH} reverse={c.type === 'media' && !!c.reverse} tintKey={kind} />
                 )}
                 <span className="clip-plate">
                   {kind !== 'video' && <KindIcon className="clip-kind" size={12} strokeWidth={1.75} aria-hidden="true" />}
                   {fxNames.length ? <span className="clip-fx-badge" aria-hidden="true" data-testid="clip-fx-badge">∿</span> : null}
-                  <span dir="auto" className="clip-label">{label || (missing ? s.clipMissing : '')}</span>
+                  <span dir="auto" className="clip-label">{missing ? (label ? `${label} · ${s.clipMissing}` : s.clipMissing) : label}</span>
                 </span>
                 {hasClipBadges({ mcBadge, fxCount, speed, ai, onBeatFx, media: c.type === 'media' && !!(c.freeze || c.reverse || c.speedEnd) }) && (
                   <span className="clip-badges" aria-hidden="true">
@@ -823,7 +825,7 @@ export function Timeline() {
               tempo={lane.track.kind === 'audio' && flavours.get(lane.track.id) === 'music' ? pulse.bpm : null}
               selection={selection} ghostSel={ghostSel} cutPending={state.cutPending} ghost={ghost} tails={tails} grid={pulse.grid} heldLights={heldLights} selectedCut={selectedCut}
               dropClip={drop?.kind === 'catalog' && drop.on?.type === 'clip' ? drop.on.clipId : null} dropCut={drop?.kind === 'catalog' && drop.on?.type === 'cut' ? drop.on.clipId : null}
-              anchorClip={anchorClip} blade={tool === 'blade'} empty={empty} onMenu={onMenu} />
+              anchorClip={anchorClip} blade={tool === 'blade'} empty={empty} onMenu={onMenu} missingMedia={state.missingMedia} />
           ))}
           {drop?.kind === 'asset' && <div className="drop-line" data-testid="drop-line" data-frame={drop.frame} style={{ left: head + T.toSeconds(T.frameTime(drop.frame, rate)) * pps }} aria-hidden="true"><span className="num">{shortTimecode(drop.frame, rate)}</span></div>}
           {dropTip && drop?.kind === 'catalog' && <div className={`drop-tip${dropTip.ok ? '' : ' no'}`} data-testid="drop-tip" role="status" dir={uiDir} style={{ left: Math.max(head + 8, drop.x + 14), top: drop.y + 18 }}>{dropTip.text}</div>}

@@ -25,6 +25,7 @@ import { ffprobe } from './ingest.ts';
 import { assertStorageRoom } from './storage.ts';
 import { FrameFlashCheck, type PhotosensitivityReport } from './flashCheck.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
+import { blobPresent, MISSING_MEDIA_HINT } from './mediaPresence.ts';
 import type { ComputeLane } from './aiContracts.ts';
 import { fieldIssues } from './preflight.fields.ts';
 import type { FrameKeyFn, runSegmentedExport, SegmentEnv } from './exportSegments.ts';
@@ -291,9 +292,7 @@ export class Exporter {
     const assets = [...used].flatMap(([id, clips]) => {
       const a = Object.hasOwn(doc.assets, id) ? doc.assets[id] : undefined;
       if (!a) { blockers.push({ code: 'missing_media', message: `colour table ${id} named by an effect is not in the project library`, ids: [id] }); return []; }
-      let present = false;
-      try { present = fs.statSync(this.store.blobPath(a.contentHash)).size === a.byteSize; } catch { /* missing */ }
-      if (!present) blockers.push({ code: 'missing_media', message: `source media for "${a.name}" is not available to the render worker`, ids: [id] });
+      if (!blobPresent(this.store, a)) blockers.push({ code: 'missing_media', message: `source media for "${a.name}" is not available to the render worker`, ids: [id], hint: MISSING_MEDIA_HINT });
       return [{ id, contentHash: a.contentHash, byteSize: a.byteSize, kind: a.kind, clips }];
     });
     for (const fam of families) if (!ENGINE.fontFamilies.includes(fam)) blockers.push({ code: 'missing_font', message: `font "${fam}" is not bundled with the renderer; text would silently fall back`, ids: [] });
@@ -425,7 +424,7 @@ export class Exporter {
   async renderStill(doc: ProjectDocument, revision: number, frameIndex: number, scale: 1 | 0.5 | 0.25 = 1): Promise<Buffer> {
     const { manifest, blockers } = this.plan(doc, revision, { format: 'png', frame: frameIndex, scale });
     const hard = blockers.filter((b) => b.code !== 'empty_sequence');
-    if (hard.length) throw new ApiError(422, hard[0]!.code === 'out_of_bounds' ? 'out_of_bounds' : 'render_blocked', hard[0]!.message, { blockers: hard });
+    if (hard.length) throw new ApiError(422, hard[0]!.code === 'out_of_bounds' ? 'out_of_bounds' : 'render_blocked', hard[0]!.message, { blockers: hard }, hard[0]!.hint);
     const { token, url } = this.open(doc, revision, null, { width: manifest.output.width, height: manifest.output.height, firstFrame: frameIndex, frames: 1 });
     try {
       // Stills are reachable with a read-only credential and each opens a browser page: run at most two at a time.
@@ -505,9 +504,7 @@ export class Exporter {
     try {
       // The manifest is re-verified at run time: bytes must still be the ones the job was planned against.
       for (const a of manifest.assets) {
-        let ok = false;
-        try { ok = fs.statSync(this.store.blobPath(a.contentHash)).size === a.byteSize; } catch { /* missing */ }
-        if (!ok) throw new ApiError(422, 'render_blocked', `source media ${a.id} is no longer available`, { blockers: [{ code: 'missing_media', ids: [a.id] }] });
+        if (!blobPresent(this.store, a)) throw new ApiError(422, 'render_blocked', `source media ${a.id} is no longer available`, { blockers: [{ code: 'missing_media', ids: [a.id] }] }, MISSING_MEDIA_HINT);
       }
       const { frameRate, sampleRate } = output;
       const ext = { 'mp4-h264-aac': 'mp4', 'webm-vp9-opus': 'webm', gif: 'gif', wav: 'wav', png: 'png' }[options.format];

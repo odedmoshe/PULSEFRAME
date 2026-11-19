@@ -155,6 +155,8 @@ export interface EditorState {
   dropProblem: PhoneDropProblem | null;
   /** Blocker codes of the last segment plan (422 render_blocked): the sheet's switch says why the fast export is unavailable. */
   planBlockers: string[];
+  /** Assets whose stored file the server reports missing on disk (GET …/missing-media): the library card and the timeline clips say so, the preview leaves them out. */
+  missingMedia: string[];
   // ---- multicam live switching (ADR-0020): session state, never stored or sent in presence ----
   /** The recording of switches in progress (cuts in group time), or null/absent. */
   multicamRec?: MulticamSession | null;
@@ -253,6 +255,9 @@ const readSafeArea = () => { try { return localStorage.getItem(SAFE_KEY) !== '0'
 
 export interface Ghost { sessionId: string; actor: string; kind: 'user' | 'agent'; frame: number | null; selection: string[]; label: string | null }
 
+/** The asset set of a document (ids and content hashes): the missing-media list is asked for again when it changes. */
+const mediaKey = (doc: ProjectDocument) => Object.values(doc.assets).map((a) => `${a.id}:${a.contentHash}`).sort().join('|');
+
 export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, rawDoc: null, activeSequenceId: '', revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null, capJobs: {},
@@ -261,7 +266,7 @@ export class Editor {
     templatesOpen: false, templatesFocus: 0, templateRun: null,
     cutClipId: null, loupe: false, inspectorTab: null, panelRequest: null, gallery: null, stageNote: null, notice: null, exportSheet: 0,
     segmentPlan: { status: 'off', view: null, revision: null }, fastExport: readFastExport(), planOptions: {}, // the export sheet's first pick (the computer destination: high quality, whose options are all defaults)
-    imports: { local: [], jobs: [], room: null, skipped: null }, phoneDropOpen: false, drop: null, dropLive: null, dropProblem: null, planBlockers: [],
+    imports: { local: [], jobs: [], room: null, skipped: null }, phoneDropOpen: false, drop: null, dropLive: null, dropProblem: null, planBlockers: [], missingMedia: [],
     filmOpen: false, filmSource: null, filmRun: null,
     keySel: null, keyClipboard: null, curvePicker: null, pathOn: readPathOn(),
   };
@@ -351,6 +356,37 @@ export class Editor {
     const detail = e instanceof ApiFailure ? translateRefusal(this.state.lang, e.message) ?? e.message : e instanceof Error ? e.message : String(e);
     this.set({ error: headline ? `${headline}: ${detail}` : detail, errorHeadline: headline ?? null });
   };
+  /** The asset set the missing-media list was last asked for (ids and content hashes). */
+  private mediaChecked = '';
+  /**
+   * Ask the server which assets' stored files are missing, and show them as missing: the library card and the timeline clips say
+   * so (the timeline's own missing-file look), and the preview leaves their pictures out instead of failing the frame. True when
+   * the list changed. A failed request changes nothing.
+   */
+  async checkMedia(projectId: string): Promise<boolean> {
+    let missing: unknown;
+    try { missing = (await api.missingMedia(projectId))?.missing; } catch { return false; }
+    if (!Array.isArray(missing) || !missing.every((id) => typeof id === 'string')) return false; // not an answer this editor knows: nothing changes
+    if (this.disposed || this.state.doc?.id !== projectId) return false;
+    const changed = this.pool?.setMissing(missing) ?? false;
+    if (changed || missing.join() !== (this.state.missingMedia ?? []).join()) this.set({ missingMedia: missing });
+    if (changed && this.player && !this.player.playing) this.player.seek(this.player.frame);
+    return changed;
+  }
+  /** A preview frame failed: when a stored file went missing meanwhile, the asset is marked missing and the frame drawn without it; otherwise the error is shown. */
+  private async previewFailed(projectId: string, e: unknown) {
+    const changed = await this.checkMedia(projectId);
+    // The frame may have failed just before the list (asked for on load) arrived: it is drawn again once per list, never in a loop.
+    const key = this.state.missingMedia.join();
+    if (changed || (key && this.mediaRetried !== key)) {
+      this.mediaRetried = key;
+      console.warn('preview: a stored media file is missing; its clips are shown as missing', e);
+      if (!changed && this.player && !this.player.playing) this.player.seek(this.player.frame);
+      return;
+    }
+    this.fail(e);
+  }
+  private mediaRetried = '';
   async load(projectId: string) {
     const p = await api.getProject(projectId);
     if (p.revision >= this.state.revision || !this.state.doc) {
@@ -372,6 +408,8 @@ export class Editor {
       const keySel = pruneKeySel(this.state.keySel, (id) => findClip(projected, id)?.clip, projected.settings.frameRate);
       const curvePicker = this.state.curvePicker && !findClip(projected, this.state.curvePicker.clipId) ? null : this.state.curvePicker;
       this.set({ doc: projected, rawDoc: p.project, activeSequenceId, revision: p.revision, selection, viewVariantId, ...cut, ...targets, ...picker, ...cutGone, keySel, curvePicker });
+      const media = mediaKey(p.project);
+      if (media !== this.mediaChecked) { this.mediaChecked = media; void this.checkMedia(p.project.id); }
       const vd = this.viewDoc;
       // while switches are being recorded (or committed) the sound plan is unchanged, so playback is not stopped (ADR-0020)
       // perform mode (ADR-0025): a ghost under review stays on screen (the view re-plans it on the new revision and shows it again);
@@ -435,7 +473,7 @@ export class Editor {
       // Preview decodes the frame-identical proxy once it exists; export always uses the original.
       previewUrl: async (assetId) => ((await api.derivatives(projectId, assetId)).derivatives.find((d) => d.kind === 'proxy')?.status === 'ready' ? `/api/v1/projects/${projectId}/assets/${assetId}/derivatives/proxy` : null),
     });
-    this.player = new Player(canvas, this.pool, () => { this.set({ tick: this.state.tick + 1 }); this.announce(projectId); this.multicamTick(); }, this.fail);
+    this.player = new Player(canvas, this.pool, () => { this.set({ tick: this.state.tick + 1 }); this.announce(projectId); this.multicamTick(); }, (e) => void this.previewFailed(projectId, e));
     (window as any).__pfMedia = () => this.pool?.stats();
     (window as any).__pfSync = () => this.player?.syncStats();
     const p = await this.load(projectId);

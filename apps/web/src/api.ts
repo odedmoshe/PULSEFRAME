@@ -149,6 +149,8 @@ export const api = {
   startColourMatchJob: (id: string, body: ColourMatchRequest) => call<{ jobId: string; status: string }>(`/projects/${id}/analysis/colour-match`, json({ ...body, background: true })),
   capabilities: () => call<{ provider: { configured: boolean; reason: string | null; readiness: { reachable: boolean; runtimeVersion: string | null; device: { name: string; type: string } | null } | null }; capabilities: { id: string; runnable: boolean; title: { he: string; en: string } }[] }>('/capabilities'),
   runCapability: (id: string, capabilityId: string, params: Record<string, unknown>) => call<{ jobId: string }>(`/projects/${id}/capabilities/${capabilityId}/runs`, json({ params, idempotencyKey: crypto.randomUUID() })),
+  /** Assets whose stored file is missing on disk (the server's one check: gone, or no longer its imported size). */
+  missingMedia: (id: string) => call<{ missing: string[] }>(`/projects/${id}/missing-media`),
   derivatives: (id: string, assetId: string) => call<{ derivatives: { kind: string; status: string; meta: any }[] }>(`/projects/${id}/assets/${assetId}/derivatives`),
   presence: (id: string, sessionId: string, frame: number, selection: string[]) => call<unknown>(`/projects/${id}/presence`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId, frame, selection }) }),
   speech: () => call<SpeechStatus>('/speech'),

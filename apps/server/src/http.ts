@@ -39,6 +39,7 @@ import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking
 import { cancelMomentsJob, momentsLaneOf, startMomentsJob } from './moments.ts';
 import type { Presence } from './presence.ts';
 import { ApiError, type JobRow, type RevisionEvent, type Store } from './store.ts';
+import { blobPresent, logMissingMedia, missingAssets, missingMediaError } from './mediaPresence.ts';
 import { measureVoiceCheck, VoiceMeasureBody } from './voiceClean.ts';
 import { ColourMatchBody, matchColour } from './colourMatch.ts';
 import { ApplyModeSchema, RunSourceSchema, type RunRequest } from './aiContracts.ts';
@@ -177,8 +178,13 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (!s) throw new ApiError(404, 'render_session_not_found', 'unknown render session');
     return s;
   };
-  const sendBlob = (c: Context, file: string, mime: string, downloadName?: string) => {
-    const size = fs.statSync(file).size;
+  /**
+   * A stored file, whole or by range. A file that is not there is an expected state, not a fault: `missing` gives the typed
+   * answer (404), and no stack is logged. Before, statSync threw ENOENT here and the client got 500 internal_error.
+   */
+  const sendBlob = (c: Context, file: string, mime: string, missing: () => ApiError, downloadName?: string) => {
+    let size: number;
+    try { size = fs.statSync(file).size; } catch (e) { if ((e as { code?: string }).code === 'ENOENT' || (e as { code?: string }).code === 'ENOTDIR') throw missing(); throw e; }
     const range = /^bytes=(\d+)-(\d*)$/.exec(c.req.header('range') ?? '');
     const headers: Record<string, string> = { 'Content-Type': mime, 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, max-age=3600' };
     if (downloadName) headers['Content-Disposition'] = `attachment; filename="${downloadName}"`;
@@ -190,11 +196,18 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     }
     return new Response(Readable.toWeb(fs.createReadStream(file)) as any, { headers: { ...headers, 'Content-Length': String(size) } });
   };
+  /** An asset's stored file (editor preview and render worker alike): 404 missing_media when it is gone or no longer its imported size. */
+  const sendAsset = (c: Context, a: Asset, where: string) => {
+    const missing = () => { logMissingMedia(a.id, where); return missingMediaError(a.id); };
+    if (!blobPresent(store, a)) throw missing();
+    return sendBlob(c, store.blobPath(a.contentHash), a.mimeType, missing);
+  };
+  const fileMissing = (code: string, what: string) => () => new ApiError(404, code, `${what} is no longer stored on this computer`, {}, 'Make it again (run the export or the job once more).');
   app.get('/api/v1/render/:token/snapshot', (c) => { const s = session(c.req.param('token')); return c.json({ doc: s.doc, revision: s.revision, frameCount: s.totalFrames, firstFrame: s.firstFrame, outWidth: s.outWidth, outHeight: s.outHeight, ...(s.runs ? { runs: s.runs.map((r) => [r.first, r.count]) } : {}) }); });
   app.get('/api/v1/render/:token/assets/:assetId', (c) => {
     const a = session(c.req.param('token')).doc.assets[c.req.param('assetId')];
     if (!a) throw new ApiError(404, 'asset_not_found', 'asset not in snapshot');
-    return sendBlob(c, store.blobPath(a.contentHash), a.mimeType);
+    return sendAsset(c, a, 'render worker');
   });
   app.post('/api/v1/render/:token/frames', async (c) => {
     await exporter.acceptFrames(c.req.param('token'), Number(c.req.query('first')), new Uint8Array(await c.req.arrayBuffer()));
@@ -695,7 +708,12 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     need(c, 'observe');
     const a = store.getProject(c.req.param('id')).doc.assets[c.req.param('assetId')];
     if (!a) throw new ApiError(404, 'asset_not_found', 'asset not found in this project');
-    return sendBlob(c, store.blobPath(a.contentHash), a.mimeType);
+    return sendAsset(c, a, 'asset content');
+  });
+  /** The project's assets whose stored file is missing: the editor marks them (library card, timeline clips) instead of failing to draw them. */
+  app.get('/api/v1/projects/:id/missing-media', (c) => {
+    need(c, 'observe');
+    return c.json({ missing: missingAssets(store, store.getProject(c.req.param('id')).doc) });
   });
 
   const assetOf = (c: Context<Env>) => {
@@ -713,7 +731,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     need(c, 'observe');
     const row = derivatives.get(assetOf(c).contentHash, c.req.param('kind') as DerivativeKind);
     if (!row || row.status !== 'ready' || !row.blobHash) throw new ApiError(404, 'derivative_not_ready', `derivative is ${row?.status ?? 'unknown'}`, { status: row?.status ?? null, error: row?.error ?? null });
-    return sendBlob(c, store.blobPath(row.blobHash), row.mimeType ?? 'application/octet-stream');
+    return sendBlob(c, store.blobPath(row.blobHash), row.mimeType ?? 'application/octet-stream', () => new ApiError(404, 'derivative_not_ready', 'the derivative file is no longer stored on this computer', { status: 'missing', error: null }));
   });
 
   // ----- senses -----
@@ -754,14 +772,14 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const j = store.getJob(c.req.param('jobId'));
     assertMayTakeJobOutput(who, j, 'download this export');
     if (j.status !== 'succeeded') throw new ApiError(409, 'job_not_finished', `job is ${j.status}`, { status: j.status });
-    return sendBlob(c, path.join(store.outDir, path.basename(j.output.file)), j.output.mimeType ?? 'video/mp4', `pulseframe-${j.id}${path.extname(j.output.file)}`);
+    return sendBlob(c, path.join(store.outDir, path.basename(j.output.file)), j.output.mimeType ?? 'video/mp4', fileMissing('output_missing', 'the exported file'), `pulseframe-${j.id}${path.extname(j.output.file)}`);
   });
   app.get('/api/v1/jobs/:jobId/captions', (c) => {
     need(c, 'observe');
     const j = store.getJob(c.req.param('jobId'));
     if (j.status !== 'succeeded') throw new ApiError(409, 'job_not_finished', `job is ${j.status}`, { status: j.status });
     if (!j.output?.captions) throw new ApiError(404, 'not_found', 'this export has no caption file');
-    return sendBlob(c, path.join(store.outDir, path.basename(j.output.captions.file)), j.output.captions.format === 'vtt' ? 'text/vtt' : 'application/x-subrip', `pulseframe-${j.id}.${j.output.captions.format}`);
+    return sendBlob(c, path.join(store.outDir, path.basename(j.output.captions.file)), j.output.captions.format === 'vtt' ? 'text/vtt' : 'application/x-subrip', fileMissing('output_missing', 'the caption file of this export'), `pulseframe-${j.id}.${j.output.captions.format}`);
   });
   // ----- browser export route: the tab renders and encodes; the server holds the durable job and a tab lease -----
   const browserExport = registerBrowserExportRoutes(app, store, exporter);
@@ -876,7 +894,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const j = store.getJob(c.req.param('jobId'));
     const o = j.status === 'succeeded' ? j.output?.bundle?.[Number(c.req.param('index'))] : undefined;
     if (!o) throw new ApiError(404, 'output_not_found', 'no validated output at that index');
-    return sendBlob(c, store.blobPath(o.contentHash), o.mimeType);
+    return sendBlob(c, store.blobPath(o.contentHash), o.mimeType, fileMissing('output_missing', 'this output of the job'));
   });
   app.all('/api/*', () => { throw new ApiError(404, 'not_found', 'no such API route'); });
 
