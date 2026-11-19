@@ -1,0 +1,1764 @@
+{
+  "ranAt": "2026-11-19T01:18:38.318Z",
+  "result": "PASSED",
+  "counts": {
+    "pass": 23,
+    "fail": 0,
+    "blocked": 0,
+    "contract-tested": 5
+  },
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v653 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "scope": "Headless Chromium on the built editor and in-process servers. The model path (11a–11e) ran against TEST-MOCK-chat, a labelled test double that opens no connection: contract-tested, credentials required — no real provider was called and no network adapter exists. Not provable here: a real provider (no key exists), a screen reader, the owner's own phrasing. Timings are one sample.",
+  "checks": [
+    {
+      "id": "1",
+      "name": "owner examples (Node): the 18 sentences on the grammar's fixture give their kind, and equal the golden file (canonical ops, actions, choices)",
+      "status": "pass",
+      "detail": []
+    },
+    {
+      "id": "2",
+      "name": "exact time: 60 phrases × 5 rates (300 conversions) equal the BigInt oracle written in the proof",
+      "status": "pass",
+      "detail": {
+        "phrases": 60,
+        "conversions": 300,
+        "mismatches": []
+      }
+    },
+    {
+      "id": "1",
+      "name": "owner examples in the editor (Hebrew): five plans commit, «סנכרן לקצב» offers choices and commits nothing, export opens the sheet with WhatsApp chosen, undo undoes the owner's newest edit, perform mode opens",
+      "status": "pass",
+      "detail": {
+        "rows": [
+          {
+            "text": "חתוך כאן",
+            "kind": "plan",
+            "intent": "split_here",
+            "ops": 1,
+            "steps": 1,
+            "notes": [
+              "alternative_reading"
+            ],
+            "shownIsRun": true,
+            "oneTransaction": true,
+            "label": "Command bar: split_here",
+            "focusBack": true,
+            "liveBefore": "",
+            "announced": "בוצע: פיצול קליפביטול",
+            "undo": true,
+            "redo": true,
+            "replayOk": true,
+            "ok": true
+          },
+          {
+            "text": "מחק את הקליפ",
+            "kind": "plan",
+            "intent": "delete_clip",
+            "ops": 1,
+            "steps": 1,
+            "notes": [
+              "ripple_moves"
+            ],
+            "shownIsRun": true,
+            "oneTransaction": true,
+            "label": "Command bar: delete_clip",
+            "focusBack": true,
+            "liveBefore": "",
+            "announced": "בוצע: פיצול קליפביטול",
+            "undo": true,
+            "redo": true,
+            "replayOk": true,
+            "rippleMovesNote": "עוד 5 קליפים יזוזו כדי לסגור את הרווח",
+            "ok": true
+          },
+          {
+            "text": "הוסף כותרת \"יום הולדת 5\" בשנייה 3",
+            "kind": "plan",
+            "intent": "add_title",
+            "ops": 1,
+            "steps": 1,
+            "notes": [
+              "default_used"
+            ],
+            "shownIsRun": true,
+            "oneTransaction": true,
+            "label": "Command bar: add_title",
+            "focusBack": true,
+            "liveBefore": "",
+            "announced": "בוצע: פיצול קליפביטול",
+            "undo": true,
+            "redo": true,
+            "replayOk": true,
+            "ok": true
+          },
+          {
+            "text": "הגבר את המוזיקה ב־3 דציבל",
+            "kind": "plan",
+            "intent": "gain_change",
+            "ops": 1,
+            "steps": 1,
+            "notes": [],
+            "shownIsRun": true,
+            "oneTransaction": true,
+            "label": "Command bar: gain_change",
+            "focusBack": true,
+            "liveBefore": "",
+            "announced": "בוצע: מחיקה וסגירת הרווחביטול",
+            "undo": true,
+            "redo": true,
+            "replayOk": true,
+            "ok": true
+          },
+          {
+            "text": "הוסף מעבר בין כל הקליפים",
+            "kind": "plan",
+            "intent": "transitions_all",
+            "ops": 3,
+            "steps": 3,
+            "notes": [
+              "default_used",
+              "default_used",
+              "skipped_no_handle"
+            ],
+            "shownIsRun": true,
+            "oneTransaction": true,
+            "label": "Command bar: transitions_all",
+            "focusBack": true,
+            "liveBefore": "",
+            "announced": "בוצע: הוספת טקסטביטול",
+            "undo": true,
+            "redo": true,
+            "replayOk": true,
+            "skipped": "דילגתי על 1 חיתוכים בלי מספיק חומר: still.png",
+            "ok": true
+          },
+          {
+            "text": "סנכרן לקצב",
+            "kind": "ambiguous",
+            "intent": "sync_beat",
+            "choices": 3,
+            "ok": true
+          },
+          {
+            "text": "ייצא לוואטסאפ",
+            "kind": "action",
+            "intent": "export_to",
+            "sheet": true,
+            "whatsappChosen": true,
+            "ok": true
+          },
+          {
+            "text": "בטל",
+            "kind": "action",
+            "intent": "undo",
+            "undid": "the owner's newest edit",
+            "ok": true
+          },
+          {
+            "text": "עבור למצב הופעה",
+            "kind": "action",
+            "intent": "workspace",
+            "performView": true,
+            "ok": true
+          }
+        ],
+        "pageErrors": []
+      }
+    },
+    {
+      "id": "3",
+      "name": "what is shown is what runs (he): the preview's ops (window.__pfBar.lastPlan, data-plan-hash) hash to the committed row's ops, for each of the five plans",
+      "status": "pass",
+      "detail": [
+        {
+          "text": "חתוך כאן",
+          "ops": 1,
+          "same": true
+        },
+        {
+          "text": "מחק את הקליפ",
+          "ops": 1,
+          "same": true
+        },
+        {
+          "text": "הוסף כותרת \"יום הולדת 5\" בשנייה 3",
+          "ops": 1,
+          "same": true
+        },
+        {
+          "text": "הגבר את המוזיקה ב־3 דציבל",
+          "ops": 1,
+          "same": true
+        },
+        {
+          "text": "הוסף מעבר בין כל הקליפים",
+          "ops": 3,
+          "same": true
+        }
+      ]
+    },
+    {
+      "id": "4",
+      "name": "one request = one transaction (he): revision +1, one history entry labelled «Command bar: <intent>» without the typed text, key 'bar:'+planHash",
+      "status": "pass",
+      "detail": [
+        {
+          "label": "Command bar: split_here",
+          "ok": true
+        },
+        {
+          "label": "Command bar: delete_clip",
+          "ok": true
+        },
+        {
+          "label": "Command bar: add_title",
+          "ok": true
+        },
+        {
+          "label": "Command bar: gain_change",
+          "ok": true
+        },
+        {
+          "label": "Command bar: transitions_all",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "5",
+      "name": "one undo (he): Ctrl+Z gives the hash of before (ripple delete and 3 transitions included), Ctrl+Shift+Z the hash of after, Store.replay equals the store",
+      "status": "pass",
+      "detail": [
+        {
+          "intent": "split_here",
+          "undo": true,
+          "redo": true,
+          "replay": true
+        },
+        {
+          "intent": "delete_clip",
+          "undo": true,
+          "redo": true,
+          "replay": true
+        },
+        {
+          "intent": "add_title",
+          "undo": true,
+          "redo": true,
+          "replay": true
+        },
+        {
+          "intent": "gain_change",
+          "undo": true,
+          "redo": true,
+          "replay": true
+        },
+        {
+          "intent": "transitions_all",
+          "undo": true,
+          "redo": true,
+          "replay": true
+        }
+      ]
+    },
+    {
+      "id": "13",
+      "name": "keyboard (he): after each commit focus is back on open-palette and «בוצע: …» is announced in a polite live region (the undo toast; the bar's own region closes with the dialog)",
+      "status": "pass",
+      "detail": [
+        {
+          "intent": "split_here",
+          "focusBack": true,
+          "announced": "בוצע: פיצול קליפביטול"
+        },
+        {
+          "intent": "delete_clip",
+          "focusBack": true,
+          "announced": "בוצע: פיצול קליפביטול"
+        },
+        {
+          "intent": "add_title",
+          "focusBack": true,
+          "announced": "בוצע: פיצול קליפביטול"
+        },
+        {
+          "intent": "gain_change",
+          "focusBack": true,
+          "announced": "בוצע: מחיקה וסגירת הרווחביטול"
+        },
+        {
+          "intent": "transitions_all",
+          "focusBack": true,
+          "announced": "בוצע: הוספת טקסטביטול"
+        }
+      ]
+    },
+    {
+      "id": "14",
+      "name": "determinism (he): each plan's hash in the browser equals the hash Node computes from the same text and context",
+      "status": "pass",
+      "detail": [
+        {
+          "text": "חתוך כאן",
+          "browser": "2613e478665273b9d1b39c56a977c8fa8250e0ff64a83129841921a55199de6e",
+          "node": "2613e478665273b9d1b39c56a977c8fa8250e0ff64a83129841921a55199de6e",
+          "same": true
+        },
+        {
+          "text": "מחק את הקליפ",
+          "browser": "27200338a9e552c4ec80c9641e9cf680f8ebe263da23a651395c32e7bb579416",
+          "node": "27200338a9e552c4ec80c9641e9cf680f8ebe263da23a651395c32e7bb579416",
+          "same": true
+        },
+        {
+          "text": "הוסף כותרת \"יום הולדת 5\" בשנייה 3",
+          "browser": "c948f08a6970b7521bde356076b8a3a3b0b3ad0e0c7569fa0bf225db896856e2",
+          "node": "c948f08a6970b7521bde356076b8a3a3b0b3ad0e0c7569fa0bf225db896856e2",
+          "same": true
+        },
+        {
+          "text": "הגבר את המוזיקה ב־3 דציבל",
+          "browser": "d2faab4438ee5f54160be35e0a3cc408805b5a37e64f44bdc0ed1a9b1772884b",
+          "node": "d2faab4438ee5f54160be35e0a3cc408805b5a37e64f44bdc0ed1a9b1772884b",
+          "same": true
+        },
+        {
+          "text": "הוסף מעבר בין כל הקליפים",
+          "browser": "80102e26448198e277d6b3a5f2c62fb508845a1cd284454cf0bb5166caeee88c",
+          "node": "80102e26448198e277d6b3a5f2c62fb508845a1cd284454cf0bb5166caeee88c",
+          "same": true
+        }
+      ]
+    },
+    {
+      "id": "1",
+      "name": "owner examples in the editor (English): five plans commit, «sync to the beat» offers choices and commits nothing, export opens the sheet with WhatsApp chosen, undo undoes the owner's newest edit, perform mode opens",
+      "status": "pass",
+      "detail": {
+        "rows": [
+          {
+            "text": "split here",
+            "kind": "plan",
+            "intent": "split_here",
+            "ops": 1,
+            "steps": 1,
+            "notes": [],
+            "shownIsRun": true,
+            "oneTransaction": true,
+            "label": "Command bar: split_here",
+            "focusBack": true,
+            "liveBefore": "",
+            "announced": "Done: Split clipUndo",
+            "undo": true,
+            "redo": true,
+            "replayOk": true,
+            "ok": true
+          },
+          {
+            "text": "delete the clip",
+            "kind": "plan",
+            "intent": "delete_clip",
+            "ops": 1,
+            "steps": 1,
+            "notes": [
+              "ripple_moves"
+            ],
+            "shownIsRun": true,
+            "oneTransaction": true,
+            "label": "Command bar: delete_clip",
+            "focusBack": true,
+            "liveBefore": "",
+            "announced": "Done: Split clipUndo",
+            "undo": true,
+            "redo": true,
+            "replayOk": true,
+            "rippleMovesNote": "5 more clips will move to close the gap",
+            "ok": true
+          },
+          {
+            "text": "add title \"Happy birthday\" at 3s",
+            "kind": "plan",
+            "intent": "add_title",
+            "ops": 1,
+            "steps": 1,
+            "notes": [
+              "default_used"
+            ],
+            "shownIsRun": true,
+            "oneTransaction": true,
+            "label": "Command bar: add_title",
+            "focusBack": true,
+            "liveBefore": "",
+            "announced": "Done: Split clipUndo",
+            "undo": true,
+            "redo": true,
+            "replayOk": true,
+            "ok": true
+          },
+          {
+            "text": "turn the music up 3 dB",
+            "kind": "plan",
+            "intent": "gain_change",
+            "ops": 1,
+            "steps": 1,
+            "notes": [],
+            "shownIsRun": true,
+            "oneTransaction": true,
+            "label": "Command bar: gain_change",
+            "focusBack": true,
+            "liveBefore": "",
+            "announced": "Done: Delete and close the gapUndo",
+            "undo": true,
+            "redo": true,
+            "replayOk": true,
+            "ok": true
+          },
+          {
+            "text": "add transitions between all clips",
+            "kind": "plan",
+            "intent": "transitions_all",
+            "ops": 3,
+            "steps": 3,
+            "notes": [
+              "default_used",
+              "default_used",
+              "skipped_no_handle"
+            ],
+            "shownIsRun": true,
+            "oneTransaction": true,
+            "label": "Command bar: transitions_all",
+            "focusBack": true,
+            "liveBefore": "",
+            "announced": "Done: Added textUndo",
+            "undo": true,
+            "redo": true,
+            "replayOk": true,
+            "skipped": "Skipped 1 cuts without enough material: still.png",
+            "ok": true
+          },
+          {
+            "text": "sync to the beat",
+            "kind": "ambiguous",
+            "intent": "sync_beat",
+            "choices": 3,
+            "ok": true
+          },
+          {
+            "text": "export to whatsapp",
+            "kind": "action",
+            "intent": "export_to",
+            "sheet": true,
+            "whatsappChosen": true,
+            "ok": true
+          },
+          {
+            "text": "undo",
+            "kind": "action",
+            "intent": "undo",
+            "undid": "the owner's newest edit",
+            "ok": true
+          },
+          {
+            "text": "switch to perform mode",
+            "kind": "action",
+            "intent": "workspace",
+            "performView": true,
+            "ok": true
+          }
+        ],
+        "pageErrors": []
+      }
+    },
+    {
+      "id": "3",
+      "name": "what is shown is what runs (en): the preview's ops (window.__pfBar.lastPlan, data-plan-hash) hash to the committed row's ops, for each of the five plans",
+      "status": "pass",
+      "detail": [
+        {
+          "text": "split here",
+          "ops": 1,
+          "same": true
+        },
+        {
+          "text": "delete the clip",
+          "ops": 1,
+          "same": true
+        },
+        {
+          "text": "add title \"Happy birthday\" at 3s",
+          "ops": 1,
+          "same": true
+        },
+        {
+          "text": "turn the music up 3 dB",
+          "ops": 1,
+          "same": true
+        },
+        {
+          "text": "add transitions between all clips",
+          "ops": 3,
+          "same": true
+        }
+      ]
+    },
+    {
+      "id": "4",
+      "name": "one request = one transaction (en): revision +1, one history entry labelled «Command bar: <intent>» without the typed text, key 'bar:'+planHash",
+      "status": "pass",
+      "detail": [
+        {
+          "label": "Command bar: split_here",
+          "ok": true
+        },
+        {
+          "label": "Command bar: delete_clip",
+          "ok": true
+        },
+        {
+          "label": "Command bar: add_title",
+          "ok": true
+        },
+        {
+          "label": "Command bar: gain_change",
+          "ok": true
+        },
+        {
+          "label": "Command bar: transitions_all",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "5",
+      "name": "one undo (en): Ctrl+Z gives the hash of before (ripple delete and 3 transitions included), Ctrl+Shift+Z the hash of after, Store.replay equals the store",
+      "status": "pass",
+      "detail": [
+        {
+          "intent": "split_here",
+          "undo": true,
+          "redo": true,
+          "replay": true
+        },
+        {
+          "intent": "delete_clip",
+          "undo": true,
+          "redo": true,
+          "replay": true
+        },
+        {
+          "intent": "add_title",
+          "undo": true,
+          "redo": true,
+          "replay": true
+        },
+        {
+          "intent": "gain_change",
+          "undo": true,
+          "redo": true,
+          "replay": true
+        },
+        {
+          "intent": "transitions_all",
+          "undo": true,
+          "redo": true,
+          "replay": true
+        }
+      ]
+    },
+    {
+      "id": "13",
+      "name": "keyboard (en): after each commit focus is back on open-palette and «Done: …» is announced in a polite live region (the undo toast; the bar's own region closes with the dialog)",
+      "status": "pass",
+      "detail": [
+        {
+          "intent": "split_here",
+          "focusBack": true,
+          "announced": "Done: Split clipUndo"
+        },
+        {
+          "intent": "delete_clip",
+          "focusBack": true,
+          "announced": "Done: Split clipUndo"
+        },
+        {
+          "intent": "add_title",
+          "focusBack": true,
+          "announced": "Done: Split clipUndo"
+        },
+        {
+          "intent": "gain_change",
+          "focusBack": true,
+          "announced": "Done: Delete and close the gapUndo"
+        },
+        {
+          "intent": "transitions_all",
+          "focusBack": true,
+          "announced": "Done: Added textUndo"
+        }
+      ]
+    },
+    {
+      "id": "14",
+      "name": "determinism (en): each plan's hash in the browser equals the hash Node computes from the same text and context",
+      "status": "pass",
+      "detail": [
+        {
+          "text": "split here",
+          "browser": "d092dcc36ac38920aab88a0e9dca58ed5ed1cb8c467053a84ece4d965d46b6d7",
+          "node": "d092dcc36ac38920aab88a0e9dca58ed5ed1cb8c467053a84ece4d965d46b6d7",
+          "same": true
+        },
+        {
+          "text": "delete the clip",
+          "browser": "6dfc370736d3dc9ed880a02ee9c75f8927889a3f631badc3c57453d2887bf69b",
+          "node": "6dfc370736d3dc9ed880a02ee9c75f8927889a3f631badc3c57453d2887bf69b",
+          "same": true
+        },
+        {
+          "text": "add title \"Happy birthday\" at 3s",
+          "browser": "95f541f29cf0e41cf5c647d6ab5a7b5487646ce020ba0b2c88ba4c70c326cfb7",
+          "node": "95f541f29cf0e41cf5c647d6ab5a7b5487646ce020ba0b2c88ba4c70c326cfb7",
+          "same": true
+        },
+        {
+          "text": "turn the music up 3 dB",
+          "browser": "d2faab4438ee5f54160be35e0a3cc408805b5a37e64f44bdc0ed1a9b1772884b",
+          "node": "d2faab4438ee5f54160be35e0a3cc408805b5a37e64f44bdc0ed1a9b1772884b",
+          "same": true
+        },
+        {
+          "text": "add transitions between all clips",
+          "browser": "cd007c4613d1f2edb8aa588b3ab33250be7358e4738493c38ec2b8b536c7ea7e",
+          "node": "cd007c4613d1f2edb8aa588b3ab33250be7358e4738493c38ec2b8b536c7ea7e",
+          "same": true
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "name": "exact time in the editor: «בשנייה 3» at 30000/1001 stores add_text.start = frameTime(90) = 3.003 s exactly, and the rounding note was on screen before Enter",
+      "status": "pass",
+      "detail": {
+        "start": {
+          "value": "3003",
+          "timescale": 1000
+        },
+        "seconds": 3.003,
+        "note": "עוגל לפריים הקרוב: 0:03.00 (פריים 90)"
+      }
+    },
+    {
+      "id": "6",
+      "name": "never guessed: 30 ambiguous, incomplete, refused or unknown requests (Enter pressed on each) commit nothing; each shows every word it read (an ambiguous one: its readings as choices), every word it did not read, and at least one choice, nearest command or example; the kind equals Node's",
+      "status": "pass",
+      "detail": {
+        "revisionsMoved": 0,
+        "bad": []
+      }
+    },
+    {
+      "id": "8",
+      "name": "double Enter: two Enters on one plan give ONE transaction; the same strict request sent again is replayed (replayed: true) and the revision does not move",
+      "status": "pass",
+      "detail": {
+        "revisionsMoved": 1,
+        "replayStatus": 200,
+        "replayed": true
+      }
+    },
+    {
+      "id": "9",
+      "name": "same path, same scopes: the planned ops with a propose-mode grant give a proposal and no commit; with the observer token 403",
+      "status": "pass",
+      "detail": {
+        "proposer": {
+          "status": 200,
+          "proposalId": "prp_KiztZ6PSnYI"
+        },
+        "observer": 403,
+        "revisionsMoved": 0
+      }
+    },
+    {
+      "id": "7",
+      "name": "stale: a preview made at r, an agent edits, Enter gives 409 with nothing applied and a new preview (basis r+1) under «הפרויקט השתנה — בדקו שוב»; the second Enter commits on r+1",
+      "status": "pass",
+      "detail": {
+        "first": "4e8f49f909ce",
+        "second": "a9bf6538262d",
+        "basis": 26,
+        "stale": "הפרויקט השתנה — בדקו שוב",
+        "committedOn": 26
+      }
+    },
+    {
+      "id": "10",
+      "name": "not connected: GET /assistant/status says provider_not_configured (agent and owner), the palette row reads «עוזר השפה לא מחובר», POST …/assistant/requests gives 409 assistant_not_connected and no job row",
+      "status": "pass",
+      "detail": {
+        "setup": "provider_not_configured",
+        "row": "לבקש מהעוזר: תעשה סרט יפהעוזר השפה לא מחובראיך מחברים",
+        "request": 409,
+        "code": "assistant_not_connected",
+        "jobRows": 0
+      }
+    },
+    {
+      "id": "13",
+      "name": "accessibility: Ctrl+K, «חתוך כאן» / \"split here\", the polite status speaks, Enter, focus back on open-palette, Ctrl+Z — keyboard only; aria-activedescendant names the bar row, aria-describedby the preview; the live region and the preview are outside the listbox; heuristic audit of the open preview: 0 findings in Hebrew and English (dark: the whole page; light: the palette dialog)",
+      "status": "pass",
+      "detail": [
+        {
+          "lang": "he",
+          "theme": "dark",
+          "scope": "whole page",
+          "outsideTheDialogInLight": null,
+          "activedescendant": "pf-palette-opt-bar",
+          "describedby": "pf-bar-preview",
+          "live": "הבנתי: פיצול קליפ. Enter לביצוע",
+          "liveOutsideListbox": true,
+          "findings": 0,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "committed": true,
+          "focusBack": true,
+          "undone": true
+        },
+        {
+          "lang": "he",
+          "theme": "light",
+          "scope": "palette dialog",
+          "outsideTheDialogInLight": {
+            "lowContrast": 10,
+            "unnamed": 0,
+            "sample": [
+              {
+                "el": "span.asset-name",
+                "ratio": 1.01,
+                "text": "long",
+                "size": 14
+              },
+              {
+                "el": "button[data-testid=rename-ast_3bcaf1196b0].track-btn.inline-rename-btn",
+                "ratio": 3.18,
+                "text": "✎",
+                "size": 13
+              },
+              {
+                "el": "span.asset-name",
+                "ratio": 1.01,
+                "text": "short",
+                "size": 14
+              },
+              {
+                "el": "button[data-testid=rename-ast_f9468c79f20].track-btn.inline-rename-btn",
+                "ratio": 3.18,
+                "text": "✎",
+                "size": 13
+              }
+            ]
+          },
+          "activedescendant": "pf-palette-opt-bar",
+          "describedby": "pf-bar-preview",
+          "live": "הבנתי: פיצול קליפ. Enter לביצוע",
+          "liveOutsideListbox": true,
+          "findings": 0,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "committed": true,
+          "focusBack": true,
+          "undone": true
+        },
+        {
+          "lang": "en",
+          "theme": "dark",
+          "scope": "whole page",
+          "outsideTheDialogInLight": null,
+          "activedescendant": "pf-palette-opt-bar",
+          "describedby": "pf-bar-preview",
+          "live": "Understood: Split clip. Enter to apply",
+          "liveOutsideListbox": true,
+          "findings": 0,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "committed": true,
+          "focusBack": true,
+          "undone": true
+        },
+        {
+          "lang": "en",
+          "theme": "light",
+          "scope": "palette dialog",
+          "outsideTheDialogInLight": {
+            "lowContrast": 10,
+            "unnamed": 0,
+            "sample": [
+              {
+                "el": "span.asset-name",
+                "ratio": 1.01,
+                "text": "long",
+                "size": 14
+              },
+              {
+                "el": "button[data-testid=rename-ast_f671bd4f330].track-btn.inline-rename-btn",
+                "ratio": 3.18,
+                "text": "✎",
+                "size": 13
+              },
+              {
+                "el": "span.asset-name",
+                "ratio": 1.01,
+                "text": "short",
+                "size": 14
+              },
+              {
+                "el": "button[data-testid=rename-ast_64a28b155c0].track-btn.inline-rename-btn",
+                "ratio": 3.18,
+                "text": "✎",
+                "size": 13
+              }
+            ]
+          },
+          "activedescendant": "pf-palette-opt-bar",
+          "describedby": "pf-bar-preview",
+          "live": "Understood: Split clip. Enter to apply",
+          "liveOutsideListbox": true,
+          "findings": 0,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "committed": true,
+          "focusBack": true,
+          "undone": true
+        }
+      ]
+    },
+    {
+      "id": "11a",
+      "name": "MOCK adapter: a valid answer gives an open proposal with the revision unchanged and its steps rendered in the editor; the owner's accept gives +1, Ctrl+Z restores the document hash",
+      "status": "contract-tested",
+      "detail": {
+        "steps": [
+          "split_clip"
+        ],
+        "revisionWhileOpen": 0,
+        "accepted": true,
+        "undoRestores": true,
+        "calls": 1
+      }
+    },
+    {
+      "id": "11b",
+      "name": "MOCK adapter: each of the 9 invalid answers gives invalid_model_output with its reason, and no proposal",
+      "status": "contract-tested",
+      "detail": [
+        {
+          "name": "unknown op",
+          "status": "failed",
+          "code": "invalid_model_output",
+          "ok": true
+        },
+        {
+          "name": "internal op",
+          "status": "failed",
+          "code": "invalid_model_output",
+          "ok": true
+        },
+        {
+          "name": "people op",
+          "status": "failed",
+          "code": "invalid_model_output",
+          "ok": true
+        },
+        {
+          "name": "birth date in an allowed op",
+          "status": "failed",
+          "code": "invalid_model_output",
+          "ok": true
+        },
+        {
+          "name": "bad args",
+          "status": "failed",
+          "code": "invalid_model_output",
+          "ok": true
+        },
+        {
+          "name": "51 ops",
+          "status": "failed",
+          "code": "invalid_model_output",
+          "ok": true
+        },
+        {
+          "name": "text that is not JSON",
+          "status": "failed",
+          "code": "invalid_model_output",
+          "ok": true
+        },
+        {
+          "name": "finish length",
+          "status": "failed",
+          "code": "invalid_model_output",
+          "ok": true
+        },
+        {
+          "name": "empty tool input",
+          "status": "failed",
+          "code": "invalid_model_output",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "11c",
+      "name": "MOCK adapter: per-request cap 10¢ and an estimate of 12¢ give 402 budget_exceeded before anything is sent; the adapter's call count does not move",
+      "status": "contract-tested",
+      "detail": {
+        "requestBytes": 133874,
+        "priceIn": 82,
+        "status": 402,
+        "requestedCents": 12,
+        "cap": 10,
+        "calls": 0
+      }
+    },
+    {
+      "id": "11d",
+      "name": "MOCK adapter: unknown_after_send gives submission-unknown, the ledger stays unknown (counted), and no second call is made",
+      "status": "contract-tested",
+      "detail": {
+        "status": "submission-unknown",
+        "ledger": "unknown",
+        "calls": 1
+      }
+    },
+    {
+      "id": "11e",
+      "name": "MOCK adapter: the 11 requests handed to the adapter (1470195 bytes) hold none of the planted private strings (birth date, capture date, event, file name, transcript word, GPS-like path; with the switches off the name, title, marker and track name), nor the word choice «בת» in what the project shapes nor as a word anywhere, nor the key; the system text and tool are the reviewed prompt byte for byte",
+      "status": "contract-tested",
+      "detail": {
+        "requests": 11,
+        "fixedSame": true,
+        "found": [],
+        "formInVariable": false,
+        "formAsWord": false
+      }
+    },
+    {
+      "id": "12",
+      "name": "credential: the planted test key is in no JSON response and no log line of the proof; an agent PUT of config or key gives 403; the key file is 0600; a backup made now holds no assistant.key or assistant.json and not the key's bytes",
+      "status": "pass",
+      "detail": {
+        "agentPut": 403,
+        "agentKey": 403,
+        "ownerPut": 200,
+        "ownerKey": 200,
+        "setup": "ready",
+        "keyFileMode": "600",
+        "backup": 200,
+        "backupFiles": 6,
+        "assistantFilesInBackup": [],
+        "filesHoldingTheKey": [],
+        "scanned": {
+          "responses": 533,
+          "logLines": 60
+        },
+        "inResponses": 0,
+        "inLogs": 0
+      }
+    },
+    {
+      "id": "10",
+      "name": "not connected: 0 outbound connection attempts during the whole proof (Node sockets to non-loopback hosts; Chromium through the counting listener)",
+      "status": "pass",
+      "detail": {
+        "node": [],
+        "chromium": []
+      }
+    }
+  ],
+  "measurements": {
+    "neverGuessed": [
+      {
+        "text": "חתוך",
+        "kind": "incomplete",
+        "nodeKind": "incomplete",
+        "readWords": [
+          "חתוך"
+        ],
+        "choices": 0,
+        "nearest": 5,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "ב־3 שניות",
+        "kind": "unknown",
+        "nodeKind": "unknown",
+        "readWords": [],
+        "choices": 0,
+        "nearest": 3,
+        "unread": "מה שלא קראתי: ב־3 שניות",
+        "ok": true
+      },
+      {
+        "text": "הגבר ב־3",
+        "kind": "unknown",
+        "nodeKind": "unknown",
+        "readWords": [
+          "הגבר"
+        ],
+        "choices": 0,
+        "nearest": 1,
+        "unread": "מה שלא קראתי: ב־3",
+        "ok": true
+      },
+      {
+        "text": "הקול",
+        "kind": "unknown",
+        "nodeKind": "unknown",
+        "readWords": [],
+        "choices": 0,
+        "nearest": 4,
+        "unread": "מה שלא קראתי: הקול",
+        "ok": true
+      },
+      {
+        "text": "1,5 שניות",
+        "kind": "unknown",
+        "nodeKind": "unknown",
+        "readWords": [],
+        "choices": 0,
+        "nearest": 3,
+        "unread": "מה שלא קראתי: 1,5 שניות",
+        "ok": true
+      },
+      {
+        "text": "סנכרן לקצב",
+        "kind": "ambiguous",
+        "nodeKind": "ambiguous",
+        "readWords": [
+          "סנכרן",
+          "לקצב"
+        ],
+        "choices": 2,
+        "nearest": 0,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "תעשה שמח",
+        "kind": "unknown",
+        "nodeKind": "unknown",
+        "readWords": [],
+        "choices": 0,
+        "nearest": 3,
+        "unread": "מה שלא קראתי: תעשה שמח",
+        "ok": true
+      },
+      {
+        "text": "הוסף",
+        "kind": "unknown",
+        "nodeKind": "unknown",
+        "readWords": [],
+        "choices": 0,
+        "nearest": 3,
+        "unread": "מה שלא קראתי: הוסף",
+        "ok": true
+      },
+      {
+        "text": "הוסף כותרת",
+        "kind": "incomplete",
+        "nodeKind": "incomplete",
+        "readWords": [
+          "הוסף כותרת"
+        ],
+        "choices": 0,
+        "nearest": 2,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "הגבר את הקול ב־3 דציבל",
+        "kind": "ambiguous",
+        "nodeKind": "ambiguous",
+        "readWords": [
+          "הגבר",
+          "את",
+          "הקול",
+          "ב־3 דציבל"
+        ],
+        "choices": 2,
+        "nearest": 0,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "פצל כאן ואז מחק",
+        "kind": "unknown",
+        "nodeKind": "unknown",
+        "readWords": [
+          "פצל",
+          "כאן"
+        ],
+        "choices": 0,
+        "nearest": 4,
+        "unread": "מה שלא קראתי: ואז מחק",
+        "ok": true
+      },
+      {
+        "text": "הקליפ הבא",
+        "kind": "unknown",
+        "nodeKind": "unknown",
+        "readWords": [],
+        "choices": 0,
+        "nearest": 4,
+        "unread": "מה שלא קראתי: הקליפ הבא",
+        "ok": true
+      },
+      {
+        "text": "עבור",
+        "kind": "incomplete",
+        "nodeKind": "incomplete",
+        "readWords": [
+          "עבור"
+        ],
+        "choices": 0,
+        "nearest": 2,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "ייצא",
+        "kind": "incomplete",
+        "nodeKind": "incomplete",
+        "readWords": [
+          "ייצא"
+        ],
+        "choices": 0,
+        "nearest": 2,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "מהירות",
+        "kind": "incomplete",
+        "nodeKind": "incomplete",
+        "readWords": [
+          "מהירות"
+        ],
+        "choices": 0,
+        "nearest": 1,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "עמעום",
+        "kind": "incomplete",
+        "nodeKind": "incomplete",
+        "readWords": [
+          "עמעום"
+        ],
+        "choices": 0,
+        "nearest": 1,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "השתק",
+        "kind": "incomplete",
+        "nodeKind": "incomplete",
+        "readWords": [
+          "השתק"
+        ],
+        "choices": 0,
+        "nearest": 5,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "הוסף כותרת \"abc",
+        "kind": "incomplete",
+        "nodeKind": "incomplete",
+        "readWords": [
+          "הוסף כותרת",
+          "\"abc"
+        ],
+        "choices": 0,
+        "nearest": 2,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "הוסף אפקט קסם",
+        "kind": "refused",
+        "nodeKind": "refused",
+        "readWords": [
+          "הוסף אפקט",
+          "קסם"
+        ],
+        "choices": 0,
+        "nearest": 1,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "הוסף כותרת \"x\" בשנייה השלישית",
+        "kind": "ambiguous",
+        "nodeKind": "ambiguous",
+        "readWords": [
+          "הוסף כותרת",
+          "\"x\"",
+          "בשנייה השלישית"
+        ],
+        "choices": 2,
+        "nearest": 0,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "הוסף כותרת \"x\" ב־3 שניות",
+        "kind": "ambiguous",
+        "nodeKind": "ambiguous",
+        "readWords": [
+          "הוסף כותרת",
+          "\"x\"",
+          "ב־3 שניות"
+        ],
+        "choices": 2,
+        "nearest": 0,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "הוסף כותרת \"x\" ב־1,5 שניות",
+        "kind": "ambiguous",
+        "nodeKind": "ambiguous",
+        "readWords": [
+          "הוסף כותרת",
+          "\"x\"",
+          "ב־1,5 שניות"
+        ],
+        "choices": 2,
+        "nearest": 0,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "hello world",
+        "kind": "unknown",
+        "nodeKind": "unknown",
+        "readWords": [],
+        "choices": 0,
+        "nearest": 3,
+        "unread": "מה שלא קראתי: hello world",
+        "ok": true
+      },
+      {
+        "text": "שלום",
+        "kind": "unknown",
+        "nodeKind": "unknown",
+        "readWords": [],
+        "choices": 0,
+        "nearest": 3,
+        "unread": "מה שלא קראתי: שלום",
+        "ok": true
+      },
+      {
+        "text": "חתוך את הסוף",
+        "kind": "incomplete",
+        "nodeKind": "incomplete",
+        "readWords": [
+          "חתוך",
+          "את",
+          "הסוף"
+        ],
+        "choices": 0,
+        "nearest": 2,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "הקפא",
+        "kind": "incomplete",
+        "nodeKind": "incomplete",
+        "readWords": [
+          "הקפא"
+        ],
+        "choices": 0,
+        "nearest": 5,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "zoom",
+        "kind": "unknown",
+        "nodeKind": "unknown",
+        "readWords": [],
+        "choices": 0,
+        "nearest": 5,
+        "unread": "מה שלא קראתי: zoom",
+        "ok": true
+      },
+      {
+        "text": "דקה ועשר",
+        "kind": "unknown",
+        "nodeKind": "unknown",
+        "readWords": [],
+        "choices": 0,
+        "nearest": 3,
+        "unread": "מה שלא קראתי: דקה ועשר",
+        "ok": true
+      },
+      {
+        "text": "הוסף כותרת \"x\" למשך חצי פריים",
+        "kind": "refused",
+        "nodeKind": "refused",
+        "readWords": [
+          "הוסף כותרת",
+          "\"x\"",
+          "למשך חצי פריים"
+        ],
+        "choices": 0,
+        "nearest": 2,
+        "unread": null,
+        "ok": true
+      },
+      {
+        "text": "מחק",
+        "kind": "refused",
+        "nodeKind": "refused",
+        "readWords": [
+          "מחק"
+        ],
+        "choices": 2,
+        "nearest": 0,
+        "unread": null,
+        "ok": true
+      }
+    ],
+    "a11y": [
+      {
+        "lang": "he",
+        "theme": "dark",
+        "scope": "whole page",
+        "outsideTheDialogInLight": null,
+        "activedescendant": "pf-palette-opt-bar",
+        "describedby": "pf-bar-preview",
+        "live": "הבנתי: פיצול קליפ. Enter לביצוע",
+        "liveOutsideListbox": true,
+        "findings": 0,
+        "unnamed": [],
+        "lowContrast": [],
+        "tabIssues": [],
+        "noFocusRing": [],
+        "committed": true,
+        "focusBack": true,
+        "undone": true
+      },
+      {
+        "lang": "he",
+        "theme": "light",
+        "scope": "palette dialog",
+        "outsideTheDialogInLight": {
+          "lowContrast": 10,
+          "unnamed": 0,
+          "sample": [
+            {
+              "el": "span.asset-name",
+              "ratio": 1.01,
+              "text": "long",
+              "size": 14
+            },
+            {
+              "el": "button[data-testid=rename-ast_3bcaf1196b0].track-btn.inline-rename-btn",
+              "ratio": 3.18,
+              "text": "✎",
+              "size": 13
+            },
+            {
+              "el": "span.asset-name",
+              "ratio": 1.01,
+              "text": "short",
+              "size": 14
+            },
+            {
+              "el": "button[data-testid=rename-ast_f9468c79f20].track-btn.inline-rename-btn",
+              "ratio": 3.18,
+              "text": "✎",
+              "size": 13
+            }
+          ]
+        },
+        "activedescendant": "pf-palette-opt-bar",
+        "describedby": "pf-bar-preview",
+        "live": "הבנתי: פיצול קליפ. Enter לביצוע",
+        "liveOutsideListbox": true,
+        "findings": 0,
+        "unnamed": [],
+        "lowContrast": [],
+        "tabIssues": [],
+        "noFocusRing": [],
+        "committed": true,
+        "focusBack": true,
+        "undone": true
+      },
+      {
+        "lang": "en",
+        "theme": "dark",
+        "scope": "whole page",
+        "outsideTheDialogInLight": null,
+        "activedescendant": "pf-palette-opt-bar",
+        "describedby": "pf-bar-preview",
+        "live": "Understood: Split clip. Enter to apply",
+        "liveOutsideListbox": true,
+        "findings": 0,
+        "unnamed": [],
+        "lowContrast": [],
+        "tabIssues": [],
+        "noFocusRing": [],
+        "committed": true,
+        "focusBack": true,
+        "undone": true
+      },
+      {
+        "lang": "en",
+        "theme": "light",
+        "scope": "palette dialog",
+        "outsideTheDialogInLight": {
+          "lowContrast": 10,
+          "unnamed": 0,
+          "sample": [
+            {
+              "el": "span.asset-name",
+              "ratio": 1.01,
+              "text": "long",
+              "size": 14
+            },
+            {
+              "el": "button[data-testid=rename-ast_f671bd4f330].track-btn.inline-rename-btn",
+              "ratio": 3.18,
+              "text": "✎",
+              "size": 13
+            },
+            {
+              "el": "span.asset-name",
+              "ratio": 1.01,
+              "text": "short",
+              "size": 14
+            },
+            {
+              "el": "button[data-testid=rename-ast_64a28b155c0].track-btn.inline-rename-btn",
+              "ratio": 3.18,
+              "text": "✎",
+              "size": 13
+            }
+          ]
+        },
+        "activedescendant": "pf-palette-opt-bar",
+        "describedby": "pf-bar-preview",
+        "live": "Understood: Split clip. Enter to apply",
+        "liveOutsideListbox": true,
+        "findings": 0,
+        "unnamed": [],
+        "lowContrast": [],
+        "tabIssues": [],
+        "noFocusRing": [],
+        "committed": true,
+        "focusBack": true,
+        "undone": true
+      }
+    ]
+  },
+  "report": {
+    "hebrew": [
+      {
+        "text": "חתוך כאן",
+        "kind": "plan",
+        "intent": "split_here",
+        "ops": 1,
+        "steps": 1,
+        "notes": [
+          "alternative_reading"
+        ],
+        "shownIsRun": true,
+        "oneTransaction": true,
+        "label": "Command bar: split_here",
+        "focusBack": true,
+        "liveBefore": "",
+        "announced": "בוצע: פיצול קליפביטול",
+        "undo": true,
+        "redo": true,
+        "replayOk": true,
+        "ok": true
+      },
+      {
+        "text": "מחק את הקליפ",
+        "kind": "plan",
+        "intent": "delete_clip",
+        "ops": 1,
+        "steps": 1,
+        "notes": [
+          "ripple_moves"
+        ],
+        "shownIsRun": true,
+        "oneTransaction": true,
+        "label": "Command bar: delete_clip",
+        "focusBack": true,
+        "liveBefore": "",
+        "announced": "בוצע: פיצול קליפביטול",
+        "undo": true,
+        "redo": true,
+        "replayOk": true,
+        "rippleMovesNote": "עוד 5 קליפים יזוזו כדי לסגור את הרווח",
+        "ok": true
+      },
+      {
+        "text": "הוסף כותרת \"יום הולדת 5\" בשנייה 3",
+        "kind": "plan",
+        "intent": "add_title",
+        "ops": 1,
+        "steps": 1,
+        "notes": [
+          "default_used"
+        ],
+        "shownIsRun": true,
+        "oneTransaction": true,
+        "label": "Command bar: add_title",
+        "focusBack": true,
+        "liveBefore": "",
+        "announced": "בוצע: פיצול קליפביטול",
+        "undo": true,
+        "redo": true,
+        "replayOk": true,
+        "ok": true
+      },
+      {
+        "text": "הגבר את המוזיקה ב־3 דציבל",
+        "kind": "plan",
+        "intent": "gain_change",
+        "ops": 1,
+        "steps": 1,
+        "notes": [],
+        "shownIsRun": true,
+        "oneTransaction": true,
+        "label": "Command bar: gain_change",
+        "focusBack": true,
+        "liveBefore": "",
+        "announced": "בוצע: מחיקה וסגירת הרווחביטול",
+        "undo": true,
+        "redo": true,
+        "replayOk": true,
+        "ok": true
+      },
+      {
+        "text": "הוסף מעבר בין כל הקליפים",
+        "kind": "plan",
+        "intent": "transitions_all",
+        "ops": 3,
+        "steps": 3,
+        "notes": [
+          "default_used",
+          "default_used",
+          "skipped_no_handle"
+        ],
+        "shownIsRun": true,
+        "oneTransaction": true,
+        "label": "Command bar: transitions_all",
+        "focusBack": true,
+        "liveBefore": "",
+        "announced": "בוצע: הוספת טקסטביטול",
+        "undo": true,
+        "redo": true,
+        "replayOk": true,
+        "skipped": "דילגתי על 1 חיתוכים בלי מספיק חומר: still.png",
+        "ok": true
+      },
+      {
+        "text": "סנכרן לקצב",
+        "kind": "ambiguous",
+        "intent": "sync_beat",
+        "choices": 3,
+        "ok": true
+      },
+      {
+        "text": "ייצא לוואטסאפ",
+        "kind": "action",
+        "intent": "export_to",
+        "sheet": true,
+        "whatsappChosen": true,
+        "ok": true
+      },
+      {
+        "text": "בטל",
+        "kind": "action",
+        "intent": "undo",
+        "undid": "the owner's newest edit",
+        "ok": true
+      },
+      {
+        "text": "עבור למצב הופעה",
+        "kind": "action",
+        "intent": "workspace",
+        "performView": true,
+        "ok": true
+      }
+    ],
+    "english": [
+      {
+        "text": "split here",
+        "kind": "plan",
+        "intent": "split_here",
+        "ops": 1,
+        "steps": 1,
+        "notes": [],
+        "shownIsRun": true,
+        "oneTransaction": true,
+        "label": "Command bar: split_here",
+        "focusBack": true,
+        "liveBefore": "",
+        "announced": "Done: Split clipUndo",
+        "undo": true,
+        "redo": true,
+        "replayOk": true,
+        "ok": true
+      },
+      {
+        "text": "delete the clip",
+        "kind": "plan",
+        "intent": "delete_clip",
+        "ops": 1,
+        "steps": 1,
+        "notes": [
+          "ripple_moves"
+        ],
+        "shownIsRun": true,
+        "oneTransaction": true,
+        "label": "Command bar: delete_clip",
+        "focusBack": true,
+        "liveBefore": "",
+        "announced": "Done: Split clipUndo",
+        "undo": true,
+        "redo": true,
+        "replayOk": true,
+        "rippleMovesNote": "5 more clips will move to close the gap",
+        "ok": true
+      },
+      {
+        "text": "add title \"Happy birthday\" at 3s",
+        "kind": "plan",
+        "intent": "add_title",
+        "ops": 1,
+        "steps": 1,
+        "notes": [
+          "default_used"
+        ],
+        "shownIsRun": true,
+        "oneTransaction": true,
+        "label": "Command bar: add_title",
+        "focusBack": true,
+        "liveBefore": "",
+        "announced": "Done: Split clipUndo",
+        "undo": true,
+        "redo": true,
+        "replayOk": true,
+        "ok": true
+      },
+      {
+        "text": "turn the music up 3 dB",
+        "kind": "plan",
+        "intent": "gain_change",
+        "ops": 1,
+        "steps": 1,
+        "notes": [],
+        "shownIsRun": true,
+        "oneTransaction": true,
+        "label": "Command bar: gain_change",
+        "focusBack": true,
+        "liveBefore": "",
+        "announced": "Done: Delete and close the gapUndo",
+        "undo": true,
+        "redo": true,
+        "replayOk": true,
+        "ok": true
+      },
+      {
+        "text": "add transitions between all clips",
+        "kind": "plan",
+        "intent": "transitions_all",
+        "ops": 3,
+        "steps": 3,
+        "notes": [
+          "default_used",
+          "default_used",
+          "skipped_no_handle"
+        ],
+        "shownIsRun": true,
+        "oneTransaction": true,
+        "label": "Command bar: transitions_all",
+        "focusBack": true,
+        "liveBefore": "",
+        "announced": "Done: Added textUndo",
+        "undo": true,
+        "redo": true,
+        "replayOk": true,
+        "skipped": "Skipped 1 cuts without enough material: still.png",
+        "ok": true
+      },
+      {
+        "text": "sync to the beat",
+        "kind": "ambiguous",
+        "intent": "sync_beat",
+        "choices": 3,
+        "ok": true
+      },
+      {
+        "text": "export to whatsapp",
+        "kind": "action",
+        "intent": "export_to",
+        "sheet": true,
+        "whatsappChosen": true,
+        "ok": true
+      },
+      {
+        "text": "undo",
+        "kind": "action",
+        "intent": "undo",
+        "undid": "the owner's newest edit",
+        "ok": true
+      },
+      {
+        "text": "switch to perform mode",
+        "kind": "action",
+        "intent": "workspace",
+        "performView": true,
+        "ok": true
+      }
+    ],
+    "credential": {
+      "agentPut": 403,
+      "agentKey": 403,
+      "ownerPut": 200,
+      "ownerKey": 200,
+      "setup": "ready",
+      "keyFileMode": "600",
+      "backup": 200,
+      "backupFiles": 6,
+      "assistantFilesInBackup": [],
+      "filesHoldingTheKey": []
+    }
+  }
+}
