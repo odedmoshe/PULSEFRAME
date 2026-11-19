@@ -2,7 +2,8 @@
  * The command bar inside the palette and the «עוזר השפה» Settings section (ADR-0027). Tokens of ds/tokens.css only; logical
  * properties (RTL first); both themes through the tokens. The rows reuse the palette's .pf-pal-option.
  */
-.pf-bar { display: flex; flex-direction: column; gap: var(--pf-sp-2); padding-block-end: var(--pf-sp-3); }
+/* .pf-cbar, not .pf-bar: ds/primitives.css owns .pf-bar (the 6 px progress bar, overflow hidden), which clipped the bar's rows */
+.pf-cbar { display: flex; flex-direction: column; gap: var(--pf-sp-2); padding-block-end: var(--pf-sp-3); }
 .pf-bar-panel { flex: 0 1 auto; min-block-size: 0; max-block-size: 45%; overflow-y: auto; padding-inline: var(--pf-sp-4); padding-block-end: var(--pf-sp-3); scrollbar-width: thin; }
 .pf-bar-panel:empty { display: none; }
 .pf-bar-sr { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -23,7 +24,11 @@
 .pf-bar-stale { margin: var(--pf-sp-2) var(--pf-sp-3) 0; padding: var(--pf-sp-3) var(--pf-sp-5); border-radius: var(--pf-r-md); color: var(--pf-text); background: color-mix(in srgb, var(--pf-attention) 14%, transparent); box-shadow: inset 0 0 0 1px var(--pf-attention); font-size: var(--pf-fs-xs); }
 .pf-bar-untranslated { color: var(--pf-text-2); font-size: var(--pf-fs-xs); }
 .num { font-variant-numeric: tabular-nums; }
-/* the assistant's row */
+/* the assistant's row and the palette's lines outside the listbox */
+.pf-pal-extra { flex: 0 0 auto; padding-inline: var(--pf-sp-4); }
+/* not connected: greyed (the row is not an option, so it is not aria-disabled; its «איך מחברים» works) */
+.pf-pal-option.is-assistant[data-connected='false'] { cursor: default; }
+.pf-pal-option.is-assistant[data-connected='false'] .pf-pal-label { color: var(--pf-text-3); }
 .pf-pal-option.is-assistant.is-live { flex-direction: column; align-items: stretch; cursor: default; }
 .pf-bar-asst-line { color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
 .pf-bar-asst-actions { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); align-items: center; }

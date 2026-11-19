@@ -117,3 +117,17 @@ describe('BarSection', () => {
     expect(P.highlightSegments('abcdef', [{ role: 'verb', span: [0, 2], value: 0 }, { role: 'object', span: [1, 3], value: 0 }, { role: 'text', span: [4, 6], value: 0 }])).toEqual([{ text: 'abc', hit: true }, { text: ' ', hit: false }].slice(0, 1).concat([{ text: 'd', hit: false }, { text: 'ef', hit: true }]));
   });
 });
+
+describe('the rows are not clipped', () => {
+  it('the group does not use .pf-bar, the design system\'s 6 px progress bar (overflow hidden), which hid the bar\'s rows', async () => {
+    const { readFileSync } = await import('node:fs');
+    const h = html(plan, 'חתוך כאן');
+    expect(h).not.toMatch(/class="pf-bar"/);
+    expect(h).toContain('class="pf-cbar"');
+    const ds = readFileSync(new URL('../../ds/primitives.css', import.meta.url), 'utf8');
+    const own = readFileSync(new URL('./commandBar.css', import.meta.url), 'utf8');
+    const dsClasses = new Set([...ds.matchAll(/\.(pf-[a-z0-9-]+)/g)].map((m) => m[1]!));
+    const ownRoots = [...own.matchAll(/^\.(pf-[a-z0-9-]+)\s*[{,]/gm)].map((m) => m[1]!);
+    expect(ownRoots.filter((c) => dsClasses.has(c))).toEqual([]); // no class of the bar's own sheet is also a design-system class
+  });
+});

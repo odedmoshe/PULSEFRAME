@@ -78,8 +78,8 @@ export function AssistantRow({ query, lang, optionDomId }: AssistantRowProps): R
 
   return (
     <div
-      className={`pf-pal-option is-assistant${ready ? ' is-live' : ''}`} role="option" aria-selected="false" aria-disabled={ready ? undefined : 'true'}
-      id={optionDomId('assistant')} data-testid={TID.assistantRow} data-ready={ready || undefined}
+      className={`pf-pal-option is-assistant${ready ? ' is-live' : ''}`}
+      id={optionDomId('assistant')} data-testid={TID.assistantRow} data-ready={ready || undefined} data-connected={ready ? 'true' : 'false'}
     >
       <span className="pf-pal-names"><Bot size={14} strokeWidth={1.75} aria-hidden="true" className="pf-pal-ic is-agent" /><span className="pf-pal-label"><bdi dir="auto">{C.palAssistantRow(q)}</bdi></span>
         {!ready && <span className="pf-pal-unavail">{setupWords(lang, status)}</span>}</span>

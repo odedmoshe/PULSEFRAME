@@ -278,15 +278,16 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
                   ))}
                 </div>
               )}
-              {scope !== 'assistant' && keys.length === 0 && <div className="pf-pal-empty" role="status">{searching ? C.palEmpty : t('palette.empty')}</div>}
-              {/* The assistant: honest about not being connected. It never pretends to understand free language. */}
-              {(scope === 'all' || scope === 'assistant') && searching && (
-                <div role="group" aria-label={C.scopeAssistant}>
-                  <AssistantRow query={query} lang={lang} optionDomId={optionDomId} />
-                </div>
-              )}
-              {scope === 'assistant' && <p className="pf-pal-note is-block" role="status" data-testid="palette-assistant-note">{C.palAssistantOff}</p>}
             </div>
+            {/* Outside the listbox (it owns only options and groups): the empty line, and the assistant, which is not an option
+                (the arrows never reach it) and holds real buttons — «איך מחברים», send, accept and reject (ADR-0027). */}
+            {scope !== 'assistant' && keys.length === 0 && <div className="pf-pal-empty pf-pal-extra" role="status">{searching ? C.palEmpty : t('palette.empty')}</div>}
+            {(scope === 'all' || scope === 'assistant') && searching && (
+              <div className="pf-pal-extra" role="group" aria-label={C.scopeAssistant}>
+                <AssistantRow query={query} lang={lang} optionDomId={optionDomId} />
+              </div>
+            )}
+            {scope === 'assistant' && <p className="pf-pal-note is-block pf-pal-extra" role="status" data-testid="palette-assistant-note">{C.palAssistantOff}</p>}
             {/* the bar's live region and preview: outside the listbox, which owns only options and groups (ADR-0027) */}
             <BarPanel slot={bar} query={query} activeKey={activeKey} off={scope === 'assistant'} />
             <div className="pf-pal-footer">

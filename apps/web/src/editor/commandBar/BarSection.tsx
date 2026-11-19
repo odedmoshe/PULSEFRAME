@@ -41,7 +41,7 @@ function Section({ slot, query, activeKey, onHover, optionDomId }: BarSectionPro
   const kind = r.kind === 'plan' || r.kind === 'action' ? (r.kind === 'plan' ? intentName(r.intent, lang) : plain(describeAction(r.action, lang, rate))) : null;
 
   return (
-    <div role="group" aria-label={barText(lang, 'bar.label')} className="pf-bar" data-testid="bar-section">
+    <div role="group" aria-label={barText(lang, 'bar.label')} className="pf-cbar" data-testid="bar-section">
       <div
         id={optionDomId(resultRow.key)} role="option" className="pf-pal-option pf-bar-row" data-testid={TID.result}
         aria-selected={resultRow.key === activeKey} aria-describedby={resultRow.key === activeKey ? BAR_DOM_IDS.preview : undefined} data-active={resultRow.key === activeKey || undefined}

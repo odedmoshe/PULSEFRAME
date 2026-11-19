@@ -59,7 +59,10 @@ describe('AssistantRow', () => {
   it('reads «עוזר השפה לא מחובר» with «איך מחברים» for the owner until the status says ready', () => {
     const html = render(createElement(Row.AssistantRow, { query: 'חתוך הכול', lang: 'he', optionDomId: opt }), 'user:local');
     expect(html).toContain(`data-testid="${TID.assistantRow}"`);
-    expect(html).toContain('aria-disabled="true"');
+    // not an option (the palette mounts it outside the listbox) and not disabled: its «איך מחברים» is a working button
+    expect(html).not.toContain('role="option"');
+    expect(html).not.toContain('aria-disabled');
+    expect(html).toContain('data-connected="false"');
     expect(html).toContain('עוזר השפה לא מחובר');
     expect(html).toContain('איך מחברים');
     expect(html).toContain(`data-testid="${TID.assistantConnect}"`);
