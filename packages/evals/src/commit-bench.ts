@@ -8,7 +8,7 @@
  * plus perform mode's live path (quantise + plan + applyTransaction in memory, as apps/web capture.ts liveDocument does).
  *
  * Phases are timed on an instrumented copy of Store.commit's steps, in its order, against a real Store's SQLite database:
- *   load (SELECT + JSON.parse + migrateProject) · clone (structuredClone in applyTransaction) · parse (zod args; for apply_take
+ *   load (SELECT + JSON.parse + migrateProject) · clone (the copy applyTransaction makes) · parse (zod args; for apply_take
  *   the outer schema and every step's) · apply (the op bodies, step parses excluded) · validate (validateProject) ·
  *   diff (diffEntities + privacyChanged) · serialise (JSON.stringify of document, ops, result, changes, event) ·
  *   write (the SQLite statements) · emit (drainOutbox).
@@ -26,6 +26,8 @@ import {
   type OpCall, type PadBank, type ProjectDocument, type QuantiseSettings, type Tap,
 } from '@pulseframe/core';
 import { Store } from '../../../apps/server/src/store.ts';
+import { cloneDocument } from '../../core/src/clone.ts';
+import { REFERENCE_PATH } from '../../core/src/ops.ts';
 import { privacyChanged } from '../../../apps/server/src/privacyPurge.ts';
 
 const args = process.argv.slice(2);
@@ -109,7 +111,7 @@ function phasedCommit(store: Store, projectId: string, ops: OpCall[], allowInter
     const doc = migrateProject(JSON.parse(row.doc));
     lap('load');
     const idSeed = randomBytes(5).toString('hex');
-    const draft = structuredClone(doc);
+    const draft = REFERENCE_PATH.on ? structuredClone(doc) : cloneDocument(doc); // as applyTransaction copies
     lap('clone');
     const ctx = { newId: makeIdSource(idSeed), actor: 'bench' };
     const results: { op: string; summary: string; affectedIds: string[]; output?: Record<string, unknown> }[] = [];
