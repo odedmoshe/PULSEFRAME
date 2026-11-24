@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-19T04:13:07.464Z",
+  "ranAt": "2026-11-24T20:44:12.481Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v653 x64",
+    "platform": "Linux 6.18.44-fc-v819 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
@@ -161,7 +161,7 @@
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
       "ok": true,
       "detail": {
-        "editor-he": 0.993053,
+        "editor-he": 0.993052,
         "editor-en": 0.994136,
         "palette-en": 0.999771
       }
@@ -629,7 +629,7 @@
       "detail": {
         "sampled": 40,
         "movingFramesCompared": 38,
-        "differentSourceFrames": 28,
+        "differentSourceFrames": 29,
         "firstFrames": [
           {
             "frame": 3,
@@ -642,9 +642,9 @@
             "code": 7
           },
           {
-            "frame": 10,
+            "frame": 11,
             "quality": "draft",
-            "code": 10
+            "code": 11
           },
           {
             "frame": 14,
@@ -652,9 +652,9 @@
             "code": 14
           },
           {
-            "frame": 18,
+            "frame": 17,
             "quality": "draft",
-            "code": 18
+            "code": 17
           },
           {
             "frame": 21,
