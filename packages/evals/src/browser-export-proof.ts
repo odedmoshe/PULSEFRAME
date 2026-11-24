@@ -238,6 +238,40 @@ async function main() {
     check('restart: a NEW job over a fresh snapshot succeeds; exactly one succeeded job carries its output; the lost job published nothing', r6.result.jobId !== lostJobId && succeeded.filter((s) => s.sha === sha6).length === 1 && !server.store.getJob(lostJobId).output, { newJob: r6.result.jobId, lostJob: lostJobId });
     await late.page.close();
 
+    console.log('\n# 7b. an agent cancels the tab\'s export mid-run through MCP cancel_job (the same path as POST /jobs/:jobId/cancel)');
+    // A two-minute timeline (3,600 frames), long enough that the tab is still rendering when the cancel arrives.
+    const pidLong: string = (await rest('/projects', { name: 'browser-export-cancel', width: 640, height: 360 })).body.project.id;
+    await rest(`/projects/${pidLong}/transactions`, { ops: [{ op: 'add_text', args: { text: 'ביטול באמצע · cancel mid-run', start: f(0), duration: T.rt(120, 1) } }] });
+    const LONG = 3600;
+    const mcpCall = async (name: string, args: Record<string, unknown>) => {
+      const r = await fetch(`${base}/mcp`, { method: 'POST', headers: { ...h, 'content-type': 'application/json', accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }) });
+      const text = await r.text();
+      const msg = JSON.parse((r.headers.get('content-type') ?? '').includes('text/event-stream') ? text.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5)).join('') : text);
+      return { isError: msg.result?.isError === true, body: JSON.parse(msg.result?.content?.[0]?.text ?? '{}') };
+    };
+    const cx = await openPage();
+    const running = cx.page.evaluate(([p]) => window.__pfBrowserExport.tryRun(p as string, { quality: 'draft' }), [pidLong] as const);
+    await cx.page.waitForFunction(() => (window.__pfBrowserExport.last.progress as any)?.framesDone >= 30, undefined, { timeout: 120_000 });
+    const cxJob = await cx.page.evaluate(() => window.__pfBrowserExport.last);
+    const framesAtCancel = (cxJob.progress as any).framesDone as number;
+    const canceledAt = Date.now();
+    const viaTool = await mcpCall('cancel_job', { jobId: cxJob.jobId });
+    const outcome = await running;
+    const stopSeconds = (Date.now() - canceledAt) / 1000;
+    const framesAtStop = (await cx.page.evaluate(() => window.__pfBrowserExport.last.progress as any)).framesDone as number;
+    const cj = (await rest(`/jobs/${cxJob.jobId}`)).body;
+    const afterHb = await cx.page.evaluate(async ([jobId, sid]) => (await window.__pfBrowserExport.post(`/jobs/${jobId}/heartbeat`, { sessionId: sid, framesDone: 1 })).body, [cxJob.jobId, cxJob.sessionId] as const);
+    const lateDone = await cx.page.evaluate(async ([jobId, sid, n]) => { const r = await window.__pfBrowserExport.post(`/jobs/${jobId}/complete`, { sessionId: sid, bytes: 1, sha256: 'c'.repeat(64), videoCodec: 'avc', audioCodec: 'aac', frames: n, container: 'mp4' }); return { status: r.status, code: r.code }; }, [cxJob.jobId, cxJob.sessionId, LONG] as const);
+    measurements.agentCancel = { frames: LONG, framesAtCancel, framesAtStop, cancelToStopSeconds: +stopSeconds.toFixed(2), heartbeatSeconds: 5, tool: viaTool.body, tabError: outcome.ok ? null : { code: outcome.code, message: outcome.message } };
+    check('an agent (MCP cancel_job) stops the export the tab is rendering: the tab stops within a heartbeat, names who asked, publishes nothing, releases the lease and the job ends canceled',
+      !viaTool.isError && viaTool.body.status === 'cancel-requested' && !outcome.ok && outcome.code === 'canceled' && /agent:local/.test(outcome.message)
+      && framesAtStop < LONG && stopSeconds <= 8
+      && cj.status === 'canceled' && !cj.output && cj.error?.code === 'canceled' && cj.error?.canceledBy === 'agent:local'
+      && afterHb.canceled === true && lateDone.status === 409 && lateDone.code === 'job_canceled'
+      && !server.store.getJob(cxJob.jobId!).output,
+      measurements.agentCancel);
+    await cx.page.close();
+
     console.log('\n# 8. blockers refuse before any job exists; unsupported encoder refuses before any job exists');
     const pid2: string = (await rest('/projects', { name: 'blocked', width: 640, height: 360 })).body.project.id;
     const t2 = (await rest(`/projects/${pid2}/transactions`, { ops: [{ op: 'add_text', args: { text: 'x', start: f(0), duration: f(30) } }] })).body;
