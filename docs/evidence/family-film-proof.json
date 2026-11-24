@@ -1,8 +1,8 @@
 {
   "proof": "family-film",
   "status": "passed",
-  "at": "2026-11-19T06:26:27.894Z",
-  "summary": "41/41 checks passed, 0 section(s) blocked",
+  "at": "2026-11-24T21:40:03.389Z",
+  "summary": "42/42 checks passed, 0 section(s) blocked",
   "checks": [
     {
       "id": "F7",
@@ -78,7 +78,7 @@
           "attached": 6,
           "revision": 25,
           "skipped": [],
-          "wallSeconds": 6.774,
+          "wallSeconds": 6.548,
           "mediaSeconds": 82
         },
         "revisionBefore": 24,
@@ -120,7 +120,7 @@
           "attached": 0,
           "revision": null,
           "skipped": [],
-          "wallSeconds": 1.407,
+          "wallSeconds": 1.323,
           "mediaSeconds": 82
         },
         "digests": {
@@ -622,9 +622,9 @@
       "name": "R1: the moved clip and the trimmed clip are byte-identical and present after regenerating at 30 s",
       "value": {
         "protected": [
-          "clp_7a798e10fe4",
-          "clp_7a798e10fe6",
-          "clp_7a798e10fe7"
+          "clp_4c7b19aaab4",
+          "clp_4c7b19aaab6",
+          "clp_4c7b19aaab7"
         ],
         "replaced": 11
       },
@@ -923,6 +923,47 @@
       },
       "budget": "+1 revision, target 30",
       "pass": true
+    },
+    {
+      "id": "F20",
+      "name": "a film clip deleted by hand with Shift+Delete: the film bar offers «החזרת החלקים שנמחקו» (not before); the button makes the film whole again in one revision and is gone",
+      "value": {
+        "pictures": 7,
+        "onTimeline": 1,
+        "offeredBefore": 0,
+        "deleted": true,
+        "offered": {
+          "count": 1,
+          "text": "החזרת החלקים שנמחקו",
+          "visible": true,
+          "removed": 1
+        },
+        "back": {
+          "revision": 18,
+          "removed": 0,
+          "pictureSlots": 7,
+          "offered": 0,
+          "refusal": null
+        },
+        "withDefaultDelete": {
+          "deleteOps": [
+            [
+              "ripple_delete_clips"
+            ]
+          ],
+          "offered": 1,
+          "afterButton": {
+            "revisions": 1,
+            "refusal": null,
+            "removed": 0,
+            "offered": 0
+          },
+          "undoneExactly": true
+        },
+        "pageErrors": []
+      },
+      "budget": "offered once, +1 revision, 0 removed, exact undo",
+      "pass": true
     }
   ],
   "blocked": [],
@@ -978,7 +1019,7 @@
           "offset": 0
         }
       ],
-      "generateSeconds": 13.49
+      "generateSeconds": 13.9
     },
     "capturesReadOnUpload": {
       "film-a.mp4": {
@@ -1082,16 +1123,16 @@
       "downbeats": 47
     },
     "measureSpeed": {
-      "wallSeconds": 6.82,
+      "wallSeconds": 6.58,
       "mediaSeconds": 82,
-      "timesRealTime": 12.03,
+      "timesRealTime": 12.47,
       "output": {
         "measured": 6,
         "cached": 0,
         "attached": 6,
         "revision": 25,
         "skipped": [],
-        "wallSeconds": 6.774,
+        "wallSeconds": 6.548,
         "mediaSeconds": 82
       }
     },
@@ -1099,8 +1140,8 @@
       "origin"
     ],
     "commitLatencyMs": {
-      "before": 5.55,
-      "afterMeasuring": 4.77
+      "before": 5.3,
+      "afterMeasuring": 5.06
     },
     "plan": {
       "picks": [
@@ -1315,9 +1356,9 @@
           "shorter_than_target"
         ],
         "protected": [
-          "clp_7a798e10fe4",
-          "clp_7a798e10fe6",
-          "clp_7a798e10fe7"
+          "clp_4c7b19aaab4",
+          "clp_4c7b19aaab6",
+          "clp_4c7b19aaab7"
         ],
         "replaced": 11
       },
@@ -1386,7 +1427,7 @@
           "longer_than_target"
         ],
         "protected": [
-          "clp_7a798e10fef"
+          "clp_4c7b19aaabf"
         ],
         "replaced": 13
       },
@@ -1456,7 +1497,7 @@
           "pictures_missing"
         ],
         "protected": [
-          "clp_7a798e10fef"
+          "clp_4c7b19aaabf"
         ],
         "replaced": 13
       }

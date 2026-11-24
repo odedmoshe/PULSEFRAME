@@ -23,6 +23,9 @@
  * asset whose stored file is missing on disk (library card and timeline clip), and the start hub, in both languages.
  * In both themes: a toast shown while a modal dialog is open (the people sheet's undo toast): inside the modal, not inert, in the
  * accessibility tree as a status, and reachable from the keyboard inside the modal's focus trap.
+ * In both themes, the wave 6 notes: the transcript panel's note that names a clip showing an untimed copy the cut left alone, the
+ * archive import's toast about cleared review marks (closed with its ×), and the Templates bar's «החזרת החלקים שנמחקו» after a hand
+ * delete (undone again). The untimed copy and the reviewed translation are typed fixtures: no provider and no model ran.
  *   pnpm build && pnpm audit:a11y
  */
 import { execFileSync } from 'node:child_process';
@@ -40,6 +43,9 @@ import { makeRenderCacheCtx, renderCacheA11yScenarios } from './a11y-render-cach
 import { makeApi, ownerApi } from './incremental-fixtures.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
 import { auditInPage, focusAudit } from './a11y-lib.ts';
+import { dictionaries } from '../../i18n/src/index.ts';
+import { TEMPLATE_STRINGS } from '../../../apps/web/src/editor/templates.strings.ts';
+import { IMPORTED_REVIEW_CLEARED } from '../../../apps/server/src/archive.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/a11y');
@@ -109,6 +115,74 @@ async function toastInModal(page: Page, lang: 'he' | 'en'): Promise<Record<strin
   await cdp.detach().catch(() => {});
   const announced = axToast?.ignored === false && axToast.role === 'status';
   return { shown: where.inModal && where.host === 'modal' && !where.inert && announced && axBehind?.ignored === true && reached && left === 0, ...where, announced, pageBehindPruned: axBehind?.ignored === true, toastReachedByKeyboard: reached, tabStepsThatLeftTheDialog: left };
+}
+
+/**
+ * The transcript panel's note after a cut by the transcript that left a clip alone: the open project has a recording and a clip that
+ * shows a reversed copy of it (no time mapping). One word is deleted in the panel; the note names the copy's file. The cut changes
+ * the project, so each run gets its own (the caller makes it). `shown` is false (a finding) unless the one note is a visible status
+ * with the dictionary's wording.
+ */
+async function skippedNoteState(page: Page, lang: 'he' | 'en'): Promise<Record<string, unknown>> {
+  await page.locator('[data-testid=transcript-panel][data-state=ready]').waitFor({ timeout: 15000 }).catch(() => {});
+  await page.getByTestId('transcript-word').nth(1).click({ timeout: 8000 }).catch(() => {});
+  await page.getByTestId('transcript-delete').click({ timeout: 8000 }).catch(() => {});
+  const note = page.getByTestId('transcript-skipped-note');
+  await note.first().waitFor({ timeout: 10000 }).catch(() => {});
+  await note.first().scrollIntoViewIfNeeded().catch(() => {});
+  const text = await note.first().textContent().catch(() => null);
+  const want = dictionaries[lang]['transcript.untimedSkipped'].replace('{name}', 'reversed.mp4');
+  return { shown: (await note.count()) === 1 && text === want && (await note.first().getAttribute('role').catch(() => null)) === 'status' && (await note.first().isVisible().catch(() => false)), text };
+}
+
+/**
+ * The archive import's note: an archive whose translation was marked reviewed is imported in the Deliver panel; the editor opens the
+ * new project with one toast that says the mark was cleared (kept until closed: no timer). Leaves the toast open for the audit;
+ * `close` presses its × and reports whether it went away.
+ */
+async function importNoteState(page: Page, lang: 'he' | 'en', archive: Buffer): Promise<{ extra: Record<string, unknown>; close: () => Promise<Record<string, unknown>> }> {
+  const from = new URL(page.url()).searchParams.get('project');
+  await page.getByTestId('archive-import').setInputFiles({ name: 'a11y-review.pulseframe.tar', mimeType: 'application/x-tar', buffer: archive });
+  await page.waitForFunction((old) => { const now = new URLSearchParams(location.search).get('project'); return !!now && now !== old; }, from, { timeout: 30000 }).catch(() => {});
+  await page.getByTestId('timecode').waitFor({ timeout: 15000 }).catch(() => {});
+  const toast = page.locator('[data-testid=toasts] [role=status]');
+  await toast.first().waitFor({ timeout: 10000 }).catch(() => {});
+  const plain = (x: string | null) => (x ?? '').replace(/[⁦-⁩‎‏]/g, '');
+  const title = plain(await toast.first().locator('b').textContent().catch(() => null)), body = plain(await toast.first().locator('p').textContent().catch(() => null));
+  const closeName = await toast.first().locator('.pf-toast-x').getAttribute('aria-label').catch(() => null);
+  const shown = (await toast.count()) === 1 && title === (lang === 'he' ? 'הארכיון יובא' : 'The archive was imported') && body === IMPORTED_REVIEW_CLEARED[lang]('«English»') && (await toast.first().locator('.pf-toast-timer').count()) === 0 && !!closeName
+    && new URL(page.url()).searchParams.get('project') !== from && (await toast.first().isVisible().catch(() => false));
+  return { extra: { shown, title, body, closeName }, close: async () => { await toast.first().locator('.pf-toast-x').click({ timeout: 5000 }).catch(() => {}); await toast.first().waitFor({ state: 'detached', timeout: 5000 }).catch(() => {}); return { closed: (await toast.count()) === 0 }; } };
+}
+
+/**
+ * The Templates bar after a hand delete: with a template just applied (the bar is showing), a picture the template placed is deleted
+ * in the timeline with the Delete key; the bar then offers «החזרת החלקים שנמחקו» / "Bring back the deleted parts". Leaves the button
+ * showing for the audit; `undo` takes the delete back (the button goes away) so the caller's own undo of the template still fits.
+ */
+async function restoreRemovedState(page: Page, lang: 'he' | 'en'): Promise<{ extra: Record<string, unknown>; undo: () => Promise<Record<string, unknown>> }> {
+  const btn = page.getByTestId('template-restore-removed');
+  const runId = await page.getByTestId('template-applied').getAttribute('data-run-id').catch(() => null);
+  const before = await btn.count();
+  const slotClips = await page.evaluate(async (run) => {
+    const id = new URLSearchParams(location.search).get('project');
+    const doc = (await (await fetch(`/api/v1/projects/${id}`)).json()).project;
+    return ((run && doc.recipeRuns?.[run]?.slots) || []).map((x: { clipId: string }) => x.clipId) as string[];
+  }, runId).catch(() => [] as string[]);
+  let victim: string | null = null;
+  for (const id of slotClips) if (await page.locator(`.track.video .clip[data-clip-id="${id}"]`).count()) { victim = id; break; }
+  if (victim) {
+    await page.locator(`.track.video .clip[data-clip-id="${victim}"]`).click({ timeout: 8000 }).catch(() => {});
+    await page.keyboard.press('Delete');
+  }
+  await btn.waitFor({ timeout: 8000 }).catch(() => {});
+  await btn.scrollIntoViewIfNeeded().catch(() => {});
+  // the bar itself, for the eye (the state's own screenshot is taken after the focus walk, which scrolls the drawer)
+  const theme = await page.evaluate(() => document.documentElement.dataset.theme ?? 'dark');
+  await page.getByTestId('template-applied').screenshot({ path: path.join(art, `bar-template-restore-removed-${lang}-${theme}.png`) }).catch(() => {});
+  const text = await btn.textContent().catch(() => null);
+  const shown = before === 0 && !!victim && (await btn.count()) === 1 && text === TEMPLATE_STRINGS[lang].restoreRemoved && (await btn.isVisible().catch(() => false)) && (await btn.isEnabled().catch(() => false));
+  return { extra: { shown, text, slots: slotClips.length }, undo: async () => { if (await btn.count()) { await page.getByTestId('undo').click({ timeout: 5000 }).catch(() => {}); await btn.waitFor({ state: 'detached', timeout: 8000 }).catch(() => {}); } await page.waitForTimeout(300); return { closed: (await btn.count()) === 0 }; } };
 }
 
 async function main() {
@@ -201,6 +275,40 @@ async function main() {
     }
     const tplList = (((await (await fetch(`${s.url}/api/v1/templates`, { headers: h })).json()) as any).templates ?? []) as any[];
     const tplPick = tplList.find((t) => t.available && t.needs.music !== 'beats' && t.slots.every((x: any) => x.accept !== 'video')) ?? tplList.find((t) => t.available);
+    // wave 6 notes. (1) A recording and a reversed copy of it: the copy is a real file made here by ffmpeg, stored through a side
+    // project (one blob store) and attached by hand as a derived asset with no time mapping, as a provider's reversed rendition
+    // would be (a typed fixture: no provider ran). One project per run: the cut that shows the note changes it.
+    const revFile = path.join(art, 'reversed.mp4');
+    const talkFile = path.join(art, 'recording.mp4'); // a transcript belongs to a file with sound
+    execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-f', 'lavfi', '-t', '4', '-i', 'testsrc2=s=640x360:r=30', '-f', 'lavfi', '-t', '4', '-i', 'sine=frequency=330:sample_rate=48000', '-vf', 'format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-shortest', talkFile]);
+    execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-i', talkFile, '-vf', 'reverse', '-af', 'areverse', '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', revFile]);
+    const revSide = (await post('/projects', { name: 'a11y-untimed (blob side project)', width: 640, height: 360 })).project.id as string;
+    const revUp: any = await (await fetch(`${s.url}/api/v1/projects/${revSide}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'reversed.mp4' }, body: fs.readFileSync(revFile) })).json();
+    const { id: _revSideId, ...revAsset } = s.store.getProject(revSide).doc.assets[revUp.assetId]!;
+    const untimedProject = async (name: string) => {
+      const id = (await post('/projects', { name, width: 640, height: 360 })).project.id as string;
+      const rec: any = await (await fetch(`${s.url}/api/v1/projects/${id}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'recording.mp4' }, body: fs.readFileSync(talkFile) })).json();
+      const rev = s.store.commit({ projectId: id, actor: 'fixture', allowInternal: true, ops: [{ op: 'import_asset', args: { asset: { ...revAsset, name: 'reversed.mp4', provenance: { origin: 'derived', importedAt: new Date().toISOString(), importedBy: 'fixture', derived: { jobId: 'job_fixture', capabilityId: 'comfy.video.reverse', capabilityVersion: '0.1.0', graphDigest: `sha256:${'a'.repeat(64)}`, params: {}, sourceAssetIds: [rec.assetId], outputName: 'out', outputRole: 'primary', encoding: 'display', provider: { id: 'fixture' } } } } } }] }).results[0]!.output!.assetId as string;
+      const spoken = ['שלום', 'אממ', 'עולם', 'טוב'];
+      const made = await post(`/projects/${id}/transactions`, { ops: [
+        { op: 'set_transcript', args: { assetId: rec.assetId, language: 'he', segments: [{ start: T.rt(0, 1), duration: T.rt(2, 1), text: spoken.join(' '), words: spoken.map((text, k) => ({ text, start: T.rt(k, 2), duration: T.rt(1, 2) })) }] } },
+        { op: 'add_clip', args: { assetId: rec.assetId, start: f(0), duration: f(60), withLinkedAudio: false } },
+        { op: 'add_clip', args: { assetId: rev, start: f(60), duration: f(30), withLinkedAudio: false } },
+      ] });
+      if (!made.results) throw new Error(`untimed-copy fixture: ${JSON.stringify(made).slice(0, 300)}`);
+      return id;
+    };
+    // (2) An archive of a project whose English translation (the typed fixture, as above) carries the owner's "reviewed" mark.
+    const revPid = (await post('/projects', { name: 'a11y-review', width: 640, height: 360 })).project.id as string;
+    const revMix: any = await (await fetch(`${s.url}/api/v1/projects/${revPid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'mix.wav' }, body: fs.readFileSync(mix) })).json();
+    await post(`/projects/${revPid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: revMix.assetId, start: f(0) } }] });
+    s.store.commit({ projectId: revPid, actor: 'fixture', ops: [{ op: 'set_transcript', args: { assetId: revMix.assetId, language: 'he', segments: [{ start: T.rt(0, 1), duration: T.rt(1, 1), text: 'שלום לכולם' }] } }] });
+    const revSeg = s.store.getProject(revPid).doc.transcripts[revMix.assetId]!.segments[0]!.id;
+    const revVariant = s.store.commit({ projectId: revPid, actor: 'fixture', allowInternal: true, ops: [{ op: 'attach_translation', args: { baseVariantId: null, name: 'English', language: 'en', translation: { from: 'he', to: 'en', engine: 'typed fixture (no model ran)', model: 'none', createdAt: new Date().toISOString(), createdBy: 'fixture', sources: { [revSeg]: sha256Hex('שלום לכולם') } }, phraseText: { [revSeg]: 'Hello everyone' }, cueText: {} } }] }).results[0]!.output!.variantId as string;
+    s.store.commit({ projectId: revPid, actor: 'user:local', allowInternal: true, ops: [{ op: 'review_translation', args: { variantId: revVariant, review: 'reviewed', at: new Date().toISOString() } }] });
+    const revArchiveRes = await fetch(`${s.url}/api/v1/projects/${revPid}/archive`, { headers: h });
+    if (!revArchiveRes.ok) throw new Error(`the review-marks archive was refused: ${revArchiveRes.status} ${(await revArchiveRes.text()).slice(0, 200)}`);
+    const revArchive = Buffer.from(await revArchiveRes.arrayBuffer());
     for (const lang of ['he', 'en'] as const) {
       const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
       await page.addInitScript((l) => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); localStorage.setItem('pf.lang', l); } catch { /* storage unavailable */ } }, lang);
@@ -548,6 +656,12 @@ async function main() {
       await page.getByTestId('template-applied').waitFor({ timeout: 30000 }).catch(() => {});
       if (await page.getByTestId('template-dialog').count()) await page.keyboard.press('Escape');
       await auditState('template-applied', { shown: (await page.getByTestId('template-applied').count()) === 1, template: tplPick?.id ?? null });
+      // a picture the template placed, deleted by hand: the bar offers «החזרת החלקים שנמחקו»; the delete is undone after the audit
+      {
+        const rr = await restoreRemovedState(page, lang);
+        await auditState('template-restore-removed', rr.extra);
+        Object.assign(states.at(-1), await rr.undo());
+      }
       if (await page.getByTestId('template-undo').count()) { await page.getByTestId('template-undo').click(); await page.getByTestId('template-applied').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {}); await page.waitForTimeout(500); }
       // the life line and the pack mounts, in the life project (the picture under the title is restored for the second language)
       await page.goto(`${s.ownerUrl}&project=${lifePid}`);
@@ -751,6 +865,16 @@ async function main() {
         await page.keyboard.press('Shift+Digit1');
         await page.waitForFunction(() => !document.querySelector('[data-testid=perform-view]'), undefined, { timeout: 10000 }).catch(() => {});
       }
+      // wave 6 notes: the transcript panel's skipped-clip note (its own project), then the archive import's note in the project the import makes
+      await page.goto(`${s.ownerUrl}&project=${await untimedProject(`a11y-untimed-dark-${lang}`)}`);
+      await page.getByTestId('timecode').waitFor({ timeout: 15000 }).catch(() => {});
+      if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+      await auditState('transcript-skipped-note', await skippedNoteState(page, lang));
+      {
+        const note = await importNoteState(page, lang, revArchive);
+        await auditState('archive-import-note', note.extra);
+        Object.assign(states.at(-1), await note.close());
+      }
       // the start hub of an empty project
       await page.goto(`${s.ownerUrl}&project=${emptyPid}`);
       await page.getByTestId('welcome').waitFor({ timeout: 10000 }).catch(() => {});
@@ -834,6 +958,30 @@ async function main() {
       await page.getByTestId(`missing-${missUp.assetId}`).waitFor({ timeout: 10000 }).catch(() => {});
       await page.waitForTimeout(500);
       await auditState('missing-media', { shown: (await page.getByTestId(`missing-${missUp.assetId}`).count()) === 1 && (await page.locator('.clip.missing').count()) >= 1 && (await page.locator('.error[role=alert]').count()) === 0 });
+      // wave 6 notes in the light theme: the skipped-clip note, the archive import's note, and the Templates bar after a hand delete
+      await open(await untimedProject(`a11y-untimed-light-${lang}`));
+      await auditState('transcript-skipped-note', await skippedNoteState(page, lang));
+      {
+        const note = await importNoteState(page, lang, revArchive);
+        await auditState('archive-import-note', note.extra);
+        Object.assign(states.at(-1), await note.close());
+      }
+      await open(tplPid);
+      await page.getByTestId('rail-templates').click();
+      if ((await page.getByTestId('templates-toggle').getAttribute('aria-expanded')) !== 'true') await page.getByTestId('templates-toggle').click();
+      await page.locator(`[data-testid=template-card][data-template-id="${tplPick?.id ?? ''}"]`).click({ timeout: 10000 }).catch(() => {});
+      await page.getByTestId('template-dialog').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.locator('[data-testid=template-step][data-step=plan]').click().catch(() => {});
+      await page.waitForFunction(() => !!document.querySelector('[data-testid=template-plan-summary]') || !!document.querySelector('[data-testid=template-error]'), undefined, { timeout: 30000 }).catch(() => {});
+      await page.getByTestId('template-use').click({ timeout: 5000 }).catch(() => {});
+      await page.getByTestId('template-applied').waitFor({ timeout: 30000 }).catch(() => {});
+      if (await page.getByTestId('template-dialog').count()) await page.keyboard.press('Escape');
+      {
+        const rr = await restoreRemovedState(page, lang);
+        await auditState('template-restore-removed', rr.extra);
+        Object.assign(states.at(-1), await rr.undo());
+      }
+      if (await page.getByTestId('template-undo').count()) { await page.getByTestId('template-undo').click(); await page.getByTestId('template-applied').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {}); await page.waitForTimeout(500); }
       // the start hub of an empty project
       await open(emptyPid, 'welcome');
       await auditState('start-hub', { shown: (await page.getByTestId('welcome').count()) === 1 });

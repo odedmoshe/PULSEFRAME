@@ -721,6 +721,55 @@ async function main() {
       const d3 = await getDoc(up);
       const run = Object.values(d3.recipeRuns).find((r: any) => r.recipeId === 'template:tpl.family-film') as any;
       check('F19', 'after a reload, «אורך אחר» → 30 in the film bar regenerates the film from the document\'s run', rev3 === rev2 + 1 && run?.params?.targetSeconds === 30, { revisionBefore: rev2, revisionAfter: rev3, targetSeconds: run?.params?.targetSeconds ?? null }, '+1 revision, target 30');
+      // F20 (wave 6): a film clip deleted by hand in the timeline, and «החזרת החלקים שנמחקו» in the film bar
+      {
+        const restore = page.locator('[data-testid=film-bar-restore-removed]'), barError = page.locator('[data-testid=film-bar] .pf-anchored');
+        const slotsOf = (doc: any) => ((Object.values(doc.recipeRuns).find((r: any) => r.recipeId === 'template:tpl.family-film') as any)?.slots ?? []) as { key: string; kind: string; clipId: string }[];
+        const has = (doc: any, id: string) => Object.values(doc.sequences).some((q: any) => q.tracks.some((t: any) => t.clips.some((c: any) => c.id === id)));
+        const removedN = (doc: any) => slotsOf(doc).filter((x) => !has(doc, x.clipId)).length;
+        const shape = (doc: any) => JSON.stringify(doc.sequences);
+        const waitRevision = async (want: number, ms = 120_000) => { const t = Date.now(); while ((await revision(up)) < want && Date.now() - t < ms) await sleep(200); return (await revision(up)) >= want; };
+        const pictures = slotsOf(d3).filter((x) => x.kind === 'picture');
+        const victim = pictures[Math.min(1, pictures.length - 1)]?.clipId ?? '';
+        const onTimeline = await page.locator(`.clip[data-clip-id="${victim}"]`).count();
+        const offeredBefore = await restore.count();
+        // Observed first, judged only for exact undo: Delete as a new project has it closes the gap, so the film's later clips move
+        // earlier. What the bar's button then does (the clip made again, or a refusal in words) is recorded in `withDefaultDelete`.
+        await page.locator(`.clip[data-clip-id="${victim}"]`).click();
+        await page.keyboard.press('Delete');
+        await waitRevision(rev3 + 1, 20_000);
+        await restore.waitFor({ timeout: 10_000 }).catch(() => {});
+        const obs: Record<string, unknown> = { deleteOps: (((await must(`/projects/${up}/history?since=${rev3}`)).events ?? []) as any[]).filter((e) => e.revision > rev3).map((e) => e.ops), offered: await restore.count() };
+        if (await restore.count()) {
+          const revA = await revision(up);
+          await restore.click();
+          await Promise.race([barError.waitFor({ timeout: 120_000 }).catch(() => {}), waitRevision(revA + 1)]);
+          await sleep(800);
+          obs.afterButton = { revisions: (await revision(up)) - revA, refusal: (await barError.count()) ? await barError.locator('p').first().textContent() : null, removed: removedN(await getDoc(up)), offered: await restore.count() };
+          if (await barError.count()) await barError.locator('.pf-anchored-x').click().catch(() => {});
+        }
+        for (let n = (await revision(up)) - rev3; n > 0; n--) { await page.locator('[data-testid=undo]').click(); await sleep(700); }
+        let observedUndone = false;
+        for (let i = 0; i < 100 && !observedUndone; i++) { observedUndone = shape(await getDoc(up)) === shape(d3); if (!observedUndone) await sleep(150); }
+        obs.undoneExactly = observedUndone;
+        // Shift+Delete keeps the gap: nothing else moves; the button makes the clip again
+        const rev4 = await revision(up);
+        await page.locator(`.clip[data-clip-id="${victim}"]`).click();
+        await page.keyboard.press('Shift+Delete');
+        const deleted = (await waitRevision(rev4 + 1, 20_000)) && !has(await getDoc(up), victim);
+        await restore.waitFor({ timeout: 10_000 }).catch(() => {});
+        const offered = { count: await restore.count(), text: await restore.textContent().catch(() => null), visible: await restore.isVisible().catch(() => false), removed: removedN(await getDoc(up)) };
+        await restore.scrollIntoViewIfNeeded().catch(() => {});
+        await page.screenshot({ path: path.join(shots, 'family-film-bar-restore-removed.png') });
+        await restore.click();
+        const made = await waitRevision(rev4 + 2);
+        await restore.waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {});
+        const after = await getDoc(up);
+        const back = { revision: await revision(up), removed: removedN(after), pictureSlots: slotsOf(after).filter((x) => x.kind === 'picture').length, offered: await restore.count(), refusal: (await barError.count()) ? await barError.locator('p').first().textContent() : null };
+        check('F20', 'a film clip deleted by hand with Shift+Delete: the film bar offers «החזרת החלקים שנמחקו» (not before); the button makes the film whole again in one revision and is gone', onTimeline === 1 && offeredBefore === 0 && deleted && offered.count === 1 && (offered.text ?? '').trim() === 'החזרת החלקים שנמחקו' && offered.visible && offered.removed === 1
+          && made && back.revision === rev4 + 2 && back.removed === 0 && back.pictureSlots === pictures.length && back.offered === 0 && back.refusal === null && observedUndone && errors.length === 0,
+          { pictures: pictures.length, onTimeline, offeredBefore, deleted, offered, back, withDefaultDelete: obs, pageErrors: errors.slice(0, 3) }, 'offered once, +1 revision, 0 removed, exact undo');
+      }
     } finally { await browser.close(); }
   });
 

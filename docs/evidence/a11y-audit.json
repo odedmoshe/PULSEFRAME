@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-24T16:50:35.046Z",
+  "ranAt": "2026-11-24T23:19:51.784Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v819 x64",
     "browser": "153.0.8010.12"
@@ -47,7 +47,7 @@
         },
         {
           "state": "projects-dialog",
-          "controls": 613,
+          "controls": 617,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -61,7 +61,7 @@
         },
         {
           "state": "project-delete-confirmation",
-          "controls": 617,
+          "controls": 621,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -145,7 +145,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_5ea867f1110]",
+          "focusAfterClose": "button[data-testid=more-ast_51fe189f360]",
           "focusReturned": true
         },
         {
@@ -460,6 +460,18 @@
           "template": "tpl.photo-dump"
         },
         {
+          "state": "template-restore-removed",
+          "controls": 370,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "החזרת החלקים שנמחקו",
+          "slots": 11,
+          "closed": true
+        },
+        {
           "state": "life-library-dates",
           "controls": 345,
           "unnamed": [],
@@ -632,7 +644,7 @@
         },
         {
           "state": "cache-sheet-first",
-          "controls": 475,
+          "controls": 476,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -753,7 +765,7 @@
         },
         {
           "state": "multicam-panel",
-          "controls": 382,
+          "controls": 381,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -832,6 +844,29 @@
           "shown": true
         },
         {
+          "state": "transcript-skipped-note",
+          "controls": 364,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "הקליפ reversed.mp4 לא נחתך לפי ההקלטה: הוא מציג עותק שלא שומר על התזמון שלה"
+        },
+        {
+          "state": "archive-import-note",
+          "controls": 341,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "title": "הארכיון יובא",
+          "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגומים «English» מסומנים שוב «תרגום מכונה · לא נבדק», והנוסח שלהם נשמר. אפשר לעבור עליהם בלוח «תמלול» ולבחור «סמן כנבדק».",
+          "closeName": "סגירה",
+          "closed": true
+        },
+        {
           "state": "start-hub",
           "controls": 337,
           "unnamed": [],
@@ -883,7 +918,7 @@
         },
         {
           "state": "projects-dialog",
-          "controls": 618,
+          "controls": 626,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -897,7 +932,7 @@
         },
         {
           "state": "project-delete-confirmation",
-          "controls": 622,
+          "controls": 630,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -981,7 +1016,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_5ea867f1110]",
+          "focusAfterClose": "button[data-testid=more-ast_51fe189f360]",
           "focusReturned": true
         },
         {
@@ -1296,6 +1331,18 @@
           "template": "tpl.photo-dump"
         },
         {
+          "state": "template-restore-removed",
+          "controls": 370,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "Restore deleted parts",
+          "slots": 11,
+          "closed": true
+        },
+        {
           "state": "life-library-dates",
           "controls": 345,
           "unnamed": [],
@@ -1468,7 +1515,7 @@
         },
         {
           "state": "cache-sheet-first",
-          "controls": 476,
+          "controls": 475,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1477,7 +1524,7 @@
         },
         {
           "state": "cache-sheet-ready",
-          "controls": 477,
+          "controls": 478,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1668,6 +1715,29 @@
           "shown": true
         },
         {
+          "state": "transcript-skipped-note",
+          "controls": 364,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "Clip reversed.mp4 was not cut by the recording's times: it shows a copy that does not keep its timing"
+        },
+        {
+          "state": "archive-import-note",
+          "controls": 341,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "title": "The archive was imported",
+          "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translations «English» need review again; their wording is kept. Go through them in the \"Transcript\" panel and choose \"Mark as reviewed\".",
+          "closeName": "Close",
+          "closed": true
+        },
+        {
           "state": "start-hub",
           "controls": 337,
           "unnamed": [],
@@ -1713,7 +1783,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 471,
+          "controls": 472,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1765,8 +1835,43 @@
           "shown": true
         },
         {
+          "state": "transcript-skipped-note",
+          "controls": 364,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "הקליפ reversed.mp4 לא נחתך לפי ההקלטה: הוא מציג עותק שלא שומר על התזמון שלה"
+        },
+        {
+          "state": "archive-import-note",
+          "controls": 341,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "title": "הארכיון יובא",
+          "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגומים «English» מסומנים שוב «תרגום מכונה · לא נבדק», והנוסח שלהם נשמר. אפשר לעבור עליהם בלוח «תמלול» ולבחור «סמן כנבדק».",
+          "closeName": "סגירה",
+          "closed": true
+        },
+        {
+          "state": "template-restore-removed",
+          "controls": 370,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "החזרת החלקים שנמחקו",
+          "slots": 11,
+          "closed": true
+        },
+        {
           "state": "start-hub",
-          "controls": 337,
+          "controls": 360,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1810,7 +1915,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 471,
+          "controls": 472,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1862,8 +1967,43 @@
           "shown": true
         },
         {
+          "state": "transcript-skipped-note",
+          "controls": 364,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "Clip reversed.mp4 was not cut by the recording's times: it shows a copy that does not keep its timing"
+        },
+        {
+          "state": "archive-import-note",
+          "controls": 341,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "title": "The archive was imported",
+          "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translations «English» need review again; their wording is kept. Go through them in the \"Transcript\" panel and choose \"Mark as reviewed\".",
+          "closeName": "Close",
+          "closed": true
+        },
+        {
+          "state": "template-restore-removed",
+          "controls": 370,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "Restore deleted parts",
+          "slots": 11,
+          "closed": true
+        },
+        {
           "state": "start-hub",
-          "controls": 337,
+          "controls": 360,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1878,25 +2018,25 @@
     {
       "theme": "dark",
       "uiLanguage": "he",
-      "states": 73,
+      "states": 76,
       "findings": 0
     },
     {
       "theme": "dark",
       "uiLanguage": "en",
-      "states": 73,
+      "states": 76,
       "findings": 0
     },
     {
       "theme": "light",
       "uiLanguage": "he",
-      "states": 8,
+      "states": 11,
       "findings": 0
     },
     {
       "theme": "light",
       "uiLanguage": "en",
-      "states": 8,
+      "states": 11,
       "findings": 0
     }
   ],
