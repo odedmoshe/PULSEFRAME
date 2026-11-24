@@ -24,6 +24,7 @@ import { Transport } from './editor/Transport.tsx';
 import { isTyping, shortcutAllowed } from './editor/shortcutGate.ts';
 import { Editor, EditorContext, useEditorState } from './editor/store.ts';
 import { toastOf } from './editor/undoToast.ts';
+import { IMPORT_NOTES_KEY } from './editor/DeliverPanel.tsx';
 import { Timeline } from './editor/Timeline.tsx';
 import { Welcome } from './editor/Welcome.tsx';
 import { FamilyFilmDialog } from './editor/FamilyFilmDialog.tsx';
@@ -69,7 +70,7 @@ export function App() {
   );
 }
 
-const APP_STRINGS = { he: { close: 'סגירה', undo: 'ביטול', notifications: 'התראות' }, en: { close: 'Close', undo: 'Undo', notifications: 'Notifications' } } as const;
+const APP_STRINGS = { he: { close: 'סגירה', undo: 'ביטול', notifications: 'התראות', imported: 'הארכיון יובא' }, en: { close: 'Close', undo: 'Undo', notifications: 'Notifications', imported: 'The archive was imported' } } as const;
 /** The toast queue of the editor (ds ToastProvider), in the interface language. */
 function Toasts({ children }: { children: React.ReactNode }) {
   const { state } = useEditorState();
@@ -86,6 +87,22 @@ function ToastBridge() {
     seen.current = n.n;
     toasts.push(toastOf(n, APP_STRINGS[state.lang].undo, editor));
   }, [n?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  // An archive import that changed something on the way in says so once, in the project it made, until the owner closes it.
+  const docId = state.doc?.id;
+  useEffect(() => {
+    if (!docId) return;
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem(IMPORT_NOTES_KEY); } catch { return; }
+    if (!raw) return;
+    let saved: { projectId?: string; notes?: { code?: string; he?: string; en?: string }[] } | null = null;
+    try { saved = JSON.parse(raw); } catch { /* not ours */ }
+    if (saved?.projectId !== docId) return;
+    try { sessionStorage.removeItem(IMPORT_NOTES_KEY); } catch { /* shown once per load at worst */ }
+    for (const note of saved.notes ?? []) {
+      const body = note[state.lang];
+      if (typeof body === 'string' && body) toasts.push({ kind: 'fix', title: APP_STRINGS[state.lang].imported, body, ttl: 0 });
+    }
+  }, [docId]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
 

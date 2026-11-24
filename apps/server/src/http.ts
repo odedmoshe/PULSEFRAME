@@ -309,7 +309,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
       await pipeline(Readable.fromWeb(c.req.raw.body as any), async function* (src) { for await (const chunk of src) { size += chunk.length; if (size > maxBytes) throw new ApiError(413, 'upload_too_large', `archive exceeds ${maxBytes} bytes${maxBytes < cfg.maxUploadBytes * 4 ? ' (the room left under the storage ceiling)' : ''}`, { maxBytes }); yield chunk; } }, fs.createWriteStream(tmp, { mode: 0o600 }));
       const r = importArchive(store, tmp);
       for (const a of Object.values(r.doc.assets)) derivatives.ensure(a);
-      return c.json({ project: { id: r.doc.id, name: r.doc.name }, revision: r.revision, blobsAdded: r.blobsAdded, blobsAlreadyPresent: r.blobsAlreadyPresent }, 201);
+      return c.json({ project: { id: r.doc.id, name: r.doc.name }, revision: r.revision, blobsAdded: r.blobsAdded, blobsAlreadyPresent: r.blobsAlreadyPresent, notes: r.notes }, 201);
     } finally {
       fs.rmSync(tmp, { force: true });
     }

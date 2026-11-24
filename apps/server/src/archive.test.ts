@@ -71,6 +71,54 @@ describe('project archive', () => {
     const edited = dst.commit({ projectId: r.doc.id, actor: 'user:local', ops: [{ op: 'rename_project', args: { name: 'x' } }] });
     expect(edited.revision).toBe(1);
   });
+  it('a translation marked reviewed arrives needing review again, with a note in Hebrew and English; its wording is kept and the owner can mark it here', async () => {
+    const src = world(), dst = world();
+    const { pid } = seeded(src);
+    // a voice recording (arbitrary bytes: the archive treats media as opaque)
+    const bytes = Buffer.from('a voice recording stand-in');
+    const hash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+    fs.writeFileSync(path.join(src.tmpDir, 'voice'), bytes);
+    src.putBlob(hash, path.join(src.tmpDir, 'voice'), bytes.length, 'audio/wav');
+    const voice = { kind: 'audio' as const, name: 'voice.wav', contentHash: hash, byteSize: bytes.length, container: 'wav', mimeType: 'audio/wav', duration: T.rt(4, 1), audio: { sampleRate: 48000, channels: 1, codec: 'pcm_s16le' }, provenance: { origin: 'fixture' as const, importedAt: '2026-11-15T00:00:00Z', importedBy: 'test' } };
+    const assetId = src.commit({ projectId: pid, actor: 'user:local', allowInternal: true, ops: [{ op: 'import_asset', args: { asset: voice } }] }).results[0]!.output!.assetId as string;
+    src.commit({ projectId: pid, actor: 'user:local', ops: [{ op: 'set_transcript', args: { assetId, language: 'he', segments: [{ start: T.rt(0, 1), duration: T.rt(2, 1), text: 'שלום לכולם' }] } }] });
+    const seg = src.getProject(pid).doc.transcripts[assetId]!.segments[0]!.id;
+    const sha = createHash('sha256').update('שלום לכולם').digest('hex');
+    const translate = (name: string, to: string, text: string) => src.commit({ projectId: pid, actor: 'test', allowInternal: true, ops: [{ op: 'attach_translation', args: { baseVariantId: null, name, language: to, translation: { from: 'he', to, engine: 'fixture', model: 'none', createdAt: '2026-11-20T00:00:00Z', createdBy: 'test', sources: { [seg]: sha } }, phraseText: { [seg]: text }, cueText: {} } }] }).results[0]!.output!.variantId as string;
+    const en = translate('English', 'en', 'Hello everyone'), fr = translate('Français', 'fr', 'Bonjour à tous');
+    src.commit({ projectId: pid, actor: 'user:local', allowInternal: true, ops: [{ op: 'review_translation', args: { variantId: en, review: 'reviewed', at: '2026-11-21T10:00:00Z' } }] });
+    expect(src.getProject(pid).doc.variants[en]!.translation).toMatchObject({ review: 'reviewed', reviewedBy: 'user:local' });
+    const { file } = await toFile(src, pid);
+    const copy = path.join(dst.tmpDir, 'in.tar');
+    fs.copyFileSync(file, copy);
+    const r = importArchive(dst, copy);
+    const tl = dst.getProject(r.doc.id).doc.variants[en]!.translation!;
+    expect(tl.review).toBe('needed');
+    expect(tl).not.toHaveProperty('reviewedBy');
+    expect(tl).not.toHaveProperty('reviewedAt');
+    expect(dst.getProject(r.doc.id).doc.variants[en]!.phraseText).toEqual({ [seg]: 'Hello everyone' }); // the wording is kept
+    expect(dst.getProject(r.doc.id).doc.variants[fr]!.translation!.review).toBe('needed'); // was never reviewed: unchanged
+    expect(r.notes).toHaveLength(1);
+    expect(r.notes[0]).toMatchObject({ code: 'translation_review_cleared', variants: [{ variantId: en, name: 'English', reviewedBy: 'user:local', reviewedAt: '2026-11-21T10:00:00Z' }] });
+    expect(r.notes[0]!.he).toMatch(/«נבדק».*«English».*«סמן כנבדק»/);
+    expect(r.notes[0]!.en).toMatch(/"Reviewed" mark.*«English».*"Mark as reviewed"/);
+    // the source project keeps its own mark: exporting changes nothing
+    expect(src.getProject(pid).doc.variants[en]!.translation!.review).toBe('reviewed');
+    // the owner of this computer marks it again in the imported project
+    dst.commit({ projectId: r.doc.id, actor: 'user:local', allowInternal: true, ops: [{ op: 'review_translation', args: { variantId: en, review: 'reviewed' } }] });
+    expect(dst.getProject(r.doc.id).doc.variants[en]!.translation).toMatchObject({ review: 'reviewed', reviewedBy: 'user:local' });
+    // a hand-written archive claiming a reviewer is cleared the same way (the mark is never taken from a file)
+    const forged = path.join(dst.tmpDir, 'forged.tar');
+    fs.copyFileSync(file, forged);
+    const r2 = importArchive(dst, forged);
+    expect(dst.getProject(r2.doc.id).doc.variants[en]!.translation!.review).toBe('needed');
+    // an archive with no reviewed translation carries no note
+    const plain = world();
+    const p2 = seeded(plain);
+    const { file: plainFile } = await toFile(plain, p2.pid, 'plain.tar');
+    fs.copyFileSync(plainFile, path.join(dst.tmpDir, 'plain.tar'));
+    expect(importArchive(dst, path.join(dst.tmpDir, 'plain.tar')).notes).toEqual([]);
+  });
   it('refuses damaged or hostile archives without adding anything', async () => {
     const src = world();
     const { pid } = seeded(src);
