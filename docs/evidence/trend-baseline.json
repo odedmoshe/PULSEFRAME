@@ -11,12 +11,12 @@
   "dissolve": {
    "360x640": {
     "61": "54123be8298b78acd8d8d9af1d1d7a7cbdd6f2670a92311f5e0581f9792feed4",
-    "74": "ca7fb5370ff0978f48f2a20470aa436a77efd63902f734d8bbc986cb473cb3cf",
+    "74": "555572d397676279ca0671768ef10a0972814c4657f0d93fcf32d1683c5888ed",
     "87": "3a9885578e461352420cbff49da133d983bdc5becc4a53efe0ce9bf46cff1287"
    },
    "640x360": {
     "61": "92c511fe1bf4377d26bf8c90f8d250a0cd6a6f9fa79e2d32044fad9a47d2cf4c",
-    "74": "8ca6688cf583addb4194ccdc10af56aeafc39bbe913076e8775135c03984bd2e",
+    "74": "ce818fae54a8a43b05241801d7b6e434578436271720339b93db80e4e6075194",
     "87": "77a362f9f7a043d85e3fe61e1ac1bfb9f13f91b77a60f6e23422885783886f5a"
    }
   },
@@ -669,5 +669,20 @@
   "pixelHashes": 348,
   "refused": 0,
   "gpuTransitionsRendered": true
- }
+ },
+ "amended": [
+  {
+   "at": "74b7ebe",
+   "what": "transition dissolve 360x640 and 640x360 frame 74 (p = 0.5)",
+   "from": {
+    "360x640": "ca7fb5370ff0978f48f2a20470aa436a77efd63902f734d8bbc986cb473cb3cf",
+    "640x360": "8ca6688cf583addb4194ccdc10af56aeafc39bbe913076e8775135c03984bd2e"
+   },
+   "to": {
+    "360x640": "555572d397676279ca0671768ef10a0972814c4657f0d93fcf32d1683c5888ed",
+    "640x360": "ce818fae54a8a43b05241801d7b6e434578436271720339b93db80e4e6075194"
+   },
+   "why": "the dissolve puts its weights into the pictures' alpha with one 8-bit level for both (127 and 128 at p = 0.5): on this fixture red and green are the same in both pictures and now equal the source in every pixel (before: 109880 bytes one level high), blue is 128 in every pixel before and after. Nothing else was re-recorded."
+  }
+ ]
 }
