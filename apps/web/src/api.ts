@@ -52,7 +52,7 @@ export type RecipeParams = Record<string, unknown>;
 export interface RecipeAlternative { label: string; params: RecipeParams }
 export interface RecipePlanResult { revision: number; steps: string[]; basis: string[]; operations?: unknown; alternatives: RecipeAlternative[]; method?: string; note?: string; /** clips of a copy that does not keep the recording's timing, left alone (tidy-speech) */ skippedClips?: { clipId: string; assetId: string; reason: 'untimed_copy' }[] }
 export interface RecipeApplyResult { revision: number; runId: string; createdIds: string[]; steps: string[]; basis: string[]; alternatives: RecipeAlternative[] }
-export interface RecipeRegenerateResult { revision: number; runId: string; replaced: number; protected: string[]; steps: string[] }
+export interface RecipeRegenerateResult { revision: number; runId: string; replaced: number; protected: string[]; /** clips deleted by hand whose places were left empty (beat montage, family film) */ removed?: string[]; steps: string[] }
 
 export interface AnalyzeResult{ revision: number; summary: string; scenes?: { count: number }; beats?: { bpm: number | null; confidence: number | null; count: number } }
 
@@ -188,7 +188,7 @@ export const api = {
   },
   planRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipePlanResult>(`/projects/${id}/recipes/${recipeId}/plan`, json({ params })),
   applyRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipeApplyResult>(`/projects/${id}/recipes/${recipeId}/apply`, json({ params })),
-  regenerateRecipeRun: (id: string, runId: string, params?: RecipeParams) => call<RecipeRegenerateResult>(`/projects/${id}/recipe-runs/${runId}/regenerate`, json(params ? { params } : {})),
+  regenerateRecipeRun: (id: string, runId: string, params?: RecipeParams, restoreRemoved = false) => call<RecipeRegenerateResult>(`/projects/${id}/recipe-runs/${runId}/regenerate`, json({ ...(params ? { params } : {}), ...(restoreRemoved ? { restoreRemoved: true } : {}) })),
   soundEffects: async () => (await call<{ soundEffects: SoundEffectInfo[] }>('/catalog')).soundEffects,
   soundEffectAudio: async (id: string) => {
     const r = await fetch(`/api/v1/sfx/${encodeURIComponent(id)}/audio`, { credentials: 'same-origin' });

@@ -5,15 +5,17 @@
  *
  * `regenerateFilm` repeats, in a few lines, what the server does on regeneration (apps/server/src/familyFilm.ts
  * filmRegeneration: kept by content fingerprint plus link partners, the document without the rest, the planner's context and
- * the apply_template arguments), so the core tests can apply a regeneration through the REAL apply_template op. The server's
- * own code is tested in apps/server.
+ * the apply_template arguments), so the core tests can apply a regeneration through the REAL apply_template op. What was deleted by
+ * hand (slot records, the picks' windows, the mix and the cut the run left) comes from core filmRegenerationRemoved, which the
+ * server uses too, and the run params are recorded by core filmRunRecordParams, as the server records them. The server's own code
+ * is tested in apps/server.
  */
 import * as T from '@pulseframe/time';
 import {
-  applyTransaction, clipEnd, createProject, findClip, fingerprint, FAMILY_FILM_TEMPLATE_ID, FAMILY_FILM_VERSION, filmRunParams, MOMENTS_ALGO, MOMENTS_METHOD,
-  type Asset, type FamilyFilmPlan, type FilmKeptClip, type FilmPlanContext, type MomentsItem, type MomentWindow, type ProjectDocument, type RecipeRun, type SlotRecord,
+  applyTransaction, clipEnd, createProject, findClip, fingerprint, FAMILY_FILM_TEMPLATE_ID, FAMILY_FILM_VERSION, filmRunParams, filmRunRecordParams, MOMENTS_ALGO, MOMENTS_METHOD,
+  type Asset, type FamilyFilmPlan, type FilmKeptClip, type FilmPlanContext, type FilmRemovedPick, type MomentsItem, type MomentWindow, type ProjectDocument, type RecipeRun, type SlotRecord,
 } from './index.ts';
-import { planFamilyFilm } from './familyFilm.ts';
+import { filmRegenerationRemoved, planFamilyFilm } from './familyFilm.ts';
 
 export type Rate = { num: number; den: number };
 export const R30: Rate = { num: 30, den: 1 };
@@ -70,14 +72,13 @@ export function withMoments(doc: ProjectDocument, assetId: string, o: Partial<Om
 export const emptyCtx = (capture: Record<string, string | null> = {}): FilmPlanContext => ({ capture, title: null, closing: null });
 
 /** Apply a plan as the server does: ONE apply_template with params.picked (a regeneration adds runId and the keep lists). */
-export function applyFilm(doc: ProjectDocument, plan: FamilyFilmPlan, extra: Record<string, unknown> = {}, seed = 'film_') {
-  const picked = plan.picks.map((k) => ({ key: k.key, assetId: k.assetId, kind: k.kind, windowIndex: k.windowIndex, reasons: k.reasons }));
-  return applyTransaction(doc, [{ op: 'apply_template', args: { templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: FAMILY_FILM_VERSION, params: { ...plan.params, picked }, steps: plan.steps, ops: plan.ops, slots: plan.slots, ...extra } }], { idSeed: seed, actor: 'test', allowInternal: true });
+export function applyFilm(doc: ProjectDocument, plan: FamilyFilmPlan, extra: Record<string, unknown> = {}, seed = 'film_', removedPicks: readonly FilmRemovedPick[] = []) {
+  return applyTransaction(doc, [{ op: 'apply_template', args: { templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: FAMILY_FILM_VERSION, params: filmRunRecordParams(plan, removedPicks), steps: plan.steps, ops: plan.ops, slots: plan.slots, ...extra } }], { idSeed: seed, actor: 'test', allowInternal: true });
 }
 export const runOf = (doc: ProjectDocument, runId: string): RecipeRun => doc.recipeRuns[runId]!;
 
 /** The server's regeneration in short (see the header), planned only: the plan, its context and the apply_template keep lists. */
-export function regenerationPlan(doc: ProjectDocument, runId: string, newParams: Record<string, unknown> = {}) {
+export function regenerationPlan(doc: ProjectDocument, runId: string, newParams: Record<string, unknown> = {}, restoreRemoved = false) {
   const run = runOf(doc, runId);
   const rate = doc.settings.frameRate;
   const live = run.createdIds.filter((id) => !!findClip(doc, id));
@@ -86,7 +87,8 @@ export function regenerationPlan(doc: ProjectDocument, runId: string, newParams:
   const protectedIds = live.filter((id) => { const c = findClip(doc, id)!.clip; return edited.includes(id) || (c.type === 'media' && !!c.linkGroupId && groups.has(c.linkGroupId)); });
   const removable = live.filter((id) => !protectedIds.includes(id));
   const slots: SlotRecord[] = run.slots ?? [];
-  const keepSlots = slots.filter((s) => protectedIds.includes(s.clipId));
+  const { removedSlots, removedPicks, previousMusic, previousCut } = filmRegenerationRemoved(doc, run, restoreRemoved);
+  const keepSlots = [...slots.filter((s) => protectedIds.includes(s.clipId)), ...removedSlots];
   const without = structuredClone(doc);
   for (const id of removable) { const f = findClip(without, id); if (f) f.track.clips.splice(f.index, 1); }
   const kept: FilmKeptClip[] = protectedIds.map((id) => {
@@ -114,14 +116,14 @@ export function regenerationPlan(doc: ProjectDocument, runId: string, newParams:
   if (musicTrack) reuseTracks.musicTrack = musicTrack.id;
   const ownTrack = Object.values(doc.sequences).flatMap((q) => q.tracks).find((t) => t.kind === 'audio' && t.id !== reuseTracks.musicTrack && t.clips.some((c) => c.type === 'media' && !!c.linkGroupId && links.has(c.linkGroupId)));
   if (ownTrack) reuseTracks.ownSound = ownTrack.id;
-  const ctx: FilmPlanContext = { capture: {}, title: null, closing: null, kept, keptKeys: keepSlots.map((s) => s.key), reuseTracks, previousOwnSound: prevOwn, previousMusic: typeof run.params.musicAssetId === 'string' };
+  const ctx: FilmPlanContext = { capture: {}, title: null, closing: null, kept, keptKeys: keepSlots.filter((s) => !removedSlots.includes(s)).map((s) => s.key), removedKeys: removedSlots.map((s) => s.key), removedPicks, previousCut, reuseTracks, previousOwnSound: prevOwn, previousMusic };
   const plan = planFamilyFilm(without, params, ctx);
-  return { plan, ctx, kept, protectedIds, extra: { runId, removeClipIds: removable, keepIds, keepSlots } };
+  return { plan, ctx, kept, protectedIds, removedPicks, extra: { runId, removeClipIds: removable, keepIds, keepSlots } };
 }
 /** regenerationPlan, then applied through the real apply_template as the server commits it. */
-export function regenerateFilm(doc: ProjectDocument, runId: string, newParams: Record<string, unknown> = {}, seed = 'regen_') {
-  const r = regenerationPlan(doc, runId, newParams);
-  return { ...r, applied: applyFilm(doc, r.plan, r.extra, seed) };
+export function regenerateFilm(doc: ProjectDocument, runId: string, newParams: Record<string, unknown> = {}, seed = 'regen_', restoreRemoved = false) {
+  const r = regenerationPlan(doc, runId, newParams, restoreRemoved);
+  return { ...r, applied: applyFilm(doc, r.plan, r.extra, seed, r.removedPicks) };
 }
 let editSeq = 0;
 /** A person's edit: ordinary public ops in one transaction. */

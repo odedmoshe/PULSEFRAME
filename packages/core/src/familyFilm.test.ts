@@ -374,6 +374,82 @@ describe('fitting the target', () => {
   });
 });
 
+describe('regeneration after a hand delete', () => {
+  const tracksOf = (doc: ProjectDocument) => Object.values(doc.sequences).flatMap((q) => q.tracks);
+  it('music deleted by hand: the no-music mix (own sound not lowered, nothing ducked); the cuts stay on its bars, a new length re-cuts on a steady grid', () => {
+    for (const ownSound of ['under', 'lead'] as const) {
+      const d0 = withSong(clips(6, 12), 120, 200);
+      const p = plan(d0, { assetIds: ids(6), musicAssetId: 'mus', targetSeconds: 30, order: 'given', ownSound });
+      const doc0 = applied(d0, p).doc, runId = runIdOf(doc0);
+      const mixed = tracksOf(doc0);
+      // the first film is mixed with music: own sound lowered (under) or the music ducked (lead)
+      expect(ownSound === 'under' ? mixed.some((t) => (t.audio?.gain ?? 1) < 1) : mixed.some((t) => !!t.audio?.duck), ownSound).toBe(true);
+      const musicSlot = doc0.recipeRuns[runId]!.slots!.find((x) => x.kind === 'music')!;
+      const doc1 = edit(doc0, [{ op: 'delete_clip', args: { clipId: musicSlot.clipId } }]);
+      const r = regenerateFilm(doc1, runId);
+      const after = r.applied.doc;
+      expect(validateProject(after), ownSound).toEqual([]);
+      expect(opsOf(r.plan, 'add_clip').some((o) => argsOf(o).assetId === 'mus'), ownSound).toBe(false);
+      for (const t of tracksOf(after)) { expect(t.audio?.gain ?? 1, `${ownSound} ${t.name}`).toBe(1); expect(t.audio?.duck ?? null, `${ownSound} ${t.name}`).toBe(null); }
+      const w = r.plan.warnings.find((x) => x.code === 'music_removed')!;
+      expect([w.details.cutOn, r.plan.musicRemoved], ownSound).toEqual(['removed-music', { cutOn: 'removed-music' }]);
+      expect(r.plan.predicted.cuts, 'the cuts stay where they are').toEqual(p.predicted.cuts);
+      expect(after.recipeRuns[runId]!.params.cutOn).toBe('removed-music');
+      // another length: a steady grid, still no music and no lowering; asking for that length again stays on the steady grid
+      const r2 = regenerateFilm(after, runId, { targetSeconds: 60 }, 'regen2_');
+      expect(r2.plan.warnings.find((x) => x.code === 'music_removed')!.details.cutOn, ownSound).toBe('steady');
+      expect(r2.plan.basis[0], ownSound).toMatch(/no music: a steady grid/);
+      for (const t of tracksOf(r2.applied.doc)) { expect(t.audio?.gain ?? 1).toBe(1); expect(t.audio?.duck ?? null).toBe(null); }
+      const r3 = regenerateFilm(r2.applied.doc, runId, {}, 'regen3_');
+      expect(r3.plan.warnings.find((x) => x.code === 'music_removed')!.details.cutOn, ownSound).toBe('steady');
+      // restoreRemoved: the music is placed again and the film is mixed with it again
+      const back = regenerateFilm(r3.applied.doc, runId, {}, 'regen4_', true);
+      expect(opsOf(back.plan, 'add_clip').some((o) => argsOf(o).assetId === 'mus'), ownSound).toBe(true);
+      expect(back.plan.warnings.map((x) => x.code), ownSound).not.toContain('music_removed');
+    }
+  });
+  it('one moment of a file that gives two is deleted: only that window is left out, the file\'s other moment stays, and the warning names the file and the time', () => {
+    let d = project();
+    for (let i = 0; i < 3; i++) { d.assets[`v${i}`] = video(`v${i}`, 20); d = withMoments(d, `v${i}`, { windows: [win({ peakFrame: 400, fromFrame: 330, toFrame: 520 }), win({ peakFrame: 340, fromFrame: 300, toFrame: 380 }), win({ peakFrame: 120, fromFrame: 40, toFrame: 230 })] }); }
+    withSong(d, 120);
+    const p = plan(d, { assetIds: ids(3), musicAssetId: 'mus', targetSeconds: 30, order: 'given' });
+    const doc0 = applied(d, p).doc, runId = runIdOf(doc0);
+    const gone = p.picks.find((k) => k.assetId === 'v1' && k.windowIndex === 0)!;
+    expect(p.picks.filter((k) => k.assetId === 'v1').length, 'v1 gives two moments').toBe(2);
+    const clipId = doc0.recipeRuns[runId]!.slots!.find((x) => x.key === gone.key)!.clipId;
+    const r = regenerateFilm(edit(doc0, [{ op: 'delete_clip', args: { clipId } }]), runId);
+    expect(validateProject(r.applied.doc)).toEqual([]);
+    const v1 = r.plan.picks.filter((k) => k.assetId === 'v1');
+    expect(v1.length).toBeGreaterThan(0);
+    expect(v1.map((k) => k.windowIndex)).not.toContain(0);
+    expect(r.plan.excluded.filter((e) => e.assetId === 'v1')).toEqual([]);
+    const w = r.plan.warnings.find((x) => x.code === 'removed_by_hand')!;
+    expect(w.details.items).toEqual([{ kind: 'window', assetId: 'v1', name: 'v1.mp4', windowIndex: 0, fromSecond: 11, toSecond: 17.3 }]);
+    expect(w.message).toContain('"v1.mp4" (its moment at 11.0–17.3 s');
+    // the run record carries the deleted window on, so the next regeneration still leaves it out
+    expect(r.applied.doc.recipeRuns[runId]!.params.removedPicks).toEqual([{ key: gone.key, assetId: 'v1', windowIndex: 0 }]);
+    const again = regenerateFilm(r.applied.doc, runId, { targetSeconds: 60 }, 'again_');
+    expect(again.plan.picks.filter((k) => k.assetId === 'v1').map((k) => k.windowIndex)).not.toContain(0);
+    // restored: window 0 of v1 is back
+    const back = regenerateFilm(again.applied.doc, runId, { targetSeconds: 30 }, 'back_', true);
+    expect(back.plan.picks.filter((k) => k.assetId === 'v1').map((k) => k.windowIndex)).toContain(0);
+  });
+  it('a file that can give only one moment (unmeasured, or a still) is left out whole, by name', () => {
+    const d0 = withSong(clips(4, 12, { measured: false }), 120, 200);
+    d0.assets.ph = still('ph');
+    const p = plan(d0, { assetIds: [...ids(4), 'ph'], musicAssetId: 'mus', targetSeconds: 30, order: 'given' });
+    const doc0 = applied(d0, p).doc, runId = runIdOf(doc0);
+    const slots = doc0.recipeRuns[runId]!.slots!;
+    const del = ['v2', 'ph'].map((id) => slots.find((x) => x.key === p.picks.find((k) => k.assetId === id)!.key)!.clipId);
+    const r = regenerateFilm(edit(doc0, del.map((clipId) => ({ op: 'delete_clip', args: { clipId } }))), runId);
+    expect(r.plan.picks.map((k) => k.assetId)).not.toContain('v2');
+    expect(r.plan.picks.map((k) => k.assetId)).not.toContain('ph');
+    expect(r.plan.excluded).toEqual(expect.arrayContaining([expect.objectContaining({ assetId: 'v2', code: 'removed_by_hand' }), expect.objectContaining({ assetId: 'ph', code: 'removed_by_hand' })]));
+    const w = r.plan.warnings.find((x) => x.code === 'removed_by_hand')!;
+    expect(w.details.items).toEqual([{ kind: 'file', assetId: 'v2', name: 'v2.mp4' }, { kind: 'file', assetId: 'ph', name: 'ph.jpg' }]);
+  });
+});
+
 describe('overrides', () => {
   it('another window by index says chosen_by_you; exclude leaves a file out', () => {
     let d = project();

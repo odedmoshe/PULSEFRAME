@@ -521,9 +521,17 @@ export const SlotRecordSchema = z
   .strict();
 export type SlotRecord = z.infer<typeof SlotRecordSchema>;
 
+/** A timeline range a run's clip was placed on (RecipeRunSchema.ranges). */
+export const RunRangeSchema = z.object({ start: RationalTimeSchema, end: RationalTimeSchema }).strict();
 export const RecipeRunSchema = z.object({ id: Id, recipeId: z.string().max(64), params: z.record(z.string(), z.unknown()), createdIds: z.array(Id).max(5000), /** Content fingerprint of each created clip as the recipe left it; a clip whose content differs was edited by hand. */ fingerprints: z.record(Id, z.string()).default({}), steps: z.array(z.string().max(400)).max(50),
   /** Template runs only (recipeId `template:<templateId>`, ADR-0016): what each slot of the template holds. */
-  slots: z.array(SlotRecordSchema).max(400).optional() }).strict();
+  slots: z.array(SlotRecordSchema).max(400).optional(),
+  /**
+   * Beat-montage runs (recipes.ts recordsRanges), OPTIONAL: the timeline range each clip of the run was placed on, by clip id, so
+   * a clip deleted by hand is told by its id missing from the document and its range is left empty on regeneration (ADR-0016
+   * decision 6). Written by apply_recipe only when its arguments ask for it (recordRanges); absent on every older run.
+   */
+  ranges: z.record(Id, RunRangeSchema).optional() }).strict();
 export type RecipeRun = z.infer<typeof RecipeRunSchema>;
 
 // ---------- analysis results (SPEC §19): measured from a source file, stored in SOURCE time, editable ----------
