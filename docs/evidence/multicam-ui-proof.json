@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-24T18:01:01.368Z",
+  "ranAt": "2026-11-24T22:45:42.956Z",
   "result": "PASS",
   "checks": [
     {
@@ -12,7 +12,7 @@
           100,
           140,
           180,
-          220,
+          222,
           260,
           300,
           340,
@@ -27,7 +27,7 @@
           100,
           140,
           180,
-          220,
+          222,
           260,
           300,
           340,
@@ -89,18 +89,18 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_b0194f26390": "proxy",
-            "ast_68d4e877730": "original",
-            "ast_3ca2d0ce6f0": "proxy"
+            "ast_0fbcbfee870": "proxy",
+            "ast_9188f87e310": "original",
+            "ast_0180c8c0670": "proxy"
           },
           "sourcesUsed": {
-            "ast_b0194f26390": [
+            "ast_0fbcbfee870": [
               "proxy"
             ],
-            "ast_68d4e877730": [
+            "ast_9188f87e310": [
               "original"
             ],
-            "ast_3ca2d0ce6f0": [
+            "ast_0180c8c0670": [
               "proxy"
             ]
           },
@@ -129,18 +129,18 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_b0194f26390": "original",
-            "ast_68d4e877730": "original",
-            "ast_3ca2d0ce6f0": "original"
+            "ast_0fbcbfee870": "original",
+            "ast_9188f87e310": "original",
+            "ast_0180c8c0670": "original"
           },
           "sourcesUsed": {
-            "ast_b0194f26390": [
+            "ast_0fbcbfee870": [
               "original"
             ],
-            "ast_68d4e877730": [
+            "ast_9188f87e310": [
               "original"
             ],
-            "ast_3ca2d0ce6f0": [
+            "ast_0180c8c0670": [
               "original"
             ]
           },
@@ -156,23 +156,23 @@
       "ok": true,
       "detail": {
         "cutFramesMeasured": 12,
-        "medianMs": 31.98,
-        "p95Ms": 39.98,
-        "medianFrames": 0.96,
-        "p95Frames": 1.2,
+        "medianMs": 29.33,
+        "p95Ms": 106.67,
+        "medianFrames": 0.88,
+        "p95Frames": 3.2,
         "allFrames": {
-          "median": 17.31,
-          "p95": 31.98,
-          "max": 338.65
+          "median": 13.33,
+          "p95": 28,
+          "max": 308
         },
         "baselineRun": {
           "median": 13.33,
-          "p95": 29.33,
-          "max": 45.33
+          "p95": 26.67,
+          "max": 30.67
         },
         "progressMd74": "median 5-15 ms, p95 about 21-24 ms after the clock reached the frame (one 3.5 s headless run)",
         "budget": "p95 <= 2 frames",
-        "budgetMet": true,
+        "budgetMet": false,
         "prefetch": {
           "off": null,
           "budgetMB": 160,
@@ -183,9 +183,9 @@
           "gaveRoom": 0
         },
         "loadAverage": [
-          3.9,
-          5.88,
-          11.39
+          1.79,
+          2.54,
+          3.01
         ]
       }
     },
@@ -275,8 +275,8 @@
       "name": "U5: a digit while paused gives +1 history entry, the segment under the playhead shows the angle, and undo restores it",
       "ok": true,
       "detail": {
-        "angleAfter": "ang_2b6d002cbc3",
-        "expected": "ang_2b6d002cbc3"
+        "angleAfter": "ang_2905c839c33",
+        "expected": "ang_2905c839c33"
       }
     },
     {
@@ -316,64 +316,64 @@
         "shownSegments": 7,
         "badges": [
           {
-            "angle": "ang_2b6d002cbc2",
+            "angle": "ang_2905c839c32",
             "badge": {
-              "clipId": "clp_7dd3aa5e1e1",
-              "angleId": "ang_2b6d002cbc2",
+              "clipId": "clp_64c6989f7c1",
+              "angleId": "ang_2905c839c32",
               "text": "1 · Camera 1",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_2b6d002cbc3",
+            "angle": "ang_2905c839c33",
             "badge": {
-              "clipId": "clp_b7e64b5a2b0",
-              "angleId": "ang_2b6d002cbc3",
+              "clipId": "clp_0ddbe0b6aa0",
+              "angleId": "ang_2905c839c33",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_2b6d002cbc4",
+            "angle": "ang_2905c839c34",
             "badge": {
-              "clipId": "clp_b7e64b5a2b1",
-              "angleId": "ang_2b6d002cbc4",
+              "clipId": "clp_0ddbe0b6aa1",
+              "angleId": "ang_2905c839c34",
               "text": "3 · Camera 3",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_2b6d002cbc3",
+            "angle": "ang_2905c839c33",
             "badge": {
-              "clipId": "clp_b7e64b5a2b2",
-              "angleId": "ang_2b6d002cbc3",
+              "clipId": "clp_0ddbe0b6aa2",
+              "angleId": "ang_2905c839c33",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_2b6d002cbc4",
+            "angle": "ang_2905c839c34",
             "badge": {
-              "clipId": "clp_b7e64b5a2b3",
-              "angleId": "ang_2b6d002cbc4",
+              "clipId": "clp_0ddbe0b6aa3",
+              "angleId": "ang_2905c839c34",
               "text": "3 · Camera 3",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_2b6d002cbc2",
+            "angle": "ang_2905c839c32",
             "badge": {
-              "clipId": "clp_b7e64b5a2b4",
-              "angleId": "ang_2b6d002cbc2",
+              "clipId": "clp_0ddbe0b6aa4",
+              "angleId": "ang_2905c839c32",
               "text": "1 · Camera 1",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_2b6d002cbc3",
+            "angle": "ang_2905c839c33",
             "badge": {
-              "clipId": "clp_7dd3aa5e1e2",
-              "angleId": "ang_2b6d002cbc3",
+              "clipId": "clp_64c6989f7c2",
+              "angleId": "ang_2905c839c33",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
@@ -446,27 +446,27 @@
   "measurements": {
     "sync": [
       {
-        "angleId": "ang_2b6d002cbc1",
+        "angleId": "ang_2905c839c31",
         "verdict": "reference",
         "offsetSeconds": 0
       },
       {
-        "angleId": "ang_2b6d002cbc2",
+        "angleId": "ang_2905c839c32",
         "verdict": "check",
         "offsetSeconds": -0.625
       },
       {
-        "angleId": "ang_2b6d002cbc3",
+        "angleId": "ang_2905c839c33",
         "verdict": "confident",
         "offsetSeconds": 1.194187
       },
       {
-        "angleId": "ang_2b6d002cbc4",
+        "angleId": "ang_2905c839c34",
         "verdict": "confident",
         "offsetSeconds": 0.499979
       },
       {
-        "angleId": "ang_2b6d002cbc4",
+        "angleId": "ang_2905c839c34",
         "verdict": "unsynced",
         "offsetSeconds": null
       }
@@ -474,7 +474,7 @@
     "initialBoundaries": [
       {
         "frame": 1001,
-        "angleId": "ang_2b6d002cbc3"
+        "angleId": "ang_2905c839c33"
       }
     ],
     "baseline": {
@@ -482,8 +482,8 @@
       "onsets": 28,
       "paintLatenessMs": {
         "median": 13.33,
-        "p95": 29.33,
-        "max": 45.33
+        "p95": 26.67,
+        "max": 30.67
       }
     },
     "u1": {
@@ -506,7 +506,7 @@
         },
         {
           "digit": 3,
-          "painted": 220
+          "painted": 222
         },
         {
           "digit": 1,
@@ -540,77 +540,77 @@
       "cuts": [
         {
           "frame": 60,
-          "angleId": "ang_2b6d002cbc3"
+          "angleId": "ang_2905c839c33"
         },
         {
           "frame": 100,
-          "angleId": "ang_2b6d002cbc4"
+          "angleId": "ang_2905c839c34"
         },
         {
           "frame": 140,
-          "angleId": "ang_2b6d002cbc2"
+          "angleId": "ang_2905c839c32"
         },
         {
           "frame": 180,
-          "angleId": "ang_2b6d002cbc3"
+          "angleId": "ang_2905c839c33"
         },
         {
-          "frame": 220,
-          "angleId": "ang_2b6d002cbc4"
+          "frame": 222,
+          "angleId": "ang_2905c839c34"
         },
         {
           "frame": 260,
-          "angleId": "ang_2b6d002cbc2"
+          "angleId": "ang_2905c839c32"
         },
         {
           "frame": 300,
-          "angleId": "ang_2b6d002cbc3"
+          "angleId": "ang_2905c839c33"
         },
         {
           "frame": 340,
-          "angleId": "ang_2b6d002cbc4"
+          "angleId": "ang_2905c839c34"
         },
         {
           "frame": 380,
-          "angleId": "ang_2b6d002cbc2"
+          "angleId": "ang_2905c839c32"
         },
         {
           "frame": 420,
-          "angleId": "ang_2b6d002cbc3"
+          "angleId": "ang_2905c839c33"
         },
         {
           "frame": 460,
-          "angleId": "ang_2b6d002cbc4"
+          "angleId": "ang_2905c839c34"
         },
         {
           "frame": 500,
-          "angleId": "ang_2b6d002cbc2"
+          "angleId": "ang_2905c839c32"
         },
         {
           "frame": 1001,
-          "angleId": "ang_2b6d002cbc3"
+          "angleId": "ang_2905c839c33"
         }
       ]
     },
     "u4": {
       "cutFramesMeasured": 12,
-      "medianMs": 31.98,
-      "p95Ms": 39.98,
-      "medianFrames": 0.96,
-      "p95Frames": 1.2,
+      "medianMs": 29.33,
+      "p95Ms": 106.67,
+      "medianFrames": 0.88,
+      "p95Frames": 3.2,
       "allFrames": {
-        "median": 17.31,
-        "p95": 31.98,
-        "max": 338.65
+        "median": 13.33,
+        "p95": 28,
+        "max": 308
       },
       "baselineRun": {
         "median": 13.33,
-        "p95": 29.33,
-        "max": 45.33
+        "p95": 26.67,
+        "max": 30.67
       },
       "progressMd74": "median 5-15 ms, p95 about 21-24 ms after the clock reached the frame (one 3.5 s headless run)",
       "budget": "p95 <= 2 frames",
-      "budgetMet": true,
+      "budgetMet": false,
       "prefetch": {
         "off": null,
         "budgetMB": 160,
@@ -621,11 +621,11 @@
         "gaveRoom": 0
       },
       "loadAverage": [
-        3.9,
-        5.88,
-        11.39
+        1.79,
+        2.54,
+        3.01
       ],
-      "prefetchVerdict": "budget met in this run"
+      "prefetchVerdict": "budget missed in this run (prefetch on)"
     }
   },
   "notMeasured": []

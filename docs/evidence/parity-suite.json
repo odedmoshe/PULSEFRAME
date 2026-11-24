@@ -2224,46 +2224,46 @@
     },
     "summary": {
       "psnr": {
-        "min": 41.7074,
-        "median": 43.8259,
+        "min": 41.6916,
+        "median": 43.7717,
         "max": 55.5212,
         "worstFrame": 64
       },
       "ssim": {
-        "min": 0.997,
-        "median": 0.9978,
+        "min": 0.9969,
+        "median": 0.9977,
         "max": 0.9998,
         "worstFrame": 56
       },
       "psnrFullChroma": {
-        "min": 35.7301,
-        "median": 38.4885,
+        "min": 35.7238,
+        "median": 38.4821,
         "max": 44.5387,
         "worstFrame": 91
       },
       "largeTextPsnr": {
-        "min": 36.5493,
-        "median": 37.9124,
+        "min": 36.5806,
+        "median": 37.969,
         "max": 48.3571,
         "worstFrame": 62
       },
       "smallTextPsnr": {
-        "min": 29.1293,
-        "median": 33.6656,
+        "min": 29.1141,
+        "median": 33.6367,
         "max": 42.1102,
         "worstFrame": 120
       },
       "imageBandPsnr": {
-        "min": 38.8011,
-        "median": 39.9101,
-        "max": 41.4118,
+        "min": 38.6292,
+        "median": 39.8461,
+        "max": 41.2923,
         "worstFrame": 62
       }
     },
     "worstFramesSavedAsPng": [
       64,
       89,
-      56
+      62
     ],
     "colour": [
       {
@@ -2300,7 +2300,7 @@
         "redSquare": {
           "ref": [
             218,
-            42,
+            41,
             59
           ],
           "export": [
@@ -2308,7 +2308,7 @@
             40,
             58
           ],
-          "maxChannelDiff": 2
+          "maxChannelDiff": 1
         },
         "textBox": {
           "ref": [
@@ -2446,12 +2446,12 @@
           "ref": [
             233,
             43,
-            40
+            39
           ],
           "export": [
             232,
             41,
-            39
+            37
           ],
           "maxChannelDiff": 2
         },
@@ -2649,7 +2649,7 @@
           "ref": [
             219,
             57,
-            40
+            39
           ],
           "export": [
             218,
@@ -2763,14 +2763,14 @@
         "frame": 69,
         "redSquare": {
           "ref": [
-            211,
-            57,
-            41
+            210,
+            56,
+            40
           ],
           "export": [
-            209,
-            55,
-            39
+            208,
+            54,
+            38
           ],
           "maxChannelDiff": 2
         },
@@ -2793,13 +2793,13 @@
         "redSquare": {
           "ref": [
             210,
-            57,
+            56,
             43
           ],
           "export": [
-            209,
-            55,
-            41
+            208,
+            54,
+            42
           ],
           "maxChannelDiff": 2
         },
@@ -2821,12 +2821,12 @@
         "frame": 79,
         "redSquare": {
           "ref": [
-            211,
+            210,
             54,
             60
           ],
           "export": [
-            210,
+            208,
             52,
             59
           ],
@@ -2850,16 +2850,16 @@
         "frame": 80,
         "redSquare": {
           "ref": [
-            211,
+            210,
             52,
             59
           ],
           "export": [
-            211,
-            50,
+            209,
+            51,
             58
           ],
-          "maxChannelDiff": 2
+          "maxChannelDiff": 1
         },
         "textBox": {
           "ref": [
@@ -2879,7 +2879,7 @@
         "frame": 81,
         "redSquare": {
           "ref": [
-            211,
+            210,
             50,
             59
           ],
@@ -2909,15 +2909,15 @@
         "redSquare": {
           "ref": [
             217,
-            42,
+            41,
             59
           ],
           "export": [
-            216,
-            41,
-            58
+            217,
+            39,
+            57
           ],
-          "maxChannelDiff": 1
+          "maxChannelDiff": 2
         },
         "textBox": {
           "ref": [
@@ -2938,13 +2938,13 @@
         "redSquare": {
           "ref": [
             220,
-            42,
+            41,
             59
           ],
           "export": [
-            220,
-            41,
-            59
+            219,
+            40,
+            58
           ],
           "maxChannelDiff": 1
         },
@@ -3026,7 +3026,7 @@
           "ref": [
             233,
             42,
-            47
+            46
           ],
           "export": [
             232,
@@ -3082,14 +3082,14 @@
         "frame": 120,
         "redSquare": {
           "ref": [
-            211,
-            57,
+            210,
+            56,
             40
           ],
           "export": [
-            209,
-            55,
-            39
+            208,
+            54,
+            38
           ],
           "maxChannelDiff": 2
         },
@@ -3169,7 +3169,7 @@
         "frame": 131,
         "redSquare": {
           "ref": [
-            211,
+            210,
             53,
             59
           ],
@@ -3201,90 +3201,90 @@
           60,
           61
         ],
-        "referenceDx": 4.3703,
-        "exportDx": 4.2418,
+        "referenceDx": 4.3658,
+        "exportDx": 4.3717,
         "evaluatorDx": 4.3742,
-        "absError": 0.1285
+        "absError": 0.0059
       },
       {
         "pair": [
           61,
           62
         ],
-        "referenceDx": 4.6012,
-        "exportDx": 4.4802,
+        "referenceDx": 4.5802,
+        "exportDx": 4.5876,
         "evaluatorDx": 4.5929,
-        "absError": 0.121
+        "absError": 0.0074
       },
       {
         "pair": [
           62,
           63
         ],
-        "referenceDx": 4.8114,
-        "exportDx": 4.8008,
+        "referenceDx": 4.8211,
+        "exportDx": 4.9156,
         "evaluatorDx": 4.8169,
-        "absError": 0.0106
+        "absError": 0.0946
       },
       {
         "pair": [
           63,
           64
         ],
-        "referenceDx": 5.0356,
-        "exportDx": 4.9494,
+        "referenceDx": 5.0496,
+        "exportDx": 4.825,
         "evaluatorDx": 5.0462,
-        "absError": 0.0862
+        "absError": 0.2246
       },
       {
         "pair": [
           64,
           65
         ],
-        "referenceDx": 5.2945,
-        "exportDx": 5.2811,
+        "referenceDx": 5.2827,
+        "exportDx": 5.3614,
         "evaluatorDx": 5.2809,
-        "absError": 0.0134
+        "absError": 0.0788
       },
       {
         "pair": [
           65,
           66
         ],
-        "referenceDx": 5.5033,
-        "exportDx": 5.5259,
+        "referenceDx": 5.5258,
+        "exportDx": 5.5677,
         "evaluatorDx": 5.5209,
-        "absError": 0.0226
+        "absError": 0.0419
       },
       {
         "pair": [
           66,
           67
         ],
-        "referenceDx": 5.7845,
-        "exportDx": 5.8083,
+        "referenceDx": 5.7681,
+        "exportDx": 5.7877,
         "evaluatorDx": 5.7662,
-        "absError": 0.0238
+        "absError": 0.0197
       },
       {
         "pair": [
           67,
           68
         ],
-        "referenceDx": 6.0325,
-        "exportDx": 5.8823,
+        "referenceDx": 6.0143,
+        "exportDx": 5.9904,
         "evaluatorDx": 6.0169,
-        "absError": 0.1502
+        "absError": 0.0239
       },
       {
         "pair": [
           68,
           69
         ],
-        "referenceDx": 6.2472,
-        "exportDx": 6.4031,
+        "referenceDx": 6.2654,
+        "exportDx": 6.2237,
         "evaluatorDx": 6.2729,
-        "absError": 0.156
+        "absError": 0.0417
       },
       {
         "pair": [
@@ -3292,9 +3292,9 @@
           70
         ],
         "referenceDx": 6.5397,
-        "exportDx": 6.5405,
+        "exportDx": 6.6627,
         "evaluatorDx": 6.5342,
-        "absError": 0.0009
+        "absError": 0.123
       }
     ],
     "curveLayer": [
@@ -3325,8 +3325,8 @@
           "y": 291.4933
         },
         "stillPx": 0.0048,
-        "exportPx": 0.0502,
-        "stillVsExportPx": 0.0547
+        "exportPx": 0.0579,
+        "stillVsExportPx": 0.0598
       },
       {
         "frame": 50,
@@ -3335,8 +3335,8 @@
           "y": 291.8016
         },
         "stillPx": 0.0105,
-        "exportPx": 0.0065,
-        "stillVsExportPx": 0.0138
+        "exportPx": 0.0979,
+        "stillVsExportPx": 0.0965
       },
       {
         "frame": 51,
@@ -3345,8 +3345,8 @@
           "y": 292.1151
         },
         "stillPx": 0.0208,
-        "exportPx": 0.0463,
-        "stillVsExportPx": 0.0271
+        "exportPx": 0.1174,
+        "stillVsExportPx": 0.0967
       },
       {
         "frame": 52,
@@ -3355,8 +3355,8 @@
           "y": 292.4327
         },
         "stillPx": 0.0708,
-        "exportPx": 0.0442,
-        "stillVsExportPx": 0.0487
+        "exportPx": 0.1106,
+        "stillVsExportPx": 0.1079
       },
       {
         "frame": 56,
@@ -3365,8 +3365,8 @@
           "y": 293.7238
         },
         "stillPx": 0.0999,
-        "exportPx": 0.1624,
-        "stillVsExportPx": 0.1501
+        "exportPx": 0.1272,
+        "stillVsExportPx": 0.1012
       },
       {
         "frame": 60,
@@ -3375,8 +3375,8 @@
           "y": 294.9984
         },
         "stillPx": 0.0137,
-        "exportPx": 0.0408,
-        "stillVsExportPx": 0.032
+        "exportPx": 0.0602,
+        "stillVsExportPx": 0.0561
       },
       {
         "frame": 61,
@@ -3395,8 +3395,8 @@
           "y": 295.6087
         },
         "stillPx": 0.0788,
-        "exportPx": 0.0858,
-        "stillVsExportPx": 0.164
+        "exportPx": 0.066,
+        "stillVsExportPx": 0.1318
       },
       {
         "frame": 63,
@@ -3405,8 +3405,8 @@
           "y": 295.9035
         },
         "stillPx": 0.0405,
-        "exportPx": 0.0504,
-        "stillVsExportPx": 0.0826
+        "exportPx": 0.1066,
+        "stillVsExportPx": 0.1159
       },
       {
         "frame": 64,
@@ -3425,8 +3425,8 @@
           "y": 296.4672
         },
         "stillPx": 0.0805,
-        "exportPx": 0.1597,
-        "stillVsExportPx": 0.1115
+        "exportPx": 0.0979,
+        "stillVsExportPx": 0.0692
       },
       {
         "frame": 66,
@@ -3435,8 +3435,8 @@
           "y": 296.734
         },
         "stillPx": 0.032,
-        "exportPx": 0.0745,
-        "stillVsExportPx": 0.0993
+        "exportPx": 0.1336,
+        "stillVsExportPx": 0.1546
       },
       {
         "frame": 67,
@@ -3445,8 +3445,8 @@
           "y": 296.9894
         },
         "stillPx": 0.0195,
-        "exportPx": 0.1141,
-        "stillVsExportPx": 0.1039
+        "exportPx": 0.13,
+        "stillVsExportPx": 0.1177
       },
       {
         "frame": 68,
@@ -3455,8 +3455,8 @@
           "y": 297.2324
         },
         "stillPx": 0.0091,
-        "exportPx": 0.0963,
-        "stillVsExportPx": 0.0886
+        "exportPx": 0.1723,
+        "stillVsExportPx": 0.1662
       },
       {
         "frame": 69,
@@ -3475,8 +3475,8 @@
           "y": 297.6768
         },
         "stillPx": 0.0412,
-        "exportPx": 0.0876,
-        "stillVsExportPx": 0.0464
+        "exportPx": 0.1568,
+        "stillVsExportPx": 0.1554
       },
       {
         "frame": 79,
@@ -3485,8 +3485,8 @@
           "y": 298.7872
         },
         "stillPx": 0.0657,
-        "exportPx": 0.066,
-        "stillVsExportPx": 0.0664
+        "exportPx": 0.1634,
+        "stillVsExportPx": 0.1139
       },
       {
         "frame": 80,
@@ -3495,8 +3495,8 @@
           "y": 298.8
         },
         "stillPx": 0.039,
-        "exportPx": 0.1016,
-        "stillVsExportPx": 0.0626
+        "exportPx": 0.1232,
+        "stillVsExportPx": 0.0976
       },
       {
         "frame": 81,
@@ -3505,8 +3505,8 @@
           "y": 298.7801
         },
         "stillPx": 0.0644,
-        "exportPx": 0.04,
-        "stillVsExportPx": 0.0293
+        "exportPx": 0.0308,
+        "stillVsExportPx": 0.0788
       },
       {
         "frame": 88,
@@ -3515,8 +3515,8 @@
           "y": 297.6768
         },
         "stillPx": 0.0471,
-        "exportPx": 0.1019,
-        "stillVsExportPx": 0.0551
+        "exportPx": 0.0542,
+        "stillVsExportPx": 0.0108
       },
       {
         "frame": 89,
@@ -3525,8 +3525,8 @@
           "y": 297.4058
         },
         "stillPx": 0.1232,
-        "exportPx": 0.1027,
-        "stillVsExportPx": 0.0397
+        "exportPx": 0.0509,
+        "stillVsExportPx": 0.1087
       },
       {
         "frame": 90,
@@ -3535,8 +3535,8 @@
           "y": 297.1125
         },
         "stillPx": 0.0062,
-        "exportPx": 0.1325,
-        "stillVsExportPx": 0.1264
+        "exportPx": 0.0728,
+        "stillVsExportPx": 0.0694
       },
       {
         "frame": 91,
@@ -3545,8 +3545,8 @@
           "y": 296.799
         },
         "stillPx": 0.023,
-        "exportPx": 0.1024,
-        "stillVsExportPx": 0.1061
+        "exportPx": 0.0428,
+        "stillVsExportPx": 0.0359
       },
       {
         "frame": 100,
@@ -3555,8 +3555,8 @@
           "y": 293.4
         },
         "stillPx": 0.0211,
-        "exportPx": 0.1441,
-        "stillVsExportPx": 0.1268
+        "exportPx": 0.0611,
+        "stillVsExportPx": 0.0502
       },
       {
         "frame": 109,
@@ -3565,8 +3565,8 @@
           "y": 290.001
         },
         "stillPx": 0.0178,
-        "exportPx": 0.0574,
-        "stillVsExportPx": 0.0434
+        "exportPx": 0.0692,
+        "stillVsExportPx": 0.0825
       },
       {
         "frame": 120,
@@ -3575,8 +3575,8 @@
           "y": 288
         },
         "stillPx": 0.0263,
-        "exportPx": 0.1114,
-        "stillVsExportPx": 0.1375
+        "exportPx": 0.1266,
+        "stillVsExportPx": 0.1421
       },
       {
         "frame": 129,
@@ -3585,33 +3585,33 @@
           "y": 288
         },
         "stillPx": 0.0104,
-        "exportPx": 0.1166,
-        "stillVsExportPx": 0.1267
+        "exportPx": 0.166,
+        "stillVsExportPx": 0.1764
       }
     ],
     "qualityLadderReportOnly": {
       "high": {
-        "bytes": 518989,
-        "wallSeconds": 3.389,
+        "bytes": 519899,
+        "wallSeconds": 3.23,
         "psnr": {
-          "min": 41.7074,
-          "median": 43.8259,
+          "min": 41.6916,
+          "median": 43.7717,
           "max": 55.5212,
           "worstFrame": 64
         },
         "ssim": {
-          "min": 0.997,
-          "median": 0.9978,
+          "min": 0.9969,
+          "median": 0.9977,
           "max": 0.9998,
           "worstFrame": 56
         }
       },
       "mp4-standard": {
-        "bytes": 339200,
-        "wallSeconds": 3.229,
+        "bytes": 338035,
+        "wallSeconds": 3.051,
         "psnr": {
-          "min": 38.8579,
-          "median": 40.4358,
+          "min": 38.6753,
+          "median": 40.383,
           "max": 49.4396
         },
         "ssim": {
@@ -3621,30 +3621,30 @@
         }
       },
       "mp4-draft": {
-        "bytes": 187647,
-        "wallSeconds": 3.471,
+        "bytes": 189360,
+        "wallSeconds": 3.039,
         "psnr": {
-          "min": 32.9974,
-          "median": 34.1828,
+          "min": 32.0884,
+          "median": 34.1857,
           "max": 45.8756
         },
         "ssim": {
           "min": 0.9787,
-          "median": 0.9873,
+          "median": 0.9865,
           "max": 0.998
         }
       },
       "webm-vp9-standard": {
-        "bytes": 413867,
-        "wallSeconds": 3.947,
+        "bytes": 412851,
+        "wallSeconds": 3.471,
         "psnr": {
-          "min": 37.4323,
+          "min": 37.3611,
           "median": 40.4428,
           "max": 57.9608
         },
         "ssim": {
           "min": 0.9858,
-          "median": 0.9944,
+          "median": 0.9942,
           "max": 0.9999
         }
       }
@@ -3702,421 +3702,421 @@
       },
       {
         "frame": 18,
-        "psnr": 43.6736,
+        "psnr": 43.6368,
         "ssim": 0.9981,
-        "psnrFullChroma": 38.7374,
-        "largeTextPsnr": 38.7749,
-        "smallTextPsnr": 32.6965,
+        "psnrFullChroma": 38.7543,
+        "largeTextPsnr": 38.8062,
+        "smallTextPsnr": 32.7079,
         "imageBandPsnr": null,
         "barcode": 18
       },
       {
         "frame": 19,
-        "psnr": 45.661,
+        "psnr": 45.664,
         "ssim": 0.9983,
-        "psnrFullChroma": 40.4296,
-        "largeTextPsnr": 39.624,
-        "smallTextPsnr": 33.5055,
+        "psnrFullChroma": 40.4042,
+        "largeTextPsnr": 39.5409,
+        "smallTextPsnr": 33.5077,
         "imageBandPsnr": null,
         "barcode": 19
       },
       {
         "frame": 20,
-        "psnr": 43.8648,
-        "ssim": 0.9977,
-        "psnrFullChroma": 39.7028,
-        "largeTextPsnr": 38.7283,
-        "smallTextPsnr": 33.787,
-        "imageBandPsnr": 39.8821,
+        "psnr": 43.7717,
+        "ssim": 0.9976,
+        "psnrFullChroma": 39.6826,
+        "largeTextPsnr": 38.668,
+        "smallTextPsnr": 33.7682,
+        "imageBandPsnr": 39.7961,
         "barcode": 20
       },
       {
         "frame": 21,
-        "psnr": 44.9638,
+        "psnr": 44.9296,
         "ssim": 0.9978,
-        "psnrFullChroma": 39.6688,
-        "largeTextPsnr": 39.3574,
-        "smallTextPsnr": 33.9431,
-        "imageBandPsnr": 40.9498,
+        "psnrFullChroma": 39.6298,
+        "largeTextPsnr": 39.3127,
+        "smallTextPsnr": 33.9203,
+        "imageBandPsnr": 40.8858,
         "barcode": 21
       },
       {
         "frame": 24,
-        "psnr": 42.4909,
-        "ssim": 0.9972,
-        "psnrFullChroma": 38.9295,
-        "largeTextPsnr": 37.2139,
-        "smallTextPsnr": 33.716,
-        "imageBandPsnr": 39.2921,
+        "psnr": 42.3884,
+        "ssim": 0.9971,
+        "psnrFullChroma": 38.8798,
+        "largeTextPsnr": 37.1773,
+        "smallTextPsnr": 33.7109,
+        "imageBandPsnr": 39.0387,
         "barcode": 24
       },
       {
         "frame": 25,
-        "psnr": 44.6106,
-        "ssim": 0.9979,
-        "psnrFullChroma": 39.7825,
-        "largeTextPsnr": 38.9716,
-        "smallTextPsnr": 33.6742,
-        "imageBandPsnr": 41.1406,
+        "psnr": 44.4713,
+        "ssim": 0.9978,
+        "psnrFullChroma": 39.7376,
+        "largeTextPsnr": 38.9312,
+        "smallTextPsnr": 33.6367,
+        "imageBandPsnr": 40.8884,
         "barcode": 25
       },
       {
         "frame": 26,
-        "psnr": 44.2185,
-        "ssim": 0.9974,
-        "psnrFullChroma": 39.5681,
-        "largeTextPsnr": 38.6861,
-        "smallTextPsnr": 33.449,
-        "imageBandPsnr": 40.8932,
+        "psnr": 44.1373,
+        "ssim": 0.9972,
+        "psnrFullChroma": 39.5483,
+        "largeTextPsnr": 38.6519,
+        "smallTextPsnr": 33.4293,
+        "imageBandPsnr": 40.5595,
         "barcode": 26
       },
       {
         "frame": 37,
-        "psnr": 44.7993,
-        "ssim": 0.998,
-        "psnrFullChroma": 37.7013,
-        "largeTextPsnr": 38.2064,
-        "smallTextPsnr": 34.2147,
-        "imageBandPsnr": 40.6497,
+        "psnr": 45.0378,
+        "ssim": 0.9978,
+        "psnrFullChroma": 37.7497,
+        "largeTextPsnr": 38.2574,
+        "smallTextPsnr": 34.2502,
+        "imageBandPsnr": 40.7854,
         "barcode": 37
       },
       {
         "frame": 38,
-        "psnr": 43.6292,
-        "ssim": 0.9976,
-        "psnrFullChroma": 37.1651,
-        "largeTextPsnr": 37.1396,
-        "smallTextPsnr": 34.0108,
-        "imageBandPsnr": 39.2238,
+        "psnr": 43.8027,
+        "ssim": 0.9974,
+        "psnrFullChroma": 37.1955,
+        "largeTextPsnr": 37.1749,
+        "smallTextPsnr": 34.0186,
+        "imageBandPsnr": 39.3404,
         "barcode": 38
       },
       {
         "frame": 49,
-        "psnr": 44.4596,
+        "psnr": 44.5399,
         "ssim": 0.9981,
-        "psnrFullChroma": 38.1912,
-        "largeTextPsnr": 38.1203,
-        "smallTextPsnr": 34.1885,
-        "imageBandPsnr": 40.2626,
+        "psnrFullChroma": 38.2241,
+        "largeTextPsnr": 38.0872,
+        "smallTextPsnr": 34.2539,
+        "imageBandPsnr": 40.2154,
         "barcode": 49
       },
       {
         "frame": 50,
-        "psnr": 43.9492,
-        "ssim": 0.9978,
-        "psnrFullChroma": 38.0981,
-        "largeTextPsnr": 37.9643,
-        "smallTextPsnr": 33.9118,
-        "imageBandPsnr": 39.935,
+        "psnr": 43.9348,
+        "ssim": 0.9977,
+        "psnrFullChroma": 38.0972,
+        "largeTextPsnr": 38.0241,
+        "smallTextPsnr": 33.9544,
+        "imageBandPsnr": 39.8121,
         "barcode": 50
       },
       {
         "frame": 51,
-        "psnr": 43.7388,
-        "ssim": 0.9975,
-        "psnrFullChroma": 37.1003,
-        "largeTextPsnr": 36.974,
-        "smallTextPsnr": 33.0714,
-        "imageBandPsnr": 39.0194,
+        "psnr": 43.6244,
+        "ssim": 0.9973,
+        "psnrFullChroma": 37.1298,
+        "largeTextPsnr": 36.9896,
+        "smallTextPsnr": 33.0608,
+        "imageBandPsnr": 39.1058,
         "barcode": 51
       },
       {
         "frame": 52,
-        "psnr": 44.2114,
-        "ssim": 0.9982,
-        "psnrFullChroma": 37.9043,
-        "largeTextPsnr": 37.6368,
-        "smallTextPsnr": 33.4302,
-        "imageBandPsnr": 39.9101,
+        "psnr": 44.2918,
+        "ssim": 0.998,
+        "psnrFullChroma": 37.9056,
+        "largeTextPsnr": 37.6804,
+        "smallTextPsnr": 33.3725,
+        "imageBandPsnr": 39.8684,
         "barcode": 52
       },
       {
         "frame": 56,
-        "psnr": 42.147,
-        "ssim": 0.997,
-        "psnrFullChroma": 38.4462,
-        "largeTextPsnr": 37.567,
-        "smallTextPsnr": 34.2691,
-        "imageBandPsnr": 39.1321,
+        "psnr": 42.1802,
+        "ssim": 0.9969,
+        "psnrFullChroma": 38.4821,
+        "largeTextPsnr": 37.6736,
+        "smallTextPsnr": 34.2657,
+        "imageBandPsnr": 39.326,
         "barcode": 56
       },
       {
         "frame": 60,
-        "psnr": 43.4488,
+        "psnr": 43.5708,
         "ssim": 0.997,
-        "psnrFullChroma": 36.6833,
-        "largeTextPsnr": 37.9124,
-        "smallTextPsnr": 29.1455,
-        "imageBandPsnr": 39.7293,
+        "psnrFullChroma": 36.7004,
+        "largeTextPsnr": 38.0105,
+        "smallTextPsnr": 29.1937,
+        "imageBandPsnr": 39.5189,
         "barcode": 60
       },
       {
         "frame": 61,
-        "psnr": 43.7196,
-        "ssim": 0.9978,
-        "psnrFullChroma": 36.5842,
-        "largeTextPsnr": 37.876,
-        "smallTextPsnr": 29.1639,
-        "imageBandPsnr": 39.9547,
+        "psnr": 43.7335,
+        "ssim": 0.9977,
+        "psnrFullChroma": 36.5853,
+        "largeTextPsnr": 37.969,
+        "smallTextPsnr": 29.1625,
+        "imageBandPsnr": 39.9505,
         "barcode": 61
       },
       {
         "frame": 62,
-        "psnr": 42.3238,
-        "ssim": 0.9974,
-        "psnrFullChroma": 37.8587,
-        "largeTextPsnr": 36.5493,
-        "smallTextPsnr": 33.5545,
-        "imageBandPsnr": 38.8011,
+        "psnr": 42.1724,
+        "ssim": 0.9971,
+        "psnrFullChroma": 37.7822,
+        "largeTextPsnr": 36.5806,
+        "smallTextPsnr": 33.525,
+        "imageBandPsnr": 38.6292,
         "barcode": 62
       },
       {
         "frame": 63,
-        "psnr": 43.1223,
-        "ssim": 0.9978,
-        "psnrFullChroma": 38.6044,
-        "largeTextPsnr": 37.3814,
-        "smallTextPsnr": 34.0756,
-        "imageBandPsnr": 39.2514,
+        "psnr": 43.1522,
+        "ssim": 0.9976,
+        "psnrFullChroma": 38.5873,
+        "largeTextPsnr": 37.4205,
+        "smallTextPsnr": 34.0607,
+        "imageBandPsnr": 39.1328,
         "barcode": 63
       },
       {
         "frame": 64,
-        "psnr": 41.7074,
+        "psnr": 41.6916,
         "ssim": 0.997,
-        "psnrFullChroma": 38.6568,
-        "largeTextPsnr": 36.978,
-        "smallTextPsnr": 34.2082,
-        "imageBandPsnr": 39.042,
+        "psnrFullChroma": 38.6222,
+        "largeTextPsnr": 36.8851,
+        "smallTextPsnr": 34.1985,
+        "imageBandPsnr": 38.8821,
         "barcode": 64
       },
       {
         "frame": 65,
-        "psnr": 45.2169,
-        "ssim": 0.9982,
-        "psnrFullChroma": 38.7969,
-        "largeTextPsnr": 38.2836,
-        "smallTextPsnr": 33.7386,
-        "imageBandPsnr": 40.4771,
+        "psnr": 44.9663,
+        "ssim": 0.998,
+        "psnrFullChroma": 38.7529,
+        "largeTextPsnr": 38.2704,
+        "smallTextPsnr": 33.7263,
+        "imageBandPsnr": 40.4291,
         "barcode": 65
       },
       {
         "frame": 66,
-        "psnr": 42.8156,
-        "ssim": 0.9974,
-        "psnrFullChroma": 38.1468,
-        "largeTextPsnr": 36.7632,
-        "smallTextPsnr": 33.5674,
-        "imageBandPsnr": 38.8695,
+        "psnr": 42.7606,
+        "ssim": 0.9972,
+        "psnrFullChroma": 38.1188,
+        "largeTextPsnr": 36.7643,
+        "smallTextPsnr": 33.5469,
+        "imageBandPsnr": 38.9315,
         "barcode": 66
       },
       {
         "frame": 67,
-        "psnr": 43.8259,
+        "psnr": 43.6733,
         "ssim": 0.9978,
-        "psnrFullChroma": 38.4927,
-        "largeTextPsnr": 37.8548,
-        "smallTextPsnr": 33.2013,
-        "imageBandPsnr": 40.0709,
+        "psnrFullChroma": 38.4498,
+        "largeTextPsnr": 37.8473,
+        "smallTextPsnr": 33.1395,
+        "imageBandPsnr": 40.0818,
         "barcode": 67
       },
       {
         "frame": 68,
-        "psnr": 42.6398,
-        "ssim": 0.9975,
-        "psnrFullChroma": 38.0239,
-        "largeTextPsnr": 36.6199,
-        "smallTextPsnr": 32.9097,
-        "imageBandPsnr": 38.8126,
+        "psnr": 42.7418,
+        "ssim": 0.9974,
+        "psnrFullChroma": 38.0695,
+        "largeTextPsnr": 36.7851,
+        "smallTextPsnr": 32.9055,
+        "imageBandPsnr": 38.9106,
         "barcode": 68
       },
       {
         "frame": 69,
-        "psnr": 44.891,
-        "ssim": 0.9978,
-        "psnrFullChroma": 38.3977,
-        "largeTextPsnr": 38.0201,
-        "smallTextPsnr": 32.7757,
-        "imageBandPsnr": 41.0463,
+        "psnr": 44.8763,
+        "ssim": 0.9977,
+        "psnrFullChroma": 38.3976,
+        "largeTextPsnr": 38.0955,
+        "smallTextPsnr": 32.7819,
+        "imageBandPsnr": 41.1018,
         "barcode": 69
       },
       {
         "frame": 70,
-        "psnr": 45.8431,
-        "ssim": 0.9982,
-        "psnrFullChroma": 38.8993,
-        "largeTextPsnr": 39.0032,
-        "smallTextPsnr": 33.325,
-        "imageBandPsnr": 41.4118,
+        "psnr": 45.7018,
+        "ssim": 0.9981,
+        "psnrFullChroma": 38.858,
+        "largeTextPsnr": 39.0004,
+        "smallTextPsnr": 33.3084,
+        "imageBandPsnr": 41.2923,
         "barcode": 70
       },
       {
         "frame": 79,
-        "psnr": 42.5103,
-        "ssim": 0.9975,
-        "psnrFullChroma": 37.9403,
-        "largeTextPsnr": 37.0268,
-        "smallTextPsnr": 33.7595,
-        "imageBandPsnr": 39.0625,
+        "psnr": 42.497,
+        "ssim": 0.9973,
+        "psnrFullChroma": 37.934,
+        "largeTextPsnr": 37.0405,
+        "smallTextPsnr": 33.7316,
+        "imageBandPsnr": 38.9282,
         "barcode": 79
       },
       {
         "frame": 80,
-        "psnr": 43.204,
-        "ssim": 0.9978,
-        "psnrFullChroma": 38.4885,
-        "largeTextPsnr": 37.7844,
-        "smallTextPsnr": 34.3014,
-        "imageBandPsnr": 39.7004,
+        "psnr": 43.4325,
+        "ssim": 0.9977,
+        "psnrFullChroma": 38.5585,
+        "largeTextPsnr": 37.7913,
+        "smallTextPsnr": 34.291,
+        "imageBandPsnr": 39.8461,
         "barcode": 80
       },
       {
         "frame": 81,
-        "psnr": 42.6729,
-        "ssim": 0.9976,
-        "psnrFullChroma": 38.3366,
-        "largeTextPsnr": 37.5889,
-        "smallTextPsnr": 34.1989,
-        "imageBandPsnr": 39.5382,
+        "psnr": 42.8335,
+        "ssim": 0.9973,
+        "psnrFullChroma": 38.3993,
+        "largeTextPsnr": 37.7251,
+        "smallTextPsnr": 34.2138,
+        "imageBandPsnr": 39.5962,
         "barcode": 81
       },
       {
         "frame": 88,
-        "psnr": 44.3133,
-        "ssim": 0.9977,
-        "psnrFullChroma": 38.0725,
-        "largeTextPsnr": 38.3106,
-        "smallTextPsnr": 33.3099,
-        "imageBandPsnr": 40.5301,
+        "psnr": 44.0582,
+        "ssim": 0.9974,
+        "psnrFullChroma": 37.9957,
+        "largeTextPsnr": 38.266,
+        "smallTextPsnr": 33.2487,
+        "imageBandPsnr": 40.4569,
         "barcode": 88
       },
       {
         "frame": 89,
-        "psnr": 41.9436,
-        "ssim": 0.9976,
-        "psnrFullChroma": 37.061,
-        "largeTextPsnr": 37.4589,
-        "smallTextPsnr": 32.5411,
-        "imageBandPsnr": 39.8438,
+        "psnr": 41.755,
+        "ssim": 0.9975,
+        "psnrFullChroma": 36.9715,
+        "largeTextPsnr": 37.4177,
+        "smallTextPsnr": 32.4753,
+        "imageBandPsnr": 39.518,
         "barcode": 89
       },
       {
         "frame": 90,
-        "psnr": 43.2857,
-        "ssim": 0.9974,
-        "psnrFullChroma": 36.1872,
-        "largeTextPsnr": 38.0012,
-        "smallTextPsnr": 29.2717,
-        "imageBandPsnr": 40.0865,
+        "psnr": 42.8961,
+        "ssim": 0.9969,
+        "psnrFullChroma": 36.066,
+        "largeTextPsnr": 37.8898,
+        "smallTextPsnr": 29.2162,
+        "imageBandPsnr": 39.9078,
         "barcode": 90
       },
       {
         "frame": 91,
-        "psnr": 43.2397,
+        "psnr": 43.1523,
         "ssim": 0.997,
-        "psnrFullChroma": 35.7301,
-        "largeTextPsnr": 37.4253,
-        "smallTextPsnr": 29.1561,
-        "imageBandPsnr": 39.5513,
+        "psnrFullChroma": 35.7238,
+        "largeTextPsnr": 37.3545,
+        "smallTextPsnr": 29.1462,
+        "imageBandPsnr": 39.3058,
         "barcode": 91
       },
       {
         "frame": 100,
-        "psnr": 43.4261,
+        "psnr": 43.2993,
         "ssim": 0.9979,
-        "psnrFullChroma": 38.0613,
-        "largeTextPsnr": 37.3818,
-        "smallTextPsnr": 34.34,
-        "imageBandPsnr": 39.2754,
+        "psnrFullChroma": 38.0644,
+        "largeTextPsnr": 37.3824,
+        "smallTextPsnr": 34.2978,
+        "imageBandPsnr": 39.273,
         "barcode": 100
       },
       {
         "frame": 109,
-        "psnr": 43.2954,
-        "ssim": 0.9976,
-        "psnrFullChroma": 38.1092,
-        "largeTextPsnr": 36.9118,
-        "smallTextPsnr": 34.2467,
-        "imageBandPsnr": 39.0122,
+        "psnr": 43.221,
+        "ssim": 0.9978,
+        "psnrFullChroma": 38.1057,
+        "largeTextPsnr": 36.8166,
+        "smallTextPsnr": 34.2729,
+        "imageBandPsnr": 38.8175,
         "barcode": 109
       },
       {
         "frame": 120,
-        "psnr": 43.2304,
-        "ssim": 0.9976,
-        "psnrFullChroma": 36.6861,
-        "largeTextPsnr": 37.6514,
-        "smallTextPsnr": 29.1293,
-        "imageBandPsnr": 40.3588,
+        "psnr": 43.1314,
+        "ssim": 0.9973,
+        "psnrFullChroma": 36.6711,
+        "largeTextPsnr": 37.6107,
+        "smallTextPsnr": 29.1141,
+        "imageBandPsnr": 40.4021,
         "barcode": 120
       },
       {
         "frame": 129,
-        "psnr": 43.909,
-        "ssim": 0.9978,
-        "psnrFullChroma": 38.0658,
-        "largeTextPsnr": 37.8013,
-        "smallTextPsnr": 33.3965,
-        "imageBandPsnr": 40.9016,
+        "psnr": 43.8442,
+        "ssim": 0.9976,
+        "psnrFullChroma": 38.0472,
+        "largeTextPsnr": 37.8045,
+        "smallTextPsnr": 33.3936,
+        "imageBandPsnr": 40.6438,
         "barcode": 129
       },
       {
         "frame": 130,
-        "psnr": 44.7491,
-        "ssim": 0.9979,
-        "psnrFullChroma": 38.8659,
-        "largeTextPsnr": 38.2509,
-        "smallTextPsnr": 33.5701,
-        "imageBandPsnr": 40.3269,
+        "psnr": 44.7808,
+        "ssim": 0.9976,
+        "psnrFullChroma": 38.9418,
+        "largeTextPsnr": 38.4587,
+        "smallTextPsnr": 33.5764,
+        "imageBandPsnr": 40.6691,
         "barcode": 130
       },
       {
         "frame": 131,
-        "psnr": 44.965,
-        "ssim": 0.9982,
-        "psnrFullChroma": 40.267,
-        "largeTextPsnr": 39.6903,
-        "smallTextPsnr": 34.3496,
-        "imageBandPsnr": 41.1336,
+        "psnr": 44.2733,
+        "ssim": 0.9979,
+        "psnrFullChroma": 40.0975,
+        "largeTextPsnr": 39.0741,
+        "smallTextPsnr": 34.3408,
+        "imageBandPsnr": 40.9992,
         "barcode": 131
       },
       {
         "frame": 139,
-        "psnr": 44.4106,
-        "ssim": 0.9972,
-        "psnrFullChroma": 39.886,
-        "largeTextPsnr": 38.5067,
-        "smallTextPsnr": 33.9359,
-        "imageBandPsnr": 40.947,
+        "psnr": 44.4049,
+        "ssim": 0.9971,
+        "psnrFullChroma": 39.9552,
+        "largeTextPsnr": 38.6802,
+        "smallTextPsnr": 33.9758,
+        "imageBandPsnr": 40.6492,
         "barcode": 139
       },
       {
         "frame": 140,
-        "psnr": 45.183,
-        "ssim": 0.9984,
-        "psnrFullChroma": 39.8271,
-        "largeTextPsnr": 38.1403,
-        "smallTextPsnr": 33.7874,
+        "psnr": 45.0949,
+        "ssim": 0.9987,
+        "psnrFullChroma": 39.9595,
+        "largeTextPsnr": 38.4749,
+        "smallTextPsnr": 33.8844,
         "imageBandPsnr": null,
         "barcode": 140
       },
       {
         "frame": 145,
-        "psnr": 44.54,
-        "ssim": 0.9982,
-        "psnrFullChroma": 39.1362,
-        "largeTextPsnr": 37.259,
-        "smallTextPsnr": 32.6751,
+        "psnr": 44.5052,
+        "ssim": 0.9986,
+        "psnrFullChroma": 39.2064,
+        "largeTextPsnr": 37.6473,
+        "smallTextPsnr": 32.5896,
         "imageBandPsnr": null,
         "barcode": 145
       },
       {
         "frame": 149,
-        "psnr": 43.6041,
+        "psnr": 43.6075,
         "ssim": 0.9982,
-        "psnrFullChroma": 39.2344,
-        "largeTextPsnr": 37.3027,
-        "smallTextPsnr": 33.5561,
+        "psnrFullChroma": 39.1795,
+        "largeTextPsnr": 37.4011,
+        "smallTextPsnr": 33.4396,
         "imageBandPsnr": null,
         "barcode": 149
       }
@@ -4132,7 +4132,7 @@
       "yuv420p": {
         "pixFmt": "yuv420p",
         "encoder": "libx264 -qp 0 (lossless)",
-        "minPsnr": 36.6184,
+        "minPsnr": 36.6166,
         "worstFrame": 91,
         "frames": 47
       },
@@ -4144,19 +4144,19 @@
   "pass": true,
   "failures": [],
   "warnings": [
-    "test2 smallTextPsnr frame 18: 32.6965 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 60: 29.1455 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 61: 29.1639 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 68: 32.9097 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 69: 32.7757 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 89: 32.5411 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 90: 29.2717 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 91: 29.1561 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 120: 29.1293 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
-    "test2 smallTextPsnr frame 145: 32.6751 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)"
+    "test2 smallTextPsnr frame 18: 32.7079 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 60: 29.1937 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 61: 29.1625 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 68: 32.9055 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 69: 32.7819 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 89: 32.4753 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 90: 29.2162 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 91: 29.1462 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 120: 29.1141 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)",
+    "test2 smallTextPsnr frame 145: 32.5896 dB (14 px text: below the qualified text size for H.264 4:2:0; see textSizeEnvelope)"
   ],
   "machine": {
-    "platform": "Linux 6.18.44-fc-v653 x64",
+    "platform": "Linux 6.18.44-fc-v819 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "memoryGiB": 15.7,
@@ -4209,5 +4209,5 @@
     "Test 1 (i) and (ii) are both strict; the paused preview decodes the original media (data-source=original), playback uses the proxy.",
     "Small-text (14.4 px) regional PSNR in Test 2 is report+warning only; the pass/fail criterion is textSizeEnvelope."
   ],
-  "runtimeSeconds": 126.6
+  "runtimeSeconds": 114.2
 }

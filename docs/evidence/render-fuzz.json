@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-19T06:56:05.946Z",
+  "ranAt": "2026-11-24T22:53:14.290Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v653 x64",
+    "platform": "Linux 6.18.44-fc-v819 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none"
   },
@@ -41,7 +41,7 @@
       "fieldTitlesMadePlain": {
         "refusal": "render_blocked",
         "titles": [
-          "clp_c9429c38600"
+          "clp_2d06f0a52b0"
         ]
       },
       "export": {
@@ -49,7 +49,7 @@
         "rate": "25/1",
         "videoSeconds": 13.2,
         "audioSeconds": 13.2,
-        "bytes": 1055690
+        "bytes": 1056014
       },
       "features": {
         "videoClips": 2,
@@ -211,7 +211,7 @@
         "rate": "24000/1001",
         "videoSeconds": 10.26,
         "audioSeconds": 10.26,
-        "bytes": 111273
+        "bytes": 109841
       },
       "features": {
         "videoClips": 0,
@@ -258,7 +258,7 @@
         "rate": "30000/1001",
         "videoSeconds": 18.986,
         "audioSeconds": 18.985,
-        "bytes": 425362
+        "bytes": 420021
       },
       "features": {
         "videoClips": 5,
@@ -317,7 +317,7 @@
             "mask",
             "transition"
           ],
-          "stillMeanLevel": 54.8,
+          "stillMeanLevel": 54.9,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -325,7 +325,7 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 1.24
+            "mean": 1.22
           }
         },
         {
@@ -338,7 +338,7 @@
             "reverse",
             "transition"
           ],
-          "stillMeanLevel": 41.9,
+          "stillMeanLevel": 41.8,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -346,7 +346,7 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 0.95
+            "mean": 0.88
           }
         },
         {
@@ -385,7 +385,7 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 1
+            "mean": 1.06
           }
         },
         {
@@ -397,7 +397,7 @@
             "keyframes",
             "reverse"
           ],
-          "stillMeanLevel": 9.2,
+          "stillMeanLevel": 8.8,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -405,7 +405,7 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 0.6
+            "mean": 0.67
           }
         },
         {
@@ -417,7 +417,7 @@
             "keyframes",
             "reverse"
           ],
-          "stillMeanLevel": 8.2,
+          "stillMeanLevel": 8.1,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -425,7 +425,7 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 0.63
+            "mean": 0.62
           }
         },
         {
@@ -437,7 +437,7 @@
             "keyframes",
             "reverse"
           ],
-          "stillMeanLevel": 8.4,
+          "stillMeanLevel": 8.1,
           "painted": true,
           "previewSize": "640x360",
           "previewVsStill": {
@@ -445,7 +445,7 @@
             "worst": 0
           },
           "exportVsStill": {
-            "mean": 0.87
+            "mean": 0.76
           }
         }
       ],
@@ -621,7 +621,7 @@
         "rate": "25/1",
         "videoSeconds": 8.52,
         "audioSeconds": 8.52,
-        "bytes": 51788
+        "bytes": 51747
       },
       "features": {
         "videoClips": 0,
@@ -709,7 +709,7 @@
       "fieldTitlesMadePlain": {
         "refusal": "people_scope_required",
         "titles": [
-          "clp_b897ab2c920"
+          "clp_3863237ce90"
         ]
       },
       "export": {
@@ -717,7 +717,7 @@
         "rate": "24000/1001",
         "videoSeconds": 24.149,
         "audioSeconds": 24.149,
-        "bytes": 1351310
+        "bytes": 1351619
       },
       "features": {
         "videoClips": 9,
@@ -1407,21 +1407,21 @@
             },
             {
               "frame": 335,
-              "level": 54.8,
+              "level": 54.9,
               "preview": {
                 "mean": 0,
                 "worst": 0
               },
-              "export": 1.24
+              "export": 1.22
             },
             {
               "frame": 418,
-              "level": 41.9,
+              "level": 41.8,
               "preview": {
                 "mean": 0,
                 "worst": 0
               },
-              "export": 0.95
+              "export": 0.88
             },
             {
               "frame": 302,
@@ -1439,34 +1439,34 @@
                 "mean": 0,
                 "worst": 0
               },
-              "export": 1
+              "export": 1.06
             },
             {
               "frame": 455,
-              "level": 9.2,
+              "level": 8.8,
               "preview": {
                 "mean": 0,
                 "worst": 0
               },
-              "export": 0.6
+              "export": 0.67
             },
             {
               "frame": 512,
-              "level": 8.2,
+              "level": 8.1,
               "preview": {
                 "mean": 0,
                 "worst": 0
               },
-              "export": 0.63
+              "export": 0.62
             },
             {
               "frame": 540,
-              "level": 8.4,
+              "level": 8.1,
               "preview": {
                 "mean": 0,
                 "worst": 0
               },
-              "export": 0.87
+              "export": 0.76
             }
           ]
         },

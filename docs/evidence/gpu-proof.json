@@ -1,10 +1,10 @@
 {
-  "ranAt": "2026-11-19T04:24:41.798Z",
+  "ranAt": "2026-11-24T20:53:45.924Z",
   "result": "PASSED",
   "passed": 92,
   "total": 92,
   "machine": {
-    "platform": "Linux 6.18.44-fc-v653 x64",
+    "platform": "Linux 6.18.44-fc-v819 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none: the WebGPU adapter here is a software one"
   },
@@ -911,38 +911,38 @@
       "detail": {
         "verdict": "ok",
         "shuttle": "▶▶ ×8",
-        "seconds": 7.8,
-        "samples": 483,
-        "windowSeconds": 8.06,
-        "paints": 111,
-        "paintsPerSecond": 13.8,
-        "flashesOnScreen": 21,
-        "flashesPerSecond": 2.6,
+        "seconds": 16.5,
+        "samples": 1001,
+        "windowSeconds": 16.92,
+        "paints": 205,
+        "paintsPerSecond": 12.1,
+        "flashesOnScreen": 33,
+        "flashesPerSecond": 1.95,
         "mostInOneSecond": 3,
         "closestOnScreen": 0.346,
         "pictureBrightness": 127.4,
         "unexplained": 0,
-        "heldOnScreen": 20,
-        "flashesWithoutGuard": 34,
-        "mostInOneSecondWithoutGuard": 6,
+        "heldOnScreen": 26,
+        "flashesWithoutGuard": 46,
+        "mostInOneSecondWithoutGuard": 5,
         "guardNeeded": true,
-        "flashesWithRightGuard": 20,
+        "flashesWithRightGuard": 33,
         "wrongGuards": [
           {
             "gap": 0.2,
-            "flashes": 20,
+            "flashes": 38,
             "mostInOneSecond": 4,
             "unsafe": true
           },
           {
             "gap": 0.25,
-            "flashes": 18,
+            "flashes": 33,
             "mostInOneSecond": 4,
             "unsafe": true
           },
           {
             "gap": 0.3,
-            "flashes": 20,
+            "flashes": 33,
             "mostInOneSecond": 3,
             "unsafe": false
           }
@@ -952,13 +952,13 @@
           0.25
         ],
         "margin": true,
-        "flashFloor": 6,
-        "framesHeldBack": 25,
-        "load1Before": 3.14,
-        "load1After": 3.29,
+        "flashFloor": 12,
+        "framesHeldBack": 29,
+        "load1Before": 8.5,
+        "load1After": 8.04,
         "cpus": 4,
-        "childCpuPerSecond": 2.8,
-        "childCpuSecondsPerPaint": 0.203
+        "childCpuPerSecond": 2.38,
+        "childCpuSecondsPerPaint": 0.196
       }
     },
     {
@@ -1226,7 +1226,7 @@
       "ok": true,
       "detail": {
         "unreadable": 503,
-        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_c1a91b84f90 could not be loaded: Missing LUT_",
+        "reason": "{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: color.lut: colour table ast_bf6c6c98d50 could not be loaded: Missing LUT_",
         "gone": 422,
         "blocker": "missing_media"
       }
@@ -1235,7 +1235,7 @@
       "name": "Editor while the table cannot be read: the preview shows the plain picture and a notice over it names the effect and the colour table, not a missing graphics adapter",
       "ok": true,
       "detail": {
-        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_c1a91b84f90 could not be loaded: Missing LUT_3D_SIZE",
+        "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.טבלת צבע (LUT) — colour table ast_bf6c6c98d50 could not be loaded: Missing LUT_3D_SIZE",
         "previewVsPlain": 0
       }
     },
@@ -1260,10 +1260,10 @@
       "name": "Editor: the effect shows a chooser with \"none\" and the project's table, selected; intensity keeps its slider; the library card of the table shows its size, is marked as in use, cannot be removed, and has no add-to-timeline or view button",
       "ok": true,
       "detail": {
-        "value": "ast_c1a91b84f90",
+        "value": "ast_bf6c6c98d50",
         "options": [
           "",
-          "ast_c1a91b84f90"
+          "ast_bf6c6c98d50"
         ],
         "badge": "17³",
         "addButtons": 0,
@@ -1276,7 +1276,7 @@
       "name": "Editor: \"import .cube\" on the effect uploads the file into the library and selects it for that effect; an identity table changes nothing beyond 2 of 255",
       "ok": true,
       "detail": {
-        "selected": "ast_6bd77293da0",
+        "selected": "ast_f3159fb5310",
         "kind": "lut",
         "maxDifferenceFromPlain": 0,
         "worstFromModel": 0.47

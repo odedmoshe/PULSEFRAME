@@ -1,16 +1,16 @@
 {
-  "ranAt": "2026-11-19T05:50:25.779Z",
+  "ranAt": "2026-11-24T21:59:54.090Z",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v653 x64",
+    "platform": "Linux 6.18.44-fc-v819 x64",
     "cpus": 4,
     "memoryGiB": 15.7,
     "loadAtStart": [
-      2.78,
-      3.47,
-      3.21
+      1.71,
+      2.29,
+      2.49
     ]
   },
-  "freeDiskBytesAtStart": 5595459584,
+  "freeDiskBytesAtStart": 5025951744,
   "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
   "notVerifiedHere": [
     "a real phone and its pickers (iOS, Android; whether they hand over the original HEVC with its date)",
@@ -145,8 +145,8 @@
           "state": "waiting",
           "waitingFor": "check"
         },
-        "aSavedMs": 91,
-        "allSavedMs": 115
+        "aSavedMs": 84,
+        "allSavedMs": 95
       }
     },
     {
@@ -255,9 +255,8 @@
       "numbers": {
         "states": {
           "card-hevc.mp4": [
-            "ממתין",
             "ממיר 0%",
-            "ממיר 21%",
+            "ממיר 18%",
             "ממיר 53%",
             "ממיר 98%",
             "מוכן"
@@ -265,8 +264,8 @@
           "card2-hevc.mp4": [
             "ממתין",
             "ממיר 0%",
-            "ממיר 14%",
-            "ממיר 53%",
+            "ממיר 12%",
+            "ממיר 54%",
             "מוכן"
           ]
         },
@@ -386,7 +385,7 @@
       "name": "killed with SIGKILL during a conversion and restarted: the code is gone (its port refuses), all 20 files import exactly once (20 assets whose originals are the 20 sources), the interrupted job ran again (attempt 2), and no temporary file is left once any orphan ffmpeg has exited",
       "pass": true,
       "numbers": {
-        "killedPid": 4739,
+        "killedPid": 7944,
         "convertingSeen": true,
         "doorClosed": true,
         "jobs": 20,
@@ -394,9 +393,9 @@
         "assets": 20,
         "distinctOriginals": 20,
         "interruptedAttempt": 2,
-        "orphanFfmpegAfterKill": "4787",
+        "orphanFfmpegAfterKill": "7986",
         "leftovers": [],
-        "secondsToAllImported": 9.307
+        "secondsToAllImported": 9.611
       }
     },
     {
@@ -405,26 +404,26 @@
       "pass": true,
       "numbers": {
         "idle": {
-          "p50": 3.4,
-          "p95": 6.9,
-          "max": 22.6
+          "p50": 3.5,
+          "p95": 8.7,
+          "max": 18.9
         },
         "convertingImports": {
           "p50": 3.6,
-          "p95": 8.3,
-          "max": 18.4
+          "p95": 8.2,
+          "max": 14.1
         },
         "during300MBUpload": {
-          "p50": 4.7,
+          "p50": 4.9,
           "p95": 11.3,
-          "max": 15.5
+          "max": 21
         },
         "limitMs": 120,
         "upload": 201,
         "load": [
-          1.86,
-          2.72,
-          2.96
+          3.2,
+          2.33,
+          2.46
         ]
       }
     },
@@ -497,7 +496,7 @@
     "p18Frames": "barcode frames at three positions between preview, server still and export: not run in this proof (the parity suite and proof:phase4 hold the shared compositor)",
     "pageLanguage": "the page follows navigator.language: an English-locale phone gets the English page first (review item; the owner decides whether a Hebrew household with en-US phones should get Hebrew first)"
   },
-  "seconds": 140,
+  "seconds": 141,
   "summary": {
     "passed": 31,
     "failed": [],

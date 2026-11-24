@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-19T04:13:07.464Z",
+  "ranAt": "2026-11-24T20:39:00.113Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v653 x64",
+    "platform": "Linux 6.18.44-fc-v819 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
@@ -629,7 +629,7 @@
       "detail": {
         "sampled": 40,
         "movingFramesCompared": 38,
-        "differentSourceFrames": 28,
+        "differentSourceFrames": 29,
         "firstFrames": [
           {
             "frame": 3,
@@ -637,29 +637,29 @@
             "code": 3
           },
           {
-            "frame": 7,
+            "frame": 6,
             "quality": "draft",
-            "code": 7
+            "code": 6
           },
           {
-            "frame": 10,
+            "frame": 9,
             "quality": "draft",
-            "code": 10
+            "code": 9
           },
           {
-            "frame": 14,
+            "frame": 13,
             "quality": "draft",
-            "code": 14
+            "code": 13
           },
           {
-            "frame": 18,
+            "frame": 16,
             "quality": "draft",
-            "code": 18
+            "code": 16
           },
           {
-            "frame": 21,
+            "frame": 19,
             "quality": "draft",
-            "code": 21
+            "code": 19
           }
         ],
         "mismatches": []

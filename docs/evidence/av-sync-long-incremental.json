@@ -1,7 +1,7 @@
 {
-  "ranAt": "2026-11-19T06:21:24.761Z",
+  "ranAt": "2026-11-24T22:31:00.624Z",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v653 x64",
+    "platform": "Linux 6.18.44-fc-v819 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "memoryGiB": 15.7,
@@ -21,22 +21,22 @@
     "thenTitleAtSeconds": 300
   },
   "times": {
-    "singlePassSeconds": 214.9,
+    "singlePassSeconds": 218.8,
     "singlePassSource": "measured here on the same project, one run",
-    "cleanSegmentedSeconds": 237.7,
-    "incrementalSeconds": 30.1,
-    "cleanOverSingle": 1.106,
-    "incrementalOverClean": 0.127
+    "cleanSegmentedSeconds": 231.3,
+    "incrementalSeconds": 28.5,
+    "cleanOverSingle": 1.057,
+    "incrementalOverClean": 0.123
   },
   "clean": {
-    "wallSeconds": 237.7,
+    "wallSeconds": 231.3,
     "frames": 16879,
     "bytes": 8121232,
     "route": "server-segmented-canvas2d",
     "renderStageMs": {
-      "draw": 23359,
-      "readback": 9829,
-      "upload": 187069
+      "draw": 22653,
+      "readback": 9605,
+      "upload": 181426
     },
     "report": {
       "segFrames": 60,
@@ -48,7 +48,7 @@
       "notStored": 0,
       "selfCheck": {
         "mode": "every-segment",
-        "seed": "7f23ac8cf51b026d09123bed0020d9ef8ce04b37bcbce4b520036299b894af91",
+        "seed": "cce119b36c1af738b03f60b77e653b5d8397f66f9d8ecf705b6ddad4469eb58f",
         "segmentsChecked": 0,
         "framesChecked": 0,
         "framesPerSegment": 3,
@@ -56,16 +56,16 @@
       },
       "encoderId": "59d7b227390c86cc40ded2ca12bff9c16a08bdce78baff2b4ae0a50b9dd06b26",
       "engine": {
-        "bundle": "b4eaaa603e8fe73bda3bc54512580004dc9b8204b104debfd2db11fe3ab38003",
+        "bundle": "83d51827ce93e8ab9ae87a79bd48be5e36bf8c6669ac1a6b412872ec77879ae2",
         "browser": "153.0.8010.12|launch=auto",
         "schemaVersion": 3
       },
       "cacheBytesAfter": 17953941,
       "ms": {
-        "keying": 347,
+        "keying": 437,
         "selfCheck": 0,
-        "render": 220773,
-        "join": 8904
+        "render": 214214,
+        "join": 8077
       }
     },
     "sync": {
@@ -78,14 +78,14 @@
     }
   },
   "incremental": {
-    "wallSeconds": 30.1,
+    "wallSeconds": 28.5,
     "frames": 16879,
     "bytes": 8136127,
     "route": "server-segmented-canvas2d",
     "renderStageMs": {
-      "draw": 6434,
-      "readback": 495,
-      "upload": 4997
+      "draw": 5440,
+      "readback": 481,
+      "upload": 4664
     },
     "report": {
       "segFrames": 60,
@@ -97,7 +97,7 @@
       "notStored": 0,
       "selfCheck": {
         "mode": "every-segment",
-        "seed": "b87791b379e43913a3050ca70c3018a36cb92b0b0c8c6fb56d47e7b6e5aa5604",
+        "seed": "aac0d6210ddec603f4e661dfb4819765d2bfa6bc1d23b0809f8bdf5007c3fb35",
         "segmentsChecked": 281,
         "framesChecked": 843,
         "framesPerSegment": 3,
@@ -105,16 +105,16 @@
       },
       "encoderId": "59d7b227390c86cc40ded2ca12bff9c16a08bdce78baff2b4ae0a50b9dd06b26",
       "engine": {
-        "bundle": "b4eaaa603e8fe73bda3bc54512580004dc9b8204b104debfd2db11fe3ab38003",
+        "bundle": "83d51827ce93e8ab9ae87a79bd48be5e36bf8c6669ac1a6b412872ec77879ae2",
         "browser": "153.0.8010.12|launch=auto",
         "schemaVersion": 3
       },
       "cacheBytesAfter": 18038022,
       "ms": {
-        "keying": 435,
-        "selfCheck": 11548,
-        "render": 929,
-        "join": 8439
+        "keying": 413,
+        "selfCheck": 10176,
+        "render": 958,
+        "join": 8337
       }
     },
     "sync": {
