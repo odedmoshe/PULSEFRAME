@@ -368,10 +368,25 @@ describe('the walk: a planted birth date never reaches a credential without the 
     store.events.emit('proposal', { projectId: pid, id: 'prp_walk', status: 'open', actor: 'agent:full', ops: [{ op: 'add_person', args: { name: 'איתי', birthDate: '2014-11-04', form: 'm' } }], changes: [{ before: { kind: 'person', person: NOA } }] });
     presence.events.emit('presence', { projectId: pid, sessionId: 's', actor: 'agent:full', person: NOA });
     await read((t) => (t.match(/event: (job|proposal|presence)/g) ?? []).length >= 3);
+    // a live revision of the person: its event carries the entity states it left (Store.liveChanges) to the owner's session only
+    const owner = await app.fetch(new Request(`${base()}/api/v1/projects/${pid}/events`, { headers: OWNER_WHO.headers() }));
+    const ownerReader = owner.body!.getReader();
+    let ownerText = '';
+    const readOwner = async (until: (t: string) => boolean) => { const end = Date.now() + 5000; while (!until(ownerText) && Date.now() < end) { const c = await Promise.race([ownerReader.read(), new Promise<null>((ok) => setTimeout(() => ok(null), 200))]); if (c && !c.done) ownerText += Buffer.from(c.value).toString('utf8'); } };
+    await readOwner((t) => t.includes('event: hello'));
+    store.commit({ projectId: pid, actor: 'user:local', ops: [{ op: 'update_person', args: { personId: NOA.id, name: 'נועה ל' } }] });
+    store.commit({ projectId: pid, actor: 'user:local', ops: [{ op: 'update_person', args: { personId: NOA.id, name: NOA.name } }] });
+    await read((t) => (t.match(/event: revision/g) ?? []).length >= 2);
+    await readOwner((t) => (t.match(/event: revision/g) ?? []).length >= 2);
     await reader.cancel();
-    expect(text).toMatch(/event: job[\s\S]*event: proposal[\s\S]*event: presence/);
+    await ownerReader.cancel();
+    expect(text).toMatch(/event: job[\s\S]*event: proposal[\s\S]*event: presence[\s\S]*event: revision[\s\S]*event: revision/);
     const events = text.split('\n').filter((l) => l.startsWith('data:')).map((l) => JSON.parse(l.slice(5)));
     expect(familyLeak(events)).toBeNull();
+    const revisions = (t: string) => t.split('\n\n').filter((f) => f.includes('event: revision')).map((f) => JSON.parse(f.split('\n').find((l) => l.startsWith('data:'))!.slice(5)));
+    expect(revisions(text).map((e) => 'changes' in e)).toEqual([false, false]);
+    const ownerRevisions = revisions(ownerText);
+    expect(ownerRevisions.map((e) => e.changes)).toEqual([[{ id: NOA.id, after: { kind: 'person', person: { ...NOA, name: 'נועה ל' } } }], [{ id: NOA.id, after: { kind: 'person', person: NOA } }]]);
   });
 
   it('films and the documents a browser renders them from are refused to a credential without the scope while a title shows an age, and say why', async () => {

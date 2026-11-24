@@ -38,7 +38,7 @@ import { buildOpenApi } from './openapi.ts';
 import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
 import { cancelMomentsJob, momentsLaneOf, startMomentsJob } from './moments.ts';
 import type { Presence } from './presence.ts';
-import { ApiError, type JobRow, type RevisionEvent, type Store } from './store.ts';
+import { ApiError, revisionWithChanges, type JobRow, type RevisionEvent, type Store } from './store.ts';
 import { blobPresent, logMissingMedia, missingAssets, missingMediaError } from './mediaPresence.ts';
 import { measureVoiceCheck, VoiceMeasureBody } from './voiceClean.ts';
 import { ColourMatchBody, matchColour } from './colourMatch.ts';
@@ -491,28 +491,41 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     // job, proposal or presence event never carries a birth date to one without the people scope (peoplePrivacy.ts).
     const listener = c.var.principal;
     const seen = <X,>(e: X): X => forPrincipal(e, listener);
+    // A live revision event carries the states its transaction left (Store.liveChanges), so the editor applies them instead of
+    // reading the whole document again: only to a credential that may read every entity state whole (the people scope; the
+    // owner's session). Others get the event as before and read the document through the store, as their credential may.
+    const whole = peopleAccess(listener) === 'full';
     return streamSSE(c, async (stream) => {
       let last = since;
-      const send = async (e: RevisionEvent) => {
-        if (e.projectId !== projectId || e.revision <= last) return; // drop duplicates
+      const revisionMessage = (e: RevisionEvent) => {
+        if (e.projectId !== projectId || e.revision <= last) return null; // drop duplicates
         last = e.revision;
-        await stream.writeSSE({ event: 'revision', id: String(e.revision), data: JSON.stringify(seen(e)) });
+        const changes = whole ? store.liveChanges(e) : undefined;
+        return { event: 'revision', id: String(e.revision), data: changes ? revisionWithChanges(e, changes) : JSON.stringify(seen(e)) };
       };
+      const send = async (e: RevisionEvent) => { const m = revisionMessage(e); if (m) await stream.writeSSE(m); };
+      // Live events are written in the order they happened, each after the macrotask that emitted it: the answer to the edit that
+      // caused a revision goes out first, and the revision's data (with its changes) is serialised then, not inside Store.commit.
+      let queue: Promise<void> = Promise.resolve();
+      const later = (message: () => { event: string; id?: string; data: string } | null) => {
+        queue = queue.then(() => new Promise<void>((r) => setImmediate(r))).then(async () => { const m = message(); if (m) await stream.writeSSE(m); }).catch(() => {});
+      };
+      const now = (m: { event: string; data: string }) => later(() => m); // the data is taken when the event happens
       const pending: RevisionEvent[] = [];
       let live = false;
-      const onEvent = (e: RevisionEvent) => (live ? void send(e) : pending.push(e));
-      const onJob = (j: any) => j.projectId === projectId && void stream.writeSSE({ event: 'job', data: JSON.stringify(seen({ id: j.id, type: j.type, status: j.status, stage: j.stage, output: j.output, error: j.error })) });
+      const onEvent = (e: RevisionEvent) => (live ? later(() => revisionMessage(e)) : pending.push(e));
+      const onJob = (j: any) => j.projectId === projectId && now({ event: 'job', data: JSON.stringify(seen({ id: j.id, type: j.type, status: j.status, stage: j.stage, output: j.output, error: j.error })) });
       store.events.on('revision', onEvent);
-      const onDerivative = (d: any) => { const a = Object.values(store.getProject(projectId).doc.assets).find((x) => x.contentHash === d.assetHash); if (a) void stream.writeSSE({ event: 'derivative', data: JSON.stringify({ assetId: a.id, kind: d.kind, status: d.status }) }); };
+      const onDerivative = (d: any) => { const a = Object.values(store.getProject(projectId).doc.assets).find((x) => x.contentHash === d.assetHash); if (a) now({ event: 'derivative', data: JSON.stringify({ assetId: a.id, kind: d.kind, status: d.status }) }); };
       store.events.on('job', onJob);
       store.events.on('derivative', onDerivative);
-      const onGov = (kind: string) => (e: any) => e.projectId === projectId && void stream.writeSSE({ event: kind, data: JSON.stringify(seen(e)) });
+      const onGov = (kind: string) => (e: any) => e.projectId === projectId && now({ event: kind, data: JSON.stringify(seen(e)) });
       const govHandlers = (['control', 'proposal', 'approval'] as const).map((k) => [k, onGov(k)] as const);
       for (const [k, fn] of govHandlers) store.events.on(k, fn);
-      const onPresence = (p: any) => p.projectId === projectId && void stream.writeSSE({ event: 'presence', data: JSON.stringify(seen(p)) });
+      const onPresence = (p: any) => p.projectId === projectId && now({ event: 'presence', data: JSON.stringify(seen(p)) });
       presence.events.on('presence', onPresence);
       // The phone drop's public view (no token, PIN or session: drop.ts), to the owner's own session only: it is the owner's dialog.
-      const onDrop = (d: { projectId: string }) => d.projectId === projectId && void stream.writeSSE({ event: 'drop', data: JSON.stringify(d) });
+      const onDrop = (d: { projectId: string }) => d.projectId === projectId && now({ event: 'drop', data: JSON.stringify(d) });
       if (listener.kind === 'user') extras.door?.events.on('drop', onDrop);
       try {
         await stream.writeSSE({ event: 'hello', data: JSON.stringify({ revision: current }) });
