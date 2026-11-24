@@ -232,12 +232,16 @@ export function DeliverPanel() {
   );
 }
 
+/** Notes of the last archive import (server answer `notes`, each with `he` and `en`), shown once by the new project (App.tsx). */
+export const IMPORT_NOTES_KEY = 'pf.import.notes';
 /** Upload an archive; on success open the new project (a full page load keeps one editor instance per project). */
 async function importArchiveFile(file: File, onError: (message: string) => void) {
   try {
     const r = await fetch('/api/v1/projects/import', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/x-tar' }, body: file });
     const data = await r.json();
     if (!r.ok) return onError(`${data?.error?.message ?? `HTTP ${r.status}`}`);
+    // what the import changed on the way in (a translation's reviewed mark is cleared, archive.ts): told once in the new project
+    if (Array.isArray(data.notes) && data.notes.length) { try { sessionStorage.setItem(IMPORT_NOTES_KEY, JSON.stringify({ projectId: data.project.id, notes: data.notes })); } catch { /* storage unavailable: the note is lost, the import is not */ } }
     location.assign(`/?project=${encodeURIComponent(data.project.id)}`);
   } catch (e) {
     onError(e instanceof Error ? e.message : String(e));

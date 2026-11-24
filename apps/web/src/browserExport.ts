@@ -103,7 +103,8 @@ async function api<R>(apiBase: string, path: string, body: unknown): Promise<R> 
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
     const code = j?.error?.code as string | undefined;
-    throw new BrowserExportError(code === 'lease_lost' || code === 'lease_not_owned' || code === 'render_blocked' ? code : 'server_error', j?.error?.message ?? `HTTP ${r.status}`, { details: j?.error });
+    // job_canceled: a cancel reached the server between the last heartbeat and this call (e.g. the completion); it is a cancel, not a fault
+    throw new BrowserExportError(code === 'lease_lost' || code === 'lease_not_owned' || code === 'render_blocked' ? code : code === 'job_canceled' ? 'canceled' : 'server_error', j?.error?.message ?? `HTTP ${r.status}`, { details: j?.error });
   }
   return j as R;
 }
@@ -313,11 +314,12 @@ export async function runBrowserExport(opts: BrowserExportRun): Promise<BrowserE
     if (beating || stopReason) return;
     beating = true;
     try {
-      const r = await api<{ ok: boolean; canceled: boolean }>(apiBase, `/jobs/${jobId}/heartbeat`, { sessionId, framesDone });
+      const r = await api<{ ok: boolean; canceled: boolean; canceledBy?: string }>(apiBase, `/jobs/${jobId}/heartbeat`, { sessionId, framesDone });
       lastBeat = performance.now();
-      if (r.canceled) stop(new BrowserExportError('canceled', 'the export was canceled on the server', { jobId }));
+      // the owner or an agent (REST or MCP cancel_job) asked to stop: say who, so the owner knows why their export ended
+      if (r.canceled) stop(new BrowserExportError('canceled', `the export was canceled on the server${r.canceledBy ? ` by ${r.canceledBy}` : ''}; nothing was published`, { jobId, details: r.canceledBy ? { canceledBy: r.canceledBy } : undefined }));
     } catch (e: any) {
-      if (e instanceof BrowserExportError && (e.code === 'lease_lost' || e.code === 'lease_not_owned')) stop(new BrowserExportError(e.code, e.message, { jobId }));
+      if (e instanceof BrowserExportError && (e.code === 'lease_lost' || e.code === 'lease_not_owned' || e.code === 'canceled')) stop(new BrowserExportError(e.code, e.message, { jobId }));
       // Transient network failure: keep going, but never keep computing past a lease we cannot prove we hold.
       else if (performance.now() - lastBeat > job.leaseSeconds * 1000) stop(new BrowserExportError('lease_lost', 'heartbeats failed for longer than the lease; stopping', { jobId }));
     } finally { beating = false; }

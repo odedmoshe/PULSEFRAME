@@ -309,7 +309,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
       await pipeline(Readable.fromWeb(c.req.raw.body as any), async function* (src) { for await (const chunk of src) { size += chunk.length; if (size > maxBytes) throw new ApiError(413, 'upload_too_large', `archive exceeds ${maxBytes} bytes${maxBytes < cfg.maxUploadBytes * 4 ? ' (the room left under the storage ceiling)' : ''}`, { maxBytes }); yield chunk; } }, fs.createWriteStream(tmp, { mode: 0o600 }));
       const r = importArchive(store, tmp);
       for (const a of Object.values(r.doc.assets)) derivatives.ensure(a);
-      return c.json({ project: { id: r.doc.id, name: r.doc.name }, revision: r.revision, blobsAdded: r.blobsAdded, blobsAlreadyPresent: r.blobsAlreadyPresent }, 201);
+      return c.json({ project: { id: r.doc.id, name: r.doc.name }, revision: r.revision, blobsAdded: r.blobsAdded, blobsAlreadyPresent: r.blobsAlreadyPresent, notes: r.notes }, 201);
     } finally {
       fs.rmSync(tmp, { force: true });
     }
@@ -882,11 +882,11 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (j.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, p, j, 'cancel'); return c.json(extras.imports.cancel(j.id, p.actor)); }
     assertMayCancel(gov, p, j);
     if (j.type === ASSISTANT_JOB_TYPE) return c.json(assistant.cancel(p, j.id));
-    if (j.type === 'export' && j.input.route === 'browser') return c.json(browserExport.requestCancel(j.id));
     if (j.type === 'analysis') return c.json(cancelAnalysisJob(store, j.id, p.actor));
     if (j.type === TRACKING_JOB_TYPE) return c.json(cancelTrackingJob(store, j.id, p.actor));
     if (j.type === MOMENTS_JOB_TYPE) return c.json(cancelMomentsJob(store, j.id, p.actor));
     if (speech.handles(j)) return c.json(speech.cancel(j.id, p.actor));
+    // an export the editor's tab renders is handed to its lease holder by Exporter.cancel (browser-export.ts), as for MCP cancel_job
     return c.json(j.type === 'export' ? exporter.cancel(j.id, p.actor) : await capabilities.cancel(j.id, p.actor));
   });
   app.get('/api/v1/jobs/:jobId/outputs/:index', (c) => {
@@ -1282,9 +1282,16 @@ export function cancelAnalysisJob(store: Store, jobId: string, actor: string) {
 export function assertMayTakeJobOutput(p: Principal, job: JobRow, what: string): void {
   if (job.type === 'export' && job.input?.snapshot) assertMayTakeRendered(p, job.input.snapshot as ProjectDocument, what);
 }
-/** Cancelling is an action: a paused agent may not do it, and an agent may only cancel jobs it started. The owner may cancel any job. */
+/**
+ * Cancelling is an action: a paused agent may not do it, and an agent may only cancel jobs it started. The owner may cancel any job.
+ * One exception, for REST and MCP alike: an export the owner's editor tab renders (the browser route) has no agent that started
+ * it, so an agent may stop it when its grant lets it run jobs on that project (edit or autopilot, not paused) and is not limited
+ * to certain tracks or a time range (the export is the whole project). Stopping one publishes nothing; the owner can start it again.
+ */
 export function assertMayCancel(gov: Governance, p: Principal, job: JobRow) {
   if (p.kind !== 'agent') return;
   gov.assertMayAct(p, job.projectId, 'job');
-  if (job.actor !== p.actor) throw new ApiError(403, 'not_your_job', 'agents can only cancel jobs they started', { jobId: job.id, startedBy: job.actor });
+  if (job.actor === p.actor) return;
+  if (job.type === 'export' && job.input?.route === 'browser' && !job.actor.startsWith('agent:')) { gov.assertUnrestricted(p, 'stop an export of the whole project'); return; }
+  throw new ApiError(403, 'not_your_job', 'agents can only cancel jobs they started', { jobId: job.id, startedBy: job.actor }, 'Ask the owner to cancel it, or cancel only jobs this credential started.');
 }
