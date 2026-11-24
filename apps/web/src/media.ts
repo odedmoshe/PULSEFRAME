@@ -2,7 +2,8 @@
  * Frame-exact source decoding via WebCodecs (Mediabunny). One decoder per clip and decode lane, so that two layers
  * showing the same asset, or the earlier pictures a time effect merges (ADR-0011), never invalidate each other's frame.
  * Sequential requests reuse the decode pipeline; random requests seek from the proper keyframe (Mediabunny handles
- * B-frame/presentation order), in one decode that the frames after the sought one continue.
+ * B-frame/presentation order): in one decode that the frames after the sought one continue, or, when seek follows seek
+ * (scrubbing), by a lookup that decodes to the sought frame and no further (ClipDecoder.get has the rule).
  *
  * Decoders used while a frame is drawn are pinned to that drawing (FrameProvider.begin/end): the budget never disposes them under it, whatever other drawings do.
  * A frame that needs more decoders than the budget gets null for the extra pictures, with the reason (`decode_budget`),
@@ -45,6 +46,8 @@ export class ClipDecoder implements PoolDecoder {
   private iter: AsyncGenerator<ClipSample, void, unknown> | null = null;
   /** The sample after `cur`, taken from `iter` by the seek that found `cur`. */
   private ahead: ClipSample | null = null;
+  /** The last request that was not for the frame held was a jump (see `get`). */
+  private jumped = false;
   private chain: Promise<unknown> = Promise.resolve();
   /** `first` is the timestamp of this file's first video frame; requests are relative to it (original and proxy may differ in container offset). */
   private constructor(private release: () => void, private sink: ClipSampleSource, private frameDur: number, private first: number) {}
@@ -92,9 +95,25 @@ export class ClipDecoder implements PoolDecoder {
     const n = await this.iter!.next();
     return n.done ? null : n.value;
   }
+  /**
+   * The picture at `t`. What a request costs depends on the requests before it, never on the clock; which picture it gets
+   * depends on neither (media.seek.test.ts holds the decoder of before both changes as the reference):
+   *   the frame held covers `t`                     that frame; nothing changes
+   *   a step (after the frame held, by under 0.5 s) the next samples of the iterator, which is started at the frame held if a
+   *                                                 lookup found it (play starts from a frame scrubbing reached: that one
+   *                                                 time the frames from its key frame are decoded again)
+   *   a jump (anything else), the first request     one decode from the key frame that the steps after it continue (`seek`):
+   *     or the first since a step                   jump, then play
+   *   a jump after a jump, no step in between       the lookup only (getSample: decode to `t`, flush, nothing ahead):
+   *                                                 scrubbing, stepping back, a clip played in reverse
+   */
   private async get(t: number): Promise<FrameImage | null> {
     if (this.cur && this.covers(this.cur, t)) return this.wrap(this.cur);
-    if (this.cur && this.iter && t > this.cur.timestamp && t < this.cur.timestamp + 0.5) {
+    const step = !!this.cur && t > this.cur.timestamp && t < this.cur.timestamp + 0.5;
+    const lookupOnly = !step && this.jumped;
+    this.jumped = !step;
+    if (this.cur && step) {
+      this.iter ??= this.sink.samples(this.cur.timestamp);
       for (;;) {
         const n = await this.following();
         if (!n) break;
@@ -106,16 +125,13 @@ export class ClipDecoder implements PoolDecoder {
       if (this.cur && this.covers(this.cur, t)) return this.wrap(this.cur);
     }
     await this.drop();
-    if (!(await this.seek(t))) {
-      this.cur = await this.sink.getSample(t); // last frame with PTS <= t
-      this.iter = this.cur && this.sink.samples(this.cur.timestamp);
-    }
+    if (lookupOnly || !(await this.seek(t))) this.cur = await this.sink.getSample(t); // last frame with PTS <= t
     return this.cur && this.wrap(this.cur);
   }
   /**
    * A seek as ONE decode from the key frame: the iterator that gives the frames after `t` also gives the frame at `t`, its
    * first sample (the last one that starts at or before `t`; the stream's first when none does). Asking getSample(t) for that
-   * frame and then starting the iterator at it, as the fallback above does, decodes the frames from the key frame to `t` twice.
+   * frame and then starting an iterator at it decodes the frames from the key frame to `t` twice.
    * False: only getSample can say which frame it is, or the iterator failed where getSample, which decodes no further than
    * `t`, may not; nothing is held then.
    */

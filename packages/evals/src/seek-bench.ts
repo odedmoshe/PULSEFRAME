@@ -10,6 +10,7 @@
  * until its picture is there. Counted: the chunks given to VideoDecoder.decode until the last picture is there, and 150 ms later.
  * A second measurement, scrubbing: the same targets asked for one after the other, `--scrub-gaps` milliseconds apart (0: the
  * next seek starts in the same task the picture arrived in, so nothing else runs in between; 16: a pointer move a frame later).
+ * A third, play after scrubbing: the targets one after the other with no gap, then the `--follow` frames after the last one.
  * Every picture is drawn and hashed outside the timing.
  * With `--before <ref>` the same page also holds the media.ts of that commit (bundled against this tree's packages) and the two
  * take turns, target by target, so both see the same load; their pictures' hashes are compared frame by frame.
@@ -54,10 +55,12 @@ const layer = (frame) => ({ kind: 'video', clipId: 'clp_bench', trackId: 'trk', 
 const hash = (img) => { img.draw(ctx, 0, 0, ${W}, ${H}); const d = new Uint32Array(ctx.getImageData(0, 0, ${W}, ${H}).data.buffer); let h = 2166136261; for (let i = 0; i < d.length; i += 7) h = Math.imul(h ^ d[i], 16777619); return h >>> 0; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export function provide(blob) { pool.provideLocal('ast_bench', blob); }
-export async function scrub(targets, gap) {
+export async function scrub(targets, gap, follow = 0) {
   const ms = [], hashes = [];
   const c0 = globalThis.__decodes;
-  for (const f of targets) {
+  const frames = [...targets];
+  for (let i = 1; i <= follow; i++) frames.push(targets.at(-1) + i); // play on from where the scrub stopped
+  for (const f of frames) {
     if (ms.length && gap) await sleep(gap);
     const token = pool.frames.begin();
     const t0 = performance.now();
@@ -147,6 +150,7 @@ async function main() {
   type Run = { ms: number[]; hashes: number[]; chunks: number; chunksSettled: number };
   const samples: Record<string, Record<string, Record<string, Run[]>>> = {}; // gap → variant → target → runs
   const scrubs: Record<string, Record<string, Run[]>> = {}; // gap → variant → runs
+  const scrubPlay: Record<string, Run[]> = Object.fromEntries(variants.map((v) => [v.name, []]));
   let hashMismatches = 0, hashCompared = 0;
   const compare = (got: Run[]) => { if (got.length === 2) for (let i = 0; i < got[0]!.hashes.length; i++) { hashCompared++; if (got[0]!.hashes[i] !== got[1]!.hashes[i]) hashMismatches++; } };
   try {
@@ -184,6 +188,15 @@ async function main() {
         compare(got);
       }
     }
+    for (let round = 0; round < ROUNDS; round++) {
+      const got: Run[] = [];
+      for (const v of round % 2 ? [...variants].reverse() : variants) {
+        const run = await page.evaluate(([n, t, f]) => (globalThis as any)[`__seekBench_${n}`].scrub(t, 0, f), [v.name, TARGETS, FOLLOW] as const) as Run;
+        scrubPlay[v.name]!.push(run);
+        got.push(run);
+      }
+      compare(got);
+    }
   } finally {
     await browser.close();
     server.close();
@@ -207,6 +220,16 @@ async function main() {
   for (const [gap, byVariant] of Object.entries(scrubs)) for (const [name, runs] of Object.entries(byVariant)) {
     summary[`scrubbing, gap ${gap} ms, ${name}`] = { seekMsMedian: r1(median(runs.flatMap((r) => r.ms))), allSeeksMsMedian: r1(median(runs.map((r) => r.ms.reduce((a, b) => a + b, 0)))), chunksDecodedMedian: median(runs.map((r) => r.chunks)), chunksDecodedSettledMedian: median(runs.map((r) => r.chunksSettled)), runs: runs.length };
   }
+  const N = TARGETS.length;
+  for (const [name, runs] of Object.entries(scrubPlay)) {
+    summary[`play after scrubbing, ${name}`] = {
+      scrubSeekMsMedian: r1(median(runs.flatMap((r) => r.ms.slice(0, N)))),
+      firstFrameAfterMsMedian: r1(median(runs.map((r) => r.ms[N]!))),
+      framesAfterMsMedian: r1(median(runs.map((r) => r.ms.slice(N).reduce((a, b) => a + b, 0)))),
+      allMsMedian: r1(median(runs.map((r) => r.ms.reduce((a, b) => a + b, 0)))),
+      chunksDecodedMedian: median(runs.map((r) => r.chunks)), chunksDecodedSettledMedian: median(runs.map((r) => r.chunksSettled)), runs: runs.length,
+    };
+  }
   const compact = Object.fromEntries(Object.entries(samples).map(([gap, byVariant]) => [gap, Object.fromEntries(Object.entries(byVariant).map(([name, byTarget]) => [name, Object.fromEntries(Object.entries(byTarget).map(([target, runs]) => [target, {
     seekMs: runs.map((r) => r1(r.ms[0]!)), nextFrameMs: runs.map((r) => r1(r.ms[1]!)), followingMs: runs.map((r) => r.ms.slice(1).map(r1)), chunksDecoded: runs.map((r) => r.chunks), chunksDecodedSettled: runs.map((r) => r.chunksSettled),
   }]))]))]));
@@ -217,10 +240,11 @@ async function main() {
     browser: `Chromium ${browser.version()} (headless, software decode unless the machine says otherwise)`,
     fixture: `barcode ${W}x${H}, H.264 in MP4, 30 fps, ${FRAMES} frames, B-frames 2, key frames at most ${GOP} apart: at frames ${keys.join(', ')}`,
     variants: Object.fromEntries(variants.map((v) => [v.name, v.what])),
-    method: `seek targets ${TARGETS.join(', ')} (${TARGETS.map((t) => t - keys.findLast((k) => k <= t)!).join(', ')} frames after their key frame), then the next ${FOLLOW} frames; ${ROUNDS} rounds; variants take turns per target. Scrubbing: the same targets one after the other, ${ROUNDS} rounds, variants take turns per round`,
+    method: `seek targets ${TARGETS.join(', ')} (${TARGETS.map((t) => t - keys.findLast((k) => k <= t)!).join(', ')} frames after their key frame), then the next ${FOLLOW} frames; ${ROUNDS} rounds; variants take turns per target. Scrubbing: the same targets one after the other, ${ROUNDS} rounds, variants take turns per round. Play after scrubbing: the targets with no gap, then the ${FOLLOW} frames after the last one, ${ROUNDS} rounds`,
     ...(variants.length === 2 ? { pictures: { compared: hashCompared, different: hashMismatches } } : {}),
     summary,
     samples: compact,
+    playAfterScrubbing: Object.fromEntries(Object.entries(scrubPlay).map(([name, runs]) => [name, { scrubSeekMs: runs.map((r) => r.ms.slice(0, N).map(r1)), framesAfterMs: runs.map((r) => r.ms.slice(N).map(r1)), chunksDecoded: runs.map((r) => r.chunks), chunksDecodedSettled: runs.map((r) => r.chunksSettled) }])),
     scrubbing: Object.fromEntries(Object.entries(scrubs).map(([gap, byVariant]) => [gap, Object.fromEntries(Object.entries(byVariant).map(([name, runs]) => [name, { seekMs: runs.map((r) => r.ms.map(r1)), chunksDecoded: runs.map((r) => r.chunks), chunksDecodedSettled: runs.map((r) => r.chunksSettled) }]))])),
   };
   fs.writeFileSync(OUT, `${JSON.stringify(out, null, 2)}\n`);

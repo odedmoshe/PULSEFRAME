@@ -1,6 +1,7 @@
 /**
- * ClipDecoder seeks (media.ts): a seek followed by the next frames decodes every frame once, and the picture given for a time
- * is the one the decoder gave before that change, whatever was asked earlier.
+ * ClipDecoder seeks (media.ts): a seek followed by the next frames decodes every frame once, a seek that follows a seek
+ * (scrubbing) decodes to the sought frame and no further, and the picture given for a time is the one the decoder gave before
+ * both changes, whatever was asked earlier.
  *
  * The sample source is a counting stand-in (labelled: ClipDecoder.over is the test-only seam; no Mediabunny, no browser). It
  * models what the installed Mediabunny (1.66.0, src/media-sink.ts) does with a stream of packets in decode order:
@@ -15,9 +16,10 @@ import type { FrameImage } from '@pulseframe/engine';
 import { ClipDecoder, type ClipSample, type ClipSampleSource, type PoolDecoder } from './media.ts';
 
 interface Packet { seq: number; idx: number; ts: number; dur: number; key: boolean }
-interface StreamShape { frames: number; fps: number; gop: number; bframes?: number; first?: number }
+/** `dur`: how long a sample says it lasts, in frames (1 when left out; under 1 leaves gaps between samples, over 1 makes them overlap). */
+interface StreamShape { frames: number; fps: number; gop: number; bframes?: number; first?: number; dur?: number }
 /** Packets in decode order: closed groups of `gop` pictures; with B-frames, each P comes before the B pictures shown before it. */
-function packets({ frames, fps, gop, bframes = 0, first = 0 }: StreamShape): Packet[] {
+function packets({ frames, fps, gop, bframes = 0, first = 0, dur = 1 }: StreamShape): Packet[] {
   const order: number[] = [];
   for (let g = 0; g < frames; g += gop) {
     const end = Math.min(frames, g + gop);
@@ -28,7 +30,7 @@ function packets({ frames, fps, gop, bframes = 0, first = 0 }: StreamShape): Pac
       for (let b = i; b < p; b++) order.push(b);
     }
   }
-  return order.map((idx, seq) => ({ seq, idx, ts: first + idx / fps, dur: 1 / fps, key: idx % gop === 0 }));
+  return order.map((idx, seq) => ({ seq, idx, ts: first + idx / fps, dur: dur / fps, key: idx % gop === 0 }));
 }
 
 class FakeSample implements ClipSample {
@@ -45,6 +47,8 @@ class FakeSink implements ClipSampleSource {
   decodes: number[];
   /** Decode pipelines started (a decoder configured, fed from a key packet). */
   pipelines = 0;
+  /** What the decoder asked of the source, in order: a lookup (getSample) or an iterator (samples). */
+  asked: ('lookup' | 'iterator')[] = [];
   open = new Set<FakeSample>();
   /** A frame whose packet cannot be decoded (a damaged file), or -1. */
   broken = -1;
@@ -76,6 +80,7 @@ class FakeSink implements ClipSampleSource {
     };
   }
   async getSample(t: number): Promise<FakeSample | null> {
+    this.asked.push('lookup');
     await null;
     const target = this.packetAt(t);
     const key = target && this.packetAt(target.ts, true);
@@ -97,6 +102,7 @@ class FakeSink implements ClipSampleSource {
     return answer !== undefined ? answer : held;
   }
   samples(start = -Infinity): AsyncGenerator<FakeSample, void, unknown> {
+    this.asked.push('iterator');
     const queue: FakeSample[] = [];
     let last: FakeSample | null = null, firstQueued = false, flushed = false, terminated = false;
     const startPacket = this.packetAt(start);
@@ -209,6 +215,12 @@ const SHAPES: Record<string, StreamShape> = {
   'start offset 0.5 s, B-frames 2': { frames: 120, fps: 30, gop: 30, bframes: 2, first: 0.5 },
   'start offset 1/3 s, 25 fps': { frames: 100, fps: 25, gop: 25, bframes: 2, first: 1 / 3 },
 };
+/** Streams whose samples do not tile the time line: which sample a time gets then depends on how the decoder got there, and has to depend on it as before. */
+const ODD: Record<string, StreamShape> = {
+  'samples shorter than their spacing (gaps), B-frames 2': { frames: 150, fps: 30, gop: 30, bframes: 2, dur: 0.6 },
+  'samples longer than their spacing (overlaps)': { frames: 150, fps: 30, gop: 30, dur: 1.7 },
+  'samples without a duration': { frames: 90, fps: 30, gop: 30, bframes: 2, dur: 0, first: 0.25 },
+};
 const open = (shape: StreamShape) => {
   const sink = new FakeSink(packets(shape));
   // As ClipDecoder.open: requests are measured from the first frame (a negative first timestamp counts as 0), frames last 1/30 s when a sample does not say.
@@ -245,13 +257,71 @@ describe('a seek followed by the next frames decodes every frame once', () => {
     await dec.dispose();
   });
 
-  it('scrubbing (seek after seek, nothing in between) starts one decode pipeline per seek', async () => {
+  it('a seek after frames were played, then the next 5 frames', async () => {
     const { sink, dec } = open(GOP30);
-    const targets = [100, 40, 131, 12, 77];
-    for (const f of targets) expect(shown(await dec.frame(mid(f, 30)))).toBe(f);
-    expect(sink.pipelines).toBe(targets.length); // before: two per seek
+    for (const f of [10, 11, 12, 100, 101, 102, 103, 104, 105]) expect(shown(await dec.frame(mid(f, 30)))).toBe(f);
+    expect(sink.asked).toEqual(['iterator', 'iterator']); // each seek is one iterator, started at the sought frame
+    expect(Math.max(...sink.decodes)).toBe(1);
     await dec.dispose();
     expect(sink.open.size).toBe(0);
+  });
+});
+
+describe('a seek that follows a seek decodes to the sought frame and no further (scrubbing)', () => {
+  it('seek after seek: the first is an iterator, every one after it a lookup that decodes from its key frame to its frame', async () => {
+    const { sink, dec } = open(GOP30);
+    const targets = [100, 40, 131, 12, 77, 76, 75, 140];
+    for (const f of targets) expect(shown(await dec.frame(mid(f, 30)))).toBe(f);
+    expect(sink.asked).toEqual(['iterator', ...targets.slice(1).map(() => 'lookup')]);
+    expect(sink.pipelines).toBe(targets.length); // before: two per seek
+    // frame 100's seek decoded 90..100 and a few ahead; every other seek exactly its key frame..its frame (77, 76 and 75 share 60..75)
+    const want = sink.decodes.map(() => 0);
+    for (const f of targets.slice(1)) for (let i = f - (f % 30); i <= f; i++) want[i]!++;
+    const got = [...sink.decodes];
+    for (let i = 90; i < 120; i++) { want[i] = 0; got[i] = 0; }
+    expect(got).toEqual(want);
+    expect(sink.decodes.slice(90, 101)).toEqual(Array(11).fill(1));
+    expect(sink.decodes.slice(101, 120).reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(MAX_QUEUE + 1);
+    await dec.dispose();
+    expect(sink.open.size).toBe(0);
+  });
+
+  it('the rule reads the requests only: frame held, step, jump, jump after jump', async () => {
+    const { sink, dec } = open(GOP30);
+    const ask = async (f: number, want: ('lookup' | 'iterator')[]) => {
+      const n = sink.asked.length;
+      expect(shown(await dec.frame(mid(f, 30)))).toBe(f);
+      expect(sink.asked.slice(n), `frame ${f}`).toEqual(want);
+    };
+    await ask(50, ['iterator']); // the first request: a jump, then perhaps play
+    await ask(50, []); // the frame held
+    await ask(51, []); // a step: the iterator's next sample
+    await ask(20, ['iterator']); // a jump after a step
+    await ask(20, []);
+    await ask(90, ['lookup']); // a jump after a jump (the frame held asked again in between changes nothing)
+    await ask(89, ['lookup']); // stepping back is a jump each time
+    await ask(88, ['lookup']);
+    await ask(120, ['lookup']);
+    await ask(121, ['iterator']); // play starts from a frame a lookup reached: the iterator starts at that frame
+    await ask(122, []);
+    await ask(130, []); // a step of several frames, under half a second
+    await ask(60, ['iterator']); // a jump after a step again
+    await ask(76, ['lookup']); // half a second ahead or more is a jump
+    await dec.dispose();
+    expect(sink.open.size).toBe(0);
+  });
+
+  it('play after scrubbing: the frames from the key frame to the frame scrubbing stopped on are decoded once more, then every frame once', async () => {
+    const { sink, dec } = open(GOP30);
+    for (const f of [100, 40, 135]) expect(shown(await dec.frame(mid(f, 30)))).toBe(f);
+    const before = [...sink.decodes];
+    for (let f = 135; f <= 141; f++) expect(shown(await dec.frame(mid(f, 30)))).toBe(f);
+    const more = sink.decodes.map((n, i) => n - before[i]!);
+    expect(more.slice(120, 136)).toEqual(Array(16).fill(1)); // the accepted cost, once
+    expect(more.slice(136, 142)).toEqual(Array(6).fill(1));
+    expect(Math.max(...more)).toBe(1);
+    expect(sink.asked).toEqual(['iterator', 'lookup', 'lookup', 'iterator']);
+    await dec.dispose();
   });
 });
 
@@ -281,10 +351,36 @@ describe('the picture for a time is the one given before the change, whatever wa
     return out;
   }
 
-  for (const [name, shape] of Object.entries(SHAPES)) {
-    it(`${name}: 40 random patterns of 120 requests agree with the decoder before, and no sample is left open`, async () => {
-      for (let seed = 1; seed <= 40; seed++) {
-        const reqs = pattern(shape, mulberry32(seed * 7919 + name.length), 120);
+  /** Runs: scrubbing (seek after seek: across the file, a few frames either way, frame by frame backwards), playing on from where a run stopped, and the frame held asked again. */
+  function runs(shape: StreamShape, rand: () => number, length: number): number[] {
+    const { frames, fps } = shape;
+    const int = (n: number) => Math.floor(rand() * n);
+    const clamp = (f: number) => Math.max(0, Math.min(frames - 1, f));
+    const out: number[] = [];
+    let f = int(frames);
+    const ask = () => { const where = rand(); out.push(where < 0.85 ? mid(f, fps) : where < 0.93 ? f / fps : (f + rand()) / fps); };
+    while (out.length < length) {
+      const kind = rand(), n = 1 + int(8);
+      for (let i = 0; i < n; i++) {
+        if (kind < 0.3) f = clamp(f + 1); // play
+        else if (kind < 0.4) f = clamp(f + 2 + int(4)); // play fast
+        else if (kind < 0.55) f = int(frames); // scrub across the file
+        else if (kind < 0.7) f = clamp(f + int(41) - 20); // scrub around the playhead
+        else if (kind < 0.8) f = clamp(f - 1); // step back, frame by frame
+        else if (kind < 0.88) f = clamp(f + 15 + int(3) - 1); // right at the half second that tells a step from a jump
+        else if (kind < 0.94) f = f + 0; // the frame held
+        else f = i % 2 ? frames - 1 : 0; // both ends
+        ask();
+      }
+    }
+    return out;
+  }
+
+  for (const [name, shape] of Object.entries({ ...SHAPES, ...ODD })) {
+    it(`${name}: 40 random patterns of 120 requests and 40 of scrub and play runs agree with the decoder before, and no sample is left open`, async () => {
+      for (let seed = 1; seed <= 80; seed++) {
+        const rand = mulberry32(seed * 7919 + name.length);
+        const reqs = seed <= 40 ? pattern(shape, rand, 120) : runs(shape, rand, 120);
         const a = open(shape);
         const before = new DecoderBefore(new FakeSink(packets(shape)), 1 / 30, Math.max(0, shape.first ?? 0));
         const got: (number | null)[] = [], want: (number | null)[] = [];
@@ -296,7 +392,7 @@ describe('the picture for a time is the one given before the change, whatever wa
       }
     });
 
-    it(`${name}: random access gives what sequential access gives`, async () => {
+    if (name in SHAPES) it(`${name}: random access gives what sequential access gives`, async () => {
       // sequential access: one decoder walked from the first frame to the last
       const walk = open(shape);
       const sequential: (number | null)[] = [];
