@@ -2,7 +2,8 @@
  * Frame-exact source decoding via WebCodecs (Mediabunny). One decoder per clip and decode lane, so that two layers
  * showing the same asset, or the earlier pictures a time effect merges (ADR-0011), never invalidate each other's frame.
  * Sequential requests reuse the decode pipeline; random requests seek from the proper keyframe (Mediabunny handles
- * B-frame/presentation order).
+ * B-frame/presentation order): in one decode that the frames after the sought one continue, or, when seek follows seek
+ * (scrubbing), by a lookup that decodes to the sought frame and no further (ClipDecoder.get has the rule).
  *
  * Decoders used while a frame is drawn are pinned to that drawing (FrameProvider.begin/end): the budget never disposes them under it, whatever other drawings do.
  * A frame that needs more decoders than the budget gets null for the extra pictures, with the reason (`decode_budget`),
@@ -15,7 +16,7 @@
  * which picture it is (ADR-0005). Warm decoders count towards `maxDecoders`, are never pinned, and give their slot to a drawing
  * before any decoder a drawing used lately does.
  */
-import { ALL_FORMATS, AudioBufferSink, BlobSource, Input, UrlSource, VideoSampleSink, type Source, type VideoSample } from 'mediabunny';
+import { ALL_FORMATS, AudioBufferSink, BlobSource, Input, UrlSource, VideoSampleSink, type Source } from 'mediabunny';
 import { LUT_MAX_TEXT_LENGTH, LutError, lutStrip } from '@pulseframe/core';
 import { decodeBudgetReason, type FrameImage, type FrameProvider, type LutStrip, type PictureLayer } from '@pulseframe/engine';
 
@@ -32,12 +33,26 @@ interface DecoderEntry { assetId: string; dec: Promise<PoolDecoder>; used: numbe
 interface WarmEntry { assetId: string; quality: 'draft' | 'full'; dec: Promise<PoolDecoder>; bytes: number; busy: boolean }
 const now = () => performance.now();
 
-class ClipDecoder implements PoolDecoder {
-  private cur: VideoSample | null = null;
-  private iter: AsyncGenerator<VideoSample, void, unknown> | null = null;
+/** A decoded picture as a decoder holds it: Mediabunny's VideoSample (media.seek.test.ts counts with a stand-in). */
+export interface ClipSample { timestamp: number; duration: number; close(): void; draw(ctx: Parameters<FrameImage['draw']>[0], dx: number, dy: number, dw: number, dh: number): void }
+/** What a decoder needs of its samples: VideoSampleSink's lookup by time, and its iterator in presentation order from a time on. */
+export interface ClipSampleSource { getSample(t: number): Promise<ClipSample | null>; samples(start?: number): AsyncGenerator<ClipSample, void, unknown> }
+
+/** Mediabunny's getSample (1.66.0, mediaSamplesAtTimestamps) takes a sample as started at `t` up to this many seconds before its timestamp. */
+const LOOKUP_TOLERANCE = 1e-10;
+
+export class ClipDecoder implements PoolDecoder {
+  private cur: ClipSample | null = null;
+  private iter: AsyncGenerator<ClipSample, void, unknown> | null = null;
+  /** The sample after `cur`, taken from `iter` by the seek that found `cur`. */
+  private ahead: ClipSample | null = null;
+  /** The last request that was not for the frame held was a jump (see `get`). */
+  private jumped = false;
   private chain: Promise<unknown> = Promise.resolve();
   /** `first` is the timestamp of this file's first video frame; requests are relative to it (original and proxy may differ in container offset). */
-  private constructor(private release: () => void, private sink: VideoSampleSink, private frameDur: number, private first: number) {}
+  private constructor(private release: () => void, private sink: ClipSampleSource, private frameDur: number, private first: number) {}
+  /** TEST ONLY (media.seek.test.ts): a decoder over a stand-in for Mediabunny's sample sink, so what it decodes can be counted without a browser. */
+  static over(sink: ClipSampleSource, fps: number, first: number): ClipDecoder { return new ClipDecoder(() => {}, sink, 1 / fps, first); }
 
   /**
    * `src` is a local Blob/File or a shared URL source. URLs are read with HTTP range requests through a bounded byte cache;
@@ -66,38 +81,94 @@ class ClipDecoder implements PoolDecoder {
     this.chain = p.catch(() => {});
     return p;
   }
-  private covers(s: VideoSample, t: number) {
+  private covers(s: ClipSample, t: number) {
     return t >= s.timestamp && t < s.timestamp + (s.duration || this.frameDur);
   }
-  private wrap(s: VideoSample): FrameImage {
+  private wrap(s: ClipSample): FrameImage {
     return { draw: (ctx, dx, dy, dw, dh) => s.draw(ctx, dx, dy, dw, dh) };
   }
+  /** The next sample in presentation order: the one a seek already took from the iterator, else the iterator's. */
+  private async following(): Promise<ClipSample | null> {
+    const a = this.ahead;
+    this.ahead = null;
+    if (a) return a;
+    const n = await this.iter!.next();
+    return n.done ? null : n.value;
+  }
+  /**
+   * The picture at `t`. What a request costs depends on the requests before it, never on the clock; which picture it gets
+   * depends on neither (media.seek.test.ts holds the decoder of before both changes as the reference):
+   *   the frame held covers `t`                     that frame; nothing changes
+   *   a step (after the frame held, by under 0.5 s) the next samples of the iterator, which is started at the frame held if a
+   *                                                 lookup found it (play starts from a frame scrubbing reached: that one
+   *                                                 time the frames from its key frame are decoded again)
+   *   a jump (anything else), the first request     one decode from the key frame that the steps after it continue (`seek`):
+   *     or the first since a step                   jump, then play
+   *   a jump after a jump, no step in between       the lookup only (getSample: decode to `t`, flush, nothing ahead):
+   *                                                 scrubbing, stepping back, a clip played in reverse
+   */
   private async get(t: number): Promise<FrameImage | null> {
     if (this.cur && this.covers(this.cur, t)) return this.wrap(this.cur);
-    if (this.cur && this.iter && t > this.cur.timestamp && t < this.cur.timestamp + 0.5) {
+    const step = !!this.cur && t > this.cur.timestamp && t < this.cur.timestamp + 0.5;
+    const lookupOnly = !step && this.jumped;
+    this.jumped = !step;
+    if (this.cur && step) {
+      this.iter ??= this.sink.samples(this.cur.timestamp);
       for (;;) {
-        const n = await this.iter.next();
-        if (n.done) break;
-        if (n.value.timestamp <= this.cur.timestamp) { n.value.close(); continue; }
+        const n = await this.following();
+        if (!n) break;
+        if (n.timestamp <= this.cur.timestamp) { n.close(); continue; }
         this.cur.close();
-        this.cur = n.value;
+        this.cur = n;
         if (this.covers(this.cur, t) || this.cur.timestamp > t) break;
       }
       if (this.cur && this.covers(this.cur, t)) return this.wrap(this.cur);
     }
-    await this.iter?.return();
-    this.iter = null;
-    this.cur?.close();
-    this.cur = await this.sink.getSample(t); // last frame with PTS <= t
-    if (!this.cur) return null;
-    this.iter = this.sink.samples(this.cur.timestamp);
-    return this.wrap(this.cur);
+    await this.drop();
+    if (lookupOnly || !(await this.seek(t))) this.cur = await this.sink.getSample(t); // last frame with PTS <= t
+    return this.cur && this.wrap(this.cur);
+  }
+  /**
+   * A seek as ONE decode from the key frame: the iterator that gives the frames after `t` also gives the frame at `t`, its
+   * first sample (the last one that starts at or before `t`; the stream's first when none does). Asking getSample(t) for that
+   * frame and then starting an iterator at it decodes the frames from the key frame to `t` twice.
+   * False: only getSample can say which frame it is, or the iterator failed where getSample, which decodes no further than
+   * `t`, may not; nothing is held then.
+   */
+  private async seek(t: number): Promise<boolean> {
+    const iter = this.sink.samples(t);
+    let at: ClipSample | null = null, next: ClipSample | null = null;
+    try {
+      at = (await iter.next()).value ?? null;
+      if (at && at.timestamp <= t) {
+        next = (await iter.next()).value ?? null; // already decoded when `at` starts before `t`: the iterator knew `at` by seeing this one
+        // getSample takes a sample that starts within its tolerance after `t` as started, if it was decoded on the way to `t`
+        // (B-frames). No time evaluate asks for (the middle of a frame) is this close to a frame's start.
+        if (!next || next.timestamp - t > LOOKUP_TOLERANCE) {
+          this.cur = at;
+          this.iter = iter;
+          this.ahead = next;
+          return true;
+        }
+      }
+    } catch { /* getSample is asked below */ }
+    const before = !!at && at.timestamp > t; // `t` is before the first frame: no picture, as getSample answers
+    at?.close();
+    next?.close();
+    await iter.return().catch(() => {});
+    return before;
+  }
+  /** Close the pipeline and every sample held. */
+  private async drop() {
+    const { iter, cur, ahead } = this;
+    this.iter = this.cur = this.ahead = null;
+    cur?.close();
+    ahead?.close();
+    await iter?.return();
   }
   async dispose() {
     await this.chain.catch(() => {});
-    await this.iter?.return();
-    this.cur?.close();
-    this.cur = null;
+    await this.drop();
     this.release();
     this.release = () => {};
   }
