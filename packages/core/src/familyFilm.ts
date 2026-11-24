@@ -46,7 +46,7 @@
 import * as T from '@pulseframe/time';
 import { z } from 'zod';
 import {
-  FAMILY_FILM_DRAFT_LABEL, FAMILY_FILM_FACES_NOTE, FAMILY_FILM_METHOD, FAMILY_FILM_RECIPE_ID, FAMILY_FILM_TEMPLATE_ID, FAMILY_FILM_VERSION, FamilyFilmParamsSchema, FILM, FILM_BINDS, FILM_DEFAULTS, FilmError, filmMix, filmReasonsFor,
+  FAMILY_FILM_DRAFT_LABEL, FAMILY_FILM_FACES_NOTE, FAMILY_FILM_METHOD, FAMILY_FILM_RECIPE_ID, FAMILY_FILM_TEMPLATE_ID, FAMILY_FILM_VERSION, FamilyFilmParamsSchema, FILM, FILM_BINDS, FILM_DEFAULTS, FILM_PICK_KEY, FilmError, filmMix, filmReasonsFor,
   type FamilyFilmPlan, type FilmExclusion, type FilmMomentsRecord, type FilmPick, type FilmPickKey, type FilmPlanContext, type FilmReason, type FilmText, type FilmWarning, type FilmWarningCode, type PlanFamilyFilm, type ResolvedFilmParams,
 } from './familyFilmContract.ts';
 import { MOMENTS_ALGO, MOMENTS_GATES, videoFrames, type MomentWindow } from './momentsContract.ts';
@@ -216,6 +216,18 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   const keptClosing = kept.some((k) => k.kind === 'text' && k.key === FILM_BINDS.closing);
   const keptMusic = kept.find((k) => k.kind === 'music');
   if (kept.length) warn('kept_by_hand', `${kept.length} clip(s) of the last film were edited by hand and are kept exactly as they are`, { clipIds: kept.map((k) => k.clipId) });
+  // ===== regeneration: what was deleted by hand (FilmPlanContext.removedKeys) is not made again =====
+  const keptKeySet = new Set(ctx.keptKeys ?? []);
+  const removedKeys = new Set((ctx.removedKeys ?? []).filter((k) => !keptKeySet.has(k)));
+  const removedTitle = removedKeys.has(FILM_BINDS.title), removedClosing = removedKeys.has(FILM_BINDS.closing), removedMusic = removedKeys.has(FILM_BINDS.music);
+  // a pick key is a hash of (file, ordinal), and a file's ordinal only grows past keys already taken: the files whose pick was deleted
+  const removedAssets = new Set<string>();
+  const removedPicks = [...removedKeys].filter((k) => FILM_PICK_KEY.test(k));
+  if (removedPicks.length) {
+    const ordinals = keptKeySet.size + removedKeys.size + 2;
+    for (const id of new Set(P.assetIds)) for (let o = 0; o < ordinals; o++) if (removedKeys.has(filmPickKey(id, o))) { removedAssets.add(id); break; }
+  }
+  if (removedKeys.size) warn('removed_by_hand', `${removedKeys.size} part(s) of the last film were deleted by hand and are not made again${removedAssets.size ? ` (${removedAssets.size} file(s) left out)` : ''}; regenerate with restoreRemoved to make them again`, { keys: [...removedKeys].sort(), assetIds: [...removedAssets] });
 
   // ===== assets =====
   const excludeSet = new Set(P.picks.exclude), includeSet = new Set(P.picks.include);
@@ -230,6 +242,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
     if (!isPicture(a)) { exclude(id, 'no_picture', { kind: a.kind }); continue; }
     if (excludeSet.has(id)) { exclude(id, 'excluded_by_you'); continue; }
     if (keptAssets.has(id)) { exclude(id, 'kept_by_hand'); continue; }
+    if (removedAssets.has(id)) { exclude(id, 'removed_by_hand'); continue; }
     const capacity = capacityOf(a, rate);
     if (capacity < minF) { exclude(id, 'too_short', { seconds: Math.round((capacity / fps) * 100) / 100, shortestSlotSeconds: FILM.minSlotSeconds }); continue; }
     const rec = recordOf(doc, id);
@@ -245,7 +258,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   // one line for every window asked for that does not exist (a stale choice after measuring again), so they never crowd the basis
   if (staleWindows.length === 1) { const w = staleWindows[0]!; basis.push(clipText(`window ${w.wanted} of "${w.name}" was asked for, but it has ${w.have} measured window(s); its first one is used`)); }
   else if (staleWindows.length > 1) basis.push(clipText(`${staleWindows.length} window choices were asked for that the files do not have, so their first measured window is used: ${staleWindows.map((w) => `window ${w.wanted} of "${w.name}" (${w.have} measured)`).join(', ')}`));
-  if (!cands.length && !keptPictures.length) throw new FilmError('nothing_to_do', 'none of the chosen files can go into the film (no picture, too short, left out or kept by hand)', 'Choose pictures or videos of at least 1.6 seconds.');
+  if (!cands.length && !keptPictures.length) throw new FilmError('nothing_to_do', 'none of the chosen files can go into the film (no picture, too short, left out or kept by hand)', removedAssets.size ? 'Regenerate with restoreRemoved: true to bring back the clips deleted by hand, or choose more pictures or videos.' : 'Choose pictures or videos of at least 1.6 seconds.');
 
   // ===== 2. order =====
   let ordered: Cand[];
@@ -592,7 +605,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   const pictures = slots.length ? chooseTrack('video', ctx.reuseTracks?.pictures, FILM_BINDS.pictures, pictureRanges) : null;
   const sounding = picks.filter((k) => k.ownSound);
   const ownTrack = sounding.length ? chooseTrack('audio', ctx.reuseTracks?.ownSound, FILM_BINDS.ownSound, []) : null;
-  const placeMusic = !!music && !music.kept;
+  const placeMusic = !!music && !music.kept && !removedMusic;
   const musicTrack = placeMusic ? chooseTrack('audio', ctx.reuseTracks?.musicTrack, FILM_BINDS.musicTrack, []) : music?.kept && music.trackId ? { arg: music.trackId, status: 'reused' as const, name: trackById(music.trackId)?.name ?? '' } : null;
 
   // ===== the picture clips =====
@@ -667,7 +680,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
     plannedSlots.push({ key: bind, kind: 'text', clipId: ref(bind) });
   };
   let titleText: FilmText | null = null;
-  if (P.openingTitle && !keptTitle && picturesEnd > picturesStart) {
+  if (P.openingTitle && !keptTitle && !removedTitle && picturesEnd > picturesStart) {
     titleText = ctx.title ?? { text: P.openingText ?? P.event?.name ?? DEFAULT_TITLE[lang], resolved: null, live: false };
     if (!titleText.live && P.openingText === undefined) warn('title_resolved_static', ctx.title ? 'the opening title is fixed text: not every clip has a capture date to show, or the date of an evening event waits for its sunset answer' : 'the opening title is fixed text: no live title was given', {});
     const minTitle = Math.round(FILM.titleMinSeconds * fps);
@@ -676,8 +689,9 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
     addTitle(FILM_BINDS.title, titleText, picturesStart, titleEnd, lookOf(ctx.titleLookId, TITLE_LOOK, 'title'), FILM.titleY);
     steps.push(clipText(`Add the opening title "${quote(titleText.text)}" over the first ${secs(titleEnd - picturesStart)}${titleText.live ? ' (live fields: it shows the date of the pictures under it)' : ''}${P.motion === 'full' ? ', fading in and out' : ' without animation (reduced motion)'}`));
   } else if (keptTitle) steps.push('Keep the opening title edited by hand');
+  else if (removedTitle && P.openingTitle) steps.push('Leave out the opening title: it was deleted by hand');
   let filmEndF = picturesEnd;
-  if (P.closingCard && !keptClosing) {
+  if (P.closingCard && !keptClosing && !removedClosing) {
     const closing = ctx.closing ?? { text: P.closingText ?? DEFAULT_CLOSING[lang], resolved: null, live: false };
     const lastSlot = slots[slots.length - 1];
     const onGrid = lastSlot && lastSlot.endF === picturesEnd && lastSlot.endJ !== null ? lastSlot.endJ : null;
@@ -690,6 +704,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
     steps.push(clipText(`Add the closing card "${quote(closing.text)}" for ${secs(endF - picturesEnd)} after the last picture${exact && endF - picturesEnd >= lo - 1 ? ' (on the beat grid)' : ''}`));
     filmEndF = endF;
   } else if (keptClosing) steps.push('Keep the closing card edited by hand');
+  else if (removedClosing && P.closingCard) steps.push('Leave out the closing card: it was deleted by hand');
 
   // ===== the music =====
   if (placeMusic && music && musicTrack) {
@@ -698,6 +713,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
     plannedSlots.push({ key: FILM_BINDS.music, kind: 'music', clipId: ref(FILM_BINDS.music) });
     steps.push(clipText(`Place the music "${quote(music.name)}" from the start of the film (its first ${music.bars ? 'bar start' : 'beat'} at ${T.toSeconds(music.sourceIn).toFixed(3)} s in the file) on ${musicTrack.status === 'new' ? musicTrack.name : `track ${musicTrack.name}`} and end it on a beat at the end of the film`));
   } else if (music?.kept) steps.push('Keep the music placed by hand; the new cuts follow its beats');
+  else if (music && removedMusic) steps.push(clipText(`Leave out the music "${quote(music.name)}": it was deleted by hand; the cuts still follow its beats`));
 
   // ===== what the plan rests on, and what it predicts =====
   const offGrid = new Set<number>(), cuts = new Set<number>();
@@ -737,7 +753,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   );
   if (kept.length) basis.push(`${kept.length} clip(s) edited by hand are kept; the new clips are laid around ${keptPictures.length} kept picture(s)`);
 
-  if (ops.length === 0) throw new FilmError('nothing_to_do', 'every part of this film was edited by hand since the last run; there is nothing to make again');
+  if (ops.length === 0) throw new FilmError('nothing_to_do', 'every part of this film was edited by hand since the last run; there is nothing to make again', removedKeys.size ? 'Regenerate with restoreRemoved: true to make the parts deleted by hand again.' : undefined);
   if (ops.length > FILM.maxOps) throw new FilmError('invalid_args', `this film would need ${ops.length} operations; at most ${FILM.maxOps} fit in one step`, 'Choose fewer files.');
   if (plannedSlots.length > FILM.maxSlots) throw new FilmError('invalid_args', `this film would record ${plannedSlots.length} slots; a run holds at most ${FILM.maxSlots}`);
 
@@ -746,6 +762,8 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
     P.order === 'arc' ? { label: 'In the order they were filmed', params: { order: 'capture' as const } } : { label: 'Calm first, the most active clip at two thirds', params: { order: 'arc' as const } },
     ...(music ? (['under', 'lead', 'mute'] as const).filter((o) => o !== P.ownSound).map((o) => ({ label: o === 'under' ? 'The clips\' own sound 12 dB under the music' : o === 'lead' ? 'The voices lead: the music is lowered 9 dB while a clip has sound' : 'Music only: leave the clips\' own sound out', params: { ownSound: o } })) : []),
     P.motion === 'full' ? { label: 'No camera moves or animated titles (reduced motion)', params: { motion: 'none' as const } } : { label: 'With camera moves and animated titles', params: { motion: 'full' as const } },
+    // the explicit choice to bring back what was deleted by hand (never taken on its own)
+    ...(removedKeys.size ? [{ label: `Restore the ${removedKeys.size} part(s) deleted by hand`, params: {}, restoreRemoved: true as const }] : []),
   ];
   return {
     recipeId: FAMILY_FILM_RECIPE_ID, templateId: FAMILY_FILM_TEMPLATE_ID, version: FAMILY_FILM_VERSION, params: P,

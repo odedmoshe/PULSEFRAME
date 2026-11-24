@@ -12,7 +12,7 @@
 import { z } from 'zod';
 import { createdIdsOf, defineOp, findClip, getOp, OpError, refuseInheritedIds, removeRunClips, runFingerprints } from './ops.ts';
 import { ApplyTemplateArgsSchema, AssetRefSchema, findGatedTemplate, RefSchema, type ApplyTemplateOutput } from './templateContract.ts';
-import type { SlotRecord } from './schema.ts';
+import type { ProjectDocument, SlotRecord } from './schema.ts';
 import { attachKnownGrid } from './packOps.ts';
 import { analysisEntityId } from './entities.ts';
 
@@ -21,6 +21,14 @@ export const MAX_BINDING_DEPTH = 64;
 /** A run record holds at most this many slots (schema.ts RecipeRunSchema.slots). */
 const MAX_RUN_SLOTS = 400;
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/**
+ * The slot records of a run whose clip is no longer in the document: items deleted by hand since the run (ADR-0016, decision 6).
+ * Nothing records the delete: the slot record outlives its clip ("an inert, detached slot", schema.ts), so the answer follows the
+ * document and its history (undo the delete and the slot is live again). A regeneration passes them as keepSlots, so the new run
+ * record carries them and the next regeneration still knows; with restoreRemoved it leaves them out and the items are made again.
+ */
+export const removedByHand = (doc: ProjectDocument, slots: readonly SlotRecord[]): SlotRecord[] => slots.filter((s) => !findClip(doc, s.clipId));
 const BINDING_SHAPE = 'a binding is exactly {"$ref": name} with optional "out" and "at", or {"$asset": key}';
 
 /**

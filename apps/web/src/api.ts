@@ -206,7 +206,7 @@ export const api = {
   planFilm: (projectId: string, params: FamilyFilmParams) => call<FamilyFilmPlanView>(`/projects/${projectId}/recipes/family-film/plan`, json({ params })),
   applyFilm: (projectId: string, params: FamilyFilmParams, expectedRevision: number) => call<FamilyFilmApplyResult>(`/projects/${projectId}/recipes/family-film/apply`, json({ params, expectedRevision })),
   /** Regenerate a film run (from this tab's filmRun or the document's run after a reload) with changed parameters. */
-  regenerateFilm: (projectId: string, runId: string, params?: Partial<FamilyFilmParams>) => call<FamilyFilmRegenerateResult>(`/projects/${projectId}/recipe-runs/${runId}/regenerate`, json(params ? { params } : {})),
+  regenerateFilm: (projectId: string, runId: string, params?: Partial<FamilyFilmParams>, restoreRemoved = false) => call<FamilyFilmRegenerateResult>(`/projects/${projectId}/recipe-runs/${runId}/regenerate`, json({ ...(params ? { params } : {}), ...(restoreRemoved ? { restoreRemoved: true } : {}) })),
   // ----- multicam (ADR-0020): the routes of core multicamApi.ts -----
   /** The group's view: coverage, program tracks, out-of-sync segments, envelope states and capture-time priors. */
   multicamView: (id: string, groupId: string) => call<MulticamView>(`/projects/${id}/multicam/${encodeURIComponent(groupId)}`),

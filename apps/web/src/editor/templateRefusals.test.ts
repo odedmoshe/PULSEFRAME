@@ -52,7 +52,8 @@ describe('template refusals', () => {
       ['invalid_request', 'this plan would record 500 slots; a run holds at most 400'],
       ['needs_capability', 'template tpl.list places graphic elements, which this machine cannot draw: its ffmpeg has no SVG decoder (librsvg)', 'Install an ffmpeg build with librsvg and restart the server, or choose a template without elements.'],
       ['template_blocked', 'the template cannot regenerate like this: slot(s) s1, s3 were edited by hand and are kept where they are, but no longer lie exactly on the range this plan gives them, so the new pictures would leave frames without a picture',
-        'Regenerate with the run\'s tempo (half), undo the hand edit that moved or trimmed slot(s) s1, s3, or delete that clip so the template fills the slot again.'],
+        'Regenerate with the run\'s tempo (half), undo the hand edit that moved or trimmed slot(s) s1, s3, or delete that clip and regenerate with restoreRemoved: true so the template fills the slot again.'],
+      ['nothing_to_do', 'every item of this template was edited or deleted by hand since the last run; there is nothing to make again', 'Regenerate with restoreRemoved: true to make the deleted items again.'],
       ['insufficient_scope', 'this credential may only propose edits, and a template cannot be proposed: it is applied through an internal step that a proposal does not carry', 'Ask the project owner to apply the template, or for a grant in edit mode. plan_template still shows what it would do.'],
       ['not_found', 'template "tpl.nope" does not exist', 'Available: tpl.travel-montage, tpl.birthday (GET /api/v1/templates).'],
       ['not_found', 'template run run_9 not found', 'A template run id is returned by apply (runId).'],
@@ -65,7 +66,7 @@ describe('template refusals', () => {
       // English keeps the server's detail; a hint written for API callers is reworded, the others stay
       const en = templateRefusal('en', new ApiFailure(409, code, message, {}, hint));
       expect(en.message.endsWith(message)).toBe(true);
-      if (hint) expect(en.hint, hint).not.toMatch(/\/api\/|POST |Pass |edit_analysis|plan_template|\(at\)|runId/);
+      if (hint) expect(en.hint, hint).not.toMatch(/\/api\/|POST |Pass |edit_analysis|plan_template|\(at\)|runId|restoreRemoved/);
     }
   });
   it('the planner\'s built-in-music refusals, provoked for real, are worded in Hebrew with their hints; English hints speak to a person', () => {

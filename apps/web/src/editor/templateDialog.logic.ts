@@ -201,5 +201,5 @@ export const templateApi = {
   list: () => call<{ templates: TemplateSummary[] }>('/templates'),
   plan: (projectId: string, templateId: string, params: Partial<TemplateInput>) => call<TemplatePlanView>(`/projects/${seg(projectId)}/templates/${seg(templateId)}/plan`, { params }),
   apply: (projectId: string, templateId: string, params: Partial<TemplateInput>, expectedRevision: number) => call<TemplateApplyResult>(`/projects/${seg(projectId)}/templates/${seg(templateId)}/apply`, { params, expectedRevision }),
-  regenerate: (projectId: string, runId: string, params: Partial<TemplateInput>) => call<TemplateRegenerateResult>(`/projects/${seg(projectId)}/template-runs/${seg(runId)}/regenerate`, { params }),
+  regenerate: (projectId: string, runId: string, params: Partial<TemplateInput>, restoreRemoved?: boolean) => call<TemplateRegenerateResult>(`/projects/${seg(projectId)}/template-runs/${seg(runId)}/regenerate`, { params, ...(restoreRemoved ? { restoreRemoved: true } : {}) }),
 };

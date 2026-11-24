@@ -88,7 +88,8 @@ function pictureCoverage(doc: ProjectDocument, runId: string, keptIds: readonly 
   const run = doc.recipeRuns[runId]!;
   const elementKey = new Map(run.slots!.filter((s) => s.kind === 'element').map((s) => [s.clipId, s.key]));
   const isSlotPicture = (c: Clip) => isPictureClip(doc, c) && !elementKey.has(c.id);
-  const slotClips = run.slots!.filter((s) => s.kind === 'picture').map((s) => findClip(doc, s.clipId)!.clip);
+  // a slot deleted by hand keeps an inert record (its clip is gone): it holds no picture
+  const slotClips = run.slots!.filter((s) => s.kind === 'picture').flatMap((s) => { const f = findClip(doc, s.clipId); return f ? [f.clip] : []; });
   const fi = (t: T.RationalTime) => T.nearestFrameIndex(t, R);
   const from = Math.min(...slotClips.map((c) => fi(c.start))), to = Math.max(...slotClips.map((c) => fi(clipEnd(c))));
   const holes: number[] = [];
@@ -314,6 +315,77 @@ describe('regenerate', () => {
     const mt = await tool('regenerate_template', { projectId: s.pid, runId, params: { seed: 9 } });
     expect([mt.isError, revision(s.pid)]).toEqual([false, t0 + 1]);
     expect(pictureCoverage(store.getProject(s.pid).doc, runId, [s2])).toMatchObject({ holes: [], covered: [] });
+  }, 60_000);
+
+  it('a slot deleted by hand stays deleted: the regeneration leaves it out, says so, carries its record on, and replays byte for byte', async () => {
+    const s = seed('regen-deleted');
+    const applied = await rest('POST', `/projects/${s.pid}/templates/${TEST_DEF.id}/apply`, { params: { media: [s.a, s.b, s.c], musicAssetId: s.mus } });
+    expect(applied.status).toBe(200);
+    const runId = applied.body.runId as string;
+    const run0 = store.getProject(s.pid).doc.recipeRuns[runId]!;
+    const s2 = run0.slots!.find((x) => x.key === 's2')!.clipId;
+    const range = findClip(store.getProject(s.pid).doc, s2)!.clip;
+    const [from, to] = [T.nearestFrameIndex(range.start, R), T.nearestFrameIndex(clipEnd(range), R)];
+    store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'delete_clip', args: { clipId: s2 } }] });
+    const r = await rest('POST', `/projects/${s.pid}/template-runs/${runId}/regenerate`, { params: { order: 'shuffle', seed: 7 } });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ removed: ['s2'], protected: [] });
+    expect(r.body.notices).toContainEqual(expect.objectContaining({ code: 'removed_by_hand', details: { keys: ['s2'] } }));
+    expect(r.body.warnings.map((w: { code: string }) => w.code)).not.toContain('kept_by_hand');
+    expect(r.body.alternatives).toContainEqual(expect.objectContaining({ restoreRemoved: true, params: {} }));
+    let doc = store.getProject(s.pid).doc;
+    expect(validateProject(doc)).toEqual([]);
+    // nothing was made in its place: the slot's frames hold no slot picture, every other frame does
+    const cov = pictureCoverage(doc, runId);
+    expect(cov.holes).toEqual(Array.from({ length: to - from }, (_, i) => from + i));
+    // the record travels on (its clip still gone), so a second regeneration still leaves it out
+    expect(doc.recipeRuns[runId]!.slots!.find((x) => x.key === 's2')!.clipId).toBe(s2);
+    const again = await rest('POST', `/projects/${s.pid}/template-runs/${runId}/regenerate`, {});
+    expect([again.status, again.body.removed]).toEqual([200, ['s2']]);
+    expect(pictureCoverage(store.getProject(s.pid).doc, runId).holes).toEqual(cov.holes);
+    // MCP says the same
+    const m = await tool('regenerate_template', { projectId: s.pid, runId, params: { seed: 3 } });
+    expect([m.isError, m.body.removed]).toEqual([false, ['s2']]);
+    // replay of the op log gives the same document, byte for byte
+    doc = store.getProject(s.pid).doc;
+    expect(JSON.stringify(store.replay(s.pid, revision(s.pid)).doc)).toBe(JSON.stringify(doc));
+  }, 60_000);
+
+  it('undo of a hand delete brings the slot back for the regeneration; restoreRemoved is the explicit way back after one (REST and MCP)', async () => {
+    const s = seed('regen-undo-delete');
+    const applied = await rest('POST', `/projects/${s.pid}/templates/${TEST_DEF.id}/apply`, { params: { media: [s.a, s.b, s.c], musicAssetId: s.mus } });
+    const runId = applied.body.runId as string;
+    const run0 = store.getProject(s.pid).doc.recipeRuns[runId]!;
+    const s2 = run0.slots!.find((x) => x.key === 's2')!.clipId, title = run0.slots!.find((x) => x.key === 'title')!.clipId;
+    // delete, then undo the delete: the slot is live again and is regenerated like any untouched one
+    store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'delete_clip', args: { clipId: s2 } }] });
+    store.undo(s.pid, 'user:owner', 'undo');
+    expect(findClip(store.getProject(s.pid).doc, s2)).toBeTruthy();
+    const back = await rest('POST', `/projects/${s.pid}/template-runs/${runId}/regenerate`, { params: { order: 'shuffle', seed: 5 } });
+    expect([back.status, back.body.removed, back.body.notices.map((x: { code: string }) => x.code)]).toEqual([200, [], []]);
+    let doc = store.getProject(s.pid).doc;
+    expect(findClip(doc, doc.recipeRuns[runId]!.slots!.find((x) => x.key === 's2')!.clipId)).toBeTruthy();
+    expect(pictureCoverage(doc, runId).holes).toEqual([]);
+    // delete the picture and the title, regenerate (both left out), then restore: both are made again and the run is whole
+    const s2b = doc.recipeRuns[runId]!.slots!.find((x) => x.key === 's2')!.clipId, titleB = doc.recipeRuns[runId]!.slots!.find((x) => x.key === 'title')!.clipId;
+    expect(titleB).not.toBe(title);
+    store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'delete_clip', args: { clipId: s2b } }, { op: 'delete_clip', args: { clipId: titleB } }] });
+    const left = await rest('POST', `/projects/${s.pid}/template-runs/${runId}/regenerate`, {});
+    expect([left.status, [...left.body.removed].sort()]).toEqual([200, ['s2', 'title']]);
+    doc = store.getProject(s.pid).doc;
+    expect(mainTracks(doc).filter((t) => t.kind === 'text').flatMap((t) => t.clips)).toEqual([]);
+    const restored = await rest('POST', `/projects/${s.pid}/template-runs/${runId}/regenerate`, { restoreRemoved: true });
+    expect([restored.status, restored.body.removed, restored.body.notices.map((x: { code: string }) => x.code)]).toEqual([200, [], []]);
+    doc = store.getProject(s.pid).doc;
+    expect(validateProject(doc)).toEqual([]);
+    for (const key of ['s2', 'title']) expect(findClip(doc, doc.recipeRuns[runId]!.slots!.find((x) => x.key === key)!.clipId), key).toBeTruthy();
+    expect(pictureCoverage(doc, runId).holes).toEqual([]);
+    // MCP: delete again, restore through the tool
+    store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'delete_clip', args: { clipId: doc.recipeRuns[runId]!.slots!.find((x) => x.key === 's2')!.clipId } }] });
+    const mt = await tool('regenerate_template', { projectId: s.pid, runId, restoreRemoved: true });
+    expect([mt.isError, mt.body.removed]).toEqual([false, []]);
+    expect(pictureCoverage(store.getProject(s.pid).doc, runId).holes).toEqual([]);
+    expect(JSON.stringify(store.replay(s.pid, revision(s.pid)).doc)).toBe(JSON.stringify(store.getProject(s.pid).doc));
   }, 60_000);
 
   it('another tempo would move a slot kept by hand: refused with 409 template_blocked naming the slot (REST and MCP), nothing changes; without hand edits it re-times every slot with no gap', async () => {

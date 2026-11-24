@@ -115,9 +115,10 @@ export const FILM_DEFAULTS = { targetSeconds: 60, order: 'capture', ownSound: 'u
 export const FILM_REASON_CODES = ['inner_motion', 'measured_moment', 'loud_sound', 'sound_burst', 'sharp', 'active_throughout', 'second_moment', 'chosen_by_you', 'past_clean_stretch', 'not_measured', 'no_clear_moment', 'default_middle', 'whole_clip', 'still'] as const;
 export type FilmReasonCode = (typeof FILM_REASON_CODES)[number];
 export interface FilmReason { code: FilmReasonCode; /** seconds inside the file, one decimal, for wording only */ fromSecond?: number; toSecond?: number; value?: number; unit?: 'permille' | 'db' | 'ratio' }
-export const FILM_EXCLUSION_CODES = ['no_room', 'too_short', 'excluded_by_you', 'no_picture', 'kept_by_hand'] as const;
+/** removed_by_hand (regeneration): a clip of this file in the last film was deleted by hand, so the file is left out (restoreRemoved brings it back). */
+export const FILM_EXCLUSION_CODES = ['no_room', 'too_short', 'excluded_by_you', 'no_picture', 'kept_by_hand', 'removed_by_hand'] as const;
 export interface FilmExclusion { assetId: string; code: (typeof FILM_EXCLUSION_CODES)[number]; details: Record<string, unknown> }
-export const FILM_WARNING_CODES = ['shorter_than_target', 'longer_than_target', 'music_short', 'low_beat_confidence', 'not_measured', 'no_capture_time', 'mixed_orientation', 'cuts_merged', 'kept_by_hand', 'cut_off_grid_next_to_kept', 'title_resolved_static', 'kept_music_not_followable', 'lead_music_rises', 'pictures_missing'] as const;
+export const FILM_WARNING_CODES = ['shorter_than_target', 'longer_than_target', 'music_short', 'low_beat_confidence', 'not_measured', 'no_capture_time', 'mixed_orientation', 'cuts_merged', 'kept_by_hand', 'cut_off_grid_next_to_kept', 'title_resolved_static', 'kept_music_not_followable', 'lead_music_rises', 'pictures_missing', 'removed_by_hand'] as const;
 export type FilmWarningCode = (typeof FILM_WARNING_CODES)[number];
 export interface FilmWarning { code: FilmWarningCode; message: string; details: Record<string, unknown> }
 export interface FilmPick {
@@ -150,6 +151,12 @@ export interface FilmPlanContext {
   kept?: readonly FilmKeptClip[];
   /** Regeneration: the keys of the slots the kept clips hold (a new pick never takes one). */
   keptKeys?: readonly string[];
+  /**
+   * Regeneration: the keys of the last film's slots whose clip was deleted by hand (the slot record names a clip no longer in the
+   * document; derived, never stored as a flag). Not made again: a pick's file is left out (exclusion removed_by_hand), a title,
+   * closing card or music is not placed; warning removed_by_hand says so and an alternative offers restoreRemoved.
+   */
+  removedKeys?: readonly string[];
   /** Regeneration: tracks the previous run made, by role (the server finds them from the run's slots), used again when unlocked. */
   reuseTracks?: { pictures?: string; ownSound?: string; musicTrack?: string };
   /** Regeneration: the previous run's ownSound; with previousMusic it gives the mix the reused tracks were set to (filmMix). */
@@ -165,7 +172,8 @@ export interface FamilyFilmPlan {
   params: ResolvedFilmParams;
   steps: string[]; basis: string[];                                     // <= FILM.maxSteps entries of <= FILM.maxStepChars characters
   warnings: FilmWarning[]; blocking: FilmWarning[];                     // blocking non-empty = apply refuses (409 film_blocked)
-  alternatives: { label: string; params: Partial<FamilyFilmParams> }[];
+  /** restoreRemoved: the choice to regenerate again with what was deleted by hand made again (warning removed_by_hand). */
+  alternatives: { label: string; params: Partial<FamilyFilmParams>; restoreRemoved?: true }[];
   picks: FilmPick[]; excluded: FilmExclusion[];
   /** Videos among the picks with no moments record of MOMENTS_ALGO: the dialog and agents measure these first. */
   needsMeasurement: string[];
@@ -178,7 +186,11 @@ export type PlanFamilyFilm = (doc: ProjectDocument, params: unknown, ctx: FilmPl
 
 export type FamilyFilmPlanView = Omit<FamilyFilmPlan, 'ops' | 'slots'> & { revision: number; operations: number; label: typeof FAMILY_FILM_DRAFT_LABEL; note: string };
 export interface FamilyFilmApplyResult { revision: number; runId: string; createdIds: string[]; slots: SlotRecord[]; steps: string[]; warnings: FilmWarning[]; picks: FilmPick[]; excluded: FilmExclusion[] }
-export interface FamilyFilmRegenerateResult extends FamilyFilmApplyResult { replaced: number; protected: string[] }
+/**
+ * removed: the keys of the last film's slots deleted by hand that this regeneration left out (empty with restoreRemoved);
+ * alternatives: the plan's, among them the explicit choice to restore them ({restoreRemoved: true}).
+ */
+export interface FamilyFilmRegenerateResult extends FamilyFilmApplyResult { replaced: number; protected: string[]; removed: string[]; alternatives: FamilyFilmPlan['alternatives'] }
 /**
  * The mix a film sounds with: the own-sound track's gain and the music track's ducking (null = none). 'under' lowers the clips
  * only under music; 'lead' ducks only music; 'mute' adds no own sound (gain 1, no ducking). Pure.

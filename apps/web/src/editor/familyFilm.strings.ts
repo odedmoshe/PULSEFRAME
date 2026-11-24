@@ -41,7 +41,7 @@ export interface FamilyFilmStrings {
   /** «28 קליפים · 58.4 שנ׳» */
   footer(clips: number, seconds: number): string;
   // after apply
-  made: string; undo: string; otherMoments: string; otherLength: string; lengthMenu(seconds: number): string; whyClips: string; noOtherMoments: string; working: string; whyList: string; whyListItem(name: string, reasons: string): string; undoFailed: string; notInProject: string;
+  made: string; undo: string; otherMoments: string; otherLength: string; lengthMenu(seconds: number): string; whyClips: string; restoreRemoved: string; noOtherMoments: string; working: string; whyList: string; whyListItem(name: string, reasons: string): string; undoFailed: string; notInProject: string;
   // the inspector section
   whyHeading: string; edited: string; editedShort: string; notMeasured: string; measure: string; measuringOne: string; noReason: string; swapDone: string;
   // the entry
@@ -94,7 +94,7 @@ const he: FamilyFilmStrings = {
   blockedTitle: 'אי אפשר ליצור את הסרט כך', warningsLabel: 'שימו לב',
   facesNote: 'פנים לא נבדקות: אין מודל פנים מאושר', onBeat: 'כל החיתוכים על הפעימה',
   footer: (c, s) => `${c === 1 ? 'קליפ אחד' : `${c} קליפים`} · ${num1(s)} שנ׳`,
-  made: 'הסרט נוצר', undo: 'ביטול', otherMoments: 'רגעים אחרים', otherLength: 'אורך אחר', lengthMenu: (s) => `${s} שניות`, whyClips: 'למה הקליפים האלה?',
+  made: 'הסרט נוצר', undo: 'ביטול', otherMoments: 'רגעים אחרים', otherLength: 'אורך אחר', lengthMenu: (s) => `${s} שניות`, whyClips: 'למה הקליפים האלה?', restoreRemoved: 'החזרת החלקים שנמחקו',
   noOtherMoments: 'אין בקבצים רגעים אחרים שנמדדו', working: 'מעדכן את הסרט…', whyList: 'הקליפים והסיבה לכל אחד', whyListItem: (name, reasons) => `${name}: ${reasons}`,
   undoFailed: 'אי אפשר לבטל את הסרט, כי נערכו בו פריטים מאז שנוצר', notInProject: 'הסרט כבר אינו בציר הזמן',
   whyHeading: 'למה הקליפ הזה', editedShort: 'נערך ידנית', edited: 'נערך ידנית: הקליפ שונה ממה שהתוכנית יצרה, והסיבה נבדקת לפי מה שמנגן בו עכשיו', notMeasured: 'הקובץ עוד לא נמדד', measure: 'מדידת רגעים', measuringOne: 'מודד רגעים…', noReason: 'הקליפ הזה לא מנגן אף רגע שנמדד', swapDone: 'הקליפ הוחלף',
@@ -125,6 +125,7 @@ const he: FamilyFilmStrings = {
       case 'excluded_by_you': return 'הוצא על ידכם';
       case 'no_picture': return 'אין תמונה בקובץ';
       case 'kept_by_hand': return 'נערך ידנית ונשאר במקומו';
+      case 'removed_by_hand': return 'נמחק ידנית ולא נוסף שוב';
     }
   },
   warning(w) {
@@ -143,6 +144,7 @@ const he: FamilyFilmStrings = {
       case 'title_resolved_static': return 'הכותרת קבועה, ולא תתעדכן לפי תאריך הצילום';
       case 'kept_music_not_followable': return 'המוזיקה שכבר בפרויקט נשארה, והחיתוכים אינם עוקבים אחרי הפעימות שלה';
       case 'lead_music_rises': return 'במצב «הקולות מובילים» המוזיקה מורדת ב־9 dB בזמן שיש קול בקליפ, ולכן היא עולה מעל תמונות וקליפים שקטים';
+      case 'removed_by_hand': return 'חלקים שמחקתם ידנית לא נוספו שוב; אפשר להחזיר אותם ב«החזרת החלקים שנמחקו»';
       case 'pictures_missing': return s !== null ? `ב־${num1(s)} שנ׳ של הסרט אין תמונה: הקליפים שנבחרו לא ממלאים את המקום עד הקליפים שנשארו במקומם` : 'בחלק מהסרט אין תמונה: הקליפים שנבחרו לא ממלאים את המקום עד הקליפים שנשארו במקומם';
     }
   },
@@ -182,7 +184,7 @@ const en: FamilyFilmStrings = {
   blockedTitle: 'The film cannot be made like this', warningsLabel: 'Note',
   facesNote: 'Faces are not checked: no face model is approved', onBeat: 'Every cut is on the beat',
   footer: (c, s) => `${c === 1 ? '1 clip' : `${c} clips`} · ${num1(s)} s`,
-  made: 'The film was made', undo: 'Undo', otherMoments: 'Other moments', otherLength: 'Another length', lengthMenu: (s) => `${s} seconds`, whyClips: 'Why these clips?',
+  made: 'The film was made', undo: 'Undo', otherMoments: 'Other moments', otherLength: 'Another length', lengthMenu: (s) => `${s} seconds`, whyClips: 'Why these clips?', restoreRemoved: 'Restore deleted parts',
   noOtherMoments: 'The files have no other measured moments', working: 'Updating the film…', whyList: 'The clips and the reason for each', whyListItem: (name, reasons) => `${name}: ${reasons}`,
   undoFailed: 'The film cannot be undone because items of it were edited since it was made', notInProject: 'The film is no longer on the timeline',
   whyHeading: 'Why this clip', editedShort: 'Edited by hand', edited: 'Edited by hand: the clip differs from what the plan made, and the reason is checked against what it plays now', notMeasured: 'The file is not measured yet', measure: 'Measure moments', measuringOne: 'Measuring moments…', noReason: 'This clip plays none of the measured moments', swapDone: 'The clip was replaced',
@@ -213,6 +215,7 @@ const en: FamilyFilmStrings = {
       case 'excluded_by_you': return 'Taken out by you';
       case 'no_picture': return 'The file has no picture';
       case 'kept_by_hand': return 'Edited by hand and kept where it is';
+      case 'removed_by_hand': return 'Deleted by hand and not added again';
     }
   },
   warning(w) {
@@ -231,6 +234,7 @@ const en: FamilyFilmStrings = {
       case 'title_resolved_static': return 'The title is fixed and will not update from the capture date';
       case 'kept_music_not_followable': return 'The music already in the project was kept, and the cuts do not follow its beats';
       case 'lead_music_rises': return 'In "Voices lead" the music is lowered 9 dB while a clip has sound, so it rises over pictures and silent clips';
+      case 'removed_by_hand': return 'Parts you deleted by hand were not added again; "Restore deleted parts" brings them back';
       case 'pictures_missing': return s !== null ? `${num1(s)} s of the film show no picture: the chosen clips do not fill the room up to the clips kept by hand` : 'Part of the film shows no picture: the chosen clips do not fill the room up to the clips kept by hand';
     }
   },
