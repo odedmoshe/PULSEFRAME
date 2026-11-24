@@ -7,7 +7,7 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { MOMENTS_JOB_TYPE, StartMomentsBodySchema, TRACKING_JOB_TYPE, TrackRunBody, COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, transcriptFor, untimedCopies, untimedCopyRefusal, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeAudioCatalog, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
+import { MOMENTS_JOB_TYPE, StartMomentsBodySchema, TRACKING_JOB_TYPE, TrackRunBody, COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, transcriptFor, skippedClips, timingCoverage, untimedCopyRefusal, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeAudioCatalog, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
@@ -950,10 +950,14 @@ export function exportCaptions(master: ProjectDocument, trackId: string | undefi
   return { format, text, cues: cues.length, trackId: track.id, mime: format === 'vtt' ? 'text/vtt' : format === 'srt' ? 'application/x-subrip' : 'text/x-ssa' };
 }
 
-/** Candidates by a recording's times are refused while a clip shows a copy of it whose timing is unknown (core cleanup.ts untimedCopies). */
-function refuseUntimedCopies(doc: ProjectDocument, assetId: string) {
-  const untimed = untimedCopies(doc, assetId);
-  if (untimed.length) { const r = untimedCopyRefusal(untimed); throw new ApiError(422, r.code, r.message, r.details, r.hint); }
+/**
+ * Candidates by a recording's times skip the clips that show a copy of it whose timing is unknown and name them (skippedClips, the
+ * editor shows a note); refused only when no clip plays the recording on a known clock and such a copy is there (core cleanup.ts timingCoverage).
+ */
+function untimedSkips(doc: ProjectDocument, assetId: string) {
+  const cov = timingCoverage(doc, assetId);
+  if (cov.mapped === 0 && cov.untimed.length) { const r = untimedCopyRefusal(cov.untimed); throw new ApiError(422, r.code, r.message, r.details, r.hint); }
+  return skippedClips(cov.untimed);
 }
 
 export const SilenceBody = z.object({
@@ -970,7 +974,7 @@ export async function findSilences(store: Store, projectId: string, a: z.infer<t
   if (!asset.audio) throw new ApiError(422, 'no_audio', 'this asset has no audio');
   const opts = { thresholdDb: a.thresholdDb ?? -35, minSeconds: a.minSeconds ?? 0.5 };
   const keepSeconds = a.keepSeconds ?? 0.1;
-  refuseUntimedCopies(p.doc, a.assetId);
+  const skipped = untimedSkips(p.doc, a.assetId);
   const source = await heavy(() => detectSilences(store.blobPath(asset.contentHash), opts, timeOriginSeconds(asset)));
   // mapped through every clip that plays this recording: its own and those of copies that keep its timing (core cleanup.ts)
   const candidates = sourceRangesToTimeline(p.doc, a.assetId, source, T.fromSeconds(keepSeconds.toFixed(6)));
@@ -980,8 +984,8 @@ export async function findSilences(store: Store, projectId: string, a: z.infer<t
     sourceSilences: source.map((r) => ({ startSeconds: sec(r.start), endSeconds: sec(r.end) })),
     candidates: candidates.map((r) => ({ start: r.start, end: r.end, startSeconds: sec(r.start), seconds: sec(T.sub(r.end, r.start)) })),
     removableSeconds: sec(candidates.reduce((n, r) => T.add(n, T.sub(r.end, r.start)), T.ZERO)),
-    ops: cutOps(candidates),
-    note: 'Candidates only. To apply, send `ops` as ONE transaction with expectedRevision set to this revision (or propose it). Quiet speech can be mistaken for silence: review before applying.',
+    ops: cutOps(candidates), skippedClips: skipped,
+    note: `Candidates only. To apply, send \`ops\` as ONE transaction with expectedRevision set to this revision (or propose it). Quiet speech can be mistaken for silence: review before applying.${skipped.length ? ' skippedClips show a copy that does not keep the recording\'s timing and were not searched.' : ''}`,
   };
 }
 
@@ -998,7 +1002,7 @@ export function findFillerWords(store: Store, projectId: string, a: z.infer<type
   const tr = transcriptFor(p.doc, a.assetId)?.transcript;
   if (!tr) throw new ApiError(404, 'no_transcript', 'this asset has no transcript to search', { assetId: a.assetId }, 'Recognise or import a transcript first.');
   const anchor = tr.assetId;
-  refuseUntimedCopies(p.doc, anchor);
+  const skipped = untimedSkips(p.doc, anchor);
   const { candidates: found, skippedPhrases } = findFillers(tr, { repeats: a.repeats, words: a.words });
   const sec = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));
   // Each word is mapped on its own, so a word that is no longer on the timeline simply yields no cut. Source times are the transcribed recording's.
@@ -1010,7 +1014,7 @@ export function findFillerWords(store: Store, projectId: string, a: z.infer<type
     words: rows.map((r) => ({ kind: r.kind, text: r.text, segmentId: r.segmentId, wordIds: r.wordIds, sourceStartSeconds: sec(r.start), sourceEndSeconds: sec(r.end), onTimeline: r.timeline.map((x) => ({ startSeconds: sec(x.start), seconds: sec(T.sub(x.end, x.start)) })) })),
     candidates: cuts.map((r) => ({ start: r.start, end: r.end, startSeconds: sec(r.start), seconds: sec(T.sub(r.end, r.start)) })),
     removableSeconds: sec(cuts.reduce((n, r) => T.add(n, T.sub(r.end, r.start)), T.ZERO)),
-    ops: cutOps(cuts),
+    ops: cutOps(cuts), skippedClips: skipped,
     note: 'Candidates only. Recognisers often leave hesitation sounds out of their text, so an empty list does not mean there are none. Cuts are snapped inward to whole frames; a word shorter than a frame yields no cut. To apply, send `ops` as ONE transaction with expectedRevision set to this revision (or propose it).',
   };
 }

@@ -1,7 +1,7 @@
 /**
  * The filler candidates route (POST /analysis/fillers, find_filler_words) follows a clip that shows a derived copy back to the
- * transcribed recording (core lineage.ts timingRelations), and refuses with 422 untimed_copy while a clip shows a copy made
- * without a recorded time mapping. The derived assets are hand-built fixtures standing in for provider results (no provider ran).
+ * transcribed recording (core lineage.ts timingRelations), skips and names (skippedClips) a clip that shows a copy made without a
+ * recorded time mapping, refusing with 422 untimed_copy only when nothing else plays the recording. The derived assets are hand-built fixtures standing in for provider results (no provider ran).
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -24,7 +24,7 @@ beforeAll(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-tlineage-')); 
 afterAll(() => { store.close(); fs.rmSync(dir, { recursive: true, force: true }); });
 
 describe('filler candidates follow a derived copy', () => {
-  it('a clip of the cleaned voice gets the cuts of the recording\'s filler words; asked by the copy\'s id the recording\'s transcript is used; an untimed copy refuses', () => {
+  it('a clip of the cleaned voice gets the cuts of the recording\'s filler words; asked by the copy\'s id the recording\'s transcript is used; an untimed copy is named, alone it refuses', () => {
     const pid = store.createProject({ name: 'fl', width: 640, height: 360, frameRate: R }).doc.id;
     const vid = store.commit({ projectId: pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'import_asset', args: { asset: talk } }] }).results[0]!.output!.assetId as string;
     const voice = { kind: 'audio', name: 'clean.wav', contentHash: hash('2'), byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(7, 1), audio: { sampleRate: 48000, channels: 1, codec: 'pcm_s16le' }, provenance: derived(vid, { sourceRangeStart: T.rt(1, 2), audio: 'processed' }, 'local.audio.voice-clean') };
@@ -43,7 +43,16 @@ describe('filler candidates follow a derived copy', () => {
     const byCopy = findFillerWords(store, pid, { assetId: clean });
     expect(byCopy.candidates).toEqual(byRecording.candidates);
     expect(byCopy).toMatchObject({ assetId: clean, transcriptAssetId: vid });
-    store.commit({ projectId: pid, actor: 'user:owner', ops: [{ op: 'add_clip', args: { assetId: rev, start: f(150), duration: f(30), withLinkedAudio: false } }] });
+    expect(byRecording.skippedClips).toEqual([]);
+    // a reversed rendition beside it: the same cuts, and that clip is named as not searched
+    const revClip = store.commit({ projectId: pid, actor: 'user:owner', ops: [{ op: 'add_clip', args: { assetId: rev, start: f(150), duration: f(30), withLinkedAudio: false } }] }).results[0]!.output!.clipId as string;
+    const beside = findFillerWords(store, pid, { assetId: vid });
+    expect(beside.candidates).toEqual(byRecording.candidates);
+    expect(beside.skippedClips).toEqual([{ clipId: revClip, assetId: rev, reason: 'untimed_copy' }]);
+    // with only the reversed rendition left on the timeline there is nothing to map: refused with the way forward
+    const doc = store.getProject(pid).doc;
+    const voiceClip = doc.sequences[doc.mainSequenceId]!.tracks.flatMap((t) => t.clips).find((c) => c.type === 'media' && c.assetId === clean)!.id;
+    store.commit({ projectId: pid, actor: 'user:owner', ops: [{ op: 'delete_clip', args: { clipId: voiceClip } }] });
     let err: unknown;
     try { findFillerWords(store, pid, { assetId: vid }); } catch (e) { err = e; }
     expect(err).toBeInstanceOf(ApiError);

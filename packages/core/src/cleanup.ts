@@ -17,25 +17,32 @@ const ceilFrame = (t: T.RationalTime, rate: { num: number; den: number }) => {
 
 /** A clip that shows a copy of a recording made by a derivation that records no time mapping (lineage.ts timingRelations 'untimed'). */
 export interface UntimedCopy { clipId: string; assetId: string; madeFromAssetId: string }
+/** A clip an edit by a recording's times left alone, named in the edit's answer (the editor shows it as a note). */
+export interface SkippedClip { clipId: string; assetId: string; reason: 'untimed_copy' }
 /**
- * Clips of the sequence that play a moving picture or sound made from `assetId`'s recording without a recorded time mapping (a
- * reversed, stretched or generated rendition). Freeze frames play no time and are left out. An edit by `assetId`'s times refuses
- * while there is one (untimedCopyRefusal): where those moments are in such a clip is unknown, and a guess could cut the wrong frames.
+ * How the clips of the sequence relate to `assetId`'s recording: `mapped` counts the clips that play it on a known clock (its own
+ * and those of time-preserving copies); `untimed` lists the clips of moving pictures or sounds made from it without a recorded time
+ * mapping (a reversed, stretched or generated rendition). Freeze frames play no time and are left out of both.
+ * Edits by the recording's times skip the untimed ones, as they skip clips that play backwards, and name them (skippedClips); they
+ * refuse (untimedCopyRefusal) only when nothing maps at all.
  */
-export function untimedCopies(doc: ProjectDocument, assetId: string, sequenceId = doc.mainSequenceId): UntimedCopy[] {
+export function timingCoverage(doc: ProjectDocument, assetId: string, sequenceId = doc.mainSequenceId): { mapped: number; untimed: UntimedCopy[] } {
   const seq = Object.hasOwn(doc.sequences, sequenceId) ? doc.sequences[sequenceId] : undefined;
-  if (!seq) return [];
+  const out = { mapped: 0, untimed: [] as UntimedCopy[] };
+  if (!seq) return out;
   const rel = timingRelations(doc, assetId);
-  const out: UntimedCopy[] = [];
   for (const track of seq.tracks)
     for (const c of track.clips) {
       if (c.type !== 'media' || c.freeze) continue;
       const r = rel(c.assetId);
-      if (r?.kind === 'untimed') out.push({ clipId: c.id, assetId: c.assetId, madeFromAssetId: r.viaAssetId });
+      if (r?.kind === 'same') out.mapped++;
+      else if (r?.kind === 'untimed') out.untimed.push({ clipId: c.id, assetId: c.assetId, madeFromAssetId: r.viaAssetId });
     }
   return out;
 }
-/** The refusal for untimedCopies (the caller raises it as its own error type, code 'untimed_copy'). */
+/** The clips of `untimedCopies` as an edit's answer names them. */
+export const skippedClips = (copies: UntimedCopy[]): SkippedClip[] => copies.map((c) => ({ clipId: c.clipId, assetId: c.assetId, reason: 'untimed_copy' as const }));
+/** The refusal when no clip maps and an untimed copy is the only place the moments could be (the caller raises it as its own error type, code 'untimed_copy'). */
 export const untimedCopyRefusal = (copies: UntimedCopy[]) => ({
   code: 'untimed_copy' as const,
   message: `clip ${copies[0]!.clipId} shows a copy of this recording that does not keep its timing, so where these moments are in it is unknown`,
@@ -48,7 +55,7 @@ export const untimedCopyRefusal = (copies: UntimedCopy[]) => ({
  * Each source range is first shrunk by `keep` on both sides (breathing room), then mapped through every clip that plays that
  * recording: clips of the asset itself and of time-preserving copies of it or of its source (lineage.ts timingRelations: an
  * enhanced picture, a cleaned-up voice, a smoother slow motion, through replace_clip_asset or replace_clip_media), each on its own
- * clock. Clips of untimed copies are not mapped (see untimedCopies). Snapped INWARD to whole frames, so a cut never removes
+ * clock. Clips of untimed copies are not mapped (see timingCoverage). Snapped INWARD to whole frames, so a cut never removes
  * material outside the source range. Result: merged, ascending.
  */
 export function sourceRangesToTimeline(doc: ProjectDocument, assetId: string, ranges: TimeRange[], keep: T.RationalTime = T.ZERO, sequenceId = doc.mainSequenceId): TimeRange[] {

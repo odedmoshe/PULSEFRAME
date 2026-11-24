@@ -36,7 +36,7 @@ import { isLightChannel } from './keyframeChannels.ts';
 import { detachAssetFromEvents } from './events.ts';
 import { handDownCapture } from './capture.ts';
 import { sceneCutsFor, timingRelations, transcriptFor } from './lineage.ts';
-import { untimedCopies, untimedCopyRefusal } from './cleanup.ts';
+import { skippedClips, timingCoverage, untimedCopyRefusal } from './cleanup.ts';
 import { MULTICAM_REFUSALS, type MulticamRefusalKey, type MulticamRefusalRow } from './multicamRefusals.ts';
 import { DEFAULT_REDACT_REGION, isUsable, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, roundHalfUp, SIZE_UNIT, ST, TrackOpArgs, trackSampleAt, type MotionTrack, type RedactRegion } from './tracking.ts';
 
@@ -45,7 +45,8 @@ export type OpErrorCode =
   | 'incompatible' | 'forbidden_op' | 'invalid_result'
   // replace_clip_asset (ADR-0017): the new file does not keep the original's timing / does not cover what the clip shows
   | 'not_time_preserving' | 'range_not_covered'
-  // edits by a recording's times (delete_transcript_range; tidy-speech and the filler/silence routes use the same code): a clip shows a copy of it that records no time mapping
+  // edits by a recording's times (delete_transcript_range; tidy-speech and the filler/silence routes use the same code): nothing on the
+  // timeline plays the recording on a known clock, and a clip shows a copy of it that records no time mapping
   | 'untimed_copy';
 export class OpError extends Error {
   constructor(public code: OpErrorCode, message: string, public details: Record<string, unknown> = {}, public hint?: string) {
@@ -3837,7 +3838,7 @@ defineOp({
 defineOp({
   name: 'delete_transcript_range',
   version: 1,
-  description: 'Text-based editing: remove the given spoken words (first to last, inclusive) from the timeline wherever that media is used, also where a clip shows a copy that keeps its timing (an enhanced picture, a cleaned-up voice, a smoother slow motion; mapped exactly onto the copy\'s own clock). Picture, sound and captions are cut together and later material closes the gap. Needs word-level timing; cut points snap to the nearest frame. assetId may also be such a copy: the transcript of the recording it was made from is used. Refused while a clip shows a copy made without a recorded time mapping (reversed, stretched or generated), as where the words are in it is unknown.',
+  description: 'Text-based editing: remove the given spoken words (first to last, inclusive) from the timeline wherever that media is used, also where a clip shows a copy that keeps its timing (an enhanced picture, a cleaned-up voice, a smoother slow motion; mapped exactly onto the copy\'s own clock). Picture, sound and captions are cut together and later material closes the gap. Needs word-level timing; cut points snap to the nearest frame. assetId may also be such a copy: the transcript of the recording it was made from is used. A clip that shows a copy made without a recorded time mapping (reversed, stretched or generated) is skipped, as a clip that plays backwards is, and named in the output (skippedClips), since where the words are in it is unknown; refused when the words are on no other clip.',
   args: z.object({ sequenceId: z.string().optional(), assetId: z.string(), fromWordId: z.string(), toWordId: z.string(), allowApproximate: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const seq = seqOf(d, a.sequenceId);
@@ -3852,8 +3853,9 @@ defineOp({
     if (!a.allowApproximate && picked.some((x) => x.s.timing !== 'word'))
       throw new OpError('incompatible', 'these words only have estimated times, so a word-precise cut would be a guess', { timing: 'approximate' }, 'Use cut_range with explicit times, or pass allowApproximate=true to accept an estimated cut.');
     const srcStart = picked[0]!.w.start, last = picked.at(-1)!.w, srcEnd = T.add(last.start, last.duration);
-    const untimed = untimedCopies(d, anchor, seq.id);
-    if (untimed.length) { const r = untimedCopyRefusal(untimed); throw new OpError(r.code, r.message, r.details, r.hint); }
+    // clips of copies without a recorded time mapping are skipped and named; an edit that finds the words nowhere else is refused
+    const untimed = timingCoverage(d, anchor, seq.id).untimed;
+    const refuseUntimed = () => { const r = untimedCopyRefusal(untimed); return new OpError(r.code, r.message, r.details, r.hint); };
     const rate = d.settings.frameRate;
     const rel = timingRelations(d, anchor);
     const ranges: { start: T.RationalTime; end: T.RationalTime }[] = [];
@@ -3867,12 +3869,13 @@ defineOp({
         const start = T.snapToFrame(timelineAt(c, from), rate), end = T.snapToFrame(timelineAt(c, to), rate);
         if (T.lt(start, end) && !ranges.some((r) => T.eq(r.start, start) && T.eq(r.end, end))) ranges.push({ start, end });
       }
-    if (ranges.length === 0) throw new OpError('not_found', 'those words are not on the timeline (already cut, or shorter than one frame)', { assetId: a.assetId });
+    if (ranges.length === 0) { if (untimed.length) throw refuseUntimed(); throw new OpError('not_found', 'those words are not on the timeline (already cut, or shorter than one frame)', { assetId: a.assetId }); }
     ranges.sort((x, y) => T.cmp(y.start, x.start)); // latest first, so earlier ranges keep their times
     const affected = new Set<string>();
     for (const r of ranges) { const c = cutRange(d, seq, r.start, r.end, seq.tracks, true, ctx); for (const id of [...c.removed, ...c.changed, ...c.created, ...c.markersMoved, ...c.markersRemoved, ...c.unlinked]) affected.add(id); }
     const text = picked.map((x) => x.w.text).join(' ');
-    return { affectedIds: [...affected], summary: `Removed "${text.slice(0, 40)}" from the timeline`, output: { ranges: ranges.reverse(), words: picked.length } };
+    const skipped = skippedClips(untimed);
+    return { affectedIds: [...affected], summary: `Removed "${text.slice(0, 40)}" from the timeline${skipped.length ? `; ${skipped.length} clip(s) showing a copy that does not keep the recording's timing not searched` : ''}`, output: { ranges: ranges.reverse(), words: picked.length, ...(skipped.length ? { skippedClips: skipped } : {}) } };
   },
 });
 

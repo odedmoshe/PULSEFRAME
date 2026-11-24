@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
   applyTransaction, createProject, creativeProjection, diffEntities, findClip, OpError, pacingReport, planRecipe, RecipeError, restoreEntities, sourceRangesToTimeline,
-  untimedCopies, validateProject, type MediaClip, type OpCall, type ProjectDocument,
+  timingCoverage, validateProject, type MediaClip, type OpCall, type ProjectDocument,
 } from './index.ts';
 
 const R = { num: 30, den: 1 };
@@ -153,27 +153,39 @@ describe('delete_transcript_range follows a derived copy back to the transcribed
     expect(ranges(del(r.doc, vid, r.doc.transcripts[vid]!.segments[0]!.words[1]!.id))).toEqual([[60, 75]]);
   });
 
-  it('DECISION: a clip that shows a copy without a recorded time mapping (reversed or stretched rendition) is refused, with nothing changed; stills and freeze frames are not in the way', () => {
+  it('DECISION: a clip that shows a copy without a recorded time mapping (reversed or stretched rendition) is skipped and named, like a reversed clip; refused only when the words are on no other clip; stills and freeze frames are not in the way', () => {
     const s = setup();
     const base = tx(s.doc, [{ op: 'add_clip', args: { assetId: s.vid, start: f(0), duration: f(240) } }]);
     for (const kind of ['reversed', 'stretched'] as const) {
       const r = tx(base.doc, [{ op: 'add_clip', args: { assetId: s.ids[kind], start: f(240), duration: f(60) } }]);
       const clip = r.results[0]!.output!.clipId as string, sound = r.results[0]!.output!.audioClipId as string;
-      const got = refusal(() => del(r.doc, s.vid, s.words[1]!));
-      expect(got).toMatchObject({ code: 'untimed_copy', message: `clip ${clip} shows a copy of this recording that does not keep its timing, so where these moments are in it is unknown`, details: { clipIds: [clip, sound], assetIds: [s.ids[kind]] } });
+      // the recording's clip is cut exactly as without the copy; the copy's clips are named, not guessed at
+      const cut = del(r.doc, s.vid, s.words[1]!);
+      expect(cut.results).toHaveLength(1);
+      expect(ranges(cut)).toEqual([[60, 75]]);
+      expect(cut.results[0]!.output!.skippedClips).toEqual([{ clipId: clip, assetId: s.ids[kind], reason: 'untimed_copy' }, { clipId: sound, assetId: s.ids[kind], reason: 'untimed_copy' }]);
+      expect(cut.results[0]!.summary).toMatch(/2 clip\(s\) showing a copy that does not keep the recording's timing not searched/);
+      expect(layout(cut.doc).filter((x) => x[3] === s.ids[kind])).toEqual([['video', 225, 60, s.ids[kind], 0], ['audio', 225, 60, s.ids[kind], 0]]); // moved up by the cut, not cut itself
+      expect(undoes(r.doc, cut.doc)).toBe(true);
+      // without a clip of the recording, the words could only be in the copy: refused, nothing changed, with the way forward
+      const only = tx(s.doc, [{ op: 'add_clip', args: { assetId: s.ids[kind], start: f(0), duration: f(60) } }]);
+      const got = refusal(() => del(only.doc, s.vid, s.words[1]!));
+      expect(got).toMatchObject({ code: 'untimed_copy', message: `clip ${only.results[0]!.output!.clipId} shows a copy of this recording that does not keep its timing, so where these moments are in it is unknown` });
       expect((got as { hint: string }).hint).toMatch(/replace_clip_media.*cut_range/);
       // a copy of the untimed copy that keeps ITS timing is still untimed against the recording
-      const chained = tx(r.doc, [{ op: 'import_asset', args: { asset: { ...copies(s.ids[kind]).enhanced, contentHash: hash(kind === 'reversed' ? 'b' : 'c') } } }], true);
-      const swapped = tx(chained.doc, [{ op: 'delete_clip', args: { clipId: clip } }, { op: 'add_clip', args: { assetId: chained.results[0]!.output!.assetId as string, start: f(240), duration: f(30) } }]);
+      const chained = tx(only.doc, [{ op: 'import_asset', args: { asset: { ...copies(s.ids[kind]).enhanced, contentHash: hash(kind === 'reversed' ? 'b' : 'c') } } }], true);
+      const swapped = tx(chained.doc, [{ op: 'delete_clip', args: { clipId: only.results[0]!.output!.clipId as string } }, { op: 'add_clip', args: { assetId: chained.results[0]!.output!.assetId as string, start: f(0), duration: f(30) } }]);
       expect(refusal(() => del(swapped.doc, s.vid, s.words[1]!)).code).toBe('untimed_copy');
     }
-    // a still made from the recording, and a freeze frame of the reversed rendition, play no time: the cut goes ahead
+    // a still made from the recording, and a freeze frame of the reversed rendition, play no time: nothing skipped
     const stills = tx(base.doc, [{ op: 'add_clip', args: { assetId: s.ids.still, start: f(240), duration: f(30) } }, { op: 'add_clip', args: { assetId: s.ids.reversed, start: f(270), duration: f(60), withLinkedAudio: false } }]);
     const frozen = tx(stills.doc, [{ op: 'freeze_frame', args: { clipId: stills.results[1]!.output!.clipId as string, at: f(270), duration: f(30) } }]).doc;
     const frozenOnly = structuredClone(frozen);
     for (const t of frozenOnly.sequences[frozenOnly.mainSequenceId]!.tracks) t.clips = t.clips.filter((c) => c.type !== 'media' || c.assetId !== s.ids.reversed || c.freeze);
-    expect(untimedCopies(frozenOnly, s.vid)).toEqual([]);
-    expect(ranges(del(frozenOnly, s.vid, s.words[1]!))).toEqual([[60, 75]]);
+    expect(timingCoverage(frozenOnly, s.vid)).toEqual({ mapped: 2, untimed: [] });
+    const cut = del(frozenOnly, s.vid, s.words[1]!);
+    expect(ranges(cut)).toEqual([[60, 75]]);
+    expect(cut.results[0]!.output!.skippedClips).toBeUndefined();
   });
 });
 
@@ -183,19 +195,24 @@ describe('filler and silence cuts, tidy-speech, scene splits and pacing follow t
     const r = tx(s.doc, [{ op: 'add_clip', args: { assetId: s.ids.voice, start: f(0), duration: f(150) } }]); // 0.5..5.5 s of the recording
     // a silence 2.6–3.0 s of the recording with 0.1 s kept each side: 2.7–2.9 s → the copy's 2.2–2.4 s → frames 66–72
     expect(sourceRangesToTimeline(r.doc, s.vid, [{ start: T.rt(13, 5), end: T.rt(3, 1) }], T.rt(1, 10)).map((x) => [T.frameIndexAt(x.start, R), T.frameIndexAt(x.end, R)])).toEqual([[66, 72]]);
-    expect(untimedCopies(r.doc, s.vid)).toEqual([]);
+    expect(timingCoverage(r.doc, s.vid)).toEqual({ mapped: 1, untimed: [] });
   });
 
-  it('tidy-speech cuts the measured pauses out of a clip of the cleaned voice; refused while an untimed copy is on the timeline', () => {
+  it('tidy-speech cuts the measured pauses out of a clip of the cleaned voice; an untimed copy beside it is named, alone it is refused', () => {
     const s = setup();
     const r = tx(s.doc, [{ op: 'add_clip', args: { assetId: s.ids.voice, start: f(0), duration: f(150) } }]);
     const plan = planRecipe(r.doc, 'tidy-speech', { assetId: s.vid, keepSeconds: 0, loudness: null, captions: false }, { silences: { [s.vid]: [{ start: T.rt(13, 5), end: T.rt(3, 1) }] } });
     expect(plan.ops).toEqual([{ op: 'cut_range', args: { start: f(63), end: f(75) } }]);
     const applied = tx(r.doc, plan.ops);
     expect(applied.results).toHaveLength(1);
-    const withUntimed = tx(r.doc, [{ op: 'add_clip', args: { assetId: s.ids.stretched, start: f(150), duration: f(30) } }]).doc;
+    const withUntimed = tx(r.doc, [{ op: 'add_clip', args: { assetId: s.ids.stretched, start: f(150), duration: f(30) } }]);
+    const named = planRecipe(withUntimed.doc, 'tidy-speech', { assetId: s.vid, keepSeconds: 0, loudness: null, captions: false }, { silences: { [s.vid]: [{ start: T.rt(13, 5), end: T.rt(3, 1) }] } });
+    expect(named.ops).toEqual(plan.ops);
+    expect(named.skippedClips).toEqual([withUntimed.results[0]!.output!.clipId, withUntimed.results[0]!.output!.audioClipId].map((clipId) => ({ clipId, assetId: s.ids.stretched, reason: 'untimed_copy' })));
+    expect(named.basis.some((b) => b.includes('does not keep the recording\'s timing'))).toBe(true);
+    const onlyUntimed = tx(s.doc, [{ op: 'add_clip', args: { assetId: s.ids.stretched, start: f(0), duration: f(30) } }]).doc;
     let err: unknown;
-    try { planRecipe(withUntimed, 'tidy-speech', { assetId: s.vid, loudness: null, captions: false }, { silences: { [s.vid]: [{ start: T.rt(13, 5), end: T.rt(3, 1) }] } }); } catch (e) { err = e; }
+    try { planRecipe(onlyUntimed, 'tidy-speech', { assetId: s.vid, loudness: null, captions: false }, { silences: { [s.vid]: [{ start: T.rt(13, 5), end: T.rt(3, 1) }] } }); } catch (e) { err = e; }
     expect(err).toBeInstanceOf(RecipeError);
     expect((err as RecipeError).code).toBe('untimed_copy');
     expect((err as RecipeError).hint).toBeTruthy();

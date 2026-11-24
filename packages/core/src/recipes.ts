@@ -7,7 +7,7 @@
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { CAPTION_PRESETS, type Asset, type MediaClip, type ProjectDocument, type Track } from './schema.ts';
-import { cutOps, sourceTimesToTimeline, sourceRangesToTimeline, untimedCopies, untimedCopyRefusal, type TimeRange } from './cleanup.ts';
+import { cutOps, skippedClips, sourceTimesToTimeline, sourceRangesToTimeline, timingCoverage, untimedCopyRefusal, type SkippedClip, type TimeRange } from './cleanup.ts';
 import { FORMAT_PROFILES } from './variants.ts';
 import { defineOp, findClip, getOp, OpError, type OpCall } from './ops.ts';
 import { flashGapFrames } from './flashSafety.ts';
@@ -19,7 +19,7 @@ import { planMulticamAuto } from './multicamAuto.ts';
 
 export class RecipeError extends Error {
   /** not_built: a recipe whose planner is only a contract in this build (none at present; multicam-auto was until ADR-0020 W2); the server answers 501. */
-  /** untimed_copy: a clip shows a copy of the recording made without a recorded time mapping (cleanup.ts untimedCopies); the server answers 422. */
+  /** untimed_copy: a clip shows a copy of the recording made without a recorded time mapping and nothing else plays it on a known clock (cleanup.ts timingCoverage); the server answers 422. */
   constructor(public code: 'not_found' | 'needs_analysis' | 'invalid_args' | 'nothing_to_do' | 'not_built' | 'untimed_copy', message: string, public hint?: string) { super(message); }
 }
 export interface RecipePlan {
@@ -32,6 +32,8 @@ export interface RecipePlan {
   ops: OpCall[];
   /** Other reasonable parameter choices for the same recipe. */
   alternatives: { label: string; params: Record<string, unknown> }[];
+  /** Clips the plan left alone because they show a copy that does not keep the recording's timing (tidy-speech; cleanup.ts timingCoverage). */
+  skippedClips?: SkippedClip[];
 }
 export interface PlanContext {
   /** Timeline ranges that must be left alone (clips of a previous run that were edited by hand). */
@@ -195,17 +197,20 @@ function planTidySpeech(doc: ProjectDocument, raw: unknown, ctx: PlanContext): R
   if (!doc.assets[p.assetId]?.audio) throw new RecipeError('not_found', `asset ${p.assetId} is missing or has no sound`);
   const silences = ctx.silences?.[p.assetId];
   if (!silences) throw new RecipeError('needs_analysis', 'silence measurement for this asset was not supplied');
-  const untimed = untimedCopies(doc, p.assetId);
-  if (untimed.length) { const r = untimedCopyRefusal(untimed); throw new RecipeError(r.code, r.message, r.hint); }
+  // clips of copies without a recorded time mapping are skipped and named; with nothing else playing the recording, refused
+  const cov = timingCoverage(doc, p.assetId);
+  if (cov.mapped === 0 && cov.untimed.length) { const r = untimedCopyRefusal(cov.untimed); throw new RecipeError(r.code, r.message, r.hint); }
+  const skipped = skippedClips(cov.untimed);
   const ranges = sourceRangesToTimeline(doc, p.assetId, silences, T.fromSeconds(p.keepSeconds.toFixed(6)));
   const ops: OpCall[] = cutOps(ranges), steps: string[] = [], basis: string[] = [`${silences.length} silent stretch(es) measured in the recording`];
+  for (const c of skipped) basis.push(`clip ${c.clipId} was not searched for pauses: it shows a copy that does not keep the recording's timing`);
   const removed = ranges.reduce((n, r) => n + T.toSeconds(T.sub(r.end, r.start)), 0);
   if (ranges.length) steps.push(`Remove ${ranges.length} pause(s), ${removed.toFixed(1)} s in total, from every track (keeping ${p.keepSeconds} s around speech)`);
   const seq = doc.sequences[doc.mainSequenceId]!;
   if (p.captions && doc.transcripts?.[p.assetId] && !seq.tracks.some((t) => t.kind === 'caption')) { ops.push({ op: 'add_caption_track', args: { mode: 'transcript' } }); steps.push('Show the transcript as captions'); }
   if (p.loudness !== null && doc.settings.loudness?.target !== p.loudness) { ops.push({ op: 'set_loudness_target', args: { target: p.loudness } }); steps.push(`Set the loudness target to ${p.loudness} LUFS`); }
   if (ops.length === 0) throw new RecipeError('nothing_to_do', 'no pauses long enough to remove, and captions and loudness are already set');
-  return { recipeId: 'tidy-speech', params: p, steps, basis, ops, alternatives: [{ label: 'Tighter (keep 0.05 s)', params: { ...p, keepSeconds: 0.05 } }, { label: 'Looser (keep 0.25 s)', params: { ...p, keepSeconds: 0.25 } }] };
+  return { recipeId: 'tidy-speech', params: p, steps, basis, ops, alternatives: [{ label: 'Tighter (keep 0.05 s)', params: { ...p, keepSeconds: 0.05 } }, { label: 'Looser (keep 0.25 s)', params: { ...p, keepSeconds: 0.25 } }], ...(skipped.length ? { skippedClips: skipped } : {}) };
 }
 
 // ---------- portrait blur (ADR-0017): one public op, because a recipe plan cannot name the clips it creates ----------

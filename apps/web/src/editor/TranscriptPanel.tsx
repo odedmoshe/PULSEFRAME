@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { decodeTextFile, type DecodedText } from '../textDecode.ts';
 import * as T from '@pulseframe/time';
 import type { Clip, ProjectDocument } from '@pulseframe/core';
-import { sourceAt, sourceEnd, timelineAt, CAPTION_LOOKS, CAPTION_PRESETS, FONT_CATALOG } from '@pulseframe/core';
+import { CAPTION_LOOKS, CAPTION_PRESETS, FONT_CATALOG } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { api, type SilenceResult, type SpeechStatus } from '../api.ts';
 import { CaptionLooks } from './CaptionLooks.tsx';
@@ -10,20 +10,14 @@ import { CAP_STRINGS } from './captions.strings.ts';
 import './captionsPanel.css';
 import { useEditorState, type Editor } from './store.ts';
 import { openItems, readingLimitFor, readReadingLimits, reviewRows, writeReadingLimit, type ReviewRow } from './aiTools.recheck.ts';
+import { recordingAt, recordingToTimeline, skippedNotes, speechClipsOf, transcriptOfSelection } from './transcriptLineage.logic.ts';
 
 type MediaClip = Extract<Clip, { type: 'media' }>;
 type Transcript = ProjectDocument['transcripts'][string];
 type Segment = Transcript['segments'][number];
 
 const mainTracks = (doc: ProjectDocument) => doc.sequences[doc.mainSequenceId]?.tracks ?? [];
-const mediaClipsOf = (doc: ProjectDocument, assetId: string): MediaClip[] =>
-  mainTracks(doc).flatMap((tr) => (tr.kind === 'video' || tr.kind === 'audio' ? tr.clips : [])).filter((c): c is MediaClip => c.type === 'media' && c.assetId === assetId && !c.reverse);
 const half = (d: T.RationalTime) => T.rt(BigInt(d.value), d.timescale * 2);
-/** Timeline time of a source time, or null when no clip of the asset shows it. */
-function sourceToTimeline(clips: MediaClip[], s: T.RationalTime): T.RationalTime | null {
-  for (const c of clips) if (T.lte(c.sourceIn, s) && T.lt(s, sourceEnd(c))) return timelineAt(c, s);
-  return null;
-}
 /** Subtitle and transcript files do not declare their encoding; older Hebrew files are often Windows-1255 or UTF-16. */
 const readText = async (file: File) => decodeTextFile(new Uint8Array(await file.arrayBuffer()));
 /** Says so when the encoding of an imported text file had to be guessed, so a wrong guess is not silent. */
@@ -116,17 +110,20 @@ export function TranscriptPanel() {
   const { doc } = state;
   const sel = editor.selected;
   const selAsset = sel?.clip.type === 'media' ? sel.clip.assetId : null;
-  const assetId = selAsset ?? (doc ? Object.keys(doc.transcripts)[0] ?? null : null);
-  const transcript = doc && assetId ? doc.transcripts[assetId] : undefined;
+  // the selected clip's file's transcript, or that of the recording a time-preserving copy was made from (core transcriptFor)
+  const owner = doc ? transcriptOfSelection(doc, selAsset) : null;
+  const assetId = owner?.assetId ?? null;
+  const transcript = owner?.transcript;
+  const [notes, setNotes] = useState<string[]>([]);
   const [lang, setLang] = useState<'he' | 'en'>('he');
   const [decoded, setDecoded] = useState<DecodedText | null>(null);
   const [anchor, setAnchor] = useState<string | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ message: string; approx: boolean } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
-  useEffect(() => { setAnchor(null); setFocus(null); setFailure(null); setEditing(null); }, [assetId]);
+  useEffect(() => { setAnchor(null); setFocus(null); setFailure(null); setEditing(null); setNotes([]); }, [assetId]);
 
-  const clips = useMemo(() => (doc && assetId ? mediaClipsOf(doc, assetId) : []), [doc, assetId]);
+  const clips = useMemo(() => (doc && assetId ? speechClipsOf(doc, assetId) : []), [doc, assetId]);
   const flat = useMemo(() => (transcript ? transcript.segments.flatMap((s) => s.words.map((w) => ({ w, s }))) : []), [transcript]);
   const rate = editor.rate;
 
@@ -156,10 +153,8 @@ export function TranscriptPanel() {
     );
   }
 
-  // Playhead → source time of this asset.
-  const ph = editor.playhead;
-  const playing = clips.find((c) => T.lte(c.start, ph) && T.lt(ph, T.add(c.start, c.duration)));
-  const srcNow = playing ? sourceAt(playing, ph) : null;
+  // Playhead → time of the transcribed recording.
+  const srcNow = recordingAt(clips, editor.playhead);
   const idx = (id: string | null) => (id ? flat.findIndex((x) => x.w.id === id) : -1);
   const a = idx(anchor), f = idx(focus);
   const lo = a < 0 || f < 0 ? -1 : Math.min(a, f), hi = a < 0 || f < 0 ? -1 : Math.max(a, f);
@@ -167,9 +162,10 @@ export function TranscriptPanel() {
 
   const cut = async (allowApproximate: boolean) => {
     if (lo < 0 || !assetId) return;
-    setFailure(null);
+    setFailure(null); setNotes([]);
     const r = await editor.commit([{ op: 'delete_transcript_range', args: { assetId, fromWordId: flat[lo]!.w.id, toWordId: flat[hi]!.w.id, ...(allowApproximate ? { allowApproximate: true } : {}) } }], 'Delete words');
-    if (r) { setAnchor(null); setFocus(null); return; }
+    // clips of a copy that does not keep the recording's timing were left alone: say which
+    if (r) { setAnchor(null); setFocus(null); setNotes(skippedNotes(doc, r.results[0]?.output?.skippedClips, t('transcript.untimedSkipped'))); return; }
     // Editor.commit reports failures as text only; the server refuses estimated timing exactly when a picked word's phrase is not word-timed.
     setFailure({ message: editor.getState().error ?? t('transcript.cutFailed'), approx: pickedApprox && !allowApproximate });
   };
@@ -177,7 +173,7 @@ export function TranscriptPanel() {
   const clickWord = (id: string, start: T.RationalTime, shift: boolean) => {
     if (shift && anchor) setFocus(id);
     else { setAnchor(id); setFocus(id); }
-    const at = sourceToTimeline(clips, start);
+    const at = recordingToTimeline(clips, start);
     if (at) editor.seek(T.nearestFrameIndex(at, rate));
   };
 
@@ -190,6 +186,7 @@ export function TranscriptPanel() {
         {failure?.approx && <button className="ghost" onClick={() => void cut(true)} data-testid="transcript-cut-anyway">{t('transcript.cutAnyway')}</button>}
       </div>
       {failure && <p className="muted danger" role="alert" data-testid="transcript-error">{failure.message}</p>}
+      {notes.map((n) => <p key={n} className="muted" role="status" data-testid="transcript-skipped-note">{n}</p>)}
       {assetId && doc.assets[assetId]?.audio && transcript.segments.some((s) => s.timing !== 'word' && s.text.trim()) && <AutoTranscribe assetId={assetId} language={transcript.language.slice(0, 2)} align />}
       <ol className="phrases">
         {transcript.segments.map((s) => (
@@ -203,7 +200,7 @@ export function TranscriptPanel() {
             }}
             renderWord={(w) => {
               const mid = T.add(w.start, half(w.duration));
-              const onTimeline = sourceToTimeline(clips, mid) !== null;
+              const onTimeline = recordingToTimeline(clips, mid) !== null;
               const now = srcNow !== null && T.lte(w.start, srcNow) && T.lt(srcNow, T.add(w.start, w.duration));
               const i = flat.findIndex((x) => x.w.id === w.id);
               const selected = lo >= 0 && i >= lo && i <= hi;
@@ -412,14 +409,15 @@ export function FillerPanel() {
   const { doc } = state;
   const sel = editor.selected;
   const selAsset = sel?.clip.type === 'media' ? sel.clip.assetId : null;
-  const assetId = selAsset ?? (doc ? Object.keys(doc.transcripts)[0] ?? null : null);
+  // the transcribed recording of the selected clip's file (its own, or the one a time-preserving copy was made from)
+  const assetId = doc ? transcriptOfSelection(doc, selAsset)?.assetId ?? null : null;
   const [extra, setExtra] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
   const [res, setRes] = useState<Awaited<ReturnType<typeof api.findFillers>> | null>(null);
   useEffect(() => { setRes(null); setErr(null); setStale(false); }, [assetId]);
-  if (!doc || !assetId || !doc.transcripts[assetId]) return null;
+  if (!doc || !assetId) return null;
   const find = async () => {
     setBusy(true); setErr(null); setStale(false); setRes(null);
     const words = extra.split(/[,\s]+/).map((w) => w.trim()).filter(Boolean).slice(0, 50);
@@ -448,6 +446,7 @@ export function FillerPanel() {
             {res.words.length === 0 ? t('filler.none') : `${t('filler.count')}: `}
             {res.words.length > 0 && <bdi>{res.words.length} · {res.removableSeconds.toFixed(2)}s</bdi>}
           </p>
+          {skippedNotes(doc, res.skippedClips, t('transcript.untimedSkipped')).map((n) => <p key={n} className="muted" role="status" data-testid="filler-skipped-note">{n}</p>)}
           {res.words.length > 0 && (
             <ul className="filler-list" data-testid="filler-list">
               {res.words.slice(0, 200).map((w, i) => (
@@ -513,6 +512,7 @@ export function SilencePanel() {
             {res.candidates.length === 0 ? t('silence.none') : `${t('silence.count')}: `}
             {res.candidates.length > 0 && <bdi>{res.candidates.length} · {res.removableSeconds.toFixed(2)}s</bdi>}
           </p>
+          {skippedNotes(doc, res.skippedClips, t('transcript.untimedSkipped')).map((n) => <p key={n} className="muted" role="status" data-testid="silence-skipped-note">{n}</p>)}
           <ol className="silence-list">
             {res.candidates.map((c, i) => {
               const fr = Math.max(0, Math.round((c.startSeconds * rate.num) / rate.den));

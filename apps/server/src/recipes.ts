@@ -40,7 +40,7 @@ async function context(store: Store, projectId: string, recipeId: string, params
   }
   return ctx;
 }
-const view = (revision: number, plan: RecipePlan) => ({ revision, recipeId: plan.recipeId, params: plan.params, steps: plan.steps, basis: plan.basis, operations: plan.ops.length, alternatives: plan.alternatives, method: 'rule-based plan from project data; no language model', note: 'Nothing was changed. Apply it to make these edits as one undoable step.' });
+const view = (revision: number, plan: RecipePlan) => ({ revision, recipeId: plan.recipeId, params: plan.params, steps: plan.steps, basis: plan.basis, operations: plan.ops.length, alternatives: plan.alternatives, ...(plan.skippedClips ? { skippedClips: plan.skippedClips } : {}), method: 'rule-based plan from project data; no language model', note: 'Nothing was changed. Apply it to make these edits as one undoable step.' });
 
 /**
  * The family film (ADR-0026) is listed as recipe 'family-film' but planned by its own planner and applied through apply_template
@@ -65,7 +65,7 @@ export async function applyRecipe(store: Store, gov: Governance, principal: Prin
   const plan = wrap(() => planRecipe(p.doc, recipeId, params, ctx));
   // The plan was built from revision p.revision; committing against exactly that revision means a concurrent edit cannot be silently built upon.
   const r = gov.commitAs(principal, { projectId, expectedRevision: expectedRevision ?? p.revision, allowInternal: true, label: `Recipe: ${plan.steps[0] ?? recipeId}`.slice(0, 120), ops: [{ op: 'apply_recipe', args: { recipeId, params: plan.params, steps: plan.steps, ops: plan.ops } }] }) as any;
-  return { revision: r.revision, runId: r.results?.[0]?.output?.runId ?? null, createdIds: r.results?.[0]?.output?.createdIds ?? [], steps: plan.steps, basis: plan.basis, alternatives: plan.alternatives, ...(r.proposal ? { proposal: r.proposal } : {}) };
+  return { revision: r.revision, runId: r.results?.[0]?.output?.runId ?? null, createdIds: r.results?.[0]?.output?.createdIds ?? [], steps: plan.steps, basis: plan.basis, alternatives: plan.alternatives, ...(plan.skippedClips ? { skippedClips: plan.skippedClips } : {}), ...(r.proposal ? { proposal: r.proposal } : {}) };
 }
 
 export async function regenerateRecipe(store: Store, gov: Governance, principal: Principal, projectId: string, runId: string, newParams?: unknown) {
