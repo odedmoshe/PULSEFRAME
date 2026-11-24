@@ -1,5 +1,5 @@
 {
- "when": "2026-11-24T18:13:27.283Z",
+ "when": "2026-11-24T19:26:51.395Z",
  "checks": [
   {
    "name": "1. The bottom clip alone and the top clip at opacity 1 are byte-identical to their files",
@@ -127,6 +127,504 @@
       "sameValueBytesChanged": 0
      }
     }
+   }
+  },
+  {
+   "name": "5. Draft, a faded picture: normal blend at 99 opacities every byte within 2 of round(exact at α), mean signed error within ±0.1; with multiply … add (14 opacities each) byte-identical to full",
+   "ok": true,
+   "detail": {
+    "normal": {
+     "bytes": 19464192,
+     "worstOffRounded": 2,
+     "meanSignedError": 0,
+     "shareOff2": 0.00127,
+     "bytesOff3": 0,
+     "draftVsFullWorst": 1,
+     "draftVsFullMeanAbs": 0.2872
+    },
+    "multiply": {
+     "bytes": 2752512,
+     "worstOffRounded": 2,
+     "meanSignedError": 0.0799,
+     "shareOff2": 0.00016,
+     "bytesOff3": 0,
+     "draftVsFullWorst": 0,
+     "draftVsFullMeanAbs": 0
+    },
+    "screen": {
+     "bytes": 2752512,
+     "worstOffRounded": 1,
+     "meanSignedError": 0.0357,
+     "shareOff2": 0,
+     "bytesOff3": 0,
+     "draftVsFullWorst": 0,
+     "draftVsFullMeanAbs": 0
+    },
+    "overlay": {
+     "bytes": 2752512,
+     "worstOffRounded": 1,
+     "meanSignedError": 0,
+     "shareOff2": 0,
+     "bytesOff3": 0,
+     "draftVsFullWorst": 0,
+     "draftVsFullMeanAbs": 0
+    },
+    "soft-light": {
+     "bytes": 2752512,
+     "worstOffRounded": 1,
+     "meanSignedError": -0.0009,
+     "shareOff2": 0,
+     "bytesOff3": 0,
+     "draftVsFullWorst": 0,
+     "draftVsFullMeanAbs": 0
+    },
+    "darken": {
+     "bytes": 2752512,
+     "worstOffRounded": 2,
+     "meanSignedError": -0.1036,
+     "shareOff2": 0.00075,
+     "bytesOff3": 0,
+     "draftVsFullWorst": 0,
+     "draftVsFullMeanAbs": 0
+    },
+    "lighten": {
+     "bytes": 2752512,
+     "worstOffRounded": 2,
+     "meanSignedError": -0.1244,
+     "shareOff2": 0,
+     "bytesOff3": 0,
+     "draftVsFullWorst": 0,
+     "draftVsFullMeanAbs": 0
+    },
+    "add": {
+     "bytes": 2752512,
+     "worstOffRounded": 1,
+     "meanSignedError": 0.0654,
+     "shareOff2": 0,
+     "bytesOff3": 0,
+     "draftVsFullWorst": 0,
+     "draftVsFullMeanAbs": 0
+    }
+   }
+  },
+  {
+   "name": "6. Draft, the dissolve at 21 progress values (between two clips, revealing): every byte within 2 of round(exact at p), mean within ±0.1; between two clips same-value bytes unchanged",
+   "ok": true,
+   "detail": {
+    "dissolve": {
+     "bytes": 4128768,
+     "worstOffRounded": 2,
+     "meanSignedError": 0,
+     "shareOff2": 0.00137,
+     "bytesOff3": 0,
+     "draftVsFullWorst": 2,
+     "draftVsFullMeanAbs": 0.3415
+    },
+    "dissolve-reveal": {
+     "bytes": 4128768,
+     "worstOffRounded": 2,
+     "meanSignedError": 0,
+     "shareOff2": 0.00137,
+     "bytesOff3": 0,
+     "draftVsFullWorst": 1,
+     "draftVsFullMeanAbs": 0.2619
+    }
+   }
+  },
+  {
+   "name": "7. Draft against full on all those frames: at most 2 apart byte by byte; the lab's full frame equals the still (normal blend, opacity 0.37)",
+   "ok": true,
+   "detail": {
+    "worst": 2,
+    "labFullVsStillBytesDiffering": 0
+   }
+  },
+  {
+   "name": "8. The fill limited to the faded picture's placed box equals the fill of the whole buffer byte for byte (54 drawings: 9 placements × 2 opacities × 3 frame sizes)",
+   "ok": true,
+   "detail": {
+    "differingBytes": 0,
+    "comparedBytes": 182476800,
+    "drawings": [
+     {
+      "placement": "scale 0.5, centred, opacity 0.3",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.195
+     },
+     {
+      "placement": "scale 0.5, centred, opacity 0.77",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.195
+     },
+     {
+      "placement": "scale 0.37, rotated 17°, moved, opacity 0.3",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.171
+     },
+     {
+      "placement": "scale 0.37, rotated 17°, moved, opacity 0.77",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.171
+     },
+     {
+      "placement": "scale 0.8, half off the right edge, opacity 0.3",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.286
+     },
+     {
+      "placement": "scale 0.8, half off the right edge, opacity 0.77",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.286
+     },
+     {
+      "placement": "scale 1.3 (larger than the frame), opacity 0.3",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.981
+     },
+     {
+      "placement": "scale 1.3 (larger than the frame), opacity 0.77",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.981
+     },
+     {
+      "placement": "scale 0.6, rotated 90°, opacity 0.3",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.279
+     },
+     {
+      "placement": "scale 0.6, rotated 90°, opacity 0.77",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.279
+     },
+     {
+      "placement": "scale 0.05, opacity 0.3",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.003
+     },
+     {
+      "placement": "scale 0.05, opacity 0.77",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.003
+     },
+     {
+      "placement": "scale 0.7, rotated 45°, low, opacity 0.3",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.448
+     },
+     {
+      "placement": "scale 0.7, rotated 45°, low, opacity 0.77",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.448
+     },
+     {
+      "placement": "scale 0.333, rotated -33.3°, at a fractional place, opacity 0.3",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.171
+     },
+     {
+      "placement": "scale 0.333, rotated -33.3°, at a fractional place, opacity 0.77",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.171
+     },
+     {
+      "placement": "scale 0.5, multiply, a blur and a mask after the fade, opacity 0.3",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.251
+     },
+     {
+      "placement": "scale 0.5, multiply, a blur and a mask after the fade, opacity 0.77",
+      "size": "640x360",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.251
+     },
+     {
+      "placement": "scale 0.5, centred, opacity 0.3",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.112
+     },
+     {
+      "placement": "scale 0.5, centred, opacity 0.77",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.112
+     },
+     {
+      "placement": "scale 0.37, rotated 17°, moved, opacity 0.3",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.098
+     },
+     {
+      "placement": "scale 0.37, rotated 17°, moved, opacity 0.77",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.098
+     },
+     {
+      "placement": "scale 0.8, half off the right edge, opacity 0.3",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.157
+     },
+     {
+      "placement": "scale 0.8, half off the right edge, opacity 0.77",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.157
+     },
+     {
+      "placement": "scale 1.3 (larger than the frame), opacity 0.3",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.556
+     },
+     {
+      "placement": "scale 1.3 (larger than the frame), opacity 0.77",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.556
+     },
+     {
+      "placement": "scale 0.6, rotated 90°, opacity 0.3",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.159
+     },
+     {
+      "placement": "scale 0.6, rotated 90°, opacity 0.77",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.159
+     },
+     {
+      "placement": "scale 0.05, opacity 0.3",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.002
+     },
+     {
+      "placement": "scale 0.05, opacity 0.77",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.002
+     },
+     {
+      "placement": "scale 0.7, rotated 45°, low, opacity 0.3",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.304
+     },
+     {
+      "placement": "scale 0.7, rotated 45°, low, opacity 0.77",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.304
+     },
+     {
+      "placement": "scale 0.333, rotated -33.3°, at a fractional place, opacity 0.3",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.098
+     },
+     {
+      "placement": "scale 0.333, rotated -33.3°, at a fractional place, opacity 0.77",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.098
+     },
+     {
+      "placement": "scale 0.5, multiply, a blur and a mask after the fade, opacity 0.3",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.144
+     },
+     {
+      "placement": "scale 0.5, multiply, a blur and a mask after the fade, opacity 0.77",
+      "size": "360x640",
+      "bytes": 921600,
+      "differing": 0,
+      "filledShare": 0.144
+     },
+     {
+      "placement": "scale 0.5, centred, opacity 0.3",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.19
+     },
+     {
+      "placement": "scale 0.5, centred, opacity 0.77",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.19
+     },
+     {
+      "placement": "scale 0.37, rotated 17°, moved, opacity 0.3",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.165
+     },
+     {
+      "placement": "scale 0.37, rotated 17°, moved, opacity 0.77",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.165
+     },
+     {
+      "placement": "scale 0.8, half off the right edge, opacity 0.3",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.282
+     },
+     {
+      "placement": "scale 0.8, half off the right edge, opacity 0.77",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.282
+     },
+     {
+      "placement": "scale 1.3 (larger than the frame), opacity 0.3",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.977
+     },
+     {
+      "placement": "scale 1.3 (larger than the frame), opacity 0.77",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.977
+     },
+     {
+      "placement": "scale 0.6, rotated 90°, opacity 0.3",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.273
+     },
+     {
+      "placement": "scale 0.6, rotated 90°, opacity 0.77",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.273
+     },
+     {
+      "placement": "scale 0.05, opacity 0.3",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.002
+     },
+     {
+      "placement": "scale 0.05, opacity 0.77",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.002
+     },
+     {
+      "placement": "scale 0.7, rotated 45°, low, opacity 0.3",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.443
+     },
+     {
+      "placement": "scale 0.7, rotated 45°, low, opacity 0.77",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.443
+     },
+     {
+      "placement": "scale 0.333, rotated -33.3°, at a fractional place, opacity 0.3",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.166
+     },
+     {
+      "placement": "scale 0.333, rotated -33.3°, at a fractional place, opacity 0.77",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.166
+     },
+     {
+      "placement": "scale 0.5, multiply, a blur and a mask after the fade, opacity 0.3",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.245
+     },
+     {
+      "placement": "scale 0.5, multiply, a blur and a mask after the fade, opacity 0.77",
+      "size": "1920x1080",
+      "bytes": 8294400,
+      "differing": 0,
+      "filledShare": 0.245
+     }
+    ]
    }
   }
  ],
@@ -4631,5 +5129,481 @@
    "bytesOff2Q": 0,
    "sameValueBytesChanged": 0
   }
- ]
+ ],
+ "draft": {
+  "opacity": {
+   "normal": {
+    "bytes": 19464192,
+    "worstOffRounded": 2,
+    "meanSignedError": 0,
+    "shareOff2": 0.00127,
+    "bytesOff3": 0,
+    "draftVsFullWorst": 1,
+    "draftVsFullMeanAbs": 0.2872
+   },
+   "multiply": {
+    "bytes": 2752512,
+    "worstOffRounded": 2,
+    "meanSignedError": 0.0799,
+    "shareOff2": 0.00016,
+    "bytesOff3": 0,
+    "draftVsFullWorst": 0,
+    "draftVsFullMeanAbs": 0
+   },
+   "screen": {
+    "bytes": 2752512,
+    "worstOffRounded": 1,
+    "meanSignedError": 0.0357,
+    "shareOff2": 0,
+    "bytesOff3": 0,
+    "draftVsFullWorst": 0,
+    "draftVsFullMeanAbs": 0
+   },
+   "overlay": {
+    "bytes": 2752512,
+    "worstOffRounded": 1,
+    "meanSignedError": 0,
+    "shareOff2": 0,
+    "bytesOff3": 0,
+    "draftVsFullWorst": 0,
+    "draftVsFullMeanAbs": 0
+   },
+   "soft-light": {
+    "bytes": 2752512,
+    "worstOffRounded": 1,
+    "meanSignedError": -0.0009,
+    "shareOff2": 0,
+    "bytesOff3": 0,
+    "draftVsFullWorst": 0,
+    "draftVsFullMeanAbs": 0
+   },
+   "darken": {
+    "bytes": 2752512,
+    "worstOffRounded": 2,
+    "meanSignedError": -0.1036,
+    "shareOff2": 0.00075,
+    "bytesOff3": 0,
+    "draftVsFullWorst": 0,
+    "draftVsFullMeanAbs": 0
+   },
+   "lighten": {
+    "bytes": 2752512,
+    "worstOffRounded": 2,
+    "meanSignedError": -0.1244,
+    "shareOff2": 0,
+    "bytesOff3": 0,
+    "draftVsFullWorst": 0,
+    "draftVsFullMeanAbs": 0
+   },
+   "add": {
+    "bytes": 2752512,
+    "worstOffRounded": 1,
+    "meanSignedError": 0.0654,
+    "shareOff2": 0,
+    "bytesOff3": 0,
+    "draftVsFullWorst": 0,
+    "draftVsFullMeanAbs": 0
+   }
+  },
+  "dissolve": {
+   "dissolve": {
+    "bytes": 4128768,
+    "worstOffRounded": 2,
+    "meanSignedError": 0,
+    "shareOff2": 0.00137,
+    "bytesOff3": 0,
+    "draftVsFullWorst": 2,
+    "draftVsFullMeanAbs": 0.3415
+   },
+   "dissolve-reveal": {
+    "bytes": 4128768,
+    "worstOffRounded": 2,
+    "meanSignedError": 0,
+    "shareOff2": 0.00137,
+    "bytesOff3": 0,
+    "draftVsFullWorst": 1,
+    "draftVsFullMeanAbs": 0.2619
+   }
+  },
+  "fadeArea": [
+   {
+    "placement": "scale 0.5, centred, opacity 0.3",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.195
+   },
+   {
+    "placement": "scale 0.5, centred, opacity 0.77",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.195
+   },
+   {
+    "placement": "scale 0.37, rotated 17°, moved, opacity 0.3",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.171
+   },
+   {
+    "placement": "scale 0.37, rotated 17°, moved, opacity 0.77",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.171
+   },
+   {
+    "placement": "scale 0.8, half off the right edge, opacity 0.3",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.286
+   },
+   {
+    "placement": "scale 0.8, half off the right edge, opacity 0.77",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.286
+   },
+   {
+    "placement": "scale 1.3 (larger than the frame), opacity 0.3",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.981
+   },
+   {
+    "placement": "scale 1.3 (larger than the frame), opacity 0.77",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.981
+   },
+   {
+    "placement": "scale 0.6, rotated 90°, opacity 0.3",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.279
+   },
+   {
+    "placement": "scale 0.6, rotated 90°, opacity 0.77",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.279
+   },
+   {
+    "placement": "scale 0.05, opacity 0.3",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.003
+   },
+   {
+    "placement": "scale 0.05, opacity 0.77",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.003
+   },
+   {
+    "placement": "scale 0.7, rotated 45°, low, opacity 0.3",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.448
+   },
+   {
+    "placement": "scale 0.7, rotated 45°, low, opacity 0.77",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.448
+   },
+   {
+    "placement": "scale 0.333, rotated -33.3°, at a fractional place, opacity 0.3",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.171
+   },
+   {
+    "placement": "scale 0.333, rotated -33.3°, at a fractional place, opacity 0.77",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.171
+   },
+   {
+    "placement": "scale 0.5, multiply, a blur and a mask after the fade, opacity 0.3",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.251
+   },
+   {
+    "placement": "scale 0.5, multiply, a blur and a mask after the fade, opacity 0.77",
+    "size": "640x360",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.251
+   },
+   {
+    "placement": "scale 0.5, centred, opacity 0.3",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.112
+   },
+   {
+    "placement": "scale 0.5, centred, opacity 0.77",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.112
+   },
+   {
+    "placement": "scale 0.37, rotated 17°, moved, opacity 0.3",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.098
+   },
+   {
+    "placement": "scale 0.37, rotated 17°, moved, opacity 0.77",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.098
+   },
+   {
+    "placement": "scale 0.8, half off the right edge, opacity 0.3",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.157
+   },
+   {
+    "placement": "scale 0.8, half off the right edge, opacity 0.77",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.157
+   },
+   {
+    "placement": "scale 1.3 (larger than the frame), opacity 0.3",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.556
+   },
+   {
+    "placement": "scale 1.3 (larger than the frame), opacity 0.77",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.556
+   },
+   {
+    "placement": "scale 0.6, rotated 90°, opacity 0.3",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.159
+   },
+   {
+    "placement": "scale 0.6, rotated 90°, opacity 0.77",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.159
+   },
+   {
+    "placement": "scale 0.05, opacity 0.3",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.002
+   },
+   {
+    "placement": "scale 0.05, opacity 0.77",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.002
+   },
+   {
+    "placement": "scale 0.7, rotated 45°, low, opacity 0.3",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.304
+   },
+   {
+    "placement": "scale 0.7, rotated 45°, low, opacity 0.77",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.304
+   },
+   {
+    "placement": "scale 0.333, rotated -33.3°, at a fractional place, opacity 0.3",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.098
+   },
+   {
+    "placement": "scale 0.333, rotated -33.3°, at a fractional place, opacity 0.77",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.098
+   },
+   {
+    "placement": "scale 0.5, multiply, a blur and a mask after the fade, opacity 0.3",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.144
+   },
+   {
+    "placement": "scale 0.5, multiply, a blur and a mask after the fade, opacity 0.77",
+    "size": "360x640",
+    "bytes": 921600,
+    "differing": 0,
+    "filledShare": 0.144
+   },
+   {
+    "placement": "scale 0.5, centred, opacity 0.3",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.19
+   },
+   {
+    "placement": "scale 0.5, centred, opacity 0.77",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.19
+   },
+   {
+    "placement": "scale 0.37, rotated 17°, moved, opacity 0.3",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.165
+   },
+   {
+    "placement": "scale 0.37, rotated 17°, moved, opacity 0.77",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.165
+   },
+   {
+    "placement": "scale 0.8, half off the right edge, opacity 0.3",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.282
+   },
+   {
+    "placement": "scale 0.8, half off the right edge, opacity 0.77",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.282
+   },
+   {
+    "placement": "scale 1.3 (larger than the frame), opacity 0.3",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.977
+   },
+   {
+    "placement": "scale 1.3 (larger than the frame), opacity 0.77",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.977
+   },
+   {
+    "placement": "scale 0.6, rotated 90°, opacity 0.3",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.273
+   },
+   {
+    "placement": "scale 0.6, rotated 90°, opacity 0.77",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.273
+   },
+   {
+    "placement": "scale 0.05, opacity 0.3",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.002
+   },
+   {
+    "placement": "scale 0.05, opacity 0.77",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.002
+   },
+   {
+    "placement": "scale 0.7, rotated 45°, low, opacity 0.3",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.443
+   },
+   {
+    "placement": "scale 0.7, rotated 45°, low, opacity 0.77",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.443
+   },
+   {
+    "placement": "scale 0.333, rotated -33.3°, at a fractional place, opacity 0.3",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.166
+   },
+   {
+    "placement": "scale 0.333, rotated -33.3°, at a fractional place, opacity 0.77",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.166
+   },
+   {
+    "placement": "scale 0.5, multiply, a blur and a mask after the fade, opacity 0.3",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.245
+   },
+   {
+    "placement": "scale 0.5, multiply, a blur and a mask after the fade, opacity 0.77",
+    "size": "1920x1080",
+    "bytes": 8294400,
+    "differing": 0,
+    "filledShare": 0.245
+   }
+  ]
+ }
 }

@@ -53,9 +53,15 @@ export function scratch(slot: number, width: number, height: number): Buf {
  * nearest alpha an 8-bit canvas has); the bytes still 2 off the real α are those where α itself falls between two such
  * levels. Measured in headless Chromium 153 over all 256×256 byte pairs at the opacities 0.01…0.99, also through stills
  * (conformance:opacity). Used by picture clips and the adjustment pass (compositor2d.ts) and by the dissolve
- * (canvasTransitions.ts).
+ * (canvasTransitions.ts). The full picture only (stills, export, the paused preview): draft playback uses a faster form, see
+ * DrawOptions in compositor2d.ts.
+ *
+ * `area`: the part of the buffer that may hold anything, in whole pixels; the fill covers only it. Outside it the buffer must
+ * be transparent (destination-in leaves transparent pixels transparent, so the result is the same as a fill of the whole
+ * buffer, byte for byte: conformance:opacity check 8 compares the two). The fill is most of the cost (about 8 ms for a
+ * 1920×1080 buffer in Chromium's software canvas), so a picture smaller than the frame costs less.
  */
-export function fadeBuf(buf: Buf, opacity: number, width: number, height: number): void {
+export function fadeBuf(buf: Buf, opacity: number, width: number, height: number, area?: PixelRect): void {
   const b = buf.ctx;
   b.save();
   b.setTransform(1, 0, 0, 1, 0, 0);
@@ -63,9 +69,11 @@ export function fadeBuf(buf: Buf, opacity: number, width: number, height: number
   b.globalCompositeOperation = 'destination-in';
   b.globalAlpha = opacity;
   b.fillStyle = '#000';
-  b.fillRect(0, 0, width, height);
+  if (area) b.fillRect(area.x, area.y, area.w, area.h); else b.fillRect(0, 0, width, height);
   b.restore();
 }
+/** A rectangle of whole pixels: x, y its top-left corner, w, h its size. */
+export interface PixelRect { x: number; y: number; w: number; h: number }
 export const COMPOSITE: Record<BlendMode, GlobalCompositeOperation> = {
   normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay', 'soft-light': 'soft-light', 'hard-light': 'hard-light', add: 'lighter',
   difference: 'difference', exclusion: 'exclusion', darken: 'darken', lighten: 'lighten', 'color-dodge': 'color-dodge', 'color-burn': 'color-burn',
@@ -464,13 +472,13 @@ const DIR: Record<string, [number, number]> = { left: [-1, 0], right: [1, 0], up
  * A Canvas2D transition is drawn by the kernel its registry row names (canvasTransitions.ts, ADR-0012); GPU transitions
  * are mixed before this (compositor2d.ts) and arrive here without a transition.
  */
-export function compositeLayer(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, layer: Buf, look: LayerLook, W: number, H: number, outgoing: Buf | null) {
+export function compositeLayer(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, layer: Buf, look: LayerLook, W: number, H: number, outgoing: Buf | null, draft = false) {
   const t = look.transition;
   ctx.save();
   ctx.globalCompositeOperation = COMPOSITE[look.blend ?? 'normal'];
   if (!t) { ctx.drawImage(layer.canvas, 0, 0); ctx.restore(); return; }
   const c = CANVAS_TRANSITIONS[t.type], k = c && CANVAS_KERNELS[c.kernel];
-  if (k) k({ ctx, incoming: layer, outgoing, t, v: c.v, W, H }); else ctx.drawImage(layer.canvas, 0, 0);
+  if (k) k({ ctx, incoming: layer, outgoing, t, v: c.v, W, H, draft }); else ctx.drawImage(layer.canvas, 0, 0);
   ctx.restore();
 }
 

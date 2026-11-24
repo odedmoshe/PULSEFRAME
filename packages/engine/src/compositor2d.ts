@@ -11,7 +11,7 @@ import { gpuTransition, isGpuTransition, lutIdOf, takeUnavailable, type LutStrip
 import { ADJUST_PASS_SLOT, type AdjustLayer, type ImageLayer, type PictureLayer, type RenderGraph, type TextLayer, type VideoLayer } from './evaluate.ts';
 import { visualOrder, wordDir, wrapWords, type CaptionLayer } from './captions.ts';
 import { textAtRest, unitPose } from './textAnimation.ts';
-import { applyColourMatrix, applyEffects, hasGpuEffect, applyMask, applyRegions, BT709_AS_BT601, COMPOSITE, compositeLayer, fadeBuf, scratch, type Buf, type LayerBox, type LookEnv } from './look.ts';
+import { applyColourMatrix, applyEffects, hasGpuEffect, applyMask, applyRegions, BT709_AS_BT601, COMPOSITE, compositeLayer, fadeBuf, scratch, type Buf, type LayerBox, type LookEnv, type PixelRect } from './look.ts';
 import { fitScale } from '@pulseframe/core';
 import { TAP_PLACE_SLOT, tapMerger } from './taps.ts';
 import { enterUnit, INK_METRICS_MAX_PX, paintTitle, paragraphSpacing, restPoses, type Box, type TextNote, type TitleUnit } from './textEffects.ts';
@@ -416,17 +416,48 @@ export function frameDecoders(g: RenderGraph): { count: number; clipIds: string[
  */
 /** The frame that is waiting on a GPU pass, if any (see drawGraph). */
 let gpuFrame: Promise<void> | null = null;
-export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Promise<{ missing: string[]; /** For missing clips whose picture the view refused (FrameProvider.refusal, e.g. decode_budget): why, by clip id. */ missingReasons?: Record<string, string>; unavailableEffects: string[]; unavailableReasons?: Record<string, string> }> {
+/**
+ * How a frame is drawn (ADR-0005 amendment of 2026-11-24).
+ *
+ * `quality`: 'full' (the default) is the picture of stills, export and the paused preview, all three identical. 'draft' is for
+ * playback only (the player passes it while it plays a reduced picture, by the same pictureQuality() rule that picks proxy
+ * frames): a picture below full opacity with the normal blend is copied into its buffer with globalAlpha instead of placed
+ * opaque and faded by a destination-in fill, and the dissolve adds its two pictures with globalAlpha (canvasTransitions.ts
+ * crossfade). The fill costs about 8 ms per 1920×1080 buffer in Chromium's software canvas. Draft is then within 2 of 255 of
+ * the exact mix with zero mean error, and at most 2 off the full picture (conformance:opacity checks 5 to 7). A faded picture
+ * with another blend mode keeps the exact fill in draft too: with the copied form its mean error went up to +0.28 of a level
+ * (add; multiply +0.19). Everything else is drawn the same in both. The flash guard reads no
+ * pixels (layerLights works from the graph), so it decides the same in both.
+ *
+ * `fadeArea`: DIAGNOSTICS ONLY (conformance:opacity check 8). In 'full', a faded picture's fill covers only the pixels its
+ * placed box can touch; 'frame' makes it cover the whole buffer, so the two can be compared byte for byte.
+ */
+export interface DrawOptions { quality?: 'draft' | 'full'; fadeArea?: 'box' | 'frame' }
+export async function drawGraph(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider, opts: DrawOptions = {}): Promise<{ missing: string[]; /** For missing clips whose picture the view refused (FrameProvider.refusal, e.g. decode_budget): why, by clip id. */ missingReasons?: Record<string, string>; unavailableEffects: string[]; unavailableReasons?: Record<string, string> }> {
   const pin = frames.begin?.();
   try {
-    return await drawPinned(ctx, g, frames);
+    return await drawPinned(ctx, g, frames, opts);
   } finally {
     frames.end?.(pin);
   }
 }
-async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Promise<{ missing: string[]; missingReasons?: Record<string, string>; unavailableEffects: string[]; unavailableReasons?: Record<string, string> }> {
+/**
+ * The whole pixels a placed picture can touch: the axis-aligned bounds of its box (size, scale, rotation, position), two pixels
+ * wider on every side for the antialiased edge, within the frame. Undefined when that is the whole frame.
+ */
+export function placedArea(g: RenderGraph, layer: VideoLayer | ImageLayer): PixelRect | undefined {
+  const b = boxOf(g, layer), r = (b.rotation * Math.PI) / 180;
+  const hw = (b.w * b.scale) / 2, hh = (b.h * b.scale) / 2, c = Math.abs(Math.cos(r)), s = Math.abs(Math.sin(r));
+  const ex = hw * c + hh * s, ey = hw * s + hh * c;
+  const x0 = Math.max(0, Math.floor(b.cx - ex) - 2), y0 = Math.max(0, Math.floor(b.cy - ey) - 2);
+  const x1 = Math.min(g.width, Math.ceil(b.cx + ex) + 2), y1 = Math.min(g.height, Math.ceil(b.cy + ey) + 2);
+  if (x0 === 0 && y0 === 0 && x1 === g.width && y1 === g.height) return undefined;
+  return { x: x0, y: y0, w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) };
+}
+async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider, opts: DrawOptions): Promise<{ missing: string[]; missingReasons?: Record<string, string>; unavailableEffects: string[]; unavailableReasons?: Record<string, string> }> {
   const missing: string[] = [];
   const missingReasons: Record<string, string> = {};
+  const draft = opts.quality === 'draft';
   // Colour tables named by effects of this frame are loaded here, with the source frames and before the GPU gate; a table that
   // cannot be had becomes null with its reason, and the effect that needs it is then reported as unavailable, never thrown.
   const luts = new Map<string, LutStrip | null>();
@@ -519,11 +550,17 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Pr
       // Without its time effect (a tap's picture could not be had): the layer's own picture alone, and the effect is reported,
       // so a preview says so and a still or an export refuses.
       if (taps && layer.time) timeLeftOut.set(layer.time.type, tapWhy.get(`${i}:${lost}`) ?? 'source frame unavailable');
-      if (faded) {
-        // opaque first, then the opacity into the buffer's alpha (fadeBuf): at the same step as before, so colour fix,
-        // privacy regions, effects, mask, transition and blend see the faded picture as they always did
+      if (faded && draft && !(layer.blend && layer.blend !== 'normal')) {
+        // draft playback (DrawOptions), normal blend: copied into the empty buffer with its opacity as globalAlpha, no fill
+        buf.ctx.globalCompositeOperation = 'copy';
+        placeLayer(buf.ctx, g, layer, img ?? null, textNote);
+        buf.ctx.globalCompositeOperation = 'source-over';
+      } else if (faded) {
+        // opaque first, then the opacity into the buffer's alpha (fadeBuf), filling only the pixels the picture can touch: at
+        // the same step as before, so colour fix, privacy regions, effects, mask, transition and blend see the faded picture
+        // as they always did
         placeLayer(buf.ctx, g, { ...layer, transform: { ...layer.transform, opacity: 1 } }, img ?? null, textNote);
-        fadeBuf(buf, layer.transform.opacity, g.width, g.height);
+        fadeBuf(buf, layer.transform.opacity, g.width, g.height, opts.fadeArea === 'frame' ? undefined : placedArea(g, layer));
       } else placeLayer(buf.ctx, g, layer, img ?? null, textNote);
       if (colourFix === 'bt709-as-bt601') applyColourMatrix(buf, BT709_AS_BT601); // before effects: it corrects the source, it is not a look
       if (regions?.length) applyRegions(buf, regions, env); // privacy regions (ADR-0015): on the placed picture, before any effect
@@ -542,8 +579,8 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Pr
       const mixed = scratch(6, g.width, g.height);
       const ok = await gpuTransition(layer.transition, outgoing ? (outgoing as Buf).canvas : null, buf.canvas, mixed.ctx, env);
       // Not available: the incoming picture alone (a cut), recorded as missing so a still or an export refuses.
-      compositeLayer(ctx, ok ? mixed : buf, { ...layer, transition: undefined }, g.width, g.height, null);
-    } else compositeLayer(ctx, buf, layer, g.width, g.height, layer.transition ? outgoing : null);
+      compositeLayer(ctx, ok ? mixed : buf, { ...layer, transition: undefined }, g.width, g.height, null, draft);
+    } else compositeLayer(ctx, buf, layer, g.width, g.height, layer.transition ? outgoing : null, draft);
     outgoing = null;
   }
   ctx.restore();

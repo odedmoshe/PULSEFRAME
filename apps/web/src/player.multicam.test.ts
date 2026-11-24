@@ -10,10 +10,10 @@ import type { MediaPool } from './media.ts';
 import { Player } from './player.ts';
 
 // ---- labelled stand-ins (test only) ----
-const drawn = vi.hoisted(() => ({ calls: [] as { pool: unknown; w: number; h: number }[] }));
+const drawn = vi.hoisted(() => ({ calls: [] as { pool: unknown; w: number; h: number; quality: unknown }[] }));
 vi.mock('@pulseframe/engine', async (importOriginal) => {
   const real = await importOriginal<typeof import('@pulseframe/engine')>();
-  return { ...real, drawGraph: async (ctx: { canvas: { width: number; height: number } }, _g: unknown, provider: unknown) => { drawn.calls.push({ pool: provider, w: ctx.canvas.width, h: ctx.canvas.height }); return { missing: [], unavailableEffects: [] }; } };
+  return { ...real, drawGraph: async (ctx: { canvas: { width: number; height: number } }, _g: unknown, provider: unknown, opts?: { quality?: unknown }) => { drawn.calls.push({ pool: provider, w: ctx.canvas.width, h: ctx.canvas.height, quality: opts?.quality }); return { missing: [], unavailableEffects: [] }; } };
 });
 class FakeCanvas {
   width = 0; height = 0; dataset: Record<string, string> = {};
@@ -146,6 +146,19 @@ describe('pictureQuality (the quality prefetch warms)', () => {
     large.follow(10);
     await vi.waitFor(() => expect(drawn.calls.length).toBeGreaterThan(0));
     expect(drawn.calls.at(-1)!.pool).toBe(pool.draftFrames);
+  });
+  it('drawGraph gets the same quality (ADR-0005 amendment of 2026-11-24): draft while playing a reduced picture and in the angle viewer; full when paused and when playing at full size', async () => {
+    const { doc } = project();
+    const big = { ...doc, settings: { ...doc.settings, width: 1920, height: 1080 } };
+    const last = async (p: Player, frame: number) => { drawn.calls.length = 0; p.follow(frame); await vi.waitFor(() => expect(drawn.calls.length).toBeGreaterThan(0)); return drawn.calls.at(-1)!; };
+    const large = playing(big).p;
+    expect(await last(large, 10)).toMatchObject({ pool: pool.draftFrames, quality: 'draft', h: 960 });
+    (large as unknown as { playing: boolean }).playing = false;
+    expect(await last(large, 11)).toMatchObject({ pool: pool.frames, quality: 'full', h: 1080 }); // paused: the picture a still shows
+    expect(await last(playing(doc).p, 12)).toMatchObject({ pool: pool.frames, quality: 'full', h: 180 }); // 180 lines play at full size
+    const viewer = new Player(new FakeCanvas() as unknown as HTMLCanvasElement, pool, () => {}, (e) => { throw e; }, { draftOnly: { maxHeight: 90 } });
+    viewer.doc = doc;
+    expect(await last(viewer, 13)).toMatchObject({ pool: pool.draftFrames, quality: 'draft' });
   });
 });
 
