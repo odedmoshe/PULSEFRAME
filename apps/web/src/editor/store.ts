@@ -34,6 +34,7 @@ import { RefreshPolicy } from './renderCache.logic.ts';
 import type { DropCodeView, DropPublicView, FamilyFilmParams, FamilyFilmPlanView, FilmExclusion, FilmPick } from '@pulseframe/core';
 import type { ChannelRef, KeyClipboard, KeyRef } from '@pulseframe/core';
 import { pruneKeySel } from './keyStrip.math.ts';
+import { nextFromEvent, type LiveChange } from './sync.ts';
 
 /**
  * The activity list after a live revision event: newest first, at most 50. An undo or redo marks the transaction it reversed
@@ -390,6 +391,46 @@ export class Editor {
   private mediaRetried = '';
   async load(projectId: string) {
     const p = await api.getProject(projectId);
+    this.adopt(p);
+    return p;
+  }
+  /**
+   * Waiters for a revision (reach): an edit of this editor resolves when the revision event brought its result (applied from the
+   * event's changes, sync.ts), instead of reading the whole document again.
+   */
+  private revisionWaiters: { revision: number; resolve: () => void }[] = [];
+  /**
+   * The document at least at `revision`: from the revision event when the event stream is open (the server sends it right
+   * after the edit's answer; at most a second is waited for it), else read whole.
+   */
+  private async reach(projectId: string, revision: number) {
+    if (this.state.revision >= revision) return;
+    if (this.es?.readyState === 1) { // EventSource.OPEN
+      await new Promise<void>((resolve) => {
+        const w = { revision, resolve: () => { clearTimeout(timer); resolve(); } };
+        const timer = setTimeout(() => { this.revisionWaiters = this.revisionWaiters.filter((x) => x !== w); resolve(); }, 1000);
+        this.revisionWaiters.push(w);
+      });
+      if (this.state.revision >= revision) return;
+    }
+    await this.load(projectId);
+  }
+  /**
+   * Read the whole document after an event that could not be applied; events arriving while that read is out lead to one more
+   * read when it is back (a reconnect replays many events without changes: two reads, not one per event).
+   */
+  private rereading = false;
+  private rereadAgain = false;
+  private reread(projectId: string) {
+    if (this.rereading) { this.rereadAgain = true; return; }
+    this.rereading = true;
+    void this.load(projectId).catch(this.fail).finally(() => {
+      this.rereading = false;
+      if (this.rereadAgain) { this.rereadAgain = false; this.reread(projectId); }
+    });
+  }
+  /** Show the document at a revision (read whole, or applied from a revision event's changes). An older one is ignored. */
+  private adopt(p: { project: ProjectDocument; revision: number }) {
     if (p.revision >= this.state.revision || !this.state.doc) {
       // the active sequence resets to the main one when it is gone (as the viewed format does); the editor works on its projection
       const activeSequenceId = Object.hasOwn(p.project.sequences, this.state.activeSequenceId) ? this.state.activeSequenceId : p.project.mainSequenceId;
@@ -417,7 +458,11 @@ export class Editor {
       // while a take is recorded the picture is replaced without stopping the sound when the sound plan is unchanged
       if (vd && !this.state.performGhost) { if (this.state.multicamRec || this.committingSession || this.state.performRecording) this.player?.setPictureDoc(vd); else this.player?.setDoc(vd); }
     }
-    return p;
+    if (this.revisionWaiters.length) {
+      const due = this.revisionWaiters.filter((w) => w.revision <= this.state.revision);
+      this.revisionWaiters = this.revisionWaiters.filter((w) => w.revision > this.state.revision);
+      for (const w of due) w.resolve();
+    }
   }
   /** Show and edit another sequence (a short, or the main edit): the editor's document becomes its projection. Session state only. */
   setActiveSequence(id: string) {
@@ -485,10 +530,15 @@ export class Editor {
     if (this.disposed) return;
     const es = (this.es = api.events(projectId, p.revision));
     es.addEventListener('revision', (m) => {
-      const e: RevisionEvent = JSON.parse((m as MessageEvent).data);
+      const { changes, ...e }: RevisionEvent & { changes?: LiveChange[] } = JSON.parse((m as MessageEvent).data);
       if (!this.state.activity.some((x) => x.revision === e.revision)) this.set({ activity: withRevisionEvent(this.state.activity, e) });
       // Committed remote or local change: converge on the server document. Playhead and selection are local and stay put.
-      if (e.revision > this.state.revision) void this.load(projectId).catch(this.fail);
+      // The event's changes give the next document when this one is at the revision before (sync.ts); otherwise read it whole.
+      if (e.revision > this.state.revision) {
+        const next = nextFromEvent(this.state.rawDoc, this.state.revision, { revision: e.revision, ...(changes ? { changes } : {}) });
+        if (next) this.adopt({ project: next, revision: e.revision });
+        else this.reread(projectId);
+      }
       if (this.state.fastExport) this.planPolicy.changed(e.revision);
     });
     // The phone drop's public view (owner sessions only, no secrets): counts, connected, closed.
@@ -830,7 +880,7 @@ export class Editor {
     this.set({ save: 'save.saving', error: null });
     try {
       const r = await api.commit(doc.id, revision, ops, label);
-      await this.load(doc.id);
+      await this.reach(doc.id, r.revision);
       this.set({ save: 'save.saved' });
       return r;
     } catch (e) {
@@ -849,8 +899,8 @@ export class Editor {
     if (!doc) return;
     this.set({ error: null });
     try {
-      await api.undo(doc.id, mode, transactionId);
-      await this.load(doc.id);
+      const r = await api.undo(doc.id, mode, transactionId);
+      await this.reach(doc.id, r.revision);
     } catch (e) {
       if (e instanceof ApiFailure && (e.code === 'nothing_to_undo' || e.code === 'nothing_to_redo' || e.code === 'already_undone')) return;
       this.fail(e instanceof ApiFailure && e.code === 'undo_conflict' ? new Error(this.t('undo.conflict')) : e);
