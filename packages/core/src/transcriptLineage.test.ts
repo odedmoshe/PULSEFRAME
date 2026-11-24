@@ -242,4 +242,34 @@ describe('filler and silence cuts, tidy-speech, scene splits and pacing follow t
     expect(b.windows.map((w) => w.words)).toEqual(a.windows.map((w) => w.words));
     expect(b.totals).toEqual(a.totals);
   });
+
+  it('the pacing report names the clips it left out because they show an untimed copy (reversed, stretched); nothing is counted for them', () => {
+    const s = setup();
+    const onOriginal = tx(s.doc, [{ op: 'add_clip', args: { assetId: s.vid, start: f(0), sourceIn: f(30), duration: f(150), withLinkedAudio: false } }]).doc;
+    expect(pacingReport(onOriginal).skippedClips).toEqual([]);
+    // beside it: a time-preserving copy, a still, a reversed rendition with its linked sound, and a stretched one
+    const r = tx(onOriginal, [
+      { op: 'add_clip', args: { assetId: s.ids.enhanced, start: f(200), duration: f(60), withLinkedAudio: false } },
+      { op: 'add_clip', args: { assetId: s.ids.still, start: f(300), duration: f(30) } },
+      { op: 'add_clip', args: { assetId: s.ids.reversed, start: f(400), duration: f(120) } },
+      { op: 'add_clip', args: { assetId: s.ids.stretched, start: f(600), duration: f(120), withLinkedAudio: false } },
+    ]);
+    const out = (i: number) => r.results[i]!.output as { clipId: string; audioClipId?: string };
+    const report = pacingReport(r.doc);
+    const named = [...report.skippedClips].sort((a, b) => a.clipId.localeCompare(b.clipId));
+    expect(named).toEqual([
+      { clipId: out(2).clipId, assetId: s.ids.reversed, reason: 'untimed_copy' },
+      { clipId: out(2).audioClipId!, assetId: s.ids.reversed, reason: 'untimed_copy' },
+      { clipId: out(3).clipId, assetId: s.ids.stretched, reason: 'untimed_copy' },
+    ].sort((a, b) => a.clipId.localeCompare(b.clipId)));
+    // the words of the recording's own clip (4) and of the time-preserving copy's 2 s (the words at 1 s and 2 s): none guessed for the untimed copies
+    expect(report.totals.words).toBe(6);
+    expect(report.windows.slice(Math.floor(400 / 150)).reduce((n, w) => n + w.words, 0)).toBe(0);
+    // a file that is no copy of a transcribed recording is not named, and a recording with phrase timing only has no words to leave out
+    const other = tx(s.doc, [{ op: 'import_asset', args: { asset: { ...video, name: 'other.mp4', contentHash: hash('9') } } }], true);
+    const plain = tx(other.doc, [{ op: 'add_clip', args: { assetId: other.results[0]!.output!.assetId as string, start: f(0), duration: f(60) } }]).doc;
+    expect(pacingReport(plain).skippedClips).toEqual([]);
+    const phrases = tx(r.doc, [{ op: 'set_transcript', args: { assetId: s.vid, language: 'he', segments: [{ start: T.rt(1, 1), duration: T.rt(4, 1), text: 'אחת שתיים' }] } }]).doc;
+    expect(pacingReport(phrases).skippedClips).toEqual([]);
+  });
 });

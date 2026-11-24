@@ -8,6 +8,8 @@ export interface PacingStrings {
   cell: (from: string, to: string, cuts: number, wps: string) => string;
   issue: (i: PacingIssue, at: string, value: string, limit: string) => string;
   goTo: (at: string) => string;
+  /** The note for a clip whose words are not counted because it shows an untimed copy; `{name}` is the file's name (skippedNotes). */
+  untimedSkipped: string;
 }
 
 export const pacingStrings: Record<Lang, PacingStrings> = {
@@ -25,6 +27,7 @@ export const pacingStrings: Record<Lang, PacingStrings> = {
       }
     },
     goTo: (at) => `מעבר אל ${at}`,
+    untimedSkipped: 'המילים של הקליפ {name} לא נספרו: הוא מציג עותק שלא שומר על התזמון של ההקלטה',
   },
   en: {
     title: 'Pacing', strip: 'Pacing heat map along the timeline', cutsRow: 'Cuts', wordsRow: 'Words per second', clear: 'No pacing problems found.', go: 'Go', empty: 'Nothing on the timeline yet.',
@@ -40,5 +43,6 @@ export const pacingStrings: Record<Lang, PacingStrings> = {
       }
     },
     goTo: (at) => `Go to ${at}`,
+    untimedSkipped: 'The words of clip {name} are not counted: it shows a copy that does not keep the recording\'s timing',
   },
 };
