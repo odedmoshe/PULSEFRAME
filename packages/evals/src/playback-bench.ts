@@ -8,8 +8,9 @@
  * Scenes: three clips at full opacity; one clip at opacity 0.6 over one at full opacity; three clips at opacity 0.6. Every clip
  * is fitted to the frame, one per track. For a 1920×1080 project (proxies 960×540) and a 1080×1920 project (proxies 304×540),
  * with the pictures given as I420 video frames (what the decoder gives for a proxy) and as bitmaps (what a photo is).
- * Sizes: 'before' is the playing size until 2026-11-24 (height at most 960), 'rule' is the size pictureSize gives now, and the
- * others are alternatives that were measured. Every sample visits every cell once, so before and after see the same load;
+ * Sizes: 'sharper' is the playing size until 2026-11-24 (height at most 960), now the viewer's choice «חד יותר»; 'rule' is the
+ * size pictureSize gives by default («חלק»); the others are alternatives that were measured. The last project is the vertical
+ * one with proxies sized by the short side (540×960), which the server does not make: what such a proxy rule would change. Every sample visits every cell once, so before and after see the same load;
  * the load average is recorded with each sample.
  * Profile (once per run): `layers` drawImage calls alone, by smoothing quality, source size and target size.
  * With `--editor`, also the editor itself: a server on a new data directory, a 1920×1080 and a 1080×1920 project of three
@@ -50,8 +51,9 @@ interface Lab {
 const SCENES = [{ name: 'three opaque clips', opaque: 3, faded: 0 }, { name: 'one faded clip over one opaque', opaque: 1, faded: 1 }, { name: 'three faded clips', opaque: 0, faded: 3 }] as const;
 /** Per project: its proxies' size, and the sizes to composite at (undefined: the player's rule). */
 const PROJECTS: { name: string; project: Size; proxy: Size; sizes: { name: string; size?: Size }[] }[] = [
-  { name: '1920x1080', project: [1920, 1080], proxy: [960, 540], sizes: [{ name: 'before (height 960)', size: [1707, 960] }, { name: 'alternative (height 720)', size: [1280, 720] }, { name: 'rule' }] },
-  { name: '1080x1920', project: [1080, 1920], proxy: [304, 540], sizes: [{ name: 'before (height 960)', size: [540, 960] }, { name: 'rule' }, { name: 'alternative (the proxy\'s own 304x540)', size: [304, 540] }] },
+  { name: '1920x1080', project: [1920, 1080], proxy: [960, 540], sizes: [{ name: 'sharper (height 960, the rule before)', size: [1707, 960] }, { name: 'alternative (height 720)', size: [1280, 720] }, { name: 'rule' }] },
+  { name: '1080x1920', project: [1080, 1920], proxy: [304, 540], sizes: [{ name: 'sharper (height 960, the rule before)', size: [540, 960] }, { name: 'rule' }, { name: 'alternative (the proxy\'s own 304x540)', size: [304, 540] }] },
+  { name: '1080x1920 if proxies were 540x960', project: [1080, 1920], proxy: [540, 960], sizes: [{ name: 'rule' }] },
 ];
 
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png', '.wasm': 'application/wasm' };
@@ -158,7 +160,7 @@ try {
   }
   if (samples.length) console.log('\n# a playing frame (draft): median ms per frame, one figure per sample');
   const first = samples[0]?.cells ?? [];
-  for (const [i, c] of first.entries()) console.log(`${c.project} ${c.source.padEnd(6)} ${c.scene.padEnd(31)} ${c.at.padEnd(38)} ${c.size.padEnd(9)} ${samples.map((s) => s.cells[i]!.medianMs.toFixed(1).padStart(5)).join(' ')}`);
+  for (const [i, c] of first.entries()) console.log(`${c.project.padEnd(33)} ${c.source.padEnd(6)} ${c.scene.padEnd(31)} ${c.at.padEnd(38)} ${c.size.padEnd(9)} ${samples.map((s) => s.cells[i]!.medianMs.toFixed(1).padStart(5)).join(' ')}`);
   if (errors.length) throw new Error(`page errors: ${errors.slice(0, 3).join('; ')}`);
   await page.context().close();
   const editor = EDITOR ? await playInEditor() : undefined;

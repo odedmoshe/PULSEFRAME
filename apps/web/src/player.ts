@@ -9,7 +9,7 @@
  */
 import * as T from '@pulseframe/time';
 import { canonical, sequenceDuration, type ProjectDocument } from '@pulseframe/core';
-import { pictureSize } from './pictureSize.ts';
+import { pictureSize, type PlaySharpness } from './pictureSize.ts';
 import { audioPlan, drawGraph, evaluate, fillPlayingOrder, FlashGuard, isDecodeBudgetReason, openClipVoice, PitchStretcher, RampResampler, rampSourceFrames, rampSpanOf, soundEnd, type PlannedAudioClip } from '@pulseframe/engine';
 import { interleaved, plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import type { MediaPool } from './media.ts';
@@ -236,9 +236,15 @@ export class Player {
     this.request(this.frame);
     return true;
   }
+  /**
+   * The viewer's choice of the playing picture (pictureSize.ts): 'smooth', the proxies' own scale, or 'sharper', the larger
+   * picture. A preference of this browser that the owner of the player sets (editor/store.ts setPlaySharpness); never project
+   * state. The next frame drawn follows it, and so does pictureQuality().
+   */
+  sharpness: PlaySharpness = 'smooth';
   /** The size and quality the next frame of `settings` is drawn at (pictureSize.ts: the one rule). */
   private sizeOf(settings: { width: number; height: number }) {
-    return pictureSize(settings, { playing: this.playing, ...(this.opts.draftOnly ? { draftMaxHeight: this.opts.draftOnly.maxHeight } : {}) });
+    return pictureSize(settings, { playing: this.playing, sharpness: this.sharpness, ...(this.opts.draftOnly ? { draftMaxHeight: this.opts.draftOnly.maxHeight } : {}) });
   }
   /**
    * The quality the next frame is drawn at, as pump() chooses it: draft (the proxy) for the angle viewer and while playing at a

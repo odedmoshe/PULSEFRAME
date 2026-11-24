@@ -38,6 +38,9 @@ export function SettingsDialog() {
           <Seg size="sm" label={S.interfaceLang} value={state.lang} onChange={(v) => editor.setLang(v)} options={[{ value: 'he', label: 'עברית' }, { value: 'en', label: 'English' }]} /></div>
         <div className="pf-set-row"><span>{S.theme}</span>
           <Seg size="sm" label={S.theme} value={theme} onChange={(v) => { setTheme(v); applyTheme(v); }} options={[{ value: 'dark', label: S.themeDark }, { value: 'light', label: S.themeLight }]} /></div>
+        {/* the picture while playing (pictureSize.ts): a choice of this browser, not of the project */}
+        <div className="pf-set-row" data-testid="settings-play-sharpness"><span>{S.playSharpness}<small className="pf-set-note" id="pf-set-play-sharpness-why">{S.playSharpnessWhy}</small></span>
+          <Seg size="sm" label={S.playSharpness} describedBy="pf-set-play-sharpness-why" value={state.playSharpness} onChange={(v) => editor.setPlaySharpness(v)} options={[{ value: 'smooth', label: S.playSmooth, testId: 'play-sharpness-smooth' }, { value: 'sharper', label: S.playSharper, testId: 'play-sharpness-sharper' }]} /></div>
         <h3 className="pf-set-h">{S.capabilities}</h3>
         <ul className="pf-set-caps">
           {rows.map((r) => (

@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { fitScale } from '@pulseframe/core';
-import { pictureSize, PLAYING_SHORT_SIDE } from './pictureSize.ts';
+import { parsePlaySharpness, pictureSize, PLAY_SHARPNESS_KEY, PLAYING_HEIGHT_SHARPER, PLAYING_SHORT_SIDE } from './pictureSize.ts';
 
 const playing = (width: number, height: number) => pictureSize({ width, height }, { playing: true });
 const paused = (width: number, height: number) => pictureSize({ width, height }, { playing: false });
@@ -79,5 +79,48 @@ describe('pictureSize', () => {
   it('no document yet (0×0): full, no size, no NaN', () => {
     expect(playing(0, 0)).toEqual({ width: 0, height: 0, scale: 1, quality: 'full' });
     expect(paused(0, 0)).toEqual({ width: 0, height: 0, scale: 1, quality: 'full' });
+    expect(pictureSize({ width: 0, height: 0 }, { playing: true, sharpness: 'sharper' })).toEqual({ width: 0, height: 0, scale: 1, quality: 'full' });
+  });
+});
+
+describe('the viewer\'s choice of the playing picture (sharpness)', () => {
+  const sharper = (width: number, height: number, isPlaying = true) => pictureSize({ width, height }, { playing: isPlaying, sharpness: 'sharper' });
+  it('smooth is the default: no choice and \'smooth\' give the same size', () => {
+    for (const [w, h] of [[1920, 1080], [1080, 1920], [1280, 720], [640, 360], [3840, 2160]] as const) expect(pictureSize({ width: w, height: h }, { playing: true, sharpness: 'smooth' })).toEqual(playing(w, h));
+  });
+  it('sharper: the playing frame is at most 960 px high (the rule until 2026-11-24), draft when reduced', () => {
+    expect(PLAYING_HEIGHT_SHARPER).toBe(960);
+    expect(sharper(1920, 1080)).toMatchObject({ width: 1707, height: 960, quality: 'draft' });
+    expect(sharper(3840, 2160)).toMatchObject({ width: 1707, height: 960, quality: 'draft' });
+    expect(sharper(1080, 1920)).toEqual({ width: 540, height: 960, scale: 0.5, quality: 'draft' }); // a 9:16 frame is the same in both
+    expect(sharper(1080, 1080)).toMatchObject({ width: 960, height: 960, quality: 'draft' });
+    expect(sharper(2160, 3840)).toMatchObject({ width: 540, height: 960, quality: 'draft' });
+    // a frame higher than 960 and at most 540 wide: the height rule alone would make it smaller than smooth does (461×960); it is not reduced
+    expect(sharper(480, 1000)).toEqual({ width: 480, height: 1000, scale: 1, quality: 'full' });
+  });
+  it('sharper: a frame at most 960 px high plays at full size, the full picture from the originals (1280×720 too)', () => {
+    for (const [w, h] of [[1280, 720], [960, 960], [1707, 960], [640, 360]] as const) expect(sharper(w, h)).toEqual({ width: w, height: h, scale: 1, quality: 'full' });
+    expect(playing(1280, 720).quality).toBe('draft'); // smooth reduces it
+  });
+  it('sharper is never smaller than smooth, and the same shape within a pixel', () => {
+    for (const [w, h] of [[1920, 1080], [1080, 1920], [1280, 720], [1080, 1350], [2048, 858], [1919, 1079], [721, 1281], [480, 1000], [320, 180]] as const) {
+      const a = playing(w, h), b = sharper(w, h);
+      expect(b.width, `${w}x${h}`).toBeGreaterThanOrEqual(a.width);
+      expect(b.height, `${w}x${h}`).toBeGreaterThanOrEqual(a.height);
+      expect(Math.abs(b.width - w * b.scale)).toBeLessThanOrEqual(0.5);
+      expect(Math.abs(b.height - h * b.scale)).toBeLessThanOrEqual(0.5);
+      expect(b.scale).toBeLessThanOrEqual(1);
+    }
+  });
+  it('the choice changes nothing when paused, and nothing in an angle viewer', () => {
+    for (const s of ['smooth', 'sharper'] as const) {
+      expect(pictureSize({ width: 1920, height: 1080 }, { playing: false, sharpness: s })).toEqual({ width: 1920, height: 1080, scale: 1, quality: 'full' });
+      for (const p of [true, false]) expect(pictureSize({ width: 1920, height: 1080 }, { playing: p, draftMaxHeight: 270, sharpness: s })).toEqual({ width: 480, height: 270, scale: 0.25, quality: 'draft' });
+    }
+  });
+  it('a stored value is \'sharper\' only when it says exactly that; anything else is the default', () => {
+    expect(PLAY_SHARPNESS_KEY).toBe('pf.playSharpness');
+    expect(parsePlaySharpness('sharper')).toBe('sharper');
+    for (const raw of ['smooth', null, undefined, '', 'Sharper', '1', 'true', 960, {}, ['sharper']]) expect(parsePlaySharpness(raw), JSON.stringify(raw)).toBe('smooth');
   });
 });

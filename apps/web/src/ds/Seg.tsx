@@ -12,13 +12,15 @@ export interface SegProps<V extends string = string> {
   size?: 'sm' | 'md';
   block?: boolean;
   label: string;
+  /** id of an element that explains the choice (aria-describedby on the group) */
+  describedBy?: string;
   /** icons only; each option keeps its aria-label */
   iconOnly?: boolean;
   className?: string;
 }
 
 /** Segmented control with a roving tabindex: one tab stop, arrows move AND select (automatic activation), Home/End jump. */
-export function Seg<V extends string = string>({ options, value, onChange, semantics = 'radio', size = 'md', block, label, iconOnly, className }: SegProps<V>) {
+export function Seg<V extends string = string>({ options, value, onChange, semantics = 'radio', size = 'md', block, label, describedBy, iconOnly, className }: SegProps<V>) {
   const dir = useDir();
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const active = Math.max(0, options.findIndex((o) => o.value === value));
@@ -32,7 +34,7 @@ export function Seg<V extends string = string>({ options, value, onChange, seman
     onChange(options[to]!.value);
   };
   return (
-    <div role={semantics === 'radio' ? 'radiogroup' : 'group'} aria-label={label} className={cx(DS, 'pf-seg', `pf-seg-${size}`, block && 'is-block', className)}>
+    <div role={semantics === 'radio' ? 'radiogroup' : 'group'} aria-label={label} aria-describedby={describedBy} className={cx(DS, 'pf-seg', `pf-seg-${size}`, block && 'is-block', className)}>
       {options.map((o, i) => {
         const on = o.value === value;
         const common = {
