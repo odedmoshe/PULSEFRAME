@@ -60,10 +60,17 @@ Status: **accepted** (2026-11-17) for wave 1. Built by three workers on shared c
      `removedKeys`: the planner does not emit them, says so in notice `removed_by_hand` (Hebrew and English in i18n
      `template.notice.removed_by_hand`) and offers the alternative `{restoreRemoved: true}`. The regenerate request (REST body,
      MCP `regenerate_template` / `regenerate_recipe`) takes `restoreRemoved: true` as the explicit choice to make them again; the
-     result lists the left-out keys in `removed`. The family film (ADR-0026) does the same: a deleted pick leaves its file out
-     (exclusion `removed_by_hand`), a deleted title, closing card or music is not placed. The multicam auto-switch regenerates in
-     place and `switch_angles` skips gaps, so a deleted segment was already never refilled; a test holds it. All of it travels in
-     the op's arguments, so replay is unchanged and byte-identical.
+     result lists the left-out keys in `removed`. The family film (ADR-0026) does the same: a deleted title or closing card is not
+     placed; a deleted pick leaves out only the window it showed when its file has another window to give, and the whole file
+     (exclusion `removed_by_hand`) when it can give only one pick (a still, an unmeasured or flat video). The warning names each
+     file, and each window by its time. The window comes from the run record (`params.picked`; carried on in the optional
+     `params.removedPicks`). Music deleted by hand gives the no-music mix (own sound not lowered, ducking turned off); the cuts
+     stay on its bars while the length and order are unchanged and move to a steady grid otherwise (warning `music_removed`;
+     optional `params.cutOn`). The beat montage records where each clip was placed (optional `run.ranges`, written when
+     `apply_recipe` gets `recordRanges`; older runs have none), so a deleted clip's range stays empty on regeneration and is
+     carried on (`keepRanges`). The multicam auto-switch regenerates in place and `switch_angles` skips gaps, so a deleted
+     segment was already never refilled; a test holds it. All of it travels in the op's arguments, so replay is unchanged and
+     byte-identical.
 7. **Built-in catalogue** (`templateCatalog.ts`, all on Canvas2D effects, Hebrew and English names): `tpl.travel-montage`, `tpl.photo-dump`,
    `tpl.birthday`, `tpl.quote-card`, `tpl.countdown-list`, `tpl.home-video`. Your own clips are muted by default and the music carries the sound
    (`keepAudio` false); Home Video keeps each clip's own sound. Two more are listed unavailable with a reason: `tpl.text-behind-subject` (needs video

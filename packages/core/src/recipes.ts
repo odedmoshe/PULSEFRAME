@@ -38,6 +38,11 @@ export interface RecipePlan {
 export interface PlanContext {
   /** Timeline ranges that must be left alone (clips of a previous run that were edited by hand). */
   protectedRanges?: TimeRange[];
+  /**
+   * Timeline ranges of a previous run's clips that were deleted by hand (run.ranges whose clip is gone; beat-montage): left empty,
+   * so a hand delete survives the regeneration (ADR-0016 decision 6). The server passes none with restoreRemoved.
+   */
+  removedRanges?: TimeRange[];
   /** Silent source ranges per asset, measured by the server (tidy-speech only). */
   silences?: Record<string, TimeRange[]>;
   /** Level envelopes by asset id, loaded by the server (multicam-auto only; built on demand, never stored in the document). */
@@ -84,6 +89,12 @@ export const RECIPES = [
   // it has its own sheet in the multicam panel, not a form in the recipes panel
   { id: MULTICAM_AUTO_RECIPE_ID, name: { he: 'החלפת זוויות אוטומטית', en: 'Auto-switch angles' }, description: 'Heuristic: cut a multicam program to the angle of the clearly loudest mic, and to the wide angle when both or nobody speak. Not speaker identification.', params: MulticamAutoParams, needs: 'a synced multicam group with speakers mapped to mics, and level envelopes (built on demand)', regenerable: true, aiInput: null, inPlace: true },
 ] as const;
+/**
+ * Recipes whose runs record where each clip was placed (run.ranges, apply_recipe recordRanges), so that a clip deleted by hand
+ * stays deleted on regeneration: the regenerable recipes that remove and re-plan their clips (beat-montage). Not the in-place
+ * multicam auto-switch (switch_angles never fills a gap) and not the family film (its slot records say it).
+ */
+export const recordsRanges = (id: string): boolean => { const r = RECIPES.find((x) => x.id === id) as { regenerable: boolean; inPlace?: boolean } | undefined; return !!r && r.regenerable && !r.inPlace && id !== FAMILY_FILM_RECIPE_ID; };
 /**
  * A recipe regenerated IN PLACE (ADR-0020): regenerateRecipe removes nothing, plans on the current document with the
  * protected ranges, and passes keepIds = the clips edited by hand (apps/server/src/recipes.ts, W2).
@@ -137,9 +148,12 @@ function planMontage(doc: ProjectDocument, raw: unknown, ctx: PlanContext): Reci
   const ops: OpCall[] = [];
   let skipped = 0;
   const prot = (ctx.protectedRanges ?? []).map((r) => [fi(r.start), fi(r.end)] as const);
+  const gone = (ctx.removedRanges ?? []).map((r) => [fi(r.start), fi(r.end)] as const);
+  let leftEmpty = 0;
   for (let i = 0; i + 1 < bounds.length; i++) {
     const a = bounds[i]!, b = bounds[i + 1]!;
     if (prot.some(([s, e]) => a < e && s < b)) { skipped++; continue; }
+    if (gone.some(([s, e]) => a < e && s < b)) { leftEmpty++; continue; }
     const assetId = order[i % order.length]!;
     const asset = doc.assets[assetId]!;
     let len = b - a, sourceIn = 0;
@@ -154,11 +168,12 @@ function planMontage(doc: ProjectDocument, raw: unknown, ctx: PlanContext): Reci
     if (len <= 0) continue;
     ops.push({ op: 'add_clip', args: { assetId, start: T.frameTime(a, rate), sourceIn: T.frameTime(sourceIn, rate), duration: T.frameTime(len, rate), withLinkedAudio: false } });
   }
+  if (ops.length === 0 && leftEmpty) throw new RecipeError('nothing_to_do', 'every segment is covered by clips you edited or lies where you deleted clips by hand', 'Regenerate with restoreRemoved: true to fill the places of the deleted clips again.');
   if (ops.length === 0) throw new RecipeError('nothing_to_do', 'every segment is already covered by clips you edited');
   const bpm = analysis.bpm ? `${analysis.bpm.toFixed(1)} BPM` : 'unknown tempo';
   return {
     recipeId: 'beat-montage', params: p,
-    steps: [`Place ${ops.length} picture clips, one every ${p.everyBeats} ${p.cutOn === 'bars' ? 'bar(s), starting on bar starts' : 'beat(s)'}, order: ${p.order}`, ...(thinnedOut ? [`Leave out ${thinnedOut} cut(s) that would come less than a third of a second after the one before, so the montage cuts at most three times a second (faster cutting between bright and dark pictures is a seizure risk for some viewers)`] : []), ...(skipped ? [`Leave ${skipped} segment(s) alone because they hold clips edited by hand`] : [])],
+    steps: [`Place ${ops.length} picture clips, one every ${p.everyBeats} ${p.cutOn === 'bars' ? 'bar(s), starting on bar starts' : 'beat(s)'}, order: ${p.order}`, ...(thinnedOut ? [`Leave out ${thinnedOut} cut(s) that would come less than a third of a second after the one before, so the montage cuts at most three times a second (faster cutting between bright and dark pictures is a seizure risk for some viewers)`] : []), ...(skipped ? [`Leave ${skipped} segment(s) alone because they hold clips edited by hand`] : []), ...(leftEmpty ? [`Leave ${leftEmpty} segment(s) empty because their clips were deleted by hand (regenerate with restoreRemoved to fill them again)`] : [])],
     basis: [`${p.cutOn === 'bars' ? `${barFrames.length} bar starts among ` : ''}${beatFrames.length} beats of the music clip (${bpm}, confidence ${analysis.confidence ?? 'n/a'}${analysis.origin.edited ? ', corrected by hand' : ''})`, `method: ${analysis.origin.method}`],
     ops,
     alternatives: [

@@ -65,6 +65,44 @@ describe('regenerate after the in-place branch', () => {
     expect(findClip(doc, edited)!.clip).toEqual(before);
     for (const id of created.filter((x: string) => x !== edited)) expect(findClip(doc, id)).toBeFalsy();
   });
+  it('beat-montage: a clip deleted by hand stays deleted (its range stays empty, carried on in run.ranges); undo of the delete or restoreRemoved fills it again; replay is byte-identical', async () => {
+    const pid = store.createProject({ name: 'bm-del', width: 640, height: 360, frameRate: R }).doc.id;
+    const r = store.commit({ projectId: pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'import_asset', args: { asset: fake('d', 'audio') } }, { op: 'import_asset', args: { asset: fake('e', 'video') } }, { op: 'import_asset', args: { asset: fake('f', 'video') } }] });
+    const [M, A, B] = r.results.map((x) => x.output!.assetId as string) as [string, string, string];
+    const mc = store.commit({ projectId: pid, actor: 'user:owner', ops: [{ op: 'add_clip', args: { assetId: M, start: f(0) } }] }).results[0]!.output!;
+    store.commit({ projectId: pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'attach_analysis', args: { assetId: M, kind: 'beats', method: 'test', params: {}, createdAt: 'x', times: Array.from({ length: 100 }, (_, i) => T.rt(i, 2)), bpm: 120, confidence: 1 } }] });
+    const params = { musicClipId: (mc.audioClipId ?? mc.clipId) as string, assetIds: [A, B], everyBeats: 4 };
+    const applied = await applyRecipe(store, gov, owner, pid, 'beat-montage', params);
+    const pictures = () => { const d = store.getProject(pid).doc; return Object.values(d.sequences).flatMap((q) => q.tracks).filter((t) => t.kind === 'video').flatMap((t) => t.clips); };
+    const run0 = store.getProject(pid).doc.recipeRuns[applied.runId]!;
+    expect(Object.keys(run0.ranges ?? {}).sort()).toEqual([...run0.createdIds].filter((id) => !!findClip(store.getProject(pid).doc, id)).sort());
+    const gone = pictures()[2]!;
+    const [from, to] = [gone.start, T.add(gone.start, gone.duration)];
+    const over = () => pictures().filter((c) => T.lt(c.start, to) && T.lt(from, T.add(c.start, c.duration)));
+    store.commit({ projectId: pid, actor: 'user:owner', ops: [{ op: 'delete_clip', args: { clipId: gone.id } }] });
+    const regen = await regenerateRecipe(store, gov, owner, pid, applied.runId, params);
+    expect(regen.removed).toEqual([gone.id]);
+    expect(regen.steps.join(' ')).toMatch(/empty because their clips were deleted by hand/);
+    expect(over()).toEqual([]);
+    expect(store.getProject(pid).doc.recipeRuns[applied.runId]!.ranges![gone.id]).toEqual({ start: from, end: to });
+    // another cut rate still leaves the deleted range empty
+    const again = await regenerateRecipe(store, gov, owner, pid, applied.runId, { ...params, everyBeats: 2 });
+    expect([again.removed, over()]).toEqual([[gone.id], []]);
+    expect(JSON.stringify(store.replay(pid, store.getProject(pid).revision).doc)).toBe(JSON.stringify(store.getProject(pid).doc));
+    // restoreRemoved: the range is filled again and the deleted clip is forgotten
+    const back = await regenerateRecipe(store, gov, owner, pid, applied.runId, params, { restoreRemoved: true });
+    expect(back.removed).toEqual([]);
+    expect(over().length).toBeGreaterThan(0);
+    expect(store.getProject(pid).doc.recipeRuns[applied.runId]!.ranges![gone.id]).toBeUndefined();
+    // delete one, undo the delete: the regeneration treats it as untouched (nothing removed, the range filled)
+    const one = over()[0]!;
+    store.commit({ projectId: pid, actor: 'user:owner', ops: [{ op: 'delete_clip', args: { clipId: one.id } }] });
+    store.undo(pid, 'user:owner', 'undo');
+    const undone = await regenerateRecipe(store, gov, owner, pid, applied.runId, params);
+    expect(undone.removed).toEqual([]);
+    expect(over().length).toBeGreaterThan(0);
+    expect(JSON.stringify(store.replay(pid, store.getProject(pid).revision).doc)).toBe(JSON.stringify(store.getProject(pid).doc));
+  });
   it('tidy-speech: regenerating a run is planned on the document without its untouched clips, as before', async () => {
     const pid = store.createProject({ name: 'ts', width: 640, height: 360, frameRate: R }).doc.id;
     const bursts = speechBursts(5, 12);

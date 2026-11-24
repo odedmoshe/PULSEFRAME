@@ -93,6 +93,29 @@ describe('the trend-pack kernels (run against the recording MOCK)', () => {
     }
   });
 
+  it('the plain dissolve puts its weights into the pictures\' alpha (one destination-in fill each) and adds them at full alpha, never with globalAlpha', () => {
+    /** The destination-in fills of a log, as the globalAlpha set before each. */
+    const fades = (log: Call[]) => log.flatMap(([op], i) => (op === 'fillRect' && log.slice(0, i).filter(([o]) => o === '=globalCompositeOperation').at(-1)?.[1][0] === 'destination-in' ? [log.slice(0, i).filter(([o]) => o === '=globalAlpha').at(-1)![1][0]] : []));
+    const r = run('dissolve', 0.3);
+    expect(draws(r.slot6.log)).toEqual([r.outgoing, r.incoming]);
+    // one 8-bit level k = round(255·p) = 77 for both weights, so the two alphas add up to 255
+    expect(fades(r.slot6.log)).toEqual([178 / 255]); // the outgoing copy, faded by (255 − k)/255 in the mix
+    expect(fades(r.incoming.log)).toEqual([77 / 255]); // the incoming layer, faded by k/255 in place
+    // the outgoing copy is faded before the incoming picture is added (lighter); the only globalAlpha below 1 is the fade's
+    const log = r.slot6.log, fill = log.findIndex(([op]) => op === 'fillRect'), lighter = log.findIndex(([op, a]) => op === '=globalCompositeOperation' && a[0] === 'lighter');
+    expect([log.findIndex(([op]) => op === 'drawImage') < fill, fill < lighter, lighter < log.findLastIndex(([op]) => op === 'drawImage')]).toEqual([true, true, true]);
+    expect(log.filter(([op, a]) => op === '=globalAlpha' && a[0] !== 1).map(([, a]) => a[0])).toEqual([178 / 255]); // scratch() resets it to 1
+    expect(draws(r.frame.log)).toEqual([r.slot6]);
+    // no previous clip: only the incoming picture, faded by p, over what is below
+    const alone = run('dissolve', 0.3, false);
+    expect(draws(alone.slot6.log)).toEqual([alone.incoming]);
+    expect(fades(alone.incoming.log)).toEqual([77 / 255]);
+    // at p = 0.5 the weights are 127 and 128, not 128 and 128
+    const half = run('dissolve', 0.5);
+    expect([fades(half.slot6.log), fades(half.incoming.log)]).toEqual([[127 / 255], [128 / 255]]);
+    expect(fades(alone.slot6.log)).toEqual([]);
+  });
+
   it('each kernel draws from the side its rule names', () => {
     // punch: the outgoing picture before the switch, the incoming one from it on; four smear copies added up in slot 13
     for (const [p, side] of [[0.3, 'outgoing'], [0.5, 'incoming'], [0.7, 'incoming']] as const) {

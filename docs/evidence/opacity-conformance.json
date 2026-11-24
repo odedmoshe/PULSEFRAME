@@ -1,5 +1,5 @@
 {
- "when": "2026-11-24T16:39:04.931Z",
+ "when": "2026-11-24T18:13:27.283Z",
  "checks": [
   {
    "name": "1. The bottom clip alone and the top clip at opacity 1 are byte-identical to their files",
@@ -80,6 +80,52 @@
      "worstAbsAtAq": 0.498,
      "meanSignedError": 0.065,
      "bytesOff2AtAlpha": 0
+    }
+   }
+  },
+  {
+   "name": "4. Dissolve at 21 progress values (one of them 0.5), between two clips and revealing over the track below: every byte within 1 of round(exact at round(255·p)/255); between two clips a byte that is the same in both pictures is unchanged",
+   "ok": true,
+   "detail": {
+    "dissolve": {
+     "progressValues": 21,
+     "bytesOff2AtPq": 0,
+     "progressWithBytesOff2AtPq": [],
+     "worstAbsAtPq": 0.996,
+     "meanSignedError": 0,
+     "bytesOff2AtP": 0,
+     "sameValueBytesChanged": 0,
+     "atHalf": {
+      "type": "dissolve",
+      "frame": 40,
+      "progress": 0.5,
+      "meanSignedError": 0,
+      "worstAbs": 0.5,
+      "bytesOff2": 0,
+      "worstAbsQ": 0.996,
+      "bytesOff2Q": 0,
+      "sameValueBytesChanged": 0
+     }
+    },
+    "dissolve (reveal over the track below)": {
+     "progressValues": 21,
+     "bytesOff2AtPq": 0,
+     "progressWithBytesOff2AtPq": [],
+     "worstAbsAtPq": 1.494,
+     "meanSignedError": -0.209,
+     "bytesOff2AtP": 1372,
+     "sameValueBytesChanged": 8448,
+     "atHalf": {
+      "type": "dissolve (reveal over the track below)",
+      "frame": 40,
+      "progress": 0.5,
+      "meanSignedError": 0,
+      "worstAbs": 0.5,
+      "bytesOff2": 0,
+      "worstAbsQ": 0.996,
+      "bytesOff2Q": 0,
+      "sameValueBytesChanged": 0
+     }
     }
    }
   }
@@ -255,6 +301,46 @@
     "bytesOff2Q": 0,
     "bytesEqualRounded": 195470,
     "bytes": 196608
+   }
+  },
+  "dip-black": {
+   "progressValues": 21,
+   "bytesOff2AtPq": 0,
+   "progressWithBytesOff2AtPq": [],
+   "worstAbsAtPq": 0.992,
+   "meanSignedError": -0.326,
+   "bytesOff2AtP": 0,
+   "sameValueBytesChanged": 0,
+   "atHalf": {
+    "type": "dip-black",
+    "frame": 40,
+    "progress": 0.5,
+    "meanSignedError": 0,
+    "worstAbs": 0,
+    "bytesOff2": 0,
+    "worstAbsQ": 0,
+    "bytesOff2Q": 0,
+    "sameValueBytesChanged": 0
+   }
+  },
+  "dip-white": {
+   "progressValues": 21,
+   "bytesOff2AtPq": 0,
+   "progressWithBytesOff2AtPq": [],
+   "worstAbsAtPq": 0.992,
+   "meanSignedError": -0.283,
+   "bytesOff2AtP": 0,
+   "sameValueBytesChanged": 0,
+   "atHalf": {
+    "type": "dip-white",
+    "frame": 40,
+    "progress": 0.5,
+    "meanSignedError": 0,
+    "worstAbs": 0,
+    "bytesOff2": 0,
+    "worstAbsQ": 0,
+    "bytesOff2Q": 0,
+    "sameValueBytesChanged": 0
    }
   }
  },
@@ -3618,6 +3704,932 @@
    "bytesOff2Q": 0,
    "bytesEqualRounded": 195470,
    "bytes": 196608
+  }
+ ],
+ "transitions": [
+  {
+   "type": "dissolve",
+   "frame": 30,
+   "progress": 0.0004,
+   "meanSignedError": 0,
+   "worstAbs": 0.096,
+   "bytesOff2": 0,
+   "worstAbsQ": 0,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 31,
+   "progress": 0.003,
+   "meanSignedError": 0,
+   "worstAbs": 0.997,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.996,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 32,
+   "progress": 0.0101,
+   "meanSignedError": 0,
+   "worstAbs": 1.266,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.988,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 33,
+   "progress": 0.024,
+   "meanSignedError": 0,
+   "worstAbs": 1.073,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.988,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 34,
+   "progress": 0.047,
+   "meanSignedError": 0,
+   "worstAbs": 1.003,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.988,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 35,
+   "progress": 0.0811,
+   "meanSignedError": 0,
+   "worstAbs": 1.282,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.988,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 36,
+   "progress": 0.1289,
+   "meanSignedError": 0,
+   "worstAbs": 1.101,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.988,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 37,
+   "progress": 0.1923,
+   "meanSignedError": 0,
+   "worstAbs": 0.968,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.996,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 38,
+   "progress": 0.2739,
+   "meanSignedError": 0,
+   "worstAbs": 1.121,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.98,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 39,
+   "progress": 0.3757,
+   "meanSignedError": 0,
+   "worstAbs": 1.064,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.988,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 40,
+   "progress": 0.5,
+   "meanSignedError": 0,
+   "worstAbs": 0.5,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.996,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 41,
+   "progress": 0.6243,
+   "meanSignedError": 0,
+   "worstAbs": 1.064,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.988,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 42,
+   "progress": 0.7261,
+   "meanSignedError": 0,
+   "worstAbs": 1.121,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.98,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 43,
+   "progress": 0.8077,
+   "meanSignedError": 0,
+   "worstAbs": 0.968,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.996,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 44,
+   "progress": 0.8711,
+   "meanSignedError": 0,
+   "worstAbs": 1.101,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.988,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 45,
+   "progress": 0.9189,
+   "meanSignedError": 0,
+   "worstAbs": 1.282,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.988,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 46,
+   "progress": 0.953,
+   "meanSignedError": 0,
+   "worstAbs": 1.003,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.988,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 47,
+   "progress": 0.976,
+   "meanSignedError": 0,
+   "worstAbs": 1.073,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.988,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 48,
+   "progress": 0.9899,
+   "meanSignedError": 0,
+   "worstAbs": 1.266,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.988,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 49,
+   "progress": 0.997,
+   "meanSignedError": 0,
+   "worstAbs": 0.997,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.996,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve",
+   "frame": 50,
+   "progress": 0.9996,
+   "meanSignedError": 0,
+   "worstAbs": 0.096,
+   "bytesOff2": 0,
+   "worstAbsQ": 0,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 30,
+   "progress": 0.0004,
+   "meanSignedError": 0,
+   "worstAbs": 0.096,
+   "bytesOff2": 0,
+   "worstAbsQ": 0,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 31,
+   "progress": 0.003,
+   "meanSignedError": -0.496,
+   "worstAbs": 1.379,
+   "bytesOff2": 0,
+   "worstAbsQ": 1.494,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 762
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 32,
+   "progress": 0.0101,
+   "meanSignedError": -0.492,
+   "worstAbs": 1.692,
+   "bytesOff2": 672,
+   "worstAbsQ": 1.482,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 756
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 33,
+   "progress": 0.024,
+   "meanSignedError": -0.484,
+   "worstAbs": 1.578,
+   "bytesOff2": 150,
+   "worstAbsQ": 1.482,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 744
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 34,
+   "progress": 0.047,
+   "meanSignedError": -0.469,
+   "worstAbs": 1.47,
+   "bytesOff2": 0,
+   "worstAbsQ": 1.471,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 720
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 35,
+   "progress": 0.0811,
+   "meanSignedError": -0.457,
+   "worstAbs": 1.688,
+   "bytesOff2": 312,
+   "worstAbsQ": 1.471,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 702
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 36,
+   "progress": 0.1289,
+   "meanSignedError": -0.434,
+   "worstAbs": 1.488,
+   "bytesOff2": 0,
+   "worstAbsQ": 1.459,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 666
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 37,
+   "progress": 0.1923,
+   "meanSignedError": -0.402,
+   "worstAbs": 1.468,
+   "bytesOff2": 0,
+   "worstAbsQ": 1.463,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 618
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 38,
+   "progress": 0.2739,
+   "meanSignedError": -0.359,
+   "worstAbs": 1.465,
+   "bytesOff2": 0,
+   "worstAbsQ": 1.471,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 552
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 39,
+   "progress": 0.3757,
+   "meanSignedError": -0.25,
+   "worstAbs": 1.301,
+   "bytesOff2": 0,
+   "worstAbsQ": 1.365,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 384
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 40,
+   "progress": 0.5,
+   "meanSignedError": 0,
+   "worstAbs": 0.5,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.996,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 41,
+   "progress": 0.6243,
+   "meanSignedError": -0.187,
+   "worstAbs": 1.53,
+   "bytesOff2": 36,
+   "worstAbsQ": 1.412,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 336
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 42,
+   "progress": 0.7261,
+   "meanSignedError": -0.137,
+   "worstAbs": 1.574,
+   "bytesOff2": 42,
+   "worstAbsQ": 1.431,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 318
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 43,
+   "progress": 0.8077,
+   "meanSignedError": -0.094,
+   "worstAbs": 1.423,
+   "bytesOff2": 0,
+   "worstAbsQ": 1.459,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 312
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 44,
+   "progress": 0.8711,
+   "meanSignedError": -0.063,
+   "worstAbs": 1.555,
+   "bytesOff2": 16,
+   "worstAbsQ": 1.435,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 336
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 45,
+   "progress": 0.9189,
+   "meanSignedError": -0.039,
+   "worstAbs": 1.688,
+   "bytesOff2": 144,
+   "worstAbsQ": 1.4,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 324
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 46,
+   "progress": 0.953,
+   "meanSignedError": -0.023,
+   "worstAbs": 1.407,
+   "bytesOff2": 0,
+   "worstAbsQ": 1.388,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 348
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 47,
+   "progress": 0.976,
+   "meanSignedError": -0.012,
+   "worstAbs": 1.337,
+   "bytesOff2": 0,
+   "worstAbsQ": 1.341,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 318
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 48,
+   "progress": 0.9899,
+   "meanSignedError": 0,
+   "worstAbs": 1.479,
+   "bytesOff2": 0,
+   "worstAbsQ": 1.235,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 252
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 49,
+   "progress": 0.997,
+   "meanSignedError": 0,
+   "worstAbs": 0.997,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.996,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dissolve (reveal over the track below)",
+   "frame": 50,
+   "progress": 0.9996,
+   "meanSignedError": 0,
+   "worstAbs": 0.096,
+   "bytesOff2": 0,
+   "worstAbsQ": 0,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 30,
+   "progress": 0.0004,
+   "meanSignedError": 0.096,
+   "worstAbs": 0.192,
+   "bytesOff2": 0,
+   "worstAbsQ": 0,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 31,
+   "progress": 0.003,
+   "meanSignedError": -0.726,
+   "worstAbs": 1.225,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.992,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 32,
+   "progress": 0.0101,
+   "meanSignedError": -0.402,
+   "worstAbs": 0.98,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.98,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 33,
+   "progress": 0.024,
+   "meanSignedError": -0.338,
+   "worstAbs": 0.952,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.976,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 34,
+   "progress": 0.047,
+   "meanSignedError": -0.463,
+   "worstAbs": 0.967,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.965,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 35,
+   "progress": 0.0811,
+   "meanSignedError": -0.227,
+   "worstAbs": 0.943,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.98,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 36,
+   "progress": 0.1289,
+   "meanSignedError": -0.51,
+   "worstAbs": 1.017,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.965,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 37,
+   "progress": 0.1923,
+   "meanSignedError": -0.259,
+   "worstAbs": 0.923,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.933,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 38,
+   "progress": 0.2739,
+   "meanSignedError": -0.386,
+   "worstAbs": 0.975,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.961,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 39,
+   "progress": 0.3757,
+   "meanSignedError": -0.207,
+   "worstAbs": 0.746,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.741,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 40,
+   "progress": 0.5,
+   "meanSignedError": 0,
+   "worstAbs": 0,
+   "bytesOff2": 0,
+   "worstAbsQ": 0,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 41,
+   "progress": 0.6243,
+   "meanSignedError": -0.207,
+   "worstAbs": 0.746,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.741,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 42,
+   "progress": 0.7261,
+   "meanSignedError": -0.386,
+   "worstAbs": 0.975,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.961,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 43,
+   "progress": 0.8077,
+   "meanSignedError": -0.259,
+   "worstAbs": 0.923,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.933,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 44,
+   "progress": 0.8711,
+   "meanSignedError": -0.51,
+   "worstAbs": 1.017,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.965,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 45,
+   "progress": 0.9189,
+   "meanSignedError": -0.227,
+   "worstAbs": 0.943,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.98,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 46,
+   "progress": 0.953,
+   "meanSignedError": -0.463,
+   "worstAbs": 0.967,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.965,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 47,
+   "progress": 0.976,
+   "meanSignedError": -0.338,
+   "worstAbs": 0.952,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.976,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 48,
+   "progress": 0.9899,
+   "meanSignedError": -0.402,
+   "worstAbs": 0.98,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.98,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 49,
+   "progress": 0.997,
+   "meanSignedError": -0.726,
+   "worstAbs": 1.225,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.992,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-black",
+   "frame": 50,
+   "progress": 0.9996,
+   "meanSignedError": 0.096,
+   "worstAbs": 0.192,
+   "bytesOff2": 0,
+   "worstAbsQ": 0,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 30,
+   "progress": 0.0004,
+   "meanSignedError": -0.096,
+   "worstAbs": 0.192,
+   "bytesOff2": 0,
+   "worstAbsQ": 0,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 31,
+   "progress": 0.003,
+   "meanSignedError": -0.259,
+   "worstAbs": 0.757,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.992,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 32,
+   "progress": 0.0101,
+   "meanSignedError": -0.575,
+   "worstAbs": 1.153,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.98,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 33,
+   "progress": 0.024,
+   "meanSignedError": -0.599,
+   "worstAbs": 1.213,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.976,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 34,
+   "progress": 0.047,
+   "meanSignedError": -0.412,
+   "worstAbs": 0.915,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.965,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 35,
+   "progress": 0.0811,
+   "meanSignedError": -0.609,
+   "worstAbs": 1.325,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.98,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 36,
+   "progress": 0.1289,
+   "meanSignedError": -0.224,
+   "worstAbs": 0.731,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.965,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 37,
+   "progress": 0.1923,
+   "meanSignedError": -0.351,
+   "worstAbs": 1.014,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.933,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 38,
+   "progress": 0.2739,
+   "meanSignedError": -0.052,
+   "worstAbs": 0.641,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.961,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 39,
+   "progress": 0.3757,
+   "meanSignedError": 0.207,
+   "worstAbs": 0.746,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.741,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 40,
+   "progress": 0.5,
+   "meanSignedError": 0,
+   "worstAbs": 0,
+   "bytesOff2": 0,
+   "worstAbsQ": 0,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 41,
+   "progress": 0.6243,
+   "meanSignedError": 0.207,
+   "worstAbs": 0.746,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.741,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 42,
+   "progress": 0.7261,
+   "meanSignedError": -0.052,
+   "worstAbs": 0.641,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.961,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 43,
+   "progress": 0.8077,
+   "meanSignedError": -0.351,
+   "worstAbs": 1.014,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.933,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 44,
+   "progress": 0.8711,
+   "meanSignedError": -0.224,
+   "worstAbs": 0.731,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.965,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 45,
+   "progress": 0.9189,
+   "meanSignedError": -0.609,
+   "worstAbs": 1.325,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.98,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 46,
+   "progress": 0.953,
+   "meanSignedError": -0.412,
+   "worstAbs": 0.915,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.965,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 47,
+   "progress": 0.976,
+   "meanSignedError": -0.599,
+   "worstAbs": 1.213,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.976,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 48,
+   "progress": 0.9899,
+   "meanSignedError": -0.575,
+   "worstAbs": 1.153,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.98,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 49,
+   "progress": 0.997,
+   "meanSignedError": -0.259,
+   "worstAbs": 0.757,
+   "bytesOff2": 0,
+   "worstAbsQ": 0.992,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
+  },
+  {
+   "type": "dip-white",
+   "frame": 50,
+   "progress": 0.9996,
+   "meanSignedError": -0.096,
+   "worstAbs": 0.192,
+   "bytesOff2": 0,
+   "worstAbsQ": 0,
+   "bytesOff2Q": 0,
+   "sameValueBytesChanged": 0
   }
  ]
 }

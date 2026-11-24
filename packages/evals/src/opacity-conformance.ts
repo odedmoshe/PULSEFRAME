@@ -12,9 +12,16 @@
  *     onto the frame with globalAlpha) 57752 bytes at 44 opacities were 2 off, and the frame was on average 0.49 of a level low.
  *  3. multiply, screen, overlay, soft-light, darken, lighten and add at 14 opacities: the same bound. Before the fix (placed
  *     with globalAlpha into the scratch buffer) multiply, overlay, darken and lighten had bytes 2 off.
+ *  4. The dissolve transition (21 frames, so 21 progress values p from the real evaluate, one of them exactly 0.5): between two
+ *     clips (the first picture outgoing, the second incoming), every byte within 1 of round(out·(1 − pq) + in·pq),
+ *     pq = round(255·p)/255, and a byte that is the same in both pictures unchanged; revealing the second picture over the
+ *     first on the track below, the first bound. Before the fix (both pictures drawn with globalAlpha into the mix buffer, 20
+ *     frames) 1604 bytes at 6 progress values were 2 off between two clips, and 38096 bytes at 16 when revealing, with the frame
+ *     on average 0.44 of a level low.
  * Recorded, not gated: the mean signed error per mode and opacity, bytes 2 off round(exact at α) (those come from α between two
- * 8-bit levels), and hard-light, difference, exclusion, color-dodge and color-burn, whose own 8-bit maths in Chromium is more
- * than 1 off even at opacity 1 (exclusion) or ill-conditioned (dodge, burn).
+ * 8-bit levels), hard-light, difference, exclusion, color-dodge and color-burn, whose own 8-bit maths in Chromium is more
+ * than 1 off even at opacity 1 (exclusion) or ill-conditioned (dodge, burn), and the dip to black and to white (already within 1
+ * at the nearest 8-bit alpha, on average 0.40 and 0.23 of a level low).
  *
  *   pnpm build && pnpm conformance:opacity
  * Writes docs/evidence/opacity-conformance.json. Synthetic pictures only.
@@ -25,6 +32,7 @@ import zlib from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import * as T from '@pulseframe/time';
 import { startServer } from '@pulseframe/server';
+import { evaluate } from '@pulseframe/engine';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const dir = path.join(root, '.artifacts/opacity-conformance');
@@ -58,7 +66,7 @@ const s = await startServer({ port: 8961, dataDir: path.join(dir, 'data') });
 const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
 const call = async (p: string, body?: unknown) => { const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }); return { status: r.status, body: r.headers.get('content-type')?.includes('json') ? await r.json() : Buffer.from(await r.arrayBuffer()) } as { status: number; body: any }; };
 const tx = async (pid: string, ops: unknown[]) => { const r = await call(`/projects/${pid}/transactions`, { ops }); if (r.status !== 200) throw new Error(JSON.stringify(r.body).slice(0, 300)); return r.body; };
-const still = async (pid: string) => { const r = await call(`/projects/${pid}/frame?index=5`); if (r.status !== 200) throw new Error(JSON.stringify(r.body).slice(0, 300)); return rgb(r.body); };
+const still = async (pid: string, index = 5) => { const r = await call(`/projects/${pid}/frame?index=${index}`); if (r.status !== 200) throw new Error(JSON.stringify(r.body).slice(0, 300)); return rgb(r.body); };
 const results: { mode: string; opacity: number; meanSignedError: number; worstAbs: number; bytesOff2: number; meanSignedErrorQ: number; worstAbsQ: number; bytesOff2Q: number; bytesEqualRounded: number; bytes: number }[] = [];
 const checks: { name: string; ok: boolean; detail?: unknown }[] = [];
 const check = (name: string, ok: boolean, detail?: unknown) => { checks.push({ name, ok, detail }); console.log(`${ok ? '  ok  ' : ' FAIL '} ${name}${detail !== undefined ? `  ${JSON.stringify(detail)}` : ''}`); };
@@ -104,11 +112,56 @@ try {
   check('2. Normal blend, opacities 0.01…0.99: every byte within 1 of round(exact at round(255·α)/255)', normal.length === 99 && normal.every((x) => x.bytesOff2Q === 0), summary(normal));
   const gated = Object.fromEntries(GATED.map((m) => [m, summary(below(results.filter((x) => x.mode === m)))]));
   check(`3. ${GATED.join(', ')} at 14 opacities: every byte within 1 of round(exact at round(255·α)/255)`, GATED.every((m) => gated[m]!.opacities === 14 && gated[m]!.bytesOff2AtAq === 0), gated);
-  const recorded = Object.fromEntries(['hard-light', 'difference', 'exclusion', 'color-dodge', 'color-burn'].map((m) => [m, { ...summary(below(results.filter((x) => x.mode === m))), atOpacity1: results.find((x) => x.mode === m && x.opacity === 1) }]));
+  const recorded: Record<string, unknown> = Object.fromEntries(['hard-light', 'difference', 'exclusion', 'color-dodge', 'color-burn'].map((m) => [m, { ...summary(below(results.filter((x) => x.mode === m))), atOpacity1: results.find((x) => x.mode === m && x.opacity === 1) }]));
+  // ---------- 4. transitions: the dissolve (gated) and the dips (recorded) ----------
+  const transitions: { type: string; frame: number; progress: number; meanSignedError: number; worstAbs: number; bytesOff2: number; worstAbsQ: number; bytesOff2Q: number; sameValueBytesChanged: number }[] = [];
+  for (const [type, reveal] of [['dissolve', false], ['dissolve', true], ['dip-black', false], ['dip-white', false]] as const) {
+    const tp = (await call('/projects', { name: `${type}${reveal ? '-reveal' : ''}`, width: N, height: N })).body.project.id as string;
+    const upT = async (file: string) => ((await (await fetch(`${s.url}/api/v1/projects/${tp}/assets`, { method: 'POST', headers: { ...h, 'x-filename': path.basename(file) }, body: fs.readFileSync(file) })).json()) as any).assetId as string;
+    const A = await upT(path.join(dir, 'bottom.png')), B = await upT(path.join(dir, 'top.png'));
+    let inId: string;
+    if (!reveal) {
+      await tx(tp, [{ op: 'add_clip', args: { assetId: A, start: f(0), duration: f(30) } }]);
+      inId = (await tx(tp, [{ op: 'add_clip', args: { assetId: B, start: f(30), duration: f(30) } }])).results[0].output.clipId;
+    } else {
+      await tx(tp, [{ op: 'add_clip', args: { assetId: A, start: f(0), duration: f(60) } }]);
+      const tr = (await tx(tp, [{ op: 'add_track', args: { kind: 'video' } }])).results[0].output.trackId;
+      inId = (await tx(tp, [{ op: 'add_clip', args: { assetId: B, trackId: tr, start: f(30), duration: f(30) } }])).results[0].output.clipId;
+    }
+    await tx(tp, [{ op: 'set_transition', args: { clipId: inId, type, frames: 21 } }]);
+    const doc = (await call(`/projects/${tp}`)).body.project;
+    for (let F = 30; F < 51; F++) {
+      const layer = evaluate(doc, f(F)).layers.find((l) => l.kind !== 'caption' && l.kind !== 'adjust' && l.transition?.role === 'in');
+      if (!layer || layer.kind === 'caption' || layer.kind === 'adjust') throw new Error(`${type}: no incoming layer at frame ${F}`);
+      const p = layer.transition!.progress;
+      // weights of the first picture (outgoing, or below), of the second (incoming) and of the dip colour, at progress w
+      const weights = (quantized: boolean) => {
+        const q8 = (x: number) => (quantized ? Math.round(255 * x) / 255 : x);
+        if (type === 'dissolve') return { wa: 1 - q8(p), wb: q8(p), wc: 0 };
+        const q = q8(p < 0.5 ? 2 * p : 2 * (1 - p));
+        return p < 0.5 ? { wa: 1 - q, wb: 0, wc: q } : { wa: 0, wb: 1 - q, wc: q };
+      };
+      const c = type === 'dip-white' ? 255 : 0, ex = weights(false), eq = weights(true);
+      const O = await still(tp, F);
+      let worst = 0, worstQ = 0, sum = 0, off2 = 0, off2Q = 0, same = 0;
+      for (let i = 0; i < O.length; i++) {
+        const a = D[i]!, b = S0(i), e = ex.wa * a + ex.wb * b + ex.wc * c, e2 = eq.wa * a + eq.wb * b + eq.wc * c;
+        sum += O[i]! - e; worst = Math.max(worst, Math.abs(O[i]! - e)); worstQ = Math.max(worstQ, Math.abs(O[i]! - e2));
+        if (Math.abs(O[i]! - Math.round(e)) >= 2) off2++;
+        if (Math.abs(O[i]! - Math.round(e2)) >= 2) off2Q++;
+        if (type === 'dissolve' && a === b && O[i] !== a) same++;
+      }
+      transitions.push({ type: reveal ? 'dissolve (reveal over the track below)' : type, frame: F, progress: +p.toFixed(4), meanSignedError: +(sum / O.length).toFixed(3), worstAbs: +worst.toFixed(3), bytesOff2: off2, worstAbsQ: +worstQ.toFixed(3), bytesOff2Q: off2Q, sameValueBytesChanged: same });
+    }
+  }
+  const tsum = (t: string) => { const xs = transitions.filter((x) => x.type === t); return { progressValues: xs.length, bytesOff2AtPq: xs.reduce((u, x) => u + x.bytesOff2Q, 0), progressWithBytesOff2AtPq: xs.filter((x) => x.bytesOff2Q).map((x) => x.progress), worstAbsAtPq: Math.max(...xs.map((x) => x.worstAbsQ)), meanSignedError: +(xs.reduce((u, x) => u + x.meanSignedError, 0) / xs.length).toFixed(3), bytesOff2AtP: xs.reduce((u, x) => u + x.bytesOff2, 0), sameValueBytesChanged: xs.reduce((u, x) => u + x.sameValueBytesChanged, 0), atHalf: xs.find((x) => x.progress === 0.5) ?? null }; };
+  const dissolves = { dissolve: tsum('dissolve'), 'dissolve (reveal over the track below)': tsum('dissolve (reveal over the track below)') };
+  check('4. Dissolve at 21 progress values (one of them 0.5), between two clips and revealing over the track below: every byte within 1 of round(exact at round(255·p)/255); between two clips a byte that is the same in both pictures is unchanged', Object.values(dissolves).every((x) => x.progressValues === 21 && x.bytesOff2AtPq === 0 && x.atHalf !== null) && dissolves.dissolve.sameValueBytesChanged === 0, dissolves);
+  Object.assign(recorded, { 'dip-black': tsum('dip-black'), 'dip-white': tsum('dip-white') });
   console.log(`  --   recorded, not gated: ${JSON.stringify(recorded)}`);
   failed = checks.some((c) => !c.ok);
   fs.mkdirSync(path.join(root, 'docs/evidence'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'docs/evidence/opacity-conformance.json'), JSON.stringify({ when: new Date().toISOString(), checks, recorded, results }, null, 1) + '\n');
+  fs.writeFileSync(path.join(root, 'docs/evidence/opacity-conformance.json'), JSON.stringify({ when: new Date().toISOString(), checks, recorded, results, transitions }, null, 1) + '\n');
   function S0(i: number) { const p = Math.floor(i / 3), c = i % 3; return topPx(p % N, Math.floor(p / N))[c]!; }
 } catch (e) {
   failed = true;
