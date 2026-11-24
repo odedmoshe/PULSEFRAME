@@ -61,7 +61,7 @@ describe('the trend-pack kernels (run against the recording MOCK)', () => {
   afterAll(() => { vi.unstubAllGlobals(); });
   let size = 40;
   /** One kernel run on a frame size no earlier run used, so the scratch buffers it creates are its own. */
-  function run(id: string, progress: number, withOutgoing = true, extra: Partial<CanvasTransitionArgs['t']> = {}) {
+  function run(id: string, progress: number, withOutgoing = true, extra: Partial<CanvasTransitionArgs['t']> = {}, draft = false) {
     const W = size++, H = 2 * W;
     const frame = new FakeCanvas(W, H), incoming = new FakeCanvas(W, H), outgoing = new FakeCanvas(W, H);
     const before = FakeCanvas.made.length;
@@ -70,7 +70,7 @@ describe('the trend-pack kernels (run against the recording MOCK)', () => {
       ctx: frame.getContext() as unknown as OffscreenCanvasRenderingContext2D,
       incoming: { canvas: incoming, ctx: incoming.getContext() } as unknown as Buf,
       outgoing: withOutgoing ? ({ canvas: outgoing, ctx: outgoing.getContext() } as unknown as Buf) : null,
-      t: { type: id as never, progress, role: 'in', light: 0, color: null, seed: 0, frame: 7, frames: 15, fps: 30, ...extra }, v: c.v, W, H,
+      t: { type: id as never, progress, role: 'in', light: 0, color: null, seed: 0, frame: 7, frames: 15, fps: 30, ...extra }, v: c.v, W, H, draft,
     });
     const created = FakeCanvas.made.slice(before);
     // the slots the kernel used: scratch() hands back the same buffer for the same slot and size
@@ -114,6 +114,23 @@ describe('the trend-pack kernels (run against the recording MOCK)', () => {
     const half = run('dissolve', 0.5);
     expect([fades(half.slot6.log), fades(half.incoming.log)]).toEqual([[127 / 255], [128 / 255]]);
     expect(fades(alone.slot6.log)).toEqual([]);
+  });
+
+  it('draft playback: the dissolve adds the two pictures with globalAlpha (255 − k)/255 and k/255, no fill; with no previous clip it copies the incoming one in', () => {
+    const fills = (log: Call[]) => log.filter(([op]) => op === 'fillRect').length;
+    const alphas = (log: Call[]) => log.filter(([op, a]) => op === '=globalAlpha' && a[0] !== 1).map(([, a]) => a[0]);
+    const ops = (log: Call[]) => log.filter(([op]) => op === '=globalCompositeOperation').map(([, a]) => a[0]);
+    const r = run('dissolve', 0.3, true, {}, true);
+    expect(draws(r.slot6.log)).toEqual([r.outgoing, r.incoming]);
+    expect(alphas(r.slot6.log)).toEqual([178 / 255, 77 / 255]);
+    expect(ops(r.slot6.log)).toContain('lighter'); // (the harness's scratch() call afterwards resets it)
+    expect([fills(r.slot6.log), fills(r.incoming.log)]).toEqual([0, 0]);
+    expect(draws(r.frame.log)).toEqual([r.slot6]);
+    const alone = run('dissolve', 0.3, false, {}, true);
+    expect(draws(alone.slot6.log)).toEqual([alone.incoming]);
+    expect(alphas(alone.slot6.log)).toEqual([77 / 255]);
+    expect([ops(alone.slot6.log).includes('copy'), ops(alone.slot6.log).includes('lighter')]).toEqual([true, false]);
+    expect(fills(alone.incoming.log)).toBe(0);
   });
 
   it('each kernel draws from the side its rule names', () => {

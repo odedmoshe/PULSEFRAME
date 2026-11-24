@@ -6,7 +6,7 @@ import './lab.css';
 import './strictPage.ts';
 import * as T from '@pulseframe/time';
 import { applyTransaction, BLEND_MODES, createProject, DEFAULT_MASK, describeCatalog, EFFECTS, TRANSITIONS, type Mask, type TransitionDef, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { drawGraph, evaluate, gpuStatus, initGpu, type FrameImage } from '@pulseframe/engine';
+import { drawGraph, evaluate, gpuStatus, initGpu, placedArea, type DrawOptions, type FrameImage } from '@pulseframe/engine';
 import { ensureFonts } from './fonts.ts';
 
 const lang: 'he' | 'en' = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'he';
@@ -264,8 +264,117 @@ async function benchTransitions(ids: readonly string[]): Promise<LabBench> {
   return { size: `${W}x${H}`, frames: N, raster: 'canvas 2d, willReadFrequently (the render page\'s CPU raster path)', results };
 }
 
+
+// ---- opacity and dissolve at both qualities (lab.html?bench=opacity; driven by conformance:opacity, ADR-0005 amendment) ----
+/**
+ * What conformance:opacity asks this page for, on window.__pfLabOpacity. The draft picture is drawn only by the player while it
+ * plays, never by a still, so the checks of the draft quality draw here with the same evaluate + drawGraph the player uses.
+ * - frame(kind, value, quality): one 256×256 frame as packed RGB in base64. The bottom picture has R = x, G = y, the top one
+ *   R = y, G = x (B mixes both), so a frame puts every (backdrop, source) byte pair through the composite. kind 'opacity:<blend>'
+ *   draws the top clip at opacity `value` with that blend over the bottom one; 'dissolve' and 'dissolve-reveal' draw frame
+ *   `value` of a 21-frame dissolve from the bottom picture to the top one (one track), or revealing the top one over the
+ *   bottom one on the track below; the progress of that frame is returned with it.
+ * - fadeArea(): for faded pictures placed at many sizes, positions and angles, the full picture with the fill limited to the
+ *   placed box against the fill of the whole buffer (DrawOptions.fadeArea, diagnostics): differing bytes per placement.
+ * Diagnostics only: nothing is stored.
+ */
+export interface LabOpacity {
+  frame(kind: string, value: number, quality: 'draft' | 'full'): Promise<{ rgb: string; progress?: number }>;
+  fadeArea(): Promise<{ placement: string; size: string; bytes: number; differing: number; filledShare: number }[]>;
+}
+function opacityBench(): LabOpacity {
+  const N = 256;
+  const image = (name: string, hash: string, w: number, h: number) => ({
+    kind: 'image' as const, name, contentHash: `sha256:${hash.repeat(64)}`, byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.ZERO,
+    image: { width: w, height: h, codec: 'png', hasAlpha: false }, provenance: { origin: 'fixture' as const, importedAt: '2026-01-01T00:00:00Z', importedBy: 'lab' },
+  });
+  const pattern = (w: number, h: number, f: (x: number, y: number) => [number, number, number]) => { const id = new ImageData(w, h); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 4; const [r, g, b] = f(x, y); id.data[i] = r; id.data[i + 1] = g; id.data[i + 2] = b; id.data[i + 3] = 255; } return createImageBitmap(id); };
+  const pics = new Map<string, Promise<ImageBitmap>>();
+  const provider = async (l: { assetId: string }): Promise<FrameImage | null> => { const p = pics.get(l.assetId); const b = p ? await p : null; return b ? { draw: (c, dx, dy, dw, dh) => c.drawImage(b, dx, dy, dw, dh) } : null; };
+  /** Two pictures as assets of a new project of the given size, with the bitmaps registered for the provider. */
+  const project = (W: number, H: number, a: [number, number, (x: number, y: number) => [number, number, number]], b: [number, number, (x: number, y: number) => [number, number, number]]) => {
+    const s0 = step(createProject({ id: 'prj_lab_opacity', name: 'Lab opacity', width: W, height: H, frameRate: RATE }), [{ op: 'import_asset', args: { asset: image('o-a', 'c', a[0], a[1]) } }, { op: 'import_asset', args: { asset: image('o-b', 'd', b[0], b[1]) } }], true);
+    const [ia, ib] = [s0.out[0]!.assetId as string, s0.out[1]!.assetId as string];
+    pics.set(ia, pattern(...a)); pics.set(ib, pattern(...b));
+    return { doc: s0.doc, a: ia, b: ib, v1: s0.doc.sequences[s0.doc.mainSequenceId]!.tracks.find((t) => t.kind === 'video')!.id };
+  };
+  const bottom: [number, number, (x: number, y: number) => [number, number, number]] = [N, N, (x, y) => [x, y, (x * 7 + y * 13) & 255]];
+  const top: [number, number, (x: number, y: number) => [number, number, number]] = [N, N, (x, y) => [y, x, (x * 11 + y * 5) & 255]];
+  const canvas = el('canvas', { width: N, height: N });
+  const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false, colorSpace: 'srgb' })!;
+  const rgbOf = (c: CanvasRenderingContext2D, w: number, h: number) => { const d = c.getImageData(0, 0, w, h).data, out = new Uint8Array(w * h * 3); for (let i = 0, j = 0; i < d.length; i += 4, j += 3) { out[j] = d[i]!; out[j + 1] = d[i + 1]!; out[j + 2] = d[i + 2]!; } let bin = ''; for (let i = 0; i < out.length; i += 0x8000) bin += String.fromCharCode(...out.subarray(i, i + 0x8000)); return btoa(bin); };
+  const scenes = new Map<string, { doc: ProjectDocument; clipId: string }>();
+  const sceneOf = (kind: string) => {
+    let sc = scenes.get(kind);
+    if (sc) return sc;
+    const p = project(N, N, bottom, top);
+    if (kind.startsWith('opacity:')) {
+      const s1 = step(p.doc, [{ op: 'add_clip', args: { assetId: p.a, trackId: p.v1, start: f(0), duration: f(30), withLinkedAudio: false } }, { op: 'add_track', args: { kind: 'video' } }]);
+      const s2 = step(s1.doc, [{ op: 'add_clip', args: { assetId: p.b, trackId: s1.out[1]!.trackId as string, start: f(0), duration: f(30), withLinkedAudio: false } }]);
+      const clipId = s2.out[0]!.clipId as string, blend = kind.slice('opacity:'.length);
+      sc = { doc: blend === 'normal' ? s2.doc : step(s2.doc, [{ op: 'set_clip_blend', args: { clipId, mode: blend } }]).doc, clipId };
+    } else {
+      const reveal = kind === 'dissolve-reveal';
+      const s1 = step(p.doc, [{ op: 'add_clip', args: { assetId: p.a, trackId: p.v1, start: f(0), duration: f(reveal ? 60 : 30), withLinkedAudio: false } }, ...(reveal ? [{ op: 'add_track', args: { kind: 'video' } } as OpCall] : [])]);
+      const trackId = reveal ? (s1.out[1]!.trackId as string) : p.v1;
+      const s2 = step(s1.doc, [{ op: 'add_clip', args: { assetId: p.b, trackId, start: f(30), duration: f(30), withLinkedAudio: false } }]);
+      const clipId = s2.out[0]!.clipId as string;
+      sc = { doc: step(s2.doc, [{ op: 'set_transition', args: { clipId, type: 'dissolve', frames: 21 } }]).doc, clipId };
+    }
+    scenes.set(kind, sc);
+    return sc;
+  };
+  return {
+    async frame(kind, value, quality) {
+      const sc = sceneOf(kind);
+      const doc = kind.startsWith('opacity:') ? step(sc.doc, [{ op: 'set_clip_transform', args: { clipId: sc.clipId, transform: { opacity: value } } }]).doc : sc.doc;
+      const g = evaluate(doc, f(kind.startsWith('opacity:') ? 5 : value));
+      const r = await drawGraph(ctx, g, provider, { quality });
+      if (r.missing.length || r.unavailableEffects.length) throw new Error(`${kind} ${value}: could not be drawn`);
+      const inc = g.layers.find((l) => l.kind !== 'caption' && l.kind !== 'adjust' && l.transition?.role === 'in');
+      return { rgb: rgbOf(ctx, N, N), ...(inc && inc.kind !== 'caption' && inc.kind !== 'adjust' && inc.transition ? { progress: inc.transition.progress } : {}) };
+    },
+    async fadeArea() {
+      const out: Awaited<ReturnType<LabOpacity['fadeArea']>> = [];
+      // a 400×300 picture (another shape than the frame: contain leaves bars) with fine detail, over a full-frame one
+      const detail = (x: number, y: number): [number, number, number] => [(x * 5 + y * 3) & 255, (x * y) & 255, ((x ^ y) * 7) & 255];
+      const PLACEMENTS: [string, Record<string, number>, string?, boolean?][] = [
+        ['scale 0.5, centred', { scale: 0.5 }], ['scale 0.37, rotated 17°, moved', { scale: 0.37, rotation: 17, x: 0.1, y: -0.2 }],
+        ['scale 0.8, half off the right edge', { scale: 0.8, x: 0.45 }], ['scale 1.3 (larger than the frame)', { scale: 1.3 }],
+        ['scale 0.6, rotated 90°', { scale: 0.6, rotation: 90 }], ['scale 0.05', { scale: 0.05, x: -0.3, y: 0.3 }],
+        ['scale 0.7, rotated 45°, low', { scale: 0.7, rotation: 45, y: 0.4 }], ['scale 0.333, rotated -33.3°, at a fractional place', { scale: 0.333, rotation: -33.3, x: 0.1234, y: 0.0567 }],
+        ['scale 0.5, multiply, a blur and a mask after the fade', { scale: 0.5, rotation: 8 }, 'multiply', true],
+      ];
+      for (const [W, H] of [[640, 360], [360, 640], [1920, 1080]] as const) {
+        const p = project(W, H, [W, H, (x, y) => [(x * 3) & 255, (y * 5) & 255, (x + y) & 255]], [400, 300, detail]);
+        const s1 = step(p.doc, [{ op: 'add_clip', args: { assetId: p.a, trackId: p.v1, start: f(0), duration: f(30), withLinkedAudio: false } }, { op: 'add_track', args: { kind: 'video' } }]);
+        const s2 = step(s1.doc, [{ op: 'add_clip', args: { assetId: p.b, trackId: s1.out[1]!.trackId as string, start: f(0), duration: f(30), withLinkedAudio: false } }]);
+        const clipId = s2.out[0]!.clipId as string;
+        const c = el('canvas', { width: W, height: H }).getContext('2d', { willReadFrequently: true, alpha: false, colorSpace: 'srgb' })!;
+        for (const [name, transform, blend, extras] of PLACEMENTS) for (const opacity of [0.3, 0.77]) {
+          let doc = step(s2.doc, [{ op: 'set_clip_transform', args: { clipId, transform: { ...transform, opacity } } }]).doc;
+          if (blend) doc = step(doc, [{ op: 'set_clip_blend', args: { clipId, mode: blend } }]).doc;
+          if (extras) doc = step(doc, [{ op: 'add_effect', args: { clipId, type: 'blur.gaussian' } }, { op: 'set_clip_mask', args: { clipId, mask: { ...DEFAULT_MASK, shape: 'ellipse', width: 0.6, height: 0.6 } } }]).doc;
+          const g = evaluate(doc, f(5));
+          const draw = async (fadeArea: DrawOptions['fadeArea']) => { const r = await drawGraph(c, g, provider, { quality: 'full', fadeArea }); if (r.missing.length || r.unavailableEffects.length) throw new Error(`${name}: could not be drawn`); return c.getImageData(0, 0, W, H).data; };
+          const box = await draw('box'), frame = await draw('frame');
+          let differing = 0;
+          for (let i = 0; i < box.length; i++) if (box[i] !== frame[i]) differing++;
+          const top = g.layers.filter((l) => l.kind === 'image')[1];
+          const area = top && top.kind === 'image' ? placedArea(g, top) : undefined;
+          out.push({ placement: `${name}, opacity ${opacity}`, size: `${W}x${H}`, bytes: box.length, differing, filledShare: area ? +((area.w * area.h) / (W * H)).toFixed(3) : 1 });
+        }
+      }
+      return out;
+    },
+  };
+}
+
 const bench = new URLSearchParams(location.search).get('bench');
-if (bench === 'transitions') {
+if (bench === 'opacity') {
+  (window as unknown as { __pfLabOpacity: LabOpacity }).__pfLabOpacity = opacityBench();
+  document.body.dataset.ready = '1';
+} else if (bench === 'transitions') {
   // the trend-pack Canvas2D ids by default; ?ids=a,b picks others (non-GPU ids only)
   const asked = new URLSearchParams(location.search).get('ids')?.split(',').filter(Boolean);
   const ids = asked ?? (TRANSITIONS as readonly TransitionDef[]).filter((t) => !t.gpu && ['punch', 'blur', 'split', 'shape', 'block', 'slices'].includes(t.kernel)).map((t) => t.id);

@@ -29,7 +29,7 @@ const pool = new MediaPool({ assetUrl: (assetId) => `${base}/assets/${assetId}`,
 async function draw(index: number) {
   // `index` is relative to the exported range. Layout is resolution-independent, so a scaled output only changes the raster size.
   const g = evaluate(doc, T.frameTime(firstFrame + index, doc.settings.frameRate));
-  const { missing, missingReasons, unavailableEffects, unavailableReasons } = await drawGraph(ctx, { ...g, width: outWidth, height: outHeight }, pool.frames);
+  const { missing, missingReasons, unavailableEffects, unavailableReasons } = await drawGraph(ctx, { ...g, width: outWidth, height: outHeight }, pool.frames, { quality: 'full' }); // a still or an export frame: the full picture (ADR-0005)
   // Final renders never substitute black for media that failed to decode, and never leave out an effect that could not run.
   if (missing.length) throw new Error(`frame ${index}: source frame unavailable for clips ${missing.map((id) => (missingReasons?.[id] ? `${id} (${missingReasons[id]})` : id)).join(', ')}`);
   // An effect whose own material is missing (a colour table that could not be loaded) says so; the others need the adapter.

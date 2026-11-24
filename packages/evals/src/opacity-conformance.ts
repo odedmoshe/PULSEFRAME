@@ -18,6 +18,19 @@
  *     first on the track below, the first bound. Before the fix (both pictures drawn with globalAlpha into the mix buffer, 20
  *     frames) 1604 bytes at 6 progress values were 2 off between two clips, and 38096 bytes at 16 when revealing, with the frame
  *     on average 0.44 of a level low.
+ * Draft quality (DrawOptions, ADR-0005 amendment of 2026-11-24): drawn only by the player while it plays, so these frames come
+ * from the lab page (lab.html?bench=opacity), which draws the same pictures with the same evaluate + drawGraph in the same
+ * headless Chromium, once in 'draft' and once in 'full'.
+ *  5. Draft, a faded picture with the normal blend at the 99 opacities: every byte within 2 of round(exact at α), the mean
+ *     signed error within ±0.1 of a level; the share of bytes 2 off is reported. With multiply … add (14 opacities each) draft
+ *     keeps the exact fill: byte-identical to full (the copied form's mean error was up to +0.28 there, add).
+ *  6. Draft, the dissolve (between two clips and revealing) at its 21 progress values: the same bounds; and between two clips
+ *     a byte that is the same in both pictures unchanged.
+ *  7. Draft against full, byte by byte, on all the frames of 5 and 6: at most 2 apart (the amendment's bound). The full frames of
+ *     the lab equal the stills of checks 2 to 4 (the same compositor; compared here for the normal blend).
+ *  8. The full picture's fill limited to the faded picture's placed box equals the fill of the whole buffer, byte for byte:
+ *     9 placements (scaled, moved, half off the frame, larger than it, rotated by 17°, 45°, 90° and −33.3°, at fractional
+ *     positions, one with a blend, a blur and a mask after the fade) × 2 opacities × 3 frame sizes (640×360, 360×640, 1920×1080).
  * Recorded, not gated: the mean signed error per mode and opacity, bytes 2 off round(exact at α) (those come from α between two
  * 8-bit levels), hard-light, difference, exclusion, color-dodge and color-burn, whose own 8-bit maths in Chromium is more
  * than 1 off even at opacity 1 (exclusion) or ill-conditioned (dodge, burn), and the dip to black and to white (already within 1
@@ -33,6 +46,7 @@ import { execFileSync } from 'node:child_process';
 import * as T from '@pulseframe/time';
 import { startServer } from '@pulseframe/server';
 import { evaluate } from '@pulseframe/engine';
+import { chromium } from 'playwright';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const dir = path.join(root, '.artifacts/opacity-conformance');
@@ -158,10 +172,63 @@ try {
   const dissolves = { dissolve: tsum('dissolve'), 'dissolve (reveal over the track below)': tsum('dissolve (reveal over the track below)') };
   check('4. Dissolve at 21 progress values (one of them 0.5), between two clips and revealing over the track below: every byte within 1 of round(exact at round(255·p)/255); between two clips a byte that is the same in both pictures is unchanged', Object.values(dissolves).every((x) => x.progressValues === 21 && x.bytesOff2AtPq === 0 && x.atHalf !== null) && dissolves.dissolve.sameValueBytesChanged === 0, dissolves);
   Object.assign(recorded, { 'dip-black': tsum('dip-black'), 'dip-white': tsum('dip-white') });
+  // ---------- 5–8. draft quality and the fill area, in the lab page ----------
+  const browser = await chromium.launch();
+  let draft: Record<string, unknown> = {};
+  try {
+    const page = await browser.newPage();
+    await page.goto(`${s.url}/lab.html?bench=opacity`);
+    await page.waitForFunction(() => document.body.dataset.ready === '1');
+    const frame = async (kind: string, value: number, quality: 'draft' | 'full') => {
+      const r = await page.evaluate(([k, v, q]) => (window as unknown as { __pfLabOpacity: { frame(k: string, v: number, q: string): Promise<{ rgb: string; progress?: number }> } }).__pfLabOpacity.frame(k, v, q), [kind, value, quality] as [string, number, string]);
+      return { rgb: Buffer.from(r.rgb, 'base64'), progress: r.progress };
+    };
+    type Stat = { n: number; sum: number; worst: number; off2: number; off3: number; same: number; draftVsFullWorst: number; draftVsFullSum: number; fullVsStill?: number };
+    const stat = (): Stat => ({ n: 0, sum: 0, worst: 0, off2: 0, off3: 0, same: 0, draftVsFullWorst: 0, draftVsFullSum: 0 });
+    const add = (st: Stat, O: Buffer, F: Buffer, exact: (i: number) => number, sameCheck: boolean) => {
+      for (let i = 0; i < O.length; i++) {
+        const e = exact(i), d = Math.abs(O[i]! - Math.round(e));
+        st.n++; st.sum += O[i]! - e; st.worst = Math.max(st.worst, d); if (d >= 2) st.off2++; if (d >= 3) st.off3++;
+        if (sameCheck && D[i] === S0(i) && O[i] !== D[i]) st.same++;
+        const df = Math.abs(O[i]! - F[i]!); st.draftVsFullWorst = Math.max(st.draftVsFullWorst, df); st.draftVsFullSum += df;
+      }
+    };
+    const fin = (st: Stat) => ({ bytes: st.n, worstOffRounded: st.worst, meanSignedError: +(st.sum / st.n).toFixed(4), shareOff2: +(st.off2 / st.n).toFixed(5), bytesOff3: st.off3, draftVsFullWorst: st.draftVsFullWorst, draftVsFullMeanAbs: +(st.draftVsFullSum / st.n).toFixed(4), ...(st.same ? { sameValueBytesChanged: st.same } : {}) });
+    const opacityStats: Record<string, ReturnType<typeof fin>> = {};
+    let labFullVsStill = 0;
+    for (const mode of ['normal', ...GATED]) {
+      const st = stat();
+      for (const a of mode === 'normal' ? all.slice(0, 99) : some.slice(0, 14)) {
+        const d = await frame(`opacity:${mode}`, a, 'draft'), fu = await frame(`opacity:${mode}`, a, 'full');
+        add(st, d.rgb, fu.rgb, (i) => exactOf(mode, a, D[i]!, S0(i)), false);
+      }
+      opacityStats[mode] = fin(st);
+    }
+    // the lab's full picture is the still's: compare one opacity byte for byte
+    { await tx(pid, [{ op: 'set_clip_blend', args: { clipId, mode: 'normal' } }, { op: 'set_clip_transform', args: { clipId, transform: { opacity: 0.37 } } }]); const st = await still(pid); const lab = (await frame('opacity:normal', 0.37, 'full')).rgb; for (let i = 0; i < st.length; i++) if (st[i] !== lab[i]) labFullVsStill++; }
+    const dissolveStats: Record<string, ReturnType<typeof fin>> = {};
+    for (const kind of ['dissolve', 'dissolve-reveal']) {
+      const st = stat();
+      for (let F = 30; F < 51; F++) {
+        const d = await frame(kind, F, 'draft'), fu = await frame(kind, F, 'full');
+        const p = d.progress!;
+        add(st, d.rgb, fu.rgb, (i) => D[i]! * (1 - p) + S0(i) * p, kind === 'dissolve');
+      }
+      dissolveStats[kind] = fin(st);
+    }
+    const n5 = opacityStats.normal!, blended = GATED.map((m) => opacityStats[m]!);
+    check('5. Draft, a faded picture: normal blend at 99 opacities every byte within 2 of round(exact at α), mean signed error within ±0.1; with multiply … add (14 opacities each) byte-identical to full', n5.worstOffRounded <= 2 && Math.abs(n5.meanSignedError) <= 0.1 && blended.every((x) => x.draftVsFullWorst === 0), opacityStats);
+    check('6. Draft, the dissolve at 21 progress values (between two clips, revealing): every byte within 2 of round(exact at p), mean within ±0.1; between two clips same-value bytes unchanged', Object.values(dissolveStats).every((x) => x.worstOffRounded <= 2 && Math.abs(x.meanSignedError) <= 0.1) && !('sameValueBytesChanged' in dissolveStats.dissolve!), dissolveStats);
+    const vsFull = [...Object.values(opacityStats), ...Object.values(dissolveStats)];
+    check('7. Draft against full on all those frames: at most 2 apart byte by byte; the lab\'s full frame equals the still (normal blend, opacity 0.37)', vsFull.every((x) => x.draftVsFullWorst <= 2) && labFullVsStill === 0, { worst: Math.max(...vsFull.map((x) => x.draftVsFullWorst)), labFullVsStillBytesDiffering: labFullVsStill });
+    const areas = await page.evaluate(() => (window as unknown as { __pfLabOpacity: { fadeArea(): Promise<{ placement: string; size: string; bytes: number; differing: number; filledShare: number }[]> } }).__pfLabOpacity.fadeArea());
+    check(`8. The fill limited to the faded picture's placed box equals the fill of the whole buffer byte for byte (${areas.length} drawings: 9 placements × 2 opacities × 3 frame sizes)`, areas.length === 54 && areas.every((x) => x.differing === 0), { differingBytes: areas.reduce((u, x) => u + x.differing, 0), comparedBytes: areas.reduce((u, x) => u + x.bytes, 0), drawings: areas });
+    draft = { opacity: opacityStats, dissolve: dissolveStats, fadeArea: areas };
+  } finally { await browser.close(); }
   console.log(`  --   recorded, not gated: ${JSON.stringify(recorded)}`);
   failed = checks.some((c) => !c.ok);
   fs.mkdirSync(path.join(root, 'docs/evidence'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'docs/evidence/opacity-conformance.json'), JSON.stringify({ when: new Date().toISOString(), checks, recorded, results, transitions }, null, 1) + '\n');
+  fs.writeFileSync(path.join(root, 'docs/evidence/opacity-conformance.json'), JSON.stringify({ when: new Date().toISOString(), checks, recorded, results, transitions, draft }, null, 1) + '\n');
   function S0(i: number) { const p = Math.floor(i / 3), c = i % 3; return topPx(p % N, Math.floor(p / N))[c]!; }
 } catch (e) {
   failed = true;

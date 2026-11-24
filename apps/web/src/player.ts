@@ -288,7 +288,9 @@ export class Player {
         // decision: the draw takes as long as it takes), and records what was painted (an effect that could not run drew no light).
         const drawn = await this.flashGuard.paint(evaluate(doc, T.frameTime(frame, frameRate)), {
           now: realTime, // real time, never the audio clock (it can stand still)
-          draw: (g) => drawGraph(back.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, draft ? this.pool.draftFrames : this.pool.frames),
+          // draft: proxy frames and the draft quality of drawGraph (faded pictures and dissolves without their exact fills, at
+          // most 2 of 255 off with zero mean; ADR-0005 amendment of 2026-11-24); paused, the full picture, identical to a still
+          draw: (g) => drawGraph(back.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, draft ? this.pool.draftFrames : this.pool.frames, { quality: draft ? 'draft' : 'full' }),
           copy: () => {
             // the finished frame replaces the one on screen at once (resizing the visible canvas clears it, so only now)
             if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
