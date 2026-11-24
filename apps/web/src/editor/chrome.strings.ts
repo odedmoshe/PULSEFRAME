@@ -35,6 +35,7 @@ const he = {
   flashChecked: 'נבדק להבהובים', notifications: 'התראות', statusCentre: 'מרכז המצב',
   // settings
   settingsTitle: 'הגדרות', settingsClose: 'סגירה', theme: 'ערכת נושא', themeDark: 'כהה', themeLight: 'בהירה', interfaceLang: 'שפת הממשק',
+  playSharpness: 'התמונה בזמן ניגון', playSmooth: 'חלק', playSharper: 'חד יותר', playSharpnessWhy: '«חד יותר» עלול לדלג על פריימים במחשב בלי כרטיס גרפי.',
   capabilities: 'יכולות שדורשות הכנה', capReady: 'מוכן', capSetup: 'דורש הגדרה', capOff: 'לא זמין',
   gpu: 'האצת גרפיקה', ai: 'ספק AI מקומי', assistant: 'העוזר השפתי', assistantOff: 'לא מחובר עדיין',
   // palette
@@ -88,6 +89,7 @@ const en: ChromeStrings = {
   statusFormat: 'Project format', statusJobs: 'Background jobs', pips: 'Capability status', pipsNeed: (n: number) => `${n} to set up`, pipsAll: 'All ready',
   flashChecked: 'Checked for flashes', notifications: 'Notifications', statusCentre: 'Status centre',
   settingsTitle: 'Settings', settingsClose: 'Close', theme: 'Theme', themeDark: 'Dark', themeLight: 'Light', interfaceLang: 'Interface language',
+  playSharpness: 'Picture while playing', playSmooth: 'Smooth', playSharper: 'Sharper', playSharpnessWhy: '“Sharper” may drop frames on a computer without a graphics card.',
   capabilities: 'Capabilities that need setup', capReady: 'Ready', capSetup: 'Needs setup', capOff: 'Unavailable',
   gpu: 'Graphics acceleration', ai: 'Local AI provider', assistant: 'Language assistant', assistantOff: 'Not connected yet',
   palScopes: 'Search scope', scopeAll: 'All', scopeCommands: 'Commands', scopeCatalogue: 'Catalogue', scopeMedia: 'Media', scopeAssistant: 'Assistant',

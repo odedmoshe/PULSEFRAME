@@ -158,6 +158,19 @@ describe('pictureQuality (the quality prefetch warms)', () => {
     const hd = playing({ ...doc, settings: { ...doc.settings, width: 1280, height: 720 } }).p;
     expect(hd.pictureQuality()).toBe('draft'); // 720 lines are reduced too, so prefetch warms the proxy
     expect(await last(hd, 10)).toMatchObject({ pool: pool.draftFrames, quality: 'draft', w: 960, h: 540 });
+    // the viewer's choice «חד יותר» (Player.sharpness): the larger picture from the next frame on, and pictureQuality() follows it
+    large.sharpness = 'sharper';
+    (large as unknown as { playing: boolean }).playing = true;
+    expect(large.pictureQuality()).toBe('draft');
+    expect(await last(large, 14)).toMatchObject({ pool: pool.draftFrames, quality: 'draft', w: 1707, h: 960 });
+    hd.sharpness = 'sharper';
+    expect(hd.pictureQuality()).toBe('full'); // 720 lines are not reduced then: the originals, so prefetch warms those
+    expect(await last(hd, 14)).toMatchObject({ pool: pool.frames, quality: 'full', w: 1280, h: 720 });
+    hd.sharpness = 'smooth';
+    expect(hd.pictureQuality()).toBe('draft');
+    expect(await last(hd, 15)).toMatchObject({ pool: pool.draftFrames, quality: 'draft', w: 960, h: 540 });
+    (large as unknown as { playing: boolean }).playing = false;
+    expect(await last(large, 16)).toMatchObject({ pool: pool.frames, quality: 'full', w: 1920, h: 1080 }); // paused: the full picture whatever the choice
     (large as unknown as { playing: boolean }).playing = false;
     expect(await last(large, 11)).toMatchObject({ pool: pool.frames, quality: 'full', h: 1080 }); // paused: the picture a still shows
     expect(await last(playing(doc).p, 12)).toMatchObject({ pool: pool.frames, quality: 'full', h: 180 }); // 180 lines play at full size

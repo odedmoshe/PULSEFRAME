@@ -16,6 +16,7 @@ import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type 
 import { ensureFonts } from '../fonts.ts';
 import { MediaPool, prefetchBudget } from '../media.ts';
 import { Player } from '../player.ts';
+import { parsePlaySharpness, PLAY_SHARPNESS_KEY, type PlaySharpness } from '../pictureSize.ts';
 import { timelineDerivatives } from '../clipVisuals.cache.ts';
 import { failureOf, rememberJob, type ProviderFailure } from './aiTools.recheck.ts';
 import { aiApi, type ApplyMode, type RunSource } from './api.ts';
@@ -188,6 +189,8 @@ export interface EditorState {
   curvePicker: { clipId: string; frame: number; channels: ChannelRef[] } | null;
   /** Show the motion path on the stage: a setting of this browser (localStorage 'pf.motionPath'), default on. */
   pathOn: boolean;
+  /** The picture while playing, «חלק» or «חד יותר» (pictureSize.ts): a setting of this browser (localStorage 'pf.playSharpness'), default smooth; never project state. */
+  playSharpness: PlaySharpness;
 }
 /** What the family film dialog starts from (FamilyFilmEntry → editor.openFilm). */
 export interface FilmSource { assetIds: string[]; event: FamilyFilmParams['event'] }
@@ -199,6 +202,7 @@ export const FAST_EXPORT_KEY = 'pf.fastExport';
 export const MOTION_PATH_KEY = 'pf.motionPath';
 const readPathOn = () => { try { return localStorage.getItem(MOTION_PATH_KEY) !== '0'; } catch { return true; } };
 const readFastExport = () => { try { return localStorage.getItem(FAST_EXPORT_KEY) === '1'; } catch { return false; } };
+const readPlaySharpness = (): PlaySharpness => { try { return parsePlaySharpness(localStorage.getItem(PLAY_SHARPNESS_KEY)); } catch { return 'smooth'; } };
 /** A place the ride bar can ask the editor to show: a tab of the inspector, or a gallery (RideBar.tsx, Inspector.tsx). */
 export type PanelTarget = 'speed' | 'animation' | 'effects' | 'transition' | 'transitions-gallery' | 'sound' | 'replace';
 /** The tabs of the effects gallery that can be asked for from outside it. */
@@ -270,7 +274,7 @@ export class Editor {
     segmentPlan: { status: 'off', view: null, revision: null }, fastExport: readFastExport(), planOptions: {}, // the export sheet's first pick (the computer destination: high quality, whose options are all defaults)
     imports: { local: [], jobs: [], room: null, skipped: null }, phoneDropOpen: false, drop: null, dropLive: null, dropProblem: null, planBlockers: [], missingMedia: [],
     filmOpen: false, filmSource: null, filmRun: null,
-    keySel: null, keyClipboard: null, curvePicker: null, pathOn: readPathOn(),
+    keySel: null, keyClipboard: null, curvePicker: null, pathOn: readPathOn(), playSharpness: readPlaySharpness(),
   };
   /**
    * The import queue's editor side (ADR-0023): uploads one at a time to POST …/imports, cards from the job events, placement of
@@ -520,6 +524,7 @@ export class Editor {
       previewUrl: async (assetId) => ((await api.derivatives(projectId, assetId)).derivatives.find((d) => d.kind === 'proxy')?.status === 'ready' ? `/api/v1/projects/${projectId}/assets/${assetId}/derivatives/proxy` : null),
     });
     this.player = new Player(canvas, this.pool, () => { this.set({ tick: this.state.tick + 1 }); this.announce(projectId); this.multicamTick(); this.multicamWarm(); }, (e) => void this.previewFailed(projectId, e));
+    this.player.sharpness = this.state.playSharpness;
     (window as any).__pfMedia = () => this.pool?.stats();
     (window as any).__pfSync = () => this.player?.syncStats();
     const p = await this.load(projectId);
@@ -1070,6 +1075,16 @@ export class Editor {
   /** Open the curve picker for these channels at this clip-local frame. */
   openCurvePicker(clipId: string, frame: number, channels: ChannelRef[]) { this.set({ curvePicker: { clipId, frame, channels } }); }
   closeCurvePicker() { if (this.state.curvePicker) this.set({ curvePicker: null }); }
+  /**
+   * The picture while playing (Settings): «חלק», the proxies' own scale, or «חד יותר», the larger picture (pictureSize.ts). A
+   * preference of this browser (localStorage 'pf.playSharpness'), never an edit of the project: no op, no revision. The
+   * player draws its next frame with it; other players of this editor (the source viewer) read it from the state.
+   */
+  setPlaySharpness(playSharpness: PlaySharpness) {
+    try { localStorage.setItem(PLAY_SHARPNESS_KEY, playSharpness); } catch { /* storage unavailable: the choice lasts for this visit */ }
+    if (this.player) this.player.sharpness = playSharpness;
+    this.set({ playSharpness });
+  }
   /** Show or hide the motion path on the stage: a setting of this browser (localStorage 'pf.motionPath'). */
   setPathOn(on: boolean) { try { localStorage.setItem(MOTION_PATH_KEY, on ? '1' : '0'); } catch { /* ignore */ } this.set({ pathOn: on }); }
   /** Ask the inspector to show a tab of the selected object (it ignores a tab the object does not have). */

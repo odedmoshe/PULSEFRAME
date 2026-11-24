@@ -46,11 +46,13 @@ export function SourceViewer({ assetId, onClose, startAt }: { assetId: string; o
     if (!canvas || !editor.pool || !doc || doc instanceof Error) { if (doc instanceof Error) setErr(doc.message); return; }
     const p = new Player(canvas, editor.pool, () => setTick((x) => x + 1), (e) => setErr(describeError(e)));
     playerRef.current = p;
+    p.sharpness = editor.getState().playSharpness; // the viewer's choice of the playing picture (Settings), as in the main preview
     p.setDoc(doc);
     if (startAt) { const f = Math.max(0, T.frameIndexAt(startAt, editor.rate)); void Promise.resolve().then(() => playerRef.current === p && p.seek(Math.min(f, Math.max(0, p.frameCount - 1)))); }
     closeRef.current?.focus();
     return () => { playerRef.current = null; p.dispose(); };
   }, [doc, editor]);
+  useEffect(() => { if (playerRef.current) playerRef.current.sharpness = state.playSharpness; }, [state.playSharpness]);
 
   const liveTracks = state.doc ? state.doc.sequences[state.doc.mainSequenceId]!.tracks : [];
   const hasPicture = !!asset && (!!asset.video || asset.kind === 'image'), hasSound = !!asset?.audio;

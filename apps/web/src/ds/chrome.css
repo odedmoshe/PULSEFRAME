@@ -269,6 +269,7 @@
 /* ---------- settings ---------- */
 .pf-set { display: flex; flex-direction: column; gap: var(--pf-sp-6); min-inline-size: 360px; }
 .pf-set-row { display: flex; align-items: center; justify-content: space-between; gap: var(--pf-sp-6); color: var(--pf-text); }
+.pf-set-note { display: block; margin-block-start: var(--pf-sp-2); max-inline-size: 36ch; color: var(--pf-text-3); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); font-weight: var(--pf-fw-regular, 400); }
 .pf-set-h { margin: var(--pf-sp-4) 0 0; font-size: var(--pf-fs-sm); font-weight: var(--pf-fw-semibold); color: var(--pf-text-2); }
 .pf-set-caps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--pf-sp-3); }
 .pf-set-caps li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--pf-sp-4); padding: var(--pf-sp-4) var(--pf-sp-5); border-radius: var(--pf-r-md); background: var(--pf-surface-2); }
