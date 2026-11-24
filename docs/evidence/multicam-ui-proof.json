@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-19T06:37:44.349Z",
+  "ranAt": "2026-11-24T18:01:01.368Z",
   "result": "PASS",
   "checks": [
     {
@@ -70,24 +70,37 @@
       "ok": true,
       "detail": {
         "viewer": {
+          "warm": {
+            "decoders": 0,
+            "bytes": 0,
+            "budgetBytes": 0,
+            "off": null,
+            "opened": 0,
+            "reused": 0,
+            "adopted": 0,
+            "evicted": 0,
+            "gaveRoom": 0,
+            "overBudget": 0,
+            "noRoom": 0
+          },
           "decoders": 3,
           "stills": 0,
           "maxDecoders": 4,
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_4db544ac710": "proxy",
-            "ast_0ba2d820d60": "original",
-            "ast_6f9351a2240": "proxy"
+            "ast_b0194f26390": "proxy",
+            "ast_68d4e877730": "original",
+            "ast_3ca2d0ce6f0": "proxy"
           },
           "sourcesUsed": {
-            "ast_4db544ac710": [
+            "ast_b0194f26390": [
               "proxy"
             ],
-            "ast_0ba2d820d60": [
+            "ast_68d4e877730": [
               "original"
             ],
-            "ast_6f9351a2240": [
+            "ast_3ca2d0ce6f0": [
               "proxy"
             ]
           },
@@ -97,30 +110,43 @@
           "refused": 0
         },
         "program": {
-          "decoders": 10,
+          "warm": {
+            "decoders": 0,
+            "bytes": 0,
+            "budgetBytes": 167772160,
+            "off": null,
+            "opened": 5,
+            "reused": 9,
+            "adopted": 12,
+            "evicted": 2,
+            "gaveRoom": 0,
+            "overBudget": 0,
+            "noRoom": 0
+          },
+          "decoders": 5,
           "stills": 0,
           "maxDecoders": 10,
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_4db544ac710": "original",
-            "ast_6f9351a2240": "original",
-            "ast_0ba2d820d60": "original"
+            "ast_b0194f26390": "original",
+            "ast_68d4e877730": "original",
+            "ast_3ca2d0ce6f0": "original"
           },
           "sourcesUsed": {
-            "ast_4db544ac710": [
+            "ast_b0194f26390": [
               "original"
             ],
-            "ast_6f9351a2240": [
+            "ast_68d4e877730": [
               "original"
             ],
-            "ast_0ba2d820d60": [
+            "ast_3ca2d0ce6f0": [
               "original"
             ]
           },
-          "opened": 14,
-          "disposed": 4,
-          "peakDecoders": 10,
+          "opened": 2,
+          "disposed": 0,
+          "peakDecoders": 6,
           "refused": 0
         }
       }
@@ -130,23 +156,37 @@
       "ok": true,
       "detail": {
         "cutFramesMeasured": 12,
-        "medianMs": 53.33,
-        "p95Ms": 162.67,
-        "medianFrames": 1.6,
-        "p95Frames": 4.88,
+        "medianMs": 31.98,
+        "p95Ms": 39.98,
+        "medianFrames": 0.96,
+        "p95Frames": 1.2,
         "allFrames": {
-          "median": 12,
-          "p95": 34.67,
-          "max": 233.33
+          "median": 17.31,
+          "p95": 31.98,
+          "max": 338.65
         },
         "baselineRun": {
-          "median": 17.33,
-          "p95": 24,
-          "max": 33.33
+          "median": 13.33,
+          "p95": 29.33,
+          "max": 45.33
         },
         "progressMd74": "median 5-15 ms, p95 about 21-24 ms after the clock reached the frame (one 3.5 s headless run)",
         "budget": "p95 <= 2 frames",
-        "budgetMet": false
+        "budgetMet": true,
+        "prefetch": {
+          "off": null,
+          "budgetMB": 160,
+          "opened": 5,
+          "reused": 9,
+          "adopted": 12,
+          "evicted": 2,
+          "gaveRoom": 0
+        },
+        "loadAverage": [
+          3.9,
+          5.88,
+          11.39
+        ]
       }
     },
     {
@@ -235,8 +275,8 @@
       "name": "U5: a digit while paused gives +1 history entry, the segment under the playhead shows the angle, and undo restores it",
       "ok": true,
       "detail": {
-        "angleAfter": "ang_a4638a42253",
-        "expected": "ang_a4638a42253"
+        "angleAfter": "ang_2b6d002cbc3",
+        "expected": "ang_2b6d002cbc3"
       }
     },
     {
@@ -276,64 +316,64 @@
         "shownSegments": 7,
         "badges": [
           {
-            "angle": "ang_a4638a42252",
+            "angle": "ang_2b6d002cbc2",
             "badge": {
-              "clipId": "clp_afe6bb43091",
-              "angleId": "ang_a4638a42252",
+              "clipId": "clp_7dd3aa5e1e1",
+              "angleId": "ang_2b6d002cbc2",
               "text": "1 · Camera 1",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_a4638a42253",
+            "angle": "ang_2b6d002cbc3",
             "badge": {
-              "clipId": "clp_0563688c920",
-              "angleId": "ang_a4638a42253",
+              "clipId": "clp_b7e64b5a2b0",
+              "angleId": "ang_2b6d002cbc3",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_a4638a42254",
+            "angle": "ang_2b6d002cbc4",
             "badge": {
-              "clipId": "clp_0563688c921",
-              "angleId": "ang_a4638a42254",
+              "clipId": "clp_b7e64b5a2b1",
+              "angleId": "ang_2b6d002cbc4",
               "text": "3 · Camera 3",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_a4638a42253",
+            "angle": "ang_2b6d002cbc3",
             "badge": {
-              "clipId": "clp_0563688c922",
-              "angleId": "ang_a4638a42253",
+              "clipId": "clp_b7e64b5a2b2",
+              "angleId": "ang_2b6d002cbc3",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_a4638a42254",
+            "angle": "ang_2b6d002cbc4",
             "badge": {
-              "clipId": "clp_0563688c923",
-              "angleId": "ang_a4638a42254",
+              "clipId": "clp_b7e64b5a2b3",
+              "angleId": "ang_2b6d002cbc4",
               "text": "3 · Camera 3",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_a4638a42252",
+            "angle": "ang_2b6d002cbc2",
             "badge": {
-              "clipId": "clp_0563688c924",
-              "angleId": "ang_a4638a42252",
+              "clipId": "clp_b7e64b5a2b4",
+              "angleId": "ang_2b6d002cbc2",
               "text": "1 · Camera 1",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_a4638a42253",
+            "angle": "ang_2b6d002cbc3",
             "badge": {
-              "clipId": "clp_afe6bb43092",
-              "angleId": "ang_a4638a42253",
+              "clipId": "clp_7dd3aa5e1e2",
+              "angleId": "ang_2b6d002cbc3",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
@@ -406,27 +446,27 @@
   "measurements": {
     "sync": [
       {
-        "angleId": "ang_a4638a42251",
+        "angleId": "ang_2b6d002cbc1",
         "verdict": "reference",
         "offsetSeconds": 0
       },
       {
-        "angleId": "ang_a4638a42252",
+        "angleId": "ang_2b6d002cbc2",
         "verdict": "check",
         "offsetSeconds": -0.625
       },
       {
-        "angleId": "ang_a4638a42253",
+        "angleId": "ang_2b6d002cbc3",
         "verdict": "confident",
         "offsetSeconds": 1.194187
       },
       {
-        "angleId": "ang_a4638a42254",
+        "angleId": "ang_2b6d002cbc4",
         "verdict": "confident",
         "offsetSeconds": 0.499979
       },
       {
-        "angleId": "ang_a4638a42254",
+        "angleId": "ang_2b6d002cbc4",
         "verdict": "unsynced",
         "offsetSeconds": null
       }
@@ -434,16 +474,16 @@
     "initialBoundaries": [
       {
         "frame": 1001,
-        "angleId": "ang_a4638a42253"
+        "angleId": "ang_2b6d002cbc3"
       }
     ],
     "baseline": {
       "clock": "audio",
       "onsets": 28,
       "paintLatenessMs": {
-        "median": 17.33,
-        "p95": 24,
-        "max": 33.33
+        "median": 13.33,
+        "p95": 29.33,
+        "max": 45.33
       }
     },
     "u1": {
@@ -500,78 +540,92 @@
       "cuts": [
         {
           "frame": 60,
-          "angleId": "ang_a4638a42253"
+          "angleId": "ang_2b6d002cbc3"
         },
         {
           "frame": 100,
-          "angleId": "ang_a4638a42254"
+          "angleId": "ang_2b6d002cbc4"
         },
         {
           "frame": 140,
-          "angleId": "ang_a4638a42252"
+          "angleId": "ang_2b6d002cbc2"
         },
         {
           "frame": 180,
-          "angleId": "ang_a4638a42253"
+          "angleId": "ang_2b6d002cbc3"
         },
         {
           "frame": 220,
-          "angleId": "ang_a4638a42254"
+          "angleId": "ang_2b6d002cbc4"
         },
         {
           "frame": 260,
-          "angleId": "ang_a4638a42252"
+          "angleId": "ang_2b6d002cbc2"
         },
         {
           "frame": 300,
-          "angleId": "ang_a4638a42253"
+          "angleId": "ang_2b6d002cbc3"
         },
         {
           "frame": 340,
-          "angleId": "ang_a4638a42254"
+          "angleId": "ang_2b6d002cbc4"
         },
         {
           "frame": 380,
-          "angleId": "ang_a4638a42252"
+          "angleId": "ang_2b6d002cbc2"
         },
         {
           "frame": 420,
-          "angleId": "ang_a4638a42253"
+          "angleId": "ang_2b6d002cbc3"
         },
         {
           "frame": 460,
-          "angleId": "ang_a4638a42254"
+          "angleId": "ang_2b6d002cbc4"
         },
         {
           "frame": 500,
-          "angleId": "ang_a4638a42252"
+          "angleId": "ang_2b6d002cbc2"
         },
         {
           "frame": 1001,
-          "angleId": "ang_a4638a42253"
+          "angleId": "ang_2b6d002cbc3"
         }
       ]
     },
     "u4": {
       "cutFramesMeasured": 12,
-      "medianMs": 53.33,
-      "p95Ms": 162.67,
-      "medianFrames": 1.6,
-      "p95Frames": 4.88,
+      "medianMs": 31.98,
+      "p95Ms": 39.98,
+      "medianFrames": 0.96,
+      "p95Frames": 1.2,
       "allFrames": {
-        "median": 12,
-        "p95": 34.67,
-        "max": 233.33
+        "median": 17.31,
+        "p95": 31.98,
+        "max": 338.65
       },
       "baselineRun": {
-        "median": 17.33,
-        "p95": 24,
-        "max": 33.33
+        "median": 13.33,
+        "p95": 29.33,
+        "max": 45.33
       },
       "progressMd74": "median 5-15 ms, p95 about 21-24 ms after the clock reached the frame (one 3.5 s headless run)",
       "budget": "p95 <= 2 frames",
-      "budgetMet": false,
-      "wave2Prefetch": "NEEDED: the budget was missed"
+      "budgetMet": true,
+      "prefetch": {
+        "off": null,
+        "budgetMB": 160,
+        "opened": 5,
+        "reused": 9,
+        "adopted": 12,
+        "evicted": 2,
+        "gaveRoom": 0
+      },
+      "loadAverage": [
+        3.9,
+        5.88,
+        11.39
+      ],
+      "prefetchVerdict": "budget met in this run"
     }
   },
   "notMeasured": []

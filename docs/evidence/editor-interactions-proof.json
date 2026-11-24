@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-19T06:45:27.004Z",
+  "ranAt": "2026-11-24T17:42:39.808Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v653 x64",
+    "platform": "Linux 6.18.44-fc-v819 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
@@ -59,7 +59,7 @@
       "name": "while the drum loop plays, the meter shows a real level (above -40 dB and not above 0)",
       "ok": true,
       "detail": {
-        "peakDbShown": -8
+        "peakDbShown": 0
       }
     },
     {
@@ -312,9 +312,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2.04,
+        "fwd2": 2.01,
         "sh2": "◀◀ ×1",
-        "back1": -0.99,
+        "back1": -0.98,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -328,9 +328,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 0.99,
+        "playSpeed": 1.03,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.99,
+        "shuttleSpeed": 1.9,
         "staysPaused": true
       }
     },
@@ -358,30 +358,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_b398c736980",
-          "clp_b398c736981"
+          "clp_92bb8055690",
+          "clp_92bb8055691"
         ],
         "afterAB": [
-          "clp_b398c736980",
-          "clp_b398c736981"
+          "clp_92bb8055690",
+          "clp_92bb8055691"
         ],
         "afterAdd": [
-          "clp_b398c736980",
-          "clp_b398c736981",
-          "clp_b398c736982"
+          "clp_92bb8055690",
+          "clp_92bb8055691",
+          "clp_92bb8055692"
         ],
         "midEscape": [
-          "clp_b398c736981"
+          "clp_92bb8055691"
         ],
         "afterEscape": [
-          "clp_b398c736980",
-          "clp_b398c736981",
-          "clp_b398c736982"
+          "clp_92bb8055690",
+          "clp_92bb8055691",
+          "clp_92bb8055692"
         ],
         "afterEscapeUp": [
-          "clp_b398c736980",
-          "clp_b398c736981",
-          "clp_b398c736982"
+          "clp_92bb8055690",
+          "clp_92bb8055691",
+          "clp_92bb8055692"
         ]
       }
     },
@@ -447,7 +447,7 @@
         "wantRefusal": "בטקסט של חותמת התאריך מותרים רק ספרות, רווחים והסימנים ⁦. : ' / -⁩, עד 20 תווים",
         "invalid": "true",
         "kept": true,
-        "today": "'26 11 19",
+        "today": "'26 11 24",
         "todaySet": true,
         "refusalGone": true
       }
@@ -543,7 +543,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 25/1799",
+        "valueText": "עוקב קדימה 11/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -804,18 +804,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_2e14db238b0",
-          "ast_c760e923060",
-          "ast_e1f580b91c0",
-          "ast_5413964bed0",
-          "ast_007429a0060"
+          "ast_7da63dcd660",
+          "ast_130ef276eb0",
+          "ast_11c59540690",
+          "ast_81b85c0e510",
+          "ast_efc6986c2f0"
         ],
         "order1": [
-          "ast_2e14db238b0",
-          "ast_5413964bed0",
-          "ast_c760e923060",
-          "ast_e1f580b91c0",
-          "ast_007429a0060"
+          "ast_7da63dcd660",
+          "ast_81b85c0e510",
+          "ast_130ef276eb0",
+          "ast_11c59540690",
+          "ast_efc6986c2f0"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -839,7 +839,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-19T06:42:07.954Z",
+          "createdAt": "2026-11-24T17:36:37.158Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -965,8 +965,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_e0773aea410",
-          "seq_e0773aea417"
+          "seq_1b764a03c40",
+          "seq_1b764a03c47"
         ],
         "revisions": 1,
         "transactions": [
@@ -976,7 +976,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_e0773aea410",
+          "seq": "seq_1b764a03c40",
           "selected": "true"
         }
       }
@@ -1007,9 +1007,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_e0773aea410"
+          "seq": "seq_1b764a03c40"
         },
-        "secondTab": "seq_e0773aea410",
+        "secondTab": "seq_1b764a03c40",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
