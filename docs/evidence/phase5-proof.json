@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-19T04:15:54.711Z",
+  "ranAt": "2026-11-24T18:18:06.431Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v653 x64",
+    "platform": "Linux 6.18.44-fc-v819 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
@@ -76,11 +76,11 @@
       "detail": {
         "proposed": true,
         "committed": false,
-        "proposalId": "prp_ofHZqLKQQiQ",
+        "proposalId": "prp_tYXlBxASlJk",
         "baseRevision": 10,
         "summary": "Updated text \"פתיחה חלופית\"",
         "changedIds": [
-          "clp_a6d0eb3e940"
+          "clp_0731dca9ef0"
         ],
         "status": "open"
       }
@@ -113,7 +113,7 @@
       "name": "goal 10 — scoped agent: may edit the text track; video, mixed transactions and other projects are refused with typed errors, and nothing partial is applied",
       "ok": true,
       "detail": {
-        "entityId": "clp_2cd84d6f714",
+        "entityId": "clp_a09c61cf134",
         "reason": "track trk_video is outside the grant"
       }
     },
@@ -270,8 +270,8 @@
             "script-src-elem|inline|:1:119",
             "script-src-elem|blob|:1:276",
             "script-src-elem|https://example.invalid/x.js|:1:386",
-            "script-src-attr|inline|:1:0",
-            "script-src|eval|:1:578"
+            "script-src|eval|:1:578",
+            "script-src-attr|inline|:1:0"
           ]
         }
       }

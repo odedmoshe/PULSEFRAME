@@ -88,7 +88,8 @@
     "proof:multicam-ui": "tsx packages/evals/src/multicam-ui-proof.ts",
     "proof:perform": "tsx packages/evals/src/perform-proof.ts",
     "proof:command-bar": "tsx packages/evals/src/command-bar-proof.ts",
-    "bench:commit": "tsx packages/evals/src/commit-bench.ts"
+    "bench:commit": "tsx packages/evals/src/commit-bench.ts",
+    "bench:request": "tsx packages/evals/src/request-bench.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
