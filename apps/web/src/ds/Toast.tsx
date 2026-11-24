@@ -1,8 +1,21 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from './Button.tsx';
 import { DEFAULT_TTL, dismissToast, pushToast, type ToastItem, type ToastKind } from './logic.ts';
+import { createHostStack } from './toastHost.ts';
 import { CheckIcon, CloseIcon, DS, InfoIcon, WarnIcon, cx, isolate } from './util.tsx';
+
+/** The open modal that holds the toast region (toastHost.ts); null = the page. */
+const toastHosts = createHostStack<HTMLElement>();
+/**
+ * Rendered inside a modal dialog (Dialog.tsx does it): while the modal is open the toast region lives here, so toasts stay
+ * focusable inside the modal's focus trap and stay in the accessibility tree (announced), instead of under the inert page.
+ */
+export function ToastSlot() {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => toastHosts.claim(ref.current!), []);
+  return <div ref={ref} className="pf-toast-slot" data-testid="toast-slot" />;
+}
 
 export interface ToastInput { id?: string; kind: ToastKind; title: string; body?: string; action?: string; onAction?: () => void; ttl?: number }
 interface Entry extends ToastItem { onAction?: () => void }
@@ -16,7 +29,7 @@ export function useToasts(): Api {
 
 let counter = 0;
 /** Toast queue: start-bottom, at most three, undo with a timer bar, receipt (agent edge), fix. role=status, never steals focus. */
-export function ToastProvider({ children, closeLabel = 'Close' }: { children: ReactNode; closeLabel?: string }) {
+export function ToastProvider({ children, closeLabel = 'Close', label = 'Notifications' }: { children: ReactNode; closeLabel?: string; /** the region's name, in the interface language */ label?: string }) {
   const [queue, setQueue] = useState<Entry[]>([]);
   const dismiss = useCallback((id: string) => setQueue((q) => dismissToast(q, id) as Entry[]), []);
   const push = useCallback((t: ToastInput) => {
@@ -25,13 +38,14 @@ export function ToastProvider({ children, closeLabel = 'Close' }: { children: Re
     return id;
   }, []);
   const api = useMemo(() => ({ push, dismiss }), [push, dismiss]);
+  const host = useSyncExternalStore(toastHosts.subscribe, toastHosts.current, () => null);
   return (
     <Ctx.Provider value={api}>
       {children}
       {typeof document !== 'undefined' && createPortal(
-        <div className={cx(DS, 'pf-toasts')} role="region" aria-label="Notifications">
+        <div className={cx(DS, 'pf-toasts')} role="region" aria-label={label} data-testid="toasts" data-host={host ? 'modal' : 'page'}>
           {queue.map((t) => <ToastView key={t.id} t={t} onDismiss={() => dismiss(t.id)} closeLabel={closeLabel} />)}
-        </div>, document.body)}
+        </div>, host ?? document.body)}
     </Ctx.Provider>
   );
 }

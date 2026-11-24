@@ -21,6 +21,8 @@
  * The Hebrew command bar (ADR-0027): a plan's preview, a question's choices, and Settings «עוזר השפה».
  * The light theme: the resting editor, a media card under the pointer and its ⋯ menu, the export sheet, Settings, perform mode, an
  * asset whose stored file is missing on disk (library card and timeline clip), and the start hub, in both languages.
+ * In both themes: a toast shown while a modal dialog is open (the people sheet's undo toast): inside the modal, not inert, in the
+ * accessibility tree as a status, and reachable from the keyboard inside the modal's focus trap.
  *   pnpm build && pnpm audit:a11y
  */
 import { execFileSync } from 'node:child_process';
@@ -58,6 +60,55 @@ async function clickClipEnd(page: Page, clipId: string) {
     await page.getByTestId('marker-bar').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
   }
   await el.click({ position: { x: Math.max(2, b.width - 8), y: b.height / 2 } });
+}
+
+/**
+ * A toast that appears while a modal dialog is open: the people sheet (opened from the palette), a person added and removed in it,
+ * so the removal's undo toast shows while the sheet stays open. The page behind a modal is inert; the toast must be inside the
+ * modal (data-host=modal), not inert, in the accessibility tree as a status (an inert subtree is pruned from it: the page behind
+ * is the control), and reachable from the keyboard inside the modal's focus trap. Leaves the sheet open with the toast focused;
+ * the caller audits the state, then closes the sheet. `shown` is false (a finding) if any part fails.
+ */
+async function toastInModal(page: Page, lang: 'he' | 'en'): Promise<Record<string, unknown>> {
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.getByTestId('open-palette').click();
+  await page.getByTestId('palette-input').fill(lang === 'he' ? 'אנשים' : 'People');
+  await page.locator('[data-testid=palette-option][data-command-id="life.people"]').click({ timeout: 8000 });
+  await page.getByTestId('life-people').waitFor({ timeout: 8000 });
+  const name = lang === 'he' ? 'אורח בדיקת נגישות' : 'Accessibility test guest';
+  await page.getByTestId('life-person-add').click();
+  await page.getByTestId('life-person-new-name').fill(name);
+  await page.getByTestId('life-person-new-save').click();
+  const personId = await page.waitForFunction((n) => [...document.querySelectorAll<HTMLElement>('[data-person-id]')].find((r) => r.querySelector<HTMLInputElement>('input[type=text]')?.value === n)?.dataset.personId ?? null, name, { timeout: 10000 }).then((x) => x.jsonValue() as Promise<string>);
+  await page.getByTestId(`life-person-remove-${personId}`).click();
+  await page.locator('[data-testid=life-people] [data-testid=toasts] [role=status]').first().waitFor({ timeout: 8000 }).catch(() => {});
+  // the keyboard: Shift+Tab from where the removal left the focus walks back to the toast's button, never leaving the sheet
+  let left = 0, reached = false;
+  for (let i = 0; i < 40 && !reached; i++) {
+    await page.keyboard.press('Shift+Tab');
+    const at = await page.evaluate(() => ({ inSheet: !!document.querySelector('[data-testid=life-people]')?.contains(document.activeElement), onToast: !!document.activeElement?.closest('[data-testid=toasts] [role=status]') && document.activeElement?.tagName === 'BUTTON' && !document.activeElement.classList.contains('pf-toast-x') }));
+    if (!at.inSheet) left++;
+    reached = at.onToast;
+  }
+  const where = await page.evaluate(() => {
+    const region = document.querySelector<HTMLElement>('[data-testid=toasts]');
+    const t = region?.querySelector<HTMLElement>('[role=status]');
+    return { inModal: !!t && !!document.querySelector('[data-testid=life-people]')?.contains(t), host: region?.dataset.host ?? null, inert: !t || !!t.closest('[inert]'), regionName: region?.getAttribute('aria-label') ?? null };
+  });
+  const cdp = await page.context().newCDPSession(page);
+  const axIgnored = async (selector: string) => {
+    const { root: d } = await cdp.send('DOM.getDocument', { depth: 0 });
+    const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: d.nodeId, selector });
+    if (!nodeId) return null;
+    const { nodes } = await cdp.send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false });
+    const n = nodes[0] as { ignored?: boolean; role?: { value?: string } } | undefined;
+    return n ? { ignored: !!n.ignored, role: n.role?.value ?? null } : null;
+  };
+  const axToast = await axIgnored('[data-testid=life-people] [data-testid=toasts] [role=status]');
+  const axBehind = await axIgnored('[data-testid=open-palette]');
+  await cdp.detach().catch(() => {});
+  const announced = axToast?.ignored === false && axToast.role === 'status';
+  return { shown: where.inModal && where.host === 'modal' && !where.inert && announced && axBehind?.ignored === true && reached && left === 0, ...where, announced, pageBehindPruned: axBehind?.ignored === true, toastReachedByKeyboard: reached, tabStepsThatLeftTheDialog: left };
 }
 
 async function main() {
@@ -560,6 +611,12 @@ async function main() {
       const ps = await dialogBehaviour('life-people', async () => { await page.getByTestId('field-add').click(); await page.getByTestId('field-item-add-person').click(); }, '[data-testid=field-add]');
       await auditState('people-sheet', { startsInside: ps.startsInside, tabStepsThatLeftTheDialog: ps.tabStepsThatLeftTheDialog, shown: (await page.locator('[data-testid^="life-person-"][data-person-id]').count()) >= 1 && (await page.getByTestId('life-people-privacy').count()) === 1 }, true);
       Object.assign(states.at(-1), await ps.close());
+      // a toast while a modal is open (the people sheet): inside it, announced, reachable from the keyboard; Escape closes the sheet
+      await auditState('toast-in-modal', await toastInModal(page, lang), true);
+      await page.keyboard.press('Escape');
+      await page.getByTestId('life-people').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      Object.assign(states.at(-1), { closed: (await page.getByTestId('life-people').count()) === 0, toastBackOnPage: await page.evaluate(() => { const r = document.querySelector<HTMLElement>('[data-testid=toasts]'); return r?.dataset.host === 'page' && r.parentElement === document.body && !document.querySelector('[inert]'); }) });
+      if (states.at(-1).toastBackOnPage === false) states.at(-1).shown = false;
       // the live line with an anchored error and its fix: the picture under the title is replaced by the one without a date
       const lifeUnder = (await lifeTx([{ op: 'delete_clip', args: { clipId: lifePicture } }, { op: 'add_clip', args: { assetId: lifeUndated, start: f(0), duration: f(60) } }])).results[1].output.clipId as string;
       await page.locator('[data-testid=field-live] .pf-anchored').first().waitFor({ timeout: 10000 }).catch(() => {});
@@ -761,6 +818,9 @@ async function main() {
       await page.getByTestId('settings-dialog').waitFor({ timeout: 8000 }).catch(() => {});
       await auditState('settings-dialog', { shown: (await page.getByTestId('settings-dialog').count()) === 1 }, true);
       await closeWith('settings-dialog');
+      // a toast while a modal is open (the people sheet), in the light theme
+      await auditState('toast-in-modal', await toastInModal(page, lang), true);
+      await closeWith('life-people');
       // perform mode at rest
       await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
       await page.keyboard.press('Shift+Digit7');

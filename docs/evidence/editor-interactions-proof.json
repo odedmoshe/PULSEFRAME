@@ -1,15 +1,15 @@
 {
-  "ranAt": "2026-11-19T06:45:27.004Z",
+  "ranAt": "2026-11-24T16:50:18.942Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v653 x64",
+    "platform": "Linux 6.18.44-fc-v819 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 70,
-  "total": 70,
+  "passed": 73,
+  "total": 73,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -59,7 +59,7 @@
       "name": "while the drum loop plays, the meter shows a real level (above -40 dB and not above 0)",
       "ok": true,
       "detail": {
-        "peakDbShown": -8
+        "peakDbShown": 0
       }
     },
     {
@@ -272,9 +272,9 @@
       "name": "Sound tab: \"end the music with the picture\" trims the music to the last detected beat before the picture ends and gives it a fade-out, in one transaction; undo restores it",
       "ok": true,
       "detail": {
-        "pictureEnd": 245,
-        "wantEnd": 239,
-        "gotEnd": 239,
+        "pictureEnd": 290,
+        "wantEnd": 284,
+        "gotEnd": 284,
         "fadeOutFrames": 30,
         "fitUndone": true
       }
@@ -312,9 +312,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2.04,
+        "fwd2": 1.98,
         "sh2": "◀◀ ×1",
-        "back1": -0.99,
+        "back1": -0.92,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -328,9 +328,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 0.99,
+        "playSpeed": 0.98,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.99,
+        "shuttleSpeed": 1.89,
         "staysPaused": true
       }
     },
@@ -358,30 +358,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_b398c736980",
-          "clp_b398c736981"
+          "clp_d06cf5a0450",
+          "clp_d06cf5a0451"
         ],
         "afterAB": [
-          "clp_b398c736980",
-          "clp_b398c736981"
+          "clp_d06cf5a0450",
+          "clp_d06cf5a0451"
         ],
         "afterAdd": [
-          "clp_b398c736980",
-          "clp_b398c736981",
-          "clp_b398c736982"
+          "clp_d06cf5a0450",
+          "clp_d06cf5a0451",
+          "clp_d06cf5a0452"
         ],
         "midEscape": [
-          "clp_b398c736981"
+          "clp_d06cf5a0451"
         ],
         "afterEscape": [
-          "clp_b398c736980",
-          "clp_b398c736981",
-          "clp_b398c736982"
+          "clp_d06cf5a0450",
+          "clp_d06cf5a0451",
+          "clp_d06cf5a0452"
         ],
         "afterEscapeUp": [
-          "clp_b398c736980",
-          "clp_b398c736981",
-          "clp_b398c736982"
+          "clp_d06cf5a0450",
+          "clp_d06cf5a0451",
+          "clp_d06cf5a0452"
         ]
       }
     },
@@ -447,7 +447,7 @@
         "wantRefusal": "בטקסט של חותמת התאריך מותרים רק ספרות, רווחים והסימנים ⁦. : ' / -⁩, עד 20 תווים",
         "invalid": "true",
         "kept": true,
-        "today": "'26 11 19",
+        "today": "'26 11 24",
         "todaySet": true,
         "refusalGone": true
       }
@@ -543,7 +543,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 25/1799",
+        "valueText": "עוקב קדימה 21/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -804,18 +804,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_2e14db238b0",
-          "ast_c760e923060",
-          "ast_e1f580b91c0",
-          "ast_5413964bed0",
-          "ast_007429a0060"
+          "ast_e02a88881b0",
+          "ast_112ad001bb0",
+          "ast_6aa17e9c0f0",
+          "ast_991f9f58950",
+          "ast_622494500e0"
         ],
         "order1": [
-          "ast_2e14db238b0",
-          "ast_5413964bed0",
-          "ast_c760e923060",
-          "ast_e1f580b91c0",
-          "ast_007429a0060"
+          "ast_e02a88881b0",
+          "ast_991f9f58950",
+          "ast_112ad001bb0",
+          "ast_6aa17e9c0f0",
+          "ast_622494500e0"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -839,7 +839,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-19T06:42:07.954Z",
+          "createdAt": "2026-11-24T16:38:42.135Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -965,8 +965,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_e0773aea410",
-          "seq_e0773aea417"
+          "seq_527f06d8480",
+          "seq_527f06d8487"
         ],
         "revisions": 1,
         "transactions": [
@@ -976,7 +976,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_e0773aea410",
+          "seq": "seq_527f06d8480",
           "selected": "true"
         }
       }
@@ -1007,9 +1007,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_e0773aea410"
+          "seq": "seq_527f06d8480"
         },
-        "secondTab": "seq_e0773aea410",
+        "secondTab": "seq_527f06d8480",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1188,6 +1188,47 @@
       "name": "command bar: no uncaught errors in the page",
       "ok": true,
       "detail": []
+    },
+    {
+      "name": "a toast that appears while a modal dialog is open is rendered inside it, named «התראות», not inert, and in the accessibility tree as a status (announced), while the page behind stays inert and out of that tree",
+      "ok": true,
+      "detail": {
+        "inSheet": true,
+        "host": "modal",
+        "inert": false,
+        "regionName": "התראות",
+        "pageBehindInert": true,
+        "text": "הסרת אדםביטול",
+        "axToast": {
+          "ignored": false,
+          "role": "status"
+        },
+        "axBehind": {
+          "ignored": true,
+          "role": "none"
+        }
+      }
+    },
+    {
+      "name": "the keyboard reaches the toast's «ביטול» inside the modal's focus trap (focus never leaves the sheet); Enter brings the removed person back and the sheet stays open",
+      "ok": true,
+      "detail": {
+        "reached": true,
+        "tabStepsThatLeftTheSheet": 0,
+        "focusedLabel": "ביטול",
+        "restored": true
+      }
+    },
+    {
+      "name": "after the sheet closes, the toast region is back on the page (a child of the body, not inert) and nothing is left inert; no page errors",
+      "ok": true,
+      "detail": {
+        "host": "page",
+        "parentIsBody": true,
+        "inert": false,
+        "anyInert": false,
+        "errors": []
+      }
     }
   ]
 }

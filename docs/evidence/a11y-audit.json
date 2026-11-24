@@ -1,7 +1,7 @@
 {
-  "ranAt": "2026-11-19T06:45:30.322Z",
+  "ranAt": "2026-11-24T16:50:35.046Z",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v653 x64",
+    "platform": "Linux 6.18.44-fc-v819 x64",
     "browser": "153.0.8010.12"
   },
   "scope": "Automated heuristic audit of the editor with all Inspector panels shown and one clip selected, in the dark theme (every state) and the light theme (the main states), in Hebrew and English. Not a WCAG conformance claim; no screen-reader or user testing.",
@@ -145,7 +145,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_2554f19fae0]",
+          "focusAfterClose": "button[data-testid=more-ast_5ea867f1110]",
           "focusReturned": true
         },
         {
@@ -576,8 +576,27 @@
           "focusReturned": true
         },
         {
+          "state": "toast-in-modal",
+          "controls": 498,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "inModal": true,
+          "host": "modal",
+          "inert": false,
+          "regionName": "התראות",
+          "announced": true,
+          "pageBehindPruned": true,
+          "toastReachedByKeyboard": true,
+          "tabStepsThatLeftTheDialog": 0,
+          "closed": true,
+          "toastBackOnPage": true
+        },
+        {
           "state": "field-live-error",
-          "controls": 488,
+          "controls": 490,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -586,7 +605,7 @@
         },
         {
           "state": "pack-page",
-          "controls": 500,
+          "controls": 502,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -595,7 +614,7 @@
         },
         {
           "state": "music-browser",
-          "controls": 516,
+          "controls": 518,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -604,7 +623,7 @@
         },
         {
           "state": "text-drawer-fonts",
-          "controls": 538,
+          "controls": 540,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -613,7 +632,7 @@
         },
         {
           "state": "cache-sheet-first",
-          "controls": 476,
+          "controls": 475,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -962,7 +981,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_2554f19fae0]",
+          "focusAfterClose": "button[data-testid=more-ast_5ea867f1110]",
           "focusReturned": true
         },
         {
@@ -1393,8 +1412,27 @@
           "focusReturned": true
         },
         {
+          "state": "toast-in-modal",
+          "controls": 498,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "inModal": true,
+          "host": "modal",
+          "inert": false,
+          "regionName": "Notifications",
+          "announced": true,
+          "pageBehindPruned": true,
+          "toastReachedByKeyboard": true,
+          "tabStepsThatLeftTheDialog": 0,
+          "closed": true,
+          "toastBackOnPage": true
+        },
+        {
           "state": "field-live-error",
-          "controls": 488,
+          "controls": 490,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1403,7 +1441,7 @@
         },
         {
           "state": "pack-page",
-          "controls": 500,
+          "controls": 502,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1412,7 +1450,7 @@
         },
         {
           "state": "music-browser",
-          "controls": 516,
+          "controls": 518,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1421,7 +1459,7 @@
         },
         {
           "state": "text-drawer-fonts",
-          "controls": 538,
+          "controls": 540,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1430,7 +1468,7 @@
         },
         {
           "state": "cache-sheet-first",
-          "controls": 475,
+          "controls": 476,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1439,7 +1477,7 @@
         },
         {
           "state": "cache-sheet-ready",
-          "controls": 478,
+          "controls": 477,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1675,7 +1713,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 472,
+          "controls": 471,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1692,8 +1730,25 @@
           "shown": true
         },
         {
+          "state": "toast-in-modal",
+          "controls": 449,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "inModal": true,
+          "host": "modal",
+          "inert": false,
+          "regionName": "התראות",
+          "announced": true,
+          "pageBehindPruned": true,
+          "toastReachedByKeyboard": true,
+          "tabStepsThatLeftTheDialog": 0
+        },
+        {
           "state": "perform-view",
-          "controls": 138,
+          "controls": 140,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1755,7 +1810,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 472,
+          "controls": 471,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1772,8 +1827,25 @@
           "shown": true
         },
         {
+          "state": "toast-in-modal",
+          "controls": 449,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "inModal": true,
+          "host": "modal",
+          "inert": false,
+          "regionName": "Notifications",
+          "announced": true,
+          "pageBehindPruned": true,
+          "toastReachedByKeyboard": true,
+          "tabStepsThatLeftTheDialog": 0
+        },
+        {
           "state": "perform-view",
-          "controls": 138,
+          "controls": 140,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1806,25 +1878,25 @@
     {
       "theme": "dark",
       "uiLanguage": "he",
-      "states": 72,
+      "states": 73,
       "findings": 0
     },
     {
       "theme": "dark",
       "uiLanguage": "en",
-      "states": 72,
+      "states": 73,
       "findings": 0
     },
     {
       "theme": "light",
       "uiLanguage": "he",
-      "states": 7,
+      "states": 8,
       "findings": 0
     },
     {
       "theme": "light",
       "uiLanguage": "en",
-      "states": 7,
+      "states": 8,
       "findings": 0
     }
   ],

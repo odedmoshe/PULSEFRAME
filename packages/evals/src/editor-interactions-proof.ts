@@ -29,6 +29,7 @@ import { chooseFormat } from './editor-ui.ts';
 import { generateShortsFixture } from '../../fixtures/src/shorts.ts';
 import { SHORTS_TESTIDS } from '../../../apps/web/src/editor/shorts.testids.ts';
 import { PERFORM_TESTIDS } from '../../../apps/web/src/editor/perform/perform.testids.ts';
+import { PEOPLE_TESTIDS } from '../../../apps/web/src/editor/lifeline/people.testids.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/editor-interactions');
@@ -1408,6 +1409,71 @@ async function main() {
       check('command bar: the assistant row reads «עוזר השפה לא מחובר»; «איך מחברים» opens Settings at «עוזר השפה» (provider_not_configured); a refused save reads in Hebrew with its next step and without the server\'s English hint', !!rowText?.includes('עוזר השפה לא מחובר') && settings && setup === 'provider_not_configured' && /PF_ASSISTANT_HOSTS/.test(refused) && /[א-ת]/.test(refused) && refused.includes('; ') && !/restart the server/i.test(refused) && !/לא תורגם/.test(refused), { setup, refused });
       check('command bar: no uncaught errors in the page', cErrors.length === 0, cErrors.slice(0, 4));
       await cctx.close();
+    }
+
+    console.log('\n# a toast while a modal dialog is open (the people sheet, in Hebrew): inside the modal, announced, reachable by Tab, back on the page after');
+    {
+      const mctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+      await mctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const mp = await mctx.newPage();
+      const mErrors: string[] = [];
+      mp.on('pageerror', (e) => mErrors.push(String(e)));
+      await mp.goto(`${s.ownerUrl}&project=${pid}`);
+      await mp.getByTestId('timecode').waitFor();
+      await mp.getByTestId('open-palette').click();
+      await mp.getByTestId('palette-input').fill('אנשים');
+      await mp.locator('[data-testid=palette-option][data-command-id="life.people"]').click({ timeout: 8000 });
+      const sheet = mp.getByTestId(PEOPLE_TESTIDS.sheet);
+      await sheet.waitFor();
+      // a person added in the sheet and removed again: the removal is an undo toast, shown while the sheet is still open
+      await mp.getByTestId(PEOPLE_TESTIDS.personAdd).click();
+      await mp.getByTestId('life-person-new-name').fill('אורחת בדיקה');
+      await mp.getByTestId('life-person-new-save').click();
+      const personId = await mp.waitForFunction(() => [...document.querySelectorAll<HTMLElement>('[data-person-id]')].find((r) => r.querySelector<HTMLInputElement>('input[type=text]')?.value === 'אורחת בדיקה')?.dataset.personId ?? null, undefined, { timeout: 10000 }).then((h) => h.jsonValue() as Promise<string>);
+      await mp.getByTestId(PEOPLE_TESTIDS.personRemove(personId)).click();
+      const toastIn = mp.locator(`[data-testid=${PEOPLE_TESTIDS.sheet}] [data-testid=toasts] [role=status]`);
+      await toastIn.first().waitFor({ timeout: 8000 }).catch(() => {});
+      const where = await mp.evaluate((sheetId) => {
+        const region = document.querySelector<HTMLElement>('[data-testid=toasts]');
+        const t = region?.querySelector<HTMLElement>('[role=status]');
+        return { inSheet: !!t && !!document.querySelector(`[data-testid=${sheetId}]`)?.contains(t), host: region?.dataset.host ?? null, inert: !!t?.closest('[inert]'), regionName: region?.getAttribute('aria-label') ?? null, pageBehindInert: !!document.querySelector('[data-testid=timecode]')?.closest('[inert]'), text: t?.textContent ?? '' };
+      }, PEOPLE_TESTIDS.sheet);
+      // announced = in the accessibility tree as a live status (an inert subtree is pruned from it); the page behind is the control
+      const cdp = await mctx.newCDPSession(mp);
+      const axOf = async (selector: string) => {
+        const { root: docRoot } = await cdp.send('DOM.getDocument', { depth: 0 });
+        const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: docRoot.nodeId, selector });
+        if (!nodeId) return null;
+        const { nodes } = await cdp.send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false });
+        const n = nodes[0] as { ignored?: boolean; role?: { value?: string } } | undefined;
+        return n ? { ignored: !!n.ignored, role: n.role?.value ?? null } : null;
+      };
+      const axToast = await axOf(`[data-testid=${PEOPLE_TESTIDS.sheet}] [data-testid=toasts] [role=status]`);
+      const axBehind = await axOf('[data-testid=open-palette]');
+      check('a toast that appears while a modal dialog is open is rendered inside it, named «התראות», not inert, and in the accessibility tree as a status (announced), while the page behind stays inert and out of that tree',
+        where.inSheet && where.host === 'modal' && !where.inert && where.regionName === 'התראות' && where.pageBehindInert && axToast?.ignored === false && axToast.role === 'status' && axBehind?.ignored === true && where.text.length > 0,
+        { ...where, axToast, axBehind });
+      // the keyboard: Shift+Tab walks the sheet backwards (the toast region is its last part); focus never leaves the sheet;
+      // Enter on «ביטול» undoes exactly the removal (the undo toast lives 6 s and pauses while focused)
+      let left = 0, reached = false;
+      for (let i = 0; i < 60 && !reached; i++) {
+        await mp.keyboard.press('Shift+Tab');
+        const at = await mp.evaluate((id) => ({ inSheet: !!document.querySelector(`[data-testid=${id}]`)?.contains(document.activeElement), onUndo: !!document.activeElement?.closest('[data-testid=toasts] [role=status]') && document.activeElement?.tagName === 'BUTTON' && !document.activeElement.classList.contains('pf-toast-x') }), PEOPLE_TESTIDS.sheet);
+        if (!at.inSheet) left++;
+        reached = at.onUndo;
+      }
+      const focusedLabel = await mp.evaluate(() => document.activeElement?.textContent ?? '');
+      if (reached) await mp.keyboard.press('Enter');
+      const restored = await mp.getByTestId(PEOPLE_TESTIDS.personRow(personId)).waitFor({ timeout: 8000 }).then(() => true, () => false);
+      check('the keyboard reaches the toast\'s «ביטול» inside the modal\'s focus trap (focus never leaves the sheet); Enter brings the removed person back and the sheet stays open',
+        reached && left === 0 && focusedLabel.trim() === 'ביטול' && restored && (await sheet.count()) === 1, { reached, tabStepsThatLeftTheSheet: left, focusedLabel, restored });
+      await mp.keyboard.press('Escape');
+      await sheet.waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      await mp.waitForTimeout(150);
+      // after the sheet closes the region is the page's again (a child of the body, not inert)
+      const after = await mp.evaluate(() => { const r = document.querySelector<HTMLElement>('[data-testid=toasts]'); return { host: r?.dataset.host ?? null, parentIsBody: r?.parentElement === document.body, inert: !!r?.closest('[inert]'), anyInert: !!document.querySelector('[inert]') }; });
+      check('after the sheet closes, the toast region is back on the page (a child of the body, not inert) and nothing is left inert; no page errors', after.host === 'page' && after.parentIsBody && !after.inert && !after.anyInert && mErrors.length === 0, { ...after, errors: mErrors.slice(0, 3) });
+      await mctx.close();
     }
 
     await page.close();

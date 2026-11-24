@@ -69,11 +69,11 @@ export function App() {
   );
 }
 
-const APP_STRINGS = { he: { close: 'סגירה', undo: 'ביטול' }, en: { close: 'Close', undo: 'Undo' } } as const;
+const APP_STRINGS = { he: { close: 'סגירה', undo: 'ביטול', notifications: 'התראות' }, en: { close: 'Close', undo: 'Undo', notifications: 'Notifications' } } as const;
 /** The toast queue of the editor (ds ToastProvider), in the interface language. */
 function Toasts({ children }: { children: React.ReactNode }) {
   const { state } = useEditorState();
-  return <ToastProvider closeLabel={APP_STRINGS[state.lang].close}>{children}<ToastBridge /></ToastProvider>;
+  return <ToastProvider closeLabel={APP_STRINGS[state.lang].close} label={APP_STRINGS[state.lang].notifications}>{children}<ToastBridge /></ToastProvider>;
 }
 /** The editor's notices (editor.notify) go to the toast queue; an undo toast undoes exactly the transaction it names (undoToast.ts). */
 function ToastBridge() {

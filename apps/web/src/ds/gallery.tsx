@@ -269,4 +269,4 @@ function Gallery() {
   );
 }
 
-createRoot(document.getElementById('root')!).render(<StrictMode><ToastProvider closeLabel={initialLang === 'he' ? 'סגירה' : 'Close'}><Gallery /></ToastProvider></StrictMode>);
+createRoot(document.getElementById('root')!).render(<StrictMode><ToastProvider closeLabel={initialLang === 'he' ? 'סגירה' : 'Close'} label={initialLang === 'he' ? 'התראות' : 'Notifications'}><Gallery /></ToastProvider></StrictMode>);
