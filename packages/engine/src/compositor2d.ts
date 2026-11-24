@@ -345,6 +345,27 @@ function boxOf(g: RenderGraph, layer: VideoLayer | ImageLayer | TextLayer): Laye
   const { w, h } = placedSize(g, layer), t = layer.transform;
   return { cx: g.width / 2 + t.x * g.width, cy: g.height / 2 + t.y * g.height, w, h, rotation: t.rotation, scale: t.scale };
 }
+/**
+ * Put an opacity below 1 into a buffer's own alpha: one destination-in fill of the whole buffer. A clip's opacity is applied
+ * this way, never as the globalAlpha of a draw onto a picture below it: in 8 bits that is not the same picture. Chromium's
+ * software canvas computes such a draw as (s·(a+1) + d·(255−a)) >> 8 with a = round(255·α), a truncation that leaves the
+ * frame on average half a level low and some bytes 2 off round(d + (s − d)·α). With the opacity in the buffer's alpha and the
+ * buffer composited at full alpha, every byte pair is within 1 of round(d + (s − d)·a/255) at every opacity (a/255 is the
+ * nearest alpha an 8-bit canvas has); the bytes still 2 off the real α are those where α itself falls between two such
+ * levels. Measured in headless Chromium 153 over all 256×256 byte pairs at the opacities 0.01…0.99, also through stills
+ * (conformance:opacity). Used by picture clips (drawPinned) and by the adjustment pass.
+ */
+function fadeBuf(buf: Buf, opacity: number, width: number, height: number) {
+  const b = buf.ctx;
+  b.save();
+  b.setTransform(1, 0, 0, 1, 0, 0);
+  b.filter = 'none';
+  b.globalCompositeOperation = 'destination-in';
+  b.globalAlpha = opacity;
+  b.fillStyle = '#000';
+  b.fillRect(0, 0, width, height);
+  b.restore();
+}
 /** Draw a layer's picture (or title) with its transform and opacity, nothing else: the first step of every layer and of every time tap. */
 function placeLayer(c: Ctx2D, g: RenderGraph, layer: VideoLayer | ImageLayer | TextLayer, img: FrameImage | null, note?: TextNote) {
   if (layer.kind === 'text') { drawText(c, g, layer, note); return; }
@@ -358,7 +379,7 @@ function placeLayer(c: Ctx2D, g: RenderGraph, layer: VideoLayer | ImageLayer | T
  * frame·(1 − α·m) + adjusted·α·m (α opacity, m mask coverage): masked-out pixels are transparent in the adjusted copy,
  * so they stay byte-identical. Nothing else is drawn: no picture is asked for, no transform, no transition.
  *
- * Opacity below 1 is put into the copy's own alpha (one destination-in fill) and the copy is then drawn at full alpha. Drawing
+ * Opacity below 1 is put into the copy's own alpha (fadeBuf: one destination-in fill) and the copy is then drawn at full alpha. Drawing
  * the opaque copy with globalAlpha instead is the same picture in exact arithmetic, but not in 8 bits: Chromium's software
  * canvas then computes (s·(a+1) + d·(255−a)) >> 8 with a = 255·α (s adjusted, d frame): weights of (a+1)/256 and (255−a)/256
  * and a truncation, which at α = 0.5 is 2 below round((s + d) / 2) for 4096 of the 65536 byte pairs, and more than 1 off
@@ -374,17 +395,7 @@ async function adjustPass(ctx: Ctx2D, g: RenderGraph, layer: AdjustLayer, tables
   let buf: Buf = snap;
   if (layer.effects?.length) buf = await applyEffects(buf, layer.effects, env);
   if (layer.mask) applyMask(buf, layer.mask, env);
-  if (layer.opacity < 1) {
-    const b = buf.ctx;
-    b.save();
-    b.setTransform(1, 0, 0, 1, 0, 0);
-    b.filter = 'none';
-    b.globalCompositeOperation = 'destination-in';
-    b.globalAlpha = layer.opacity;
-    b.fillStyle = '#000';
-    b.fillRect(0, 0, g.width, g.height);
-    b.restore();
-  }
+  if (layer.opacity < 1) fadeBuf(buf, layer.opacity, g.width, g.height);
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
@@ -499,7 +510,10 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Pr
     const { w, h } = placedSize(g, layer);
     const colourFix = layer.kind === 'video' ? layer.colourFix : undefined;
     const regions = layer.kind === 'video' ? layer.regions : undefined;
-    const hasLook = !!(colourFix || regions?.length || layer.time || layer.effects?.length || layer.mask || layer.transition || (layer.blend && layer.blend !== 'normal'));
+    // A picture below full opacity is placed opaque in a scratch buffer and faded there (fadeBuf), never drawn onto the frame
+    // with globalAlpha. A title keeps its globalAlpha: its stroke shows through its fill, which a fade of the whole would change.
+    const faded = layer.kind !== 'text' && layer.transform.opacity < 1;
+    const hasLook = !!(faded || colourFix || regions?.length || layer.time || layer.effects?.length || layer.mask || layer.transition || (layer.blend && layer.blend !== 'normal'));
     if (!hasLook) { placeLayer(ctx, g, layer, img ?? null, textNote); continue; } // fast path: identical to drawing without the look system
     const t = layer.transform;
     const box: LayerBox = { cx: g.width / 2 + t.x * g.width, cy: g.height / 2 + t.y * g.height, w, h, rotation: t.rotation, scale: t.scale };
@@ -526,7 +540,12 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider): Pr
       // Without its time effect (a tap's picture could not be had): the layer's own picture alone, and the effect is reported,
       // so a preview says so and a still or an export refuses.
       if (taps && layer.time) timeLeftOut.set(layer.time.type, tapWhy.get(`${i}:${lost}`) ?? 'source frame unavailable');
-      placeLayer(buf.ctx, g, layer, img ?? null, textNote);
+      if (faded) {
+        // opaque first, then the opacity into the buffer's alpha (fadeBuf): at the same step as before, so colour fix,
+        // privacy regions, effects, mask, transition and blend see the faded picture as they always did
+        placeLayer(buf.ctx, g, { ...layer, transform: { ...layer.transform, opacity: 1 } }, img ?? null, textNote);
+        fadeBuf(buf, layer.transform.opacity, g.width, g.height);
+      } else placeLayer(buf.ctx, g, layer, img ?? null, textNote);
       if (colourFix === 'bt709-as-bt601') applyColourMatrix(buf, BT709_AS_BT601); // before effects: it corrects the source, it is not a look
       if (regions?.length) applyRegions(buf, regions, env); // privacy regions (ADR-0015): on the placed picture, before any effect
     }
