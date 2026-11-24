@@ -13,6 +13,8 @@ export const MULTICAM_TESTIDS = {
   // live switching: the «הקלטת החלפות» toggle (aria-pressed), the reaction offset, the polite live region (start, stop,
   // «N חתכים נשמרו» only), the group chooser
   record: 'multicam-record', reaction: 'multicam-reaction', live: 'multicam-live', group: 'multicam-group',
+  // the note shown when angle prefetch is off on a low-memory device (media.ts prefetchBudget)
+  prefetchOff: 'multicam-prefetch-off',
   // the speakers table: a row (data-speaker-id), its mic, channel and shot choosers
   speakers: 'multicam-speakers', speaker: 'multicam-speaker', speakerMic: 'multicam-speaker-mic', speakerChannel: 'multicam-speaker-channel', speakerShot: 'multicam-speaker-shot',
   // the auto-switch sheet: open, the heuristic disclaimer, the basis lines, apply, regenerate; the diarisation setup state

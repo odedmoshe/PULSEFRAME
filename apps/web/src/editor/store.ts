@@ -14,7 +14,7 @@ import { createT, dictionaries, dirOf, translateRefusal, type Key, type Lang } f
 import { initGpu, type GpuStatus, type ImageLayer, type RenderGraph, type TextLayer, type VideoLayer } from '@pulseframe/engine';
 import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
 import { ensureFonts } from '../fonts.ts';
-import { MediaPool } from '../media.ts';
+import { MediaPool, prefetchBudget } from '../media.ts';
 import { Player } from '../player.ts';
 import { timelineDerivatives } from '../clipVisuals.cache.ts';
 import { failureOf, rememberJob, type ProviderFailure } from './aiTools.recheck.ts';
@@ -23,6 +23,7 @@ import { addAssetArgs, dropAssetArgs } from './placement.ts';
 import { injectSequenceId } from './shorts.view.ts';
 import { followFactor, followOffsetAt, layerOf, ownFromResolved } from './tracking.math.ts';
 import { wholeEditOps, type WholeEditPick } from './commands.ts';
+import { anglePrefetchPlan } from './anglePrefetch.ts';
 import { commitParts, projectionResult, record, reportNotes, reportOf, startSession, unchangedPlaces, type MulticamSession } from './multicamSession.ts';
 import { MULTICAM_STRINGS } from './multicam.strings.ts';
 import { cutBefore, type ObjectTab } from './inspector.model.ts';
@@ -473,7 +474,7 @@ export class Editor {
       // Preview decodes the frame-identical proxy once it exists; export always uses the original.
       previewUrl: async (assetId) => ((await api.derivatives(projectId, assetId)).derivatives.find((d) => d.kind === 'proxy')?.status === 'ready' ? `/api/v1/projects/${projectId}/assets/${assetId}/derivatives/proxy` : null),
     });
-    this.player = new Player(canvas, this.pool, () => { this.set({ tick: this.state.tick + 1 }); this.announce(projectId); this.multicamTick(); }, (e) => void this.previewFailed(projectId, e));
+    this.player = new Player(canvas, this.pool, () => { this.set({ tick: this.state.tick + 1 }); this.announce(projectId); this.multicamTick(); this.multicamWarm(); }, (e) => void this.previewFailed(projectId, e));
     (window as any).__pfMedia = () => this.pool?.stats();
     (window as any).__pfSync = () => this.player?.syncStats();
     const p = await this.load(projectId);
@@ -650,6 +651,29 @@ export class Editor {
     this.set({ multicamRec: record(s, gt.g, angleId) });
     const vd = this.viewDoc;
     if (vd) p.setPictureDoc(vd);
+  }
+  /** The painted frame prefetch was last planned for (-1: nothing is kept warm). */
+  private warmAt = -1;
+  private warmDoc: ProjectDocument | null = null;
+  /**
+   * Prefetch for multicam (anglePrefetch.ts, MediaPool.warm): while a multicam program plays at normal speed, keep the decoders of
+   * the next segment and, while switches are recorded, of the other picture angles warm within the device's budget; planned once
+   * per painted frame. Anything else (paused, shuttling, no program) lets every warm decoder go. Only warms: the picture of every
+   * frame is still whatever evaluate gives for it.
+   */
+  private multicamWarm() {
+    const p = this.player, pool = this.pool;
+    if (!p || !pool) return;
+    const budget = prefetchBudget((globalThis.navigator as { deviceMemory?: number } | undefined)?.deviceMemory);
+    // planned from the frame ON SCREEN and the document it was drawn from: right after a live cut, p.doc already shows the new
+    // angle on air while its first frame is still being drawn, and a plan from it would let go of the very decoder that frame takes
+    const shown = p.painted >= 0 ? p.paintedDoc : null;
+    const prog = p.playing && !p.shuttleRate && shown ? this.multicamProgram() : null;
+    if (!prog || !shown) { if (this.warmAt !== -1) { this.warmAt = -1; pool.warm([], budget.bytes, budget.off); } return; }
+    if (p.painted === this.warmAt && shown === this.warmDoc) return;
+    this.warmAt = p.painted;
+    this.warmDoc = shown;
+    pool.warm(anglePrefetchPlan(shown, prog, p.painted, { quality: p.pictureQuality(), live: this.recordingSwitches }), budget.bytes, budget.off);
   }
   /** Called on every player tick: a pause or the end of the program (not a pause-and-resume inside setDoc) commits the recording. */
   private multicamTick() {

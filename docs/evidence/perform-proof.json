@@ -1,12 +1,12 @@
 {
-  "ranAt": "2026-11-19T06:39:30.170Z",
+  "ranAt": "2026-11-24T17:54:05.468Z",
   "result": "PASS",
   "passed": 28,
   "failed": 0,
   "blocked": 0,
   "total": 28,
   "machine": {
-    "platform": "Linux 6.18.44-fc-v653 x64",
+    "platform": "Linux 6.18.44-fc-v819 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "webgpu": "present (on this Linux container it is a software adapter, as in proof:gpu)"
@@ -122,9 +122,9 @@
       "name": "SHA-256 of the canonical apply_take args: equal across two server dry runs and the browser view",
       "status": "pass",
       "detail": {
-        "browser": "91a48995714e71928a40f9c539fb9955d7f10814ed7592384fed30539862eb31",
-        "server1": "91a48995714e71928a40f9c539fb9955d7f10814ed7592384fed30539862eb31",
-        "server2": "91a48995714e71928a40f9c539fb9955d7f10814ed7592384fed30539862eb31"
+        "browser": "e78a8e2f10668fb52a3a098cde749ba1d30012ff57f98b49336c70283858604b",
+        "server1": "e78a8e2f10668fb52a3a098cde749ba1d30012ff57f98b49336c70283858604b",
+        "server2": "e78a8e2f10668fb52a3a098cde749ba1d30012ff57f98b49336c70283858604b"
       }
     },
     {
@@ -144,11 +144,11 @@
       "name": "undo (Ctrl+Z in the editor): the document hash equals the one before the take; redo (Ctrl+Shift+Z) equals the one after; Store.replay of that revision equals the stored document",
       "status": "pass",
       "detail": {
-        "before": "be81478861200042",
-        "after": "29d7d39b7b1d516f",
-        "undone": "be81478861200042",
-        "redone": "29d7d39b7b1d516f",
-        "replay": "29d7d39b7b1d516f"
+        "before": "3867228d6aeda929",
+        "after": "229674c3b49bac81",
+        "undone": "3867228d6aeda929",
+        "redone": "229674c3b49bac81",
+        "replay": "229674c3b49bac81"
       }
     },
     {
@@ -409,33 +409,33 @@
         "rows": [
           {
             "pad": 0,
-            "down": 1.9979,
-            "clock": 1.999682666668157,
-            "diffMs": -1.8
+            "down": 2.0142,
+            "clock": 2.02364,
+            "diffMs": -9.4
           },
           {
             "pad": 1,
-            "down": 2.2549,
-            "clock": 2.2583713333355684,
-            "diffMs": -3.5
+            "down": 2.279,
+            "clock": 2.291259666666667,
+            "diffMs": -12.3
           },
           {
             "pad": 2,
-            "down": 2.5161,
-            "clock": 2.516486000000745,
-            "diffMs": -0.4
+            "down": 2.5854,
+            "clock": 2.5898696666666665,
+            "diffMs": -4.5
           },
           {
             "pad": 3,
-            "down": 2.7727,
-            "clock": 2.7831394999985104,
-            "diffMs": -10.4
+            "down": 2.8637,
+            "clock": 2.8686599999998137,
+            "diffMs": -5
           },
           {
             "pad": 5,
-            "down": 3.0477,
-            "clock": 3.051753166665177,
-            "diffMs": -4.1
+            "down": 3.1564,
+            "clock": 3.1663560000001865,
+            "diffMs": -10
           }
         ]
       }
@@ -457,19 +457,19 @@
       "detail": {
         "hits": 200,
         "runsMs": [
-          16.7,
-          13.4,
-          11.8,
-          11.3,
-          12.5,
-          25.7,
-          16.6,
-          12.2,
-          11.3,
-          10.2
+          20.6,
+          17,
+          15.2,
+          20.4,
+          33.2,
+          15,
+          15,
+          20.5,
+          23.3,
+          18.1
         ],
-        "warmupMs": 18.1,
-        "slowestMs": 25.7,
+        "warmupMs": 31.9,
+        "slowestMs": 33.2,
         "budgetMs": 33.33,
         "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4",
         "note": "one sample of this machine, under whatever else ran on it; not a general claim"
@@ -883,7 +883,7 @@
       "name": "the camera overlay from the keyboard (+ to zoom, Enter, Shift+→ while filming at half speed, Enter): a review with the confirm saying the framing outside the range stays, nothing written while filming, accept = one transaction (history lists its op once: replace_clip_keyframes) that keyed x, y and scale",
       "status": "pass",
       "detail": {
-        "confirm": "הצילום יחליף 30 נקודות מפתח של מיקום וגודל בטווח שצולם. המסגור מחוץ לטווח נשאר כמו שהוא. אפשר לבטל בבת אחת. נקודות מפתח חדשות: 12",
+        "confirm": "הצילום יחליף 33 נקודות מפתח של מיקום וגודל בטווח שצולם. המסגור מחוץ לטווח נשאר כמו שהוא. אפשר לבטל בבת אחת. נקודות מפתח חדשות: 13",
         "revisions": 1,
         "ops": [
           "replace_clip_keyframes"
@@ -1122,19 +1122,19 @@
     "n1LivePath": {
       "hits": 200,
       "runsMs": [
-        16.7,
-        13.4,
-        11.8,
-        11.3,
-        12.5,
-        25.7,
-        16.6,
-        12.2,
-        11.3,
-        10.2
+        20.6,
+        17,
+        15.2,
+        20.4,
+        33.2,
+        15,
+        15,
+        20.5,
+        23.3,
+        18.1
       ],
-      "warmupMs": 18.1,
-      "slowestMs": 25.7,
+      "warmupMs": 31.9,
+      "slowestMs": 33.2,
       "budgetMs": 33.33,
       "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4",
       "note": "one sample of this machine, under whatever else ran on it; not a general claim"

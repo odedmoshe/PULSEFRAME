@@ -19,6 +19,8 @@ export interface MulticamStrings {
   clipBlockTitle: string; angleList: string; appliedLook: (n: number) => string; droppedLine: (what: string, n: number) => string;
   badge: (n: number | string, label: string) => string; dualMonoDone: string;
   groupsLabel: string;
+  /** Prefetch is off on a low-memory device (media.ts prefetchBudget): the reason and what still holds or helps. */
+  prefetchOff: string;
 }
 const ARROW = (v: number) => (v > 0 ? `+${v}` : `${v}`);
 export const MULTICAM_STRINGS: Record<'he' | 'en', MulticamStrings> = {
@@ -41,6 +43,7 @@ export const MULTICAM_STRINGS: Record<'he' | 'en', MulticamStrings> = {
     stepCreate: 'יוצר קבוצה', stepSync: 'מסנכרן לפי הקול', stepReview: 'בדיקה', stepPlace: 'מניח על ציר הזמן', stepDone: 'התוכנית מוכנה', stepFailed: (w) => `נעצר: ${w}`, reviewIntro: 'הסנכרון של חלק מהקבצים אינו ודאי. אפשר לבדוק אותם ולתקן, או להמשיך כמו שהוא', reviewContinue: 'המשך לחיתוך', reviewCancel: 'עצירה כאן', reviewSyncDialog: 'פתיחת בדיקת הסנכרון', syncAgain: 'סנכרון מחדש',
     clipBlockTitle: 'זווית בתוכנית', angleList: 'זווית', appliedLook: (n) => `המראה הוחל על ${n} קטעים`, droppedLine: (w, n) => `${w}: הוסר ב־${n} קטעים`,
     badge: (n, l) => `${n} · ${l}`, dualMonoDone: 'הקול מורכז', groupsLabel: 'קבוצות מולטיקאם',
+    prefetchOff: 'טעינה מוקדמת של זוויות כבויה במכשיר הזה, כי יש בו מעט זיכרון, ולכן זווית חדשה עלולה להופיע באיחור של כמה פריימים. החתכים נרשמים בפריים הנכון בכל מקרה. במחשב עם יותר זיכרון ההחלפה מוצגת מהר יותר',
   },
   en: {
     region: 'Multicam', viewerLabel: 'Angle viewer', noProgram: 'No multicam program on the chosen video track', noProgramHint: 'Choose the program\'s video track (the ◎ button of the track) to switch angles with the number keys', group: 'Group',
@@ -61,6 +64,7 @@ export const MULTICAM_STRINGS: Record<'he' | 'en', MulticamStrings> = {
     stepCreate: 'Creating the group', stepSync: 'Syncing by sound', stepReview: 'Review', stepPlace: 'Placing on the timeline', stepDone: 'The program is ready', stepFailed: (w) => `Stopped: ${w}`, reviewIntro: 'Some files are not surely in sync. Check and fix them, or go on as it is', reviewContinue: 'Go on to cutting', reviewCancel: 'Stop here', reviewSyncDialog: 'Open the sync check', syncAgain: 'Sync again',
     clipBlockTitle: 'Angle in the program', angleList: 'Angle', appliedLook: (n) => `Look applied to ${n} segments`, droppedLine: (w, n) => `${w}: removed on ${n} segments`,
     badge: (n, l) => `${n} · ${l}`, dualMonoDone: 'Sound centred', groupsLabel: 'Multicam groups',
+    prefetchOff: 'Angle prefetch is off on this device because it has little memory, so a new angle may appear a few frames late. Cuts are still recorded at the right frame. On a computer with more memory, switches show sooner',
   },
 };
 export const signed = ARROW;
