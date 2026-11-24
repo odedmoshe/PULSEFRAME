@@ -12,10 +12,10 @@ import { detectSilences, heavy } from './analysis.ts';
 import type { Governance } from './governance.ts';
 import { ApiError, type Store } from './store.ts';
 
-const STATUS: Record<RecipeError['code'], number> = { not_found: 404, needs_analysis: 409, invalid_args: 400, nothing_to_do: 409, not_built: 501 };
+const STATUS: Record<RecipeError['code'], number> = { not_found: 404, needs_analysis: 409, invalid_args: 400, nothing_to_do: 409, not_built: 501, untimed_copy: 422 };
 const wrap = <R>(fn: () => R): R => {
   try { return fn(); } catch (e) {
-    if (e instanceof RecipeError) throw new ApiError(STATUS[e.code], e.code === 'nothing_to_do' ? 'nothing_to_do' : e.code === 'needs_analysis' ? 'needs_analysis' : e.code === 'not_found' ? 'not_found' : e.code === 'not_built' ? 'not_built' : 'invalid_request', e.message, {}, e.hint);
+    if (e instanceof RecipeError) throw new ApiError(STATUS[e.code], e.code === 'nothing_to_do' ? 'nothing_to_do' : e.code === 'needs_analysis' ? 'needs_analysis' : e.code === 'not_found' ? 'not_found' : e.code === 'not_built' ? 'not_built' : e.code === 'untimed_copy' ? 'untimed_copy' : 'invalid_request', e.message, {}, e.hint);
     throw e;
   }
 };
@@ -40,7 +40,7 @@ async function context(store: Store, projectId: string, recipeId: string, params
   }
   return ctx;
 }
-const view = (revision: number, plan: RecipePlan) => ({ revision, recipeId: plan.recipeId, params: plan.params, steps: plan.steps, basis: plan.basis, operations: plan.ops.length, alternatives: plan.alternatives, method: 'rule-based plan from project data; no language model', note: 'Nothing was changed. Apply it to make these edits as one undoable step.' });
+const view = (revision: number, plan: RecipePlan) => ({ revision, recipeId: plan.recipeId, params: plan.params, steps: plan.steps, basis: plan.basis, operations: plan.ops.length, alternatives: plan.alternatives, ...(plan.skippedClips ? { skippedClips: plan.skippedClips } : {}), method: 'rule-based plan from project data; no language model', note: 'Nothing was changed. Apply it to make these edits as one undoable step.' });
 
 /**
  * The family film (ADR-0026) is listed as recipe 'family-film' but planned by its own planner and applied through apply_template
@@ -65,7 +65,7 @@ export async function applyRecipe(store: Store, gov: Governance, principal: Prin
   const plan = wrap(() => planRecipe(p.doc, recipeId, params, ctx));
   // The plan was built from revision p.revision; committing against exactly that revision means a concurrent edit cannot be silently built upon.
   const r = gov.commitAs(principal, { projectId, expectedRevision: expectedRevision ?? p.revision, allowInternal: true, label: `Recipe: ${plan.steps[0] ?? recipeId}`.slice(0, 120), ops: [{ op: 'apply_recipe', args: { recipeId, params: plan.params, steps: plan.steps, ops: plan.ops } }] }) as any;
-  return { revision: r.revision, runId: r.results?.[0]?.output?.runId ?? null, createdIds: r.results?.[0]?.output?.createdIds ?? [], steps: plan.steps, basis: plan.basis, alternatives: plan.alternatives, ...(r.proposal ? { proposal: r.proposal } : {}) };
+  return { revision: r.revision, runId: r.results?.[0]?.output?.runId ?? null, createdIds: r.results?.[0]?.output?.createdIds ?? [], steps: plan.steps, basis: plan.basis, alternatives: plan.alternatives, ...(plan.skippedClips ? { skippedClips: plan.skippedClips } : {}), ...(r.proposal ? { proposal: r.proposal } : {}) };
 }
 
 export async function regenerateRecipe(store: Store, gov: Governance, principal: Principal, projectId: string, runId: string, newParams?: unknown) {

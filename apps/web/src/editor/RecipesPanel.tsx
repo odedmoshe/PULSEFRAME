@@ -5,6 +5,7 @@ import type { Key } from '@pulseframe/i18n';
 import { api, ApiFailure, type RecipeAlternative, type RecipeParams, type RecipePlanResult } from '../api.ts';
 import { useEditorState } from './store.ts';
 import { RECIPE_FORM_IDS, recipeParams, recipeSources } from './recipeParams.ts';
+import { skippedNotes } from './transcriptLineage.logic.ts';
 
 /** Only the recipes this panel has a form for (recipeParams.test.ts checks that every recipe has one). */
 const RECIPES = describeRecipes().filter((r) => RECIPE_FORM_IDS.includes(r.id));
@@ -231,6 +232,7 @@ export function RecipesPanel() {
                       <ul className="recipe-basis" data-testid="recipe-basis">{entry.plan.basis.map((s, i) => <li key={i} dir="auto" className="muted">{s}</li>)}</ul>
                     </>
                   )}
+                  {doc && skippedNotes(doc, entry.plan.skippedClips, t('transcript.untimedSkipped')).map((n) => <p key={n} className="muted" role="status" data-testid="recipe-skipped-note">{n}</p>)}
                   {entry.plan.note && <p className="muted" dir="auto">{entry.plan.note}</p>}
                   {stale && <p className="warn" data-testid="recipe-plan-stale">{t('recipes.stale')}</p>}
                   {entry.plan.alternatives.length > 0 && (

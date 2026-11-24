@@ -35,6 +35,8 @@ import { splitSegment, turnsBack } from './curves.ts';
 import { isLightChannel } from './keyframeChannels.ts';
 import { detachAssetFromEvents } from './events.ts';
 import { handDownCapture } from './capture.ts';
+import { sceneCutsFor, timingRelations, transcriptFor } from './lineage.ts';
+import { skippedClips, timingCoverage, untimedCopyRefusal } from './cleanup.ts';
 import { MULTICAM_REFUSALS, type MulticamRefusalKey, type MulticamRefusalRow } from './multicamRefusals.ts';
 import { DEFAULT_REDACT_REGION, isUsable, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, roundHalfUp, SIZE_UNIT, ST, TrackOpArgs, trackSampleAt, type MotionTrack, type RedactRegion } from './tracking.ts';
 
@@ -42,7 +44,10 @@ export type OpErrorCode =
   | 'unknown_op' | 'invalid_args' | 'not_found' | 'track_locked' | 'overlap' | 'out_of_bounds'
   | 'incompatible' | 'forbidden_op' | 'invalid_result'
   // replace_clip_asset (ADR-0017): the new file does not keep the original's timing / does not cover what the clip shows
-  | 'not_time_preserving' | 'range_not_covered';
+  | 'not_time_preserving' | 'range_not_covered'
+  // edits by a recording's times (delete_transcript_range; tidy-speech and the filler/silence routes use the same code): nothing on the
+  // timeline plays the recording on a known clock, and a clip shows a copy of it that records no time mapping
+  | 'untimed_copy';
 export class OpError extends Error {
   constructor(public code: OpErrorCode, message: string, public details: Record<string, unknown> = {}, public hint?: string) {
     super(message);
@@ -2132,8 +2137,10 @@ defineOp({
     const f = mustClip(d, a.clipId);
     refuseAdjustment(f.clip, 'split at scene cuts');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only media clips have scenes', { clipId: a.clipId });
-    const cuts = d.analyses[f.clip.assetId]?.scenes?.cuts;
-    if (!cuts) throw new OpError('not_found', 'this asset has no scene analysis yet', { assetId: f.clip.assetId }, 'Run the scene analysis first (analyze_asset kind=scenes).');
+    // the clip's own file, else the nearest time-preserving source it was made from (an enhanced copy keeps its source's shots)
+    const found = sceneCutsFor(d, f.clip.assetId);
+    if (!found) throw new OpError('not_found', 'this asset has no scene analysis yet', { assetId: f.clip.assetId }, 'Run the scene analysis first (analyze_asset kind=scenes).');
+    const cuts = T.isZero(found.offset) ? found.cuts : found.cuts.map((t) => T.sub(t, found.offset));
     if (f.clip.reverse) throw new OpError('incompatible', 'scene cuts cannot be applied to a clip that plays backwards', { clipId: a.clipId }, 'Split it before reversing, or split by hand.');
     const rate = d.settings.frameRate;
     const clip = f.clip;
@@ -2146,7 +2153,7 @@ defineOp({
       created.push(...(r.output!.createdClipIds as string[]));
       current = r.output!.rightClipId as string;
     }
-    return { affectedIds: [clip.id, ...created], summary: `Split into ${points.length + 1} shots`, output: { cuts: points, createdClipIds: created } };
+    return { affectedIds: [clip.id, ...created], summary: `Split into ${points.length + 1} shots`, output: { cuts: points, createdClipIds: created, ...(found.assetId !== clip.assetId ? { analysedAssetId: found.assetId } : {}) } };
   },
 });
 
@@ -3831,12 +3838,14 @@ defineOp({
 defineOp({
   name: 'delete_transcript_range',
   version: 1,
-  description: 'Text-based editing: remove the given spoken words (first to last, inclusive) from the timeline wherever that media is used. Picture, sound and captions are cut together and later material closes the gap. Needs word-level timing; cut points snap to the nearest frame.',
+  description: 'Text-based editing: remove the given spoken words (first to last, inclusive) from the timeline wherever that media is used, also where a clip shows a copy that keeps its timing (an enhanced picture, a cleaned-up voice, a smoother slow motion; mapped exactly onto the copy\'s own clock). Picture, sound and captions are cut together and later material closes the gap. Needs word-level timing; cut points snap to the nearest frame. assetId may also be such a copy: the transcript of the recording it was made from is used. A clip that shows a copy made without a recorded time mapping (reversed, stretched or generated) is skipped, as a clip that plays backwards is, and named in the output (skippedClips), since where the words are in it is unknown; refused when the words are on no other clip.',
   args: z.object({ sequenceId: z.string().optional(), assetId: z.string(), fromWordId: z.string(), toWordId: z.string(), allowApproximate: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const seq = seqOf(d, a.sequenceId);
-    const tr = d.transcripts[a.assetId];
+    // the asset's own transcript, else that of the recording a time-preserving copy was made from (lineage.ts)
+    const tr = transcriptFor(d, a.assetId)?.transcript;
     if (!tr) throw new OpError('not_found', `asset ${a.assetId} has no transcript`, { assetId: a.assetId });
+    const anchor = tr.assetId;
     const flat = tr.segments.flatMap((s) => s.words.map((w) => ({ w, s })));
     const i = flat.findIndex((x) => x.w.id === a.fromWordId), j = flat.findIndex((x) => x.w.id === a.toWordId);
     if (i < 0 || j < i) throw new OpError('not_found', 'fromWordId/toWordId must be words of this transcript, in order', { fromWordId: a.fromWordId, toWordId: a.toWordId });
@@ -3844,22 +3853,29 @@ defineOp({
     if (!a.allowApproximate && picked.some((x) => x.s.timing !== 'word'))
       throw new OpError('incompatible', 'these words only have estimated times, so a word-precise cut would be a guess', { timing: 'approximate' }, 'Use cut_range with explicit times, or pass allowApproximate=true to accept an estimated cut.');
     const srcStart = picked[0]!.w.start, last = picked.at(-1)!.w, srcEnd = T.add(last.start, last.duration);
+    // clips of copies without a recorded time mapping are skipped and named; an edit that finds the words nowhere else is refused
+    const untimed = timingCoverage(d, anchor, seq.id).untimed;
+    const refuseUntimed = () => { const r = untimedCopyRefusal(untimed); return new OpError(r.code, r.message, r.details, r.hint); };
     const rate = d.settings.frameRate;
+    const rel = timingRelations(d, anchor);
     const ranges: { start: T.RationalTime; end: T.RationalTime }[] = [];
     for (const track of seq.tracks)
       for (const c of track.clips) {
-        if (c.type !== 'media' || c.assetId !== a.assetId || c.reverse) continue; // a reversed clip does not play the words
-        const from = T.max(c.sourceIn, srcStart), to = T.min(sourceEnd(c), srcEnd);
+        if (c.type !== 'media' || c.reverse) continue; // a reversed clip does not play the words
+        const k = rel(c.assetId);
+        if (k?.kind !== 'same') continue; // the recording itself, or a time-preserving copy: the words on that file's own clock
+        const from = T.max(c.sourceIn, T.add(srcStart, k.delta)), to = T.min(sourceEnd(c), T.add(srcEnd, k.delta));
         if (!T.lt(from, to)) continue;
         const start = T.snapToFrame(timelineAt(c, from), rate), end = T.snapToFrame(timelineAt(c, to), rate);
         if (T.lt(start, end) && !ranges.some((r) => T.eq(r.start, start) && T.eq(r.end, end))) ranges.push({ start, end });
       }
-    if (ranges.length === 0) throw new OpError('not_found', 'those words are not on the timeline (already cut, or shorter than one frame)', { assetId: a.assetId });
+    if (ranges.length === 0) { if (untimed.length) throw refuseUntimed(); throw new OpError('not_found', 'those words are not on the timeline (already cut, or shorter than one frame)', { assetId: a.assetId }); }
     ranges.sort((x, y) => T.cmp(y.start, x.start)); // latest first, so earlier ranges keep their times
     const affected = new Set<string>();
     for (const r of ranges) { const c = cutRange(d, seq, r.start, r.end, seq.tracks, true, ctx); for (const id of [...c.removed, ...c.changed, ...c.created, ...c.markersMoved, ...c.markersRemoved, ...c.unlinked]) affected.add(id); }
     const text = picked.map((x) => x.w.text).join(' ');
-    return { affectedIds: [...affected], summary: `Removed "${text.slice(0, 40)}" from the timeline`, output: { ranges: ranges.reverse(), words: picked.length } };
+    const skipped = skippedClips(untimed);
+    return { affectedIds: [...affected], summary: `Removed "${text.slice(0, 40)}" from the timeline${skipped.length ? `; ${skipped.length} clip(s) showing a copy that does not keep the recording's timing not searched` : ''}`, output: { ranges: ranges.reverse(), words: picked.length, ...(skipped.length ? { skippedClips: skipped } : {}) } };
   },
 });
 

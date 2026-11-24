@@ -49,6 +49,66 @@ export function transcriptFor(doc: ProjectDocument, assetId: string): { transcri
   return null;
 }
 
+/**
+ * How an asset's own clock relates to the clock of `anchorId` (a transcribed or measured recording), for edits driven by the anchor's
+ * times (delete_transcript_range, filler and silence cuts, split_at_scenes):
+ * - 'same': the asset is the anchor or shares its time lineage root (a time-preserving copy of it, the recording a time-preserving copy
+ *   was made from, or a sibling copy). Moment t of the anchor is moment t + delta of the asset, exactly (rational times).
+ * - 'untimed': a moving picture or sound made from the anchor's recording (directly or through other copies, along any of its sources)
+ *   by a derivation that records no time mapping (no sourceRangeStart: reversed, stretched or generated). Where the anchor's moments
+ *   lie in it is unknown, so an edit by the anchor's times must refuse rather than guess.
+ * - null: unrelated, or a still picture (a still has no time).
+ * Same-asset copies (a conformed file, an editing proxy) keep the asset's id, so they are the anchor itself.
+ */
+export type TimingRelation = { kind: 'same'; delta: T.RationalTime } | { kind: 'untimed'; viaAssetId: string };
+export function timingRelations(doc: ProjectDocument, anchorId: string): (assetId: string) => TimingRelation | null {
+  const anchor = timeLineage(doc, anchorId);
+  const rootOf = new Map<string, Lineage>();
+  const lineage = (id: string) => { let l = rootOf.get(id); if (!l) { l = timeLineage(doc, id); rootOf.set(id, l); } return l; };
+  const memo = new Map<string, TimingRelation | null>();
+  return (assetId) => {
+    if (memo.has(assetId)) return memo.get(assetId)!;
+    let out: TimingRelation | null = null;
+    const asset = Object.hasOwn(doc.assets, assetId) ? doc.assets[assetId] : undefined;
+    const lin = lineage(assetId);
+    if (lin.rootAssetId === anchor.rootAssetId) out = { kind: 'same', delta: T.sub(anchor.offset, lin.offset) };
+    else if (asset && asset.kind !== 'image' && (asset.video || asset.audio)) {
+      // walk every source link up from the asset (breadth first, bounded): reaching the anchor's lineage means it was made from that recording
+      const seen = new Set([assetId]);
+      let level = [asset], depth = 0;
+      while (!out && level.length && depth++ < MAX_LINEAGE_DEPTH) {
+        const next: typeof level = [];
+        for (const a of level)
+          for (const id of a.provenance.derived?.sourceAssetIds ?? []) {
+            if (seen.has(id) || !Object.hasOwn(doc.assets, id)) continue;
+            seen.add(id);
+            if (lineage(id).rootAssetId === anchor.rootAssetId) { out = { kind: 'untimed', viaAssetId: id }; break; }
+            next.push(doc.assets[id]!);
+          }
+        level = next;
+      }
+    }
+    memo.set(assetId, out);
+    return out;
+  };
+}
+
+/**
+ * Scene cuts of an asset, or of the nearest time-preserving source of it that was analysed (as transcriptFor), with the offset to
+ * subtract from them to get this asset's own times. null when none of the chain has scene analysis.
+ */
+export function sceneCutsFor(doc: ProjectDocument, assetId: string): { cuts: T.RationalTime[]; offset: T.RationalTime; assetId: string } | null {
+  const lin = timeLineage(doc, assetId);
+  let offset: T.RationalTime = T.ZERO;
+  for (let i = 0; i < lin.chain.length; i++) {
+    const id = lin.chain[i]!;
+    if (i > 0) offset = T.add(offset, doc.assets[lin.chain[i - 1]!]!.provenance.derived!.sourceRangeStart!);
+    const cuts = Object.hasOwn(doc.analyses ?? {}, id) ? doc.analyses[id]!.scenes?.cuts : undefined;
+    if (cuts) return { cuts, offset, assetId: id };
+  }
+  return null;
+}
+
 /** The current master text of a translated id: a transcript phrase (segment id) or a manual caption cue (clip id); null when it no longer exists. */
 export function masterTextOf(doc: ProjectDocument, id: string): string | null {
   for (const tr of Object.values(doc.transcripts ?? {})) for (const s of tr.segments) if (s.id === id) return s.text;

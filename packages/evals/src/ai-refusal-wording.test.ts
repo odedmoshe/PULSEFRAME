@@ -46,6 +46,9 @@ describe('Hebrew wording of the AI-model wave refusals', () => {
     const en = tr.results[0]!.output!.variantId as string;
     const reviewed = tx(tr.doc, [{ op: 'review_translation', args: { variantId: en, review: 'reviewed' } }], true).doc;
     // a cue on a transcript-mode caption track (which shows the transcript, so its cues are not translated as cues)
+    // only a clip that shows a copy without a recorded time mapping is left: the words could be only there, so they cannot be cut by text
+    const withUntimed = tx(d, [{ op: 'delete_clip', args: { clipId: clip } }, { op: 'add_clip', args: { assetId: untimed, start: f(60), duration: f(30), withLinkedAudio: false } }, { op: 'set_transcript', args: { assetId: vid, language: 'he', segments: [{ start: T.rt(1, 1), duration: T.rt(1, 1), text: 'שלום', words: [{ start: T.rt(1, 1), duration: T.rt(1, 1), text: 'שלום' }] }] } }]).doc;
+    const word = withUntimed.transcripts[vid]!.segments[0]!.words[0]!.id;
     const transcriptCue = structuredClone(d);
     const ct = transcriptCue.sequences[transcriptCue.mainSequenceId]!.tracks.find((t) => t.kind === 'caption')!;
     ct.clips.push({ id: 'clp_tcue', type: 'caption', start: f(0), duration: f(30), transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 }, text: 'x' });
@@ -60,6 +63,7 @@ describe('Hebrew wording of the AI-model wave refusals', () => {
       ['a still for a video clip', d, [{ op: 'replace_clip_asset', args: { clipId: clip, assetId: grab } }], false],
       ['a copy that does not keep the timing', d, [{ op: 'replace_clip_asset', args: { clipId: clip, assetId: untimed } }], false],
       ['a copy that does not cover the clip', d, [{ op: 'replace_clip_asset', args: { clipId: clip, assetId: late } }], false],
+      ['deleting words that only an untimed copy could play', withUntimed, [{ op: 'delete_transcript_range', args: { assetId: vid, fromWordId: word, toWordId: word } }], false],
       ['reviewing a format that is not a translation', d, [{ op: 'review_translation', args: { variantId: square, review: 'reviewed' } }], true],
       ['reviewing twice', reviewed, [{ op: 'review_translation', args: { variantId: en, review: 'reviewed' } }], true],
       ['asking for review twice', tr.doc, [{ op: 'review_translation', args: { variantId: en, review: 'needed' } }], true],
@@ -82,8 +86,14 @@ describe('Hebrew wording of the AI-model wave refusals', () => {
     // the numbers of the range refusal survive, isolated left to right inside the Hebrew sentence
     expect(translateRefusal('he', 'the new file covers 5.000s–7.000s of the original; the clip needs 1.000s–3.000s')).toBe('הקובץ החדש מכסה את השניות ⁦5.000–7.000⁩ של המקור, והקליפ צריך את השניות ⁦1.000–3.000⁩');
   });
+  it('the note for a clip skipped as an untimed copy is worded in both languages, with the clip\'s name', () => {
+    const he = (dictionaries.he as Record<string, string>)['transcript.untimedSkipped']!, en = (dictionaries.en as Record<string, string>)['transcript.untimedSkipped']!;
+    expect(/[֐-׿]/.test(he)).toBe(true);
+    expect(en.trim().length).toBeGreaterThan(0);
+    for (const s of [he, en]) expect(s.match(/\{\w+\}/g)).toEqual(['{name}']);
+  });
   it('the new error codes have a headline in both languages', () => {
-    for (const lang of ['he', 'en'] as const) for (const code of ['not_time_preserving', 'range_not_covered'])
+    for (const lang of ['he', 'en'] as const) for (const code of ['not_time_preserving', 'range_not_covered', 'untimed_copy'])
       expect((dictionaries[lang] as Record<string, string>)[`error.code.${code}`], `${lang} ${code}`).toBeTruthy();
   });
 });

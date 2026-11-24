@@ -38,7 +38,7 @@ export interface JobEvent { id: string; type: string; status: string; stage: str
 export interface PreflightIssue { code: string; severity: 'blocker' | 'warning' | 'note'; message: string; ids: string[]; range?: { startFrame: number; endFrame: number }; fix?: { label: string; ops: OpCall[] } }
 export interface PreflightReport { revision: number; ok: boolean; blockers: number; warnings: number; notes: number; issues: PreflightIssue[]; output: unknown; scope: string }
 export interface CommitResult { revision: number; committed: boolean; /** the transaction this commit made (null when nothing changed): undo names it to reverse exactly this edit */ transactionId?: string | null; summary: string; affectedIds: string[]; results: { op: string; output?: Record<string, any> }[] }
-export interface SilenceResult { revision: number; candidates: { start: unknown; end: unknown; startSeconds: number; seconds: number }[]; removableSeconds: number; ops: OpCall[]; note?: string }
+export interface SilenceResult { revision: number; candidates: { start: unknown; end: unknown; startSeconds: number; seconds: number }[]; removableSeconds: number; ops: OpCall[]; note?: string; /** clips of a copy that does not keep the recording's timing, not searched */ skippedClips?: { clipId: string; assetId: string; reason: 'untimed_copy' }[] }
 /** measure_voice (ADR-0013; apps/server/src/voiceClean.ts): the same shapes as the server's VoiceMeasureBody and VoiceCheck. */
 export interface VoiceMeasureRequest { clipId: string; strength?: number; /** SOURCE-time stretches that hold only noise */ noiseRanges?: { start: RationalTime; end: RationalTime }[]; scope?: 'clip' | 'asset' }
 export interface VoiceCheck { revision: number; assetId: string; clipIds: string[]; method: string; /** ranges in source seconds */ report: VoiceMeasurement; recommendedStrength: number; /** clean_voice candidates: send as ONE transaction */ ops: OpCall[]; note: string }
@@ -50,7 +50,7 @@ export interface LoudnessResult { integratedLufs: number | null; truePeakDbtp: n
 
 export type RecipeParams = Record<string, unknown>;
 export interface RecipeAlternative { label: string; params: RecipeParams }
-export interface RecipePlanResult { revision: number; steps: string[]; basis: string[]; operations?: unknown; alternatives: RecipeAlternative[]; method?: string; note?: string }
+export interface RecipePlanResult { revision: number; steps: string[]; basis: string[]; operations?: unknown; alternatives: RecipeAlternative[]; method?: string; note?: string; /** clips of a copy that does not keep the recording's timing, left alone (tidy-speech) */ skippedClips?: { clipId: string; assetId: string; reason: 'untimed_copy' }[] }
 export interface RecipeApplyResult { revision: number; runId: string; createdIds: string[]; steps: string[]; basis: string[]; alternatives: RecipeAlternative[] }
 export interface RecipeRegenerateResult { revision: number; runId: string; replaced: number; protected: string[]; steps: string[] }
 
