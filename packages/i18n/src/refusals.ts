@@ -99,6 +99,7 @@ const HE_AI: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^the new file has no sound$/, () => 'בקובץ החדש אין קול'],
   [/^a still picture and a moving picture cannot stand in for each other$/, () => 'תמונה סטטית ווידאו אינם יכולים להחליף זה את זה'],
   [/^the new file does not keep the timing of the file this clip shows$/, () => 'הקובץ החדש אינו שומר על התזמון של הקובץ שהקליפ מציג, ולכן הקליפ היה מציג רגעים אחרים. אפשר להניח אותו ברצועה משלו'],
+  [/^clip \S+ shows a copy of this recording that does not keep its timing, so where these moments are in it is unknown$/, () => 'אחד הקליפים מציג עותק של ההקלטה שאינו שומר על התזמון שלה, ולכן לא ידוע היכן הרגעים האלה נמצאים בו. אפשר להחזיר לקליפ את ההקלטה עצמה או עותק ששומר על התזמון, או להסיר אותו ולנסות שוב; או לחתוך לפי זמן'],
   [/^the new file covers (-?[\d.]+)s–(-?[\d.]+)s of the original; the clip needs (-?[\d.]+)s–(-?[\d.]+)s$/, (m) => `הקובץ החדש מכסה את השניות ${ltr(`${m[1]}–${m[2]}`)} של המקור, והקליפ צריך את השניות ${ltr(`${m[3]}–${m[4]}`)}`],
   [/^this format is not a translation$/, () => 'הפורמט הזה אינו תרגום'],
   [/^the translation is already marked as reviewed$/, () => 'התרגום כבר מסומן כנבדק'],

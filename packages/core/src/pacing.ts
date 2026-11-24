@@ -12,6 +12,7 @@ import * as T from '@pulseframe/time';
 import type { MediaClip, ProjectDocument } from './schema.ts';
 import { clipEnd, sequenceDuration } from './validate.ts';
 import { isRamped, sourceEnd, speedOf, timelineOfSource } from './speed.ts';
+import { transcriptFor } from './lineage.ts';
 
 export interface PacingOptions { windowSeconds?: number; staticSeconds?: number; maxCharsPerSecond?: number; maxWordsPerSecond?: number; maxCutsPerWindow?: number; silenceSeconds?: number }
 export interface PacingWindow { start: T.RationalTime; end: T.RationalTime; cuts: number; words: number; wordsPerSecond: number; captionChars: number; charsPerSecond: number }
@@ -62,17 +63,20 @@ export function pacingReport(doc: ProjectDocument, opts: PacingOptions = {}): Pa
 
   // Words: each word once per place it plays (a linked picture + sound pair plays it at one place).
   const hasTranscriptCaptions = seq.tracks.some((t) => t.kind === 'caption' && t.caption?.mode === 'transcript');
-  // The word-timed words of an asset in order of their start, built once however many clips use the asset.
+  // The word-timed words of an asset in order of their start, built once however many clips use the asset. A time-preserving copy
+  // (an enhanced picture, a cleaned-up voice) has the words of the recording it was made from, moved exactly onto its own clock.
+  // A copy made without a recorded time mapping has none: where its words are is unknown, so they are not counted.
   const byStart = (a: TimedWord, b: TimedWord) => a.sec - b.sec || T.cmp(a.start, b.start); // seconds never reverse the exact order; equal seconds are compared exactly
   const index = new Map<string, TimedWord[] | null>();
   const wordsOf = (assetId: string) => {
     let list = index.get(assetId);
     if (list !== undefined) return list;
-    const tx = doc.transcripts?.[assetId];
+    const found = transcriptFor(doc, assetId);
     list = null;
-    if (tx) {
+    if (found) {
       list = [];
-      for (const seg of tx.segments) if (seg.timing === 'word') for (const w of seg.words) list.push({ id: w.id, text: w.text, start: w.start, duration: w.duration, sec: T.toSeconds(w.start), len: T.toSeconds(w.duration) });
+      const shift = !T.isZero(found.offset);
+      for (const seg of found.transcript.segments) if (seg.timing === 'word') for (const w of seg.words) { const start = shift ? T.sub(w.start, found.offset) : w.start; list.push({ id: w.id, text: w.text, start, duration: w.duration, sec: T.toSeconds(start), len: T.toSeconds(w.duration) }); }
       for (let i = 1; i < list.length; i++) if (byStart(list[i - 1]!, list[i]!) > 0) { list.sort(byStart); break; }
     }
     index.set(assetId, list);

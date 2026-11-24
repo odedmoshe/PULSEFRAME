@@ -7,7 +7,7 @@
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { CAPTION_PRESETS, type Asset, type MediaClip, type ProjectDocument, type Track } from './schema.ts';
-import { cutOps, sourceTimesToTimeline, sourceRangesToTimeline, type TimeRange } from './cleanup.ts';
+import { cutOps, sourceTimesToTimeline, sourceRangesToTimeline, untimedCopies, untimedCopyRefusal, type TimeRange } from './cleanup.ts';
 import { FORMAT_PROFILES } from './variants.ts';
 import { defineOp, findClip, getOp, OpError, type OpCall } from './ops.ts';
 import { flashGapFrames } from './flashSafety.ts';
@@ -19,7 +19,8 @@ import { planMulticamAuto } from './multicamAuto.ts';
 
 export class RecipeError extends Error {
   /** not_built: a recipe whose planner is only a contract in this build (none at present; multicam-auto was until ADR-0020 W2); the server answers 501. */
-  constructor(public code: 'not_found' | 'needs_analysis' | 'invalid_args' | 'nothing_to_do' | 'not_built', message: string, public hint?: string) { super(message); }
+  /** untimed_copy: a clip shows a copy of the recording made without a recorded time mapping (cleanup.ts untimedCopies); the server answers 422. */
+  constructor(public code: 'not_found' | 'needs_analysis' | 'invalid_args' | 'nothing_to_do' | 'not_built' | 'untimed_copy', message: string, public hint?: string) { super(message); }
 }
 export interface RecipePlan {
   recipeId: string;
@@ -194,6 +195,8 @@ function planTidySpeech(doc: ProjectDocument, raw: unknown, ctx: PlanContext): R
   if (!doc.assets[p.assetId]?.audio) throw new RecipeError('not_found', `asset ${p.assetId} is missing or has no sound`);
   const silences = ctx.silences?.[p.assetId];
   if (!silences) throw new RecipeError('needs_analysis', 'silence measurement for this asset was not supplied');
+  const untimed = untimedCopies(doc, p.assetId);
+  if (untimed.length) { const r = untimedCopyRefusal(untimed); throw new RecipeError(r.code, r.message, r.hint); }
   const ranges = sourceRangesToTimeline(doc, p.assetId, silences, T.fromSeconds(p.keepSeconds.toFixed(6)));
   const ops: OpCall[] = cutOps(ranges), steps: string[] = [], basis: string[] = [`${silences.length} silent stretch(es) measured in the recording`];
   const removed = ranges.reduce((n, r) => n + T.toSeconds(T.sub(r.end, r.start)), 0);

@@ -6,6 +6,7 @@ import * as T from '@pulseframe/time';
 import type { ProjectDocument } from './schema.ts';
 import type { OpCall } from './ops.ts';
 import { sourceEnd, timelineAt, timelineOfSource } from './speed.ts';
+import { timingRelations } from './lineage.ts';
 
 export interface TimeRange { start: T.RationalTime; end: T.RationalTime }
 
@@ -14,22 +15,57 @@ const ceilFrame = (t: T.RationalTime, rate: { num: number; den: number }) => {
   return T.frameTime(T.isFrameAligned(t, rate) ? i : i + 1, rate);
 };
 
+/** A clip that shows a copy of a recording made by a derivation that records no time mapping (lineage.ts timingRelations 'untimed'). */
+export interface UntimedCopy { clipId: string; assetId: string; madeFromAssetId: string }
+/**
+ * Clips of the sequence that play a moving picture or sound made from `assetId`'s recording without a recorded time mapping (a
+ * reversed, stretched or generated rendition). Freeze frames play no time and are left out. An edit by `assetId`'s times refuses
+ * while there is one (untimedCopyRefusal): where those moments are in such a clip is unknown, and a guess could cut the wrong frames.
+ */
+export function untimedCopies(doc: ProjectDocument, assetId: string, sequenceId = doc.mainSequenceId): UntimedCopy[] {
+  const seq = Object.hasOwn(doc.sequences, sequenceId) ? doc.sequences[sequenceId] : undefined;
+  if (!seq) return [];
+  const rel = timingRelations(doc, assetId);
+  const out: UntimedCopy[] = [];
+  for (const track of seq.tracks)
+    for (const c of track.clips) {
+      if (c.type !== 'media' || c.freeze) continue;
+      const r = rel(c.assetId);
+      if (r?.kind === 'untimed') out.push({ clipId: c.id, assetId: c.assetId, madeFromAssetId: r.viaAssetId });
+    }
+  return out;
+}
+/** The refusal for untimedCopies (the caller raises it as its own error type, code 'untimed_copy'). */
+export const untimedCopyRefusal = (copies: UntimedCopy[]) => ({
+  code: 'untimed_copy' as const,
+  message: `clip ${copies[0]!.clipId} shows a copy of this recording that does not keep its timing, so where these moments are in it is unknown`,
+  hint: 'Give that clip the recording itself or a copy that keeps its timing (replace_clip_media), or remove it, and try again; or cut by time with cut_range.',
+  details: { clipIds: copies.map((c) => c.clipId), assetIds: [...new Set(copies.map((c) => c.assetId))] },
+});
+
 /**
  * Timeline ranges where the given source ranges of `assetId` are currently playing.
- * Each source range is first shrunk by `keep` on both sides (breathing room), then mapped through every clip of the asset
- * and snapped INWARD to whole frames, so a cut never removes material outside the source range. Result: merged, ascending.
+ * Each source range is first shrunk by `keep` on both sides (breathing room), then mapped through every clip that plays that
+ * recording: clips of the asset itself and of time-preserving copies of it or of its source (lineage.ts timingRelations: an
+ * enhanced picture, a cleaned-up voice, a smoother slow motion, through replace_clip_asset or replace_clip_media), each on its own
+ * clock. Clips of untimed copies are not mapped (see untimedCopies). Snapped INWARD to whole frames, so a cut never removes
+ * material outside the source range. Result: merged, ascending.
  */
 export function sourceRangesToTimeline(doc: ProjectDocument, assetId: string, ranges: TimeRange[], keep: T.RationalTime = T.ZERO, sequenceId = doc.mainSequenceId): TimeRange[] {
   const seq = doc.sequences[sequenceId];
   if (!seq) return [];
   const rate = doc.settings.frameRate;
+  const rel = timingRelations(doc, assetId);
   const out: TimeRange[] = [];
   for (const r of ranges) {
-    const s = T.add(r.start, keep), e = T.sub(r.end, keep);
-    if (!T.lt(s, e)) continue;
+    const s0 = T.add(r.start, keep), e0 = T.sub(r.end, keep);
+    if (!T.lt(s0, e0)) continue;
     for (const track of seq.tracks)
       for (const c of track.clips) {
-        if (c.type !== 'media' || c.assetId !== assetId) continue;
+        if (c.type !== 'media') continue;
+        const k = rel(c.assetId);
+        if (k?.kind !== 'same') continue;
+        const s = T.add(s0, k.delta), e = T.add(e0, k.delta); // on the clip's own file's clock
         const from = T.max(c.sourceIn, s), to = T.min(sourceEnd(c), e);
         if (!T.lt(from, to)) continue;
         // a reversed clip plays the later source first: the range's end comes first on the timeline

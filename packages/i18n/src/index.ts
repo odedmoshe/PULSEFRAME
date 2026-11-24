@@ -125,7 +125,7 @@ export const he = {
   'op.add_variant': 'הוספת פורמט', 'op.update_variant': 'עדכון פורמט', 'op.remove_variant': 'הסרת פורמט', 'op.set_variant_override': 'התאמה לפורמט', 'op.set_variant_phrase_text': 'ניסוח משפט בפורמט',
   // AI-model wave (ADR-0017): operations and their error codes
   'op.replace_clip_asset': 'הקליפ מציג גרסה מעובדת של הקובץ שלו', 'op.attach_translation': 'תרגום מכונה של הכתוביות', 'op.review_translation': 'סימון בדיקה של תרגום',
-  'error.code.not_time_preserving': 'הקובץ החדש אינו שומר על התזמון של המקור', 'error.code.range_not_covered': 'הקובץ החדש אינו מכסה את כל הקטע שהקליפ משתמש בו',
+  'error.code.not_time_preserving': 'הקובץ החדש אינו שומר על התזמון של המקור', 'error.code.range_not_covered': 'הקובץ החדש אינו מכסה את כל הקטע שהקליפ משתמש בו', 'error.code.untimed_copy': 'קליפ מציג עותק של ההקלטה שאינו שומר על התזמון שלה',
   // AI-model wave (ADR-0017), the editor and agent surface: setup states, error codes, portrait blur, translation review
   'ai.setup.ready': 'מוכן להרצה', 'ai.setup.provider_not_configured': 'ComfyUI לא מחובר', 'ai.setup.provider_unreachable': 'ComfyUI מוגדר אבל לא עונה',
   'ai.setup.engine_not_configured': 'המנוע של הכלי לא מוגדר במחשב הזה', 'ai.setup.engine_not_working': 'המנוע של הכלי מוגדר אבל לא עובד', 'ai.setup.engine_unverified': 'המנוע של הכלי אינו גרסה שנבדקה (החתימה שלו לא מוכרת)',
@@ -327,7 +327,7 @@ export const en: Record<keyof typeof he, string> = {
   'op.add_variant': 'Added format', 'op.update_variant': 'Updated format', 'op.remove_variant': 'Removed format', 'op.set_variant_override': 'Format override', 'op.set_variant_phrase_text': 'Phrase wording in a format',
   // AI-model wave (ADR-0017): operations and their error codes
   'op.replace_clip_asset': 'Clip shows a processed copy of its file', 'op.attach_translation': 'Machine translation of the captions', 'op.review_translation': 'Translation review mark',
-  'error.code.not_time_preserving': 'The new file does not keep the timing of the original', 'error.code.range_not_covered': 'The new file does not cover the whole stretch the clip uses',
+  'error.code.not_time_preserving': 'The new file does not keep the timing of the original', 'error.code.range_not_covered': 'The new file does not cover the whole stretch the clip uses', 'error.code.untimed_copy': 'A clip shows a copy of this recording that does not keep its timing',
   // AI-model wave (ADR-0017), the editor and agent surface: setup states, error codes, portrait blur, translation review
   'ai.setup.ready': 'Ready to run', 'ai.setup.provider_not_configured': 'ComfyUI is not connected', 'ai.setup.provider_unreachable': 'ComfyUI is set up but does not answer',
   'ai.setup.engine_not_configured': 'The tool\'s engine is not set up on this computer', 'ai.setup.engine_not_working': 'The tool\'s engine is set up but does not work', 'ai.setup.engine_unverified': 'The tool\'s engine is not a reviewed build (its checksum is not known)',
