@@ -186,6 +186,11 @@ export class Player {
   private shown = false;
   /** Index of the frame most recently painted, for tests and the UI. */
   painted = -1;
+  /**
+   * The document that frame was drawn from. `doc` can already be a newer one whose first frame is still being drawn (a live cut):
+   * prefetch plans from what is on screen, so the warm decoder of the angle being cut to is not let go before that frame takes it.
+   */
+  paintedDoc: ProjectDocument | null = null;
   /** Playback instrumentation: how late (seconds) each painted frame appeared relative to the clock that drives audio. */
   private late: number[] = [];
   /** Measurement only (ADR-0020 U4): the frame and how late (seconds) it was painted, for the last playback, so lateness at chosen frames can be read. */
@@ -298,6 +303,7 @@ export class Player {
         this.unavailableReasons = drawn.unavailableReasons ?? {};
         this.retryLater(doc, frame);
         this.painted = frame;
+        this.paintedDoc = doc;
         if (this.playing) {
           const { num, den } = frameRate;
           const lateBy = this.now() - (this.origin.clock + ((frame - this.origin.frame) * den) / num);

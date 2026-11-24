@@ -654,6 +654,7 @@ export class Editor {
   }
   /** The painted frame prefetch was last planned for (-1: nothing is kept warm). */
   private warmAt = -1;
+  private warmDoc: ProjectDocument | null = null;
   /**
    * Prefetch for multicam (anglePrefetch.ts, MediaPool.warm): while a multicam program plays at normal speed, keep the decoders of
    * the next segment and, while switches are recorded, of the other picture angles warm within the device's budget; planned once
@@ -664,12 +665,15 @@ export class Editor {
     const p = this.player, pool = this.pool;
     if (!p || !pool) return;
     const budget = prefetchBudget((globalThis.navigator as { deviceMemory?: number } | undefined)?.deviceMemory);
-    const prog = p.playing && !p.shuttleRate && p.doc ? this.multicamProgram() : null;
-    if (!prog || !p.doc) { if (this.warmAt !== -1) { this.warmAt = -1; pool.warm([], budget.bytes, budget.off); } return; }
-    const f = p.painted >= 0 ? p.painted : p.frame;
-    if (f === this.warmAt) return;
-    this.warmAt = f;
-    pool.warm(anglePrefetchPlan(p.doc, prog, f, { quality: p.pictureQuality(), live: this.recordingSwitches }), budget.bytes, budget.off);
+    // planned from the frame ON SCREEN and the document it was drawn from: right after a live cut, p.doc already shows the new
+    // angle on air while its first frame is still being drawn, and a plan from it would let go of the very decoder that frame takes
+    const shown = p.painted >= 0 ? p.paintedDoc : null;
+    const prog = p.playing && !p.shuttleRate && shown ? this.multicamProgram() : null;
+    if (!prog || !shown) { if (this.warmAt !== -1) { this.warmAt = -1; pool.warm([], budget.bytes, budget.off); } return; }
+    if (p.painted === this.warmAt && shown === this.warmDoc) return;
+    this.warmAt = p.painted;
+    this.warmDoc = shown;
+    pool.warm(anglePrefetchPlan(shown, prog, p.painted, { quality: p.pictureQuality(), live: this.recordingSwitches }), budget.bytes, budget.off);
   }
   /** Called on every player tick: a pause or the end of the program (not a pause-and-resume inside setDoc) commits the recording. */
   private multicamTick() {

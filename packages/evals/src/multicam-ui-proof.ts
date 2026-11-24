@@ -169,7 +169,7 @@ async function main() {
     check('U2: player.pause() is called 0 times during the session', pausesDuring === 0 && pausesBefore >= 0, { pausesDuring });
     check('U2: the audio tap\'s onsets equal those of an untouched playback (no gap > 1 ms)', wantsAudio ? onsetDiff !== null && onsetDiff <= 0.001 : null, wantsAudio ? { maxDiffSeconds: onsetDiff, onsets: ons(sess).length, baselineOnsets: ons(base).length } : { why: `no audio clock in this browser (clock ${sess.clock}): onsets not measured` });
     const viewer = (await page.evaluate(() => (window as any).__pfViewerMedia())) as { peakDecoders: number; maxDecoders: number; refused: number };
-    const program = (await page.evaluate(() => (window as any).__pfMedia())) as { peakDecoders: number; refused: number; warm?: { off: string | null; budgetBytes: number; opened: number; reused: number; adopted: number; evicted: number } };
+    const program = (await page.evaluate(() => (window as any).__pfMedia())) as { peakDecoders: number; refused: number; warm?: { off: string | null; budgetBytes: number; opened: number; reused: number; adopted: number; evicted: number; gaveRoom?: number } };
     check('U3: the viewer pool peaks at <= 4 decoders and the program pool refused 0 pictures', viewer.peakDecoders <= 4 && program.refused === 0, { viewer, program });
     // U4: lateness at the cut frames (the first frame painted at or after each), against the baseline
     const byFrame = new Map<number, number>((sess.paintLatenessByFrameMs as [number, number][]));
@@ -177,7 +177,7 @@ async function main() {
     const toFrames = (ms: number) => (ms * R.num) / (1000 * R.den);
     const u4 = { cutFramesMeasured: atCuts.length, medianMs: +median(atCuts).toFixed(2), p95Ms: +pct(atCuts, 95).toFixed(2), medianFrames: +toFrames(median(atCuts)).toFixed(2), p95Frames: +toFrames(pct(atCuts, 95)).toFixed(2), allFrames: sess.paintLatenessMs, baselineRun: base.paintLatenessMs, progressMd74: 'median 5-15 ms, p95 about 21-24 ms after the clock reached the frame (one 3.5 s headless run)', budget: 'p95 <= 2 frames', budgetMet: toFrames(pct(atCuts, 95)) <= 2,
       // prefetch (MediaPool.warm, anglePrefetch.ts): the budget it ran in and how many cut pictures took a warm decoder over
-      prefetch: program.warm ? { off: program.warm.off, budgetMB: +(program.warm.budgetBytes / (1 << 20)).toFixed(1), opened: program.warm.opened, reused: program.warm.reused, adopted: program.warm.adopted, evicted: program.warm.evicted } : 'not built', loadAverage: os.loadavg().map((x) => +x.toFixed(2)) };
+      prefetch: program.warm ? { off: program.warm.off, budgetMB: +(program.warm.budgetBytes / (1 << 20)).toFixed(1), opened: program.warm.opened, reused: program.warm.reused, adopted: program.warm.adopted, evicted: program.warm.evicted, gaveRoom: program.warm.gaveRoom ?? null } : 'not built', loadAverage: os.loadavg().map((x) => +x.toFixed(2)) };
     measurements.u4 = { ...u4, prefetchVerdict: u4.budgetMet ? 'budget met in this run' : `budget missed in this run (prefetch ${program.warm ? (program.warm.off ? `off: ${program.warm.off}` : 'on') : 'not built'})` };
     check('U4: program paint lateness at the cut frames recorded against the baseline (a miss is reported, it decides wave-2 prefetch)', atCuts.length > 0, u4);
 

@@ -12,8 +12,8 @@
  * and decoded up to a given time, inside ONE byte budget, so that a clip that appears (a live cut, the next segment) takes an
  * open decoder instead of opening one. A warm decoder is an ordinary decoder of the same source a fresh one would read; its
  * answer for a time does not depend on what it was asked before, so taking one over changes when a picture is ready, never
- * which picture it is (ADR-0005). Warm decoders count towards `maxDecoders`, are never pinned, and are the first to go when a
- * drawing needs room.
+ * which picture it is (ADR-0005). Warm decoders count towards `maxDecoders`, are never pinned, and give their slot to a drawing
+ * before any decoder a drawing used lately does.
  */
 import { ALL_FORMATS, AudioBufferSink, BlobSource, Input, UrlSource, VideoSampleSink, type Source, type VideoSample } from 'mediabunny';
 import { LUT_MAX_TEXT_LENGTH, LutError, lutStrip } from '@pulseframe/core';
@@ -140,6 +140,8 @@ export interface WarmStats {
   off: string | null;
   /** Warm decoders opened; taken over from a decoder no drawing used lately; taken over by a picture (the point of it); disposed because the plan or the budget no longer held them. */
   opened: number; reused: number; adopted: number; evicted: number;
+  /** Of those evicted, the ones disposed to give their slot to a drawing's decoder. */
+  gaveRoom: number;
   /** Requests left out because they did not fit the budget (last call), or because no decoder slot was free. */
   overBudget: number; noRoom: number;
 }
@@ -208,7 +210,7 @@ export class MediaPool {
   private disposed = 0;
   /** Warm decoders by `${assetId}:${quality}`, in the order of the last plan (the last is the first to go). */
   private warmed = new Map<string, WarmEntry>();
-  private warmStats: WarmStats = { decoders: 0, bytes: 0, budgetBytes: 0, off: null, opened: 0, reused: 0, adopted: 0, evicted: 0, overBudget: 0, noRoom: 0 };
+  private warmStats: WarmStats = { decoders: 0, bytes: 0, budgetBytes: 0, off: null, opened: 0, reused: 0, adopted: 0, evicted: 0, gaveRoom: 0, overBudget: 0, noRoom: 0 };
   private maxDecoders: number;
   private maxStills: number;
   private byteCache: number;
@@ -409,12 +411,15 @@ export class MediaPool {
     return { source: entry.source, release: () => { if (given) return; given = true; if (--entry.users === 0 && this.urlSources.get(k) === entry) this.urlSources.delete(k); } };
   }
   /**
-   * Bounded decoder count: before a decoder is opened, the least recently used ones that the current drawing does not use
-   * are disposed until there is room. False when every open decoder is in use by the current drawing (pinned).
+   * Bounded decoder count: before a decoder is opened, decoders the current drawing does not use are disposed until there is
+   * room: first those no drawing used in the last STALE_MS (least recently used first), then warm ones (the least wanted
+   * first), then the least recently used of the rest. False when every open decoder is in use by the current drawing (pinned).
    */
   private makeRoom(): boolean {
     while (this.decoders.size + this.warmed.size >= this.maxDecoders && this.warmed.size) {
-      const [k, w] = [...this.warmed].at(-1)!; // warm decoders go first, the least wanted of them first
+      if (this.freeStaleSlot()) continue;
+      const [k, w] = [...this.warmed].at(-1)!;
+      this.warmStats.gaveRoom++;
       this.dropWarm(k, w);
     }
     while (this.decoders.size >= this.maxDecoders) {

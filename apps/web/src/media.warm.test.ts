@@ -140,9 +140,29 @@ describe('MediaPool.warm', () => {
     const got = await draw(pool, [layer('clp_1', 'ast_a'), layer('clp_2', 'ast_b')]);
     await settle();
     expect(got.every((x) => x !== null)).toBe(true);
-    expect(pool.stats()).toMatchObject({ refused: 0, decoders: 2, warm: { decoders: 1 } });
+    expect(pool.stats()).toMatchObject({ refused: 0, decoders: 2, warm: { decoders: 1, gaveRoom: 2 } });
     expect(disposed).toEqual(['warm:ast_z:full:0', 'warm:ast_y:full:0']); // the least wanted first
     expect(pool.stats().peakDecoders).toBeLessThanOrEqual(3);
+  });
+
+  it('a decoder no drawing used lately gives its slot to a new picture before a warm one does', async () => {
+    let t = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => t);
+    const { pool, disposed } = stubPool(3);
+    await draw(pool, [layer('clp_old', 'ast_old')]);
+    t += MediaPool.STALE_MS;
+    pool.warm([req('ast_x'), req('ast_y')], 10 * ONE);
+    await settle();
+    expect(pool.stats()).toMatchObject({ decoders: 1, warm: { decoders: 2 } });
+    await draw(pool, [layer('clp_new', 'ast_new')]);
+    await settle();
+    expect(disposed).toEqual(['clp_old:full:0']);
+    expect(pool.stats()).toMatchObject({ refused: 0, decoders: 1, warm: { decoders: 2, gaveRoom: 0 } });
+    // with nothing stale left, a warm decoder gives its slot rather than a picture being refused
+    await draw(pool, [layer('clp_new', 'ast_new', 1), layer('clp_two', 'ast_two')]);
+    await settle();
+    expect(pool.stats()).toMatchObject({ refused: 0, decoders: 2, warm: { decoders: 1, gaveRoom: 1 } });
+    expect(disposed).toEqual(['clp_old:full:0', 'warm:ast_y:full:0']);
   });
 
   it('never takes the slot of a decoder a drawing used lately; a stale one gives its slot, or becomes the warm decoder of its own asset', async () => {

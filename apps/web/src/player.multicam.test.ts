@@ -148,3 +148,17 @@ describe('pictureQuality (the quality prefetch warms)', () => {
     expect(drawn.calls.at(-1)!.pool).toBe(pool.draftFrames);
   });
 });
+
+describe('paintedDoc (what prefetch plans from)', () => {
+  it('is the document of the frame on screen: after setPictureDoc it stays the old one until a frame of the new one is painted', async () => {
+    const { doc, picture } = project();
+    const edited = tx(doc, [{ op: 'set_clip_transform', args: { clipId: picture, transform: { x: 0.2 } } }] as OpCall[]).doc;
+    const { p } = playing(doc);
+    p.follow(30);
+    await vi.waitFor(() => expect(p.paintedDoc).toBe(doc));
+    expect(p.setPictureDoc(edited)).toBe(true);
+    expect(p.doc).toBe(edited);
+    expect(p.paintedDoc).toBe(doc); // its first frame is still being drawn
+    await vi.waitFor(() => expect(p.paintedDoc).toBe(edited));
+  });
+});
