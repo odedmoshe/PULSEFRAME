@@ -215,8 +215,11 @@ export interface TemplateWarning { code: (typeof TEMPLATE_WARNING_CODES)[number]
  * - field_no_date: a title's live field would have no capture date to read under it; the fallback words were used.
  * - builtin_music_faded: the built-in track is longer than the pictures; it is cut at the last picture and faded out.
  * - element_dropped: two graphic elements of the plan would lie on the same track range; the earlier one was left out.
+ * - removed_by_hand (regeneration): items of the previous run that were deleted by hand since (their slot record names a clip no
+ *   longer in the document) are not made again; details.keys names them. The plan's alternatives offer to bring them back
+ *   (restoreRemoved: true on the regenerate request).
  */
-export const TEMPLATE_NOTICE_CODES = ['field_missing', 'field_no_date', 'builtin_music_faded', 'element_dropped'] as const;
+export const TEMPLATE_NOTICE_CODES = ['field_missing', 'field_no_date', 'builtin_music_faded', 'element_dropped', 'removed_by_hand'] as const;
 export interface TemplateNotice { code: (typeof TEMPLATE_NOTICE_CODES)[number]; message: string; details: Record<string, unknown> }
 export interface PredictedSlot { key: string; startFrame: number; frames: number; assetId: string | null; sourceInFrame: number | null; /** 1 - visible share of the picture under the project fit (cover) or letterbox share (contain); null for no picture. */ cropShare: number | null }
 export interface TemplatePlan {
@@ -226,7 +229,8 @@ export interface TemplatePlan {
   notices: TemplateNotice[];
   /** Non-empty = apply refuses (409 template_blocked). */
   blocking: TemplateWarning[];
-  alternatives: { label: string; params: Partial<TemplateInput> }[];
+  /** restoreRemoved: the choice to regenerate again with the items removed by hand made again (notice removed_by_hand). */
+  alternatives: { label: string; params: Partial<TemplateInput>; restoreRemoved?: true }[];
   /**
    * Procedural media the server makes (makeSfx / makeElement / makeMusic) and passes as apply_template.assets under `key`.
    * music: `id` is the style, the track has exactly `bars` bars, and the server passes its known grid as assets[].analysis.
@@ -239,7 +243,17 @@ export interface TemplatePlan {
 export class TemplateError extends Error {
   constructor(public code: 'not_found' | 'needs_analysis' | 'needs_capability' | 'invalid_args' | 'nothing_to_do', message: string, public hint?: string) { super(message); }
 }
-export interface TemplatePlanContext { /** keys of the previous run's items edited by hand (regeneration): not emitted, kept */ keepKeys?: readonly string[]; elementsAvailable?: boolean }
+export interface TemplatePlanContext {
+  /** keys of the previous run's items edited by hand (regeneration): not emitted, kept */
+  keepKeys?: readonly string[];
+  /**
+   * keys of the previous run's items deleted by hand (regeneration): their slot record names a clip that is no longer in the
+   * document. Not emitted, so a hand delete survives the regeneration; the plan says so (notice removed_by_hand) and offers the
+   * alternative restoreRemoved. Derived from the run's slot records and the document, never stored as a flag.
+   */
+  removedKeys?: readonly string[];
+  elementsAvailable?: boolean;
+}
 
 /**
  * Model capabilities a template may need and this build does not have (ADR-0016). No built-in template uses one; the
@@ -302,15 +316,25 @@ export const gatedTemplateError = (t: ModelGatedTemplate) => new TemplateError('
 
 export interface TemplatePlanView { revision: number; templateId: string; version: number; params: TemplateInput; steps: string[]; basis: string[]; warnings: TemplateWarning[]; /** The server always sends it (ADR-0022); optional so that a view made without it stays one. */ notices?: TemplateNotice[]; blocking: TemplateWarning[]; alternatives: TemplatePlan['alternatives']; operations: number; predicted: TemplatePlan['predicted']; method: string; note: string }
 export interface TemplateApplyResult { revision: number; runId: string; createdIds: string[]; slots: SlotRecord[]; steps: string[]; warnings: TemplateWarning[]; notices?: TemplateNotice[] }
-export interface TemplateRegenerateResult extends TemplateApplyResult { replaced: number; protected: string[] }
+/**
+ * removed: the keys of the items deleted by hand that this regeneration left out (empty with restoreRemoved); alternatives: the
+ * plan's, among them the explicit choice to restore those items ({restoreRemoved: true}).
+ */
+export interface TemplateRegenerateResult extends TemplateApplyResult { replaced: number; protected: string[]; removed: string[]; alternatives: TemplatePlan['alternatives'] }
 export const TemplateBodySchema = z.object({ params: z.unknown().optional(), expectedRevision: z.number().int().min(0).optional() }).strict();
+/**
+ * The regenerate request: restoreRemoved true makes the items deleted by hand since the last run again (the explicit choice the
+ * plan offers); absent or false leaves them out. Template runs and family film runs alike.
+ */
+export const TemplateRegenerateBodySchema = TemplateBodySchema.extend({ restoreRemoved: z.boolean().optional() }).strict();
+export interface RegenerateOptions { restoreRemoved?: boolean }
 /**
  * REST routes. Every mutating route calls gov.assertMayAct(p, id, 'edit') (propose mode -> 403 insufficient_scope) and gov.assertUnrestricted.
  * - GET  /api/v1/templates -> { templates: TemplateSummary[] }: the built-ins (summarizeTemplate) followed by
  *   MODEL_GATED_TEMPLATES.map(gatedTemplateSummary); catalog().templates is the same list.
  * - POST /api/v1/projects/:id/templates/:templateId/plan {params} -> TemplatePlanView (read-only).
  * - POST /api/v1/projects/:id/templates/:templateId/apply {params, expectedRevision?} -> TemplateApplyResult.
- * - POST /api/v1/projects/:id/template-runs/:runId/regenerate {params?: Partial<TemplateInput>} -> TemplateRegenerateResult.
+ * - POST /api/v1/projects/:id/template-runs/:runId/regenerate {params?: Partial<TemplateInput>, restoreRemoved?} -> TemplateRegenerateResult.
  * - plan/apply of a gated id -> 409 needs_capability (gatedTemplateError); an unknown id -> 404 not_found.
  * MCP tools: plan_template, apply_template, regenerate_template.
  */

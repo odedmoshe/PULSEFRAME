@@ -3,7 +3,7 @@
  * (replace what the last run created and nobody touched; keep what was edited by hand).
  */
 import * as T from '@pulseframe/time';
-import { FAMILY_FILM_RECIPE_ID, FAMILY_FILM_RUN_RECIPE_ID, timeOriginSeconds, findClip, fingerprint, isInPlaceRecipe, MULTICAM_AUTO_RECIPE_ID, multicamGroupOf, planRecipe, RecipeError, type LevelEnvelope, type PlanContext, type RecipePlan, type TimeRange } from '@pulseframe/core';
+import { FAMILY_FILM_RECIPE_ID, FAMILY_FILM_RUN_RECIPE_ID, timeOriginSeconds, findClip, fingerprint, isInPlaceRecipe, MULTICAM_AUTO_RECIPE_ID, multicamGroupOf, planRecipe, RecipeError, type LevelEnvelope, type PlanContext, type RecipePlan, type RegenerateOptions, type TimeRange } from '@pulseframe/core';
 import { envelopeOf } from './envelope.ts';
 import { multicamDerivatives } from './multicamSync.ts';
 import { applyFamilyFilmFor, planFamilyFilmFor, regenerateFamilyFilmFor } from './familyFilm.ts';
@@ -68,11 +68,11 @@ export async function applyRecipe(store: Store, gov: Governance, principal: Prin
   return { revision: r.revision, runId: r.results?.[0]?.output?.runId ?? null, createdIds: r.results?.[0]?.output?.createdIds ?? [], steps: plan.steps, basis: plan.basis, alternatives: plan.alternatives, ...(plan.skippedClips ? { skippedClips: plan.skippedClips } : {}), ...(r.proposal ? { proposal: r.proposal } : {}) };
 }
 
-export async function regenerateRecipe(store: Store, gov: Governance, principal: Principal, projectId: string, runId: string, newParams?: unknown) {
+export async function regenerateRecipe(store: Store, gov: Governance, principal: Principal, projectId: string, runId: string, newParams?: unknown, options: RegenerateOptions = {}) {
   const p = store.getProject(projectId);
   const run = p.doc.recipeRuns && Object.hasOwn(p.doc.recipeRuns, runId) ? p.doc.recipeRuns[runId] : undefined;
   if (!run) throw new ApiError(404, 'not_found', `recipe run ${runId} not found`, { runId });
-  if (run.recipeId === FAMILY_FILM_RUN_RECIPE_ID) return regenerateFamilyFilmFor(store, gov, principal, projectId, runId, newParams);
+  if (run.recipeId === FAMILY_FILM_RUN_RECIPE_ID) return regenerateFamilyFilmFor(store, gov, principal, projectId, runId, newParams, undefined, options);
   // "Protected" = a clip the run created whose content no longer matches what the run left (compared by content fingerprint,
   // so the answer does not depend on history: an undo that restores a hand edit restores its protection too).
   const live = run.createdIds.filter((id) => !!findClip(p.doc, id));

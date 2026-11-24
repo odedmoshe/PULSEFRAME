@@ -289,6 +289,23 @@ describe('planTemplate: what it refuses, blocks and reports', () => {
     expect(code(() => planTemplate(doc, PROP, { media: MEDIA.slice(0, 3), musicAssetId: 'mus' }, { keepKeys: full.slots.map((s) => s.key) }))).toBe('nothing_to_do');
   });
 
+  it('removed keys (deleted by hand) are not made again: the plan says so in a notice and offers restoreRemoved; all removed means nothing to do, with that hint', () => {
+    const doc = project(R30, Array.from({ length: 80 }, (_, i) => ms(i * 500)));
+    const full = planTemplate(doc, PROP, { media: MEDIA.slice(0, 3), musicAssetId: 'mus' });
+    const p = planTemplate(doc, PROP, { media: MEDIA.slice(0, 3), musicAssetId: 'mus' }, { keepKeys: ['s1'], removedKeys: ['s2', 'title'] });
+    expect(p.ops.some((o) => o.bind === 's1' || o.bind === 's2' || o.bind === 'title')).toBe(false);
+    expect(p.slots.map((s) => s.key)).toEqual(full.slots.map((s) => s.key).filter((k) => !['s1', 's2', 'title'].includes(k)));
+    expect(p.warnings).toContainEqual(expect.objectContaining({ code: 'kept_by_hand', details: { keys: ['s1'] } }));
+    expect(p.notices).toContainEqual(expect.objectContaining({ code: 'removed_by_hand', details: { keys: ['s2', 'title'] } }));
+    expect(p.alternatives.filter((a) => a.restoreRemoved)).toEqual([expect.objectContaining({ params: {}, restoreRemoved: true })]);
+    expect(full.alternatives.some((a) => a.restoreRemoved)).toBe(false);
+    expect(full.notices.map((n) => n.code)).not.toContain('removed_by_hand');
+    expect(p.predicted).toEqual(full.predicted);
+    let hint: string | undefined;
+    try { planTemplate(doc, PROP, { media: MEDIA.slice(0, 3), musicAssetId: 'mus' }, { removedKeys: full.slots.map((s) => s.key) }); } catch (e) { hint = (e as TemplateError).code === 'nothing_to_do' ? (e as TemplateError).hint : 'wrong code'; }
+    expect(hint).toMatch(/restoreRemoved/);
+  });
+
   it('refuses: no media, a missing or pictureless medium, an off-grid start, a template with elements where they cannot be drawn, more than 2000 operations', () => {
     const doc = project(R30, null);
     const def = simple([one({ seconds: '1' })]);

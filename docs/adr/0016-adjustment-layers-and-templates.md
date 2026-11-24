@@ -53,6 +53,17 @@ Status: **accepted** (2026-11-17) for wave 1. Built by three workers on shared c
 6. **Regenerate** (shuffle, another tempo) replaces what the run made and nobody changed. It protects hand-edited slots by fingerprint, and a
    protected clip protects its whole link group (a slot's picture and its own sound stay together, unchanged). A kept picture that no longer lies on
    the range the new plan gives its slot is refused (409 `template_blocked`, listing each slot) instead of leaving frames without a picture.
+   - *Amendment (wave 6): a hand delete survives regeneration.* An item is "deleted by hand" when its run slot record names a clip
+     that is no longer in the document (`removedByHand`, templateOps.ts). Nothing new is stored and the schema is unchanged: the
+     record already outlives its clip, so the answer follows the document and its history (undo the delete and the slot is live
+     again). Regeneration passes those records on as `keepSlots` (so the new run record still holds them) and their keys as
+     `removedKeys`: the planner does not emit them, says so in notice `removed_by_hand` (Hebrew and English in i18n
+     `template.notice.removed_by_hand`) and offers the alternative `{restoreRemoved: true}`. The regenerate request (REST body,
+     MCP `regenerate_template` / `regenerate_recipe`) takes `restoreRemoved: true` as the explicit choice to make them again; the
+     result lists the left-out keys in `removed`. The family film (ADR-0026) does the same: a deleted pick leaves its file out
+     (exclusion `removed_by_hand`), a deleted title, closing card or music is not placed. The multicam auto-switch regenerates in
+     place and `switch_angles` skips gaps, so a deleted segment was already never refilled; a test holds it. All of it travels in
+     the op's arguments, so replay is unchanged and byte-identical.
 7. **Built-in catalogue** (`templateCatalog.ts`, all on Canvas2D effects, Hebrew and English names): `tpl.travel-montage`, `tpl.photo-dump`,
    `tpl.birthday`, `tpl.quote-card`, `tpl.countdown-list`, `tpl.home-video`. Your own clips are muted by default and the music carries the sound
    (`keepAudio` false); Home Video keeps each clip's own sound. Two more are listed unavailable with a reason: `tpl.text-behind-subject` (needs video

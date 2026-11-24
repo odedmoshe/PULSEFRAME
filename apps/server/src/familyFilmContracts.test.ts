@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { FAMILY_FILM_RUN_RECIPE_ID, FAMILY_FILM_TEMPLATE_ID, MOMENTS_JOB_TYPE, type Asset } from '@pulseframe/core';
+import { FAMILY_FILM_RUN_RECIPE_ID, FAMILY_FILM_TEMPLATE_ID, findClip, MOMENTS_JOB_TYPE, type Asset } from '@pulseframe/core';
 import { Auth } from './auth.ts';
 import { Capabilities } from './capabilities.ts';
 import { loadConfig, type Config } from './config.ts';
@@ -204,6 +204,58 @@ describe('the family film through the recipe routes and tools', () => {
     await regenerateFamilyFilmFor(store, gov, USER, s.pid, applied.runId, { targetSeconds: 30 });
     expect(tracksOf(s.pid).length).toBe(nAfterApply);
     expect(tracksOf(s.pid).find((t) => t.id === a1.id)!.audio?.gain).toBe(0.6);
+  });
+});
+
+describe('a film clip deleted by hand stays deleted (ADR-0016 decision 6, applied to the film)', () => {
+  const pictureAssets = (pid: string, runId: string) => {
+    const doc = store.getProject(pid).doc;
+    return (doc.recipeRuns[runId]!.slots ?? []).filter((x) => x.kind === 'picture').flatMap((x) => { const f = findClip(doc, x.clipId); return f && f.clip.type === 'media' ? [f.clip.assetId] : []; });
+  };
+  const textClips = (pid: string) => Object.values(store.getProject(pid).doc.sequences).flatMap((q) => q.tracks).filter((t) => t.kind === 'text').flatMap((t) => t.clips);
+  it('a deleted pick leaves its file out and a deleted title is not made again; undo of the delete or restoreRemoved brings them back; replay is byte-identical', async () => {
+    const s = seed('ff-deleted', ['2026-12-05T18:00:00', '2026-12-05T18:10:00', '2026-12-05T18:20:00']);
+    const applied = await applyFamilyFilmFor(store, gov, USER, s.pid, { assetIds: s.ids, targetSeconds: 30 });
+    const run0 = store.getProject(s.pid).doc.recipeRuns[applied.runId]!;
+    const pick = run0.slots!.find((x) => x.kind === 'picture')!;
+    const gone = (findClip(store.getProject(s.pid).doc, pick.clipId)!.clip as { assetId: string }).assetId;
+    expect(pictureAssets(s.pid, applied.runId)).toContain(gone);
+    const title = run0.slots!.find((x) => x.key === 'title')!;
+    // delete one pick (with its own sound) and the opening title by hand
+    store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'delete_clip', args: { clipId: pick.clipId } }, { op: 'delete_clip', args: { clipId: title.clipId } }] });
+    const textsAfterDelete = textClips(s.pid).length;
+    const r = await regenerateFamilyFilmFor(store, gov, USER, s.pid, applied.runId, { order: 'given' });
+    expect([...r.removed].sort()).toEqual([pick.key, 'title'].sort());
+    expect(r.warnings).toContainEqual(expect.objectContaining({ code: 'removed_by_hand' }));
+    expect(r.excluded).toContainEqual(expect.objectContaining({ assetId: gone, code: 'removed_by_hand' }));
+    expect(r.alternatives).toContainEqual(expect.objectContaining({ restoreRemoved: true }));
+    expect(pictureAssets(s.pid, applied.runId)).not.toContain(gone);
+    expect(textClips(s.pid).length).toBe(textsAfterDelete); // the closing card was remade; no opening title came back
+    expect(store.getProject(s.pid).doc.recipeRuns[applied.runId]!.slots!.find((x) => x.key === 'title')!.clipId).toBe(title.clipId);
+    // the next regeneration, through the recipe route, still leaves them out
+    const again = await rest('POST', `/projects/${s.pid}/recipe-runs/${applied.runId}/regenerate`, { params: { targetSeconds: 60 } }, auth.tokens.agent);
+    expect([again.status, [...again.body.removed].sort()]).toEqual([200, [pick.key, 'title'].sort()]);
+    expect(pictureAssets(s.pid, applied.runId)).not.toContain(gone);
+    expect(JSON.stringify(store.replay(s.pid, revision(s.pid)).doc)).toBe(JSON.stringify(store.getProject(s.pid).doc));
+    // restoreRemoved (the template route, which hands film runs to the film path): the file and the title are made again
+    const back = await rest('POST', `/projects/${s.pid}/template-runs/${applied.runId}/regenerate`, { restoreRemoved: true }, auth.tokens.agent);
+    expect([back.status, back.body.removed]).toEqual([200, []]);
+    expect(pictureAssets(s.pid, applied.runId)).toContain(gone);
+    const runB = store.getProject(s.pid).doc.recipeRuns[applied.runId]!;
+    expect(findClip(store.getProject(s.pid).doc, runB.slots!.find((x) => x.key === 'title')!.clipId)).toBeTruthy();
+    // delete a pick again, undo the delete: the regeneration treats it as untouched (no removed_by_hand), and the file stays in
+    const pickB = runB.slots!.find((x) => x.kind === 'picture')!;
+    const fileB = (findClip(store.getProject(s.pid).doc, pickB.clipId)!.clip as { assetId: string }).assetId;
+    store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'delete_clip', args: { clipId: pickB.clipId } }] });
+    store.undo(s.pid, 'user:owner', 'undo');
+    const undone = await regenerateFamilyFilmFor(store, gov, USER, s.pid, applied.runId, {});
+    expect(undone.removed).toEqual([]);
+    expect(undone.warnings.map((w) => w.code)).not.toContain('removed_by_hand');
+    expect(pictureAssets(s.pid, applied.runId)).toContain(fileB);
+    // MCP: regenerate_recipe passes restoreRemoved too
+    const m = await tool('regenerate_recipe', { projectId: s.pid, runId: applied.runId, restoreRemoved: true }, auth.tokens.agent);
+    expect([m.isError, m.body.removed]).toEqual([false, []]);
+    expect(JSON.stringify(store.replay(s.pid, revision(s.pid)).doc)).toBe(JSON.stringify(store.getProject(s.pid).doc));
   });
 });
 

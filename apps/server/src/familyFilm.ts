@@ -25,7 +25,7 @@ import * as T from '@pulseframe/time';
 import {
   clipEnd, eventNeedsSunsetAnswer, eventOfAsset, escapeFieldText, FAMILY_FILM_BUILT, FAMILY_FILM_DRAFT_LABEL, FAMILY_FILM_RUN_RECIPE_ID, FAMILY_FILM_TEMPLATE_ID, FAMILY_FILM_VERSION, FilmError, filmRunParams,
   findClip, isPersonToken, parseFields, planFamilyFilm, shownCapture,
-  type FamilyFilmApplyResult, type RecipeRun, type TemplateStep, type Track, type FamilyFilmParams, type FamilyFilmPlan, type FamilyFilmPlanView, type FamilyFilmRegenerateResult, type FilmKeptClip, type FilmPicked, type FilmPlanContext, type FilmText, type ProjectDocument, type SlotRecord,
+  type FamilyFilmApplyResult, type RecipeRun, type TemplateStep, type Track, type FamilyFilmParams, type FamilyFilmPlan, type FamilyFilmPlanView, type FamilyFilmRegenerateResult, type FilmKeptClip, type FilmPicked, type FilmPlanContext, type FilmText, type ProjectDocument, type RegenerateOptions, type SlotRecord, removedByHand,
 } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import type { Governance } from './governance.ts';
@@ -110,7 +110,7 @@ function filmText(typed: string | undefined, fallback: () => { text: string; liv
  * file has a capture date and none of their events waits for its sunset answer; otherwise it is fixed text (the planner then
  * warns title_resolved_static).
  */
-export function filmContext(doc: ProjectDocument, params: unknown, extra: Pick<FilmPlanContext, 'kept' | 'keptKeys' | 'reuseTracks' | 'previousOwnSound' | 'previousMusic'> = {}): FilmPlanContext {
+export function filmContext(doc: ProjectDocument, params: unknown, extra: Pick<FilmPlanContext, 'kept' | 'keptKeys' | 'removedKeys' | 'reuseTracks' | 'previousOwnSound' | 'previousMusic'> = {}): FilmPlanContext {
   const p = isObject(params) ? params : {};
   const ids = strings(p.assetIds).filter((id) => Object.hasOwn(doc.assets, id));
   const capture: Record<string, string | null> = {};
@@ -225,11 +225,14 @@ export function filmRunTracks(doc: ProjectDocument, run: Pick<RecipeRun, 'create
  * keys, the run's tracks by role, the previous mix) and the ids the new run record keeps (kept clips and the run's tracks that
  * still exist, so the tracks stay the film's own for the next regeneration whether or not this plan uses them again).
  */
-export function filmRegeneration(doc: ProjectDocument, run: RecipeRun, params: Record<string, unknown>) {
+export function filmRegeneration(doc: ProjectDocument, run: RecipeRun, params: Record<string, unknown>, options: RegenerateOptions = {}) {
   const live = run.createdIds.filter((id) => !!findClip(doc, id));
   const protectedIds = keptByHand(doc, live, run.fingerprints ?? {});
   const removable = live.filter((id) => !protectedIds.includes(id));
-  const keepSlots = (run.slots ?? []).filter((s) => protectedIds.includes(s.clipId));
+  const keptSlots = (run.slots ?? []).filter((s) => protectedIds.includes(s.clipId));
+  // slots whose clip was deleted by hand travel on in the new run record (so the next regeneration still knows), unless restored
+  const removedSlots = options.restoreRemoved ? [] : removedByHand(doc, run.slots ?? []);
+  const keepSlots = [...keptSlots, ...removedSlots];
   const without = structuredClone(doc);
   for (const id of removable) { const f = findClip(without, id); if (f) f.track.clips.splice(f.index, 1); }
   const previousOwnSound = run.params.ownSound === 'lead' || run.params.ownSound === 'mute' || run.params.ownSound === 'under' ? run.params.ownSound : undefined;
@@ -238,16 +241,18 @@ export function filmRegeneration(doc: ProjectDocument, run: RecipeRun, params: R
   const trackIds = new Set(Object.values(doc.sequences).flatMap((q) => q.tracks.map((t) => t.id)));
   // the run's tracks that still exist, and the tracks found by role (a reused A1 too), so they are the film's own from now on
   const keepIds = [...new Set([...protectedIds, ...run.createdIds.filter((id) => trackIds.has(id)), ...Object.values(reuseTracks).filter((id): id is string => typeof id === 'string')])];
-  const ctx = filmContext(without, params, { kept: keptClips(doc, protectedIds, run.slots ?? []), keptKeys: keepSlots.map((s) => s.key), reuseTracks, previousOwnSound, previousMusic });
-  return { removable, protectedIds, keepSlots, keepIds, without, ctx };
+  const ctx = filmContext(without, params, { kept: keptClips(doc, protectedIds, run.slots ?? []), keptKeys: keptSlots.map((s) => s.key), removedKeys: removedSlots.map((s) => s.key), reuseTracks, previousOwnSound, previousMusic });
+  return { removable, protectedIds, keepSlots, removedSlots, keepIds, without, ctx };
 }
 
 /**
  * Regenerate a film run, optionally with changed parameters («רגעים אחרים», «אורך אחר»): clips the run made that nobody
  * changed are replaced; clips edited by hand since (and the clips linked to them) are kept exactly as they are, with their
  * slots — a moved kept clip too (the planner lays the new slots around it). Works from the document's run after a reload.
+ * A clip deleted by hand is not made again (its file is left out, a title, card or music is not placed; warning removed_by_hand)
+ * unless `restoreRemoved` is set: the explicit choice the plan's alternatives offer.
  */
-export async function regenerateFamilyFilmFor(store: Store, gov: Governance, principal: Principal, projectId: string, runId: string, newParams?: unknown, expectedRevision?: number): Promise<FamilyFilmRegenerateResult> {
+export async function regenerateFamilyFilmFor(store: Store, gov: Governance, principal: Principal, projectId: string, runId: string, newParams?: unknown, expectedRevision?: number, options: RegenerateOptions = {}): Promise<FamilyFilmRegenerateResult> {
   mayApply(gov, principal, projectId);
   if (newParams !== undefined && !isObject(newParams)) throw FILM_API_ERRORS.badParams();
   const p = store.getProject(projectId);
@@ -256,7 +261,7 @@ export async function regenerateFamilyFilmFor(store: Store, gov: Governance, pri
   const params: Partial<FamilyFilmParams> & Record<string, unknown> = { ...filmRunParams(run.params), ...(newParams as Record<string, unknown> | undefined) };
   refuseAges(principal, params);
   refuseNotBuilt();
-  const { removable, protectedIds, keepSlots, keepIds, without, ctx } = filmRegeneration(p.doc, run, params);
+  const { removable, protectedIds, keepSlots, removedSlots, keepIds, without, ctx } = filmRegeneration(p.doc, run, params, options);
   const plan = wrap(() => planFamilyFilm(without, params, ctx));
   refuseAgesInPlan(principal, plan.ops);
   // a new slot never takes a key a kept slot holds (apply_template drops a slot only when key AND clip match): a planner fault, not the request's
@@ -268,5 +273,5 @@ export async function regenerateFamilyFilmFor(store: Store, gov: Governance, pri
     ops: [{ op: 'apply_template', args: { runId, templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: FAMILY_FILM_VERSION, params: { ...plan.params, picked: picked(plan) }, steps: plan.steps, removeClipIds: removable, keepIds, keepSlots, ops: plan.ops, slots: plan.slots } }],
   }) as CommitOut;
   const out = r.results?.[0]?.output ?? {};
-  return { revision: r.revision, runId, createdIds: out.createdIds ?? [], slots: out.slots ?? [], steps: plan.steps, warnings: plan.warnings, picks: plan.picks, excluded: plan.excluded, replaced: removable.length, protected: protectedIds };
+  return { revision: r.revision, runId, createdIds: out.createdIds ?? [], slots: out.slots ?? [], steps: plan.steps, warnings: plan.warnings, picks: plan.picks, excluded: plan.excluded, replaced: removable.length, protected: protectedIds, removed: removedSlots.map((s) => s.key), alternatives: plan.alternatives };
 }

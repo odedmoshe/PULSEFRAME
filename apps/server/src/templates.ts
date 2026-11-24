@@ -13,8 +13,8 @@
  */
 import * as T from '@pulseframe/time';
 import {
-  clipEnd, FAMILY_FILM_RUN_RECIPE_ID, findClip, findGatedTemplate, findTemplate, fingerprint, gatedTemplateError, gatedTemplateSummary, MODEL_GATED_TEMPLATES, planTemplate, summarizeTemplate, TemplateError, TEMPLATE_METHOD, TEMPLATES,
-  type Asset, type KnownGrid, type ProjectDocument, type SlotRecord, type TemplateApplyResult, type TemplateDef, type TemplatePlan, type TemplatePlanView, type TemplateRegenerateResult, type TemplateSummary,
+  clipEnd, FAMILY_FILM_RUN_RECIPE_ID, findClip, removedByHand, findGatedTemplate, findTemplate, fingerprint, gatedTemplateError, gatedTemplateSummary, MODEL_GATED_TEMPLATES, planTemplate, summarizeTemplate, TemplateError, TEMPLATE_METHOD, TEMPLATES,
+  type Asset, type KnownGrid, type ProjectDocument, type SlotRecord, type RegenerateOptions, type TemplateApplyResult, type TemplateDef, type TemplatePlan, type TemplatePlanView, type TemplateRegenerateResult, type TemplateSummary,
 } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
@@ -160,7 +160,7 @@ function refuseMovedKeptPictures(doc: ProjectDocument, plan: TemplatePlan, keepS
   const keys = moved.map((m) => m.key).join(', ');
   const tempo = typeof runParams.tempo === 'string' ? runParams.tempo : 'normal';
   throw new ApiError(409, 'template_blocked', `the template cannot regenerate like this: slot(s) ${keys} were edited by hand and are kept where they are, but no longer lie exactly on the range this plan gives them, so the new pictures would leave frames without a picture`, { kept: moved },
-    `Regenerate with the run's tempo (${tempo}), undo the hand edit that moved or trimmed slot(s) ${keys}, or delete that clip so the template fills the slot again.`);
+    `Regenerate with the run's tempo (${tempo}), undo the hand edit that moved or trimmed slot(s) ${keys}, or delete that clip and regenerate with restoreRemoved: true so the template fills the slot again.`);
 }
 
 /**
@@ -168,8 +168,11 @@ function refuseMovedKeptPictures(doc: ProjectDocument, plan: TemplatePlan, keepS
  * changed are replaced; clips edited by hand since (their content fingerprint differs), and the clips linked to them, are kept
  * exactly as they are, with their slot records, and the planner does not make those items again. A kept picture that would no
  * longer lie on its slot (another tempo, or the clip was moved or trimmed) is refused with 409 template_blocked.
+ * Items deleted by hand since (removedByHand: the slot record names a clip no longer in the document) are not made again either:
+ * their slot records travel on as keepSlots, so the new run record remembers them, and the plan says so (notice removed_by_hand).
+ * `restoreRemoved` is the explicit choice to make them again. Nothing new is stored: undo the delete and the item is live again.
  */
-export async function regenerateTemplateFor(store: Store, gov: Governance, principal: Principal, projectId: string, runId: string, newParams?: unknown, expectedRevision?: number): Promise<TemplateRegenerateResult> {
+export async function regenerateTemplateFor(store: Store, gov: Governance, principal: Principal, projectId: string, runId: string, newParams?: unknown, expectedRevision?: number, options: RegenerateOptions = {}): Promise<TemplateRegenerateResult> {
   mayApply(gov, principal, projectId);
   const p = store.getProject(projectId);
   const run = Object.hasOwn(p.doc.recipeRuns, runId) ? p.doc.recipeRuns[runId] : undefined;
@@ -178,22 +181,24 @@ export async function regenerateTemplateFor(store: Store, gov: Governance, princ
   if (run.recipeId === FAMILY_FILM_RUN_RECIPE_ID) {
     const { regenerateFamilyFilmFor } = await import('./familyFilm.ts');
     // the answer is the film's own (FamilyFilmRegenerateResult: its warnings are film warnings, with picks and exclusions)
-    return await regenerateFamilyFilmFor(store, gov, principal, projectId, runId, newParams, expectedRevision) as unknown as TemplateRegenerateResult;
+    return await regenerateFamilyFilmFor(store, gov, principal, projectId, runId, newParams, expectedRevision, options) as unknown as TemplateRegenerateResult;
   }
   if (newParams !== undefined && (typeof newParams !== 'object' || newParams === null || Array.isArray(newParams))) throw new ApiError(400, 'invalid_request', 'params must be an object of template parameters to change');
   const def = templateOf(run.recipeId.slice('template:'.length));
   const live = run.createdIds.filter((id) => !!findClip(p.doc, id));
   const protectedIds = keptByHand(p.doc, live, run.fingerprints ?? {});
   const removable = live.filter((id) => !protectedIds.includes(id));
-  const keepSlots = (run.slots ?? []).filter((s) => protectedIds.includes(s.clipId));
+  const keptSlots = (run.slots ?? []).filter((s) => protectedIds.includes(s.clipId));
+  const removedSlots = options.restoreRemoved ? [] : removedByHand(p.doc, run.slots ?? []);
+  const keepSlots = [...keptSlots, ...removedSlots];
   // Plan against the document as it will be once the untouched clips are gone; `at` and the other parameters come from the run.
   const without = structuredClone(p.doc);
   for (const id of removable) { const f = findClip(without, id); if (f) f.track.clips.splice(f.index, 1); }
   const { templateVersion: _v, ...previous } = run.params;
   const params = { ...previous, ...(newParams as Record<string, unknown> | undefined) };
   const elementsAvailable = await elementsFor(def);
-  const plan = wrap(() => planTemplate(without, def, params, { keepKeys: keepSlots.map((s) => s.key), elementsAvailable }));
-  refuseMovedKeptPictures(p.doc, plan, keepSlots, run.params);
+  const plan = wrap(() => planTemplate(without, def, params, { keepKeys: keptSlots.map((s) => s.key), removedKeys: removedSlots.map((s) => s.key), elementsAvailable }));
+  refuseMovedKeptPictures(p.doc, plan, keptSlots, run.params);
   refuseBlocked(plan);
   const assets = await makeAssets(store, principal, plan);
   mayApply(gov, principal, projectId);
@@ -202,5 +207,5 @@ export async function regenerateTemplateFor(store: Store, gov: Governance, princ
     ops: [{ op: 'apply_template', args: { runId, templateId: def.id, templateVersion: def.version, params: plan.params, steps: plan.steps, ...(assets.length ? { assets } : {}), removeClipIds: removable, keepIds: protectedIds, keepSlots, ops: plan.ops, slots: plan.slots } }],
   }) as CommitOut;
   const out = r.results?.[0]?.output ?? {};
-  return { revision: r.revision, runId, createdIds: out.createdIds ?? [], slots: out.slots ?? [], steps: plan.steps, warnings: plan.warnings, notices: plan.notices, replaced: removable.length, protected: protectedIds };
+  return { revision: r.revision, runId, createdIds: out.createdIds ?? [], slots: out.slots ?? [], steps: plan.steps, warnings: plan.warnings, notices: plan.notices, replaced: removable.length, protected: protectedIds, removed: removedSlots.map((s) => s.key), alternatives: plan.alternatives };
 }

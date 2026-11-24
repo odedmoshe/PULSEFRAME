@@ -105,5 +105,15 @@ describe('regenerate after the in-place branch', () => {
     expect(regen.protected).toContain(seg.clip.id);
     doc = store.getProject(pid).doc;
     expect(fingerprint(findClip(doc, seg.clip.id)!.clip)).toBe(fingerprint(hand));
+    // a segment deleted by hand stays deleted: the in-place regeneration plans on the document as it is, and switch_angles never
+    // fills a gap (it skips it), so nothing is made where the segment was (ADR-0016 decision 6; checked, no change needed)
+    const prog = findClip(doc, seg.clip.id)!.track;
+    const victim = prog.clips.find((c) => c.id !== seg.clip.id && T.toSeconds(c.start) > 1 && T.toSeconds(c.start) < 9)!;
+    const [from, to] = [victim.start, T.add(victim.start, victim.duration)];
+    store.commit({ projectId: pid, actor: 'user:owner', ops: [{ op: 'delete_clip', args: { clipId: victim.id } }] });
+    const covering = () => { const d = store.getProject(pid).doc; return Object.values(d.sequences).flatMap((q) => q.tracks).filter((t) => t.id === prog.id).flatMap((t) => t.clips).filter((c) => T.lt(c.start, to) && T.lt(from, T.add(c.start, c.duration))); };
+    expect(covering()).toEqual([]);
+    await regenerateRecipe(store, gov, owner, pid, applied.runId, { groupId: created.groupId });
+    expect(covering()).toEqual([]);
   }, 120_000);
 });
