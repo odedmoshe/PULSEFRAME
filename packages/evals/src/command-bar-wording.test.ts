@@ -140,6 +140,8 @@ describe('every refusal the assistant\'s server code gives is worded in Hebrew, 
     said.push(['owner only', thrown(() => s0.handlers.putKey(agent, KEY))]);
     // the ledger (governance.ts reserveAssistant)
     const j = () => s0.store.createJob(s0.pid, ASSISTANT_JOB_TYPE, ASSISTANT_ACTOR, {}).id;
+    // cancelling a request is the owner's too (routes.ts assistantCancelRefusal: what POST /jobs/:jobId/cancel and MCP cancel_job answer an agent)
+    said.push(['cancel by an agent', thrown(() => s0.handlers.cancel(agent, j()))]);
     said.push(['limits missing', thrown(() => s0.gov.reserveAssistant(s0.assistant, s0.pid, j(), 5, { monthlyLimitCents: 0, perRequestCapCents: 0 }))]);
     said.push(['over the cap', thrown(() => s0.gov.reserveAssistant(s0.assistant, s0.pid, j(), 11, { monthlyLimitCents: 100, perRequestCapCents: 10 }))]);
     s0.gov.reserveAssistant(s0.assistant, s0.pid, j(), 10, { monthlyLimitCents: 15, perRequestCapCents: 10 });
@@ -180,7 +182,7 @@ describe('every refusal the assistant\'s server code gives is worded in Hebrew, 
       for (const [name, id] of [['restart before the send', queued], ['restart while waiting', waiting], ['restart while checking', checking]] as const) said.push([name, (s.store.getJob(id).error as { message: string }).message]);
     }
 
-    expect(said.length).toBe(18);
+    expect(said.length).toBe(19);
     const used = new Set<number>();
     for (const [name, message] of said) {
       const h = translateRefusal('he', message);

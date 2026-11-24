@@ -51,7 +51,7 @@ import { peopleSuggestions } from './lifeline.ts';
 import { takeFor } from './perform.ts';
 import { ASSISTANT_JOB_TYPE, AssistantConfigBodySchema, AssistantKeyBodySchema, AssistantRequestBodySchema } from '@pulseframe/core';
 import { isOwnerSession, type AssistantDeps } from './assistant/contract.ts';
-import { createAssistantHandlers } from './assistant/routes.ts';
+import { assistantCancelRefusal, createAssistantHandlers, type AssistantJobControls } from './assistant/routes.ts';
 
 const TxBody = z
   .object({
@@ -806,6 +806,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // ----- the command bar's language assistant (ADR-0027; assistant/contract.ts ASSISTANT_ROUTES): status for any observer, the
   // rest for the owner's own session only (the money and the key are the owner's). The handlers are W2's (assistant/routes.ts).
   const assistant = createAssistantHandlers({ cfg, store, gov, deps: extras.assistant ?? { adapters: new Map(), endpoint: () => null } });
+  // MCP cancel_job reaches an assistant job through this same handler (one cancel path; mcp.ts bindAssistant)
+  (mcp as { bindAssistant?: (a: AssistantJobControls) => void }).bindAssistant?.(assistant);
   const assistantOwner = (c: Context<Env>) => {
     const p = need(c, 'observe');
     if (!isOwnerSession(p)) throw new ApiError(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only', undefined, 'The owner sets it up in Settings.');
@@ -1302,10 +1304,14 @@ export function assertMayTakeJobOutput(p: Principal, job: JobRow, what: string):
  * One exception, for REST and MCP alike: an export the owner's editor tab renders (the browser route) has no agent that started
  * it, so an agent may stop it when its grant lets it run jobs on that project (edit or autopilot, not paused) and is not limited
  * to certain tracks or a time range (the export is the whole project). Stopping one publishes nothing; the owner can start it again.
+ * A language-assistant request (assistant.propose, ADR-0027) is the owner's own: no agent credential cancels it, whatever its grant.
+ * It is refused here, after the checks every cancel makes (project in scope, not paused, a grant that runs jobs), with its own
+ * reason and next step (assistant/routes.ts assistantCancelRefusal), the same for REST and MCP.
  */
 export function assertMayCancel(gov: Governance, p: Principal, job: JobRow) {
   if (p.kind !== 'agent') return;
   gov.assertMayAct(p, job.projectId, 'job');
+  if (job.type === ASSISTANT_JOB_TYPE) throw assistantCancelRefusal(job.id);
   if (job.actor === p.actor) return;
   if (job.type === 'export' && job.input?.route === 'browser' && !job.actor.startsWith('agent:')) { gov.assertUnrestricted(p, 'stop an export of the whole project'); return; }
   throw new ApiError(403, 'not_your_job', 'agents can only cancel jobs they started', { jobId: job.id, startedBy: job.actor }, 'Ask the owner to cancel it, or cancel only jobs this credential started.');
