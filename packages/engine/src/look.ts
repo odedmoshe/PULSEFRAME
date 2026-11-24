@@ -44,6 +44,28 @@ export function scratch(slot: number, width: number, height: number): Buf {
   return b;
 }
 
+/**
+ * Put an opacity below 1 into a buffer's own alpha: one destination-in fill of the whole buffer. A clip's opacity is applied
+ * this way, never as the globalAlpha of a draw onto a picture below it: in 8 bits that is not the same picture. Chromium's
+ * software canvas computes such a draw as (s·(a+1) + d·(255−a)) >> 8 with a = round(255·α), a truncation that leaves the
+ * frame on average half a level low and some bytes 2 off round(d + (s − d)·α). With the opacity in the buffer's alpha and the
+ * buffer composited at full alpha, every byte pair is within 1 of round(d + (s − d)·a/255) at every opacity (a/255 is the
+ * nearest alpha an 8-bit canvas has); the bytes still 2 off the real α are those where α itself falls between two such
+ * levels. Measured in headless Chromium 153 over all 256×256 byte pairs at the opacities 0.01…0.99, also through stills
+ * (conformance:opacity). Used by picture clips and the adjustment pass (compositor2d.ts) and by the dissolve
+ * (canvasTransitions.ts).
+ */
+export function fadeBuf(buf: Buf, opacity: number, width: number, height: number): void {
+  const b = buf.ctx;
+  b.save();
+  b.setTransform(1, 0, 0, 1, 0, 0);
+  b.filter = 'none';
+  b.globalCompositeOperation = 'destination-in';
+  b.globalAlpha = opacity;
+  b.fillStyle = '#000';
+  b.fillRect(0, 0, width, height);
+  b.restore();
+}
 export const COMPOSITE: Record<BlendMode, GlobalCompositeOperation> = {
   normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay', 'soft-light': 'soft-light', 'hard-light': 'hard-light', add: 'lighter',
   difference: 'difference', exclusion: 'exclusion', darken: 'darken', lighten: 'lighten', 'color-dodge': 'color-dodge', 'color-burn': 'color-burn',
