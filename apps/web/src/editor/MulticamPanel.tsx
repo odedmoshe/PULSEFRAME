@@ -11,6 +11,7 @@ import { dictionaries } from '@pulseframe/i18n';
 import { decodeEnvelope, fromGroupExact, isDualMono, levelAt, multicamGroups, type LevelEnvelope, type MulticamAngle, type MulticamGroup, type MulticamView, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { api, ApiFailure, type RecipePlanResult } from '../api.ts';
 import { Button } from '../ds/index.ts';
+import { prefetchBudget } from '../media.ts';
 import { AngleViewer, LIVE_TILES, ThumbnailTile, useProgramGroupTime } from './AngleViewer.tsx';
 import { MulticamSyncDialog } from './MulticamSyncDialog.tsx';
 import { MULTICAM_STRINGS, type MulticamStrings } from './multicam.strings.ts';
@@ -103,6 +104,7 @@ function Recorder({ lang }: { lang: 'he' | 'en' }) {
   const S = MULTICAM_STRINGS[lang], D = dictionaries[lang];
   const rec = !!state.multicamRec;
   const r = state.multicamReaction ?? 0;
+  const prefetchOff = !!prefetchBudget((globalThis.navigator as { deviceMemory?: number } | undefined)?.deviceMemory).off;
   return (
     <div className="mc-rec">
       <Button variant={rec ? 'danger' : 'secondary'} aria-pressed={rec} data-testid={ID.record} disabledReason={!rec && !editor.multicamProgram() ? S.noProgramHint : undefined}
@@ -113,6 +115,7 @@ function Recorder({ lang }: { lang: 'he' | 'en' }) {
           onChange={(e) => editor.setMulticamReaction(Number(e.target.value))} />
       </label>
       <p className="mc-note" id="mc-reaction-hint">{S.reactionHint}. {S.recordHint}</p>
+      {prefetchOff && <p className="mc-note" data-testid={ID.prefetchOff}>{S.prefetchOff}</p>}
     </div>
   );
 }

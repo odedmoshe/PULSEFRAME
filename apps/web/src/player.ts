@@ -230,6 +230,16 @@ export class Player {
     this.request(this.frame);
     return true;
   }
+  /**
+   * The quality the next frame is drawn at, as pump() chooses it: draft (the proxy) for the angle viewer and while playing at a
+   * reduced size, else full (the original). Prefetch warms decoders of this quality only, so a warm decoder reads the same source
+   * the drawing would.
+   */
+  pictureQuality(): 'draft' | 'full' {
+    const h = this.doc?.settings.height ?? 0;
+    if (this.opts.draftOnly) return 'draft';
+    return this.playing && h > 0 && Math.min(1, 960 / h) !== 1 ? 'draft' : 'full';
+  }
   /** Playing, or asked to play and waiting for the audio device (a pause-and-resume inside setDoc passes through neither). */
   get active(): boolean { return this.playing || this.starting; }
   /** Draw `frame` of the current document now (coalesced like request()); no transport, no sound. */
@@ -262,6 +272,7 @@ export class Player {
         // Draft resolution while playing; FULL project resolution when paused, so a still preview is the real picture (SPEC §8).
         const draftMax = this.opts.draftOnly?.maxHeight;
         const scale = draftMax ? Math.min(1, draftMax / height) : this.playing ? Math.min(1, 960 / height) : 1;
+        const draft = this.pictureQuality() === 'draft'; // the one rule prefetch also follows
         const w = Math.round(width * scale);
         const h = Math.round(height * scale);
         if (!this.shown && (this.canvas.width !== w || this.canvas.height !== h)) { this.canvas.width = w; this.canvas.height = h; } // the layout gets the right shape at once
@@ -272,7 +283,7 @@ export class Player {
         // decision: the draw takes as long as it takes), and records what was painted (an effect that could not run drew no light).
         const drawn = await this.flashGuard.paint(evaluate(doc, T.frameTime(frame, frameRate)), {
           now: realTime, // real time, never the audio clock (it can stand still)
-          draw: (g) => drawGraph(back.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, draftMax || scale !== 1 ? this.pool.draftFrames : this.pool.frames),
+          draw: (g) => drawGraph(back.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, draft ? this.pool.draftFrames : this.pool.frames),
           copy: () => {
             // the finished frame replaces the one on screen at once (resizing the visible canvas clears it, so only now)
             if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
@@ -297,8 +308,8 @@ export class Player {
         }
         this.canvas.dataset.frame = String(frame);
         this.canvas.dataset.flashesHeld = String(this.flashGuard.leftOut); // frames on which the safety guard held a strobe flash back
-        this.canvas.dataset.quality = draftMax || scale !== 1 ? 'draft' : 'full';
-        this.canvas.dataset.source = draftMax || scale !== 1 ? 'proxy-or-original' : 'original';
+        this.canvas.dataset.quality = draft ? 'draft' : 'full';
+        this.canvas.dataset.source = draft ? 'proxy-or-original' : 'original';
         this.onTick();
       }
     } catch (e) {

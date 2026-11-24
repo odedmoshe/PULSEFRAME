@@ -126,3 +126,25 @@ describe('draftOnly and follow', () => {
     expect(v.playing).toBe(false);
   });
 });
+
+describe('pictureQuality (the quality prefetch warms)', () => {
+  it('is the quality pump() draws with: draft for the angle viewer and for playback at a reduced size, else full', async () => {
+    const { doc } = project();
+    const big = { ...doc, settings: { ...doc.settings, width: 3840, height: 2160 } };
+    const viewer = new Player(new FakeCanvas() as unknown as HTMLCanvasElement, pool, () => {}, (e) => { throw e; }, { draftOnly: { maxHeight: 400 } });
+    viewer.doc = doc;
+    expect(viewer.pictureQuality()).toBe('draft'); // even when the project is smaller than maxHeight
+    const small = playing(doc).p;
+    expect(small.pictureQuality()).toBe('full'); // 180 lines play at full size: the original
+    const large = playing(big).p;
+    expect(large.pictureQuality()).toBe('draft');
+    (large as unknown as { playing: boolean }).playing = false;
+    expect(large.pictureQuality()).toBe('full'); // paused: the real picture
+    // and pump() drew with the provider of that quality
+    drawn.calls.length = 0;
+    (large as unknown as { playing: boolean }).playing = true;
+    large.follow(10);
+    await vi.waitFor(() => expect(drawn.calls.length).toBeGreaterThan(0));
+    expect(drawn.calls.at(-1)!.pool).toBe(pool.draftFrames);
+  });
+});
