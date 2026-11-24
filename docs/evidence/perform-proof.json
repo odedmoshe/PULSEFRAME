@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-24T17:54:05.468Z",
+  "ranAt": "2026-11-24T20:22:46.360Z",
   "result": "PASS",
   "passed": 28,
   "failed": 0,
@@ -122,9 +122,9 @@
       "name": "SHA-256 of the canonical apply_take args: equal across two server dry runs and the browser view",
       "status": "pass",
       "detail": {
-        "browser": "e78a8e2f10668fb52a3a098cde749ba1d30012ff57f98b49336c70283858604b",
-        "server1": "e78a8e2f10668fb52a3a098cde749ba1d30012ff57f98b49336c70283858604b",
-        "server2": "e78a8e2f10668fb52a3a098cde749ba1d30012ff57f98b49336c70283858604b"
+        "browser": "8aaccf704dfa32d83ec71f63e19e4f986a63caffafe06cee8e45f1ccf1021379",
+        "server1": "8aaccf704dfa32d83ec71f63e19e4f986a63caffafe06cee8e45f1ccf1021379",
+        "server2": "8aaccf704dfa32d83ec71f63e19e4f986a63caffafe06cee8e45f1ccf1021379"
       }
     },
     {
@@ -144,11 +144,11 @@
       "name": "undo (Ctrl+Z in the editor): the document hash equals the one before the take; redo (Ctrl+Shift+Z) equals the one after; Store.replay of that revision equals the stored document",
       "status": "pass",
       "detail": {
-        "before": "3867228d6aeda929",
-        "after": "229674c3b49bac81",
-        "undone": "3867228d6aeda929",
-        "redone": "229674c3b49bac81",
-        "replay": "229674c3b49bac81"
+        "before": "bdc680355e1b27b7",
+        "after": "213eef53c76d563d",
+        "undone": "bdc680355e1b27b7",
+        "redone": "213eef53c76d563d",
+        "replay": "213eef53c76d563d"
       }
     },
     {
@@ -409,33 +409,33 @@
         "rows": [
           {
             "pad": 0,
-            "down": 2.0142,
-            "clock": 2.02364,
-            "diffMs": -9.4
+            "down": 2.0659,
+            "clock": 2.0676523333340784,
+            "diffMs": -1.8
           },
           {
             "pad": 1,
-            "down": 2.279,
-            "clock": 2.291259666666667,
-            "diffMs": -12.3
+            "down": 2.3227,
+            "clock": 2.3266030000007447,
+            "diffMs": -3.9
           },
           {
             "pad": 2,
-            "down": 2.5854,
-            "clock": 2.5898696666666665,
-            "diffMs": -4.5
+            "down": 2.5925,
+            "clock": 2.5928466666666665,
+            "diffMs": -0.3
           },
           {
             "pad": 3,
-            "down": 2.8637,
-            "clock": 2.8686599999998137,
-            "diffMs": -5
+            "down": 2.8622,
+            "clock": 2.8637639999992546,
+            "diffMs": -1.6
           },
           {
             "pad": 5,
-            "down": 3.1564,
-            "clock": 3.1663560000001865,
-            "diffMs": -10
+            "down": 3.123,
+            "clock": 3.123439833332961,
+            "diffMs": -0.4
           }
         ]
       }
@@ -457,19 +457,19 @@
       "detail": {
         "hits": 200,
         "runsMs": [
-          20.6,
-          17,
-          15.2,
-          20.4,
-          33.2,
-          15,
-          15,
-          20.5,
-          23.3,
-          18.1
+          24.9,
+          20,
+          10.6,
+          17.6,
+          21.7,
+          9.9,
+          24.4,
+          15.7,
+          13.2,
+          7.8
         ],
-        "warmupMs": 31.9,
-        "slowestMs": 33.2,
+        "warmupMs": 41.5,
+        "slowestMs": 24.9,
         "budgetMs": 33.33,
         "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4",
         "note": "one sample of this machine, under whatever else ran on it; not a general claim"
@@ -883,7 +883,7 @@
       "name": "the camera overlay from the keyboard (+ to zoom, Enter, Shift+→ while filming at half speed, Enter): a review with the confirm saying the framing outside the range stays, nothing written while filming, accept = one transaction (history lists its op once: replace_clip_keyframes) that keyed x, y and scale",
       "status": "pass",
       "detail": {
-        "confirm": "הצילום יחליף 33 נקודות מפתח של מיקום וגודל בטווח שצולם. המסגור מחוץ לטווח נשאר כמו שהוא. אפשר לבטל בבת אחת. נקודות מפתח חדשות: 13",
+        "confirm": "הצילום יחליף 33 נקודות מפתח של מיקום וגודל בטווח שצולם. המסגור מחוץ לטווח נשאר כמו שהוא. אפשר לבטל בבת אחת. נקודות מפתח חדשות: 12",
         "revisions": 1,
         "ops": [
           "replace_clip_keyframes"
@@ -891,15 +891,15 @@
         "keys": [
           {
             "p": "x",
-            "keys": 34
+            "keys": 33
           },
           {
             "p": "y",
-            "keys": 34
+            "keys": 33
           },
           {
             "p": "scale",
-            "keys": 34
+            "keys": 33
           }
         ],
         "errors": []
@@ -1122,19 +1122,19 @@
     "n1LivePath": {
       "hits": 200,
       "runsMs": [
-        20.6,
-        17,
-        15.2,
-        20.4,
-        33.2,
-        15,
-        15,
-        20.5,
-        23.3,
-        18.1
+        24.9,
+        20,
+        10.6,
+        17.6,
+        21.7,
+        9.9,
+        24.4,
+        15.7,
+        13.2,
+        7.8
       ],
-      "warmupMs": 31.9,
-      "slowestMs": 33.2,
+      "warmupMs": 41.5,
+      "slowestMs": 24.9,
       "budgetMs": 33.33,
       "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4",
       "note": "one sample of this machine, under whatever else ran on it; not a general claim"
