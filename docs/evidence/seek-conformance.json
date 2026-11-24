@@ -1,7 +1,7 @@
 {
-  "ranAt": "2026-11-19T07:00:46.175Z",
+  "ranAt": "2026-11-24T23:19:44.957Z",
   "machine": {
-    "os": "Linux 6.18.44-fc-v653 x64",
+    "os": "Linux 6.18.44-fc-v819 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4
   },
@@ -9,7 +9,7 @@
   "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
   "seed": 1,
   "seeksPerFixture": 1000,
-  "totalWallSeconds": 278.5,
+  "totalWallSeconds": 235.1,
   "fixtures": [
     {
       "name": "h264-mp4-30-bf2-gop30",
@@ -28,7 +28,7 @@
         "checked": 300,
         "mismatches": 0
       },
-      "exportWallSeconds": 25,
+      "exportWallSeconds": 23.5,
       "detail": {
         "asset": {
           "codec": "h264",
@@ -63,7 +63,7 @@
         "checked": 300,
         "mismatches": 0
       },
-      "exportWallSeconds": 46,
+      "exportWallSeconds": 34.1,
       "detail": {
         "asset": {
           "codec": "h264",
@@ -98,7 +98,7 @@
         "checked": 300,
         "mismatches": 0
       },
-      "exportWallSeconds": 26,
+      "exportWallSeconds": 24,
       "detail": {
         "asset": {
           "codec": "h264",
@@ -133,7 +133,7 @@
         "checked": 150,
         "mismatches": 0
       },
-      "exportWallSeconds": 32,
+      "exportWallSeconds": 26,
       "detail": {
         "asset": {
           "codec": "h264",
@@ -168,7 +168,7 @@
         "checked": 300,
         "mismatches": 0
       },
-      "exportWallSeconds": 29.9,
+      "exportWallSeconds": 25.3,
       "detail": {
         "asset": {
           "codec": "vp9",
@@ -203,7 +203,7 @@
         "checked": 300,
         "mismatches": 0
       },
-      "exportWallSeconds": 33.4,
+      "exportWallSeconds": 27.4,
       "detail": {
         "asset": {
           "codec": "av1",
@@ -238,7 +238,7 @@
         "checked": 300,
         "mismatches": 0
       },
-      "exportWallSeconds": 28.7,
+      "exportWallSeconds": 22.4,
       "detail": {
         "asset": {
           "codec": "h264",

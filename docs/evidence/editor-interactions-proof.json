@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-24T16:50:18.942Z",
+  "ranAt": "2026-11-24T20:32:54.308Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v819 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 73,
-  "total": 73,
+  "passed": 78,
+  "total": 78,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -204,7 +204,7 @@
         "vl5": true,
         "tcBefore": "00:00:03:00",
         "tcAfter": "00:00:03:00",
-        "namedKey": "נקודת עוצמה 00:00:02:20 · 140%",
+        "namedKey": "נקודת עוצמה 00:00:02:19 · 140%",
         "keys": [
           [
             40,
@@ -272,9 +272,9 @@
       "name": "Sound tab: \"end the music with the picture\" trims the music to the last detected beat before the picture ends and gives it a fade-out, in one transaction; undo restores it",
       "ok": true,
       "detail": {
-        "pictureEnd": 290,
-        "wantEnd": 284,
-        "gotEnd": 284,
+        "pictureEnd": 245,
+        "wantEnd": 239,
+        "gotEnd": 239,
         "fadeOutFrames": 30,
         "fitUndone": true
       }
@@ -312,9 +312,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 1.98,
+        "fwd2": 2.04,
         "sh2": "◀◀ ×1",
-        "back1": -0.92,
+        "back1": -1,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -328,9 +328,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 0.98,
+        "playSpeed": 1,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.89,
+        "shuttleSpeed": 2,
         "staysPaused": true
       }
     },
@@ -358,30 +358,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_d06cf5a0450",
-          "clp_d06cf5a0451"
+          "clp_8328e473cf0",
+          "clp_8328e473cf1"
         ],
         "afterAB": [
-          "clp_d06cf5a0450",
-          "clp_d06cf5a0451"
+          "clp_8328e473cf0",
+          "clp_8328e473cf1"
         ],
         "afterAdd": [
-          "clp_d06cf5a0450",
-          "clp_d06cf5a0451",
-          "clp_d06cf5a0452"
+          "clp_8328e473cf0",
+          "clp_8328e473cf1",
+          "clp_8328e473cf2"
         ],
         "midEscape": [
-          "clp_d06cf5a0451"
+          "clp_8328e473cf1"
         ],
         "afterEscape": [
-          "clp_d06cf5a0450",
-          "clp_d06cf5a0451",
-          "clp_d06cf5a0452"
+          "clp_8328e473cf0",
+          "clp_8328e473cf1",
+          "clp_8328e473cf2"
         ],
         "afterEscapeUp": [
-          "clp_d06cf5a0450",
-          "clp_d06cf5a0451",
-          "clp_d06cf5a0452"
+          "clp_8328e473cf0",
+          "clp_8328e473cf1",
+          "clp_8328e473cf2"
         ]
       }
     },
@@ -543,7 +543,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 21/1799",
+        "valueText": "עוקב קדימה 20/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -804,18 +804,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_e02a88881b0",
-          "ast_112ad001bb0",
-          "ast_6aa17e9c0f0",
-          "ast_991f9f58950",
-          "ast_622494500e0"
+          "ast_676b5323ac0",
+          "ast_1a081d41d70",
+          "ast_e68e2f51b70",
+          "ast_77193e9cfa0",
+          "ast_a4c2004fbc0"
         ],
         "order1": [
-          "ast_e02a88881b0",
-          "ast_991f9f58950",
-          "ast_112ad001bb0",
-          "ast_6aa17e9c0f0",
-          "ast_622494500e0"
+          "ast_676b5323ac0",
+          "ast_77193e9cfa0",
+          "ast_1a081d41d70",
+          "ast_e68e2f51b70",
+          "ast_a4c2004fbc0"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -839,7 +839,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-24T16:38:42.135Z",
+          "createdAt": "2026-11-24T20:28:49.873Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -881,6 +881,74 @@
           [
             "apply_template"
           ]
+        ]
+      }
+    },
+    {
+      "name": "a picture of the applied template deleted with Delete (a new project closes the gap, so the later pictures move earlier): the bar offers «החזרת החלקים שנמחקו» (not before the delete); pressing it either makes the picture again in 1 revision, or refuses in Hebrew with the reason and the next step and changes nothing; undo brings the shuffled template back and the offer is gone",
+      "ok": true,
+      "detail": {
+        "outcome": "refused",
+        "deleteOps": [
+          [
+            "ripple_delete_clips"
+          ]
+        ],
+        "refusal": "התבנית אינה יכולה לחול כך: פריטים שנערכו ביד נשמרים במקומם, אבל הם כבר אינם נמצאים בדיוק בטווח שהתכנון החדש נותן להם, ולכן היו נשארים פריימים בלי תמונה — אפשר ליצור מחדש בקצב של ההחלה (רגיל), לבטל את העריכה ביד שהזיזה או קיצרה את המשבצות, או למחוק את הקליפ וליצור מחדש עם «החזרת החלקים שנמחקו» כדי שהתבנית תמלא את המשבצת שוב.",
+        "revisions": {
+          "afterDelete": 18,
+          "afterButton": 18
+        },
+        "rUndone": true,
+        "rOfferGone": true
+      }
+    },
+    {
+      "name": "the same picture deleted with Shift+Delete (the gap is kept): the bar offers «החזרת החלקים שנמחקו»; Shuffle leaves that item out and says so (1 revision, apply_template); the button makes it again (1 revision), says so, and is gone",
+      "ok": true,
+      "detail": {
+        "slots": 11,
+        "victim": "clp_19e7e278ec0",
+        "deleted": true,
+        "offered": {
+          "count": 1,
+          "text": "החזרת החלקים שנמחקו",
+          "visible": true,
+          "enabled": true
+        },
+        "deleteOps": [
+          [
+            "delete_clip"
+          ]
+        ],
+        "leftOut": {
+          "said": "הוחלפו 10 פריטים. 1 פריטים שמחקתם ידנית לא נוצרו שוב.",
+          "slots": 11,
+          "removed": 1,
+          "stillOffered": 1,
+          "refused": 0
+        },
+        "back": {
+          "said": "הוחלפו 10 פריטים. החלקים שנמחקו נוצרו שוב.",
+          "slots": 11,
+          "removed": 0,
+          "offered": 0,
+          "ops": [
+            [
+              "apply_template"
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "name": "undo three times takes back the restore, the regeneration and the hand delete, one step each: an equal creativeProjection at every step, ending at the shuffled template",
+      "ok": true,
+      "detail": {
+        "steps": [
+          true,
+          true,
+          true
         ]
       }
     },
@@ -965,8 +1033,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_527f06d8480",
-          "seq_527f06d8487"
+          "seq_3d4c5ae9d30",
+          "seq_3d4c5ae9d37"
         ],
         "revisions": 1,
         "transactions": [
@@ -976,7 +1044,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_527f06d8480",
+          "seq": "seq_3d4c5ae9d30",
           "selected": "true"
         }
       }
@@ -1007,9 +1075,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_527f06d8480"
+          "seq": "seq_3d4c5ae9d30"
         },
-        "secondTab": "seq_527f06d8480",
+        "secondTab": "seq_3d4c5ae9d30",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1227,6 +1295,99 @@
         "parentIsBody": true,
         "inert": false,
         "anyInert": false,
+        "errors": []
+      }
+    },
+    {
+      "name": "a word deleted in the transcript panel while another clip shows a reversed copy of the recording: the recording's clip is cut, the copy's clip is left whole, and the panel says «הקליפ reversed.mp4 לא נחתך לפי ההקלטה…» as one status note; after switching to English the next cut says it in English; nothing is refused",
+      "ok": true,
+      "detail": {
+        "noteBefore": 0,
+        "he": {
+          "count": 1,
+          "text": "הקליפ reversed.mp4 לא נחתך לפי ההקלטה: הוא מציג עותק שלא שומר על התזמון שלה",
+          "role": "status",
+          "visible": true
+        },
+        "en": {
+          "count": 1,
+          "text": "Clip reversed.mp4 was not cut by the recording's times: it shows a copy that does not keep its timing",
+          "role": "status",
+          "visible": true
+        },
+        "recordingFrames": [
+          [
+            [
+              0,
+              15
+            ],
+            [
+              15,
+              30
+            ]
+          ],
+          [
+            [
+              0,
+              15
+            ],
+            [
+              15,
+              15
+            ]
+          ]
+        ],
+        "copy": [
+          [
+            45,
+            30
+          ],
+          [
+            30,
+            30
+          ]
+        ],
+        "refused": 0,
+        "errors": []
+      }
+    },
+    {
+      "name": "an archive of a project whose translation the owner marked reviewed, imported in the editor: the new project opens with one toast «הארכיון יובא» whose text is the server's note naming «English», without a timer; the translation there needs review again with its wording kept, the source keeps its mark; the toast stays past 7 s, closes with its ×, and a reload does not show it again; in English the same import says it in English",
+      "ok": true,
+      "detail": {
+        "marked": true,
+        "he": {
+          "id": "prj_feM5GJX0rOM",
+          "count": 1,
+          "title": "הארכיון יובא",
+          "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגומים «English» מסומנים שוב «תרגום מכונה · לא נבדק», והנוסח שלהם נשמר. אפשר לעבור עליהם בלוח «תמלול» ולבחור «סמן כנבדק».",
+          "visible": true,
+          "timer": 0,
+          "panel": "needed",
+          "badge": 1
+        },
+        "en": {
+          "id": "prj_xdmJLeDoSKE",
+          "count": 1,
+          "title": "The archive was imported",
+          "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translations «English» need review again; their wording is kept. Go through them in the \"Transcript\" panel and choose \"Mark as reviewed\".",
+          "visible": true,
+          "timer": 0,
+          "panel": "needed",
+          "badge": 1
+        },
+        "imported": {
+          "review": "needed",
+          "reviewedBy": null,
+          "wording": [
+            "Hello everyone",
+            "Welcome"
+          ]
+        },
+        "sourceReview": "reviewed",
+        "stays": 1,
+        "closed": 0,
+        "afterReload": 0,
         "errors": []
       }
     }

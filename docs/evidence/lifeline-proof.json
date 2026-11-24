@@ -1,12 +1,12 @@
 {
   "proof": "lifeline",
   "adr": "ADR-0021",
-  "ranAt": "2026-11-19T05:26:18.975Z",
+  "ranAt": "2026-11-24T21:51:34.276Z",
   "result": "PASSED",
   "passed": 17,
   "total": 17,
   "machine": {
-    "platform": "Linux 6.18.44-fc-v653 x64",
+    "platform": "Linux 6.18.44-fc-v819 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "node": "v22.23.4",
@@ -281,10 +281,10 @@
       "bytes": 48128,
       "familyCheck": {
         "varying": [
-          "clp_f5ecef59ad1"
+          "clp_71bc2db5331"
         ],
         "empty": [
-          "clp_f5ecef59ad5"
+          "clp_71bc2db5335"
         ]
       },
       "frozen": {
@@ -1492,20 +1492,20 @@
       "evaluate": {
         "frames": 1000,
         "liveTitles": 20,
-        "medianMsPerFrameLive": 0.01,
-        "medianMsPerFrameTyped": 0.008,
+        "medianMsPerFrameLive": 0.007,
+        "medianMsPerFrameTyped": 0.005,
         "addedMsPerFrame": 0.002,
         "budgetMs": 0.2,
         "withinBudget": true,
-        "firstFrameAfterAnEditMs": 0.119
+        "firstFrameAfterAnEditMs": 0.046
       },
       "commit": {
         "datedFiles": 500,
         "events": 60,
         "created": 60,
         "commits": 30,
-        "medianMs": 16.978,
-        "maxMs": 23.054
+        "medianMs": 16.793,
+        "maxMs": 27.707
       }
     }
   },
@@ -1779,8 +1779,8 @@
             "severity": "blocker",
             "message": "the title \"צולם ב־{date}\" has a field without data, so those words would be missing from the film ({date}: there is no capture date to take it from (the picture under the title has none, or no dated picture is on the timeline))",
             "ids": [
-              "clp_7d7dc513b00",
-              "clp_058ae761c10"
+              "clp_4b001390610",
+              "clp_22067e637b0"
             ],
             "range": {
               "startFrame": 0,
@@ -1804,8 +1804,8 @@
             "severity": "blocker",
             "message": "the title \"{hebrewDate}\" shows a Hebrew date ({hebrewDate}) for a picture taken around sunset: the Hebrew date depends on whether it was filmed before or after sunset, and that has not been answered. Answer it for the event (update_event afterSunset); it is never guessed",
             "ids": [
-              "clp_68e74872de0",
-              "evt_bf029a0f120"
+              "clp_8deab9fb100",
+              "evt_36e32269580"
             ],
             "range": {
               "startFrame": 0,
@@ -1909,10 +1909,10 @@
         ],
         "familyCheck": {
           "varying": [
-            "clp_f5ecef59ad1"
+            "clp_71bc2db5331"
           ],
           "empty": [
-            "clp_f5ecef59ad5"
+            "clp_71bc2db5335"
           ]
         },
         "afterTheCutTheCopyShowsTheFirstValue": true
@@ -1967,20 +1967,20 @@
         "evaluate": {
           "frames": 1000,
           "liveTitles": 20,
-          "medianMsPerFrameLive": 0.01,
-          "medianMsPerFrameTyped": 0.008,
+          "medianMsPerFrameLive": 0.007,
+          "medianMsPerFrameTyped": 0.005,
           "addedMsPerFrame": 0.002,
           "budgetMs": 0.2,
           "withinBudget": true,
-          "firstFrameAfterAnEditMs": 0.119
+          "firstFrameAfterAnEditMs": 0.046
         },
         "commit": {
           "datedFiles": 500,
           "events": 60,
           "created": 60,
           "commits": 30,
-          "medianMs": 16.978,
-          "maxMs": 23.054
+          "medianMs": 16.793,
+          "maxMs": 27.707
         }
       }
     }

@@ -2,7 +2,7 @@
   "proof": "multicam",
   "adr": "ADR-0020",
   "status": "pass",
-  "generatedAt": "2026-11-19T06:36:13.371Z",
+  "generatedAt": "2026-11-24T22:44:16.323Z",
   "machine": {
     "platform": "linux",
     "cpus": 4,
@@ -189,8 +189,8 @@
       "value": {
         "segments": 1001,
         "documentBytes": 412272,
-        "commitP95Ms": 30.83,
-        "getProjectP95Ms": 16.5
+        "commitP95Ms": 36.28,
+        "getProjectP95Ms": 17.69
       },
       "budget": "recorded",
       "pass": true
@@ -199,8 +199,8 @@
       "id": "M5",
       "name": "undo of a 1000-cut switch gives an equal creativeProjection",
       "value": {
-        "switchMs": 82.67,
-        "undoMs": 86.6
+        "switchMs": 124.81,
+        "undoMs": 81.16
       },
       "budget": "equal",
       "pass": true
@@ -245,7 +245,7 @@
       "id": "M6",
       "name": "planning time for a 60-minute program (recorded)",
       "value": {
-        "ms": 316.83,
+        "ms": 282.38,
         "ops": 1
       },
       "budget": "recorded",
@@ -255,11 +255,11 @@
       "id": "M3",
       "name": "envelope + sync of 3 × 10 min on this CPU (a miss is reported)",
       "value": {
-        "wallSeconds": 14.44,
+        "wallSeconds": 14.18,
         "timingsMs": {
-          "envelope": 6132,
-          "coarse": 511,
-          "fine": 7699
+          "envelope": 6477,
+          "coarse": 469,
+          "fine": 7152
         },
         "verdicts": [
           "reference",
@@ -314,12 +314,12 @@
         }
       ],
       "turns": 21,
-      "generateSeconds": 47.24
+      "generateSeconds": 46.83
     },
     "dryRunTimingsMs": {
-      "envelope": 3245,
-      "coarse": 387,
-      "fine": 6691
+      "envelope": 3722,
+      "coarse": 353,
+      "fine": 6552
     },
     "m4": {
       "segments": 81,
@@ -333,12 +333,12 @@
     "m8": {
       "segments": 1001,
       "documentBytes": 412272,
-      "commitP95Ms": 30.83,
-      "getProjectP95Ms": 16.5
+      "commitP95Ms": 36.28,
+      "getProjectP95Ms": 17.69
     },
     "m5": {
-      "switchMs": 82.67,
-      "undoMs": 86.6,
+      "switchMs": 124.81,
+      "undoMs": 81.16,
       "segments": 1001
     },
     "dialogueSync": [
@@ -369,16 +369,16 @@
       "shots": 24,
       "shortestShot": 2,
       "segments": 24,
-      "planning60minMs": 316.83,
+      "planning60minMs": 282.38,
       "planning60minOps": 1
     },
     "m3": {
       "threeTimesTenMinutes": {
-        "wallSeconds": 14.44,
+        "wallSeconds": 14.18,
         "timingsMs": {
-          "envelope": 6132,
-          "coarse": 511,
-          "fine": 7699
+          "envelope": 6477,
+          "coarse": 469,
+          "fine": 7152
         },
         "verdicts": [
           "reference",

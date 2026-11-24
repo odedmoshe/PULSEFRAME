@@ -3,6 +3,8 @@
  * applied as one undoable step, offer alternatives, and keep hand-edited results when regenerated.
  * Not covered: the natural-language Director, Prompt-to-Draft, Long-to-Shorts, hooks, B-roll, brand kits (need a language
  * model and/or providers; not built).
+ * Wave 6, in the editor: a montage clip deleted by hand stays out of the next regeneration, and «החזרת החלקים שנמחקו» fills its
+ * place again (the recipes panel's own button), each step one exact undo.
  *   pnpm build && pnpm proof:phase11
  */
 import { execFileSync } from 'node:child_process';
@@ -16,6 +18,7 @@ import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
 import { BEAT_SR } from '../../../apps/server/src/beats.ts';
 import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
+import { dictionaries } from '../../i18n/src/index.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/phase11');
@@ -165,6 +168,74 @@ async function main() {
     for (let i = 0; i < 100 && restored !== placed; i++) { restored = vclips((await get(ep)).project).length; if (restored !== placed) await sleep(100); }
     await page.screenshot({ path: path.join(art, 'editor-recipes.png') });
     check('editor: preview shows steps and alternatives; apply places the clips; after a hand edit, regenerate with another setting keeps that clip (shown as 1 protected) and re-cuts the rest; Ctrl+Z undoes the regeneration', /\d/.test(stepsText ?? '') && alts >= 3 && placed >= 6 && prot === 1 && afterRegen.length > placed && afterRegen.some((c: any) => c.id === first.id && c.effects?.[0]?.type === 'color.sepia') && restored === placed && errors.length === 0, { placed, afterRegen: afterRegen.length, protectedShown: prot, restored, errors: errors.slice(0, 3) });
+    // a montage clip deleted by hand (ADR-0016 decision 6; wave 6): the next regeneration leaves its place empty and says so,
+    // and «החזרת החלקים שנמחקו» on the run fills it again. The first clip still carries its hand edit (kept, as above).
+    {
+      const he = dictionaries.he as Record<string, string>;
+      const runEl = page.locator('[data-testid=recipe-run]').first();
+      const restoreBtn = runEl.getByTestId('recipe-restore-removed'), resultEl = runEl.getByTestId('recipe-regenerate-result');
+      const pics0 = vclips((await get(ep)).project);
+      const shape = (d: any) => JSON.stringify(vclips(d).map((c: any) => [c.id, fr(c.start), fr(c.duration)]));
+      const shape0 = shape((await get(ep)).project);
+      const gone = pics0[3];
+      const from = fr(gone.start), to = from + fr(gone.duration);
+      const over = (d: any) => vclips(d).filter((c: any) => fr(c.start) < to && from < fr(c.start) + fr(c.duration)).length;
+      const waitRev = async (want: number, ms = 30000) => { const t0 = Date.now(); for (;;) { if ((await get(ep)).revision >= want) return true; if (Date.now() - t0 > ms) return false; await sleep(150); } };
+      const resultText = async () => ((await resultEl.textContent().catch(() => null)) ?? '').replace(/\s+/g, ' ').trim();
+      // the result line of the regeneration undone above is still shown: it names nothing removed, and the button is not offered
+      const offeredBefore = await restoreBtn.count();
+      // Observed first, not judged beyond exact undo: Delete as a new project has it closes the gap, so the later clips move earlier
+      // and count as edited by hand. What the regeneration and the button then do is recorded in the detail (`withDefaultDelete`).
+      const revA = (await get(ep)).revision;
+      await page.locator(`.clip[data-clip-id="${gone.id}"]`).click();
+      await page.keyboard.press('Delete');
+      await waitRev(revA + 1);
+      const rippleOps = (((await call(`/projects/${ep}/history?since=${revA}`)).body.events ?? []) as any[]).filter((e) => e.revision > revA).map((e) => e.ops);
+      await runEl.getByTestId('recipe-regenerate').click();
+      await waitRev(revA + 2, 20000);
+      await sleep(500);
+      const obs: Record<string, unknown> = { deleteOps: rippleOps, afterRegenerate: { said: await resultText(), offered: await restoreBtn.count(), error: await page.getByTestId('recipe-error').textContent().catch(() => null), pictures: vclips((await get(ep)).project).length } };
+      if (await restoreBtn.count()) {
+        const revB = (await get(ep)).revision;
+        await restoreBtn.click();
+        await waitRev(revB + 1, 20000);
+        await sleep(500);
+        obs.afterButton = { said: await resultText(), offered: await restoreBtn.count(), error: await page.getByTestId('recipe-error').textContent().catch(() => null), pictures: vclips((await get(ep)).project).length, revisions: (await get(ep)).revision - revB };
+      }
+      let observedUndone = false;
+      for (let n = (await get(ep)).revision - revA; n > 0; n--) { await page.keyboard.press('Control+z'); await sleep(500); }
+      for (let i = 0; i < 100 && !observedUndone; i++) { observedUndone = shape((await get(ep)).project) === shape0; if (!observedUndone) await sleep(100); }
+      obs.undoneExactly = observedUndone;
+      const rev0 = (await get(ep)).revision;
+      await page.locator(`.clip[data-clip-id="${gone.id}"]`).click();
+      await page.keyboard.press('Shift+Delete'); // the gap is kept: nothing else moves
+      const deleted = await waitRev(rev0 + 1) && !vclips((await get(ep)).project).some((c: any) => c.id === gone.id);
+      const shapeDeleted = shape((await get(ep)).project);
+      await runEl.getByTestId('recipe-regenerate').click();
+      const regenerated = await waitRev(rev0 + 2);
+      await page.waitForFunction((want) => (document.querySelector('[data-testid=recipe-regenerate-result]')?.textContent ?? '').includes(want), he['recipes.removed']!, { timeout: 30000 }).catch(() => {});
+      const dRegen = (await get(ep)).project;
+      const leftOut = { said: await resultText(), live: await resultEl.getAttribute('aria-live').catch(() => null), offered: await restoreBtn.count(), text: await restoreBtn.textContent().catch(() => null), visible: await restoreBtn.isVisible().catch(() => false), over: over(dRegen), kept: vclips(dRegen).some((c: any) => c.id === first.id && c.effects?.[0]?.type === 'color.sepia') };
+      const shapeRegen = shape(dRegen);
+      await restoreBtn.click();
+      const restoredRev = await waitRev(rev0 + 3);
+      await restoreBtn.waitFor({ state: 'detached', timeout: 30000 }).catch(() => {});
+      const dBack = (await get(ep)).project;
+      const back = { said: await resultText(), offered: await restoreBtn.count(), over: over(dBack), revision: (await get(ep)).revision };
+      check('editor: a montage clip deleted by hand with Shift+Delete: the run does not offer «החזרת החלקים שנמחקו» before a regeneration says so; regenerate leaves the clip\'s place empty, says «נשארו ריקים כי נמחקו ידנית: 1» in its live line and offers the button; the button fills the place again (1 revision) and is gone; the hand-edited clip is kept throughout',
+        offeredBefore === 0 && deleted && regenerated && leftOut.said.includes(`${he['recipes.removed']}: 1`) && he['recipes.removed'] === 'נשארו ריקים כי נמחקו ידנית' && leftOut.live === 'polite' && leftOut.offered === 1 && leftOut.text === 'החזרת החלקים שנמחקו' && leftOut.text === he['recipes.restoreRemoved'] && leftOut.visible && leftOut.over === 0 && leftOut.kept
+          && restoredRev && back.revision === rev0 + 3 && back.offered === 0 && !back.said.includes(he['recipes.removed']!) && back.over > 0 && observedUndone && errors.length === 0,
+        { deletedFrames: [from, to], offeredBefore, leftOut, back, withDefaultDelete: obs, errors: errors.slice(0, 3) });
+      // exact undo, one step each: the restore, the regeneration, the delete
+      const steps: boolean[] = [];
+      for (const want of [shapeRegen, shapeDeleted, shape0]) {
+        await page.keyboard.press('Control+z');
+        let ok = false;
+        for (let i = 0; i < 100 && !ok; i++) { ok = shape((await get(ep)).project) === want; if (!ok) await sleep(100); }
+        steps.push(ok);
+      }
+      check('editor: Ctrl+Z three times takes back the restore, the regeneration and the hand delete, one step each, ending at the montage as it was', steps.every(Boolean) && shapeRegen !== shapeDeleted && shapeDeleted !== shape0, { steps });
+    }
     await page.close();
   } catch (e) {
     console.error(e);
