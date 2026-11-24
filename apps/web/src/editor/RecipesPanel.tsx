@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import * as T from '@pulseframe/time';
 import { describeRecipes, FORMAT_PROFILES, PERFORM_RECIPE_ID } from '@pulseframe/core';
-import type { Key } from '@pulseframe/i18n';
+import { translateRefusal, type Key } from '@pulseframe/i18n';
 import { api, ApiFailure, type RecipeAlternative, type RecipeParams, type RecipePlanResult } from '../api.ts';
 import { useEditorState } from './store.ts';
 import { RECIPE_FORM_IDS, recipeParams, recipeSources } from './recipeParams.ts';
@@ -199,6 +199,8 @@ export function RecipesPanel() {
       <p className="muted" data-testid="recipes-intro">{t('recipes.intro')}</p>
       {RECIPES.map((r) => {
         const err = errors[r.id];
+        // in Hebrew a refusal that has its own Hebrew sentence carries the way forward in it (as in the command bar); otherwise the server's words and hint
+        const errSaid = err ? translateRefusal(lang, err.message) : undefined;
         const entry = plans[r.id];
         const stale = !!entry && entry.plan.revision !== revision;
         const done = outcomes[r.id];
@@ -216,7 +218,7 @@ export function RecipesPanel() {
             <div aria-live="polite">
               {err && (
                 <p className="danger" role="alert" data-testid="recipe-error" data-code={err.code}>
-                  <span dir="auto">{err.message}</span>{err.hint && <> <span className="muted" dir="auto" data-testid="recipe-error-hint">{err.hint}</span></>}
+                  <span dir="auto">{errSaid ?? err.message}</span>{err.hint && !errSaid && <> <span className="muted" dir="auto" data-testid="recipe-error-hint">{err.hint}</span></>}
                 </p>
               )}
               {done && <p data-testid="recipe-applied" data-created={done.created}>{t('recipes.applied')}: {done.created} {t('recipes.created')}</p>}

@@ -133,6 +133,13 @@ const HE_PORTRAIT: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^remove the transition into the next clip first$/, () => 'יש להסיר קודם את המעבר אל הקליפ הבא'],
 ];
 /**
+ * The beat montage's refusal for a music clip that shows a copy made without a recorded time mapping (core recipes.ts planMontage;
+ * packages/core/src/markerLineage.test.ts provokes it). The reason, then «; » and the next step.
+ */
+const HE_MONTAGE: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^music clip \S+ plays a copy of the measured music that does not keep its timing, so where the beats are in it is unknown$/, () => 'קליפ המוזיקה מנגן עותק של המוזיקה שנמדדה שאינו שומר על התזמון שלה, ולכן לא ידוע היכן הפעימות נמצאות בו; אפשר למדוד את הקצב של העותק עצמו, או להחזיר לקליפ את המוזיקה שנמדדה או עותק ששומר על התזמון, ולנסות שוב'],
+];
+/**
  * Refusals of the motion tracking operations («מעקב תנועה», ADR-0015): motion tracks, following them and privacy regions.
  * Their own list, so the inventory of the list above stays as it is; packages/evals/src/refusal-wording.test.ts provokes
  * every one of them in a case of its own. A motion track is «מסלול מעקב» (a timeline track stays «רצועה»).
@@ -270,7 +277,7 @@ const HE_MEDIA: [RegExp, (m: RegExpExecArray) => string][] = [
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA]) { const m = re.exec(message); if (m) return say(m); }
   for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
   // The export routes wrap the first blocker (Exporter.start, the browser export): worded only when the blocker itself is.
   const start = /^export cannot start: ([\s\S]+)$/.exec(message);
@@ -287,6 +294,8 @@ export const AI_REFUSAL_PATTERNS: readonly RegExp[] = HE_AI.map(([re]) => re);
 export const TREND_REFUSAL_PATTERNS: readonly RegExp[] = HE_TREND.map(([re]) => re);
 /** The portrait-blur patterns (ADR-0017), for their own test (packages/core/src/recipes.test.ts). */
 export const PORTRAIT_REFUSAL_PATTERNS: readonly RegExp[] = HE_PORTRAIT.map(([re]) => re);
+/** The beat montage's lineage refusal, for its own test (packages/core/src/markerLineage.test.ts). */
+export const MONTAGE_REFUSAL_PATTERNS: readonly RegExp[] = HE_MONTAGE.map(([re]) => re);
 /** The motion tracking patterns (ADR-0015), for their own case of refusal-wording.test.ts. */
 export const TRACKING_REFUSAL_PATTERNS: readonly RegExp[] = HE_TRACKING.map(([re]) => re);
 /** The patterns of adjustment layers, replacing media and templates (ADR-0016), for their own test. */
