@@ -3,7 +3,7 @@
  * (replace what the last run created and nobody touched; keep what was edited by hand).
  */
 import * as T from '@pulseframe/time';
-import { FAMILY_FILM_RECIPE_ID, FAMILY_FILM_RUN_RECIPE_ID, timeOriginSeconds, findClip, fingerprint, isInPlaceRecipe, MULTICAM_AUTO_RECIPE_ID, multicamGroupOf, planRecipe, RecipeError, type LevelEnvelope, type PlanContext, type RecipePlan, type RegenerateOptions, type TimeRange } from '@pulseframe/core';
+import { FAMILY_FILM_RECIPE_ID, FAMILY_FILM_RUN_RECIPE_ID, timeOriginSeconds, findClip, fingerprint, isInPlaceRecipe, MULTICAM_AUTO_RECIPE_ID, multicamGroupOf, planRecipe, RecipeError, recordsRanges, type LevelEnvelope, type PlanContext, type RecipePlan, type RegenerateOptions, type TimeRange } from '@pulseframe/core';
 import { envelopeOf } from './envelope.ts';
 import { multicamDerivatives } from './multicamSync.ts';
 import { applyFamilyFilmFor, planFamilyFilmFor, regenerateFamilyFilmFor } from './familyFilm.ts';
@@ -64,7 +64,7 @@ export async function applyRecipe(store: Store, gov: Governance, principal: Prin
   const ctx = await context(store, projectId, recipeId, params);
   const plan = wrap(() => planRecipe(p.doc, recipeId, params, ctx));
   // The plan was built from revision p.revision; committing against exactly that revision means a concurrent edit cannot be silently built upon.
-  const r = gov.commitAs(principal, { projectId, expectedRevision: expectedRevision ?? p.revision, allowInternal: true, label: `Recipe: ${plan.steps[0] ?? recipeId}`.slice(0, 120), ops: [{ op: 'apply_recipe', args: { recipeId, params: plan.params, steps: plan.steps, ops: plan.ops } }] }) as any;
+  const r = gov.commitAs(principal, { projectId, expectedRevision: expectedRevision ?? p.revision, allowInternal: true, label: `Recipe: ${plan.steps[0] ?? recipeId}`.slice(0, 120), ops: [{ op: 'apply_recipe', args: { recipeId, params: plan.params, steps: plan.steps, ops: plan.ops, ...(recordsRanges(recipeId) ? { recordRanges: true } : {}) } }] }) as any;
   return { revision: r.revision, runId: r.results?.[0]?.output?.runId ?? null, createdIds: r.results?.[0]?.output?.createdIds ?? [], steps: plan.steps, basis: plan.basis, alternatives: plan.alternatives, ...(plan.skippedClips ? { skippedClips: plan.skippedClips } : {}), ...(r.proposal ? { proposal: r.proposal } : {}) };
 }
 
@@ -82,12 +82,16 @@ export async function regenerateRecipe(store: Store, gov: Governance, principal:
   const inPlace = isInPlaceRecipe(run.recipeId);
   const removable = inPlace ? [] : live.filter((id) => !protectedIds.includes(id));
   const protectedRanges = protectedIds.map((id) => { const c = findClip(p.doc, id)!.clip; return { start: c.start, end: T.add(c.start, c.duration) }; });
+  // clips deleted by hand (ADR-0016 decision 6): a run that records where its clips were (run.ranges; beat-montage) names them by
+  // their ids missing from the document; their ranges are left empty and carried on, unless restoreRemoved. Older runs record none.
+  const ranges = recordsRanges(run.recipeId) ? run.ranges ?? {} : {};
+  const removedRanges = options.restoreRemoved ? {} : Object.fromEntries(Object.entries(ranges).filter(([id]) => !findClip(p.doc, id)));
   // Plan against the document as it will be once the untouched clips are gone.
   const without = structuredClone(p.doc);
   for (const id of removable) { const f = findClip(without, id); if (f) f.track.clips.splice(f.index, 1); }
   const params = newParams ?? run.params;
-  const ctx = await context(store, projectId, run.recipeId, params, protectedRanges);
+  const ctx = { ...await context(store, projectId, run.recipeId, params, protectedRanges), removedRanges: Object.values(removedRanges) };
   const plan = wrap(() => planRecipe(without, run.recipeId, params, ctx));
-  const r = gov.commitAs(principal, { projectId, expectedRevision: p.revision, allowInternal: true, label: `Regenerate recipe: ${plan.steps[0] ?? run.recipeId}`.slice(0, 120), ops: [{ op: 'apply_recipe', args: { runId, recipeId: run.recipeId, params: plan.params, steps: plan.steps, removeClipIds: removable, keepIds: protectedIds, ops: plan.ops } }] }) as any;
-  return { revision: r.revision, runId, replaced: removable.length, protected: protectedIds, createdIds: r.results?.[0]?.output?.createdIds ?? [], steps: plan.steps, basis: plan.basis, alternatives: plan.alternatives };
+  const r = gov.commitAs(principal, { projectId, expectedRevision: p.revision, allowInternal: true, label: `Regenerate recipe: ${plan.steps[0] ?? run.recipeId}`.slice(0, 120), ops: [{ op: 'apply_recipe', args: { runId, recipeId: run.recipeId, params: plan.params, steps: plan.steps, removeClipIds: removable, keepIds: protectedIds, ops: plan.ops, ...(recordsRanges(run.recipeId) ? { recordRanges: true, ...(Object.keys(removedRanges).length ? { keepRanges: removedRanges } : {}) } : {}) } }] }) as any;
+  return { revision: r.revision, runId, replaced: removable.length, protected: protectedIds, removed: Object.keys(removedRanges), createdIds: r.results?.[0]?.output?.createdIds ?? [], steps: plan.steps, basis: plan.basis, alternatives: plan.alternatives };
 }

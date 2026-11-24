@@ -7,7 +7,7 @@ import * as T from '@pulseframe/time';
 import {
   ANIMATABLE, AssetSchema, EASINGS, DEFAULT_TEXT_ANIMATION, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, TextAnimationSchema, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
   normaliseTextStyle, TEXT_LOOK_FIELDS, timelineBehaviour,
-  CaptionStyleSchema, DEFAULT_CAPTION_STYLE, SafeAreaSchema, MARKER_COLORS, VariantTranslationSchema,
+  CaptionStyleSchema, DEFAULT_CAPTION_STYLE, RunRangeSchema, SafeAreaSchema, MARKER_COLORS, VariantTranslationSchema,
   type AdjustmentClip, type Asset, type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
@@ -1787,7 +1787,9 @@ defineOp({
   version: 1,
   internal: true,
   description: 'Apply a recipe plan (ordinary public ops) as one step and record which objects it created. Issued by the server from a plan it built; on regeneration it first removes the previous run\'s untouched clips.',
-  args: z.object({ runId: z.string().optional(), recipeId: z.string().max(64), params: z.record(z.string(), z.unknown()), steps: z.array(z.string().max(400)).max(50), removeClipIds: z.array(z.string()).max(5000).optional(), keepIds: z.array(z.string()).max(5000).optional(), ops: z.array(z.object({ op: z.string(), args: z.unknown() }).strict()).min(1).max(2000) }).strict(),
+  args: z.object({ runId: z.string().optional(), recipeId: z.string().max(64), params: z.record(z.string(), z.unknown()), steps: z.array(z.string().max(400)).max(50), removeClipIds: z.array(z.string()).max(5000).optional(), keepIds: z.array(z.string()).max(5000).optional(), ops: z.array(z.object({ op: z.string(), args: z.unknown() }).strict()).min(1).max(2000),
+    // optional and additive (ADR-0016 decision 6): record each clip's range in the run, and carry on the ranges of clips deleted by hand
+    recordRanges: z.literal(true).optional(), keepRanges: z.record(z.string(), RunRangeSchema).optional() }).strict(),
   apply(d, a, ctx) {
     const affected = new Set<string>(removeRunClips(d, a.removeClipIds ?? []));
     const created: string[] = [...(a.keepIds ?? [])];
@@ -1804,7 +1806,13 @@ defineOp({
     const id = a.runId ?? ctx.newId('run');
     const previous = a.runId ? d.recipeRuns[a.runId]?.fingerprints ?? {} : {};
     const { createdIds, fingerprints } = runFingerprints(d, created, a.keepIds ?? [], previous);
-    d.recipeRuns[id] = { id, recipeId: a.recipeId, params: a.params, createdIds, fingerprints, steps: a.steps };
+    // ranges (beat montage): the clips deleted by hand carried on as given, then every clip of the run where it lies now
+    const ranges: Record<string, z.infer<typeof RunRangeSchema>> = {};
+    if (a.recordRanges) {
+      for (const [cid, r] of Object.entries(a.keepRanges ?? {})) if (!findClip(d, cid)) ranges[cid] = { start: { ...r.start }, end: { ...r.end } };
+      for (const cid of createdIds) { const f = findClip(d, cid); if (f) ranges[cid] = { start: { ...f.clip.start }, end: { ...clipEnd(f.clip) } }; }
+    }
+    d.recipeRuns[id] = { id, recipeId: a.recipeId, params: a.params, createdIds, fingerprints, steps: a.steps, ...(a.recordRanges ? { ranges } : {}) };
     affected.add(id);
     return { affectedIds: [...affected], summary: `${a.runId ? 'Regenerated' : 'Applied'} recipe ${a.recipeId}: ${a.steps[0] ?? ''}`.slice(0, 200), output: { runId: id, createdIds: d.recipeRuns[id]!.createdIds } };
   },

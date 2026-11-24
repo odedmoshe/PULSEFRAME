@@ -118,7 +118,7 @@ export interface FilmReason { code: FilmReasonCode; /** seconds inside the file,
 /** removed_by_hand (regeneration): a clip of this file in the last film was deleted by hand, so the file is left out (restoreRemoved brings it back). */
 export const FILM_EXCLUSION_CODES = ['no_room', 'too_short', 'excluded_by_you', 'no_picture', 'kept_by_hand', 'removed_by_hand'] as const;
 export interface FilmExclusion { assetId: string; code: (typeof FILM_EXCLUSION_CODES)[number]; details: Record<string, unknown> }
-export const FILM_WARNING_CODES = ['shorter_than_target', 'longer_than_target', 'music_short', 'low_beat_confidence', 'not_measured', 'no_capture_time', 'mixed_orientation', 'cuts_merged', 'kept_by_hand', 'cut_off_grid_next_to_kept', 'title_resolved_static', 'kept_music_not_followable', 'lead_music_rises', 'pictures_missing', 'removed_by_hand'] as const;
+export const FILM_WARNING_CODES = ['shorter_than_target', 'longer_than_target', 'music_short', 'low_beat_confidence', 'not_measured', 'no_capture_time', 'mixed_orientation', 'cuts_merged', 'kept_by_hand', 'cut_off_grid_next_to_kept', 'title_resolved_static', 'kept_music_not_followable', 'lead_music_rises', 'pictures_missing', 'removed_by_hand', 'music_removed'] as const;
 export type FilmWarningCode = (typeof FILM_WARNING_CODES)[number];
 export interface FilmWarning { code: FilmWarningCode; message: string; details: Record<string, unknown> }
 export interface FilmPick {
@@ -157,6 +157,17 @@ export interface FilmPlanContext {
    * closing card or music is not placed; warning removed_by_hand says so and an alternative offers restoreRemoved.
    */
   removedKeys?: readonly string[];
+  /**
+   * Regeneration: what each pick deleted by hand showed (from the run record: params.picked, then params.removedPicks). A pick
+   * with a window leaves out only that window when its file has another one to give; a pick without one (a still, an unmeasured
+   * or flat video: the file's only possible pick) leaves the file out. A removed pick key this list does not name leaves its file out.
+   */
+  removedPicks?: readonly FilmRemovedPick[];
+  /**
+   * Regeneration: how the last film was cut. onMusicBars: on the bars of its music (placed by the run, kept by hand, or deleted by
+   * hand and still followed). With the music deleted by hand, the cuts stay on its bars while the length and order are unchanged.
+   */
+  previousCut?: { targetSeconds: number; order: ResolvedFilmParams['order']; onMusicBars: boolean };
   /** Regeneration: tracks the previous run made, by role (the server finds them from the run's slots), used again when unlocked. */
   reuseTracks?: { pictures?: string; ownSound?: string; musicTrack?: string };
   /** Regeneration: the previous run's ownSound; with previousMusic it gives the mix the reused tracks were set to (filmMix). */
@@ -177,6 +188,11 @@ export interface FamilyFilmPlan {
   picks: FilmPick[]; excluded: FilmExclusion[];
   /** Videos among the picks with no moments record of MOMENTS_ALGO: the dialog and agents measure these first. */
   needsMeasurement: string[];
+  /**
+   * Regeneration with the music deleted by hand: what the cuts were placed on ('removed-music': its bars, as before; 'steady': a
+   * steady grid, because another length or order was asked for). Absent otherwise. The run record keeps it (params.cutOn).
+   */
+  musicRemoved?: { cutOn: 'removed-music' | 'steady' };
   ops: TemplateStep[]; slots: PlannedSlot[];
   predicted: { startFrame: number; endFrame: number; cuts: number[]; offGridCuts: number[]; gapFrames: number; seconds: number; targetSeconds: number };
   method: typeof FAMILY_FILM_METHOD;
@@ -198,10 +214,26 @@ export interface FamilyFilmRegenerateResult extends FamilyFilmApplyResult { repl
 export function filmMix(ownSound: ResolvedFilmParams['ownSound'], music: boolean): { ownGain: number; duckDb: number | null } {
   return { ownGain: music && ownSound === 'under' ? FILM.ownGainUnder : 1, duckDb: music && ownSound === 'lead' ? FILM.duckDb : null };
 }
-/** The run's params without what the run record adds (picked, templateVersion), ready to parse with FamilyFilmParamsSchema. */
+/** The run's params without what the run record adds (picked, removedPicks, cutOn, templateVersion), ready to parse with FamilyFilmParamsSchema. */
 export function filmRunParams(params: Readonly<Record<string, unknown>>): Record<string, unknown> {
-  const { picked: _p, templateVersion: _v, ...rest } = params;
+  const { picked: _p, removedPicks: _r, cutOn: _c, templateVersion: _v, ...rest } = params;
   return rest;
+}
+/** A pick of the film deleted by hand: its key, its file and the window it showed (null: the file's only possible pick). */
+export interface FilmRemovedPick { key: string; assetId: string; windowIndex: number | null }
+/** The picks deleted by hand a run record carries on (params.removedPicks), or []. Never throws. */
+export function filmRunRemovedPicks(params: Readonly<Record<string, unknown>>): FilmRemovedPick[] {
+  const p = Object.hasOwn(params, 'removedPicks') ? params.removedPicks : undefined;
+  return Array.isArray(p) ? p.filter((x): x is FilmRemovedPick => !!x && typeof x === 'object' && typeof x.key === 'string' && typeof x.assetId === 'string' && (x.windowIndex === null || Number.isInteger(x.windowIndex))).map((x) => ({ key: x.key, assetId: x.assetId, windowIndex: x.windowIndex })) : [];
+}
+/**
+ * The params a film run records (the server and the test double): the plan's params, the picks (picked, so "why this clip"
+ * survives a reload), and, only when there are any, the picks deleted by hand that the run carries on (removedPicks) and what
+ * the cuts followed after the music was deleted by hand (cutOn). Both are optional additions: a record without them reads as before.
+ */
+export function filmRunRecordParams(plan: Pick<FamilyFilmPlan, 'params' | 'picks' | 'musicRemoved'>, removedPicks: readonly FilmRemovedPick[]): Record<string, unknown> {
+  const picked: FilmPicked[] = plan.picks.map((k) => ({ key: k.key, assetId: k.assetId, kind: k.kind, windowIndex: k.windowIndex, reasons: k.reasons }));
+  return { ...plan.params, picked, ...(removedPicks.length ? { removedPicks: removedPicks.map((r) => ({ ...r })) } : {}), ...(plan.musicRemoved ? { cutOn: plan.musicRemoved.cutOn } : {}) };
 }
 /** The picks a run record keeps (params.picked), or [] for a record without them. Never throws. */
 export function filmRunPicked(params: Readonly<Record<string, unknown>>): FilmPicked[] {

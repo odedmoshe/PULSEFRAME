@@ -59,6 +59,13 @@ const range = (r: FilmReason): string => {
   return a !== undefined && b !== undefined ? `${num1(a)}–${num1(b)}` : a !== undefined ? num1(a) : '';
 };
 const sign = (v: number) => (v >= 0 ? '+' : '−') + num1(Math.abs(v));
+/** What a film regeneration left out because it was deleted by hand (core familyFilm.ts, warning removed_by_hand details.items). */
+type LeftOut = { kind: 'file' | 'window' | 'title' | 'closing' | 'music'; name?: string; windowIndex?: number; fromSecond?: number; toSecond?: number };
+const leftOut = (v: unknown): LeftOut[] => (Array.isArray(v) ? v.filter((x): x is LeftOut => !!x && typeof x === 'object' && typeof (x as LeftOut).kind === 'string') : []);
+/** A file name isolated inside the sentence (it may be written left to right). */
+const fname = (x: LeftOut) => `\u2068${x.name ?? ''}\u2069`;
+const leftOutHe = (x: LeftOut) => x.kind === 'file' ? `«${fname(x)}» (כל הקובץ)` : x.kind === 'window' ? `«${fname(x)}» (${n(x.fromSecond) !== null && n(x.toSecond) !== null ? `הרגע ב־${num1(x.fromSecond!)}–${num1(x.toSecond!)} שנ׳` : `רגע ${(x.windowIndex ?? 0) + 1}`}; רגעים אחרים שלו יכולים להישאר)` : x.kind === 'title' ? 'כותרת הפתיחה' : x.kind === 'closing' ? 'כרטיס הסיום' : x.name ? `המוזיקה «${fname(x)}»` : 'המוזיקה';
+const leftOutEn = (x: LeftOut) => x.kind === 'file' ? `“${fname(x)}” (the whole file)` : x.kind === 'window' ? `“${fname(x)}” (${n(x.fromSecond) !== null && n(x.toSecond) !== null ? `its moment at ${num1(x.fromSecond!)}–${num1(x.toSecond!)} s` : `moment ${(x.windowIndex ?? 0) + 1}`}; its other moments may stay)` : x.kind === 'title' ? 'the opening title' : x.kind === 'closing' ? 'the closing card' : x.name ? `the music “${fname(x)}”` : 'the music';
 
 const he: FamilyFilmStrings = {
   title: 'סרט משפחתי בלחיצה', close: 'סגירה', back: 'הקודם', next: 'הבא', apply: 'יצירת הסרט', applying: 'יוצר את הסרט…', stepsLabel: 'שלבי היצירה',
@@ -144,7 +151,10 @@ const he: FamilyFilmStrings = {
       case 'title_resolved_static': return 'הכותרת קבועה, ולא תתעדכן לפי תאריך הצילום';
       case 'kept_music_not_followable': return 'המוזיקה שכבר בפרויקט נשארה, והחיתוכים אינם עוקבים אחרי הפעימות שלה';
       case 'lead_music_rises': return 'במצב «הקולות מובילים» המוזיקה מורדת ב־9 dB בזמן שיש קול בקליפ, ולכן היא עולה מעל תמונות וקליפים שקטים';
-      case 'removed_by_hand': return 'חלקים שמחקתם ידנית לא נוספו שוב; אפשר להחזיר אותם ב«החזרת החלקים שנמחקו»';
+      case 'removed_by_hand': { const items = leftOut(w.details.items); return `${items.length ? `לא נוספו שוב כי מחקתם אותם ידנית: ${items.map(leftOutHe).join(', ')}` : 'חלקים שמחקתם ידנית לא נוספו שוב'}. אפשר להחזיר אותם ב«החזרת החלקים שנמחקו»`; }
+      case 'music_removed': return w.details.cutOn === 'steady'
+        ? 'המוזיקה נמחקה ידנית וביקשתם אורך או סדר אחר: הקליפים נחתכים על קצב קבוע, בלי מוזיקה. הקול של הקליפים לא מונמך ושום דבר לא מונמך מתחתיו'
+        : 'המוזיקה נמחקה ידנית: הקליפים נשארים חתוכים על התיבות שלה, במקום שבו הם, בלי מוזיקה מתחתם. הקול של הקליפים לא מונמך ושום דבר לא מונמך מתחתיו. אורך או סדר אחר יחתכו אותם על קצב קבוע';
       case 'pictures_missing': return s !== null ? `ב־${num1(s)} שנ׳ של הסרט אין תמונה: הקליפים שנבחרו לא ממלאים את המקום עד הקליפים שנשארו במקומם` : 'בחלק מהסרט אין תמונה: הקליפים שנבחרו לא ממלאים את המקום עד הקליפים שנשארו במקומם';
     }
   },
@@ -234,7 +244,10 @@ const en: FamilyFilmStrings = {
       case 'title_resolved_static': return 'The title is fixed and will not update from the capture date';
       case 'kept_music_not_followable': return 'The music already in the project was kept, and the cuts do not follow its beats';
       case 'lead_music_rises': return 'In "Voices lead" the music is lowered 9 dB while a clip has sound, so it rises over pictures and silent clips';
-      case 'removed_by_hand': return 'Parts you deleted by hand were not added again; "Restore deleted parts" brings them back';
+      case 'removed_by_hand': { const items = leftOut(w.details.items); return `${items.length ? `Not added again because you deleted them by hand: ${items.map(leftOutEn).join(', ')}` : 'Parts you deleted by hand were not added again'}. "Restore deleted parts" brings them back`; }
+      case 'music_removed': return w.details.cutOn === 'steady'
+        ? 'The music was deleted by hand and you asked for another length or order: the clips are cut on a steady beat, with no music. The clips\' own sound is not lowered and nothing is ducked'
+        : 'The music was deleted by hand: the clips stay cut on its bars, where they are, with no music under them. The clips\' own sound is not lowered and nothing is ducked. Another length or order cuts them on a steady beat instead';
       case 'pictures_missing': return s !== null ? `${num1(s)} s of the film show no picture: the chosen clips do not fill the room up to the clips kept by hand` : 'Part of the film shows no picture: the chosen clips do not fill the room up to the clips kept by hand';
     }
   },

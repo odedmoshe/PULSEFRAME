@@ -257,6 +257,28 @@ describe('a film clip deleted by hand stays deleted (ADR-0016 decision 6, applie
     expect([m.isError, m.body.removed]).toEqual([false, []]);
     expect(JSON.stringify(store.replay(s.pid, revision(s.pid)).doc)).toBe(JSON.stringify(store.getProject(s.pid).doc));
   });
+  it('the music deleted by hand: the regenerated film has the no-music mix (own sound at full level, nothing ducked) and says the cuts stay on its bars', async () => {
+    const s = seed('ff-music-deleted', ['2026-12-05T18:00:00', '2026-12-05T18:10:00', '2026-12-05T18:20:00']);
+    const song: Omit<Asset, 'id'> = { kind: 'audio', name: 'song.wav', contentHash: hash(), byteSize: 1000, container: 'wav', mimeType: 'audio/wav', duration: T.rt(120, 1), audio: { sampleRate: 48000, channels: 2, codec: 'pcm_s16le' }, provenance: prov } as Omit<Asset, 'id'>;
+    const mus = store.commit({ projectId: s.pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'import_asset', args: { asset: song } }] }).results[0]!.output!.assetId as string;
+    const beats = Array.from({ length: 230 }, (_, i) => T.rt(i, 2));
+    store.commit({ projectId: s.pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'attach_analysis', args: { assetId: mus, kind: 'beats', method: 'test grid', params: {}, createdAt: '2026-11-18T00:00:00.000Z', times: beats, bpm: 120, confidence: 1, downbeats: beats.filter((_, i) => i % 4 === 0), meter: 4 } }] });
+    const tracks = () => Object.values(store.getProject(s.pid).doc.sequences).flatMap((q) => q.tracks).filter((t) => t.kind === 'audio');
+    const applied = await applyFamilyFilmFor(store, gov, USER, s.pid, { assetIds: s.ids, musicAssetId: mus, targetSeconds: 30, ownSound: 'under' });
+    expect(tracks().some((t) => (t.audio?.gain ?? 1) < 1), 'the clips\' own sound is under the music').toBe(true);
+    const musicSlot = store.getProject(s.pid).doc.recipeRuns[applied.runId]!.slots!.find((x) => x.kind === 'music')!;
+    store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'delete_clip', args: { clipId: musicSlot.clipId } }] });
+    const r = await regenerateFamilyFilmFor(store, gov, USER, s.pid, applied.runId, {});
+    expect(r.removed).toEqual(['music']);
+    expect(r.warnings).toContainEqual(expect.objectContaining({ code: 'music_removed', details: expect.objectContaining({ cutOn: 'removed-music' }) }));
+    for (const t of tracks()) { expect(t.audio?.gain ?? 1, t.name).toBe(1); expect(t.audio?.duck ?? null, t.name).toBe(null); }
+    expect(tracks().flatMap((t) => t.clips).some((c) => c.type === 'media' && c.assetId === mus)).toBe(false);
+    // the next regeneration knows the last film was already mixed without music (nothing to set again) and still cut on its bars
+    const again = await regenerateFamilyFilmFor(store, gov, USER, s.pid, applied.runId, {});
+    expect(again.warnings.find((w) => w.code === 'music_removed')!.details.cutOn).toBe('removed-music');
+    for (const t of tracks()) expect(t.audio?.gain ?? 1, t.name).toBe(1);
+    expect(JSON.stringify(store.replay(s.pid, revision(s.pid)).doc)).toBe(JSON.stringify(store.getProject(s.pid).doc));
+  });
 });
 
 describe('the planner context from the life line (filmContext)', () => {

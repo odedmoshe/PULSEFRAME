@@ -25,7 +25,7 @@ import * as T from '@pulseframe/time';
 import {
   clipEnd, eventNeedsSunsetAnswer, eventOfAsset, escapeFieldText, FAMILY_FILM_BUILT, FAMILY_FILM_DRAFT_LABEL, FAMILY_FILM_RUN_RECIPE_ID, FAMILY_FILM_TEMPLATE_ID, FAMILY_FILM_VERSION, FilmError, filmRunParams,
   findClip, isPersonToken, parseFields, planFamilyFilm, shownCapture,
-  type FamilyFilmApplyResult, type RecipeRun, type TemplateStep, type Track, type FamilyFilmParams, type FamilyFilmPlan, type FamilyFilmPlanView, type FamilyFilmRegenerateResult, type FilmKeptClip, type FilmPicked, type FilmPlanContext, type FilmText, type ProjectDocument, type RegenerateOptions, type SlotRecord, removedByHand,
+  type FamilyFilmApplyResult, type RecipeRun, type TemplateStep, type Track, type FamilyFilmParams, type FamilyFilmPlan, type FamilyFilmPlanView, type FamilyFilmRegenerateResult, type FilmKeptClip, type FilmPlanContext, type FilmText, type ProjectDocument, type RegenerateOptions, type SlotRecord, filmRegenerationRemoved, filmRunRecordParams,
 } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import type { Governance } from './governance.ts';
@@ -110,7 +110,7 @@ function filmText(typed: string | undefined, fallback: () => { text: string; liv
  * file has a capture date and none of their events waits for its sunset answer; otherwise it is fixed text (the planner then
  * warns title_resolved_static).
  */
-export function filmContext(doc: ProjectDocument, params: unknown, extra: Pick<FilmPlanContext, 'kept' | 'keptKeys' | 'removedKeys' | 'reuseTracks' | 'previousOwnSound' | 'previousMusic'> = {}): FilmPlanContext {
+export function filmContext(doc: ProjectDocument, params: unknown, extra: Pick<FilmPlanContext, 'kept' | 'keptKeys' | 'removedKeys' | 'removedPicks' | 'previousCut' | 'reuseTracks' | 'previousOwnSound' | 'previousMusic'> = {}): FilmPlanContext {
   const p = isObject(params) ? params : {};
   const ids = strings(p.assetIds).filter((id) => Object.hasOwn(doc.assets, id));
   const capture: Record<string, string | null> = {};
@@ -135,7 +135,6 @@ const view = (revision: number, plan: FamilyFilmPlan): FamilyFilmPlanView => {
   return { ...rest, revision, operations: plan.ops.length, label: FAMILY_FILM_DRAFT_LABEL, note: plan.blocking.length ? 'Nothing was changed. This plan cannot be applied as it is: see blocking.' : NOTE };
 };
 const refuseBlocked = (plan: FamilyFilmPlan) => { if (plan.blocking.length) throw FILM_API_ERRORS.blocked(plan.blocking[0]!.message, plan.blocking); };
-const picked = (plan: FamilyFilmPlan): FilmPicked[] => plan.picks.map((k) => ({ key: k.key, assetId: k.assetId, kind: k.kind, windowIndex: k.windowIndex, reasons: k.reasons }));
 type CommitOut = { revision: number; results?: { output?: { runId?: string; createdIds?: string[]; slots?: SlotRecord[] } }[] };
 
 /** Read-only: what the film would be in this project now, and at which revision. */
@@ -158,7 +157,7 @@ export async function applyFamilyFilmFor(store: Store, gov: Governance, principa
   refuseBlocked(plan);
   const r = gov.commitAs(principal, {
     projectId, expectedRevision: expectedRevision ?? p.revision, allowInternal: true, label: `Family film: ${plan.steps[0] ?? ''}`.slice(0, 120),
-    ops: [{ op: 'apply_template', args: { templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: FAMILY_FILM_VERSION, params: { ...plan.params, picked: picked(plan) }, steps: plan.steps, ops: plan.ops, slots: plan.slots } }],
+    ops: [{ op: 'apply_template', args: { templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: FAMILY_FILM_VERSION, params: filmRunRecordParams(plan, []), steps: plan.steps, ops: plan.ops, slots: plan.slots } }],
   }) as CommitOut;
   const out = r.results?.[0]?.output ?? {};
   return { revision: r.revision, runId: out.runId ?? '', createdIds: out.createdIds ?? [], slots: out.slots ?? [], steps: plan.steps, warnings: plan.warnings, picks: plan.picks, excluded: plan.excluded };
@@ -230,19 +229,19 @@ export function filmRegeneration(doc: ProjectDocument, run: RecipeRun, params: R
   const protectedIds = keptByHand(doc, live, run.fingerprints ?? {});
   const removable = live.filter((id) => !protectedIds.includes(id));
   const keptSlots = (run.slots ?? []).filter((s) => protectedIds.includes(s.clipId));
-  // slots whose clip was deleted by hand travel on in the new run record (so the next regeneration still knows), unless restored
-  const removedSlots = options.restoreRemoved ? [] : removedByHand(doc, run.slots ?? []);
+  // slots whose clip was deleted by hand travel on in the new run record (so the next regeneration still knows), unless restored;
+  // with them what each deleted pick showed, the mix the run left and how it was cut (core filmRegenerationRemoved)
+  const { removedSlots, removedPicks, previousMusic, previousCut } = filmRegenerationRemoved(doc, run, options.restoreRemoved);
   const keepSlots = [...keptSlots, ...removedSlots];
   const without = structuredClone(doc);
   for (const id of removable) { const f = findClip(without, id); if (f) f.track.clips.splice(f.index, 1); }
   const previousOwnSound = run.params.ownSound === 'lead' || run.params.ownSound === 'mute' || run.params.ownSound === 'under' ? run.params.ownSound : undefined;
-  const previousMusic = typeof run.params.musicAssetId === 'string';
   const reuseTracks = filmRunTracks(doc, run);
   const trackIds = new Set(Object.values(doc.sequences).flatMap((q) => q.tracks.map((t) => t.id)));
   // the run's tracks that still exist, and the tracks found by role (a reused A1 too), so they are the film's own from now on
   const keepIds = [...new Set([...protectedIds, ...run.createdIds.filter((id) => trackIds.has(id)), ...Object.values(reuseTracks).filter((id): id is string => typeof id === 'string')])];
-  const ctx = filmContext(without, params, { kept: keptClips(doc, protectedIds, run.slots ?? []), keptKeys: keptSlots.map((s) => s.key), removedKeys: removedSlots.map((s) => s.key), reuseTracks, previousOwnSound, previousMusic });
-  return { removable, protectedIds, keepSlots, removedSlots, keepIds, without, ctx };
+  const ctx = filmContext(without, params, { kept: keptClips(doc, protectedIds, run.slots ?? []), keptKeys: keptSlots.map((s) => s.key), removedKeys: removedSlots.map((s) => s.key), removedPicks, previousCut, reuseTracks, previousOwnSound, previousMusic });
+  return { removable, protectedIds, keepSlots, removedSlots, removedPicks, keepIds, without, ctx };
 }
 
 /**
@@ -261,7 +260,7 @@ export async function regenerateFamilyFilmFor(store: Store, gov: Governance, pri
   const params: Partial<FamilyFilmParams> & Record<string, unknown> = { ...filmRunParams(run.params), ...(newParams as Record<string, unknown> | undefined) };
   refuseAges(principal, params);
   refuseNotBuilt();
-  const { removable, protectedIds, keepSlots, removedSlots, keepIds, without, ctx } = filmRegeneration(p.doc, run, params, options);
+  const { removable, protectedIds, keepSlots, removedSlots, removedPicks, keepIds, without, ctx } = filmRegeneration(p.doc, run, params, options);
   const plan = wrap(() => planFamilyFilm(without, params, ctx));
   refuseAgesInPlan(principal, plan.ops);
   // a new slot never takes a key a kept slot holds (apply_template drops a slot only when key AND clip match): a planner fault, not the request's
@@ -270,7 +269,7 @@ export async function regenerateFamilyFilmFor(store: Store, gov: Governance, pri
   refuseBlocked(plan);
   const r = gov.commitAs(principal, {
     projectId, expectedRevision: expectedRevision ?? p.revision, allowInternal: true, label: `Regenerate family film: ${plan.steps[0] ?? ''}`.slice(0, 120),
-    ops: [{ op: 'apply_template', args: { runId, templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: FAMILY_FILM_VERSION, params: { ...plan.params, picked: picked(plan) }, steps: plan.steps, removeClipIds: removable, keepIds, keepSlots, ops: plan.ops, slots: plan.slots } }],
+    ops: [{ op: 'apply_template', args: { runId, templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: FAMILY_FILM_VERSION, params: filmRunRecordParams(plan, removedPicks), steps: plan.steps, removeClipIds: removable, keepIds, keepSlots, ops: plan.ops, slots: plan.slots } }],
   }) as CommitOut;
   const out = r.results?.[0]?.output ?? {};
   return { revision: r.revision, runId, createdIds: out.createdIds ?? [], slots: out.slots ?? [], steps: plan.steps, warnings: plan.warnings, picks: plan.picks, excluded: plan.excluded, replaced: removable.length, protected: protectedIds, removed: removedSlots.map((s) => s.key), alternatives: plan.alternatives };
