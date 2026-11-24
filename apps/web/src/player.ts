@@ -9,6 +9,7 @@
  */
 import * as T from '@pulseframe/time';
 import { canonical, sequenceDuration, type ProjectDocument } from '@pulseframe/core';
+import { pictureSize } from './pictureSize.ts';
 import { audioPlan, drawGraph, evaluate, fillPlayingOrder, FlashGuard, isDecodeBudgetReason, openClipVoice, PitchStretcher, RampResampler, rampSourceFrames, rampSpanOf, soundEnd, type PlannedAudioClip } from '@pulseframe/engine';
 import { interleaved, plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import type { MediaPool } from './media.ts';
@@ -235,15 +236,17 @@ export class Player {
     this.request(this.frame);
     return true;
   }
+  /** The size and quality the next frame of `settings` is drawn at (pictureSize.ts: the one rule). */
+  private sizeOf(settings: { width: number; height: number }) {
+    return pictureSize(settings, { playing: this.playing, ...(this.opts.draftOnly ? { draftMaxHeight: this.opts.draftOnly.maxHeight } : {}) });
+  }
   /**
    * The quality the next frame is drawn at, as pump() chooses it: draft (the proxy) for the angle viewer and while playing at a
    * reduced size, else full (the original). Prefetch warms decoders of this quality only, so a warm decoder reads the same source
    * the drawing would.
    */
   pictureQuality(): 'draft' | 'full' {
-    const h = this.doc?.settings.height ?? 0;
-    if (this.opts.draftOnly) return 'draft';
-    return this.playing && h > 0 && Math.min(1, 960 / h) !== 1 ? 'draft' : 'full';
+    return this.sizeOf(this.doc?.settings ?? { width: 0, height: 0 }).quality;
   }
   /** Playing, or asked to play and waiting for the audio device (a pause-and-resume inside setDoc passes through neither). */
   get active(): boolean { return this.playing || this.starting; }
@@ -272,14 +275,12 @@ export class Player {
         const frame = this.want;
         this.want = null;
         const doc = this.doc;
-        const { width, height, frameRate } = doc.settings;
+        const { frameRate } = doc.settings;
         // Preview may reduce resolution; layout is resolution-independent so semantics are unchanged.
-        // Draft resolution while playing; FULL project resolution when paused, so a still preview is the real picture (SPEC §8).
-        const draftMax = this.opts.draftOnly?.maxHeight;
-        const scale = draftMax ? Math.min(1, draftMax / height) : this.playing ? Math.min(1, 960 / height) : 1;
+        // Draft resolution while playing (the proxies' own scale, so a fitted picture is drawn from its proxy without
+        // resampling: pictureSize.ts); FULL project resolution when paused, so a still preview is the real picture (SPEC §8).
         const draft = this.pictureQuality() === 'draft'; // the one rule prefetch also follows
-        const w = Math.round(width * scale);
-        const h = Math.round(height * scale);
+        const { width: w, height: h } = this.sizeOf(doc.settings);
         if (!this.shown && (this.canvas.width !== w || this.canvas.height !== h)) { this.canvas.width = w; this.canvas.height = h; } // the layout gets the right shape at once
         const back = (this.back ??= document.createElement('canvas'));
         if (back.width !== w || back.height !== h) { back.width = w; back.height = h; }

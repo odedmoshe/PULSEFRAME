@@ -8,6 +8,7 @@ import * as T from '@pulseframe/time';
 import { applyTransaction, BLEND_MODES, createProject, DEFAULT_MASK, describeCatalog, EFFECTS, TRANSITIONS, type Mask, type TransitionDef, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { drawGraph, evaluate, gpuStatus, initGpu, placedArea, type DrawOptions, type FrameImage } from '@pulseframe/engine';
 import { ensureFonts } from './fonts.ts';
+import { pictureSize } from './pictureSize.ts';
 
 const lang: 'he' | 'en' = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'he';
 document.documentElement.lang = lang;
@@ -370,9 +371,111 @@ function opacityBench(): LabOpacity {
   };
 }
 
+// ---- what a playing frame costs (lab.html?bench=playback; driven by pnpm bench:playback, ADR-0005 amendment) ----
+/**
+ * What bench:playback asks this page for, on window.__pfLabPlayback. Diagnostics only: nothing is stored.
+ * - frames(spec): a project of `project` size with `opaque` clips at full opacity and, above them, `faded` clips at opacity
+ *   0.6, one per track, every one fitted to the frame. Each frame is drawn the way the player's pump draws it: evaluate, then
+ *   drawGraph onto an off-screen canvas of `size` (default: the player's own rule for a playing picture, pictureSize) with
+ *   { alpha: false }, then one copy onto the visible canvas of that size, which the page scales to its layout. Timed per
+ *   frame, with a one-pixel read-back of the visible canvas so that the drawing is really done. The pictures are given at
+ *   `sourceSize`, as 'video' (a new I420 VideoFrame per frame and layer, BT.709 limited range: what the decoder gives for a
+ *   proxy) or as 'bitmap' (an ImageBitmap: what a photo is), while the clips' assets are declared at `declared` size (default:
+ *   the project's), as a proxy stands in for its original.
+ * - raw(spec): no compositor, only `layers` drawImage calls of such pictures onto an { alpha: false } canvas of `size` with
+ *   the given smoothing ('off': imageSmoothingEnabled = false), each filling the canvas. Where the time of one layer goes.
+ */
+export interface LabPlaybackTiming { size: string; frames: number; medianMs: number; minMs: number; maxMs: number }
+export interface LabPlayback {
+  frames(spec: { project: [number, number]; size?: [number, number]; source: 'video' | 'bitmap'; sourceSize: [number, number]; declared?: [number, number]; opaque: number; faded: number; quality?: 'draft' | 'full'; frames?: number }): Promise<LabPlaybackTiming & { quality: string }>;
+  raw(spec: { size: [number, number]; source: 'video' | 'bitmap'; sourceSize: [number, number]; layers: number; smoothing: 'high' | 'medium' | 'low' | 'off'; frames?: number }): Promise<LabPlaybackTiming>;
+}
+function playbackBench(): LabPlayback {
+  const WARM = 3;
+  /** Planes of an I420 picture with some detail (a gradient and a pattern), different per layer. */
+  const planes = (w: number, h: number, seed: number) => { const cw = (w + 1) >> 1, ch = (h + 1) >> 1, b = new Uint8Array(w * h + 2 * cw * ch); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) b[y * w + x] = 16 + (((x * 219) / w + ((x ^ y) & 31) + seed * 23) % 220); for (let i = w * h; i < b.length; i++) b[i] = 64 + ((i * 7 + seed * 31) & 127); return b; };
+  const videoFrame = (b: Uint8Array, w: number, h: number) => new VideoFrame(b, { format: 'I420', codedWidth: w, codedHeight: h, timestamp: 0, colorSpace: { matrix: 'bt709', primaries: 'bt709', transfer: 'bt709', fullRange: false } });
+  const bitmap = (w: number, h: number, seed: number) => { const id = new ImageData(w, h); for (let y = 0, i = 0; y < h; y++) for (let x = 0; x < w; x++, i += 4) { id.data[i] = ((x * 255) / w + seed * 40) & 255; id.data[i + 1] = (y * 255) / h; id.data[i + 2] = ((x ^ y) * 5 + seed * 70) & 255; id.data[i + 3] = 255; } return createImageBitmap(id); };
+  /** `n` pictures of one kind and size: draw(k) is picture k for the frame being drawn; next() makes the pictures of the next frame (outside the timing). */
+  const pictures = async (kind: 'video' | 'bitmap', [w, h]: [number, number], n: number) => {
+    if (kind === 'bitmap') { const bs = await Promise.all(Array.from({ length: n }, (_, k) => bitmap(w, h, k))); return { next() {}, at: (k: number): CanvasImageSource => bs[k]!, close() { for (const b of bs) b.close(); } }; }
+    const data = Array.from({ length: n }, (_, k) => planes(w, h, k));
+    let now: VideoFrame[] = [];
+    return { next() { for (const f of now) f.close(); now = data.map((b) => videoFrame(b, w, h)); }, at: (k: number): CanvasImageSource => now[k]!, close() { for (const f of now) f.close(); now = []; } };
+  };
+  const timing = (ms: number[], size: [number, number]): LabPlaybackTiming => { const t = ms.slice(WARM), sorted = [...t].sort((a, b) => a - b); return { size: `${size[0]}x${size[1]}`, frames: t.length, medianMs: +sorted[Math.floor(t.length / 2)]!.toFixed(2), minMs: +sorted[0]!.toFixed(2), maxMs: +sorted[t.length - 1]!.toFixed(2) }; };
+  /** A visible canvas of this size, shown as the editor shows its preview: scaled by the page to its layout. */
+  const visible = ([w, h]: [number, number]) => { const c = el('canvas', { width: w, height: h }); c.style.cssText = `display:block;inline-size:min(100%, ${Math.round((540 * w) / h)}px);aspect-ratio:${w} / ${h}`; root.replaceChildren(c); return c; };
+  const nextPaint = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+  return {
+    async frames(spec) {
+      const [W, H] = spec.project, n = spec.opaque + spec.faded, N = (spec.frames ?? 20) + WARM;
+      const quality = spec.quality ?? 'draft';
+      const rule = pictureSize({ width: W, height: H }, { playing: true });
+      const size: [number, number] = spec.size ?? [rule.width, rule.height];
+      const [dw, dh] = spec.declared ?? spec.project;
+      const asset = (k: number) => ({
+        kind: 'image' as const, name: `play-${k}`, contentHash: `sha256:${(k + 1).toString(16).repeat(64).slice(0, 64)}`, byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.rt(5, 1),
+        image: { width: dw, height: dh, codec: 'png', hasAlpha: false }, provenance: { origin: 'fixture' as const, importedAt: '2026-01-01T00:00:00Z', importedBy: 'lab' },
+      });
+      const s0 = step(createProject({ id: 'prj_lab_playback', name: 'Lab playback', width: W, height: H, frameRate: RATE }), Array.from({ length: n }, (_, k) => ({ op: 'import_asset', args: { asset: asset(k) } })), true);
+      const ids = s0.out.map((o) => o.assetId as string);
+      let doc = s0.doc;
+      let track = doc.sequences[doc.mainSequenceId]!.tracks.find((t) => t.kind === 'video')!.id;
+      for (let k = 0; k < n; k++) {
+        if (k > 0) { const a = step(doc, [{ op: 'add_track', args: { kind: 'video' } }]); doc = a.doc; track = a.out[0]!.trackId as string; }
+        const c = step(doc, [{ op: 'add_clip', args: { assetId: ids[k]!, trackId: track, start: f(0), duration: f(150), withLinkedAudio: false } }]);
+        doc = k < spec.opaque ? c.doc : step(c.doc, [{ op: 'set_clip_transform', args: { clipId: c.out[0]!.clipId as string, transform: { opacity: 0.6 } } }]).doc;
+      }
+      const pics = await pictures(spec.source, spec.sourceSize, n);
+      const provider = async (l: { assetId: string }): Promise<FrameImage | null> => { const k = ids.indexOf(l.assetId); return k < 0 ? null : { draw: (c, dx, dy, dw2, dh2) => c.drawImage(pics.at(k), dx, dy, dw2, dh2) }; };
+      const shown = visible(size);
+      const back = el('canvas', { width: size[0], height: size[1] });
+      const ms: number[] = [];
+      try {
+        for (let k = 0; k < N; k++) {
+          pics.next();
+          const t0 = performance.now();
+          const g = evaluate(doc, f(k));
+          const r = await drawGraph(back.getContext('2d', { alpha: false })!, { ...g, width: size[0], height: size[1] }, provider, { quality });
+          const screen = shown.getContext('2d', { alpha: false })!;
+          screen.drawImage(back, 0, 0);
+          screen.getImageData(0, 0, 1, 1);
+          ms.push(performance.now() - t0);
+          if (r.missing.length || r.unavailableEffects.length || g.layers.length !== n) throw new Error(`playback bench: frame ${k} could not be drawn`);
+          await nextPaint();
+        }
+      } finally { pics.close(); }
+      return { ...timing(ms, size), quality };
+    },
+    async raw(spec) {
+      const [w, h] = spec.size, N = (spec.frames ?? 12) + WARM;
+      const pics = await pictures(spec.source, spec.sourceSize, spec.layers);
+      const shown = visible(spec.size), ctx = shown.getContext('2d', { alpha: false })!;
+      const ms: number[] = [];
+      try {
+        for (let k = 0; k < N; k++) {
+          pics.next();
+          const t0 = performance.now();
+          ctx.imageSmoothingEnabled = spec.smoothing !== 'off';
+          if (spec.smoothing !== 'off') ctx.imageSmoothingQuality = spec.smoothing;
+          for (let l = 0; l < spec.layers; l++) ctx.drawImage(pics.at(l), 0, 0, w, h);
+          ctx.getImageData(0, 0, 1, 1);
+          ms.push(performance.now() - t0);
+          await nextPaint();
+        }
+      } finally { pics.close(); }
+      return timing(ms, spec.size);
+    },
+  };
+}
+
 const bench = new URLSearchParams(location.search).get('bench');
 if (bench === 'opacity') {
   (window as unknown as { __pfLabOpacity: LabOpacity }).__pfLabOpacity = opacityBench();
+  document.body.dataset.ready = '1';
+} else if (bench === 'playback') {
+  (window as unknown as { __pfLabPlayback: LabPlayback }).__pfLabPlayback = playbackBench();
   document.body.dataset.ready = '1';
 } else if (bench === 'transitions') {
   // the trend-pack Canvas2D ids by default; ?ids=a,b picks others (non-GPU ids only)

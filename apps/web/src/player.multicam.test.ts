@@ -152,7 +152,12 @@ describe('pictureQuality (the quality prefetch warms)', () => {
     const big = { ...doc, settings: { ...doc.settings, width: 1920, height: 1080 } };
     const last = async (p: Player, frame: number) => { drawn.calls.length = 0; p.follow(frame); await vi.waitFor(() => expect(drawn.calls.length).toBeGreaterThan(0)); return drawn.calls.at(-1)!; };
     const large = playing(big).p;
-    expect(await last(large, 10)).toMatchObject({ pool: pool.draftFrames, quality: 'draft', h: 960 });
+    expect(await last(large, 10)).toMatchObject({ pool: pool.draftFrames, quality: 'draft', w: 960, h: 540 }); // the proxies' own scale (pictureSize.ts)
+    const tall = playing({ ...doc, settings: { ...doc.settings, width: 1080, height: 1920 } }).p;
+    expect(await last(tall, 10)).toMatchObject({ pool: pool.draftFrames, quality: 'draft', w: 540, h: 960 });
+    const hd = playing({ ...doc, settings: { ...doc.settings, width: 1280, height: 720 } }).p;
+    expect(hd.pictureQuality()).toBe('draft'); // 720 lines are reduced too, so prefetch warms the proxy
+    expect(await last(hd, 10)).toMatchObject({ pool: pool.draftFrames, quality: 'draft', w: 960, h: 540 });
     (large as unknown as { playing: boolean }).playing = false;
     expect(await last(large, 11)).toMatchObject({ pool: pool.frames, quality: 'full', h: 1080 }); // paused: the picture a still shows
     expect(await last(playing(doc).p, 12)).toMatchObject({ pool: pool.frames, quality: 'full', h: 180 }); // 180 lines play at full size
