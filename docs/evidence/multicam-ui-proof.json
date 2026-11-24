@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-24T18:01:01.368Z",
+  "ranAt": "2026-11-24T20:24:23.625Z",
   "result": "PASS",
   "checks": [
     {
@@ -60,7 +60,7 @@
       "name": "U2: the audio tap's onsets equal those of an untouched playback (no gap > 1 ms)",
       "ok": true,
       "detail": {
-        "maxDiffSeconds": 0.000009999999999843467,
+        "maxDiffSeconds": 0,
         "onsets": 28,
         "baselineOnsets": 28
       }
@@ -89,18 +89,18 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_b0194f26390": "proxy",
-            "ast_68d4e877730": "original",
-            "ast_3ca2d0ce6f0": "proxy"
+            "ast_0b7143f8290": "proxy",
+            "ast_a919b50b4d0": "original",
+            "ast_132e3dcccf0": "proxy"
           },
           "sourcesUsed": {
-            "ast_b0194f26390": [
+            "ast_0b7143f8290": [
               "proxy"
             ],
-            "ast_68d4e877730": [
+            "ast_a919b50b4d0": [
               "original"
             ],
-            "ast_3ca2d0ce6f0": [
+            "ast_132e3dcccf0": [
               "proxy"
             ]
           },
@@ -129,18 +129,18 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_b0194f26390": "original",
-            "ast_68d4e877730": "original",
-            "ast_3ca2d0ce6f0": "original"
+            "ast_0b7143f8290": "original",
+            "ast_a919b50b4d0": "original",
+            "ast_132e3dcccf0": "original"
           },
           "sourcesUsed": {
-            "ast_b0194f26390": [
+            "ast_0b7143f8290": [
               "original"
             ],
-            "ast_68d4e877730": [
+            "ast_a919b50b4d0": [
               "original"
             ],
-            "ast_3ca2d0ce6f0": [
+            "ast_132e3dcccf0": [
               "original"
             ]
           },
@@ -156,23 +156,23 @@
       "ok": true,
       "detail": {
         "cutFramesMeasured": 12,
-        "medianMs": 31.98,
-        "p95Ms": 39.98,
-        "medianFrames": 0.96,
-        "p95Frames": 1.2,
+        "medianMs": 40,
+        "p95Ms": 93.33,
+        "medianFrames": 1.2,
+        "p95Frames": 2.8,
         "allFrames": {
-          "median": 17.31,
-          "p95": 31.98,
-          "max": 338.65
+          "median": 16,
+          "p95": 40,
+          "max": 444
         },
         "baselineRun": {
-          "median": 13.33,
+          "median": 14.67,
           "p95": 29.33,
-          "max": 45.33
+          "max": 61.33
         },
         "progressMd74": "median 5-15 ms, p95 about 21-24 ms after the clock reached the frame (one 3.5 s headless run)",
         "budget": "p95 <= 2 frames",
-        "budgetMet": true,
+        "budgetMet": false,
         "prefetch": {
           "off": null,
           "budgetMB": 160,
@@ -183,9 +183,9 @@
           "gaveRoom": 0
         },
         "loadAverage": [
-          3.9,
-          5.88,
-          11.39
+          8.55,
+          7.34,
+          5.93
         ]
       }
     },
@@ -275,8 +275,8 @@
       "name": "U5: a digit while paused gives +1 history entry, the segment under the playhead shows the angle, and undo restores it",
       "ok": true,
       "detail": {
-        "angleAfter": "ang_2b6d002cbc3",
-        "expected": "ang_2b6d002cbc3"
+        "angleAfter": "ang_69a2bd55b83",
+        "expected": "ang_69a2bd55b83"
       }
     },
     {
@@ -316,64 +316,64 @@
         "shownSegments": 7,
         "badges": [
           {
-            "angle": "ang_2b6d002cbc2",
+            "angle": "ang_69a2bd55b82",
             "badge": {
-              "clipId": "clp_7dd3aa5e1e1",
-              "angleId": "ang_2b6d002cbc2",
+              "clipId": "clp_66aa5fe5c61",
+              "angleId": "ang_69a2bd55b82",
               "text": "1 · Camera 1",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_2b6d002cbc3",
+            "angle": "ang_69a2bd55b83",
             "badge": {
-              "clipId": "clp_b7e64b5a2b0",
-              "angleId": "ang_2b6d002cbc3",
+              "clipId": "clp_8a0e10a2d10",
+              "angleId": "ang_69a2bd55b83",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_2b6d002cbc4",
+            "angle": "ang_69a2bd55b84",
             "badge": {
-              "clipId": "clp_b7e64b5a2b1",
-              "angleId": "ang_2b6d002cbc4",
+              "clipId": "clp_8a0e10a2d11",
+              "angleId": "ang_69a2bd55b84",
               "text": "3 · Camera 3",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_2b6d002cbc3",
+            "angle": "ang_69a2bd55b83",
             "badge": {
-              "clipId": "clp_b7e64b5a2b2",
-              "angleId": "ang_2b6d002cbc3",
+              "clipId": "clp_8a0e10a2d12",
+              "angleId": "ang_69a2bd55b83",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_2b6d002cbc4",
+            "angle": "ang_69a2bd55b84",
             "badge": {
-              "clipId": "clp_b7e64b5a2b3",
-              "angleId": "ang_2b6d002cbc4",
+              "clipId": "clp_8a0e10a2d13",
+              "angleId": "ang_69a2bd55b84",
               "text": "3 · Camera 3",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_2b6d002cbc2",
+            "angle": "ang_69a2bd55b82",
             "badge": {
-              "clipId": "clp_b7e64b5a2b4",
-              "angleId": "ang_2b6d002cbc2",
+              "clipId": "clp_8a0e10a2d14",
+              "angleId": "ang_69a2bd55b82",
               "text": "1 · Camera 1",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_2b6d002cbc3",
+            "angle": "ang_69a2bd55b83",
             "badge": {
-              "clipId": "clp_7dd3aa5e1e2",
-              "angleId": "ang_2b6d002cbc3",
+              "clipId": "clp_66aa5fe5c62",
+              "angleId": "ang_69a2bd55b83",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
@@ -446,27 +446,27 @@
   "measurements": {
     "sync": [
       {
-        "angleId": "ang_2b6d002cbc1",
+        "angleId": "ang_69a2bd55b81",
         "verdict": "reference",
         "offsetSeconds": 0
       },
       {
-        "angleId": "ang_2b6d002cbc2",
+        "angleId": "ang_69a2bd55b82",
         "verdict": "check",
         "offsetSeconds": -0.625
       },
       {
-        "angleId": "ang_2b6d002cbc3",
+        "angleId": "ang_69a2bd55b83",
         "verdict": "confident",
         "offsetSeconds": 1.194187
       },
       {
-        "angleId": "ang_2b6d002cbc4",
+        "angleId": "ang_69a2bd55b84",
         "verdict": "confident",
         "offsetSeconds": 0.499979
       },
       {
-        "angleId": "ang_2b6d002cbc4",
+        "angleId": "ang_69a2bd55b84",
         "verdict": "unsynced",
         "offsetSeconds": null
       }
@@ -474,16 +474,16 @@
     "initialBoundaries": [
       {
         "frame": 1001,
-        "angleId": "ang_2b6d002cbc3"
+        "angleId": "ang_69a2bd55b83"
       }
     ],
     "baseline": {
       "clock": "audio",
       "onsets": 28,
       "paintLatenessMs": {
-        "median": 13.33,
+        "median": 14.67,
         "p95": 29.33,
-        "max": 45.33
+        "max": 61.33
       }
     },
     "u1": {
@@ -540,77 +540,77 @@
       "cuts": [
         {
           "frame": 60,
-          "angleId": "ang_2b6d002cbc3"
+          "angleId": "ang_69a2bd55b83"
         },
         {
           "frame": 100,
-          "angleId": "ang_2b6d002cbc4"
+          "angleId": "ang_69a2bd55b84"
         },
         {
           "frame": 140,
-          "angleId": "ang_2b6d002cbc2"
+          "angleId": "ang_69a2bd55b82"
         },
         {
           "frame": 180,
-          "angleId": "ang_2b6d002cbc3"
+          "angleId": "ang_69a2bd55b83"
         },
         {
           "frame": 220,
-          "angleId": "ang_2b6d002cbc4"
+          "angleId": "ang_69a2bd55b84"
         },
         {
           "frame": 260,
-          "angleId": "ang_2b6d002cbc2"
+          "angleId": "ang_69a2bd55b82"
         },
         {
           "frame": 300,
-          "angleId": "ang_2b6d002cbc3"
+          "angleId": "ang_69a2bd55b83"
         },
         {
           "frame": 340,
-          "angleId": "ang_2b6d002cbc4"
+          "angleId": "ang_69a2bd55b84"
         },
         {
           "frame": 380,
-          "angleId": "ang_2b6d002cbc2"
+          "angleId": "ang_69a2bd55b82"
         },
         {
           "frame": 420,
-          "angleId": "ang_2b6d002cbc3"
+          "angleId": "ang_69a2bd55b83"
         },
         {
           "frame": 460,
-          "angleId": "ang_2b6d002cbc4"
+          "angleId": "ang_69a2bd55b84"
         },
         {
           "frame": 500,
-          "angleId": "ang_2b6d002cbc2"
+          "angleId": "ang_69a2bd55b82"
         },
         {
           "frame": 1001,
-          "angleId": "ang_2b6d002cbc3"
+          "angleId": "ang_69a2bd55b83"
         }
       ]
     },
     "u4": {
       "cutFramesMeasured": 12,
-      "medianMs": 31.98,
-      "p95Ms": 39.98,
-      "medianFrames": 0.96,
-      "p95Frames": 1.2,
+      "medianMs": 40,
+      "p95Ms": 93.33,
+      "medianFrames": 1.2,
+      "p95Frames": 2.8,
       "allFrames": {
-        "median": 17.31,
-        "p95": 31.98,
-        "max": 338.65
+        "median": 16,
+        "p95": 40,
+        "max": 444
       },
       "baselineRun": {
-        "median": 13.33,
+        "median": 14.67,
         "p95": 29.33,
-        "max": 45.33
+        "max": 61.33
       },
       "progressMd74": "median 5-15 ms, p95 about 21-24 ms after the clock reached the frame (one 3.5 s headless run)",
       "budget": "p95 <= 2 frames",
-      "budgetMet": true,
+      "budgetMet": false,
       "prefetch": {
         "off": null,
         "budgetMB": 160,
@@ -621,11 +621,11 @@
         "gaveRoom": 0
       },
       "loadAverage": [
-        3.9,
-        5.88,
-        11.39
+        8.55,
+        7.34,
+        5.93
       ],
-      "prefetchVerdict": "budget met in this run"
+      "prefetchVerdict": "budget missed in this run (prefetch on)"
     }
   },
   "notMeasured": []
