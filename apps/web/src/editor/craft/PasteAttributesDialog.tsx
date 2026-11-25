@@ -80,7 +80,7 @@ export function PasteAttributesDialog() {
                   return (
                     <li key={g}>
                       <label htmlFor={id}>
-                        <input id={id} type="checkbox" checked={!off && ticks.includes(g)} disabled={off} aria-describedby={`${id}-d`} data-testid={`${TID.pasteGroup}-${g}`} data-ok={row?.ok ?? 0} data-skipped={row?.skipped ?? 0} onChange={() => toggle(g)} />
+                        <input id={id} type="checkbox" checked={!off && ticks.includes(g)} disabled={off} aria-describedby={`${id}-d`} data-testid={`craft-paste-group-${g}`} data-ok={row?.ok ?? 0} data-skipped={row?.skipped ?? 0} onChange={() => toggle(g)} />
                         <span><strong>{groupName(lang, g)}</strong><span className="why" id={`${id}-d`}>{row?.line ?? ''}</span></span>
                       </label>
                     </li>

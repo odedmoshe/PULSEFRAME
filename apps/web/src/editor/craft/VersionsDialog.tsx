@@ -132,7 +132,7 @@ export function VersionsDialog() {
             <p className="pf-craft-hint" data-testid="craft-versions-count">{say(lang, 'versionCountLine', { n: versions.length })}</p>
             <ul className="pf-craft-vlist" aria-label={say(lang, 'versionsListLabel')} dir="auto">
               {versions.map((v, n) => (
-                <li key={v.id} className="pf-craft-vrow" data-testid={`${TID.versionRow}-${n}`} data-version-id={v.id} aria-current={v.id === chosen || undefined}>
+                <li key={v.id} className="pf-craft-vrow" data-testid={`craft-version-row-${n}`} data-version-id={v.id} aria-current={v.id === chosen || undefined}>
                   {renaming === v.id ? (
                     <div className="pf-craft-row">
                       <input type="text" dir="auto" value={newName} maxLength={80} aria-label={say(lang, 'renameLabel')} data-testid={TID.versionRename} autoFocus onChange={(e) => setNewName(e.target.value)}

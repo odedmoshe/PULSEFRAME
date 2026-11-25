@@ -145,7 +145,7 @@ export function FindReplacePanel() {
       <fieldset>
         {FLAGS.map((f) => (
           <div className="pf-craft-flag" key={f.flag}>
-            <label><input type="checkbox" checked={opts[f.flag]} aria-describedby={`${id}-${f.flag}`} data-testid={`${TID.findOption}-${f.flag}`} onChange={(e) => set(f.flag, e.target.checked)} /> {say(lang, f.label)}</label>
+            <label><input type="checkbox" checked={opts[f.flag]} aria-describedby={`${id}-${f.flag}`} data-testid={`craft-find-option-${f.flag}`} onChange={(e) => set(f.flag, e.target.checked)} /> {say(lang, f.label)}</label>
             <span className="rule" id={`${id}-${f.flag}`}>{say(lang, f.rule)}</span>
           </div>
         ))}
@@ -178,7 +178,7 @@ export function FindReplacePanel() {
                   const asn = after ? snippetOf(after.text, after.spans.map(([s, e]) => [s, e] as [number, number])) : null;
                   const ticked = picked.has(i) && !!after;
                   return (
-                    <div key={i} id={`${id}-o${i}`} role="option" aria-selected={ticked} aria-disabled={!after || undefined} className="pf-craft-opt" data-active={i === active} data-testid={`${TID.findRow}-${i}`} data-kind={m.kind}
+                    <div key={i} id={`${id}-o${i}`} role="option" aria-selected={ticked} aria-disabled={!after || undefined} className="pf-craft-opt" data-active={i === active} data-testid={`craft-find-row-${i}`} data-kind={m.kind}
                       onClick={() => { setActive(i); listRef.current?.focus(); if (after) setPicked((p) => { const n = new Set(p); if (n.has(i)) n.delete(i); else n.add(i); return n; }); }} onDoubleClick={() => jump(i)}>
                       <span className="tick" aria-hidden="true">{ticked ? '☑' : '☐'}</span>
                       <span className="lines">
