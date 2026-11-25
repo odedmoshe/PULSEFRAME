@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-11-25T11:15:24.236Z",
-  "result": "FAILED",
+  "ranAt": "2026-11-25T11:59:19.495Z",
+  "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 84,
-  "total": 86,
+  "passed": 88,
+  "total": 88,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -59,7 +59,7 @@
       "name": "while the drum loop plays, the meter shows a real level (above -40 dB and not above 0)",
       "ok": true,
       "detail": {
-        "peakDbShown": -1
+        "peakDbShown": 0
       }
     },
     {
@@ -276,7 +276,7 @@
         "vl5": true,
         "tcBefore": "00:00:03:00",
         "tcAfter": "00:00:03:00",
-        "namedKey": "נקודת עוצמה 00:00:02:19 · 140%",
+        "namedKey": "נקודת עוצמה 00:00:02:20 · 140%",
         "keys": [
           [
             40,
@@ -384,9 +384,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2.02,
+        "fwd2": 1.98,
         "sh2": "◀◀ ×1",
-        "back1": -0.98,
+        "back1": -1.01,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -400,15 +400,15 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 1.02,
+        "playSpeed": 0.96,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.98,
+        "shuttleSpeed": 1.88,
         "staysPaused": true
       }
     },
     {
       "name": "multi-select: Ctrl+click adds a clip to the selection; dragging one moves both by the same 20 frames in one transaction and a third clip stays; Alt+→ nudges both; Ctrl+A selects all, Shift+click removes one; Delete removes the two selected in one transaction and one undo restores them",
-      "ok": false,
+      "ok": true,
       "detail": {
         "twoSelected": 2,
         "stillTwo": 2,
@@ -420,11 +420,7 @@
           5,
           6
         ],
-        "errors": [
-          "Failed to load resource: the server responded with a status of 501 (Not Implemented)",
-          "Failed to load resource: the server responded with a status of 501 (Not Implemented)",
-          "Failed to load resource: the server responded with a status of 501 (Not Implemented)"
-        ]
+        "errors": []
       }
     },
     {
@@ -434,30 +430,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_d60cf5ee950",
-          "clp_d60cf5ee951"
+          "clp_34bb0ae0150",
+          "clp_34bb0ae0151"
         ],
         "afterAB": [
-          "clp_d60cf5ee950",
-          "clp_d60cf5ee951"
+          "clp_34bb0ae0150",
+          "clp_34bb0ae0151"
         ],
         "afterAdd": [
-          "clp_d60cf5ee950",
-          "clp_d60cf5ee951",
-          "clp_d60cf5ee952"
+          "clp_34bb0ae0150",
+          "clp_34bb0ae0151",
+          "clp_34bb0ae0152"
         ],
         "midEscape": [
-          "clp_d60cf5ee951"
+          "clp_34bb0ae0151"
         ],
         "afterEscape": [
-          "clp_d60cf5ee950",
-          "clp_d60cf5ee951",
-          "clp_d60cf5ee952"
+          "clp_34bb0ae0150",
+          "clp_34bb0ae0151",
+          "clp_34bb0ae0152"
         ],
         "afterEscapeUp": [
-          "clp_d60cf5ee950",
-          "clp_d60cf5ee951",
-          "clp_d60cf5ee952"
+          "clp_34bb0ae0150",
+          "clp_34bb0ae0151",
+          "clp_34bb0ae0152"
         ]
       }
     },
@@ -485,13 +481,8 @@
     },
     {
       "name": "no uncaught errors in the page during these interactions",
-      "ok": false,
-      "detail": [
-        "Failed to load resource: the server responded with a status of 501 (Not Implemented)",
-        "Failed to load resource: the server responded with a status of 501 (Not Implemented)",
-        "Failed to load resource: the server responded with a status of 501 (Not Implemented)",
-        "Failed to load resource: the server responded with a status of 501 (Not Implemented)"
-      ]
+      "ok": true,
+      "detail": []
     },
     {
       "name": "a clip is removed from the timeline in one step three ways: the action bar above the tracks (disabled until a clip is selected), the right-click menu (opens with the keyboard focus inside and closes after use), and a button in the clip panel; undo brings it back",
@@ -624,7 +615,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 15/1799",
+        "valueText": "עוקב קדימה 17/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -909,18 +900,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_79a66e3cf30",
-          "ast_677a598ecd0",
-          "ast_9b34f6ad1f0",
-          "ast_8bee86c98c0",
-          "ast_2dab325b260"
+          "ast_d299770b0d0",
+          "ast_9a88ec004a0",
+          "ast_a389b90de70",
+          "ast_3e721a25780",
+          "ast_f5c6703d840"
         ],
         "order1": [
-          "ast_79a66e3cf30",
-          "ast_8bee86c98c0",
-          "ast_677a598ecd0",
-          "ast_9b34f6ad1f0",
-          "ast_2dab325b260"
+          "ast_d299770b0d0",
+          "ast_3e721a25780",
+          "ast_9a88ec004a0",
+          "ast_a389b90de70",
+          "ast_f5c6703d840"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -944,7 +935,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-25T11:07:41.889Z",
+          "createdAt": "2026-11-25T11:54:43.648Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -1139,7 +1130,7 @@
       "ok": true,
       "detail": {
         "slots": 11,
-        "victim": "clp_f1f54ac9010",
+        "victim": "clp_a79175939d0",
         "deleted": true,
         "offered": {
           "count": 1,
@@ -1264,8 +1255,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_5cd371cc280",
-          "seq_5cd371cc287"
+          "seq_9378d68cdb0",
+          "seq_9378d68cdb7"
         ],
         "revisions": 1,
         "transactions": [
@@ -1275,7 +1266,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_5cd371cc280",
+          "seq": "seq_9378d68cdb0",
           "selected": "true"
         }
       }
@@ -1306,9 +1297,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_5cd371cc280"
+          "seq": "seq_9378d68cdb0"
         },
-        "secondTab": "seq_5cd371cc280",
+        "secondTab": "seq_9378d68cdb0",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1613,7 +1604,7 @@
       "detail": {
         "marked": true,
         "he": {
-          "id": "prj_APGboUmRKTA",
+          "id": "prj_WlsObi4yTuM",
           "count": 1,
           "title": "הארכיון יובא",
           "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגום «English» מסומן שוב «תרגום מכונה · לא נבדק», והנוסח שלו נשמר. אפשר לעבור עליו בלוח «תמלול» ולבחור «סמן כנבדק».",
@@ -1623,7 +1614,7 @@
           "badge": 1
         },
         "en": {
-          "id": "prj_KJkZ55xhQrY",
+          "id": "prj_9okWWoEMbCI",
           "count": 1,
           "title": "The archive was imported",
           "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translation «English» needs review again; its wording is kept. Go through it in the \"Transcript\" panel and choose \"Mark as reviewed\".",
@@ -1651,17 +1642,32 @@
       "name": "library: the sound drawer's «מהספרייה» tab opens from the keyboard (Enter), shows exactly one honest state in Hebrew (not built, not set up, scanning, error, empty or the list), and its boxes do not overlap",
       "ok": true,
       "detail": {
-        "state": "not_built",
+        "state": "not_configured",
         "rows": 0,
         "overlaps": [],
-        "text": "הספרייה עוד לא נבנתה בגרסה הזו"
+        "text": "הספרייה לא מוגדרת\n\nפתיחת ההגדרות"
+      }
+    },
+    {
+      "name": "library: «פתיחת ההגדרות» (Enter) opens Settings at «הספרייה שלי» (the owner's own session)",
+      "ok": true,
+      "detail": {
+        "section": 1
+      }
+    },
+    {
+      "name": "library: with no library folder set, the panels log no console error and no library request answers an error status",
+      "ok": true,
+      "detail": {
+        "errors": [],
+        "failed": []
       }
     },
     {
       "name": "library: the elements drawer has «מובנים» (the built-in browser, unchanged) and «מהספרייה» tabs; the library tab shows one honest state; switching back restores the built-in browser",
       "ok": true,
       "detail": {
-        "state": "not_built",
+        "state": "not_configured",
         "overlaps": [],
         "builtinBack": true
       }
