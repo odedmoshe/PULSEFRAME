@@ -79,3 +79,11 @@ Content of a source marked `diskOnly` stays on the owner's disk. It is never com
 ## Tests
 
 `pnpm vitest run tools/library` (no network: a server on 127.0.0.1 through a test-only plain-http transport, and a git repository made in a temp folder). `pnpm typecheck` covers the test file and `fetch.d.mts`; `fetch.mjs` itself is plain JavaScript and is not type-checked.
+
+## Manifests
+
+| file | content | about | notes |
+|---|---|---|---|
+| `manifests/visual-01.json` | emoji, icons, transitions, fonts, maps, doodles | see its own notes | permissive licences only |
+| `manifests/audio-01.json` | public-domain classical (Musopen), CC BY music (Incompetech), FSD50K and Freesound Loop Dataset (disk-only, per-clip licences), sampled instruments (Salamander, VSCO-2 CE, VCSL, MuseScore_General, TinySOL) | size: see the SUMMARY line of a dry run | Zenodo and archive.org give MD5/SHA-1 only: the publisher's value is in each item's `notes`, `bytes` is exact, the ledger records the first-seen SHA-256. FSD50K audio is a split zip: join the parts with 7-Zip on the laptop. |
+| `manifests/models-01.json` | tier-1 local models: SigLIP 2, SAM 2.1 tiny/small, BiRefNet lite, Depth Anything 3 small/base, YuNet, DictaLM 3.0 1.7B, Gemma 4 E2B, DictaBERT niqqud, PANNs Cnn14 | about 8.7 GB | not gated; Hugging Face files pinned by commit, size and SHA-256 |

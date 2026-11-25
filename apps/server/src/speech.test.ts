@@ -9,7 +9,7 @@ import * as T from '@pulseframe/time';
 import type { ComputeLane } from './aiContracts.ts';
 import { loadConfig } from './config.ts';
 import { describeMedia } from './ingest.ts';
-import { sanitizeRecognition, Speech, SPEECH_MODELS } from './speech.ts';
+import { sanitizeRecognition, Speech, SPEECH_MODELS, PHONIKUD_ATTRIBUTION } from './speech.ts';
 import { Store } from './store.ts';
 
 const w = (text: string, start: number, end: number, probability = 0.9) => ({ text, start, end, probability });
@@ -69,6 +69,18 @@ describe('reviewed speech models', () => {
       expect(f.path.startsWith(`${m.kind}/`)).toBe(true);
       expect(f.license).toBeTruthy();
     }
+  });
+  it('the Hebrew pointing model records both licence statements and carries the CC BY credit', () => {
+    const pin = SPEECH_MODELS.flatMap((m) => m.files).find((f) => f.role === 'hebrew-pointing')!;
+    expect(pin.license).toContain('CC BY 4.0');
+    expect(pin.license).toContain('MIT');
+    expect(pin.licenseEvidence).toContain('license: mit');
+    expect(pin.licenseEvidence).toContain('CC BY 4.0');
+    expect(pin.attribution).toBe(PHONIKUD_ATTRIBUTION);
+    expect(pin.attribution).toContain('Phonikud');
+    expect(pin.attribution).toContain('CC BY 4.0');
+    expect(pin.attribution).toContain('https://github.com/thewh1teagle/phonikud');
+    expect(pin.attribution).toContain('Dicta');
   });
 });
 
