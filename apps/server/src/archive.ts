@@ -13,6 +13,8 @@ import path from 'node:path';
 import { LUT_MAX_TEXT_LENGTH, LutError, migrateProject, parseCube, validateProject, type ProjectDocument } from '@pulseframe/core';
 import { ApiError, type Store } from './store.ts';
 import { readerAccess, withoutFamily, type ArchiveFamily } from './peoplePrivacy.ts';
+import type { ArchiveLibraryMode } from '@pulseframe/core';
+import { libraryError } from './library/contract.ts';
 
 export const ARCHIVE_FORMAT = 'pulseframe-archive/1';
 
@@ -78,8 +80,13 @@ export function archiveBlobs(doc: ProjectDocument): string[] {
  *   credential without the people scope may ask for it too, and it is then made from what that credential may read.
  * The manifest says which it is, so an import can tell the owner.
  */
-export function planArchive(store: Store, projectId: string, opts: { family?: ArchiveFamily } = {}) {
+export function planArchive(store: Store, projectId: string, opts: { family?: ArchiveFamily; library?: ArchiveLibraryMode } = {}) {
   const read = store.getProject(projectId), revision = read.revision;
+  // Wave 7 library track (worker B; core libraryCredits.ts archiveLibraryPlan): without `library`, a project holding restricted
+  // library files is refused with archive_needs_library_choice; 'strip' leaves them out and lists them in the manifest; 'keep'
+  // (owner only, checked by the route) keeps everything with mode 'keep'. A project without library files is archived byte for
+  // byte as before either way. Until worker B builds it, asking for either mode answers 501 library_not_built.
+  if (opts.library) throw libraryError('notBuilt');
   const family: ArchiveFamily = opts.family ?? 'keep';
   const doc = family === 'omit' ? withoutFamily(read.doc).doc : read.doc;
   // what the archive says about the people in it: none, names only (made for a credential that reads no birth dates), or all

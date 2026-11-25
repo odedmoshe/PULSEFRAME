@@ -191,6 +191,19 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   'POST /api/v1/jobs/:jobId/heartbeat': ['no-document'],
   'POST /api/v1/jobs/:jobId/complete': ['no-document'],
   'POST /api/v1/jobs/:jobId/abandon': ['no-document'],
+  // the content library on disk (wave 7 library track; library/contract.ts LIBRARY_ROUTES): the catalogue holds no project
+  // document; the folder is the owner's; use reads the document for its dry run and commits; credits read the document
+  'GET /api/v1/library/status': ['no-document'],
+  'PUT /api/v1/library/root': ['owner-only'],
+  'POST /api/v1/library/reindex': ['owner-only'],
+  'DELETE /api/v1/library/reindex': ['owner-only'],
+  'GET /api/v1/library/items': ['no-document'],
+  'GET /api/v1/library/items/:key': ['no-document'],
+  'GET /api/v1/library/items/:key/licence': ['no-document'],
+  'GET /api/v1/library/items/:key/audio': ['no-document'],
+  'GET /api/v1/library/items/:key/thumb': ['no-document'],
+  [`POST ${P}/library/use`]: ['reader-document', 'write'],
+  [`GET ${P}/credits`]: ['reader-document'],
   // MCP over HTTP: see PEOPLE_MCP_TOOLS and PEOPLE_MCP_RESOURCES
   'ALL /mcp': ['reader-document'],
 };
@@ -222,6 +235,8 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   sync_multicam: ['reader-document', 'write'], get_multicam: ['reader-document'],
   // perform mode (ADR-0025)
   perform_take: ['reader-document', 'write'],
+  // the content library (wave 7 library track)
+  use_library_item: ['reader-document', 'write'], get_credits: ['reader-document'],
 };
 /** MCP resources and prompts (every resource answer passes forPrincipal; prompts carry no project content). */
 export const PEOPLE_MCP_RESOURCES: Readonly<Record<string, readonly PeopleFilter[]>> = {
