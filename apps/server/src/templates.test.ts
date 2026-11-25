@@ -9,7 +9,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import * as T from '@pulseframe/time';
-import { clipEnd, creativeProjection, findClip, MODEL_GATED_TEMPLATES, movedOnly, removedByHand, TEMPLATES, validateProject, type Asset, type Clip, type ProjectDocument, type TemplateDef } from '@pulseframe/core';
+import { clipEnd, creativeProjection, findClip, MODEL_GATED_TEMPLATES, movedOnly, planTemplate, removedByHand, TEMPLATES, validateProject, type Asset, type Clip, type ProjectDocument, type TemplateDef } from '@pulseframe/core';
 import { useApplyTemplateDoubleIfStub } from '@pulseframe/core/templatePlan.testDouble.ts';
 import { Auth } from './auth.ts';
 import { Capabilities } from './capabilities.ts';
@@ -48,7 +48,10 @@ const SOUND_DEF: TemplateDef = {
   slots: Array.from({ length: 3 }, (_, i) => ({ key: `clip${i + 1}`, role: words(`Clip ${i + 1}`), accept: 'any' as const, span: { seconds: '1' }, keepAudio: true })),
   slotUse: { mode: 'all', min: 1 }, texts: [], elements: [], sfx: [], adjust: [],
 };
-(TEMPLATES as TemplateDef[]).push(TEST_DEF, SOUND_DEF);
+// TEST TEMPLATE without procedural media (no sound effect, no element), so a run of it can be committed here exactly as a server
+// before run.ranges committed it: the plan's own ops, without recordRanges.
+const OLD_DEF: TemplateDef = { ...TEST_DEF, id: 'tpl.server-test-older', name: words('Server test, older run'), sfx: [] };
+(TEMPLATES as TemplateDef[]).push(TEST_DEF, SOUND_DEF, OLD_DEF);
 
 const USER: Principal = { actor: 'user:owner', kind: 'user', scopes: ['observe', 'edit'] };
 const R = { num: 30, den: 1 };
@@ -602,14 +605,22 @@ describe('regenerate after a ripple delete: a clip that was only moved is made a
     // restoreRemoved: the refusal does not send the caller back to restoreRemoved
     const rs = await regen(s.pid, s.runId, { restoreRemoved: true });
     expect([rs.status, rs.body.error.code, rs.body.error.details.kept.map((k: { key: string }) => k.key)]).toEqual([409, 'template_blocked', ['s3']]);
-    expect(rs.body.error.hint).toBe('Undo the hand edit that moved or trimmed slot(s) s3.');
-    // another tempo with restoreRemoved: the run's tempo is a next step, restoreRemoved is not
+    const RESTORE_HINT = 'Undo the hand edit that moved or trimmed slot(s) s3, or delete that clip as well and regenerate with restoreRemoved: true again so the template makes it again too.';
+    expect(rs.body.error.hint).toBe(RESTORE_HINT);
+    // another tempo with restoreRemoved: the run's tempo is a next step too
     const rt = await regen(s.pid, s.runId, { restoreRemoved: true, params: { tempo: 'half' } });
-    expect([rt.status, rt.body.error.hint]).toEqual([409, 'Regenerate with the run\'s tempo (normal), or undo the hand edit that moved or trimmed slot(s) s3.']);
+    expect([rt.status, rt.body.error.hint]).toEqual([409, `Regenerate with the run's tempo (normal), u${RESTORE_HINT.slice(1)}`]);
     const mt = await tool('regenerate_template', { projectId: s.pid, runId: s.runId, restoreRemoved: true });
-    expect([mt.isError, mt.body.error.code, mt.body.error.hint]).toEqual([true, 'template_blocked', 'Undo the hand edit that moved or trimmed slot(s) s3.']);
+    expect([mt.isError, mt.body.error.code, mt.body.error.hint]).toEqual([true, 'template_blocked', RESTORE_HINT]);
     expect([revision(s.pid), txRows(s.pid)]).toEqual([before, rows]);
     expect(store.getProject(s.pid).doc).toEqual(held);
+    // the second next step is true: with that clip deleted as well (the gap closed again), the same request makes all of them again
+    hand(s.pid, [{ op: 'ripple_delete_clips', args: { clipIds: [s3!] } }]);
+    const both = await regen(s.pid, s.runId, { restoreRemoved: true });
+    expect([both.status, both.body.protected, both.body.removed, both.body.movedBack]).toEqual([200, [], [], ['s4']]);
+    expect(slotFrames(store.getProject(s.pid).doc, s.runId, ['s1', 's2', 's3', 's4'])).toEqual([[0, 30], [30, 60], [60, 90], [90, 120]]);
+    undoLast(s.pid); undoLast(s.pid);
+    expect(store.getProject(s.pid).doc.sequences).toEqual(held.sequences);
     // a picture turned by hand that lies on its slot is kept there, while the shifted ones around it are put back
     undoLast(s.pid);
     hand(s.pid, [{ op: 'set_clip_transform', args: { clipId: slotClip(doc0, s.runId, 's1'), transform: { rotation: 5 } } }, { op: 'ripple_delete_clips', args: { clipIds: [s2!] } }]);
@@ -705,32 +716,137 @@ describe('regenerate after a ripple delete: a clip that was only moved is made a
     expect(findClip(store.getProject(s.pid).doc, mus2)!.clip).toEqual(kept);
   }, 60_000);
 
-  it('a run made before places were recorded (no run.ranges) keeps a moved clip as before: protected, and refused off its slot with the next step', async () => {
-    const s = seed('moved-old-run');
-    // an older log: apply_template without recordRanges, as the server committed it before this rule
-    const pic = (id: string, start: number, bind: string) => ({ op: 'add_clip', args: { assetId: id, start: T.frameTime(start, R), duration: T.frameTime(30, R), sourceIn: T.ZERO, withLinkedAudio: false, ...(bind === 's1' ? {} : { trackId: { $ref: 's1', out: 'trackId' } }) }, bind });
-    const r0 = store.commit({ projectId: s.pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'apply_template', args: {
-      templateId: TEST_DEF.id, templateVersion: 1, params: { media: [s.a, s.b, s.c], musicAssetId: null, at: T.ZERO, tempo: 'normal' }, steps: ['older run'],
-      ops: [pic(s.a, 0, 's1'), pic(s.b, 30, 's2'), pic(s.c, 60, 's3'), pic(s.a, 90, 's4')], slots: ['s1', 's2', 's3', 's4'].map((key) => ({ key, kind: 'picture', clipId: { $ref: key } })),
-    } }] });
-    const runId = r0.results[0]!.output!.runId as string;
+  it('a clip taken to another track at its own time is edited by hand (the run recorded its track): kept there, its key not made again, no frame empty and nothing over it; another tempo is then refused; a title likewise is kept', async () => {
+    const s = await appliedRun('other-track-same-time');
     const doc0 = store.getProject(s.pid).doc;
-    expect(doc0.recipeRuns[runId]).not.toHaveProperty('ranges');
-    hand(s.pid, [{ op: 'ripple_delete_clips', args: { clipIds: [slotClip(doc0, runId, 's2')] } }]);
+    const s3 = slotClip(doc0, s.runId, 's3'), title = slotClip(doc0, s.runId, 'title');
+    const own = findClip(doc0, s3)!.track.id;
+    const added = hand(s.pid, [{ op: 'add_track', args: { kind: 'video' } }, { op: 'add_track', args: { kind: 'text' } }]);
+    const [videoTrack, textTrack] = added.results.map((x) => x.output!.trackId as string);
+    hand(s.pid, [{ op: 'move_clip', args: { clipId: s3, start: T.frameTime(60, R), trackId: videoTrack } }, { op: 'move_clip', args: { clipId: title, start: findClip(doc0, title)!.clip.start, trackId: textTrack } }]);
+    const held = store.getProject(s.pid).doc;
+    // nothing about either clip changed but its track: the fingerprint (which holds no track) still agrees
+    expect(findClip(held, s3)!.clip).toEqual(findClip(doc0, s3)!.clip);
+    const r = await regen(s.pid, s.runId, { params: { order: 'shuffle', seed: 6 } });
+    expect([r.status, [...r.body.protected].sort(), r.body.movedBack]).toEqual([200, [s3, title].sort(), []]);
+    expect(r.body.warnings).toContainEqual(expect.objectContaining({ code: 'kept_by_hand', details: { keys: ['s3', 'title'] } }));
+    let doc = store.getProject(s.pid).doc;
+    expect(validateProject(doc)).toEqual([]);
+    expect([findClip(doc, s3)!.clip, findClip(doc, s3)!.track.id, findClip(doc, title)!.track.id]).toEqual([findClip(held, s3)!.clip, videoTrack, textTrack]);
+    expect([slotClip(doc, s.runId, 's3'), slotClip(doc, s.runId, 'title')]).toEqual([s3, title]);
+    // the picture: the other slots are made again on the run's own track and none of them shares the kept picture's frames, so
+    // the kept clip neither covers a slot picture nor is covered by one, and no frame of the run is without a picture
+    for (const k of ['s1', 's2', 's4']) expect(findClip(doc, slotClip(doc, s.runId, k))!.track.id, k).toBe(own);
+    expect(pictureCoverage(doc, s.runId, [s3])).toMatchObject({ holes: [], covered: [] });
+    expect(mainTracks(doc).find((t) => t.id === own)!.clips.filter((c) => T.lt(c.start, T.frameTime(90, R)) && T.lt(T.frameTime(60, R), clipEnd(c)))).toEqual([]);
+    // the next regeneration still knows (the kept clip keeps the track the run recorded for it)
+    const again = await regen(s.pid, s.runId, {});
+    expect([again.status, [...again.body.protected].sort()]).toEqual([200, [s3, title].sort()]);
+    // template_blocked can follow like for any kept picture: another tempo re-times its slot
     const before = revision(s.pid);
-    const r = await regen(s.pid, runId, { restoreRemoved: true });
-    expect([r.status, r.body.error.code, r.body.error.details.kept.map((k: { key: string }) => k.key), revision(s.pid)]).toEqual([409, 'template_blocked', ['s3', 's4'], before]);
-    expect(r.body.error.hint).toBe('Undo the hand edit that moved or trimmed slot(s) s3, s4.');
-    // Shift+Delete (the gap kept) works on such a run as it did, and from then on the run records its places
+    const t = await regen(s.pid, s.runId, { params: { tempo: 'half' } });
+    expect([t.status, t.body.error.code, t.body.error.details.kept.map((k: { key: string }) => k.key), revision(s.pid)]).toEqual([409, 'template_blocked', ['s3'], before]);
+    doc = store.getProject(s.pid).doc;
+    expect(findClip(doc, s3)!.track.id).toBe(videoTrack);
+  }, 60_000);
+
+  /** A run as a server before run.ranges committed it: the plan's own steps and slots, no recordRanges. */
+  function olderRun(name: string, def: TemplateDef, withMusic: boolean) {
+    const s = seed(name);
+    const plan = planTemplate(store.getProject(s.pid).doc, def, { media: [s.a, s.b, s.c], musicAssetId: withMusic ? s.mus : null });
+    expect([plan.assetsNeeded, plan.blocking]).toEqual([[], []]);
+    const r = store.commit({ projectId: s.pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'apply_template', args: { templateId: def.id, templateVersion: def.version, params: plan.params, steps: plan.steps, ops: plan.ops, slots: plan.slots } }] });
+    const runId = r.results[0]!.output!.runId as string;
+    expect(store.getProject(s.pid).doc.recipeRuns[runId]).not.toHaveProperty('ranges');
+    return { ...s, runId };
+  }
+
+  it('a run made before places were recorded: its places are worked out from its own plan, so after a Delete that closed the gap Shuffle and restoreRemoved work there too (pictures, and a picture with its own sound); exact undo; the new run records its places', async () => {
+    const s = olderRun('older-run', OLD_DEF, true);
+    const doc0 = store.getProject(s.pid).doc;
+    const s2 = slotClip(doc0, s.runId, 's2');
+    expect(slotFrames(doc0, s.runId, ['s1', 's2', 's3', 's4'])).toEqual([[0, 30], [30, 60], [60, 90], [90, 120]]);
+    hand(s.pid, [{ op: 'ripple_delete_clips', args: { clipIds: [s2] } }]);
+    const rippled = store.getProject(s.pid).doc;
+    expect(movedOnly(rippled, rippled.recipeRuns[s.runId]!, rippled.recipeRuns[s.runId]!.createdIds)).toEqual([]); // nothing recorded to compare with
+    const sh = await regen(s.pid, s.runId, { params: { order: 'shuffle', seed: 7 } });
+    expect([sh.status, sh.body.protected, sh.body.removed, sh.body.movedBack]).toEqual([200, [], ['s2'], ['s3', 's4']]);
+    expect(sh.body.notices).toContainEqual(expect.objectContaining({ code: 'moved_back', details: { keys: ['s3', 's4'] } }));
+    let doc = store.getProject(s.pid).doc;
+    expect(validateProject(doc)).toEqual([]);
+    expect(slotFrames(doc, s.runId, ['s1', 's3', 's4'])).toEqual([[0, 30], [60, 90], [90, 120]]);
+    expect(Object.keys(doc.recipeRuns[s.runId]!.ranges ?? {}).length).toBeGreaterThan(0);
     undoLast(s.pid);
-    hand(s.pid, [{ op: 'delete_clip', args: { clipId: slotClip(doc0, runId, 's2') } }]);
-    const ok = await regen(s.pid, runId, { restoreRemoved: true });
-    expect([ok.status, ok.body.movedBack]).toEqual([200, []]);
-    const doc = store.getProject(s.pid).doc;
-    expect(Object.keys(doc.recipeRuns[runId]!.ranges ?? {}).length).toBeGreaterThan(0);
-    hand(s.pid, [{ op: 'ripple_delete_clips', args: { clipIds: [slotClip(doc, runId, 's2')] } }]);
-    const now = await regen(s.pid, runId, { restoreRemoved: true });
-    expect([now.status, now.body.movedBack]).toEqual([200, ['s3', 's4']]);
+    expect(creativeProjection(store.getProject(s.pid).doc)).toBe(creativeProjection(rippled));
+    expect(store.getProject(s.pid).doc.recipeRuns[s.runId]).not.toHaveProperty('ranges');
+    // the button at once, on the older run
+    const rs = await regen(s.pid, s.runId, { restoreRemoved: true });
+    expect([rs.status, rs.body.protected, rs.body.removed, rs.body.movedBack]).toEqual([200, [], [], ['s3', 's4']]);
+    doc = store.getProject(s.pid).doc;
+    expect(slotFrames(doc, s.runId, ['s1', 's2', 's3', 's4'])).toEqual([[0, 30], [30, 60], [60, 90], [90, 120]]);
+    expect(pictureCoverage(doc, s.runId).holes).toEqual([]);
+    expect(JSON.stringify(store.replay(s.pid, revision(s.pid)).doc)).toBe(JSON.stringify(doc));
+    undoLast(s.pid); undoLast(s.pid);
+    expect(creativeProjection(store.getProject(s.pid).doc)).toBe(creativeProjection(doc0));
+    // a picture with its own sound: the sound's place is its picture's, so the pair is made again together
+    const h = olderRun('older-run-sound', SOUND_DEF, false);
+    const hd = store.getProject(h.pid).doc;
+    const [c1, c2] = ['clip1', 'clip2'].map((k) => slotClip(hd, h.runId, k));
+    const sound2 = partners(hd, c2!)[0]!.id;
+    hand(h.pid, [{ op: 'ripple_delete_clips', args: { clipIds: [c1!] } }]);
+    const hr = await regen(h.pid, h.runId, { restoreRemoved: true });
+    expect([hr.status, hr.body.protected, hr.body.movedBack]).toEqual([200, [], ['clip2', 'clip3']]);
+    doc = store.getProject(h.pid).doc;
+    expect([findClip(doc, c2!), findClip(doc, sound2)]).toEqual([undefined, undefined]);
+    expect(slotFrames(doc, h.runId, ['clip1', 'clip2', 'clip3'])).toEqual([[0, 30], [30, 60], [60, 90]]);
+    for (const key of ['clip1', 'clip2', 'clip3']) { const c = findClip(doc, slotClip(doc, h.runId, key))!.clip; expect([partners(doc, c.id).length, soundsAt(doc, c.start).length], key).toEqual([1, 1]); }
+  }, 60_000);
+
+  it('an older run: what the plan does not place on a named track is not covered (a moved title stays kept, as before); moved and trimmed, or taken to another track, stays kept and refused; a picture taken to another track at its own time is replaced, as before', async () => {
+    const s = olderRun('older-run-kept', OLD_DEF, true);
+    const doc0 = store.getProject(s.pid).doc;
+    const title = slotClip(doc0, s.runId, 'title'), s2 = slotClip(doc0, s.runId, 's2'), s3 = slotClip(doc0, s.runId, 's3'), s4 = slotClip(doc0, s.runId, 's4');
+    const videoTrack = hand(s.pid, [{ op: 'add_track', args: { kind: 'video' } }]).results[0]!.output!.trackId as string;
+    // the title moved along its own track: an older run cannot tell (add_text chooses the track), so it is kept where it is
+    hand(s.pid, [{ op: 'move_clip', args: { clipId: title, start: T.frameTime(15, R) } }]);
+    const t = await regen(s.pid, s.runId, {});
+    expect([t.status, t.body.protected, t.body.movedBack]).toEqual([200, [title], []]);
+    undoLast(s.pid); undoLast(s.pid);
+    // a picture taken to another track at its own time: no track was recorded, so it is untouched for this run and replaced
+    hand(s.pid, [{ op: 'move_clip', args: { clipId: s4, start: T.frameTime(90, R), trackId: videoTrack } }]);
+    const same = await regen(s.pid, s.runId, {});
+    expect([same.status, same.body.protected, findClip(store.getProject(s.pid).doc, s4)]).toEqual([200, [], undefined]);
+    undoLast(s.pid); undoLast(s.pid);
+    // moved by the delete AND trimmed: edited; taken to another track and time: on another track than its plan gives it
+    hand(s.pid, [{ op: 'ripple_delete_clips', args: { clipIds: [s2] } }, { op: 'trim_clip', args: { clipId: s3, edge: 'end', to: T.frameTime(50, R) } }, { op: 'move_clip', args: { clipId: s4, start: T.frameTime(150, R), trackId: videoTrack } }]);
+    const before = revision(s.pid);
+    const r = await regen(s.pid, s.runId, { restoreRemoved: true });
+    expect([r.status, r.body.error.code, r.body.error.details.kept.map((k: { key: string }) => k.key), revision(s.pid)]).toEqual([409, 'template_blocked', ['s3', 's4'], before]);
+    expect(r.body.error.hint).toBe('Undo the hand edit that moved or trimmed slot(s) s3, s4, or delete that clip as well and regenerate with restoreRemoved: true again so the template makes it again too.');
+  }, 60_000);
+
+  it('an older run whose plan cannot be made as it was (the template changed since): a clip that was only moved still counts as edited, refused as before, and the hint says why; nothing changes', async () => {
+    const s = olderRun('older-run-changed', OLD_DEF, true);
+    const doc0 = store.getProject(s.pid).doc;
+    hand(s.pid, [{ op: 'ripple_delete_clips', args: { clipIds: [slotClip(doc0, s.runId, 's2')] } }]);
+    const before = revision(s.pid), held = store.getProject(s.pid).doc;
+    (OLD_DEF as { version: number }).version = 2; // the catalogue's template is a newer version than the run's
+    try {
+      const r = await regen(s.pid, s.runId, { restoreRemoved: true });
+      expect([r.status, r.body.error.code, r.body.error.details.kept.map((k: { key: string }) => k.key)]).toEqual([409, 'template_blocked', ['s3', 's4']]);
+      expect(r.body.error.details.placesUnknown).toBe('the template has changed since (the run is of version 1, the template is version 2 now)');
+      expect(r.body.error.hint).toBe('Undo the hand edit that moved or trimmed slot(s) s3, s4, or delete that clip as well and regenerate with restoreRemoved: true again so the template makes it again too. This run was made before places were recorded, and where it placed its clips cannot be worked out again: the template has changed since (the run is of version 1, the template is version 2 now). So a clip that was only moved counts as edited.');
+      expect([revision(s.pid), store.getProject(s.pid).doc]).toEqual([before, held]);
+      // Shift+Delete (the gap kept) still works on such a run, and from then on the run records its places
+      undoLast(s.pid);
+      hand(s.pid, [{ op: 'delete_clip', args: { clipId: slotClip(doc0, s.runId, 's2') } }]);
+      const ok = await regen(s.pid, s.runId, { restoreRemoved: true });
+      expect([ok.status, ok.body.movedBack]).toEqual([200, []]);
+      const doc = store.getProject(s.pid).doc;
+      hand(s.pid, [{ op: 'ripple_delete_clips', args: { clipIds: [slotClip(doc, s.runId, 's2')] } }]);
+      const now = await regen(s.pid, s.runId, { restoreRemoved: true });
+      expect([now.status, now.body.movedBack]).toEqual([200, ['s3', 's4']]);
+    } finally { (OLD_DEF as { version: number }).version = 1; }
   }, 60_000);
 });
 
@@ -742,15 +858,25 @@ describe('regenerate after a ripple delete: a clip that was only moved is made a
  */
 describe('regenerate after hand edits, ripple deletes among them (property, seeded)', () => {
   it('one exact, undoable revision or a refusal that changes nothing; only-moved clips never block and are never kept', async () => {
-    const tally = { runs: 0, ok: 0, movedBack: 0, blocked: 0, nothing: 0, ripples: 0, pureRuns: 0 };
+    const tally = { runs: 0, ok: 0, movedBack: 0, blocked: 0, nothing: 0, ripples: 0, pureRuns: 0, olderRuns: 0, olderMovedBack: 0 };
     let project = 0;
     await fc.assert(
-      fc.asyncProperty(fc.boolean(), fc.array(fc.tuple(fc.nat(6), fc.nat(20), fc.nat(60)), { minLength: 1, maxLength: 4 }), fc.nat(3), async (sound, edits, ask) => {
-        const def = sound ? SOUND_DEF : TEST_DEF;
+      fc.asyncProperty(fc.boolean(), fc.array(fc.tuple(fc.nat(6), fc.nat(20), fc.nat(60)), { minLength: 1, maxLength: 4 }), fc.nat(3), fc.nat(2), async (sound, edits, ask, age) => {
+        // one run in three is an older one: committed as a server before run.ranges did, so its places are worked out from its plan
+        const older = age === 0;
+        const def = sound ? SOUND_DEF : older ? OLD_DEF : TEST_DEF;
         const s = seed(`prop-${project++}`);
-        const applied = await rest('POST', `/projects/${s.pid}/templates/${def.id}/apply`, { params: { media: [s.a, s.b, s.c], musicAssetId: sound ? null : s.mus } });
-        if (applied.status !== 200) throw new Error(`apply ${applied.status}`);
-        const runId = applied.body.runId as string;
+        const params = { media: [s.a, s.b, s.c], musicAssetId: sound ? null : s.mus };
+        let runId: string;
+        if (older) {
+          const plan = planTemplate(store.getProject(s.pid).doc, def, params);
+          runId = store.commit({ projectId: s.pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'apply_template', args: { templateId: def.id, templateVersion: def.version, params: plan.params, steps: plan.steps, ops: plan.ops, slots: plan.slots } }] }).results[0]!.output!.runId as string;
+          tally.olderRuns++;
+        } else {
+          const applied = await rest('POST', `/projects/${s.pid}/templates/${def.id}/apply`, { params });
+          if (applied.status !== 200) throw new Error(`apply ${applied.status}`);
+          runId = applied.body.runId as string;
+        }
         const other = store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'add_track', args: { kind: 'video' } }] }).results[0]!.output!.trackId as string;
         let pure = true; // only deletes that close the gap and moves along a clip's own track so far
         for (const [kind, pick, amount] of edits) {
@@ -788,7 +914,8 @@ describe('regenerate after hand edits, ripple deletes among them (property, seed
           if (r.body.error.code === 'template_blocked') {
             tally.blocked++;
             if (pure) throw new Error(`blocked although nothing but places changed: ${r.body.error.message}`);
-            if (typeof r.body.error.hint !== 'string' || (body.restoreRemoved && /restoreRemoved/.test(r.body.error.hint))) throw new Error(`the hint repeats the request: ${r.body.error.hint}`);
+            // the hint never proposes the request just refused: a restore request is told to delete that clip as well first
+            if (typeof r.body.error.hint !== 'string' || (body.restoreRemoved && !/delete that clip as well and regenerate with restoreRemoved: true again/.test(r.body.error.hint)) || /places were recorded/.test(r.body.error.hint)) throw new Error(`the hint repeats the request: ${r.body.error.hint}`);
           } else tally.nothing++;
           return true;
         }
@@ -804,7 +931,7 @@ describe('regenerate after hand edits, ripple deletes among them (property, seed
           if (kept && !(r.body.protected as string[]).some((x) => x !== id && !onlyMoved.includes(x) && !!group(id) && group(x) === group(id))) throw new Error(`only-moved clip ${id} was kept on its own`);
           if (!kept && findClip(doc, id)) throw new Error(`only-moved clip ${id} was neither kept nor replaced`);
         }
-        if ((r.body.movedBack as string[]).length) tally.movedBack++;
+        if ((r.body.movedBack as string[]).length) { tally.movedBack++; if (older) tally.olderMovedBack++; }
         if ((r.body.movedBack as string[]).length !== ((r.body.notices as { code: string; details: { keys: string[] } }[]).find((x) => x.code === 'moved_back')?.details.keys.length ?? 0)) throw new Error('movedBack and the notice disagree');
         if (JSON.stringify(store.replay(s.pid, revision(s.pid)).doc) !== JSON.stringify(doc)) throw new Error('replay differs');
         const row = store.db.prepare("SELECT actor FROM transactions WHERE project_id = ? AND kind = 'edit' AND undone_by IS NULL ORDER BY revision DESC LIMIT 1").get(s.pid) as { actor: string };
@@ -819,6 +946,7 @@ describe('regenerate after hand edits, ripple deletes among them (property, seed
     expect(tally.ripples).toBeGreaterThan(5);
     expect(tally.movedBack).toBeGreaterThan(3);
     expect(tally.pureRuns).toBeGreaterThan(3);
+    expect(tally.olderMovedBack).toBeGreaterThan(0);
     expect(tally.ok + tally.blocked + tally.nothing).toBe(tally.runs);
   }, 600_000);
 });

@@ -148,6 +148,7 @@ const he: FamilyFilmStrings = {
       case 'cuts_merged': return 'חלק מהחיתוכים אוחדו כדי שלא יהיו חיתוכים צפופים מדי (בטיחות להבהובים)';
       case 'kept_by_hand': return 'קליפים שערכתם ידנית נשארו במקומם';
       case 'cut_off_grid_next_to_kept': return 'ליד קליפ שנערך ידנית החיתוך אינו נופל על הפעימה';
+      case 'moved_back': return 'קליפים שזזו בגלל מחיקה לא נשארו במקום שאליו זזו: הסרט סודר מחדש יחד איתם';
       case 'title_resolved_static': return 'הכותרת קבועה, ולא תתעדכן לפי תאריך הצילום';
       case 'kept_music_not_followable': return 'המוזיקה שכבר בפרויקט נשארה, והחיתוכים אינם עוקבים אחרי הפעימות שלה';
       case 'lead_music_rises': return 'במצב «הקולות מובילים» המוזיקה מורדת ב־9 dB בזמן שיש קול בקליפ, ולכן היא עולה מעל תמונות וקליפים שקטים';
@@ -241,6 +242,7 @@ const en: FamilyFilmStrings = {
       case 'cuts_merged': return 'Some cuts were merged so none are too close together (flash safety)';
       case 'kept_by_hand': return 'Clips you edited by hand were kept where they are';
       case 'cut_off_grid_next_to_kept': return 'Next to a clip edited by hand the cut does not land on the beat';
+      case 'moved_back': return 'Clips that a delete had moved were not kept where they ended up: the film was laid out again with them';
       case 'title_resolved_static': return 'The title is fixed and will not update from the capture date';
       case 'kept_music_not_followable': return 'The music already in the project was kept, and the cuts do not follow its beats';
       case 'lead_music_rises': return 'In "Voices lead" the music is lowered 9 dB while a clip has sound, so it rises over pictures and silent clips';

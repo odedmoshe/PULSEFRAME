@@ -184,8 +184,10 @@ async function main() {
       const resultText = async () => ((await resultEl.textContent().catch(() => null)) ?? '').replace(/\s+/g, ' ').trim();
       // the result line of the regeneration undone above is still shown: it names nothing removed, and the button is not offered
       const offeredBefore = await restoreBtn.count();
-      // Observed first, not judged beyond exact undo: Delete as a new project has it closes the gap, so the later clips move earlier
-      // and count as edited by hand. What the regeneration and the button then do is recorded in the detail (`withDefaultDelete`).
+      // Delete as a new project has it closes the gap, so the later clips move earlier, by exactly the deleted clip's length. That
+      // is not an edit by hand (ADR-0016 decision 6, amendment of 2026-11-24): the regeneration places them again on the beat,
+      // leaves the deleted clip's place empty and says both; the button fills the place. Judged in its own check below
+      // (`withDefaultDelete`). A clip dragged by hand is another matter: it stays kept (the check after it).
       const revA = (await get(ep)).revision;
       await page.locator(`.clip[data-clip-id="${gone.id}"]`).click();
       await page.keyboard.press('Delete');
@@ -194,18 +196,58 @@ async function main() {
       await runEl.getByTestId('recipe-regenerate').click();
       await waitRev(revA + 2, 20000);
       await sleep(500);
-      const obs: Record<string, unknown> = { deleteOps: rippleOps, afterRegenerate: { said: await resultText(), offered: await restoreBtn.count(), error: await page.getByTestId('recipe-error').textContent().catch(() => null), pictures: vclips((await get(ep)).project).length } };
+      // the montage's extent before the delete, and the frames of it that show no picture (the panel regenerates with the cut rate
+      // its form holds now, so the clips are counted by the frames they cover, not one by one)
+      const [ext0, ext1] = [fr(pics0[0].start), Math.max(...pics0.map((c: any) => fr(c.start) + fr(c.duration)))];
+      const holes = (d: any) => { const sp = vclips(d).map((c: any) => [fr(c.start), fr(c.start) + fr(c.duration)]); let n = 0; for (let x = ext0; x < ext1; x++) if (!sp.some(([a, b]: number[]) => a! <= x && x < b!)) n++; return n; };
+      const movedIds = pics0.filter((c: any) => fr(c.start) >= to).map((c: any) => c.id as string);
+      const movedN = movedIds.length;
+      const dR = (await get(ep)).project;
+      const obs: Record<string, unknown> = { deleteOps: rippleOps, moved: movedN, deletedFrames: to - from, afterRegenerate: { said: await resultText(), offered: await restoreBtn.count(), error: await page.getByTestId('recipe-error').textContent().catch(() => null), pictures: vclips(dR).length, over: over(dR), holes: holes(dR), movedStillThere: vclips(dR).filter((c: any) => movedIds.includes(c.id)).length, kept: vclips(dR).some((c: any) => c.id === first.id && c.effects?.[0]?.type === 'color.sepia') } };
       if (await restoreBtn.count()) {
         const revB = (await get(ep)).revision;
         await restoreBtn.click();
         await waitRev(revB + 1, 20000);
         await sleep(500);
-        obs.afterButton = { said: await resultText(), offered: await restoreBtn.count(), error: await page.getByTestId('recipe-error').textContent().catch(() => null), pictures: vclips((await get(ep)).project).length, revisions: (await get(ep)).revision - revB };
+        const dB = (await get(ep)).project;
+        obs.afterButton = { said: await resultText(), offered: await restoreBtn.count(), error: await page.getByTestId('recipe-error').textContent().catch(() => null), pictures: vclips(dB).length, revisions: (await get(ep)).revision - revB, holes: holes(dB) };
       }
       let observedUndone = false;
       for (let n = (await get(ep)).revision - revA; n > 0; n--) { await page.keyboard.press('Control+z'); await sleep(500); }
       for (let i = 0; i < 100 && !observedUndone; i++) { observedUndone = shape((await get(ep)).project) === shape0; if (!observedUndone) await sleep(100); }
       obs.undoneExactly = observedUndone;
+      {
+        const ar = obs.afterRegenerate as { said: string; offered: number; error: string | null; pictures: number; over: number; holes: number; movedStillThere: number; kept: boolean };
+        const ab = (obs.afterButton ?? {}) as { said?: string; offered?: number; error?: string | null; revisions?: number; holes?: number };
+        check('editor: a montage clip deleted with Delete (the gap closes, the later clips move earlier): regenerate does not keep the moved clips one segment early but places clips again up to the montage\'s end, leaving exactly the deleted clip\'s frames empty, and says both in Hebrew («חזרו לפעימות אחרי שזזו בגלל מחיקה: N», «נשארו ריקים כי נמחקו ידנית: 1»); «החזרת החלקים שנמחקו» then fills the place (1 revision, no frame empty); the hand-edited clip is kept; undo returns exactly',
+          JSON.stringify(rippleOps) === '[["ripple_delete_clips"]]' && movedN > 0 && ar.error === null && ar.over === 0 && ar.holes === to - from && ar.movedStillThere === 0 && ar.kept && ar.offered === 1 && ar.said.includes(`${he['recipes.movedBack']}: ${movedN}`) && he['recipes.movedBack'] === 'חזרו לפעימות אחרי שזזו בגלל מחיקה' && ar.said.includes(`${he['recipes.removed']}: 1`) && ar.said.includes(`${he['recipes.kept']}: 1`)
+            && ab.revisions === 1 && ab.error === null && ab.offered === 0 && ab.holes === 0 && !(ab.said ?? '').includes(he['recipes.removed']!) && observedUndone,
+          obs);
+      }
+      // a clip dragged by hand (the last one, half a second later; nothing else about it changed) is the person's arrangement:
+      // regenerate keeps it where it was put and counts it among the clips kept by hand, and says nothing about a delete
+      {
+        const lastClip = pics0.at(-1);
+        const revD = (await get(ep)).revision;
+        const dragTo = T.frameTime(fr(lastClip.start) + 15, R);
+        const drag = await call(`/projects/${ep}/transactions`, { ops: [{ op: 'move_clip', args: { clipId: lastClip.id, start: dragTo } }] });
+        await waitRev(revD + 1);
+        await runEl.getByTestId('recipe-regenerate').click();
+        await waitRev(revD + 2, 20000);
+        await page.waitForFunction((want) => (document.querySelector('[data-testid=recipe-regenerate-result]')?.textContent ?? '').includes(want), `${he['recipes.kept']}: 2`, { timeout: 20000 }).catch(() => {});
+        const dD = (await get(ep)).project;
+        const still = vclips(dD).find((c: any) => c.id === lastClip.id);
+        const saidD = await resultText();
+        // back: the regeneration is the person's step in the editor (Ctrl+Z), the drag was sent with the agent's credential (its own undo)
+        await page.keyboard.press('Control+z');
+        await waitRev(revD + 3, 20000);
+        const undoDrag = await call(`/projects/${ep}/undo`, {});
+        let dragUndone: boolean = false;
+        for (let i = 0; i < 100 && !dragUndone; i++) { dragUndone = shape((await get(ep)).project) === shape0; if (!dragUndone) await sleep(100); }
+        check('editor: a montage clip dragged by hand, with nothing else changed, stays where it was put after regenerate and is counted among «נשארו כי נערכו ידנית» (2 with the clip that carries an effect); nothing is said about a delete; undo returns exactly',
+          drag.status === 200 && undoDrag.status === 200 && !!still && fr(still.start) === fr(lastClip.start) + 15 && saidD.includes(`${he['recipes.kept']}: 2`) && !saidD.includes(he['recipes.movedBack']!) && !saidD.includes(he['recipes.removed']!) && dragUndone && errors.length === 0,
+          { dragStatus: drag.status, draggedTo: still ? fr(still.start) : null, said: saidD, undoDrag: undoDrag.status, dragUndone });
+      }
       const rev0 = (await get(ep)).revision;
       await page.locator(`.clip[data-clip-id="${gone.id}"]`).click();
       await page.keyboard.press('Shift+Delete'); // the gap is kept: nothing else moves

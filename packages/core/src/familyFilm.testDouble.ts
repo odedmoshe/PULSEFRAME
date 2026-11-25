@@ -4,15 +4,16 @@
  * analyses (as the beat measurement would). Nothing here is a measurement and nothing here stands in for a provider.
  *
  * `regenerateFilm` repeats, in a few lines, what the server does on regeneration (apps/server/src/familyFilm.ts
- * filmRegeneration: kept by content fingerprint plus link partners, the document without the rest, the planner's context and
- * the apply_template arguments), so the core tests can apply a regeneration through the REAL apply_template op. What was deleted by
+ * filmRegeneration: kept by content fingerprint plus link partners, except a clip that a delete which closed the gap moved
+ * (core closedGapOnly; the run records its places), the document without the rest, the planner's context and the apply_template
+ * arguments), so the core tests can apply a regeneration through the REAL apply_template op. What was deleted by
  * hand (slot records, the picks' windows, the mix and the cut the run left) comes from core filmRegenerationRemoved, which the
  * server uses too, and the run params are recorded by core filmRunRecordParams, as the server records them. The server's own code
  * is tested in apps/server.
  */
 import * as T from '@pulseframe/time';
 import {
-  applyTransaction, clipEnd, createProject, findClip, fingerprint, FAMILY_FILM_TEMPLATE_ID, FAMILY_FILM_VERSION, filmRunParams, filmRunRecordParams, MOMENTS_ALGO, MOMENTS_METHOD,
+  applyTransaction, clipEnd, closedGapOnly, createProject, findClip, fingerprint, onOtherTrack, FAMILY_FILM_TEMPLATE_ID, FAMILY_FILM_VERSION, filmRunParams, filmRunRecordParams, MOMENTS_ALGO, MOMENTS_METHOD,
   type Asset, type FamilyFilmPlan, type FilmKeptClip, type FilmPlanContext, type FilmRemovedPick, type MomentsItem, type MomentWindow, type ProjectDocument, type RecipeRun, type SlotRecord,
 } from './index.ts';
 import { filmRegenerationRemoved, planFamilyFilm } from './familyFilm.ts';
@@ -73,7 +74,7 @@ export const emptyCtx = (capture: Record<string, string | null> = {}): FilmPlanC
 
 /** Apply a plan as the server does: ONE apply_template with params.picked (a regeneration adds runId and the keep lists). */
 export function applyFilm(doc: ProjectDocument, plan: FamilyFilmPlan, extra: Record<string, unknown> = {}, seed = 'film_', removedPicks: readonly FilmRemovedPick[] = []) {
-  return applyTransaction(doc, [{ op: 'apply_template', args: { templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: FAMILY_FILM_VERSION, params: filmRunRecordParams(plan, removedPicks), steps: plan.steps, ops: plan.ops, slots: plan.slots, ...extra } }], { idSeed: seed, actor: 'test', allowInternal: true });
+  return applyTransaction(doc, [{ op: 'apply_template', args: { templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: FAMILY_FILM_VERSION, params: filmRunRecordParams(plan, removedPicks), steps: plan.steps, ops: plan.ops, slots: plan.slots, recordRanges: true, ...extra } }], { idSeed: seed, actor: 'test', allowInternal: true });
 }
 export const runOf = (doc: ProjectDocument, runId: string): RecipeRun => doc.recipeRuns[runId]!;
 
@@ -82,7 +83,10 @@ export function regenerationPlan(doc: ProjectDocument, runId: string, newParams:
   const run = runOf(doc, runId);
   const rate = doc.settings.frameRate;
   const live = run.createdIds.filter((id) => !!findClip(doc, id));
-  const edited = live.filter((id) => fingerprint(findClip(doc, id)!.clip) !== run.fingerprints[id]);
+  // as the server's runHandEdits with the film's rule: a clip a gap-closing delete moved is not edited (closedGapOnly); one taken
+  // to another track than recorded is (onOtherTrack)
+  const closed = closedGapOnly(doc, run, live), elsewhere = onOtherTrack(doc, run, live);
+  const edited = live.filter((id) => elsewhere.includes(id) || (fingerprint(findClip(doc, id)!.clip) !== run.fingerprints[id] && !closed.includes(id)));
   const groups = new Set(edited.flatMap((id) => { const c = findClip(doc, id)!.clip; return c.type === 'media' && c.linkGroupId ? [c.linkGroupId] : []; }));
   const protectedIds = live.filter((id) => { const c = findClip(doc, id)!.clip; return edited.includes(id) || (c.type === 'media' && !!c.linkGroupId && groups.has(c.linkGroupId)); });
   const removable = live.filter((id) => !protectedIds.includes(id));

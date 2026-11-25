@@ -23,7 +23,7 @@ export const FILM_TESTIDS = {
   excludedToggle: 'film-excluded-toggle', excluded: 'film-excluded', include: 'film-include', warning: 'film-warning',
   footer: 'film-footer', apply: 'film-apply', error: 'film-error', retry: 'film-retry',
   // after apply: the film bar and its actions; the inspector section of a film clip and its two swaps
-  bar: 'film-bar', barUndo: 'film-bar-undo', barMoments: 'film-bar-moments', barLength: 'film-bar-length', barWhy: 'film-bar-why', barRestore: 'film-bar-restore-removed', barWhyList: 'film-bar-why-list',
+  bar: 'film-bar', barUndo: 'film-bar-undo', barMoments: 'film-bar-moments', barLength: 'film-bar-length', barWhy: 'film-bar-why', barRestore: 'film-bar-restore-removed', barWhyList: 'film-bar-why-list', barNote: 'film-bar-note',
   why: 'film-why', whyReason: 'film-why-reason', whyEdited: 'film-why-edited', whyWindow: 'film-why-window', whyClip: 'film-why-clip', whyMeasure: 'film-why-measure',
 } as const;
 export type FilmTestId = (typeof FILM_TESTIDS)[keyof typeof FILM_TESTIDS];

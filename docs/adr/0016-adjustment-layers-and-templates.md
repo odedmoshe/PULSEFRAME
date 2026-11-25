@@ -71,35 +71,84 @@ Status: **accepted** (2026-11-17) for wave 1. Built by three workers on shared c
      carried on (`keepRanges`). The multicam auto-switch regenerates in place and `switch_angles` skips gaps, so a deleted
      segment was already never refilled; a test holds it. All of it travels in the op's arguments, so replay is unchanged and
      byte-identical.
-   - *Amendment (2026-11-24): what "edited by hand" means.* A clip a template run made whose ONLY change since the run is its
-     place in time on its own track is not edited by hand. It is treated like an untouched clip: replaced, and made again on its
-     slot. Reason: a new project closes the gap on Delete (ripple delete), which moves every later picture of the template
-     earlier; those clips then differed from their fingerprints (the start is part of it), were kept, no longer lay on their
-     slots, and so Shuffle and «החזרת החלקים שנמחקו» were both refused with `template_blocked`. Such a clip can never be honoured
-     where it lies (template slots are timed to the music), and nothing a person authored in it is lost. The test is `movedOnly`
-     (templateOps.ts), per clip: the run recorded where it placed the clip; the clip is on the track recorded there; its start
-     differs from the recorded start; and its fingerprint with the recorded start put back equals the run's fingerprint, so its
-     length, source range, speed, transform, keyframes, effects, sound, link, text and style are all unchanged. It applies to
-     every clip kind of the run (pictures, a slot's own sound, titles, music, looks, elements, sound effects). A link group is
-     replaced only when no clip in it has another change: `keptByHand` leaves a moved-only clip out of "edited", and still keeps
-     it when a clip linked to it was edited. Everything else is protected exactly as before: a clip trimmed, re-sourced, restyled
-     or changed in any other way is kept by fingerprint, and a kept picture off its slot is still refused; a clip taken to
-     another track is kept as well, since that is an arrangement made by hand (taken to another track at its own time it has the
-     run's fingerprint and is replaced, as it always was). The fingerprint alone cannot tell this, because it holds neither the
-     old start nor the track, so the run now records them: `apply_template` takes the optional `recordRanges` and writes
-     `run.ranges` (`{start, end, trackId}` per live clip; `trackId` is a new optional field of the range). A clip kept on
-     regeneration keeps the entry of the earlier run, as it keeps that run's fingerprint. Additive, no schema version bump; a log
-     without the argument replays to the same document as before. A run made before this (no `run.ranges`) names no moved-only
-     clip and behaves as before, until its first successful regeneration records the places. The answer says what was done:
-     notice `moved_back` with the slot keys (a slot's own sound under its picture's key), the same keys in `movedBack` of the
-     regenerate result, Hebrew and English in i18n `template.notice.moved_back` and in the bar («… פריטים שרק זזו ממקומם חזרו
-     למקומם בתבנית»). The hint of `template_blocked` no longer proposes what was just asked: the run's tempo is offered only to a
-     request for another tempo, and "delete that clip and regenerate with restoreRemoved" only to a request without
-     `restoreRemoved`. Undo: the regeneration is one `apply_template` transaction, so after Delete and the button two undo steps
-     return exactly (the regeneration, then the delete). The family film and the beat montage do not take this rule and are not
-     refused: both keep a moved clip where it lies and lay the new clips around it (the film closes up behind the kept picks and
-     places a restored file after them; the montage keeps the shifted clips on the beat one segment earlier and fills the freed
-     last segment). In a film the order of the picks is the person's to arrange, so a moved pick stays an edit there.
+   - *Amendment (2026-11-24): what "edited by hand" means.* A clip a template run made whose ONLY change since the run is its place in
+     time on its own track is not edited by hand. It is treated like an untouched clip: replaced, and made again on its place.
+     Reason: a new project closes the gap on Delete (ripple delete), which moves every later picture earlier; those clips then
+     differed from their fingerprints (the start is part of it), were kept, no longer lay on their slots, and so Shuffle and
+     «החזרת החלקים שנמחקו» were both refused with `template_blocked`. Such a clip can never be honoured where it lies (template
+     slots are timed to the music), and nothing a person authored in it is lost.
+
+     The test is `movedOnly` (templateOps.ts), per clip: the run recorded where it placed the clip; the clip is on the track
+     recorded there; its start differs from the recorded start; and its fingerprint with the recorded start put back equals the
+     run's fingerprint, so its length, source range, speed, transform, keyframes, effects, sound, link, text and style are all
+     unchanged. It applies to every clip kind of the run (pictures, a slot's own sound, titles, music, looks, elements, sound
+     effects). A link group is replaced only when no clip in it has another change: `keptByHand` leaves a moved-only clip out of
+     "edited", and still keeps it when a clip linked to it was edited. Everything else is protected exactly as before: a clip
+     trimmed, re-sourced, restyled or changed in any other way is kept by fingerprint, and a kept picture off its slot is still
+     refused.
+
+     The fingerprint alone cannot tell a move, because it holds neither the old start nor the track, so the run records them:
+     `apply_template` takes the optional `recordRanges` and writes `run.ranges` (`{start, end, trackId}` per live clip; `trackId`
+     is a new optional field of the range). A clip kept on regeneration keeps the entry of the earlier run, as it keeps that
+     run's fingerprint. Additive, no schema version bump; a log without the argument replays to the same document as before.
+
+     *Another track.* A clip on another track than the run recorded for it is edited by hand and kept (`onOtherTrack`), whether
+     or not its time changed too: taking a clip to another track is an arrangement made by hand. Its key is not made again. For a
+     picture taken to another track at its own time this gives: the other slots are made again on the run's own track, none of
+     them shares the kept picture's frames, so it neither covers a slot picture nor is covered by one and no frame is without a
+     picture; `template_blocked` follows only as for any kept picture (another tempo re-times its slot). Only a run that recorded
+     tracks can tell; in an older run such a clip has the run's fingerprint and is replaced, as it always was.
+
+     *Runs made before places were recorded.* Their places are worked out again (`derivedRanges`): the run's OWN stored
+     parameters are planned once more on the document without the run's clips, and each slot's making step gives its clip a
+     start, and a track when the step names an existing one. A clip counts as moved only when its fingerprint with that start
+     equals the run's and it is on that track, so a plan that comes out differently never puts a clip back wrongly; it only finds
+     nothing. Covered: the pictures of a template and of a film, a picture's own sound (it gets its picture's start; its track
+     cannot be checked), a film's music, a template's graphic elements. Not covered, because the operation chooses their track:
+     titles, looks, sound effects and a template's music; moved in an older run they stay kept, which never refuses anything.
+     When the plan cannot be made as it was (the template's version changed since, or the planner refuses now), a moved clip
+     counts as edited as before, and the hint of the refusal says so (`details.placesUnknown`). The first successful regeneration
+     records the places.
+
+     *The answer says what was done:* notice `moved_back` with the slot keys (a slot's own sound under its picture's key), the
+     same keys in `movedBack` of the regenerate result, Hebrew and English in i18n `template.notice.moved_back` and in the bar
+     («… פריטים שרק זזו ממקומם חזרו למקומם בתבנית»). The hint of `template_blocked` never proposes the request just refused: the
+     run's tempo is offered only to a request for another tempo; a request that already had `restoreRemoved` is told to undo the
+     edit, or to delete that clip as well and ask again (which then makes it again with the others). Undo: the regeneration is
+     one `apply_template` transaction, so after Delete and the button two undo steps return exactly (the regeneration, then the
+     delete).
+
+     *The family film and the beat montage take a narrower rule, and why the two differ.* A template takes every pure move in
+     time (the broad rule above): its slots are timed to the music, so a moved clip could never be honoured where it lies, and
+     making it again on its slot loses nothing. In a film or a montage a clip dragged to another place IS honoured: it is kept
+     and the rest is laid around it (the film's F13 R1 and R3; the montage's "left alone because they hold clips edited by
+     hand"), and people arrange a film that way. So there only a move that a delete which closed the gap explains is not an edit
+     by hand (`closedGapOnly`, templateOps.ts): besides the conditions of `movedOnly`, the clip's start must be EARLIER than
+     recorded by exactly the summed length of the run's own clips that are gone from the document and whose recorded range lay
+     before its recorded start on the same track (exact rational arithmetic), which is what `ripple_delete_clips` does to the
+     clips after a deleted one; a clip linked to such a clip (a pick's own sound) counts when it moved by exactly as much. Before
+     this, one plain Delete of a pick froze every later pick as "edited by hand" in all later regenerations: one segment early,
+     worded as hand edits, a restored file out of place.
+
+     What follows from the sum: with no deleted length before it, any move is a move by hand and the clip is kept, as before the
+     rule. A clip dragged by hand that also lies after a deleted one does not match the sum and is kept. Several gap-closing
+     deletes add up. A delete on another track counts for that track only (the title deleted with its gap closed moves the
+     closing card, which is made again; no pick is touched). A delete that kept its gap adds length without a move, so with a
+     later gap-closing delete the clips after both do not match and are kept. A ripple that removed a clip the run did not make
+     moves the run's clips without any of them being gone: they are kept, as before. In every "kept" case the result is the one
+     from before the rule and still a valid project: the film lays its other clips around the kept ones with no picture over
+     another and no gap, the montage skips the segments they lie on and fills the free ones (tests hold each case).
+
+     To know the places, film runs record them like template runs, and montage runs record each clip's track with its range
+     (`apply_recipe` takes the optional `recordTracks` beside `recordRanges`; a kept clip keeps the track recorded for it). After
+     a Delete that closed the gap a regeneration leaves the deleted clip out and lays the clips it moved on the grid again, and
+     `restoreRemoved` puts the deleted one back at its place. A film says it with warning `moved_back` (ADR-0026: «קליפים שזזו
+     בגלל מחיקה לא נשארו במקום שאליו זזו: הסרט סודר מחדש יחד איתם»), a montage with `movedBack` (clip ids), one step line and
+     «חזרו לפעימות אחרי שזזו בגלל מחיקה» in its panel. A clip taken to another track than recorded is kept, as for templates. A
+     montage answer names in `removed` only the deleted clips whose place is in fact left empty; one whose whole range a kept
+     clip lies on is still carried in `run.ranges`. Older film runs use the worked-out places above with the same narrow test
+     (the places of deleted picks come from the plan too). An older montage run (ranges without tracks) keeps the clips a Delete
+     moved, as before: the montage planner names no track, so there is nothing to check a place against.
 7. **Built-in catalogue** (`templateCatalog.ts`, all on Canvas2D effects, Hebrew and English names): `tpl.travel-montage`, `tpl.photo-dump`,
    `tpl.birthday`, `tpl.quote-card`, `tpl.countdown-list`, `tpl.home-video`. Your own clips are muted by default and the music carries the sound
    (`keepAudio` false); Home Video keeps each clip's own sound. Two more are listed unavailable with a reason: `tpl.text-behind-subject` (needs video

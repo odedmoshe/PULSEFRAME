@@ -334,8 +334,8 @@ export interface TemplateApplyResult { revision: number; runId: string; createdI
 /**
  * removed: the keys of the items deleted by hand that this regeneration left out (empty with restoreRemoved); alternatives: the
  * plan's, among them the explicit choice to restore those items ({restoreRemoved: true}); movedBack: the keys of the items that
- * had only been moved in time and were made again on their place (notice moved_back; a template run always sends it, a family
- * film never does: it keeps a moved clip and lays the new ones around it).
+ * had only been moved in time and were made again on their place (notice moved_back; a template run always sends it; a family
+ * film answers with its own result, which has the same field and warning moved_back).
  */
 export interface TemplateRegenerateResult extends TemplateApplyResult { replaced: number; protected: string[]; removed: string[]; movedBack?: string[]; alternatives: TemplatePlan['alternatives'] }
 export const TemplateBodySchema = z.object({ params: z.unknown().optional(), expectedRevision: z.number().int().min(0).optional() }).strict();

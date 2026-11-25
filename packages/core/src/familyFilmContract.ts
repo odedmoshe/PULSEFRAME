@@ -118,7 +118,7 @@ export interface FilmReason { code: FilmReasonCode; /** seconds inside the file,
 /** removed_by_hand (regeneration): a clip of this file in the last film was deleted by hand, so the file is left out (restoreRemoved brings it back). */
 export const FILM_EXCLUSION_CODES = ['no_room', 'too_short', 'excluded_by_you', 'no_picture', 'kept_by_hand', 'removed_by_hand'] as const;
 export interface FilmExclusion { assetId: string; code: (typeof FILM_EXCLUSION_CODES)[number]; details: Record<string, unknown> }
-export const FILM_WARNING_CODES = ['shorter_than_target', 'longer_than_target', 'music_short', 'low_beat_confidence', 'not_measured', 'no_capture_time', 'mixed_orientation', 'cuts_merged', 'kept_by_hand', 'cut_off_grid_next_to_kept', 'title_resolved_static', 'kept_music_not_followable', 'lead_music_rises', 'pictures_missing', 'removed_by_hand', 'music_removed'] as const;
+export const FILM_WARNING_CODES = ['shorter_than_target', 'longer_than_target', 'music_short', 'low_beat_confidence', 'not_measured', 'no_capture_time', 'mixed_orientation', 'cuts_merged', 'kept_by_hand', 'cut_off_grid_next_to_kept', 'title_resolved_static', 'kept_music_not_followable', 'lead_music_rises', 'pictures_missing', 'removed_by_hand', 'music_removed', 'moved_back'] as const;
 export type FilmWarningCode = (typeof FILM_WARNING_CODES)[number];
 export interface FilmWarning { code: FilmWarningCode; message: string; details: Record<string, unknown> }
 export interface FilmPick {
@@ -174,6 +174,12 @@ export interface FilmPlanContext {
   previousOwnSound?: ResolvedFilmParams['ownSound'];
   /** Regeneration: whether the previous run had music (its musicAssetId was not null). */
   previousMusic?: boolean;
+  /**
+   * Regeneration: the keys of the last film's slots whose clips moved earlier only because a delete before them closed the gap
+   * (ADR-0026, amendment of 2026-11-24; templateOps.ts closedGapOnly). They are not kept: the film is laid out again, and warning
+   * moved_back says so (one sentence; absent when there is none). A clip dragged by hand is never among them: it is kept.
+   */
+  movedKeys?: readonly string[];
 }
 export class FilmError extends Error {
   constructor(public code: 'not_found' | 'needs_analysis' | 'invalid_args' | 'nothing_to_do', message: string, public hint?: string) { super(message); }
@@ -206,7 +212,8 @@ export interface FamilyFilmApplyResult { revision: number; runId: string; create
  * removed: the keys of the last film's slots deleted by hand that this regeneration left out (empty with restoreRemoved);
  * alternatives: the plan's, among them the explicit choice to restore them ({restoreRemoved: true}).
  */
-export interface FamilyFilmRegenerateResult extends FamilyFilmApplyResult { replaced: number; protected: string[]; removed: string[]; alternatives: FamilyFilmPlan['alternatives'] }
+/** movedBack: the slot keys of the clips that a delete which closed the gap had moved and that were therefore not kept (warning moved_back says it); always sent by the server. */
+export interface FamilyFilmRegenerateResult extends FamilyFilmApplyResult { replaced: number; protected: string[]; removed: string[]; movedBack?: string[]; alternatives: FamilyFilmPlan['alternatives'] }
 /**
  * The mix a film sounds with: the own-sound track's gain and the music track's ducking (null = none). 'under' lowers the clips
  * only under music; 'lead' ducks only music; 'mute' adds no own sound (gain 1, no ducking). Pure.

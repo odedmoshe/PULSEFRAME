@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T00:35:20.640Z",
+  "ranAt": "2026-11-25T01:20:28.703Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
@@ -272,9 +272,9 @@
       "name": "Sound tab: \"end the music with the picture\" trims the music to the last detected beat before the picture ends and gives it a fade-out, in one transaction; undo restores it",
       "ok": true,
       "detail": {
-        "pictureEnd": 245,
-        "wantEnd": 239,
-        "gotEnd": 239,
+        "pictureEnd": 290,
+        "wantEnd": 284,
+        "gotEnd": 284,
         "fadeOutFrames": 30,
         "fitUndone": true
       }
@@ -312,9 +312,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 1.97,
+        "fwd2": 2.03,
         "sh2": "◀◀ ×1",
-        "back1": -1,
+        "back1": -0.99,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -330,7 +330,7 @@
         "keptPlaying": true,
         "playSpeed": 0.99,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.94,
+        "shuttleSpeed": 2.01,
         "staysPaused": true
       }
     },
@@ -358,30 +358,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_8415091c9a0",
-          "clp_8415091c9a1"
+          "clp_0ba610492f0",
+          "clp_0ba610492f1"
         ],
         "afterAB": [
-          "clp_8415091c9a0",
-          "clp_8415091c9a1"
+          "clp_0ba610492f0",
+          "clp_0ba610492f1"
         ],
         "afterAdd": [
-          "clp_8415091c9a0",
-          "clp_8415091c9a1",
-          "clp_8415091c9a2"
+          "clp_0ba610492f0",
+          "clp_0ba610492f1",
+          "clp_0ba610492f2"
         ],
         "midEscape": [
-          "clp_8415091c9a1"
+          "clp_0ba610492f1"
         ],
         "afterEscape": [
-          "clp_8415091c9a0",
-          "clp_8415091c9a1",
-          "clp_8415091c9a2"
+          "clp_0ba610492f0",
+          "clp_0ba610492f1",
+          "clp_0ba610492f2"
         ],
         "afterEscapeUp": [
-          "clp_8415091c9a0",
-          "clp_8415091c9a1",
-          "clp_8415091c9a2"
+          "clp_0ba610492f0",
+          "clp_0ba610492f1",
+          "clp_0ba610492f2"
         ]
       }
     },
@@ -543,7 +543,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 13/1799",
+        "valueText": "עוקב קדימה 18/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -804,18 +804,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_e6b0bc47430",
-          "ast_87d494ce710",
-          "ast_9e94d5293e0",
-          "ast_9ae777cc000",
-          "ast_62576f0fd10"
+          "ast_e3c0d96e7f0",
+          "ast_d8ad14c2be0",
+          "ast_4d762a3ac30",
+          "ast_f8b4dbb29d0",
+          "ast_a8e49fb0540"
         ],
         "order1": [
-          "ast_e6b0bc47430",
-          "ast_9ae777cc000",
-          "ast_87d494ce710",
-          "ast_9e94d5293e0",
-          "ast_62576f0fd10"
+          "ast_e3c0d96e7f0",
+          "ast_f8b4dbb29d0",
+          "ast_d8ad14c2be0",
+          "ast_4d762a3ac30",
+          "ast_a8e49fb0540"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -839,7 +839,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-25T00:31:01.620Z",
+          "createdAt": "2026-11-25T01:16:16.620Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -1034,7 +1034,7 @@
       "ok": true,
       "detail": {
         "slots": 11,
-        "victim": "clp_b040035fb00",
+        "victim": "clp_98bd6e10940",
         "deleted": true,
         "offered": {
           "count": 1,
@@ -1159,8 +1159,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_0b0313aeb50",
-          "seq_0b0313aeb57"
+          "seq_936314f6e10",
+          "seq_936314f6e17"
         ],
         "revisions": 1,
         "transactions": [
@@ -1170,7 +1170,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_0b0313aeb50",
+          "seq": "seq_936314f6e10",
           "selected": "true"
         }
       }
@@ -1201,9 +1201,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_0b0313aeb50"
+          "seq": "seq_936314f6e10"
         },
-        "secondTab": "seq_0b0313aeb50",
+        "secondTab": "seq_936314f6e10",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1483,7 +1483,7 @@
       "detail": {
         "marked": true,
         "he": {
-          "id": "prj_GPv3YK0oAmA",
+          "id": "prj_g0LSbZVmzQM",
           "count": 1,
           "title": "הארכיון יובא",
           "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגומים «English» מסומנים שוב «תרגום מכונה · לא נבדק», והנוסח שלהם נשמר. אפשר לעבור עליהם בלוח «תמלול» ולבחור «סמן כנבדק».",
@@ -1493,7 +1493,7 @@
           "badge": 1
         },
         "en": {
-          "id": "prj_L7CjyVruwM0",
+          "id": "prj_e1BtxD7BziY",
           "count": 1,
           "title": "The archive was imported",
           "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translations «English» need review again; their wording is kept. Go through them in the \"Transcript\" panel and choose \"Mark as reviewed\".",

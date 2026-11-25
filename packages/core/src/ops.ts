@@ -1789,7 +1789,10 @@ defineOp({
   description: 'Apply a recipe plan (ordinary public ops) as one step and record which objects it created. Issued by the server from a plan it built; on regeneration it first removes the previous run\'s untouched clips.',
   args: z.object({ runId: z.string().optional(), recipeId: z.string().max(64), params: z.record(z.string(), z.unknown()), steps: z.array(z.string().max(400)).max(50), removeClipIds: z.array(z.string()).max(5000).optional(), keepIds: z.array(z.string()).max(5000).optional(), ops: z.array(z.object({ op: z.string(), args: z.unknown() }).strict()).min(1).max(2000),
     // optional and additive (ADR-0016 decision 6): record each clip's range in the run, and carry on the ranges of clips deleted by hand
-    recordRanges: z.literal(true).optional(), keepRanges: z.record(z.string(), RunRangeSchema).optional() }).strict(),
+    recordRanges: z.literal(true).optional(), keepRanges: z.record(z.string(), RunRangeSchema).optional(),
+    // optional and additive (amendment of 2026-11-24): with recordRanges, record each clip's track too, so a clip that was only moved in
+    // time on its own track is told from one taken to another track (templateOps.ts movedOnly). Absent in every older log.
+    recordTracks: z.literal(true).optional() }).strict(),
   apply(d, a, ctx) {
     const affected = new Set<string>(removeRunClips(d, a.removeClipIds ?? []));
     const created: string[] = [...(a.keepIds ?? [])];
@@ -1810,7 +1813,11 @@ defineOp({
     const ranges: Record<string, z.infer<typeof RunRangeSchema>> = {};
     if (a.recordRanges) {
       for (const [cid, r] of Object.entries(a.keepRanges ?? {})) if (!findClip(d, cid)) ranges[cid] = { start: { ...r.start }, end: { ...r.end } };
-      for (const cid of createdIds) { const f = findClip(d, cid); if (f) ranges[cid] = { start: { ...f.clip.start }, end: { ...clipEnd(f.clip) } }; }
+      // recordTracks: the track too; a clip kept from the earlier run keeps the track that run recorded for it, so one taken to
+      // another track by hand stays recognisable next time (its range is where it lies now, as before)
+      const earlier = a.runId ? d.recipeRuns[a.runId]?.ranges ?? {} : {};
+      const trackOf = (cid: string, now: string) => ((a.keepIds ?? []).includes(cid) && Object.hasOwn(earlier, cid) && earlier[cid]!.trackId !== undefined ? earlier[cid]!.trackId! : now);
+      for (const cid of createdIds) { const f = findClip(d, cid); if (f) ranges[cid] = { start: { ...f.clip.start }, end: { ...clipEnd(f.clip) }, ...(a.recordTracks ? { trackId: trackOf(cid, f.track.id) } : {}) }; }
     }
     d.recipeRuns[id] = { id, recipeId: a.recipeId, params: a.params, createdIds, fingerprints, steps: a.steps, ...(a.recordRanges ? { ranges } : {}) };
     affected.add(id);
