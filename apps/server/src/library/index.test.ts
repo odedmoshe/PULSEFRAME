@@ -212,7 +212,7 @@ describe('fail closed', () => {
     await ready(s);
     const st = await s.status(true);
     expect(st.counts).toEqual({});
-    expect(st.problems.some((p) => /licence table is not built/.test(p.reason))).toBe(true);
+    expect(st.problems, JSON.stringify(st)).toEqual(expect.arrayContaining([expect.objectContaining({ reason: expect.stringMatching(/licence table is not built/) })]));
   });
 });
 

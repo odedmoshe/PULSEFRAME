@@ -75,6 +75,9 @@ export class LibraryService {
   private building: { cancel: boolean; progress: { rows: number; entriesDone: number; entriesTotal: number }; done: Promise<void> } | null = null;
   private ledgerCache: { stamp: string; sha256: string } | null = null;
   private closed = false;
+  /** The start-up check (it may start a build); idle() waits for it first. */
+  private starting: Promise<void> = Promise.resolve();
+  private startingNow = false;
 
   constructor(cfg: Config, opts: LibraryServiceOptions = {}) {
     this.cfg = cfg;
@@ -82,7 +85,7 @@ export class LibraryService {
     this.duties = opts.duties ?? coreLicenceDuties;
     this.rasteriser = opts.rasteriser ?? canRasteriseSvg;
     this.openIndex();
-    if (!opts.noStartupBuild) void this.startupCheck();
+    if (!opts.noStartupBuild) { this.startingNow = true; this.starting = this.startupCheck().catch(() => undefined).finally(() => { this.startingNow = false; }); }
   }
   get indexFile() { return path.join(this.cfg.dataDir, LIBRARY_INDEX_FILE); }
   get configFile() { return path.join(this.cfg.dataDir, LIBRARY_CONFIG_FILE); }
@@ -195,7 +198,7 @@ export class LibraryService {
     return true;
   }
   /** Resolves when no build is running. */
-  async idle(): Promise<void> { while (this.building) await this.building.done; }
+  async idle(): Promise<void> { await this.starting; while (this.building) await this.building.done; }
   close(): void {
     this.closed = true;
     if (this.building) this.building.cancel = true;
@@ -302,13 +305,15 @@ export class LibraryService {
             row, rel: r.rel, member: r.member ?? null, bytes: r.bytes, mtimeMs: r.mtimeMs, format: r.format, licence,
             entry: { item: e.item, path: e.path, kind: e.kind, bytes: e.bytes, ...(e.sha256 ? { sha256: e.sha256 } : {}), ...(e.treeSha256 ? { treeSha256: e.treeSha256 } : {}), ...(e.version ? { version: e.version } : {}), ...(e.commit ? { commit: e.commit } : {}), ...(e.licence.url ? { licenceUrl: e.licence.url } : {}) },
           };
+          // the «בלי קרדיט» filter: a row needs a credit when its duties say so, or when it is refused under an attribution licence
+          const needsCredit = duties.credit || (duties.use !== 'ok' && /^CC-BY/.test(duties.licenceId));
           const tags = [...r.meta.tags, ...r.meta.genre, ...r.meta.mood, ...r.meta.instruments];
           const he = [...tags, r.kind].map((t) => LIBRARY_WORDS_HE[t.toLowerCase()]).filter((x): x is string => !!x);
           const title = searchKey(row.title);
           const body = searchKey([row.author ?? '', ...tags, ...r.words, ...he, LIBRARY_WORDS_HE[r.kind] ?? '', r.kind].join(' '));
           let info;
           try {
-            info = insItem.run(key, r.kind, r.format === 'svg' ? 1 : 0, duties.credit ? 1 : 0, duties.nonCommercial ? 1 : 0, r.meta.bpm ?? null, r.meta.durationSeconds ?? null, bars(r.meta.genre), bars(r.meta.mood), JSON.stringify(indexed));
+            info = insItem.run(key, r.kind, r.format === 'svg' ? 1 : 0, needsCredit ? 1 : 0, duties.nonCommercial ? 1 : 0, r.meta.bpm ?? null, r.meta.durationSeconds ?? null, bars(r.meta.genre), bars(r.meta.mood), JSON.stringify(indexed));
           } catch (err) {
             if (String((err as Error).message).includes('UNIQUE')) { problem(e.item, `the same key twice: ${key.slice(0, 120)}`); return; }
             throw err;
@@ -355,7 +360,7 @@ export class LibraryService {
     const sum = rs.state === 'not_configured' ? null : this.summary();
     let state: LibraryState;
     if (rs.state !== 'ok') state = rs.state;
-    else if (this.building) state = 'indexing';
+    else if (this.building || this.startingNow) state = 'indexing';
     else state = 'ready'; // the index answers as it is; a changed ledger is read at start-up, on a new root and on reindex (a cancel keeps it)
     const counts: Partial<Record<LibraryKind, number>> = {};
     const unusable: Partial<Record<LibraryUnusable, number>> = { ...(sum?.unusable ?? {}) };
