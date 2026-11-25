@@ -116,3 +116,8 @@ export * from './libraryCredits.ts';
 export * from './librarySearch.ts';
 export * from './svgSafety.ts';
 export * from './libraryOps.ts';
+// stabilisation (wave 7 stabilise track): the contract and attach_camera_motion are lead-built; steady.ts and the two public op
+// bodies are W2's
+export * from './steadyContract.ts';
+export * from './steady.ts';
+export * from './steadyOps.ts';

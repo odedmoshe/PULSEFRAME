@@ -53,6 +53,8 @@ export const ASSISTANT_EXCLUDED_OPS = [
   // the content library (wave 7): the credits card writes licence text the assistant never reads; offering it would also change
   // the reviewed prompt (ASSISTANT_PROMPT_DIGEST), which needs its own review first
   'add_credits_card',
+  // stabilisation (wave 7): it reads camera measurements the assistant never sees; a command-bar intent is a non-goal of version 1
+  'set_clip_stabilise', 'remove_camera_motion',
 ] as const;
 /** The ops a proposal may hold: every registered public op minus ASSISTANT_EXCLUDED_OPS and PERSON_OPS, in registry order. */
 export function assistantOps(): string[] {
