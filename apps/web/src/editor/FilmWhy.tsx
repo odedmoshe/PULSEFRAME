@@ -13,7 +13,7 @@ import { api } from '../api.ts';
 import { useEditorState } from './store.ts';
 import { FILM_TESTIDS as TID } from './familyFilm.testids.ts';
 import { familyFilmStrings } from './familyFilm.strings.ts';
-import { clipWhy, filmFailure, reasonLine, replacementCandidates, runMeasurement, slotOfClip, swapClipOp, swapWindowOp } from './familyFilm.logic.ts';
+import { clipWhy, filmFailure, pearlLabelOf, reasonLine, replacementCandidates, runMeasurement, slotOfClip, swapClipOp, swapWindowOp } from './familyFilm.logic.ts';
 import './familyFilm.css';
 
 export interface FilmWhyProps { clipId: string; lang: 'he' | 'en' }
@@ -47,7 +47,7 @@ export function FilmWhy({ clipId, lang }: FilmWhyProps): ReactElement | null {
   return (
     <section className="pf-film-why" data-testid={TID.why} aria-label={S.whyHeading}>
       <h4>{S.whyHeading}</h4>
-      <p className="pf-film-reason" data-testid={TID.whyReason}>{isolate(reasonLine(why.reasons, lang) || S.noReason)}</p>
+      <p className="pf-film-reason" data-testid={TID.whyReason}>{isolate(reasonLine(why.reasons, lang, pearlLabelOf(doc)) || S.noReason)}</p>
       {why.edited && <p className="pf-film-muted" data-testid={TID.whyEdited}>{S.edited}</p>}
       <p className="pf-film-muted">{FAMILY_FILM_DRAFT_LABEL[lang]}</p>
       {!why.measured && <Button size="sm" data-testid={TID.whyMeasure} busy={busy} onClick={() => void measure()}>{busy ? S.measuringOne : S.measure}</Button>}
