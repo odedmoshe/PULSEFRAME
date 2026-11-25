@@ -96,6 +96,8 @@ const KIND: Record<EntityState['kind'], DiffEntityKind> = {
   project: 'project', asset: 'asset', track: 'track', clip: 'clip', transcript: 'transcript', analysis: 'analysis', variant: 'variant',
   recipeRun: 'recipeRun', marker: 'marker', motionTrack: 'motionTrack', lifeEvent: 'event', person: 'person', sequence: 'sequence',
   multicamGroup: 'multicam', trackOrder: 'other',
+  // a marked range (wave 7 pearls) is listed among the rest; restore never takes ranges (composeRestore above)
+  sourceRange: 'other',
 };
 /** The order rows are listed in: the edit first, then the library. */
 const ORDER: DiffEntityKind[] = ['project', 'sequence', 'track', 'clip', 'marker', 'variant', 'recipeRun', 'other', 'asset', 'transcript', 'analysis', 'motionTrack', 'multicam', 'event', 'person'];
@@ -126,6 +128,8 @@ function nameOf(s: EntityState, id: string, docs: ProjectDocument[]): string {
     case 'sequence': return s.sequence.name || id;
     case 'multicamGroup': return s.group.name;
     case 'trackOrder': return seqName(s.sequenceId);
+    // its file's name, never the label (labels are family notes; peoplePrivacy.ts)
+    case 'sourceRange': return asset(s.range.assetId);
   }
 }
 

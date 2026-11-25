@@ -1,3 +1,4 @@
+import { pearlsSummary } from './sourceRanges.ts';
 import { sequenceList } from './sequences.ts';
 import * as T from '@pulseframe/time';
 import type { Asset, MediaClip, ProjectDocument } from './schema.ts';
@@ -71,6 +72,8 @@ export function summarize(doc: ProjectDocument) {
     // people (ADR-0021, people section): the id and the name, for every reader. A summary never holds a birth date or the word choice;
     // the editor reads those from the document, which the server hands to the owner and to credentials granted them.
     people: Object.values(doc.people ?? {}).map((p) => ({ id: p.id, name: p.name })),
+    // marked ranges («פנינים», wave 7): counts only, and only when the project has any (no label ever: labels are family notes)
+    ...(doc.sourceRanges ? { pearls: pearlsSummary(doc) } : {}),
     events: Object.values(doc.events ?? {}).map((e) => { const shown = eventDisplayName(doc, e, 'en'); return { id: e.id, name: e.name, shownAs: shown.name, nameKind: shown.kind, files: e.assetIds.length, afterSunset: e.afterSunset, edited: e.origin.edited }; }),
   };
 }

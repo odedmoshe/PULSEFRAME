@@ -801,6 +801,34 @@ export type ShortReason = z.infer<typeof ShortReasonSchema>;
 /** A stretch of SOURCE time [start, end) of one asset. */
 export const SourceSpanSchema = z.object({ start: RationalTimeSchema, end: RationalTimeSchema }).strict();
 export type SourceSpan = z.infer<typeof SourceSpanSchema>;
+// ---------- marked source ranges («פנינים», wave 7 pearls track; sourceRangesContract.ts). Optional; no schema version bump. ----------
+/**
+ * A stretch of SOURCE time of one library file (or the whole file) that the owner marked: a `pearl` (a moment worth keeping, with a
+ * name) or a `presence` tag (only who is in the file, no name, span null). Times are exact rationals of any alignment (a word edge is
+ * not a frame edge); nothing is rounded when stored. Nothing derived is stored (no usage, no seconds per person).
+ *
+ * PRIVACY: `label` can hold a child's words, so it is read like a birth date (apps/server/src/peoplePrivacy.ts): the owner's session
+ * and a people 'full' grant read it; every other credential reads ''. `people` holds person ids only and is written only by the
+ * owner's own session (assertOwnerTagsPeople). Rules the validation checks: validate.ts → sourceRanges.ts validateSourceRanges.
+ */
+export const SourceRangeSchema = z
+  .object({
+    id: Id,
+    /** A video, sound or picture file of the library; never a colour table. */
+    assetId: Id,
+    kind: z.enum(['pearl', 'presence']),
+    /** SOURCE time [start, end) of assetId; null = the whole file (always null for a still and for kind presence). */
+    span: SourceSpanSchema.nullable(),
+    /** What the owner typed, one line; '' = not named yet. Always '' for kind presence. */
+    label: z.string().max(200).regex(/^[^\n\r]*$/),
+    /** Person ids, sorted (code-unit order) and unique; absent = nobody tagged. Written only by the owner's own session. */
+    people: z.array(z.string().regex(PERSON_ID)).min(1).max(12).optional(),
+    /** The actor of the commit that made it (an accepted proposal is the owner's). */
+    createdBy: z.string().max(80),
+  })
+  .strict();
+export type SourceRange = z.infer<typeof SourceRangeSchema>;
+
 /** 'cand_' + core fingerprint() (16 hex digits, entities.ts). */
 export const CANDIDATE_ID = /^cand_[0-9a-f]{16}$/;
 /**
@@ -898,6 +926,11 @@ export const ProjectSchema = z
      * groups is stored exactly as before, the people precedent); read it as `doc.multicam ?? {}`.
      */
     multicam: z.record(Id, MulticamGroupSchema).optional(),
+    /**
+     * Marked source ranges («פנינים», wave 7), by range id. OPTIONAL and absent until the first range (no default, so a project
+     * without ranges is stored exactly as before, the people precedent); read it as `doc.sourceRanges ?? {}` (sourceRanges.ts rangesOf).
+     */
+    sourceRanges: z.record(Id, SourceRangeSchema).optional(),
   })
   .strict();
 
@@ -992,5 +1025,7 @@ export function migrateProject(raw: unknown): ProjectDocument {
   if (out.people && Object.keys(out.people).length === 0) delete out.people;
   // the same for multicam groups (ADR-0020): undoing the first create_multicam deletes the emptied map
   if (out.multicam && Object.keys(out.multicam).length === 0) delete out.multicam;
+  // the same for marked source ranges (wave 7 pearls): undoing the first add_source_range deletes the emptied map
+  if (out.sourceRanges && Object.keys(out.sourceRanges).length === 0) delete out.sourceRanges;
   return out;
 }

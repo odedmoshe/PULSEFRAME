@@ -20,6 +20,7 @@ const curveMismatch = (k: Keyframe) => (k.easing === 'bezier') !== (k.bezier !==
 import { multicamIssues } from './multicamValidate.ts';
 import { libraryRecordIssues } from './libraryDuties.ts';
 import { steadyIssues } from './steadyValidate.ts';
+import { validateSourceRanges } from './sourceRanges.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
 
@@ -405,6 +406,8 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   if (doc.multicam || hasTags(doc)) issues.push(...multicamIssues(doc, uniq));
   // stabilisation (wave 7): the clip switch and the camera measurements (steadyValidate.ts)
   issues.push(...steadyIssues(doc));
+  // marked source ranges (wave 7 pearls track; sourceRanges.ts validateSourceRanges, code source_range)
+  if (doc.sourceRanges) issues.push(...validateSourceRanges(doc));
   return issues;
 }
 const hasTags = (doc: ProjectDocument) => Object.values(doc.sequences).some((s) => s.tracks.some((t) => t.clips.some((c) => c.type === 'media' && !!c.multicam)));
