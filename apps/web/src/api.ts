@@ -3,7 +3,7 @@ import type { MulticamSyncReport, MulticamSyncRequest, MulticamView } from '@pul
 import type { TakePlanView, TakeRequest, TakeResult } from '@pulseframe/core';
 import type { DiffSummary, FindQuery, FindResult, VersionInfo } from '@pulseframe/core';
 import type { AssistantConfigBody, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, BudgetReleaseAnswer } from '@pulseframe/core';
-import type { ArchiveLibraryMode, CreditsView, LibraryItemsPage, LibraryItemsQuery, LibraryRow, LibraryStatus, LibraryUseBody, LibraryUseResult } from '@pulseframe/core';
+import type { ArchiveLibraryMode, CreditsView, LibraryFacets, LibraryItemsPage, LibraryItemsQuery, LibraryKind, LibraryRow, LibraryStatus, LibraryUseBody, LibraryUseResult } from '@pulseframe/core';
 import type { CameraMotionView, StabiliseRunBody } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
@@ -235,6 +235,8 @@ export const api = {
   cancelLibraryReindex: () => call<LibraryStatus>('/library/reindex', { method: 'DELETE' }),
   libraryItems: (q: LibraryItemsQuery) => call<LibraryItemsPage>(`/library/items?${new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))}`),
   libraryItem: (key: string) => call<LibraryRow>(`/library/items/${encodeURIComponent(key)}`),
+  /** The genres and moods of the whole catalogue (of one kind), for the filter chips (they never depend on the rows loaded). */
+  libraryFacets: (kind?: LibraryKind) => call<LibraryFacets>(`/library/facets${kind ? `?kind=${encodeURIComponent(kind)}` : ''}`),
   /** URLs for an <audio> element, an <img> and a link: never fetched into a blob (the audio streams with Range). */
   libraryAudioUrl: (key: string) => `/api/v1/library/items/${encodeURIComponent(key)}/audio`,
   libraryThumbUrl: (key: string, size: 128 | 256 = 128) => `/api/v1/library/items/${encodeURIComponent(key)}/thumb?size=${size}`,

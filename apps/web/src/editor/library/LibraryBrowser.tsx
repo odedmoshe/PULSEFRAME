@@ -5,9 +5,9 @@
  * «שימוש בפרויקט» copies the file into the project at the playhead through POST /projects/:id/library/use. Test ids are fixed by
  * library.testids.ts; words by library.strings.ts and the shared tables (libText); a refusal is worded by the shared tables.
  */
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Play, Square } from 'lucide-react';
-import type { LibraryItemsPage, LibraryKind, LibraryRow, LibraryStatus } from '@pulseframe/core';
+import type { LibraryFacets, LibraryItemsPage, LibraryKind, LibraryRow, LibraryStatus } from '@pulseframe/core';
 import type { Lang } from '@pulseframe/i18n';
 import { Button, Chip, IconButton } from '../../ds/index.ts';
 import { api, ApiFailure } from '../../api.ts';
@@ -17,7 +17,7 @@ import { useEditorState } from '../store.ts';
 import { LIBRARY_TESTIDS as TID } from './library.testids.ts';
 import { fillLib, libText, LIBRARY_UI_STRINGS } from './library.strings.ts';
 import {
-  audioUnsupportedText, auditionable, badgeText, countOf, facetsOf, filtersActive, formatBytes, formatLength, hasHebrew, isAudioKind, isSoft, kindText, lengthLabel, LENGTH_ORDER, NO_FILTERS,
+  audioUnsupportedText, auditionable, badgeText, countOf, filtersActive, formatBytes, formatLength, hasHebrew, isAudioKind, isSoft, kindText, lengthLabel, LENGTH_ORDER, NO_FILTERS,
   panelState, queryOf, rowBadges, shownKinds, stateText, takesColour, tempoLabel, tempoOf, TEMPO_ORDER, unusableText, useBody,
   type FailureLike, type LengthBucket, type LibraryFilters, type TempoBucket,
 } from './library.logic.ts';
@@ -88,7 +88,7 @@ function FacetChip({ testId, label, value, options, open, onOpen, onPick }: {
   const shown = options.find((o) => o.id === value)?.label ?? value;
   return (
     <>
-      <Chip data-testid={testId} pressed={value !== undefined} aria-expanded={open} aria-haspopup="true" onClick={onOpen}>{shown ? <>{label}: <bdi className="num" dir="ltr">{shown}</bdi></> : label}</Chip>
+      <Chip data-testid={testId} pressed={value !== undefined} aria-expanded={open} aria-haspopup="true" onClick={onOpen}>{shown ? <>{label}: <bdi dir="auto">{shown}</bdi></> : label}</Chip>
       {open && (
         <span className="pf-lib-options" role="group" aria-label={label}>
           {options.map((o) => <Chip key={o.id} pressed={o.id === value} onClick={() => onPick(o.id === value ? undefined : o.id)}><bdi dir="auto">{o.label}</bdi></Chip>)}
@@ -117,6 +117,7 @@ export function LibraryBrowser({ kinds, lang: langProp }: { kinds: readonly Libr
   const [playing, setPlaying] = useState<string | null>(null);
   const [using, setUsing] = useState<string | null>(null);
   const [note, setNote] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [facets, setFacets] = useState<LibraryFacets>({ genre: [], mood: [] });
   const audioEl = useRef<HTMLAudioElement>(null);
   const seq = useRef(0);
   const audio = isAudioKind(kind);
@@ -149,6 +150,14 @@ export function LibraryBrowser({ kinds, lang: langProp }: { kinds: readonly Libr
     return () => clearTimeout(t);
   }, [ready, kind, text, JSON.stringify(filters), lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // the genre and mood chips offer what the whole catalogue holds for this kind (GET /library/facets), not the rows loaded so far
+  useEffect(() => {
+    if (!ready || !isAudioKind(kind)) return;
+    let alive = true;
+    api.libraryFacets(kind).then((f) => { if (alive) setFacets(f); }, () => { if (alive) setFacets({ genre: [], mood: [] }); });
+    return () => { alive = false; };
+  }, [ready, kind, status?.indexedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const more = async () => {
     if (!page?.next) return;
     const my = seq.current;
@@ -179,10 +188,12 @@ export function LibraryBrowser({ kinds, lang: langProp }: { kinds: readonly Libr
     } catch (e) { setNote({ kind: 'err', text: sayFailure(lang, e) }); } finally { setUsing(null); }
   };
 
-  const facets = useMemo(() => facetsOf(rows), [rows]);
   const setF = (patch: Partial<LibraryFilters>) => { setFilters((f) => ({ ...f, ...patch })); };
   const toggleChip = (c: 'genre' | 'mood' | 'tempo' | 'length') => setOpenChip((o) => (o === c ? null : c));
-  const names = (xs: string[]) => xs.map((x) => ({ id: x, label: x }));
+  const names = (xs: { value: string; count: number }[]) => xs.map((x) => ({ id: x.value, label: x.value }));
+  const tempoWord = { slow: L.tempoSlow, mid: L.tempoMid, fast: L.tempoFast } as const;
+  const lengthWord = { short: L.lengthShort, mid: L.lengthMid, long: L.lengthLong } as const;
+  const noProject = state.doc ? undefined : L.noProject;
 
   const gate = ((): ReactElement | null => {
     if (panel.kind === 'loading') return <p className="pf-lib-state" role="status">…</p>;
@@ -224,8 +235,8 @@ export function LibraryBrowser({ kinds, lang: langProp }: { kinds: readonly Libr
             {audio && <>
               <FacetChip testId={TID.chipGenre} label={L.genre} value={filters.genre} options={names(facets.genre)} open={openChip === 'genre'} onOpen={() => toggleChip('genre')} onPick={(v) => setF({ genre: v })} />
               <FacetChip testId={TID.chipMood} label={L.mood} value={filters.mood} options={names(facets.mood)} open={openChip === 'mood'} onOpen={() => toggleChip('mood')} onPick={(v) => setF({ mood: v })} />
-              <FacetChip testId={TID.chipTempo} label={L.tempo} value={filters.tempo} options={TEMPO_ORDER.map((b) => ({ id: b, label: `${tempoLabel(b)} BPM` }))} open={openChip === 'tempo'} onOpen={() => toggleChip('tempo')} onPick={(v) => setF({ tempo: v as TempoBucket | undefined })} />
-              <FacetChip testId={TID.chipLength} label={L.length} value={filters.length} options={LENGTH_ORDER.map((b) => ({ id: b, label: lengthLabel(b) }))} open={openChip === 'length'} onOpen={() => toggleChip('length')} onPick={(v) => setF({ length: v as LengthBucket | undefined })} />
+              <FacetChip testId={TID.chipTempo} label={L.tempo} value={filters.tempo} options={TEMPO_ORDER.map((b) => ({ id: b, label: `${tempoWord[b]} (${tempoLabel(b)} BPM)` }))} open={openChip === 'tempo'} onOpen={() => toggleChip('tempo')} onPick={(v) => setF({ tempo: v as TempoBucket | undefined })} />
+              <FacetChip testId={TID.chipLength} label={L.length} value={filters.length} options={LENGTH_ORDER.map((b) => ({ id: b, label: `${lengthWord[b]} (${lengthLabel(b)})` }))} open={openChip === 'length'} onOpen={() => toggleChip('length')} onPick={(v) => setF({ length: v as LengthBucket | undefined })} />
             </>}
             <Chip data-testid={TID.chipNoCredit} pressed={filters.noCredit} onClick={() => setF({ noCredit: !filters.noCredit })}>{L.noCredit}</Chip>
             <Chip data-testid={TID.chipCommercial} pressed={filters.commercial} onClick={() => setF({ commercial: !filters.commercial })}>{L.commercial}</Chip>
@@ -235,10 +246,10 @@ export function LibraryBrowser({ kinds, lang: langProp }: { kinds: readonly Libr
           {empty && <p className="pf-lib-state" role="status" data-testid={TID.empty} data-state="empty">{emptyText}</p>}
           {page && rows.length > 0 && <p className="pf-lib-count" aria-live="polite"><bdi className="num">{page.total}</bdi></p>}
           <ul className={`pf-lib-list${audio ? '' : ' is-visual'}`} data-testid={TID.list} aria-label={kindText(lang, kind)} aria-busy={loading}>
-            {rows.map((r) => <LibraryRowView key={r.key} row={r} lang={lang} playing={playing === r.key} busy={using === r.key} thumb={!audio}
+            {rows.map((r) => <LibraryRowView key={r.key} row={r} lang={lang} playing={playing === r.key} busy={using === r.key} thumb={!audio} blockedReason={noProject}
               onPlay={audio ? play : undefined} onUse={(x) => void use(x)} />)}
           </ul>
-          {page?.next && <Button variant="secondary" size="sm" data-testid={TID.more} aria-label={kindText(lang, kind)} busy={loading} onClick={() => void more()}>…</Button>}
+          {page?.next && <Button variant="secondary" size="sm" data-testid={TID.more} busy={loading} onClick={() => void more()}>{L.more}</Button>}
           <p className={`pf-lib-note is-${note?.kind ?? 'none'}`} role="status">{note?.text ?? ''}</p>
         </>
       )}

@@ -28,4 +28,6 @@ export const LIBRARY_TESTIDS = {
   archiveChoice: 'archive-library-choice', archiveStrip: 'archive-library-strip', archiveKeep: 'archive-library-keep',
   // the export sheet: the non-commercial line before export, the credits card after it (copy button)
   exportNonCommercial: 'export-licence-noncommercial', exportCredits: 'export-licence-credits', exportCreditsCopy: 'export-licence-credits-copy',
+  // integration: Settings' stop button while a scan runs; the note under «ארכיון לשיתוף» when «ארכיון לעצמי» is not offered
+  settingsCancel: 'settings-library-cancel', archiveOwnerOnly: 'archive-library-owner-only',
 } as const;
