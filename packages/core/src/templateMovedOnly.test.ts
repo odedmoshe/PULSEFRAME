@@ -153,14 +153,14 @@ describe('closedGapOnly: only a move that a delete which closed the gap explains
     expect(closed(tx(a.doc, [{ op: 'move_clip', args: { clipId: a.id('title'), start: f(15) } }]), a.runId, a.live)).toEqual([]);
   });
 
-  it('a clip dragged on after the delete does not match the deleted length and is not named; two deletes add up; a delete that kept its gap adds length without a move, so the clips after it are not named', () => {
+  it('a clip dragged on after the delete does not match the deleted length and is not named; two deletes add up; after a delete that kept its gap and one that closed its gap the clips after both moved by the closed length and are named', () => {
     const a = applied();
     const draggedOn = tx(a.doc, [{ op: 'ripple_delete_clips', args: { clipIds: [a.id('s1')] } }, { op: 'move_clip', args: { clipId: a.id('s3'), start: f(45) } }]);
     expect(closed(draggedOn, a.runId, a.live)).toEqual([a.id('s2'), soundOf(a)].sort());
     const two = tx(a.doc, [{ op: 'ripple_delete_clips', args: { clipIds: [a.id('s1')] } }, { op: 'ripple_delete_clips', args: { clipIds: [a.id('s2')] } }]);
     expect([T.eq(findClip(two, a.id('s3'))!.clip.start, f(0)), closed(two, a.runId, a.live)]).toEqual([true, [a.id('s3')]]);
     const gapKept = tx(a.doc, [{ op: 'delete_clip', args: { clipId: a.id('s1') } }, { op: 'ripple_delete_clips', args: { clipIds: [a.id('s2')] } }]);
-    expect([T.eq(findClip(gapKept, a.id('s3'))!.clip.start, f(30)), closed(gapKept, a.runId, a.live)]).toEqual([true, []]);
+    expect([T.eq(findClip(gapKept, a.id('s3'))!.clip.start, f(30)), closed(gapKept, a.runId, a.live)]).toEqual([true, [a.id('s3')]]);
     // moved by the delete and changed otherwise: not named (movedOnly already refuses it)
     const edited = tx(a.doc, [{ op: 'ripple_delete_clips', args: { clipIds: [a.id('s1')] } }, { op: 'set_clip_transform', args: { clipId: a.id('s3'), transform: { scale: 0.5 } } }]);
     expect(closed(edited, a.runId, a.live)).toEqual([a.id('s2'), soundOf(a)].sort());

@@ -349,7 +349,7 @@ describe('a film clip deleted by hand stays deleted (ADR-0016 decision 6, applie
       expect([findClip(doc, d.p0[1]!.id)!.track.id, fi(findClip(doc, d.p0[1]!.id)!.clip.start)]).toEqual([other, d.p0[1]!.from]);
     });
 
-    it('several deletes add up; a delete on another track counts for that track only; a delete that kept its gap, or of a clip the film did not make, explains no move: those clips stay kept and the film stays valid, with no picture over another and no gap between them', async () => {
+    it('several deletes add up; a delete on another track counts for that track only; a delete that kept its gap and a later one that closed its gap: the pick after both moved by the closed length and is laid out again; a delete of a clip the film did not make explains no move: those clips stay kept and the film stays valid, with no picture over another and no gap between them', async () => {
       const hand = (pid: string, ops: { op: string; args: unknown }[]) => store.commit({ projectId: pid, actor: 'user:owner', ops });
       const noOverlap = (pid: string, runId: string) => { const p = picksOf(pid, runId); return p.every((x, i) => i === 0 || x.from >= p[i - 1]!.to); };
       const whole = (pid: string, runId: string) => { const p = picksOf(pid, runId); return p.every((x, i) => i === 0 || x.from === p[i - 1]!.to); };
@@ -377,15 +377,16 @@ describe('a film clip deleted by hand stays deleted (ADR-0016 decision 6, applie
       const rt = await regenerateFamilyFilmFor(store, gov, USER, t.pid, made.runId, {});
       expect([rt.protected, [...rt.removed].sort(), [...(rt.movedBack ?? [])].sort()]).toEqual([[], [q0[1]!.key, 'title'].sort(), ['closing', q0[2]!.key].sort()]);
       expect([findClip(store.getProject(t.pid).doc, closing0), whole(t.pid, made.runId), closingAt(t.pid, made.runId) === picksOf(t.pid, made.runId).at(-1)!.to]).toEqual([undefined, true, true]);
-      // one pick deleted with its gap KEPT and a later one with its gap closed: the last pick moved by one length, two are gone
-      // before it, so its move is not explained and it is kept where it lies; the film is laid around it
+      // one pick deleted with its gap KEPT and a later one with its gap closed: the last pick moved by one length while two are
+      // gone before it. Each gone pick closed its gap or kept it, and the one reading that fits the track (the pick between
+      // them did not move) explains the move: the last pick is laid out again, not kept (amendment of 2026-11-25)
       const u = seed('ff-mixed-deletes', ['2026-12-05T18:00:00', '2026-12-05T18:10:00', '2026-12-05T18:20:00', '2026-12-05T18:30:00']);
       const mixed = await applyFamilyFilmFor(store, gov, USER, u.pid, { assetIds: u.ids, targetSeconds: 30 });
       const u0 = picksOf(u.pid, mixed.runId);
       hand(u.pid, [{ op: 'delete_clip', args: { clipId: u0[0]!.id } }, { op: 'ripple_delete_clips', args: { clipIds: [u0[2]!.id] } }]);
       const ru = await regenerateFamilyFilmFor(store, gov, USER, u.pid, mixed.runId, {});
-      expect([ru.protected.includes(u0[3]!.id), ru.movedBack]).toEqual([true, []]);
-      expect([validateProject(store.getProject(u.pid).doc), noOverlap(u.pid, mixed.runId)]).toEqual([[], true]);
+      expect([ru.protected, ru.movedBack, [...ru.removed].sort()]).toEqual([[], [u0[3]!.key], [u0[0]!.key, u0[2]!.key].sort()]);
+      expect([validateProject(store.getProject(u.pid).doc), noOverlap(u.pid, mixed.runId), whole(u.pid, mixed.runId)]).toEqual([[], true, true]);
       // a clip the film did not make, before the film on its picture track, deleted with its gap closed: every pick moved, none
       // of the film's own clips is gone, so every pick is kept as moved by hand (as before the rule)
       const v = seed('ff-foreign-delete', THREE);
@@ -400,10 +401,46 @@ describe('a film clip deleted by hand stays deleted (ADR-0016 decision 6, applie
       expect([validateProject(store.getProject(v.pid).doc), noOverlap(v.pid, later.runId), whole(v.pid, later.runId), picksOf(v.pid, later.runId).map((x) => x.from)]).toEqual([[], true, true, v0.map((x) => x.from - 60)]);
     });
 
-    it('property (seeded): after hand edits (deletes that close the gap, drags, trims, turns), a film regeneration is one valid revision that undoes exactly and replays, or a refusal that changes nothing; after gap-closing deletes alone nothing is kept and the pictures run without a gap; while none of the film\'s clips is deleted every dragged clip is kept where it was put', async () => {
-      const tally = { runs: 0, refused: 0, ripples: 0, drags: 0, deletesOnly: 0, noDelete: 0, movedBack: 0, kept: 0, draggedKept: 0 };
+    it('Shift+Delete then Delete, and Delete then Shift+Delete, before the same picks: they moved by the one closed length and are laid out again with the film, not kept as hand edits; a pick dragged by hand after the two deletes is still kept where it was put', async () => {
+      const FOUR = ['2026-12-05T18:00:00', '2026-12-05T18:10:00', '2026-12-05T18:20:00', '2026-12-05T18:30:00'];
+      const film = async (name: string) => { const s = seed(name, FOUR); const applied = await applyFamilyFilmFor(store, gov, USER, s.pid, { assetIds: s.ids, targetSeconds: 30 }); return { ...s, runId: applied.runId, p0: picksOf(s.pid, applied.runId) }; };
+      const hand = (pid: string, ops: { op: string; args: unknown }[]) => store.commit({ projectId: pid, actor: 'user:owner', ops });
+      const whole = (pid: string, runId: string) => { const p = picksOf(pid, runId); return p.every((x, i) => i === 0 || x.from === p[i - 1]!.to); };
+      const keepGap = (id: string) => ({ op: 'delete_clip', args: { clipId: id } }), closeGap = (id: string) => ({ op: 'ripple_delete_clips', args: { clipIds: [id] } });
+      for (const [name, first, second] of [['ff-kept-then-closed', keepGap, closeGap], ['ff-closed-then-kept', closeGap, keepGap]] as const) {
+        const a = await film(name);
+        expect(a.p0.length, name).toBe(4);
+        const closedLength = (first === closeGap ? a.p0[0]! : a.p0[1]!).to - (first === closeGap ? a.p0[0]! : a.p0[1]!).from;
+        hand(a.pid, [first(a.p0[0]!.id)]);
+        hand(a.pid, [second(a.p0[1]!.id)]);
+        // the two later picks lie one deleted length early, while two picks are gone before them
+        expect(picksOf(a.pid, a.runId).map((x) => [x.id, x.from]), name).toEqual([[a.p0[2]!.id, a.p0[2]!.from - closedLength], [a.p0[3]!.id, a.p0[3]!.from - closedLength]]);
+        const r = await regenerateFamilyFilmFor(store, gov, USER, a.pid, a.runId, {});
+        expect([r.protected, [...(r.movedBack ?? [])].sort(), [...r.removed].sort(), r.warnings.map((w) => w.code).includes('kept_by_hand')], name).toEqual([[], [a.p0[2]!.key, a.p0[3]!.key].sort(), [a.p0[0]!.key, a.p0[1]!.key].sort(), false]);
+        expect([validateProject(store.getProject(a.pid).doc), whole(a.pid, a.runId), layout(a.pid, a.runId).map((x) => x[0])], name).toEqual([[], true, [a.ids[2], a.ids[3]]]);
+        // exact undo, one step
+        const after = revision(a.pid);
+        store.undo(a.pid, 'user:owner', 'undo');
+        expect([revision(a.pid), picksOf(a.pid, a.runId).map((x) => x.from)], name).toEqual([after + 1, [a.p0[2]!.from - closedLength, a.p0[3]!.from - closedLength]]);
+      }
+      // the same two deletes, then the last pick dragged 15 frames on by hand: no reading of the deletes gives that amount, so
+      // it is kept where it was put; the pick before it, which only the delete moved, is still laid out again
+      const b = await film('ff-two-deletes-then-drag');
+      const len = b.p0[1]!.to - b.p0[1]!.from;
+      hand(b.pid, [keepGap(b.p0[0]!.id)]);
+      hand(b.pid, [closeGap(b.p0[1]!.id)]);
+      hand(b.pid, [{ op: 'move_clip', args: { clipId: b.p0[3]!.id, start: T.frameTime(b.p0[3]!.from - len + 15, R) } }]);
+      const keptB = structuredClone(findClip(store.getProject(b.pid).doc, b.p0[3]!.id)!.clip);
+      const rb = await regenerateFamilyFilmFor(store, gov, USER, b.pid, b.runId, {});
+      expect([rb.protected.includes(b.p0[3]!.id), rb.protected.includes(b.p0[2]!.id), rb.movedBack, rb.warnings.map((w) => w.code).includes('kept_by_hand')]).toEqual([true, false, [b.p0[2]!.key], true]);
+      expect(findClip(store.getProject(b.pid).doc, b.p0[3]!.id)!.clip).toEqual(keptB);
+      expect(validateProject(store.getProject(b.pid).doc)).toEqual([]);
+    });
+
+    it('property (seeded): after hand edits (deletes that close the gap, deletes that keep the gap, drags, trims, turns), a film regeneration is one valid revision that undoes exactly and replays, or a refusal that changes nothing; after deletes alone, gap-closing and gap-keeping in any order, nothing is kept and the pictures run without a gap; while none of the film\'s clips is deleted every dragged clip is kept where it was put', async () => {
+      const tally = { runs: 0, refused: 0, ripples: 0, gapKeeping: 0, drags: 0, deletesOnly: 0, mixedDeletesOnly: 0, noDelete: 0, movedBack: 0, kept: 0, draggedKept: 0 };
       let project = 0;
-      await fc.assert(fc.asyncProperty(fc.array(fc.tuple(fc.nat(5), fc.nat(20), fc.nat(50)), { minLength: 1, maxLength: 4 }), fc.boolean(), async (edits, restore) => {
+      await fc.assert(fc.asyncProperty(fc.array(fc.tuple(fc.nat(7), fc.nat(20), fc.nat(50)), { minLength: 1, maxLength: 4 }), fc.boolean(), async (edits, restore) => {
         const s = seed(`ff-prop-${project++}`, THREE);
         const applied = await applyFamilyFilmFor(store, gov, USER, s.pid, { assetIds: s.ids, targetSeconds: 30 });
         const done = new Set<string>();
@@ -416,12 +453,15 @@ describe('a film clip deleted by hand stays deleted (ADR-0016 decision 6, applie
           const [name, op] = ([
             ['ripple', { op: 'ripple_delete_clips', args: { clipIds: [clipId] } }],
             ['ripple', { op: 'ripple_delete_clips', args: { clipIds: [clipId] } }],
+            // Shift+Delete: the clip goes (with its linked sound) and its gap stays
+            ['delete', { op: 'delete_clip', args: { clipId } }],
+            ['delete', { op: 'delete_clip', args: { clipId } }],
             ['drag', { op: 'move_clip', args: { clipId, start: T.frameTime(start + 1 + amount, R) } }],
             ['drag', { op: 'move_clip', args: { clipId, start: T.frameTime(Math.max(0, start - 1 - amount), R) } }],
             ['trim', { op: 'trim_clip', args: { clipId, edge: 'end', to: T.frameTime(start + 10 + (amount % 40), R) } }],
             ['turn', { op: 'set_clip_transform', args: { clipId, transform: { rotation: 1 + amount } } }],
           ] as const)[kind]!;
-          try { store.commit({ projectId: s.pid, actor: 'user:owner', ops: [op] }); done.add(name); if (name === 'ripple') tally.ripples++; if (name === 'drag') tally.drags++; } catch (e) { if (!(e instanceof ApiError)) throw e; }
+          try { store.commit({ projectId: s.pid, actor: 'user:owner', ops: [op] }); done.add(name); if (name === 'ripple') tally.ripples++; if (name === 'delete') tally.gapKeeping++; if (name === 'drag') tally.drags++; } catch (e) { if (!(e instanceof ApiError)) throw e; }
         }
         const held = store.getProject(s.pid).doc, before = revision(s.pid), run = held.recipeRuns[applied.runId]!;
         const live = run.createdIds.filter((id) => !!findClip(held, id));
@@ -444,14 +484,16 @@ describe('a film clip deleted by hand stays deleted (ADR-0016 decision 6, applie
         // what is said to be put back was moved by a delete: one of the film's own clips is gone
         if ((r.movedBack ?? []).length && live.length === run.createdIds.filter((id) => !Object.values(held.sequences).some((q) => q.tracks.some((t) => t.id === id))).length) throw new Error('clips were put back although none of the film\'s clips was deleted');
         const keptClipIds = r.protected.filter((id) => !!findClip(held, id));
-        if (done.size === 1 && done.has('ripple')) {
+        // deletes alone, each with its gap closed or kept, in any order: every clip lies where those deletes left it, so none is a hand edit
+        if (done.size > 0 && [...done].every((x) => x === 'ripple' || x === 'delete')) {
           tally.deletesOnly++;
-          if (keptClipIds.length || codes.includes('kept_by_hand') || codes.includes('cut_off_grid_next_to_kept')) throw new Error(`only gap-closing deletes, yet clips were kept as hand edits: ${JSON.stringify({ kept: keptClipIds, codes })}`);
+          if (done.size === 2) tally.mixedDeletesOnly++;
+          if (keptClipIds.length || codes.includes('kept_by_hand') || codes.includes('cut_off_grid_next_to_kept')) throw new Error(`only deletes, yet clips were kept as hand edits: ${JSON.stringify({ kept: keptClipIds, codes, done: [...done] })}`);
           const p = picksOf(s.pid, applied.runId);
           if (p.some((x, i) => x.from !== (i === 0 ? p[0]!.from : p[i - 1]!.to))) throw new Error(`a gap between the pictures: ${JSON.stringify(p.map((x) => [x.from, x.to]))}`);
-          if (restore && JSON.stringify(p.map((x) => x.file)) !== JSON.stringify(s.ids)) throw new Error(`restoreRemoved after gap-closing deletes did not give every file in order: ${JSON.stringify(p.map((x) => x.file))}`);
+          if (restore && JSON.stringify(p.map((x) => x.file)) !== JSON.stringify(s.ids)) throw new Error(`restoreRemoved after deletes alone did not give every file in order: ${JSON.stringify(p.map((x) => x.file))}`);
         }
-        if (!done.has('ripple')) {
+        if (!done.has('ripple') && !done.has('delete')) {
           // none of the film's clips was deleted, so no move is explained by a delete: every clip that lies somewhere else than
           // the film placed it was dragged by hand and is kept
           tally.noDelete++;
@@ -469,7 +511,9 @@ describe('a film clip deleted by hand stays deleted (ADR-0016 decision 6, applie
       console.log(`family film regeneration after hand edits (property): ${JSON.stringify(tally)}`);
       expect(tally.ripples).toBeGreaterThan(5);
       expect(tally.drags).toBeGreaterThan(5);
+      expect(tally.gapKeeping).toBeGreaterThan(5);
       expect(tally.deletesOnly).toBeGreaterThan(1);
+      expect(tally.mixedDeletesOnly).toBeGreaterThan(0);
       expect(tally.movedBack).toBeGreaterThan(1);
       expect(tally.draggedKept).toBeGreaterThan(1);
     }, 300_000);
