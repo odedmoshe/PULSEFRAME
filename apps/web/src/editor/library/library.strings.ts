@@ -32,7 +32,7 @@ export const LIBRARY_UI_HE = {
   lengthShort: 'קצר', lengthMid: 'בינוני', lengthLong: 'ארוך',
   noProject: 'קודם פותחים פרויקט, ואז אפשר להוסיף אליו',
   creditsCardRefused: 'כרטיס הקרדיטים לא נוסף: {reason}',
-  archiveKeepOwnerOnly: 'רק בעל הפרויקט יכול להוריד ארכיון עם כל הקבצים. אם צריך כזה, בקשו ממנו',
+  archiveKeepOwnerOnly: 'ארכיון עם כל הקבצים אפשר להוריד רק מהחיבור של בעלי הפרויקט',
 } as const;
 export const LIBRARY_UI_EN: Record<keyof typeof LIBRARY_UI_HE, string> = {
   audioTab: 'From the library', elementsBuiltin: 'Built-in', elementsLibrary: 'From the library',
