@@ -195,29 +195,32 @@ async function main() {
       await runEl.getByTestId('recipe-regenerate').click();
       await waitRev(revA + 2, 20000);
       await sleep(500);
-      const placesOf = (d: any) => JSON.stringify(vclips(d).map((c: any) => [fr(c.start), fr(c.duration)]).sort((x: number[], y: number[]) => x[0]! - y[0]!));
-      const places0 = placesOf({ sequences: { seq_main: { tracks: [{ kind: 'video', clips: pics0 }] } } }), placesLeft = placesOf({ sequences: { seq_main: { tracks: [{ kind: 'video', clips: pics0.filter((c: any) => c.id !== gone.id) }] } } });
-      const movedN = pics0.filter((c: any) => fr(c.start) >= to).length;
+      // the montage's extent before the delete, and the frames of it that show no picture (the panel regenerates with the cut rate
+      // its form holds now, so the clips are counted by the frames they cover, not one by one)
+      const [ext0, ext1] = [fr(pics0[0].start), Math.max(...pics0.map((c: any) => fr(c.start) + fr(c.duration)))];
+      const holes = (d: any) => { const sp = vclips(d).map((c: any) => [fr(c.start), fr(c.start) + fr(c.duration)]); let n = 0; for (let x = ext0; x < ext1; x++) if (!sp.some(([a, b]: number[]) => a! <= x && x < b!)) n++; return n; };
+      const movedIds = pics0.filter((c: any) => fr(c.start) >= to).map((c: any) => c.id as string);
+      const movedN = movedIds.length;
       const dR = (await get(ep)).project;
-      const obs: Record<string, unknown> = { deleteOps: rippleOps, moved: movedN, afterRegenerate: { said: await resultText(), offered: await restoreBtn.count(), error: await page.getByTestId('recipe-error').textContent().catch(() => null), pictures: vclips(dR).length, over: over(dR), onTheirPlaces: placesOf(dR) === placesLeft, kept: vclips(dR).some((c: any) => c.id === first.id && c.effects?.[0]?.type === 'color.sepia') } };
+      const obs: Record<string, unknown> = { deleteOps: rippleOps, moved: movedN, deletedFrames: to - from, afterRegenerate: { said: await resultText(), offered: await restoreBtn.count(), error: await page.getByTestId('recipe-error').textContent().catch(() => null), pictures: vclips(dR).length, over: over(dR), holes: holes(dR), movedStillThere: vclips(dR).filter((c: any) => movedIds.includes(c.id)).length, kept: vclips(dR).some((c: any) => c.id === first.id && c.effects?.[0]?.type === 'color.sepia') } };
       if (await restoreBtn.count()) {
         const revB = (await get(ep)).revision;
         await restoreBtn.click();
         await waitRev(revB + 1, 20000);
         await sleep(500);
         const dB = (await get(ep)).project;
-        obs.afterButton = { said: await resultText(), offered: await restoreBtn.count(), error: await page.getByTestId('recipe-error').textContent().catch(() => null), pictures: vclips(dB).length, revisions: (await get(ep)).revision - revB, onTheirPlaces: placesOf(dB) === places0 };
+        obs.afterButton = { said: await resultText(), offered: await restoreBtn.count(), error: await page.getByTestId('recipe-error').textContent().catch(() => null), pictures: vclips(dB).length, revisions: (await get(ep)).revision - revB, holes: holes(dB) };
       }
       let observedUndone = false;
       for (let n = (await get(ep)).revision - revA; n > 0; n--) { await page.keyboard.press('Control+z'); await sleep(500); }
       for (let i = 0; i < 100 && !observedUndone; i++) { observedUndone = shape((await get(ep)).project) === shape0; if (!observedUndone) await sleep(100); }
       obs.undoneExactly = observedUndone;
       {
-        const ar = obs.afterRegenerate as { said: string; offered: number; error: string | null; pictures: number; over: number; onTheirPlaces: boolean; kept: boolean };
-        const ab = (obs.afterButton ?? {}) as { said?: string; offered?: number; error?: string | null; revisions?: number; onTheirPlaces?: boolean };
-        check('editor: a montage clip deleted with Delete (the gap closes, the later clips move earlier): regenerate places the moved clips again on their beats, leaves the deleted clip\'s place empty and says both in Hebrew («הונחו מחדש במקומם כי רק זזו: N», «נשארו ריקים כי נמחקו ידנית: 1»); «החזרת החלקים שנמחקו» then fills the place (1 revision); the hand-edited clip is kept; undo returns exactly',
-          JSON.stringify(rippleOps) === '[["ripple_delete_clips"]]' && movedN > 0 && ar.error === null && ar.over === 0 && ar.onTheirPlaces && ar.kept && ar.offered === 1 && ar.said.includes(`${he['recipes.movedBack']}: ${movedN}`) && he['recipes.movedBack'] === 'הונחו מחדש במקומם כי רק זזו' && ar.said.includes(`${he['recipes.removed']}: 1`) && ar.said.includes(`${he['recipes.kept']}: 1`)
-            && ab.revisions === 1 && ab.error === null && ab.offered === 0 && ab.onTheirPlaces === true && !(ab.said ?? '').includes(he['recipes.removed']!) && observedUndone,
+        const ar = obs.afterRegenerate as { said: string; offered: number; error: string | null; pictures: number; over: number; holes: number; movedStillThere: number; kept: boolean };
+        const ab = (obs.afterButton ?? {}) as { said?: string; offered?: number; error?: string | null; revisions?: number; holes?: number };
+        check('editor: a montage clip deleted with Delete (the gap closes, the later clips move earlier): regenerate does not keep the moved clips one segment early but places clips again up to the montage\'s end, leaving exactly the deleted clip\'s frames empty, and says both in Hebrew («הונחו מחדש במקומם כי רק זזו: N», «נשארו ריקים כי נמחקו ידנית: 1»); «החזרת החלקים שנמחקו» then fills the place (1 revision, no frame empty); the hand-edited clip is kept; undo returns exactly',
+          JSON.stringify(rippleOps) === '[["ripple_delete_clips"]]' && movedN > 0 && ar.error === null && ar.over === 0 && ar.holes === to - from && ar.movedStillThere === 0 && ar.kept && ar.offered === 1 && ar.said.includes(`${he['recipes.movedBack']}: ${movedN}`) && he['recipes.movedBack'] === 'הונחו מחדש במקומם כי רק זזו' && ar.said.includes(`${he['recipes.removed']}: 1`) && ar.said.includes(`${he['recipes.kept']}: 1`)
+            && ab.revisions === 1 && ab.error === null && ab.offered === 0 && ab.holes === 0 && !(ab.said ?? '').includes(he['recipes.removed']!) && observedUndone,
           obs);
       }
       const rev0 = (await get(ep)).revision;
