@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T00:25:33.608Z",
+  "ranAt": "2026-11-25T01:01:39.616Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "browser": "153.0.8010.12"
@@ -34,11 +34,11 @@
     "13-export-finished"
   ],
   "summary": {
-    "ids": 659,
+    "ids": 663,
     "patterns": 29,
     "staticMissing": [],
-    "inTheDomOfAState": 282,
-    "onlyInItsOwnProofScenario": 377,
+    "inTheDomOfAState": 283,
+    "onlyInItsOwnProofScenario": 380,
     "lostSinceTheLastReport": [],
     "acceptedWithLosses": false,
     "unreadableReferences": 51
@@ -128,6 +128,8 @@
     {"id":"backup-now","kind":"exact","usedBy":["owner-ui-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/ProjectsDialog.tsx"]},"dynamic":[]},
     {"id":"backup-snapshots","kind":"exact","usedBy":["owner-ui-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/ProjectsDialog.tsx"]},"dynamic":[]},
     {"id":"bar-assistant-accept","kind":"exact","usedBy":["command-bar-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/commandBar/commandBar.testids.ts"]},"dynamic":[]},
+    {"id":"bar-assistant-cancel","kind":"exact","usedBy":["command-bar-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/commandBar/commandBar.testids.ts"]},"dynamic":[]},
+    {"id":"bar-assistant-canceled","kind":"exact","usedBy":["command-bar-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/commandBar/commandBar.testids.ts"]},"dynamic":[]},
     {"id":"bar-assistant-connect","kind":"exact","usedBy":["editor-interactions-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/commandBar/commandBar.testids.ts"]},"dynamic":[]},
     {"id":"bar-assistant-proposal","kind":"exact","usedBy":["command-bar-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/commandBar/commandBar.testids.ts"]},"dynamic":[]},
     {"id":"bar-choice","kind":"exact","usedBy":["a11y-audit.ts","command-bar-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/commandBar/commandBar.testids.ts"]},"dynamic":[]},
@@ -142,7 +144,7 @@
     {"id":"bar-unread","kind":"exact","usedBy":["command-bar-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/commandBar/commandBar.testids.ts"]},"dynamic":[]},
     {"id":"beat-every","kind":"exact","usedBy":["a11y-audit.ts","editor-interactions-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/LookPanel.tsx"]},"dynamic":[]},
     {"id":"beat-fieldset","kind":"exact","usedBy":["a11y-audit.ts","editor-interactions-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/LookPanel.tsx"]},"dynamic":[]},
-    {"id":"beat-marker","kind":"exact","usedBy":["phase9-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/PulseStrip.tsx"]},"dynamic":[]},
+    {"id":"beat-marker","kind":"exact","usedBy":["editor-interactions-proof.ts","phase9-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/PulseStrip.tsx"]},"dynamic":[]},
     {"id":"beat-toggle","kind":"exact","usedBy":["a11y-audit.ts","editor-interactions-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/LookPanel.tsx"]},"dynamic":[]},
     {"id":"blend-mode","kind":"exact","usedBy":["phase7-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/LookPanel.tsx"]},"dynamic":["03-clip-selected","04-format-9x16","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu"]},
     {"id":"cache-clear","kind":"exact","usedBy":["a11y-audit.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/renderCache.testids.ts"]},"dynamic":[]},
@@ -520,7 +522,7 @@
     {"id":"revision","kind":"exact","usedBy":["phase0-proof.ts","phase12-proof.ts","phase3-proof.ts","phase5-proof.ts","voicefx-ui-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/Header.tsx"]},"dynamic":["01-start-empty","02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates","x-rail-ai","13-export-finished"]},
     {"id":"ruler","kind":"exact","usedBy":["a11y-audit.ts","editor-interactions-proof.ts","input-matrix.ts","keyframes-proof.ts","lifeline-proof.ts","parity-suite.ts","phase0-proof.ts","phase3-proof.ts","pitch-proof.ts","project-matrix.ts","render-fuzz.ts","request-bench.ts","reverse-sound-proof.ts","shuttle-flash.ts","speed-proof.ts","start-offset.ts","time-proof.ts","tracking-proof.ts","trend-transitions-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/Timeline.tsx"]},"dynamic":["01-start-empty","02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates","x-rail-ai","13-export-finished"]},
     {"id":"safe-area","kind":"exact","usedBy":["phase12-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/CanvasHandles.tsx"]},"dynamic":["04-format-9x16"]},
-    {"id":"scene-marker","kind":"exact","usedBy":["phase9-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/PulseStrip.tsx"]},"dynamic":[]},
+    {"id":"scene-marker","kind":"exact","usedBy":["editor-interactions-proof.ts","phase9-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/PulseStrip.tsx"]},"dynamic":[]},
     {"id":"scope-histogram","kind":"exact","usedBy":["phase3-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/Scopes.tsx"]},"dynamic":[]},
     {"id":"scope-vectorscope","kind":"exact","usedBy":["phase3-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/Scopes.tsx"]},"dynamic":[]},
     {"id":"scope-waveform","kind":"exact","usedBy":["phase3-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/Scopes.tsx"]},"dynamic":[]},
@@ -629,6 +631,8 @@
     {"id":"time-cost","kind":"exact","usedBy":["editor-interactions-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/LookPanel.tsx"]},"dynamic":[]},
     {"id":"time-separator","kind":"exact","usedBy":["a11y-audit.ts","editor-interactions-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/LookPanel.tsx"]},"dynamic":[]},
     {"id":"timecode","kind":"exact","usedBy":["a11y-audit.ts","a11y-render-cache.ts","ai-ui-proof.ts","command-bar-proof.ts","editor-interactions-proof.ts","lifeline-ui-proof.ts","long-media.ts","owner-ui-proof.ts","phase0-proof.ts","phase3-proof.ts","phase6-proof.ts","phase8-proof.ts","phone-drop-proof.ts","tracking-proof.ts","voicefx-ui-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/Transport.tsx"]},"dynamic":["01-start-empty","02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates","x-rail-ai","13-export-finished"]},
+    {"id":"timeline-markers","kind":"exact","usedBy":["editor-interactions-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/PulseStrip.tsx"]},"dynamic":["01-start-empty","02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates","x-rail-ai","13-export-finished"]},
+    {"id":"tl-bpm","kind":"exact","usedBy":["editor-interactions-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/PulseStrip.tsx"]},"dynamic":[]},
     {"id":"tl-zoom-fit","kind":"exact","usedBy":["creative-tools-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/TimelineZoom.tsx"]},"dynamic":["01-start-empty","02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates","x-rail-ai","13-export-finished"]},
     {"id":"tl-zoom-in","kind":"exact","usedBy":["creative-tools-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/TimelineZoom.tsx"]},"dynamic":["01-start-empty","02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates","x-rail-ai","13-export-finished"]},
     {"id":"tl-zoom-out","kind":"exact","usedBy":["creative-tools-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/TimelineZoom.tsx"]},"dynamic":["01-start-empty","02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates","x-rail-ai","13-export-finished"]},

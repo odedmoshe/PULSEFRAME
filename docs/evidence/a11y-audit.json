@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T00:19:00.857Z",
+  "ranAt": "2026-11-25T00:56:28.119Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "browser": "153.0.8010.12"
@@ -145,7 +145,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_812f89484c0]",
+          "focusAfterClose": "button[data-testid=more-ast_13e46a3ee70]",
           "focusReturned": true
         },
         {
@@ -653,7 +653,7 @@
         },
         {
           "state": "cache-sheet-ready",
-          "controls": 477,
+          "controls": 478,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -765,7 +765,7 @@
         },
         {
           "state": "multicam-panel",
-          "controls": 382,
+          "controls": 381,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1026,7 +1026,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_812f89484c0]",
+          "focusAfterClose": "button[data-testid=more-ast_13e46a3ee70]",
           "focusReturned": true
         },
         {
@@ -1552,7 +1552,7 @@
         },
         {
           "state": "cache-sheet-disabled",
-          "controls": 477,
+          "controls": 476,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1945,7 +1945,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 471,
+          "controls": 472,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
