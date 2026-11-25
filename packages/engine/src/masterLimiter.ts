@@ -54,6 +54,9 @@ export class MasterLimiter {
   /** timeline index of the next input sample */
   private t: number;
   private q = 1;
+  /** samples pushed so far: the first M − 1 outputs carry the delay line's initial silence, and their gain (an average over fewer
+   *  than M pushed values) is not a reduction of any sound, so they are left out of the stats and the meter */
+  private pushed = 0;
   private lastGain = 1;
   private minGain = 1;
   private limited = 0;
@@ -78,7 +81,7 @@ export class MasterLimiter {
   /** Process one block in place order (inputs and outputs may be the same arrays). */
   process(inL: Float32Array, inR: Float32Array, outL: Float32Array, outR: Float32Array): void {
     const M = this.lookahead, c = this.ceiling, k = this.k, ringL = this.ringL, ringR = this.ringR, n = inL.length;
-    let pos = this.pos, t = this.t, q = this.q, g = this.lastGain;
+    let pos = this.pos, t = this.t, q = this.q, g = this.lastGain, pushed = this.pushed;
     for (let i = 0; i < n; i++) {
       const xl = inL[i]!, xr = inR[i]!;
       const al = xl < 0 ? -xl : xl, ar = xr < 0 ? -xr : xr, pk = al > ar ? al : ar;
@@ -96,14 +99,14 @@ export class MasterLimiter {
       if (yr > c) yr = c; else if (yr < -c) yr = -c;
       outL[i] = yl;
       outR[i] = yr;
-      if (g < 1) {
+      if (++pushed >= M && g < 1) {
         this.limited++;
         this.lastLimited = t - (M - 1);
         if (g < this.minGain) this.minGain = g;
       }
       t++;
     }
-    this.pos = pos; this.t = t; this.q = q; this.lastGain = g;
+    this.pos = pos; this.t = t; this.q = q; this.lastGain = pushed >= M ? g : 1; this.pushed = pushed;
   }
   /** Gain reduction of the last processed sample, in dB (≤ 0), for the meter. */
   reductionDb(): number { return this.lastGain < 1 ? 20 * Math.log10(this.lastGain) : 0; }

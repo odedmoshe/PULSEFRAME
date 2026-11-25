@@ -85,6 +85,15 @@ describe('master limiter kernel', () => {
     expect(lim.reductionDb()).toBe(0);
   });
 
+  it('the start-up of the delay line is not counted as a reduction (a quiet stream reports none)', () => {
+    const rate = 48000, n = 5000, left = new Float32Array(n).fill(0.1), right = new Float32Array(n).fill(-0.1);
+    for (const start of [0, 17, 1234567]) {
+      const { out, stats } = limiterRun({ left, right }, rate, -1, 128, start);
+      expect(stats).toEqual({ maxReductionDb: 0, limitedSamples: 0, lastLimitedSample: null });
+      expect(out[(240 - 1) * 2]).toBe(left[0]); // output latency samples later is the input, untouched
+    }
+  });
+
   it('the block size changes nothing, and a stream started later equals the full stream 125 ms after its start', () => {
     const rate = 48000, x = limiterFixture(rate, 2);
     const a = limiterRun(x, rate, -2, 128).out, b = limiterRun(x, rate, -2, 1).out, c = limiterRun(x, rate, -2, 4801).out;

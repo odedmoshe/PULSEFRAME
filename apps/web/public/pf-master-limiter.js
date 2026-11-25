@@ -56,7 +56,7 @@ registerProcessor('pf-master-limiter', class extends AudioWorkletProcessor {
     this.M = M; this.c = o.ceiling; this.k = 1 / (0.12 * sampleRate);
     this.minW = new AnchoredMin(M); this.sumW = new AnchoredSum(M);
     this.ringL = new Float64Array(M); this.ringR = new Float64Array(M);
-    this.pos = 0; this.t = typeof o.startSample === 'number' ? o.startSample : null; this.q = 1;
+    this.pos = 0; this.t = typeof o.startSample === 'number' ? o.startSample : null; this.q = 1; this.pushed = 0;
     this.win = 0; this.winMin = 1; this.winT = 0; this.winLen = Math.round(sampleRate * 0.05);
   }
   process(inputs, outputs) {
@@ -83,9 +83,10 @@ registerProcessor('pf-master-limiter', class extends AudioWorkletProcessor {
       if (yr > c) yr = c; else if (yr < -c) yr = -c;
       outL[i] = yl;
       if (outR !== outL) outR[i] = yr;
-      // the meter (observation only): the smallest gain of each 50 ms window
+      // the meter (observation only): the smallest gain of each 50 ms window; the first M − 1 outputs (the delay line's initial
+      // silence, averaged over fewer than M values) are no reduction of any sound
       if (this.win === 0) { this.winT = t; this.winMin = 1; }
-      if (g < this.winMin) this.winMin = g;
+      if (++this.pushed >= M && g < this.winMin) this.winMin = g;
       if (++this.win >= this.winLen) { this.port.postMessage({ t: this.winT, reductionDb: this.winMin < 1 ? 20 * Math.log10(this.winMin) : 0 }); this.win = 0; }
       t++;
     }
