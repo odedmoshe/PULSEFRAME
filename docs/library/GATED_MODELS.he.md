@@ -149,10 +149,14 @@ $root='E:\PULSEFRAME-Library\models\gated\stable-audio-open-small'; Get-ChildIte
 
 1. לפני כן: אשרו את התנאים בשני דפי המודלים (חלקים ב.1 ו-ג.2).
 2. צרו מפתח: פתחו `https://huggingface.co/settings/tokens`, לחצו על הכפתור ליצירת מפתח חדש (New token / Create new token), בחרו בסוג **Read**, תנו לו שם כלשהו, וצרו אותו. העתיקו את המפתח (מתחיל ב-`hf_`). (שמות הכפתורים לא אומתו מראש; אם הדף נראה אחרת, שלחו צילום מסך בלי המפתח עצמו.)
-3. פתחו PowerShell והריצו את שתי הפקודות, אחת אחרי השנייה:
+3. פתחו PowerShell והריצו את שלוש הפקודות, אחת אחרי השנייה (שתי הראשונות מעדכנות את תיקיית הכלים):
 
 ```
-git -C E:\PULSEFRAME-Library\_tools\repo pull --depth 1 --ff-only origin claude/confident-planck-677xq5
+git -C E:\PULSEFRAME-Library\_tools\repo fetch --depth 1 origin claude/confident-planck-677xq5
+```
+
+```
+git -C E:\PULSEFRAME-Library\_tools\repo checkout --detach FETCH_HEAD
 ```
 
 ```
