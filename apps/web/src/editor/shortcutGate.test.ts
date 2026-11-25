@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Keymap } from './commands.ts';
-import { isTyping, shortcutAllowed, takenFromBrowser } from './shortcutGate.ts';
+import { isTyping, shortcutAllowed, spaceBelongsToControl, takenFromBrowser, type FocusedControl } from './shortcutGate.ts';
 
 const storage = () => { const d = new Map<string, string>(); return { getItem: (k: string) => d.get(k) ?? null, setItem: (k: string, v: string) => void d.set(k, v), removeItem: (k: string) => void d.delete(k) }; };
 const km = new Keymap(storage());
@@ -79,5 +79,27 @@ describe('the craft chords (wave 7)', () => {
     other.bind('file.saveVersion', ['Mod+Shift+KeyS']);
     expect(takenFromBrowser('Mod+KeyS', (id) => other.keysFor(id))).toBe(false);
     expect(takenFromBrowser('Mod+Shift+KeyS', (id) => other.keysFor(id))).toBe(true);
+  });
+});
+
+describe('spaceBelongsToControl (Space on a control with keyboard focus presses it; otherwise it plays and pauses)', () => {
+  const el = (tagName: string, more: Partial<FocusedControl> = {}): FocusedControl => ({ tagName, isContentEditable: false, focusVisible: true, ...more });
+  it('keyboard focus on a button, switch, checkbox, link, summary or select: Space is the control\'s', () => {
+    for (const e of [el('BUTTON'), el('DIV', { role: 'switch' }), el('BUTTON', { role: 'switch' }), el('DIV', { role: 'checkbox' }), el('SPAN', { role: 'button' }), el('A', { hasHref: true }), el('SPAN', { role: 'link' }), el('SUMMARY'), el('SELECT'), el('INPUT', { type: 'checkbox' }), el('INPUT', { type: 'submit' }), el('INPUT', { type: 'button' })])
+      expect(spaceBelongsToControl(e, 'Space'), JSON.stringify(e)).toBe(true);
+  });
+  it('after a mouse click (focus without :focus-visible) Space still plays and pauses', () => {
+    for (const e of [el('BUTTON', { focusVisible: false }), el('DIV', { role: 'switch', focusVisible: false }), el('SUMMARY', { focusVisible: false })]) expect(spaceBelongsToControl(e, 'Space')).toBe(false);
+  });
+  it('everywhere else Space plays and pauses: the page, a plain element, a link without href, a tab, a slider, nothing focused', () => {
+    for (const e of [null, el('BODY'), el('DIV'), el('A'), el('DIV', { role: 'tab' }), el('DIV', { role: 'slider' }), el('CANVAS')]) expect(spaceBelongsToControl(e, 'Space'), JSON.stringify(e)).toBe(false);
+  });
+  it('only plain Space: other keys and chords on a focused button keep their commands', () => {
+    for (const c of ['Shift+Space', 'Mod+Space', 'KeyS', 'Enter', 'ArrowLeft']) expect(spaceBelongsToControl(el('BUTTON'), c), c).toBe(false);
+  });
+  it('with the rule, Space on a keyboard-focused button counts as typing for the gate, so transport.toggle does not run', () => {
+    const typing = isTyping({ tagName: 'BUTTON', isContentEditable: false }, 'Space') || spaceBelongsToControl(el('BUTTON'), 'Space');
+    expect(allowed('Space', { typing })).toBe(false);
+    expect(allowed('Space', { typing: isTyping({ tagName: 'BUTTON', isContentEditable: false }, 'Space') || spaceBelongsToControl(el('BUTTON', { focusVisible: false }), 'Space') })).toBe(true);
   });
 });

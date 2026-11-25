@@ -15,5 +15,18 @@ export const SEND_TESTIDS = {
   match: 'loudness-match', matchRun: 'loudness-match-run', matchResult: 'loudness-match-result',
   /** LimiterSwitch in the sound panel's loudness section, and the meter's gain-reduction bar */
   limiter: 'master-limiter', limiterSwitch: 'master-limiter-switch', limiterCeiling: 'master-limiter-ceiling', meterReduction: 'meter-reduction',
+  // ---- added by the integration pass: the further ids builder C put on the send UI (each on one element, used by the proofs) ----
+  /** SendSize: «choose a size» note before one is chosen; the sheet's quality note on the send tile */
+  sizePending: 'send-size-pending', qualityNote: 'send-quality-note',
+  /** the export progress line while the fit runs (Hebrew stages) */
+  fitStage: 'fit-stage',
+  /** the findings in the status bar (StatusBar), ChecksResult's quiet state, the ruler mark of a finding (Timeline) */
+  checksStatus: 'export-checks-status', checksQuiet: 'export-checks-quiet', checkMark: 'export-check-mark',
+  /** Deliver panel: the send button, the recent export's fit line and findings count */
+  deliverSend: 'deliver-send', deliverRecentFit: 'deliver-recent-fit', deliverRecentFound: 'deliver-recent-found',
+  /** LoudnessMatch: the plan block, its target field, the per-clip preview, apply, undo, the refusal, the per-track button(s) */
+  matchPlan: 'loudness-match-plan', matchTarget: 'loudness-match-target', matchPreview: 'loudness-match-preview', matchApply: 'loudness-match-apply', matchUndo: 'loudness-match-undo', matchError: 'loudness-match-error', matchTracks: 'loudness-match-tracks', matchTrack: 'loudness-match-track',
+  /** LimiterSwitch: the honest state when the preview cannot load the limiter; the meter's note «לפני הגברת הייצוא» */
+  limiterUnavailable: 'master-limiter-unavailable', beforeExportGain: 'meter-before-export-gain',
 } as const;
 export type SendTestId = (typeof SEND_TESTIDS)[keyof typeof SEND_TESTIDS];

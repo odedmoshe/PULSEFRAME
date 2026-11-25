@@ -69,3 +69,9 @@ While it plays, the preview composites at the scale of the proxies: the frame's 
 - Preview audio decodes the whole file with `decodeAudioData`; fine for short clips, not for long media.
 - No colour management beyond "treat sources as SDR BT.709, tag output BT.709". HDR sources are not detected or tone-mapped.
 - The headless browser uses Playwright's default launch settings in this container. A hosted deployment must isolate the render worker (SPEC §26); not designed yet.
+
+## Amendment 2026-11-25: size fit (wave 7 send)
+- The size fit encodes the compositor's frames twice: a CRF 16 intermediate at the planned picture size, then a two-pass encode of
+  that file to the target bytes (ADR-0024 amendment). Preview, `render_frame` and export still use the same `evaluate` and
+  compositor; the fit changes no frame they draw (a smaller planned scale is the export's existing `scale`, chosen by the plan and
+  stated before export). Only the file size is promised, not picture quality at the low bitrate.

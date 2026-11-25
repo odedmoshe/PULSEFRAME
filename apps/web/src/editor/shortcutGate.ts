@@ -55,3 +55,31 @@ export function isTyping(el: KeyTarget | null, chord: string): boolean {
   if (el.tagName === 'INPUT' && CHOICE_INPUTS.has((el.type ?? '').toLowerCase())) return !chord.startsWith('Mod+');
   return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
 }
+
+/** The focused element as the Space rule needs it (built from an HTMLElement in App.tsx). */
+export interface FocusedControl extends KeyTarget {
+  /** its role attribute, if any */
+  role?: string | null;
+  /** an `a` element with an href is a link */
+  hasHref?: boolean;
+  /** the browser's own judgement that the focus came from the keyboard: el.matches(':focus-visible') read WHEN THE ELEMENT WAS FOCUSED
+   *  (Chromium turns it on at the first key pressed on a mouse-focused element, so App.tsx keeps the value from focusin) */
+  focusVisible: boolean;
+}
+const SPACE_TAGS = new Set(['BUTTON', 'SUMMARY', 'SELECT']);
+const SPACE_INPUT_TYPES = new Set(['button', 'submit', 'reset', 'image', 'checkbox']);
+const SPACE_ROLES = new Set(['button', 'switch', 'checkbox', 'link']);
+/**
+ * Whether Space belongs to the focused control instead of play / pause (lead decision, wave 7): when a button, switch,
+ * checkbox, link, `summary` or select has KEYBOARD focus (`:focus-visible`), Space presses it, as everywhere on the web. After a
+ * mouse click the focus stays on the button without `:focus-visible`, and there (and everywhere else) Space still plays and
+ * pauses the film, as before. Only plain Space: Shift+Space and the Mod+ chords keep their commands.
+ */
+export function spaceBelongsToControl(el: FocusedControl | null, chord: string): boolean {
+  if (chord !== 'Space' || !el || !el.focusVisible) return false;
+  const role = (el.role ?? '').toLowerCase();
+  if (SPACE_ROLES.has(role)) return true;
+  if (SPACE_TAGS.has(el.tagName)) return true;
+  if (el.tagName === 'A') return !!el.hasHref;
+  return el.tagName === 'INPUT' && SPACE_INPUT_TYPES.has((el.type ?? '').toLowerCase());
+}

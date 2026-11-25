@@ -23,7 +23,7 @@ import type { ExportChecks } from '@pulseframe/core';
 import { translateRefusal, dictionaries, jobStageLabel } from '@pulseframe/i18n';
 import * as T from '@pulseframe/time';
 import { api, ApiFailure, type PreflightIssue, type PreflightReport } from '../api.ts';
-import { useEditorState, type Editor, type ExportRequest } from './store.ts';
+import { useEditorState, type Editor } from './store.ts';
 import { EXPORT_STRINGS, type ExportStrings } from './exportSheet.strings.ts';
 import {
   alsoSuggestion, DEFAULT_CHOICES, DESTINATIONS, describeExport, destinationPick, jobsOnOpen, mergeJobViews, destinationKey, exportOptions, exportTargets, formatFileSize, formatLength, fourKReachable, isActiveJob, jobFraction, overallFraction,
@@ -450,7 +450,7 @@ function SettingsFooter({ editor, S }: { editor: Editor; S: ExportStrings }) {
         const out = p.choices.targetBytes !== null && p.fit.kind === 'plan' ? { width: p.fit.width, height: p.fit.height } : scaledSize(c, p.choices.scale);
         // the editor registers the job: its file is saved by itself when ready, and the top bar's ring follows it (store.ts)
         const fast = state.fastExport && p.choices.format === 'mp4-h264-aac' && !state.planBlockers.length; // «ייצוא מהיר» (ADR-0024), off unless the viewer turned it on
-        const jobId = await editor.startExport({ ...exportOptions(p.choices, variantId), ...(fast ? { mode: 'incremental' as const } : {}) } as ExportRequest);
+        const jobId = await editor.startExport({ ...exportOptions(p.choices, variantId), ...(fast ? { mode: 'incremental' as const } : {}) });
         if (!jobId) throw new Error(S.startFailed);
         const r = { jobId };
         // append to the list as it is now (a poll may have updated the earlier files meanwhile); `starting` stays on until the last is added

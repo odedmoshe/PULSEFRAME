@@ -271,6 +271,9 @@ async function main() {
     await live.addInitScript(() => { (window as any).__pfAudioTap = true; });
     await live.goto(`${s.ownerUrl}&project=${livePid}`);
     await live.getByTestId('timecode').waitFor();
+    // the timecode shows before the player holds the project; a click on play before that does nothing (measured 2026-11-25: 3 of 3
+    // runs on the wave 7 tree timed out here, the player had no document when the button was clicked)
+    await live.waitForFunction(() => !!(window as any).__pfPlayer?.doc, undefined, { timeout: 30000 });
     await live.getByTestId('play').click();
     await live.waitForFunction(() => { const st = (window as any).__pfSync?.(); return st && st.audioLevels.length > 150; }, undefined, { timeout: 40000 });
     const stats: any = await live.evaluate(() => (window as any).__pfSync());

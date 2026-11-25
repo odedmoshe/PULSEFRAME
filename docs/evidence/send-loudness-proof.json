@@ -1,0 +1,619 @@
+{
+  "checks": [
+    {
+      "id": "L1",
+      "state": "ok",
+      "detail": {
+        "rows": [
+          {
+            "clip": "soft.wav",
+            "status": "measured",
+            "measured": -26.9,
+            "ffmpeg": -26.9,
+            "diff": 0
+          },
+          {
+            "clip": "noise.wav",
+            "status": "measured",
+            "measured": -18.6,
+            "ffmpeg": -18.6,
+            "diff": 0
+          },
+          {
+            "clip": "mid.wav",
+            "status": "measured",
+            "measured": -10.5,
+            "ffmpeg": -10.5,
+            "diff": 0
+          },
+          {
+            "clip": "click.wav",
+            "status": "measured",
+            "measured": -28.6,
+            "ffmpeg": -28.6,
+            "diff": 0
+          },
+          {
+            "clip": "two.wav",
+            "status": "short",
+            "measured": -20.7,
+            "ffmpeg": -20.7,
+            "diff": 0
+          },
+          {
+            "clip": "blip.wav",
+            "status": "too_short",
+            "measured": null,
+            "ffmpeg": null,
+            "diff": null
+          }
+        ],
+        "median": -20.7,
+        "revision": 13
+      }
+    },
+    {
+      "id": "L2",
+      "state": "ok",
+      "detail": {
+        "remeasured": [
+          {
+            "clipId": "clp_b73bfe40f20",
+            "lufs": -20,
+            "limitedBy": null
+          },
+          {
+            "clipId": "clp_32cfc23cd40",
+            "lufs": -20,
+            "limitedBy": null
+          },
+          {
+            "clipId": "clp_4596789bff0",
+            "lufs": -20,
+            "limitedBy": null
+          },
+          {
+            "clipId": "clp_05cbbd0ad30",
+            "lufs": -28.2,
+            "limitedBy": "peak"
+          },
+          {
+            "clipId": "clp_56e73221340",
+            "lufs": -20,
+            "limitedBy": null
+          }
+        ],
+        "undoStatus": 200,
+        "hashRestored": true,
+        "stale": {
+          "status": 422,
+          "code": "incompatible",
+          "reason": "stale_measurement"
+        },
+        "oldRevision": {
+          "status": 409,
+          "code": "stale_revision"
+        }
+      }
+    },
+    {
+      "id": "L3",
+      "state": "ok",
+      "detail": {
+        "export": "939604d1844bc4df0c6428d878e9461fb60d9e8178c552759ebb6ca88472923a",
+        "proof": "939604d1844bc4df0c6428d878e9461fb60d9e8178c552759ebb6ca88472923a",
+        "gainDb": -9.8,
+        "limiterInOutput": null
+      }
+    },
+    {
+      "id": "L4",
+      "state": "ok",
+      "detail": {
+        "peakSample": 29203,
+        "ceilingSample": 29203,
+        "truePeakDbtp": -1,
+        "window": {
+          "fromSample": 47792,
+          "toSample": 78208
+        },
+        "samplesOutside": 257583,
+        "differentOutside": 0,
+        "sameLength": true,
+        "jobLimiterReport": {
+          "ceiling": -1,
+          "gainDb": 0,
+          "maxReductionDb": -7.24,
+          "secondsLimited": 0.575,
+          "achievedLufs": -11.2,
+          "truePeakDbtp": -1,
+          "trimDb": 0,
+          "method": "gain, then a 5 ms look-ahead brick-wall limiter (release 120 ms) to 29203/32768 of full scale; achieved loudness and true peak measured by ffmpeg (EBU R128) on the written 16-bit file"
+        }
+      }
+    },
+    {
+      "id": "L8",
+      "state": "ok",
+      "detail": {
+        "rangeFirstSample": 52800,
+        "compared": 133200,
+        "different": 0,
+        "differentInFirst125ms": 106
+      }
+    },
+    {
+      "id": "L5",
+      "state": "ok",
+      "detail": {
+        "staticLimitedByPeak": true,
+        "staticGainDb": -1,
+        "measuredHere": {
+          "I": -14,
+          "TP": -1
+        },
+        "jobReport": {
+          "ceiling": -1,
+          "gainDb": 6.8,
+          "maxReductionDb": -7.79,
+          "secondsLimited": 0.332,
+          "achievedLufs": -14,
+          "truePeakDbtp": -1,
+          "trimDb": 0,
+          "method": "gain to the loudness target, then a 5 ms look-ahead brick-wall limiter (release 120 ms) to 29203/32768 of full scale; a second pass, the gain corrected by 0.7 dB; achieved loudness and true peak measured by ffmpeg (EBU R128) on the written 16-bit file"
+        },
+        "measureLoudnessReport": {
+          "ceiling": -1,
+          "gainDb": 6.8,
+          "maxReductionDb": -7.79,
+          "secondsLimited": 0.332,
+          "achievedLufs": -14,
+          "truePeakDbtp": -1,
+          "trimDb": 0,
+          "method": "gain to the loudness target, then a 5 ms look-ahead brick-wall limiter (release 120 ms) to 29203/32768 of full scale; a second pass, the gain corrected by 0.7 dB; achieved loudness and true peak measured by ffmpeg (EBU R128) on the written 16-bit file"
+        }
+      }
+    },
+    {
+      "id": "L6",
+      "state": "ok",
+      "detail": {
+        "node": "e092251d490d5ed46b741140f5cf99a4294b2786b683db512f8e8b38242c37a9",
+        "selftestKernel": {
+          "sha256": "e092251d490d5ed46b741140f5cf99a4294b2786b683db512f8e8b38242c37a9",
+          "frames": 96000,
+          "ms": 13.6
+        },
+        "publicWorkletFile": {
+          "sha256": "e092251d490d5ed46b741140f5cf99a4294b2786b683db512f8e8b38242c37a9",
+          "frames": 96000,
+          "messages": 26
+        },
+        "limited": {
+          "maxReductionDb": -8.694568731385159,
+          "limitedSamples": 25534,
+          "lastLimitedSample": 49294
+        }
+      }
+    },
+    {
+      "id": "L7a",
+      "state": "ok",
+      "detail": {
+        "clock": "audio",
+        "limiter": {
+          "active": true,
+          "ceilingDb": -1,
+          "unavailable": null,
+          "reductions": 65
+        },
+        "loudWindows": [
+          {
+            "t": 0.979979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.029979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.079979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.129979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.179979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.229979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.279979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.329979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.379979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.429979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.479979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.529979,
+            "reductionDb": -3.86
+          }
+        ],
+        "maxTapPeak": 0.8912,
+        "ceilingLinear": 0.891204833984375,
+        "tapWindows": 65,
+        "noteShown": true,
+        "noteText": "לפני הגברת הייצוא · התצוגה היא לפני הגברת הייצוא ליעד −16 LUFS",
+        "withoutLimiter": {
+          "active": false,
+          "polled": [
+            null
+          ]
+        }
+      }
+    },
+    {
+      "id": "L7b",
+      "state": "ok",
+      "detail": {
+        "clock": "audio",
+        "limiter": {
+          "active": true,
+          "ceilingDb": -1,
+          "unavailable": null,
+          "reductions": 65
+        },
+        "loudWindows": [
+          {
+            "t": 0.979979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.029979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.079979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.129979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.179979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.229979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.279979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.329979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.379979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.429979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.479979,
+            "reductionDb": -7.24
+          },
+          {
+            "t": 1.529979,
+            "reductionDb": -3.86
+          }
+        ],
+        "maxTapPeak": 0.8912,
+        "ceilingLinear": 0.891204833984375,
+        "tapWindows": 65,
+        "noteShown": true,
+        "noteText": "לפני הגברת הייצוא · התצוגה היא לפני הגברת הייצוא ליעד −16 LUFS",
+        "withoutLimiter": {
+          "active": false,
+          "polled": [
+            null
+          ]
+        }
+      }
+    },
+    {
+      "id": "L7c",
+      "state": "ok",
+      "detail": {
+        "noteText": "לפני הגברת הייצוא · התצוגה היא לפני הגברת הייצוא ליעד −16 LUFS"
+      }
+    },
+    {
+      "id": "L7d",
+      "state": "ok",
+      "detail": {
+        "state": "pass",
+        "reason": "3 of 3 rows passed in docs/evidence/phase0-proof.json, recorded on this build",
+        "rows": [
+          {
+            "name": "preview: playback advances and pauses",
+            "ok": true
+          },
+          {
+            "name": "preview playback ran to the end on a measured clock; paint lateness recorded (measurement, not a pass/fail target)",
+            "ok": true
+          },
+          {
+            "name": "preview audio (streamed, bounded lookahead): beeps reach the output stage within one frame of their timeline positions on the audio clock",
+            "ok": true
+          }
+        ],
+        "ranAt": "2026-11-25T14:16:32.999Z",
+        "builtAt": "2026-11-25T14:05:24.304Z"
+      }
+    }
+  ],
+  "measurements": {
+    "L1": {
+      "rows": [
+        {
+          "clip": "soft.wav",
+          "status": "measured",
+          "measured": -26.9,
+          "ffmpeg": -26.9,
+          "diff": 0
+        },
+        {
+          "clip": "noise.wav",
+          "status": "measured",
+          "measured": -18.6,
+          "ffmpeg": -18.6,
+          "diff": 0
+        },
+        {
+          "clip": "mid.wav",
+          "status": "measured",
+          "measured": -10.5,
+          "ffmpeg": -10.5,
+          "diff": 0
+        },
+        {
+          "clip": "click.wav",
+          "status": "measured",
+          "measured": -28.6,
+          "ffmpeg": -28.6,
+          "diff": 0
+        },
+        {
+          "clip": "two.wav",
+          "status": "short",
+          "measured": -20.7,
+          "ffmpeg": -20.7,
+          "diff": 0
+        },
+        {
+          "clip": "blip.wav",
+          "status": "too_short",
+          "measured": null,
+          "ffmpeg": null,
+          "diff": null
+        }
+      ],
+      "median": -20.7,
+      "revision": 13
+    },
+    "L2": {
+      "remeasured": [
+        {
+          "clipId": "clp_b73bfe40f20",
+          "lufs": -20,
+          "limitedBy": null
+        },
+        {
+          "clipId": "clp_32cfc23cd40",
+          "lufs": -20,
+          "limitedBy": null
+        },
+        {
+          "clipId": "clp_4596789bff0",
+          "lufs": -20,
+          "limitedBy": null
+        },
+        {
+          "clipId": "clp_05cbbd0ad30",
+          "lufs": -28.2,
+          "limitedBy": "peak"
+        },
+        {
+          "clipId": "clp_56e73221340",
+          "lufs": -20,
+          "limitedBy": null
+        }
+      ],
+      "undoStatus": 200,
+      "hashRestored": true,
+      "stale": {
+        "status": 422,
+        "code": "incompatible",
+        "reason": "stale_measurement"
+      },
+      "oldRevision": {
+        "status": 409,
+        "code": "stale_revision"
+      }
+    },
+    "L3": {
+      "export": "939604d1844bc4df0c6428d878e9461fb60d9e8178c552759ebb6ca88472923a",
+      "proof": "939604d1844bc4df0c6428d878e9461fb60d9e8178c552759ebb6ca88472923a",
+      "gainDb": -9.8,
+      "limiterInOutput": null
+    },
+    "L4": {
+      "peakSample": 29203,
+      "ceilingSample": 29203,
+      "truePeakDbtp": -1,
+      "window": {
+        "fromSample": 47792,
+        "toSample": 78208
+      },
+      "samplesOutside": 257583,
+      "differentOutside": 0,
+      "sameLength": true,
+      "jobLimiterReport": {
+        "ceiling": -1,
+        "gainDb": 0,
+        "maxReductionDb": -7.24,
+        "secondsLimited": 0.575,
+        "achievedLufs": -11.2,
+        "truePeakDbtp": -1,
+        "trimDb": 0,
+        "method": "gain, then a 5 ms look-ahead brick-wall limiter (release 120 ms) to 29203/32768 of full scale; achieved loudness and true peak measured by ffmpeg (EBU R128) on the written 16-bit file"
+      }
+    },
+    "L8": {
+      "rangeFirstSample": 52800,
+      "compared": 133200,
+      "different": 0,
+      "differentInFirst125ms": 106
+    },
+    "L5": {
+      "staticLimitedByPeak": true,
+      "staticGainDb": -1,
+      "measuredHere": {
+        "I": -14,
+        "TP": -1
+      },
+      "jobReport": {
+        "ceiling": -1,
+        "gainDb": 6.8,
+        "maxReductionDb": -7.79,
+        "secondsLimited": 0.332,
+        "achievedLufs": -14,
+        "truePeakDbtp": -1,
+        "trimDb": 0,
+        "method": "gain to the loudness target, then a 5 ms look-ahead brick-wall limiter (release 120 ms) to 29203/32768 of full scale; a second pass, the gain corrected by 0.7 dB; achieved loudness and true peak measured by ffmpeg (EBU R128) on the written 16-bit file"
+      },
+      "measureLoudnessReport": {
+        "ceiling": -1,
+        "gainDb": 6.8,
+        "maxReductionDb": -7.79,
+        "secondsLimited": 0.332,
+        "achievedLufs": -14,
+        "truePeakDbtp": -1,
+        "trimDb": 0,
+        "method": "gain to the loudness target, then a 5 ms look-ahead brick-wall limiter (release 120 ms) to 29203/32768 of full scale; a second pass, the gain corrected by 0.7 dB; achieved loudness and true peak measured by ffmpeg (EBU R128) on the written 16-bit file"
+      }
+    },
+    "L6": {
+      "node": "e092251d490d5ed46b741140f5cf99a4294b2786b683db512f8e8b38242c37a9",
+      "selftestKernel": {
+        "sha256": "e092251d490d5ed46b741140f5cf99a4294b2786b683db512f8e8b38242c37a9",
+        "frames": 96000,
+        "ms": 13.6
+      },
+      "publicWorkletFile": {
+        "sha256": "e092251d490d5ed46b741140f5cf99a4294b2786b683db512f8e8b38242c37a9",
+        "frames": 96000,
+        "messages": 26
+      },
+      "limited": {
+        "maxReductionDb": -8.694568731385159,
+        "limitedSamples": 25534,
+        "lastLimitedSample": 49294
+      }
+    },
+    "L7": {
+      "clock": "audio",
+      "limiter": {
+        "active": true,
+        "ceilingDb": -1,
+        "unavailable": null,
+        "reductions": 65
+      },
+      "loudWindows": [
+        {
+          "t": 0.979979,
+          "reductionDb": -7.24
+        },
+        {
+          "t": 1.029979,
+          "reductionDb": -7.24
+        },
+        {
+          "t": 1.079979,
+          "reductionDb": -7.24
+        },
+        {
+          "t": 1.129979,
+          "reductionDb": -7.24
+        },
+        {
+          "t": 1.179979,
+          "reductionDb": -7.24
+        },
+        {
+          "t": 1.229979,
+          "reductionDb": -7.24
+        },
+        {
+          "t": 1.279979,
+          "reductionDb": -7.24
+        },
+        {
+          "t": 1.329979,
+          "reductionDb": -7.24
+        },
+        {
+          "t": 1.379979,
+          "reductionDb": -7.24
+        },
+        {
+          "t": 1.429979,
+          "reductionDb": -7.24
+        },
+        {
+          "t": 1.479979,
+          "reductionDb": -7.24
+        },
+        {
+          "t": 1.529979,
+          "reductionDb": -3.86
+        }
+      ],
+      "maxTapPeak": 0.8912,
+      "ceilingLinear": 0.891204833984375,
+      "tapWindows": 65,
+      "noteShown": true,
+      "noteText": "לפני הגברת הייצוא · התצוגה היא לפני הגברת הייצוא ליעד −16 LUFS",
+      "withoutLimiter": {
+        "active": false,
+        "polled": [
+          null
+        ]
+      }
+    }
+  }
+}

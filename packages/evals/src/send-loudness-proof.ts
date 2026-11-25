@@ -26,6 +26,7 @@ import { audioPlan } from '@pulseframe/engine';
 import { limiterCeilingLinear, limiterFixture, limiterRun, limiterWindow } from '@pulseframe/engine/masterLimiter.ts';
 import { startServer, type RunningServer } from '@pulseframe/server';
 import { measureLoudness, mixToRaw, normalisationGain } from '@pulseframe/server/audiomix.ts';
+import { evidenceRows } from './send-evidence.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/send-loudness');
@@ -202,9 +203,9 @@ async function main() {
         outside++;
         if (a[i * 2] !== b[i * 2] || a[i * 2 + 1] !== b[i * 2 + 1]) diff++;
       }
-      measurements.L4 = { peakSample: peak, ceilingSample: top, truePeakDbtp: tp, window: { fromSample: first - M, toSample: last + 2 * M + R }, samplesOutside: outside, differentOutside: diff, sameLength: a.length === b.length, jobLimiterReport: on.job.output?.audio?.limiter ?? 'not in the job output (export.ts output.audio, worker B / lead)' };
-      check('L4', 'with a limiter, a +6 dB mix: every 16-bit sample <= floor(10^(c/20)*32767), true peak <= c + 0.05 dB, samples outside the limiting window (M before the first sample at the ceiling to 2M + 120 ms after the last) equal the unlimited export',
-        peak <= top && tp !== null && tp <= ceiling + 0.05 && first >= 0 && diff === 0 && outside > SR && a.length === b.length, measurements.L4);
+      measurements.L4 = { peakSample: peak, ceilingSample: top, truePeakDbtp: tp, window: { fromSample: first - M, toSample: last + 2 * M + R }, samplesOutside: outside, differentOutside: diff, sameLength: a.length === b.length, jobLimiterReport: on.job.output?.audio?.limiter ?? null };
+      check('L4', 'with a limiter, a +6 dB mix: every 16-bit sample <= floor(10^(c/20)*32767), true peak <= c + 0.05 dB, samples outside the limiting window (M before the first sample at the ceiling to 2M + 120 ms after the last) equal the unlimited export; the export job reports its limiter',
+        peak <= top && tp !== null && tp <= ceiling + 0.05 && first >= 0 && diff === 0 && outside > SR && a.length === b.length && on.job.output?.audio?.limiter?.ceiling === ceiling, measurements.L4);
 
       // L8: a range starting inside the hot stretch (frame 33 = 1.1 s, where the limiter holds) against the full export
       const part = await exportWav(pid, 'l8-range.wav', { range: { startFrame: 33, endFrame: 120 } });
@@ -260,7 +261,7 @@ async function main() {
       browser ??= await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
       const openEditor = async (pid: string): Promise<Page> => {
         const page = await browser!.newPage({ viewport: { width: 1500, height: 950 } });
-        await page.addInitScript(() => { (window as any).__pfAudioTap = true; });
+        await page.addInitScript(() => { (window as any).__pfAudioTap = true; try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
         await page.goto(`${s.ownerUrl}&project=${pid}`);
         await page.waitForFunction(() => (document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null)?.dataset.frame === '0', undefined, { timeout: 30000 });
         await page.waitForFunction(() => !!(window as any).__pfPlayer?.doc, undefined, { timeout: 30000 });
@@ -281,7 +282,10 @@ async function main() {
       await tx(limPid, [{ op: 'set_loudness_target', args: { target: -16, truePeak: -1 } }]);
       const page = await openEditor(limPid);
       const on = await playFor(page, 3.2);
-      const note = await page.evaluate(() => document.body.innerText.includes('לפני הגברת הייצוא'));
+      // the note sits in the sound panel's meter (LimiterSwitch.tsx ReductionMeter, test id meter-before-export-gain): read that element
+      await page.getByTestId('meter-before-export-gain').waitFor({ state: 'attached', timeout: 15000 }).catch(() => {});
+      const noteText = (await page.getByTestId('meter-before-export-gain').textContent().catch(() => null))?.trim() ?? null;
+      const note = !!noteText && noteText.includes('לפני הגברת הייצוא');
       await page.close();
       const lv: { t: number; peak: number }[] = on.stats.audioLevels ?? [];
       const red: { t: number; reductionDb: number }[] = on.stats.limiter?.reductions ?? [];
@@ -293,11 +297,13 @@ async function main() {
       const page2 = await openEditor(limPid);
       const offRun = await playFor(page2, 1.5);
       await page2.close();
-      measurements.L7 = { clock: on.stats.clock, limiter: { ...on.stats.limiter, reductions: red.length }, loudWindows: loud, maxTapPeak: Math.max(0, ...lv.map((x) => x.peak)), ceilingLinear: c, tapWindows: lv.length, noteShown: note, withoutLimiter: { active: offRun.stats.limiter?.active, polled: [...new Set(offRun.polled)] } };
+      measurements.L7 = { clock: on.stats.clock, limiter: { ...on.stats.limiter, reductions: red.length }, loudWindows: loud, maxTapPeak: Math.max(0, ...lv.map((x) => x.peak)), ceilingLinear: c, tapWindows: lv.length, noteShown: note, noteText, withoutLimiter: { active: offRun.stats.limiter?.active, polled: [...new Set(offRun.polled)] } };
       check('L7a', 'preview, limiter on: the tap after it never exceeds the ceiling and the reduction is shown only in the loud part (on the audio clock)', on.stats.clock === 'audio' && on.stats.limiter?.active === true && underCeiling && onlyInLoudPart, measurements.L7);
       check('L7b', 'preview, limiter absent: no worklet node (the graph of before) and no reduction reported', offRun.stats.limiter?.active === false && offRun.polled.every((x) => x === null), measurements.L7);
-      check('L7c', '«לפני הגברת הייצוא» shown with a loudness target', note ? true : 'BLOCKED', note ? undefined : 'the meter note is worker C\'s (SoundPanel); not in this tree');
-      check('L7d', 'the Phase 0 preview-audio checks unchanged', 'BLOCKED', 'pnpm proof (Phase 0) is not run by this proof; the lead runs it on the merged tree (the graph without a limiter is unchanged by construction: player.ts inserts the node only when the document has one)');
+      check('L7c', 'the sound panel\'s meter says «לפני הגברת הייצוא» with a loudness target and the limiter on (element meter-before-export-gain of the open editor)', note, { noteText });
+      // L7d: the Phase 0 preview-audio checks (phase0-proof.ts) are read from its evidence, which must be recorded on this build
+      const p0 = evidenceRows('phase0-proof.json', /^preview audio|^preview playback|^preview: playback/, 'pnpm proof');
+      check('L7d', 'the Phase 0 preview-audio checks unchanged (rows "preview audio …" / "preview playback …" of phase0-proof, read from its evidence)', p0.state === 'pass' ? true : p0.state === 'fail' ? false : 'BLOCKED', p0);
     });
   } finally {
     if (browser) await (browser as Browser).close();

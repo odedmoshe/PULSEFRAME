@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-24T22:31:00.624Z",
+  "ranAt": "2026-11-25T16:47:05.294Z",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "logicalCpus": 4,
     "memoryGiB": 15.7,
     "gpu": "none"
@@ -21,22 +21,22 @@
     "thenTitleAtSeconds": 300
   },
   "times": {
-    "singlePassSeconds": 218.8,
+    "singlePassSeconds": 320.2,
     "singlePassSource": "measured here on the same project, one run",
-    "cleanSegmentedSeconds": 231.3,
-    "incrementalSeconds": 28.5,
-    "cleanOverSingle": 1.057,
-    "incrementalOverClean": 0.123
+    "cleanSegmentedSeconds": 404.3,
+    "incrementalSeconds": 40.7,
+    "cleanOverSingle": 1.262,
+    "incrementalOverClean": 0.101
   },
   "clean": {
-    "wallSeconds": 231.3,
+    "wallSeconds": 404.3,
     "frames": 16879,
     "bytes": 8121232,
     "route": "server-segmented-canvas2d",
     "renderStageMs": {
-      "draw": 22653,
-      "readback": 9605,
-      "upload": 181426
+      "draw": 36764,
+      "readback": 10927,
+      "upload": 340334
     },
     "report": {
       "segFrames": 60,
@@ -48,7 +48,7 @@
       "notStored": 0,
       "selfCheck": {
         "mode": "every-segment",
-        "seed": "cce119b36c1af738b03f60b77e653b5d8397f66f9d8ecf705b6ddad4469eb58f",
+        "seed": "6251ce5f1c0dd19d28f452c2c42dc5bb70ae1e98a021e96ab882d25e2eea123f",
         "segmentsChecked": 0,
         "framesChecked": 0,
         "framesPerSegment": 3,
@@ -56,16 +56,16 @@
       },
       "encoderId": "59d7b227390c86cc40ded2ca12bff9c16a08bdce78baff2b4ae0a50b9dd06b26",
       "engine": {
-        "bundle": "83d51827ce93e8ab9ae87a79bd48be5e36bf8c6669ac1a6b412872ec77879ae2",
+        "bundle": "62c0c35dc796b3cd48f92b373c49a15b117943b61f8914269bbfa439d42144a2",
         "browser": "153.0.8010.12|launch=auto",
         "schemaVersion": 3
       },
-      "cacheBytesAfter": 17953941,
+      "cacheBytesAfter": 17954205,
       "ms": {
-        "keying": 437,
+        "keying": 519,
         "selfCheck": 0,
-        "render": 214214,
-        "join": 8077
+        "render": 388746,
+        "join": 7930
       }
     },
     "sync": {
@@ -78,14 +78,14 @@
     }
   },
   "incremental": {
-    "wallSeconds": 28.5,
+    "wallSeconds": 40.7,
     "frames": 16879,
     "bytes": 8136127,
     "route": "server-segmented-canvas2d",
     "renderStageMs": {
-      "draw": 5440,
-      "readback": 481,
-      "upload": 4664
+      "draw": 8894,
+      "readback": 466,
+      "upload": 9483
     },
     "report": {
       "segFrames": 60,
@@ -97,7 +97,7 @@
       "notStored": 0,
       "selfCheck": {
         "mode": "every-segment",
-        "seed": "aac0d6210ddec603f4e661dfb4819765d2bfa6bc1d23b0809f8bdf5007c3fb35",
+        "seed": "434dd409265524fe432a674a6f98f534b466eb750e76dda1201aeb3a6b3a0d67",
         "segmentsChecked": 281,
         "framesChecked": 843,
         "framesPerSegment": 3,
@@ -105,16 +105,16 @@
       },
       "encoderId": "59d7b227390c86cc40ded2ca12bff9c16a08bdce78baff2b4ae0a50b9dd06b26",
       "engine": {
-        "bundle": "83d51827ce93e8ab9ae87a79bd48be5e36bf8c6669ac1a6b412872ec77879ae2",
+        "bundle": "62c0c35dc796b3cd48f92b373c49a15b117943b61f8914269bbfa439d42144a2",
         "browser": "153.0.8010.12|launch=auto",
         "schemaVersion": 3
       },
-      "cacheBytesAfter": 18038022,
+      "cacheBytesAfter": 18038287,
       "ms": {
-        "keying": 413,
-        "selfCheck": 10176,
-        "render": 958,
-        "join": 8337
+        "keying": 660,
+        "selfCheck": 18387,
+        "render": 1637,
+        "join": 8692
       }
     },
     "sync": {
@@ -126,6 +126,6 @@
       "frameMs": 33.333
     }
   },
-  "pass": true,
+  "pass": false,
   "criteria": "frame count exact on both files; every flash has a beep within 1 ms (max offset); no drift (last third against first third under 1 ms); clean segmented export at most 1.25 times the single pass; incremental export at most 30 % of the clean segmented export (target 15 %)"
 }

@@ -1,0 +1,287 @@
+{
+  "when": "2026-11-25T14:20:53.591Z",
+  "checks": [
+    {
+      "id": "K5",
+      "name": "15 black frames at 30 fps are found, 14 are not",
+      "pass": true,
+      "numbers": {
+        "r15": [
+          {
+            "kind": "black",
+            "fromFrame": 5,
+            "toFrame": 20,
+            "measured": {
+              "frames": 15,
+              "minFrames": 15,
+              "brightestCellLinear": 0,
+              "limitLinear": 0.0012141091782958246,
+              "level8": 4
+            }
+          }
+        ],
+        "r14": []
+      }
+    },
+    {
+      "id": "K6",
+      "name": "editor: findings in Hebrew, «מעבר לקטע» lands on the frame, ruler and status bar marks, a quiet state without «תקין» (rows K6 of editor-interactions-proof, read from its evidence)",
+      "pass": true,
+      "numbers": {
+        "state": "pass",
+        "reason": "4 of 4 rows passed in docs/evidence/editor-interactions-proof.json, recorded on this build",
+        "rows": [
+          {
+            "name": "K6 a report with nothing found lists what was looked for as «לא נמצאו…», says it is a heuristic, and never says «תקין»",
+            "ok": true
+          },
+          {
+            "name": "K6 the one-second gap is listed as «תמונה שחורה» with its time range, and the card says it is report only",
+            "ok": true
+          },
+          {
+            "name": "K6 «מעבר לקטע» (keyboard) closes the sheet and puts the playhead on the first frame of the stretch (2 s = frame 60 of 30 fps)",
+            "ok": true
+          },
+          {
+            "name": "K6 the black stretch is marked on the ruler and listed in the status bar (report only: the export succeeded and its file is there)",
+            "ok": true
+          }
+        ],
+        "ranAt": "2026-11-25T14:14:09.192Z",
+        "builtAt": "2026-11-25T14:05:24.304Z"
+      }
+    },
+    {
+      "id": "K1",
+      "name": "F3 single pass, picture: exactly one black (gap) and one frozen at the planted frames (±1), exact rationals",
+      "pass": true,
+      "numbers": {
+        "picture": [
+          {
+            "kind": "black",
+            "frames": [
+              240,
+              270
+            ],
+            "context": "gap",
+            "from": {
+              "value": "8",
+              "timescale": 1
+            },
+            "measured": {
+              "frames": 30,
+              "minFrames": 15,
+              "brightestCellLinear": 0,
+              "limitLinear": 0.0012141091782958246,
+              "level8": 4,
+              "drawnFrames": 0
+            }
+          },
+          {
+            "kind": "frozen",
+            "frames": [
+              270,
+              390
+            ],
+            "from": {
+              "value": "9",
+              "timescale": 1
+            },
+            "measured": {
+              "frames": 120,
+              "minFrames": 60,
+              "unchangedFramesWhileVideoPlays": 119,
+              "cellsCompared": 576,
+              "drawnFrames": 120
+            }
+          }
+        ],
+        "status": "measured",
+        "jobStatus": "succeeded",
+        "error": null
+      }
+    },
+    {
+      "id": "K1s",
+      "name": "F3 single pass, sound: one silence [7.1 s, 13 s) (from the end of the first clip's last beep) and one clipped at 15 s (±0.1 s = one block), exact rationals on the sample grid",
+      "pass": true,
+      "numbers": {
+        "expected": {
+          "silence": {
+            "from": 7.1,
+            "to": 13
+          },
+          "clippedFrom": 15
+        },
+        "sound": [
+          {
+            "kind": "silence",
+            "from": 7.1,
+            "to": 13,
+            "soundPlays": true,
+            "measured": {
+              "blocks": 59,
+              "seconds": 5.9,
+              "loudestBlockRmsDbfs": -74.8
+            }
+          },
+          {
+            "kind": "clipped",
+            "from": 15,
+            "to": 15.5,
+            "measured": {
+              "blocks": 5,
+              "fullScaleSamples": 48000,
+              "peakSample": 32768
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "K4",
+      "name": "measure_loudness returns the same silence and clipped ranges as the export (exact rationals, same measured numbers)",
+      "pass": true,
+      "numbers": {
+        "status": 200,
+        "export": [
+          {
+            "kind": "silence",
+            "from": {
+              "value": "340800",
+              "timescale": 48000
+            },
+            "to": {
+              "value": "624000",
+              "timescale": 48000
+            },
+            "soundPlays": true,
+            "measured": {
+              "blocks": 59,
+              "seconds": 5.9,
+              "loudestBlockRmsDbfs": -74.8
+            }
+          },
+          {
+            "kind": "clipped",
+            "from": {
+              "value": "720000",
+              "timescale": 48000
+            },
+            "to": {
+              "value": "744000",
+              "timescale": 48000
+            },
+            "measured": {
+              "blocks": 5,
+              "fullScaleSamples": 48000,
+              "peakSample": 32768
+            }
+          }
+        ],
+        "measureLoudness": [
+          {
+            "kind": "silence",
+            "from": {
+              "value": "340800",
+              "timescale": 48000
+            },
+            "to": {
+              "value": "624000",
+              "timescale": 48000
+            },
+            "soundPlays": true,
+            "measured": {
+              "blocks": 59,
+              "seconds": 5.9,
+              "loudestBlockRmsDbfs": -74.8
+            }
+          },
+          {
+            "kind": "clipped",
+            "from": {
+              "value": "720000",
+              "timescale": 48000
+            },
+            "to": {
+              "value": "744000",
+              "timescale": 48000
+            },
+            "measured": {
+              "blocks": 5,
+              "fullScaleSamples": 48000,
+              "peakSample": 32768
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "K8",
+      "name": "the F3 export with findings succeeds and is published (report only)",
+      "pass": true,
+      "numbers": {
+        "status": "succeeded",
+        "output": 200,
+        "bytes": 197855
+      }
+    },
+    {
+      "id": "K2",
+      "name": "all segments reused: picture findings identical to the first fast export and to the single pass",
+      "pass": true,
+      "numbers": {
+        "rendered": [
+          10,
+          0
+        ],
+        "findings": [
+          2,
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "K3",
+      "name": "still, freeze, hidden track, covered video, clean film: no frozen finding (and no black); the gap is black with context gap",
+      "pass": true,
+      "numbers": {
+        "k3": [],
+        "clean": [],
+        "status": [
+          "succeeded",
+          "succeeded"
+        ],
+        "frames": 360,
+        "error": null
+      }
+    },
+    {
+      "id": "K7",
+      "name": "the flashing fixture still fails the flash check, the same report on the single pass and the fast export",
+      "pass": true,
+      "numbers": {
+        "verdict": "fail",
+        "ranges": [
+          {
+            "from": {
+              "value": "47",
+              "timescale": 15
+            },
+            "to": {
+              "value": "34",
+              "timescale": 5
+            },
+            "kind": "general",
+            "flashesPerSecond": 5,
+            "area": 1
+          }
+        ],
+        "fastExport": "succeeded",
+        "sameOnFast": true
+      }
+    }
+  ]
+}

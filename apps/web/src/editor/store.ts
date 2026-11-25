@@ -232,7 +232,7 @@ export type GalleryTab = 'effects' | 'looks' | 'transitions' | 'text' | 'motion'
  */
 export interface Notice { kind: 'undo' | 'info'; title: string; body?: string; undoes?: string }
 /** What an export is started with (POST /exports): the defaults are left out, as exportSheet.logic.ts exportOptions builds it. */
-export interface ExportRequest { variantId?: string; /** a sequence of the project (a short) instead of the main edit (ADR-0018) */ sequenceId?: string; /** frame index of a png still */ frame?: number; quality?: string; captions?: string; format?: string; scale?: number; /** «ייצוא מהיר» (ADR-0024): 'incremental' when the viewer's switch is on and the format is MP4. */ mode?: ExportMode }
+export interface ExportRequest { variantId?: string; /** a sequence of the project (a short) instead of the main edit (ADR-0018) */ sequenceId?: string; /** frame index of a png still */ frame?: number; quality?: string; captions?: string; format?: string; scale?: number; /** «ייצוא מהיר» (ADR-0024): 'incremental' when the viewer's switch is on and the format is MP4. */ mode?: ExportMode; /** «מתאים לשליחה» (wave 7 send): the file must come out at or under targetBytes (MP4 only; 1 MB = 1,000,000 bytes). */ sizeFit?: { targetBytes: number } }
 /**
  * The fast export's segment plan as the sheet line and the timeline lane read it (ADR-0024). `off`: the lane is hidden (the
  * cache is off, or this project never used the fast export); `updating`: a plan is being made (aria-busy); `error`: the last

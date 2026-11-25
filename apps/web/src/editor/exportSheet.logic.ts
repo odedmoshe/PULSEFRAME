@@ -4,6 +4,7 @@
  * Nothing here estimates what the server has not measured: no time estimate exists without measured history, and a size
  * is shown only when the server's plan carries one.
  */
+import type { ExportRequest } from './store.ts';
 import { FORMAT_PROFILES, type ProjectDocument } from '@pulseframe/core';
 
 export const ACTIVE_JOB = ['queued', 'running', 'cancel-requested'] as const;
@@ -99,8 +100,8 @@ export interface ExportChoices { quality: ExportQuality; captions: ExportCaption
 export const DEFAULT_CHOICES: ExportChoices = { quality: 'standard', captions: 'burned', format: 'mp4-h264-aac', scale: 1, targetBytes: null };
 
 /** The body of POST /exports. Defaults are left out, so a plain export sends exactly what the editor's own button always sent. */
-export function exportOptions(c: ExportChoices, variantId: string | null): Record<string, unknown> {
-  const o: Record<string, unknown> = {};
+export function exportOptions(c: ExportChoices, variantId: string | null): ExportRequest {
+  const o: ExportRequest = {};
   if (variantId) o.variantId = variantId;
   if (c.quality !== 'high') o.quality = c.quality;
   if (c.captions !== 'burned') o.captions = c.captions;

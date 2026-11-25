@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-24T20:44:54.335Z",
+  "ranAt": "2026-11-25T14:16:32.999Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "logicalCpus": 4,
     "memoryGiB": 15.7,
     "gpu": "none (software)",
@@ -21,7 +21,7 @@
     "exportedFrames": 105
   },
   "measurements": {
-    "editorShellInteractiveMs": 908,
+    "editorShellInteractiveMs": 1698,
     "mcp": {
       "negotiatedProtocolVersion": "2026-07-28",
       "server": {
@@ -30,18 +30,18 @@
       }
     },
     "agentEdit": {
-      "requestToCommitMs": 19.5,
-      "requestToVisibleInEditorMs": 143.9,
+      "requestToCommitMs": 40,
+      "requestToVisibleInEditorMs": 222.1,
       "note": "single sample, loopback, includes Playwright polling overhead"
     },
     "restCommitLatencyMs": {
       "samples": 30,
-      "median": 5.14,
-      "p95": 10.63,
-      "max": 14.91
+      "median": 11.83,
+      "p95": 26.47,
+      "max": 46.94
     },
     "export": {
-      "file": "job_og7pvRTc7RI.mp4",
+      "file": "job_r3xr1pkyBqI.mp4",
       "mimeType": "video/mp4",
       "captions": null,
       "bytes": 107979,
@@ -75,7 +75,7 @@
         },
         "assets": [
           {
-            "id": "ast_d5854bde460",
+            "id": "ast_01d1fdb0a80",
             "contentHash": "sha256:c7e7258d199ae386d741322d2a22c5d626d2af5e3bd3822625e430fb09f7066d",
             "byteSize": 49384,
             "kind": "video",
@@ -129,6 +129,24 @@
         "frames": 105,
         "ranges": []
       },
+      "checks": {
+        "picture": {
+          "method": "HEURISTIC on the 24 × 24 cells of the flash check (block means of a sample, so a small detail can be missed): black = every cell at or under 8-bit level 4 for at least 0.5 s; frozen = every cell unchanged for at least 2 s while the document says a video plays (a video clip that is not a freeze frame, inside its source, on a visible track, not covered by an opaque full-frame clip; opacity keys and effects are not modelled). Report only.",
+          "status": "measured",
+          "findings": []
+        },
+        "sound": {
+          "method": "measured on the written 16-bit sound, before AAC: 0.1 s blocks; clipped = a block with at least 3 samples at -32768 or 32767; silence = blocks with RMS under -60 dBFS for at least 2 s",
+          "status": "measured",
+          "findings": []
+        },
+        "lookedFor": [
+          "black",
+          "frozen",
+          "silence",
+          "clipped"
+        ]
+      },
       "audioClipsMixed": 2,
       "audio": {
         "mixPeakDbfs": -5.72,
@@ -149,13 +167,13 @@
         "durationSeconds": 3.5
       },
       "renderStageMs": {
-        "draw": 717,
-        "readback": 788,
-        "upload": 7192
+        "draw": 870,
+        "readback": 926,
+        "upload": 13996
       },
-      "wallSeconds": 10.368,
-      "realtimeFactor": 0.33757716049382713,
-      "uiWallSeconds": 17.151
+      "wallSeconds": 18.183,
+      "realtimeFactor": 0.19248748831325965,
+      "uiWallSeconds": 22.263
     },
     "parityFrame70": {
       "psnrDb": 46.687164,
@@ -200,10 +218,10 @@
       "maxStills": 16,
       "decoderByteCacheBytes": 16777216,
       "sources": {
-        "ast_d5854bde460": "original"
+        "ast_01d1fdb0a80": "original"
       },
       "sourcesUsed": {
-        "ast_d5854bde460": [
+        "ast_01d1fdb0a80": [
           "original"
         ]
       },
@@ -213,7 +231,7 @@
       "refused": 0,
       "rangedResponses": 2,
       "statuses": [
-        "ast_d5854bde460/content:206"
+        "ast_01d1fdb0a80/content:206"
       ]
     },
     "previewSync": {
@@ -221,7 +239,7 @@
       "audioContextState": "running",
       "audioSampleRate": 48000,
       "outputLatencyMs": 42.02,
-      "audioScheduledAheadMaxMs": 2061.3,
+      "audioScheduledAheadMaxMs": 2050.7,
       "audioLookaheadMs": 1500,
       "liveAudioNodes": 0,
       "loops": 0,
@@ -232,7 +250,7 @@
       ],
       "audioLevels": [
         {
-          "t": -0.130667,
+          "t": -0.32,
           "peak": 0
         },
         {
@@ -520,148 +538,68 @@
           "peak": 0
         }
       ],
-      "framesRequested": 102,
-      "framesPainted": 102,
+      "framesRequested": 92,
+      "framesPainted": 77,
       "paintLatenessByFrameMs": [
         [
           1,
-          65.33
-        ],
-        [
-          2,
-          42.67
-        ],
-        [
-          3,
-          38.67
-        ],
-        [
-          4,
-          16
-        ],
-        [
-          5,
-          4
+          206.67
         ],
         [
           6,
-          10.67
-        ],
-        [
-          7,
-          17.33
-        ],
-        [
-          8,
-          13.33
-        ],
-        [
-          9,
-          1.33
+          181.33
         ],
         [
           10,
-          16
-        ],
-        [
-          11,
-          14.67
-        ],
-        [
-          12,
-          10.67
-        ],
-        [
-          13,
-          17.33
-        ],
-        [
-          14,
-          13.33
+          208
         ],
         [
           15,
-          12
-        ],
-        [
-          16,
-          18.67
-        ],
-        [
-          17,
-          14.67
-        ],
-        [
-          18,
-          10.67
+          161.33
         ],
         [
           19,
-          17.33
-        ],
-        [
-          20,
-          13.33
+          89.33
         ],
         [
           21,
-          20
+          52
         ],
         [
           22,
-          18.67
+          40
         ],
         [
           23,
-          14.67
+          17.33
         ],
         [
           24,
-          10.67
+          13.33
         ],
         [
           25,
-          17.33
-        ],
-        [
-          26,
-          16
+          38.67
         ],
         [
           27,
-          12
+          22.67
         ],
         [
           28,
-          18.67
-        ],
-        [
-          29,
-          25.33
-        ],
-        [
-          30,
-          10.67
+          40
         ],
         [
           31,
-          17.33
+          30.67
         ],
         [
           32,
-          16
+          45.33
         ],
         [
           33,
-          12
-        ],
-        [
-          34,
-          18.67
-        ],
-        [
-          35,
-          14.67
+          44
         ],
         [
           36,
@@ -669,99 +607,79 @@
         ],
         [
           37,
-          28
-        ],
-        [
-          38,
-          16
+          20
         ],
         [
           39,
-          1.33
-        ],
-        [
-          40,
-          18.67
+          22.67
         ],
         [
           41,
-          14.67
-        ],
-        [
-          42,
-          13.33
-        ],
-        [
-          43,
-          20
-        ],
-        [
-          44,
-          16
-        ],
-        [
-          45,
-          12
-        ],
-        [
-          46,
-          10.67
-        ],
-        [
-          47,
-          17.33
-        ],
-        [
-          48,
-          13.33
-        ],
-        [
-          49,
-          20
-        ],
-        [
-          50,
-          26.67
-        ],
-        [
-          51,
-          22.67
-        ],
-        [
-          52,
-          10.67
-        ],
-        [
-          53,
           28
         ],
         [
-          54,
-          13.33
+          42,
+          24
         ],
         [
-          55,
+          43,
           30.67
         ],
         [
-          56,
-          16
+          44,
+          26.67
         ],
         [
-          57,
-          22.67
+          45,
+          33.33
+        ],
+        [
+          46,
+          40
+        ],
+        [
+          47,
+          46.67
+        ],
+        [
+          49,
+          30.67
+        ],
+        [
+          50,
+          37.33
+        ],
+        [
+          51,
+          33.33
+        ],
+        [
+          52,
+          40
+        ],
+        [
+          53,
+          57.33
+        ],
+        [
+          55,
+          41.33
+        ],
+        [
+          56,
+          58.67
         ],
         [
           58,
-          10.67
+          21.33
         ],
         [
           59,
-          36
+          17.33
         ],
         [
           60,
-          64
+          74.67
         ],
         [
           61,
@@ -769,11 +687,11 @@
         ],
         [
           62,
-          26.67
+          37.33
         ],
         [
           63,
-          4
+          36
         ],
         [
           64,
@@ -785,71 +703,75 @@
         ],
         [
           66,
-          13.33
+          16
         ],
         [
           67,
-          12
-        ],
-        [
-          68,
-          18.67
-        ],
-        [
-          70,
-          21.33
-        ],
-        [
-          71,
-          17.33
-        ],
-        [
-          72,
-          13.33
-        ],
-        [
-          73,
           22.67
         ],
         [
-          74,
-          18.67
+          68,
+          8
+        ],
+        [
+          69,
+          25.33
+        ],
+        [
+          70,
+          42.67
+        ],
+        [
+          71,
+          38.67
+        ],
+        [
+          72,
+          45.33
+        ],
+        [
+          73,
+          33.33
         ],
         [
           75,
-          14.67
+          28
         ],
         [
           76,
-          61.33
+          32
+        ],
+        [
+          77,
+          20
         ],
         [
           78,
-          16
+          26.67
         ],
         [
           79,
-          12
+          22.67
         ],
         [
           80,
-          37.33
+          10.67
         ],
         [
           81,
-          14.67
+          36
         ],
         [
           82,
-          13.33
+          32
         ],
         [
           83,
-          9.33
+          20
         ],
         [
           84,
-          16
+          37.33
         ],
         [
           85,
@@ -857,85 +779,81 @@
         ],
         [
           86,
-          8
+          21.33
         ],
         [
           87,
-          14.67
+          28
         ],
         [
           88,
-          13.33
+          24
         ],
         [
           89,
-          20
+          1.33
         ],
         [
           90,
-          16
+          26.67
         ],
         [
           91,
-          12
+          33.33
         ],
         [
           92,
-          10.67
+          29.33
         ],
         [
           93,
-          17.33
+          28
         ],
         [
           94,
-          13.33
+          34.67
         ],
         [
           95,
-          9.33
-        ],
-        [
-          96,
-          16
+          41.33
         ],
         [
           97,
-          12
+          14.67
         ],
         [
           98,
-          18.67
+          0
         ],
         [
           99,
-          17.33
+          28
         ],
         [
           100,
-          13.33
+          24
         ],
         [
           101,
-          9.33
+          20
         ],
         [
           102,
-          16
+          18.67
         ],
         [
           103,
-          22.67
+          4
         ],
         [
           104,
-          29.33
+          40
         ]
       ],
       "paintLatenessMs": {
-        "median": 16,
-        "p95": 38.67,
-        "max": 65.33
+        "median": 30.67,
+        "p95": 161.33,
+        "max": 208
       },
       "fxVoices": 0,
       "fxPrimeMs": 0,
@@ -945,6 +863,12 @@
       "bypassAudioFx": false,
       "auditioning": false,
       "unavailableAudioFx": {},
+      "limiter": {
+        "active": false,
+        "ceilingDb": null,
+        "unavailable": null,
+        "reductions": []
+      },
       "note": "one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it",
       "audioOnsetMaxErrorMs": 0.06
     }
@@ -1064,7 +988,7 @@
       "name": "MCP: tools are generated from the operation registry (internal ops hidden)",
       "ok": true,
       "detail": {
-        "count": 187
+        "count": 201
       }
     },
     {
@@ -1072,7 +996,7 @@
       "ok": true,
       "detail": {
         "right": {
-          "id": "clp_24938ce3661",
+          "id": "clp_e54a4b8e071",
           "start": {
             "value": "2",
             "timescale": 1
@@ -1092,8 +1016,8 @@
       "name": "live UI update: agent edit appears in the open editor without reload",
       "ok": true,
       "detail": {
-        "requestToCommitMs": 19.5,
-        "requestToVisibleInEditorMs": 143.9,
+        "requestToCommitMs": 40,
+        "requestToVisibleInEditorMs": 222.1,
         "note": "single sample, loopback, includes Playwright polling overhead"
       }
     },
@@ -1107,11 +1031,11 @@
       "detail": {
         "before": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_b04cfb25520"
+          "selected": "clip-clp_ecf7756e6f0"
         },
         "after": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_b04cfb25520"
+          "selected": "clip-clp_ecf7756e6f0"
         }
       }
     },
@@ -1157,7 +1081,7 @@
       "ok": true,
       "detail": [
         {
-          "entityId": "clp_b04cfb25520",
+          "entityId": "clp_ecf7756e6f0",
           "changedAtRevision": 7,
           "by": "agent:local",
           "deleted": false
@@ -1213,7 +1137,7 @@
       "name": "when the export finishes the editor says so and the file starts saving by itself; the link stays for another copy",
       "ok": true,
       "detail": {
-        "savedName": "pulseframe-job_og7pvRTc7RI.mp4"
+        "savedName": "pulseframe-job_r3xr1pkyBqI.mp4"
       }
     },
     {
@@ -1314,10 +1238,10 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_d5854bde460": "original"
+            "ast_01d1fdb0a80": "original"
           },
           "sourcesUsed": {
-            "ast_d5854bde460": [
+            "ast_01d1fdb0a80": [
               "original"
             ]
           },
@@ -1327,7 +1251,7 @@
           "refused": 0,
           "rangedResponses": 2,
           "statuses": [
-            "ast_d5854bde460/content:206"
+            "ast_01d1fdb0a80/content:206"
           ]
         }
       }
@@ -1340,7 +1264,7 @@
         "audioContextState": "running",
         "audioSampleRate": 48000,
         "outputLatencyMs": 42.02,
-        "audioScheduledAheadMaxMs": 2061.3,
+        "audioScheduledAheadMaxMs": 2050.7,
         "audioLookaheadMs": 1500,
         "liveAudioNodes": 0,
         "loops": 0,
@@ -1351,7 +1275,7 @@
         ],
         "audioLevels": [
           {
-            "t": -0.130667,
+            "t": -0.32,
             "peak": 0
           },
           {
@@ -1639,148 +1563,68 @@
             "peak": 0
           }
         ],
-        "framesRequested": 102,
-        "framesPainted": 102,
+        "framesRequested": 92,
+        "framesPainted": 77,
         "paintLatenessByFrameMs": [
           [
             1,
-            65.33
-          ],
-          [
-            2,
-            42.67
-          ],
-          [
-            3,
-            38.67
-          ],
-          [
-            4,
-            16
-          ],
-          [
-            5,
-            4
+            206.67
           ],
           [
             6,
-            10.67
-          ],
-          [
-            7,
-            17.33
-          ],
-          [
-            8,
-            13.33
-          ],
-          [
-            9,
-            1.33
+            181.33
           ],
           [
             10,
-            16
-          ],
-          [
-            11,
-            14.67
-          ],
-          [
-            12,
-            10.67
-          ],
-          [
-            13,
-            17.33
-          ],
-          [
-            14,
-            13.33
+            208
           ],
           [
             15,
-            12
-          ],
-          [
-            16,
-            18.67
-          ],
-          [
-            17,
-            14.67
-          ],
-          [
-            18,
-            10.67
+            161.33
           ],
           [
             19,
-            17.33
-          ],
-          [
-            20,
-            13.33
+            89.33
           ],
           [
             21,
-            20
+            52
           ],
           [
             22,
-            18.67
+            40
           ],
           [
             23,
-            14.67
+            17.33
           ],
           [
             24,
-            10.67
+            13.33
           ],
           [
             25,
-            17.33
-          ],
-          [
-            26,
-            16
+            38.67
           ],
           [
             27,
-            12
+            22.67
           ],
           [
             28,
-            18.67
-          ],
-          [
-            29,
-            25.33
-          ],
-          [
-            30,
-            10.67
+            40
           ],
           [
             31,
-            17.33
+            30.67
           ],
           [
             32,
-            16
+            45.33
           ],
           [
             33,
-            12
-          ],
-          [
-            34,
-            18.67
-          ],
-          [
-            35,
-            14.67
+            44
           ],
           [
             36,
@@ -1788,99 +1632,79 @@
           ],
           [
             37,
-            28
-          ],
-          [
-            38,
-            16
+            20
           ],
           [
             39,
-            1.33
-          ],
-          [
-            40,
-            18.67
+            22.67
           ],
           [
             41,
-            14.67
-          ],
-          [
-            42,
-            13.33
-          ],
-          [
-            43,
-            20
-          ],
-          [
-            44,
-            16
-          ],
-          [
-            45,
-            12
-          ],
-          [
-            46,
-            10.67
-          ],
-          [
-            47,
-            17.33
-          ],
-          [
-            48,
-            13.33
-          ],
-          [
-            49,
-            20
-          ],
-          [
-            50,
-            26.67
-          ],
-          [
-            51,
-            22.67
-          ],
-          [
-            52,
-            10.67
-          ],
-          [
-            53,
             28
           ],
           [
-            54,
-            13.33
+            42,
+            24
           ],
           [
-            55,
+            43,
             30.67
           ],
           [
-            56,
-            16
+            44,
+            26.67
           ],
           [
-            57,
-            22.67
+            45,
+            33.33
+          ],
+          [
+            46,
+            40
+          ],
+          [
+            47,
+            46.67
+          ],
+          [
+            49,
+            30.67
+          ],
+          [
+            50,
+            37.33
+          ],
+          [
+            51,
+            33.33
+          ],
+          [
+            52,
+            40
+          ],
+          [
+            53,
+            57.33
+          ],
+          [
+            55,
+            41.33
+          ],
+          [
+            56,
+            58.67
           ],
           [
             58,
-            10.67
+            21.33
           ],
           [
             59,
-            36
+            17.33
           ],
           [
             60,
-            64
+            74.67
           ],
           [
             61,
@@ -1888,11 +1712,11 @@
           ],
           [
             62,
-            26.67
+            37.33
           ],
           [
             63,
-            4
+            36
           ],
           [
             64,
@@ -1904,71 +1728,75 @@
           ],
           [
             66,
-            13.33
+            16
           ],
           [
             67,
-            12
-          ],
-          [
-            68,
-            18.67
-          ],
-          [
-            70,
-            21.33
-          ],
-          [
-            71,
-            17.33
-          ],
-          [
-            72,
-            13.33
-          ],
-          [
-            73,
             22.67
           ],
           [
-            74,
-            18.67
+            68,
+            8
+          ],
+          [
+            69,
+            25.33
+          ],
+          [
+            70,
+            42.67
+          ],
+          [
+            71,
+            38.67
+          ],
+          [
+            72,
+            45.33
+          ],
+          [
+            73,
+            33.33
           ],
           [
             75,
-            14.67
+            28
           ],
           [
             76,
-            61.33
+            32
+          ],
+          [
+            77,
+            20
           ],
           [
             78,
-            16
+            26.67
           ],
           [
             79,
-            12
+            22.67
           ],
           [
             80,
-            37.33
+            10.67
           ],
           [
             81,
-            14.67
+            36
           ],
           [
             82,
-            13.33
+            32
           ],
           [
             83,
-            9.33
+            20
           ],
           [
             84,
-            16
+            37.33
           ],
           [
             85,
@@ -1976,85 +1804,81 @@
           ],
           [
             86,
-            8
+            21.33
           ],
           [
             87,
-            14.67
+            28
           ],
           [
             88,
-            13.33
+            24
           ],
           [
             89,
-            20
+            1.33
           ],
           [
             90,
-            16
+            26.67
           ],
           [
             91,
-            12
+            33.33
           ],
           [
             92,
-            10.67
+            29.33
           ],
           [
             93,
-            17.33
+            28
           ],
           [
             94,
-            13.33
+            34.67
           ],
           [
             95,
-            9.33
-          ],
-          [
-            96,
-            16
+            41.33
           ],
           [
             97,
-            12
+            14.67
           ],
           [
             98,
-            18.67
+            0
           ],
           [
             99,
-            17.33
+            28
           ],
           [
             100,
-            13.33
+            24
           ],
           [
             101,
-            9.33
+            20
           ],
           [
             102,
-            16
+            18.67
           ],
           [
             103,
-            22.67
+            4
           ],
           [
             104,
-            29.33
+            40
           ]
         ],
         "paintLatenessMs": {
-          "median": 16,
-          "p95": 38.67,
-          "max": 65.33
+          "median": 30.67,
+          "p95": 161.33,
+          "max": 208
         },
         "fxVoices": 0,
         "fxPrimeMs": 0,
@@ -2064,6 +1888,12 @@
         "bypassAudioFx": false,
         "auditioning": false,
         "unavailableAudioFx": {},
+        "limiter": {
+          "active": false,
+          "ceilingDb": null,
+          "unavailable": null,
+          "reductions": []
+        },
         "note": "one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it",
         "audioOnsetMaxErrorMs": 0.06
       }
@@ -2078,7 +1908,7 @@
           2.50006
         ],
         "maxErrorMs": 0.06,
-        "scheduledAheadMaxMs": 2061.3
+        "scheduledAheadMaxMs": 2050.7
       }
     },
     {
@@ -2086,7 +1916,7 @@
       "ok": true,
       "detail": {
         "sourcesUsed": {
-          "ast_d5854bde460": [
+          "ast_01d1fdb0a80": [
             "original",
             "proxy"
           ]
