@@ -18,6 +18,7 @@ import { CutLoupe } from './CutLoupe.tsx';
 import { MulticamPanel } from './MulticamPanel.tsx';
 import { PerformView } from './perform/PerformView.tsx';
 import { STAGE_STRINGS } from './stage.strings.ts';
+import { TimecodeButton } from './craft/TimecodeButton.tsx';
 import './stage.css';
 
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -92,7 +93,7 @@ export function Transport() {
       {!(state.workspace === 'color' && wide) && <MulticamPanel />}
       <div className="transport pf-ds pf-force-dark" dir="ltr" role="group" aria-label={t('cmd.playPause')}>
         <div className="tp-time">
-          <span className="timecode tc" data-testid="timecode">{T.toTimecode(editor.playhead, rate)}</span>
+          <TimecodeButton text={T.toTimecode(editor.playhead, rate)} />
           <span className="tp-total tc" aria-label={`${S.of} ${T.toTimecode(editor.duration, rate)}`}>/ {T.toTimecode(editor.duration, rate)}</span>
         </div>
         <div className="tp-keys">

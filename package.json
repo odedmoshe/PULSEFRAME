@@ -94,7 +94,8 @@
     "bench:commit": "tsx packages/evals/src/commit-bench.ts",
     "bench:request": "tsx packages/evals/src/request-bench.ts",
     "bench:seek": "tsx packages/evals/src/seek-bench.ts",
-    "bench:playback": "tsx packages/evals/src/playback-bench.ts"
+    "bench:playback": "tsx packages/evals/src/playback-bench.ts",
+    "proof:craft": "tsx packages/evals/src/craft-proof.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

@@ -22,6 +22,7 @@ import { describeExport, isActiveJob, jobFraction, overallFraction } from './exp
 import { ProjectsDialog } from './ProjectsDialog.tsx';
 import { IconExport, IconRedo, IconUndo } from './icons.tsx';
 import { WORKSPACES, useEditorState, type Workspace } from './store.ts';
+import { CraftHost } from './craft/CraftHost.tsx';
 import '../ds/chrome.css';
 
 const MODES: Workspace[] = ['pro', 'color', 'sound', 'captions', 'deliver', 'shorts', 'perform'];
@@ -125,6 +126,8 @@ export function Header() {
         </button>
       </div>
       {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); /* return focus to the button that opened the dialog */ setTimeout(() => document.querySelector<HTMLElement>('[data-testid=projects-open]')?.focus(), 0); }} />}
+      {/* editing craft (wave 7): the open craft surface — time field, paste dialog, find panel, versions, save field (W3) */}
+      <CraftHost />
     </header>
   );
 }

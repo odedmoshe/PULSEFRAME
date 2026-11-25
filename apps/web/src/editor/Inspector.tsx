@@ -34,6 +34,7 @@ import { STAGE_STRINGS } from './stage.strings.ts';
 import { useWideStage } from './Transport.tsx';
 import { useChrome } from './chromeState.ts';
 import { Copilot } from './Copilot.tsx';
+import { VersionsButton } from './craft/VersionsButton.tsx';
 import './inspector.css';
 
 const TAB_KEY = 'pf.inspector.tab.v1';
@@ -344,6 +345,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
       )}
       <h2>{t('activity')}</h2>
       <button type="button" className="ghost" data-testid="activity-open" onClick={() => setActivityOpen(true)}>{t('activity.all')}</button>
+      <VersionsButton />
       {activityOpen && <ActivityDialog onClose={() => { setActivityOpen(false); setTimeout(() => document.querySelector<HTMLElement>('[data-testid=activity-open]')?.focus(), 0); }} />}
       <label className="check"><input type="checkbox" checked={state.followAgent} onChange={(e) => editor.set({ followAgent: e.target.checked })} data-testid="follow-agent" /> {t('follow.agent')}</label>
       <ol className="activity" data-testid="activity" aria-live="polite">

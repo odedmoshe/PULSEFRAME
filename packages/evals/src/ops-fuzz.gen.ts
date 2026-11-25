@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT } from '@pulseframe/core';
+import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -600,6 +600,9 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       ...(MULTICAM_OPS_BUILT && !opts.v1Replay ? multicamMenu(doc) : []),
       // the content library (wave 7): the credits card, once worker B has built the bodies
       ...(LIBRARY_OPS_BUILT && !opts.v1Replay ? [() => genLibrary(doc)] : []),
+      // editing craft (wave 7): ripple trim, paste attributes, replace text, once W1 has built the bodies (never in the v1 corpus,
+      // which keyframe-replay.test.ts and ripple-delete-golden.test.ts pin)
+      ...(CRAFT_OPS_BUILT && !opts.v1Replay ? [() => genCraft(doc)] : []),
       ...(SEQUENCE_OPS_BUILT ? [...sequenceMenu(doc), () => { const others = Object.keys(doc.sequences).filter((id) => id !== doc.mainSequenceId); return { op: 'add_marker', args: { sequenceId: others.length && rnd() < 0.8 ? pick(others) : rnd() < 0.5 ? doc.mainSequenceId : 'seq_none', time: T.frameTime(int(240), rate) } }; }] : []),
       // send and keep (wave 7): the master limiter on and off, and the loudness match of sound clips with their current gain (accepted)
       // or a changed one (refused stale), sometimes a repeated or unknown clip; left out of the recorded v1 replay corpus
@@ -732,6 +735,32 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     return { op: 'use_library_item', args: { asset } };
   };
   /**
+   * Editing craft (wave 7 craft track). `genCraft(doc)` returns a random ripple_trim, paste_attributes or replace_text call: ripple
+   * trims at frame times inside, at and past a clip's edges (the start edge also earlier: refused), pastes of random groups among
+   * clips of every kind (a source among its targets: refused), replacements of titles with the text they hold or a stale one
+   * (refused), and unknown ids. `gen` draws it once CRAFT_OPS_BUILT.
+   */
+  const genCraft = (doc: ProjectDocument): OpCall => {
+    const clips = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips));
+    const id = () => (clips.length && rnd() < 0.92 ? pick(clips).id : 'clp_none');
+    const kind = rnd();
+    if (kind < 0.45) {
+      const c = clips.length ? pick(clips) : null;
+      const s = c ? T.frameIndexAt(c.start, rate) : 0, d = c ? Math.max(1, T.frameIndexAt(c.duration, rate)) : 30;
+      const edge = rnd() < 0.5 ? 'start' as const : 'end' as const;
+      const to = edge === 'start' ? s + int(d + 2) - (rnd() < 0.1 ? 3 : 0) : s + 1 + int(2 * d);
+      return { op: 'ripple_trim', args: { clipId: c?.id ?? 'clp_none', edge, to: f(Math.max(0, to)), ...(rnd() < 0.1 ? { includeLinked: false } : {}) } };
+    }
+    if (kind < 0.8) {
+      const from = id();
+      const groups = ATTRIBUTE_GROUPS.filter(() => rnd() < 0.4);
+      return { op: 'paste_attributes', args: { fromClipId: from, toClipIds: Array.from({ length: 1 + int(3) }, () => (rnd() < 0.05 ? from : id())), groups: groups.length ? groups : [pick(ATTRIBUTE_GROUPS)] } };
+    }
+    const titles = clips.filter((c) => c.type === 'text') as Extract<(typeof clips)[number], { type: 'text' }>[];
+    const t = titles.length ? pick(titles) : null;
+    return { op: 'replace_text', args: { edits: [{ at: { kind: 'title', clipId: t?.id ?? 'clp_none' }, was: t && rnd() < 0.85 ? t.text : 'stale', text: pick(['נועה', 'Noa', 'שלום {name}', 'x']) }] } };
+  };
+  /**
    * The next random call among the named operations: draws from the same menu until one of them comes up (the menu grows with every
    * feature, so a driver that is about a few operations would otherwise meet them too rarely to say anything about them).
    */
@@ -740,5 +769,5 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft };
 }

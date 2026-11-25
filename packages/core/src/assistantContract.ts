@@ -55,6 +55,10 @@ export const ASSISTANT_EXCLUDED_OPS = [
   'add_credits_card',
   // send and keep (wave 7): a project setting, and a match that needs measurements the assistant never reads
   'set_master_limiter', 'match_clip_loudness',
+  // editing craft (wave 7): replace_text rewrites captions, transcripts and translations the assistant never reads; ripple_trim and
+  // paste_attributes are left out until the owner has tried them (offering them would also change the reviewed prompt,
+  // ASSISTANT_PROMPT_DIGEST, which needs its own review first)
+  'replace_text', 'ripple_trim', 'paste_attributes',
 ] as const;
 /** The ops a proposal may hold: every registered public op minus ASSISTANT_EXCLUDED_OPS and PERSON_OPS, in registry order. */
 export function assistantOps(): string[] {

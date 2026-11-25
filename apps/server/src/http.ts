@@ -48,6 +48,7 @@ import { assertMayTakeRendered, forPrincipal, mayHoldPeople, peopleAccess, peopl
 import { assertMayHandleImportJob, decodeUploadHeader, IMPORT_JOB_TYPE, type DropDoor, type ImportQueue } from './importContracts.ts';
 import { declaredLength, registerImportRoutes } from './importRoutes.ts';
 import { registerRenderCacheRoutes, type RenderCacheService } from './renderCacheRoutes.ts';
+import { registerCraftRoutes } from './craft/routes.ts';
 import { peopleSuggestions } from './lifeline.ts';
 import { takeFor } from './perform.ts';
 import { ASSISTANT_JOB_TYPE, AssistantConfigBodySchema, AssistantKeyBodySchema, AssistantRequestBodySchema } from '@pulseframe/core';
@@ -841,6 +842,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   if (extras.renderCache) registerRenderCacheRoutes(app, extras.renderCache, need);
   // the content library on disk (wave 7 library track): every library route, and GET …/credits (library/contract.ts LIBRARY_ROUTES)
   registerLibraryRoutes(app, { cfg, store, gov, imports: extras.imports ?? null, need });
+  // editing craft (wave 7 craft track): named versions and find (craft/contract.ts CRAFT_ROUTES; 501 craft_not_built until W2)
+  registerCraftRoutes(app, { cfg, store, gov, exporter, need });
 
   // ----- the command bar's language assistant (ADR-0027; assistant/contract.ts ASSISTANT_ROUTES): status for any observer (whole
   // for the owner's own session, connected or not for anyone else: assistant/visibility.ts), the rest for the owner's own session

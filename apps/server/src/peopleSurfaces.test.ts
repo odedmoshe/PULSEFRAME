@@ -192,6 +192,8 @@ const PARAMS: Record<string, () => string> = {
   groupId: () => 'mcg_none',
   // the content library (wave 7): a catalogue key the library does not hold (the routes answer before reading anything)
   key: () => encodeURIComponent('none/none'),
+  // editing craft (wave 7): a saved version the walked project does not have (the routes answer before reading a copy)
+  versionId: () => 'ver_none',
 };
 /** Queries and bodies that reach the part of a route that reads the project; any other POST gets a body its schema refuses. */
 const QUERY: Record<string, () => string> = {

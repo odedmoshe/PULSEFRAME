@@ -16,6 +16,7 @@ import { PERFORM_EN, PERFORM_HE } from './perform.ts';
 import { SEND_EN, SEND_HE } from './send.ts';
 import { COMMAND_BAR_EN, COMMAND_BAR_HE } from './commandBar.ts';
 import { LIBRARY_EN, LIBRARY_HE } from './library.ts';
+import { CRAFT_EN, CRAFT_HE } from './craft.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
@@ -220,6 +221,7 @@ export const he = {
   ...COMMAND_BAR_HE,
   ...LIBRARY_HE,
   ...SEND_HE,
+  ...CRAFT_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -424,6 +426,7 @@ export const en: Record<keyof typeof he, string> = {
   ...COMMAND_BAR_EN,
   ...LIBRARY_EN,
   ...SEND_EN,
+  ...CRAFT_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -446,3 +449,4 @@ export * from './multicam.ts';
 export * from './perform.ts';
 export * from './library.ts';
 export * from './send.ts';
+export * from './craft.ts';

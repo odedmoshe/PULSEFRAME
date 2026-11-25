@@ -151,7 +151,7 @@ const mustTrack = (seq: Sequence, trackId: string) => {
   if (t.locked) throw new OpError('track_locked', `track ${trackId} is locked`, { trackId });
   return t;
 };
-const sortClips = (t: Track) => t.clips.sort((a, b) => T.cmp(a.start, b.start) || (a.id < b.id ? -1 : 1));
+export const sortClips = (t: Track) => t.clips.sort((a, b) => T.cmp(a.start, b.start) || (a.id < b.id ? -1 : 1));
 const overlaps = (t: Track, start: T.RationalTime, end: T.RationalTime, ignore: Set<string>) =>
   t.clips.find((c) => !ignore.has(c.id) && T.lt(c.start, end) && T.lt(start, clipEnd(c)));
 function assertFree(t: Track, start: T.RationalTime, end: T.RationalTime, ignore = new Set<string>()) {
@@ -249,7 +249,7 @@ function placeTrack(seq: Sequence, kind: Track['kind'], start: T.RationalTime, e
   return newTrack(seq, kind, ctx);
 }
 /** The other clips of a clip's link group, wherever they are (none for a clip that is not linked, or whose link id no other clip carries). */
-const partnersOf = (d: ProjectDocument, clip: Clip) => {
+export const partnersOf = (d: ProjectDocument, clip: Clip) => {
   const out: { track: Track; clip: MediaClip }[] = [];
   if (clip.type !== 'media' || !clip.linkGroupId) return out;
   for (const seq of Object.values(d.sequences))
@@ -258,7 +258,7 @@ const partnersOf = (d: ProjectDocument, clip: Clip) => {
   return out;
 };
 /** The other clips of a clip's link group, which an edit of the clip changes too: refused while one of them is on a locked track. */
-const linked = (d: ProjectDocument, clip: Clip) => {
+export const linked = (d: ProjectDocument, clip: Clip) => {
   const out = partnersOf(d, clip);
   for (const l of out) if (l.track.locked) throw new OpError('track_locked', `linked clip ${l.clip.id} is on locked track ${l.track.id}`, { trackId: l.track.id, clipId: l.clip.id }, 'Unlock the track or pass includeLinked=false.');
   return out;
@@ -1506,6 +1506,68 @@ function coveredBefore(spans: readonly { s: T.RationalTime; e: T.RationalTime }[
   }
   return total;
 }
+/**
+ * The words of the refusals shiftClips raises; each op that closes a gap passes its own, so the advice fits the edit (wave 7
+ * craft: ripple_trim says "trim without closing the gap", ripple_delete_clips "delete and keep the gap").
+ */
+export interface ShiftWords {
+  differentAmounts: (clipId: string, otherClipId: string) => string; differentAmountsHint: string;
+  lockedPartnerHint: string;
+  beforeZero: (clipId: string) => string; beforeZeroHint: string;
+  over: (clipId: string, otherClipId: string, trackId: string) => string; overHint: string;
+}
+/** ripple_delete_clips' words, unchanged since before the extraction (packages/evals/src/ripple-delete.golden.json pins them). */
+export const RIPPLE_DELETE_WORDS: ShiftWords = {
+  differentAmounts: (a, b) => `linked clips ${a} and ${b} would move by different amounts`, differentAmountsHint: 'Delete the clips of one track at a time, or unlink those two clips first.',
+  lockedPartnerHint: 'Unlock the track, or delete with delete_clip to keep the gap.',
+  beforeZero: (a) => `closing the gap would place clip ${a} before 0`, beforeZeroHint: 'Delete with delete_clip to keep the gap, or trim the start of that clip (it starts before the clip it is linked to) first.',
+  over: (a, b, t) => `closing the gap would put clip ${a} over clip ${b} on track ${t}`, overHint: 'Delete with delete_clip to keep the gap, or move the clip that is in the way first.',
+};
+/** One clip that a gap-closing edit moves: `by` is how much EARLIER it goes (negative: later), frame-aligned, never rounded. */
+export interface ShiftEntry { track: Track; clip: Clip; by: T.RationalTime }
+/**
+ * The shared shift of ripple_delete_clips and ripple_trim (extracted from ripple_delete_clips, wave 7 craft pre-pass; the golden
+ * ripple-delete.golden.json, recorded before, replays identically). `shift` holds every clip of the closing tracks with its `by`;
+ * this adds the linked partners of each clip that moves (same amount; refused when two linked clips would move by different
+ * amounts, or a partner is on a locked track), refuses a clip that would go before 0, applies the moves, and refuses a moved clip
+ * landing on a clip that did not move with it, on the closing tracks and the tracks of the moved clips. Mutates `shift` and the
+ * draft; returns the clips that moved (by ≠ 0). All or nothing only through the transaction (the caller throws on the draft).
+ */
+export function shiftClips(d: ProjectDocument, shift: Map<string, ShiftEntry>, closing: ReadonlySet<Track>, w: ShiftWords): ShiftEntry[] {
+  for (const m of [...shift.values()]) {
+    if (T.isZero(m.by)) continue;
+    for (const p of partnersOf(d, m.clip)) {
+      const had = shift.get(p.clip.id);
+      if (had) {
+        if (!T.eq(had.by, m.by)) throw new OpError('incompatible', w.differentAmounts(m.clip.id, p.clip.id), { clipId: m.clip.id, otherClipId: p.clip.id, by: m.by, otherBy: had.by }, w.differentAmountsHint);
+        continue;
+      }
+      if (p.track.locked) throw new OpError('track_locked', `linked clip ${p.clip.id} is on locked track ${p.track.id}`, { trackId: p.track.id, clipId: p.clip.id }, w.lockedPartnerHint);
+      shift.set(p.clip.id, { ...p, by: m.by });
+    }
+  }
+  const moved = [...shift.values()].filter((m) => !T.isZero(m.by));
+  // A clip on a closing track never goes before 0 (it moves by at most the time before it), but a linked clip that starts
+  // earlier than its partner does (a sound that starts before its picture: a J-cut) can; it keeps its offset, so refuse.
+  for (const m of moved) if (T.lt(m.clip.start, m.by)) throw new OpError('out_of_bounds', w.beforeZero(m.clip.id), { clipId: m.clip.id, trackId: m.track.id, start: m.clip.start, by: m.by }, w.beforeZeroHint);
+  for (const m of moved) m.clip.start = T.sub(m.clip.start, m.by);
+  // A clip that moved may not land on one that did not move with it, on any track: sounds that already overlapped
+  // (a crossfade) and moved together keep their overlap, but a sound is never slid over another one that stays.
+  const by = (c: Clip) => shift.get(c.id)?.by ?? T.ZERO;
+  for (const track of new Set([...closing, ...moved.map((m) => m.track)])) {
+    sortClips(track);
+    for (let i = 0; i < track.clips.length; i++) {
+      const cur = track.clips[i]!;
+      for (let k = i + 1; k < track.clips.length && T.lt(track.clips[k]!.start, clipEnd(cur)); k++) {
+        const other = track.clips[k]!;
+        if (T.eq(by(cur), by(other))) continue;
+        const [mover, still] = T.lt(by(other), by(cur)) ? [cur, other] : [other, cur];
+        throw new OpError('overlap', w.over(mover.id, still.id, track.id), { trackId: track.id, clipId: mover.id, otherClipId: still.id }, w.overHint);
+      }
+    }
+  }
+  return moved;
+}
 defineOp({
   name: 'ripple_delete_clips',
   version: 1,
@@ -1524,38 +1586,7 @@ defineOp({
     // how far each clip moves: on a closing track, the deleted time before it; a linked clip moves with its partner
     const shift = new Map<string, { track: Track; clip: Clip; by: T.RationalTime }>();
     for (const t of closing) for (const c of t.clips) shift.set(c.id, { track: t, clip: c, by: coveredBefore(spans.get(t)!, c.start) });
-    for (const m of [...shift.values()]) {
-      if (T.isZero(m.by)) continue;
-      for (const p of partnersOf(d, m.clip)) {
-        const had = shift.get(p.clip.id);
-        if (had) {
-          if (!T.eq(had.by, m.by)) throw new OpError('incompatible', `linked clips ${m.clip.id} and ${p.clip.id} would move by different amounts`, { clipId: m.clip.id, otherClipId: p.clip.id, by: m.by, otherBy: had.by }, 'Delete the clips of one track at a time, or unlink those two clips first.');
-          continue;
-        }
-        if (p.track.locked) throw new OpError('track_locked', `linked clip ${p.clip.id} is on locked track ${p.track.id}`, { trackId: p.track.id, clipId: p.clip.id }, 'Unlock the track, or delete with delete_clip to keep the gap.');
-        shift.set(p.clip.id, { ...p, by: m.by });
-      }
-    }
-    const moved = [...shift.values()].filter((m) => !T.isZero(m.by));
-    // A clip on a closing track never goes before 0 (it moves by at most the time before it), but a linked clip that starts
-    // earlier than its partner does (a sound that starts before its picture: a J-cut) can; it keeps its offset, so refuse.
-    for (const m of moved) if (T.lt(m.clip.start, m.by)) throw new OpError('out_of_bounds', `closing the gap would place clip ${m.clip.id} before 0`, { clipId: m.clip.id, trackId: m.track.id, start: m.clip.start, by: m.by }, 'Delete with delete_clip to keep the gap, or trim the start of that clip (it starts before the clip it is linked to) first.');
-    for (const m of moved) m.clip.start = T.sub(m.clip.start, m.by);
-    // A clip that moved may not land on one that did not move with it, on any track: sounds that already overlapped
-    // (a crossfade) and moved together keep their overlap, but a sound is never slid over another one that stays.
-    const by = (c: Clip) => shift.get(c.id)?.by ?? T.ZERO;
-    for (const track of new Set([...closing, ...moved.map((m) => m.track)])) {
-      sortClips(track);
-      for (let i = 0; i < track.clips.length; i++) {
-        const cur = track.clips[i]!;
-        for (let k = i + 1; k < track.clips.length && T.lt(track.clips[k]!.start, clipEnd(cur)); k++) {
-          const other = track.clips[k]!;
-          if (T.eq(by(cur), by(other))) continue;
-          const [mover, still] = T.lt(by(other), by(cur)) ? [cur, other] : [other, cur];
-          throw new OpError('overlap', `closing the gap would put clip ${mover.id} over clip ${still.id} on track ${track.id}`, { trackId: track.id, clipId: mover.id, otherClipId: still.id }, 'Delete with delete_clip to keep the gap, or move the clip that is in the way first.');
-        }
-      }
-    }
+    const moved = shiftClips(d, shift, closing, RIPPLE_DELETE_WORDS);
     // per closing track, the time taken out of it (all of its deleted time)
     const closed = [...closing].map((t) => { const sp = spans.get(t)!; return { trackId: t.id, removed: coveredBefore(sp, sp.reduce((e, x) => T.max(e, x.e), T.ZERO)) }; });
     const deletedClipIds = [...gone.keys()], movedClipIds = moved.map((m) => m.clip.id);
