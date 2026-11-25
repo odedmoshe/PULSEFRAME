@@ -31,6 +31,7 @@ import { dictionaries, effectParamLabel, translateRefusal, fillIn, TREND_PACK_HE
 import { creativeProjection, beatSwitchFrame, BUILTIN_TEMPLATES, MODEL_GATED_TEMPLATES, PACKS, removedByHand, sha256Hex, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 import { TEMPLATE_TESTIDS } from '../../../apps/web/src/editor/templates.testids.ts';
 import { chooseFormat } from './editor-ui.ts';
+import { libraryPanelsProbe } from './library-proof.ui.ts';
 import { toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
 import { generateShortsFixture } from '../../fixtures/src/shorts.ts';
 import { SHORTS_TESTIDS } from '../../../apps/web/src/editor/shorts.testids.ts';
@@ -1814,6 +1815,52 @@ async function main() {
           && en.id !== he.id && en.count === 1 && en.title === 'The archive was imported' && en.body === IMPORTED_REVIEW_CLEARED.en(['«English»']) && en.body.includes('The translation «English» needs review again; its wording is kept') && !/translations/.test(en.body) && en.visible && en.timer === 0 && rErrors.length === 0,
         { marked, he, en, imported: { review: newVariant?.translation?.review, reviewedBy: newVariant?.translation?.reviewedBy ?? null, wording: Object.values(newVariant?.phraseText ?? {}) }, sourceReview: source.review, stays, closed, afterReload, errors: rErrors.slice(0, 3) });
       await rctx.close();
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // content library (wave 7): the sound drawer's «מהספרייה» tab and the elements drawer's tabs in the state THIS server answers
+    // (library_not_built, not set up or ready): keyboard-only tab switch, one honest state with its words, «פתיחת ההגדרות» opens
+    // Settings, no overlapping boxes. The full flow with a library on disk is proof:library check 17.
+    // ---------------------------------------------------------------------------------------------------------------
+    {
+      console.log('\n# content library panels');
+      const lctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
+      await lctx.addInitScript('globalThis.__name = (f) => f');
+      await lctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const lpage = await lctx.newPage();
+      await lpage.goto(`${s.ownerUrl}&project=${pid}`);
+      await lpage.getByTestId('timecode').waitFor({ timeout: 30000 });
+      await lpage.getByTestId('rail-audio').click();
+      const tab = lpage.getByTestId('audio-tab-library');
+      await tab.focus();
+      await lpage.keyboard.press('Enter');
+      await lpage.getByTestId('audio-panel-library').waitFor({ timeout: 8000 }).catch(() => {});
+      await lpage.waitForFunction(() => !!document.querySelector('[data-testid=library-empty],[data-testid=library-not-configured],[data-testid=library-indexing],[data-testid=library-list]'), undefined, { timeout: 8000 }).catch(() => {});
+      const st = await libraryPanelsProbe(lpage);
+      const text = (await lpage.getByTestId('audio-panel-library').innerText().catch(() => '')).trim();
+      const stateWords: Record<string, RegExp> = { not_built: /עוד לא נבנתה/, not_configured: /הספרייה לא מוגדרת/, indexing: /סורקים/, error: /[א-ת]/, empty: /אין עדיין מוזיקה|לא נמצא/, list: /./ };
+      check('library: the sound drawer\'s «מהספרייה» tab opens from the keyboard (Enter), shows exactly one honest state in Hebrew (not built, not set up, scanning, error, empty or the list), and its boxes do not overlap', (await tab.getAttribute('aria-selected')) === 'true' && st.state !== 'none' && !!stateWords[st.state]?.test(text) && st.overlaps.length === 0, { state: st.state, rows: st.rows, overlaps: st.overlaps, text: text.slice(0, 120) });
+      if (st.state === 'not_configured') {
+        await lpage.getByTestId('library-open-settings').focus();
+        await lpage.keyboard.press('Enter');
+        await lpage.getByTestId('settings-dialog').waitFor({ timeout: 5000 }).catch(() => {});
+        const section = await lpage.getByTestId('settings-library').count();
+        await lpage.keyboard.press('Escape');
+        await lpage.getByTestId('settings-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+        check('library: «פתיחת ההגדרות» (Enter) opens Settings at «הספרייה שלי» (the owner\'s own session)', section === 1, { section });
+      }
+      await lpage.getByTestId('rail-elements').click();
+      const etab = lpage.getByTestId('elements-tab-library');
+      await etab.focus();
+      await lpage.keyboard.press('Enter');
+      await lpage.getByTestId('elements-panel-library').waitFor({ timeout: 8000 }).catch(() => {});
+      await lpage.waitForFunction(() => !!document.querySelector('[data-testid=library-empty],[data-testid=library-not-configured],[data-testid=library-indexing],[data-testid=library-list]'), undefined, { timeout: 8000 }).catch(() => {});
+      const est = await libraryPanelsProbe(lpage);
+      await lpage.getByTestId('elements-tab-builtin').focus();
+      await lpage.keyboard.press('Enter');
+      const builtinBack = await lpage.getByTestId('elements-browser').waitFor({ timeout: 5000 }).then(() => true, () => false);
+      check('library: the elements drawer has «מובנים» (the built-in browser, unchanged) and «מהספרייה» tabs; the library tab shows one honest state; switching back restores the built-in browser', est.state !== 'none' && est.overlaps.length === 0 && builtinBack, { state: est.state, overlaps: est.overlaps, builtinBack });
+      await lctx.close();
     }
 
     await page.close();
