@@ -37,17 +37,19 @@ export function LibraryStatusView({ status, lang }: { status: LibraryStatus; lan
   );
 }
 
+/** Owner only: any other session draws nothing and asks the server nothing. */
 export function LibrarySettings(): ReactElement | null {
   const { state } = useEditorState();
-  const lang = state.lang;
+  return isOwnerActor(state.actor) ? <LibrarySettingsOwner lang={state.lang} /> : null;
+}
+
+function LibrarySettingsOwner({ lang }: { lang: Lang }): ReactElement {
   const L = LIBRARY_UI_STRINGS[lang];
-  const owner = isOwnerActor(state.actor);
   const { status, failure, reload, set } = useLibraryStatus();
   const [root, setRoot] = useState('');
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (status?.root !== undefined) setRoot(status.root); }, [status?.root]);
-  if (!owner) return null;
   const run = async (f: () => Promise<LibraryStatus>) => {
     setBusy(true); setNote(null);
     try { set(await f()); } catch (e) { setNote({ ok: false, text: sayFailure(lang, e) }); } finally { setBusy(false); reload(); }
