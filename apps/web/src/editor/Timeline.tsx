@@ -31,6 +31,10 @@ import { assetHasBeats, timelineTempo } from './pulse.logic.ts';
 import { assetDisplayName } from './assetLabel.ts';
 import { RenderCacheLane } from './RenderCacheLane.tsx';
 import { FilmBar } from './FilmBar.tsx';
+import { dictionaries } from '@pulseframe/i18n';
+import type { ExportChecks } from '@pulseframe/core';
+import { findingRows } from './send/send.logic.ts';
+import './send/send.css';
 import './templates.css';
 import './timeline.css';
 
@@ -590,6 +594,12 @@ export function Timeline() {
     return r && r.verdict !== 'pass' ? r.ranges.map((x) => ({ from: T.toSeconds(x.from), to: T.toSeconds(x.to), perSecond: x.flashesPerSecond })) : [];
   }, [state.exportJob]);
 
+  // the findings of the last export's file checks (wave 7 send), marked on the same lane; report only
+  const checkMarks = useMemo(() => {
+    const c = (state.exportJob?.output as { checks?: ExportChecks } | null | undefined)?.checks;
+    return c && state.doc ? findingRows(c, state.doc.settings.frameRate).map((r) => ({ key: r.key, kind: r.kind, from: T.toSeconds(r.from), to: T.toSeconds(r.to), fromText: r.fromText, toText: r.toText })) : [];
+  }, [state.exportJob, state.doc]);
+
   // a cut stays selected only while its clip is the selection
   useEffect(() => { if (selectedCut && !(selection.length === 1 && selection[0] === selectedCut)) cutSelection.set(null); }, [selection, selectedCut]);
 
@@ -810,6 +820,7 @@ export function Timeline() {
               </div>
               <div className="tl-flash" data-testid="flash-lane" role="img" aria-label={s.flashLane}>
                 {flashRanges.map((r, i) => <i key={i} data-testid="flash-risk" style={{ left: r.from * pps, width: Math.max(3, (r.to - r.from) * pps) }} title={s.flashRisk(rulerLabel(r.from, 1), rulerLabel(r.to, 1), String(r.perSecond))} />)}
+                {checkMarks.map((m) => <b key={m.key} className="tl-check-mark" data-testid="export-check-mark" data-kind={m.kind} style={{ left: m.from * pps, width: Math.max(3, (m.to - m.from) * pps) }} title={`${dictionaries[lang][`send.find.${m.kind}` as 'send.find.black']} ${m.fromText}–${m.toText}`} />)}
               </div>
               {/* the render cache's lane (ADR-0024): under the flash lane, only while the viewer's fast export is on */}
               <RenderCacheLane plan={state.segmentPlan} pxPerSecond={pps} frameRate={rate} lang={lang} onSeek={(f) => editor.seek(f)} onRefresh={() => editor.refreshPlan()} />
