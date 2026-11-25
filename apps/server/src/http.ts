@@ -36,6 +36,8 @@ import { applyShorts, cachedShortCandidates, findShortCandidates, planReframeFor
 import { registerBrowserExportRoutes } from './browser-export.ts';
 import { buildOpenApi } from './openapi.ts';
 import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
+import { cameraMotionView, cancelStabiliseJob, startStabiliseJob } from './stabilise.ts';
+import { STABILISE_JOB_TYPE, StabiliseRunBodySchema } from '@pulseframe/core';
 import { cancelMomentsJob, momentsLaneOf, startMomentsJob } from './moments.ts';
 import type { Presence } from './presence.ts';
 import { ApiError, revisionWithChanges, type JobRow, type RevisionEvent, type Store } from './store.ts';
@@ -403,6 +405,18 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
     return c.json(motionTrackView(p.doc, p.revision, c.req.param('motionTrackId')));
+  });
+  // ----- stabilisation (wave 7): a durable, model-free job; attach_camera_motion + set_clip_stabilise in one transaction (stabilise.ts) -----
+  app.post('/api/v1/projects/:id/clips/:clipId/stabilise', async (c) => {
+    const p = need(c, 'edit');
+    const b = await body(c, StabiliseRunBodySchema);
+    const j = startStabiliseJob(store, gov, p, c.req.param('id'), c.req.param('clipId'), b, { derivatives });
+    return c.json({ jobId: j.id, status: j.status }, 202);
+  });
+  app.get('/api/v1/projects/:id/assets/:assetId/camera-motion', (c) => {
+    need(c, 'observe');
+    const p = store.getProject(c.req.param('id'));
+    return c.json(cameraMotionView(p.doc, p.revision, c.req.param('assetId')));
   });
   const RecipeBody = z.object({ params: z.record(z.string(), z.unknown()).optional(), expectedRevision: z.number().int().optional() }).strict();
   app.post('/api/v1/projects/:id/recipes/:recipeId/plan', async (c) => { const p = need(c, 'observe'); store.getProject(c.req.param('id')); return c.json(await planRecipeFor(store, c.req.param('id'), c.req.param('recipeId'), (await body(c, RecipeBody)).params, gov, p)); });
@@ -945,6 +959,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (j.type === 'analysis') return c.json(cancelAnalysisJob(store, j.id, p.actor));
     if (j.type === TRACKING_JOB_TYPE) return c.json(cancelTrackingJob(store, j.id, p.actor));
     if (j.type === MOMENTS_JOB_TYPE) return c.json(cancelMomentsJob(store, j.id, p.actor));
+    if (j.type === STABILISE_JOB_TYPE) return c.json(cancelStabiliseJob(store, j.id, p.actor));
     if (speech.handles(j)) return c.json(speech.cancel(j.id, p.actor));
     // an export the editor's tab renders is handed to its lease holder by Exporter.cancel (browser-export.ts), as for MCP cancel_job
     return c.json(j.type === 'export' ? exporter.cancel(j.id, p.actor) : await capabilities.cancel(j.id, p.actor));

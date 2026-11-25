@@ -9,6 +9,7 @@ import { AudioFxInstanceSchema, MAX_AUDIO_FX } from './audioEffects.ts';
 import { BLEND_MODES, EffectInstanceSchema, MaskSchema, TransitionSchema } from './effects.ts';
 import { FollowSchema, MAX_REDACT_REGIONS, MotionTrackSchema, RedactRegionSchema } from './tracking.ts';
 import { ANIMATABLE, KeyframeSchema, MAX_TRANSFORM_KEYS, RationalTimeSchema, type Animatable } from './keyframe.ts';
+import { CameraMotionSchema, ClipStabiliseSchema } from './steadyContract.ts';
 import { MOMENTS_MAX_WINDOWS, MomentsFileSchema, MomentsMeasuredSchema, MomentWindowSchema } from './momentsContract.ts';
 import { ANGLE_KINDS, MAX_ANCHORS_PER_PIECE, MAX_ANGLES, MAX_PIECES, MAX_SPEAKERS, MAX_SYNC_CANDIDATES, SYNC_VERDICTS } from './multicamLimits.ts';
 
@@ -423,6 +424,8 @@ export const MediaClipSchema = z
     transition: TransitionSchema.optional(),
     /** Multicam (ADR-0020): the group and angle this program segment shows. Absent = an ordinary clip. */
     multicam: MulticamTagSchema.optional(),
+    /** Stabilisation (wave 7, steadyContract.ts): the clip's picture is steadied with the camera motion measured on its file. Video clips on video tracks only (validate.ts stabilise_clip). */
+    stabilise: ClipStabiliseSchema.optional(),
   })
   .strict();
 /**
@@ -612,6 +615,8 @@ export const AnalysisSchema = z
     moments: z.object({ origin: AnalysisOrigin, algo: z.number().int().min(1).max(1000), data: z.string().regex(/^sha256:[0-9a-f]{64}$/),
       measured: MomentsMeasuredSchema, file: MomentsFileSchema, flat: z.boolean(), windows: z.array(MomentWindowSchema).max(MOMENTS_MAX_WINDOWS),
       truncated: z.literal(true).optional() }).strict().optional(),
+    /** Camera motion of a video, measured per SOURCE frame by the model-free stabilise job (wave 7, steadyContract.ts); attached by attach_camera_motion. */
+    cameraMotion: CameraMotionSchema.optional(),
   })
   .strict();
 

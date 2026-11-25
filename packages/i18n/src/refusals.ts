@@ -13,6 +13,7 @@ import { HE_ASSISTANT } from './commandBar.ts';
 import { HE_LIBRARY } from './library.ts';
 import { HE_SEND } from './send.ts';
 import { HE_CRAFT } from './craft.ts';
+import { HE_STABILISE } from './stabilise.ts';
 
 /**
  * Hebrew wording for the detail text of the refusals a person meets most often in the editor. The server's messages are
@@ -162,7 +163,7 @@ const HE_TRACKING: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^measured samples cannot be marked manual$/, () => 'דגימות שנמדדו אינן יכולות להיות מסומנות כמיקום שנקבע ביד'],
   [/^a project can hold at most (\d+) motion tracks$/, (m) => `בפרויקט יכולים להיות עד ${m[1]} מסלולי מעקב. אפשר למחוק מסלול שכבר אינו בשימוש`],
   [/^a motion track can hold at most (\d+) samples; this edit would make (\d+)$/, (m) => `מסלול מעקב יכול להכיל עד ${m[1]} דגימות, והעריכה הזו הייתה מגיעה ל־${m[2]}. אפשר לעקוב אחרי קטע קצר יותר`],
-  [/^the motion tracks of a project can hold at most (\d+) samples in all; this edit would make (\d+)$/, (m) => `כל מסלולי המעקב בפרויקט יחד יכולים להכיל עד ${m[1]} דגימות, והעריכה הזו הייתה מגיעה ל־${m[2]}. אפשר למחוק מסלול שכבר אינו בשימוש`],
+  [/^the motion tracks and camera measurements of a project can hold at most (\d+) samples in all; this edit would make (\d+)$/, (m) => `כל מסלולי המעקב ומדידות המצלמה בפרויקט יחד יכולים להכיל עד ${m[1]} דגימות, והעריכה הזו הייתה מגיעה ל־${m[2]}. אפשר למחוק מסלול או מדידה שכבר אינם בשימוש`],
   [/^nothing to change: give name, set, markLost or interpolate$/, () => 'לא צוין מה לשנות במסלול המעקב'],
   [/^frame (\d+) is set twice$/, (m) => `הפריים ${m[1]} נקבע פעמיים באותה עריכה`],
   [/^(markLost|interpolate): the stretch must end after it starts \(to is one past its last frame\)$/, () => 'הקטע חייב להסתיים אחרי שהוא מתחיל'],
@@ -280,7 +281,7 @@ const HE_MEDIA: [RegExp, (m: RegExpExecArray) => string][] = [
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA, ...HE_LIBRARY, ...HE_SEND, ...HE_CRAFT]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA, ...HE_LIBRARY, ...HE_SEND, ...HE_CRAFT, ...HE_STABILISE]) { const m = re.exec(message); if (m) return say(m); }
   for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
   // The export routes wrap the first blocker (Exporter.start, the browser export): worded only when the blocker itself is.
   const start = /^export cannot start: ([\s\S]+)$/.exec(message);
@@ -339,3 +340,5 @@ export const LIBRARY_REFUSAL_PATTERNS: readonly RegExp[] = HE_LIBRARY.map(([re])
 export const SEND_REFUSAL_PATTERNS: readonly RegExp[] = HE_SEND.map(([re]) => re);
 /** The patterns of the editing craft track (craft.ts HE_CRAFT, wave 7), for packages/evals/src/craft-wording.test.ts. */
 export const CRAFT_REFUSAL_PATTERNS: readonly RegExp[] = HE_CRAFT.map(([re]) => re);
+/** The patterns of stabilisation (stabilise.ts HE_STABILISE, wave 7), for packages/evals/src/stabilise-wording.test.ts. */
+export const STABILISE_REFUSAL_PATTERNS: readonly RegExp[] = HE_STABILISE.map(([re]) => re);

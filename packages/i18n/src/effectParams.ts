@@ -122,6 +122,8 @@ const STAGE_WORDS: Record<string, { he: string; en: string }> = {
   'fitting sync': { he: 'מחשב את הסנכרון', en: 'fitting the sync' }, 'saving sync': { he: 'שומר את הסנכרון', en: 'saving the sync' },
   // size-fit and export checks (core sendContract.ts SEND_STAGES, wave 7 send); 'fitting size 1/2' keeps its count
   'fitting size': { he: 'מתאים לגודל היעד', en: 'fitting the target size' }, 'checking size': { he: 'בודק את גודל הקובץ', en: 'checking the file size' }, 'checking the export': { he: 'בודק את הקובץ', en: 'checking the file' },
+  // stabilisation (core steadyContract.ts stabiliseStage, wave 7); 'measuring camera motion 12/240' keeps its count ('reading frames' is above)
+  'measuring camera motion': { he: 'מודד את תנועת המצלמה', en: 'measuring the camera motion' }, 'saving camera motion': { he: 'שומר את המדידה', en: 'saving the measurement' },
 };
 export function jobStageLabel(stage: string | null | undefined, lang: 'he' | 'en'): string {
   if (!stage) return '';

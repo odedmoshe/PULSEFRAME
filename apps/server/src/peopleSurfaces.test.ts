@@ -194,6 +194,8 @@ const PARAMS: Record<string, () => string> = {
   key: () => encodeURIComponent('none/none'),
   // editing craft (wave 7): a saved version the walked project does not have (the routes answer before reading a copy)
   versionId: () => 'ver_none',
+  // stabilisation (wave 7): a clip the walked project does not have (the route answers before reading anything)
+  clipId: () => 'clp_none',
 };
 /** Queries and bodies that reach the part of a route that reads the project; any other POST gets a body its schema refuses. */
 const QUERY: Record<string, () => string> = {

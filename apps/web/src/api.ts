@@ -4,6 +4,7 @@ import type { TakePlanView, TakeRequest, TakeResult } from '@pulseframe/core';
 import type { DiffSummary, FindQuery, FindResult, VersionInfo } from '@pulseframe/core';
 import type { AssistantConfigBody, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, BudgetReleaseAnswer } from '@pulseframe/core';
 import type { ArchiveLibraryMode, CreditsView, LibraryItemsPage, LibraryItemsQuery, LibraryRow, LibraryStatus, LibraryUseBody, LibraryUseResult } from '@pulseframe/core';
+import type { CameraMotionView, StabiliseRunBody } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
 import type { ClipLoudnessRequest, ClipLoudnessResult } from '@pulseframe/core';
@@ -252,6 +253,9 @@ export const api = {
   versionFrameUrl: (id: string, versionId: string, index: number) => `/api/v1/projects/${id}/versions/${encodeURIComponent(versionId)}/frame?index=${index}`,
   restoreVersion: (id: string, versionId: string, body: { expectRevision?: number; confirmPrivacy?: boolean } = {}) => call<{ revision: number; transactionId: string | null; summary: string; diff: DiffSummary }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}/restore`, json(body)),
   findText: (id: string, query: FindQuery) => call<FindResult>(`/projects/${id}/text/find`, json(query)),
+  // stabilisation (wave 7; apps/server/src/stabilise.ts): both answer 501 stabilise_not_built until the job is built
+  stabiliseClip: (id: string, clipId: string, body: StabiliseRunBody = {}) => call<{ jobId: string; status: string }>(`/projects/${id}/clips/${encodeURIComponent(clipId)}/stabilise`, json(body)),
+  cameraMotion: (id: string, assetId: string) => call<CameraMotionView>(`/projects/${id}/assets/${encodeURIComponent(assetId)}/camera-motion`),
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }

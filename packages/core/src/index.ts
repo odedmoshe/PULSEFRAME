@@ -133,3 +133,8 @@ export * from './findReplace.ts';
 export * from './versionDiff.ts';
 // the one Hebrew mark table and the direction controls (find and replace; the search track folds with the same)
 export { HEBREW_MARKS, BIDI_CONTROLS } from './commandBar/normalize.ts';
+// stabilisation (wave 7 stabilise track): the contract and attach_camera_motion are lead-built; steady.ts and the two public op
+// bodies are W2's
+export * from './steadyContract.ts';
+export * from './steady.ts';
+export * from './steadyOps.ts';

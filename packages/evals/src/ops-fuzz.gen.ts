@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS } from '@pulseframe/core';
+import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -603,6 +603,8 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       // editing craft (wave 7): ripple trim, paste attributes, replace text, once W1 has built the bodies (never in the v1 corpus,
       // which keyframe-replay.test.ts and ripple-delete-golden.test.ts pin)
       ...(CRAFT_OPS_BUILT && !opts.v1Replay ? [() => genCraft(doc)] : []),
+      // stabilisation (wave 7): the two public operations, once W2 has built the bodies
+      ...(STEADY_OPS_BUILT && !opts.v1Replay ? [() => genStabilise(doc)] : []),
       ...(SEQUENCE_OPS_BUILT ? [...sequenceMenu(doc), () => { const others = Object.keys(doc.sequences).filter((id) => id !== doc.mainSequenceId); return { op: 'add_marker', args: { sequenceId: others.length && rnd() < 0.8 ? pick(others) : rnd() < 0.5 ? doc.mainSequenceId : 'seq_none', time: T.frameTime(int(240), rate) } }; }] : []),
       // send and keep (wave 7): the master limiter on and off, and the loudness match of sound clips with their current gain (accepted)
       // or a changed one (refused stale), sometimes a repeated or unknown clip; left out of the recorded v1 replay corpus
@@ -761,6 +763,37 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     return { op: 'replace_text', args: { edits: [{ at: { kind: 'title', clipId: t?.id ?? 'clp_none' }, was: t && rnd() < 0.85 ? t.text : 'stale', text: pick(['נועה', 'Noa', 'שלום {name}', 'x']) }] } };
   };
   /**
+   * Stabilisation (wave 7 stabilise track). `genCameraMotion(doc)` returns a random attach_camera_motion call (internal; a driver
+   * commits it with allowInternal, as the job does): on a video, a still, a sound file or no file; stretches of 1–300 frames anywhere
+   * in the file (overlapping, touching or apart from earlier ones), now and then past the end, with a bad first state, unequal
+   * columns or an out-of-range value. `genStabilise(doc)` returns a random set_clip_stabilise or remove_camera_motion call (public;
+   * `gen` draws them once STEADY_OPS_BUILT): on media clips of every kind and on unknown ids, strengths, crops, zooms, null and modes.
+   */
+  const genCameraMotion = (doc: ProjectDocument): OpCall => {
+    const assets = Object.values(doc.assets);
+    const a = rnd() < 0.93 && assets.length ? pick(assets.filter((x) => x.video).length && rnd() < 0.85 ? assets.filter((x) => x.video) : assets) : undefined;
+    const frames = a?.video ? a.video.frameCount ?? 300 : 300;
+    const len = 1 + int(Math.min(300, frames));
+    const from = rnd() < 0.05 ? frames - int(3) : int(Math.max(1, frames - len + 1));
+    const col = (amp: number) => Array.from({ length: len }, () => int(2 * amp + 1) - amp);
+    const st = Array.from({ length: len }, (_, i) => (i === 0 ? (rnd() < 0.95 ? SST.start : SST.ok) : pick([SST.ok, SST.ok, SST.ok, SST.weak, SST.unknown, SST.start])));
+    const dx = col(400);
+    if (rnd() < 0.04) dx.pop();
+    const dr = col(2000);
+    if (rnd() < 0.03) dr[0] = 600_000;
+    return { op: 'attach_camera_motion', args: { assetId: a?.id ?? 'ast_none', from, dx: dx.length ? dx : [0], dy: col(400), dr, dz: col(300), st, method: 'fuzz', params: { algo: 1, input: pick(['proxy', 'original']) }, createdAt: '2026-11-25T00:00:00Z' } };
+  };
+  const genStabilise = (doc: ProjectDocument): OpCall => {
+    const media = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips)).filter((c) => c.type === 'media');
+    if (rnd() < 0.3) {
+      const ids = Object.keys(doc.assets);
+      return { op: 'remove_camera_motion', args: { assetId: ids.length && rnd() < 0.9 ? pick(ids) : 'ast_none', ...(rnd() < 0.6 ? { mode: pick(['if-unused', 'unbind', 'unused-only'] as const) } : {}) } };
+    }
+    const clipId = media.length && rnd() < 0.92 ? pick(media).id : 'clp_none';
+    if (rnd() < 0.15) return { op: 'set_clip_stabilise', args: { clipId, stabilise: null } };
+    return { op: 'set_clip_stabilise', args: { clipId, stabilise: { ...(rnd() < 0.7 ? { strength: pick([1, 5, 50, 77, 100]) } : {}), ...(rnd() < 0.3 ? { maxCrop: pick([1, 10, 15, 50]) } : {}), ...(rnd() < 0.2 ? { zoomPm: pick([1000, 1010, 1500, 2000]) } : {}) } } };
+  };
+  /**
    * The next random call among the named operations: draws from the same menu until one of them comes up (the menu grows with every
    * feature, so a driver that is about a few operations would otherwise meet them too rarely to say anything about them).
    */
@@ -769,5 +802,5 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise };
 }

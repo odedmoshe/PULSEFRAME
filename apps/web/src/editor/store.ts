@@ -9,6 +9,7 @@ import * as T from '@pulseframe/time';
 import { clipEnd, findClip, projectOutput, projectSequence, sequenceDuration, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun, type TemplateInput, type ExportMode, type SegmentPlanView } from '@pulseframe/core';
 import { groupTimeAt, multicamGroupOf, projectVariant, type SwitchAnglesOutput } from '@pulseframe/core';
 import type { TakeRequest, TakeResult } from '@pulseframe/core';
+import type { ClipStabilise } from '@pulseframe/core';
 import { defaultTitleDuration, type ExportDestinationId } from '@pulseframe/core';
 import { createT, dictionaries, dirOf, translateRefusal, type Key, type Lang } from '@pulseframe/i18n';
 import { initGpu, type GpuStatus, type ImageLayer, type RenderGraph, type TextLayer, type VideoLayer } from '@pulseframe/engine';
@@ -787,6 +788,23 @@ export class Editor {
     const vd = this.viewDoc;
     if (vd) this.player?.setPictureDoc(vd);
     this.say(this.ms().announceDiscard);
+  }
+  // ---------- stabilisation preview (wave 7 stabilise track; the block in ./stabilise calls it) ----------
+  /**
+   * Show the clip with a stabilisation setting that is NOT committed (the strength slider while it moves; ADR-0025 decision 1's
+   * picture-only document): the player draws it through the same evaluate + compositor, nothing is saved or sent. null ends the
+   * preview and shows the document again. The block commits set_clip_stabilise once on release, then calls previewStabilise(id, null).
+   */
+  previewStabilise(clipId: string, value: ClipStabilise | null): void {
+    const vd = this.viewDoc;
+    if (!vd || !this.player) return;
+    if (value === null) { this.player.setPictureDoc(vd); return; }
+    // copy only the path to the clip: the document can hold tens of thousands of camera samples
+    const sequences = Object.fromEntries(Object.entries(vd.sequences).map(([id, seq]) => {
+      if (!seq.tracks.some((t) => t.clips.some((c) => c.id === clipId))) return [id, seq];
+      return [id, { ...seq, tracks: seq.tracks.map((t) => (t.clips.some((c) => c.id === clipId) ? { ...t, clips: t.clips.map((c) => (c.id === clipId && c.type === 'media' ? { ...c, stabilise: { ...value } } : c)) } : t)) }];
+    }));
+    this.player.setPictureDoc({ ...vd, sequences });
   }
   /** The tagged segment of the program track under the playhead. */
   multicamSegmentAtPlayhead() {

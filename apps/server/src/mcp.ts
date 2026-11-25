@@ -29,6 +29,8 @@ import { applyTemplateFor, planTemplateFor, regenerateTemplateFor } from './temp
 import { PROJECT_RESOURCE_KINDS, registerResourcesAndPrompts } from './mcpResources.ts';
 import type { Derivatives } from './derive.ts';
 import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
+import { cameraMotionView, cancelStabiliseJob, startStabiliseJob } from './stabilise.ts';
+import { STABILISE_JOB_TYPE, StabiliseRunBodySchema } from '@pulseframe/core';
 import { CreditsQuerySchema, LibraryUseBodySchema } from '@pulseframe/core';
 import { libraryError } from './library/contract.ts';
 import { creditsFor } from './library/credits.ts';
@@ -133,6 +135,11 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
       run('edit', () => { read(projectId); const j = startTrackingJob(store, gov, principal, projectId, motionTrackId, TrackRunBody.parse(rest), { derivatives }); return { jobId: j.id, status: j.status }; }));
     server.registerTool('get_motion_track', { description: 'A motion track\'s summary: its media, kind (point or region), source-frame range, how it was made, how many samples are tracked, weak, lost, hand-placed, interpolated or re-acquired, the problem stretches (source frames) to review, and which clips follow it or blur along it. Tracking uses no AI model; a tracked blur is not guaranteed redaction. The samples themselves are in the project document (motionTracks).', inputSchema: z.object({ projectId: pid, motionTrackId: z.string() }), annotations: ro }, ({ projectId, motionTrackId }) =>
       run('observe', () => { const p = read(projectId); return motionTrackView(p.doc, p.revision, motionTrackId); }));
+    // stabilisation (wave 7): a durable, model-free job; the measurement and the switch are ONE undoable step (stabilise.ts, W1)
+    server.registerTool('stabilise_clip', { description: 'Steady the picture of a video clip shot by hand. Measures the camera\'s motion on the clip\'s file with optical flow and a robust fit (NO AI model is used), then attaches the measurement and switches the clip\'s stabilisation on as ONE undoable step. The camera\'s movement, rotation and zoom are corrected; rolling-shutter "jelly" and perspective are not. The edges are cut off by a constant zoom (strength 1–100, default 50, lowered until at most maxCrop percent of the picture is cut, default 15). Runs as a job: poll get_job, cancel with cancel_job; the job fails with clip_changed and saves nothing when the clip changed while it ran. Change the strength later with set_clip_stabilise (no new measurement). Answers 501 stabilise_not_built while this build has no stabilisation.', inputSchema: z.object({ projectId: pid, clipId: z.string(), ...StabiliseRunBodySchema.shape }) }, ({ projectId, clipId, ...rest }) =>
+      run('edit', () => { read(projectId); const j = startStabiliseJob(store, gov, principal, projectId, clipId, StabiliseRunBodySchema.parse(rest), { derivatives }); return { jobId: j.id, status: j.status }; }));
+    server.registerTool('get_camera_motion', { description: 'The camera motion measured on a video file for stabilisation: its measured stretches (source frames) and how each was measured, counts per state (ok, weak, unknown, start of a shot), the stretches to review, and the clips stabilised with it. Counts and ranges only; no AI model is used. Answers 501 stabilise_not_built while this build has no stabilisation.', inputSchema: z.object({ projectId: pid, assetId: z.string() }), annotations: ro }, ({ projectId, assetId }) =>
+      run('observe', () => { const p = read(projectId); return cameraMotionView(p.doc, p.revision, assetId); }));
     server.registerTool('measure_moments', { description: `Measure the candidate moments of video files (for the family film recipe): measured movement inside the picture, sharpness, brightness and sound level, with fixed rules. ${MOMENTS_LABEL.en}; faces are not used. A durable job (poll get_job, cancel with cancel_job); the windows are attached to each file's analyses in one undoable step when it succeeds. Answers { cached: true } when every file already has a current measurement and overwrite is not set. Never runs on import.`, inputSchema: z.object({ projectId: pid, ...StartMomentsBodySchema.shape }) }, ({ projectId, assetIds, overwrite }) =>
       run('edit', () => { read(projectId); const r = startMomentsJob(store, gov, principal, projectId, { assetIds, ...(overwrite !== undefined ? { overwrite } : {}) }, { derivatives: derivatives ?? { get: () => null, put: () => Promise.reject(new Error('no derivative store')) }, lane: momentsLaneOf(exporter.lane) }); return 'cached' in r ? r : { jobId: r.id, status: r.status }; }));
     // multicam (ADR-0020): sync a group by sound (a dryRun only measures and needs observe), and the group view
@@ -287,6 +294,7 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
         if (j.type === 'analysis') return cancelAnalysisJob(store, jobId, principal.actor);
         if (j.type === TRACKING_JOB_TYPE) return cancelTrackingJob(store, jobId, principal.actor);
         if (j.type === MOMENTS_JOB_TYPE) return cancelMomentsJob(store, jobId, principal.actor);
+        if (j.type === STABILISE_JOB_TYPE) return cancelStabiliseJob(store, jobId, principal.actor);
         if (speech?.handles(j)) return speech.cancel(jobId, principal.actor);
         return j.type === 'export' ? exporter.cancel(jobId, principal.actor) : capabilities.cancel(jobId, principal.actor);
       }));

@@ -38,6 +38,7 @@ import { handDownCapture } from './capture.ts';
 import { ownBeats, sceneCutsFor, timingRelations, transcriptFor } from './lineage.ts';
 import { skippedClips, timingCoverage, untimedCopyRefusal } from './cleanup.ts';
 import { MULTICAM_REFUSALS, type MulticamRefusalKey, type MulticamRefusalRow } from './multicamRefusals.ts';
+import { projectCameraSamples, STEADY_REFUSALS } from './steadyContract.ts';
 import { DEFAULT_REDACT_REGION, isUsable, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, roundHalfUp, SIZE_UNIT, ST, TrackOpArgs, trackSampleAt, type MotionTrack, type RedactRegion } from './tracking.ts';
 
 export type OpErrorCode =
@@ -1415,6 +1416,8 @@ defineOp({
       ...(src.blend ? { blend: src.blend } : {}), ...(src.mask ? { mask: structuredClone(src.mask) } : {}),
       // privacy regions (ADR-0015) stay on the held picture, resolved at its own source frame; a follow goes on too
       ...(src.redact ? { redact: structuredClone(src.redact) } : {}), ...(src.follow ? { follow: { ...src.follow } } : {}),
+      // stabilisation (wave 7) stays on the held picture: its correction is that of its own source frame, so the hold does not jump
+      ...(src.stabilise ? { stabilise: { ...src.stabilise } } : {}),
     };
     const affected = new Set<string>([held.id]);
     const created: string[] = [held.id];
@@ -2029,6 +2032,8 @@ defineOp({
     if (!Object.hasOwn(d.assets, a.assetId)) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
     const next = d.assets[a.assetId]!, cur = d.assets[clip.assetId];
     if (next.id === clip.assetId) throw new OpError('incompatible', 'the clip already shows this file', { clipId: clip.id, assetId: next.id });
+    // stabilisation (wave 7) uses the camera motion measured on the current file; dropping it silently would change the picture
+    if (clip.stabilise) throw new OpError(STEADY_REFUSALS.otherFile.code, STEADY_REFUSALS.otherFile.message(), { clipId: clip.id }, STEADY_REFUSALS.otherFile.hint);
     const der = next.provenance.derived;
     if (!der?.sourceAssetIds.includes(clip.assetId)) throw new OpError('incompatible', 'the new file was not made from the file this clip shows', { clipId: clip.id, assetId: next.id, sourceAssetIds: der?.sourceAssetIds ?? [] }, 'Run the tool on this clip, or pick the file it made from this clip\'s file.');
     if (track.kind === 'video' && !next.video && !(next.kind === 'image' && next.image)) throw new OpError('incompatible', 'the new file has no picture', { clipId: clip.id, assetId: next.id });
@@ -3047,8 +3052,9 @@ function assertTrackLength(motionTrackId: string, n: number) {
 function assertTrackCaps(d: ProjectDocument, t: MotionTrack) {
   const n = t.x.length;
   assertTrackLength(t.id, n);
-  const total = Object.values(d.motionTracks ?? {}).reduce((sum, x) => sum + (x.id === t.id ? 0 : x.x.length), n);
-  if (total > MAX_PROJECT_TRACK_SAMPLES) throw new OpError('out_of_bounds', `the motion tracks of a project can hold at most ${MAX_PROJECT_TRACK_SAMPLES} samples in all; this edit would make ${total}`, { samples: total, max: MAX_PROJECT_TRACK_SAMPLES }, 'Delete a motion track that is no longer needed (remove_motion_track), or track a shorter stretch.');
+  // the camera measurements of stabilisation (wave 7) share the project's budget with the motion tracks
+  const total = Object.values(d.motionTracks ?? {}).reduce((sum, x) => sum + (x.id === t.id ? 0 : x.x.length), n) + projectCameraSamples(d);
+  if (total > MAX_PROJECT_TRACK_SAMPLES) throw new OpError(STEADY_REFUSALS.budget.code, STEADY_REFUSALS.budget.message(total, MAX_PROJECT_TRACK_SAMPLES), { samples: total, max: MAX_PROJECT_TRACK_SAMPLES }, STEADY_REFUSALS.budget.hint);
 }
 /** The sample columns of a track being edited. `filled` marks samples made only to close a gap (unknown, placed later at the nearest known sample). */
 interface Columns { from: number; x: number[]; y: number[]; s: number[] | null; q: number[]; st: number[]; filled: boolean[] }
@@ -3419,6 +3425,9 @@ defineOp({
       if (!asset.video) throw new OpError('incompatible', 'this clip has privacy regions, which are drawn on video pictures only', { clipId: c.id }, 'Remove its privacy regions first (set_redact_region), or choose a video.');
       if (c.redact.some((r) => r.motionTrackId && d.motionTracks?.[r.motionTrackId]?.assetId !== asset.id)) throw new OpError('incompatible', 'a privacy region of this clip follows a motion track of its current file', { clipId: c.id }, 'Make that region fixed or remove it first (set_redact_region).');
     }
+    // Stabilisation (wave 7) uses the camera motion measured on the current file: switch it off first rather than drop it silently.
+    for (const { clip: c } of targets)
+      if (c.stabilise && c.assetId !== asset.id) throw new OpError(STEADY_REFUSALS.otherFile.code, STEADY_REFUSALS.otherFile.message(), { clipId: c.id }, STEADY_REFUSALS.otherFile.hint);
     // The source a clip needs from sourceIn: its stretch of source (a freeze frame needs one picture inside the file).
     const needed = (c: MediaClip) => toSourceSpan(c, c.duration);
     const fits = (c: MediaClip, sourceIn: T.RationalTime) => isStill || (!T.isNegative(sourceIn) && (c.freeze ? T.lt(sourceIn, asset.duration) : T.lte(T.add(sourceIn, needed(c)), asset.duration)));

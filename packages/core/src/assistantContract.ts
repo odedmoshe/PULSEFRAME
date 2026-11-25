@@ -59,6 +59,8 @@ export const ASSISTANT_EXCLUDED_OPS = [
   // paste_attributes are left out until the owner has tried them (offering them would also change the reviewed prompt,
   // ASSISTANT_PROMPT_DIGEST, which needs its own review first)
   'replace_text', 'ripple_trim', 'paste_attributes',
+  // stabilisation (wave 7): it reads camera measurements the assistant never sees; a command-bar intent is a non-goal of version 1
+  'set_clip_stabilise', 'remove_camera_motion',
 ] as const;
 /** The ops a proposal may hold: every registered public op minus ASSISTANT_EXCLUDED_OPS and PERSON_OPS, in registry order. */
 export function assistantOps(): string[] {

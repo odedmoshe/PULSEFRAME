@@ -42,6 +42,7 @@ import { withExif } from '../../../apps/server/src/captureMeta.fixtures.ts';
 import { chooseFormat, formatOptions, openCardMenu } from './editor-ui.ts';
 import { makeRenderCacheCtx, renderCacheA11yScenarios } from './a11y-render-cache.ts';
 import { craftA11yScenarios } from './a11y-craft.ts';
+import { stabiliseA11yScenarios } from './a11y-stabilise.ts';
 import { makeApi, ownerApi } from './incremental-fixtures.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
 import { auditInPage, focusAudit, toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
@@ -807,6 +808,12 @@ async function main() {
       }
       // editing craft (wave 7): the time field, the paste dialog, the find panel with matches, the versions compare (a11y-craft.ts, W3)
       for (const sc of craftA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // stabilisation (wave 7): the block's states in the inspector (a11y-stabilise.ts, W3)
+      for (const sc of stabiliseA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
