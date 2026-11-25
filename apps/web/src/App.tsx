@@ -4,7 +4,7 @@ import './ds/shell.css';
 import './editor/stage.css';
 import './editor/timeline.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ToastProvider, useToasts } from './ds/index.ts';
+import { ToastProvider, useToasts, type ToastInput } from './ds/index.ts';
 import { CanvasHandles } from './editor/CanvasHandles.tsx';
 import { TrackPicker } from './editor/TrackPicker.tsx';
 import { CommandPalette } from './editor/CommandPalette.tsx';
@@ -87,6 +87,14 @@ function ToastBridge() {
     seen.current = n.n;
     toasts.push(toastOf(n, APP_STRINGS[state.lang].undo, editor));
   }, [n?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the proofs' test hook, only when the proof's flag is set (like __pfPerformProof): raises a toast through the same queue, so a
+  // browser check can show one while a modal (palette, gallery, curve picker, template dialog) is open
+  useEffect(() => {
+    if (!(globalThis as { __pfToastProof?: unknown }).__pfToastProof) return;
+    const w = window as unknown as { __pfToast?: (t: ToastInput) => string };
+    w.__pfToast = (t) => toasts.push(t);
+    return () => { delete w.__pfToast; };
+  }, [toasts]);
   // An archive import that changed something on the way in says so once, in the project it made, until the owner closes it.
   const docId = state.doc?.id;
   useEffect(() => {

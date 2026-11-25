@@ -8,6 +8,7 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 
 import * as T from '@pulseframe/time';
 import type { TemplateApplyResult, TemplateInput, TemplatePlanView, TemplateSummary } from '@pulseframe/core';
 import { api, ApiFailure } from '../api.ts';
+import { ToastSlot } from '../ds/index.ts';
 import { useEditorState } from './store.ts';
 import { TEMPLATE_STRINGS } from './templates.strings.ts';
 import { TEMPLATE_TESTIDS as TID } from './templates.testids.ts';
@@ -291,6 +292,8 @@ export function TemplateDialog({ summary, onClose, onApplied }: { summary: Templ
             ? <button type="button" className="primary" onClick={() => go(STEPS[at + 1]!)} data-testid="template-next">{S.next}</button>
             : <button type="button" className="primary" disabled={!rows || !rows.canApply || planning || applying} aria-busy={applying || undefined} onClick={() => void use()} data-testid={TID.use}>{applying ? S.using : S.use}</button>}
         </div>
+        {/* the toast region while this modal is open: a toast under the page behind could be neither reached nor heard (ds/toastHost.ts) */}
+        <ToastSlot />
       </div>
     </div>
   );

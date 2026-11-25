@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import * as T from '@pulseframe/time';
-import { importArchive, planArchive, writeArchive } from './archive.ts';
+import { IMPORTED_REVIEW_CLEARED, importArchive, planArchive, writeArchive } from './archive.ts';
 import { ApiError, Store } from './store.ts';
 
 const dirs: string[] = [];
@@ -100,8 +100,11 @@ describe('project archive', () => {
     expect(dst.getProject(r.doc.id).doc.variants[fr]!.translation!.review).toBe('needed'); // was never reviewed: unchanged
     expect(r.notes).toHaveLength(1);
     expect(r.notes[0]).toMatchObject({ code: 'translation_review_cleared', variants: [{ variantId: en, name: 'English', reviewedBy: 'user:local', reviewedAt: '2026-11-21T10:00:00Z' }] });
-    expect(r.notes[0]!.he).toMatch(/«נבדק».*«English».*«סמן כנבדק»/);
-    expect(r.notes[0]!.en).toMatch(/"Reviewed" mark.*«English».*"Mark as reviewed"/);
+    // exactly one translation was cleared: the note says «the translation», not «the translations», in both languages
+    expect(r.notes[0]!.he).toMatch(/«נבדק».*התרגום «English» מסומן שוב.*והנוסח שלו נשמר.*עבור עליו.*«סמן כנבדק»/);
+    expect(r.notes[0]!.he).not.toMatch(/התרגומים|מסומנים|שלהם|עליהם/);
+    expect(r.notes[0]!.en).toMatch(/"Reviewed" mark.*The translation «English» needs review again; its wording is kept\. Go through it in.*"Mark as reviewed"/);
+    expect(r.notes[0]!.en).not.toMatch(/translations|their wording|through them/);
     // the source project keeps its own mark: exporting changes nothing
     expect(src.getProject(pid).doc.variants[en]!.translation!.review).toBe('reviewed');
     // the owner of this computer marks it again in the imported project
@@ -112,6 +115,14 @@ describe('project archive', () => {
     fs.copyFileSync(file, forged);
     const r2 = importArchive(dst, forged);
     expect(dst.getProject(r2.doc.id).doc.variants[en]!.translation!.review).toBe('needed');
+    // two reviewed translations: the plural, with both names in the order of the variants
+    src.commit({ projectId: pid, actor: 'user:local', allowInternal: true, ops: [{ op: 'review_translation', args: { variantId: fr, review: 'reviewed', at: '2026-11-21T10:05:00Z' } }] });
+    const { file: twoFile } = await toFile(src, pid, 'two.tar');
+    fs.copyFileSync(twoFile, path.join(dst.tmpDir, 'two.tar'));
+    const r3 = importArchive(dst, path.join(dst.tmpDir, 'two.tar'));
+    expect(r3.notes[0]!.variants.map((v) => v.name)).toEqual(['English', 'Français']);
+    expect(r3.notes[0]!.he).toMatch(/התרגומים «English», «Français» מסומנים שוב.*והנוסח שלהם נשמר.*לעבור עליהם/);
+    expect(r3.notes[0]!.en).toMatch(/The translations «English», «Français» need review again; their wording is kept\. Go through them in/);
     // an archive with no reviewed translation carries no note
     const plain = world();
     const p2 = seeded(plain);
@@ -167,5 +178,14 @@ describe('project archive', () => {
     const { pid, blobs } = seeded(src);
     fs.rmSync(src.blobPath(blobs[0]!.hash));
     expect(code(() => planArchive(src, pid))).toBe('409:missing_media');
+  });
+});
+
+describe('the import note\'s number', () => {
+  it('reads in the singular for one translation and the plural for several, in Hebrew and English', () => {
+    expect(IMPORTED_REVIEW_CLEARED.he(['«English»'])).toContain('התרגום «English» מסומן שוב «תרגום מכונה · לא נבדק», והנוסח שלו נשמר. אפשר לעבור עליו בלוח «תמלול»');
+    expect(IMPORTED_REVIEW_CLEARED.he(['«English»', '«Français»'])).toContain('התרגומים «English», «Français» מסומנים שוב «תרגום מכונה · לא נבדק», והנוסח שלהם נשמר. אפשר לעבור עליהם בלוח «תמלול»');
+    expect(IMPORTED_REVIEW_CLEARED.en(['«English»'])).toContain('The translation «English» needs review again; its wording is kept. Go through it in the "Transcript" panel');
+    expect(IMPORTED_REVIEW_CLEARED.en(['«English»', '«Français»', '«Deutsch»'])).toContain('The translations «English», «Français», «Deutsch» need review again; their wording is kept. Go through them in the "Transcript" panel');
   });
 });

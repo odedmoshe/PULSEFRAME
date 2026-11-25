@@ -24,6 +24,7 @@ import { catalogDragType } from './interactions.math.ts';
 import { GALLERY_STRINGS, SPREAD_STRINGS } from './gallery.strings.ts';
 import { ArrowLeft, ArrowRight, Star, X } from 'lucide-react';
 import { Button, Tabs } from '../ds/index.ts';
+import { ToastSlot } from '../ds/index.ts';
 import { CheckIcon } from '../ds/util.tsx';
 import { DEFAULT_TRANSITION_FRAMES, isOn, pickCall, pickRefusal, thumbSize, transitionLength, transitionRoom } from './gallery.pick.ts';
 import { singleFlight } from './oneAtATime.ts';
@@ -704,6 +705,8 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
             </>
           )}
         </div>
+        {/* the toast region while this modal is open: a toast under the page behind could be neither reached nor heard (ds/toastHost.ts) */}
+        <ToastSlot />
       </div>
     </div>,
     document.body,
