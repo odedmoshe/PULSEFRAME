@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, creativeProjection, diffEntities, LIBRARY_OPS_BUILT, STEADY_OPS_BUILT, SST, OpError, ProjectSchema, projectVariant, restoreEntities, summarize, timeline, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, creativeProjection, diffEntities, LIBRARY_OPS_BUILT, MUSICFIT_OPS_BUILT, STEADY_OPS_BUILT, SST, OpError, ProjectSchema, projectVariant, restoreEntities, summarize, timeline, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, evaluate } from '@pulseframe/engine';
 import { createFuzz } from './ops-fuzz.gen.ts';
 
@@ -46,6 +46,12 @@ function run(seed: number, focus: () => string[] = () => []) {
   // add_cue draws landing in the same run; fixed numbers, no draw from the random stream
   doc = applyTransaction(doc, [{ op: 'add_caption_track', args: { mode: 'manual' } }], ctx()).doc;
   doc = applyTransaction(doc, [{ op: 'add_cue', args: { start: f(30), duration: f(20), text: 'first' } }, { op: 'add_cue', args: { start: f(50), duration: f(20), text: 'second' } }], ctx()).doc;
+  // music that fits the film (wave 7): the measured music under a picture clip near the start, so sync_impact meets beats under a
+  // shown moment (the random draws rarely put the two together); fixed numbers, no draw from the random stream
+  if (MUSICFIT_OPS_BUILT) {
+    const [v, m] = Object.keys(doc.assets) as [string, string];
+    doc = applyTransaction(doc, [{ op: 'add_clip', args: { assetId: m, start: f(0), withLinkedAudio: false } }, { op: 'add_clip', args: { assetId: v, start: f(0), sourceIn: f(30), duration: f(90), withLinkedAudio: false } }], ctx()).doc;
+  }
   // Every sixth step draws among the operations no earlier step of the run has seen accepted (the menu grows with every
   // feature, so plain draws can miss one by chance after an unrelated row changes the stream); every other step draws as before.
   const gen = (step: number) => { const f = step % 6 === 5 ? focus() : []; return f.length ? fz.genFocused(doc, f) : fz.gen(doc); };
