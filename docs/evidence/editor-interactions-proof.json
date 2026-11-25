@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T19:35:09.156Z",
+  "ranAt": "2026-11-25T20:35:48.772Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 119,
-  "total": 119,
+  "passed": 129,
+  "total": 129,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -59,7 +59,7 @@
       "name": "while the drum loop plays, the meter shows a real level (above -40 dB and not above 0)",
       "ok": true,
       "detail": {
-        "peakDbShown": -1
+        "peakDbShown": 0
       }
     },
     {
@@ -276,7 +276,7 @@
         "vl5": true,
         "tcBefore": "00:00:03:00",
         "tcAfter": "00:00:03:00",
-        "namedKey": "נקודת עוצמה 00:00:02:19 · 140%",
+        "namedKey": "נקודת עוצמה 00:00:02:20 · 140%",
         "keys": [
           [
             40,
@@ -344,9 +344,9 @@
       "name": "Sound tab: \"end the music with the picture\" trims the music to the last detected beat before the picture ends and gives it a fade-out, in one transaction; undo restores it",
       "ok": true,
       "detail": {
-        "pictureEnd": 290,
-        "wantEnd": 284,
-        "gotEnd": 284,
+        "pictureEnd": 245,
+        "wantEnd": 239,
+        "gotEnd": 239,
         "fadeOutFrames": 30,
         "fitUndone": true
       }
@@ -384,9 +384,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 1.95,
+        "fwd2": 2,
         "sh2": "◀◀ ×1",
-        "back1": -0.94,
+        "back1": -0.99,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -400,9 +400,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 0.96,
+        "playSpeed": 0.99,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 2.12,
+        "shuttleSpeed": 2.02,
         "staysPaused": true
       }
     },
@@ -430,30 +430,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_23134aee6e0",
-          "clp_23134aee6e1"
+          "clp_5e5f5b86ff0",
+          "clp_5e5f5b86ff1"
         ],
         "afterAB": [
-          "clp_23134aee6e0",
-          "clp_23134aee6e1"
+          "clp_5e5f5b86ff0",
+          "clp_5e5f5b86ff1"
         ],
         "afterAdd": [
-          "clp_23134aee6e0",
-          "clp_23134aee6e1",
-          "clp_23134aee6e2"
+          "clp_5e5f5b86ff0",
+          "clp_5e5f5b86ff1",
+          "clp_5e5f5b86ff2"
         ],
         "midEscape": [
-          "clp_23134aee6e1"
+          "clp_5e5f5b86ff1"
         ],
         "afterEscape": [
-          "clp_23134aee6e0",
-          "clp_23134aee6e1",
-          "clp_23134aee6e2"
+          "clp_5e5f5b86ff0",
+          "clp_5e5f5b86ff1",
+          "clp_5e5f5b86ff2"
         ],
         "afterEscapeUp": [
-          "clp_23134aee6e0",
-          "clp_23134aee6e1",
-          "clp_23134aee6e2"
+          "clp_5e5f5b86ff0",
+          "clp_5e5f5b86ff1",
+          "clp_5e5f5b86ff2"
         ]
       }
     },
@@ -615,7 +615,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 25/1799",
+        "valueText": "עוקב קדימה 9/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -900,18 +900,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_e7142f9dfa0",
-          "ast_a28c4adab00",
-          "ast_b0c292624a0",
-          "ast_240c65faac0",
-          "ast_c2bfc1b8220"
+          "ast_9ed7d6f4580",
+          "ast_06ebb6ee840",
+          "ast_0c6d5dbbc60",
+          "ast_6edf6dc7260",
+          "ast_07d0a30eb40"
         ],
         "order1": [
-          "ast_e7142f9dfa0",
-          "ast_240c65faac0",
-          "ast_a28c4adab00",
-          "ast_b0c292624a0",
-          "ast_c2bfc1b8220"
+          "ast_9ed7d6f4580",
+          "ast_6edf6dc7260",
+          "ast_06ebb6ee840",
+          "ast_0c6d5dbbc60",
+          "ast_07d0a30eb40"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -935,7 +935,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-25T19:27:44.701Z",
+          "createdAt": "2026-11-25T20:31:00.189Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -1130,7 +1130,7 @@
       "ok": true,
       "detail": {
         "slots": 11,
-        "victim": "clp_1a902430c40",
+        "victim": "clp_4d573497410",
         "deleted": true,
         "offered": {
           "count": 1,
@@ -1255,8 +1255,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_d40eb4db980",
-          "seq_d40eb4db987"
+          "seq_bfeadb30610",
+          "seq_bfeadb30617"
         ],
         "revisions": 1,
         "transactions": [
@@ -1266,7 +1266,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_d40eb4db980",
+          "seq": "seq_bfeadb30610",
           "selected": "true"
         }
       }
@@ -1297,9 +1297,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_d40eb4db980"
+          "seq": "seq_bfeadb30610"
         },
-        "secondTab": "seq_d40eb4db980",
+        "secondTab": "seq_bfeadb30610",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1604,7 +1604,7 @@
       "detail": {
         "marked": true,
         "he": {
-          "id": "prj_D4xjtzuvyRU",
+          "id": "prj_ZEHtxHBTtmQ",
           "count": 1,
           "title": "הארכיון יובא",
           "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגום «English» מסומן שוב «תרגום מכונה · לא נבדק», והנוסח שלו נשמר. אפשר לעבור עליו בלוח «תמלול» ולבחור «סמן כנבדק».",
@@ -1614,7 +1614,7 @@
           "badge": 1
         },
         "en": {
-          "id": "prj_3nuIXInArs0",
+          "id": "prj_p0YBuC2xlcs",
           "count": 1,
           "title": "The archive was imported",
           "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translation «English» needs review again; its wording is kept. Go through it in the \"Transcript\" panel and choose \"Mark as reviewed\".",
@@ -1801,11 +1801,11 @@
       "detail": {
         "planRows": [
           {
-            "id": "clp_c53ec5e2f80",
+            "id": "clp_a64b164d8f0",
             "text": "send-quiet.wav · +9.1 dB"
           },
           {
-            "id": "clp_fe87ae7b490",
+            "id": "clp_5a11a73f5a0",
             "text": "send-loud.wav · −9.1 dB"
           }
         ],
@@ -1818,11 +1818,11 @@
       "detail": {
         "resRows": [
           {
-            "id": "clp_c53ec5e2f80",
+            "id": "clp_a64b164d8f0",
             "by": ""
           },
           {
-            "id": "clp_fe87ae7b490",
+            "id": "clp_5a11a73f5a0",
             "by": ""
           }
         ],
@@ -1948,7 +1948,7 @@
       "ok": true,
       "detail": {
         "empty": 1,
-        "row": "גרסה לבדיקה 25.11.2026, 19:34 · אני · 100 פריימים · 2 KB · המדיה לא מועתקת זהה למצב הנוכחי השוואה שינוי שם מחיקה"
+        "row": "גרסה לבדיקה 25.11.2026, 20:35 · אני · 100 פריימים · 2 KB · המדיה לא מועתקת זהה למצב הנוכחי השוואה שינוי שם מחיקה"
       }
     },
     {
@@ -1979,6 +1979,112 @@
     },
     {
       "name": "Space rows: the page logged no script error",
+      "ok": true,
+      "detail": {
+        "errors": []
+      }
+    },
+    {
+      "name": "pearls: Escape in the pearl form closes the form only (the viewer stays open, the focus is on «שמור כפנינה», nothing is committed)",
+      "ok": true,
+      "detail": {
+        "marks": {
+          "in": "10",
+          "out": "40"
+        },
+        "esc": {
+          "form": 0,
+          "viewer": 1,
+          "focus": "pearl-save",
+          "commits": 0
+        }
+      }
+    },
+    {
+      "name": "pearls: I, O, P, a name and Enter mark one pearl in one commit, its span the marks [10, 40) and its name as typed",
+      "ok": true,
+      "detail": {
+        "marks": {
+          "in": "10",
+          "out": "40"
+        },
+        "typed": true,
+        "commits": 1,
+        "span": [
+          10,
+          40
+        ],
+        "label": "הצעד הראשון"
+      }
+    },
+    {
+      "name": "pearls: one Ctrl+Z takes the pearl back and the document holds no sourceRanges key again",
+      "ok": true,
+      "detail": {
+        "undone": true,
+        "hasKey": false
+      }
+    },
+    {
+      "name": "pearls rows: the page logged no script error",
+      "ok": true,
+      "detail": {
+        "errors": []
+      }
+    },
+    {
+      "name": "story: the palette's «ספרו מה היה» with nothing selected opens the dialog on the library's three pictures; Alt+← (Hebrew: later) moves the focused picture one place later",
+      "ok": true,
+      "detail": {
+        "first": [
+          "ast_0d5dd36ead0",
+          "ast_58f0274b370",
+          "ast_47b2a18ec10"
+        ],
+        "moved": [
+          "ast_58f0274b370",
+          "ast_0d5dd36ead0",
+          "ast_47b2a18ec10"
+        ]
+      }
+    },
+    {
+      "name": "story: Escape closes the dialog and the focus is on a live element of the page (not lost in the closed dialog)",
+      "ok": true,
+      "detail": {
+        "closed": true,
+        "focusOk": true
+      }
+    },
+    {
+      "name": "story: «בנו בלי הקשות» applies the story as ONE revision, closes the dialog and shows the story bar",
+      "ok": true,
+      "detail": {
+        "r0": 4,
+        "r1": 5,
+        "bar": true
+      }
+    },
+    {
+      "name": "story: the bar's «בנייה מחדש» opens its menu with Enter (other music or none, the clips' own sound) and Escape closes it; nothing is committed",
+      "ok": true,
+      "detail": {
+        "menuItems": [
+          "הקול של הקליפים: מושתק"
+        ]
+      }
+    },
+    {
+      "name": "story: one Ctrl+Z returns the exact document from before the story, the bar goes with it, and the narration stays in the library",
+      "ok": true,
+      "detail": {
+        "back": true,
+        "barGone": true,
+        "kept": true
+      }
+    },
+    {
+      "name": "story rows: the page logged no script error",
       "ok": true,
       "detail": {
         "errors": []

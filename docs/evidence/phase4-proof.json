@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T16:48:57.563Z",
+  "ranAt": "2026-11-25T23:09:14.123Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
@@ -11,42 +11,42 @@
   "measurements": {
     "formats": {
       "mp4Draft": {
-        "wall": 2.224,
+        "wall": 1.667,
         "bytes": 12789,
         "estimate": 30480
       },
       "webm": {
-        "wall": 3.339,
+        "wall": 2.31,
         "bytes": 54848,
         "estimate": 168960
       },
       "wav": {
-        "wall": 0.427
+        "wall": 0.24
       },
       "png": {
-        "wall": 1.105
+        "wall": 0.636
       }
     },
     "cancel": {
       "stageAtCancel": "rendering 0/600",
-      "msToCanceled": 26
+      "msToCanceled": 93
     },
     "longExport": {
       "frames": 600,
       "size": "1920x1080",
-      "wallSeconds": 82.771,
-      "realtimeFactor": 0.241630522767636,
+      "wallSeconds": 47.215,
+      "realtimeFactor": 0.4235941967595044,
       "renderStageMs": {
-        "draw": 6578,
-        "readback": 4487,
-        "upload": 68532
+        "draw": 5554,
+        "readback": 3587,
+        "upload": 36170
       },
       "bytes": 747124,
       "estimateBytes": 22252800
     },
     "cancelAtRenderStart": {
       "stageAtCancel": "rendering 0/600",
-      "msToCanceled": 53
+      "msToCanceled": 19
     },
     "photosensitivity": {
       "flashing": {
@@ -195,7 +195,7 @@
       "ok": true,
       "detail": {
         "stageAtCancel": "rendering 0/600",
-        "msToCanceled": 26
+        "msToCanceled": 93
       }
     },
     {
@@ -212,12 +212,12 @@
       "detail": {
         "frames": 600,
         "size": "1920x1080",
-        "wallSeconds": 82.771,
-        "realtimeFactor": 0.241630522767636,
+        "wallSeconds": 47.215,
+        "realtimeFactor": 0.4235941967595044,
         "renderStageMs": {
-          "draw": 6578,
-          "readback": 4487,
-          "upload": 68532
+          "draw": 5554,
+          "readback": 3587,
+          "upload": 36170
         },
         "bytes": 747124,
         "estimateBytes": 22252800
@@ -232,7 +232,7 @@
       "ok": true,
       "detail": {
         "stageAtCancel": "rendering 0/600",
-        "msToCanceled": 53
+        "msToCanceled": 19
       }
     },
     {

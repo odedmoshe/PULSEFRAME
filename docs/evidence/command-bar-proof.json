@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T14:45:48.752Z",
+  "ranAt": "2026-11-25T21:17:32.823Z",
   "result": "PASSED",
   "counts": {
     "pass": 23,
@@ -307,14 +307,14 @@
       "detail": [
         {
           "text": "חתוך כאן",
-          "browser": "60be953fb92c00408c0222a600204af5f6e7338a965eac48c60865facf60fc70",
-          "node": "60be953fb92c00408c0222a600204af5f6e7338a965eac48c60865facf60fc70",
+          "browser": "71c1400e5c8aca9961b55ab0c8f53606cb01b16dcc67b2f5abeb397c05f26a03",
+          "node": "71c1400e5c8aca9961b55ab0c8f53606cb01b16dcc67b2f5abeb397c05f26a03",
           "same": true
         },
         {
           "text": "מחק את הקליפ",
-          "browser": "28dd42ce659abdb0ddbe6334b24505e5ce8d7c4718feffa463dee92534aa51d1",
-          "node": "28dd42ce659abdb0ddbe6334b24505e5ce8d7c4718feffa463dee92534aa51d1",
+          "browser": "d874eebe85cd935e2f972328b710f3a005f8e881569eb8777eed94cd21d32307",
+          "node": "d874eebe85cd935e2f972328b710f3a005f8e881569eb8777eed94cd21d32307",
           "same": true
         },
         {
@@ -331,8 +331,8 @@
         },
         {
           "text": "הוסף מעבר בין כל הקליפים",
-          "browser": "4b4a12de625e776bf674ed237760115cf04f3aa99a48f178b523c7e2aeafd488",
-          "node": "4b4a12de625e776bf674ed237760115cf04f3aa99a48f178b523c7e2aeafd488",
+          "browser": "99c9de61fe4415b71e036218b59ac1ec8e252e0ce58674d0344ea845f3649809",
+          "node": "99c9de61fe4415b71e036218b59ac1ec8e252e0ce58674d0344ea845f3649809",
           "same": true
         }
       ]
@@ -611,14 +611,14 @@
       "detail": [
         {
           "text": "split here",
-          "browser": "19056b906d09e70f01909020afa5edb2182ec9cea9d8861d1b15944c86617b52",
-          "node": "19056b906d09e70f01909020afa5edb2182ec9cea9d8861d1b15944c86617b52",
+          "browser": "65cae8a81485c5e6aee8e5fd5ea8168bdca2a19260c4079b2acc334573413e65",
+          "node": "65cae8a81485c5e6aee8e5fd5ea8168bdca2a19260c4079b2acc334573413e65",
           "same": true
         },
         {
           "text": "delete the clip",
-          "browser": "bdbcdfe9e077d264dd73b40638933085684569f85b692d8d67cee0ca1338a5cc",
-          "node": "bdbcdfe9e077d264dd73b40638933085684569f85b692d8d67cee0ca1338a5cc",
+          "browser": "e6d188890d82bd1c56c19824d00805b9053878b41eaa824e73e953b9bcf3be55",
+          "node": "e6d188890d82bd1c56c19824d00805b9053878b41eaa824e73e953b9bcf3be55",
           "same": true
         },
         {
@@ -635,8 +635,8 @@
         },
         {
           "text": "add transitions between all clips",
-          "browser": "3ce83438744839801b2c0e77b3ad515041fb35df4b7c3fc1f8a80f2d33f9d4d4",
-          "node": "3ce83438744839801b2c0e77b3ad515041fb35df4b7c3fc1f8a80f2d33f9d4d4",
+          "browser": "b9fd1fd3e2fdad88684f26722e90b11152f2e23ae7e4e876c42adbd6943543b9",
+          "node": "b9fd1fd3e2fdad88684f26722e90b11152f2e23ae7e4e876c42adbd6943543b9",
           "same": true
         }
       ]
@@ -680,7 +680,7 @@
       "detail": {
         "proposer": {
           "status": 200,
-          "proposalId": "prp_ROBsBVfcdG4"
+          "proposalId": "prp_cIEHQY6qswc"
         },
         "observer": 403,
         "revisionsMoved": 0
@@ -837,8 +837,8 @@
         "a11y": {
           "findings": 0,
           "focusRing": true,
-          "controlsWhilePending": 108,
-          "controlsAfter": 109,
+          "controlsWhilePending": 110,
+          "controlsAfter": 111,
           "unnamed": [],
           "lowContrast": []
         },
@@ -873,9 +873,9 @@
         "tabsToTheButton": 6,
         "button": {
           "label": "שחרור הסכום השמור",
-          "name": "שחרור הסכום השמור, 44¢, בקשה מ־25.11.2026, 14:45",
+          "name": "שחרור הסכום השמור, 44¢, בקשה מ־25.11.2026, 21:17",
           "popup": "dialog",
-          "job": "job_7z5VltgFJsw"
+          "job": "job_iZ2952Wc4vs"
         },
         "confirmation": {
           "shown": true,
@@ -928,8 +928,8 @@
           "findings": 0,
           "focusRingOnButton": true,
           "focusRingOnRelease": true,
-          "controlsOffered": 109,
-          "controlsReleased": 108,
+          "controlsOffered": 111,
+          "controlsReleased": 110,
           "unnamed": [],
           "lowContrast": []
         },
@@ -944,9 +944,9 @@
       "status": "contract-tested",
       "detail": {
         "held": {
-          "jobId": "job_1seWkZte6bI",
+          "jobId": "job_b9uEk0XJoZ4",
           "cents": 44,
-          "requestedAt": "2026-11-25T14:45:41.963Z",
+          "requestedAt": "2026-11-25T21:17:26.487Z",
           "status": "canceled"
         },
         "listed": {
@@ -955,9 +955,9 @@
           "group": "group",
           "rows": [
             {
-              "job": "job_1seWkZte6bI",
+              "job": "job_b9uEk0XJoZ4",
               "how": "canceled",
-              "text": "44¢ · בקשה מ־25.11.2026, 14:45 · בוטלה אחרי שנשלחהשחרור הסכום השמור"
+              "text": "44¢ · בקשה מ־25.11.2026, 21:17 · בוטלה אחרי שנשלחהשחרור הסכום השמור"
             }
           ]
         },
@@ -1126,7 +1126,7 @@
         "assistantFilesInBackup": [],
         "filesHoldingTheKey": [],
         "scanned": {
-          "responses": 565,
+          "responses": 564,
           "logLines": 51
         },
         "inResponses": 0,

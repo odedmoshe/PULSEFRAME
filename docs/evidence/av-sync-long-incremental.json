@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T16:47:05.294Z",
+  "ranAt": "2026-11-25T23:08:06.430Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
@@ -21,22 +21,22 @@
     "thenTitleAtSeconds": 300
   },
   "times": {
-    "singlePassSeconds": 320.2,
+    "singlePassSeconds": 223.4,
     "singlePassSource": "measured here on the same project, one run",
-    "cleanSegmentedSeconds": 404.3,
-    "incrementalSeconds": 40.7,
-    "cleanOverSingle": 1.262,
-    "incrementalOverClean": 0.101
+    "cleanSegmentedSeconds": 237.7,
+    "incrementalSeconds": 30.7,
+    "cleanOverSingle": 1.064,
+    "incrementalOverClean": 0.129
   },
   "clean": {
-    "wallSeconds": 404.3,
+    "wallSeconds": 237.7,
     "frames": 16879,
     "bytes": 8121232,
     "route": "server-segmented-canvas2d",
     "renderStageMs": {
-      "draw": 36764,
-      "readback": 10927,
-      "upload": 340334
+      "draw": 22413,
+      "readback": 9407,
+      "upload": 190778
     },
     "report": {
       "segFrames": 60,
@@ -48,7 +48,7 @@
       "notStored": 0,
       "selfCheck": {
         "mode": "every-segment",
-        "seed": "6251ce5f1c0dd19d28f452c2c42dc5bb70ae1e98a021e96ab882d25e2eea123f",
+        "seed": "badd02f863a0a239098d4aeda6caf62f020af2258be9c12a25bd48c9953f0c30",
         "segmentsChecked": 0,
         "framesChecked": 0,
         "framesPerSegment": 3,
@@ -56,16 +56,16 @@
       },
       "encoderId": "59d7b227390c86cc40ded2ca12bff9c16a08bdce78baff2b4ae0a50b9dd06b26",
       "engine": {
-        "bundle": "62c0c35dc796b3cd48f92b373c49a15b117943b61f8914269bbfa439d42144a2",
+        "bundle": "15a1998bd00a8eba454c81d880a3d79064d582e164ccb04443846dabb822b468",
         "browser": "153.0.8010.12|launch=auto",
         "schemaVersion": 3
       },
-      "cacheBytesAfter": 17954205,
+      "cacheBytesAfter": 17953960,
       "ms": {
-        "keying": 519,
+        "keying": 337,
         "selfCheck": 0,
-        "render": 388746,
-        "join": 7930
+        "render": 223049,
+        "join": 7388
       }
     },
     "sync": {
@@ -78,14 +78,14 @@
     }
   },
   "incremental": {
-    "wallSeconds": 40.7,
+    "wallSeconds": 30.7,
     "frames": 16879,
     "bytes": 8136127,
     "route": "server-segmented-canvas2d",
     "renderStageMs": {
-      "draw": 8894,
-      "readback": 466,
-      "upload": 9483
+      "draw": 7771,
+      "readback": 545,
+      "upload": 6012
     },
     "report": {
       "segFrames": 60,
@@ -97,7 +97,7 @@
       "notStored": 0,
       "selfCheck": {
         "mode": "every-segment",
-        "seed": "434dd409265524fe432a674a6f98f534b466eb750e76dda1201aeb3a6b3a0d67",
+        "seed": "b50d4f4fd8b4f22715152bc093339a9e54721d0d53e02d3c6ae58e08c09da27c",
         "segmentsChecked": 281,
         "framesChecked": 843,
         "framesPerSegment": 3,
@@ -105,16 +105,16 @@
       },
       "encoderId": "59d7b227390c86cc40ded2ca12bff9c16a08bdce78baff2b4ae0a50b9dd06b26",
       "engine": {
-        "bundle": "62c0c35dc796b3cd48f92b373c49a15b117943b61f8914269bbfa439d42144a2",
+        "bundle": "15a1998bd00a8eba454c81d880a3d79064d582e164ccb04443846dabb822b468",
         "browser": "153.0.8010.12|launch=auto",
         "schemaVersion": 3
       },
-      "cacheBytesAfter": 18038287,
+      "cacheBytesAfter": 18038041,
       "ms": {
-        "keying": 660,
-        "selfCheck": 18387,
-        "render": 1637,
-        "join": 8692
+        "keying": 353,
+        "selfCheck": 13659,
+        "render": 1281,
+        "join": 7549
       }
     },
     "sync": {
@@ -126,6 +126,6 @@
       "frameMs": 33.333
     }
   },
-  "pass": false,
+  "pass": true,
   "criteria": "frame count exact on both files; every flash has a beep within 1 ms (max offset); no drift (last third against first third under 1 ms); clean segmented export at most 1.25 times the single pass; incremental export at most 30 % of the clean segmented export (target 15 %)"
 }
