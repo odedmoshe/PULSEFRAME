@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T12:55:43.666Z",
+  "ranAt": "2026-11-25T14:22:45.221Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "browser": "153.0.8010.12"
@@ -418,7 +418,7 @@
     {"id":"master-limiter-ceiling","kind":"exact","usedBy":["a11y-audit.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/send/send.testids.ts"]},"dynamic":[]},
     {"id":"master-limiter-switch","kind":"exact","usedBy":["a11y-audit.ts","editor-interactions-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/send/send.testids.ts"]},"dynamic":["01-start-empty","02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates","13-export-finished"]},
     {"id":"menu-delete","kind":"exact","usedBy":["editor-interactions-proof.ts"],"static":{"found":true,"how":"template","where":["apps/web/src/editor/Timeline.tsx","apps/web/src/editor/Timeline.tsx (template literal)"],"via":["menu-*"]},"dynamic":["x-clip-menu"]},
-    {"id":"meter-before-export-gain","kind":"exact","usedBy":["editor-interactions-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/send/LimiterSwitch.tsx"]},"dynamic":[]},
+    {"id":"meter-before-export-gain","kind":"exact","usedBy":["editor-interactions-proof.ts","send-loudness-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/send/LimiterSwitch.tsx"]},"dynamic":[]},
     {"id":"meter-reduction","kind":"exact","usedBy":["a11y-audit.ts","editor-interactions-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/send/send.testids.ts"]},"dynamic":[]},
     {"id":"missing-*","kind":"pattern","usedBy":["a11y-audit.ts"],"static":{"found":true,"how":"template","where":["apps/web/src/editor/MediaLibrary.tsx","apps/web/src/editor/MediaLibrary.tsx (template literal)"],"via":["missing-*"]},"dynamic":[]},
     {"id":"more-*","kind":"pattern","usedBy":["a11y-audit.ts","editor-ui.ts","image-matrix.ts","input-matrix.ts","phase12-proof.ts","phase3-proof.ts"],"static":{"found":true,"how":"template","where":["apps/web/src/editor/MediaLibrary.tsx","apps/web/src/editor/MediaLibrary.tsx (template literal)"],"via":["more-*"]},"dynamic":["02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","13-export-finished"]},

@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T13:15:14.572Z",
+  "ranAt": "2026-11-25T15:47:22.949Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "browser": "153.0.8010.12"
@@ -145,7 +145,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_957266285e0]",
+          "focusAfterClose": "button[data-testid=more-ast_e9d2afe8d90]",
           "focusReturned": true
         },
         {
@@ -1244,7 +1244,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_957266285e0]",
+          "focusAfterClose": "button[data-testid=more-ast_e9d2afe8d90]",
           "focusReturned": true
         },
         {
@@ -2239,7 +2239,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 478,
+          "controls": 477,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],

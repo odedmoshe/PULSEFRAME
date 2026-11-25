@@ -1,0 +1,306 @@
+{
+  "when": "2026-11-25T14:19:55.903Z",
+  "checks": [
+    {
+      "id": "S5",
+      "name": "plan only: 1,000,000 refused with minBytes; minBytes plans clean; minBytes − 1 refused",
+      "pass": true,
+      "numbers": {
+        "refusal": {
+          "code": "size_fit_too_small",
+          "message": "a target of 1000000 bytes is too small for this film; the smallest that works is 10825901 bytes",
+          "ids": [],
+          "hint": "Choose a larger target, or export a shorter part of the film.",
+          "minBytes": 10825901
+        },
+        "atMin": [],
+        "below": [
+          "size_fit_too_small"
+        ]
+      }
+    },
+    {
+      "id": "S12",
+      "name": "the browser route refuses sizeFit and a limiter (409 unsupported_in_browser_export)",
+      "pass": true,
+      "numbers": {
+        "a": [
+          409,
+          "unsupported_in_browser_export"
+        ],
+        "b": [
+          409,
+          "unsupported_in_browser_export"
+        ]
+      }
+    },
+    {
+      "id": "S13",
+      "name": "editor: the tile, the fitted size before export, Hebrew stages, the card's bytes and «לא אומת», the Hebrew too-small refusal (rows S13 of editor-interactions-proof, read from its evidence)",
+      "pass": true,
+      "numbers": {
+        "state": "pass",
+        "reason": "5 of 5 rows passed in docs/evidence/editor-interactions-proof.json, recorded on this build",
+        "rows": [
+          {
+            "name": "S13 the tile is named «מתאים לשליחה» (no app name), is chosen from the keyboard, and the sheet asks for a size first: Export is blocked and none of 16 / 64 / 100 is preselected, each marked «לא אומת»",
+            "ok": true
+          },
+          {
+            "name": "S13 picking 16 from the keyboard states the picture size before the export, in Hebrew, with the size as a number; Export opens",
+            "ok": true
+          },
+          {
+            "name": "S13 the export finishes; the file card says «X מתוך 16 מ״ב · ניסיון N» marked «לא אומת», and the job's own bytes are at or under 16,000,000",
+            "ok": true
+          },
+          {
+            "name": "S13 while it ran, the fit stages were worded in Hebrew (sampled every 100 ms; one sample, so an empty set is reported, not failed on a short film)",
+            "ok": true
+          },
+          {
+            "name": "S13 a target the film cannot fit is refused before any export, in Hebrew, with the smallest size that works (a number) and the way forward; Export stays blocked",
+            "ok": true
+          }
+        ],
+        "ranAt": "2026-11-25T14:14:09.192Z",
+        "builtAt": "2026-11-25T14:05:24.304Z"
+      }
+    },
+    {
+      "id": "S1",
+      "name": "F1 at 1,500,000: file <= target and >= 85 % of it",
+      "pass": true,
+      "numbers": {
+        "status": "succeeded",
+        "error": null,
+        "bytes": 1332107,
+        "fit": {
+          "targetBytes": 1500000,
+          "scale": 1,
+          "width": 640,
+          "height": 360,
+          "bytes": 1332107,
+          "result": "fitted",
+          "attempts": [
+            {
+              "videoBitrate": 862326,
+              "bytes": 1332107
+            }
+          ],
+          "audioBitrate": 96000
+        }
+      }
+    },
+    {
+      "id": "S2",
+      "name": "exact frames at the exact rate, barcodes in order, beep offsets <= 1 ms",
+      "pass": true,
+      "numbers": {
+        "packets": 360,
+        "firstPts": 0,
+        "deltas": [
+          512
+        ],
+        "decoded": 360,
+        "firstWrong": -1,
+        "beepsMs": [
+          0.08333333333333333,
+          0.08333333333333333,
+          0.08333333333333333,
+          0.08333333333333333,
+          0.08333333333333333,
+          0.08333333333333333,
+          0.08333333333333333,
+          0.08333333333333333,
+          0.08333333333333333,
+          0.08333333333333333,
+          0.08333333333333333
+        ]
+      }
+    },
+    {
+      "id": "S9",
+      "name": "flash and picture-check reports of the fit export equal the plain export's",
+      "pass": true,
+      "numbers": {
+        "fit": {
+          "flash": "pass",
+          "picture": {
+            "method": "HEURISTIC on the 24 × 24 cells of the flash check (block means of a sample, so a small detail can be missed): black = every cell at or under 8-bit level 4 for at least 0.5 s; frozen = every cell unchanged for at least 2 s while the document says a video plays (a video clip that is not a freeze frame, inside its source, on a visible track, not covered by an opaque full-frame clip; opacity keys and effects are not modelled). Report only.",
+            "status": "measured",
+            "findings": []
+          }
+        },
+        "plain": {
+          "flash": "pass",
+          "picture": {
+            "method": "HEURISTIC on the 24 × 24 cells of the flash check (block means of a sample, so a small detail can be missed): black = every cell at or under 8-bit level 4 for at least 0.5 s; frozen = every cell unchanged for at least 2 s while the document says a video plays (a video clip that is not a freeze frame, inside its source, on a visible track, not covered by an opaque full-frame clip; opacity keys and effects are not modelled). Report only.",
+            "status": "measured",
+            "findings": []
+          }
+        }
+      }
+    },
+    {
+      "id": "S6",
+      "name": "1280x720 at 1,000,000: fit.scale 0.5, probed 640x360, frames exact, <= target",
+      "pass": true,
+      "numbers": {
+        "status": "succeeded",
+        "error": null,
+        "fit": {
+          "targetBytes": 1000000,
+          "scale": 0.5,
+          "width": 640,
+          "height": 360,
+          "bytes": 846951,
+          "result": "fitted",
+          "attempts": [
+            {
+              "videoBitrate": 538993,
+              "bytes": 846951
+            }
+          ],
+          "audioBitrate": 96000
+        },
+        "probed": [
+          640,
+          360
+        ]
+      }
+    },
+    {
+      "id": "S7",
+      "name": "F1 at 500 MB: already_fits, no fitting attempt, scale and size stated",
+      "pass": true,
+      "numbers": {
+        "status": "succeeded",
+        "fit": {
+          "targetBytes": 500000000,
+          "scale": 1,
+          "width": 640,
+          "height": 360,
+          "bytes": 10426292,
+          "result": "already_fits",
+          "attempts": [],
+          "audioBitrate": 192000
+        }
+      }
+    },
+    {
+      "id": "S8",
+      "name": "fast export: second target renders 0 segments; after a one-title edit 1 segment renders; all <= targets",
+      "pass": true,
+      "numbers": {
+        "segs": [
+          {
+            "total": 6,
+            "rendered": 6,
+            "reused": 0
+          },
+          {
+            "total": 6,
+            "rendered": 0,
+            "reused": 6
+          },
+          {
+            "total": 6,
+            "rendered": 1,
+            "reused": 5
+          }
+        ],
+        "status": [
+          "succeeded",
+          "succeeded",
+          "succeeded"
+        ],
+        "bytes": [
+          1325828,
+          1034888,
+          1035185
+        ],
+        "error": null
+      }
+    },
+    {
+      "id": "S11",
+      "name": "single-pass, segmented and fit outputs carry only the allowed tags",
+      "pass": true,
+      "numbers": {
+        "single": [],
+        "segmented": [],
+        "fit": []
+      }
+    },
+    {
+      "id": "S10",
+      "name": "cancel in pass 2 ends within 2 s, nothing published",
+      "pass": true,
+      "numbers": {
+        "status": "canceled",
+        "ms": 216,
+        "output": 409,
+        "leftovers": []
+      }
+    },
+    {
+      "id": "S3",
+      "name": "overshoot-once: two attempts, the second <= target, labelled TEST",
+      "pass": true,
+      "numbers": {
+        "status": "succeeded",
+        "attempts": [
+          {
+            "videoBitrate": 862326,
+            "bytes": 1332044
+          },
+          {
+            "videoBitrate": 836455,
+            "bytes": 1291610
+          }
+        ],
+        "test": "TEST fault: overshoot-once (a test seam set by the server's caller; the over-target attempts below were forced, their bytes on disk are as measured)",
+        "error": null
+      }
+    },
+    {
+      "id": "S4",
+      "name": "overshoot-always: size_fit_missed with both byte counts; output 409; no file, no work directory",
+      "pass": true,
+      "numbers": {
+        "status": "failed",
+        "error": {
+          "code": "size_fit_missed",
+          "message": "the file came out at 1500001 bytes, over the target of 1500000 bytes, on both attempts",
+          "attempts": [
+            {
+              "videoBitrate": 862326,
+              "bytes": 1332044
+            },
+            {
+              "videoBitrate": 836455,
+              "bytes": 1291610
+            }
+          ],
+          "countedBytes": [
+            1500001,
+            1500001
+          ]
+        },
+        "output": 409,
+        "files": [],
+        "work": []
+      }
+    },
+    {
+      "id": "S14",
+      "name": "peak disk use of the data directory <= 1.5 GB, and the data directory removed",
+      "pass": true,
+      "numbers": {
+        "peakDiskBytes": 69141284,
+        "sampledEverySeconds": 1
+      }
+    }
+  ]
+}
