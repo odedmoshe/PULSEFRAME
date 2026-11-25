@@ -765,6 +765,9 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
   if (clamped.length) basis.push(`item(s) placed at slot(s) ${clamped.join(', ')}, which are not used with this much media, were placed on the last used slot`);
   if (keptByHand.size) warn('kept_by_hand', `${keptByHand.size} item(s) edited by hand since the last run were kept as they are and not made again`, { keys: [...keptByHand].sort() });
   if (removedByHand.size) notice('removed_by_hand', `${removedByHand.size} item(s) deleted by hand since the last run were left out and not made again; regenerate with restoreRemoved to make them again`, { keys: [...removedByHand].sort() });
+  // items that had only been moved in time (ctx.movedKeys): the ones this plan makes again are said, by key
+  const movedBack = [...new Set(ctx.movedKeys ?? [])].filter((k) => slots.some((s) => s.key === k)).sort();
+  if (movedBack.length) notice('moved_back', `${movedBack.length} item(s) that were only moved in time since the last run (nothing else about them was changed) were made again on the place the template gives them`, { keys: movedBack });
   const shape = H > W * 1.1 ? 'tall' : W > H * 1.1 ? 'wide' : 'square';
   if (shape !== d.designedFor) warn('designed_for_other_shape', `this template is designed for a ${d.designedFor} frame; this project is ${shape} (${W}×${H})`, { designedFor: d.designedFor, project: shape, width: W, height: H });
   basis.unshift(

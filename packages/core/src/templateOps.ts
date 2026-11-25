@@ -12,9 +12,11 @@
 import { z } from 'zod';
 import { createdIdsOf, defineOp, findClip, getOp, OpError, refuseInheritedIds, removeRunClips, runFingerprints } from './ops.ts';
 import { ApplyTemplateArgsSchema, AssetRefSchema, findGatedTemplate, RefSchema, type ApplyTemplateOutput } from './templateContract.ts';
-import type { ProjectDocument, SlotRecord } from './schema.ts';
+import * as T from '@pulseframe/time';
+import type { ProjectDocument, RecipeRun, RunRange, SlotRecord } from './schema.ts';
 import { attachKnownGrid } from './packOps.ts';
-import { analysisEntityId } from './entities.ts';
+import { analysisEntityId, fingerprint } from './entities.ts';
+import { clipEnd } from './validate.ts';
 
 /** How deep a step's arguments are walked for bindings. */
 export const MAX_BINDING_DEPTH = 64;
@@ -29,6 +31,27 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
  * record carries them and the next regeneration still knows; with restoreRemoved it leaves them out and the items are made again.
  */
 export const removedByHand = (doc: ProjectDocument, slots: readonly SlotRecord[]): SlotRecord[] => slots.filter((s) => !findClip(doc, s.clipId));
+/**
+ * The clips among `ids` whose ONLY change since the run is their place in time (ADR-0016 decision 6, amendment of 2026-11-24):
+ * a ripple delete before them closed the gap, or they were dragged along their track. Such a clip is not "edited by hand" for a
+ * template regeneration; it is replaced and made again on its slot like an untouched one. The test, per clip:
+ * - the run recorded where it placed the clip (run.ranges[id], written by apply_template with recordRanges);
+ * - the clip is on the track recorded there (a clip taken to another track was arranged by hand and stays protected);
+ * - its start differs from the recorded start; and
+ * - its content fingerprint with the recorded start put back equals the fingerprint the run recorded, so nothing else differs:
+ *   not its length, source range, speed, transform, keyframes, effects, sound, link, text or style.
+ * A run without recorded places (made before this rule, or a family film) names none: its moved clips stay protected as before.
+ * Pure; reads the document and the run record only, so undo of the move gives the old answer back.
+ */
+export function movedOnly(doc: ProjectDocument, run: Pick<RecipeRun, 'fingerprints' | 'ranges'>, ids: readonly string[]): string[] {
+  const ranges = run.ranges ?? {}, fingerprints = run.fingerprints ?? {};
+  return ids.filter((id) => {
+    const f = findClip(doc, id);
+    const place = Object.hasOwn(ranges, id) ? ranges[id] : undefined, recorded = Object.hasOwn(fingerprints, id) ? fingerprints[id] : undefined;
+    if (!f || !place || recorded === undefined || place.trackId !== f.track.id || T.eq(f.clip.start, place.start)) return false;
+    return fingerprint({ ...f.clip, start: place.start }) === recorded;
+  });
+}
 const BINDING_SHAPE = 'a binding is exactly {"$ref": name} with optional "out" and "at", or {"$asset": key}';
 
 /**
@@ -124,6 +147,21 @@ defineOp({
     }
     // d. what the run made, and the fingerprints that later tell hand edits apart
     const { createdIds, fingerprints } = runFingerprints(d, created, a.keepIds ?? [], earlier?.fingerprints ?? {});
+    // d'. where each clip lies, when asked (recordRanges): the place that goes with its fingerprint. A clip kept from the earlier
+    // run keeps that run's entry (or none, when that run recorded none), as it keeps that run's fingerprint.
+    let ranges: Record<string, RunRange> | undefined;
+    if (a.recordRanges) {
+      ranges = {};
+      const keptIds = new Set(a.keepIds ?? []), before = earlier?.ranges ?? {};
+      for (const cid of createdIds) {
+        const f = findClip(d, cid);
+        if (!f) continue;
+        if (keptIds.has(cid)) {
+          const r = Object.hasOwn(before, cid) ? before[cid] : undefined;
+          if (r) ranges[cid] = { start: { ...r.start }, end: { ...r.end }, ...(r.trackId !== undefined ? { trackId: r.trackId } : {}) };
+        } else ranges[cid] = { start: { ...f.clip.start }, end: { ...clipEnd(f.clip) }, trackId: f.track.id };
+      }
+    }
     // e. every planned slot names a clip that exists now
     const resolved: SlotRecord[] = a.slots.map((s, i) => {
       let clipId: unknown;
@@ -136,7 +174,7 @@ defineOp({
     const slots = [...kept, ...resolved.filter((s) => !kept.some((k) => k.key === s.key && k.clipId === s.clipId))];
     if (slots.length > MAX_RUN_SLOTS) throw new OpError('invalid_args', `a template run holds at most ${MAX_RUN_SLOTS} slots; this one would hold ${slots.length}`, { slots: slots.length });
     const id = a.runId ?? ctx.newId('run');
-    d.recipeRuns[id] = { id, recipeId, params: { ...a.params, templateVersion: a.templateVersion }, createdIds, fingerprints, steps: a.steps, slots };
+    d.recipeRuns[id] = { id, recipeId, params: { ...a.params, templateVersion: a.templateVersion }, createdIds, fingerprints, steps: a.steps, slots, ...(ranges ? { ranges } : {}) };
     affected.add(id);
     const output: ApplyTemplateOutput = { runId: id, createdIds, slots, assetIds: Object.fromEntries(assets) };
     return { affectedIds: [...affected], summary: `${a.runId ? 'Regenerated' : 'Applied'} template ${a.templateId}: ${a.steps[0] ?? ''}`.slice(0, 200), output: output as unknown as Record<string, unknown> };

@@ -10,7 +10,8 @@
  * The trend pack's transition options (ADR-0012): beat lock and a ×2 velocity ramp set from the keyboard, each one undo step, with the
  * Hebrew status line in a live region and the velocity choices the clips cannot take shown disabled with what they need.
  * Wave 6 notes, each seen in a real browser: the Templates bar's «החזרת החלקים שנמחקו» after a hand delete (left out by a
- * regeneration, made again by the button, each step one exact undo), the transcript panel's note that names a clip showing an
+ * regeneration, made again by the button, each step one exact undo; after a Delete that closes the gap the pictures it moved
+ * are made again on their slots and the bar says so), the transcript panel's note that names a clip showing an
  * untimed copy the cut left alone (Hebrew and English), and the archive import's note about cleared review marks (shown once, kept
  * until closed). The untimed copy and the translation are typed fixtures: no provider and no model ran.
  * Still not covered here: audible fades/ducking during live playback (only the offline WebAudio chain is measured).
@@ -1051,10 +1052,16 @@ async function main() {
         const victim = slots0.map((x) => x.clipId).find((id) => clipOf(afterShuffle.project, id)?.type === 'media') ?? slots0[0]?.clipId ?? '';
         const offeredBefore = await restoreBtn.count();
 
-        // (1) Delete, as a new project has it: the gap is closed (ripple delete), so the later pictures move earlier. Those now count
-        // as moved by hand, and a kept picture off its slot blocks a regeneration (409 template_blocked). Either outcome of the
-        // button is accepted here, as long as it is said and exact: the picture is made again, or a Hebrew refusal with the reason and
-        // the next step is shown and nothing changes. Which one happened is in the detail.
+        // (1) Delete, as a new project has it: the gap is closed (ripple delete), so the later pictures move earlier. A clip whose
+        // only change is its place is not edited by hand (ADR-0016 decision 6, amendment of 2026-11-24): the regeneration makes it
+        // again on its slot and the bar says so. First Shuffle (the deleted picture left out), then the button (made again).
+        type Slot = { key: string; kind: string; clipId: string };
+        /** Where each live picture slot of a run lies: key -> [start frame, frames]. */
+        const places = (d: any, runId: string) => Object.fromEntries((slotsOf(d, runId) as unknown as Slot[]).filter((x) => x.kind === 'picture' && clipOf(d, x.clipId)).map((x) => [x.key, [fr(clipOf(d, x.clipId).start), fr(clipOf(d, x.clipId).duration)]] as [string, number[]]).sort(([x], [y]) => (x < y ? -1 : 1)));
+        const waitSaid = (want: string) => tpage.waitForFunction((w) => (document.querySelector('[data-testid=template-applied] [role=status]')?.textContent ?? '').replace(/[\u2066-\u2069]/g, '').includes(w), want, { timeout: 10000 }).catch(() => {});
+        const places0 = places(afterShuffle.project, run0);
+        const victimKey = (slots0 as unknown as Slot[]).find((x) => x.clipId === victim)?.key ?? '';
+        const rest0 = Object.fromEntries(Object.entries(places0).filter(([k]) => k !== victimKey));
         await tpage.locator(`.clip[data-clip-id="${victim}"]`).click();
         await tpage.keyboard.press('Delete');
         const rDeleted = await tuntil((d) => !clipOf(d, victim));
@@ -1062,21 +1069,58 @@ async function main() {
         const rOffered = { count: await restoreBtn.count(), text: await restoreBtn.textContent().catch(() => null) };
         const afterRipple = await tdoc();
         const rippleOps = await opsSince(afterShuffle.revision);
-        await restoreBtn.click();
+        const placesRippled = places(afterRipple.project, run0);
+        const movedKeys = Object.keys(rest0).filter((k) => JSON.stringify(placesRippled[k]) !== JSON.stringify(rest0[k]));
+        // Shuffle: one revision; the deleted picture is left out; the pictures the delete moved are back on their slots; both said
+        await tpage.getByTestId(TID.shuffle).click();
         await Promise.race([barAlert.waitFor({ timeout: 15000 }).catch(() => {}), revisionReaches(afterRipple.revision + 1, 15000)]);
-        await sleep(400);
-        const afterTry = await tdoc();
-        const refusal = (await barAlert.count()) ? ((await barAlert.textContent()) ?? '').replace(/[⁦-⁩]/g, '') : null;
-        const made = afterTry.revision === afterRipple.revision + 1 && removedByHand(afterTry.project, slotsOf(afterTry.project, await runNow()) as any).length === 0;
-        const refusedInWords = refusal !== null && afterTry.revision === afterRipple.revision && /[֐-׿]/.test(refusal) && refusal.includes('—') && !/restoreRemoved|template_blocked|slot\(s\)/.test(refusal);
-        // take it back: the delete (and the restore, had it been made); the offer goes with the delete
-        for (let n = afterTry.revision - afterShuffle.revision; n > 0; n--) { await tpage.getByTestId('undo').click(); await sleep(400); }
-        const rUndone = await tuntil((d) => creativeProjection(d) === pShuffled, 10000);
+        await waitSaid(S.movedBack(movedKeys.length).trim());
+        const afterRShuffle = await tdoc();
+        const runS = await runNow();
+        const rShuffle = { said: await said(), refusal: (await barAlert.count()) ? await barAlert.textContent() : null, ops: await opsSince(afterRipple.revision), places: places(afterRShuffle.project, runS), removed: removedByHand(afterRShuffle.project, slotsOf(afterRShuffle.project, runS) as any).length, offered: await restoreBtn.count() };
+        // the button: one revision; the deleted picture is made again; nothing is left moved
+        await restoreBtn.click();
+        await Promise.race([barAlert.waitFor({ timeout: 15000 }).catch(() => {}), revisionReaches(afterRShuffle.revision + 1, 15000)]);
+        await restoreBtn.waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+        await sleep(300);
+        const afterRRestore = await tdoc();
+        const runR = await runNow();
+        const rRestore = { said: await said(), refusal: (await barAlert.count()) ? await barAlert.textContent() : null, ops: await opsSince(afterRShuffle.revision), places: places(afterRRestore.project, runR), removed: removedByHand(afterRRestore.project, slotsOf(afterRRestore.project, runR) as any).length, offered: await restoreBtn.count() };
+        // exact undo, one step each: the restore, the shuffle, the delete; the offer goes with the delete
+        const pRippled = creativeProjection(afterRipple.project), pRShuffle = creativeProjection(afterRShuffle.project);
+        const rSteps: boolean[] = [];
+        for (const want of [pRShuffle, pRippled, pShuffled]) { await tpage.getByTestId('undo').click(); rSteps.push(await tuntil((d) => creativeProjection(d) === want, 10000)); }
         await restoreBtn.waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
         const rOfferGone = (await restoreBtn.count()) === 0;
-        check('a picture of the applied template deleted with Delete (a new project closes the gap, so the later pictures move earlier): the bar offers «החזרת החלקים שנמחקו» (not before the delete); pressing it either makes the picture again in 1 revision, or refuses in Hebrew with the reason and the next step and changes nothing; undo brings the shuffled template back and the offer is gone',
-          slots0.length > 1 && !!victim && offeredBefore === 0 && rDeleted && rOffered.count === 1 && rOffered.text === 'החזרת החלקים שנמחקו' && (made !== refusedInWords) && rUndone && rOfferGone,
-          { outcome: made ? 'made again' : refusal !== null ? 'refused' : 'nothing said', deleteOps: rippleOps, refusal, revisions: { afterDelete: afterRipple.revision, afterButton: afterTry.revision }, rUndone, rOfferGone });
+        check('a picture of the applied template deleted with Delete (a new project closes the gap, so the later pictures move earlier): the bar offers «החזרת החלקים שנמחקו» (not before the delete); Shuffle regenerates in 1 revision, leaves the deleted picture out and puts the moved pictures back on their slots, and the bar says both in Hebrew («… פריטים שרק זזו ממקומם חזרו למקומם בתבנית»); the button then makes the deleted picture again in 1 revision and says so; nothing is refused; three undos return exactly, one step each, and the offer is gone',
+          slots0.length > 1 && !!victim && !!victimKey && offeredBefore === 0 && rDeleted && JSON.stringify(rippleOps) === '[["ripple_delete_clips"]]' && rOffered.count === 1 && rOffered.text === 'החזרת החלקים שנמחקו' && movedKeys.length > 0
+            && afterRShuffle.revision === afterRipple.revision + 1 && JSON.stringify(rShuffle.ops) === '[["apply_template"]]' && rShuffle.refusal === null && JSON.stringify(rShuffle.places) === JSON.stringify(rest0) && rShuffle.removed === 1 && rShuffle.offered === 1
+            && rShuffle.said.includes(S.movedBack(movedKeys.length).trim()) && rShuffle.said.includes('שרק ז') && rShuffle.said.includes('בתבנית') && rShuffle.said.includes(S.removedLeftOut(1).trim())
+            && afterRRestore.revision === afterRShuffle.revision + 1 && JSON.stringify(rRestore.ops) === '[["apply_template"]]' && rRestore.refusal === null && JSON.stringify(rRestore.places) === JSON.stringify(places0) && rRestore.removed === 0 && rRestore.offered === 0 && rRestore.said.endsWith(S.restored)
+            && rSteps.every(Boolean) && rOfferGone,
+          { victimKey, deleteOps: rippleOps, places: { before: places0, afterDelete: placesRippled, afterShuffle: rShuffle.places, afterRestore: rRestore.places }, movedKeys, shuffle: { said: rShuffle.said, refusal: rShuffle.refusal, ops: rShuffle.ops, removed: rShuffle.removed }, restore: { said: rRestore.said, refusal: rRestore.refusal, ops: rRestore.ops, removed: rRestore.removed }, undo: rSteps, rOfferGone });
+
+        // (1b) the same Delete, then the button at once (the path that was refused before): the deleted picture is made again and
+        // the moved ones return to their slots in ONE revision, said in Hebrew; two undos (the restore, the delete) return exactly
+        await tpage.locator(`.clip[data-clip-id="${victim}"]`).click();
+        await tpage.keyboard.press('Delete');
+        const bDeleted = await tuntil((d) => !clipOf(d, victim));
+        await restoreBtn.waitFor({ timeout: 8000 }).catch(() => {});
+        const afterB = await tdoc();
+        await restoreBtn.click();
+        await Promise.race([barAlert.waitFor({ timeout: 15000 }).catch(() => {}), revisionReaches(afterB.revision + 1, 15000)]);
+        await restoreBtn.waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+        await waitSaid(S.restored);
+        const afterBRestore = await tdoc();
+        const runB = await runNow();
+        const bRestore = { said: await said(), refusal: (await barAlert.count()) ? await barAlert.textContent() : null, ops: await opsSince(afterB.revision), places: places(afterBRestore.project, runB), removed: removedByHand(afterBRestore.project, slotsOf(afterBRestore.project, runB) as any).length, offered: await restoreBtn.count() };
+        const bSteps: boolean[] = [];
+        for (const want of [creativeProjection(afterB.project), pShuffled]) { await tpage.getByTestId('undo').click(); bSteps.push(await tuntil((d) => creativeProjection(d) === want, 10000)); }
+        await restoreBtn.waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+        check('the same Delete, then «החזרת החלקים שנמחקו» at once: 1 revision (apply_template) makes the deleted picture again and returns the moved pictures to their slots, the bar says so in Hebrew and nothing is refused; two undos (the restore, then the delete) return exactly',
+          bDeleted && afterBRestore.revision === afterB.revision + 1 && JSON.stringify(bRestore.ops) === '[["apply_template"]]' && bRestore.refusal === null && JSON.stringify(bRestore.places) === JSON.stringify(places0) && bRestore.removed === 0 && bRestore.offered === 0
+            && bRestore.said.includes(S.movedBack(movedKeys.length).trim()) && bRestore.said.endsWith(S.restored) && /[\u0590-\u05FF]/.test(bRestore.said) && !/[A-Za-z]{3,}/.test(bRestore.said) && bSteps.every(Boolean) && (await restoreBtn.count()) === 0,
+          { said: bRestore.said, refusal: bRestore.refusal, ops: bRestore.ops, places: bRestore.places, removed: bRestore.removed, undo: bSteps });
 
         // (2) Shift+Delete keeps the gap: nothing else moves, so the regeneration runs
         await tpage.locator(`.clip[data-clip-id="${victim}"]`).click();
