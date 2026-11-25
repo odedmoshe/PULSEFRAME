@@ -1,0 +1,41 @@
+/* The library panels (wave 7 library track): redesign tokens only; logical properties, so the panels mirror with the page direction. */
+.pf-lib { display: grid; gap: var(--pf-sp-4); color: var(--pf-text); font: var(--pf-fw-regular) var(--pf-fs-sm) / var(--pf-lh-sm) var(--pf-font); }
+.pf-lib-muted { margin: 0; color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-lib-state { margin: 0; display: grid; gap: var(--pf-sp-3); justify-items: start; padding: var(--pf-sp-4); background: var(--pf-surface-2); border-radius: var(--pf-r-md); }
+.pf-lib-state.is-err, .pf-lib-note.is-err { color: var(--pf-danger); }
+.pf-lib-note { margin: 0; min-block-size: var(--pf-lh-sm); color: var(--pf-text-2); }
+.pf-lib-note.is-ok { color: var(--pf-ok); }
+.pf-lib-kinds, .pf-lib-chips, .pf-lib-options { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-2); }
+.pf-lib-options { inline-size: 100%; padding-inline-start: var(--pf-sp-3); }
+.pf-lib-search { inline-size: 100%; }
+.pf-lib-colour { display: inline-flex; align-items: center; gap: var(--pf-sp-3); color: var(--pf-text-2); }
+.pf-lib-count { margin: 0; color: var(--pf-text-2); font-size: var(--pf-fs-xs); }
+.pf-lib-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--pf-sp-3); }
+.pf-lib-list.is-visual { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.pf-lib-row { display: flex; gap: var(--pf-sp-4); padding: var(--pf-sp-4); background: var(--pf-surface-2); border-radius: var(--pf-r-md); box-shadow: var(--pf-e1), var(--pf-hilite); min-inline-size: 0; }
+.pf-lib-thumb { inline-size: 64px; block-size: 64px; object-fit: contain; background: #0b0d11; border-radius: var(--pf-r-sm); flex: none; }
+.pf-lib-main { display: grid; gap: var(--pf-sp-3); flex: 1; min-inline-size: 0; align-content: start; }
+.pf-lib-top { display: flex; align-items: flex-start; gap: var(--pf-sp-3); }
+.pf-lib-names { display: grid; flex: 1; min-inline-size: 0; }
+.pf-lib-title { font-weight: var(--pf-fw-semibold); overflow-wrap: anywhere; }
+.pf-lib-author { color: var(--pf-text-2); font-size: var(--pf-fs-xs); overflow-wrap: anywhere; }
+.pf-lib-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-2) var(--pf-sp-4); font-size: var(--pf-fs-xs); }
+.pf-lib-meta .num { font-family: var(--pf-font-mono); font-size: var(--pf-fs-digits); }
+.pf-lib-badges { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--pf-sp-2); }
+.pf-lib-badge { padding: 0 var(--pf-sp-3); border-radius: var(--pf-r-xs); font-size: var(--pf-fs-xs); box-shadow: inset 0 0 0 1px var(--pf-line-strong); }
+.pf-lib-badge.is-nonCommercial, .pf-lib-badge.is-unusable { color: var(--pf-danger); }
+.pf-lib-credit { margin: 0; color: var(--pf-text-2); font-size: var(--pf-fs-xs); overflow-wrap: anywhere; }
+.pf-lib-main > .pf-btn { justify-self: start; }
+.pf-lib-assetbox { display: grid; gap: 2px; }
+.pf-lib-assetbadges { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.pf-lib-assetlicence { background: none; border: 0; padding: 0; color: var(--pf-text-2); text-decoration: underline; font-size: var(--pf-fs-xs); cursor: pointer; }
+.pf-lib-assetinfo { font-size: var(--pf-fs-xs); color: var(--pf-text-2); display: grid; gap: 2px; overflow-wrap: anywhere; }
+.pf-lib-export { display: grid; gap: var(--pf-sp-3); margin-block-start: var(--pf-sp-4); }
+.pf-lib-credit-text { white-space: pre-wrap; margin: 0; padding: var(--pf-sp-3); background: var(--pf-surface-2); border-radius: var(--pf-r-sm); font: inherit; max-block-size: 160px; overflow: auto; }
+.pf-lib-credits, .pf-lib-archive, .pf-lib-settings { display: grid; gap: var(--pf-sp-3); }
+.pf-lib-archive-opt { display: flex; gap: var(--pf-sp-3); align-items: flex-start; }
+.pf-lib-archive-opt small { display: block; }
+.pf-lib-credit-missing { color: var(--pf-danger); margin: 0; }
+.pf-lib-field { display: grid; gap: var(--pf-sp-2); }
+.pf-lib-counts, .pf-lib-problems, .pf-lib-credit-list { margin: 0; padding-inline-start: var(--pf-sp-6, 20px); }
+@media (prefers-reduced-motion: reduce) { .pf-lib * { transition: none !important; animation: none !important; } }
