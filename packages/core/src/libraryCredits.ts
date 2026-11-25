@@ -11,7 +11,7 @@
  */
 import * as T from '@pulseframe/time';
 import type { Asset, LibraryRecord, ProjectDocument } from './schema.ts';
-import { recordShareable } from './libraryDuties.ts';
+import { recordNeedsCredit, recordShareable } from './libraryDuties.ts';
 
 export interface CreditLine { assetId: string; title: string; text: string; placement: 'description' | 'on_screen' | 'either'; group: 'music' | 'sound' | 'picture' }
 export interface CreditsReport {
@@ -104,8 +104,14 @@ export function collectCredits(doc: ProjectDocument, opts: { sequenceId?: string
   // music, then sounds, then pictures and video; timeline order inside each group (a stable sort keeps it)
   lines.sort((a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group));
   const shown = seq.tracks.filter((t) => !t.hidden).flatMap((t) => t.clips).flatMap((c) => (c.type === 'text' ? [norm(c.text)] : []));
-  const onScreenMissing = lines.filter((l) => l.placement === 'on_screen' && !shown.some((s) => s.includes(norm(l.text))));
+  // a duty only: a courtesy line (a licence that needs no credit) is listed but never missing
+  const onScreenMissing = lines.filter((l) => l.placement === 'on_screen' && creditDue(doc, l) && !shown.some((s) => s.includes(norm(l.text))));
   return { lines, descriptionText: (lang) => describe(lines, nonCommercial, lang), onScreenMissing, nonCommercial, people };
+}
+/** Is this credit line a duty of its file's licence (libraryDuties.ts recordNeedsCredit), or a courtesy line? */
+export function creditDue(doc: ProjectDocument, line: CreditLine): boolean {
+  const r = Object.hasOwn(doc.assets, line.assetId) ? doc.assets[line.assetId]!.provenance.library : undefined;
+  return !!r && recordNeedsCredit(r);
 }
 /** A report as JSON (GET /projects/:id/credits, MCP get_credits, the export job's output). */
 export function creditsView(r: CreditsReport, lang: 'he' | 'en'): CreditsView {

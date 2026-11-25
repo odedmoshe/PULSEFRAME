@@ -67,7 +67,11 @@ type World = Awaited<ReturnType<typeof world>>;
 const record = (over: Partial<LibraryRecord>): LibraryRecord => ({ itemId: 'synthetic/x', sourceId: 'synthetic', kind: 'music', title: 'X', sourceSha256: '0'.repeat(64), ledger: { item: 'synthetic' }, licence: { id: 'CC0-1.0' }, flags: {}, ...over });
 const SONG_CREDIT = 'Song Synthetic Composer (example.invalid)\nLicensed under Creative Commons: By Attribution 4.0';
 
-/** The synthetic project of checks 12 and 14: a CC0 tone, a CC BY tone whose credit must be on screen, a CC BY-NC sound and a CC BY picture. */
+/**
+ * The synthetic project of checks 12 and 14: a CC0 tone, a CC BY tone whose credit must be on screen (its record as a ledger entry
+ * with `creditOnScreen: true` would make it; the fetch tool writes no such entry today), a CC BY-NC sound and a CC BY picture
+ * (their credits go in the description: `creditInExport` means "due with every export", lead decision 2026-11-25).
+ */
 async function libraryProject(w: World) {
   const art = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-libproof-b-media-'));
   const tone = (name: string, hz: number) => { const p = path.join(art, name); ff(['-f', 'lavfi', '-i', `sine=frequency=${hz}:sample_rate=48000:duration=3`, '-c:a', 'pcm_s16le', p]); return p; };
@@ -122,6 +126,11 @@ async function check12(): Promise<true | string> {
     const miss = pf.find((i) => i.code === 'credit_not_on_screen');
     if (!miss?.fix || miss.fix.ops[0]?.op !== 'add_credits_card') return fail('preflight does not list credit_not_on_screen with the credits card as its fix', pf.map((i) => i.code));
     if (!pf.some((i) => i.code === 'non_commercial_content' && i.severity === 'warning')) return fail('preflight does not warn about non-commercial material');
+    const desc = pf.find((i) => i.code === 'credits_for_description');
+    if (desc?.severity !== 'note' || desc.fix) return fail('the description credits are not a note without a required fix', desc);
+    if (JSON.stringify(desc.ids.slice().sort()) !== JSON.stringify([attached.bird!.assetId, attached.star!.assetId].sort())) return fail('the description reminder does not name exactly the description credits', desc.ids);
+    if (pf.some((i) => i.ids?.includes(attached.zero!.assetId))) return fail('the CC0 file raised an issue');
+    if (JSON.stringify(miss.ids) !== JSON.stringify([attached.song!.assetId])) return fail('credit_not_on_screen names more than the on-screen credit', miss.ids);
     const before = await w.docHash(pid);
     const card = await w.tx(pid, miss.fix.ops);
     const pf2 = (await w.call(`/projects/${pid}/preflight`)).body.issues as any[];

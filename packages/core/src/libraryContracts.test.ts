@@ -114,12 +114,16 @@ describe('licenceDuties (fail-closed table)', () => {
     expect(cc0({ ...OPEN, diskOnly: true })).toMatchObject({ use: 'ok', nonCommercial: false, shareable: false });
     expect(cc0({ ...OPEN, repoAllowed: false })).toMatchObject({ use: 'ok', shareable: false });
     expect(cc0({ ...OPEN, shareAlike: true }).use).toBe('licence_share_alike');
-    expect(licenceDuties('s', { spdx: 'CC-BY-4.0' }, { ...OPEN, creditInExport: true }).placement).toBe('on_screen');
+    // a credit goes in the description: creditInExport means "due with every export" (lead decision 2026-11-25), not on screen;
+    // only creditOnScreen: true (not written by the fetch tool today) asks for it on screen
+    expect(licenceDuties('s', { spdx: 'CC-BY-4.0' }, { ...OPEN, creditInExport: true }).placement).toBe('description');
+    expect(licenceDuties('s', { spdx: 'CC-BY-4.0' }, { ...OPEN, creditInExport: true, creditOnScreen: true })).toMatchObject({ use: 'ok', credit: true, placement: 'on_screen' });
+    expect(licenceDuties('s', { spdx: 'CC-BY-4.0' }, { ...OPEN, creditOnScreen: false }).placement).toBe('description');
     // absent flags: never the permissive answer
     const { diskOnly: _d, ...noDisk } = OPEN, { repoAllowed: _r, ...noRepo } = OPEN, { creditInExport: _c, ...noCredit } = OPEN, { shareAlike: _s, ...noSa } = OPEN;
     expect(cc0(noDisk).shareable).toBe(false);
     expect(cc0(noRepo).shareable).toBe(false);
-    expect(licenceDuties('s', { spdx: 'CC-BY-4.0' }, noCredit).placement).toBe('on_screen');
+    expect(licenceDuties('s', { spdx: 'CC-BY-4.0' }, noCredit)).toMatchObject({ use: 'ok', credit: true, placement: 'description' });
     expect(cc0(noSa).use).toBe('licence_unknown');
     expect(cc0({}).use).toBe('licence_unknown');
     // a flag this build does not know, set true, may be a restriction: unknown. Known benign ones and false values pass.
@@ -379,5 +383,21 @@ describe('the summary\'s library part', () => {
     expect(parts).toContainEqual({ itemId: 's/c.wav', title: 'Bird', licenceId: 'CC-BY-NC-4.0', credit: 'Bird by Rec', creditPlacement: 'either', nonCommercial: true, shareable: false, people: false });
     expect(parts).toContainEqual({ itemId: 's/a.wav', title: 'Zero', licenceId: 'CC0-1.0', credit: null, creditPlacement: null, nonCommercial: false, shareable: true, people: false });
     expect(summarize(applyTransaction(fresh(), [{ op: 'import_asset', args: { asset: asset({}) } }], ctx('s_')).doc).assets[0]).not.toHaveProperty('library');
+  });
+});
+
+describe('a courtesy credit (a licence that needs none) is listed, never a duty', () => {
+  it('CC0 with a credit text: listed in the credits, never on-screen missing, never makes a credits card', async () => {
+    const { recordNeedsCredit, creditDue } = await import('./index.ts');
+    expect(recordNeedsCredit(record)).toBe(false);
+    expect(recordNeedsCredit({ ...record, licence: { id: 'CC-BY-4.0' } })).toBe(true);
+    const r = applyTransaction(fresh(), [{ op: 'use_library_item', args: { asset: libAsset('a', { title: 'Kind', credit: { text: 'Thanks to Kind Person', placement: 'on_screen' } }) } }], ctx('k_'));
+    const id = (r.results[0]!.output as { assetId: string }).assetId;
+    const d = applyTransaction(r.doc, [{ op: 'add_clip', args: { assetId: id, start: T.ZERO, duration: T.frameTime(5, r.doc.settings.frameRate) } }], ctx('k2_', false)).doc;
+    const c = collectCredits(d);
+    expect(c.lines.map((l) => l.text)).toEqual(['Thanks to Kind Person']);
+    expect(creditDue(d, c.lines[0]!)).toBe(false);
+    expect(c.onScreenMissing).toEqual([]);
+    expect(refusedBy(() => applyTransaction(d, [{ op: 'add_credits_card', args: {} }], ctx('k3_', false)))?.message).toBe(LIBRARY_REFUSALS.noCredits.message());
   });
 });

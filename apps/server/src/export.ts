@@ -13,7 +13,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { collectCredits, creditsView, type CreditsView } from '@pulseframe/core';
+import { collectCredits, creditDue, creditsView, type CreditsView } from '@pulseframe/core';
 import { AUTO_SELF_CHECK_CLEAN_EXPORTS, EXPORT_MODES, INCREMENTAL_NOT_BUILT_REASON, RENDER_CACHE_BLOCKERS, SEGMENTED_ROUTE, SELF_CHECK_MODES, type RenderCacheStatus, type SegmentedExportReport } from '@pulseframe/core';
 import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
@@ -206,8 +206,10 @@ export function libraryExportWarnings(doc: ProjectDocument): Blocker[] {
   const r = collectCredits(doc);
   const out: Blocker[] = [];
   if (r.nonCommercial.length) out.push({ code: 'non_commercial_content', message: `this video holds library material for non-commercial use only (${list(r.nonCommercial)}); it may not be used commercially, and those files are never passed on in a shared archive`, ids: r.nonCommercial.map((n) => n.assetId), hint: 'Keep the video for non-commercial use, or replace those files.' });
-  const described = r.lines.filter((l) => l.placement !== 'on_screen');
-  if (described.length) out.push({ code: 'credits_for_description', message: `${described.length} credit line(s) of library files must go in the video's description: copy them from the credits (GET /api/v1/projects/{id}/credits) when you publish`, ids: described.map((l) => l.assetId) });
+  // credits due (never a courtesy line of a licence that needs none) whose place is the description: a reminder with the text to
+  // paste, and the credits card offered (never a required fix: the owner decided the card is offered, not added by itself)
+  const described = r.lines.filter((l) => l.placement !== 'on_screen' && creditDue(doc, l));
+  if (described.length) out.push({ code: 'credits_for_description', message: `${described.length} credit line(s) of library files must go in the video's description: copy them from the credits (GET /api/v1/projects/{id}/credits) when you publish. A credits card at the end can also be added (add_credits_card); it is optional`, ids: described.map((l) => l.assetId) });
   if (r.onScreenMissing.length) out.push({ code: 'credit_not_on_screen', message: `${r.onScreenMissing.length} credit(s) that the licence wants in the video itself appear in no visible title (${list(r.onScreenMissing)})`, ids: r.onScreenMissing.map((l) => l.assetId), hint: 'Add a credits card (add_credits_card), or a title of your own with the credit.' });
   if (r.people.length) out.push({ code: 'stock_people', message: `the video holds stock footage that shows people (${list(r.people)})`, ids: r.people.map((p) => p.assetId) });
   return out;

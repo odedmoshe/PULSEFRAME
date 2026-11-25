@@ -150,6 +150,20 @@ describe('export: the credit lines, the non-commercial warning, the job output',
     expect(preflight(exporter, fixed, 2).issues.map((i) => i.code)).not.toContain('credit_not_on_screen');
     expect(libraryExportWarnings(fixed).map((w) => w.code)).toEqual(['non_commercial_content', 'credits_for_description']);
   });
+  it('a courtesy credit (CC0 with a credit text) and a description credit never raise credit_not_on_screen; a CC0 courtesy line raises nothing', () => {
+    const store = world();
+    const pid = store.createProject({ name: 'courtesy' }).doc.id;
+    const b = blob(store, 9, 1200);
+    const asset = (library: LibraryRecord) => ({ kind: 'audio' as const, name: 'c.wav', contentHash: b.hash, byteSize: b.size, container: 'wav', mimeType: 'audio/wav', duration: T.rt(4, 1), audio: { sampleRate: 48000, channels: 1, codec: 'pcm_s16le' }, provenance: { origin: 'upload' as const, importedAt: '2026-11-25T00:00:00Z', importedBy: 'test', library } });
+    const id = store.commit({ projectId: pid, actor: 'user:local', allowInternal: true, ops: [{ op: 'use_library_item', args: { asset: asset(record({ title: 'Kind', credit: { text: 'Thanks to Kind Person', placement: 'on_screen' } })) } }] }).results[0]!.output!.assetId as string;
+    store.commit({ projectId: pid, actor: 'user:local', ops: [{ op: 'add_clip', args: { assetId: id, start: f(0), duration: f(30) } }] });
+    const doc = store.getProject(pid).doc;
+    expect(collectCredits(doc).lines.map((l) => l.text)).toEqual(['Thanks to Kind Person']);
+    expect(libraryExportWarnings(doc)).toEqual([]);
+    // the same file under CC BY with its credit in the description: the reminder only
+    store.commit({ projectId: pid, actor: 'user:local', allowInternal: true, ops: [{ op: 'use_library_item', args: { asset: asset(record({ title: 'Kind', licence: { id: 'CC-BY-4.0' }, credit: { text: 'Kind by Person', placement: 'description' } })) } }] });
+    expect(libraryExportWarnings(store.getProject(pid).doc).map((w) => w.code)).toEqual(['credits_for_description']);
+  });
   it('the job output\'s licence is the snapshot\'s credits, its description text the core one in Hebrew', () => {
     const store = world();
     const { pid } = seeded(store);

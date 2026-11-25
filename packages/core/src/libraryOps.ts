@@ -23,7 +23,7 @@ import * as T from '@pulseframe/time';
 import { defineOp, getOp, OpError, type OpContext, type OpErrorCode } from './ops.ts';
 import { AssetSchema, type Asset, type LibraryRecord, type ProjectDocument } from './schema.ts';
 import { libraryRecordProblems } from './libraryDuties.ts';
-import { collectCredits, CREDITS_HEADING } from './libraryCredits.ts';
+import { collectCredits, creditDue, CREDITS_HEADING } from './libraryCredits.ts';
 import { sequenceDuration } from './validate.ts';
 
 /** True once worker B has built the bodies. */
@@ -111,7 +111,8 @@ function addCreditsCard(d: ProjectDocument, a: AddCreditsCardArgs, ctx: OpContex
   const seq = Object.hasOwn(d.sequences, seqId) ? d.sequences[seqId] : undefined;
   if (!seq) throw new OpError('not_found', `sequence ${seqId} not found`, { sequenceId: seqId });
   const report = collectCredits(d, { sequenceId: seq.id });
-  if (!report.lines.length) throw libraryRefusal('noCredits', { sequenceId: seq.id });
+  // a card is for credits that are due; courtesy lines (a licence that needs none) go on it too, but never make one
+  if (!report.lines.some((l) => creditDue(d, l))) throw libraryRefusal('noCredits', { sequenceId: seq.id });
   const body = report.lines.map((l) => l.text).join('\n');
   if (body.length > CREDITS_CARD_MAX_CHARS) throw libraryRefusal('creditsTooLong', { sequenceId: seq.id, chars: body.length, max: CREDITS_CARD_MAX_CHARS }, body.length);
   // the card this operation made before (delete_clip's body: a card on a locked track is refused as any edit there)

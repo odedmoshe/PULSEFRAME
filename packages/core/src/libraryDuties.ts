@@ -8,7 +8,10 @@
  * - A `custom` licence is admitted only through CUSTOM_LICENCES[sourceId] whose `custom` string equals the ledger's exactly; the
  *   row's values are the decided ones in that table. A ledger flag can never admit or loosen anything.
  * - Ledger flags can only make a row stricter: diskOnly or repoAllowed === false → not shareable; personalOnly → non-commercial and
- *   not shareable; shareAlike → licence_share_alike; creditInExport → credit placement on_screen.
+ *   not shareable; shareAlike → licence_share_alike. A credit goes in the video's description (lead decision, 2026-11-25:
+ *   `creditInExport` means "a credit is due with every export", not "on screen"; it is a known flag and changes nothing here).
+ *   Only the optional flag `creditOnScreen: true` makes the placement on_screen; the fetch tool does not write it today, so no
+ *   row is on-screen yet.
  * - An SPDX id containing "-NC" is non-commercial (and therefore not shareable); "-SA" is share-alike; "-ND" no-derivatives.
  * - A row whose duties say credit and whose credit text is empty after its reader ran is `credit_missing`.
  */
@@ -58,7 +61,7 @@ export interface LicenceDuties { use: 'ok' | Extract<LibraryUnusable, 'licence_u
 
 /** The ledger flags the fetch tool writes (tools/library/fetch.mjs FLAGS: always present, OPT_FLAGS: only when the source sets them). */
 export const LEDGER_FLAGS = ['diskOnly', 'creditInExport', 'shareAlike', 'people', 'aiGenerated', 'repoAllowed'] as const;
-export const LEDGER_OPT_FLAGS = ['needsOwnerKey', 'trademark', 'personalOnly'] as const;
+export const LEDGER_OPT_FLAGS = ['needsOwnerKey', 'trademark', 'personalOnly', 'creditOnScreen'] as const;
 const KNOWN_FLAGS: ReadonlySet<string> = new Set<string>([...LEDGER_FLAGS, ...LEDGER_OPT_FLAGS]);
 
 /**
@@ -93,7 +96,8 @@ function tableDuties(row: LicenceRow, licenceId: string): { credit: boolean; non
  * What a row's licence demands. `licence` is the row's own (an icon set's SPDX, or the ledger entry's licence); `flags` the ledger
  * entry's. Fail-closed as described above; the stricter of the table and the flags wins. Pure; the same in Node and Chromium.
  * No duty is lifted by a flag being absent: shareable needs `diskOnly: false` AND `repoAllowed: true` written in the ledger; a
- * description-only credit needs `creditInExport: false`; `shareAlike` must be written false (absent → licence_unknown); a flag
+ * credit is placed in the description unless `creditOnScreen: true` asks for it on screen (the stricter placement; `creditInExport`
+ * is known and changes nothing); `shareAlike` must be written false (absent → licence_unknown); a flag
  * this build does not know that is true → licence_unknown (it may be a restriction the table cannot honour).
  */
 export function licenceDuties(sourceId: string, licence: LedgerLicenceInput, flags: Readonly<Record<string, boolean>>): LicenceDuties {
@@ -119,7 +123,7 @@ export function licenceDuties(sourceId: string, licence: LedgerLicenceInput, fla
   const t = tableDuties(row, licenceId);
   const nonCommercial = t.nonCommercial || flag('personalOnly') === true;
   const shareable = t.shareable && !nonCommercial && flag('diskOnly') === false && flag('repoAllowed') === true;
-  return { use: 'ok', licenceId, credit: t.credit, nonCommercial, shareable, placement: flag('creditInExport') === false ? 'description' : 'on_screen' };
+  return { use: 'ok', licenceId, credit: t.credit, nonCommercial, shareable, placement: flag('creditOnScreen') === true ? 'on_screen' : 'description' };
 }
 
 /** What a record lacks against the table, first problem first (the order use_library_item refuses in). */
@@ -157,6 +161,15 @@ export function libraryRecordIssues(record: LibraryRecord): string[] {
       case 'recordWeaker': return `the library record is weaker than its licence: it must be marked ${p.what}`;
     }
   });
+}
+
+/**
+ * Does the table make a credit a duty for this record's licence? False for a licence that needs none (a CC0 file whose record
+ * carries a credit text: that line is a courtesy, listed but never warned about) and for an unknown licence.
+ */
+export function recordNeedsCredit(record: LibraryRecord): boolean {
+  const row = tableRow(record.licence.id, record.sourceId);
+  return !!row && tableDuties(row, record.licence.id).credit;
 }
 
 /**
