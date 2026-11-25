@@ -279,5 +279,5 @@ export function fixtureDutiesStandIn(sourceId: string, l: { spdx?: string; custo
   }
   if (f.shareAlike) return no('licence_share_alike');
   const nonCommercial = row.nonCommercial || !!f.personalOnly;
-  return { use: 'ok', licenceId: id, credit: row.credit, nonCommercial, shareable: row.shareable && !nonCommercial && !f.diskOnly && f.repoAllowed !== false, placement: f.creditInExport ? 'on_screen' : 'description' };
+  return { use: 'ok', licenceId: id, credit: row.credit, nonCommercial, shareable: row.shareable && !nonCommercial && !f.diskOnly && f.repoAllowed !== false, placement: f.creditOnScreen ? 'on_screen' : 'description' }; // lead amendment 2026-11-25: on screen only with creditOnScreen
 }
