@@ -46,8 +46,8 @@
 import * as T from '@pulseframe/time';
 import { z } from 'zod';
 import {
-  FAMILY_FILM_DRAFT_LABEL, FAMILY_FILM_FACES_NOTE, FAMILY_FILM_METHOD, FAMILY_FILM_RECIPE_ID, FAMILY_FILM_TEMPLATE_ID, FAMILY_FILM_VERSION, FamilyFilmParamsSchema, FILM, FILM_BINDS, FILM_DEFAULTS, FILM_PICK_KEY, FilmError, filmMix, filmReasonsFor, filmRunPicked, filmRunRemovedPicks,
-  type FamilyFilmPlan, type FilmExclusion, type FilmRemovedPick, type FilmMomentsRecord, type FilmPick, type FilmPickKey, type FilmPlanContext, type FilmReason, type FilmText, type FilmWarning, type FilmWarningCode, type PlanFamilyFilm, type ResolvedFilmParams,
+  FAMILY_FILM_DRAFT_LABEL, FAMILY_FILM_FACES_NOTE, FAMILY_FILM_METHOD, FAMILY_FILM_RECIPE_ID, FAMILY_FILM_TEMPLATE_ID, FAMILY_FILM_VERSION, FamilyFilmParamsSchema, FILM, FILM_BINDS, FILM_DEFAULTS, FILM_PICK_KEY, FilmError, filmMix, filmPearlKeySource, filmReasonsFor, filmRunPicked, filmRunRemovedPicks,
+  type FamilyFilmPlan, type FilmPearlLeftOutWhy, type FilmExclusion, type FilmRemovedPick, type FilmMomentsRecord, type FilmPick, type FilmPickKey, type FilmPlanContext, type FilmReason, type FilmText, type FilmWarning, type FilmWarningCode, type PlanFamilyFilm, type ResolvedFilmParams,
 } from './familyFilmContract.ts';
 import { MOMENTS_ALGO, MOMENTS_GATES, videoFrames, type MomentWindow } from './momentsContract.ts';
 import { anchorOf, listGrid, placedMusicGrid, steadyGrid, type Grid } from './templatePlan.ts';
@@ -59,7 +59,8 @@ import { compareWall } from './events.ts';
 import { clipEnd } from './validate.ts';
 import { findClip } from './ops.ts';
 import { sha256Hex } from './sha256.ts';
-import { WALL_DATE_TIME, type Asset, type ProjectDocument, type RecipeRun, type SlotRecord, type Track } from './schema.ts';
+import { WALL_DATE_TIME, type Asset, type ProjectDocument, type RecipeRun, type SlotRecord, type SourceRange, type Track } from './schema.ts';
+import { filmWindowOfRange } from './sourceRanges.ts';
 import { removedByHand } from './templateOps.ts';
 import { ownBeats } from './lineage.ts';
 
@@ -71,6 +72,8 @@ export const FAMILY_FILM_BUILT: boolean = true;
 
 /** Stable key of a pick: 'm' + the first 12 hex of sha256(`${assetId}:${ordinal}`). */
 export const filmPickKey: FilmPickKey = (assetId: string, ordinal: number): string => `m${sha256Hex(`${assetId}:${ordinal}`).slice(0, 12)}`;
+/** Stable key of a pearl pick (wave 7): 'm' + the first 12 hex of sha256(`${assetId}:p:${rangeId}`); never equal to an ordinal key. */
+export const filmPearlKey = (assetId: string, rangeId: string): string => `m${sha256Hex(filmPearlKeySource(assetId, rangeId)).slice(0, 12)}`;
 
 const DEFAULT_TITLE = { he: 'הסרט שלנו', en: 'Our film' } as const;
 const DEFAULT_CLOSING = { he: 'סוף', en: 'The end' } as const;
@@ -86,6 +89,8 @@ const isStill = (a: Asset) => a.kind === 'image';
 const hasSound = (a: Asset) => !isStill(a) && !!a.audio;
 const clipText = (s: string) => (s.length > MAX_ITEM_CHARS ? `${s.slice(0, MAX_ITEM_CHARS - 1)}…` : s);
 const quote = (s: string) => (s.length > 60 ? `${s.slice(0, 59)}…` : s);
+/** Seconds to one decimal, for wording only. */
+const tenth = (t: T.RationalTime) => Math.round(T.toSeconds(t) * 10) / 10;
 
 /** A template grid error as a film error (same code; needs_capability cannot happen here and reads as invalid_args). */
 function filmErrorOf(e: unknown): never {
@@ -120,6 +125,39 @@ function capacityOf(asset: Asset, rate: { num: number; den: number }): number {
   let f = Math.min(T.frameIndexAt(asset.duration, rate), Math.floor((frames * a.den * rate.num) / (a.num * rate.den)));
   while (f > 0 && latestStart(asset, f, rate) < 0) f--;
   return Math.max(0, f);
+}
+
+/** The longest clip (project frames) the asset can fill at speed 1 starting at source frame `from` (a pearl's first frame), or 0. */
+function roomFrom(asset: Asset, from: number, rate: { num: number; den: number }): number {
+  const frames = videoFrames(asset)!;
+  const a = asset.video!.frameRate;
+  const startT = sourceTimeOfFrame(asset, from);
+  if (from >= frames || !T.lt(startT, asset.duration)) return 0;
+  const fits = (f: number) => sourceFramesFor(asset, f, rate) <= frames - from && !T.lt(asset.duration, T.add(startT, T.frameTime(f, rate)));
+  let f = Math.min(T.frameIndexAt(T.sub(asset.duration, startT), rate), Math.floor(((frames - from) * a.den * rate.num) / (a.num * rate.den)));
+  while (f > 0 && !fits(f)) f--;
+  return Math.max(0, f);
+}
+/** Project frames a clip needs at speed 1 to show `srcFrames` source frames of the asset (rounded up). */
+function projFramesFor(asset: Asset, srcFrames: number, rate: { num: number; den: number }): number {
+  const a = asset.video!.frameRate;
+  const num = BigInt(srcFrames) * BigInt(a.den) * BigInt(rate.num), den = BigInt(a.num) * BigInt(rate.den);
+  return Number((num + den - 1n) / den);
+}
+/**
+ * The pearls of a file (wave 7, picks.pearls 'prefer'): kind pearl with a span, in span order then range id (code units, `<`).
+ * Own-property reads; a pearl whose window the file's picture cannot show is skipped. Labels are never read here.
+ */
+function pearlsOfAsset(doc: ProjectDocument, asset: Asset): { range: SourceRange; fromFrame: number; toFrame: number }[] {
+  if (!doc.sourceRanges || asset.kind === 'image' || !asset.video) return [];
+  const out: { range: SourceRange; fromFrame: number; toFrame: number }[] = [];
+  for (const id of Object.keys(doc.sourceRanges)) {
+    const r = doc.sourceRanges[id]!;
+    if (r.kind !== 'pearl' || r.span === null || r.assetId !== asset.id) continue;
+    const w = filmWindowOfRange(asset, r);
+    if (w && w.toFrame > w.fromFrame) out.push({ range: r, fromFrame: w.fromFrame, toFrame: w.toFrame });
+  }
+  return out.sort((x, y) => T.cmp(x.range.span!.start, y.range.span!.start) || (x.range.id < y.range.id ? -1 : x.range.id > y.range.id ? 1 : 0));
 }
 
 // ---------- the moments of an asset ----------
@@ -203,6 +241,11 @@ interface Cand {
   cls: Cls; include: boolean; capacity: number; captureAt: string | null;
   /** index into the allowed spans */
   si: number; key?: string;
+  /**
+   * A pearl pick (picks.pearls 'prefer'): the file's first pearl, its window in source frames, the project frames it needs
+   * (pearlF), the floor of its span index (minSi), and whether the file is too short after the pearl so the start moves earlier.
+   */
+  pearl?: { rangeId: string; fromFrame: number; toFrame: number; fromSecond: number; toSecond: number; pearlF: number; minSi: number; moved: boolean };
 }
 interface Slot { c: Cand; startF: number; endF: number; startJ: number | null; endJ: number | null }
 
@@ -225,13 +268,23 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
     order: p0.order ?? FILM_DEFAULTS.order, ownSound: p0.ownSound ?? FILM_DEFAULTS.ownSound, openingTitle: p0.openingTitle ?? FILM_DEFAULTS.openingTitle,
     closingCard: p0.closingCard ?? FILM_DEFAULTS.closingCard, lang: p0.lang ?? FILM_DEFAULTS.lang, motion: p0.motion ?? FILM_DEFAULTS.motion,
     ...(p0.event !== undefined ? { event: p0.event } : {}), ...(p0.openingText !== undefined ? { openingText: p0.openingText } : {}), ...(p0.closingText !== undefined ? { closingText: p0.closingText } : {}),
-    at, picks: { exclude: [...(p0.picks?.exclude ?? [])], include: [...(p0.picks?.include ?? [])], window: Object.fromEntries(Object.entries(p0.picks?.window ?? {})) },
+    at, picks: { exclude: [...(p0.picks?.exclude ?? [])], include: [...(p0.picks?.include ?? [])], window: Object.fromEntries(Object.entries(p0.picks?.window ?? {})), ...(p0.picks?.pearls !== undefined ? { pearls: p0.picks.pearls } : {}) },
   };
   const lang = P.lang;
   const warnings: FilmWarning[] = [], blocking: FilmWarning[] = [], steps: string[] = [], basis: string[] = [];
   const warn = (code: FilmWarningCode, message: string, details: Record<string, unknown> = {}) => warnings.push({ code, message, details });
   const excluded: FilmExclusion[] = [];
   const exclude = (assetId: string, code: FilmExclusion['code'], details: Record<string, unknown> = {}) => excluded.push({ assetId, code, details });
+  // ----- pearls (wave 7, picks.pearls 'prefer'; C9–C14): every pearl of a chosen file that is not in the film is named with why -----
+  const prefer = P.picks.pearls === 'prefer';
+  /** Pearls of each chosen file, in span order; `out` holds the ones left out and why (the first reason wins). */
+  const pearlFiles = new Map<string, { rangeIds: string[]; out?: Map<string, FilmPearlLeftOutWhy> }>();
+  const pearlGone = (assetId: string, why: FilmPearlLeftOutWhy, only?: readonly string[]) => {
+    const f = pearlFiles.get(assetId);
+    if (!f) return;
+    f.out ??= new Map();
+    for (const r of only ?? f.rangeIds) if (!f.out.has(r)) f.out.set(r, why);
+  };
   const minF = Math.round(FILM.minSlotSeconds * fps), maxF = Math.round(FILM.maxSlotSeconds * fps);
 
   // ===== regeneration: what was kept by hand =====
@@ -257,9 +310,13 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   // that window when the file has another to give, one without (the file's only possible pick) leaves the file out
   const removedWindows = new Map<string, Set<number>>(), removedFiles = new Set<string>();
   const resolvedPicks = new Set<string>();
+  // a pearl pick deleted by hand (C13): only that pearl leaves the film, never its file; tested BEFORE the windowIndex null branch
+  // (a pearl pick has no window); a range no longer in the document leaves nothing out
+  const removedRanges = new Map<string, string>(); // rangeId -> assetId
   for (const r of ctx.removedPicks ?? []) {
     if (!removedKeys.has(r.key)) continue;
     resolvedPicks.add(r.key);
+    if (r.rangeId !== undefined) { if (doc.sourceRanges && Object.hasOwn(doc.sourceRanges, r.rangeId)) removedRanges.set(r.rangeId, r.assetId); continue; }
     if (r.windowIndex === null) removedFiles.add(r.assetId);
     else { const set = removedWindows.get(r.assetId) ?? new Set<number>(); set.add(r.windowIndex); removedWindows.set(r.assetId, set); }
   }
@@ -285,16 +342,34 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
     const a = own(doc.assets, id);
     if (!a) { exclude(id, 'no_picture', { reason: 'not in this project' }); continue; }
     if (!isPicture(a)) { exclude(id, 'no_picture', { kind: a.kind }); continue; }
-    if (excludeSet.has(id)) { exclude(id, 'excluded_by_you'); continue; }
-    if (keptAssets.has(id)) { exclude(id, 'kept_by_hand'); continue; }
+    // picks.pearls 'prefer' (wave 7): the file's pearls not deleted by hand, in span order; none are read without it (C14)
+    const pearls = prefer ? pearlsOfAsset(doc, a).filter((x) => !removedRanges.has(x.range.id)) : [];
+    const rangeIds = pearls.map((x) => x.range.id);
+    if (pearls.length) pearlFiles.set(id, { rangeIds });
+    if (excludeSet.has(id)) { exclude(id, 'excluded_by_you', pearls.length ? { rangeIds } : {}); continue; }
+    if (keptAssets.has(id)) {
+      exclude(id, 'kept_by_hand');
+      // a pearl whose clip was kept by hand is in the film; the file's other pearls are not
+      if (pearls.length) pearlGone(id, 'kept_by_hand', rangeIds.filter((r) => !keptKeySet.has(filmPearlKey(id, r))));
+      continue;
+    }
     const rec = recordOf(doc, id);
     const ws = measured(rec) && !rec.flat ? rec.windows : [];
     const gone = removedWindows.get(id);
     const free = (i: number) => !gone?.has(i);
-    // deleted by hand: the file is left out when it has no window left to give (or its only possible pick was deleted)
-    if (removedFiles.has(id) || (gone && !ws.some((_, i) => free(i)))) { exclude(id, 'removed_by_hand'); fileGone.add(id); continue; }
+    // deleted by hand: the file is left out when it has no window left to give (or its only possible pick was deleted); a file
+    // with a pearl left gives that pearl whatever its windows
+    if (removedFiles.has(id) || (!pearls.length && gone && !ws.some((_, i) => free(i)))) { exclude(id, 'removed_by_hand', pearls.length ? { rangeIds } : {}); fileGone.add(id); continue; }
     const capacity = capacityOf(a, rate);
-    if (capacity < minF) { exclude(id, 'too_short', { seconds: Math.round((capacity / fps) * 100) / 100, shortestSlotSeconds: FILM.minSlotSeconds }); continue; }
+    if (capacity < minF) { exclude(id, 'too_short', { seconds: Math.round((capacity / fps) * 100) / 100, shortestSlotSeconds: FILM.minSlotSeconds }); pearlGone(id, 'too_short'); continue; }
+    const capRaw0 = own(ctx.capture, id) ?? null;
+    if (pearls.length) {
+      // the first pearl is the file's pick (class A, never dropped for room); its span is set once the grid is known (C9, C10)
+      const first = pearls[0]!;
+      cands.push({ asset: a, given, rec, windowIndex: null, chosen: false, second: false, cls: 'A', include: true, capacity, captureAt: typeof capRaw0 === 'string' && WALL_DATE_TIME.test(capRaw0) ? capRaw0 : null, si: 0,
+        pearl: { rangeId: first.range.id, fromFrame: first.fromFrame, toFrame: first.toFrame, fromSecond: tenth(first.range.span!.start), toSecond: tenth(first.range.span!.end), pearlF: projFramesFor(a, first.toFrame - first.fromFrame, rate), minSi: 0, moved: false } });
+      continue;
+    }
     const wanted = own(P.picks.window, id);
     const chosen = wanted !== undefined && wanted < ws.length && free(wanted);
     if (wanted !== undefined && wanted >= ws.length) staleWindows.push({ wanted, name: quote(a.name), have: ws.length });
@@ -320,9 +395,11 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   if (removedTitle) leftOut.push({ kind: 'title' });
   if (removedClosing) leftOut.push({ kind: 'closing' });
   if (removedMusic) leftOut.push({ kind: 'music', ...(P.musicAssetId !== null ? { assetId: P.musicAssetId, name: own(doc.assets, P.musicAssetId)?.name ?? P.musicAssetId } : {}) });
+  // pearls deleted by hand (C13): named beside the rest, by file, never by label
+  const removedPearls = [...removedRanges].map(([rangeId, assetId]) => ({ rangeId, assetId, name: own(doc.assets, assetId)?.name ?? assetId }));
   if (removedKeys.size) {
-    const words = leftOut.map((x) => x.kind === 'file' ? `"${quote(x.name!)}" (the whole file)` : x.kind === 'window' ? `"${quote(x.name!)}" (${x.fromSecond !== undefined ? `its moment at ${x.fromSecond.toFixed(1)}–${x.toSecond!.toFixed(1)} s` : `its moment ${x.windowIndex! + 1}`}; its other moments may stay)` : x.kind === 'title' ? 'the opening title' : x.kind === 'closing' ? 'the closing card' : `the music${x.name ? ` "${quote(x.name)}"` : ''}`);
-    warn('removed_by_hand', clipText(`left out because they were deleted by hand: ${words.join(', ') || `${removedKeys.size} part(s)`}; regenerate with restoreRemoved to make them again`), { keys: [...removedKeys].sort(), items: leftOut });
+    const words = [...leftOut.map((x) => x.kind === 'file' ? `"${quote(x.name!)}" (the whole file)` : x.kind === 'window' ? `"${quote(x.name!)}" (${x.fromSecond !== undefined ? `its moment at ${x.fromSecond.toFixed(1)}–${x.toSecond!.toFixed(1)} s` : `its moment ${x.windowIndex! + 1}`}; its other moments may stay)` : x.kind === 'title' ? 'the opening title' : x.kind === 'closing' ? 'the closing card' : `the music${x.name ? ` "${quote(x.name)}"` : ''}`), ...removedPearls.map((x) => `a pearl you marked in "${quote(x.name)}" (its file may stay)`)];
+    warn('removed_by_hand', clipText(`left out because they were deleted by hand: ${words.join(', ') || `${removedKeys.size} part(s)`}; regenerate with restoreRemoved to make them again`), { keys: [...removedKeys].sort(), items: leftOut, ...(removedPearls.length ? { pearls: removedPearls } : {}) });
   }
   if (!cands.length && !keptPictures.length) throw new FilmError('nothing_to_do', 'none of the chosen files can go into the film (no picture, too short, left out or kept by hand)', fileGone.size ? 'Regenerate with restoreRemoved: true to bring back the clips deleted by hand, or choose more pictures or videos.' : 'Choose pictures or videos of at least 1.6 seconds.');
 
@@ -449,9 +526,20 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
 
   // ===== 4. spans and fitting, in units =====
   const capUnits = (c: Cand): number => { let i = -1; allowed.forEach((u, k) => { if (Math.round(u * unitSec * fps) <= c.capacity) i = k; }); return i; };
+  // a pearl pick starts at the pearl's first frame (C9): its room is what the file holds from there; the smallest allowed span of at
+  // least the pearl's frames that fits, else the largest that fits (pearl_cut_short). When the file is too short after the pearl for
+  // the shortest slot, the start moves earlier (latestStart) and the whole file's room counts.
+  const unitFrames = (k: number) => Math.round(allowed[k]! * unitSec * fps);
+  for (const c of ordered) {
+    if (!c.pearl) continue;
+    const room = roomFrom(c.asset, c.pearl.fromFrame, rate);
+    if (room >= unitFrames(0)) c.capacity = room; else c.pearl.moved = true;
+    const k = allowed.findIndex((_, i) => unitFrames(i) >= c.pearl!.pearlF);
+    c.pearl.minSi = k >= 0 && unitFrames(k) <= c.capacity ? k : capUnits(c);
+  }
   const fitting: Cand[] = [];
   for (const c of ordered) {
-    if (capUnits(c) < 0) { exclude(c.asset.id, 'too_short', { seconds: Math.round((c.capacity / fps) * 100) / 100, shortestSlotSeconds: Math.round(allowed[0]! * unitSec * 100) / 100 }); continue; }
+    if (capUnits(c) < 0) { pearlGone(c.asset.id, 'too_short'); exclude(c.asset.id, 'too_short', { seconds: Math.round((c.capacity / fps) * 100) / 100, shortestSlotSeconds: Math.round(allowed[0]! * unitSec * 100) / 100 }); continue; }
     fitting.push(c);
   }
   if (!fitting.length && !keptPictures.length) throw new FilmError('nothing_to_do', `every chosen video is shorter than the shortest slot at this tempo (${(allowed[0]! * unitSec).toFixed(2)} s)`, 'Choose longer videos, pictures, or other music.');
@@ -498,7 +586,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   const perPick = pool.length ? (want * unitSec) / pool.length : unitSec;
   let base = 0;
   allowed.forEach((u, k) => { if (Math.abs(u * unitSec - perPick) < Math.abs(allowed[base]! * unitSec - perPick)) base = k; });
-  const setBase = (c: Cand) => { c.si = Math.min(capUnits(c), clampInt(base + (c.cls === 'A' ? 1 : c.cls === 'C' ? -1 : 0), 0, allowed.length - 1)); };
+  const setBase = (c: Cand) => { if (c.pearl) { c.si = Math.max(0, c.pearl.minSi); return; } c.si = Math.min(capUnits(c), clampInt(base + (c.cls === 'A' ? 1 : c.cls === 'C' ? -1 : 0), 0, allowed.length - 1)); };
   pool.forEach(setBase);
   const sum = () => pool.reduce((n, c) => n + allowed[c.si]!, 0);
   const closer = (delta: number) => Math.abs(sum() + delta - want) < Math.abs(sum() - want);
@@ -507,7 +595,18 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
     let changed = true;
     while (sum() > want && changed) {
       changed = false;
-      for (const c of spread(pool.filter((x) => x.cls === cls && x.si > 0), pool.length)) {
+      for (const c of spread(pool.filter((x) => x.cls === cls && x.si > 0 && !x.pearl), pool.length)) {
+        if (sum() <= want) break;
+        c.si--; changed = true;
+      }
+    }
+  }
+  // pearls shrink last, only when no other pick can (C10); a pearl cut short is warned below (pearl_cut_short)
+  {
+    let changed = true;
+    while (sum() > want && changed) {
+      changed = false;
+      for (const c of spread(pool.filter((x) => !!x.pearl && x.si > 0), pool.length)) {
         if (sum() <= want) break;
         c.si--; changed = true;
       }
@@ -534,7 +633,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
       let changed = true;
       while (sum() < want && changed) {
         changed = false;
-        for (const c of spread(pool.filter((x) => x.cls === cls && x.si < Math.min(allowed.length - 1, capUnits(x))), pool.length)) {
+        for (const c of spread(pool.filter((x) => x.cls === cls && !x.pearl && x.si < Math.min(allowed.length - 1, capUnits(x))), pool.length)) {
           const d = allowed[c.si + 1]! - allowed[c.si]!;
           if (!closer(d)) continue;
           c.si++; changed = true;
@@ -571,7 +670,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
     if (endF - curF > c.capacity) {
       // off the grid and the clip is too short for the next boundary: the latest boundary it can fill, else it waits out
       const j2: number | null = endJ !== null ? ((): number | null => { for (let j = endJ - 1; j >= 0; j--) { const f = boundF(j)!; if (f - curF < minF) return null; if (f - curF <= c.capacity) return j; } return null; })() : null;
-      if (j2 === null) { if (!c.second) exclude(c.asset.id, 'no_room', { reason: 'too short for the room next to a clip kept by hand' }); continue; }
+      if (j2 === null) { if (!c.second) exclude(c.asset.id, 'no_room', { reason: 'too short for the room next to a clip kept by hand' }); pearlGone(c.asset.id, 'too_short'); continue; }
       endJ = j2; endF = boundF(j2)!;
     }
     const hit = keptPictures.find((k) => k.s >= curF && k.s < endF);
@@ -588,7 +687,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
     curF = endF; curJ = offEnd ? null : endJ;
   }
   if (dropped.length) {
-    for (const c of dropped) if (!c.second) exclude(c.asset.id, 'no_room', { reason: 'after the music\'s last measured beat' });
+    for (const c of dropped) { if (!c.second) exclude(c.asset.id, 'no_room', { reason: 'after the music\'s last measured beat' }); pearlGone(c.asset.id, 'music_end'); }
     if (!musicShort) warn('music_short', `${dropped.length} clip(s) would end after the music's last measured beat and were left out`, { assetIds: dropped.map((c) => c.asset.id), lastBeat: grid.last });
   }
   // the last new slot reaches a kept picture right after it when that keeps it a slot long
@@ -605,6 +704,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
     prev.endF = s.endF; prev.endJ = s.endJ;
     merged.push(s.c.asset.id);
     if (!s.c.second) exclude(s.c.asset.id, 'no_room', { reason: 'merged: its cut would come less than the flash gap after the one before' });
+    pearlGone(s.c.asset.id, 'merged');
     slots.splice(i--, 1);
   }
   if (merged.length) warn('cuts_merged', `${merged.length} cut(s) would come less than ${gap} frames after the one before; those slots were merged into the slot before them (cuts between bright and dark pictures can trigger seizures)`, { assetIds: merged, gapFrames: gap });
@@ -613,6 +713,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   // ===== keys: the next free ordinal (a new pick never takes a key a kept slot holds) =====
   const usedKeys = new Set([...(ctx.keptKeys ?? []), ...removedKeys]); // a deleted pick's key stays its own (its record travels on)
   for (const s of slots) {
+    if (s.c.pearl) { s.c = { ...s.c, key: filmPearlKey(s.c.asset.id, s.c.pearl.rangeId) }; usedKeys.add(s.c.key!); continue; }
     let ord = 0;
     while (usedKeys.has(filmPickKey(s.c.asset.id, ord))) ord++;
     s.c = { ...s.c, key: filmPickKey(s.c.asset.id, ord) };
@@ -621,7 +722,15 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
 
   // ===== 6. the window in the source of each slot =====
   const picks: FilmPick[] = [];
-  const windowOf = (c: Cand, F: number) => filmSourceWindow(c.asset, c.rec, c.windowIndex, F, rate, { chosenByYou: c.chosen, second: c.second });
+  const windowOf = (c: Cand, F: number) => {
+    // a pearl: always from its first frame, never centred (C9); earlier only when the file ends too soon after it
+    if (c.pearl && !isStill(c.asset)) {
+      const ls = sourceFramesFor(c.asset, F, rate);
+      const latest = Math.max(0, latestStart(c.asset, F, rate));
+      return { sourceInFrame: Math.min(c.pearl.fromFrame, latest), sourceFrames: ls, kind: 'pearl' as const, windowIndex: null, reasons: [{ code: 'pearl' as const, rangeId: c.pearl.rangeId, fromSecond: c.pearl.fromSecond, toSecond: c.pearl.toSecond }] as FilmReason[] };
+    }
+    return filmSourceWindow(c.asset, c.rec, c.windowIndex, F, rate, { chosenByYou: c.chosen, second: c.second });
+  };
   const spanOf = (s: Slot): FilmPick['span'] => {
     if (s.startJ === null || s.endJ === null) return null;
     const a = unitAt(s.startJ)!, b = unitAt(s.endJ)!;
@@ -634,7 +743,34 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
       key: s.c.key!, assetId: s.c.asset.id, order: i, startFrame: s.startF, frames: s.endF - s.startF, span: spanOf(s),
       sourceInFrame: w.sourceInFrame, sourceFrames: w.sourceFrames, kind: w.kind, windowIndex: w.windowIndex,
       windowsAvailable: measured(s.c.rec) ? s.c.rec.windows.length : 0, reasons: w.reasons, captureAt: s.c.captureAt, ownSound: ownOn && hasSound(s.c.asset),
+      ...(s.c.pearl ? { rangeId: s.c.pearl.rangeId } : {}),
     });
+    const pe = s.c.pearl;
+    if (pe && w.sourceInFrame !== null && w.sourceFrames !== null) {
+      const a = s.c.asset, name = quote(a.name);
+      if (w.sourceInFrame < pe.fromFrame) basis.push(clipText(`"${name}" ends too soon after the pearl you marked: its clip starts ${T.toSeconds(T.sub(sourceTimeOfFrame(a, pe.fromFrame), sourceTimeOfFrame(a, w.sourceInFrame))).toFixed(2)} s before the pearl, so the slot is filled`));
+      const shownTo = w.sourceInFrame + w.sourceFrames;
+      if (shownTo < pe.toFrame) {
+        const lost = Math.round(T.toSeconds(T.sub(sourceTimeOfFrame(a, pe.toFrame), sourceTimeOfFrame(a, shownTo))) * 100) / 100;
+        warn('pearl_cut_short', clipText(`a pearl you marked in "${name}" is longer than its place in the film: its last ${lost.toFixed(2)} s do not fit`), { rangeId: pe.rangeId, assetId: a.id, seconds: lost });
+      }
+    }
+  }
+  if (prefer) {
+    // every pearl of a chosen file that is not in the film, with why (C11); the first pearl of a file in the film leaves the others out
+    const inFilm = new Set(slots.flatMap((s) => (s.c.pearl ? [s.c.pearl.rangeId] : [])));
+    const items: { rangeId: string; assetId: string; why: FilmPearlLeftOutWhy }[] = [];
+    for (const [assetId, f] of pearlFiles) {
+      const fileIn = f.rangeIds.some((r) => inFilm.has(r));
+      for (const r of f.rangeIds) {
+        if (inFilm.has(r)) continue;
+        const why = f.out?.get(r) ?? (fileIn ? 'one_per_file' as const : undefined);
+        if (why) items.push({ rangeId: r, assetId, why });
+      }
+    }
+    if (items.length) warn('pearl_left_out', clipText(`${items.length} pearl(s) you marked are not in the film (for now one pearl of each file goes in): ${items.map((x) => `"${quote(own(doc.assets, x.assetId)?.name ?? x.assetId)}" (${x.why.replace(/_/g, ' ')})`).join(', ')}`), { items: items.map(({ rangeId, why }) => ({ rangeId, why })) });
+    const n = slots.filter((s) => !!s.c.pearl).length;
+    basis.push(n ? `pearls: ${n} clip(s) show a pearl you marked, each from its first frame (your choice, not a measurement)` : 'pearls: none of the chosen files has a pearl that went into the film');
   }
   const needsMeasurement = [...new Set(slots.filter((s) => !isStill(s.c.asset) && !measured(s.c.rec)).map((s) => s.c.asset.id))];
   if (needsMeasurement.length) warn('not_measured', `${needsMeasurement.length} video(s) have no measured moments yet; the middle of each is used until they are measured`, { assetIds: needsMeasurement });
@@ -683,15 +819,20 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   }
   const stills = P.motion === 'full' ? picks.filter((k) => k.kind === 'still' && k.frames >= 2) : [];
   for (const k of stills) ops.push({ op: 'apply_motion_preset', args: { clipId: ref(k.key), presetId: STILL_MOTION } });
+  const pearlSlots = slots.filter((x) => !!x.c.pearl).length;
   if (slots.length) {
     const first = slots[0]!.startF, last = slots[slots.length - 1]!.endF;
-    steps.push(clipText(`Place ${slots.length} clip(s) from ${secs(first - atF)} to ${secs(last - atF)} of the film on ${pictures!.status === 'new' ? pictures!.name : `track ${pictures!.name}`}, cut on ${music ? `the ${hasBars ? 'bars and half-bars' : 'beats'} of "${quote(music.name)}" (${tempoText})` : `a steady ${FILM.fallbackBpm} BPM grid (no music)`}, ${P.order === 'capture' ? 'in the order they were filmed' : P.order === 'arc' ? 'calm first, the most active at two thirds' : 'in the order chosen'}; each shows its measured moment (heuristic)`));
+    steps.push(clipText(`Place ${slots.length} clip(s) from ${secs(first - atF)} to ${secs(last - atF)} of the film on ${pictures!.status === 'new' ? pictures!.name : `track ${pictures!.name}`}, cut on ${music ? `the ${hasBars ? 'bars and half-bars' : 'beats'} of "${quote(music.name)}" (${tempoText})` : `a steady ${FILM.fallbackBpm} BPM grid (no music)`}, ${P.order === 'capture' ? 'in the order they were filmed' : P.order === 'arc' ? 'calm first, the most active at two thirds' : 'in the order chosen'}; ${pearlSlots ? `${pearlSlots} show a pearl you marked from its first frame, the others their measured moment (heuristic)` : 'each shows its measured moment (heuristic)'}`));
   }
   if (stills.length) steps.push(`Give ${stills.length} photo(s) a slow zoom in (Ken Burns)`);
   else if (P.motion === 'none' && picks.some((k) => k.kind === 'still')) steps.push('No camera moves on the photos (reduced motion)');
 
   // ===== the mix (filmMix; only where it changes on a track used again) =====
   const mix = filmMix(P.ownSound, !!music && !removedMusic); // music deleted by hand: nothing is lowered under it, nothing is ducked
+  if (prefer && mix.ownGain < 1) {
+    const under = picks.filter((k) => k.kind === 'pearl' && k.ownSound);
+    if (under.length) warn('pearl_under_music', `${under.length} pearl(s) with sound play ${Math.round(-20 * Math.log10(mix.ownGain))} dB under the music; "the voices lead" (ownSound lead) lets them be heard`, { rangeIds: under.map((k) => k.rangeId!) });
+  }
   const prevKnown = ctx.previousOwnSound !== undefined;
   const prev = prevKnown ? filmMix(ctx.previousOwnSound!, ctx.previousMusic ?? false) : { ownGain: 1, duckDb: null };
   if (ownTrack) {
@@ -857,7 +998,7 @@ export function filmRegenerationRemoved(doc: ProjectDocument, run: RecipeRun, re
   const removedSlots = restoreRemoved ? [] : removedByHand(doc, slots);
   const known = new Map<string, FilmRemovedPick>();
   for (const r of filmRunRemovedPicks(run.params)) known.set(r.key, r);
-  for (const k of filmRunPicked(run.params)) known.set(k.key, { key: k.key, assetId: k.assetId, windowIndex: typeof k.windowIndex === 'number' ? k.windowIndex : null });
+  for (const k of filmRunPicked(run.params)) known.set(k.key, { key: k.key, assetId: k.assetId, windowIndex: typeof k.windowIndex === 'number' ? k.windowIndex : null, ...(typeof k.rangeId === 'string' ? { rangeId: k.rangeId } : {}) });
   const removedPicks = removedSlots.flatMap((x) => { const k = known.get(x.key); return x.kind === 'picture' && k ? [k] : []; });
   const hadMusic = typeof run.params.musicAssetId === 'string';
   const musicSlot = slots.find((x) => x.kind === 'music');
