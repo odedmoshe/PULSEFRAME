@@ -319,7 +319,7 @@ describe('the file-hash map, the bank loader and the memory bound', () => {
     fs.utimesSync(wav, t2, t2);
     expect(await codeOf(loadBank(check, kit, kitNotes(kit, 'music.calm', 4, 1), undefined, STAND_IN))).toBe('409:instruments_file_changed');
   });
-  it('decodes only the frames the plan asks for; refuses above the memory bound and a note out of range; the real planner says not built until W1', async () => {
+  it('decodes only the frames the plan asks for; refuses above the memory bound and a note out of range; the real planner of the sampler loads the kit', async () => {
     const w = world();
     const kit = w.lib!.kit;
     const check = await ready(w.cfg, kit);
@@ -343,8 +343,14 @@ describe('the file-hash map, the bank loader and the memory bound', () => {
     // the bound: 96 MB in production; here a lower bound proves the refusal with tiny files
     expect(await codeOf(loadBank(check, kit, notes, undefined, { ...STAND_IN, maxDecodedBytes: 1000 }))).toBe('409:instruments_too_large');
     expect(await codeOf(loadBank(check, kit, [{ part: 'lead', midi: 120, vel: 1, gate: 100 }], undefined, STAND_IN))).toBe('409:instruments_range');
-    // W1's planZones: not built in this tree (SamplerNotBuilt → 501, never synthesised). Passes differently once W1 is merged.
-    expect(await codeOf(loadBank(check, kit, notes))).toBe('501:instruments_not_built');
+    // W1's real planZones (merged): the same kit loads with the sampler's own plan, every used zone holds at least the frames the
+    // plan asked for, and a zone nobody needs stays empty
+    const real = await loadBank(check, kit, notes);
+    expect([real.kitId, real.version, real.bank]).toEqual([kit.id, 1, kitBank(kit)]);
+    expect(Object.keys(real.parts).sort()).toEqual(['arp', 'double', 'lead', 'pad']);
+    const realZones = Object.values(real.parts).flatMap((part) => part!.instrument.zones);
+    expect(realZones.some((z) => z.samples.length > 0)).toBe(true);
+    for (const z of realZones) expect(z.samples.length % z.channels).toBe(0);
   });
 });
 
