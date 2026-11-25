@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-24T23:19:51.784Z",
+  "ranAt": "2026-11-24T23:34:58.777Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v819 x64",
     "browser": "153.0.8010.12"
@@ -145,7 +145,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_51fe189f360]",
+          "focusAfterClose": "button[data-testid=more-ast_55a0015e4c0]",
           "focusReturned": true
         },
         {
@@ -220,7 +220,7 @@
         },
         {
           "state": "assistant-settings",
-          "controls": 614,
+          "controls": 616,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -253,7 +253,7 @@
         },
         {
           "state": "settings-dialog",
-          "controls": 461,
+          "controls": 463,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -700,7 +700,7 @@
         },
         {
           "state": "cache-storage-row",
-          "controls": 467,
+          "controls": 469,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1016,7 +1016,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_51fe189f360]",
+          "focusAfterClose": "button[data-testid=more-ast_55a0015e4c0]",
           "focusReturned": true
         },
         {
@@ -1091,7 +1091,7 @@
         },
         {
           "state": "assistant-settings",
-          "controls": 619,
+          "controls": 621,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1124,7 +1124,7 @@
         },
         {
           "state": "settings-dialog",
-          "controls": 466,
+          "controls": 468,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1515,7 +1515,7 @@
         },
         {
           "state": "cache-sheet-first",
-          "controls": 475,
+          "controls": 476,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1571,7 +1571,7 @@
         },
         {
           "state": "cache-storage-row",
-          "controls": 467,
+          "controls": 469,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1792,7 +1792,7 @@
         },
         {
           "state": "settings-dialog",
-          "controls": 462,
+          "controls": 464,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1924,7 +1924,7 @@
         },
         {
           "state": "settings-dialog",
-          "controls": 462,
+          "controls": 464,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1959,12 +1959,12 @@
         },
         {
           "state": "missing-media",
-          "controls": 328,
+          "controls": 329,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
-          "shown": true
+          "shown": false
         },
         {
           "state": "transcript-skipped-note",
@@ -2013,7 +2013,7 @@
       ]
     }
   ],
-  "findings": 0,
+  "findings": 1,
   "findingsByRun": [
     {
       "theme": "dark",
@@ -2037,8 +2037,8 @@
       "theme": "light",
       "uiLanguage": "en",
       "states": 11,
-      "findings": 0
+      "findings": 1
     }
   ],
-  "result": "NO FINDINGS (heuristic)"
+  "result": "FINDINGS"
 }
