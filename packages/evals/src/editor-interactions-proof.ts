@@ -2238,6 +2238,72 @@ async function main() {
       await ctx.close();
     }
 
+    // marked ranges «פנינים» (wave 7 pearls track): marking a pearl with the viewer's form by keyboard, Escape closes only the form,
+    // one undo takes the pearl back
+    {
+      console.log('\n# pearls: the form in the source viewer, Escape, one undo');
+      const PID = { save: 'pearl-save', form: 'pearl-form', name: 'pearl-form-name' };
+      const pe = (await call('/projects', { name: 'pearls interactions', width: 640, height: 360 })).body.project.id as string;
+      const pa = (await upload(pe, picFile)).assetId as string;
+      const cookie = (await fetch(`${s.url}/api/v1/session`, { headers: { origin: s.url, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
+      const ownerTx = async (ops: unknown[]) => { const r = await fetch(`${s.url}/api/v1/projects/${pe}/transactions`, { method: 'POST', headers: { origin: s.url, cookie, connection: 'close', 'content-type': 'application/json' }, body: JSON.stringify({ ops }) }); if (!r.ok) throw new Error(`owner tx: ${r.status} ${(await r.text()).slice(0, 200)}`); return r.json(); };
+      await ownerTx([{ op: 'add_person', args: { name: 'אלף' } }]);
+      // read as the owner: the agent token reads every pearl's name as '' (labels are family notes, peoplePrivacy.ts)
+      const ownerDoc = async () => ((await (await fetch(`${s.url}/api/v1/projects/${pe}`, { headers: { origin: s.url, cookie, connection: 'close' } })).json()) as any).project;
+      const rangesOf = async () => Object.values((await ownerDoc()).sourceRanges ?? {}) as any[];
+      const revOf = async () => (await call(`/projects/${pe}`)).body.revision as number;
+      const ctx = await browser.newContext({ viewport: { width: 1500, height: 1000 }, reducedMotion: 'reduce' });
+      await ctx.addInitScript(`globalThis.__name = (f) => f`);
+      await ctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const pg = await ctx.newPage();
+      const errs: string[] = [];
+      pg.on('pageerror', (e) => errs.push(String(e)));
+      await pg.goto(`${s.ownerUrl}&project=${pe}`);
+      await pg.getByTestId('timecode').waitFor({ timeout: 30000 });
+      await pg.getByTestId('rail-media').click();
+      await pg.getByTestId(`more-${pa}`).click();
+      await pg.getByTestId(`view-${pa}`).click();
+      await pg.getByTestId('source-viewer').waitFor({ timeout: 15000 });
+      await pg.waitForFunction(() => Number(document.querySelector('[data-testid=source-range]')?.getAttribute('data-out')) > 0, undefined, { timeout: 20000 });
+      // In at frame 10, Out on frame 39 (Shift+→ is ten frames)
+      await pg.keyboard.press('Shift+ArrowRight'); await sleep(150);
+      await pg.keyboard.press('i'); await sleep(100);
+      for (let i = 0; i < 3; i++) { await pg.keyboard.press('Shift+ArrowRight'); await sleep(150); }
+      await pg.keyboard.press('ArrowLeft'); await sleep(150);
+      await pg.keyboard.press('o'); await sleep(150);
+      const marks = { in: await pg.getByTestId('source-range').getAttribute('data-in'), out: await pg.getByTestId('source-range').getAttribute('data-out') };
+      const rev0 = await revOf();
+      await pg.keyboard.press('p');
+      await pg.getByTestId(PID.form).waitFor({ timeout: 5000 });
+      await pg.getByTestId(PID.name).fill('בדיקה');
+      await pg.keyboard.press('Escape');
+      await sleep(300);
+      const esc = { form: await pg.getByTestId(PID.form).count(), viewer: await pg.getByTestId('source-viewer').count(), focus: await pg.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? null), commits: (await revOf()) - rev0 };
+      check('pearls: Escape in the pearl form closes the form only (the viewer stays open, the focus is on «שמור כפנינה», nothing is committed)', esc.form === 0 && esc.viewer === 1 && esc.focus === PID.save && esc.commits === 0, { marks, esc });
+      await pg.keyboard.press('p');
+      await pg.getByTestId(PID.form).waitFor({ timeout: 5000 });
+      await pg.getByTestId(PID.name).fill('הצעד הראשון');
+      const typed = await pg.waitForFunction((id) => (document.querySelector(`[data-testid="${id}"]`) as HTMLInputElement | null)?.value === 'הצעד הראשון', PID.name, { timeout: 5000 }).then(() => true, () => false);
+      await pg.keyboard.press('Enter');
+      const saved = await until2(rangesOf, (rs) => rs.length === 1);
+      const rs = await rangesOf();
+      const commits = (await revOf()) - rev0;
+      const span = rs[0]?.span ? [T.frameIndexAt(rs[0].span.start, R), T.frameIndexAt(rs[0].span.end, R)] : null;
+      check('pearls: I, O, P, a name and Enter mark one pearl in one commit, its span the marks [10, 40) and its name as typed', saved && rs.length === 1 && commits === 1 && JSON.stringify(span) === '[10,40]' && rs[0].label === 'הצעד הראשון', { marks, typed, commits, span, label: rs[0]?.label });
+      await pg.keyboard.press('Escape');
+      await pg.getByTestId('source-viewer').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      await pg.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
+      await pg.keyboard.press('Control+z');
+      const undone = await until2(rangesOf, (x2) => x2.length === 0);
+      const after = await ownerDoc();
+      check('pearls: one Ctrl+Z takes the pearl back and the document holds no sourceRanges key again', undone && !Object.hasOwn(after, 'sourceRanges'), { undone, hasKey: Object.hasOwn(after, 'sourceRanges') });
+      check('pearls rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
+      await ctx.close();
+      // «מי בקליפ?» refused in words for a non-owner credential is not driven here: the editor boots only on the owner's session
+      // (a page carrying an agent's bearer header stops at «כדי לפתוח את העורך כבעלים…»); the refusal is held by pearls.test.ts
+      // (403 human_tag_required for every non-owner credential) and its Hebrew by pearls-wording.test.ts
+    }
+
     await page.close();
   } catch (e) {
     console.error(e);

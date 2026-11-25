@@ -24,6 +24,7 @@ import { generateBarcodeFixture, readBarcode } from '@pulseframe/fixtures';
 import { createFuzz } from './ops-fuzz.gen.ts';
 import { pearlsDigest } from '../../../apps/web/src/editor/pearls/pearls.selftest.ts';
 import { PEARLS_TESTIDS as ID } from '../../../apps/web/src/editor/pearls/pearls.testids.ts';
+import { shortBody } from '../../../apps/web/src/editor/pearls/pearls.logic.ts';
 import { openInspectorPage } from './editor-ui.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -396,8 +397,10 @@ const checks: Record<string, () => Promise<true | string>> = {
       if ((await page.getByTestId(ID.list).getAttribute('data-state')) === 'not-built') { evidence.P13 = out; return `${WAIT_A}; ran: the list shows the honest not-built state (501)`; }
       const short = rowOf(page, RNG.rng_short).getByTestId(ID.rowShort);
       const disabled = (await short.getAttribute('aria-disabled')) === 'true';
-      await short.focus();
-      const reason = ((await page.locator('[role=tooltip]').first().textContent().catch(() => null)) ?? '').trim();
+      // the reason is the button's accessible description (ds Tooltip: aria-describedby names the tooltip, or its screen-reader twin
+      // while the tooltip is closed); a programmatic focus is not :focus-visible, so the visible tooltip is not what is read here
+      const described = await short.getAttribute('aria-describedby');
+      const reason = described ? ((await page.locator(`[id=${JSON.stringify(described)}]`).first().textContent()) ?? '').trim() : '';
       out.twoSecond = { disabled, reason };
       if (!disabled || !/3/.test(reason)) return `the 2-second pearl's short action: disabled=${disabled}, reason «${reason}»; expected disabled with the 3-second reason in words`;
       const before = Object.keys((await docOf(pid)).sequences).length;
@@ -411,6 +414,15 @@ const checks: Record<string, () => Promise<true | string>> = {
       evidence.P13 = out;
       // without a transcript the short starts at the pearl's first source frame (frame 60 = 2 s)
       if (!made || !first || first.type !== 'media' || !T.eq(first.sourceIn, T.rt(2, 1))) return `the short's first clip starts at ${JSON.stringify(out.short)}; expected the pearl's first source frame (2 s)`;
+      // with a transcript: the same body the button sends (shortBody) is planned; the edges 2 s and 6 s lie inside words, so the
+      // plan warns snapped_to_words and the excerpt, widened outward to the word edges 1.9 s and 6.25 s, contains the pearl
+      const words = Array.from({ length: 11 }, (_, k) => ({ start: T.rt(190 + 40 * k, 100), duration: T.rt(35, 100), text: `מילה${k}` }));
+      await tx(pid, [{ op: 'set_transcript', args: { assetId: b.a, language: 'he', segments: [{ start: words[0]!.start, duration: T.rt(435, 100), text: words.map((x) => x.text).join(' '), words }] } }]);
+      const plan = await must('POST', `/projects/${pid}/shorts/plan`, shortBody({ assetId: b.a, label: 'ארבע שניות', span: { start: f(60), end: f(180) } }));
+      const snapped = (plan.warnings as { code: string; details: { start?: T.RationalTime; end?: T.RationalTime } }[]).find((x) => x.code === 'snapped_to_words');
+      out.withWords = { warnings: (plan.warnings as { code: string }[]).map((x) => x.code), start: snapped?.details.start ? T.toSeconds(snapped.details.start) : null, end: snapped?.details.end ? T.toSeconds(snapped.details.end) : null };
+      evidence.P13 = out;
+      if (!snapped?.details.start || !snapped.details.end || !T.eq(snapped.details.start, T.rt(19, 10)) || !T.eq(snapped.details.end, T.rt(625, 100))) return `with a transcript: ${JSON.stringify(out.withWords)}; expected snapped_to_words widening [2, 6) s to [1.9, 6.25) s`;
       return true;
     } finally { await close(page); }
   },

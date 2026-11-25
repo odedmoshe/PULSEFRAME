@@ -11,7 +11,7 @@
  * - update: the full new people list ([] clears it: the key is deleted; a presence range may not be left with nobody).
  * - remove: deletes the range; the emptied map is deleted.
  * - Summaries: SOURCE_RANGE_SUMMARIES with the file's name; never the label, never a person.
- * - A "who is in it" tag (presence) covers the whole file: start and end given for one are refused as rangeWholeAndSpan (the kind
+ * - A "who is in it" tag (presence) covers the whole file: start and end given for one are refused as presenceIsWhole (the kind
  *   already says "whole"), at the place of the span checks.
  * The credential rules (who may tag, who may name) are the server's (apps/server/src/peoplePrivacy.ts), checked before these run.
  */
@@ -45,7 +45,7 @@ function mustRange(d: ProjectDocument, rangeId: string): SourceRange {
 function checkSpan(asset: Asset, kind: SourceRange['kind'], span: SourceSpan | null, details: Record<string, unknown>): void {
   if (!span) return;
   if (asset.kind === 'image') throw rangeRefusal('rangeStillSpan', details);
-  if (kind === 'presence') throw rangeRefusal('rangeWholeAndSpan', details);
+  if (kind === 'presence') throw rangeRefusal('presenceIsWhole', details);
   if (T.isNegative(span.start) || !T.lt(span.start, span.end) || T.lt(asset.duration, span.end)) throw rangeRefusal('rangeBounds', details, secondsOf(asset.duration));
 }
 function checkLabel(label: string, details: Record<string, unknown>): void {

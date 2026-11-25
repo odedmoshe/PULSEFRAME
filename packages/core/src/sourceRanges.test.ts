@@ -61,7 +61,7 @@ describe('add_source_range', () => {
     expectRefusal(a({ assetId: s.lut, start: f(1) }), 'rangeNoTime');
     expectRefusal(a({ assetId: s.vid, start: f(1), label: 'a\nb' }), 'rangeHalfSpan');
     expectRefusal(a({ assetId: s.still, ...span, label: 'a\nb' }), 'rangeStillSpan');
-    expectRefusal(a({ assetId: s.vid, kind: 'presence', ...span, people: [s.alef] }), 'rangeWholeAndSpan');
+    expectRefusal(a({ assetId: s.vid, kind: 'presence', ...span, people: [s.alef] }), 'presenceIsWhole');
     expectRefusal(a({ assetId: s.vid, start: f(30), end: f(301), label: 'a\nb' }), 'rangeBounds', '10');
     expectRefusal(a({ assetId: s.vid, start: f(30), end: f(30) }), 'rangeBounds', '10');
     expectRefusal(a({ assetId: s.vid, start: T.rt(-1, 30), end: f(3) }), 'rangeBounds', '10');
@@ -124,7 +124,7 @@ describe('update_source_range and remove_source_range', () => {
     expectRefusal(u({ rangeId: a.id, whole: true, start: f(1) }), 'rangeWholeAndSpan');
     expectRefusal(u({ rangeId: a.id, end: f(1), label: 'a\nb' }), 'rangeHalfSpan');
     expectRefusal(u({ rangeId: st.id, start: f(0), end: f(1) }), 'rangeStillSpan');
-    expectRefusal(u({ rangeId: p.id, start: f(0), end: f(1) }), 'rangeWholeAndSpan');
+    expectRefusal(u({ rangeId: p.id, start: f(0), end: f(1) }), 'presenceIsWhole');
     expectRefusal(u({ rangeId: a.id, start: f(10), end: f(5), label: 'a\nb' }), 'rangeBounds', '10');
     expectRefusal(u({ rangeId: a.id, label: 'a\nb', people: ['per_none'] }), 'rangeLabelLine');
     expectRefusal(u({ rangeId: p.id, people: [] }), 'presenceNeedsPeople');

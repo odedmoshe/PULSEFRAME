@@ -2,7 +2,7 @@
  * The pearls track's privacy contract on the server (wave 7; .artifacts/wave7/pearls-decisions.md §2.2, §3), landed complete in the
  * pre-pass: labels are read like birth dates (namesOnly, scrubPeople, the REST net's quick test), a 'names' credential may not give
  * a label, only the owner's own session tags people or touches a tagged range or person (assertOwnerTagsPeople, people 'full'
- * grants included), the archive «בלי פרטי משפחה» holds no range, and the read view answers an honest 501 until builder B.
+ * grants included), the archive «בלי פרטי משפחה» holds no range, and the read view answers an honest 501 only in a build without core's usage functions (the view itself: pearls.test.ts).
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';

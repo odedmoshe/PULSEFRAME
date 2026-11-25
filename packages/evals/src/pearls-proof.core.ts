@@ -151,16 +151,21 @@ function barcodes(file: string): number[] {
   const fb = W * H * 3;
   return Array.from({ length: raw.length / fb }, (_, i) => readBarcode(raw.subarray(i * fb, (i + 1) * fb), W, 3, { x: 0, y: 0, w: W, h: H }));
 }
-interface Media { a30: number[]; n2997: number[]; copy: number[]; reversed: number[] }
-async function makeMedia(): Promise<Media> {
-  const dir = tmp('media');
+interface Media { a30: number[]; n2997: number[]; copy: number[]; reversed: number[]; files: { a30: string; n2997: string; copy: string; reversed: string } }
+async function makeMedia(dir = tmp('media')): Promise<Media> {
   const a30 = await generateBarcodeFixture({ out: path.join(dir, 'a30.mp4'), width: W, height: H, fps: R, frames: 300 });
   const n = await generateBarcodeFixture({ out: path.join(dir, 'n2997.mp4'), width: W, height: H, fps: NTSC, frames: 300 });
   // the time-preserving copy: the 30 fps file from 1 s on (its time zero is the original's 1 s), 200 frames
   ff(['-y', '-ss', '1', '-i', a30.file, '-frames:v', '200', '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '14', path.join(dir, 'copy.mp4')]);
   // the untimed copy: the file reversed (no time mapping is recorded for it)
   ff(['-y', '-i', a30.file, '-vf', 'reverse', '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '14', path.join(dir, 'reversed.mp4')]);
-  return { a30: barcodes(a30.file), n2997: barcodes(n.file), copy: barcodes(path.join(dir, 'copy.mp4')), reversed: barcodes(path.join(dir, 'reversed.mp4')) };
+  const files = { a30: a30.file, n2997: n.file, copy: path.join(dir, 'copy.mp4'), reversed: path.join(dir, 'reversed.mp4') };
+  return { a30: barcodes(files.a30), n2997: barcodes(files.n2997), copy: barcodes(files.copy), reversed: barcodes(files.reversed), files };
+}
+/** P6's film and its media files, made in `dir` (the caller removes it): for the integration run that reads the barcodes off an export. */
+export async function p6Film(dir: string) {
+  const media = await makeMedia(dir);
+  return { film: buildFilm(media), files: media.files };
 }
 /** floor and ceil of a rational time times a frame rate, with integers. */
 const floorAt = (t: T.RationalTime, fps: T.Rate) => { const n = BigInt(t.value) * BigInt(fps.num), d = BigInt(t.timescale) * BigInt(fps.den); return Number(n / d - (n % d !== 0n && n < 0n ? 1n : 0n)); };

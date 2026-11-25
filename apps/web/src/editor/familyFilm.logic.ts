@@ -210,17 +210,13 @@ export function warningText(w: FilmWarning, lang: Lang): string {
   const S = familyFilmStrings(lang);
   const gone = removedPearls(w.details.pearls);
   if (w.code !== 'removed_by_hand' || !gone.length) return S.warning(w);
-  const named = gone.map((x) => (lang === 'he' ? `«\u2068${x.name}\u2069»` : `“\u2068${x.name}\u2069”`)).join(lang === 'he' ? ', ' : ', ');
+  const P = pearlsT(lang);
+  const [open, close] = lang === 'he' ? ['«', '»'] : ['“', '”'];
+  const files = gone.map((x) => `${open}\u2068${x.name}\u2069${close}`).join(', ');
   const hasItems = Array.isArray(w.details.items) && w.details.items.length > 0;
-  const base = hasItems ? S.warning({ ...w, details: { ...w.details, pearls: undefined } }) : '';
-  if (lang === 'he') {
-    const one = gone.length === 1;
-    const sentence = `${hasItems ? 'וגם ' : ''}${one ? 'פנינה שסימנתם' : 'פנינים שסימנתם'} ב${named} ${one ? 'נמחקה' : 'נמחקו'} ידנית ו${one ? 'לא נוספה' : 'לא נוספו'} שוב; ${one ? 'הקובץ שלה יכול' : 'הקבצים שלהן יכולים'} להישאר בסרט`;
-    return hasItems ? `${base}. ${sentence}.` : `${sentence}. אפשר להחזיר ${one ? 'אותה' : 'אותן'} ב«${S.restoreRemoved}»`;
-  }
   const one = gone.length === 1;
-  const sentence = `${hasItems ? 'Also, ' : ''}${one ? 'a pearl you marked' : 'pearls you marked'} in ${named} ${one ? 'was' : 'were'} deleted by hand and not added again; ${one ? 'its file' : 'their files'} may stay in the film`;
-  return hasItems ? `${base}. ${sentence}.` : `${sentence}. "${S.restoreRemoved}" brings ${one ? 'it' : 'them'} back`;
+  if (hasItems) return `${S.warning({ ...w, details: { ...w.details, pearls: undefined } })}. ${P(one ? 'removedAlsoOne' : 'removedAlsoMany', { files })}.`;
+  return `${P(one ? 'removedOne' : 'removedMany', { files })}. ${P(one ? 'restoreOne' : 'restoreMany', { restore: S.restoreRemoved })}`;
 }
 /** details.pearls of a removed_by_hand warning: [{ rangeId, assetId, name }] (name = the FILE's name; never a label). */
 const removedPearls = (v: unknown): { rangeId: string; name: string }[] => (Array.isArray(v) ? v.filter((x): x is { rangeId: string; name: string } => !!x && typeof x === 'object' && typeof (x as { name?: unknown }).name === 'string' && typeof (x as { rangeId?: unknown }).rangeId === 'string') : []);

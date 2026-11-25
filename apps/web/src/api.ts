@@ -262,7 +262,7 @@ export const api = {
   // stabilisation (wave 7; apps/server/src/stabilise.ts)
   stabiliseClip: (id: string, clipId: string, body: StabiliseRunBody = {}) => call<{ jobId: string; status: string }>(`/projects/${id}/clips/${encodeURIComponent(clipId)}/stabilise`, json(body)),
   cameraMotion: (id: string, assetId: string) => call<CameraMotionView>(`/projects/${id}/assets/${encodeURIComponent(assetId)}/camera-motion`),
-  // marked ranges «פנינים» (wave 7; apps/server/src/pearls.ts): 501 pearls_not_built until builder B has built the view
+  // marked ranges «פנינים» (wave 7; apps/server/src/pearls.ts): usage and screen time of one sequence; labels empty with labelsHidden for a credential without the people scope
   pearls: (id: string, sequenceId?: string) => call<PearlsView>(`/projects/${id}/pearls${sequenceId ? `?sequenceId=${encodeURIComponent(sequenceId)}` : ''}`),
   // ----- «ספרו מה היה» (wave 7 story track): the recipe routes and the template-runs route (which passes expectedRevision) -----
   planStory: (projectId: string, params: StoryParams) => call<StoryPlanView>(`/projects/${projectId}/recipes/story/plan`, json({ params })),
