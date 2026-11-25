@@ -1,0 +1,62 @@
+{
+  "manifestVersion": 1,
+  "id": "models-02",
+  "title": "Un-gated companion: T5 base text encoder (for Stable Audio Open Small)",
+  "created": "2026-11-25",
+  "notes": "Hugging Face files pinned to a 40-digit commit; bytes and SHA-256 from the repository tree API (lfs.oid) for model.safetensors, and from downloading the three small non-LFS files on 2026-11-25. Only the safetensors weights and the tokenizer/config files; the flax, TensorFlow, Rust and pytorch_model.bin copies are left out. Model files are data: never executed. About 894 MB in total.",
+  "sources": [
+    {
+      "id": "t5-base",
+      "title": "T5 base (google-t5/t5-base) - text encoder",
+      "homepage": "https://huggingface.co/google-t5/t5-base",
+      "licence": {
+        "spdx": "Apache-2.0",
+        "url": "https://huggingface.co/google-t5/t5-base/blob/a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1/README.md",
+        "readOn": "2026-11-25",
+        "quote": "Model card front matter: \"license: apache-2.0\". Card text: \"License: Apache 2.0\"."
+      },
+      "credit": null,
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "Revision a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1. Not gated (the API reports gated=false). This is the text encoder that Stable Audio Open Small loads at run time (the model itself is gated and is downloaded by the owner, see docs/library/GATED_MODELS.he.md); that the library finds it at this location has not been run. The repository has no separate LICENSE file; the licence is stated in the model card.",
+      "items": [
+        {
+          "id": "t5-base/model.safetensors",
+          "kind": "file",
+          "url": "https://huggingface.co/google-t5/t5-base/resolve/a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1/model.safetensors",
+          "dest": "models/t5-base/model.safetensors",
+          "sha256": "a90903540cc02cbeb7ff9f823f1a80eb778c7e22426a0e620b01c77a5ec8f5b4",
+          "bytes": 891646390
+        },
+        {
+          "id": "t5-base/config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/google-t5/t5-base/resolve/a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1/config.json",
+          "dest": "models/t5-base/config.json",
+          "sha256": "46dd7cb62d29c81fb551e0ef1ea274c24a46ba441eeb948897706252933df033",
+          "bytes": 1208
+        },
+        {
+          "id": "t5-base/spiece.model",
+          "kind": "file",
+          "url": "https://huggingface.co/google-t5/t5-base/resolve/a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1/spiece.model",
+          "dest": "models/t5-base/spiece.model",
+          "sha256": "d60acb128cf7b7f2536e8f38a5b18a05535c9e14c7a355904270e15b0945ea86",
+          "bytes": 791656
+        },
+        {
+          "id": "t5-base/tokenizer.json",
+          "kind": "file",
+          "url": "https://huggingface.co/google-t5/t5-base/resolve/a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1/tokenizer.json",
+          "dest": "models/t5-base/tokenizer.json",
+          "sha256": "d2acde0d8d71dd30a711834b07781b9c89feaac33fd332f60507699282740066",
+          "bytes": 1389353
+        }
+      ]
+    }
+  ]
+}
