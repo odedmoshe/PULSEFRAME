@@ -2,17 +2,26 @@
  * pnpm proof:musicfit — «מוזיקה שמתאימה לסרט», music that ends with the film (wave 7 musicfit track; .artifacts/wave7/musicfit-decisions.md
  * §4). LEAD: the entry point and the list of checks. The checks are built in three parts, each owned by one builder:
  * musicfit-proof.makers.ts (A: B1, B2, S1–S4, S7, L3, I1, I2), musicfit-proof.hosts.ts (B: B3, B4, S5, S6, L1, L2, W1–W3, W5, W6, I3;
- * run in the integration round, after A merged), musicfit-proof.ui.ts (C: U1). The integration step imports them here and sets
- * MUSICFIT_PROOF_BUILT. Until then it runs nothing and exits 2 (blocked), the code the proofs use for "cannot run here", never a pass.
+ * run in the integration round, after A merged), musicfit-proof.ui.ts (C: U1). Integration (wave 7 batch B) imports the makers and hosts
+ * parts here, and the UI part (builder C, merged later in the same integration).
+ * Five states, each counted on its own: pass; partial (a part of the check could not be measured here: never counted as a pass);
+ * blocked (it could not run here, with the reason); fail. Exit 0 only when every check passes, 1 on any failure, 2 otherwise.
  * Fixtures are SYNTHETIC only, made by the proof: built-in tracks from the product; songs written by the proof's own code as WAV (an
  * A·B·A song at 120 BPM of sine chords and noise-burst drums with a 4-bar ending; a song whose two sides of the join are steady tones
  * of different pitch; a through-composed song; a song drifting 120→123 BPM); a time-preserving copy made by a local-tool job; barcode
  * clips at 320×180 with one white frame and a beep at a known source frame; a temporary library folder with a ledger the proof writes
  * (CC-BY-4.0 and CC-BY-NC-4.0 rows of the synthetic song). Never downloaded or copyrighted music; no owner clip. At most five exports;
- * films at most 20 s; not run beside music.test.ts M10. Writes docs/evidence/musicfit-proof.json when built; the whole proof's wall
+ * films at most 20 s; not run beside music.test.ts M10. Writes docs/evidence/musicfit-proof.json; the whole proof's wall
  * time is recorded once, not gated. Nobody here can listen: every check is a measurement, none says how anything sounds.
  */
-export const MUSICFIT_PROOF_BUILT = false;
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { runMusicfitMakers } from './musicfit-proof.makers.ts';
+import { closeMusicfitProofHosts, MUSICFIT_HOST_COVERS, MUSICFIT_PROOF_HOSTS } from './musicfit-proof.hosts.ts';
+import { closeMusicfitProofUi, MUSICFIT_PROOF_UI } from './musicfit-proof.ui.ts';
+
+export const MUSICFIT_PROOF_BUILT = true;
 export const MUSICFIT_CHECKS: Readonly<Record<string, string>> = {
   B1: 'for three styles and lengths from each style\'s minimum to 40 s at 30 and 30000/1001 fps: the file has exactly sampleFramesFor(E − S) frames, its beats are k·spb < totalFrames, every ending note of the arranger starts at K·bar with gate endFrames and none starts later',
   B2: 'a request with the default ending (no endFrames, or one bar) gives the bytes, name and params of music.golden.json',
@@ -39,7 +48,70 @@ export const MUSICFIT_CHECKS: Readonly<Record<string, string>> = {
   U1: 'the three flows (fit, swap, impact) by keyboard only in Hebrew and in English (B, Alt+B, the dialog, the audition button with aria-pressed), RTL without overlap at 1280 and 1440 px; new states in audit:a11y; ids in audit:testids',
 };
 
-if (!MUSICFIT_PROOF_BUILT) {
-  console.error(`musicfit-proof: not built yet; ${Object.keys(MUSICFIT_CHECKS).length} checks pending (${Object.keys(MUSICFIT_CHECKS).join(', ')}); nothing was measured`);
-  process.exit(2);
+
+export type MusicfitStatus = 'pass' | 'partial' | 'blocked' | 'fail';
+export interface MusicfitRow { id: string; part: 'makers' | 'hosts' | 'ui'; status: MusicfitStatus; measured?: unknown; missing?: string[]; reason?: string }
+
+// ---------------------------------------------------------------- the UI part (builder C)
+/** UI part — builder C's musicfit-proof.ui.ts (U1), merged and wired at integration. A step that cannot run here reports BLOCKED. */
+async function runUiPart(): Promise<MusicfitRow[]> {
+  const rows: MusicfitRow[] = [];
+  try {
+    for (const [id, fn] of Object.entries(MUSICFIT_PROOF_UI.checks)) {
+      let r: true | string;
+      try { r = await fn(); } catch (e) { r = `error: ${String((e as Error)?.stack ?? e).slice(0, 600)}`; }
+      const status: MusicfitStatus = r === true ? 'pass' : r.startsWith('BLOCKED') ? 'blocked' : 'fail';
+      console.log(`${status.toUpperCase().padEnd(8)} ${id} (ui)${r === true ? '' : `  ${r.slice(0, 600)}`}`);
+      rows.push({ id, part: 'ui', status, ...(r === true ? {} : { reason: r }) });
+    }
+  } finally { await closeMusicfitProofUi(); }
+  return rows;
 }
+
+async function main(): Promise<number> {
+  const started = Date.now();
+  const rows: MusicfitRow[] = [];
+  for (const c of await runMusicfitMakers()) rows.push({ id: c.id, part: 'makers', status: c.status, measured: c.measured, ...(c.missing ? { missing: c.missing } : {}), ...(c.error ? { reason: c.error } : {}) });
+  try {
+    for (const [id, fn] of Object.entries(MUSICFIT_PROOF_HOSTS.checks)) {
+      let r: true | string;
+      try { r = await fn(); } catch (e) { r = `error: ${String((e as Error)?.stack ?? e).slice(0, 600)}`; }
+      const status: MusicfitStatus = r === true ? 'pass' : r.startsWith('BLOCKED') ? 'blocked' : r.startsWith('PARTIAL') ? 'partial' : 'fail';
+      console.log(`${status.toUpperCase().padEnd(8)} ${id} (hosts)${r === true ? '' : `  ${r.slice(0, 400)}`}`);
+      const mk = rows.find((x) => x.id === id && x.part === 'makers');
+      if (!mk) { rows.push({ id, part: 'hosts', status, measured: MUSICFIT_PROOF_HOSTS.evidence[id], ...(r === true ? {} : { reason: r }) }); continue; }
+      // the same id in both parts (integration): the host check measures what the makers check left as `missing`
+      const cover = MUSICFIT_HOST_COVERS[id] ?? { drop: [] };
+      const hostRow = { status, measured: MUSICFIT_PROOF_HOSTS.evidence[id], ...(r === true ? {} : { reason: r }) };
+      mk.measured = { makers: mk.measured, hosts: hostRow };
+      if (status === 'fail') { mk.status = 'fail'; mk.reason = `hosts: ${r}`; continue; }
+      if (status !== 'pass') { mk.reason = `hosts ${status}: ${r}`; continue; }
+      const left = (mk.missing ?? []).filter((m) => !cover.drop.some((d) => m.includes(d)));
+      const still = [...left, ...(cover.remaining ?? [])];
+      if (still.length) mk.missing = still; else delete mk.missing;
+      if (mk.status === 'partial' && !still.length) mk.status = 'pass';
+    }
+  } finally { await closeMusicfitProofHosts(); }
+  rows.push(...(await runUiPart()));
+  // S3's last item (the editor's strings hold no praise word) is measured by U1: it counts only when U1 passed
+  const u1 = rows.find((r) => r.id === 'U1'), s3 = rows.find((r) => r.id === 'S3' && r.part === 'makers');
+  if (u1?.status === 'pass' && s3?.missing) {
+    s3.missing = s3.missing.filter((m) => !m.includes('by U1'));
+    if (!s3.missing.length) { delete s3.missing; if (s3.status === 'partial') s3.status = 'pass'; }
+  }
+  const order = Object.keys(MUSICFIT_CHECKS);
+  rows.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+  const count = (s: MusicfitStatus) => rows.filter((r) => r.status === s).map((r) => r.id);
+  const missingIds = order.filter((id) => !rows.some((r) => r.id === id));
+  for (const id of missingIds) rows.push({ id, part: 'hosts', status: 'blocked', reason: 'BLOCKED: no part of this build runs this check' });
+  const summary = { pass: count('pass'), partial: count('partial'), blocked: count('blocked'), fail: count('fail') };
+  for (const r of rows.filter((x) => x.part === 'makers')) console.log(`${r.status.toUpperCase().padEnd(8)} ${r.id}${r.missing ? `  not measured: ${r.missing.join('; ')}` : ''}${r.reason ? `  ${r.reason.slice(0, 300)}` : ''}`);
+  const wallSeconds = (Date.now() - started) / 1000;
+  console.log(`musicfit proof: ${summary.pass.length} pass, ${summary.partial.length} partial (not a pass), ${summary.blocked.length} blocked, ${summary.fail.length} fail of ${rows.length}; ${wallSeconds.toFixed(1)} s wall (one sample)`);
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+  fs.mkdirSync(path.join(root, 'docs/evidence'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'docs/evidence/musicfit-proof.json'), `${JSON.stringify({ at: new Date().toISOString(), wallSeconds, note: 'partial is its own state and is never counted as a pass; nobody here listened: every value is a measurement', summary, checks: rows }, null, 2)}\n`);
+  return summary.fail.length ? 1 : summary.partial.length || summary.blocked.length ? 2 : 0;
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exit(await main());

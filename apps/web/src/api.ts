@@ -269,7 +269,7 @@ export const api = {
   applyStory: (projectId: string, params: StoryParams, expectedRevision: number) => call<StoryApplyResult>(`/projects/${projectId}/recipes/story/apply`, json({ params, expectedRevision })),
   /** Rebuild a story run with changed options (never other taps: 409 story_retap_not_built), against the revision the bar showed. */
   regenerateStory: (projectId: string, runId: string, params: Partial<StoryParams> | undefined, expectedRevision: number, restoreRemoved = false) => call<StoryRegenerateResult>(`/projects/${projectId}/template-runs/${runId}/regenerate`, json({ ...(params ? { params } : {}), expectedRevision, ...(restoreRemoved ? { restoreRemoved: true } : {}) })),
-  // ----- «מוזיקה שמתאימה לסרט» (wave 7 musicfit; apps/server/src/musicfit/routes.ts): 501 musicfit_not_built until built -----
+  // ----- «מוזיקה שמתאימה לסרט» (wave 7 musicfit; apps/server/src/musicfit/routes.ts) -----
   musicFitPlan: (projectId: string, req: MusicFitPlanRequest) => call<MusicFitPlan>(`/projects/${projectId}/music-fit/plan`, json(req)),
   musicFitApply: (projectId: string, req: MusicFitApplyRequest) => call<MusicFitApplyResult>(`/projects/${projectId}/music-fit/apply`, json(req)),
   /** The owner's own session only (agents get 403 human_approval_required). */

@@ -9,14 +9,14 @@
  *   not start at its file's start is refused not_from_start). A film is planned with musicGridSteady, so its end never depends on
  *   the track; the plan is made on a draft that holds a stand-in record of the track (the same layout and known grid, no bytes),
  *   and apply makes it again with the real file before anything is committed (fit_unstable when they differ).
- * - A song, tailored: ONE removal of whole bars, found by builder A's join search (SongFitter, registered at integration). The
+ * - A song, tailored: ONE removal of whole bars, found by builder A's join search (SongFitter; builtSongFitter since integration). The
  *   licence rule (core fitLicenceProblem, fail-closed) refuses before anything is searched or made; a song without measured bar
  *   starts is needs_bars; one over MUSICFIT.maxSeconds too_long. Every candidate's numbers are measured, not heard.
  * - The flash rule (§2.14, C10): only a cut THIS plan makes that comes closer than flashGapFrames to another cut blocks (flash_gap);
  *   two kept cuts that close are the warning kept_cuts_close. A cut is the start frame of a picture clip on any picture track of
  *   the sequence, all tracks merged.
  * - Builder A's pure functions (cutStats, planImpact) and the server makers (makeMusic, the song fitter) are reached through
- *   `musicFitDeps`, so unit tests use small labelled doubles while A's bodies are not merged.
+ *   `musicFitDeps`, so unit tests can use small labelled doubles (musicFit.plan.test.ts) beside the real ones (musicFit.real.test.ts).
  * Nothing here is committed: apply.ts commits (two commits: the made file, then one transaction).
  */
 import * as T from '@pulseframe/time';
@@ -34,17 +34,19 @@ import { makeMusic } from '../music.ts';
 import { ApiError, type Store } from '../store.ts';
 import { makeTemplateAssets, templateApiError, templateElements, templateOfRun, templateRegeneration, templateRegenerationOp, withoutClips } from '../templates.ts';
 import { musicFitApiError } from './routes.ts';
+import { searchJoins } from './features.ts';
+import { makeFittedSong } from './splice.ts';
 
 type RT = T.RationalTime;
 
 // ---------- what the planner needs from builder A (and the music queue) ----------
 /**
  * Builder A's join search and splice (apps/server/src/musicfit/features.ts, splice.ts), as this planner calls them. Registered at
- * integration (setSongFitter); until then a tailored song answers 501 musicfit_not_built after its licence and bar checks.
+ * integration as the default (builtSongFitter below); with none set, a tailored song answers 501 musicfit_not_built after its licence and bar checks.
  */
 export interface SongFitter {
   /** Up to MUSICFIT.maxCandidates removals of whole bars from the song played from `startAt`, ordered (core orderCandidates). */
-  candidates(a: { store: Store; projectId: string; doc: ProjectDocument; assetId: string; startAt: RT; wantedSeconds: number; signal?: AbortSignal }): Promise<{ candidates: JoinCandidate[]; basis: string[] }>;
+  candidates(a: { store: Store; projectId: string; doc: ProjectDocument; assetId: string; startAt: RT; wantedSeconds: number; signal?: AbortSignal }): Promise<{ candidates: JoinCandidate[]; basis: string[]; /** The song's usable end (source clock, whole 48 kHz frames), so the made length is exact. */ usableEnd?: RT }>;
   /** The made file of one removal (checked against the song's current analysis: 409 fit_stale otherwise), stored, not committed. */
   make(a: { store: Store; projectId: string; doc: ProjectDocument; assetId: string; startAt: RT; removal: JoinRemoval; actor: string; signal?: AbortSignal }): Promise<{ asset: Omit<Asset, 'id'>; grid: FittedGrid }>;
 }
@@ -55,9 +57,28 @@ export interface MusicFitDeps {
   planImpact: typeof planImpact;
   songFitter: SongFitter | null;
 }
+/**
+ * Builder A's join search (features.ts searchJoins) and splice (splice.ts makeFittedSong) behind B's SongFitter (wave 7 musicfit
+ * integration). Both are reached at call time only (the musicfit modules import each other). The basis sentences say what was
+ * measured, never how the join sounds.
+ */
+export const builtSongFitter: SongFitter = {
+  async candidates({ store, doc, assetId, startAt, wantedSeconds, signal }) {
+    const s = await searchJoins(store, doc, assetId, startAt, wantedSeconds, signal);
+    const basis = [
+      `the song's bar starts come from its own beat analysis: ${s.bars} bar starts in the part used, from ${secs(startAt)} s to its usable end at ${secs(s.usableEnd)} s; only whole bars are removed`,
+      `measured beat-interval spread ${s.tempoSpreadMs.toFixed(1)} ms; beat confidence ${s.beatConfidence === null ? 'not given' : s.beatConfidence.toFixed(2)}; each candidate is scored on the pitch classes and band levels of the bars on both sides of the join (${s.candidates.length} candidate(s) kept)`,
+    ];
+    return { candidates: s.candidates, basis, usableEnd: s.usableEnd };
+  },
+  async make({ store, doc, assetId, startAt, removal, actor, signal }) {
+    const m = await makeFittedSong(store, doc, assetId, startAt, removal, actor, signal ? { signal } : {});
+    return { asset: m.asset, grid: m.grid };
+  },
+};
 /** The functions the planner and apply call; tests replace them with labelled doubles. */
-export const musicFitDeps: MusicFitDeps = { makeMusic, makeTemplateAssets, cutStats, planImpact, songFitter: null };
-/** Integration: builder A's song fitter. */
+export const musicFitDeps: MusicFitDeps = { makeMusic, makeTemplateAssets, cutStats, planImpact, songFitter: builtSongFitter };
+/** Integration: builder A's song fitter (the default since integration; tests may set null to see the not-built answer). */
 export const setSongFitter = (f: SongFitter | null): void => { musicFitDeps.songFitter = f; };
 
 // ---------- errors ----------
@@ -283,6 +304,9 @@ async function prepareClip(store: Store, projectId: string, doc: ProjectDocument
     planMake = { kind: 'fitted', sourceAssetId: choice.assetId, candidates: r.candidates, chosen: r.chosen };
     const c = r.candidates[r.chosen]!;
     ending = endingOf(c.madeSeconds, wantedSeconds, false);
+    // the clip ends where the made file ends when that comes before the target (ending early): the same rule planMusicSwap applies
+    // on the made file in apply's second plan (its end floored to a frame from the clip's start), else apply refuses fit_unstable
+    if (found.usableEnd) firstEndFrame = Math.min(firstEndFrame, T.frameIndexAt(T.add(clip.start, madeLength(startAt, c.removal, found.usableEnd)), doc.settings.frameRate));
     warnings.push(...joinNotes(c));
     basis.push(...found.basis, ...joinBasis(c));
   } else {
@@ -309,6 +333,11 @@ async function prepareClip(store: Store, projectId: string, doc: ProjectDocument
   if (impacts.some((x) => x.framesFromBeatAfter !== 0)) warnings.push(impactNote(impacts));
   const plan: MusicFitPlan = { revision, target: { kind: runId ? (doc.recipeRuns[runId]!.recipeId === FAMILY_FILM_RUN_RECIPE_ID ? 'film' : 'template') : 'clip', clipId, runId }, make: planMake, wantedSeconds: Math.round(wantedSeconds * 1000) / 1000, ending, recut: null, impacts, warnings, blocking: [], basis };
   return { plan, make, firstEndFrame, edit };
+}
+/** The exact length of a made file (splice.ts: e − s − (t − f), every time taken to its nearest 48 kHz frame). */
+function madeLength(startAt: RT, removal: JoinRemoval, usableEnd: RT): RT {
+  const fr = (t: RT) => T.nearestSampleIndex(t, MUSIC_SAMPLE_RATE);
+  return T.rt(fr(usableEnd) - fr(startAt) - (fr(removal.to) - fr(removal.from)), MUSIC_SAMPLE_RATE);
 }
 function impactNote(impacts: MusicFitPlan['impacts']): MusicFitNote {
   const off = impacts.filter((x) => x.framesFromBeatAfter !== 0);

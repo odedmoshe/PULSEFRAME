@@ -43,6 +43,7 @@ import { chooseFormat, formatOptions, openCardMenu } from './editor-ui.ts';
 import { makeRenderCacheCtx, renderCacheA11yScenarios } from './a11y-render-cache.ts';
 import { craftA11yScenarios } from './a11y-craft.ts';
 import { stabiliseA11yScenarios } from './a11y-stabilise.ts';
+import { musicfitA11yScenarios } from './a11y-musicfit.ts';
 import { pearlsA11yScenarios } from './a11y-pearls.ts';
 import { storyA11yScenarios } from './a11y-story.ts';
 import { searchA11yScenarios } from './a11y-search.ts';
@@ -856,6 +857,12 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      // music that fits the film «מוזיקה שמתאימה לסרט» (wave 7 musicfit): the fit block, the swap dialog, the impact controls (a11y-musicfit.ts)
+      for (const sc of musicfitA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       if (await page.getByTestId('cache-fast-switch').count() === 0) { await page.getByTestId('export').click(); await page.getByTestId('cache-fast-switch').waitFor({ timeout: 8000 }).catch(() => {}); }
       if ((await page.getByTestId('cache-fast-switch').getAttribute('aria-checked').catch(() => null)) === 'true') await page.getByTestId('cache-fast-switch').click();
       if (await page.getByTestId('export-sheet').count()) { await page.keyboard.press('Escape'); await page.getByTestId('export-sheet').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {}); }
@@ -1174,6 +1181,12 @@ async function main() {
       // the start hub of an empty project
       await open(emptyPid, 'welcome');
       await auditState('start-hub', { shown: (await page.getByTestId('welcome').count()) === 1 });
+      // music that fits the film (wave 7 musicfit) in the light theme: the same six scenarios as the dark pass (a11y-musicfit.ts)
+      for (const sc of musicfitA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       for (const st of states) console.log(`[${lang} light] state ${st.state}: controls=${st.controls} unnamed=${st.unnamed.length} lowContrast=${st.lowContrast.length} tabIssues=${st.tabIssues.length} noFocusRing=${st.noFocusRing.length}${st.shown !== undefined ? ` shown=${st.shown}` : ''}`);
       report.runs.push({ ...found, uiLanguage: lang, theme: 'light', focus, states });
       console.log(`[${lang} light] controls=${found.controls} unnamed=${found.unnamed.length} lowContrast=${found.lowContrast.length} tabIssues=${found.tabIssues.length} focusReached=${focus.reached} noFocusRing=${focus.missing.length}`);

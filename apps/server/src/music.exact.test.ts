@@ -116,6 +116,20 @@ describe('the server half', () => {
     expect(a.layout.totalFrames).toBe(4 * 90000);
     expect(b.layout.totalFrames).toBe(3 * 90000 + 45000);
   });
+  it('integration: two requests that differ only in endFrames give different bytes, and neither is served from the other\'s cache (either order)', async () => {
+    const seen: (number | undefined)[] = [];
+    const q = createMusicQueue({}, async (id, bars, seed, opts) => { seen.push(opts.endFrames); return renderMusic(id, bars, seed, opts); });
+    const a = await q.render('music.pop', 4, 1, 'preview', undefined, 2 * 22500);
+    const b = await q.render('music.pop', 4, 1, 'preview', undefined, 3 * 22500);
+    const plain = await q.render('music.pop', 4, 1, 'preview');
+    expect(seen).toEqual([45000, 67500, undefined]); // three renders: no request was answered from another's entry
+    expect([a.wav.equals(b.wav), a.wav.equals(plain.wav), b.wav.equals(plain.wav)]).toEqual([false, false, false]);
+    expect([a.layout.totalFrames, b.layout.totalFrames, plain.layout.totalFrames]).toEqual([3 * 90000 + 45000, 3 * 90000 + 67500, 4 * 90000]);
+    // each asked again: its own cached bytes, no fourth render
+    const [a2, b2, p2] = [await q.render('music.pop', 4, 1, 'preview', undefined, 45000), await q.render('music.pop', 4, 1, 'preview', undefined, 67500), await q.render('music.pop', 4, 1, 'preview')];
+    expect(seen.length).toBe(3);
+    expect([a2.wav.equals(a.wav), b2.wav.equals(b.wav), p2.wav.equals(plain.wav)]).toEqual([true, true, true]);
+  }, 60_000);
   it('makeMusic stores an exact track: duration exact, params.end, the known grid of its layout, a name with the ending', async () => {
     const q = createMusicQueue();
     const made = await makeMusic(store, { styleId: 'music.birthday', bars: 5, endFrames: 60000, seed: 2 }, 'owner', q);

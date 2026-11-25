@@ -1,0 +1,763 @@
+{
+  "at": "2026-11-25T19:37:33.620Z",
+  "wallSeconds": 119.999,
+  "note": "partial is its own state and is never counted as a pass; nobody here listened: every value is a measurement",
+  "summary": {
+    "pass": [
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S5",
+      "S6",
+      "S7",
+      "L1",
+      "L2",
+      "L3",
+      "W1",
+      "W2",
+      "W3",
+      "W5",
+      "W6",
+      "I1",
+      "I2",
+      "I3",
+      "U1"
+    ],
+    "partial": [],
+    "blocked": [],
+    "fail": []
+  },
+  "checks": [
+    {
+      "id": "B1",
+      "part": "makers",
+      "status": "pass",
+      "measured": {
+        "tracks": 18,
+        "rows": [
+          {
+            "style": "music.cinematic",
+            "fps": "30/1",
+            "filmFrames": 350,
+            "L": 560000,
+            "fileFrames": 560000,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 80000
+          },
+          {
+            "style": "music.cinematic",
+            "fps": "30/1",
+            "filmFrames": 600,
+            "L": 960000,
+            "fileFrames": 960000,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 160000
+          },
+          {
+            "style": "music.cinematic",
+            "fps": "30/1",
+            "filmFrames": 1200,
+            "L": 1920000,
+            "fileFrames": 1920000,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 160000
+          },
+          {
+            "style": "music.cinematic",
+            "fps": "30000/1001",
+            "filmFrames": 350,
+            "L": 560560,
+            "fileFrames": 560560,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 80560
+          },
+          {
+            "style": "music.cinematic",
+            "fps": "30000/1001",
+            "filmFrames": 600,
+            "L": 960960,
+            "fileFrames": 960960,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 160960
+          },
+          {
+            "style": "music.cinematic",
+            "fps": "30000/1001",
+            "filmFrames": 1199,
+            "L": 1920319,
+            "fileFrames": 1920319,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 160319
+          },
+          {
+            "style": "music.birthday",
+            "fps": "30/1",
+            "filmFrames": 210,
+            "L": 336000,
+            "fileFrames": 336000,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 48000
+          },
+          {
+            "style": "music.birthday",
+            "fps": "30/1",
+            "filmFrames": 600,
+            "L": 960000,
+            "fileFrames": 960000,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 96000
+          },
+          {
+            "style": "music.birthday",
+            "fps": "30/1",
+            "filmFrames": 1200,
+            "L": 1920000,
+            "fileFrames": 1920000,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 96000
+          },
+          {
+            "style": "music.birthday",
+            "fps": "30000/1001",
+            "filmFrames": 210,
+            "L": 336336,
+            "fileFrames": 336336,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 48336
+          },
+          {
+            "style": "music.birthday",
+            "fps": "30000/1001",
+            "filmFrames": 600,
+            "L": 960960,
+            "fileFrames": 960960,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 96960
+          },
+          {
+            "style": "music.birthday",
+            "fps": "30000/1001",
+            "filmFrames": 1199,
+            "L": 1920319,
+            "fileFrames": 1920319,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 96319
+          },
+          {
+            "style": "music.pop",
+            "fps": "30/1",
+            "filmFrames": 197,
+            "L": 315200,
+            "fileFrames": 315200,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 45200
+          },
+          {
+            "style": "music.pop",
+            "fps": "30/1",
+            "filmFrames": 600,
+            "L": 960000,
+            "fileFrames": 960000,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 60000
+          },
+          {
+            "style": "music.pop",
+            "fps": "30/1",
+            "filmFrames": 1200,
+            "L": 1920000,
+            "fileFrames": 1920000,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 120000
+          },
+          {
+            "style": "music.pop",
+            "fps": "30000/1001",
+            "filmFrames": 197,
+            "L": 315516,
+            "fileFrames": 315516,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 45516
+          },
+          {
+            "style": "music.pop",
+            "fps": "30000/1001",
+            "filmFrames": 600,
+            "L": 960960,
+            "fileFrames": 960960,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 60960
+          },
+          {
+            "style": "music.pop",
+            "fps": "30000/1001",
+            "filmFrames": 1199,
+            "L": 1920319,
+            "fileFrames": 1920319,
+            "beatsOk": true,
+            "endingNotesAtKBar": true,
+            "heldGateEndFrames": true,
+            "endFrames": 120319
+          }
+        ]
+      }
+    },
+    {
+      "id": "B2",
+      "part": "makers",
+      "status": "pass",
+      "measured": {
+        "rows": [
+          {
+            "style": "music.festive",
+            "plain": true,
+            "oneBarEnding": true,
+            "name": "Festive · 8 bars.wav",
+            "params": "bars,seed,bpm,meter,synth"
+          },
+          {
+            "style": "music.birthday",
+            "plain": true,
+            "oneBarEnding": true,
+            "name": "Cheerful birthday · 8 bars.wav",
+            "params": "bars,seed,bpm,meter,synth"
+          },
+          {
+            "style": "music.calm",
+            "plain": true,
+            "oneBarEnding": true,
+            "name": "Calm and warm · 8 bars.wav",
+            "params": "bars,seed,bpm,meter,synth"
+          },
+          {
+            "style": "music.pop",
+            "plain": true,
+            "oneBarEnding": true,
+            "name": "Upbeat pop · 8 bars.wav",
+            "params": "bars,seed,bpm,meter,synth"
+          },
+          {
+            "style": "music.lofi",
+            "plain": true,
+            "oneBarEnding": true,
+            "name": "Lo-fi · 8 bars.wav",
+            "params": "bars,seed,bpm,meter,synth"
+          },
+          {
+            "style": "music.cinematic",
+            "plain": true,
+            "oneBarEnding": true,
+            "name": "Cinematic · 8 bars.wav",
+            "params": "bars,seed,bpm,meter,synth"
+          }
+        ]
+      }
+    },
+    {
+      "id": "B3",
+      "part": "hosts",
+      "status": "pass",
+      "measured": {
+        "clipEnd": 285,
+        "filmEnd": 285,
+        "fileMinusClip": 0,
+        "trailingSilenceMs": 35.75,
+        "rmsBeforeFadeDb": -31.162709224383278,
+        "exportLastSoundMs": 222.125,
+        "fadeOut": null
+      }
+    },
+    {
+      "id": "B4",
+      "part": "hosts",
+      "status": "pass",
+      "measured": {
+        "notices": [],
+        "clipEnd": 540,
+        "pictureEnd": 540,
+        "fadeOut": null
+      }
+    },
+    {
+      "id": "S1",
+      "part": "makers",
+      "status": "pass",
+      "measured": {
+        "removal": [
+          8,
+          40
+        ],
+        "removedBars": 16,
+        "similarity": 1,
+        "maxDiffAbaLsb": 0,
+        "crossfadeFrames": 2880,
+        "maxDiffCrossfadeLsb": 0,
+        "candidates": [
+          1,
+          0.9,
+          0.9
+        ]
+      }
+    },
+    {
+      "id": "S2",
+      "part": "makers",
+      "status": "pass",
+      "measured": {
+        "gridExact": true,
+        "beats": 48,
+        "tracked": 47,
+        "agreeWithin35ms": 0.979,
+        "medianMs": 8,
+        "nearJoinMs": [
+          3.4,
+          4.2,
+          5,
+          5.8,
+          6.5,
+          7.3,
+          8.1,
+          8.8,
+          9.6
+        ]
+      }
+    },
+    {
+      "id": "S3",
+      "part": "makers",
+      "status": "pass",
+      "measured": {
+        "makers": {
+          "bestSimilarity": 0.329,
+          "warnLine": 0.6,
+          "praiseWords": []
+        },
+        "hosts": {
+          "status": "pass",
+          "measured": {
+            "warnings": [
+              "join_weak"
+            ],
+            "similarity": 0.22,
+            "praise": []
+          }
+        }
+      }
+    },
+    {
+      "id": "S4",
+      "part": "makers",
+      "status": "pass",
+      "measured": {
+        "previewFrames": 384000,
+        "equalToFile": true
+      }
+    },
+    {
+      "id": "S5",
+      "part": "hosts",
+      "status": "pass"
+    },
+    {
+      "id": "S6",
+      "part": "hosts",
+      "status": "pass",
+      "measured": {
+        "ending": {
+          "kind": "exact",
+          "seconds": 0
+        },
+        "measured": 0.033062500000003325
+      }
+    },
+    {
+      "id": "S7",
+      "part": "makers",
+      "status": "pass",
+      "measured": {
+        "makers": {
+          "direct": [
+            10,
+            42
+          ],
+          "viaCopy": [
+            8,
+            40
+          ],
+          "offset": 2,
+          "sameRemoval": true
+        },
+        "hosts": {
+          "status": "pass",
+          "measured": {
+            "offset": 2,
+            "direct": [
+              10,
+              42
+            ],
+            "viaCopy": [
+              8,
+              40
+            ],
+            "similarity": [
+              1,
+              1
+            ],
+            "apply": 200,
+            "madeFrom": "ast_f8ab3b87780",
+            "copyId": "ast_f8ab3b87780"
+          }
+        }
+      }
+    },
+    {
+      "id": "L1",
+      "part": "hosts",
+      "status": "pass",
+      "measured": {
+        "record": {
+          "id": "CC-BY-4.0"
+        },
+        "text": "קרדיטים\n\n\"Proof song CC-BY-4.0\" by the musicfit proof, CC-BY-4.0\n(קוצר בעורך: הוסרו תיבות מהאמצע)"
+      }
+    },
+    {
+      "id": "L2",
+      "part": "hosts",
+      "status": "pass",
+      "measured": {
+        "flags": {
+          "nonCommercial": true,
+          "diskOnly": true
+        },
+        "warn": [
+          "non_commercial_content",
+          "credits_for_description"
+        ],
+        "exportPlan": 200,
+        "strip": "{\"omit\":[\"sha256:83215cec202035e5f095a132a56f532575ae116bb35a9ab44a5b3605dc4d1c23\",\"sha256:cc88126215b2bdbdc8f4b4701f6a87dad79665eea76afb6fdd389a69a2a332d8\"],\"omitted\":[{\"hash\":\"sha256:cc88126215b2bdbdc8f4b4701f6a87dad79665eea76afb6fdd389a69a2a332d8\",\"assetId\":\"ast_2eea4cde560\",\"itemId\":\"mf-proof/so"
+      }
+    },
+    {
+      "id": "L3",
+      "part": "makers",
+      "status": "pass",
+      "measured": {
+        "makers": {
+          "maker": {
+            "code": "incompatible",
+            "message": "the licence of this music (CC-BY-ND-4.0) forbids changing it, so it cannot be shortened",
+            "hint": "Choose other music."
+          },
+          "makerMany": {
+            "code": "incompatible",
+            "message": "this music was made from more than one library file, so shortening it is not offered"
+          },
+          "op": "the licence of this music (CC-BY-ND-4.0) forbids changing it, so it cannot be shortened",
+          "opMany": "this music was made from more than one library file, so shortening it is not offered",
+          "blobsMadeByRefusals": 0
+        },
+        "hosts": {
+          "status": "pass",
+          "measured": {
+            "alreadyFitted": [
+              422,
+              "incompatible",
+              "this music is already a shortened copy",
+              true,
+              422
+            ],
+            "manyOrigins": [
+              422,
+              "incompatible",
+              "this music was made from more than one library file, so shortening it is not offered",
+              true,
+              422
+            ],
+            "noDerivatives": [
+              "incompatible",
+              "the licence of this music (CC-BY-ND-4.0) forbids changing it, so it cannot be shortened",
+              true
+            ],
+            "madeByAlreadyFitted": {
+              "revisions": 0,
+              "blobs": 0
+            },
+            "madeByManyOrigins": {
+              "revisions": 0,
+              "blobs": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "W1",
+      "part": "hosts",
+      "status": "pass",
+      "measured": {
+        "from": "music.pop",
+        "to": "music.cinematic",
+        "madeCuts": [
+          0,
+          110,
+          200,
+          300,
+          400,
+          500,
+          600,
+          700
+        ],
+        "keptEnds": [
+          110
+        ],
+        "offGrid": [
+          "clp_084f36941d0"
+        ],
+        "off": []
+      }
+    },
+    {
+      "id": "W2",
+      "part": "hosts",
+      "status": "pass",
+      "measured": [
+        {
+          "rate": 24,
+          "gap": 9,
+          "after": {
+            "cuts": 8,
+            "minGapFrames": 45,
+            "maxInOneSecond": 1
+          },
+          "thinned": 0,
+          "blocking": []
+        },
+        {
+          "rate": 30,
+          "gap": 11,
+          "after": {
+            "cuts": 8,
+            "minGapFrames": 56,
+            "maxInOneSecond": 1
+          },
+          "thinned": 0,
+          "blocking": []
+        },
+        {
+          "rate": 60,
+          "gap": 21,
+          "after": {
+            "cuts": 8,
+            "minGapFrames": 113,
+            "maxInOneSecond": 1
+          },
+          "thinned": 0,
+          "blocking": []
+        }
+      ]
+    },
+    {
+      "id": "W3",
+      "part": "hosts",
+      "status": "pass",
+      "measured": {
+        "status": 409,
+        "code": "template_blocked"
+      }
+    },
+    {
+      "id": "W5",
+      "part": "hosts",
+      "status": "pass",
+      "measured": {
+        "gain": 0.5,
+        "volume": null,
+        "dropped": 2
+      }
+    },
+    {
+      "id": "W6",
+      "part": "hosts",
+      "status": "pass",
+      "measured": {
+        "codes": [
+          "music_short",
+          "not_measured"
+        ],
+        "again": 200
+      }
+    },
+    {
+      "id": "I1",
+      "part": "makers",
+      "status": "pass",
+      "measured": {
+        "makers": {
+          "whiteFrameBefore": 37,
+          "beatFrame": 42,
+          "whiteFrameAfter": 42,
+          "offsetBefore": {
+            "frames": -5,
+            "ms": -166.7
+          },
+          "residualMs": 6.25,
+          "linkedSoundSlippedAlike": true,
+          "undoExact": true,
+          "noRoom": {
+            "message": "the file has no material to bring the moment to that beat",
+            "index": 0,
+            "op": "sync_impact",
+            "clipId": "clp_i1_1",
+            "to": "beat",
+            "pick": "later",
+            "maxEarlier": {
+              "value": "0",
+              "timescale": 1
+            },
+            "maxLater": {
+              "value": "0",
+              "timescale": 1
+            },
+            "wanted": {
+              "value": "15",
+              "timescale": 32
+            }
+          },
+          "reversed": {
+            "target": 84,
+            "whiteFrameAfter": 84
+          }
+        },
+        "hosts": {
+          "status": "pass",
+          "measured": {
+            "whiteBefore": [
+              37
+            ],
+            "offsetBefore": -5,
+            "beatFrame": 42,
+            "whiteAfterInStills": [
+              42
+            ],
+            "stillLuma": {
+              "40": 0,
+              "41": 0,
+              "42": 255,
+              "43": 0,
+              "44": 0
+            },
+            "exportLuma": [
+              0,
+              255,
+              0
+            ],
+            "beepOnsetMs": 1400,
+            "whiteFrameMs": 1400,
+            "beepMinusWhiteMs": 0,
+            "startSame": true,
+            "lengthSame": true,
+            "reversed": {
+              "beatFrame": 84,
+              "white": [
+                84
+              ],
+              "luma": {
+                "83": 0,
+                "84": 255,
+                "85": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "I2",
+      "part": "makers",
+      "status": "pass",
+      "measured": {
+        "makers": {
+          "viaAssetId": "ast_m",
+          "whiteFrameAfter": 40,
+          "usedBeatSeconds": 1.34375
+        },
+        "hosts": {
+          "status": "pass",
+          "measured": {
+            "copyId": "ast_472ecc8ed80",
+            "sourceRangeStart": 1,
+            "viaAssetId": "ast_aa25548a2e0",
+            "song": "ast_aa25548a2e0",
+            "beatFrame": 40,
+            "white": [
+              40
+            ],
+            "luma": {
+              "39": 0,
+              "40": 255,
+              "41": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "I3",
+      "part": "hosts",
+      "status": "pass",
+      "measured": {
+        "listed": {
+          "clipId": "clp_88b00634030",
+          "framesFromBeatBefore": 0,
+          "framesFromBeatAfter": 2
+        },
+        "after": "alreadyOnBeat"
+      }
+    },
+    {
+      "id": "U1",
+      "part": "ui",
+      "status": "pass"
+    }
+  ]
+}

@@ -954,6 +954,7 @@ function BeatTab({ clip, keymap }: PanelProps) {
   const facts = state.doc ? beatFacts(state.doc, clip.assetId) : null;
   const beats = facts?.measured ? facts : null;
   const bpm = beats?.bpm ?? null;
+  const onVideoTrack = !!state.doc && findClip(state.doc, clip.id)?.track.kind === 'video';
   return (
     <>
       <div className={`pf-card${beats ? ' is-pulse' : ''} beat-card`} data-testid="insp-beat" data-beats={beats ? beats.count : 0}>
@@ -961,11 +962,12 @@ function BeatTab({ clip, keymap }: PanelProps) {
         {/* "120 BPM" is one left-to-right run, in every language */}
         <span>{beats ? <>{S.tempo} <bdi dir="ltr" className="num">{bpm === null ? '—' : Math.round(bpm)} BPM</bdi> · {isolate(S.beatsN(beats.count))}</> : S.bpmNone}</span>
       </div>
-      <Section id="analysis" title={S.secBeat} help><AnalysisPanel key={`analysis:${clip.id}`} /></Section>
+      {!onVideoTrack && <Section id="analysis" title={S.secBeat} help><AnalysisPanel key={`analysis:${clip.id}`} /></Section>}
       {/* «סימון הרגע» / «אל הפעימה» (wave 7 musicfit): once builder C has built it */}
       {MUSICFIT_UI_BUILT && <ImpactControls key={`impact:${clip.id}`} clip={clip} />}
-      <Section id="time" title={S.secTime} defaultOpen={false} summary={`${secondsText(T.toSeconds(clip.duration))} ${S.seconds}`}><TimeBlock clip={clip} keymap={keymap} /></Section>
-      {!state.viewVariantId && (
+      {/* a video clip's Beat tab (wave 7 musicfit) holds the beat card and the moment only: its analysis, time and media sections are in Basic */}
+      {!onVideoTrack && <Section id="time" title={S.secTime} defaultOpen={false} summary={`${secondsText(T.toSeconds(clip.duration))} ${S.seconds}`}><TimeBlock clip={clip} keymap={keymap} /></Section>}
+      {!onVideoTrack && !state.viewVariantId && (
         <Section id="media" title={S.secMedia} defaultOpen={false}>
           <ReplaceMedia key={`replace:${clip.id}`} clip={clip} />
           {clip.linkGroupId && <div className="row"><button type="button" className="ghost" data-testid="unlink-clip" title={t('unlink.hint')} onClick={() => void editor.commit([{ op: 'unlink_clip', args: { clipId: clip.id } }], 'Detach clip')}>{t('unlink.label')}</button></div>}
