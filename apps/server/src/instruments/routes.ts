@@ -3,13 +3,16 @@
  * states COMPLETE; BUILDER W2 replaces the 'not_built' branch with the real check (bank.ts checkKit) and owns this file after.
  *
  * - GET /api/v1/music/kits (observe; no project, no people): every kit with its state, the reason a recorded request would get now,
- *   the parts it plays, its sources' duties once checked, its label, and the owner's mark. No absolute path.
+ *   the parts it plays, its sources' duties once checked, its label, and the owner's mark. No absolute path. The state is the kit
+ *   check's own (bank.ts checkKit: library, calibration, ledger, licences, every file against the kit table); a kit whose check passes
+ *   is 'not_built' until the sampler is built and the flag flipped (INSTRUMENTS_BUILT), then 'ready'.
  * - POST /api/v1/music/kits/:kitId/heard {heard} (the owner's own session only; heard.ts). No MCP tool.
  */
-import { kitCalibrated, kitKey, MUSIC_KITS, MUSIC_RECORDED_HEARD_LABEL, MUSIC_RECORDED_UNHEARD_LABEL, type KitState, type MusicKit, type MusicKitStatus } from '@pulseframe/core';
+import { kitCalibrated, kitForStyle, kitKey, MUSIC_KITS, MUSIC_RECORDED_HEARD_LABEL, MUSIC_RECORDED_UNHEARD_LABEL, type KitState, type MusicKit, type MusicKitStatus } from '@pulseframe/core';
 import type { Config } from '../config.ts';
 import { libraryServiceFor } from '../library/index.ts';
-import { INSTRUMENTS_BUILT, INSTRUMENTS_SERVER_REFUSALS } from './contract.ts';
+import { checkKit, type ReadyKit } from './bank.ts';
+import { INSTRUMENTS_BUILT, INSTRUMENTS_SERVER_REFUSALS, instrumentsError } from './contract.ts';
 import { readKitsHeard } from './heard.ts';
 
 /** The refusal code a recorded request gets in each state (null = it is made). */
@@ -32,22 +35,36 @@ export function kitStateBeforeCheck(cfg: Config, kit: MusicKit): Exclude<KitStat
   if (!INSTRUMENTS_BUILT) return 'not_built';
   return 'check';
 }
-/** GET /api/v1/music/kits. */
-export async function listMusicKits(cfg: Config, kits: readonly MusicKit[] = MUSIC_KITS): Promise<{ kits: MusicKitStatus[] }> {
+/** GET /api/v1/music/kits. `built` is the build flag (a test of the check itself may pass true). */
+export async function listMusicKits(cfg: Config, kits: readonly MusicKit[] = MUSIC_KITS, built: boolean = INSTRUMENTS_BUILT): Promise<{ kits: MusicKitStatus[] }> {
   const marks = readKitsHeard(cfg.dataDir);
-  return {
-    kits: kits.map((kit): MusicKitStatus => {
-      const before = kitStateBeforeCheck(cfg, kit);
-      const state: KitState = before === 'check' ? 'not_built' : before; // W2: run checkKit here
-      const heard = marks.get(kitKey(kit)) ?? null;
-      return {
-        kitId: kit.id, version: kit.version, styleId: kit.styleId, state, reason: KIT_STATE_REASON[state],
-        parts: Object.entries(kit.parts).map(([part, p]) => {
-          const ins = kit.instruments.find((i) => i.id === p!.instrument)!;
-          return { part: part as MusicKitStatus['parts'][number]['part'], instrument: ins.id, title: ins.title };
-        }),
-        sources: [], label: kitLabel(heard), heard,
-      };
-    }),
-  };
+  const out: MusicKitStatus[] = [];
+  for (const kit of kits) {
+    const check = await checkKit(cfg, kit);
+    const state: KitState = check.state === 'ready' && !built ? 'not_built' : check.state;
+    // the reason is the refusal a recorded request would get now (the check's own error: path_escape and format too)
+    const reason = check.state === 'ready' ? (built ? null : KIT_STATE_REASON.not_built) : check.error.code;
+    const heard = marks.get(kitKey(kit)) ?? null;
+    out.push({
+      kitId: kit.id, version: kit.version, styleId: kit.styleId, state, reason,
+      parts: Object.entries(kit.parts).map(([part, p]) => {
+        const ins = kit.instruments.find((i) => i.id === p!.instrument)!;
+        return { part: part as MusicKitStatus['parts'][number]['part'], instrument: ins.id, title: ins.title };
+      }),
+      sources: check.sources, label: kitLabel(heard), heard,
+    });
+  }
+  return { kits: out };
+}
+
+/**
+ * The recorded kit of a request, checked (outside the queue turn), or the refusal: 404 instruments_no_kit for a style without one, then
+ * the check's own refusal (library, calibration, ledger, licence, files). All-or-nothing: nothing is made unless this returns.
+ */
+export async function recordedKitFor(cfg: Config, styleId: string, kits: readonly MusicKit[] = MUSIC_KITS, signal?: AbortSignal): Promise<{ kit: MusicKit; check: ReadyKit }> {
+  const kit = kitForStyle(styleId, kits);
+  if (!kit) throw instrumentsError('noKit', { styleId }, styleId);
+  const check = await checkKit(cfg, kit, signal);
+  if (check.state !== 'ready') throw check.error;
+  return { kit, check };
 }

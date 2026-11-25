@@ -5,9 +5,23 @@
  * recorded kit sounds better, real, warm or natural (core INSTRUMENTS_FORBIDDEN_WORDS). Builder W2 owns this file after the pre-pass
  * (it adds a row per refusal provoked for real through the recorded path).
  */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { INSTRUMENTS_FORBIDDEN_WORDS, INSTRUMENTS_FORBIDDEN_WORDS_HE, MUSIC_RECORDED_HEARD_LABEL, MUSIC_RECORDED_UNHEARD_LABEL } from '@pulseframe/core';
+import * as T from '@pulseframe/time';
+import { MUSIC_KITS, INSTRUMENTS_FORBIDDEN_WORDS, INSTRUMENTS_FORBIDDEN_WORDS_HE, MUSIC_RECORDED_HEARD_LABEL, MUSIC_RECORDED_UNHEARD_LABEL } from '@pulseframe/core';
 import { INSTRUMENTS_SERVER_REFUSALS } from '../../../apps/server/src/instruments/contract.ts';
+import { checkKit, kitNotes, loadBank } from '../../../apps/server/src/instruments/bank.ts';
+import { markKitHeard } from '../../../apps/server/src/instruments/heard.ts';
+import { loadConfig } from '../../../apps/server/src/config.ts';
+import { Governance } from '../../../apps/server/src/governance.ts';
+import { closeLibraryService, libraryServiceFor } from '../../../apps/server/src/library/index.ts';
+import { addMusic, createMusicQueue, makeMusic } from '../../../apps/server/src/music.ts';
+import { renderMusic } from '../../../apps/server/src/music/render.ts';
+import { prepareMusicFit } from '../../../apps/server/src/musicfit/plan.ts';
+import { ApiError, Store } from '../../../apps/server/src/store.ts';
+import { refreshKitTable, standInPlanZones, SYNTHETIC_SOURCES, writeLedger, writeSyntheticKit } from '../../fixtures/src/instruments.ts';
 import { dictionaries, INSTRUMENTS_EN, INSTRUMENTS_HE, INSTRUMENTS_REFUSAL_PATTERNS, translateRefusal } from '../../i18n/src/index.ts';
 
 /** One sample sentence per refusal, made by the table's own message function. */
@@ -43,7 +57,68 @@ describe('instruments refusals in Hebrew', () => {
   it('every refusal carries an English hint (the next step) and an instruments_ or owner code', () => {
     for (const r of Object.values(INSTRUMENTS_SERVER_REFUSALS)) { expect(r.hint.length).toBeGreaterThan(10); expect(/^(instruments_|owner_required$)/.test(r.code)).toBe(true); }
   });
-  it.todo('W2: each refusal of the recorded path is provoked for real (synthetic library, labelled test kit) and equals the table');
+  it('each refusal of the recorded path, provoked for real over the labelled synthetic test kit, is the table\'s sentence and is worded in Hebrew', async () => {
+    const tmp = (p: string) => fs.mkdtempSync(path.join(os.tmpdir(), p));
+    const made: string[] = [];
+    const got = new Map<string, ApiError>();
+    const take = async (p: Promise<unknown> | (() => unknown)) => { try { await (typeof p === 'function' ? p() : p); } catch (e) { if (e instanceof ApiError) { got.set(e.code, e); return; } throw e; } throw new Error('no refusal'); };
+    const stand = { planZones: (n: Parameters<typeof standInPlanZones>[0], b: Parameters<typeof standInPlanZones>[1]) => standInPlanZones(n, b) } as never;
+    const world = (o: Parameters<typeof writeSyntheticKit>[1] = {}, library = true) => {
+      const data = tmp('pf-insw-data-'); made.push(data);
+      const lib = library ? writeSyntheticKit(tmp('pf-insw-lib-'), o) : null; if (lib) made.push(lib.root);
+      const cfg = { ...loadConfig({}), dataDir: data, libraryDir: lib?.root ?? null };
+      libraryServiceFor(cfg, { noStartupBuild: true });
+      return { cfg, lib, store: new Store(data) };
+    };
+    try {
+      const n = world({}, false);
+      await take(makeMusic(n.store, { styleId: 'music.calm', bars: 4, seed: 1, instruments: 'recorded' as const }, 't')); // no Config wired: not built
+      await take(makeMusic(n.store, { styleId: 'music.calm', bars: 4, seed: 1, instruments: 'recorded' as const }, 't', createMusicQueue(), { cfg: n.cfg }));
+      const w = world();
+      const kit = w.lib!.kit;
+      await take(makeMusic(w.store, { styleId: 'music.pop', bars: 4, seed: 1, instruments: 'recorded' as const }, 't', createMusicQueue(), { cfg: w.cfg, kits: [kit] }));
+      await take(makeMusic(w.store, { styleId: 'music.calm', bars: 4, seed: 1, instruments: 'recorded' as const }, 't', createMusicQueue(), { cfg: w.cfg }));
+      const check = await checkKit(w.cfg, kit);
+      if (check.state !== 'ready') throw check.error;
+      await take(loadBank(check, kit, [{ part: 'lead', midi: 127, vel: 1, gate: 10 }], undefined, stand));
+      await take(loadBank(check, kit, kitNotes(kit, 'music.calm', 4, 1), undefined, { ...(stand as object), maxDecodedBytes: 1 } as never));
+      const gov = new Governance(w.store);
+      const pid = w.store.createProject({ name: 'w' }).doc.id;
+      // LABELLED STAND-IN renderer (until W1's sampler is merged): the synthesiser's bytes; only the refusal after it is checked here
+      const half = async (id: string, bars: number, seed: number, o: { cancel: { cancelled: boolean } }) => renderMusic(id, bars, seed, { cancel: o.cancel });
+      const r = await addMusic(w.store, gov, { actor: 'owner', kind: 'user', scopes: ['observe', 'edit'] }, pid, { styleId: 'music.calm', bars: 4, seed: 1, start: T.ZERO, instruments: 'recorded' as const }, createMusicQueue({}, half), { cfg: w.cfg, kits: [kit], load: stand });
+      const p = w.store.getProject(pid);
+      await take(prepareMusicFit(w.store, pid, p.doc, p.revision, { target: { clipId: r.clipId! }, music: { keep: true }, tailor: true }));
+      await take(() => markKitHeard(w.cfg.dataDir, { actor: 'agent:a', kind: 'agent', scopes: ['observe', 'edit'], mode: 'edit' } as never, kit.id, true, '2026-11-25T00:00:00Z'));
+      const at = async (mut: () => void, k = kit) => { mut(); const c = await checkKit(w.cfg, k); if (c.state !== 'ready') got.set(c.error.code, c.error); writeLedger(w.lib!.root, w.lib!.ledger); };
+      await at(() => writeLedger(w.lib!.root, []));
+      await at(() => writeLedger(w.lib!.root, w.lib!.ledger.map((e) => ({ ...e, commit: 'other' }))));
+      const wav = path.join(w.lib!.items.piano.dir, 'samples', 'piano-c4.wav');
+      const keep = fs.readFileSync(wav);
+      await at(() => fs.rmSync(wav));
+      await at(() => { const b = Buffer.from(keep); b[b.length - 1]! ^= 1; fs.writeFileSync(wav, b); });
+      fs.writeFileSync(wav, keep.subarray(0, 100));
+      await at(() => {}, refreshKitTable(w.lib!));
+      fs.writeFileSync(wav, Buffer.concat([Buffer.from('fLaC'), Buffer.alloc(100)]));
+      await at(() => {}, refreshKitTable(w.lib!));
+      fs.writeFileSync(wav, keep);
+      fs.appendFileSync(path.join(w.lib!.items.piano.dir, 'piano.sfz'), '<region> sample=../../../x.wav key=1\n');
+      await at(() => {}, refreshKitTable(w.lib!));
+      const l = world({ piano: SYNTHETIC_SOURCES.ccBySa });
+      const lc = await checkKit(l.cfg, l.lib!.kit);
+      if (lc.state !== 'ready') got.set(lc.error.code, lc.error);
+      for (const d of made) closeLibraryService(d);
+    } finally { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); }
+    const want = Object.values(INSTRUMENTS_SERVER_REFUSALS).map((x) => x.code).sort();
+    expect([...got.keys()].sort()).toEqual(want);
+    for (const [code, e] of got) {
+      const row = Object.values(INSTRUMENTS_SERVER_REFUSALS).find((x) => x.code === code)!;
+      expect([code, e.status, e.hint]).toEqual([code, row.status, row.hint]);
+      const he = translateRefusal('he', e.message);
+      expect(he && heb.test(he), `${code}: ${e.message}`).toBe(true);
+    }
+    expect(MUSIC_KITS.length).toBe(1);
+  }, 120_000);
 });
 
 describe('instruments strings', () => {
