@@ -3,7 +3,7 @@ import type { Asset, BuildShortsBody, ExportMode, FindShortsBody, ReframePlanBod
 import type { MulticamSyncReport, MulticamSyncRequest, MulticamView } from '@pulseframe/core';
 import type { TakePlanView, TakeRequest, TakeResult } from '@pulseframe/core';
 import type { DiffSummary, FindQuery, FindResult, VersionInfo } from '@pulseframe/core';
-import type { AssistantConfigBody, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, BudgetReleaseAnswer } from '@pulseframe/core';
+import type { AssistantConfigBody, AssistantLocalCheck, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, BudgetReleaseAnswer } from '@pulseframe/core';
 import type { ArchiveLibraryMode, CreditsView, LibraryFacets, LibraryItemsPage, LibraryItemsQuery, LibraryKind, LibraryRow, LibraryStatus, LibraryUseBody, LibraryUseResult } from '@pulseframe/core';
 import type { CameraMotionView, StabiliseRunBody } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
@@ -138,6 +138,10 @@ export const api = {
   setAssistantKey: (key: string) => call<AssistantKeyState>('/assistant/key', { ...json({ key }), method: 'PUT' }),
   deleteAssistantKey: () => call<AssistantKeyState>('/assistant/key', { method: 'DELETE' }),
   askAssistant: (id: string, body: AssistantRequestBody) => call<{ jobId: string }>(`/projects/${id}/assistant/requests`, json(body)),
+  /** The local assistant (wave 7; the owner's session only): what answers on 127.0.0.1 at the saved port. The body is empty: no address is ever sent. */
+  assistantLocalCheck: () => call<AssistantLocalCheck>('/assistant/local/check', json({})),
+  /** The owner's tab took («הכנס לשורה») or ignored («התעלם») a local phrase: the server erases the phrase and any text slot (204). */
+  assistantTaken: (jobId: string) => call<void>(`/assistant/jobs/${encodeURIComponent(jobId)}/taken`, json({})),
   /** Without `transactionId` the server reverses the caller's own newest edit; with it, exactly that transaction (the owner may name an agent's). */
   undo: (id: string, mode: 'undo' | 'redo', transactionId?: string) => call<CommitResult>(`/projects/${id}/${mode}`, json(transactionId ? { transactionId } : {})),
   upload: (id: string, file: File) =>

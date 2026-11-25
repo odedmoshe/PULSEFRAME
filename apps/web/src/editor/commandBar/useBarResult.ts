@@ -294,6 +294,22 @@ export class BarSession {
   dispose(): void { this.live.dispose(); }
 }
 
+// ---- what the local assistant's row needs from the bar (wave 7): the grammar's result for the query, and the palette's input ----
+/** The bar's result kind for a query (published by useBarSlot, after its own debounce) and the palette's way to put text in its input. */
+export interface BarBridgeState { query: string; kind: BarResultKind | null }
+let bridgeState: BarBridgeState = { query: '', kind: null };
+let bridgeSetQuery: ((text: string) => void) | null = null;
+const bridgeListeners = new Set<() => void>();
+export const subscribeBarBridge = (l: () => void): (() => void) => { bridgeListeners.add(l); return () => { bridgeListeners.delete(l); }; };
+export const getBarBridge = (): BarBridgeState => bridgeState;
+/** The row's «הכנס לשורה»: the palette's own setQuery (the input gets the focus; the bar reads the text like typed text). False without a palette. */
+export function putInBar(text: string): boolean { if (!bridgeSetQuery) return false; bridgeSetQuery(text); return true; }
+function publishBar(query: string, kind: BarResultKind | null): void {
+  if (bridgeState.query === query && bridgeState.kind === kind) return;
+  bridgeState = { query, kind };
+  for (const l of bridgeListeners) l();
+}
+
 // ---- the hook ----
 /** The editor and its state (the same as useEditorState, with the server snapshot too so the components render to markup in tests). */
 export function useBarEditor(): { editor: Editor; state: EditorState } {
@@ -336,6 +352,9 @@ export function useBarSlot(query: string, host: BarPaletteHost): BarSlot {
   );
   const view = fresh; // after a 409 the editor has reloaded the document, so this is the re-planned view
   session.setView(view);
+  useEffect(() => { const f = host.setQuery ?? null; bridgeSetQuery = f; return () => { if (bridgeSetQuery === f) bridgeSetQuery = null; }; });
+  useEffect(() => { publishBar(view.query, view.kind); }, [view.query, view.kind]);
+  useEffect(() => () => publishBar('', null), []);
 
   const keysRef = useRef<readonly string[]>([]);
   const joined = view.entries.map((e) => e.key).join('|');
