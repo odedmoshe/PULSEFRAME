@@ -12,15 +12,22 @@
  *    PF_ASSISTANT_HOSTS).
  *  - request (owner): job.ts; 409 assistant_not_connected with no job row while the setup is not ready.
  *
+ *  - localCheck (owner, wave 7): what answers on 127.0.0.1:<the saved port> — running, loading, stopped or not llama.cpp — and the
+ *    model name it reports (basename); kept in memory as the owner's status `local.lastCheck`. Never a stack: a state in words.
+ *  - taken (owner, wave 7): the owner's tab took («הכנס לשורה») or ignored («התעלם») a local phrase; the phrase and the text slot
+ *    leave the job row by direct SQL inside Store.erasing (job.ts clearLocalPhrases). 404 for an unknown job, 409 for a job that is
+ *    not a local one.
+ *
  * Besides the contract's handlers the object carries `cancel` (for the jobs cancel route) and `done` (tests, the proof).
  */
 import type { Config } from '../config.ts';
 import type { Governance, Principal } from '../governance.ts';
 import { ApiError, type Store } from '../store.ts';
+import type { AssistantLocalCheck } from '@pulseframe/core';
 import { isOwnerSession, type AssistantDeps, type AssistantHandlers, type AssistantStatus } from './contract.ts';
 import { assistantStatusFor } from './visibility.ts';
 import { AssistantFiles } from './credential.ts';
-import { AssistantJobs, assistantSetup, type AssistantRuntime } from './job.ts';
+import { AssistantJobs, assistantSetup, clearLocalPhrases, isLocalJob, LOCAL_SETUP_HINT, type AssistantRuntime } from './job.ts';
 import { assistantSummary } from './summary.ts';
 
 export interface AssistantRouteContext { cfg: Config; store: Store; gov: Governance; deps: AssistantDeps }
@@ -50,6 +57,8 @@ const owner = (p: Principal) => {
 export function createAssistantHandlers(ctx: AssistantRouteContext): AssistantHandlers & AssistantJobControls {
   const rt: AssistantRuntime = { ...ctx, files: new AssistantFiles(ctx.cfg.dataDir, ctx.cfg.assistantHosts) };
   const jobs = new AssistantJobs(rt);
+  /** The last local check, in memory only (a restart forgets it; the owner checks again). */
+  let lastCheck: AssistantLocalCheck | null = null;
   const status = (): AssistantStatus => {
     const s = assistantSetup(rt);
     const spend = ctx.gov.assistantSpend();
@@ -65,6 +74,8 @@ export function createAssistantHandlers(ctx: AssistantRouteContext): AssistantHa
       toggles: { titlesAndMarkers: c.toggles.titlesAndMarkers, peopleNames: c.toggles.peopleNames },
       keySet: s.keySet, keyAddedAt: s.keyAddedAt,
       adapters: [...ctx.deps.adapters.keys()],
+      // wave 7: the local settings and the last check, when the local adapter is chosen (owner only: assistantStatusFor)
+      ...(s.local ? { local: c.local ? { port: c.local.port, timeoutSeconds: c.local.timeoutSeconds, lastCheck: lastCheck ? { ...lastCheck } : null } : null } : {}),
     };
   };
   return {
@@ -81,11 +92,22 @@ export function createAssistantHandlers(ctx: AssistantRouteContext): AssistantHa
     request: (p, projectId, body) => { owner(p); return jobs.start(p, projectId, body); },
     cancel: (p, jobId) => { if (!isOwnerSession(p)) throw assistantCancelRefusal(jobId); return jobs.cancel(jobId, p.actor); },
     done: (jobId) => jobs.done(jobId),
-    // wave 7, the LOCAL assistant (assistant-decisions.md §4): the owner check is final; the bodies are builder B's
-    localCheck: (p) => { owner(p); throw localNotBuilt('the local assistant check'); },
-    taken: (p, jobId) => { owner(p); void jobId; throw localNotBuilt('clearing the local assistant\'s phrase'); },
+    // wave 7, the LOCAL assistant (assistant-decisions.md §4): the owner check comes first, before anything is looked up
+    localCheck: async (p) => {
+      owner(p);
+      const { config } = rt.files.readConfig();
+      if (!config.local) throw new ApiError(409, 'assistant_not_connected', 'no port is saved for the local assistant, so there is nothing to check', { setup: 'provider_not_configured' }, LOCAL_SETUP_HINT.provider_not_configured);
+      const adapter = ctx.deps.local;
+      if (!adapter) throw new ApiError(409, 'assistant_not_connected', 'this build has no local adapter installed', { setup: 'provider_not_configured' }, 'The command bar works without the local assistant.');
+      const found = await adapter.check(config.local.port, AbortSignal.timeout(Math.min(config.local.timeoutSeconds, 15) * 1000)).catch(() => ({ state: 'not_llama' as const, model: null }));
+      lastCheck = { state: found.state, model: found.model, checkedAt: new Date().toISOString() };
+      return { ...lastCheck };
+    },
+    taken: (p, jobId) => {
+      owner(p);
+      const j = ctx.store.getJob(jobId); // 404 job_not_found
+      if (!isLocalJob(j)) throw new ApiError(409, 'not_a_local_job', `job ${jobId} is not a request to the local assistant`, { jobId }, 'Only a local assistant\'s phrase is taken or ignored this way.');
+      clearLocalPhrases(ctx.store, { jobId });
+    },
   };
 }
-
-/** Until builder B lands: an honest 501, never a fake state. */
-const localNotBuilt = (what: string) => new ApiError(501, 'not_built', `${what} is not built yet`, undefined, 'The command bar works without the local assistant; it comes in a later build.');

@@ -9,11 +9,14 @@
  * the cost and the error text to any observer of the project, and the proposals routes handed over the operations.
  * Also here: exactly what a job row keeps of a request (never the typed text), and where the explanation is stored.
  * The assistant is the labelled MOCK adapter (testAdapter.ts); the key is a labelled test double. No provider, no port, no network.
+ * Last, the LOCAL assistant (wave 7; the labelled local MOCK, local/localTestAdapter.ts, and while builder A's core functions are not
+ * merged their labelled double): the same walk with a planted phrase and text slot, and what is kept at rest until «הכנס לשורה» /
+ * «התעלם» (taken).
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ASSISTANT_ACTOR, ASSISTANT_JOB_TYPE } from '@pulseframe/core';
 import { ChatProviderError } from '@pulseframe/providers';
 import { Auth } from '../auth.ts';
@@ -32,6 +35,10 @@ import { Speech } from '../speech.ts';
 import { Store } from '../store.ts';
 import { f, plantedProject } from './assistantFixture.ts';
 import { mockToolAnswer, TestChatAdapter } from './testAdapter.ts';
+import { createLocalMockAdapter } from './local/localTestAdapter.ts';
+
+// builder A's groundLocalAnswer / localPhrase: the labelled DOUBLE while core's LOCAL_INTENT_BUILT is false, the real ones after
+vi.mock('@pulseframe/core', async (importOriginal) => (await import('./local/localTestAdapter.ts')).withLocalIntentDouble(await importOriginal()));
 
 const KEY = 'TEST-DOUBLE-NOT-A-KEY-job-privacy-7e42';
 const HOST = 'api.example.test';
@@ -45,6 +52,10 @@ let dir: string, cfg: Config, store: Store, auth: Auth, gov: Governance, app: Re
 let derivatives: Derivatives, capabilities: Capabilities, speech: Speech;
 let pid = '', ownerCookie = '', okJob = '', errJob = '', badJob = '', proposalId = '';
 const adapter = new TestChatAdapter();
+// ---------- the LOCAL plant (wave 7): a title text the owner typed (it can be a child's name), a word only in the typed request ----------
+const L_SLOT = 'פרפרונית', L_TYPED = 'גחליליונת';
+const L_REQ = `שימי בפתיחה כיתוב ${L_SLOT} בבקשה ${L_TYPED}`;
+const localMock = createLocalMockAdapter({ [L_REQ]: JSON.stringify({ intent: 'add_title', slots: { text: L_SLOT, at: 'start' } }) });
 const base = () => `http://127.0.0.1:${cfg.port}`;
 type Who = { name: string; headers: () => Record<string, string> };
 const tokens: Record<string, string> = {};
@@ -99,7 +110,7 @@ beforeAll(async () => {
   speech = new Speech(store, cfg);
   mcp = createMcp(store, auth, exporter, capabilities, presence, gov, speech);
   derivatives = new Derivatives(store);
-  app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, gov, undefined, speech, { assistant: { adapters: new Map([[adapter.id, adapter]]), endpoint: () => null } });
+  app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, gov, undefined, speech, { assistant: { adapters: new Map([[adapter.id, adapter]]), endpoint: () => null, local: localMock } });
   ownerCookie = auth.issueSession(new Request(`${base()}/api/v1/session`, { headers: { origin: base(), 'x-pf-owner-key': auth.tokens.owner } })).split(';')[0]!;
   pid = plantedProject(store).pid;
   for (const [name, mode, extra] of [['observe', 'observe', {}], ['propose', 'propose', {}], ['edit', 'edit', {}], ['autopilot', 'autopilot', { projectIds: [pid] }], ['full', 'edit', { people: 'full' }]] as const)
@@ -404,5 +415,121 @@ describe('the model\'s sentence lives only while its proposal can still be decid
   it('a service error text stays (the owner needs it; it is the service\'s sentence, not the model\'s answer), and so does a pending proposal\'s sentence', () => {
     expect(store.getJob(errJob).error.message).toContain(ERR_MARK);
     expect(holding(dir, EXPL_MARK)).toContain(dbFile());
+  });
+});
+
+describe('the LOCAL assistant (wave 7): a local job is the owner\'s own; its phrase and text slot live only until taken', () => {
+  const L_MARKS = [L_SLOT, L_TYPED] as const;
+  const markLocal = (text: string): string | null => {
+    const plain = text.replace(/\\u([0-9a-fA-F]{4})/g, (_, h: string) => String.fromCharCode(parseInt(h, 16)));
+    return L_MARKS.find((m) => text.includes(m) || plain.includes(m)) ?? null;
+  };
+  const filesOf = (root: string): string[] => fs.readdirSync(root, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? filesOf(path.join(root, e.name)) : [path.join(root, e.name)]));
+  const holding = (root: string, word: string) => filesOf(root).filter((file) => fs.readFileSync(file).includes(Buffer.from(word, 'utf8'))).map((file) => path.relative(root, file));
+  const askLocal = async () => { const r = await rest(OWNER_WHO, 'POST', `/projects/${pid}/assistant/requests`, { text: L_REQ, selection: [], playheadFrame: 0, lang: 'he' }); expect(r.status).toBe(202); return r.body.jobId as string; };
+  let localJob = '';
+  const logged: string[] = [];
+  beforeAll(async () => {
+    const put = await rest(OWNER_WHO, 'PUT', '/assistant/config', { adapter: 'local-llama-server', host: null, model: null, pricesCentsPerMTok: null, monthlyLimitCents: 0, perRequestCapCents: 0, toggles: { titlesAndMarkers: false, peopleNames: false }, local: { port: 18791, timeoutSeconds: 60 } });
+    expect(put.status).toBe(200);
+    for (const m of ['log', 'info', 'warn', 'error', 'debug'] as const) vi.spyOn(console, m).mockImplementation((...a: unknown[]) => { logged.push(a.map(String).join(' ')); });
+    localJob = await askLocal();
+    expect((await settled(localJob)).status).toBe('succeeded');
+  });
+  afterAll(() => { vi.restoreAllMocks(); });
+
+  it('control: the owner\'s session reads the phrase and the text slot', async () => {
+    const r = await rest(OWNER_WHO, 'GET', `/jobs/${localJob}`);
+    expect(r.body.output).toMatchObject({ kind: 'local-intent', intent: 'add_title', slots: { text: L_SLOT, at: 'start' } });
+    expect(r.body.output.phrase).toContain(L_SLOT);
+    expect((await rpc(OWNER_WHO, 'tools/call', { name: 'get_job', arguments: { jobId: localJob } })).text).toContain(L_SLOT);
+  });
+  it('the job row keeps the text\'s digest and length, never the typed request; no log line holds either', () => {
+    const row = store.getJob(localJob);
+    expect(Object.keys(row.input).sort()).toEqual(['adapter', 'kind', 'lang', 'port', 'profile', 'promptDigest', 'requestedBy', 'text', 'timeoutSeconds']);
+    expect(markLocal(JSON.stringify(row.input))).toBeNull();
+    expect(JSON.stringify(row)).not.toContain(L_TYPED);
+    expect(logged.filter((l) => markLocal(l))).toEqual([]);
+  });
+  for (const who of OTHERS) it(`as ${who.name}: GET /jobs/:jobId and MCP get_job give the stub; both local routes 403 owner_required; every REST route and MCP tool and resource is free of the plant`, async () => {
+    const row = store.getJob(localJob);
+    const want = { id: localJob, projectId: pid, type: ASSISTANT_JOB_TYPE, actor: ASSISTANT_ACTOR, status: 'succeeded', createdAt: row.createdAt, updatedAt: row.updatedAt };
+    expect((await rest(who, 'GET', `/jobs/${localJob}`)).body).toEqual(want);
+    expect(JSON.parse((await rpc(who, 'tools/call', { name: 'get_job', arguments: { jobId: localJob } })).result.content[0].text)).toEqual(want);
+    for (const [method, route] of [['POST', '/assistant/local/check'], ['POST', `/assistant/jobs/${localJob}/taken`]] as const) {
+      const r = await rest(who, method, route, {});
+      expect([r.status, r.body.error.code], route).toEqual([403, 'owner_required']);
+      expect(markLocal(JSON.stringify(r.body))).toBeNull();
+    }
+    const leaks: string[] = [];
+    const params: Record<string, string> = { id: pid, jobId: localJob, proposalId, sequenceId: 'seq_main', index: '0', kind: 'thumb' };
+    for (const key of Object.keys(PEOPLE_REST_SURFACES)) {
+      const [method, route] = key.split(' ') as [string, string];
+      if (PEOPLE_REST_SURFACES[key]!.includes('renderer-only') || key === 'ALL /mcp' || route.endsWith('/events')) continue;
+      if (method !== 'GET' && !/:jobId|proposal|assistant/.test(route)) continue;
+      const url = `${base()}${route.replace(/:([A-Za-z]+)/g, (_, k: string) => encodeURIComponent(params[k] ?? 'none'))}`;
+      const r = await fetchRaw(who, method, url, method === 'GET' ? undefined : { __walk: 1 });
+      const found = markLocal(r.buf.toString('utf8')) ?? markLocal(r.headers);
+      if (found) leaks.push(`${key} → ${r.status}: ${found}`);
+    }
+    const tools = (await rpc(who, 'tools/list', {})).result.tools as { name: string; annotations?: { readOnlyHint?: boolean }; inputSchema?: { properties?: Record<string, unknown> } }[];
+    for (const t of tools.filter((x) => x.annotations?.readOnlyHint || Object.hasOwn(x.inputSchema?.properties ?? {}, 'jobId'))) {
+      const found = markLocal((await rpc(who, 'tools/call', { name: t.name, arguments: { projectId: pid, jobId: localJob, frameIndex: 10, frames: [0, 10] } })).text);
+      if (found) leaks.push(`tool ${t.name}: ${found}`);
+    }
+    for (const r of (await rpc(who, 'resources/list', {})).result.resources ?? []) { const found = markLocal((await rpc(who, 'resources/read', { uri: r.uri })).text); if (found) leaks.push(`resource ${r.uri}: ${found}`); }
+    expect(leaks).toEqual([]);
+  }, 120_000);
+  it('the event stream: a listener other than the owner\'s session hears a local job (and its taken) as the stub only', async () => {
+    const listen = async (who: Who) => {
+      const r = await app.fetch(new Request(`${base()}/api/v1/projects/${pid}/events`, { headers: who.headers() }));
+      const reader = r.body!.getReader();
+      const s = { text: '' };
+      const read = async (until: (t: string) => boolean) => { const end = Date.now() + 5000; while (!until(s.text) && Date.now() < end) { const c = await Promise.race([reader.read(), new Promise<null>((ok) => setTimeout(() => ok(null), 100))]); if (c && !c.done) s.text += Buffer.from(c.value).toString('utf8'); } };
+      await read((t) => t.includes('event: hello'));
+      return { who, s, read, close: () => reader.cancel() };
+    };
+    const ls = await Promise.all([OWNER_WHO, ...OTHERS].map(listen));
+    const j = await askLocal(); await settled(j);
+    expect((await rest(OWNER_WHO, 'POST', `/assistant/jobs/${j}/taken`, {})).status).toBe(204);
+    const heard = (t: string) => new RegExp(`"id":"${j}"[^\\n]*"status":"succeeded"`).test(t);
+    for (const l of ls) { await l.read(heard); await l.close(); }
+    const [own, ...others] = ls;
+    expect(own!.s.text).toContain(L_SLOT); // control
+    expect(own!.s.text).toContain('"cleared":true');
+    for (const l of others) {
+      expect(heard(l.s.text), l.who.name).toBe(true);
+      expect(markLocal(l.s.text), l.who.name).toBeNull();
+      for (const e of l.s.text.split('\n\n').filter((x) => x.includes('event: job')).map((x) => JSON.parse(x.split('\n').find((y) => y.startsWith('data:'))!.slice(5)))) {
+        expect(Object.keys(e).sort(), l.who.name).toEqual(['actor', 'createdAt', 'id', 'projectId', 'status', 'type', 'updatedAt']);
+      }
+    }
+  }, 60_000);
+  it('at rest: the typed request is in no file; the text slot is in the database only until taken («הכנס לשורה» / «התעלם»), then in no file, no backup made afterwards and no archive', async () => {
+    // the event-stream test's request already cleared the first job's phrase (the next request on the project clears it)
+    expect(store.getJob(localJob).output).toMatchObject({ cleared: true, phrase: null, slots: {} });
+    const fresh = await askLocal(); await settled(fresh);
+    store.db.pragma('wal_checkpoint(TRUNCATE)');
+    expect(holding(dir, L_TYPED)).toEqual([]);
+    expect(holding(dir, L_SLOT).length).toBeGreaterThan(0); // control: until taken
+    const r = await rest(OWNER_WHO, 'POST', `/assistant/jobs/${fresh}/taken`, {});
+    expect(r.status).toBe(204);
+    expect(store.getJob(fresh).output).toMatchObject({ cleared: true, phrase: null, slots: {} });
+    expect(holding(dir, L_SLOT)).toEqual([]);
+    expect(holding(dir, L_TYPED)).toEqual([]);
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-ajp-lbackup-'));
+    try {
+      await backupDataDir(dir, dest);
+      for (const w of L_MARKS) expect(holding(dest, w), w).toEqual([]);
+    } finally { fs.rmSync(dest, { recursive: true, force: true }); }
+    // a phrase still pending is not in an archive either (an archive holds no job at all)
+    const pending = await askLocal(); await settled(pending);
+    const standIns: string[] = [];
+    for (const hash of archiveBlobs(store.getProject(pid).doc)) { const file = store.blobPath(hash); if (!fs.existsSync(file)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'x'); standIns.push(file); } }
+    const arc = await fetchRaw(OWNER_WHO, 'GET', `${base()}/api/v1/projects/${pid}/archive`);
+    expect(arc.status).toBe(200);
+    expect(markLocal(arc.buf.toString('utf8'))).toBeNull();
+    for (const file of standIns) fs.rmSync(file);
+    expect(logged.filter((l) => markLocal(l))).toEqual([]);
   });
 });

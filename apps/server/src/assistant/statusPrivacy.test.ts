@@ -9,11 +9,14 @@
  * Also here: who may release a held amount (the owner's session only, on REST; no MCP tool does), what the refusal tells, a held
  * amount whose project was deleted, and the budget fact that stays visible to an agent: its OWN grant's.
  * The assistant is the labelled MOCK adapter (testAdapter.ts); the key is a labelled test double. No provider, no port, no network.
+ * Last, the LOCAL assistant (wave 7): a planted port, time limit and model name (the labelled local MOCK reports it on the check)
+ * are the owner's too; the same walk with the same seven credentials.
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createLocalMockAdapter } from './local/localTestAdapter.ts';
 import { ASSISTANT_JOB_TYPE, ASSISTANT_PUBLIC_STATUS_KEYS } from '@pulseframe/core';
 import { Auth } from '../auth.ts';
 import { Capabilities } from '../capabilities.ts';
@@ -47,6 +50,10 @@ let dir: string, cfg: Config, store: Store, auth: Auth, gov: Governance, app: Re
 let derivatives: Derivatives, capabilities: Capabilities, speech: Speech;
 let pid = '', ownerCookie = '', okJob = '', heldJob = '', keyAddedAt = '';
 const adapter = new TestChatAdapter({ id: ADAPTER, bytesBoundTokens: false });
+// ---------- the LOCAL plant (wave 7): a port, a time limit and the model name the local server reports ----------
+const L_PORT = 47_311, L_TIMEOUT = 593, L_MODEL = 'MOCK-tutonit-8823.gguf';
+const localMock = createLocalMockAdapter({});
+localMock.checkAnswer = { state: 'running', model: L_MODEL };
 const base = () => `http://127.0.0.1:${cfg.port}`;
 type Who = { name: string; headers: () => Record<string, string> };
 const tokens: Record<string, string> = {};
@@ -109,7 +116,7 @@ beforeAll(async () => {
   speech = new Speech(store, cfg);
   mcp = createMcp(store, auth, exporter, capabilities, presence, gov, speech);
   derivatives = new Derivatives(store);
-  app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, gov, undefined, speech, { assistant: { adapters: new Map([[adapter.id, adapter]]), endpoint: () => null } });
+  app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, gov, undefined, speech, { assistant: { adapters: new Map([[adapter.id, adapter]]), endpoint: () => null, local: localMock } });
   ownerCookie = auth.issueSession(new Request(`${base()}/api/v1/session`, { headers: { origin: base(), 'x-pf-owner-key': auth.tokens.owner } })).split(';')[0]!;
   pid = plantedProject(store).pid;
   for (const [name, mode, extra] of [['observe', 'observe', {}], ['propose', 'propose', {}], ['edit', 'edit', {}], ['autopilot', 'autopilot', { projectIds: [pid], budgetCents: GRANT_BUDGET }], ['full', 'edit', { people: 'full' }]] as const)
@@ -332,4 +339,43 @@ describe('releasing a held amount is the owner\'s session\'s alone', () => {
     expect((await rest(OWNER_WHO, 'GET', '/assistant/status')).body).toMatchObject({ reservedCents: 0, held: [] });
     expect(store.db.prepare('SELECT COUNT(*) AS n FROM jobs WHERE type = ? AND project_id = ?').get(ASSISTANT_JOB_TYPE, other)).toEqual({ n: 0 });
   });
+});
+
+describe('the LOCAL assistant (wave 7): its port, time limit and model name are the owner\'s', () => {
+  // the time limit is a 3-digit number that project data can hold by chance (a frame count, a size): it is searched as the settings'
+  // own words (timeoutSeconds, lastCheck) instead; the port (5 digits) as a number of its own, the model name as it is
+  const plantLocal = (text: string): string | null => [L_MODEL, 'timeoutSeconds', 'lastCheck'].find((w) => text.includes(w)) ?? (asNumber(String(L_PORT)).test(text) ? String(L_PORT) : null);
+  beforeAll(async () => {
+    expect((await rest(OWNER_WHO, 'PUT', '/assistant/config', { ...CONFIG, adapter: 'local-llama-server', local: { port: L_PORT, timeoutSeconds: L_TIMEOUT } })).status).toBe(200);
+    expect((await rest(OWNER_WHO, 'POST', '/assistant/local/check', {})).body).toMatchObject({ state: 'running', model: L_MODEL });
+  });
+  it('control: the owner\'s session reads the port, the time limit and the last check with the model name', async () => {
+    const s = await rest(OWNER_WHO, 'GET', '/assistant/status');
+    expect(s.body).toMatchObject({ setup: 'ready', adapter: 'local-llama-server', local: { port: L_PORT, timeoutSeconds: L_TIMEOUT, lastCheck: { state: 'running', model: L_MODEL } } });
+  });
+  for (const who of OTHERS) it(`as ${who.name}: the status is connected in three fields; the check route is refused; every REST route, MCP tool, resource and prompt is free of the plant`, async () => {
+    const st = await rest(who, 'GET', '/assistant/status');
+    expect(Object.keys(st.body).sort()).toEqual([...ASSISTANT_PUBLIC_STATUS_KEYS].sort());
+    expect(st.body.connected).toBe(true);
+    const chk = await rest(who, 'POST', '/assistant/local/check', {});
+    expect([chk.status, chk.body.error.code]).toEqual([403, 'owner_required']);
+    const leaks: string[] = [];
+    const params: Record<string, string> = { id: pid, jobId: okJob, proposalId: 'none', sequenceId: 'seq_main', index: '0', kind: 'thumb' };
+    for (const key of Object.keys(PEOPLE_REST_SURFACES)) {
+      const [method, route] = key.split(' ') as [string, string];
+      if (PEOPLE_REST_SURFACES[key]!.includes('renderer-only') || key === 'ALL /mcp' || route.endsWith('/events')) continue;
+      if (method !== 'GET' && !/:jobId|proposal|assistant/.test(route)) continue;
+      const r = await fetchRaw(who, method, `${base()}${route.replace(/:([A-Za-z]+)/g, (_, k: string) => encodeURIComponent(params[k] ?? 'none'))}`, method === 'GET' ? undefined : { __walk: 1 });
+      const found = plantLocal(r.buf.toString('utf8')) ?? plantLocal(r.headers);
+      if (found) leaks.push(`${key} → ${r.status}: ${found}`);
+    }
+    const tools = (await rpc(who, 'tools/list', {})).result.tools as { name: string; annotations?: { readOnlyHint?: boolean }; inputSchema?: { properties?: Record<string, unknown> } }[];
+    for (const t of tools.filter((x) => x.annotations?.readOnlyHint || Object.hasOwn(x.inputSchema?.properties ?? {}, 'jobId'))) {
+      const found = plantLocal((await rpc(who, 'tools/call', { name: t.name, arguments: { projectId: pid, jobId: okJob, frameIndex: 10, frames: [0, 10] } })).text);
+      if (found) leaks.push(`tool ${t.name}: ${found}`);
+    }
+    for (const r of (await rpc(who, 'resources/list', {})).result.resources ?? []) { const found = plantLocal((await rpc(who, 'resources/read', { uri: r.uri })).text); if (found) leaks.push(`resource ${r.uri}: ${found}`); }
+    for (const p of (await rpc(who, 'prompts/list', {})).result.prompts ?? []) { const found = plantLocal((await rpc(who, 'prompts/get', { name: p.name, arguments: { projectId: pid } })).text); if (found) leaks.push(`prompt ${p.name}: ${found}`); }
+    expect(leaks).toEqual([]);
+  }, 120_000);
 });
