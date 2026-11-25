@@ -756,3 +756,50 @@ describe('words', () => {
     for (const s of allText) { expect(s).not.toMatch(FILM_FORBIDDEN_WORDS); expect(s).not.toMatch(FILM_FORBIDDEN_WORDS_HE); }
   });
 });
+
+describe('music that is a derived copy of the measured music (lineage.ts ownBeats: the one rule every beat reader follows)', () => {
+  const derived = (extra: Record<string, unknown>) => ({ origin: 'derived' as const, importedAt: '2026-11-25T00:00:00Z', importedBy: 'test', derived: { jobId: 'job_fixture', capabilityId: 'local.audio.voice-clean', capabilityVersion: '0.1.0', graphDigest: `sha256:${'a'.repeat(64)}`, params: {}, sourceAssetIds: ['mus'], outputName: 'out', outputRole: 'primary', encoding: 'display', provider: { id: 'fixture' }, logicDigest: `sha256:${'a'.repeat(64)}`, ...extra } });
+  /** The project of `regeneration` plus two hand-built copies of the song (no provider ran): one from 1/4 s of it that keeps its timing, one reversed. */
+  const withCopies = (d: ProjectDocument) => {
+    d.assets.cln = { ...song('cln', 199.75), provenance: derived({ sourceRangeStart: T.rt(1, 4), audio: 'processed' }) } as ProjectDocument['assets'][string];
+    d.assets.rev = { ...song('rev', 200), provenance: derived({}) } as ProjectDocument['assets'][string];
+    expect(validateProject(d)).toEqual([]);
+    return d;
+  };
+  const params = (musicAssetId: string) => ({ assetIds: ids(12), musicAssetId, targetSeconds: 30, order: 'given' });
+
+  it('a film on a time-preserving copy of the music is cut on the same beats as a film on the music itself; on a reversed copy it is refused like music that was never measured', () => {
+    const d = withCopies(withSong(clips(12, 12), 120, 200));
+    const a = plan(d, params('mus')), b = plan(d, params('cln'));
+    expect(a.predicted.cuts.length).toBeGreaterThan(5);
+    expect([b.predicted.cuts, b.predicted.offGridCuts, b.blocking]).toEqual([a.predicted.cuts, [], []]);
+    // the copy's clip starts at the same moment of the music: 1/4 s earlier on the copy's own clock
+    const sourceIn = (p: FamilyFilmPlan) => T.toSeconds((argsOf(p.ops.find((o) => o.bind === FILM_BINDS.music)!) as { sourceIn: T.RationalTime }).sourceIn);
+    expect([sourceIn(a), sourceIn(b)]).toEqual([0.5, 0.25]);
+    applied(d, b);
+    const refusal = (doc: ProjectDocument, id: string) => { try { planFamilyFilm(doc, params(id), emptyCtx()); } catch (e) { if (e instanceof FilmError) return [e.code, e.message, e.hint]; throw e; } return ['planned']; };
+    const bare = clips(12, 12); bare.assets.mus = song('mus', 200); // the song, never measured
+    expect(refusal(d, 'rev')).toEqual(refusal(bare, 'mus'));
+    expect(refusal(d, 'rev')[0]).toBe('needs_analysis');
+  });
+
+  it('music kept by hand that shows a time-preserving copy (replace_clip_asset) still defines the grid; showing a reversed copy it blocks the plan like music without measured beats', () => {
+    const d0 = withCopies(withSong(clips(12, 12), 120, 200));
+    const p = plan(d0, params('mus'));
+    const doc = applied(d0, p).doc, runId = runIdOf(doc);
+    const music = doc.recipeRuns[runId]!.slots!.find((s) => s.key === FILM_BINDS.music)!;
+    const cleaned = edit(doc, [{ op: 'replace_clip_asset', args: { clipId: music.clipId, assetId: 'cln' } }]);
+    expect((findClip(cleaned, music.clipId)!.clip as { assetId: string }).assetId).toBe('cln');
+    const r = regenerationPlan(cleaned, runId).plan;
+    expect([r.blocking, r.predicted.cuts, r.predicted.offGridCuts]).toEqual([[], p.predicted.cuts, []]);
+    expect(r.slots.map((s) => s.key)).not.toContain(FILM_BINDS.music); // kept, not placed again
+    // a reversed copy cannot be given to the clip by the op (it does not keep the timing), so the fixture sets it by hand
+    const reversed = structuredClone(doc);
+    (findClip(reversed, music.clipId)!.clip as { assetId: string }).assetId = 'rev';
+    const unmeasured = structuredClone(doc);
+    delete unmeasured.analyses.mus;
+    (findClip(unmeasured, music.clipId)!.clip as { gain?: number }).gain = 0.7; // edited by hand, so kept
+    const codes = (x: ProjectDocument) => regenerationPlan(x, runId).plan.blocking.map((w) => w.code);
+    expect([codes(reversed), codes(unmeasured)]).toEqual([['kept_music_not_followable'], ['kept_music_not_followable']]);
+  });
+});

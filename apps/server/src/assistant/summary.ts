@@ -17,7 +17,7 @@
  */
 import * as T from '@pulseframe/time';
 import {
-  ASSISTANT_FOLD_SECONDS, ASSISTANT_SUMMARY_FIELDS, clipEnd, parseFields, sequenceDuration, SUMMARY_MAX_BYTES,
+  ASSISTANT_FOLD_SECONDS, ASSISTANT_SUMMARY_FIELDS, beatNumbers, clipEnd, parseFields, sequenceDuration, SUMMARY_MAX_BYTES,
   type AssistantSummary, type AssistantToggles, type Clip, type ProjectDocument,
 } from '@pulseframe/core';
 import { ApiError } from '../store.ts';
@@ -95,8 +95,10 @@ export function assistantSummary(input: ProjectDocument, ctx: AssistantSummaryCo
   // music: assets on this sequence with a beat grid (count and bpm only; never the beats themselves, nor any other analysis)
   const music: AssistantSummary['music'] = [];
   for (const [assetId, a] of alias) {
-    const an = Object.hasOwn(doc.analyses, assetId) ? doc.analyses[assetId] : undefined;
-    if (an?.beats && an.beats.beats.length > 0) music.push({ asset: a, beats: an.beats.beats.length, bpm: an.beats.bpm });
+    // the file's own beats, or those of the measured music it is a time-preserving copy of (core lineage beatNumbers: the rule
+    // the timeline follows), so the assistant knows the music that is followed; a copy without a recorded time mapping has none
+    const n = Object.hasOwn(doc.assets, assetId) ? beatNumbers(doc, assetId) : null;
+    if (n && n.count > 0) music.push({ asset: a, beats: n.count, bpm: n.bpm });
   }
   const markers: AssistantSummary['markers'] = Object.values(doc.markers ?? {})
     .filter((m) => m.sequenceId === seq.id)

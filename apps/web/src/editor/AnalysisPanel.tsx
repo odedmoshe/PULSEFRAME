@@ -4,22 +4,16 @@ import * as T from '@pulseframe/time';
 import type { Clip } from '@pulseframe/core';
 import { api, ApiFailure } from '../api.ts';
 import { useEditorState } from './store.ts';
+import { analysisEdit, analysisFacts } from './analysis.logic.ts';
 
 type MediaClip = Extract<Clip, { type: 'media' }>;
 type Kind = 'scenes' | 'beats';
 
-/** Nearest time of `list` to `t` (exact rational compare), or null when the list is empty. */
-function nearest(list: readonly T.RationalTime[], t: T.RationalTime): T.RationalTime | null {
-  let best: T.RationalTime | null = null;
-  let bestD: T.RationalTime | null = null;
-  for (const x of list) {
-    const d = T.cmp(x, t) < 0 ? T.sub(t, x) : T.sub(x, t);
-    if (bestD === null || T.lt(d, bestD)) { best = x; bestD = d; }
-  }
-  return best;
-}
-
-/** Stored scene-cut / beat results of the selected media clip's asset, plus runners and manual correction (no AI involved). */
+/**
+ * Scene-cut / beat results of the selected media clip's file, plus runners and manual correction (no AI involved). The results are
+ * the file's own or, for a time-preserving copy, its measured source's on the copy's clock (analysis.logic.ts: the timeline's
+ * rule); the panel then names the source, and a correction is made in the source's record.
+ */
 export function AnalysisPanel() {
   const { editor, state, t } = useEditorState();
   const { doc } = state;
@@ -32,11 +26,9 @@ export function AnalysisPanel() {
   if (!doc || !clip || !assetId || state.selection.length !== 1) return null;
 
   const asset = doc.assets[assetId];
-  const an = doc.analyses?.[assetId];
   const hasVideo = !!asset?.video;
   const hasAudio = !!asset?.audio;
-  const scenes = an?.scenes;
-  const beats = an?.beats;
+  const { scenes, beats, measuredOn } = analysisFacts(doc, assetId);
   const clipEndT = T.add(clip.start, clip.duration);
   const ph = editor.playhead;
   const inside = T.lte(clip.start, ph) && T.lt(ph, clipEndT);
@@ -53,22 +45,18 @@ export function AnalysisPanel() {
   // Handlers read the playhead when they run (a seek may not have re-rendered this panel yet), and "which point is
   // nearest" is decided from the document as it is when the edit's turn comes.
   const liveSrc = () => { const c = editor.doc ? findClip(editor.doc, clip.id)?.clip : undefined; const at = editor.playhead; return c && c.type === 'media' && T.lte(c.start, at) && T.lt(at, T.add(c.start, c.duration)) ? sourceAt(c, at) : null; };
-  const add = (kind: Kind) => { const at = liveSrc(); if (at) void editor.commit([{ op: 'edit_analysis', args: { assetId, kind, add: [at] } }], 'Edit analysis'); };
+  const add = (kind: Kind) => { const at = liveSrc(); if (at) void editor.commit(() => { const op = editor.doc ? analysisEdit(editor.doc, assetId, kind, 'add', at) : null; return op ? [op] : null; }, 'Edit analysis'); };
   const remove = (kind: Kind) => {
     const at = liveSrc();
     if (!at) return;
-    void editor.commit(() => {
-      const cur = editor.doc?.analyses?.[assetId];
-      const n = nearest(kind === 'scenes' ? cur?.scenes?.cuts ?? [] : cur?.beats?.beats ?? [], at);
-      return n ? [{ op: 'edit_analysis', args: { assetId, kind, remove: [n] } }] : null;
-    }, 'Edit analysis');
+    void editor.commit(() => { const op = editor.doc ? analysisEdit(editor.doc, assetId, kind, 'remove', at) : null; return op ? [op] : null; }, 'Edit analysis');
   };
 
   const conf = beats?.confidence ?? null;
   const origin = (o: { method: string; edited: boolean }) => (
     <span className="muted"> {t('analysis.method')}: <bdi>{o.method}</bdi>{o.edited && <> <span className="badge" data-testid="analysis-edited">{t('analysis.edited')}</span></>}</span>
   );
-  const noneToRemove = (k: Kind) => (k === 'scenes' ? !scenes || scenes.cuts.length === 0 : !beats || beats.beats.length === 0);
+  const noneToRemove = (k: Kind) => (k === 'scenes' ? !scenes || scenes.cuts.length === 0 : !beats || beats.times.length === 0);
 
   return (
     <div className="fields analysis" data-testid="analysis-panel" data-asset-id={assetId}>
@@ -77,18 +65,19 @@ export function AnalysisPanel() {
       <p className="stat" data-testid="analysis-scenes" data-count={scenes ? scenes.cuts.length : undefined}>
         <strong>{t('analysis.scenes')}:</strong> {scenes ? <><bdi>{scenes.cuts.length}</bdi>{origin(scenes.origin)}</> : <span className="muted">{t('analysis.none')}</span>}
       </p>
-      <p className="stat" data-testid="analysis-beats" data-count={beats ? beats.beats.length : undefined}>
+      <p className="stat" data-testid="analysis-beats" data-count={beats ? beats.count : undefined}>
         <strong>{t('analysis.beats')}:</strong>{' '}
         {beats ? (
           <>
-            <bdi>{beats.beats.length}</bdi>
+            <bdi>{beats.count}</bdi>
             {beats.bpm !== null && <span> · {t('analysis.bpm')}: <bdi data-testid="analysis-bpm">{beats.bpm.toFixed(1)}</bdi></span>}
             {conf !== null && <span> · {t('analysis.confidence')}: <bdi data-testid="analysis-confidence">{Math.round(conf * 100)}%</bdi></span>}
-            {!!beats.downbeats?.length && <span> · {t('analysis.bars')}: <bdi data-testid="analysis-bars">{beats.downbeats.length}</bdi>{beats.meter ? <> (<bdi>{beats.meter}</bdi> {t('analysis.beatsPerBar')})</> : null}</span>}
+            {beats.bars > 0 && <span> · {t('analysis.bars')}: <bdi data-testid="analysis-bars">{beats.bars}</bdi>{beats.meter ? <> (<bdi>{beats.meter}</bdi> {t('analysis.beatsPerBar')})</> : null}</span>}
             {origin(beats.origin)}
           </>
         ) : <span className="muted">{t('analysis.none')}</span>}
       </p>
+      {measuredOn && <p className="muted" data-testid="analysis-measured-on" data-asset-id={measuredOn}>{t('analysis.measuredOn')} <bdi>{doc.assets[measuredOn]?.name ?? measuredOn}</bdi>. {t('analysis.measuredOnEdit')}</p>}
       {conf !== null && conf < 0.3 && <p className="muted danger" role="alert" data-testid="analysis-low-confidence">{t('analysis.lowConfidence')}</p>}
       <div className="row">
         <button className="ghost" disabled={busy !== null || !hasVideo} title={hasVideo ? undefined : t('analysis.noVideo')} onClick={() => void run('scenes')} data-testid="analysis-run-scenes">{busy === 'scenes' ? t('analysis.running') : t('analysis.runScenes')}</button>

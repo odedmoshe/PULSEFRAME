@@ -35,7 +35,7 @@ import { splitSegment, turnsBack } from './curves.ts';
 import { isLightChannel } from './keyframeChannels.ts';
 import { detachAssetFromEvents } from './events.ts';
 import { handDownCapture } from './capture.ts';
-import { sceneCutsFor, timingRelations, transcriptFor } from './lineage.ts';
+import { ownBeats, sceneCutsFor, timingRelations, transcriptFor } from './lineage.ts';
 import { skippedClips, timingCoverage, untimedCopyRefusal } from './cleanup.ts';
 import { MULTICAM_REFUSALS, type MulticamRefusalKey, type MulticamRefusalRow } from './multicamRefusals.ts';
 import { DEFAULT_REDACT_REGION, isUsable, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, roundHalfUp, SIZE_UNIT, ST, TrackOpArgs, trackSampleAt, type MotionTrack, type RedactRegion } from './tracking.ts';
@@ -2099,6 +2099,10 @@ const mustAsset = (d: ProjectDocument, assetId: string) => {
   if (!a) throw new OpError('not_found', `asset ${assetId} not found`, { assetId });
   return a;
 };
+// attach_analysis and edit_analysis WRITE the record of the file they name and do not follow lineage (lineage.ts): a record is
+// what was measured on, or entered for, that one file, on its own clock. A copy that is measured or corrected itself gets its own
+// record, which then wins over its source's for every reader (the nearest record of the chain; pinned in beatLineage.test.ts).
+// The editor's analysis panel addresses a correction made on a time-preserving copy to the measured file (analysis.logic.ts).
 defineOp({
   name: 'attach_analysis',
   version: 1,
@@ -2241,13 +2245,16 @@ defineOp({
     const frame = (t: T.RationalTime) => T.frameTime(T.frameIndexAt(t, rate), rate); // down to a whole frame
     const maxEnd = frame(T.add(clip.start, toTimelineSpan(clip, T.sub(asset.duration, clip.sourceIn))));
     const limit = T.min(target, maxEnd);
-    // beats of the source at or after the clip's in-point, as timeline times of this clip (also past its current end)
-    const beats = (d.analyses?.[clip.assetId]?.beats?.beats ?? []).filter((b) => T.lt(clip.sourceIn, b)).map((b) => frame(timelineAt(clip, b))).filter((t) => T.lt(clip.start, t) && T.lte(t, limit));
+    // beats of the source at or after the clip's in-point, as timeline times of this clip (also past its current end): the file's
+    // own, or those of the nearest time-preserving source it is a copy of, on the file's own clock (lineage.ts ownBeats). A copy
+    // made without a recorded time mapping has none, and is fitted like any file without a beat analysis: exactly to the picture.
+    const own = ownBeats(d, clip.assetId);
+    const beats = (own?.beats ?? []).filter((b) => T.lt(clip.sourceIn, b)).map((b) => frame(timelineAt(clip, b))).filter((t) => T.lt(clip.start, t) && T.lte(t, limit));
     const lastBeat = beats.length ? beats.reduce((m, t) => T.max(m, t)) : null;
     // With bar starts in the analysis the music ends on the last bar start, which sounds finished where an arbitrary beat does not —
     // unless that bar start lies more than one bar before the last usable beat (bars known for an earlier part of the file only).
-    const an = d.analyses?.[clip.assetId]?.beats;
-    const bars = (an?.downbeats ?? []).filter((b) => T.lt(clip.sourceIn, b)).map((b) => frame(timelineAt(clip, b))).filter((t) => T.lt(clip.start, t) && T.lte(t, limit));
+    const an = own?.analysis;
+    const bars = (own?.downbeats ?? []).filter((b) => T.lt(clip.sourceIn, b)).map((b) => frame(timelineAt(clip, b))).filter((t) => T.lt(clip.start, t) && T.lte(t, limit));
     const lastBar = bars.length ? bars.reduce((m, t) => T.max(m, t)) : null;
     const onBar = !!lastBar && !!lastBeat && beats.filter((t) => T.lt(lastBar, t)).length < (an?.meter ?? 4);
     const end = onBar ? lastBar! : lastBeat ?? limit;

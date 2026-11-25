@@ -155,7 +155,8 @@ describe('objectActions: what the ⋯ menu and the footer may do to what the pan
 });
 
 describe('trackRole: what a mixer strip says its track carries', () => {
-  const doc = { analyses: { music: { beats: { bpm: 120 } } }, transcripts: { talk: { segments: [] } } } as unknown as ProjectDocument;
+  // `assets` is empty: trackRole follows a file's lineage (core lineage.ts), and a file that is not in the library is its own root
+  const doc = { assets: {}, analyses: { music: { beats: { bpm: 120 } } }, transcripts: { talk: { segments: [] } } } as unknown as ProjectDocument;
   const m = (assetId: string, linkGroupId?: string) => ({ type: 'media', assetId, ...(linkGroupId ? { linkGroupId } : {}) }) as unknown as Parameters<typeof trackRole>[1]['clips'][number];
   it('music when its sound was analysed for beats, speech when it has a transcript, the video sound when every clip is linked', () => {
     expect(trackRole(doc, { clips: [m('other'), m('music')] })).toBe('music');

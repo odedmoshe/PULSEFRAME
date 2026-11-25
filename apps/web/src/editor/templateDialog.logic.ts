@@ -6,6 +6,7 @@
  */
 import * as T from '@pulseframe/time';
 import type { Asset, ProjectDocument, TemplateApplyResult, TemplateInput, TemplatePlanView, TemplateRegenerateResult, TemplateSummary, TemplateWarning } from '@pulseframe/core';
+import { beatFacts } from './analysis.logic.ts';
 import { ApiFailure } from '../api.ts';
 
 // ---------- media ----------
@@ -36,11 +37,8 @@ export const toggleItem = (list: readonly MediaItem[], assetId: string): MediaIt
 // ---------- music ----------
 /** Sound files of the project that can carry a template: files of kind audio (a video's own sound is not offered as music). */
 export const musicAssets = (doc: ProjectDocument): Asset[] => Object.values(doc.assets).filter((a) => a.kind === 'audio' && !!a.audio);
-/** Whether the beat of a sound file has been measured, and what was found. */
-export function beatState(doc: ProjectDocument, assetId: string): { measured: boolean; count: number; bpm: number | null } {
-  const b = doc.analyses?.[assetId]?.beats;
-  return b ? { measured: true, count: b.beats.length, bpm: b.bpm } : { measured: false, count: 0, bpm: null };
-}
+/** Whether the beat of a sound file is known, and what was found: its own measurement or its time-preserving source's (analysis.logic.ts beatFacts; the planner's rule, core placedMusicGrid). */
+export const beatState = (doc: ProjectDocument, assetId: string): { measured: boolean; count: number; bpm: number | null } => beatFacts(doc, assetId);
 /** The music chosen when the dialog opens: none for a template without music; else the first sound file with a measured beat, else the first sound file (or none). */
 export function defaultMusic(doc: ProjectDocument, need: TemplateSummary['needs']['music']): string {
   if (need === 'none') return '';

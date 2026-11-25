@@ -21,7 +21,7 @@
  */
 import * as T from '@pulseframe/time';
 import {
-  BuildShortsBodySchema, FindShortsBodySchema, findFillers, fingerprint, planShorts, rankShortCandidates, reframeOps, ReframePlanBodySchema, SHORTS_PROPOSE_REFUSED, SHORTS_RANK_METHOD,
+  BuildShortsBodySchema, FindShortsBodySchema, findFillers, fingerprint, ownSceneCuts, planShorts, rankShortCandidates, reframeOps, ReframePlanBodySchema, SHORTS_PROPOSE_REFUSED, SHORTS_RANK_METHOD,
   ShortsError, SHORTS_STATUS, shortsRefusal, transcriptStatements,
   type ApplySequencePlanArgs, type ApplySequencePlanOutput, type Asset, type AudioFeatures, type BuildShortsBody, type FindShortsBody, type HighlightInputsWithWords,
   type ProjectDocument, type ReframePlanView, type ShortCandidate, type ShortCandidatesView, type ShortsApplyResult, type ShortsPlan, type ShortsPlanContext, type ShortsPlanView,
@@ -57,11 +57,16 @@ function built<R>(what: string, fn: () => R): R {
 const REMEMBERED_MAX = 4000;
 const remembered = new Map<string, { candidate: ShortCandidate; stamp: string }>();
 const key = (projectId: string, candidateId: string) => `${projectId}|${candidateId}`;
+/**
+ * The scene cuts of a file as the finder and the planner read them: its own, or those of the nearest time-preserving source it is a
+ * copy of, on its own clock (core lineage ownSceneCuts: an enhanced copy keeps its source's shots). null when none: also for a
+ * copy made without a recorded time mapping, where the finder says "scene cuts: not analysed" as for any unanalysed file.
+ */
+export const sceneCutsOf = (doc: ProjectDocument, asset: Asset): T.RationalTime[] | null => { const own = ownSceneCuts(doc, asset.id); return own ? [...own.cuts] : null; };
 /** What a candidate's score was measured on: the file's transcript, its scene cuts and its measured sound. */
 function measuredOn(doc: ProjectDocument, asset: Asset, features: AudioFeatures | null): string {
   const tr = Object.hasOwn(doc.transcripts, asset.id) ? doc.transcripts[asset.id]! : null;
-  const analysis = Object.hasOwn(doc.analyses, asset.id) ? doc.analyses[asset.id]! : null;
-  return fingerprint({ duration: T.normalize(asset.duration), tr, cuts: analysis?.scenes?.cuts ?? null, features: features ? [features.contentHash, features.version, features.hops, features.partial] : null });
+  return fingerprint({ duration: T.normalize(asset.duration), tr, cuts: sceneCutsOf(doc, asset), features: features ? [features.contentHash, features.version, features.hops, features.partial] : null });
 }
 function remember(projectId: string, stamp: string, cands: readonly ShortCandidate[]) {
   for (const c of cands) { const k = key(projectId, c.id); remembered.delete(k); remembered.set(k, { candidate: c, stamp }); }
@@ -78,13 +83,13 @@ function videoAsset(doc: ProjectDocument, assetId: string): Asset {
 /** The finder's inputs for one asset of `doc`, with `features` (null when the file has no sound or it was not measured). */
 export function finderInputs(doc: ProjectDocument, asset: Asset, features: AudioFeatures | null): HighlightInputsWithWords {
   const tr = Object.hasOwn(doc.transcripts, asset.id) ? doc.transcripts[asset.id]! : null;
-  const analysis = Object.hasOwn(doc.analyses, asset.id) ? doc.analyses[asset.id]! : null;
+  const sceneCuts = sceneCutsOf(doc, asset);
   const existingShorts = Object.values(doc.sequences).flatMap((s) => (s.origin?.kind === 'short' && s.origin.assetId === asset.id ? [{ start: s.origin.excerpt.start, end: s.origin.excerpt.end }] : []));
   return {
     assetId: asset.id, assetDuration: asset.duration,
     statements: tr ? transcriptStatements(tr, { fileDuration: asset.duration }) : null,
     fillers: tr ? findFillers(tr).candidates : null,
-    features, sceneCuts: analysis?.scenes ? analysis.scenes.cuts : null, existingShorts,
+    features, sceneCuts, existingShorts,
     words: tr ? tr.segments.flatMap((s) => (s.timing === 'word' ? s.words.map((w) => ({ id: w.id, text: w.text, start: w.start, end: T.add(w.start, w.duration), confidence: w.confidence })) : [])) : null,
   };
 }

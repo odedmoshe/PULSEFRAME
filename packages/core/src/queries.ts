@@ -54,6 +54,8 @@ export function summarize(doc: ProjectDocument) {
     sequences: sequenceList(doc),
     recipeRuns: Object.values(doc.recipeRuns ?? {}).map((r) => ({ id: r.id, recipeId: r.recipeId, created: r.createdIds.length, steps: r.steps })),
     variants: Object.values(doc.variants ?? {}).map((v) => ({ id: v.id, name: v.name, width: v.width, height: v.height, fit: v.fit, safeArea: v.safeArea, captionStyle: v.captionStyle ?? null, overrides: Object.keys(v.overrides).length })),
+    // the STORED records, one per measured file, on purpose not by lineage (lineage.ts): this lists what exists to be read or
+    // corrected (get_analysis, edit_analysis). A copy that follows its source's record has no entry (pinned in beatLineage.test.ts)
     analyses: Object.values(doc.analyses ?? {}).map((a) => ({ assetId: a.assetId, sceneCuts: a.scenes?.cuts.length ?? null, beats: a.beats?.beats.length ?? null, bpm: a.beats?.bpm ?? null, bars: a.beats?.downbeats?.length ?? null, meter: a.beats?.meter ?? null })),
     transcripts: Object.values(doc.transcripts ?? {}).map((t) => ({ assetId: t.assetId, language: t.language, origin: t.origin.kind, phrases: t.segments.length, words: t.segments.reduce((n, s) => n + s.words.length, 0), wordTimed: t.segments.every((s) => s.timing === 'word') })),
     // life line (ADR-0021): `name` is what a person typed ('' = none); `shownAs` is the name the library shows (typed, or derived from a holiday), '' = shown by its date
