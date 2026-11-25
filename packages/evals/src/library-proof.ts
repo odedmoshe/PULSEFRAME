@@ -42,24 +42,45 @@
  * Not provable here (the helper runs them on the laptop, library-decisions.md §6): the real 500 GB root, librsvg on the laptop's
  * ffmpeg, real Hebrew words against real CLDR data, the owner's listening and looking, whether a platform releases a claim.
  */
-import { LIBRARY_PROOF_SERVER } from './library-proof.server.ts';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { closeLibraryProofServer, LIBRARY_PROOF_SERVER } from './library-proof.server.ts';
 import { LIBRARY_PROOF_DUTIES } from './library-proof.duties.ts';
 import { LIBRARY_PROOF_UI } from './library-proof.ui.ts';
+import { exitCode, verdict } from './library-proof.verdict.ts';
 
-/** One part of the proof: built or not, and its checks (number → run). Each part's run returns true (pass) or a failure sentence. */
+/** One part of the proof: built or not, and its checks (number → run). Each part's run returns true (pass) or a sentence. */
 export interface LibraryProofPart { built: boolean; checks: Record<number, () => Promise<true | string>> }
-const parts = { server: LIBRARY_PROOF_SERVER, duties: LIBRARY_PROOF_DUTIES, ui: LIBRARY_PROOF_UI };
-const pending = Object.entries(parts).filter(([, p]) => !p.built).map(([k]) => k);
-if (pending.length) {
-  console.error(`library-proof: not built yet (parts pending: ${pending.join(', ')}); nothing was measured`);
-  process.exit(2);
-}
-let failed = 0;
-for (const [name, part] of Object.entries(parts)) {
-  for (const [n, check] of Object.entries(part.checks)) {
-    const r = await check();
-    console.log(`${r === true ? 'PASS' : 'FAIL'} ${n} (${name})${r === true ? '' : `: ${r}`}`);
-    if (r !== true) failed++;
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const parts = { server: LIBRARY_PROOF_SERVER, duties: LIBRARY_PROOF_DUTIES, ui: LIBRARY_PROOF_UI };
+  const pending = Object.entries(parts).filter(([, p]) => !p.built).map(([k]) => k);
+  if (pending.length) {
+    console.error(`library-proof: not built yet (parts pending: ${pending.join(', ')}); nothing was measured`);
+    process.exit(2);
   }
+  const results: { check: number; part: string; verdict: 'PASS' | 'BLOCKED' | 'FAIL'; seconds: number; reason?: string }[] = [];
+  try {
+    for (const [name, part] of Object.entries(parts)) {
+      for (const [n, check] of Object.entries(part.checks)) {
+        const t0 = Date.now();
+        let r: true | string;
+        try { r = await check(); } catch (e) { r = `threw: ${String((e as Error)?.stack ?? e).slice(0, 600)}`; }
+        const v = verdict(r);
+        const seconds = Math.round((Date.now() - t0) / 100) / 10;
+        console.log(`${v} ${n} (${name}, ${seconds} s)${r === true ? '' : `: ${r}`}`);
+        results.push({ check: Number(n), part: name, verdict: v, seconds, ...(r === true ? {} : { reason: r.slice(0, 2000) }) });
+      }
+    }
+  } finally {
+    await closeLibraryProofServer();
+  }
+  const code = exitCode(results.map((x) => x.verdict));
+  const count = (v: string) => results.filter((x) => x.verdict === v).length;
+  console.log(`library-proof: ${count('PASS')} pass, ${count('BLOCKED')} blocked, ${count('FAIL')} fail (exit ${code})`);
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+  fs.mkdirSync(path.join(root, 'docs', 'evidence'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'docs', 'evidence', 'library-proof.json'), JSON.stringify({ when: new Date().toISOString(), exit: code, results, note: 'SYNTHETIC LIBRARY only (made by the proof); timings are one sample each' }, null, 1) + '\n');
+  process.exit(code);
 }
-process.exit(failed ? 1 : 0);

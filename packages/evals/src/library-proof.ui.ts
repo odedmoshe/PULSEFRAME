@@ -1,16 +1,19 @@
 /**
  * pnpm proof:library, part ui (worker C): check 17 of library-proof.ts, plus `libraryPanelsProbe`, which the editor-interactions
  * proof and the a11y audit share. Check 17 drives the editor (he and en; 1280 and 1440) against a server whose library the proof
- * sets up through the Settings flow itself: it needs a SYNTHETIC library folder (the server track's library-fixtures.ts) given in
- * PF_LIBRARY_PROOF_ROOT; without one, or while the server answers library_not_built, it FAILS with the reason (never passes).
+ * sets up through the Settings flow itself, over a SYNTHETIC library folder it makes with the server track's library-fixtures.ts
+ * (outside the data directory; removed afterwards). It never needs the owner's library.
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium, type Page } from 'playwright';
+import { fileURLToPath } from 'node:url';
 import { startServer } from '@pulseframe/server';
+import { closeLibraryService } from '../../../apps/server/src/library/index.ts';
 import { LIBRARY_TESTIDS as TID } from '../../../apps/web/src/editor/library/library.testids.ts';
 import type { LibraryProofPart } from './library-proof.ts';
+import { makeLibraryFixture } from './library-fixtures.ts';
 
 /** Every fixed id that is a plain string (the row and kind ids are per element). */
 const FIXED_IDS: string[] = (Object.values(TID) as unknown[]).filter((v): v is string => typeof v === 'string');
@@ -37,10 +40,12 @@ export async function libraryPanelsProbe(page: Page): Promise<{ state: 'not_buil
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function check17(): Promise<true | string> {
-  const root = process.env.PF_LIBRARY_PROOF_ROOT;
-  if (!root || !fs.existsSync(path.join(root, '_manifests', 'ledger.json'))) return 'not run: PF_LIBRARY_PROOF_ROOT must name a synthetic library folder (made by the server track\'s library-fixtures.ts) holding _manifests/ledger.json';
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-library-ui-'));
-  const s = await startServer({ port: 8817, dataDir });
+  if (!fs.existsSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../../../apps/web/dist/index.html'))) return 'BLOCKED: web bundle missing (run `pnpm build`), the editor cannot be opened';
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-library-ui-'));
+  const root = (await makeLibraryFixture(path.join(base, 'fixture'))).root;
+  const dataDir = path.join(base, 'data');
+  fs.mkdirSync(dataDir);
+  const s = await startServer({ port: 8817, dataDir, libraryDir: null });
   const browser = await chromium.launch();
   const problems: string[] = [];
   try {
@@ -106,7 +111,7 @@ async function check17(): Promise<true | string> {
       await ctx.close();
     }
     return problems.length ? problems.join('; ') : true;
-  } finally { await browser.close(); await s.close(); fs.rmSync(dataDir, { recursive: true, force: true }); }
+  } finally { await browser.close(); await s.close(); closeLibraryService(dataDir); fs.rmSync(base, { recursive: true, force: true }); }
 }
 
 export const LIBRARY_PROOF_UI: LibraryProofPart = { built: true, checks: { 17: check17 } };

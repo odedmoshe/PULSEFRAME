@@ -1,7 +1,7 @@
 /**
  * pnpm proof:library, part server (worker A): checks 1–11, 16, 18 of library-proof.ts, over the real server (startServer on
- * 127.0.0.1) and the SYNTHETIC LIBRARY of library-fixtures.ts. No stand-in is used: what other parts have not built yet shows as
- * BLOCKED (its own words name what is missing), never as a pass.
+ * 127.0.0.1) and the SYNTHETIC LIBRARY of library-fixtures.ts, against core's own licence table. No stand-in is used: what cannot
+ * run here shows as BLOCKED (its own words name what is missing), never as a pass.
  *
  * Each check returns true, or a sentence. A sentence that begins with "BLOCKED" means the check could not run here (no librsvg,
  * no built web app for stills, or a piece another worker or the lead has not landed yet); anything else is a failure.
@@ -22,7 +22,7 @@ import { canRasteriseSvg } from '../../../apps/server/src/elements.ts';
 import { closeLibraryService } from '../../../apps/server/src/library/index.ts';
 import * as raster from '../../../apps/server/src/library/raster.ts';
 import { DATA_CSP } from '../../../apps/server/src/http.ts';
-import { coreDutiesBuilt, FIX_COUNTS, FIX_KEYS, FIX_SVG_COUNTS, makeLibraryFixture, type LibraryFixture } from './library-fixtures.ts';
+import { FIX_COUNTS, FIX_KEYS, FIX_SVG_COUNTS, makeLibraryFixture, type LibraryFixture } from './library-fixtures.ts';
 import type { LibraryProofPart } from './library-proof.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -466,16 +466,7 @@ const checks: LibraryProofPart['checks'] = {
   },
 };
 
-/**
- * Without worker B's core licenceDuties the catalogue lists nothing (fail closed; the status says so), so every check after 1
- * that needs a row cannot pass here: its failure is reported as BLOCKED with what it saw, never as a pass.
- */
-const guarded: LibraryProofPart['checks'] = Object.fromEntries(Object.entries(checks).map(([n, run]) => [n, async () => {
-  const r = await run();
-  if (r === true || r.startsWith('BLOCKED') || Number(n) === 1 || coreDutiesBuilt()) return r;
-  return `BLOCKED (part duties: core licenceDuties is not built in this build, so the catalogue lists nothing, fail closed); seen: ${r.slice(0, 200)}`;
-}]));
-export const LIBRARY_PROOF_SERVER: LibraryProofPart = { built: true, checks: guarded };
+export const LIBRARY_PROOF_SERVER: LibraryProofPart = { built: true, checks };
 
 /** Stops the server and removes the temp folders (the runner may call it; the stand-alone run does). */
 export async function closeLibraryProofServer(): Promise<void> {
@@ -493,7 +484,7 @@ export async function closeLibraryProofServer(): Promise<void> {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   let failed = 0, blocked = 0;
   try {
-    for (const [n, check] of Object.entries(guarded)) {
+    for (const [n, check] of Object.entries(checks)) {
       let r: true | string;
       try { r = await check(); } catch (e) { r = `threw: ${(e as Error).stack?.slice(0, 600) ?? e}`; }
       const b = r !== true && r.startsWith('BLOCKED');
