@@ -10,7 +10,7 @@
 import * as T from '@pulseframe/time';
 import { canonical, sequenceDuration, type ProjectDocument } from '@pulseframe/core';
 import { pictureSize, type PlaySharpness } from './pictureSize.ts';
-import { audioPlan, drawGraph, evaluate, fillPlayingOrder, FlashGuard, isDecodeBudgetReason, openClipVoice, PitchStretcher, RampResampler, rampSourceFrames, rampSpanOf, soundEnd, type PlannedAudioClip } from '@pulseframe/engine';
+import { audioPlan, drawGraph, evaluate, fillPlayingOrder, FlashGuard, isDecodeBudgetReason, limiterCeilingLinear, limiterWindow, openClipVoice, PitchStretcher, RampResampler, rampSourceFrames, rampSpanOf, soundEnd, type PlannedAudioClip } from '@pulseframe/engine';
 import { interleaved, plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import type { MediaPool } from './media.ts';
 
@@ -98,6 +98,21 @@ export class Player {
   private tapLoaded = false;
   private analyser: AnalyserNode | null = null;
   private meterBuf: Float32Array | null = null;
+  /**
+   * The master limiter in preview (wave 7, track send; send-decisions C11): the engine kernel's static copy (public/
+   * pf-master-limiter.js) between the master gain and the output, inserted ONLY when the document has settings.limiter — without
+   * it the graph is exactly the one before (master → output). It runs on the browser's own mix (its own sum and resampling), 5 ms
+   * late, and without the export's loudness gain (send-decisions C3: the meter says «לפני הגברת הייצוא» when a target exists).
+   */
+  private limiterLoaded = false;
+  private limiterNode: AudioWorkletNode | null = null;
+  /** the ceiling (dB) of the session being started; null = no limiter */
+  private sessionLimiter: number | null = null;
+  private limiterReduction = 0;
+  /** reduction per 50 ms of output, in timeline seconds (measurement for proof:send L7) */
+  private limiterReductions: { t: number; reductionDb: number }[] = [];
+  /** why the limiter could not run in this browser (the sound then plays without it, and the editor can say so); null when it can */
+  limiterUnavailable: string | null = null;
   private origin = { clock: 0, frame: 0 };
   /**
    * SAFETY: whatever the transport does (shuttle, stepping, loop, jumps, edits during playback), the screen never shows
@@ -146,7 +161,8 @@ export class Player {
     if (!c) return;
     const sr = plan.sampleRate;
     const gen = ++this.generation;
-    if (!(await this.ensureAudio(sr)) || gen !== this.generation) return;
+    if (!(await this.ensureAudio(sr, !!plan.limiter)) || gen !== this.generation) return;
+    this.sessionLimiter = plan.limiter?.ceiling ?? null;
     const head = this.doc ? T.nearestSampleIndex(T.frameTime(this.frame, this.doc.settings.frameRate), sr) : c.at;
     const startSample = head >= c.at && head < soundEnd(c) ? head : c.at;
     const until = Math.min(soundEnd(c), startSample + Math.max(1, Math.round(seconds * sr)));
@@ -355,8 +371,8 @@ export class Player {
   }
 
   /** The audio device at `rate` (a context at another rate is replaced while nothing plays on it); true when it runs. */
-  private async ensureAudio(rate: number): Promise<boolean> {
-    if (this.actx && this.actx.sampleRate !== rate && this.nodes.length === 0) { void this.actx.close(); this.actx = null; this.tapLoaded = false; }
+  private async ensureAudio(rate: number, limiter = false): Promise<boolean> {
+    if (this.actx && this.actx.sampleRate !== rate && this.nodes.length === 0) { void this.actx.close(); this.actx = null; this.tapLoaded = false; this.limiterLoaded = false; }
     this.actx ??= new AudioContext({ sampleRate: rate, latencyHint: 'interactive' });
     await Promise.race([this.actx.resume(), new Promise((r) => setTimeout(r, 300))]);
     const ok = this.actx.state === 'running';
@@ -364,6 +380,15 @@ export class Player {
       // AudioWorklet tap: sample-accurate (currentFrame), unlike ScriptProcessor whose callbacks lag by a block.
       await this.actx.audioWorklet.addModule('/pf-onset-tap.js'); // static file: see apps/web/public (no blob: scripts, so the content security policy can stay strict)
       this.tapLoaded = true;
+    }
+    if (ok && limiter && !this.limiterLoaded) {
+      try {
+        await this.actx.audioWorklet.addModule('/pf-master-limiter.js'); // static file, like the tap (strict content security policy)
+        this.limiterLoaded = true;
+        this.limiterUnavailable = null;
+      } catch (e) {
+        this.limiterUnavailable = `the master limiter could not be loaded in this browser (${String((e as Error)?.message ?? e).slice(0, 120)}): preview plays without it; export still applies it`;
+      }
     }
     return ok;
   }
@@ -377,7 +402,7 @@ export class Player {
     if (this.frame >= this.frameCount - 1) this.frame = 0;
     const startFrame = this.frame;
     const t0 = T.toSeconds(T.frameTime(startFrame, rate));
-    const audioOk = await this.ensureAudio(doc.settings.sampleRate);
+    const audioOk = await this.ensureAudio(doc.settings.sampleRate, !!doc.settings.limiter);
     if (this.doc !== doc || !this.starting) return; // the project changed while waiting (setDoc has already started playback again with the new one), or playback was stopped
     const plan = audioPlan(doc, undefined, { bypassFx: this.bypassAudioFx });
     this.starting = false;
@@ -389,6 +414,7 @@ export class Player {
     this.late = [];
     this.lateFrames = [];
     this.requested = 0;
+    this.sessionLimiter = plan.limiter?.ceiling ?? null;
     if (audioOk) {
       const session = await this.startSound(plan.clips, plan.sampleRate, t0, T.nearestSampleIndex(T.frameTime(startFrame, rate), plan.sampleRate), gen);
       if (!session || gen !== this.generation) return;
@@ -470,13 +496,28 @@ export class Player {
   private openOutput(originClock: number, t0: number): GainNode {
     const ctx = this.actx!;
     const master = ctx.createGain();
-    master.connect(ctx.destination);
     this.onsets = [];
     this.levels = [];
-    // Level meter tap (observation only; the analyser has no output so it does not change what is heard).
+    this.limiterReduction = 0;
+    this.limiterReductions = [];
+    // What is heard: the master mix, or (only when the document has a master limiter) the master mix through the limiter.
+    let out: AudioNode = master;
+    if (this.sessionLimiter !== null && this.limiterLoaded) {
+      const node = new AudioWorkletNode(ctx, 'pf-master-limiter', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], processorOptions: { ceiling: limiterCeilingLinear(this.sessionLimiter), lookahead: limiterWindow(ctx.sampleRate).lookahead } });
+      node.port.onmessage = (e) => {
+        const m = e.data as { t: number; reductionDb: number };
+        this.limiterReduction = m.reductionDb;
+        this.limiterReductions.push({ t: +(m.t / ctx.sampleRate - originClock + t0).toFixed(6), reductionDb: +m.reductionDb.toFixed(2) });
+      };
+      master.connect(node);
+      this.limiterNode = node;
+      out = node;
+    }
+    out.connect(ctx.destination);
+    // Level meter tap (observation only; the analyser has no output so it does not change what is heard), after the limiter.
     const an = ctx.createAnalyser();
     an.fftSize = 2048;
-    master.connect(an);
+    out.connect(an);
     this.analyser = an;
     this.meterBuf = new Float32Array(an.fftSize);
     if ((globalThis as any).__pfAudioTap && this.tapLoaded) {
@@ -489,7 +530,7 @@ export class Player {
         // could be 2 samples off whenever the tap's first block does not fall on the 0.1 ms grid, and a peak at the edge changed windows)
         else this.levels.push({ t: +((e.data as { t: number }).t - originClock + t0).toFixed(6), peak: +(e.data as { peak: number }).peak.toFixed(4) });
       };
-      master.connect(tap);
+      out.connect(tap);
       this.tap = tap;
     }
     return master;
@@ -812,6 +853,7 @@ export class Player {
   private stopNodes() {
     if (this.analyser) { this.analyser.disconnect(); this.analyser = null; }
     if (this.tap) { this.tap.port.onmessage = null; this.tap.disconnect(); this.tap = null; }
+    if (this.limiterNode) { this.limiterNode.port.onmessage = null; this.limiterNode.disconnect(); this.limiterNode = null; this.limiterReduction = 0; }
     for (const n of this.nodes) { try { n.stop(); } catch { /* already stopped */ } n.disconnect(); }
     this.nodes = [];
   }
@@ -834,11 +876,19 @@ export class Player {
     for (let i = 0; i < this.meterBuf.length; i++) { const a = Math.abs(this.meterBuf[i]!); if (a > p) p = a; }
     return p > 0 ? 20 * Math.log10(p) : -Infinity;
   }
+  /**
+   * Gain reduction of the master limiter now, in dB (≤ 0; the largest of the last 50 ms of output), for the meter; null when no
+   * limiter runs (the document has none, nothing plays, or it could not be loaded: see limiterUnavailable).
+   */
+  limiterReductionDb(): number | null {
+    if ((!this.playing && !this.auditioning) || !this.limiterNode) return null;
+    return this.limiterReduction;
+  }
   /** Measured, not estimated. `clock` says which timebase the numbers refer to. */
   syncStats() {
     const v = [...this.late].sort((a, b) => a - b);
     const q = (p: number) => (v.length ? +(v[Math.min(v.length - 1, Math.floor(v.length * p))]! * 1000).toFixed(2) : null);
-    return { clock: this.clock, audioContextState: this.actx?.state ?? 'none', audioSampleRate: this.actx?.sampleRate ?? null, outputLatencyMs: this.actx ? +(((this.actx.outputLatency || 0) + (this.actx.baseLatency || 0)) * 1000).toFixed(2) : null, audioScheduledAheadMaxMs: +(this.scheduledAheadMax * 1000).toFixed(1), audioLookaheadMs: Player.AUDIO_LOOKAHEAD * 1000, liveAudioNodes: this.nodes.length, loops: this.loops, audioOnsetsTimelineSeconds: [...this.onsets], audioLevels: [...this.levels], framesRequested: this.requested, framesPainted: v.length, paintLatenessByFrameMs: this.lateFrames.map(([f, v]) => [f, +(v * 1000).toFixed(2)] as [number, number]), paintLatenessMs: { median: q(0.5), p95: q(0.95), max: q(1) }, fxVoices: this.fxVoices, fxPrimeMs: this.fxPrimeMs, fxPrimeTimedOut: this.fxPrimeTimedOut, fxLateStarts: this.fxLateStarts, fxLateSkips: this.fxLateSkips, bypassAudioFx: this.bypassAudioFx, auditioning: this.auditioning, unavailableAudioFx: { ...this.unavailableAudioFx } };
+    return { clock: this.clock, audioContextState: this.actx?.state ?? 'none', audioSampleRate: this.actx?.sampleRate ?? null, outputLatencyMs: this.actx ? +(((this.actx.outputLatency || 0) + (this.actx.baseLatency || 0)) * 1000).toFixed(2) : null, audioScheduledAheadMaxMs: +(this.scheduledAheadMax * 1000).toFixed(1), audioLookaheadMs: Player.AUDIO_LOOKAHEAD * 1000, liveAudioNodes: this.nodes.length, loops: this.loops, audioOnsetsTimelineSeconds: [...this.onsets], audioLevels: [...this.levels], framesRequested: this.requested, framesPainted: v.length, paintLatenessByFrameMs: this.lateFrames.map(([f, v]) => [f, +(v * 1000).toFixed(2)] as [number, number]), paintLatenessMs: { median: q(0.5), p95: q(0.95), max: q(1) }, fxVoices: this.fxVoices, fxPrimeMs: this.fxPrimeMs, fxPrimeTimedOut: this.fxPrimeTimedOut, fxLateStarts: this.fxLateStarts, fxLateSkips: this.fxLateSkips, bypassAudioFx: this.bypassAudioFx, auditioning: this.auditioning, unavailableAudioFx: { ...this.unavailableAudioFx }, limiter: { active: !!this.limiterNode, ceilingDb: this.limiterNode ? this.sessionLimiter : null, unavailable: this.limiterUnavailable, reductions: [...this.limiterReductions] } };
   }
   dispose() {
     this.pause();
