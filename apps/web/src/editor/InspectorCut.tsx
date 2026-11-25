@@ -6,6 +6,7 @@
 import { useId, useState } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { beatPositionAt, followedBeats, TRANSITIONS, transitionDef, type Clip } from '@pulseframe/core';
+import { meterOf } from './analysis.logic.ts';
 import { useEditorState } from './store.ts';
 import { Section } from './Section.tsx';
 import { EffectGalleryButton } from './EffectGallery.tsx';
@@ -103,7 +104,7 @@ const fmtTc = (frame: number, fps: number) => { const w = Math.max(1, Math.round
 /** Beats per bar of the music under the clip's start, from its analysis; 4 when the analysis has no bars. */
 function barLength(doc: NonNullable<ReturnType<typeof useEditorState>['state']['doc']>, clip: Media): number {
   const pos = beatPositionAt(doc, clip.start);
-  const meter = pos ? doc.analyses?.[findAsset(doc, pos.clipId) ?? '']?.beats?.meter : null;
+  const meter = pos ? meterOf(doc, findAsset(doc, pos.clipId) ?? '') : null; // by the lineage beatPositionAt followed
   return meter ?? 4;
 }
 function findAsset(doc: NonNullable<ReturnType<typeof useEditorState>['state']['doc']>, clipId: string): string | null {

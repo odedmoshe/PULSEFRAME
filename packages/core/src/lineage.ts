@@ -130,6 +130,57 @@ export function beatsFor(doc: ProjectDocument, assetId: string): { beats: BeatAn
   return found ? { beats: found.value, offset: found.offset, assetId: found.assetId } : null;
 }
 
+/** A beat analysis as its asset counts time: `beats` and `downbeats` on the asset's own clock; `analysis` is the measured record (tempo, meter, confidence, origin). */
+export interface OwnBeats { analysis: BeatAnalysis; beats: readonly T.RationalTime[]; downbeats: readonly T.RationalTime[]; /** The asset whose record this is (the asset itself or a time-preserving source of it). */ assetId: string; /** What was subtracted from the record's times (zero for the asset's own record). */ offset: T.RationalTime }
+const ownClock = new WeakMap<object, Map<string, { beats: readonly T.RationalTime[]; downbeats: readonly T.RationalTime[] }>>();
+/**
+ * beatsFor with the beat and bar-start times moved exactly onto the asset's own clock (rational subtraction of the lineage offset;
+ * the ONE place that does it for the readers that want lists: the beat grid of effects and of the perform mode, fit_music, the
+ * template and film planners, the inspector). A beat of the source from before the copy begins is negative here and one after its
+ * end lies past its duration: both are kept, so the beats are numbered as in the source. The lists are the record's own arrays
+ * when the offset is zero, and the same arrays again for the same record and offset (readers cache by them).
+ */
+export function ownBeats(doc: ProjectDocument, assetId: string): OwnBeats | null {
+  // the asset's own record is the nearest one (beatsFor finds it first): answered without walking the chain, for the readers that ask on every frame
+  const mine = analysisOf(doc, assetId)?.beats;
+  if (mine) return { analysis: mine, beats: mine.beats, downbeats: mine.downbeats ?? [], assetId, offset: T.ZERO };
+  const found = beatsFor(doc, assetId);
+  if (!found) return null;
+  const a = found.beats;
+  if (T.isZero(found.offset)) return { analysis: a, beats: a.beats, downbeats: a.downbeats ?? [], assetId: found.assetId, offset: found.offset };
+  const o = T.normalize(found.offset), key = `${o.value}/${o.timescale}:${a.beats.length}:${a.downbeats?.length ?? 0}`;
+  let per = ownClock.get(a);
+  if (!per) { per = new Map(); ownClock.set(a, per); }
+  let lists = per.get(key);
+  if (!lists) { lists = { beats: a.beats.map((t) => T.sub(t, found.offset)), downbeats: (a.downbeats ?? []).map((t) => T.sub(t, found.offset)) }; per.set(key, lists); }
+  return { analysis: a, ...lists, assetId: found.assetId, offset: found.offset };
+}
+/**
+ * The numbers shown for a file's beats (the inspector, the dialogs' music step, the assistant's summary): how many measured beats
+ * and bar starts lie in the file, and the measured tempo. For the file's own record that is the record's whole lists; for a
+ * time-preserving copy, the source's beats that fall inside the copy (0 <= t < its duration). null when ownBeats is.
+ */
+export function beatNumbers(doc: ProjectDocument, assetId: string): { count: number; bars: number; bpm: number | null; own: OwnBeats } | null {
+  const own = ownBeats(doc, assetId);
+  if (!own) return null;
+  if (own.assetId === assetId) return { count: own.beats.length, bars: own.downbeats.length, bpm: own.analysis.bpm, own };
+  const duration = doc.assets[assetId]!.duration, inside = (t: T.RationalTime) => !T.isNegative(t) && T.lt(t, duration);
+  return { count: own.beats.filter(inside).length, bars: own.downbeats.filter(inside).length, bpm: own.analysis.bpm, own };
+}
+/**
+ * sceneCutsFor with the cut times moved exactly onto the asset's own clock (as ownBeats), for the readers that want the cuts of a
+ * file rather than of a clip (the shorts finder and planner, frame interpolation, the library card, the analysis panel). Of a
+ * source's cuts only those inside the copy are answered (0 <= t < its duration): a cut is a place in the picture, and the ones
+ * before the copy begins or after it ends are not in it. The asset's own record is answered as it is stored.
+ */
+export function ownSceneCuts(doc: ProjectDocument, assetId: string): { cuts: readonly T.RationalTime[]; assetId: string; offset: T.RationalTime } | null {
+  const found = sceneCutsFor(doc, assetId);
+  if (!found) return null;
+  if (found.assetId === assetId) return { cuts: found.cuts, assetId, offset: found.offset };
+  const duration = doc.assets[assetId]!.duration;
+  return { cuts: found.cuts.map((t) => T.sub(t, found.offset)).filter((t) => !T.isNegative(t) && T.lt(t, duration)), assetId: found.assetId, offset: found.offset };
+}
+
 /**
  * For surfaces that read each clip's own nearest transcript or analysis (the pacing report, the beat montage): whether an asset
  * that has none is an UNTIMED copy of one of the transcribed or measured recordings `anchorIds` (timingRelations 'untimed'), so

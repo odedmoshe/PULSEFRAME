@@ -56,6 +56,7 @@ import { ELEMENT_IDS } from './elements.ts';
 import { flashGapFrames } from './flashSafety.ts';
 import { clipEnd } from './validate.ts';
 import { handleAfterEnd, isRamped } from './speed.ts';
+import { beatsFor, ownBeats } from './lineage.ts';
 
 type RT = T.RationalTime;
 type SlotDef = TemplateDef['slots'][number];
@@ -297,19 +298,23 @@ function musicOf(doc: ProjectDocument, def: TemplateDef, p: TemplateInput, at: R
  * startAt 'first-downbeat': the music clip starts at its first bar start, else its first beat; 'zero': at the file's start.
  * Throws TemplateError: not_found (not in the project), invalid_args (not a sound-only file), needs_analysis (no beats, fewer
  * than two after the start, or no bar starts while `needBars`).
+ * The beats are the file's own, or those of the nearest time-preserving source it is a copy of, on the file's own clock (lineage.ts
+ * ownBeats: a cleaned-up copy of measured music carries a template like the music does). A copy made without a recorded time
+ * mapping (reversed, stretched, generated) has none: needs_analysis, and measuring that copy itself is the next step, as for any
+ * file whose beat was not measured.
  */
 export function placedMusicGrid(doc: ProjectDocument, musicAssetId: string, at: RT, startAt: 'first-downbeat' | 'zero', needBars: boolean): PlacedMusic {
   const usesBars = needBars;
   const asset = Object.hasOwn(doc.assets, musicAssetId) ? doc.assets[musicAssetId] : undefined;
   if (!asset) throw new TemplateError('not_found', `music asset ${musicAssetId} is not in this project`);
   if (!asset.audio || asset.video || asset.kind === 'image') throw new TemplateError('invalid_args', `asset ${asset.id} is not a sound file`, 'Choose a sound-only file as the music.');
-  const an = doc.analyses?.[asset.id]?.beats;
+  const own = ownBeats(doc, asset.id), an = own?.analysis;
   const hint = 'Measure the beat of the music first (מדידת קצב, ללא בינה מלאכותית): POST /api/v1/projects/{id}/assets/{assetId}/analyze with {"kind":"beats"}, or analyze_asset kind=beats.';
-  if (!an || an.beats.length < 2) throw new TemplateError('needs_analysis', 'the music has no beat analysis yet', hint);
-  if (usesBars && !an.downbeats?.length) throw new TemplateError('needs_analysis', 'the beat analysis of this music has no bar starts, and this template counts in bars', 'Mark the bar starts with edit_analysis (downbeats), or measure the beat again.');
+  if (!own || !an || own.beats.length < 2) throw new TemplateError('needs_analysis', 'the music has no beat analysis yet', hint);
+  if (usesBars && !own.downbeats.length) throw new TemplateError('needs_analysis', 'the beat analysis of this music has no bar starts, and this template counts in bars', 'Mark the bar starts with edit_analysis (downbeats), or measure the beat again.');
   const inFile = (b: RT) => !T.isNegative(b) && T.lt(b, asset.duration);
-  const beats = [...an.beats].filter(inFile).sort(T.cmp);
-  const downs = [...(an.downbeats ?? [])].filter(inFile).sort(T.cmp);
+  const beats = [...own.beats].filter(inFile).sort(T.cmp);
+  const downs = [...own.downbeats].filter(inFile).sort(T.cmp);
   const sourceIn = startAt === 'zero' ? T.ZERO : downs[0] ?? beats[0]!;
   const toTimeline = (list: RT[]) => list.filter((b) => !T.lt(b, sourceIn)).map((b) => T.add(at, T.sub(b, sourceIn))).filter((t, i, a) => i === 0 || !T.eq(a[i - 1]!, t));
   const tb = toTimeline(beats);
@@ -407,7 +412,7 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
   const style: MusicStyle | null = wanted ? findMusicStyle(wanted.styleId) ?? null : null;
   if (wanted && !style) throw new TemplateError('invalid_args', `there is no built-in music style "${wanted.styleId}"`, `The styles are: ${listMusicStyles().map((x) => x.id).join(', ') || 'none in this build'} (GET /api/v1/music).`);
   const builtin = style && d.music.need !== 'none' ? { style, seed: wanted!.seed } : null;
-  const meterHint = d.music.need === 'none' || p.musicAssetId === null ? 4 : doc.analyses?.[p.musicAssetId]?.beats?.meter ?? 4;
+  const meterHint = d.music.need === 'none' || p.musicAssetId === null ? 4 : beatsFor(doc, p.musicAssetId)?.beats.meter ?? 4; // by the same lineage as the grid (placedMusicGrid)
   const spans = d.slots.slice(0, useCount).map((s) => scaleSpan(s.span, p.tempo, meterHint));
   const music = musicOf(doc, d, p, at, spans.some((s) => 'bars' in s), !!builtin);
   if (p.musicAssetId !== null && d.music.need === 'none') basis.push('this template does not use music; the chosen music was not placed');

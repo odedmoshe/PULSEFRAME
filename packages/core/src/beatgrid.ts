@@ -4,7 +4,9 @@
  * Effects that "follow the music" (a zoom pulse, a flash, a shake on every beat) read this instead of a tempo number, so
  * they land on the beats that were actually detected, through every cut, speed change and tempo drift of the music.
  * The music is the first sound clip (in track order, then by start) that plays at that moment on a track that is not
- * muted and whose file has a beat analysis with at least two beats.
+ * muted and whose file has a beat analysis with at least two beats: its own, or that of the nearest time-preserving source it is a
+ * copy of (lineage.ts ownBeats: a cleaned-up copy of measured music is followed exactly like the music, on its own clock). A copy
+ * made without a recorded time mapping (reversed, stretched, generated) has no beats here: where they lie in it is unknown.
  *
  * Besides the position in beats, the beats around the moment are listed as places on the timeline (`hits`), each placed
  * through its clip's own time mapping (speed.ts), so an effect can see how far apart its hits really are there. The list
@@ -16,6 +18,7 @@
 import * as T from '@pulseframe/time';
 import type { Clip, MediaClip, ProjectDocument } from './schema.ts';
 import { sourceAt, sourceEnd, timelineAt } from './speed.ts';
+import { ownBeats, type OwnBeats } from './lineage.ts';
 
 /** How far before and after a moment the beats around it are listed (seconds of timeline). */
 export const BEAT_WINDOW_SECONDS = 2;
@@ -69,12 +72,13 @@ function firstAtOrAfter(xs: Float64Array, x: number): number {
 /** The beats of an analysis that fall inside a clip, placed on the timeline: beats `from`…`from + t.length - 1`, at `t` seconds. */
 interface Placed { key: string; grid: Grid; from: number; t: Float64Array }
 const placedByClip = new WeakMap<object, Placed>();
-function placedBeats(clip: MediaClip, times: readonly T.RationalTime[], grid: Grid): Placed {
+function placedBeats(clip: MediaClip, own: OwnBeats, grid: Grid): Placed {
   // everything the place of a beat depends on; a clip object that is changed in place is noticed
-  const key = JSON.stringify([clip.start, clip.duration, clip.sourceIn, clip.speed, clip.speedEnd, clip.rampWindow, clip.speedCurve, times.length]);
+  const times = own.beats;
+  const key = JSON.stringify([clip.start, clip.duration, clip.sourceIn, clip.speed, clip.speedEnd, clip.rampWindow, clip.speedCurve, times.length, own.offset]);
   const had = placedByClip.get(clip);
   if (had && had.key === key && had.grid === grid) return had;
-  const from = firstAtOrAfter(grid.beats, T.toSeconds(clip.sourceIn)), to = firstAtOrAfter(grid.beats, T.toSeconds(sourceEnd(clip)));
+  const from = firstAtOrAfter(grid.beats, T.toSeconds(onMeasuredClock(own, clip.sourceIn))), to = firstAtOrAfter(grid.beats, T.toSeconds(onMeasuredClock(own, sourceEnd(clip))));
   const start = T.toSeconds(clip.start), end = start + T.toSeconds(clip.duration);
   const t = new Float64Array(Math.max(0, to - from));
   let floor = start;
@@ -84,11 +88,24 @@ function placedBeats(clip: MediaClip, times: readonly T.RationalTime[], grid: Gr
   return placed;
 }
 
-/** Whether a clip is music that can be followed: a sound clip played forwards whose file has a beat analysis with at least two beats. Does not depend on the moment. */
-const followable = (doc: ProjectDocument, clip: Clip): clip is MediaClip =>
-  clip.type === 'media' && !clip.freeze && !clip.reverse && (doc.analyses?.[clip.assetId]?.beats?.beats.length ?? 0) >= 2; // a sound played backwards has no beat grid to follow here
+/**
+ * The beats a clip follows when it is music that can be followed: a sound clip played forwards whose file has a beat analysis with
+ * at least two beats, its own or its time-preserving source's, on the file's own clock (lineage.ts ownBeats). null otherwise.
+ * Does not depend on the moment.
+ */
+const followed = (doc: ProjectDocument, clip: Clip): OwnBeats | null => {
+  if (clip.type !== 'media' || clip.freeze || clip.reverse) return null; // a sound played backwards has no beat grid to follow here
+  const own = ownBeats(doc, clip.assetId);
+  return own && own.beats.length >= 2 ? own : null;
+};
 
-const gridOf = (analysis: { beats: readonly T.RationalTime[]; downbeats?: readonly T.RationalTime[] | undefined }): Grid => {
+/**
+ * The grid of a measured record, in seconds of the MEASURED file's clock (one grid for the music and for every copy that follows
+ * it). A moment of a copy is looked up in it through onMeasuredClock, so a copy's clip gets the very numbers the music's own clip
+ * gets for the same moment of the music; where a beat falls on the timeline is worked out from the copy's own-clock times.
+ */
+const gridOf = (own: OwnBeats): Grid => {
+  const analysis = own.analysis;
   let grid = grids.get(analysis);
   if (!grid) {
     const beats = seconds(analysis.beats), bars = seconds(analysis.downbeats ?? []);
@@ -97,28 +114,32 @@ const gridOf = (analysis: { beats: readonly T.RationalTime[]; downbeats?: readon
   }
   return grid;
 };
+/** A time of the clip's file as a time of the file its beats were measured on (exact: plus the lineage offset; the same time for the file's own record). */
+const onMeasuredClock = (own: OwnBeats, t: T.RationalTime): T.RationalTime => (T.isZero(own.offset) ? t : T.add(t, own.offset));
 
 /**
  * The analysed beats that are followed between two moments of a timeline (seconds), in time order, placed exactly as
  * `BeatPosition.hits` places them: every beat of every music clip that falls on a moment at which that clip is the music.
  * A pure function of the document, used to plan things for a whole timeline at once (the flash schedule of the strobes).
  */
+interface Near { clip: MediaClip; own: OwnBeats; start: number; end: number }
 export function followedBeats(doc: ProjectDocument, from: number, to: number, sequenceId = doc.mainSequenceId): { t: number; index: number }[] {
   const seq = doc.sequences[sequenceId];
   if (!seq) return [];
-  const near: { clip: MediaClip; start: number; end: number }[] = [];
+  const near: Near[] = [];
   for (const track of seq.tracks) {
     if (track.kind !== 'audio' || track.muted) continue;
     for (const clip of track.clips) {
-      if (!followable(doc, clip)) continue;
+      const own = followed(doc, clip);
+      if (!own || clip.type !== 'media') continue;
       const start = T.toSeconds(clip.start), end = T.toSeconds(T.add(clip.start, clip.duration));
       if (end <= from || start > to) continue;
-      near.push({ clip, start, end });
+      near.push({ clip, own, start, end });
     }
   }
   const hits: { t: number; index: number }[] = [];
   near.forEach((c, order) => {
-    const a = doc.analyses![c.clip.assetId]!.beats!, g = gridOf(a), p = placedBeats(c.clip, a.beats, g);
+    const g = gridOf(c.own), p = placedBeats(c.clip, c.own, g);
     for (let k = firstAtOrAfter(p.t, from); k < p.t.length && p.t[k]! <= to; k++) {
       const t = p.t[k]!;
       if (t < c.end && !near.some((o, at) => at < order && o.start <= t && t < o.end)) hits.push({ t, index: p.from + k - g.anchor });
@@ -133,35 +154,37 @@ export function beatPositionAt(doc: ProjectDocument, time: T.RationalTime, seque
   const now = T.toSeconds(time), from = now - BEAT_WINDOW_SECONDS, to = now + BEAT_WINDOW_SECONDS;
   // Every followable clip that plays within the window, in the order in which they are preferred: at each moment the
   // music is the first of them that plays then.
-  let chosen: MediaClip | null = null;
-  const near: { clip: MediaClip; start: number; end: number }[] = [];
+  let chosen: Near | null = null;
+  const near: Near[] = [];
   for (const track of seq.tracks) {
     if (track.kind !== 'audio' || track.muted) continue;
     for (const clip of track.clips) {
-      if (!followable(doc, clip)) continue;
+      const own = followed(doc, clip);
+      if (!own || clip.type !== 'media') continue;
       const start = T.toSeconds(clip.start), end = T.toSeconds(T.add(clip.start, clip.duration));
       if (end <= from || start > to) continue;
-      near.push({ clip, start, end });
-      if (!chosen && !T.lt(time, clip.start) && T.lt(time, T.add(clip.start, clip.duration))) chosen = clip;
+      const item = { clip, own, start, end };
+      near.push(item);
+      if (!chosen && !T.lt(time, clip.start) && T.lt(time, T.add(clip.start, clip.duration))) chosen = item;
     }
   }
   if (!chosen) return null;
-  const clip = chosen, analysis = doc.analyses![clip.assetId]!.beats!, grid = gridOf(analysis);
+  const clip = chosen.clip, analysis = chosen.own, grid = gridOf(analysis);
   const b = grid.beats, n = b.length;
-  const s = T.toSeconds(sourceAt(clip, time));
+  const s = T.toSeconds(onMeasuredClock(analysis, sourceAt(clip, time)));
   const i = Math.min(n - 2, Math.max(0, lastAtOrBefore(b, s))); // the interval used: the one around s, or the first/last one beyond the ends
   const d = b[i + 1]! - b[i]!;
   const beat = i + (d > 0 ? (s - b[i]!) / d : 0); // two beats at one instant are not a grid; validation refuses them
   const bar = lastAtOrBefore(grid.bars, s);
   const barIndex = bar >= 0 ? lastAtOrBefore(b, grid.bars[bar]! + 1e-9) : -1;
-  const placed = placedBeats(clip, analysis.beats, grid);
+  const placed = placedBeats(clip, analysis, grid);
   // where the two beats of that interval are on the timeline: from the placed beats when both are inside the clip, else computed here (the grid continues beyond the clip)
   const onTimeline = (k: number) => (k >= placed.from && k < placed.from + placed.t.length ? placed.t[k - placed.from]! : T.toSeconds(timelineAt(clip, analysis.beats[k]!)));
   const period = Math.max(1e-6, onTimeline(i + 1) - onTimeline(i));
   // the beats of each clip near the moment, for the time that clip is the music: not while a clip listed before it plays
   const hits: BeatPosition['hits'] = [];
   near.forEach((c, order) => {
-    const a = doc.analyses![c.clip.assetId]!.beats!, g = gridOf(a), p = placedBeats(c.clip, a.beats, g);
+    const g = gridOf(c.own), p = placedBeats(c.clip, c.own, g);
     for (let k = firstAtOrAfter(p.t, from); k < p.t.length && p.t[k]! <= to; k++) {
       const t = p.t[k]!;
       if (t < c.end && !near.some((o, at) => at < order && o.start <= t && t < o.end)) hits.push({ t, index: p.from + k - g.anchor });

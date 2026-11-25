@@ -41,6 +41,7 @@ import { backdropScales, planReframe, trackSamples } from './reframe.ts';
 import { isVerbatim } from './quotes.ts';
 import { findCaptionLook } from './captionPresets.ts';
 import { sequenceOf } from './sequences.ts';
+import { ownSceneCuts } from './lineage.ts';
 import { DEFAULT_CAPTION_STYLE } from './schema.ts';
 import { MAX_REDACT_REGIONS, type MotionTrack, type RedactRegion } from './tracking.ts';
 
@@ -230,10 +231,12 @@ export function planShorts(doc: ProjectDocument, body: BuildShortsBody, ctx: Sho
     const inside = allWords.filter((x) => T.lte(excerpt.start, x.start) && T.lte(x.end, excerpt.end));
     const wordTimed = inside.length > 0 && inside.every((x) => x.timing === 'word');
     if (tr) basis.add(wordTimed ? 'transcript with word timing' : 'transcript (phrase timing)');
-    const scenes = (Object.hasOwn(doc.analyses ?? {}, asset.id) ? doc.analyses[asset.id]!.scenes?.cuts : undefined) ?? null;
+    // the file's own scene cuts, or those of the nearest time-preserving source it is a copy of, on its own clock (lineage.ts
+    // ownSceneCuts: an enhanced copy keeps its source's shots); a copy without a recorded time mapping has none, and the warning says so
+    const scenes = ownSceneCuts(doc, asset.id)?.cuts ?? null;
     if (scenes) basis.add('scene cuts (analysis)');
     else if (!noScenes.has(asset.id)) { noScenes.add(asset.id); w('no_scene_cuts', `"${asset.name}" has no scene analysis, so shots inside a short are not split at cuts`, { assetId: asset.id }); }
-    const sceneCuts = scenes ?? [];
+    const sceneCuts: readonly T.RationalTime[] = scenes ?? [];
 
     // ---- removals ----
     const keep = sec(PAUSE_KEEP_SECONDS);

@@ -61,6 +61,7 @@ import { findClip } from './ops.ts';
 import { sha256Hex } from './sha256.ts';
 import { WALL_DATE_TIME, type Asset, type ProjectDocument, type RecipeRun, type SlotRecord, type Track } from './schema.ts';
 import { removedByHand } from './templateOps.ts';
+import { ownBeats } from './lineage.ts';
 
 type RT = T.RationalTime;
 type Ref = { $ref: string; out?: string };
@@ -326,15 +327,18 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   if (keptMusic) {
     const f = findClip(doc, keptMusic.clipId);
     const c = f?.clip;
-    const an = c && c.type === 'media' ? own(doc.analyses, c.assetId)?.beats : undefined;
+    // the kept music's beats: its file's own, or its time-preserving source's, on the file's own clock (lineage.ts ownBeats); a copy
+    // without a recorded time mapping has none and cannot be followed
+    const measured = c && c.type === 'media' ? ownBeats(doc, c.assetId) : null;
+    const an = measured?.analysis;
     const sp = c && c.type === 'media' ? speedOf(c) : null;
-    const followable = !!c && c.type === 'media' && !c.reverse && !isRamped(c) && !isFreeze(c) && !!sp && sp.num === sp.den && !!an && an.beats.length >= 2;
-    if (!followable || !c || c.type !== 'media' || !an) {
+    const followable = !!c && c.type === 'media' && !c.reverse && !isRamped(c) && !isFreeze(c) && !!sp && sp.num === sp.den && !!measured && measured.beats.length >= 2;
+    if (!followable || !c || c.type !== 'media' || !an || !measured) {
       blocking.push({ code: 'kept_music_not_followable', message: 'the music kept by hand plays backwards, at another speed or has no measured beats, so the new cuts cannot follow its beats', details: { clipId: keptMusic.clipId } });
     } else {
       const end = T.add(c.sourceIn, c.duration);
       const place = (list: readonly RT[]) => [...list].filter((b) => !T.lt(b, c.sourceIn) && T.lt(b, end)).sort(T.cmp).map((b) => T.add(c.start, T.sub(b, c.sourceIn)));
-      const tb = place(an.beats), downs = place(an.downbeats ?? []);
+      const tb = place(measured.beats), downs = place(measured.downbeats);
       if (tb.length < 2) blocking.push({ code: 'kept_music_not_followable', message: 'fewer than two measured beats of the music kept by hand lie inside its clip', details: { clipId: keptMusic.clipId } });
       else music = { assetId: c.assetId, name: own(doc.assets, c.assetId)?.name ?? c.assetId, sourceIn: c.sourceIn, grid: listGrid(tb, downs.length ? downs : null, an.meter ?? 4), beatCount: tb.length, bpm: an.bpm, bars: downs.length > 0, confidence: an.confidence, method: an.origin.method, edited: !!an.origin.edited, kept: true, trackId: f!.track.id };
     }

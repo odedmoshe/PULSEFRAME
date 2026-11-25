@@ -21,7 +21,7 @@ import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
-import { applyTransaction, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema, TemplateRegenerateBodySchema, FindShortsBodySchema, SHORTS_MEASUREMENT_KIND, sequenceList, shortsRefusal, MulticamSyncBody, multicamGroupOf, MULTICAM_REFUSALS, MULTICAM_SYNC_KIND, TakeRequestSchema } from '@pulseframe/core';
+import { applyTransaction, beatNumbers, ownSceneCuts, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema, TemplateRegenerateBodySchema, FindShortsBodySchema, SHORTS_MEASUREMENT_KIND, sequenceList, shortsRefusal, MulticamSyncBody, multicamGroupOf, MULTICAM_REFUSALS, MULTICAM_SYNC_KIND, TakeRequestSchema } from '@pulseframe/core';
 import { addMusic, MusicBody, musicPreview } from './music.ts';
 import { onThisDayFor, readMissingCaptures } from './lifeline.ts';
 import { preflight } from './preflight.ts';
@@ -366,9 +366,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.get('/api/v1/projects/:id/assets/:assetId/analysis', (c) => {
     need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
-    const a = p.doc.analyses?.[c.req.param('assetId')];
-    if (!a) throw new ApiError(404, 'not_found', 'this asset has no analysis results');
-    return c.json({ revision: p.revision, ...analysisView(a) });
+    const view = analysisViewOf(p.doc, c.req.param('assetId'));
+    if (!view) throw new ApiError(404, 'not_found', 'this asset has no analysis results');
+    return c.json({ revision: p.revision, ...view });
   });
   // ----- motion tracking (ADR-0015): a durable job; its samples are attached by the internal op attach_motion_track -----
   app.post('/api/v1/projects/:id/motion-tracks/:motionTrackId/track', async (c) => {
@@ -1185,6 +1185,30 @@ export const analysisView = (a: Analysis) => ({
   ...(a.scenes ? { scenes: { ...a.scenes.origin, count: a.scenes.cuts.length, cuts: a.scenes.cuts, cutSeconds: a.scenes.cuts.map(secs) } } : {}),
   ...(a.beats ? { beats: { ...a.beats.origin, bpm: a.beats.bpm, confidence: a.beats.confidence, count: a.beats.beats.length, beatSeconds: a.beats.beats.map(secs), ...(a.beats.downbeats?.length ? { meter: a.beats.meter ?? null, barCount: a.beats.downbeats.length, downbeatSeconds: a.beats.downbeats.map(secs) } : {}) } } : {}),
 });
+/**
+ * What GET …/assets/{id}/analysis and get_analysis answer for an asset, by the rule every reader follows (core lineage.ts): its own
+ * scene cuts and beats, or those of the nearest time-preserving source it is a copy of, on the asset's OWN clock (rational
+ * subtraction of the lineage offset; of a source's cuts and beats only those inside the copy). `measuredOn` then names, per kind,
+ * the asset whose record it is and the offset (that asset's time = this asset's time + offset), which is where a correction
+ * belongs: edit_analysis writes the record of the asset it names. null when the asset is not in the project or has neither: also a
+ * copy made without a recorded time mapping (reversed, stretched, generated), whose next step is to measure it itself.
+ */
+export function analysisViewOf(doc: ProjectDocument, assetId: string) {
+  if (!Object.hasOwn(doc.assets, assetId)) return null;
+  const s = ownSceneCuts(doc, assetId), n = beatNumbers(doc, assetId);
+  if (!s && !n) return null;
+  const inside = (t: T.RationalTime) => !T.isNegative(t) && T.lt(t, doc.assets[assetId]!.duration);
+  const b = n?.own, mine = b?.assetId === assetId;
+  const view = analysisView({
+    assetId,
+    ...(s ? { scenes: { origin: doc.analyses[s.assetId]!.scenes!.origin, cuts: [...s.cuts] } } : {}),
+    ...(b ? { beats: mine ? b.analysis : { origin: b.analysis.origin, bpm: b.analysis.bpm, confidence: b.analysis.confidence, beats: b.beats.filter(inside), ...(b.analysis.downbeats?.length ? { downbeats: b.downbeats.filter(inside), meter: b.analysis.meter ?? null } : {}) } } : {}),
+  });
+  const from = (id: string, offset: T.RationalTime) => ({ assetId: id, offset: T.normalize(offset), offsetSeconds: secs(offset) });
+  const measuredOn = { ...(s && s.assetId !== assetId ? { scenes: from(s.assetId, s.offset) } : {}), ...(b && !mine ? { beats: from(b.assetId, b.offset) } : {}) };
+  if (!Object.keys(measuredOn).length) return view;
+  return { ...view, note: 'Times are in this asset\'s own media. They were measured on the asset named in measuredOn, of which this asset is a copy that keeps the timing; that asset\'s time = this time + offset. Correct them there with edit_analysis (it corrects every copy that keeps the timing); use split_at_scenes to cut a clip into its shots.', measuredOn };
+}
 export const AnalyzeBody = z.object({ kind: z.enum(['scenes', 'beats']), overwrite: z.boolean().optional().describe('Required to replace a result that was corrected by hand'), threshold: z.number().min(0.05).max(0.9).optional().describe('scenes only: how different two frames must be to count as a cut (default 0.3; lower finds more)') }).strict();
 /** Everything that can be refused before measuring starts: permissions, the asset, hand-made corrections, the right kind of media. */
 function checkAnalysis(store: Store, gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof AnalyzeBody> & { assetId: string }) {
@@ -1198,6 +1222,9 @@ function assertAnalysable(store: Store, projectId: string, a: z.infer<typeof Ana
   const p = store.getProject(projectId);
   const asset = p.doc.assets[a.assetId];
   if (!asset) throw new ApiError(404, 'not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
+  // The asset's OWN record on purpose, not its lineage (core lineage.ts): measuring replaces the record of the file it names. A
+  // copy that is measured itself gets its own record (the next step offered for a copy without a recorded time mapping); its
+  // source's record and the corrections in it stay as they are. Pinned in analysisLineage.test.ts.
   const existing = a.kind === 'scenes' ? p.doc.analyses?.[a.assetId]?.scenes : p.doc.analyses?.[a.assetId]?.beats;
   if (existing?.origin.edited && !a.overwrite) throw new ApiError(409, 'would_discard_edits', 'this result was corrected by hand; analysing again would discard those corrections', { kind: a.kind }, 'Pass overwrite=true to replace it.');
   // Built-in music (ADR-0022): its beats, bars and sections are known from the recipe. A measurement would replace them with

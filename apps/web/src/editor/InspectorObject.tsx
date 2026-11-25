@@ -13,6 +13,7 @@ import * as T from '@pulseframe/time';
 import type { Asset, Clip, OpCall, ProjectDocument } from '@pulseframe/core';
 import { assetDisplayName } from './assetLabel.ts';
 import { beatPositionAt, clipEnd, fieldsToDisplay, findClip, findEffect, fitScale, speedValue, TEXT_PRESETS, transitionDef } from '@pulseframe/core';
+import { beatFacts } from './analysis.logic.ts';
 import { effectParamLabel, type Key } from '@pulseframe/i18n';
 import { CurveChip } from './CurvePicker.tsx';
 import { chordLabel, COMMANDS, coverEditOps, keyframeProps, type Keymap } from './commands.ts';
@@ -943,14 +944,16 @@ function BeatTab({ clip, keymap }: PanelProps) {
   const { editor, state, t } = useEditorState();
   const S = INSPECTOR_STRINGS[state.lang];
   if (clip.type !== 'media') return null;
-  const beats = state.doc?.analyses?.[clip.assetId]?.beats;
+  // the file's own beats or its time-preserving source's (analysis.logic.ts): the card says what the timeline follows
+  const facts = state.doc ? beatFacts(state.doc, clip.assetId) : null;
+  const beats = facts?.measured ? facts : null;
   const bpm = beats?.bpm ?? null;
   return (
     <>
-      <div className={`pf-card${beats ? ' is-pulse' : ''} beat-card`} data-testid="insp-beat" data-beats={beats ? beats.beats.length : 0}>
+      <div className={`pf-card${beats ? ' is-pulse' : ''} beat-card`} data-testid="insp-beat" data-beats={beats ? beats.count : 0}>
         <IconOnBeat size={18} />
         {/* "120 BPM" is one left-to-right run, in every language */}
-        <span>{beats ? <>{S.tempo} <bdi dir="ltr" className="num">{bpm === null ? '—' : Math.round(bpm)} BPM</bdi> · {isolate(S.beatsN(beats.beats.length))}</> : S.bpmNone}</span>
+        <span>{beats ? <>{S.tempo} <bdi dir="ltr" className="num">{bpm === null ? '—' : Math.round(bpm)} BPM</bdi> · {isolate(S.beatsN(beats.count))}</> : S.bpmNone}</span>
       </div>
       <Section id="analysis" title={S.secBeat} help><AnalysisPanel key={`analysis:${clip.id}`} /></Section>
       <Section id="time" title={S.secTime} defaultOpen={false} summary={`${secondsText(T.toSeconds(clip.duration))} ${S.seconds}`}><TimeBlock clip={clip} keymap={keymap} /></Section>

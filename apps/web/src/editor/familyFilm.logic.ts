@@ -13,6 +13,7 @@
  * - Faces are not used (no approved model); every choice is explained and labelled heuristic (familyFilm.strings.ts).
  */
 import * as T from '@pulseframe/time';
+import { beatFacts } from './analysis.logic.ts';
 import {
   FAMILY_FILM_RUN_RECIPE_ID, FILM_DEFAULTS, MOMENTS_MAX_ASSETS, MOMENTS_MAX_WINDOWS, filmReasonsFor, filmRunParams, filmRunPicked, fingerprint, findClip, sourceFrameOfTime, sourceTimeOfFrame, toSourceSpan, videoFrames,
   type Asset, type FamilyFilmParams, type FamilyFilmPlanView, type FilmExclusion, type FilmMomentsRecord, type FilmPick, type FilmPicked, type FilmReason, type FilmWarning, type MediaClip, type MomentsData, type OpCall, type ProjectDocument, type RecipeRun, type SlotRecord, type StartMomentsBody,
@@ -80,10 +81,8 @@ export function sourceFromSelection(doc: ProjectDocument, selection: readonly st
 }
 /** Sound files that can be the film's music (a video's own sound is not offered). */
 export const musicChoices = (doc: ProjectDocument): Asset[] => Object.values(doc.assets).filter((a) => a.kind === 'audio' && !!a.audio);
-export function beatInfo(doc: ProjectDocument, assetId: string): { measured: boolean; count: number; bpm: number | null } {
-  const b = doc.analyses?.[assetId]?.beats;
-  return b ? { measured: true, count: b.beats.length, bpm: b.bpm } : { measured: false, count: 0, bpm: null };
-}
+/** Whether the beat of a sound file is known: its own measurement or its time-preserving source's (analysis.logic.ts beatFacts; the planner's rule, core placedMusicGrid). */
+export const beatInfo = (doc: ProjectDocument, assetId: string): { measured: boolean; count: number; bpm: number | null } => beatFacts(doc, assetId);
 /** Seconds of the chosen videos (stills add nothing), for the count line. */
 export const videoSeconds = (doc: ProjectDocument, ids: readonly string[]): number => ids.reduce((s, id) => { const a = doc.assets[id]; return a?.video && a.kind !== 'image' ? s + T.toSeconds(a.duration) : s; }, 0);
 export const tooManyChosen = (c: Pick<FilmChoices, 'assetIds'>): boolean => c.assetIds.length > MAX_FILM_ASSETS;
