@@ -119,6 +119,9 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`POST ${P}/analysis/voice`]: ['reader-document'],
   [`GET ${P}/motion-tracks/:motionTrackId`]: ['reader-document'],
   [`POST ${P}/motion-tracks/:motionTrackId/track`]: ['reader-document', 'write'],
+  // stabilisation (wave 7): the job reads the document and commits; the read view reads it
+  [`POST ${P}/clips/:clipId/stabilise`]: ['reader-document', 'write'],
+  [`GET ${P}/assets/:assetId/camera-motion`]: ['reader-document'],
   // measured moments (ADR-0026): the job reads media, attaches analyses; nothing about people
   [`POST ${P}/moments`]: ['reader-document', 'write'],
   // edits
@@ -219,6 +222,7 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   add_graphic_element: ['write'], add_sound_effect: ['write'], add_builtin_music: ['write'], suggest_packs: ['reader-document'], get_speech_status: ['no-document'], transcribe_asset: ['reader-document'],
   generate_narration: ['reader-document', 'write'], narrate_script: ['reader-document', 'write'], analyze_asset: ['reader-document'], get_analysis: ['reader-document'],
   track_motion: ['reader-document', 'write'], get_motion_track: ['reader-document'],
+  stabilise_clip: ['reader-document', 'write'], get_camera_motion: ['reader-document'],
   measure_moments: ['reader-document', 'write'],
   plan_recipe: ['reader-document'], apply_recipe: ['reader-document', 'write'], regenerate_recipe: ['reader-document', 'write'],
   plan_template: ['reader-document'], apply_template: ['reader-document', 'write'], regenerate_template: ['reader-document', 'write'],
