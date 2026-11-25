@@ -1,5 +1,5 @@
 {
- "when": "2026-11-25T17:11:41.638Z",
+ "when": "2026-11-25T18:42:21.021Z",
  "aBuilt": true,
  "web": true,
  "pageErrors": [],
@@ -82,7 +82,7 @@
   "P13": {
    "twoSecond": {
     "disabled": true,
-    "reason": "הפנינה קצרה מ־3 שניות"
+    "reason": "הפנינה קצרה מ־3 שניות: סמנו קטע ארוך יותר"
    },
    "short": {
     "sequences": 1,

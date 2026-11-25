@@ -2239,17 +2239,18 @@ async function main() {
     }
 
     // marked ranges «פנינים» (wave 7 pearls track): marking a pearl with the viewer's form by keyboard, Escape closes only the form,
-    // one undo takes the pearl back; then «מי בקליפ?» from a non-owner credential (the agent token, sent as a bearer header by the
-    // browser) is refused and the dialog says so in words, nothing committed
+    // one undo takes the pearl back
     {
-      console.log('\n# pearls: the form in the source viewer, Escape, one undo; «מי בקליפ?» refused in words for the agent');
-      const PID = { save: 'pearl-save', form: 'pearl-form', name: 'pearl-form-name', who: 'pearl-who-in-clip', whoDialog: 'pearl-who-dialog', whoPerson: 'pearl-who-person', whoSave: 'pearl-who-save' };
+      console.log('\n# pearls: the form in the source viewer, Escape, one undo');
+      const PID = { save: 'pearl-save', form: 'pearl-form', name: 'pearl-form-name' };
       const pe = (await call('/projects', { name: 'pearls interactions', width: 640, height: 360 })).body.project.id as string;
       const pa = (await upload(pe, picFile)).assetId as string;
       const cookie = (await fetch(`${s.url}/api/v1/session`, { headers: { origin: s.url, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
       const ownerTx = async (ops: unknown[]) => { const r = await fetch(`${s.url}/api/v1/projects/${pe}/transactions`, { method: 'POST', headers: { origin: s.url, cookie, connection: 'close', 'content-type': 'application/json' }, body: JSON.stringify({ ops }) }); if (!r.ok) throw new Error(`owner tx: ${r.status} ${(await r.text()).slice(0, 200)}`); return r.json(); };
       await ownerTx([{ op: 'add_person', args: { name: 'אלף' } }]);
-      const rangesOf = async () => Object.values((await doc2(pe)).sourceRanges ?? {}) as any[];
+      // read as the owner: the agent token reads every pearl's name as '' (labels are family notes, peoplePrivacy.ts)
+      const ownerDoc = async () => ((await (await fetch(`${s.url}/api/v1/projects/${pe}`, { headers: { origin: s.url, cookie, connection: 'close' } })).json()) as any).project;
+      const rangesOf = async () => Object.values((await ownerDoc()).sourceRanges ?? {}) as any[];
       const revOf = async () => (await call(`/projects/${pe}`)).body.revision as number;
       const ctx = await browser.newContext({ viewport: { width: 1500, height: 1000 }, reducedMotion: 'reduce' });
       await ctx.addInitScript(`globalThis.__name = (f) => f`);
@@ -2282,46 +2283,25 @@ async function main() {
       await pg.keyboard.press('p');
       await pg.getByTestId(PID.form).waitFor({ timeout: 5000 });
       await pg.getByTestId(PID.name).fill('הצעד הראשון');
+      const typed = await pg.waitForFunction((id) => (document.querySelector(`[data-testid="${id}"]`) as HTMLInputElement | null)?.value === 'הצעד הראשון', PID.name, { timeout: 5000 }).then(() => true, () => false);
       await pg.keyboard.press('Enter');
       const saved = await until2(rangesOf, (rs) => rs.length === 1);
       const rs = await rangesOf();
       const commits = (await revOf()) - rev0;
       const span = rs[0]?.span ? [T.frameIndexAt(rs[0].span.start, R), T.frameIndexAt(rs[0].span.end, R)] : null;
-      check('pearls: I, O, P, a name and Enter mark one pearl in one commit, its span the marks [10, 40) and its name as typed', saved && rs.length === 1 && commits === 1 && JSON.stringify(span) === '[10,40]' && rs[0].label === 'הצעד הראשון', { marks, commits, span, label: rs[0]?.label });
+      check('pearls: I, O, P, a name and Enter mark one pearl in one commit, its span the marks [10, 40) and its name as typed', saved && rs.length === 1 && commits === 1 && JSON.stringify(span) === '[10,40]' && rs[0].label === 'הצעד הראשון', { marks, typed, commits, span, label: rs[0]?.label });
       await pg.keyboard.press('Escape');
       await pg.getByTestId('source-viewer').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
       await pg.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
       await pg.keyboard.press('Control+z');
       const undone = await until2(rangesOf, (x2) => x2.length === 0);
-      const after = await doc2(pe);
+      const after = await ownerDoc();
       check('pearls: one Ctrl+Z takes the pearl back and the document holds no sourceRanges key again', undone && !Object.hasOwn(after, 'sourceRanges'), { undone, hasKey: Object.hasOwn(after, 'sourceRanges') });
       check('pearls rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
       await ctx.close();
-      // the agent token in a browser: its bearer header outranks any cookie (auth.ts), so this editor acts as the agent
-      const actx = await browser.newContext({ viewport: { width: 1500, height: 1000 }, reducedMotion: 'reduce', extraHTTPHeaders: { authorization: `Bearer ${s.auth.tokens.agent}` } });
-      await actx.addInitScript(`globalThis.__name = (f) => f`);
-      await actx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
-      const ap = await actx.newPage();
-      const aerrs: string[] = [];
-      ap.on('pageerror', (e) => aerrs.push(String(e)));
-      await ap.goto(`${s.url}/?project=${pe}`);
-      const opened = await ap.getByTestId('timecode').waitFor({ timeout: 30000 }).then(() => true, () => false);
-      let said: string | null = null;
-      let ticked = false;
-      if (opened) {
-        await ap.getByTestId('rail-media').click();
-        await ap.getByTestId(`more-${pa}`).click();
-        await ap.getByTestId(PID.who).click();
-        await ap.getByTestId(PID.whoDialog).waitFor({ timeout: 8000 });
-        const box = ap.getByTestId(PID.whoPerson).first();
-        ticked = (await box.count()) === 1;
-        if (ticked) { await box.check(); await ap.getByTestId(PID.whoSave).click(); }
-        await sleep(1200);
-        said = (await ap.getByTestId(PID.whoDialog).textContent().catch(() => null)) ?? null;
-      }
-      const tagged = (await rangesOf()).length;
-      check('pearls: «מי בקליפ?» from the agent token is refused and the dialog says so in Hebrew (only the owner tags people), with nothing committed', opened && ticked && !!said && /רק בעל הפרויקט/.test(said) && tagged === 0, { opened, ticked, said: said?.slice(0, 200), tagged, errors: aerrs.slice(0, 3) });
-      await actx.close();
+      // «מי בקליפ?» refused in words for a non-owner credential is not driven here: the editor boots only on the owner's session
+      // (a page carrying an agent's bearer header stops at «כדי לפתוח את העורך כבעלים…»); the refusal is held by pearls.test.ts
+      // (403 human_tag_required for every non-owner credential) and its Hebrew by pearls-wording.test.ts
     }
 
     await page.close();
