@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { coreDutiesBuilt, FIX_KEYS, fixtureDutiesStandIn, makeLibraryFixture, type LibraryFixture } from '../../../../packages/evals/src/library-fixtures.ts';
+import { FIX_KEYS, makeLibraryFixture, type LibraryFixture } from '../../../../packages/evals/src/library-fixtures.ts';
 import type { Config } from '../config.ts';
 import { canRasteriseSvg } from '../elements.ts';
 import { LibraryService } from './index.ts';
@@ -28,7 +28,7 @@ beforeAll(async () => {
   fx = await makeLibraryFixture(path.join(base, 'fx'));
   tmp = path.join(base, 'tmp'); fs.mkdirSync(tmp);
   fs.mkdirSync(path.join(base, 'data'));
-  s = new LibraryService({ dataDir: path.join(base, 'data'), libraryDir: fx.root } as Config, coreDutiesBuilt() ? {} : { duties: fixtureDutiesStandIn });
+  s = new LibraryService({ dataDir: path.join(base, 'data'), libraryDir: fx.root } as Config);
   await new Promise((r) => setTimeout(r, 20));
   await s.idle();
 }, 120_000);
