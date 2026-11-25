@@ -222,7 +222,7 @@ describe('the assistant routes are registered and refuse honestly', () => {
     };
     const reqBody = { text: 'חתוך כאן', selection: [], playheadFrame: 0 };
     const config = { adapter: null, host: null, model: null, pricesCentsPerMTok: null, monthlyLimitCents: 0, perRequestCapCents: 0, toggles: { titlesAndMarkers: false, peopleNames: false } };
-    expect(ASSISTANT_ROUTES).toHaveLength(6);
+    expect(ASSISTANT_ROUTES).toHaveLength(8); // wave 7: + local/check and assistant/jobs/:jobId/taken
     for (const r of ASSISTANT_ROUTES) {
       const p = r.path.replace(':id', pid);
       const b = r.method === 'POST' ? reqBody : r.path.endsWith('/config') ? config : r.path.endsWith('/key') && r.method === 'PUT' ? { key: 'TEST-DOUBLE-NOT-A-KEY' } : undefined;

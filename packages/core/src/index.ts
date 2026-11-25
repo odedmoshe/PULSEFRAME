@@ -156,3 +156,7 @@ export * from './musicGrid.ts';
 export * from './impact.ts';
 export * from './musicJoin.ts';
 export * from './musicSwap.ts';
+// the local language assistant (wave 7 assistant track): the vocabulary is in assistantContract.ts; barUnderstands is lead-built,
+// groundLocalAnswer / localPhrase are builder A's
+export * from './commandBar/understands.ts';
+export * from './commandBar/localIntent.ts';

@@ -32,6 +32,7 @@ import { closeLibraryService } from './library/index.ts';
 import { dataDirBytes, setStorageHooks } from './storage.ts';
 import { recoverAssistantJobs } from './assistant/job.ts'; // command bar assistant recovery (ADR-0027)
 import type { AssistantDeps } from './assistant/contract.ts';
+import { createLlamaAdapter } from './assistant/local/llamaAdapter.ts'; // the local assistant's loopback adapter (wave 7)
 import type { SizeFitFault } from '@pulseframe/core';
 
 export { loadConfig, type Config } from './config.ts';
@@ -99,8 +100,11 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   const renderCache = createRenderCacheService({ store, exporter, segments, envSource, status: cacheStatus });
   exporter.incremental = { status: cacheStatus, join: () => joinResult };
   exporter.segmented = { store: segments, env: renderCache.env, keyOf: frameKeyFor, run: runSegmentedExport };
+  // the command bar assistant (ADR-0027) and, wave 7, the LOCAL assistant: the loopback-only adapter (it contacts 127.0.0.1:<port> only
+  // when the owner chose it and asks) and the compute lane; tests may pass their own (a labelled MOCK) in deps.assistant.local
+  const assistantDeps: AssistantDeps = { ...(deps.assistant ?? { adapters: new Map(), endpoint: () => null }), lane, local: deps.assistant?.local !== undefined ? deps.assistant.local : createLlamaAdapter() };
   const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { imports, renderCache });
-  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { imports, door, renderCache, ...(deps.assistant ? { assistant: deps.assistant } : {}) });
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { imports, door, renderCache, assistant: assistantDeps });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   if ((server.address() as AddressInfo).port !== cfg.port) throw new Error('unexpected port');

@@ -44,6 +44,16 @@ export const COMMAND_BAR_TESTIDS = {
   settingsWhatIsSent: 'assistant-what-is-sent', settingsSetup: 'assistant-setup',
   // a refusal of a Settings save (owner_required, host_not_allowed, a price of 0…) in words, with its next step
   settingsRefused: 'assistant-refused',
+  // ---- the LOCAL language assistant (wave 7; .artifacts/wave7/assistant-decisions.md §4) ----
+  // Settings (shown when the adapter is «מודל מקומי על המחשב הזה»): the port, the time limit, «בדיקת חיבור», its result (data-state =
+  // core LOCAL_RUNTIME_STATES), the model name it reported, the fixed «לא נמדדו» note, the link to the guide
+  assistantLocalSettings: 'assistant-local-settings', assistantLocalPort: 'assistant-local-port', assistantLocalTimeout: 'assistant-local-timeout',
+  assistantLocalCheck: 'assistant-local-check', assistantLocalState: 'assistant-local-state', assistantLocalModel: 'assistant-local-model',
+  assistantLocalUnmeasured: 'assistant-local-unmeasured', assistantLocalGuide: 'assistant-local-guide',
+  // the row under an 'unknown' result: «לשאול את העוזר המקומי» (role=option), the suggestion «העוזר הציע: …» (data-intent; the phrase
+  // in one dir=auto span), «הכנס לשורה» and «התעלם»; and the badge «הצעת העוזר — בדקו לפני Enter» beside the input until the first edit
+  assistantLocalAsk: 'bar-assistant-local-ask', assistantLocalSuggestion: 'bar-assistant-local-suggestion',
+  assistantLocalInsert: 'bar-assistant-local-insert', assistantLocalIgnore: 'bar-assistant-local-ignore', assistantLocalBadge: 'bar-assistant-suggested',
 } as const;
 export type CommandBarTestId = (typeof COMMAND_BAR_TESTIDS)[keyof typeof COMMAND_BAR_TESTIDS];
 /** DOM ids: the result row is an option of the palette (CommandPalette.tsx optionDomId('bar')), the preview is what the input's aria-describedby names. */

@@ -15,6 +15,7 @@
  */
 import type * as T from '@pulseframe/time';
 import { z } from 'zod';
+import { BAR_WORKSPACES, EXPORT_DESTINATION_IDS, type IntentId } from './commandBarContract.ts';
 import { listOps } from './ops.ts';
 import { PERSON_OPS } from './peopleOps.ts';
 
@@ -77,10 +78,15 @@ export function assistantOps(): string[] {
 /** The setup state, in the order the owner fixes them. Only 'ready' lets a request leave the machine. */
 export const ASSISTANT_SETUP_CODES = ['ready', 'provider_not_configured', 'prices_missing', 'limit_missing', 'host_not_allowed', 'prompt_digest_mismatch'] as const;
 export type AssistantSetup = (typeof ASSISTANT_SETUP_CODES)[number];
-export const ASSISTANT_ERROR_CODES = ['assistant_not_connected', 'owner_required', 'budget_exceeded', 'invalid_model_output', 'provider_error', 'submission_unknown'] as const;
+export const ASSISTANT_ERROR_CODES = ['assistant_not_connected', 'owner_required', 'budget_exceeded', 'invalid_model_output', 'provider_error', 'submission_unknown',
+  // the local assistant (wave 7, .artifacts/wave7/assistant-decisions.md §4): the grammar read the request itself (409, no job); the
+  // owner's local server is not running, still loading its model, too slow, not on loopback, or answered an error
+  'grammar_understood', 'local_not_running', 'local_loading', 'local_timeout', 'local_not_loopback', 'local_server_error'] as const;
 export type AssistantErrorCode = (typeof ASSISTANT_ERROR_CODES)[number];
 /** Job stages, said in words in the editor (never a percentage). */
-export const ASSISTANT_STAGES = ['sending', 'awaiting-provider', 'checking'] as const;
+export const ASSISTANT_STAGES = ['sending', 'awaiting-provider', 'checking',
+  // the local assistant (wave 7): waiting for the compute lane (another heavy job holds it), waiting for the owner's local model
+  'waiting-for-compute', 'awaiting-local-model'] as const;
 export type AssistantStage = (typeof ASSISTANT_STAGES)[number];
 
 /** The two data switches (decision 7), both off by default. */
@@ -107,6 +113,8 @@ export interface AssistantStatus {
   toggles: AssistantToggles; keySet: boolean; keyAddedAt: string | null;
   /** Installed adapter ids: empty in wave 1 (no network adapter exists). */
   adapters: string[];
+  /** The local assistant's settings and its last check (wave 7); absent or null when the local adapter is not chosen. Owner only (visibility.ts). */
+  local?: AssistantLocalStatus | null;
 }
 /**
  * One held amount (budget_ledger state 'unknown'): the request's job, what stays counted, when the request was made, and how the
@@ -133,6 +141,16 @@ const Cents = z.number().int().nonnegative().max(10_000_000);
 const Price = z.number().max(1_000_000).refine((n) => Number.isFinite(n) && n > 0, {
   message: 'a price is more than 0 cents per million tokens: type the price from the provider\'s price list (for example 300 for $3 per million tokens)',
 });
+/**
+ * The local assistant's settings (wave 7, .artifacts/wave7/assistant-decisions.md §4): ONLY a port and a time limit. The host is
+ * never a setting: requests go to http://127.0.0.1:<port> (providers localChat.ts LOCAL_MODEL_HOST), so no typed value can point the
+ * editor at another machine. Strict: a host, a URL or a path in it is refused with 400.
+ */
+export const AssistantLocalConfigSchema = z.object({
+  port: z.number().int().min(1024).max(65535).describe('The port the owner\'s local server listens on, on 127.0.0.1 only'),
+  timeoutSeconds: z.number().int().min(5).max(600),
+}).strict();
+export type AssistantLocalConfig = z.infer<typeof AssistantLocalConfigSchema>;
 /** PUT /api/v1/assistant/config (owner only). No key in it: the key has its own route. */
 export const AssistantConfigBodySchema = z.object({
   adapter: z.string().min(1).max(64).nullable(),
@@ -141,6 +159,8 @@ export const AssistantConfigBodySchema = z.object({
   pricesCentsPerMTok: z.object({ input: Price, output: Price }).strict().nullable().describe('Typed in by the owner from the provider’s price list'),
   monthlyLimitCents: Cents, perRequestCapCents: Cents,
   toggles: z.object({ titlesAndMarkers: z.boolean(), peopleNames: z.boolean() }).strict(),
+  /** wave 7: the local assistant (used when `adapter` is ASSISTANT_LOCAL_ADAPTER_ID); absent in a config saved before it */
+  local: AssistantLocalConfigSchema.nullable().optional(),
 }).strict();
 export type AssistantConfigBody = z.infer<typeof AssistantConfigBodySchema>;
 /** PUT /api/v1/assistant/key (owner only). */
@@ -152,6 +172,8 @@ export const AssistantRequestBodySchema = z.object({
   selection: z.array(z.string().max(128)).max(2000),
   playheadFrame: z.number().int().nonnegative(),
   sequenceId: z.string().max(128).optional(),
+  /** wave 7: the language the local assistant's phrase is written in (the editor's UI language); absent = Hebrew */
+  lang: z.enum(['he', 'en']).optional(),
 }).strict();
 export type AssistantRequestBody = z.infer<typeof AssistantRequestBodySchema>;
 /** The output of a succeeded assistant.propose job. */
@@ -193,3 +215,101 @@ export const ASSISTANT_SUMMARY_FIELDS = ['format', 'version', 'settings', 'durat
 /** Never sent, whatever the switches (decision 7); each has words in i18n 'assistant.never.<id>'. */
 export const ASSISTANT_NEVER_SENT = ['media', 'file_names', 'capture', 'events', 'transcripts', 'analyses', 'provenance', 'recipe_params', 'birth_dates'] as const;
 export type AssistantNeverSent = (typeof ASSISTANT_NEVER_SENT)[number];
+
+// =====================================================================================================================
+// The LOCAL language assistant (wave 7 track `assistant`; .artifacts/wave7/assistant-decisions.md). LEAD pre-pass contract.
+//
+// The owner starts a local llama.cpp server (the library's model, a short Hebrew guide); the editor reaches it ONLY at
+// http://127.0.0.1:<port> (providers localChat.ts). The model writes no operations: it answers { intent, slots } from the small
+// vocabulary below. The server keeps only what the owner said (groundLocalAnswer: a number, time or text that is not in the request
+// is dropped, so the grammar asks), renders ONE phrase in the bar's own language (localPhrase), and the owner's tab reads it with the
+// model-free grammar: preview, then Enter, then commitExact (one transaction, one undo). Nothing from the project is sent. No money.
+// =====================================================================================================================
+export const ASSISTANT_LOCAL_ADAPTER_ID = 'local-llama-server';
+/** The settings the editor offers first (the guide uses the same port); the owner may change both. */
+export const ASSISTANT_LOCAL_DEFAULTS: Readonly<AssistantLocalConfig> = Object.freeze({ port: 8791, timeoutSeconds: 60 });
+/** The longest request the local assistant is sent (a small model's context; the bar's own limit is ASSISTANT_TEXT_MAX). */
+export const ASSISTANT_LOCAL_TEXT_MAX = 400;
+/** The answer is at most this many tokens (`{ intent, slots }` needs far fewer). */
+export const ASSISTANT_LOCAL_MAX_TOKENS = 128;
+/** The job input's `profile` of a local request (a cloud request has none). */
+export const ASSISTANT_LOCAL_PROFILE = 'local' as const;
+
+/** The grammar intents the local model may answer with (a subset of INTENT_IDS; effects, looks, names, language, open and sync are not offered). */
+export const LOCAL_INTENTS = ['split_here', 'split_at', 'trim_start_here', 'trim_end_here', 'delete_clip', 'delete_keep_gap', 'add_title',
+  'gain_change', 'mute', 'unmute', 'transitions_all', 'transition_here', 'add_marker', 'close_gaps', 'freeze', 'speed', 'fades', 'fit_music',
+  'rename_project', 'remove_empty_tracks', 'undo', 'redo', 'seek', 'play', 'pause', 'zoom_in', 'zoom_out', 'workspace', 'export_to'] as const satisfies readonly IntentId[];
+export type LocalIntent = (typeof LOCAL_INTENTS)[number];
+/** 'none': nothing in the vocabulary fits (or the request is not an editing request). */
+export const LOCAL_ANSWER_INTENTS = [...LOCAL_INTENTS, 'none'] as const;
+export type LocalAnswerIntent = (typeof LOCAL_ANSWER_INTENTS)[number];
+
+export const LOCAL_SLOT_NAMES = ['at', 'atSeconds', 'forSeconds', 'target', 'dir', 'db', 'factor', 'edge', 'text', 'workspace', 'destination'] as const;
+export type LocalSlotName = (typeof LOCAL_SLOT_NAMES)[number];
+export const LOCAL_POSITIONS = ['here', 'start', 'end'] as const;
+export const LOCAL_TARGETS = ['music', 'clip'] as const;
+export const LOCAL_DIRECTIONS = ['up', 'down'] as const;
+export const LOCAL_EDGES = ['in', 'out'] as const;
+/** The slots that carry a number: kept only when the grammar's own number or time reader finds that exact value in the request. */
+export const LOCAL_NUMERIC_SLOTS = ['atSeconds', 'forSeconds', 'db', 'factor'] as const satisfies readonly LocalSlotName[];
+/** A number slot is a decimal STRING (never a float): up to 6 digits, optionally a point and up to 3 digits. Checked on the server only. */
+export const LOCAL_DECIMAL = /^\d{1,6}(?:\.\d{1,3})?$/;
+/** A text slot (title, marker, project name): at most this many characters, an exact substring of the request, no quote or control character. */
+export const LOCAL_TEXT_SLOT_MAX = 80;
+export interface LocalSlots {
+  at?: (typeof LOCAL_POSITIONS)[number]; atSeconds?: string; forSeconds?: string;
+  target?: (typeof LOCAL_TARGETS)[number]; dir?: (typeof LOCAL_DIRECTIONS)[number]; db?: string; factor?: string;
+  edge?: (typeof LOCAL_EDGES)[number]; text?: string; workspace?: (typeof BAR_WORKSPACES)[number]; destination?: (typeof EXPORT_DESTINATION_IDS)[number];
+}
+/** Which slots each intent takes; any other slot in an answer is dropped ('not_for_intent'). */
+export const LOCAL_INTENT_SLOTS: Readonly<Record<LocalIntent, readonly LocalSlotName[]>> = {
+  split_here: [], split_at: ['atSeconds'], trim_start_here: [], trim_end_here: [], delete_clip: [], delete_keep_gap: [],
+  add_title: ['text', 'at', 'atSeconds', 'forSeconds'], gain_change: ['target', 'dir', 'db'], mute: ['target'], unmute: ['target'],
+  transitions_all: [], transition_here: [], add_marker: ['text'], close_gaps: [], freeze: ['forSeconds'], speed: ['factor'],
+  fades: ['edge', 'forSeconds'], fit_music: [], rename_project: ['text'], remove_empty_tracks: [], undo: [], redo: [],
+  seek: ['at', 'atSeconds'], play: [], pause: [], zoom_in: [], zoom_out: [], workspace: ['workspace'], export_to: ['destination'],
+};
+/**
+ * The model's answer as the SERVER checks it (the schema sent to the model is apps/server/src/assistant/localPrompt.ts
+ * localAnswerJsonSchema: the same keys, pattern-free, because llama.cpp's grammar converter takes no Unicode classes).
+ */
+export const LocalAnswerSchema = z.object({
+  intent: z.enum(LOCAL_ANSWER_INTENTS),
+  slots: z.object({
+    at: z.enum(LOCAL_POSITIONS).optional(), atSeconds: z.string().max(12).optional(), forSeconds: z.string().max(12).optional(),
+    target: z.enum(LOCAL_TARGETS).optional(), dir: z.enum(LOCAL_DIRECTIONS).optional(), db: z.string().max(12).optional(), factor: z.string().max(12).optional(),
+    edge: z.enum(LOCAL_EDGES).optional(), text: z.string().max(LOCAL_TEXT_SLOT_MAX).optional(),
+    workspace: z.enum(BAR_WORKSPACES).optional(), destination: z.enum(EXPORT_DESTINATION_IDS).optional(),
+  }).strict(),
+}).strict();
+export type LocalAnswer = z.infer<typeof LocalAnswerSchema>;
+/** Why a slot of the answer was not kept: not said by the owner, not a slot of that intent, or not in the slot's form. */
+export const LOCAL_DROP_REASONS = ['ungrounded', 'not_for_intent', 'malformed'] as const;
+export type LocalDropReason = (typeof LOCAL_DROP_REASONS)[number];
+/** Why an answer was refused (job failed invalid_model_output, with the category and a fixed sentence; nothing of the answer is kept). */
+export const LOCAL_INVALID_CATEGORIES = ['cut_off', 'empty', 'not_json', 'wrong_shape', 'not_a_command'] as const;
+export type LocalInvalidCategory = (typeof LOCAL_INVALID_CATEGORIES)[number];
+
+/**
+ * The output of a succeeded LOCAL job (job input profile 'local'). `phrase` is the bar phrase the server rendered (null for intent
+ * 'none'); the owner's tab puts it in the bar's input and the grammar reads it. `phrase` and `slots.text` can repeat what the owner
+ * typed, so they live in the row only until the owner's tab calls `taken`, the next request on the project, or project delete; then
+ * `cleared` is true, `phrase` null and `slots` {} (direct SQL inside Store.erasing). `model` is the name the local server reported
+ * (basename only). `wallMs` is one measurement of this request.
+ */
+export interface AssistantLocalOutput {
+  kind: 'local-intent'; intent: LocalAnswerIntent; slots: LocalSlots;
+  dropped: { slot: LocalSlotName; why: LocalDropReason }[];
+  phrase: string | null; model: string | null; wallMs: number; cleared?: true;
+}
+/** What a succeeded assistant job carries: the cloud proposal (no `kind`) or the local phrase. */
+export type AssistantJobAnswer = AssistantJobOutput | AssistantLocalOutput;
+export const isLocalOutput = (o: unknown): o is AssistantLocalOutput => !!o && typeof o === 'object' && (o as { kind?: unknown }).kind === 'local-intent';
+
+/** What the check route found on the owner's port: a llama.cpp-like server with its model loaded, one still loading, nothing, or something else. */
+export const LOCAL_RUNTIME_STATES = ['running', 'loading', 'stopped', 'not_llama'] as const;
+export type LocalRuntimeState = (typeof LOCAL_RUNTIME_STATES)[number];
+/** POST /api/v1/assistant/local/check (owner's session only) → this; also kept as AssistantLocalStatus.lastCheck (in memory). */
+export interface AssistantLocalCheck { state: LocalRuntimeState; model: string | null; checkedAt: string }
+/** The owner's status, `local` part. */
+export interface AssistantLocalStatus { port: number; timeoutSeconds: number; lastCheck: AssistantLocalCheck | null }

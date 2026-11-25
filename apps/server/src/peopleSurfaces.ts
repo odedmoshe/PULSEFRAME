@@ -164,6 +164,9 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   'PUT /api/v1/assistant/key': ['owner-only'],
   'DELETE /api/v1/assistant/key': ['owner-only'],
   [`POST ${P}/assistant/requests`]: ['owner-only'],
+  // the LOCAL assistant (wave 7): the owner's session only; it reads no document (the local model is sent only the typed request)
+  'POST /api/v1/assistant/local/check': ['owner-only'],
+  'POST /api/v1/assistant/jobs/:jobId/taken': ['owner-only'],
   // proposals and approvals
   [`GET ${P}/proposals`]: ['rows-scrubbed'],
   [`POST ${P}/proposals`]: ['write'],

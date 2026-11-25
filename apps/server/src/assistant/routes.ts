@@ -81,5 +81,11 @@ export function createAssistantHandlers(ctx: AssistantRouteContext): AssistantHa
     request: (p, projectId, body) => { owner(p); return jobs.start(p, projectId, body); },
     cancel: (p, jobId) => { if (!isOwnerSession(p)) throw assistantCancelRefusal(jobId); return jobs.cancel(jobId, p.actor); },
     done: (jobId) => jobs.done(jobId),
+    // wave 7, the LOCAL assistant (assistant-decisions.md §4): the owner check is final; the bodies are builder B's
+    localCheck: (p) => { owner(p); throw localNotBuilt('the local assistant check'); },
+    taken: (p, jobId) => { owner(p); void jobId; throw localNotBuilt('clearing the local assistant\'s phrase'); },
   };
 }
+
+/** Until builder B lands: an honest 501, never a fake state. */
+const localNotBuilt = (what: string) => new ApiError(501, 'not_built', `${what} is not built yet`, undefined, 'The command bar works without the local assistant; it comes in a later build.');

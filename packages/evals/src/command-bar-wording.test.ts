@@ -202,7 +202,10 @@ describe('every refusal the assistant\'s server code gives is worded in Hebrew, 
     }
     // the patterns not provoked here: the summary route's playhead (http.ts; provoked in routes.test.ts), the 32 KB summary,
     // the adapter or key going away mid-job, the canceled-after-answer race, and the answer that came back while paused
-    expect(ASSISTANT_REFUSAL_PATTERNS.length - used.size).toBeLessThanOrEqual(6);
+    // (the local assistant's patterns, wave 7, are checked by their own block at the end of this file)
+    const localSaid = [...Object.values(ASSISTANT_LOCAL_SENTENCES).map((x) => (typeof x.message === 'function' ? x.message('x') : x.message))];
+    const local = new Set(ASSISTANT_REFUSAL_PATTERNS.map((re, i) => (localSaid.some((m) => re.test(m)) ? i : -1)).filter((i) => i >= 0));
+    expect(ASSISTANT_REFUSAL_PATTERNS.length - local.size - [...used].filter((i) => !local.has(i)).length).toBeLessThanOrEqual(6);
   });
   it('the sentences the server builds elsewhere are worded too (their words are copied from the server code it checks)', () => {
     const src = (f: string) => fs.readFileSync(new URL(`../../../apps/server/src/${f}`, import.meta.url), 'utf8');
@@ -221,5 +224,42 @@ describe('every refusal the assistant\'s server code gives is worded in Hebrew, 
     }
     expect(src('assistant/summary.ts')).toContain('the selection and the tracks alone take more than ${SUMMARY_MAX_BYTES} bytes to describe');
     expect(translateRefusal('he', 'the selection and the tracks alone take more than 32768 bytes to describe')).toMatch(/32768/);
+  });
+});
+
+// ---- the LOCAL language assistant (wave 7; .artifacts/wave7/assistant-decisions.md §4) ----
+import { ASSISTANT_LOCAL_SENTENCES } from '../../../apps/server/src/assistant/contract.ts';
+import { LOCAL_INVALID_CATEGORIES, LOCAL_RUNTIME_STATES } from '@pulseframe/core';
+
+describe('the local assistant\'s wording (no money, nothing leaves, reason then next step)', () => {
+  const MONEY_HE = /חיוב|חויב|סכום|שמור|כסף|תשלום(?! )/;
+  const MONEY_EN = /charg|reserv|billing|money|cents?\b|paid/i;
+  const sentences = (): string[] => Object.values(ASSISTANT_LOCAL_SENTENCES).map((s) => (typeof s.message === 'function' ? s.message('cut_off') : s.message));
+  it('every local server sentence has a Hebrew wording by an assistant pattern, with a next step after «; »', () => {
+    for (const m of [...sentences(), ASSISTANT_LOCAL_SENTENCES.local_server_error.message('HTTP 500')]) {
+      expect(ASSISTANT_REFUSAL_PATTERNS.some((re) => re.test(m)), m).toBe(true);
+      const h = translateRefusal('he', m) ?? '';
+      expect(h, m).toMatch(HEBREW);
+      expect(h.split('; ').length, `${m} → ${h}`).toBe(2);
+    }
+  });
+  it('no local sentence, hint or Hebrew wording speaks of money, a charge or a reservation', () => {
+    for (const s of Object.values(ASSISTANT_LOCAL_SENTENCES)) {
+      const m = typeof s.message === 'function' ? s.message('x') : s.message;
+      expect(MONEY_EN.test(m), m).toBe(false);
+      expect(MONEY_EN.test(s.hint), s.hint).toBe(false);
+      const h = translateRefusal('he', m) ?? '';
+      expect(MONEY_HE.test(h), h).toBe(false);
+    }
+    for (const [k, v] of Object.entries(COMMAND_BAR_HE).filter(([k]) => k.startsWith('assistant.local.') || k.startsWith('error.code.local_'))) expect(MONEY_HE.test(v.replace('בלי תשלום', '')), `${k}: ${v}`).toBe(false);
+  });
+  it('every runtime state and invalid category has words in both languages', () => {
+    for (const k of [...LOCAL_RUNTIME_STATES.map((s) => `assistant.local.state.${s}`), ...LOCAL_INVALID_CATEGORIES.map((c) => `assistant.local.invalid.${c}`)]) {
+      expect(HEBREW.test(he[k] ?? ''), k).toBe(true);
+      expect(en[k]?.trim(), k).toBeTruthy();
+      expect(HEBREW.test(en[k]!), k).toBe(false);
+    }
+    expect(he['assistant.local.insert']).toBe('הכנס לשורה');
+    expect(he['assistant.local.badge']).toBe('הצעת העוזר — בדקו לפני Enter');
   });
 });

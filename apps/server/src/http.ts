@@ -924,6 +924,10 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     store.getProject(projectId);
     return c.json(await assistant.request(p, projectId, await body(c, AssistantRequestBodySchema)), 202);
   });
+  // wave 7, the LOCAL assistant (assistant-decisions.md §4): owner's session only (agents 403 owner_required before anything is
+  // looked up); the bodies are builder B's (assistant/routes.ts answers 501 not_built until then). No MCP tool reaches either.
+  app.post('/api/v1/assistant/local/check', async (c) => c.json(await assistant.localCheck(assistantOwner(c))));
+  app.post('/api/v1/assistant/jobs/:jobId/taken', async (c) => { await assistant.taken(assistantOwner(c), c.req.param('jobId')); return c.body(null, 204); });
 
   // ----- optional provider capabilities (Amendment A1). No route accepts a raw graph for execution. -----
   app.get('/api/v1/catalog', (c) => { need(c, 'observe'); return c.json(catalog()); });
