@@ -31,6 +31,7 @@ import {
 import type { Principal } from '../auth.ts';
 import { filmRegeneration, FILM_API_ERRORS, refuseAgesInPlan } from '../familyFilm.ts';
 import { makeMusic } from '../music.ts';
+import { instrumentsError } from '../instruments/contract.ts';
 import { ApiError, type Store } from '../store.ts';
 import { makeTemplateAssets, templateApiError, templateElements, templateOfRun, templateRegeneration, templateRegenerationOp, withoutClips } from '../templates.ts';
 import { musicFitApiError } from './routes.ts';
@@ -195,6 +196,8 @@ function choiceOf(doc: ProjectDocument, music: MusicFitPlanRequest['music'], cur
   if (!assetId) throw new ApiError(409, 'nothing_to_do', 'there is no music to keep here', {}, 'Choose a sound file of the library or built-in music.');
   const a = own(doc.assets, assetId);
   if (!a) throw new ApiError(404, 'not_found', `asset ${assetId} not found`, { assetId }, 'Call get_summary to list assets.');
+  // wave 7 instruments: a track made with recorded instruments is never fitted (nor silently recomposed as synth) in v1
+  if (a.provenance.instruments) throw instrumentsError('notFittable', { assetId });
   if (!a.audio || a.video || a.kind === 'image') throw new ApiError(400, 'invalid_request', `asset ${assetId} is not a sound file`, { assetId }, 'Choose a sound-only file as the music.');
   return { choice: builtinOf(assetId) ?? { kind: 'file', assetId }, changes: assetId !== current };
 }
