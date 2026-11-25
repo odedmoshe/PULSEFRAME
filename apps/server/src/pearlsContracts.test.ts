@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, type ProjectDocument, type SourceRange } from '@pulseframe/core';
+import { applyTransaction, createProject, rangeUsage, SourceRangesNotBuilt, type ProjectDocument, type SourceRange } from '@pulseframe/core';
 import { assertMayWritePeople, assertOwnerTagsPeople, HUMAN_TAG_REFUSALS, mayHoldPeople, namesOnly, scrubPeople, withoutFamily } from './peoplePrivacy.ts';
 import { PEARLS_SERVER_BUILT, pearlsView } from './pearls.ts';
 import { ApiError } from './store.ts';
@@ -104,11 +104,21 @@ describe('the archive and the read view', () => {
     expect(Object.hasOwn(out, 'sourceRanges')).toBe(false);
     expect(Object.hasOwn(out, 'people')).toBe(false);
   });
-  it('the view answers 404 for an unknown sequence and 501 pearls_not_built until builder B', () => {
+  it('the view answers 404 for an unknown sequence; built, it answers 501 pearls_not_built only while core\'s usage functions are not, never a made-up number', () => {
     const { doc } = project();
     expect(refusedWith(() => pearlsView(doc, 1, owner, 'seq_none'))?.status).toBe(404);
-    if (!PEARLS_SERVER_BUILT) expect(refusedWith(() => pearlsView(doc, 1, owner))).toMatchObject({ status: 501, code: 'pearls_not_built' });
+    expect(PEARLS_SERVER_BUILT).toBe(true);
+    let coreBuilt = true;
+    try { rangeUsage(doc); } catch (e) { if (e instanceof SourceRangesNotBuilt) coreBuilt = false; else throw e; }
+    if (!coreBuilt) expect(refusedWith(() => pearlsView(doc, 1, owner))).toMatchObject({ status: 501, code: 'pearls_not_built' });
+    else {
+      const names = pearlsView(doc, 1, agent);
+      expect(names.labelsHidden).toBe(true);
+      expect(JSON.stringify(names)).not.toContain('דינוזאורים');
+      expect(pearlsView(doc, 1, fullAgent).ranges.find((r) => r.id === 'rng_tagged')!.label).toBe(LABEL);
+    }
   });
-  it.todo('B: GET …/pearls and get_pearls answer PearlsView from the reader document: labels "" and labelsHidden for a names credential, names only, usage and screen time from core, SCREEN_TIME_LABEL and USAGE_LIMITS with them');
-  it.todo('B: through the routes, an agent\'s commit, dry run, nested apply_transaction and propose_transaction with people are 403 human_tag_required; a planted label is in no answer of peopleSurfaces for a names credential');
+  // B's rows: the view (labels, labelsHidden, names only, usage and screen time from core with SCREEN_TIME_LABEL and USAGE_LIMITS),
+  // the refusals through the routes (commit, dry run, nested apply_transaction, proposals) and the walk of every REST route and MCP
+  // tool for a planted label are in pearls.test.ts
 });
