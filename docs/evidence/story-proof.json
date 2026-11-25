@@ -1,0 +1,222 @@
+{
+  "ranAt": "2026-11-25T17:28:44.111Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "logicalCpus": 4,
+    "loadAverage": [
+      7.6,
+      7.2,
+      8.4
+    ]
+  },
+  "scope": "Synthetic fixtures only (tones over seeded noise, solid-colour pictures); headless Chromium with a fake microphone fed from a file. Nobody listened; no real microphone or voice.",
+  "passed": 34,
+  "total": 34,
+  "checks": [
+    {
+      "id": "S1",
+      "part": "server",
+      "ok": true,
+      "seconds": 3.8
+    },
+    {
+      "id": "S1b",
+      "part": "server",
+      "ok": true,
+      "seconds": 0.5
+    },
+    {
+      "id": "S2",
+      "part": "server",
+      "ok": true,
+      "seconds": 0.7
+    },
+    {
+      "id": "S2b",
+      "part": "server",
+      "ok": true,
+      "seconds": 5.1
+    },
+    {
+      "id": "S3",
+      "part": "server",
+      "ok": true,
+      "seconds": 3.1
+    },
+    {
+      "id": "S4",
+      "part": "server",
+      "ok": true,
+      "seconds": 0.8
+    },
+    {
+      "id": "S5",
+      "part": "server",
+      "ok": true,
+      "seconds": 1.2
+    },
+    {
+      "id": "S6",
+      "part": "server",
+      "ok": true,
+      "seconds": 0.7
+    },
+    {
+      "id": "S7",
+      "part": "server",
+      "ok": true,
+      "seconds": 2.3
+    },
+    {
+      "id": "S8",
+      "part": "server",
+      "ok": true,
+      "seconds": 11.9
+    },
+    {
+      "id": "S9",
+      "part": "server",
+      "ok": true,
+      "seconds": 3.1
+    },
+    {
+      "id": "S13",
+      "part": "server",
+      "ok": true,
+      "seconds": 0
+    },
+    {
+      "id": "S11",
+      "part": "server",
+      "ok": true,
+      "seconds": 1.6
+    },
+    {
+      "id": "S12",
+      "part": "server",
+      "ok": true,
+      "seconds": 0.7
+    },
+    {
+      "id": "S14",
+      "part": "server",
+      "ok": true,
+      "seconds": 0.4
+    },
+    {
+      "id": "S15",
+      "part": "server",
+      "ok": true,
+      "seconds": 0.7
+    },
+    {
+      "id": "S16",
+      "part": "server",
+      "ok": true,
+      "seconds": 0.5
+    },
+    {
+      "id": "S19",
+      "part": "server",
+      "ok": true,
+      "seconds": 0.6
+    },
+    {
+      "id": "S20",
+      "part": "server",
+      "ok": true,
+      "seconds": 0.6
+    },
+    {
+      "id": "U1",
+      "part": "ui",
+      "ok": true,
+      "seconds": 4.4
+    },
+    {
+      "id": "U2",
+      "part": "ui",
+      "ok": true,
+      "seconds": 6.9
+    },
+    {
+      "id": "U3",
+      "part": "ui",
+      "ok": true,
+      "seconds": 9
+    },
+    {
+      "id": "U4",
+      "part": "ui",
+      "ok": true,
+      "seconds": 4.9
+    },
+    {
+      "id": "U5",
+      "part": "ui",
+      "ok": true,
+      "seconds": 5.7
+    },
+    {
+      "id": "U6",
+      "part": "ui",
+      "ok": true,
+      "seconds": 9
+    },
+    {
+      "id": "U7",
+      "part": "ui",
+      "ok": true,
+      "seconds": 10.9
+    },
+    {
+      "id": "U8",
+      "part": "ui",
+      "ok": true,
+      "seconds": 9.6
+    },
+    {
+      "id": "U9",
+      "part": "ui",
+      "ok": true,
+      "seconds": 12.5
+    },
+    {
+      "id": "U10",
+      "part": "ui",
+      "ok": true,
+      "seconds": 6.7
+    },
+    {
+      "id": "U12",
+      "part": "ui",
+      "ok": true,
+      "seconds": 7.6
+    },
+    {
+      "id": "U13",
+      "part": "ui",
+      "ok": true,
+      "seconds": 8.1
+    },
+    {
+      "id": "U14",
+      "part": "ui",
+      "ok": true,
+      "seconds": 10.2
+    },
+    {
+      "id": "U15",
+      "part": "ui",
+      "ok": true,
+      "seconds": 2.1
+    },
+    {
+      "id": "S11e",
+      "part": "ui",
+      "ok": true,
+      "seconds": 4
+    }
+  ]
+}

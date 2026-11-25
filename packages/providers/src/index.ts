@@ -13,3 +13,5 @@ export * from './chat.ts';
 export { LOCAL_TOOLS } from './local-registry.ts';
 /** One registry (ADR-0017): ComfyUI descriptors and local tools, dispatched by `provider`. */
 export const ALL_CAPABILITIES: CapabilityDescriptor[] = [...BUILTIN_CAPABILITIES, ...LOCAL_TOOLS];
+// the LOCAL language assistant (wave 7 assistant track): loopback-only model path, its own descriptor and prompt pin
+export * from './localChat.ts';

@@ -1,15 +1,15 @@
 /**
  * Lead contracts of the story track on the server (wave 7; .artifacts/wave7/story-decisions.md §4): the recipe routes and tools
  * dispatch 'story' and 'template:tpl.story' runs to story.ts; the refusals that come BEFORE planning (propose mode, limited grants,
- * an age field without the people scope) answer as decided; until W2 builds the bodies every call answers 501 story_not_built after
- * those checks and changes nothing. Also the route fix of this pre-pass: the recipe regenerate route passes expectedRevision.
+ * an age field without the people scope) answer as decided (the rows that ran only until W1/W2 were built were removed at
+ * integration). Also the route fix of this pre-pass: the recipe regenerate route passes expectedRevision.
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { FAMILY_FILM_TEMPLATE_ID, STORY_RUN_RECIPE_ID, STORY_TEMPLATE_ID, type Asset } from '@pulseframe/core';
+import { FAMILY_FILM_TEMPLATE_ID, type Asset } from '@pulseframe/core';
 import { Auth } from './auth.ts';
 import { Capabilities } from './capabilities.ts';
 import { loadConfig, type Config } from './config.ts';
@@ -21,8 +21,6 @@ import { createMcp } from './mcp.ts';
 import { Presence } from './presence.ts';
 import { Speech } from './speech.ts';
 import { Store } from './store.ts';
-import { STORY_SERVER_BUILT } from './story.ts';
-import { STORY_REGEN_BUILT, storyRegeneration } from './storyRegeneration.ts';
 
 const USER: Principal = { actor: 'user:owner', kind: 'user', scopes: ['observe', 'edit'] };
 const R = { num: 30, den: 1 };
@@ -112,33 +110,6 @@ describe('the story through the recipe routes and tools (lead)', () => {
       const r = await rest('POST', `/projects/${s.pid}/recipes/story/${route}`, body(s, { openingText: 'גיל {age:p1}' }), auth.tokens.agent);
       expect([route, r.status, r.body.error?.code]).toEqual([route, 403, 'people_scope_required']);
     }
-  });
-  it('until built: plan, apply and regenerate answer 501 story_not_built after the checks, through REST and MCP; nothing changes', async () => {
-    if (STORY_SERVER_BUILT) return;
-    const s = seedStory('st-nb');
-    const before = revision(s.pid);
-    for (const route of ['plan', 'apply']) {
-      const r = await rest('POST', `/projects/${s.pid}/recipes/story/${route}`, body(s), editor());
-      expect([route, r.status, r.body.error?.code]).toEqual([route, 501, 'story_not_built']);
-    }
-    const t = await tool('plan_recipe', { projectId: s.pid, recipeId: 'story', params: body(s).params }, editor());
-    expect(t.isError).toBe(true);
-    expect(JSON.stringify(t.body)).toMatch(/story_not_built/);
-    const runId = titleRun(s.pid, STORY_TEMPLATE_ID, { narrationAssetId: s.narration, assetIds: s.ids, picked: [] });
-    expect(store.getProject(s.pid).doc.recipeRuns[runId]!.recipeId).toBe(STORY_RUN_RECIPE_ID);
-    const mid = revision(s.pid);
-    for (const p of [`/projects/${s.pid}/recipe-runs/${runId}/regenerate`, `/projects/${s.pid}/template-runs/${runId}/regenerate`]) {
-      const x = await rest('POST', p, { params: { ownSound: 'mute' } }, editor());
-      expect([p, x.status, x.body.error?.code]).toEqual([p, 501, 'story_not_built']);
-      const y = await rest('POST', p, { params: { ownSound: 'mute' } }, grant({ mode: 'propose' }));
-      expect([p, y.status, y.body.error?.code]).toEqual([p, 403, 'insufficient_scope']);
-    }
-    expect(revision(s.pid)).toBe(mid);
-    expect(mid).toBe(before + 1);
-  });
-  it('storyRegeneration refuses until W1 builds it', () => {
-    if (STORY_REGEN_BUILT) return;
-    expect(() => storyRegeneration(null as never, null as never, {})).toThrow(/not built/);
   });
 });
 

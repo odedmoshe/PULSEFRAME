@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, creativeProjection, diffEntities, SOURCE_RANGE_OPS, SOURCE_RANGE_OPS_BUILT, OpError, ProjectSchema, restoreEntities, timeline, validateProject, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, creativeProjection, diffEntities, SOURCE_RANGE_OPS, SOURCE_RANGE_OPS_BUILT, OpError, ProjectSchema, rangeUsage, restoreEntities, screenTime, timeline, validateProject, type ProjectDocument } from '@pulseframe/core';
 import { evaluate } from '@pulseframe/engine';
 import { createFuzz } from './ops-fuzz.gen.ts';
 
@@ -45,7 +45,13 @@ function run(seed: number) {
     const back = structuredClone(next);
     restoreEntities(back, changes.map((c) => ({ id: c.id, state: c.before })));
     if (creativeProjection(back) !== creativeProjection(before)) throw new Error(`${where}\n  undoing the step does not restore the previous document`);
-    if (!next.sourceRanges && back.sourceRanges) throw new Error(`${where}\n  undo left an empty sourceRanges map`);
+    if (back.sourceRanges && Object.keys(back.sourceRanges).length === 0) throw new Error(`${where}\n  undo left an empty sourceRanges map`);
+    if (next.sourceRanges && Object.keys(next.sourceRanges).length === 0) throw new Error(`${where}\n  the step left an empty sourceRanges map`);
+    if (Object.hasOwn(before, 'sourceRanges') !== Object.hasOwn(back, 'sourceRanges')) throw new Error(`${where}\n  undo does not restore the presence of the sourceRanges key`);
+    // usage and screen time answer on every accepted document (they never throw), and every range has a usage row
+    const u = rangeUsage(next);
+    if (Object.keys(u.ranges).length !== Object.keys(next.sourceRanges ?? {}).length) throw new Error(`${where}\n  usage misses a range`);
+    screenTime(next);
     doc = next;
   }
 }

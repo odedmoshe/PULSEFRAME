@@ -1,0 +1,138 @@
+# Picture search («חיפוש בצילומים») - Python environment for Windows x64, CPU torch, Python 3.13 (cp313, win_amd64).
+# Hash-locked: every requirement of the closure is pinned to one version and to the SHA-256 of its wheel as PyPI's JSON API lists it
+# (https://pypi.org/pypi/<name>/<version>/json, read 2026-11-25). Nothing was downloaded or installed to make this file; no wheel was opened.
+#
+#   py -3.13 -m venv .artifacts\search\venv
+#   .artifacts\search\venv\Scripts\python -m pip install --require-hashes --only-binary=:all: -r apps\server\tools\requirements-search-win-cpu.txt
+#   set PF_TOOLS_PYTHON=...\.artifacts\search\venv\Scripts\python.exe
+#
+# Roots (the six pins of the decisions file): torch 2.15.0, transformers 5.23.0, tokenizers 0.23.3, sentencepiece 0.2.3,
+# safetensors 0.8.0, numpy 2.5.4. The rest is their closure for this platform: each project's Requires-Dist from PyPI, markers
+# evaluated for win32 / AMD64 / CPython 3.13 / no extras, newest release that has a cp313 win_amd64 (or pure-Python) wheel and fits every
+# constraint seen. NOT run through pip's own resolver (none ran here): the first `pip install --require-hashes` on the laptop is the test;
+# an error there means this list needs a correction, and the helper reports it rather than relaxing --require-hashes.
+# No torchvision and no Pillow, by decision: the worker normalises frames itself ((x/255-0.5)/0.5; embedder suffix pre1).
+# The PyPI torch wheel for Windows is the CPU build. A CUDA build comes from the PyTorch wheel index: a second lock, made after laptop step
+# L0 (nvidia-smi) from the sha256 of `pip download --no-deps` files the helper sends and the lead checks against the index. The
+# nvidia-* wheels are LicenseRef-NVIDIA-Proprietary: operator-installed runtime, never committed, never archived.
+# Licence text after each pin is what PyPI's metadata says (license expression, else the licence classifier); it is not a legal review.
+
+# annotated-doc: MIT
+annotated-doc==0.0.7 --hash=sha256:6bc31bbbec6dfaaedc1676dbc11dbda96fe22a2b5c400e9ebad113fec44a9dc6
+
+# annotated-types: MIT
+annotated-types==0.8.0 --hash=sha256:f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0
+
+# anyio: MIT
+anyio==4.16.0 --hash=sha256:c66ae634e0b8228396b801741beb3294326d4b6102f7bba4041c0dfb58c29026
+
+# click: BSD-3-Clause
+click==8.5.1 --hash=sha256:8bb5376d2006950386f8c6427613334a2acadc5f559cb80e638d00b4df957e37
+
+# colorama: OSI Approved :: BSD License
+colorama==0.4.6 --hash=sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6
+
+# filelock: MIT
+filelock==4.3.1 --hash=sha256:79e43df8e9fe509cd83a3899a7c186c8077cbbe4d200a1ed3705c2f3bb6bc487
+
+# fsspec: BSD-3-Clause
+fsspec==2026.9.0 --hash=sha256:8dd6e646e99ea382bd85f97a45e6b526a442d79423a7dc673f1e2756d05fcb5f
+
+# h11: MIT
+h11==0.16.0 --hash=sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86
+
+# hf-xet: Apache-2.0
+hf-xet==1.8.0 --hash=sha256:92188598dedc1e1f5609bd718d4db8687a6c89915553912571e2f587892eecec
+
+# httpcore2: BSD-3-Clause
+httpcore2==2.16.2 --hash=sha256:16051ae2a42f776007543f32de9349a317b23d2cbb4e1456b4bac0e88b87419a
+
+# httpx2: BSD-3-Clause
+httpx2==2.16.2 --hash=sha256:f05c13aade4c45dbf1c9060647a1058f0acad62398fad96e741269edb33d46f5
+
+# huggingface-hub: Apache-2.0
+huggingface-hub==2.4.0 --hash=sha256:42ecfd93ede47bdd333daebbf66a32d7bfe2e18752754fe4d2d4f98a0179d801
+
+# idna: BSD-3-Clause
+idna==3.20 --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
+
+# jinja2: OSI Approved :: BSD License
+jinja2==3.1.6 --hash=sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67
+
+# markdown-it-py: OSI Approved :: MIT License
+markdown-it-py==4.3.0 --hash=sha256:7aa1511a46c39138de78d9eba92ce47e63124d8003fc98b3a351909e04239efa
+
+# markupsafe: BSD-3-Clause
+markupsafe==3.0.4 --hash=sha256:1f1f9477e174582b0a1b583d60b66e1f2cf5d3fe12cee985e4aedf44766600e5
+
+# mdurl: OSI Approved :: MIT License
+mdurl==0.1.2 --hash=sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8
+
+# mpmath: BSD
+mpmath==1.3.0 --hash=sha256:a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c
+
+# networkx: BSD-3-Clause
+networkx==3.7 --hash=sha256:e3fd2c13a7814cee3746340d8d7f8598a67f16a58bf47fb7f8793fab6efca1b0
+
+# numpy (root): BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0
+numpy==2.5.4 --hash=sha256:8b4d2fd2d34e5f8c9235ee787de5631a37a28402b15cb80814df973d2be54129
+
+# packaging: Apache-2.0 OR BSD-2-Clause
+packaging==26.4 --hash=sha256:81383611a09c1bc0b08b76e0fd5829d7c6824c65b27a6aee339da133f4233ea2
+
+# pydantic: MIT
+pydantic==2.14.4 --hash=sha256:653a2ad9f6d8858529c77c72717d0ea991d6c6837fe683246b2f4b2bbfc3fadc
+
+# pydantic-core: MIT
+pydantic-core==2.50.5 --hash=sha256:d34c0d4dd4a318f2be788a60a972c3a1ed5da0155a7c06d6dd810dc5d60ad704
+
+# pygments: BSD-2-Clause
+pygments==2.21.0 --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9
+
+# pyyaml: MIT
+pyyaml==6.0.4 --hash=sha256:0a3a351f04dc124f9357512bdb80ac37cd1750cf1371da33e7cbb96d80ac865f
+
+# regex: Apache-2.0 AND CNRI-Python
+regex==2026.11.24 --hash=sha256:e8e36c76fc1a300ec66e4abd5c676c102078ea8142d9d974b43a6766f737f698
+
+# rich: MIT
+rich==15.0.0 --hash=sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb
+
+# safetensors (root): OSI Approved :: Apache Software License
+safetensors==0.8.0 --hash=sha256:096ec1a98435df7beb08853bb5aa9081a84f23d0adc67ed1a0a10550f608373f
+
+# sentencepiece (root): Apache-2.0
+sentencepiece==0.2.3 --hash=sha256:84e9def430ca8cc848b84adb304ffb77bff151cfc7dc66eb881f0385258f536b
+
+# setuptools: MIT
+setuptools==84.2.1 --hash=sha256:ca140b45d5325a9478f880e351484f62fef15f336462e449ca0c03c873d589c2
+
+# shellingham: ISC License
+shellingham==1.5.4 --hash=sha256:7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686
+
+# sympy: BSD
+sympy==1.14.0 --hash=sha256:e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5
+
+# tokenizers (root): OSI Approved :: Apache Software License
+tokenizers==0.23.3 --hash=sha256:1f0823bb00c5fdc98e487354d54dd55a03848d61a1a0bf29a68c77f24f3b26c3
+
+# torch (root): Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND ISC AND MIT...
+torch==2.15.0 --hash=sha256:e079089d36401261ebe145504309d0114fb9a00529eac4b33048221d2376a15c
+
+# tqdm: MPL-2.0 AND MIT
+tqdm==4.70.1 --hash=sha256:c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73
+
+# transformers (root): Apache 2.0 License
+transformers==5.23.0 --hash=sha256:018e82fd07490ad5bb58414f65e31576033dc7f36bed10c574843f69b90991bf
+
+# truststore: MIT
+truststore==0.10.5 --hash=sha256:9aaaedaefaf06d8b206278cf8b5012bc897f485a874503501e12d776df78951c
+
+# typer: MIT
+typer==0.29.2 --hash=sha256:f30731f8ca758368b836b3714872e58e395cef8fcaff918c853b1969ed5274e7
+
+# typing-extensions: PSF-2.0
+typing-extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+
+# typing-inspection: MIT
+typing-inspection==0.4.5 --hash=sha256:bc210535442b39e1bf2805e0c7a17dfd6a4ace760c84c7f7d16245d23a6b1c39

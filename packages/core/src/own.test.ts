@@ -83,8 +83,9 @@ function studio() {
   const audioEffectId = (run('add_audio_effect', { clipId: audioClipId, type: 'tone.bassboost' }).effects as { effectId: string }[])[0]!.effectId;
   run('set_effect_keyframe', { clipId, effectId, param: 'radius', time: f(0), value: 0.02 });
   const runId = run('apply_recipe', { recipeId: 'fixture', params: {}, steps: ['add a title'], ops: [{ op: 'add_text', args: { text: 'From a recipe', start: f(150), duration: f(30) } }] }, true).runId as string;
+  const rangeId = run('add_source_range', { assetId, start: T.rt(1, 1), end: T.rt(2, 1) }).rangeId as string;
   expect(validateProject(doc)).toEqual([]);
-  return { doc, assetId, lutId, clipId, audioClipId, trackId, audioTrackId, textId, captionTrackId, cueId, markerId, variantId, segmentId, fromWordId, toWordId, effectId, audioEffectId, motionTrackId, eventId, personId, shortId, groupId, angleIds, runId };
+  return { doc, assetId, lutId, clipId, audioClipId, trackId, audioTrackId, textId, captionTrackId, cueId, markerId, variantId, segmentId, fromWordId, toWordId, effectId, audioEffectId, motionTrackId, eventId, personId, shortId, groupId, angleIds, runId, rangeId };
 }
 
 describe('own', () => {
@@ -284,7 +285,7 @@ describe('every registered op', () => {
     const s = studio();
     const ids: Record<string, unknown> = {
       assetId: s.assetId, clipId: s.clipId, trackId: s.trackId, audioTrackId: s.audioTrackId, linkedTrackId: s.audioTrackId, sequenceId: 'seq_main', variantId: s.variantId, markerId: s.markerId,
-      effectId: s.effectId, motionTrackId: s.motionTrackId, targetTrackId: s.trackId, eventId: s.eventId, personId: s.personId, groupId: s.groupId, segmentId: s.segmentId, fromWordId: s.fromWordId, toWordId: s.toWordId, runId: s.runId, presetId: TEXT_PRESETS[0]!.id, lookId: COLOR_LOOKS[0]!.id, type: 'blur.gaussian', param: 'radius',
+      effectId: s.effectId, motionTrackId: s.motionTrackId, targetTrackId: s.trackId, eventId: s.eventId, personId: s.personId, groupId: s.groupId, segmentId: s.segmentId, fromWordId: s.fromWordId, toWordId: s.toWordId, runId: s.runId, rangeId: s.rangeId, presetId: TEXT_PRESETS[0]!.id, lookId: COLOR_LOOKS[0]!.id, type: 'blur.gaussian', param: 'radius',
       language: 'en', clipIds: [s.clipId, s.audioClipId], trackIds: [s.trackId], sourceTrackIds: [s.trackId], preferTrackIds: [s.trackId], removeClipIds: [s.textId], keepIds: [s.clipId],
     };
     // The clip or track an op is about, where it is not the picture clip on the picture track.
@@ -343,6 +344,7 @@ describe('every registered op', () => {
       apply_recipe: { runId: s.runId, recipeId: 'fixture', params: {}, steps: ['again'], removeClipIds: [], keepIds: [s.clipId], ops: [{ op: 'add_marker', args: { time: f(200) } }] },
       restore_entities: { targets: [{ id: s.markerId, state: null }] },
       split_clip: { clipId: s.clipId, at: f(60) },
+      update_source_range: { rangeId: s.rangeId, label: 'A moment' },
       set_clip_reverse: { clipId: s.clipId, reverse: true }, set_clip_pitch: { clipId: s.audioClipId, keepPitch: true }, animate_clip: { clipId: s.textId, in: 'fade' },
       rename_asset: { assetId: s.assetId, name: 'b.mp4' },
       remove_marker: { markerId: s.markerId },

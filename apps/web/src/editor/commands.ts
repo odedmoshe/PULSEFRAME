@@ -19,6 +19,7 @@ import { MULTICAM_STRINGS } from './multicam.strings.ts';
 import { CRAFT_CHANGES_SELECTION, CRAFT_COMMANDS } from './craft/craft.commands.ts';
 import { STABILISE_CHANGES_SELECTION, STABILISE_COMMANDS } from './stabilise/stabilise.commands.ts';
 import { PEARLS_COMMANDS } from './pearls/pearls.commands.ts';
+import { MUSICFIT_COMMANDS } from './musicfit/musicFit.commands.ts';
 
 export interface Command {
   id: string;
@@ -333,7 +334,7 @@ export const MULTICAM_COMMANDS: Command[] = [
 ];
 
 export const COMMANDS: Command[] = [
-  { id: 'transport.toggle', label: 'cmd.playPause', group: 'transport', keys: ['Space'], run: (e) => (e.player?.playing ? e.player.pause() : e.player?.play()) },
+  { id: 'transport.toggle', label: 'cmd.playPause', group: 'transport', keys: ['Space'], run: (e) => (e.player?.playing ? e.player.pause() : e.playerReady ? e.player?.play() : undefined) }, // before the player holds the project Space is a no-op, as the disabled play button is
   // Shuttle: L forwards (play, then 2×, 4×, 8×), J backwards (1×, 2×, 4×, 8×). Faster than 1× and backwards are silent. Space stops.
   { id: 'transport.shuttleForward', label: 'cmd.shuttleForward', group: 'transport', keys: ['KeyL'], enabled: (e) => (e.player?.frameCount ?? 0) > 0, run: (e) => { const p = e.player; if (!p) return; const r = p.playing ? (p.shuttleRate || 1) : 0; p.shuttle(r > 0 ? Math.min(8, r * 2) : 1); } },
   { id: 'transport.shuttleBack', label: 'cmd.shuttleBack', group: 'transport', keys: ['KeyJ'], enabled: (e) => (e.player?.frameCount ?? 0) > 0, run: (e) => { const p = e.player; if (!p) return; const r = p.playing ? (p.shuttleRate || 1) : 0; p.shuttle(r < 0 ? Math.max(-8, r * 2) : -1); } },
@@ -429,10 +430,12 @@ export const COMMANDS: Command[] = [
   ...CRAFT_COMMANDS,
   // stabilisation (wave 7): «ייצוב תמונה» on or off, unbound (stabilise/stabilise.commands.ts; disabled until W3)
   ...STABILISE_COMMANDS,
-  // marked ranges «פנינים» (wave 7): open the pearls view, unbound (pearls/pearls.commands.ts; disabled until builder C)
+  // marked ranges «פנינים» (wave 7): open the pearls view, unbound (pearls/pearls.commands.ts)
   ...PEARLS_COMMANDS,
   // «ספרו מה היה» (wave 7 story track): opens the story dialog on the selected pictures and videos (StoryDialog, W3)
   { id: 'view.openStory', label: 'cmd.openStory', group: 'view', keys: [], enabled: (e) => !!e.doc && sourceFromSelection(e.doc, e.getState().selection).assetIds.length > 0, run: (e) => { if (e.doc) e.openStory(sourceFromSelection(e.doc, e.getState().selection)); } },
+  // music that fits the film (wave 7 musicfit): mark the moment, moment to the beat / bar (musicfit/musicFit.commands.ts; disabled until builder C)
+  ...MUSICFIT_COMMANDS,
 ];
 
 /** Canonical chord for an event: modifiers in fixed order + physical key code. */

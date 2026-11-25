@@ -43,7 +43,10 @@ import { chooseFormat, formatOptions, openCardMenu } from './editor-ui.ts';
 import { makeRenderCacheCtx, renderCacheA11yScenarios } from './a11y-render-cache.ts';
 import { craftA11yScenarios } from './a11y-craft.ts';
 import { stabiliseA11yScenarios } from './a11y-stabilise.ts';
+import { musicfitA11yScenarios } from './a11y-musicfit.ts';
 import { pearlsA11yScenarios } from './a11y-pearls.ts';
+import { storyA11yScenarios } from './a11y-story.ts';
+import { searchA11yScenarios } from './a11y-search.ts';
 import { makeApi, ownerApi } from './incremental-fixtures.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
 import { auditInPage, focusAudit, toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
@@ -842,6 +845,24 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      // «ספרו מה היה» (wave 7 story): the dialog, the recorder recording and refused, the «סיפור» tab and the story bar (a11y-story.ts, integration)
+      for (const sc of storyA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // «חיפוש בצילומים» (wave 7 search): results, «לא נמצא דבר», the picture status line, the forget confirmation (a11y-search.ts, builder C)
+      for (const sc of searchA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // music that fits the film «מוזיקה שמתאימה לסרט» (wave 7 musicfit): the fit block, the swap dialog, the impact controls (a11y-musicfit.ts)
+      for (const sc of musicfitA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       if (await page.getByTestId('cache-fast-switch').count() === 0) { await page.getByTestId('export').click(); await page.getByTestId('cache-fast-switch').waitFor({ timeout: 8000 }).catch(() => {}); }
       if ((await page.getByTestId('cache-fast-switch').getAttribute('aria-checked').catch(() => null)) === 'true') await page.getByTestId('cache-fast-switch').click();
       if (await page.getByTestId('export-sheet').count()) { await page.keyboard.press('Escape'); await page.getByTestId('export-sheet').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {}); }
@@ -1145,9 +1166,27 @@ async function main() {
         Object.assign(states.at(-1), await rr.undo());
       }
       if (await page.getByTestId('template-undo').count()) { await page.getByTestId('template-undo').click(); await page.getByTestId('template-applied').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {}); await page.waitForTimeout(500); }
+      // stabilisation (wave 7) in the light theme: the same five scenarios as the dark pass (each sets up its own start state; it opens its own project)
+      for (const sc of stabiliseA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // «ספרו מה היה» in the light theme too: the dialog, the recorder recording and refused, the «סיפור» tab, the bar (a11y-story.ts, integration)
+      for (const sc of storyA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid: emptyPid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid: emptyPid });
+      }
       // the start hub of an empty project
       await open(emptyPid, 'welcome');
       await auditState('start-hub', { shown: (await page.getByTestId('welcome').count()) === 1 });
+      // music that fits the film (wave 7 musicfit) in the light theme: the same six scenarios as the dark pass (a11y-musicfit.ts)
+      for (const sc of musicfitA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       for (const st of states) console.log(`[${lang} light] state ${st.state}: controls=${st.controls} unnamed=${st.unnamed.length} lowContrast=${st.lowContrast.length} tabIssues=${st.tabIssues.length} noFocusRing=${st.noFocusRing.length}${st.shown !== undefined ? ` shown=${st.shown}` : ''}`);
       report.runs.push({ ...found, uiLanguage: lang, theme: 'light', focus, states });
       console.log(`[${lang} light] controls=${found.controls} unnamed=${found.unnamed.length} lowContrast=${found.lowContrast.length} tabIssues=${found.tabIssues.length} focusReached=${focus.reached} noFocusRing=${focus.missing.length}`);

@@ -155,6 +155,31 @@ export const LibraryRecordSchema = z
   })
   .strict();
 export type LibraryRecord = z.infer<typeof LibraryRecordSchema>;
+/**
+ * Asset.provenance.fitted (wave 7 musicfit track, .artifacts/wave7/musicfit-decisions.md): a song of this library shortened by ONE
+ * removal of whole bars from its middle. The file is the source from `startAt` to its usable end without [removed.from, removed.to),
+ * joined by a linear equal-gain crossfade of `crossfade` that ENDS on the join. All times are source times of `sourceAssetId`
+ * except `joinAt` (this file's own clock; = removed.from − startAt). `measured` is a heuristic's measurement, never a judgement;
+ * `heard` is set by the owner's own session only (mark_join_heard). `sourceAssetId` may name a file removed since: readers check.
+ * Written only by the internal operation add_fitted_music; validate.ts fitted_provenance.
+ */
+export const FittedMusicSchema = z
+  .object({
+    sourceAssetId: Id,
+    /** musicFitContract.ts FIT_METHOD: names the heuristic and its version. */
+    method: z.string().max(240),
+    startAt: RationalTimeSchema,
+    removed: z.object({ from: RationalTimeSchema, to: RationalTimeSchema }).strict(),
+    crossfade: RationalTimeSchema,
+    joinAt: RationalTimeSchema,
+    measured: z.object({
+      similarity: z.number().min(0).max(1), levelStepDb: z.number().min(-200).max(200), phraseBars: z.union([z.literal(1), z.literal(2), z.literal(4)]),
+      tempoSpreadMs: z.number().min(0).max(100000), beatConfidence: z.number().min(0).max(1).nullable(),
+    }).strict(),
+    heard: z.object({ by: z.string().min(1).max(120), at: z.string().min(1).max(40) }).strict().optional(),
+  })
+  .strict();
+export type FittedMusic = z.infer<typeof FittedMusicSchema>;
 /** A project holds at most this many events. */
 export const MAX_LIFE_EVENTS = 2000;
 /** An event holds at most this many files (and at least one). */
@@ -310,6 +335,8 @@ export const AssetSchema = z
           })
           .strict()
           .optional(),
+        /** Present for a song shortened by «התאמה לאורך» (wave 7 musicfit track): FittedMusicSchema. origin is 'derived'. */
+        fitted: FittedMusicSchema.optional(),
       })
       .strict(),
   })
@@ -427,6 +454,13 @@ export const MediaClipSchema = z
     multicam: MulticamTagSchema.optional(),
     /** Stabilisation (wave 7, steadyContract.ts): the clip's picture is steadied with the camera motion measured on its file. Video clips on video tracks only (validate.ts stabilise_clip). */
     stabilise: ClipStabiliseSchema.optional(),
+    /**
+     * The marked action moment «הרגע» (wave 7 musicfit track), on the clip's FILE clock: set_clip_impact / sync_impact. It means
+     * something only while the clip shows that source time (never validated as "inside"). Copied by split, duplicate and paste;
+     * cleared when the clip's file changes (replace_clip_media, a multicam switch), shifted by replace_clip_asset. Part of the
+     * fingerprint: a marked clip counts as edited by hand on regeneration. validate.ts clip_impact.
+     */
+    impact: RationalTimeSchema.optional(),
   })
   .strict();
 /**

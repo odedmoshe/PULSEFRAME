@@ -16,6 +16,7 @@ import { LimiterSwitch, ReductionMeter } from './send/LimiterSwitch.tsx';
 import { LoudnessMatch } from './send/LoudnessMatch.tsx';
 import { defaultCeiling, trackClipIds } from './send/send.logic.ts';
 import './send/send.css';
+import { MUSICFIT_UI_BUILT, MusicFitBlock } from './musicfit/MusicFitBlock.tsx';
 
 type Track = ProjectDocument['sequences'][string]['tracks'][number];
 
@@ -371,6 +372,8 @@ export function ClipSound({ clip }: { clip: Extract<Clip, { type: 'media' }> }) 
           <button type="button" className="ghost" data-testid="sound-fit-music" title={t('sound.fit.hint')} onClick={() => void editor.commit([{ op: 'fit_music', args: { clipId: clip.id } }], 'Fit music')}>{t('sound.fit')}</button>
         </div>
       )}
+      {/* «התאמה לאורך» (wave 7 musicfit): once builder C has built it */}
+      {MUSICFIT_UI_BUILT && <MusicFitBlock key={`mf:${clip.id}`} clip={clip} />}
     </div>
   );
 }

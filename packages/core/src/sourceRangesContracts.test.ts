@@ -2,7 +2,7 @@
  * The pearls track's contract in core (wave 7; .artifacts/wave7/pearls-decisions.md): the optional `sourceRanges` key and its
  * entity, exact undo of the emptied map, migration of an imported `{}`, the language assistant's exclusion, the honest "not built"
  * state of the three operations and of the functions, the film contract's additions, and the cascade call sites that change nothing
- * while no range can be made. The it.todo rows name what builders A and B must make pass.
+ * while no range can be made. The bodies themselves are tested in sourceRanges.test.ts and sourceRanges.property.test.ts.
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
@@ -52,13 +52,13 @@ describe('the sourceRanges key and its entity', () => {
     const { doc, assetId } = project();
     expect(Object.hasOwn(summarize(doc), 'pearls')).toBe(false);
     const s = summarize({ ...doc, sourceRanges: { rng_1: range(assetId) } }) as { pearls?: unknown };
-    expect(s.pearls).toEqual({ count: 1, unused: null });
+    expect(s.pearls).toEqual({ count: 1, unused: 1 });
     expect(JSON.stringify(s)).not.toContain('סופגנייה');
   });
 });
 
 describe('the three operations', () => {
-  it('are public, excluded from the language assistant, and refuse as not built until builder A', () => {
+  it('are public, excluded from the language assistant, and (in a build without the bodies) refuse as not built', () => {
     const names = listOps().filter((o) => !o.internal).map((o) => o.name);
     for (const op of SOURCE_RANGE_OPS) { expect(names).toContain(op); expect(ASSISTANT_EXCLUDED_OPS).toContain(op); expect(assistantOps()).not.toContain(op); }
     if (SOURCE_RANGE_OPS_BUILT) return;
@@ -91,9 +91,18 @@ describe('the three operations', () => {
     expect(() => rangeUsage(doc)).toThrow(SourceRangesNotBuilt);
     expect(() => screenTime(doc)).toThrow(SourceRangesNotBuilt);
   });
-  it.todo('A: each op body follows SOURCE_RANGE_REFUSALS in order; add → undo gives the stored JSON back; remove_asset and remove_person cascade with exact undo and the untagged count in the summary');
-  it.todo('A: rangeUsage equals a per-frame scan of sourceFrameIndexAt on forward, reversed, 2×, ramped and freeze clips, spans off frame edges, a 29.97 file in a 30 fps project, a time-preserving and an untimed copy');
-  it.todo('A: screenTime, searchRanges, placeRangeArgs (outward snap), filmWindowOfRange and validateSourceRanges as the contract says; no localeCompare or Intl in sourceRanges.ts');
+  it('A: built — an add commits, undoes to the stored JSON and is counted; the functions answer with numbers (cases: sourceRanges.test.ts, sourceRanges.property.test.ts)', () => {
+    expect(SOURCE_RANGE_OPS_BUILT).toBe(true);
+    const { doc, assetId } = project();
+    const r = applyTransaction(doc, [{ op: 'add_source_range', args: { assetId, start: T.frameTime(30, R), end: T.frameTime(75, R), label: 'x' } }], { idSeed: 'pb_', actor: 'user:local' });
+    const rangeId = r.results[0]!.output!.rangeId as string;
+    expect(r.doc.sourceRanges![rangeId]!.span).toEqual({ start: T.frameTime(30, R), end: T.frameTime(75, R) });
+    const back = structuredClone(r.doc);
+    restoreEntities(back, diffEntities(doc, r.doc).map((c) => ({ id: c.id, state: c.before })));
+    expect(JSON.stringify(back)).toBe(JSON.stringify(doc));
+    expect(rangeUsage(r.doc).unused).toEqual([rangeId]);
+    expect(screenTime(r.doc).pictureFrames).toBe(0);
+  });
 });
 
 describe('the family film contract', () => {
@@ -115,5 +124,4 @@ describe('the family film contract', () => {
     expect(filmRunRemovedPicks(params)).toEqual([{ key: 'm000000000003', assetId: 'c', windowIndex: null, rangeId: 'rng_9' }]);
     expect(filmRunRemovedPicks({ removedPicks: [{ key: 'k', assetId: 'a', windowIndex: 1 }] })).toEqual([{ key: 'k', assetId: 'a', windowIndex: 1 }]);
   });
-  it.todo('B (in familyFilm.pearls.test.ts; delete this row then): without picks.pearls every existing plan is unchanged (deep-equal with ranges removed); with prefer the first pearl of a file starts at its first frame; C9–C14');
 });

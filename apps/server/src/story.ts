@@ -41,7 +41,7 @@ import type { Governance } from './governance.ts';
 import { filmContext, holdsAgeField, refuseAgesInPlan } from './familyFilm.ts';
 import { peopleAccess, PEOPLE_SCOPE_REQUIRED } from './peoplePrivacy.ts';
 import { ApiError, type Store } from './store.ts';
-import { storyRegeneration } from './storyRegeneration.ts';
+import { storyRegeneration, storyRegenRecordParams } from './storyRegeneration.ts';
 
 /** True once the bodies below are built (W2 flips it). */
 export const STORY_SERVER_BUILT: boolean = true;
@@ -222,7 +222,8 @@ export async function regenerateStoryFor(store: Store, gov: Governance, principa
   const p = store.getProject(projectId);
   const run = own(p.doc.recipeRuns, runId);
   if (!run || run.recipeId !== STORY_RUN_RECIPE_ID) throw STORY_API_ERRORS.runNotFound(runId);
-  const { removable, protectedIds, keepSlots, removedSlots, removedPicks, keepIds, without, ctx: regenCtx, movedKeys } = wrap(() => storyRegeneration(p.doc, run, params, options));
+  const regen = wrap(() => storyRegeneration(p.doc, run, params, options));
+  const { removable, protectedIds, keepSlots, removedSlots, keepIds, without, ctx: regenCtx, movedKeys } = regen;
   const context: StoryPlanContext = { ...voice, ...titleOf(without, params), ...regenCtx };
   const plan = wrap(() => planStory(without, params, context));
   refuseAgesInPlan(principal, plan.ops);
@@ -232,7 +233,7 @@ export async function regenerateStoryFor(store: Store, gov: Governance, principa
   refuseBlocked(plan);
   const r = gov.commitAs(principal, {
     projectId, expectedRevision: expectedRevision ?? p.revision, allowInternal: true, label: `Rebuild story: ${plan.steps[0] ?? ''}`.slice(0, 120),
-    ops: [{ op: 'apply_template', args: { runId, templateId: STORY_TEMPLATE_ID, templateVersion: STORY_VERSION, params: storyRunRecordParams(plan, removedPicks), steps: plan.steps, removeClipIds: removable, keepIds, keepSlots, ops: plan.ops, slots: plan.slots, recordRanges: true } }],
+    ops: [{ op: 'apply_template', args: { runId, templateId: STORY_TEMPLATE_ID, templateVersion: STORY_VERSION, params: storyRegenRecordParams(plan, regen), steps: plan.steps, removeClipIds: removable, keepIds, keepSlots, ops: plan.ops, slots: plan.slots, recordRanges: true } }],
   }) as CommitOut;
   const out = r.results?.[0]?.output ?? {};
   return {

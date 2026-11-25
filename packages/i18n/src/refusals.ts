@@ -16,6 +16,8 @@ import { HE_CRAFT } from './craft.ts';
 import { HE_STABILISE } from './stabilise.ts';
 import { HE_PEARLS } from './pearls.ts';
 import { HE_STORY } from './story.ts';
+import { HE_MUSICFIT } from './musicFit.ts';
+import { HE_FOOTAGE } from './footageSearch.ts';
 
 /**
  * Hebrew wording for the detail text of the refusals a person meets most often in the editor. The server's messages are
@@ -283,7 +285,7 @@ const HE_MEDIA: [RegExp, (m: RegExpExecArray) => string][] = [
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA, ...HE_LIBRARY, ...HE_SEND, ...HE_CRAFT, ...HE_STABILISE, ...HE_PEARLS, ...HE_STORY]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA, ...HE_LIBRARY, ...HE_SEND, ...HE_CRAFT, ...HE_STABILISE, ...HE_PEARLS, ...HE_STORY, ...HE_MUSICFIT, ...HE_FOOTAGE]) { const m = re.exec(message); if (m) return say(m); }
   for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
   // The export routes wrap the first blocker (Exporter.start, the browser export): worded only when the blocker itself is.
   const start = /^export cannot start: ([\s\S]+)$/.exec(message);
@@ -348,3 +350,7 @@ export const STABILISE_REFUSAL_PATTERNS: readonly RegExp[] = HE_STABILISE.map(([
 export const PEARLS_REFUSAL_PATTERNS: readonly RegExp[] = HE_PEARLS.map(([re]) => re);
 /** The patterns of «ספרו מה היה» (story.ts HE_STORY, wave 7), for packages/evals/src/story-wording.test.ts. */
 export const STORY_REFUSAL_PATTERNS: readonly RegExp[] = HE_STORY.map(([re]) => re);
+/** The patterns of «מוזיקה שמתאימה לסרט» (musicFit.ts HE_MUSICFIT, wave 7), for packages/evals/src/musicfit-wording.test.ts. */
+export const MUSICFIT_REFUSAL_PATTERNS: readonly RegExp[] = HE_MUSICFIT.map(([re]) => re);
+/** The patterns of footage search (footageSearch.ts HE_FOOTAGE, wave 7), for packages/evals/src/footage-wording.test.ts. */
+export const FOOTAGE_REFUSAL_PATTERNS: readonly RegExp[] = HE_FOOTAGE.map(([re]) => re);

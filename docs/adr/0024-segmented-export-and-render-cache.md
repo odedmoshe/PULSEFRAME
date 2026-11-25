@@ -65,3 +65,13 @@ frame); I12 A/V offset 0.063 ms; incremental 27.1 s against 216.3 s clean.
 - Phase 0 55, Phase 4 22, browser export 26, accessibility 0 findings, 3526 unit tests (PROGRESS 19b). Faults
   fixed: lane and sheet planning different qualities.
 - Not verified: the owner's laptop encoder, a long real export.
+
+## Amendment 2026-11-25: size fit («מתאים לשליחה», wave 7 send)
+- An MP4 export with `sizeFit.targetBytes` encodes the compositor's frames a second time: the single pass or the segmented join
+  first writes a full-quality intermediate (CRF 16, at the planned picture size), and after its validation that file is encoded
+  again to the target by two-pass libx264, with the sound encoded from the export's own WAV (`apps/server/src/sizeFit.ts`,
+  `SIZE_FIT_METHOD`, stated in the job output's `fit.method`). The bytes on disk are checked, with one retry; on a miss the job
+  fails `size_fit_missed` and nothing is published.
+- It changes no frame the compositor draws and no segment key (segments are keyed without `sizeFit`, so a second target at the
+  same scale reuses every segment). Only the file size is promised: the second encode loses detail as any encode at a lower rate
+  does, and nothing is said about how an app treats the file.

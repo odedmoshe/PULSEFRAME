@@ -68,7 +68,7 @@ export function objectKind(doc: ProjectDocument | null, selection: readonly stri
 const TABS: Record<ObjectKind, readonly ObjectTab[]> = {
   none: ['project'],
   multi: ['shared'],
-  video: ['basic', 'motion', 'speed', 'colour', 'effects', 'mask', 'audio'],
+  video: ['basic', 'motion', 'speed', 'beat', 'colour', 'effects', 'mask', 'audio'], // 'beat': the impact controls (wave 7 musicfit; the moment is usually in the picture)
   image: ['basic', 'motion', 'colour', 'effects', 'mask'],
   text: ['text', 'style', 'anim', 'place', 'effects'],
   caption: ['cue', 'timing'],

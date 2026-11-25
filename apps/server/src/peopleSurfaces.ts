@@ -164,6 +164,9 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   'PUT /api/v1/assistant/key': ['owner-only'],
   'DELETE /api/v1/assistant/key': ['owner-only'],
   [`POST ${P}/assistant/requests`]: ['owner-only'],
+  // the LOCAL assistant (wave 7): the owner's session only; it reads no document (the local model is sent only the typed request)
+  'POST /api/v1/assistant/local/check': ['owner-only'],
+  'POST /api/v1/assistant/jobs/:jobId/taken': ['owner-only'],
   // proposals and approvals
   [`GET ${P}/proposals`]: ['rows-scrubbed'],
   [`POST ${P}/proposals`]: ['write'],
@@ -224,6 +227,20 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`POST ${P}/text/find`]: ['reader-document'],
   // marked ranges «פנינים» (wave 7): the reader document (labels '' for 'names'; peoplePrivacy.ts rule 5)
   [`GET ${P}/pearls`]: ['reader-document'],
+  // music that fits the film (wave 7 musicfit): plan reads the reader document; apply commits; the join preview is media bytes;
+  // the heard mark answers the owner's own session only (403 human_approval_required for every agent)
+  [`POST ${P}/music-fit/plan`]: ['reader-document'],
+  [`POST ${P}/music-fit/apply`]: ['reader-document', 'write'],
+  [`GET ${P}/music-fit/join.wav`]: ['no-document'],
+  [`POST ${P}/assets/:assetId/music-join/heard`]: ['owner-only', 'write'],
+  // «חיפוש בצילומים» (wave 7 search track; search/contract.ts): the search reads the reader document, and for any credential but the
+  // owner's own session never reads a pearl's name or a tag (core searchFootage reader 'agent') and answers {assetId, start, end, sources}
+  // only (core agentAnswerOf); the picture index, the scan and forgetting are the owner's own session's
+  [`POST ${P}/search`]: ['reader-document'],
+  [`GET ${P}/search/index`]: ['owner-only'],
+  [`POST ${P}/search/index`]: ['owner-only'],
+  [`DELETE ${P}/search/index`]: ['owner-only'],
+  'DELETE /api/v1/search/index': ['owner-only'],
   // MCP over HTTP: see PEOPLE_MCP_TOOLS and PEOPLE_MCP_RESOURCES
   'ALL /mcp': ['reader-document'],
 };
@@ -264,6 +281,10 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   find_text: ['reader-document'],
   // marked ranges «פנינים» (wave 7 pearls track)
   get_pearls: ['reader-document'],
+  // music that fits the film (wave 7 musicfit track)
+  plan_music_fit: ['reader-document'], apply_music_fit: ['reader-document', 'write'],
+  // find it in your footage (wave 7 search track): text only, the reader document without pearl names or tags
+  find_in_footage: ['reader-document'],
 };
 /** MCP resources and prompts (every resource answer passes forPrincipal; prompts carry no project content). */
 export const PEOPLE_MCP_RESOURCES: Readonly<Record<string, readonly PeopleFilter[]>> = {

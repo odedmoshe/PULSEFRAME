@@ -6,13 +6,13 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { findClip, type MediaClip } from '@pulseframe/core';
+import { findClip, STABILISE_JOB_TYPE, type MediaClip } from '@pulseframe/core';
 import { jobStageLabel } from '@pulseframe/i18n';
 import { api, ApiFailure } from '../../api.ts';
 import { refusalText } from '../TrackingPanel.tsx';
 import { useEditorState } from '../store.ts';
 import {
-  forgetRun, jumpFrameIn, OPEN_JOB, panelState, percentText, previewPlan, previewValue, rememberRun, rememberedRun, rememberStrength, removeOp, sliderKey, stabiliseProgress,
+  dependsOnOf, FALLBACK_POLL_MS, forgetRun, jumpFrameIn, needsFallbackRead, OPEN_JOB, panelState, percentText, previewPlan, previewValue, rememberRun, rememberedRun, rememberStrength, removeOp, settledOf, sliderKey, stabiliseProgress,
   stabiliseView, strengthOp, strengthToUse, switchOffOp, switchOnOp, zoomText,
 } from './stabilise.logic.ts';
 import { stabiliseT } from './stabilise.strings.ts';
@@ -23,7 +23,6 @@ import './stabilise.css';
 /** True once W3 has built the block (InspectorObject.tsx mounts the section only then). */
 export const STABILISE_UI_BUILT = true;
 
-interface Job { id: string; status: string; stage: string | null; error: { code?: string; message?: string } | null; output: { strengthLowered?: boolean } | null }
 const POLL_MS = 400;
 
 export function StabiliseBlock({ clip: given }: { clip: MediaClip }) {
@@ -34,7 +33,6 @@ export function StabiliseBlock({ clip: given }: { clip: MediaClip }) {
   // the clip as the document has it now (the selection's copy can be one revision behind)
   const clip = (doc && (findClip(doc, given.id)?.clip as MediaClip | undefined)) || given;
   const view = useMemo(() => (doc ? stabiliseView(doc, clip) : null), [doc, clip]);
-  const [job, setJob] = useState<Job | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [said, setSaid] = useState('');
   const [lowered, setLowered] = useState<{ strength: number; maxCrop: number } | null>(null);
@@ -50,27 +48,32 @@ export function StabiliseBlock({ clip: given }: { clip: MediaClip }) {
     const id = setInterval(() => { const r = rememberedRun(clip.id); if (r !== watched) setWatched(r); }, POLL_MS);
     return () => clearInterval(id);
   }, [clip.id, watched]);
+  // the run's events come through the store's event stream (Editor.onJobEvent); the block reads the job from it
+  const job = watched ? (state.stabiliseJobs[watched] ?? null) : null;
+  useEffect(() => {
+    if (!watched || !job) return;
+    const s = settledOf(job);
+    if (s.kind === 'open') return;
+    forgetRun(clip.id);
+    setWatched(undefined);
+    if (s.kind === 'done') {
+      if (s.strengthLowered) setLowered({ strength: editor.doc ? ((findClip(editor.doc, clip.id)?.clip as MediaClip | undefined)?.stabilise?.strength ?? 0) : 0, maxCrop: 15 });
+      setSaid(t('job.done'));
+    } else if (s.kind === 'canceled') setSaid(t('job.canceled'));
+    else setErr(`${t('job.failed')}: ${refusalText(lang, new ApiFailure(0, s.code, s.message))}`);
+  }, [watched, job]); // eslint-disable-line react-hooks/exhaustive-deps
+  // one slow fallback read, only while the stream is not connected (or has said nothing of this run): its answer goes the same way an event does
   useEffect(() => {
     if (!watched) return;
     let stop = false;
-    const tick = async () => {
+    const id = setInterval(async () => {
+      if (!needsFallbackRead(editor.streamOpen, editor.getState().stabiliseJobs[watched])) return;
       try {
         const j = await api.job(watched);
-        if (stop || !alive.current) return;
-        setJob({ id: j.id, status: j.status, stage: j.stage ?? null, error: (j.error as Job['error']) ?? null, output: (j.output as Job['output']) ?? null });
-        if (OPEN_JOB.has(j.status)) { setTimeout(tick, POLL_MS); return; }
-        forgetRun(clip.id);
-        setWatched(undefined);
-        if (j.status === 'succeeded') {
-          const out = (j.output as { strengthLowered?: boolean } | null) ?? null;
-          if (out?.strengthLowered) setLowered({ strength: editor.doc ? ((findClip(editor.doc, clip.id)?.clip as MediaClip | undefined)?.stabilise?.strength ?? 0) : 0, maxCrop: 15 });
-          setSaid(t('job.done'));
-        } else if (j.status === 'canceled') setSaid(t('job.canceled'));
-        else setErr(`${t('job.failed')}: ${refusalText(lang, new ApiFailure(0, j.error?.code ?? 'failed', j.error?.message ?? ''))}`);
+        if (!stop && alive.current) editor.onJobEvent({ id: j.id, type: STABILISE_JOB_TYPE, status: j.status, stage: j.stage ?? null, error: j.error ?? null, output: j.output ?? null });
       } catch (e) { if (!stop && alive.current) { forgetRun(clip.id); setWatched(undefined); setErr(refusalText(lang, e)); } }
-    };
-    void tick();
-    return () => { stop = true; };
+    }, FALLBACK_POLL_MS);
+    return () => { stop = true; clearInterval(id); };
   }, [watched, clip.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!doc || !view) return null;
@@ -86,7 +89,6 @@ export function StabiliseBlock({ clip: given }: { clip: MediaClip }) {
       const mem = view.stored?.strength;
       const r = await api.stabiliseClip(doc.id, clip.id, mem ? { strength: mem } : {});
       rememberRun(clip.id, r.jobId);
-      setJob(null);
       setWatched(r.jobId);
     } catch (e) { setErr(refusalText(lang, e)); }
   };
@@ -95,7 +97,7 @@ export function StabiliseBlock({ clip: given }: { clip: MediaClip }) {
   /** One commit; its refusal is shown in place. */
   const commit = async (op: ReturnType<typeof switchOnOp>, label: string, announce: string): Promise<boolean> => {
     setErr(null); setSaid(''); setLowered(null);
-    const r = await editor.commit([op], label);
+    const r = await editor.commit([op], label, { dependsOn: dependsOnOf(clip.assetId) });
     if (!alive.current) return !!r;
     if (!r) { setErr(t('job.failed')); return false; }
     const out = r.results[0]?.output as { strengthLowered?: boolean; stabilise?: { strength: number } | null } | undefined;

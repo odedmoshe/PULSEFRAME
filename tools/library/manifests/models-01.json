@@ -16,13 +16,13 @@
         "quote": "Model card front matter: \"license: apache-2.0\". Card text: \"SigLIP 2 is pre-trained on the WebLI dataset\"."
       },
       "credit": null,
-      "diskOnly": false,
+      "diskOnly": true,
       "creditInExport": false,
       "shareAlike": false,
       "people": false,
       "aiGenerated": false,
-      "repoAllowed": true,
-      "notes": "Revision 3f9f96cb90da5dbc758b01813f2f6f1aee24c1ab (head on 2026-11-25). Training data: WebLI, undisclosed web data (accepted-risk class in docs/research/2026-11-25-library-models.md section 13 q5). Titled multilingual but the publisher gives no Hebrew figure: Hebrew queries may need translation to English first. The upstream repository is not gated. transformers format (safetensors).",
+      "repoAllowed": false,
+      "notes": "Revision 3f9f96cb90da5dbc758b01813f2f6f1aee24c1ab (head on 2026-11-25). Training data: WebLI, undisclosed web data (accepted-risk class in docs/research/2026-11-25-library-models.md section 13 q5). Titled multilingual but the publisher gives no Hebrew figure: Hebrew queries may need translation to English first. The upstream repository is not gated. transformers format (safetensors). Disk only (wave 7 search decisions): the model reads frames of family videos and stays on the owner's disk, never in the repository or a shared archive. Tokenizer (read at source 2026-11-25): the publisher's big_vision README calls it the \"Gemma tokenizer\"; the model card and file list say only apache-2.0 and carry no LICENSE file; the Gemma Terms of Use (ai.google.dev/gemma/terms, last modified 2026-04-01) define Gemma as the models listed in their Appendix, where SigLIP is not listed, and never mention a tokenizer - whether they reach this file is not stated. Their notice and copy-of-terms duties attach to reproducing or distributing to a third party, which this library never does; if a file were ever shared those duties could apply. Terms: gemma.ai/resources/terms and gemma.ai/resources/prohibited_use_policy.",
       "items": [
         {
           "id": "siglip2-base-patch16-256/model.safetensors",

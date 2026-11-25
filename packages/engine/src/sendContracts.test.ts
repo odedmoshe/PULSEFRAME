@@ -1,6 +1,6 @@
 /**
  * Track send (wave 7), engine contract: the limiter's ceiling sits on the 16-bit grid; the plan carries the limiter only when the
- * project has one. The it.todo rows name what workers A (limiter, sound checks) and B (picture checks) must make pass.
+ * project has one. What workers A and B built is tested in masterLimiter.test.ts, soundCheck.test.ts and pictureCheck.test.ts.
  */
 import { describe, expect, it } from 'vitest';
 import { createProject } from '@pulseframe/core';
@@ -21,9 +21,4 @@ describe('send: engine contract', () => {
     expect('limiter' in audioPlan(doc)).toBe(false);
     expect(audioPlan({ ...doc, settings: { ...doc.settings, limiter: { ceiling: -1 } } }).limiter).toEqual({ ceiling: -1 });
   });
-  it.todo('A: MasterLimiter: a property test finds no output sample over limiterCeilingLinear(ceiling) (masterLimiter.test.ts)');
-  it.todo('A: MasterLimiter: samples more than lookahead + release after the last limited sample equal the delayed input bit for bit');
-  it.todo('A: MasterLimiter: the same seeded input gives the same hash as public/pf-master-limiter.js (selftest page, proof L6)');
-  it.todo('A: SoundCheck: 3 full-scale samples in a 0.1 s block are clipped, 2 are not; −60 dBFS RMS for 2 s is silence, 1.9 s is not (soundCheck.test.ts)');
-  it.todo('B: PictureCheck: 15 black frames at 30 fps are found, 14 are not; frozen only while moving (pictureCheck.test.ts)');
 });

@@ -110,6 +110,7 @@ describe('versions through REST', () => {
     const saved = await rest(owner, 'POST', '/versions', { name: 'לפני הקיצור' });
     expect(saved.status).toBe(201);
     v1 = saved.body.version.id;
+    expect(Object.keys(saved.body)).toEqual(['version']); // the web client's api.saveVersion unwraps exactly this envelope
     expect(saved.body.version).toMatchObject({ name: 'לפני הקיצור', sameAsCurrent: true, privacyChanged: false, frames: 50 });
     expect((await rest(observer, 'POST', '/versions', { name: 'x' })).status).toBe(403);
     expectRefusal(await rest(proposer, 'POST', '/versions', { name: 'x' }), 'proposeOnly');

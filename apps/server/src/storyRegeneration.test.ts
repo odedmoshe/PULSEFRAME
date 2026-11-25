@@ -16,7 +16,7 @@ import {
   type ProjectDocument, type StoryPlan, type StoryPlanContext,
 } from '@pulseframe/core';
 import { project, R30, song, still, video } from '../../../packages/core/src/familyFilm.testDouble.ts';
-import { STORY_REGEN_BUILT, storyRegeneration } from './storyRegeneration.ts';
+import { STORY_REGEN_BUILT, storyRegeneration, storyRegenRecordParams } from './storyRegeneration.ts';
 import { Store } from './store.ts';
 
 const base: StoryPlanContext = { voice: null, voiceState: 'pending', capture: {}, title: null };
@@ -49,7 +49,7 @@ function rebuild(doc: ProjectDocument, runId: string, newParams: Record<string, 
   if (plan.blocking.length) return { g, plan, doc: null };
   // the server's key-clash guard: a new slot never takes a key a kept slot holds
   expect(plan.slots.filter((s) => g.keepSlots.some((k) => k.key === s.key))).toEqual([]);
-  const out = applyTransaction(doc, [applyArgs(plan, { runId, removeClipIds: g.removable, keepIds: g.keepIds, keepSlots: g.keepSlots }, g.removedPicks)], { idSeed: `rg${seq++}_`, actor: 'test', allowInternal: true }).doc;
+  const out = applyTransaction(doc, [applyArgs(plan, { runId, removeClipIds: g.removable, keepIds: g.keepIds, keepSlots: g.keepSlots, params: storyRegenRecordParams(plan, g) })], { idSeed: `rg${seq++}_`, actor: 'test', allowInternal: true }).doc;
   expect(validateProject(out)).toEqual([]);
   return { g, plan, doc: out };
 }
@@ -221,5 +221,30 @@ describe('story regeneration', () => {
       store.undo(pid, 'user:owner', 'undo');
       expect(canonical(store.getProject(pid).doc)).toBe(before);
     } finally { store.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe('story regeneration: a second rebuild (integration)', () => {
+  it('a picture replaced by hand stays the only place of its pick: a second rebuild (restoreRemoved) does not place its old file again, and the picture deleted by hand comes back', () => {
+    const { doc, runId } = build(storyDoc());
+    const [p3, p4] = [clipOf(doc, runId, 's2'), clipOf(doc, runId, 's3')];
+    // as the editor does it with ripple on: W ripple-trims the end of 3 (later pictures one second earlier), replace 4, Delete 2 ripples
+    let d = edit(doc, [{ op: 'trim_clip', args: { clipId: p3, edge: 'end', to: fr(330) } }, { op: 'move_clips', args: { clipIds: [p4, clipOf(doc, runId, 's4'), clipOf(doc, runId, 's5')], delta: fr(-30) } }]);
+    d = edit(d, [{ op: 'replace_clip_media', args: { clipId: p4, assetId: 'x' } }]);
+    d = edit(d, [{ op: 'ripple_delete_clips', args: { clipIds: [clipOf(d, runId, 's1')] } }]);
+    const first = rebuild(d, runId, { musicAssetId: 'mus2' });
+    expect(pictures(first.doc!, runId).map((p) => p.assetId)).not.toContain('s3');
+    const before3 = canonical(findClip(first.doc!, p3)!.clip), before4 = canonical(findClip(first.doc!, p4)!.clip);
+    // the second rebuild: the run record of the first must still say which picks the kept clips hold
+    const second = rebuild(first.doc!, runId, {}, true);
+    const pics = pictures(second.doc!, runId);
+    expect(pics.map((p) => p.assetId)).not.toContain('s3');
+    expect(pics.map((p) => p.assetId)).toContain('s1');
+    expect(canonical(findClip(second.doc!, p3)!.clip)).toBe(before3);
+    expect(canonical(findClip(second.doc!, p4)!.clip)).toBe(before4);
+    tiles(pics, 0, 720);
+    // and once more without restoring: still no old file of the replaced picture
+    const third = rebuild(second.doc!, runId, { musicAssetId: 'mus' });
+    expect(pictures(third.doc!, runId).map((p) => p.assetId)).not.toContain('s3');
   });
 });

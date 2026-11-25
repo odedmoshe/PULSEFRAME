@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { chainReach, openClipVoice, registerKernel, soundEnd, type AudioPlan, type FxKernel, type PlannedAudioClip, type PlannedFx } from '@pulseframe/engine';
-import { mixToRaw } from './audiomix.ts';
+import { mixRoomBytes, mixToRaw } from './audiomix.ts';
 
 const EPS = 2 ** -24;
 const ceilLog = (g: number) => { let w = 0, x = 1; while (x > EPS) { x *= g; w++; } return w; };
@@ -146,4 +146,17 @@ describe('server mix of clips with sound effects', () => {
     const tail = (await mix(p, tailFirst, 9000)).pcm;
     expect(peakOf(tail)).toBeGreaterThan(5e-4); // the ring-out of the comb (0.6 per 10 ms) after the clip's fade-out
   }, 180_000);
+});
+
+describe('storage asked before an export mix (wave 7 send, integration)', () => {
+  const plan = (limiter?: { ceiling: number }) => ({ sampleRate: 48000, totalSamples: 0, clips: [], ...(limiter ? { limiter } : {}) }) as unknown as AudioPlan;
+  it('without a limiter: the raw float file and the 16-bit WAV, as before wave 7 (max(1, n) · 2 · (4 + 2))', () => {
+    expect(mixRoomBytes(plan(), 480_000)).toBe(480_000 * 12);
+    expect(mixRoomBytes(plan(), 0)).toBe(12);
+  });
+  it('with a limiter: also its float output while the raw file (with M − 1 frames of look-ahead) is still there', () => {
+    // M = round(0.005 · 48000) = 240: raw (n + 239) · 8, limited n · 8, WAV n · 4
+    expect(mixRoomBytes(plan({ ceiling: -1 }), 480_000)).toBe((480_000 + 239) * 8 + 480_000 * 8 + 480_000 * 4);
+    expect(mixRoomBytes(plan({ ceiling: -1 }), 480_000)).toBe(480_000 * 2 * (4 + 4 + 2) + 8 * 239);
+  });
 });

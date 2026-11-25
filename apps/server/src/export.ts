@@ -19,7 +19,7 @@ import { assembleChecks, flagsOf, pictureExpectation, planSizeFit, SEND_API_REFU
 import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, own, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { AUDIO_FX_ENGINE, audioPlan, captionCues, PictureCheck, soundEnd, type AudioPlan, type FlashCells, type PlannedAudioClip } from '@pulseframe/engine';
-import { renderMix, type MixResult } from './audiomix.ts';
+import { mixRoomBytes, renderMix, type MixResult } from './audiomix.ts';
 import { limiter } from './analysis.ts';
 
 const stillLimit = limiter(2, 32);
@@ -568,8 +568,9 @@ export class Exporter {
    * instead of passing the ceiling (lead run 2026-11-18, proof:incremental I11d: 31 MB over the start for a 60 s mix).
    */
   private renderAudio(doc: ProjectDocument, firstSample: number, totalSamples: number, outFile: string, isCanceled: () => boolean) {
-    assertStorageRoom(this.store, Math.max(1, totalSamples) * 2 * (4 + 2), 'mix the sound of this export');
-    return renderMix(audioPlan(doc), (assetId) => this.store.blobPath(doc.assets[assetId]!.contentHash), firstSample, totalSamples, outFile, isCanceled, (assetId) => timeOriginSeconds(doc.assets[assetId]), (assetId) => doc.assets[assetId]?.audio?.channels === 1);
+    const plan = audioPlan(doc);
+    assertStorageRoom(this.store, mixRoomBytes(plan, totalSamples), 'mix the sound of this export');
+    return renderMix(plan, (assetId) => this.store.blobPath(doc.assets[assetId]!.contentHash), firstSample, totalSamples, outFile, isCanceled, (assetId) => timeOriginSeconds(doc.assets[assetId]), (assetId) => doc.assets[assetId]?.audio?.channels === 1);
   }
 
   private async run(jobId: string) {
@@ -741,7 +742,7 @@ export class Exporter {
         status: 'succeeded', stage: null,
         output: {
           file: path.basename(final), mimeType: { mp4: 'video/mp4', webm: 'video/webm', gif: 'image/gif', wav: 'audio/wav', png: 'image/png' }[ext], captions: captionsOut, ...(licence ? { licence } : {}), bytes, revision: job.input.revision, route: segmentsReport ? SEGMENTED_ROUTE : 'server-software-canvas2d', ...(segmentsReport ? { segments: segmentsReport } : {}), options, manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, audioEffects: manifest.audioEffects ?? [], output },
-          estimate: { ...manifest.estimate, actualBytes: bytes }, ...(flashReport ? { photosensitivity: flashReport } : {}), ...(fitOut ? { fit: fitOut } : {}), ...(checks ? { checks } : {}), audioClipsMixed: audioClips, audio: audioMix && { mixPeakDbfs: audioMix.mixPeakDbfs, clipped: audioMix.clipped, loudness: audioMix.loudness }, validation, renderStageMs, wallSeconds: wall, realtimeFactor: output.frames > 1 ? (output.frames * frameRate.den) / frameRate.num / wall : null,
+          estimate: { ...manifest.estimate, actualBytes: bytes }, ...(flashReport ? { photosensitivity: flashReport } : {}), ...(fitOut ? { fit: fitOut } : {}), ...(checks ? { checks } : {}), audioClipsMixed: audioClips, audio: audioMix && { mixPeakDbfs: audioMix.mixPeakDbfs, clipped: audioMix.clipped, loudness: audioMix.loudness, ...(audioMix.limiter ? { limiter: audioMix.limiter } : {}) }, validation, renderStageMs, wallSeconds: wall, realtimeFactor: output.frames > 1 ? (output.frames * frameRate.den) / frameRate.num / wall : null,
         },
       });
     } catch (e: any) {

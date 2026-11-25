@@ -63,6 +63,8 @@ export interface Config {
   toolsModelsDir: string;
   /** How long an idle local-tool worker keeps its model loaded, in seconds (PF_TOOLS_KEEP_SECONDS, default 60; 0 = a new process for every job). */
   toolsKeepSeconds: number;
+  /** Picture search (wave 7 search track): the folder of the pinned SigLIP 2 files (PF_SEARCH_MODEL_DIR). Unset = <library root>/models/search/siglip2-base-patch16-256 when a library root is known, else model_missing. The interpreter is PF_TOOLS_PYTHON. */
+  searchModelDir: string | null;
   /** Operator-installed deep-filter 0.5.6 binary (PF_DENOISE_BIN); verified by digest, never installed by the product. Unset = engine_not_configured. */
   denoiseBin: string | null;
   /** Scratch space one AI job may use for staged frames and chunks (PF_AI_SCRATCH_BYTES, default 2 GiB). */
@@ -163,6 +165,7 @@ export function loadConfig(env = process.env): Config {
     toolsPython: env.PF_TOOLS_PYTHON ? path.resolve(root, env.PF_TOOLS_PYTHON) : null,
     toolsModelsDir: env.PF_TOOLS_MODELS_DIR ? path.resolve(root, env.PF_TOOLS_MODELS_DIR) : path.join(dataDir, 'tool-models'),
     toolsKeepSeconds: num(env.PF_TOOLS_KEEP_SECONDS, 60),
+    searchModelDir: env.PF_SEARCH_MODEL_DIR ? path.resolve(root, env.PF_SEARCH_MODEL_DIR) : null,
     denoiseBin: env.PF_DENOISE_BIN ? path.resolve(root, env.PF_DENOISE_BIN) : null,
     aiScratchBytes: num(env.PF_AI_SCRATCH_BYTES, 2 * 1024 ** 3, 1),
     aiHostRamBudgetBytes: num(env.PF_AI_HOST_RAM_BUDGET, 3 * 1024 ** 3, 1),

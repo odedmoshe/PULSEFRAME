@@ -638,6 +638,7 @@ function switchAngles(d: ProjectDocument, a: z.infer<typeof MulticamOpArgs.switc
     for (const p of plan.parts) {
       const clip = at.get(p.k0)!, piece = B.pieces[p.pieceIndex]!;
       ledger.clip(seq.id, track.id, clip);
+      if (clip.assetId !== piece.assetId) delete clip.impact; // the marked moment «הרגע» (wave 7 musicfit) is a time of the file
       clip.assetId = piece.assetId;
       clip.sourceIn = p.sourceIn;
       clip.multicam = { groupId: g.id, angleId: B.id };

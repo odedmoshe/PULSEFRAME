@@ -2,17 +2,79 @@
  * Keeps the Hebrew wording of the marked-range refusals (packages/i18n/src/pearls.ts HE_PEARLS) in step with the fixed English of core
  * sourceRangesContract.ts SOURCE_RANGE_REFUSALS and of the server's guards (apps/server/src/peoplePrivacy.ts HUMAN_TAG_REFUSALS,
  * apps/server/src/pearls.ts): every sentence is worded in Hebrew, says what to do next, and every pattern is used. notBuilt is
- * provoked for real; the rest come from the table until builder A's bodies exist — A then provokes each through its operation
- * (it.todo below). Also: the pearls strings exist in both languages and never judge a cut. Builder A owns this file after the pre-pass.
+ * provoked for real while the bodies are not built; once built, every other refusal is provoked through its operation. Also: the pearls strings exist in both languages and never judge a cut. Builder A owns this file after the pre-pass.
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, OpError, PEARL_FORBIDDEN_WORDS, PEARL_FORBIDDEN_WORDS_HE, SCREEN_TIME_LABEL, SCREEN_TIME_TITLE, SOURCE_RANGE_OPS, SOURCE_RANGE_OPS_BUILT, SOURCE_RANGE_REFUSALS, type SourceRangeRefusalKey } from '@pulseframe/core';
+import { applyTransaction, createProject, MAX_SOURCE_RANGES, OpError, PEARL_FORBIDDEN_WORDS, PEARL_FORBIDDEN_WORDS_HE, SCREEN_TIME_LABEL, SCREEN_TIME_TITLE, SOURCE_RANGE_OPS, SOURCE_RANGE_OPS_BUILT, SOURCE_RANGE_REFUSALS, type SourceRangeRefusalKey } from '@pulseframe/core';
 import { HUMAN_TAG_REFUSALS } from '../../../apps/server/src/peoplePrivacy.ts';
 import { PEARLS_SERVER_REFUSALS } from '../../../apps/server/src/pearls.ts';
 import { dictionaries, PEARLS_EN, PEARLS_HE, PEARLS_REFUSAL_PATTERNS, translateRefusal } from '../../i18n/src/index.ts';
 
 const caught = (fn: () => unknown): string => { try { fn(); } catch (e) { if (e instanceof OpError) return e.message; throw e; } throw new Error('not refused'); };
+
+const R = { num: 30, den: 1 };
+const f = (n: number) => T.frameTime(n, R);
+const prov = { origin: 'fixture' as const, importedAt: '2026-11-25T00:00:00Z', importedBy: 'test' };
+const hash = (c: string) => `sha256:${c.repeat(64)}`;
+/** A project with a 10 s video, a still, a colour table, one person, a pearl [1, 2.5) s, a presence tag and a whole-file pearl. */
+function fixture() {
+  const assets = [
+    { kind: 'video', name: 'v.mp4', contentHash: hash('1'), byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: f(300), video: { width: 64, height: 36, frameRate: R, codec: 'h264', rotation: 0, frameCount: 300 }, provenance: prov },
+    { kind: 'image', name: 's.png', contentHash: hash('2'), byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.ZERO, image: { width: 64, height: 36, codec: 'png', hasAlpha: false }, provenance: prov },
+    { kind: 'lut', name: 'l.cube', contentHash: hash('3'), byteSize: 1, container: 'cube', mimeType: 'text/plain', duration: T.ZERO, provenance: prov },
+  ];
+  let r = applyTransaction(createProject({ id: 'prj_pw', name: 'PW' }), assets.map((asset) => ({ op: 'import_asset', args: { asset } })), { idSeed: 'pw0_', actor: 'test', allowInternal: true });
+  const [vid, still, lut] = r.results.map((x) => x.output!.assetId as string) as [string, string, string];
+  r = applyTransaction(r.doc, [{ op: 'add_person', args: { name: 'אלף' } }], { idSeed: 'pw1_', actor: 'test' });
+  const personId = r.results[0]!.output!.personId as string;
+  r = applyTransaction(r.doc, [
+    { op: 'add_source_range', args: { assetId: vid, start: f(30), end: f(75), label: 'סופגנייה' } },
+    { op: 'add_source_range', args: { assetId: vid, kind: 'presence', people: [personId] } },
+    { op: 'add_source_range', args: { assetId: still } },
+  ], { idSeed: 'pw2_', actor: 'user:local' });
+  const [pearl, presence, whole] = r.results.map((x) => x.output!.rangeId as string) as [string, string, string];
+  return { doc: r.doc, vid, still, lut, personId, pearl, presence, whole };
+}
+let seq = 0;
+/** Every refusal of the three operations provoked through its operation, in the order SOURCE_RANGE_REFUSALS lists them for add, then update, then remove. */
+export function provokedRefusals(): { key: SourceRangeRefusalKey; op: string; message: string }[] {
+  const x = fixture();
+  const call = (op: string, args: Record<string, unknown>) => caught(() => applyTransaction(x.doc, [{ op, args }], { idSeed: `pwr${seq++}_`, actor: 'user:local' }));
+  const span = { start: f(30), end: f(75) };
+  const rows: [SourceRangeRefusalKey, string, Record<string, unknown>][] = [
+    ['assetNotFound', 'add_source_range', { assetId: 'ast_x' }],
+    ['rangeNoTime', 'add_source_range', { assetId: x.lut }],
+    ['rangeHalfSpan', 'add_source_range', { assetId: x.vid, start: f(1) }],
+    ['rangeStillSpan', 'add_source_range', { assetId: x.still, ...span }],
+    ['presenceIsWhole', 'add_source_range', { assetId: x.vid, kind: 'presence', ...span, people: [x.personId] }],
+    ['rangeBounds', 'add_source_range', { assetId: x.vid, start: f(30), end: f(400) }],
+    ['rangeLabelLine', 'add_source_range', { assetId: x.vid, start: f(1), end: f(2), label: 'a\nb' }],
+    ['presenceNeedsPeople', 'add_source_range', { assetId: x.still, kind: 'presence' }],
+    ['rangePersonNotFound', 'add_source_range', { assetId: x.vid, start: f(1), end: f(2), people: ['per_x'] }],
+    ['rangeDuplicate', 'add_source_range', { assetId: x.vid, ...span }],
+    ['rangeNotFound', 'update_source_range', { rangeId: 'rng_x', label: 'x' }],
+    ['rangeNothingToChange', 'update_source_range', { rangeId: x.pearl }],
+    ['rangeWholeAndSpan', 'update_source_range', { rangeId: x.pearl, whole: true, ...span }],
+    ['rangeHalfSpan', 'update_source_range', { rangeId: x.pearl, end: f(80) }],
+    ['rangeStillSpan', 'update_source_range', { rangeId: x.whole, ...span }],
+    ['presenceIsWhole', 'update_source_range', { rangeId: x.presence, ...span }],
+    ['rangeBounds', 'update_source_range', { rangeId: x.pearl, start: f(80), end: f(70) }],
+    ['rangeLabelLine', 'update_source_range', { rangeId: x.pearl, label: 'a\rb' }],
+    ['presenceNeedsPeople', 'update_source_range', { rangeId: x.presence, people: [] }],
+    ['rangePersonNotFound', 'update_source_range', { rangeId: x.pearl, people: ['per_x'] }],
+    ['rangeUnchanged', 'update_source_range', { rangeId: x.pearl, label: 'סופגנייה' }],
+    ['rangeNotFound', 'remove_source_range', { rangeId: 'rng_x' }],
+  ];
+  return rows.map(([key, op, args]) => ({ key, op, message: call(op, args) }));
+}
+/** tooManyRanges needs 2000 ranges: provoked on a document filled by hand (the op refuses before it adds). */
+function provokeTooMany(): string {
+  const x = fixture();
+  const full = structuredClone(x.doc);
+  for (let i = 0; i < MAX_SOURCE_RANGES; i++) full.sourceRanges![`rng_f${i}`] = { id: `rng_f${i}`, assetId: x.vid, kind: 'pearl', span: { start: f(i % 299), end: f(300 - Math.floor(i / 299)) }, label: '', createdBy: 't' };
+  return caught(() => applyTransaction(full, [{ op: 'add_source_range', args: { assetId: x.vid, start: f(5), end: f(7) } }], { idSeed: 'pwt_', actor: 'user:local' }));
+}
 
 function opSentences(): Record<SourceRangeRefusalKey, string[]> {
   const S = SOURCE_RANGE_REFUSALS;
@@ -22,14 +84,10 @@ function opSentences(): Record<SourceRangeRefusalKey, string[]> {
     : [caught(() => applyTransaction(doc, [{ op: 'add_source_range', args: { assetId: 'ast_x' } }], { idSeed: 'pw1_', actor: 'test' })),
       caught(() => applyTransaction(doc, [{ op: 'update_source_range', args: { rangeId: 'rng_x', label: 'x' } }], { idSeed: 'pw2_', actor: 'test' })),
       caught(() => applyTransaction(doc, [{ op: 'remove_source_range', args: { rangeId: 'rng_x' } }], { idSeed: 'pw3_', actor: 'test' }))];
-  return {
-    notBuilt,
-    assetNotFound: [S.assetNotFound.message('ast_x')], rangeNoTime: [S.rangeNoTime.message()], rangeHalfSpan: [S.rangeHalfSpan.message()],
-    rangeWholeAndSpan: [S.rangeWholeAndSpan.message()], rangeStillSpan: [S.rangeStillSpan.message()], rangeBounds: [S.rangeBounds.message('12.4'), S.rangeBounds.message('8')],
-    rangeLabelLine: [S.rangeLabelLine.message()], presenceNeedsPeople: [S.presenceNeedsPeople.message()], rangePersonNotFound: [S.rangePersonNotFound.message('per_x')],
-    rangeDuplicate: [S.rangeDuplicate.message()], tooManyRanges: [S.tooManyRanges.message()], rangeNotFound: [S.rangeNotFound.message('rng_x')],
-    rangeNothingToChange: [S.rangeNothingToChange.message()], rangeUnchanged: [S.rangeUnchanged.message()],
-  };
+  const out = { notBuilt } as Record<SourceRangeRefusalKey, string[]>;
+  for (const r of provokedRefusals()) (out[r.key] ??= []).push(r.message);
+  out.tooManyRanges = [provokeTooMany()];
+  return out;
 }
 const serverSentences = (): string[] => [...Object.values(HUMAN_TAG_REFUSALS), ...Object.values(PEARLS_SERVER_REFUSALS).map((r) => r.message)];
 
@@ -54,7 +112,23 @@ describe('pearls refusals in Hebrew', () => {
   it('no refusal, summary-free English or Hebrew holds a label: the sentences carry ids and numbers only', () => {
     for (const en of all) expect(en).not.toMatch(/סופגנייה|dinosaur/);
   });
-  it.todo('A: each refusal of add/update/remove_source_range is provoked for real through its operation, in the order of SOURCE_RANGE_REFUSALS, and equals the table');
+  it('each refusal of add/update/remove_source_range is provoked for real through its operation, in the order of SOURCE_RANGE_REFUSALS, and equals the table', () => {
+    const S = SOURCE_RANGE_REFUSALS as Record<SourceRangeRefusalKey, { message: (...a: string[]) => string }>;
+    const rows = provokedRefusals();
+    for (const r of rows) {
+      const want = r.key === 'assetNotFound' ? S[r.key].message('ast_x') : r.key === 'rangeBounds' ? S[r.key].message('10') : r.key === 'rangePersonNotFound' ? S[r.key].message('per_x') : r.key === 'rangeNotFound' ? S[r.key].message('rng_x') : S[r.key].message();
+      expect({ key: r.key, op: r.op, message: r.message }).toEqual({ key: r.key, op: r.op, message: want });
+    }
+    expect(provokeTooMany()).toBe(SOURCE_RANGE_REFUSALS.tooManyRanges.message());
+    // every key but notBuilt is provoked, and the add rows and the update rows each follow the table's order
+    const keys = Object.keys(SOURCE_RANGE_REFUSALS) as SourceRangeRefusalKey[];
+    expect(keys.filter((k) => k !== 'notBuilt' && k !== 'tooManyRanges' && !rows.some((r) => r.key === k))).toEqual([]);
+    const ADD_ORDER = ['assetNotFound', 'rangeNoTime', 'rangeHalfSpan', 'rangeStillSpan', 'presenceIsWhole', 'rangeBounds', 'rangeLabelLine', 'presenceNeedsPeople', 'rangePersonNotFound', 'rangeDuplicate', 'tooManyRanges'];
+    const UPDATE_ORDER = ['rangeNotFound', 'rangeNothingToChange', 'rangeWholeAndSpan', 'rangeHalfSpan', 'rangeStillSpan', 'presenceIsWhole', 'rangeBounds', 'rangeLabelLine', 'presenceNeedsPeople', 'rangePersonNotFound', 'rangeDuplicate', 'rangeUnchanged'];
+    const inOrder = (op: string, order: string[]) => { const ix = rows.filter((r) => r.op === op).map((r) => order.indexOf(r.key)); return ix.every((v, i) => v >= 0 && (i === 0 || v > ix[i - 1]!)); };
+    expect(inOrder('add_source_range', ADD_ORDER)).toBe(true);
+    expect(inOrder('update_source_range', UPDATE_ORDER)).toBe(true);
+  });
 });
 
 describe('pearls strings', () => {

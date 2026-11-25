@@ -103,9 +103,4 @@ describe('loudness plan helpers', () => {
   });
 });
 
-describe('send builders (wave 7) — what each must make pass', () => {
-  it.todo('B: planSizeFit accepts every target ≥ sizeFitMinBytes and refuses minBytes − 1 (random durations, rates, sizes); integer arithmetic only (sizeFit.test.ts)');
-  it.todo('B: planSizeFit never picks a scale above maxScale and prefers a lower audio rate before a smaller picture');
-  it.todo('B: pictureExpectation: a still, a freeze clip, a hidden track, a video covered by an opaque full-frame clip and a video past its source end are not "moving" (exportChecks.test.ts)');
-  it.todo('B: assembleChecks lists every kind looked for and never calls the file fine');
-});
+// The size-fit plan and the export checks of builder B are tested in sizeFit.test.ts and exportChecks.test.ts.

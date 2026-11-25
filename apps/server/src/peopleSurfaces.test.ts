@@ -216,6 +216,8 @@ const bodies = (): Record<string, unknown> => ({
   'POST /api/v1/projects/:id/exports/browser': { sessionId: 'walk-session-1' },
   'POST /api/v1/projects/:id/undo': {}, 'POST /api/v1/projects/:id/redo': {},
   'POST /api/v1/jobs/:jobId/retry': {},
+  // find it in your footage (wave 7 search): a person's name as the query
+  'POST /api/v1/projects/:id/search': { query: 'נועה' },
 });
 const urlOf = (key: string) => { const [method, route] = key.split(' ') as [string, string]; return { method, url: `${base()}${route.replace(/:([A-Za-z]+)/g, (_, k: string) => encodeURIComponent(PARAMS[k]!()))}${QUERY[key]?.() ?? ''}` }; };
 async function call(who: Who, key: string): Promise<{ status: number; body: unknown }> {
@@ -245,6 +247,8 @@ const TOOL_ARGS: Record<string, Record<string, unknown>> = {
   add_person: { name: 'איתי' }, suggest_packs: { date: '2024-11-01' }, add_builtin_music: { styleId: 'music.none', bars: 4 },
   // marked ranges (wave 7 pearls): an unnamed pearl on the walked file (refused notBuilt until A builds it), and the read view
   add_source_range: { assetId: '' }, get_pearls: {},
+  // find it in your footage (wave 7 search): a person's name as the query; the answer never holds more than ids and times
+  find_in_footage: { query: 'נועה' },
 };
 const toolArgs = (name: string) => {
   const extra = { ...(TOOL_ARGS[name] ?? {}) };

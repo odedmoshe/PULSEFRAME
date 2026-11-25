@@ -61,7 +61,7 @@ interface Refusal<A extends unknown[]> { code: OpErrorCode; message: (...a: A) =
 const refusal = <A extends unknown[]>(code: OpErrorCode, message: (...a: A) => string, hint?: string): Refusal<A> => ({ code, message, ...(hint ? { hint } : {}) });
 /**
  * Every refusal of the three operations, IN THE ORDER the bodies check them (add: assetNotFound, rangeNoTime, rangeHalfSpan,
- * rangeStillSpan, rangeBounds, rangeLabelLine, presenceNeedsPeople, rangePersonNotFound, rangeDuplicate, tooManyRanges; update:
+ * rangeStillSpan, presenceIsWhole, rangeBounds, rangeLabelLine, presenceNeedsPeople, rangePersonNotFound, rangeDuplicate, tooManyRanges; update:
  * rangeNotFound, rangeNothingToChange, rangeWholeAndSpan, rangeHalfSpan, then as add for what is given, then rangeUnchanged; remove:
  * rangeNotFound). Messages are fixed: the Hebrew table recognises them by their shape. No message holds a label or a person's details.
  */
@@ -72,6 +72,7 @@ export const SOURCE_RANGE_REFUSALS = {
   rangeHalfSpan: refusal('invalid_args', () => 'give both start and end, or neither for the whole file'),
   rangeWholeAndSpan: refusal('invalid_args', () => 'give either whole or start and end, not both'),
   rangeStillSpan: refusal('invalid_args', () => 'a photo is marked whole; give no start and end'),
+  presenceIsWhole: refusal('invalid_args', () => 'a "who is in it" tag covers the whole file; give no start and end'),
   rangeBounds: refusal('out_of_bounds', (seconds: string) => `a range starts at 0 or later, ends after it starts and ends inside the file (${seconds} s)`),
   rangeLabelLine: refusal('invalid_args', () => 'the name of a marked range is one line'),
   presenceNeedsPeople: refusal('invalid_args', () => 'a "who is in it" tag needs at least one person and has no name'),

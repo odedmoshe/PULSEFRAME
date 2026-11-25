@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-24T21:01:26.077Z",
+  "ranAt": "2026-11-25T15:41:49.554Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "cores": 4,
     "gpu": "none"
   },
@@ -56,7 +56,7 @@
           10
         ],
         "clock": "audio",
-        "fxPrimeMs": 29,
+        "fxPrimeMs": 80,
         "fxPrimeTimedOut": false,
         "unavailable": {}
       }
@@ -67,37 +67,37 @@
       "detail": {
         "points": [
           {
-            "t": 0.53,
+            "t": 0.529979,
             "preview": 1,
             "previewBeforeTheSpeaker": 1.1848,
             "export": 1
           },
           {
-            "t": 1.53,
+            "t": 1.529979,
             "preview": 0.6003,
             "previewBeforeTheSpeaker": 0.6003,
             "export": 0.609
           },
           {
-            "t": 2.53,
+            "t": 2.529979,
             "preview": 0.4799,
             "previewBeforeTheSpeaker": 0.4799,
             "export": 0.48
           },
           {
-            "t": 3.53,
+            "t": 3.529979,
             "preview": 0.468,
             "previewBeforeTheSpeaker": 0.468,
             "export": 0.468
           },
           {
-            "t": 4.53,
+            "t": 4.529979,
             "preview": 0.5065,
             "previewBeforeTheSpeaker": 0.5065,
             "export": 0.507
           },
           {
-            "t": 5.53,
+            "t": 5.529979,
             "preview": 0.4913,
             "previewBeforeTheSpeaker": 0.4913,
             "export": 0.491
@@ -130,7 +130,7 @@
       "name": "D4 starting the preview 20 s into a clip with a 3 s hall reverb: the effects are rendered ahead (their whole warm-up) in at most 500 ms, and the first sound is on time",
       "ok": true,
       "detail": {
-        "fxPrimeMs": 247,
+        "fxPrimeMs": 254,
         "fxPrimeTimedOut": false,
         "fxLateStarts": 0,
         "warmUpSeconds": 11.281
@@ -142,63 +142,63 @@
       "detail": [
         {
           "type": "cleanup.dehum",
-          "realtime": 212,
-          "kernelRealtime": 343
+          "realtime": 233,
+          "kernelRealtime": 431
         },
         {
           "type": "cleanup.denoise",
-          "realtime": 51,
-          "kernelRealtime": 90
+          "realtime": 67,
+          "kernelRealtime": 78
         },
         {
           "type": "cleanup.speech",
-          "realtime": 119,
-          "kernelRealtime": 157
+          "realtime": 130,
+          "kernelRealtime": 149
         },
         {
           "type": "tone.bassboost",
-          "realtime": 356,
-          "kernelRealtime": 986
+          "realtime": 419,
+          "kernelRealtime": 961
         },
         {
           "type": "voice.telephone",
-          "realtime": 99,
-          "kernelRealtime": 126
+          "realtime": 130,
+          "kernelRealtime": 129
         },
         {
           "type": "voice.megaphone",
-          "realtime": 176,
-          "kernelRealtime": 252
+          "realtime": 195,
+          "kernelRealtime": 313
         },
         {
           "type": "voice.radio",
-          "realtime": 143,
-          "kernelRealtime": 182
+          "realtime": 112,
+          "kernelRealtime": 226
         },
         {
           "type": "voice.robot",
-          "realtime": 278,
-          "kernelRealtime": 795
+          "realtime": 383,
+          "kernelRealtime": 656
         },
         {
           "type": "texture.8bit",
-          "realtime": 355,
-          "kernelRealtime": 846
+          "realtime": 409,
+          "kernelRealtime": 416
         },
         {
           "type": "space.echo",
-          "realtime": 332,
-          "kernelRealtime": 660
+          "realtime": 301,
+          "kernelRealtime": 817
         },
         {
           "type": "space.reverb",
-          "realtime": 96,
-          "kernelRealtime": 118
+          "realtime": 102,
+          "kernelRealtime": 106
         },
         {
           "type": "utility.width",
-          "realtime": 540,
-          "kernelRealtime": 3639
+          "realtime": 560,
+          "kernelRealtime": 3047
         }
       ]
     },
@@ -208,7 +208,7 @@
       "detail": {
         "withEffects": {
           "fxVoices": 4,
-          "fxPrimeMs": 127,
+          "fxPrimeMs": 101,
           "fxLateStarts": 0,
           "fxLateSkips": 0,
           "audioScheduledAheadMaxMs": 1485.9,
@@ -217,8 +217,8 @@
           "longestTaskMs": 0,
           "paintLatenessMs": {
             "median": 10.67,
-            "p95": 25.33,
-            "max": 30.67
+            "p95": 16,
+            "max": 45.33
           }
         },
         "baseline": {
@@ -235,7 +235,7 @@
       "detail": {
         "withEffects": {
           "fxVoices": 4,
-          "fxPrimeMs": 127,
+          "fxPrimeMs": 101,
           "fxLateStarts": 0,
           "fxLateSkips": 0,
           "audioScheduledAheadMaxMs": 1485.9,
@@ -244,8 +244,8 @@
           "longestTaskMs": 0,
           "paintLatenessMs": {
             "median": 10.67,
-            "p95": 25.33,
-            "max": 30.67
+            "p95": 16,
+            "max": 45.33
           }
         },
         "baseline": {
@@ -314,44 +314,44 @@
         10
       ],
       "clock": "audio",
-      "fxPrimeMs": 29,
+      "fxPrimeMs": 80,
       "fxPrimeTimedOut": false,
       "unavailable": {}
     },
     "levels": {
       "points": [
         {
-          "t": 0.53,
+          "t": 0.529979,
           "preview": 1,
           "previewBeforeTheSpeaker": 1.1848,
           "export": 1
         },
         {
-          "t": 1.53,
+          "t": 1.529979,
           "preview": 0.6003,
           "previewBeforeTheSpeaker": 0.6003,
           "export": 0.609
         },
         {
-          "t": 2.53,
+          "t": 2.529979,
           "preview": 0.4799,
           "previewBeforeTheSpeaker": 0.4799,
           "export": 0.48
         },
         {
-          "t": 3.53,
+          "t": 3.529979,
           "preview": 0.468,
           "previewBeforeTheSpeaker": 0.468,
           "export": 0.468
         },
         {
-          "t": 4.53,
+          "t": 4.529979,
           "preview": 0.5065,
           "previewBeforeTheSpeaker": 0.5065,
           "export": 0.507
         },
         {
-          "t": 5.53,
+          "t": 5.529979,
           "preview": 0.4913,
           "previewBeforeTheSpeaker": 0.4913,
           "export": 0.491
@@ -376,7 +376,7 @@
       ]
     },
     "priming": {
-      "fxPrimeMs": 247,
+      "fxPrimeMs": 254,
       "fxPrimeTimedOut": false,
       "fxLateStarts": 0,
       "warmUpSeconds": 11.281
@@ -384,69 +384,69 @@
     "nodeCost": [
       {
         "type": "cleanup.dehum",
-        "realtime": 212,
-        "kernelRealtime": 343
+        "realtime": 233,
+        "kernelRealtime": 431
       },
       {
         "type": "cleanup.denoise",
-        "realtime": 51,
-        "kernelRealtime": 90
+        "realtime": 67,
+        "kernelRealtime": 78
       },
       {
         "type": "cleanup.speech",
-        "realtime": 119,
-        "kernelRealtime": 157
+        "realtime": 130,
+        "kernelRealtime": 149
       },
       {
         "type": "tone.bassboost",
-        "realtime": 356,
-        "kernelRealtime": 986
+        "realtime": 419,
+        "kernelRealtime": 961
       },
       {
         "type": "voice.telephone",
-        "realtime": 99,
-        "kernelRealtime": 126
+        "realtime": 130,
+        "kernelRealtime": 129
       },
       {
         "type": "voice.megaphone",
-        "realtime": 176,
-        "kernelRealtime": 252
+        "realtime": 195,
+        "kernelRealtime": 313
       },
       {
         "type": "voice.radio",
-        "realtime": 143,
-        "kernelRealtime": 182
+        "realtime": 112,
+        "kernelRealtime": 226
       },
       {
         "type": "voice.robot",
-        "realtime": 278,
-        "kernelRealtime": 795
+        "realtime": 383,
+        "kernelRealtime": 656
       },
       {
         "type": "texture.8bit",
-        "realtime": 355,
-        "kernelRealtime": 846
+        "realtime": 409,
+        "kernelRealtime": 416
       },
       {
         "type": "space.echo",
-        "realtime": 332,
-        "kernelRealtime": 660
+        "realtime": 301,
+        "kernelRealtime": 817
       },
       {
         "type": "space.reverb",
-        "realtime": 96,
-        "kernelRealtime": 118
+        "realtime": 102,
+        "kernelRealtime": 106
       },
       {
         "type": "utility.width",
-        "realtime": 540,
-        "kernelRealtime": 3639
+        "realtime": 560,
+        "kernelRealtime": 3047
       }
     ],
     "previewCost": {
       "withEffects": {
         "fxVoices": 4,
-        "fxPrimeMs": 127,
+        "fxPrimeMs": 101,
         "fxLateStarts": 0,
         "fxLateSkips": 0,
         "audioScheduledAheadMaxMs": 1485.9,
@@ -455,8 +455,8 @@
         "longestTaskMs": 0,
         "paintLatenessMs": {
           "median": 10.67,
-          "p95": 25.33,
-          "max": 30.67
+          "p95": 16,
+          "max": 45.33
         }
       },
       "baseline": {
@@ -472,168 +472,168 @@
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 20.7
+        "chromiumMs": 16.2
       },
       {
         "type": "cleanup.dehum",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 19.9
+        "chromiumMs": 11.9
       },
       {
         "type": "cleanup.denoise",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 47.8
+        "chromiumMs": 43.6
       },
       {
         "type": "cleanup.denoise",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 63.3
+        "chromiumMs": 31.9
       },
       {
         "type": "cleanup.speech",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 42.8
+        "chromiumMs": 34.7
       },
       {
         "type": "cleanup.speech",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 39.1
+        "chromiumMs": 23.4
       },
       {
         "type": "tone.bassboost",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 6.5
+        "chromiumMs": 6.7
       },
       {
         "type": "tone.bassboost",
         "params": "{\"gainDb\":15,\"freqHz\":150}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 5.5
+        "chromiumMs": 5.4
       },
       {
         "type": "voice.telephone",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 13.5
+        "chromiumMs": 14.8
       },
       {
         "type": "voice.telephone",
         "params": "{\"grit\":1,\"hiss\":1}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 17.9
+        "chromiumMs": 11.9
       },
       {
         "type": "voice.megaphone",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 27.7
+        "chromiumMs": 12.9
       },
       {
         "type": "voice.megaphone",
         "params": "{\"drive\":1,\"amount\":0.7}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 12.2
+        "chromiumMs": 10.4
       },
       {
         "type": "voice.radio",
         "params": "{}",
         "maxAbsDiff": 3.3306690738754696e-16,
         "bitEqual": false,
-        "chromiumMs": 20.7
+        "chromiumMs": 18.4
       },
       {
         "type": "voice.radio",
         "params": "{\"noise\":1}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 19.4
+        "chromiumMs": 17.3
       },
       {
         "type": "voice.robot",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 5.5
+        "chromiumMs": 6.7
       },
       {
         "type": "voice.robot",
         "params": "{\"pitchHz\":200,\"metal\":1}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 5.3
+        "chromiumMs": 5
       },
       {
         "type": "texture.8bit",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 3
+        "chromiumMs": 3.2
       },
       {
         "type": "texture.8bit",
         "params": "{\"bits\":3,\"rateKhz\":3}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 2.9
+        "chromiumMs": 4.6
       },
       {
         "type": "space.echo",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 6.3
+        "chromiumMs": 8.2
       },
       {
         "type": "space.echo",
         "params": "{\"pingPong\":true,\"tone\":0.6,\"repeats\":8,\"delayMs\":120}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 10.9
+        "chromiumMs": 20.5
       },
       {
         "type": "space.reverb",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 48.9
+        "chromiumMs": 38.1
       },
       {
         "type": "space.reverb",
         "params": "{\"room\":\"cave\",\"decaySeconds\":3,\"damping\":1,\"spread\":0.3,\"predelayMs\":100,\"amount\":1}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 39.2
+        "chromiumMs": 29.4
       },
       {
         "type": "utility.width",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 2
+        "chromiumMs": 2.2
       },
       {
         "type": "utility.width",
         "params": "{\"stereoWidth\":0}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 0.8
+        "chromiumMs": 1.4
       }
     ]
   }

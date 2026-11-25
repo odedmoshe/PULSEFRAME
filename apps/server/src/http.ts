@@ -38,6 +38,8 @@ import { buildOpenApi } from './openapi.ts';
 import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
 import { cameraMotionView, cancelStabiliseJob, startStabiliseJob } from './stabilise.ts';
 import { pearlsView } from './pearls.ts';
+import { applyMusicFitFor, markJoinHeardFor, musicJoinPreviewFor, planMusicFitFor, refuseHeardByAgent } from './musicfit/routes.ts';
+import { MusicFitApplyRequestSchema, MusicFitPlanRequestSchema } from '@pulseframe/core';
 import { STABILISE_JOB_TYPE, StabiliseRunBodySchema } from '@pulseframe/core';
 import { cancelMomentsJob, momentsLaneOf, startMomentsJob } from './moments.ts';
 import type { Presence } from './presence.ts';
@@ -60,6 +62,8 @@ import { assistantCancelRefusal, createAssistantHandlers, type AssistantJobContr
 import { assertMayReadProposal, assertMayReleaseBudget, assistantJobStub, mayReadProposal, proposalsFor } from './assistant/visibility.ts';
 import { libraryOwner } from './library/contract.ts';
 import { registerLibraryRoutes } from './library/routes.ts';
+import { notBuiltRuntime, SEARCH_INDEX_JOB_TYPE, type SearchRuntime } from './search/contract.ts';
+import { registerSearchRoutes } from './search/routes.ts';
 
 const TxBody = z
   .object({
@@ -133,7 +137,7 @@ export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self';
 export const DATA_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
 
 /** Services wired by the server (index.ts) that tests may leave out: the import queue and the phone drop (ADR-0023), the render cache (ADR-0024). */
-export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps }
+export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps; /** picture search (wave 7 search track; search/runtime.ts): absent = the not-built runtime */ search?: SearchRuntime }
 export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler, speechService?: Speech, extras: AppExtras = {}) {
   setMeasurementExporter(exporter); // colour-match jobs render stills, also when they are recovered after a restart
   const gov = governance ?? new Governance(store);
@@ -766,6 +770,20 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     store.getProject(projectId);
     return c.json(await addMusic(store, gov, p, projectId, await body(c, MusicBody)), 201);
   });
+  // ----- music that fits the film «מוזיקה שמתאימה לסרט» (wave 7 musicfit; musicfit/routes.ts): 501 musicfit_not_built until built -----
+  app.post('/api/v1/projects/:id/music-fit/plan', async (c) => { const p = need(c, 'observe'); return c.json(await planMusicFitFor(store, gov, p, c.req.param('id'), await body(c, MusicFitPlanRequestSchema))); });
+  app.post('/api/v1/projects/:id/music-fit/apply', async (c) => { const p = need(c, 'observe'); return c.json(await applyMusicFitFor(store, gov, p, c.req.param('id'), await body(c, MusicFitApplyRequestSchema))); });
+  app.get('/api/v1/projects/:id/music-fit/join.wav', async (c) => {
+    const p = need(c, 'observe');
+    const q = { assetId: c.req.query('assetId') ?? '', from: c.req.query('from') ?? '', to: c.req.query('to') ?? '', ...(c.req.query('startAt') ? { startAt: c.req.query('startAt')! } : {}) };
+    const bytes = await musicJoinPreviewFor(store, gov, p, c.req.param('id'), q, c.req.raw.signal);
+    return c.body(new Uint8Array(bytes), 200, { 'content-type': 'audio/wav', 'content-length': String(bytes.length), 'cache-control': 'no-store' });
+  });
+  app.post('/api/v1/projects/:id/assets/:assetId/music-join/heard', async (c) => {
+    const p = need(c, 'observe');
+    refuseHeardByAgent(p, c.req.param('assetId')); // before the body is read: an agent learns nothing else
+    return c.json(markJoinHeardFor(store, gov, p, c.req.param('id'), c.req.param('assetId'), (await body(c, z.object({ heard: z.boolean() }).strict())).heard));
+  });
   // Graphic elements: the same route for the editor and for agents. Element pictures count against the storage ceiling like
   // uploads; makeElement checks it (store.maxStorageBytes), so the agent tool is held to it as well.
   app.get('/api/v1/elements', async (c) => { need(c, 'observe'); return c.json({ available: await canRasteriseSvg(), count: ELEMENTS.length, note: 'Elements are listed in the catalog. available=false means this machine\'s ffmpeg cannot read SVG, so elements cannot be made here.' }); });
@@ -878,6 +896,10 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   registerLibraryRoutes(app, { cfg, store, gov, imports: extras.imports ?? null, need });
   // editing craft (wave 7 craft track): named versions and find (craft/contract.ts CRAFT_ROUTES; 501 craft_not_built until W2)
   registerCraftRoutes(app, { cfg, store, gov, exporter, need });
+  // «חיפוש בצילומים» (wave 7 search track; search/contract.ts SEARCH_ROUTES): POST …/search for observers (agents: no-model part of the reader
+  // document, agentAnswerOf), the picture index for the owner's own session only; 501 footage_search_not_built until builder B
+  const searchRuntime = extras.search ?? notBuiltRuntime();
+  registerSearchRoutes(app, { cfg, store, gov, runtime: searchRuntime, need });
 
   // ----- the command bar's language assistant (ADR-0027; assistant/contract.ts ASSISTANT_ROUTES): status for any observer (whole
   // for the owner's own session, connected or not for anyone else: assistant/visibility.ts), the rest for the owner's own session
@@ -908,6 +930,10 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     store.getProject(projectId);
     return c.json(await assistant.request(p, projectId, await body(c, AssistantRequestBodySchema)), 202);
   });
+  // wave 7, the LOCAL assistant (assistant-decisions.md §4): owner's session only (agents 403 owner_required before anything is
+  // looked up); the bodies are builder B's (assistant/routes.ts answers 501 not_built until then). No MCP tool reaches either.
+  app.post('/api/v1/assistant/local/check', async (c) => c.json(await assistant.localCheck(assistantOwner(c))));
+  app.post('/api/v1/assistant/jobs/:jobId/taken', async (c) => { await assistant.taken(assistantOwner(c), c.req.param('jobId')); return c.body(null, 204); });
 
   // ----- optional provider capabilities (Amendment A1). No route accepts a raw graph for execution. -----
   app.get('/api/v1/catalog', (c) => { need(c, 'observe'); return c.json(catalog()); });
@@ -980,6 +1006,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (j.type === TRACKING_JOB_TYPE) return c.json(cancelTrackingJob(store, j.id, p.actor));
     if (j.type === MOMENTS_JOB_TYPE) return c.json(cancelMomentsJob(store, j.id, p.actor));
     if (j.type === STABILISE_JOB_TYPE) return c.json(cancelStabiliseJob(store, j.id, p.actor));
+    if (j.type === SEARCH_INDEX_JOB_TYPE) return c.json(searchRuntime.cancel(j.id, p.actor)); // a picture scan (wave 7 search): the owner's own
     if (speech.handles(j)) return c.json(speech.cancel(j.id, p.actor));
     // an export the editor's tab renders is handed to its lease holder by Exporter.cancel (browser-export.ts), as for MCP cancel_job
     return c.json(j.type === 'export' ? exporter.cancel(j.id, p.actor) : await capabilities.cancel(j.id, p.actor));

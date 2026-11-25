@@ -6,7 +6,7 @@
  */
 import { createContext, useContext, useSyncExternalStore } from 'react';
 import * as T from '@pulseframe/time';
-import { clipEnd, findClip, projectOutput, projectSequence, sequenceDuration, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun, type TemplateInput, type ExportMode, type SegmentPlanView } from '@pulseframe/core';
+import { clipEnd, findClip, projectOutput, projectSequence, sequenceDuration, STABILISE_JOB_TYPE, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun, type TemplateInput, type ExportMode, type SegmentPlanView } from '@pulseframe/core';
 import { groupTimeAt, multicamGroupOf, projectVariant, type SwitchAnglesOutput } from '@pulseframe/core';
 import type { TakeRequest, TakeResult } from '@pulseframe/core';
 import type { ClipStabilise } from '@pulseframe/core';
@@ -36,6 +36,7 @@ import { RefreshPolicy } from './renderCache.logic.ts';
 import type { DropCodeView, DropPublicView, FamilyFilmParams, FamilyFilmPlanView, FilmExclusion, FilmPick } from '@pulseframe/core';
 import type { ChannelRef, KeyClipboard, KeyRef } from '@pulseframe/core';
 import type { StoryChip, StoryExclusion, StoryParams, StoryPick, StoryPlanView } from '@pulseframe/core';
+import type { StoryChoices } from './story/story.logic.ts';
 import { pruneKeySel } from './keyStrip.math.ts';
 import { nextFromEvent, type LiveChange } from './sync.ts';
 
@@ -109,6 +110,8 @@ export interface EditorState {
   actor: string | null;
   /** The latest event of each tracking job seen in this session, by job id (ADR-0015). */
   trackJobs: Record<string, JobEvent>;
+  /** The latest event of each camera-stabilise job seen in this session, by job id (the block «ייצוב תמונה» reads it; no polling while the stream is open). */
+  stabiliseJobs: Record<string, JobEvent>;
   /** The tracking job this session started for each motion track (motion track id → job id). */
   trackJobFor: Record<string, string>;
   /** The track picker on the monitor (TrackPicker.tsx): open while a point or an area of a clip's picture is being picked. */
@@ -190,6 +193,8 @@ export interface EditorState {
   storyDraft: StoryDraft | null;
   /** The story applied from this tab, for the story bar. Session state only; after a reload the document's run (recipeId template:tpl.story) is used. */
   storyRun: StoryRunInfo | null;
+  /** The story dialog's choices kept while the owner went to the phone dialog («מהטלפון»); the story reopens with them when the phone dialog is put away. Session state only, never stored or sent. */
+  storyKept: StoryChoices | null;
   // ---- keyframe curves and motion paths (ADR-0019): session state, never stored in the document or sent in presence ----
   /** The selected keys of the keyframe strip (one clip at a time); pruned on load when the clip is gone (W2). */
   keySel: { clipId: string; keys: KeyRef[] } | null;
@@ -232,7 +237,7 @@ export type GalleryTab = 'effects' | 'looks' | 'transitions' | 'text' | 'motion'
  */
 export interface Notice { kind: 'undo' | 'info'; title: string; body?: string; undoes?: string }
 /** What an export is started with (POST /exports): the defaults are left out, as exportSheet.logic.ts exportOptions builds it. */
-export interface ExportRequest { variantId?: string; /** a sequence of the project (a short) instead of the main edit (ADR-0018) */ sequenceId?: string; /** frame index of a png still */ frame?: number; quality?: string; captions?: string; format?: string; scale?: number; /** «ייצוא מהיר» (ADR-0024): 'incremental' when the viewer's switch is on and the format is MP4. */ mode?: ExportMode }
+export interface ExportRequest { variantId?: string; /** a sequence of the project (a short) instead of the main edit (ADR-0018) */ sequenceId?: string; /** frame index of a png still */ frame?: number; quality?: string; captions?: string; format?: string; scale?: number; /** «ייצוא מהיר» (ADR-0024): 'incremental' when the viewer's switch is on and the format is MP4. */ mode?: ExportMode; /** «מתאים לשליחה» (wave 7 send): the file must come out at or under targetBytes (MP4 only; 1 MB = 1,000,000 bytes). */ sizeFit?: { targetBytes: number } }
 /**
  * The fast export's segment plan as the sheet line and the timeline lane read it (ADR-0024). `off`: the lane is hidden (the
  * cache is off, or this project never used the fast export); `updating`: a plan is being made (aria-busy); `error`: the last
@@ -287,13 +292,13 @@ export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, rawDoc: null, activeSequenceId: '', revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null, capJobs: {},
     provider: null, providerAsking: false, providerError: null, gpu: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), targets: { video: null, audio: null }, clipboard: [], cutPending: [], actor: null,
-    trackJobs: {}, trackJobFor: {}, picker: null, activeTrackId: null,
+    trackJobs: {}, stabiliseJobs: {}, trackJobFor: {}, picker: null, activeTrackId: null,
     templatesOpen: false, templatesFocus: 0, templateRun: null,
     cutClipId: null, loupe: false, inspectorTab: null, panelRequest: null, gallery: null, stageNote: null, notice: null, exportSheet: 0,
     segmentPlan: { status: 'off', view: null, revision: null }, fastExport: readFastExport(), planOptions: {}, // the export sheet's first pick (the computer destination: high quality, whose options are all defaults)
     imports: { local: [], jobs: [], room: null, skipped: null }, phoneDropOpen: false, drop: null, dropLive: null, dropProblem: null, planBlockers: [], missingMedia: [],
     filmOpen: false, filmSource: null, filmRun: null,
-    storyOpen: false, storySource: null, storyDraft: null, storyRun: null,
+    storyOpen: false, storySource: null, storyDraft: null, storyRun: null, storyKept: null,
     keySel: null, keyClipboard: null, curvePicker: null, pathOn: readPathOn(), playSharpness: readPlaySharpness(),
   };
   /**
@@ -318,6 +323,10 @@ export class Editor {
   private viewCache: { doc: ProjectDocument; id: string; out: ProjectDocument } | null = null;
   private listeners = new Set<() => void>();
   private es?: EventSource;
+  /** True once the player holds the project (the condition the proofs wait for: __pfPlayer.doc); before it, play does nothing. */
+  get playerReady(): boolean { return !!this.player?.doc; }
+  /** True while the event stream is connected: the stabilise block polls only when it is not. */
+  get streamOpen(): boolean { return this.es?.readyState === 1; }
   private disposed = false;
   private sessionId = crypto.randomUUID();
   private presenceTimer = 0;
@@ -600,23 +609,7 @@ export class Editor {
     es.addEventListener('control', (m) => this.set({ agentsPaused: !!JSON.parse((m as MessageEvent).data).agentsPaused }));
     refreshProposals();
     void api.controls(projectId).then((c) => this.set({ agentsPaused: c.agentsPaused })).catch(() => {});
-    es.addEventListener('job', (m) => {
-      const j: JobEvent = JSON.parse((m as MessageEvent).data);
-      if (j.type === 'import') { this.imports.onJobEvent(j as ImportJobEvent); return; }
-      // a fast export that stored segments changes what the next one reuses: the lane and the sheet line ask again
-      if (j.type === 'export' && j.status === 'succeeded' && this.state.fastExport && (j.output as { segments?: unknown } | null)?.segments) void this.planPolicy.now(this.state.revision);
-      this.set(j.type === 'capability' ? { capJob: j, capJobs: rememberJob(this.state.capJobs, j) } : j.type === 'export' ? { exportJob: j } : j.type === TRACKING_JOB_TYPE ? { trackJobs: rememberJob(this.state.trackJobs, j) } : {});
-      // An export this tab started saves its file as soon as it is ready, once; the link in the header stays for another copy.
-      if (j.type === 'export' && j.status === 'succeeded' && this.myExports.delete(j.id)) {
-        const a = document.createElement('a');
-        a.href = `/api/v1/jobs/${j.id}/output`;
-        a.download = '';
-        a.hidden = true;
-        document.body.append(a);
-        a.click();
-        a.remove();
-      }
-    });
+    es.addEventListener('job', (m) => this.onJobEvent(JSON.parse((m as MessageEvent).data)));
     es.onerror = () => this.set({ save: 'save.offline' });
     es.onopen = () => { this.set({ save: 'save.saved' }); timelineDerivatives.reconnected(projectId); }; // a derivative announced while the stream was down is looked up again
     // Listing capabilities only reads provider status; it never starts a worker.
@@ -624,6 +617,23 @@ export class Editor {
     this.set({ providerAsking: true });
     void api.capabilities().then((provider) => this.set({ provider, providerAsking: false, providerError: null }))
       .catch((e) => this.set({ provider: null, providerAsking: false, providerError: failureOf(e) }));
+  }
+  /** One job event from the stream (or, for a stabilise run, from the block's fallback read while the stream is down): kept by job id for the surface that shows it. */
+  onJobEvent(j: JobEvent): void {
+    if (j.type === 'import') { this.imports.onJobEvent(j as ImportJobEvent); return; }
+    // a fast export that stored segments changes what the next one reuses: the lane and the sheet line ask again
+    if (j.type === 'export' && j.status === 'succeeded' && this.state.fastExport && (j.output as { segments?: unknown } | null)?.segments) void this.planPolicy.now(this.state.revision);
+    this.set(j.type === 'capability' ? { capJob: j, capJobs: rememberJob(this.state.capJobs, j) } : j.type === 'export' ? { exportJob: j } : j.type === TRACKING_JOB_TYPE ? { trackJobs: rememberJob(this.state.trackJobs, j) } : j.type === STABILISE_JOB_TYPE ? { stabiliseJobs: rememberJob(this.state.stabiliseJobs, j) } : {});
+    // An export this tab started saves its file as soon as it is ready, once; the link in the header stays for another copy.
+    if (j.type === 'export' && j.status === 'succeeded' && this.myExports.delete(j.id)) {
+      const a = document.createElement('a');
+      a.href = `/api/v1/jobs/${j.id}/output`;
+      a.download = '';
+      a.hidden = true;
+      document.body.append(a);
+      a.click();
+      a.remove();
+    }
   }
   dispose() {
     this.disposed = true;
@@ -873,7 +883,7 @@ export class Editor {
     return p;
   }
   /** `ops` may be a function: it is called when this write's turn comes, so it can decide from the document as it is then (after the user's earlier queued edits). Returning null or nothing commits nothing. */
-  commit(ops: OpCall[] | (() => OpCall[] | null), label?: string): Promise<CommitResult | null> { return this.enqueue(() => this.commitNow(ops, label)); }
+  commit(ops: OpCall[] | (() => OpCall[] | null), label?: string, opts?: { dependsOn?: string[] }): Promise<CommitResult | null> { return this.enqueue(() => this.commitNow(ops, label, opts?.dependsOn)); }
   history(mode: 'undo' | 'redo'): Promise<void> { return this.enqueue(() => this.historyNow(mode)); }
   /**
    * Undo exactly the transaction `id` (an undo toast's button): the server reverses that one or refuses with undo_conflict when
@@ -911,7 +921,7 @@ export class Editor {
       return e instanceof ApiFailure ? { kind: 'failed', code: e.code, message: e.message, ...(e.hint ? { hint: e.hint } : {}) } : { kind: 'failed', code: 'network', message: e instanceof Error ? e.message : String(e) };
     }
   }
-  private async commitNow(given: OpCall[] | (() => OpCall[] | null), label?: string): Promise<CommitResult | null> {
+  private async commitNow(given: OpCall[] | (() => OpCall[] | null), label?: string, dependsOn?: string[]): Promise<CommitResult | null> {
     const { doc, revision } = this.state;
     if (!doc) return null;
     const made = typeof given === 'function' ? given() : given;
@@ -921,7 +931,7 @@ export class Editor {
     const ops = raw ? made.map((c) => injectSequenceId(c, this.state.activeSequenceId, raw.mainSequenceId)) : made;
     this.set({ save: 'save.saving', error: null });
     try {
-      const r = await api.commit(doc.id, revision, ops, label);
+      const r = await api.commit(doc.id, revision, ops, label, dependsOn);
       await this.reach(doc.id, r.revision);
       this.set({ save: 'save.saved' });
       return r;
@@ -1043,12 +1053,14 @@ export class Editor {
   closeFilm() { this.set({ filmOpen: false }); }
   setFilmRun(run: FilmRunInfo | null) { this.set({ filmRun: run }); }
   /** «ספרו מה היה» (wave 7): open the dialog on an event's files or a selection; close it; the draft while tapping; the run this tab made. */
-  openStory(source: StorySource) { this.set({ storyOpen: true, storySource: { assetIds: [...source.assetIds], event: source.event ?? null } }); }
-  closeStory() { this.set({ storyOpen: false }); }
+  openStory(source: StorySource) { this.set({ storyOpen: true, storySource: { assetIds: [...source.assetIds], event: source.event ?? null }, storyKept: null }); }
+  closeStory() { this.set({ storyOpen: false, storyKept: null }); }
+  /** «מהטלפון» in the story dialog: the dialog closes (its caller released the microphone first), its choices are kept, the phone dialog opens; hidePhoneDrop reopens the story as it was. */
+  storyToPhone(choices: StoryChoices) { this.set({ storyOpen: false, storyKept: choices, phoneDropOpen: true }); }
   setStoryDraft(draft: StoryDraft | null) { this.set({ storyDraft: draft }); }
   setStoryRun(run: StoryRunInfo | null) { this.set({ storyRun: run }); }
   openPhoneDrop() { this.set({ phoneDropOpen: true }); }
-  hidePhoneDrop() { this.set({ phoneDropOpen: false }); }
+  hidePhoneDrop() { this.set({ phoneDropOpen: false, ...(this.state.storyKept && !this.state.storyOpen ? { storyOpen: true } : {}) }); }
   /** The live code of this project, if any (after a reload; a code never survives a server restart: then it is gone, said so). */
   async refreshDrop() {
     const id = this.state.doc?.id;

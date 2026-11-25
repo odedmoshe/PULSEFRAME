@@ -89,7 +89,8 @@ async function makeAssets(store: Store, principal: Principal, plan: TemplatePlan
   for (const n of plan.assetsNeeded) {
     if (n.kind === 'music') {
       // built-in music, made to measure: exactly the plan's bars, with the grid known from its recipe (ADR-0022)
-      const made = await makeMusic(store, { styleId: n.id, bars: n.bars, seed: n.seed }, principal.actor);
+      // wave 7 musicfit: an exact ending (builtinMusic.ending 'exact') travels as endFrames, the track then lasts exactly the pictures
+      const made = await makeMusic(store, { styleId: n.id, bars: n.bars, seed: n.seed, ...(n.endFrames !== undefined ? { endFrames: n.endFrames } : {}) }, principal.actor);
       out.push({ key: n.key, asset: made.asset, analysis: made.grid });
     } else if (n.kind === 'sfx') out.push({ key: n.key, asset: await makeSfx(store, n.id, principal.actor) });
     else out.push({ key: n.key, asset: await makeElement(store, n.id, { ...(n.color ? { color: n.color } : {}), ...(n.color2 ? { color2: n.color2 } : {}) }, principal.actor) });
@@ -258,8 +259,36 @@ export async function regenerateTemplateFor(store: Store, gov: Governance, princ
   }
   if (newParams !== undefined && (typeof newParams !== 'object' || newParams === null || Array.isArray(newParams))) throw new ApiError(400, 'invalid_request', 'params must be an object of template parameters to change');
   const def = templateOf(run.recipeId.slice('template:'.length));
-  const live = run.createdIds.filter((id) => !!findClip(p.doc, id));
   const elementsAvailable = await elementsFor(def);
+  const { plan, removable, protectedIds, keepSlots, removedSlots } = templateRegeneration(p.doc, run, def, newParams as Record<string, unknown> | undefined, options, elementsAvailable);
+  const assets = await makeAssets(store, principal, plan);
+  mayApply(gov, principal, projectId);
+  const r = gov.commitAs(principal, {
+    projectId, expectedRevision: expectedRevision ?? p.revision, allowInternal: true, label: `Regenerate template: ${def.name.en}`.slice(0, 120),
+    ops: [templateRegenerationOp(runId, def, plan, assets, removable, protectedIds, keepSlots)],
+  }) as CommitOut;
+  const out = r.results?.[0]?.output ?? {};
+  const movedBack = plan.notices.find((x) => x.code === 'moved_back')?.details.keys;
+  return { revision: r.revision, runId, createdIds: out.createdIds ?? [], slots: out.slots ?? [], steps: plan.steps, warnings: plan.warnings, notices: plan.notices, replaced: removable.length, protected: protectedIds, removed: removedSlots.map((s) => s.key), movedBack: Array.isArray(movedBack) ? movedBack as string[] : [], alternatives: plan.alternatives };
+}
+/** The template of a run (404 when the catalogue has no such template; 409 needs_capability for a model-gated one). Exported for music fit. */
+export const templateOfRun = (run: RecipeRun): TemplateDef => templateOf(run.recipeId.slice('template:'.length));
+/** Whether this machine can draw the template's graphic elements (409 needs_capability when it needs them and cannot). */
+export const templateElements = elementsFor;
+/** The procedural media of a plan, made now (music fit makes the music of a template regeneration through it). */
+export const makeTemplateAssets = makeAssets;
+/** The ONE apply_template step of a regeneration. */
+export function templateRegenerationOp(runId: string, def: TemplateDef, plan: TemplatePlan, assets: { key: string; asset: Omit<Asset, 'id'>; analysis?: KnownGrid }[], removable: readonly string[], protectedIds: readonly string[], keepSlots: readonly SlotRecord[]) {
+  return { op: 'apply_template', args: { runId, templateId: def.id, templateVersion: def.version, params: plan.params, steps: plan.steps, ...(assets.length ? { assets } : {}), removeClipIds: removable, keepIds: protectedIds, keepSlots, ops: plan.ops, slots: plan.slots, recordRanges: true } };
+}
+/**
+ * What a regeneration of a template run would do, without making or committing anything (regenerateTemplateFor's planning, and the
+ * music fit's): the plan against the document without the untouched clips, what is kept and removed. Throws ApiError as
+ * regenerateTemplateFor does (template_blocked for a kept picture off its slot, or a blocked plan).
+ */
+export function templateRegeneration(doc: ProjectDocument, run: RecipeRun, def: TemplateDef, newParams: Record<string, unknown> | undefined, options: RegenerateOptions, elementsAvailable: boolean) {
+  const p = { doc };
+  const live = run.createdIds.filter((id) => !!findClip(p.doc, id));
   // a run that recorded no places (made before run.ranges): they are worked out from its own plan, when that can still be made
   const older = run.ranges ? {} : templateRunPlaces(p.doc, run, def, live, elementsAvailable);
   const { protectedIds, movedBack: movedIds } = runHandEdits(p.doc, run, live, older.ranges);
@@ -275,13 +304,5 @@ export async function regenerateTemplateFor(store: Store, gov: Governance, princ
   const plan = wrap(() => planTemplate(without, def, params, { keepKeys: keptSlots.map((s) => s.key), removedKeys: removedSlots.map((s) => s.key), movedKeys, elementsAvailable }));
   refuseMovedKeptPictures(p.doc, plan, keptSlots, run.params, options.restoreRemoved === true, older.why);
   refuseBlocked(plan);
-  const assets = await makeAssets(store, principal, plan);
-  mayApply(gov, principal, projectId);
-  const r = gov.commitAs(principal, {
-    projectId, expectedRevision: expectedRevision ?? p.revision, allowInternal: true, label: `Regenerate template: ${def.name.en}`.slice(0, 120),
-    ops: [{ op: 'apply_template', args: { runId, templateId: def.id, templateVersion: def.version, params: plan.params, steps: plan.steps, ...(assets.length ? { assets } : {}), removeClipIds: removable, keepIds: protectedIds, keepSlots, ops: plan.ops, slots: plan.slots, recordRanges: true } }],
-  }) as CommitOut;
-  const out = r.results?.[0]?.output ?? {};
-  const movedBack = plan.notices.find((x) => x.code === 'moved_back')?.details.keys;
-  return { revision: r.revision, runId, createdIds: out.createdIds ?? [], slots: out.slots ?? [], steps: plan.steps, warnings: plan.warnings, notices: plan.notices, replaced: removable.length, protected: protectedIds, removed: removedSlots.map((s) => s.key), movedBack: Array.isArray(movedBack) ? movedBack as string[] : [], alternatives: plan.alternatives };
+  return { plan, removable, protectedIds, keepSlots, removedSlots };
 }

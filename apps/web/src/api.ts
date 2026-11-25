@@ -10,6 +10,7 @@ import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pul
 import type { RationalTime } from '@pulseframe/time';
 import type { ClipLoudnessRequest, ClipLoudnessResult } from '@pulseframe/core';
 import type { PearlsView } from '@pulseframe/core';
+import type { MusicFitApplyRequest, MusicFitApplyResult, MusicFitPlan, MusicFitPlanRequest, JoinRemoval } from '@pulseframe/core';
 
 export class ApiFailure extends Error {
   constructor(public status: number, public code: string, message: string, public details?: unknown, public hint?: string) {
@@ -117,8 +118,9 @@ export const api = {
   createProject: (name: string) => call<{ project: ProjectDocument; revision: number }>('/projects', json({ name })),
   getProject: (id: string) => call<{ project: ProjectDocument; revision: number }>(`/projects/${id}`),
   history: (id: string) => call<{ events: RevisionEvent[] }>(`/projects/${id}/history?since=0`),
-  commit: (id: string, baseRevision: number, ops: OpCall[], label?: string) =>
-    call<CommitResult>(`/projects/${id}/transactions`, json({ baseRevision, idempotencyKey: crypto.randomUUID(), label, ops })),
+  /** `dependsOn`: entity ids the edit relies on beyond those its ops name (the server's transaction body takes it; a stale base conflicts if any changed). */
+  commit: (id: string, baseRevision: number, ops: OpCall[], label?: string, dependsOn?: string[]) =>
+    call<CommitResult>(`/projects/${id}/transactions`, json({ baseRevision, idempotencyKey: crypto.randomUUID(), label, ops, ...(dependsOn ? { dependsOn } : {}) })),
   /**
    * The command bar's STRICT commit (ADR-0027): refused with 409 stale_revision unless `expectedRevision` is current (never
    * rebased onto a newer revision), and replayed, not applied twice, when `idempotencyKey` was used with the same ops.
@@ -249,10 +251,10 @@ export const api = {
   archiveUrl: (id: string, opts: { family?: 'keep' | 'omit'; library?: ArchiveLibraryMode | null } = {}) => `/api/v1/projects/${id}/archive${(() => { const q = new URLSearchParams({ ...(opts.family === 'omit' ? { family: 'omit' } : {}), ...(opts.library ? { library: opts.library } : {}) }).toString(); return q ? `?${q}` : ''; })()}`,
   // editing craft (wave 7 craft track; apps/server/src/craft/contract.ts). Every route answers 501 craft_not_built until W2 builds it
   versions: (id: string) => call<{ versions: VersionInfo[] }>(`/projects/${id}/versions`),
-  saveVersion: (id: string, name: string) => call<VersionInfo>(`/projects/${id}/versions`, json({ name })),
-  renameVersion: (id: string, versionId: string, name: string) => call<VersionInfo>(`/projects/${id}/versions/${encodeURIComponent(versionId)}`, { ...json({ name }), method: 'PUT' }),
+  saveVersion: (id: string, name: string) => call<{ version: VersionInfo }>(`/projects/${id}/versions`, json({ name })).then((r) => r.version),
+  renameVersion: (id: string, versionId: string, name: string) => call<{ version: VersionInfo }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}`, { ...json({ name }), method: 'PUT' }).then((r) => r.version),
   deleteVersion: (id: string, versionId: string) => call<{ deleted: string }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}`, { method: 'DELETE' }),
-  versionDiff: (id: string, versionId: string, against: 'current' | string = 'current') => call<DiffSummary>(`/projects/${id}/versions/${encodeURIComponent(versionId)}/diff?against=${encodeURIComponent(against)}`),
+  versionDiff: (id: string, versionId: string, against: 'current' | string = 'current') => call<{ diff: DiffSummary }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}/diff?against=${encodeURIComponent(against)}`).then((r) => r.diff),
   /** For an <img>: one frame of the saved version (404 version_frame_out_of_range past its end). */
   versionFrameUrl: (id: string, versionId: string, index: number) => `/api/v1/projects/${id}/versions/${encodeURIComponent(versionId)}/frame?index=${index}`,
   restoreVersion: (id: string, versionId: string, body: { expectRevision?: number; confirmPrivacy?: boolean } = {}) => call<{ revision: number; transactionId: string | null; summary: string; diff: DiffSummary }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}/restore`, json(body)),
@@ -260,16 +262,25 @@ export const api = {
   // stabilisation (wave 7; apps/server/src/stabilise.ts)
   stabiliseClip: (id: string, clipId: string, body: StabiliseRunBody = {}) => call<{ jobId: string; status: string }>(`/projects/${id}/clips/${encodeURIComponent(clipId)}/stabilise`, json(body)),
   cameraMotion: (id: string, assetId: string) => call<CameraMotionView>(`/projects/${id}/assets/${encodeURIComponent(assetId)}/camera-motion`),
-  // marked ranges «פנינים» (wave 7; apps/server/src/pearls.ts): 501 pearls_not_built until builder B has built the view
+  // marked ranges «פנינים» (wave 7; apps/server/src/pearls.ts): usage and screen time of one sequence; labels empty with labelsHidden for a credential without the people scope
   pearls: (id: string, sequenceId?: string) => call<PearlsView>(`/projects/${id}/pearls${sequenceId ? `?sequenceId=${encodeURIComponent(sequenceId)}` : ''}`),
   // ----- «ספרו מה היה» (wave 7 story track): the recipe routes and the template-runs route (which passes expectedRevision) -----
   planStory: (projectId: string, params: StoryParams) => call<StoryPlanView>(`/projects/${projectId}/recipes/story/plan`, json({ params })),
   applyStory: (projectId: string, params: StoryParams, expectedRevision: number) => call<StoryApplyResult>(`/projects/${projectId}/recipes/story/apply`, json({ params, expectedRevision })),
   /** Rebuild a story run with changed options (never other taps: 409 story_retap_not_built), against the revision the bar showed. */
   regenerateStory: (projectId: string, runId: string, params: Partial<StoryParams> | undefined, expectedRevision: number, restoreRemoved = false) => call<StoryRegenerateResult>(`/projects/${projectId}/template-runs/${runId}/regenerate`, json({ ...(params ? { params } : {}), expectedRevision, ...(restoreRemoved ? { restoreRemoved: true } : {}) })),
+  // ----- «מוזיקה שמתאימה לסרט» (wave 7 musicfit; apps/server/src/musicfit/routes.ts) -----
+  musicFitPlan: (projectId: string, req: MusicFitPlanRequest) => call<MusicFitPlan>(`/projects/${projectId}/music-fit/plan`, json(req)),
+  musicFitApply: (projectId: string, req: MusicFitApplyRequest) => call<MusicFitApplyResult>(`/projects/${projectId}/music-fit/apply`, json(req)),
+  /** The owner's own session only (agents get 403 human_approval_required). */
+  markJoinHeard: (projectId: string, assetId: string, heard: boolean) => call<unknown>(`/projects/${projectId}/assets/${encodeURIComponent(assetId)}/music-join/heard`, json({ heard })),
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }
 
 /** A request by an agent that only the owner can decide (for example downloading model files). */
 export interface Approval { id: string; kind: string; action: { capabilityId?: string; bytes?: number; models?: { path: string }[] } & Record<string, unknown>; costCents: number; requestedBy: string; status: 'pending' | 'approved' | 'consumed' | 'rejected' | 'expired'; expiresAt: string; createdAt: string }
+
+/** The URL of the four bars around a candidate join (GET …/music-fit/join.wav; same-origin, the owner's session cookie). */
+export const musicJoinUrl = (projectId: string, assetId: string, removal: JoinRemoval, startAt?: RationalTime): string =>
+  `/api/v1/projects/${projectId}/music-fit/join.wav?assetId=${encodeURIComponent(assetId)}&from=${encodeURIComponent(JSON.stringify(removal.from))}&to=${encodeURIComponent(JSON.stringify(removal.to))}${startAt ? `&startAt=${encodeURIComponent(JSON.stringify(startAt))}` : ''}`;

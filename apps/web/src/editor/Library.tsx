@@ -28,6 +28,7 @@ import { FontsSection, MusicTab, PacksSection } from './lifeline/PacksMount.tsx'
 import { PACKS_MOUNT_STRINGS } from './lifeline/packs.mount.strings.ts';
 import { setLifeView, useLifeUi } from './lifeline/lifeUi.ts';
 import { MUSIC_TESTIDS } from './packs.testids.ts';
+import { FootageResults } from './search/FootageResults.tsx';
 import { ImportCards } from './ImportCards.tsx';
 import { DropChip, ImportMenu } from './ImportHosts.tsx';
 import { collectDropped } from './imports.logic.ts';
@@ -141,6 +142,8 @@ function MediaDrawer({ onView }: { onView: (id: string) => void }) {
             <Search size={16} strokeWidth={1.75} aria-hidden="true" />
             <input type="search" dir="auto" value={q} disabled={view !== 'all'} onChange={(e) => setQ(e.target.value)} placeholder={S.searchMedia} aria-label={S.searchPlaceholder} data-testid="media-search" />
           </label>
+          {/* «חיפוש בצילומים» (wave 7 search track): moments under the box; renders nothing until built (search/FootageResults.tsx) */}
+          {view === 'all' && q.trim() !== '' && <FootageResults query={q} onView={onView} />}
           <div className="pf-bw-chips" role="group" aria-label={S.filters}>
             {chips.filter(([f]) => f === 'all' || n(f) > 0).map(([f, label]) => <Chip key={f} pressed={filter === f} count={n(f)} disabled={view !== 'all'} onClick={() => setFilter(f)} data-testid={`media-filter-${f}`}>{label}</Chip>)}
           </div>

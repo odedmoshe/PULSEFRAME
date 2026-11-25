@@ -76,13 +76,14 @@ export interface MusicQueue {
    * The track for (style, bars, seed). A preview comes from memory when it was made recently (and an add may reuse it: the
    * bytes are the same). A request for a track that is already being made in the same lane shares that render. Otherwise it
    * takes a turn: one render runs at a time, adds before previews; when its lane's waiting places are full it is refused with
-   * 429 synthesis_busy. `signal`: the caller no longer wants it; a render nobody wants any more is cancelled.
+   * 429 synthesis_busy. `signal`: the caller no longer wants it; a render nobody wants any more is cancelled. `endFrames` (wave 7
+   * musicfit): an exact ending in sample frames; part of the key only when given (callers leave it out for a one-bar ending).
    */
-  render(styleId: string, bars: number, seed: number, lane: MusicLane, signal?: AbortSignal): Promise<RenderedMusic>;
+  render(styleId: string, bars: number, seed: number, lane: MusicLane, signal?: AbortSignal, endFrames?: number): Promise<RenderedMusic>;
   /** For tests: what is held and waiting. */
   stats(): { running: boolean; waiting: Record<MusicLane, number>; cached: number; cachedBytes: number };
 }
-type Renderer = (styleId: string, bars: number, seed: number, opts: { cancel: { cancelled: boolean } }) => Promise<RenderedMusic>;
+type Renderer = (styleId: string, bars: number, seed: number, opts: { cancel: { cancelled: boolean }; endFrames?: number }) => Promise<RenderedMusic>;
 export function createMusicQueue(limits: Partial<MusicQueueLimits> = {}, renderer: Renderer = renderMusic): MusicQueue {
   const L: MusicQueueLimits = { maxWaitingPreviews: 4, maxWaitingAdds: 8, cacheBytes: 64 * 1024 * 1024, previewTimeoutMs: 60_000, addTimeoutMs: 180_000, retryAfterSeconds: 2, ...limits };
   interface Job { lane: MusicLane; cancel: { cancelled: boolean }; reason: 'timeout' | 'abandoned' | null; wanted: number; hasTurn: boolean; started: boolean; go: () => void; leave: () => void; promise: Promise<RenderedMusic> }
@@ -112,8 +113,8 @@ export function createMusicQueue(limits: Partial<MusicQueueLimits> = {}, rendere
     }, { once: true });
   };
   return {
-    render(styleId, bars, seed, lane, signal) {
-      const key = `${styleId}\n${bars}\n${seed}`;
+    render(styleId, bars, seed, lane, signal, endFrames) {
+      const key = `${styleId}\n${bars}\n${seed}${endFrames === undefined ? '' : `\n${endFrames}`}`;
       const hit = cache.get(key);
       if (hit) { cache.delete(key); cache.set(key, hit); return Promise.resolve(hit); }
       if (signal?.aborted) return Promise.reject(cancelledError());
@@ -133,7 +134,7 @@ export function createMusicQueue(limits: Partial<MusicQueueLimits> = {}, rendere
         job.started = true;
         const timer = setTimeout(() => { job.reason = 'timeout'; job.cancel.cancelled = true; }, lane === 'add' ? L.addTimeoutMs : L.previewTimeoutMs);
         try {
-          const r = await renderer(styleId, bars, seed, { cancel: job.cancel });
+          const r = await renderer(styleId, bars, seed, { cancel: job.cancel, ...(endFrames === undefined ? {} : { endFrames }) });
           if (lane === 'preview') remember(key, r);
           return r;
         } catch (e) {
@@ -170,18 +171,30 @@ export function resolveMusicRequest(req: MusicRequest): { style: MusicStyle; lay
     if (!m || Number(m[1]) <= 0 || (m[2] !== undefined && Number(m[2]) <= 0)) throw new ApiError(400, 'invalid_option', 'fitSeconds is a positive number of seconds written "n" or "n/d"', { fitSeconds: req.fitSeconds });
     bars = barsForDuration(style.id, T.rt(Number(m[1]), m[2] === undefined ? 1 : Number(m[2])));
   }
+  if (req.endFrames !== undefined && req.fitSeconds !== undefined) throw new ApiError(400, 'invalid_option', 'endFrames goes together with bars, not with fitSeconds', { endFrames: req.endFrames }, 'Ask for bars and endFrames (exactLayoutFor gives both), or for fitSeconds alone.');
   try {
-    return { style, layout: musicLayout(style.id, bars!), seed };
+    return { style, layout: musicLayout(style.id, bars!, req.endFrames), seed };
   } catch (e) {
     if (e instanceof RangeError) throw new ApiError(400, 'invalid_option', e.message, { styleId: style.id, bars });
     throw e;
   }
 }
 
+/** The ending in sample frames when it is not one bar (wave 7 musicfit), else undefined: a one-bar ending is today's request exactly. */
+export const exactEnding = (layout: MusicLayout): number | undefined => (layout.endFrames === layout.meter * layout.samplesPerBeat ? undefined : layout.endFrames);
+/**
+ * The library name of a track: "Pop · 16 bars.wav" with the default ending (as before wave 7); with an exact ending the whole bars
+ * before the final chord and the ending in seconds, rounded to a tenth for reading only: "Pop · 15 bars + ending 1.4 s.wav".
+ */
+export function musicFileName(style: Pick<MusicStyle, 'name'>, layout: MusicLayout): string {
+  const end = exactEnding(layout);
+  if (end === undefined) return `${style.name.en} · ${layout.bars} bars.wav`;
+  return `${style.name.en} · ${layout.bars - 1} bars + ending ${(Math.round(end / 4800) / 10).toFixed(1)} s.wav`;
+}
 /** Synthesise, validate and store one track; the asset is not attached to any project yet. */
 export async function makeMusic(store: Store, req: MusicRequest, actor: string, queue: MusicQueue = musicQueue): Promise<{ asset: Omit<Asset, 'id'>; grid: KnownGrid; layout: MusicLayout }> {
   const { style, layout, seed } = resolveMusicRequest(req);
-  const r = await queue.render(style.id, layout.bars, seed, 'add');
+  const r = await queue.render(style.id, layout.bars, seed, 'add', undefined, exactEnding(layout));
   validateMusic(r);
   const bytes = r.wav;
   const contentHash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
@@ -196,7 +209,7 @@ export async function makeMusic(store: Store, req: MusicRequest, actor: string, 
     store.putBlob(contentHash, tmp, bytes.length, meta.mimeType);
     const importedAt = new Date().toISOString();
     const asset: Omit<Asset, 'id'> = {
-      ...meta, duration, name: `${style.name.en} · ${layout.bars} bars.wav`, contentHash, byteSize: bytes.length,
+      ...meta, duration, name: musicFileName(style, layout), contentHash, byteSize: bytes.length,
       provenance: { origin: 'generated', importedAt, importedBy: actor, procedural: { id: style.id, version: style.version, generator: MUSIC_GENERATOR, params: musicProvenanceParams(layout, seed) } },
     };
     return { asset, grid: knownGridOf(layout, seed, importedAt), layout };

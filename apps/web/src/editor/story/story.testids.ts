@@ -26,6 +26,7 @@ export const STORY_TESTIDS = {
   // plan notes (data-code) and a refusal next to its control
   warning: 'story-warning', error: 'story-error',
   // after apply: the bar beside the film bar
+  tapDone: 'story-tap-done',
   bar: 'story-bar', barRebuild: 'story-bar-rebuild', barRestore: 'story-bar-restore-removed', barUndo: 'story-bar-undo', barNote: 'story-bar-note',
 } as const;
 export type StoryTestId = (typeof STORY_TESTIDS)[keyof typeof STORY_TESTIDS];

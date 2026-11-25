@@ -88,7 +88,7 @@
     "proof:multicam": "tsx packages/evals/src/multicam-proof.ts",
     "proof:multicam-ui": "tsx packages/evals/src/multicam-ui-proof.ts",
     "proof:perform": "tsx packages/evals/src/perform-proof.ts",
-    "proof:send": "tsx packages/evals/src/send-fit-proof.ts && tsx packages/evals/src/send-checks-proof.ts && tsx packages/evals/src/send-loudness-proof.ts",
+    "proof:send": "tsx packages/evals/src/send-proof.ts",
     "proof:command-bar": "tsx packages/evals/src/command-bar-proof.ts",
     "proof:library": "tsx packages/evals/src/library-proof.ts",
     "proof:stabilise": "tsx packages/evals/src/stabilise-proof.ts",
@@ -98,7 +98,12 @@
     "bench:playback": "tsx packages/evals/src/playback-bench.ts",
     "proof:craft": "tsx packages/evals/src/craft-proof.ts",
     "proof:pearls": "tsx packages/evals/src/pearls-proof.ts",
-    "proof:story": "tsx packages/evals/src/story-proof.ts"
+    "proof:story": "tsx packages/evals/src/story-proof.ts",
+    "proof:musicfit": "tsx packages/evals/src/musicfit-proof.ts",
+    "proof:search": "tsx packages/evals/src/footage-search-proof.ts",
+    "proof:search-real": "tsx packages/evals/src/footage-search-real.ts",
+    "proof:assistant-local": "tsx packages/evals/src/assistant-local-proof.ts",
+    "proof:assistant-local-model": "tsx packages/evals/src/assistant-local-model-proof.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

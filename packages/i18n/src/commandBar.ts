@@ -55,6 +55,23 @@ export const COMMAND_BAR_HE = {
   'error.code.budget_error': 'לא הצלחנו לשמור סכום לבקשה, ולכן היא לא נשלחה', 'error.code.nothing_to_release': 'אין סכום שמור לשחרר',
   // the bar and Settings: a server sentence that has no Hebrew wording is shown as sent, marked
   'refusal.untranslated': 'בלשון השרת, לא תורגם',
+  // ---- the LOCAL language assistant (wave 7; .artifacts/wave7/assistant-decisions.md §4) ----
+  'assistant.stage.waiting-for-compute': 'ממתין למשימה אחרת שמשתמשת במעבד הגרפי', 'assistant.stage.awaiting-local-model': 'העוזר המקומי חושב',
+  'error.code.grammar_understood': 'שורת הפקודות מבינה את הבקשה בעצמה', 'error.code.local_not_running': 'העוזר המקומי לא פועל כרגע',
+  'error.code.local_loading': 'העוזר המקומי עוד טוען את המודל', 'error.code.local_timeout': 'העוזר המקומי לא ענה בזמן',
+  'error.code.local_not_loopback': 'הכתובת של העוזר המקומי לא הובילה למחשב הזה, ושום דבר לא נשלח', 'error.code.local_server_error': 'העוזר המקומי החזיר שגיאה',
+  'assistant.local.title': 'עוזר שפה מקומי', 'assistant.local.adapter': 'מודל מקומי על המחשב הזה',
+  'assistant.local.nothingLeaves': 'שום דבר לא יוצא מהמחשב: בלי מפתח, בלי חשבון ובלי תשלום',
+  'assistant.local.unmeasured': 'איכות העברית והמהירות של העוזר על המחשב הזה לא נמדדו',
+  'assistant.local.ask': 'לשאול את העוזר המקומי', 'assistant.local.suggested': 'העוזר הציע:',
+  'assistant.local.insert': 'הכנס לשורה', 'assistant.local.ignore': 'התעלם', 'assistant.local.badge': 'הצעת העוזר — בדקו לפני Enter',
+  'assistant.local.none': 'העוזר לא מצא פקודה מתאימה; נסחו את הבקשה אחרת, או בחרו פקודה מהרשימה',
+  'assistant.local.dropped': 'העוזר השמיט מספר או טקסט שלא נאמרו בבקשה; השורה תשאל עליהם',
+  'assistant.local.state.running': 'העוזר המקומי פועל', 'assistant.local.state.loading': 'העוזר המקומי עוד טוען את המודל',
+  'assistant.local.state.stopped': 'העוזר המקומי לא פועל כרגע', 'assistant.local.state.not_llama': 'ביציאה הזו עונה תוכנה אחרת, לא העוזר המקומי',
+  'assistant.local.invalid.cut_off': 'התשובה של העוזר נקטעה', 'assistant.local.invalid.empty': 'העוזר לא ענה',
+  'assistant.local.invalid.not_json': 'התשובה של העוזר לא הייתה בצורה הנכונה', 'assistant.local.invalid.wrong_shape': 'התשובה של העוזר לא הייתה בצורה הנכונה',
+  'assistant.local.invalid.not_a_command': 'העוזר לא הצליח לנסח פקודה שהשורה מבינה',
 };
 export const COMMAND_BAR_EN: Record<keyof typeof COMMAND_BAR_HE, string> = {
   'bar.title': 'Command bar',
@@ -93,6 +110,22 @@ export const COMMAND_BAR_EN: Record<keyof typeof COMMAND_BAR_HE, string> = {
   'error.code.summary_too_large': 'The project description is too long to send', 'error.code.agent_paused': 'Agents are paused on this project',
   'error.code.budget_error': 'No amount could be reserved for the request, so it was not sent', 'error.code.nothing_to_release': 'There is no reserved amount to release',
   'refusal.untranslated': 'in the server\'s words, not translated',
+  'assistant.stage.waiting-for-compute': 'Waiting for another task that uses the graphics card', 'assistant.stage.awaiting-local-model': 'The local assistant is thinking',
+  'error.code.grammar_understood': 'The command bar understands this request itself', 'error.code.local_not_running': 'The local assistant is not running now',
+  'error.code.local_loading': 'The local assistant is still loading its model', 'error.code.local_timeout': 'The local assistant did not answer in time',
+  'error.code.local_not_loopback': 'The local assistant\'s address did not lead to this computer, and nothing was sent', 'error.code.local_server_error': 'The local assistant returned an error',
+  'assistant.local.title': 'Local language assistant', 'assistant.local.adapter': 'A local model on this computer',
+  'assistant.local.nothingLeaves': 'Nothing leaves the computer: no key, no account and no payment',
+  'assistant.local.unmeasured': 'The assistant\'s Hebrew quality and speed on this computer have not been measured',
+  'assistant.local.ask': 'Ask the local assistant', 'assistant.local.suggested': 'The assistant suggested:',
+  'assistant.local.insert': 'Put in the bar', 'assistant.local.ignore': 'Ignore', 'assistant.local.badge': 'The assistant\'s suggestion — check before Enter',
+  'assistant.local.none': 'The assistant found no matching command; say it differently, or choose a command from the list',
+  'assistant.local.dropped': 'The assistant left out a number or text that the request did not say; the bar will ask about it',
+  'assistant.local.state.running': 'The local assistant is running', 'assistant.local.state.loading': 'The local assistant is still loading its model',
+  'assistant.local.state.stopped': 'The local assistant is not running now', 'assistant.local.state.not_llama': 'Another program answers on this port, not the local assistant',
+  'assistant.local.invalid.cut_off': 'The assistant\'s answer was cut off', 'assistant.local.invalid.empty': 'The assistant did not answer',
+  'assistant.local.invalid.not_json': 'The assistant\'s answer was not in the right form', 'assistant.local.invalid.wrong_shape': 'The assistant\'s answer was not in the right form',
+  'assistant.local.invalid.not_a_command': 'The assistant could not form a command the bar understands',
 };
 /** Codes the assistant's routes and job answer with besides core ASSISTANT_ERROR_CODES (host_not_allowed's headline is index.ts's, worded for any site). */
 export const ASSISTANT_EXTRA_ERROR_CODES = ['summary_too_large', 'host_not_allowed', 'agent_paused', 'budget_error', 'nothing_to_release', 'invalid_request', 'not_found', 'internal_error'] as const;
@@ -143,4 +176,15 @@ export const HE_ASSISTANT: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^canceled; the service was not reached, nothing was sent$/, () => 'הבקשה בוטלה, השירות לא הושג ושום דבר לא נשלח; אפשר לבקש שוב'],
   [/^canceled while the request was with the service; it may have been charged$/, () => `הבקשה בוטלה בזמן שהייתה אצל השירות, וייתכן שחויבה; ${BILLING_HE}`],
   [/^canceled; the answer that arrived was discarded$/, () => 'הבקשה בוטלה, והתשובה שהגיעה נזרקה; אפשר לבקש שוב'],
+  // ---- the LOCAL language assistant (wave 7; apps/server/src/assistant/contract.ts ASSISTANT_LOCAL_SENTENCES): no money words ----
+  [/^the command bar reads this request itself, so it is not sent to the local assistant$/, () => 'שורת הפקודות מבינה את הבקשה הזו בעצמה, ולכן היא לא נשלחת לעוזר המקומי; השתמשו בתשובה של השורה: לחצו עליה Enter, או ענו על השאלה שלה'],
+  [/^the local assistant is not running on this computer/, () => 'העוזר המקומי לא פועל כרגע במחשב הזה; הפעילו אותו לפי המדריך «עוזר שפה מקומי» ובקשו שוב'],
+  [/^the local assistant is still loading its model$/, () => 'העוזר המקומי עוד טוען את המודל; חכו רגע ובקשו שוב'],
+  [/^the local assistant took longer than the time limit, and the request was stopped$/, () => 'העוזר המקומי לקח יותר מהזמן המרבי, והבקשה נעצרה; בקשו שוב, או הגדילו בהגדרות את הזמן המרבי לבקשה'],
+  [/^the local assistant's address did not lead to this computer, so nothing was sent$/, () => `הכתובת של העוזר המקומי לא הובילה למחשב הזה, ולכן שום דבר לא נשלח; בדקו בהגדרות את מספר היציאה, ושהעוזר המקומי מאזין רק ב־${ltr('127.0.0.1')}`],
+  [/^the local assistant answered with an error \(([^)]*)\)$/, (m) => `העוזר המקומי החזיר שגיאה (${ltr(m[1]!)}); הסתכלו בחלון של העוזר המקומי, הפעילו אותו מחדש אם צריך, ובקשו שוב`],
+  [/^canceled before anything was sent to the local assistant$/, () => 'הבקשה בוטלה לפני שנשלחה לעוזר המקומי; אפשר לבקש שוב מתי שרוצים'],
+  [/^canceled while the local assistant was answering; nothing left this computer$/, () => 'הבקשה בוטלה בזמן שהעוזר המקומי ענה, ושום דבר לא יצא מהמחשב; אפשר לבקש שוב מתי שרוצים'],
+  [/^the server stopped during a local request; nothing left this computer and nothing is held$/, () => 'השרת נעצר באמצע בקשה לעוזר המקומי; שום דבר לא יצא מהמחשב ושום דבר לא נשאר תלוי, ואפשר לבקש שוב'],
+  [/^the local assistant's answer was not a command of the bar \((\w+)\); nothing was changed$/, () => 'התשובה של העוזר המקומי לא הייתה פקודה של השורה, ושום דבר לא שונה; נסחו את הבקשה אחרת, או השתמשו באחת הדוגמאות של השורה'],
 ];

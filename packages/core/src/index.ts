@@ -147,3 +147,20 @@ export * from './sourceRangeOps.ts';
 export * from './storyContract.ts';
 export * from './story.ts';
 export * from './voiceActivity.ts';
+// music that fits the film «מוזיקה שמתאימה לסרט» (wave 7 musicfit track): the contract and validation are lead-built; the op bodies,
+// musicGrid, impact and musicJoin are A's; musicSwap is B's
+export * from './musicFitContract.ts';
+export * from './musicFitValidate.ts';
+export * from './impactOps.ts';
+export * from './musicFitOps.ts';
+export * from './musicGrid.ts';
+export * from './impact.ts';
+export * from './musicJoin.ts';
+export * from './musicSwap.ts';
+// «חיפוש בצילומים» (wave 7 search track): the contract and the agent filter are lead-built; footageSearch.ts is builder A's
+export * from './footageSearchContract.ts';
+export * from './footageSearch.ts';
+// the local language assistant (wave 7 assistant track): the vocabulary is in assistantContract.ts; barUnderstands is lead-built,
+// groundLocalAnswer / localPhrase are builder A's
+export * from './commandBar/understands.ts';
+export * from './commandBar/localIntent.ts';

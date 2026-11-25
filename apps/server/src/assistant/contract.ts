@@ -9,7 +9,9 @@
  */
 import type { AssistantConfigBody, AssistantJobOutput, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, AssistantToggles } from '@pulseframe/core';
 import { ASSISTANT_ACTOR, ASSISTANT_GRANT_ID } from '@pulseframe/core';
-import type { ChatEndpoint, ChatModelAdapter } from '@pulseframe/providers';
+import type { AssistantLocalCheck } from '@pulseframe/core';
+import type { ChatEndpoint, ChatModelAdapter, LocalModelAdapter } from '@pulseframe/providers';
+import type { ComputeLane } from '../aiContracts.ts';
 import type { Grant, Principal } from '../governance.ts';
 
 export type { AssistantConfigBody, AssistantJobOutput, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, AssistantToggles };
@@ -38,7 +40,18 @@ export function assistantPrincipal(projectId: string, monthlyLimitCents: number,
 }
 
 /** The installed adapters (a Map: an adapter id is never used as a plain-object key) — empty in wave 1 — and the owner's endpoint, null until configured. */
-export interface AssistantDeps { adapters: ReadonlyMap<string, ChatModelAdapter>; endpoint(): ChatEndpoint | null }
+export interface AssistantDeps {
+  adapters: ReadonlyMap<string, ChatModelAdapter>; endpoint(): ChatEndpoint | null;
+  /**
+   * wave 7, the LOCAL assistant: the loopback-only adapter (llamaAdapter.ts in production, installed by index.ts; a labelled MOCK in
+   * tests); absent or null = no local adapter in this build (setup provider_not_configured).
+   */
+  local?: LocalModelAdapter | null;
+  /** wave 7: the compute lane a local request takes while the owner's model computes (label ASSISTANT_LOCAL_LANE_LABEL); index.ts passes it. */
+  lane?: ComputeLane | null;
+}
+/** The lane label of a local request (the lane hooks release the kept speech and tool workers before it starts). */
+export const ASSISTANT_LOCAL_LANE_LABEL = 'assistant (local model)';
 
 /** What `GET …/assistant/summary` and the job send: the summary and the switches it was built with. */
 export interface AssistantSummaryContext { playheadFrame: number; selection: readonly string[]; sequenceId?: string }
@@ -51,6 +64,9 @@ export const ASSISTANT_ROUTES = [
   { method: 'PUT', path: '/api/v1/assistant/key', access: 'owner', answers: 'AssistantKeyState' },
   { method: 'DELETE', path: '/api/v1/assistant/key', access: 'owner', answers: 'AssistantKeyState' },
   { method: 'POST', path: '/api/v1/projects/:id/assistant/requests', access: 'owner', answers: '202 { jobId } | 409 assistant_not_connected (no job row) | 402 budget_exceeded' },
+  // wave 7, the LOCAL assistant (assistant-decisions.md §4)
+  { method: 'POST', path: '/api/v1/assistant/local/check', access: 'owner', answers: 'AssistantLocalCheck: what answers on 127.0.0.1:<the saved port> (running, loading, stopped, not_llama) and the model name it reports' },
+  { method: 'POST', path: '/api/v1/assistant/jobs/:jobId/taken', access: 'owner', answers: '204: the owner\'s tab took or ignored the local phrase; the phrase and the text slot leave the job row (Store.erasing)' },
 ] as const;
 export type AssistantRoute = (typeof ASSISTANT_ROUTES)[number];
 
@@ -62,4 +78,27 @@ export interface AssistantHandlers {
   putKey(p: Principal, key: string): AssistantKeyState | Promise<AssistantKeyState>;
   deleteKey(p: Principal): AssistantKeyState | Promise<AssistantKeyState>;
   request(p: Principal, projectId: string, body: AssistantRequestBody): { jobId: string } | Promise<{ jobId: string }>;
+  /** wave 7: POST /assistant/local/check (owner). */
+  localCheck(p: Principal): AssistantLocalCheck | Promise<AssistantLocalCheck>;
+  /** wave 7: POST /assistant/jobs/:jobId/taken (owner); resolves when the phrase is cleared. */
+  taken(p: Principal, jobId: string): void | Promise<void>;
 }
+
+/**
+ * wave 7, the LOCAL assistant: the job's and the routes' fixed sentences (reason, then the next step in `hint`). Builder B uses exactly
+ * these (job.ts, routes.ts); packages/i18n commandBar.ts HE_ASSISTANT words each in Hebrew; command-bar-wording.test.ts checks both, and
+ * that none speaks of money, a charge or a reservation (a local request costs nothing). `local_server_error` carries a status code or
+ * a code word only, never a reply body.
+ */
+export const ASSISTANT_LOCAL_SENTENCES = {
+  grammar_understood: { message: 'the command bar reads this request itself, so it is not sent to the local assistant', hint: 'Use the bar\'s own answer: press Enter on it, or answer its question.' },
+  local_not_running: { message: 'the local assistant is not running on this computer: nothing answers on 127.0.0.1 at the saved port', hint: 'Start it as the guide «עוזר שפה מקומי» says, then ask again.' },
+  local_loading: { message: 'the local assistant is still loading its model', hint: 'Wait a little, then ask again.' },
+  local_timeout: { message: 'the local assistant took longer than the time limit, and the request was stopped', hint: 'Ask again, or raise the time limit in Settings, under the language assistant.' },
+  local_not_loopback: { message: 'the local assistant\'s address did not lead to this computer, so nothing was sent', hint: 'Check the port in Settings, and that the local server listens on 127.0.0.1 only.' },
+  local_server_error: { message: (detail: string) => `the local assistant answered with an error (${detail})`, hint: 'Look at the local assistant\'s window, start it again if needed, then ask again.' },
+  canceled_unsent: { message: 'canceled before anything was sent to the local assistant', hint: 'Ask again when you want.' },
+  canceled_sent: { message: 'canceled while the local assistant was answering; nothing left this computer', hint: 'Ask again when you want.' },
+  recovered: { message: 'the server stopped during a local request; nothing left this computer and nothing is held', hint: 'Ask again.' },
+  invalid: { message: (category: string) => `the local assistant's answer was not a command of the bar (${category}); nothing was changed`, hint: 'Say it differently, or use one of the bar\'s examples.' },
+} as const;

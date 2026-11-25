@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-24T20:46:12.123Z",
+  "ranAt": "2026-11-25T15:38:56.893Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "logicalCpus": 4,
     "gpu": "none"
   },
@@ -57,9 +57,9 @@
     "longMix": {
       "seconds": 320,
       "clips": 40,
-      "wallMs": 6822,
-      "realtimeFactor": 46.9071,
-      "serverRssGrowthMb": 317,
+      "wallMs": 6047,
+      "realtimeFactor": 52.9188,
+      "serverRssGrowthMb": 306,
       "note": "one run on this CPU profile; RSS includes the proof harness holding the decoded result"
     },
     "browserAudioChain": {
@@ -299,9 +299,9 @@
       "detail": {
         "seconds": 320,
         "clips": 40,
-        "wallMs": 6822,
-        "realtimeFactor": 46.9071,
-        "serverRssGrowthMb": 317,
+        "wallMs": 6047,
+        "realtimeFactor": 52.9188,
+        "serverRssGrowthMb": 306,
         "note": "one run on this CPU profile; RSS includes the proof harness holding the decoded result"
       }
     },

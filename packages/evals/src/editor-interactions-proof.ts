@@ -30,7 +30,8 @@ import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
 import { dictionaries, effectParamLabel, translateRefusal, fillIn, TREND_PACK_HE } from '../../i18n/src/index.ts';
 import { creativeProjection, beatSwitchFrame, BUILTIN_TEMPLATES, MODEL_GATED_TEMPLATES, PACKS, removedByHand, sha256Hex, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 import { TEMPLATE_TESTIDS } from '../../../apps/web/src/editor/templates.testids.ts';
-import { chooseFormat, startExport } from './editor-ui.ts';
+import { chooseFormat, openInspectorPage, startExport } from './editor-ui.ts';
+import { MUSICFIT_TESTIDS } from '../../../apps/web/src/editor/musicfit/musicFit.testids.ts';
 import { libraryPanelsProbe } from './library-proof.ui.ts';
 import { toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
 import { generateShortsFixture } from '../../fixtures/src/shorts.ts';
@@ -1994,7 +1995,7 @@ async function main() {
       await sw.waitFor({ timeout: 15000 });
       const noBarBefore = (await D2.pg.getByTestId('meter-reduction').count()) === 0;
       await sw.focus();
-      await D2.pg.keyboard.press('Enter'); // outside a dialog the editor's Space plays and pauses, even on a focused button: Enter activates
+      await D2.pg.keyboard.press('Enter'); // Enter activates the switch (Space would too with keyboard focus: the Space rows below)
       let ceiling: number | null = null;
       for (let i = 0; i < 80 && ceiling === null; i++) { ceiling = (await doc2(sd)).settings.limiter?.ceiling ?? null; if (ceiling === null) await sleep(100); }
       const bar = D2.pg.getByTestId('meter-reduction');
@@ -2010,7 +2011,11 @@ async function main() {
       await D2.pg.keyboard.press('Enter');
       let gone = false;
       for (let i = 0; i < 80 && !gone; i++) { gone = (await doc2(sd)).settings.limiter === undefined; if (!gone) await sleep(100); }
-      check('L7 switching it off removes the field from the project and the bar from the meter', gone && (await D2.pg.locator('[data-testid=meter-reduction][data-state=on],[data-testid=meter-reduction][data-state=unavailable]').count()) === 0, { gone });
+      // the project changes on the server first; the editor hears it over its event stream, so the bar is read until it goes (8 s)
+      const barsOn = () => D2.pg.locator('[data-testid=meter-reduction][data-state=on],[data-testid=meter-reduction][data-state=unavailable]').count();
+      let bars = await barsOn();
+      for (let i = 0; i < 80 && bars > 0; i++) { await sleep(100); bars = await barsOn(); }
+      check('L7 switching it off removes the field from the project and the bar from the meter', gone && bars === 0, { gone, bars });
 
       // the match: select both clips, measure, see the plan, commit, read the result, undo
       await D2.pg.locator(`.clip[data-clip-id="${qId}"]`).first().click();
@@ -2180,6 +2185,248 @@ async function main() {
       await cpage.getByTestId('craft-versions-empty').waitFor({ timeout: 8000 }).catch(() => {});
       check('versions: «גרסאות» says honestly that nothing is saved yet; a saved version lists its name, «המדיה לא מועתקת» and «זהה למצב הנוכחי»; delete asks first and the list is empty again', empty === 1 && /גרסה לבדיקה/.test(row) && /המדיה לא מועתקת/.test(row) && /זהה למצב הנוכחי/.test(row) && (await cpage.getByTestId('craft-versions-empty').count()) === 1, { empty, row });
       await cctx.close();
+    }
+
+    // Space on a control (lead decision, wave 7 send integration; shortcutGate.ts spaceBelongsToControl): a button or switch with
+    // KEYBOARD focus takes Space (it is pressed); after a mouse click on it, Space still plays and pauses the film, as before.
+    console.log('\n# Space: a keyboard-focused control takes it, a mouse-focused one leaves it to play / pause');
+    {
+      const vid = path.join(art, 'space-key.mp4');
+      ff(['-f', 'lavfi', '-t', '6', '-i', 'testsrc2=s=640x360:r=30', '-f', 'lavfi', '-t', '6', '-i', 'sine=frequency=330:sample_rate=48000', '-vf', 'format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-c:a', 'aac', '-shortest', vid]);
+      const sp = (await call('/projects', { name: 'space key', width: 640, height: 360 })).body.project.id as string;
+      const va = await upload(sp, vid);
+      await txs(sp, [{ op: 'add_clip', args: { assetId: va.assetId, start: f(0) } }]);
+      const ctx = await browser.newContext({ viewport: { width: 1500, height: 3200 }, reducedMotion: 'reduce' });
+      await ctx.addInitScript(`globalThis.__name = (f) => f`);
+      await ctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
+      const pg = await ctx.newPage();
+      const errs: string[] = [];
+      pg.on('pageerror', (e) => errs.push(String(e)));
+      await pg.goto(`${s.ownerUrl}&project=${sp}`);
+      await pg.getByTestId('timecode').waitFor({ timeout: 30000 });
+      const sw = pg.getByTestId('master-limiter-switch');
+      await sw.waitFor({ timeout: 15000 });
+      const playing = async () => (await pg.getByTestId('play').getAttribute('data-playing')) === 'true';
+      const limiterOf = async () => (await doc2(sp)).settings.limiter?.ceiling ?? null;
+      const settle = async (want: number | null) => { for (let i = 0; i < 60; i++) { if ((await limiterOf()) === want) return true; await sleep(100); } return false; };
+      // keyboard focus: reach the switch with Tab (one step back with Shift+Tab, one forward with Tab)
+      await sw.focus();
+      await pg.keyboard.press('Shift+Tab');
+      await pg.keyboard.press('Tab');
+      const kb = await sw.evaluate((el) => ({ active: document.activeElement === el, visible: el.matches(':focus-visible') }));
+      await pg.keyboard.press('Space');
+      const pressed = await settle(-1);
+      await sleep(400);
+      const playedOnKeyboard = await playing();
+      check('Space on a switch reached with Tab presses the switch (the limiter is set) and does not play the film', kb.active && kb.visible && pressed && !playedOnKeyboard, { kb, limiter: await limiterOf(), playing: playedOnKeyboard });
+      // mouse focus: click the switch (it turns the limiter off and keeps the focus, without :focus-visible), then Space plays
+      if (playedOnKeyboard) await pg.keyboard.press('Space');
+      // the focus leaves the switch first: Chromium keeps :focus-visible on an element that already had keyboard focus when it is
+      // then clicked (the click does not move the focus), so a click on the still-focused switch would not be a mouse focus
+      await pg.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await sw.click();
+      const off = await settle(null);
+      const ms = await sw.evaluate((el) => ({ active: document.activeElement === el, visible: el.matches(':focus-visible') }));
+      await pg.keyboard.press('Space');
+      let played = false;
+      for (let i = 0; i < 40 && !played; i++) { played = await playing(); if (!played) await sleep(100); }
+      const stillOff = (await limiterOf()) === null;
+      await pg.keyboard.press('Space');
+      let paused = false;
+      for (let i = 0; i < 40 && !paused; i++) { paused = !(await playing()); if (!paused) await sleep(100); }
+      check('after a mouse click on the switch (focus stays, not :focus-visible) Space plays and pauses the film and leaves the switch alone', off && ms.active && !ms.visible && played && paused && stillOff, { ms, off, played, paused, stillOff });
+      check('Space rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
+      await ctx.close();
+    }
+
+    // marked ranges «פנינים» (wave 7 pearls track): marking a pearl with the viewer's form by keyboard, Escape closes only the form,
+    // one undo takes the pearl back
+    {
+      console.log('\n# pearls: the form in the source viewer, Escape, one undo');
+      const PID = { save: 'pearl-save', form: 'pearl-form', name: 'pearl-form-name' };
+      const pe = (await call('/projects', { name: 'pearls interactions', width: 640, height: 360 })).body.project.id as string;
+      const pa = (await upload(pe, picFile)).assetId as string;
+      const cookie = (await fetch(`${s.url}/api/v1/session`, { headers: { origin: s.url, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
+      const ownerTx = async (ops: unknown[]) => { const r = await fetch(`${s.url}/api/v1/projects/${pe}/transactions`, { method: 'POST', headers: { origin: s.url, cookie, connection: 'close', 'content-type': 'application/json' }, body: JSON.stringify({ ops }) }); if (!r.ok) throw new Error(`owner tx: ${r.status} ${(await r.text()).slice(0, 200)}`); return r.json(); };
+      await ownerTx([{ op: 'add_person', args: { name: 'אלף' } }]);
+      // read as the owner: the agent token reads every pearl's name as '' (labels are family notes, peoplePrivacy.ts)
+      const ownerDoc = async () => ((await (await fetch(`${s.url}/api/v1/projects/${pe}`, { headers: { origin: s.url, cookie, connection: 'close' } })).json()) as any).project;
+      const rangesOf = async () => Object.values((await ownerDoc()).sourceRanges ?? {}) as any[];
+      const revOf = async () => (await call(`/projects/${pe}`)).body.revision as number;
+      const ctx = await browser.newContext({ viewport: { width: 1500, height: 1000 }, reducedMotion: 'reduce' });
+      await ctx.addInitScript(`globalThis.__name = (f) => f`);
+      await ctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const pg = await ctx.newPage();
+      const errs: string[] = [];
+      pg.on('pageerror', (e) => errs.push(String(e)));
+      await pg.goto(`${s.ownerUrl}&project=${pe}`);
+      await pg.getByTestId('timecode').waitFor({ timeout: 30000 });
+      await pg.getByTestId('rail-media').click();
+      await pg.getByTestId(`more-${pa}`).click();
+      await pg.getByTestId(`view-${pa}`).click();
+      await pg.getByTestId('source-viewer').waitFor({ timeout: 15000 });
+      await pg.waitForFunction(() => Number(document.querySelector('[data-testid=source-range]')?.getAttribute('data-out')) > 0, undefined, { timeout: 20000 });
+      // In at frame 10, Out on frame 39 (Shift+→ is ten frames)
+      await pg.keyboard.press('Shift+ArrowRight'); await sleep(150);
+      await pg.keyboard.press('i'); await sleep(100);
+      for (let i = 0; i < 3; i++) { await pg.keyboard.press('Shift+ArrowRight'); await sleep(150); }
+      await pg.keyboard.press('ArrowLeft'); await sleep(150);
+      await pg.keyboard.press('o'); await sleep(150);
+      const marks = { in: await pg.getByTestId('source-range').getAttribute('data-in'), out: await pg.getByTestId('source-range').getAttribute('data-out') };
+      const rev0 = await revOf();
+      await pg.keyboard.press('p');
+      await pg.getByTestId(PID.form).waitFor({ timeout: 5000 });
+      await pg.getByTestId(PID.name).fill('בדיקה');
+      await pg.keyboard.press('Escape');
+      await sleep(300);
+      const esc = { form: await pg.getByTestId(PID.form).count(), viewer: await pg.getByTestId('source-viewer').count(), focus: await pg.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? null), commits: (await revOf()) - rev0 };
+      check('pearls: Escape in the pearl form closes the form only (the viewer stays open, the focus is on «שמור כפנינה», nothing is committed)', esc.form === 0 && esc.viewer === 1 && esc.focus === PID.save && esc.commits === 0, { marks, esc });
+      await pg.keyboard.press('p');
+      await pg.getByTestId(PID.form).waitFor({ timeout: 5000 });
+      await pg.getByTestId(PID.name).fill('הצעד הראשון');
+      const typed = await pg.waitForFunction((id) => (document.querySelector(`[data-testid="${id}"]`) as HTMLInputElement | null)?.value === 'הצעד הראשון', PID.name, { timeout: 5000 }).then(() => true, () => false);
+      await pg.keyboard.press('Enter');
+      const saved = await until2(rangesOf, (rs) => rs.length === 1);
+      const rs = await rangesOf();
+      const commits = (await revOf()) - rev0;
+      const span = rs[0]?.span ? [T.frameIndexAt(rs[0].span.start, R), T.frameIndexAt(rs[0].span.end, R)] : null;
+      check('pearls: I, O, P, a name and Enter mark one pearl in one commit, its span the marks [10, 40) and its name as typed', saved && rs.length === 1 && commits === 1 && JSON.stringify(span) === '[10,40]' && rs[0].label === 'הצעד הראשון', { marks, typed, commits, span, label: rs[0]?.label });
+      await pg.keyboard.press('Escape');
+      await pg.getByTestId('source-viewer').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      await pg.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
+      await pg.keyboard.press('Control+z');
+      const undone = await until2(rangesOf, (x2) => x2.length === 0);
+      const after = await ownerDoc();
+      check('pearls: one Ctrl+Z takes the pearl back and the document holds no sourceRanges key again', undone && !Object.hasOwn(after, 'sourceRanges'), { undone, hasKey: Object.hasOwn(after, 'sourceRanges') });
+      check('pearls rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
+      await ctx.close();
+      // «מי בקליפ?» refused in words for a non-owner credential is not driven here: the editor boots only on the owner's session
+      // (a page carrying an agent's bearer header stops at «כדי לפתוח את העורך כבעלים…»); the refusal is held by pearls.test.ts
+      // (403 human_tag_required for every non-owner credential) and its Hebrew by pearls-wording.test.ts
+    }
+
+    // «ספרו מה היה» (wave 7 story, integration): the palette opens the dialog on the library's pictures; the strip moves a picture
+    // with Alt+arrow; Escape closes it and gives the focus back; «בנו בלי הקשות» applies ONE revision and the story bar appears; the
+    // bar's «בנייה מחדש» opens its menu from the keyboard; Ctrl+Z returns the exact document and takes the bar with it.
+    // The whole story is proved in pnpm proof:story; these rows keep the editor's own keys and surfaces honest around it.
+    console.log('\n# story: palette, strip keys, Escape, build without taps, the bar by keyboard, one undo');
+    {
+      const narr = path.join(art, 'story-narration.wav');
+      ff(['-f', 'lavfi', '-i', "aevalsrc='0.4*sin(2*PI*440*t)*between(mod(t,3),0.3,2.4)':s=48000:d=12", '-ac', '1', '-c:a', 'pcm_s16le', narr]);
+      const stp = (await call('/projects', { name: 'story keys', width: 640, height: 360 })).body.project.id as string;
+      const shots: string[] = [];
+      for (const [i, c] of ['dc1e1e', '1ec81e', '1e1edc'].entries()) { const out = path.join(art, `story-still-${i}.png`); ff(['-f', 'lavfi', '-i', `color=c=0x${c}:s=640x360`, '-frames:v', '1', out]); shots.push((await upload(stp, out)).assetId as string); }
+      const narration = (await upload(stp, narr)).assetId as string;
+      const sctx = await browser.newContext({ viewport: { width: 1500, height: 1000 }, reducedMotion: 'reduce' });
+      await sctx.addInitScript('globalThis.__name = (f) => f');
+      await sctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const sp = await sctx.newPage();
+      const serrs: string[] = [];
+      sp.on('pageerror', (e) => serrs.push(String(e)));
+      await sp.goto(`${s.ownerUrl}&project=${stp}`);
+      await sp.getByTestId('timecode').waitFor({ timeout: 30000 });
+      const shash = async () => JSON.stringify((await call(`/projects/${stp}`)).body.project);
+      const srev = async () => (await call(`/projects/${stp}`)).body.revision as number;
+      await sp.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
+      await sp.keyboard.press('Control+k');
+      await sp.getByTestId('palette-input').fill('ספרו מה היה');
+      await sp.getByTestId('palette-option').first().waitFor({ timeout: 8000 }).catch(() => {});
+      await sp.keyboard.press('Enter');
+      const opened = await sp.getByTestId('story-dialog').waitFor({ timeout: 8000 }).then(() => true, () => false);
+      const items = async () => sp.getByTestId('story-item').evaluateAll((els) => els.map((x) => x.getAttribute('data-asset-id')));
+      const first = await items();
+      await sp.getByTestId('story-item').first().focus();
+      await sp.keyboard.press('Alt+ArrowLeft');
+      const moved = await items();
+      check('story: the palette\'s «ספרו מה היה» with nothing selected opens the dialog on the library\'s three pictures; Alt+← (Hebrew: later) moves the focused picture one place later', opened && first.length === 3 && moved[1] === first[0] && moved[0] === first[1], { first, moved });
+      await sp.keyboard.press('Escape');
+      const closed = await sp.getByTestId('story-dialog').waitFor({ state: 'detached', timeout: 5000 }).then(() => true, () => false);
+      const focusOk = await sp.evaluate(() => !!document.activeElement && document.activeElement !== document.body ? document.activeElement.isConnected : true);
+      check('story: Escape closes the dialog and the focus is on a live element of the page (not lost in the closed dialog)', closed && focusOk, { closed, focusOk });
+      // build without taps
+      await sp.keyboard.press('Control+k');
+      await sp.getByTestId('palette-input').fill('ספרו מה היה');
+      await sp.getByTestId('palette-option').first().waitFor({ timeout: 8000 }).catch(() => {});
+      await sp.keyboard.press('Enter');
+      await sp.getByTestId('story-dialog').waitFor({ timeout: 8000 }).catch(() => {});
+      await sp.getByTestId('story-from-library').selectOption(narration);
+      await sp.waitForFunction(() => document.querySelector('[data-testid=story-build-no-taps]')?.getAttribute('aria-disabled') !== 'true', undefined, { timeout: 15000 }).catch(() => {});
+      const h0 = await shash(), r0 = await srev();
+      await sp.getByTestId('story-build-no-taps').click();
+      const bar = await sp.getByTestId('story-bar').waitFor({ timeout: 30000 }).then(() => true, () => false);
+      const r1 = await srev();
+      check('story: «בנו בלי הקשות» applies the story as ONE revision, closes the dialog and shows the story bar', bar && r1 === r0 + 1 && (await sp.getByTestId('story-dialog').count()) === 0, { r0, r1, bar });
+      await sp.getByTestId('story-bar-rebuild').focus();
+      await sp.keyboard.press('Enter');
+      const menu = await sp.getByRole('menuitem').first().waitFor({ timeout: 5000 }).then(() => true, () => false);
+      const menuItems = await sp.getByRole('menuitem').allInnerTexts();
+      await sp.keyboard.press('Escape');
+      const menuGone = await sp.getByRole('menuitem').first().waitFor({ state: 'detached', timeout: 5000 }).then(() => true, () => false);
+      check('story: the bar\'s «בנייה מחדש» opens its menu with Enter (other music or none, the clips\' own sound) and Escape closes it; nothing is committed', menu && menuItems.length >= 1 && menuGone && (await srev()) === r1, { menuItems });
+      await sp.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
+      await sp.keyboard.press('Control+z');
+      let back = false;
+      for (let i = 0; i < 60 && !back; i++) { back = (await shash()) === h0; if (!back) await sleep(150); }
+      const barGone = await sp.getByTestId('story-bar').waitFor({ state: 'detached', timeout: 8000 }).then(() => true, () => false);
+      const kept = !!(await call(`/projects/${stp}`)).body.project.assets[narration];
+      check('story: one Ctrl+Z returns the exact document from before the story, the bar goes with it, and the narration stays in the library', back && barGone && kept, { back, barGone, kept });
+      check('story rows: the page logged no script error', serrs.length === 0, { errors: serrs.slice(0, 4) });
+      await sctx.close();
+    }
+
+    // music that fits the film «מוזיקה שמתאימה לסרט» (wave 7 musicfit, integration): a marked clip says so on the timeline; B brings
+    // its moment to a beat (the clip's place and length unchanged) and one Ctrl+Z undoes it; «התאמה לאורך» → «בצעו» ends the
+    // built-in music on the last picture frame in one undoable transaction. Built-in music only; nobody listens.
+    console.log('\n# Music that fits the film: the marked clip, B, «התאמה לאורך» and «בצעו»');
+    {
+      const vid = path.join(art, 'musicfit.mp4');
+      ff(['-f', 'lavfi', '-t', '14', '-i', 'testsrc2=s=640x360:r=30', '-vf', 'format=yuv420p', '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', vid]);
+      const mp = (await call('/projects', { name: 'musicfit keys', width: 640, height: 360 })).body.project.id as string;
+      const va = await upload(mp, vid);
+      // the clip shows 1 s … 13 s of its file, so a slip has material on both sides (the whole file left no room: noRoom)
+      const placed = await txs(mp, [{ op: 'add_clip', args: { assetId: va.assetId, start: f(0), sourceIn: f(30), duration: f(360), withLinkedAudio: false } }]);
+      const videoClip = placed.results[0].output.clipId as string;
+      const music = (await call(`/projects/${mp}/music`, { styleId: 'music.calm', bars: 8, seed: 1, start: f(0) })).body.clipId as string;
+      await txs(mp, [{ op: 'set_clip_impact', args: { clipId: videoClip, moment: f(37) } }]);
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+      await ctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const pg = await ctx.newPage();
+      const errs: string[] = [];
+      pg.on('pageerror', (e) => errs.push(String(e)));
+      await pg.goto(`${s.ownerUrl}&project=${mp}`);
+      await pg.getByTestId('timecode').waitFor({ timeout: 30000 });
+      const clipOf = async (id: string) => Object.values((await doc2(mp)).sequences as Record<string, { tracks: { clips: MediaClip[] }[] }>).flatMap((q) => q.tracks.flatMap((t) => t.clips)).find((c) => c.id === id)!;
+      const label = (await pg.locator(`.clip[data-clip-id="${videoClip}"]`).getAttribute('aria-label')) ?? '';
+      check('a clip with a marked moment says «רגע מסומן» in its timeline name', label.includes(dictionaries.he['musicfit.clipMarked']), { label });
+      await pg.locator(`.clip[data-clip-id="${videoClip}"]`).click({ position: { x: 4, y: 4 } });
+      const c0 = await clipOf(videoClip);
+      await pg.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await pg.keyboard.press('KeyB');
+      let c1 = c0;
+      for (let i = 0; i < 50 && T.eq(c1.sourceIn, c0.sourceIn); i++) { await sleep(100); c1 = await clipOf(videoClip); }
+      await pg.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await pg.keyboard.press('Control+KeyZ');
+      let c2 = c1;
+      for (let i = 0; i < 50 && !T.eq(c2.sourceIn, c0.sourceIn); i++) { await sleep(100); c2 = await clipOf(videoClip); }
+      check('B brings the marked moment to a beat (the source slips; the clip\'s place and length stay) and one Ctrl+Z undoes it', !T.eq(c1.sourceIn, c0.sourceIn) && T.eq(c1.start, c0.start) && T.eq(c1.duration, c0.duration) && T.eq(c2.sourceIn, c0.sourceIn), { before: T.toSeconds(c0.sourceIn), afterB: T.toSeconds(c1.sourceIn), afterUndo: T.toSeconds(c2.sourceIn) });
+      await openInspectorPage(pg, 'sound');
+      await pg.locator(`.clip[data-clip-id="${music}"]`).click({ position: { x: 4, y: 4 } });
+      await pg.getByTestId(MUSICFIT_TESTIDS.fit).click({ timeout: 10000 });
+      const planned = await pg.waitForFunction((sel) => document.querySelector(sel)?.getAttribute('data-state') === 'plan', `[data-testid="${MUSICFIT_TESTIDS.block}"]`, { timeout: 30000 }).then(() => true, () => false);
+      const r0 = (await call(`/projects/${mp}`)).body.revision as number;
+      const asset0 = (await clipOf(music)).assetId;
+      if (planned) await pg.getByTestId(MUSICFIT_TESTIDS.apply).click();
+      let r1 = r0;
+      for (let i = 0; i < 300 && r1 < r0 + 2; i++) { await sleep(200); r1 = (await call(`/projects/${mp}`)).body.revision as number; }
+      const m1 = await clipOf(music);
+      const end = T.nearestFrameIndex(T.add(m1.start, m1.duration), { num: 30, den: 1 });
+      await pg.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await pg.keyboard.press('Control+KeyZ');
+      let back = false;
+      for (let i = 0; i < 50 && !back; i++) { await sleep(100); back = (await clipOf(music)).assetId === asset0; }
+      check('«התאמה לאורך» plans before anything changes; «בצעו» makes the track and ends the music on the last picture frame (frame 360, no fade) in one transaction; one Ctrl+Z gives the old music back', planned && r1 === r0 + 2 && m1.assetId !== asset0 && end === 360 && !m1.fadeOut && back, { planned, revisions: r1 - r0, end, fadeOut: m1.fadeOut ?? null, back });
+      check('musicfit rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
+      await ctx.close();
     }
 
     await page.close();

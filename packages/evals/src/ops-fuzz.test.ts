@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, creativeProjection, diffEntities, LIBRARY_OPS_BUILT, STEADY_OPS_BUILT, SST, OpError, ProjectSchema, projectVariant, restoreEntities, summarize, timeline, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, creativeProjection, diffEntities, LIBRARY_OPS_BUILT, MUSICFIT_OPS_BUILT, SOURCE_RANGE_OPS_BUILT, STEADY_OPS_BUILT, SST, OpError, ProjectSchema, projectVariant, restoreEntities, summarize, timeline, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, evaluate } from '@pulseframe/engine';
 import { createFuzz } from './ops-fuzz.gen.ts';
 
@@ -46,25 +46,34 @@ function run(seed: number, focus: () => string[] = () => []) {
   // add_cue draws landing in the same run; fixed numbers, no draw from the random stream
   doc = applyTransaction(doc, [{ op: 'add_caption_track', args: { mode: 'manual' } }], ctx()).doc;
   doc = applyTransaction(doc, [{ op: 'add_cue', args: { start: f(30), duration: f(20), text: 'first' } }, { op: 'add_cue', args: { start: f(50), duration: f(20), text: 'second' } }], ctx()).doc;
+  // music that fits the film (wave 7): the measured music under a picture clip near the start, so sync_impact meets beats under a
+  // shown moment (the random draws rarely put the two together); fixed numbers, no draw from the random stream
+  if (MUSICFIT_OPS_BUILT) {
+    const [v, m] = Object.keys(doc.assets) as [string, string];
+    doc = applyTransaction(doc, [{ op: 'add_clip', args: { assetId: m, start: f(0), withLinkedAudio: false } }, { op: 'add_clip', args: { assetId: v, start: f(0), sourceIn: f(30), duration: f(90), withLinkedAudio: false } }], ctx()).doc;
+  }
   // Every sixth step draws among the operations no earlier step of the run has seen accepted (the menu grows with every
   // feature, so plain draws can miss one by chance after an unrelated row changes the stream); every other step draws as before.
   const gen = (step: number) => { const f = step % 6 === 5 ? focus() : []; return f.length ? fz.genFocused(doc, f) : fz.gen(doc); };
 
   const stats = { accepted: 0, refused: 0, byOp: {} as Record<string, [number, number]> };
-  for (let step = 0; step < STEPS; step++) {
-    const call = gen(step);
-    const where = `seed ${seed} (${rate.num}/${rate.den}) step ${step}: ${JSON.stringify(call).slice(0, 300)}`;
+  /** One step with every oracle; returns the operation's output when accepted, null when refused. */
+  const step = (call: OpCall, label: string | number): Record<string, unknown> | null => {
+    const where = `seed ${seed} (${rate.num}/${rate.den}) step ${label}: ${JSON.stringify(call).slice(0, 300)}`;
     const before = doc;
     const beforeJson = JSON.stringify(doc);
     const tally = (stats.byOp[call.op] ??= [0, 0]);
     let next: ProjectDocument;
+    let output: Record<string, unknown> | undefined;
     try {
-      next = applyTransaction(doc, [call], ctx()).doc;
+      const r = applyTransaction(doc, [call], ctx());
+      next = r.doc;
+      output = r.results[0]?.output;
     } catch (e) {
       if (!(e instanceof OpError)) throw new Error(`${where}\n  threw something that is not a typed refusal: ${String((e as Error)?.stack ?? e).slice(0, 600)}`);
       if (JSON.stringify(doc) !== beforeJson) throw new Error(`${where}\n  a refused operation changed the document`);
       stats.refused++; tally[1]++;
-      continue;
+      return null;
     }
     stats.accepted++; tally[0]++;
     if (JSON.stringify(before) !== beforeJson) throw new Error(`${where}\n  the operation mutated its input document`);
@@ -89,6 +98,21 @@ function run(seed: number, focus: () => string[] = () => []) {
     try { restoreEntities(back, changes.map((c) => ({ id: c.id, state: c.before }))); } catch (e) { throw new Error(`${where}\n  the step could not be undone: ${String(e).slice(0, 300)}`); }
     if (creativeProjection(back) !== creativeProjection(before)) throw new Error(`${where}\n  undoing the step does not restore the previous document (entities changed: ${changes.map((c) => c.id).slice(0, 8).join(', ')})`);
     doc = next;
+    return output ?? {};
+  };
+  for (let s = 0; s < STEPS; s++) step(gen(s), s);
+  // marked ranges (wave 7): after the random steps (so no other operation's sequence moves), one fixed add, update and remove of a
+  // pearl through the same oracles, so each of the three is accepted in every run that still has a timed file; fixed numbers, no draw
+  if (SOURCE_RANGE_OPS_BUILT) {
+    const file = Object.values(doc.assets).sort((x, y) => (x.id < y.id ? -1 : 1)).find((a) => (a.kind === 'video' || a.kind === 'audio') && T.cmp(a.duration, T.rt(1, 1)) >= 0);
+    if (file) {
+      const added = step({ op: 'add_source_range', args: { assetId: file.id, start: T.rt(1, 7), end: T.rt(5, 7), label: 'fuzz פנינה' } }, 'pearl add');
+      const rangeId = added?.rangeId as string | undefined;
+      if (rangeId) {
+        step({ op: 'update_source_range', args: { rangeId, start: T.rt(2, 7), end: T.rt(6, 7) } }, 'pearl update');
+        step({ op: 'remove_source_range', args: { rangeId } }, 'pearl remove');
+      }
+    }
   }
   return stats;
 }

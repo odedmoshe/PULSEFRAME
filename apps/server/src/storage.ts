@@ -32,6 +32,22 @@ export function setStorageHooks(store: Store, hooks: StorageHooks | null): void 
   else hooksOf.delete(store);
 }
 
+/**
+ * Picture search (wave 7 search track; search/contract.ts): the index keeps vectors per content hash outside the database. Deleting a
+ * project and storage clean-up tell it which hashes may have no project left; it keeps the rows of a hash some current project still
+ * holds. A second registry beside StorageHooks (whose one slot is the render cache's). Synchronous; a failure is logged, never fatal.
+ */
+export interface SearchIndexHooks { hashesMaybeGone(contentHashes: string[]): void }
+const searchHooksOf = new WeakMap<Store, SearchIndexHooks>();
+export function setSearchIndexHooks(store: Store, hooks: SearchIndexHooks | null): void {
+  if (hooks) searchHooksOf.set(store, hooks);
+  else searchHooksOf.delete(store);
+}
+function searchIndexMaybeGone(store: Store, hashes: string[]): void {
+  if (!hashes.length) return;
+  try { searchHooksOf.get(store)?.hashesMaybeGone(hashes); } catch (e) { console.error('the search index purge failed', e); }
+}
+
 const ownerOnly = (p: Principal, what: string) => { if (p.kind !== 'user') throw new ApiError(403, 'owner_required', `only the owner can ${what}`); };
 const GRACE_MS = 10 * 60_000;
 
@@ -53,6 +69,8 @@ export function deleteProject(store: Store, by: Principal, projectId: string, co
   for (const f of outputs) fs.rmSync(path.join(store.outDir, path.basename(f)), { force: true });
   // Rendered segments hold pictures of the project: the ones no other project shares go with it (ADR-0024).
   hooksOf.get(store)?.purgeProject(projectId);
+  // Picture search (wave 7): the vectors of its files go too, unless another project still holds the same file
+  searchIndexMaybeGone(store, [...new Set(Object.values(doc.assets).map((a) => a.contentHash))]);
   store.events.emit('projects', { projectId, change: 'deleted' });
   return { deleted: { id: projectId, name: doc.name }, exportsRemoved: outputs.length, note: 'Media files are kept until storage clean-up is run, because other projects may use the same files.' };
 }
@@ -227,5 +245,7 @@ export function collectGarbage(store: Store, by: Principal, apply: boolean, now 
     if (has) store.db.prepare('DELETE FROM derivatives WHERE asset_hash IN (?, ?) OR blob_hash IN (?, ?)').run(hash, `sha256:${hash}`, hash, `sha256:${hash}`);
     removed++; bytes += size;
   }
+  // Picture search (wave 7): no project holds these files any more, so their vectors go too
+  searchIndexMaybeGone(store, report.unreferenced.hashes.map((h) => (h.startsWith('sha256:') ? h : `sha256:${h}`)));
   return { applied: true, removed: { files: removed, bytes }, note: 'Removed files cannot be recovered.' };
 }

@@ -1,7 +1,7 @@
 /**
  * The accessibility audit scenarios of the stabilisation block (wave 7 stabilise track): the block not measured, measuring (with
  * «עצירה»), on with the slider and the crop line, limited (the clip's zoom is smaller than its frames need), refused; each in the
- * language and theme the audit runs it in. Each scenario PREPARES the page and says whether the state is shown (and whether it is
+ * language and theme (dark and light) the audit runs it in. Each scenario PREPARES the page and says whether the state is shown (and whether it is
  * modal); a11y-audit.ts then runs its full heuristic on it.
  *
  * The clip is a SYNTHETIC shaky video made here (packages/fixtures steady.ts, F1, 240 frames at 480×270) in its own project. The
