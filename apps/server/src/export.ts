@@ -15,10 +15,10 @@ import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { collectCredits, creditDue, creditsView, type CreditsView } from '@pulseframe/core';
 import { AUTO_SELF_CHECK_CLEAN_EXPORTS, EXPORT_MODES, INCREMENTAL_NOT_BUILT_REASON, RENDER_CACHE_BLOCKERS, SEGMENTED_ROUTE, SELF_CHECK_MODES, type RenderCacheStatus, type SegmentedExportReport } from '@pulseframe/core';
-import { SEND_API_REFUSALS, SEND_FIT, SIZE_FIT_BUILT, type SizeFitFault, type SizeFitManifest } from '@pulseframe/core';
+import { assembleChecks, flagsOf, pictureExpectation, planSizeFit, SEND_API_REFUSALS, SEND_FIT, SIZE_FIT_BUILT, type ExportFinding, type PictureChecks, type SizeFitFault, type SizeFitManifest, type SizeFitOutput, type SoundChecks } from '@pulseframe/core';
 import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
-import { AUDIO_FX_ENGINE, audioPlan, captionCues, soundEnd, type AudioPlan, type PlannedAudioClip } from '@pulseframe/engine';
+import { AUDIO_FX_ENGINE, audioPlan, captionCues, PictureCheck, soundEnd, type AudioPlan, type FlashCells, type PlannedAudioClip } from '@pulseframe/engine';
 import { renderMix, type MixResult } from './audiomix.ts';
 import { limiter } from './analysis.ts';
 
@@ -26,6 +26,7 @@ const stillLimit = limiter(2, 32);
 import { ffprobe } from './ingest.ts';
 import { assertStorageRoom } from './storage.ts';
 import { FrameFlashCheck, type PhotosensitivityReport } from './flashCheck.ts';
+import { assertOutputTags, runSizeFit } from './sizeFit.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 import { blobPresent, MISSING_MEDIA_HINT } from './mediaPresence.ts';
 import type { ComputeLane } from './aiContracts.ts';
@@ -110,6 +111,19 @@ const BPP = { draft: 0.03, standard: 0.07, high: 0.14 } as const;
 /** `audio`: the audio plan version and the sound-effect runtime (ADR-0010) every route mixes with. */
 export const ENGINE = { compositor: 'canvas2d/1', evaluator: 'evaluate/1', audio: `plan/2 ${AUDIO_FX_ENGINE}`, fontFamilies: FONT_CATALOG.map((f) => f.family) } as const;
 
+/** The single-pass encoder of MP4 and WebM: RGBA frames on stdin + the WAV → the file (exported for the metadata test, exportMetadata.test.ts). */
+export function singlePassArgs(o: { format: 'mp4-h264-aac' | 'webm-vp9-opus'; quality: 'draft' | 'standard' | 'high'; width: number; height: number; frameRate: { num: number; den: number }; wav: string; outFile: string }): string[] {
+  const mp4 = o.format === 'mp4-h264-aac', crf = String(CRF[o.format][o.quality]);
+  return [
+    '-hide_banner', '-v', 'error', '-y',
+    '-f', 'rawvideo', '-pix_fmt', 'rgba', '-video_size', `${o.width}x${o.height}`, '-framerate', `${o.frameRate.num}/${o.frameRate.den}`, '-i', 'pipe:0',
+    '-i', o.wav, '-map', '0:v:0', '-map', '1:a:0',
+    '-vf', EXPORT_PIXEL_FILTER,
+    ...(mp4 ? ['-c:v', 'libx264', '-preset', o.quality === 'draft' ? 'veryfast' : 'medium', '-crf', crf, '-profile:v', 'high'] : ['-c:v', 'libvpx-vp9', '-crf', crf, '-b:v', '0', '-row-mt', '1', '-deadline', 'good', '-cpu-used', o.quality === 'high' ? '2' : '4']),
+    ...EXPORT_COLOR_TAGS,
+    ...(mp4 ? ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-f', 'mp4'] : ['-c:a', 'libopus', '-b:a', '160k', '-f', 'webm']), o.outFile,
+  ];
+}
 /** Frames of the exported range (relative to it), in the order the render page draws them: [first, first + count). */
 export interface FrameRun { first: number; count: number }
 /**
@@ -196,7 +210,7 @@ export interface Manifest {
   fit?: SizeFitManifest;
 }
 /** `hint`: the fix for this blocker when it has one of its own; the refusal then offers it instead of the generic advice. */
-export interface Blocker { code: string; message: string; ids: string[]; hint?: string }
+export interface Blocker { code: string; message: string; ids: string[]; hint?: string; /** size_fit_too_small only: the smallest target that works for this film (bytes) */ minBytes?: number }
 
 /** The export warnings of library content (wave 7 library track); preflight shows credits_for_description and stock_people as notes. */
 export const LIBRARY_EXPORT_CODES = ['non_commercial_content', 'credits_for_description', 'credit_not_on_screen', 'stock_people'] as const;
@@ -272,7 +286,7 @@ export class Exporter {
   plan(doc: ProjectDocument, revision: number, raw: unknown): { manifest: Manifest; blockers: Blocker[]; warnings: Blocker[] } {
     const parsed = ExportOptionsSchema.safeParse(raw ?? {});
     if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error), { issues: parsed.error.issues });
-    const options = parsed.data;
+    let options = parsed.data;
     const target = { sequenceId: options.sequenceId, variantId: options.variantId };
     const targetWarnings = outputWarnings(doc, target);
     doc = outputDoc(doc, target);
@@ -282,8 +296,8 @@ export class Exporter {
     const warnings: Blocker[] = [];
     if (targetWarnings.includes('variant_over_sequence_format')) warnings.push({ code: 'variant_over_sequence_format', message: `format variant ${options.variantId} replaces the own frame of sequence ${options.sequenceId}`, ids: [options.sequenceId!, options.variantId!] });
     const even = (n: number) => Math.max(2, Math.round((n * options.scale) / 2) * 2);
-    const outWidth = even(width);
-    const outHeight = even(height);
+    let outWidth = even(width);
+    let outHeight = even(height);
     let first = 0;
     let frames = total;
     if (options.format === 'png') {
@@ -296,6 +310,23 @@ export class Exporter {
       if (frames <= 0) blockers.push({ code: 'empty_range', message: `range [${options.range.startFrame}, ${options.range.endFrame}) contains no frames (sequence has ${total})`, ids: [] });
     }
     if (total === 0) blockers.push({ code: 'empty_sequence', message: 'the sequence has no clips to export', ids: [] });
+    // size-fit (wave 7 send, C4–C6): the plan picks the picture size (never above the asked scale) and the rates; the job then
+    // renders the full-quality intermediate at that size (quality high) and fits it. Segment keys see only quality, size and frames,
+    // so a fit export keys exactly as a plain high-quality export at the fitted scale (sizeFit.test.ts).
+    let fit: SizeFitManifest | undefined;
+    if (options.sizeFit && SIZE_FIT_BUILT) {
+      const F = SEND_API_REFUSALS;
+      if (options.format !== 'mp4-h264-aac') blockers.push({ code: F.sizeFitFormat.code, message: F.sizeFitFormat.message(options.format), ids: [], hint: F.sizeFitFormat.hint });
+      else if (frames > 0) {
+        const p = planSizeFit({ targetBytes: options.sizeFit.targetBytes, frames, rate: frameRate, width, height, sampleRate, maxScale: options.scale });
+        if (!p.ok) blockers.push({ code: F.sizeFitTooSmall.code, message: F.sizeFitTooSmall.message(options.sizeFit.targetBytes, p.minBytes), ids: [], hint: F.sizeFitTooSmall.hint, minBytes: p.minBytes });
+        else {
+          options = { ...options, scale: p.scale, quality: 'high' };
+          outWidth = p.width; outHeight = p.height;
+          fit = { targetBytes: options.sizeFit!.targetBytes, scale: p.scale, width: p.width, height: p.height, videoBitrate: p.videoBitrate, audioBitrate: p.audioBitrate, overheadBytes: p.overheadBytes, bitsPerPixelFrame: p.bitsPerPixelFrame, basis: p.basis };
+        }
+      }
+    }
     // life line (ADR-0021): a title field without data would silently leave out words the author placed, so it stops an export of
     // moving picture, like a missing font. A still is never stopped (the editor's own frames must draw, with the field empty),
     // and sound alone has no titles. The preflight report lists the same issues with their frame ranges (preflight.ts).
@@ -350,7 +381,7 @@ export class Exporter {
       if (outWidth * outHeight * Math.max(0, frames) > 640 * 360 * 600) warnings.push({ code: 'gif_large', message: 'this GIF will be large and limited to 256 colours per frame; consider a shorter range or scale 0.5', ids: [] });
     }
     blockers.push(...incrementalBlockers(options, this.incremental));
-    // size-fit (wave 7 send): an honest blocker until worker B builds the fit (then size_fit_format / size_fit_too_small from core planSizeFit)
+    // size-fit (wave 7 send): an honest blocker while the fit plan is not built (SIZE_FIT_BUILT false)
     if (options.sizeFit && !SIZE_FIT_BUILT) blockers.push({ code: SEND_API_REFUSALS.sizeFitNotBuilt.code, message: SEND_API_REFUSALS.sizeFitNotBuilt.message(), ids: [], hint: SEND_API_REFUSALS.sizeFitNotBuilt.hint });
     if (options.captions.startsWith('sidecar') && !doc.sequences[doc.mainSequenceId]!.tracks.some((t) => t.kind === 'caption')) warnings.push({ code: 'no_captions', message: 'a caption file was requested but the project has no caption track; none will be written', ids: [] });
     if (options.format === 'webm-vp9-opus' && doc.settings.sampleRate !== 48000) warnings.push({ code: 'resampled_audio', message: 'Opus is encoded at 48 kHz; audio will be resampled', ids: [] });
@@ -365,7 +396,7 @@ export class Exporter {
       ? { bytes: Math.round((outWidth * outHeight * frames * BPP[options.quality]) / 8 + seconds * 24_000), basis: 'heuristic bits-per-pixel for the chosen quality; real size depends on content' }
       : options.format === 'wav' ? { bytes: Math.round(seconds * sampleRate * 4 + 44), basis: 'exact for 16-bit stereo PCM' } : { bytes: null, basis: 'not estimated for stills' };
     return {
-      manifest: { revision, engine: { ...ENGINE, schemaVersion: doc.schemaVersion }, options, output: { width: outWidth, height: outHeight, firstFrame: first, frames: Math.max(0, frames), frameRate, sampleRate }, assets, fonts, effects, transitions, audioEffects, estimate },
+      manifest: { revision, engine: { ...ENGINE, schemaVersion: doc.schemaVersion }, options, output: { width: outWidth, height: outHeight, firstFrame: first, frames: Math.max(0, frames), frameRate, sampleRate }, assets, fonts, effects, transitions, audioEffects, estimate, ...(fit ? { fit } : {}) },
       blockers, warnings,
     };
   }
@@ -424,6 +455,8 @@ export class Exporter {
     const p = retryOf ? { doc: retryOf.input.snapshot as ProjectDocument, revision: retryOf.input.revision as number } : this.store.getProject(projectId);
     const { manifest, blockers, warnings } = this.plan(p.doc, p.revision, retryOf ? retryOf.input.manifest.options : rawOptions);
     if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, blockers[0]!.hint ?? GENERIC_BLOCKER_HINT);
+    // size-fit (C6): the full-quality intermediate and the fitted file live side by side until the publish; ask room for both now
+    if (manifest.fit) assertStorageRoom(this.store, (manifest.estimate.bytes ?? 0) + manifest.fit.targetBytes, retryOf ? 'retry this export' : 'start an export at a target size');
     // A variant export snapshots the PROJECTED document, so the job renders exactly what was planned even if the variant changes later.
     // Snapshot what will be rendered. For a clean picture, caption tracks are hidden in the snapshot; a requested subtitle file
     // is fixed now from the same document, so later edits cannot change it.
@@ -572,6 +605,8 @@ export class Exporter {
       let renderStageMs: unknown = null;
       let validation: Record<string, unknown>;
       let segmentsReport: SegmentedExportReport | null = null;
+      // Picture checks (wave 7 send, C10): fed with the flash check's own cells on both routes; report only, never blocks.
+      const picture = pictureCheckFor(doc, options.format, output);
 
       // The fast export runs only through the segmented route (ADR-0024), which is wired after its workers; until then a job asking
       // for it (planning refuses it, so only a hand-made job could) fails honestly instead of being exported another way.
@@ -595,6 +630,7 @@ export class Exporter {
             } finally { this.sessions.delete(opened.token); token = undefined; }
           },
           mixAudio: (wavFile) => this.renderAudio(doc, firstSample, totalSamples, wavFile, canceled),
+          ...(picture ? { onCells: (c: FlashCells) => picture.feed(c) } : {}),
           canceled,
           stage: (text) => this.store.updateJob(jobId, { stage: text }),
           onProcess: (p) => { if (this.running) this.running.ff = p ?? undefined; },
@@ -629,23 +665,14 @@ export class Exporter {
           const opened = this.open(doc, job.input.revision, jobId, { width: output.width, height: output.height, firstFrame: output.firstFrame, frames: output.frames });
           token = opened.token;
           const s = opened.session;
-          if (output.frames > 1) s.flash = new FrameFlashCheck(output.width, output.height, frameRate);
+          if (output.frames > 1) s.flash = new FrameFlashCheck(output.width, output.height, frameRate, picture ? (c) => picture.feed(c) : undefined);
           const mp4 = options.format === 'mp4-h264-aac';
-          const crf = gif ? '' : String(CRF[options.format as 'mp4-h264-aac' | 'webm-vp9-opus'][options.quality]);
           const ff = spawn('ffmpeg', gif ? [
             '-hide_banner', '-v', 'error', '-y',
             '-f', 'rawvideo', '-pix_fmt', 'rgba', '-video_size', `${output.width}x${output.height}`, '-framerate', `${frameRate.num}/${frameRate.den}`, '-i', 'pipe:0',
             // One palette for the whole clip, then ordered dithering: stable colours from frame to frame.
             '-filter_complex', '[0:v]split[a][b];[a]palettegen=stats_mode=full[p];[b][p]paletteuse=dither=bayer:bayer_scale=4', '-loop', '0', '-f', 'gif', partial,
-          ] : [
-            '-hide_banner', '-v', 'error', '-y',
-            '-f', 'rawvideo', '-pix_fmt', 'rgba', '-video_size', `${output.width}x${output.height}`, '-framerate', `${frameRate.num}/${frameRate.den}`, '-i', 'pipe:0',
-            '-i', wav, '-map', '0:v:0', '-map', '1:a:0',
-            '-vf', EXPORT_PIXEL_FILTER,
-            ...(mp4 ? ['-c:v', 'libx264', '-preset', options.quality === 'draft' ? 'veryfast' : 'medium', '-crf', crf, '-profile:v', 'high'] : ['-c:v', 'libvpx-vp9', '-crf', crf, '-b:v', '0', '-row-mt', '1', '-deadline', 'good', '-cpu-used', options.quality === 'high' ? '2' : '4']),
-            ...EXPORT_COLOR_TAGS,
-            ...(mp4 ? ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-f', 'mp4'] : ['-c:a', 'libopus', '-b:a', '160k', '-f', 'webm']), partial,
-          ]);
+          ] : singlePassArgs({ format: options.format as 'mp4-h264-aac' | 'webm-vp9-opus', quality: options.quality, width: output.width, height: output.height, frameRate, wav, outFile: partial }));
           this.running.ff = ff;
           let stderr = '';
           ff.stderr.on('data', (d) => (stderr += d));
@@ -677,7 +704,24 @@ export class Exporter {
         }
       }
       if (canceled()) throw new Error('canceled');
-      fs.renameSync(partial, final);
+      // No metadata beyond the allow-list on any MP4 output (C8): single pass, segmented join and fitted file alike.
+      if (options.format === 'mp4-h264-aac') { this.store.updateJob(jobId, { stage: 'checking the export' }); await assertOutputTags(partial); }
+      // Size-fit (C4–C7): after the route's own validation, before the publish; on failure nothing is published.
+      let publish = partial;
+      let fitOut: SizeFitOutput | null = null;
+      if (manifest.fit && options.sizeFit) {
+        const r = await runSizeFit({
+          intermediate: partial, wav: path.join(work, 'mix.wav'), workDir: work, output, fit: manifest.fit, fault: this.fitFault, canceled,
+          stage: (text) => this.store.updateJob(jobId, { stage: text }),
+          onProcess: (p) => { if (this.running) this.running.ff = p ?? undefined; },
+        });
+        publish = r.file;
+        fitOut = r.fit;
+        if (r.validation) validation = { ...r.validation, intermediate: validation };
+      }
+      const checks = picture ? assembleChecks(picture.result(output.firstFrame), soundChecksOf(audioMix)) : null;
+      if (canceled()) throw new Error('canceled');
+      fs.renameSync(publish, final);
       let captionsOut: { file: string; format: string; cues: number } | null = null;
       if (job.input.sidecar) {
         const file = `${jobId}.captions.${job.input.sidecar.format}`;
@@ -697,7 +741,7 @@ export class Exporter {
         status: 'succeeded', stage: null,
         output: {
           file: path.basename(final), mimeType: { mp4: 'video/mp4', webm: 'video/webm', gif: 'image/gif', wav: 'audio/wav', png: 'image/png' }[ext], captions: captionsOut, ...(licence ? { licence } : {}), bytes, revision: job.input.revision, route: segmentsReport ? SEGMENTED_ROUTE : 'server-software-canvas2d', ...(segmentsReport ? { segments: segmentsReport } : {}), options, manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, audioEffects: manifest.audioEffects ?? [], output },
-          estimate: { ...manifest.estimate, actualBytes: bytes }, ...(flashReport ? { photosensitivity: flashReport } : {}), audioClipsMixed: audioClips, audio: audioMix && { mixPeakDbfs: audioMix.mixPeakDbfs, clipped: audioMix.clipped, loudness: audioMix.loudness }, validation, renderStageMs, wallSeconds: wall, realtimeFactor: output.frames > 1 ? (output.frames * frameRate.den) / frameRate.num / wall : null,
+          estimate: { ...manifest.estimate, actualBytes: bytes }, ...(flashReport ? { photosensitivity: flashReport } : {}), ...(fitOut ? { fit: fitOut } : {}), ...(checks ? { checks } : {}), audioClipsMixed: audioClips, audio: audioMix && { mixPeakDbfs: audioMix.mixPeakDbfs, clipped: audioMix.clipped, loudness: audioMix.loudness }, validation, renderStageMs, wallSeconds: wall, realtimeFactor: output.frames > 1 ? (output.frames * frameRate.den) / frameRate.num / wall : null,
         },
       });
     } catch (e: any) {
@@ -715,4 +759,33 @@ export class Exporter {
       fs.rmSync(work, { recursive: true, force: true });
     }
   }
+}
+
+/** Picture checks of one export (wave 7 send, C10): the document's expectation, a PictureCheck fed with the flash cells, and its findings. */
+export const PICTURE_CHECK_METHOD = 'HEURISTIC on the 24 × 24 cells of the flash check (block means of a sample, so a small detail can be missed): black = every cell at or under 8-bit level 4 for at least 0.5 s; frozen = every cell unchanged for at least 2 s while the document says a video plays (a video clip that is not a freeze frame, inside its source, on a visible track, not covered by an opaque full-frame clip; opacity keys and effects are not modelled). Report only.';
+export interface PictureFeed { feed(cells: FlashCells): void; result(firstFrame: number): PictureChecks }
+export function pictureCheckFor(doc: ProjectDocument, format: ExportOptions['format'], output: Manifest['output']): PictureFeed | null {
+  if (!(format === 'mp4-h264-aac' || format === 'webm-vp9-opus' || format === 'gif') || output.frames <= 1) return null;
+  const expect = pictureExpectation(doc, doc.mainSequenceId, output.firstFrame, output.frames);
+  const moving = flagsOf(expect.moving, output.frames), drawn = flagsOf(expect.drawn, output.frames);
+  const check = new PictureCheck(output.frameRate);
+  let k = 0;
+  return {
+    feed(cells) { check.push(cells, moving[k++] === 1); },
+    result(firstFrame) {
+      const at = (f: number) => T.frameTime(firstFrame + f, output.frameRate);
+      const findings: ExportFinding[] = check.runs().map((r) => {
+        let drawnFrames = 0;
+        for (let f = r.fromFrame; f < r.toFrame; f++) drawnFrames += drawn[f]!;
+        return { kind: r.kind, from: at(r.fromFrame), to: at(r.toFrame), ...(r.kind === 'black' ? { context: drawnFrames ? 'picture' as const : 'gap' as const } : {}), measured: { ...r.measured, drawnFrames } };
+      });
+      // every frame must have been fed, or the report would describe part of the film as the whole
+      return k === output.frames ? { method: PICTURE_CHECK_METHOD, status: 'measured', findings } : { method: `${PICTURE_CHECK_METHOD} Not measured: ${k} of ${output.frames} frames were checked.`, status: 'not_measured', findings: [] };
+    },
+  };
+}
+/** The sound half of the report: what the mix measured on its written 16-bit WAV (worker A), or an honest not-measured state. */
+export function soundChecksOf(mix: MixResult | null): SoundChecks {
+  if (mix?.checks) return mix.checks;
+  return { method: mix ? 'Not measured in this build: the sound checks of the written 16-bit WAV are not built yet.' : 'Not measured: this export has no sound.', status: 'not_measured', findings: [] };
 }

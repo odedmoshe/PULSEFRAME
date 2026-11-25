@@ -21,13 +21,21 @@ export const PHOTOSENSITIVITY_METHOD = 'General and red flash thresholds of WCAG
 export class FrameFlashCheck {
   private readonly analyser: FlashAnalyser;
   private readonly frameBytes: number;
-  constructor(private readonly width: number, private readonly height: number, private readonly rate: T.Rate) {
+  /**
+   * `onCells` (wave 7 send, C10): each frame's cells are handed on, in order, to the picture checks (engine PictureCheck), so
+   * black and frozen stretches are read from the very cells the flash check reads; nothing here changes for the flash report.
+   */
+  constructor(private readonly width: number, private readonly height: number, private readonly rate: T.Rate, private readonly onCells?: (cells: FlashCells) => void) {
     this.analyser = new FlashAnalyser(rate.num / rate.den);
     this.frameBytes = width * height * 4;
   }
   /** RGBA frames, in order, a whole number of them (as the render page posts them). */
   feed(data: Uint8Array): void {
-    for (let o = 0; o + this.frameBytes <= data.length; o += this.frameBytes) this.analyser.push(flashCells(data.subarray(o, o + this.frameBytes), this.width, this.height));
+    for (let o = 0; o + this.frameBytes <= data.length; o += this.frameBytes) {
+      const cells = flashCells(data.subarray(o, o + this.frameBytes), this.width, this.height);
+      this.analyser.push(cells);
+      this.onCells?.(cells);
+    }
   }
   /** The result, with frame numbers turned into timeline times: the export's frame 0 is timeline frame `firstFrame`. */
   report(firstFrame: number): PhotosensitivityReport {
