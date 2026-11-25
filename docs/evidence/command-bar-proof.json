@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T00:50:11.065Z",
+  "ranAt": "2026-11-25T01:21:02.207Z",
   "result": "PASSED",
   "counts": {
     "pass": 23,
@@ -307,14 +307,14 @@
       "detail": [
         {
           "text": "חתוך כאן",
-          "browser": "e05bbe37f5b700a561c476c433841394401f30c7fd8bc2484dd2a8acc7000c49",
-          "node": "e05bbe37f5b700a561c476c433841394401f30c7fd8bc2484dd2a8acc7000c49",
+          "browser": "2c9edd4193adbb92997afd18e44eb4fe5e348e63813fadd95ed3756da4d3ddf6",
+          "node": "2c9edd4193adbb92997afd18e44eb4fe5e348e63813fadd95ed3756da4d3ddf6",
           "same": true
         },
         {
           "text": "מחק את הקליפ",
-          "browser": "b953034ac21903e1a595579d5a56e894ddc260da29e8d50701fcadc525b7fd91",
-          "node": "b953034ac21903e1a595579d5a56e894ddc260da29e8d50701fcadc525b7fd91",
+          "browser": "8576cc286cd94ccae124e85398adb97dac580d65e75ae7ef9f3e546bd863ce88",
+          "node": "8576cc286cd94ccae124e85398adb97dac580d65e75ae7ef9f3e546bd863ce88",
           "same": true
         },
         {
@@ -331,8 +331,8 @@
         },
         {
           "text": "הוסף מעבר בין כל הקליפים",
-          "browser": "b25b0abe1942af0157173005643314cd2a7a0f6b862c347a467702d50d6d8c09",
-          "node": "b25b0abe1942af0157173005643314cd2a7a0f6b862c347a467702d50d6d8c09",
+          "browser": "d1a68b906c9f9c6771005c98cfeebc03f3ddec7c79a4e02a18de8125a69808bf",
+          "node": "d1a68b906c9f9c6771005c98cfeebc03f3ddec7c79a4e02a18de8125a69808bf",
           "same": true
         }
       ]
@@ -611,14 +611,14 @@
       "detail": [
         {
           "text": "split here",
-          "browser": "1bd6cbd1a4a8ede28e0174750b87b1ce223eadb12556ead74a549d4933f17132",
-          "node": "1bd6cbd1a4a8ede28e0174750b87b1ce223eadb12556ead74a549d4933f17132",
+          "browser": "b6807739d1c94d2cb3ed5e15ae4be7939ae05174258c0eab7e4a7ae885d2d07c",
+          "node": "b6807739d1c94d2cb3ed5e15ae4be7939ae05174258c0eab7e4a7ae885d2d07c",
           "same": true
         },
         {
           "text": "delete the clip",
-          "browser": "1b4596cd0785a00fab7d1e3cb59014c338e1ba184b2c31b1d7d94e34dab9593a",
-          "node": "1b4596cd0785a00fab7d1e3cb59014c338e1ba184b2c31b1d7d94e34dab9593a",
+          "browser": "c08e6288d09bbc0b0657571e11fd654aa5830e5987be694ab2fb8c4bec08ef48",
+          "node": "c08e6288d09bbc0b0657571e11fd654aa5830e5987be694ab2fb8c4bec08ef48",
           "same": true
         },
         {
@@ -635,8 +635,8 @@
         },
         {
           "text": "add transitions between all clips",
-          "browser": "8087d7bfa06f7b7f3fde3e227813715115c1688d77368ed42445937940cd41e7",
-          "node": "8087d7bfa06f7b7f3fde3e227813715115c1688d77368ed42445937940cd41e7",
+          "browser": "ddb99c20586f624d2c5be1a7e5168fca251ce48ee74aa32e4e44e274c5149183",
+          "node": "ddb99c20586f624d2c5be1a7e5168fca251ce48ee74aa32e4e44e274c5149183",
           "same": true
         }
       ]
@@ -680,7 +680,7 @@
       "detail": {
         "proposer": {
           "status": 200,
-          "proposalId": "prp_81d6xvdlxpY"
+          "proposalId": "prp_I3E4R62QHgk"
         },
         "observer": 403,
         "revisionsMoved": 0
@@ -959,7 +959,7 @@
         "assistantFilesInBackup": [],
         "filesHoldingTheKey": [],
         "scanned": {
-          "responses": 486,
+          "responses": 490,
           "logLines": 49
         },
         "inResponses": 0,

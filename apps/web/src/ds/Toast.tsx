@@ -8,17 +8,20 @@ import { CheckIcon, CloseIcon, DS, InfoIcon, WarnIcon, cx, isolate } from './uti
 /** The open modal that holds the toast region (toastHost.ts); null = the page. */
 const toastHosts = createHostStack<HTMLElement>();
 /** What the region draws: the queue and the words around it. Shared by the page region and the slot of an open modal. */
-interface RegionData { queue: Entry[]; dismiss: (id: string) => void; closeLabel: string; label: string; clock: ToastClock }
+export interface RegionData { queue: Entry[]; dismiss: (id: string) => void; closeLabel: string; label: string; clock: ToastClock }
 const RegionCtx = createContext<RegionData | null>(null);
 
-function ToastRegion({ where }: { where: 'page' | 'modal' }) {
-  const d = useContext(RegionCtx);
-  if (!d) return null;
+/** The region's markup for the place that holds it. Exported for the unit tests, which have no DOM (toastNested.test.ts). */
+export function ToastRegionView({ where, d }: { where: 'page' | 'modal'; d: RegionData }) {
   return (
     <div className={cx(DS, 'pf-toasts')} role="region" aria-label={d.label} data-testid="toasts" data-host={where}>
       {d.queue.map((t) => <ToastView key={t.id} t={t} onDismiss={() => d.dismiss(t.id)} closeLabel={d.closeLabel} clock={d.clock} />)}
     </div>
   );
+}
+function ToastRegion({ where }: { where: 'page' | 'modal' }) {
+  const d = useContext(RegionCtx);
+  return d ? <ToastRegionView where={where} d={d} /> : null;
 }
 
 /**

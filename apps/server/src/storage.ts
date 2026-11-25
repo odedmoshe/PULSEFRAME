@@ -43,10 +43,13 @@ export function deleteProject(store: Store, by: Principal, projectId: string, co
   if (active.n > 0) throw new ApiError(409, 'jobs_running', 'this project has jobs that are queued or running; cancel them or wait, then delete', { jobs: active.n });
   const outputs = (store.db.prepare('SELECT output FROM jobs WHERE project_id = ?').all(projectId) as { output: string | null }[]).flatMap((r) => { try { const o = JSON.parse(r.output ?? 'null'); return [o?.file, o?.captions?.file].filter((x): x is string => typeof x === 'string'); } catch { return []; } });
   const has = (table: string) => !!store.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table);
-  store.db.transaction(() => {
+  // A deleted project's rows leave the database FILE too (Store.erasing: freed bytes zeroed, the write-ahead log folded and cut),
+  // so a backup made afterwards holds none of them: its history, its proposals and what the language assistant said about it
+  // (ADR-0027, note of 2026-11-25: the model's sentence does not outlive its proposal).
+  store.erasing(() => {
     for (const t of ['transactions', 'outbox', 'jobs', 'entity_versions', 'proposals', 'approvals', 'project_controls']) if (has(t)) store.db.prepare(`DELETE FROM ${t} WHERE project_id = ?`).run(projectId);
     store.db.prepare('DELETE FROM projects WHERE id = ?').run(projectId);
-  })();
+  });
   for (const f of outputs) fs.rmSync(path.join(store.outDir, path.basename(f)), { force: true });
   // Rendered segments hold pictures of the project: the ones no other project shares go with it (ADR-0024).
   hooksOf.get(store)?.purgeProject(projectId);

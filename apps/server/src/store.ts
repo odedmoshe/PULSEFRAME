@@ -343,6 +343,23 @@ export class Store {
     this.db.prepare('INSERT OR IGNORE INTO blobs (hash, size, mime, created_at) VALUES (?,?,?,?)').run(hash, size, mime, now());
   }
 
+  /**
+   * Run a write that removes private words from rows so that they also leave the FILES: inside one transaction with SQLite's
+   * secure_delete on (freed bytes of the changed rows are overwritten with zeros, not left in the page), and with the write-ahead
+   * log folded into the database and cut to nothing afterwards (the log held the earlier versions of those pages). A backup
+   * made after this holds none of them. The checkpoint is best effort: a reader in another connection can hold it back until
+   * the next one. Not promised: what a filesystem or a disk keeps of blocks it has freed.
+   */
+  erasing<R>(write: () => R): R {
+    const was = this.db.pragma('secure_delete', { simple: true });
+    this.db.pragma('secure_delete = ON');
+    try { return this.db.transaction(write)(); }
+    finally {
+      this.db.pragma(`secure_delete = ${was === 2 ? 'FAST' : was ? 'ON' : 'OFF'}`);
+      try { this.db.pragma('wal_checkpoint(TRUNCATE)'); } catch { /* another connection reads: the next checkpoint folds it */ }
+    }
+  }
+
   // ---------- jobs ----------
   private jobRow = (r: any): JobRow => ({ id: r.id, projectId: r.project_id, type: r.type, actor: r.actor, status: r.status, stage: r.stage, attempt: r.attempt, input: JSON.parse(r.input), output: r.output && JSON.parse(r.output), error: r.error && JSON.parse(r.error), createdAt: r.created_at, updatedAt: r.updated_at });
   createJob(projectId: string, type: string, actor: string, input: unknown): JobRow {
