@@ -53,8 +53,9 @@ export const MODIFIED_LINE = { he: '(קוצר בעורך: הוסרו תיבות 
 /**
  * The library files an asset stems from: itself when it carries a library record, and, through provider results
  * (provenance.derived.sourceAssetIds) and generated speech made from a reference recording (provenance.voice.referenceAssetId),
- * every library file it was made from. A file made from a library file carries its duties: its credit, its non-commercial mark and
- * the archive rule. Cycles and missing ids are ignored. In the order met, without repeats.
+ * every library file it was made from, and the instrument sources of built-in music made with recorded instruments
+ * (provenance.instruments.records: one pair per record, all with that asset). A file made from a library file carries its duties: its
+ * credit, its non-commercial mark and the archive rule. Cycles and missing ids are ignored. In the order met, without repeats.
  */
 export function libraryOrigins(doc: ProjectDocument, assetId: string): { asset: Asset; record: LibraryRecord }[] {
   const out: { asset: Asset; record: LibraryRecord }[] = [];
@@ -64,6 +65,8 @@ export function libraryOrigins(doc: ProjectDocument, assetId: string): { asset: 
     seen.add(id);
     const a = doc.assets[id]!;
     if (a.provenance.library) out.push({ asset: a, record: a.provenance.library });
+    // built-in music made with recorded instruments (wave 7 instruments): one record per library source of its kit — the union of duties
+    for (const r of a.provenance.instruments?.records ?? []) out.push({ asset: a, record: r });
     for (const s of a.provenance.derived?.sourceAssetIds ?? []) visit(s);
     if (a.provenance.voice?.referenceAssetId) visit(a.provenance.voice.referenceAssetId);
   };
@@ -125,7 +128,10 @@ export function collectCredits(doc: ProjectDocument, opts: { sequenceId?: string
 }
 /** Is this credit line a duty of its file's licence (libraryDuties.ts recordNeedsCredit), or a courtesy line? */
 export function creditDue(doc: ProjectDocument, line: CreditLine): boolean {
-  const r = Object.hasOwn(doc.assets, line.assetId) ? doc.assets[line.assetId]!.provenance.library : undefined;
+  const a = Object.hasOwn(doc.assets, line.assetId) ? doc.assets[line.assetId]! : undefined;
+  if (!a) return false;
+  // a recorded built-in track (wave 7 instruments) holds several records: the one whose credit is this line's
+  const r = a.provenance.library ?? a.provenance.instruments?.records.find((x) => x.credit?.text === line.text);
   return !!r && recordNeedsCredit(r);
 }
 /** A report as JSON (GET /projects/:id/credits, MCP get_credits, the export job's output). */
@@ -153,7 +159,8 @@ export function archiveLibraryPlan(doc: ProjectDocument): ArchiveLibraryPlan {
   const notices: ArchiveLibraryPlan['notices'] = [];
   const noticed = new Set<string>();
   for (const a of Object.values(doc.assets).sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0))) {
-    const restricted = libraryOrigins(doc, a.id).filter((o) => !shareable(o.asset));
+    // by the record, not the asset: a recorded built-in track carries several records (wave 7 instruments); for a copied file the two agree
+    const restricted = libraryOrigins(doc, a.id).filter((o) => !recordShareable(o.record));
     if (!restricted.length) continue;
     const root = restricted[0]!;
     for (const hash of [a.contentHash, ...(a.conform ? [a.conform.originalContentHash] : [])]) {
@@ -162,8 +169,9 @@ export function archiveLibraryPlan(doc: ProjectDocument): ArchiveLibraryPlan {
       omitted.push({ hash, assetId: a.id, itemId: root.record.itemId, title: a.provenance.library ? titleOf(a, root.record) : a.name, licenceId: root.record.licence.id });
     }
     for (const { asset, record } of restricted) {
-      if (noticed.has(asset.id)) continue;
-      noticed.add(asset.id);
+      const nk = `${asset.id}\n${record.itemId}`;
+      if (noticed.has(nk)) continue;
+      noticed.add(nk);
       notices.push({ title: titleOf(asset, record), licenceId: record.licence.id, credit: record.credit?.text ?? null, url: record.licence.url ?? null });
     }
   }

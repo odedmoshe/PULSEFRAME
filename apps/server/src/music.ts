@@ -30,6 +30,7 @@ import { describeMedia } from './ingest.ts';
 import { assertStorageRoom } from './storage.ts';
 import { ApiError, type CommitResult, type Store } from './store.ts';
 import { MusicCancelled, renderMusic, type RenderedMusic } from './music/render.ts';
+import { instrumentsError } from './instruments/contract.ts';
 
 export type { RenderedMusic } from './music/render.ts';
 /** The highest peak a valid track may have (the master's soft clip never exceeds 2/3). */
@@ -171,6 +172,9 @@ export function resolveMusicRequest(req: MusicRequest): { style: MusicStyle; lay
     if (!m || Number(m[1]) <= 0 || (m[2] !== undefined && Number(m[2]) <= 0)) throw new ApiError(400, 'invalid_option', 'fitSeconds is a positive number of seconds written "n" or "n/d"', { fitSeconds: req.fitSeconds });
     bars = barsForDuration(style.id, T.rt(Number(m[1]), m[2] === undefined ? 1 : Number(m[2])));
   }
+  // wave 7 instruments «כלים מוקלטים»: until builder W2 builds the recorded path, a recorded request is refused here, before anything
+  // is made (never silently synthesised; decisions §1). Absent or 'synth' is today's request exactly.
+  if (req.instruments === 'recorded') throw instrumentsError('notBuilt', { styleId: style.id, instruments: 'recorded' });
   if (req.endFrames !== undefined && req.fitSeconds !== undefined) throw new ApiError(400, 'invalid_option', 'endFrames goes together with bars, not with fitSeconds', { endFrames: req.endFrames }, 'Ask for bars and endFrames (exactLayoutFor gives both), or for fitSeconds alone.');
   try {
     return { style, layout: musicLayout(style.id, bars!, req.endFrames), seed };
@@ -219,12 +223,13 @@ export async function makeMusic(store: Store, req: MusicRequest, actor: string, 
 }
 
 /** WAV bytes for listening before adding (bars <= 32). Nothing is stored. */
-export async function musicPreview(styleId: string, bars: number, seed: number, opts: { signal?: AbortSignal; queue?: MusicQueue } = {}): Promise<Buffer> {
+/** `instruments` (wave 7): 'recorded' previews the style's recorded kit (refused until built); absent or 'synth' is today's preview. */
+export async function musicPreview(styleId: string, bars: number, seed: number, opts: { signal?: AbortSignal; queue?: MusicQueue; instruments?: 'synth' | 'recorded' } = {}): Promise<Buffer> {
   if (!Number.isInteger(bars) || bars < 1 || bars > MUSIC_PREVIEW_MAX_BARS) {
     if (!findMusicStyle(styleId)) throw new ApiError(404, 'not_found', `there is no built-in music style "${styleId}"`, { styleId });
     throw new ApiError(400, 'invalid_option', `a preview is 1 to ${MUSIC_PREVIEW_MAX_BARS} whole bars`, { bars });
   }
-  const { style, layout } = resolveMusicRequest({ styleId, bars, seed });
+  const { style, layout } = resolveMusicRequest({ styleId, bars, seed, ...(opts.instruments ? { instruments: opts.instruments } : {}) });
   const r = await (opts.queue ?? musicQueue).render(style.id, layout.bars, seed, 'preview', opts.signal);
   validateMusic(r);
   return r.wav;
