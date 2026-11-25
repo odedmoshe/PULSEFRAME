@@ -75,7 +75,7 @@ const queuedRow = () => store.createJob(pid, ASSISTANT_JOB_TYPE, ASSISTANT_ACTOR
 const REFUSAL = {
   code: 'owner_required',
   message: 'a language-assistant request belongs to the owner\'s own session, so an agent credential cannot cancel it',
-  hint: 'Ask the owner to cancel it from their own session; left alone it ends when the service answers, and it only ever makes a proposal the owner accepts or rejects.',
+  hint: 'Ask the owner to cancel it in the editor\'s command bar («ביטול הבקשה», Cancel the request); left alone it ends when the service answers, and it only ever makes a proposal the owner accepts or rejects.',
 };
 
 beforeAll(async () => {

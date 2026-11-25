@@ -52,6 +52,7 @@ import { takeFor } from './perform.ts';
 import { ASSISTANT_JOB_TYPE, AssistantConfigBodySchema, AssistantKeyBodySchema, AssistantRequestBodySchema } from '@pulseframe/core';
 import { isOwnerSession, type AssistantDeps } from './assistant/contract.ts';
 import { assistantCancelRefusal, createAssistantHandlers, type AssistantJobControls } from './assistant/routes.ts';
+import { assertMayReadProposal, assistantJobStub, mayReadProposal, proposalsFor } from './assistant/visibility.ts';
 
 const TxBody = z
   .object({
@@ -69,6 +70,12 @@ const NewProject = z.object({ name: z.string().min(1).max(200), width: z.number(
 type Env = { Variables: { principal: Principal } };
 /** Public job shape, identical for REST and MCP. Snapshots and resolved graphs stay server-side. */
 export const jobView = ({ input, ...j }: JobRow) => ({ ...j, revision: input.revision ?? input.projectRevision, ...(j.type === 'export' ? { options: input.manifest?.options, estimate: input.manifest?.estimate, warnings: input.warnings ?? [], retryOf: input.retryOf ?? null } : {}), ...(j.type === 'capability' ? { capabilityId: input.capabilityId, capabilityVersion: input.capabilityVersion, graphDigest: input.graphDigest, params: input.params } : {}) });
+/**
+ * A job as `p` may read it, for REST (GET /jobs/:jobId), MCP (get_job) and the event stream alike: jobView, except that a
+ * language-assistant job is whole only for the owner's own session; anyone else reads its id, project, type, status and times
+ * (assistant/visibility.ts, the one place that decides it).
+ */
+export const jobViewFor = (p: Principal, j: JobRow) => assistantJobStub(p, j) ?? jobView(j);
 
 /** The body of a capability run, the same for REST (POST …/runs) and MCP (run_capability). ADR-0017 adds source, apply and confirmLongRun. */
 export const RunBody = z
@@ -516,12 +523,14 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
       const pending: RevisionEvent[] = [];
       let live = false;
       const onEvent = (e: RevisionEvent) => (live ? later(() => revisionMessage(e)) : pending.push(e));
-      const onJob = (j: any) => j.projectId === projectId && now({ event: 'job', data: JSON.stringify(seen({ id: j.id, type: j.type, status: j.status, stage: j.stage, output: j.output, error: j.error })) });
+      // an assistant job reaches a listener other than the owner's session as its id, type, status and times only (assistant/visibility.ts)
+      const onJob = (j: any) => j.projectId === projectId && now({ event: 'job', data: JSON.stringify(assistantJobStub(listener, j) ?? seen({ id: j.id, type: j.type, status: j.status, stage: j.stage, output: j.output, error: j.error })) });
       store.events.on('revision', onEvent);
       const onDerivative = (d: any) => { const a = Object.values(store.getProject(projectId).doc.assets).find((x) => x.contentHash === d.assetHash); if (a) now({ event: 'derivative', data: JSON.stringify({ assetId: a.id, kind: d.kind, status: d.status }) }); };
       store.events.on('job', onJob);
       store.events.on('derivative', onDerivative);
-      const onGov = (kind: string) => (e: any) => e.projectId === projectId && now({ event: kind, data: JSON.stringify(seen(e)) });
+      // the assistant's proposals are announced to the owner's session only (assistant/visibility.ts)
+      const onGov = (kind: string) => (e: any) => e.projectId === projectId && (kind !== 'proposal' || mayReadProposal(listener, e)) && now({ event: kind, data: JSON.stringify(seen(e)) });
       const govHandlers = (['control', 'proposal', 'approval'] as const).map((k) => [k, onGov(k)] as const);
       for (const [k, fn] of govHandlers) store.events.on(k, fn);
       const onPresence = (p: any) => p.projectId === projectId && now({ event: 'presence', data: JSON.stringify(seen(p)) });
@@ -563,10 +572,10 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     need(c, 'observe');
     const rate = store.getProject(c.req.param('id')).doc.settings.frameRate;
     // entity states and operation arguments of a proposal: without birth dates for a credential that may not read them
-    return c.json({ proposals: forPrincipal(gov.listProposals(c.req.param('id'), c.req.query('status')), c.var.principal).map((p) => ({ ...p, previewFrame: previewFrame(p.changes, rate) })) });
+    return c.json({ proposals: forPrincipal(proposalsFor(c.var.principal, gov.listProposals(c.req.param('id'), c.req.query('status'))), c.var.principal).map((p) => ({ ...p, previewFrame: previewFrame(p.changes, rate) })) });
   });
   app.post('/api/v1/projects/:id/proposals', async (c) => { const b = await body(c, TxBody); return c.json(gov.propose(c.var.principal, c.req.param('id'), b.ops, b.label), 201); });
-  const proposalIn = (c: Context<Env>) => { const pr = gov.getProposal(c.req.param('proposalId')!); if (pr.projectId !== c.req.param('id')) throw new ApiError(404, 'proposal_not_found', 'proposal not found in this project'); return pr; };
+  const proposalIn = (c: Context<Env>) => { const pr = gov.getProposal(c.req.param('proposalId')!); assertMayReadProposal(c.var.principal, pr); if (pr.projectId !== c.req.param('id')) throw new ApiError(404, 'proposal_not_found', 'proposal not found in this project'); return pr; };
   app.get('/api/v1/projects/:id/proposals/:proposalId', (c) => { const who = need(c, 'observe'); return c.json({ proposal: forPrincipal(proposalIn(c), who) }); });
   /** Before/after stills of a proposal, rendered by the same compositor as export. `side=before|after`. */
   app.get('/api/v1/projects/:id/proposals/:proposalId/frame', async (c) => {
@@ -781,12 +790,14 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/jobs/:jobId/budget/release', (c) => { const p = need(c, 'observe'); gov.releaseUnknown(p, c.req.param('jobId')); return c.json({ jobId: c.req.param('jobId'), ledger: gov.ledgerFor(c.req.param('jobId')) }); });
   app.post('/api/v1/jobs/:jobId/retry', (c) => { const pr = need(c, 'edit'); const old = store.getJob(c.req.param('jobId'));
     if (old.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, pr, old, 'retry'); const job = extras.imports.retry(old.id, pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: old.id }, 202); } gov.assertMayAct(pr, old.projectId, 'job'); assertMayTakeJobOutput(pr, old, 'retry this export'); const job = exporter.retry(c.req.param('jobId'), pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: job.input.retryOf }, 202); });
-  app.get('/api/v1/jobs/:jobId', (c) => { need(c, 'observe'); return c.json(jobView(store.getJob(c.req.param('jobId')))); });
+  app.get('/api/v1/jobs/:jobId', (c) => c.json(jobViewFor(need(c, 'observe'), store.getJob(c.req.param('jobId')))));
   app.get('/api/v1/jobs/:jobId/output', (c) => {
     const who = need(c, 'observe');
     const j = store.getJob(c.req.param('jobId'));
     assertMayTakeJobOutput(who, j, 'download this export');
     if (j.status !== 'succeeded') throw new ApiError(409, 'job_not_finished', `job is ${j.status}`, { status: j.status });
+    // only an export leaves a file to download; any other kind of job (an analysis, a language-assistant request) has none
+    if (typeof j.output?.file !== 'string') throw new ApiError(404, 'not_found', 'this job has no file to download', { jobId: j.id }, 'Only a finished export has a file; read other jobs with GET /api/v1/jobs/{jobId}.');
     return sendBlob(c, path.join(store.outDir, path.basename(j.output.file)), j.output.mimeType ?? 'video/mp4', fileMissing('output_missing', 'the exported file'), `pulseframe-${j.id}${path.extname(j.output.file)}`);
   });
   app.get('/api/v1/jobs/:jobId/captions', (c) => {

@@ -32,12 +32,13 @@ export interface AssistantJobControls {
  * Who may cancel an assistant job (ADR-0027 decisions 8 and 10 with its note of 2026-11-24; ADR-0002): the owner's own session only.
  * The request is the owner's (their words, their money), it runs as agent:assistant, a principal no token can be, and "agents
  * may only cancel their own jobs" has one exception, which is not this. The one refusal REST and MCP give an agent credential
- * (http.ts assertMayCancel, and the handler below): the reason with the next step, the job id it was asked about and nothing else
+ * (http.ts assertMayCancel, and the handler below): the reason with the next step (the row's «ביטול הבקשה» button in the
+ * owner's command bar, AssistantRow.tsx), the job id it was asked about and nothing else
  * of the job (no status, no stage, nothing of the request).
  */
 export const assistantCancelRefusal = (jobId: string) => new ApiError(403, 'owner_required',
   'a language-assistant request belongs to the owner\'s own session, so an agent credential cannot cancel it', { jobId },
-  'Ask the owner to cancel it from their own session; left alone it ends when the service answers, and it only ever makes a proposal the owner accepts or rejects.');
+  'Ask the owner to cancel it in the editor\'s command bar («ביטול הבקשה», Cancel the request); left alone it ends when the service answers, and it only ever makes a proposal the owner accepts or rejects.');
 
 const owner = (p: Principal) => {
   if (!isOwnerSession(p)) throw new ApiError(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only', undefined, 'The owner sets it up in Settings.');

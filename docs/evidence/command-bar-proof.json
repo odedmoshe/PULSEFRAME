@@ -1,19 +1,19 @@
 {
-  "ranAt": "2026-11-25T00:12:37.711Z",
+  "ranAt": "2026-11-25T00:50:11.065Z",
   "result": "PASSED",
   "counts": {
     "pass": 23,
     "fail": 0,
     "blocked": 0,
-    "contract-tested": 5
+    "contract-tested": 6
   },
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
+    "platform": "Linux 6.18.44-fc-v880 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
   },
-  "scope": "Headless Chromium on the built editor and in-process servers. The model path (11a–11e) ran against TEST-MOCK-chat, a labelled test double that opens no connection: contract-tested, credentials required — no real provider was called and no network adapter exists. Not provable here: a real provider (no key exists), a screen reader, the owner's own phrasing. Timings are one sample.",
+  "scope": "Headless Chromium on the built editor and in-process servers. The model path (11a–11f) ran against TEST-MOCK-chat, a labelled test double that opens no connection: contract-tested, credentials required — no real provider was called and no network adapter exists. Not provable here: a real provider (no key exists), a screen reader, the owner's own phrasing. Timings are one sample.",
   "checks": [
     {
       "id": "1",
@@ -307,14 +307,14 @@
       "detail": [
         {
           "text": "חתוך כאן",
-          "browser": "471b7cc720d12f2081e66ef077c0a75c1d96ce487a049c125e35e02a977c491b",
-          "node": "471b7cc720d12f2081e66ef077c0a75c1d96ce487a049c125e35e02a977c491b",
+          "browser": "e05bbe37f5b700a561c476c433841394401f30c7fd8bc2484dd2a8acc7000c49",
+          "node": "e05bbe37f5b700a561c476c433841394401f30c7fd8bc2484dd2a8acc7000c49",
           "same": true
         },
         {
           "text": "מחק את הקליפ",
-          "browser": "f393256484b1084210198363b7e49e8b392d3f522fbe0ae55963d0edacb111f2",
-          "node": "f393256484b1084210198363b7e49e8b392d3f522fbe0ae55963d0edacb111f2",
+          "browser": "b953034ac21903e1a595579d5a56e894ddc260da29e8d50701fcadc525b7fd91",
+          "node": "b953034ac21903e1a595579d5a56e894ddc260da29e8d50701fcadc525b7fd91",
           "same": true
         },
         {
@@ -331,8 +331,8 @@
         },
         {
           "text": "הוסף מעבר בין כל הקליפים",
-          "browser": "d43d892364c86a20cb0be3d30e06cdb1d65f2ff0fe2d83774a9244562d6f9e63",
-          "node": "d43d892364c86a20cb0be3d30e06cdb1d65f2ff0fe2d83774a9244562d6f9e63",
+          "browser": "b25b0abe1942af0157173005643314cd2a7a0f6b862c347a467702d50d6d8c09",
+          "node": "b25b0abe1942af0157173005643314cd2a7a0f6b862c347a467702d50d6d8c09",
           "same": true
         }
       ]
@@ -611,14 +611,14 @@
       "detail": [
         {
           "text": "split here",
-          "browser": "94703f99d6dda860205a95c23401be411012384019c94bb03b260212e38c889a",
-          "node": "94703f99d6dda860205a95c23401be411012384019c94bb03b260212e38c889a",
+          "browser": "1bd6cbd1a4a8ede28e0174750b87b1ce223eadb12556ead74a549d4933f17132",
+          "node": "1bd6cbd1a4a8ede28e0174750b87b1ce223eadb12556ead74a549d4933f17132",
           "same": true
         },
         {
           "text": "delete the clip",
-          "browser": "11d1ae5edfba13bebf419cf970cd9a97708ad828a43051494e5cda83bb75df50",
-          "node": "11d1ae5edfba13bebf419cf970cd9a97708ad828a43051494e5cda83bb75df50",
+          "browser": "1b4596cd0785a00fab7d1e3cb59014c338e1ba184b2c31b1d7d94e34dab9593a",
+          "node": "1b4596cd0785a00fab7d1e3cb59014c338e1ba184b2c31b1d7d94e34dab9593a",
           "same": true
         },
         {
@@ -635,8 +635,8 @@
         },
         {
           "text": "add transitions between all clips",
-          "browser": "dcde9a3b5ba3d9db880a06f6ef5f90cc3f03ae06560aa755fc16ac378db829d4",
-          "node": "dcde9a3b5ba3d9db880a06f6ef5f90cc3f03ae06560aa755fc16ac378db829d4",
+          "browser": "8087d7bfa06f7b7f3fde3e227813715115c1688d77368ed42445937940cd41e7",
+          "node": "8087d7bfa06f7b7f3fde3e227813715115c1688d77368ed42445937940cd41e7",
           "same": true
         }
       ]
@@ -680,7 +680,7 @@
       "detail": {
         "proposer": {
           "status": 200,
-          "proposalId": "prp_t9Zw4UY1tl0"
+          "proposalId": "prp_81d6xvdlxpY"
         },
         "observer": 403,
         "revisionsMoved": 0
@@ -816,6 +816,38 @@
       }
     },
     {
+      "id": "11f",
+      "name": "MOCK adapter: while a request is pending the row offers «ביטול הבקשה»; reached from the input with Tab and pressed with Enter it cancels the job (canceled after the send, its reservation still counted), no proposal and no change are made, the row says so in words as a status, and the keyboard is back in the input; the heuristic accessibility audit of both states has 0 findings",
+      "status": "contract-tested",
+      "detail": {
+        "offered": true,
+        "tabsToTheButton": 6,
+        "reached": true,
+        "label": "ביטול הבקשה",
+        "text": "הבקשה בוטלה אחרי שכבר נשלחה לשירות, ולכן ייתכן שחויבה; הסכום ששמור לה נשאר בחשבון ההוצאה של החודש. שום דבר לא שונה",
+        "dataSent": "true",
+        "role": "status",
+        "buttonGone": true,
+        "focusAfter": "palette-input",
+        "a11y": {
+          "findings": 0,
+          "focusRing": true,
+          "controlsWhilePending": 108,
+          "controlsAfter": 108,
+          "unnamed": [],
+          "lowContrast": []
+        },
+        "job": {
+          "status": "canceled",
+          "attempt": 1
+        },
+        "ledger": "unknown",
+        "proposals": 0,
+        "calls": 1,
+        "revision": 0
+      }
+    },
+    {
       "id": "11b",
       "name": "MOCK adapter: each of the 9 invalid answers gives invalid_model_output with its reason, and no proposal",
       "status": "contract-tested",
@@ -901,10 +933,10 @@
     },
     {
       "id": "11e",
-      "name": "MOCK adapter: the 11 requests handed to the adapter (1470195 bytes) hold none of the planted private strings (birth date, capture date, event, file name, transcript word, GPS-like path; with the switches off the name, title, marker and track name), nor the word choice «בת» in what the project shapes nor as a word anywhere, nor the key; the system text and tool are the reviewed prompt byte for byte",
+      "name": "MOCK adapter: the 12 requests handed to the adapter (1603845 bytes) hold none of the planted private strings (birth date, capture date, event, file name, transcript word, GPS-like path; with the switches off the name, title, marker and track name), nor the word choice «בת» in what the project shapes nor as a word anywhere, nor the key; the system text and tool are the reviewed prompt byte for byte",
       "status": "contract-tested",
       "detail": {
-        "requests": 11,
+        "requests": 12,
         "fixedSame": true,
         "found": [],
         "formInVariable": false,
@@ -927,8 +959,8 @@
         "assistantFilesInBackup": [],
         "filesHoldingTheKey": [],
         "scanned": {
-          "responses": 491,
-          "logLines": 48
+          "responses": 486,
+          "logLines": 49
         },
         "inResponses": 0,
         "inLogs": 0
