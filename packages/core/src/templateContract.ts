@@ -46,6 +46,13 @@ export const ApplyTemplateArgsSchema = z.object({
   keepSlots: z.array(SlotRecordSchema).max(400).optional(),
   ops: z.array(TemplateStepSchema).min(1).max(2000),
   slots: z.array(PlannedSlotSchema).max(400),
+  /**
+   * Optional and additive (ADR-0016 decision 6, amendment of 2026-11-24): record in the run where each of its clips lies, with
+   * its track (RecipeRun.ranges), so a later regeneration can tell a clip that was only moved in time (templateOps.ts movedOnly).
+   * A clip named in keepIds keeps the entry of the earlier run, as it keeps that run's fingerprint. Absent in every older log,
+   * which therefore replays to the same document as before.
+   */
+  recordRanges: z.literal(true).optional(),
 }).strict();
 export type ApplyTemplateArgs = z.infer<typeof ApplyTemplateArgsSchema>;
 /** apply_template OpResult.output. The run record: recipeRuns[runId] = { recipeId: `template:${templateId}`, params: {...params, templateVersion}, createdIds, fingerprints, steps, slots }. */
@@ -218,8 +225,11 @@ export interface TemplateWarning { code: (typeof TEMPLATE_WARNING_CODES)[number]
  * - removed_by_hand (regeneration): items of the previous run that were deleted by hand since (their slot record names a clip no
  *   longer in the document) are not made again; details.keys names them. The plan's alternatives offer to bring them back
  *   (restoreRemoved: true on the regenerate request).
+ * - moved_back (regeneration): items of the previous run whose only change since is their place in time on their own track (a
+ *   ripple delete before them closed the gap, or they were dragged along the track) are not kept as hand edits: they are made
+ *   again on the place the template gives them; details.keys names them (a slot's own sound under the key of its picture).
  */
-export const TEMPLATE_NOTICE_CODES = ['field_missing', 'field_no_date', 'builtin_music_faded', 'element_dropped', 'removed_by_hand'] as const;
+export const TEMPLATE_NOTICE_CODES = ['field_missing', 'field_no_date', 'builtin_music_faded', 'element_dropped', 'removed_by_hand', 'moved_back'] as const;
 export interface TemplateNotice { code: (typeof TEMPLATE_NOTICE_CODES)[number]; message: string; details: Record<string, unknown> }
 export interface PredictedSlot { key: string; startFrame: number; frames: number; assetId: string | null; sourceInFrame: number | null; /** 1 - visible share of the picture under the project fit (cover) or letterbox share (contain); null for no picture. */ cropShare: number | null }
 export interface TemplatePlan {
@@ -252,6 +262,11 @@ export interface TemplatePlanContext {
    * alternative restoreRemoved. Derived from the run's slot records and the document, never stored as a flag.
    */
   removedKeys?: readonly string[];
+  /**
+   * keys of the previous run's items that were only moved in time since the run (regeneration; templateOps.ts movedOnly). They
+   * are emitted like any untouched item; the plan says which of them it made again (notice moved_back).
+   */
+  movedKeys?: readonly string[];
   elementsAvailable?: boolean;
 }
 
@@ -318,9 +333,11 @@ export interface TemplatePlanView { revision: number; templateId: string; versio
 export interface TemplateApplyResult { revision: number; runId: string; createdIds: string[]; slots: SlotRecord[]; steps: string[]; warnings: TemplateWarning[]; notices?: TemplateNotice[] }
 /**
  * removed: the keys of the items deleted by hand that this regeneration left out (empty with restoreRemoved); alternatives: the
- * plan's, among them the explicit choice to restore those items ({restoreRemoved: true}).
+ * plan's, among them the explicit choice to restore those items ({restoreRemoved: true}); movedBack: the keys of the items that
+ * had only been moved in time and were made again on their place (notice moved_back; a template run always sends it, a family
+ * film never does: it keeps a moved clip and lays the new ones around it).
  */
-export interface TemplateRegenerateResult extends TemplateApplyResult { replaced: number; protected: string[]; removed: string[]; alternatives: TemplatePlan['alternatives'] }
+export interface TemplateRegenerateResult extends TemplateApplyResult { replaced: number; protected: string[]; removed: string[]; movedBack?: string[]; alternatives: TemplatePlan['alternatives'] }
 export const TemplateBodySchema = z.object({ params: z.unknown().optional(), expectedRevision: z.number().int().min(0).optional() }).strict();
 /**
  * The regenerate request: restoreRemoved true makes the items deleted by hand since the last run again (the explicit choice the

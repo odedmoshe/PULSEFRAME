@@ -125,7 +125,9 @@ function AppliedBar() {
       editor.setTemplateRun(next);
       const tempo = kind === 'tempo' && change.tempo ? ` ${S.tempoNow(S.tempoNames[change.tempo])}` : '';
       const left = r.removed?.length ?? 0;
-      setSaid(`${S.regenerated(r.replaced, r.protected.length)}${tempo}${left ? S.removedLeftOut(left) : ''}${kind === 'restore' ? ` ${S.restored}` : ''}`);
+      // items that had only been moved in time (a Delete that closed the gap moved them) are back on their slots: said, not silent
+      const back = r.movedBack?.length ?? 0;
+      setSaid(`${S.regenerated(r.replaced, r.protected.length)}${tempo}${back ? S.movedBack(back) : ''}${left ? S.removedLeftOut(left) : ''}${kind === 'restore' ? ` ${S.restored}` : ''}`);
     } catch (e) {
       const f = templateRefusal(lang, e); // worded in the interface language, as the dialog and the editor's refusals are
       setFailed(f.hint ? `${f.message} — ${f.hint}` : f.message);

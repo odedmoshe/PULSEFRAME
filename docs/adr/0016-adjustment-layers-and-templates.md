@@ -71,6 +71,35 @@ Status: **accepted** (2026-11-17) for wave 1. Built by three workers on shared c
      carried on (`keepRanges`). The multicam auto-switch regenerates in place and `switch_angles` skips gaps, so a deleted
      segment was already never refilled; a test holds it. All of it travels in the op's arguments, so replay is unchanged and
      byte-identical.
+   - *Amendment (2026-11-24): what "edited by hand" means.* A clip a template run made whose ONLY change since the run is its
+     place in time on its own track is not edited by hand. It is treated like an untouched clip: replaced, and made again on its
+     slot. Reason: a new project closes the gap on Delete (ripple delete), which moves every later picture of the template
+     earlier; those clips then differed from their fingerprints (the start is part of it), were kept, no longer lay on their
+     slots, and so Shuffle and «החזרת החלקים שנמחקו» were both refused with `template_blocked`. Such a clip can never be honoured
+     where it lies (template slots are timed to the music), and nothing a person authored in it is lost. The test is `movedOnly`
+     (templateOps.ts), per clip: the run recorded where it placed the clip; the clip is on the track recorded there; its start
+     differs from the recorded start; and its fingerprint with the recorded start put back equals the run's fingerprint, so its
+     length, source range, speed, transform, keyframes, effects, sound, link, text and style are all unchanged. It applies to
+     every clip kind of the run (pictures, a slot's own sound, titles, music, looks, elements, sound effects). A link group is
+     replaced only when no clip in it has another change: `keptByHand` leaves a moved-only clip out of "edited", and still keeps
+     it when a clip linked to it was edited. Everything else is protected exactly as before: a clip trimmed, re-sourced, restyled
+     or changed in any other way is kept by fingerprint, and a kept picture off its slot is still refused; a clip taken to
+     another track is kept as well, since that is an arrangement made by hand (taken to another track at its own time it has the
+     run's fingerprint and is replaced, as it always was). The fingerprint alone cannot tell this, because it holds neither the
+     old start nor the track, so the run now records them: `apply_template` takes the optional `recordRanges` and writes
+     `run.ranges` (`{start, end, trackId}` per live clip; `trackId` is a new optional field of the range). A clip kept on
+     regeneration keeps the entry of the earlier run, as it keeps that run's fingerprint. Additive, no schema version bump; a log
+     without the argument replays to the same document as before. A run made before this (no `run.ranges`) names no moved-only
+     clip and behaves as before, until its first successful regeneration records the places. The answer says what was done:
+     notice `moved_back` with the slot keys (a slot's own sound under its picture's key), the same keys in `movedBack` of the
+     regenerate result, Hebrew and English in i18n `template.notice.moved_back` and in the bar («… פריטים שרק זזו ממקומם חזרו
+     למקומם בתבנית»). The hint of `template_blocked` no longer proposes what was just asked: the run's tempo is offered only to a
+     request for another tempo, and "delete that clip and regenerate with restoreRemoved" only to a request without
+     `restoreRemoved`. Undo: the regeneration is one `apply_template` transaction, so after Delete and the button two undo steps
+     return exactly (the regeneration, then the delete). The family film and the beat montage do not take this rule and are not
+     refused: both keep a moved clip where it lies and lay the new clips around it (the film closes up behind the kept picks and
+     places a restored file after them; the montage keeps the shifted clips on the beat one segment earlier and fills the freed
+     last segment). In a film the order of the picks is the person's to arrange, so a moved pick stays an edit there.
 7. **Built-in catalogue** (`templateCatalog.ts`, all on Canvas2D effects, Hebrew and English names): `tpl.travel-montage`, `tpl.photo-dump`,
    `tpl.birthday`, `tpl.quote-card`, `tpl.countdown-list`, `tpl.home-video`. Your own clips are muted by default and the music carries the sound
    (`keepAudio` false); Home Video keeps each clip's own sound. Two more are listed unavailable with a reason: `tpl.text-behind-subject` (needs video
