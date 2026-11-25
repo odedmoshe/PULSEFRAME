@@ -1,0 +1,46 @@
+{
+  "manifestVersion": 1,
+  "id": "assistant-01",
+  "title": "Local language assistant run-time (llama.cpp llama-server, Windows, no NVIDIA files): the Vulkan build and the CPU build",
+  "created": "2026-11-25",
+  "notes": "The owner starts llama-server by hand (docs/guides/assistant-local.he.md); the editor never starts it. The model is in models-01.json (DictaLM 3.0 1.7B Thinking Q4_K_M). Only what was read at source is recorded; release size and sha256 were not reachable from the session that wrote this file (see the source notes), so no pin is written and the fetcher records the first hash it sees. Run-time files are programs, never data: disk only, never in the repository.",
+  "sources": [
+    {
+      "id": "llama-cpp-b12720",
+      "title": "llama.cpp release b12720 - llama-server for Windows x64 (Vulkan, and CPU as the fallback)",
+      "homepage": "https://github.com/ggml-org/llama.cpp",
+      "licence": {
+        "spdx": "MIT",
+        "url": "https://github.com/ggml-org/llama.cpp/blob/b12720/LICENSE",
+        "readOn": "2026-11-25",
+        "quote": "LICENSE at tag b12720, read on raw.githubusercontent.com: \"MIT License\" / \"Copyright (c) 2023-2026 The ggml authors\" / \"Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \\\"Software\\\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software\" / \"The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\" (file sha256 94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d, 1078 bytes)."
+      },
+      "credit": null,
+      "diskOnly": true,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": false,
+      "notes": "Read on 2026-11-25 from raw.githubusercontent.com at tag b12720 (the only GitHub host reachable from the session that wrote this row: github.com and api.github.com answered 403, so the release page, the asset list, the asset sizes and GitHub's published digests were NOT read). What WAS read: the tag exists (raw.githubusercontent.com/ggml-org/llama.cpp/b12720/LICENSE answered 200); .github/workflows/release-publish.yml at that tag builds the release notes with the link https://github.com/ggml-org/llama.cpp/releases/download/<tag>/llama-<tag>-bin-win-vulkan-x64.zip (\"Windows x64 (Vulkan)\"), and its \"Merge artifacts\" step renames each llama-bin-win-*.zip to llama-<tag>-bin-win-*.zip and injects the windows-cpu zip's llama-server and CPU backend into every other Windows zip; .github/workflows/release.yml at that tag packs these zips from the Vulkan backend library (matrix backend 'vulkan', arch x64, target ggml-vulkan) and the CPU build, with no CUDA step in them (the CUDA zips and their cudart-* zips are separate assets, not listed here). Not known from reading: that the release's assets were all uploaded, their sizes, their sha256, and the zips' file lists. So bytes and sha256 are absent on purpose: the fetcher then records the hash it first sees (the ledger marks it 'not yet pinned'), and the owner's helper compares it with the digest GitHub shows on the release page before the first run. No binary was downloaded here.",
+      "items": [
+        {
+          "id": "llama-cpp-b12720/win-vulkan-x64",
+          "kind": "archive",
+          "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12720/llama-b12720-bin-win-vulkan-x64.zip",
+          "format": "zip",
+          "dest": "models/runtime/llama-cpp/b12720-win-vulkan-x64",
+          "notes": "Asset name llama-b12720-bin-win-vulkan-x64.zip (Windows x64 Vulkan build, with llama-server.exe injected from the CPU zip), taken from the release-notes template of release-publish.yml at tag b12720; no NVIDIA file is in it or needed (cudart-* and the win-cuda-* zips are NOT listed). llama-server.exe from this zip is what docs/guides/assistant-local.he.md starts. Size and sha256: not read (see the source notes)."
+        },
+        {
+          "id": "llama-cpp-b12720/win-cpu-x64",
+          "kind": "archive",
+          "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12720/llama-b12720-bin-win-cpu-x64.zip",
+          "format": "zip",
+          "dest": "models/runtime/llama-cpp/b12720-win-cpu-x64",
+          "notes": "Asset name llama-b12720-bin-win-cpu-x64.zip (Windows x64 CPU build), taken from the release-notes template of release-publish.yml at tag b12720; no NVIDIA file is in it or needed (cudart-* and the win-cuda-* zips are NOT listed). llama-server.exe from this zip is what docs/guides/assistant-local.he.md starts. Size and sha256: not read (see the source notes)."
+        }
+      ]
+    }
+  ]
+}
