@@ -19,11 +19,15 @@
  *   nothing needs a credit; creditsTooLong when the body would pass 2000 characters (TextClipSchema). Undo is the generic one.
  */
 import { z } from 'zod';
-import { defineOp, OpError, type OpErrorCode } from './ops.ts';
-import { AssetSchema } from './schema.ts';
+import * as T from '@pulseframe/time';
+import { defineOp, getOp, OpError, type OpContext, type OpErrorCode } from './ops.ts';
+import { AssetSchema, type Asset, type LibraryRecord, type ProjectDocument } from './schema.ts';
+import { libraryRecordProblems } from './libraryDuties.ts';
+import { collectCredits, CREDITS_HEADING } from './libraryCredits.ts';
+import { sequenceDuration } from './validate.ts';
 
 /** True once worker B has built the bodies. */
-export const LIBRARY_OPS_BUILT = false;
+export const LIBRARY_OPS_BUILT = true;
 /** The longest credits body one card holds (TextClipSchema text max). */
 export const CREDITS_CARD_MAX_CHARS = 2000;
 
@@ -59,7 +63,76 @@ export const AddCreditsCardArgsSchema = z.object({
 export type AddCreditsCardArgs = z.infer<typeof AddCreditsCardArgsSchema>;
 export interface AddCreditsCardOutput { clipIds: string[]; trackId: string; removed: number }
 
-const notBuilt = (op: string) => () => { throw libraryRefusal('notBuilt', { op }, op); };
+/** A value with its object keys in order, so two records compare equal exactly when they say the same. */
+const canonical = (v: unknown): unknown => (Array.isArray(v) ? v.map(canonical) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canonical((v as Record<string, unknown>)[k])])) : v);
+const sameRecord = (a: LibraryRecord, b: LibraryRecord) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+/** An operation's body by name (looked up when it runs, so the order of the modules does not matter). */
+function opBody(name: string) {
+  const def = getOp(name);
+  if (!def) throw new OpError('unknown_op', `operation ${name} is not registered in this build`, { op: name });
+  return def;
+}
+
+/** use_library_item: the record must pass the table first (libraryDuties.ts libraryRecordProblems, first problem refuses). */
+function useLibraryItem(d: ProjectDocument, a: UseLibraryItemArgs, ctx: OpContext) {
+  const record = a.asset.provenance.library;
+  if (!record) throw libraryRefusal('notLibraryAsset', { name: a.asset.name.slice(0, 80) });
+  const problem = libraryRecordProblems(record)[0];
+  if (problem) {
+    const details = { itemId: record.itemId, licenceId: record.licence.id };
+    if (problem.key === 'recordWeaker') throw libraryRefusal('recordWeaker', { ...details, missing: problem.what }, problem.what);
+    throw libraryRefusal(problem.key, details);
+  }
+  // the same bytes already in the project as a copied file: give it the record (an upload record gives way to it, since a file
+  // from the library carries none, validate.ts library_provenance). Bytes that came from a formula or a provider stay as they are,
+  // and the library copy is added beside them.
+  const existing = Object.values(d.assets).find((x): x is Asset => x.contentHash === a.asset.contentHash && x.provenance.origin === 'upload');
+  if (!existing) {
+    const id = ctx.newId('ast');
+    d.assets[id] = { id, ...a.asset };
+    const output: UseLibraryItemOutput = { assetId: id, deduplicated: false, recordAttached: false };
+    return { affectedIds: [id], summary: `Added "${record.title || a.asset.name}" from the library (${record.licence.id})`, output: { ...output } };
+  }
+  const before = existing.provenance.library;
+  if (before && sameRecord(before, record)) {
+    const output: UseLibraryItemOutput = { assetId: existing.id, deduplicated: true, recordAttached: false };
+    return { affectedIds: [], summary: `"${existing.name}" is already in the project with this library record`, output: { ...output } };
+  }
+  const { upload, ...provenance } = existing.provenance;
+  existing.provenance = { ...provenance, library: record };
+  const output: UseLibraryItemOutput = { assetId: existing.id, deduplicated: true, recordAttached: true };
+  const was = before ? 'its earlier library record was replaced (the library ledger is the authority)' : upload ? 'its upload record was replaced by the library record' : 'it now carries its library record';
+  return { affectedIds: [existing.id], summary: `"${existing.name}" was already in the project; ${was} (${record.licence.id})`, output: { ...output } };
+}
+
+/** add_credits_card: the earlier card goes, then a heading and the credit lines after the last clip (two ordinary titles). */
+function addCreditsCard(d: ProjectDocument, a: AddCreditsCardArgs, ctx: OpContext) {
+  const seqId = a.sequenceId ?? d.mainSequenceId;
+  const seq = Object.hasOwn(d.sequences, seqId) ? d.sequences[seqId] : undefined;
+  if (!seq) throw new OpError('not_found', `sequence ${seqId} not found`, { sequenceId: seqId });
+  const report = collectCredits(d, { sequenceId: seq.id });
+  if (!report.lines.length) throw libraryRefusal('noCredits', { sequenceId: seq.id });
+  const body = report.lines.map((l) => l.text).join('\n');
+  if (body.length > CREDITS_CARD_MAX_CHARS) throw libraryRefusal('creditsTooLong', { sequenceId: seq.id, chars: body.length, max: CREDITS_CARD_MAX_CHARS }, body.length);
+  // the card this operation made before (delete_clip's body: a card on a locked track is refused as any edit there)
+  const old = seq.tracks.flatMap((t) => t.clips).filter((c) => c.type === 'text' && c.role === 'credits').map((c) => c.id);
+  const del = opBody('delete_clip');
+  for (const clipId of old) del.apply(d, { clipId }, ctx);
+  const rate = d.settings.frameRate;
+  const end = sequenceDuration(d, seq.id);
+  const start = T.isFrameAligned(end, rate) ? end : T.frameTime(T.frameIndexAt(end, rate) + 1, rate);
+  const seconds = a.seconds ?? 4;
+  const duration = T.frameTime(Math.max(1, Math.round((seconds * rate.num) / rate.den)), rate);
+  const add = opBody('add_text');
+  const heading = add.apply(d, { sequenceId: seq.id, text: CREDITS_HEADING[a.lang ?? 'he'], start, duration, style: { sizeFrac: 0.08, direction: 'auto', align: 'center' }, transform: { y: -0.3 } }, ctx).output as { clipId: string; trackId: string };
+  const lines = add.apply(d, { sequenceId: seq.id, text: body, start, duration, style: { sizeFrac: 0.04, direction: 'ltr', align: 'center', lineHeight: 1.3 }, transform: { y: 0.05 } }, ctx).output as { clipId: string; trackId: string };
+  for (const id of [heading.clipId, lines.clipId]) {
+    const clip = seq.tracks.flatMap((t) => t.clips).find((c) => c.id === id);
+    if (clip?.type === 'text') clip.role = 'credits';
+  }
+  const output: AddCreditsCardOutput = { clipIds: [heading.clipId, lines.clipId], trackId: lines.trackId, removed: old.length };
+  return { affectedIds: [...old, heading.clipId, lines.clipId], summary: `Credits card with ${report.lines.length} credit line(s) at the end of the sequence${old.length ? '; the earlier card was replaced' : ''}`, output: { ...output } };
+}
 
 defineOp({
   name: 'use_library_item',
@@ -67,12 +140,12 @@ defineOp({
   internal: true,
   description: 'Add a file copied from the owner\'s library folder to the project library with its licence record (provenance.library), deduplicated by content; an existing copy gets the record. Issued only by the server after it copied and verified the bytes.',
   args: UseLibraryItemArgsSchema,
-  apply: notBuilt('use_library_item'),
+  apply: useLibraryItem,
 });
 defineOp({
   name: 'add_credits_card',
   version: 1,
   description: 'Put a credits card at the end of the sequence: a heading and the credit lines every library file in the sequence needs, verbatim, as two ordinary titles marked as the credits. Running it again replaces the card it made (hand edits to the card are replaced too). Refused when nothing needs a credit.',
   args: AddCreditsCardArgsSchema,
-  apply: notBuilt('add_credits_card'),
+  apply: addCreditsCard,
 });

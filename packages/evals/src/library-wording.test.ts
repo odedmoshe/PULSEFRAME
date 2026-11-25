@@ -66,6 +66,36 @@ describe('library refusals in Hebrew', () => {
       expect({ lang, missing }).toEqual({ lang, missing: [] });
     }
   });
-  it.todo('B: each operation refusal provoked for real through use_library_item and add_credits_card once LIBRARY_OPS_BUILT');
+  it.runIf(LIBRARY_OPS_BUILT)('each operation refusal provoked for real through use_library_item and add_credits_card is a table sentence, worded in Hebrew', () => {
+    const rec = { itemId: 's/a.wav', sourceId: 's', kind: 'music' as const, title: 'A', sourceSha256: 'a'.repeat(64), ledger: { item: 's/a' }, licence: { id: 'CC0-1.0' }, flags: {} };
+    const base = { kind: 'audio' as const, name: 'a.wav', contentHash: `sha256:${'a'.repeat(64)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(2, 1), audio: { sampleRate: 48000, channels: 1, codec: 'pcm_s16le' }, provenance: { origin: 'upload' as const, importedAt: '2026-11-25T00:00:00Z', importedBy: 'test' } };
+    const use = (lib: Record<string, unknown> | null) => ({ op: 'use_library_item', args: { asset: { ...base, provenance: { ...base.provenance, ...(lib ? { library: { ...rec, ...lib } } : {}) } } } });
+    const empty = createProject({ id: 'prj_lw3', name: 'LW', width: 640, height: 360 });
+    const got: Partial<Record<LibraryRefusalKey, string>> = {
+      notLibraryAsset: caught(() => applyTransaction(empty, [use(null)], { idSeed: 'a_', actor: 't', allowInternal: true })),
+      licenceUnknown: caught(() => applyTransaction(empty, [use({ licence: { id: 'custom:nobody' } })], { idSeed: 'b_', actor: 't', allowInternal: true })),
+      licenceNoDerivatives: caught(() => applyTransaction(empty, [use({ licence: { id: 'CC-BY-ND-4.0' } })], { idSeed: 'c_', actor: 't', allowInternal: true })),
+      licenceShareAlike: caught(() => applyTransaction(empty, [use({ licence: { id: 'CC-BY-SA-4.0' } })], { idSeed: 'd_', actor: 't', allowInternal: true })),
+      creditMissing: caught(() => applyTransaction(empty, [use({ licence: { id: 'CC-BY-4.0' } })], { idSeed: 'e_', actor: 't', allowInternal: true })),
+      recordWeaker: caught(() => applyTransaction(empty, [use({ licence: { id: 'CC-BY-NC-4.0' }, credit: { text: 'x', placement: 'either' } })], { idSeed: 'f_', actor: 't', allowInternal: true })),
+      noCredits: caught(() => applyTransaction(empty, [{ op: 'add_credits_card', args: {} }], { idSeed: 'g_', actor: 't' })),
+    };
+    // too long: one CC BY file placed, with a credit of 500 characters, five times over (different files)
+    let doc = empty;
+    for (let i = 0; i < 5; i++) {
+      const h = String(i).repeat(64);
+      const r = applyTransaction(doc, [{ ...use({ itemId: `s/${i}`, licence: { id: 'CC-BY-4.0' }, credit: { text: `${i}`.repeat(500), placement: 'description' } }), args: { asset: { ...base, contentHash: `sha256:${h}`, provenance: { ...base.provenance, library: { ...rec, itemId: `s/${i}`, licence: { id: 'CC-BY-4.0' }, credit: { text: `${i}`.repeat(500), placement: 'description' } } } } } }], { idSeed: `h${i}_`, actor: 't', allowInternal: true });
+      const assetId = (r.results[0]!.output as { assetId: string }).assetId;
+      doc = applyTransaction(r.doc, [{ op: 'add_clip', args: { assetId, start: T.rt(i, 1), duration: T.rt(1, 1) } }], { idSeed: `p${i}_`, actor: 't' }).doc;
+    }
+    got.creditsTooLong = caught(() => applyTransaction(doc, [{ op: 'add_credits_card', args: {} }], { idSeed: 'k_', actor: 't' }));
+    const table = opSentences();
+    for (const [key, en] of Object.entries(got) as [LibraryRefusalKey, string][]) {
+      expect({ key, inTable: key === 'creditsTooLong' ? /^the credits are \d+ characters long; one card holds at most 2000$/.test(en) : table[key].includes(en) }).toEqual({ key, inTable: true });
+      const he = translateRefusal('he', en);
+      expect({ key, hebrew: !!he && /[֐-׿]/.test(he) && !/לא עבר בדיקה/.test(he) }).toEqual({ key, hebrew: true });
+    }
+    expect(Object.keys(got).sort()).toEqual(Object.keys(LIBRARY_REFUSALS).filter((k) => k !== 'notBuilt').sort());
+  });
   it.todo('A: each server refusal provoked for real through its route (library/routes.ts)');
 });
