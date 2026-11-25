@@ -3,7 +3,7 @@
   "id": "visual-01",
   "title": "First visual set: emoji, icons, transitions, fonts, maps, doodles (tier A only)",
   "created": "2026-11-25",
-  "notes": "Only sources whose licence was read at the publisher and that allow keeping the files in an application's library (MIT, Apache-2.0, ISC, OFL-1.1, CC0, public domain, Unicode-3.0). Nothing share-alike, nothing that needs a key, no stock sites. URLs, sizes and commits were resolved on 2026-11-25. Sizes marked approx are estimates.",
+  "notes": "Only sources whose licence was read at the publisher and that allow keeping the files in an application's library (MIT, Apache-2.0, ISC, OFL-1.1, CC0, public domain, Unicode-3.0). Nothing share-alike, nothing that needs a key, no stock sites. URLs, sizes and commits were resolved on 2026-11-25. Sizes marked approx are estimates. Open Doodles was removed on 2026-11-25 by the owner's decision (its Dropbox zip cannot be hash-pinned).",
   "sources": [
     {
       "id": "fluent-emoji",
@@ -302,35 +302,6 @@
           ],
           "approxBytes": 90000000,
           "dest": "visual/fonts/google-fonts"
-        }
-      ]
-    },
-    {
-      "id": "open-doodles",
-      "title": "Open Doodles (Pablo Stanley) - hand-drawn illustrations, source folder",
-      "homepage": "https://www.opendoodles.com/",
-      "licence": {
-        "spdx": "CC0-1.0",
-        "url": "https://www.opendoodles.com/about",
-        "readOn": "2026-11-25",
-        "quote": "You can copy, edit, remix, share, or redraw these images for any purpose without restriction under copyright or database law (CC0 license.)"
-      },
-      "credit": null,
-      "diskOnly": false,
-      "creditInExport": false,
-      "shareAlike": false,
-      "people": false,
-      "aiGenerated": false,
-      "repoAllowed": true,
-      "notes": "The only CC0 illustration kit with an official direct link today: the Dropbox folder linked from opendoodles.com/about (\"individual assets and source files on Dropbox\"). Dropbox builds the zip on request, so its bytes and hash can differ between downloads and cannot be pinned; the ledger records the hash of the copy that was fetched. Checked on 2026-11-25 without downloading it: the link redirects (https only) to a zip of about 74.8 MB that starts with a zip signature. NOT inspected here (above this worker's download limit): expect design source files next to PNG/SVG. Drop this source with --skip open-doodles if a set with unpinnable bytes is not wanted.",
-      "items": [
-        {
-          "id": "open-doodles/source",
-          "kind": "archive",
-          "url": "https://www.dropbox.com/sh/egmjlot3o8787sr/AABbIT7a1-3zWvF7HQ8R21_ta?dl=1",
-          "format": "zip",
-          "approxUnpackedBytes": 160000000,
-          "dest": "visual/illustrations/open-doodles"
         }
       ]
     }
