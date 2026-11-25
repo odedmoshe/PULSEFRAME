@@ -61,6 +61,9 @@ export const ASSISTANT_EXCLUDED_OPS = [
   'replace_text', 'ripple_trim', 'paste_attributes',
   // stabilisation (wave 7): it reads camera measurements the assistant never sees; a command-bar intent is a non-goal of version 1
   'set_clip_stabilise', 'remove_camera_motion',
+  // marked ranges («פנינים», wave 7): an accepted proposal commits as the owner, which would pass the owner-only tagging rule; labels
+  // are family notes the assistant never reads (and offering them would change the reviewed ASSISTANT_PROMPT_DIGEST)
+  'add_source_range', 'update_source_range', 'remove_source_range',
 ] as const;
 /** The ops a proposal may hold: every registered public op minus ASSISTANT_EXCLUDED_OPS and PERSON_OPS, in registry order. */
 export function assistantOps(): string[] {

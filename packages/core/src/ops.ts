@@ -39,6 +39,7 @@ import { ownBeats, sceneCutsFor, timingRelations, transcriptFor } from './lineag
 import { skippedClips, timingCoverage, untimedCopyRefusal } from './cleanup.ts';
 import { MULTICAM_REFUSALS, type MulticamRefusalKey, type MulticamRefusalRow } from './multicamRefusals.ts';
 import { projectCameraSamples, STEADY_REFUSALS } from './steadyContract.ts';
+import { detachRangesOfAsset } from './sourceRanges.ts';
 import { DEFAULT_REDACT_REGION, isUsable, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, roundHalfUp, SIZE_UNIT, ST, TrackOpArgs, trackSampleAt, type MotionTrack, type RedactRegion } from './tracking.ts';
 
 export type OpErrorCode =
@@ -448,7 +449,7 @@ defineOp({
 defineOp({
   name: 'remove_asset',
   version: 1,
-  description: 'Remove a file from the project library, together with its transcript, analysis results and motion tracks; it also leaves the event it was in (an event left without files is removed), and a copy made from it that took its capture date from it keeps that date. Refused while any clip uses it, while a colour table (LUT) effect on any clip refers to it, or while a clip follows one of its motion tracks (or hides a region with one), or while a multicam group has it as a file of an angle. The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
+  description: 'Remove a file from the project library, together with its transcript, analysis results, motion tracks and marked ranges (pearls); it also leaves the event it was in (an event left without files is removed), and a copy made from it that took its capture date from it keeps that date. Refused while any clip uses it, while a colour table (LUT) effect on any clip refers to it, or while a clip follows one of its motion tracks (or hides a region with one), or while a multicam group has it as a file of an angle. The stored media file itself stays on disk until the owner cleans up storage, so undo brings the library entry back.',
   args: z.object({ assetId: z.string() }).strict(),
   apply(d, a) {
     const asset = d.assets[a.assetId];
@@ -471,6 +472,8 @@ defineOp({
     if (d.analyses?.[asset.id]) { delete d.analyses[asset.id]; affected.push(analysisEntityId(asset.id)); }
     // life line (ADR-0021): a copy that took its capture date from this file keeps it, and the file leaves its event
     affected.push(...handDownCapture(d, asset.id), ...detachAssetFromEvents(d, asset.id));
+    // marked ranges (wave 7 pearls) of the file go with it, for every credential; undo brings them back (entity 'sourceRange')
+    affected.push(...detachRangesOfAsset(d, asset.id));
     delete d.assets[asset.id];
     return { affectedIds: [...new Set(affected)], summary: `Removed "${asset.name.slice(0, 60)}" from the library` };
   },

@@ -12,6 +12,7 @@ import { plannedClipInput } from './audioGraph.ts';
 import { curveHash, curveSamples, pathPointsMs, v1Shapes } from './curveHash.ts';
 import './editor/lifeline/lifeline.selftest.ts'; // life line (ADR-0021): window.__pfLife, the core calendar in this browser, for proof:lifeline
 import './editor/craft/craft.selftest.ts'; // editing craft (wave 7): window.__pfCraftMatch, core matchText in this browser, for proof:craft F8 (W3)
+import './editor/pearls/pearls.selftest.ts'; // marked ranges (wave 7): window.__pfPearlsHash, core usage and screen time in this browser, for proof:pearls P15 (builder C)
 import './editor/stabilise/stabilise.selftest.ts'; // stabilisation (wave 7): window.__pfSteadyHash, core steadyPose in this browser, for proof:stabilise S7 (W3)
 
 /**

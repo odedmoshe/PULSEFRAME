@@ -138,3 +138,7 @@ export { HEBREW_MARKS, BIDI_CONTROLS } from './commandBar/normalize.ts';
 export * from './steadyContract.ts';
 export * from './steady.ts';
 export * from './steadyOps.ts';
+// marked source ranges («פנינים», wave 7 pearls track): the contract is lead-built; sourceRanges.ts and the three op bodies are A's
+export * from './sourceRangesContract.ts';
+export * from './sourceRanges.ts';
+export * from './sourceRangeOps.ts';

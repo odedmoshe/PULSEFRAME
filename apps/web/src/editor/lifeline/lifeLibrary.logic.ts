@@ -15,7 +15,8 @@ import { addAssetArgs, addedClipDuration } from '../placement.ts';
 type Lang = 'he' | 'en';
 
 // ---------------------------------------------------------------- the view choice
-export const LIFE_VIEWS = ['all', 'date', 'events'] as const;
+/** 'pearls' (wave 7 pearls track): the «פנינים» view, offered only once its list is built (pearls/PearlsList.tsx PEARLS_UI_BUILT). */
+export const LIFE_VIEWS = ['all', 'date', 'events', 'pearls'] as const;
 export type LifeView = (typeof LIFE_VIEWS)[number];
 /** Where the chosen view is remembered (browser storage; nothing else of the life line is kept there). */
 export const LIFE_VIEW_STORAGE_KEY = 'pf.life.view';
