@@ -12,7 +12,10 @@ import { Button, Chip, Tabs } from '../ds/index.ts';
 import { AiTools } from './AiTools.tsx';
 import { CHROME_STRINGS } from './chrome.strings.ts';
 import { useChrome, type RailCategory } from './chromeState.ts';
-import { ElementsBrowser } from './ElementsBrowser.tsx';
+import { LibraryElementsDrawer } from './library/LibraryElementsDrawer.tsx';
+import { LibraryAudioTab, LIBRARY_UI_BUILT } from './library/LibraryAudioTab.tsx';
+import { LIBRARY_TESTIDS } from './library/library.testids.ts';
+import { LIBRARY_UI_STRINGS } from './library/library.strings.ts';
 import { pickCall, type PickKind } from './gallery.pick.ts';
 import { filterAssets, MediaGrid, type MediaFilter } from './MediaLibrary.tsx';
 import { SfxBrowser } from './SfxBrowser.tsx';
@@ -77,7 +80,7 @@ export function Library() {
         </Pane>
       )}
       {(rail === 'effects' || rail === 'transitions' || rail === 'looks') && <CatalogueDrawer kind={rail} />}
-      {rail === 'elements' && <div className="pf-bw-legacy"><ElementsBrowser /></div>}
+      {rail === 'elements' && <div className="pf-bw-legacy"><LibraryElementsDrawer /></div>}
       {rail === 'templates' && <div className="pf-bw-legacy"><PacksSection /><TemplatesDrawer /></div>}
       {rail === 'ai' && <div className="pf-bw-legacy"><AiTools /></div>}
     </aside>
@@ -169,14 +172,16 @@ function AudioDrawer({ onView }: { onView: (id: string) => void }) {
   const S = CHROME_STRINGS[state.lang];
   const M = PACKS_MOUNT_STRINGS[state.lang];
   const hasAudio = !!state.doc && filterAssets(state.doc, '', 'audio').length > 0;
-  const [tab, setTab] = useState<'effects' | 'music'>('effects'); // per visit; the built-in music is the drawer's second tab (ADR-0022)
+  const L = LIBRARY_UI_STRINGS[state.lang];
+  // per visit; the built-in music is the drawer's second tab (ADR-0022), the owner's library its third (wave 7, once built)
+  const [tab, setTab] = useState<'effects' | 'music' | 'library'>('effects');
   return (
     <div className="pf-bw-audio">
       {hasAudio && <Pane title={S.rail.audio}><div className="pf-bw-scroll"><MediaGrid onView={onView} filter="audio" /></div></Pane>}
-      <Tabs label={M.audioTabs} value={tab} onChange={(id) => setTab(id === 'music' ? 'music' : 'effects')} panelPrefix="pf-audio-panel"
-        tabs={[{ id: 'effects', label: M.tabEffects, testId: 'audio-tab-effects' }, { id: 'music', label: M.tabMusic, testId: MUSIC_TESTIDS.tab }]} />
-      <div role="tabpanel" id={`pf-audio-panel-${tab}`} aria-labelledby={`pf-audio-panel-tab-${tab}`} tabIndex={0} data-testid={tab === 'music' ? MUSIC_TESTIDS.panel : 'audio-panel-effects'}>
-        {tab === 'music' ? <MusicTab /> : <SfxBrowser />}
+      <Tabs label={M.audioTabs} value={tab} onChange={(id) => setTab(id === 'music' ? 'music' : id === 'library' && LIBRARY_UI_BUILT ? 'library' : 'effects')} panelPrefix="pf-audio-panel"
+        tabs={[{ id: 'effects', label: M.tabEffects, testId: 'audio-tab-effects' }, { id: 'music', label: M.tabMusic, testId: MUSIC_TESTIDS.tab }, ...(LIBRARY_UI_BUILT ? [{ id: 'library', label: L.audioTab, testId: LIBRARY_TESTIDS.audioTab }] : [])]} />
+      <div role="tabpanel" id={`pf-audio-panel-${tab}`} aria-labelledby={`pf-audio-panel-tab-${tab}`} tabIndex={0} data-testid={tab === 'music' ? MUSIC_TESTIDS.panel : tab === 'library' ? LIBRARY_TESTIDS.audioPanel : 'audio-panel-effects'}>
+        {tab === 'music' ? <MusicTab /> : tab === 'library' ? <LibraryAudioTab /> : <SfxBrowser />}
       </div>
     </div>
   );

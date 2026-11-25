@@ -14,6 +14,7 @@
  * The photosensitivity card in the done step carries its own ids (export-flash-*): flash-pass / flash-fail are the status
  * bar's (StatusBar.tsx), which stays after the sheet is closed.
  */
+import { ExportLicenceLines } from './library/ExportLicenceLines.tsx';
 import { useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { Check, Download, MessageCircle, MonitorPlay, Play, ShieldCheck, SlidersHorizontal, Smartphone, HardDriveDownload, TriangleAlert, Upload } from 'lucide-react';
 import { Badge, Button, Dialog, ProgressBar } from '../ds/index.ts';
@@ -583,6 +584,8 @@ function FileCard({ j, S, editor }: { j: SheetJob; S: ExportStrings; editor: Edi
         <a className="pf-btn pf-btn-secondary pf-btn-md pf-ds" href={url} download data-testid="export-download"><Download size={16} aria-hidden="true" /><span className="pf-btn-label">{S.download}</span></a>
       </div>
       {report && <FlashResult report={report} S={S} editor={editor} />}
+      {/* the licence lines of library files (wave 7 library track), from the job output */}
+      <ExportLicenceLines output={j.output} />
     </>
   );
 }
