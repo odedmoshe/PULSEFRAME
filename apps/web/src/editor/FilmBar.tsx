@@ -15,6 +15,8 @@ import { FILM_TESTIDS as TID } from './familyFilm.testids.ts';
 import { familyFilmStrings } from './familyFilm.strings.ts';
 import { clipWhy, currentFilmRun, filmFailure, findFilmTransaction, otherLengths, otherMomentsParams, reasonLine } from './familyFilm.logic.ts';
 import './familyFilm.css';
+import { MUSICFIT_UI_BUILT } from './musicfit/MusicFitBlock.tsx';
+import { SwapMusicButton } from './musicfit/SwapMusicDialog.tsx';
 
 export interface FilmBarProps { lang: 'he' | 'en'; /** a film run of the document, when filmRun of this tab is null (after a reload) */ runId?: string | null }
 export function FilmBar({ lang, runId }: FilmBarProps): ReactElement | null {
@@ -61,6 +63,8 @@ export function FilmBar({ lang, runId }: FilmBarProps): ReactElement | null {
         items={otherLengths(params.targetSeconds).map((s) => ({ id: String(s), label: S.lengthMenu(s) }))}
         trigger={(p) => <Button {...p} size="sm" data-testid={TID.barLength} disabled={busy}>{S.otherLength}</Button>} />
       {removed > 0 && <Button size="sm" data-testid={TID.barRestore} disabled={busy} onClick={() => void regenerate({}, true)}>{S.restoreRemoved}</Button>}
+      {/* «מוזיקה אחרת» (wave 7 musicfit): once builder C has built it */}
+      {MUSICFIT_UI_BUILT && <SwapMusicButton host={{ kind: 'film', runId: view.run.id }} />}
       <Button size="sm" variant="ghost" data-testid={TID.barWhy} aria-expanded={showWhy} onClick={() => setShowWhy((v) => !v)}>{S.whyClips}</Button>
       {busy && <span role="status" className="pf-film-muted">{S.working}</span>}
       {note && !busy && <span role="status" className="pf-film-muted" data-testid={TID.barNote}>{note}</span>}

@@ -408,6 +408,8 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
   const useCount = d.slotUse.mode === 'all' ? d.slots.length : Math.min(d.slots.length, Math.max(d.slotUse.min, media.length));
   // built-in music (ADR-0022): one source of music at a time; an unknown or rejected style is refused
   const wanted = p.builtinMusic ?? null;
+  // wave 7 musicfit: the exact ending is builder B's; until then it is refused, never silently made as a faded track
+  if (wanted?.ending === 'exact') throw new TemplateError('invalid_args', 'an exact ending of built-in music is not built in this build yet', 'Leave out ending (the track is then cut at the last picture and faded), or update the editor.');
   if (wanted && p.musicAssetId !== null) throw new TemplateError('invalid_args', 'choose a music file or built-in music, not both', 'Send musicAssetId: null together with builtinMusic, and builtinMusic: null together with musicAssetId (a regeneration merges new parameters into the run\'s own).');
   const style: MusicStyle | null = wanted ? findMusicStyle(wanted.styleId) ?? null : null;
   if (wanted && !style) throw new TemplateError('invalid_args', `there is no built-in music style "${wanted.styleId}"`, `The styles are: ${listMusicStyles().map((x) => x.id).join(', ') || 'none in this build'} (GET /api/v1/music).`);

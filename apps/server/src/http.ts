@@ -38,6 +38,8 @@ import { buildOpenApi } from './openapi.ts';
 import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
 import { cameraMotionView, cancelStabiliseJob, startStabiliseJob } from './stabilise.ts';
 import { pearlsView } from './pearls.ts';
+import { applyMusicFitFor, markJoinHeardFor, musicJoinPreviewFor, planMusicFitFor, refuseHeardByAgent } from './musicfit/routes.ts';
+import { MusicFitApplyRequestSchema, MusicFitPlanRequestSchema } from '@pulseframe/core';
 import { STABILISE_JOB_TYPE, StabiliseRunBodySchema } from '@pulseframe/core';
 import { cancelMomentsJob, momentsLaneOf, startMomentsJob } from './moments.ts';
 import type { Presence } from './presence.ts';
@@ -765,6 +767,20 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const projectId = c.req.param('id');
     store.getProject(projectId);
     return c.json(await addMusic(store, gov, p, projectId, await body(c, MusicBody)), 201);
+  });
+  // ----- music that fits the film «מוזיקה שמתאימה לסרט» (wave 7 musicfit; musicfit/routes.ts): 501 musicfit_not_built until built -----
+  app.post('/api/v1/projects/:id/music-fit/plan', async (c) => { const p = need(c, 'observe'); return c.json(await planMusicFitFor(store, gov, p, c.req.param('id'), await body(c, MusicFitPlanRequestSchema))); });
+  app.post('/api/v1/projects/:id/music-fit/apply', async (c) => { const p = need(c, 'observe'); return c.json(await applyMusicFitFor(store, gov, p, c.req.param('id'), await body(c, MusicFitApplyRequestSchema))); });
+  app.get('/api/v1/projects/:id/music-fit/join.wav', async (c) => {
+    const p = need(c, 'observe');
+    const q = { assetId: c.req.query('assetId') ?? '', from: c.req.query('from') ?? '', to: c.req.query('to') ?? '', ...(c.req.query('startAt') ? { startAt: c.req.query('startAt')! } : {}) };
+    const bytes = await musicJoinPreviewFor(store, gov, p, c.req.param('id'), q, c.req.raw.signal);
+    return c.body(new Uint8Array(bytes), 200, { 'content-type': 'audio/wav', 'content-length': String(bytes.length), 'cache-control': 'no-store' });
+  });
+  app.post('/api/v1/projects/:id/assets/:assetId/music-join/heard', async (c) => {
+    const p = need(c, 'observe');
+    refuseHeardByAgent(p, c.req.param('assetId')); // before the body is read: an agent learns nothing else
+    return c.json(markJoinHeardFor(store, gov, p, c.req.param('id'), c.req.param('assetId'), (await body(c, z.object({ heard: z.boolean() }).strict())).heard));
   });
   // Graphic elements: the same route for the editor and for agents. Element pictures count against the storage ceiling like
   // uploads; makeElement checks it (store.maxStorageBytes), so the agent tool is held to it as well.

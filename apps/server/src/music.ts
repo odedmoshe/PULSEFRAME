@@ -170,8 +170,11 @@ export function resolveMusicRequest(req: MusicRequest): { style: MusicStyle; lay
     if (!m || Number(m[1]) <= 0 || (m[2] !== undefined && Number(m[2]) <= 0)) throw new ApiError(400, 'invalid_option', 'fitSeconds is a positive number of seconds written "n" or "n/d"', { fitSeconds: req.fitSeconds });
     bars = barsForDuration(style.id, T.rt(Number(m[1]), m[2] === undefined ? 1 : Number(m[2])));
   }
+  if (req.endFrames !== undefined && req.fitSeconds !== undefined) throw new ApiError(400, 'invalid_option', 'endFrames goes together with bars, not with fitSeconds', { endFrames: req.endFrames }, 'Ask for bars and endFrames (exactLayoutFor gives both), or for fitSeconds alone.');
+  // wave 7 musicfit: an ending other than one bar is builder A's synthesiser work; until then it is refused, never made wrongly
+  if (req.endFrames !== undefined && req.endFrames !== (MUSIC_SAMPLE_RATE * 60 * style.meter) / style.bpm) throw new ApiError(501, 'musicfit_not_built', 'music that fits the film is not built in this build yet', { endFrames: req.endFrames }, 'Leave out endFrames (the track then ends with one bar), or update the editor.');
   try {
-    return { style, layout: musicLayout(style.id, bars!), seed };
+    return { style, layout: musicLayout(style.id, bars!, req.endFrames), seed };
   } catch (e) {
     if (e instanceof RangeError) throw new ApiError(400, 'invalid_option', e.message, { styleId: style.id, bars });
     throw e;

@@ -21,6 +21,7 @@ import { multicamIssues } from './multicamValidate.ts';
 import { libraryRecordIssues } from './libraryDuties.ts';
 import { steadyIssues } from './steadyValidate.ts';
 import { validateSourceRanges } from './sourceRanges.ts';
+import { musicFitIssues } from './musicFitValidate.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
 
@@ -111,7 +112,8 @@ export function validateProject(doc: ProjectDocument): Issue[] {
     // licence table says so) is libraryDuties.ts libraryRecordIssues.
     const lib = a.provenance.library;
     if (lib) {
-      if (a.provenance.origin !== 'upload') issues.push({ code: 'library_provenance', message: `asset ${a.id}: only a copied file carries a library record`, ids: [a.id] });
+      // a song shortened by «התאמה לאורך» (wave 7 musicfit) carries the record of the library file it was made from (origin 'derived')
+      if (a.provenance.origin !== 'upload' && !(a.provenance.origin === 'derived' && a.provenance.fitted)) issues.push({ code: 'library_provenance', message: `asset ${a.id}: only a copied file carries a library record`, ids: [a.id] });
       if (a.provenance.upload) issues.push({ code: 'library_provenance', message: `asset ${a.id}: a file from the library has no upload record`, ids: [a.id] });
       if (lib.raster && a.kind !== 'image') issues.push({ code: 'library_provenance', message: `asset ${a.id}: only a picture can be rasterised from the library`, ids: [a.id] });
       for (const message of libraryRecordIssues(lib)) issues.push({ code: 'library_provenance', message: `asset ${a.id}: ${message}`, ids: [a.id] });
@@ -408,6 +410,8 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   issues.push(...steadyIssues(doc));
   // marked source ranges (wave 7 pearls track; sourceRanges.ts validateSourceRanges, code source_range)
   if (doc.sourceRanges) issues.push(...validateSourceRanges(doc));
+  // music that fits the film (wave 7 musicfit): provenance.fitted and clip.impact (musicFitValidate.ts, codes fitted_provenance, clip_impact)
+  issues.push(...musicFitIssues(doc));
   return issues;
 }
 const hasTags = (doc: ProjectDocument) => Object.values(doc.sequences).some((s) => s.tracks.some((t) => t.clips.some((c) => c.type === 'media' && !!c.multicam)));

@@ -67,11 +67,16 @@ export interface MusicLayout {
   styleId: string; version: number; bars: number; bpm: number; meter: 4;
   /** 2,880,000 / bpm */
   samplesPerBeat: number;
-  /** bars · 4 · samplesPerBeat stereo sample frames; the WAV file is 44 + 4 · totalFrames bytes */
+  /** (bars − 1) · 4 · samplesPerBeat + endFrames stereo sample frames; the WAV file is 44 + 4 · totalFrames bytes */
   totalFrames: number;
-  /** 240 · bars / bpm seconds, exact */
+  /**
+   * Sample frames of the ending (the last "bar"): one bar (4 · samplesPerBeat) unless an exact length was asked for (wave 7
+   * musicfit, exactLayoutFor), then 2 to 6 beats. Only a track whose ending is not one bar records it (params.end).
+   */
+  endFrames: number;
+  /** totalFrames / 48,000 seconds, exact (240 · bars / bpm with the default ending) */
   duration: T.RationalTime;
-  /** k · 60 / bpm seconds for k = 0 … 4·bars − 1 */
+  /** k · 60 / bpm seconds for every k with k · samplesPerBeat < totalFrames (k = 0 … 4·bars − 1 with the default ending) */
   beats: T.RationalTime[];
   /** every fourth beat */
   downbeats: T.RationalTime[];
@@ -96,24 +101,56 @@ function formOf(bars: number): { kind: MusicSectionKind; level: 0 | 1 | 2 | 3; b
   out.push({ kind: 'ending', level: 3, bars: 1 });
   return out.filter((s) => s.bars > 0);
 }
+/** The shortest and longest exact ending, in beats (wave 7 musicfit, decisions §2.2): exactLayoutFor gives 2 ≤ ending < 6 beats. */
+export const MUSIC_ENDING_MIN_BEATS = 2;
+export const MUSIC_ENDING_MAX_BEATS = 6;
 /**
  * Everything known about a track of `bars` bars in this style. Pure. Throws RangeError for an unknown or rejected style,
- * a number of bars that is not a whole number or is below the style's minBars, or a length over MUSIC_MAX_SECONDS.
+ * a number of bars that is not a whole number or is below the style's minBars, an ending that is not a whole number of sample
+ * frames from MUSIC_ENDING_MIN_BEATS to MUSIC_ENDING_MAX_BEATS beats, or a length over MUSIC_MAX_SECONDS.
+ * `endFrames` (wave 7 musicfit): the length of the last "bar", the ending, in 48 kHz sample frames; absent = one bar, which gives
+ * exactly the layout (and the bytes, names and params) of a track made before it existed.
  */
-export function musicLayout(styleId: string, bars: number): MusicLayout {
+export function musicLayout(styleId: string, bars: number, endFrames?: number): MusicLayout {
   const style = findMusicStyle(styleId);
   if (!style) throw new RangeError(`there is no built-in music style "${styleId}"`);
   if (!Number.isInteger(bars) || bars < style.minBars) throw new RangeError(`${style.id} is made in whole bars, at least ${style.minBars}; got ${bars}`);
-  if (240 * bars > MUSIC_MAX_SECONDS * style.bpm) throw new RangeError(`${bars} bars of ${style.id} last ${Math.ceil((240 * bars) / style.bpm)} s; a built-in track is at most ${MUSIC_MAX_SECONDS} s (${maxMusicBars(style)} bars)`);
   const samplesPerBeat = (MUSIC_SAMPLE_RATE * 60) / style.bpm;
+  const bar = style.meter * samplesPerBeat;
+  const ending = endFrames ?? bar;
+  if (!Number.isInteger(ending) || ending < MUSIC_ENDING_MIN_BEATS * samplesPerBeat || ending > MUSIC_ENDING_MAX_BEATS * samplesPerBeat) throw new RangeError(`the ending of ${style.id} lasts ${MUSIC_ENDING_MIN_BEATS} to ${MUSIC_ENDING_MAX_BEATS} beats in whole sample frames (${MUSIC_ENDING_MIN_BEATS * samplesPerBeat} to ${MUSIC_ENDING_MAX_BEATS * samplesPerBeat}); got ${endFrames}`);
+  const totalFrames = (bars - 1) * bar + ending;
+  if (totalFrames > MUSIC_MAX_SECONDS * MUSIC_SAMPLE_RATE) throw new RangeError(`${bars} bars of ${style.id} last ${Math.ceil(totalFrames / MUSIC_SAMPLE_RATE)} s; a built-in track is at most ${MUSIC_MAX_SECONDS} s (${maxMusicBars(style)} bars)`);
   const beatAt = (k: number): T.RationalTime => T.normalize(T.rt(60 * k, style.bpm)); // lowest terms: the form documents are compared in
-  const beats = Array.from({ length: bars * style.meter }, (_, k) => beatAt(k));
-  let bar = 0;
-  const sections = formOf(bars).map((s): MusicLayoutSection => { const startBar = bar; bar += s.bars; return { startBar, bars: s.bars, start: beatAt(startBar * style.meter), kind: s.kind, level: s.level }; });
+  const beats = Array.from({ length: Math.ceil(totalFrames / samplesPerBeat) }, (_, k) => beatAt(k)); // k · spb < totalFrames
+  let at = 0;
+  const sections = formOf(bars).map((s): MusicLayoutSection => { const startBar = at; at += s.bars; return { startBar, bars: s.bars, start: beatAt(startBar * style.meter), kind: s.kind, level: s.level }; });
   return {
-    styleId: style.id, version: style.version, bars, bpm: style.bpm, meter: style.meter, samplesPerBeat, totalFrames: bars * style.meter * samplesPerBeat,
-    duration: beatAt(bars * style.meter), beats, downbeats: beats.filter((_, k) => k % style.meter === 0), sections,
+    styleId: style.id, version: style.version, bars, bpm: style.bpm, meter: style.meter, samplesPerBeat, totalFrames, endFrames: ending,
+    duration: T.normalize(T.rt(totalFrames, MUSIC_SAMPLE_RATE)), beats, downbeats: beats.filter((_, k) => k % style.meter === 0), sections,
   };
+}
+/** Whole 48 kHz sample frames that cover `duration`, rounded UP (a clip of that length never runs past the file). Pure, exact. */
+export function sampleFramesFor(duration: T.RationalTime): number {
+  if (T.isNegative(duration)) throw new RangeError('a duration is not negative');
+  const n = BigInt(duration.value) * BigInt(MUSIC_SAMPLE_RATE), d = BigInt(duration.timescale);
+  return Number(n / d + (n % d === 0n ? 0n : 1n));
+}
+/**
+ * The bars and ending of a track of exactly `lengthFrames` sample frames in this style (wave 7 musicfit, decisions §2.2): K =
+ * floor((L − 2·spb) / bar) whole bars before the final chord and an ending of L − K·bar frames (2 to just under 6 beats); the
+ * track has K + 1 bars in the sense of musicLayout. Throws RangeError like musicLayout (too short for the style's minBars, or
+ * longer than MUSIC_MAX_SECONDS).
+ */
+export function exactLayoutFor(styleId: string, lengthFrames: number): { bars: number; endFrames: number } {
+  const style = findMusicStyle(styleId);
+  if (!style) throw new RangeError(`there is no built-in music style "${styleId}"`);
+  if (!Number.isInteger(lengthFrames) || lengthFrames <= 0) throw new RangeError(`a length is a positive whole number of sample frames; got ${lengthFrames}`);
+  const spb = (MUSIC_SAMPLE_RATE * 60) / style.bpm, bar = style.meter * spb;
+  const k = Math.floor((lengthFrames - MUSIC_ENDING_MIN_BEATS * spb) / bar);
+  const out = { bars: k + 1, endFrames: lengthFrames - k * bar };
+  musicLayout(style.id, out.bars, out.endFrames); // the same refusals as musicLayout
+  return out;
 }
 /** The most bars of a style that stay within MUSIC_MAX_SECONDS. */
 export const maxMusicBars = (style: Pick<MusicStyle, 'bpm'>): number => Math.floor((MUSIC_MAX_SECONDS * style.bpm) / 240);
@@ -136,6 +173,8 @@ export const MusicRequestSchema = z.object({
   styleId: z.string().regex(MUSIC_STYLE_ID),
   bars: z.number().int().min(1).max(600).optional(),
   fitSeconds: z.string().regex(/^[1-9]\d{0,3}(\/[1-9]\d{0,3})?$/).optional().describe('Exact seconds n or n/d; rounded UP to whole bars. Exactly one of bars and fitSeconds.'),
+  /** Wave 7 musicfit: the ending in 48 kHz sample frames (2 to 6 beats), only with `bars`; exactLayoutFor gives both. Absent = one bar. */
+  endFrames: z.number().int().min(1).max(MUSIC_MAX_SECONDS * MUSIC_SAMPLE_RATE).optional().describe('The ending in 48 kHz sample frames (2 to 6 beats), only together with bars; absent = one bar'),
   seed: z.number().int().min(0).max(MUSIC_MAX_SEED).default(1),
 }).strict();
 export type MusicRequest = z.infer<typeof MusicRequestSchema>;
@@ -151,7 +190,9 @@ export const KnownGridSchema = z.object({
 }).strict();
 export type KnownGrid = z.infer<typeof KnownGridSchema>;
 /** What the formula was asked for, as it is recorded in the asset (provenance.procedural.params) and in the grid's origin. */
-export const musicProvenanceParams = (layout: MusicLayout, seed: number): { bars: number; seed: number; bpm: number; meter: number; synth: number } => ({ bars: layout.bars, seed, bpm: layout.bpm, meter: layout.meter, synth: MUSIC_SYNTH_VERSION });
+/** `end` (sample frames of the ending) only when the ending is not one bar, so a track made before wave 7 keeps its params. */
+export const musicProvenanceParams = (layout: MusicLayout, seed: number): { bars: number; seed: number; bpm: number; meter: number; synth: number; end?: number } =>
+  ({ bars: layout.bars, seed, bpm: layout.bpm, meter: layout.meter, synth: MUSIC_SYNTH_VERSION, ...(layout.endFrames !== layout.meter * layout.samplesPerBeat ? { end: layout.endFrames } : {}) });
 /** The known grid of a layout. `createdAt` is the caller's (the server's clock when the track was made). */
 export const knownGridOf = (layout: MusicLayout, seed: number, createdAt: string): KnownGrid => ({
   method: MUSIC_METHOD, params: { styleId: layout.styleId, version: layout.version, ...musicProvenanceParams(layout, seed) }, createdAt, bpm: layout.bpm, meter: layout.meter,

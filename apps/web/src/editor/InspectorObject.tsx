@@ -51,6 +51,8 @@ import { ProjectPanel } from './InspectorProject.tsx';
 import { FontPicker } from './FontPicker.tsx';
 import { FieldLiveLine, FieldMenu, FieldTextBox } from './lifeline/FieldMenu.tsx';
 import { MulticamClipBlock } from './MulticamClipBlock.tsx';
+import { MUSICFIT_UI_BUILT } from './musicfit/MusicFitBlock.tsx';
+import { ImpactControls } from './musicfit/ImpactControls.tsx';
 
 type Media = Extract<Clip, { type: 'media' }>;
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -960,6 +962,8 @@ function BeatTab({ clip, keymap }: PanelProps) {
         <span>{beats ? <>{S.tempo} <bdi dir="ltr" className="num">{bpm === null ? '—' : Math.round(bpm)} BPM</bdi> · {isolate(S.beatsN(beats.count))}</> : S.bpmNone}</span>
       </div>
       <Section id="analysis" title={S.secBeat} help><AnalysisPanel key={`analysis:${clip.id}`} /></Section>
+      {/* «סימון הרגע» / «אל הפעימה» (wave 7 musicfit): once builder C has built it */}
+      {MUSICFIT_UI_BUILT && <ImpactControls key={`impact:${clip.id}`} clip={clip} />}
       <Section id="time" title={S.secTime} defaultOpen={false} summary={`${secondsText(T.toSeconds(clip.duration))} ${S.seconds}`}><TimeBlock clip={clip} keymap={keymap} /></Section>
       {!state.viewVariantId && (
         <Section id="media" title={S.secMedia} defaultOpen={false}>

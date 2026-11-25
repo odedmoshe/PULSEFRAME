@@ -13,7 +13,15 @@ import * as T from '@pulseframe/time';
 import type { Asset, LibraryRecord, ProjectDocument } from './schema.ts';
 import { recordNeedsCredit, recordShareable } from './libraryDuties.ts';
 
-export interface CreditLine { assetId: string; title: string; text: string; placement: 'description' | 'on_screen' | 'either'; group: 'music' | 'sound' | 'picture' }
+export interface CreditLine {
+  assetId: string; title: string; text: string; placement: 'description' | 'on_screen' | 'either'; group: 'music' | 'sound' | 'picture';
+  /**
+   * 'shortened' when the sequence plays a song made from this library file by «התאמה לאורך» (wave 7 musicfit: provenance.fitted, which
+   * carries the source's record). The licence (CC BY) asks that a change be indicated: the description adds MODIFIED_LINE after the
+   * credit, on its own line; the credit itself stays verbatim.
+   */
+  modified?: 'shortened';
+}
 export interface CreditsReport {
   lines: CreditLine[];
   /** The text to paste in the video's description, in the chosen language. */
@@ -39,6 +47,8 @@ export interface ArchiveLibraryPlan {
 export const CREDITS_HEADING = { he: 'קרדיטים', en: 'Credits' } as const;
 /** The line that names the non-commercial files (the export warning says the same). */
 export const NON_COMMERCIAL_LINE = { he: 'לשימוש לא מסחרי בלבד', en: 'For non-commercial use only' } as const;
+/** The line after a credit whose music was shortened in the editor (wave 7 musicfit; CreditLine.modified). */
+export const MODIFIED_LINE = { he: '(קוצר בעורך: הוסרו תיבות מהאמצע)', en: '(shortened in the editor: bars removed from the middle)' } as const;
 
 /**
  * The library files an asset stems from: itself when it carries a library record, and, through provider results
@@ -70,7 +80,7 @@ const titleOf = (asset: Asset, r: LibraryRecord) => r.title || asset.name;
 /** The description text of a report's parts (empty when there is nothing to say). Credit strings are written verbatim. */
 function describe(lines: readonly CreditLine[], nonCommercial: readonly { title: string }[], lang: 'he' | 'en'): string {
   const parts: string[] = [];
-  if (lines.length) parts.push(CREDITS_HEADING[lang], ...lines.map((l) => l.text));
+  if (lines.length) parts.push(CREDITS_HEADING[lang], ...lines.map((l) => (l.modified ? `${l.text}\n${MODIFIED_LINE[lang]}` : l.text)));
   if (nonCommercial.length) parts.push(`${NON_COMMERCIAL_LINE[lang]}: ${nonCommercial.map((n) => n.title).join(', ')}`);
   return parts.join('\n\n');
 }
@@ -93,9 +103,14 @@ export function collectCredits(doc: ProjectDocument, opts: { sequenceId?: string
     if (c.type !== 'media') continue;
     for (const { asset, record } of libraryOrigins(doc, c.assetId)) {
       const title = titleOf(asset, record);
+      const shortened = !!asset.provenance.fitted;
       if (record.credit && !texts.has(record.credit.text)) {
         texts.add(record.credit.text);
-        lines.push({ assetId: asset.id, title, text: record.credit.text, placement: record.credit.placement, group: groupOf(record) });
+        lines.push({ assetId: asset.id, title, text: record.credit.text, placement: record.credit.placement, group: groupOf(record), ...(shortened ? { modified: 'shortened' as const } : {}) });
+      } else if (record.credit && shortened) {
+        // the same credit met first through the original song: the change must still be indicated
+        const line = lines.find((l) => l.text === record.credit!.text);
+        if (line) line.modified = 'shortened';
       }
       if (record.flags.nonCommercial && !ncSeen.has(asset.id)) { ncSeen.add(asset.id); nonCommercial.push({ assetId: asset.id, title }); }
       if (record.flags.people && !peopleSeen.has(asset.id)) { peopleSeen.add(asset.id); people.push({ assetId: asset.id, title }); }
