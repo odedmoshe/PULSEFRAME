@@ -28,6 +28,8 @@ type Lang = 'he' | 'en';
 
 interface Env {
   s: RunningServer; fx: Record<StoryFixtureName, string>; stills: string[];
+  /** S11e: a seventh still (the replacement) and two tones as music (3 kHz, then 2 kHz for the rebuild). */
+  more: { s6: string; music3k: string; music2k: string };
   call(p: string, body?: unknown, method?: string): Promise<{ status: number; body: any }>;
 }
 let envPromise: Promise<Env> | null = null;
@@ -42,6 +44,10 @@ async function makeEnv(): Promise<Env> {
   const stills: string[] = [];
   const colours = ['dc1e1e', '1ec81e', '1e1edc', 'e6e61e', 'dc1edc', '1edcdc'];
   colours.forEach((c, i) => { const out = path.join(fxDir, `s${i}.png`); ff(['-y', '-f', 'lavfi', '-i', `color=c=0x${c}:s=${W}x${H}`, '-frames:v', '1', out]); stills.push(out); });
+  const more = { s6: path.join(fxDir, 's6.png'), music3k: path.join(fxDir, 'music-3k.wav'), music2k: path.join(fxDir, 'music-2k.wav') };
+  ff(['-y', '-f', 'lavfi', '-i', `color=c=0xfafafa:s=${W}x${H}`, '-frames:v', '1', more.s6]);
+  ff(['-y', '-f', 'lavfi', '-i', 'sine=f=3000:d=30:sample_rate=48000', '-ac', '1', '-c:a', 'pcm_s16le', more.music3k]);
+  ff(['-y', '-f', 'lavfi', '-i', 'sine=f=2000:d=30:sample_rate=48000', '-ac', '1', '-c:a', 'pcm_s16le', more.music2k]);
   const s = await startServer({ port: PORT, dataDir: path.join(art, 'data'), webDist: path.join(root, 'apps/web/dist'), homeZone: 'Asia/Jerusalem' });
   server = s;
   process.once('beforeExit', () => { void s.close(); });
@@ -49,7 +55,7 @@ async function makeEnv(): Promise<Env> {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: method ?? (body === undefined ? 'GET' : 'POST'), headers: { connection: 'close', authorization: `Bearer ${s.auth.tokens.agent}`, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
     return { status: r.status, body: r.headers.get('content-type')?.includes('json') ? await r.json() : Buffer.from(await r.arrayBuffer()) };
   };
-  return { s, fx, stills, call };
+  return { s, fx, stills, more, call };
 }
 async function upload(e: Env, pid: string, file: string): Promise<string> {
   const r = await fetch(`${e.s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { authorization: `Bearer ${e.s.auth.tokens.agent}`, connection: 'close', 'x-filename': encodeURIComponent(path.basename(file)) }, body: new Uint8Array(fs.readFileSync(file)) });
@@ -193,25 +199,53 @@ const U1 = () => guarded({ kind: 'denied' }, async (b, e) => {
   return fails([!ok && `the state never became denied (it is ${state}; the browser's own error is ${probe})`, !text.includes('אין הרשאה למיקרופון') && `the words are «${text}»`, jobs.length > 0 && `${jobs.length} import job(s) exist`, audio.size > 0 && 'a sound file was made']);
 });
 
+/**
+ * The bodies the page hands to fetch, XMLHttpRequest, sendBeacon and WebSocket, with their sizes (a File/Blob's size, a buffer's
+ * bytes, a string's length): a request's own body size is not reported for a streamed File, so the page's senders are watched.
+ */
+const BODY_SPY = `
+  window.__pfBodies = [];
+  const size = (b) => b == null ? 0 : typeof b === 'string' ? b.length : b instanceof Blob ? b.size : b.byteLength ?? (b instanceof FormData ? [...b.values()].reduce((n, v) => n + (typeof v === 'string' ? v.length : v.size), 0) : 0);
+  const of = globalThis.fetch; globalThis.fetch = (u, init) => { window.__pfBodies.push({ how: 'fetch', url: String(u instanceof Request ? u.url : u), bytes: size(init && init.body) }); return of(u, init); };
+  const oo = XMLHttpRequest.prototype.open, os = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (m, u, ...r) { this.__pfUrl = String(u); return oo.call(this, m, u, ...r); };
+  XMLHttpRequest.prototype.send = function (b) { window.__pfBodies.push({ how: 'xhr', url: this.__pfUrl, bytes: size(b) }); return os.call(this, b); };
+  if (navigator.sendBeacon) { const ob = navigator.sendBeacon.bind(navigator); navigator.sendBeacon = (u, b) => { window.__pfBodies.push({ how: 'beacon', url: String(u), bytes: size(b) }); return ob(u, b); }; }
+  const ws = WebSocket.prototype.send; WebSocket.prototype.send = function (b) { window.__pfBodies.push({ how: 'websocket', url: this.url, bytes: size(b) }); return ws.call(this, b); };`;
+/** U2, and the privacy evidence that the take leaves the browser only through the authenticated import queue. */
 const U2 = () => run2();
 async function run2(): Promise<true | string> {
   let e: Env;
   try { e = await env(); } catch (x) { return `BLOCKED: ${(x as Error).message}`; }
   return guarded({ kind: 'file', file: e.fx['mic.wav'] }, async (b) => {
     const p = await project(e, 'U2', { pictures: 2 });
-    const { page, ctx } = await openEditor(b, e, p.pid, 'he');
+    const { page, ctx } = await openEditor(b, e, p.pid, 'he', BODY_SPY);
     await openDialog(page, 'he');
     const rate = await page.evaluate(() => { const c = new AudioContext(); const r = c.sampleRate; void c.close(); return r; });
+    // privacy evidence (integration): every request the page sends, and every body it hands to a sender (BODY_SPY); the take may leave only as
+    // one POST to the project's import queue (same origin, via 'browser'), and that door refuses a request without a credential
+    const sent: { method: string; url: string; via: string | null }[] = [];
+    page.on('request', (q) => { sent.push({ method: q.method(), url: q.url(), via: q.headers()['x-pf-via'] ?? null }); });
     const rec = await recordFor(page, 3600);
     if (typeof rec === 'string') return rec;
     const before = await audioIds(e, p.pid);
     const w = await saveAndFetch(e, page, p.pid, before);
+    await sleep(500);
+    const bodies = await page.evaluate(() => (window as any).__pfBodies as { how: string; url: string; bytes: number }[]);
     await ctx.close();
     if (typeof w === 'string') return w;
+    const origin = new URL(e.s.url).origin;
+    const heavy = bodies.filter((q) => q.bytes > 1000);
+    const importPath = `/api/v1/projects/${p.pid}/imports`;
+    const imports = sent.filter((q) => q.method === 'POST' && new URL(q.url).pathname === importPath);
+    const leaks = [...heavy.filter((q) => !(q.how === 'xhr' && new URL(q.url, origin).origin === origin && new URL(q.url, origin).pathname === importPath)), ...imports.filter((q) => q.via !== 'browser'), ...sent.filter((q) => !q.url.startsWith(origin) && !q.url.startsWith('blob:') && !q.url.startsWith('data:'))];
+    const anon = await fetch(`${e.s.url}${importPath}`, { method: 'POST', headers: { connection: 'close', 'x-filename': 'x.wav' }, body: new Uint8Array(fs.readFileSync(e.fx['mic.wav'])) });
+    const privacy = [imports.length !== 1 && `${imports.length} POST(s) to the import queue (one wanted)`, heavy.length !== 1 && `${heavy.length} request(s) carried a body over 1 kB (one wanted: the import): ${JSON.stringify(heavy).slice(0, 300)}`, leaks.length > 0 && `the page sent ${JSON.stringify(leaks).slice(0, 300)}`, anon.status !== 401 && `the import queue answered ${anon.status} without a credential (401 wanted)`];
     const seconds = w.samples.length / w.rate, starts = burstStarts(w.samples, w.rate);
     const gaps = starts.slice(1).map((s, i) => s - starts[i]!);
     const want = MIC_BURSTS.slice(1).map((s, i) => s - MIC_BURSTS[i]!);
     return fails([
+      ...privacy,
       w.channels !== 1 && `${w.channels} channels`, w.bits !== 16 && `${w.bits} bits`, w.rate !== rate && `header rate ${w.rate} ≠ context rate ${rate}`,
       Math.abs(seconds - rec.seconds) > 0.25 && `length ${seconds.toFixed(3)} s vs ${rec.seconds.toFixed(3)} s between record and stop`,
       starts.length !== 3 && `${starts.length} bursts found (${starts.map((s) => s.toFixed(2)).join(', ')}), wanted 3`,
@@ -438,6 +472,21 @@ const U12 = async () => {
       await page.getByTestId(ID.dialog).waitFor({ state: 'detached', timeout: 5000 }).catch(() => bad.push(`${how}: the dialog did not close`));
       await ended(`closed by ${how}`);
     }
+    // integration: «מהטלפון» while recording — the dialog goes away (the recorder unmounts) for the phone dialog: the microphone is
+    // released; putting the phone dialog away brings the story dialog back with the picture order chosen so far
+    await openDialog(page, 'he');
+    await page.getByTestId(ID.item).first().focus();
+    await page.keyboard.press('Alt+ArrowLeft');
+    const order = await page.getByTestId(ID.item).evaluateAll((els) => els.map((x) => x.getAttribute('data-asset-id')));
+    await page.getByTestId(ID.recStart).click(); await waitState(page, 'recording'); await sleep(400);
+    await page.getByRole('button', { name: storyStrings('he').fromPhone, exact: true }).click();
+    await page.getByTestId(ID.dialog).waitFor({ state: 'detached', timeout: 5000 }).catch(() => bad.push('phone: the story dialog did not go away'));
+    await ended('«מהטלפון» (the recorder unmounted)');
+    await page.keyboard.press('Escape');
+    const back = await page.getByTestId(ID.dialog).waitFor({ timeout: 8000 }).then(() => true, () => false);
+    const order2 = back ? await page.getByTestId(ID.item).evaluateAll((els) => els.map((x) => x.getAttribute('data-asset-id'))) : [];
+    if (!back) bad.push('the story dialog did not come back when the phone dialog was put away');
+    else if (JSON.stringify(order2) !== JSON.stringify(order) || order.length < 2) bad.push(`the picture order was not kept across the phone dialog: ${JSON.stringify(order)} → ${JSON.stringify(order2)}`);
     await ctx.close();
     return bad.length ? bad.join('; ') : true;
   });
@@ -487,5 +536,136 @@ const U15 = () => guarded({ kind: 'none' }, async (b, e) => {
   return fails([!shown && 'no «הקובץ לא מתנגן בעורך» state', shown && !/^הקובץ לא מתנגן בעורך \(קודק .*\)\. הקליטו כאן או המירו אותו$/u.test(text.replace(/[⁦⁩]/g, '')) && `the words are «${text}»`, disabled.some((d) => d !== 'true') && `build buttons aria-disabled: ${disabled.join(', ')}`, requests.length > 0 && 'a plan request was sent for the unplayable file']);
 });
 
-export const STORY_PROOF_UI: StoryProofPart = { built: true, checks: { U1, U2, U3, U4, U5, U6, U7, U8, U9, U10, U12, U13, U14, U15 } };
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// S11e (integration): S11's editor half — a story applied, then hand edits in the real editor of a new project (main magnet and
+// ripple delete on, as a new project starts): ripple-trim the end of picture 3 with W, replace picture 4 through «החלפת מדיה», Delete picture 2 (the
+// ripple moves every later picture earlier), and «בנייה מחדש» with the other music from the story bar. Expected: 3 and 4 kept
+// byte-equal; 5 and 6 (only moved by the ripple) back on their recorded cuts, or against a kept clip's end (the fill rule), with
+// the moved_back note shown in Hebrew in the bar; 2 left out until «החזרת החלקים שנמחקו», which brings it back at its own cut (or,
+// when a clip kept by hand covers that frame, right after the kept clips there: the fill rule); the
+// narration clip never replaced (byte-equal, same id); no frame without a picture from the first cut to the narration's end; the
+// whole rebuild is one undo (Ctrl+Z returns the exact document) and redo returns it. Cuts are typed here: tap ms → frame at 30 fps.
+// ---------------------------------------------------------------------------------------------------------------------------
+const S11e = () => guarded({ kind: 'none' }, async (b, e) => {
+  const pid = (await e.call('/projects', { name: 'S11e editor', width: W, height: H, frameRate: { num: 30, den: 1 } })).body.project.id as string;
+  const names = ['s0', 's1', 's2', 's3', 's4', 's5'];
+  const pics: string[] = [];
+  for (const f of e.stills) pics.push(await upload(e, pid, f));
+  const s6 = await upload(e, pid, e.more.s6), m3 = await upload(e, pid, e.more.music3k), m2 = await upload(e, pid, e.more.music2k);
+  const narration = await upload(e, pid, e.fx['narration.wav']);
+  const name = (assetId: string) => names[pics.indexOf(assetId)] ?? (assetId === s6 ? 's6' : assetId);
+  const timeline = (await getProject(e, pid)).project.settings.timeline;
+  if (!timeline?.mainMagnet || !timeline?.rippleDelete) return `a new project does not start with the magnet and ripple delete on: ${JSON.stringify(timeline)}`;
+  const taps = [3000, 6000, 9000, 12000, 16000];
+  const a = await e.call(`/projects/${pid}/recipes/story/apply`, { params: { narrationAssetId: narration, assetIds: pics, cutsMs: taps, musicAssetId: m3, openingTitle: false } });
+  if (a.status !== 200) return `apply → ${a.status} ${JSON.stringify(a.body?.error ?? a.body).slice(0, 300)}`;
+  const runId = a.body.runId as string;
+  const clipsOf = (d: any) => { const out: Record<string, any> = {}; for (const q of Object.values(d.sequences) as any[]) for (const t of q.tracks) for (const c of t.clips) out[c.id] = c; return out; };
+  const fr = (t: { value: string; timescale: number }) => { const n = BigInt(t.value) * 30n, dd = BigInt(t.timescale); return n % dd === 0n ? Number(n / dd) : NaN; };
+  const storyPics = (d: any) => { const all = clipsOf(d); return ((d.recipeRuns[runId]?.slots ?? []) as any[]).filter((x) => x.kind === 'picture' && all[x.clipId]).map((x) => { const c = all[x.clipId]; return { key: x.key as string, id: c.id as string, name: name(c.assetId), s: fr(c.start), e: fr(c.start) + fr(c.duration) }; }).sort((x, y) => x.s - y.s); };
+  const d0 = (await getProject(e, pid)).project;
+  const p0 = storyPics(d0);
+  const byName = (n: string) => p0.find((x) => x.name === n)!;
+  const narSlot = (d0.recipeRuns[runId].slots as any[]).find((x) => x.kind === 'sound' && clipsOf(d0)[x.clipId]?.assetId === narration);
+  const narBefore = narSlot ? JSON.stringify(clipsOf(d0)[narSlot.clipId]) : null;
+  if (!narBefore) return 'the narration clip of the run was not found';
+  if (p0.map((x) => x.name).join() !== names.join()) return `pictures applied out of order: ${p0.map((x) => x.name).join()}`;
+  const { page, ctx } = await openEditor(b, e, pid, 'he');
+  try {
+    await page.getByTestId(ID.bar).waitFor({ timeout: 15000 });
+    const revNow = async () => (await getProject(e, pid)).revision;
+    const waitRev = async (r: number) => { const t0 = Date.now(); while ((await revNow()) <= r && Date.now() - t0 < 15000) await sleep(150); return (await revNow()) > r; };
+    const selectClip = async (id: string) => { await page.locator(`.clip[data-clip-id="${id}"]`).first().click(); };
+    const seekTo = async (frame: number) => { await page.keyboard.press('KeyG'); await page.getByTestId('craft-time-input').waitFor({ timeout: 8000 }); await page.getByTestId('craft-time-input').fill(String(frame)); await page.keyboard.press('Enter'); await page.getByTestId('craft-time-entry').waitFor({ state: 'detached', timeout: 8000 }); };
+    const steps: string[] = [];
+    // trim picture 3 (s2, 180–270): its end to frame 240 with W (ripple trim on the main track: the later pictures move 30 earlier)
+    const p3 = byName('s2'), p4 = byName('s3'), p2 = byName('s1');
+    await selectClip(p3.id); await seekTo(240);
+    let r = await revNow(); await page.keyboard.press('KeyW');
+    if (!(await waitRev(r))) steps.push('W committed nothing');
+    // replace picture 4 (s3) with s6 through the inspector
+    await selectClip(p4.id);
+    r = await revNow();
+    // the inspector's «מדיה» section may be folded (its state is a setting of this browser): open it as a person would
+    if ((await page.getByTestId('section-media').getAttribute('data-open')) !== 'true') await page.getByTestId('section-media').locator('.pf-section-toggle').click();
+    await page.getByTestId('replace-media').click();
+    await page.locator(`[data-testid=replace-media-option][data-asset-id="${s6}"]`).click();
+    if (!(await waitRev(r))) steps.push('«החלפת מדיה» committed nothing');
+    // Delete picture 2 (s1): ripple delete on the main track moves the later pictures earlier
+    await selectClip(p2.id);
+    r = await revNow(); await page.keyboard.press('Delete');
+    if (!(await waitRev(r))) steps.push('Delete committed nothing');
+    const d1 = (await getProject(e, pid)).project;
+    const p1 = storyPics(d1);
+    const kept3 = JSON.stringify(clipsOf(d1)[p3.id]), kept4 = JSON.stringify(clipsOf(d1)[p4.id]);
+    const rippled = p1.filter((x) => x.name === 's4' || x.name === 's5').every((x) => x.s < byName(x.name).s);
+    const hash1 = await hashOf(e, pid), rev1 = (await getProject(e, pid)).revision;
+    // «בנייה מחדש» with the other music
+    await page.getByTestId(ID.barRebuild).click();
+    const S = storyStrings('he');
+    await page.getByRole('menuitem', { name: S.optionMusic('music-2k.wav') }).click();
+    const rebuilt = await waitRev(rev1);
+    await page.getByTestId(ID.barNote).waitFor({ timeout: 10000 }).catch(() => undefined);
+    await page.waitForFunction(([id, w]) => (document.querySelector(`[data-testid="${id}"]`)?.textContent ?? '').includes(w), [ID.barNote, S.warning.moved_back] as const, { timeout: 10000 }).catch(() => undefined);
+    const note = ((await page.getByTestId(ID.barNote).textContent().catch(() => '')) ?? '').replace(/[⁦-⁩]/g, '');
+    const d2 = (await getProject(e, pid)).project, rev2 = (await getProject(e, pid)).revision, hash2 = await hashOf(e, pid);
+    const p2s = storyPics(d2);
+    const all2 = clipsOf(d2);
+    const run2 = d2.recipeRuns[runId];
+    const cutOf = new Map<string, number | null>(([...(run2.params.picked ?? []), ...(run2.params.removedPicks ?? [])] as any[]).map((x) => [x.assetId, x.cutMs]));
+    const want = (assetId: string) => { const ms = cutOf.get(assetId); return ms == null ? 0 : Math.round(ms * 30 / 1000); };
+    const keptEnds = new Set([all2[p3.id], all2[p4.id]].filter(Boolean).map((c: any) => fr(c.start) + fr(c.duration)));
+    const later = p2s.filter((x) => x.name === 's4' || x.name === 's5');
+    const notBack = later.filter((x) => x.s !== want(pics[names.indexOf(x.name)]!) && !keptEnds.has(x.s));
+    let reach = p2s[0]?.s ?? 0; const holes: number[] = [];
+    for (const x of p2s) { if (x.s > reach) holes.push(reach); reach = Math.max(reach, x.e); }
+    if (reach < 720) holes.push(reach);
+    const musicNow = Object.values(all2).find((c: any) => c.assetId === m2 || c.assetId === m3) as any;
+    const restoreShown = (await page.getByTestId(ID.barRestore).count()) === 1;
+    // the whole rebuild is one undo; redo returns it
+    await page.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => undefined);
+    await page.keyboard.press('Control+z');
+    const t0 = Date.now(); while ((await hashOf(e, pid)) !== hash1 && Date.now() - t0 < 10000) await sleep(200);
+    const undone = (await hashOf(e, pid)) === hash1;
+    await page.keyboard.press('Control+Shift+z');
+    const t1 = Date.now(); while ((await hashOf(e, pid)) !== hash2 && Date.now() - t1 < 10000) await sleep(200);
+    const redone = (await hashOf(e, pid)) === hash2;
+    // «החזרת החלקים שנמחקו» brings picture 2 back at its own cut
+    await page.getByTestId(ID.barRestore).waitFor({ timeout: 10000 }).catch(() => undefined);
+    const rev3 = (await getProject(e, pid)).revision;
+    const restoreAnswer = page.waitForResponse((x) => /\/regenerate$/.test(new URL(x.url()).pathname), { timeout: 15000 }).then((x) => x.json()).catch(() => null);
+    if (await page.getByTestId(ID.barRestore).count()) await page.getByTestId(ID.barRestore).click();
+    const restored = await restoreAnswer as { excluded?: { assetId: string; code: string }[] } | null;
+    await waitRev(rev3);
+    const d3 = (await getProject(e, pid)).project;
+    const back2 = storyPics(d3).find((x) => x.name === 's1');
+    // its cut, or — when a clip kept by hand covers that frame — the end of the kept clips there (the fill rule, C2)
+    const keptSpans = [all2[p3.id], all2[p4.id]].filter(Boolean).map((c: any) => [fr(c.start), fr(c.start) + fr(c.duration)] as const);
+    let want2 = want(pics[1]!);
+    for (let moved = true; moved;) { moved = false; for (const [x, y] of keptSpans) if (x <= want2 && want2 < y) { want2 = y; moved = true; } }
+    return fails([
+      ...steps,
+      !rippled && `the Delete did not ripple the later pictures: ${JSON.stringify(p1.map((x) => [x.name, x.s]))}`,
+      !rebuilt && 'the rebuild committed nothing',
+      rev2 !== rev1 + 1 && `the rebuild moved the revision ${rev1} → ${rev2} (one wanted)`,
+      JSON.stringify(all2[p3.id]) !== kept3 && 'picture 3 (trimmed) is not byte-equal after the rebuild',
+      JSON.stringify(all2[p4.id]) !== kept4 && 'picture 4 (replaced) is not byte-equal after the rebuild',
+      p2s.some((x) => x.name === 's1') && 'picture 2 (deleted) was made again by the rebuild',
+      p2s.some((x) => x.name === 's3') && 'the file replaced by hand (picture 4\'s old file) was placed again by the rebuild',
+      notBack.length > 0 && `pictures only moved by the ripple are not back on their recorded cuts: ${JSON.stringify(notBack.map((x) => ({ name: x.name, start: x.s, cut: want(pics[names.indexOf(x.name)]!) })))}`,
+      holes.length > 0 && `frames without a picture after the rebuild at ${JSON.stringify(holes)}`,
+      JSON.stringify(all2[narSlot.clipId]) !== narBefore && 'the narration clip was replaced or changed',
+      musicNow?.assetId !== m2 && 'the other music is not placed',
+      !note.includes(S.warning.moved_back) && `the bar does not show the moved_back note in Hebrew: «${note}»`,
+      !restoreShown && '«החזרת החלקים שנמחקו» is not offered after the rebuild',
+      !undone && 'Ctrl+Z after the rebuild does not return the exact document (not one undo)',
+      !redone && 'redo does not return the rebuilt document',
+      (!back2 || back2.s !== want2) && `«החזרת החלקים שנמחקו»: picture 2 at ${back2?.s}, want ${want2} (its cut ${want(pics[1]!)}, past the clips kept by hand there); left out: ${JSON.stringify(restored?.excluded ?? null)}`,
+      storyPics(d3).some((x) => x.name === 's3') && 'the file replaced by hand (picture 4\'s old file) was placed again by the second rebuild',
+    ]);
+  } finally { await ctx.close().catch(() => undefined); }
+});
+
+export const STORY_PROOF_UI: StoryProofPart = { built: true, checks: { U1, U2, U3, U4, U5, U6, U7, U8, U9, U10, U12, U13, U14, U15, S11e } };
 void server;

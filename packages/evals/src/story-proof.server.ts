@@ -421,6 +421,8 @@ export const STORY_PROOF_SERVER: StoryProofPart = {
         holes(s2, firstCut).length > 0 && `frames without a picture after the rebuild at ${j(holes(s2, firstCut))}`,
         s2.music?.clip.assetId !== st.ids['music-2k.wav'] && 'the other music is not placed',
         (!back2 || back2.startFrame !== cutFrame(st.ids['s1.png']!)) && `restoreRemoved: picture 2 at ${back2?.startFrame}, its cut ${cutFrame(st.ids['s1.png']!)} (answer ${r2.revision})`,
+        // integration: a second rebuild still knows the replaced clip holds picture 4's pick (its old file is not placed again)
+        [s2, s3].some((x) => x.pictures.some((p) => p.name === 's3.png')) && 'the file replaced by hand (s3.png) was placed again by a rebuild',
       ]);
     }),
 

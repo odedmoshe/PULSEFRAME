@@ -6,7 +6,8 @@
  * ways to build: «הקישו את המעברים» (plans, closes the dialog, switches to the perform workspace; the «סיפור» tab opens) and «בנו
  * בלי הקשות» (plans and applies at the plan's revision).
  * An unplayable narration shows «הקובץ לא מתנגן בעורך (קודק …)» and disables both build buttons.
- * PRIVACY: every way of closing goes through `close()`, which releases the microphone (the recorder's release) first.
+ * PRIVACY: every way of closing goes through `close()`, which releases the microphone (the recorder's release) first; «מהטלפון»
+ * releases it the same way, then keeps the choices (Editor.storyToPhone) so the dialog reopens as it was when the phone dialog closes.
  * Mounted once in App.tsx; open while editor state storyOpen.
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactElement } from 'react';
@@ -20,7 +21,7 @@ import { StoryRecorder } from './StoryRecorder.tsx';
 import { storyStrings } from './story.strings.ts';
 import { STORY_TESTIDS as ID } from './story.testids.ts';
 import {
-  addableAssets, assetSeconds, buildBlocker, buildStoryParams, codecOf, defaultChoices, moveItem, moveOfKey, musicShort, probePlayable, soundFiles, storyFailure,
+  addableAssets, assetSeconds, buildBlocker, buildStoryParams, codecOf, initialChoices, moveItem, moveOfKey, musicShort, probePlayable, soundFiles, storyFailure,
   type Playable, type StoryChoices,
 } from './story.logic.ts';
 import './story.css';
@@ -39,7 +40,7 @@ function StoryDialogBody({ lang }: { lang: 'he' | 'en' }): ReactElement {
   const S = storyStrings(lang);
   const doc = state.doc!, source = state.storySource!;
   const rtl = lang === 'he';
-  const [c, setC] = useState<StoryChoices>(() => defaultChoices(source, doc, lang));
+  const [c, setC] = useState<StoryChoices>(() => initialChoices(source, doc, lang, state.storyKept));
   const [playable, setPlayable] = useState<Playable>('ok');
   const [busy, setBusy] = useState<null | 'planning' | 'building'>(null);
   const [error, setError] = useState<string | null>(null);
@@ -157,7 +158,7 @@ function StoryDialogBody({ lang }: { lang: 'he' | 'en' }): ReactElement {
             </label>
           </div>
           <p className="pf-story-muted" data-testid={ID.fromPhone}>{S.phoneHint}</p>
-          <div className="pf-story-row"><Button size="sm" onClick={() => { close(); editor.openPhoneDrop(); }}>{S.fromPhone}</Button></div>
+          <div className="pf-story-row"><Button size="sm" onClick={() => { releaseMic.current?.(); editor.storyToPhone(c); }}>{S.fromPhone}</Button></div>
           {narration && (
             <p className="pf-story-narration" data-testid={ID.narration} data-asset-id={narration.id}>{isolate(narration.name)} · {isolate(S.narrationChosen(assetSeconds(narration)))}</p>
           )}

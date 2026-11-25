@@ -1,14 +1,14 @@
 /**
  * The story track's core contract (lead pre-pass, wave 7; .artifacts/wave7/story-decisions.md §4): the parameters, the run-record
- * helpers, the recipe listing, the stubs that refuse until built, the lifted film window rule, and the labelled test double applied
- * through the REAL apply_template as one transaction. The planner's own behaviour is W1's (story.test.ts, it.todo below).
+ * helpers, the recipe listing, the lifted film window rule, and the labelled test double applied
+ * through the REAL apply_template as one transaction. The planner's own behaviour is W1's (story.test.ts); the stub row that ran until W1 was built was removed at integration.
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  applyTransaction, ASSISTANT_EXCLUDED_OPS, assistantOps, createProject, describeRecipes, filmSourceWindow, planRecipe, planStory, RecipeError, recordsRanges, sameCuts, STORY, STORY_FORBIDDEN_WORDS, STORY_FORBIDDEN_WORDS_HE,
-  STORY_PLANNER_BUILT, STORY_RECIPE_ID, STORY_REFUSALS, STORY_RUN_RECIPE_ID, STORY_TEMPLATE_ID, STORY_VERSION, StoryError, StoryNotBuilt, StoryParamsSchema, storyLiveDocument, storyRunParams, storyRunPicked, storyRunRecordParams, storyRunRemovedPicks,
-  VOICE_ACTIVITY_BUILT, voiceActivity, voiceOnsets, type Asset, type ProjectDocument, type StoryPlanContext,
+  applyTransaction, ASSISTANT_EXCLUDED_OPS, assistantOps, createProject, describeRecipes, filmSourceWindow, planRecipe, RecipeError, recordsRanges, sameCuts, STORY, STORY_FORBIDDEN_WORDS, STORY_FORBIDDEN_WORDS_HE,
+  STORY_RECIPE_ID, STORY_RUN_RECIPE_ID, STORY_TEMPLATE_ID, STORY_VERSION, StoryError, StoryParamsSchema, storyRunParams, storyRunPicked, storyRunRecordParams, storyRunRemovedPicks,
+  voiceOnsets, type Asset, type ProjectDocument, type StoryPlanContext,
 } from './index.ts';
 import { planStoryDouble } from './story.testDouble.ts';
 
@@ -52,14 +52,6 @@ describe('story contract (lead)', () => {
     expect(sameCuts([3, 1, 1], [1, 3])).toBe(true);
     expect(sameCuts([1], [1, 2])).toBe(false);
     expect(voiceOnsets({ flat: true, ranges: [{ start: 1, end: 2 }] })).toEqual([]);
-  });
-  it('the stubs refuse with not_built and the Hebrew-worded sentence until built (never a made-up value)', () => {
-    if (!STORY_PLANNER_BUILT) {
-      expect(() => planStory(doc(), {}, ctx)).toThrow(StoryNotBuilt);
-      expect(() => storyLiveDocument(doc(), {}, ctx, [])).toThrow(StoryNotBuilt);
-      try { planStory(doc(), {}, ctx); } catch (e) { expect((e as StoryError).message).toBe(STORY_REFUSALS.notBuilt.message()); }
-    }
-    if (!VOICE_ACTIVITY_BUILT) expect(() => voiceActivity(new Int16Array(4), 512)).toThrow(StoryNotBuilt);
   });
   it('the film window rule is exported as it was (a still shows itself)', () => {
     const w = filmSourceWindow(doc().assets.i1!, null, null, 30, R);
