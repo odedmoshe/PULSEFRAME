@@ -17,6 +17,7 @@ import { Scopes } from './Scopes.tsx';
 import { CutLoupe } from './CutLoupe.tsx';
 import { MulticamPanel } from './MulticamPanel.tsx';
 import { PerformView } from './perform/PerformView.tsx';
+import { playControl } from './playControl.ts';
 import { STAGE_STRINGS } from './stage.strings.ts';
 import { TimecodeButton } from './craft/TimecodeButton.tsx';
 import './stage.css';
@@ -99,7 +100,7 @@ export function Transport() {
         <div className="tp-keys">
           <button className="tp-btn tp-outer" onClick={() => run(editor, 'transport.start')} aria-label={S.toStart} title={S.toStart} data-testid="to-start"><SkipBack size={16} strokeWidth={1.75} aria-hidden="true" /></button>
           <button className="tp-btn" onClick={() => run(editor, 'transport.prevFrame')} aria-label={t('frame.prev')} title={t('frame.prev')}><IconPrevFrame /></button>
-          <button className="tp-play" onClick={() => run(editor, 'transport.toggle')} aria-label={p?.playing ? t('pause') : t('play')} data-testid="play" data-playing={p?.playing ? 'true' : 'false'}>{p?.playing ? <IconPause size={20} /> : <IconPlay size={20} />}</button>
+          <button className="tp-play" onClick={() => run(editor, 'transport.toggle')} aria-label={p?.playing ? t('pause') : t('play')} {...playControl(editor.playerReady || !!p?.playing, S.playNotReady)} data-testid="play" data-playing={p?.playing ? 'true' : 'false'}>{p?.playing ? <IconPause size={20} /> : <IconPlay size={20} />}</button>
           <button className="tp-btn" onClick={() => run(editor, 'transport.nextFrame')} aria-label={t('frame.next')} title={t('frame.next')}><IconNextFrame /></button>
           <button className="tp-btn tp-outer" onClick={() => run(editor, 'transport.end')} aria-label={S.toEnd} title={S.toEnd} data-testid="to-end"><SkipForward size={16} strokeWidth={1.75} aria-hidden="true" /></button>
           <button className="tp-btn tp-outer" onClick={() => run(editor, 'transport.loop')} aria-pressed={!!p?.loop} aria-label={t('cmd.loop')} title={t('cmd.loop')} data-testid="loop"><IconLoop /></button>

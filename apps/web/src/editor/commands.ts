@@ -333,7 +333,7 @@ export const MULTICAM_COMMANDS: Command[] = [
 ];
 
 export const COMMANDS: Command[] = [
-  { id: 'transport.toggle', label: 'cmd.playPause', group: 'transport', keys: ['Space'], run: (e) => (e.player?.playing ? e.player.pause() : e.player?.play()) },
+  { id: 'transport.toggle', label: 'cmd.playPause', group: 'transport', keys: ['Space'], run: (e) => (e.player?.playing ? e.player.pause() : e.playerReady ? e.player?.play() : undefined) }, // before the player holds the project Space is a no-op, as the disabled play button is
   // Shuttle: L forwards (play, then 2×, 4×, 8×), J backwards (1×, 2×, 4×, 8×). Faster than 1× and backwards are silent. Space stops.
   { id: 'transport.shuttleForward', label: 'cmd.shuttleForward', group: 'transport', keys: ['KeyL'], enabled: (e) => (e.player?.frameCount ?? 0) > 0, run: (e) => { const p = e.player; if (!p) return; const r = p.playing ? (p.shuttleRate || 1) : 0; p.shuttle(r > 0 ? Math.min(8, r * 2) : 1); } },
   { id: 'transport.shuttleBack', label: 'cmd.shuttleBack', group: 'transport', keys: ['KeyJ'], enabled: (e) => (e.player?.frameCount ?? 0) > 0, run: (e) => { const p = e.player; if (!p) return; const r = p.playing ? (p.shuttleRate || 1) : 0; p.shuttle(r < 0 ? Math.max(-8, r * 2) : -1); } },

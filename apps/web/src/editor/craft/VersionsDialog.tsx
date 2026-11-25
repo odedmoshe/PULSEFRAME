@@ -17,7 +17,7 @@ import { useEditorState } from '../store.ts';
 import { CRAFT_TESTIDS as TID } from './craft.testids.ts';
 import { craftSurface } from './craft.state.ts';
 import { TimeField } from './TimeEntry.tsx';
-import { craftApi, craftFailure, currentFrameUrl, diffRowSentence, diffSentence, frameState, loadStill, privacyAtStake, restoresRows, say, stepFrame, versionMeta, type Failure, type Lang } from './craft.logic.ts';
+import { craftFailure, currentFrameUrl, diffRowSentence, diffSentence, frameState, loadStill, privacyAtStake, restoresRows, say, stepFrame, versionMeta, type Failure, type Lang } from './craft.logic.ts';
 
 type Still = { state: 'loading' } | { state: 'ok'; url: string } | { state: 'failed'; message: string; code: string | null } | { state: 'absent' };
 
@@ -80,8 +80,8 @@ export function VersionsDialog() {
     if (!pid || !chosen) return;
     const mine = ++loadSeq.current;
     const fail = (e: unknown) => { if (mine === loadSeq.current) setDiffError(craftFailure(lang, e)); };
-    craftApi.versionDiff(pid, chosen, against).then((d) => { if (mine === loadSeq.current) { setDiff(d); if (against === 'current') setRestoreDiff(d); } }, fail);
-    if (against !== 'current') craftApi.versionDiff(pid, chosen, 'current').then((d) => { if (mine === loadSeq.current) setRestoreDiff(d); }, () => undefined);
+    api.versionDiff(pid, chosen, against).then((d) => { if (mine === loadSeq.current) { setDiff(d); if (against === 'current') setRestoreDiff(d); } }, fail);
+    if (against !== 'current') api.versionDiff(pid, chosen, 'current').then((d) => { if (mine === loadSeq.current) setRestoreDiff(d); }, () => undefined);
   }, [pid, chosen, against, state.revision, lang]);
 
   if (!pid) return null;
@@ -204,6 +204,7 @@ export function VersionsDialog() {
               <div data-testid={TID.versionDiff} data-added={diff.counts.added} data-removed={diff.counts.removed} data-changed={diff.counts.changed}>
                 {diff.rows.length === 0 && diff.more === 0 ? <p>{say(lang, 'diffNone')}</p> : (
                   <>
+                    {against === 'current' && <p className="pf-craft-hint" data-testid="craft-version-diff-leadin">{say(lang, 'diffSince')}</p>}
                     <p data-testid="craft-version-diff-sentence"><strong><bdi dir="auto">{diffSentence(lang, diff)}</bdi></strong></p>
                     {restored.length > 0 && <ul className="pf-craft-diff" aria-label={say(lang, 'diffRestoresList')}>{restored.map((r) => <li key={r.entity + r.id} data-change={r.change}><bdi dir="auto">{diffRowSentence(lang, r)}</bdi></li>)}</ul>}
                     {kept.length > 0 && <><p className="pf-craft-hint">{say(lang, 'notRestored')}</p><ul className="pf-craft-diff">{kept.map((r) => <li key={r.entity + r.id} data-change={r.change}><bdi dir="auto">{diffRowSentence(lang, r)}</bdi></li>)}</ul></>}
@@ -214,6 +215,7 @@ export function VersionsDialog() {
             )}
 
             <p className="pf-craft-hint">{say(lang, 'restoreWill')} · {say(lang, 'restoreKeeps')}</p>
+            <p className="pf-craft-hint" data-testid="craft-version-restore-undoes">{say(lang, 'restoreUndoesChanges')}</p>
             {restoreRows && stakes > 0 && <div className="pf-craft-warn" role="alert" data-testid="craft-version-privacy-warning" data-stakes={stakes}><strong>{say(lang, 'restorePrivacy', { n: stakes })}</strong><br />{say(lang, 'restorePrivacyAsk')}</div>}
             {nothingToRestore && <p className="pf-craft-hint" role="status">{say(lang, 'restoreNothing')}</p>}
             <div className="pf-craft-row">

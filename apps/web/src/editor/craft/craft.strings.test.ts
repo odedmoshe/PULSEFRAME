@@ -14,6 +14,11 @@ describe('craft strings', () => {
   it('the wording the owner reads says the rules as rules, in words', () => {
     expect(CRAFT_STRINGS.he.ruleWholeWord).toContain('ילדים');
     expect(CRAFT_STRINGS.he.projectChanged).toBe('הפרויקט השתנה — בדקו שוב');
+    // the counts say how NOW differs from the version; restore does the opposite, so both sentences say which way they read
+    expect(CRAFT_STRINGS.he.diffSince).toBe('מאז הגרסה הזאת:');
+    expect(CRAFT_STRINGS.en.diffSince).toBe('Since this version:');
+    expect(CRAFT_STRINGS.he.restoreUndoesChanges).toContain('יבוטלו');
+    expect(CRAFT_STRINGS.en.restoreUndoesChanges).toContain('undone');
     expect(CRAFT_STRINGS.he.restoreKeeps).toBe('הספרייה, התמלולים והאנשים נשארים כפי שהם');
   });
 });

@@ -1145,6 +1145,12 @@ async function main() {
         Object.assign(states.at(-1), await rr.undo());
       }
       if (await page.getByTestId('template-undo').count()) { await page.getByTestId('template-undo').click(); await page.getByTestId('template-applied').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {}); await page.waitForTimeout(500); }
+      // stabilisation (wave 7) in the light theme: the same five scenarios as the dark pass (each sets up its own start state; it opens its own project)
+      for (const sc of stabiliseA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       // the start hub of an empty project
       await open(emptyPid, 'welcome');
       await auditState('start-hub', { shown: (await page.getByTestId('welcome').count()) === 1 });

@@ -117,8 +117,9 @@ export const api = {
   createProject: (name: string) => call<{ project: ProjectDocument; revision: number }>('/projects', json({ name })),
   getProject: (id: string) => call<{ project: ProjectDocument; revision: number }>(`/projects/${id}`),
   history: (id: string) => call<{ events: RevisionEvent[] }>(`/projects/${id}/history?since=0`),
-  commit: (id: string, baseRevision: number, ops: OpCall[], label?: string) =>
-    call<CommitResult>(`/projects/${id}/transactions`, json({ baseRevision, idempotencyKey: crypto.randomUUID(), label, ops })),
+  /** `dependsOn`: entity ids the edit relies on beyond those its ops name (the server's transaction body takes it; a stale base conflicts if any changed). */
+  commit: (id: string, baseRevision: number, ops: OpCall[], label?: string, dependsOn?: string[]) =>
+    call<CommitResult>(`/projects/${id}/transactions`, json({ baseRevision, idempotencyKey: crypto.randomUUID(), label, ops, ...(dependsOn ? { dependsOn } : {}) })),
   /**
    * The command bar's STRICT commit (ADR-0027): refused with 409 stale_revision unless `expectedRevision` is current (never
    * rebased onto a newer revision), and replayed, not applied twice, when `idempotencyKey` was used with the same ops.
@@ -249,10 +250,10 @@ export const api = {
   archiveUrl: (id: string, opts: { family?: 'keep' | 'omit'; library?: ArchiveLibraryMode | null } = {}) => `/api/v1/projects/${id}/archive${(() => { const q = new URLSearchParams({ ...(opts.family === 'omit' ? { family: 'omit' } : {}), ...(opts.library ? { library: opts.library } : {}) }).toString(); return q ? `?${q}` : ''; })()}`,
   // editing craft (wave 7 craft track; apps/server/src/craft/contract.ts). Every route answers 501 craft_not_built until W2 builds it
   versions: (id: string) => call<{ versions: VersionInfo[] }>(`/projects/${id}/versions`),
-  saveVersion: (id: string, name: string) => call<VersionInfo>(`/projects/${id}/versions`, json({ name })),
-  renameVersion: (id: string, versionId: string, name: string) => call<VersionInfo>(`/projects/${id}/versions/${encodeURIComponent(versionId)}`, { ...json({ name }), method: 'PUT' }),
+  saveVersion: (id: string, name: string) => call<{ version: VersionInfo }>(`/projects/${id}/versions`, json({ name })).then((r) => r.version),
+  renameVersion: (id: string, versionId: string, name: string) => call<{ version: VersionInfo }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}`, { ...json({ name }), method: 'PUT' }).then((r) => r.version),
   deleteVersion: (id: string, versionId: string) => call<{ deleted: string }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}`, { method: 'DELETE' }),
-  versionDiff: (id: string, versionId: string, against: 'current' | string = 'current') => call<DiffSummary>(`/projects/${id}/versions/${encodeURIComponent(versionId)}/diff?against=${encodeURIComponent(against)}`),
+  versionDiff: (id: string, versionId: string, against: 'current' | string = 'current') => call<{ diff: DiffSummary }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}/diff?against=${encodeURIComponent(against)}`).then((r) => r.diff),
   /** For an <img>: one frame of the saved version (404 version_frame_out_of_range past its end). */
   versionFrameUrl: (id: string, versionId: string, index: number) => `/api/v1/projects/${id}/versions/${encodeURIComponent(versionId)}/frame?index=${index}`,
   restoreVersion: (id: string, versionId: string, body: { expectRevision?: number; confirmPrivacy?: boolean } = {}) => call<{ revision: number; transactionId: string | null; summary: string; diff: DiffSummary }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}/restore`, json(body)),
