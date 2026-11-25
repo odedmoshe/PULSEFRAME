@@ -175,8 +175,13 @@ describe('manifest validation', () => {
     for (const f of files) {
       const v = validateManifest(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')));
       expect(v.errors, f).toEqual([]);
-      for (const { src } of v.items) { // first set: only sources that may be kept in an application's library, no key, no share-alike
-        expect(src.shareAlike || src.needsOwnerKey || src.creditInExport || src.personalOnly, `${f} ${src.id}`).toBeFalsy();
+      for (const { src } of v.items) {
+        // No shipped manifest may need the owner's key: such sources wait for the owner.
+        expect(src.needsOwnerKey, `${f} ${src.id}`).toBeFalsy();
+        // The first visual set holds only sources an application's library may keep: no credit duty, no share-alike, no personal-only.
+        if (f === 'visual-01.json') expect(src.shareAlike || src.creditInExport || src.personalOnly, `${f} ${src.id}`).toBeFalsy();
+        // A restricted source never reaches the repository or a shared archive.
+        if (src.shareAlike || src.personalOnly) expect(src.diskOnly && !src.repoAllowed, `${f} ${src.id}`).toBe(true);
       }
     }
   });
