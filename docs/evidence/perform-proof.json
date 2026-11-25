@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-25T08:38:00.205Z",
-  "result": "PASS",
-  "passed": 28,
-  "failed": 0,
+  "ranAt": "2026-11-25T17:35:50.444Z",
+  "result": "FAIL",
+  "passed": 27,
+  "failed": 1,
   "blocked": 0,
   "total": 28,
   "machine": {
@@ -122,9 +122,9 @@
       "name": "SHA-256 of the canonical apply_take args: equal across two server dry runs and the browser view",
       "status": "pass",
       "detail": {
-        "browser": "5a65dfa1c7940d941af56668a1d99c2d3707189f0d608ab443057685374871ba",
-        "server1": "5a65dfa1c7940d941af56668a1d99c2d3707189f0d608ab443057685374871ba",
-        "server2": "5a65dfa1c7940d941af56668a1d99c2d3707189f0d608ab443057685374871ba"
+        "browser": "29d34a4add084d2b732353a1636fb6e83de0d546a2c09cce4c91f417e16768b1",
+        "server1": "29d34a4add084d2b732353a1636fb6e83de0d546a2c09cce4c91f417e16768b1",
+        "server2": "29d34a4add084d2b732353a1636fb6e83de0d546a2c09cce4c91f417e16768b1"
       }
     },
     {
@@ -144,11 +144,11 @@
       "name": "undo (Ctrl+Z in the editor): the document hash equals the one before the take; redo (Ctrl+Shift+Z) equals the one after; Store.replay of that revision equals the stored document",
       "status": "pass",
       "detail": {
-        "before": "c435dde707fe0e84",
-        "after": "acd58445189b99a8",
-        "undone": "c435dde707fe0e84",
-        "redone": "acd58445189b99a8",
-        "replay": "acd58445189b99a8"
+        "before": "f1fdd732c38f4c16",
+        "after": "aa88c9bd81d23878",
+        "undone": "f1fdd732c38f4c16",
+        "redone": "aa88c9bd81d23878",
+        "replay": "aa88c9bd81d23878"
       }
     },
     {
@@ -409,33 +409,33 @@
         "rows": [
           {
             "pad": 0,
-            "down": 2.0593,
-            "clock": 2.061126500000093,
-            "diffMs": -1.85
+            "down": 2.1277,
+            "clock": 2.129389500002235,
+            "diffMs": -1.7
           },
           {
             "pad": 1,
-            "down": 2.3314,
-            "clock": 2.3345089999998136,
-            "diffMs": -3.1
-          },
-          {
-            "pad": 2,
-            "down": 2.5958,
-            "clock": 2.5959746666665735,
+            "down": 2.4228,
+            "clock": 2.422982499999255,
             "diffMs": -0.2
           },
           {
+            "pad": 2,
+            "down": 2.6829,
+            "clock": 2.689395166668902,
+            "diffMs": -6.5
+          },
+          {
             "pad": 3,
-            "down": 2.8526,
-            "clock": 2.8625431666664802,
-            "diffMs": -9.9
+            "down": 2.9684,
+            "clock": 2.9785663333355687,
+            "diffMs": -10.2
           },
           {
             "pad": 5,
-            "down": 3.1201,
-            "clock": 3.1223998333333336,
-            "diffMs": -2.3
+            "down": 3.2492,
+            "clock": 3.260287666668157,
+            "diffMs": -11.1
           }
         ]
       }
@@ -453,23 +453,23 @@
     {
       "id": "N1",
       "name": "the live path (raw taps planned and applied in memory) for 200 hits takes under one frame period (33.3 ms) on the slowest of 10 runs after a warm-up",
-      "status": "pass",
+      "status": "fail",
       "detail": {
         "hits": 200,
         "runsMs": [
-          13.1,
-          10.2,
-          9.5,
+          28.2,
           9.2,
-          11.8,
-          19.7,
-          10.6,
-          12.6,
-          8.8,
-          9.2
+          23.4,
+          42.6,
+          150.2,
+          25.6,
+          50,
+          27.4,
+          12.7,
+          33.1
         ],
-        "warmupMs": 13.9,
-        "slowestMs": 19.7,
+        "warmupMs": 11.7,
+        "slowestMs": 150.2,
         "budgetMs": 33.33,
         "machine": "Intel(R) Xeon(R) Processor @ 2.30GHz ×4",
         "note": "one sample of this machine, under whatever else ran on it; not a general claim"
@@ -1122,19 +1122,19 @@
     "n1LivePath": {
       "hits": 200,
       "runsMs": [
-        13.1,
-        10.2,
-        9.5,
+        28.2,
         9.2,
-        11.8,
-        19.7,
-        10.6,
-        12.6,
-        8.8,
-        9.2
+        23.4,
+        42.6,
+        150.2,
+        25.6,
+        50,
+        27.4,
+        12.7,
+        33.1
       ],
-      "warmupMs": 13.9,
-      "slowestMs": 19.7,
+      "warmupMs": 11.7,
+      "slowestMs": 150.2,
       "budgetMs": 33.33,
       "machine": "Intel(R) Xeon(R) Processor @ 2.30GHz ×4",
       "note": "one sample of this machine, under whatever else ran on it; not a general claim"

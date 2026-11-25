@@ -74,10 +74,16 @@ with real sound.
   unreviewed.
 
 ## Verified / not verified
-- `pnpm proof:story` (S1–S20 server, U1–U15 and S11e in the browser; one run, loaded 4-CPU machine): see PROGRESS for the count.
-  U7 (taps within one frame of the player's painted frame) failed once under load (one tap 2 frames off) and passed three times
-  alone.
-- Unit: core story, voiceActivity, property S18; server story, storyRegeneration, storyContracts; web story logic, recorder,
-  strings; the wording test provokes every planner refusal and every blocking sentence.
+- One run each on this shared 4-CPU machine (integration, 2026-11-25): `pnpm proof:story` 34/34 (S1–S20 server, U1–U15 and
+  S11e in the browser); `proof:family-film` 45/45; `proof:phone-drop` 31 passed, 2 blocked (as before); `proof:perform` 27/28 (N1
+  live path 150 ms on the slowest of 10 runs under load, budget 33 ms; K1 passed); `audit:testids` PASS (803 ids, none lost);
+  `audit:a11y` the 20 story states (5 × he/en × dark/light) without findings, in a run with the pearls scenarios set aside (they
+  stopped the audit before the story states; the pearls integration owns them); editor interactions 121/121; `pnpm test` 6281
+  passed, 2 timing tests failed under load and passed alone (music M10, overlays speed limit).
+- In the first full proof run U1 and U2 timed out opening the dialog while the server part's server was still busy; the entry now
+  stops that server before the browser part. U7 (taps within one frame of the player's painted frame) failed once in a separate
+  run (one tap 2 frames off under load) and passed three times alone and in the full run.
+- Faults found by integration and fixed: a second rebuild placed the file of a picture replaced by hand again (decision 6); the
+  dialog lost the picture order when the owner went to the phone page.
 - Not verified: a real microphone and Windows' permission settings, a Bluetooth headset, tap latency with real sound, real phone
   voice memos (AMR cannot be made here), the music under the voice by ear, the Hebrew.

@@ -56,6 +56,9 @@
  * Not provable here (the owner's laptop): a real microphone and Windows' permission settings, tap latency with real sound, how the
  * music under the voice sounds, the pause thresholds on a real voice with children in the room, real phone memos (AMR), the Hebrew.
  */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { STORY_PROOF_SERVER, stopStoryProofServer } from './story-proof.server.ts';
 import { STORY_PROOF_UI } from './story-proof.ui.ts';
 
@@ -68,14 +71,20 @@ if (pending.length) {
   process.exit(2);
 }
 let failed = 0;
+const results: { id: string; part: string; ok: boolean; seconds: number; why?: string }[] = [];
 for (const [name, part] of Object.entries(parts)) {
   for (const [id, check] of Object.entries(part.checks)) {
+    const t0 = Date.now();
     const r = await check();
     console.log(`${r === true ? 'PASS' : 'FAIL'} ${id} (${name})${r === true ? '' : `: ${r}`}`);
+    results.push({ id, part: name, ok: r === true, seconds: Math.round((Date.now() - t0) / 100) / 10, ...(r === true ? {} : { why: r.slice(0, 600) }) });
     if (r !== true) failed++;
   }
   // the server part's server (and the jobs it still runs) stops before the browser part starts: on this shared machine its
   // leftover work made the first browser checks wait past their timeouts (integration, first full run)
   if (name === 'server') await stopStoryProofServer();
 }
+const root = path.resolve(import.meta.dirname, '../../..');
+fs.writeFileSync(path.join(root, 'docs/evidence/story-proof.json'), JSON.stringify({ ranAt: new Date().toISOString(), result: failed ? 'FAILED' : 'PASSED', machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, logicalCpus: os.cpus().length, loadAverage: os.loadavg().map((x) => Math.round(x * 10) / 10) }, scope: 'Synthetic fixtures only (tones over seeded noise, solid-colour pictures); headless Chromium with a fake microphone fed from a file. Nobody listened; no real microphone or voice.', passed: results.length - failed, total: results.length, checks: results }, null, 2) + '\n');
+console.log(`\nstory proof ${failed ? 'FAILED' : 'PASSED'}: ${results.length - failed}/${results.length}`);
 process.exit(failed ? 1 : 0);

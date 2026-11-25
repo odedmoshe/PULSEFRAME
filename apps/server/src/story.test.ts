@@ -288,6 +288,22 @@ describe('plan, apply and regenerate through the recipe routes', () => {
     expect(none.status).toBe(401);
     expect(docHash(s.pid)).toBe(before);
   });
+  it('a rebuild is refused as an apply is: propose, a track-limited grant and a time-range grant (both regenerate routes); nothing changes', async () => {
+    const s = await storyProject('regen-perm');
+    const a = await rest('POST', `/projects/${s.pid}/recipes/story/apply`, { params: { narrationAssetId: s.narration, assetIds: s.ids, cutsMs: [4500, 8200] } }, editor());
+    expect(a.status).toBe(200);
+    const before = docHash(s.pid);
+    const range = { start: T.ZERO, end: T.rt(100, 1) };
+    for (const p of [`/projects/${s.pid}/recipe-runs/${a.body.runId}/regenerate`, `/projects/${s.pid}/template-runs/${a.body.runId}/regenerate`]) {
+      const pr = await rest('POST', p, { params: { ownSound: 'mute' } }, grant({ mode: 'propose' }));
+      expect([p, pr.status, pr.body.error.code]).toEqual([p, 403, 'insufficient_scope']);
+      const lim = await rest('POST', p, { params: { ownSound: 'mute' } }, grant({ mode: 'edit', trackIds: ['trk_none'] }));
+      expect([p, lim.status, lim.body.error.code]).toEqual([p, 403, 'out_of_scope']);
+      const rg = await rest('POST', p, { params: { ownSound: 'mute' } }, grant({ mode: 'edit', range }));
+      expect([p, rg.status, rg.body.error.code]).toEqual([p, 403, 'out_of_scope']);
+    }
+    expect(docHash(s.pid)).toBe(before);
+  });
   it('a regeneration with other cutsMs answers 409 story_retap_not_built and changes nothing (both regenerate routes)', async () => {
     const s = await storyProject('retap');
     const a = await rest('POST', `/projects/${s.pid}/recipes/story/apply`, { params: { narrationAssetId: s.narration, assetIds: s.ids, cutsMs: [4500, 8200] } }, editor());

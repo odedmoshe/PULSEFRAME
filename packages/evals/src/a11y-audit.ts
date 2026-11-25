@@ -1152,6 +1152,12 @@ async function main() {
         Object.assign(states.at(-1), await rr.undo());
       }
       if (await page.getByTestId('template-undo').count()) { await page.getByTestId('template-undo').click(); await page.getByTestId('template-applied').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {}); await page.waitForTimeout(500); }
+      // «ספרו מה היה» in the light theme too: the dialog, the recorder recording and refused, the «סיפור» tab, the bar (a11y-story.ts, integration)
+      for (const sc of storyA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid: emptyPid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid: emptyPid });
+      }
       // the start hub of an empty project
       await open(emptyPid, 'welcome');
       await auditState('start-hub', { shown: (await page.getByTestId('welcome').count()) === 1 });

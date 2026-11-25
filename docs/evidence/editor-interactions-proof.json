@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T14:14:09.192Z",
+  "ranAt": "2026-11-25T18:29:40.770Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 107,
-  "total": 107,
+  "passed": 121,
+  "total": 121,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -344,9 +344,9 @@
       "name": "Sound tab: \"end the music with the picture\" trims the music to the last detected beat before the picture ends and gives it a fade-out, in one transaction; undo restores it",
       "ok": true,
       "detail": {
-        "pictureEnd": 245,
-        "wantEnd": 239,
-        "gotEnd": 239,
+        "pictureEnd": 290,
+        "wantEnd": 284,
+        "gotEnd": 284,
         "fadeOutFrames": 30,
         "fitUndone": true
       }
@@ -384,9 +384,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2.02,
+        "fwd2": 1.93,
         "sh2": "◀◀ ×1",
-        "back1": -0.99,
+        "back1": -1,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -400,9 +400,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 1.04,
+        "playSpeed": 0.98,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 2.03,
+        "shuttleSpeed": 2.01,
         "staysPaused": true
       }
     },
@@ -430,30 +430,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_7b352604df0",
-          "clp_7b352604df1"
+          "clp_4b3b0529620",
+          "clp_4b3b0529621"
         ],
         "afterAB": [
-          "clp_7b352604df0",
-          "clp_7b352604df1"
+          "clp_4b3b0529620",
+          "clp_4b3b0529621"
         ],
         "afterAdd": [
-          "clp_7b352604df0",
-          "clp_7b352604df1",
-          "clp_7b352604df2"
+          "clp_4b3b0529620",
+          "clp_4b3b0529621",
+          "clp_4b3b0529622"
         ],
         "midEscape": [
-          "clp_7b352604df1"
+          "clp_4b3b0529621"
         ],
         "afterEscape": [
-          "clp_7b352604df0",
-          "clp_7b352604df1",
-          "clp_7b352604df2"
+          "clp_4b3b0529620",
+          "clp_4b3b0529621",
+          "clp_4b3b0529622"
         ],
         "afterEscapeUp": [
-          "clp_7b352604df0",
-          "clp_7b352604df1",
-          "clp_7b352604df2"
+          "clp_4b3b0529620",
+          "clp_4b3b0529621",
+          "clp_4b3b0529622"
         ]
       }
     },
@@ -900,18 +900,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_18fccfd6ef0",
-          "ast_119404a0ba0",
-          "ast_fe958fc6840",
-          "ast_817e1c2ef60",
-          "ast_f9344b6cb40"
+          "ast_8fceb2fcab0",
+          "ast_3b5eedc07f0",
+          "ast_bd347f7e570",
+          "ast_13dac693a30",
+          "ast_0a2dbe19f30"
         ],
         "order1": [
-          "ast_18fccfd6ef0",
-          "ast_817e1c2ef60",
-          "ast_119404a0ba0",
-          "ast_fe958fc6840",
-          "ast_f9344b6cb40"
+          "ast_8fceb2fcab0",
+          "ast_13dac693a30",
+          "ast_3b5eedc07f0",
+          "ast_bd347f7e570",
+          "ast_0a2dbe19f30"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -935,7 +935,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-25T14:07:17.115Z",
+          "createdAt": "2026-11-25T18:22:04.106Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -1130,7 +1130,7 @@
       "ok": true,
       "detail": {
         "slots": 11,
-        "victim": "clp_b3eb969f170",
+        "victim": "clp_033bcc125b0",
         "deleted": true,
         "offered": {
           "count": 1,
@@ -1203,7 +1203,7 @@
         "statusText": "הפעימה בפריים 60 (⁦00:00:02:00⁩)",
         "want": "הפעימה בפריים 60 (⁦00:00:02:00⁩)",
         "statusRole": "status",
-        "describedBy": "_r_3a_",
+        "describedBy": "_r_3c_",
         "announced": 1,
         "onVelocity": "transition-velocity",
         "opt3": {
@@ -1255,8 +1255,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_71642bdaf60",
-          "seq_71642bdaf67"
+          "seq_80dfed99ac0",
+          "seq_80dfed99ac7"
         ],
         "revisions": 1,
         "transactions": [
@@ -1266,7 +1266,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_71642bdaf60",
+          "seq": "seq_80dfed99ac0",
           "selected": "true"
         }
       }
@@ -1297,9 +1297,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_71642bdaf60"
+          "seq": "seq_80dfed99ac0"
         },
-        "secondTab": "seq_71642bdaf60",
+        "secondTab": "seq_80dfed99ac0",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1604,7 +1604,7 @@
       "detail": {
         "marked": true,
         "he": {
-          "id": "prj_6w8AvyCN5mo",
+          "id": "prj_Eotd8qQDxuo",
           "count": 1,
           "title": "הארכיון יובא",
           "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגום «English» מסומן שוב «תרגום מכונה · לא נבדק», והנוסח שלו נשמר. אפשר לעבור עליו בלוח «תמלול» ולבחור «סמן כנבדק».",
@@ -1614,7 +1614,7 @@
           "badge": 1
         },
         "en": {
-          "id": "prj_htLmyEzZ2Ag",
+          "id": "prj_H1e3Dg3hZms",
           "count": 1,
           "title": "The archive was imported",
           "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translation «English» needs review again; its wording is kept. Go through it in the \"Transcript\" panel and choose \"Mark as reviewed\".",
@@ -1801,11 +1801,11 @@
       "detail": {
         "planRows": [
           {
-            "id": "clp_c3b965f7d50",
+            "id": "clp_245a4f9cee0",
             "text": "send-quiet.wav · +9.1 dB"
           },
           {
-            "id": "clp_d513eff8cb0",
+            "id": "clp_decdacd5bf0",
             "text": "send-loud.wav · −9.1 dB"
           }
         ],
@@ -1818,11 +1818,11 @@
       "detail": {
         "resRows": [
           {
-            "id": "clp_c3b965f7d50",
+            "id": "clp_245a4f9cee0",
             "by": ""
           },
           {
-            "id": "clp_d513eff8cb0",
+            "id": "clp_decdacd5bf0",
             "by": ""
           }
         ],
@@ -1858,6 +1858,100 @@
       }
     },
     {
+      "name": "stabilisation block: not measured shows «ייצבו את הקליפ»; one press runs the job (measuring, with «עצירה»), the clip ends up on with a crop line, and the whole job is ONE revision",
+      "ok": true,
+      "detail": {
+        "s0": "not-measured",
+        "runVisible": 1,
+        "sMeasuring": "measuring",
+        "stopVisible": 1,
+        "sOn": "on",
+        "jobRevisions": 1,
+        "stored": {
+          "strength": 50,
+          "zoomPm": 1043
+        }
+      }
+    },
+    {
+      "name": "stabilisation block: the crop line shows the stored zoom and its area (the operation's numbers), in Hebrew with the standing «בלי מודל» line",
+      "ok": true,
+      "detail": {
+        "onShown": {
+          "zoomPm": 1043,
+          "area": 8.1,
+          "strength": 50,
+          "text": "חיתוך שוליים: 8.1% מהתמונה (הגדלה ×1.04)"
+        },
+        "standing": true,
+        "rtl": "rtl"
+      }
+    },
+    {
+      "name": "stabilisation block: PageUp on the slider is +10 and leaving it is ONE commit; the crop line then shows the stored zoom",
+      "ok": true,
+      "detail": {
+        "live": 60,
+        "commits": 1,
+        "stored": {
+          "strength": 60,
+          "zoomPm": 1043
+        },
+        "afterSlider": {
+          "zoomPm": 1043,
+          "area": 8.1,
+          "strength": 60,
+          "text": "חיתוך שוליים: 8.1% מהתמונה (הגדלה ×1.04)"
+        }
+      }
+    },
+    {
+      "name": "stabilisation block: the switch turns it off (aria-checked false, the state «off», the measurement stays) and on again with the strength it had; one undo returns it to off",
+      "ok": true,
+      "detail": {
+        "sOff": "off",
+        "offChecked": "false",
+        "before": 60,
+        "after": 60,
+        "sUndo": "off",
+        "pageErrors": []
+      }
+    },
+    {
+      "name": "Q (ripple trim): the toast says «נחתכו 20 פריימים» with «קליפ אחד זז», says that titles, music and markers after the cut stayed, and its «ביטול» returns the exact document",
+      "ok": true,
+      "detail": {
+        "said": "נחתכו 20 פריימים · קליפ אחד זז כותרות, מוזיקה וסמנים שאחרי החיתוך נשארו במקומם ביטול",
+        "stayed": true,
+        "shortened": true,
+        "undone": true
+      }
+    },
+    {
+      "name": "Ctrl+Alt+V while a format is shown says why it cannot paste (no dialog opens, nothing is changed)",
+      "ok": true,
+      "detail": {
+        "said": true
+      }
+    },
+    {
+      "name": "find: «ילד» finds the title without «מילה שלמה» (one text) and finds nothing with it; the rule is stated beside the switch (no prefix stripping)",
+      "ok": true,
+      "detail": {
+        "loose": "1",
+        "whole": "0",
+        "rule": 1
+      }
+    },
+    {
+      "name": "versions: «גרסאות» says honestly that nothing is saved yet; a saved version lists its name, «המדיה לא מועתקת» and «זהה למצב הנוכחי»; delete asks first and the list is empty again",
+      "ok": true,
+      "detail": {
+        "empty": 1,
+        "row": "גרסה לבדיקה 25.11.2026, 18:29 · אני · 100 פריימים · 2 KB · המדיה לא מועתקת זהה למצב הנוכחי השוואה שינוי שם מחיקה"
+      }
+    },
+    {
       "name": "Space on a switch reached with Tab presses the switch (the limiter is set) and does not play the film",
       "ok": true,
       "detail": {
@@ -1885,6 +1979,64 @@
     },
     {
       "name": "Space rows: the page logged no script error",
+      "ok": true,
+      "detail": {
+        "errors": []
+      }
+    },
+    {
+      "name": "story: the palette's «ספרו מה היה» with nothing selected opens the dialog on the library's three pictures; Alt+← (Hebrew: later) moves the focused picture one place later",
+      "ok": true,
+      "detail": {
+        "first": [
+          "ast_27ebd906710",
+          "ast_e406882cce0",
+          "ast_cdb2480db30"
+        ],
+        "moved": [
+          "ast_e406882cce0",
+          "ast_27ebd906710",
+          "ast_cdb2480db30"
+        ]
+      }
+    },
+    {
+      "name": "story: Escape closes the dialog and the focus is on a live element of the page (not lost in the closed dialog)",
+      "ok": true,
+      "detail": {
+        "closed": true,
+        "focusOk": true
+      }
+    },
+    {
+      "name": "story: «בנו בלי הקשות» applies the story as ONE revision, closes the dialog and shows the story bar",
+      "ok": true,
+      "detail": {
+        "r0": 4,
+        "r1": 5,
+        "bar": true
+      }
+    },
+    {
+      "name": "story: the bar's «בנייה מחדש» opens its menu with Enter (other music or none, the clips' own sound) and Escape closes it; nothing is committed",
+      "ok": true,
+      "detail": {
+        "menuItems": [
+          "הקול של הקליפים: מושתק"
+        ]
+      }
+    },
+    {
+      "name": "story: one Ctrl+Z returns the exact document from before the story, the bar goes with it, and the narration stays in the library",
+      "ok": true,
+      "detail": {
+        "back": true,
+        "barGone": true,
+        "kept": true
+      }
+    },
+    {
+      "name": "story rows: the page logged no script error",
       "ok": true,
       "detail": {
         "errors": []
