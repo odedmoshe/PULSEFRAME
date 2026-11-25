@@ -8,6 +8,7 @@ import type { CameraMotionView, StabiliseRunBody } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
 import type { ClipLoudnessRequest, ClipLoudnessResult } from '@pulseframe/core';
+import type { PearlsView } from '@pulseframe/core';
 
 export class ApiFailure extends Error {
   constructor(public status: number, public code: string, message: string, public details?: unknown, public hint?: string) {
@@ -258,6 +259,8 @@ export const api = {
   // stabilisation (wave 7; apps/server/src/stabilise.ts)
   stabiliseClip: (id: string, clipId: string, body: StabiliseRunBody = {}) => call<{ jobId: string; status: string }>(`/projects/${id}/clips/${encodeURIComponent(clipId)}/stabilise`, json(body)),
   cameraMotion: (id: string, assetId: string) => call<CameraMotionView>(`/projects/${id}/assets/${encodeURIComponent(assetId)}/camera-motion`),
+  // marked ranges «פנינים» (wave 7; apps/server/src/pearls.ts): 501 pearls_not_built until builder B has built the view
+  pearls: (id: string, sequenceId?: string) => call<PearlsView>(`/projects/${id}/pearls${sequenceId ? `?sequenceId=${encodeURIComponent(sequenceId)}` : ''}`),
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }

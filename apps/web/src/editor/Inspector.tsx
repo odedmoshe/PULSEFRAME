@@ -36,6 +36,8 @@ import { useChrome } from './chromeState.ts';
 import { Copilot } from './Copilot.tsx';
 import { VersionsButton } from './craft/VersionsButton.tsx';
 import './inspector.css';
+import { PEARLS_UI_BUILT } from './pearls/PearlsList.tsx';
+import { ScreenTimePanel } from './pearls/ScreenTimePanel.tsx';
 
 const TAB_KEY = 'pf.inspector.tab.v1';
 const CUSTOM_TABS_KEY = 'pf.workspace.custom.v1';
@@ -289,6 +291,8 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
         <h2>{t('inspector.tab.deliver')}</h2>
         <DeliverPanel />
         <PacingPanel />
+        {/* «מי כמה בסרט» (wave 7 pearls): screen time by manual tag; once builder C has built it */}
+        {PEARLS_UI_BUILT && <ScreenTimePanel />}
       </div>
       <div {...panelProps('shorts')}>
         <ShortsPanel />

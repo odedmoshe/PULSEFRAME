@@ -11,6 +11,8 @@ import './captionsPanel.css';
 import { useEditorState, type Editor } from './store.ts';
 import { openItems, readingLimitFor, readReadingLimits, reviewRows, writeReadingLimit, type ReviewRow } from './aiTools.recheck.ts';
 import { recordingAt, recordingToTimeline, skippedNotes, speechClipsOf, transcriptOfSelection } from './transcriptLineage.logic.ts';
+import { PEARLS_UI_BUILT } from './pearls/PearlsList.tsx';
+import { SavePearlFromWords } from './pearls/SavePearlFromWords.tsx';
 
 type MediaClip = Extract<Clip, { type: 'media' }>;
 type Transcript = ProjectDocument['transcripts'][string];
@@ -184,6 +186,8 @@ export function TranscriptPanel() {
       <div className="row">
         <button className="ghost danger" disabled={lo < 0} onClick={() => void cut(false)} data-testid="transcript-delete">{t('transcript.delete')}</button>
         {failure?.approx && <button className="ghost" onClick={() => void cut(true)} data-testid="transcript-cut-anyway">{t('transcript.cutAnyway')}</button>}
+        {/* «שמור כפנינה» on the selected words (wave 7 pearls); once builder C has built it */}
+        {PEARLS_UI_BUILT && <SavePearlFromWords assetId={assetId} words={lo >= 0 ? flat.slice(lo, hi + 1).map((x) => x.w) : []} />}
       </div>
       {failure && <p className="muted danger" role="alert" data-testid="transcript-error">{failure.message}</p>}
       {notes.map((n) => <p key={n} className="muted" role="status" data-testid="transcript-skipped-note">{n}</p>)}

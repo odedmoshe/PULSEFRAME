@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST } from '@pulseframe/core';
+import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -605,6 +605,8 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       ...(CRAFT_OPS_BUILT && !opts.v1Replay ? [() => genCraft(doc)] : []),
       // stabilisation (wave 7): the two public operations, once W2 has built the bodies
       ...(STEADY_OPS_BUILT && !opts.v1Replay ? [() => genStabilise(doc)] : []),
+      // marked ranges «פנינים» (wave 7): the three public operations, once builder A has built the bodies (never in the v1 corpus)
+      ...(SOURCE_RANGE_OPS_BUILT && !opts.v1Replay ? [() => genPearls(doc)] : []),
       ...(SEQUENCE_OPS_BUILT ? [...sequenceMenu(doc), () => { const others = Object.keys(doc.sequences).filter((id) => id !== doc.mainSequenceId); return { op: 'add_marker', args: { sequenceId: others.length && rnd() < 0.8 ? pick(others) : rnd() < 0.5 ? doc.mainSequenceId : 'seq_none', time: T.frameTime(int(240), rate) } }; }] : []),
       // send and keep (wave 7): the master limiter on and off, and the loudness match of sound clips with their current gain (accepted)
       // or a changed one (refused stale), sometimes a repeated or unknown clip; left out of the recorded v1 replay corpus
@@ -794,6 +796,40 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     return { op: 'set_clip_stabilise', args: { clipId, stabilise: { ...(rnd() < 0.7 ? { strength: pick([1, 5, 50, 77, 100]) } : {}), ...(rnd() < 0.3 ? { maxCrop: pick([1, 10, 15, 50]) } : {}), ...(rnd() < 0.2 ? { zoomPm: pick([1000, 1010, 1500, 2000]) } : {}) } } };
   };
   /**
+   * Marked ranges «פנינים» (wave 7 pearls track). `genPearls(doc)` returns a random add_source_range, update_source_range or
+   * remove_source_range call (public; `gen` draws them once SOURCE_RANGE_OPS_BUILT): on every kind of file and on unknown ids, spans
+   * on frame edges and off them (a word edge), half spans, spans past the end or reversed (refused), whole files, presence tags with
+   * and without people, labels with a line break (refused), the project's people, an unknown person and a repeated one.
+   */
+  const genPearls = (doc: ProjectDocument): OpCall => {
+    const assets = Object.values(doc.assets);
+    const ranges = Object.keys(doc.sourceRanges ?? {});
+    const people = Object.keys(doc.people ?? {});
+    const a = assets.length && rnd() < 0.93 ? pick(assets) : undefined;
+    const dur = a ? T.toSeconds(a.duration) : 5;
+    const t = (x: number) => (rnd() < 0.5 ? T.frameTime(Math.max(0, Math.round(x * 30)), { num: 30, den: 1 }) : T.rt(Math.max(0, Math.round(x * 1000)), 1000));
+    const span = (): Record<string, unknown> => {
+      const r = rnd();
+      if (r < 0.2) return {};
+      if (r < 0.25) return { start: t(dur * rnd()) };
+      const s0 = dur * rnd() * 0.9, e0 = r < 0.3 ? s0 - 0.5 : r < 0.35 ? dur + 1 : s0 + 0.04 + rnd() * (dur - s0);
+      return { start: t(s0), end: t(e0) };
+    };
+    const tag = (): string[] => Array.from({ length: int(3) }, () => (people.length && rnd() < 0.85 ? pick(people) : 'per_none'));
+    const label = () => pick(['', 'סופגנייה של דינוזאורים', 'Noa laughs', 'two\nlines', 'נועה'.repeat(int(3) + 1)]);
+    const kind = rnd();
+    if (kind < 0.5 || !ranges.length) {
+      const presence = rnd() < 0.2;
+      return { op: 'add_source_range', args: { assetId: a?.id ?? 'ast_none', ...(presence ? { kind: 'presence' } : rnd() < 0.2 ? { kind: 'pearl' } : {}), ...(presence ? (rnd() < 0.8 ? {} : span()) : span()), ...(presence ? (rnd() < 0.1 ? { label: 'x' } : {}) : rnd() < 0.7 ? { label: label() } : {}), ...(rnd() < (presence ? 0.9 : 0.4) ? { people: tag() } : {}) } };
+    }
+    const rangeId = rnd() < 0.92 ? pick(ranges) : 'rng_none';
+    if (kind < 0.85) {
+      const r = rnd();
+      return { op: 'update_source_range', args: { rangeId, ...(r < 0.3 ? span() : r < 0.4 ? { whole: true } : {}), ...(rnd() < 0.4 ? { label: label() } : {}), ...(rnd() < 0.3 ? { people: rnd() < 0.2 ? [] : tag() } : {}) } };
+    }
+    return { op: 'remove_source_range', args: { rangeId } };
+  };
+  /**
    * The next random call among the named operations: draws from the same menu until one of them comes up (the menu grows with every
    * feature, so a driver that is about a few operations would otherwise meet them too rarely to say anything about them).
    */
@@ -802,5 +838,5 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls };
 }

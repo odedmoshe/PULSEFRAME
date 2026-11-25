@@ -62,6 +62,8 @@ const sign = (v: number) => (v >= 0 ? '+' : '−') + num1(Math.abs(v));
 /** What a film regeneration left out because it was deleted by hand (core familyFilm.ts, warning removed_by_hand details.items). */
 type LeftOut = { kind: 'file' | 'window' | 'title' | 'closing' | 'music'; name?: string; windowIndex?: number; fromSecond?: number; toSecond?: number };
 const leftOut = (v: unknown): LeftOut[] => (Array.isArray(v) ? v.filter((x): x is LeftOut => !!x && typeof x === 'object' && typeof (x as LeftOut).kind === 'string') : []);
+/** How many pearls a pearl_left_out warning names (details.items [{ rangeId, why }]); at least one. Labels are never in a warning. */
+const pearlsOut = (v: unknown): number => (Array.isArray(v) && v.length ? v.length : 1);
 /** A file name isolated inside the sentence (it may be written left to right). */
 const fname = (x: LeftOut) => `\u2068${x.name ?? ''}\u2069`;
 const leftOutHe = (x: LeftOut) => x.kind === 'file' ? `«${fname(x)}» (כל הקובץ)` : x.kind === 'window' ? `«${fname(x)}» (${n(x.fromSecond) !== null && n(x.toSecond) !== null ? `הרגע ב־${num1(x.fromSecond!)}–${num1(x.toSecond!)} שנ׳` : `רגע ${(x.windowIndex ?? 0) + 1}`}; רגעים אחרים שלו יכולים להישאר)` : x.kind === 'title' ? 'כותרת הפתיחה' : x.kind === 'closing' ? 'כרטיס הסיום' : x.name ? `המוזיקה «${fname(x)}»` : 'המוזיקה';
@@ -122,6 +124,7 @@ const he: FamilyFilmStrings = {
       case 'default_middle': return 'נבחר אמצע הקליפ';
       case 'whole_clip': return 'כל הקליפ';
       case 'still': return 'תמונה';
+      case 'pearl': return range(r) ? `פנינה שסימנתם (שניות ${range(r)})` : 'פנינה שסימנתם';
     }
   },
   exclusion(e) {
@@ -156,6 +159,9 @@ const he: FamilyFilmStrings = {
       case 'music_removed': return w.details.cutOn === 'steady'
         ? 'המוזיקה נמחקה ידנית וביקשתם אורך או סדר אחר: הקליפים נחתכים על קצב קבוע, בלי מוזיקה. הקול של הקליפים לא מונמך ושום דבר לא מונמך מתחתיו'
         : 'המוזיקה נמחקה ידנית: הקליפים נשארים חתוכים על התיבות שלה, במקום שבו הם, בלי מוזיקה מתחתם. הקול של הקליפים לא מונמך ושום דבר לא מונמך מתחתיו. אורך או סדר אחר יחתכו אותם על קצב קבוע';
+      case 'pearl_cut_short': return s !== null ? `פנינה ארוכה מהמקום שלה בסרט: ${num1(s)} שנ׳ ממנה לא נכנסו` : 'פנינה ארוכה מהמקום שלה בסרט, וסופה לא נכנס';
+      case 'pearl_left_out': { const k = pearlsOut(w.details.items); return `${k === 1 ? 'פנינה אחת שסימנתם לא נכנסה לסרט' : `${k} פנינים שסימנתם לא נכנסו לסרט`}. מכל קובץ נכנסת כרגע פנינה אחת; אפשר לראות אותן ברשימת הפנינים`; }
+      case 'pearl_under_music': return 'בפנינה יש קול, והוא נשמע חלש מתחת למוזיקה. כדי לשמוע אותו בחרו «הקולות מובילים»';
       case 'pictures_missing': return s !== null ? `ב־${num1(s)} שנ׳ של הסרט אין תמונה: הקליפים שנבחרו לא ממלאים את המקום עד הקליפים שנשארו במקומם` : 'בחלק מהסרט אין תמונה: הקליפים שנבחרו לא ממלאים את המקום עד הקליפים שנשארו במקומם';
     }
   },
@@ -216,6 +222,7 @@ const en: FamilyFilmStrings = {
       case 'default_middle': return 'The middle of the clip was taken';
       case 'whole_clip': return 'The whole clip';
       case 'still': return 'A picture';
+      case 'pearl': return range(r) ? `A pearl you marked (seconds ${range(r)})` : 'A pearl you marked';
     }
   },
   exclusion(e) {
@@ -250,6 +257,9 @@ const en: FamilyFilmStrings = {
       case 'music_removed': return w.details.cutOn === 'steady'
         ? 'The music was deleted by hand and you asked for another length or order: the clips are cut on a steady beat, with no music. The clips\' own sound is not lowered and nothing is ducked'
         : 'The music was deleted by hand: the clips stay cut on its bars, where they are, with no music under them. The clips\' own sound is not lowered and nothing is ducked. Another length or order cuts them on a steady beat instead';
+      case 'pearl_cut_short': return s !== null ? `A pearl is longer than its place in the film: ${num1(s)} s of it did not fit` : 'A pearl is longer than its place in the film, and its end did not fit';
+      case 'pearl_left_out': { const k = pearlsOut(w.details.items); return `${k === 1 ? 'A pearl you marked is not in the film' : `${k} pearls you marked are not in the film`}. For now one pearl of each file goes in; the pearls list shows them`; }
+      case 'pearl_under_music': return 'A pearl has sound, and it plays quietly under the music. To hear it, choose "Voices lead"';
       case 'pictures_missing': return s !== null ? `${num1(s)} s of the film show no picture: the chosen clips do not fill the room up to the clips kept by hand` : 'Part of the film shows no picture: the chosen clips do not fill the room up to the clips kept by hand';
     }
   },

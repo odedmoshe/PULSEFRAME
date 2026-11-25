@@ -22,6 +22,9 @@ import { lifeApi } from './lifeline.api.ts';
 import { clusterNudgeCount, dateGroups, eventModels, monthLabel, LIFE_VIEWS, LIFE_VIEW_STORAGE_KEY, type LifeView } from './lifeLibrary.logic.ts';
 import { closePeople, setLifeView, showEvent, useLifeUi } from './lifeUi.ts';
 import './lifeline.css';
+import { PEARLS_UI_BUILT } from '../pearls/PearlsList.tsx';
+import { PEARLS_TESTIDS } from '../pearls/pearls.testids.ts';
+import { pearlsT } from '../pearls/pearls.strings.ts';
 
 export { LIFE_VIEWS, LIFE_VIEW_STORAGE_KEY };
 export type { LifeView };
@@ -33,7 +36,9 @@ export function LifeViewSwitch({ view, onChange }: { view: LifeView; onChange: (
   return (
     <div className="pf-life-view" data-testid={LIFE_TESTIDS.view}>
       <Seg size="sm" block label={S.viewLabel} value={view} onChange={onChange}
-        options={[{ value: 'all', label: S.viewAll, testId: LIFE_TESTIDS.viewOption('all') }, { value: 'date', label: S.viewByDate, testId: LIFE_TESTIDS.viewOption('date') }, { value: 'events', label: S.viewEvents, testId: LIFE_TESTIDS.viewOption('events') }]} />
+        options={[{ value: 'all', label: S.viewAll, testId: LIFE_TESTIDS.viewOption('all') }, { value: 'date', label: S.viewByDate, testId: LIFE_TESTIDS.viewOption('date') }, { value: 'events', label: S.viewEvents, testId: LIFE_TESTIDS.viewOption('events') },
+          // «פנינים» (wave 7 pearls track): offered once builder C has built the list
+          ...(PEARLS_UI_BUILT ? [{ value: 'pearls' as const, label: pearlsT(state.lang)('view'), testId: PEARLS_TESTIDS.view }] : [])]} />
     </div>
   );
 }
@@ -88,7 +93,7 @@ function ReadDates() {
 }
 
 /** The body of the media drawer for the views 'date' and 'events' (the view 'all' stays the existing library). */
-export function LifeLibrary({ view, onView }: { view: Exclude<LifeView, 'all'>; onView?: (assetId: string) => void }): ReactElement | null {
+export function LifeLibrary({ view, onView }: { view: Exclude<LifeView, 'all' | 'pearls'>; onView?: (assetId: string) => void }): ReactElement | null {
   const { state } = useEditorState();
   const doc = state.doc;
   const S = LIFE_STRINGS[state.lang];
