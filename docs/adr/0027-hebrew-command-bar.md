@@ -78,15 +78,32 @@ no file.
 revision, the sequence, a SHA-256 and a character count of the typed text, a SHA-256, byte count and the two switches of
 the summary, the prompt digest, adapter, host, model, token cap, the estimate and the reservation. `output` of a
 successful job: the proposal id, the model's explanation (at most ASSISTANT_EXPLANATION_MAX characters, the key
-redacted), the operation count and the cost. `error`: a code and a sentence that may quote the
-service or the model (key redacted). The proposal row holds the operations. All of these are in the database, so in
-every backup of it; a project archive holds no job and no proposal. The digest of a short typed request could be matched
+redacted), the operation count and the cost. `error`: a code and a sentence; for a service error the sentence can quote
+the service (key redacted), for an answer that is not valid it is fixed (see below). The proposal row holds the
+operations. All of these are in the database while they last, so in a backup made then; a project archive holds no job and no proposal. The digest of a short typed request could be matched
 by guessing; it is not returned by any route.
 
-**Open (proposed, not done).** The explanation is read once, by the owner's tab polling the job; nothing reads it after
-the proposal is decided. Clearing `output.explanation` when the proposal is accepted or rejected (Governance.decide)
-would leave nothing of the model's sentence at rest; it needs the job found from the proposal id and a rule for a tab
-that never polled, so it waits for a decision.
+**The sentence at rest (built 2026-11-25, lead decision).** The model's explanation can repeat what the owner typed, so
+it lives in the job row only while its proposal can still be decided. `Governance.decide` clears it in the same database
+transaction as the decision (accepted, rejected, or stale when the accept finds the project changed); the job is found by
+the proposal id its output carries. A cancelled request never stores an answer. Deleting a project removes its jobs and
+proposals. In each case the bytes leave the files too (`Store.erasing`: SQLite secure_delete for that write, then the
+write-ahead log folded into the database and cut), so no backup made afterwards holds them; what a filesystem or a disk
+keeps of freed blocks is not promised. The owner's tab that already showed the sentence keeps showing it until the
+decision; a tab that never polled shows the proposal's steps without a sentence (the row has no empty line for it).
+An answer that is not valid is stored as a category (`validate.ts` INVALID_ANSWER_CATEGORIES) and a fixed sentence: no
+operation name, key or value of the answer is kept, for the owner either. A service error text stays: the owner needs it
+(a refused key, a rate limit) and it is the service's sentence, not the model's answer. The MOCK adapter echoes nothing
+it is not scripted to; no network adapter exists in this build, so whether a real service quotes the request in an error
+cannot be checked here. An adapter, when one is built, should pass on the service's status and code, not its body.
+
+**Stated plainly: a backup made while a proposal is pending holds its sentence** (and the proposal's operations), because
+the backup is a copy of the database as it is. To keep it out, decide the proposal (or cancel the request) before backing
+up. Pending assistant output is NOT excluded from backups as the key file is: the copy is a verified snapshot of the
+database, and a restored project would otherwise show an open proposal with nothing behind it.
+
+**Still at rest.** A rejected or stale proposal's row keeps its operations, entity states and summary (so does every
+agent's proposal); only the owner's session reads the assistant's. The digest of the typed text stays in the job's input.
 
 **The cancel button.** The pending assistant row has «ביטול הבקשה» for the owner's session (POST /jobs/{jobId}/cancel),
 reachable with Tab from the palette's input. The row then says what the cancel did, from the job's own attempt count:

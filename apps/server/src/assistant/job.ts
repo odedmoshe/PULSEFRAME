@@ -17,8 +17,9 @@
  *  4. check (stage checking): settle at the reported usage at the owner's prices, else at the reservation; then
  *     checkModelAnswer, then Governance.propose as the in-memory assistantPrincipal (it parses every op again, refuses people
  *     details, dry-runs on the names-only document and refuses when paused). Any failure → failed invalid_model_output
- *     with the first reason, and no proposal;
- *  5. succeeded with AssistantJobOutput.
+ *     with the first reason (its category and a fixed sentence: the answer's own words are not stored), and no proposal;
+ *  5. succeeded with AssistantJobOutput. Its explanation, the model's sentence, lives in the row only while the proposal can
+ *     still be decided: Governance.decide clears it with the decision (accepted, rejected or stale), in one transaction.
  * Stages are words (never a percentage). Cancel before the send → canceled with attempt 0 → the ledger is released.
  */
 import { createHash } from 'node:crypto';
@@ -34,7 +35,7 @@ import { assistantPrincipal, type AssistantDeps } from './contract.ts';
 import { redact, type AssistantFiles } from './credential.ts';
 import { assistantPrompt, buildChatRequest, requestBytes } from './prompt.ts';
 import { assistantSummary } from './summary.ts';
-import { checkModelAnswer } from './validate.ts';
+import { checkModelAnswer, type InvalidAnswerCategory } from './validate.ts';
 
 export interface AssistantRuntime { cfg: Config; store: Store; gov: Governance; deps: AssistantDeps; files: AssistantFiles }
 /** The label of every assistant proposal: fixed words, never the owner's typed text. */
@@ -202,13 +203,15 @@ export class AssistantJobs {
     if (store.getJob(jobId).status === 'cancel-requested') { store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'canceled; the answer that arrived was discarded' } }); return; }
     store.updateJob(jobId, { stage: 'checking' });
     const check = checkModelAnswer(res);
-    if (!check.ok) { fail('invalid_model_output', red(check.reason)); return; }
+    // an answer that is not valid: its category and a fixed sentence, never its own words (validate.ts; ADR-0027 note of 2026-11-25)
+    if (!check.ok) { fail('invalid_model_output', check.reason, { category: check.category }); return; }
     let proposalId: string;
     try {
       proposalId = gov.propose(principal, projectId, check.ops, ASSISTANT_PROPOSAL_LABEL).proposalId;
     } catch (e) {
       if (e instanceof ApiError && e.code === 'agent_paused') { fail('agent_paused', 'the owner paused agents on this project while the answer was on its way; no proposal was made'); return; }
-      if (e instanceof ApiError) { fail('invalid_model_output', red(`${e.code}: ${e.message}`).slice(0, 500)); return; }
+      // the refusal's code is a word of this build; its message can quote the proposed arguments, so it is not kept
+      if (e instanceof ApiError) { fail('invalid_model_output', `the project refused the proposed operations (${e.code})`, { category: 'refused_by_project' satisfies InvalidAnswerCategory }); return; }
       throw e;
     }
     const output: AssistantJobOutput = { proposalId, explanation: check.explanation === null ? null : red(check.explanation), opsCount: check.ops.length, costCents, costBasis: usage ? 'reported' : 'reserved' };

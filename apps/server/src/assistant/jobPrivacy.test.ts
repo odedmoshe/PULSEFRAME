@@ -127,7 +127,8 @@ describe('controls: the plant is there to be found', () => {
     const ok = await rest(OWNER_WHO, 'GET', `/jobs/${okJob}`);
     expect(ok.body).toMatchObject({ status: 'succeeded', actor: ASSISTANT_ACTOR, output: { proposalId, explanation: `MOCK ${EXPL_MARK}`, opsCount: 1, costBasis: 'reported' } });
     expect((await rest(OWNER_WHO, 'GET', `/jobs/${errJob}`)).body.error.message).toContain(ERR_MARK);
-    expect((await rest(OWNER_WHO, 'GET', `/jobs/${badJob}`)).body.error.message).toContain(BAD_MARK);
+    // an answer that is not valid is recorded by its category and a fixed sentence: the model's own words are not kept, for the owner either
+    expect((await rest(OWNER_WHO, 'GET', `/jobs/${badJob}`)).body.error).toEqual({ code: 'invalid_model_output', category: 'unknown_op', message: 'op 0 is not an operation of this build', retryable: false });
     const viaTool = await rpc(OWNER_WHO, 'tools/call', { name: 'get_job', arguments: { jobId: okJob } });
     expect(viaTool.text).toContain(EXPL_MARK);
     const listed = await rest(OWNER_WHO, 'GET', `/projects/${pid}/proposals`);
@@ -232,6 +233,7 @@ describe('the walk: the planted words reach no credential but the owner\'s sessi
     // control: the owner's own session is told everything, as before
     expect(owner!.s.text).toContain(EXPL_MARK);
     expect(owner!.s.text).toContain(ERR_MARK);
+    expect(owner!.s.text).toContain('"category":"unknown_op"');
     expect(events(owner!.s.text, 'proposal').some((e) => e.actor === ASSISTANT_ACTOR)).toBe(true);
     for (const l of others) {
       expect(ended(l.s.text), `${l.who.name} heard the three jobs end`).toBe(true);
@@ -261,7 +263,8 @@ describe('what is kept of a request (ADR-0027 decision 12)', () => {
     const holding = (root: string, word: string) => filesOf(root).filter((file) => fs.readFileSync(file).includes(Buffer.from(word, 'utf8'))).map((file) => path.relative(root, file));
     expect(holding(dir, TYPED_MARK)).toEqual([]);
     const db = path.relative(dir, store.db.name);
-    for (const word of [EXPL_MARK, ERR_MARK, BAD_MARK, OPS_MARK]) expect(holding(dir, word), word).toEqual([db]);
+    for (const word of [EXPL_MARK, ERR_MARK, OPS_MARK]) expect(holding(dir, word), word).toEqual([db]);
+    expect(holding(dir, BAD_MARK)).toEqual([]); // the words of an answer that was not valid are never stored
     const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-ajp-backup-'));
     try {
       await backupDataDir(dir, dest);
@@ -273,12 +276,133 @@ describe('what is kept of a request (ADR-0027 decision 12)', () => {
   });
   it('a project archive holds no job and no proposal: none of the planted words, for the owner too', async () => {
     // the fixture's two files have no stored bytes: a byte each stands in, so the archive can be written (it is not imported)
-    for (const hash of archiveBlobs(store.getProject(pid).doc)) { const file = store.blobPath(hash); if (!fs.existsSync(file)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'x'); } }
+    const standIns: string[] = [];
+    for (const hash of archiveBlobs(store.getProject(pid).doc)) { const file = store.blobPath(hash); if (!fs.existsSync(file)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'x'); standIns.push(file); } }
     const r = await fetchRaw(OWNER_WHO, 'GET', `${base()}/api/v1/projects/${pid}/archive`);
     expect(r.status).toBe(200);
     expect(r.buf.length).toBeGreaterThan(1000);
     expect(r.buf.toString('utf8')).toContain('manifest.json');
     expect(markIn(r.buf.toString('utf8'))).toBeNull();
     for (const word of [okJob, proposalId, ASSISTANT_JOB_TYPE]) expect(r.buf.includes(Buffer.from(word))).toBe(false);
+    for (const file of standIns) fs.rmSync(file); // a backup checks stored files against their names: the stand-ins are not real content
+  });
+});
+
+describe('the model\'s sentence lives only while its proposal can still be decided (ADR-0027, note of 2026-11-25)', () => {
+  const filesOf = (root: string): string[] => fs.readdirSync(root, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? filesOf(path.join(root, e.name)) : [path.join(root, e.name)]));
+  /** The files under `root` whose bytes hold the word (the database, its write-ahead log, anything else). */
+  const holding = (root: string, word: string) => filesOf(root).filter((file) => fs.readFileSync(file).includes(Buffer.from(word, 'utf8'))).map((file) => path.relative(root, file));
+  const backupHolding = async (word: string) => {
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-ajp-backup-'));
+    try { await backupDataDir(dir, dest); return holding(dest, word); } finally { fs.rmSync(dest, { recursive: true, force: true }); }
+  };
+  const dbFile = () => path.relative(dir, store.db.name);
+  /** A request answered with one marker at `frame` and an explanation that holds `word`; resolves to the job and its open proposal. */
+  const proposed = async (word: string, frame: number, op: { op: string; args: Record<string, unknown> } = { op: 'add_marker', args: { time: f(frame), label: 'סמן' } }) => {
+    adapter.queue(mockToolAnswer([op], `MOCK ${word}`));
+    const jobId = await ask();
+    const job = await settled(jobId);
+    expect(job.status).toBe('succeeded');
+    expect(job.output.explanation).toBe(`MOCK ${word}`);
+    return { jobId, proposalId: job.output.proposalId as string };
+  };
+  const explanationOf = (jobId: string) => store.getJob(jobId).output.explanation as string | null;
+
+  it('accepted: the sentence is in the database and in a backup made while the proposal is pending; after the owner accepts it is in no file and in no backup made afterwards; undo and redo of the edit are unaffected', async () => {
+    const WORD = 'דובדבנית';
+    const p = await proposed(WORD, 120);
+    // pending: stored, and a backup made now holds it (stated in the ADR; the owner decides or cancels before backing up to avoid it)
+    expect(holding(dir, WORD).length).toBeGreaterThan(0);
+    expect((await backupHolding(WORD)).length).toBe(1);
+    const rev = store.getProject(pid).revision, markers = () => Object.values(store.getProject(pid).doc.markers ?? {}).length, before = markers();
+    const accepted = await rest(OWNER_WHO, 'POST', `/projects/${pid}/proposals/${p.proposalId}/accept`);
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.proposal.status).toBe('accepted');
+    expect([store.getProject(pid).revision, markers()]).toEqual([rev + 1, before + 1]);
+    // the row keeps everything else (the proposal id, the count, the cost); only the sentence is gone
+    expect(store.getJob(p.jobId)).toMatchObject({ status: 'succeeded', output: { proposalId: p.proposalId, explanation: null, opsCount: 1, costBasis: 'reported' } });
+    expect((await rest(OWNER_WHO, 'GET', `/jobs/${p.jobId}`)).body.output.explanation).toBeNull();
+    expect(holding(dir, WORD)).toEqual([]); // not in the database file, not in its write-ahead log
+    expect(await backupHolding(WORD)).toEqual([]);
+    // the accepted edit is the owner's own transaction: undo takes it back, redo brings it again
+    expect((await rest(OWNER_WHO, 'POST', `/projects/${pid}/undo`, {})).status).toBe(200);
+    expect(markers()).toBe(before);
+    expect((await rest(OWNER_WHO, 'POST', `/projects/${pid}/redo`, {})).status).toBe(200);
+    expect(markers()).toBe(before + 1);
+    expect(holding(dir, WORD)).toEqual([]);
+  });
+  it('rejected: cleared with the decision; a second decision is refused as before', async () => {
+    const WORD = 'תאנונת';
+    const p = await proposed(WORD, 150);
+    expect(explanationOf(p.jobId)).toContain(WORD);
+    expect((await rest(OWNER_WHO, 'POST', `/projects/${pid}/proposals/${p.proposalId}/reject`)).body.proposal.status).toBe('rejected');
+    expect(explanationOf(p.jobId)).toBeNull();
+    expect(holding(dir, WORD)).toEqual([]);
+    expect(await backupHolding(WORD)).toEqual([]);
+    expect((await rest(OWNER_WHO, 'POST', `/projects/${pid}/proposals/${p.proposalId}/accept`)).body.error.code).toBe('proposal_closed');
+  });
+  it('stale: a proposal that can no longer apply is closed as stale by the accept that finds it out, and its sentence is cleared', async () => {
+    const WORD = 'רימונית';
+    // the proposal renames a marker; the owner deletes that marker before deciding
+    const made = store.commit({ projectId: pid, actor: 'user:local', ops: [{ op: 'add_marker', args: { time: f(200), label: 'זמני' } }] });
+    const markerId = made.results[0]!.output!.markerId as string;
+    const p = await proposed(WORD, 0, { op: 'update_marker', args: { markerId, label: 'אחר' } });
+    store.commit({ projectId: pid, actor: 'user:local', ops: [{ op: 'remove_marker', args: { markerId } }] });
+    const r = await rest(OWNER_WHO, 'POST', `/projects/${pid}/proposals/${p.proposalId}/accept`);
+    expect([r.status, r.body.error.code]).toEqual([409, 'proposal_stale']);
+    expect(store.db.prepare('SELECT status FROM proposals WHERE id = ?').get(p.proposalId)).toEqual({ status: 'stale' });
+    expect(explanationOf(p.jobId)).toBeNull();
+    expect(holding(dir, WORD)).toEqual([]);
+    expect(await backupHolding(WORD)).toEqual([]);
+  });
+  it('another agent\'s proposal is decided as before: no job is touched', async () => {
+    const own = await rest(OTHERS.find((w) => w.name === 'a propose grant')!, 'POST', `/projects/${pid}/proposals`, { ops: [{ op: 'add_marker', args: { time: f(260), label: 'של סוכן' } }] });
+    const pending = await proposed('אגסונת', 290);
+    expect((await rest(OWNER_WHO, 'POST', `/projects/${pid}/proposals/${own.body.proposalId}/reject`)).body.proposal.status).toBe('rejected');
+    expect(explanationOf(pending.jobId)).toContain('אגסונת'); // still pending: still shown
+    expect(explanationOf(okJob)).toContain(EXPL_MARK);
+  });
+  it('an answer that is not valid: the row holds the category and a fixed sentence, and the model\'s words are in no file and no backup', async () => {
+    const cases: [string, ReturnType<typeof mockToolAnswer>, string, string][] = [
+      ['an operation that does not exist', mockToolAnswer([{ op: 'op_shezifonet', args: {} }]), 'unknown_op', 'op 0 is not an operation of this build'],
+      ['a key the tool does not have', { respond: { toolInput: { ops: [{ op: 'add_marker', args: { time: f(5) } }], key_mishmishonet: 1 }, text: null, finish: 'tool', usage: { inputTokens: 10, outputTokens: 10 } } }, 'wrong_shape', 'the proposal does not have the tool\'s shape (unrecognized_keys)'],
+      ['an argument the operation does not have', mockToolAnswer([{ op: 'add_marker', args: { time: f(5), arg_afarsekonet: 'x' } }]), 'invalid_args', 'op 0 has invalid arguments (unrecognized_keys)'],
+      ['an operation the project refuses', mockToolAnswer([{ op: 'update_marker', args: { markerId: 'mrk_tapuzonet', label: 'x' } }]), 'refused_by_project', 'the project refused the proposed operations (not_found)'],
+    ];
+    for (const [name, step, category, message] of cases) {
+      adapter.queue(step);
+      const job = await settled(await ask());
+      expect(job.error, name).toEqual({ code: 'invalid_model_output', category, message, retryable: false });
+    }
+    for (const word of ['shezifonet', 'mishmishonet', 'afarsekonet', 'tapuzonet']) {
+      expect(holding(dir, word), word).toEqual([]);
+      expect(await backupHolding(word), word).toEqual([]);
+    }
+  });
+  it('a cancelled request leaves no sentence: nothing of an answer is stored for it (pinned; it held before too)', async () => {
+    adapter.queue({ wait: (signal) => new Promise((_res, rej) => { signal.addEventListener('abort', () => rej(new Error('MOCK: aborted'))); }) });
+    const jobId = await ask();
+    for (let i = 0; i < 200 && store.getJob(jobId).status !== 'running'; i++) await new Promise((res) => setTimeout(res, 5));
+    expect((await rest(OWNER_WHO, 'POST', `/jobs/${jobId}/cancel`)).body.outcome).toBe('requested');
+    const job = await settled(jobId);
+    expect(job).toMatchObject({ status: 'canceled', output: null, error: { code: 'canceled', message: 'canceled while the request was with the service; it may have been charged' } });
+  });
+  it('a deleted project: its pending proposal, its job and the sentence leave the database file with it, and no backup made afterwards holds them', async () => {
+    const SENTENCE = 'חבושונת', LABEL = 'שסקונת';
+    const other = plantedProject(store).pid;
+    adapter.queue(mockToolAnswer([{ op: 'add_marker', args: { time: f(45), label: LABEL } }], `MOCK ${SENTENCE}`));
+    const asked = await rest(OWNER_WHO, 'POST', `/projects/${other}/assistant/requests`, { text: TYPED, selection: [], playheadFrame: 0 });
+    expect((await settled(asked.body.jobId)).status).toBe('succeeded');
+    for (const word of [SENTENCE, LABEL]) expect(holding(dir, word).length, word).toBeGreaterThan(0);
+    const gone = await rest(OWNER_WHO, 'POST', `/projects/${other}/delete`, { confirmName: store.getProject(other).doc.name });
+    expect(gone.status).toBe(200);
+    expect(store.db.prepare('SELECT (SELECT COUNT(*) FROM jobs WHERE project_id = ?) AS jobs, (SELECT COUNT(*) FROM proposals WHERE project_id = ?) AS proposals').get(other, other)).toEqual({ jobs: 0, proposals: 0 });
+    for (const word of [SENTENCE, LABEL]) { expect(holding(dir, word), word).toEqual([]); expect(await backupHolding(word), word).toEqual([]); }
+    // the project that stays is untouched
+    expect(explanationOf(okJob)).toContain(EXPL_MARK);
+  });
+  it('a service error text stays (the owner needs it; it is the service\'s sentence, not the model\'s answer), and so does a pending proposal\'s sentence', () => {
+    expect(store.getJob(errJob).error.message).toContain(ERR_MARK);
+    expect(holding(dir, EXPL_MARK)).toContain(dbFile());
   });
 });
