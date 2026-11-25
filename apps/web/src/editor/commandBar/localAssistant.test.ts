@@ -88,22 +88,25 @@ describe('parseLocalSettings: a port and a time limit, never an address', () => 
 
 describe('the words', () => {
   const dictLocal = (lang: 'he' | 'en') => Object.entries(dictionaries[lang] as Record<string, string>).filter(([k]) => /^assistant\.local\./.test(k) || /^error\.code\.local_/.test(k));
-  it('this builder\'s strings have the same keys and placeholders in Hebrew and English, Hebrew has Hebrew, English none', () => {
-    expect(Object.keys(L.LOCAL_TEXT_EN).sort()).toEqual(Object.keys(L.LOCAL_TEXT_HE).sort());
-    for (const k of Object.keys(L.LOCAL_TEXT_HE) as import('./localAssistant.logic.ts').LocalTextKey[]) {
-      expect(placeholdersOf(L.LOCAL_TEXT_EN[k]), k).toEqual(placeholdersOf(L.LOCAL_TEXT_HE[k]));
-      expect(/[א-ת]/.test(L.LOCAL_TEXT_HE[k]), k).toBe(true);
-      expect(L.LOCAL_TEXT_EN[k], k).not.toMatch(/[א-ת]/);
+  const HE_L = L.LOCAL_TEXT_KEYS.map((k) => BAR_HE[k]), EN_L = L.LOCAL_TEXT_KEYS.map((k) => BAR_EN[k]);
+  it('this builder\'s strings are the command bar\'s own (same keys and placeholders in Hebrew and English, Hebrew has Hebrew, English none)', () => {
+    for (const k of L.LOCAL_TEXT_KEYS) {
+      expect(BAR_HE[k], k).toBeTruthy();
+      expect(placeholdersOf(BAR_EN[k]), k).toEqual(placeholdersOf(BAR_HE[k]));
+      expect(/[א-ת]/.test(BAR_HE[k]), k).toBe(true);
+      expect(BAR_EN[k], k).not.toMatch(/[א-ת]/);
+      expect(L.localText('he', k), k).toBe(BAR_HE[k]);
+      expect(L.localText('en', k), k).toBe(BAR_EN[k]);
     }
   });
   it('no local-assistant sentence has a money word or claims anything about how well it understands', () => {
-    const all = [...Object.values(L.LOCAL_TEXT_HE), ...Object.values(L.LOCAL_TEXT_EN), ...dictLocal('he').map(([, v]) => v), ...dictLocal('en').map(([, v]) => v),
+    const all = [...HE_L, ...EN_L, ...dictLocal('he').map(([, v]) => v), ...dictLocal('en').map(([, v]) => v),
       ...Object.entries(BAR_HE).filter(([k]) => /^(set|row)\.local\./.test(k)).map(([, v]) => v), ...Object.entries(BAR_EN).filter(([k]) => /^(set|row)\.local\./.test(k)).map(([, v]) => v)];
     expect(all.length).toBeGreaterThan(60);
     for (const w of all) { expect(w, w).not.toMatch(MONEY); expect(w, w).not.toMatch(QUALITY); }
   });
   it('no sentence takes a host or a URL', () => {
-    for (const w of [...Object.values(L.LOCAL_TEXT_HE), ...Object.values(L.LOCAL_TEXT_EN)]) expect(w, w).not.toMatch(/https?:\/\/|:\/\//);
+    for (const w of [...HE_L, ...EN_L]) expect(w, w).not.toMatch(/https?:\/\/|:\/\//);
   });
   it('every state the check can find has words in both languages', () => {
     for (const s of LOCAL_RUNTIME_STATES) for (const lang of ['he', 'en'] as const) expect((dictionaries[lang] as Record<string, string>)[`assistant.local.state.${s}`], `${lang} ${s}`).toBeTruthy();

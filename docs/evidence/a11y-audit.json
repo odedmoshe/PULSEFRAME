@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T21:27:56.383Z",
+  "ranAt": "2026-11-25T21:14:26.932Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "browser": "153.0.8010.12"
@@ -145,7 +145,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_a10d59e4e30]",
+          "focusAfterClose": "button[data-testid=more-ast_51178340140]",
           "focusReturned": true
         },
         {
@@ -249,7 +249,7 @@
         },
         {
           "state": "assistant-settings",
-          "controls": 633,
+          "controls": 634,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -282,7 +282,7 @@
         },
         {
           "state": "settings-dialog",
-          "controls": 476,
+          "controls": 477,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -740,7 +740,7 @@
         },
         {
           "state": "settings-library",
-          "controls": 815,
+          "controls": 816,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1004,7 +1004,7 @@
         },
         {
           "state": "story-bar",
-          "controls": 203,
+          "controls": 364,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1038,25 +1038,23 @@
           "rows": 0
         },
         {
-          "state": "search-picture-not-installed",
+          "state": "not_installed",
           "controls": 360,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
-          "pictureState": "not_installed",
           "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
         },
         {
-          "state": "search-picture-scanning",
+          "state": "busy",
           "controls": 361,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
-          "pictureState": "busy",
           "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
         },
         {
@@ -1136,8 +1134,98 @@
           "clip": "a video clip (its Beat tab)"
         },
         {
+          "state": "running",
+          "controls": 474,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "stopped",
+          "controls": 474,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "not_llama",
+          "controls": 474,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-offer",
+          "controls": 467,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-thinking",
+          "controls": 467,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-suggested",
+          "controls": 468,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-inserted",
+          "controls": 466,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-none",
+          "controls": 467,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-not-running",
+          "controls": 467,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
           "state": "cache-storage-row",
-          "controls": 552,
+          "controls": 481,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1561,7 +1649,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_a10d59e4e30]",
+          "focusAfterClose": "button[data-testid=more-ast_51178340140]",
           "focusReturned": true
         },
         {
@@ -1665,7 +1753,7 @@
         },
         {
           "state": "assistant-settings",
-          "controls": 638,
+          "controls": 639,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1698,7 +1786,7 @@
         },
         {
           "state": "settings-dialog",
-          "controls": 481,
+          "controls": 482,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2038,7 +2126,7 @@
         },
         {
           "state": "film-bar",
-          "controls": 362,
+          "controls": 371,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2156,7 +2244,7 @@
         },
         {
           "state": "settings-library",
-          "controls": 815,
+          "controls": 816,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2454,25 +2542,23 @@
           "rows": 0
         },
         {
-          "state": "search-picture-not-installed",
+          "state": "not_installed",
           "controls": 360,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
-          "pictureState": "not_installed",
           "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
         },
         {
-          "state": "search-picture-scanning",
+          "state": "busy",
           "controls": 361,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
-          "pictureState": "busy",
           "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
         },
         {
@@ -2552,8 +2638,98 @@
           "clip": "a video clip (its Beat tab)"
         },
         {
+          "state": "running",
+          "controls": 474,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "stopped",
+          "controls": 474,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "not_llama",
+          "controls": 474,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-offer",
+          "controls": 467,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-thinking",
+          "controls": 467,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-suggested",
+          "controls": 468,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-inserted",
+          "controls": 466,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-none",
+          "controls": 467,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-not-running",
+          "controls": 467,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
           "state": "cache-storage-row",
-          "controls": 552,
+          "controls": 481,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2873,7 +3049,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 481,
+          "controls": 482,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2882,7 +3058,7 @@
         },
         {
           "state": "settings-dialog",
-          "controls": 477,
+          "controls": 478,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3171,7 +3347,7 @@
         },
         {
           "state": "story-bar",
-          "controls": 367,
+          "controls": 206,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3255,61 +3431,94 @@
           "clip": "a video clip (its Beat tab)"
         },
         {
-          "state": "search-results",
-          "controls": 359,
+          "state": "running",
+          "controls": 476,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
-          "rows": 1,
-          "sections": [
-            1,
-            1
-          ],
-          "pictureLine": "not_installed"
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
         },
         {
-          "state": "search-nothing-found",
-          "controls": 352,
+          "state": "stopped",
+          "controls": 476,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
-          "rows": 0
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
         },
         {
-          "state": "search-picture-not-installed",
-          "controls": 359,
+          "state": "not_llama",
+          "controls": 476,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
-          "pictureState": "not_installed",
-          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
         },
         {
-          "state": "search-picture-scanning",
-          "controls": 360,
+          "state": "assistant-local-row-offer",
+          "controls": 469,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
-          "pictureState": "busy",
-          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
         },
         {
-          "state": "search-forget-confirm",
-          "controls": 364,
+          "state": "assistant-local-row-thinking",
+          "controls": 469,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
-          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-suggested",
+          "controls": 470,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-inserted",
+          "controls": 468,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-none",
+          "controls": 469,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-not-running",
+          "controls": 469,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
         }
       ]
     },
@@ -3357,7 +3566,7 @@
         },
         {
           "state": "settings-dialog",
-          "controls": 477,
+          "controls": 478,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3730,61 +3939,94 @@
           "clip": "a video clip (its Beat tab)"
         },
         {
-          "state": "search-results",
-          "controls": 359,
+          "state": "running",
+          "controls": 476,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
-          "rows": 1,
-          "sections": [
-            1,
-            1
-          ],
-          "pictureLine": "not_installed"
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
         },
         {
-          "state": "search-nothing-found",
-          "controls": 352,
+          "state": "stopped",
+          "controls": 476,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
-          "rows": 0
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
         },
         {
-          "state": "search-picture-not-installed",
-          "controls": 359,
+          "state": "not_llama",
+          "controls": 476,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
-          "pictureState": "not_installed",
-          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
         },
         {
-          "state": "search-picture-scanning",
-          "controls": 360,
+          "state": "assistant-local-row-offer",
+          "controls": 469,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
-          "pictureState": "busy",
-          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
         },
         {
-          "state": "search-forget-confirm",
-          "controls": 364,
+          "state": "assistant-local-row-thinking",
+          "controls": 469,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
-          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-suggested",
+          "controls": 470,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-inserted",
+          "controls": 468,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-none",
+          "controls": 469,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "assistant-local-row-not-running",
+          "controls": 469,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
         }
       ]
     }
@@ -3794,25 +4036,25 @@
     {
       "theme": "dark",
       "uiLanguage": "he",
-      "states": 121,
+      "states": 130,
       "findings": 0
     },
     {
       "theme": "dark",
       "uiLanguage": "en",
-      "states": 121,
+      "states": 130,
       "findings": 0
     },
     {
       "theme": "light",
       "uiLanguage": "he",
-      "states": 37,
+      "states": 41,
       "findings": 0
     },
     {
       "theme": "light",
       "uiLanguage": "en",
-      "states": 37,
+      "states": 41,
       "findings": 0
     }
   ],

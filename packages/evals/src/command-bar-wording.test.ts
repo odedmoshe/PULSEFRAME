@@ -203,7 +203,7 @@ describe('every refusal the assistant\'s server code gives is worded in Hebrew, 
     // the patterns not provoked here: the summary route's playhead (http.ts; provoked in routes.test.ts), the 32 KB summary,
     // the adapter or key going away mid-job, the canceled-after-answer race, and the answer that came back while paused
     // (the local assistant's patterns, wave 7, are checked by their own block at the end of this file)
-    const localSaid = [...Object.values(ASSISTANT_LOCAL_SENTENCES).map((x) => (typeof x.message === 'function' ? x.message('x') : x.message))];
+    const localSaid = [...Object.values(ASSISTANT_LOCAL_SENTENCES).map((x) => (typeof x.message === 'function' ? x.message('x') : x.message)), ...LOCAL_OTHER_SAMPLES];
     const local = new Set(ASSISTANT_REFUSAL_PATTERNS.map((re, i) => (localSaid.some((m) => re.test(m)) ? i : -1)).filter((i) => i >= 0));
     expect(ASSISTANT_REFUSAL_PATTERNS.length - local.size - [...used].filter((i) => !local.has(i)).length).toBeLessThanOrEqual(6);
   });
@@ -261,5 +261,79 @@ describe('the local assistant\'s wording (no money, nothing leaves, reason then 
     }
     expect(he['assistant.local.insert']).toBe('הכנס לשורה');
     expect(he['assistant.local.badge']).toBe('הצעת העוזר — בדקו לפני Enter');
+  });
+});
+
+// ---- the LOCAL assistant's other server sentences (integration, wave 7): PROVOKED through the server's own code ----
+import { ASSISTANT_LOCAL_ADAPTER_ID, ASSISTANT_LOCAL_TEXT_MAX, type AssistantConfigBody } from '@pulseframe/core';
+import { createLocalMockAdapter } from '../../../apps/server/src/assistant/local/localTestAdapter.ts';
+
+/** The local refusals outside the job, as the server words them (each is provoked or source-checked by the block below). */
+const LOCAL_OTHER_SAMPLES = [
+  'the language assistant is not set up (provider_not_configured): the local language assistant is not set up: no port is saved for the local assistant',
+  'no port is saved for the local assistant, so there is nothing to check', 'this build has no local adapter installed',
+  'a request to the local assistant is at most 400 characters (this one has 401)', 'job job_x is not a request to the local assistant',
+  'the check of a local assistant\'s answer is not built in this server yet, so nothing is sent', 'the local adapter went away before the request was sent; nothing was sent',
+];
+describe('the local assistant\'s refusals outside the job (501, too long, not a local job, no port) are worded in Hebrew with the next step', () => {
+  const dirs: string[] = [], stores: Store[] = [];
+  afterAll(() => { for (const s of stores) s.close(); for (const d of dirs) fs.rmSync(d, { recursive: true, force: true }); });
+  const owner: Principal = { actor: 'user:local', kind: 'user', scopes: ['observe', 'edit'] };
+  const MONEY_HE = /חיוב|חויב|סכום|שמור|כסף/;
+  const localCfg = (local: { port: number; timeoutSeconds: number } | null): AssistantConfigBody => ({ adapter: ASSISTANT_LOCAL_ADAPTER_ID, host: null, model: null, pricesCentsPerMTok: null, monthlyLimitCents: 0, perRequestCapCents: 0, toggles: { titlesAndMarkers: false, peopleNames: false }, local });
+  function setup(local: { port: number; timeoutSeconds: number } | null, installed = true) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-cbwl-'));
+    dirs.push(dir);
+    const store = new Store(dir); stores.push(store);
+    const gov = new Governance(store);
+    const h = createAssistantHandlers({ cfg: { ...loadConfig({}), dataDir: dir }, store, gov, deps: { adapters: new Map(), endpoint: () => null, local: installed ? createLocalMockAdapter({}) : null } });
+    h.putConfig(owner, localCfg(local));
+    return { store, h, pid: plantedProject(store).pid };
+  }
+  const caught = async (fn: () => unknown): Promise<string> => { try { await fn(); } catch (e) { if (e instanceof Error) return e.message; } throw new Error('not refused'); };
+  it('provokes each and words it: one reason, one next step, no money word, the port in an isolate', async () => {
+    const said: [string, string][] = [];
+    const noPort = setup(null);
+    said.push(['a request with no port saved', await caught(() => noPort.h.request(owner, noPort.pid, { text: 'תעשה שזה יהיה מרגש', selection: [], playheadFrame: 0, lang: 'he' }))]);
+    said.push(['the check with no port saved', await caught(() => noPort.h.localCheck(owner))]);
+    const bare = setup({ port: 18791, timeoutSeconds: 60 }, false);
+    said.push(['the check in a build with no local adapter', await caught(() => bare.h.localCheck(owner))]);
+    const ok = setup({ port: 18791, timeoutSeconds: 60 });
+    said.push(['a request over the length', await caught(() => ok.h.request(owner, ok.pid, { text: 'מ'.repeat(ASSISTANT_LOCAL_TEXT_MAX + 1), selection: [], playheadFrame: 0, lang: 'he' }))]);
+    const other = ok.store.createJob(ok.pid, 'export', 'user:local', {}).id;
+    said.push(['taken on a job that is not local', await caught(() => ok.h.taken(owner, other))]);
+    // the 501 cannot be provoked once core is built: its words are copied from the server code it checks
+    const src = fs.readFileSync(new URL('../../../apps/server/src/assistant/job.ts', import.meta.url), 'utf8');
+    const notBuilt = 'the check of a local assistant\'s answer is not built in this server yet, so nothing is sent';
+    expect(src).toContain(notBuilt.replace(/'/g, '\\\''));
+    said.push(['501 not built', notBuilt]);
+    const gone = 'the local adapter went away before the request was sent; nothing was sent';
+    expect(src).toContain(gone);
+    said.push(['the adapter went away', gone]);
+    expect(said.length).toBe(7);
+    // the samples the earlier block excludes are these very sentences (job ids and counts aside)
+    const shape = (m: string) => m.replace(/job \S+ is/, 'job J is').replace(/\d+/g, 'N');
+    expect(said.map(([, m]) => shape(m)).sort()).toEqual(LOCAL_OTHER_SAMPLES.map(shape).sort());
+    for (const [name, message] of said) {
+      const h = translateRefusal('he', message);
+      expect(h, `${name}: «${message}» has no Hebrew wording`).toBeTruthy();
+      expect(ASSISTANT_REFUSAL_PATTERNS.some((re) => re.test(message)), `${name}: worded by an assistant pattern`).toBe(true);
+      const [reason, next, ...rest] = h!.split('; ');
+      expect(rest.length, `${name}: one reason, one next step: ${h}`).toBe(0);
+      expect(reason!.trim().length, name).toBeGreaterThan(3);
+      expect(next?.trim().length ?? 0, `${name}: next step missing: ${h}`).toBeGreaterThan(3);
+      expect(MONEY_HE.test(h!), `${name}: ${h}`).toBe(false);
+      // the local setup is not the cloud one: never «no network adapter in this version»
+      expect(h, name).not.toMatch(/מתאם רשת/);
+      for (const m of h!.matchAll(/\d+/g)) expect(/⁦[^⁩]*$/.test(h!.slice(0, m.index)), `${name}: a number outside an isolate: ${h}`).toBe(true);
+    }
+    expect(translateRefusal('he', said[3]![1])).toMatch(new RegExp(`⁦${ASSISTANT_LOCAL_TEXT_MAX}⁩`));
+  });
+  it('local_interrupted is an error code with a headline in both languages', () => {
+    expect(ASSISTANT_ERROR_CODES).toContain('local_interrupted');
+    expect(he['error.code.local_interrupted']).toMatch(HEBREW);
+    expect(MONEY_HE.test(he['error.code.local_interrupted']!)).toBe(false);
+    expect(en['error.code.not_a_local_job']?.trim()).toBeTruthy();
+    expect(he['error.code.not_a_local_job']).toMatch(HEBREW);
   });
 });

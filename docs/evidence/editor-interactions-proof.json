@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T21:15:32.971Z",
+  "ranAt": "2026-11-25T21:55:10.763Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
@@ -276,7 +276,7 @@
         "vl5": true,
         "tcBefore": "00:00:03:00",
         "tcAfter": "00:00:03:00",
-        "namedKey": "נקודת עוצמה 00:00:02:20 · 140%",
+        "namedKey": "נקודת עוצמה 00:00:02:19 · 140%",
         "keys": [
           [
             40,
@@ -344,9 +344,9 @@
       "name": "Sound tab: \"end the music with the picture\" trims the music to the last detected beat before the picture ends and gives it a fade-out, in one transaction; undo restores it",
       "ok": true,
       "detail": {
-        "pictureEnd": 245,
-        "wantEnd": 239,
-        "gotEnd": 239,
+        "pictureEnd": 290,
+        "wantEnd": 284,
+        "gotEnd": 284,
         "fadeOutFrames": 30,
         "fitUndone": true
       }
@@ -384,9 +384,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2.01,
+        "fwd2": 1.96,
         "sh2": "◀◀ ×1",
-        "back1": -0.98,
+        "back1": -0.91,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -400,9 +400,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 1.03,
+        "playSpeed": 1.07,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.99,
+        "shuttleSpeed": 1.51,
         "staysPaused": true
       }
     },
@@ -430,30 +430,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_28795f123d0",
-          "clp_28795f123d1"
+          "clp_d31671321e0",
+          "clp_d31671321e1"
         ],
         "afterAB": [
-          "clp_28795f123d0",
-          "clp_28795f123d1"
+          "clp_d31671321e0",
+          "clp_d31671321e1"
         ],
         "afterAdd": [
-          "clp_28795f123d0",
-          "clp_28795f123d1",
-          "clp_28795f123d2"
+          "clp_d31671321e0",
+          "clp_d31671321e1",
+          "clp_d31671321e2"
         ],
         "midEscape": [
-          "clp_28795f123d1"
+          "clp_d31671321e1"
         ],
         "afterEscape": [
-          "clp_28795f123d0",
-          "clp_28795f123d1",
-          "clp_28795f123d2"
+          "clp_d31671321e0",
+          "clp_d31671321e1",
+          "clp_d31671321e2"
         ],
         "afterEscapeUp": [
-          "clp_28795f123d0",
-          "clp_28795f123d1",
-          "clp_28795f123d2"
+          "clp_d31671321e0",
+          "clp_d31671321e1",
+          "clp_d31671321e2"
         ]
       }
     },
@@ -615,7 +615,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 26/1799",
+        "valueText": "עוקב קדימה 13/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -900,18 +900,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_5a00a082d70",
-          "ast_8173d6591b0",
-          "ast_62059883f50",
-          "ast_0956358bc40",
-          "ast_bca51e6c690"
+          "ast_b205f37d3e0",
+          "ast_eb267264140",
+          "ast_82535346ab0",
+          "ast_9821bc910d0",
+          "ast_9015f76cc40"
         ],
         "order1": [
-          "ast_5a00a082d70",
-          "ast_0956358bc40",
-          "ast_8173d6591b0",
-          "ast_62059883f50",
-          "ast_bca51e6c690"
+          "ast_b205f37d3e0",
+          "ast_9821bc910d0",
+          "ast_eb267264140",
+          "ast_82535346ab0",
+          "ast_9015f76cc40"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -935,7 +935,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-25T21:08:58.375Z",
+          "createdAt": "2026-11-25T21:40:01.729Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -1130,7 +1130,7 @@
       "ok": true,
       "detail": {
         "slots": 11,
-        "victim": "clp_2cde9cadd90",
+        "victim": "clp_fa72fadd170",
         "deleted": true,
         "offered": {
           "count": 1,
@@ -1255,8 +1255,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_e2255aa9eb0",
-          "seq_e2255aa9eb7"
+          "seq_538304b6770",
+          "seq_538304b6777"
         ],
         "revisions": 1,
         "transactions": [
@@ -1266,7 +1266,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_e2255aa9eb0",
+          "seq": "seq_538304b6770",
           "selected": "true"
         }
       }
@@ -1297,9 +1297,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_e2255aa9eb0"
+          "seq": "seq_538304b6770"
         },
-        "secondTab": "seq_e2255aa9eb0",
+        "secondTab": "seq_538304b6770",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1604,7 +1604,7 @@
       "detail": {
         "marked": true,
         "he": {
-          "id": "prj_XUKnCWJkKMo",
+          "id": "prj_yPcvSetBOI0",
           "count": 1,
           "title": "הארכיון יובא",
           "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגום «English» מסומן שוב «תרגום מכונה · לא נבדק», והנוסח שלו נשמר. אפשר לעבור עליו בלוח «תמלול» ולבחור «סמן כנבדק».",
@@ -1614,7 +1614,7 @@
           "badge": 1
         },
         "en": {
-          "id": "prj_YSxVAScWVCU",
+          "id": "prj_1w13NjA3ZTk",
           "count": 1,
           "title": "The archive was imported",
           "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translation «English» needs review again; its wording is kept. Go through it in the \"Transcript\" panel and choose \"Mark as reviewed\".",
@@ -1801,11 +1801,11 @@
       "detail": {
         "planRows": [
           {
-            "id": "clp_421a3548990",
+            "id": "clp_7688a8709f0",
             "text": "send-quiet.wav · +9.1 dB"
           },
           {
-            "id": "clp_4709d19bbc0",
+            "id": "clp_3366069f0d0",
             "text": "send-loud.wav · −9.1 dB"
           }
         ],
@@ -1818,11 +1818,11 @@
       "detail": {
         "resRows": [
           {
-            "id": "clp_421a3548990",
+            "id": "clp_7688a8709f0",
             "by": ""
           },
           {
-            "id": "clp_4709d19bbc0",
+            "id": "clp_3366069f0d0",
             "by": ""
           }
         ],
@@ -1948,7 +1948,7 @@
       "ok": true,
       "detail": {
         "empty": 1,
-        "row": "גרסה לבדיקה 25.11.2026, 21:15 · אני · 100 פריימים · 2 KB · המדיה לא מועתקת זהה למצב הנוכחי השוואה שינוי שם מחיקה"
+        "row": "גרסה לבדיקה 25.11.2026, 21:54 · אני · 100 פריימים · 2 KB · המדיה לא מועתקת זהה למצב הנוכחי השוואה שינוי שם מחיקה"
       }
     },
     {
@@ -2037,14 +2037,14 @@
       "ok": true,
       "detail": {
         "first": [
-          "ast_fdfad89fb20",
-          "ast_734f01aa980",
-          "ast_3e90cff5360"
+          "ast_8632d00dff0",
+          "ast_b03433774b0",
+          "ast_6a032740930"
         ],
         "moved": [
-          "ast_734f01aa980",
-          "ast_fdfad89fb20",
-          "ast_3e90cff5360"
+          "ast_b03433774b0",
+          "ast_8632d00dff0",
+          "ast_6a032740930"
         ]
       }
     },
@@ -2125,59 +2125,55 @@
       }
     },
     {
-      "name": "search: «שלום» in the media drawer's box finds exactly the word said in the typed transcript, its span [1/2, 1/1) s, without a model",
+      "name": "local assistant: Tab from the bar's input reaches «לשאול את העוזר המקומי», Enter asks, and the stand-in's answer shows as the assistant's suggestion (nothing changed yet)",
       "ok": true,
       "detail": {
-        "n": 1,
-        "asset": "ast_e1353e29750",
-        "start": "1/2",
-        "end": "1/1",
-        "sources": "transcript"
+        "saved": 200,
+        "tabs": 6,
+        "suggested": true,
+        "phrase": "הנמך את המוזיקה ב־6 דציבל"
       }
     },
     {
-      "name": "search: ArrowDown from the box reaches the row and Escape returns to the box",
+      "name": "local assistant: «הכנס לשורה» puts the phrase in the bar with the caret at the end and the badge, and the bar's own grammar previews it (gain_change); nothing committed",
       "ok": true,
       "detail": {
-        "inList": "footage-row",
-        "back": "media-search"
+        "inserted": true,
+        "caretAtEnd": true,
+        "kind": "plan",
+        "intent": "gain_change",
+        "badge": true
       }
     },
     {
-      "name": "search: Enter asks the pictures; the status line says «החיפוש בתמונה לא מותקן» (no Python configured here) and no picture row appears",
+      "name": "local assistant: Enter commits exactly one transaction, «Command bar: gain_change», by the owner",
       "ok": true,
       "detail": {
-        "state": "not_installed",
-        "text": "החיפוש בתמונה לא מותקן. לא הוגדרה סביבת Python לחיפוש בתמונה (PF_TOOLS_PYTHON). השלבים הבאים: ההוראות ב־docs/INTEGRATIONS.mdההוראות להתקנה: docs/INTEGRATIONS.md",
-        "pictureRows": 0
+        "revisions": 1,
+        "tx": {
+          "label": "Command bar: gain_change",
+          "actor": "user:local"
+        }
       }
     },
     {
-      "name": "search: Shift+Enter on the row places exactly the word span (frames 15–30 of the file) in ONE commit",
+      "name": "local assistant: one Ctrl+Z gives the exact document from before the commit",
       "ok": true,
       "detail": {
-        "commits": 1,
-        "clips": [
-          [
-            0.5,
-            0.5
-          ],
-          [
-            0.5,
-            0.5
-          ]
-        ]
+        "back": true,
+        "revisions": 1
       }
     },
     {
-      "name": "search: one Ctrl+Z returns the exact document from before the placement",
+      "name": "local assistant: with nothing listening on the saved port the row says «העוזר המקומי לא פועל כרגע» with the guide as the next step, offers no phrase, names no money and marks nothing untranslated",
       "ok": true,
       "detail": {
-        "undone": true
+        "said": "הבקשה לעוזר נכשלה: העוזר המקומי לא פועל כרגע במחשב הזה; הפעילו אותו לפי המדריך «עוזר שפה מקומי» ובקשו שוב. שום דבר לא שונה",
+        "noPhrase": true
       }
     },
     {
-      "name": "search rows: the page logged no script error",
+      "name": "local assistant rows: the page logged no script error",
       "ok": true,
       "detail": {
         "errors": []

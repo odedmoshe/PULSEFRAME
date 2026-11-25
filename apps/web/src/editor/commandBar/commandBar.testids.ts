@@ -50,7 +50,8 @@ export const COMMAND_BAR_TESTIDS = {
   assistantLocalSettings: 'assistant-local-settings', assistantLocalPort: 'assistant-local-port', assistantLocalTimeout: 'assistant-local-timeout',
   assistantLocalCheck: 'assistant-local-check', assistantLocalState: 'assistant-local-state', assistantLocalModel: 'assistant-local-model',
   assistantLocalUnmeasured: 'assistant-local-unmeasured', assistantLocalGuide: 'assistant-local-guide',
-  // the row under an 'unknown' result: «לשאול את העוזר המקומי» (role=option), the suggestion «העוזר הציע: …» (data-intent; the phrase
+  // the row under an 'unknown' result: «לשאול את העוזר המקומי» (a plain button OUTSIDE the listbox, reached with Tab from the input,
+  // ADR-0027; not a role=option), the suggestion «העוזר הציע: …» (data-intent; the phrase
   // in one dir=auto span), «הכנס לשורה» and «התעלם»; and the badge «הצעת העוזר — בדקו לפני Enter» beside the input until the first edit
   assistantLocalAsk: 'bar-assistant-local-ask', assistantLocalSuggestion: 'bar-assistant-local-suggestion',
   assistantLocalInsert: 'bar-assistant-local-insert', assistantLocalIgnore: 'bar-assistant-local-ignore', assistantLocalBadge: 'bar-assistant-suggested',

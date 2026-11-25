@@ -8,7 +8,7 @@
  */
 import { ASSISTANT_LOCAL_ADAPTER_ID, ASSISTANT_LOCAL_DEFAULTS, AssistantLocalConfigSchema, isLocalOutput, type AssistantLocalConfig, type AssistantLocalOutput, type BarResultKind } from '@pulseframe/core';
 import type { Lang } from '@pulseframe/i18n';
-import { fill } from './commandBar.strings.ts';
+import { barText, type BarTextKey } from './commandBar.strings.ts';
 
 export const LOCAL_UI_BUILT = true;
 /** The only address the editor ever calls, shown to the owner as words (never a field). */
@@ -62,50 +62,10 @@ export const localFormOf = (local: { port: number; timeoutSeconds: number } | nu
   ({ port: String(local?.port ?? ASSISTANT_LOCAL_DEFAULTS.port), timeout: String(local?.timeoutSeconds ?? ASSISTANT_LOCAL_DEFAULTS.timeoutSeconds) });
 
 /**
- * Words of this builder (the shared strings file is not in this track's files; commandBar.strings.ts holds the pre-pass words).
- * Every one pairs what happened with what to do; none says anything about how well the assistant understands. Hebrew first.
+ * The words of this builder live in the command bar's strings (commandBar.strings.ts BAR_HE / BAR_EN, keys `set.local.*` and
+ * `row.local.*`; moved there at integration so the strings' parity test covers them). Every one pairs what happened with what to do;
+ * none says anything about how well the assistant understands, none speaks of money (localAssistant.test.ts).
  */
-export const LOCAL_TEXT_HE = {
-  'set.what': 'מה נשלח ולאן',
-  'set.whatSent': 'נשלח לעוזר המקומי רק המשפט שהקלדתם בשורה, בלי כלום מהפרויקט: לא קליפים, לא שמות, לא כיתובים ולא תמונות.',
-  'set.runsHere': 'המודל פועל רק על המחשב הזה. העורך פונה אליו רק בכתובת {address} ביציאה שבחרתם, ואין שדה שמקבל כתובת אחרת.',
-  'set.noHost': 'אין כאן כתובת להקלדה: רק מספר יציאה.',
-  'set.local.saveFirst': 'שמרו את ההגדרות ואז בדקו: הבדיקה פונה ליציאה שנשמרה',
-  'set.local.notChecked': 'עוד לא נבדק',
-  'set.local.checkFailed': 'הבדיקה לא הצליחה: {reason}',
-  'set.local.stateLabel': 'מצב',
-  'set.local.guideLine': 'המדריך «עוזר שפה מקומי» (הקובץ docs/guides/assistant-local.he.md) מסביר איך מפעילים אותו ואיך עוצרים אותו',
-  'set.local.pickHint': 'בחרו «מודל מקומי על המחשב הזה» כדי להשתמש בעוזר שרץ אצלכם',
-  'row.local.groupLabel': 'העוזר המקומי',
-  'row.local.canceledUnsent': 'הבקשה בוטלה לפני שנשלחה לעוזר המקומי; אפשר לבקש שוב מתי שרוצים',
-  'row.local.canceledSent': 'הבקשה בוטלה בזמן שהעוזר המקומי ענה, ושום דבר לא יצא מהמחשב; אפשר לבקש שוב מתי שרוצים',
-  'row.local.canceling': 'מבטל…',
-  'row.local.inserted': 'ההצעה נכנסה לשורה. בדקו את התצוגה שמתחת ולחצו Enter כדי להחיל, או ערכו את השורה',
-  'row.local.ignored': 'ההצעה הוסרה; השורה נשארה כמו שהקלדתם',
-  'row.local.takenFailed': 'ההצעה נכנסה לשורה, אבל לא הצלחנו למחוק אותה מהשרת; פתחו את השורה שוב אחרי שהעורך מתחבר מחדש',
-  'row.local.understoodByBar': 'שורת הפקודות מבינה את הבקשה בעצמה, ולכן היא לא נשלחת לעוזר המקומי',
-  'row.local.ownerOnly': 'העוזר המקומי זמין רק למי שהעורך פתוח אצלו כבעלים',
-} as const;
-export type LocalTextKey = keyof typeof LOCAL_TEXT_HE;
-export const LOCAL_TEXT_EN: Record<LocalTextKey, string> = {
-  'set.what': 'What is sent, and where',
-  'set.whatSent': 'Only the sentence you typed in the bar is sent to the local assistant, with nothing from the project: no clips, names, titles or pictures.',
-  'set.runsHere': 'The model runs only on this computer. The editor calls it only at {address}, on the port you choose, and no field takes any other address.',
-  'set.noHost': 'There is no address to type here: only a port number.',
-  'set.local.saveFirst': 'Save the settings, then check: the check calls the saved port',
-  'set.local.notChecked': 'Not checked yet',
-  'set.local.checkFailed': 'The check did not work: {reason}',
-  'set.local.stateLabel': 'State',
-  'set.local.guideLine': 'The guide «Local language assistant» (the file docs/guides/assistant-local.he.md) explains how to start it and how to stop it',
-  'set.local.pickHint': 'Choose «A local model on this computer» to use the assistant that runs on your machine',
-  'row.local.groupLabel': 'The local assistant',
-  'row.local.canceledUnsent': 'The request was canceled before it was sent to the local assistant; ask again whenever you like',
-  'row.local.canceledSent': 'The request was canceled while the local assistant was answering, and nothing left this computer; ask again whenever you like',
-  'row.local.canceling': 'Canceling…',
-  'row.local.inserted': 'The suggestion is in the bar. Check the preview below and press Enter to apply it, or edit the line',
-  'row.local.ignored': 'The suggestion was removed; the bar keeps what you typed',
-  'row.local.takenFailed': 'The suggestion is in the bar, but it could not be erased on the server; open the bar again once the editor reconnects',
-  'row.local.understoodByBar': 'The command bar understands this request itself, so it is not sent to the local assistant',
-  'row.local.ownerOnly': 'The local assistant is available only to the owner\'s own session',
-};
-export const localText = (lang: Lang, key: LocalTextKey, vars?: Record<string, string | number>): string => fill(lang === 'he' ? LOCAL_TEXT_HE[key] : LOCAL_TEXT_EN[key], vars);
+export const LOCAL_TEXT_KEYS = ['set.local.what', 'set.local.whatSent', 'set.local.runsHere', 'set.local.noHost', 'set.local.saveFirst', 'set.local.notChecked', 'set.local.checkFailed', 'set.local.stateLabel', 'set.local.guideLine', 'set.local.pickHint', 'row.local.groupLabel', 'row.local.canceledUnsent', 'row.local.canceledSent', 'row.local.canceling', 'row.local.inserted', 'row.local.ignored', 'row.local.takenFailed', 'row.local.understoodByBar', 'row.local.ownerOnly'] as const satisfies readonly BarTextKey[];
+export type LocalTextKey = (typeof LOCAL_TEXT_KEYS)[number];
+export const localText = (lang: Lang, key: LocalTextKey, vars?: Record<string, string | number>): string => barText(lang, key, vars);

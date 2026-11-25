@@ -81,7 +81,9 @@ export type AssistantSetup = (typeof ASSISTANT_SETUP_CODES)[number];
 export const ASSISTANT_ERROR_CODES = ['assistant_not_connected', 'owner_required', 'budget_exceeded', 'invalid_model_output', 'provider_error', 'submission_unknown',
   // the local assistant (wave 7, .artifacts/wave7/assistant-decisions.md §4): the grammar read the request itself (409, no job); the
   // owner's local server is not running, still loading its model, too slow, not on loopback, or answered an error
-  'grammar_understood', 'local_not_running', 'local_loading', 'local_timeout', 'local_not_loopback', 'local_server_error'] as const;
+  'grammar_understood', 'local_not_running', 'local_loading', 'local_timeout', 'local_not_loopback', 'local_server_error',
+  // a local job found queued or running after a restart: ended failed, never resumed, never 'submission unknown' (job.ts recoverAssistantJobs)
+  'local_interrupted'] as const;
 export type AssistantErrorCode = (typeof ASSISTANT_ERROR_CODES)[number];
 /** Job stages, said in words in the editor (never a percentage). */
 export const ASSISTANT_STAGES = ['sending', 'awaiting-provider', 'checking',
