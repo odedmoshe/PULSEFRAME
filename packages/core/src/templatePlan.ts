@@ -45,7 +45,8 @@ import {
   ELEMENT_ID_TOKEN, fillFields, PACK_FIELD_KEYS, TemplateDefSchema, TemplateError, TemplateInputSchema, TEMPLATE_METHOD,
   type PackFieldKey, type PackFieldsInput, type PackFieldValues, type PlannedSlot, type PredictedSlot, type TemplateDef, type TemplateInput, type TemplateNotice, type TemplatePlan, type TemplatePlanContext, type TemplateStep, type TemplateSummary, type TemplateWarning,
 } from './templateContract.ts';
-import { barsForDuration, findMusicStyle, listMusicStyles, MUSIC_MAX_SECONDS, type MusicStyle } from './musicStyles.ts';
+import { barsForDuration, exactLayoutFor, findMusicStyle, listMusicStyles, MUSIC_MAX_SECONDS, sampleFramesFor, type MusicStyle } from './musicStyles.ts';
+import { musicEndingFor } from './musicSwap.ts';
 import { resolveTitleText, titleFieldUse, titleTextProblems } from './titleFields.ts';
 import { candleNight } from './packs/suggest.ts';
 import { captureOf } from './capture.ts';
@@ -408,8 +409,6 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
   const useCount = d.slotUse.mode === 'all' ? d.slots.length : Math.min(d.slots.length, Math.max(d.slotUse.min, media.length));
   // built-in music (ADR-0022): one source of music at a time; an unknown or rejected style is refused
   const wanted = p.builtinMusic ?? null;
-  // wave 7 musicfit: the exact ending is builder B's; until then it is refused, never silently made as a faded track
-  if (wanted?.ending === 'exact') throw new TemplateError('invalid_args', 'an exact ending of built-in music is not built in this build yet', 'Leave out ending (the track is then cut at the last picture and faded), or update the editor.');
   if (wanted && p.musicAssetId !== null) throw new TemplateError('invalid_args', 'choose a music file or built-in music, not both', 'Send musicAssetId: null together with builtinMusic, and builtinMusic: null together with musicAssetId (a regeneration merges new parameters into the run\'s own).');
   const style: MusicStyle | null = wanted ? findMusicStyle(wanted.styleId) ?? null : null;
   if (wanted && !style) throw new TemplateError('invalid_args', `there is no built-in music style "${wanted.styleId}"`, `The styles are: ${listMusicStyles().map((x) => x.id).join(', ') || 'none in this build'} (GET /api/v1/music).`);
@@ -463,8 +462,21 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
   const startFrame = pre[0]!.startFrame, endFrame = pre[pre.length - 1]!.endFrame;
   if (endFrame <= startFrame) throw new TemplateError('nothing_to_do', 'the slots of this template would be shorter than one frame here', 'Choose another tempo or other music.');
   // built-in music made to measure: whole bars that cover the pictures, counted from the EXACT end of the last slot (not its frame)
-  let made: { style: MusicStyle; seed: number; bars: number; trackFrames: number; clipFrames: number } | null = null;
-  if (builtin) {
+  let made: { style: MusicStyle; seed: number; bars: number; trackFrames: number; clipFrames: number; endFrames?: number } | null = null;
+  if (builtin && wanted?.ending === 'exact') {
+    // wave 7 musicfit (decisions §2.2): the track is made for exactly the pictures, its own ending included; nothing is cut or faded
+    const frames = endFrame - startFrame;
+    const lengthFrames = sampleFramesFor(T.sub(ft(endFrame), ft(startFrame)));
+    let exact: { bars: number; endFrames: number };
+    try { exact = exactLayoutFor(builtin.style.id, lengthFrames); } catch (e) {
+      if (!(e instanceof RangeError)) throw e;
+      const minSeconds = Math.ceil(((builtin.style.minBars - 1) * 240 + 120) / builtin.style.bpm * 10) / 10;
+      throw lengthFrames > MUSIC_MAX_SECONDS * 48000
+        ? new TemplateError('invalid_args', `built-in music with its own ending at the last picture would be ${Math.ceil(lengthFrames / 48000)} s long; a built-in track is at most ${MUSIC_MAX_SECONDS} s`, 'Use fewer or shorter slots (tempo: double), or choose a music file instead (musicAssetId).')
+        : new TemplateError('invalid_args', `the pictures are too short for "${builtin.style.name.en}" with its own ending: it needs at least ${minSeconds} s`, 'Leave out ending (the track is then cut at the last picture and faded), choose another style, or add pictures.');
+    }
+    made = { ...builtin, bars: exact.bars, endFrames: exact.endFrames, trackFrames: frames, clipFrames: frames };
+  } else if (builtin) {
     const bars = barsForDuration(builtin.style.id, T.sub(pre[pre.length - 1]!.end, at));
     const length = T.rt(240 * bars, builtin.style.bpm);
     if (T.lt(T.rt(MUSIC_MAX_SECONDS, 1), length)) throw new TemplateError('invalid_args', `built-in music for this template would be ${Math.ceil(T.toSeconds(length))} s long (${bars} bars); a built-in track is at most ${MUSIC_MAX_SECONDS} s`, 'Use fewer or shorter slots (tempo: double), or choose a music file instead (musicAssetId).');
@@ -751,21 +763,29 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
   // music
   if (music && !keep.has(TEMPLATE_RESERVED_BINDS.music)) {
     ops.push({ op: 'add_clip', args: { assetId: music.asset.id, start: at, sourceIn: music.sourceIn, withLinkedAudio: false }, bind: TEMPLATE_RESERVED_BINDS.music });
-    ops.push({ op: 'fit_music', args: { clipId: ref(TEMPLATE_RESERVED_BINDS.music), to: ft(endFrame) } });
+    // wave 7 musicfit (decisions §2.4): a shortened song ends with its own end or exactly at the last picture, never on an earlier beat
+    const exactEnd = music.asset.provenance.fitted ? musicEndingFor(rate, music.asset, at, music.sourceIn, ft(endFrame)) : null;
+    if (exactEnd) {
+      ops[ops.length - 1] = { op: 'add_clip', args: { assetId: music.asset.id, start: at, sourceIn: music.sourceIn, duration: exactEnd.duration, withLinkedAudio: false }, bind: TEMPLATE_RESERVED_BINDS.music };
+      if (exactEnd.cut) ops.push({ op: 'set_clip_fades', args: { clipId: ref(TEMPLATE_RESERVED_BINDS.music), fadeOut: exactEnd.fadeOut } });
+    } else ops.push({ op: 'fit_music', args: { clipId: ref(TEMPLATE_RESERVED_BINDS.music), to: ft(endFrame) } });
     slots.push({ key: TEMPLATE_RESERVED_BINDS.music, kind: 'music', clipId: ref(TEMPLATE_RESERVED_BINDS.music) });
     steps.push(`Place the music "${music.asset.name}" from ${secs(at)} (its first ${music.bars && d.music.startAt === 'first-downbeat' ? 'bar start' : d.music.startAt === 'zero' ? 'moment' : 'beat'} at ${secs(music.sourceIn)} in the file) and end it on a beat at the end of the pictures`);
   }
 
   // built-in music, made to measure (ADR-0022): the server makes the track; it is placed from its start for exactly as long as the pictures
   if (made && !keep.has(TEMPLATE_RESERVED_BINDS.music)) {
-    assetsNeeded.push({ key: BUILTIN_MUSIC_ASSET_KEY, kind: 'music', id: made.style.id, bars: made.bars, seed: made.seed });
+    assetsNeeded.push({ key: BUILTIN_MUSIC_ASSET_KEY, kind: 'music', id: made.style.id, bars: made.bars, seed: made.seed, ...(made.endFrames !== undefined ? { endFrames: made.endFrames } : {}) });
     ops.push({ op: 'add_clip', args: { assetId: { $asset: BUILTIN_MUSIC_ASSET_KEY }, start: at, duration: ft(made.clipFrames), withLinkedAudio: false }, bind: TEMPLATE_RESERVED_BINDS.music });
     const cut = made.trackFrames - made.clipFrames;
     const fade = cut > 0 ? Math.min(Math.round(fps), Math.floor(made.clipFrames / 2)) : 0;
     if (fade >= 1) ops.push({ op: 'set_clip_fades', args: { clipId: ref(TEMPLATE_RESERVED_BINDS.music), fadeOut: ft(fade) } });
     if (cut > 0) notice('builtin_music_faded', `the built-in music is ${made.bars} bars long, ${cut} frame(s) more than the pictures; it is cut at the last picture and fades out there instead of ending on its own last bar`, { bars: made.bars, trackFrames: made.trackFrames, clipFrames: made.clipFrames, fadeFrames: fade });
     slots.push({ key: TEMPLATE_RESERVED_BINDS.music, kind: 'music', clipId: ref(TEMPLATE_RESERVED_BINDS.music) });
-    steps.push(`Make built-in music "${made.style.name.en}" (${made.style.id}, seed ${made.seed}): ${made.bars} bars at ${made.style.bpm} BPM, placed from ${secs(at)} for the length of the pictures${cut > 0 ? ', cut at the last picture with a fade-out' : '; its ending lands with the last picture'}`);
+    if (made.endFrames !== undefined) {
+      const endSec = Math.round((made.endFrames / 48000) * 100) / 100;
+      steps.push(`Make built-in music "${made.style.name.en}" (${made.style.id}, seed ${made.seed}) for exactly the length of the pictures: ${made.bars - 1} whole bars at ${made.style.bpm} BPM and its own ending of ${endSec} s, placed from ${secs(at)}; it ends with the last picture and is not faded (composed again for this length: not the same notes as another length)`);
+    } else steps.push(`Make built-in music "${made.style.name.en}" (${made.style.id}, seed ${made.seed}): ${made.bars} bars at ${made.style.bpm} BPM, placed from ${secs(at)} for the length of the pictures${cut > 0 ? ', cut at the last picture with a fade-out' : '; its ending lands with the last picture'}`);
   }
 
   // ----- what the plan rests on -----
