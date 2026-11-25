@@ -1,8 +1,7 @@
 /**
  * The routes of «מוזיקה שמתאימה לסרט» (wave 7 musicfit track; .artifacts/wave7/musicfit-decisions.md §4). The lead lands the permission
  * checks COMPLETE here; the bodies answer 501 musicfit_not_built after them (never a made-up plan, file or mark) until built:
- * plan and apply by BUILDER B (musicfit/plan.ts, musicfit/apply.ts; B owns this file after the pre-pass and calls them from the two
- * bodies below), the join preview and the heard mark by BUILDER A (musicfit/joinPreview.ts, musicfit/heard.ts, already called from here).
+ * plan and apply by BUILDER B (musicfit/plan.ts, musicfit/apply.ts, called from the two bodies below behind MUSICFIT_SERVER_BUILT), the join preview and the heard mark by BUILDER A (musicfit/joinPreview.ts, musicfit/heard.ts, already called from here).
  *
  * - plan (observe, read-only): POST /api/v1/projects/:id/music-fit/plan, MCP plan_music_fit.
  * - apply (edit; a propose-mode credential is refused: the fit adds a file to the library through an internal step a proposal does
@@ -17,9 +16,14 @@ import type { Governance } from '../governance.ts';
 import { ApiError, type Store } from '../store.ts';
 import { commitJoinHeard } from './heard.ts';
 import { renderJoinPreview } from './joinPreview.ts';
+import { prepareMusicFit } from './plan.ts';
+import { applyMusicFit } from './apply.ts';
 
-/** True once builder B has built plan and apply. */
-export const MUSICFIT_SERVER_BUILT = false;
+/**
+ * True once plan and apply answer. Builder B built them (musicfit/plan.ts, apply.ts); the lead flips this at integration, after
+ * builder A's makers are merged, together with the contract test that still expects 501 here.
+ */
+export const MUSICFIT_SERVER_BUILT: boolean = false;
 /** True once builder A has built the join preview and the heard mark. */
 export const MUSICFIT_JOIN_BUILT = true;
 
@@ -55,16 +59,16 @@ export function mayApplyMusicFit(gov: Governance, principal: Principal, projectI
 /** POST …/music-fit/plan and MCP plan_music_fit (observe). */
 export async function planMusicFitFor(store: Store, gov: Governance, principal: Principal, projectId: string, req: MusicFitPlanRequest): Promise<MusicFitPlan> {
   gov.assertMayAct(principal, projectId, 'observe');
-  store.getProject(projectId);
-  void req;
-  throw musicFitApiError('notBuilt', {});
+  const p = store.getProject(projectId);
+  if (!MUSICFIT_SERVER_BUILT) throw musicFitApiError('notBuilt', {});
+  return (await prepareMusicFit(store, projectId, p.doc, p.revision, req)).plan;
 }
 /** POST …/music-fit/apply and MCP apply_music_fit. */
 export async function applyMusicFitFor(store: Store, gov: Governance, principal: Principal, projectId: string, req: MusicFitApplyRequest): Promise<MusicFitApplyResult> {
   mayApplyMusicFit(gov, principal, projectId);
   store.getProject(projectId);
-  void req;
-  throw musicFitApiError('notBuilt', {});
+  if (!MUSICFIT_SERVER_BUILT) throw musicFitApiError('notBuilt', {});
+  return applyMusicFit(store, gov, principal, projectId, req);
 }
 /** GET …/music-fit/join.wav (observe): WAV bytes of the four bars around a removal. Nothing is stored. */
 export async function musicJoinPreviewFor(store: Store, gov: Governance, principal: Principal, projectId: string, q: { assetId: string; from: string; to: string; startAt?: string }, signal?: AbortSignal): Promise<Buffer> {

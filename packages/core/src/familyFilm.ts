@@ -63,6 +63,8 @@ import { WALL_DATE_TIME, type Asset, type ProjectDocument, type RecipeRun, type 
 import { filmWindowOfRange } from './sourceRanges.ts';
 import { removedByHand } from './templateOps.ts';
 import { ownBeats } from './lineage.ts';
+import { isBuiltinMusic, MUSIC_MAX_SECONDS } from './musicStyles.ts';
+import { endsExactly, musicEndingFor } from './musicSwap.ts';
 
 type RT = T.RationalTime;
 type Ref = { $ref: string; out?: string };
@@ -423,7 +425,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   if (P.order === 'given') basis.push('order: as chosen');
 
   // ===== 3. grid =====
-  type Music = { assetId: string; name: string; sourceIn: RT; grid: Grid; beatCount: number; bpm: number | null; bars: boolean; confidence: number | null; method: string; edited: boolean; kept: boolean; trackId: string | null };
+  type Music = { assetId: string; name: string; sourceIn: RT; grid: Grid; beatCount: number; searchBeats?: number; bpm: number | null; bars: boolean; confidence: number | null; method: string; edited: boolean; kept: boolean; trackId: string | null };
   let music: Music | null = null;
   if (keptMusic) {
     const f = findClip(doc, keptMusic.clipId);
@@ -447,6 +449,12 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
     try {
       const pm = placedMusicGrid(doc, P.musicAssetId, at, 'first-downbeat', false);
       music = { assetId: pm.asset.id, name: pm.asset.name, sourceIn: pm.sourceIn, grid: pm.grid, beatCount: pm.beatCount, bpm: pm.bpm, bars: pm.bars, confidence: pm.confidence, method: pm.method, edited: pm.edited, kept: false, trackId: null };
+      // wave 7 musicfit (decisions §2.5): built-in music placed from its start, for a plan the music fit makes: its grid is known by
+      // construction and goes on past the file's end, so the film's end never depends on the track's length (the track is made for it)
+      if (ctx.musicGridSteady && isBuiltinMusic(pm.asset) && T.isZero(pm.sourceIn) && pm.bpm) {
+        music.grid = steadyGrid(at, pm.bpm);
+        music.searchBeats = Math.ceil((MUSIC_MAX_SECONDS * pm.bpm) / 60) + 1;
+      }
     } catch (e) { filmErrorOf(e); }
   }
   const grid: Grid = music?.grid ?? steadyGrid(at, FILM.fallbackBpm);
@@ -456,7 +464,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   /** the k-th beat (k >= 0) at or after the film start */
   const beatCache = new Map<number, RT | null>();
   const beatK = (k: number): RT | null => { let v = beatCache.get(k); if (v === undefined) { v = grid.beatAfter(T.sub(at, TICK), k + 1); beatCache.set(k, v); } return v; };
-  const beatCount = music ? (() => { let n = 0; for (let lo = 0, hi = music.beatCount; lo < hi;) { const mid = (lo + hi) >> 1; if (beatK(mid)) { n = mid + 1; lo = mid + 1; } else hi = mid; } return n; })() : Infinity;
+  const beatCount = music ? (() => { let n = 0; for (let lo = 0, hi = music.searchBeats ?? music.beatCount; lo < hi;) { const mid = (lo + hi) >> 1; if (beatK(mid)) { n = mid + 1; lo = mid + 1; } else hi = mid; } return n; })() : Infinity;
   if (music && beatCount < 2) throw new FilmError('needs_analysis', 'fewer than two measured beats of the music lie after the start of the film', 'Measure the beat of the music first (מדידת קצב, ללא בינה מלאכותית).');
   const probe = Math.min(64, beatCount - 1);
   const beatSec = (T.toSeconds(beatK(probe)!) - T.toSeconds(beatK(0)!)) / probe;
@@ -919,10 +927,15 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
 
   // ===== the music =====
   if (placeMusic && music && musicTrack) {
-    ops.push({ op: 'add_clip', args: { assetId: music.assetId, trackId: musicTrack.arg, start: at, sourceIn: music.sourceIn, withLinkedAudio: false }, bind: FILM_BINDS.music });
-    ops.push({ op: 'fit_music', args: { clipId: ref(FILM_BINDS.music), to: ft(filmEndF) } });
+    // wave 7 musicfit (decisions §2.4): a shortened song, or built-in music whose file ends on the film's last frame, ends exactly
+    // (an explicit length; a fade only when the file is cut), never on an earlier beat; any other music as before (fit_music)
+    const mAsset = own(doc.assets, music.assetId);
+    const exactEnd = mAsset && endsExactly(rate, mAsset, at, music.sourceIn, ft(filmEndF)) ? musicEndingFor(rate, mAsset, at, music.sourceIn, ft(filmEndF)) : null;
+    ops.push({ op: 'add_clip', args: { assetId: music.assetId, trackId: musicTrack.arg, start: at, sourceIn: music.sourceIn, ...(exactEnd ? { duration: exactEnd.duration } : {}), withLinkedAudio: false }, bind: FILM_BINDS.music });
+    if (!exactEnd) ops.push({ op: 'fit_music', args: { clipId: ref(FILM_BINDS.music), to: ft(filmEndF) } });
+    else if (exactEnd.cut) ops.push({ op: 'set_clip_fades', args: { clipId: ref(FILM_BINDS.music), fadeOut: exactEnd.fadeOut } });
     plannedSlots.push({ key: FILM_BINDS.music, kind: 'music', clipId: ref(FILM_BINDS.music) });
-    steps.push(clipText(`Place the music "${quote(music.name)}" from the start of the film (its first ${music.bars ? 'bar start' : 'beat'} at ${T.toSeconds(music.sourceIn).toFixed(3)} s in the file) on ${musicTrack.status === 'new' ? musicTrack.name : `track ${musicTrack.name}`} and end it on a beat at the end of the film`));
+    steps.push(clipText(`Place the music "${quote(music.name)}" from the start of the film (its first ${music.bars ? 'bar start' : 'beat'} at ${T.toSeconds(music.sourceIn).toFixed(3)} s in the file) on ${musicTrack.status === 'new' ? musicTrack.name : `track ${musicTrack.name}`} and end it ${exactEnd ? (exactEnd.cut ? 'at the end of the film with a fade-out' : 'with the film, on its own last frame') : 'on a beat at the end of the film'}`));
   } else if (music?.kept) steps.push('Keep the music placed by hand; the new cuts follow its beats');
   else if (music && removedMusic) steps.push(clipText(`Leave out the music "${quote(music.name)}": it was deleted by hand; the cuts still follow its beats`));
 
