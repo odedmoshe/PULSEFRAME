@@ -502,7 +502,7 @@ describe('parseTimeEntry', () => {
 const FL = (o: Partial<MatchFlags> = {}): MatchFlags => ({ wholeWord: false, ignoreMarks: true, finalsEqual: true, ignoreCase: false, ...o });
 describe('matchText, findText, planReplace', () => {
   it('the golden: findReplace.golden.json (200+ cases) gives the recorded ranges', () => {
-    const cases = (GOLDEN as { cases: { text: string; needle: string; flags: MatchFlags; ranges: [number, number][] }[] }).cases;
+    const cases = (GOLDEN as unknown as { cases: { text: string; needle: string; flags: MatchFlags; ranges: [number, number][] }[] }).cases;
     expect(cases.length).toBeGreaterThanOrEqual(200);
     for (const c of cases) expect({ c: [c.text, c.needle, c.flags], r: matchText(c.text, c.needle, c.flags) }).toEqual({ c: [c.text, c.needle, c.flags], r: c.ranges });
   });
