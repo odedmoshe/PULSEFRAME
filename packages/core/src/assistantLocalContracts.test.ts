@@ -7,7 +7,11 @@ import {
   isLocalOutput, LOCAL_ANSWER_INTENTS, LOCAL_DECIMAL, LOCAL_INTENT_SLOTS, LOCAL_INTENTS, LOCAL_NUMERIC_SLOTS, LOCAL_SLOT_NAMES, LocalAnswerSchema,
   ASSISTANT_TEXT_MAX,
 } from './index.ts';
-import { LOCAL_INTENT_BUILT } from './commandBar/localIntent.ts';
+import { groundLocalAnswer, LOCAL_INTENT_BUILT, localPhrase } from './commandBar/localIntent.ts';
+import { interpret } from './commandBar/index.ts';
+import { barUnderstands } from './commandBar/understands.ts';
+import { ctxFor } from './commandBar/fixture.testFixture.ts';
+import type { LocalSlots } from './assistantContract.ts';
 
 const base = { adapter: 'local-llama-server', host: null, model: null, pricesCentsPerMTok: null, monthlyLimitCents: 0, perRequestCapCents: 0, toggles: { titlesAndMarkers: false, peopleNames: false } };
 
@@ -51,9 +55,43 @@ describe('settings and requests', () => {
 });
 
 describe('builder A (core localIntent.ts)', () => {
-  it('is not built yet', () => { expect(LOCAL_INTENT_BUILT).toBe(false); });
-  it.todo('groundLocalAnswer keeps a numeric slot only when parseNumber/parseTime read that exact value in the request («שש» → "6"; «וחצי» → .5; «הרביעית» grounds nothing), and drops it otherwise as ungrounded');
-  it.todo('groundLocalAnswer keeps a text slot only as an exact substring of the NFC request without a quote, control or format character; drops a slot the intent does not take (not_for_intent) and a number outside LOCAL_DECIMAL (malformed); never adds or changes a value');
-  it.todo('localPhrase: for every intent × slot combination of a table, the Hebrew and English phrase satisfies barUnderstands and interpret(phrase, ctxFor(intent)) has that intent; null where no grammar phrase fits (mute with target clip)');
-  it.todo('localPhrase with a dropped number gives the grammar\'s incomplete result (it asks), never a default amount');
+  it('is built', () => { expect(LOCAL_INTENT_BUILT).toBe(true); });
+  it('groundLocalAnswer keeps a numeric slot only when parseNumber/parseTime read that exact value in the request («שש» → "6"; «וחצי» → .5; «הרביעית» grounds nothing), and drops it otherwise as ungrounded', () => {
+    expect(groundLocalAnswer('תורידי את המוזיקה בשש דציבל', { intent: 'gain_change', slots: { target: 'music', dir: 'down', db: '6' } }).slots.db).toBe('6');
+    expect(groundLocalAnswer('תקפיא לשנייה וחצי', { intent: 'freeze', slots: { forSeconds: '1.5' } }).slots.forSeconds).toBe('1.5');
+    expect(groundLocalAnswer('תחתוך בשנייה הרביעית', { intent: 'split_at', slots: { atSeconds: '4' } }).dropped).toEqual([{ slot: 'atSeconds', why: 'ungrounded' }]);
+    expect(groundLocalAnswer('תורידי קצת את המוזיקה', { intent: 'gain_change', slots: { db: '3' } }).dropped).toEqual([{ slot: 'db', why: 'ungrounded' }]);
+  });
+  it('groundLocalAnswer keeps a text slot only as an exact substring of the NFC request without a quote, control or format character; drops a slot the intent does not take (not_for_intent) and a number outside LOCAL_DECIMAL (malformed); never adds or changes a value', () => {
+    expect(groundLocalAnswer('תקרא לפרויקט גן רימון', { intent: 'rename_project', slots: { text: 'גן רימון' } })).toEqual({ intent: 'rename_project', slots: { text: 'גן רימון' }, dropped: [] });
+    expect(groundLocalAnswer('תקרא לפרויקט "גן רימון"', { intent: 'rename_project', slots: { text: '"גן רימון"' } }).dropped).toEqual([{ slot: 'text', why: 'malformed' }]);
+    expect(groundLocalAnswer('תקרא לפרויקט גן\u200Fרימון', { intent: 'rename_project', slots: { text: 'גן\u200Fרימון' } }).dropped).toEqual([{ slot: 'text', why: 'malformed' }]);
+    expect(groundLocalAnswer('תקרא לפרויקט גן רימון', { intent: 'rename_project', slots: { text: 'גן תפוח' } }).dropped).toEqual([{ slot: 'text', why: 'ungrounded' }]);
+    expect(groundLocalAnswer('בטל בשש', { intent: 'undo', slots: { db: '6' } }).dropped).toEqual([{ slot: 'db', why: 'not_for_intent' }]);
+    expect(groundLocalAnswer('בשש', { intent: 'gain_change', slots: { db: '6.0000' } }).dropped).toEqual([{ slot: 'db', why: 'malformed' }]);
+  });
+  it('localPhrase: for every intent × slot combination of a table, the Hebrew and English phrase satisfies barUnderstands and interpret(phrase, ctxFor(intent)) has that intent; null where no grammar phrase fits (mute with target clip)', () => {
+    // the full table (every intent × every combination, read back value by value) is commandBar/localIntent.test.ts; one row per intent here
+    for (const intent of LOCAL_INTENTS) for (const lang of ['he', 'en'] as const) {
+      const slots = FULL[intent] ?? {};
+      const phrase = localPhrase(intent, slots, lang);
+      expect(phrase, `${intent} ${lang}`).not.toBeNull();
+      expect(barUnderstands(phrase!), phrase!).toBe(true);
+      const r = interpret(phrase!, ctxFor(intent));
+      expect(r.kind === 'unknown' || r.kind === 'incomplete' ? null : r.intent, phrase!).toBe(intent);
+    }
+    expect(localPhrase('mute', { target: 'clip' }, 'he')).toBeNull();
+  });
+  it('localPhrase with a dropped number gives the grammar\'s incomplete result (it asks), never a default amount', () => {
+    const g = groundLocalAnswer('תורידי קצת את המוזיקה', { intent: 'gain_change', slots: { target: 'music', dir: 'down', db: '3' } });
+    const r = interpret(localPhrase('gain_change', g.slots, 'he')!, ctxFor('gain_change'));
+    expect(r).toMatchObject({ kind: 'incomplete', intent: 'gain_change', missing: ['amount'] });
+  });
 });
+
+/** A complete answer of every intent (each required slot said). */
+const FULL: Partial<Record<(typeof LOCAL_INTENTS)[number], LocalSlots>> = {
+  split_at: { atSeconds: '4' }, add_title: { text: 'מזל טוב', at: 'start', forSeconds: '2' }, gain_change: { target: 'music', dir: 'down', db: '6' }, mute: { target: 'music' },
+  unmute: { target: 'music' }, add_marker: { text: 'עוגה' }, freeze: { forSeconds: '1.5' }, speed: { factor: '0.5' }, fades: { edge: 'in', forSeconds: '0.5' },
+  rename_project: { text: 'גן רימון' }, seek: { atSeconds: '10' }, workspace: { workspace: 'sound' }, export_to: { destination: 'whatsapp' },
+};
