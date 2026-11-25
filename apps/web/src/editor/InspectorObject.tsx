@@ -27,6 +27,7 @@ import { TrackingPanel } from './TrackingPanel.tsx';
 import { FollowControls } from './FollowControls.tsx';
 import { RedactControls } from './RedactControls.tsx';
 import { trackingT } from './tracking.strings.ts';
+import { ClipTimeRows } from './craft/ClipTimeRows.tsx';
 import { BlendField, EffectsBlock, LOOK_CATALOG_COUNTS, LooksField, LookTarget, LookTargetLine, MaskControls, musicUnder, useLook, type LookState } from './LookPanel.tsx';
 import { ColourMatchPanel } from './ColourMatchPanel.tsx';
 import { ClipSound, DuckSwitch } from './SoundPanel.tsx';
@@ -303,8 +304,7 @@ function TimeBlock({ clip, keymap }: { clip: Clip; keymap: Keymap }) {
   return (
     <>
       <dl className="insp-dl">
-        <dt>{t('clip.start')}</dt><dd><bdi className="num">{T.toSeconds(clip.start).toFixed(3)}s</bdi></dd>
-        <dt>{t('clip.duration')}</dt><dd><bdi className="num">{T.toSeconds(clip.duration).toFixed(3)}s</bdi></dd>
+        <ClipTimeRows clip={clip} t={t} />
       </dl>
       <div className="row">
         <button className="ghost" disabled={!inside} onClick={() => run(editor, 'edit.split')} data-testid="split">{t('split')} {hint(keymap, 'edit.split')}</button>

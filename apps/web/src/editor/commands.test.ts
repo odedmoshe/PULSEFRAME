@@ -39,7 +39,7 @@ describe('Keymap', () => {
     const km = new Keymap(fakeStorage());
     expect(km.lookup('Space')?.id).toBe('transport.toggle');
     expect(km.lookup('Mod+KeyZ')?.id).toBe('history.undo');
-    expect(km.lookup('KeyQ')).toBeUndefined();
+    expect(km.lookup('KeyY')).toBeUndefined(); // KeyQ is ripple trim since wave 7 (craft)
     expect(km.isCustom('transport.toggle')).toBe(false);
   });
   it('bind moves a chord, reports displaced commands, persists and is restored', () => {

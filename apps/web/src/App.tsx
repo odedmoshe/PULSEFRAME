@@ -21,7 +21,7 @@ import { Splitter } from './editor/Splitter.tsx';
 import { StageHeader } from './editor/StageHeader.tsx';
 import { StatusBar } from './editor/StatusBar.tsx';
 import { Transport } from './editor/Transport.tsx';
-import { isTyping, shortcutAllowed } from './editor/shortcutGate.ts';
+import { isTyping, shortcutAllowed, takenFromBrowser } from './editor/shortcutGate.ts';
 import { Editor, EditorContext, useEditorState } from './editor/store.ts';
 import { toastOf } from './editor/undoToast.ts';
 import { IMPORT_NOTES_KEY } from './editor/DeliverPanel.tsx';
@@ -51,6 +51,8 @@ export function App() {
       // a chord may belong to more than one command (the cut's , and . before the keyframe steps): the first that can run now acts
       const bound = keymap.lookupAll(chord);
       const cmd = bound.find((c) => !c.enabled || c.enabled(editor)) ?? bound[0];
+      // Ctrl+S and Ctrl+F belong to the editor while a project is open, whether or not their command may run now (wave 7 craft)
+      if (editor.doc && takenFromBrowser(chord, (id) => keymap.keysFor(id))) e.preventDefault();
       if (!cmd) return;
       // any modal dialog (whatever its class) is open: editor shortcuts do not act on the timeline behind it
       if (!shortcutAllowed(chord, cmd, { typing, paletteOpen: editor.getState().paletteOpen, modalOpen: !!document.querySelector('[aria-modal="true"]'), performRecording: !!editor.getState().performRecording })) return;

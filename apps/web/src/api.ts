@@ -1,6 +1,7 @@
 import type { Asset, BuildShortsBody, ExportMode, FindShortsBody, ReframePlanBody, ReframePlanView, SequenceSummary, ShortCandidatesView, ShortsApplyResult, ShortsPlanView, FamilyFilmApplyResult, FamilyFilmParams, FamilyFilmPlanView, FamilyFilmRegenerateResult, MomentsData, OpCall, ProjectDocument, RenderCacheStatus, SegmentPlanView, SelfCheckMode, StartMomentsBody } from '@pulseframe/core';
 import type { MulticamSyncReport, MulticamSyncRequest, MulticamView } from '@pulseframe/core';
 import type { TakePlanView, TakeRequest, TakeResult } from '@pulseframe/core';
+import type { DiffSummary, FindQuery, FindResult, VersionInfo } from '@pulseframe/core';
 import type { AssistantConfigBody, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, BudgetReleaseAnswer } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
@@ -221,6 +222,16 @@ export const api = {
     const r = await fetch(`/api/v1/projects/${id}/assets/${assetId}/derivatives/envelope`, { credentials: 'same-origin' });
     return r.ok ? new Uint8Array(await r.arrayBuffer()) : null;
   },
+  // editing craft (wave 7 craft track; apps/server/src/craft/contract.ts). Every route answers 501 craft_not_built until W2 builds it
+  versions: (id: string) => call<{ versions: VersionInfo[] }>(`/projects/${id}/versions`),
+  saveVersion: (id: string, name: string) => call<VersionInfo>(`/projects/${id}/versions`, json({ name })),
+  renameVersion: (id: string, versionId: string, name: string) => call<VersionInfo>(`/projects/${id}/versions/${encodeURIComponent(versionId)}`, { ...json({ name }), method: 'PUT' }),
+  deleteVersion: (id: string, versionId: string) => call<{ deleted: string }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}`, { method: 'DELETE' }),
+  versionDiff: (id: string, versionId: string, against: 'current' | string = 'current') => call<DiffSummary>(`/projects/${id}/versions/${encodeURIComponent(versionId)}/diff?against=${encodeURIComponent(against)}`),
+  /** For an <img>: one frame of the saved version (404 version_frame_out_of_range past its end). */
+  versionFrameUrl: (id: string, versionId: string, index: number) => `/api/v1/projects/${id}/versions/${encodeURIComponent(versionId)}/frame?index=${index}`,
+  restoreVersion: (id: string, versionId: string, body: { expectRevision?: number; confirmPrivacy?: boolean } = {}) => call<{ revision: number; transactionId: string | null; summary: string; diff: DiffSummary }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}/restore`, json(body)),
+  findText: (id: string, query: FindQuery) => call<FindResult>(`/projects/${id}/text/find`, json(query)),
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }

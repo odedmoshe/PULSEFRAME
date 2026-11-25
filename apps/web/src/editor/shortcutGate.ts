@@ -15,8 +15,22 @@ export interface ShortcutContext {
   performRecording?: boolean;
 }
 
+/**
+ * Commands that run while typing although they are not in group `view` (wave 7 craft): Ctrl+S saves a version with the cursor in
+ * a title field (it opens the one-line name field and commits nothing). Never behind a modal or the palette (the rules below).
+ */
+export const RUN_WHILE_TYPING: readonly string[] = ['file.saveVersion'];
+/**
+ * Commands whose chords the editor takes from the browser whenever a project is open, allowed now or not (wave 7 craft): Ctrl+S
+ * would open the browser's "save page" and Ctrl+F its own search. App.tsx prevents the browser's default for their chords.
+ */
+export const TAKEN_FROM_BROWSER: readonly string[] = ['file.saveVersion', 'view.findReplace'];
+export function takenFromBrowser(chord: string, keysFor: (id: string) => string[]): boolean {
+  return chord.startsWith('Mod+') && TAKEN_FROM_BROWSER.some((id) => keysFor(id).includes(chord));
+}
+
 export function shortcutAllowed(chord: string, cmd: { id: string; group: string }, ctx: ShortcutContext): boolean {
-  if (ctx.typing && !(chord.startsWith('Mod+') && cmd.group === 'view')) return false;
+  if (ctx.typing && !(chord.startsWith('Mod+') && (cmd.group === 'view' || RUN_WHILE_TYPING.includes(cmd.id)))) return false;
   // The palette's own toggle must still close it; nothing else runs behind the palette.
   if (ctx.paletteOpen) return cmd.id === 'view.palette';
   // While a take is recorded nothing is edited or switched (multicam's digits included): perform/performKeys.ts.
