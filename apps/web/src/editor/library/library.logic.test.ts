@@ -105,7 +105,7 @@ describe('project file card, export lines, archive', () => {
     const html = renderToStaticMarkup(createElement(ArchiveChoiceView, { lang: 'he', count: 2, owner: false, mode: 'strip', onChange: () => {} }));
     expect(html).toContain(TID.archiveStrip); expect(html).not.toContain(TID.archiveKeep);
     // when «ארכיון לעצמי» is not offered, a note says who can download it
-    expect(html).toContain(TID.archiveOwnerOnly); expect(html).toContain('רק בעל הפרויקט יכול להוריד ארכיון עם כל הקבצים');
+    expect(html).toContain(TID.archiveOwnerOnly); expect(html).toContain('ארכיון עם כל הקבצים אפשר להוריד רק מהחיבור של בעלי הפרויקט');
     expect(renderToStaticMarkup(createElement(ArchiveChoiceView, { lang: 'en', count: 2, owner: true, mode: 'strip', onChange: () => {} }))).not.toContain(TID.archiveOwnerOnly);
   });
   it('a refused credits card says so with the reason; a row without an open project says why use is off', () => {
