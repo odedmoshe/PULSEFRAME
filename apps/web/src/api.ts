@@ -1,7 +1,7 @@
 import type { Asset, BuildShortsBody, ExportMode, FindShortsBody, ReframePlanBody, ReframePlanView, SequenceSummary, ShortCandidatesView, ShortsApplyResult, ShortsPlanView, FamilyFilmApplyResult, FamilyFilmParams, FamilyFilmPlanView, FamilyFilmRegenerateResult, MomentsData, OpCall, ProjectDocument, RenderCacheStatus, SegmentPlanView, SelfCheckMode, StartMomentsBody } from '@pulseframe/core';
 import type { MulticamSyncReport, MulticamSyncRequest, MulticamView } from '@pulseframe/core';
 import type { TakePlanView, TakeRequest, TakeResult } from '@pulseframe/core';
-import type { AssistantConfigBody, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantSummary } from '@pulseframe/core';
+import type { AssistantConfigBody, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, BudgetReleaseAnswer } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
 
@@ -119,8 +119,11 @@ export const api = {
    */
   commitExact: (id: string, expectedRevision: number, ops: OpCall[], label: string, idempotencyKey: string) =>
     call<CommitResult & { replayed?: boolean }>(`/projects/${id}/transactions`, json({ expectedRevision, idempotencyKey, label, ops })),
-  // the command bar's language assistant (ADR-0027): the status never holds the key; the rest is the owner's session only
-  assistantStatus: () => call<AssistantStatus>('/assistant/status'),
+  // the command bar's language assistant (ADR-0027): the status never holds the key, and is whole only for the owner's session
+  // (any other credential reads connected or not); the rest is the owner's session only
+  assistantStatus: () => call<AssistantStatusAnswer>('/assistant/status'),
+  /** The owner releases an amount held for a job whose cost is not known: only this server's own count changes, never a charge. */
+  releaseBudget: (jobId: string) => call<BudgetReleaseAnswer>(`/jobs/${encodeURIComponent(jobId)}/budget/release`, json({})),
   assistantSummary: (id: string, q: { playheadFrame: number; selection: readonly string[]; sequenceId?: string }) =>
     call<AssistantSummary>(`/projects/${id}/assistant/summary?${new URLSearchParams({ playheadFrame: String(q.playheadFrame), selection: q.selection.join(','), ...(q.sequenceId ? { sequenceId: q.sequenceId } : {}) })}`),
   setAssistantConfig: (body: AssistantConfigBody) => call<AssistantStatus>('/assistant/config', { ...json(body), method: 'PUT' }),

@@ -3,12 +3,15 @@
  * server's status says 'ready'; then the send line, the job's stage in words (never a percentage), the proposal's steps with
  * accept and reject (editor.decideProposal: the owner accepts, as one owner transaction). The assistant only proposes.
  * While a request is pending the owner can cancel it («ביטול הבקשה»: POST /jobs/:jobId/cancel, the owner's own session); the row
- * then says what the cancel did, from the job itself: nothing was sent, or it had been sent and may have been charged.
+ * then says what the cancel did, from the job itself: nothing was sent, or it had been sent and may have been charged. A request
+ * that ended after it was sent (canceled, failed, not known) keeps its reservation counted; when the owner's status lists that
+ * amount as held, the row offers «שחרור הסכום השמור» (ReleaseHeld.tsx: a confirmation that says what a release is and is not).
+ * The status is whole only for the owner's session; any other session reads connected or not, and the row shows no amount.
  * Nothing here pretends a model answered: a failed or missing status reads as not connected.
  */
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Bot } from 'lucide-react';
-import { ASSISTANT_STAGES, type AssistantStatus, type OpCall } from '@pulseframe/core';
+import { ASSISTANT_STAGES, isOwnerStatus, type AssistantStatus, type AssistantStatusAnswer, type OpCall } from '@pulseframe/core';
 import type { Lang } from '@pulseframe/i18n';
 import { api, ApiFailure } from '../../api.ts';
 import { CHROME_STRINGS } from '../chrome.strings.ts';
@@ -19,20 +22,27 @@ import { auto, barText, dict, ltr } from './commandBar.strings.ts';
 import type { AssistantRowProps } from './contract.ts';
 import { describeCall, refusalWords, type RefusalWords } from './describe.ts';
 import { Rich, WithReason } from './BarPreview.tsx';
+import { heldAmount, ReleaseHeld, releasedWords, withoutHeld } from './ReleaseHeld.tsx';
 import './commandBar.css';
 
 export const OWNER_ACTOR = 'user:local';
-/** null = unknown (not fetched, or the route answered 501 or failed): the honest state is "not connected". */
-export type StatusState = AssistantStatus | null;
+/**
+ * null = unknown (not fetched, or the route answered 501 or failed): the honest state is "not connected". The owner's session
+ * gets the whole status; any other session gets connected or not (core AssistantPublicStatus) and nothing of the money.
+ */
+export type StatusState = AssistantStatusAnswer | null;
 export const isReady = (s: StatusState): boolean => s?.setup === 'ready';
-/** The words for a setup state; a missing status and 'provider_not_configured' both read «עוזר השפה לא מחובר». */
-export const setupWords = (lang: Lang, s: StatusState): string => dict(lang, s ? `assistant.setup.${s.setup}` : 'assistant.notConnected');
+/**
+ * The words for a setup state; a missing status and 'provider_not_configured' both read «עוזר השפה לא מחובר», and so does the
+ * not-connected state of a session that is not the owner's (which is not told what is missing).
+ */
+export const setupWords = (lang: Lang, s: StatusState): string => dict(lang, isOwnerStatus(s) ? `assistant.setup.${s.setup}` : s?.setup === 'ready' ? 'assistant.setup.ready' : 'assistant.notConnected');
 export const stageWords = (lang: Lang, stage: string | null): string => (ASSISTANT_STAGES as readonly string[]).includes(stage ?? '') ? dict(lang, `assistant.stage.${stage}`) : barText(lang, 'assistant.row.checking');
 export const sendLine = (lang: Lang, s: AssistantStatus): string => barText(lang, 'assistant.row.sendLine', { cap: ltr(`${s.perRequestCapCents}¢`) }) + (s.toggles.titlesAndMarkers ? ` · ${barText(lang, 'assistant.row.sendTitles')}` : '') + (s.toggles.peopleNames ? ` · ${barText(lang, 'assistant.row.sendPeople')}` : '');
 
 let cache: { at: number; p: Promise<StatusState> } | null = null;
 /** The status, fetched at most once every 5 s (the row mounts and unmounts as the query empties). A failure is "unknown". */
-export function loadStatus(now = Date.now(), fetcher: () => Promise<AssistantStatus> = api.assistantStatus): Promise<StatusState> {
+export function loadStatus(now = Date.now(), fetcher: () => Promise<AssistantStatusAnswer> = api.assistantStatus): Promise<StatusState> {
   if (cache && now - cache.at < 5000) return cache.p;
   const p = fetcher().then((s) => s, () => null);
   cache = { at: now, p };
@@ -45,7 +55,11 @@ export const canceledWords = (lang: Lang, sent: boolean): string => barText(lang
 /** The end of a canceled job as the row shows it (attempt 0 = canceled before anything was sent). */
 export const canceledPhase = (j: { attempt?: number | null }): { phase: 'canceled'; sent: boolean } => ({ phase: 'canceled', sent: (j.attempt ?? 0) > 0 });
 
-type Job = { phase: 'idle' } | { phase: 'running'; jobId: string; stage: string | null; canceling: boolean } | { phase: 'canceled'; sent: boolean } | { phase: 'failed'; words: RefusalWords } | { phase: 'proposal'; proposalId: string; ops: OpCall[] | null; explanation: string | null; count: number };
+/** The words after a release: what was taken off the editor's count (a charge, if there was one, stands), or that nothing was held any more. */
+export const releasedLine = (lang: Lang, r: { cents: number; gone: boolean }): string => (r.gone ? barText(lang, 'release.gone') : releasedWords(lang, r.cents));
+
+type Job = { phase: 'idle' } | { phase: 'running'; jobId: string; stage: string | null; canceling: boolean } | { phase: 'canceled'; sent: boolean; jobId?: string } | { phase: 'failed'; words: RefusalWords; jobId?: string }
+  | { phase: 'released'; cents: number; gone: boolean } | { phase: 'proposal'; proposalId: string; ops: OpCall[] | null; explanation: string | null; count: number };
 
 export function AssistantRow({ query, lang, optionDomId }: AssistantRowProps): ReactElement {
   const { editor, state } = useBarEditor();
@@ -54,7 +68,13 @@ export function AssistantRow({ query, lang, optionDomId }: AssistantRowProps): R
   const [job, setJob] = useState<Job>({ phase: 'idle' });
   const alive = useRef(true);
   const canceling = useRef(false); // the owner pressed «ביטול הבקשה» for the running request
+  const rowRef = useRef<HTMLDivElement>(null);
   useEffect(() => { alive.current = true; void loadStatus().then((s) => { if (alive.current) setStatus(s); }); return () => { alive.current = false; }; }, []);
+  /** The status again, now: after a request ended, the owner's status says whether its amount is still held. */
+  const refreshStatus = async () => { resetStatusCache(); const s = await loadStatus(); if (alive.current && s) setStatus(s); }; // a failed read keeps what the row knew
+  // the release button went away with the held amount: the keyboard goes back to the palette's input, not to nowhere
+  const releasedNow = job.phase === 'released';
+  useEffect(() => { if (releasedNow) (rowRef.current?.closest('[role=dialog]')?.querySelector('.pf-pal-input') as HTMLElement | null)?.focus(); }, [releasedNow]);
   const owner = state.actor === OWNER_ACTOR;
   const ready = isReady(status);
   const q = query.trim();
@@ -78,8 +98,8 @@ export function AssistantRow({ query, lang, optionDomId }: AssistantRowProps): R
           setJob({ phase: 'proposal', proposalId: out.proposalId, ops: found?.ops ?? null, explanation: out.explanation ?? null, count: out.opsCount ?? found?.ops?.length ?? 0 });
           return;
         }
-        if (j.status === 'canceled') { setJob(canceledPhase(j as { attempt?: number })); return; }
-        if (j.status === 'failed' || j.status === 'submission-unknown') { setJob({ phase: 'failed', words: refusalWords(lang, j.error as { code?: string; message?: string; hint?: string } | null) }); return; }
+        if (j.status === 'canceled') { const c = canceledPhase(j as { attempt?: number }); setJob({ ...c, jobId }); if (c.sent) void refreshStatus(); return; }
+        if (j.status === 'failed' || j.status === 'submission-unknown') { setJob({ phase: 'failed', jobId, words: refusalWords(lang, j.error as { code?: string; message?: string; hint?: string } | null) }); void refreshStatus(); return; }
         setJob({ phase: 'running', jobId, stage: j.stage, canceling: canceling.current || j.status === 'cancel-requested' });
       }
     } catch (e) { if (alive.current) setJob({ phase: 'failed', words: refusalWords(lang, e instanceof ApiFailure ? { code: e.code, message: e.message, hint: e.hint ?? null } : { message: e instanceof Error ? e.message : String(e) }) }); }
@@ -93,11 +113,18 @@ export function AssistantRow({ query, lang, optionDomId }: AssistantRowProps): R
     try { await api.cancelJob(jobId); }
     catch (e) { canceling.current = false; if (alive.current) setJob((cur) => (cur.phase === 'running' ? { ...cur, canceling: false } : cur)); editor.fail(e); }
   };
+  /** The held amount of the request that just ended, if the owner's status lists one (never for another session). */
+  const held = owner && (job.phase === 'canceled' || job.phase === 'failed') ? heldAmount(status, job.jobId) : null;
+  const onReleased = (r: { jobId: string; cents: number; gone: boolean }) => {
+    resetStatusCache();
+    setStatus((s) => (isOwnerStatus(s) ? withoutHeld(s, r.jobId) : s));
+    setJob({ phase: 'released', cents: r.cents, gone: r.gone });
+  };
   const decide = async (id: string, d: 'accept' | 'reject') => { await editor.decideProposal(id, d); if (alive.current) { setJob({ phase: 'idle' }); if (d === 'accept') editor.set({ paletteOpen: false }); } };
 
   return (
     <div
-      className={`pf-pal-option is-assistant${ready ? ' is-live' : ''}`}
+      ref={rowRef} className={`pf-pal-option is-assistant${ready ? ' is-live' : ''}`}
       id={optionDomId('assistant')} data-testid={TID.assistantRow} data-ready={ready || undefined} data-connected={ready ? 'true' : 'false'}
     >
       <span className="pf-pal-names"><Bot size={14} strokeWidth={1.75} aria-hidden="true" className="pf-pal-ic is-agent" /><span className="pf-pal-label"><bdi dir="auto">{C.palAssistantRow(q)}</bdi></span>
@@ -108,15 +135,22 @@ export function AssistantRow({ query, lang, optionDomId }: AssistantRowProps): R
             : <span className="pf-bar-asst-line">{barText(lang, 'assistant.ownerOnly')}</span>}
         </span>
       )}
-      {ready && status && (
+      {ready && status && !isOwnerStatus(status) && <span className="pf-bar-asst-line">{barText(lang, 'assistant.row.ownerUses')}</span>}
+      {ready && isOwnerStatus(status) && (
         <>
           <span className="pf-bar-asst-line"><Rich text={sendLine(lang, status)} /> · {dict(lang, 'assistant.proposeOnly')}</span>
           {job.phase === 'idle' && owner && <span className="pf-bar-asst-actions"><button type="button" className="pf-bar-link" disabled={!q} onClick={() => void ask()}>{barText(lang, 'assistant.row.send')}</button></span>}
           {job.phase === 'running' && <span className="pf-bar-asst-stage" role="status" data-testid={TID.assistantStage} data-stage={job.stage ?? undefined} data-canceling={job.canceling || undefined}>{job.canceling ? barText(lang, 'assistant.row.canceling') : barText(lang, 'assistant.row.stage', { stage: stageWords(lang, job.stage) })}</span>}
           {job.phase === 'running' && owner && !job.canceling && <span className="pf-bar-asst-actions"><button type="button" className="pf-bar-link" data-testid={TID.assistantCancel} onClick={(e) => void cancel(job.jobId, e.currentTarget)}>{barText(lang, 'assistant.row.cancel')}</button></span>}
           {job.phase === 'canceled' && <span className="pf-bar-asst-stage" role="status" data-testid={TID.assistantCanceled} data-sent={job.sent ? 'true' : 'false'}>{canceledWords(lang, job.sent)}</span>}
-          {job.phase === 'canceled' && owner && <span className="pf-bar-asst-actions"><button type="button" className="pf-bar-link" disabled={!q} onClick={() => void ask()}>{barText(lang, 'assistant.row.send')}</button></span>}
           {job.phase === 'failed' && <span className="pf-asst-bad" role="status"><WithReason lang={lang} k="assistant.row.failed" words={job.words} /></span>}
+          {job.phase === 'released' && <span className="pf-bar-asst-stage" role="status" data-testid={TID.released}><Rich text={releasedLine(lang, job)} /></span>}
+          {(job.phase === 'canceled' || job.phase === 'released' || held) && owner && (
+            <span className="pf-bar-asst-actions">
+              {held && <ReleaseHeld lang={lang} held={held} look="link" onDone={onReleased} />}
+              {job.phase !== 'failed' && <button type="button" className="pf-bar-link" disabled={!q} onClick={() => void ask()}>{barText(lang, 'assistant.row.send')}</button>}
+            </span>
+          )}
           {job.phase === 'proposal' && (
             <span className="pf-bar-asst-proposal" data-testid={TID.assistantProposal}>
               <strong>{barText(lang, 'assistant.proposal.heading')}</strong>

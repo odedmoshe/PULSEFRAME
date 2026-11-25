@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { ASSISTANT_ACTOR, ASSISTANT_SETUP_CODES, barIdempotencyKey, barPlanHash, COMMAND_BAR_LABEL } from '@pulseframe/core';
+import { ASSISTANT_ACTOR, ASSISTANT_PUBLIC_SETUP, ASSISTANT_PUBLIC_STATUS_KEYS, ASSISTANT_SETUP_CODES, barIdempotencyKey, barPlanHash, COMMAND_BAR_LABEL } from '@pulseframe/core';
 import { ALL_CAPABILITIES, CHAT_BLOCKER_CODES, ChatCapabilityDescriptorSchema, DescriptorSchema, QUALIFICATION_DIMENSIONS } from '@pulseframe/providers';
 import { Governance, type Principal } from './governance.ts';
 import { ApiError, Store } from './store.ts';
@@ -168,8 +168,10 @@ describe('configuration and descriptor', () => {
 });
 
 /**
- * What an agent may get from GET …/assistant/status on a fresh data directory: the placeholder's 501 not_built, or W2's
- * AssistantStatus, which cannot be 'ready' (nothing is configured) and holds no key field nor the key's text.
+ * What an agent may get from GET …/assistant/status on a fresh data directory: the placeholder's 501 not_built, or the status
+ * as any credential but the owner's session reads it (ADR-0027, note of 2026-11-25 "money and provider"; core
+ * AssistantPublicStatus): exactly `connected`, `setup` and `detail`, not connected (nothing is configured), and so no setup
+ * code of the owner's, no amount, no host or model, no key field nor the key's text.
  */
 const KEY_FIELDS = ['key', 'apikey', 'api_key', 'secret', 'token', 'authorization']; // compared lowercased
 function freshStatusVerdict(r: { status: number; code?: string; body: unknown }, keyText: string): string {
@@ -177,23 +179,30 @@ function freshStatusVerdict(r: { status: number; code?: string; body: unknown },
   if (r.status !== 200) return `status ${r.status} (${r.code})`;
   const b = r.body as Record<string, unknown> | null;
   if (!b || typeof b !== 'object' || Array.isArray(b)) return 'body is not an object';
-  if (typeof b.setup !== 'string' || !(ASSISTANT_SETUP_CODES as readonly string[]).includes(b.setup)) return `setup ${String(b.setup)} is not a setup code`;
-  if (b.setup === 'ready') return 'ready on a fresh data directory';
   const keyed = Object.keys(b).filter((k) => KEY_FIELDS.includes(k.toLowerCase()));
   if (keyed.length > 0) return `key field ${keyed.join(',')}`;
   if (JSON.stringify(b).includes(keyText)) return 'holds the key text';
+  const extra = Object.keys(b).filter((k) => !(ASSISTANT_PUBLIC_STATUS_KEYS as readonly string[]).includes(k));
+  if (extra.length > 0) return `more than connected or not: ${extra.sort().join(',')}`;
+  if (typeof b.setup !== 'string' || !(ASSISTANT_PUBLIC_SETUP as readonly string[]).includes(b.setup)) return `setup ${String(b.setup)} is not ready or not_connected`;
+  if (b.setup === 'ready' || b.connected !== false) return 'ready on a fresh data directory';
+  if (typeof b.detail !== 'string' || !b.detail) return 'no sentence';
   return 'ok';
 }
 
-describe('the status verdict accepts the placeholder and W2\'s status alike', () => {
+describe('the status verdict accepts the placeholder and the connected-or-not status alike', () => {
   const K = 'TEST-DOUBLE-NOT-A-KEY';
-  it('accepts 501 not_built and a not-ready status without a key; refuses ready, a key field, the key text and other answers', () => {
+  it('accepts 501 not_built and a not-connected status of three fields; refuses ready, the owner\'s fields, a key field, the key text and other answers', () => {
+    const notConnected = { connected: false, setup: 'not_connected', detail: 'the language assistant is not connected' };
     expect(freshStatusVerdict({ status: 501, code: 'not_built', body: {} }, K)).toBe('ok');
-    expect(freshStatusVerdict({ status: 200, body: { setup: 'provider_not_configured', detail: '', keySet: false, keyAddedAt: null } }, K)).toBe('ok');
-    expect(freshStatusVerdict({ status: 200, body: { setup: 'ready' } }, K)).toBe('ready on a fresh data directory');
-    expect(freshStatusVerdict({ status: 200, body: { setup: 'limit_missing', apiKey: 'x' } }, K)).toBe('key field apiKey');
-    expect(freshStatusVerdict({ status: 200, body: { setup: 'limit_missing', detail: K } }, K)).toBe('holds the key text');
-    expect(freshStatusVerdict({ status: 200, body: { setup: 'whatever' } }, K)).toMatch(/not a setup code/);
+    expect(freshStatusVerdict({ status: 200, body: notConnected }, K)).toBe('ok');
+    expect(freshStatusVerdict({ status: 200, body: { connected: true, setup: 'ready', detail: 'x' } }, K)).toBe('ready on a fresh data directory');
+    // what an agent read before the rule: the owner's setup code, the key state, the amounts
+    expect(freshStatusVerdict({ status: 200, body: { setup: 'provider_not_configured', detail: '', keySet: false, keyAddedAt: null } }, K)).toBe('more than connected or not: keyAddedAt,keySet');
+    expect(freshStatusVerdict({ status: 200, body: { ...notConnected, spentCents: 0 } }, K)).toBe('more than connected or not: spentCents');
+    expect(freshStatusVerdict({ status: 200, body: { ...notConnected, setup: 'limit_missing' } }, K)).toMatch(/not ready or not_connected/);
+    expect(freshStatusVerdict({ status: 200, body: { ...notConnected, apiKey: 'x' } }, K)).toBe('key field apiKey');
+    expect(freshStatusVerdict({ status: 200, body: { ...notConnected, detail: K } }, K)).toBe('holds the key text');
     expect(freshStatusVerdict({ status: 501, code: 'other', body: {} }, K)).toBe('501 with code other');
     expect(freshStatusVerdict({ status: 403, code: 'owner_required', body: {} }, K)).toMatch(/^status 403/);
   });
@@ -202,7 +211,7 @@ describe('the status verdict accepts the placeholder and W2\'s status alike', ()
 describe('the assistant routes are registered and refuse honestly', () => {
   let s: Awaited<ReturnType<typeof startServer>> | undefined;
   afterAll(async () => { await s?.close(); });
-  it('owner-only routes refuse an agent with 403 owner_required; status answers 501 not_built or a not-ready status without a key; no job', async () => {
+  it('owner-only routes refuse an agent with 403 owner_required; status answers 501 not_built or connected-or-not (not connected, three fields); no job', async () => {
     s = await startServer({ port: 8987, dataDir: tmp('pf-cb-routes-') });
     const pid = s.store.createProject({ name: 'p' }).doc.id;
     const call = async (method: string, p: string, token: string | null, body?: unknown) => {

@@ -7,12 +7,12 @@
  * table (registered by http.ts; every handler answers 501 not_built until W2), Governance.reserveAssistant / settleAssistant
  * / assistantSpend, PF_ASSISTANT_HOSTS (config.ts assistantHosts) and the backup exclusion (backup.ts NEVER_BACKED_UP).
  */
-import type { AssistantConfigBody, AssistantJobOutput, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantSummary, AssistantToggles } from '@pulseframe/core';
+import type { AssistantConfigBody, AssistantJobOutput, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, AssistantToggles } from '@pulseframe/core';
 import { ASSISTANT_ACTOR, ASSISTANT_GRANT_ID } from '@pulseframe/core';
 import type { ChatEndpoint, ChatModelAdapter } from '@pulseframe/providers';
 import type { Grant, Principal } from '../governance.ts';
 
-export type { AssistantConfigBody, AssistantJobOutput, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantSummary, AssistantToggles };
+export type { AssistantConfigBody, AssistantJobOutput, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, AssistantToggles };
 
 /** In the data directory, outside every project, archive and backup (backup.ts NEVER_BACKED_UP): the owner's config (no key) and the key alone. */
 export const ASSISTANT_CONFIG_FILE = 'assistant.json';
@@ -22,7 +22,7 @@ export const ASSISTANT_FILE_MODE = 0o600;
 
 /**
  * The owner's own browser session: the money and the key are the owner's (plan §7.4). An agent token or grant gets 403
- * owner_required on every owner route, also when it could observe.
+ * owner_required on every owner route, also when it could observe; of the status it reads connected or not (visibility.ts).
  */
 export const isOwnerSession = (p: Principal): boolean => p.kind === 'user' && p.actor === 'user:local';
 
@@ -45,7 +45,7 @@ export interface AssistantSummaryContext { playheadFrame: number; selection: rea
 
 /** The assistant's REST routes. 'owner' = isOwnerSession, else 403 owner_required; 'observe' = any credential with observe. */
 export const ASSISTANT_ROUTES = [
-  { method: 'GET', path: '/api/v1/assistant/status', access: 'observe', answers: 'AssistantStatus (never the key)' },
+  { method: 'GET', path: '/api/v1/assistant/status', access: 'observe', answers: 'AssistantStatus for the owner\'s own session (never the key); AssistantPublicStatus, connected or not and nothing else, for any other credential' },
   { method: 'GET', path: '/api/v1/projects/:id/assistant/summary', access: 'owner', answers: 'exactly the AssistantSummary a request would send now' },
   { method: 'PUT', path: '/api/v1/assistant/config', access: 'owner', answers: 'AssistantStatus' },
   { method: 'PUT', path: '/api/v1/assistant/key', access: 'owner', answers: 'AssistantKeyState' },
@@ -56,9 +56,9 @@ export type AssistantRoute = (typeof ASSISTANT_ROUTES)[number];
 
 /** The handlers W2 provides in routes.ts; http.ts parses bodies with core's schemas, checks the scope and calls them. */
 export interface AssistantHandlers {
-  status(p: Principal): AssistantStatus | Promise<AssistantStatus>;
+  status(p: Principal): AssistantStatusAnswer | Promise<AssistantStatusAnswer>;
   summary(p: Principal, projectId: string, ctx: AssistantSummaryContext): AssistantSummary | Promise<AssistantSummary>;
-  putConfig(p: Principal, body: AssistantConfigBody): AssistantStatus | Promise<AssistantStatus>;
+  putConfig(p: Principal, body: AssistantConfigBody): AssistantStatusAnswer | Promise<AssistantStatusAnswer>;
   putKey(p: Principal, key: string): AssistantKeyState | Promise<AssistantKeyState>;
   deleteKey(p: Principal): AssistantKeyState | Promise<AssistantKeyState>;
   request(p: Principal, projectId: string, body: AssistantRequestBody): { jobId: string } | Promise<{ jobId: string }>;

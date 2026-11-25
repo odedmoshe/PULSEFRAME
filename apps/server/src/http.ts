@@ -52,7 +52,7 @@ import { takeFor } from './perform.ts';
 import { ASSISTANT_JOB_TYPE, AssistantConfigBodySchema, AssistantKeyBodySchema, AssistantRequestBodySchema } from '@pulseframe/core';
 import { isOwnerSession, type AssistantDeps } from './assistant/contract.ts';
 import { assistantCancelRefusal, createAssistantHandlers, type AssistantJobControls } from './assistant/routes.ts';
-import { assertMayReadProposal, assistantJobStub, mayReadProposal, proposalsFor } from './assistant/visibility.ts';
+import { assertMayReadProposal, assertMayReleaseBudget, assistantJobStub, mayReadProposal, proposalsFor } from './assistant/visibility.ts';
 
 const TxBody = z
   .object({
@@ -249,7 +249,14 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.use('/api/v1/projects/:id', async (c, next) => { gov.assertMayAct(c.var.principal, c.req.param('id'), 'observe'); await next(); });
   // Guards must be registered before the routes they protect (Hono applies middleware in registration order).
   // Jobs are reached by id, not by project path: a project-limited grant must not see or touch other projects' jobs.
-  const jobScope = async (c: Context<Env>, next: () => Promise<void>) => { gov.assertMayAct(c.var.principal, store.getJob(c.req.param('jobId')!).projectId, 'observe'); await next(); };
+  // One exception, for the owner's own session only: a reservation outlives its job when the job's project is deleted (the
+  // ledger row stays counted), so releasing it must not need the job row. Any other credential gets 404 as for every missing job.
+  const jobScope = async (c: Context<Env>, next: () => Promise<void>) => {
+    const jobId = c.req.param('jobId')!;
+    const orphanRelease = c.req.method === 'POST' && c.req.path.endsWith('/budget/release') && isOwnerSession(c.var.principal) && gov.ledgerFor(jobId) !== null;
+    if (!orphanRelease) gov.assertMayAct(c.var.principal, store.getJob(jobId).projectId, 'observe');
+    await next();
+  };
   app.use('/api/v1/jobs/:jobId', jobScope);
   app.use('/api/v1/jobs/:jobId/*', jobScope);
   // Starting any job is refused while agents are paused, whichever route creates it.
@@ -787,7 +794,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const p = store.getProject(c.req.param('id'));
     return c.json({ ...exporter.plan(p.doc, p.revision, await c.req.json().catch(() => ({}))), ...peopleNote(who, p.doc) });
   });
-  app.post('/api/v1/jobs/:jobId/budget/release', (c) => { const p = need(c, 'observe'); gov.releaseUnknown(p, c.req.param('jobId')); return c.json({ jobId: c.req.param('jobId'), ledger: gov.ledgerFor(c.req.param('jobId')) }); });
+  // The owner confirms a reservation left 'unknown' was not charged. The owner's own session only (assistant/visibility.ts
+  // assertMayReleaseBudget): any other credential is refused before the ledger is looked at, so its answer tells nothing of it.
+  app.post('/api/v1/jobs/:jobId/budget/release', (c) => { const p = need(c, 'observe'); const jobId = c.req.param('jobId'); assertMayReleaseBudget(p, jobId); gov.releaseUnknown(p, jobId); return c.json({ jobId, ledger: gov.ledgerFor(jobId) }); });
   app.post('/api/v1/jobs/:jobId/retry', (c) => { const pr = need(c, 'edit'); const old = store.getJob(c.req.param('jobId'));
     if (old.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, pr, old, 'retry'); const job = extras.imports.retry(old.id, pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: old.id }, 202); } gov.assertMayAct(pr, old.projectId, 'job'); assertMayTakeJobOutput(pr, old, 'retry this export'); const job = exporter.retry(c.req.param('jobId'), pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: job.input.retryOf }, 202); });
   app.get('/api/v1/jobs/:jobId', (c) => c.json(jobViewFor(need(c, 'observe'), store.getJob(c.req.param('jobId')))));
@@ -814,8 +823,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   if (extras.imports) registerImportRoutes(app, { cfg, store, gov, imports: extras.imports, door: extras.door ?? null, need });
   if (extras.renderCache) registerRenderCacheRoutes(app, extras.renderCache, need);
 
-  // ----- the command bar's language assistant (ADR-0027; assistant/contract.ts ASSISTANT_ROUTES): status for any observer, the
-  // rest for the owner's own session only (the money and the key are the owner's). The handlers are W2's (assistant/routes.ts).
+  // ----- the command bar's language assistant (ADR-0027; assistant/contract.ts ASSISTANT_ROUTES): status for any observer (whole
+  // for the owner's own session, connected or not for anyone else: assistant/visibility.ts), the rest for the owner's own session
+  // only (the money and the key are the owner's). The handlers are W2's (assistant/routes.ts).
   const assistant = createAssistantHandlers({ cfg, store, gov, deps: extras.assistant ?? { adapters: new Map(), endpoint: () => null } });
   // MCP cancel_job reaches an assistant job through this same handler (one cancel path; mcp.ts bindAssistant)
   (mcp as { bindAssistant?: (a: AssistantJobControls) => void }).bindAssistant?.(assistant);

@@ -151,8 +151,9 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`POST ${P}/sequences/:sequenceId/reframe-plan`]: ['reader-document'],
   // perform mode (ADR-0025): planned from the reader's document (clips, beats; no people data), committed as one internal step
   [`POST ${P}/takes`]: ['reader-document', 'write'],
-  // the command bar's language assistant (ADR-0027): the status holds settings, ids and money only; everything else is the owner's
-  // own session (a model is sent only the allowlisted summary, built without birth dates whatever the switches)
+  // the command bar's language assistant (ADR-0027): the status holds settings, ids and money for the owner's own session, and
+  // connected-or-not for anyone else (assistant/visibility.ts); everything else is the owner's own session (a model is sent only
+  // the allowlisted summary, built without birth dates whatever the switches)
   'GET /api/v1/assistant/status': ['no-document'],
   [`GET ${P}/assistant/summary`]: ['owner-only'],
   'PUT /api/v1/assistant/config': ['owner-only'],
@@ -186,7 +187,7 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   'GET /api/v1/jobs/:jobId/outputs/:index': ['no-document'],
   'POST /api/v1/jobs/:jobId/retry': ['rendered-refused'],
   'POST /api/v1/jobs/:jobId/cancel': ['no-document'],
-  'POST /api/v1/jobs/:jobId/budget/release': ['no-document'],
+  'POST /api/v1/jobs/:jobId/budget/release': ['owner-only'],
   'POST /api/v1/jobs/:jobId/heartbeat': ['no-document'],
   'POST /api/v1/jobs/:jobId/complete': ['no-document'],
   'POST /api/v1/jobs/:jobId/abandon': ['no-document'],

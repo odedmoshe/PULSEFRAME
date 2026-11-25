@@ -3,9 +3,11 @@
  * password field never shown back, prices, the monthly limit and the per-request cap, the two switches (off), «מה נשלח?» with the
  * server's exact summary. Nothing is sent until every setting is filled in (the server's status says so). The key is typed into
  * a password field, sent once to PUT /assistant/key and cleared; the page never holds it again.
+ * Under the month's amounts: «סכומים שמורים», one row for each amount still counted for a request that was canceled or failed
+ * after it had been sent, each with «שחרור הסכום השמור» (ReleaseHeld.tsx: the confirmation says what a release is and is not).
  */
-import { useEffect, useState, type ReactElement } from 'react';
-import { ASSISTANT_NEVER_SENT, AssistantConfigBodySchema, type AssistantConfigBody, type AssistantStatus } from '@pulseframe/core';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { ASSISTANT_NEVER_SENT, AssistantConfigBodySchema, isOwnerStatus, type AssistantConfigBody, type AssistantHeldAmount, type AssistantStatus } from '@pulseframe/core';
 import type { Lang } from '@pulseframe/i18n';
 import { Button, Switch } from '../../ds/index.ts';
 import { api, ApiFailure } from '../../api.ts';
@@ -14,6 +16,7 @@ import { COMMAND_BAR_TESTIDS as TID } from './commandBar.testids.ts';
 import { barText, dict, ltr } from './commandBar.strings.ts';
 import { Rich, WithReason } from './BarPreview.tsx';
 import { refusalWords, type RefusalWords } from './describe.ts';
+import { heldLine, money, ReleaseHeld, releasedWords, withoutHeld } from './ReleaseHeld.tsx';
 import './commandBar.css';
 
 export const OWNER_ACTOR = 'user:local';
@@ -50,6 +53,25 @@ export function configBodyOf(f: ConfigForm): AssistantConfigBody | null {
 export const wordsOf = (lang: Lang, e: unknown): RefusalWords => refusalWords(lang, e instanceof ApiFailure ? { code: e.code, message: e.message, hint: e.hint ?? null } : { message: e instanceof Error ? e.message : String(e) });
 type Note = { ok: string } | { failed: RefusalWords };
 
+/** The month's held amounts, one row each with its release button; nothing at all when none is held. */
+export function HeldAmounts({ lang, held, onDone }: { lang: Lang; held: readonly AssistantHeldAmount[]; onDone: (r: { jobId: string; cents: number; gone: boolean }) => void }): ReactElement | null {
+  if (held.length === 0) return null;
+  return (
+    <div className="pf-asst" role="group" aria-labelledby="pf-asst-held-h" data-testid={TID.settingsHeld}>
+      <h4 id="pf-asst-held-h" className="pf-set-h">{barText(lang, 'set.held.heading')}</h4>
+      <p className="pf-asst-note">{barText(lang, 'set.held.note')}</p>
+      <ul className="pf-asst-held">
+        {held.map((h) => (
+          <li key={h.jobId} className="pf-asst-row" data-testid={TID.settingsHeldRow} data-job={h.jobId} data-how={h.status ?? 'gone'}>
+            <span><Rich text={heldLine(lang, h)} /></span>
+            <ReleaseHeld lang={lang} held={h} look="button" onDone={onDone} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function AssistantSettings(): ReactElement | null {
   const { editor, state } = useBarEditor();
   const lang: Lang = state.lang;
@@ -59,15 +81,20 @@ export function AssistantSettings(): ReactElement | null {
   const [form, setForm] = useState<ConfigForm>(formOf(null));
   const [key, setKey] = useState('');
   const [note, setNote] = useState<Note | null>(null);
+  const [released, setReleased] = useState<{ jobId: string; cents: number; gone: boolean } | null>(null);
+  const releasedRef = useRef<HTMLParagraphElement>(null);
   const [summary, setSummary] = useState<{ state: 'idle' | 'loading' | 'ok'; text: string } | { state: 'failed'; words: RefusalWords }>({ state: 'idle', text: '' });
   const t = (k: Parameters<typeof barText>[1], v?: Record<string, string | number>) => barText(lang, k, v);
 
   useEffect(() => {
     if (!owner) return;
     let alive = true;
-    api.assistantStatus().then((s) => { if (alive) { setStatus(s); setForm(formOf(s)); setLoaded('ok'); } }, (e) => { if (alive) setLoaded(wordsOf(lang, e)); });
+    // the owner's session reads the whole status; anything else (a session that is not the owner's after all) is shown as unknown
+    api.assistantStatus().then((a) => { if (!alive) return; const s = isOwnerStatus(a) ? a : null; setStatus(s); setForm(formOf(s)); setLoaded(s ? 'ok' : wordsOf(lang, new ApiFailure(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only'))); }, (e) => { if (alive) setLoaded(wordsOf(lang, e)); });
     return () => { alive = false; };
   }, [owner]);
+  // the pressed button left with its amount: the sentence that says what the release did takes the focus (and is read out)
+  useEffect(() => { if (released) releasedRef.current?.focus(); }, [released]);
   if (!owner) return null;
 
   const set = <K extends keyof ConfigForm>(k: K, v: ConfigForm[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -93,7 +120,7 @@ export function AssistantSettings(): ReactElement | null {
     catch (e) { setSummary({ state: 'failed', words: wordsOf(lang, e) }); }
   };
   const date = status?.keyAddedAt ? new Date(status.keyAddedAt).toLocaleDateString(lang === 'he' ? 'he-IL' : 'en-GB') : '';
-  const money = (c: number) => ltr(`${c}¢`);
+  const onReleased = (r: { jobId: string; cents: number; gone: boolean }) => { setStatus((s) => (s ? withoutHeld(s, r.jobId) : s)); setReleased(r); };
   const field = (id: string, label: string, testId: string, value: string, onChange: (v: string) => void, extra: { inputMode?: 'numeric' | 'decimal'; dir?: 'ltr' } = {}) => (
     <label className="pf-asst-field" htmlFor={id}><span>{label}</span><input id={id} data-testid={testId} value={value} onChange={(e) => onChange(e.target.value)} autoComplete="off" spellCheck={false} {...(extra.inputMode ? { inputMode: extra.inputMode } : {})} {...(extra.dir ? { dir: extra.dir } : {})} /></label>
   );
@@ -134,6 +161,8 @@ export function AssistantSettings(): ReactElement | null {
           {field('pf-asst-monthly', t('set.monthly'), TID.settingsMonthly, form.monthly, (v) => set('monthly', v), { inputMode: 'numeric', dir: 'ltr' })}
           {field('pf-asst-cap', t('set.cap'), TID.settingsCap, form.cap, (v) => set('cap', v), { inputMode: 'numeric', dir: 'ltr' })}
           <p className="pf-asst-note" data-testid={TID.settingsSpent}><Rich text={t('set.spent', { month: ltr(status.month), spent: money(status.spentCents), reserved: money(status.reservedCents) })} /></p>
+          <HeldAmounts lang={lang} held={status.held} onDone={onReleased} />
+          {released && <p ref={releasedRef} tabIndex={-1} role="status" className="pf-asst-note pf-asst-released" data-testid={TID.released} data-job={released.jobId}><Rich text={released.gone ? t('release.gone') : releasedWords(lang, released.cents)} /></p>}
           <div role="group" aria-label={t('set.toggles')} className="pf-asst">
             <Switch checked={form.titles} onChange={(v) => set('titles', v)} label={dict(lang, 'assistant.toggle.titlesAndMarkers')} testId={TID.settingsToggleTitles} />
             <Switch checked={form.people} onChange={(v) => set('people', v)} label={dict(lang, 'assistant.toggle.peopleNames')} testId={TID.settingsTogglePeople} />

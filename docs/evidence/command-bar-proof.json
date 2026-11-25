@@ -1,19 +1,19 @@
 {
-  "ranAt": "2026-11-25T02:05:11.336Z",
+  "ranAt": "2026-11-25T08:18:12.895Z",
   "result": "PASSED",
   "counts": {
     "pass": 23,
     "fail": 0,
     "blocked": 0,
-    "contract-tested": 6
+    "contract-tested": 8
   },
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "logicalCpus": 4,
     "gpu": "none"
   },
-  "scope": "Headless Chromium on the built editor and in-process servers. The model path (11a–11f) ran against TEST-MOCK-chat, a labelled test double that opens no connection: contract-tested, credentials required — no real provider was called and no network adapter exists. Not provable here: a real provider (no key exists), a screen reader, the owner's own phrasing. Timings are one sample.",
+  "scope": "Headless Chromium on the built editor and in-process servers. The model path (11a–11h) ran against TEST-MOCK-chat, a labelled test double that opens no connection: contract-tested, credentials required — no real provider was called and no network adapter exists. Not provable here: a real provider (no key exists), a screen reader, the owner's own phrasing. Timings are one sample.",
   "checks": [
     {
       "id": "1",
@@ -307,14 +307,14 @@
       "detail": [
         {
           "text": "חתוך כאן",
-          "browser": "c4f2040c06758575d973c0115df2809e457d4988eddc4ea8cc3e72557d0d4c09",
-          "node": "c4f2040c06758575d973c0115df2809e457d4988eddc4ea8cc3e72557d0d4c09",
+          "browser": "0ef8e91812ad95a86d5dd4297fa50bd87b349d6803f98601bf4d74e83e0dad07",
+          "node": "0ef8e91812ad95a86d5dd4297fa50bd87b349d6803f98601bf4d74e83e0dad07",
           "same": true
         },
         {
           "text": "מחק את הקליפ",
-          "browser": "57aafb374ed7dea1de97b7afd8fd49c963ff00f3aa1527888c36b736b0bc9ac4",
-          "node": "57aafb374ed7dea1de97b7afd8fd49c963ff00f3aa1527888c36b736b0bc9ac4",
+          "browser": "48abb57e8e98f63b5e6ef8d424dcfdb50437ca3ae14ce89f409ba463900e9d56",
+          "node": "48abb57e8e98f63b5e6ef8d424dcfdb50437ca3ae14ce89f409ba463900e9d56",
           "same": true
         },
         {
@@ -331,8 +331,8 @@
         },
         {
           "text": "הוסף מעבר בין כל הקליפים",
-          "browser": "d19d1cd5fd184b41fef415db867ae77c3e921009d878c71a4fba83dbfb4b49c9",
-          "node": "d19d1cd5fd184b41fef415db867ae77c3e921009d878c71a4fba83dbfb4b49c9",
+          "browser": "ef34f14304f220d610d26c9149de11688a43eac9f11a7651224eaa0318df5200",
+          "node": "ef34f14304f220d610d26c9149de11688a43eac9f11a7651224eaa0318df5200",
           "same": true
         }
       ]
@@ -611,14 +611,14 @@
       "detail": [
         {
           "text": "split here",
-          "browser": "eaa15a99dce079b169a8e87cccf2b6e8c51fbae42ea0489f70a4cabb979f121e",
-          "node": "eaa15a99dce079b169a8e87cccf2b6e8c51fbae42ea0489f70a4cabb979f121e",
+          "browser": "746f78ae628303760100447e1a9628d5cc57173c8de7930819ac7e7f500c7132",
+          "node": "746f78ae628303760100447e1a9628d5cc57173c8de7930819ac7e7f500c7132",
           "same": true
         },
         {
           "text": "delete the clip",
-          "browser": "73f75cc22e5fddf8d439754a7774ea32eb0ca151fedd4cb4e741b5a6bc65e796",
-          "node": "73f75cc22e5fddf8d439754a7774ea32eb0ca151fedd4cb4e741b5a6bc65e796",
+          "browser": "6b45796c0ba0fc8801625947f41d56f34b228afd7f9e79ccc76b10de809dcb97",
+          "node": "6b45796c0ba0fc8801625947f41d56f34b228afd7f9e79ccc76b10de809dcb97",
           "same": true
         },
         {
@@ -635,8 +635,8 @@
         },
         {
           "text": "add transitions between all clips",
-          "browser": "bd778c94c751944c2a5acc3932565ab0bc962d583bb7325aee5c914f38d0650d",
-          "node": "bd778c94c751944c2a5acc3932565ab0bc962d583bb7325aee5c914f38d0650d",
+          "browser": "4c4a4d8a4b2ba565da7a55332b9507bedb90ae8899054f6177ae6aea68230fdb",
+          "node": "4c4a4d8a4b2ba565da7a55332b9507bedb90ae8899054f6177ae6aea68230fdb",
           "same": true
         }
       ]
@@ -680,7 +680,7 @@
       "detail": {
         "proposer": {
           "status": 200,
-          "proposalId": "prp_S0qndLxZKyo"
+          "proposalId": "prp_Vk055Qg8deU"
         },
         "observer": 403,
         "revisionsMoved": 0
@@ -700,10 +700,15 @@
     },
     {
       "id": "10",
-      "name": "not connected: GET /assistant/status says provider_not_configured (agent and owner), the palette row reads «עוזר השפה לא מחובר», POST …/assistant/requests gives 409 assistant_not_connected and no job row",
+      "name": "not connected: GET /assistant/status says provider_not_configured to the owner's session and only \"not connected\" to an agent (connected, setup, detail; no amount, host or model), the palette row reads «עוזר השפה לא מחובר», POST …/assistant/requests gives 409 assistant_not_connected and no job row",
       "status": "pass",
       "detail": {
-        "setup": "provider_not_configured",
+        "ownerSetup": "provider_not_configured",
+        "agentReads": {
+          "connected": false,
+          "setup": "not_connected",
+          "detail": "the language assistant is not connected; the owner connects it in the editor's Settings"
+        },
         "row": "לבקש מהעוזר: תעשה סרט יפהעוזר השפה לא מחובראיך מחברים",
         "request": 409,
         "code": "assistant_not_connected",
@@ -833,7 +838,7 @@
           "findings": 0,
           "focusRing": true,
           "controlsWhilePending": 108,
-          "controlsAfter": 108,
+          "controlsAfter": 109,
           "unnamed": [],
           "lowContrast": []
         },
@@ -845,6 +850,168 @@
         "proposals": 0,
         "calls": 1,
         "revision": 0
+      }
+    },
+    {
+      "id": "11g",
+      "name": "MOCK adapter: after a cancel that came after the send, the row offers «שחרור הסכום השמור» for the amount the owner's status lists as held; an agent's release is refused (403 owner_required with the next step) and releases nothing, and its status holds no amount; from the keyboard the button opens a confirmation that says a release only takes the amount off the editor's own monthly count and does not undo a charge, with the way out focused first and the focus kept inside; Escape keeps the amount and returns to the button; Tab and Enter release it: the ledger row is released, the month counts exactly that much less, what was spent does not move, the row says so as a status and the keyboard is back in the input; no proposal, no change, no second call; the heuristic accessibility audit of the four states has 0 findings",
+      "status": "contract-tested",
+      "detail": {
+        "heldCents": 44,
+        "agent": {
+          "status": 403,
+          "code": "owner_required",
+          "hint": "Ask the owner to release it after checking the service's billing: for a language-assistant request, «שחרור הסכום השמור» (Release the held amount) in the editor's command bar or in Settings; for any job, POST /api/v1/jobs/{jobId}/budget/release from the owner's session. Until then the amount stays counted.",
+          "ledgerAfter": "unknown",
+          "statusKeys": [
+            "connected",
+            "detail",
+            "setup"
+          ]
+        },
+        "offered": true,
+        "tabsToTheButton": 6,
+        "button": {
+          "label": "שחרור הסכום השמור",
+          "name": "שחרור הסכום השמור, 44¢, בקשה מ־25.11.2026, 08:18",
+          "popup": "dialog",
+          "job": "job_ygnc7LA4N6g"
+        },
+        "confirmation": {
+          "shown": true,
+          "firstFocus": "assistant-release-keep",
+          "role": "dialog",
+          "modal": "true",
+          "title": "לשחרר את הסכום השמור?",
+          "body": "השחרור מוריד 44¢ מהספירה החודשית של העורך, וזה כל מה שהוא עושה.הוא לא מבטל חיוב: ייתכן שהשירות חייב אתכם על הבקשה הזו בכל זאת. את זה רואים רק בדף החיובים של השירות, ולכן כדאי לבדוק שם לפני שמשחררים.אי אפשר לבטל שחרור.",
+          "tabWalk": [
+            "assistant-release-confirm",
+            "close",
+            "assistant-release-keep",
+            "assistant-release-confirm"
+          ],
+          "staysInside": true,
+          "missingRings": 0,
+          "a11y": {
+            "findings": 0,
+            "controls": 3,
+            "unnamed": [],
+            "lowContrast": []
+          }
+        },
+        "escape": {
+          "ledger": "unknown",
+          "focus": "assistant-release",
+          "palette": 1
+        },
+        "tabsToRelease": 1,
+        "released": {
+          "text": "הסכום 44¢ שוחרר מהספירה החודשית של העורך. אם השירות חייב על הבקשה, החיוב נשאר אצלו",
+          "role": "status",
+          "ledger": {
+            "reservedCents": 44,
+            "actualCents": null,
+            "state": "released"
+          },
+          "focus": "palette-input",
+          "button": 0,
+          "dialog": 0,
+          "palette": 1
+        },
+        "month": {
+          "reservedBefore": 88,
+          "reservedAfter": 44,
+          "spentBefore": 1,
+          "spentAfter": 1
+        },
+        "a11y": {
+          "findings": 0,
+          "focusRingOnButton": true,
+          "focusRingOnRelease": true,
+          "controlsOffered": 109,
+          "controlsReleased": 108,
+          "unnamed": [],
+          "lowContrast": []
+        },
+        "proposals": 0,
+        "calls": 1,
+        "revision": 0
+      }
+    },
+    {
+      "id": "11h",
+      "name": "MOCK adapter: Settings lists the amount still held for the owner (the request 11f canceled after the send) under «סכומים שמורים», with when it was asked and how it ended; its button is the next Tab stop after the per-request cap and opens the same confirmation; Escape keeps the amount; Tab and Enter release it: the row leaves the list, the month's line shows that much less reserved, the sentence that says what the release did is a status and holds the focus, and the ledger row is released; the heuristic accessibility audit of the list, the confirmation and the released state has 0 findings",
+      "status": "contract-tested",
+      "detail": {
+        "held": {
+          "jobId": "job_HpIOP9aVlVY",
+          "cents": 44,
+          "requestedAt": "2026-11-25T08:18:05.721Z",
+          "status": "canceled"
+        },
+        "listed": {
+          "shown": true,
+          "heading": "סכומים שמורים",
+          "group": "group",
+          "rows": [
+            {
+              "job": "job_HpIOP9aVlVY",
+              "how": "canceled",
+              "text": "44¢ · בקשה מ־25.11.2026, 08:18 · בוטלה אחרי שנשלחהשחרור הסכום השמור"
+            }
+          ]
+        },
+        "tabsFromTheCap": 1,
+        "confirmation": {
+          "shown": true,
+          "firstFocus": "assistant-release-keep",
+          "role": "dialog",
+          "modal": "true",
+          "title": "לשחרר את הסכום השמור?",
+          "body": "השחרור מוריד 44¢ מהספירה החודשית של העורך, וזה כל מה שהוא עושה.הוא לא מבטל חיוב: ייתכן שהשירות חייב אתכם על הבקשה הזו בכל זאת. את זה רואים רק בדף החיובים של השירות, ולכן כדאי לבדוק שם לפני שמשחררים.אי אפשר לבטל שחרור.",
+          "tabWalk": [
+            "assistant-release-confirm",
+            "close",
+            "assistant-release-keep",
+            "assistant-release-confirm"
+          ],
+          "staysInside": true,
+          "missingRings": 0,
+          "a11y": {
+            "findings": 0,
+            "controls": 3,
+            "unnamed": [],
+            "lowContrast": []
+          }
+        },
+        "escape": {
+          "ledger": "unknown",
+          "focus": "assistant-release",
+          "settings": 1
+        },
+        "tabsToRelease": 1,
+        "released": {
+          "text": "הסכום 44¢ שוחרר מהספירה החודשית של העורך. אם השירות חייב על הבקשה, החיוב נשאר אצלו",
+          "role": "status",
+          "focus": "assistant-released",
+          "rows": 0,
+          "dialog": 0,
+          "spentLine": "החודש (2026-11): הוצאו 1¢, שמורים לבקשות 0¢"
+        },
+        "month": {
+          "reservedBefore": 44,
+          "reservedAfter": 0,
+          "spent": 1
+        },
+        "a11y": {
+          "findings": 0,
+          "focusRingOnButton": true,
+          "focusRingOnRelease": true,
+          "focusRingOnSentence": true,
+          "controlsInSettings": 23,
+          "unnamed": [],
+          "lowContrast": []
+        }
       }
     },
     {
@@ -933,10 +1100,10 @@
     },
     {
       "id": "11e",
-      "name": "MOCK adapter: the 12 requests handed to the adapter (1603845 bytes) hold none of the planted private strings (birth date, capture date, event, file name, transcript word, GPS-like path; with the switches off the name, title, marker and track name), nor the word choice «בת» in what the project shapes nor as a word anywhere, nor the key; the system text and tool are the reviewed prompt byte for byte",
+      "name": "MOCK adapter: the 13 requests handed to the adapter (1737492 bytes) hold none of the planted private strings (birth date, capture date, event, file name, transcript word, GPS-like path; with the switches off the name, title, marker and track name), nor the word choice «בת» in what the project shapes nor as a word anywhere, nor the key; the system text and tool are the reviewed prompt byte for byte",
       "status": "contract-tested",
       "detail": {
-        "requests": 12,
+        "requests": 13,
         "fixedSame": true,
         "found": [],
         "formInVariable": false,
@@ -959,8 +1126,8 @@
         "assistantFilesInBackup": [],
         "filesHoldingTheKey": [],
         "scanned": {
-          "responses": 491,
-          "logLines": 49
+          "responses": 508,
+          "logLines": 51
         },
         "inResponses": 0,
         "inLogs": 0
