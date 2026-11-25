@@ -72,5 +72,7 @@
 
 /* ---------- Welcome: the fourth step ---------- */
 .welcome-steps .welcome-template-step button { padding: 2px 10px; }
+/* the dialog's «הבא» / «שימוש» in the light theme: the legacy .primary colours (dark ink on --pf-accent) measured 2.81:1 there; the frame tokens follow the theme (as the Deliver panel's primary button) */
+.pf-tpl-dialog button.primary { background-color: var(--pf-frame); background-image: none; color: var(--pf-frame-ink); }
 
 @media (prefers-reduced-motion: reduce) { .pf-tpl-drawer *, .pf-tpl-dialog * { transition: none !important; animation: none !important; } }

@@ -26,3 +26,24 @@ export function createHostStack<T>(): HostStack<T> {
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
   };
 }
+
+/**
+ * How much of each toast's time is left. A toast is drawn by the page region or, while a modal is open, by that modal's slot; the
+ * view is a new element each time the region moves, so the time left lives here, by toast id, and not in the view: moving the
+ * region neither restarts the timer nor refills its bar.
+ */
+export interface ToastClock {
+  /** Milliseconds left for the toast (its full time when it has never been shown). */
+  left(id: string, ttl: number): number;
+  save(id: string, left: number): void;
+  /** Forget every toast that is no longer in the queue. */
+  keepOnly(ids: string[]): void;
+}
+export function createToastClock(): ToastClock {
+  const m = new Map<string, number>();
+  return {
+    left: (id, ttl) => m.get(id) ?? ttl,
+    save: (id, left) => { m.set(id, left); },
+    keepOnly(ids) { const keep = new Set(ids); for (const k of [...m.keys()]) if (!keep.has(k)) m.delete(k); },
+  };
+}

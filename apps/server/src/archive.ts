@@ -24,8 +24,13 @@ export const ARCHIVE_FORMAT = 'pulseframe-archive/1';
  */
 export const IMPORTED_REVIEW_CLEARED = {
   code: 'translation_review_cleared',
-  he: (names: string) => `סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגומים ${names} מסומנים שוב «תרגום מכונה · לא נבדק», והנוסח שלהם נשמר. אפשר לעבור עליהם בלוח «תמלול» ולבחור «סמן כנבדק».`,
-  en: (names: string) => `A translation's "Reviewed" mark does not carry over in an archive import: it was given on another computer or by someone else. The translations ${names} need review again; their wording is kept. Go through them in the "Transcript" panel and choose "Mark as reviewed".`,
+  /** `names` are the translations' names, each already in «», in the order of the project's variants. One translation reads in the singular, several in the plural. */
+  he: (names: string[]) => names.length === 1
+    ? `סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגום ${names[0]} מסומן שוב «תרגום מכונה · לא נבדק», והנוסח שלו נשמר. אפשר לעבור עליו בלוח «תמלול» ולבחור «סמן כנבדק».`
+    : `סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגומים ${names.join(', ')} מסומנים שוב «תרגום מכונה · לא נבדק», והנוסח שלהם נשמר. אפשר לעבור עליהם בלוח «תמלול» ולבחור «סמן כנבדק».`,
+  en: (names: string[]) => names.length === 1
+    ? `A translation's "Reviewed" mark does not carry over in an archive import: it was given on another computer or by someone else. The translation ${names[0]} needs review again; its wording is kept. Go through it in the "Transcript" panel and choose "Mark as reviewed".`
+    : `A translation's "Reviewed" mark does not carry over in an archive import: it was given on another computer or by someone else. The translations ${names.join(', ')} need review again; their wording is kept. Go through them in the "Transcript" panel and choose "Mark as reviewed".`,
 } as const;
 export interface ImportNote { code: string; he: string; en: string; variants: { variantId: string; name: string; reviewedBy: string | null; reviewedAt: string | null }[] }
 /** Clears every reviewed mark of the document in place; returns what was cleared (empty when nothing was marked). */
@@ -177,7 +182,7 @@ export function importArchive(store: Store, file: string): { doc: ProjectDocumen
     }
     // Reviewed marks are the owner's on this computer, never the archive's (IMPORTED_REVIEW_CLEARED).
     const cleared = clearImportedReviews(doc);
-    const names = cleared.map((v) => `«${v.name}»`).join(', ');
+    const names = cleared.map((v) => `«${v.name}»`);
     const notes: ImportNote[] = cleared.length ? [{ code: IMPORTED_REVIEW_CLEARED.code, he: IMPORTED_REVIEW_CLEARED.he(names), en: IMPORTED_REVIEW_CLEARED.en(names), variants: cleared }] : [];
     // All checks passed: add blobs (content-addressed, so existing ones are simply reused) and create the project.
     let added = 0, present = 0;

@@ -20,7 +20,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { chromium } from 'playwright';
+import { chromium, type Page } from 'playwright';
 import * as T from '@pulseframe/time';
 import { generateTrackingFixture, trackingTruth } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
@@ -30,6 +30,7 @@ import { dictionaries, effectParamLabel, translateRefusal, fillIn, TREND_PACK_HE
 import { creativeProjection, beatSwitchFrame, BUILTIN_TEMPLATES, MODEL_GATED_TEMPLATES, PACKS, removedByHand, sha256Hex, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 import { TEMPLATE_TESTIDS } from '../../../apps/web/src/editor/templates.testids.ts';
 import { chooseFormat } from './editor-ui.ts';
+import { toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
 import { generateShortsFixture } from '../../fixtures/src/shorts.ts';
 import { SHORTS_TESTIDS } from '../../../apps/web/src/editor/shorts.testids.ts';
 import { PERFORM_TESTIDS } from '../../../apps/web/src/editor/perform/perform.testids.ts';
@@ -41,6 +42,21 @@ const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/editor-interactions');
 const checks: { name: string; ok: boolean; detail?: unknown }[] = [];
 const check = (name: string, ok: boolean, detail?: unknown) => { checks.push({ name, ok, detail }); console.log(`${ok ? '  ok  ' : ' FAIL '} ${name}${detail !== undefined ? `  ${JSON.stringify(detail)}` : ''}`); };
+/**
+ * A toast raised while one of the editor's own modals is open (its own focus trap): the modal is open with its focus inside. The toast
+ * must be inside the modal and focusable by Tab (toastInOpenModal), and Escape typed on the toast's × closes the modal as it does
+ * from anywhere else in it (the design system Dialog's rule), after which the toast region is the page's again.
+ */
+const modalToastCheck = async (p: Page, what: string, dialogTestId: string) => {
+  const lang = (await p.evaluate(() => document.documentElement.lang)) === 'en' ? 'en' : 'he';
+  const r = await toastInOpenModal(p, lang, dialogTestId);
+  await p.keyboard.press('Escape');
+  await p.getByTestId(dialogTestId).waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+  const closed = (await p.getByTestId(dialogTestId).count()) === 0;
+  const after = await toastAfterModal(p);
+  check(`a toast raised while ${what} is open is inside it (in its own toast region), one status only, in the accessibility tree and on screen; Tab reaches the toast's action and its × without leaving the modal and wraps back into it; Escape typed on the × closes the modal, and the region is the page's again`,
+    r.shown === true && closed && after.toastBackOnPage, { ...r, closed, ...after });
+};
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const until2 = async (get: () => Promise<any>, pred: (d: any) => boolean, ms = 20000) => { const t0 = Date.now(); for (;;) { if (pred(await get())) return true; if (Date.now() - t0 > ms) return false; await sleep(150); } };
 const R = { num: 30, den: 1 };
@@ -83,6 +99,8 @@ async function main() {
 
     const page = await (await browser.newContext({ viewport: { width: 1500, height: 3200 }, reducedMotion: 'reduce' })).newPage();
     await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
+    await page.addInitScript('globalThis.__name = (f) => f');
+    await page.addInitScript(() => { (globalThis as { __pfToastProof?: boolean }).__pfToastProof = true; }); // the toast hook (window.__pfToast), as the a11y audit sets it
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     page.on('response', (r) => { if (r.status() === 409) void r.text().then((b) => console.log('  409:', r.request().method(), new URL(r.url()).pathname, (r.request().postData() ?? '').slice(0, 300), b.slice(0, 300))).catch(() => {}); });
@@ -272,6 +290,19 @@ async function main() {
       const afterEsc = await focused();
       const revK2 = (await call(`/projects/${pid}`)).body.revision as number;
       check('keyframe strip by keyboard: Alt+K focuses a strip key, Enter opens the curve picker with the focus inside, Escape closes it and the focus is back on the same key; no commit', afterAltK.id === 'key-strip-key' && pickerOpen && inPicker.inPicker && (await page.getByTestId('curve-picker').count()) === 0 && afterEsc.id === 'key-strip-key' && afterEsc.frame === afterAltK.frame && revK2 === revK, { afterAltK, pickerOpen, inPicker, afterEsc, revisions: [revK, revK2] });
+      // a toast raised while the curve picker, the effect gallery and the command palette are open
+      await page.locator(`.clip[data-clip-id="${picClip}"]`).focus();
+      await page.keyboard.press('Alt+KeyK');
+      await page.keyboard.press('Enter');
+      await page.getByTestId('curve-picker').waitFor({ timeout: 5000 }).catch(() => {});
+      await modalToastCheck(page, 'the curve picker', 'curve-picker');
+      await page.locator(`.clip[data-clip-id="${picClip}"]`).click();
+      await page.getByTestId('gallery-open').click({ timeout: 8000 }).catch(() => {});
+      await page.getByTestId('effect-gallery').waitFor({ timeout: 8000 }).catch(() => {});
+      await modalToastCheck(page, 'the effect gallery', 'effect-gallery');
+      await page.getByTestId('open-palette').click();
+      await page.getByTestId('palette-dialog').waitFor({ timeout: 8000 }).catch(() => {});
+      await modalToastCheck(page, 'the command palette', 'palette-dialog');
       await page.locator(`.clip[data-clip-id="${title}"]`).click();
       await page.waitForFunction((id) => document.querySelectorAll(`.clip[data-clip-id="${id}"] i.kf`).length > 0, picClip, { timeout: 5000 }).catch(() => {});
       const passive = await page.locator(`.clip[data-clip-id="${picClip}"] i.kf`).count();
@@ -882,6 +913,8 @@ async function main() {
       const opsSince = async (rev: number) => ((await call(`/projects/${tp}/history?since=${rev}`)).body.events as any[]).filter((e) => e.revision > rev).map((e) => e.ops);
       const adjOf = (d: any) => d.sequences.seq_main.tracks.filter((t: any) => t.kind === 'adjustment').flatMap((t: any) => t.clips);
       const tctx = await browser.newContext({ viewport: { width: 1500, height: 3200 }, reducedMotion: 'reduce' });
+      await tctx.addInitScript('globalThis.__name = (f) => f');
+      await tctx.addInitScript(() => { (globalThis as { __pfToastProof?: boolean }).__pfToastProof = true; }); // the toast hook (window.__pfToast)
       await tctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
       const tpage = await tctx.newPage();
       const tErrors: string[] = [];
@@ -975,6 +1008,10 @@ async function main() {
       // the keyboard-only flow: pick → order → music → Hebrew text → plan → use
       const pick = list?.find((t) => t.available && t.texts.length > 0 && t.needs.music !== 'none' && t.slots.every((x: any) => x.accept !== 'video')) ?? list?.find((t) => t.available && t.texts.length > 0) ?? list?.find((t) => t.available);
       const card = tpage.locator(`[data-testid=${TID.card}][data-template-id="${pick?.id}"]`);
+      await card.focus();
+      await tpage.keyboard.press('Enter');
+      await tpage.getByTestId(TID.dialog).waitFor({ timeout: 8000 });
+      await modalToastCheck(tpage, 'the template dialog', TID.dialog);
       await card.focus();
       await tpage.keyboard.press('Enter');
       await tpage.getByTestId(TID.dialog).waitFor({ timeout: 8000 });
@@ -1671,11 +1708,11 @@ async function main() {
       await rpage.waitForFunction(() => document.documentElement.lang === 'en', undefined, { timeout: 5000 }).catch(() => {});
       const en = await importHere(he.id);
       const source = (await rdoc(rp)).variants[variantId].translation;
-      check('an archive of a project whose translation the owner marked reviewed, imported in the editor: the new project opens with one toast «הארכיון יובא» whose text is the server\'s note naming «English», without a timer; the translation there needs review again with its wording kept, the source keeps its mark; the toast stays past 7 s, closes with its ×, and a reload does not show it again; in English the same import says it in English',
-        marked && he.id !== rp && he.count === 1 && he.title === 'הארכיון יובא' && he.body === IMPORTED_REVIEW_CLEARED.he('«English»') && he.visible && he.timer === 0 && he.panel === 'needed' && he.badge === 1
+      check('an archive of a project whose translation the owner marked reviewed, imported in the editor: the new project opens with one toast «הארכיון יובא» whose text is the server\'s note naming «English» in the singular («התרגום … מסומן», «The translation … needs»), without a timer; the translation there needs review again with its wording kept, the source keeps its mark; the toast stays past 7 s, closes with its ×, and a reload does not show it again; in English the same import says it in English',
+        marked && he.id !== rp && he.count === 1 && he.title === 'הארכיון יובא' && he.body === IMPORTED_REVIEW_CLEARED.he(['«English»']) && he.body.includes('התרגום «English» מסומן שוב') && !/התרגומים|מסומנים/.test(he.body) && he.visible && he.timer === 0 && he.panel === 'needed' && he.badge === 1
           && newVariant?.translation?.review === 'needed' && newVariant.translation.reviewedBy === undefined && JSON.stringify(Object.values(newVariant.phraseText ?? {}).sort()) === JSON.stringify(['Hello everyone', 'Welcome']) && source.review === 'reviewed'
           && stays === 1 && closed === 0 && afterReload === 0
-          && en.id !== he.id && en.count === 1 && en.title === 'The archive was imported' && en.body === IMPORTED_REVIEW_CLEARED.en('«English»') && en.visible && en.timer === 0 && rErrors.length === 0,
+          && en.id !== he.id && en.count === 1 && en.title === 'The archive was imported' && en.body === IMPORTED_REVIEW_CLEARED.en(['«English»']) && en.body.includes('The translation «English» needs review again; its wording is kept') && !/translations/.test(en.body) && en.visible && en.timer === 0 && rErrors.length === 0,
         { marked, he, en, imported: { review: newVariant?.translation?.review, reviewedBy: newVariant?.translation?.reviewedBy ?? null, wording: Object.values(newVariant?.phraseText ?? {}) }, sourceReview: source.review, stays, closed, afterReload, errors: rErrors.slice(0, 3) });
       await rctx.close();
     }

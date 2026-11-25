@@ -13,6 +13,7 @@ import { pickCall, type PickKind } from './gallery.pick.ts';
 import { normalize, rankCommands, rankWithRescue } from './palette.search.ts';
 import { defaultActiveKey, exactCommandId } from './palette.enter.ts';
 import { useEditorState } from './store.ts';
+import { ToastSlot } from '../ds/index.ts';
 import './command-palette.css';
 // the Hebrew command bar (ADR-0027): its rows come first in the one listbox (commandBar/contract.ts)
 import { AssistantRow } from './commandBar/AssistantRow.tsx';
@@ -339,6 +340,8 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
             </div>
           </>
         )}
+        {/* the toast region while this modal is open: a toast under the page behind could be neither reached nor heard (ds/toastHost.ts) */}
+        <ToastSlot />
       </div>
     </div>
   );

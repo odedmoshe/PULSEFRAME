@@ -24,6 +24,7 @@ import * as T from '@pulseframe/time';
 import { CURVES, CURVES_BUILT, channelKey, curveOps, describeCatalog, findClip, isV1Easing, keyTimes, keysOf, isLightChannel2, rangeOf, type ChannelRef, type Clip, type CurveHandles, type Easing } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
+import { ToastSlot } from '../ds/index.ts';
 import { KF_TESTIDS } from './keyframes.testids.ts';
 import { channelName } from './KeyStrip.tsx';
 import { dragHandle, fieldDraft, handlesDiffer, nudgeHandle, pointFromHandle, polyline, previewPoints, setHandleField, tilePoints, turnsBackLocal, TILE_RANGE } from './curvePicker.math.ts';
@@ -180,6 +181,8 @@ function Shell({ root, t, onClose, onKeyDown, children }: { root: React.RefObjec
       <div ref={root} className="curve-picker" role="dialog" aria-modal="true" aria-labelledby={title} data-testid={KF_TESTIDS.picker} onKeyDown={onKeyDown}>
         <header><h2 id={title}>{t('curve.picker')}</h2><button type="button" className="ghost" onClick={onClose}>{t('close')}</button></header>
         {children}
+        {/* the toast region while this modal is open (ds/toastHost.ts) */}
+        <ToastSlot />
       </div>
     </div>, document.body);
 }

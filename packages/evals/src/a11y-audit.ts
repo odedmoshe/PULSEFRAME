@@ -42,7 +42,7 @@ import { chooseFormat, formatOptions, openCardMenu } from './editor-ui.ts';
 import { makeRenderCacheCtx, renderCacheA11yScenarios } from './a11y-render-cache.ts';
 import { makeApi, ownerApi } from './incremental-fixtures.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
-import { auditInPage, focusAudit } from './a11y-lib.ts';
+import { auditInPage, focusAudit, toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
 import { dictionaries } from '../../i18n/src/index.ts';
 import { TEMPLATE_STRINGS } from '../../../apps/web/src/editor/templates.strings.ts';
 import { IMPORTED_REVIEW_CLEARED } from '../../../apps/server/src/archive.ts';
@@ -150,7 +150,7 @@ async function importNoteState(page: Page, lang: 'he' | 'en', archive: Buffer): 
   const plain = (x: string | null) => (x ?? '').replace(/[⁦-⁩‎‏]/g, '');
   const title = plain(await toast.first().locator('b').textContent().catch(() => null)), body = plain(await toast.first().locator('p').textContent().catch(() => null));
   const closeName = await toast.first().locator('.pf-toast-x').getAttribute('aria-label').catch(() => null);
-  const shown = (await toast.count()) === 1 && title === (lang === 'he' ? 'הארכיון יובא' : 'The archive was imported') && body === IMPORTED_REVIEW_CLEARED[lang]('«English»') && (await toast.first().locator('.pf-toast-timer').count()) === 0 && !!closeName
+  const shown = (await toast.count()) === 1 && title === (lang === 'he' ? 'הארכיון יובא' : 'The archive was imported') && body === IMPORTED_REVIEW_CLEARED[lang](['«English»']) && body.includes(lang === 'he' ? 'התרגום «English» מסומן שוב' : 'The translation «English» needs review again') && (await toast.first().locator('.pf-toast-timer').count()) === 0 && !!closeName
     && new URL(page.url()).searchParams.get('project') !== from && (await toast.first().isVisible().catch(() => false));
   return { extra: { shown, title, body, closeName }, close: async () => { await toast.first().locator('.pf-toast-x').click({ timeout: 5000 }).catch(() => {}); await toast.first().waitFor({ state: 'detached', timeout: 5000 }).catch(() => {}); return { closed: (await toast.count()) === 0 }; } };
 }
@@ -313,7 +313,7 @@ async function main() {
       const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
       await page.addInitScript((l) => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); localStorage.setItem('pf.lang', l); } catch { /* storage unavailable */ } }, lang);
       await page.addInitScript('globalThis.__name = (f) => f'); // tsx/esbuild helper referenced by functions passed to page.evaluate
-      await page.addInitScript(() => { (globalThis as { __pfPerformProof?: boolean }).__pfPerformProof = true; }); // perform mode's test hook (injectTaps), as proof:perform sets it
+      await page.addInitScript(() => { (globalThis as { __pfPerformProof?: boolean }).__pfPerformProof = true; (globalThis as { __pfToastProof?: boolean }).__pfToastProof = true; }); // perform mode's test hook (injectTaps), as proof:perform sets it; the toast hook (window.__pfToast)
       await page.goto(`${s.ownerUrl}&project=${pid}`);
       await page.getByTestId('timecode').waitFor();
       if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
@@ -360,6 +360,19 @@ async function main() {
         for (let i = 0; i < 25; i++) { await page.keyboard.press('Tab'); if (!(await inside())) escaped++; }
         for (let i = 0; i < 6; i++) { await page.keyboard.press('Shift+Tab'); if (!(await inside())) escaped++; }
         return { startsInside, tabStepsThatLeftTheDialog: escaped, close: async () => { const stillOpen = (await page.getByTestId(dialogTestId).count()) === 1; await page.keyboard.press('Escape'); await page.getByTestId(dialogTestId).waitFor({ state: 'detached', timeout: 5000 }).catch(() => {}); await page.waitForTimeout(150); const where = await page.evaluate(() => { const el = document.activeElement as HTMLElement | null; return el ? `${el.tagName.toLowerCase()}${el.dataset?.testid ? `[data-testid=${el.dataset.testid}]` : ''}` : 'none'; }); return { openUntilEscape: stillOpen, closed: (await page.getByTestId(dialogTestId).count()) === 0, focusAfterClose: where, focusReturned: await page.evaluate((sel) => !!document.activeElement && document.activeElement.matches(sel), openerSelector) }; } };
+      };
+      /**
+       * A toast raised while one of the editor's own modals is open (its own focus trap, not the design system's Dialog): audited as a
+       * state of its own, with the modal's close (Escape typed on the toast's ×) assigned to both states, then the region back on the page.
+       */
+      const toastState = async (name: string, dialogTestId: string, d: { close: () => Promise<Record<string, unknown>> }, alsoOnPrevious = true) => {
+        const prev = alsoOnPrevious ? states.at(-1) : null;
+        await auditState(name, await toastInOpenModal(page, lang, dialogTestId), true);
+        const mine = states.at(-1);
+        const closed = await d.close();
+        if (prev) Object.assign(prev, closed);
+        Object.assign(mine, closed, await toastAfterModal(page));
+        if (mine.toastBackOnPage === false) mine.shown = false;
       };
       // marker bar (a marker sits on frame 0, where the playhead is)
       await page.locator('[data-testid=marker-bar]').waitFor({ timeout: 5000 }).catch(() => {});
@@ -446,7 +459,7 @@ async function main() {
       // command palette
       const cp = await dialogBehaviour('palette-dialog', async () => { await page.getByTestId('projects-open').focus(); await page.keyboard.press('Control+k'); }, '[data-testid=projects-open]');
       await auditState('command-palette', { startsInside: cp.startsInside, tabStepsThatLeftTheDialog: cp.tabStepsThatLeftTheDialog }, true);
-      Object.assign(states.at(-1), await cp.close());
+      await toastState('toast-in-palette', 'palette-dialog', cp);
       // the Hebrew command bar (ADR-0027): a plan's preview (the bar's row first and active, its steps, the live region and the
       // preview outside the listbox), a question's choices with the first choice active, and Settings «עוזר השפה» (owner only)
       {
@@ -507,7 +520,7 @@ async function main() {
       await page.getByTestId('gallery-open').waitFor({ timeout: 8000 });
       const gd = await dialogBehaviour('effect-gallery', async () => { await page.getByTestId('gallery-open').click(); }, '[data-testid=gallery-open]');
       await auditState('effect-gallery', { startsInside: gd.startsInside, tabStepsThatLeftTheDialog: gd.tabStepsThatLeftTheDialog }, true);
-      Object.assign(states.at(-1), await gd.close());
+      await toastState('toast-in-effect-gallery', 'effect-gallery', gd);
       // the look panel with the visual wave's controls (ADR-0011): a blur whose radius follows the beat (its fieldset open), a
       // date stamp (its text field and hint) and an echo (first, with the separator that names the rule); no music here, so the
       // ♪ toggles are off with their note. The focus walk starts in the fieldset. The effects are removed again afterwards.
@@ -647,6 +660,8 @@ async function main() {
       await page.waitForFunction(() => !!document.querySelector('[data-testid=template-plan-summary]') || !!document.querySelector('[data-testid=template-error]'), undefined, { timeout: 30000 }).catch(() => {});
       await auditState('template-dialog-plan', { shown: (await page.getByTestId('template-plan-summary').count()) === 1, live: await page.getByTestId('template-plan').getAttribute('aria-live').catch(() => null) }, true);
       Object.assign(dialogState, await td.close());
+      // a toast while the template dialog is open: the dialog is opened again from its card, audited with the toast, and closed with Escape
+      await toastState('toast-in-template-dialog', 'template-dialog', await dialogBehaviour('template-dialog', async () => { await page.locator(tplCard).click(); }, tplCard), false);
       // the post-apply bar: the template is applied from the dialog, audited, and undone
       await page.locator(tplCard).click();
       await page.getByTestId('template-dialog').waitFor({ timeout: 8000 }).catch(() => {});
@@ -808,7 +823,7 @@ async function main() {
         const keyAt15 = `[data-testid=${KF_TESTIDS.key}][data-frame="15"]`;
         const cp = await dialogBehaviour(KF_TESTIDS.picker, async () => { await page.locator(keyAt15).focus(); await page.keyboard.press('Enter'); }, keyAt15);
         await auditState('curve-picker', { startsInside: cp.startsInside, tabStepsThatLeftTheDialog: cp.tabStepsThatLeftTheDialog, shown: (await page.locator(`[data-testid^="curve-tile-"]`).count()) >= 12 }, true);
-        Object.assign(states.at(-1), await cp.close());
+        await toastState('toast-in-curve-picker', KF_TESTIDS.picker, cp);
       }
       // multicam (ADR-0020): the docked panel, the sync dialog (modal), and a keyboard-only path from the library selection to a placed program
       if (mc.trackId) {
@@ -900,7 +915,7 @@ async function main() {
       const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
       await page.addInitScript((l) => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); localStorage.setItem('pf.lang', l); localStorage.setItem('pf.theme', 'light'); } catch { /* storage unavailable */ } }, lang);
       await page.addInitScript('globalThis.__name = (f) => f');
-      await page.addInitScript(() => { (globalThis as { __pfPerformProof?: boolean }).__pfPerformProof = true; });
+      await page.addInitScript(() => { (globalThis as { __pfPerformProof?: boolean }).__pfPerformProof = true; (globalThis as { __pfToastProof?: boolean }).__pfToastProof = true; });
       const open = async (projectId: string, ready = 'timecode') => {
         await page.goto(`${s.ownerUrl}&project=${projectId}`);
         await page.getByTestId(ready).waitFor({ timeout: 15000 });
@@ -945,6 +960,30 @@ async function main() {
       // a toast while a modal is open (the people sheet), in the light theme
       await auditState('toast-in-modal', await toastInModal(page, lang), true);
       await closeWith('life-people');
+      // a toast while each of the editor's own modals is open, in the light theme: the command palette, the effect gallery (of the
+      // selected clip), the curve picker (of a title's key) and the template dialog; Escape is typed on the toast's × and closes the modal
+      const lightToast = async (name: string, dialogTestId: string, opener: () => Promise<void>) => {
+        await opener();
+        await page.getByTestId(dialogTestId).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(200);
+        await auditState(name, await toastInOpenModal(page, lang, dialogTestId), true);
+        const mine = states.at(-1);
+        await closeWith(dialogTestId);
+        Object.assign(mine, { closed: (await page.getByTestId(dialogTestId).count()) === 0 }, await toastAfterModal(page));
+        if (mine.toastBackOnPage === false) mine.shown = false;
+      };
+      await lightToast('toast-in-palette', 'palette-dialog', async () => { await page.getByTestId('open-palette').click(); });
+      await clickClipEnd(page, clipId);
+      await page.getByTestId('gallery-open').waitFor({ timeout: 8000 });
+      await lightToast('toast-in-effect-gallery', 'effect-gallery', async () => { await page.getByTestId('gallery-open').click(); });
+      const lightProjectUrl = page.url();
+      await open(kfPid);
+      await page.locator(`.clip[data-clip-id="${kfClip}"]`).click({ position: { x: 4, y: 4 } });
+      await page.getByTestId(KF_TESTIDS.strip).waitFor({ timeout: 8000 }).catch(() => {});
+      await lightToast('toast-in-curve-picker', KF_TESTIDS.picker, async () => { await page.locator(`[data-testid=${KF_TESTIDS.key}][data-frame="15"]`).focus(); await page.keyboard.press('Enter'); });
+      await page.goto(lightProjectUrl);
+      await page.getByTestId('timecode').waitFor({ timeout: 15000 });
+      if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
       // perform mode at rest
       await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
       await page.keyboard.press('Shift+Digit7');
@@ -969,6 +1008,7 @@ async function main() {
       await open(tplPid);
       await page.getByTestId('rail-templates').click();
       if ((await page.getByTestId('templates-toggle').getAttribute('aria-expanded')) !== 'true') await page.getByTestId('templates-toggle').click();
+      await lightToast('toast-in-template-dialog', 'template-dialog', async () => { await page.locator(`[data-testid=template-card][data-template-id="${tplPick?.id ?? ''}"]`).click({ timeout: 10000 }); });
       await page.locator(`[data-testid=template-card][data-template-id="${tplPick?.id ?? ''}"]`).click({ timeout: 10000 }).catch(() => {});
       await page.getByTestId('template-dialog').waitFor({ timeout: 8000 }).catch(() => {});
       await page.locator('[data-testid=template-step][data-step=plan]').click().catch(() => {});
