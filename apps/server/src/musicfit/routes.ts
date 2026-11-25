@@ -21,7 +21,7 @@ import { renderJoinPreview } from './joinPreview.ts';
 /** True once builder B has built plan and apply. */
 export const MUSICFIT_SERVER_BUILT = false;
 /** True once builder A has built the join preview and the heard mark. */
-export const MUSICFIT_JOIN_BUILT = false;
+export const MUSICFIT_JOIN_BUILT = true;
 
 /** Every refusal of the routes: status, code, fixed English, hint (Hebrew: packages/i18n/src/musicFit.ts HE_MUSICFIT). */
 export const MUSICFIT_SERVER_REFUSALS = {

@@ -8,10 +8,12 @@ import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
   applyTransaction, assistantOps, ASSISTANT_EXCLUDED_OPS, collectCredits, createProject, cutStats, exactLayoutFor, findTemplate, fitLicenceProblem, fittedLibraryRecord, FIT_METHOD,
-  fittedGrid, getOp, listOps, MODIFIED_LINE, MUSIC_STYLES, musicAt, musicEndingSteps, MusicFitNotBuilt, MUSICFIT_PUBLIC_OPS, MUSICFIT_INTERNAL_OPS, MUSICFIT_REFUSALS, musicLayout,
+  fittedGrid, getOp, listOps, MODIFIED_LINE, MUSIC_STYLES, musicAt, musicEndingSteps, MusicFitNotBuilt, MUSICFIT_OPS_BUILT, MUSICFIT_PUBLIC_OPS, MUSICFIT_INTERNAL_OPS, MUSICFIT_REFUSALS, musicLayout,
   musicProvenanceParams, OpError, orderCandidates, planImpact, planMusicSwap, planTemplate, ProjectSchema, sampleFramesFor, TEMPLATES, validateProject, maxMusicBars,
   type Asset, type LibraryRecord, type MediaClip, type ProjectDocument,
 } from './index.ts';
+import type { PlaceMulticamOutput } from './index.ts';
+import { podcast } from './multicam.testFixture.ts';
 
 const R = { num: 30, den: 1 };
 const hash = (n: number) => `sha256:${n.toString(16).padStart(64, '0')}`;
@@ -129,7 +131,27 @@ describe('the marked moment when the clip\'s file changes (decisions §2.8)', ()
     const late = structuredClone(doc); clipsOf(late)[0]!.impact = T.rt(9, 1);
     expect(clipsOf(tx(late, [{ op: 'replace_clip_asset', args: { clipId, assetId: 'ast_c' } }]).doc)[0]!.impact).toBeUndefined();
   });
-  it.todo('A: a multicam angle switch that changes the file clears the mark (multicamOps.ts), proved through switch_angle on a group');
+  it('a multicam angle switch that changes the file clears the mark; a switch that keeps the file keeps it (switch_angles on a group)', () => {
+    const p = podcast();
+    const placed = tx(p.doc, [{ op: 'place_multicam', args: { groupId: p.groupId, at: T.ZERO, angleId: p.camA, range: { from: T.rt(10, 1), to: T.rt(40, 1) } } }]);
+    const out = placed.results[0]!.output as unknown as PlaceMulticamOutput;
+    const videoTrack = (d: ProjectDocument) => Object.values(d.sequences).flatMap((s) => s.tracks).find((t) => t.id === out.videoTrackId)!.clips as MediaClip[];
+    const marked = structuredClone(placed.doc);
+    const first = videoTrack(marked)[0]!;
+    first.impact = first.sourceIn;
+    const fileBefore = first.assetId;
+    // switching the second half to camera B: the part that now plays B's file loses the mark, the part still on A keeps it
+    const sw = tx(marked, [{ op: 'switch_angles', args: { groupId: p.groupId, cuts: [{ at: T.frameTime(300, R), angleId: p.camB }] } }]).doc;
+    const parts = videoTrack(sw);
+    expect(parts.length).toBe(2);
+    expect(parts[0]!.assetId).toBe(fileBefore);
+    expect(parts[0]!.impact).toEqual(first.impact);
+    expect(parts[1]!.assetId).not.toBe(fileBefore);
+    expect(parts[1]!.impact).toBeUndefined();
+    // the whole program to camera B: the mark is gone
+    const all = tx(marked, [{ op: 'switch_angles', args: { groupId: p.groupId, cuts: [{ at: T.ZERO, angleId: p.camB }] } }]).doc;
+    expect(videoTrack(all).every((c) => c.impact === undefined)).toBe(true);
+  });
 });
 
 describe('the licence rule of a shortened library song (decisions §1)', () => {
@@ -177,9 +199,10 @@ describe('the licence rule of a shortened library song (decisions §1)', () => {
 });
 
 describe('operations, the assistant and the stubs', () => {
-  it('the four operations are registered (two public, two internal) and refuse notBuilt, changing nothing', () => {
+  it('the four operations are registered (two public, two internal); until built they refuse notBuilt, changing nothing (built: musicFitOps.test.ts)', () => {
     for (const op of MUSICFIT_PUBLIC_OPS) expect(getOp(op)?.internal ?? false).toBe(false);
     for (const op of MUSICFIT_INTERNAL_OPS) expect(getOp(op)?.internal).toBe(true);
+    if (MUSICFIT_OPS_BUILT) return;
     const doc = createProject({ id: 'prj_mo', name: 'O' });
     for (const [op, args] of [['set_clip_impact', { clipId: 'c', moment: null }], ['sync_impact', { clipId: 'c', to: 'bar' }], ['mark_join_heard', { assetId: 'a', heard: false, at: 'x' }]] as const) {
       let err: unknown;
@@ -195,8 +218,13 @@ describe('operations, the assistant and the stubs', () => {
   });
   it('the stubs throw MusicFitNotBuilt (never a made-up value)', () => {
     const doc = createProject({ id: 'prj_ms', name: 'S' });
-    for (const fn of [() => musicAt(doc, T.ZERO), () => cutStats([0], 30), () => planImpact(doc, 'c', undefined, 'beat'), () => fittedGrid({ beats: [], downbeats: [], duration: T.ZERO }, T.ZERO, { from: T.ZERO, to: T.ZERO }, T.ZERO),
-      () => orderCandidates([], 1), () => planMusicSwap(doc, 'c', 'a'), () => musicEndingSteps(doc, 'c', T.ZERO)]) expect(fn).toThrow(MusicFitNotBuilt);
+    // builder A's (musicAt, cutStats, planImpact, fittedGrid, orderCandidates) are built: musicFitOps.test.ts
+    for (const fn of [() => planMusicSwap(doc, 'c', 'a'), () => musicEndingSteps(doc, 'c', T.ZERO)]) expect(fn).toThrow(MusicFitNotBuilt);
+    expect(musicAt(doc, T.ZERO)).toBeNull();
+    expect(cutStats([0], 30)).toEqual({ cuts: 1, minGapFrames: null, maxInOneSecond: 1 });
+    expect(() => planImpact(doc, 'c', undefined, 'beat')).toThrow(OpError);
+    expect(fittedGrid({ beats: [], downbeats: [], duration: T.ZERO }, T.ZERO, { from: T.ZERO, to: T.ZERO }, T.ZERO)).toBeNull();
+    expect(orderCandidates([], 1)).toEqual([]);
   });
   it('a template asked for an exact built-in ending is refused until built, never made as a faded track', () => {
     const def = findTemplate(TEMPLATES[0]!.id)!;
@@ -204,8 +232,5 @@ describe('operations, the assistant and the stubs', () => {
     doc.assets.ast_v = video('ast_v', 1);
     expect(() => planTemplate(doc, def, { media: ['ast_v'], musicAssetId: null, builtinMusic: { styleId: 'music.festive', ending: 'exact' } })).toThrow(/exact ending of built-in music is not built/);
   });
-  it.todo('A: set_clip_impact and sync_impact bodies (impactOps.ts): every refusal in table order; sync through timelineOfSource, reversed clips, nearest-frame beats, residual ≤ half a frame, exact undo');
-  it.todo('A: add_fitted_music checks the licence again (fail-closed), the copied record equals fittedLibraryRecord, the grid and the removal; mark_join_heard sets and clears heard');
-  it.todo('A: musicAt skips muted tracks and reads beats through lineage; fittedGrid and orderCandidates follow decisions §2.11');
   it.todo('B: planMusicSwap and musicEndingSteps (one transaction of existing public ops; a fade only when the file is cut by a frame); the film planner reads musicGridSteady; the template ending exact');
 });

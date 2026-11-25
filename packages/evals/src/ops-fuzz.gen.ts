@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT, MUSICFIT_OPS_BUILT } from '@pulseframe/core';
+import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT, MUSICFIT_OPS_BUILT, musicAt, sourceAt, type MediaClip } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -840,12 +840,23 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
    */
   const genMusicFit = (doc: ProjectDocument): OpCall => {
     const clips = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips));
-    const c = clips.length && rnd() < 0.93 ? pick(clips) : undefined;
+    // most draws on a picture clip that plays a file (the case sync_impact is for); the rest on any clip, or an unknown id
+    const pictures = Object.values(doc.sequences).flatMap((s) => s.tracks.filter((t) => t.kind === 'video').flatMap((t) => t.clips)).filter((x) => x.type === 'media');
+    const c = pictures.length && rnd() < 0.6 ? pick(pictures) : clips.length && rnd() < 0.93 ? pick(clips) : undefined;
     const clipId = c?.id ?? 'clp_none';
     const asset = c && c.type === 'media' && Object.hasOwn(doc.assets, c.assetId) ? doc.assets[c.assetId] : undefined;
     const dur = asset ? T.toSeconds(asset.duration) : 5;
-    const at = (): T.RationalTime => { const x = rnd() < 0.1 ? dur + 0.5 : rnd() * dur; return rnd() < 0.5 ? T.frameTime(Math.max(0, Math.round(x * 30)), { num: 30, den: 1 }) : T.rt(Math.max(0, Math.round(x * 1000)), 1000); };
+    // half of the moments inside the part the clip shows (forward, speed 1 reading), so sync_impact meets music under a shown moment
+    const shown = c && c.type === 'media' ? { from: T.toSeconds(c.sourceIn), len: T.toSeconds(c.duration) } : null;
+    const at = (): T.RationalTime => { const x = shown && rnd() < 0.5 ? shown.from + rnd() * shown.len : rnd() < 0.1 ? dur + 0.5 : rnd() * dur; return rnd() < 0.5 ? T.frameTime(Math.max(0, Math.round(x * 30)), { num: 30, den: 1 }) : T.rt(Math.max(0, Math.round(x * 1000)), 1000); };
     if (rnd() < 0.45) return { op: 'set_clip_impact', args: { clipId, moment: rnd() < 0.15 ? null : at() } };
+    // half of the syncs on a picture clip with measured music under its middle, the moment shown there (so some are accepted)
+    const underMusic = rnd() < 0.5 ? pictures.filter((x): x is MediaClip => x.type === 'media' && !x.freeze && doc.assets[x.assetId]?.kind !== 'image' && !!musicAt(doc, T.add(x.start, T.rt(BigInt(x.duration.value), x.duration.timescale * 2)))) : [];
+    if (underMusic.length) {
+      const u = pick(underMusic);
+      const mid = T.add(u.start, T.rt(BigInt(u.duration.value) * BigInt(1 + int(98)), u.duration.timescale * 100));
+      return { op: 'sync_impact', args: { clipId: u.id, to: rnd() < 0.7 ? 'beat' : 'bar', moment: sourceAt(u, mid), ...(rnd() < 0.5 ? { pick: pick(['nearest', 'earlier', 'later'] as const) } : {}) } };
+    }
     return { op: 'sync_impact', args: { clipId, to: rnd() < 0.7 ? 'beat' : 'bar', ...(rnd() < 0.4 ? { moment: at() } : {}), ...(rnd() < 0.5 ? { pick: pick(['nearest', 'earlier', 'later'] as const) } : {}) } };
   };
   /**

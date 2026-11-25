@@ -34,6 +34,11 @@ export interface RenderOptions {
   clickOnly?: boolean;
   /** Checked at every yield; when it is true the render stops with MusicCancelled. */
   cancel?: { cancelled: boolean };
+  /**
+   * Wave 7 musicfit: the ending in 48 kHz sample frames (2 to 6 beats; core musicLayout). Absent, or one bar, gives exactly the
+   * track (and the bytes) made before it existed.
+   */
+  endFrames?: number;
 }
 /** Thrown when a render is stopped through RenderOptions.cancel. */
 export class MusicCancelled extends Error {
@@ -57,7 +62,7 @@ const pause = async (cancel: RenderOptions['cancel']): Promise<void> => {
  * musicLayout refuses (unknown or rejected style, bars out of range) and for a seed outside 0..MUSIC_MAX_SEED.
  */
 export async function renderMusic(styleId: string, bars: number, seed: number, opts: RenderOptions = {}): Promise<RenderedMusic> {
-  const layout = musicLayout(styleId, bars);
+  const layout = musicLayout(styleId, bars, opts.endFrames);
   if (!Number.isInteger(seed) || seed < 0 || seed > MUSIC_MAX_SEED) throw new RangeError(`a seed is a whole number from 0 to ${MUSIC_MAX_SEED}; got ${seed}`);
   if (opts.cancel?.cancelled) throw new MusicCancelled();
   const spec = styleSpec(layout.styleId);

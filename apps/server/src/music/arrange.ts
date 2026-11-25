@@ -97,11 +97,12 @@ export function arrange(spec: StyleSpec, layout: MusicLayout, comp: Composition,
 
   // the ending: the tonic chord on beat 1 of the last bar, with the kick and the crash; nothing starts after it
   const E = N - 1, endAt = at(E, 0), endGate = layout.totalFrames - endAt;
+  const endT60 = endingT60(layout);
   const tonic = voicings[E]![0]!;
   const lastLead = comp.lead.length ? comp.lead[comp.lead.length - 1]!.deg : spec.leadLow + 7;
   const leadHome = nearestTonic(lastLead);
   for (const part of spec.parts) {
-    const voice = endingVoice(part.voice);
+    const voice = endingVoice(part.voice, endT60);
     const p = { voice, pan: part.pan, send: part.send };
     if (part.role === 'bass') push(p, endAt, endGate, spec.root + part.octave, part.vel * 0.95);
     else if (part.role === 'lead' || part.role === 'double') push(p, endAt, endGate, pitchOf(spec, leadHome) + part.octave, part.vel * 0.9);
@@ -175,10 +176,25 @@ export function arrange(spec: StyleSpec, layout: MusicLayout, comp: Composition,
  * Every voice of the ending starts at once (a slow string attack would make the ending grow after its first beat), and the
  * held voices die away instead of holding, with almost no detune (detuned saws beat, which would make the dying chord swell).
  */
-function endingVoice(v: Voice): Voice {
-  if (v.kind === 'pad') return { ...v, attack: Math.min(v.attack, 0.012), t60: 2.5, detune: Math.min(v.detune, 2) };
+function endingVoice(v: Voice, t60: number): Voice {
+  if (v.kind === 'pad') return { ...v, attack: Math.min(v.attack, 0.012), t60, detune: Math.min(v.detune, 2) };
   if (v.kind === 'fm') return { ...v, attack: Math.min(v.attack, 0.004) };
   return v;
+}
+
+/** The ring time of the held ending chord with the default ending (one bar). */
+export const ENDING_T60 = 2.5;
+/**
+ * The ring time (t60, seconds) of the held ending voices (wave 7 musicfit, decisions §2.3). With the default ending (one bar) it is
+ * ENDING_T60, so the bytes of every track made before stay the same. An exact ending (2 to 6 beats) is held until the master's
+ * two-beat fade begins, `endFrames − 2·samplesPerBeat` frames after the chord starts; the ring time is then six times that hold,
+ * and never shorter than ENDING_T60, so at the start of the fade the held chord has fallen by at most 10 dB from its onset
+ * (60 dB over t60, a sixth of it over the hold). What the ear makes of it is not measured here.
+ */
+export function endingT60(layout: Pick<MusicLayout, 'endFrames' | 'samplesPerBeat' | 'meter'>): number {
+  if (layout.endFrames === layout.meter * layout.samplesPerBeat) return ENDING_T60;
+  const holdFrames = layout.endFrames - 2 * layout.samplesPerBeat;
+  return Math.max(ENDING_T60, (6 * holdFrames) / 48_000);
 }
 
 /** The onset test's notes (M4): one click per beat, accented on bar starts, from the same scheduler. */

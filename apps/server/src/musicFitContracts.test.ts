@@ -2,8 +2,8 @@
  * Lead contracts of the musicfit track on the server (wave 7; .artifacts/wave7/musicfit-decisions.md §4): the four routes and two MCP
  * tools exist; the checks that come BEFORE any work answer as decided (a propose-mode agent and a limited grant are refused at apply;
  * every agent is refused at the heard mark before its body is read; there is no MCP tool for it); until the builders build the bodies
- * every call answers 501 musicfit_not_built after those checks and changes nothing. A built-in music request with an ending other
- * than one bar answers 501 until A builds the synthesiser (never a wrong track).
+ * every call answers 501 musicfit_not_built after those checks and changes nothing. Builder A built the synthesiser's exact ending
+ * and the join preview and heard bodies (musicfit/splice.test.ts holds what they make).
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -106,13 +106,16 @@ describe('the musicfit routes and tools (lead)', () => {
     expect([ed.status, ed.body.error?.code]).toEqual([501, 'musicfit_not_built']);
     expect(revision(s.pid)).toBe(before);
   });
-  it('the join preview answers 501 after the observe check', async () => {
+  it('the join preview answers after the observe check (501 until built; built: a malformed time is 400, a removal off the bar starts 409)', async () => {
     const s = seed('mf-join');
-    expect(MUSICFIT_JOIN_BUILT).toBe(false);
     const r = await app.fetch(new Request(`${base()}/api/v1/projects/${s.pid}/music-fit/join.wav?assetId=${s.assetId}&from=x&to=y`, { headers: headers(auth.tokens.observer) }));
-    expect(r.status).toBe(501);
+    expect(r.status).toBe(MUSICFIT_JOIN_BUILT ? 400 : 501);
+    const q = `from=${encodeURIComponent(JSON.stringify(T.rt(8, 1)))}&to=${encodeURIComponent(JSON.stringify(T.rt(24, 1)))}`;
+    const stale = await app.fetch(new Request(`${base()}/api/v1/projects/${s.pid}/music-fit/join.wav?assetId=${s.assetId}&${q}`, { headers: headers(auth.tokens.observer) }));
+    expect(stale.status).toBe(MUSICFIT_JOIN_BUILT ? 409 : 501);
+    expect((await app.fetch(new Request(`${base()}/api/v1/projects/${s.pid}/music-fit/join.wav?assetId=${s.assetId}&from=x&to=y`, { headers: { host: `127.0.0.1:${cfg.port}` } }))).status).toBe(401);
   });
-  it('the heard mark: every agent credential is refused 403 human_approval_required before its body is read; the owner reaches 501; nothing changes', async () => {
+  it('the heard mark: every agent credential is refused 403 human_approval_required before its body is read; the owner reaches the op (501 until built; built: a file that is not shortened is 404); nothing changes', async () => {
     const s = seed('mf-heard');
     const before = revision(s.pid);
     for (const t of [auth.tokens.agent, grant({ mode: 'edit' })]) {
@@ -122,7 +125,7 @@ describe('the musicfit routes and tools (lead)', () => {
       expect([r.status, r.body.error?.code]).toEqual([403, 'human_approval_required']);
     }
     const owner = await rest('POST', `/projects/${s.pid}/assets/${s.assetId}/music-join/heard`, { heard: true }, ownerHeaders());
-    expect([owner.status, owner.body.error?.code]).toEqual([501, 'musicfit_not_built']);
+    expect([owner.status, owner.body.error?.code]).toEqual(MUSICFIT_JOIN_BUILT ? [404, 'not_found'] : [501, 'musicfit_not_built']);
     expect(revision(s.pid)).toBe(before);
   });
   it('MCP lists plan_music_fit and apply_music_fit, the two public ops reach agents as ordinary op tools, and no tool marks a join heard', async () => {
@@ -134,13 +137,13 @@ describe('the musicfit routes and tools (lead)', () => {
     const viaTx = await mcpCall('tools/call', { name: 'apply_transaction', arguments: { projectId: s.pid, ops: [{ op: 'mark_join_heard', args: { assetId: s.assetId, heard: true, at: 'x' } }] } }, auth.tokens.agent);
     expect(viaTx.result.isError).toBe(true);
   });
-  it('built-in music with an ending other than one bar answers 501 (never a wrong track); with one bar it is today\'s request', async () => {
+  it('built-in music with an ending other than one bar is made to that length (builder A); endFrames with fitSeconds stays 400', async () => {
     const s = seed('mf-builtin');
     const r = await rest('POST', `/projects/${s.pid}/music`, { styleId: 'music.birthday', bars: 4, endFrames: 60000 }, headers(grant({ mode: 'edit' })));
-    expect([r.status, r.body.error?.code]).toEqual([501, 'musicfit_not_built']);
+    expect(r.status).toBe(201);
+    expect(store.getProject(s.pid).doc.assets[r.body.assetId]!.duration).toEqual(T.rt(3 * 96000 + 60000, 48000));
     const both = await rest('POST', `/projects/${s.pid}/music`, { styleId: 'music.birthday', fitSeconds: '8', endFrames: 96000 }, headers(grant({ mode: 'edit' })));
     expect([both.status, both.body.error?.code]).toEqual([400, 'invalid_option']);
   });
   it.todo('B: plan and apply for a free clip, a film and a template (two commits; the plan made twice; fit_unstable; flash_gap only for cuts this plan makes)');
-  it.todo('A: join.wav equals the made file\'s samples around the join; the owner\'s heard mark commits mark_join_heard as one undoable revision');
 });
