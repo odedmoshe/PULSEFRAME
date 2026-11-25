@@ -22,6 +22,8 @@ export const THUMB_SIZES = [128, 256] as const;
 export const THUMB_VIDEO_MAX_BYTES = 256 * 1024 * 1024;
 const PICTURE = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif']);
 const VIDEO = new Set(['mp4', 'mov', 'webm', 'mkv']);
+/** The ffmpeg demuxer of each format a thumbnail is made from. */
+const DEMUXER: Readonly<Record<string, string>> = { png: 'png_pipe', jpg: 'jpeg_pipe', jpeg: 'jpeg_pipe', webp: 'webp_pipe', gif: 'gif', mp4: 'mov', mov: 'mov', webm: 'matroska', mkv: 'matroska' };
 
 let chain: Promise<unknown> = Promise.resolve();
 const oneAtATime = <T>(fn: () => Promise<T>): Promise<T> => { const p = chain.then(fn, fn); chain = p.catch(() => undefined); return p; };
@@ -68,7 +70,9 @@ async function ffmpegThumb(tmpDir: string, rootReal: string, ix: IndexedRow, siz
     await copyChecked(rootReal, ix, src, video ? THUMB_VIDEO_MAX_BYTES : 8 * MAX_READ_BYTES);
     const scale = `scale='if(gte(iw,ih),${size},-2)':'if(gte(iw,ih),-2,${size})':flags=area,format=rgba`;
     try {
-      await exec('ffmpeg', ['-hide_banner', '-v', 'error', '-nostdin', '-y', '-protocol_whitelist', 'file', '-i', src, '-frames:v', '1', '-vf', scale, '-c:v', 'png', '-pix_fmt', 'rgba', out], { timeout: 30_000, maxBuffer: 1 << 20 });
+      // the demuxer is named, never guessed from the bytes: a file that only calls itself a picture (a playlist, a concat list)
+      // cannot make ffmpeg open anything else
+      await exec('ffmpeg', ['-hide_banner', '-v', 'error', '-nostdin', '-y', '-protocol_whitelist', 'file', '-f', DEMUXER[ix.format]!, '-i', src, '-frames:v', '1', '-vf', scale, '-c:v', 'png', '-pix_fmt', 'rgba', out], { timeout: 30_000, maxBuffer: 1 << 20 });
     } catch {
       throw new ApiError(500, 'thumbnail_failed', 'the thumbnail could not be made from this file', {}, 'The file may be damaged; check it with the download tool (--verify).');
     }
