@@ -1994,7 +1994,7 @@ async function main() {
       await sw.waitFor({ timeout: 15000 });
       const noBarBefore = (await D2.pg.getByTestId('meter-reduction').count()) === 0;
       await sw.focus();
-      await D2.pg.keyboard.press('Enter'); // outside a dialog the editor's Space plays and pauses, even on a focused button: Enter activates
+      await D2.pg.keyboard.press('Enter'); // Enter activates the switch (Space would too with keyboard focus: the Space rows below)
       let ceiling: number | null = null;
       for (let i = 0; i < 80 && ceiling === null; i++) { ceiling = (await doc2(sd)).settings.limiter?.ceiling ?? null; if (ceiling === null) await sleep(100); }
       const bar = D2.pg.getByTestId('meter-reduction');
@@ -2033,6 +2033,55 @@ async function main() {
       check('L7 one undo restores both clips\' gains exactly', back, { gain0, now: await gainsOf() });
       check('send: the pages logged no script error', A.errs.length + C.errs.length + G.errs.length + D2.errs.length === 0, { errors: [...A.errs, ...C.errs, ...G.errs, ...D2.errs].slice(0, 4) });
       await D2.ctx.close();
+    }
+
+    // Space on a control (lead decision, wave 7 send integration; shortcutGate.ts spaceBelongsToControl): a button or switch with
+    // KEYBOARD focus takes Space (it is pressed); after a mouse click on it, Space still plays and pauses the film, as before.
+    console.log('\n# Space: a keyboard-focused control takes it, a mouse-focused one leaves it to play / pause');
+    {
+      const vid = path.join(art, 'space-key.mp4');
+      ff(['-f', 'lavfi', '-t', '6', '-i', 'testsrc2=s=640x360:r=30', '-f', 'lavfi', '-t', '6', '-i', 'sine=frequency=330:sample_rate=48000', '-vf', 'format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-c:a', 'aac', '-shortest', vid]);
+      const sp = (await call('/projects', { name: 'space key', width: 640, height: 360 })).body.project.id as string;
+      const va = await upload(sp, vid);
+      await txs(sp, [{ op: 'add_clip', args: { assetId: va.assetId, start: f(0) } }]);
+      const ctx = await browser.newContext({ viewport: { width: 1500, height: 3200 }, reducedMotion: 'reduce' });
+      await ctx.addInitScript(`globalThis.__name = (f) => f`);
+      await ctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
+      const pg = await ctx.newPage();
+      const errs: string[] = [];
+      pg.on('pageerror', (e) => errs.push(String(e)));
+      await pg.goto(`${s.ownerUrl}&project=${sp}`);
+      await pg.getByTestId('timecode').waitFor({ timeout: 30000 });
+      const sw = pg.getByTestId('master-limiter-switch');
+      await sw.waitFor({ timeout: 15000 });
+      const playing = async () => (await pg.getByTestId('play').getAttribute('data-playing')) === 'true';
+      const limiterOf = async () => (await doc2(sp)).settings.limiter?.ceiling ?? null;
+      const settle = async (want: number | null) => { for (let i = 0; i < 60; i++) { if ((await limiterOf()) === want) return true; await sleep(100); } return false; };
+      // keyboard focus: reach the switch with Tab (one step back with Shift+Tab, one forward with Tab)
+      await sw.focus();
+      await pg.keyboard.press('Shift+Tab');
+      await pg.keyboard.press('Tab');
+      const kb = await sw.evaluate((el) => ({ active: document.activeElement === el, visible: el.matches(':focus-visible') }));
+      await pg.keyboard.press('Space');
+      const pressed = await settle(-1);
+      await sleep(400);
+      const playedOnKeyboard = await playing();
+      check('Space on a switch reached with Tab presses the switch (the limiter is set) and does not play the film', kb.active && kb.visible && pressed && !playedOnKeyboard, { kb, limiter: await limiterOf(), playing: playedOnKeyboard });
+      // mouse focus: click the switch (it turns the limiter off and keeps the focus, without :focus-visible), then Space plays
+      if (playedOnKeyboard) await pg.keyboard.press('Space');
+      await sw.click();
+      const off = await settle(null);
+      const ms = await sw.evaluate((el) => ({ active: document.activeElement === el, visible: el.matches(':focus-visible') }));
+      await pg.keyboard.press('Space');
+      let played = false;
+      for (let i = 0; i < 40 && !played; i++) { played = await playing(); if (!played) await sleep(100); }
+      const stillOff = (await limiterOf()) === null;
+      await pg.keyboard.press('Space');
+      let paused = false;
+      for (let i = 0; i < 40 && !paused; i++) { paused = !(await playing()); if (!paused) await sleep(100); }
+      check('after a mouse click on the switch (focus stays, not :focus-visible) Space plays and pauses the film and leaves the switch alone', off && ms.active && !ms.visible && played && paused && stillOff, { ms, off, played, paused, stillOff });
+      check('Space rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
+      await ctx.close();
     }
 
     await page.close();
