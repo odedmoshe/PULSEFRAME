@@ -1,0 +1,45 @@
+/* The pearls surfaces «פנינים» (wave 7 pearls track): the list, the viewer's form and strip, «מי בקליפ?», «מי כמה בסרט».
+   Logical properties only (the editor is right to left in Hebrew); targets are at least 32 px; nothing is told by colour alone;
+   nothing animates; every control has a visible focus ring. */
+.pf-pearls { display: flex; flex-direction: column; gap: 8px; }
+.pf-pearls-tools { display: flex; flex-direction: column; gap: 6px; }
+.pf-pearls-tools input[type='search'] { inline-size: 100%; min-block-size: 32px; padding-inline: 8px; font: inherit; }
+.pf-pearls-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pf-pearls-note, .pf-pearls-empty { margin: 0; padding: 8px 10px; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); font-size: var(--pf-fs-sm); color: var(--pf-text-2); }
+.pf-pearls-note.is-problem { color: var(--pf-danger); border-color: var(--pf-danger); font-weight: 700; }
+.pf-pearls-rows { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.pf-pearl-row { display: grid; grid-template-columns: 96px 1fr; gap: 4px 8px; padding: 6px; border: 1px solid var(--pf-line); border-radius: var(--pf-r-md); background: var(--pf-surface-1); }
+.pf-pearl-row:focus-visible, .pf-pearls button:focus-visible, .pf-pearls input:focus-visible { outline: 2px solid var(--pf-frame); outline-offset: 2px; }
+.pf-pearl-row[data-used='no'] { border-style: dashed; }
+.pf-pearl-thumb { display: block; inline-size: 96px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--pf-r-sm); background-color: var(--pf-surface-3); }
+.pf-pearl-thumb.is-empty { display: grid; place-items: center; color: var(--pf-text-2); }
+.pf-pearl-main { display: flex; flex-direction: column; gap: 2px; min-inline-size: 0; }
+.pf-pearl-label { overflow-wrap: anywhere; }
+.pf-pearl-file, .pf-pearl-time, .pf-pearl-usage { font-size: var(--pf-fs-sm); color: var(--pf-text-2); }
+.pf-pearl-people { display: flex; flex-wrap: wrap; gap: 4px; }
+.pf-pearl-rename { min-block-size: 32px; padding-inline: 8px; font: inherit; inline-size: 100%; }
+.pf-pearl-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* the viewer: «שמור כפנינה», the inline form, the strip under the scrubber */
+.pf-pearl-form { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); }
+.pf-pearl-form label { display: flex; flex-direction: column; gap: 4px; }
+.pf-pearl-form input[type='text'] { min-block-size: 32px; padding-inline: 8px; font: inherit; }
+.pf-pearl-form-people { display: flex; flex-wrap: wrap; gap: 6px; }
+.pf-pearl-form-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pf-pearl-strip { position: relative; block-size: 12px; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-sm); background: var(--pf-surface-2); direction: ltr; overflow: hidden; }
+.pf-pearl-strip i { position: absolute; inset-block: 0; display: block; }
+.pf-pearl-strip i.is-used { background: repeating-linear-gradient(135deg, var(--pf-text-2) 0 2px, transparent 2px 5px); opacity: 0.7; }
+.pf-pearl-strip i.is-pearl { inset-block: 3px; border-radius: 3px; background: var(--pf-frame); box-shadow: 0 0 0 1px var(--pf-surface-1); }
+.pf-pearl-strip-legend { margin: 0; font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
+
+/* «מי בקליפ?» */
+.pf-pearl-who { display: flex; flex-direction: column; gap: 6px; }
+.pf-pearl-who label { display: flex; align-items: center; gap: 8px; min-block-size: 32px; }
+.pf-pearl-who input[type='checkbox'] { inline-size: 20px; block-size: 20px; }
+
+/* «מי כמה בסרט» */
+.pf-screen { display: flex; flex-direction: column; gap: 6px; }
+.pf-screen table { border-collapse: collapse; inline-size: 100%; font-size: var(--pf-fs-sm); }
+.pf-screen th, .pf-screen td { text-align: start; padding: 4px 6px; border-block-end: 1px solid var(--pf-line); }
+.pf-screen-bar { display: block; block-size: 6px; min-inline-size: 1px; border-radius: 3px; background: var(--pf-text-2); }
+.pf-screen-bar-cell { inline-size: 30%; }

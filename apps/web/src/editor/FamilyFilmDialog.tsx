@@ -20,10 +20,13 @@ import { FILM_TESTIDS as TID } from './familyFilm.testids.ts';
 import { familyFilmStrings } from './familyFilm.strings.ts';
 import {
   beatInfo, buildParams, choicesOf, defaultChoices, filmFailure, filmFlow, formatCapture, isPictureAsset, musicChoices, nextBlocked, otherClipChoices, planRows, progressDue, reasonLine, runMeasurement, spriteStyle, spriteTileIndex,
-  tooManyChosen, videoSeconds, withIncluded, withNextWindow, withOtherClip, withRemoved, MAX_FILM_ASSETS,
+  pearlLabelOf, picksAfterFiles, tooManyChosen, videoSeconds, warningText, withIncluded, withNextWindow, withOtherClip, withRemoved, MAX_FILM_ASSETS,
   type FilmChoices, type FilmFlowEffect, type FilmFlowEvent, type FilmFlowState, type FilmPlanRow,
 } from './familyFilm.logic.ts';
 import { FAMILY_FILM_DRAFT_LABEL } from '@pulseframe/core';
+import { anyFilmPearl } from './pearls/pearls.logic.ts';
+import { pearlsT } from './pearls/pearls.strings.ts';
+import { PEARLS_TESTIDS } from './pearls/pearls.testids.ts';
 import './familyFilm.css';
 
 export interface FamilyFilmDialogProps { lang: 'he' | 'en' }
@@ -80,6 +83,7 @@ function PlanRow({ row, lang, projectId, asset, hash, others, onWindow, onClip, 
   onWindow: () => void; onClip: (assetId: string) => void; onRemove: () => void;
 }): ReactElement {
   const S = familyFilmStrings(lang);
+  const { state } = useEditorState();
   const [open, setOpen] = useState(false);
   const data = useMomentsData(projectId, row.assetId, row.still ? undefined : hash);
   const win = row.windowIndex !== null && data ? data.windows[row.windowIndex] : undefined;
@@ -91,7 +95,7 @@ function PlanRow({ row, lang, projectId, asset, hash, others, onWindow, onClip, 
       <div className="pf-film-row-main">
         <b className="pf-film-row-name">{isolate(row.name)}</b>
         <span className="pf-film-row-facts">{isolate(S.rowFacts(formatCapture(row.captureAt, lang), row.span, row.seconds))}</span>
-        <span className="pf-film-reason" data-testid={TID.reason}>{isolate(reasonLine(row.reasons, lang))}</span>
+        <span className="pf-film-reason" data-testid={TID.reason}>{isolate(reasonLine(row.reasons, lang, (state.doc ? pearlLabelOf(state.doc) : undefined)))}</span>
         {!row.still && <MomentsStrip data={data} window={marked} />}
         {open && (
           <ul className="pf-film-choices" aria-label={S.chooseClip}>
@@ -121,7 +125,8 @@ function FilmDialogBody({ lang }: FamilyFilmDialogProps): ReactElement | null {
   const docId = doc.id;
   const candidates = useMemo(() => source.assetIds.filter((id) => isPictureAsset(doc.assets[id])), [source, doc.assets]);
   const [step, setStep] = useState<Step>('what');
-  const [choices, setChoices] = useState<FilmChoices>(() => defaultChoices({ assetIds: candidates, event: source.event }, lang));
+  const [choices, setChoices] = useState<FilmChoices>(() => defaultChoices({ assetIds: candidates, event: source.event }, lang, doc));
+  const pearlsTouched = useRef(false); // the user chose «להעדיף פנינים» / «בלי פנינים» by hand: a change of files no longer preselects
   const [flow, setFlow] = useState<FilmFlowState>({ phase: 'idle' });
   const [showExcluded, setShowExcluded] = useState(false);
   const [measuringBeat, setMeasuringBeat] = useState<string | null>(null);
@@ -180,7 +185,17 @@ function FilmDialogBody({ lang }: FamilyFilmDialogProps): ReactElement | null {
     try { await api.analyzeAssetJob(docId, assetId, { kind: 'beats' }); await editor.load(docId); patch({ musicAssetId: assetId }); }
     catch (e) { setMusicError(filmFailure(lang, e).message); } finally { setMeasuringBeat(null); }
   };
-  const toggle = (id: string) => patch({ assetIds: choices.assetIds.includes(id) ? choices.assetIds.filter((x) => x !== id) : [...candidates.filter((c) => c === id || choices.assetIds.includes(c))] });
+  const toggle = (id: string) => {
+    const assetIds = choices.assetIds.includes(id) ? choices.assetIds.filter((x) => x !== id) : [...candidates.filter((c) => c === id || choices.assetIds.includes(c))];
+    patch({ assetIds, picks: picksAfterFiles(choices.picks, doc, assetIds, pearlsTouched.current) });
+  };
+  const hasPearls = anyFilmPearl(doc, choices.assetIds);
+  const PT = pearlsT(lang);
+  const setPearls = (v: 'prefer' | 'none') => {
+    pearlsTouched.current = true;
+    const { pearls: _drop, ...rest } = choices.picks;
+    patch({ picks: v === 'prefer' ? { ...rest, pearls: 'prefer' } : rest });
+  };
 
   const blockedNext = nextBlocked(choices, lang);
   const secs = videoSeconds(doc, choices.assetIds);
@@ -266,6 +281,14 @@ function FilmDialogBody({ lang }: FamilyFilmDialogProps): ReactElement | null {
           <Seg label={S.orderLabel} value={choices.order} onChange={(v) => patch({ order: v })} options={[
             { value: 'capture', label: S.order.capture, testId: TID.orderCapture }, { value: 'given', label: S.order.given, testId: TID.orderGiven }, { value: 'arc', label: S.order.arc, testId: TID.orderArc }]} />
           <p className="pf-film-muted">{S.orderNote[choices.order]}</p>
+          {/* «פנינים» (wave 7): shown when a chosen file has a pearl; the whole `picks` object travels (pearls: 'prefer', or absent) */}
+          {hasPearls && (
+            <div className="pf-film-pearls" data-testid={PEARLS_TESTIDS.filmChoice} data-value={choices.picks.pearls ?? 'none'}>
+              <Seg label={PT('filmPearlsLegend')} value={choices.picks.pearls ?? 'none'} onChange={(v) => setPearls(v as 'prefer' | 'none')} options={[
+                { value: 'prefer', label: PT('filmPrefer'), testId: 'film-pearls-prefer' }, { value: 'none', label: PT('filmNone'), testId: 'film-pearls-none' }]} />
+              <p className="pf-film-muted">{PT('filmPearlsNote')}</p>
+            </div>
+          )}
           <label className="pf-film-field">
             <span>{S.titleLabel}</span>
             <input type="text" data-testid={TID.titleField} maxLength={200} value={choices.openingText ?? ''} placeholder={S.titlePlaceholder(choices.event?.name ?? null)} onChange={(e) => patch({ openingText: e.target.value })} aria-describedby="pf-film-title-hint" />
@@ -291,7 +314,7 @@ function FilmDialogBody({ lang }: FamilyFilmDialogProps): ReactElement | null {
               <p className="pf-film-muted">{S.planNote}</p>
               {warnings.length > 0 && (
                 <ul className="pf-film-warnings" aria-label={S.warningsLabel}>
-                  {warnings.map(({ w, blocking }, i) => <li key={`${w.code}-${i}`} data-testid={TID.warning} data-code={w.code} className={blocking ? 'is-blocking' : ''}>{blocking && <b>{S.blockedTitle}: </b>}{isolate(S.warning(w))}</li>)}
+                  {warnings.map(({ w, blocking }, i) => <li key={`${w.code}-${i}`} data-testid={TID.warning} data-code={w.code} className={blocking ? 'is-blocking' : ''}>{blocking && <b>{S.blockedTitle}: </b>}{isolate(warningText(w, lang))}</li>)}
                 </ul>
               )}
               {rows.length === 0 ? <p>{S.emptyPlan}</p> : (

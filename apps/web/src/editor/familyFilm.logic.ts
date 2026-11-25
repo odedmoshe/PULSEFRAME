@@ -22,6 +22,8 @@ import { ApiFailure, type RevisionEvent } from '../api.ts';
 import type { FilmSource } from './store.ts';
 import { familyFilmStrings } from './familyFilm.strings.ts';
 import { templateRefusal } from './templateRefusals.ts';
+import { anyFilmPearl, rangeById } from './pearls/pearls.logic.ts';
+import { pearlsT } from './pearls/pearls.strings.ts';
 
 type Lang = 'he' | 'en';
 /** The most files a film is made from (core MOMENTS_MAX_ASSETS). */
@@ -30,21 +32,37 @@ export const MAX_FILM_ASSETS = MOMENTS_MAX_ASSETS;
 export const FILM_PROGRESS_EVERY_MS = 500;
 export const FILM_LENGTHS = [30, 60, 90] as const;
 
+/**
+ * The picks of the film's parameters as the dialog holds them: the whole object travels (exclude, include, window and, since wave 7,
+ * `pearls: 'prefer'`). `pearls` is present only when chosen: absent, the film does not read pearls at all (ADR-0026 amendment).
+ */
+export interface FilmPicks { exclude: string[]; include: string[]; window: Record<string, number>; pearls?: 'prefer' }
 /** What the dialog's three steps hold. */
 export interface FilmChoices {
   assetIds: string[]; event: FamilyFilmParams['event'];
   targetSeconds: 30 | 60 | 90; musicAssetId: string | null;
   ownSound: 'under' | 'lead' | 'mute'; order: 'capture' | 'given' | 'arc';
   openingText?: string;
-  picks: { exclude: string[]; include: string[]; window: Record<string, number> };
+  picks: FilmPicks;
   lang: Lang;
 }
 /** The dialog's first choices for a source: everything chosen, 60 s, capture order, own sound under the music, no music picked yet. */
-export function defaultChoices(source: FilmSource, lang: Lang): FilmChoices {
+export function defaultChoices(source: FilmSource, lang: Lang, doc?: Pick<ProjectDocument, 'sourceRanges'>): FilmChoices {
+  const assetIds = [...new Set(source.assetIds)];
   return {
-    assetIds: [...new Set(source.assetIds)], event: source.event ?? null, targetSeconds: FILM_DEFAULTS.targetSeconds, musicAssetId: null,
-    ownSound: FILM_DEFAULTS.ownSound, order: FILM_DEFAULTS.order, picks: { exclude: [], include: [], window: {} }, lang,
+    assetIds, event: source.event ?? null, targetSeconds: FILM_DEFAULTS.targetSeconds, musicAssetId: null,
+    // wave 7: «להעדיף פנינים» is preselected when the chosen files have pearls (a pearl with a span; the film reads nothing else)
+    ownSound: FILM_DEFAULTS.ownSound, order: FILM_DEFAULTS.order, picks: { exclude: [], include: [], window: {}, ...(doc && anyFilmPearl(doc, assetIds) ? { pearls: 'prefer' as const } : {}) }, lang,
   };
+}
+/**
+ * The picks after the chosen files changed: without a pearl among them `pearls` is dropped (absent = not read); with one it is
+ * preselected «להעדיף פנינים» unless the user already chose by hand (`touched`), in which case their choice stays.
+ */
+export function picksAfterFiles(picks: FilmPicks, doc: Pick<ProjectDocument, 'sourceRanges'>, assetIds: readonly string[], touched: boolean): FilmPicks {
+  const { pearls: _p, ...rest } = picks;
+  if (!anyFilmPearl(doc, assetIds)) return rest;
+  return picks.pearls || !touched ? { ...rest, pearls: 'prefer' } : rest;
 }
 const uniq = (l: readonly string[]) => [...new Set(l)];
 /** A record with `id` set, built so an id like "__proto__" is an own property, never the prototype. */
@@ -55,7 +73,7 @@ export function buildParams(c: FilmChoices): FamilyFilmParams {
   const exclude = uniq(c.picks.exclude), include = uniq(c.picks.include).filter((id) => !exclude.includes(id));
   const window = Object.fromEntries(Object.entries(c.picks.window).filter(([, v]) => Number.isInteger(v) && v >= 0 && v < MOMENTS_MAX_WINDOWS));
   const text = c.openingText?.trim();
-  const picks = exclude.length || include.length || Object.keys(window).length ? { ...(exclude.length ? { exclude } : {}), ...(include.length ? { include } : {}), ...(Object.keys(window).length ? { window } : {}) } : undefined;
+  const picks = exclude.length || include.length || Object.keys(window).length || c.picks.pearls ? { ...(exclude.length ? { exclude } : {}), ...(include.length ? { include } : {}), ...(Object.keys(window).length ? { window } : {}), ...(c.picks.pearls ? { pearls: c.picks.pearls } : {}) } : undefined;
   return {
     assetIds: uniq(c.assetIds), ...(c.event ? { event: c.event } : {}), targetSeconds: c.targetSeconds,
     ...(c.musicAssetId ? { musicAssetId: c.musicAssetId } : {}), order: c.order, ownSound: c.ownSound, ...(text ? { openingText: text } : {}),
@@ -67,7 +85,7 @@ export function choicesOf(params: FamilyFilmParams): FilmChoices {
   return {
     assetIds: [...params.assetIds], event: params.event ?? null, targetSeconds: params.targetSeconds ?? FILM_DEFAULTS.targetSeconds, musicAssetId: params.musicAssetId ?? null,
     ownSound: params.ownSound ?? FILM_DEFAULTS.ownSound, order: params.order ?? FILM_DEFAULTS.order, ...(params.openingText ? { openingText: params.openingText } : {}),
-    picks: { exclude: [...(params.picks?.exclude ?? [])], include: [...(params.picks?.include ?? [])], window: { ...(params.picks?.window ?? {}) } }, lang: params.lang ?? FILM_DEFAULTS.lang,
+    picks: { exclude: [...(params.picks?.exclude ?? [])], include: [...(params.picks?.include ?? [])], window: { ...(params.picks?.window ?? {}) }, ...(params.picks?.pearls ? { pearls: params.picks.pearls } : {}) }, lang: params.lang ?? FILM_DEFAULTS.lang,
   };
 }
 
@@ -118,11 +136,21 @@ export function planRows(view: FamilyFilmPlanView, doc: ProjectDocument, lang: L
     seconds: (p.frames * rate.den) / rate.num,
     span: p.span ? (p.span.unit === 'bar' ? S.spanBars(p.span.count) : S.spanBeats(p.span.count)) : null,
     reasons: p.reasons, windowIndex: p.windowIndex, windowsAvailable: p.windowsAvailable,
-    canSwapWindow: p.kind !== 'still' && nextWindow(p.windowIndex, p.windowsAvailable) !== null, still: p.kind === 'still',
+    canSwapWindow: p.kind !== 'still' && p.kind !== 'pearl' && nextWindow(p.windowIndex, p.windowsAvailable) !== null, still: p.kind === 'still',
     sourceInFrame: p.sourceInFrame, sourceFrames: p.sourceFrames,
   }));
 }
-export const reasonLine = (reasons: readonly FilmReason[], lang: Lang): string => reasons.map((r) => reasonText(r, lang)).join(' · ');
+/** The name of a pearl by its range id, read from the document NOW; null = the range is gone («פנינה שנמחקה»). An empty name stays empty (unnamed, or hidden from this credential: never guessed). */
+export type PearlLabelOf = (rangeId: string) => string | null;
+export const pearlLabelOf = (doc: Pick<ProjectDocument, 'sourceRanges'>): PearlLabelOf => (id) => rangeById(doc, id)?.label ?? null;
+/** A pearl reason says which pearl: «פנינה שסימנתם (שניות 2.0–4.0) — «צחוק ראשון»», or «פנינה שנמחקה» once its range is gone. Labels are resolved here, by rangeId, never stored in a plan or run record. */
+const withPearlName = (r: FilmReason, text: string, lang: Lang, labelOf?: PearlLabelOf): string => {
+  if (r.code !== 'pearl' || !r.rangeId || !labelOf) return text;
+  const label = labelOf(r.rangeId);
+  if (label === null) return `${text} — ${pearlsT(lang)('deleted')}`;
+  return label ? `${text} — «\u2068${label}\u2069»` : text;
+};
+export const reasonLine = (reasons: readonly FilmReason[], lang: Lang, labelOf?: PearlLabelOf): string => reasons.map((r) => withPearlName(r, reasonText(r, lang), lang, labelOf)).join(' · ');
 
 // ---------- the pick edits (each returns new params; the dialog plans again) ----------
 /** The next candidate window, wrapping over windowsAvailable; null when there is no other. */
@@ -132,10 +160,10 @@ export function nextWindow(current: number | null, available: number): number | 
   const next = (current + 1) % available;
   return next === current ? null : next;
 }
-const picksOf = (p: FamilyFilmParams) => ({ exclude: [...(p.picks?.exclude ?? [])], include: [...(p.picks?.include ?? [])], window: { ...(p.picks?.window ?? {}) } });
-const withPicks = (p: FamilyFilmParams, picks: { exclude: string[]; include: string[]; window: Record<string, number> }): FamilyFilmParams => {
+const picksOf = (p: FamilyFilmParams): FilmPicks => ({ exclude: [...(p.picks?.exclude ?? [])], include: [...(p.picks?.include ?? [])], window: { ...(p.picks?.window ?? {}) }, ...(p.picks?.pearls ? { pearls: p.picks.pearls } : {}) });
+const withPicks = (p: FamilyFilmParams, picks: FilmPicks): FamilyFilmParams => {
   const { picks: _old, ...rest } = p;
-  const out = { ...(picks.exclude.length ? { exclude: picks.exclude } : {}), ...(picks.include.length ? { include: picks.include } : {}), ...(Object.keys(picks.window).length ? { window: picks.window } : {}) };
+  const out = { ...(picks.exclude.length ? { exclude: picks.exclude } : {}), ...(picks.include.length ? { include: picks.include } : {}), ...(Object.keys(picks.window).length ? { window: picks.window } : {}), ...(picks.pearls ? { pearls: picks.pearls } : {}) };
   return Object.keys(out).length ? { ...rest, picks: out } : rest;
 };
 export function withNextWindow(params: FamilyFilmParams, assetId: string, current: number | null, available: number): FamilyFilmParams {
@@ -150,14 +178,14 @@ export function withOtherClip(params: FamilyFilmParams, fromAssetId: string, toA
   const assetIds = params.assetIds.includes(toAssetId) ? params.assetIds : [...params.assetIds, toAssetId];
   if (assetIds.length > MAX_FILM_ASSETS) return params;
   const next = withPicks({ ...params, assetIds }, {
-    exclude: uniq([...k.exclude.filter((id) => id !== toAssetId), fromAssetId]), include: uniq([...k.include.filter((id) => id !== fromAssetId), toAssetId]),
+    ...k, exclude: uniq([...k.exclude.filter((id) => id !== toAssetId), fromAssetId]), include: uniq([...k.include.filter((id) => id !== fromAssetId), toAssetId]),
     window: withoutKey(withoutKey(k.window, fromAssetId), toAssetId),
   });
   return next;
 }
 export function withRemoved(params: FamilyFilmParams, assetId: string): FamilyFilmParams {
   const k = picksOf(params);
-  return withPicks(params, { exclude: uniq([...k.exclude, assetId]), include: k.include.filter((id) => id !== assetId), window: withoutKey(k.window, assetId) });
+  return withPicks(params, { ...k, exclude: uniq([...k.exclude, assetId]), include: k.include.filter((id) => id !== assetId), window: withoutKey(k.window, assetId) });
 }
 /** «הכנסה»; null for an exclusion that cannot be brought back (too_short, no_picture, kept_by_hand). */
 export function withIncluded(params: FamilyFilmParams, exclusion: FilmExclusion): FamilyFilmParams | null {
@@ -177,7 +205,25 @@ export function otherClipChoices(view: FamilyFilmPlanView, doc: ProjectDocument,
 /** «תנועה בתוך התמונה בשניות 4–7», «פרץ קול בשנייה 5.2», «קול חזק מהרגיל בקליפ (+9 dB)», «לא נמדד». */
 export function reasonText(reason: FilmReason, lang: Lang): string { return familyFilmStrings(lang).reason(reason); }
 export function exclusionText(e: FilmExclusion, lang: Lang): string { return familyFilmStrings(lang).exclusion(e); }
-export function warningText(w: FilmWarning, lang: Lang): string { return familyFilmStrings(lang).warning(w); }
+/** A regeneration's warning; `removed_by_hand` with `details.pearls` (pearls deleted from the timeline by hand) names them in words, without any label. */
+export function warningText(w: FilmWarning, lang: Lang): string {
+  const S = familyFilmStrings(lang);
+  const gone = removedPearls(w.details.pearls);
+  if (w.code !== 'removed_by_hand' || !gone.length) return S.warning(w);
+  const named = gone.map((x) => (lang === 'he' ? `«\u2068${x.name}\u2069»` : `“\u2068${x.name}\u2069”`)).join(lang === 'he' ? ', ' : ', ');
+  const hasItems = Array.isArray(w.details.items) && w.details.items.length > 0;
+  const base = hasItems ? S.warning({ ...w, details: { ...w.details, pearls: undefined } }) : '';
+  if (lang === 'he') {
+    const one = gone.length === 1;
+    const sentence = `${hasItems ? 'וגם ' : ''}${one ? 'פנינה שסימנתם' : 'פנינים שסימנתם'} ב${named} ${one ? 'נמחקה' : 'נמחקו'} ידנית ו${one ? 'לא נוספה' : 'לא נוספו'} שוב; ${one ? 'הקובץ שלה יכול' : 'הקבצים שלהן יכולים'} להישאר בסרט`;
+    return hasItems ? `${base}. ${sentence}.` : `${sentence}. אפשר להחזיר ${one ? 'אותה' : 'אותן'} ב«${S.restoreRemoved}»`;
+  }
+  const one = gone.length === 1;
+  const sentence = `${hasItems ? 'Also, ' : ''}${one ? 'a pearl you marked' : 'pearls you marked'} in ${named} ${one ? 'was' : 'were'} deleted by hand and not added again; ${one ? 'its file' : 'their files'} may stay in the film`;
+  return hasItems ? `${base}. ${sentence}.` : `${sentence}. "${S.restoreRemoved}" brings ${one ? 'it' : 'them'} back`;
+}
+/** details.pearls of a removed_by_hand warning: [{ rangeId, assetId, name }] (name = the FILE's name; never a label). */
+const removedPearls = (v: unknown): { rangeId: string; name: string }[] => (Array.isArray(v) ? v.filter((x): x is { rangeId: string; name: string } => !!x && typeof x === 'object' && typeof (x as { name?: unknown }).name === 'string' && typeof (x as { rangeId?: unknown }).rangeId === 'string') : []);
 
 /** A failed call as the dialog shows it: the status, the code and the message in the interface language (templateRefusals.ts: the common table, then the headline of the code). */
 export interface FilmFailure { status: number; code: string; message: string }
