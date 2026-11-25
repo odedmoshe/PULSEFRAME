@@ -94,8 +94,9 @@ export type ExportQuality = 'draft' | 'standard' | 'high';
 export type ExportCaptions = 'burned' | 'sidecar-srt' | 'none';
 export type ExportFormat = 'mp4-h264-aac' | 'webm-vp9-opus';
 export type ExportScale = 1 | 0.5 | 0.25;
-export interface ExportChoices { quality: ExportQuality; captions: ExportCaptions; format: ExportFormat; scale: ExportScale }
-export const DEFAULT_CHOICES: ExportChoices = { quality: 'standard', captions: 'burned', format: 'mp4-h264-aac', scale: 1 };
+/** `targetBytes`: the size a «מתאים לשליחה» export must fit (null: none chosen, which the sheet will not export). */
+export interface ExportChoices { quality: ExportQuality; captions: ExportCaptions; format: ExportFormat; scale: ExportScale; targetBytes: number | null }
+export const DEFAULT_CHOICES: ExportChoices = { quality: 'standard', captions: 'burned', format: 'mp4-h264-aac', scale: 1, targetBytes: null };
 
 /** The body of POST /exports. Defaults are left out, so a plain export sends exactly what the editor's own button always sent. */
 export function exportOptions(c: ExportChoices, variantId: string | null): Record<string, unknown> {
@@ -105,6 +106,8 @@ export function exportOptions(c: ExportChoices, variantId: string | null): Recor
   if (c.captions !== 'burned') o.captions = c.captions;
   if (c.format !== 'mp4-h264-aac') o.format = c.format;
   if (c.scale !== 1) o.scale = c.scale;
+  // a target size (wave 7 send): the server picks the picture size and the rates, and renders at full quality first
+  if (c.targetBytes !== null) o.sizeFit = { targetBytes: c.targetBytes };
   return o;
 }
 
@@ -146,7 +149,8 @@ export interface Destination {
 export const DESTINATIONS: readonly Destination[] = [
   { id: 'reels', format: 'vertical-9x16', choices: { quality: 'standard', scale: 1, captions: 'burned' } },
   { id: 'youtube', format: 'landscape-16x9', choices: { quality: 'high', scale: 1 } },
-  { id: 'whatsapp', format: 'master', choices: { quality: 'draft', scale: 0.5 } },
+  // «מתאים לשליחה»: a size is required and nothing is preselected (targetBytes stays null until the owner picks or types one); the scale is the largest the fit may use
+  { id: 'whatsapp', format: 'master', choices: { quality: 'high', scale: 1, format: 'mp4-h264-aac', targetBytes: null } },
   { id: 'computer', format: 'master', choices: { quality: 'high', scale: 1 } },
   { id: 'custom', format: null, choices: {} },
 ];
@@ -163,7 +167,7 @@ export function destinationKey(d: Destination, targets: ExportTarget[]): string 
 /** What choosing destination `d` sets in the sheet (a click on its tile, or openExportSheet({ destination })): the destination, its format when the project has it, and its quality and size over the current choices. */
 export function destinationPick(d: Destination, targets: ExportTarget[], choices: ExportChoices): { dest: Destination['id']; keys?: string[]; choices: ExportChoices } {
   const key = destinationKey(d, targets);
-  return { dest: d.id, ...(key ? { keys: [key] } : {}), choices: { ...choices, ...d.choices } };
+  return { dest: d.id, ...(key ? { keys: [key] } : {}), choices: { ...choices, targetBytes: null, ...d.choices } };
 }
 
 /** Size of the output of a target at a scale: even numbers, as the server rounds them. */
@@ -219,3 +223,10 @@ export function fixLabel(F: { removeStretch: string; removeTransition: string; r
   }
   return serverLabel;
 }
+
+/** Why the sheet will not start yet because of the «מתאים לשליחה» tile, or null: a size must be chosen first. */
+export function sendBlock(dest: Destination['id'] | null, choices: Pick<ExportChoices, 'targetBytes'>): 'choose_size' | null {
+  return dest === 'whatsapp' && choices.targetBytes === null ? 'choose_size' : null;
+}
+/** Job stage words of the size fit ('fitting size 1/2', 'checking size', 'checking the export'), for the progress line. */
+export const isFitStage = (stage: string | null | undefined) => !!stage && /^(fitting size|checking size|checking the export)( |$)/.test(stage);

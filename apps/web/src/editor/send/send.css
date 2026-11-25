@@ -1,0 +1,25 @@
+/* «שליחה ושמירה» (wave 7 send): the target size, the report, the limiter and the loudness match. Logical properties only (RTL first);
+   colours come from the theme tokens, so dark and light both hold. */
+.pf-send-size { display: grid; gap: var(--pf-sp-3, 8px); margin-block-start: var(--pf-sp-3, 8px); }
+.pf-send-size .pf-xs-seg button { display: inline-grid; gap: 2px; justify-items: center; }
+.pf-send-nv { color: var(--pf-text-3, var(--pf-text-muted)); font-size: var(--pf-fs-xs, 11px); }
+.pf-send-field { display: grid; gap: 4px; font-size: var(--pf-fs-sm); max-inline-size: 16rem; }
+.pf-send-field input { inline-size: 100%; }
+.pf-send-fitted { margin: 0; font-weight: 600; }
+.pf-send-refusal { margin: 0; color: var(--pf-danger); font-size: var(--pf-fs-sm); }
+.pf-send-honest { margin: 0; color: var(--pf-text-3, var(--pf-text-muted)); font-size: var(--pf-fs-xs, 12px); border-inline-start: 3px solid var(--pf-attention, currentColor); padding-inline-start: 8px; }
+.pf-send-measured { color: var(--pf-text-3, var(--pf-text-muted)); }
+.pf-send-checks .pf-xs-flash-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.pf-send-limiter { display: grid; gap: 6px; margin-block-start: 8px; }
+.pf-send-reduction { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-block-start: 6px; font-size: var(--pf-fs-sm); }
+.pf-send-bar { position: relative; inline-size: 8rem; block-size: 8px; border-radius: 4px; background: var(--pf-surface-3, rgba(127, 127, 127, .2)); overflow: hidden; }
+.pf-send-bar i { position: absolute; inset-block: 0; inset-inline-start: 0; background: var(--pf-pulse, var(--pf-accent)); transition: inline-size 60ms linear; }
+.pf-send-reduction[data-holding="true"] .pf-send-bar i { background: var(--pf-attention, var(--pf-accent)); }
+.pf-send-before { flex-basis: 100%; color: var(--pf-text-3, var(--pf-text-muted)); font-size: var(--pf-fs-xs, 12px); }
+.pf-send-match { display: grid; gap: 8px; margin-block-start: 8px; }
+.pf-send-match-list { margin: 0; padding-inline-start: 18px; display: grid; gap: 2px; font-size: var(--pf-fs-sm); }
+.pf-send-match-plan, .pf-send-match-done { display: grid; gap: 6px; }
+@media (prefers-reduced-motion: reduce) { .pf-send-bar i { transition: none; } }
+/* the file checks' marks on the flash lane of the ruler: solid, so they are not read as the hatched flash risks */
+.timeline.pf-ds .tl-flash .tl-check-mark { position: absolute; inset-block: 0; background: var(--pf-text-2, var(--pf-text)); opacity: .55; border-inline: 1px solid var(--pf-text); }
+.timeline.pf-ds .tl-flash .tl-check-mark[data-kind="black"] { opacity: .85; }
