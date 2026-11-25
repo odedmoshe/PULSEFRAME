@@ -34,6 +34,7 @@ import { STABILISE_JOB_TYPE, StabiliseRunBodySchema } from '@pulseframe/core';
 import { CreditsQuerySchema, LibraryUseBodySchema } from '@pulseframe/core';
 import { libraryError } from './library/contract.ts';
 import { creditsFor } from './library/credits.ts';
+import { useLibraryItemFor } from './library/routes.ts';
 import { FindQuerySchema } from '@pulseframe/core';
 import { findTextFor } from './craft/findText.ts';
 import { multicamView, syncMulticam } from './multicamSync.ts';
@@ -153,7 +154,7 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
     // the content library on disk (wave 7 library track): use an item by its catalogue key, and read the credits a sequence needs.
     // No search tool this wave (cut by the lead): the key comes from the owner. Worker A builds use, worker B the credits.
     server.registerTool('use_library_item', { description: 'Copy an item of the owner\'s content library (key from the library catalogue, given by the owner) into the project with its licence record, and optionally place it on the timeline at a frame-aligned time. The file is copied by hash and checked against the library ledger; nothing is stored when the check fails. Items whose licence the editor does not know, share-alike or no-derivatives items, and items that need a credit but have none are refused. Credentials in propose mode are refused. Answers 501 library_not_built while this build has no library; 409 library_not_configured until the owner sets the folder.', inputSchema: z.object({ projectId: pid, ...LibraryUseBodySchema.shape }) }, ({ projectId, ...b }) =>
-      run('edit', () => { read(projectId); void b; throw libraryError('notBuilt'); }));
+      run('edit', () => { read(projectId); return useLibraryItemFor(store, principal, projectId, b); }));
     server.registerTool('get_credits', { description: 'The credits the library files of a sequence need: each line verbatim in timeline order, the text to paste into the video description (lang he or en), the credits that must appear on screen and do not, and the files for non-commercial use only. Read-only. Credentials read the document as they may read it.', inputSchema: z.object({ projectId: pid, ...CreditsQuerySchema.shape }), annotations: ro }, ({ projectId, sequenceId, lang }) =>
       run('observe', () => { read(projectId); return creditsFor(store, principal, projectId, { sequenceId, lang }); }));
     // editing craft (wave 7 craft track): find text for a replace_text edit. No MCP tool for versions this wave (cut by the lead).

@@ -150,10 +150,10 @@ describe('before a root is set: owner rule first, honest states', () => {
     expect((await rest(agent, 'GET', `/api/v1/projects/${pid}/archive?library=keep`)).body?.error?.code).toBe('owner_required');
     expect((await rest(owner, 'GET', `/api/v1/projects/${pid}/archive?library=all`)).status).toBe(400);
   });
-  it('MCP use_library_item answers library_not_built', async () => {
+  it('MCP use_library_item answers as REST does before a root is set: library_not_configured', async () => {
     const u = await tool(agent, 'use_library_item', { projectId: pid, key: 'none/none' });
     expect(u.isError).toBe(true);
-    expect(JSON.stringify(u.data)).toContain('library_not_built');
+    expect(JSON.stringify(u.data)).toContain('library_not_configured');
   });
 });
 
@@ -345,7 +345,13 @@ describe('what the workers make pass', () => {
     expect(counts()).toEqual(before);
     expect(fs.readdirSync(store.tmpDir).filter((f) => f.startsWith('up_'))).toEqual([]);
   });
-  it.todo('A: MCP use_library_item = REST — needs the one-line delegation in mcp.ts (lead): run(\'edit\', () => useLibraryItemFor(store, principal, projectId, b)) from library/routes.ts');
+  it('A: MCP use_library_item = REST (the same refusal for an unknown key)', async () => {
+    const r = await rest(agent, 'POST', `/api/v1/projects/${pid}/library/use`, { key: 'none/none' });
+    const u = await tool(agent, 'use_library_item', { projectId: pid, key: 'none/none' });
+    expect(r.status).toBeGreaterThanOrEqual(400);
+    expect(u.isError).toBe(true);
+    expect(JSON.stringify(u.data)).toContain(r.body.error.code);
+  });
   it('B: GET /credits = MCP get_credits = core collectCredits over the reader document', async () => {
     const lp = libraryProject();
     const doc = store.getProject(lp).doc;
