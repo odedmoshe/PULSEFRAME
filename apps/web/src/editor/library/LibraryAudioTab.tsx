@@ -1,15 +1,14 @@
 /**
- * The sound drawer's third tab «מהספרייה» (wave 7 library track): music and sounds of the owner's library folder. WORKER C builds
- * it against library.testids.ts, library.strings.ts and api.ts (libraryStatus, libraryItems, libraryAudioUrl, useLibraryItem).
- * Until then the tab is not shown at all (LIBRARY_UI_BUILT false, Library.tsx), so the drawer is exactly as before.
- * Rules: audition streams from api.libraryAudioUrl into one <audio> element (never a blob), one at a time, Escape stops; a row's
- * «שימוש בפרויקט» places at the playhead on the target sound track; every honest state has its own words and test id.
+ * The sound drawer's third tab «מהספרייה» (wave 7 library track): music and sounds of the owner's library folder, through the shared
+ * LibraryBrowser (audition from api.libraryAudioUrl into one <audio> element, «שימוש בפרויקט» at the playhead on the target sound
+ * track, every honest state with its own words and test id). Library.tsx owns the tab panel and its test id (audioPanel).
  */
-import { LIBRARY_TESTIDS } from './library.testids.ts';
+import { AUDIO_KINDS } from './library.logic.ts';
+import { LibraryBrowser } from './LibraryBrowser.tsx';
 
-/** True once worker C has built the library panels: Library.tsx then shows the tab. */
-export const LIBRARY_UI_BUILT = false;
+/** True once the library panels are built: Library.tsx then shows the tab. */
+export const LIBRARY_UI_BUILT = true;
 
 export function LibraryAudioTab() {
-  return <div data-testid={LIBRARY_TESTIDS.audioPanel} />;
+  return <LibraryBrowser kinds={AUDIO_KINDS} />;
 }
