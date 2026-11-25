@@ -78,17 +78,18 @@ export function formatDuration(seconds: number): string {
 export const formatMegabytes = (bytes: number): string => (bytes / 1_000_000).toFixed(1);
 
 /** GET /api/v1/music/:styleId/audio for listening: at most 32 bars. */
-export function previewUrl(styleId: string, bars: number, seed: number): string {
-  return `/api/v1/music/${encodeURIComponent(styleId)}/audio?bars=${Math.min(bars, PREVIEW_MAX_BARS)}&seed=${seed}`;
+export function previewUrl(styleId: string, bars: number, seed: number, instruments?: 'recorded'): string {
+  return `/api/v1/music/${encodeURIComponent(styleId)}/audio?bars=${Math.min(bars, PREVIEW_MAX_BARS)}&seed=${seed}${instruments === 'recorded' ? '&instruments=recorded' : ''}`;
 }
 /**
  * The body of POST /api/v1/projects/:id/music: the chosen length in bars, the seed, placed from the start of the film.
  * «כאורך הסרטון» sends the bars computed from the exact length (lengthChoices), not `fitSeconds`: the request schema's
  * fitSeconds takes only short "n/d" forms, and the bars are the same number the server would round to.
  */
-export function addBody(styleId: string, choice: LengthChoice, seed: number): Record<string, unknown> {
+export function addBody(styleId: string, choice: LengthChoice, seed: number, instruments?: 'recorded'): Record<string, unknown> {
   if (choice.bars === null) throw new RangeError('this length cannot be added');
-  return { styleId, bars: choice.bars, seed, start: T.ZERO };
+  // wave 7 instruments: the optional field is present ONLY for a recorded request; an ordinary request is exactly what it was before
+  return instruments === 'recorded' ? { styleId, bars: choice.bars, seed, start: T.ZERO, instruments } : { styleId, bars: choice.bars, seed, start: T.ZERO };
 }
 
 /** What to tell the person when a request failed: the Hebrew wording of a known refusal, the busy line, or the server's words. */

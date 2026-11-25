@@ -6,7 +6,7 @@
  */
 const he = {
   tab: 'מוזיקה מובנית', title: 'מוזיקה מובנית',
-  intro: 'מוזיקה מקורית שהתוכנה מחברת ומנגנת בעצמה, באורך של תיבות שלמות ועם סיום אמיתי. בלי הקלטות ובלי שירים של אחרים.',
+  intro: 'מוזיקה מקורית שהתוכנה מחברת ומנגנת בעצמה, באורך של תיבות שלמות ועם סיום אמיתי. בלי שירים של אחרים. הצליל הרגיל מסונתז; כשהם זמינים אפשר לבחור גם כלים מוקלטים מהספרייה.',
   unheard: 'מוזיקה מובנית — עוד לא הושמעה לאף אחד', unheardShort: 'עוד לא הושמעה לאף אחד',
   knownFromRecipe: 'קצב ידוע מהמתכון', bpm: 'BPM',
   length: 'אורך', bars: 'תיבות', fit: 'כאורך הסרטון', fitEmpty: 'הסרטון עוד ריק', fitUnknown: 'לא ידוע מה אורך הסרטון', fitTooLong: 'הסרטון ארוך מ־5 דקות, האורך המרבי של מוזיקה מובנית',
@@ -22,7 +22,7 @@ const he = {
 export type MusicStrings = typeof he;
 const en: MusicStrings = {
   tab: 'Built-in music', title: 'Built-in music',
-  intro: 'Original music this program composes and plays by itself, in whole bars and with a real ending. No recordings, no other people\'s songs.',
+  intro: 'Original music this program composes and plays by itself, in whole bars and with a real ending. No other people\'s songs. The usual sound is synthesised; when available you can also choose recorded instruments from the library.',
   unheard: 'Built-in music — nobody has listened to it yet', unheardShort: 'Nobody has listened to it yet',
   knownFromRecipe: 'Tempo known from the recipe', bpm: 'BPM',
   length: 'Length', bars: 'bars', fit: 'Length of the film', fitEmpty: 'The film is still empty', fitUnknown: 'The length of the film is not known', fitTooLong: 'The film is longer than 5 minutes, the longest built-in music can be',

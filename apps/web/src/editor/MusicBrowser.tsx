@@ -15,6 +15,9 @@ import { MUSIC_TESTIDS } from './packs.testids.ts';
 import { MUSIC_STRINGS } from './music.strings.ts';
 import { addBody, errorText, formatDuration, formatMegabytes, lengthChoices, musicRows, previewUrl, PREVIEW_MAX_BARS, sectionStrip, stepSeed, type LengthKey, type MusicRow } from './music.logic.ts';
 import { InstrumentsChoice } from './instruments/InstrumentsChoice.tsx';
+import { useMusicKits } from './instruments/useMusicKits.ts';
+import { addDecision, isReady, kitView, type Sound } from './instruments/instruments.logic.ts';
+import { instrumentsT } from './instruments/instruments.strings.ts';
 import './musicBrowser.css';
 
 const ico = { size: 16, strokeWidth: 1.75, 'aria-hidden': true as const, focusable: false as const };
@@ -25,6 +28,9 @@ export function MusicBrowser({ projectId, lang, fitSeconds, onAdded }: { project
   const [choice, setChoice] = useState<Record<string, LengthKey>>({});
   const [seeds, setSeeds] = useState<Record<string, number>>({});
   const [playing, setPlaying] = useState<{ id: string; ready: boolean } | null>(null);
+  const [sound, setSound] = useState<Record<string, Sound>>({});
+  const { load: kitsLoad, reload: reloadKits } = useMusicKits(lang);
+  const ti = instrumentsT(lang);
   const [adding, setAdding] = useState<string | null>(null);
   const [status, setStatus] = useState<{ kind: 'ok' | 'err' | 'info'; text: string } | null>(null);
   const audio = useRef<{ el: HTMLAudioElement; url: string } | null>(null);
@@ -42,13 +48,15 @@ export function MusicBrowser({ projectId, lang, fitSeconds, onAdded }: { project
 
   const play = async (row: MusicRow, bars: number, seed: number) => {
     if (playing?.id === row.id) return stop();
+    const chosen = sound[row.id] ?? 'synth';
+    if (!addDecision(chosen, kitView(kitsLoad, row.id)).send) return; // recorded and not available: the control says why, nothing is requested
     stop();
     const ac = new AbortController();
     pending.current = ac;
     setPlaying({ id: row.id, ready: false });
     setStatus(bars > PREVIEW_MAX_BARS ? { kind: 'info', text: s.previewFirst } : null);
     try {
-      const r = await fetch(previewUrl(row.id, bars, seed), { credentials: 'same-origin', signal: ac.signal });
+      const r = await fetch(previewUrl(row.id, bars, seed, chosen === 'recorded' ? 'recorded' : undefined), { credentials: 'same-origin', signal: ac.signal });
       if (!r.ok) throw new Error(errorText(lang, s, r.status, await r.json().catch(() => null)));
       const blob = await r.blob();
       if (ac.signal.aborted) return;
@@ -68,14 +76,17 @@ export function MusicBrowser({ projectId, lang, fitSeconds, onAdded }: { project
   const add = async (row: MusicRow, key: LengthKey, seed: number) => {
     const c = lengthChoices(row.style, fitSeconds, s).find((x) => x.key === key)!;
     if (c.disabledReason) return;
+    // recorded is asked for only when chosen AND the kit is ready; otherwise refused here in words and nothing is sent (never a quiet synth)
+    const decision = addDecision(sound[row.id] ?? 'synth', kitView(kitsLoad, row.id));
+    if (!decision.send) { setStatus({ kind: 'err', text: ti('addNeedsKit') }); return; }
     setAdding(row.id);
     setStatus(null);
     try {
-      const r = await fetch(`/api/v1/projects/${encodeURIComponent(projectId)}/music`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(addBody(row.id, c, seed)) });
+      const r = await fetch(`/api/v1/projects/${encodeURIComponent(projectId)}/music`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(addBody(row.id, c, seed, decision.instruments)) });
       const body = await r.json().catch(() => null);
-      if (!r.ok) { setStatus({ kind: 'err', text: errorText(lang, s, r.status, body) }); return; }
+      if (!r.ok) { setStatus({ kind: 'err', text: errorText(lang, s, r.status, body) }); if (decision.instruments) void reloadKits(); return; }
       const out = body as { assetId: string; clipId: string | null; revision: number };
-      setStatus({ kind: 'ok', text: `${out.clipId ? s.added : s.addedLibrary}: ${row.name}` });
+      setStatus({ kind: 'ok', text: `${out.clipId ? s.added : s.addedLibrary}: ${row.name}${decision.instruments ? ` (${ti('addedRecorded')})` : ''}` });
       onAdded?.(out);
     } catch (e) {
       setStatus({ kind: 'err', text: `${s.failed}: ${e instanceof Error ? e.message : String(e)}` });
@@ -98,6 +109,9 @@ export function MusicBrowser({ projectId, lang, fitSeconds, onAdded }: { project
           const c = choices.find((x) => x.key === key)!;
           const strip = c.bars && !c.disabledReason ? sectionStrip(row.id, c.bars, s) : [];
           const isPlaying = playing?.id === row.id;
+          const snd: Sound = sound[row.id] ?? 'synth';
+          const view = kitView(kitsLoad, row.id);
+          const recordedBlocked = snd === 'recorded' && !isReady(view);
           const nameId = `pf-music-name-${row.id.replace(/\W/g, '-')}`;
           return (
             <li key={row.id} className="pf-music-row" data-testid={MUSIC_TESTIDS.row} data-style-id={row.id} aria-labelledby={nameId}>
@@ -109,7 +123,7 @@ export function MusicBrowser({ projectId, lang, fitSeconds, onAdded }: { project
                 <IconButton
                   label={`${isPlaying ? s.stop : s.play}: ${row.name}`} pressed={isPlaying} data-testid={MUSIC_TESTIDS.play}
                   icon={isPlaying ? <Square {...ico} /> : <Play {...ico} />} busy={isPlaying && !playing?.ready}
-                  disabledReason={c.bars ? undefined : (c.disabledReason ?? undefined)}
+                  disabledReason={recordedBlocked ? ti('playNeedsKit') : c.bars ? undefined : (c.disabledReason ?? undefined)}
                   onClick={() => { if (c.bars) void play(row, c.bars, seed); }}
                 />
               </div>
@@ -128,8 +142,10 @@ export function MusicBrowser({ projectId, lang, fitSeconds, onAdded }: { project
                   >{x.key === 'fit' ? s.fit : `${x.key} ${s.bars}`}</Chip>
                 ))}
               </div>
-              {/* «צליל» (wave 7 instruments; builder W3 wires the choice into the preview and the add): renders nothing until built */}
-              <InstrumentsChoice styleId={row.id} lang={lang} bars={c.bars ?? 0} seed={seed} value="synth" onChange={() => undefined} />
+              <InstrumentsChoice
+                styleId={row.id} lang={lang} bars={c.disabledReason ? 0 : Math.min(c.bars ?? 0, PREVIEW_MAX_BARS)} seed={seed} value={snd} view={view}
+                onChange={(v) => { if (isPlaying) stop(); setSound((m) => ({ ...m, [row.id]: v })); }} onRecheck={reloadKits} onPlay={stop}
+              />
               <div className="pf-music-seed" role="group" aria-label={`${s.seed}: ${row.name}`} data-testid={MUSIC_TESTIDS.seed}>
                 <IconButton size="sm" label={s.seedDown} icon={<Minus {...ico} />} disabledReason={seed <= 0 ? s.seedDown : undefined} onClick={() => { if (isPlaying) stop(); setSeeds((m) => ({ ...m, [row.id]: stepSeed(seed, -1) })); }} />
                 <span className="pf-music-seed-value" aria-live="polite">{s.seed} <bdi className="num">{seed}</bdi></span>
@@ -151,7 +167,7 @@ export function MusicBrowser({ projectId, lang, fitSeconds, onAdded }: { project
               )}
               <Button
                 variant="primary" size="sm" data-testid={MUSIC_TESTIDS.add} busy={adding === row.id}
-                disabledReason={c.disabledReason ?? (adding !== null && adding !== row.id ? s.adding : undefined)}
+                disabledReason={c.disabledReason ?? (recordedBlocked ? ti('addNeedsKit') : undefined) ?? (adding !== null && adding !== row.id ? s.adding : undefined)}
                 aria-describedby="pf-music-addhint" onClick={() => void add(row, key, seed)}
               >{s.add}</Button>
             </li>
