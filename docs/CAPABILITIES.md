@@ -201,6 +201,8 @@ FFmpeg 6.1.1-3ubuntu5 (GPL build, libx264). Raw probe: `docs/evidence/capability
 | Toasts inside an open modal dialog (inside its focus trap); importing an archive clears every translation's reviewed mark and says so in one toast that stays until closed | tested | `pnpm audit:a11y` (states `toast-in-modal`, `archive-import-note`), `docs/evidence/phase12-proof.json`, `editor-interactions-proof.json`. The same holds in the four modals with their own traps (template dialog, effect gallery, curve picker, command palette; states `toast-in-*`); Escape closes the modal as in the Dialog; a toast's timer carries on when the region moves. Not verified with a real screen reader (only the status count is checked) |
 | GPU compositor, shader effect families, keying, speed ramps, OPFS/offline drafts, tablet/mobile layouts, first-run demo/tour | not built | |
 
+**Local content library (drive E of the owner's laptop) — built, not yet run there (2026-11-25).** `tools/library/fetch.mjs` downloads the items of a manifest, verifies each and records source, licence, credit and checksum in a ledger; `tools/library/manifests/visual-01.json` is the first manifest. Evidence: 58 unit tests and one small real fetch in the Linux container. The library on `E:\` is still empty; the editor has no library browser, no licence filter for the icon collection and no «לשימוש לא מסחרי בלבד» flag yet.
+
 ## Agent surface
 
 | Capability | Status | Evidence / limits |
