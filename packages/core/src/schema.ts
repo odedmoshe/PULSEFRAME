@@ -10,6 +10,7 @@ import { AudioFxInstanceSchema, MAX_AUDIO_FX } from './audioEffects.ts';
 import { BLEND_MODES, EffectInstanceSchema, MaskSchema, TransitionSchema } from './effects.ts';
 import { FollowSchema, MAX_REDACT_REGIONS, MotionTrackSchema, RedactRegionSchema } from './tracking.ts';
 import { ANIMATABLE, KeyframeSchema, MAX_TRANSFORM_KEYS, RationalTimeSchema, type Animatable } from './keyframe.ts';
+import { CameraMotionSchema, ClipStabiliseSchema } from './steadyContract.ts';
 import { MOMENTS_MAX_WINDOWS, MomentsFileSchema, MomentsMeasuredSchema, MomentWindowSchema } from './momentsContract.ts';
 import { ANGLE_KINDS, MAX_ANCHORS_PER_PIECE, MAX_ANGLES, MAX_PIECES, MAX_SPEAKERS, MAX_SYNC_CANDIDATES, SYNC_VERDICTS } from './multicamLimits.ts';
 
@@ -120,6 +121,40 @@ export const UploadProvenanceSchema = z
   })
   .strict();
 export type UploadProvenance = z.infer<typeof UploadProvenanceSchema>;
+// ---------- the content library on disk (wave 7, library track). Optional fields only; no schema version bump. ----------
+/** What a library item is, as the catalogue lists it (apps/server/src/library readers). Instruments, models, fonts, maps and transitions are counted, never listed. */
+export const LIBRARY_KINDS = ['music', 'sound', 'loop', 'sticker', 'icon', 'illustration', 'texture', 'backdrop', 'video'] as const;
+export type LibraryKind = (typeof LIBRARY_KINDS)[number];
+/** Where a credit must go: the video's description text, on screen in the video, or either of them satisfies the licence. */
+export const CREDIT_PLACEMENTS = ['description', 'on_screen', 'either'] as const;
+const Hex64 = z.string().regex(/^[0-9a-f]{64}$/);
+/**
+ * Asset.provenance.library: the licence record of a file copied from the owner's library folder (tools/library ledger). It lives
+ * in the document so credits, the non-commercial warning and the archive rule work from the project alone, on a machine without
+ * the library. Written only by the internal operation use_library_item (libraryOps.ts); origin stays 'upload' and there is no
+ * provenance.upload beside it (validate.ts library_provenance). Every flag is either true or absent.
+ */
+export const LibraryRecordSchema = z
+  .object({
+    /** `${sourceId}/${path inside the item}` or `${sourceId}/${path}#${member}` (an icon inside a set file). */
+    itemId: z.string().min(1).max(300),
+    sourceId: z.string().min(1).max(64),
+    kind: z.enum(LIBRARY_KINDS),
+    title: z.string().max(200),
+    author: z.string().max(200).optional(),
+    /** SHA-256 (hex) of the file on disk as it was copied; for a rasterised sticker, of the SVG text that was rasterised. */
+    sourceSha256: Hex64,
+    /** Which download it came from: the ledger entry's item id and, when the ledger has them, its tree hash, version or commit. */
+    ledger: z.object({ item: z.string().min(1).max(200), treeSha256: Hex64.optional(), version: z.string().max(80).optional(), commit: z.string().max(64).optional() }).strict(),
+    /** The licence id the core table knows (an exact SPDX id, or `custom:<sourceId>` for an allow-listed custom licence). */
+    licence: z.object({ id: z.string().min(1).max(80), url: z.string().max(500).optional() }).strict(),
+    credit: z.object({ text: z.string().min(1).max(500), placement: z.enum(CREDIT_PLACEMENTS) }).strict().optional(),
+    flags: z.object({ nonCommercial: z.literal(true).optional(), diskOnly: z.literal(true).optional(), people: z.literal(true).optional(), aiGenerated: z.literal(true).optional(), trademark: z.literal(true).optional() }).strict(),
+    /** Present when the server rasterised an SVG into this PNG: the long side asked for, the colour given to one-colour icons, and what made the bytes. */
+    raster: z.object({ longSide: z.number().int().min(64).max(2048), color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(), by: z.literal('ffmpeg-librsvg') }).strict().optional(),
+  })
+  .strict();
+export type LibraryRecord = z.infer<typeof LibraryRecordSchema>;
 /** A project holds at most this many events. */
 export const MAX_LIFE_EVENTS = 2000;
 /** An event holds at most this many files (and at least one). */
@@ -242,6 +277,8 @@ export const AssetSchema = z
          * `relativePath` (the path inside a dropped folder, cut to 512 characters) only for 'folder' (validate.ts import_provenance).
          */
         upload: UploadProvenanceSchema.optional(),
+        /** Present for a file copied from the owner's library folder (wave 7 library track): its licence record (LibraryRecordSchema). */
+        library: LibraryRecordSchema.optional(),
         /** Present for generated speech (SPEC §17): what was said, by which engine and model, in which voice. A voice taken from a recording carries the consent statement its owner made; an agent cannot make one. */
         voice: z
           .object({
@@ -388,6 +425,8 @@ export const MediaClipSchema = z
     transition: TransitionSchema.optional(),
     /** Multicam (ADR-0020): the group and angle this program segment shows. Absent = an ordinary clip. */
     multicam: MulticamTagSchema.optional(),
+    /** Stabilisation (wave 7, steadyContract.ts): the clip's picture is steadied with the camera motion measured on its file. Video clips on video tracks only (validate.ts stabilise_clip). */
+    stabilise: ClipStabiliseSchema.optional(),
   })
   .strict();
 /**
@@ -414,7 +453,9 @@ export type TextAnimation = z.infer<typeof TextAnimationSchema>;
 export const DEFAULT_TEXT_ANIMATION = { by: 'word', in: null, out: null, loop: null, inFrames: 20, outFrames: 15 } as const satisfies TextAnimation;
 export const TextClipSchema = z.object({ ...ClipBase, type: z.literal('text'), text: z.string().max(2000), style: TextStyleSchema, animation: TextAnimationSchema.optional(),
   /** Live fields (life line, ADR-0021): `{date}`, `{hebrewDate}`, `{event}` … in `text` are resolved by the evaluator (core fields.ts); `{{` and `}}` are braces. Absent = the text is drawn verbatim, as before. */
-  fields: z.literal(true).optional() }).strict();
+  fields: z.literal(true).optional(),
+  /** 'credits' marks the cards add_credits_card made (wave 7 library track), so running it again replaces them. Absent = an ordinary title. */
+  role: z.literal('credits').optional() }).strict();
 
 // ---------- captions and transcripts (SPEC §16) ----------
 export const CAPTION_PRESETS = ['classic', 'karaoke', 'word-pop', 'box-highlight', 'reveal', 'underline', 'dim-ahead'] as const;
@@ -575,6 +616,8 @@ export const AnalysisSchema = z
     moments: z.object({ origin: AnalysisOrigin, algo: z.number().int().min(1).max(1000), data: z.string().regex(/^sha256:[0-9a-f]{64}$/),
       measured: MomentsMeasuredSchema, file: MomentsFileSchema, flat: z.boolean(), windows: z.array(MomentWindowSchema).max(MOMENTS_MAX_WINDOWS),
       truncated: z.literal(true).optional() }).strict().optional(),
+    /** Camera motion of a video, measured per SOURCE frame by the model-free stabilise job (wave 7, steadyContract.ts); attached by attach_camera_motion. */
+    cameraMotion: CameraMotionSchema.optional(),
   })
   .strict();
 
@@ -821,7 +864,13 @@ export const ProjectSchema = z
          * ripple_delete_clips for clips on the main track, Shift+Delete keeps the gap with delete_clip; mainMagnet: the main
          * track keeps its clips together while dragging). Agents choose their operations explicitly.
          */
-        timeline: TimelineBehaviourSchema.optional() })
+        timeline: TimelineBehaviourSchema.optional(),
+        /**
+         * Master limiter (wave 7, track send; op set_master_limiter). OPTIONAL: absent = no limiter, and export and preview run
+         * exactly as before the field existed (byte-identical sound). With it, export applies the loudness gain and then a
+         * look-ahead brick-wall limiter so no 16-bit sample passes `ceiling` (dBTP); it is then the only ceiling of the mix.
+         */
+        limiter: z.object({ ceiling: z.number().min(-9).max(0) }).strict().optional() })
       .strict(),
     assets: z.record(Id, AssetSchema),
     sequences: z.record(Id, SequenceSchema),

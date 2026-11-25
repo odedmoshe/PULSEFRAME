@@ -1,11 +1,12 @@
 import { sequenceList } from './sequences.ts';
 import * as T from '@pulseframe/time';
-import type { MediaClip, ProjectDocument } from './schema.ts';
+import type { Asset, MediaClip, ProjectDocument } from './schema.ts';
 import { clipEnd, sequenceDuration } from './validate.ts';
 import { timelineMarkers } from './cleanup.ts';
 import { assetNotices } from './notices.ts';
 import { own } from './own.ts';
 import { eventDisplayName } from './events.ts';
+import { shareable } from './libraryCredits.ts';
 
 const sec = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));
 
@@ -36,6 +37,12 @@ function soundFields(c: MediaClip, tails: ReadonlyMap<string, SoundTail> | null)
   };
 }
 
+/** An asset's library part of the summary: its licence, its credit (verbatim, or null), and the marks that bind its use. */
+function libraryPart(a: Asset) {
+  const r = a.provenance.library!;
+  return { itemId: r.itemId, title: r.title, licenceId: r.licence.id, credit: r.credit?.text ?? null, creditPlacement: r.credit?.placement ?? null, nonCommercial: r.flags.nonCommercial === true, shareable: shareable(a), people: r.flags.people === true };
+}
+
 /** Compact, agent-readable overview. Exact times are included alongside readable seconds. */
 export function summarize(doc: ProjectDocument) {
   const seq = doc.sequences[doc.mainSequenceId]!;
@@ -49,12 +56,16 @@ export function summarize(doc: ProjectDocument) {
     frameCount: T.frameCount(duration, doc.settings.frameRate),
     assets: Object.values(doc.assets).map((a) => ({ id: a.id, kind: a.kind, name: a.name, duration: a.duration, durationSeconds: sec(a.duration), hasAudio: !!a.audio, video: a.video && { width: a.video.width, height: a.video.height, frameRate: a.video.frameRate }, ...(a.lut ? { lut: a.lut } : {}),
       // life line (ADR-0021): the file's own capture date; `circa` = an estimate (a file-name date)
-      ...(a.capture ? { capture: { at: a.capture.at, source: a.capture.source, circa: a.capture.circa === true } } : {}), notices: assetNotices(a) })),
+      ...(a.capture ? { capture: { at: a.capture.at, source: a.capture.source, circa: a.capture.circa === true } } : {}), notices: assetNotices(a),
+      // the content library (wave 7): the licence record of a file copied from the owner's library folder, and what it demands
+      ...(a.provenance.library ? { library: libraryPart(a) } : {}) })),
     tracks: seq.tracks.map((t) => ({ id: t.id, kind: t.kind, name: t.name, locked: t.locked, muted: t.muted, clipCount: t.clips.length, ...(t.caption ? { caption: { mode: t.caption.mode, linkedTrackId: t.caption.linkedTrackId, preset: t.caption.style.preset } } : {}) })),
     // shorts (ADR-0018): every sequence of the project, the main edit first; `tracks` above are the main edit's
     sequences: sequenceList(doc),
     recipeRuns: Object.values(doc.recipeRuns ?? {}).map((r) => ({ id: r.id, recipeId: r.recipeId, created: r.createdIds.length, steps: r.steps })),
     variants: Object.values(doc.variants ?? {}).map((v) => ({ id: v.id, name: v.name, width: v.width, height: v.height, fit: v.fit, safeArea: v.safeArea, captionStyle: v.captionStyle ?? null, overrides: Object.keys(v.overrides).length })),
+    // the STORED records, one per measured file, on purpose not by lineage (lineage.ts): this lists what exists to be read or
+    // corrected (get_analysis, edit_analysis). A copy that follows its source's record has no entry (pinned in beatLineage.test.ts)
     analyses: Object.values(doc.analyses ?? {}).map((a) => ({ assetId: a.assetId, sceneCuts: a.scenes?.cuts.length ?? null, beats: a.beats?.beats.length ?? null, bpm: a.beats?.bpm ?? null, bars: a.beats?.downbeats?.length ?? null, meter: a.beats?.meter ?? null })),
     transcripts: Object.values(doc.transcripts ?? {}).map((t) => ({ assetId: t.assetId, language: t.language, origin: t.origin.kind, phrases: t.segments.length, words: t.segments.reduce((n, s) => n + s.words.length, 0), wordTimed: t.segments.every((s) => s.timing === 'word') })),
     // life line (ADR-0021): `name` is what a person typed ('' = none); `shownAs` is the name the library shows (typed, or derived from a holiday), '' = shown by its date

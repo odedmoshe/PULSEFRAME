@@ -10,6 +10,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { ELEMENT_IDS, elementDefaultColours, ELEMENTS, elementSvg, type Asset } from '@pulseframe/core';
 import { describeMedia } from './ingest.ts';
+import { libraryError } from './library/contract.ts';
 import { synth, SynthFailure, type Synth, type SynthLane } from './sfx.ts';
 import { assertStorageRoom } from './storage.ts';
 import { ApiError, type Store } from './store.ts';
@@ -118,4 +119,31 @@ export async function makeElement(store: Store, id: string, options: Opts, actor
 /** PNG bytes for looking at an element before adding it. Held in memory for the most recent few; nothing is stored. */
 export async function elementPreview(tmpDir: string, id: string, options: Opts, queue: Synth = synth): Promise<Buffer> {
   return render(tmpDir, id, options, queue, 'preview');
+}
+
+/**
+ * Library stickers and thumbnails (wave 7 library track, worker A; library/raster.ts): an SVG that core sanitiseSvg passed and
+ * whose width and height already give the long side, rasterised with the elements' own arguments and straight-alpha filter,
+ * through the same queue. The SVG is written into a private, otherwise empty folder, so nothing beside it can be reached. `key`
+ * names the picture (the SVG's sha256, colour and size): the same picture asked for twice at once is drawn once.
+ * 501 element_rasteriser_missing when this ffmpeg cannot read SVG.
+ */
+export async function rasteriseCheckedSvg(tmpDir: string, svg: string, longSide: number, key: string, lane: SynthLane, queue: Synth = synth): Promise<Buffer> {
+  if (!Number.isInteger(longSide) || longSide < 16 || longSide > 2048) throw new ApiError(400, 'invalid_option', 'longSide must be a whole number from 16 to 2048', { longSide });
+  if (!(await canRasteriseSvg())) throw new ApiError(501, 'element_rasteriser_missing', 'this ffmpeg cannot read SVG, so this picture cannot be made', { needs: 'ffmpeg built with librsvg (decoder "librsvg")' }, 'Install an ffmpeg build with --enable-librsvg (for example the full build from your distribution), then restart the server.');
+  return queue.bytes('library-svg', key, async (ffmpeg) => {
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const dir = fs.mkdtempSync(path.join(tmpDir, 'libsvg_'));
+    const svgFile = path.join(dir, 'in.svg'), png = path.join(dir, 'out.png');
+    try {
+      fs.writeFileSync(svgFile, svg, { mode: 0o600 });
+      await ffmpeg(elementFfmpegArgs(svgFile, png, longSide));
+      return fs.readFileSync(png);
+    } catch (e) {
+      if (e instanceof ApiError) throw e;
+      throw libraryError('svgUnsafe', { ...(e instanceof SynthFailure ? { reason: e.reason } : {}) }, 'the rasteriser could not draw it');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }, lane);
 }

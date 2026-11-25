@@ -21,7 +21,7 @@ import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
-import { applyTransaction, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema, TemplateRegenerateBodySchema, FindShortsBodySchema, SHORTS_MEASUREMENT_KIND, sequenceList, shortsRefusal, MulticamSyncBody, multicamGroupOf, MULTICAM_REFUSALS, MULTICAM_SYNC_KIND, TakeRequestSchema } from '@pulseframe/core';
+import { applyTransaction, beatNumbers, ownSceneCuts, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema, TemplateRegenerateBodySchema, FindShortsBodySchema, SHORTS_MEASUREMENT_KIND, sequenceList, shortsRefusal, MulticamSyncBody, multicamGroupOf, MULTICAM_REFUSALS, MULTICAM_SYNC_KIND, TakeRequestSchema } from '@pulseframe/core';
 import { addMusic, MusicBody, musicPreview } from './music.ts';
 import { onThisDayFor, readMissingCaptures } from './lifeline.ts';
 import { preflight } from './preflight.ts';
@@ -36,23 +36,29 @@ import { applyShorts, cachedShortCandidates, findShortCandidates, planReframeFor
 import { registerBrowserExportRoutes } from './browser-export.ts';
 import { buildOpenApi } from './openapi.ts';
 import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
+import { cameraMotionView, cancelStabiliseJob, startStabiliseJob } from './stabilise.ts';
+import { STABILISE_JOB_TYPE, StabiliseRunBodySchema } from '@pulseframe/core';
 import { cancelMomentsJob, momentsLaneOf, startMomentsJob } from './moments.ts';
 import type { Presence } from './presence.ts';
 import { ApiError, revisionWithChanges, type JobRow, type RevisionEvent, type Store } from './store.ts';
 import { blobPresent, logMissingMedia, missingAssets, missingMediaError } from './mediaPresence.ts';
 import { measureVoiceCheck, VoiceMeasureBody } from './voiceClean.ts';
 import { ColourMatchBody, matchColour } from './colourMatch.ts';
+import { ClipLoudnessBody, measureClipLoudness } from './clipLoudness.ts';
 import { ApplyModeSchema, RunSourceSchema, type RunRequest } from './aiContracts.ts';
 import { assertMayTakeRendered, forPrincipal, mayHoldPeople, peopleAccess, peopleNote, readingAs, scrubPeople, withoutFamily } from './peoplePrivacy.ts';
 import { assertMayHandleImportJob, decodeUploadHeader, IMPORT_JOB_TYPE, type DropDoor, type ImportQueue } from './importContracts.ts';
 import { declaredLength, registerImportRoutes } from './importRoutes.ts';
 import { registerRenderCacheRoutes, type RenderCacheService } from './renderCacheRoutes.ts';
+import { registerCraftRoutes } from './craft/routes.ts';
 import { peopleSuggestions } from './lifeline.ts';
 import { takeFor } from './perform.ts';
 import { ASSISTANT_JOB_TYPE, AssistantConfigBodySchema, AssistantKeyBodySchema, AssistantRequestBodySchema } from '@pulseframe/core';
 import { isOwnerSession, type AssistantDeps } from './assistant/contract.ts';
 import { assistantCancelRefusal, createAssistantHandlers, type AssistantJobControls } from './assistant/routes.ts';
-import { assertMayReadProposal, assistantJobStub, mayReadProposal, proposalsFor } from './assistant/visibility.ts';
+import { assertMayReadProposal, assertMayReleaseBudget, assistantJobStub, mayReadProposal, proposalsFor } from './assistant/visibility.ts';
+import { libraryOwner } from './library/contract.ts';
+import { registerLibraryRoutes } from './library/routes.ts';
 
 const TxBody = z
   .object({
@@ -249,7 +255,14 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.use('/api/v1/projects/:id', async (c, next) => { gov.assertMayAct(c.var.principal, c.req.param('id'), 'observe'); await next(); });
   // Guards must be registered before the routes they protect (Hono applies middleware in registration order).
   // Jobs are reached by id, not by project path: a project-limited grant must not see or touch other projects' jobs.
-  const jobScope = async (c: Context<Env>, next: () => Promise<void>) => { gov.assertMayAct(c.var.principal, store.getJob(c.req.param('jobId')!).projectId, 'observe'); await next(); };
+  // One exception, for the owner's own session only: a reservation outlives its job when the job's project is deleted (the
+  // ledger row stays counted), so releasing it must not need the job row. Any other credential gets 404 as for every missing job.
+  const jobScope = async (c: Context<Env>, next: () => Promise<void>) => {
+    const jobId = c.req.param('jobId')!;
+    const orphanRelease = c.req.method === 'POST' && c.req.path.endsWith('/budget/release') && isOwnerSession(c.var.principal) && gov.ledgerFor(jobId) !== null;
+    if (!orphanRelease) gov.assertMayAct(c.var.principal, store.getJob(jobId).projectId, 'observe');
+    await next();
+  };
   app.use('/api/v1/jobs/:jobId', jobScope);
   app.use('/api/v1/jobs/:jobId/*', jobScope);
   // Starting any job is refused while agents are paused, whichever route creates it.
@@ -289,10 +302,16 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     // people scope gets the document as it may read it either way (names, no birth dates): planArchive reads through the store.
     const family = c.req.query('family') ?? 'keep';
     if (family !== 'keep' && family !== 'omit') throw new ApiError(400, 'invalid_request', 'family must be keep or omit', { family: family.slice(0, 16) });
-    void who;
-    const plan = planArchive(store, c.req.param('id'), { family });
+    // ?library=strip «ארכיון לשיתוף» leaves restricted library files out; ?library=keep «ארכיון לעצמי» keeps them, owner's own session only
+    // (wave 7 library track; archive.ts planArchive, worker B)
+    const library = c.req.query('library');
+    if (library !== undefined && library !== 'strip' && library !== 'keep') throw new ApiError(400, 'invalid_request', 'library must be strip or keep', { library: library.slice(0, 16) });
+    if (library === 'keep') libraryOwner(who);
+    const plan = planArchive(store, c.req.param('id'), { family, ...(library ? { library } : {}) });
     const name = plan.doc.name.replace(/[^\p{L}\p{N} _.-]+/gu, '_').slice(0, 60) || 'project';
-    return new Response(Readable.toWeb(Readable.from(writeArchive(plan))) as ReadableStream, { headers: { 'content-type': 'application/x-tar', 'content-length': String(plan.bytes), 'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}.pulseframe.tar` } });
+    // «ארכיון לעצמי» says so in its name: it holds library files that may not be passed on (archive.ts planArchive().library)
+    const suffix = plan.library === 'keep' ? '.private.pulseframe.tar' : '.pulseframe.tar';
+    return new Response(Readable.toWeb(Readable.from(writeArchive(plan))) as ReadableStream, { headers: { 'content-type': 'application/x-tar', 'content-length': String(plan.bytes), 'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}${suffix}` } });
   });
   // What the archive «בלי פרטי משפחה» would change, for the dialog before the download: titles whose words change inside them
   // (frozen at their first value) and titles whose people field has no words. The owner's own session only.
@@ -366,9 +385,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.get('/api/v1/projects/:id/assets/:assetId/analysis', (c) => {
     need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
-    const a = own(p.doc.analyses, c.req.param('assetId'));
-    if (!a) throw new ApiError(404, 'not_found', 'this asset has no analysis results');
-    return c.json({ revision: p.revision, ...analysisView(a) });
+    const view = analysisViewOf(p.doc, c.req.param('assetId'));
+    if (!view) throw new ApiError(404, 'not_found', 'this asset has no analysis results');
+    return c.json({ revision: p.revision, ...view });
   });
   // ----- motion tracking (ADR-0015): a durable job; its samples are attached by the internal op attach_motion_track -----
   app.post('/api/v1/projects/:id/motion-tracks/:motionTrackId/track', async (c) => {
@@ -388,6 +407,18 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
     return c.json(motionTrackView(p.doc, p.revision, c.req.param('motionTrackId')));
+  });
+  // ----- stabilisation (wave 7): a durable, model-free job; attach_camera_motion + set_clip_stabilise in one transaction (stabilise.ts) -----
+  app.post('/api/v1/projects/:id/clips/:clipId/stabilise', async (c) => {
+    const p = need(c, 'edit');
+    const b = await body(c, StabiliseRunBodySchema);
+    const j = startStabiliseJob(store, gov, p, c.req.param('id'), c.req.param('clipId'), b, { derivatives });
+    return c.json({ jobId: j.id, status: j.status }, 202);
+  });
+  app.get('/api/v1/projects/:id/assets/:assetId/camera-motion', (c) => {
+    need(c, 'observe');
+    const p = store.getProject(c.req.param('id'));
+    return c.json(cameraMotionView(p.doc, p.revision, c.req.param('assetId')));
   });
   const RecipeBody = z.object({ params: z.record(z.string(), z.unknown()).optional(), expectedRevision: z.number().int().optional() }).strict();
   app.post('/api/v1/projects/:id/recipes/:recipeId/plan', async (c) => { const p = need(c, 'observe'); store.getProject(c.req.param('id')); return c.json(await planRecipeFor(store, c.req.param('id'), c.req.param('recipeId'), (await body(c, RecipeBody)).params, gov, p)); });
@@ -467,6 +498,16 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (sequenceId !== undefined) outputDoc(store.getProject(c.req.param('id')).doc, { sequenceId }); // 404 before any job exists
     if (b && typeof b === 'object' && (b as { background?: unknown }).background === true) { const j = startMeasurementJob(store, p, c.req.param('id'), 'loudness', sequenceId !== undefined ? { sequenceId } : {}); return c.json({ jobId: j.id, status: j.status }, 202); }
     return c.json(await programmeLoudness(store, c.req.param('id'), sequenceId));
+  });
+  // loudness of single clips (wave 7 send): read-only; the match is committed separately with match_clip_loudness and expectedRevision
+  app.post('/api/v1/projects/:id/analysis/clip-loudness', async (c) => {
+    const p = need(c, 'observe');
+    const parsed = ClipLoudnessBody.safeParse(await c.req.json().catch(() => undefined));
+    if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error));
+    if (parsed.data.sequenceId !== undefined) outputDoc(store.getProject(c.req.param('id')).doc, { sequenceId: parsed.data.sequenceId }); // 404 before any job exists
+    else store.getProject(c.req.param('id'));
+    if (parsed.data.background === true) { const j = startMeasurementJob(store, p, c.req.param('id'), 'clip-loudness', parsed.data); return c.json({ jobId: j.id, status: j.status }, 202); }
+    return c.json(await measureClipLoudness(store, c.req.param('id'), parsed.data));
   });
   app.get('/api/v1/projects/:id/history', (c) => { need(c, 'observe'); store.getProject(c.req.param('id')); return c.json({ events: store.eventsSince(c.req.param('id'), Number(c.req.query('since') ?? 0)) }); });
 
@@ -787,7 +828,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const p = store.getProject(c.req.param('id'));
     return c.json({ ...exporter.plan(p.doc, p.revision, await c.req.json().catch(() => ({}))), ...peopleNote(who, p.doc) });
   });
-  app.post('/api/v1/jobs/:jobId/budget/release', (c) => { const p = need(c, 'observe'); gov.releaseUnknown(p, c.req.param('jobId')); return c.json({ jobId: c.req.param('jobId'), ledger: gov.ledgerFor(c.req.param('jobId')) }); });
+  // The owner confirms a reservation left 'unknown' was not charged. The owner's own session only (assistant/visibility.ts
+  // assertMayReleaseBudget): any other credential is refused before the ledger is looked at, so its answer tells nothing of it.
+  app.post('/api/v1/jobs/:jobId/budget/release', (c) => { const p = need(c, 'observe'); const jobId = c.req.param('jobId'); assertMayReleaseBudget(p, jobId); gov.releaseUnknown(p, jobId); return c.json({ jobId, ledger: gov.ledgerFor(jobId) }); });
   app.post('/api/v1/jobs/:jobId/retry', (c) => { const pr = need(c, 'edit'); const old = store.getJob(c.req.param('jobId'));
     if (old.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, pr, old, 'retry'); const job = extras.imports.retry(old.id, pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: old.id }, 202); } gov.assertMayAct(pr, old.projectId, 'job'); assertMayTakeJobOutput(pr, old, 'retry this export'); const job = exporter.retry(c.req.param('jobId'), pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: job.input.retryOf }, 202); });
   app.get('/api/v1/jobs/:jobId', (c) => c.json(jobViewFor(need(c, 'observe'), store.getJob(c.req.param('jobId')))));
@@ -807,15 +850,31 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (!j.output?.captions) throw new ApiError(404, 'not_found', 'this export has no caption file');
     return sendBlob(c, path.join(store.outDir, path.basename(j.output.captions.file)), j.output.captions.format === 'vtt' ? 'text/vtt' : 'application/x-subrip', fileMissing('output_missing', 'the caption file of this export'), `pulseframe-${j.id}.${j.output.captions.format}`);
   });
+  // the credits text written with an export of library material (wave 7 library track; export.ts exportLicence): the sidecar
+  // file of the server route, or the text of the job row for the browser route (which stores no file)
+  app.get('/api/v1/jobs/:jobId/credits', (c) => {
+    need(c, 'observe');
+    const j = store.getJob(c.req.param('jobId'));
+    if (j.status !== 'succeeded') throw new ApiError(409, 'job_not_finished', `job is ${j.status}`, { status: j.status });
+    const credits = j.output?.licence?.credits as { descriptionText?: unknown; file?: unknown } | undefined;
+    if (!credits || typeof credits.descriptionText !== 'string' || !credits.descriptionText) throw new ApiError(404, 'not_found', 'this export has no credits text', { jobId: j.id }, 'Only an export holding library material whose licence asks for a credit has one; read the project\'s credits with GET /api/v1/projects/{id}/credits.');
+    if (typeof credits.file === 'string') return sendBlob(c, path.join(store.outDir, path.basename(credits.file)), 'text/plain; charset=utf-8', fileMissing('output_missing', 'the credits file of this export'), `pulseframe-${j.id}.credits.txt`);
+    return c.body(credits.descriptionText, 200, { 'content-type': 'text/plain; charset=utf-8', 'content-disposition': `attachment; filename="pulseframe-${j.id}.credits.txt"` });
+  });
   // ----- browser export route: the tab renders and encodes; the server holds the durable job and a tab lease -----
   const browserExport = registerBrowserExportRoutes(app, store, exporter);
   (app as any).browserExport = browserExport;
   // ----- import queue and phone drop (ADR-0023); render cache (ADR-0024) -----
   if (extras.imports) registerImportRoutes(app, { cfg, store, gov, imports: extras.imports, door: extras.door ?? null, need });
   if (extras.renderCache) registerRenderCacheRoutes(app, extras.renderCache, need);
+  // the content library on disk (wave 7 library track): every library route, and GET …/credits (library/contract.ts LIBRARY_ROUTES)
+  registerLibraryRoutes(app, { cfg, store, gov, imports: extras.imports ?? null, need });
+  // editing craft (wave 7 craft track): named versions and find (craft/contract.ts CRAFT_ROUTES; 501 craft_not_built until W2)
+  registerCraftRoutes(app, { cfg, store, gov, exporter, need });
 
-  // ----- the command bar's language assistant (ADR-0027; assistant/contract.ts ASSISTANT_ROUTES): status for any observer, the
-  // rest for the owner's own session only (the money and the key are the owner's). The handlers are W2's (assistant/routes.ts).
+  // ----- the command bar's language assistant (ADR-0027; assistant/contract.ts ASSISTANT_ROUTES): status for any observer (whole
+  // for the owner's own session, connected or not for anyone else: assistant/visibility.ts), the rest for the owner's own session
+  // only (the money and the key are the owner's). The handlers are W2's (assistant/routes.ts).
   const assistant = createAssistantHandlers({ cfg, store, gov, deps: extras.assistant ?? { adapters: new Map(), endpoint: () => null } });
   // MCP cancel_job reaches an assistant job through this same handler (one cancel path; mcp.ts bindAssistant)
   (mcp as { bindAssistant?: (a: AssistantJobControls) => void }).bindAssistant?.(assistant);
@@ -913,6 +972,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (j.type === 'analysis') return c.json(cancelAnalysisJob(store, j.id, p.actor));
     if (j.type === TRACKING_JOB_TYPE) return c.json(cancelTrackingJob(store, j.id, p.actor));
     if (j.type === MOMENTS_JOB_TYPE) return c.json(cancelMomentsJob(store, j.id, p.actor));
+    if (j.type === STABILISE_JOB_TYPE) return c.json(cancelStabiliseJob(store, j.id, p.actor));
     if (speech.handles(j)) return c.json(speech.cancel(j.id, p.actor));
     // an export the editor's tab renders is handed to its lease holder by Exporter.cancel (browser-export.ts), as for MCP cancel_job
     return c.json(j.type === 'export' ? exporter.cancel(j.id, p.actor) : await capabilities.cancel(j.id, p.actor));
@@ -1074,32 +1134,9 @@ export const catalog = () => ({
   note: 'This is the complete list for this build; anything not listed here does not exist. Picture entries render through the Canvas2D compositor (GPU passes where listed); sound entries through the shared engine DSP in preview and export alike. audioEffects are effects applied to sound clips (add_audio_effect, apply_audio_preset); soundEffects are sound files of the sound library.',
 });
 
-/** Mix the current timeline exactly as export would and measure it (EBU R128). Read-only. */
-export async function programmeLoudness(store: Store, projectId: string, sequenceId?: string) {
-  const stored = store.getProject(projectId);
-  // a sequence (a short, ADR-0018) is measured as it exports: alone, with its own loudness target
-  const p = { revision: stored.revision, doc: outputDoc(stored.doc, { sequenceId }) };
-  const plan = audioPlan(p.doc);
-  if (plan.totalSamples === 0 || plan.clips.length === 0) return { revision: p.revision, integratedLufs: null, truePeakDbtp: null, rangeLu: null, clips: 0, note: 'The timeline has no audible sound.' };
-  if (plan.totalSamples > plan.sampleRate * 3600) throw new ApiError(422, 'too_long', 'loudness measurement is limited to one hour of programme');
-  const raw = path.join(store.tmpDir, `loud_${projectId}_${p.revision}_${Date.now()}.f32`);
-  return heavy(async () => {
-  try {
-    const { clips, peak } = await mixToRaw(plan, (assetId) => store.blobPath(p.doc.assets[assetId]!.contentHash), 0, plan.totalSamples, raw, undefined, (assetId) => timeOriginSeconds(p.doc.assets[assetId]), (assetId) => p.doc.assets[assetId]?.audio?.channels === 1);
-    const m = await measureLoudness(raw, plan.sampleRate);
-    const target = p.doc.settings.loudness ?? null;
-    const g = target ? normalisationGain(m, target.target, target.truePeak) : null;
-    return {
-      revision: p.revision, clips, seconds: Number((plan.totalSamples / plan.sampleRate).toFixed(3)), ...m,
-      mixPeakDbfs: peak > 0 ? Number((20 * Math.log10(peak)).toFixed(2)) : null, wouldClipWithoutNormalisation: peak > 1,
-      target, exportWouldApplyGainDb: g ? Number(g.gainDb.toFixed(2)) : 0, limitedByPeak: g?.limitedByPeak ?? false,
-      method: 'ffmpeg ebur128 (EBU R128 / ITU-R BS.1770) on the same mix export renders',
-    };
-  } finally {
-    fs.rmSync(raw, { force: true });
-  }
-  });
-}
+/** Moved to programmeLoudness.ts (wave 7 send pre-pass; worker A's file); re-exported so REST, MCP and tests keep one import. */
+export { programmeLoudness } from './programmeLoudness.ts';
+import { programmeLoudness } from './programmeLoudness.ts';
 
 export const SfxBody = z.object({ sfxId: z.string(), start: RationalTimeSchema.optional().describe('Place it on the timeline at this frame-aligned time (omit to only add it to the media library)'), trackId: z.string().optional() }).strict();
 /** Synthesise a built-in sound effect, attach it as a normal asset, and optionally place it. Goes through governance like any edit. */
@@ -1185,6 +1222,30 @@ export const analysisView = (a: Analysis) => ({
   ...(a.scenes ? { scenes: { ...a.scenes.origin, count: a.scenes.cuts.length, cuts: a.scenes.cuts, cutSeconds: a.scenes.cuts.map(secs) } } : {}),
   ...(a.beats ? { beats: { ...a.beats.origin, bpm: a.beats.bpm, confidence: a.beats.confidence, count: a.beats.beats.length, beatSeconds: a.beats.beats.map(secs), ...(a.beats.downbeats?.length ? { meter: a.beats.meter ?? null, barCount: a.beats.downbeats.length, downbeatSeconds: a.beats.downbeats.map(secs) } : {}) } } : {}),
 });
+/**
+ * What GET …/assets/{id}/analysis and get_analysis answer for an asset, by the rule every reader follows (core lineage.ts): its own
+ * scene cuts and beats, or those of the nearest time-preserving source it is a copy of, on the asset's OWN clock (rational
+ * subtraction of the lineage offset; of a source's cuts and beats only those inside the copy). `measuredOn` then names, per kind,
+ * the asset whose record it is and the offset (that asset's time = this asset's time + offset), which is where a correction
+ * belongs: edit_analysis writes the record of the asset it names. null when the asset is not in the project or has neither: also a
+ * copy made without a recorded time mapping (reversed, stretched, generated), whose next step is to measure it itself.
+ */
+export function analysisViewOf(doc: ProjectDocument, assetId: string) {
+  if (!Object.hasOwn(doc.assets, assetId)) return null;
+  const s = ownSceneCuts(doc, assetId), n = beatNumbers(doc, assetId);
+  if (!s && !n) return null;
+  const inside = (t: T.RationalTime) => !T.isNegative(t) && T.lt(t, doc.assets[assetId]!.duration);
+  const b = n?.own, mine = b?.assetId === assetId;
+  const view = analysisView({
+    assetId,
+    ...(s ? { scenes: { origin: doc.analyses[s.assetId]!.scenes!.origin, cuts: [...s.cuts] } } : {}),
+    ...(b ? { beats: mine ? b.analysis : { origin: b.analysis.origin, bpm: b.analysis.bpm, confidence: b.analysis.confidence, beats: b.beats.filter(inside), ...(b.analysis.downbeats?.length ? { downbeats: b.downbeats.filter(inside), meter: b.analysis.meter ?? null } : {}) } } : {}),
+  });
+  const from = (id: string, offset: T.RationalTime) => ({ assetId: id, offset: T.normalize(offset), offsetSeconds: secs(offset) });
+  const measuredOn = { ...(s && s.assetId !== assetId ? { scenes: from(s.assetId, s.offset) } : {}), ...(b && !mine ? { beats: from(b.assetId, b.offset) } : {}) };
+  if (!Object.keys(measuredOn).length) return view;
+  return { ...view, note: 'Times are in this asset\'s own media. They were measured on the asset named in measuredOn, of which this asset is a copy that keeps the timing; that asset\'s time = this time + offset. Correct them there with edit_analysis (it corrects every copy that keeps the timing); use split_at_scenes to cut a clip into its shots.', measuredOn };
+}
 export const AnalyzeBody = z.object({ kind: z.enum(['scenes', 'beats']), overwrite: z.boolean().optional().describe('Required to replace a result that was corrected by hand'), threshold: z.number().min(0.05).max(0.9).optional().describe('scenes only: how different two frames must be to count as a cut (default 0.3; lower finds more)') }).strict();
 /** Everything that can be refused before measuring starts: permissions, the asset, hand-made corrections, the right kind of media. */
 function checkAnalysis(store: Store, gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof AnalyzeBody> & { assetId: string }) {
@@ -1198,6 +1259,9 @@ function assertAnalysable(store: Store, projectId: string, a: z.infer<typeof Ana
   const p = store.getProject(projectId);
   const asset = own(p.doc.assets, a.assetId);
   if (!asset) throw new ApiError(404, 'not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
+  // The asset's OWN record on purpose, not its lineage (core lineage.ts): measuring replaces the record of the file it names. A
+  // copy that is measured itself gets its own record (the next step offered for a copy without a recorded time mapping); its
+  // source's record and the corrections in it stay as they are. Pinned in analysisLineage.test.ts.
   const existing = a.kind === 'scenes' ? own(p.doc.analyses, a.assetId)?.scenes : own(p.doc.analyses, a.assetId)?.beats;
   if (existing?.origin.edited && !a.overwrite) throw new ApiError(409, 'would_discard_edits', 'this result was corrected by hand; analysing again would discard those corrections', { kind: a.kind }, 'Pass overwrite=true to replace it.');
   // Built-in music (ADR-0022): its beats, bars and sections are known from the recipe. A measurement would replace them with
@@ -1251,7 +1315,7 @@ const exporterForMeasurement = (): Exporter => {
   if (!measurementExporter) throw new ApiError(503, 'unavailable', 'colour match needs the renderer, which is not running in this process');
   return measurementExporter;
 };
-export type MeasurementKind = 'silences' | 'loudness' | 'voice' | 'colour' | typeof SHORTS_MEASUREMENT_KIND;
+export type MeasurementKind = 'silences' | 'loudness' | 'voice' | 'colour' | typeof SHORTS_MEASUREMENT_KIND | 'clip-loudness';
 /** Start a silence, loudness, voice (ADR-0013), colour-match (ADR-0014) or shorts-candidates (ADR-0018) measurement as a durable job of type `analysis`. It changes nothing in the project; its output carries the same object the in-request route returns. */
 export function startMeasurementJob(store: Store, principal: Principal, projectId: string, kind: MeasurementKind, options: unknown): JobRow {
   const p = store.getProject(projectId); // 404 before any job exists
@@ -1268,12 +1332,13 @@ async function runAnalysisJob(store: Store, jobId: string) {
   const j = store.getJob(jobId);
   try {
     // Measurements that attach nothing to the project (silence candidates, programme loudness, voice and colour checks): the result is the job's output.
-    if (j.input.kind === 'silences' || j.input.kind === 'loudness' || j.input.kind === 'voice' || j.input.kind === 'colour' || j.input.kind === SHORTS_MEASUREMENT_KIND) {
+    if (j.input.kind === 'silences' || j.input.kind === 'loudness' || j.input.kind === 'voice' || j.input.kind === 'colour' || j.input.kind === SHORTS_MEASUREMENT_KIND || j.input.kind === 'clip-loudness') {
       const kind = j.input.kind as MeasurementKind;
       const result = kind === 'silences' ? await findSilences(store, j.projectId, j.input.options)
         : kind === 'loudness' ? await programmeLoudness(store, j.projectId, typeof j.input.options?.sequenceId === 'string' ? j.input.options.sequenceId : undefined)
         // shorts (ADR-0018): measure the audio features that are missing, then rank; stops between windows once cancel is requested
         : kind === SHORTS_MEASUREMENT_KIND ? await withShortsErrors(() => findShortCandidates(store, j.projectId, FindShortsBodySchema.parse(j.input.options), () => store.getJob(jobId).status === 'cancel-requested'))
+        : kind === 'clip-loudness' ? await measureClipLoudness(store, j.projectId, ClipLoudnessBody.parse(j.input.options), () => store.getJob(jobId).status === 'cancel-requested')
         : kind === 'voice' ? await measureVoiceCheck(store, j.projectId, VoiceMeasureBody.parse(j.input.options))
         : await matchColour(store, exporterForMeasurement(), j.projectId, ColourMatchBody.parse(j.input.options));
       if (store.getJob(jobId).status === 'cancel-requested') { store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'canceled while measuring; the result was discarded' } }); return; }

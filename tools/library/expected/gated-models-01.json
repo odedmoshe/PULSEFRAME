@@ -1,0 +1,204 @@
+{
+  "version": 1,
+  "note": "Expected values for owner-downloaded gated models. NOT a fetcher manifest. sha256 null = hidden from anonymous API clients; never invented. The runtime companion t5-base is ungated and may go in a fetcher manifest.",
+  "checkedOn": "2026-11-25",
+  "repos": [
+    {
+      "repo": "pyannote/speaker-diarization-community-1",
+      "commit": "3533c8cf8e369892e6b79ff1bf80f7b0286a54ee",
+      "gated": true,
+      "gatedApiValue": "auto",
+      "licence": {
+        "name": "CC BY 4.0 (page header: cc-by-4.0)",
+        "url": "https://creativecommons.org/licenses/by/4.0/",
+        "quote": "This pipeline is released under the CC-BY-4.0 license and will always remain freely accessible.",
+        "readOn": "2026-11-25",
+        "readFrom": "model page HTML (README raw and config.yaml are 401 anonymously)"
+      },
+      "personalOnly": false,
+      "subModels": "segmentation, embedding, plda are folders of this same repository; their own licences and config.yaml content could not be read anonymously",
+      "unreadAnonymously": [
+        "README.md",
+        "config.yaml",
+        "sub-folder READMEs",
+        "lfs sha256 of every file"
+      ],
+      "totalBytes": 32821421
+    },
+    {
+      "repo": "stabilityai/stable-audio-open-small",
+      "commit": "ea2772170fc06f80dfd02bea6e57a44d9d4bc9d3",
+      "gated": true,
+      "gatedApiValue": "auto",
+      "licence": {
+        "name": "Stability AI Community License Agreement (updated 2024-07-05)",
+        "url": "https://huggingface.co/stabilityai/stable-audio-open-small/blob/main/LICENSE",
+        "quote": "“Non-Commercial Purpose” means any purpose other than a Research Purpose that is not primarily intended for commercial advantage or monetary compensation to You or others, such as personal use (i.e., hobbyist) or evaluation and testing.",
+        "quote2": "If at any time You or Your Affiliate(s), either individually or in aggregate, generate more than USD $1,000,000 in annual revenue (or the equivalent thereof in Your local currency), regardless of whether that revenue is generated directly or indirectly from the Stability AI Materials or Derivative Works, any licenses granted to You under this Agreement shall terminate as of such date.",
+        "readOn": "2026-11-25",
+        "readFrom": "rendered blob page of LICENSE (raw is 401 anonymously)"
+      },
+      "personalOnly": true,
+      "unreadAnonymously": [
+        "raw README.md",
+        "raw LICENSE",
+        "model_config.json content",
+        "lfs sha256 of every file"
+      ],
+      "totalBytes": 1676846686
+    },
+    {
+      "repo": "google-t5/t5-base",
+      "commit": "a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1",
+      "gated": false,
+      "licence": {
+        "name": "Apache-2.0",
+        "readOn": "2026-11-25",
+        "readFrom": "API cardData.license"
+      },
+      "personalOnly": false,
+      "ownerDownload": false,
+      "totalBytes": 893828607
+    }
+  ],
+  "files": [
+    {
+      "repo": "pyannote/speaker-diarization-community-1",
+      "commit": "3533c8cf8e369892e6b79ff1bf80f7b0286a54ee",
+      "path": "config.yaml",
+      "bytes": 444,
+      "sha256": "5ce2bfa9a938dc132cec1172592d65173cbb8f444ea1e4133f10f9391de155be",
+      "sha256Status": "first seen in the owner's download of 2026-11-25 on the laptop (the publisher's value is hidden from anonymous clients; size matched)",
+      "dest": "models/gated/speaker-diarization-community-1/config.yaml",
+      "url": "https://huggingface.co/pyannote/speaker-diarization-community-1/resolve/3533c8cf8e369892e6b79ff1bf80f7b0286a54ee/config.yaml?download=true"
+    },
+    {
+      "repo": "pyannote/speaker-diarization-community-1",
+      "commit": "3533c8cf8e369892e6b79ff1bf80f7b0286a54ee",
+      "path": "segmentation/pytorch_model.bin",
+      "bytes": 5906507,
+      "sha256": "7ad24338d844fb95985486eb1a464e32d229f6d7a03c9abe60f978bacf3f816e",
+      "sha256Status": "first seen in the owner's download of 2026-11-25 on the laptop (the publisher's value is hidden from anonymous clients; size matched)",
+      "dest": "models/gated/speaker-diarization-community-1/segmentation/pytorch_model.bin",
+      "url": "https://huggingface.co/pyannote/speaker-diarization-community-1/resolve/3533c8cf8e369892e6b79ff1bf80f7b0286a54ee/segmentation/pytorch_model.bin?download=true",
+      "format": "pytorch pickle (no safetensors in this repo)"
+    },
+    {
+      "repo": "pyannote/speaker-diarization-community-1",
+      "commit": "3533c8cf8e369892e6b79ff1bf80f7b0286a54ee",
+      "path": "embedding/pytorch_model.bin",
+      "bytes": 26646242,
+      "sha256": "6f10ff60898a1d185fa22e1d11e0bfa8a92efec811f11bca48cb8cafebefd929",
+      "sha256Status": "first seen in the owner's download of 2026-11-25 on the laptop (the publisher's value is hidden from anonymous clients; size matched)",
+      "dest": "models/gated/speaker-diarization-community-1/embedding/pytorch_model.bin",
+      "url": "https://huggingface.co/pyannote/speaker-diarization-community-1/resolve/3533c8cf8e369892e6b79ff1bf80f7b0286a54ee/embedding/pytorch_model.bin?download=true",
+      "format": "pytorch pickle (no safetensors in this repo)"
+    },
+    {
+      "repo": "pyannote/speaker-diarization-community-1",
+      "commit": "3533c8cf8e369892e6b79ff1bf80f7b0286a54ee",
+      "path": "plda/plda.npz",
+      "bytes": 133852,
+      "sha256": "9b77bcd840692710dd3496f62ecfeed8d8e5f002fd991b785079b244eab7d255",
+      "sha256Status": "first seen in the owner's download of 2026-11-25 on the laptop (the publisher's value is hidden from anonymous clients; size matched)",
+      "dest": "models/gated/speaker-diarization-community-1/plda/plda.npz",
+      "url": "https://huggingface.co/pyannote/speaker-diarization-community-1/resolve/3533c8cf8e369892e6b79ff1bf80f7b0286a54ee/plda/plda.npz?download=true"
+    },
+    {
+      "repo": "pyannote/speaker-diarization-community-1",
+      "commit": "3533c8cf8e369892e6b79ff1bf80f7b0286a54ee",
+      "path": "plda/xvec_transform.npz",
+      "bytes": 134376,
+      "sha256": "325f1ce8e48f7e55e9c8aa47e05d2766b7c48c4b25b8de8dd751e7a4cc5fbe8f",
+      "sha256Status": "first seen in the owner's download of 2026-11-25 on the laptop (the publisher's value is hidden from anonymous clients; size matched)",
+      "dest": "models/gated/speaker-diarization-community-1/plda/xvec_transform.npz",
+      "url": "https://huggingface.co/pyannote/speaker-diarization-community-1/resolve/3533c8cf8e369892e6b79ff1bf80f7b0286a54ee/plda/xvec_transform.npz?download=true"
+    },
+    {
+      "repo": "stabilityai/stable-audio-open-small",
+      "commit": "ea2772170fc06f80dfd02bea6e57a44d9d4bc9d3",
+      "path": "model.safetensors",
+      "bytes": 1676829212,
+      "sha256": "0ee8b9edbe3104cb079dd163b62589d67d9c321ea8942cbbd81e6f7d3f390be2",
+      "sha256Status": "first seen in the owner's download of 2026-11-25 on the laptop (the publisher's value is hidden from anonymous clients; size matched)",
+      "dest": "models/gated/stable-audio-open-small/model.safetensors",
+      "url": "https://huggingface.co/stabilityai/stable-audio-open-small/resolve/ea2772170fc06f80dfd02bea6e57a44d9d4bc9d3/model.safetensors?download=true"
+    },
+    {
+      "repo": "stabilityai/stable-audio-open-small",
+      "commit": "ea2772170fc06f80dfd02bea6e57a44d9d4bc9d3",
+      "path": "model_config.json",
+      "bytes": 5622,
+      "sha256": "105f33659c4def4804a8247666981892a69f9fb07724c180e11b63e688e7780c",
+      "sha256Status": "first seen in the owner's download of 2026-11-25 on the laptop (the publisher's value is hidden from anonymous clients; size matched)",
+      "dest": "models/gated/stable-audio-open-small/model_config.json",
+      "url": "https://huggingface.co/stabilityai/stable-audio-open-small/resolve/ea2772170fc06f80dfd02bea6e57a44d9d4bc9d3/model_config.json?download=true"
+    },
+    {
+      "repo": "stabilityai/stable-audio-open-small",
+      "commit": "ea2772170fc06f80dfd02bea6e57a44d9d4bc9d3",
+      "path": "LICENSE",
+      "bytes": 11852,
+      "sha256": "d6f6b1a4dce5c852bd6d7d9482d002baf0ccdb71e662250b73be9eec8764ee8d",
+      "sha256Status": "first seen in the owner's download of 2026-11-25 on the laptop (the publisher's value is hidden from anonymous clients; size matched)",
+      "dest": "models/gated/stable-audio-open-small/LICENSE",
+      "url": "https://huggingface.co/stabilityai/stable-audio-open-small/resolve/ea2772170fc06f80dfd02bea6e57a44d9d4bc9d3/LICENSE?download=true"
+    },
+    {
+      "repo": "google-t5/t5-base",
+      "commit": "a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1",
+      "path": "model.safetensors",
+      "bytes": 891646390,
+      "sha256": "a90903540cc02cbeb7ff9f823f1a80eb778c7e22426a0e620b01c77a5ec8f5b4",
+      "dest": "models/t5-base/model.safetensors",
+      "url": "https://huggingface.co/google-t5/t5-base/resolve/a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1/model.safetensors?download=true",
+      "ownerDownload": false,
+      "gated": false
+    },
+    {
+      "repo": "google-t5/t5-base",
+      "commit": "a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1",
+      "path": "config.json",
+      "bytes": 1208,
+      "sha256": null,
+      "dest": "models/t5-base/config.json",
+      "url": "https://huggingface.co/google-t5/t5-base/resolve/a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1/config.json?download=true",
+      "ownerDownload": false,
+      "gated": false,
+      "sha256Status": "not an LFS file: no sha256 published by the API; record on fetch"
+    },
+    {
+      "repo": "google-t5/t5-base",
+      "commit": "a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1",
+      "path": "spiece.model",
+      "bytes": 791656,
+      "sha256": null,
+      "dest": "models/t5-base/spiece.model",
+      "url": "https://huggingface.co/google-t5/t5-base/resolve/a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1/spiece.model?download=true",
+      "ownerDownload": false,
+      "gated": false,
+      "sha256Status": "not an LFS file: no sha256 published by the API; record on fetch"
+    },
+    {
+      "repo": "google-t5/t5-base",
+      "commit": "a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1",
+      "path": "tokenizer.json",
+      "bytes": 1389353,
+      "sha256": null,
+      "dest": "models/t5-base/tokenizer.json",
+      "url": "https://huggingface.co/google-t5/t5-base/resolve/a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1/tokenizer.json?download=true",
+      "ownerDownload": false,
+      "gated": false,
+      "sha256Status": "not an LFS file: no sha256 published by the API; record on fetch"
+    }
+  ],
+  "considered": [
+    {
+      "repo": "stabilityai/stable-audio-open-1.0",
+      "commit": "f21265c1e2710b3bd2386596943f0007f55f802e",
+      "gated": true,
+      "chosen": false,
+      "reason": "transformer 4,227,806,200 B and model.safetensors 4,853,889,016 B in fp32; 100+ steps; no 4 GB measurement"
+    }
+  ]
+}

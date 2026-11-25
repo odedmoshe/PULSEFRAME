@@ -41,6 +41,8 @@ import { startServer } from '@pulseframe/server';
 import { withExif } from '../../../apps/server/src/captureMeta.fixtures.ts';
 import { chooseFormat, formatOptions, openCardMenu } from './editor-ui.ts';
 import { makeRenderCacheCtx, renderCacheA11yScenarios } from './a11y-render-cache.ts';
+import { craftA11yScenarios } from './a11y-craft.ts';
+import { stabiliseA11yScenarios } from './a11y-stabilise.ts';
 import { makeApi, ownerApi } from './incremental-fixtures.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
 import { auditInPage, focusAudit, toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
@@ -788,6 +790,23 @@ async function main() {
       await page.getByTestId('music-tab').click({ timeout: 8000 }).catch(() => {});
       await page.locator('[data-testid=music-row]').first().waitFor({ timeout: 10000 }).catch(() => {});
       await auditState('music-browser', { shown: (await page.locator('[data-testid=music-row]').count()) >= 1 });
+      // the content library (wave 7): the sound drawer's «מהספרייה» tab and the elements drawer's two tabs, each in the state the server
+      // answers (not built / not set up / ready); the audit looks at the panel as it is, never at a fixture shown in its place
+      await page.getByTestId('audio-tab-library').click({ timeout: 8000 }).catch(() => {});
+      await page.getByTestId('audio-panel-library').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.waitForFunction(() => !!document.querySelector('[data-testid=library-empty],[data-testid=library-not-configured],[data-testid=library-indexing],[data-testid=library-list]'), undefined, { timeout: 8000 }).catch(() => {});
+      await auditState('library-audio-tab', { shown: (await page.getByTestId('audio-panel-library').count()) === 1 && (await page.locator('[data-testid=library-empty],[data-testid=library-not-configured],[data-testid=library-indexing],[data-testid=library-list]').count()) >= 1 });
+      await railOn('elements');
+      await page.getByTestId('elements-tab-library').click({ timeout: 8000 }).catch(() => {});
+      await page.getByTestId('elements-panel-library').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.waitForFunction(() => !!document.querySelector('[data-testid=library-empty],[data-testid=library-not-configured],[data-testid=library-indexing],[data-testid=library-list]'), undefined, { timeout: 8000 }).catch(() => {});
+      await auditState('library-elements-tab', { shown: (await page.getByTestId('elements-panel-library').count()) === 1 && (await page.locator('[data-testid=library-empty],[data-testid=library-not-configured],[data-testid=library-indexing],[data-testid=library-list]').count()) >= 1 });
+      await page.getByTestId('elements-tab-builtin').click({ timeout: 8000 }).catch(() => {});
+      // Settings → «הספרייה שלי» (the owner's session): the folder field, save, scan again and the state line
+      const lsd = await dialogBehaviour('settings-dialog', async () => { await page.getByTestId('rail-settings').click(); }, '[data-testid=rail-settings]');
+      await page.getByTestId('settings-library').scrollIntoViewIfNeeded().catch(() => {});
+      await auditState('settings-library', { shown: (await page.getByTestId('settings-library').count()) === 1 && (await page.getByTestId('settings-library-state').count()) >= 1, startsInside: lsd.startsInside, tabStepsThatLeftTheDialog: lsd.tabStepsThatLeftTheDialog }, true);
+      Object.assign(states.at(-1), await lsd.close());
       await railOn('text');
       await page.locator('[data-testid=font-option]').first().waitFor({ timeout: 8000 }).catch(() => {});
       await auditState('text-drawer-fonts', { shown: (await page.locator('[data-testid=font-option]').count()) >= 1 });
@@ -803,6 +822,18 @@ async function main() {
         const r = await sc.prepare(rcCtx);
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, sc.id.startsWith('cache-sheet'));
         await sc.leave?.(rcCtx);
+      }
+      // editing craft (wave 7): the time field, the paste dialog, the find panel with matches, the versions compare (a11y-craft.ts, W3)
+      for (const sc of craftA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // stabilisation (wave 7): the block's states in the inspector (a11y-stabilise.ts, W3)
+      for (const sc of stabiliseA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
       }
       if (await page.getByTestId('cache-fast-switch').count() === 0) { await page.getByTestId('export').click(); await page.getByTestId('cache-fast-switch').waitFor({ timeout: 8000 }).catch(() => {}); }
       if ((await page.getByTestId('cache-fast-switch').getAttribute('aria-checked').catch(() => null)) === 'true') await page.getByTestId('cache-fast-switch').click();

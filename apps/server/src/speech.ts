@@ -40,6 +40,8 @@ const ivrit = (name: string, bytes: number, sha256: string): ModelFile => ({
   license: 'Apache-2.0', licenseEvidence: `model card of ivrit-ai/whisper-large-v3-turbo-ct2@${IVRIT_REV.slice(0, 8)} is tagged license:apache-2.0 (metadata-level check; training-data terms not reviewed)`,
   commercialUse: 'allowed', gated: false, source: `https://huggingface.co/ivrit-ai/whisper-large-v3-turbo-ct2/resolve/${IVRIT_REV}/${name}`, attribution: null,
 });
+/** CC BY 4.0 credit for the Hebrew vowel-pointing model (publisher repository licence; the model card says MIT). */
+export const PHONIKUD_ATTRIBUTION = 'Hebrew vowel pointing: Phonikud by thewh1teagle and contributors (https://github.com/thewh1teagle/phonikud), CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/) per the publisher repository; the model card is tagged MIT. Built on DictaBERT-large-char-menaked by Dicta (https://huggingface.co/dicta-il/dictabert-large-char-menaked), CC BY 4.0. No changes made to the model file.';
 const NIKUD_REV = 'b806189fe1fc0085b1012b7560ffb5e8ecfd72a2', NIKUD_PATH = 'tts/phonikud/phonikud-1.0.int8.onnx';
 const CHATTERBOX_REV = '5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18';
 const chatterbox = (name: string, bytes: number, sha256: string): ModelFile => ({
@@ -72,7 +74,7 @@ export const SPEECH_MODELS: SpeechModel[] = [{
     chatterbox('conds.pt', 107374, '6552d70568833628ba019c6b03459e77fe71ca197d5c560cef9411bee9d87f4e'),
     chatterbox('grapheme_mtl_merged_expanded_v1.json', 69989, '69632f47220a788a52ce2661d096453c5655e9bf25289d89a8d832c46ee07dbf'),
     // Hebrew vowel pointing: without it this voice model garbles unpointed Hebrew (measured: see docs/evidence/voice-proof.json).
-    { role: 'hebrew-pointing', path: NIKUD_PATH, publisher: 'Phonikud', revision: NIKUD_REV, sha256: '113afb58d3140502aa1e7691cdc6b240b56cf97e5852fc870e1a7fb5a400dd62', bytes: 307844158, license: 'MIT', licenseEvidence: `model card of Phonikud/phonikud-onnx@${NIKUD_REV.slice(0, 8)} is tagged license:mit (metadata-level check; training-data terms not reviewed)`, commercialUse: 'allowed', gated: false, source: `https://huggingface.co/Phonikud/phonikud-onnx/resolve/${NIKUD_REV}/phonikud-1.0.int8.onnx`, attribution: null },
+    { role: 'hebrew-pointing', path: NIKUD_PATH, publisher: 'Phonikud', revision: NIKUD_REV, sha256: '113afb58d3140502aa1e7691cdc6b240b56cf97e5852fc870e1a7fb5a400dd62', bytes: 307844158, license: 'MIT (model card) / CC BY 4.0 (publisher repository)', licenseEvidence: `Read at the source on 2026-11-25. Model card of Phonikud/phonikud-onnx@${NIKUD_REV.slice(0, 8)}: front matter "license: mit" (the card has no licence text). Publisher repository github.com/thewh1teagle/phonikud@a29a75b4 README: "Phonikud G2P (the code in this repository) is licensed under CC BY 4.0 (open use). Note: The datasets included or referenced in this repository have their own separate licenses."; its LICENSE file is the CC BY 4.0 legal text with the note \"When giving attribution, you must include a clear and visible link to the Phonikud project so others can easily find and explore it.\" The model card credits Dicta's Hebrew diacritics model, which its own card licenses CC BY 4.0. The model card and the repository disagree; the stricter one (attribution required) is applied. Weights' training-data terms not reviewed.`, commercialUse: 'allowed', gated: false, source: `https://huggingface.co/Phonikud/phonikud-onnx/resolve/${NIKUD_REV}/phonikud-1.0.int8.onnx`, attribution: PHONIKUD_ATTRIBUTION },
   ],
 }];
 

@@ -8,6 +8,7 @@ import * as T from '@pulseframe/time';
 import { findClip, getOp, type OpCall } from './ops.ts';
 import type { Clip, ProjectDocument } from './schema.ts';
 import { clipEnd } from './validate.ts';
+import { beatsFor, transcriptFor } from './lineage.ts';
 
 /** End of the edit as add_adjustment's span 'edit' measures it: the end of the last picture or title clip of the main sequence. */
 export function editEnd(doc: ProjectDocument): T.RationalTime {
@@ -77,13 +78,13 @@ export function emptyTrackIds(doc: ProjectDocument): string[] {
   return tracks.filter((t) => t.clips.length === 0 && !t.locked && !tracks.some((x) => x.id !== t.id && (x.audio?.duck?.sourceTrackIds.includes(t.id) || x.caption?.linkedTrackId === t.id))).map((t) => t.id);
 }
 
-/** What an audio track carries, for the mixer strip's name and «המוזיקה»: music (its sound was analysed for beats), speech (it has a transcript), the sound of video clips (linked to them), or null (the strip shows its first file's name). */
+/** What an audio track carries, for the mixer strip's name and «המוזיקה»: music (its sound, or the sound it is a time-preserving copy of, was analysed for beats; a copy without a recorded time mapping is not music by that), speech (it has a transcript), the sound of video clips (linked to them), or null (the strip shows its first file's name). */
 export type TrackRole = 'music' | 'speech' | 'linked';
 export function trackRole(doc: ProjectDocument, track: { clips: readonly Clip[] }): TrackRole | null {
   const media = track.clips.filter((c): c is Extract<Clip, { type: 'media' }> => c.type === 'media');
   if (!media.length) return null;
-  if (media.some((c) => doc.analyses?.[c.assetId]?.beats)) return 'music';
-  if (media.some((c) => doc.transcripts?.[c.assetId])) return 'speech';
+  if (media.some((c) => beatsFor(doc, c.assetId))) return 'music'; // its own beats, or those of the measured music it is a time-preserving copy of (lineage.ts)
+  if (media.some((c) => transcriptFor(doc, c.assetId))) return 'speech'; // likewise: its own transcript or its time-preserving source's
   if (media.every((c) => !!c.linkGroupId)) return 'linked';
   return null;
 }

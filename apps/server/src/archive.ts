@@ -10,9 +10,11 @@
 import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { LUT_MAX_TEXT_LENGTH, LutError, migrateProject, parseCube, validateProject, type ProjectDocument } from '@pulseframe/core';
+import { archiveLibraryPlan, LUT_MAX_TEXT_LENGTH, LutError, migrateProject, parseCube, validateProject, type ProjectDocument } from '@pulseframe/core';
 import { ApiError, type Store } from './store.ts';
 import { readerAccess, withoutFamily, type ArchiveFamily } from './peoplePrivacy.ts';
+import type { ArchiveLibraryMode } from '@pulseframe/core';
+import { libraryError } from './library/contract.ts';
 
 export const ARCHIVE_FORMAT = 'pulseframe-archive/1';
 
@@ -32,7 +34,17 @@ export const IMPORTED_REVIEW_CLEARED = {
     ? `A translation's "Reviewed" mark does not carry over in an archive import: it was given on another computer or by someone else. The translation ${names[0]} needs review again; its wording is kept. Go through it in the "Transcript" panel and choose "Mark as reviewed".`
     : `A translation's "Reviewed" mark does not carry over in an archive import: it was given on another computer or by someone else. The translations ${names.join(', ')} need review again; their wording is kept. Go through them in the "Transcript" panel and choose "Mark as reviewed".`,
 } as const;
-export interface ImportNote { code: string; he: string; en: string; variants: { variantId: string; name: string; reviewedBy: string | null; reviewedAt: string | null }[] }
+export interface ImportNote { code: string; he: string; en: string; variants: { variantId: string; name: string; reviewedBy: string | null; reviewedAt: string | null }[]; library?: { hash: string; assetId: string; title: string }[] }
+/**
+ * «ארכיון לשיתוף» (wave 7 library track): library files that may not be passed on were left out by the person who made the archive.
+ * The import accepts exactly those missing files (listed in the manifest AND restricted by the imported document's own records,
+ * core archiveLibraryPlan) and opens the project with them in missing media, saying so in both languages.
+ */
+export const LIBRARY_FILES_OMITTED = {
+  code: 'library_files_omitted',
+  he: (n: number) => `${n === 1 ? 'קובץ אחד מהספרייה לא נכלל' : `${n} קבצים מהספרייה לא נכללו`} בארכיון, כי אסור להעביר אותם לאחרים. הם מסומנים כחסרים בפרויקט. אפשר להוסיף אותם מחדש מהספרייה במחשב שבו היא נמצאת.`,
+  en: (n: number) => `${n === 1 ? 'One library file was' : `${n} library files were`} left out of the archive because they may not be passed on. They are marked missing in the project. Add them again from the library on the computer that has it.`,
+} as const;
 /** Clears every reviewed mark of the document in place; returns what was cleared (empty when nothing was marked). */
 export function clearImportedReviews(doc: ProjectDocument): ImportNote['variants'] {
   const cleared: ImportNote['variants'] = [];
@@ -78,21 +90,34 @@ export function archiveBlobs(doc: ProjectDocument): string[] {
  *   credential without the people scope may ask for it too, and it is then made from what that credential may read.
  * The manifest says which it is, so an import can tell the owner.
  */
-export function planArchive(store: Store, projectId: string, opts: { family?: ArchiveFamily } = {}) {
+export function planArchive(store: Store, projectId: string, opts: { family?: ArchiveFamily; library?: ArchiveLibraryMode } = {}) {
   const read = store.getProject(projectId), revision = read.revision;
   const family: ArchiveFamily = opts.family ?? 'keep';
   const doc = family === 'omit' ? withoutFamily(read.doc).doc : read.doc;
+  // Wave 7 library track (core libraryCredits.ts archiveLibraryPlan): without `library`, a project holding restricted library files
+  // (not shareable, or made from one) is refused with archive_needs_library_choice; 'strip' leaves every hash they store out and
+  // lists them in the manifest; 'keep' (the owner's own session, checked by the route, http.ts libraryOwner) keeps everything with mode 'keep'.
+  // A project without restricted library files is archived byte for byte as before, whichever mode is asked.
+  const lib = archiveLibraryPlan(doc);
+  const restricted = lib.omit.length > 0;
+  if (restricted && !opts.library) {
+    const files = [...new Map(lib.omitted.map((o) => [o.assetId, { assetId: o.assetId, title: o.title.slice(0, 120), licenceId: o.licenceId }])).values()];
+    throw libraryError('archiveNeedsChoice', { files: files.slice(0, 50), choices: ['strip', 'keep'] }, files.length);
+  }
+  const strip = restricted && opts.library === 'strip';
+  const omit = new Set(strip ? lib.omit : []);
   // what the archive says about the people in it: none, names only (made for a credential that reads no birth dates), or all
   const people = !doc.people || Object.keys(doc.people).length === 0 ? 'none' : readerAccess() === 'full' ? 'full' : 'names';
-  const blobs = archiveBlobs(doc).map((hash) => {
+  const blobs = archiveBlobs(doc).filter((hash) => !omit.has(hash)).map((hash) => {
     const file = store.blobPath(hash);
     if (!fs.existsSync(file)) throw new ApiError(409, 'missing_media', `media ${hash} is referenced by the project but missing from the store`, { hash });
     return { hash, size: fs.statSync(file).size, file };
   });
-  const manifest = Buffer.from(JSON.stringify({ format: ARCHIVE_FORMAT, schemaVersion: doc.schemaVersion, projectName: doc.name, exportedRevision: revision, blobs: blobs.map(({ hash, size }) => ({ hash, size })), ...(people === 'none' && family === 'keep' ? {} : { people, family }), note: 'History, derivatives, exports and credentials are not part of an archive.' }, null, 2));
+  const manifest = Buffer.from(JSON.stringify({ format: ARCHIVE_FORMAT, schemaVersion: doc.schemaVersion, projectName: doc.name, exportedRevision: revision, blobs: blobs.map(({ hash, size }) => ({ hash, size })), ...(people === 'none' && family === 'keep' ? {} : { people, family }),
+    ...(!restricted ? {} : strip ? { library: { mode: 'strip', omitted: lib.omitted, notices: lib.notices } } : { library: { mode: 'keep', note: 'For the owner\'s own computers only: holds library files that may not be passed on.' } }), note: 'History, derivatives, exports and credentials are not part of an archive.' }, null, 2));
   const project = Buffer.from(JSON.stringify(doc));
   const bytes = [manifest.length, project.length, ...blobs.map((b) => b.size)].reduce((n, s) => n + BLOCK + s + pad(s), 0) + 2 * BLOCK;
-  return { doc, manifest, project, blobs, bytes };
+  return { doc, manifest, project, blobs, bytes, library: !restricted ? null : strip ? 'strip' as const : 'keep' as const };
 }
 
 /** The archive as a stream of chunks (constant memory). */
@@ -160,8 +185,15 @@ export function importArchive(store: Store, file: string): { doc: ProjectDocumen
     if (issues.length) throw bad('the project document is not valid', { issues: issues.slice(0, 10) });
     const have = new Map(staged.map((s) => [s.hash, s]));
     const listed = new Map<string, number>((manifest.blobs ?? []).map((b: any) => [b.hash, b.size]));
+    // «ארכיון לשיתוף»: a missing file is accepted only when the manifest says it was left out AND the document's own records make it
+    // a restricted library file (or one made from such a file). Anything else missing is a damaged archive, as before.
+    const declared = new Set<string>(manifest.library?.mode === 'strip' && Array.isArray(manifest.library.omitted) ? manifest.library.omitted.map((o: any) => (typeof o?.hash === 'string' ? o.hash : '')) : []);
+    const restrictedHere = declared.size ? archiveLibraryPlan(doc) : null;
+    const mayMiss = new Set(restrictedHere ? restrictedHere.omit.filter((h) => declared.has(h)) : []);
+    const missing: string[] = [];
     for (const hash of archiveBlobs(doc)) {
       const s = have.get(hash);
+      if (!s && mayMiss.has(hash)) { missing.push(hash); continue; }
       if (!s) throw bad(`media ${hash.slice(7, 19)}… used by the project is not in the archive`, { hash });
       if (listed.get(hash) !== s.size) throw bad(`media ${hash.slice(7, 19)}… does not match the manifest`, { hash });
     }
@@ -171,7 +203,8 @@ export function importArchive(store: Store, file: string): { doc: ProjectDocumen
     for (const a of Object.values(doc.assets)) {
       if (a.kind !== 'lut') continue;
       const label = `colour table "${a.name.slice(0, 60)}"`;
-      const s = have.get(a.contentHash)!;
+      const s = have.get(a.contentHash);
+      if (!s) throw bad(`${label} is not in the archive`, { assetId: a.id });
       if (s.size > LUT_MAX_TEXT_LENGTH) throw bad(`${label} is larger than a .cube file may be (${LUT_MAX_TEXT_LENGTH} bytes)`, { assetId: a.id, byteSize: s.size, maxBytes: LUT_MAX_TEXT_LENGTH });
       let table;
       try { table = parseCube(fs.readFileSync(s.tmp, 'utf8')); } catch (e) {
@@ -184,6 +217,11 @@ export function importArchive(store: Store, file: string): { doc: ProjectDocumen
     const cleared = clearImportedReviews(doc);
     const names = cleared.map((v) => `«${v.name}»`);
     const notes: ImportNote[] = cleared.length ? [{ code: IMPORTED_REVIEW_CLEARED.code, he: IMPORTED_REVIEW_CLEARED.he(names), en: IMPORTED_REVIEW_CLEARED.en(names), variants: cleared }] : [];
+    if (missing.length) {
+      const left = restrictedHere!.omitted.filter((o) => missing.includes(o.hash)).map((o) => ({ hash: o.hash, assetId: o.assetId, title: o.title }));
+      const n = new Set(left.map((o) => o.assetId)).size;
+      notes.push({ code: LIBRARY_FILES_OMITTED.code, he: LIBRARY_FILES_OMITTED.he(n), en: LIBRARY_FILES_OMITTED.en(n), variants: [], library: left });
+    }
     // All checks passed: add blobs (content-addressed, so existing ones are simply reused) and create the project.
     let added = 0, present = 0;
     const mimeOf = new Map(Object.values(doc.assets).map((a) => [a.contentHash, a.mimeType]));

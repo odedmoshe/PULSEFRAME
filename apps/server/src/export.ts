@@ -13,7 +13,9 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
+import { collectCredits, creditDue, creditsView, type CreditsView } from '@pulseframe/core';
 import { AUTO_SELF_CHECK_CLEAN_EXPORTS, EXPORT_MODES, INCREMENTAL_NOT_BUILT_REASON, RENDER_CACHE_BLOCKERS, SEGMENTED_ROUTE, SELF_CHECK_MODES, type RenderCacheStatus, type SegmentedExportReport } from '@pulseframe/core';
+import { SEND_API_REFUSALS, SEND_FIT, SIZE_FIT_BUILT, type SizeFitFault, type SizeFitManifest } from '@pulseframe/core';
 import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, own, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { AUDIO_FX_ENGINE, audioPlan, captionCues, soundEnd, type AudioPlan, type PlannedAudioClip } from '@pulseframe/engine';
@@ -48,6 +50,8 @@ export const ExportOptionsSchema = z
     // segmented export and render cache (ADR-0024). Optional without a default, so the options of every job made before stay as they were.
     mode: z.enum(EXPORT_MODES).optional().describe('single-pass (the default) = one encoder run over every frame; incremental = the fast export: only the segments (2 seconds each, never under 3 frames) whose picture changed since they were stored are rendered, and the segments are joined by stream copy (MP4 only)'),
     selfCheck: z.enum(SELF_CHECK_MODES).optional().describe('incremental only: before rendering, frames of reused segments are rendered again and compared with what was stored; auto (the default) = 3 frames of every reused segment until 20 clean fast exports with this build, then one frame of a sample of them. It proves the frames it checks, nothing more'),
+    // send and keep (wave 7, track send). Optional without a default, so the options of every job made before stay as they were.
+    sizeFit: z.object({ targetBytes: z.number().int().min(SEND_FIT.minTargetBytes).max(SEND_FIT.maxTargetBytes) }).strict().optional().describe('MP4 only: make the file at or under targetBytes (1 MB = 1,000,000 bytes). The server picks the picture size and bit rates (a labelled heuristic, stated in the plan), encodes the full-quality film once and then to the target in two passes, checks the bytes, retries once, and otherwise fails with size_fit_missed and saves nothing. It promises bytes only, not how any app treats the file'),
   })
   .strict();
 export type ExportOptions = z.infer<typeof ExportOptionsSchema>;
@@ -188,9 +192,40 @@ export interface Manifest {
   audioEffects: { type: string; version: number; clips: number }[];
   /** Labelled estimate, never a promise. */
   estimate: { bytes: number | null; basis: string };
+  /** Size-fit (wave 7 send): the planned fit when options.sizeFit is set; the estimate stays the full-quality intermediate's. */
+  fit?: SizeFitManifest;
 }
 /** `hint`: the fix for this blocker when it has one of its own; the refusal then offers it instead of the generic advice. */
 export interface Blocker { code: string; message: string; ids: string[]; hint?: string }
+
+/** The export warnings of library content (wave 7 library track); preflight shows credits_for_description and stock_people as notes. */
+export const LIBRARY_EXPORT_CODES = ['non_commercial_content', 'credits_for_description', 'credit_not_on_screen', 'stock_people'] as const;
+export const LIBRARY_EXPORT_NOTES: ReadonlySet<string> = new Set(['credits_for_description', 'stock_people']);
+const list = (xs: readonly { title: string }[]) => xs.slice(0, 8).map((x) => `"${x.title.slice(0, 60)}"`).join(', ') + (xs.length > 8 ? ` and ${xs.length - 8} more` : '');
+/**
+ * What the library files of the exported sequence ask of this video (core collectCredits over the document that renders). Nothing
+ * here blocks an export: the owner decides; the editor shows the credit lines to paste and the non-commercial warning
+ * («לשימוש לא מסחרי בלבד»), and preflight offers add_credits_card for a credit that must appear on screen.
+ */
+export function libraryExportWarnings(doc: ProjectDocument): Blocker[] {
+  const r = collectCredits(doc);
+  const out: Blocker[] = [];
+  if (r.nonCommercial.length) out.push({ code: 'non_commercial_content', message: `this video holds library material for non-commercial use only (${list(r.nonCommercial)}); it may not be used commercially, and those files are never passed on in a shared archive`, ids: r.nonCommercial.map((n) => n.assetId), hint: 'Keep the video for non-commercial use, or replace those files.' });
+  // credits due (never a courtesy line of a licence that needs none) whose place is the description: a reminder with the text to
+  // paste, and the credits card offered (never a required fix: the owner decided the card is offered, not added by itself)
+  const described = r.lines.filter((l) => l.placement !== 'on_screen' && creditDue(doc, l));
+  if (described.length) out.push({ code: 'credits_for_description', message: `${described.length} credit line(s) of library files must go in the video's description: copy them from the credits (GET /api/v1/projects/{id}/credits) when you publish. A credits card at the end can also be added (add_credits_card); it is optional`, ids: described.map((l) => l.assetId) });
+  if (r.onScreenMissing.length) out.push({ code: 'credit_not_on_screen', message: `${r.onScreenMissing.length} credit(s) that the licence wants in the video itself appear in no visible title (${list(r.onScreenMissing)})`, ids: r.onScreenMissing.map((l) => l.assetId), hint: 'Add a credits card (add_credits_card), or a title of your own with the credit.' });
+  if (r.people.length) out.push({ code: 'stock_people', message: `the video holds stock footage that shows people (${list(r.people)})`, ids: r.people.map((p) => p.assetId) });
+  return out;
+}
+/** The export job's output.licence: the credits of the rendered snapshot, the text written as the <jobId>.credits.txt sidecar. Null when the video holds no library duty. */
+export function exportLicence(snapshot: ProjectDocument): (Omit<CreditsView, 'descriptionText'> & { credits: { descriptionText: string; file: string | null } }) | null {
+  const view = creditsView(collectCredits(snapshot), 'he');
+  if (!view.lines.length && !view.nonCommercial.length && !view.people.length) return null;
+  const { descriptionText, ...rest } = view;
+  return { ...rest, credits: { descriptionText, file: null } };
+}
 /** The refusal's hint when no blocker brings its own. */
 export const GENERIC_BLOCKER_HINT = 'Fix the listed blockers (relink media, change the font or the range) and try again.';
 
@@ -223,6 +258,11 @@ export class Exporter {
    * heartbeat, stops, discards its partial output and releases the lease.
    */
   browserRoute: { requestCancel(jobId: string, actor: string): { jobId: string; status: string; outcome: string; note?: string } } | null = null;
+  /**
+   * TEST seam only (wave 7 send, send-decisions C7): set by startServer's second argument (deps.fitFault), never from the
+   * environment or a request. Forces the first or every size-fit attempt over the target; the job output labels it TEST.
+   */
+  fitFault: SizeFitFault | null = null;
   constructor(private store: Store, private host: RenderHost, private renderPageUrl: () => string, private webDist: string) {}
 
   /**
@@ -310,8 +350,11 @@ export class Exporter {
       if (outWidth * outHeight * Math.max(0, frames) > 640 * 360 * 600) warnings.push({ code: 'gif_large', message: 'this GIF will be large and limited to 256 colours per frame; consider a shorter range or scale 0.5', ids: [] });
     }
     blockers.push(...incrementalBlockers(options, this.incremental));
+    // size-fit (wave 7 send): an honest blocker until worker B builds the fit (then size_fit_format / size_fit_too_small from core planSizeFit)
+    if (options.sizeFit && !SIZE_FIT_BUILT) blockers.push({ code: SEND_API_REFUSALS.sizeFitNotBuilt.code, message: SEND_API_REFUSALS.sizeFitNotBuilt.message(), ids: [], hint: SEND_API_REFUSALS.sizeFitNotBuilt.hint });
     if (options.captions.startsWith('sidecar') && !doc.sequences[doc.mainSequenceId]!.tracks.some((t) => t.kind === 'caption')) warnings.push({ code: 'no_captions', message: 'a caption file was requested but the project has no caption track; none will be written', ids: [] });
     if (options.format === 'webm-vp9-opus' && doc.settings.sampleRate !== 48000) warnings.push({ code: 'resampled_audio', message: 'Opus is encoded at 48 kHz; audio will be resampled', ids: [] });
+    warnings.push(...libraryExportWarnings(doc));
     const effects = [...fxUsed].map(([type, clips]) => ({ type, version: findEffect(type)?.version ?? 0, clips }));
     for (const fx of effects) if (fx.version === 0) blockers.push({ code: 'unknown_effect', message: `effect "${fx.type}" is not available in this renderer; exporting would silently drop it`, ids: [] });
     const transitions = [...trUsed].map(([type, clips]) => ({ type, clips }));
@@ -641,12 +684,19 @@ export class Exporter {
         fs.writeFileSync(path.join(this.store.outDir, file), job.input.sidecar.text);
         captionsOut = { file, format: job.input.sidecar.format, cues: job.input.sidecar.cues };
       }
+      // the credits of library files (wave 7 library track), from the immutable snapshot: the text the owner pastes into the description
+      const licence = exportLicence(doc);
+      if (licence?.lines.length) {
+        const file = `${jobId}.credits.txt`;
+        fs.writeFileSync(path.join(this.store.outDir, file), licence.credits.descriptionText);
+        licence.credits.file = file;
+      }
       const wall = (Date.now() - started) / 1000;
       const bytes = fs.statSync(final).size;
       this.store.updateJob(jobId, {
         status: 'succeeded', stage: null,
         output: {
-          file: path.basename(final), mimeType: { mp4: 'video/mp4', webm: 'video/webm', gif: 'image/gif', wav: 'audio/wav', png: 'image/png' }[ext], captions: captionsOut, bytes, revision: job.input.revision, route: segmentsReport ? SEGMENTED_ROUTE : 'server-software-canvas2d', ...(segmentsReport ? { segments: segmentsReport } : {}), options, manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, audioEffects: manifest.audioEffects ?? [], output },
+          file: path.basename(final), mimeType: { mp4: 'video/mp4', webm: 'video/webm', gif: 'image/gif', wav: 'audio/wav', png: 'image/png' }[ext], captions: captionsOut, ...(licence ? { licence } : {}), bytes, revision: job.input.revision, route: segmentsReport ? SEGMENTED_ROUTE : 'server-software-canvas2d', ...(segmentsReport ? { segments: segmentsReport } : {}), options, manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, audioEffects: manifest.audioEffects ?? [], output },
           estimate: { ...manifest.estimate, actualBytes: bytes }, ...(flashReport ? { photosensitivity: flashReport } : {}), audioClipsMixed: audioClips, audio: audioMix && { mixPeakDbfs: audioMix.mixPeakDbfs, clipped: audioMix.clipped, loudness: audioMix.loudness }, validation, renderStageMs, wallSeconds: wall, realtimeFactor: output.frames > 1 ? (output.frames * frameRate.den) / frameRate.num / wall : null,
         },
       });

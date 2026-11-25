@@ -117,8 +117,12 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`POST ${P}/analysis/loudness`]: ['reader-document'],
   [`POST ${P}/analysis/silences`]: ['reader-document'],
   [`POST ${P}/analysis/voice`]: ['reader-document'],
+  [`POST ${P}/analysis/clip-loudness`]: ['reader-document'], // wave 7 send: levels of the clips the reader may read; nothing about people
   [`GET ${P}/motion-tracks/:motionTrackId`]: ['reader-document'],
   [`POST ${P}/motion-tracks/:motionTrackId/track`]: ['reader-document', 'write'],
+  // stabilisation (wave 7): the job reads the document and commits; the read view reads it
+  [`POST ${P}/clips/:clipId/stabilise`]: ['reader-document', 'write'],
+  [`GET ${P}/assets/:assetId/camera-motion`]: ['reader-document'],
   // measured moments (ADR-0026): the job reads media, attaches analyses; nothing about people
   [`POST ${P}/moments`]: ['reader-document', 'write'],
   // edits
@@ -151,8 +155,9 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`POST ${P}/sequences/:sequenceId/reframe-plan`]: ['reader-document'],
   // perform mode (ADR-0025): planned from the reader's document (clips, beats; no people data), committed as one internal step
   [`POST ${P}/takes`]: ['reader-document', 'write'],
-  // the command bar's language assistant (ADR-0027): the status holds settings, ids and money only; everything else is the owner's
-  // own session (a model is sent only the allowlisted summary, built without birth dates whatever the switches)
+  // the command bar's language assistant (ADR-0027): the status holds settings, ids and money for the owner's own session, and
+  // connected-or-not for anyone else (assistant/visibility.ts); everything else is the owner's own session (a model is sent only
+  // the allowlisted summary, built without birth dates whatever the switches)
   'GET /api/v1/assistant/status': ['no-document'],
   [`GET ${P}/assistant/summary`]: ['owner-only'],
   'PUT /api/v1/assistant/config': ['owner-only'],
@@ -186,10 +191,37 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   'GET /api/v1/jobs/:jobId/outputs/:index': ['no-document'],
   'POST /api/v1/jobs/:jobId/retry': ['rendered-refused'],
   'POST /api/v1/jobs/:jobId/cancel': ['no-document'],
-  'POST /api/v1/jobs/:jobId/budget/release': ['no-document'],
+  'POST /api/v1/jobs/:jobId/budget/release': ['owner-only'],
   'POST /api/v1/jobs/:jobId/heartbeat': ['no-document'],
   'POST /api/v1/jobs/:jobId/complete': ['no-document'],
   'POST /api/v1/jobs/:jobId/abandon': ['no-document'],
+  // the content library on disk (wave 7 library track; library/contract.ts LIBRARY_ROUTES): the catalogue holds no project
+  // document; the folder is the owner's; use reads the document for its dry run and commits; credits read the document
+  'GET /api/v1/library/status': ['no-document'],
+  'PUT /api/v1/library/root': ['owner-only'],
+  'POST /api/v1/library/reindex': ['owner-only'],
+  'DELETE /api/v1/library/reindex': ['owner-only'],
+  'GET /api/v1/library/items': ['no-document'],
+  'GET /api/v1/library/items/:key': ['no-document'],
+  'GET /api/v1/library/items/:key/licence': ['no-document'],
+  'GET /api/v1/library/items/:key/audio': ['no-document'],
+  'GET /api/v1/library/items/:key/thumb': ['no-document'],
+  [`POST ${P}/library/use`]: ['reader-document', 'write'],
+  [`GET ${P}/credits`]: ['reader-document'],
+  // the genres and moods of the catalogue; the credits text of a finished export (as its captions file next door)
+  'GET /api/v1/library/facets': ['no-document'],
+  'GET /api/v1/jobs/:jobId/credits': ['no-document'],
+  // editing craft (wave 7 craft track; craft/contract.ts CRAFT_ROUTES): the list holds names, sizes and dates, never a document;
+  // diff, still and find read the document (and the version's copy) as the credential may; save and restore read and write;
+  // rename and delete are the owner's own session's
+  [`GET ${P}/versions`]: ['no-document'],
+  [`POST ${P}/versions`]: ['reader-document', 'write'],
+  [`PUT ${P}/versions/:versionId`]: ['owner-only'],
+  [`DELETE ${P}/versions/:versionId`]: ['owner-only'],
+  [`GET ${P}/versions/:versionId/diff`]: ['reader-document'],
+  [`GET ${P}/versions/:versionId/frame`]: ['reader-document'],
+  [`POST ${P}/versions/:versionId/restore`]: ['reader-document', 'write'],
+  [`POST ${P}/text/find`]: ['reader-document'],
   // MCP over HTTP: see PEOPLE_MCP_TOOLS and PEOPLE_MCP_RESOURCES
   'ALL /mcp': ['reader-document'],
 };
@@ -205,6 +237,7 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   add_graphic_element: ['write'], add_sound_effect: ['write'], add_builtin_music: ['write'], suggest_packs: ['reader-document'], get_speech_status: ['no-document'], transcribe_asset: ['reader-document'],
   generate_narration: ['reader-document', 'write'], narrate_script: ['reader-document', 'write'], analyze_asset: ['reader-document'], get_analysis: ['reader-document'],
   track_motion: ['reader-document', 'write'], get_motion_track: ['reader-document'],
+  stabilise_clip: ['reader-document', 'write'], get_camera_motion: ['reader-document'],
   measure_moments: ['reader-document', 'write'],
   plan_recipe: ['reader-document'], apply_recipe: ['reader-document', 'write'], regenerate_recipe: ['reader-document', 'write'],
   plan_template: ['reader-document'], apply_template: ['reader-document', 'write'], regenerate_template: ['reader-document', 'write'],
@@ -221,6 +254,12 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   sync_multicam: ['reader-document', 'write'], get_multicam: ['reader-document'],
   // perform mode (ADR-0025)
   perform_take: ['reader-document', 'write'],
+  // the content library (wave 7 library track)
+  use_library_item: ['reader-document', 'write'], get_credits: ['reader-document'],
+  // send and keep (wave 7): levels of clips, read-only
+  measure_clip_loudness: ['reader-document'],
+  // editing craft (wave 7 craft track)
+  find_text: ['reader-document'],
 };
 /** MCP resources and prompts (every resource answer passes forPrincipal; prompts carry no project content). */
 export const PEOPLE_MCP_RESOURCES: Readonly<Record<string, readonly PeopleFilter[]>> = {

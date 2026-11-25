@@ -62,6 +62,9 @@ describe('ids that are names of Object.prototype members', () => {
       // people (ADR-0021, people section): people are a plain object keyed by id as well
       update_person: (id) => ({ personId: id, name: 'x' }),
       remove_person: (id) => ({ personId: id }),
+      // editing craft (wave 7): refused by the guard before any body runs (built or not)
+      ripple_trim: (id) => ({ clipId: id, edge: 'end', to: f(10) }),
+      paste_attributes: (id) => ({ fromClipId: id, toClipIds: [id], groups: ['colour'] }),
     };
     let reached = 0;
     for (const def of listOps()) {

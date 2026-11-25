@@ -23,6 +23,11 @@ export interface Config {
    * host names; default none). The owner's configured host must be listed here and reached over https (ADR-0027).
    */
   assistantHosts: string[];
+  /**
+   * The owner's content library folder (wave 7 library track; PF_LIBRARY_DIR). Optional: the owner may instead set it in Settings,
+   * which writes <dataDir>/library.json (apps/server/src/library/contract.ts LIBRARY_CONFIG_FILE); the environment wins when both exist.
+   */
+  libraryDir?: string | null;
   /** Ceiling for everything in the data directory (media, derivatives, exports, database), in bytes; 0 = no ceiling (the default). New uploads and exports are refused once it is reached. */
   maxStorageBytes: number;
   /**
@@ -141,6 +146,7 @@ export function loadConfig(env = process.env): Config {
     comfyuiModelsDir: env.PF_COMFYUI_MODELS_DIR ? path.resolve(env.PF_COMFYUI_MODELS_DIR) : null,
     modelHosts: env.PF_MODEL_HOSTS !== undefined ? env.PF_MODEL_HOSTS.split(',').filter(Boolean) : [...DEFAULT_MODEL_HOSTS],
     assistantHosts: (env.PF_ASSISTANT_HOSTS ?? '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean),
+    libraryDir: env.PF_LIBRARY_DIR ? path.resolve(env.PF_LIBRARY_DIR) : null,
     maxStorageBytes: Math.max(0, Number(env.PF_MAX_STORAGE_BYTES ?? 0)) || 0,
     agentRequestsPerMinute: Math.max(0, Number(env.PF_AGENT_RPM ?? 0)) || 0,
     secureCookie: env.PF_SECURE_COOKIE === '1',

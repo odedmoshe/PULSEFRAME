@@ -1,0 +1,115 @@
+{
+ "when": "2026-11-25T11:45:24.499Z",
+ "exit": 0,
+ "results": [
+  {
+   "check": 1,
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 2.9
+  },
+  {
+   "check": 2,
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 0.3
+  },
+  {
+   "check": 3,
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 0.1
+  },
+  {
+   "check": 4,
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 0
+  },
+  {
+   "check": 5,
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 0.8
+  },
+  {
+   "check": 6,
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 0.5
+  },
+  {
+   "check": 7,
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 0.2
+  },
+  {
+   "check": 8,
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 0
+  },
+  {
+   "check": 9,
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 0
+  },
+  {
+   "check": 10,
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 2.6
+  },
+  {
+   "check": 11,
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 0.6
+  },
+  {
+   "check": 16,
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 0.5
+  },
+  {
+   "check": 18,
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 20.2
+  },
+  {
+   "check": 12,
+   "part": "duties",
+   "verdict": "PASS",
+   "seconds": 3.3
+  },
+  {
+   "check": 13,
+   "part": "duties",
+   "verdict": "PASS",
+   "seconds": 2.4
+  },
+  {
+   "check": 14,
+   "part": "duties",
+   "verdict": "PASS",
+   "seconds": 2
+  },
+  {
+   "check": 15,
+   "part": "duties",
+   "verdict": "PASS",
+   "seconds": 0.2
+  },
+  {
+   "check": 17,
+   "part": "ui",
+   "verdict": "PASS",
+   "seconds": 26.1
+  }
+ ],
+ "note": "SYNTHETIC LIBRARY only (made by the proof); timings are one sample each"
+}

@@ -19,6 +19,8 @@ import { turnsBack } from './curves.ts';
  */
 const curveMismatch = (k: Keyframe) => (k.easing === 'bezier') !== (k.bezier !== undefined);
 import { multicamIssues } from './multicamValidate.ts';
+import { libraryRecordIssues } from './libraryDuties.ts';
+import { steadyIssues } from './steadyValidate.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
 
@@ -117,6 +119,16 @@ export function validateProject(doc: ProjectDocument): Issue[] {
       if (a.provenance.origin !== 'upload') issues.push({ code: 'import_provenance', message: `asset ${a.id}: only an uploaded file records how it was uploaded`, ids: [a.id] });
       if ((up.via === 'phone') !== (up.dropId !== undefined)) issues.push({ code: 'import_provenance', message: `asset ${a.id}: a file from a phone names its drop code, and only such a file does`, ids: [a.id] });
       if (up.relativePath !== undefined && up.via !== 'folder') issues.push({ code: 'import_provenance', message: `asset ${a.id}: only a file from a dropped folder has a path inside it`, ids: [a.id] });
+    }
+    // Wave 7 library track: the licence record of a file copied from the owner's library folder. Only an upload carries it, never
+    // together with an upload record, a raster only on a picture; the rest (diskOnly / nonCommercial / credit present where the core
+    // licence table says so) is libraryDuties.ts libraryRecordIssues.
+    const lib = a.provenance.library;
+    if (lib) {
+      if (a.provenance.origin !== 'upload') issues.push({ code: 'library_provenance', message: `asset ${a.id}: only a copied file carries a library record`, ids: [a.id] });
+      if (a.provenance.upload) issues.push({ code: 'library_provenance', message: `asset ${a.id}: a file from the library has no upload record`, ids: [a.id] });
+      if (lib.raster && a.kind !== 'image') issues.push({ code: 'library_provenance', message: `asset ${a.id}: only a picture can be rasterised from the library`, ids: [a.id] });
+      for (const message of libraryRecordIssues(lib)) issues.push({ code: 'library_provenance', message: `asset ${a.id}: ${message}`, ids: [a.id] });
     }
     const rangeStart = a.provenance.derived?.sourceRangeStart;
     if (rangeStart && T.isNegative(rangeStart)) issues.push({ code: 'derived_range', message: `asset ${a.id}: its source range cannot start before 0`, ids: [a.id] });
@@ -406,6 +418,8 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   issues.push(...lifeIssues(doc));
   // multicam groups and the tags of their program segments (ADR-0020)
   if (doc.multicam || hasTags(doc)) issues.push(...multicamIssues(doc, uniq));
+  // stabilisation (wave 7): the clip switch and the camera measurements (steadyValidate.ts)
+  issues.push(...steadyIssues(doc));
   return issues;
 }
 const hasTags = (doc: ProjectDocument) => Object.values(doc.sequences).some((s) => s.tracks.some((t) => t.clips.some((c) => c.type === 'media' && !!c.multicam)));

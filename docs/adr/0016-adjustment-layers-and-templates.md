@@ -124,17 +124,26 @@ Status: **accepted** (2026-11-17) for wave 1. Built by three workers on shared c
      and the rest is laid around it (the film's F13 R1 and R3; the montage's "left alone because they hold clips edited by
      hand"), and people arrange a film that way. So there only a move that a delete which closed the gap explains is not an edit
      by hand (`closedGapOnly`, templateOps.ts): besides the conditions of `movedOnly`, the clip's start must be EARLIER than
-     recorded by exactly the summed length of the run's own clips that are gone from the document and whose recorded range lay
-     before its recorded start on the same track (exact rational arithmetic), which is what `ripple_delete_clips` does to the
-     clips after a deleted one; a clip linked to such a clip (a pick's own sound) counts when it moved by exactly as much. Before
+     recorded by exactly the summed length of those of the run's own clips, gone from the document, whose recorded range lay
+     before its recorded start on the same track and which closed their gaps (exact rational arithmetic), which is what
+     `ripple_delete_clips` does to the clips after a deleted one; a clip linked to such a clip (a pick's own sound) counts when it moved by exactly as much. Before
      this, one plain Delete of a pick froze every later pick as "edited by hand" in all later regenerations: one segment early,
      worded as hand edits, a restored file out of place.
 
      What follows from the sum: with no deleted length before it, any move is a move by hand and the clip is kept, as before the
      rule. A clip dragged by hand that also lies after a deleted one does not match the sum and is kept. Several gap-closing
      deletes add up. A delete on another track counts for that track only (the title deleted with its gap closed moves the
-     closing card, which is made again; no pick is touched). A delete that kept its gap adds length without a move, so with a
-     later gap-closing delete the clips after both do not match and are kept. A ripple that removed a clip the run did not make
+     closing card, which is made again; no pick is touched). A delete that kept its gap moves nothing, and the document does not
+     say which gone clip closed its gap, so one reading per track is taken (each gone clip closed or kept): the one that agrees
+     with the most clips of the track, a clip agreeing when it moved by exactly the reading's amount for its place with nothing
+     else changed, or still starts where recorded while that amount is zero; among equals the reading that names fewer moved
+     clips, then fewer closed gaps (amended 2026-11-25; before, every gone clip counted as closed, so after one Shift+Delete and
+     one Delete before the same clips they were kept as hand edits). So a clip dragged into a kept gap by exactly the deleted
+     length stays kept while the clips after it stayed put; what cannot be told is a drag that leaves the very document a
+     delete leaves (the last clip of a track pulled into such a gap). The readings are followed level by level, one state per
+     amount reached, at most 4096 amounts per track (`MAX_GAP_AMOUNTS`: never reached with equal-length slots, where n gone
+     clips give at most n + 1 amounts; reachable from 13 gone clips of pairwise different lengths); a track beyond it is judged
+     by the full sum. A ripple that removed a clip the run did not make
      moves the run's clips without any of them being gone: they are kept, as before. In every "kept" case the result is the one
      from before the rule and still a valid project: the film lays its other clips around the kept ones with no picture over
      another and no gap, the montage skips the segments they lie on and fills the free ones (tests hold each case).

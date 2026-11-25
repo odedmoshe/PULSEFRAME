@@ -45,7 +45,7 @@ describe('motion tracks: caps', () => {
     for (let k = 0; k < 3; k++) { const c = create(d, { assetId, kind: 'point', frame: 0, x: 1, y: 1 }); d = attach(c.doc, c.id, 0, full(MAX_TRACK_SAMPLES)); }
     expect(Object.values(d.motionTracks).reduce((s, m) => s + m.x.length, 0)).toBe(MAX_PROJECT_TRACK_SAMPLES);
     const fifth = refusal(() => create(d, { assetId, kind: 'point', frame: 0, x: 1, y: 1 }));
-    expect([fifth.code, fifth.message]).toEqual(['out_of_bounds', `the motion tracks of a project can hold at most ${MAX_PROJECT_TRACK_SAMPLES} samples in all; this edit would make ${MAX_PROJECT_TRACK_SAMPLES + 1}`]);
+    expect([fifth.code, fifth.message]).toEqual(['out_of_bounds', `the motion tracks and camera measurements of a project can hold at most ${MAX_PROJECT_TRACK_SAMPLES} samples in all; this edit would make ${MAX_PROJECT_TRACK_SAMPLES + 1}`]);
   });
 
   it('a hand sample far before or after a track in a long video is refused with the typed cap refusal, before the track grows', () => {

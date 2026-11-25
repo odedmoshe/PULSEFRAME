@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Keymap } from './commands.ts';
-import { isTyping, shortcutAllowed } from './shortcutGate.ts';
+import { isTyping, shortcutAllowed, takenFromBrowser } from './shortcutGate.ts';
 
 const storage = () => { const d = new Map<string, string>(); return { getItem: (k: string) => d.get(k) ?? null, setItem: (k: string, v: string) => void d.set(k, v), removeItem: (k: string) => void d.delete(k) }; };
 const km = new Keymap(storage());
@@ -53,5 +53,31 @@ describe('isTyping', () => {
     expect(isTyping({ tagName: 'BUTTON', isContentEditable: false }, 'Mod+KeyZ')).toBe(false);
     expect(isTyping({ tagName: 'BODY', isContentEditable: false }, 'Space')).toBe(false);
     expect(isTyping(null, 'Space')).toBe(false);
+  });
+});
+
+describe('the craft chords (wave 7)', () => {
+  it('Ctrl+S may run while typing (it opens the name field), never behind a modal or the palette; Ctrl+F likewise as a view command', () => {
+    for (const c of ['Mod+KeyS', 'Mod+KeyF']) {
+      expect(allowed(c, { typing: true }), c).toBe(true);
+      expect(allowed(c, { modalOpen: true }), c).toBe(false);
+      expect(allowed(c, { paletteOpen: true }), c).toBe(false);
+    }
+  });
+  it('Q, W, D and Ctrl+Alt+V never act while typing or behind a modal', () => {
+    for (const c of ['KeyQ', 'KeyW', 'KeyD', 'Mod+Alt+KeyV', 'KeyG']) {
+      expect(allowed(c, { typing: true }), c).toBe(false);
+      expect(allowed(c, { modalOpen: true }), c).toBe(false);
+    }
+  });
+  it('Ctrl+S and Ctrl+F are taken from the browser (also after a rebind, by the chord bound now); other chords are not', () => {
+    expect(takenFromBrowser('Mod+KeyS', (id) => km.keysFor(id))).toBe(true);
+    expect(takenFromBrowser('Mod+KeyF', (id) => km.keysFor(id))).toBe(true);
+    expect(takenFromBrowser('Mod+KeyP', (id) => km.keysFor(id))).toBe(false);
+    expect(takenFromBrowser('KeyS', (id) => km.keysFor(id))).toBe(false);
+    const other = new Keymap(storage());
+    other.bind('file.saveVersion', ['Mod+Shift+KeyS']);
+    expect(takenFromBrowser('Mod+KeyS', (id) => other.keysFor(id))).toBe(false);
+    expect(takenFromBrowser('Mod+Shift+KeyS', (id) => other.keysFor(id))).toBe(true);
   });
 });

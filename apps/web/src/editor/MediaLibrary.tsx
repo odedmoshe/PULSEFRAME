@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import { LibraryAssetBadges } from './library/LibraryAssetBadges.tsx';
 import { createPortal } from 'react-dom';
 import { AudioLines, Check, Ellipsis, Eye, FileMusic, Film, Image as ImageIcon, Palette, Plus, Trash2, Info, TriangleAlert } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { assetNotices, lutUsers, type Asset, type ProjectDocument } from '@pulseframe/core';
+import { libraryFacts } from './analysis.logic.ts';
 import type { Key } from '@pulseframe/i18n';
 import { peaksForColumns, pickWaveformLevel } from '../clipVisuals.math.ts';
 import { DerivativeLoader, thumbTileAt, type LoadedDerivative } from './mediaThumb.ts';
@@ -189,9 +191,7 @@ export function MediaGrid({ onView, query = '', filter = 'all', only }: { onView
         const usedLabel = isLut ? S.lutInUse : S.inUse;
         const KindIcon = isLut ? Palette : a.kind === 'image' ? ImageIcon : a.kind === 'video' ? Film : AudioLines;
         const add = () => void editor.addAsset(a.id);
-        const an = doc.analyses[a.id];
-        const bpm = an?.beats?.bpm ? Math.round(an.beats.bpm) : null;
-        const shots = an?.scenes ? an.scenes.cuts.length + 1 : null;
+        const { bpm, shots } = libraryFacts(doc, a.id); // its own measurements or its time-preserving source's (analysis.logic.ts)
         const lang = doc.transcripts[a.id]?.language.split('-')[0]?.toUpperCase() ?? null;
         return (
           <li key={a.id} className={`media-card pf-mc${isMissing ? ' is-missing' : ''}`} draggable={!isLut} data-testid={`asset-${a.id}`} data-kind={a.kind} data-missing={isMissing || undefined} title={isLut ? S.lutHint : t('media.dragHint')}
@@ -213,6 +213,7 @@ export function MediaGrid({ onView, query = '', filter = 'all', only }: { onView
             <span className="pf-mc-name"><span className="asset-name" dir="auto" title={a.name}>{stem(assetDisplayName(a, state.lang) ?? a.name)}</span>
               <InlineRename value={a.name} label={`${t('media.rename')}: ${a.name}`} testid={`rename-${a.id}`} className="pf-mc-rename" onCommit={(name) => void editor.commit([{ op: 'rename_asset', args: { assetId: a.id, name } }], 'Rename file')} /></span>
             <DateBadge assetId={a.id} />
+            <LibraryAssetBadges asset={a} />
             {(bpm || shots || lang) && (
               <span className="pf-mc-glyphs">
                 {bpm && <span title={C.badgeBeat}><bdi className="num">{bpm}</bdi> {C.bpmWord}</span>}

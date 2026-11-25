@@ -291,7 +291,7 @@ describe('every registered op', () => {
     const about: Record<string, Record<string, unknown>> = {
       apply_text_preset: title, update_text: title, set_text_animation: title, add_text: { trackId: undefined }, update_cue: cue, merge_cues: cue,
       set_volume_keyframe: sound, draw_volume: sound, delete_volume_keyframe: sound, set_clip_fades: sound, set_audio_crossfade: sound, fit_music: sound,
-      set_track_audio: soundTrack, add_adjustment: { trackId: undefined }, set_clip_follow: title, set_text_fields: title,
+      set_track_audio: soundTrack, add_adjustment: { trackId: undefined }, set_clip_follow: title, set_text_fields: title, match_clip_loudness: sound,
       add_audio_effect: sound, apply_audio_preset: sound, update_audio_effect: { ...sound, effectId: s.audioEffectId }, remove_audio_effect: { ...sound, effectId: s.audioEffectId }, set_ducking: { ...soundTrack, sourceTrackIds: [s.trackId] }, set_caption_style: captions, apply_caption_look: captions, add_cue: captions,
     };
     // Arguments the schema alone cannot make meaningful.
@@ -314,6 +314,7 @@ describe('every registered op', () => {
       update_sequence: { sequenceId: 'seq_main', name: 'Main edit' },
       remove_sequence: { sequenceId: s.shortId, withContents: true },
       update_person: { personId: s.personId, name: 'Dana B' },
+      replace_text: { edits: [{ at: { kind: 'title', clipId: s.textId }, was: 'Title', text: 'Heading' }] },
       update_multicam: { groupId: s.groupId, name: 'Two cameras' },
       set_multicam_sync: { groupId: s.groupId, angleId: s.angleIds[1], pieceIndex: 0, clear: true },
       set_angle_look: { groupId: s.groupId, angleId: s.angleIds[0], clear: true },
@@ -356,7 +357,7 @@ describe('every registered op', () => {
       const first = attempt(o.name, base);
       if ('doc' in first) worked.push(o.name);
       // an op whose contract is registered before its body: no argument can make it do its work (it is swept all the same)
-      else if (first.error instanceof OpError && /\bnot built yet\b/.test(first.error.message)) stubs.push(o.name);
+      else if (first.error instanceof OpError && /\bnot built\b/.test(first.error.message)) stubs.push(o.name);
       const paths = stringPaths(base);
       const variants: [string, unknown][] = [];
       for (const id of HOSTILE) {

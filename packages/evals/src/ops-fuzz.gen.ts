@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT } from '@pulseframe/core';
+import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -598,7 +598,28 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       ...(KEYFRAME_OPS_BUILT && !opts.v1Replay ? keyframeMenu(doc) : []),
       // multicam (ADR-0020): once W1 has built the bodies
       ...(MULTICAM_OPS_BUILT && !opts.v1Replay ? multicamMenu(doc) : []),
+      // the content library (wave 7): the credits card, once worker B has built the bodies
+      ...(LIBRARY_OPS_BUILT && !opts.v1Replay ? [() => genLibrary(doc)] : []),
+      // editing craft (wave 7): ripple trim, paste attributes, replace text, once W1 has built the bodies (never in the v1 corpus,
+      // which keyframe-replay.test.ts and ripple-delete-golden.test.ts pin)
+      ...(CRAFT_OPS_BUILT && !opts.v1Replay ? [() => genCraft(doc)] : []),
+      // stabilisation (wave 7): the two public operations, once W2 has built the bodies
+      ...(STEADY_OPS_BUILT && !opts.v1Replay ? [() => genStabilise(doc)] : []),
       ...(SEQUENCE_OPS_BUILT ? [...sequenceMenu(doc), () => { const others = Object.keys(doc.sequences).filter((id) => id !== doc.mainSequenceId); return { op: 'add_marker', args: { sequenceId: others.length && rnd() < 0.8 ? pick(others) : rnd() < 0.5 ? doc.mainSequenceId : 'seq_none', time: T.frameTime(int(240), rate) } }; }] : []),
+      // send and keep (wave 7): the master limiter on and off, and the loudness match of sound clips with their current gain (accepted)
+      // or a changed one (refused stale), sometimes a repeated or unknown clip; left out of the recorded v1 replay corpus
+      ...(opts.v1Replay ? [] : [
+      () => ({ op: 'set_master_limiter', args: { ceiling: pick([null, -1, -3, -0.5, 0]) } }),
+      () => {
+        const pool = audioClips.length ? audioClips : [];
+        const take = pool.length ? Array.from({ length: 1 + int(Math.min(3, pool.length)) }, () => pick(pool).c) : [];
+        const uniq = [...new Map(take.map((c) => [c.id, c])).values()];
+        const rows = uniq.map((c) => ({ clipId: c.id, measuredLufs: -(10 + int(40)), peakDbfs: -int(30), gain: c.type === 'media' && c.gain > 0 && rnd() < 0.9 ? c.gain : 0.37 }));
+        if (rows.length === 0 || rnd() < 0.05) rows.push({ clipId: any(), measuredLufs: -20, peakDbfs: -6, gain: 1 });
+        if (rnd() < 0.05) rows.push({ ...rows[0]! });
+        return { op: 'match_clip_loudness', args: { target: pick([-14, -16, -18, -23]), clips: rows } };
+      },
+      ]),
     ];
     return pick(menu)();
   };
@@ -693,6 +714,86 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     return { op: 'add_builtin_music', args: { asset: a, grid: g, ...(rnd() < 0.6 ? { place: { start: rnd() < 0.9 ? fr() : T.rt(1, 1000) } } : {}) } };
   };
   /**
+   * The content library (wave 7 library track). `genLibrary(doc)` returns a random add_credits_card call (public; `gen` draws it once
+   * LIBRARY_OPS_BUILT): sometimes on an unknown sequence, sometimes with an out-of-range length (both refused by the schema or the op).
+   * `genLibraryUse()` returns a random use_library_item call (internal; a driver commits it with allowInternal, as the server does):
+   * records under CC0, CC BY (with and without credit), CC BY-NC, ND, an unknown custom licence and the allow-listed custom row,
+   * flags right and wrong, the same content again (deduplicated or record attached), and now and then no record at all (refused).
+   */
+  const genLibrary = (doc: ProjectDocument): OpCall => {
+    const seqs = Object.keys(doc.sequences);
+    return { op: 'add_credits_card', args: { ...(rnd() < 0.3 ? { sequenceId: rnd() < 0.9 ? pick(seqs) : 'seq_none' } : {}), ...(rnd() < 0.5 ? { seconds: pick([3, 4, 8, 20, 2, 21]) } : {}), ...(rnd() < 0.4 ? { lang: pick(['he', 'en'] as const) } : {}) } };
+  };
+  const genLibraryUse = (): OpCall => {
+    const licences: [string, Record<string, unknown>][] = [
+      ['CC0-1.0', {}], ['CC-BY-4.0', { credit: { text: 'Song Composer (example.invalid)', placement: 'description' } }], ['CC-BY-4.0', {}],
+      ['CC-BY-NC-4.0', { credit: { text: 'NC Composer', placement: 'either' } }], ['CC-BY-NC-4.0', { credit: { text: 'NC Composer', placement: 'either' }, flags: { nonCommercial: true, diskOnly: true } }],
+      ['CC-BY-ND-4.0', {}], ['custom:unknown-source', {}], ['custom:musopen-flac', { flags: { diskOnly: true } }],
+    ];
+    const [id, extra] = pick(licences);
+    const k = int(4);
+    const record = { itemId: `synthetic/${k}.wav`, sourceId: id.startsWith('custom:') ? id.slice(7) : 'synthetic', kind: 'sound' as const, title: `Fuzz ${k}`, sourceSha256: sha256Hex(`lib${k}`), ledger: { item: `synthetic/${k}` }, licence: { id }, flags: {}, ...extra };
+    const asset = { kind: 'audio' as const, name: `lib${k}.wav`, contentHash: `sha256:${rnd() < 0.15 ? '2'.repeat(64) : sha256Hex(`lib${k}`)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(2 + k, 1), audio: { sampleRate: 48000, channels: 1, codec: 'pcm_s16le' }, provenance: { origin: 'upload' as const, importedAt: '2026-11-25T00:00:00Z', importedBy: 'fuzz', ...(rnd() < 0.95 ? { library: record } : {}) } };
+    return { op: 'use_library_item', args: { asset } };
+  };
+  /**
+   * Editing craft (wave 7 craft track). `genCraft(doc)` returns a random ripple_trim, paste_attributes or replace_text call: ripple
+   * trims at frame times inside, at and past a clip's edges (the start edge also earlier: refused), pastes of random groups among
+   * clips of every kind (a source among its targets: refused), replacements of titles with the text they hold or a stale one
+   * (refused), and unknown ids. `gen` draws it once CRAFT_OPS_BUILT.
+   */
+  const genCraft = (doc: ProjectDocument): OpCall => {
+    const clips = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips));
+    const id = () => (clips.length && rnd() < 0.92 ? pick(clips).id : 'clp_none');
+    const kind = rnd();
+    if (kind < 0.45) {
+      const c = clips.length ? pick(clips) : null;
+      const s = c ? T.frameIndexAt(c.start, rate) : 0, d = c ? Math.max(1, T.frameIndexAt(c.duration, rate)) : 30;
+      const edge = rnd() < 0.5 ? 'start' as const : 'end' as const;
+      const to = edge === 'start' ? s + int(d + 2) - (rnd() < 0.1 ? 3 : 0) : s + 1 + int(2 * d);
+      return { op: 'ripple_trim', args: { clipId: c?.id ?? 'clp_none', edge, to: f(Math.max(0, to)), ...(rnd() < 0.1 ? { includeLinked: false } : {}) } };
+    }
+    if (kind < 0.8) {
+      const from = id();
+      const groups = ATTRIBUTE_GROUPS.filter(() => rnd() < 0.4);
+      return { op: 'paste_attributes', args: { fromClipId: from, toClipIds: Array.from({ length: 1 + int(3) }, () => (rnd() < 0.05 ? from : id())), groups: groups.length ? groups : [pick(ATTRIBUTE_GROUPS)] } };
+    }
+    const titles = clips.filter((c) => c.type === 'text') as Extract<(typeof clips)[number], { type: 'text' }>[];
+    const t = titles.length ? pick(titles) : null;
+    return { op: 'replace_text', args: { edits: [{ at: { kind: 'title', clipId: t?.id ?? 'clp_none' }, was: t && rnd() < 0.85 ? t.text : 'stale', text: pick(['נועה', 'Noa', 'שלום {name}', 'x']) }] } };
+  };
+  /**
+   * Stabilisation (wave 7 stabilise track). `genCameraMotion(doc)` returns a random attach_camera_motion call (internal; a driver
+   * commits it with allowInternal, as the job does): on a video, a still, a sound file or no file; stretches of 1–300 frames anywhere
+   * in the file (overlapping, touching or apart from earlier ones), now and then past the end, with a bad first state, unequal
+   * columns or an out-of-range value. `genStabilise(doc)` returns a random set_clip_stabilise or remove_camera_motion call (public;
+   * `gen` draws them once STEADY_OPS_BUILT): on media clips of every kind and on unknown ids, strengths, crops, zooms, null and modes.
+   */
+  const genCameraMotion = (doc: ProjectDocument): OpCall => {
+    const assets = Object.values(doc.assets);
+    const a = rnd() < 0.93 && assets.length ? pick(assets.filter((x) => x.video).length && rnd() < 0.85 ? assets.filter((x) => x.video) : assets) : undefined;
+    const frames = a?.video ? a.video.frameCount ?? 300 : 300;
+    const len = 1 + int(Math.min(300, frames));
+    const from = rnd() < 0.05 ? frames - int(3) : int(Math.max(1, frames - len + 1));
+    const col = (amp: number) => Array.from({ length: len }, () => int(2 * amp + 1) - amp);
+    const st = Array.from({ length: len }, (_, i) => (i === 0 ? (rnd() < 0.95 ? SST.start : SST.ok) : pick([SST.ok, SST.ok, SST.ok, SST.weak, SST.unknown, SST.start])));
+    const dx = col(400);
+    if (rnd() < 0.04) dx.pop();
+    const dr = col(2000);
+    if (rnd() < 0.03) dr[0] = 600_000;
+    return { op: 'attach_camera_motion', args: { assetId: a?.id ?? 'ast_none', from, dx: dx.length ? dx : [0], dy: col(400), dr, dz: col(300), st, method: 'fuzz', params: { algo: 1, input: pick(['proxy', 'original']) }, createdAt: '2026-11-25T00:00:00Z' } };
+  };
+  const genStabilise = (doc: ProjectDocument): OpCall => {
+    const media = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips)).filter((c) => c.type === 'media');
+    if (rnd() < 0.3) {
+      const ids = Object.keys(doc.assets);
+      return { op: 'remove_camera_motion', args: { assetId: ids.length && rnd() < 0.9 ? pick(ids) : 'ast_none', ...(rnd() < 0.6 ? { mode: pick(['if-unused', 'unbind', 'unused-only'] as const) } : {}) } };
+    }
+    const clipId = media.length && rnd() < 0.92 ? pick(media).id : 'clp_none';
+    if (rnd() < 0.15) return { op: 'set_clip_stabilise', args: { clipId, stabilise: null } };
+    return { op: 'set_clip_stabilise', args: { clipId, stabilise: { ...(rnd() < 0.7 ? { strength: pick([1, 5, 50, 77, 100]) } : {}), ...(rnd() < 0.3 ? { maxCrop: pick([1, 10, 15, 50]) } : {}), ...(rnd() < 0.2 ? { zoomPm: pick([1000, 1010, 1500, 2000]) } : {}) } } };
+  };
+  /**
    * The next random call among the named operations: draws from the same menu until one of them comes up (the menu grows with every
    * feature, so a driver that is about a few operations would otherwise meet them too rarely to say anything about them).
    */
@@ -701,5 +802,5 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise };
 }

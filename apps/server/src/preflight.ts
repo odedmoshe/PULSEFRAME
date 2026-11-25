@@ -7,7 +7,7 @@ import * as T from '@pulseframe/time';
 import { BACKDROP, BACKDROP_MIN_BLUR, MULTICAM_PREFLIGHT_CODE, own, multicamGroupOf, segmentSyncOffset, outputSafeArea, previousAdjacent, sequenceDuration, sequenceOf, velocityLimit, velocityNeeds, type Clip, type FollowStateName, type MediaClip, type OpCall, type ProjectDocument, type ResolvedRegion, type Track, type Transition } from '@pulseframe/core';
 import { audioPlan, captionCues, decodeOverBudget, evaluate, type DecodeStretch, type Layer } from '@pulseframe/engine';
 import type { Exporter } from './export.ts';
-import { outputDoc } from './export.ts';
+import { LIBRARY_EXPORT_NOTES, outputDoc } from './export.ts';
 import { fieldIssues, fieldTextExtent, isFieldIssueCode } from './preflight.fields.ts';
 
 export interface PreflightIssue {
@@ -107,7 +107,10 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
   // the life line's issues (ADR-0021) are listed once, below, with their frame ranges; the plan carries them without
   for (const b of plan.blockers) if (!isFieldIssueCode(b.code)) issues.push({ code: b.code, severity: 'blocker', message: b.message, ids: b.ids });
   // A sound-effect tail cut at the end of the video is how effects are designed to behave (ADR-0010), so it is a note here.
-  for (const w of plan.warnings) if (!isFieldIssueCode(w.code)) issues.push({ code: w.code, severity: w.code === 'audio_tail_cut' ? 'note' : 'warning', message: w.message, ids: w.ids });
+  // Library content (wave 7): the credits for the description and stock footage with people are notes; a credit the licence wants in
+  // the video and no visible title shows is a warning whose fix is the credits card of this output's sequence.
+  for (const w of plan.warnings) if (!isFieldIssueCode(w.code)) issues.push({ code: w.code, severity: w.code === 'audio_tail_cut' || LIBRARY_EXPORT_NOTES.has(w.code) ? 'note' : 'warning', message: w.message, ids: w.ids,
+    ...(w.code === 'credit_not_on_screen' ? { fix: { label: 'Add a credits card at the end', ops: [{ op: 'add_credits_card', args: opts.sequenceId !== undefined ? { sequenceId: opts.sequenceId } : {} }] } } : {}) });
 
   // 2. stretches with no picture at all (the background colour would show)
   const covered = seq.tracks.filter((t) => (t.kind === 'video' || t.kind === 'text') && !t.hidden).flatMap((t) => t.clips.map((c) => [fi(c.start), fi(T.add(c.start, c.duration))] as [number, number])).sort((a, b) => a[0] - b[0]);

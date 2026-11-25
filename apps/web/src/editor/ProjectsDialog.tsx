@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { api, ApiFailure, type BackupStatus, type GcResult, type ProjectListItem, type StorageReport } from '../api.ts';
 import { useEditorState } from './store.ts';
+import { isOwnerActor, ownerArchiveHref } from './library/library.logic.ts';
 
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
 
@@ -175,7 +176,7 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }) {
               {deleting === p.id && (
                 <div className="fields pf-dlg-confirm" role="group" aria-label={t('projects.delete')}>
                   <p className="danger" role="alert">{t('projects.delete.warn')}</p>
-                  <a className="ghost" href={`/api/v1/projects/${encodeURIComponent(p.id)}/archive`} data-testid="project-archive">{t('projects.delete.archive')}</a>
+                  <a className="ghost" href={isOwnerActor(state.actor) ? ownerArchiveHref(p.id) : `/api/v1/projects/${encodeURIComponent(p.id)}/archive`} data-testid="project-archive">{t('projects.delete.archive')}</a>
                   <label>{t('projects.delete.type')} (<bdi dir="auto">{p.name}</bdi>)
                     <input dir="auto" autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} data-testid="project-delete-confirm" />
                   </label>

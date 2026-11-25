@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
-import { CAPTION_LOOKS, FORMAT_PROFILES, SCORE_COMPONENTS, sequenceList, transcriptStatements, type BuildShortsBody, type FindShortsBody, type ShortCandidate, type ShortCandidatesView, type ShortsPlanView, type Statement, type Transcript } from '@pulseframe/core';
+import { CAPTION_LOOKS, FORMAT_PROFILES, SCORE_COMPONENTS, sceneCutsFor, sequenceList, transcriptStatements, type BuildShortsBody, type FindShortsBody, type ShortCandidate, type ShortCandidatesView, type ShortsPlanView, type Statement, type Transcript } from '@pulseframe/core';
 import { dictionaries, jobStageLabel, translateRefusal, type Key } from '@pulseframe/i18n';
 import { api, ApiFailure, type SpeechStatus } from '../api.ts';
 import { Button, Chip, Dialog, ProgressBar } from '../ds/index.ts';
@@ -51,7 +51,7 @@ export function ShortsPanel() {
   const assetId = cfg.assetId && videos.some((v) => v.id === cfg.assetId) ? cfg.assetId : videos[0]?.id ?? '';
   const set = (p: Partial<Settings>) => setCfg((c) => ({ ...c, assetId, ...p }));
   const transcript = raw && assetId && Object.hasOwn(raw.transcripts, assetId) ? raw.transcripts[assetId] : undefined;
-  const hasScenes = !!(raw && assetId && Object.hasOwn(raw.analyses, assetId) && raw.analyses[assetId]!.scenes);
+  const hasScenes = !!(raw && assetId && Object.hasOwn(raw.assets, assetId) && sceneCutsFor(raw, assetId)); // its own scene cuts or its time-preserving source's, as the finder reads them
   const wordTimed = !!transcript?.segments.some((s) => s.timing === 'word');
   const tracks = useMemo(() => (raw ? Object.values(raw.motionTracks).filter((m) => m.assetId === assetId) : []), [raw, assetId]);
 

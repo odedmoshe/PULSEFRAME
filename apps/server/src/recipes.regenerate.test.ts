@@ -198,7 +198,7 @@ describe('regenerate after the in-place branch', () => {
       }
     });
 
-    it('several deletes add up; a delete that kept its gap, or of a clip the montage did not make, explains no move: those clips stay kept, and the montage stays valid with no picture over another', async () => {
+    it('several deletes add up; a delete that kept its gap and a later one that closed its gap: the clips after both moved by the closed length and are placed again; a delete of a clip the montage did not make explains no move: those clips stay kept, and the montage stays valid with no picture over another', async () => {
       const noOverlap = (at: number[][]) => at.every(([s2], i) => i === 0 || s2! >= at[i - 1]![1]!);
       // two Deletes that each closed the gap: the clips after both moved by two segments and are placed again
       const m = montageProject('bm-two-deletes', ['y', 'z', 'A']);
@@ -212,15 +212,16 @@ describe('regenerate after the in-place branch', () => {
       const back = await regenerateRecipe(store, gov, owner, m.pid, applied.runId, m.params, { restoreRemoved: true });
       expect([back.protected, back.removed, m.at()]).toEqual([[], [], SIX]);
       // one clip deleted with its gap KEPT and a later one with its gap closed: the clips after both moved by one segment while two
-      // are gone before them, so their move is not explained and they are kept where they lie
+      // are gone before them. Each gone clip closed its gap or kept it, and the reading that fits the track (the clips between
+      // them did not move) explains the move: they are placed again on the beat, not kept (amendment of 2026-11-25)
       const u = montageProject('bm-mixed-deletes', ['B', 'C', 'D']);
       const mixed = await applyRecipe(store, gov, owner, u.pid, 'beat-montage', u.params);
       const u0 = u.pictures();
       store.commit({ projectId: u.pid, actor: 'user:owner', ops: [{ op: 'delete_clip', args: { clipId: u0[0]!.id } }, { op: 'ripple_delete_clips', args: { clipIds: [u0[3]!.id] } }] });
       const ru = await regenerateRecipe(store, gov, owner, u.pid, mixed.runId, u.params);
-      // the clips between the two deletes did not move (untouched, replaced); those after the closing delete are kept
-      expect([[...ru.protected].sort(), ru.movedBack]).toEqual([[u0[4]!.id, u0[5]!.id].sort(), []]);
-      expect([validateProject(store.getProject(u.pid).doc), noOverlap(u.at())]).toEqual([[], true]);
+      // the clips between the two deletes did not move (untouched, replaced); those after the closing delete are put back
+      expect([ru.protected, [...(ru.movedBack ?? [])].sort(), [...(ru.removed ?? [])].sort()]).toEqual([[], [u0[4]!.id, u0[5]!.id].sort(), [u0[0]!.id, u0[3]!.id].sort()]);
+      expect([validateProject(store.getProject(u.pid).doc), noOverlap(u.at()), u.at()]).toEqual([[], true, SIX.filter((_, i) => i !== 0 && i !== 3)]);
       // a clip the montage did not make, before the montage on its picture track, deleted with its gap closed: every clip moved,
       // none of the montage's own clips is gone, so every clip is kept as moved by hand (as before the rule)
       const v = montageProject('bm-foreign-delete', ['E', 'F', 'G'], 60);
@@ -237,10 +238,44 @@ describe('regenerate after the in-place branch', () => {
       expect([validateProject(store.getProject(pid).doc), v.at()]).toEqual([[], [...SIX, [360, 420]]]);
     });
 
-    it('property (seeded): after hand edits (deletes that close the gap, drags, deletes that keep the gap, trims, turns) a regeneration leaves a valid montage with no two pictures on the same frames, undoes exactly and replays; after gap-closing deletes alone every clip is back on its beat and nothing is kept; while none of the montage\'s clips is deleted every dragged clip is kept where it was put', async () => {
-      const tally = { runs: 0, ripples: 0, drags: 0, deletesOnly: 0, noDelete: 0, movedBack: 0, kept: 0, draggedKept: 0 };
+    it('Shift+Delete then Delete, and Delete then Shift+Delete, before the same clips: they moved by the one closed segment and are placed again on the beat, not kept one segment early; a clip dragged by hand after the two deletes is still kept where it was put', async () => {
+      const keepGap = (id: string) => ({ op: 'delete_clip', args: { clipId: id } }), closeGap = (id: string) => ({ op: 'ripple_delete_clips', args: { clipIds: [id] } });
+      const hand = (pid: string, op: { op: string; args: unknown }) => store.commit({ projectId: pid, actor: 'user:owner', ops: [op] });
+      for (const [name, letters, first, second] of [['bm-kept-then-closed', ['H', 'I', 'J'], keepGap, closeGap], ['bm-closed-then-kept', ['K', 'L', 'M'], closeGap, keepGap]] as const) {
+        const m = montageProject(name, [...letters]);
+        const applied = await applyRecipe(store, gov, owner, m.pid, 'beat-montage', m.params);
+        const p0 = m.pictures();
+        hand(m.pid, first(p0[0]!.id));
+        hand(m.pid, second(p0[1]!.id));
+        // the four later clips lie one segment early, while two clips are gone before them
+        expect(m.at(), name).toEqual(SIX.slice(1, 5));
+        const held = store.getProject(m.pid).doc;
+        const r = await regenerateRecipe(store, gov, owner, m.pid, applied.runId, m.params);
+        expect([r.protected, [...(r.movedBack ?? [])].sort(), [...(r.removed ?? [])].sort(), m.at()], name).toEqual([[], p0.slice(2).map((c) => c.id).sort(), [p0[0]!.id, p0[1]!.id].sort(), SIX.slice(2)]);
+        expect(validateProject(store.getProject(m.pid).doc), name).toEqual([]);
+        store.undo(m.pid, 'user:owner', 'undo');
+        expect(creativeProjection(store.getProject(m.pid).doc), name).toBe(creativeProjection(held));
+      }
+      // the same two deletes, then the last clip dragged 15 frames on by hand: no reading of the deletes gives that amount, so it
+      // is kept where it was put; the clips before it, which only the delete moved, are still placed again
+      const d = montageProject('bm-two-deletes-then-drag', ['N', 'O', 'P']);
+      const made = await applyRecipe(store, gov, owner, d.pid, 'beat-montage', d.params);
+      const d0 = d.pictures();
+      hand(d.pid, keepGap(d0[0]!.id));
+      hand(d.pid, closeGap(d0[1]!.id));
+      hand(d.pid, { op: 'move_clip', args: { clipId: d0[5]!.id, start: f(255) } });
+      const kept = structuredClone(findClip(store.getProject(d.pid).doc, d0[5]!.id)!.clip);
+      const rd = await regenerateRecipe(store, gov, owner, d.pid, made.runId, d.params);
+      expect([rd.protected, [...(rd.movedBack ?? [])].sort()]).toEqual([[d0[5]!.id], [d0[2]!.id, d0[3]!.id, d0[4]!.id].sort()]);
+      expect(findClip(store.getProject(d.pid).doc, d0[5]!.id)!.clip).toEqual(kept);
+      const at = d.at();
+      expect([validateProject(store.getProject(d.pid).doc), at.every(([s2], i) => i === 0 || s2! >= at[i - 1]![1]!)]).toEqual([[], true]);
+    });
+
+    it('property (seeded): after hand edits (deletes that close the gap, drags, deletes that keep the gap, trims, turns) a regeneration leaves a valid montage with no two pictures on the same frames, undoes exactly and replays; after deletes alone, gap-closing and gap-keeping in any order, every clip is back on its beat and nothing is kept; while none of the montage\'s clips is deleted every dragged clip is kept where it was put', async () => {
+      const tally = { runs: 0, ripples: 0, gapKeeping: 0, drags: 0, deletesOnly: 0, mixedDeletesOnly: 0, noDelete: 0, movedBack: 0, kept: 0, draggedKept: 0 };
       let project = 0;
-      await fc.assert(fc.asyncProperty(fc.array(fc.tuple(fc.nat(6), fc.nat(20), fc.nat(50)), { minLength: 1, maxLength: 4 }), fc.boolean(), async (edits, restore) => {
+      await fc.assert(fc.asyncProperty(fc.array(fc.tuple(fc.nat(7), fc.nat(20), fc.nat(50)), { minLength: 1, maxLength: 4 }), fc.boolean(), async (edits, restore) => {
         const letters = [0, 1, 2].map((i) => String.fromCharCode(0x80 + ((project * 3 + i) % 0x80))) as [string, string, string];
         const m = montageProject(`bm-prop-${project++}`, letters);
         const applied = await applyRecipe(store, gov, owner, m.pid, 'beat-montage', m.params);
@@ -256,10 +291,11 @@ describe('regenerate after the in-place branch', () => {
             ['drag', { op: 'move_clip', args: { clipId: pics.at(-1)!.id, start: f(T.nearestFrameIndex(pics.at(-1)!.start, R) + 1 + amount) } }],
             ['drag', { op: 'move_clip', args: { clipId: c.id, start: f(Math.max(0, start - 1 - amount)) } }],
             ['delete', { op: 'delete_clip', args: { clipId: c.id } }],
+            ['delete', { op: 'delete_clip', args: { clipId: c.id } }],
             ['trim', { op: 'trim_clip', args: { clipId: c.id, edge: 'end', to: f(start + 10 + (amount % 40)) } }],
             ['turn', { op: 'set_clip_transform', args: { clipId: c.id, transform: { rotation: 1 + amount } } }],
           ] as const)[kind]!;
-          try { store.commit({ projectId: m.pid, actor: 'user:owner', ops: [op] }); done.add(name); if (name === 'ripple') tally.ripples++; if (name === 'drag') tally.drags++; } catch (e) { if (!(e instanceof ApiError)) throw e; }
+          try { store.commit({ projectId: m.pid, actor: 'user:owner', ops: [op] }); done.add(name); if (name === 'ripple') tally.ripples++; if (name === 'delete') tally.gapKeeping++; if (name === 'drag') tally.drags++; } catch (e) { if (!(e instanceof ApiError)) throw e; }
         }
         const held = store.getProject(m.pid).doc, run = held.recipeRuns[applied.runId]!;
         const live = run.createdIds.filter((id) => !!findClip(held, id));
@@ -280,10 +316,12 @@ describe('regenerate after the in-place branch', () => {
         if ((r.movedBack ?? []).some((id) => !displaced.includes(id)) || ((r.movedBack ?? []).length && live.length === run.createdIds.length)) throw new Error('clips were put back although none of the montage\'s clips was deleted');
         const at = m.at();
         if (at.some(([s2], i) => i > 0 && s2! < at[i - 1]![1]!)) throw new Error(`pictures overlap: ${JSON.stringify(at)}`);
-        if (done.size === 1 && done.has('ripple')) {
+        // deletes alone, each with its gap closed or kept, in any order: every clip lies where those deletes left it, so none is a hand edit
+        if (done.size > 0 && [...done].every((x) => x === 'ripple' || x === 'delete')) {
           tally.deletesOnly++;
-          if (r.protected.length || at.some(([s2, e2]) => s2! % 60 !== 0 || e2! - s2! !== 60)) throw new Error(`only gap-closing deletes, yet not every clip is on its beat: ${JSON.stringify({ at, protected: r.protected })}`);
-          if (restore && JSON.stringify(at) !== JSON.stringify(SIX)) throw new Error(`restoreRemoved after gap-closing deletes did not give the whole montage: ${JSON.stringify(at)}`);
+          if (done.size === 2) tally.mixedDeletesOnly++;
+          if (r.protected.length || at.some(([s2, e2]) => s2! % 60 !== 0 || e2! - s2! !== 60)) throw new Error(`only deletes, yet not every clip is on its beat: ${JSON.stringify({ at, protected: r.protected, done: [...done] })}`);
+          if (restore && JSON.stringify(at) !== JSON.stringify(SIX)) throw new Error(`restoreRemoved after deletes alone did not give the whole montage: ${JSON.stringify(at)}`);
         }
         if (!done.has('ripple') && !done.has('delete')) {
           // none of the montage's clips is gone, so no move is explained by a delete: every displaced clip was dragged and is kept
@@ -303,7 +341,9 @@ describe('regenerate after the in-place branch', () => {
       console.log(`beat-montage regeneration after hand edits (property): ${JSON.stringify(tally)}`);
       expect(tally.ripples).toBeGreaterThan(5);
       expect(tally.drags).toBeGreaterThan(5);
+      expect(tally.gapKeeping).toBeGreaterThan(5);
       expect(tally.deletesOnly).toBeGreaterThan(1);
+      expect(tally.mixedDeletesOnly).toBeGreaterThan(0);
       expect(tally.movedBack).toBeGreaterThan(1);
       expect(tally.draggedKept).toBeGreaterThan(1);
     }, 300_000);

@@ -78,6 +78,15 @@ export interface VideoLayer extends LayerLook {
   lane?: number;
   /** Privacy regions (ADR-0015) resolved at THIS picture's sourceFrameIndex (taps and the stutter picture carry their own); drawn right after placement, before effects. */
   regions?: ResolvedRegion[];
+  /**
+   * Stabilisation (wave 7; core steadyContract.ts / steady.ts), a render quantity of THIS picture, set by barePicture at its own
+   * source frame from clip.stabilise and the file's camera motion, after limitToCover (W2 builds it). The compositor draws the
+   * picture as: own transform → clip to the picture's own rectangle → translate(zoom·t·w) · rotate(r) · scale(zoom·e^l); after the
+   * privacy regions the buffer is masked to the own rectangle. `transform` keeps its meaning (the clip's own placement).
+   * limited: false, or why the cover guarantee weakened the correction ('clip': the clip changed since its zoom was computed;
+   * 'reach': only a ramp or a transition handle reaches past the clip's range).
+   */
+  steady?: { v: 1; tx: number; ty: number; r: number; l: number; zoom: number; state: 'ok' | 'weak' | 'unknown' | 'start' | 'outside'; limited: false | 'clip' | 'reach' };
 }
 /** A still picture. Same placement rules as video; one decoded image for the whole clip. */
 export interface ImageLayer extends LayerLook { kind: 'image'; clipId: string; trackId: string; assetId: string; sourceWidth: number; sourceHeight: number; transform: Transform }

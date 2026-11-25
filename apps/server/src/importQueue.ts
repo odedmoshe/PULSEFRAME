@@ -19,9 +19,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { IMPORT_STAGE, convertingStage, importCardState, importErrorRetryable, LUT_MAX_TEXT_LENGTH, type Asset, type ImportErrorCode, type ImportJobView, type ImportRoom } from '@pulseframe/core';
+import { LibraryRecordSchema, IMPORT_STAGE, convertingStage, importCardState, importErrorRetryable, LUT_MAX_TEXT_LENGTH, type Asset, type ImportErrorCode, type ImportJobView, type ImportRoom } from '@pulseframe/core';
 import { readCapture } from './captureMeta.ts';
-import { CONFORM_RECIPE, diskReserveRefuses, IMPORT_JOB_TYPE, importIdempotencyKey, importTempName, type ImportJobError, type ImportJobInput, type ImportJobOutput, type ImportQueue, type ImportQueueDeps, type ReceiveRequest } from './importContracts.ts';
+import { CONFORM_RECIPE, diskReserveRefuses, IMPORT_JOB_TYPE, importIdempotencyKey, importTempName, type ImportJobError, type ImportJobInput, type ImportJobOutput, type ImportQueue, type ImportQueueDeps, type LibraryJobInput, type ReceiveRequest } from './importContracts.ts';
+import { libraryError } from './library/contract.ts';
 import { buildImportedAsset, cleanRelativePath, cleanUploadName, ConformError, conformRecord, conformVideo, describeMedia, NeedsConform, prepareWithoutConform, receiveOriginal, type MediaMeta } from './ingest.ts';
 import { assertStorageRoom, dataDirBytes, freeDiskBytes, UploadLedger } from './storage.ts';
 import { ApiError, type JobRow } from './store.ts';
@@ -42,7 +43,7 @@ export function conformNeedBytes(originalBytes: number, needs: NeedsConform): nu
 }
 
 /** What the queue keeps beside the shared job output: the recipe a converted result was made by (conform reuse is keyed by it). */
-type StoredOutput = ImportJobOutput & { recipe?: string };
+type StoredOutput = ImportJobOutput & { recipe?: string; /** LIBRARY BRANCH (worker A): use_library_item wrote its record onto an asset that existed */ recordAttached?: boolean };
 
 export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
   const { store, lane, derivatives } = deps;
@@ -168,16 +169,20 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
     const input = inputOf(job);
     let r;
     try {
-      r = store.commit({ projectId: job.projectId, actor: job.actor, allowInternal: true, kind: input.commitKind, idempotencyKey: importIdempotencyKey(job.id), label: `Import ${asset.name}`, ops: [{ op: 'import_asset', args: { asset } }] });
+      // LIBRARY BRANCH (worker A): a library copy is committed by use_library_item (which deduplicates and attaches the record)
+      const op = input.library ? { op: 'use_library_item', args: { asset } } : { op: 'import_asset', args: { asset } };
+      r = store.commit({ projectId: job.projectId, actor: job.actor, allowInternal: true, kind: input.commitKind, idempotencyKey: importIdempotencyKey(job.id), label: `${input.library ? 'Add from the library' : 'Import'} ${asset.name}`, ops: [op] });
     } catch (e) {
       if (e instanceof ApiError && e.code === 'project_not_found') return fail(job, 'project_gone', 'the project was deleted before the file arrived in it', 404, { projectId: job.projectId });
       if (e instanceof ApiError && e.code === 'idempotency_key_reused') return fail(job, 'internal_error', 'another change already used this import\'s commit key; send the file again', 409, { transactionId: e.details.transactionId });
+      // LIBRARY BRANCH (worker A): a refusal of the library record is the caller's to see, with its own code
+      if (e instanceof ApiError && input.library && e.status < 500 && e.code !== 'unknown_op') return fail(job, 'internal_error', `the file could not be added to the project: ${e.message}`, e.status, { refusal: e.code, ...e.details }, e.hint);
       if (e instanceof ApiError) return fail(job, 'internal_error', `the file could not be added to the project: ${e.message}`, 500, { refusal: e.code });
       throw e;
     }
-    const out = r.results[0]?.output as { assetId: string; deduplicated: boolean } | undefined;
+    const out = r.results[0]?.output as { assetId: string; deduplicated: boolean; recordAttached?: boolean } | undefined;
     if (!out?.assetId) return fail(job, 'internal_error', 'the import operation gave no asset', 500);
-    succeed(job, { assetId: out.assetId, revision: r.revision, deduplicated: !!out.deduplicated, converted: extra.converted, reusedConform: extra.reusedConform, reasons: extra.reasons, contentHash: asset.contentHash, conformSeconds: extra.conformSeconds, ...(extra.recipe ? { recipe: extra.recipe } : {}) });
+    succeed(job, { assetId: out.assetId, revision: r.revision, deduplicated: !!out.deduplicated, converted: extra.converted, reusedConform: extra.reusedConform, reasons: extra.reasons, contentHash: asset.contentHash, conformSeconds: extra.conformSeconds, ...(extra.recipe ? { recipe: extra.recipe } : {}), ...(input.library ? { recordAttached: !!out.recordAttached } : {}) });
     ensureDerivatives(job.projectId, out.assetId);
   }
   function ensureDerivatives(projectId: string, assetId: string) {
@@ -188,6 +193,8 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
   }
   const provenanceOf = (job: JobRow): Asset['provenance'] => {
     const i = inputOf(job);
+    // LIBRARY BRANCH (worker A): a library copy carries its licence record and no upload record (validate.ts library_provenance)
+    if (i.library) return { origin: 'upload', importedAt: i.receivedAt, importedBy: job.actor, library: i.library.record } as Asset['provenance'];
     return { origin: 'upload', importedAt: i.receivedAt, importedBy: job.actor, upload: { via: i.via, jobId: job.id, ...(i.dropId ? { dropId: i.dropId } : {}), ...(i.relativePath && i.via === 'folder' ? { relativePath: i.relativePath } : {}) } } as Asset['provenance'];
   };
   const captureOf = (job: JobRow) => readCapture(store.blobPath(inputOf(job).originalHash), inputOf(job).name, { homeZone: deps.homeZone, now: new Date(inputOf(job).receivedAt) });
@@ -206,7 +213,9 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
       const asset = ops[0]?.args?.asset;
       const assetId = JSON.parse(row.result)?.results?.[0]?.output?.assetId;
       const h = inputOf(job).originalHash;
-      if (row.actor === job.actor && row.allow_internal === 1 && ops.length === 1 && ops[0]!.op === 'import_asset' && asset?.provenance?.upload?.jobId === job.id && (asset.contentHash === h || asset.conform?.originalContentHash === h) && typeof assetId === 'string')
+      const lib = inputOf(job).library; // LIBRARY BRANCH (worker A): the library commit names its record, not the job
+      const mine = lib ? ops[0]!.op === 'use_library_item' && asset?.provenance?.library?.itemId === lib.record.itemId : ops[0]!.op === 'import_asset' && asset?.provenance?.upload?.jobId === job.id;
+      if (row.actor === job.actor && row.allow_internal === 1 && ops.length === 1 && mine && (asset.contentHash === h || asset.conform?.originalContentHash === h) && typeof assetId === 'string')
         return { kind: 'own', transactionId: row.id, revision: row.revision, asset, assetId };
     } catch { /* not ours */ }
     return { kind: 'foreign', transactionId: row.id };
@@ -231,7 +240,8 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
   /** Ends a job early when it needs no work of its own. True when the job is finished. */
   async function shortcut(job: JobRow, needs: NeedsConform | null): Promise<boolean> {
     const input = inputOf(job);
-    const dup = duplicateIn(job.projectId, input.originalHash);
+    // LIBRARY BRANCH (worker A): no short-cut for a library copy; use_library_item finds the duplicate and attaches the record
+    const dup = input.library ? null : duplicateIn(job.projectId, input.originalHash);
     if (dup) {
       succeed(job, { assetId: dup.asset.id, revision: dup.revision, deduplicated: true, converted: !!dup.asset.conform, reusedConform: false, reasons: dup.asset.conform?.reasons ?? [], contentHash: dup.asset.contentHash, conformSeconds: null });
       return true;
@@ -385,6 +395,18 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
   const queue: ImportQueue = {
     async receive(req: ReceiveRequest): Promise<JobRow> {
       if (stopped) throw new ApiError(503, 'shutting_down', 'the server is stopping; send the file again once it is back');
+      // ---- LIBRARY BRANCH (wave 7 library track, worker A; library/contract.ts) ----
+      // A copy from the library folder (library/routes.ts, which already checked the file at its source): the record must be a
+      // valid LibraryRecord and `expect` well formed; after the bytes are received, they must equal `expect` (libraryExpectFails,
+      // below) or nothing is stored. The job keeps input.library; its commit is use_library_item (commitAsset), its provenance
+      // provenance.library without provenance.upload (provenanceOf); a duplicate is not short-cut, so the op can attach the record.
+      if (req.library) {
+        const r = LibraryRecordSchema.safeParse(req.library.record);
+        const x = req.library.expect as Record<string, unknown>;
+        const okExpect = typeof x?.sha256 === 'string' ? /^[0-9a-f]{64}$/.test(x.sha256) : Number.isInteger(x?.bytes) && Number.isFinite(x?.mtimeMs);
+        if (!r.success || !okExpect || req.via !== 'browser') throw new ApiError(400, 'invalid_request', 'a library copy needs a valid record and expectation', {});
+      }
+      // ---- end of the library branch ----
       if (!store.db.prepare('SELECT 1 FROM projects WHERE id = ?').get(req.projectId)) throw new ApiError(404, 'project_not_found', `project ${req.projectId} not found`, { projectId: req.projectId }, 'Call list_projects.');
       const { name, isCube } = cleanUploadName(req.name);
       const relativePath = req.via === 'folder' ? cleanRelativePath(req.relativePath) : undefined;
@@ -416,6 +438,10 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
       try {
         if (declared !== null && rec.size !== declared) { fs.rmSync(rec.tmp, { force: true }); throw new ApiError(400, 'upload_incomplete', `the upload ended after ${rec.size} of ${declared} bytes; nothing was stored`, { receivedBytes: rec.size, declaredBytes: declared }); }
         if (stopped) { fs.rmSync(rec.tmp, { force: true }); throw new ApiError(503, 'shutting_down', 'the server is stopping; send the file again once it is back'); }
+        // ---- LIBRARY BRANCH (worker A): the received bytes must be the bytes the library route checked; nothing is stored otherwise ----
+        const libFail = req.library ? libraryExpectFails(req.library.expect, rec) : null;
+        if (libFail) { fs.rmSync(rec.tmp, { force: true }); throw libFail; }
+        // ---- end of the library branch ----
         const input: ImportJobInput = {
           originalHash: rec.hash, byteSize: rec.size, name, via: req.via,
           ...(req.via === 'phone' && req.dropId ? { dropId: req.dropId } : {}),
@@ -425,6 +451,7 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
           receivedAt: new Date(now()).toISOString(), commitKind: req.commitKind,
           ...(req.batchId ? { batchId: req.batchId } : {}),
           retryOf: null,
+          ...(req.library ? { library: req.library } : {}), // LIBRARY BRANCH (worker A)
         };
         // Stored and enqueued in one synchronous step: no job without its bytes, no bytes without a job.
         const row = store.db.transaction(() => {
@@ -549,3 +576,11 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
   };
   return queue;
 }
+
+// ---- LIBRARY BRANCH (wave 7 library track, worker A) ----
+/** Why received library bytes are not the ones the library route checked (409, nothing stored), or null when they are. */
+export function libraryExpectFails(expect: LibraryJobInput['expect'], rec: { hash: string; size: number }): ApiError | null {
+  if ('sha256' in expect) return rec.hash === `sha256:${expect.sha256}` ? null : libraryError('hashMismatch', { sha256: rec.hash.replace(/^sha256:/, ''), expected: expect.sha256 });
+  return rec.size === expect.bytes ? null : libraryError('changedSinceIndex', { bytes: rec.size, indexedBytes: expect.bytes });
+}
+// ---- end of the library branch ----

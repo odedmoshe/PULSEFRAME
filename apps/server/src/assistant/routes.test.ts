@@ -25,6 +25,7 @@ import { f, PLANTED, PLANTED_PRIVATE, plantedProject } from './assistantFixture.
 import { ASSISTANT_KEY_FILE, ASSISTANT_ROUTES } from './contract.ts';
 import { createAssistantHandlers } from './routes.ts';
 import { mockToolAnswer, TestChatAdapter } from './testAdapter.ts';
+import { PUBLIC_STATUS_DETAIL } from './visibility.ts';
 
 const KEY = 'TEST-DOUBLE-NOT-A-KEY-routes-91b2';
 const HOST = 'api.example.test';
@@ -76,12 +77,16 @@ afterAll(async () => {
 });
 
 describe('a fresh data directory', () => {
-  it('status answers any observer with an honest not-ready state and no key field', async () => {
-    for (const h of [bearer(auth.tokens.agent), bearer(auth.tokens.observer), ownerHeaders()]) {
-      const r = await rest('GET', '/assistant/status', h);
-      expect(r.status).toBe(200);
-      expect(r.body).toMatchObject({ setup: 'provider_not_configured', keySet: false, keyAddedAt: null, monthlyLimitCents: 0, perRequestCapCents: 0, spentCents: 0, reservedCents: 0, adapters: [adapter.id], toggles: { titlesAndMarkers: false, peopleNames: false } });
-      expect(Object.keys(r.body).filter((k) => ['key', 'apikey', 'api_key', 'secret', 'token', 'authorization'].includes(k.toLowerCase()))).toEqual([]);
+  it('status answers the owner\'s session with an honest not-ready state and no key field; an agent or observer reads not connected and nothing else', async () => {
+    const r = await rest('GET', '/assistant/status', ownerHeaders());
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ setup: 'provider_not_configured', keySet: false, keyAddedAt: null, monthlyLimitCents: 0, perRequestCapCents: 0, spentCents: 0, reservedCents: 0, held: [], adapters: [adapter.id], toggles: { titlesAndMarkers: false, peopleNames: false } });
+    expect(Object.keys(r.body).filter((k) => ['key', 'apikey', 'api_key', 'secret', 'token', 'authorization'].includes(k.toLowerCase()))).toEqual([]);
+    // money and provider details are the owner's (visibility.ts assistantStatusFor; walked in statusPrivacy.test.ts)
+    for (const h of [bearer(auth.tokens.agent), bearer(auth.tokens.observer)]) {
+      const o = await rest('GET', '/assistant/status', h);
+      expect(o.status).toBe(200);
+      expect(o.body).toEqual({ connected: false, setup: 'not_connected', detail: PUBLIC_STATUS_DETAIL.not_connected });
     }
   });
   it('a request while not set up → 409 assistant_not_connected with the setup state and a hint; no job row', async () => {
@@ -136,8 +141,9 @@ describe('the owner sets it up', () => {
     expect(Object.keys(k.body).sort()).toEqual(['keyAddedAt', 'keySet']);
     expect(k.body.keySet).toBe(true);
     expect(fs.statSync(path.join(dir, ASSISTANT_KEY_FILE)).mode & 0o777).toBe(0o600);
-    const s = await rest('GET', '/assistant/status', bearer(auth.tokens.agent));
+    const s = await rest('GET', '/assistant/status', ownerHeaders());
     expect(s.body).toMatchObject({ setup: 'ready', keySet: true, host: HOST });
+    expect((await rest('GET', '/assistant/status', bearer(auth.tokens.agent))).body).toEqual({ connected: true, setup: 'ready', detail: PUBLIC_STATUS_DETAIL.ready });
   });
   it('the summary route answers exactly what a request would send, with none of the planted values', async () => {
     const r = await rest('GET', `/projects/${pid}/assistant/summary?playheadFrame=30&selection=${videoClip}`, ownerHeaders());

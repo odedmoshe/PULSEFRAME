@@ -16,7 +16,7 @@
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as T from '@pulseframe/time';
-import { MAX_PROJECT_TRACK_SAMPLES, MAX_TRACK_SAMPLES, SIZE_UNIT, ST, TRACK_MARGIN_FRAMES, TRACK_UNIT, TRACK_WORK_HEIGHT, TRACKER_METHOD, TRACKING_JOB_TYPE, sourceFrameIndexAt, trackSummary, trackingStage, type Asset, type MotionTrack, type MotionTrackView, type ProjectDocument, type TrackingJobInput, type TrackingJobOutput, type TrackRun } from '@pulseframe/core';
+import { MAX_PROJECT_TRACK_SAMPLES, MAX_TRACK_SAMPLES, projectCameraSamples, SIZE_UNIT, ST, TRACK_MARGIN_FRAMES, TRACK_UNIT, TRACK_WORK_HEIGHT, TRACKER_METHOD, TRACKING_JOB_TYPE, sourceFrameIndexAt, trackSummary, trackingStage, type Asset, type MotionTrack, type MotionTrackView, type ProjectDocument, type TrackingJobInput, type TrackingJobOutput, type TrackRun } from '@pulseframe/core';
 import { heavy, limiter } from './analysis.ts';
 import type { Principal } from './auth.ts';
 import type { Derivatives } from './derive.ts';
@@ -162,12 +162,16 @@ export function trackingRange(doc: ProjectDocument, track: MotionTrack, asset: A
   const after = Math.max(track.from + track.x.length, to) - Math.min(track.from, from);
   if (after > MAX_TRACK_SAMPLES) throw new ApiError(422, 'range_too_long', `the track would hold ${after} samples; at most ${MAX_TRACK_SAMPLES}`, { from, to, samples: after, max: MAX_TRACK_SAMPLES }, 'Track a range closer to the existing samples, or start a new track.');
   const others = Object.values(doc.motionTracks ?? {}).reduce((n, t) => n + (t.id === track.id ? 0 : t.x.length), 0);
-  if (others + after > MAX_PROJECT_TRACK_SAMPLES) throw new ApiError(422, 'range_too_long', `the project's motion tracks would hold ${others + after} samples; at most ${MAX_PROJECT_TRACK_SAMPLES}`, { from, to, projectSamples: others + after, max: MAX_PROJECT_TRACK_SAMPLES }, 'Remove tracks that are no longer needed, or track a shorter range.');
+  // the camera measurements of stabilisation (wave 7) share the budget, so a job is refused here, not after minutes of work at attach
+  const camera = projectCameraSamples(doc);
+  if (others + camera + after > MAX_PROJECT_TRACK_SAMPLES) throw new ApiError(422, 'range_too_long', `the project's motion tracks and camera measurements would hold ${others + camera + after} samples; at most ${MAX_PROJECT_TRACK_SAMPLES}`, { from, to, projectSamples: others + camera + after, max: MAX_PROJECT_TRACK_SAMPLES }, 'Remove tracks or camera measurements that are no longer needed, or track a shorter range.');
   return { from, to };
 }
 
 // ---------- jobs ----------
 const trackingLane = limiter(1, 4);
+/** The vision lane (wave 7): the stabilise job (stabilise.ts) runs in the same lane, so a tracking and a stabilise job never run together. */
+export const visionLane = trackingLane;
 interface Running { store: Store; ac: AbortController; done: Promise<void>; shutdown: boolean }
 const running = new Map<string, Running>();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -273,7 +277,7 @@ interface Rec { cx: number; cy: number; sPm: number; q: number; st: number }
  * Hold the shared heavy slot until the returned release is called; waits (and asks again) while its queue is full. A cancel
  * while waiting rejects at once; a slot granted after that is handed straight back.
  */
-function holdHeavy(signal: AbortSignal): Promise<() => void> {
+export function holdHeavy(signal: AbortSignal): Promise<() => void> {
   return new Promise((resolve, reject) => {
     let settled = false;
     const settle = (fn: () => void) => { if (settled) return false; settled = true; signal.removeEventListener('abort', onAbort); fn(); return true; };

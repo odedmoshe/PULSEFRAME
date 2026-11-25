@@ -1,9 +1,13 @@
 import type { Asset, BuildShortsBody, ExportMode, FindShortsBody, ReframePlanBody, ReframePlanView, SequenceSummary, ShortCandidatesView, ShortsApplyResult, ShortsPlanView, FamilyFilmApplyResult, FamilyFilmParams, FamilyFilmPlanView, FamilyFilmRegenerateResult, MomentsData, OpCall, ProjectDocument, RenderCacheStatus, SegmentPlanView, SelfCheckMode, StartMomentsBody } from '@pulseframe/core';
 import type { MulticamSyncReport, MulticamSyncRequest, MulticamView } from '@pulseframe/core';
 import type { TakePlanView, TakeRequest, TakeResult } from '@pulseframe/core';
-import type { AssistantConfigBody, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantSummary } from '@pulseframe/core';
+import type { DiffSummary, FindQuery, FindResult, VersionInfo } from '@pulseframe/core';
+import type { AssistantConfigBody, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, BudgetReleaseAnswer } from '@pulseframe/core';
+import type { ArchiveLibraryMode, CreditsView, LibraryFacets, LibraryItemsPage, LibraryItemsQuery, LibraryKind, LibraryRow, LibraryStatus, LibraryUseBody, LibraryUseResult } from '@pulseframe/core';
+import type { CameraMotionView, StabiliseRunBody } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
+import type { ClipLoudnessRequest, ClipLoudnessResult } from '@pulseframe/core';
 
 export class ApiFailure extends Error {
   constructor(public status: number, public code: string, message: string, public details?: unknown, public hint?: string) {
@@ -119,8 +123,11 @@ export const api = {
    */
   commitExact: (id: string, expectedRevision: number, ops: OpCall[], label: string, idempotencyKey: string) =>
     call<CommitResult & { replayed?: boolean }>(`/projects/${id}/transactions`, json({ expectedRevision, idempotencyKey, label, ops })),
-  // the command bar's language assistant (ADR-0027): the status never holds the key; the rest is the owner's session only
-  assistantStatus: () => call<AssistantStatus>('/assistant/status'),
+  // the command bar's language assistant (ADR-0027): the status never holds the key, and is whole only for the owner's session
+  // (any other credential reads connected or not); the rest is the owner's session only
+  assistantStatus: () => call<AssistantStatusAnswer>('/assistant/status'),
+  /** The owner releases an amount held for a job whose cost is not known: only this server's own count changes, never a charge. */
+  releaseBudget: (jobId: string) => call<BudgetReleaseAnswer>(`/jobs/${encodeURIComponent(jobId)}/budget/release`, json({})),
   assistantSummary: (id: string, q: { playheadFrame: number; selection: readonly string[]; sequenceId?: string }) =>
     call<AssistantSummary>(`/projects/${id}/assistant/summary?${new URLSearchParams({ playheadFrame: String(q.playheadFrame), selection: q.selection.join(','), ...(q.sequenceId ? { sequenceId: q.sequenceId } : {}) })}`),
   setAssistantConfig: (body: AssistantConfigBody) => call<AssistantStatus>('/assistant/config', { ...json(body), method: 'PUT' }),
@@ -142,6 +149,8 @@ export const api = {
   /** The programme loudness of the main edit, or of one sequence (a short) with `sequenceId`. */
   measureLoudness: (id: string, sequenceId?: string) => call<LoudnessResult>(`/projects/${id}/analysis/loudness`, json(sequenceId ? { sequenceId } : {})),
   measureVoice: (id: string, body: VoiceMeasureRequest) => call<VoiceCheck>(`/projects/${id}/analysis/voice`, json(body)),
+  /** Loudness of single clips (wave 7 send; 501 not_built until built). Commit match_clip_loudness with expectedRevision = revision. */
+  measureClipLoudness: (id: string, body: ClipLoudnessRequest) => call<ClipLoudnessResult>(`/projects/${id}/analysis/clip-loudness`, json(body)),
   /** The same measurement as a durable job (its output is { kind: 'voice', result: VoiceCheck }). */
   startVoiceMeasureJob: (id: string, body: VoiceMeasureRequest) => call<{ jobId: string; status: string }>(`/projects/${id}/analysis/voice`, json({ ...body, background: true })),
   matchColour: (id: string, body: ColourMatchRequest) => call<ColourMatch>(`/projects/${id}/analysis/colour-match`, json(body)),
@@ -218,6 +227,37 @@ export const api = {
     const r = await fetch(`/api/v1/projects/${id}/assets/${assetId}/derivatives/envelope`, { credentials: 'same-origin' });
     return r.ok ? new Uint8Array(await r.arrayBuffer()) : null;
   },
+  // the content library on disk (wave 7 library track; apps/server/src/library/contract.ts). Every route answers 501
+  // library_not_built until the server worker builds it; keys travel percent-encoded (they hold slashes)
+  libraryStatus: () => call<LibraryStatus>('/library/status'),
+  setLibraryRoot: (root: string | null) => call<LibraryStatus>('/library/root', { ...json({ root }), method: 'PUT' }),
+  reindexLibrary: () => call<LibraryStatus>('/library/reindex', json({})),
+  cancelLibraryReindex: () => call<LibraryStatus>('/library/reindex', { method: 'DELETE' }),
+  libraryItems: (q: LibraryItemsQuery) => call<LibraryItemsPage>(`/library/items?${new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))}`),
+  libraryItem: (key: string) => call<LibraryRow>(`/library/items/${encodeURIComponent(key)}`),
+  /** The genres and moods of the whole catalogue (of one kind), for the filter chips (they never depend on the rows loaded). */
+  libraryFacets: (kind?: LibraryKind) => call<LibraryFacets>(`/library/facets${kind ? `?kind=${encodeURIComponent(kind)}` : ''}`),
+  /** URLs for an <audio> element, an <img> and a link: never fetched into a blob (the audio streams with Range). */
+  libraryAudioUrl: (key: string) => `/api/v1/library/items/${encodeURIComponent(key)}/audio`,
+  libraryThumbUrl: (key: string, size: 128 | 256 = 128) => `/api/v1/library/items/${encodeURIComponent(key)}/thumb?size=${size}`,
+  libraryLicenceUrl: (key: string) => `/api/v1/library/items/${encodeURIComponent(key)}/licence`,
+  useLibraryItem: (id: string, body: LibraryUseBody) => call<LibraryUseResult>(`/projects/${id}/library/use`, json(body)),
+  credits: (id: string, q: { sequenceId?: string; lang?: 'he' | 'en' } = {}) => call<CreditsView>(`/projects/${id}/credits?${new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined) as [string, string][])}`),
+  /** The archive link: «ארכיון לשיתוף» (strip) or «ארכיון לעצמי» (keep, owner session only); null = the archive as before. */
+  archiveUrl: (id: string, opts: { family?: 'keep' | 'omit'; library?: ArchiveLibraryMode | null } = {}) => `/api/v1/projects/${id}/archive${(() => { const q = new URLSearchParams({ ...(opts.family === 'omit' ? { family: 'omit' } : {}), ...(opts.library ? { library: opts.library } : {}) }).toString(); return q ? `?${q}` : ''; })()}`,
+  // editing craft (wave 7 craft track; apps/server/src/craft/contract.ts). Every route answers 501 craft_not_built until W2 builds it
+  versions: (id: string) => call<{ versions: VersionInfo[] }>(`/projects/${id}/versions`),
+  saveVersion: (id: string, name: string) => call<VersionInfo>(`/projects/${id}/versions`, json({ name })),
+  renameVersion: (id: string, versionId: string, name: string) => call<VersionInfo>(`/projects/${id}/versions/${encodeURIComponent(versionId)}`, { ...json({ name }), method: 'PUT' }),
+  deleteVersion: (id: string, versionId: string) => call<{ deleted: string }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}`, { method: 'DELETE' }),
+  versionDiff: (id: string, versionId: string, against: 'current' | string = 'current') => call<DiffSummary>(`/projects/${id}/versions/${encodeURIComponent(versionId)}/diff?against=${encodeURIComponent(against)}`),
+  /** For an <img>: one frame of the saved version (404 version_frame_out_of_range past its end). */
+  versionFrameUrl: (id: string, versionId: string, index: number) => `/api/v1/projects/${id}/versions/${encodeURIComponent(versionId)}/frame?index=${index}`,
+  restoreVersion: (id: string, versionId: string, body: { expectRevision?: number; confirmPrivacy?: boolean } = {}) => call<{ revision: number; transactionId: string | null; summary: string; diff: DiffSummary }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}/restore`, json(body)),
+  findText: (id: string, query: FindQuery) => call<FindResult>(`/projects/${id}/text/find`, json(query)),
+  // stabilisation (wave 7; apps/server/src/stabilise.ts): both answer 501 stabilise_not_built until the job is built
+  stabiliseClip: (id: string, clipId: string, body: StabiliseRunBody = {}) => call<{ jobId: string; status: string }>(`/projects/${id}/clips/${encodeURIComponent(clipId)}/stabilise`, json(body)),
+  cameraMotion: (id: string, assetId: string) => call<CameraMotionView>(`/projects/${id}/assets/${encodeURIComponent(assetId)}/camera-motion`),
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }

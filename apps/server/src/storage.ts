@@ -47,7 +47,7 @@ export function deleteProject(store: Store, by: Principal, projectId: string, co
   // so a backup made afterwards holds none of them: its history, its proposals and what the language assistant said about it
   // (ADR-0027, note of 2026-11-25: the model's sentence does not outlive its proposal).
   store.erasing(() => {
-    for (const t of ['transactions', 'outbox', 'jobs', 'entity_versions', 'proposals', 'approvals', 'project_controls']) if (has(t)) store.db.prepare(`DELETE FROM ${t} WHERE project_id = ?`).run(projectId);
+    for (const t of ['transactions', 'outbox', 'jobs', 'entity_versions', 'proposals', 'approvals', 'project_controls', 'project_versions']) if (has(t)) store.db.prepare(`DELETE FROM ${t} WHERE project_id = ?`).run(projectId);
     store.db.prepare('DELETE FROM projects WHERE id = ?').run(projectId);
   });
   for (const f of outputs) fs.rmSync(path.join(store.outDir, path.basename(f)), { force: true });
@@ -90,6 +90,8 @@ function referencedHashes(store: Store, now = Date.now()): Set<string> {
   for (const r of store.db.prepare('SELECT ops FROM transactions').iterate() as Iterable<{ ops: string }>) scan(r.ops);
   for (const r of store.db.prepare('SELECT type, status, input, output, error, updated_at FROM jobs').iterate() as Iterable<{ type: string; status: string; input: string; output: string | null; error: string | null; updated_at: string }>) if (jobPins(r, now)) { scan(r.input); scan(r.output); }
   if (has('proposals')) for (const r of store.db.prepare('SELECT ops, changes FROM proposals').iterate() as Iterable<{ ops: string; changes: string | null }>) { scan(r.ops); scan(r.changes); }
+  // Named versions (wave 7 craft) keep every file their copy names: a restore brings a removed clip's file back.
+  if (has('project_versions')) for (const r of store.db.prepare('SELECT doc FROM project_versions').iterate() as Iterable<{ doc: string }>) scan(r.doc);
   // Derivatives (proxies, thumbnails, waveforms) live as long as the media they were made from.
   if (has('derivatives')) for (const r of store.db.prepare('SELECT asset_hash, blob_hash FROM derivatives').iterate() as Iterable<{ asset_hash: string; blob_hash: string | null }>) { const src = r.asset_hash.replace(/^sha256:/, ''); if (out.has(src) && r.blob_hash) out.add(r.blob_hash.replace(/^sha256:/, '')); }
   return out;

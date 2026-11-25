@@ -15,9 +15,9 @@
  */
 import type { Hono } from 'hono';
 import { z } from 'zod';
-import { BROWSER_EXPORT_SIDECAR_REFUSED, RationalTimeSchema } from '@pulseframe/core';
+import { BROWSER_EXPORT_SIDECAR_REFUSED, RationalTimeSchema, SEND_API_REFUSALS } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
-import { GENERIC_BLOCKER_HINT, renderDocFor, type Exporter, type Manifest } from './export.ts';
+import { exportLicence, GENERIC_BLOCKER_HINT, renderDocFor, type Exporter, type Manifest } from './export.ts';
 import { PHOTOSENSITIVITY_METHOD } from './flashCheck.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 import { assertMayTakeRendered } from './peoplePrivacy.ts';
@@ -156,6 +156,8 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
     // sidecar is refused below: this route writes no subtitle file).
     const doc = renderDocFor(stored, manifest.options);
     // Loudness normalisation needs the R128 measurement pass, which only the server route has. Refuse rather than export at a different level.
+    // send and keep (wave 7): the browser route neither fits a target size nor runs the master limiter (server export only)
+    if (manifest.options.sizeFit || doc.settings.limiter) throw new ApiError(SEND_API_REFUSALS.browserRoute.status, SEND_API_REFUSALS.browserRoute.code, SEND_API_REFUSALS.browserRoute.message(), { ...(manifest.options.sizeFit ? { sizeFit: manifest.options.sizeFit } : {}), ...(doc.settings.limiter ? { limiter: doc.settings.limiter } : {}) }, SEND_API_REFUSALS.browserRoute.hint);
     if (doc.settings.loudness) throw new ApiError(409, 'unsupported_in_browser_export', 'this project has a loudness target; the browser export route cannot measure and normalise loudness', { loudness: doc.settings.loudness }, 'Use the server export, or clear the loudness target.');
     if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, blockers[0]!.hint ?? GENERIC_BLOCKER_HINT);
     // The tab writes no subtitle file and the snapshot hides the caption tracks unless they are burned: refuse a sidecar rather than lose the captions.
@@ -193,6 +195,9 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
     if (ps && (ps.frames !== b.frames || (ps.verdict === 'fail') !== ps.ranges.length > 0)) throw new ApiError(422, 'invalid_photosensitivity', 'the photosensitivity report does not match the export (frames, or verdict and ranges, disagree)', { frames: ps.frames, expected: b.frames, verdict: ps.verdict, ranges: ps.ranges.length });
     leases.delete(job.id);
     const { width, height, firstFrame, frames, frameRate, sampleRate } = manifest.output;
+    // the credits of library files (wave 7 library track), from the snapshot the tab rendered; no sidecar file is written on this
+    // route (the server stores only the record): GET /jobs/:jobId/credits answers the text from it
+    const licence = exportLicence(job.input.snapshot);
     store.updateJob(job.id, {
       status: 'succeeded', stage: null,
       output: {
@@ -202,6 +207,7 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
         // measured by the tab on the frames it encoded, with the same analyser as the server export; the method text is the server's
         ...(ps ? { photosensitivity: { method: PHOTOSENSITIVITY_METHOD, measuredBy: 'browser', ...ps } } : {}),
         manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, output: { width, height, firstFrame, frames, frameRate, sampleRate } },
+        ...(licence ? { licence } : {}),
       },
     });
     return c.json({ ok: true, jobId: job.id, status: 'succeeded' });

@@ -112,6 +112,60 @@ been charged; its reservation stays counted). The agent's `owner_required` refus
 `pnpm proof:command-bar` 11f drives it against the labelled MOCK adapter holding its answer back: contract-tested, never
 a claim about a real provider.
 
+## Note 2026-11-25 — the assistant's money and provider are the owner's; releasing a held amount
+**Found.** `GET /assistant/status` (access `observe`) answered any credential that may observe a project with the month's
+spent and reserved amounts, the monthly limit, the per-request cap, the owner's prices, the service host, the model, the
+adapter, the two data switches, whether a key is stored and when it was added. A reservation left `unknown` after a
+cancelled request could be released only over REST (`POST /jobs/{jobId}/budget/release`); the editor had no control, and a
+held amount whose project had been deleted could not be released at all (the route looked the job up first).
+
+**Decision (lead): narrow it.** Money and provider details are the owner's. The owner's own session reads the status whole.
+Every other principal, whatever its grant (the fixed agent and observer tokens; observe, propose, edit and autopilot grants;
+people 'full'), reads exactly three fields: `connected`, `setup` (`ready` or `not_connected`) and a fixed sentence. It reads
+no amount, limit, price, host, model, adapter, switch, key state or date, no count of requests, and not which setting is
+missing: not connected reads the same whether the key, the limits, the prices or the model is missing.
+`apps/server/src/assistant/visibility.ts` decides it in one function (`assistantStatusFor`), which every answer that carries
+the status goes through (`GET /assistant/status`, `PUT /assistant/config`). The same facts elsewhere:
+- a job's input (host, model, adapter, estimate, reservation) is answered to no one, and its output (the cost) and error
+  only to the owner's session (`assistantJobStub`, the note above), on REST, MCP `get_job` and the event stream;
+- a ledger row is answered, and a held amount released, for the owner's session only (`assertMayReleaseBudget`, called by
+  the route and by `Governance.releaseUnknown`). Any other credential gets 403 `owner_required` with the next step and the
+  job id, the same whether or not an amount is held. No MCP tool reads the assistant's status or ledger, and none releases;
+- the refusals that carry amounts (402 `budget_exceeded`, 409 `assistant_not_connected` with its blockers) are given by
+  routes only the owner's session reaches; the project summary, `get_controls`, the resources and the prompts hold none of it.
+
+**What stays visible to an agent, and why.** Its OWN grant's budget: MCP `get_controls` answers `budgetCents`, `spentCents`
+and `reservedCents` of the grant the credential authenticates with. That is a different ledger (the grant's id, never
+`assistant`), and an agent needs it to tell whether paid work can start. Its own request rate limit, as the 429 with
+`Retry-After` it gets. That an assistant request exists on a project it may observe, as the stub of the note above (id,
+project, type, actor, status, times): so a credential that watches a project can still count the owner's requests there and
+see when each ended. That is the earlier decision, kept; the status itself gives no count.
+
+`apps/server/src/assistant/statusPrivacy.test.ts` plants a host, a model name, an adapter id, two prices, the monthly limit,
+the per-request cap, an amount spent and an amount held, and walks every REST route, the MCP tools that read or name a job
+or a proposal, every resource and prompt, the event stream and the API description with the same seven kinds of credential;
+the owner's session reads every one of them (control). With the status rule switched off it fails 15 of 31 (the status
+and the REST walk for each of the seven credentials, and the not-connected test).
+
+**The release control (built 2026-11-25).** The owner's status lists the month's held amounts (`held`: the job, the cents,
+when the request was made, how the job ended; ledger state `unknown`). Wherever the editor shows a held amount to the owner
+there is «שחרור הסכום השמור» (Release the held amount): on the assistant's row after a request ended once it had been sent
+(canceled, failed, or not known), and on each row of «סכומים שמורים» in Settings. It opens the design system's confirm
+dialog, as the other irreversible owner actions do (a small modal a click outside does not close, a quiet way out, a danger
+button): «השחרור מוריד ⁦12¢⁩ מהספירה החודשית של העורך, וזה כל מה שהוא עושה. הוא לא מבטל חיוב: ייתכן שהשירות חייב אתכם
+על הבקשה הזו בכל זאת. את זה רואים רק בדף החיובים של השירות, ולכן כדאי לבדוק שם לפני שמשחררים. אי אפשר לבטל שחרור.»
+The first focus is the way out («להשאיר בספירה»); Escape keeps the amount; the release is one Tab and Enter. Afterwards the
+row (or Settings) says as a status: «הסכום ⁦12¢⁩ שוחרר מהספירה החודשית של העורך. אם השירות חייב על הבקשה, החיוב נשאר אצלו».
+A release changes the ledger row to `released` and nothing else: what was spent does not move, the job stays as it ended,
+and no route re-holds an amount. A held amount whose project was deleted stays counted and listed, and the owner's session
+can still release it by its job id (for anyone else that id is a job that does not exist). Held amounts of an earlier month
+are not listed: they count toward no limit any more.
+
+`pnpm proof:command-bar` 11g (the row) and 11h (Settings) drive it from the keyboard against the labelled MOCK adapter, with
+the heuristic accessibility audit of the button, the confirmation, and the released state: contract-tested, never a claim
+about a real provider. Whether a real service charged for a cancelled request cannot be known here, which is what the
+confirmation says.
+
 ## Consequences / what is not promised
 - Without a provider the assistant row says it is not connected («עוזר השפה לא מחובר»). Nothing is fabricated.
 - The lexicon covers listed phrasings only; there is no corpus of how the owner speaks.

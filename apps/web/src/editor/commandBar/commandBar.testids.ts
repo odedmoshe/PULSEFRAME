@@ -29,6 +29,13 @@ export const COMMAND_BAR_TESTIDS = {
   assistantRow: 'palette-assistant', assistantConnect: 'bar-assistant-connect', assistantStage: 'bar-assistant-stage',
   assistantCancel: 'bar-assistant-cancel', assistantCanceled: 'bar-assistant-canceled',
   assistantProposal: 'bar-assistant-proposal', assistantAccept: 'bar-assistant-accept', assistantReject: 'bar-assistant-reject',
+  // releasing an amount held for a request whose cost is not known (owner's session; ReleaseHeld.tsx): the button (data-job, on the
+  // canceled or failed row and on each held amount in Settings), its confirmation dialog with «להשאיר בספירה» (the first focus) and
+  // «שחרור הסכום», a refusal inside it, and the sentence that says what the release did (role=status; data-job)
+  releaseHeld: 'assistant-release', releaseDialog: 'assistant-release-dialog', releaseKeep: 'assistant-release-keep', releaseConfirm: 'assistant-release-confirm',
+  releaseRefused: 'assistant-release-refused', released: 'assistant-released',
+  // Settings: the held amounts of the month, one row each (data-job, data-how)
+  settingsHeld: 'assistant-held', settingsHeldRow: 'assistant-held-row',
   // Settings: the «עוזר השפה» section (owner session only), its fields, the key (a password field, never shown back), «מה נשלח?»
   settings: 'assistant-settings', settingsAdapter: 'assistant-adapter', settingsHost: 'assistant-host', settingsModel: 'assistant-model',
   settingsKey: 'assistant-key', settingsKeyState: 'assistant-key-state', settingsKeyRemove: 'assistant-key-remove',

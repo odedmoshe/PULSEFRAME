@@ -16,6 +16,8 @@ import { channelName, clampDelta, remapKeySel } from './keyStrip.math.ts';
 import { MULTICAM_ANGLE_COMMANDS, MULTICAM_CUT_COMMANDS, MULTICAM_KEYS } from './multicam.keys.ts';
 import { angleForDigit } from './multicamSession.ts';
 import { MULTICAM_STRINGS } from './multicam.strings.ts';
+import { CRAFT_CHANGES_SELECTION, CRAFT_COMMANDS } from './craft/craft.commands.ts';
+import { STABILISE_CHANGES_SELECTION, STABILISE_COMMANDS } from './stabilise/stabilise.commands.ts';
 
 export interface Command {
   id: string;
@@ -415,11 +417,17 @@ export const COMMANDS: Command[] = [
   { id: 'file.importFolder', label: 'cmd.importFolder', group: 'file', keys: [], enabled: (e) => !!e.doc, run: () => document.querySelector<HTMLInputElement>('[data-testid=folder-input]')?.click() },
   { id: 'file.phoneDrop', label: 'cmd.phoneDrop', group: 'file', keys: [], enabled: (e) => !!e.doc && e.getState().actor === 'user:local', run: (e) => e.openPhoneDrop() },
   { id: 'file.export', label: 'export', text: { he: COMMAND_STRINGS.he.exportOpen, en: COMMAND_STRINGS.en.exportOpen }, group: 'file', keys: ['Mod+KeyE'], enabled: (e) => !!e.doc && (e.player?.frameCount ?? 0) > 0, run: (e) => e.openExportSheet() },
+  // send and keep (wave 7): the export sheet with «מתאים לשליחה» chosen (the size is chosen there; nothing starts by itself)
+  { id: 'export.send', label: 'export', text: { he: 'ייצוא לשליחה…', en: 'Export to send…' }, group: 'file', keys: [], enabled: (e) => !!e.doc && (e.player?.frameCount ?? 0) > 0, run: (e) => e.openExportSheet('whatsapp') },
   { id: 'view.palette', label: 'cmd.palette', group: 'view', keys: ['Mod+KeyK'], run: (e) => e.set({ paletteOpen: !e.getState().paletteOpen }) },
   { id: 'view.language', label: 'lang.label', group: 'view', keys: [], run: (e) => e.setLang(e.getState().lang === 'he' ? 'en' : 'he') },
   { id: 'view.zoomIn', label: 'cmd.zoomIn', group: 'view', keys: ['Equal'], run: (e) => e.set({ pxPerSecond: Math.min(720, e.getState().pxPerSecond * 1.5) }) },
   { id: 'view.zoomOut', label: 'cmd.zoomOut', group: 'view', keys: ['Minus'], run: (e) => e.set({ pxPerSecond: Math.max(10, e.getState().pxPerSecond / 1.5) }) },
   ...MULTICAM_COMMANDS,
+  // editing craft (wave 7): Q, W, G, D, Ctrl+Alt+V, Ctrl+F, Ctrl+S and «גרסאות» (craft/craft.commands.ts; disabled until W3)
+  ...CRAFT_COMMANDS,
+  // stabilisation (wave 7): «ייצוב תמונה» on or off, unbound (stabilise/stabilise.commands.ts; disabled until W3)
+  ...STABILISE_COMMANDS,
 ];
 
 /** Canonical chord for an event: modifiers in fixed order + physical key code. */
@@ -461,6 +469,6 @@ export function chordLabel(chord: string, mac = typeof navigator !== 'undefined'
 }
 
 // Commands that change the selected clips do nothing while a selected clip is on a locked track.
-const CHANGES_SELECTION = new Set(['edit.rollLater', 'edit.rollEarlier', 'edit.slideLater', 'edit.slideEarlier', 'edit.split', 'edit.delete', 'edit.deleteKeepGap', 'cut.rollEarlier', 'cut.rollLater', 'cut.rollEarlier5', 'cut.rollLater5', 'cut.toBeat', 'edit.cut', 'edit.duplicate', 'edit.trimStart', 'edit.trimEnd', 'edit.nudgeLeft', 'edit.nudgeRight', 'edit.nudgeLeft10', 'edit.nudgeRight10', 'edit.slipLater', 'edit.slipEarlier', 'edit.slipLater10', 'edit.slipEarlier10', 'keyframe.remove']);
+const CHANGES_SELECTION = new Set(['edit.rollLater', 'edit.rollEarlier', 'edit.slideLater', 'edit.slideEarlier', 'edit.split', 'edit.delete', 'edit.deleteKeepGap', 'cut.rollEarlier', 'cut.rollLater', 'cut.rollEarlier5', 'cut.rollLater5', 'cut.toBeat', 'edit.cut', 'edit.duplicate', 'edit.trimStart', 'edit.trimEnd', 'edit.nudgeLeft', 'edit.nudgeRight', 'edit.nudgeLeft10', 'edit.nudgeRight10', 'edit.slipLater', 'edit.slipEarlier', 'edit.slipLater10', 'edit.slipEarlier10', 'keyframe.remove', ...CRAFT_CHANGES_SELECTION, ...STABILISE_CHANGES_SELECTION]);
 for (const c of COMMANDS) if (CHANGES_SELECTION.has(c.id)) { const was = c.enabled; c.enabled = (e) => !e.selectionLocked && (!was || was(e)); }
 

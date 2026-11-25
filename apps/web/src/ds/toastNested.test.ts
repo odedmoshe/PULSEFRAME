@@ -9,7 +9,8 @@
  *   the provider draws the region on the page   when no modal holds it        (host === null)
  *   a modal's ToastSlot draws it                when it is the newest host    (host === its own element)
  * and a slot claims the host when it mounts and gives it back when it unmounts. The browser checks (a11y audit, toast-in-modal)
- * run the effects for one modal; no path in the editor opens a Dialog over one of the four today (see the last test).
+ * run the effects for one modal. One path in the editor opens a Dialog over one of the four: the assistant row's confirmation
+ * before a held amount is released, over the command palette (see the last test; pnpm proof:command-bar 11g drives it).
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -136,13 +137,23 @@ describe('a Dialog opened over one of the editor\'s own modals, with a toast on 
 });
 
 describe('where nesting can happen in the editor today', () => {
-  it('none of the four modals opens a design-system Dialog, and the palette\'s shortcut does not act behind an open modal', () => {
+  it('none of the four modals opens a design-system Dialog itself, and the palette\'s shortcut does not act behind an open modal', () => {
     for (const file of ['TemplateDialog.tsx', 'EffectGallery.tsx', 'CurvePicker.tsx', 'CommandPalette.tsx']) {
       const code = editor(file);
       expect(code, file).not.toMatch(/<(Dialog|Sheet)\b/);
       expect(code, file).not.toMatch(/import \{[^}]*\b(Dialog|Sheet)\b[^}]*\} from '\.\.\/ds\/index\.ts'/);
     }
-    // the nearest thing to it is a hand-over, not a nesting: the assistant row's «איך מחברים» closes the palette, then opens Settings
+    // a hand-over, not a nesting: the assistant row's «איך מחברים» closes the palette, then opens Settings
     expect(editor('commandBar/AssistantRow.tsx')).toMatch(/editor\.set\(\{ paletteOpen: false \}\); setSettingsOpen\(true\);/);
+  });
+  it('the one nesting: the assistant row, inside the palette, confirms the release of a held amount in a design-system Dialog (the case modelled above), which raises no toast of its own', () => {
+    const row = editor('commandBar/AssistantRow.tsx'), release = editor('commandBar/ReleaseHeld.tsx');
+    expect(editor('CommandPalette.tsx')).toMatch(/<AssistantRow /);
+    expect(row).toMatch(/<ReleaseHeld lang=\{lang\} held=\{held\} look="link" onDone=\{onReleased\} \/>/);
+    expect(release).toMatch(/import \{ Button, Dialog \} from '\.\.\/\.\.\/ds\/index\.ts'/);
+    expect(release.match(/<Dialog /g)).toHaveLength(1);
+    // what the release did is said in the row (or in Settings) as a status, not in a toast; a refusal is said inside the confirmation
+    expect(release).not.toMatch(/notify\(|toasts?\.push|useToasts/);
+    expect(row).not.toMatch(/notify\(|toasts?\.push|useToasts/);
   });
 });

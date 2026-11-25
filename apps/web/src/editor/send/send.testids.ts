@@ -1,0 +1,19 @@
+/**
+ * Fixed data-testids of «שליחה ושמירה» (wave 7, track send), shared by the editor and the proofs (send-*-proof.ts,
+ * editor-interactions-proof.ts, a11y-audit.ts). Lead pre-pass: worker C puts exactly these on the elements named here and does
+ * not rename them. A repeated element repeats its id and carries the data-* attribute named beside it. The destination tile keeps
+ * its id `export-dest` with data-id `whatsapp` (command bar proof).
+ */
+export const SEND_TESTIDS = {
+  /** SendSize: the radiogroup of target sizes (data-mb on each choice), the typed field, the fitted picture size before export, the refusal */
+  size: 'send-size', sizeChoice: 'send-size-choice', sizeInput: 'send-size-input', sizeFitted: 'send-size-fitted', sizeRefusal: 'send-size-refusal',
+  /** ChecksResult on the file card: the list, one row per finding (data-kind), its jump button */
+  checks: 'export-checks', checkItem: 'export-check-item', checkJump: 'export-check-jump',
+  /** the fit line on the file card («15.6 מתוך 16 מ״ב · ניסיון 1») */
+  fitLine: 'export-fit-line',
+  /** LoudnessMatch in the sound panel: the block, its run button, the per-clip result list (data-clip-id, data-limited-by) */
+  match: 'loudness-match', matchRun: 'loudness-match-run', matchResult: 'loudness-match-result',
+  /** LimiterSwitch in the sound panel's loudness section, and the meter's gain-reduction bar */
+  limiter: 'master-limiter', limiterSwitch: 'master-limiter-switch', limiterCeiling: 'master-limiter-ceiling', meterReduction: 'meter-reduction',
+} as const;
+export type SendTestId = (typeof SEND_TESTIDS)[keyof typeof SEND_TESTIDS];

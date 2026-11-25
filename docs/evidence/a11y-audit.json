@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T01:54:49.785Z",
+  "ranAt": "2026-11-25T11:45:32.503Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "browser": "153.0.8010.12"
@@ -145,7 +145,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_96e8915ddf0]",
+          "focusAfterClose": "button[data-testid=more-ast_d71d971da70]",
           "focusReturned": true
         },
         {
@@ -249,7 +249,7 @@
         },
         {
           "state": "assistant-settings",
-          "controls": 616,
+          "controls": 619,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -282,7 +282,7 @@
         },
         {
           "state": "settings-dialog",
-          "controls": 463,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -713,7 +713,7 @@
         },
         {
           "state": "music-browser",
-          "controls": 518,
+          "controls": 519,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -721,8 +721,41 @@
           "shown": true
         },
         {
+          "state": "library-audio-tab",
+          "controls": 472,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "library-elements-tab",
+          "controls": 471,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "settings-library",
+          "controls": 807,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "startsInside": true,
+          "tabStepsThatLeftTheDialog": 0,
+          "openUntilEscape": true,
+          "closed": true,
+          "focusAfterClose": "button[data-testid=rail-settings]",
+          "focusReturned": true
+        },
+        {
           "state": "text-drawer-fonts",
-          "controls": 540,
+          "controls": 538,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -787,7 +820,7 @@
         },
         {
           "state": "cache-storage-row",
-          "controls": 469,
+          "controls": 472,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -881,7 +914,7 @@
         },
         {
           "state": "multicam-panel",
-          "controls": 381,
+          "controls": 382,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1142,7 +1175,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_96e8915ddf0]",
+          "focusAfterClose": "button[data-testid=more-ast_d71d971da70]",
           "focusReturned": true
         },
         {
@@ -1246,7 +1279,7 @@
         },
         {
           "state": "assistant-settings",
-          "controls": 621,
+          "controls": 624,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1279,7 +1312,7 @@
         },
         {
           "state": "settings-dialog",
-          "controls": 468,
+          "controls": 471,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1710,7 +1743,7 @@
         },
         {
           "state": "music-browser",
-          "controls": 518,
+          "controls": 519,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1718,8 +1751,41 @@
           "shown": true
         },
         {
+          "state": "library-audio-tab",
+          "controls": 472,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "library-elements-tab",
+          "controls": 471,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true
+        },
+        {
+          "state": "settings-library",
+          "controls": 807,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "startsInside": true,
+          "tabStepsThatLeftTheDialog": 0,
+          "openUntilEscape": true,
+          "closed": true,
+          "focusAfterClose": "button[data-testid=rail-settings]",
+          "focusReturned": true
+        },
+        {
           "state": "text-drawer-fonts",
-          "controls": 540,
+          "controls": 538,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1728,7 +1794,7 @@
         },
         {
           "state": "cache-sheet-first",
-          "controls": 475,
+          "controls": 476,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1755,7 +1821,7 @@
         },
         {
           "state": "cache-sheet-disabled",
-          "controls": 476,
+          "controls": 477,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1784,7 +1850,7 @@
         },
         {
           "state": "cache-storage-row",
-          "controls": 469,
+          "controls": 472,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2035,7 +2101,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 472,
+          "controls": 471,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2044,7 +2110,7 @@
         },
         {
           "state": "settings-dialog",
-          "controls": 464,
+          "controls": 467,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2281,7 +2347,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 472,
+          "controls": 471,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2290,7 +2356,7 @@
         },
         {
           "state": "settings-dialog",
-          "controls": 464,
+          "controls": 467,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2498,13 +2564,13 @@
     {
       "theme": "dark",
       "uiLanguage": "he",
-      "states": 81,
+      "states": 84,
       "findings": 0
     },
     {
       "theme": "dark",
       "uiLanguage": "en",
-      "states": 81,
+      "states": 84,
       "findings": 0
     },
     {

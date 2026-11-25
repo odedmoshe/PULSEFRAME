@@ -13,7 +13,11 @@ import { SHORTS_EN, SHORTS_HE } from './shorts.ts';
 import { KEYFRAMES_WAVE_EN, KEYFRAMES_WAVE_HE } from './keyframesWave.ts';
 import { MULTICAM_EN, MULTICAM_HE } from './multicam.ts';
 import { PERFORM_EN, PERFORM_HE } from './perform.ts';
+import { SEND_EN, SEND_HE } from './send.ts';
 import { COMMAND_BAR_EN, COMMAND_BAR_HE } from './commandBar.ts';
+import { LIBRARY_EN, LIBRARY_HE } from './library.ts';
+import { CRAFT_EN, CRAFT_HE } from './craft.ts';
+import { STABILISE_EN, STABILISE_HE } from './stabilise.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
@@ -167,7 +171,7 @@ export const he = {
   'recipes.needs.portrait-blur': 'חיתוך של התמונה (הדמות בלי הרקע) שנוצר בכלי הסרת הרקע (כלי AI)',
   'recipes.needs.beat-montage': 'ניתוח פעימות של קובץ המוזיקה', 'recipes.needs.social-pack': 'אין דרישות; כתוביות דורשות תמלול', 'recipes.needs.tidy-speech': 'מדידת שקטים (השרת מבצע אותה בעת התכנון)',
   'recipes.runs': 'הפעלות קודמות', 'recipes.runs.none': 'עדיין לא הופעל מתכון', 'recipes.regenerate': 'יצירה מחדש', 'recipes.regenerating': 'יוצר מחדש…', 'recipes.replaced': 'הוחלפו', 'recipes.kept': 'נשארו כי נערכו ידנית', 'recipes.removed': 'נשארו ריקים כי נמחקו ידנית', 'recipes.movedBack': 'חזרו לפעימות אחרי שזזו בגלל מחיקה', 'recipes.restoreRemoved': 'החזרת החלקים שנמחקו',
-  'analysis.outside': 'הסמן מחוץ לקליפ', 'analysis.nothingToRemove': 'אין מה להסיר', 'snap.beats': 'הצמדה לפעימות וחיתוכים', 'timeline.markers.truncated': 'מוצגים 3000 הסמנים הראשונים בלבד',
+  'analysis.outside': 'הסמן מחוץ לקליפ', 'analysis.measuredOn': 'נמדד בקובץ המקור', 'analysis.measuredOnEdit': 'תיקון כאן נשמר שם, וחל על כל עותק ששומר על התזמון.', 'analysis.nothingToRemove': 'אין מה להסיר', 'snap.beats': 'הצמדה לפעימות וחיתוכים', 'timeline.markers.truncated': 'מוצגים 3000 הסמנים הראשונים בלבד',
   'op.set_audio_crossfade': 'מעבר חלק בין קליפים',
   'sound.crossfade': 'מעבר חלק (שניות)', 'sound.crossfade.apply': 'החלת מעבר חלק', 'sound.crossfade.hint': 'נכנס בפייד מהקליפ שנגמר היכן שהקליפ הזה מתחיל. 0 מסיר אותו.',
   'projects.open': 'פרויקטים', 'projects.title': 'פרויקטים', 'projects.close': 'סגירה', 'projects.loading': 'טוען…', 'projects.empty': 'אין פרויקטים', 'projects.current': 'הפרויקט הנוכחי',
@@ -216,6 +220,10 @@ export const he = {
   ...MULTICAM_HE,
   ...PERFORM_HE,
   ...COMMAND_BAR_HE,
+  ...LIBRARY_HE,
+  ...SEND_HE,
+  ...CRAFT_HE,
+  ...STABILISE_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -369,7 +377,7 @@ export const en: Record<keyof typeof he, string> = {
   'recipes.needs.portrait-blur': 'A cut-out of the picture (the subject without its background), made by the background-removal tool (AI tools)',
   'recipes.needs.beat-montage': 'Beat analysis of the music file', 'recipes.needs.social-pack': 'Nothing; captions need a transcript', 'recipes.needs.tidy-speech': 'Silence measurement (done by the server when planned)',
   'recipes.runs': 'Previous runs', 'recipes.runs.none': 'No recipe has been applied yet', 'recipes.regenerate': 'Regenerate', 'recipes.regenerating': 'Regenerating…', 'recipes.replaced': 'Replaced', 'recipes.kept': 'Kept because edited by hand', 'recipes.removed': 'Left empty because deleted by hand', 'recipes.movedBack': 'Back on the beat after a delete moved them', 'recipes.restoreRemoved': 'Restore deleted parts',
-  'analysis.outside': 'The playhead is outside the clip', 'analysis.nothingToRemove': 'Nothing to remove', 'snap.beats': 'Snap to beats and cuts', 'timeline.markers.truncated': 'Only the first 3000 markers are shown',
+  'analysis.outside': 'The playhead is outside the clip', 'analysis.measuredOn': 'Measured on the source file', 'analysis.measuredOnEdit': 'A correction here is saved there, and applies to every copy that keeps the timing.', 'analysis.nothingToRemove': 'Nothing to remove', 'snap.beats': 'Snap to beats and cuts', 'timeline.markers.truncated': 'Only the first 3000 markers are shown',
   'op.set_audio_crossfade': 'Audio crossfade',
   'sound.crossfade': 'Crossfade (seconds)', 'sound.crossfade.apply': 'Apply crossfade', 'sound.crossfade.hint': 'Fades in from the clip that ends where this one starts. 0 removes it.',
   'projects.open': 'Projects', 'projects.title': 'Projects', 'projects.close': 'Close', 'projects.loading': 'Loading…', 'projects.empty': 'No projects', 'projects.current': 'Current project',
@@ -418,6 +426,10 @@ export const en: Record<keyof typeof he, string> = {
   ...MULTICAM_EN,
   ...PERFORM_EN,
   ...COMMAND_BAR_EN,
+  ...LIBRARY_EN,
+  ...SEND_EN,
+  ...CRAFT_EN,
+  ...STABILISE_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -438,3 +450,7 @@ export * from './shorts.ts';
 export * from './keyframesWave.ts';
 export * from './multicam.ts';
 export * from './perform.ts';
+export * from './library.ts';
+export * from './send.ts';
+export * from './craft.ts';
+export * from './stabilise.ts';

@@ -1,0 +1,168 @@
+{
+ "ledgerVersion": 1,
+ "entries": [
+  {
+   "item": "tones/a440",
+   "source": "synthetic-tones",
+   "sourceTitle": "SYNTHETIC synthetic-tones",
+   "manifest": "synthetic-01",
+   "manifestSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+   "kind": "file",
+   "identity": "tones/a440",
+   "url": "http://127.0.0.1/tones/a440",
+   "path": "music/synthetic/a440.wav",
+   "bytes": 1000,
+   "pinned": true,
+   "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "licence": {
+    "spdx": "CC0-1.0",
+    "url": "https://example.invalid/licence",
+    "readOn": "2026-11-25",
+    "quote": "SYNTHETIC fixture: no real licence was read"
+   },
+   "credit": null,
+   "flags": {
+    "diskOnly": false,
+    "creditInExport": false,
+    "shareAlike": false,
+    "people": false,
+    "aiGenerated": false,
+    "repoAllowed": true
+   },
+   "time": "2026-11-25T10:00:00.000Z"
+  },
+  {
+   "item": "tones/a440",
+   "source": "synthetic-tones",
+   "sourceTitle": "SYNTHETIC synthetic-tones",
+   "manifest": "synthetic-01",
+   "manifestSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+   "kind": "file",
+   "identity": "tones/a440",
+   "url": "http://127.0.0.1/tones/a440",
+   "path": "music/synthetic/a440.wav",
+   "bytes": 1000,
+   "pinned": true,
+   "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+   "licence": {
+    "spdx": "CC0-1.0",
+    "url": "https://example.invalid/licence",
+    "readOn": "2026-11-25",
+    "quote": "SYNTHETIC fixture: no real licence was read"
+   },
+   "credit": null,
+   "flags": {
+    "diskOnly": false,
+    "creditInExport": false,
+    "shareAlike": false,
+    "people": false,
+    "aiGenerated": false,
+    "repoAllowed": true
+   },
+   "time": "2026-11-25T09:00:00.000Z"
+  },
+  {
+   "item": "ccby/track",
+   "source": "synthetic-ccby",
+   "sourceTitle": "SYNTHETIC synthetic-ccby",
+   "manifest": "synthetic-01",
+   "manifestSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+   "kind": "file",
+   "identity": "ccby/track",
+   "url": "http://127.0.0.1/ccby/track",
+   "path": "music/synthetic/ccby.mp3",
+   "bytes": 1000,
+   "pinned": true,
+   "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "licence": {
+    "spdx": "CC-BY-4.0",
+    "url": "https://example.invalid/licence",
+    "readOn": "2026-11-25",
+    "quote": "SYNTHETIC fixture: no real licence was read"
+   },
+   "credit": "Title Synthetic Composer (example.invalid)",
+   "flags": {
+    "diskOnly": false,
+    "creditInExport": true,
+    "shareAlike": false,
+    "people": false,
+    "aiGenerated": false,
+    "repoAllowed": true
+   },
+   "time": "2026-11-25T10:01:00.000Z"
+  },
+  {
+   "item": "icons/package",
+   "source": "iconify-json",
+   "sourceTitle": "SYNTHETIC iconify-json",
+   "manifest": "synthetic-01",
+   "manifestSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+   "kind": "npm",
+   "identity": "icons/package",
+   "url": "http://127.0.0.1/icons/package",
+   "path": "visual/icons/synthetic-iconify",
+   "bytes": 1000,
+   "pinned": true,
+   "treeSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+   "files": 3,
+   "version": "0.0.0",
+   "integrity": "sha512-x",
+   "licence": {
+    "custom": "Mixed (MIT package; every icon set has its own licence)",
+    "url": "https://example.invalid/licence",
+    "readOn": "2026-11-25",
+    "quote": "SYNTHETIC fixture: no real licence was read"
+   },
+   "credit": null,
+   "flags": {
+    "diskOnly": true,
+    "creditInExport": false,
+    "shareAlike": false,
+    "people": false,
+    "aiGenerated": false,
+    "repoAllowed": false,
+    "trademark": true
+   },
+   "time": "2026-11-25T10:02:00.000Z"
+  },
+  {
+   "item": "personal/sound",
+   "source": "synthetic-personal",
+   "sourceTitle": "SYNTHETIC synthetic-personal",
+   "manifest": "synthetic-01",
+   "manifestSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+   "kind": "file",
+   "identity": "personal/sound",
+   "url": "http://127.0.0.1/personal/sound",
+   "path": "sounds/synthetic/personal.wav",
+   "bytes": 1000,
+   "pinned": true,
+   "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+   "licence": {
+    "custom": "Personal use only (synthetic)",
+    "url": "https://example.invalid/licence",
+    "readOn": "2026-11-25",
+    "quote": "SYNTHETIC fixture: no real licence was read"
+   },
+   "credit": null,
+   "flags": {
+    "diskOnly": true,
+    "creditInExport": false,
+    "shareAlike": false,
+    "people": false,
+    "aiGenerated": false,
+    "repoAllowed": false,
+    "personalOnly": true
+   },
+   "time": "2026-11-25T10:03:00.000Z"
+  }
+ ],
+ "licenceTexts": [
+  {
+   "source": "synthetic-tones",
+   "url": "https://example.invalid/licence",
+   "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "file": "LICENCES/synthetic-tones.txt"
+  }
+ ]
+}

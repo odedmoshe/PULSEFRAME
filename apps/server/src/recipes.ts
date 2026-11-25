@@ -78,7 +78,7 @@ export async function regenerateRecipe(store: Store, gov: Governance, principal:
   // so the answer does not depend on history: an undo that restores a hand edit restores its protection too).
   // A run that records where its clips were, with their tracks (beat-montage from the amendment of 2026-11-24 on): a clip that
   // moved earlier ONLY because a delete before it closed the gap is not edited by hand (core closedGapOnly: moved by exactly the
-  // length of the run's clips deleted before it on its track, nothing else changed). Those are placed again on the beat like
+  // length of the run's clips deleted before it on its track that closed their gaps, nothing else changed). Those are placed again on the beat like
   // untouched ones instead of being kept one segment early for good. A clip moved in any other way was dragged by hand and is
   // kept, as before; so is one taken to another track than recorded (onOtherTrack). A run that recorded no tracks (older) names
   // neither and behaves as before: its moved clips are kept.

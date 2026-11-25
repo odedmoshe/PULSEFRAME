@@ -22,11 +22,15 @@
  *    «הפרויקט השתנה — בדקו שוב»; the second Enter commits on r+1.
  *  8 double Enter: two Enters, one transaction; the same strict request again is replayed (replayed: true), revision unchanged.
  *  9 same path: the planned ops with a propose-mode grant give a proposal and no commit; with the observer token 403.
- * 10 not connected: status provider_not_configured, the row «עוזר השפה לא מחובר», POST …/assistant/requests 409 with no job row,
+ * 10 not connected: the owner's status says provider_not_configured and an agent's only "not connected" (three fields, no amount,
+ *    host or model), the row «עוזר השפה לא מחובר», POST …/assistant/requests 409 with no job row,
  *    and 0 outbound connection attempts in the whole proof (Node sockets to non-loopback hosts are counted by a hook; Chromium is
  *    sent through a counting listener on a local port by --proxy-server).
  * 11 the model path with the labelled MOCK adapter: CONTRACT-TESTED, CREDENTIALS REQUIRED — never a pass of a real provider.
  *    11f: the pending row's «ביטול הבקשה», from the keyboard, against a MOCK answer that is held back (the canceled state in words).
+ *    11g: the canceled row's «שחרור הסכום השמור», from the keyboard: the confirmation (what a release is and is not, the way out
+ *    focused first, Escape keeps the amount), the release, the row's sentence; an agent's release is refused and releases nothing.
+ *    11h: the same control on the held amount Settings lists for the owner (the amount 11f left held), from the keyboard.
  * 12 credential: the planted test key (not a real key) is in no JSON response and no log line; an agent PUT gives 403; the key file
  *    is 0600; a backup made during the proof holds no assistant.key or assistant.json and not the key's bytes.
  * 13 accessibility and keyboard: the audit scenario keyboard only; the heuristic audit (a11y-lib.ts) of the open preview in Hebrew
@@ -62,7 +66,7 @@ import { ctxFor } from '../../core/src/commandBar/fixture.testFixture.ts';
 import { tokenizeBar } from '../../core/src/commandBar/match.ts';
 import { parseTime } from '../../core/src/commandBar/time.ts';
 import { BAR_DOM_IDS, COMMAND_BAR_TESTIDS as TID } from '../../../apps/web/src/editor/commandBar/commandBar.testids.ts';
-import { barText } from '../../../apps/web/src/editor/commandBar/commandBar.strings.ts';
+import { barText, ltr, plain } from '../../../apps/web/src/editor/commandBar/commandBar.strings.ts';
 import { auditInPage, focusAudit } from './a11y-lib.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
@@ -525,7 +529,9 @@ async function main() {
       const jobs0 = (s.store.db.prepare('SELECT COUNT(*) AS n FROM jobs WHERE type = ?').get(ASSISTANT_JOB_TYPE) as { n: number }).n;
       const req = await ownerFetch(page, 'POST', `/projects/${he.pid}/assistant/requests`, { text: 'תעשה סרט יפה', selection: [], playheadFrame: 0 });
       const jobs1 = (s.store.db.prepare('SELECT COUNT(*) AS n FROM jobs WHERE type = ?').get(ASSISTANT_JOB_TYPE) as { n: number }).n;
-      check('10', 'not connected: GET /assistant/status says provider_not_configured (agent and owner), the palette row reads «עוזר השפה לא מחובר», POST …/assistant/requests gives 409 assistant_not_connected and no job row', status.body?.setup === 'provider_not_configured' && ownerStatus.body?.setup === 'provider_not_configured' && !!row?.includes('עוזר השפה לא מחובר') && req.status === 409 && req.body?.error?.code === 'assistant_not_connected' && jobs0 === 0 && jobs1 === 0, { setup: status.body?.setup, row, request: req.status, code: req.body?.error?.code, jobRows: jobs1 });
+      // the owner's session reads why (provider_not_configured); an agent reads connected or not, in three fields, and nothing else
+      const agentKeys = Object.keys(status.body ?? {}).sort().join();
+      check('10', 'not connected: GET /assistant/status says provider_not_configured to the owner\'s session and only "not connected" to an agent (connected, setup, detail; no amount, host or model), the palette row reads «עוזר השפה לא מחובר», POST …/assistant/requests gives 409 assistant_not_connected and no job row', agentKeys === 'connected,detail,setup' && status.body?.connected === false && status.body?.setup === 'not_connected' && ownerStatus.body?.setup === 'provider_not_configured' && !!row?.includes('עוזר השפה לא מחובר') && req.status === 409 && req.body?.error?.code === 'assistant_not_connected' && jobs0 === 0 && jobs1 === 0, { ownerSetup: ownerStatus.body?.setup, agentReads: status.body, row, request: req.status, code: req.body?.error?.code, jobRows: jobs1 });
       await closePalette(page);
       await ctx.close();
     }
@@ -630,6 +636,7 @@ async function main() {
     check('11a', 'MOCK adapter: a valid answer gives an open proposal with the revision unchanged and its steps rendered in the editor; the owner\'s accept gives +1, Ctrl+Z restores the document hash', shown && steps.join() === 'split_clip' && revOpen === revA && open.n === propA + 1 && accepted && hAcc !== hA && undone && hUndo === hA && adapter.calls === callsA + 1, { steps, revisionWhileOpen: revOpen - revA, accepted, undoRestores: hUndo === hA, calls: adapter.calls - callsA }, true);
     await page.screenshot({ path: path.join(art, 'assistant-mock.png') }).catch(() => {});
 
+    let row11f = '';
     // (f) the pending row's «ביטול הבקשה»: the MOCK adapter holds its answer; the owner cancels from the keyboard; the row says what the
     // cancel did (the request had been handed over, so it may have been charged), in the job's own facts. MOCK only: no real provider.
     {
@@ -664,6 +671,7 @@ async function main() {
       const a11yFindings = [auditPending, auditCanceled].reduce((n, a) => n + a.unnamed.length + a.lowContrast.length + a.tabIssues.length, 0) + (ring ? 0 : 1);
       const row = s2.store.db.prepare('SELECT id, status, attempt FROM jobs WHERE type = ? ORDER BY created_at DESC LIMIT 1').get('assistant.propose') as { id: string; status: string; attempt: number };
       const ledger = s2.governance.ledgerFor(row.id);
+      row11f = row.id;
       await page.screenshot({ path: path.join(art, 'assistant-canceled.png') }).catch(() => {});
       await page.keyboard.press('Escape');
       await page.getByTestId('palette-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
@@ -671,6 +679,147 @@ async function main() {
         offered && sentToMock && reached && ended && text === barText(lang, 'assistant.row.canceledSent') && label === barText(lang, 'assistant.row.cancel') && sent === 'true' && role === 'status' && buttonGone && focusBack === 'palette-input' && a11yFindings === 0
         && row.status === 'canceled' && row.attempt === 1 && ledger?.state === 'unknown' && proposals() === propF && adapter.calls === callsF + 1 && s2.store.getProject(fx.pid).revision === revF,
         { offered, tabsToTheButton: tabs, reached, label, text, dataSent: sent, role, buttonGone, focusAfter: focusBack, a11y: { findings: a11yFindings, focusRing: ring, controlsWhilePending: auditPending.controls, controlsAfter: auditCanceled.controls, unnamed: [...auditPending.unnamed, ...auditCanceled.unnamed].slice(0, 4), lowContrast: [...auditPending.lowContrast, ...auditCanceled.lowContrast].slice(0, 4) }, job: { status: row.status, attempt: row.attempt }, ledger: ledger?.state ?? null, proposals: proposals() - propF, calls: adapter.calls - callsF, revision: s2.store.getProject(fx.pid).revision - revF }, true);
+    }
+
+    // (g) and (h) the owner's release of an amount left held after a cancel (ADR-0027, note of 2026-11-25 "the release control"),
+    // keyboard only, with the heuristic audit of every new state. MOCK only: whether a real service charged cannot be known here,
+    // which is exactly what the confirmation says. 11f left one amount held; (h) releases that one from Settings, (g) one of its own.
+    {
+      const lang = (await page.evaluate(() => document.documentElement.lang)) === 'en' ? 'en' : 'he';
+      const findingsOf = (...audits: { unnamed: unknown[]; lowContrast: unknown[]; tabIssues: unknown[] }[]) => audits.reduce((n, a) => n + a.unnamed.length + a.lowContrast.length + a.tabIssues.length, 0);
+      const samples = (...audits: { unnamed: unknown[]; lowContrast: unknown[] }[]) => ({ unnamed: audits.flatMap((a) => a.unnamed).slice(0, 4), lowContrast: audits.flatMap((a) => a.lowContrast).slice(0, 4) });
+      const active = () => page.evaluate(() => { const el = document.activeElement as HTMLElement | null; const c = el ? getComputedStyle(el) : null; return { id: el?.getAttribute('data-testid') ?? null, inDialog: el?.closest('[role=dialog]')?.getAttribute('data-testid') ?? null, ring: !!c && ((c.outlineStyle !== 'none' && parseFloat(c.outlineWidth) > 0) || c.boxShadow !== 'none') }; });
+      const tabTo = async (id: string, max = 12) => { let n = 0; while (n < max && (await active()).id !== id) { await page.keyboard.press('Tab'); n++; } return { tabs: n, ...(await active()) }; };
+      const tidy = (t: string | null) => (t ?? '').replace(/\s+/g, ' ').trim();
+      const ownerStatus = async () => (await ownerFetch(page, 'GET', '/assistant/status')).body as { month: string; reservedCents: number; spentCents: number; held: { jobId: string; cents: number }[] };
+      /** The confirmation's three sentences for an amount, as the strings give them (what it does, what it does not, that it is final). */
+      const saidFor = (cents: number) => [barText(lang, 'release.body.what', { amount: ltr(`${cents}¢`) }), barText(lang, 'release.body.charge'), barText(lang, 'release.body.final')].map(plain).join(' ');
+      /** The open confirmation: where the focus starts, its words, its names, the focus trap, and the heuristic audit of the dialog and of the page under it. */
+      const confirmation = async (cents: number) => {
+        const shown = await page.getByTestId(TID.releaseDialog).waitFor({ timeout: 5000 }).then(() => true, () => false);
+        await page.waitForTimeout(150);
+        const first = await active();
+        const dialog = page.getByTestId(TID.releaseDialog);
+        const role = await dialog.getAttribute('role').catch(() => null), modal = await dialog.getAttribute('aria-modal').catch(() => null);
+        const title = await dialog.locator('h2').textContent().catch(() => null);
+        const body = plain((await dialog.locator('.pf-dialog-body').textContent().catch(() => '')) ?? '').replace(/\s+/g, ' ').trim();
+        const paragraphs = await dialog.locator('.pf-dialog-body p').allTextContents().catch(() => []);
+        const audit = await page.evaluate(auditInPage, `[data-testid=${TID.releaseDialog}]`), auditPage = await page.evaluate(auditInPage);
+        // Tab stays inside: the way out, the release, the close button, and round again
+        const walk: (string | null)[] = [];
+        let rings = first.ring ? 0 : 1, stayed = first.inDialog === TID.releaseDialog;
+        for (let i = 0; i < 4; i++) { await page.keyboard.press('Tab'); const a = await active(); walk.push(a.id ?? 'close'); if (a.inDialog !== TID.releaseDialog) stayed = false; if (!a.ring) rings++; }
+        return {
+          ok: shown && first.id === TID.releaseKeep && role === 'dialog' && modal === 'true' && title === barText(lang, 'release.title') && paragraphs.map((x) => plain(x).replace(/\s+/g, ' ').trim()).join(' ') === saidFor(cents).replace(/\s+/g, ' ') && stayed && rings === 0
+            && walk.join() === [TID.releaseConfirm, 'close', TID.releaseKeep, TID.releaseConfirm].join() && findingsOf(audit, auditPage) === 0,
+          detail: { shown, firstFocus: first.id, role, modal, title, body, tabWalk: walk, staysInside: stayed, missingRings: rings, a11y: { findings: findingsOf(audit, auditPage), controls: audit.controls, ...samples(audit, auditPage) } },
+        };
+      };
+
+      // ---- (g) the canceled row
+      adapter.queue({ wait: (signal) => new Promise((_res, rej) => { signal.addEventListener('abort', () => rej(new Error('MOCK: aborted'))); }) });
+      const propG = proposals(), callsG = adapter.calls, revG = s2.store.getProject(fx.pid).revision;
+      await page.getByTestId('open-palette').focus();
+      await page.keyboard.press('Enter');
+      await page.getByTestId('palette-input').waitFor({ timeout: 5000 });
+      await page.keyboard.type('תקצר את הסרט בבקשה');
+      await page.locator(`[data-testid=${TID.assistantRow}][data-ready] .pf-bar-link`).first().click({ timeout: 10000 });
+      await page.getByTestId(TID.assistantCancel).waitFor({ timeout: 10000 }).catch(() => {});
+      for (let i = 0; i < 200 && adapter.calls !== callsG + 1; i++) await sleep(25);
+      await page.getByTestId(TID.assistantCancel).click().catch(() => {});
+      await page.getByTestId(TID.assistantCanceled).waitFor({ timeout: 15000 }).catch(() => {});
+      const jobG = (s2.store.db.prepare('SELECT id FROM jobs WHERE type = ? ORDER BY created_at DESC, rowid DESC LIMIT 1').get('assistant.propose') as { id: string }).id;
+      const heldG = s2.governance.ledgerFor(jobG);
+      const centsG = heldG?.reservedCents ?? -1;
+      const before = await ownerStatus();
+      // an agent cannot release it (REST; no MCP tool does): refused with the next step, told nothing of the ledger, and nothing is released
+      const agentRelease = await agent2('POST', `/jobs/${jobG}/budget/release`, {});
+      const agentStatus = await agent2('GET', '/assistant/status');
+      const afterAgent = s2.governance.ledgerFor(jobG)?.state;
+      // the row now offers the release (the owner's status lists the amount as held); keyboard only from here
+      const offeredG = await page.getByTestId(TID.assistantRow).getByTestId(TID.releaseHeld).waitFor({ timeout: 10000 }).then(() => true, () => false);
+      await page.getByTestId('palette-input').focus();
+      const reachG = await tabTo(TID.releaseHeld);
+      const buttonG = { label: tidy(await page.getByTestId(TID.releaseHeld).first().textContent().catch(() => null)), name: await page.getByTestId(TID.releaseHeld).getAttribute('aria-label').catch(() => null), popup: await page.getByTestId(TID.releaseHeld).getAttribute('aria-haspopup').catch(() => null), job: await page.getByTestId(TID.releaseHeld).getAttribute('data-job').catch(() => null) };
+      const auditOffer = await page.evaluate(auditInPage);
+      await page.screenshot({ path: path.join(art, 'assistant-release-button.png') }).catch(() => {});
+      await page.keyboard.press('Enter');
+      const confG = await confirmation(centsG);
+      await page.screenshot({ path: path.join(art, 'assistant-release-confirm.png') }).catch(() => {});
+      // Escape is the way out: the amount stays counted, the palette stays open, and the keyboard is back on the button
+      await page.keyboard.press('Escape');
+      await page.getByTestId(TID.releaseDialog).waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      const kept = { ledger: s2.governance.ledgerFor(jobG)?.state, focus: (await active()).id, palette: await page.getByTestId('palette-dialog').count() };
+      // again, and this time the release: Enter opens, Tab moves from the way out to the release, Enter releases
+      await page.keyboard.press('Enter');
+      await page.getByTestId(TID.releaseDialog).waitFor({ timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(150);
+      const toConfirm = await tabTo(TID.releaseConfirm, 3);
+      await page.keyboard.press('Enter');
+      const saidG = page.getByTestId(TID.assistantRow).getByTestId(TID.released);
+      const doneG = await saidG.waitFor({ timeout: 10000 }).then(() => true, () => false);
+      await page.waitForTimeout(150);
+      const releasedText = plain((await saidG.textContent().catch(() => '')) ?? ''), releasedRole = await saidG.getAttribute('role').catch(() => null);
+      const afterG = { ledger: s2.governance.ledgerFor(jobG), focus: (await active()).id, button: await page.getByTestId(TID.assistantRow).getByTestId(TID.releaseHeld).count(), dialog: await page.getByTestId(TID.releaseDialog).count(), palette: await page.getByTestId('palette-dialog').count() };
+      const auditReleased = await page.evaluate(auditInPage);
+      const after = await ownerStatus();
+      await page.screenshot({ path: path.join(art, 'assistant-released.png') }).catch(() => {});
+      await page.keyboard.press('Escape');
+      await page.getByTestId('palette-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      const a11yG = findingsOf(auditOffer, auditReleased) + (reachG.ring ? 0 : 1) + (toConfirm.ring ? 0 : 1);
+      check('11g', 'MOCK adapter: after a cancel that came after the send, the row offers «שחרור הסכום השמור» for the amount the owner\'s status lists as held; an agent\'s release is refused (403 owner_required with the next step) and releases nothing, and its status holds no amount; from the keyboard the button opens a confirmation that says a release only takes the amount off the editor\'s own monthly count and does not undo a charge, with the way out focused first and the focus kept inside; Escape keeps the amount and returns to the button; Tab and Enter release it: the ledger row is released, the month counts exactly that much less, what was spent does not move, the row says so as a status and the keyboard is back in the input; no proposal, no change, no second call; the heuristic accessibility audit of the four states has 0 findings',
+        heldG?.state === 'unknown' && centsG > 0 && before.held.some((h) => h.jobId === jobG && h.cents === centsG)
+        && agentRelease.status === 403 && agentRelease.body?.error?.code === 'owner_required' && !!agentRelease.body?.error?.hint && JSON.stringify(agentRelease.body?.error?.details) === JSON.stringify({ jobId: jobG }) && afterAgent === 'unknown' && Object.keys(agentStatus.body ?? {}).sort().join() === 'connected,detail,setup'
+        && offeredG && reachG.id === TID.releaseHeld && buttonG.label === barText(lang, 'release.button') && buttonG.popup === 'dialog' && buttonG.job === jobG && !!buttonG.name?.includes(`${centsG}¢`)
+        && confG.ok && kept.ledger === 'unknown' && kept.focus === TID.releaseHeld && kept.palette === 1
+        && toConfirm.id === TID.releaseConfirm && doneG && releasedText === plain(barText(lang, 'release.done', { amount: ltr(`${centsG}¢`) })) && releasedRole === 'status'
+        && afterG.ledger?.state === 'released' && afterG.focus === 'palette-input' && afterG.button === 0 && afterG.dialog === 0 && afterG.palette === 1
+        && after.reservedCents === before.reservedCents - centsG && after.spentCents === before.spentCents && !after.held.some((h) => h.jobId === jobG)
+        && a11yG === 0 && proposals() === propG && adapter.calls === callsG + 1 && s2.store.getProject(fx.pid).revision === revG,
+        { heldCents: centsG, agent: { status: agentRelease.status, code: agentRelease.body?.error?.code, hint: agentRelease.body?.error?.hint, ledgerAfter: afterAgent, statusKeys: Object.keys(agentStatus.body ?? {}).sort() }, offered: offeredG, tabsToTheButton: reachG.tabs, button: buttonG, confirmation: confG.detail, escape: kept, tabsToRelease: toConfirm.tabs, released: { text: releasedText, role: releasedRole, ...afterG }, month: { reservedBefore: before.reservedCents, reservedAfter: after.reservedCents, spentBefore: before.spentCents, spentAfter: after.spentCents },
+          a11y: { findings: a11yG, focusRingOnButton: reachG.ring, focusRingOnRelease: toConfirm.ring, controlsOffered: auditOffer.controls, controlsReleased: auditReleased.controls, ...samples(auditOffer, auditReleased) }, proposals: proposals() - propG, calls: adapter.calls - callsG, revision: s2.store.getProject(fx.pid).revision - revG }, true);
+
+      // ---- (h) Settings: the amount 11f left held, listed for the owner with the same control
+      const listed = await ownerStatus();
+      const h = listed.held[0];
+      await page.getByTestId('rail-settings').focus();
+      await page.keyboard.press('Enter');
+      const shownH = await page.getByTestId(TID.settingsHeld).waitFor({ timeout: 8000 }).then(() => true, () => false);
+      await page.getByTestId(TID.settingsHeld).scrollIntoViewIfNeeded().catch(() => {});
+      const rows = await page.getByTestId(TID.settingsHeldRow).evaluateAll((els) => els.map((e) => ({ job: e.getAttribute('data-job'), how: e.getAttribute('data-how'), text: (e.textContent ?? '').replace(/[⁦-⁩]/g, '') })));
+      const heading = await page.locator(`[data-testid=${TID.settingsHeld}] h4`).textContent().catch(() => null), group = await page.getByTestId(TID.settingsHeld).getAttribute('role').catch(() => null);
+      // keyboard: from the per-request cap, the next stop is the held amount's button
+      await page.getByTestId(TID.settingsCap).focus();
+      const reachH = await tabTo(TID.releaseHeld, 4);
+      const auditList = await page.evaluate(auditInPage, '[data-testid=settings-dialog]'), auditListPage = await page.evaluate(auditInPage);
+      await page.screenshot({ path: path.join(art, 'assistant-settings-held.png') }).catch(() => {});
+      await page.keyboard.press('Enter');
+      const confH = await confirmation(h?.cents ?? -1);
+      await page.keyboard.press('Escape');
+      await page.getByTestId(TID.releaseDialog).waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      const keptH = { ledger: h ? s2.governance.ledgerFor(h.jobId)?.state : null, focus: (await active()).id, settings: await page.getByTestId('settings-dialog').count() };
+      await page.keyboard.press('Enter');
+      await page.getByTestId(TID.releaseDialog).waitFor({ timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(150);
+      const toConfirmH = await tabTo(TID.releaseConfirm, 3);
+      await page.keyboard.press('Enter');
+      const saidH = page.getByTestId('settings-dialog').getByTestId(TID.released);
+      const doneH = await saidH.waitFor({ timeout: 10000 }).then(() => true, () => false);
+      await page.waitForTimeout(200);
+      const releasedH = { text: plain((await saidH.textContent().catch(() => '')) ?? ''), role: await saidH.getAttribute('role').catch(() => null), focus: await active(), rows: await page.getByTestId(TID.settingsHeldRow).count(), dialog: await page.getByTestId(TID.releaseDialog).count(), spentLine: plain(tidy(await page.getByTestId(TID.settingsSpent).first().textContent().catch(() => null))) };
+      const auditDone = await page.evaluate(auditInPage, '[data-testid=settings-dialog]');
+      const end = await ownerStatus();
+      await page.screenshot({ path: path.join(art, 'assistant-settings-released.png') }).catch(() => {});
+      await page.keyboard.press('Escape');
+      await page.getByTestId('settings-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      const a11yH = findingsOf(auditList, auditListPage, auditDone) + (reachH.ring ? 0 : 1) + (toConfirmH.ring ? 0 : 1) + (releasedH.focus.ring ? 0 : 1);
+      check('11h', 'MOCK adapter: Settings lists the amount still held for the owner (the request 11f canceled after the send) under «סכומים שמורים», with when it was asked and how it ended; its button is the next Tab stop after the per-request cap and opens the same confirmation; Escape keeps the amount; Tab and Enter release it: the row leaves the list, the month\'s line shows that much less reserved, the sentence that says what the release did is a status and holds the focus, and the ledger row is released; the heuristic accessibility audit of the list, the confirmation and the released state has 0 findings',
+        !!h && h.jobId === row11f && shownH && rows.length === 1 && rows[0]?.job === h.jobId && rows[0]?.how === 'canceled' && !!rows[0]?.text.includes(`${h.cents}¢`) && !!rows[0]?.text.includes(barText(lang, 'set.held.how.canceled')) && heading === barText(lang, 'set.held.heading') && group === 'group'
+        && reachH.id === TID.releaseHeld && reachH.tabs === 1 && confH.ok && keptH.ledger === 'unknown' && keptH.focus === TID.releaseHeld && keptH.settings === 1
+        && toConfirmH.id === TID.releaseConfirm && doneH && releasedH.text === plain(barText(lang, 'release.done', { amount: ltr(`${h.cents}¢`) })) && releasedH.role === 'status' && releasedH.focus.id === TID.released && releasedH.rows === 0 && releasedH.dialog === 0
+        && releasedH.spentLine === plain(barText(lang, 'set.spent', { month: end.month, spent: `${end.spentCents}¢`, reserved: `${end.reservedCents}¢` })) && s2.governance.ledgerFor(h.jobId)?.state === 'released' && end.reservedCents === listed.reservedCents - h.cents && end.spentCents === listed.spentCents && end.held.length === 0 && a11yH === 0,
+        { held: h ?? null, listed: { shown: shownH, heading, group, rows }, tabsFromTheCap: reachH.tabs, confirmation: confH.detail, escape: keptH, tabsToRelease: toConfirmH.tabs, released: { ...releasedH, focus: releasedH.focus.id }, month: { reservedBefore: listed.reservedCents, reservedAfter: end.reservedCents, spent: end.spentCents },
+          a11y: { findings: a11yH, focusRingOnButton: reachH.ring, focusRingOnRelease: toConfirmH.ring, focusRingOnSentence: releasedH.focus.ring, controlsInSettings: auditList.controls, ...samples(auditList, auditListPage, auditDone) } }, true);
     }
 
     // (b) nine invalid answers
@@ -759,7 +908,7 @@ async function main() {
   const evidence = {
     ranAt: new Date().toISOString(), result, counts,
     machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, gpu: 'none' },
-    scope: 'Headless Chromium on the built editor and in-process servers. The model path (11a–11f) ran against TEST-MOCK-chat, a labelled test double that opens no connection: contract-tested, credentials required — no real provider was called and no network adapter exists. Not provable here: a real provider (no key exists), a screen reader, the owner\'s own phrasing. Timings are one sample.',
+    scope: 'Headless Chromium on the built editor and in-process servers. The model path (11a–11h) ran against TEST-MOCK-chat, a labelled test double that opens no connection: contract-tested, credentials required — no real provider was called and no network adapter exists. Not provable here: a real provider (no key exists), a screen reader, the owner\'s own phrasing. Timings are one sample.',
     checks, measurements, report,
   };
   const text = JSON.stringify(evidence, (_k, v) => (typeof v === 'bigint' ? v.toString() : v), 2);

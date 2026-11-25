@@ -109,3 +109,33 @@ export * from './assistantContract.ts';
 export * from './commandBar/index.ts';
 export * from './commandBar/numbers.ts';
 export * from './commandBar/time.ts';
+// the content library on disk (wave 7 library track): the contract is lead-built; libraryDuties/libraryCredits bodies and the op
+// bodies are worker B's, librarySearch and svgSafety worker A's
+export * from './libraryContract.ts';
+export * from './libraryDuties.ts';
+export * from './libraryCredits.ts';
+export * from './librarySearch.ts';
+export * from './svgSafety.ts';
+export * from './libraryOps.ts';
+// send and keep (wave 7, track send): the contract and the two ops are lead-built; sizeFit.ts / exportChecks.ts are worker B's stubs
+export * from './sendContract.ts';
+export * from './loudnessMatch.ts';
+export * from './sendOps.ts';
+export * from './sizeFit.ts';
+export * from './exportChecks.ts';
+// editing craft (wave 7 craft track; .artifacts/wave7/craft-decisions.md): the contract is lead-built; craftOps, timeEntry,
+// rippleTrim, pasteAttributes and findReplace bodies are W1's, versionDiff W2's
+export * from './craftContract.ts';
+export * from './craftOps.ts';
+export * from './timeEntry.ts';
+export * from './rippleTrim.ts';
+export * from './pasteAttributes.ts';
+export * from './findReplace.ts';
+export * from './versionDiff.ts';
+// the one Hebrew mark table and the direction controls (find and replace; the search track folds with the same)
+export { HEBREW_MARKS, BIDI_CONTROLS } from './commandBar/normalize.ts';
+// stabilisation (wave 7 stabilise track): the contract and attach_camera_motion are lead-built; steady.ts and the two public op
+// bodies are W2's
+export * from './steadyContract.ts';
+export * from './steady.ts';
+export * from './steadyOps.ts';

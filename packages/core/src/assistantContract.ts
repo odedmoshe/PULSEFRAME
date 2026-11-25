@@ -50,6 +50,17 @@ export const ASSISTANT_EXCLUDED_OPS = [
   'add_cue', 'update_cue', 'merge_cues', 'set_caption_style', 'set_variant_phrase_text',
   // privacy regions and the motion tracks they follow (a proposal must never take a redaction away)
   'set_redact_region', 'create_motion_track', 'edit_motion_track', 'remove_motion_track',
+  // the content library (wave 7): the credits card writes licence text the assistant never reads; offering it would also change
+  // the reviewed prompt (ASSISTANT_PROMPT_DIGEST), which needs its own review first
+  'add_credits_card',
+  // send and keep (wave 7): a project setting, and a match that needs measurements the assistant never reads
+  'set_master_limiter', 'match_clip_loudness',
+  // editing craft (wave 7): replace_text rewrites captions, transcripts and translations the assistant never reads; ripple_trim and
+  // paste_attributes are left out until the owner has tried them (offering them would also change the reviewed prompt,
+  // ASSISTANT_PROMPT_DIGEST, which needs its own review first)
+  'replace_text', 'ripple_trim', 'paste_attributes',
+  // stabilisation (wave 7): it reads camera measurements the assistant never sees; a command-bar intent is a non-goal of version 1
+  'set_clip_stabilise', 'remove_camera_motion',
 ] as const;
 /** The ops a proposal may hold: every registered public op minus ASSISTANT_EXCLUDED_OPS and PERSON_OPS, in registry order. */
 export function assistantOps(): string[] {
@@ -70,7 +81,11 @@ export type AssistantStage = (typeof ASSISTANT_STAGES)[number];
 export interface AssistantToggles { titlesAndMarkers: boolean; peopleNames: boolean }
 export const ASSISTANT_TOGGLES_DEFAULT: Readonly<AssistantToggles> = Object.freeze({ titlesAndMarkers: false, peopleNames: false });
 
-/** GET /api/v1/assistant/status (observe). Never holds the key nor any part of it. Money is in cents; `month` is the UTC calendar month the limit counts ('YYYY-MM'). */
+/**
+ * GET /api/v1/assistant/status as the OWNER'S OWN SESSION reads it (ADR-0027, note of 2026-11-25 "money and provider"). Never
+ * holds the key nor any part of it. Money is in cents; `month` is the UTC calendar month the limit counts ('YYYY-MM').
+ * Any other principal reads AssistantPublicStatus instead: the server's assistant/visibility.ts decides which.
+ */
 export interface AssistantStatus {
   setup: AssistantSetup; detail: string;
   adapter: string | null; host: string | null; model: string | null;
@@ -79,11 +94,31 @@ export interface AssistantStatus {
   monthlyLimitCents: number;
   /** 0 = not set (setup limit_missing). */
   perRequestCapCents: number;
+  /** `reservedCents` is everything the month still counts without a known cost: requests on their way, and the `held` amounts. */
   month: string; spentCents: number; reservedCents: number;
+  /** The amounts of this month that stay counted because it is not known whether the service charged; the owner may release each. */
+  held: AssistantHeldAmount[];
   toggles: AssistantToggles; keySet: boolean; keyAddedAt: string | null;
   /** Installed adapter ids: empty in wave 1 (no network adapter exists). */
   adapters: string[];
 }
+/**
+ * One held amount (budget_ledger state 'unknown'): the request's job, what stays counted, when the request was made, and how the
+ * job ended ('canceled', 'failed', 'submission-unknown'; null when its project, and so the job, was deleted since).
+ */
+export interface AssistantHeldAmount { jobId: string; cents: number; requestedAt: string; status: string | null }
+/**
+ * All that a principal other than the owner's own session reads of the assistant's status, whatever its grant: connected or
+ * not. No amount, limit, price, host, model, adapter, switch, key state or date, and not which setting is missing.
+ */
+export const ASSISTANT_PUBLIC_SETUP = ['ready', 'not_connected'] as const;
+export interface AssistantPublicStatus { connected: boolean; setup: (typeof ASSISTANT_PUBLIC_SETUP)[number]; detail: string }
+export const ASSISTANT_PUBLIC_STATUS_KEYS = ['connected', 'detail', 'setup'] as const satisfies readonly (keyof AssistantPublicStatus)[];
+export type AssistantStatusAnswer = AssistantStatus | AssistantPublicStatus;
+/** Whether a status answer is the owner's whole one (the editor shows amounts, the cap and the switches only then). */
+export const isOwnerStatus = (s: AssistantStatusAnswer | null | undefined): s is AssistantStatus => !!s && !('connected' in s);
+/** POST /api/v1/jobs/{jobId}/budget/release (owner's session only) → the ledger row after the release. */
+export interface BudgetReleaseAnswer { jobId: string; ledger: { reservedCents: number; actualCents: number | null; state: string } | null }
 const Cents = z.number().int().nonnegative().max(10_000_000);
 /**
  * Cents per million tokens, typed in by the owner. More than 0 (lead decision after the contracts review): a price of 0

@@ -56,19 +56,38 @@ export function movedOnly(doc: ProjectDocument, run: Pick<RecipeRun, 'fingerprin
   });
 }
 /**
+ * How many different amounts the deletes before the clips of one track could have moved them by (the subset sums of the gone
+ * clips' lengths, level by level) closedGapOnly follows. Equal-length slots never come near it (n gone clips give at most n + 1
+ * amounts); 12 gone clips of pairwise different lengths can reach it (2^12). A track that goes beyond it is judged by the
+ * full-sum test instead: every gone clip before a clip counted as having closed its gap.
+ */
+export const MAX_GAP_AMOUNTS = 4096;
+/**
  * movedOnly, narrowed for runs whose clips a person arranges by dragging (the family film, the beat montage; ADR-0026): only a
- * move that a delete which closed the gap explains. Besides the conditions of movedOnly, the clip's start must be EARLIER than
- * recorded by exactly the summed length of the run's own clips that are gone from the document and whose recorded range lay
- * before its recorded start on the same track (exact rational arithmetic) — what ripple_delete_clips does to the clips after a
- * deleted one. A clip linked to such a clip moves with it by the same amount on its own track (a pick's own sound), so a clip
- * also counts when it moved by exactly as much as a clip it is linked to that passes the test itself.
+ * move that deletes which closed their gaps explain. The run's own clips that are gone from the document and whose recorded
+ * range lies on a track are that track's gone clips. Each was deleted either with its gap closed (ripple_delete_clips: every
+ * later clip of the track moves earlier by its length) or with its gap kept (delete_clip: nothing moves), and the document does
+ * not say which. So per track ONE reading is chosen — for each gone clip, closed or kept — and a clip is named when, besides
+ * the conditions of movedOnly, its start is EARLIER than recorded by exactly the summed length of the gone clips recorded
+ * before it that the reading takes as closed (exact rational arithmetic; a clip with no gone clip before it is never named).
+ * The reading chosen is the one that agrees with the most of the track's clips among `ids`: a clip agrees when it lies on its
+ * recorded track and either passes movedOnly and moved by exactly the reading's amount for its place, or still starts where
+ * recorded while the reading's amount there is zero. Among readings that agree with equally many clips, the one that names
+ * fewer moved clips wins, then the one with fewer closed gaps, then the smaller total; so in doubt a clip stays kept.
+ * (The gone clips before a clip are a prefix of the track's gone clips in time order, so the readings are followed level by
+ * level, one state per amount reached; at most MAX_GAP_AMOUNTS amounts, see there for what happens beyond.)
+ * A clip linked to a named clip moves with it by the same amount on its own track (a pick's own sound), so a clip also counts
+ * when it moved by exactly as much as a clip it is linked to that passes the test itself.
  * Therefore: with no deleted length before it, any move is a move by hand and the clip is not named (it stays kept, and the
- * planner lays the rest around it); a clip dragged by hand that also lies after a deleted one does not match the sum and is
- * not named; after several such deletes the sum of all of them is what counts; a delete on another track does not count for
- * this track; a deleted clip the run did not make (or one already gone when the run was made: not among its createdIds) adds
- * nothing, so clips moved by it are not named; and a delete that kept its gap adds to the sum without moving anything, so the
- * clips after it and after a gap-closing delete are not named either. In all those cases the answer is the one from before the
- * rule: kept by hand.
+ * planner lays the rest around it); after a Delete that closed its gap and a Shift+Delete that kept its gap, in either order,
+ * the later clips moved by the one closed length and are named; after several gap-closing deletes their sum is what counts; a
+ * clip dragged on by hand after a delete moved by an amount no reading gives, or by one that the rest of its track
+ * contradicts, and is not named, while the clips around it still are; a delete on another track does not count for this track;
+ * a deleted clip the run did not make (or one already gone when the run was made: not among its createdIds) adds nothing, so
+ * clips moved by it are not named. In all the not-named cases the answer is the one from before the rule: kept by hand.
+ * What it cannot tell: a clip dragged by hand to exactly the place one reading of the deletes gives it, where no other reading
+ * agrees with more of the track (the last clip of a track pulled into the gap a Shift+Delete left: the document is then the
+ * very one a plain Delete leaves). It is named and laid out again like the clips a delete moved.
  */
 export function closedGapOnly(doc: ProjectDocument, run: Pick<RecipeRun, 'fingerprints' | 'ranges' | 'createdIds'>, ids: readonly string[]): string[] {
   const ranges = run.ranges ?? {};
@@ -76,11 +95,50 @@ export function closedGapOnly(doc: ProjectDocument, run: Pick<RecipeRun, 'finger
   const gone = run.createdIds.filter((id) => !findClip(doc, id)).flatMap((id) => { const r = place(id); return r && r.trackId !== undefined ? [r] : []; });
   const shiftOf = (id: string) => T.sub(place(id)!.start, findClip(doc, id)!.clip.start);
   const moved = movedOnly(doc, run, ids);
-  const closed = moved.filter((id) => {
-    const at = place(id)!;
-    const before = gone.filter((g) => g.trackId === at.trackId && !T.lt(at.start, g.end)).reduce((sum, g) => T.add(sum, T.sub(g.end, g.start)), T.ZERO);
-    return !T.isZero(before) && T.eq(shiftOf(id), before);
-  });
+  const keyOf = (t: T.RationalTime) => { const x = T.normalize(t); return `${x.value}/${x.timescale}`; };
+  const closed: string[] = [];
+  for (const trackId of new Set(gone.map((g) => g.trackId!))) {
+    const lengths = gone.filter((g) => g.trackId === trackId).sort((a, b) => T.cmp(a.end, b.end)).map((g) => ({ end: g.end, length: T.sub(g.end, g.start) }));
+    // the track's clips that say something: where each was recorded (level = how many gone clips lay before it) and how far it moved
+    const said: { id: string; level: number; shift: T.RationalTime; moved: boolean }[] = [];
+    for (const id of ids) {
+      const f = findClip(doc, id), at = place(id);
+      if (!f || !at || at.trackId !== trackId || f.track.id !== trackId) continue;
+      const isMoved = moved.includes(id), shift = shiftOf(id);
+      if (!isMoved && !T.isZero(shift)) continue; // moved and changed otherwise: says nothing either way
+      said.push({ id, level: lengths.filter((g) => !T.lt(at.start, g.end)).length, shift, moved: isMoved });
+    }
+    const candidates = said.filter((c) => c.moved && c.level > 0);
+    if (!candidates.length) continue;
+    // per level, how many clips moved by each amount: [clips that agree, of which moved]
+    const votes = lengths.map(() => new Map<string, [number, number]>());
+    for (const c of said) if (c.level > 0) { const m = votes[c.level - 1]!, k = keyOf(c.shift), v = m.get(k) ?? [0, 0]; m.set(k, [v[0] + 1, v[1] + (c.moved ? 1 : 0)]); }
+    // one state per amount reached after each gone clip: the best reading that reaches it (agreeing clips, then fewer named, then fewer closed)
+    interface State { sum: T.RationalTime; agree: number; named: number; closedGaps: number; before: State | null }
+    const better = (a: State, b: State) => a.agree !== b.agree ? a.agree > b.agree : a.named !== b.named ? a.named < b.named : a.closedGaps !== b.closedGaps ? a.closedGaps < b.closedGaps : T.lt(a.sum, b.sum);
+    let states = new Map<string, State>([[keyOf(T.ZERO), { sum: T.ZERO, agree: 0, named: 0, closedGaps: 0, before: null }]]);
+    let within = true;
+    for (let level = 0; level < lengths.length && within; level++) {
+      const next = new Map<string, State>();
+      for (const s of states.values())
+        for (const isClosed of [false, true]) {
+          const sum = isClosed ? T.add(s.sum, lengths[level]!.length) : s.sum, k = keyOf(sum), v = votes[level]!.get(k) ?? [0, 0];
+          const state: State = { sum, agree: s.agree + v[0], named: s.named + v[1], closedGaps: s.closedGaps + (isClosed ? 1 : 0), before: s };
+          const had = next.get(k);
+          if (!had || better(state, had)) next.set(k, state);
+        }
+      states = next;
+      within = states.size <= MAX_GAP_AMOUNTS;
+    }
+    // the amount at each level: of the chosen reading, or (beyond the bound) of the reading in which every gap closed
+    const amounts: T.RationalTime[] = [];
+    if (within) {
+      let best: State | null = null;
+      for (const s of states.values()) if (!best || better(s, best)) best = s;
+      for (let s = best; s && s.before; s = s.before) amounts.unshift(s.sum);
+    } else lengths.reduce((sum, g) => { const total = T.add(sum, g.length); amounts.push(total); return total; }, T.ZERO);
+    for (const c of candidates) if (T.eq(c.shift, amounts[c.level - 1]!)) closed.push(c.id);
+  }
   const groupOf = (id: string) => { const c = findClip(doc, id)!.clip; return c.type === 'media' ? c.linkGroupId : null; };
   return moved.filter((id) => closed.includes(id) || closed.some((other) => !!groupOf(id) && groupOf(other) === groupOf(id) && T.eq(shiftOf(other), shiftOf(id))));
 }

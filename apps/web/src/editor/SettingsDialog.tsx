@@ -6,6 +6,7 @@ import { setSettingsOpen, useChrome } from './chromeState.ts';
 import { useEditorState } from './store.ts';
 import { RenderCacheStorage } from './RenderCacheStorage.tsx';
 import { AssistantSettings } from './commandBar/AssistantSettings.tsx';
+import { LibrarySettings } from './library/LibrarySettings.tsx';
 
 const THEME_KEY = 'pf.theme';
 export const readTheme = (): 'dark' | 'light' => { try { return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark'; } catch { return 'dark'; } };
@@ -51,6 +52,8 @@ export function SettingsDialog() {
         {settingsOpen && <RenderCacheStorage />}
         {/* the command bar's language assistant (ADR-0027): the owner's own session only (AssistantSettings decides) */}
         {settingsOpen && <AssistantSettings />}
+        {/* the owner's content library folder (wave 7 library track; LibrarySettings decides what each session sees) */}
+        {settingsOpen && <LibrarySettings />}
       </div>
     </Dialog>
   );

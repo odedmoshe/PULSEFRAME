@@ -3,8 +3,10 @@
  * schemas, checks the scope and the owner session, and calls these; every handler checks the owner again itself
  * (isOwnerSession), so a handler reached any other way still refuses an agent with 403 owner_required.
  *
- *  - status (observe): the setup state from the config file, the key file (only whether it exists and when it was written),
- *    the installed adapters (none in wave 1) and the month's ledger. Never the key, nor any part of it.
+ *  - status (observe): for the owner's own session the setup state from the config file, the key file (only whether it exists
+ *    and when it was written), the installed adapters (none in wave 1), the month's ledger and the amounts it still holds for
+ *    requests whose cost is not known. Never the key, nor any part of it. For every other principal: connected or not, and
+ *    nothing else (visibility.ts assistantStatusFor, the one place that decides it).
  *  - summary (owner): exactly the AssistantSummary a request would send now.
  *  - putConfig / putKey / deleteKey (owner): the files of credential.ts (0600, temp then rename; the host must be in
  *    PF_ASSISTANT_HOSTS).
@@ -16,6 +18,7 @@ import type { Config } from '../config.ts';
 import type { Governance, Principal } from '../governance.ts';
 import { ApiError, type Store } from '../store.ts';
 import { isOwnerSession, type AssistantDeps, type AssistantHandlers, type AssistantStatus } from './contract.ts';
+import { assistantStatusFor } from './visibility.ts';
 import { AssistantFiles } from './credential.ts';
 import { AssistantJobs, assistantSetup, type AssistantRuntime } from './job.ts';
 import { assistantSummary } from './summary.ts';
@@ -58,19 +61,21 @@ export function createAssistantHandlers(ctx: AssistantRouteContext): AssistantHa
       pricesCentsPerMTok: c.pricesCentsPerMTok ? { input: c.pricesCentsPerMTok.input, output: c.pricesCentsPerMTok.output } : null,
       monthlyLimitCents: c.monthlyLimitCents, perRequestCapCents: c.perRequestCapCents,
       month: spend.month, spentCents: spend.spentCents, reservedCents: spend.reservedCents,
+      held: ctx.gov.assistantHeld().map((h) => ({ jobId: h.jobId, cents: h.cents, requestedAt: h.requestedAt, status: h.status })),
       toggles: { titlesAndMarkers: c.toggles.titlesAndMarkers, peopleNames: c.toggles.peopleNames },
       keySet: s.keySet, keyAddedAt: s.keyAddedAt,
       adapters: [...ctx.deps.adapters.keys()],
     };
   };
   return {
-    status: () => status(),
+    // whole for the owner's own session; connected or not for anyone else (visibility.ts)
+    status: (p) => assistantStatusFor(p, status()),
     summary: (p, projectId, sctx) => {
       owner(p);
       const { doc } = ctx.store.getProject(projectId);
       return assistantSummary(doc, sctx, rt.files.readConfig().config.toggles);
     },
-    putConfig: (p, body) => { owner(p); rt.files.writeConfig(body); return status(); },
+    putConfig: (p, body) => { owner(p); rt.files.writeConfig(body); return assistantStatusFor(p, status()); },
     putKey: (p, key) => { owner(p); return rt.files.writeKey(key); },
     deleteKey: (p) => { owner(p); return rt.files.deleteKey(); },
     request: (p, projectId, body) => { owner(p); return jobs.start(p, projectId, body); },

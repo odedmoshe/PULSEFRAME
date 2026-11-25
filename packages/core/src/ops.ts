@@ -36,9 +36,10 @@ import { isLightChannel } from './keyframeChannels.ts';
 import { isInheritedName, own } from './own.ts';
 import { detachAssetFromEvents } from './events.ts';
 import { handDownCapture } from './capture.ts';
-import { sceneCutsFor, timingRelations, transcriptFor } from './lineage.ts';
+import { ownBeats, sceneCutsFor, timingRelations, transcriptFor } from './lineage.ts';
 import { skippedClips, timingCoverage, untimedCopyRefusal } from './cleanup.ts';
 import { MULTICAM_REFUSALS, type MulticamRefusalKey, type MulticamRefusalRow } from './multicamRefusals.ts';
+import { projectCameraSamples, STEADY_REFUSALS } from './steadyContract.ts';
 import { DEFAULT_REDACT_REGION, isUsable, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, roundHalfUp, SIZE_UNIT, ST, TrackOpArgs, trackSampleAt, type MotionTrack, type RedactRegion } from './tracking.ts';
 
 export type OpErrorCode =
@@ -157,7 +158,7 @@ const mustTrack = (seq: Sequence, trackId: string) => {
   if (t.locked) throw new OpError('track_locked', `track ${trackId} is locked`, { trackId });
   return t;
 };
-const sortClips = (t: Track) => t.clips.sort((a, b) => T.cmp(a.start, b.start) || (a.id < b.id ? -1 : 1));
+export const sortClips = (t: Track) => t.clips.sort((a, b) => T.cmp(a.start, b.start) || (a.id < b.id ? -1 : 1));
 const overlaps = (t: Track, start: T.RationalTime, end: T.RationalTime, ignore: Set<string>) =>
   t.clips.find((c) => !ignore.has(c.id) && T.lt(c.start, end) && T.lt(start, clipEnd(c)));
 function assertFree(t: Track, start: T.RationalTime, end: T.RationalTime, ignore = new Set<string>()) {
@@ -255,7 +256,7 @@ function placeTrack(seq: Sequence, kind: Track['kind'], start: T.RationalTime, e
   return newTrack(seq, kind, ctx);
 }
 /** The other clips of a clip's link group, wherever they are (none for a clip that is not linked, or whose link id no other clip carries). */
-const partnersOf = (d: ProjectDocument, clip: Clip) => {
+export const partnersOf = (d: ProjectDocument, clip: Clip) => {
   const out: { track: Track; clip: MediaClip }[] = [];
   if (clip.type !== 'media' || !clip.linkGroupId) return out;
   for (const seq of Object.values(d.sequences))
@@ -264,7 +265,7 @@ const partnersOf = (d: ProjectDocument, clip: Clip) => {
   return out;
 };
 /** The other clips of a clip's link group, which an edit of the clip changes too: refused while one of them is on a locked track. */
-const linked = (d: ProjectDocument, clip: Clip) => {
+export const linked = (d: ProjectDocument, clip: Clip) => {
   const out = partnersOf(d, clip);
   for (const l of out) if (l.track.locked) throw new OpError('track_locked', `linked clip ${l.clip.id} is on locked track ${l.track.id}`, { trackId: l.track.id, clipId: l.clip.id }, 'Unlock the track or pass includeLinked=false.');
   return out;
@@ -1417,6 +1418,8 @@ defineOp({
       ...(src.blend ? { blend: src.blend } : {}), ...(src.mask ? { mask: structuredClone(src.mask) } : {}),
       // privacy regions (ADR-0015) stay on the held picture, resolved at its own source frame; a follow goes on too
       ...(src.redact ? { redact: structuredClone(src.redact) } : {}), ...(src.follow ? { follow: { ...src.follow } } : {}),
+      // stabilisation (wave 7) stays on the held picture: its correction is that of its own source frame, so the hold does not jump
+      ...(src.stabilise ? { stabilise: { ...src.stabilise } } : {}),
     };
     const affected = new Set<string>([held.id]);
     const created: string[] = [held.id];
@@ -1508,6 +1511,68 @@ function coveredBefore(spans: readonly { s: T.RationalTime; e: T.RationalTime }[
   }
   return total;
 }
+/**
+ * The words of the refusals shiftClips raises; each op that closes a gap passes its own, so the advice fits the edit (wave 7
+ * craft: ripple_trim says "trim without closing the gap", ripple_delete_clips "delete and keep the gap").
+ */
+export interface ShiftWords {
+  differentAmounts: (clipId: string, otherClipId: string) => string; differentAmountsHint: string;
+  lockedPartnerHint: string;
+  beforeZero: (clipId: string) => string; beforeZeroHint: string;
+  over: (clipId: string, otherClipId: string, trackId: string) => string; overHint: string;
+}
+/** ripple_delete_clips' words, unchanged since before the extraction (packages/evals/src/ripple-delete.golden.json pins them). */
+export const RIPPLE_DELETE_WORDS: ShiftWords = {
+  differentAmounts: (a, b) => `linked clips ${a} and ${b} would move by different amounts`, differentAmountsHint: 'Delete the clips of one track at a time, or unlink those two clips first.',
+  lockedPartnerHint: 'Unlock the track, or delete with delete_clip to keep the gap.',
+  beforeZero: (a) => `closing the gap would place clip ${a} before 0`, beforeZeroHint: 'Delete with delete_clip to keep the gap, or trim the start of that clip (it starts before the clip it is linked to) first.',
+  over: (a, b, t) => `closing the gap would put clip ${a} over clip ${b} on track ${t}`, overHint: 'Delete with delete_clip to keep the gap, or move the clip that is in the way first.',
+};
+/** One clip that a gap-closing edit moves: `by` is how much EARLIER it goes (negative: later), frame-aligned, never rounded. */
+export interface ShiftEntry { track: Track; clip: Clip; by: T.RationalTime }
+/**
+ * The shared shift of ripple_delete_clips and ripple_trim (extracted from ripple_delete_clips, wave 7 craft pre-pass; the golden
+ * ripple-delete.golden.json, recorded before, replays identically). `shift` holds every clip of the closing tracks with its `by`;
+ * this adds the linked partners of each clip that moves (same amount; refused when two linked clips would move by different
+ * amounts, or a partner is on a locked track), refuses a clip that would go before 0, applies the moves, and refuses a moved clip
+ * landing on a clip that did not move with it, on the closing tracks and the tracks of the moved clips. Mutates `shift` and the
+ * draft; returns the clips that moved (by ≠ 0). All or nothing only through the transaction (the caller throws on the draft).
+ */
+export function shiftClips(d: ProjectDocument, shift: Map<string, ShiftEntry>, closing: ReadonlySet<Track>, w: ShiftWords): ShiftEntry[] {
+  for (const m of [...shift.values()]) {
+    if (T.isZero(m.by)) continue;
+    for (const p of partnersOf(d, m.clip)) {
+      const had = shift.get(p.clip.id);
+      if (had) {
+        if (!T.eq(had.by, m.by)) throw new OpError('incompatible', w.differentAmounts(m.clip.id, p.clip.id), { clipId: m.clip.id, otherClipId: p.clip.id, by: m.by, otherBy: had.by }, w.differentAmountsHint);
+        continue;
+      }
+      if (p.track.locked) throw new OpError('track_locked', `linked clip ${p.clip.id} is on locked track ${p.track.id}`, { trackId: p.track.id, clipId: p.clip.id }, w.lockedPartnerHint);
+      shift.set(p.clip.id, { ...p, by: m.by });
+    }
+  }
+  const moved = [...shift.values()].filter((m) => !T.isZero(m.by));
+  // A clip on a closing track never goes before 0 (it moves by at most the time before it), but a linked clip that starts
+  // earlier than its partner does (a sound that starts before its picture: a J-cut) can; it keeps its offset, so refuse.
+  for (const m of moved) if (T.lt(m.clip.start, m.by)) throw new OpError('out_of_bounds', w.beforeZero(m.clip.id), { clipId: m.clip.id, trackId: m.track.id, start: m.clip.start, by: m.by }, w.beforeZeroHint);
+  for (const m of moved) m.clip.start = T.sub(m.clip.start, m.by);
+  // A clip that moved may not land on one that did not move with it, on any track: sounds that already overlapped
+  // (a crossfade) and moved together keep their overlap, but a sound is never slid over another one that stays.
+  const by = (c: Clip) => shift.get(c.id)?.by ?? T.ZERO;
+  for (const track of new Set([...closing, ...moved.map((m) => m.track)])) {
+    sortClips(track);
+    for (let i = 0; i < track.clips.length; i++) {
+      const cur = track.clips[i]!;
+      for (let k = i + 1; k < track.clips.length && T.lt(track.clips[k]!.start, clipEnd(cur)); k++) {
+        const other = track.clips[k]!;
+        if (T.eq(by(cur), by(other))) continue;
+        const [mover, still] = T.lt(by(other), by(cur)) ? [cur, other] : [other, cur];
+        throw new OpError('overlap', w.over(mover.id, still.id, track.id), { trackId: track.id, clipId: mover.id, otherClipId: still.id }, w.overHint);
+      }
+    }
+  }
+  return moved;
+}
 defineOp({
   name: 'ripple_delete_clips',
   version: 1,
@@ -1526,38 +1591,7 @@ defineOp({
     // how far each clip moves: on a closing track, the deleted time before it; a linked clip moves with its partner
     const shift = new Map<string, { track: Track; clip: Clip; by: T.RationalTime }>();
     for (const t of closing) for (const c of t.clips) shift.set(c.id, { track: t, clip: c, by: coveredBefore(spans.get(t)!, c.start) });
-    for (const m of [...shift.values()]) {
-      if (T.isZero(m.by)) continue;
-      for (const p of partnersOf(d, m.clip)) {
-        const had = shift.get(p.clip.id);
-        if (had) {
-          if (!T.eq(had.by, m.by)) throw new OpError('incompatible', `linked clips ${m.clip.id} and ${p.clip.id} would move by different amounts`, { clipId: m.clip.id, otherClipId: p.clip.id, by: m.by, otherBy: had.by }, 'Delete the clips of one track at a time, or unlink those two clips first.');
-          continue;
-        }
-        if (p.track.locked) throw new OpError('track_locked', `linked clip ${p.clip.id} is on locked track ${p.track.id}`, { trackId: p.track.id, clipId: p.clip.id }, 'Unlock the track, or delete with delete_clip to keep the gap.');
-        shift.set(p.clip.id, { ...p, by: m.by });
-      }
-    }
-    const moved = [...shift.values()].filter((m) => !T.isZero(m.by));
-    // A clip on a closing track never goes before 0 (it moves by at most the time before it), but a linked clip that starts
-    // earlier than its partner does (a sound that starts before its picture: a J-cut) can; it keeps its offset, so refuse.
-    for (const m of moved) if (T.lt(m.clip.start, m.by)) throw new OpError('out_of_bounds', `closing the gap would place clip ${m.clip.id} before 0`, { clipId: m.clip.id, trackId: m.track.id, start: m.clip.start, by: m.by }, 'Delete with delete_clip to keep the gap, or trim the start of that clip (it starts before the clip it is linked to) first.');
-    for (const m of moved) m.clip.start = T.sub(m.clip.start, m.by);
-    // A clip that moved may not land on one that did not move with it, on any track: sounds that already overlapped
-    // (a crossfade) and moved together keep their overlap, but a sound is never slid over another one that stays.
-    const by = (c: Clip) => shift.get(c.id)?.by ?? T.ZERO;
-    for (const track of new Set([...closing, ...moved.map((m) => m.track)])) {
-      sortClips(track);
-      for (let i = 0; i < track.clips.length; i++) {
-        const cur = track.clips[i]!;
-        for (let k = i + 1; k < track.clips.length && T.lt(track.clips[k]!.start, clipEnd(cur)); k++) {
-          const other = track.clips[k]!;
-          if (T.eq(by(cur), by(other))) continue;
-          const [mover, still] = T.lt(by(other), by(cur)) ? [cur, other] : [other, cur];
-          throw new OpError('overlap', `closing the gap would put clip ${mover.id} over clip ${still.id} on track ${track.id}`, { trackId: track.id, clipId: mover.id, otherClipId: still.id }, 'Delete with delete_clip to keep the gap, or move the clip that is in the way first.');
-        }
-      }
-    }
+    const moved = shiftClips(d, shift, closing, RIPPLE_DELETE_WORDS);
     // per closing track, the time taken out of it (all of its deleted time)
     const closed = [...closing].map((t) => { const sp = spans.get(t)!; return { trackId: t.id, removed: coveredBefore(sp, sp.reduce((e, x) => T.max(e, x.e), T.ZERO)) }; });
     const deletedClipIds = [...gone.keys()], movedClipIds = moved.map((m) => m.clip.id);
@@ -2007,6 +2041,8 @@ defineOp({
     if (!Object.hasOwn(d.assets, a.assetId)) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
     const next = d.assets[a.assetId]!, cur = d.assets[clip.assetId];
     if (next.id === clip.assetId) throw new OpError('incompatible', 'the clip already shows this file', { clipId: clip.id, assetId: next.id });
+    // stabilisation (wave 7) uses the camera motion measured on the current file; dropping it silently would change the picture
+    if (clip.stabilise) throw new OpError(STEADY_REFUSALS.otherFile.code, STEADY_REFUSALS.otherFile.message(), { clipId: clip.id }, STEADY_REFUSALS.otherFile.hint);
     const der = next.provenance.derived;
     if (!der?.sourceAssetIds.includes(clip.assetId)) throw new OpError('incompatible', 'the new file was not made from the file this clip shows', { clipId: clip.id, assetId: next.id, sourceAssetIds: der?.sourceAssetIds ?? [] }, 'Run the tool on this clip, or pick the file it made from this clip\'s file.');
     if (track.kind === 'video' && !next.video && !(next.kind === 'image' && next.image)) throw new OpError('incompatible', 'the new file has no picture', { clipId: clip.id, assetId: next.id });
@@ -2103,6 +2139,10 @@ defineOp({
 // ---------- analysis results and edits that use them (SPEC §19) ----------
 const TimeList = z.array(RT).max(50000);
 const sortedUnique = (list: T.RationalTime[]) => list.slice().sort(T.cmp).filter((t, i, a) => i === 0 || !T.eq(a[i - 1]!, t));
+// attach_analysis and edit_analysis WRITE the record of the file they name and do not follow lineage (lineage.ts): a record is
+// what was measured on, or entered for, that one file, on its own clock. A copy that is measured or corrected itself gets its own
+// record, which then wins over its source's for every reader (the nearest record of the chain; pinned in beatLineage.test.ts).
+// The editor's analysis panel addresses a correction made on a time-preserving copy to the measured file (analysis.logic.ts).
 defineOp({
   name: 'attach_analysis',
   version: 1,
@@ -2245,13 +2285,16 @@ defineOp({
     const frame = (t: T.RationalTime) => T.frameTime(T.frameIndexAt(t, rate), rate); // down to a whole frame
     const maxEnd = frame(T.add(clip.start, toTimelineSpan(clip, T.sub(asset.duration, clip.sourceIn))));
     const limit = T.min(target, maxEnd);
-    // beats of the source at or after the clip's in-point, as timeline times of this clip (also past its current end)
-    const beats = (d.analyses?.[clip.assetId]?.beats?.beats ?? []).filter((b) => T.lt(clip.sourceIn, b)).map((b) => frame(timelineAt(clip, b))).filter((t) => T.lt(clip.start, t) && T.lte(t, limit));
+    // beats of the source at or after the clip's in-point, as timeline times of this clip (also past its current end): the file's
+    // own, or those of the nearest time-preserving source it is a copy of, on the file's own clock (lineage.ts ownBeats). A copy
+    // made without a recorded time mapping has none, and is fitted like any file without a beat analysis: exactly to the picture.
+    const own = ownBeats(d, clip.assetId);
+    const beats = (own?.beats ?? []).filter((b) => T.lt(clip.sourceIn, b)).map((b) => frame(timelineAt(clip, b))).filter((t) => T.lt(clip.start, t) && T.lte(t, limit));
     const lastBeat = beats.length ? beats.reduce((m, t) => T.max(m, t)) : null;
     // With bar starts in the analysis the music ends on the last bar start, which sounds finished where an arbitrary beat does not —
     // unless that bar start lies more than one bar before the last usable beat (bars known for an earlier part of the file only).
-    const an = d.analyses?.[clip.assetId]?.beats;
-    const bars = (an?.downbeats ?? []).filter((b) => T.lt(clip.sourceIn, b)).map((b) => frame(timelineAt(clip, b))).filter((t) => T.lt(clip.start, t) && T.lte(t, limit));
+    const an = own?.analysis;
+    const bars = (own?.downbeats ?? []).filter((b) => T.lt(clip.sourceIn, b)).map((b) => frame(timelineAt(clip, b))).filter((t) => T.lt(clip.start, t) && T.lte(t, limit));
     const lastBar = bars.length ? bars.reduce((m, t) => T.max(m, t)) : null;
     const onBar = !!lastBar && !!lastBeat && beats.filter((t) => T.lt(lastBar, t)).length < (an?.meter ?? 4);
     const end = onBar ? lastBar! : lastBeat ?? limit;
@@ -3012,8 +3055,9 @@ function assertTrackLength(motionTrackId: string, n: number) {
 function assertTrackCaps(d: ProjectDocument, t: MotionTrack) {
   const n = t.x.length;
   assertTrackLength(t.id, n);
-  const total = Object.values(d.motionTracks ?? {}).reduce((sum, x) => sum + (x.id === t.id ? 0 : x.x.length), n);
-  if (total > MAX_PROJECT_TRACK_SAMPLES) throw new OpError('out_of_bounds', `the motion tracks of a project can hold at most ${MAX_PROJECT_TRACK_SAMPLES} samples in all; this edit would make ${total}`, { samples: total, max: MAX_PROJECT_TRACK_SAMPLES }, 'Delete a motion track that is no longer needed (remove_motion_track), or track a shorter stretch.');
+  // the camera measurements of stabilisation (wave 7) share the project's budget with the motion tracks
+  const total = Object.values(d.motionTracks ?? {}).reduce((sum, x) => sum + (x.id === t.id ? 0 : x.x.length), n) + projectCameraSamples(d);
+  if (total > MAX_PROJECT_TRACK_SAMPLES) throw new OpError(STEADY_REFUSALS.budget.code, STEADY_REFUSALS.budget.message(total, MAX_PROJECT_TRACK_SAMPLES), { samples: total, max: MAX_PROJECT_TRACK_SAMPLES }, STEADY_REFUSALS.budget.hint);
 }
 /** The sample columns of a track being edited. `filled` marks samples made only to close a gap (unknown, placed later at the nearest known sample). */
 interface Columns { from: number; x: number[]; y: number[]; s: number[] | null; q: number[]; st: number[]; filled: boolean[] }
@@ -3383,6 +3427,9 @@ defineOp({
       if (!asset.video) throw new OpError('incompatible', 'this clip has privacy regions, which are drawn on video pictures only', { clipId: c.id }, 'Remove its privacy regions first (set_redact_region), or choose a video.');
       if (c.redact.some((r) => r.motionTrackId && own(d.motionTracks, r.motionTrackId)?.assetId !== asset.id)) throw new OpError('incompatible', 'a privacy region of this clip follows a motion track of its current file', { clipId: c.id }, 'Make that region fixed or remove it first (set_redact_region).');
     }
+    // Stabilisation (wave 7) uses the camera motion measured on the current file: switch it off first rather than drop it silently.
+    for (const { clip: c } of targets)
+      if (c.stabilise && c.assetId !== asset.id) throw new OpError(STEADY_REFUSALS.otherFile.code, STEADY_REFUSALS.otherFile.message(), { clipId: c.id }, STEADY_REFUSALS.otherFile.hint);
     // The source a clip needs from sourceIn: its stretch of source (a freeze frame needs one picture inside the file).
     const needed = (c: MediaClip) => toSourceSpan(c, c.duration);
     const fits = (c: MediaClip, sourceIn: T.RationalTime) => isStill || (!T.isNegative(sourceIn) && (c.freeze ? T.lt(sourceIn, asset.duration) : T.lte(T.add(sourceIn, needed(c)), asset.duration)));

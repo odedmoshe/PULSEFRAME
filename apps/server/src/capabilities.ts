@@ -13,7 +13,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as T from '@pulseframe/time';
-import { findClip, own, sourceEnd, speedOf, type MediaClip, type ProjectDocument } from '@pulseframe/core';
+import { findClip, own, ownSceneCuts, sourceEnd, speedOf, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 import {
   BUILTIN_CAPABILITIES, CapabilityError, ComfyUIAdapter, expectedOutputSize, importComfyWorkflow, ImportError, LOCAL_TOOLS, logicDigest, ProviderError, publicationBlockers, resolveGraph, resolveParams,
   type Blocker, type CapabilityDescriptor, type ComfyDescriptor, type LocalToolDescriptor, type PixelSize, type ProviderAdapter, type Readiness,
@@ -67,7 +67,14 @@ export interface CapabilityDeps {
   pollMs?: number;
 }
 type Output = { name: string; role: string; mediaType: string; encoding: string; contentHash: string; bytes: number; mimeType: string; [k: string]: unknown };
-
+/**
+ * The scene cuts a pairwise frame job (frame interpolation) must not blend across, as decoded-frame indices of the source asset:
+ * the asset's own scene cuts, or those of the nearest time-preserving source it is a copy of, on its own clock (core lineage
+ * ownSceneCuts: an enhanced copy has its source's shots, so it is not interpolated across them either). A copy made without a
+ * recorded time mapping has none, like a file that was never analysed.
+ */
+export const sceneCutFrames = (doc: ProjectDocument, src: Pick<FrameSource, 'assetId' | 'rate' | 'startFrames'>): number[] =>
+  (ownSceneCuts(doc, src.assetId)?.cuts ?? []).map((t) => T.frameIndexAt(t, src.rate) - src.startFrames);
 export class Capabilities implements CapabilityService {
   private adapter: ProviderAdapter | null = null;
   private configError: string | null = null;
@@ -496,7 +503,7 @@ export class Capabilities implements CapabilityService {
     const chunkFrames = Math.min(f.chunkFrames, ram);
     if (chunkFrames < (f.mode === 'pairwise' ? 2 : 1)) throw new ApiError(422, 'input_too_large', `one frame at ${src.width}x${src.height} does not fit the provider memory budget (PF_AI_HOST_RAM_BUDGET ${this.cfg.aiHostRamBudgetBytes} bytes)`, { width: src.width, height: src.height, budgetBytes: this.cfg.aiHostRamBudgetBytes });
     const asset = doc.assets[src.assetId]!;
-    const cuts = f.mode === 'pairwise' ? (doc.analyses?.[src.assetId]?.scenes?.cuts ?? []).map((t) => T.frameIndexAt(t, src.rate) - src.startFrames) : [];
+    const cuts = f.mode === 'pairwise' ? sceneCutFrames(doc, src) : [];
     const plan = buildFramePlan({ mode: f.mode, firstFrame: src.firstFrame, frameCount: src.frameCount, rate: src.rate, width: src.width, height: src.height, chunkFrames, multiplier: m, sampleFps: f.sampleFps, cuts });
     const scratch = scratchBytes(plan, out, !!src.audio);
     const { measured, seconds } = this.measured(d, plan.expectedOutputFrames, plan.width * plan.height);

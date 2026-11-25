@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { SkipBack, SkipForward } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { beatPositionAt } from '@pulseframe/core';
+import { meterOf } from './analysis.logic.ts';
 import { COMMANDS } from './commands.ts';
 import { useEditorState, type Editor } from './store.ts';
 import { IconLoop, IconNextFrame, IconPause, IconPlay, IconPrevFrame } from './icons.tsx';
@@ -17,6 +18,7 @@ import { CutLoupe } from './CutLoupe.tsx';
 import { MulticamPanel } from './MulticamPanel.tsx';
 import { PerformView } from './perform/PerformView.tsx';
 import { STAGE_STRINGS } from './stage.strings.ts';
+import { TimecodeButton } from './craft/TimecodeButton.tsx';
 import './stage.css';
 
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -40,7 +42,7 @@ function beatNow(editor: Editor): { bar: number; beat: number; index: number } |
   const pos = doc ? beatPositionAt(doc, editor.playhead) : null;
   if (!doc || !pos || pos.beat < 0) return null;
   let meter = 4;
-  for (const tr of doc.sequences[doc.mainSequenceId]?.tracks ?? []) for (const c of tr.clips) if (c.id === pos.clipId && c.type === 'media') meter = doc.analyses?.[c.assetId]?.beats?.meter ?? 4;
+  for (const tr of doc.sequences[doc.mainSequenceId]?.tracks ?? []) for (const c of tr.clips) if (c.id === pos.clipId && c.type === 'media') meter = meterOf(doc, c.assetId) ?? 4; // by the lineage beatPositionAt followed
   const since = Math.max(0, Math.floor(pos.sinceFirstBar + 1e-6));
   return { bar: Math.floor(since / meter) + 1, beat: (since % meter) + 1, index: since };
 }
@@ -91,7 +93,7 @@ export function Transport() {
       {!(state.workspace === 'color' && wide) && <MulticamPanel />}
       <div className="transport pf-ds pf-force-dark" dir="ltr" role="group" aria-label={t('cmd.playPause')}>
         <div className="tp-time">
-          <span className="timecode tc" data-testid="timecode">{T.toTimecode(editor.playhead, rate)}</span>
+          <TimecodeButton text={T.toTimecode(editor.playhead, rate)} />
           <span className="tp-total tc" aria-label={`${S.of} ${T.toTimecode(editor.duration, rate)}`}>/ {T.toTimecode(editor.duration, rate)}</span>
         </div>
         <div className="tp-keys">
