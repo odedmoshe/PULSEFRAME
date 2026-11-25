@@ -19,8 +19,8 @@ const flags = { wholeWord: false, ignoreMarks: true, finalsEqual: true, ignoreCa
 const query = { text: 'נעה', ...flags, scope: 'project' as const, formats: 'all' as const };
 
 describe('craft contracts', () => {
-  it('the three ops are public, version 1, and refuse as not built while CRAFT_OPS_BUILT is false, changing nothing', () => {
-    expect(CRAFT_OPS_BUILT).toBe(false);
+  it('the three ops are public, version 1, built (W1), and refuse in their own words on a document without those clips, changing nothing', () => {
+    expect(CRAFT_OPS_BUILT).toBe(true);
     const calls = [
       { op: 'ripple_trim', args: { clipId: 'clp_x', edge: 'end', to: T.frameTime(30, R) } },
       { op: 'paste_attributes', args: { fromClipId: 'clp_a', toClipIds: ['clp_b'], groups: ['colour'] } },
@@ -34,7 +34,7 @@ describe('craft contracts', () => {
       let err: unknown;
       try { applyTransaction(doc, [call], { idSeed: 'c_', actor: 'test' }); } catch (e) { err = e; }
       expect(err).toBeInstanceOf(OpError);
-      expect((err as OpError).message).toBe(CRAFT_REFUSALS.notBuilt.message(call.op));
+      expect((err as OpError).message).not.toBe(CRAFT_REFUSALS.notBuilt.message(call.op));
       expect(JSON.stringify(doc)).toBe(before);
     }
   });
@@ -47,13 +47,15 @@ describe('craft contracts', () => {
     expect(ReplaceTextArgsSchema.safeParse({ edits: [{ at: { kind: 'title', clipId: 'c' }, was: 'a', text: '' }] }).success).toBe(false);
     expect(ReplaceTextArgsSchema.safeParse({ edits: [{ at: { kind: 'phrase', assetId: 'a', segmentId: 's' }, was: 'a', text: 'x'.repeat(4001) }] }).success).toBe(false);
   });
-  it('every stub refuses with CraftNotBuilt instead of answering', () => {
-    const stubs: (() => unknown)[] = [
-      () => parseTimeEntry('5s', R), () => rippleTrimTarget(doc, { clipIds: [], sequenceId: doc.mainSequenceId }, 0), () => rippleTrimCall(doc, 'c', 'start', 0),
-      () => durationOps(doc, ['c'], 150), () => planPasteAttributes(doc, { fromClipId: 'a', toClipIds: ['b'], groups: ['colour'] }), () => matchText('נעה', 'נעה', flags),
-      () => findText(doc, query), () => planReplace(doc, query, 'נועה'), () => privacyDigest(doc), () => composeRestore(doc, doc), () => describeDiff(doc, doc),
-    ];
+  it('every stub not built yet refuses with CraftNotBuilt instead of answering; W1\'s answer (craft.test.ts)', () => {
+    const stubs: (() => unknown)[] = [() => privacyDigest(doc), () => composeRestore(doc, doc), () => describeDiff(doc, doc)];
     for (const s of stubs) expect(s).toThrow(CraftNotBuilt);
+    const built: (() => unknown)[] = [
+      () => parseTimeEntry('5s', R), () => rippleTrimTarget(doc, { clipIds: [], sequenceId: doc.mainSequenceId }, 0), () => rippleTrimCall(doc, 'c', 'start', 0),
+      () => durationOps(doc, ['c'], 150), () => matchText('נעה', 'נעה', flags), () => findText(doc, query), () => planReplace(doc, query, 'נועה'),
+    ];
+    for (const s of built) expect(s).not.toThrow();
+    expect(() => planPasteAttributes(doc, { fromClipId: 'a', toClipIds: ['b'], groups: ['colour'] })).toThrow(OpError); // no such clip
   });
   it('the language assistant cannot propose any craft op (the reviewed prompt stays as it is)', () => {
     for (const op of ['replace_text', 'ripple_trim', 'paste_attributes']) {
@@ -76,10 +78,5 @@ describe('craft contracts', () => {
     expect('א⁧ב⁩‏'.replace(BIDI_CONTROLS, '')).toBe('אב');
     expect('־'.replace(HEBREW_MARKS, '')).toBe('־'); // maqaf is not a mark
   });
-  it.todo('W1: ripple_trim — shortening the end, lengthening the end (shift first), the start edge, by = 0, each RIPPLE_TRIM_WORDS refusal, undo exact');
-  it.todo('W1: paste_attributes — each group, source_empty never clears, target_animated, rollback confined to the target and its linked clips, keys past the end counted');
-  it.todo('W1: replace_text — each carrier, was mismatch, empty, fields, limits per carrier, cue word timing kept iff the count is unchanged');
-  it.todo('W1: parseTimeEntry — the shared golden with the command bar reader; sign, suffix, bare number, rounding ties up, every refusal');
-  it.todo('W1: matchText / findText / planReplace — findReplace.golden.json (200+ cases) and the notes');
   it.todo('W2: privacyDigest, composeRestore, describeDiff (versionDiff.test.ts)');
 });

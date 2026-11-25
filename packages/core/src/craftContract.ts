@@ -13,7 +13,7 @@ import { RationalTimeSchema } from './keyframe.ts';
 import { OpError, type OpErrorCode, type ShiftWords } from './ops.ts';
 
 /** True once W1 has built the op bodies (turns the fuzz rows on: packages/evals/src/ops-fuzz.gen.ts genCraft). */
-export const CRAFT_OPS_BUILT = false;
+export const CRAFT_OPS_BUILT = true;
 
 export const CRAFT_LIMITS = {
   /** paste_attributes targets in one op (one request carries at most 200 ops, http.ts TxBody). */
