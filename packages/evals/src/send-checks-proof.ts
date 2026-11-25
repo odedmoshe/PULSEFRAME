@@ -1,6 +1,6 @@
 /**
  * pnpm proof:send — export checks (wave 7, track send; .artifacts/wave7/send-decisions.md §4, C9, C10). Worker B (picture);
- * the sound findings are worker A's (read from the written WAV) and are BLOCKED here until A's sound checks land.
+ * the sound findings are worker A's (read from the written WAV). K6 is read from the editor-interactions evidence (send-evidence.ts).
  * A server is started here with startServer on its own port and data directory (removed at the end); REST only. Fixtures are
  * synthetic: the barcode video of @pulseframe/fixtures, a still and a lossless static video made with ffmpeg lavfi, a full-scale
  * square wave. Nothing of the owner's.
@@ -8,7 +8,10 @@
  * F3 (640x360, 30 fps, 600 frames), every number typed here:
  *   [0, 240) barcode video (moves every frame; beeps each second) · [240, 270) nothing (a gap: black, context gap) ·
  *   [270, 390) a lossless video of one still picture (a video plays, the picture does not change: frozen) ·
- *   [390, 600) the barcode video again · sound: none in [240, 390) (silence, 5 s) and a full-scale square wave at [450, 465) (clipped).
+ *   [390, 600) the barcode video again · sound: none in [240, 390) and a full-scale square wave at [450, 465) (clipped).
+ *   The barcode's own sound is a 100 ms beep at the start of every source second and digital silence between (fixtures beepWav), so
+ *   the silence found runs from the END OF THE LAST BEEP of the first clip (source 7.0–7.1 s = timeline 7.1 s) to the first beep of
+ *   the second clip (13 s): [7.1 s, 13 s), 5.9 s. The 0.9 s pauses between beeps are under the 2 s rule and are not findings.
  * K3 project (640x360, 360 frames): a still photo [0, 90); a freeze frame [90, 179) then one moving frame; a still photo under a
  *   HIDDEN track holding the static video [180, 270); the static video covered by an opaque full-frame photo above [270, 360).
  *
@@ -31,6 +34,7 @@ import * as T from '@pulseframe/time';
 import { flashCells, PictureCheck } from '@pulseframe/engine';
 import { startServer } from '@pulseframe/server';
 import { buildFixtureB, f, makeApi, makeSource, type Api } from './incremental-fixtures.ts';
+import { evidenceRows } from './send-evidence.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/send-checks');
@@ -41,6 +45,10 @@ const R = { num: 30, den: 1 };
 // ---- expected numbers, typed here ----
 const W = 640, H = 360;
 const F3 = { frames: 600, a1: [0, 240], gap: [240, 270], frozen: [270, 390], a2: [390, 600], loud: [450, 465] } as const;
+/** the barcode fixture's beep (packages/fixtures beepWav): 100 ms at the start of every source second */
+const BEEP = { everySeconds: 1, ms: 100 } as const;
+/** expected silence [from, to) in seconds: from the end of the last beep the first clip plays (it plays source [0, 8 s)) to the second clip's first beep */
+const SILENCE = { from: Math.floor((F3.a1[1] - F3.a1[0]) / 30 - 1e-9) * BEEP.everySeconds + BEEP.ms / 1000, to: F3.a2[0] / 30 } as const;
 const K3_FRAMES = 360;
 
 interface Check { id: string; name: string; pass: boolean | null; numbers: unknown; blocked?: string }
@@ -70,10 +78,14 @@ async function main() {
     check('K5', '15 black frames at 30 fps are found, 14 are not', r15.length === 1 && r15[0]!.kind === 'black' && r15[0]!.fromFrame === 5 && r15[0]!.toFrame === 20 && r14.length === 0, { r15, r14 });
   }
   const webBuilt = fs.existsSync(path.join(root, 'apps/web/dist/render.html'));
-  blocked('K4', 'measure_loudness silence and clipped ranges equal the export\'s', 'the sound checks of the written WAV (MixResult.checks, programmeLoudness soundChecks) are worker A\'s');
-  blocked('K6', 'editor: findings in Hebrew, «מעבר לקטע», ruler marks, quiet state without «תקין»', 'the editor\'s checks list (ChecksResult, Timeline, StatusBar) is builder C\'s; its rows go in editor-interactions-proof');
+  {
+    // K6 runs in the editor (editor-interactions-proof.ts, rows "K6 …"); read here from its evidence, recorded on this build
+    const e = evidenceRows('editor-interactions-proof.json', /^K6 /, 'pnpm proof:editor-interactions');
+    if (e.state === 'blocked') blocked('K6', 'editor: findings in Hebrew, «מעבר לקטע», ruler marks, quiet state without «תקין»', e.reason);
+    else check('K6', 'editor: findings in Hebrew, «מעבר לקטע» lands on the frame, ruler and status bar marks, a quiet state without «תקין» (rows K6 of editor-interactions-proof, read from its evidence)', e.state === 'pass', e);
+  }
   if (!webBuilt) {
-    for (const id of ['K1', 'K2', 'K3', 'K7', 'K8']) blocked(id, 'export checks', 'the web bundle is not built here (run pnpm build): no export can render');
+    for (const id of ['K1', 'K2', 'K3', 'K4', 'K7', 'K8']) blocked(id, 'export checks', 'the web bundle is not built here (run pnpm build): no export can render');
     return finish();
   }
   fs.rmSync(art, { recursive: true, force: true });
@@ -111,8 +123,16 @@ async function main() {
       const snd = c1.sound.findings as any[];
       const sec = (t: any) => T.toSeconds(t);
       const sil = snd.filter((x) => x.kind === 'silence'), clip = snd.filter((x) => x.kind === 'clipped');
-      check('K1s', 'F3 single pass, sound: one silence [8 s, 13 s) and one clipped at 15 s (±0.1 s)', snd.length === 2 && sil.length === 1 && clip.length === 1 && Math.abs(sec(sil[0].from) - 8) <= 0.1 && Math.abs(sec(sil[0].to) - 13) <= 0.1 && Math.abs(sec(clip[0].from) - 15) <= 0.1,
-        { sound: snd.map((x) => ({ kind: x.kind, from: sec(x.from), to: sec(x.to), measured: x.measured })) });
+      check('K1s', `F3 single pass, sound: one silence [${SILENCE.from} s, ${SILENCE.to} s) (from the end of the first clip's last beep) and one clipped at 15 s (±0.1 s = one block), exact rationals on the sample grid`, snd.length === 2 && sil.length === 1 && clip.length === 1 && snd.every((x) => isRational(x.from) && isRational(x.to) && x.from.timescale === 48000)
+        && Math.abs(sec(sil[0].from) - SILENCE.from) <= 0.1 && Math.abs(sec(sil[0].to) - SILENCE.to) <= 0.1 && sil[0].soundPlays === true && Math.abs(sec(clip[0].from) - F3.loud[0] / 30) <= 0.1,
+        { expected: { silence: SILENCE, clippedFrom: F3.loud[0] / 30 }, sound: snd.map((x) => ({ kind: x.kind, from: sec(x.from), to: sec(x.to), soundPlays: x.soundPlays, measured: x.measured })) });
+    }
+    // ---- K4: measure_loudness writes the WAV export would write and reads the same sound checks ----
+    {
+      const ml = await api.call(`/projects/${pid}/analysis/loudness`, {});
+      const exp = c1?.sound?.findings ?? null, got = ml.body?.soundChecks?.findings ?? null;
+      check('K4', 'measure_loudness returns the same silence and clipped ranges as the export (exact rationals, same measured numbers)', ml.status === 200 && ml.body?.soundChecks?.status === 'measured' && c1?.sound?.status === 'measured' && Array.isArray(exp) && exp.length > 0 && JSON.stringify(got) === JSON.stringify(exp),
+        { status: ml.status, export: exp, measureLoudness: got });
     }
     const out = await api.call(`/jobs/${single.id}/output`);
     check('K8', 'the F3 export with findings succeeds and is published (report only)', single.status === 'succeeded' && out.status === 200 && pic.length > 0, { status: single.status, output: out.status, bytes: single.output?.bytes });

@@ -33,6 +33,7 @@ import { promisify } from 'node:util';
 import { readBarcode } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
 import { f, makeApi, makeSource, sleep, type Api } from './incremental-fixtures.ts';
+import { evidenceRows } from './send-evidence.ts';
 
 const execP = promisify(execFile);
 const root = path.resolve(import.meta.dirname, '../../..');
@@ -130,7 +131,12 @@ async function main() {
     const b = await api.call(`/projects/${pid}/exports/browser`, { sessionId: 'session-send-proof' });
     check('S12', 'the browser route refuses sizeFit and a limiter (409 unsupported_in_browser_export)', a.status === 409 && a.body.error?.code === 'unsupported_in_browser_export' && b.status === 409 && b.body.error?.code === 'unsupported_in_browser_export', { a: [a.status, a.body.error?.code], b: [b.status, b.body.error?.code] });
   }
-  blocked('S13', 'editor: fitted size before export, Hebrew stages, card bytes and «לא אומת», Hebrew too-small refusal', 'the editor\'s send controls are builder C\'s (SendSize, ExportSheet); their rows go in editor-interactions-proof');
+  {
+    // S13 runs in the editor (editor-interactions-proof.ts, rows "S13 …"); read here from its evidence, recorded on this build
+    const e = evidenceRows('editor-interactions-proof.json', /^S13 /, 'pnpm proof:editor-interactions');
+    if (e.state === 'blocked') blocked('S13', 'editor: fitted size before export, Hebrew stages, card bytes and «לא אומת», Hebrew too-small refusal', e.reason);
+    else check('S13', 'editor: the tile, the fitted size before export, Hebrew stages, the card\'s bytes and «לא אומת», the Hebrew too-small refusal (rows S13 of editor-interactions-proof, read from its evidence)', e.state === 'pass', e);
+  }
 
   if (!webBuilt) {
     for (const [id, name] of [['S1', 'fit at 1,500,000'], ['S2', 'frames, barcodes, beeps'], ['S3', 'overshoot-once'], ['S4', 'overshoot-always'], ['S6', 'half size'], ['S7', 'already fits'], ['S8', 'fast export'], ['S9', 'reports equal'], ['S10', 'cancel in pass 2'], ['S11', 'tags']] as const) blocked(id, name, 'the web bundle is not built here (run pnpm build): no export can render');
