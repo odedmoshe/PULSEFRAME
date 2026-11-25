@@ -2,8 +2,8 @@
  * The accessibility audit scenarios of the pearls surfaces (wave 7 pearls track; builder C): the «פנינים» list (empty and with rows),
  * the pearl form open in the source viewer, «מי בקליפ?», and the screen-time table; both languages (a11y-audit.ts runs each scenario in
  * both and in both themes). Each scenario PREPARES the page and says whether the state is shown (and whether it is modal); a11y-audit.ts
- * then runs its full heuristic on it. A state that could not be brought up (the operations of builder A are not merged: no pearl can be
- * made, so no row, no tag, no table) says `shown: false`, which the audit reports as a finding, never as a pass.
+ * then runs its full heuristic on it. A state that could not be brought up (a pearl or a tag refused, so no row and no table) says
+ * `shown: false`, which the audit reports as a finding, never as a pass. The empty list is audited first, then the pearl and the tag are made.
  * Synthetic data only: a scratch project of its own with one generated picture (ffmpeg testsrc) and an invented person «אלף».
  */
 import { execFileSync } from 'node:child_process';
@@ -20,12 +20,13 @@ export interface PearlsA11yScenario {
   leave?(ctx: PearlsA11yCtx): Promise<void>;
 }
 
-interface Made { id: string; assetId: string; home: string; ranged: boolean }
+interface Made { id: string; assetId: string; home: string; personId: string | undefined; post: (p: string, data: unknown, soft?: boolean) => Promise<any> }
 const made = new WeakMap<Page, Promise<Made>>();
+const rangedOf = new WeakMap<Page, Promise<boolean>>();
 const frame = (n: number) => ({ value: String(n), timescale: 30 });
 const settle = (page: Page) => page.waitForTimeout(250);
 
-/** The scratch project of this page, made once: one picture, a person, and (when the operations exist) a pearl and a «מי בקליפ?» tag. */
+/** The scratch project of this page, made once: one picture and a person, no pearl yet (the empty list is audited first; `ranged` adds them). */
 function project(ctx: PearlsA11yCtx): Promise<Made> {
   const have = made.get(ctx.page);
   if (have) return have;
@@ -45,17 +46,27 @@ function project(ctx: PearlsA11yCtx): Promise<Made> {
     await post(`/projects/${id}/transactions`, { ops: [{ op: 'add_person', args: { name: 'אלף' } }, { op: 'add_clip', args: { assetId, start: frame(0), duration: frame(60) } }] });
     const doc = (await (await page.request.get(`${origin}/api/v1/projects/${id}`)).json()) as any;
     const personId = Object.keys(doc.project.people ?? {})[0];
-    // a pearl and a tag: refused until builder A's operations are merged (soft: the scenarios then say the state is not shown)
-    const a = await post(`/projects/${id}/transactions`, { ops: [{ op: 'add_source_range', args: { assetId, kind: 'pearl', label: 'פנינה לבדיקה' } }] }, true);
-    const b = personId ? await post(`/projects/${id}/transactions`, { ops: [{ op: 'add_source_range', args: { assetId, kind: 'presence', people: [personId] } }] }, true) : null;
     const u = new URL(home);
     u.searchParams.set('project', id);
     await page.goto(u.toString());
     await page.getByTestId('timecode').waitFor({ timeout: 30000 });
     if ((await page.evaluate(() => document.documentElement.lang)) !== ctx.lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => undefined);
-    return { id, assetId, home, ranged: !!a && !!b };
+    return { id, assetId, home, personId, post };
   })();
   made.set(ctx.page, p);
+  return p;
+}
+/** A pearl and a «מי בקליפ?» tag in the scratch project, made once by the owner's session (soft: a refusal says the state is not shown). */
+function ranged(ctx: PearlsA11yCtx): Promise<boolean> {
+  const have = rangedOf.get(ctx.page);
+  if (have) return have;
+  const p = (async () => {
+    const m = await project(ctx);
+    const a = await m.post(`/projects/${m.id}/transactions`, { ops: [{ op: 'add_source_range', args: { assetId: m.assetId, kind: 'pearl', label: 'פנינה לבדיקה' } }] }, true);
+    const b = m.personId ? await m.post(`/projects/${m.id}/transactions`, { ops: [{ op: 'add_source_range', args: { assetId: m.assetId, kind: 'presence', people: [m.personId] } }] }, true) : null;
+    return !!a && !!b;
+  })();
+  rangedOf.set(ctx.page, p);
   return p;
 }
 const openList = async (ctx: PearlsA11yCtx) => {
@@ -70,21 +81,20 @@ export const pearlsA11yScenarios: PearlsA11yScenario[] = [
   {
     id: 'pearls-list-empty',
     async prepare(ctx) {
-      const m = await project(ctx);
-      if (m.ranged) return { shown: false, modal: false, detail: { why: 'the scratch project already holds pearls' } };
+      if (rangedOf.has(ctx.page)) return { shown: false, modal: false, detail: { why: 'the scratch project already holds pearls' } };
       await openList(ctx);
       const state = await ctx.page.getByTestId(ID.list).getAttribute('data-state').catch(() => null);
-      // before A the list says «not built» (501) honestly; with no pearl it says the empty sentence: both are shown states of the list
-      return { shown: state === 'empty' || state === 'not-built', modal: false, detail: { state } };
+      return { shown: state === 'empty', modal: false, detail: { state } };
     },
   },
   {
     id: 'pearls-list-rows',
     async prepare(ctx) {
-      const m = await project(ctx);
+      const made2 = await ranged(ctx);
       await openList(ctx);
+      await ctx.page.getByTestId(ID.row).first().waitFor({ timeout: 10000 }).catch(() => undefined);
       const rows = await ctx.page.getByTestId(ID.row).count();
-      return { shown: m.ranged && rows > 0, modal: false, detail: { rows, ranged: m.ranged } };
+      return { shown: made2 && rows > 0, modal: false, detail: { rows, ranged: made2 } };
     },
   },
   {
@@ -118,14 +128,14 @@ export const pearlsA11yScenarios: PearlsA11yScenario[] = [
   {
     id: 'pearls-screen-time',
     async prepare(ctx) {
-      const m = await project(ctx);
+      const m = await ranged(ctx);
       await ctx.page.getByTestId('rail-deliver').click().catch(() => undefined);
       const tab = ctx.page.locator('[data-testid="workspace-deliver"]');
       await tab.click().catch(() => undefined);
       await ctx.page.getByTestId(ID.screenTime).scrollIntoViewIfNeeded().catch(() => undefined);
       await settle(ctx.page);
       const shown = (await ctx.page.getByTestId(ID.screenTime).count()) === 1 && (await ctx.page.getByTestId(ID.screenTime).getAttribute('data-state')) === 'table';
-      return { shown: shown && m.ranged, modal: false };
+      return { shown: shown && m, modal: false };
     },
   },
 ];

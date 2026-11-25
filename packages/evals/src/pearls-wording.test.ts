@@ -47,6 +47,7 @@ export function provokedRefusals(): { key: SourceRangeRefusalKey; op: string; me
     ['rangeNoTime', 'add_source_range', { assetId: x.lut }],
     ['rangeHalfSpan', 'add_source_range', { assetId: x.vid, start: f(1) }],
     ['rangeStillSpan', 'add_source_range', { assetId: x.still, ...span }],
+    ['presenceIsWhole', 'add_source_range', { assetId: x.vid, kind: 'presence', ...span, people: [x.personId] }],
     ['rangeBounds', 'add_source_range', { assetId: x.vid, start: f(30), end: f(400) }],
     ['rangeLabelLine', 'add_source_range', { assetId: x.vid, start: f(1), end: f(2), label: 'a\nb' }],
     ['presenceNeedsPeople', 'add_source_range', { assetId: x.still, kind: 'presence' }],
@@ -57,6 +58,7 @@ export function provokedRefusals(): { key: SourceRangeRefusalKey; op: string; me
     ['rangeWholeAndSpan', 'update_source_range', { rangeId: x.pearl, whole: true, ...span }],
     ['rangeHalfSpan', 'update_source_range', { rangeId: x.pearl, end: f(80) }],
     ['rangeStillSpan', 'update_source_range', { rangeId: x.whole, ...span }],
+    ['presenceIsWhole', 'update_source_range', { rangeId: x.presence, ...span }],
     ['rangeBounds', 'update_source_range', { rangeId: x.pearl, start: f(80), end: f(70) }],
     ['rangeLabelLine', 'update_source_range', { rangeId: x.pearl, label: 'a\rb' }],
     ['presenceNeedsPeople', 'update_source_range', { rangeId: x.presence, people: [] }],
@@ -121,8 +123,8 @@ describe('pearls refusals in Hebrew', () => {
     // every key but notBuilt is provoked, and the add rows and the update rows each follow the table's order
     const keys = Object.keys(SOURCE_RANGE_REFUSALS) as SourceRangeRefusalKey[];
     expect(keys.filter((k) => k !== 'notBuilt' && k !== 'tooManyRanges' && !rows.some((r) => r.key === k))).toEqual([]);
-    const ADD_ORDER = ['assetNotFound', 'rangeNoTime', 'rangeHalfSpan', 'rangeStillSpan', 'rangeBounds', 'rangeLabelLine', 'presenceNeedsPeople', 'rangePersonNotFound', 'rangeDuplicate', 'tooManyRanges'];
-    const UPDATE_ORDER = ['rangeNotFound', 'rangeNothingToChange', 'rangeWholeAndSpan', 'rangeHalfSpan', 'rangeStillSpan', 'rangeBounds', 'rangeLabelLine', 'presenceNeedsPeople', 'rangePersonNotFound', 'rangeDuplicate', 'rangeUnchanged'];
+    const ADD_ORDER = ['assetNotFound', 'rangeNoTime', 'rangeHalfSpan', 'rangeStillSpan', 'presenceIsWhole', 'rangeBounds', 'rangeLabelLine', 'presenceNeedsPeople', 'rangePersonNotFound', 'rangeDuplicate', 'tooManyRanges'];
+    const UPDATE_ORDER = ['rangeNotFound', 'rangeNothingToChange', 'rangeWholeAndSpan', 'rangeHalfSpan', 'rangeStillSpan', 'presenceIsWhole', 'rangeBounds', 'rangeLabelLine', 'presenceNeedsPeople', 'rangePersonNotFound', 'rangeDuplicate', 'rangeUnchanged'];
     const inOrder = (op: string, order: string[]) => { const ix = rows.filter((r) => r.op === op).map((r) => order.indexOf(r.key)); return ix.every((v, i) => v >= 0 && (i === 0 || v > ix[i - 1]!)); };
     expect(inOrder('add_source_range', ADD_ORDER)).toBe(true);
     expect(inOrder('update_source_range', UPDATE_ORDER)).toBe(true);

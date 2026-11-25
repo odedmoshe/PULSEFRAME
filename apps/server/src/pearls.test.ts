@@ -385,7 +385,83 @@ describe('the walk: no label reaches a credential without the people scope', () 
     }
     expect(answered, 'routes that answered with content').toBeGreaterThan(40);
     expect(leaks).toEqual([]);
-    // what a 'names' credential reads is the reader document: the label is blank there, and the doubles were used only while core is not built
-    expect([...doubles.used].every((x) => ['rangeUsage', 'screenTime', 'searchRanges', 'filmWindowOfRange'].includes(x))).toBe(true);
+    // what a 'names' credential reads is the reader document: the label is blank there; on the merged tree core's real functions
+    // answered every call (the doubles above were never used), so this walk ran on the real usage, screen time and film code
+    expect([...doubles.used]).toEqual([]);
   }, 120_000);
+});
+
+// ---------- integration (wave 7, merged tree): the live paths the walk leaves out ----------
+describe('integration: the three operations and remove_asset, live', () => {
+  it('a names grant, the agent token and the observer token read no label in the revision events, the history summaries and operation names, or the reader document; the owner does (control)', async () => {
+    const src = store.wholeProject(pid).doc;
+    const ip = store.importProject({ ...structuredClone(src), id: 'prj_pearls_live', recipeRuns: {} }).doc.id;
+    const C = src.sourceRanges!.rng_c!.assetId;
+    const noa = Object.values(src.people!).find((p) => p.name === 'נועה')!.id;
+    // the clips that show C go first (linked clips go together), so that remove_asset may take the file and its ranges
+    for (let i = 0; i < 20; i++) {
+      const user = Object.values(store.wholeProject(ip).doc.sequences).flatMap((q) => q.tracks.flatMap((t) => t.clips)).find((c) => c.type === 'media' && c.assetId === C);
+      if (!user) break;
+      store.commit({ projectId: ip, actor: 'user:local', ops: [{ op: 'delete_clip', args: { clipId: user.id } }] });
+    }
+    const open = async (who: Who) => {
+      const r = await app.fetch(new Request(`${base()}/api/v1/projects/${ip}/events`, { headers: who.headers() }));
+      expect(r.status, who.name).toBe(200);
+      const reader = r.body!.getReader();
+      const box = { text: '' };
+      const read = async (until: (t: string) => boolean) => { const end = Date.now() + 8000; while (!until(box.text) && Date.now() < end) { const c = await Promise.race([reader.read(), new Promise<null>((ok) => setTimeout(() => ok(null), 200))]); if (c && !c.done) box.text += Buffer.from(c.value).toString('utf8'); } };
+      await read((t) => t.includes('event: hello'));
+      return { who, box, read, reader };
+    };
+    const streams = await Promise.all([OWNER_WHO, NAMES, AGENT, OBSERVER].map(open));
+    const before = store.getProject(ip).revision;
+    const commit = async (ops: OpCall[]) => { const r = await rest(OWNER_WHO, 'POST', `/api/v1/projects/${ip}/transactions`, { ops }); expect(r.status, r.text.slice(0, 200)).toBe(200); return r.json; };
+    const added = await commit([{ op: 'add_source_range', args: { assetId: C, start: f(10), end: f(20), label: `${SECRET} new`, people: [noa] } }]);
+    const rangeId = added.results[0].output.rangeId as string;
+    await commit([{ op: 'update_source_range', args: { rangeId, label: `${SECRET} changed`, start: f(11), end: f(21) } }]);
+    await commit([{ op: 'remove_source_range', args: { rangeId } }]);
+    const gone = await commit([{ op: 'remove_asset', args: { assetId: C } }]);
+    expect(gone.summary ?? JSON.stringify(gone)).toMatch(/marked range\(s\) went with it/);
+    for (const s2 of streams) await s2.read((t) => (t.match(/event: revision/g) ?? []).length >= 4);
+    for (const s2 of streams) await s2.reader.cancel();
+    const [owner, ...others] = streams;
+    // control: the owner's session receives the entity states, label included
+    expect(labelLeak(owner!.box.text), 'owner control').not.toBeNull();
+    for (const s2 of others) {
+      expect((s2.box.text.match(/event: revision/g) ?? []).length, s2.who.name).toBeGreaterThanOrEqual(4);
+      expect(labelLeak(s2.box.text), `${s2.who.name} events`).toBeNull();
+      const hist = await rest(s2.who, 'GET', `/api/v1/projects/${ip}/history?since=${before}`);
+      expect(hist.status, s2.who.name).toBe(200);
+      const ops = hist.json.events.flatMap((e: { ops?: string[] }) => e.ops ?? []);
+      expect(ops, s2.who.name).toEqual(expect.arrayContaining(['add_source_range', 'update_source_range', 'remove_source_range', 'remove_asset']));
+      expect(labelLeak(hist.text), `${s2.who.name} history`).toBeNull();
+      expect(labelLeak((await rest(s2.who, 'GET', `/api/v1/projects/${ip}`)).text), `${s2.who.name} project`).toBeNull();
+    }
+    // the summaries name the file, never the label, for the owner too
+    const ownerHist = (await rest(OWNER_WHO, 'GET', `/api/v1/projects/${ip}/history?since=${before}`)).json.events.map((e: { summary: string }) => e.summary);
+    expect(ownerHist).toHaveLength(4);
+    expect(labelLeak(ownerHist)).toBeNull();
+  }, 60_000);
+
+  it('tagging, changing or removing a tagged range and removing a tagged person: 403 human_tag_required for a names grant, a people "full" grant, the agent token and the observer token (REST and MCP); nothing is committed', async () => {
+    const doc = store.wholeProject(pid).doc;
+    const noa = Object.values(doc.people!).find((p) => p.name === 'נועה')!.id;
+    const calls: [string, OpCall][] = [
+      ['tag', { op: 'add_source_range', args: { assetId, kind: 'presence', people: [noa] } }],
+      ['change a tagged range', { op: 'update_source_range', args: { rangeId: 'rng_who', people: [] } }],
+      ['remove a tagged range', { op: 'remove_source_range', args: { rangeId: 'rng_who' } }],
+      ['remove a tagged person', { op: 'remove_person', args: { personId: noa } }],
+    ];
+    const rev = store.getProject(pid).revision;
+    for (const who of [NAMES, FULL, AGENT, OBSERVER]) {
+      for (const [what, call] of calls) {
+        const r = await rest(who, 'POST', `/api/v1/projects/${pid}/transactions`, { ops: [call] });
+        expect([r.status, r.json?.error?.code ?? r.json?.code], `${who.name} ${what}`).toEqual([403, 'human_tag_required']);
+        const t = await rpc(who, 'tools/call', { name: 'apply_transaction', arguments: { projectId: pid, ops: [call] } });
+        expect(t.isError, `${who.name} MCP ${what}`).toBe(true);
+        expect(toolJson(t).error?.code ?? toolJson(t).code, `${who.name} MCP ${what}`).toBe('human_tag_required');
+      }
+    }
+    expect(store.getProject(pid).revision).toBe(rev);
+  });
 });

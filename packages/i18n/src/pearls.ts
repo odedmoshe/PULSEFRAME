@@ -22,7 +22,19 @@ export const PEARLS_HE = {
   'pearl.screenTitle': 'מי כמה בסרט', 'pearl.screenLabel': 'לפי תיוג ידני בלבד, בלי זיהוי פנים. נספר כל קליפ מתויג שמוצג, גם כשתמונה אחרת מכסה אותו',
   'pearl.untagged': 'לא מתויג', 'pearl.mostlyUntagged': 'רוב הסרט לא מתויג — המספרים חלקיים', 'pearl.unusedOf': 'פנינים שלא בשימוש של {name}', 'pearl.share': '{percent}% מזמן התמונה',
   'pearl.filmPrefer': 'להעדיף פנינים', 'pearl.filmNone': 'בלי פנינים',
-  'pearl.shortBlocked.too_short': 'הפנינה קצרה מ־3 שניות', 'pearl.shortBlocked.too_long': 'הפנינה ארוכה מ־3 דקות', 'pearl.shortBlocked.no_picture': 'בקובץ אין תמונה', 'pearl.shortBlocked.whole_file': 'פנינה של כל הקובץ: סמנו קטע',
+  'pearl.shortBlocked.too_short': 'הפנינה קצרה מ־3 שניות: סמנו קטע ארוך יותר', 'pearl.shortBlocked.too_long': 'הפנינה ארוכה מ־3 דקות: סמנו קטע קצר יותר', 'pearl.shortBlocked.no_picture': 'בקובץ אין תמונה: שורט נבנה מסרטון', 'pearl.shortBlocked.whole_file': 'פנינה של כל הקובץ: סמנו קטע',
+  // the interface's own sentences (builder C's PEARLS_EXTRA, moved here at integration)
+  'pearl.formSave': 'שמירה', 'pearl.stripLabel': 'פנינים שמורות וקטעים שכבר בשימוש', 'pearl.stripPearl': 'פנינה שמורה', 'pearl.stripUsed': 'בשימוש בסרט',
+  'pearl.whoHint': 'סמנו מי מופיע בקליפ. זה תיוג ידני, בלי זיהוי פנים', 'pearl.whoNoPeople': 'עוד אין אנשים בפרויקט. אפשר להוסיף אותם ברשימת האנשים', 'pearl.whoOpenPeople': 'פתיחת רשימת האנשים',
+  'pearl.whoSaved': 'התיוג נשמר', 'pearl.whoCleared': 'התיוג הוסר', 'pearl.whoOwnerOnly': 'רק בעל הפרויקט מתייג אנשים, מהחלון שלו',
+  'pearl.colWho': 'מי', 'pearl.colTime': 'זמן על המסך', 'pearl.colShare': 'חלק מזמן התמונה', 'pearl.screenNone': 'עוד אין קליפים על הציר', 'pearl.screenSeconds': '{seconds} שנ׳',
+  'pearl.filmPearlsNote': 'מכל קובץ נכנסת פנינה אחת: הראשונה שסימנתם בו', 'pearl.filmPearlsLegend': 'פנינים בסרט',
+  // the family film's removed_by_hand warning when pearls were deleted by hand ({files}: the FILES' names, quoted; never a label)
+  'pearl.removedOne': 'פנינה שסימנתם ב{files} נמחקה ידנית ולא נוספה שוב; הקובץ שלה יכול להישאר בסרט',
+  'pearl.removedMany': 'פנינים שסימנתם ב{files} נמחקו ידנית ולא נוספו שוב; הקבצים שלהן יכולים להישאר בסרט',
+  'pearl.removedAlsoOne': 'וגם פנינה שסימנתם ב{files} נמחקה ידנית ולא נוספה שוב; הקובץ שלה יכול להישאר בסרט',
+  'pearl.removedAlsoMany': 'וגם פנינים שסימנתם ב{files} נמחקו ידנית ולא נוספו שוב; הקבצים שלהן יכולים להישאר בסרט',
+  'pearl.restoreOne': 'אפשר להחזיר אותה ב«{restore}»', 'pearl.restoreMany': 'אפשר להחזיר אותן ב«{restore}»',
 } as const;
 export const PEARLS_EN: Record<keyof typeof PEARLS_HE, string> = {
   'op.add_source_range': 'Marked a pearl', 'op.update_source_range': 'Changed a pearl', 'op.remove_source_range': 'Removed a pearl',
@@ -39,7 +51,17 @@ export const PEARLS_EN: Record<keyof typeof PEARLS_HE, string> = {
   'pearl.screenTitle': 'Who is on screen, and how long', 'pearl.screenLabel': 'From manual tags only, no face recognition. Every tagged clip that is shown counts, also when another picture covers it',
   'pearl.untagged': 'Not tagged', 'pearl.mostlyUntagged': 'Most of the film is not tagged — the numbers are partial', 'pearl.unusedOf': 'Unused pearls of {name}', 'pearl.share': '{percent}% of the picture time',
   'pearl.filmPrefer': 'Prefer pearls', 'pearl.filmNone': 'No pearls',
-  'pearl.shortBlocked.too_short': 'The pearl is shorter than 3 seconds', 'pearl.shortBlocked.too_long': 'The pearl is longer than 3 minutes', 'pearl.shortBlocked.no_picture': 'The file has no picture', 'pearl.shortBlocked.whole_file': 'A pearl of the whole file: mark a stretch',
+  'pearl.shortBlocked.too_short': 'The pearl is shorter than 3 seconds: mark a longer stretch', 'pearl.shortBlocked.too_long': 'The pearl is longer than 3 minutes: mark a shorter stretch', 'pearl.shortBlocked.no_picture': 'The file has no picture: a short is made from a video', 'pearl.shortBlocked.whole_file': 'A pearl of the whole file: mark a stretch',
+  'pearl.formSave': 'Save', 'pearl.stripLabel': 'Saved pearls and stretches already in use', 'pearl.stripPearl': 'Saved pearl', 'pearl.stripUsed': 'Used in the film',
+  'pearl.whoHint': 'Mark who appears in the clip. This is a manual tag, no face recognition', 'pearl.whoNoPeople': 'There are no people in the project yet. Add them in the people list', 'pearl.whoOpenPeople': 'Open the people list',
+  'pearl.whoSaved': 'The tag was saved', 'pearl.whoCleared': 'The tag was removed', 'pearl.whoOwnerOnly': 'Only the project owner tags people, from their own session',
+  'pearl.colWho': 'Who', 'pearl.colTime': 'Time on screen', 'pearl.colShare': 'Share of the picture time', 'pearl.screenNone': 'There are no clips on the timeline yet', 'pearl.screenSeconds': '{seconds} s',
+  'pearl.filmPearlsNote': 'One pearl of each file goes in: the first one you marked in it', 'pearl.filmPearlsLegend': 'Pearls in the film',
+  'pearl.removedOne': 'A pearl you marked in {files} was deleted by hand and not added again; its file may stay in the film',
+  'pearl.removedMany': 'Pearls you marked in {files} were deleted by hand and not added again; their files may stay in the film',
+  'pearl.removedAlsoOne': 'Also, a pearl you marked in {files} was deleted by hand and not added again; its file may stay in the film',
+  'pearl.removedAlsoMany': 'Also, pearls you marked in {files} were deleted by hand and not added again; their files may stay in the film',
+  'pearl.restoreOne': '"{restore}" brings it back', 'pearl.restoreMany': '"{restore}" brings them back',
 };
 
 /** The Hebrew of every pearls refusal, each with the next step. */
@@ -51,6 +73,7 @@ export const HE_PEARLS: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^give both start and end, or neither for the whole file$/, () => 'תנו גם התחלה וגם סוף, או בלי שניהם כדי לסמן את כל הקובץ. נסו שוב'],
   [/^give either whole or start and end, not both$/, () => 'סמנו את כל הקובץ או התחלה וסוף, לא את שניהם. בחרו אחד מהם'],
   [/^a photo is marked whole; give no start and end$/, () => 'תמונה מסומנת כולה, בלי התחלה וסוף. השמיטו את ההתחלה והסוף'],
+  [/^a "who is in it" tag covers the whole file; give no start and end$/, () => 'תיוג «מי בקליפ?» חל על כל הקובץ, בלי התחלה וסוף. השמיטו את ההתחלה והסוף, או סמנו פנינה'],
   [/^a range starts at 0 or later, ends after it starts and ends inside the file \(([\d.]+) s\)$/, (m) => `קטע מסומן מתחיל מ־0 או אחריו, נגמר אחרי תחילתו ובתוך הקובץ (${m[1]} שניות). בדקו את ההתחלה והסוף`],
   [/^the name of a marked range is one line$/, () => 'שם של פנינה הוא שורה אחת. הסירו את מעבר השורה'],
   [/^a "who is in it" tag needs at least one person and has no name$/, () => 'בתיוג «מי בקליפ?» יש לפחות אדם אחד, ואין לו שם. בחרו מי בקליפ'],

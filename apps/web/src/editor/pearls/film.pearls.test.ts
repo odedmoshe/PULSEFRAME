@@ -62,13 +62,14 @@ describe('removed_by_hand with details.pearls', () => {
   it('is worded in Hebrew and English: which file, that the file may stay, and the way back; no label', () => {
     const he = warningText(w(one), 'he'), en = warningText(w(one), 'en');
     expect(he).toContain('beach.mp4'); expect(he).toContain('פנינה שסימנתם'); expect(he).toContain('החזרת החלקים שנמחקו'); expect(HEB.test(he)).toBe(true);
-    expect(en).toContain('beach.mp4'); expect(en).toContain('a pearl you marked'); expect(en).toContain('Restore deleted parts'); expect(HEB.test(en)).toBe(false);
+    expect(en).toContain('beach.mp4'); expect(en).toMatch(/^A pearl you marked/); expect(en).toContain('Restore deleted parts'); expect(HEB.test(en)).toBe(false);
   });
   it('several pearls are plural; with other left-out parts the sentence follows theirs', () => {
     const two = warningText(w({ pearls: [{ rangeId: 'r1', assetId: 'a', name: 'a.mp4' }, { rangeId: 'r2', assetId: 'b', name: 'b.mp4' }] }), 'he');
     expect(two).toContain('פנינים שסימנתם'); expect(two).toContain('a.mp4'); expect(two).toContain('b.mp4');
     const both = warningText(w({ ...one, items: [{ kind: 'file', name: 'clip.mp4' }] }), 'he');
     expect(both).toContain('clip.mp4'); expect(both).toContain('beach.mp4'); expect(both).toContain('וגם');
+    expect(warningText(w({ ...one, items: [{ kind: 'file', name: 'clip.mp4' }] }), 'en')).toContain('. Also, a pearl you marked in “\u2068beach.mp4\u2069”');
   });
   it('without pearls the generic wording is unchanged', () => {
     expect(warningText(w({}), 'he')).toContain('חלקים שמחקתם ידנית');

@@ -1,0 +1,122 @@
+{
+ "when": "2026-11-25T17:10:40.828Z",
+ "aBuilt": true,
+ "web": true,
+ "evidence": {
+  "P2": {
+   "refusalsWithoutHebrew": [],
+   "rest": {
+    "revisions": [
+     1,
+     2,
+     3,
+     4
+    ],
+    "summaries": [
+     "Imported video \"a30.mp4\"",
+     "Marked a pearl in \"a30.mp4\"",
+     "Changed a marked range in \"a30.mp4\"",
+     "Removed a marked range from \"a30.mp4\""
+    ]
+   }
+  },
+  "P7": {
+   "before": {
+    "uses": [
+     [
+      30,
+      75
+     ]
+    ],
+    "unused": [
+     "rng_c"
+    ]
+   },
+   "after": {
+    "uses": [
+     [
+      30,
+      50
+     ]
+    ],
+    "unused": [
+     "rng_c"
+    ]
+   }
+  },
+  "P8": {
+   "uses": [
+    [
+     0,
+     45,
+     {
+      "start": {
+       "value": "1",
+       "timescale": 1
+      },
+      "end": {
+       "value": "5",
+       "timescale": 2
+      }
+     }
+    ]
+   ],
+   "untimedCopies": [
+    "ast_ce18a02ad81"
+   ]
+  },
+  "P9": {
+   "picture": 150,
+   "untagged": 30,
+   "people": [
+    [
+     "per_itai",
+     60
+    ],
+    [
+     "per_noa",
+     90
+    ]
+   ]
+  },
+  "P10": {
+   "fails": [],
+   "waits": []
+  },
+  "P11": {
+   "roundTrip": true,
+   "omitHasKey": false,
+   "omitIssues": 0
+  },
+  "P12": {
+   "picks": [
+    [
+     "ast_b947d11c670",
+     "pearl",
+     "rng_a1",
+     60
+    ],
+    [
+     "ast_feb54cfdf00",
+     "pearl",
+     "rng_b",
+     44
+    ],
+    [
+     "ast_f2045da4cf0",
+     "pearl",
+     "rng_c",
+     15
+    ]
+   ],
+   "leftOut": [
+    {
+     "rangeId": "rng_a2",
+     "why": "one_per_file"
+    }
+   ],
+   "rendered": true,
+   "fails": []
+  }
+ }
+}

@@ -2,7 +2,7 @@
  * The pearls track's contract in core (wave 7; .artifacts/wave7/pearls-decisions.md): the optional `sourceRanges` key and its
  * entity, exact undo of the emptied map, migration of an imported `{}`, the language assistant's exclusion, the honest "not built"
  * state of the three operations and of the functions, the film contract's additions, and the cascade call sites that change nothing
- * while no range can be made. The it.todo rows name what builders A and B must make pass.
+ * while no range can be made. The bodies themselves are tested in sourceRanges.test.ts and sourceRanges.property.test.ts.
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
@@ -58,7 +58,7 @@ describe('the sourceRanges key and its entity', () => {
 });
 
 describe('the three operations', () => {
-  it('are public, excluded from the language assistant, and refuse as not built until builder A', () => {
+  it('are public, excluded from the language assistant, and (in a build without the bodies) refuse as not built', () => {
     const names = listOps().filter((o) => !o.internal).map((o) => o.name);
     for (const op of SOURCE_RANGE_OPS) { expect(names).toContain(op); expect(ASSISTANT_EXCLUDED_OPS).toContain(op); expect(assistantOps()).not.toContain(op); }
     if (SOURCE_RANGE_OPS_BUILT) return;

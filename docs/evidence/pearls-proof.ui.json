@@ -1,0 +1,108 @@
+{
+ "when": "2026-11-25T17:11:41.638Z",
+ "aBuilt": true,
+ "web": true,
+ "pageErrors": [],
+ "evidence": {
+  "P3": {
+   "baseUnused": true,
+   "marks": {
+    "in": "30",
+    "out": "75"
+   },
+   "escape": {
+    "form": 0,
+    "viewer": 1,
+    "focus": "pearl-save",
+    "revision": 0
+   },
+   "after": {
+    "ranges": 1,
+    "commits": 1,
+    "formError": null
+   }
+  },
+  "P4": {
+   "after": {
+    "ranges": 1,
+    "note": "הפנינה נשמרה",
+    "commits": 1
+   }
+  },
+  "P5": {
+   "listState": "list",
+   "insert": {
+    "commits": 1,
+    "clipFrames": 45,
+    "bars": [
+     30,
+     74
+    ]
+   },
+   "word": {
+    "clipFrames": 46,
+    "bars": [
+     30,
+     75
+    ]
+   }
+  },
+  "P7": {
+   "before": {
+    "a": "בשימוש: 1.5 מתוך 1.5 שניות",
+    "c": "לא בשימוש",
+    "cUsed": "no"
+   },
+   "after": {
+    "a": "בשימוש: 0.7 מתוך 1.5 שניות",
+    "c": "לא בשימוש",
+    "cUsed": "no"
+   }
+  },
+  "P9": {
+   "he": {
+    "state": "table",
+    "label": "לפי תיוג ידני בלבד, בלי זיהוי פנים. נספר כל קליפ מתויג שמוצג",
+    "frames": {
+     "noa": 90,
+     "itai": 60,
+     "untagged": 30
+    }
+   },
+   "en": {
+    "state": "table",
+    "label": "From manual tags only, no face recognition. Every tagged cli",
+    "frames": {
+     "noa": 90,
+     "itai": 60,
+     "untagged": 30
+    }
+   }
+  },
+  "P13": {
+   "twoSecond": {
+    "disabled": true,
+    "reason": "הפנינה קצרה מ־3 שניות"
+   },
+   "short": {
+    "sequences": 1,
+    "sourceIn": "2/1"
+   },
+   "withWords": {
+    "warnings": [
+     "snapped_to_words",
+     "no_scene_cuts",
+     "upscaled"
+    ],
+    "start": 1.9,
+    "end": 6.25
+   }
+  },
+  "P15": {
+   "documents": 20,
+   "ranges": 150,
+   "node": "8e09b56ffb5e15a3",
+   "browser": "8e09b56ffb5e15a3"
+  }
+ }
+}
