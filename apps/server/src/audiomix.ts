@@ -270,8 +270,8 @@ type LimiterReport = NonNullable<MixResult['limiter']>;
  * `outFile` (exactly totalSamples float frames; the first `latency` outputs, the delay line's initial silence, are dropped).
  * Also returns the raw mix's sample peak over the exported frames (before any gain).
  */
-async function limitPass(raw: string, outFile: string, plan: AudioPlan, firstSample: number, totalSamples: number, gainDb: number, isCanceled: () => boolean) {
-  const sr = plan.sampleRate, lim = new MasterLimiter(sr, plan.limiter!.ceiling, firstSample), lat = lim.latency;
+async function limitPass(raw: string, outFile: string, plan: AudioPlan, firstSample: number, totalSamples: number, gainDb: number, ceilingDb: number, isCanceled: () => boolean) {
+  const sr = plan.sampleRate, lim = new MasterLimiter(sr, ceilingDb, firstSample), lat = lim.latency;
   const G = gainDb === 0 ? 1 : 10 ** (gainDb / 20);
   const inFd = fs.openSync(raw, 'r'), outFd = fs.openSync(outFile, 'w');
   let peak = 0, drop = lat, inFrame = 0;
@@ -408,13 +408,19 @@ export async function masterChain(plan: AudioPlan, raw: string, firstSample: num
       m = measured ?? await measureLoudness(raw, sr, { frames: totalSamples });
       if (m.integratedLufs !== null) gainDb = target - m.integratedLufs;
     }
-    let pass = await limitPass(raw, limited, plan, firstSample, totalSamples, gainDb, isCanceled);
+    let pass = await limitPass(raw, limited, plan, firstSample, totalSamples, gainDb, ceiling, isCanceled);
     let after = await measureLoudness(limited, sr);
-    let corrected = false;
-    if (target !== null && m?.integratedLufs != null && after.integratedLufs !== null && Math.abs(after.integratedLufs - target) > 0.5) {
-      // the limiter took loudness away: one correction of the gain by what is missing, then measured again
-      gainDb += target - after.integratedLufs;
-      pass = await limitPass(raw, limited, plan, firstSample, totalSamples, gainDb, isCanceled);
+    // At most one more pass, when the first one missed: (a) the limiter took loudness away (more than 0.5 LU short of the target):
+    // the gain is corrected by what is missing; (b) the true peak (between samples, measured by ffmpeg) passed the ceiling the
+    // samples respect: the limiter runs again with its sample ceiling lowered by that overshoot. (b) keeps the loudness where a
+    // static trim alone would take the overshoot off the whole film (proof:send L5: 1.7 LU lost on sharp clicks).
+    let corrected = false, marginDb = 0;
+    const missDb = target !== null && m?.integratedLufs != null && after.integratedLufs !== null && Math.abs(after.integratedLufs - target) > 0.5 ? target - after.integratedLufs : 0;
+    const overDb = after.truePeakDbtp !== null && after.truePeakDbtp > ceiling ? after.truePeakDbtp - ceiling : 0;
+    if (missDb !== 0 || overDb > 0) {
+      gainDb += missDb;
+      marginDb = overDb;
+      pass = await limitPass(raw, limited, plan, firstSample, totalSamples, gainDb, ceiling - marginDb, isCanceled);
       after = await measureLoudness(limited, sr);
       corrected = true;
     }
@@ -426,7 +432,7 @@ export async function masterChain(plan: AudioPlan, raw: string, firstSample: num
     const s = pass.stats;
     const limiter: LimiterReport = {
       ceiling, gainDb: r2(gainDb), maxReductionDb: r2(s.maxReductionDb), secondsLimited: r3(s.limitedSamples / sr), achievedLufs: final.integratedLufs, truePeakDbtp: final.truePeakDbtp, trimDb: r2(trimDb),
-      method: `gain${target !== null ? ' to the loudness target' : ''}, then a 5 ms look-ahead brick-wall limiter (release 120 ms) to ${Math.floor(10 ** (ceiling / 20) * 32767)}/32768 of full scale; ${corrected ? 'one gain correction after the first pass; ' : ''}${trimDb !== 0 ? 'a static trim to bring the true peak to the ceiling; ' : ''}achieved loudness and true peak measured by ffmpeg (EBU R128) on the written 16-bit file`,
+      method: `gain${target !== null ? ' to the loudness target' : ''}, then a 5 ms look-ahead brick-wall limiter (release 120 ms) to ${Math.floor(10 ** (ceiling / 20) * 32767)}/32768 of full scale; ${corrected ? `a second pass${missDb !== 0 ? `, the gain corrected by ${r2(missDb)} dB` : ''}${marginDb > 0 ? `, the sample ceiling lowered by the measured true-peak overshoot (${r2(marginDb)} dB)` : ''}; ` : ''}${trimDb !== 0 ? 'a static trim to bring the true peak to the ceiling; ' : ''}achieved loudness and true peak measured by ffmpeg (EBU R128) on the written 16-bit file`,
     };
     const mixPeakDbfs = pass.peak > 0 ? Number((20 * Math.log10(pass.peak)).toFixed(2)) : null;
     const loudness: MixResult['loudness'] = plan.loudness && m ? { measuredLufs: m.integratedLufs, truePeakDbtp: m.truePeakDbtp, target: plan.loudness.target, ceiling, appliedGainDb: r2(gainDb), limitedByPeak: false, method: 'EBU R128 integrated loudness; gain to the target, then the master limiter (the limiter ceiling rules; loudness.truePeak is not consulted)' } : null;

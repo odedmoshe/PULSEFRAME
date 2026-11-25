@@ -128,6 +128,38 @@ describe('master chain', () => {
     expect(r.loudness!.method).toMatch(/not consulted/);
   }, 60_000);
 
+  it('sharp clicks whose true peak passes the sample ceiling: the second pass lowers the sample ceiling (no trim of the whole film); the true peak holds and the report is the file measured', async () => {
+    // rectangular 2 ms clicks: their true peak is 0.8 dB over their samples, and they carry much of the loudness, so limiting them
+    // takes loudness away the one correction cannot give back: the target is NOT reached here, and the report says what was (a limit)
+    const e = '0.05*sin(2*PI*220*t)+if(lt(mod(t\\,0.5)\\,0.002)\\,0.9\\,0)';
+    gen('clicks', e, 6);
+    const plan = planOf([clip('p', 'clicks', 0, 6 * SR)], 6 * SR, { loudness: { target: -14, truePeak: -1 }, limiter: { ceiling: -1 } });
+    const wav = path.join(dir, 'clicks.wav');
+    const r = await renderMix(plan, blob, 0, plan.totalSamples, wav);
+    const m = await measureLoudness(wav, SR, { wav: true });
+    expect(m.truePeakDbtp!).toBeLessThanOrEqual(-1 + 0.05);
+    expect([r.limiter!.achievedLufs, r.limiter!.truePeakDbtp]).toEqual([m.integratedLufs, m.truePeakDbtp]);
+    expect(r.limiter!.method).toMatch(/true-peak overshoot/);
+    expect(r.limiter!.trimDb).toBe(0);
+    let peak = 0;
+    for (const v of pcm16(wav)) peak = Math.max(peak, Math.abs(v));
+    expect(peak).toBeLessThanOrEqual(Math.floor(10 ** (-1 / 20) * 32767));
+  }, 60_000);
+
+  it('a bed with short loud bursts (the loudness is the bed): the target the static gain missed is reached within 0.5 LU', async () => {
+    const e = '0.1*sin(2*PI*220*t)+if(lt(mod(t\\,2)\\,0.005)\\,0.9*sin(2*PI*1000*t)\\,0)';
+    gen('bursts', e, 8);
+    const loudness = { target: -14, truePeak: -1 };
+    const plain = await renderMix(planOf([clip('b', 'bursts', 0, 8 * SR)], 8 * SR, { loudness }), blob, 0, 8 * SR, path.join(dir, 'b0.wav'));
+    expect(plain.loudness!.limitedByPeak).toBe(true);
+    const wav = path.join(dir, 'b1.wav');
+    const r = await renderMix(planOf([clip('b', 'bursts', 0, 8 * SR)], 8 * SR, { loudness, limiter: { ceiling: -1 } }), blob, 0, 8 * SR, wav);
+    const m = await measureLoudness(wav, SR, { wav: true });
+    expect(Math.abs(m.integratedLufs! - loudness.target)).toBeLessThanOrEqual(0.5);
+    expect(m.truePeakDbtp!).toBeLessThanOrEqual(-1 + 0.05);
+    expect(r.limiter!.achievedLufs).toBe(m.integratedLufs);
+  }, 60_000);
+
   it('sound checks are read from the written WAV at timeline times (the range start added), with soundPlays', async () => {
     // bed 0–2 s, nothing 2–5 s (silence, no clip plays), bed 5–5.5 s, a clip of digital nothing 5.5–8 s (silence while a clip
     // plays), hot 8–8.5 s at gain 2 (clipped), 0.5 s of nothing at the end (too short to report)
