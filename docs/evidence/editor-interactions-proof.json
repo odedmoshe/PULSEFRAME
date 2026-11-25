@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T11:59:19.495Z",
+  "ranAt": "2026-11-25T13:15:05.410Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 88,
-  "total": 88,
+  "passed": 104,
+  "total": 104,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -384,9 +384,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 1.98,
+        "fwd2": 2.09,
         "sh2": "◀◀ ×1",
-        "back1": -1.01,
+        "back1": -0.96,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -400,9 +400,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 0.96,
+        "playSpeed": 0.94,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.88,
+        "shuttleSpeed": 2.02,
         "staysPaused": true
       }
     },
@@ -430,30 +430,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_34bb0ae0150",
-          "clp_34bb0ae0151"
+          "clp_b47d785b740",
+          "clp_b47d785b741"
         ],
         "afterAB": [
-          "clp_34bb0ae0150",
-          "clp_34bb0ae0151"
+          "clp_b47d785b740",
+          "clp_b47d785b741"
         ],
         "afterAdd": [
-          "clp_34bb0ae0150",
-          "clp_34bb0ae0151",
-          "clp_34bb0ae0152"
+          "clp_b47d785b740",
+          "clp_b47d785b741",
+          "clp_b47d785b742"
         ],
         "midEscape": [
-          "clp_34bb0ae0151"
+          "clp_b47d785b741"
         ],
         "afterEscape": [
-          "clp_34bb0ae0150",
-          "clp_34bb0ae0151",
-          "clp_34bb0ae0152"
+          "clp_b47d785b740",
+          "clp_b47d785b741",
+          "clp_b47d785b742"
         ],
         "afterEscapeUp": [
-          "clp_34bb0ae0150",
-          "clp_34bb0ae0151",
-          "clp_34bb0ae0152"
+          "clp_b47d785b740",
+          "clp_b47d785b741",
+          "clp_b47d785b742"
         ]
       }
     },
@@ -615,7 +615,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 17/1799",
+        "valueText": "עוקב קדימה 24/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -900,18 +900,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_d299770b0d0",
-          "ast_9a88ec004a0",
-          "ast_a389b90de70",
-          "ast_3e721a25780",
-          "ast_f5c6703d840"
+          "ast_ea2a1bcc380",
+          "ast_52debd498b0",
+          "ast_ef0f24c99d0",
+          "ast_5b6e81293d0",
+          "ast_babf78b3460"
         ],
         "order1": [
-          "ast_d299770b0d0",
-          "ast_3e721a25780",
-          "ast_9a88ec004a0",
-          "ast_a389b90de70",
-          "ast_f5c6703d840"
+          "ast_ea2a1bcc380",
+          "ast_5b6e81293d0",
+          "ast_52debd498b0",
+          "ast_ef0f24c99d0",
+          "ast_babf78b3460"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -935,7 +935,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-25T11:54:43.648Z",
+          "createdAt": "2026-11-25T13:09:55.589Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -1130,7 +1130,7 @@
       "ok": true,
       "detail": {
         "slots": 11,
-        "victim": "clp_a79175939d0",
+        "victim": "clp_77c248aaaf0",
         "deleted": true,
         "offered": {
           "count": 1,
@@ -1203,7 +1203,7 @@
         "statusText": "הפעימה בפריים 60 (⁦00:00:02:00⁩)",
         "want": "הפעימה בפריים 60 (⁦00:00:02:00⁩)",
         "statusRole": "status",
-        "describedBy": "_r_36_",
+        "describedBy": "_r_3a_",
         "announced": 1,
         "onVelocity": "transition-velocity",
         "opt3": {
@@ -1255,8 +1255,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_9378d68cdb0",
-          "seq_9378d68cdb7"
+          "seq_835c0103f80",
+          "seq_835c0103f87"
         ],
         "revisions": 1,
         "transactions": [
@@ -1266,7 +1266,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_9378d68cdb0",
+          "seq": "seq_835c0103f80",
           "selected": "true"
         }
       }
@@ -1297,9 +1297,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_9378d68cdb0"
+          "seq": "seq_835c0103f80"
         },
-        "secondTab": "seq_9378d68cdb0",
+        "secondTab": "seq_835c0103f80",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1604,7 +1604,7 @@
       "detail": {
         "marked": true,
         "he": {
-          "id": "prj_WlsObi4yTuM",
+          "id": "prj_S1GVPr1nuQ4",
           "count": 1,
           "title": "הארכיון יובא",
           "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגום «English» מסומן שוב «תרגום מכונה · לא נבדק», והנוסח שלו נשמר. אפשר לעבור עליו בלוח «תמלול» ולבחור «סמן כנבדק».",
@@ -1614,7 +1614,7 @@
           "badge": 1
         },
         "en": {
-          "id": "prj_9okWWoEMbCI",
+          "id": "prj_gnu4RVGXwPo",
           "count": 1,
           "title": "The archive was imported",
           "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translation «English» needs review again; its wording is kept. Go through it in the \"Transcript\" panel and choose \"Mark as reviewed\".",
@@ -1670,6 +1670,190 @@
         "state": "not_configured",
         "overlaps": [],
         "builtinBack": true
+      }
+    },
+    {
+      "name": "S13 the tile is named «מתאים לשליחה» (no app name), is chosen from the keyboard, and the sheet asks for a size first: Export is blocked and none of 16 / 64 / 100 is preselected, each marked «לא אומת»",
+      "ok": true,
+      "detail": {
+        "tileText": "מתאים לשליחה\nקל לשליחה",
+        "startBlocked": true,
+        "choiceMbs": [
+          {
+            "mb": "16",
+            "on": "false",
+            "text": "16\nמ״ב\nלא אומת"
+          },
+          {
+            "mb": "64",
+            "on": "false",
+            "text": "64\nמ״ב\nלא אומת"
+          },
+          {
+            "mb": "100",
+            "on": "false",
+            "text": "100\nמ״ב\nלא אומת"
+          }
+        ]
+      }
+    },
+    {
+      "name": "S13 picking 16 from the keyboard states the picture size before the export, in Hebrew, with the size as a number; Export opens",
+      "ok": true,
+      "detail": {
+        "fittedText": "התמונה נשארת 640×360",
+        "startOpen": true
+      }
+    },
+    {
+      "name": "S13 the export finishes; the file card says «X מתוך 16 מ״ב · ניסיון N» marked «לא אומת», and the job's own bytes are at or under 16,000,000",
+      "ok": true,
+      "detail": {
+        "done": true,
+        "bytes": 15380224,
+        "fitLine": "15.4 מתוך 16 מ״ב · ניסיון 1 · לא אומת · מובטח גודל הקובץ בלבד · הקובץ מקודד פעמיים: פעם באיכות מלאה ופעם לגודל היעד",
+        "attempts": 1
+      }
+    },
+    {
+      "name": "S13 while it ran, the fit stages were worded in Hebrew (sampled every 100 ms; one sample, so an empty set is reported, not failed on a short film)",
+      "ok": true,
+      "detail": {
+        "seen": [
+          "מתאים לגודל היעד 1/2",
+          "מתאים לגודל היעד 2/2",
+          "בודק את גודל הקובץ"
+        ]
+      }
+    },
+    {
+      "name": "K6 a report with nothing found lists what was looked for as «לא נמצאו…», says it is a heuristic, and never says «תקין»",
+      "ok": true,
+      "detail": {
+        "found": "0",
+        "checksText": "בדיקות הקובץ\nלא נמצאו: תמונה שחורה, תמונה קפואה, שקט ארוך, קול חתוך\nHEURISTIC on the 24 × 24 cells of the flash check (block means of a sample, so a small detail can be missed): black = every cell at or under 8-bit level 4 for at least 0.5 s; frozen = every cell unchanged for at least 2 s while the "
+      }
+    },
+    {
+      "name": "S13 a target the film cannot fit is refused before any export, in Hebrew, with the smallest size that works (a number) and the way forward; Export stays blocked",
+      "ok": true,
+      "detail": {
+        "refusal": "יעד של ⁦1000000⁩ בתים קטן מדי לסרט הזה. הקטן ביותר שאפשר: ⁦10825901⁩ בתים. בחרו יעד גדול יותר או קטע קצר יותר",
+        "blockedC": true
+      }
+    },
+    {
+      "name": "K6 the one-second gap is listed as «תמונה שחורה» with its time range, and the card says it is report only",
+      "ok": true,
+      "detail": {
+        "rows": [
+          {
+            "kind": "black",
+            "text": "תמונה שחורה\n·\n0:02.0–0:03.0\n· אין תמונה בקטע הזה (רווח בציר)\n· frames 30 · minFrames 15 · brightestCellLinear 0 · limitLinear 0.001 · level8 4 · drawnFrames 0\nמעבר לקטע"
+          }
+        ]
+      }
+    },
+    {
+      "name": "K6 «מעבר לקטע» (keyboard) closes the sheet and puts the playhead on the first frame of the stretch (2 s = frame 60 of 30 fps)",
+      "ok": true,
+      "detail": {
+        "jumpLabel": "מעבר לקטע",
+        "tcJump": "00:00:02:00"
+      }
+    },
+    {
+      "name": "K6 the black stretch is marked on the ruler and listed in the status bar (report only: the export succeeded and its file is there)",
+      "ok": true,
+      "detail": {
+        "marks": 1,
+        "statusRows": 1
+      }
+    },
+    {
+      "name": "L7 the limiter switch works from the keyboard (Enter) and commits the ceiling (−1 dB by default); the meter bar appears only after, and says honestly either «on» (idle until it plays) or that the preview plays without it",
+      "ok": true,
+      "detail": {
+        "noBarBefore": true,
+        "ceiling": -1,
+        "barState": "on",
+        "barText": "מגביל ראשי\nההורדה תוצג בזמן ניגון"
+      }
+    },
+    {
+      "name": "L7 with a loudness target the meter says «לפני הגברת הייצוא» (the preview is not the export gain)",
+      "ok": true,
+      "detail": {
+        "noteText": "לפני הגברת הייצוא · התצוגה היא לפני הגברת הייצוא ליעד −14 LUFS"
+      }
+    },
+    {
+      "name": "L7 switching it off removes the field from the project and the bar from the meter",
+      "ok": true,
+      "detail": {
+        "gone": true
+      }
+    },
+    {
+      "name": "L7 «מדידת הקליפים הנבחרים» (keyboard) measures both clips and shows, before anything changes, the target (their median) and each clip's change in dB; the project is untouched",
+      "ok": true,
+      "detail": {
+        "planRows": [
+          {
+            "id": "clp_fbc7ea22ae0",
+            "text": "send-quiet.wav · +9.1 dB"
+          },
+          {
+            "id": "clp_668d9a3e700",
+            "text": "send-loud.wav · −9.1 dB"
+          }
+        ],
+        "targetShown": "−38.9"
+      }
+    },
+    {
+      "name": "L7 the match is one transaction: the result lists each clip, the quiet clip is raised and the loud one lowered in the project, and the note says LUFS is not the ear",
+      "ok": true,
+      "detail": {
+        "resRows": [
+          {
+            "id": "clp_fbc7ea22ae0",
+            "by": ""
+          },
+          {
+            "id": "clp_668d9a3e700",
+            "by": ""
+          }
+        ],
+        "gain0": [
+          1,
+          1
+        ],
+        "gain1": [
+          2.851,
+          0.3508
+        ]
+      }
+    },
+    {
+      "name": "L7 one undo restores both clips' gains exactly",
+      "ok": true,
+      "detail": {
+        "gain0": [
+          1,
+          1
+        ],
+        "now": [
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "name": "send: the pages logged no script error",
+      "ok": true,
+      "detail": {
+        "errors": []
       }
     }
   ]
