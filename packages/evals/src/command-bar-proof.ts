@@ -26,6 +26,7 @@
  *    and 0 outbound connection attempts in the whole proof (Node sockets to non-loopback hosts are counted by a hook; Chromium is
  *    sent through a counting listener on a local port by --proxy-server).
  * 11 the model path with the labelled MOCK adapter: CONTRACT-TESTED, CREDENTIALS REQUIRED — never a pass of a real provider.
+ *    11f: the pending row's «ביטול הבקשה», from the keyboard, against a MOCK answer that is held back (the canceled state in words).
  * 12 credential: the planted test key (not a real key) is in no JSON response and no log line; an agent PUT gives 403; the key file
  *    is 0600; a backup made during the proof holds no assistant.key or assistant.json and not the key's bytes.
  * 13 accessibility and keyboard: the audit scenario keyboard only; the heuristic audit (a11y-lib.ts) of the open preview in Hebrew
@@ -61,6 +62,7 @@ import { ctxFor } from '../../core/src/commandBar/fixture.testFixture.ts';
 import { tokenizeBar } from '../../core/src/commandBar/match.ts';
 import { parseTime } from '../../core/src/commandBar/time.ts';
 import { BAR_DOM_IDS, COMMAND_BAR_TESTIDS as TID } from '../../../apps/web/src/editor/commandBar/commandBar.testids.ts';
+import { barText } from '../../../apps/web/src/editor/commandBar/commandBar.strings.ts';
 import { auditInPage, focusAudit } from './a11y-lib.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
@@ -628,6 +630,49 @@ async function main() {
     check('11a', 'MOCK adapter: a valid answer gives an open proposal with the revision unchanged and its steps rendered in the editor; the owner\'s accept gives +1, Ctrl+Z restores the document hash', shown && steps.join() === 'split_clip' && revOpen === revA && open.n === propA + 1 && accepted && hAcc !== hA && undone && hUndo === hA && adapter.calls === callsA + 1, { steps, revisionWhileOpen: revOpen - revA, accepted, undoRestores: hUndo === hA, calls: adapter.calls - callsA }, true);
     await page.screenshot({ path: path.join(art, 'assistant-mock.png') }).catch(() => {});
 
+    // (f) the pending row's «ביטול הבקשה»: the MOCK adapter holds its answer; the owner cancels from the keyboard; the row says what the
+    // cancel did (the request had been handed over, so it may have been charged), in the job's own facts. MOCK only: no real provider.
+    {
+      adapter.queue({ wait: (signal) => new Promise((_res, rej) => { signal.addEventListener('abort', () => rej(new Error('MOCK: aborted'))); }) });
+      const propF = proposals(), callsF = adapter.calls, revF = s2.store.getProject(fx.pid).revision;
+      await page.getByTestId('open-palette').focus();
+      await page.keyboard.press('Enter');
+      await page.getByTestId('palette-input').waitFor({ timeout: 5000 });
+      await page.keyboard.type('תסדר לי את הסרט בבקשה');
+      await page.locator(`[data-testid=${TID.assistantRow}][data-ready] .pf-bar-link`).first().click({ timeout: 10000 });
+      const offered = await page.getByTestId(TID.assistantCancel).waitFor({ timeout: 10000 }).then(() => true, () => false);
+      const sentToMock = await (async () => { for (let i = 0; i < 200; i++) { if (adapter.calls === callsF + 1) return true; await sleep(25); } return false; })();
+      // keyboard only from here: from the palette's input, Tab reaches the button; Enter presses it
+      await page.getByTestId('palette-input').focus();
+      let tabs = 0;
+      const onCancel = () => page.evaluate((id) => document.activeElement?.getAttribute('data-testid') === id, TID.assistantCancel);
+      while (tabs < 12 && !(await onCancel())) { await page.keyboard.press('Tab'); tabs++; }
+      const reached = await onCancel();
+      const label = await page.getByTestId(TID.assistantCancel).textContent().catch(() => null);
+      // the new elements under the same heuristic audit as check 13 (a11y-lib.ts): names, contrast, tab order, and a visible focus ring on the button
+      const ring = await page.evaluate(() => { const el = document.activeElement as HTMLElement | null; if (!el) return false; const c = getComputedStyle(el); return (c.outlineStyle !== 'none' && parseFloat(c.outlineWidth) > 0) || c.boxShadow !== 'none'; });
+      const auditPending = await page.evaluate(auditInPage);
+      await page.screenshot({ path: path.join(art, 'assistant-cancel-button.png') }).catch(() => {});
+      if (reached) await page.keyboard.press('Enter');
+      const said = page.getByTestId(TID.assistantCanceled);
+      const ended = await said.waitFor({ timeout: 15000 }).then(() => true, () => false);
+      const lang = (await page.evaluate(() => document.documentElement.lang)) === 'en' ? 'en' : 'he';
+      const text = await said.textContent().catch(() => null), sent = await said.getAttribute('data-sent').catch(() => null), role = await said.getAttribute('role').catch(() => null);
+      const focusBack = await page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? null);
+      const buttonGone = (await page.getByTestId(TID.assistantCancel).count()) === 0;
+      const auditCanceled = await page.evaluate(auditInPage);
+      const a11yFindings = [auditPending, auditCanceled].reduce((n, a) => n + a.unnamed.length + a.lowContrast.length + a.tabIssues.length, 0) + (ring ? 0 : 1);
+      const row = s2.store.db.prepare('SELECT id, status, attempt FROM jobs WHERE type = ? ORDER BY created_at DESC LIMIT 1').get('assistant.propose') as { id: string; status: string; attempt: number };
+      const ledger = s2.governance.ledgerFor(row.id);
+      await page.screenshot({ path: path.join(art, 'assistant-canceled.png') }).catch(() => {});
+      await page.keyboard.press('Escape');
+      await page.getByTestId('palette-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      check('11f', 'MOCK adapter: while a request is pending the row offers «ביטול הבקשה»; reached from the input with Tab and pressed with Enter it cancels the job (canceled after the send, its reservation still counted), no proposal and no change are made, the row says so in words as a status, and the keyboard is back in the input; the heuristic accessibility audit of both states has 0 findings',
+        offered && sentToMock && reached && ended && text === barText(lang, 'assistant.row.canceledSent') && label === barText(lang, 'assistant.row.cancel') && sent === 'true' && role === 'status' && buttonGone && focusBack === 'palette-input' && a11yFindings === 0
+        && row.status === 'canceled' && row.attempt === 1 && ledger?.state === 'unknown' && proposals() === propF && adapter.calls === callsF + 1 && s2.store.getProject(fx.pid).revision === revF,
+        { offered, tabsToTheButton: tabs, reached, label, text, dataSent: sent, role, buttonGone, focusAfter: focusBack, a11y: { findings: a11yFindings, focusRing: ring, controlsWhilePending: auditPending.controls, controlsAfter: auditCanceled.controls, unnamed: [...auditPending.unnamed, ...auditCanceled.unnamed].slice(0, 4), lowContrast: [...auditPending.lowContrast, ...auditCanceled.lowContrast].slice(0, 4) }, job: { status: row.status, attempt: row.attempt }, ledger: ledger?.state ?? null, proposals: proposals() - propF, calls: adapter.calls - callsF, revision: s2.store.getProject(fx.pid).revision - revF }, true);
+    }
+
     // (b) nine invalid answers
     const bad: unknown[] = [];
     let okB = true;
@@ -714,7 +759,7 @@ async function main() {
   const evidence = {
     ranAt: new Date().toISOString(), result, counts,
     machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, gpu: 'none' },
-    scope: 'Headless Chromium on the built editor and in-process servers. The model path (11a–11e) ran against TEST-MOCK-chat, a labelled test double that opens no connection: contract-tested, credentials required — no real provider was called and no network adapter exists. Not provable here: a real provider (no key exists), a screen reader, the owner\'s own phrasing. Timings are one sample.',
+    scope: 'Headless Chromium on the built editor and in-process servers. The model path (11a–11f) ran against TEST-MOCK-chat, a labelled test double that opens no connection: contract-tested, credentials required — no real provider was called and no network adapter exists. Not provable here: a real provider (no key exists), a screen reader, the owner\'s own phrasing. Timings are one sample.',
     checks, measurements, report,
   };
   const text = JSON.stringify(evidence, (_k, v) => (typeof v === 'bigint' ? v.toString() : v), 2);

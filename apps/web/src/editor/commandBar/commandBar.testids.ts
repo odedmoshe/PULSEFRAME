@@ -23,8 +23,11 @@ export const COMMAND_BAR_TESTIDS = {
   // the one polite live region of the dialog (role=status aria-live=polite)
   live: 'bar-live',
   // the assistant's row in the palette (kept from before the bar: «עוזר השפה לא מחובר» until it is set up), its «איך מחברים»
-  // link, its job stage (data-stage, never a percentage), its proposal preview with accept / reject
+  // link, its job stage (data-stage, never a percentage), its proposal preview with accept / reject; while a request is pending,
+  // «ביטול הבקשה» (a button of the owner's session), and after it the canceled state in words (data-sent = true when the
+  // request had already been handed to the service)
   assistantRow: 'palette-assistant', assistantConnect: 'bar-assistant-connect', assistantStage: 'bar-assistant-stage',
+  assistantCancel: 'bar-assistant-cancel', assistantCanceled: 'bar-assistant-canceled',
   assistantProposal: 'bar-assistant-proposal', assistantAccept: 'bar-assistant-accept', assistantReject: 'bar-assistant-reject',
   // Settings: the «עוזר השפה» section (owner session only), its fields, the key (a password field, never shown back), «מה נשלח?»
   settings: 'assistant-settings', settingsAdapter: 'assistant-adapter', settingsHost: 'assistant-host', settingsModel: 'assistant-model',
