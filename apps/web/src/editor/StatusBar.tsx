@@ -12,6 +12,11 @@ import { CHROME_STRINGS } from './chrome.strings.ts';
 import { setSettingsOpen } from './chromeState.ts';
 import { editEnd } from './commands.ts';
 import { useEditorState } from './store.ts';
+import { dictionaries } from '@pulseframe/i18n';
+import type { ExportChecks } from '@pulseframe/core';
+import { SEND_TESTIDS as SEND_ID } from './send/send.testids.ts';
+import { SEND_STRINGS } from './send/send.strings.ts';
+import { findingCount, findingRows } from './send/send.logic.ts';
 import '../ds/chrome.css';
 
 export function StatusBar() {
@@ -25,6 +30,8 @@ export function StatusBar() {
   const pct = job && typeof job.output?.progress === 'number' ? Math.round(job.output.progress * 100) : null;
   // What still needs setting up: the graphics adapter and the local AI provider. Known facts only; an unknown state is not counted.
   const needs = [gpu && !gpu.available ? 'gpu' : null, provider && !provider.provider.configured ? 'ai' : null].filter(Boolean).length;
+  // the last export's file checks (wave 7 send): shown only when something was found; a quiet report stays in the export sheet
+  const checks = exportJob?.status === 'succeeded' ? ((exportJob.output as { checks?: ExportChecks } | null)?.checks ?? null) : null;
   const flash = exportJob?.status === 'succeeded' && exportJob.output?.photosensitivity ? exportJob.output.photosensitivity : null;
   return (
     <footer className="pf-ds pf-status" data-shell-slot="status" aria-label={S.statusFormat}>
@@ -44,6 +51,7 @@ export function StatusBar() {
           <span>{needs ? S.pipsNeed(needs) : S.pipsAll}</span>
         </button>
         {flash && <FlashResult report={flash} />}
+        {checks && findingCount(checks) > 0 && <CheckFindings checks={checks} />}
       </div>
     </footer>
   );
@@ -71,6 +79,31 @@ function FlashResult({ report }: { report: { verdict: 'pass' | 'fail'; ranges: {
           ))}
         </ul>
         <p className="muted">{t('flash.method')}</p>
+      </div>
+    </details>
+  );
+}
+
+/** What the last export's file checks found, with a jump to each stretch. Report only. */
+function CheckFindings({ checks }: { checks: ExportChecks }) {
+  const { editor, state } = useEditorState();
+  const D = dictionaries[state.lang], S = SEND_STRINGS[state.lang];
+  const rate = state.doc?.settings.frameRate;
+  if (!rate) return null;
+  const rows = findingRows(checks, rate);
+  return (
+    <details className="pf-status-flashFail" data-testid="export-checks-status">
+      <summary role="status"><TriangleAlert size={13} strokeWidth={1.75} aria-hidden="true" /> {D['send.checks']} ({rows.length})</summary>
+      <div className="pf-status-flashBody" role="group" aria-label={D['send.checks']}>
+        <ul>
+          {rows.map((r) => (
+            <li key={r.key} data-testid={SEND_ID.checkItem} data-kind={r.kind}>
+              <b>{D[`send.find.${r.kind}` as 'send.find.black']}</b> · <bdi dir="ltr">{r.fromText}–{r.toText}</bdi>
+              <button type="button" className="pf-status-jump" onClick={() => editor.seek(r.frame)} data-testid={SEND_ID.checkJump}>{D['send.jump']}</button>
+            </li>
+          ))}
+        </ul>
+        <p className="muted">{D['send.heuristic']} · {S.reportOnly}</p>
       </div>
     </details>
   );

@@ -30,7 +30,7 @@ import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
 import { dictionaries, effectParamLabel, translateRefusal, fillIn, TREND_PACK_HE } from '../../i18n/src/index.ts';
 import { creativeProjection, beatSwitchFrame, BUILTIN_TEMPLATES, MODEL_GATED_TEMPLATES, PACKS, removedByHand, sha256Hex, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 import { TEMPLATE_TESTIDS } from '../../../apps/web/src/editor/templates.testids.ts';
-import { chooseFormat } from './editor-ui.ts';
+import { chooseFormat, startExport } from './editor-ui.ts';
 import { libraryPanelsProbe } from './library-proof.ui.ts';
 import { toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
 import { generateShortsFixture } from '../../fixtures/src/shorts.ts';
@@ -96,6 +96,7 @@ async function main() {
     const tall = vres.results[0].output.variantId;
     await call(`/projects/${pid}/assets/${music.assetId}/analyze`, { kind: 'beats' });
     const doc = async () => (await call(`/projects/${pid}`)).body.project;
+    const doc2 = async (id: string) => (await call(`/projects/${id}`)).body.project;
     const clipOf = (d: any, id: string) => d.sequences.seq_main.tracks.flatMap((t: any) => t.clips).find((c: any) => c.id === id);
     const until = async (pred: (d: any) => boolean, ms = 8000) => { const t = Date.now(); for (;;) { const d = await doc(); if (pred(d)) return true; if (Date.now() - t > ms) return false; await sleep(100); } };
 
@@ -1867,6 +1868,171 @@ async function main() {
       check('library: with no library folder set, the panels log no console error and no library request answers an error status', lErrors.length === 0 && lFailed.length === 0, { errors: lErrors.slice(0, 4), failed: lFailed.slice(0, 4) });
       check('library: the elements drawer has «מובנים» (the built-in browser, unchanged) and «מהספרייה» tabs; the library tab shows one honest state; switching back restores the built-in browser', est.state !== 'none' && est.overlaps.length === 0 && builtinBack, { state: est.state, overlaps: est.overlaps, builtinBack });
       await lctx.close();
+    }
+
+    // ------------------------------------------------------------------------------------------------------------------
+    // «שליחה ושמירה» (wave 7 send), the editor rows of the send proof: S13 (the tile, the fitted size before export, Hebrew stages, the
+    // card, the refusal), K6 (the export report, its jump, the ruler marks, a quiet state that never says «תקין») and L7 (the
+    // limiter switch and its meter, the note before the export gain, the clip loudness match with its undo). Real exports and a real
+    // browser; the numbers shown are read back from the jobs and the project, not from the page.
+    console.log('\n# send: the «מתאים לשליחה» tile, the fitted size, the report (S13, K6) and the sound panel (L7)');
+    {
+      const sendCtx = async (id: string, lang: 'he' | 'en' = 'he') => {
+        const ctx = await browser.newContext({ viewport: { width: 1500, height: 3200 }, reducedMotion: 'reduce' });
+        await ctx.addInitScript(`globalThis.__name = (f) => f`);
+        await ctx.addInitScript((l: string) => { try { localStorage.setItem('pf.lang', l); localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } }, lang);
+        const pg = await ctx.newPage();
+        const errs: string[] = [];
+        pg.on('pageerror', (e) => errs.push(String(e)));
+        pg.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
+        await pg.goto(`${s.ownerUrl}&project=${id}`);
+        await pg.getByTestId('timecode').waitFor({ timeout: 30000 });
+        return { ctx, pg, errs };
+      };
+      const talk = path.join(art, 'send-talk.mp4');
+      ff(['-f', 'lavfi', '-t', '4', '-i', 'testsrc2=s=640x360:r=30', '-f', 'lavfi', '-t', '4', '-i', 'sine=frequency=330:sample_rate=48000', '-vf', 'format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-shortest', talk]);
+
+      // S13 + the quiet report: a noisy 12 s film (its full-quality file is far over 16 MB), fitted to 16 MB with the keyboard
+      const noisy = path.join(art, 'send-noisy.mp4');
+      ff(['-f', 'lavfi', '-t', '12', '-i', 'testsrc2=s=640x360:r=30', '-f', 'lavfi', '-t', '12', '-i', 'sine=frequency=330:sample_rate=48000', '-vf', 'noise=alls=60:allf=t,format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '14', '-c:a', 'aac', '-shortest', noisy]);
+      const sa = (await call('/projects', { name: 'send a', width: 640, height: 360 })).body.project.id as string;
+      const ta = await upload(sa, noisy);
+      await txs(sa, [{ op: 'add_clip', args: { assetId: ta.assetId, start: f(0), duration: f(360) } }]);
+      const A = await sendCtx(sa);
+      await A.pg.getByTestId('export').click();
+      await A.pg.getByTestId('export-sheet').waitFor({ timeout: 15000 });
+      const tile = A.pg.locator('[data-testid=export-dest][data-id=whatsapp]');
+      const tileText = (await tile.innerText()).trim();
+      await tile.focus();
+      await A.pg.keyboard.press('Space');
+      await A.pg.getByTestId('send-size').waitFor({ timeout: 8000 });
+      const startBlocked = (await A.pg.getByTestId('export-start').getAttribute('aria-disabled')) === 'true';
+      const choiceMbs = await A.pg.locator('[data-testid=send-size-choice]').evaluateAll((els) => els.map((e) => ({ mb: e.getAttribute('data-mb'), on: e.getAttribute('aria-checked'), text: (e as HTMLElement).innerText })));
+      check('S13 the tile is named «מתאים לשליחה» (no app name), is chosen from the keyboard, and the sheet asks for a size first: Export is blocked and none of 16 / 64 / 100 is preselected, each marked «לא אומת»',
+        /מתאים לשליחה/.test(tileText) && !/ווטסאפ|WhatsApp/i.test(tileText) && startBlocked && ['16', '64', '100'].every((m) => choiceMbs.some((c) => c.mb === m && c.on === 'false' && /לא אומת/.test(c.text))) && !choiceMbs.some((c) => c.on === 'true'), { tileText, startBlocked, choiceMbs });
+      const c16 = A.pg.locator('[data-testid=send-size-choice][data-mb="16"]');
+      await c16.focus();
+      await A.pg.keyboard.press('Space');
+      await A.pg.getByTestId('send-size-fitted').waitFor({ timeout: 15000 });
+      const fittedText = (await A.pg.getByTestId('send-size-fitted').innerText()).trim();
+      const startOpen = (await A.pg.getByTestId('export-start').getAttribute('aria-disabled')) !== 'true';
+      check('S13 picking 16 from the keyboard states the picture size before the export, in Hebrew, with the size as a number; Export opens', /\d+×\d+/.test(fittedText) && /(תוקטן|נשארת)/.test(fittedText) && startOpen, { fittedText, startOpen });
+      await A.pg.getByTestId('export-start').focus();
+      await A.pg.keyboard.press('Enter');
+      const stages = new Set<string>();
+      const t0 = Date.now();
+      while (Date.now() - t0 < 180000) {
+        if ((await A.pg.getByTestId('export-done').count()) > 0) break;
+        const st = await A.pg.getByTestId('fit-stage').first().innerText().catch(() => '');
+        if (st) stages.add(st.trim());
+        await sleep(100);
+      }
+      const done = (await A.pg.getByTestId('export-done').count()) > 0;
+      const jobA = done ? await A.pg.getByTestId('export-file').getAttribute('data-job-id') : null;
+      const outA = jobA ? (await call(`/jobs/${jobA}`)).body : null;
+      const fitLine = jobA ? ((await A.pg.getByTestId('export-fit-line').innerText().catch(() => '')) ?? '') : '';
+      check('S13 the export finishes; the file card says «X מתוך 16 מ״ב · ניסיון N» marked «לא אומת», and the job\'s own bytes are at or under 16,000,000', done && !!outA && outA.status === 'succeeded' && outA.output?.bytes <= 16_000_000 && outA.output?.fit?.result === 'fitted' && /מתוך/.test(fitLine) && /ניסיון/.test(fitLine) && /לא אומת/.test(fitLine) && !/תקין/.test(fitLine), { done, bytes: outA?.output?.bytes, fitLine, attempts: outA?.output?.fit?.attempts?.length });
+      check('S13 while it ran, the fit stages were worded in Hebrew (sampled every 100 ms; one sample, so an empty set is reported, not failed on a short film)', [...stages].every((x2) => /[א-ת]/.test(x2) && !/fitting|checking/.test(x2)), { seen: [...stages] });
+      const checksText = done ? ((await A.pg.getByTestId('export-checks').innerText().catch(() => '')) ?? '') : '';
+      const found = done ? await A.pg.getByTestId('export-checks').getAttribute('data-found').catch(() => null) : null;
+      check('K6 a report with nothing found lists what was looked for as «לא נמצאו…», says it is a heuristic, and never says «תקין»', done && !!checksText && !/תקין/.test(checksText) && (found !== '0' || /לא נמצאו/.test(checksText)) && /הערכה/.test(checksText), { found, checksText: checksText.slice(0, 300) });
+      await A.ctx.close();
+
+      // S13 refusal: a 20-minute still cannot fit 1 MB; the sheet says the smallest size that works and blocks Export (plan only, no render)
+      const sc = (await call('/projects', { name: 'send c', width: 640, height: 360 })).body.project.id as string;
+      const stillFile = path.join(art, 'send-still.png');
+      ff(['-f', 'lavfi', '-i', 'color=c=0x3366aa:s=640x360', '-frames:v', '1', stillFile]);
+      const st = await upload(sc, stillFile);
+      await txs(sc, [{ op: 'add_clip', args: { assetId: st.assetId, start: f(0), duration: f(36000) } }]);
+      const C = await sendCtx(sc);
+      await C.pg.getByTestId('export').click();
+      await C.pg.getByTestId('export-sheet').waitFor({ timeout: 15000 });
+      await C.pg.locator('[data-testid=export-dest][data-id=whatsapp]').click();
+      await C.pg.getByTestId('send-size-input').fill('1');
+      await C.pg.getByTestId('send-size-refusal').waitFor({ timeout: 15000 }).catch(() => {});
+      const refusal = (await C.pg.getByTestId('send-size-refusal').innerText().catch(() => '')).trim();
+      const blockedC = (await C.pg.getByTestId('export-start').getAttribute('aria-disabled')) === 'true';
+      check('S13 a target the film cannot fit is refused before any export, in Hebrew, with the smallest size that works (a number) and the way forward; Export stays blocked', /קטן מדי/.test(refusal) && /\d/.test(refusal) && /הקטן ביותר/.test(refusal) && blockedC, { refusal, blockedC });
+      await C.ctx.close();
+
+      // K6: a film with a one-second gap: the report lists the black stretch with its time, «מעבר לקטע» lands on it, the ruler and the status bar mark it
+      const sg = (await call('/projects', { name: 'send gap', width: 640, height: 360 })).body.project.id as string;
+      const tg = await upload(sg, talk);
+      await txs(sg, [{ op: 'add_clip', args: { assetId: tg.assetId, start: f(0), duration: f(60) } }]);
+      await txs(sg, [{ op: 'add_clip', args: { assetId: tg.assetId, start: f(90), duration: f(60) } }]);
+      const G = await sendCtx(sg);
+      await startExport(G.pg, { timeout: 30000 });
+      await G.pg.getByTestId('export-done').waitFor({ timeout: 180000 });
+      const rows = await G.pg.locator('[data-testid=export-checks] [data-testid=export-check-item]').evaluateAll((els) => els.map((e) => ({ kind: e.getAttribute('data-kind'), text: (e as HTMLElement).innerText })));
+      const black = rows.find((r) => r.kind === 'black');
+      check('K6 the one-second gap is listed as «תמונה שחורה» with its time range, and the card says it is report only', !!black && /תמונה שחורה/.test(black.text) && /0:0[12]/.test(black.text) && /מדווחות בלבד/.test(await G.pg.getByTestId('export-checks').innerText()), { rows });
+      const jump = G.pg.locator('[data-testid=export-checks] [data-testid=export-check-item][data-kind=black] [data-testid=export-check-jump]').first();
+      const jumpLabel = (await jump.innerText().catch(() => '')).trim();
+      await jump.focus();
+      await G.pg.keyboard.press('Enter');
+      await G.pg.getByTestId('export-sheet').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+      const tcJump = ((await G.pg.getByTestId('timecode').textContent()) ?? '').trim();
+      check('K6 «מעבר לקטע» (keyboard) closes the sheet and puts the playhead on the first frame of the stretch (2 s = frame 60 of 30 fps)', jumpLabel === 'מעבר לקטע' && /^00:00:02:00$/.test(tcJump), { jumpLabel, tcJump });
+      const marks = await G.pg.locator('[data-testid=export-check-mark][data-kind=black]').count();
+      const statusRows = await G.pg.locator('[data-testid=export-checks-status] [data-testid=export-check-item]').count();
+      check('K6 the black stretch is marked on the ruler and listed in the status bar (report only: the export succeeded and its file is there)', marks >= 1 && statusRows >= 1, { marks, statusRows });
+      await G.ctx.close();
+
+      // L7: the sound panel on two clips of different loudness
+      const quiet = path.join(art, 'send-quiet.wav'), loud = path.join(art, 'send-loud.wav');
+      ff(['-f', 'lavfi', '-t', '6', '-i', 'sine=frequency=220:sample_rate=48000', '-af', 'volume=0.05', '-ac', '2', '-c:a', 'pcm_s16le', quiet]);
+      ff(['-f', 'lavfi', '-t', '6', '-i', 'sine=frequency=330:sample_rate=48000', '-af', 'volume=0.4', '-ac', '2', '-c:a', 'pcm_s16le', loud]);
+      const sd = (await call('/projects', { name: 'send sound', width: 640, height: 360 })).body.project.id as string;
+      const qa = await upload(sd, quiet), la = await upload(sd, loud);
+      const qr = (await txs(sd, [{ op: 'add_clip', args: { assetId: qa.assetId, start: f(0) } }])).results[0].output;
+      const lr = (await txs(sd, [{ op: 'add_clip', args: { assetId: la.assetId, start: f(200) } }])).results[0].output;
+      const qId = (qr.audioClipId ?? qr.clipId) as string, lId = (lr.audioClipId ?? lr.clipId) as string;
+      const gainsOf = async () => { const d = (await call(`/projects/${sd}`)).body.project; return [qId, lId].map((id) => clipOf(d, id)?.gain ?? 1); };
+      const gain0 = await gainsOf();
+      const D2 = await sendCtx(sd);
+      const sw = D2.pg.getByTestId('master-limiter-switch');
+      await sw.waitFor({ timeout: 15000 });
+      const noBarBefore = (await D2.pg.getByTestId('meter-reduction').count()) === 0;
+      await sw.focus();
+      await D2.pg.keyboard.press('Enter'); // outside a dialog the editor's Space plays and pauses, even on a focused button: Enter activates
+      let ceiling: number | null = null;
+      for (let i = 0; i < 80 && ceiling === null; i++) { ceiling = (await doc2(sd)).settings.limiter?.ceiling ?? null; if (ceiling === null) await sleep(100); }
+      const bar = D2.pg.getByTestId('meter-reduction');
+      await bar.waitFor({ timeout: 8000 }).catch(() => {});
+      const barState = await bar.getAttribute('data-state').catch(() => null);
+      const barText = (await bar.innerText().catch(() => '')).trim();
+      check('L7 the limiter switch works from the keyboard (Enter) and commits the ceiling (−1 dB by default); the meter bar appears only after, and says honestly either «on» (idle until it plays) or that the preview plays without it', noBarBefore && ceiling !== null && ceiling >= -9 && ceiling <= 0 && (barState === 'on' || (barState === 'unavailable' && /בלי המגביל/.test(barText))), { noBarBefore, ceiling, barState, barText });
+      await txs(sd, [{ op: 'set_loudness_target', args: { target: -14 } }]);
+      await D2.pg.getByTestId('meter-before-export-gain').waitFor({ timeout: 8000 }).catch(() => {});
+      const noteText = (await D2.pg.getByTestId('meter-before-export-gain').innerText().catch(() => '')).trim();
+      check('L7 with a loudness target the meter says «לפני הגברת הייצוא» (the preview is not the export gain)', /לפני הגברת הייצוא/.test(noteText), { noteText });
+      await sw.focus();
+      await D2.pg.keyboard.press('Enter');
+      let gone = false;
+      for (let i = 0; i < 80 && !gone; i++) { gone = (await doc2(sd)).settings.limiter === undefined; if (!gone) await sleep(100); }
+      check('L7 switching it off removes the field from the project and the bar from the meter', gone && (await D2.pg.locator('[data-testid=meter-reduction][data-state=on],[data-testid=meter-reduction][data-state=unavailable]').count()) === 0, { gone });
+
+      // the match: select both clips, measure, see the plan, commit, read the result, undo
+      await D2.pg.locator(`.clip[data-clip-id="${qId}"]`).first().click();
+      await D2.pg.locator(`.clip[data-clip-id="${lId}"]`).first().click({ modifiers: ['Shift'] });
+      const run = D2.pg.getByTestId('loudness-match-run');
+      await run.focus();
+      await D2.pg.keyboard.press('Enter');
+      await D2.pg.getByTestId('loudness-match-plan').waitFor({ timeout: 60000 }).catch(() => {});
+      const planRows = await D2.pg.locator('[data-testid=loudness-match-preview] li').evaluateAll((els) => els.map((e) => ({ id: e.getAttribute('data-clip-id'), text: (e as HTMLElement).innerText })));
+      const targetShown = await D2.pg.getByTestId('loudness-match-target').inputValue().catch(() => '');
+      check('L7 «מדידת הקליפים הנבחרים» (keyboard) measures both clips and shows, before anything changes, the target (their median) and each clip\'s change in dB; the project is untouched', planRows.length === 2 && /\d/.test(targetShown) && JSON.stringify(await gainsOf()) === JSON.stringify(gain0), { planRows, targetShown });
+      await D2.pg.getByTestId('loudness-match-apply').click();
+      await D2.pg.getByTestId('loudness-match-result').waitFor({ timeout: 15000 }).catch(() => {});
+      const resRows = await D2.pg.locator('[data-testid=loudness-match-result] li').evaluateAll((els) => els.map((e) => ({ id: e.getAttribute('data-clip-id'), by: e.getAttribute('data-limited-by') })));
+      const gain1 = await gainsOf();
+      check('L7 the match is one transaction: the result lists each clip, the quiet clip is raised and the loud one lowered in the project, and the note says LUFS is not the ear', resRows.length === 2 && gain1[0]! > gain0[0]! && gain1[1]! < gain0[1]! && /LUFS/.test(await D2.pg.getByTestId('loudness-match-result').innerText()), { resRows, gain0, gain1 });
+      await D2.pg.getByTestId('loudness-match-undo').click();
+      let back = false;
+      for (let i = 0; i < 80 && !back; i++) { back = JSON.stringify(await gainsOf()) === JSON.stringify(gain0); if (!back) await sleep(100); }
+      check('L7 one undo restores both clips\' gains exactly', back, { gain0, now: await gainsOf() });
+      check('send: the pages logged no script error', A.errs.length + C.errs.length + G.errs.length + D2.errs.length === 0, { errors: [...A.errs, ...C.errs, ...G.errs, ...D2.errs].slice(0, 4) });
+      await D2.ctx.close();
     }
 
     await page.close();

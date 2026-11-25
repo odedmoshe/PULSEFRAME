@@ -82,7 +82,7 @@ describe('the export sheet opens with a destination (contract (d))', () => {
     expect([...EXPORT_DESTINATION_IDS].sort()).toEqual(DESTINATIONS.map((d) => d.id).filter((id) => id !== 'custom').sort());
     const targets = [{ key: 'master', profileId: null, width: 1920, height: 1080 }] as unknown as ExportTarget[];
     const wa = DESTINATIONS.find((d) => d.id === 'whatsapp')!;
-    expect(destinationPick(wa, targets, { quality: 'high', captions: 'burned', format: 'mp4-h264-aac', scale: 1 })).toEqual({ dest: 'whatsapp', keys: ['master'], choices: { quality: 'draft', captions: 'burned', format: 'mp4-h264-aac', scale: 0.5 } });
+    expect(destinationPick(wa, targets, { quality: 'standard', captions: 'burned', format: 'mp4-h264-aac', scale: 0.5, targetBytes: null })).toEqual({ dest: 'whatsapp', keys: ['master'], choices: { quality: 'high', captions: 'burned', format: 'mp4-h264-aac', scale: 1, targetBytes: null } });
   });
   it('editor.openExportSheet(destination) asks the sheet host to open with it (and without one, the sheet\'s own default)', () => {
     const ed = new Editor();

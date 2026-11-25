@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createProject } from '@pulseframe/core';
-import { describeExport, destinationKey, DESTINATIONS, jobsOnOpen, exportOptions, DEFAULT_CHOICES, exportTargets, fourKReachable, formatFileSize, alsoSuggestion, jobFraction, mergeJobViews, overallFraction, parseStage, scaledSize, shortSideLabel } from './exportSheet.logic.ts';
+import { sendBlock, isFitStage, describeExport, destinationPick, destinationKey, DESTINATIONS, jobsOnOpen, exportOptions, DEFAULT_CHOICES, exportTargets, fourKReachable, formatFileSize, alsoSuggestion, jobFraction, mergeJobViews, overallFraction, parseStage, scaledSize, shortSideLabel } from './exportSheet.logic.ts';
 
 describe('export sheet logic', () => {
   it('reads the stage words and frame counts the server reports', () => {
@@ -96,5 +96,24 @@ describe('the sheet opened from the chip shows the export the chip follows', () 
     expect(describeExport(doc, null, 'en')).toMatchObject({ variantId: null, ext: 'mp4', w: 1920, h: 1080 });
     expect(describeExport(doc, { format: 'webm-vp9-opus', scale: 0.5 }, 'en')).toMatchObject({ ext: 'webm', w: 960, h: 540 });
     expect(describeExport(doc, { variantId: 'var_gone' }, 'en').variantId).toBeNull();
+  });
+  it('the send tile needs a size and preselects none; a size is sent as sizeFit and nothing else changes', () => {
+    const wa = DESTINATIONS.find((d) => d.id === 'whatsapp')!;
+    expect(wa.choices.targetBytes).toBeNull();
+    expect(sendBlock('whatsapp', { targetBytes: null })).toBe('choose_size');
+    expect(sendBlock('whatsapp', { targetBytes: 16_000_000 })).toBeNull();
+    expect(sendBlock('computer', { targetBytes: null })).toBeNull();
+    expect(exportOptions({ ...DEFAULT_CHOICES, quality: 'high', targetBytes: 16_000_000 }, null)).toEqual({ sizeFit: { targetBytes: 16_000_000 } });
+    expect(exportOptions({ ...DEFAULT_CHOICES, quality: 'high' }, null)).toEqual({});
+    const targets = [{ key: 'master', profileId: null, width: 1920, height: 1080 }] as never;
+    const other = DESTINATIONS.find((d) => d.id === 'computer')!;
+    expect(destinationPick(other, targets, { ...DEFAULT_CHOICES, targetBytes: 16_000_000 }).choices.targetBytes).toBeNull();
+  });
+  it('knows the fit stages', () => {
+    expect(isFitStage('fitting size 1/2')).toBe(true);
+    expect(isFitStage('checking size')).toBe(true);
+    expect(isFitStage('checking the export')).toBe(true);
+    expect(isFitStage('rendering 3/9')).toBe(false);
+    expect(isFitStage(null)).toBe(false);
   });
 });

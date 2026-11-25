@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { findClip, FORMAT_PROFILES } from '@pulseframe/core';
-import { jobStageLabel, type Key } from '@pulseframe/i18n';
+import { dictionaries, jobStageLabel, type Key } from '@pulseframe/i18n';
 import { api, type PreflightReport } from '../api.ts';
 import { useEditorState } from './store.ts';
 import { openExportSheet, useRecentExports } from './ExportSheet.tsx';
+import { SEND_STRINGS } from './send/send.strings.ts';
+import { findingCount, sayMb } from './send/send.logic.ts';
 import { EXPORT_STRINGS } from './exportSheet.strings.ts';
 import { formatFileSize } from './exportSheet.logic.ts';
 import './deliverPanel.css';
@@ -197,13 +199,14 @@ export function DeliverPanel() {
           <button type="button" className="primary" disabled={!doc || editor.player?.frameCount === 0} data-testid="deliver-export" onClick={() => openExportSheet()}>
             {exporting ? t('export.running') : XS.title}…
           </button>
+          <button type="button" className="ghost" disabled={!doc || editor.player?.frameCount === 0} data-testid="deliver-send" onClick={() => openExportSheet({ destination: 'whatsapp' })}>{dictionaries[lang]['send.tile']}…</button>
           <button type="button" className="ghost" disabled={!doc || variants.length === 0 || batchActive} data-testid="deliver-export-all" onClick={() => void exportAll()}>{t('deliver.export.all')}</button>
         </div>
         {recent.length > 0 && (
           <div className="pf-dlv-recent" data-testid="deliver-recent">
             <h4>{lang === 'he' ? 'ייצואים אחרונים' : 'Recent exports'}</h4>
             <ul>{recent.map((j) => (
-              <li key={j.id}><span dir="auto">{doc?.name} · {j.label}</span><span className="num">{j.ext.toUpperCase()}{typeof j.output?.bytes === 'number' ? ` · ${formatFileSize(j.output.bytes)}` : ''}</span><a href={`/api/v1/jobs/${j.id}/output`} download>{XS.download}</a></li>
+              <li key={j.id}><span dir="auto">{doc?.name} · {j.label}</span><span className="num">{j.ext.toUpperCase()}{typeof j.output?.bytes === 'number' ? ` · ${formatFileSize(j.output.bytes)}` : ''}</span>{j.output?.fit && <span className="num" data-testid="deliver-recent-fit">{`≤ ${sayMb(j.output.fit.targetBytes)} ${dictionaries[lang]['send.megabyte']}`}</span>}{findingCount(j.output?.checks) > 0 && <span data-testid="deliver-recent-found">{SEND_STRINGS[lang].foundN(findingCount(j.output?.checks))} · {dictionaries[lang]['send.checks']}</span>}<a href={`/api/v1/jobs/${j.id}/output`} download>{XS.download}</a></li>
             ))}</ul>
           </div>
         )}
