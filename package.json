@@ -90,6 +90,7 @@
     "proof:perform": "tsx packages/evals/src/perform-proof.ts",
     "proof:command-bar": "tsx packages/evals/src/command-bar-proof.ts",
     "proof:library": "tsx packages/evals/src/library-proof.ts",
+    "proof:stabilise": "tsx packages/evals/src/stabilise-proof.ts",
     "bench:commit": "tsx packages/evals/src/commit-bench.ts",
     "bench:request": "tsx packages/evals/src/request-bench.ts",
     "bench:seek": "tsx packages/evals/src/seek-bench.ts",

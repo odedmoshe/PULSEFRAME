@@ -32,7 +32,7 @@ interface ServerRefusal<A extends unknown[]> { status: number; code: string; mes
 const r = <A extends unknown[]>(status: number, code: string, message: (...a: A) => string, hint?: string): ServerRefusal<A> => ({ status, code, message, ...(hint ? { hint } : {}) });
 /** Every refusal of the stabilise routes and job. The messages are fixed: the Hebrew table (packages/i18n/src/stabilise.ts) recognises them. */
 export const STABILISE_SERVER_REFUSALS = {
-  notBuilt: r(501, 'stabilise_not_built', () => 'stabilisation is not built in this build yet', 'Update the editor.'),
+  notBuilt: r(501, 'stabilise_not_built', () => 'stabilisation of video clips is not built in this build yet', 'Update the editor.'),
   inProgress: r(409, 'stabilise_in_progress', () => 'the camera motion of this file is already being measured', 'Wait for that job, or cancel it first.'),
   busy: r(429, 'busy', () => 'too many camera measurements and motion tracks are already running or waiting; try again shortly', 'Try again in half a minute.'),
   clipChanged: r(409, 'clip_changed', () => 'the clip changed while its camera motion was measured; nothing was saved', 'Run the stabilisation again.'),
