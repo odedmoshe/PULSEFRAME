@@ -11,7 +11,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { FOOTAGE_EMBEDDERS, FOOTAGE_REFUSALS } from '@pulseframe/core';
+import { FOOTAGE_EMBEDDERS, FOOTAGE_REFUSALS, FOOTAGE_SEARCH_BUILT } from '@pulseframe/core';
+import { CORE } from './answer.ts';
 import { planArchive, writeArchive } from '../archive.ts';
 import { backupDataDir } from '../backup.ts';
 import { collectGarbage, deleteProject } from '../storage.ts';
@@ -83,6 +84,22 @@ describe(`S1: no picture runtime (${CORE_LABEL})`, () => {
     expect({ status: s.status, code: s.body.error.code }).toEqual({ status: 409, code: 'picture_search_not_ready' });
     expect(s.body.error.message).toBe(FOOTAGE_REFUSALS.notReady.message(r.body.setup.code));
     expect(fs.existsSync(path.join(h.dir, 'search'))).toBe(false);
+  });
+});
+
+describe.skipIf(FOOTAGE_SEARCH_BUILT)('before builder A is merged: an honest 501, never a 500 or a made-up section', () => {
+  let h: Harness;
+  beforeAll(() => { h = createHarness({ runtime: { core: CORE } }); });
+  afterAll(() => h.close());
+  it('the search and the scan answer 501 footage_search_not_built for the owner and agents', async () => {
+    const pid = h.store.createProject({ name: 'not built' }).doc.id;
+    h.importVideo(pid, colours, 'colours.mp4');
+    for (const who of [h.owner, h.agent]) {
+      const r = await search(h, who, pid, 'colours');
+      expect({ status: r.status, code: r.body.error.code }).toEqual({ status: 501, code: 'footage_search_not_built' });
+    }
+    const s = await h.rest(h.owner, 'POST', `/api/v1/projects/${pid}/search/index`, {});
+    expect({ status: s.status, code: s.body.error.code }).toEqual({ status: 501, code: 'footage_search_not_built' });
   });
 });
 

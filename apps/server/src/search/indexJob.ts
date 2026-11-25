@@ -21,7 +21,7 @@ import type { FifoComputeLane } from '../lane.ts';
 import { assertStorageRoom } from '../storage.ts';
 import { ApiError, type JobRow, type Store } from '../store.ts';
 import { frameSource, type TrackingDeps } from '../tracking.ts';
-import { validateVectors, type FootageCore } from './answer.ts';
+import { notBuiltAs501, validateVectors, type FootageCore } from './answer.ts';
 import { SEARCH_INDEX_JOB_TYPE, searchError, searchLaneLabel, type Embedder } from './contract.ts';
 import { sampledFrames } from './frames.ts';
 import type { Sample, SearchIndexDb } from './indexDb.ts';
@@ -66,7 +66,10 @@ export class ScanJobs {
   }
 
   /** POST …/search/index (the owner's own session; the route checked it). */
-  async start(p: Principal, projectId: string, body: StartScanBody): Promise<{ jobId: string; status: string }> {
+  start(p: Principal, projectId: string, body: StartScanBody): Promise<{ jobId: string; status: string }> {
+    return notBuiltAs501(() => this.startNow(p, projectId, body));
+  }
+  private async startNow(p: Principal, projectId: string, body: StartScanBody): Promise<{ jobId: string; status: string }> {
     const { store } = this.ctx;
     const emb = await this.ctx.embedder();
     const open = this.openFor(projectId);
@@ -142,7 +145,7 @@ export class ScanJobs {
     const r: Running = { projectId: store.getJob(jobId).projectId, wait: new AbortController(), hard: new AbortController(), canceled: false, shutdown: false, done: Promise.resolve() };
     this.running.set(jobId, r);
     r.done = (async () => {
-      try { await this.work(jobId, r); }
+      try { await notBuiltAs501(() => this.work(jobId, r)); }
       catch (e) {
         if (r.shutdown) return;
         try {

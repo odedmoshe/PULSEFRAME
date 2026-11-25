@@ -14,7 +14,7 @@
  * - The query is never logged, stored, put in an error or echoed back.
  */
 import {
-  agentAnswerOf, AgentFootageAnswerSchema, FOOTAGE_LIMITS, FOOTAGE_NOTE, FootageAnswerSchema, int8Dot, mergePictureHits, PICTURE_MIN_RELEVANCE,
+  agentAnswerOf, AgentFootageAnswerSchema, FOOTAGE_LIMITS, FootageSearchNotBuilt, FOOTAGE_NOTE, FootageAnswerSchema, int8Dot, mergePictureHits, PICTURE_MIN_RELEVANCE,
   quantiseInt8, sampleFrameTargets, searchFootage, type AgentFootageAnswer, type FootageAnswer, type Moment, type PictureState, type ProjectDocument, type SearchSetup,
 } from '@pulseframe/core';
 import { isOwnerSession } from '../assistant/contract.ts';
@@ -111,8 +111,16 @@ export async function pictureSection(ctx: PictureContext, projectId: string, doc
   return { ...base, picture };
 }
 
+/** A core function this build does not have yet answers 501 footage_search_not_built (never a 500, never a made-up value). */
+export async function notBuiltAs501<R>(fn: () => Promise<R> | R): Promise<R> {
+  try { return await fn(); } catch (e) { if (e instanceof FootageSearchNotBuilt) throw searchError('notBuilt'); throw e; }
+}
+
 /** The whole answer for this credential. `doc` is the reader document the route read. */
-export async function footageAnswer(ctx: PictureContext, p: Principal, projectId: string, doc: ProjectDocument, q: { query: string; picture?: boolean; limit?: number }, signal: AbortSignal): Promise<FootageAnswer | AgentFootageAnswer> {
+export function footageAnswer(ctx: PictureContext, p: Principal, projectId: string, doc: ProjectDocument, q: { query: string; picture?: boolean; limit?: number }, signal: AbortSignal): Promise<FootageAnswer | AgentFootageAnswer> {
+  return notBuiltAs501(() => answerFor(ctx, p, projectId, doc, q, signal));
+}
+async function answerFor(ctx: PictureContext, p: Principal, projectId: string, doc: ProjectDocument, q: { query: string; picture?: boolean; limit?: number }, signal: AbortSignal): Promise<FootageAnswer | AgentFootageAnswer> {
   const limit = q.limit ?? FOOTAGE_LIMITS.defaultResults;
   if (!isOwnerSession(p)) {
     // fail-closed: reader 'agent' on the reader document, then the privacy filter; nothing of the picture part is read
