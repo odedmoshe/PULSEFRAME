@@ -1,6 +1,6 @@
 {
-  "at": "2026-11-25T19:37:33.620Z",
-  "wallSeconds": 119.999,
+  "at": "2026-11-25T22:53:27.165Z",
+  "wallSeconds": 105.75,
   "note": "partial is its own state and is never counted as a pass; nobody here listened: every value is a measurement",
   "summary": {
     "pass": [
@@ -443,8 +443,8 @@
               1
             ],
             "apply": 200,
-            "madeFrom": "ast_f8ab3b87780",
-            "copyId": "ast_f8ab3b87780"
+            "madeFrom": "ast_d4c37afea50",
+            "copyId": "ast_d4c37afea50"
           }
         }
       }
@@ -474,7 +474,7 @@
           "credits_for_description"
         ],
         "exportPlan": 200,
-        "strip": "{\"omit\":[\"sha256:83215cec202035e5f095a132a56f532575ae116bb35a9ab44a5b3605dc4d1c23\",\"sha256:cc88126215b2bdbdc8f4b4701f6a87dad79665eea76afb6fdd389a69a2a332d8\"],\"omitted\":[{\"hash\":\"sha256:cc88126215b2bdbdc8f4b4701f6a87dad79665eea76afb6fdd389a69a2a332d8\",\"assetId\":\"ast_2eea4cde560\",\"itemId\":\"mf-proof/so"
+        "strip": "{\"omit\":[\"sha256:83215cec202035e5f095a132a56f532575ae116bb35a9ab44a5b3605dc4d1c23\",\"sha256:cc88126215b2bdbdc8f4b4701f6a87dad79665eea76afb6fdd389a69a2a332d8\"],\"omitted\":[{\"hash\":\"sha256:cc88126215b2bdbdc8f4b4701f6a87dad79665eea76afb6fdd389a69a2a332d8\",\"assetId\":\"ast_0c099293070\",\"itemId\":\"mf-proof/so"
       }
     },
     {
@@ -551,7 +551,7 @@
           110
         ],
         "offGrid": [
-          "clp_084f36941d0"
+          "clp_24aed10c620"
         ],
         "off": []
       }
@@ -724,10 +724,10 @@
         "hosts": {
           "status": "pass",
           "measured": {
-            "copyId": "ast_472ecc8ed80",
+            "copyId": "ast_97e48f5f850",
             "sourceRangeStart": 1,
-            "viaAssetId": "ast_aa25548a2e0",
-            "song": "ast_aa25548a2e0",
+            "viaAssetId": "ast_c4d0b019970",
+            "song": "ast_c4d0b019970",
             "beatFrame": 40,
             "white": [
               40
@@ -747,7 +747,7 @@
       "status": "pass",
       "measured": {
         "listed": {
-          "clipId": "clp_88b00634030",
+          "clipId": "clp_5002964d880",
           "framesFromBeatBefore": 0,
           "framesFromBeatAfter": 2
         },

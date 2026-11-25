@@ -1,9 +1,10 @@
 /**
  * The loader of recorded instruments (wave 7 instruments track; builder W2): WAV and SFZ parsers, the kit check, the bank loader and
  * the recorded request path of music.ts. Every file here is written by code under a temporary library folder: the LABELLED synthetic
- * test kit of packages/fixtures/src/instruments.ts (never a real sample set; nothing committed). Until builder W1's sampler is merged:
- * the zone planner is the fixtures' labelled stand-in (standInPlanZones), and a recorded render is the LABELLED stand-in renderer
- * below (the synthesiser's bytes at half level, so the level match has two different levels); the rows that need W1 say so.
+ * test kit of packages/fixtures/src/instruments.ts (never a real sample set; nothing committed). Many rows here use the fixtures'
+ * labelled stand-in planner (standInPlanZones) and the LABELLED stand-in renderer below (the synthesiser's bytes at half level, so the
+ * level match has two different levels) to test the loader alone; W1's real planner and renderer meeting this loader are proven in
+ * integration.test.ts and proof checks I13/I15.
  */
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -442,12 +443,12 @@ describe('the recorded request path (music.ts) and the unchanged ordinary reques
     expect(calls.length).toBe(1); // the add found the preview under the same key: the key of an ordinary request did not change
     expect([made.asset.name.endsWith(' · 4 bars.wav'), made.asset.provenance.procedural!.generator, 'instruments' in made.asset.provenance, 'recorded' in made]).toEqual([true, MUSIC_GENERATOR, false, false]);
   });
-  it('the server without its Config wired (routes and MCP until integration) answers 501 instruments_not_built, never synthesised', async () => {
+  it('a host that never registered the routes\' Config (no library to read) answers 501 instruments_not_built, never synthesised', async () => {
     const w = world();
-    expect(await codeOf(makeMusic(w.store, { styleId: 'music.calm', bars: 4, seed: 1, instruments: 'recorded' as const }, 'test', createMusicQueue({}, standInRenderer([]))))).toBe('501:instruments_not_built');
-    // the production renderer refuses a bank until the build flag is flipped (W1 merged)
-    const check = await ready(w.cfg, w.lib!.kit);
-    expect(await codeOf(createMusicQueue().render('music.calm', 4, 1, 'preview', undefined, undefined, { key: 'kit.calm.synthetic@1', load: () => loadBank(check, w.lib!.kit, kitNotes(w.lib!.kit, 'music.calm', 4, 1), undefined, STAND_IN) }))).toBe('501:instruments_not_built');
+    const seen: (ResolvedBank | undefined)[] = [];
+    expect(await codeOf(makeMusic(w.store, { styleId: 'music.calm', bars: 4, seed: 1, instruments: 'recorded' as const }, 'test', createMusicQueue({}, standInRenderer(seen))))).toBe('501:instruments_not_built');
+    expect(seen).toEqual([]); // nothing was rendered, with or without a bank
+    expect(fs.readdirSync(w.store.blobDir)).toEqual([]);
   });
   it('preview at matched level: x-pf-level-scale ≤ 1, scale × rms equal within 0.1 dB, bytes equal the un-matched preview, headers ASCII (I16 server)', async () => {
     const w = world();
@@ -469,11 +470,11 @@ describe('the recorded request path (music.ts) and the unchanged ordinary reques
     expect((await musicPreviewAnswer('music.calm', 4, 1, { cfg: none.cfg, queue: q })).bytes.equals(s0.bytes)).toBe(true);
     expect(await codeOf(musicPreviewAnswer('music.calm', 4, 1, { cfg: none.cfg, queue: q, match: true }))).toBe('409:instruments_library_not_set');
   });
-  it('GET /music/kits for a checked synthetic kit: ready once built (not_built until), with the sources\' duties and no absolute path', async () => {
+  it('GET /music/kits for a checked synthetic kit: ready (built), not_built only in a build with the flag off, with the sources\' duties and no absolute path', async () => {
     const w = world({ strings: SYNTHETIC_SOURCES.ccBy });
-    const built = await listMusicKits(w.cfg, [w.lib!.kit], true);
+    const built = await listMusicKits(w.cfg, [w.lib!.kit]);
     expect(built.kits.map((k) => [k.kitId, k.state, k.reason, k.sources.map((s) => s.licenceId)])).toEqual([['kit.calm.synthetic', 'ready', null, ['CC-BY-4.0', 'CC0-1.0']]]);
-    const now = await listMusicKits(w.cfg, [w.lib!.kit]);
+    const now = await listMusicKits(w.cfg, [w.lib!.kit], false);
     expect(now.kits.map((k) => [k.state, k.reason])).toEqual([['not_built', 'instruments_not_built']]);
     noAbs([built, now], [w.lib!.root, w.cfg.dataDir, fs.realpathSync(w.lib!.root)]);
     expect(SYNTHETIC_KIT_LABEL).toMatch(/SYNTHETIC TEST KIT/);

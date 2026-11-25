@@ -13,7 +13,7 @@
  * Files beside it: dsp.ts (arithmetic building blocks), voices.ts (instruments), styles.ts (recipes), compose.ts (chords and
  * the lead), arrange.ts (notes by level and the ending), wav.ts (the file).
  */
-import { KIT_PART_ROLES, kitForStyle, MUSIC_MAX_SEED, musicLayout, type KitPartRole, type MusicLayout } from '@pulseframe/core';
+import { KIT_PART_ROLES, kitForStyle, MUSIC_MAX_SEED, musicLayout, type KitPartRole, type MusicKit, type MusicLayout } from '@pulseframe/core';
 import { arrange, clicks, endingT60, type Note } from './arrange.ts';
 import { compose, hashId } from './compose.ts';
 import { decay60, flush, Noise, Reverb, SR, sqrtOf } from './dsp.ts';
@@ -47,6 +47,11 @@ export interface RenderOptions {
    * sampled note must be in range (else SamplerRangeError), both before any sample is made. All-or-nothing: never a synth stand-in.
    */
   bank?: ResolvedBank;
+  /**
+   * The kit the bank was loaded from: the request path passes the kit it checked (music.ts RecordedJob.kit; a test's labelled synthetic
+   * kit). Absent: the style's kit in MUSIC_KITS. Either way the bank must be that kit, of this style, part for part.
+   */
+  kit?: MusicKit;
 }
 /** Thrown when a render is stopped through RenderOptions.cancel. */
 export class MusicCancelled extends Error {
@@ -73,9 +78,9 @@ function toSampled(notes: readonly Note[], parts: ReadonlySet<string>): SampledN
   return out;
 }
 /** All-or-nothing: the bank is the style's kit at its version, with exactly the kit's parts and instruments. */
-function checkBank(bank: ResolvedBank, styleId: string): void {
-  const kit = kitForStyle(styleId);
-  if (!kit || kit.id !== bank.kitId || kit.version !== bank.version) throw new SamplerBankError('kit', `${bank.kitId}@${bank.version} is not the kit of ${styleId}`);
+function checkBank(bank: ResolvedBank, styleId: string, given?: MusicKit): void {
+  const kit = given ?? kitForStyle(styleId);
+  if (!kit || kit.styleId !== styleId || kit.id !== bank.kitId || kit.version !== bank.version) throw new SamplerBankError('kit', `${bank.kitId}@${bank.version} is not the kit of ${styleId}`);
   for (const role of KIT_PART_ROLES) {
     const want = kit.parts[role], got = bank.parts[role];
     if (!want !== !got) throw new SamplerBankError('parts', `the part ${role} is ${want ? 'missing from the bank' : 'not a part of the kit'}`);
@@ -104,7 +109,7 @@ export async function renderMusic(styleId: string, bars: number, seed: number, o
   // a recorded render: the bank is checked and every sampled note planned (range, frames) before any sample is made
   const bank = opts.clickOnly ? undefined : opts.bank;
   if (bank) {
-    checkBank(bank, layout.styleId);
+    checkBank(bank, layout.styleId, opts.kit);
     const plan = planZones(toSampled(notes, new Set(Object.keys(bank.parts))), bank);
     if (plan.outOfRange) throw new SamplerRangeError(plan.outOfRange);
     // a zone must hold the frames this plan reads (the loader plans with the files' whole lengths and decodes at least that much;

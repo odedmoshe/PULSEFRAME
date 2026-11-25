@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { INSTRUMENTS_FORBIDDEN_WORDS, INSTRUMENTS_FORBIDDEN_WORDS_HE, KIT_STATES, type MusicKitStatus } from '@pulseframe/core';
+import { dictionaries } from '@pulseframe/i18n';
 import { addDecision, auditionBit, auditionOrder, auditionPair, dutiesOf, instrumentsPreviewUrl, kitView, levelScale, licenceWhy, parseLevelScale, refusalWords, type KitView } from './instruments.logic.ts';
 import { INSTRUMENTS_UI_STRINGS, instrumentsT } from './instruments.strings.ts';
 import { INSTRUMENTS_TESTIDS as ID } from './instruments.testids.ts';
@@ -84,6 +85,8 @@ describe('instruments strings', () => {
     // the not-downloaded state says so plainly, and the unheard label is the kit's
     expect(instrumentsT('he')('state.not_calibrated')).toContain('לא הורדה ולא נבדקה');
     expect(instrumentsT('en')('state.not_calibrated')).toContain('not been downloaded and checked');
+    // no word of this page shadows a shared i18n key (they moved to packages/i18n/src/instruments.ts at integration)
+    for (const lang of ['he', 'en'] as const) expect(Object.keys(INSTRUMENTS_UI_STRINGS[lang]).filter((k) => `instruments.${k}` in dictionaries[lang])).toEqual([]);
   });
   it('every state has its words and its next step, in both languages', () => {
     for (const lang of ['he', 'en'] as const) {

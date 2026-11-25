@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T21:14:26.932Z",
+  "ranAt": "2026-11-25T22:56:40.071Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "browser": "153.0.8010.12"
@@ -145,7 +145,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_51178340140]",
+          "focusAfterClose": "button[data-testid=more-ast_1c0f2b651e0]",
           "focusReturned": true
         },
         {
@@ -713,7 +713,7 @@
         },
         {
           "state": "music-browser",
-          "controls": 527,
+          "controls": 539,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1038,23 +1038,25 @@
           "rows": 0
         },
         {
-          "state": "not_installed",
+          "state": "search-picture-not-installed",
           "controls": 360,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
+          "pictureState": "not_installed",
           "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
         },
         {
-          "state": "busy",
+          "state": "search-picture-scanning",
           "controls": 361,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
+          "pictureState": "busy",
           "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
         },
         {
@@ -1224,8 +1226,63 @@
           "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
         },
         {
+          "state": "instruments-not-set",
+          "controls": 509,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "library_not_set",
+          "answer": "the audit server's own state (no library folder)"
+        },
+        {
+          "state": "instruments-not-calibrated",
+          "controls": 509,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "not_calibrated",
+          "answer": "STAND-IN: the kits route answered in the browser with the contract's shape"
+        },
+        {
+          "state": "instruments-ready-duties",
+          "controls": 508,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "ready",
+          "duties": 3,
+          "answer": "STAND-IN: a ready kit with two SYNTHETIC sources (CC BY, CC BY-NC), the contract's shape"
+        },
+        {
+          "state": "instruments-blind-pair",
+          "controls": 511,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "answer": "STAND-IN: the two previews are a one-second synthetic tone with x-pf-level-scale 1 and 0.5"
+        },
+        {
+          "state": "instruments-add-refused",
+          "controls": 508,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "יצירת המוזיקה נכשלה: ספריית התוכן לא הוגדרה, ולכן אי אפשר להשתמש בכלים מוקלטים. בעל הפרויקט מגדיר אותה בהגדרות; עד אז אפשר לבחור «מסונתז»",
+          "answer": "the REAL server's refusal of the recorded add (409 instruments_library_not_set; the kit list shown is a stand-in «ready»): nothing added"
+        },
+        {
           "state": "cache-storage-row",
-          "controls": 481,
+          "controls": 531,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1234,7 +1291,7 @@
         },
         {
           "state": "shorts-panel",
-          "controls": 132,
+          "controls": 292,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1243,7 +1300,7 @@
         },
         {
           "state": "shorts-switcher",
-          "controls": 134,
+          "controls": 294,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1252,7 +1309,7 @@
         },
         {
           "state": "shorts-delete-dialog",
-          "controls": 124,
+          "controls": 284,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1266,7 +1323,7 @@
         },
         {
           "state": "keyframe-strip-and-path",
-          "controls": 481,
+          "controls": 653,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1275,7 +1332,7 @@
         },
         {
           "state": "curve-picker",
-          "controls": 502,
+          "controls": 674,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1290,7 +1347,7 @@
         },
         {
           "state": "toast-in-curve-picker",
-          "controls": 504,
+          "controls": 676,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1319,7 +1376,7 @@
         },
         {
           "state": "multicam-panel",
-          "controls": 391,
+          "controls": 548,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1334,7 +1391,7 @@
         },
         {
           "state": "multicam-sync-dialog",
-          "controls": 399,
+          "controls": 556,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1349,16 +1406,16 @@
         },
         {
           "state": "multicam-keyboard-path",
-          "controls": 392,
+          "controls": 516,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
-          "keyboardOk": true
+          "keyboardOk": false
         },
         {
           "state": "perform-view",
-          "controls": 143,
+          "controls": 303,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1367,7 +1424,7 @@
         },
         {
           "state": "perform-take-review",
-          "controls": 145,
+          "controls": 305,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1376,7 +1433,7 @@
         },
         {
           "state": "perform-calibration-dialog",
-          "controls": 146,
+          "controls": 306,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1390,7 +1447,7 @@
         },
         {
           "state": "perform-camera-overlay",
-          "controls": 167,
+          "controls": 327,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1399,7 +1456,7 @@
         },
         {
           "state": "transcript-skipped-note",
-          "controls": 372,
+          "controls": 530,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1409,7 +1466,7 @@
         },
         {
           "state": "pacing-skipped-note",
-          "controls": 372,
+          "controls": 530,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1419,7 +1476,7 @@
         },
         {
           "state": "archive-import-note",
-          "controls": 349,
+          "controls": 515,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1432,7 +1489,7 @@
         },
         {
           "state": "send-tile",
-          "controls": 390,
+          "controls": 552,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1447,7 +1504,7 @@
         },
         {
           "state": "send-size-refusal",
-          "controls": 390,
+          "controls": 552,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1456,7 +1513,7 @@
         },
         {
           "state": "send-size-fitted",
-          "controls": 390,
+          "controls": 552,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1465,7 +1522,7 @@
         },
         {
           "state": "send-file-card",
-          "controls": 370,
+          "controls": 532,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1474,7 +1531,7 @@
         },
         {
           "state": "limiter-on",
-          "controls": 347,
+          "controls": 513,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1483,7 +1540,7 @@
         },
         {
           "state": "loudness-match-plan",
-          "controls": 356,
+          "controls": 522,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1492,7 +1549,7 @@
         },
         {
           "state": "loudness-match-result",
-          "controls": 355,
+          "controls": 521,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1501,7 +1558,7 @@
         },
         {
           "state": "start-hub",
-          "controls": 344,
+          "controls": 516,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1649,7 +1706,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_51178340140]",
+          "focusAfterClose": "button[data-testid=more-ast_1c0f2b651e0]",
           "focusReturned": true
         },
         {
@@ -2126,7 +2183,7 @@
         },
         {
           "state": "film-bar",
-          "controls": 371,
+          "controls": 362,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2217,7 +2274,7 @@
         },
         {
           "state": "music-browser",
-          "controls": 527,
+          "controls": 539,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2542,23 +2599,25 @@
           "rows": 0
         },
         {
-          "state": "not_installed",
+          "state": "search-picture-not-installed",
           "controls": 360,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
+          "pictureState": "not_installed",
           "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
         },
         {
-          "state": "busy",
+          "state": "search-picture-scanning",
           "controls": 361,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
+          "pictureState": "busy",
           "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
         },
         {
@@ -2728,8 +2787,63 @@
           "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
         },
         {
+          "state": "instruments-not-set",
+          "controls": 509,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "library_not_set",
+          "answer": "the audit server's own state (no library folder)"
+        },
+        {
+          "state": "instruments-not-calibrated",
+          "controls": 509,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "not_calibrated",
+          "answer": "STAND-IN: the kits route answered in the browser with the contract's shape"
+        },
+        {
+          "state": "instruments-ready-duties",
+          "controls": 508,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "ready",
+          "duties": 3,
+          "answer": "STAND-IN: a ready kit with two SYNTHETIC sources (CC BY, CC BY-NC), the contract's shape"
+        },
+        {
+          "state": "instruments-blind-pair",
+          "controls": 511,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "answer": "STAND-IN: the two previews are a one-second synthetic tone with x-pf-level-scale 1 and 0.5"
+        },
+        {
+          "state": "instruments-add-refused",
+          "controls": 508,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "Making the music failed: no library folder is set, so no recorded instrument can be used",
+          "answer": "the REAL server's refusal of the recorded add (409 instruments_library_not_set; the kit list shown is a stand-in «ready»): nothing added"
+        },
+        {
           "state": "cache-storage-row",
-          "controls": 481,
+          "controls": 531,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2738,7 +2852,7 @@
         },
         {
           "state": "shorts-panel",
-          "controls": 132,
+          "controls": 292,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2747,7 +2861,7 @@
         },
         {
           "state": "shorts-switcher",
-          "controls": 134,
+          "controls": 294,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2756,7 +2870,7 @@
         },
         {
           "state": "shorts-delete-dialog",
-          "controls": 124,
+          "controls": 284,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2770,7 +2884,7 @@
         },
         {
           "state": "keyframe-strip-and-path",
-          "controls": 481,
+          "controls": 653,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2779,7 +2893,7 @@
         },
         {
           "state": "curve-picker",
-          "controls": 502,
+          "controls": 674,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2794,7 +2908,7 @@
         },
         {
           "state": "toast-in-curve-picker",
-          "controls": 504,
+          "controls": 676,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2823,7 +2937,7 @@
         },
         {
           "state": "multicam-panel",
-          "controls": 392,
+          "controls": 549,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2838,7 +2952,7 @@
         },
         {
           "state": "multicam-sync-dialog",
-          "controls": 399,
+          "controls": 556,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2853,16 +2967,16 @@
         },
         {
           "state": "multicam-keyboard-path",
-          "controls": 409,
+          "controls": 516,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
-          "keyboardOk": true
+          "keyboardOk": false
         },
         {
           "state": "perform-view",
-          "controls": 143,
+          "controls": 303,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2871,7 +2985,7 @@
         },
         {
           "state": "perform-take-review",
-          "controls": 145,
+          "controls": 305,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2880,7 +2994,7 @@
         },
         {
           "state": "perform-calibration-dialog",
-          "controls": 146,
+          "controls": 306,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2894,7 +3008,7 @@
         },
         {
           "state": "perform-camera-overlay",
-          "controls": 167,
+          "controls": 327,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2903,7 +3017,7 @@
         },
         {
           "state": "transcript-skipped-note",
-          "controls": 372,
+          "controls": 530,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2913,7 +3027,7 @@
         },
         {
           "state": "pacing-skipped-note",
-          "controls": 372,
+          "controls": 530,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2923,7 +3037,7 @@
         },
         {
           "state": "archive-import-note",
-          "controls": 349,
+          "controls": 515,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2936,7 +3050,7 @@
         },
         {
           "state": "send-tile",
-          "controls": 390,
+          "controls": 552,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2951,7 +3065,7 @@
         },
         {
           "state": "send-size-refusal",
-          "controls": 390,
+          "controls": 552,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2960,7 +3074,7 @@
         },
         {
           "state": "send-size-fitted",
-          "controls": 390,
+          "controls": 552,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2969,7 +3083,7 @@
         },
         {
           "state": "send-file-card",
-          "controls": 370,
+          "controls": 532,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2978,7 +3092,7 @@
         },
         {
           "state": "limiter-on",
-          "controls": 347,
+          "controls": 513,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2987,7 +3101,7 @@
         },
         {
           "state": "loudness-match-plan",
-          "controls": 356,
+          "controls": 522,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2996,7 +3110,7 @@
         },
         {
           "state": "loudness-match-result",
-          "controls": 355,
+          "controls": 521,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3005,7 +3119,7 @@
         },
         {
           "state": "start-hub",
-          "controls": 344,
+          "controls": 516,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3049,7 +3163,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 482,
+          "controls": 481,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3347,7 +3461,7 @@
         },
         {
           "state": "story-bar",
-          "controls": 206,
+          "controls": 367,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3431,8 +3545,65 @@
           "clip": "a video clip (its Beat tab)"
         },
         {
+          "state": "search-results",
+          "controls": 359,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "rows": 1,
+          "sections": [
+            1,
+            1
+          ],
+          "pictureLine": "not_installed"
+        },
+        {
+          "state": "search-nothing-found",
+          "controls": 352,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "rows": 0
+        },
+        {
+          "state": "search-picture-not-installed",
+          "controls": 359,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "pictureState": "not_installed",
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "search-picture-scanning",
+          "controls": 360,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "pictureState": "busy",
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "search-forget-confirm",
+          "controls": 364,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
           "state": "running",
-          "controls": 476,
+          "controls": 473,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3442,7 +3613,7 @@
         },
         {
           "state": "stopped",
-          "controls": 476,
+          "controls": 473,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3452,7 +3623,7 @@
         },
         {
           "state": "not_llama",
-          "controls": 476,
+          "controls": 473,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3462,7 +3633,7 @@
         },
         {
           "state": "assistant-local-row-offer",
-          "controls": 469,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3472,7 +3643,7 @@
         },
         {
           "state": "assistant-local-row-thinking",
-          "controls": 469,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3482,7 +3653,7 @@
         },
         {
           "state": "assistant-local-row-suggested",
-          "controls": 470,
+          "controls": 467,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3492,7 +3663,7 @@
         },
         {
           "state": "assistant-local-row-inserted",
-          "controls": 468,
+          "controls": 465,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3502,7 +3673,7 @@
         },
         {
           "state": "assistant-local-row-none",
-          "controls": 469,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3512,13 +3683,68 @@
         },
         {
           "state": "assistant-local-row-not-running",
-          "controls": 469,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
           "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "instruments-not-set",
+          "controls": 508,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "library_not_set",
+          "answer": "the audit server's own state (no library folder)"
+        },
+        {
+          "state": "instruments-not-calibrated",
+          "controls": 508,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "not_calibrated",
+          "answer": "STAND-IN: the kits route answered in the browser with the contract's shape"
+        },
+        {
+          "state": "instruments-ready-duties",
+          "controls": 507,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "ready",
+          "duties": 3,
+          "answer": "STAND-IN: a ready kit with two SYNTHETIC sources (CC BY, CC BY-NC), the contract's shape"
+        },
+        {
+          "state": "instruments-blind-pair",
+          "controls": 510,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "answer": "STAND-IN: the two previews are a one-second synthetic tone with x-pf-level-scale 1 and 0.5"
+        },
+        {
+          "state": "instruments-add-refused",
+          "controls": 507,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "יצירת המוזיקה נכשלה: ספריית התוכן לא הוגדרה, ולכן אי אפשר להשתמש בכלים מוקלטים. בעל הפרויקט מגדיר אותה בהגדרות; עד אז אפשר לבחור «מסונתז»",
+          "answer": "the REAL server's refusal of the recorded add (409 instruments_library_not_set; the kit list shown is a stand-in «ready»): nothing added"
         }
       ]
     },
@@ -3939,8 +4165,65 @@
           "clip": "a video clip (its Beat tab)"
         },
         {
+          "state": "search-results",
+          "controls": 359,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "rows": 1,
+          "sections": [
+            1,
+            1
+          ],
+          "pictureLine": "not_installed"
+        },
+        {
+          "state": "search-nothing-found",
+          "controls": 352,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "rows": 0
+        },
+        {
+          "state": "search-picture-not-installed",
+          "controls": 359,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "pictureState": "not_installed",
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "search-picture-scanning",
+          "controls": 360,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "pictureState": "busy",
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "search-forget-confirm",
+          "controls": 364,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
           "state": "running",
-          "controls": 476,
+          "controls": 473,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3950,7 +4233,7 @@
         },
         {
           "state": "stopped",
-          "controls": 476,
+          "controls": 473,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3960,7 +4243,7 @@
         },
         {
           "state": "not_llama",
-          "controls": 476,
+          "controls": 473,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3970,7 +4253,7 @@
         },
         {
           "state": "assistant-local-row-offer",
-          "controls": 469,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3980,7 +4263,7 @@
         },
         {
           "state": "assistant-local-row-thinking",
-          "controls": 469,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3990,7 +4273,7 @@
         },
         {
           "state": "assistant-local-row-suggested",
-          "controls": 470,
+          "controls": 467,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -4000,7 +4283,7 @@
         },
         {
           "state": "assistant-local-row-inserted",
-          "controls": 468,
+          "controls": 465,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -4010,7 +4293,7 @@
         },
         {
           "state": "assistant-local-row-none",
-          "controls": 469,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -4020,43 +4303,98 @@
         },
         {
           "state": "assistant-local-row-not-running",
-          "controls": 469,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
           "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "instruments-not-set",
+          "controls": 508,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "library_not_set",
+          "answer": "the audit server's own state (no library folder)"
+        },
+        {
+          "state": "instruments-not-calibrated",
+          "controls": 508,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "not_calibrated",
+          "answer": "STAND-IN: the kits route answered in the browser with the contract's shape"
+        },
+        {
+          "state": "instruments-ready-duties",
+          "controls": 507,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "ready",
+          "duties": 3,
+          "answer": "STAND-IN: a ready kit with two SYNTHETIC sources (CC BY, CC BY-NC), the contract's shape"
+        },
+        {
+          "state": "instruments-blind-pair",
+          "controls": 510,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "answer": "STAND-IN: the two previews are a one-second synthetic tone with x-pf-level-scale 1 and 0.5"
+        },
+        {
+          "state": "instruments-add-refused",
+          "controls": 507,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "Making the music failed: no library folder is set, so no recorded instrument can be used",
+          "answer": "the REAL server's refusal of the recorded add (409 instruments_library_not_set; the kit list shown is a stand-in «ready»): nothing added"
         }
       ]
     }
   ],
-  "findings": 0,
+  "findings": 2,
   "findingsByRun": [
     {
       "theme": "dark",
       "uiLanguage": "he",
-      "states": 130,
-      "findings": 0
+      "states": 135,
+      "findings": 1
     },
     {
       "theme": "dark",
       "uiLanguage": "en",
-      "states": 130,
-      "findings": 0
+      "states": 135,
+      "findings": 1
     },
     {
       "theme": "light",
       "uiLanguage": "he",
-      "states": 41,
+      "states": 51,
       "findings": 0
     },
     {
       "theme": "light",
       "uiLanguage": "en",
-      "states": 41,
+      "states": 51,
       "findings": 0
     }
   ],
-  "result": "NO FINDINGS (heuristic)"
+  "result": "FINDINGS"
 }

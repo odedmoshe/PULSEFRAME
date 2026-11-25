@@ -9,9 +9,18 @@
  * zones at 44.1 and 48 kHz, 16 and 24 bit, mono and stereo, a looped zone, a .sfz, a temporary library folder with a ledger the proof
  * writes (CC0, CC-BY, CC-BY-NC, CC-BY-SA rows of synthetic sources). Never a real sample set; nothing downloaded. Nobody here can
  * listen: every check is a measurement (levels, lengths, frequencies, hashes, the absence of clipping), none says how anything sounds.
- * Timing figures (I13) are one sample each. Writes docs/evidence/instruments-proof.json once built.
+ * Timing figures (I13) are one sample each. Writes docs/evidence/instruments-proof.json.
+ * Integration (wave 7): the three parts are imported here; I16 is ONE row that passes only when both halves pass (the loader's server
+ * side and the UI part's page side 'I16-page'). The browser part drives the REAL server with the synthetic kit injected as its kit list
+ * (startServer's TEST-only musicKits); a stand-in remains only where the real server cannot produce the state, and its check says so.
  */
-export const INSTRUMENTS_PROOF_BUILT = false;
+import fs from 'node:fs';
+import path from 'node:path';
+import { INSTRUMENTS_LOADER_PART } from './instruments-proof.loader.ts';
+import { samplerChecks } from './instruments-proof.sampler.ts';
+import { INSTRUMENTS_PROOF_UI, stopInstrumentsProofUi } from './instruments-proof.ui.ts';
+
+export const INSTRUMENTS_PROOF_BUILT = true;
 export const INSTRUMENTS_CHECKS: Readonly<Record<string, string>> = {
   I1: 'renderSampled at r = 1 with amp_veltrack 0 and 0 dB equals the source zone sample for sample from sample 32 to the start of release',
   I2: 'a 440 Hz zone recorded at 44.1 kHz sounds at 440 Hz ± 0.05 cent at its root key and within ± 0.1 cent of equal temperament at ±1 and ±3 semitones',
@@ -45,10 +54,38 @@ const PART: Readonly<Record<string, InstrumentsRow['part']>> = {
   I17: 'ui',
 };
 
-function main(): void {
-  const rows: InstrumentsRow[] = Object.keys(INSTRUMENTS_CHECKS).map((id) => ({ id, part: PART[id]!, status: 'pending', reason: 'not built yet (wave 7 instruments pre-pass)' }));
-  for (const r of rows) console.log(`${r.status.toUpperCase().padEnd(8)} ${r.id.padEnd(5)} [${r.part}] ${INSTRUMENTS_CHECKS[r.id]}`);
-  console.log(`\n${rows.length} checks pending; nothing built yet. Exit 2.`);
-  process.exitCode = 2;
+const run = async (f: () => Promise<true | string>): Promise<{ status: InstrumentsStatus; reason?: string }> => {
+  try { const r = await f(); return r === true ? { status: 'pass' } : { status: 'fail', reason: r }; } catch (e) { return { status: 'fail', reason: e instanceof Error ? `${e.message}`.slice(0, 600) : String(e) }; }
+};
+async function main(): Promise<void> {
+  const t0 = Date.now();
+  const got = new Map<string, InstrumentsRow>();
+  for (const r of await samplerChecks()) got.set(r.id, r);
+  const loader = new Map<string, { status: InstrumentsStatus; reason?: string }>();
+  for (const [id, f] of Object.entries(INSTRUMENTS_LOADER_PART.checks)) { const r = await run(f); loader.set(id, r); console.log(`  … ${id} ${r.status}`); }
+  const ui = new Map<string, { status: InstrumentsStatus; reason?: string }>();
+  try {
+    for (const [id, f] of Object.entries(INSTRUMENTS_PROOF_UI.checks)) { const r = await run(f); ui.set(id, r); console.log(`  … ${id} ${r.status}`); }
+  } finally { await stopInstrumentsProofUi(); }
+  for (const [id, r] of loader) if (id !== 'I16') got.set(id, { id, part: 'loader', ...r });
+  // I16: one row, both halves
+  const server = loader.get('I16')!, page = ui.get('I16-page')!;
+  const halves = [server.status === 'pass' ? null : `server: ${server.reason}`, page.status === 'pass' ? null : `page: ${page.reason}`].filter(Boolean);
+  got.set('I16', { id: 'I16', part: 'loader', status: halves.length ? 'fail' : 'pass', measured: { server: server.status, page: page.status }, ...(halves.length ? { reason: halves.join(' | ') } : {}) });
+  got.set('I17', { id: 'I17', part: 'ui', ...ui.get('I17')! });
+  const rows: InstrumentsRow[] = Object.keys(INSTRUMENTS_CHECKS).map((id) => got.get(id) ?? { id, part: PART[id]!, status: 'fail', reason: 'no part reported this check' });
+  for (const r of rows) console.log(`${r.status.toUpperCase().padEnd(8)} ${r.id.padEnd(5)} [${r.part}] ${INSTRUMENTS_CHECKS[r.id]}${r.reason ? `\n         ${r.reason}` : ''}`);
+  const count = (s: InstrumentsStatus) => rows.filter((r) => r.status === s).length;
+  const root = path.resolve(import.meta.dirname, '../../..');
+  const file = path.join(root, 'docs/evidence/instruments-proof.json');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({
+    proof: 'instruments', ranAt: new Date().toISOString(), seconds: Math.round((Date.now() - t0) / 1000),
+    note: 'SYNTHETIC test kit and test bank only, written by code; never a real sample set. Nobody here can listen: every check is a measurement. Timing figures are one sample each.',
+    passed: count('pass'), failed: count('fail'), partial: count('partial'), blocked: count('blocked'), pending: count('pending'), total: rows.length,
+    rows: rows.map((r) => ({ ...r, check: INSTRUMENTS_CHECKS[r.id] })),
+  }, null, 2) + '\n');
+  console.log(`\n${count('pass')}/${rows.length} passed, ${count('fail')} failed, ${count('partial')} partial, ${count('blocked')} blocked, ${count('pending')} pending. Evidence: docs/evidence/instruments-proof.json`);
+  process.exitCode = count('fail') ? 1 : count('pass') === rows.length ? 0 : 2;
 }
-main();
+if (import.meta.url === `file://${process.argv[1]}`) await main().then(() => process.exit(process.exitCode ?? 0), (e) => { console.error(e); process.exit(1); });
