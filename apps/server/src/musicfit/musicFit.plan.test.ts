@@ -1,6 +1,7 @@
 /**
  * Builder B of the musicfit track (wave 7; .artifacts/wave7/musicfit-decisions.md §2–§4): plan and apply for a free music clip, a
- * family film and a template run, called directly (the routes answer 501 until the lead flips MUSICFIT_SERVER_BUILT at integration).
+ * family film and a template run, called directly. These rows pin the planners' logic on doubles; the same paths on builder A's real
+ * makers are in musicFit.real.test.ts (integration).
  *
  * LABELLED TEST DOUBLES (musicFitDeps): builder A's makers and pure functions are not merged in this worktree, so
  * - makeMusic is a double that returns the RECORD makeMusic would store for the request (the layout's exact duration and known grid,
@@ -104,7 +105,7 @@ function freeScene(name: string, kind: 'builtin' | 'song', pictureFrames = 300) 
 const applyReq = (pid: string, body: Omit<MusicFitApplyRequest, 'expectedRevision'>, expectedRevision = rev(pid)): MusicFitApplyRequest => ({ ...body, expectedRevision });
 
 describe('music fit: plan and apply (builder B)', () => {
-  it('the routes stay 501 until the lead flips the flag at integration', () => { expect(MUSICFIT_SERVER_BUILT).toBe(false); });
+  it('the routes answer since integration flipped the flag (the real makers: musicFit.real.test.ts)', () => { expect(MUSICFIT_SERVER_BUILT).toBe(true); });
 
   it('free clip, built-in, tailored: the plan says exact and composed again; apply makes TWO commits; the clip ends on the last picture frame with no fade; one undo leaves the made file', async () => {
     useDoubles();

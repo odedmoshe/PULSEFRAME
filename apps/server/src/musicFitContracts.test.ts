@@ -1,9 +1,9 @@
 /**
  * Lead contracts of the musicfit track on the server (wave 7; .artifacts/wave7/musicfit-decisions.md §4): the four routes and two MCP
  * tools exist; the checks that come BEFORE any work answer as decided (a propose-mode agent and a limited grant are refused at apply;
- * every agent is refused at the heard mark before its body is read; there is no MCP tool for it); until the builders build the bodies
- * every call answers 501 musicfit_not_built after those checks and changes nothing. Builder A built the synthesiser's exact ending
- * and the join preview and heard bodies (musicfit/splice.test.ts holds what they make).
+ * every agent is refused at the heard mark before its body is read; there is no MCP tool for it). All bodies are built (integration
+ * flipped MUSICFIT_SERVER_BUILT): a song without measured bar starts answers 409 needs_bars after those checks and changes nothing.
+ * musicfit/splice.test.ts and musicfit/musicFit.real.test.ts hold what the makers and the routes make.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -72,8 +72,14 @@ afterAll(async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-function seed(name: string) {
+const picture: Omit<Asset, 'id'> = { kind: 'video', name: 'picture.mp4', contentHash: `sha256:${'c'.repeat(64)}`, byteSize: 1000, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(10, 1), video: { width: 640, height: 360, frameRate: R, codec: 'h264', rotation: 0, frameCount: null }, provenance: prov } as Omit<Asset, 'id'>;
+/** `withPicture`: a 10 s picture under the song, so a fit to the length has a film end to reach (without it: 422 out_of_bounds). */
+function seed(name: string, withPicture = false) {
   const pid = store.createProject({ name, width: 640, height: 360, frameRate: R }).doc.id;
+  if (withPicture) {
+    const v = store.commit({ projectId: pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'import_asset', args: { asset: picture } }] }).results[0]!.output!.assetId as string;
+    store.commit({ projectId: pid, actor: 'user:owner', ops: [{ op: 'add_clip', args: { assetId: v, start: T.ZERO, withLinkedAudio: false } }] });
+  }
   const r = store.commit({ projectId: pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'import_asset', args: { asset: song } }] });
   const assetId = r.results[0]!.output!.assetId as string;
   const c = store.commit({ projectId: pid, actor: 'user:owner', ops: [{ op: 'add_clip', args: { assetId, start: T.ZERO } }] });
@@ -82,16 +88,16 @@ function seed(name: string) {
 const planBody = (clipId: string) => ({ target: { clipId }, music: { keep: true }, tailor: true });
 
 describe('the musicfit routes and tools (lead)', () => {
-  it('plan answers 501 musicfit_not_built after the observe check; an unknown project is 404; a bad body is 400', async () => {
-    const s = seed('mf-plan');
-    expect(MUSICFIT_SERVER_BUILT).toBe(false);
+  it('plan answers after the observe check (a song without measured bar starts: 409 needs_bars); an unknown project is 404; a bad body is 400', async () => {
+    const s = seed('mf-plan', true);
+    expect(MUSICFIT_SERVER_BUILT).toBe(true);
     const ok = await rest('POST', `/projects/${s.pid}/music-fit/plan`, planBody(s.clipId), headers(grant({ mode: 'edit' })));
-    expect([ok.status, ok.body.error?.code]).toEqual([501, 'musicfit_not_built']);
+    expect([ok.status, ok.body.error?.code]).toEqual([409, 'needs_bars']);
     expect((await rest('POST', `/projects/prj_none/music-fit/plan`, planBody(s.clipId), headers(grant({ mode: 'edit' })))).status).toBe(404);
     expect((await rest('POST', `/projects/${s.pid}/music-fit/plan`, { target: { clipId: s.clipId }, music: { keep: true } }, headers(grant({ mode: 'edit' })))).status).toBe(400);
   });
-  it('apply refuses a propose-mode agent and a limited grant (REST and MCP) before anything; an edit grant reaches 501; nothing changes', async () => {
-    const s = seed('mf-apply');
+  it('apply refuses a propose-mode agent and a limited grant (REST and MCP) before anything; an edit grant reaches the body (409 needs_bars); nothing changes', async () => {
+    const s = seed('mf-apply', true);
     const before = revision(s.pid);
     const body = { ...planBody(s.clipId), expectedRevision: before };
     const propose = grant({ mode: 'propose' });
@@ -103,7 +109,7 @@ describe('the musicfit routes and tools (lead)', () => {
     const pt = await mcpCall('tools/call', { name: 'apply_music_fit', arguments: { projectId: s.pid, ...body } }, propose);
     expect(pt.result.isError).toBe(true);
     const ed = await rest('POST', `/projects/${s.pid}/music-fit/apply`, body, headers(grant({ mode: 'edit' })));
-    expect([ed.status, ed.body.error?.code]).toEqual([501, 'musicfit_not_built']);
+    expect([ed.status, ed.body.error?.code]).toEqual([409, 'needs_bars']);
     expect(revision(s.pid)).toBe(before);
   });
   it('the join preview answers after the observe check (501 until built; built: a malformed time is 400, a removal off the bar starts 409)', async () => {

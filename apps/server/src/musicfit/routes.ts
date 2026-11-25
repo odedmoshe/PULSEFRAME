@@ -1,7 +1,7 @@
 /**
  * The routes of «מוזיקה שמתאימה לסרט» (wave 7 musicfit track; .artifacts/wave7/musicfit-decisions.md §4). The lead lands the permission
- * checks COMPLETE here; the bodies answer 501 musicfit_not_built after them (never a made-up plan, file or mark) until built:
- * plan and apply by BUILDER B (musicfit/plan.ts, musicfit/apply.ts, called from the two bodies below behind MUSICFIT_SERVER_BUILT), the join preview and the heard mark by BUILDER A (musicfit/joinPreview.ts, musicfit/heard.ts, already called from here).
+ * checks COMPLETE here; the bodies run after them (each answers 501 musicfit_not_built only while its flag below is false):
+ * plan and apply by BUILDER B (musicfit/plan.ts, musicfit/apply.ts, with builder A's song fitter wired in at integration), the join preview and the heard mark by BUILDER A (musicfit/joinPreview.ts, musicfit/heard.ts).
  *
  * - plan (observe, read-only): POST /api/v1/projects/:id/music-fit/plan, MCP plan_music_fit.
  * - apply (edit; a propose-mode credential is refused: the fit adds a file to the library through an internal step a proposal does
@@ -20,10 +20,10 @@ import { prepareMusicFit } from './plan.ts';
 import { applyMusicFit } from './apply.ts';
 
 /**
- * True once plan and apply answer. Builder B built them (musicfit/plan.ts, apply.ts); the lead flips this at integration, after
- * builder A's makers are merged, together with the contract test that still expects 501 here.
+ * True once plan and apply answer: builder B built them (musicfit/plan.ts, apply.ts) and integration wired builder A's join search
+ * and splice into them (plan.ts builtSongFitter). Kept as a flag so a build can switch the routes back to the honest 501.
  */
-export const MUSICFIT_SERVER_BUILT: boolean = false;
+export const MUSICFIT_SERVER_BUILT: boolean = true;
 /** True once builder A has built the join preview and the heard mark. */
 export const MUSICFIT_JOIN_BUILT = true;
 
