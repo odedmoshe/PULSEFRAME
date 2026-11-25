@@ -19,7 +19,8 @@ import { useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore 
 import { Check, Download, MessageCircle, MonitorPlay, Play, ShieldCheck, SlidersHorizontal, Smartphone, HardDriveDownload, TriangleAlert, Upload } from 'lucide-react';
 import { Badge, Button, Dialog, ProgressBar } from '../ds/index.ts';
 import { isolate } from '../ds/util.tsx';
-import { translateRefusal } from '@pulseframe/i18n';
+import type { ExportChecks } from '@pulseframe/core';
+import { translateRefusal, dictionaries, jobStageLabel } from '@pulseframe/i18n';
 import * as T from '@pulseframe/time';
 import { api, ApiFailure, type PreflightIssue, type PreflightReport } from '../api.ts';
 import { useEditorState, type Editor, type ExportRequest } from './store.ts';
@@ -27,11 +28,17 @@ import { EXPORT_STRINGS, type ExportStrings } from './exportSheet.strings.ts';
 import {
   alsoSuggestion, DEFAULT_CHOICES, DESTINATIONS, describeExport, destinationPick, jobsOnOpen, mergeJobViews, destinationKey, exportOptions, exportTargets, formatFileSize, formatLength, fourKReachable, isActiveJob, jobFraction, overallFraction,
   parseStage, scaledSize, shortSideLabel, STAGE_ORDER, type Destination, type ExportCaptions, type ExportChoices, type ExportQuality, type ExportScale, type ExportTarget,
-  fixLabel as fixLabelOf,
+  fixLabel as fixLabelOf, isFitStage, sendBlock,
 } from './exportSheet.logic.ts';
 import './exportSheet.css';
 import { CacheDoneLine, CacheFailure, cacheStageLabel, ExportReuseLine } from './ExportReuseLine.tsx';
 import { cacheText } from './renderCache.strings.ts';
+import { SendSize } from './send/SendSize.tsx';
+import { ChecksResult } from './send/ChecksResult.tsx';
+import { SEND_TESTIDS as SEND_ID } from './send/send.testids.ts';
+import { SEND_STRINGS } from './send/send.strings.ts';
+import { fitLineParts, frameAt, readFitPlan, type FitView } from './send/send.logic.ts';
+import { writeLastTarget } from './send/sendPrefs.ts';
 
 // ---------------------------------------------------------------- the sheet's own small store (open state and the jobs it started)
 /** `pending`: an export the sheet did not start (the chip's followed job), named from the project until its stored options are read. */
@@ -148,10 +155,10 @@ function Sheet({ editor }: { editor: Editor }) {
 
 // ---------------------------------------------------------------- settings
 /** The choices live above the footer and the body so the primary button can read them. */
-interface Pick { keys: string[]; choices: ExportChoices; dest: Destination['id'] | null; /** a destination openExportSheet was asked to choose, applied by Settings (destinationPick) */ want?: Destination['id'] | null }
+interface Pick { keys: string[]; choices: ExportChoices; dest: Destination['id'] | null; /** what the server's plan says about the target size (the Preview's request fills it) */ fit: FitView; /** a destination openExportSheet was asked to choose, applied by Settings (destinationPick) */ want?: Destination['id'] | null }
 // a destination is chosen from the start (saving a file on this computer: the original shape, full quality), so the sheet never opens on nothing
 const FIRST = DESTINATIONS.find((d) => d.id === 'computer')!;
-let pick: Pick = { keys: ['master'], choices: { ...DEFAULT_CHOICES, ...FIRST.choices }, dest: FIRST.id };
+let pick: Pick = { fit: { kind: 'none' }, keys: ['master'], choices: { ...DEFAULT_CHOICES, ...FIRST.choices }, dest: FIRST.id };
 const pickListeners = new Set<() => void>();
 const setPick = (p: Partial<Pick>) => { pick = { ...pick, ...p }; for (const l of pickListeners) l(); };
 const usePick = () => useSyncExternalStore((l) => { pickListeners.add(l); return () => { pickListeners.delete(l); }; }, () => pick);
@@ -169,16 +176,18 @@ function Settings({ editor, S }: { editor: Editor; S: ExportStrings }) {
   // drop keys that no longer exist (a format removed while the sheet was open)
   useEffect(() => { const ok = p.keys.filter((k) => targets.some((t) => t.key === k)); if (ok.length !== p.keys.length) setPick({ keys: ok.length ? ok : ['master'] }); }, [targets]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const toggle = (key: string) => setPick({ dest: 'custom', keys: p.keys.includes(key) ? p.keys.filter((k) => k !== key) : [...p.keys, key] });
+  // the send tile stays chosen while its other settings change; any other change makes the destination custom, and a custom export has no target size
+  const toggle = (key: string) => setPick({ dest: p.dest === 'whatsapp' ? 'whatsapp' : 'custom', keys: p.keys.includes(key) ? p.keys.filter((k) => k !== key) : [...p.keys, key] });
   const chooseDest = (d: Destination) => setPick({ ...destinationPick(d, targets, p.choices), want: null });
   // the destination openExportSheet was asked for (the command bar), chosen exactly as a click on its tile
   useEffect(() => { const d = p.want ? DESTINATIONS.find((x) => x.id === p.want) : undefined; if (d) chooseDest(d); else if (p.want) setPick({ want: null }); }, [p.want, targets]); // eslint-disable-line react-hooks/exhaustive-deps
-  const setChoice = (patch: Partial<ExportChoices>) => setPick({ dest: 'custom', choices: { ...p.choices, ...patch } });
+  const setChoice = (patch: Partial<ExportChoices>) => setPick(p.dest === 'whatsapp' ? { choices: { ...p.choices, ...patch } } : { dest: 'custom', choices: { ...p.choices, ...patch, targetBytes: null } });
 
   const sec = doc.settings.frameRate ? T.toSeconds(editor.duration) : 0;
   const frames = editor.player?.frameCount ?? 0;
   // the lane and the reuse line plan with what this export would send (the quality is part of every segment key)
-  const planWith = JSON.stringify(exportOptions(p.choices, lead.variantId));
+  // (a target size is left out: the segments key by quality, size and frames only, and a refused target must not read as a blocker of the reuse line)
+  const planWith = JSON.stringify(exportOptions({ ...p.choices, targetBytes: null }, lead.variantId));
   useEffect(() => { editor.setPlanOptions(JSON.parse(planWith) as Record<string, unknown>); }, [planWith, editor]);
 
   return (
@@ -199,6 +208,14 @@ function Settings({ editor, S }: { editor: Editor; S: ExportStrings }) {
             })}
           </div>
         </section>
+
+        {p.dest === 'whatsapp' && (
+          <section aria-labelledby="xs-send">
+            <h3 id="xs-send">{dictionaries[lang]['send.targetSize']}</h3>
+            <SendSize lang={lang} targetBytes={p.choices.targetBytes} plan={p.fit} asked={scaledSize(lead, p.choices.scale)}
+              onChange={(b) => { if (b !== null) writeLastTarget(b); setPick({ choices: { ...p.choices, targetBytes: b } }); }} />
+          </section>
+        )}
 
         <section aria-labelledby="xs-formats">
           <h3 id="xs-formats">{S.formats}</h3>
@@ -224,11 +241,13 @@ function Settings({ editor, S }: { editor: Editor; S: ExportStrings }) {
           </section>
           <section aria-labelledby="xs-q">
             <h3 id="xs-q">{S.quality}</h3>
-            <div className="pf-xs-seg" role="radiogroup" aria-labelledby="xs-q">
-              {(['draft', 'standard', 'high'] as ExportQuality[]).map((q) => (
-                <button key={q} type="button" role="radio" aria-checked={p.choices.quality === q} className={p.choices.quality === q ? 'is-on' : ''} onClick={() => setChoice({ quality: q })}>{S.q[q]}</button>
-              ))}
-            </div>
+            {p.dest === 'whatsapp' ? <p className="pf-xs-note" data-testid="send-quality-note">{SEND_STRINGS[lang].qualityByTarget}</p> : (
+              <div className="pf-xs-seg" role="radiogroup" aria-labelledby="xs-q">
+                {(['draft', 'standard', 'high'] as ExportQuality[]).map((q) => (
+                  <button key={q} type="button" role="radio" aria-checked={p.choices.quality === q} className={p.choices.quality === q ? 'is-on' : ''} onClick={() => setChoice({ quality: q })}>{S.q[q]}</button>
+                ))}
+              </div>
+            )}
           </section>
         </div>
 
@@ -307,20 +326,22 @@ function Preview({ lead, S, lang, frame, revision, sec, frames, choices, ...rest
   const { state } = useEditorState();
   const doc = state.doc!;
   const [bytes, setBytes] = useState<number | null>(null);
+  const fitPlan = usePick().fit;
   const variant = lead.variantId ? doc.variants?.[lead.variantId] : null;
   const safe = variant?.safeArea ?? (lead.kind === 'profile' ? FORMAT_SAFE(lead.profileId) : null);
   // the server's plan carries a size estimate only when it has a basis; otherwise none is shown
   useEffect(() => {
     let dead = false;
     setBytes(null);
+    setPick({ fit: choices.targetBytes === null ? { kind: 'none' } : { kind: 'checking' } });
     const t = window.setTimeout(() => {
       fetch(`/api/v1/projects/${id}/exports/plan`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(exportOptions(choices, lead.variantId)) })
-        .then((r) => r.json()).then((j) => { if (!dead) setBytes(typeof j?.manifest?.estimate?.bytes === 'number' ? j.manifest.estimate.bytes : null); }).catch(() => undefined);
+        .then((r) => r.json()).then((j) => { if (dead) return; setBytes(typeof j?.manifest?.estimate?.bytes === 'number' ? j.manifest.estimate.bytes : null); if (choices.targetBytes !== null) setPick({ fit: readFitPlan(j) }); }).catch(() => { if (!dead && choices.targetBytes !== null) setPick({ fit: { kind: 'unknown' } }); });
     }, 250);
     return () => { dead = true; window.clearTimeout(t); };
-  }, [id, revision, choices.quality, choices.scale, choices.format, lead.variantId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, revision, choices.quality, choices.scale, choices.format, choices.targetBytes, lead.variantId]); // eslint-disable-line react-hooks/exhaustive-deps
   const src = `/api/v1/projects/${id}/frame?index=${frame}${lead.variantId ? `&variant=${encodeURIComponent(lead.variantId)}` : ''}`;
-  const out = scaledSize(lead, choices.scale);
+  const out = fitPlan.kind === 'plan' && choices.targetBytes !== null ? { width: fitPlan.width, height: fitPlan.height } : scaledSize(lead, choices.scale);
   return (
     <aside className="pf-xs-preview" aria-label={S.preview} data-testid="export-preview">
       <div className="pf-xs-pv-title">{S.preview} · {isolate(lead.name[lang])}</div>
@@ -333,7 +354,7 @@ function Preview({ lead, S, lang, frame, revision, sec, frames, choices, ...rest
       <dl className="pf-xs-facts">
         <div><dt>{S.length}</dt><dd className="num">{formatLength(sec)}</dd></div>
         <div><dt>{lang === 'he' ? 'גודל תמונה' : 'Picture size'}</dt><dd className="num">{out.width}×{out.height}</dd></div>
-        {bytes != null && <div><dt>{S.size}</dt><dd><span className="num">≈ {formatFileSize(bytes)}</span><small>{S.sizeNote}</small></dd></div>}
+        {bytes != null && choices.targetBytes === null && <div><dt>{S.size}</dt><dd><span className="num">≈ {formatFileSize(bytes)}</span><small>{S.sizeNote}</small></dd></div>}
         {frames > 0 && <div><dt>{S.frames}</dt><dd className="num">{frames}</dd></div>}
       </dl>
     </aside>
@@ -411,7 +432,8 @@ function SettingsFooter({ editor, S }: { editor: Editor; S: ExportStrings }) {
   const targets = useMemo(() => exportTargets(doc), [doc]);
   const chosen = targets.filter((x) => p.keys.includes(x.key));
   const empty = (editor.player?.frameCount ?? 1) === 0;
-  const reason = empty ? S.noClips : chosen.length === 0 ? S.pick : undefined;
+  const fitRefused = p.dest === 'whatsapp' && p.fit.kind === 'refused';
+  const reason = empty ? S.noClips : chosen.length === 0 ? S.pick : sendBlock(p.dest, p.choices) ? dictionaries[lang]['send.chooseSize'] : fitRefused ? SEND_STRINGS[lang].cannotStart : undefined;
   const start = async () => {
     setSheet({ starting: true, error: null, blockers: [] });
     try {
@@ -425,7 +447,7 @@ function SettingsFooter({ editor, S }: { editor: Editor; S: ExportStrings }) {
       }
       for (const c of chosen) {
         const variantId = c.kind === 'master' ? null : c.kind === 'variant' ? c.variantId : made.get(c.key) ?? null;
-        const out = scaledSize(c, p.choices.scale);
+        const out = p.choices.targetBytes !== null && p.fit.kind === 'plan' ? { width: p.fit.width, height: p.fit.height } : scaledSize(c, p.choices.scale);
         // the editor registers the job: its file is saved by itself when ready, and the top bar's ring follows it (store.ts)
         const fast = state.fastExport && p.choices.format === 'mp4-h264-aac' && !state.planBlockers.length; // «ייצוא מהיר» (ADR-0024), off unless the viewer turned it on
         const jobId = await editor.startExport({ ...exportOptions(p.choices, variantId), ...(fast ? { mode: 'incremental' as const } : {}) } as ExportRequest);
@@ -469,7 +491,8 @@ function Running({ S }: { S: ExportStrings }) {
         <div className="pf-xs-pct" aria-hidden="true"><span className="num">{pct == null ? '…' : `${pct}%`}</span></div>
         <div className="pf-xs-big-meta">
           {/* the fast export's own stages (keying, self-check, joining …) are worded by the render cache's strings (ADR-0024) */}
-          {!st.id && cur.stage && cacheStageLabel(cur.stage, state.lang)
+          {!st.id && isFitStage(cur.stage) ? <b data-testid="fit-stage">{jobStageLabel(cur.stage, state.lang)}</b>
+            : !st.id && cur.stage && cacheStageLabel(cur.stage, state.lang)
             ? <b data-testid="cache-stage" data-stage={cur.stage.split(' ')[0]}>{cacheStageLabel(cur.stage, state.lang)}</b>
             : <b>{st.id ? S.stageNames[st.id] : S.starting}</b>}
           {st.done != null && st.total != null && <span className="num">{S.framesOf(st.done, st.total)} {S.frameWord}</span>}
@@ -570,6 +593,9 @@ function FileCard({ j, S, editor }: { j: SheetJob; S: ExportStrings; editor: Edi
   const report = j.output?.photosensitivity as FlashReport | undefined;
   const bytes = typeof j.output?.bytes === 'number' ? j.output.bytes : null;
   const url = `/api/v1/jobs/${j.id}/output`;
+  const fit = j.output?.fit as FitOutput | undefined;
+  const checks = (j.output?.checks ?? null) as ExportChecks | null;
+  const rate = state.doc!.settings.frameRate;
   const frameSrc = `/api/v1/projects/${state.doc!.id}/frame?index=0${j.variantId ? `&variant=${encodeURIComponent(j.variantId)}` : ''}`;
   return (
     <>
@@ -577,16 +603,32 @@ function FileCard({ j, S, editor }: { j: SheetJob; S: ExportStrings; editor: Edi
         <span className="pf-xs-card-thumb" aria-hidden="true"><FrameImg src={frameSrc} rev={state.revision} /><Play size={16} fill="currentColor" /></span>
         <div className="pf-xs-card-text">
           <b dir="auto">{state.doc!.name} · {j.label}</b>
-          <span><Badge tone="hollow" mono>{j.ext.toUpperCase()}</Badge> {bytes != null && <span className="num">{formatFileSize(bytes)}</span>} · <span className="num">{j.w}×{j.h}</span></span>
+          <span><Badge tone="hollow" mono>{j.ext.toUpperCase()}</Badge> {bytes != null && <span className="num">{formatFileSize(bytes)}</span>} · <span className="num">{fit ? fit.width : j.w}×{fit ? fit.height : j.h}</span></span>
           <span className="pf-xs-ok"><Check size={14} aria-hidden="true" /> {S.checked}</span>
+          {fit && <FitLine fit={fit} lang={state.lang} />}
           {j.output?.segments && <CacheDoneLine report={j.output.segments} lang={state.lang} />}
         </div>
         <a className="pf-btn pf-btn-secondary pf-btn-md pf-ds" href={url} download data-testid="export-download"><Download size={16} aria-hidden="true" /><span className="pf-btn-label">{S.download}</span></a>
       </div>
       {report && <FlashResult report={report} S={S} editor={editor} />}
+      <ChecksResult lang={state.lang} checks={checks} rate={rate} onJump={(at) => { editor.seek(frameAt(at, rate)); closeExportSheet(); }} />
       {/* the licence lines of library files (wave 7 library track), from the job output */}
       <ExportLicenceLines output={j.output} />
     </>
+  );
+}
+
+type FitOutput = { targetBytes: number; bytes: number; result: 'fitted' | 'already_fits'; attempts: { videoBitrate: number; bytes: number }[]; scale: number; width: number; height: number; method: string; test?: string };
+/** «15.6 מתוך 16 מ״ב · ניסיון 1», marked «לא אומת»: bytes are the only promise, and a labelled test fault says so. */
+function FitLine({ fit, lang }: { fit: FitOutput; lang: 'he' | 'en' }) {
+  const S = SEND_STRINGS[lang], D = dictionaries[lang];
+  const p = fitLineParts(fit);
+  if (!p) return null;
+  return (
+    <span data-testid={SEND_ID.fitLine} data-attempts={p.attempt} data-result={fit.result}>
+      {isolate(p.already ? S.alreadyFits(p.got, p.target) : S.fitLine(p.got, p.target, p.attempt))} · <Badge tone="neutral">{D['send.notVerified']}</Badge> · {S.bytesOnly}
+      <small className="pf-send-measured"> · {S.fitNote}{fit.test && <> · <bdi lang="en" dir="ltr">{fit.test}</bdi></>}</small>
+    </span>
   );
 }
 
