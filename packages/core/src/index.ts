@@ -108,3 +108,11 @@ export * from './assistantContract.ts';
 export * from './commandBar/index.ts';
 export * from './commandBar/numbers.ts';
 export * from './commandBar/time.ts';
+// the content library on disk (wave 7 library track): the contract is lead-built; libraryDuties/libraryCredits bodies and the op
+// bodies are worker B's, librarySearch and svgSafety worker A's
+export * from './libraryContract.ts';
+export * from './libraryDuties.ts';
+export * from './libraryCredits.ts';
+export * from './librarySearch.ts';
+export * from './svgSafety.ts';
+export * from './libraryOps.ts';
