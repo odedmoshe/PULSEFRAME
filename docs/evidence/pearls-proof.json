@@ -1,5 +1,5 @@
 {
- "when": "2026-11-25T18:42:21.022Z",
+ "when": "2026-11-25T20:44:15.112Z",
  "exit": 0,
  "checksPassed": 16,
  "checks": 16,
@@ -14,49 +14,49 @@
    "check": "P2",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 7.5
+   "seconds": 5.6
   },
   {
    "check": "P3",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 10
+   "seconds": 9.2
   },
   {
    "check": "P4",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 2.9
+   "seconds": 2.7
   },
   {
    "check": "P5",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 6.6
+   "seconds": 7.2
   },
   {
    "check": "P6",
    "part": "core",
    "verdict": "PASS",
-   "seconds": 2.6
+   "seconds": 3.5
   },
   {
    "check": "P6",
    "part": "integration",
    "verdict": "PASS",
-   "seconds": 11.6
+   "seconds": 15.3
   },
   {
    "check": "P7",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 0.5
+   "seconds": 0.7
   },
   {
    "check": "P7",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 3.1
+   "seconds": 3.3
   },
   {
    "check": "P8",
@@ -80,7 +80,7 @@
    "check": "P9",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 3.1
+   "seconds": 3.8
   },
   {
    "check": "P10",
@@ -92,49 +92,49 @@
    "check": "P11",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 0
+   "seconds": 0.1
   },
   {
    "check": "P12",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 1.7
+   "seconds": 2.8
   },
   {
    "check": "P13",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 5.1
+   "seconds": 6.4
   },
   {
    "check": "P14",
    "part": "core",
    "verdict": "PASS",
-   "seconds": 0
+   "seconds": 0.1
   },
   {
    "check": "P15",
    "part": "core",
    "verdict": "PASS",
-   "seconds": 0.6
+   "seconds": 1.6
   },
   {
    "check": "P15",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 0.5
+   "seconds": 1.1
   },
   {
    "check": "P15",
    "part": "integration",
    "verdict": "PASS",
-   "seconds": 1.2
+   "seconds": 2.6
   },
   {
    "check": "P16",
    "part": "core",
    "verdict": "PASS",
-   "seconds": 0.1
+   "seconds": 0.4
   }
  ],
  "evidence": {
@@ -211,19 +211,19 @@
     "removeAssetSaysCount": true
    },
    "P15": {
-    "node": "5038c55f32d9972877460dce4df9bbfc63f7c9629afbcb543d38018b85ca58d0",
+    "node": "4cde4ffee73e0cc56f69c1d024ea06f8d463ff8ec108e308eebfe98784f95427",
     "documents": 20,
-    "ranges": 109,
+    "ranges": 107,
     "browser": "compared by the integration run (window.__pfPearlsHash over pearlsDeterminismDocs())"
    },
    "P16": {
     "sample": "one sample each (shared machine)",
-    "usageMs700x300": 24.2,
+    "usageMs700x300": 36.5,
     "screenTimeMs": 1.6,
     "uses": 517,
     "pictureFrames": 28000,
-    "commitMsAdd2000th": 28.2,
-    "commitMsOtherOpAt2000": 25,
+    "commitMsAdd2000th": 91.9,
+    "commitMsOtherOpAt2000": 100,
     "the2001stRefused": "out_of_bounds",
     "documentBytes": 413804
    }
@@ -288,7 +288,7 @@
      ]
     ],
     "untimedCopies": [
-     "ast_db97135a421"
+     "ast_4259b1af001"
     ]
    },
    "P9": {
@@ -317,19 +317,19 @@
    "P12": {
     "picks": [
      [
-      "ast_2ca0e6dd820",
+      "ast_39d2d18cc80",
       "pearl",
       "rng_a1",
       60
      ],
      [
-      "ast_3ab328e6600",
+      "ast_86ed74563d0",
       "pearl",
       "rng_b",
       44
      ],
      [
-      "ast_2afbc20e700",
+      "ast_65096c44be0",
       "pearl",
       "rng_c",
       15
@@ -442,9 +442,9 @@
    },
    "P15": {
     "documents": 20,
-    "ranges": 150,
-    "node": "8e09b56ffb5e15a3",
-    "browser": "8e09b56ffb5e15a3"
+    "ranges": 154,
+    "node": "ef0c39bb311a72f5",
+    "browser": "ef0c39bb311a72f5"
    }
   },
   "integration": {
@@ -502,8 +502,8 @@
    },
    "P15browser": {
     "documents": 20,
-    "node": "5038c55f32d9972877460dce4df9bbfc63f7c9629afbcb543d38018b85ca58d0",
-    "chromium": "5038c55f32d9972877460dce4df9bbfc63f7c9629afbcb543d38018b85ca58d0"
+    "node": "4cde4ffee73e0cc56f69c1d024ea06f8d463ff8ec108e308eebfe98784f95427",
+    "chromium": "4cde4ffee73e0cc56f69c1d024ea06f8d463ff8ec108e308eebfe98784f95427"
    }
   }
  },

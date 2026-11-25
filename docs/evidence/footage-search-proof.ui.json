@@ -1,0 +1,110 @@
+{
+ "when": "2026-11-25T20:43:03.187Z",
+ "web": true,
+ "pageErrors": [],
+ "evidence": {
+  "S1": {
+   "server": {
+    "status": 200,
+    "pictureState": "not_installed",
+    "setup": "engine_not_configured",
+    "pictureRows": 0
+   },
+   "found": [
+    {
+     "asset": "ast_d40d6177d50",
+     "start": "",
+     "end": "",
+     "sources": "name",
+     "section": "exact"
+    }
+   ],
+   "controls": {
+    "files": 0,
+    "drop": 0
+   },
+   "picture": {
+    "state": "not_installed",
+    "statusText": "החיפוש בתמונה לא מותקן. לא הוגדרה סביבת Python לחיפוש בתמונה (PF_TOOLS_PYTHON). השלבים הבאים: ההוראות ב־docs/INTEGRATIONS.mdההוראות להתקנה: docs/INTEGRATIONS.md, «חיפוש בתמונה». החיפוש בשם, בתאריך ובמ",
+    "pictureRows": 0,
+    "hasSetup": 1
+   }
+  },
+  "S3": {
+   "queries": 40,
+   "nodeDigest": "2c15fb58a075ee54251e6f61fe82f52f7aebee41a53db90d2cdbbf0c340e799a",
+   "browserDigest": "2c15fb58a075ee54251e6f61fe82f52f7aebee41a53db90d2cdbbf0c340e799a",
+   "different": []
+  },
+  "S10": {
+   "row": {
+    "start": "9/10",
+    "end": "13/10",
+    "sources": "transcript",
+    "asset": "ast_1036d950040"
+   },
+   "placed": {
+    "commits": 1,
+    "clips": 2,
+    "sourceIn": {
+     "value": "9",
+     "timescale": 10
+    },
+    "duration": {
+     "value": "2",
+     "timescale": 5
+    }
+   },
+   "bars": [
+    27,
+    38
+   ]
+  },
+  "U1": {
+   "he1280.layout": {
+    "scrollW": 228,
+    "clientW": 228,
+    "overlap": false,
+    "outside": false,
+    "buttons": 3
+   },
+   "he1280.viewer": {
+    "in": "27",
+    "out": "39"
+   },
+   "he1280.insert": 1,
+   "he1280.live": "נמצא רגע אחד",
+   "he1440.layout": {
+    "scrollW": 260,
+    "clientW": 260,
+    "overlap": false,
+    "outside": false,
+    "buttons": 3
+   },
+   "he1440.viewer": {
+    "in": "27",
+    "out": "39"
+   },
+   "he1440.insert": 1,
+   "he1440.live": "נמצא רגע אחד",
+   "en1280.layout": {
+    "scrollW": 228,
+    "clientW": 228,
+    "overlap": false,
+    "outside": false,
+    "buttons": 3
+   },
+   "en1280.insert": 1,
+   "en1280.live": "One moment found",
+   "en1440.layout": {
+    "scrollW": 260,
+    "clientW": 260,
+    "overlap": false,
+    "outside": false,
+    "buttons": 3
+   },
+   "en1440.insert": 1,
+   "en1440.live": "One moment found"
+  }
+ }
+}
