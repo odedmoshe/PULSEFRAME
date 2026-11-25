@@ -24,7 +24,7 @@ export function musicAt(doc: ProjectDocument, time: T.RationalTime, sequenceId?:
   return musicAtExcept(doc, time, sequenceId, EMPTY);
 }
 const EMPTY: ReadonlySet<string> = new Set();
-/** musicAt leaving out the clips named in `exclude` (impact.ts: a clip is never synced to its own beats or its linked sound's). */
+/** musicAt leaving out the clips named in `exclude` (impact.ts: a clip is never brought to its own beats or its linked sound's). */
 export function musicAtExcept(doc: ProjectDocument, time: T.RationalTime, sequenceId: string | undefined, exclude: ReadonlySet<string>): MusicUnder | null {
   const seq = doc.sequences[sequenceId ?? doc.mainSequenceId];
   if (!seq || !Object.hasOwn(doc.sequences, sequenceId ?? doc.mainSequenceId)) return null;
