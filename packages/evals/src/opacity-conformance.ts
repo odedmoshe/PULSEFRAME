@@ -35,6 +35,18 @@
  * 8-bit levels), hard-light, difference, exclusion, color-dodge and color-burn, whose own 8-bit maths in Chromium is more
  * than 1 off even at opacity 1 (exclusion) or ill-conditioned (dodge, burn), and the dip to black and to white (already within 1
  * at the nearest 8-bit alpha, on average 0.40 and 0.23 of a level low).
+ * MEASUREMENTS (checks 9 to 13, opacity-measure.ts, drawn by the product's own evaluate + drawGraph in headless Chromium in the full
+ * quality and, separately, in the draft quality): what was left on the old path (globalAlpha) or never measured. Each reports the
+ * maximum deviation in 8-bit levels, the mean signed deviation (bias) and the bytes more than 1 level off an exact mix computed
+ * in this process from independently recomputed pictures; the tolerances gate regressions and claim nothing new.
+ *  9. A title (text clip) at 11 opacities incl. 0, 0.5 and 1, without and with a fade-in half way: against the exact mix of the
+ *     title's own opaque rendering over the picture below at the nearest 8-bit alpha; solid, antialiased-edge and outside pixels
+ *     apart. A stroked title is recorded, not gated: its stroke shows through its fill by design.
+ * 10. Time-effect taps (echo, 2 to 5 taps, decay 0.6 and 0.9, opacities 1, 0.75, 0.5, 0.25; lighten and trail at 1).
+ * 11. The zoom transition (between two clips, revealing) at 9 progress values, against the exact mix of the outgoing picture and
+ *     the scaled incoming one.
+ * 12. The blur dissolve, against the exact mix of the two blurred pictures (the kernel's own blur recipe for both).
+ * 13. The punch-in's smear (four quarter-strength scaled copies added), against the mean of the four copies.
  *
  *   pnpm build && pnpm conformance:opacity
  * Writes docs/evidence/opacity-conformance.json. Synthetic pictures only.
@@ -47,6 +59,7 @@ import * as T from '@pulseframe/time';
 import { startServer } from '@pulseframe/server';
 import { evaluate } from '@pulseframe/engine';
 import { chromium } from 'playwright';
+import { measureAll, openMeasurePage } from './opacity-measure.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const dir = path.join(root, '.artifacts/opacity-conformance');
@@ -225,10 +238,23 @@ try {
     check(`8. The fill limited to the faded picture's placed box equals the fill of the whole buffer byte for byte (${areas.length} drawings: 9 placements × 2 opacities × 3 frame sizes)`, areas.length === 54 && areas.every((x) => x.differing === 0), { differingBytes: areas.reduce((u, x) => u + x.differing, 0), comparedBytes: areas.reduce((u, x) => u + x.bytes, 0), drawings: areas });
     draft = { opacity: opacityStats, dissolve: dissolveStats, fadeArea: areas };
   } finally { await browser.close(); }
+  // ---------- 9–13. measurements (opacity-measure.ts) ----------
+  let measurements: Record<string, unknown> = {};
+  {
+    const mBrowser = await chromium.launch();
+    try {
+      const mPage = await mBrowser.newPage();
+      await openMeasurePage(mPage, root);
+      const mm = await measureAll(mPage);
+      for (const c of mm.checks) check(c.name, c.ok, c.detail);
+      measurements = { ...mm.evidence, above2Levels: mm.above2 };
+      console.log(`  --   measurements took ${mm.seconds} s; cases above 2 levels (a stroked title's fill is by design): ${mm.above2.length}`);
+    } finally { await mBrowser.close(); }
+  }
   console.log(`  --   recorded, not gated: ${JSON.stringify(recorded)}`);
   failed = checks.some((c) => !c.ok);
   fs.mkdirSync(path.join(root, 'docs/evidence'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'docs/evidence/opacity-conformance.json'), JSON.stringify({ when: new Date().toISOString(), checks, recorded, results, transitions, draft }, null, 1) + '\n');
+  fs.writeFileSync(path.join(root, 'docs/evidence/opacity-conformance.json'), JSON.stringify({ when: new Date().toISOString(), checks, recorded, results, transitions, draft, measurements }, null, 1) + '\n');
   function S0(i: number) { const p = Math.floor(i / 3), c = i % 3; return topPx(p % N, Math.floor(p / N))[c]!; }
 } catch (e) {
   failed = true;
