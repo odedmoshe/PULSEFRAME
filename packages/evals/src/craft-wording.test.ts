@@ -118,5 +118,4 @@ describe('craft refusals in Hebrew', () => {
       if (key.startsWith('ripple')) expect({ key, he: /Shift\+Delete/.test(he!) }).toEqual({ key, he: false });
     }
   });
-  it.todo('W2: each server refusal provoked for real through its route (craft/routes.test.ts)');
 });
