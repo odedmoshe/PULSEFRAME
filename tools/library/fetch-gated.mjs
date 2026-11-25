@@ -52,6 +52,17 @@ function readSecret(prompt) {
   });
 }
 
+/** One request, tried up to four times when the connection itself fails (not on an HTTP answer). */
+async function request(u, headers) {
+  let last;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, 1000 * 2 ** (attempt - 1)));
+    try { return await fetch(u, { headers, redirect: 'manual' }); } catch (e) { last = e; }
+  }
+  const why = last?.cause?.code ?? last?.cause?.message ?? last?.message ?? 'unknown';
+  throw new Error(`could not connect to ${u.hostname} after four tries (${why})`);
+}
+
 /** GET with redirects followed by hand, so the key goes to huggingface.co and nowhere else. */
 async function get(url, token) {
   let u = new URL(url);
@@ -59,7 +70,7 @@ async function get(url, token) {
     if (u.protocol !== 'https:') throw new Error(`refused a non-https address (${u.protocol}//${u.hostname})`);
     const headers = { 'user-agent': 'library-fetch/1 (node)', 'accept-encoding': 'identity' };
     if (token && u.hostname === HOST) headers.authorization = `Bearer ${token}`;
-    const res = await fetch(u, { headers, redirect: 'manual' });
+    const res = await request(u, headers);
     if (res.status >= 300 && res.status < 400) {
       const next = res.headers.get('location');
       await res.body?.cancel();
