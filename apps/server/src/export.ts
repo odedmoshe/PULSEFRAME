@@ -112,16 +112,16 @@ const BPP = { draft: 0.03, standard: 0.07, high: 0.14 } as const;
 export const ENGINE = { compositor: 'canvas2d/1', evaluator: 'evaluate/1', audio: `plan/2 ${AUDIO_FX_ENGINE}`, fontFamilies: FONT_CATALOG.map((f) => f.family) } as const;
 
 /** The single-pass encoder of MP4 and WebM: RGBA frames on stdin + the WAV → the file (exported for the metadata test, exportMetadata.test.ts). */
-export function singlePassArgs(o: { format: 'mp4-h264-aac' | 'webm-vp9-opus'; quality: 'draft' | 'standard' | 'high'; width: number; height: number; frameRate: { num: number; den: number }; wav: string; outFile: string }): string[] {
-  const mp4 = o.format === 'mp4-h264-aac', crf = String(CRF[o.format][o.quality]);
+export function singlePassArgs(options: { format: 'mp4-h264-aac' | 'webm-vp9-opus'; quality: 'draft' | 'standard' | 'high'; width: number; height: number; frameRate: { num: number; den: number }; wav: string; outFile: string }): string[] {
+  const mp4 = options.format === 'mp4-h264-aac', crf = String(CRF[options.format][options.quality]);
   return [
     '-hide_banner', '-v', 'error', '-y',
-    '-f', 'rawvideo', '-pix_fmt', 'rgba', '-video_size', `${o.width}x${o.height}`, '-framerate', `${o.frameRate.num}/${o.frameRate.den}`, '-i', 'pipe:0',
-    '-i', o.wav, '-map', '0:v:0', '-map', '1:a:0',
+    '-f', 'rawvideo', '-pix_fmt', 'rgba', '-video_size', `${options.width}x${options.height}`, '-framerate', `${options.frameRate.num}/${options.frameRate.den}`, '-i', 'pipe:0',
+    '-i', options.wav, '-map', '0:v:0', '-map', '1:a:0',
     '-vf', EXPORT_PIXEL_FILTER,
-    ...(mp4 ? ['-c:v', 'libx264', '-preset', o.quality === 'draft' ? 'veryfast' : 'medium', '-crf', crf, '-profile:v', 'high'] : ['-c:v', 'libvpx-vp9', '-crf', crf, '-b:v', '0', '-row-mt', '1', '-deadline', 'good', '-cpu-used', o.quality === 'high' ? '2' : '4']),
+    ...(mp4 ? ['-c:v', 'libx264', '-preset', options.quality === 'draft' ? 'veryfast' : 'medium', '-crf', crf, '-profile:v', 'high'] : ['-c:v', 'libvpx-vp9', '-crf', crf, '-b:v', '0', '-row-mt', '1', '-deadline', 'good', '-cpu-used', options.quality === 'high' ? '2' : '4']),
     ...EXPORT_COLOR_TAGS,
-    ...(mp4 ? ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-f', 'mp4'] : ['-c:a', 'libopus', '-b:a', '160k', '-f', 'webm']), o.outFile,
+    ...(mp4 ? ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-f', 'mp4'] : ['-c:a', 'libopus', '-b:a', '160k', '-f', 'webm']), options.outFile,
   ];
 }
 /** Frames of the exported range (relative to it), in the order the render page draws them: [first, first + count). */
