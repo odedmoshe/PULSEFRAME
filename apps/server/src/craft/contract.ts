@@ -30,7 +30,7 @@ import { ApiError, type Store } from '../store.ts';
 /** The table versions.ts creates (CREATE TABLE IF NOT EXISTS, as proposals and derivatives are). */
 export const VERSIONS_TABLE = 'project_versions';
 /** True once W2 has built routes.ts, versions.ts and findText.ts. */
-export const CRAFT_SERVER_BUILT = false;
+export const CRAFT_SERVER_BUILT = true;
 
 interface ServerRefusal<A extends unknown[]> { status: number; code: string; message: (...a: A) => string; hint?: string }
 const r = <A extends unknown[]>(status: number, code: string, message: (...a: A) => string, hint?: string): ServerRefusal<A> => ({ status, code, message, ...(hint ? { hint } : {}) });
