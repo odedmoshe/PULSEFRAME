@@ -33,6 +33,8 @@ import { dataDirBytes, setStorageHooks } from './storage.ts';
 import { recoverAssistantJobs } from './assistant/job.ts'; // command bar assistant recovery (ADR-0027)
 import type { AssistantDeps } from './assistant/contract.ts';
 import type { SizeFitFault } from '@pulseframe/core';
+import { SEARCH_LANE_PREFIX, type Embedder } from './search/contract.ts';
+import { createSearchRuntime } from './search/runtime.ts';
 
 export { loadConfig, type Config } from './config.ts';
 export interface RunningServer {
@@ -46,7 +48,7 @@ export interface RunningServer {
  * `deps.assistant`: the command bar assistant's installed adapters (ADR-0027). Wave 1 ships none, so the CLI passes nothing and
  * the setup state is honest (provider_not_configured); tests and pnpm proof:command-bar install the labelled MOCK adapter here.
  */
-export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter; assistant?: AssistantDeps; /** TEST only (wave 7 send proof S3/S4): a labelled size-fit fault, never from the environment */ fitFault?: SizeFitFault } = {}): Promise<RunningServer> {
+export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter; assistant?: AssistantDeps; /** TEST only (wave 7 send proof S3/S4): a labelled size-fit fault, never from the environment */ fitFault?: SizeFitFault; /** TEST only (wave 7 search proof): the labelled test double of the picture model (search/testEmbedder.ts), never from the environment */ searchEmbedder?: Embedder } = {}): Promise<RunningServer> {
   const cfg = { ...loadConfig(), ...overrides };
   if (overrides.dataDir && !overrides.speechModelsDir && !process.env.PF_SPEECH_MODELS_DIR) cfg.speechModelsDir = path.join(cfg.dataDir, 'speech-models');
   const backup = new BackupScheduler(cfg.dataDir, cfg.backupDir, cfg.backupEveryHours, cfg.backupKeep); // throws on a destination inside the data directory, before anything is opened
@@ -69,9 +71,12 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   auth.resolveGrant = (token) => governance.principalForToken(token);
   capabilities.governance = governance;
   const speech = new Speech(store, cfg, lane);
+  // picture search «חיפוש בצילומים» (wave 7 search track; search/runtime.ts, builder B): the not-built runtime until built
+  const search = createSearchRuntime({ cfg, store, lane, ...(deps.searchEmbedder ? { embedder: deps.searchEmbedder } : {}) });
   lane.onBeforeHeavy(async (label) => {
     if (!/^(speech recognition|narration) /.test(label)) await speech.releaseKept();
     if (!/^local\./.test(label)) await localTools.releaseKept();
+    if (!label.startsWith(SEARCH_LANE_PREFIX)) await search.releaseKept(); // picture search workers (wave 7): kept only for their own scan
   });
   // ---- import queue and phone drop (ADR-0023, amends ADR-0002) ----
   const imports = createImportQueue({ store, lane, derivatives, maxUploadBytes: cfg.maxUploadBytes, reserveBytes: cfg.importReserveBytes, homeZone: cfg.homeZone });
@@ -99,8 +104,8 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   const renderCache = createRenderCacheService({ store, exporter, segments, envSource, status: cacheStatus });
   exporter.incremental = { status: cacheStatus, join: () => joinResult };
   exporter.segmented = { store: segments, env: renderCache.env, keyOf: frameKeyFor, run: runSegmentedExport };
-  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { imports, renderCache });
-  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { imports, door, renderCache, ...(deps.assistant ? { assistant: deps.assistant } : {}) });
+  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { imports, renderCache, search });
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { imports, door, renderCache, search, ...(deps.assistant ? { assistant: deps.assistant } : {}) });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   if ((server.address() as AddressInfo).port !== cfg.port) throw new Error('unexpected port');
@@ -119,6 +124,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   recoverMomentsJobs(store, { derivatives, lane });
   speech.recover();
   derivatives.recover();
+  search.recover(); // picture search scans cut off by the restart resume at the first file without a complete row (wave 7)
   // ---- command bar assistant (ADR-0027, W2): a request cut off by the restart is never sent again; failed submission_unknown,
   // its reservation released when nothing was sent, kept as unknown when the send had started ----
   recoverAssistantJobs(store, governance);
@@ -135,6 +141,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
       await speech.stop();
       await stopTrackingJobs(store); // the rows stay running: they are tracked again after a restart
       await stopStabiliseJobs(store); // likewise: measured again after a restart
+      await search.stop(); // picture search (wave 7): workers let go; a running scan's row stays running for recover()
       await stopMomentsJobs(store); // likewise: measured again after a restart (cached files make it cheap)
       await door.stop(); // the code closes ('shutdown') and the second listener with it; uploads in flight are aborted
       await imports.stop(); // the running ffmpeg is killed; the rows stay running for recover()

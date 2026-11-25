@@ -21,6 +21,7 @@ import { STABILISE_EN, STABILISE_HE } from './stabilise.ts';
 import { PEARLS_EN, PEARLS_HE } from './pearls.ts';
 import { STORY_EN, STORY_HE } from './story.ts';
 import { MUSICFIT_EN, MUSICFIT_HE } from './musicFit.ts';
+import { FOOTAGE_EN, FOOTAGE_HE } from './footageSearch.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
@@ -230,6 +231,7 @@ export const he = {
   ...PEARLS_HE,
   ...STORY_HE,
   ...MUSICFIT_HE,
+  ...FOOTAGE_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -439,6 +441,7 @@ export const en: Record<keyof typeof he, string> = {
   ...PEARLS_EN,
   ...STORY_EN,
   ...MUSICFIT_EN,
+  ...FOOTAGE_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -466,3 +469,4 @@ export * from './stabilise.ts';
 export * from './pearls.ts';
 export * from './story.ts';
 export * from './musicFit.ts';
+export * from './footageSearch.ts';

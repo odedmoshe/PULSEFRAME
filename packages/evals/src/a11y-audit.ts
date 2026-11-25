@@ -45,6 +45,7 @@ import { craftA11yScenarios } from './a11y-craft.ts';
 import { stabiliseA11yScenarios } from './a11y-stabilise.ts';
 import { pearlsA11yScenarios } from './a11y-pearls.ts';
 import { storyA11yScenarios } from './a11y-story.ts';
+import { searchA11yScenarios } from './a11y-search.ts';
 import { makeApi, ownerApi } from './incremental-fixtures.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
 import { auditInPage, focusAudit, toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
@@ -845,6 +846,12 @@ async function main() {
       }
       // «ספרו מה היה» (wave 7 story): the dialog, the recorder recording and refused, the «סיפור» tab and the story bar (a11y-story.ts, integration)
       for (const sc of storyA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // «חיפוש בצילומים» (wave 7 search): results, «לא נמצא דבר», the picture status line, the forget confirmation (a11y-search.ts, builder C)
+      for (const sc of searchA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
