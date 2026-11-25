@@ -1,7 +1,7 @@
 {
   "proof": "family-film",
   "status": "passed",
-  "at": "2026-11-25T18:52:31.727Z",
+  "at": "2026-11-25T21:08:20.775Z",
   "summary": "45/45 checks passed, 0 section(s) blocked",
   "checks": [
     {
@@ -78,7 +78,7 @@
           "attached": 6,
           "revision": 25,
           "skipped": [],
-          "wallSeconds": 7.573,
+          "wallSeconds": 7.257,
           "mediaSeconds": 82
         },
         "revisionBefore": 24,
@@ -99,7 +99,7 @@
           "attached": 6,
           "revision": 27,
           "skipped": [],
-          "wallSeconds": 0.009,
+          "wallSeconds": 0.007,
           "mediaSeconds": 82
         },
         "sameRecords": true,
@@ -120,7 +120,7 @@
           "attached": 0,
           "revision": null,
           "skipped": [],
-          "wallSeconds": 1.778,
+          "wallSeconds": 1.609,
           "mediaSeconds": 82
         },
         "digests": {
@@ -622,9 +622,9 @@
       "name": "R1: the moved clip and the trimmed clip are byte-identical and present after regenerating at 30 s",
       "value": {
         "protected": [
-          "clp_e8038eff6d4",
-          "clp_e8038eff6d6",
-          "clp_e8038eff6d7"
+          "clp_fa04383bc54",
+          "clp_fa04383bc56",
+          "clp_fa04383bc57"
         ],
         "replaced": 11
       },
@@ -732,11 +732,11 @@
         "movedEarlier": true,
         "protected": [],
         "movedBack": [
-          "m1f1ad087f878",
-          "m2b2583c84f39",
-          "m331a346efc57",
-          "m537294e6bbba",
-          "mf274a5224503"
+          "m504d65e4efaf",
+          "m4193c02ef0fb",
+          "ma8c348114a18",
+          "m12951e7f1649",
+          "mc9da4137e868"
         ],
         "holes": 0,
         "offGrid": [],
@@ -976,74 +976,74 @@
           "sameLayout": true,
           "layout": [
             [
-              "ast_14786cff680",
+              "ast_8a1f3d8d9a0",
               0,
               120
             ],
             [
-              "ast_cd0e7f61680",
+              "ast_4194ed1a6e0",
               120,
               120
             ],
             [
-              "ast_0a3643a89a0",
+              "ast_3a229a86a30",
               240,
               120
             ],
             [
-              "ast_d80c0585a30",
+              "ast_6e0f8d425a0",
               360,
               120
             ],
             [
-              "ast_34f9b2e8570",
+              "ast_96d59f0cb40",
               480,
               120
             ],
             [
-              "ast_646c1c09d70",
+              "ast_346dae7c970",
               600,
               120
             ],
             [
-              "ast_bcae77b0640",
+              "ast_a53573a6d30",
               720,
               60
             ]
           ],
           "layoutBefore": [
             [
-              "ast_14786cff680",
+              "ast_8a1f3d8d9a0",
               0,
               120
             ],
             [
-              "ast_cd0e7f61680",
+              "ast_4194ed1a6e0",
               120,
               120
             ],
             [
-              "ast_0a3643a89a0",
+              "ast_3a229a86a30",
               240,
               120
             ],
             [
-              "ast_d80c0585a30",
+              "ast_6e0f8d425a0",
               360,
               120
             ],
             [
-              "ast_34f9b2e8570",
+              "ast_96d59f0cb40",
               480,
               120
             ],
             [
-              "ast_646c1c09d70",
+              "ast_346dae7c970",
               600,
               120
             ],
             [
-              "ast_bcae77b0640",
+              "ast_a53573a6d30",
               720,
               60
             ]
@@ -1091,74 +1091,74 @@
             "sameLayout": true,
             "layout": [
               [
-                "ast_14786cff680",
+                "ast_8a1f3d8d9a0",
                 0,
                 120
               ],
               [
-                "ast_cd0e7f61680",
+                "ast_4194ed1a6e0",
                 120,
                 120
               ],
               [
-                "ast_0a3643a89a0",
+                "ast_3a229a86a30",
                 240,
                 120
               ],
               [
-                "ast_d80c0585a30",
+                "ast_6e0f8d425a0",
                 360,
                 120
               ],
               [
-                "ast_34f9b2e8570",
+                "ast_96d59f0cb40",
                 480,
                 120
               ],
               [
-                "ast_646c1c09d70",
+                "ast_346dae7c970",
                 600,
                 120
               ],
               [
-                "ast_bcae77b0640",
+                "ast_a53573a6d30",
                 720,
                 60
               ]
             ],
             "layoutBefore": [
               [
-                "ast_14786cff680",
+                "ast_8a1f3d8d9a0",
                 0,
                 120
               ],
               [
-                "ast_cd0e7f61680",
+                "ast_4194ed1a6e0",
                 120,
                 120
               ],
               [
-                "ast_0a3643a89a0",
+                "ast_3a229a86a30",
                 240,
                 120
               ],
               [
-                "ast_d80c0585a30",
+                "ast_6e0f8d425a0",
                 360,
                 120
               ],
               [
-                "ast_34f9b2e8570",
+                "ast_96d59f0cb40",
                 480,
                 120
               ],
               [
-                "ast_646c1c09d70",
+                "ast_346dae7c970",
                 600,
                 120
               ],
               [
-                "ast_bcae77b0640",
+                "ast_a53573a6d30",
                 720,
                 60
               ]
@@ -1225,7 +1225,7 @@
           "offset": 0
         }
       ],
-      "generateSeconds": 11.25
+      "generateSeconds": 12.37
     },
     "capturesReadOnUpload": {
       "film-a.mp4": {
@@ -1329,16 +1329,16 @@
       "downbeats": 47
     },
     "measureSpeed": {
-      "wallSeconds": 7.63,
+      "wallSeconds": 7.36,
       "mediaSeconds": 82,
-      "timesRealTime": 10.75,
+      "timesRealTime": 11.15,
       "output": {
         "measured": 6,
         "cached": 0,
         "attached": 6,
         "revision": 25,
         "skipped": [],
-        "wallSeconds": 7.573,
+        "wallSeconds": 7.257,
         "mediaSeconds": 82
       }
     },
@@ -1346,8 +1346,8 @@
       "origin"
     ],
     "commitLatencyMs": {
-      "before": 11.37,
-      "afterMeasuring": 8.5
+      "before": 7.7,
+      "afterMeasuring": 5.47
     },
     "plan": {
       "picks": [
@@ -1562,9 +1562,9 @@
           "shorter_than_target"
         ],
         "protected": [
-          "clp_e8038eff6d4",
-          "clp_e8038eff6d6",
-          "clp_e8038eff6d7"
+          "clp_fa04383bc54",
+          "clp_fa04383bc56",
+          "clp_fa04383bc57"
         ],
         "replaced": 11
       },
@@ -1633,7 +1633,7 @@
           "longer_than_target"
         ],
         "protected": [
-          "clp_e8038eff6df"
+          "clp_fa04383bc5f"
         ],
         "replaced": 13
       },
@@ -1703,7 +1703,7 @@
           "pictures_missing"
         ],
         "protected": [
-          "clp_e8038eff6df"
+          "clp_fa04383bc5f"
         ],
         "replaced": 13
       },

@@ -1,12 +1,12 @@
 {
-  "ranAt": "2026-11-24T21:37:12.893Z",
-  "commit": "996334d78570dcee141fcf88b055a39d7bbc9716",
+  "ranAt": "2026-11-25T22:04:44.422Z",
+  "commit": "79a7c01ace31c23efb38d5a93b56c30b3cf30933",
   "result": "PASSED",
   "passed": 15,
   "total": 15,
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "gpu": "none: the WebGPU adapter here is a software one"
   },
   "scope": "The seven trend-pack WGSL transitions and the light plan (ADR-0012) on synthetic still pictures at 360x640 (timing at 1080x1920), through the server API and its render worker on a software WebGPU adapter. Correctness of the passes, of the flash schedule and of the export flash check only: no speed claim, no real footage, no hardware adapter (the owner's run is still needed, ADR-0011:85), nobody looked at the pictures.",
@@ -406,34 +406,34 @@
       }
     },
     "timing1080x1920": {
-      "plainStillMs": 322,
+      "plainStillMs": 1017,
       "film-burn": {
-        "stillMs": 919,
-        "passMsEstimate": 598
+        "stillMs": 2527,
+        "passMsEstimate": 1510
       },
       "light-leak": {
-        "stillMs": 1075,
-        "passMsEstimate": 753
+        "stillMs": 3593,
+        "passMsEstimate": 2576
       },
       "ink-bleed": {
-        "stillMs": 1249,
-        "passMsEstimate": 928
+        "stillMs": 3486,
+        "passMsEstimate": 2469
       },
       "brush-left": {
-        "stillMs": 875,
-        "passMsEstimate": 554
+        "stillMs": 2489,
+        "passMsEstimate": 1471
       },
       "brush-right": {
-        "stillMs": 866,
-        "passMsEstimate": 544
+        "stillMs": 2566,
+        "passMsEstimate": 1549
       },
       "page-turn-left": {
-        "stillMs": 716,
-        "passMsEstimate": 394
+        "stillMs": 1594,
+        "passMsEstimate": 576
       },
       "page-turn-right": {
-        "stillMs": 740,
-        "passMsEstimate": 418
+        "stillMs": 1934,
+        "passMsEstimate": 917
       }
     }
   },
@@ -1002,34 +1002,34 @@
       "name": "L7 time per pass at 1080x1920 recorded for each kernel (median of 3 still round trips with the transition, minus the same still without one; software adapter, no speed claim)",
       "ok": true,
       "detail": {
-        "plainStillMs": 322,
+        "plainStillMs": 1017,
         "film-burn": {
-          "stillMs": 919,
-          "passMsEstimate": 598
+          "stillMs": 2527,
+          "passMsEstimate": 1510
         },
         "light-leak": {
-          "stillMs": 1075,
-          "passMsEstimate": 753
+          "stillMs": 3593,
+          "passMsEstimate": 2576
         },
         "ink-bleed": {
-          "stillMs": 1249,
-          "passMsEstimate": 928
+          "stillMs": 3486,
+          "passMsEstimate": 2469
         },
         "brush-left": {
-          "stillMs": 875,
-          "passMsEstimate": 554
+          "stillMs": 2489,
+          "passMsEstimate": 1471
         },
         "brush-right": {
-          "stillMs": 866,
-          "passMsEstimate": 544
+          "stillMs": 2566,
+          "passMsEstimate": 1549
         },
         "page-turn-left": {
-          "stillMs": 716,
-          "passMsEstimate": 394
+          "stillMs": 1594,
+          "passMsEstimate": 576
         },
         "page-turn-right": {
-          "stillMs": 740,
-          "passMsEstimate": 418
+          "stillMs": 1934,
+          "passMsEstimate": 917
         }
       }
     },

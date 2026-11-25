@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T14:48:31.747Z",
+  "ranAt": "2026-11-25T21:01:30.512Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
@@ -78,7 +78,7 @@
         "chromium": "6b7bc5931ea2722f",
         "frames": 180,
         "frozenSelftestDigestOk": true,
-        "ms": 1
+        "ms": 1.1
       }
     },
     {
@@ -529,7 +529,7 @@
       "status": "passed",
       "detail": {
         "status": "canceled",
-        "afterMs": 25,
+        "afterMs": 116,
         "ffmpegLeft": 0,
         "documentUnchanged": true
       }
@@ -683,22 +683,22 @@
       "status": "passed",
       "detail": {
         "job": {
-          "framesPerSecond": 28.38,
+          "framesPerSecond": 35.79,
           "measuredFrames": 180
         },
         "eventLoopLagMs": {
-          "p50": 17.711,
-          "p99": 89.653
+          "p50": 17.744,
+          "p99": 61.44
         },
         "jobStatus": "succeeded",
         "commitMs": {
-          "baselineP95": 1.442,
-          "with10800SamplesP95": 28.939,
-          "deltaP95": 27.497
+          "baselineP95": 1.491,
+          "with10800SamplesP95": 24.119,
+          "deltaP95": 22.628
         },
         "planStabilise1800Frames": {
-          "coldMs": 9.202,
-          "afterPoseCacheMs": 3.924,
+          "coldMs": 3.787,
+          "afterPoseCacheMs": 3.035,
           "strengthStored": 50,
           "zoomPm": 1055,
           "lowered": false
@@ -724,14 +724,14 @@
           50,
           100
         ],
-        "ms": 14.1
+        "ms": 15.9
       }
     },
     "job": {
       "status": "succeeded",
       "output": {
-        "assetId": "ast_a8a1892f200",
-        "clipId": "clp_96c9c29d030",
+        "assetId": "ast_d7befc69790",
+        "clipId": "clp_6db4bfad8d0",
         "measuredFrames": 180,
         "readFrames": 180,
         "applied": true,
@@ -741,12 +741,12 @@
         },
         "strengthLowered": false,
         "revision": 4,
-        "measuringFps": 28.38
+        "measuringFps": 35.79
       },
       "error": null,
       "eventLoopMs": {
-        "p50": 17.711,
-        "p99": 89.653
+        "p50": 17.744,
+        "p99": 61.44
       }
     },
     "S1": {
@@ -827,22 +827,22 @@
     },
     "S28": {
       "job": {
-        "framesPerSecond": 28.38,
+        "framesPerSecond": 35.79,
         "measuredFrames": 180
       },
       "eventLoopLagMs": {
-        "p50": 17.711,
-        "p99": 89.653
+        "p50": 17.744,
+        "p99": 61.44
       },
       "jobStatus": "succeeded",
       "commitMs": {
-        "baselineP95": 1.442,
-        "with10800SamplesP95": 28.939,
-        "deltaP95": 27.497
+        "baselineP95": 1.491,
+        "with10800SamplesP95": 24.119,
+        "deltaP95": 22.628
       },
       "planStabilise1800Frames": {
-        "coldMs": 9.202,
-        "afterPoseCacheMs": 3.924,
+        "coldMs": 3.787,
+        "afterPoseCacheMs": 3.035,
         "strengthStored": 50,
         "zoomPm": 1055,
         "lowered": false
