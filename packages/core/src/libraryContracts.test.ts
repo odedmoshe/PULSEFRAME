@@ -59,8 +59,9 @@ describe('the licence tables (fail-closed contract)', () => {
     expect(Object.keys(SPDX_LICENCES).filter((id) => /-SA|-ND|GPL/.test(id))).toEqual([]);
     for (const [id, row] of Object.entries(CUSTOM_LICENCES)) expect({ id, custom: row.custom.length > 0, quote: row.quote.length > 20 }).toEqual({ id, custom: true, quote: true });
   });
-  it('the SVG check refuses everything until it is built (fail-closed)', () => {
-    expect(sanitiseSvg('<svg xmlns="http://www.w3.org/2000/svg"/>').ok).toBe(false);
+  it('the SVG check (built by worker A) passes a plain SVG and refuses a script; svgSafety.test.ts holds the full list', () => {
+    expect(sanitiseSvg('<svg xmlns="http://www.w3.org/2000/svg"/>').ok).toBe(true);
+    expect(sanitiseSvg('<svg xmlns="http://www.w3.org/2000/svg"><script>x</script></svg>').ok).toBe(false);
   });
 });
 
