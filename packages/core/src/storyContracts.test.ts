@@ -82,12 +82,3 @@ describe('story contract (lead)', () => {
     expect(STORY_FORBIDDEN_WORDS.test('the next picture')).toBe(false);
   });
 });
-
-describe('story planner (W1: packages/core/src/story.ts, voiceActivity.ts)', () => {
-  it.todo('W1: voiceActivity on synthetic peaks: four ranges, padding 60/120 ms, 0.35 s hold, 0.12 s minimum, digital silence clamped (C6)');
-  it.todo('W1: planStory places every picture on the frame of its tap at 25, 29.97 and 30 fps; lengths add up exactly');
-  it.todo('W1: held taps (too_close, no_picture_left, outside_narration, kept_by_hand) and no two cuts closer than flashGapFrames');
-  it.todo('W1: untapped pictures share the last segment at pauses, else evenly; parts under 1.5 s leave pictures out (no_room)');
-  it.todo('W1: storyLiveDocument keeps the narration and music clip ids across calls; a held tap changes nothing');
-  it.todo('W1: property run — random trims, replaces, deletes and moves; regeneration keeps changed clips byte-equal, no overlaps, no cut under the gap, one undo exact');
-});
