@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T01:20:28.703Z",
+  "ranAt": "2026-11-25T02:04:09.087Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 79,
-  "total": 79,
+  "passed": 84,
+  "total": 84,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -146,6 +146,78 @@
           24,
           24
         ]
+      }
+    },
+    {
+      "name": "a toast raised while the curve picker is open is inside it (in its own toast region), one status only, in the accessibility tree and on screen; Tab reaches the toast's action and its × without leaving the modal and wraps back into it; Escape typed on the × closes the modal, and the region is the page's again",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "inModal": true,
+        "host": "modal",
+        "inert": false,
+        "regionName": "התראות",
+        "regions": 1,
+        "statusesWithText": 1,
+        "liveAncestors": 0,
+        "onScreen": true,
+        "notCovered": true,
+        "announced": true,
+        "toastActionReachedByKeyboard": true,
+        "toastCloseReachedByKeyboard": true,
+        "tabWrapsInsideModal": true,
+        "tabStepsThatLeftTheDialog": 0,
+        "focusOnToastClose": true,
+        "closed": true,
+        "toastBackOnPage": true
+      }
+    },
+    {
+      "name": "a toast raised while the effect gallery is open is inside it (in its own toast region), one status only, in the accessibility tree and on screen; Tab reaches the toast's action and its × without leaving the modal and wraps back into it; Escape typed on the × closes the modal, and the region is the page's again",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "inModal": true,
+        "host": "modal",
+        "inert": false,
+        "regionName": "התראות",
+        "regions": 1,
+        "statusesWithText": 1,
+        "liveAncestors": 0,
+        "onScreen": true,
+        "notCovered": true,
+        "announced": true,
+        "toastActionReachedByKeyboard": true,
+        "toastCloseReachedByKeyboard": true,
+        "tabWrapsInsideModal": true,
+        "tabStepsThatLeftTheDialog": 0,
+        "focusOnToastClose": true,
+        "closed": true,
+        "toastBackOnPage": true
+      }
+    },
+    {
+      "name": "a toast raised while the command palette is open is inside it (in its own toast region), one status only, in the accessibility tree and on screen; Tab reaches the toast's action and its × without leaving the modal and wraps back into it; Escape typed on the × closes the modal, and the region is the page's again",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "inModal": true,
+        "host": "modal",
+        "inert": false,
+        "regionName": "התראות",
+        "regions": 1,
+        "statusesWithText": 1,
+        "liveAncestors": 0,
+        "onScreen": true,
+        "notCovered": true,
+        "announced": true,
+        "toastActionReachedByKeyboard": true,
+        "toastCloseReachedByKeyboard": true,
+        "tabWrapsInsideModal": true,
+        "tabStepsThatLeftTheDialog": 0,
+        "focusOnToastClose": true,
+        "closed": true,
+        "toastBackOnPage": true
       }
     },
     {
@@ -312,7 +384,7 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2.03,
+        "fwd2": 1.98,
         "sh2": "◀◀ ×1",
         "back1": -0.99,
         "sh3": "◀◀ ×2",
@@ -328,9 +400,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 0.99,
+        "playSpeed": 1,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 2.01,
+        "shuttleSpeed": 1.99,
         "staysPaused": true
       }
     },
@@ -358,30 +430,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_0ba610492f0",
-          "clp_0ba610492f1"
+          "clp_ac543e3ae50",
+          "clp_ac543e3ae51"
         ],
         "afterAB": [
-          "clp_0ba610492f0",
-          "clp_0ba610492f1"
+          "clp_ac543e3ae50",
+          "clp_ac543e3ae51"
         ],
         "afterAdd": [
-          "clp_0ba610492f0",
-          "clp_0ba610492f1",
-          "clp_0ba610492f2"
+          "clp_ac543e3ae50",
+          "clp_ac543e3ae51",
+          "clp_ac543e3ae52"
         ],
         "midEscape": [
-          "clp_0ba610492f1"
+          "clp_ac543e3ae51"
         ],
         "afterEscape": [
-          "clp_0ba610492f0",
-          "clp_0ba610492f1",
-          "clp_0ba610492f2"
+          "clp_ac543e3ae50",
+          "clp_ac543e3ae51",
+          "clp_ac543e3ae52"
         ],
         "afterEscapeUp": [
-          "clp_0ba610492f0",
-          "clp_0ba610492f1",
-          "clp_0ba610492f2"
+          "clp_ac543e3ae50",
+          "clp_ac543e3ae51",
+          "clp_ac543e3ae52"
         ]
       }
     },
@@ -543,7 +615,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 18/1799",
+        "valueText": "עוקב קדימה 14/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -799,23 +871,47 @@
       }
     },
     {
+      "name": "a toast raised while the template dialog is open is inside it (in its own toast region), one status only, in the accessibility tree and on screen; Tab reaches the toast's action and its × without leaving the modal and wraps back into it; Escape typed on the × closes the modal, and the region is the page's again",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "inModal": true,
+        "host": "modal",
+        "inert": false,
+        "regionName": "התראות",
+        "regions": 1,
+        "statusesWithText": 1,
+        "liveAncestors": 0,
+        "onScreen": true,
+        "notCovered": true,
+        "announced": true,
+        "toastActionReachedByKeyboard": true,
+        "toastCloseReachedByKeyboard": true,
+        "tabWrapsInsideModal": true,
+        "tabStepsThatLeftTheDialog": 0,
+        "focusOnToastClose": true,
+        "closed": true,
+        "toastBackOnPage": true
+      }
+    },
+    {
       "name": "keyboard only, in Hebrew: a card opens the template dialog (focus inside), Escape closes it and the focus is back on the card; then pick → leave the video out and move a picture earlier → music → a Hebrew text (its counter counts it) → plan (a polite live region, nothing blocking) → Use adds exactly 1 revision (apply_template) with that text on a title, and the post-apply bar appears",
       "ok": true,
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_e3c0d96e7f0",
-          "ast_d8ad14c2be0",
-          "ast_4d762a3ac30",
-          "ast_f8b4dbb29d0",
-          "ast_a8e49fb0540"
+          "ast_573d040c980",
+          "ast_e2aed9a5cf0",
+          "ast_9c740cecc20",
+          "ast_732bc2a3ed0",
+          "ast_1994be31f40"
         ],
         "order1": [
-          "ast_e3c0d96e7f0",
-          "ast_f8b4dbb29d0",
-          "ast_d8ad14c2be0",
-          "ast_4d762a3ac30",
-          "ast_a8e49fb0540"
+          "ast_573d040c980",
+          "ast_732bc2a3ed0",
+          "ast_e2aed9a5cf0",
+          "ast_9c740cecc20",
+          "ast_1994be31f40"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -839,7 +935,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-25T01:16:16.620Z",
+          "createdAt": "2026-11-25T02:00:21.274Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -1034,7 +1130,7 @@
       "ok": true,
       "detail": {
         "slots": 11,
-        "victim": "clp_98bd6e10940",
+        "victim": "clp_cf15257a400",
         "deleted": true,
         "offered": {
           "count": 1,
@@ -1159,8 +1255,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_936314f6e10",
-          "seq_936314f6e17"
+          "seq_60355f958f0",
+          "seq_60355f958f7"
         ],
         "revisions": 1,
         "transactions": [
@@ -1170,7 +1266,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_936314f6e10",
+          "seq": "seq_60355f958f0",
           "selected": "true"
         }
       }
@@ -1201,9 +1297,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_936314f6e10"
+          "seq": "seq_60355f958f0"
         },
-        "secondTab": "seq_936314f6e10",
+        "secondTab": "seq_60355f958f0",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1478,25 +1574,50 @@
       }
     },
     {
-      "name": "an archive of a project whose translation the owner marked reviewed, imported in the editor: the new project opens with one toast «הארכיון יובא» whose text is the server's note naming «English», without a timer; the translation there needs review again with its wording kept, the source keeps its mark; the toast stays past 7 s, closes with its ×, and a reload does not show it again; in English the same import says it in English",
+      "name": "a clip that shows a colour-processed copy which keeps the timing of a measured file shows that file's beat and scene markers on the timeline, at the frames its own moments play (and its tempo); a clip that shows a reversed copy shows none",
+      "ok": true,
+      "detail": {
+        "gradedCopy": {
+          "beats": [
+            30,
+            45,
+            60
+          ],
+          "scenes": [
+            60
+          ],
+          "bpm": "120",
+          "clips": 1
+        },
+        "reversedCopy": {
+          "beats": [],
+          "scenes": [],
+          "bpm": null,
+          "clips": 1
+        },
+        "errors": []
+      }
+    },
+    {
+      "name": "an archive of a project whose translation the owner marked reviewed, imported in the editor: the new project opens with one toast «הארכיון יובא» whose text is the server's note naming «English» in the singular («התרגום … מסומן», «The translation … needs»), without a timer; the translation there needs review again with its wording kept, the source keeps its mark; the toast stays past 7 s, closes with its ×, and a reload does not show it again; in English the same import says it in English",
       "ok": true,
       "detail": {
         "marked": true,
         "he": {
-          "id": "prj_g0LSbZVmzQM",
+          "id": "prj_hC3unxfciXQ",
           "count": 1,
           "title": "הארכיון יובא",
-          "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגומים «English» מסומנים שוב «תרגום מכונה · לא נבדק», והנוסח שלהם נשמר. אפשר לעבור עליהם בלוח «תמלול» ולבחור «סמן כנבדק».",
+          "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגום «English» מסומן שוב «תרגום מכונה · לא נבדק», והנוסח שלו נשמר. אפשר לעבור עליו בלוח «תמלול» ולבחור «סמן כנבדק».",
           "visible": true,
           "timer": 0,
           "panel": "needed",
           "badge": 1
         },
         "en": {
-          "id": "prj_e1BtxD7BziY",
+          "id": "prj_Q2x67iMkULw",
           "count": 1,
           "title": "The archive was imported",
-          "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translations «English» need review again; their wording is kept. Go through them in the \"Transcript\" panel and choose \"Mark as reviewed\".",
+          "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translation «English» needs review again; its wording is kept. Go through it in the \"Transcript\" panel and choose \"Mark as reviewed\".",
           "visible": true,
           "timer": 0,
           "panel": "needed",
