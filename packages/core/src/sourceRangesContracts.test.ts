@@ -52,7 +52,7 @@ describe('the sourceRanges key and its entity', () => {
     const { doc, assetId } = project();
     expect(Object.hasOwn(summarize(doc), 'pearls')).toBe(false);
     const s = summarize({ ...doc, sourceRanges: { rng_1: range(assetId) } }) as { pearls?: unknown };
-    expect(s.pearls).toEqual({ count: 1, unused: null });
+    expect(s.pearls).toEqual({ count: 1, unused: 1 });
     expect(JSON.stringify(s)).not.toContain('סופגנייה');
   });
 });
@@ -91,9 +91,18 @@ describe('the three operations', () => {
     expect(() => rangeUsage(doc)).toThrow(SourceRangesNotBuilt);
     expect(() => screenTime(doc)).toThrow(SourceRangesNotBuilt);
   });
-  it.todo('A: each op body follows SOURCE_RANGE_REFUSALS in order; add → undo gives the stored JSON back; remove_asset and remove_person cascade with exact undo and the untagged count in the summary');
-  it.todo('A: rangeUsage equals a per-frame scan of sourceFrameIndexAt on forward, reversed, 2×, ramped and freeze clips, spans off frame edges, a 29.97 file in a 30 fps project, a time-preserving and an untimed copy');
-  it.todo('A: screenTime, searchRanges, placeRangeArgs (outward snap), filmWindowOfRange and validateSourceRanges as the contract says; no localeCompare or Intl in sourceRanges.ts');
+  it('A: built — an add commits, undoes to the stored JSON and is counted; the functions answer with numbers (cases: sourceRanges.test.ts, sourceRanges.property.test.ts)', () => {
+    expect(SOURCE_RANGE_OPS_BUILT).toBe(true);
+    const { doc, assetId } = project();
+    const r = applyTransaction(doc, [{ op: 'add_source_range', args: { assetId, start: T.frameTime(30, R), end: T.frameTime(75, R), label: 'x' } }], { idSeed: 'pb_', actor: 'user:local' });
+    const rangeId = r.results[0]!.output!.rangeId as string;
+    expect(r.doc.sourceRanges![rangeId]!.span).toEqual({ start: T.frameTime(30, R), end: T.frameTime(75, R) });
+    const back = structuredClone(r.doc);
+    restoreEntities(back, diffEntities(doc, r.doc).map((c) => ({ id: c.id, state: c.before })));
+    expect(JSON.stringify(back)).toBe(JSON.stringify(doc));
+    expect(rangeUsage(r.doc).unused).toEqual([rangeId]);
+    expect(screenTime(r.doc).pictureFrames).toBe(0);
+  });
 });
 
 describe('the family film contract', () => {
