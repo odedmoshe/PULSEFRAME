@@ -1,8 +1,8 @@
 {
   "proof": "family-film",
   "status": "passed",
-  "at": "2026-11-24T21:40:03.389Z",
-  "summary": "42/42 checks passed, 0 section(s) blocked",
+  "at": "2026-11-25T01:10:56.837Z",
+  "summary": "45/45 checks passed, 0 section(s) blocked",
   "checks": [
     {
       "id": "F7",
@@ -78,7 +78,7 @@
           "attached": 6,
           "revision": 25,
           "skipped": [],
-          "wallSeconds": 6.548,
+          "wallSeconds": 6.185,
           "mediaSeconds": 82
         },
         "revisionBefore": 24,
@@ -99,7 +99,7 @@
           "attached": 6,
           "revision": 27,
           "skipped": [],
-          "wallSeconds": 0.009,
+          "wallSeconds": 0.011,
           "mediaSeconds": 82
         },
         "sameRecords": true,
@@ -120,7 +120,7 @@
           "attached": 0,
           "revision": null,
           "skipped": [],
-          "wallSeconds": 1.323,
+          "wallSeconds": 1.403,
           "mediaSeconds": 82
         },
         "digests": {
@@ -397,7 +397,7 @@
       "id": "F6",
       "name": "the run record is within 16 000 bytes",
       "value": {
-        "bytes": 4637
+        "bytes": 6239
       },
       "budget": "≤ 16 000 bytes",
       "pass": true
@@ -619,12 +619,12 @@
     },
     {
       "id": "F13",
-      "name": "R1: the moved clip and the trimmed clip are byte-identical and present after regenerating at 30 s",
+      "name": "R1: the clip moved and turned by hand and the trimmed clip are byte-identical and present after regenerating at 30 s",
       "value": {
         "protected": [
-          "clp_4c7b19aaab4",
-          "clp_4c7b19aaab6",
-          "clp_4c7b19aaab7"
+          "clp_7aef3672054",
+          "clp_7aef3672056",
+          "clp_7aef3672057"
         ],
         "replaced": 11
       },
@@ -723,6 +723,32 @@
         }
       },
       "budget": "a gap exists here; warned frames = measured frames",
+      "pass": true
+    },
+    {
+      "id": "F13",
+      "name": "R4: a clip that was only moved is not kept: it is replaced, the film has no frame without a picture, every cut is on the grid, and the answer says it (warning moved_back naming its slot)",
+      "value": {
+        "protected": [],
+        "movedBack": [
+          "mc9debf6104f5"
+        ],
+        "holes": 0,
+        "offGrid": [],
+        "warnings": [
+          "moved_back"
+        ]
+      },
+      "budget": "replaced; 0 holes; on the grid; moved_back",
+      "pass": true
+    },
+    {
+      "id": "F13",
+      "name": "R4: undoing that regeneration and the move gives back the film byte for byte",
+      "value": {
+        "equal": true
+      },
+      "budget": "sha256 equal",
       "pass": true
     },
     {
@@ -925,6 +951,103 @@
       "pass": true
     },
     {
+      "id": "F21",
+      "name": "a film clip deleted with Delete (the gap closes, the later clips move earlier): «החזרת החלקים שנמחקו» lays the film out again in one revision with the deleted file back at its place (the same files on the same frames as before the delete), nothing is refused, and the bar says in Hebrew that clips which had only been moved were not kept where they were; undo returns exactly",
+      "value": {
+        "deleteOps": [
+          [
+            "ripple_delete_clips"
+          ]
+        ],
+        "offered": 1,
+        "afterButton": {
+          "revisions": 1,
+          "refusal": null,
+          "removed": 0,
+          "offered": 0,
+          "note": "קליפים שרק זזו ממקומם לא נשארו במקום שאליו זזו: הסרט סודר מחדש יחד איתם",
+          "sameLayout": true,
+          "layout": [
+            [
+              "ast_5ea1856c440",
+              0,
+              120
+            ],
+            [
+              "ast_31dc0fc9640",
+              120,
+              120
+            ],
+            [
+              "ast_f64546a0a30",
+              240,
+              120
+            ],
+            [
+              "ast_0927041a520",
+              360,
+              120
+            ],
+            [
+              "ast_5ce0ef07490",
+              480,
+              120
+            ],
+            [
+              "ast_41ccdff2e90",
+              600,
+              120
+            ],
+            [
+              "ast_8d2ca4f6340",
+              720,
+              60
+            ]
+          ],
+          "layoutBefore": [
+            [
+              "ast_5ea1856c440",
+              0,
+              120
+            ],
+            [
+              "ast_31dc0fc9640",
+              120,
+              120
+            ],
+            [
+              "ast_f64546a0a30",
+              240,
+              120
+            ],
+            [
+              "ast_0927041a520",
+              360,
+              120
+            ],
+            [
+              "ast_5ce0ef07490",
+              480,
+              120
+            ],
+            [
+              "ast_41ccdff2e90",
+              600,
+              120
+            ],
+            [
+              "ast_8d2ca4f6340",
+              720,
+              60
+            ]
+          ]
+        },
+        "undoneExactly": true
+      },
+      "budget": "+1 revision, 0 removed, same layout, the Hebrew sentence, exact undo",
+      "pass": true
+    },
+    {
       "id": "F20",
       "name": "a film clip deleted by hand with Shift+Delete: the film bar offers «החזרת החלקים שנמחקו» (not before); the button makes the film whole again in one revision and is gone",
       "value": {
@@ -956,7 +1079,83 @@
             "revisions": 1,
             "refusal": null,
             "removed": 0,
-            "offered": 0
+            "offered": 0,
+            "note": "קליפים שרק זזו ממקומם לא נשארו במקום שאליו זזו: הסרט סודר מחדש יחד איתם",
+            "sameLayout": true,
+            "layout": [
+              [
+                "ast_5ea1856c440",
+                0,
+                120
+              ],
+              [
+                "ast_31dc0fc9640",
+                120,
+                120
+              ],
+              [
+                "ast_f64546a0a30",
+                240,
+                120
+              ],
+              [
+                "ast_0927041a520",
+                360,
+                120
+              ],
+              [
+                "ast_5ce0ef07490",
+                480,
+                120
+              ],
+              [
+                "ast_41ccdff2e90",
+                600,
+                120
+              ],
+              [
+                "ast_8d2ca4f6340",
+                720,
+                60
+              ]
+            ],
+            "layoutBefore": [
+              [
+                "ast_5ea1856c440",
+                0,
+                120
+              ],
+              [
+                "ast_31dc0fc9640",
+                120,
+                120
+              ],
+              [
+                "ast_f64546a0a30",
+                240,
+                120
+              ],
+              [
+                "ast_0927041a520",
+                360,
+                120
+              ],
+              [
+                "ast_5ce0ef07490",
+                480,
+                120
+              ],
+              [
+                "ast_41ccdff2e90",
+                600,
+                120
+              ],
+              [
+                "ast_8d2ca4f6340",
+                720,
+                60
+              ]
+            ]
           },
           "undoneExactly": true
         },
@@ -1019,7 +1218,7 @@
           "offset": 0
         }
       ],
-      "generateSeconds": 13.9
+      "generateSeconds": 13.05
     },
     "capturesReadOnUpload": {
       "film-a.mp4": {
@@ -1123,16 +1322,16 @@
       "downbeats": 47
     },
     "measureSpeed": {
-      "wallSeconds": 6.58,
+      "wallSeconds": 6.24,
       "mediaSeconds": 82,
-      "timesRealTime": 12.47,
+      "timesRealTime": 13.15,
       "output": {
         "measured": 6,
         "cached": 0,
         "attached": 6,
         "revision": 25,
         "skipped": [],
-        "wallSeconds": 6.548,
+        "wallSeconds": 6.185,
         "mediaSeconds": 82
       }
     },
@@ -1140,8 +1339,8 @@
       "origin"
     ],
     "commitLatencyMs": {
-      "before": 5.3,
-      "afterMeasuring": 5.06
+      "before": 6.54,
+      "afterMeasuring": 7.05
     },
     "plan": {
       "picks": [
@@ -1356,9 +1555,9 @@
           "shorter_than_target"
         ],
         "protected": [
-          "clp_4c7b19aaab4",
-          "clp_4c7b19aaab6",
-          "clp_4c7b19aaab7"
+          "clp_7aef3672054",
+          "clp_7aef3672056",
+          "clp_7aef3672057"
         ],
         "replaced": 11
       },
@@ -1427,12 +1626,12 @@
           "longer_than_target"
         ],
         "protected": [
-          "clp_4c7b19aaabf"
+          "clp_7aef367205f"
         ],
         "replaced": 13
       },
       {
-        "label": "R3 the last clip moved 3 s later",
+        "label": "R3 the last clip moved 3 s later and turned",
         "layout": [
           {
             "asset": "film-b.mp4",
@@ -1497,12 +1696,78 @@
           "pictures_missing"
         ],
         "protected": [
-          "clp_4c7b19aaabf"
+          "clp_7aef367205f"
         ],
         "replaced": 13
+      },
+      {
+        "label": "R4 the last clip only moved 3 s later",
+        "layout": [
+          {
+            "asset": "film-b.mp4",
+            "span": [
+              0,
+              120
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-d.mp4",
+            "span": [
+              120,
+              240
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-a.mp4",
+            "span": [
+              240,
+              360
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-f.mp4",
+            "span": [
+              360,
+              480
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-c.mp4",
+            "span": [
+              480,
+              600
+            ],
+            "kept": false
+          },
+          {
+            "asset": "IMG_20251216_102300.png",
+            "span": [
+              600,
+              720
+            ],
+            "kept": false
+          },
+          {
+            "asset": "film-e.mp4",
+            "span": [
+              720,
+              780
+            ],
+            "kept": false
+          }
+        ],
+        "warnings": [
+          "moved_back"
+        ],
+        "protected": [],
+        "replaced": 14
       }
     ],
-    "f13Note": "R3 is the only case with not enough material; it records how the planner answers (a warned gap). R1 and R2 have material to spare and must show a picture on every frame.",
+    "f13Note": "R3 is the only case with not enough material; it records how the planner answers (a warned gap). R1 and R2 have material to spare and must show a picture on every frame. In R1 and R3 the moved clip is also turned by hand, because a clip that was only moved is no longer kept (R4).",
     "leadOverStillDb": 0
   },
   "notes": [

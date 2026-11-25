@@ -1,15 +1,15 @@
 {
-  "ranAt": "2026-11-25T00:13:55.072Z",
+  "ranAt": "2026-11-25T01:14:15.215Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
+    "platform": "Linux 6.18.44-fc-v880 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
   },
   "scope": "Three rule-based recipes on synthetic material. No language-model Director and no generative steps.",
-  "passed": 14,
-  "total": 14,
+  "passed": 15,
+  "total": 15,
   "checks": [
     {
       "name": "the three phase 11 recipes are listed, and every recipe has a parameter schema and states plainly that no language model is used",
@@ -124,6 +124,38 @@
       }
     },
     {
+      "name": "editor: a montage clip deleted with Delete (the gap closes, the later clips move earlier): regenerate does not keep the moved clips one segment early but places clips again up to the montage's end, leaving exactly the deleted clip's frames empty, and says both in Hebrew («הונחו מחדש במקומם כי רק זזו: N», «נשארו ריקים כי נמחקו ידנית: 1»); «החזרת החלקים שנמחקו» then fills the place (1 revision, no frame empty); the hand-edited clip is kept; undo returns exactly",
+      "ok": true,
+      "detail": {
+        "deleteOps": [
+          [
+            "ripple_delete_clips"
+          ]
+        ],
+        "moved": 4,
+        "deletedFrames": 60,
+        "afterRegenerate": {
+          "said": "הוחלפו: 6 · נשארו כי נערכו ידנית: 1 · הונחו מחדש במקומם כי רק זזו: 4 · נשארו ריקים כי נמחקו ידנית: 1",
+          "offered": 1,
+          "error": null,
+          "pictures": 13,
+          "over": 0,
+          "holes": 60,
+          "movedStillThere": 0,
+          "kept": true
+        },
+        "afterButton": {
+          "said": "הוחלפו: 12 · נשארו כי נערכו ידנית: 1",
+          "offered": 0,
+          "error": null,
+          "pictures": 15,
+          "revisions": 1,
+          "holes": 0
+        },
+        "undoneExactly": true
+      }
+    },
+    {
       "name": "editor: a montage clip deleted by hand with Shift+Delete: the run does not offer «החזרת החלקים שנמחקו» before a regeneration says so; regenerate leaves the clip's place empty, says «נשארו ריקים כי נמחקו ידנית: 1» in its live line and offers the button; the button fills the place again (1 revision) and is gone; the hand-edited clip is kept throughout",
       "ok": true,
       "detail": {
@@ -153,18 +185,25 @@
               "ripple_delete_clips"
             ]
           ],
+          "moved": 4,
+          "deletedFrames": 60,
           "afterRegenerate": {
-            "said": "הוחלפו: 2 · נשארו כי נערכו ידנית: 5 · נשארו ריקים כי נמחקו ידנית: 1",
+            "said": "הוחלפו: 6 · נשארו כי נערכו ידנית: 1 · הונחו מחדש במקומם כי רק זזו: 4 · נשארו ריקים כי נמחקו ידנית: 1",
             "offered": 1,
             "error": null,
-            "pictures": 11
+            "pictures": 13,
+            "over": 0,
+            "holes": 60,
+            "movedStillThere": 0,
+            "kept": true
           },
           "afterButton": {
-            "said": "הוחלפו: 6 · נשארו כי נערכו ידנית: 5",
+            "said": "הוחלפו: 12 · נשארו כי נערכו ידנית: 1",
             "offered": 0,
             "error": null,
-            "pictures": 11,
-            "revisions": 1
+            "pictures": 15,
+            "revisions": 1,
+            "holes": 0
           },
           "undoneExactly": true
         },
