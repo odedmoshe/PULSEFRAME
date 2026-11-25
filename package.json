@@ -99,7 +99,9 @@
     "proof:craft": "tsx packages/evals/src/craft-proof.ts",
     "proof:pearls": "tsx packages/evals/src/pearls-proof.ts",
     "proof:story": "tsx packages/evals/src/story-proof.ts",
-    "proof:musicfit": "tsx packages/evals/src/musicfit-proof.ts"
+    "proof:musicfit": "tsx packages/evals/src/musicfit-proof.ts",
+    "proof:search": "tsx packages/evals/src/footage-search-proof.ts",
+    "proof:search-real": "tsx packages/evals/src/footage-search-real.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

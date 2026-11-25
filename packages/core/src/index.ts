@@ -156,3 +156,6 @@ export * from './musicGrid.ts';
 export * from './impact.ts';
 export * from './musicJoin.ts';
 export * from './musicSwap.ts';
+// «חיפוש בצילומים» (wave 7 search track): the contract and the agent filter are lead-built; footageSearch.ts is builder A's
+export * from './footageSearchContract.ts';
+export * from './footageSearch.ts';

@@ -48,12 +48,15 @@ import { assertMayHandleImportJob, IMPORT_JOB_TYPE, type ImportQueue } from './i
 import type { RenderCacheService } from './renderCacheRoutes.ts';
 import type { AssistantJobControls } from './assistant/routes.ts';
 import { proposalsFor } from './assistant/visibility.ts';
+import { notBuiltRuntime, SEARCH_INDEX_JOB_TYPE, type SearchRuntime } from './search/contract.ts';
+import { findInFootageFor } from './search/routes.ts';
 
 export const SERVER_INFO = { name: 'pulseframe-studio', version: '0.0.0' };
 
 /** `derivatives` lets tracking jobs read an asset's editing proxy; without it they read the stored media. */
-export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, presence: Presence, governance?: Governance, speech?: Speech, derivatives?: Derivatives, extras: { imports?: ImportQueue; renderCache?: RenderCacheService } = {}) {
+export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, presence: Presence, governance?: Governance, speech?: Speech, derivatives?: Derivatives, extras: { imports?: ImportQueue; renderCache?: RenderCacheService; /** picture search (wave 7 search track; search/runtime.ts); absent = the not-built runtime */ search?: SearchRuntime } = {}) {
   const gov = governance ?? new Governance(store);
+  const search = extras.search ?? notBuiltRuntime();
   /**
    * The assistant's job controls (ADR-0027), handed over by createApp once it has made them (bindAssistant below): cancel_job
    * cancels an assistant.propose job through the very handler POST /jobs/:jobId/cancel calls. Null only for an MCP endpoint
@@ -172,6 +175,10 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
       run('observe', () => { read(projectId); return planMusicFitFor(store, gov, principal, projectId, MusicFitPlanRequestSchema.parse(req)); }));
     server.registerTool('apply_music_fit', { description: 'Apply a music fit planned with plan_music_fit, against expectedRevision: a made file goes into the library first (it stays there on undo), then the edit is ONE undoable transaction. Refused for a credential that may only propose. Answers 501 musicfit_not_built while this build has no music fit.', inputSchema: MusicFitApplyRequestSchema.extend({ projectId: pid }) }, ({ projectId, ...req }) =>
       run('observe', () => { read(projectId); return applyMusicFitFor(store, gov, principal, projectId, MusicFitApplyRequestSchema.parse(req)); }));
+    // «חיפוש בצילומים» (wave 7 search track; search/routes.ts): text only, read-only. For any credential but the owner's own session the
+    // answer is the no-model search of the reader document without pearl names or tags, as {assetId, start, end, sources} (core agentAnswerOf).
+    server.registerTool('find_in_footage', { description: 'Find moments in the project\'s own footage by words: file names, capture dates (years, months, Hebrew years and holidays), life-line event names and words said in transcripts. Returns moments as {assetId, start, end, sources} in each file\'s own time (start and end null = the whole file), exact word matches, no model. Picture search (what is in the picture) is for the project owner\'s own session only and is never answered here (pictureState owner_only); names of marked moments and people tagged on them are never searched for this credential. Text queries only: no image, frame or file can be a query. The query is not stored. A grant limited to tracks or a time range is refused. "Nothing found" is an honest answer. Answers 501 footage_search_not_built while this build has no footage search.', inputSchema: z.object({ projectId: pid, query: z.string().describe('Words to find, 1–200 characters'), limit: z.number().int().min(1).max(50).optional() }), annotations: ro }, ({ projectId, query, limit }, extra) =>
+      run('observe', () => { read(projectId); return findInFootageFor({ store, runtime: search }, principal, projectId, { query, ...(limit !== undefined ? { limit } : {}), picture: false }, extra.mcpReq.signal); }));
     const rparams = z.record(z.string(), z.unknown()).optional().describe('Recipe parameters (see list_catalog → recipes for each schema)');
     server.registerTool('plan_recipe', { description: 'Preview what a recipe would do to this project: its steps, the data it is based on and alternative settings. Recipes are rule-based multi-step edits (beat-montage, social-pack, tidy-speech, portrait-blur, family-film, story; see list_catalog → recipes, whose aiInput says when a recipe uses a result an AI model made earlier). Read-only.', inputSchema: z.object({ projectId: pid, recipeId: z.string(), params: rparams }), annotations: ro }, ({ projectId, recipeId, params }) => run('observe', () => { read(projectId); return planRecipeFor(store, projectId, recipeId, params, gov, principal); }));
     server.registerTool('apply_recipe', { description: 'Apply a recipe as ONE undoable step. Everything it creates is a normal editable object. Returns a runId for regenerate_recipe.', inputSchema: z.object({ projectId: pid, recipeId: z.string(), params: rparams }) }, ({ projectId, recipeId, params }) => run('observe', () => { read(projectId); return applyRecipe(store, gov, principal, projectId, recipeId, params); }));
@@ -308,6 +315,7 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
         if (j.type === TRACKING_JOB_TYPE) return cancelTrackingJob(store, jobId, principal.actor);
         if (j.type === MOMENTS_JOB_TYPE) return cancelMomentsJob(store, jobId, principal.actor);
         if (j.type === STABILISE_JOB_TYPE) return cancelStabiliseJob(store, jobId, principal.actor);
+        if (j.type === SEARCH_INDEX_JOB_TYPE) return search.cancel(jobId, principal.actor); // a picture scan (wave 7 search): the owner's own; agents were refused above
         if (speech?.handles(j)) return speech.cancel(jobId, principal.actor);
         return j.type === 'export' ? exporter.cancel(jobId, principal.actor) : capabilities.cancel(jobId, principal.actor);
       }));

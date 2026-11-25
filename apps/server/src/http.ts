@@ -62,6 +62,8 @@ import { assistantCancelRefusal, createAssistantHandlers, type AssistantJobContr
 import { assertMayReadProposal, assertMayReleaseBudget, assistantJobStub, mayReadProposal, proposalsFor } from './assistant/visibility.ts';
 import { libraryOwner } from './library/contract.ts';
 import { registerLibraryRoutes } from './library/routes.ts';
+import { notBuiltRuntime, SEARCH_INDEX_JOB_TYPE, type SearchRuntime } from './search/contract.ts';
+import { registerSearchRoutes } from './search/routes.ts';
 
 const TxBody = z
   .object({
@@ -135,7 +137,7 @@ export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self';
 export const DATA_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
 
 /** Services wired by the server (index.ts) that tests may leave out: the import queue and the phone drop (ADR-0023), the render cache (ADR-0024). */
-export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps }
+export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps; /** picture search (wave 7 search track; search/runtime.ts): absent = the not-built runtime */ search?: SearchRuntime }
 export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler, speechService?: Speech, extras: AppExtras = {}) {
   setMeasurementExporter(exporter); // colour-match jobs render stills, also when they are recovered after a restart
   const gov = governance ?? new Governance(store);
@@ -894,6 +896,10 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   registerLibraryRoutes(app, { cfg, store, gov, imports: extras.imports ?? null, need });
   // editing craft (wave 7 craft track): named versions and find (craft/contract.ts CRAFT_ROUTES; 501 craft_not_built until W2)
   registerCraftRoutes(app, { cfg, store, gov, exporter, need });
+  // «חיפוש בצילומים» (wave 7 search track; search/contract.ts SEARCH_ROUTES): POST …/search for observers (agents: no-model part of the reader
+  // document, agentAnswerOf), the picture index for the owner's own session only; 501 footage_search_not_built until builder B
+  const searchRuntime = extras.search ?? notBuiltRuntime();
+  registerSearchRoutes(app, { cfg, store, gov, runtime: searchRuntime, need });
 
   // ----- the command bar's language assistant (ADR-0027; assistant/contract.ts ASSISTANT_ROUTES): status for any observer (whole
   // for the owner's own session, connected or not for anyone else: assistant/visibility.ts), the rest for the owner's own session
@@ -996,6 +1002,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (j.type === TRACKING_JOB_TYPE) return c.json(cancelTrackingJob(store, j.id, p.actor));
     if (j.type === MOMENTS_JOB_TYPE) return c.json(cancelMomentsJob(store, j.id, p.actor));
     if (j.type === STABILISE_JOB_TYPE) return c.json(cancelStabiliseJob(store, j.id, p.actor));
+    if (j.type === SEARCH_INDEX_JOB_TYPE) return c.json(searchRuntime.cancel(j.id, p.actor)); // a picture scan (wave 7 search): the owner's own
     if (speech.handles(j)) return c.json(speech.cancel(j.id, p.actor));
     // an export the editor's tab renders is handed to its lease holder by Exporter.cancel (browser-export.ts), as for MCP cancel_job
     return c.json(j.type === 'export' ? exporter.cancel(j.id, p.actor) : await capabilities.cancel(j.id, p.actor));

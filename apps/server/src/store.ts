@@ -85,6 +85,17 @@ export class Store {
    * with the project's revision after it. The server sets it to the render cache's purge (ADR-0024): privacy over speed.
    */
   onPrivacyChange: ((projectId: string, revision: number) => void) | null = null;
+  private assetsGoneListeners: ((projectId: string, contentHashes: string[]) => void)[] = [];
+  /**
+   * Picture search (wave 7 search track; search/contract.ts): called synchronously after every durable commit (an operation, an undo,
+   * a redo, a template) in which an asset entity disappeared or changed its content hash, with the content hashes that left this
+   * project's document. A listener decides itself whether another current project still holds a hash (the search index keeps a
+   * file's rows only while some project does). A listener that throws is logged and never fails the commit. Returns the remover.
+   */
+  addAssetsGoneListener(fn: (projectId: string, contentHashes: string[]) => void): () => void {
+    this.assetsGoneListeners.push(fn);
+    return () => { this.assetsGoneListeners = this.assetsGoneListeners.filter((x) => x !== fn); };
+  }
   readonly blobDir: string;
   readonly outDir: string;
   readonly tmpDir: string;
@@ -248,6 +259,16 @@ export class Store {
     const { privacyChanged: purge, ...result } = run.immediate();
     // Only once the transaction is durable: the event published for this row carries the states it left (liveChanges).
     if (live) { const { seq, changes } = live as { seq: number; changes: EntityChange[] }; if (this.liveBySeq.size > 64) this.liveBySeq.clear(); this.liveBySeq.set(seq, changes); }
+    // Picture search (wave 7): content hashes that left this project's document go to the listeners (addAssetsGoneListener)
+    if (live && this.assetsGoneListeners.length) {
+      const gone = new Set<string>();
+      for (const c of (live as { changes: EntityChange[] }).changes) {
+        const before = c.before?.kind === 'asset' ? c.before.asset.contentHash : null;
+        const after = c.after?.kind === 'asset' ? c.after.asset.contentHash : null;
+        if (before && before !== after) gone.add(before);
+      }
+      if (gone.size) for (const fn of this.assetsGoneListeners) { try { fn(req.projectId, [...gone]); } catch (e) { console.error('an assets-gone listener failed', e); } }
+    }
     // In the same commit path, before anyone is told of the revision: pictures rendered before the change may show what is now hidden.
     if (purge && this.onPrivacyChange) {
       try { this.onPrivacyChange(req.projectId, result.revision); } catch (e) { console.error('privacy purge of the render cache failed', e); }
