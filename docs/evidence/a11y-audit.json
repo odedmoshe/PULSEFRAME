@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T13:41:11.934Z",
+  "ranAt": "2026-11-25T14:28:39.974Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "browser": "153.0.8010.12"
@@ -145,7 +145,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_a24db7026f0]",
+          "focusAfterClose": "button[data-testid=more-ast_f0d031fb1d0]",
           "focusReturned": true
         },
         {
@@ -764,7 +764,7 @@
         },
         {
           "state": "cache-sheet-first",
-          "controls": 477,
+          "controls": 478,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -841,20 +841,7 @@
           "state": "craft-find-panel",
           "controls": 355,
           "unnamed": [],
-          "lowContrast": [
-            {
-              "el": "bdi",
-              "ratio": 4.17,
-              "text": "נועה",
-              "size": 14
-            },
-            {
-              "el": "bdi",
-              "ratio": 4.16,
-              "text": "00:00:00:00",
-              "size": 11
-            }
-          ],
+          "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
@@ -1228,7 +1215,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_a24db7026f0]",
+          "focusAfterClose": "button[data-testid=more-ast_f0d031fb1d0]",
           "focusReturned": true
         },
         {
@@ -1924,20 +1911,7 @@
           "state": "craft-find-panel",
           "controls": 355,
           "unnamed": [],
-          "lowContrast": [
-            {
-              "el": "bdi",
-              "ratio": 4.17,
-              "text": "נועה",
-              "size": 14
-            },
-            {
-              "el": "bdi",
-              "ratio": 4.16,
-              "text": "00:00:00:00",
-              "size": 11
-            }
-          ],
+          "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
@@ -2453,7 +2427,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 473,
+          "controls": 474,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2665,19 +2639,19 @@
       ]
     }
   ],
-  "findings": 4,
+  "findings": 0,
   "findingsByRun": [
     {
       "theme": "dark",
       "uiLanguage": "he",
       "states": 88,
-      "findings": 2
+      "findings": 0
     },
     {
       "theme": "dark",
       "uiLanguage": "en",
       "states": 88,
-      "findings": 2
+      "findings": 0
     },
     {
       "theme": "light",
@@ -2692,5 +2666,5 @@
       "findings": 0
     }
   ],
-  "result": "FINDINGS"
+  "result": "NO FINDINGS (heuristic)"
 }

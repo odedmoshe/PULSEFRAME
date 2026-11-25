@@ -239,6 +239,9 @@ async function F7(): Promise<true | string> {
     await page.getByTestId(TID.replaceAll).click();
     if (!(await until(async () => (await texts()).join('|') === 'שלום נועה|נועה והילדים'))) return `after searching again the texts are ${(await texts()).join('|')}`;
     if ((await doc(c, p.pid)).revision !== rev + 1) return `replacing took ${(await doc(c, p.pid)).revision - rev} revisions, not one transaction`;
+    // the cursor is in the find field, where Ctrl+Z is the field's own text undo: close the panel, then the editor's undo
+    await page.keyboard.press('Escape');
+    await page.getByTestId(TID.findPanel).waitFor({ state: 'detached' });
     await key(page, 'KeyZ', { ctrl: true });
     if (!(await until(async () => (await docHash(c, p.pid)) === h))) return 'one undo did not return the exact document';
     return true;
@@ -397,7 +400,7 @@ async function U2(): Promise<true | string> {
   const out = `${r.stdout}\n${r.stderr}`;
   const report = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/evidence/a11y-audit.json'), 'utf8')) as { findings: number; runs: { uiLanguage: string; theme: string; states?: { state: string; shown?: boolean }[] }[] };
   const craft = new Map<string, number>();
-  for (const run of report.runs) for (const st of run.states ?? []) if (st.state.startsWith('craft-') && st.shown === true) craft.set(st.state, (craft.get(st.state) ?? 0) + 1);
+  for (const run of report.runs) for (const st of run.states ?? []) if (typeof st.state === 'string' && st.state.startsWith('craft-') && st.shown === true) craft.set(st.state, (craft.get(st.state) ?? 0) + 1);
   if (craft.size < 4) return `the audit looked at ${craft.size} craft states (${[...craft.keys()].join(', ')}), fewer than the four: time field, paste dialog, find panel, versions compare`;
   if (r.status !== 0 || report.findings !== 0) return `the audit exited ${r.status} with ${report.findings} finding(s): ${out.split('\n').filter((l) => /finding|state/.test(l)).slice(-6).join(' | ')}`;
   return true;
