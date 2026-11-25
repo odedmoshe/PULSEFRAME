@@ -4,8 +4,8 @@
  * steadyContract.ts STEADY_REFUSALS; Hebrew packages/i18n/src/stabilise.ts, kept in step by packages/evals/src/stabilise-wording.test.ts).
  *
  * - attach_camera_motion (internal; issued only by the stabilise job) is LEAD-BUILT and final, so the job can commit from round 1.
- * - set_clip_stabilise and remove_camera_motion are W2's: until then each REFUSES with notBuilt and changes nothing.
- *   STEADY_OPS_BUILT turns their fuzz rows on (packages/evals/src/ops-fuzz.gen.ts).
+ * - set_clip_stabilise and remove_camera_motion: W2's bodies (STEADY_OPS_BUILT = true turns their fuzz rows on,
+ *   packages/evals/src/ops-fuzz.gen.ts). Undo is the generic one: affectedIds name the clip and analysis entities they change.
  *
  * RULES OF W2's BODIES (decisions §2, §4)
  * - set_clip_stabilise {clipId, stabilise: {strength?, maxCrop?, zoomPm?} | null}: in order — a media clip on a video track whose
@@ -21,17 +21,20 @@
  *   stabilised clip shows (its shown frames ± steadyHalfWindow of its strength), keeping the rest. Output RemoveCameraMotionOutput.
  */
 import { z } from 'zod';
-import { defineOp, OpError } from './ops.ts';
+import { defineOp, mustClip, OpError } from './ops.ts';
 import { analysisEntityId } from './entities.ts';
 import { isMovingPicture, videoFrames } from './momentsContract.ts';
 import {
-  MAX_CAMERA_STRETCHES, MAX_STEADY_SAMPLES, SST, STEADY_COLUMN_PROBLEMS, STEADY_REFUSALS, cameraSamples, projectCameraSamples, projectTrackSamples, stretchEnd,
-  type CameraStretch, type ClipStabilise, type SteadyRefusalKey,
+  MAX_CAMERA_STRETCHES, MAX_STEADY_SAMPLES, SST, STEADY_COLUMN_PROBLEMS, STEADY_DEFAULT_STRENGTH, STEADY_MIN_MEASURED_PERCENT, STEADY_REFUSALS, cameraSamples,
+  projectCameraSamples, projectTrackSamples, steadyHalfWindow, stretchEnd,
+  type CameraMotion, type CameraStretch, type ClipStabilise, type SteadyRefusalKey,
 } from './steadyContract.ts';
+import { clipSourceFrames, measuredFrames, planStabilise } from './steady.ts';
+import type { MediaClip, ProjectDocument } from './schema.ts';
 import { MAX_PROJECT_TRACK_SAMPLES } from './tracking.ts';
 
 /** True once W2 has built set_clip_stabilise and remove_camera_motion. */
-export const STEADY_OPS_BUILT = false;
+export const STEADY_OPS_BUILT = true;
 
 interface R<A extends unknown[]> { code: OpError['code']; message: (...a: A) => string; hint?: string }
 export function steadyRefusal<K extends SteadyRefusalKey>(key: K, details: Record<string, unknown> = {}, ...args: Parameters<(typeof STEADY_REFUSALS)[K]['message']>): OpError {
@@ -138,13 +141,65 @@ defineOp({
   },
 });
 
-const notBuilt = (op: string) => () => { throw steadyRefusal('notBuilt', { op }, op); };
+/** Every media clip of the project stabilised with this file's measurement, with its track. */
+function stabilisedClipsOf(d: ProjectDocument, assetId: string): { clip: MediaClip; locked: boolean; trackId: string }[] {
+  const out: { clip: MediaClip; locked: boolean; trackId: string }[] = [];
+  for (const seq of Object.values(d.sequences)) for (const t of seq.tracks) for (const c of t.clips) if (c.type === 'media' && c.assetId === assetId && c.stabilise) out.push({ clip: c, locked: !!t.locked, trackId: t.id });
+  return out;
+}
+/**
+ * The stretches a stabilised clip uses: those overlapping its reach (clipSourceFrames) widened by the half-window of its strength
+ * at the file's rate; when none overlaps, the nearest one (steady.ts draws frames outside every stretch with the nearest measured
+ * frame's pose, so that stretch is in use too).
+ */
+function usedStretches(d: ProjectDocument, clip: MediaClip, motion: CameraMotion): Set<CameraStretch> {
+  const asset = d.assets[clip.assetId]!;
+  const f = clipSourceFrames(d, clip), R = steadyHalfWindow(clip.stabilise!.strength, asset.video!.frameRate);
+  const a = f.reach.first - R, b = f.reach.last + R;
+  const hit = motion.stretches.filter((s) => s.from <= b && stretchEnd(s) - 1 >= a);
+  if (hit.length) return new Set(hit);
+  let best: CameraStretch | null = null, dist = Infinity;
+  for (const s of motion.stretches) { const dd = s.from > b ? s.from - b : a - (stretchEnd(s) - 1); if (dd < dist) { dist = dd; best = s; } }
+  return new Set(best ? [best] : []);
+}
+
 defineOp({
   name: 'set_clip_stabilise',
   version: 1,
   description: 'Steady the picture of a video clip with the camera motion measured on its file (model-free: translation, rotation and zoom of the camera; rolling-shutter "jelly" and perspective are not corrected). The edges are cut off by a constant zoom so no empty edge ever shows; the output states the crop. strength 1–100 (default 50); maxCrop lowers the strength until the crop fits; null switches it off and keeps the measurement. Refused until the file\'s motion is measured (stabilise_clip / POST …/clips/{clipId}/stabilise).',
   args: SetClipStabiliseArgsSchema,
-  apply: notBuilt('set_clip_stabilise'),
+  /**
+   * Rules (steadyOps header): refusals in order notVideo, multicam, notMeasured (no measurement, or none of the clip's own source
+   * frames inside a stretch), tooLittle (ok + weak below STEADY_MIN_MEASURED_PERCENT of them; the percent shown is floored).
+   * null: the switch is removed (the measurement stays), with no other check than notVideo. Otherwise steady.ts planStabilise
+   * decides strength and zoom (STEADY_MATHS_V1); zoomPm given is stored as is and maxCrop is then ignored.
+   */
+  apply(d, a) {
+    const f = mustClip(d, a.clipId);
+    const c = f.clip;
+    const asset = c.type === 'media' && Object.hasOwn(d.assets, c.assetId) ? d.assets[c.assetId] : undefined;
+    if (c.type !== 'media' || f.track.kind !== 'video' || !isMovingPicture(asset)) throw steadyRefusal('notVideo', { clipId: a.clipId });
+    if (c.multicam) throw steadyRefusal('multicam', { clipId: c.id });
+    const motion = d.analyses?.[c.assetId]?.cameraMotion;
+    if (a.stabilise === null) {
+      delete c.stabilise;
+      const output: SetClipStabiliseOutput = { stabilise: null, crop: null, measured: measuredFrames(motion, clipSourceFrames(d, c)), strengthLowered: false, limitedFrames: [] };
+      return { affectedIds: [c.id], summary: 'Switched stabilisation off (the measurement is kept)', output: output as unknown as Record<string, unknown> };
+    }
+    const measured = measuredFrames(motion, clipSourceFrames(d, c));
+    if (!motion || measured.outside === measured.frames) throw steadyRefusal('notMeasured', { clipId: c.id, assetId: c.assetId, measured });
+    const good = measured.ok + measured.weak;
+    if (good * 100 < STEADY_MIN_MEASURED_PERCENT * measured.frames) {
+      const percent = Math.floor((good * 100) / measured.frames);
+      throw steadyRefusal('tooLittle', { clipId: c.id, assetId: c.assetId, percent, measured }, percent);
+    }
+    const plan = planStabilise(d, c, { strength: a.stabilise.strength ?? STEADY_DEFAULT_STRENGTH, ...(a.stabilise.maxCrop !== undefined ? { maxCrop: a.stabilise.maxCrop } : {}), ...(a.stabilise.zoomPm !== undefined ? { zoomPm: a.stabilise.zoomPm } : {}) });
+    const stabilise: ClipStabilise = { strength: plan.strength, zoomPm: plan.zoomPm };
+    c.stabilise = stabilise;
+    const output: SetClipStabiliseOutput = { stabilise: { ...stabilise }, crop: { zoomPm: plan.zoomPm, areaPercent: plan.areaPercent }, measured: plan.measured, strengthLowered: plan.strengthLowered, limitedFrames: plan.limitedFrames };
+    const lowered = plan.strengthLowered ? ` (strength lowered to ${plan.strength} for the crop)` : '';
+    return { affectedIds: [c.id], summary: `Stabilised the clip at strength ${plan.strength}, cutting off ${plan.areaPercent}% of the picture${lowered}`, output: output as unknown as Record<string, unknown> };
+  },
 });
 defineOp({
   name: 'remove_camera_motion',
@@ -152,5 +207,40 @@ defineOp({
   checksOwnIds: ['assetId'],
   description: 'Remove the camera motion measured on a video file. Refused while clips are stabilised with it, unless mode is unbind (they are switched off too) or unused-only (only the stretches no stabilised clip uses are removed, to free space).',
   args: RemoveCameraMotionArgsSchema,
-  apply: notBuilt('remove_camera_motion'),
+  /**
+   * Rules (steadyOps header): assetMissing when the file is not in the library; noMeasurement when it has no camera motion.
+   * if-unused (default): inUse while any clip (any sequence) is stabilised with it. unbind: those clips are switched off in the
+   * same op (a clip on a locked track refuses track_locked). unused-only: keeps every stretch a stabilised clip uses
+   * (usedStretches) and removes the rest. When no stretch is left the field goes; an analysis record left with nothing but its
+   * asset id goes too.
+   */
+  apply(d, a) {
+    const asset = Object.hasOwn(d.assets, a.assetId) ? d.assets[a.assetId] : undefined;
+    if (!asset) throw steadyRefusal('assetMissing', { assetId: a.assetId });
+    const cur = Object.hasOwn(d.analyses, asset.id) ? d.analyses[asset.id] : undefined;
+    const motion = cur?.cameraMotion;
+    if (!cur || !motion) throw steadyRefusal('noMeasurement', { assetId: asset.id });
+    const users = stabilisedClipsOf(d, asset.id);
+    const mode = a.mode ?? 'if-unused';
+    if (mode === 'if-unused' && users.length) throw steadyRefusal('inUse', { assetId: asset.id, clipIds: users.map((u) => u.clip.id) }, users.length);
+    const affected = [analysisEntityId(asset.id)];
+    let keep: CameraStretch[] = [];
+    const unbound: string[] = [];
+    if (mode === 'unbind') {
+      const locked = users.find((u) => u.locked);
+      if (locked) throw new OpError('track_locked', `track ${locked.trackId} is locked`, { trackId: locked.trackId, clipId: locked.clip.id });
+      for (const u of users) { delete u.clip.stabilise; unbound.push(u.clip.id); affected.push(u.clip.id); }
+    } else if (mode === 'unused-only') {
+      const used = new Set<CameraStretch>();
+      for (const u of users) for (const s of usedStretches(d, u.clip, motion)) used.add(s);
+      keep = motion.stretches.filter((s) => used.has(s));
+    }
+    const removed = motion.stretches.length - keep.length;
+    const { cameraMotion: _gone, ...rest } = cur;
+    if (keep.length) d.analyses[asset.id] = { ...rest, cameraMotion: { stretches: keep } };
+    else if (Object.keys(rest).some((k) => k !== 'assetId')) d.analyses[asset.id] = rest;
+    else delete d.analyses[asset.id];
+    const output: RemoveCameraMotionOutput = { assetId: asset.id, removedStretches: removed, unbound };
+    return { affectedIds: affected, summary: `Removed ${removed} measured stretch(es) of camera motion${unbound.length ? ` and switched ${unbound.length} clip(s) off` : ''}`, output: output as unknown as Record<string, unknown> };
+  },
 });
