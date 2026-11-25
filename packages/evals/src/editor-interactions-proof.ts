@@ -30,7 +30,8 @@ import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
 import { dictionaries, effectParamLabel, translateRefusal, fillIn, TREND_PACK_HE } from '../../i18n/src/index.ts';
 import { creativeProjection, beatSwitchFrame, BUILTIN_TEMPLATES, MODEL_GATED_TEMPLATES, PACKS, removedByHand, sha256Hex, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 import { TEMPLATE_TESTIDS } from '../../../apps/web/src/editor/templates.testids.ts';
-import { chooseFormat, startExport } from './editor-ui.ts';
+import { chooseFormat, openInspectorPage, startExport } from './editor-ui.ts';
+import { MUSICFIT_TESTIDS } from '../../../apps/web/src/editor/musicfit/musicFit.testids.ts';
 import { libraryPanelsProbe } from './library-proof.ui.ts';
 import { toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
 import { generateShortsFixture } from '../../fixtures/src/shorts.ts';
@@ -2235,6 +2236,60 @@ async function main() {
       for (let i = 0; i < 40 && !paused; i++) { paused = !(await playing()); if (!paused) await sleep(100); }
       check('after a mouse click on the switch (focus stays, not :focus-visible) Space plays and pauses the film and leaves the switch alone', off && ms.active && !ms.visible && played && paused && stillOff, { ms, off, played, paused, stillOff });
       check('Space rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
+      await ctx.close();
+    }
+
+    // music that fits the film «מוזיקה שמתאימה לסרט» (wave 7 musicfit, integration): a marked clip says so on the timeline; B brings
+    // its moment to a beat (the clip's place and length unchanged) and one Ctrl+Z undoes it; «התאמה לאורך» → «בצעו» ends the
+    // built-in music on the last picture frame in one undoable transaction. Built-in music only; nobody listens.
+    console.log('\n# Music that fits the film: the marked clip, B, «התאמה לאורך» and «בצעו»');
+    {
+      const vid = path.join(art, 'musicfit.mp4');
+      ff(['-f', 'lavfi', '-t', '14', '-i', 'testsrc2=s=640x360:r=30', '-vf', 'format=yuv420p', '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', vid]);
+      const mp = (await call('/projects', { name: 'musicfit keys', width: 640, height: 360 })).body.project.id as string;
+      const va = await upload(mp, vid);
+      const placed = await txs(mp, [{ op: 'add_clip', args: { assetId: va.assetId, start: f(0), withLinkedAudio: false } }]);
+      const videoClip = placed.results[0].output.clipId as string;
+      const music = (await call(`/projects/${mp}/music`, { styleId: 'music.calm', bars: 8, seed: 1, start: f(0) })).body.clipId as string;
+      await txs(mp, [{ op: 'set_clip_impact', args: { clipId: videoClip, moment: f(37) } }]);
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+      await ctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const pg = await ctx.newPage();
+      const errs: string[] = [];
+      pg.on('pageerror', (e) => errs.push(String(e)));
+      await pg.goto(`${s.ownerUrl}&project=${mp}`);
+      await pg.getByTestId('timecode').waitFor({ timeout: 30000 });
+      const clipOf = async (id: string) => Object.values((await doc2(mp)).sequences as Record<string, { tracks: { clips: MediaClip[] }[] }>).flatMap((q) => q.tracks.flatMap((t) => t.clips)).find((c) => c.id === id)!;
+      const label = (await pg.locator(`.clip[data-clip-id="${videoClip}"]`).getAttribute('aria-label')) ?? '';
+      check('a clip with a marked moment says «רגע מסומן» in its timeline name', label.includes(dictionaries.he['musicfit.clipMarked']), { label });
+      await pg.locator(`.clip[data-clip-id="${videoClip}"]`).click({ position: { x: 4, y: 4 } });
+      const c0 = await clipOf(videoClip);
+      await pg.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await pg.keyboard.press('KeyB');
+      let c1 = c0;
+      for (let i = 0; i < 50 && T.eq(c1.sourceIn, c0.sourceIn); i++) { await sleep(100); c1 = await clipOf(videoClip); }
+      await pg.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await pg.keyboard.press('Control+KeyZ');
+      let c2 = c1;
+      for (let i = 0; i < 50 && !T.eq(c2.sourceIn, c0.sourceIn); i++) { await sleep(100); c2 = await clipOf(videoClip); }
+      check('B brings the marked moment to a beat (the source slips; the clip\'s place and length stay) and one Ctrl+Z undoes it', !T.eq(c1.sourceIn, c0.sourceIn) && T.eq(c1.start, c0.start) && T.eq(c1.duration, c0.duration) && T.eq(c2.sourceIn, c0.sourceIn), { before: T.toSeconds(c0.sourceIn), afterB: T.toSeconds(c1.sourceIn), afterUndo: T.toSeconds(c2.sourceIn) });
+      await openInspectorPage(pg, 'sound');
+      await pg.locator(`.clip[data-clip-id="${music}"]`).click({ position: { x: 4, y: 4 } });
+      await pg.getByTestId(MUSICFIT_TESTIDS.fit).click({ timeout: 10000 });
+      const planned = await pg.waitForFunction((sel) => document.querySelector(sel)?.getAttribute('data-state') === 'plan', `[data-testid="${MUSICFIT_TESTIDS.block}"]`, { timeout: 30000 }).then(() => true, () => false);
+      const r0 = (await call(`/projects/${mp}`)).body.revision as number;
+      const asset0 = (await clipOf(music)).assetId;
+      if (planned) await pg.getByTestId(MUSICFIT_TESTIDS.apply).click();
+      let r1 = r0;
+      for (let i = 0; i < 300 && r1 < r0 + 2; i++) { await sleep(200); r1 = (await call(`/projects/${mp}`)).body.revision as number; }
+      const m1 = await clipOf(music);
+      const end = T.nearestFrameIndex(T.add(m1.start, m1.duration), { num: 30, den: 1 });
+      await pg.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await pg.keyboard.press('Control+KeyZ');
+      let back = false;
+      for (let i = 0; i < 50 && !back; i++) { await sleep(100); back = (await clipOf(music)).assetId === asset0; }
+      check('«התאמה לאורך» plans before anything changes; «בצעו» makes the track and ends the music on the last picture frame (frame 420, no fade) in one transaction; one Ctrl+Z gives the old music back', planned && r1 === r0 + 2 && m1.assetId !== asset0 && end === 420 && !m1.fadeOut && back, { planned, revisions: r1 - r0, end, fadeOut: m1.fadeOut ?? null, back });
+      check('musicfit rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
       await ctx.close();
     }
 
