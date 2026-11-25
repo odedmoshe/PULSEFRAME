@@ -191,6 +191,17 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   'POST /api/v1/jobs/:jobId/heartbeat': ['no-document'],
   'POST /api/v1/jobs/:jobId/complete': ['no-document'],
   'POST /api/v1/jobs/:jobId/abandon': ['no-document'],
+  // editing craft (wave 7 craft track; craft/contract.ts CRAFT_ROUTES): the list holds names, sizes and dates, never a document;
+  // diff, still and find read the document (and the version's copy) as the credential may; save and restore read and write;
+  // rename and delete are the owner's own session's
+  [`GET ${P}/versions`]: ['no-document'],
+  [`POST ${P}/versions`]: ['reader-document', 'write'],
+  [`PUT ${P}/versions/:versionId`]: ['owner-only'],
+  [`DELETE ${P}/versions/:versionId`]: ['owner-only'],
+  [`GET ${P}/versions/:versionId/diff`]: ['reader-document'],
+  [`GET ${P}/versions/:versionId/frame`]: ['reader-document'],
+  [`POST ${P}/versions/:versionId/restore`]: ['reader-document', 'write'],
+  [`POST ${P}/text/find`]: ['reader-document'],
   // MCP over HTTP: see PEOPLE_MCP_TOOLS and PEOPLE_MCP_RESOURCES
   'ALL /mcp': ['reader-document'],
 };
@@ -222,6 +233,8 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   sync_multicam: ['reader-document', 'write'], get_multicam: ['reader-document'],
   // perform mode (ADR-0025)
   perform_take: ['reader-document', 'write'],
+  // editing craft (wave 7 craft track)
+  find_text: ['reader-document'],
 };
 /** MCP resources and prompts (every resource answer passes forPrincipal; prompts carry no project content). */
 export const PEOPLE_MCP_RESOURCES: Readonly<Record<string, readonly PeopleFilter[]>> = {
