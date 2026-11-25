@@ -17,7 +17,7 @@ import type { Hono } from 'hono';
 import { z } from 'zod';
 import { BROWSER_EXPORT_SIDECAR_REFUSED, RationalTimeSchema, SEND_API_REFUSALS } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
-import { GENERIC_BLOCKER_HINT, renderDocFor, type Exporter, type Manifest } from './export.ts';
+import { exportLicence, GENERIC_BLOCKER_HINT, renderDocFor, type Exporter, type Manifest } from './export.ts';
 import { PHOTOSENSITIVITY_METHOD } from './flashCheck.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 import { assertMayTakeRendered } from './peoplePrivacy.ts';
@@ -195,6 +195,9 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
     if (ps && (ps.frames !== b.frames || (ps.verdict === 'fail') !== ps.ranges.length > 0)) throw new ApiError(422, 'invalid_photosensitivity', 'the photosensitivity report does not match the export (frames, or verdict and ranges, disagree)', { frames: ps.frames, expected: b.frames, verdict: ps.verdict, ranges: ps.ranges.length });
     leases.delete(job.id);
     const { width, height, firstFrame, frames, frameRate, sampleRate } = manifest.output;
+    // the credits of library files (wave 7 library track), from the snapshot the tab rendered; no sidecar file is written on this
+    // route (the server stores only the record): GET /jobs/:jobId/credits answers the text from it
+    const licence = exportLicence(job.input.snapshot);
     store.updateJob(job.id, {
       status: 'succeeded', stage: null,
       output: {
@@ -204,6 +207,7 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
         // measured by the tab on the frames it encoded, with the same analyser as the server export; the method text is the server's
         ...(ps ? { photosensitivity: { method: PHOTOSENSITIVITY_METHOD, measuredBy: 'browser', ...ps } } : {}),
         manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, output: { width, height, firstFrame, frames, frameRate, sampleRate } },
+        ...(licence ? { licence } : {}),
       },
     });
     return c.json({ ok: true, jobId: job.id, status: 'succeeded' });

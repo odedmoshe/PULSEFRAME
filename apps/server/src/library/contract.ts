@@ -79,6 +79,8 @@ export const LIBRARY_ROUTES = [
   'GET /api/v1/library/items/:key/thumb',
   'POST /api/v1/projects/:id/library/use',
   'GET /api/v1/projects/:id/credits',
+  'GET /api/v1/library/facets',
+  'GET /api/v1/jobs/:jobId/credits',
 ] as const;
 
 export type LibraryEnv = { Variables: { principal: Principal } };

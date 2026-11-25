@@ -58,7 +58,7 @@ export type LibraryUnusable = (typeof LIBRARY_UNUSABLE)[number];
 export const LIBRARY_READERS = ['generic-audio', 'incompetech', 'fluent-emoji', 'noto-emoji', 'iconify', 'cldr', 'generic-image'] as const;
 export type LibraryReader = (typeof LIBRARY_READERS)[number];
 /** Bumped whenever a reader changes what it makes: the index is rebuilt when the ledger hash or this number differs. */
-export const LIBRARY_READERS_VERSION = 1;
+export const LIBRARY_READERS_VERSION = 2; // 2: the index keeps the genre and mood facets (GET /library/facets)
 
 /** One catalogue row, as GET /library/items answers it. `key` is percent-encoded in a route path. */
 export interface LibraryRow {
@@ -142,3 +142,10 @@ export const CreditsQuerySchema = z.object({ sequenceId: z.string().optional(), 
 /** GET /projects/:id/archive?library=…: «ארכיון לשיתוף» leaves restricted library files out, «ארכיון לעצמי» keeps all (owner only). */
 export const ARCHIVE_LIBRARY_MODES = ['strip', 'keep'] as const;
 export type ArchiveLibraryMode = (typeof ARCHIVE_LIBRARY_MODES)[number];
+
+/** GET /library/facets?kind=…: the genres and moods the catalogue holds (the source's own words), each with its row count, most first. */
+export const LibraryFacetsQuerySchema = z.object({ kind: z.enum(LIBRARY_KINDS).optional() }).strict();
+export interface LibraryFacet { value: string; count: number }
+export interface LibraryFacets { genre: LibraryFacet[]; mood: LibraryFacet[] }
+/** At most this many values of each facet are answered. */
+export const LIBRARY_FACETS_MAX = 100;

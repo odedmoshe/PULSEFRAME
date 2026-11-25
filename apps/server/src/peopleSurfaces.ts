@@ -208,6 +208,9 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   'GET /api/v1/library/items/:key/thumb': ['no-document'],
   [`POST ${P}/library/use`]: ['reader-document', 'write'],
   [`GET ${P}/credits`]: ['reader-document'],
+  // the genres and moods of the catalogue; the credits text of a finished export (as its captions file next door)
+  'GET /api/v1/library/facets': ['no-document'],
+  'GET /api/v1/jobs/:jobId/credits': ['no-document'],
   // editing craft (wave 7 craft track; craft/contract.ts CRAFT_ROUTES): the list holds names, sizes and dates, never a document;
   // diff, still and find read the document (and the version's copy) as the credential may; save and restore read and write;
   // rename and delete are the owner's own session's
