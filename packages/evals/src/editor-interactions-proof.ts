@@ -1620,6 +1620,61 @@ async function main() {
       await uctx.close();
     }
 
+    console.log('\n# beat and scene markers of a clip that shows a derived copy of a measured file (fixtures: no provider ran)');
+    {
+      // The measured file: 4 s of picture and sound. Its beats (every half second from 0.5 s, 120 BPM) and scene cuts (1 s and 2.5 s) are
+      // attached by hand as a typed fixture (no analysis ran). Two real files are made from it by ffmpeg and stored through a side
+      // project (one blob store), then attached by hand as derived assets, as a provider's results would be:
+      //   graded.mp4   its 1 s .. 3.5 s with the colour changed; recorded as starting at 1 s of the file (keeps its timing)
+      //   backwards.mp4  the file reversed; no recorded time mapping
+      const filmFile = path.join(art, 'markers-film.mp4'), gradedFile = path.join(art, 'markers-graded.mp4'), backFile = path.join(art, 'markers-backwards.mp4');
+      ff(['-f', 'lavfi', '-t', '4', '-i', 'testsrc2=s=640x360:r=30', '-f', 'lavfi', '-t', '4', '-i', 'sine=frequency=330:sample_rate=48000', '-vf', 'format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-shortest', filmFile]);
+      ff(['-ss', '1', '-t', '2.5', '-i', filmFile, '-vf', 'hue=s=0.3,format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', gradedFile]);
+      ff(['-i', filmFile, '-vf', 'reverse', '-af', 'areverse', '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', backFile]);
+      const mside = (await call('/projects', { name: 'derived copy markers (blob side project)', width: 640, height: 360 })).body.project.id as string;
+      const stored = async (file: string) => { const up = await upload(mside, file); const { id: _id, ...asset } = (await call(`/projects/${mside}`)).body.project.assets[up.assetId]; return asset; };
+      const gradedAsset = await stored(gradedFile), backAsset = await stored(backFile);
+      const derivedFrom = (src: string, capabilityId: string, extra: Record<string, unknown>) => ({ origin: 'derived', importedAt: new Date().toISOString(), importedBy: 'fixture', derived: { jobId: 'job_fixture', capabilityId, capabilityVersion: '0.1.0', graphDigest: `sha256:${'a'.repeat(64)}`, params: {}, sourceAssetIds: [src], outputName: 'out', outputRole: 'primary', encoding: 'display', provider: { id: 'fixture' }, ...extra } });
+      /** A project with the measured file in its library (not on the timeline) and one clip of `copy` of it. */
+      const projectWith = async (name: string, copy: 'graded' | 'backwards') => {
+        const id = (await call('/projects', { name, width: 640, height: 360 })).body.project.id as string;
+        const film = await upload(id, filmFile);
+        s.store.commit({ projectId: id, actor: 'fixture', allowInternal: true, ops: [
+          { op: 'attach_analysis', args: { assetId: film.assetId, kind: 'beats', method: 'typed fixture (no analysis ran)', params: {}, createdAt: new Date().toISOString(), times: [1, 2, 3, 4, 5, 6, 7].map((k) => T.rt(k, 2)), bpm: 120, confidence: 1 } },
+          { op: 'attach_analysis', args: { assetId: film.assetId, kind: 'scenes', method: 'typed fixture (no analysis ran)', params: {}, createdAt: new Date().toISOString(), times: [T.rt(1, 1), T.rt(5, 2)] } },
+        ] });
+        const asset = copy === 'graded'
+          ? { ...gradedAsset, name: 'graded.mp4', provenance: derivedFrom(film.assetId, 'comfy.video.enhance', { sourceRangeStart: T.rt(1, 1), audio: 'source-copied' }) }
+          : { ...backAsset, name: 'backwards.mp4', provenance: derivedFrom(film.assetId, 'comfy.video.reverse', {}) };
+        const copyId = s.store.commit({ projectId: id, actor: 'fixture', allowInternal: true, ops: [{ op: 'import_asset', args: { asset } }] }).results[0]!.output!.assetId as string;
+        // the copy's clip starts at frame 30 and plays the copy from 0.5 s for 1.5 s: for graded.mp4 that is 1.5 s .. 3.0 s of the measured file
+        await txs(id, [{ op: 'add_clip', args: { assetId: copyId, start: f(30), sourceIn: f(15), duration: f(45), withLinkedAudio: false } }]);
+        return id;
+      };
+      const gradedPid = await projectWith('markers on a graded copy', 'graded'), backPid = await projectWith('markers on a reversed copy', 'backwards');
+      const mctx = await browser.newContext({ viewport: { width: 1500, height: 1000 }, reducedMotion: 'reduce' });
+      const mpage = await mctx.newPage();
+      const mErrors: string[] = [];
+      mpage.on('pageerror', (e) => mErrors.push(String(e)));
+      const markersOf = async (id: string) => {
+        await mpage.goto(`${s.ownerUrl}&project=${id}`);
+        await mpage.getByTestId('timecode').waitFor({ timeout: 15000 });
+        await mpage.locator('[data-testid=timeline-markers]').waitFor({ state: 'attached', timeout: 15000 });
+        await mpage.locator('.clip').first().waitFor({ timeout: 15000 });
+        await mpage.waitForTimeout(300);
+        const frames = (testid: string) => mpage.locator(`[data-testid=${testid}]`).evaluateAll((els) => els.map((e) => Number(e.getAttribute('data-frame'))));
+        return { beats: await frames('beat-marker'), scenes: await frames('scene-marker'), bpm: await mpage.getByTestId('tl-bpm').textContent({ timeout: 500 }).catch(() => null), clips: await mpage.locator('.clip').count() };
+      };
+      const onGraded = await markersOf(gradedPid), onBackwards = await markersOf(backPid);
+      await mpage.screenshot({ path: path.join(art, 'markers-reversed-copy.png') }).catch(() => {});
+      // the file's beats at 1.5, 2.0 and 2.5 s and its cut at 2.5 s fall inside the clip: frames 30, 45, 60 and 60; the cut at 1 s and the other beats are outside it
+      check('a clip that shows a colour-processed copy which keeps the timing of a measured file shows that file\'s beat and scene markers on the timeline, at the frames its own moments play (and its tempo); a clip that shows a reversed copy shows none',
+        onGraded.clips === 1 && JSON.stringify(onGraded.beats) === '[30,45,60]' && JSON.stringify(onGraded.scenes) === '[60]' && onGraded.bpm === '120'
+          && onBackwards.clips === 1 && onBackwards.beats.length === 0 && onBackwards.scenes.length === 0 && onBackwards.bpm === null && mErrors.length === 0,
+        { gradedCopy: onGraded, reversedCopy: onBackwards, errors: mErrors.slice(0, 3) });
+      await mctx.close();
+    }
+
     console.log('\n# archive import of a project whose translation was marked reviewed: the new project says once that the mark was cleared');
     {
       const rp = (await call('/projects', { name: 'review marks', width: 640, height: 360 })).body.project.id as string;
