@@ -222,8 +222,9 @@ export function filmRunTracks(doc: ProjectDocument, run: Pick<RecipeRun, 'create
  * The places of a film run that recorded none (made before run.ranges): the film's own plan made again from the run's stored
  * parameters on the document without the run's clips, with the run's tracks by role and what had been deleted by hand before
  * that run (slot records whose clip the run did not make or keep). Undefined when the film version changed or the planner
- * refuses now. Only a clip whose fingerprint agrees with a place found here counts as moved (core movedOnly), so a plan that
- * comes out differently (other measured moments, a clip that was kept then) simply finds nothing: such clips stay kept, as before.
+ * refuses now. Only a clip whose fingerprint agrees with a place found here counts as moved (core movedOnly, then the same
+ * closed-gap test as for a run that recorded its places), so a plan that comes out differently (other measured moments, a clip
+ * that was kept then) simply finds nothing: such clips stay kept, as before.
  */
 function filmRunPlaces(doc: ProjectDocument, run: RecipeRun, live: readonly string[]): Record<string, RunRange> | undefined {
   if (run.params.templateVersion !== FAMILY_FILM_VERSION) return undefined;
@@ -244,13 +245,14 @@ function filmRunPlaces(doc: ProjectDocument, run: RecipeRun, live: readonly stri
  * hand (kept, with their link partners and slots), the document without the others, the planner's context (kept clips, kept
  * keys, the run's tracks by role, the previous mix) and the ids the new run record keeps (kept clips and the run's tracks that
  * still exist, so the tracks stay the film's own for the next regeneration whether or not this plan uses them again).
- * A clip whose only change is its place in time on its own track is not edited by hand (ADR-0016 decision 6, amendment of
- * 2026-11-24; runHandEdits): it goes with the untouched clips and the film is laid out again, so one Delete that closes the gap
- * no longer freezes every later pick where the delete left it. Its key is passed on as movedKeys (warning moved_back).
+ * A clip that moved earlier only because a delete before it closed the gap is not edited by hand (ADR-0026, amendment of
+ * 2026-11-24; runHandEdits with core closedGapOnly): it goes with the untouched clips and the film is laid out again, so one
+ * Delete that closes the gap no longer freezes every later pick where the delete left it. Its key is passed on as movedKeys
+ * (warning moved_back). A clip moved in any other way was dragged by hand: kept, and the film is laid around it, as before.
  */
 export function filmRegeneration(doc: ProjectDocument, run: RecipeRun, params: Record<string, unknown>, options: RegenerateOptions = {}) {
   const live = run.createdIds.filter((id) => !!findClip(doc, id));
-  const { protectedIds, movedBack } = runHandEdits(doc, run, live, run.ranges ? undefined : filmRunPlaces(doc, run, live));
+  const { protectedIds, movedBack } = runHandEdits(doc, run, live, run.ranges ? undefined : filmRunPlaces(doc, run, live), 'closed-gap');
   const removable = live.filter((id) => !protectedIds.includes(id));
   const keptSlots = (run.slots ?? []).filter((s) => protectedIds.includes(s.clipId));
   const movedKeys = (run.slots ?? []).filter((s) => movedBack.includes(s.clipId)).map((s) => s.key);
@@ -271,9 +273,9 @@ export function filmRegeneration(doc: ProjectDocument, run: RecipeRun, params: R
 /**
  * Regenerate a film run, optionally with changed parameters («רגעים אחרים», «אורך אחר»): clips the run made that nobody
  * changed are replaced; clips edited by hand since (and the clips linked to them) are kept exactly as they are, with their
- * slots — a kept clip that was also moved too (the planner lays the new slots around it). A clip that was ONLY moved in time on
- * its own track is not edited by hand: it is replaced with the untouched ones (warning moved_back). Works from the document's
- * run after a reload.
+ * slots — a clip moved by hand too (the planner lays the new slots around it). A clip that moved earlier only because a delete
+ * before it closed the gap is not edited by hand: it is replaced with the untouched ones (warning moved_back). Works from the
+ * document's run after a reload.
  * A clip deleted by hand is not made again (its file is left out, a title, card or music is not placed; warning removed_by_hand)
  * unless `restoreRemoved` is set: the explicit choice the plan's alternatives offer.
  */

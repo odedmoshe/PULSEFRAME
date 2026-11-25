@@ -55,6 +55,35 @@ export function movedOnly(doc: ProjectDocument, run: Pick<RecipeRun, 'fingerprin
   });
 }
 /**
+ * movedOnly, narrowed for runs whose clips a person arranges by dragging (the family film, the beat montage; ADR-0026): only a
+ * move that a delete which closed the gap explains. Besides the conditions of movedOnly, the clip's start must be EARLIER than
+ * recorded by exactly the summed length of the run's own clips that are gone from the document and whose recorded range lay
+ * before its recorded start on the same track (exact rational arithmetic) — what ripple_delete_clips does to the clips after a
+ * deleted one. A clip linked to such a clip moves with it by the same amount on its own track (a pick's own sound), so a clip
+ * also counts when it moved by exactly as much as a clip it is linked to that passes the test itself.
+ * Therefore: with no deleted length before it, any move is a move by hand and the clip is not named (it stays kept, and the
+ * planner lays the rest around it); a clip dragged by hand that also lies after a deleted one does not match the sum and is
+ * not named; after several such deletes the sum of all of them is what counts; a delete on another track does not count for
+ * this track; a deleted clip the run did not make (or one already gone when the run was made: not among its createdIds) adds
+ * nothing, so clips moved by it are not named; and a delete that kept its gap adds to the sum without moving anything, so the
+ * clips after it and after a gap-closing delete are not named either. In all those cases the answer is the one from before the
+ * rule: kept by hand.
+ */
+export function closedGapOnly(doc: ProjectDocument, run: Pick<RecipeRun, 'fingerprints' | 'ranges' | 'createdIds'>, ids: readonly string[]): string[] {
+  const ranges = run.ranges ?? {};
+  const place = (id: string) => (Object.hasOwn(ranges, id) ? ranges[id] : undefined);
+  const gone = run.createdIds.filter((id) => !findClip(doc, id)).flatMap((id) => { const r = place(id); return r && r.trackId !== undefined ? [r] : []; });
+  const shiftOf = (id: string) => T.sub(place(id)!.start, findClip(doc, id)!.clip.start);
+  const moved = movedOnly(doc, run, ids);
+  const closed = moved.filter((id) => {
+    const at = place(id)!;
+    const before = gone.filter((g) => g.trackId === at.trackId && !T.lt(at.start, g.end)).reduce((sum, g) => T.add(sum, T.sub(g.end, g.start)), T.ZERO);
+    return !T.isZero(before) && T.eq(shiftOf(id), before);
+  });
+  const groupOf = (id: string) => { const c = findClip(doc, id)!.clip; return c.type === 'media' ? c.linkGroupId : null; };
+  return moved.filter((id) => closed.includes(id) || closed.some((other) => !!groupOf(id) && groupOf(other) === groupOf(id) && T.eq(shiftOf(other), shiftOf(id))));
+}
+/**
  * The clips among `ids` that lie on another track than the one the run recorded for them: taken there by hand, so edited by hand
  * and kept where they are, whether or not their time changed too (the fingerprint holds no track, so only a run that recorded
  * `trackId` can tell). A run without recorded tracks names none and behaves as before.
@@ -76,6 +105,9 @@ export function onOtherTrack(doc: ProjectDocument, run: Pick<RecipeRun, 'ranges'
  * chooses: it gets its picture's start and the track it lies on now (its track cannot be checked). Titles, looks, sound effects
  * and a template's music are placed on a track the operation chooses and are not covered: moved, they stay kept as before.
  * Nothing here is trusted on its own: movedOnly accepts a clip only when its fingerprint with this start equals the run's.
+ * A clip of a slot that is gone from the document (deleted by hand since) gets the place its step gave it, with the step's own
+ * length: closedGapOnly sums those. A deleted picture's own sound has no slot and is not listed; the sound of a later picture
+ * is told by having moved exactly as far as its picture.
  */
 export function derivedRanges(doc: ProjectDocument, plan: { ops: readonly TemplateStep[]; slots: readonly PlannedSlot[] }, run: Pick<RecipeRun, 'slots' | 'createdIds'>): Record<string, RunRange> {
   const out: Record<string, RunRange> = {};
@@ -83,7 +115,7 @@ export function derivedRanges(doc: ProjectDocument, plan: { ops: readonly Templa
   for (const record of run.slots ?? []) {
     const f = findClip(doc, record.clipId);
     const planned = plan.slots.find((s) => s.key === record.key);
-    if (!f || !planned || typeof planned.clipId === 'string' || (planned.clipId.out !== undefined && planned.clipId.out !== 'clipId')) continue;
+    if (!planned || typeof planned.clipId === 'string' || (planned.clipId.out !== undefined && planned.clipId.out !== 'clipId')) continue;
     const bind = planned.clipId.$ref;
     const step = plan.ops.find((o) => o.bind === bind);
     const args = step && isObject(step.args) ? step.args : undefined;
@@ -91,7 +123,14 @@ export function derivedRanges(doc: ProjectDocument, plan: { ops: readonly Templa
     const span = isObject(args.span) ? args.span : args;
     if (!isTime(span.start)) continue;
     const start = span.start;
-    out[record.clipId] = { start: { ...start }, end: { ...T.add(start, f.clip.duration) }, ...(typeof args.trackId === 'string' ? { trackId: args.trackId } : {}) };
+    const track = typeof args.trackId === 'string' ? { trackId: args.trackId } : {};
+    if (!f) {
+      // a clip the run made that is gone now (deleted by hand since): where it lay, when its step says how long it was. It is
+      // what closedGapOnly sums; a slot carried on from an earlier run (not among createdIds) was never this run's clip
+      if (run.createdIds.includes(record.clipId) && isTime(span.duration)) out[record.clipId] = { start: { ...start }, end: { ...T.add(start, span.duration) }, ...track };
+      continue;
+    }
+    out[record.clipId] = { start: { ...start }, end: { ...T.add(start, f.clip.duration) }, ...track };
     // the picture's own sound, made by the same step: same start, on the track it is on now
     if (args.withLinkedAudio === true && f.clip.type === 'media' && f.clip.linkGroupId) {
       const group = f.clip.linkGroupId;

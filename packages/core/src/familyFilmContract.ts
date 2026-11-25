@@ -175,9 +175,9 @@ export interface FilmPlanContext {
   /** Regeneration: whether the previous run had music (its musicAssetId was not null). */
   previousMusic?: boolean;
   /**
-   * Regeneration: the keys of the last film's slots whose clips had only been moved in time on their own track (ADR-0016
-   * decision 6, amendment of 2026-11-24; templateOps.ts movedOnly). They are not kept: the film is laid out again without regard
-   * to where they were moved, and warning moved_back says so (one sentence; absent when there is none).
+   * Regeneration: the keys of the last film's slots whose clips moved earlier only because a delete before them closed the gap
+   * (ADR-0026, amendment of 2026-11-24; templateOps.ts closedGapOnly). They are not kept: the film is laid out again, and warning
+   * moved_back says so (one sentence; absent when there is none). A clip dragged by hand is never among them: it is kept.
    */
   movedKeys?: readonly string[];
 }
@@ -212,7 +212,7 @@ export interface FamilyFilmApplyResult { revision: number; runId: string; create
  * removed: the keys of the last film's slots deleted by hand that this regeneration left out (empty with restoreRemoved);
  * alternatives: the plan's, among them the explicit choice to restore them ({restoreRemoved: true}).
  */
-/** movedBack: the slot keys of the clips that had only been moved in time and were therefore not kept (warning moved_back says it); always sent by the server. */
+/** movedBack: the slot keys of the clips that a delete which closed the gap had moved and that were therefore not kept (warning moved_back says it); always sent by the server. */
 export interface FamilyFilmRegenerateResult extends FamilyFilmApplyResult { replaced: number; protected: string[]; removed: string[]; movedBack?: string[]; alternatives: FamilyFilmPlan['alternatives'] }
 /**
  * The mix a film sounds with: the own-sound track's gain and the music track's ducking (null = none). 'under' lowers the clips

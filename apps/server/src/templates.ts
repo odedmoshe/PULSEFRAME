@@ -14,7 +14,7 @@
  */
 import * as T from '@pulseframe/time';
 import {
-  clipEnd, derivedRanges, FAMILY_FILM_RUN_RECIPE_ID, findClip, movedOnly, onOtherTrack, removedByHand, findGatedTemplate, findTemplate, fingerprint, gatedTemplateError, gatedTemplateSummary, MODEL_GATED_TEMPLATES, planTemplate, summarizeTemplate, TemplateError, TEMPLATE_METHOD, TEMPLATES,
+  clipEnd, closedGapOnly, derivedRanges, FAMILY_FILM_RUN_RECIPE_ID, findClip, movedOnly, onOtherTrack, removedByHand, findGatedTemplate, findTemplate, fingerprint, gatedTemplateError, gatedTemplateSummary, MODEL_GATED_TEMPLATES, planTemplate, summarizeTemplate, TemplateError, TEMPLATE_METHOD, TEMPLATES,
   type Asset, type KnownGrid, type ProjectDocument, type RecipeRun, type RunRange, type SlotRecord, type RegenerateOptions, type TemplateApplyResult, type TemplateDef, type TemplatePlan, type TemplatePlanView, type TemplateRegenerateResult, type TemplateSummary,
 } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
@@ -156,10 +156,14 @@ export function keptByHand(doc: ProjectDocument, live: readonly string[], finger
  * the run record (run.ranges); for a run that recorded none, from `derived` (core derivedRanges: the run's own plan made
  * again), each accepted only when the fingerprint agrees. A clip on another track than recorded is kept; only a run that
  * recorded tracks can tell, so a run with derived places behaves there as it always did.
+ * `rule`: a template takes every pure move in time ('any-move'): its slots are timed to the music, so a moved clip could never
+ * be honoured where it lies and nothing is lost. The family film takes only a move that a delete which closed the gap explains
+ * ('closed-gap', core closedGapOnly): there a clip dragged to another place is the person's arrangement and stays kept.
  */
-export function runHandEdits(doc: ProjectDocument, run: RecipeRun, live: readonly string[], derived?: Readonly<Record<string, RunRange>>): { protectedIds: string[]; movedBack: string[] } {
+export function runHandEdits(doc: ProjectDocument, run: RecipeRun, live: readonly string[], derived?: Readonly<Record<string, RunRange>>, rule: 'any-move' | 'closed-gap' = 'any-move'): { protectedIds: string[]; movedBack: string[] } {
   const ranges = run.ranges ?? derived;
-  const moved = ranges ? movedOnly(doc, { fingerprints: run.fingerprints ?? {}, ranges }, live) : [];
+  const placed = { fingerprints: run.fingerprints ?? {}, ranges, createdIds: run.createdIds };
+  const moved = !ranges ? [] : rule === 'closed-gap' ? closedGapOnly(doc, placed, live) : movedOnly(doc, placed, live);
   const protectedIds = keptByHand(doc, live, run.fingerprints ?? {}, moved, onOtherTrack(doc, run, live));
   return { protectedIds, movedBack: moved.filter((id) => !protectedIds.includes(id)) };
 }

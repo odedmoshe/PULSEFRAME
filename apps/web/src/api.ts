@@ -52,7 +52,7 @@ export type RecipeParams = Record<string, unknown>;
 export interface RecipeAlternative { label: string; params: RecipeParams }
 export interface RecipePlanResult { revision: number; steps: string[]; basis: string[]; operations?: unknown; alternatives: RecipeAlternative[]; method?: string; note?: string; /** clips of a copy that does not keep the recording's timing, left alone (tidy-speech) */ skippedClips?: { clipId: string; assetId: string; reason: 'untimed_copy' }[] }
 export interface RecipeApplyResult { revision: number; runId: string; createdIds: string[]; steps: string[]; basis: string[]; alternatives: RecipeAlternative[] }
-export interface RecipeRegenerateResult { revision: number; runId: string; replaced: number; protected: string[]; /** clips deleted by hand whose places were left empty (beat montage, family film) */ removed?: string[]; /** clips that had only been moved in time and were placed again like untouched ones (beat montage) */ movedBack?: string[]; steps: string[] }
+export interface RecipeRegenerateResult { revision: number; runId: string; replaced: number; protected: string[]; /** clips deleted by hand whose places were left empty (beat montage, family film) */ removed?: string[]; /** clips that a delete which closed the gap had moved, placed again like untouched ones (beat montage) */ movedBack?: string[]; steps: string[] }
 
 export interface AnalyzeResult{ revision: number; summary: string; scenes?: { count: number }; beats?: { bpm: number | null; confidence: number | null; count: number } }
 

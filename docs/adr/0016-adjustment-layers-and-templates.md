@@ -71,7 +71,7 @@ Status: **accepted** (2026-11-17) for wave 1. Built by three workers on shared c
      carried on (`keepRanges`). The multicam auto-switch regenerates in place and `switch_angles` skips gaps, so a deleted
      segment was already never refilled; a test holds it. All of it travels in the op's arguments, so replay is unchanged and
      byte-identical.
-   - *Amendment (2026-11-24): what "edited by hand" means.* A clip a run made whose ONLY change since the run is its place in
+   - *Amendment (2026-11-24): what "edited by hand" means.* A clip a template run made whose ONLY change since the run is its place in
      time on its own track is not edited by hand. It is treated like an untouched clip: replaced, and made again on its place.
      Reason: a new project closes the gap on Delete (ripple delete), which moves every later picture earlier; those clips then
      differed from their fingerprints (the start is part of it), were kept, no longer lay on their slots, and so Shuffle and
@@ -118,17 +118,37 @@ Status: **accepted** (2026-11-17) for wave 1. Built by three workers on shared c
      one `apply_template` transaction, so after Delete and the button two undo steps return exactly (the regeneration, then the
      delete).
 
-     *The family film and the beat montage take the same rule.* Before, one plain Delete of a pick froze every later pick as
-     "edited by hand" in all later regenerations: one segment early, worded as hand edits, a restored file out of place. Now film
-     runs record places like template runs, and montage runs record each clip's track with its range (`apply_recipe` takes the
-     optional `recordTracks` beside `recordRanges`; a kept clip keeps the track recorded for it). A clip that was only moved goes
-     with the untouched ones: after the Delete a regeneration leaves the deleted clip out and lays the others on the grid again,
-     and `restoreRemoved` puts it back at its place. A film says it with warning `moved_back` (ADR-0026), a montage with
-     `movedBack` (clip ids) and one step line. A clip changed in another way, or taken to another track, is kept as before. A
+     *The family film and the beat montage take a narrower rule, and why the two differ.* A template takes every pure move in
+     time (the broad rule above): its slots are timed to the music, so a moved clip could never be honoured where it lies, and
+     making it again on its slot loses nothing. In a film or a montage a clip dragged to another place IS honoured: it is kept
+     and the rest is laid around it (the film's F13 R1 and R3; the montage's "left alone because they hold clips edited by
+     hand"), and people arrange a film that way. So there only a move that a delete which closed the gap explains is not an edit
+     by hand (`closedGapOnly`, templateOps.ts): besides the conditions of `movedOnly`, the clip's start must be EARLIER than
+     recorded by exactly the summed length of the run's own clips that are gone from the document and whose recorded range lay
+     before its recorded start on the same track (exact rational arithmetic), which is what `ripple_delete_clips` does to the
+     clips after a deleted one; a clip linked to such a clip (a pick's own sound) counts when it moved by exactly as much. Before
+     this, one plain Delete of a pick froze every later pick as "edited by hand" in all later regenerations: one segment early,
+     worded as hand edits, a restored file out of place.
+
+     What follows from the sum: with no deleted length before it, any move is a move by hand and the clip is kept, as before the
+     rule. A clip dragged by hand that also lies after a deleted one does not match the sum and is kept. Several gap-closing
+     deletes add up. A delete on another track counts for that track only (the title deleted with its gap closed moves the
+     closing card, which is made again; no pick is touched). A delete that kept its gap adds length without a move, so with a
+     later gap-closing delete the clips after both do not match and are kept. A ripple that removed a clip the run did not make
+     moves the run's clips without any of them being gone: they are kept, as before. In every "kept" case the result is the one
+     from before the rule and still a valid project: the film lays its other clips around the kept ones with no picture over
+     another and no gap, the montage skips the segments they lie on and fills the free ones (tests hold each case).
+
+     To know the places, film runs record them like template runs, and montage runs record each clip's track with its range
+     (`apply_recipe` takes the optional `recordTracks` beside `recordRanges`; a kept clip keeps the track recorded for it). After
+     a Delete that closed the gap a regeneration leaves the deleted clip out and lays the clips it moved on the grid again, and
+     `restoreRemoved` puts the deleted one back at its place. A film says it with warning `moved_back` (ADR-0026: «קליפים שזזו
+     בגלל מחיקה לא נשארו במקום שאליו זזו: הסרט סודר מחדש יחד איתם»), a montage with `movedBack` (clip ids), one step line and
+     «חזרו לפעימות אחרי שזזו בגלל מחיקה» in its panel. A clip taken to another track than recorded is kept, as for templates. A
      montage answer names in `removed` only the deleted clips whose place is in fact left empty; one whose whole range a kept
-     clip lies on is still carried in `run.ranges`. Older film runs use the worked-out places above. An older montage run (ranges
-     without tracks) keeps the clips a Delete moved, as before: the montage planner names no track, so there is nothing to check
-     a worked-out place against.
+     clip lies on is still carried in `run.ranges`. Older film runs use the worked-out places above with the same narrow test
+     (the places of deleted picks come from the plan too). An older montage run (ranges without tracks) keeps the clips a Delete
+     moved, as before: the montage planner names no track, so there is nothing to check a place against.
 7. **Built-in catalogue** (`templateCatalog.ts`, all on Canvas2D effects, Hebrew and English names): `tpl.travel-montage`, `tpl.photo-dump`,
    `tpl.birthday`, `tpl.quote-card`, `tpl.countdown-list`, `tpl.home-video`. Your own clips are muted by default and the music carries the sound
    (`keepAudio` false); Home Video keeps each clip's own sound. Two more are listed unavailable with a reason: `tpl.text-behind-subject` (needs video

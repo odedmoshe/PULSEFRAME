@@ -217,9 +217,9 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
   const keptClosing = kept.some((k) => k.kind === 'text' && k.key === FILM_BINDS.closing);
   const keptMusic = kept.find((k) => k.kind === 'music');
   if (kept.length) warn('kept_by_hand', `${kept.length} clip(s) of the last film were edited by hand and are kept exactly as they are`, { clipIds: kept.map((k) => k.clipId) });
-  // clips that had only been moved in time are not hand edits: they went with the untouched ones and the film is laid out again
+  // clips a delete moved (it closed the gap before them) are not hand edits: they went with the untouched ones and the film is laid out again
   const movedBack = [...new Set(ctx.movedKeys ?? [])].sort();
-  if (movedBack.length) warn('moved_back', `${movedBack.length} clip(s) of the last film had only been moved in time, with nothing else changed; they were not kept where they were moved to, and the film was laid out again with them`, { keys: movedBack });
+  if (movedBack.length) warn('moved_back', `${movedBack.length} clip(s) of the last film had moved earlier only because a delete before them closed the gap; they were not kept there, and the film was laid out again with them`, { keys: movedBack });
   // ===== regeneration: what was deleted by hand (FilmPlanContext.removedKeys) is not made again =====
   const keptKeySet = new Set(ctx.keptKeys ?? []);
   const removedKeys = new Set((ctx.removedKeys ?? []).filter((k) => !keptKeySet.has(k)));

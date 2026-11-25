@@ -3,7 +3,7 @@
  * (replace what the last run created and nobody touched; keep what was edited by hand).
  */
 import * as T from '@pulseframe/time';
-import { FAMILY_FILM_RECIPE_ID, FAMILY_FILM_RUN_RECIPE_ID, timeOriginSeconds, findClip, fingerprint, isInPlaceRecipe, movedOnly, onOtherTrack, MULTICAM_AUTO_RECIPE_ID, multicamGroupOf, planRecipe, RecipeError, recordsRanges, type LevelEnvelope, type PlanContext, type RecipePlan, type RegenerateOptions, type TimeRange } from '@pulseframe/core';
+import { FAMILY_FILM_RECIPE_ID, FAMILY_FILM_RUN_RECIPE_ID, timeOriginSeconds, closedGapOnly, findClip, fingerprint, isInPlaceRecipe, onOtherTrack, MULTICAM_AUTO_RECIPE_ID, multicamGroupOf, planRecipe, RecipeError, recordsRanges, type LevelEnvelope, type PlanContext, type RecipePlan, type RegenerateOptions, type TimeRange } from '@pulseframe/core';
 import { envelopeOf } from './envelope.ts';
 import { multicamDerivatives } from './multicamSync.ts';
 import { applyFamilyFilmFor, planFamilyFilmFor, regenerateFamilyFilmFor } from './familyFilm.ts';
@@ -75,14 +75,15 @@ export async function regenerateRecipe(store: Store, gov: Governance, principal:
   if (run.recipeId === FAMILY_FILM_RUN_RECIPE_ID) return regenerateFamilyFilmFor(store, gov, principal, projectId, runId, newParams, undefined, options);
   // "Protected" = a clip the run created whose content no longer matches what the run left (compared by content fingerprint,
   // so the answer does not depend on history: an undo that restores a hand edit restores its protection too).
-  // A run that records where its clips were, with their tracks (beat-montage from the amendment of 2026-11-24 on): a clip whose
-  // ONLY change is its place in time on its own track is not edited by hand (core movedOnly): a Delete that closes the gap moves
-  // every later clip, and those are placed again on the beat like untouched ones instead of being kept one segment early for
-  // good. A clip taken to another track than recorded is edited by hand (onOtherTrack). A run that recorded no tracks (older)
-  // names neither and behaves as before: its moved clips are kept.
+  // A run that records where its clips were, with their tracks (beat-montage from the amendment of 2026-11-24 on): a clip that
+  // moved earlier ONLY because a delete before it closed the gap is not edited by hand (core closedGapOnly: moved by exactly the
+  // length of the run's clips deleted before it on its track, nothing else changed). Those are placed again on the beat like
+  // untouched ones instead of being kept one segment early for good. A clip moved in any other way was dragged by hand and is
+  // kept, as before; so is one taken to another track than recorded (onOtherTrack). A run that recorded no tracks (older) names
+  // neither and behaves as before: its moved clips are kept.
   const live = run.createdIds.filter((id) => !!findClip(p.doc, id));
   const ranged = recordsRanges(run.recipeId);
-  const moved = ranged ? movedOnly(p.doc, run, live) : [], elsewhere = ranged ? onOtherTrack(p.doc, run, live) : [];
+  const moved = ranged ? closedGapOnly(p.doc, run, live) : [], elsewhere = ranged ? onOtherTrack(p.doc, run, live) : [];
   const protectedIds = live.filter((id) => elsewhere.includes(id) || (fingerprint(findClip(p.doc, id)!.clip) !== run.fingerprints?.[id] && !moved.includes(id)));
   // A recipe regenerated IN PLACE (multicam auto-switch, ADR-0020) re-cuts the segments where they are: nothing is removed,
   // it plans on the current document around the protected ranges, and the hand-edited segments are kept (keepIds).
@@ -106,7 +107,7 @@ export async function regenerateRecipe(store: Store, gov: Governance, principal:
   const filled = (r: TimeRange) => { let reach = fi(r.start); for (const [s, e] of keptFrames) { if (s > reach) break; reach = Math.max(reach, e); } return reach >= fi(r.end); };
   const removed = Object.keys(removedRanges).filter((id) => !filled(removedRanges[id]!));
   const movedBack = moved.filter((id) => !protectedIds.includes(id));
-  const steps = [...plan.steps, ...(movedBack.length ? [`Place ${movedBack.length} clip(s) again that had only been moved in time since the last run (nothing else about them was changed)`] : [])].slice(0, 50);
+  const steps = [...plan.steps, ...(movedBack.length ? [`Place ${movedBack.length} clip(s) again that had moved earlier only because a delete before them closed the gap`] : [])].slice(0, 50);
   const r = gov.commitAs(principal, { projectId, expectedRevision: p.revision, allowInternal: true, label: `Regenerate recipe: ${plan.steps[0] ?? run.recipeId}`.slice(0, 120), ops: [{ op: 'apply_recipe', args: { runId, recipeId: run.recipeId, params: plan.params, steps, removeClipIds: removable, keepIds: protectedIds, ops: plan.ops, ...(recordsRanges(run.recipeId) ? { recordRanges: true, recordTracks: true, ...(Object.keys(removedRanges).length ? { keepRanges: removedRanges } : {}) } : {}) } }] }) as any;
   return { revision: r.revision, runId, replaced: removable.length, protected: protectedIds, removed, movedBack, createdIds: r.results?.[0]?.output?.createdIds ?? [], steps, basis: plan.basis, alternatives: plan.alternatives };
 }
