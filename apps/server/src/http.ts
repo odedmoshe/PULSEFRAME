@@ -913,7 +913,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // editing craft (wave 7 craft track): named versions and find (craft/contract.ts CRAFT_ROUTES; 501 craft_not_built until W2)
   registerCraftRoutes(app, { cfg, store, gov, exporter, need });
   // «חיפוש בצילומים» (wave 7 search track; search/contract.ts SEARCH_ROUTES): POST …/search for observers (agents: no-model part of the reader
-  // document, agentAnswerOf), the picture index for the owner's own session only; 501 footage_search_not_built until builder B
+  // document, agentAnswerOf), the picture index for the owner's own session only; index.ts passes the built runtime (a test host without one gets 501)
   const searchRuntime = extras.search ?? notBuiltRuntime();
   registerSearchRoutes(app, { cfg, store, gov, runtime: searchRuntime, need });
 

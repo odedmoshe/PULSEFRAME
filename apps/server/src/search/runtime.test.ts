@@ -1,7 +1,7 @@
 /**
  * Builder B's runtime through the real app and MCP handler (search/runtime.ts, answer.ts, indexJob.ts, indexDb.ts, frames.ts), with the
  * LABELLED TEST-DOUBLE embedder (testEmbedder.ts: proves plumbing, never quality) and tiny synthetic colour videos made by ffmpeg. Builder
- * A's core functions are the real ones once FOOTAGE_SEARCH_BUILT is true, labelled doubles before (testdata/coreDoubles.ts).
+ * A's core functions are the real ones (core footageSearch.ts); the stand-ins B used before A was merged are deleted (integration).
  * These cover the it.todo rows of searchContracts.test.ts "builder B" and the four lines the lead reads:
  *   (1) deletion guarantee, (2) vectors and scores never leave, (3) every other credential gets only agentAnswerOf / 403s, query never
  *   echoed or logged, (4) no query by image, no network (workers.test.ts covers the worker side).
@@ -11,22 +11,21 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { FOOTAGE_EMBEDDERS, FOOTAGE_REFUSALS, FOOTAGE_SEARCH_BUILT } from '@pulseframe/core';
-import { CORE } from './answer.ts';
+import * as T from '@pulseframe/time';
+import { FOOTAGE_EMBEDDERS, FOOTAGE_REFUSALS, FOOTAGE_SEARCH_BUILT, sampleFrameTargets } from '@pulseframe/core';
 import { planArchive, writeArchive } from '../archive.ts';
 import { backupDataDir } from '../backup.ts';
 import { collectGarbage, deleteProject } from '../storage.ts';
 import { SEARCH_INDEX_JOB_TYPE, SEARCH_LANE_PREFIX } from './contract.ts';
 import { SearchIndexDb } from './indexDb.ts';
 import { createTestEmbedder } from './testEmbedder.ts';
-import { CORE_LABEL, testCore } from './testdata/coreDoubles.ts';
 import { createHarness, makeColourVideo, OWNER, until, type Harness } from './testdata/harness.ts';
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 let fx: string;
 let colours: ReturnType<typeof makeColourVideo>, long: ReturnType<typeof makeColourVideo>, blue: ReturnType<typeof makeColourVideo>;
-const core = testCore();
-const targets = (v: { frames: number; fps: number }) => core.sampleFrameTargets({ num: v.fps, den: 1 }, v.frames);
+const CORE_LABEL = 'the real core functions';
+const targets = (v: { frames: number; fps: number }) => sampleFrameTargets({ num: v.fps, den: 1 }, v.frames);
 const logs: string[] = [];
 const methods = ['log', 'info', 'warn', 'error', 'debug'] as const;
 const orig = Object.fromEntries(methods.map((m) => [m, console[m]]));
@@ -79,7 +78,7 @@ describe(`S1: no picture runtime (${CORE_LABEL})`, () => {
     expect(r.body.exact.map((m: any) => m.assetId)).toEqual([assetId]);
     expect(r.body.picture).toEqual([]);
     expect(r.body.pictureState).toBe('not_installed');
-    expect(r.body.setup.code).toMatch(/^(engine_unverified|engine_not_configured)$/); // engine_unverified until SEARCH_WORKER_SHA256 is set at integration
+    expect(r.body.setup.code).toBe('engine_not_configured'); // the reviewed digest is set (integration): no Python configured is the first thing to fix
     const s = await h.rest(h.owner, 'POST', `/api/v1/projects/${pid}/search/index`, {});
     expect({ status: s.status, code: s.body.error.code }).toEqual({ status: 409, code: 'picture_search_not_ready' });
     expect(s.body.error.message).toBe(FOOTAGE_REFUSALS.notReady.message(r.body.setup.code));
@@ -87,19 +86,52 @@ describe(`S1: no picture runtime (${CORE_LABEL})`, () => {
   });
 });
 
-describe.skipIf(FOOTAGE_SEARCH_BUILT)('before builder A is merged: an honest 501, never a 500 or a made-up section', () => {
+describe('integration: the real core answers every search (the stand-ins builder B used before A was merged are gone)', () => {
   let h: Harness;
-  beforeAll(() => { h = createHarness({ runtime: { core: CORE } }); });
+  beforeAll(() => { h = createHarness({ embedder: null }); });
   afterAll(() => h.close());
-  it('the search and the scan answer 501 footage_search_not_built for the owner and agents', async () => {
-    const pid = h.store.createProject({ name: 'not built' }).doc.id;
-    h.importVideo(pid, colours, 'colours.mp4');
-    for (const who of [h.owner, h.agent]) {
-      const r = await search(h, who, pid, 'colours');
-      expect({ status: r.status, code: r.body.error.code }).toEqual({ status: 501, code: 'footage_search_not_built' });
+  it('the stand-in file no longer exists and nothing imports it; the harness answers by the core\'s Hebrew calendar, which no stand-in could', async () => {
+    expect(FOOTAGE_SEARCH_BUILT).toBe(true);
+    expect(fs.existsSync(new URL('./testdata/coreDoubles.ts', import.meta.url))).toBe(false);
+    const roots = [new URL('..', import.meta.url), new URL('../../../../packages/evals/src/', import.meta.url)].map((u) => u.pathname);
+    const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? (e.name === 'node_modules' ? [] : walk(path.join(d, e.name))) : e.name.endsWith('.ts') ? [path.join(d, e.name)] : []));
+    const self = new URL(import.meta.url).pathname;
+    const importers = roots.flatMap(walk).filter((f) => f !== self && /coreDoubles|CORE_DOUBLES|testCore\(/.test(fs.readFileSync(f, 'utf8')));
+    expect(importers).toEqual([]);
+    // «חנוכה 2024» is in no file name: only the core's Hebrew calendar finds the file by its capture date (the stand-in matched names,
+    // pearl labels and tags only)
+    const pid = h.store.createProject({ name: 'calendar' }).doc.id;
+    h.importVideo(pid, blue, 'blue-sky.mp4');
+    const R = { num: 5, den: 1 };
+    const asset = { kind: 'video' as const, name: 'party.mp4', contentHash: `sha256:${'ab'.repeat(32)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.frameTime(15, R),
+      video: { width: 64, height: 36, frameRate: R, codec: 'h264', rotation: 0, frameCount: 15 }, capture: { at: '2024-12-26T18:30:00', utcOffsetMinutes: null, source: 'filename' as const },
+      provenance: { origin: 'fixture' as const, importedAt: '2026-11-25T00:00:00Z', importedBy: 'test' } };
+    const assetId = h.store.commit({ projectId: pid, actor: 'user:local', allowInternal: true, ops: [{ op: 'import_asset', args: { asset } }] }).results[0]!.output!.assetId as string;
+    const r = await search(h, h.owner, pid, 'חנוכה 2024');
+    expect(r.status).toBe(200);
+    expect(r.body.exact).toEqual([{ assetId, start: null, end: null, sources: ['date'] }]);
+  });
+});
+
+describe('integration: no picture, frame, asset or vector is a query anywhere; the search code downloads nothing', () => {
+  let h: Harness;
+  beforeAll(() => { h = createHarness({ embedder: null }); });
+  afterAll(() => h.close());
+  it('MCP find_in_footage takes exactly projectId, query and limit (a string); no other search tool exists', async () => {
+    const tools: { name: string; inputSchema: { properties: Record<string, { type?: string }> } }[] = (await h.rpc(h.owner, 'tools/list', {})).result.tools;
+    const t = tools.find((x) => x.name === 'find_in_footage')!;
+    expect(Object.keys(t.inputSchema.properties).sort()).toEqual(['limit', 'projectId', 'query']);
+    expect(t.inputSchema.properties.query!.type).toBe('string');
+    expect(tools.map((x) => x.name).filter((n) => /footage|search_index|scan|similar|like_this|by_image|by_frame/.test(n))).toEqual(['find_in_footage']);
+  });
+  it('the server\'s search code opens no network connection and fetches nothing (no http, https, net, dgram, fetch or undici in search/*.ts)', () => {
+    const dir = new URL('.', import.meta.url).pathname;
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'));
+    expect(files.length).toBeGreaterThan(6);
+    for (const f of files) {
+      const code = fs.readFileSync(path.join(dir, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+      expect({ f, net: /from ['"](node:)?(http|https|http2|net|dgram|tls|undici)['"]|\bfetch\(|XMLHttpRequest|WebSocket/.test(code) }).toEqual({ f, net: false });
     }
-    const s = await h.rest(h.owner, 'POST', `/api/v1/projects/${pid}/search/index`, {});
-    expect({ status: s.status, code: s.body.error.code }).toEqual({ status: 501, code: 'footage_search_not_built' });
   });
 });
 
@@ -342,9 +374,12 @@ describe(`the deletion guarantee (TEST-DOUBLE embedder; ${CORE_LABEL})`, () => {
     other.replaceFile({ contentHash: `sha256:${hex}`, embedder: FOOTAGE_EMBEDDERS.testDouble, source: 'original', frameCount: 10, rate: { num: 5, den: 1 } }, [{ frame: 0, scale: 0.01, q }, { frame: 5, scale: 0.01, q }], () => true);
     other.close();
     expect(ix().sampleCount(`sha256:${hex}`)).toBe(2);
+    expect(indexBytes().includes(Buffer.from(hex))).toBe(true); // the check below is not blind
     const r = collectGarbage(h.store, OWNER, true, Date.now() + 3600_000) as { applied: boolean; removed: { files: number } };
     expect(r.removed.files).toBeGreaterThan(0);
     expect(ix().sampleCount(`sha256:${hex}`)).toBe(0);
+    // integration: the planted rows' bytes are gone from index.sqlite and its WAL (the pattern is the hash's own key text)
+    expect(indexBytes().includes(Buffer.from(hex))).toBe(false);
   });
   it('a removal during that file\'s scan leaves no rows (stillWanted inside the write transaction); the job says removed', async () => {
     const pid = h.store.createProject({ name: 'race' }).doc.id;
@@ -374,10 +409,14 @@ describe(`the deletion guarantee (TEST-DOUBLE embedder; ${CORE_LABEL})`, () => {
     const pid = h.store.createProject({ name: 'forget' }).doc.id;
     const v = h.importVideo(pid, colours, 'colours.mp4'), w = h.importVideo(pid, blue, 'blue-sky.mp4');
     await scan(h, pid);
+    const sigs = [signature(v.contentHash), signature(w.contentHash)];
+    expect(sigs.map((x) => indexBytes().includes(x))).toEqual([true, true]);
     const f = await h.rest(h.owner, 'DELETE', `/api/v1/projects/${pid}/search/index`);
     expect(f.status).toBe(200);
     expect(f.body.forgotten.files).toBe(2);
     expect(ix().sampleCount(v.contentHash) + ix().sampleCount(w.contentHash)).toBe(0);
+    // integration: the forgotten rows' bytes are gone from index.sqlite and its WAL too (secure_delete), not only unlisted
+    expect(sigs.map((x) => indexBytes().includes(x))).toEqual([false, false]);
     await scan(h, pid);
     const all = await h.rest(h.owner, 'DELETE', '/api/v1/search/index');
     expect(all.body.forgotten.files).toBeGreaterThanOrEqual(2);

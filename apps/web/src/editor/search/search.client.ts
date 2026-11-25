@@ -1,7 +1,7 @@
 /**
  * The editor's calls to the footage search routes (wave 7 search track, builder C). The routes are contract (search/contract.ts
- * SEARCH_ROUTES); while the server's runtime is not built they answer 501 `footage_search_not_built`, which the caller shows as the
- * honest "not built" state. A failure is the shared ApiFailure. The query travels in the request body only: it is never put in an
+ * SEARCH_ROUTES); the server built with this editor answers them; a server without the runtime answers 501 `footage_search_not_built`,
+ * which the caller still shows as the honest "not built" state. A failure is the shared ApiFailure. The query travels in the request body only: it is never put in an
  * address, a header, browser storage or a log line by this file.
  */
 import type { FootageAnswer, FootageIndexStatus } from '@pulseframe/core';

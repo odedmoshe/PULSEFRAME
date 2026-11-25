@@ -10,7 +10,8 @@
  * picture part that need an installed model and a scan (not installed with a reason, scanning, something kept to forget) are brought up
  * by answering the page's own `GET …/search/index` and `GET /jobs/…` with a fixed AUDIT FIXTURE through the browser's route hook,
  * labelled so in `detail.fixture`: the audit looks at how the interface presents the state, it never claims the model works.
- * The route hook is removed by `leave`; the original page is restored by the last scenario's `leave`.
+ * The route hook is removed by `leave`; the original page is restored by the last scenario's `leave`. A detail never uses the key
+ * `state`: the audit spreads the detail over its own record, whose `state` is the scenario id.
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -122,7 +123,7 @@ export const searchA11yScenarios: readonly SearchA11yScenario[] = [
       await ctx.page.getByTestId(ID.status).waitFor({ timeout: 8000 }).catch(() => undefined);
       await ctx.page.waitForFunction((t) => document.querySelector(`[data-testid="${t}"]`)?.getAttribute('data-state') === 'not_installed', ID.status, { timeout: 5000 }).catch(() => undefined);
       const st = await status(ctx.page);
-      return { shown: st === 'not_installed' && (await ctx.page.getByTestId(ID.setup).count()) === 1, modal: false, detail: { state: st, fixture: FIXTURE_LABEL } };
+      return { shown: st === 'not_installed' && (await ctx.page.getByTestId(ID.setup).count()) === 1, modal: false, detail: { pictureState: st, fixture: FIXTURE_LABEL } };
     },
     leave: async (ctx) => { await clear(ctx.page); await clean(ctx.page); },
   },
@@ -135,7 +136,7 @@ export const searchA11yScenarios: readonly SearchA11yScenario[] = [
       await type(ctx.page, 'colours');
       await ctx.page.waitForFunction((t) => document.querySelector(`[data-testid="${t}"]`)?.getAttribute('data-state') === 'busy', ID.status, { timeout: 5000 }).catch(() => undefined);
       const st = await status(ctx.page);
-      return { shown: st === 'busy' && (await ctx.page.getByTestId(ID.scanCancel).count()) === 1, modal: false, detail: { state: st, fixture: FIXTURE_LABEL } };
+      return { shown: st === 'busy' && (await ctx.page.getByTestId(ID.scanCancel).count()) === 1, modal: false, detail: { pictureState: st, fixture: FIXTURE_LABEL } };
     },
     leave: async (ctx) => { await clear(ctx.page); await clean(ctx.page); },
   },

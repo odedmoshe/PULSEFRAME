@@ -128,6 +128,7 @@ function MediaDrawer({ onView }: { onView: (id: string) => void }) {
   const S = CHROME_STRINGS[state.lang];
   const { doc } = state;
   const [q, setQ] = useState('');
+  const searchBox = useRef<HTMLInputElement>(null); // the footage results hear Enter and ArrowDown on this box and give focus back to it
   const [filter, setFilter] = useState<MediaFilter>('all');
   const n = (f: MediaFilter) => (doc ? filterAssets(doc, '', f).length : 0);
   const total = doc ? Object.keys(doc.assets).length : 0;
@@ -140,10 +141,10 @@ function MediaDrawer({ onView }: { onView: (id: string) => void }) {
         <>
           <label className="pf-bw-search">
             <Search size={16} strokeWidth={1.75} aria-hidden="true" />
-            <input type="search" dir="auto" value={q} disabled={view !== 'all'} onChange={(e) => setQ(e.target.value)} placeholder={S.searchMedia} aria-label={S.searchPlaceholder} data-testid="media-search" />
+            <input type="search" dir="auto" value={q} disabled={view !== 'all'} onChange={(e) => setQ(e.target.value)} placeholder={S.searchMedia} aria-label={S.searchPlaceholder} data-testid="media-search" ref={searchBox} />
           </label>
           {/* «חיפוש בצילומים» (wave 7 search track): moments under the box; renders nothing until built (search/FootageResults.tsx) */}
-          {view === 'all' && q.trim() !== '' && <FootageResults query={q} onView={onView} />}
+          {view === 'all' && q.trim() !== '' && <FootageResults query={q} onView={onView} box={searchBox} />}
           <div className="pf-bw-chips" role="group" aria-label={S.filters}>
             {chips.filter(([f]) => f === 'all' || n(f) > 0).map(([f, label]) => <Chip key={f} pressed={filter === f} count={n(f)} disabled={view !== 'all'} onClick={() => setFilter(f)} data-testid={`media-filter-${f}`}>{label}</Chip>)}
           </div>

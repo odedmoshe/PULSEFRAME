@@ -1,6 +1,7 @@
 /**
  * The search routes (wave 7 search track; search/contract.ts SEARCH_ROUTES). The pre-pass landed the checks, in their order, and the
- * delegation to the runtime; while the runtime is notBuiltRuntime() every route answers 501 footage_search_not_built AFTER its checks.
+ * delegation to the runtime (index.ts passes the built runtime; only a test host without one has notBuiltRuntime(), which answers 501
+ * footage_search_not_built AFTER the checks).
  * BUILDER B owns this file after the pre-pass and keeps the order: scope observe → owner rule (before anything is read; the owner's session holds every scope, so any other credential hears owner_required, never a scope name) → project → restriction.
  * The project-scope check of a grant is http.ts's middleware for every /projects/:id route.
  */

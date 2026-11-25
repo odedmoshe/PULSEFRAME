@@ -11,10 +11,9 @@
  * two batches); every frame carries its decode index as the fixture generator's 16-bit barcode (packages/fixtures BARCODE), read back
  * from the 256×256 frames the scan decoded. Invented people «אלף» and "Gimel", a pearl named «תוויתסוד». Never an owner's clip.
  *
- * Each check returns true or a sentence. A sentence that begins with "BLOCKED" means it could not run here (builder A's core functions
- * are not merged: they throw FootageSearchNotBuilt). Anything else is a failure. Stand-alone: `tsx packages/evals/src/footage-search-proof.server.ts`
- * (exit 0 all pass, 1 a failure, 2 only blocked besides passes). `--core-doubles` is a DRY RUN with labelled doubles of A's functions
- * (apps/server/src/search/testdata/coreDoubles.ts): it never counts as the proof and always exits 2.
+ * Each check returns true or a sentence. A sentence that begins with "BLOCKED" means it could not run here. Anything else is a failure.
+ * The core functions are builder A's real ones (the labelled stand-ins B used before A was merged were deleted at integration).
+ * Stand-alone: `tsx packages/evals/src/footage-search-proof.server.ts` (exit 0 all pass, 1 a failure, 2 only blocked besides passes).
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -31,18 +30,16 @@ import { SEARCH_INDEX_JOB_TYPE, SEARCH_LANE_PREFIX, SEARCH_PICTURE, SEARCH_WORKE
 import { SearchIndexDb } from '../../../apps/server/src/search/indexDb.ts';
 import { createSearchRuntime, SEARCH_WORKER } from '../../../apps/server/src/search/runtime.ts';
 import { createTestEmbedder, type TestEmbedder } from '../../../apps/server/src/search/testEmbedder.ts';
-import { CORE_DOUBLES } from '../../../apps/server/src/search/testdata/coreDoubles.ts';
 import { createHarness, OWNER, until, type Harness } from '../../../apps/server/src/search/testdata/harness.ts';
 import { loadConfig } from '../../../apps/server/src/config.ts';
 import { FifoComputeLane } from '../../../apps/server/src/lane.ts';
 import { Store } from '../../../apps/server/src/store.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const DRY = process.argv.includes('--core-doubles');
-const core: FootageCore = DRY ? CORE_DOUBLES : CORE;
-const aBuilt = DRY || FOOTAGE_SEARCH_BUILT;
+const core: FootageCore = CORE;
+const aBuilt = FOOTAGE_SEARCH_BUILT;
 const WAIT_A = 'BLOCKED: builder A\'s core functions (searchFootage, sampleFrameTargets, quantiseInt8, int8Dot, mergePictureHits) are not merged in this build';
-const evidence: Record<string, unknown> = { dryRunWithCoreDoubles: DRY, embedder: FOOTAGE_EMBEDDERS.testDouble };
+const evidence: Record<string, unknown> = { core: 'builder A (real)', embedder: FOOTAGE_EMBEDDERS.testDouble };
 const logs: string[] = [];
 const METHODS = ['log', 'info', 'warn', 'error', 'debug'] as const;
 const consoleWas = Object.fromEntries(METHODS.map((m) => [m, console[m]]));
@@ -113,7 +110,7 @@ function harness(embedder?: Embedder | null): Harness {
   harnesses.push(h);
   return h;
 }
-const targets = (v: Vid) => (DRY ? CORE_DOUBLES : { sampleFrameTargets }).sampleFrameTargets({ num: v.fps, den: 1 }, v.frames);
+const targets = (v: Vid) => sampleFrameTargets({ num: v.fps, den: 1 }, v.frames);
 async function scan(h: Harness, pid: string, body: unknown = {}) {
   const r = await h.rest(h.owner, 'POST', `/api/v1/projects/${pid}/search/index`, body);
   if (r.status !== 202) throw new Error(`scan refused ${r.status} ${r.text.slice(0, 300)}`);
@@ -409,6 +406,8 @@ const checks: Record<string, () => Promise<true | string>> = {
       const shipped = await rt({}).setup();
       states.shipped = shipped.code;
       if (!reviewed && shipped.code !== 'engine_unverified') return `without a reviewed digest the state is ${shipped.code}, not engine_unverified`;
+      if (reviewed && reviewed !== digestOfThisCheckout) return `the shipped pf_search.py (${digestOfThisCheckout.slice(0, 12)}…) is not the reviewed file (${reviewed.slice(0, 12)}…)`;
+      if (reviewed && shipped.code !== 'engine_not_configured') return `the reviewed worker as shipped with no Python configured → ${shipped.code}, not engine_not_configured`;
       const sha = reviewed ?? digestOfThisCheckout;
       const real = (o: { python?: string | null; modelDir?: string | null }) => rt({ ...o, worker: SEARCH_WORKER, sha });
       const unset = await real({}).setup();
@@ -441,7 +440,7 @@ const checks: Record<string, () => Promise<true | string>> = {
       const changed = await rt({ python: 'python3', worker: fake, sha: fakeSha, modelDir: m }).setup();
       states.changedBytes = changed;
       if (changed.code !== 'model_missing') return `every pin at its size with other bytes → ${changed.code}`;
-      evidence.S14 = { ...states, note: reviewed ? 'reviewed digest set' : 'SEARCH_WORKER_SHA256 not set yet (integration): the digest of this checkout\'s pf_search.py stood in for the later states; the model states used the labelled fake worker, whose probe passes' };
+      evidence.S14 = { ...states, reviewedDigest: reviewed, note: reviewed ? 'reviewed digest set and equal to the shipped pf_search.py; the model states used the labelled fake worker, whose probe passes (no torch here)' : 'SEARCH_WORKER_SHA256 not set: the digest of this checkout\'s pf_search.py stood in for the later states' };
       return true;
     } finally { store.close(); fs.rmSync(dir, { recursive: true, force: true }); }
   },
@@ -503,7 +502,7 @@ const checks: Record<string, () => Promise<true | string>> = {
   },
 };
 
-export const FOOTAGE_PROOF_SERVER = { built: true, checks } as const;
+export const FOOTAGE_PROOF_SERVER = { built: true, checks, evidence } as const;
 
 /** Closes every store and runtime and removes the temp folders (the runner calls it; the stand-alone run does). */
 export async function closeFootageProofServer(): Promise<void> {
@@ -512,7 +511,7 @@ export async function closeFootageProofServer(): Promise<void> {
   if (worldP) { const w = await worldP; fs.rmSync(w.base, { recursive: true, force: true }); }
   try {
     fs.mkdirSync(path.join(ROOT, 'docs', 'evidence'), { recursive: true });
-    fs.writeFileSync(path.join(ROOT, 'docs', 'evidence', DRY ? 'footage-search-proof.server.dry-run.json' : 'footage-search-proof.server.json'), JSON.stringify({ when: new Date().toISOString(), aBuilt, evidence }, null, 1) + '\n');
+    fs.writeFileSync(path.join(ROOT, 'docs', 'evidence', 'footage-search-proof.server.json'), JSON.stringify({ when: new Date().toISOString(), aBuilt, evidence }, null, 1) + '\n');
   } catch { /* evidence is best effort */ }
 }
 
@@ -530,6 +529,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       if (r !== true) { if (b) blocked++; else failed++; }
     }
   } finally { await closeFootageProofServer(); }
-  if (DRY) console.log('footage-search-proof.server: DRY RUN with labelled doubles of builder A\'s functions; this is not the proof (exit 2)');
-  process.exit(failed ? 1 : DRY || blocked ? 2 : 0);
+  process.exit(failed ? 1 : blocked ? 2 : 0);
 }

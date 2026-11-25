@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { FOOTAGE_FORBIDDEN_WORDS, FOOTAGE_NOTE, FOOTAGE_REFUSALS } from '@pulseframe/core';
 import { dictionaries, HE_FOOTAGE, FOOTAGE_EN, FOOTAGE_HE, FOOTAGE_REFUSAL_PATTERNS, translateRefusal } from '../../i18n/src/index.ts';
+import { FOOTAGE_LOCAL_STRINGS } from '../../../apps/web/src/editor/search/search.strings.ts';
 
 const sample = (k: keyof typeof FOOTAGE_REFUSALS): string => (FOOTAGE_REFUSALS[k].message as (...a: string[]) => string)('model_missing');
 
@@ -39,5 +40,20 @@ describe('footage search wording', () => {
     expect(FOOTAGE_HE['footage.modelLabel']).toContain('מודל');
     expect(FOOTAGE_HE['footage.modelLabel']).toContain('לא נבדק בעברית');
     expect(FOOTAGE_EN['footage.modelLabel']).toMatch(/model.*not tested in Hebrew/);
+  });
+  // integration (wave 7): the editor's own sentences (apps/web/src/editor/search/search.strings.ts, builder C) are held to the same rules
+  it('the editor\'s own sentences: both languages, none shadows a shared sentence, Hebrew is Hebrew, no query by example and no person-finding', () => {
+    const he = FOOTAGE_LOCAL_STRINGS.he as Record<string, string>, en = FOOTAGE_LOCAL_STRINGS.en as Record<string, string>;
+    expect(Object.keys(en).sort()).toEqual(Object.keys(he).sort());
+    for (const k of Object.keys(he)) {
+      expect(Object.hasOwn(dictionaries.he, k) || Object.hasOwn(dictionaries.en, k), `${k} is both local and shared`).toBe(false);
+      expect(he[k], k).toMatch(/[א-ת]/);
+      for (const w of FOOTAGE_FORBIDDEN_WORDS) { expect(he[k]!.toLowerCase(), `he ${k}`).not.toContain(w); expect(en[k]!.toLowerCase(), `en ${k}`).not.toContain(w); }
+      expect(he[k]!.split(/\{\w+\}/).length, `${k}: the same placeholders in both languages`).toBe(en[k]!.split(/\{\w+\}/).length);
+    }
+  });
+  it('every setup reason of the editor names the next step in both languages', () => {
+    for (const code of ['engine_not_configured', 'engine_not_working', 'engine_unverified', 'model_missing', 'licence_blocked', 'disk_insufficient'])
+      for (const lang of ['he', 'en'] as const) expect((FOOTAGE_LOCAL_STRINGS[lang] as Record<string, string>)[`footage.setup.${code}`], `${lang} ${code}`).toMatch(/השלב הבא|השלבים הבאים|Next step/);
   });
 });

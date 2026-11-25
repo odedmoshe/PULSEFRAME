@@ -1,6 +1,6 @@
 /**
- * The search track's contract in core (wave 7; .artifacts/wave7/search-decisions.md §4): the wire shapes, the honest "not built"
- * state of the functions, and THE PRIVACY FILTER of an agent's answer (agentAnswerOf), complete here. The function bodies are tested
+ * The search track's contract in core (wave 7; .artifacts/wave7/search-decisions.md §4): the wire shapes, the built flag of the
+ * functions, and THE PRIVACY FILTER of an agent's answer (agentAnswerOf), complete here. The function bodies are tested
  * in footageSearch.test.ts and footageSearch.property.test.ts (builder A).
  */
 import { describe, expect, it } from 'vitest';
@@ -71,19 +71,18 @@ describe('the privacy filter of an agent answer (agentAnswerOf)', () => {
   });
 });
 
-describe('the functions answer "not built" until builder A builds them (never a made-up value)', () => {
+describe('the functions are built (wave 7 integration): each answers, none throws FootageSearchNotBuilt', () => {
   const doc = createProject({ id: 'prj_fs', name: 'P' });
-  it.skipIf(FOOTAGE_SEARCH_BUILT)('each throws FootageSearchNotBuilt', () => {
+  it('the flag says built and every function returns a value', () => {
+    expect(FOOTAGE_SEARCH_BUILT).toBe(true);
     const calls: (() => unknown)[] = [
       () => footageQueryForms('בנרות'), () => parseFootageQuery('חנוכה 2024'), () => searchFootage(doc, 'נרות', { reader: 'owner' }), () => sampleFrameTargets({ num: 30, den: 1 }, 300),
       () => quantiseInt8(new Float32Array(768)), () => int8Dot(new Int8Array(2), new Int8Array(2)), () => mergePictureHits(doc, [], { num: 30, den: 1 }, 30),
     ];
-    for (const c of calls) expect(c).toThrow(FootageSearchNotBuilt);
+    for (const c of calls) expect(c).not.toThrow(FootageSearchNotBuilt);
   });
-  // builder A (footageSearch.test.ts holds the full tests; these rows name what the contract needs)
-  it.todo('searchFootage(doc, q, { reader: "agent" }) never returns a pearl or person source and never matches a label or a person name, whatever the document holds');
-  it.todo('searchFootage on the same document in shuffled asset order gives the same JSON');
-  it.todo('sampleFrameTargets at 30000/1001 over 300 frames equals ceil(s·r) for every s with exact rationals, and never reaches frameCount');
-  it.todo('quantiseInt8 rounds half away from zero; int8Dot equals the float dot of the dequantised vectors within 1/127² per dimension');
-  it.todo('mergePictureHits gives spans inside the file, on project frame edges, outward; ties by (assetId, start)');
+  // The five rows this block held as to-dos are covered by builder A's tests: the agent reader (footageSearch.test.ts "the owner finds
+  // pearl names and tagged people; an agent never does", "agent reader NEVER reads doc.sourceRanges …" and the property "an agent never
+  // gets a pearl or person source …"), shuffled order ("the same document in shuffled key order … gives the same JSON"), sampleFrameTargets
+  // at 30000/1001, quantiseInt8 / int8Dot, and mergePictureHits (footageSearch.test.ts and footageSearch.property.test.ts).
 });

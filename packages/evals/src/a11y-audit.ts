@@ -1194,6 +1194,12 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      // «חיפוש בצילומים» (wave 7 search) in the light theme: the same scenarios as the dark pass, each on its own scratch project (a11y-search.ts)
+      for (const sc of searchA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       for (const st of states) console.log(`[${lang} light] state ${st.state}: controls=${st.controls} unnamed=${st.unnamed.length} lowContrast=${st.lowContrast.length} tabIssues=${st.tabIssues.length} noFocusRing=${st.noFocusRing.length}${st.shown !== undefined ? ` shown=${st.shown}` : ''}`);
       report.runs.push({ ...found, uiLanguage: lang, theme: 'light', focus, states });
       console.log(`[${lang} light] controls=${found.controls} unnamed=${found.unnamed.length} lowContrast=${found.lowContrast.length} tabIssues=${found.tabIssues.length} focusReached=${focus.reached} noFocusRing=${focus.missing.length}`);

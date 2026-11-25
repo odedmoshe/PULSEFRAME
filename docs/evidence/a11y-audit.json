@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T18:13:27.693Z",
+  "ranAt": "2026-11-25T21:27:56.383Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "browser": "153.0.8010.12"
@@ -10,7 +10,7 @@
       "lang": "he",
       "dir": "rtl",
       "title": "PULSEFRAME Studio",
-      "controls": 608,
+      "controls": 609,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
@@ -28,7 +28,7 @@
       "states": [
         {
           "state": "marker-bar",
-          "controls": 608,
+          "controls": 609,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -37,7 +37,7 @@
         },
         {
           "state": "format-view",
-          "controls": 519,
+          "controls": 520,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -47,7 +47,7 @@
         },
         {
           "state": "projects-dialog",
-          "controls": 630,
+          "controls": 631,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -61,7 +61,7 @@
         },
         {
           "state": "project-delete-confirmation",
-          "controls": 634,
+          "controls": 635,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -71,7 +71,7 @@
         },
         {
           "state": "locked-track",
-          "controls": 608,
+          "controls": 609,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -81,7 +81,7 @@
         },
         {
           "state": "upload-busy",
-          "controls": 609,
+          "controls": 610,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -90,7 +90,7 @@
         },
         {
           "state": "import-card-failed",
-          "controls": 609,
+          "controls": 610,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -99,7 +99,7 @@
         },
         {
           "state": "error-bar",
-          "controls": 609,
+          "controls": 610,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -110,7 +110,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 636,
+          "controls": 637,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -125,7 +125,7 @@
         },
         {
           "state": "export-busy",
-          "controls": 612,
+          "controls": 613,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -136,7 +136,7 @@
         },
         {
           "state": "source-viewer",
-          "controls": 623,
+          "controls": 624,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -145,12 +145,12 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_1ff4f1ffdc0]",
+          "focusAfterClose": "button[data-testid=more-ast_a10d59e4e30]",
           "focusReturned": true
         },
         {
           "state": "activity-dialog",
-          "controls": 611,
+          "controls": 612,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -164,7 +164,7 @@
         },
         {
           "state": "phone-drop-dialog",
-          "controls": 612,
+          "controls": 613,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -179,7 +179,7 @@
         },
         {
           "state": "phone-drop-chip",
-          "controls": 611,
+          "controls": 612,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -188,7 +188,7 @@
         },
         {
           "state": "command-palette",
-          "controls": 617,
+          "controls": 618,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -202,7 +202,7 @@
         },
         {
           "state": "toast-in-palette",
-          "controls": 619,
+          "controls": 620,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -231,7 +231,7 @@
         },
         {
           "state": "command-bar-preview",
-          "controls": 618,
+          "controls": 619,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -240,7 +240,7 @@
         },
         {
           "state": "command-bar-choices",
-          "controls": 618,
+          "controls": 619,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -249,7 +249,7 @@
         },
         {
           "state": "assistant-settings",
-          "controls": 632,
+          "controls": 633,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -258,7 +258,7 @@
         },
         {
           "state": "agent-menu",
-          "controls": 611,
+          "controls": 612,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -296,7 +296,7 @@
         },
         {
           "state": "effect-gallery",
-          "controls": 704,
+          "controls": 705,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -310,7 +310,7 @@
         },
         {
           "state": "toast-in-effect-gallery",
-          "controls": 706,
+          "controls": 707,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -339,7 +339,7 @@
         },
         {
           "state": "look-visual-wave",
-          "controls": 646,
+          "controls": 647,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -372,7 +372,7 @@
         },
         {
           "state": "translation-review",
-          "controls": 573,
+          "controls": 576,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -381,7 +381,7 @@
         },
         {
           "state": "tracking-video-clip",
-          "controls": 629,
+          "controls": 630,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -408,7 +408,7 @@
         },
         {
           "state": "track-picker",
-          "controls": 628,
+          "controls": 629,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -435,7 +435,7 @@
         },
         {
           "state": "transition-options",
-          "controls": 609,
+          "controls": 610,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -538,7 +538,7 @@
         },
         {
           "state": "template-applied",
-          "controls": 476,
+          "controls": 477,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -548,7 +548,7 @@
         },
         {
           "state": "template-restore-removed",
-          "controls": 376,
+          "controls": 377,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -622,7 +622,7 @@
         },
         {
           "state": "film-bar",
-          "controls": 361,
+          "controls": 362,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -631,7 +631,7 @@
         },
         {
           "state": "film-bar-why",
-          "controls": 361,
+          "controls": 362,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -640,7 +640,7 @@
         },
         {
           "state": "film-why",
-          "controls": 458,
+          "controls": 459,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -860,7 +860,7 @@
         },
         {
           "state": "stabilise-not-measured",
-          "controls": 513,
+          "controls": 514,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -870,7 +870,7 @@
         },
         {
           "state": "stabilise-measuring",
-          "controls": 513,
+          "controls": 514,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -881,7 +881,7 @@
         },
         {
           "state": "stabilise-on",
-          "controls": 516,
+          "controls": 517,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -891,7 +891,7 @@
         },
         {
           "state": "stabilise-limited",
-          "controls": 517,
+          "controls": 518,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -902,7 +902,7 @@
         },
         {
           "state": "stabilise-refused",
-          "controls": 513,
+          "controls": 514,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -961,8 +961,183 @@
           "shown": true
         },
         {
-          "state": "cache-storage-row",
+          "state": "story-dialog",
+          "controls": 370,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "recorder": "idle"
+        },
+        {
+          "state": "story-recorder-recording",
+          "controls": 371,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "recorder": "recording",
+          "microphone": "an oscillator in the page (headless has no microphone)"
+        },
+        {
+          "state": "story-recorder-denied",
+          "controls": 371,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "recorder": "denied",
+          "microphone": "getUserMedia answers NotAllowedError, as a person's «Block» does"
+        },
+        {
+          "state": "story-tap-tab",
+          "controls": 97,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "phase": "idle"
+        },
+        {
+          "state": "story-bar",
+          "controls": 203,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "apply": 200
+        },
+        {
+          "state": "search-results",
+          "controls": 360,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "rows": 1,
+          "sections": [
+            1,
+            1
+          ],
+          "pictureLine": "not_installed"
+        },
+        {
+          "state": "search-nothing-found",
+          "controls": 353,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "rows": 0
+        },
+        {
+          "state": "search-picture-not-installed",
+          "controls": 360,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "pictureState": "not_installed",
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "search-picture-scanning",
+          "controls": 361,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "pictureState": "busy",
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "search-forget-confirm",
+          "controls": 365,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "musicfit-block-idle",
           "controls": 127,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "idle"
+        },
+        {
+          "state": "musicfit-block-plan",
+          "controls": 130,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "plan",
+          "plan": "the real plan route"
+        },
+        {
+          "state": "musicfit-block-refused",
+          "controls": 121,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "refused",
+          "answer": "the real plan route: a 4 s picture is too short for the style (400 too_short)",
+          "text": "הסרט קצר מדי למוזיקה הזאת: לפחות 10.5 שניות. בחרו סגנון אחר או הוסיפו תמונות"
+        },
+        {
+          "state": "musicfit-block-not-available",
+          "controls": 127,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "not-built",
+          "answer": "the server's own 501 musicfit_not_built body, written out by the audit (the routes are built here)"
+        },
+        {
+          "state": "musicfit-swap-dialog",
+          "controls": 137,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "table": true,
+          "plan": "the real plan route (music.pop, fit to the length)"
+        },
+        {
+          "state": "musicfit-impact-controls",
+          "controls": 535,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "impactState": "marked",
+          "clip": "a video clip (its Beat tab)"
+        },
+        {
+          "state": "cache-storage-row",
+          "controls": 552,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1127,7 +1302,7 @@
         },
         {
           "state": "perform-camera-overlay",
-          "controls": 166,
+          "controls": 167,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1238,7 +1413,7 @@
         },
         {
           "state": "start-hub",
-          "controls": 343,
+          "controls": 344,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1251,7 +1426,7 @@
       "lang": "en",
       "dir": "ltr",
       "title": "PULSEFRAME Studio",
-      "controls": 613,
+      "controls": 614,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
@@ -1269,7 +1444,7 @@
       "states": [
         {
           "state": "marker-bar",
-          "controls": 613,
+          "controls": 614,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1278,7 +1453,7 @@
         },
         {
           "state": "format-view",
-          "controls": 524,
+          "controls": 525,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1288,7 +1463,7 @@
         },
         {
           "state": "projects-dialog",
-          "controls": 649,
+          "controls": 658,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1302,7 +1477,7 @@
         },
         {
           "state": "project-delete-confirmation",
-          "controls": 653,
+          "controls": 662,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1312,7 +1487,7 @@
         },
         {
           "state": "locked-track",
-          "controls": 613,
+          "controls": 614,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1322,7 +1497,7 @@
         },
         {
           "state": "upload-busy",
-          "controls": 614,
+          "controls": 615,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1331,7 +1506,7 @@
         },
         {
           "state": "import-card-failed",
-          "controls": 614,
+          "controls": 615,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1340,7 +1515,7 @@
         },
         {
           "state": "error-bar",
-          "controls": 614,
+          "controls": 615,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1351,7 +1526,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 641,
+          "controls": 642,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1366,7 +1541,7 @@
         },
         {
           "state": "export-busy",
-          "controls": 617,
+          "controls": 618,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1377,7 +1552,7 @@
         },
         {
           "state": "source-viewer",
-          "controls": 628,
+          "controls": 629,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1386,12 +1561,12 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_1ff4f1ffdc0]",
+          "focusAfterClose": "button[data-testid=more-ast_a10d59e4e30]",
           "focusReturned": true
         },
         {
           "state": "activity-dialog",
-          "controls": 616,
+          "controls": 617,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1405,7 +1580,7 @@
         },
         {
           "state": "phone-drop-dialog",
-          "controls": 617,
+          "controls": 618,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1420,7 +1595,7 @@
         },
         {
           "state": "phone-drop-chip",
-          "controls": 616,
+          "controls": 617,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1429,7 +1604,7 @@
         },
         {
           "state": "command-palette",
-          "controls": 622,
+          "controls": 623,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1443,7 +1618,7 @@
         },
         {
           "state": "toast-in-palette",
-          "controls": 624,
+          "controls": 625,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1472,7 +1647,7 @@
         },
         {
           "state": "command-bar-preview",
-          "controls": 623,
+          "controls": 624,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1481,7 +1656,7 @@
         },
         {
           "state": "command-bar-choices",
-          "controls": 623,
+          "controls": 624,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1490,7 +1665,7 @@
         },
         {
           "state": "assistant-settings",
-          "controls": 637,
+          "controls": 638,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1499,7 +1674,7 @@
         },
         {
           "state": "agent-menu",
-          "controls": 616,
+          "controls": 617,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1537,7 +1712,7 @@
         },
         {
           "state": "effect-gallery",
-          "controls": 709,
+          "controls": 710,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1551,7 +1726,7 @@
         },
         {
           "state": "toast-in-effect-gallery",
-          "controls": 711,
+          "controls": 712,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1580,7 +1755,7 @@
         },
         {
           "state": "look-visual-wave",
-          "controls": 651,
+          "controls": 652,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1613,7 +1788,7 @@
         },
         {
           "state": "translation-review",
-          "controls": 573,
+          "controls": 576,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1622,7 +1797,7 @@
         },
         {
           "state": "tracking-video-clip",
-          "controls": 629,
+          "controls": 630,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1649,7 +1824,7 @@
         },
         {
           "state": "track-picker",
-          "controls": 628,
+          "controls": 629,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1676,7 +1851,7 @@
         },
         {
           "state": "transition-options",
-          "controls": 609,
+          "controls": 610,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1779,7 +1954,7 @@
         },
         {
           "state": "template-applied",
-          "controls": 476,
+          "controls": 477,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1789,7 +1964,7 @@
         },
         {
           "state": "template-restore-removed",
-          "controls": 376,
+          "controls": 377,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1863,7 +2038,7 @@
         },
         {
           "state": "film-bar",
-          "controls": 361,
+          "controls": 362,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1872,7 +2047,7 @@
         },
         {
           "state": "film-bar-why",
-          "controls": 361,
+          "controls": 362,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1881,7 +2056,7 @@
         },
         {
           "state": "film-why",
-          "controls": 458,
+          "controls": 459,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2101,7 +2276,7 @@
         },
         {
           "state": "stabilise-not-measured",
-          "controls": 513,
+          "controls": 514,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2111,7 +2286,7 @@
         },
         {
           "state": "stabilise-measuring",
-          "controls": 513,
+          "controls": 514,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2122,7 +2297,7 @@
         },
         {
           "state": "stabilise-on",
-          "controls": 516,
+          "controls": 517,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2132,7 +2307,7 @@
         },
         {
           "state": "stabilise-limited",
-          "controls": 517,
+          "controls": 518,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2143,7 +2318,7 @@
         },
         {
           "state": "stabilise-refused",
-          "controls": 513,
+          "controls": 514,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2202,8 +2377,183 @@
           "shown": true
         },
         {
-          "state": "cache-storage-row",
+          "state": "story-dialog",
+          "controls": 388,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "recorder": "idle"
+        },
+        {
+          "state": "story-recorder-recording",
+          "controls": 389,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "recorder": "recording",
+          "microphone": "an oscillator in the page (headless has no microphone)"
+        },
+        {
+          "state": "story-recorder-denied",
+          "controls": 389,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "recorder": "denied",
+          "microphone": "getUserMedia answers NotAllowedError, as a person's «Block» does"
+        },
+        {
+          "state": "story-tap-tab",
+          "controls": 105,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "phase": "idle"
+        },
+        {
+          "state": "story-bar",
+          "controls": 365,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "apply": 200
+        },
+        {
+          "state": "search-results",
+          "controls": 360,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "rows": 1,
+          "sections": [
+            1,
+            1
+          ],
+          "pictureLine": "not_installed"
+        },
+        {
+          "state": "search-nothing-found",
+          "controls": 353,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "rows": 0
+        },
+        {
+          "state": "search-picture-not-installed",
+          "controls": 360,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "pictureState": "not_installed",
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "search-picture-scanning",
+          "controls": 361,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "pictureState": "busy",
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "search-forget-confirm",
+          "controls": 365,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "musicfit-block-idle",
           "controls": 127,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "idle"
+        },
+        {
+          "state": "musicfit-block-plan",
+          "controls": 130,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "plan",
+          "plan": "the real plan route"
+        },
+        {
+          "state": "musicfit-block-refused",
+          "controls": 121,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "refused",
+          "answer": "the real plan route: a 4 s picture is too short for the style (400 too_short)",
+          "text": "the film is too short for this music: it needs at least 10.5 s. Choose another style, or add pictures."
+        },
+        {
+          "state": "musicfit-block-not-available",
+          "controls": 127,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "not-built",
+          "answer": "the server's own 501 musicfit_not_built body, written out by the audit (the routes are built here)"
+        },
+        {
+          "state": "musicfit-swap-dialog",
+          "controls": 137,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "table": true,
+          "plan": "the real plan route (music.pop, fit to the length)"
+        },
+        {
+          "state": "musicfit-impact-controls",
+          "controls": 535,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "impactState": "marked",
+          "clip": "a video clip (its Beat tab)"
+        },
+        {
+          "state": "cache-storage-row",
+          "controls": 552,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2368,7 +2718,7 @@
         },
         {
           "state": "perform-camera-overlay",
-          "controls": 166,
+          "controls": 167,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2479,7 +2829,7 @@
         },
         {
           "state": "start-hub",
-          "controls": 343,
+          "controls": 344,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2492,7 +2842,7 @@
       "lang": "he",
       "dir": "rtl",
       "title": "PULSEFRAME Studio",
-      "controls": 610,
+      "controls": 611,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
@@ -2505,7 +2855,7 @@
       "states": [
         {
           "state": "media-card-hover",
-          "controls": 610,
+          "controls": 611,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2514,7 +2864,7 @@
         },
         {
           "state": "media-card-menu",
-          "controls": 614,
+          "controls": 615,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2584,7 +2934,7 @@
         },
         {
           "state": "toast-in-effect-gallery",
-          "controls": 707,
+          "controls": 708,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2713,7 +3063,7 @@
         },
         {
           "state": "template-restore-removed",
-          "controls": 376,
+          "controls": 377,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2724,13 +3074,242 @@
           "closed": true
         },
         {
+          "state": "stabilise-not-measured",
+          "controls": 526,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "not-measured"
+        },
+        {
+          "state": "stabilise-measuring",
+          "controls": 526,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "measuring",
+          "job": "the real measurement of the synthetic clip"
+        },
+        {
+          "state": "stabilise-on",
+          "controls": 529,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "on"
+        },
+        {
+          "state": "stabilise-limited",
+          "controls": 530,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "limited",
+          "how": "set_clip_stabilise with zoomPm 1000 on a clip that needs more"
+        },
+        {
+          "state": "stabilise-refused",
+          "controls": 526,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "refused",
+          "answer": "the server's own 429 busy body, written out by the audit",
+          "text": "המחשב עסוק כרגע; אפשר לנסות שוב בעוד רגע: יותר מדי מדידות ומסלולי מעקב כבר רצים או ממתינים. אפשר לנסות שוב בעוד חצי דקה"
+        },
+        {
+          "state": "story-dialog",
+          "controls": 390,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "recorder": "idle"
+        },
+        {
+          "state": "story-recorder-recording",
+          "controls": 391,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "recorder": "recording",
+          "microphone": "an oscillator in the page (headless has no microphone)"
+        },
+        {
+          "state": "story-recorder-denied",
+          "controls": 391,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "recorder": "denied",
+          "microphone": "getUserMedia answers NotAllowedError, as a person's «Block» does"
+        },
+        {
+          "state": "story-tap-tab",
+          "controls": 107,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "phase": "idle"
+        },
+        {
+          "state": "story-bar",
+          "controls": 367,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "apply": 200
+        },
+        {
           "state": "start-hub",
-          "controls": 366,
+          "controls": 367,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true
+        },
+        {
+          "state": "musicfit-block-idle",
+          "controls": 134,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "idle"
+        },
+        {
+          "state": "musicfit-block-plan",
+          "controls": 137,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "plan",
+          "plan": "the real plan route"
+        },
+        {
+          "state": "musicfit-block-refused",
+          "controls": 128,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "refused",
+          "answer": "the real plan route: a 4 s picture is too short for the style (400 too_short)",
+          "text": "הסרט קצר מדי למוזיקה הזאת: לפחות 10.5 שניות. בחרו סגנון אחר או הוסיפו תמונות"
+        },
+        {
+          "state": "musicfit-block-not-available",
+          "controls": 134,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "not-built",
+          "answer": "the server's own 501 musicfit_not_built body, written out by the audit (the routes are built here)"
+        },
+        {
+          "state": "musicfit-swap-dialog",
+          "controls": 144,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "table": true,
+          "plan": "the real plan route (music.pop, fit to the length)"
+        },
+        {
+          "state": "musicfit-impact-controls",
+          "controls": 542,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "impactState": "marked",
+          "clip": "a video clip (its Beat tab)"
+        },
+        {
+          "state": "search-results",
+          "controls": 359,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "rows": 1,
+          "sections": [
+            1,
+            1
+          ],
+          "pictureLine": "not_installed"
+        },
+        {
+          "state": "search-nothing-found",
+          "controls": 352,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "rows": 0
+        },
+        {
+          "state": "search-picture-not-installed",
+          "controls": 359,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "pictureState": "not_installed",
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "search-picture-scanning",
+          "controls": 360,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "pictureState": "busy",
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "search-forget-confirm",
+          "controls": 364,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
         }
       ]
     },
@@ -2738,7 +3317,7 @@
       "lang": "en",
       "dir": "ltr",
       "title": "PULSEFRAME Studio",
-      "controls": 610,
+      "controls": 611,
       "unnamed": [],
       "lowContrast": [],
       "tabIssues": [],
@@ -2751,7 +3330,7 @@
       "states": [
         {
           "state": "media-card-hover",
-          "controls": 610,
+          "controls": 611,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2760,7 +3339,7 @@
         },
         {
           "state": "media-card-menu",
-          "controls": 614,
+          "controls": 615,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2830,7 +3409,7 @@
         },
         {
           "state": "toast-in-effect-gallery",
-          "controls": 707,
+          "controls": 708,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2959,7 +3538,7 @@
         },
         {
           "state": "template-restore-removed",
-          "controls": 376,
+          "controls": 377,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2970,13 +3549,242 @@
           "closed": true
         },
         {
+          "state": "stabilise-not-measured",
+          "controls": 526,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "not-measured"
+        },
+        {
+          "state": "stabilise-measuring",
+          "controls": 526,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "measuring",
+          "job": "the real measurement of the synthetic clip"
+        },
+        {
+          "state": "stabilise-on",
+          "controls": 529,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "on"
+        },
+        {
+          "state": "stabilise-limited",
+          "controls": 530,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "limited",
+          "how": "set_clip_stabilise with zoomPm 1000 on a clip that needs more"
+        },
+        {
+          "state": "stabilise-refused",
+          "controls": 526,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "refused",
+          "answer": "the server's own 429 busy body, written out by the audit",
+          "text": "The computer is busy; try again in a moment: too many camera measurements and motion tracks are already running or waiting; try again shortly"
+        },
+        {
+          "state": "story-dialog",
+          "controls": 390,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "recorder": "idle"
+        },
+        {
+          "state": "story-recorder-recording",
+          "controls": 391,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "recorder": "recording",
+          "microphone": "an oscillator in the page (headless has no microphone)"
+        },
+        {
+          "state": "story-recorder-denied",
+          "controls": 391,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "recorder": "denied",
+          "microphone": "getUserMedia answers NotAllowedError, as a person's «Block» does"
+        },
+        {
+          "state": "story-tap-tab",
+          "controls": 107,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "phase": "idle"
+        },
+        {
+          "state": "story-bar",
+          "controls": 367,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "apply": 200
+        },
+        {
           "state": "start-hub",
-          "controls": 366,
+          "controls": 367,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true
+        },
+        {
+          "state": "musicfit-block-idle",
+          "controls": 134,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "idle"
+        },
+        {
+          "state": "musicfit-block-plan",
+          "controls": 137,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "plan",
+          "plan": "the real plan route"
+        },
+        {
+          "state": "musicfit-block-refused",
+          "controls": 128,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "refused",
+          "answer": "the real plan route: a 4 s picture is too short for the style (400 too_short)",
+          "text": "the film is too short for this music: it needs at least 10.5 s. Choose another style, or add pictures."
+        },
+        {
+          "state": "musicfit-block-not-available",
+          "controls": 134,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "blockState": "not-built",
+          "answer": "the server's own 501 musicfit_not_built body, written out by the audit (the routes are built here)"
+        },
+        {
+          "state": "musicfit-swap-dialog",
+          "controls": 144,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "table": true,
+          "plan": "the real plan route (music.pop, fit to the length)"
+        },
+        {
+          "state": "musicfit-impact-controls",
+          "controls": 542,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "impactState": "marked",
+          "clip": "a video clip (its Beat tab)"
+        },
+        {
+          "state": "search-results",
+          "controls": 359,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "rows": 1,
+          "sections": [
+            1,
+            1
+          ],
+          "pictureLine": "not_installed"
+        },
+        {
+          "state": "search-nothing-found",
+          "controls": 352,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "rows": 0
+        },
+        {
+          "state": "search-picture-not-installed",
+          "controls": 359,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "pictureState": "not_installed",
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "search-picture-scanning",
+          "controls": 360,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "pictureState": "busy",
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "search-forget-confirm",
+          "controls": 364,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
         }
       ]
     }
@@ -2986,25 +3794,25 @@
     {
       "theme": "dark",
       "uiLanguage": "he",
-      "states": 105,
+      "states": 121,
       "findings": 0
     },
     {
       "theme": "dark",
       "uiLanguage": "en",
-      "states": 105,
+      "states": 121,
       "findings": 0
     },
     {
       "theme": "light",
       "uiLanguage": "he",
-      "states": 16,
+      "states": 37,
       "findings": 0
     },
     {
       "theme": "light",
       "uiLanguage": "en",
-      "states": 16,
+      "states": 37,
       "findings": 0
     }
   ],
