@@ -1,7 +1,7 @@
 // Tests for the library fetcher. Nothing here touches the network: HTTP goes to a server on 127.0.0.1 through an
 // injected plain-http transport (labelled test-only), git uses a repository made in a temp folder.
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -9,11 +9,11 @@ import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
 import {
   budgetCheck, checkDest, creditsText, download, entryPath, extractTarGz, extractZip, hashTree, httpsTransport, itemNeed, makeNet, makeTransport,
-  parseArgs, resumeDecision, resumeHeaders, run, sanitizeSegment, validateManifest,
+  parseArgs, resumeDecision, resumeHeaders, run, runGit, sanitizeSegment, validateManifest,
   type Item, type LedgerEntry, type Manifest, type Seen, type Source, type Transport, type TransportResponse,
 } from './fetch.mjs';
 
@@ -753,6 +753,36 @@ describe('fetching into a library', () => {
       expect(fs.existsSync(path.join(root, 'visual/fonts'))).toBe(false);
       expect(stageLeft(root)).toEqual([]);
     });
+    it('trusts only its own repository on the command line, with no global git setting (dubious ownership)', async () => {
+      const { url, first } = repo(), root = mkRoot();
+      const globalCfg = path.join(tmp(), 'gitconfig'); fs.writeFileSync(globalCfg, '');
+      const saved = { ...process.env };
+      // git upload-pack also checks the source repository (and ignores -c), so this test trusts that one through a temp SYSTEM config file; the global file stays empty
+      const systemCfg = path.join(tmp(), 'system.gitconfig'); fs.writeFileSync(systemCfg, `[safe]\n\tdirectory = ${path.join(fileURLToPath(url), '.git').replaceAll('\\', '/')}\n`);
+      Object.assign(process.env, { GIT_CONFIG_GLOBAL: globalCfg, GIT_CONFIG_SYSTEM: systemCfg, GIT_TEST_ASSUME_DIFFERENT_OWNER: '1' });
+      try {
+        const m = manifest([source('fonts', [{ id: 'fonts/repo', kind: 'git', repo: url, commit: first, sparse: ['ofl/alpha'], approxBytes: 100_000, dest: 'visual/fonts/repo' }],
+          { licence: { spdx: 'OFL-1.1', url: `${base}/licence/fonts`, readOn: '2026-11-25', quote: 'SIL Open Font License' } })]);
+        const r = await go(root, m);
+        expect(r.out).not.toMatch(/dubious ownership/);
+        expect(r.out).toMatch(/fetched 1 /);
+        expect(r.code).toBe(0);
+        expect(fs.readFileSync(path.join(root, 'visual/fonts/repo/ofl/alpha/Alpha.ttf'), 'utf8')).toBe('font-a');
+        expect(fs.readFileSync(globalCfg, 'utf8')).toBe('');
+      } finally { for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]; Object.assign(process.env, saved); }
+    });
+    it('trusts exactly the repository folder it runs in, never a wildcard', async () => {
+      const a = tmp(), b = tmp(), saved = process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER;
+      execFileSync('git', ['init', '-q'], { cwd: a }); execFileSync('git', ['init', '-q'], { cwd: b });
+      process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER = '1';
+      try {
+        const own = await runGit(['rev-parse', '--git-dir'], { cwd: a });
+        expect(own).toMatchObject({ code: 0, out: '.git' });
+        const other = await runGit(['-C', b, 'rev-parse', '--git-dir'], { cwd: a });
+        expect(other.code).not.toBe(0);
+        expect(other.err).toMatch(/dubious ownership/);
+      } finally { if (saved === undefined) delete process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER; else process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER = saved; }
+    });
     it('starts git with prompts and stored credentials switched off', async () => {
       const calls: string[][] = []; const envs: (string | undefined)[] = [];
       const root = mkRoot();
@@ -768,6 +798,25 @@ describe('fetching into a library', () => {
       expect(calls.map((c) => c.join(' '))).toEqual(['init -q', 'remote add origin https://example.org/r.git', 'config core.autocrlf false', 'config core.longpaths true', 'config core.symlinks false',
         'config advice.detachedHead false', 'sparse-checkout set --cone a b c', `fetch -q --depth=1 --filter=blob:none --no-tags origin ${'c'.repeat(40)}`, `checkout -q --detach ${'c'.repeat(40)}`, 'rev-parse HEAD']);
     });
+  });
+});
+
+describe('final exit line', () => {
+  const script = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fetch.mjs');
+  const last = (r: { stdout: string }) => r.stdout.trimEnd().split('\n').at(-1);
+  it('prints EXIT 2 as the very last stdout line for bad arguments, matching the exit code', () => {
+    const r = spawnSync(process.execPath, [script, '--no-such-option'], { encoding: 'utf8' });
+    expect(r.status).toBe(2);
+    expect(last(r)).toBe('EXIT 2');
+  });
+  it('prints EXIT 0 right after the SUMMARY block of a dry run (no network: a git item is not probed)', () => {
+    const root = mkRoot();
+    const m = writeManifest(manifest([source('a', [{ id: 'a/g', kind: 'git', repo: 'https://example.org/r.git', commit: 'c'.repeat(40), approxBytes: 1000, dest: 'visual/a/g' }], { licence: { spdx: 'MIT', url: 'https://example.org/l', readOn: '2026-11-25', quote: 'MIT' } })]));
+    const r = spawnSync(process.execPath, [script, '--dry-run', '--root', root, '--manifest', m], { encoding: 'utf8' });
+    expect(r.status).toBe(0);
+    const lines = r.stdout.trimEnd().split('\n');
+    expect(lines.at(-1)).toBe('EXIT 0');
+    expect(lines.findIndex((l) => l.startsWith('SUMMARY '))).toBeGreaterThan(-1);
   });
 });
 
