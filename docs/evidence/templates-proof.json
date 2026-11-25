@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T01:09:43.608Z",
+  "ranAt": "2026-11-25T01:46:49.768Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
@@ -19,13 +19,13 @@
         6,
         7
       ],
-      "runId": "run_5b839fb589m"
+      "runId": "run_843d4a3d49m"
     },
     "planMs": {
       "runs": 260,
-      "median": 3.09,
-      "p95": 4.94,
-      "max": 17.18
+      "median": 3.22,
+      "p95": 5.83,
+      "max": 18
     },
     "perTemplate": {
       "tpl.travel-montage": {
@@ -36,11 +36,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 3.82,
-          "p95": 6.6,
-          "max": 17.18
+          "median": 4.02,
+          "p95": 15.74,
+          "max": 17.83
         },
-        "exportSeconds": 6.926,
+        "exportSeconds": 7.144,
         "shuffle": {
           "replaced": 13,
           "protected": 1,
@@ -59,7 +59,7 @@
           "kept": [
             {
               "key": "shot2",
-              "clipId": "clp_a5158510793",
+              "clipId": "clp_79d691d3573",
               "startFrame": 30,
               "frames": 30,
               "plannedStartFrame": 60,
@@ -67,7 +67,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 4.714
+        "barcodeExportSeconds": 5.044
       },
       "tpl.photo-dump": {
         "music": {
@@ -77,11 +77,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 2.85,
-          "p95": 4.63,
-          "max": 4.94
+          "median": 3.16,
+          "p95": 4.11,
+          "max": 5.47
         },
-        "exportSeconds": 4.734,
+        "exportSeconds": 5.004,
         "shuffle": {
           "replaced": 11,
           "protected": 1,
@@ -98,7 +98,7 @@
           "kept": [
             {
               "key": "photo2",
-              "clipId": "clp_e2abffa36a2",
+              "clipId": "clp_4a7e30ad262",
               "startFrame": 15,
               "frames": 15,
               "plannedStartFrame": 30,
@@ -106,7 +106,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 2.583
+        "barcodeExportSeconds": 2.8
       },
       "tpl.birthday": {
         "music": {
@@ -116,11 +116,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 3.14,
-          "p95": 4.59,
-          "max": 5.68
+          "median": 3.43,
+          "p95": 5.59,
+          "max": 7.7
         },
-        "exportSeconds": 13.524,
+        "exportSeconds": 14.673,
         "shuffle": {
           "replaced": 14,
           "protected": 1,
@@ -139,7 +139,7 @@
           "kept": [
             {
               "key": "moment2",
-              "clipId": "clp_e791512af25",
+              "clipId": "clp_04c04977a55",
               "startFrame": 60,
               "frames": 60,
               "plannedStartFrame": 120,
@@ -147,7 +147,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 8.218
+        "barcodeExportSeconds": 8.41
       },
       "tpl.quote-card": {
         "music": {
@@ -157,11 +157,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 2.61,
-          "p95": 3.3,
-          "max": 5.28
+          "median": 3.22,
+          "p95": 4.93,
+          "max": 6.87
         },
-        "exportSeconds": 7.569,
+        "exportSeconds": 8.238,
         "shuffle": {
           "replaced": 5,
           "protected": 1,
@@ -180,7 +180,7 @@
           "kept": [
             {
               "key": "backdrop",
-              "clipId": "clp_4c2048c6931",
+              "clipId": "clp_379976f2521",
               "startFrame": 0,
               "frames": 180,
               "plannedStartFrame": 0,
@@ -188,7 +188,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 4.027
+        "barcodeExportSeconds": 4.362
       },
       "tpl.countdown-list": {
         "music": {
@@ -198,11 +198,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 2.91,
-          "p95": 3.43,
-          "max": 4.17
+          "median": 3.3,
+          "p95": 5.21,
+          "max": 7.31
         },
-        "exportSeconds": 10.707,
+        "exportSeconds": 11.124,
         "shuffle": {
           "replaced": 22,
           "protected": 1,
@@ -221,7 +221,7 @@
           "kept": [
             {
               "key": "item2",
-              "clipId": "clp_72e2854daa4",
+              "clipId": "clp_c1ee5e35d24",
               "startFrame": 60,
               "frames": 60,
               "plannedStartFrame": 120,
@@ -229,7 +229,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 7.267
+        "barcodeExportSeconds": 6.686
       },
       "tpl.home-video": {
         "music": {
@@ -239,11 +239,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 3.58,
-          "p95": 4.15,
-          "max": 6.87
+          "median": 2.96,
+          "p95": 3.74,
+          "max": 3.97
         },
-        "exportSeconds": 21.197,
+        "exportSeconds": 20.841,
         "shuffle": {
           "replaced": 9,
           "protected": 1,
@@ -260,7 +260,7 @@
           "kept": [
             {
               "key": "clip2",
-              "clipId": "clp_7029b57abd2",
+              "clipId": "clp_2ea031dcc82",
               "startFrame": 90,
               "frames": 90,
               "plannedStartFrame": 180,
@@ -268,7 +268,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 11.692
+        "barcodeExportSeconds": 11.548
       },
       "tpl.hanukkah-candles": {
         "music": {
@@ -278,11 +278,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 4.08,
-          "p95": 4.58,
-          "max": 5.17
+          "median": 2.93,
+          "p95": 4,
+          "max": 5.78
         },
-        "exportSeconds": 18.229,
+        "exportSeconds": 17.886,
         "shuffle": {
           "replaced": 9,
           "protected": 1,
@@ -299,7 +299,7 @@
           "kept": [
             {
               "key": "family",
-              "clipId": "clp_fb50bd90a83",
+              "clipId": "clp_2768fd6a963",
               "startFrame": 120,
               "frames": 120,
               "plannedStartFrame": 240,
@@ -307,7 +307,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 10.298
+        "barcodeExportSeconds": 7.781
       },
       "tpl.hanukkah-eight-nights": {
         "music": {
@@ -317,11 +317,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 3.98,
-          "p95": 6.14,
-          "max": 6.32
+          "median": 3.3,
+          "p95": 4.91,
+          "max": 5.83
         },
-        "exportSeconds": 25.902,
+        "exportSeconds": 25.089,
         "shuffle": {
           "replaced": 34,
           "protected": 1,
@@ -340,7 +340,7 @@
           "kept": [
             {
               "key": "night2",
-              "clipId": "clp_6ac98afbf8b",
+              "clipId": "clp_5538c3ae76b",
               "startFrame": 60,
               "frames": 60,
               "plannedStartFrame": 120,
@@ -348,7 +348,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 12.45
+        "barcodeExportSeconds": 10.851
       },
       "tpl.hanukkah-party": {
         "music": {
@@ -358,11 +358,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 3.1,
-          "p95": 4.78,
-          "max": 5.17
+          "median": 3.14,
+          "p95": 4.51,
+          "max": 4.78
         },
-        "exportSeconds": 13.357,
+        "exportSeconds": 12.173,
         "shuffle": {
           "replaced": 18,
           "protected": 1,
@@ -381,7 +381,7 @@
           "kept": [
             {
               "key": "beat2",
-              "clipId": "clp_b9066457f47",
+              "clipId": "clp_221b60af7f7",
               "startFrame": 60,
               "frames": 60,
               "plannedStartFrame": 120,
@@ -389,7 +389,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 9.984
+        "barcodeExportSeconds": 8.175
       },
       "tpl.hanukkah-greeting": {
         "music": {
@@ -399,11 +399,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 2.74,
-          "p95": 3,
-          "max": 3.81
+          "median": 3.33,
+          "p95": 5.27,
+          "max": 5.65
         },
-        "exportSeconds": 14.199,
+        "exportSeconds": 14.374,
         "shuffle": {
           "replaced": 7,
           "protected": 1,
@@ -422,7 +422,7 @@
           "kept": [
             {
               "key": "card",
-              "clipId": "clp_2575b650ce2",
+              "clipId": "clp_57abbcbc092",
               "startFrame": 0,
               "frames": 180,
               "plannedStartFrame": 0,
@@ -430,7 +430,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 4.939
+        "barcodeExportSeconds": 4.296
       },
       "tpl.birthday-age": {
         "music": {
@@ -440,11 +440,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 2.38,
-          "p95": 3.21,
-          "max": 3.78
+          "median": 3.17,
+          "p95": 12.17,
+          "max": 18
         },
-        "exportSeconds": 15.238,
+        "exportSeconds": 13.992,
         "shuffle": {
           "replaced": 14,
           "protected": 1,
@@ -463,7 +463,7 @@
           "kept": [
             {
               "key": "moment2",
-              "clipId": "clp_b6558d6df35",
+              "clipId": "clp_26bcb92b375",
               "startFrame": 60,
               "frames": 60,
               "plannedStartFrame": 120,
@@ -471,7 +471,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 8.465
+        "barcodeExportSeconds": 7.887
       },
       "tpl.birthday-cake": {
         "music": {
@@ -481,11 +481,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 3,
-          "p95": 4.56,
-          "max": 4.79
+          "median": 3.4,
+          "p95": 4.81,
+          "max": 6.47
         },
-        "exportSeconds": 10.985,
+        "exportSeconds": 11.336,
         "shuffle": {
           "replaced": 14,
           "protected": 1,
@@ -502,7 +502,7 @@
           "kept": [
             {
               "key": "cake",
-              "clipId": "clp_1296c85e0c6",
+              "clipId": "clp_a9a29bd55a6",
               "startFrame": 60,
               "frames": 120,
               "plannedStartFrame": 120,
@@ -510,7 +510,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 6.952
+        "barcodeExportSeconds": 6.544
       },
       "tpl.birthday-invite": {
         "music": {
@@ -520,11 +520,11 @@
         },
         "planMs": {
           "runs": 20,
-          "median": 2.92,
-          "p95": 3.79,
-          "max": 5.23
+          "median": 2.41,
+          "p95": 3.23,
+          "max": 3.65
         },
-        "exportSeconds": 12.97,
+        "exportSeconds": 12.736,
         "shuffle": {
           "replaced": 8,
           "protected": 1,
@@ -543,7 +543,7 @@
           "kept": [
             {
               "key": "card",
-              "clipId": "clp_90389ea2ec2",
+              "clipId": "clp_1ca828fccc2",
               "startFrame": 0,
               "frames": 210,
               "plannedStartFrame": 0,
@@ -551,7 +551,7 @@
             }
           ]
         },
-        "barcodeExportSeconds": 4.853
+        "barcodeExportSeconds": 4.904
       }
     }
   },
@@ -611,7 +611,7 @@
       "name": "tpl.travel-montage: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_a515851079m",
+        "runId": "run_79d691d357m",
         "created": 21
       }
     },
@@ -691,7 +691,7 @@
         "kept": [
           {
             "key": "shot2",
-            "clipId": "clp_a5158510793",
+            "clipId": "clp_79d691d3573",
             "startFrame": 30,
             "frames": 30,
             "plannedStartFrame": 60,
@@ -730,7 +730,7 @@
       "name": "tpl.photo-dump: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_e2abffa36ah",
+        "runId": "run_4a7e30ad26h",
         "created": 17
       }
     },
@@ -808,7 +808,7 @@
         "kept": [
           {
             "key": "photo2",
-            "clipId": "clp_e2abffa36a2",
+            "clipId": "clp_4a7e30ad262",
             "startFrame": 15,
             "frames": 15,
             "plannedStartFrame": 30,
@@ -845,7 +845,7 @@
       "name": "tpl.birthday: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_e791512af2q",
+        "runId": "run_04c04977a5q",
         "created": 22
       }
     },
@@ -925,7 +925,7 @@
         "kept": [
           {
             "key": "moment2",
-            "clipId": "clp_e791512af25",
+            "clipId": "clp_04c04977a55",
             "startFrame": 60,
             "frames": 60,
             "plannedStartFrame": 120,
@@ -965,7 +965,7 @@
       "name": "tpl.quote-card: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_4c2048c693d",
+        "runId": "run_379976f252d",
         "created": 12
       }
     },
@@ -1040,7 +1040,7 @@
         "kept": [
           {
             "key": "backdrop",
-            "clipId": "clp_4c2048c6931",
+            "clipId": "clp_379976f2521",
             "startFrame": 0,
             "frames": 180,
             "plannedStartFrame": 0,
@@ -1080,7 +1080,7 @@
       "name": "tpl.countdown-list: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_72e2854daaw",
+        "runId": "run_c1ee5e35d2w",
         "created": 31
       }
     },
@@ -1159,7 +1159,7 @@
         "kept": [
           {
             "key": "item2",
-            "clipId": "clp_72e2854daa4",
+            "clipId": "clp_c1ee5e35d24",
             "startFrame": 60,
             "frames": 60,
             "plannedStartFrame": 120,
@@ -1199,7 +1199,7 @@
       "name": "tpl.home-video: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_7029b57abdi",
+        "runId": "run_2ea031dcc8i",
         "created": 15
       }
     },
@@ -1277,7 +1277,7 @@
         "kept": [
           {
             "key": "clip2",
-            "clipId": "clp_7029b57abd2",
+            "clipId": "clp_2ea031dcc82",
             "startFrame": 90,
             "frames": 90,
             "plannedStartFrame": 180,
@@ -1314,7 +1314,7 @@
       "name": "tpl.hanukkah-candles: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_fb50bd90a8k",
+        "runId": "run_2768fd6a96k",
         "created": 16
       }
     },
@@ -1389,7 +1389,7 @@
         "kept": [
           {
             "key": "family",
-            "clipId": "clp_fb50bd90a83",
+            "clipId": "clp_2768fd6a963",
             "startFrame": 120,
             "frames": 120,
             "plannedStartFrame": 240,
@@ -1427,7 +1427,7 @@
       "name": "tpl.hanukkah-eight-nights: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_6ac98afbf81q",
+        "runId": "run_5538c3ae761q",
         "created": 43
       }
     },
@@ -1509,7 +1509,7 @@
         "kept": [
           {
             "key": "night2",
-            "clipId": "clp_6ac98afbf8b",
+            "clipId": "clp_5538c3ae76b",
             "startFrame": 60,
             "frames": 60,
             "plannedStartFrame": 120,
@@ -1548,7 +1548,7 @@
       "name": "tpl.hanukkah-party: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_b9066457f4v",
+        "runId": "run_221b60af7fv",
         "created": 26
       }
     },
@@ -1628,7 +1628,7 @@
         "kept": [
           {
             "key": "beat2",
-            "clipId": "clp_b9066457f47",
+            "clipId": "clp_221b60af7f7",
             "startFrame": 60,
             "frames": 60,
             "plannedStartFrame": 120,
@@ -1668,7 +1668,7 @@
       "name": "tpl.hanukkah-greeting: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_2575b650cel",
+        "runId": "run_57abbcbc09l",
         "created": 16
       }
     },
@@ -1743,7 +1743,7 @@
         "kept": [
           {
             "key": "card",
-            "clipId": "clp_2575b650ce2",
+            "clipId": "clp_57abbcbc092",
             "startFrame": 0,
             "frames": 180,
             "plannedStartFrame": 0,
@@ -1783,7 +1783,7 @@
       "name": "tpl.birthday-age: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_b6558d6df3q",
+        "runId": "run_26bcb92b37q",
         "created": 22
       }
     },
@@ -1863,7 +1863,7 @@
         "kept": [
           {
             "key": "moment2",
-            "clipId": "clp_b6558d6df35",
+            "clipId": "clp_26bcb92b375",
             "startFrame": 60,
             "frames": 60,
             "plannedStartFrame": 120,
@@ -1903,7 +1903,7 @@
       "name": "tpl.birthday-cake: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_1296c85e0cr",
+        "runId": "run_a9a29bd55ar",
         "created": 22
       }
     },
@@ -1979,7 +1979,7 @@
         "kept": [
           {
             "key": "cake",
-            "clipId": "clp_1296c85e0c6",
+            "clipId": "clp_a9a29bd55a6",
             "startFrame": 60,
             "frames": 120,
             "plannedStartFrame": 120,
@@ -2019,7 +2019,7 @@
       "name": "tpl.birthday-invite: apply adds exactly one revision",
       "ok": true,
       "detail": {
-        "runId": "run_90389ea2ecm",
+        "runId": "run_1ca828fcccm",
         "created": 18
       }
     },
@@ -2094,7 +2094,7 @@
         "kept": [
           {
             "key": "card",
-            "clipId": "clp_90389ea2ec2",
+            "clipId": "clp_1ca828fccc2",
             "startFrame": 0,
             "frames": 210,
             "plannedStartFrame": 0,
@@ -2131,7 +2131,7 @@
           6,
           7
         ],
-        "runId": "run_5b839fb589m"
+        "runId": "run_843d4a3d49m"
       }
     }
   ]
