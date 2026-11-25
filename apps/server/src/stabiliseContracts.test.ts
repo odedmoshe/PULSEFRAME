@@ -143,11 +143,22 @@ describe('shared surfaces', () => {
   });
 });
 
-describe('what W1 makes pass', () => {
-  it.todo('W1: 202 + one transaction [attach_camera_motion, set_clip_stabilise] with dependsOn; one undo returns the document');
-  it.todo('W1: clipTooLong, fileFull and budget refused (422) before 202; 409 stabilise_in_progress; 429 busy above five open vision jobs');
-  it.todo('W1: clip deleted mid-run → failed clip_changed, document unchanged; set_clip_stabilise refused → failed with its refusal and details');
-  it.todo('W1: cancel mid-run → canceled, ffmpeg gone, nothing attached; restart mid-run → runs again and attaches once; shutdown leaves the row running');
-  it.todo('W1: frames already measured with the same algo and input are not read again (a second clip of the same file)');
-  it.todo('W1: GET …/camera-motion = MCP get_camera_motion: counts, review runs, usedBy, note; never the columns');
+/**
+ * What W1 made pass lives in stabilise.test.ts (it needs real H.264 files and the job runner):
+ * - 202 + one transaction [attach_camera_motion, set_clip_stabilise] with dependsOn; one undo → 'the job › runs on a real H.264 file…'
+ * - clipTooLong, fileFull, budget 422 before 202; 409 stabilise_in_progress; 429 busy → 'refused before 202 (nothing created)'
+ * - clip deleted mid-run → clip_changed; set_clip_stabilise refused → its refusal → 'the job › the clip deleted…', '…the operation refuses…'
+ * - cancel mid-run; restart mid-run; shutdown leaves the row running → 'the job › cancel mid-run…', '…restart mid-run…', '…shutdown…'
+ * - frames already measured are not read again → 'the job › frames already measured…' (and 'what is measured')
+ * - GET …/camera-motion = MCP get_camera_motion, never the columns → 'the read view'
+ */
+describe('after W1: the routes answer the built job', () => {
+  it('the job is built, so no route answers 501 any more: a missing clip is 404 and an observer still cannot start one', async () => {
+    expect(STABILISE_JOBS_BUILT).toBe(true);
+    expect((await rest(observer, 'POST', `/api/v1/projects/${pid}/clips/clp_none/stabilise`, {})).status).toBe(403);
+    const r = await rest(agent, 'POST', `/api/v1/projects/${pid}/clips/clp_none/stabilise`, { strength: 50 });
+    expect([r.status, r.body?.error?.code]).toEqual([404, 'not_found']);
+    expect((await rest(owner, 'POST', `/api/v1/projects/${pid}/clips/clp_none/stabilise`, { strength: 0 })).status).toBe(400);
+    expect(store.openJobs(STABILISE_JOB_TYPE)).toEqual([]);
+  });
 });
