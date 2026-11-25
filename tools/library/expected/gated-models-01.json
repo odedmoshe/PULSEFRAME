@@ -67,8 +67,8 @@
       "commit": "3533c8cf8e369892e6b79ff1bf80f7b0286a54ee",
       "path": "config.yaml",
       "bytes": 444,
-      "sha256": null,
-      "sha256Status": "to be recorded from the owner's first download (hidden from anonymous clients)",
+      "sha256": "5ce2bfa9a938dc132cec1172592d65173cbb8f444ea1e4133f10f9391de155be",
+      "sha256Status": "first seen in the owner's download of 2026-11-25 on the laptop (the publisher's value is hidden from anonymous clients; size matched)",
       "dest": "models/gated/speaker-diarization-community-1/config.yaml",
       "url": "https://huggingface.co/pyannote/speaker-diarization-community-1/resolve/3533c8cf8e369892e6b79ff1bf80f7b0286a54ee/config.yaml?download=true"
     },
@@ -77,8 +77,8 @@
       "commit": "3533c8cf8e369892e6b79ff1bf80f7b0286a54ee",
       "path": "segmentation/pytorch_model.bin",
       "bytes": 5906507,
-      "sha256": null,
-      "sha256Status": "to be recorded from the owner's first download (hidden from anonymous clients)",
+      "sha256": "7ad24338d844fb95985486eb1a464e32d229f6d7a03c9abe60f978bacf3f816e",
+      "sha256Status": "first seen in the owner's download of 2026-11-25 on the laptop (the publisher's value is hidden from anonymous clients; size matched)",
       "dest": "models/gated/speaker-diarization-community-1/segmentation/pytorch_model.bin",
       "url": "https://huggingface.co/pyannote/speaker-diarization-community-1/resolve/3533c8cf8e369892e6b79ff1bf80f7b0286a54ee/segmentation/pytorch_model.bin?download=true",
       "format": "pytorch pickle (no safetensors in this repo)"
