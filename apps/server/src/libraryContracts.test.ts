@@ -4,10 +4,13 @@
  * every route answers the honest 501 library_not_built and reads nothing; the archive's library modes answer 501 while a plain
  * archive is unchanged; the backup leaves the library's files out. The it.todo rows name what workers A and B must make pass.
  */
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import * as T from '@pulseframe/time';
+import { collectCredits, creditsView } from '@pulseframe/core';
 import { Auth } from './auth.ts';
 import { backupDataDir, NEVER_BACKED_UP } from './backup.ts';
 import { Capabilities } from './capabilities.ts';
@@ -95,7 +98,8 @@ describe('before the workers: honest 501, owner rule first', () => {
     }
   });
   it('every route answers 501 library_not_built to the owner, with the fixed sentence', async () => {
-    for (const route of LIBRARY_ROUTES) {
+    // GET …/credits is built (worker B, library/credits.ts): it answers below
+    for (const route of LIBRARY_ROUTES.filter((x) => x !== 'GET /api/v1/projects/:id/credits')) {
       const r = await rest(owner, route.split(' ')[0]!, urlOf(route), route.startsWith('POST') || route.startsWith('PUT') ? { key: 'none/none', root: null } : undefined);
       expect({ route, status: r.status, code: r.body?.error?.code, message: r.body?.error?.message }).toEqual({ route, status: 501, code: 'library_not_built', message: LIBRARY_SERVER_REFUSALS.notBuilt.message() });
     }
@@ -104,20 +108,17 @@ describe('before the workers: honest 501, owner rule first', () => {
     expect((await rest(observer, 'POST', urlOf('POST /api/v1/projects/:id/library/use'), { key: 'none/none' })).status).toBe(403);
     expect((await rest(observer, 'GET', '/api/v1/library/status')).status).toBe(501);
   });
-  it('the archive: no library parameter is unchanged (200); strip and keep answer 501; keep is the owner\'s; a bad value is 400', async () => {
+  it('the archive: no library parameter is unchanged (200); strip and keep of a project without library files are the same 200; keep is the owner\'s; a bad value is 400', async () => {
     expect((await rest(owner, 'GET', `/api/v1/projects/${pid}/archive`)).status).toBe(200);
-    expect((await rest(owner, 'GET', `/api/v1/projects/${pid}/archive?library=strip`)).status).toBe(501);
-    expect((await rest(owner, 'GET', `/api/v1/projects/${pid}/archive?library=keep`)).status).toBe(501);
+    expect((await rest(owner, 'GET', `/api/v1/projects/${pid}/archive?library=strip`)).status).toBe(200);
+    expect((await rest(owner, 'GET', `/api/v1/projects/${pid}/archive?library=keep`)).status).toBe(200);
     expect((await rest(agent, 'GET', `/api/v1/projects/${pid}/archive?library=keep`)).body?.error?.code).toBe('owner_required');
     expect((await rest(owner, 'GET', `/api/v1/projects/${pid}/archive?library=all`)).status).toBe(400);
   });
-  it('MCP use_library_item and get_credits answer library_not_built', async () => {
+  it('MCP use_library_item answers library_not_built', async () => {
     const u = await tool(agent, 'use_library_item', { projectId: pid, key: 'none/none' });
     expect(u.isError).toBe(true);
     expect(JSON.stringify(u.data)).toContain('library_not_built');
-    const g = await tool(agent, 'get_credits', { projectId: pid });
-    expect(g.isError).toBe(true);
-    expect(JSON.stringify(g.data)).toContain('library_not_built');
   });
 });
 
@@ -136,11 +137,55 @@ describe('the backup leaves the library\'s own files out', () => {
   });
 });
 
+/** A project holding a CC BY track and a non-commercial (disk-only) sound on the timeline, committed as the server commits them; the bytes are arbitrary. */
+function libraryProject(): string {
+  const lp = store.createProject({ name: 'library duties' }).doc.id;
+  const ids = [['song', 'CC-BY-4.0', { credit: { text: 'Song by Composer', placement: 'description' } }], ['bird', 'CC-BY-NC-4.0', { credit: { text: 'Bird by Rec', placement: 'either' }, flags: { nonCommercial: true, diskOnly: true } }]].map(([k, id, extra], i) => {
+    const bytes = Buffer.from(`library contract ${k} ${'x'.repeat(200)}`);
+    const hash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+    const tmp = path.join(store.tmpDir, `lc_${k}`);
+    fs.writeFileSync(tmp, bytes);
+    store.putBlob(hash, tmp, bytes.length, 'audio/wav');
+    const library = { itemId: `s/${k}`, sourceId: 's', kind: 'music', title: k, sourceSha256: hash.slice(7), ledger: { item: 's' }, licence: { id }, flags: {}, ...(extra as object) };
+    const asset = { kind: 'audio', name: `${k}.wav`, contentHash: hash, byteSize: bytes.length, container: 'wav', mimeType: 'audio/wav', duration: T.rt(2, 1), audio: { sampleRate: 48000, channels: 1, codec: 'pcm_s16le' }, provenance: { origin: 'upload', importedAt: '2026-11-25T00:00:00Z', importedBy: 'test', library } };
+    const assetId = store.commit({ projectId: lp, actor: 'user:local', allowInternal: true, ops: [{ op: 'use_library_item', args: { asset } }] }).results[0]!.output!.assetId as string;
+    return { assetId, i };
+  });
+  store.commit({ projectId: lp, actor: 'user:local', ops: ids.map(({ assetId, i }) => ({ op: 'add_clip', args: { assetId, start: T.rt(i, 1), duration: T.rt(1, 1) } })) });
+  return lp;
+}
+
 describe('what the workers make pass', () => {
   it.todo('A: status without a root is not_configured (200); root set by the owner, agent 403; each invalid root 400 library_root_invalid with its reason; PF_LIBRARY_DIR wins over library.json');
   it.todo('A: the index is built in a temp file and swapped whole; the old index answers while indexing; DELETE /reindex keeps the old counts; a restart mid-build rebuilds');
   it.todo('A: search, audition (206 exact bytes; 415 for m4a), thumbnails PNG under DATA_CSP, never image/svg+xml');
   it.todo('A: use — dry-run before receive and before placement; hash/size+mtime/path checks store nothing on failure; propose mode 403; MCP use_library_item = REST');
-  it.todo('B: GET /credits = MCP get_credits = core collectCredits over the reader document');
-  it.todo('B: archive — 409 archive_needs_library_choice with restricted content; strip omits exactly the restricted blobs; import of a stripped archive opens with them missing and the note in he and en; a project without library content gives the same bytes either way');
+  it('B: GET /credits = MCP get_credits = core collectCredits over the reader document', async () => {
+    const lp = libraryProject();
+    const doc = store.getProject(lp).doc;
+    for (const lang of ['he', 'en'] as const) {
+      const r = await rest(agent, 'GET', `/api/v1/projects/${lp}/credits?lang=${lang}`);
+      expect(r.status).toBe(200);
+      expect(r.body).toEqual(JSON.parse(JSON.stringify(creditsView(collectCredits(doc), lang))));
+      const g = await tool(agent, 'get_credits', { projectId: lp, lang });
+      expect(g.isError).toBe(false);
+      expect(g.data).toEqual(r.body);
+    }
+    expect((await rest(agent, 'GET', `/api/v1/projects/${lp}/credits`)).body.descriptionText).toBe(collectCredits(doc).descriptionText('he'));
+    expect((await rest(agent, 'GET', `/api/v1/projects/${lp}/credits?sequenceId=seq_none`)).status).toBe(404);
+  });
+  it('B: archive — 409 archive_needs_library_choice with restricted content; strip leaves the restricted blob out; keep is the owner\'s (agent 403) and holds it', async () => {
+    const lp = libraryProject();
+    const nc = Object.values(store.getProject(lp).doc.assets).find((a) => a.provenance.library?.flags.nonCommercial)!.contentHash;
+    const none = await rest(agent, 'GET', `/api/v1/projects/${lp}/archive`);
+    expect({ status: none.status, code: none.body?.error?.code }).toEqual({ status: 409, code: 'archive_needs_library_choice' });
+    expect((await rest(agent, 'GET', `/api/v1/projects/${lp}/archive?family=omit`)).status).toBe(409);
+    const strip = await app.fetch(new Request(`${base()}/api/v1/projects/${lp}/archive?library=strip`, { headers: agent() }));
+    expect(strip.status).toBe(200);
+    expect(Buffer.from(await strip.arrayBuffer()).includes(Buffer.from(`blobs/${nc.slice(7)}`))).toBe(false);
+    expect((await rest(agent, 'GET', `/api/v1/projects/${lp}/archive?library=keep`)).body?.error?.code).toBe('owner_required');
+    const keep = await app.fetch(new Request(`${base()}/api/v1/projects/${lp}/archive?library=keep`, { headers: owner() }));
+    expect(keep.status).toBe(200);
+    expect(Buffer.from(await keep.arrayBuffer()).includes(Buffer.from(`blobs/${nc.slice(7)}`))).toBe(true);
+  });
 });

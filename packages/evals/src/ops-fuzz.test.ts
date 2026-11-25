@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, creativeProjection, diffEntities, OpError, ProjectSchema, projectVariant, restoreEntities, summarize, timeline, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, creativeProjection, diffEntities, LIBRARY_OPS_BUILT, OpError, ProjectSchema, projectVariant, restoreEntities, summarize, timeline, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, evaluate } from '@pulseframe/engine';
 import { createFuzz } from './ops-fuzz.gen.ts';
 
@@ -25,6 +25,13 @@ function run(seed: number, focus: () => string[] = () => []) {
   doc = applyTransaction(doc, fz.setup(doc), ctx()).doc;
   doc = applyTransaction(doc, fz.aiSetup(doc), ctx(true)).doc; // ADR-0017 fixtures: derived copies and a translation (internal operations)
   { const ops = fz.setupInternal(doc); if (ops.length) doc = applyTransaction(doc, ops, ctx(true)).doc; } // ADR-0015: measured samples for the motion track (an internal operation)
+  // the content library (wave 7): one CC BY sound from the library on the timeline, so add_credits_card has a credit to card
+  if (LIBRARY_OPS_BUILT) {
+    const library = { itemId: 'synthetic/fuzz.wav', sourceId: 'synthetic', kind: 'sound' as const, title: 'Fuzz', sourceSha256: '5'.repeat(64), ledger: { item: 'synthetic' }, licence: { id: 'CC-BY-4.0' }, credit: { text: 'Fuzz by Synthetic (example.invalid)', placement: 'on_screen' as const }, flags: {} };
+    const asset = { kind: 'audio' as const, name: 'lib.wav', contentHash: `sha256:${'5'.repeat(64)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(3, 1), audio: { sampleRate: 48000, channels: 1, codec: 'pcm_s16le' }, provenance: { origin: 'upload' as const, importedAt: '2026-11-25T00:00:00Z', importedBy: 'fuzz', library } };
+    const used = applyTransaction(doc, [{ op: 'use_library_item', args: { asset } }], ctx(true));
+    doc = applyTransaction(used.doc, [{ op: 'add_clip', args: { assetId: used.results[0]!.output!.assetId as string, start: f(0), duration: f(30) } }], ctx()).doc;
+  }
   // Every sixth step draws among the operations no earlier step of the run has seen accepted (the menu grows with every
   // feature, so plain draws can miss one by chance after an unrelated row changes the stream); every other step draws as before.
   const gen = (step: number) => { const f = step % 6 === 5 ? focus() : []; return f.length ? fz.genFocused(doc, f) : fz.gen(doc); };

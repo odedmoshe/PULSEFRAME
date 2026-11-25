@@ -21,14 +21,23 @@ function run(seed: number) {
   const ctx = (allowInternal = false) => ({ idSeed: `lb${seed}_${n++}_`, actor: 'fuzz', allowInternal });
   let doc: ProjectDocument = applyTransaction(createProject({ id: 'prj_lb', name: 'lb', width: 640, height: 360, frameRate: fz.rate }), fz.importOps, ctx(true)).doc;
   doc = applyTransaction(doc, fz.setup(doc), ctx()).doc;
+  // a library file just added is placed on the timeline on a later step now and then (a file without a clip needs no credit)
+  let placeNext: string | null = null;
   for (let step = 0; step < STEPS; step++) {
     const internal = step % 3 === 0;
-    const call = internal ? fz.genLibraryUse() : step % 3 === 1 ? fz.genLibrary(doc) : fz.genFocused(doc, ['add_text', 'add_clip', 'delete_clip', 'move_clip', 'trim_clip', 'set_track_lock']);
+    const place = !internal && placeNext !== null && fz.int(10) < 7 ? placeNext : null;
+    if (place) placeNext = null;
+    const call = internal ? fz.genLibraryUse() : place ? { op: 'add_clip', args: { assetId: place, start: fz.f(fz.int(240)), duration: fz.f(1 + fz.int(40)) } } : step % 3 === 1 ? fz.genLibrary(doc) : fz.genFocused(doc, ['add_text', 'add_clip', 'delete_clip', 'move_clip', 'trim_clip', 'update_track']);
     const where = `seed ${seed} step ${step}: ${JSON.stringify(call).slice(0, 300)}`;
     const t = (tally[call.op] ??= [0, 0]);
     const before = doc, beforeJson = JSON.stringify(doc);
     let next: ProjectDocument;
-    try { next = applyTransaction(doc, [call], ctx(internal)).doc; } catch (e) {
+    try {
+      const r = applyTransaction(doc, [call], ctx(internal));
+      next = r.doc;
+      const out = r.results[0]?.output as { assetId?: unknown } | undefined;
+      if (call.op === 'use_library_item' && typeof out?.assetId === 'string') placeNext = out.assetId;
+    } catch (e) {
       if (!(e instanceof OpError)) throw new Error(`${where}\n  threw something that is not a typed refusal: ${String((e as Error)?.stack ?? e).slice(0, 600)}`);
       if (JSON.stringify(doc) !== beforeJson) throw new Error(`${where}\n  a refused operation changed the document`);
       t[1]++;
