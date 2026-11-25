@@ -72,7 +72,7 @@ function provokedOps(): Pick<Record<SteadyRefusalKey, string[]>, 'notVideo' | 'm
 }
 function serverSentences(): Record<StabiliseServerRefusalKey, string[]> {
   const S = STABILISE_SERVER_REFUSALS;
-  return { notBuilt: [S.notBuilt.message()], inProgress: [S.inProgress.message()], busy: [S.busy.message()], clipChanged: [S.clipChanged.message()] };
+  return { inProgress: [S.inProgress.message()], busy: [S.busy.message()], clipChanged: [S.clipChanged.message()] };
 }
 
 describe('stabilise refusals in Hebrew', () => {

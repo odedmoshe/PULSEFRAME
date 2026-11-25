@@ -255,7 +255,7 @@ export const api = {
   versionFrameUrl: (id: string, versionId: string, index: number) => `/api/v1/projects/${id}/versions/${encodeURIComponent(versionId)}/frame?index=${index}`,
   restoreVersion: (id: string, versionId: string, body: { expectRevision?: number; confirmPrivacy?: boolean } = {}) => call<{ revision: number; transactionId: string | null; summary: string; diff: DiffSummary }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}/restore`, json(body)),
   findText: (id: string, query: FindQuery) => call<FindResult>(`/projects/${id}/text/find`, json(query)),
-  // stabilisation (wave 7; apps/server/src/stabilise.ts): both answer 501 stabilise_not_built until the job is built
+  // stabilisation (wave 7; apps/server/src/stabilise.ts)
   stabiliseClip: (id: string, clipId: string, body: StabiliseRunBody = {}) => call<{ jobId: string; status: string }>(`/projects/${id}/clips/${encodeURIComponent(clipId)}/stabilise`, json(body)),
   cameraMotion: (id: string, assetId: string) => call<CameraMotionView>(`/projects/${id}/assets/${encodeURIComponent(assetId)}/camera-motion`),
 };

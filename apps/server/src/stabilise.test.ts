@@ -4,57 +4,17 @@
  * port). Fixtures are synthetic (packages/fixtures/src/steady.ts) encoded with H.264 here; the "files" of the refusal checks are
  * import records with no picture behind them (the refusals come before anything is read).
  *
- * Until W2 merges, core's clipSourceFrames and cameraMotionSummary are stubs and set_clip_stabilise refuses with notBuilt. The two
- * functions get LABELLED TEST DOUBLES below that hand over to the real ones as soon as they stop throwing "not built yet"; the
- * operation is never faked: before W2 the job ends failed with the operation's own refusal (asserted), after W2 it succeeds (the rows
- * marked "after W2" switch on with STEADY_OPS_BUILT).
+ * Every row runs the real path: the real operations decide the end of a job (no test doubles).
  */
 import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-
-vi.mock('@pulseframe/core', async (importOriginal) => {
-  const real = await importOriginal<typeof import('@pulseframe/core')>();
-  const T = await import('@pulseframe/time');
-  const notBuilt = (e: unknown) => /not built yet/.test((e as Error).message);
-  /**
-   * LABELLED TEST DOUBLE until W2 merges: clipSourceFrames as its contract (core steady.ts) states it for a clip with no ramp and no
-   * handle: the first and last source frame the clip shows (sourceFrameIndexAt at its first and last timeline frame, the rule of
-   * tracking.ts trackingRange); reach = the same frames.
-   */
-  const clipFramesDouble = (doc: import('@pulseframe/core').ProjectDocument, clip: import('@pulseframe/core').MediaClip) => {
-    const asset = doc.assets[clip.assetId]!, rate = doc.settings.frameRate;
-    const lastT = T.max(clip.start, T.sub(T.add(clip.start, clip.duration), T.frameTime(1, rate)));
-    const a = real.sourceFrameIndexAt({ ...asset, video: asset.video! }, clip, clip.start, rate), b = real.sourceFrameIndexAt({ ...asset, video: asset.video! }, clip, lastT, rate);
-    const first = Math.min(a, b), last = Math.max(a, b);
-    return { first, last, reach: { first, last } };
-  };
-  /** LABELLED TEST DOUBLE until W2 merges: cameraMotionSummary as its contract states it (counts per state; runs of weak/unknown and starts inside a stretch). */
-  const summaryDouble = (m: import('@pulseframe/core').CameraMotion) => {
-    const counts = { unknown: 0, ok: 0, weak: 0, start: 0 };
-    const review: { from: number; to: number; state: 'weak' | 'unknown' | 'start' }[] = [];
-    let samples = 0;
-    for (const s of m.stretches)
-      s.st.forEach((code, i) => {
-        const name = real.STEADY_STATES[code]!;
-        counts[name]++; samples++;
-        if (name === 'ok' || (name === 'start' && i === 0)) return;
-        const prev = review.at(-1);
-        if (prev && prev.state === name && name !== 'start' && prev.to === s.from + i) prev.to++;
-        else if (review.length < 200) review.push({ from: s.from + i, to: s.from + i + 1, state: name });
-      });
-    return { samples, counts, review };
-  };
-  const clipSourceFrames: typeof real.clipSourceFrames = (doc, clip) => { try { return real.clipSourceFrames(doc, clip); } catch (e) { if (notBuilt(e)) return clipFramesDouble(doc, clip); throw e; } };
-  const cameraMotionSummary: typeof real.cameraMotionSummary = (m) => { try { return real.cameraMotionSummary(m); } catch (e) { if (notBuilt(e)) return summaryDouble(m); throw e; } };
-  return { ...real, clipSourceFrames, cameraMotionSummary };
-});
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import * as T from '@pulseframe/time';
-import { MAX_STEADY_SAMPLES, SST, STABILISE_JOB_TYPE, STEADY_ALGO, STEADY_OPS_BUILT, STEADY_REFUSALS, TRACKING_JOB_TYPE, type ProjectDocument } from '@pulseframe/core';
+import { MAX_STEADY_SAMPLES, SST, STABILISE_JOB_TYPE, STEADY_ALGO, STEADY_REFUSALS, TRACKING_JOB_TYPE, type ProjectDocument } from '@pulseframe/core';
 import { steadyFixture, writeSteadyFixture } from '../../../packages/fixtures/src/steady.ts';
 import { Auth } from './auth.ts';
 import { Capabilities } from './capabilities.ts';
@@ -129,11 +89,8 @@ const ffmpegOn = (file: string) => fs.readdirSync('/proc').filter((d) => /^\d+$/
 const slowReader = (ms: number): ReadFrames => (src, from, to, h, onFrame, signal) => readFrames(src, from, to, h, async (i, f) => { await sleep(ms); await onFrame(i, f); }, signal);
 /** The real reader, recording what it was asked for (instrumentation). */
 const countingReader = (log: { from: number; to: number; frames: number }[]): ReadFrames => async (src, from, to, h, onFrame, signal) => { const row = { from, to, frames: 0 }; log.push(row); return readFrames(src, from, to, h, async (i, f) => { row.frames++; await onFrame(i, f); }, signal); };
-/** Before W2: the operation's own refusal; after: success. Either way the job ended as the operation decided, never faked. */
-const expectOpOutcome = (j: JobRow) => {
-  if (STEADY_OPS_BUILT) expect(j.status, JSON.stringify(j.error)).toBe('succeeded');
-  else expect([j.status, j.error?.code, j.error?.message]).toEqual(['failed', STEADY_REFUSALS.notBuilt.code, STEADY_REFUSALS.notBuilt.message('set_clip_stabilise')]);
-};
+/** The job ended as the real operation decided: it succeeded. */
+const expectOpOutcome = (j: JobRow) => expect(j.status, JSON.stringify(j.error)).toBe('succeeded');
 
 let shakyFile: string, longFile: string, flatFile: string;
 beforeAll(async () => {
@@ -228,7 +185,7 @@ describe('refused before 202 (nothing created)', () => {
 });
 
 describe('the job', () => {
-  it('runs on a real H.264 file: stages, the operation decides the end, one transaction (after W2: one undo returns the document)', async () => {
+  it('runs on a real H.264 file: stages, one transaction, one undo returns the document', async () => {
     const pid = project('run');
     const a = await importInto(pid, shakyFile);
     const c = placeClip(pid, a, 0, 90);
@@ -249,8 +206,7 @@ describe('the job', () => {
     expect(stages).toContain('saving camera motion');
     expect(stages.some((s) => /^measuring camera motion \d+\/90$/.test(s))).toBe(true);
     expectOpOutcome(job);
-    if (!STEADY_OPS_BUILT) { expect(store.getProject(pid).revision).toBe(rev); expect(docHash(pid)).toBe(before); return; }
-    // after W2: the measurement and the switch in one transaction, one undo returns the document from before the press
+    // the measurement and the switch in one transaction, one undo returns the document from before the press
     expect(job.output).toMatchObject({ assetId: a, clipId: c, measuredFrames: 90, readFrames: 90, applied: true });
     expect(store.getProject(pid).revision).toBe(rev + 1);
     const m = store.getProject(pid).doc.analyses[a]!.cameraMotion!;
@@ -262,15 +218,14 @@ describe('the job', () => {
     expect(docHash(pid)).toBe(before);
   }, 180_000);
 
-  it('the operation refuses (before W2 notBuilt; after W2 tooLittle on a flat picture): failed with its refusal and details, nothing attached', async () => {
+  it('the operation refuses (tooLittle on a flat picture): failed with its refusal and details, nothing attached', async () => {
     const pid = project('refused');
-    const a = await importInto(pid, STEADY_OPS_BUILT ? flatFile : shakyFile);
+    const a = await importInto(pid, flatFile);
     const c = placeClip(pid, a, 0, 60);
     const before = docHash(pid);
     const job = await settle(startStabiliseJob(store, gov, agent, pid, c, {}).id);
     expect(job.status).toBe('failed');
-    if (STEADY_OPS_BUILT) expect([job.error.code, job.error.message]).toEqual(['incompatible', expect.stringMatching(/^only \d+% of this clip's frames could be measured/)]);
-    else expect(job.error.code).toBe(STEADY_REFUSALS.notBuilt.code);
+    expect([job.error.code, job.error.message]).toEqual(['incompatible', expect.stringMatching(/^only \d+% of this clip's frames could be measured/)]);
     expect(docHash(pid)).toBe(before);
     expect(store.getProject(pid).doc.analyses[a]?.cameraMotion).toBeUndefined();
   }, 120_000);
@@ -308,7 +263,7 @@ describe('the job', () => {
     expect((await tool('cancel_job', { jobId: job.id })).text).toContain('already-finished');
   }, 60_000);
 
-  it('restart mid-run: recovery measures again from the start and ends as an uninterrupted run (after W2: the same measurement, attached once)', async () => {
+  it('restart mid-run: recovery measures again from the start and ends as an uninterrupted run (the same measurement, attached once)', async () => {
     const once = project('once'), again = project('again');
     const a1 = await importInto(once, shakyFile), a2 = await importInto(again, shakyFile);
     const c1 = placeClip(once, a1, 0, 60), c2 = placeClip(again, a2, 0, 60);
@@ -322,7 +277,7 @@ describe('the job', () => {
     expect(log).toEqual([{ from: 0, to: 90, frames: 90 }]);
     expect([j2.status, j2.error?.code ?? null]).toEqual([j1.status, j1.error?.code ?? null]);
     expectOpOutcome(j2);
-    if (STEADY_OPS_BUILT) expect(JSON.stringify(store.getProject(again).doc.analyses[a2]!.cameraMotion!.stretches.map(({ origin, ...s }) => s))).toBe(JSON.stringify(store.getProject(once).doc.analyses[a1]!.cameraMotion!.stretches.map(({ origin, ...s }) => s)));
+    expect(JSON.stringify(store.getProject(again).doc.analyses[a2]!.cameraMotion!.stretches.map(({ origin, ...s }) => s))).toBe(JSON.stringify(store.getProject(once).doc.analyses[a1]!.cameraMotion!.stretches.map(({ origin, ...s }) => s)));
   }, 180_000);
 
   it('shutdown stops the work and leaves the row running, to be measured again after the restart', async () => {
@@ -348,16 +303,14 @@ describe('the job', () => {
     const job = await settle(startStabiliseJob(store, gov, agent, pid, c, {}, { readFrames: countingReader(log) }).id);
     expect(log).toEqual([{ from: 134, to: 240, frames: 106 }]);
     expectOpOutcome(job);
-    if (STEADY_OPS_BUILT) {
-      expect(job.output).toMatchObject({ measuredFrames: 106, readFrames: 106 });
-      const s = store.getProject(pid).doc.analyses[a]!.cameraMotion!.stretches;
-      expect(s.map((x) => [x.from, x.st.length, x.st[134]])).toEqual([[0, 240, SST.ok]]); // one stretch; frame 134 kept its old sample
-    }
+    expect(job.output).toMatchObject({ measuredFrames: 106, readFrames: 106 });
+    const s = store.getProject(pid).doc.analyses[a]!.cameraMotion!.stretches;
+    expect(s.map((x) => [x.from, x.st.length, x.st[134]])).toEqual([[0, 240, SST.ok]]); // one stretch; frame 134 kept its old sample
   }, 120_000);
 });
 
-describe('after W2', () => {
-  it.skipIf(!STEADY_OPS_BUILT)('a stored scene cut of the file is start in the measurement, whatever the kernel saw', async () => {
+describe('stored cuts', () => {
+  it('a stored scene cut of the file is start in the measurement, whatever the kernel saw', async () => {
     const pid = project('cut');
     const a = await importInto(pid, shakyFile);
     const c = placeClip(pid, a, 0, 90);
