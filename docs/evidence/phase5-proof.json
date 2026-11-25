@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T00:50:33.452Z",
+  "ranAt": "2026-11-25T01:21:18.416Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
@@ -76,11 +76,11 @@
       "detail": {
         "proposed": true,
         "committed": false,
-        "proposalId": "prp_yxxA5vmtZpY",
+        "proposalId": "prp_Btt14IgWJgg",
         "baseRevision": 10,
         "summary": "Updated text \"פתיחה חלופית\"",
         "changedIds": [
-          "clp_deec0e7abc0"
+          "clp_1174b4a8b40"
         ],
         "status": "open"
       }
@@ -113,7 +113,7 @@
       "name": "goal 10 — scoped agent: may edit the text track; video, mixed transactions and other projects are refused with typed errors, and nothing partial is applied",
       "ok": true,
       "detail": {
-        "entityId": "clp_caea9050004",
+        "entityId": "clp_25976734484",
         "reason": "track trk_video is outside the grant"
       }
     },
