@@ -44,16 +44,14 @@ export function TimeEntry({ target }: { target: 'goto' | 'duration' }) {
   const lang = state.lang;
   const doc = state.doc;
   const opener = useRef<HTMLElement | null>(typeof document !== 'undefined' && document.activeElement instanceof HTMLElement ? document.activeElement : null);
-  const [box, setBox] = useState<{ left: number; bottom: number } | null>(null);
+  const [box] = useState<{ left: number; bottom: number }>(() => {
+    const r = document.querySelector<HTMLElement>('[data-testid=timecode]')?.getBoundingClientRect();
+    return r ? { left: Math.max(8, Math.min(r.left, window.innerWidth - 376)), bottom: Math.max(8, window.innerHeight - r.top + 8) } : { left: 16, bottom: 120 };
+  });
   const titleId = useId();
   const ids = state.selection.filter((id) => doc && findClip(doc, id));
   const rate = editor.rate;
-  const close = () => { craftSurface.set(null); const o = opener.current; setTimeout(() => (o && o.isConnected ? o : document.querySelector<HTMLElement>('[data-testid=timecode]'))?.focus(), 0); };
-  useEffect(() => {
-    const el = document.querySelector<HTMLElement>('[data-testid=timecode]');
-    const r = el?.getBoundingClientRect();
-    setBox(r ? { left: Math.max(8, Math.min(r.left, window.innerWidth - 376)), bottom: Math.max(8, window.innerHeight - r.top + 8) } : { left: 16, bottom: 120 });
-  }, []);
+  const close = () => { craftSurface.set(null); const o = opener.current; setTimeout(() => (o && o !== document.body && o.isConnected ? o : document.querySelector<HTMLElement>('[data-testid=timecode]'))?.focus(), 0); };
   // a click anywhere else closes the field (it is not modal); the focus stays where the click put it
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -83,7 +81,7 @@ export function TimeEntry({ target }: { target: 'goto' | 'duration' }) {
   const title = goto ? say(lang, 'gotoTitle') : ids.length > 1 ? say(lang, 'durationTitleMany', { c: ids.length }) : say(lang, 'durationTitle');
   return (
     <div ref={root} className="pf-craft-pop" role="dialog" aria-modal="false" aria-labelledby={titleId} dir={lang === 'he' ? 'rtl' : 'ltr'} lang={lang} data-testid={TID.timeEntry} data-target={target}
-      style={{ left: box?.left ?? 16, bottom: box?.bottom ?? 120, visibility: box ? 'visible' : 'hidden' }}>
+      style={{ left: box.left, bottom: box.bottom }}>
       <h2 id={titleId}>{title}</h2>
       <TimeField lang={lang} rate={rate} mode={target === 'goto' ? 'goto' : 'duration'} base={base} several={ids.length > 1} last={lastFrame} autoFocus
         label={goto ? say(lang, 'timeInputLabel') : say(lang, 'durationInputLabel')} initial="" onCommit={commit} onEscape={close} />

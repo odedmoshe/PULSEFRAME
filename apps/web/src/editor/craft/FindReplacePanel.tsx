@@ -52,6 +52,17 @@ export function FindReplacePanel() {
   const serial = craftSurface.serial;
   useEffect(() => { findRef.current?.focus(); findRef.current?.select(); }, [serial]);
 
+  // Escape closes the panel also when the focus fell to the page (a button that became disabled), but never from behind a modal
+  useEffect(() => {
+    const onEsc = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape' || document.querySelector('[aria-modal="true"]')) return;
+      const at = document.activeElement;
+      if (!at || at === document.body) { e.preventDefault(); e.stopPropagation(); close(); }
+    };
+    window.addEventListener('keydown', onEsc, true);
+    return () => window.removeEventListener('keydown', onEsc, true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // search: after a short pause, the server's answer with its revision; the document of that revision is kept for planning
   useEffect(() => {
     const mine = ++seq.current;
@@ -95,6 +106,7 @@ export function FindReplacePanel() {
     setBusy(true); setError(null);
     const r = await editor.commitExact(built.ops, 'Replace text', shown.result.revision, `craft:find:${shown.result.revision}:${hash(JSON.stringify(built.ops))}`);
     setBusy(false);
+    findRef.current?.focus();
     if (r.kind === 'committed') {
       editor.notify({ kind: r.result.transactionId ? 'undo' : 'info', title: say(lang, 'replaceDone', { n: built.plan.edits.length }), ...(r.result.transactionId ? { undoes: r.result.transactionId } : {}) });
       setStale(false); setError(null);

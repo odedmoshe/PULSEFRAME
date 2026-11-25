@@ -10,7 +10,7 @@ import {
   type AttributeGroup, type DiffEntityKind, type DiffRow, type DiffSummary, type FindQuery, type OpCall, type PastePlan, type ProjectDocument, type ReplacePlan, type TextMatch, type VersionInfo,
 } from '@pulseframe/core';
 import { dictionaries, translateRefusal } from '@pulseframe/i18n';
-import { ApiFailure } from '../../api.ts';
+import { api, ApiFailure } from '../../api.ts';
 import { CRAFT_STRINGS, type CraftStringKey } from './craft.strings.ts';
 
 export type Lang = 'he' | 'en';
@@ -312,3 +312,12 @@ export async function loadStill(url: string, lang: Lang, signal?: AbortSignal): 
 /** The clip's start frame, for the rows of the clip's time block. */
 export const clipStartFrame = (doc: ProjectDocument, clipId: string): number | null => { const f = findClip(doc, clipId); return f ? T.frameIndexAt(f.clip.start, doc.settings.frameRate) : null; };
 export const clipEndTime = (doc: ProjectDocument, clipId: string): T.RationalTime | null => { const f = findClip(doc, clipId); return f ? clipEnd(f.clip) : null; };
+
+/**
+ * The two answers the shared api client (api.ts) types as the thing itself while the server wraps it: POST …/versions answers
+ * `{version}` and GET …/diff answers `{diff}` (craft-w2-report.md). Unwrapped here, in either shape, until the client's types say so.
+ */
+export const craftApi = {
+  async saveVersion(projectId: string, name: string): Promise<VersionInfo> { const r = (await api.saveVersion(projectId, name)) as unknown as { version?: VersionInfo } & VersionInfo; return r.version ?? r; },
+  async versionDiff(projectId: string, versionId: string, against: string): Promise<DiffSummary> { const r = (await api.versionDiff(projectId, versionId, against)) as unknown as { diff?: DiffSummary } & DiffSummary; return r.diff ?? r; },
+};

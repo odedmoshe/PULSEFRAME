@@ -1869,6 +1869,79 @@ async function main() {
       await lctx.close();
     }
 
+    // editing craft (wave 7): Q with its toast and undo, a paste refused while a format is shown, the find panel's stated rules, and
+    // the versions dialog's empty, saved and delete-with-confirmation states, each in the real editor (Hebrew). The owner's laptop
+    // still has the real keyboard and the browser's own Ctrl+S / Ctrl+F dialogs.
+    {
+      console.log('\n# editing craft: Q and its undo toast, paste in a format, find rules, versions dialog');
+      const doc0 = async (id: string) => (await call(`/projects/${id}`)).body.project;
+      const poll = async (pred: () => Promise<boolean>, ms = 8000) => { const t0 = Date.now(); for (;;) { if (await pred()) return true; if (Date.now() - t0 > ms) return false; await sleep(100); } };
+      const cp = (await call('/projects', { name: 'craft', width: 640, height: 360 })).body.project.id as string;
+      const cpic = await upload(cp, picFile);
+      const ca = (await txs(cp, [{ op: 'add_clip', args: { assetId: cpic.assetId, start: f(0), duration: f(60), withLinkedAudio: false } }])).results[0].output.clipId as string;
+      const cTrack = (await doc0(cp)).sequences.seq_main.tracks.find((t: any) => t.clips.some((c: any) => c.id === ca)).id as string;
+      const cb = (await txs(cp, [{ op: 'add_clip', args: { assetId: cpic.assetId, trackId: cTrack, start: f(60), duration: f(30), withLinkedAudio: false } }])).results[0].output.clipId as string;
+      await txs(cp, [{ op: 'add_text', args: { text: 'ילדים הילד נעה', start: f(70), duration: f(30) } }]);
+      const cvar = (await txs(cp, [{ op: 'add_variant', args: { name: 'Tall', width: 360, height: 640, fit: 'cover' } }])).results[0].output.variantId as string;
+      const cctx = await browser.newContext({ viewport: { width: 1500, height: 1000 }, reducedMotion: 'reduce' });
+      await cctx.addInitScript('globalThis.__name = (f) => f');
+      await cctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
+      const cpage = await cctx.newPage();
+      const send = (code: string, mods: { ctrl?: boolean; alt?: boolean } = {}) => cpage.evaluate(({ code, mods }) => { (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { code, key: code, ctrlKey: !!mods.ctrl, altKey: !!mods.alt, bubbles: true, cancelable: true })); }, { code, mods });
+      await cpage.goto(`${s.ownerUrl}&project=${cp}`);
+      await cpage.getByTestId('timecode').waitFor({ timeout: 30000 });
+      await cpage.waitForFunction(() => document.querySelectorAll('.clip').length >= 3, undefined, { timeout: 15000 });
+      const hashOf = async () => sha256Hex(JSON.stringify(await doc0(cp)));
+      await cpage.locator(`.clip[data-clip-id="${ca}"]`).click({ position: { x: 4, y: 4 } });
+      await cpage.getByTestId('timecode').click();
+      await cpage.getByTestId('craft-time-input').fill('20');
+      await cpage.keyboard.press('Enter');
+      await cpage.getByTestId('craft-time-entry').waitFor({ state: 'detached' });
+      const h0 = await hashOf();
+      await send('KeyQ');
+      const toast = cpage.locator('.pf-toast, [role=status]').filter({ hasText: /נחתכו 20 פריימים/ }).first();
+      await toast.waitFor({ timeout: 8000 }).catch(() => {});
+      const said = (await toast.innerText().catch(() => '')).replace(/\s+/g, ' ');
+      const stayed = (await cpage.getByText(/כותרות, מוזיקה וסמנים שאחרי החיתוך נשארו במקומם/).count()) > 0;
+      const shortened = await poll(async () => fr(clipOf(await doc0(cp), ca).duration) === 40);
+      await cpage.getByRole('button', { name: 'ביטול' }).first().click().catch(() => {});
+      const undone = await poll(async () => (await hashOf()) === h0);
+      check('Q (ripple trim): the toast says «נחתכו 20 פריימים» with «קליפ אחד זז», says that titles, music and markers after the cut stayed, and its «ביטול» returns the exact document', shortened && /נחתכו 20 פריימים · קליפ אחד זז/.test(said) && stayed && undone, { said, stayed, shortened, undone });
+      await chooseFormat(cpage, cvar);
+      await cpage.locator(`.clip[data-clip-id="${cb}"]`).click({ position: { x: 4, y: 4 } });
+      await send('KeyV', { ctrl: true, alt: true });
+      const said2 = await cpage.getByText('כשמוצג פורמט אחר אפשר להדביק רק בגרסה הראשית').first().waitFor({ timeout: 5000 }).then(() => true, () => false);
+      check('Ctrl+Alt+V while a format is shown says why it cannot paste (no dialog opens, nothing is changed)', said2 && (await cpage.getByTestId('craft-paste-dialog').count()) === 0, { said: said2 });
+      await chooseFormat(cpage, '');
+      await send('KeyF', { ctrl: true });
+      await cpage.getByTestId('craft-find-input').fill('ילד');
+      await cpage.getByTestId('craft-find-count').waitFor();
+      await until2(async () => (await cpage.getByTestId('craft-find-count').getAttribute('data-total')), (v) => v === '1');
+      const loose = await cpage.getByTestId('craft-find-count').getAttribute('data-total');
+      await cpage.getByTestId('craft-find-option-wholeWord').check();
+      await until2(async () => (await cpage.getByTestId('craft-find-count').getAttribute('data-kind')), (v) => v === 'none');
+      const whole = await cpage.getByTestId('craft-find-count').getAttribute('data-total');
+      const rule = await cpage.getByText('«ילד» לא ימצא «ילדים» ולא «הילד»').count();
+      check('find: «ילד» finds the title without «מילה שלמה» (one text) and finds nothing with it; the rule is stated beside the switch (no prefix stripping)', loose === '1' && whole === '0' && rule === 1, { loose, whole, rule });
+      await cpage.keyboard.press('Escape');
+      await cpage.getByTestId('craft-versions-open').click();
+      await cpage.getByTestId('craft-versions-empty').waitFor({ timeout: 8000 }).catch(() => {});
+      const empty = await cpage.getByTestId('craft-versions-empty').count();
+      await cpage.keyboard.press('Escape');
+      await send('KeyS', { ctrl: true });
+      await cpage.getByTestId('craft-save-version-input').fill('גרסה לבדיקה');
+      await cpage.keyboard.press('Enter');
+      await cpage.getByTestId('craft-save-version').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+      await cpage.getByTestId('craft-versions-open').click();
+      await cpage.getByTestId('craft-version-row-0').waitFor({ timeout: 8000 }).catch(() => {});
+      const row = (await cpage.getByTestId('craft-version-row-0').innerText().catch(() => '')).replace(/\s+/g, ' ');
+      await cpage.getByTestId('craft-version-row-0').getByTestId('craft-version-delete').click();
+      await cpage.getByTestId('craft-version-delete-yes').click();
+      await cpage.getByTestId('craft-versions-empty').waitFor({ timeout: 8000 }).catch(() => {});
+      check('versions: «גרסאות» says honestly that nothing is saved yet; a saved version lists its name, «המדיה לא מועתקת» and «זהה למצב הנוכחי»; delete asks first and the list is empty again', empty === 1 && /גרסה לבדיקה/.test(row) && /המדיה לא מועתקת/.test(row) && /זהה למצב הנוכחי/.test(row) && (await cpage.getByTestId('craft-versions-empty').count()) === 1, { empty, row });
+      await cctx.close();
+    }
+
     await page.close();
   } catch (e) {
     console.error(e);

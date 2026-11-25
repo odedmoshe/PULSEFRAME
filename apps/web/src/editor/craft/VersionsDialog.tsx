@@ -17,7 +17,7 @@ import { useEditorState } from '../store.ts';
 import { CRAFT_TESTIDS as TID } from './craft.testids.ts';
 import { craftSurface } from './craft.state.ts';
 import { TimeField } from './TimeEntry.tsx';
-import { craftFailure, currentFrameUrl, diffRowSentence, diffSentence, frameState, loadStill, privacyAtStake, restoresRows, say, stepFrame, versionMeta, type Failure, type Lang } from './craft.logic.ts';
+import { craftApi, craftFailure, currentFrameUrl, diffRowSentence, diffSentence, frameState, loadStill, privacyAtStake, restoresRows, say, stepFrame, versionMeta, type Failure, type Lang } from './craft.logic.ts';
 
 type Still = { state: 'loading' } | { state: 'ok'; url: string } | { state: 'failed'; message: string; code: string | null } | { state: 'absent' };
 
@@ -80,8 +80,8 @@ export function VersionsDialog() {
     if (!pid || !chosen) return;
     const mine = ++loadSeq.current;
     const fail = (e: unknown) => { if (mine === loadSeq.current) setDiffError(craftFailure(lang, e)); };
-    api.versionDiff(pid, chosen, against).then((d) => { if (mine === loadSeq.current) { setDiff(d); if (against === 'current') setRestoreDiff(d); } }, fail);
-    if (against !== 'current') api.versionDiff(pid, chosen, 'current').then((d) => { if (mine === loadSeq.current) setRestoreDiff(d); }, () => undefined);
+    craftApi.versionDiff(pid, chosen, against).then((d) => { if (mine === loadSeq.current) { setDiff(d); if (against === 'current') setRestoreDiff(d); } }, fail);
+    if (against !== 'current') craftApi.versionDiff(pid, chosen, 'current').then((d) => { if (mine === loadSeq.current) setRestoreDiff(d); }, () => undefined);
   }, [pid, chosen, against, state.revision, lang]);
 
   if (!pid) return null;
