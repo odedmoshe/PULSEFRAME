@@ -46,8 +46,8 @@ describe('what the inspector shows for a selection', () => {
     expect(objectKind(p.doc, [p.first], p.first)).toBe('video'); // nothing ends where the first clip starts
     expect(objectKind(p.doc, [p.second], p.first)).toBe('video'); // another clip's cut
   });
-  it('gives a video clip its seven tabs, basic first, and every kind at least one', () => {
-    expect(tabsFor('video')).toEqual(['basic', 'motion', 'speed', 'colour', 'effects', 'mask', 'audio']);
+  it('gives a video clip its eight tabs (Beat after Speed: the moment is usually in the picture), basic first, and every kind at least one', () => {
+    expect(tabsFor('video')).toEqual(['basic', 'motion', 'speed', 'beat', 'colour', 'effects', 'mask', 'audio']);
     expect(tabsFor('text')[0]).toBe('text');
     expect(tabsFor('cut')).toEqual(['cut', 'transition']);
     expect(tabsFor('sound')).toEqual(['audio', 'soundfx', 'speed', 'beat']);
