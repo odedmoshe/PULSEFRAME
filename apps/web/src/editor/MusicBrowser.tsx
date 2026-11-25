@@ -14,6 +14,7 @@ import { Badge, Button, Chip, IconButton } from '../ds/index.ts';
 import { MUSIC_TESTIDS } from './packs.testids.ts';
 import { MUSIC_STRINGS } from './music.strings.ts';
 import { addBody, errorText, formatDuration, formatMegabytes, lengthChoices, musicRows, previewUrl, PREVIEW_MAX_BARS, sectionStrip, stepSeed, type LengthKey, type MusicRow } from './music.logic.ts';
+import { InstrumentsChoice } from './instruments/InstrumentsChoice.tsx';
 import './musicBrowser.css';
 
 const ico = { size: 16, strokeWidth: 1.75, 'aria-hidden': true as const, focusable: false as const };
@@ -127,6 +128,8 @@ export function MusicBrowser({ projectId, lang, fitSeconds, onAdded }: { project
                   >{x.key === 'fit' ? s.fit : `${x.key} ${s.bars}`}</Chip>
                 ))}
               </div>
+              {/* «צליל» (wave 7 instruments; builder W3 wires the choice into the preview and the add): renders nothing until built */}
+              <InstrumentsChoice styleId={row.id} lang={lang} bars={c.bars ?? 0} seed={seed} value="synth" onChange={() => undefined} />
               <div className="pf-music-seed" role="group" aria-label={`${s.seed}: ${row.name}`} data-testid={MUSIC_TESTIDS.seed}>
                 <IconButton size="sm" label={s.seedDown} icon={<Minus {...ico} />} disabledReason={seed <= 0 ? s.seedDown : undefined} onClick={() => { if (isPlaying) stop(); setSeeds((m) => ({ ...m, [row.id]: stepSeed(seed, -1) })); }} />
                 <span className="pf-music-seed-value" aria-live="polite">{s.seed} <bdi className="num">{seed}</bdi></span>

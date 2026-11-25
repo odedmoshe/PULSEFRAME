@@ -56,6 +56,7 @@ export * from './lifeOps.ts';
 // content packs, Hebrew fonts, built-in music (ADR-0022)
 export type { PackElementEntry } from './elementKit.ts';
 export * from './musicStyles.ts';
+export * from './musicKits.ts';
 export * from './packOps.ts';
 export * from './titleFields.ts';
 export * from './fontPairs.ts';

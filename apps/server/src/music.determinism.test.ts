@@ -43,7 +43,7 @@ describe('M9: the render path is arithmetic only', () => {
   const dir = path.join(here, 'music');
   const files = fs.readdirSync(dir).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'));
   it('the folder holds the whole render path', () => {
-    expect(files.sort()).toEqual(['arrange.ts', 'compose.ts', 'dsp.ts', 'render.ts', 'styles.ts', 'voices.ts', 'wav.ts']);
+    expect(files.sort()).toEqual(['arrange.ts', 'compose.ts', 'dsp.ts', 'render.ts', 'sampler.ts', 'styles.ts', 'voices.ts', 'wav.ts']);
   });
   it.each(files)('%s uses only the allowed Math functions and nothing that depends on the machine or the moment', (f) => {
     const raw = fs.readFileSync(path.join(dir, f), 'utf8');

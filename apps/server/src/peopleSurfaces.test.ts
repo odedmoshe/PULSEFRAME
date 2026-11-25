@@ -196,6 +196,8 @@ const PARAMS: Record<string, () => string> = {
   versionId: () => 'ver_none',
   // stabilisation (wave 7): a clip the walked project does not have (the route answers before reading anything)
   clipId: () => 'clp_none',
+  // recorded instruments (wave 7): the one kit of this build (the heard route answers 403 to every agent before reading anything)
+  kitId: () => 'kit.calm.vsco',
 };
 /** Queries and bodies that reach the part of a route that reads the project; any other POST gets a body its schema refuses. */
 const QUERY: Record<string, () => string> = {

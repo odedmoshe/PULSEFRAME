@@ -23,6 +23,9 @@ import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
 import { applyTransaction, beatNumbers, ownSceneCuts, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema, TemplateRegenerateBodySchema, FindShortsBodySchema, SHORTS_MEASUREMENT_KIND, sequenceList, shortsRefusal, MulticamSyncBody, multicamGroupOf, MULTICAM_REFUSALS, MULTICAM_SYNC_KIND, TakeRequestSchema } from '@pulseframe/core';
 import { addMusic, MusicBody, musicPreview } from './music.ts';
+import { instrumentsError } from './instruments/contract.ts';
+import { markKitHeard } from './instruments/heard.ts';
+import { listMusicKits } from './instruments/routes.ts';
 import { onThisDayFor, readMissingCaptures } from './lifeline.ts';
 import { preflight } from './preflight.ts';
 import { collectGarbage, deleteProject, assertStorageRoom, storageReport } from './storage.ts';
@@ -760,8 +763,21 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.get('/api/v1/music/:styleId/audio', async (c) => {
     need(c, 'observe');
     const int = (v: string | undefined, d: number) => (v === undefined || v === '' ? d : /^\d{1,7}$/.test(v) ? Number(v) : Number.NaN);
-    const bytes = await musicPreview(c.req.param('styleId'), int(c.req.query('bars'), 16), int(c.req.query('seed'), 1), { signal: c.req.raw.signal });
-    return c.body(new Uint8Array(bytes), 200, { 'content-type': 'audio/wav', 'content-length': String(bytes.length), 'cache-control': 'private, max-age=3600' });
+    // wave 7 instruments: ?instruments=synth|recorded (recorded refused until built, never silently synthesised) and ?match=1 (the level
+    // scale header; builder W2). Headers carry ASCII codes only.
+    const instruments = c.req.query('instruments');
+    if (instruments !== undefined && instruments !== 'synth' && instruments !== 'recorded') throw new ApiError(400, 'invalid_option', 'instruments is synth or recorded', { instruments: instruments.slice(0, 16) });
+    const match = c.req.query('match');
+    if (match !== undefined && match !== '0' && match !== '1') throw new ApiError(400, 'invalid_option', 'match is 0 or 1', { match: match.slice(0, 8) });
+    const bytes = await musicPreview(c.req.param('styleId'), int(c.req.query('bars'), 16), int(c.req.query('seed'), 1), { signal: c.req.raw.signal, ...(instruments ? { instruments } : {}) });
+    return c.body(new Uint8Array(bytes), 200, { 'content-type': 'audio/wav', 'content-length': String(bytes.length), 'cache-control': 'private, max-age=3600', 'x-pf-instruments': 'synth' });
+  });
+  // recorded instruments «כלים מוקלטים» (wave 7 instruments track; instruments/routes.ts): the kits and their honest states; the owner's mark
+  app.get('/api/v1/music/kits', async (c) => { need(c, 'observe'); return c.json(await listMusicKits(cfg)); });
+  app.post('/api/v1/music/kits/:kitId/heard', async (c) => {
+    const p = need(c, 'observe');
+    if (!isOwnerSession(p)) throw instrumentsError('ownerOnly', {}); // before the body is read: an agent learns nothing else
+    return c.json(markKitHeard(cfg.dataDir, p, c.req.param('kitId'), (await body(c, z.object({ heard: z.boolean() }).strict())).heard, new Date().toISOString()));
   });
   // As for templates: the credential's own mode decides (addMusic refuses observe and propose modes with the reason).
   app.post('/api/v1/projects/:id/music', async (c) => {

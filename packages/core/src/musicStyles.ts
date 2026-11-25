@@ -176,6 +176,8 @@ export const MusicRequestSchema = z.object({
   /** Wave 7 musicfit: the ending in 48 kHz sample frames (2 to 6 beats), only with `bars`; exactLayoutFor gives both. Absent = one bar. */
   endFrames: z.number().int().min(1).max(MUSIC_MAX_SECONDS * MUSIC_SAMPLE_RATE).optional().describe('The ending in 48 kHz sample frames (2 to 6 beats), only together with bars; absent = one bar'),
   seed: z.number().int().min(0).max(MUSIC_MAX_SEED).default(1),
+  /** Wave 7 instruments «כלים מוקלטים»: 'recorded' makes every part of the style's kit with samples of the owner's library, or is refused (all-or-nothing, never silently synthesised). Absent = 'synth' = the bytes of ADR-0022. */
+  instruments: z.enum(['synth', 'recorded']).optional().describe('synth (default) or recorded: every part of the style\'s kit played with recorded instrument samples from the owner\'s library, all or nothing; refused with the reason when the kit is not ready. Unheard until the owner listens'),
 }).strict();
 export type MusicRequest = z.infer<typeof MusicRequestSchema>;
 

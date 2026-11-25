@@ -241,6 +241,10 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`POST ${P}/search/index`]: ['owner-only'],
   [`DELETE ${P}/search/index`]: ['owner-only'],
   'DELETE /api/v1/search/index': ['owner-only'],
+  // recorded instruments «כלים מוקלטים» (wave 7 instruments track; instruments/contract.ts): kit states hold no project and no people; the
+  // owner's «שמעתי» mark answers the owner's own session only (403 owner_required for every agent, observer and the phone drop)
+  'GET /api/v1/music/kits': ['no-document'],
+  'POST /api/v1/music/kits/:kitId/heard': ['owner-only'],
   // MCP over HTTP: see PEOPLE_MCP_TOOLS and PEOPLE_MCP_RESOURCES
   'ALL /mcp': ['reader-document'],
 };

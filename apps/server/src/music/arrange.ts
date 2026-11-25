@@ -7,13 +7,14 @@
  *   starts after it.
  * Beat k starts at sample k·samplesPerBeat exactly; a tick inside a beat is floor(tick·samplesPerBeat/12) samples after it.
  */
-import type { MusicLayout } from '@pulseframe/core';
+import type { MusicLayout, PartKey } from '@pulseframe/core';
 import { mulberry32 } from './dsp.ts';
 import { chordAt, hashId, pitchOf, TICKS_PER_BAR, TICKS_PER_BEAT, type ChordInfo, type Composition } from './compose.ts';
 import type { Level, PartSpec, StyleSpec } from './styles.ts';
 import type { Voice } from './voices.ts';
 
-export interface Note { at: number; gate: number; voice: Voice; midi: number; vel: number; pan: number; send: number }
+/** `part` (wave 7 instruments): which part of the style played it (a pitched role, `drum.<voice kind>`, or `click`); a kit replaces pitched parts by it. Never changes a sample. */
+export interface Note { at: number; gate: number; voice: Voice; midi: number; vel: number; pan: number; send: number; part: PartKey }
 
 /** The sample at which `tick` (counted from the start of the track, 48 a bar) starts. */
 export function tickSample(layout: Pick<MusicLayout, 'samplesPerBeat'>, absTick: number, swing = 0): number {
@@ -66,8 +67,9 @@ export function arrange(spec: StyleSpec, layout: MusicLayout, comp: Composition,
   const span = (bar: number, tick: number, dur: number) => Math.max(1, at(bar, tick + dur) - at(bar, tick));
   const voicer = new Voicer(spec);
   const voicings: number[][][] = comp.chords.map((bar) => bar.map((c) => voicer.voice(c)));
-  const push = (p: { voice: Voice; pan: number; send: number }, atS: number, gate: number, midi: number, vel: number) => out.push({ at: atS, gate, voice: p.voice, midi, vel: Math.min(1, vel), pan: p.pan, send: p.send });
-  const play = (p: PartSpec, atS: number, gate: number, midi: number, vel: number) => push(p, atS, gate, midi, vel * dyn);
+  const push = (part: PartKey, p: { voice: Voice; pan: number; send: number }, atS: number, gate: number, midi: number, vel: number) => out.push({ at: atS, gate, voice: p.voice, midi, vel: Math.min(1, vel), pan: p.pan, send: p.send, part });
+  const drum = (v: Voice): PartKey => `drum.${v.kind}`;
+  const play = (p: PartSpec, atS: number, gate: number, midi: number, vel: number) => push(p.role, p, atS, gate, midi, vel * dyn);
   const levelOf: Level[] = new Array(N);
   const sectionOf: number[] = new Array(N);
   layout.sections.forEach((s, si) => { for (let i = 0; i < s.bars; i++) { levelOf[s.startBar + i] = s.level; sectionOf[s.startBar + i] = si; } });
@@ -85,13 +87,13 @@ export function arrange(spec: StyleSpec, layout: MusicLayout, comp: Composition,
     for (const d of spec.drums) {
       const ticks = d.patterns[level];
       if (!ticks) continue;
-      for (const t of ticks) push(d, at(bar, t), S, 60, DRUMS_AT[level]! * d.vel * (t === 0 ? 1 : t % 12 === 0 ? 0.92 : 0.78) * human());
+      for (const t of ticks) push(drum(d.voice), d, at(bar, t), S, 60, DRUMS_AT[level]! * d.vel * (t === 0 ? 1 : t % 12 === 0 ? 0.92 : 0.78) * human());
     }
-    if (spec.crash && s.kind === 'peak' && bar === s.startBar) push({ voice: spec.crash, pan: 0, send: 0.2 }, at(bar, 0), S, 60, 1);
+    if (spec.crash && s.kind === 'peak' && bar === s.startBar) push(drum(spec.crash), { voice: spec.crash, pan: 0, send: 0.2 }, at(bar, 0), S, 60, 1);
     // the last bar of a build: a riser over the bar and a roll in sixteenths over its second half
     if (s.kind === 'build' && bar === s.startBar + s.bars - 1) {
-      push({ voice: spec.riser, pan: 0, send: 0.3 }, at(bar, 0), at(bar + 1, 0) - at(bar, 0), 60, 0.8);
-      for (let t = 24; t < TICKS_PER_BAR; t += 3) push({ voice: spec.roll, pan: 0, send: 0.2 }, at(bar, t), span(bar, t, 3), 60, spec.rollVel * (0.2 + (0.6 * (t - 24)) / 21));
+      push(drum(spec.riser), { voice: spec.riser, pan: 0, send: 0.3 }, at(bar, 0), at(bar + 1, 0) - at(bar, 0), 60, 0.8);
+      for (let t = 24; t < TICKS_PER_BAR; t += 3) push(drum(spec.roll), { voice: spec.roll, pan: 0, send: 0.2 }, at(bar, t), span(bar, t, 3), 60, spec.rollVel * (0.2 + (0.6 * (t - 24)) / 21));
     }
   }
 
@@ -104,16 +106,16 @@ export function arrange(spec: StyleSpec, layout: MusicLayout, comp: Composition,
   for (const part of spec.parts) {
     const voice = endingVoice(part.voice, endT60);
     const p = { voice, pan: part.pan, send: part.send };
-    if (part.role === 'bass') push(p, endAt, endGate, spec.root + part.octave, part.vel * 0.95);
-    else if (part.role === 'lead' || part.role === 'double') push(p, endAt, endGate, pitchOf(spec, leadHome) + part.octave, part.vel * 0.9);
+    if (part.role === 'bass') push(part.role, p, endAt, endGate, spec.root + part.octave, part.vel * 0.95);
+    else if (part.role === 'lead' || part.role === 'double') push(part.role, p, endAt, endGate, pitchOf(spec, leadHome) + part.octave, part.vel * 0.9);
     else {
-      for (const m of tonic) push(p, endAt, endGate, m + part.octave, part.vel * 0.9);
-      if (part.role === 'pad') push(p, endAt, endGate, lowRoot(0) + part.octave, part.vel * 0.55);
+      for (const m of tonic) push(part.role, p, endAt, endGate, m + part.octave, part.vel * 0.9);
+      if (part.role === 'pad') push(part.role, p, endAt, endGate, lowRoot(0) + part.octave, part.vel * 0.55);
     }
   }
   const kickDrum = spec.drums.find((d) => d.voice.kind === 'kick');
-  if (kickDrum) push(kickDrum, endAt, S, 60, kickDrum.vel);
-  if (spec.crash) push({ voice: spec.crash, pan: 0, send: 0.2 }, endAt, S, 60, 1);
+  if (kickDrum) push(drum(kickDrum.voice), kickDrum, endAt, S, 60, kickDrum.vel);
+  if (spec.crash) push(drum(spec.crash), { voice: spec.crash, pan: 0, send: 0.2 }, endAt, S, 60, 1);
   return out;
 
   /** The root of a chord in the octave under the chord register. */
@@ -202,7 +204,7 @@ export function clicks(layout: MusicLayout): Note[] {
   const out: Note[] = [];
   for (let k = 0; k < 4 * layout.bars; k++) {
     const bar = k % 4 === 0;
-    out.push({ at: tickSample(layout, k * TICKS_PER_BEAT), gate: 1, voice: { kind: 'click', level: bar ? 0.5 : 0.3, hz: bar ? 1500 : 1000 }, midi: 60, vel: 1, pan: 0, send: 0 });
+    out.push({ at: tickSample(layout, k * TICKS_PER_BEAT), gate: 1, voice: { kind: 'click', level: bar ? 0.5 : 0.3, hz: bar ? 1500 : 1000 }, midi: 60, vel: 1, pan: 0, send: 0, part: 'click' });
   }
   return out;
 }

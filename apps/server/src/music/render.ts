@@ -20,6 +20,7 @@ import { flush, Noise, Reverb, SR, sqrtOf } from './dsp.ts';
 import { styleSpec } from './styles.ts';
 import { renderNote } from './voices.ts';
 import { allocWav, wavSampleWriter } from './wav.ts';
+import type { ResolvedBank } from './sampler.ts';
 
 export interface RenderedMusic {
   /** The whole WAV file: 44-byte header + 4 · layout.totalFrames bytes. */
@@ -39,6 +40,11 @@ export interface RenderOptions {
    * track (and the bytes) made before it existed.
    */
   endFrames?: number;
+  /**
+   * Wave 7 instruments «כלים מוקלטים»: the recorded kit of a recorded request, loaded and checked by apps/server/src/instruments/bank.ts.
+   * Absent gives exactly the synthesiser's bytes. Typed and ignored until builder W1 builds the sampled path (sampler.ts).
+   */
+  bank?: ResolvedBank;
 }
 /** Thrown when a render is stopped through RenderOptions.cancel. */
 export class MusicCancelled extends Error {
