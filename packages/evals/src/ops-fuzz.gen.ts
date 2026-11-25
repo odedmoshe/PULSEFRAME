@@ -600,7 +600,8 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       ...(MULTICAM_OPS_BUILT && !opts.v1Replay ? multicamMenu(doc) : []),
       ...(SEQUENCE_OPS_BUILT ? [...sequenceMenu(doc), () => { const others = Object.keys(doc.sequences).filter((id) => id !== doc.mainSequenceId); return { op: 'add_marker', args: { sequenceId: others.length && rnd() < 0.8 ? pick(others) : rnd() < 0.5 ? doc.mainSequenceId : 'seq_none', time: T.frameTime(int(240), rate) } }; }] : []),
       // send and keep (wave 7): the master limiter on and off, and the loudness match of sound clips with their current gain (accepted)
-      // or a changed one (refused stale), sometimes a repeated or unknown clip
+      // or a changed one (refused stale), sometimes a repeated or unknown clip; left out of the recorded v1 replay corpus
+      ...(opts.v1Replay ? [] : [
       () => ({ op: 'set_master_limiter', args: { ceiling: pick([null, -1, -3, -0.5, 0]) } }),
       () => {
         const pool = audioClips.length ? audioClips : [];
@@ -611,6 +612,7 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
         if (rnd() < 0.05) rows.push({ ...rows[0]! });
         return { op: 'match_clip_loudness', args: { target: pick([-14, -16, -18, -23]), clips: rows } };
       },
+      ]),
     ];
     return pick(menu)();
   };

@@ -117,6 +117,7 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`POST ${P}/analysis/loudness`]: ['reader-document'],
   [`POST ${P}/analysis/silences`]: ['reader-document'],
   [`POST ${P}/analysis/voice`]: ['reader-document'],
+  [`POST ${P}/analysis/clip-loudness`]: ['reader-document'], // wave 7 send: levels of the clips the reader may read; nothing about people
   [`GET ${P}/motion-tracks/:motionTrackId`]: ['reader-document'],
   [`POST ${P}/motion-tracks/:motionTrackId/track`]: ['reader-document', 'write'],
   // measured moments (ADR-0026): the job reads media, attaches analyses; nothing about people
@@ -222,6 +223,8 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   sync_multicam: ['reader-document', 'write'], get_multicam: ['reader-document'],
   // perform mode (ADR-0025)
   perform_take: ['reader-document', 'write'],
+  // send and keep (wave 7): levels of clips, read-only
+  measure_clip_loudness: ['reader-document'],
 };
 /** MCP resources and prompts (every resource answer passes forPrincipal; prompts carry no project content). */
 export const PEOPLE_MCP_RESOURCES: Readonly<Record<string, readonly PeopleFilter[]>> = {

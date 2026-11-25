@@ -14,6 +14,7 @@ import { promisify } from 'node:util';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { AUTO_SELF_CHECK_CLEAN_EXPORTS, EXPORT_MODES, INCREMENTAL_NOT_BUILT_REASON, RENDER_CACHE_BLOCKERS, SEGMENTED_ROUTE, SELF_CHECK_MODES, type RenderCacheStatus, type SegmentedExportReport } from '@pulseframe/core';
+import { SEND_API_REFUSALS, SEND_FIT, SIZE_FIT_BUILT, type SizeFitFault, type SizeFitManifest } from '@pulseframe/core';
 import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { AUDIO_FX_ENGINE, audioPlan, captionCues, soundEnd, type AudioPlan, type PlannedAudioClip } from '@pulseframe/engine';
@@ -48,6 +49,8 @@ export const ExportOptionsSchema = z
     // segmented export and render cache (ADR-0024). Optional without a default, so the options of every job made before stay as they were.
     mode: z.enum(EXPORT_MODES).optional().describe('single-pass (the default) = one encoder run over every frame; incremental = the fast export: only the segments (2 seconds each, never under 3 frames) whose picture changed since they were stored are rendered, and the segments are joined by stream copy (MP4 only)'),
     selfCheck: z.enum(SELF_CHECK_MODES).optional().describe('incremental only: before rendering, frames of reused segments are rendered again and compared with what was stored; auto (the default) = 3 frames of every reused segment until 20 clean fast exports with this build, then one frame of a sample of them. It proves the frames it checks, nothing more'),
+    // send and keep (wave 7, track send). Optional without a default, so the options of every job made before stay as they were.
+    sizeFit: z.object({ targetBytes: z.number().int().min(SEND_FIT.minTargetBytes).max(SEND_FIT.maxTargetBytes) }).strict().optional().describe('MP4 only: make the file at or under targetBytes (1 MB = 1,000,000 bytes). The server picks the picture size and bit rates (a labelled heuristic, stated in the plan), encodes the full-quality film once and then to the target in two passes, checks the bytes, retries once, and otherwise fails with size_fit_missed and saves nothing. It promises bytes only, not how any app treats the file'),
   })
   .strict();
 export type ExportOptions = z.infer<typeof ExportOptionsSchema>;
@@ -188,6 +191,8 @@ export interface Manifest {
   audioEffects: { type: string; version: number; clips: number }[];
   /** Labelled estimate, never a promise. */
   estimate: { bytes: number | null; basis: string };
+  /** Size-fit (wave 7 send): the planned fit when options.sizeFit is set; the estimate stays the full-quality intermediate's. */
+  fit?: SizeFitManifest;
 }
 /** `hint`: the fix for this blocker when it has one of its own; the refusal then offers it instead of the generic advice. */
 export interface Blocker { code: string; message: string; ids: string[]; hint?: string }
@@ -223,6 +228,11 @@ export class Exporter {
    * heartbeat, stops, discards its partial output and releases the lease.
    */
   browserRoute: { requestCancel(jobId: string, actor: string): { jobId: string; status: string; outcome: string; note?: string } } | null = null;
+  /**
+   * TEST seam only (wave 7 send, send-decisions C7): set by startServer's second argument (deps.fitFault), never from the
+   * environment or a request. Forces the first or every size-fit attempt over the target; the job output labels it TEST.
+   */
+  fitFault: SizeFitFault | null = null;
   constructor(private store: Store, private host: RenderHost, private renderPageUrl: () => string, private webDist: string) {}
 
   /**
@@ -310,6 +320,8 @@ export class Exporter {
       if (outWidth * outHeight * Math.max(0, frames) > 640 * 360 * 600) warnings.push({ code: 'gif_large', message: 'this GIF will be large and limited to 256 colours per frame; consider a shorter range or scale 0.5', ids: [] });
     }
     blockers.push(...incrementalBlockers(options, this.incremental));
+    // size-fit (wave 7 send): an honest blocker until worker B builds the fit (then size_fit_format / size_fit_too_small from core planSizeFit)
+    if (options.sizeFit && !SIZE_FIT_BUILT) blockers.push({ code: SEND_API_REFUSALS.sizeFitNotBuilt.code, message: SEND_API_REFUSALS.sizeFitNotBuilt.message(), ids: [], hint: SEND_API_REFUSALS.sizeFitNotBuilt.hint });
     if (options.captions.startsWith('sidecar') && !doc.sequences[doc.mainSequenceId]!.tracks.some((t) => t.kind === 'caption')) warnings.push({ code: 'no_captions', message: 'a caption file was requested but the project has no caption track; none will be written', ids: [] });
     if (options.format === 'webm-vp9-opus' && doc.settings.sampleRate !== 48000) warnings.push({ code: 'resampled_audio', message: 'Opus is encoded at 48 kHz; audio will be resampled', ids: [] });
     const effects = [...fxUsed].map(([type, clips]) => ({ type, version: findEffect(type)?.version ?? 0, clips }));

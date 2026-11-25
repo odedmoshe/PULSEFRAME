@@ -50,6 +50,8 @@ export const ASSISTANT_EXCLUDED_OPS = [
   'add_cue', 'update_cue', 'merge_cues', 'set_caption_style', 'set_variant_phrase_text',
   // privacy regions and the motion tracks they follow (a proposal must never take a redaction away)
   'set_redact_region', 'create_motion_track', 'edit_motion_track', 'remove_motion_track',
+  // send and keep (wave 7): a project setting, and a match that needs measurements the assistant never reads
+  'set_master_limiter', 'match_clip_loudness',
 ] as const;
 /** The ops a proposal may hold: every registered public op minus ASSISTANT_EXCLUDED_OPS and PERSON_OPS, in registry order. */
 export function assistantOps(): string[] {

@@ -42,6 +42,7 @@ import { ApiError, revisionWithChanges, type JobRow, type RevisionEvent, type St
 import { blobPresent, logMissingMedia, missingAssets, missingMediaError } from './mediaPresence.ts';
 import { measureVoiceCheck, VoiceMeasureBody } from './voiceClean.ts';
 import { ColourMatchBody, matchColour } from './colourMatch.ts';
+import { ClipLoudnessBody, measureClipLoudness } from './clipLoudness.ts';
 import { ApplyModeSchema, RunSourceSchema, type RunRequest } from './aiContracts.ts';
 import { assertMayTakeRendered, forPrincipal, mayHoldPeople, peopleAccess, peopleNote, readingAs, scrubPeople, withoutFamily } from './peoplePrivacy.ts';
 import { assertMayHandleImportJob, decodeUploadHeader, IMPORT_JOB_TYPE, type DropDoor, type ImportQueue } from './importContracts.ts';
@@ -474,6 +475,16 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (sequenceId !== undefined) outputDoc(store.getProject(c.req.param('id')).doc, { sequenceId }); // 404 before any job exists
     if (b && typeof b === 'object' && (b as { background?: unknown }).background === true) { const j = startMeasurementJob(store, p, c.req.param('id'), 'loudness', sequenceId !== undefined ? { sequenceId } : {}); return c.json({ jobId: j.id, status: j.status }, 202); }
     return c.json(await programmeLoudness(store, c.req.param('id'), sequenceId));
+  });
+  // loudness of single clips (wave 7 send): read-only; the match is committed separately with match_clip_loudness and expectedRevision
+  app.post('/api/v1/projects/:id/analysis/clip-loudness', async (c) => {
+    const p = need(c, 'observe');
+    const parsed = ClipLoudnessBody.safeParse(await c.req.json().catch(() => undefined));
+    if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error));
+    if (parsed.data.sequenceId !== undefined) outputDoc(store.getProject(c.req.param('id')).doc, { sequenceId: parsed.data.sequenceId }); // 404 before any job exists
+    else store.getProject(c.req.param('id'));
+    if (parsed.data.background === true) { const j = startMeasurementJob(store, p, c.req.param('id'), 'clip-loudness', parsed.data); return c.json({ jobId: j.id, status: j.status }, 202); }
+    return c.json(await measureClipLoudness(store, c.req.param('id'), parsed.data));
   });
   app.get('/api/v1/projects/:id/history', (c) => { need(c, 'observe'); store.getProject(c.req.param('id')); return c.json({ events: store.eventsSince(c.req.param('id'), Number(c.req.query('since') ?? 0)) }); });
 
@@ -1084,32 +1095,9 @@ export const catalog = () => ({
   note: 'This is the complete list for this build; anything not listed here does not exist. Picture entries render through the Canvas2D compositor (GPU passes where listed); sound entries through the shared engine DSP in preview and export alike. audioEffects are effects applied to sound clips (add_audio_effect, apply_audio_preset); soundEffects are sound files of the sound library.',
 });
 
-/** Mix the current timeline exactly as export would and measure it (EBU R128). Read-only. */
-export async function programmeLoudness(store: Store, projectId: string, sequenceId?: string) {
-  const stored = store.getProject(projectId);
-  // a sequence (a short, ADR-0018) is measured as it exports: alone, with its own loudness target
-  const p = { revision: stored.revision, doc: outputDoc(stored.doc, { sequenceId }) };
-  const plan = audioPlan(p.doc);
-  if (plan.totalSamples === 0 || plan.clips.length === 0) return { revision: p.revision, integratedLufs: null, truePeakDbtp: null, rangeLu: null, clips: 0, note: 'The timeline has no audible sound.' };
-  if (plan.totalSamples > plan.sampleRate * 3600) throw new ApiError(422, 'too_long', 'loudness measurement is limited to one hour of programme');
-  const raw = path.join(store.tmpDir, `loud_${projectId}_${p.revision}_${Date.now()}.f32`);
-  return heavy(async () => {
-  try {
-    const { clips, peak } = await mixToRaw(plan, (assetId) => store.blobPath(p.doc.assets[assetId]!.contentHash), 0, plan.totalSamples, raw, undefined, (assetId) => timeOriginSeconds(p.doc.assets[assetId]), (assetId) => p.doc.assets[assetId]?.audio?.channels === 1);
-    const m = await measureLoudness(raw, plan.sampleRate);
-    const target = p.doc.settings.loudness ?? null;
-    const g = target ? normalisationGain(m, target.target, target.truePeak) : null;
-    return {
-      revision: p.revision, clips, seconds: Number((plan.totalSamples / plan.sampleRate).toFixed(3)), ...m,
-      mixPeakDbfs: peak > 0 ? Number((20 * Math.log10(peak)).toFixed(2)) : null, wouldClipWithoutNormalisation: peak > 1,
-      target, exportWouldApplyGainDb: g ? Number(g.gainDb.toFixed(2)) : 0, limitedByPeak: g?.limitedByPeak ?? false,
-      method: 'ffmpeg ebur128 (EBU R128 / ITU-R BS.1770) on the same mix export renders',
-    };
-  } finally {
-    fs.rmSync(raw, { force: true });
-  }
-  });
-}
+/** Moved to programmeLoudness.ts (wave 7 send pre-pass; worker A's file); re-exported so REST, MCP and tests keep one import. */
+export { programmeLoudness } from './programmeLoudness.ts';
+import { programmeLoudness } from './programmeLoudness.ts';
 
 export const SfxBody = z.object({ sfxId: z.string(), start: RationalTimeSchema.optional().describe('Place it on the timeline at this frame-aligned time (omit to only add it to the media library)'), trackId: z.string().optional() }).strict();
 /** Synthesise a built-in sound effect, attach it as a normal asset, and optionally place it. Goes through governance like any edit. */
@@ -1288,7 +1276,7 @@ const exporterForMeasurement = (): Exporter => {
   if (!measurementExporter) throw new ApiError(503, 'unavailable', 'colour match needs the renderer, which is not running in this process');
   return measurementExporter;
 };
-export type MeasurementKind = 'silences' | 'loudness' | 'voice' | 'colour' | typeof SHORTS_MEASUREMENT_KIND;
+export type MeasurementKind = 'silences' | 'loudness' | 'voice' | 'colour' | typeof SHORTS_MEASUREMENT_KIND | 'clip-loudness';
 /** Start a silence, loudness, voice (ADR-0013), colour-match (ADR-0014) or shorts-candidates (ADR-0018) measurement as a durable job of type `analysis`. It changes nothing in the project; its output carries the same object the in-request route returns. */
 export function startMeasurementJob(store: Store, principal: Principal, projectId: string, kind: MeasurementKind, options: unknown): JobRow {
   const p = store.getProject(projectId); // 404 before any job exists
@@ -1305,12 +1293,13 @@ async function runAnalysisJob(store: Store, jobId: string) {
   const j = store.getJob(jobId);
   try {
     // Measurements that attach nothing to the project (silence candidates, programme loudness, voice and colour checks): the result is the job's output.
-    if (j.input.kind === 'silences' || j.input.kind === 'loudness' || j.input.kind === 'voice' || j.input.kind === 'colour' || j.input.kind === SHORTS_MEASUREMENT_KIND) {
+    if (j.input.kind === 'silences' || j.input.kind === 'loudness' || j.input.kind === 'voice' || j.input.kind === 'colour' || j.input.kind === SHORTS_MEASUREMENT_KIND || j.input.kind === 'clip-loudness') {
       const kind = j.input.kind as MeasurementKind;
       const result = kind === 'silences' ? await findSilences(store, j.projectId, j.input.options)
         : kind === 'loudness' ? await programmeLoudness(store, j.projectId, typeof j.input.options?.sequenceId === 'string' ? j.input.options.sequenceId : undefined)
         // shorts (ADR-0018): measure the audio features that are missing, then rank; stops between windows once cancel is requested
         : kind === SHORTS_MEASUREMENT_KIND ? await withShortsErrors(() => findShortCandidates(store, j.projectId, FindShortsBodySchema.parse(j.input.options), () => store.getJob(jobId).status === 'cancel-requested'))
+        : kind === 'clip-loudness' ? await measureClipLoudness(store, j.projectId, ClipLoudnessBody.parse(j.input.options), () => store.getJob(jobId).status === 'cancel-requested')
         : kind === 'voice' ? await measureVoiceCheck(store, j.projectId, VoiceMeasureBody.parse(j.input.options))
         : await matchColour(store, exporterForMeasurement(), j.projectId, ColourMatchBody.parse(j.input.options));
       if (store.getJob(jobId).status === 'cancel-requested') { store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'canceled while measuring; the result was discarded' } }); return; }
