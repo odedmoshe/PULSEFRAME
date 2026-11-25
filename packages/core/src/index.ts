@@ -108,3 +108,9 @@ export * from './assistantContract.ts';
 export * from './commandBar/index.ts';
 export * from './commandBar/numbers.ts';
 export * from './commandBar/time.ts';
+// send and keep (wave 7, track send): the contract and the two ops are lead-built; sizeFit.ts / exportChecks.ts are worker B's stubs
+export * from './sendContract.ts';
+export * from './loudnessMatch.ts';
+export * from './sendOps.ts';
+export * from './sizeFit.ts';
+export * from './exportChecks.ts';

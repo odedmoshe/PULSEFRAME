@@ -120,6 +120,8 @@ const STAGE_WORDS: Record<string, { he: string; en: string }> = {
   // the multicam sync job (core multicamApi.ts MULTICAM_SYNC_STAGES, ADR-0020); 'measuring sound 2/5' keeps its count
   'measuring sound': { he: 'מודד את הקול של הזוויות', en: 'measuring the angles\' sound' }, 'matching angles': { he: 'מתאים בין הזוויות', en: 'matching the angles' },
   'fitting sync': { he: 'מחשב את הסנכרון', en: 'fitting the sync' }, 'saving sync': { he: 'שומר את הסנכרון', en: 'saving the sync' },
+  // size-fit and export checks (core sendContract.ts SEND_STAGES, wave 7 send); 'fitting size 1/2' keeps its count
+  'fitting size': { he: 'מתאים לגודל היעד', en: 'fitting the target size' }, 'checking size': { he: 'בודק את גודל הקובץ', en: 'checking the file size' }, 'checking the export': { he: 'בודק את הקובץ', en: 'checking the file' },
 };
 export function jobStageLabel(stage: string | null | undefined, lang: 'he' | 'en'): string {
   if (!stage) return '';

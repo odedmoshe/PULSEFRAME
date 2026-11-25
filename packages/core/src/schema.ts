@@ -820,7 +820,13 @@ export const ProjectSchema = z
          * ripple_delete_clips for clips on the main track, Shift+Delete keeps the gap with delete_clip; mainMagnet: the main
          * track keeps its clips together while dragging). Agents choose their operations explicitly.
          */
-        timeline: TimelineBehaviourSchema.optional() })
+        timeline: TimelineBehaviourSchema.optional(),
+        /**
+         * Master limiter (wave 7, track send; op set_master_limiter). OPTIONAL: absent = no limiter, and export and preview run
+         * exactly as before the field existed (byte-identical sound). With it, export applies the loudness gain and then a
+         * look-ahead brick-wall limiter so no 16-bit sample passes `ceiling` (dBTP); it is then the only ceiling of the mix.
+         */
+        limiter: z.object({ ceiling: z.number().min(-9).max(0) }).strict().optional() })
       .strict(),
     assets: z.record(Id, AssetSchema),
     sequences: z.record(Id, SequenceSchema),

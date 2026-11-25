@@ -22,3 +22,7 @@ export { GRADE_DEFAULTS, gradePixel, samplePicture, mergeSamples, pictureStats, 
 // segmented export and render cache (ADR-0024): the frame key and the segment grid
 export * from './frameKey.ts';
 export * from './segmentGrid.ts';
+// send and keep (wave 7, track send): the limiter (A), sound checks (A) and picture checks (B); stubs until the workers land them
+export { limiterCeilingLinear, limiterWindow, MasterLimiter, MASTER_LIMITER_BUILT, type LimiterStats } from './masterLimiter.ts';
+export { SoundCheck, SOUND_CHECK_BUILT, type SoundRun } from './soundCheck.ts';
+export { PictureCheck, PICTURE_CHECK_BUILT, type PictureRun } from './pictureCheck.ts';

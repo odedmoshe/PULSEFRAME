@@ -64,7 +64,9 @@ export interface AudioPlan { sampleRate: number; totalSamples: number; clips: Pl
   /** Clips whose ring-out would pass the programme end: `seconds` of ring-out removed there (the kept part fades out over at most 10 ms). */
   cutTails: { clipId: string; seconds: number }[];
   /** Effects of the document this build has no kernel for (left out of the plan; export blocks on them). */
-  missingFx: { clipId: string; type: string; version: number }[] }
+  missingFx: { clipId: string; type: string; version: number }[];
+  /** The master limiter (wave 7, track send; settings.limiter): present only when the project has one, so every other plan is unchanged. */
+  limiter?: { ceiling: number } }
 export interface AudioPlanOptions { /** output rate (browser export); default doc.settings.sampleRate */ sampleRate?: number; /** session A/B: plan without effects */ bypassFx?: boolean }
 
 
@@ -204,7 +206,7 @@ export function audioPlan(doc: ProjectDocument, sequenceId = doc.mainSequenceId,
       clips.push(planned);
     }
   }
-  return { sampleRate: sr, totalSamples: total, clips, loudness: doc.settings.loudness ?? null, cutTails, missingFx };
+  return { sampleRate: sr, totalSamples: total, clips, loudness: doc.settings.loudness ?? null, cutTails, missingFx, ...(doc.settings.limiter ? { limiter: { ceiling: doc.settings.limiter.ceiling } } : {}) };
 }
 export const soundEnd = (c: PlannedAudioClip): number => c.at + c.length + (c.voice?.tail ?? 0);
 /** FNV-1a 32-bit hash of the instance id, xor params.seed (integer): deterministic per document. */
