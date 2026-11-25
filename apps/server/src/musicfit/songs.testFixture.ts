@@ -4,7 +4,8 @@
  * would give it. Every sample is a function of the section kind, the bar's number in its section and the sample's place in the bar,
  * so two bars with the same content are sample-identical (which the join search can measure).
  *
- * - abaSong: 120 BPM, A (8 bars) · B (8 bars) · A (8 bars) · ending (4 bars, a chord falling to a tenth), then half a second of silence.
+ * - abaSong: 120 BPM, A (8 bars) · B (8 bars) · A (8 bars) · ending (4 bars, a chord falling to a tenth, kicks getting softer), then half a
+ *   second of silence.
  * - twoToneSong: 120 BPM, 8 bars of a steady 440 Hz tone, 8 bars of a steady 660 Hz tone, 4 bars of 440 Hz.
  * - throughSong: 120 BPM, 24 bars, every bar its own three tones (130 Hz to 2 kHz), level and noise (nothing repeats).
  */
@@ -28,12 +29,16 @@ function bar(out: Float64Array, at: number, len: number, kind: string, index: nu
   const pick = xorshift(977 + index * 7477);
   const chord = kind === 'T' ? [0, 1, 2].map(() => 130 * 2 ** (4 * (pick() + 0.5))) : CHORDS[kind]![index % 4]!;
   if (kind === 'T') gain *= 0.25 + 1.5 * (pick() + 0.5) / 2;
-  const beat = len / 4;
   for (let n = 0; n < len; n++) {
     let v = 0;
     for (const f of chord) v += 0.12 * Math.sin((TWO_PI * f * n) / FIXTURE_RATE);
     out[at + n] = v * gain;
   }
+  kicks(out, at, len, kind, index, gain);
+}
+/** A noise kick on each beat of a bar (seeded by section, bar and beat). */
+function kicks(out: Float64Array, at: number, len: number, kind: string, index: number, gain: number) {
+  const beat = len / 4;
   for (let b = 0; b < 4; b++) {
     const rnd = xorshift(1 + kind.charCodeAt(0) * 7919 + index * 104729 + b * 31);
     const start = at + Math.floor(b * beat), hit = Math.floor(0.05 * FIXTURE_RATE);
@@ -52,7 +57,7 @@ export function abaSong(): FixtureSong {
   const bars = 28, mono = new Float64Array(bars * BAR + FIXTURE_RATE / 2);
   let at = 0;
   for (const s of sections) for (let i = 0; i < s.bars; i++, at += BAR) {
-    if (s.kind === 'E') { for (let n = 0; n < BAR; n++) { const k = i * BAR + n, g = 1 - (0.9 * k) / (4 * BAR); let v = 0; for (const f of CHORDS.A![0]!) v += 0.12 * Math.sin((TWO_PI * f * k) / FIXTURE_RATE); mono[at + n] = v * g; } }
+    if (s.kind === 'E') { for (let n = 0; n < BAR; n++) { const k = i * BAR + n, g = 1 - (0.9 * k) / (4 * BAR); let v = 0; for (const f of CHORDS.A![0]!) v += 0.12 * Math.sin((TWO_PI * f * k) / FIXTURE_RATE); mono[at + n] = v * g; } kicks(mono, at, BAR, 'E', i, 1 - (0.9 * i) / 4); }
     else bar(mono, at, BAR, s.kind, i);
   }
   return finish('aba', mono, 120, BAR, bars, sections);
