@@ -21,11 +21,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as T from '@pulseframe/time';
 import {
-  archiveLibraryPlan, canonical, collectCredits, findClip, flashGapFrames, MODIFIED_LINE, MUSIC_STYLES, MusicFitNotBuilt, planImpact,
+  archiveLibraryPlan, canonical, collectCredits, findClip, flashGapFrames, MODIFIED_LINE, MUSIC_STYLES, MUSICFIT_FORBIDDEN_WORDS, MUSICFIT_FORBIDDEN_WORDS_HE, MUSICFIT_REFUSALS, MusicFitNotBuilt, planImpact,
   type LibraryRecord, type MediaClip, type MusicFitPlan, type ProjectDocument,
 } from '@pulseframe/core';
 import { startServer, type RunningServer } from '@pulseframe/server';
 import { libraryExportWarnings } from '../../../apps/server/src/export.ts';
+import { prepareMusicFit } from '../../../apps/server/src/musicfit/plan.ts';
+import { abaSong, throughSong, type FixtureSong } from '../../../apps/server/src/musicfit/songs.testFixture.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const PORT = 21000 + Math.floor(Math.random() * 1000);
@@ -177,6 +179,93 @@ async function film(pid: string, ids: string[], musicAssetId: string, targetSeco
 }
 const sorted = (xs: number[]) => [...xs].sort((a, b) => a - b);
 const fail = (what: string, detail?: unknown) => `${what}${detail === undefined ? '' : `: ${JSON.stringify(detail).slice(0, 400)}`}`;
+
+
+// ---------- integration (wave 7 batch B): pixels, a local-tool copy and the plan route for the makers' partial checks ----------
+/** A stereo 16-bit 48 kHz WAV of a fixture song with a centred 55 Hz tone: left = 0.6·song + centre, right = centre. */
+function stereoWithCentre(song: FixtureSong, centreHz = 55): Buffer {
+  const data = Buffer.alloc(song.frames * 4);
+  for (let n = 0; n < song.frames; n++) {
+    const c = 0.2 * Math.sin((2 * Math.PI * centreHz * n) / SR), x = song.pcm[2 * n]! / 32768;
+    data.writeInt16LE(Math.max(-32767, Math.min(32767, Math.round((0.6 * x + c) * 32767))), n * 4);
+    data.writeInt16LE(Math.round(c * 32767), n * 4 + 2);
+  }
+  const h = Buffer.alloc(44);
+  h.write('RIFF', 0); h.writeUInt32LE(36 + data.length, 4); h.write('WAVEfmt ', 8); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(2, 22);
+  h.writeUInt32LE(SR, 24); h.writeUInt32LE(SR * 4, 28); h.writeUInt16LE(4, 32); h.writeUInt16LE(16, 34); h.write('data', 36); h.writeUInt32LE(data.length, 40);
+  return Buffer.concat([h, data]);
+}
+/** A song written by songWav, made stereo the same way (a centred tone), for a local-tool copy. */
+const stereoSongWav = (seconds: number, bpm: number): Buffer => {
+  const mono = samplesOf(songWav(seconds, bpm, 0));
+  const pcm = new Int16Array(2 * mono.length);
+  for (let i = 0; i < mono.length; i++) { const v = Math.round(mono[i]! * 32767); pcm[2 * i] = v; pcm[2 * i + 1] = v; }
+  return stereoWithCentre({ name: 'click', pcm, frames: mono.length, beats: [], downbeats: [], bpm, barFrames: 0, sections: [] });
+};
+/** The barcode clip: 10 s at 30 fps, 320×180, black with ONE white frame (source frame 97), and a 30 ms 1 kHz beep starting at that frame. */
+let barcodeFile: string | null = null;
+async function barcode(): Promise<string> {
+  if (barcodeFile) return barcodeFile;
+  const w = await world(), out = path.join(w.dir, 'fx', 'barcode.mp4');
+  ff(['-f', 'lavfi', '-i', 'color=black:s=320x180:r=30:d=10', '-f', 'lavfi', '-i', `aevalsrc='if(between(t\\,97/30\\,97/30+0.03)\\,0.5*sin(2*PI*1000*t)\\,0)':s=48000:d=10`,
+    '-vf', `drawbox=x=0:y=0:w=320:h=180:color=white:t=fill:enable='eq(n\\,97)'`, '-ac', '2', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '12', '-pix_fmt', 'yuv420p', '-g', '30', '-c:a', 'aac', '-b:a', '192k', '-shortest', out]);
+  return (barcodeFile = out);
+}
+const WHITE = 200, DARK = 40;
+/** Mean luma (0–255) of an RGB24 buffer. */
+const meanOf = (rgb: Buffer) => { let s = 0; for (let i = 0; i < rgb.length; i += 3) s += 0.299 * rgb[i]! + 0.587 * rgb[i + 1]! + 0.114 * rgb[i + 2]!; return s / (rgb.length / 3); };
+const ffIn = (args: string[], input: Buffer) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', ...args], { input, maxBuffer: 1 << 28 });
+/** The server still of timeline frame `n` (GET …/frame, the same evaluate and compositor as the export), as mean luma. */
+async function stillLumaOf(pid: string, n: number): Promise<number> {
+  const r = await as((await world()).owner, 'GET', `/projects/${pid}/frame?index=${n}`);
+  if (r.status !== 200) throw new Error(`frame ${n} → ${r.status} ${JSON.stringify(r.body?.error ?? '').slice(0, 200)}`);
+  return meanOf(ffIn(['-f', 'png_pipe', '-i', 'pipe:0', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], r.raw));
+}
+/** Frames [a, b] of a still each: which are white, which dark (anything between is reported as neither). */
+async function whiteFrames(pid: string, a: number, b: number): Promise<{ white: number[]; luma: Record<number, number> }> {
+  const luma: Record<number, number> = {}, white: number[] = [];
+  for (let n = a; n <= b; n++) { luma[n] = Math.round(await stillLumaOf(pid, n)); if (luma[n]! >= WHITE) white.push(n); else if (luma[n]! > DARK) white.push(-n); }
+  return { white, luma };
+}
+async function exportMp4(pid: string, name: string): Promise<string> {
+  const w = await world();
+  const st = await must(w.owner, 'POST', `/projects/${pid}/exports`, { format: 'mp4-h264-aac' });
+  for (;;) {
+    const j = await must(w.owner, 'GET', `/jobs/${st.jobId}`);
+    if (j.status === 'succeeded') { const file = path.join(w.dir, name); fs.writeFileSync(file, (await as(w.owner, 'GET', `/jobs/${j.id}/output`)).raw); return file; }
+    if (['failed', 'canceled'].includes(j.status)) throw new Error(`export ${j.status}: ${JSON.stringify(j.error ?? j).slice(0, 300)}`);
+    await new Promise((r) => setTimeout(r, 250));
+  }
+}
+const mp4FrameLuma = (file: string, n: number) => meanOf(ff(['-i', file, '-vf', `select=eq(n\\,${n})`, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']));
+const mp4Sound = (file: string) => { const raw = ff(['-i', file, '-map', '0:a:0', '-ac', '1', '-ar', String(SR), '-f', 'f32le', '-']); return new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)); };
+/** The first sample louder than −12 dBFS (the beep is −6 dBFS; the music is muted for this export). */
+const onset = (x: Float32Array) => { const lim = 10 ** (-12 / 20); for (let i = 0; i < x.length; i++) if (Math.abs(x[i]!) > lim) return i; return -1; };
+/** A song uploaded with the exact beats it was written with (attached as a typed fixture). */
+async function songIn(pid: string, name: string, bytes: Buffer, seconds: number, bpm: number): Promise<string> {
+  const w = await world(), file = path.join(w.dir, 'fx', name);
+  fs.writeFileSync(file, bytes);
+  const id = await upload(pid, file);
+  await exactBeats(pid, id, seconds, bpm);
+  return id;
+}
+/** A time-preserving copy of the sound clip made by the product's local-tool job «הסרת שירה (קלאסי)» (ffmpeg only), given to the clip. */
+async function jobCopy(pid: string, clipId: string): Promise<{ copyId: string; sourceRangeStart: T.RationalTime } | string> {
+  const w = await world();
+  const st = await as(w.owner, 'POST', `/projects/${pid}/capabilities/local.audio.vocals-classic/runs`, { params: {}, source: { clipId }, apply: 'replace-clip' });
+  if (st.status !== 202) return `BLOCKED: the local-tool job local.audio.vocals-classic was not started here (${st.status} ${codeOf(st.body)}: ${String(st.body?.error?.message ?? '').slice(0, 200)})`;
+  for (;;) {
+    const j = await must(w.owner, 'GET', `/jobs/${st.body.jobId}`);
+    if (j.status === 'succeeded') break;
+    if (['failed', 'canceled'].includes(j.status)) return fail('the local-tool job failed', j.error ?? j.status);
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  const d = await doc(pid);
+  const c = findClip(d, clipId)!.clip as MediaClip, a = d.assets[c.assetId]!;
+  if (!a.provenance.derived?.sourceRangeStart) return fail('the clip does not show a derived copy with its offset after the job', a.provenance);
+  return { copyId: a.id, sourceRangeStart: a.provenance.derived.sourceRangeStart };
+}
+const removalOf = (fp: MusicFitPlan) => (fp.make.kind === 'fitted' ? fp.make.candidates[fp.make.chosen]!.removal : null);
 
 // ---------- the checks ----------
 const checks: Record<string, () => Promise<true | string>> = {
@@ -447,6 +536,152 @@ const checks: Record<string, () => Promise<true | string>> = {
     evidence.I3 = { listed, after: 'refusal' in after ? after.refusal : after.offsetBefore };
     return 'refusal' in after && after.refusal === 'alreadyOnBeat' ? true : fail('the marked moment is not on a beat frame after «ליישר שוב»', evidence.I3);
   },
+  /** I1 (integration): the white frame read from the PIXELS of server stills and of an mp4 export; the beep measured in the exported sound; a reversed clip in stills. */
+  I1: async () => {
+    const w = await world();
+    if (!w.web) return 'BLOCKED: the web bundle is missing (pnpm build); stills and the export need it';
+    const pid = await newProject('mf I1');
+    const bar = await upload(pid, await barcode());
+    const song = await songIn(pid, 'click128.wav', songWav(30, 128, 0), 30, 128);
+    const t = await ownerTx(pid, [{ op: 'add_clip', args: { assetId: bar, start: T.ZERO, sourceIn: T.rt(2, 1), duration: T.rt(4, 1) } }, { op: 'add_clip', args: { assetId: song, start: T.ZERO, duration: T.rt(4, 1) } }]);
+    const vid = String(t.results[0]!.output!.clipId), music = String(t.results[1]!.output!.clipId);
+    const before = await whiteFrames(pid, 35, 39);
+    const c0 = findClip(await doc(pid), vid)!.clip as MediaClip;
+    const r = await ownerTx(pid, [{ op: 'sync_impact', args: { clipId: vid, moment: T.frameTime(97, R), to: 'beat' } }]);
+    const out = r.results[0]!.output as { used: T.RationalTime; offsetBefore: { frames: number }; targetFrame: number };
+    const beatFrame = nf(out.used);
+    const d1 = await doc(pid);
+    const c1 = findClip(d1, vid)!.clip as MediaClip;
+    const after = await whiteFrames(pid, beatFrame - 2, beatFrame + 2);
+    // the export: the music muted (gain 0, nothing moves) so the exported sound is the clip's own beep
+    await ownerTx(pid, [{ op: 'set_clip_gain', args: { clipId: music, gain: 0 } }]);
+    const mp4 = await exportMp4(pid, 'i1.mp4');
+    const exported = [beatFrame - 1, beatFrame, beatFrame + 1].map((n) => Math.round(mp4FrameLuma(mp4, n)));
+    const beepAt = onset(mp4Sound(mp4)), beepMs = (beepAt / SR) * 1000, whiteMs = (beatFrame / 30) * 1000;
+    fs.rmSync(mp4, { force: true });
+    // a reversed clip, from the same start
+    const pid2 = await newProject('mf I1 reversed');
+    const bar2 = await upload(pid2, await barcode());
+    const song2 = await songIn(pid2, 'click128b.wav', songWav(30, 128, 0), 30, 128);
+    const t2 = await ownerTx(pid2, [{ op: 'add_clip', args: { assetId: bar2, start: T.ZERO, sourceIn: T.rt(2, 1), duration: T.rt(4, 1) } }, { op: 'add_clip', args: { assetId: song2, start: T.ZERO, duration: T.rt(4, 1) } }]);
+    const v2 = String(t2.results[0]!.output!.clipId);
+    await ownerTx(pid2, [{ op: 'set_clip_reverse', args: { clipId: v2, reverse: true } }]);
+    const r2 = await ownerTx(pid2, [{ op: 'sync_impact', args: { clipId: v2, moment: T.frameTime(97, R), to: 'beat' } }]);
+    const rb = nf((r2.results[0]!.output as { used: T.RationalTime }).used);
+    const rev2 = await whiteFrames(pid2, rb - 1, rb + 1);
+    const row = { whiteBefore: before.white, offsetBefore: out.offsetBefore.frames, beatFrame, whiteAfterInStills: after.white, stillLuma: after.luma, exportLuma: exported, beepOnsetMs: Math.round(beepMs * 100) / 100, whiteFrameMs: Math.round(whiteMs * 100) / 100, beepMinusWhiteMs: Math.round((beepMs - whiteMs) * 100) / 100, startSame: T.eq(c0.start, c1.start), lengthSame: T.eq(c0.duration, c1.duration), reversed: { beatFrame: rb, white: rev2.white, luma: rev2.luma } };
+    evidence.I1 = row;
+    if (before.white.length !== 1 || before.white[0] !== 37) return fail('before the sync the white frame is not alone on frame 37 in the stills', row);
+    if (out.offsetBefore.frames !== 37 - beatFrame) return fail('offsetBefore is not the frames counted from the stills', row);
+    if (after.white.length !== 1 || after.white[0] !== beatFrame) return fail('after the sync the white frame is not alone on the beat frame in the stills', row);
+    if (!(exported[1]! >= WHITE && exported[0]! <= DARK && exported[2]! <= DARK)) return fail('in the export the white frame is not alone on the beat frame', row);
+    if (!row.startSame || !row.lengthSame) return fail('the clip\'s start or length changed', row);
+    if (beepAt < 0 || Math.abs(beepMs - whiteMs) > 5) return fail('the exported beep does not start within 5 ms of the white frame', row);
+    if (rev2.white.length !== 1 || rev2.white[0] !== rb) return fail('a reversed clip: the white frame is not alone on the beat frame', row);
+    return true;
+  },
+  /** I2 (integration): the music clip shows a copy made by the product's local-tool job; sync_impact measures through it (viaAssetId = the measured song) and the white frame lands on the beat frame in a still. */
+  I2: async () => {
+    const w = await world();
+    if (!w.web) return 'BLOCKED: the web bundle is missing (pnpm build); stills need it';
+    const pid = await newProject('mf I2');
+    const bar = await upload(pid, await barcode());
+    const song = await songIn(pid, 'click128s.wav', stereoSongWav(30, 128), 30, 128);
+    const t = await ownerTx(pid, [{ op: 'add_clip', args: { assetId: bar, start: T.ZERO, sourceIn: T.rt(2, 1), duration: T.rt(4, 1) } }, { op: 'add_clip', args: { assetId: song, start: T.ZERO, sourceIn: T.rt(1, 1), duration: T.rt(6, 1) } }]);
+    const vid = String(t.results[0]!.output!.clipId), music = String(t.results[1]!.output!.clipId);
+    const copy = await jobCopy(pid, music);
+    if (typeof copy === 'string') return copy;
+    const r = await ownerTx(pid, [{ op: 'sync_impact', args: { clipId: vid, moment: T.frameTime(97, R), to: 'beat' } }]);
+    const out = r.results[0]!.output as { used: T.RationalTime; viaAssetId: string };
+    const beatFrame = nf(out.used);
+    const after = await whiteFrames(pid, beatFrame - 1, beatFrame + 1);
+    evidence.I2 = { copyId: copy.copyId, sourceRangeStart: T.toSeconds(copy.sourceRangeStart), viaAssetId: out.viaAssetId, song, beatFrame, white: after.white, luma: after.luma };
+    if (out.viaAssetId !== song) return fail('viaAssetId does not name the measured song', evidence.I2);
+    return after.white.length === 1 && after.white[0] === beatFrame ? true : fail('the white frame is not alone on the beat frame', evidence.I2);
+  },
+  /** S7 (integration): through a copy made by the product's local-tool job, the plan route chooses the same removal as on the song, with the copy's offset; apply makes the file from the copy. */
+  S7: async () => {
+    const pid = await newProject('mf S7');
+    const [v] = await videosIn(pid, 1);
+    const aba = abaSong();
+    const song = await songIn(pid, 'aba-stereo.wav', stereoWithCentre(aba), aba.frames / SR, 120);
+    const t = await ownerTx(pid, [{ op: 'add_clip', args: { assetId: v, start: T.ZERO, duration: T.frameTime(660, R), withLinkedAudio: false } }, { op: 'add_clip', args: { assetId: song, start: T.ZERO, sourceIn: T.rt(2, 1), duration: T.sub(T.rt(aba.frames, SR), T.rt(2, 1)) } }]);
+    // the clip runs to the song's end: the local tool copies the clip's range only, and the search must see the same song after 2 s
+    const music = String(t.results[1]!.output!.clipId);
+    const body = { target: { clipId: music }, music: { keep: true }, tailor: true };
+    const direct = await plan(pid, body);
+    if (!routesBuilt(direct)) return WAIT_ROUTES;
+    if (direct.status !== 200) return fail('plan on the song', direct.body);
+    const copy = await jobCopy(pid, music);
+    if (typeof copy === 'string') return copy;
+    const via = await plan(pid, body);
+    if (via.status !== 200) return fail('plan through the copy', via.body);
+    const a = removalOf(direct.body as MusicFitPlan), b = removalOf(via.body as MusicFitPlan);
+    const off = copy.sourceRangeStart;
+    const same = !!a && !!b && T.eq(T.sub(a.from, off), b.from) && T.eq(T.sub(a.to, off), b.to);
+    const applied = await apply(pid, body);
+    const d = await doc(pid);
+    const made = applied.body?.madeAssetId ? d.assets[applied.body.madeAssetId] : undefined;
+    evidence.S7 = { offset: T.toSeconds(off), direct: a && [T.toSeconds(a.from), T.toSeconds(a.to)], viaCopy: b && [T.toSeconds(b.from), T.toSeconds(b.to)], similarity: [(direct.body as MusicFitPlan).make, (via.body as MusicFitPlan).make].map((m) => (m.kind === 'fitted' ? m.candidates[m.chosen]!.measured.similarity : null)), apply: applied.status, madeFrom: made?.provenance.fitted?.sourceAssetId ?? null, copyId: copy.copyId };
+    if (!same) return fail('through the copy another removal was chosen', evidence.S7);
+    if (applied.status !== 200 || made?.provenance.fitted?.sourceAssetId !== copy.copyId) return fail('apply through the copy', evidence.S7);
+    return true;
+  },
+  /** S3 (integration): the plan route on a through-composed song warns join_weak, and no string of the plan (he or en) holds a praise word. */
+  S3: async () => {
+    const pid = await newProject('mf S3');
+    const [v] = await videosIn(pid, 1);
+    const th = throughSong();
+    const song = await songIn(pid, 'through.wav', stereoWithCentre(th), th.frames / SR, 120);
+    const t = await ownerTx(pid, [{ op: 'add_clip', args: { assetId: v, start: T.ZERO, duration: T.frameTime(720, R), withLinkedAudio: false } }, { op: 'add_clip', args: { assetId: song, start: T.ZERO, duration: T.rt(10, 1) } }]);
+    const p = await plan(pid, { target: { clipId: String(t.results[1]!.output!.clipId) }, music: { keep: true }, tailor: true });
+    if (!routesBuilt(p)) return WAIT_ROUTES;
+    if (p.status !== 200) return fail('plan', p.body);
+    const fp = p.body as MusicFitPlan, text = JSON.stringify(fp);
+    const praise = [MUSICFIT_FORBIDDEN_WORDS.exec(text)?.[0], MUSICFIT_FORBIDDEN_WORDS_HE.exec(text)?.[0]].filter(Boolean);
+    evidence.S3 = { warnings: fp.warnings.map((x) => x.code), similarity: fp.make.kind === 'fitted' ? fp.make.candidates[fp.make.chosen]!.measured.similarity : null, praise };
+    if (!fp.warnings.some((x) => x.code === 'join_weak')) return fail('the plan does not warn join_weak', evidence.S3);
+    return praise.length ? fail('a plan string holds a praise word', evidence.S3) : true;
+  },
+  /** L3 (integration): the plan and apply ROUTES refuse an already shortened file and a file made from two library files, with the reason and a next step, and nothing is made; a no-derivatives record cannot be stored in a project, so the route's own planner function is asked on a copy of the document. */
+  L3: async () => {
+    const w = await world();
+    const s = await songFit('mf L3', w.songs.by, 'CC-BY-4.0');
+    if (typeof s === 'string') return s;
+    const music = s.clipId, before = await rev(s.pid), blobs = () => fs.readdirSync(path.join(w.dir, 'data', 'blobs'), { recursive: true }).length, b0 = blobs();
+    // (a) the made file again: already shortened
+    const again = await plan(s.pid, { target: { clipId: music }, music: { assetId: s.madeAssetId }, tailor: true });
+    const againApply = await apply(s.pid, { target: { clipId: music }, music: { assetId: s.madeAssetId }, tailor: true });
+    const madeByA = { revisions: (await rev(s.pid)) - before, blobs: blobs() - b0 };
+    // (b) a file made from two library files: a derived record over two library songs, stored as a job result would be
+    const second = await librarySong(s.pid, w.songs.nc, 'CC-BY-NC-4.0', { nonCommercial: true, diskOnly: true });
+    const lib1 = Object.values((await doc(s.pid)).assets).find((a) => a.provenance.library && a.id !== second.assetId && !a.provenance.fitted)!;
+    const { id: _i, ...rest } = (await doc(s.pid)).assets[lib1.id]!;
+    const mixed = { ...rest, name: 'mix of two library songs.wav', contentHash: `sha256:${'7'.repeat(64)}`, provenance: { origin: 'derived' as const, importedAt: new Date().toISOString(), importedBy: 'proof', derived: { jobId: 'proof_mix', capabilityId: 'proof.mix', capabilityVersion: '1', graphDigest: `sha256:${'0'.repeat(64)}`, params: {}, sourceAssetIds: [lib1.id, second.assetId], outputName: 'mix', outputRole: 'audio', encoding: 'pcm_s16le', provider: { id: 'proof' } } } };
+    const mixId = String(w.s.store.commit({ projectId: s.pid, actor: 'user:local', allowInternal: true, ops: [{ op: 'import_asset', args: { asset: mixed } }] }).results[0]!.output!.assetId);
+    await exactBeats(s.pid, mixId, 60);
+    const before2 = await rev(s.pid), b1 = blobs();
+    const many = await plan(s.pid, { target: { clipId: music }, music: { assetId: mixId }, tailor: true });
+    const manyApply = await apply(s.pid, { target: { clipId: music }, music: { assetId: mixId }, tailor: true });
+    // (c) no-derivatives: the planner function the route calls, on a copy of the document (a project cannot hold that record)
+    const nd = structuredClone(await doc(s.pid));
+    (nd.assets[lib1.id]!.provenance.library as LibraryRecord).licence = { id: 'CC-BY-ND-4.0' };
+    const ndr = await prepareMusicFit(w.s.store, s.pid, nd, await rev(s.pid), { target: { clipId: music }, music: { assetId: lib1.id }, tailor: true }).then(() => null, (e: { code?: string; message?: string; hint?: string }) => e);
+    const row = {
+      alreadyFitted: [again.status, codeOf(again.body), again.body?.error?.message, !!again.body?.error?.hint, againApply.status],
+      manyOrigins: [many.status, codeOf(many.body), many.body?.error?.message, !!many.body?.error?.hint, manyApply.status],
+      noDerivatives: ndr && [ndr.code, ndr.message, !!ndr.hint],
+      madeByAlreadyFitted: madeByA, madeByManyOrigins: { revisions: (await rev(s.pid)) - before2, blobs: blobs() - b1 },
+    };
+    evidence.L3 = row;
+    // an operation's refusal (OpError 'incompatible') answers 422 on every route (plan.ts asApiError, as Store.commit reports it)
+    const refused = (r: { status: number; body: any }, key: 'alreadyFitted' | 'licenceManyOrigins') => r.status === 422 && codeOf(r.body) === 'incompatible' && r.body?.error?.message === (MUSICFIT_REFUSALS[key].message as () => string)() && !!r.body?.error?.hint;
+    if (!refused(again, 'alreadyFitted') || againApply.status !== 422) return fail('an already shortened file was not refused by the routes', row);
+    if (!refused(many, 'licenceManyOrigins') || manyApply.status !== 422) return fail('a file made from two library files was not refused by the routes', row);
+    if (!ndr || ndr.message !== MUSICFIT_REFUSALS.licenceNoDerivatives.message('CC-BY-ND-4.0') || !ndr.hint) return fail('a no-derivatives record was not refused by the planner', row);
+    if (madeByA.revisions || madeByA.blobs || (await rev(s.pid)) !== before2 || blobs() !== b1) return fail('a refusal made something', row);
+    return true;
+  },
 };
 
 /** A free song clip under a 20 s picture, shortened by the music fit (tailor); BLOCKED until the routes and A's splice answer. */
@@ -468,6 +703,17 @@ async function songFit(name: string, file: string, licence?: string, flags: Libr
   return { pid, clipId, madeAssetId: a.body.madeAssetId, plan: p.body as MusicFitPlan, record };
 }
 
+/**
+ * Integration: host checks that measure what a makers check of the same id could not (its `missing` sentences). The proof entry
+ * removes a makers sentence only when the host check of that id passes; `remaining` replaces it with what is still not measured.
+ */
+export const MUSICFIT_HOST_COVERS: Readonly<Record<string, { drop: string[]; remaining?: string[] }>> = {
+  I1: { drop: ['pixels of a server still or an export', 'not measured in exported sound'] },
+  I2: { drop: ['not one made by a local-tool job'] },
+  S7: { drop: ['not made by a local-tool job'] },
+  S3: { drop: ['the join_weak warning itself'], remaining: ['the strings of the editor\'s block, dialog and chip are builder C\'s (UI part not merged): not checked for praise words here'] },
+  L3: { drop: ['the plan route\'s refusal'] },
+};
 export const MUSICFIT_PROOF_HOSTS = { checks, evidence } as const;
 /** Stop the server and remove everything this part wrote. */
 export async function closeMusicfitProofHosts(): Promise<void> {

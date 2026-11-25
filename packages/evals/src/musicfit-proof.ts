@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runMusicfitMakers } from './musicfit-proof.makers.ts';
-import { closeMusicfitProofHosts, MUSICFIT_PROOF_HOSTS } from './musicfit-proof.hosts.ts';
+import { closeMusicfitProofHosts, MUSICFIT_HOST_COVERS, MUSICFIT_PROOF_HOSTS } from './musicfit-proof.hosts.ts';
 
 export const MUSICFIT_PROOF_BUILT = true;
 export const MUSICFIT_CHECKS: Readonly<Record<string, string>> = {
@@ -73,8 +73,19 @@ async function main(): Promise<number> {
       let r: true | string;
       try { r = await fn(); } catch (e) { r = `error: ${String((e as Error)?.stack ?? e).slice(0, 600)}`; }
       const status: MusicfitStatus = r === true ? 'pass' : r.startsWith('BLOCKED') ? 'blocked' : r.startsWith('PARTIAL') ? 'partial' : 'fail';
-      rows.push({ id, part: 'hosts', status, measured: MUSICFIT_PROOF_HOSTS.evidence[id], ...(r === true ? {} : { reason: r }) });
-      console.log(`${status.toUpperCase().padEnd(8)} ${id}${r === true ? '' : `  ${r.slice(0, 400)}`}`);
+      console.log(`${status.toUpperCase().padEnd(8)} ${id} (hosts)${r === true ? '' : `  ${r.slice(0, 400)}`}`);
+      const mk = rows.find((x) => x.id === id && x.part === 'makers');
+      if (!mk) { rows.push({ id, part: 'hosts', status, measured: MUSICFIT_PROOF_HOSTS.evidence[id], ...(r === true ? {} : { reason: r }) }); continue; }
+      // the same id in both parts (integration): the host check measures what the makers check left as `missing`
+      const cover = MUSICFIT_HOST_COVERS[id] ?? { drop: [] };
+      const hostRow = { status, measured: MUSICFIT_PROOF_HOSTS.evidence[id], ...(r === true ? {} : { reason: r }) };
+      mk.measured = { makers: mk.measured, hosts: hostRow };
+      if (status === 'fail') { mk.status = 'fail'; mk.reason = `hosts: ${r}`; continue; }
+      if (status !== 'pass') { mk.reason = `hosts ${status}: ${r}`; continue; }
+      const left = (mk.missing ?? []).filter((m) => !cover.drop.some((d) => m.includes(d)));
+      const still = [...left, ...(cover.remaining ?? [])];
+      if (still.length) mk.missing = still; else delete mk.missing;
+      if (mk.status === 'partial' && !still.length) mk.status = 'pass';
     }
   } finally { await closeMusicfitProofHosts(); }
   rows.push(...(await runUiPart()));
