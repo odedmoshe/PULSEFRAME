@@ -51,7 +51,11 @@ const R30: Rate = { num: 30, den: 1 };
 const LABEL = 'אני רוצה סופגנייה עם ריבה של דינוזאורים';
 const ms = (x: number) => T.rt(x, 1000);
 const pearl = (id: string, assetId: string, from: T.RationalTime, to: T.RationalTime, over: Partial<SourceRange> = {}): SourceRange => ({ id, assetId, kind: 'pearl', span: { start: from, end: to }, label: `${LABEL} ${id}`, createdBy: 'user:local', ...over });
-const withRanges = (doc: ProjectDocument, ranges: SourceRange[]): ProjectDocument => ({ ...doc, sourceRanges: Object.fromEntries(ranges.map((r) => [r.id, r])) });
+// people named by a range are put in the project too: the document must be valid for apply (validateSourceRanges)
+const withRanges = (doc: ProjectDocument, ranges: SourceRange[]): ProjectDocument => {
+  const named = [...new Set(ranges.flatMap((r) => r.people ?? []))].filter((id) => !doc.people?.[id]);
+  return { ...doc, ...(named.length ? { people: { ...doc.people, ...Object.fromEntries(named.map((id) => [id, { id, name: id, birthDate: null }])) } } : {}), sourceRanges: Object.fromEntries(ranges.map((r) => [r.id, r])) };
+};
 const withoutRanges = (doc: ProjectDocument): ProjectDocument => { const { sourceRanges: _r, ...rest } = doc; return rest as ProjectDocument; };
 const plan = (doc: ProjectDocument, params: Record<string, unknown>, ctx: FilmPlanContext = emptyCtx()) => planFamilyFilm(doc, params, ctx);
 const applied = (doc: ProjectDocument, p: FamilyFilmPlan) => { const r = applyFilm(doc, p); expect(validateProject(r.doc)).toEqual([]); return r; };

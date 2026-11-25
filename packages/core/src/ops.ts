@@ -473,9 +473,11 @@ defineOp({
     // life line (ADR-0021): a copy that took its capture date from this file keeps it, and the file leaves its event
     affected.push(...handDownCapture(d, asset.id), ...detachAssetFromEvents(d, asset.id));
     // marked ranges (wave 7 pearls) of the file go with it, for every credential; undo brings them back (entity 'sourceRange')
-    affected.push(...detachRangesOfAsset(d, asset.id));
+    const ranges = detachRangesOfAsset(d, asset.id);
+    affected.push(...ranges);
     delete d.assets[asset.id];
-    return { affectedIds: [...new Set(affected)], summary: `Removed "${asset.name.slice(0, 60)}" from the library` };
+    // the count only, never a range's name (a name can hold a child's words)
+    return { affectedIds: [...new Set(affected)], summary: `Removed "${asset.name.slice(0, 60)}" from the library` + (ranges.length ? `; ${ranges.length} marked range(s) went with it` : '') };
   },
 });
 

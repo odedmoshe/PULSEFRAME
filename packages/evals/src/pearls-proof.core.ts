@@ -138,6 +138,7 @@ const P14 = check(() => {
     p.undo();
     if (creativeProjection(p.doc()) !== creativeProjection(full)) return 'undo of remove_person does not return the tags';
     evidence.P14 = { removeAssetSummary: ra.summary, removePersonSummary: rp.summary, removeAssetSaysCount: /marked range/.test(ra.summary) };
+    if (!/; \d+ marked range\(s\) went with it$/.test(ra.summary)) return fail('the summary of remove_asset does not say how many marked ranges went with the file', ra.summary);
     return true;
   } finally { p.close(); }
 });

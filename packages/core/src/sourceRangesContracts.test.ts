@@ -124,5 +124,4 @@ describe('the family film contract', () => {
     expect(filmRunRemovedPicks(params)).toEqual([{ key: 'm000000000003', assetId: 'c', windowIndex: null, rangeId: 'rng_9' }]);
     expect(filmRunRemovedPicks({ removedPicks: [{ key: 'k', assetId: 'a', windowIndex: 1 }] })).toEqual([{ key: 'k', assetId: 'a', windowIndex: 1 }]);
   });
-  it.todo('B (in familyFilm.pearls.test.ts; delete this row then): without picks.pearls every existing plan is unchanged (deep-equal with ranges removed); with prefer the first pearl of a file starts at its first frame; C9–C14');
 });
