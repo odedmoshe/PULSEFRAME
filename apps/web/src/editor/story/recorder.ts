@@ -3,7 +3,8 @@
  * '/pf-recorder.js' (apps/web/public), blocks of at least RECORDER_LIMITS.blockSamples, a 16-bit mono WAV at the context's own rate.
  *
  * PRIVACY (C10; the lead reviews every line that releases the microphone): the microphone is released — EVERY track of the stream
- * stopped, the worklet and source disconnected, the context closed — by `releaseMic()` and only by it, which runs:
+ * stopped, the worklet and source disconnected, the context closed — by `releaseMic()` (the live stream) or `releaseOrphan()` (a
+ * stream that is no longer the live one), which run:
  *   1. on stop()                                    (the take is kept as a WAV in memory),
  *   2. on discard()  — «הקלטה מחדש»                 (the take is dropped),
  *   3. on release()  — dialog closed, unmount        (the UI calls it from its cleanup; idempotent),
