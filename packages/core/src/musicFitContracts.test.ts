@@ -219,18 +219,18 @@ describe('operations, the assistant and the stubs', () => {
   it('the stubs throw MusicFitNotBuilt (never a made-up value)', () => {
     const doc = createProject({ id: 'prj_ms', name: 'S' });
     // builder A's (musicAt, cutStats, planImpact, fittedGrid, orderCandidates) are built: musicFitOps.test.ts
-    for (const fn of [() => planMusicSwap(doc, 'c', 'a'), () => musicEndingSteps(doc, 'c', T.ZERO)]) expect(fn).toThrow(MusicFitNotBuilt);
+    // builder B's (planMusicSwap, musicEndingSteps) are built too: musicSwap.test.ts. No stub is left; a missing clip is an OpError
+    for (const fn of [() => planMusicSwap(doc, 'c', 'a'), () => musicEndingSteps(doc, 'c', T.ZERO)]) { expect(fn).toThrow(OpError); expect(fn).not.toThrow(MusicFitNotBuilt); }
     expect(musicAt(doc, T.ZERO)).toBeNull();
     expect(cutStats([0], 30)).toEqual({ cuts: 1, minGapFrames: null, maxInOneSecond: 1 });
     expect(() => planImpact(doc, 'c', undefined, 'beat')).toThrow(OpError);
     expect(fittedGrid({ beats: [], downbeats: [], duration: T.ZERO }, T.ZERO, { from: T.ZERO, to: T.ZERO }, T.ZERO)).toBeNull();
     expect(orderCandidates([], 1)).toEqual([]);
   });
-  it('a template asked for an exact built-in ending is refused until built, never made as a faded track', () => {
+  it('a template asked for an exact built-in ending on pictures too short for the shortest piece is refused with the length, never made as a faded track (built: musicSwap.test.ts)', () => {
     const def = findTemplate(TEMPLATES[0]!.id)!;
     const doc = createProject({ id: 'prj_mt', name: 'T' });
     doc.assets.ast_v = video('ast_v', 1);
-    expect(() => planTemplate(doc, def, { media: ['ast_v'], musicAssetId: null, builtinMusic: { styleId: 'music.festive', ending: 'exact' } })).toThrow(/exact ending of built-in music is not built/);
+    expect(() => planTemplate(doc, def, { media: ['ast_v'], musicAssetId: null, builtinMusic: { styleId: 'music.festive', ending: 'exact' } })).toThrow(/too short/);
   });
-  it.todo('B: planMusicSwap and musicEndingSteps (one transaction of existing public ops; a fade only when the file is cut by a frame); the film planner reads musicGridSteady; the template ending exact');
 });
