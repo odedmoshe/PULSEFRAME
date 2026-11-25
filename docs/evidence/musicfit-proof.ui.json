@@ -1,0 +1,44 @@
+{
+ "when": "2026-11-25T18:18:45.197Z",
+ "web": true,
+ "pageErrors": [],
+ "evidence": {
+  "fit.he.1280": {
+   "state": "not-built",
+   "text": "מוזיקה מובנית — עוד לא הושמעה לאף אחד התאמה לאורך מוזיקה אחרת התאמת מוזיקה לסרט עוד לא נבנתה בגרסה הזו"
+  },
+  "swap.he.1280": {
+   "text": "מוזיקה אחרת מחליפים את המוזיקה של הקליפ מוזיקה מובנית חגיגי 125 פעימות לדקה · הקצב ידוע מהמתכון יום הולדת עליז 120 פעימות לדקה · הקצב ידוע מהמתכון רגוע ונעים 80 פעימות לדקה · הקצב ידוע מהמתכון פופ קצבי 128 פעימות לדקה · הקצב ידוע מהמתכון לו־פיי 90 פעימות לדקה · הקצב ידוע מהמתכון קולנועי מרגש 72 פעימות לדקה · הקצב ידוע מהמתכון נבחר שירים בפרויקט עם פעימות מדודות אין בפרויקט שירים עם פעימות מדודות. אפשר לייבא שיר ולמדוד את הפעימות שלו להתאים גם את האורך התאמת מוזיקה לסרט עוד לא נבנתה בגרסה הזו בצע"
+  },
+  "fit.he.1440": {
+   "state": "not-built",
+   "text": "מוזיקה מובנית — עוד לא הושמעה לאף אחד התאמה לאורך מוזיקה אחרת התאמת מוזיקה לסרט עוד לא נבנתה בגרסה הזו"
+  },
+  "swap.he.1440": {
+   "text": "מוזיקה אחרת מחליפים את המוזיקה של הקליפ מוזיקה מובנית חגיגי 125 פעימות לדקה · הקצב ידוע מהמתכון יום הולדת עליז 120 פעימות לדקה · הקצב ידוע מהמתכון רגוע ונעים 80 פעימות לדקה · הקצב ידוע מהמתכון פופ קצבי 128 פעימות לדקה · הקצב ידוע מהמתכון לו־פיי 90 פעימות לדקה · הקצב ידוע מהמתכון קולנועי מרגש 72 פעימות לדקה · הקצב ידוע מהמתכון נבחר שירים בפרויקט עם פעימות מדודות אין בפרויקט שירים עם פעימות מדודות. אפשר לייבא שיר ולמדוד את הפעימות שלו להתאים גם את האורך התאמת מוזיקה לסרט עוד לא נבנתה בגרסה הזו בצע"
+  },
+  "fit.en.1440": {
+   "state": "not-built",
+   "text": "Built-in music — nobody has listened to it yet Fit to length Other music Music that fits the film is not built in this build yet"
+  },
+  "swap.en.1440": {
+   "text": "Other music Replacing the music of the clip Built-in music Festive 125 beats a minute · The tempo is known from the recipe Cheerful birthday 120 beats a minute · The tempo is known from the recipe Calm and warm 80 beats a minute · The tempo is known from the recipe Upbeat pop 128 beats a minute · The tempo is known from the recipe Lo-fi 90 beats a minute · The tempo is known from the recipe Cinematic 72 beats a minute · The tempo is known from the recipe Chosen Songs in the project with measured"
+  },
+  "impact.he.1440.line": "הרגע 10 פריימים אחרי הפעימה",
+  "impact.he.1440.after": "הרגע על הפריים של הפעימה",
+  "impact.en.1440.line": "The moment is 10 frames after the beat",
+  "impact.en.1440.after": "The moment is on the beat's frame",
+  "notes": [
+   "fit he 1280: BLOCKED: builder B's plan and apply routes are not merged (the plan answers 501 musicfit_not_built); ran: the block opened by Enter, planned, said \"not built\" in words, nothing was made, layout ok at 1280",
+   "swap he 1280: BLOCKED: builder B's plan and apply routes are not merged (the plan answers 501 musicfit_not_built); ran: focus trap in both directions (45 Tab each way), Enter chooses a row, \"not built\" said, Escape returns focus to the button, nothing changed",
+   "fit he 1440: BLOCKED: builder B's plan and apply routes are not merged (the plan answers 501 musicfit_not_built); ran: the block opened by Enter, planned, said \"not built\" in words, nothing was made, layout ok at 1440",
+   "swap he 1440: BLOCKED: builder B's plan and apply routes are not merged (the plan answers 501 musicfit_not_built); ran: focus trap in both directions (45 Tab each way), Enter chooses a row, \"not built\" said, Escape returns focus to the button, nothing changed",
+   "fit en 1440: BLOCKED: builder B's plan and apply routes are not merged (the plan answers 501 musicfit_not_built); ran: the block opened by Enter, planned, said \"not built\" in words, nothing was made, layout ok at 1440",
+   "swap en 1440: BLOCKED: builder B's plan and apply routes are not merged (the plan answers 501 musicfit_not_built); ran: focus trap in both directions (45 Tab each way), Enter chooses a row, \"not built\" said, Escape returns focus to the button, nothing changed",
+   "impact he: pass",
+   "chip he: pass",
+   "impact en: pass",
+   "chip en: pass"
+  ]
+ }
+}
