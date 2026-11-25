@@ -53,8 +53,47 @@ agent:assistant, which no token can be (decision 8), and ADR-0002's "agents may 
 exception, the owner's in-tab export, which is not this. The refusal gives the reason, the next step and the job id it
 was asked about, and nothing of the request or of the job's state; the checks before it (edit scope, project in scope,
 agents not paused, a grant that runs jobs) answer as for any job, so a credential learns no more than `get_job`
-already tells it. Covered by `apps/server/src/assistant/mcpCancel.test.ts`. The editor has no control that cancels a
-request yet (the wording «ביטול הבקשה» exists, unused): the owner cancels through their session's REST or MCP.
+already tells it. Covered by `apps/server/src/assistant/mcpCancel.test.ts`. (On this date the editor had no control that
+cancels a request; the row has «ביטול הבקשה» since 2026-11-25, see the next note.)
+
+## Note 2026-11-25 — who reads an assistant job and its proposal; the cancel button
+**Found.** `GET /jobs/{jobId}`, MCP `get_job` and the project's event stream answered an assistant job to any credential
+that may observe the project: its output (the model's explanation, the proposal id, the cost) and its error text (which
+can quote the service or the model). The proposals routes (list, by id, frame), MCP `list_proposals` and the `proposal`
+event did the same for the assistant's proposal, whose operations can repeat what the owner typed. A finished assistant
+job asked for at `GET /jobs/{jobId}/output` answered 500.
+
+**Decision.** A request to the assistant is the owner's own, and so are the job it runs and the proposal it leaves: they
+are whole only for the owner's own session. Every other principal, whatever its grant (observe, propose, edit, autopilot,
+people 'full'), reads of an assistant job its id, project, type, actor (always agent:assistant), status and times, and
+nothing else; the assistant's proposals are not listed for it, answer 404 by id exactly as an id that does not exist, are
+not rendered and are not announced in its event stream. Accepted, a proposal's operations become ordinary edits of the
+project, read like any other. One module decides it for every surface (`apps/server/src/assistant/visibility.ts`);
+`apps/server/src/assistant/jobPrivacy.test.ts` plants words in the typed text, the MOCK adapter's explanation, its
+operations and two error texts and walks every REST route, the MCP tools that read or name a job or a proposal, every
+resource and the event stream with seven kinds of credential. `GET /jobs/{jobId}/output` answers 404 for a job that has
+no file.
+
+**What a job row keeps of a request** (decision 12 holds: never the typed text). `input`: the kind, who asked, the
+revision, the sequence, a SHA-256 and a character count of the typed text, a SHA-256, byte count and the two switches of
+the summary, the prompt digest, adapter, host, model, token cap, the estimate and the reservation. `output` of a
+successful job: the proposal id, the model's explanation (at most ASSISTANT_EXPLANATION_MAX characters, the key
+redacted), the operation count and the cost. `error`: a code and a sentence that may quote the
+service or the model (key redacted). The proposal row holds the operations. All of these are in the database, so in
+every backup of it; a project archive holds no job and no proposal. The digest of a short typed request could be matched
+by guessing; it is not returned by any route.
+
+**Open (proposed, not done).** The explanation is read once, by the owner's tab polling the job; nothing reads it after
+the proposal is decided. Clearing `output.explanation` when the proposal is accepted or rejected (Governance.decide)
+would leave nothing of the model's sentence at rest; it needs the job found from the proposal id and a rule for a tab
+that never polled, so it waits for a decision.
+
+**The cancel button.** The pending assistant row has «ביטול הבקשה» for the owner's session (POST /jobs/{jobId}/cancel),
+reachable with Tab from the palette's input. The row then says what the cancel did, from the job's own attempt count:
+canceled before anything was sent (nothing charged), or after the request had been handed to the service (it may have
+been charged; its reservation stays counted). The agent's `owner_required` refusal now names the button.
+`pnpm proof:command-bar` 11f drives it against the labelled MOCK adapter holding its answer back: contract-tested, never
+a claim about a real provider.
 
 ## Consequences / what is not promised
 - Without a provider the assistant row says it is not connected («עוזר השפה לא מחובר»). Nothing is fabricated.

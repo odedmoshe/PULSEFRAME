@@ -15,7 +15,7 @@ import { ExportOptionsSchema, outputDoc, type Exporter } from './export.ts';
 import { Governance } from './governance.ts';
 import type { Presence } from './presence.ts';
 import { describeMoment } from '@pulseframe/engine';
-import { addElement, ElementBody, addSfx, packSuggestions, assertMayCancel, assertMayTakeJobOutput, analysisView, analyzeAsset, cancelAnalysisJob, startAnalysisJob, startMeasurementJob, AnalyzeBody, catalog, exportCaptions, findSilences, findFillerWords, FillerBody, jobView, programmeLoudness, requestModelDownload, RunBody, runRequestOf, SfxBody, SilenceBody, ExportBatchBody, startExportBatch } from './http.ts';
+import { addElement, ElementBody, addSfx, packSuggestions, assertMayCancel, assertMayTakeJobOutput, analysisView, analyzeAsset, cancelAnalysisJob, startAnalysisJob, startMeasurementJob, AnalyzeBody, catalog, exportCaptions, findSilences, findFillerWords, FillerBody, jobViewFor, programmeLoudness, requestModelDownload, RunBody, runRequestOf, SfxBody, SilenceBody, ExportBatchBody, startExportBatch } from './http.ts';
 import { applyShorts, cachedShortCandidates, planReframeFor, planShortsFor, shortsApiError, withShortsErrors } from './shorts.ts';
 import { measureVoiceCheck, VoiceMeasureBody } from './voiceClean.ts';
 import { addMusic, MusicBody } from './music.ts';
@@ -35,6 +35,7 @@ import { assertMayTakeRendered, forPrincipal, peopleAccess, peopleNote, readingA
 import { assertMayHandleImportJob, IMPORT_JOB_TYPE, type ImportQueue } from './importContracts.ts';
 import type { RenderCacheService } from './renderCacheRoutes.ts';
 import type { AssistantJobControls } from './assistant/routes.ts';
+import { proposalsFor } from './assistant/visibility.ts';
 
 export const SERVER_INFO = { name: 'pulseframe-studio', version: '0.0.0' };
 
@@ -100,8 +101,8 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
         run('observe', () => gov.undoAs(principal, projectId, mode, transactionId)));
     server.registerTool('propose_transaction', { description: 'Submit operations as a PROPOSAL for the project owner to review instead of committing them. Validated now against the current revision; applied only if the owner accepts and nothing it depends on has changed. Credentials in Propose mode get this behaviour automatically from every editing tool.', inputSchema: z.object({ projectId: pid, label: z.string().max(200).optional(), ops: z.array(z.object({ op: z.string(), args: z.record(z.string(), z.unknown()) })).min(1).max(200) }) }, ({ projectId, label, ops }) =>
       run('observe', () => gov.propose(principal, projectId, ops, label)));
-    server.registerTool('list_proposals', { description: 'Proposals on a project with their status (open, accepted, rejected, stale) and what they would change.', inputSchema: z.object({ projectId: pid, status: z.enum(['open', 'accepted', 'rejected', 'stale']).optional() }), annotations: ro }, ({ projectId, status }) =>
-      run('observe', () => { read(projectId); return { proposals: gov.listProposals(projectId, status).map(({ ops: _o, changes, ...p }) => ({ ...p, changedIds: changes.map((c) => c.id) })) }; }));
+    server.registerTool('list_proposals', { description: 'Proposals on a project with their status (open, accepted, rejected, stale) and what they would change. The in-editor language assistant\'s proposals are the owner\'s own and are not listed for an agent credential.', inputSchema: z.object({ projectId: pid, status: z.enum(['open', 'accepted', 'rejected', 'stale']).optional() }), annotations: ro }, ({ projectId, status }) =>
+      run('observe', () => { read(projectId); return { proposals: proposalsFor(principal, gov.listProposals(projectId, status)).map(({ ops: _o, changes, ...p }) => ({ ...p, changedIds: changes.map((c) => c.id) })) }; }));
     server.registerTool('describe_moment', { description: 'Everything active at one exact frame: picture/text layers with their source frame, and audio clips. Use before and after an edit to check its effect.', inputSchema: z.object({ projectId: pid, frameIndex: z.number().int().min(0), sequenceId: sid }), annotations: ro }, ({ projectId, frameIndex, sequenceId }) =>
       run('observe', () => { const p = read(projectId); return { revision: p.revision, ...describeMoment(outputDoc(p.doc, { sequenceId }), T.frameTime(frameIndex, p.doc.settings.frameRate)), ...peopleNote(principal, p.doc) }; }));
     server.registerTool('get_transcript', { description: 'Read the transcript of a media asset: phrases and words with ids and SOURCE times. Use the word ids with delete_transcript_range to cut speech by text, and phrase ids with correct_transcript.', inputSchema: z.object({ projectId: pid, assetId: z.string() }), annotations: ro }, ({ projectId, assetId }) =>
@@ -218,8 +219,8 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
     server.registerTool('retry_job', { description: 'Retry a failed or canceled export from the same immutable snapshot and options, or a failed or canceled import of a file you sent (its stored original is converted again). Creates a new job.', inputSchema: z.object({ jobId: z.string() }) }, ({ jobId }) =>
       run('edit', () => { const old = store.getJob(jobId);
         if (old.type === IMPORT_JOB_TYPE && extras.imports) { gov.assertMayAct(principal, old.projectId, 'observe'); assertMayHandleImportJob(gov, principal, old, 'retry'); const job = extras.imports.retry(jobId, principal.actor); return { jobId: job.id, status: job.status, retryOf: jobId }; } gov.assertMayAct(principal, old.projectId, 'job'); assertMayTakeJobOutput(principal, old, 'retry this export'); const job = exporter.retry(jobId, principal.actor); return { jobId: job.id, status: job.status, retryOf: job.input.retryOf }; }));
-    server.registerTool('get_job', { description: 'Status, stage and result of a job.', inputSchema: z.object({ jobId: z.string() }), annotations: ro }, ({ jobId }) =>
-      run('observe', () => { const j = store.getJob(jobId); gov.assertMayAct(principal, j.projectId, 'observe'); return jobView(j); }));
+    server.registerTool('get_job', { description: 'Status, stage and result of a job. A language-assistant request (type assistant.propose) is the owner\'s own: an agent credential reads its id, project, type, status and times only.', inputSchema: z.object({ jobId: z.string() }), annotations: ro }, ({ jobId }) =>
+      run('observe', () => { const j = store.getJob(jobId); gov.assertMayAct(principal, j.projectId, 'observe'); return jobViewFor(principal, j); }));
     server.registerTool('list_capabilities', { description: 'Optional provider capabilities (reviewed workflows) with their qualification status, blockers, resource data and provider readiness. Listing never starts a worker.', inputSchema: z.object({}), annotations: ro }, () =>
       run('observe', () => capabilities.list()));
     /** The same admission as POST …/runs: scope, Pause Agent, the job right, no track/range-limited grants, then one RunRequest (runRequestOf). */
