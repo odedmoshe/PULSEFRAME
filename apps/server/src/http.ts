@@ -37,6 +37,7 @@ import { registerBrowserExportRoutes } from './browser-export.ts';
 import { buildOpenApi } from './openapi.ts';
 import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
 import { cameraMotionView, cancelStabiliseJob, startStabiliseJob } from './stabilise.ts';
+import { pearlsView } from './pearls.ts';
 import { STABILISE_JOB_TYPE, StabiliseRunBodySchema } from '@pulseframe/core';
 import { cancelMomentsJob, momentsLaneOf, startMomentsJob } from './moments.ts';
 import type { Presence } from './presence.ts';
@@ -419,6 +420,12 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
     return c.json(cameraMotionView(p.doc, p.revision, c.req.param('assetId')));
+  });
+  // ----- marked ranges «פנינים» (wave 7): read-only; the three ops reach REST through the registry like every op (pearls.ts) -----
+  app.get('/api/v1/projects/:id/pearls', (c) => {
+    const who = need(c, 'observe');
+    const p = store.getProject(c.req.param('id'));
+    return c.json(pearlsView(p.doc, p.revision, who, c.req.query('sequenceId') || undefined));
   });
   const RecipeBody = z.object({ params: z.record(z.string(), z.unknown()).optional(), expectedRevision: z.number().int().optional() }).strict();
   app.post('/api/v1/projects/:id/recipes/:recipeId/plan', async (c) => { const p = need(c, 'observe'); store.getProject(c.req.param('id')); return c.json(await planRecipeFor(store, c.req.param('id'), c.req.param('recipeId'), (await body(c, RecipeBody)).params, gov, p)); });

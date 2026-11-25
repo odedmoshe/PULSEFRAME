@@ -243,6 +243,8 @@ const TOOL_ARGS: Record<string, Record<string, unknown>> = {
   get_transcript: { assetId: '' }, get_analysis: { assetId: '' }, apply_transaction: { ops: [], dryRun: true }, propose_transaction: { ops: [] }, export_captions: {},
   export_project: {}, plan_export: {}, preflight: {}, list_proposals: {}, set_view: { frame: 10 }, update_person: { personId: '', name: 'נועה' }, remove_person: { personId: '' },
   add_person: { name: 'איתי' }, suggest_packs: { date: '2024-11-01' }, add_builtin_music: { styleId: 'music.none', bars: 4 },
+  // marked ranges (wave 7 pearls): an unnamed pearl on the walked file (refused notBuilt until A builds it), and the read view
+  add_source_range: { assetId: '' }, get_pearls: {},
 };
 const toolArgs = (name: string) => {
   const extra = { ...(TOOL_ARGS[name] ?? {}) };
