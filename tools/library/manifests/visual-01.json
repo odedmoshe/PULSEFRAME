@@ -1,0 +1,338 @@
+{
+  "manifestVersion": 1,
+  "id": "visual-01",
+  "title": "First visual set: emoji, icons, transitions, fonts, maps, doodles (tier A only)",
+  "created": "2026-11-25",
+  "notes": "Only sources whose licence was read at the publisher and that allow keeping the files in an application's library (MIT, Apache-2.0, ISC, OFL-1.1, CC0, public domain, Unicode-3.0). Nothing share-alike, nothing that needs a key, no stock sites. URLs, sizes and commits were resolved on 2026-11-25. Sizes marked approx are estimates.",
+  "sources": [
+    {
+      "id": "fluent-emoji",
+      "title": "Fluent Emoji (Microsoft) - static 3D PNG, colour, flat and high-contrast SVG, metadata",
+      "homepage": "https://github.com/microsoft/fluentui-emoji",
+      "licence": {
+        "spdx": "MIT",
+        "url": "https://raw.githubusercontent.com/microsoft/fluentui-emoji/1ffb34c752ecf5d402f04cfb4b392c77f57c54bc/LICENSE",
+        "readOn": "2026-11-25",
+        "quote": "MIT License / Copyright (c) Microsoft Corporation."
+      },
+      "credit": null,
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "The repository has no release tags: the commit is the tip of main on 2026-11-25. 12,625 files under assets/ (3,144 each of 3D PNG 256 px, Color SVG, Flat SVG; 1,594 High Contrast SVG; 1,594 metadata.json with keywords, group and unicode). Working tree about 227 MB (estimated from 170 sampled file sizes), plus the .git folder of the partial clone. Longest path inside the repository is 142 characters; five paths are not ASCII (Pinata with a tilde).",
+      "items": [
+        {
+          "id": "fluent-emoji/assets",
+          "kind": "git",
+          "repo": "https://github.com/microsoft/fluentui-emoji.git",
+          "commit": "1ffb34c752ecf5d402f04cfb4b392c77f57c54bc",
+          "sparse": [
+            "assets"
+          ],
+          "approxBytes": 400000000,
+          "dest": "visual/emoji/fluent-emoji"
+        }
+      ]
+    },
+    {
+      "id": "noto-emoji",
+      "title": "Noto Emoji (Google) - 2D SVG",
+      "homepage": "https://github.com/googlefonts/noto-emoji",
+      "licence": {
+        "spdx": "Apache-2.0",
+        "url": "https://raw.githubusercontent.com/googlefonts/noto-emoji/e20cbc2bbec1926686be9f9bee7d1d2cfa1fea0e/2D/svg/LICENSE",
+        "readOn": "2026-11-25",
+        "quote": "Copyright 2013 Google, Inc. All Rights Reserved. Licensed under the Apache License, Version 2.0 (the \"License\"); you may not use this file except in compliance with the License."
+      },
+      "credit": null,
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "Commit of tag v2026-09-24-unicode18_0. Only 2D/svg (3,750 SVG + its own LICENSE file, about 41 MB estimated from 40 sampled sizes). Left out on purpose: 3D/png (no licence file of its own), the fonts (OFL), third_party/region-flags (\"public domain or otherwise exempt\"; flags of states are also a political choice). README at this commit: \"Tools and most image resources are under the Apache license, version 2.0\"; note that the repository's root LICENSE file now holds the OFL text, so the folder's own LICENSE is the one quoted here.",
+      "items": [
+        {
+          "id": "noto-emoji/svg",
+          "kind": "git",
+          "repo": "https://github.com/googlefonts/noto-emoji.git",
+          "commit": "e20cbc2bbec1926686be9f9bee7d1d2cfa1fea0e",
+          "sparse": [
+            "/2D/svg/"
+          ],
+          "sparseNoCone": true,
+          "approxBytes": 70000000,
+          "dest": "visual/emoji/noto-emoji"
+        }
+      ]
+    },
+    {
+      "id": "cldr-annotations",
+      "title": "Unicode CLDR 49 - Hebrew and English emoji names and search words",
+      "homepage": "https://cldr.unicode.org/",
+      "licence": {
+        "spdx": "Unicode-3.0",
+        "url": "https://raw.githubusercontent.com/unicode-org/cldr/96e54b273d2da4ec6fbad350ba19ff23fa24a588/LICENSE",
+        "readOn": "2026-11-25",
+        "quote": "Permission is hereby granted, free of charge, to any person obtaining a copy of data files and any associated documentation (the \"Data Files\") or software and any associated documentation (the \"Software\") to deal in the Data Files or Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, and/or sell copies of the Data Files or Software [...] provided that either (a) this copyright and permission notice appear with all copies of the Data Files or Software, or (b) this copyright and permission notice appear in associated Documentation."
+      },
+      "credit": null,
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "Commit of tag release-49. Each file carries \"SPDX-License-Identifier: Unicode-3.0\". The licence was read in full on 2026-11-25 (the visual research report had not analysed it): permissive, notice must travel with copies (LICENCES/cldr-annotations.txt). The first paragraph of that LICENSE file restricts only the text of the LDML specification, which is not fetched. Hashes below were computed from the pinned commit URLs on 2026-11-25. he.xml has 3,950 annotation lines; join to any emoji set by code point.",
+      "items": [
+        {
+          "id": "cldr-annotations/he",
+          "kind": "file",
+          "url": "https://raw.githubusercontent.com/unicode-org/cldr/96e54b273d2da4ec6fbad350ba19ff23fa24a588/common/annotations/he.xml",
+          "dest": "visual/emoji/cldr-49/annotations/he.xml",
+          "sha256": "3e5495988601ecbb31e7ddfe048766f0439467b6281b9b3cb3736d73087caf06",
+          "bytes": 341697
+        },
+        {
+          "id": "cldr-annotations/en",
+          "kind": "file",
+          "url": "https://raw.githubusercontent.com/unicode-org/cldr/96e54b273d2da4ec6fbad350ba19ff23fa24a588/common/annotations/en.xml",
+          "dest": "visual/emoji/cldr-49/annotations/en.xml",
+          "sha256": "14d0e9bb5003c085250df4ac7bd7ba1e26d92e74174d7a3a2f42dc16e07fb155",
+          "bytes": 296588
+        },
+        {
+          "id": "cldr-annotations/derived-he",
+          "kind": "file",
+          "url": "https://raw.githubusercontent.com/unicode-org/cldr/96e54b273d2da4ec6fbad350ba19ff23fa24a588/common/annotationsDerived/he.xml",
+          "dest": "visual/emoji/cldr-49/annotationsDerived/he.xml",
+          "sha256": "bf9c80527cb63cdf198160cff449198ecb0a56f4edaf971718da392d47310ed8",
+          "bytes": 672593
+        },
+        {
+          "id": "cldr-annotations/derived-en",
+          "kind": "file",
+          "url": "https://raw.githubusercontent.com/unicode-org/cldr/96e54b273d2da4ec6fbad350ba19ff23fa24a588/common/annotationsDerived/en.xml",
+          "dest": "visual/emoji/cldr-49/annotationsDerived/en.xml",
+          "sha256": "a4a6c1a4c341d94179cb116623c5f44c47400a5bc55da483423ef7430ecf622e",
+          "bytes": 550107
+        }
+      ]
+    },
+    {
+      "id": "iconify-json",
+      "title": "@iconify/json 2.2.561 - 280 icon sets in one package (MIXED licences: filter before use)",
+      "homepage": "https://github.com/iconify/icon-sets",
+      "licence": {
+        "custom": "Mixed (MIT package; every icon set has its own licence)",
+        "url": "https://raw.githubusercontent.com/iconify/icon-sets/b44d1947306e36a5521592286fa60959d41abc18/readme.md",
+        "readOn": "2026-11-25",
+        "quote": "This is collection of icon sets created by various authors. See collections.md for list of icon sets and their licenses."
+      },
+      "credit": null,
+      "diskOnly": true,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": false,
+      "notes": "Fetched as the package itself, unfiltered, so its registry integrity value covers every byte. THE EDITOR MUST FILTER SETS BY LICENCE before offering any icon: read collections.json and expose only sets whose licence.spdx is MIT, ISC, Apache-2.0 or CC0-1.0, and ALWAYS exclude Remix Icon (prefix \"ri\"): its upstream licence changed in January 2026 to \"Remix Icon License v1.0\", which forbids offering the icons as a downloadable collection, while the package metadata still says Apache-2.0. The package also holds CC-BY, CC-BY-SA, GPL, OFL and non-commercial sets; those stay unused. Because of that mix the package as a whole is marked diskOnly: it never enters the repository or a shared project archive; a single icon taken from an allowed set travels under that set's own licence. Counts read by the research on 2026-11-25: MIT 148 sets, Apache-2.0 31, CC0-1.0 10, ISC 4. Brand icons inside sets are trademarks.",
+      "trademark": true,
+      "items": [
+        {
+          "id": "iconify-json/package",
+          "kind": "npm",
+          "name": "@iconify/json",
+          "version": "2.2.561",
+          "integrity": "sha512-7fNqKYCmeu/2L9R5y5+EtHfotXP61cJeKvtfXotw/4kocYJ0BQrxUCvfN4RxlXXkoeNf9Ltp/wzOgnXYzltrZA==",
+          "bytes": 148987492,
+          "approxUnpackedBytes": 706926415,
+          "dest": "visual/icons/iconify-json-2.2.561"
+        }
+      ]
+    },
+    {
+      "id": "gl-transitions",
+      "title": "GL Transitions 3.3.0 - 227 transitions as GLSL, GLSL3, Metal, SkSL and WGSL",
+      "homepage": "https://github.com/gl-transitions/gl-transitions",
+      "licence": {
+        "spdx": "MIT AND BSD-3-Clause AND BSD-2-Clause",
+        "url": "https://raw.githubusercontent.com/gl-transitions/gl-transitions/a450cb351445cf293ec0cc21f46607a15c8ca6bb/LICENSE",
+        "readOn": "2026-11-25",
+        "quote": "MIT License / Copyright (c) 2017-present gl-transitions contributors [...] Note: Individual transitions in the transitions/ directory may have their own license specified in their file header comments. When no license is specified, the transition is covered by this MIT license."
+      },
+      "credit": null,
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "Licence file read at the tip of the repository's main branch on 2026-11-25 (the registry entry names no source commit). Per the research report's reading of the package index: 225 transitions MIT, InvertedPageCurl BSD-3-Clause, StereoViewer BSD-2-Clause; every file names its author and licence in its header - keep the headers. Data for the editor's own WebGPU pass: each transition still has to pass the reference-pixel gate (ADR-0008) and the flash-safety check (ADR-0009) before it is offered. Nothing in the package is executed by the fetcher.",
+      "items": [
+        {
+          "id": "gl-transitions/package",
+          "kind": "npm",
+          "name": "gl-transitions",
+          "version": "3.3.0",
+          "integrity": "sha512-bRfjKSbZtT2Ax8h9Evc+HbQszg3KT/w4fa5xlyRiEpxTZ0OaH0Ov9KWC8LUvmtb32rarVabwQLvSQLQGyRwpJA==",
+          "bytes": 2061518,
+          "approxUnpackedBytes": 9743408,
+          "dest": "visual/transitions/gl-transitions-3.3.0"
+        }
+      ]
+    },
+    {
+      "id": "natural-earth",
+      "title": "Natural Earth - 1:50m shaded-relief rasters (3.2.0) and 1:50m vectors",
+      "homepage": "https://www.naturalearthdata.com/",
+      "licence": {
+        "custom": "Public domain (Natural Earth terms of use)",
+        "url": "https://www.naturalearthdata.com/about/terms-of-use/",
+        "readOn": "2026-11-25",
+        "quote": "All versions of Natural Earth raster + vector map data found on this website are in the public domain. You may use the maps in any manner, including modifying the content and design, electronic dissemination, and offset printing. [...] No permission is needed to use Natural Earth. Crediting the authors is unnecessary."
+      },
+      "credit": null,
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "Host: naciscdn.org, the CDN the publisher's own downloads page links to for its packages. The per-theme links on the publisher's pages answered HTTP 500 to a plain client on 2026-11-25; the same paths on the CDN serve the files. The archive URLs carry no version: versions are from the publisher's pages (rasters \"version 3.2.0\") and from the VERSION file inside the vector archives (cultural 5.1.2, physical 5.1.0). The publisher gives no checksums: the two vector archives are pinned to hashes computed here on 2026-11-25, the two rasters (88 MB each, above this worker's download limit) are pinned by exact size only and their hash is recorded as first seen. Unpacked sizes are exact, read from the archives' directories. Optional credit offered by the publisher: \"Made with Natural Earth.\" Borders are politically sensitive: review the data's disputed-area layers before any border is drawn in a video.",
+      "items": [
+        {
+          "id": "natural-earth/ne1-50m-sr-w",
+          "kind": "archive",
+          "url": "https://naciscdn.org/naturalearth/50m/raster/NE1_50M_SR_W.zip",
+          "format": "zip",
+          "bytes": 88413091,
+          "approxUnpackedBytes": 175041619,
+          "strip": 1,
+          "dest": "visual/maps/natural-earth/raster-3.2.0/NE1_50M_SR_W"
+        },
+        {
+          "id": "natural-earth/ne2-50m-sr-w",
+          "kind": "archive",
+          "url": "https://naciscdn.org/naturalearth/50m/raster/NE2_50M_SR_W.zip",
+          "format": "zip",
+          "bytes": 88903451,
+          "approxUnpackedBytes": 175041753,
+          "strip": 1,
+          "dest": "visual/maps/natural-earth/raster-3.2.0/NE2_50M_SR_W"
+        },
+        {
+          "id": "natural-earth/50m-cultural",
+          "kind": "archive",
+          "url": "https://naciscdn.org/naturalearth/50m/cultural/50m_cultural.zip",
+          "format": "zip",
+          "sha256": "84875b2b54e8dd2ab3424a6d700dfb226e32b393e63b8721e0fdbaf9f560b18e",
+          "bytes": 11136902,
+          "approxUnpackedBytes": 40377761,
+          "dest": "visual/maps/natural-earth/vector/50m_cultural"
+        },
+        {
+          "id": "natural-earth/50m-physical",
+          "kind": "archive",
+          "url": "https://naciscdn.org/naturalearth/50m/physical/50m_physical.zip",
+          "format": "zip",
+          "sha256": "fe3df2345a57d310a61fea947f5d664f662fa57d2c4e147fce28304f5d32e7c7",
+          "bytes": 7601683,
+          "approxUnpackedBytes": 42484654,
+          "dest": "visual/maps/natural-earth/vector/50m_physical"
+        }
+      ]
+    },
+    {
+      "id": "google-fonts-hebrew",
+      "title": "26 Hebrew-capable font families from google/fonts (SIL OFL 1.1, no Reserved Font Name)",
+      "homepage": "https://github.com/google/fonts",
+      "licence": {
+        "spdx": "OFL-1.1",
+        "url": "https://raw.githubusercontent.com/google/fonts/83c62e30d87daa70216dab6b984d00d20d96d585/ofl/notosanshebrew/OFL.txt",
+        "readOn": "2026-11-25",
+        "quote": "This Font Software is licensed under the SIL Open Font License, Version 1.1."
+      },
+      "credit": null,
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "trademark": true,
+      "notes": "One checkout of google/fonts at the tip of main on 2026-11-25, sparse to one folder per family; every family folder holds its own OFL.txt with its own copyright line (the stored licence text is the Noto Sans Hebrew one). Checked at this commit: all 26 folders exist with OFL.txt, and none declares a Reserved Font Name. 177 files, 43.5 MB (exact, from the file sizes), plus the .git folder. Families: Playpen Sans Hebrew, Solitreo, Rubik Bubbles / Doodle Shadow / Wet Paint / Spray Paint / Scribble / Dirt / Glitch / Moonrocks, Noto Sans Hebrew, Open Sans, Miriam Libre, Arimo, Lunasima, Google Sans, M PLUS 1p, Noto Serif Hebrew, Noto Rashi Hebrew, Bellefair, Bona Nova, Bona Nova SC, Cardo, Libertinus Serif, Handjet, Cousine. Google Sans ships a TRADEMARKS.md: \"Google\" and \"Google Sans\" are trademarks; the font may be used, the names may not be used to imply affiliation. Left out: M PLUS Rounded 1c and Tinos (licence files not verified), Cascadia Code/Mono (Reserved Font Name). A family enters the editor's FONT_CATALOG only after the project's own glyph and nikud test and check:notices.",
+      "items": [
+        {
+          "id": "google-fonts-hebrew/repo",
+          "kind": "git",
+          "repo": "https://github.com/google/fonts.git",
+          "commit": "83c62e30d87daa70216dab6b984d00d20d96d585",
+          "sparse": [
+            "ofl/playpensanshebrew",
+            "ofl/solitreo",
+            "ofl/rubikbubbles",
+            "ofl/rubikdoodleshadow",
+            "ofl/rubikwetpaint",
+            "ofl/rubikspraypaint",
+            "ofl/rubikscribble",
+            "ofl/rubikdirt",
+            "ofl/rubikglitch",
+            "ofl/rubikmoonrocks",
+            "ofl/notosanshebrew",
+            "ofl/opensans",
+            "ofl/miriamlibre",
+            "ofl/arimo",
+            "ofl/lunasima",
+            "ofl/googlesans",
+            "ofl/mplus1p",
+            "ofl/notoserifhebrew",
+            "ofl/notorashihebrew",
+            "ofl/bellefair",
+            "ofl/bonanova",
+            "ofl/bonanovasc",
+            "ofl/cardo",
+            "ofl/libertinusserif",
+            "ofl/handjet",
+            "ofl/cousine"
+          ],
+          "approxBytes": 90000000,
+          "dest": "visual/fonts/google-fonts"
+        }
+      ]
+    },
+    {
+      "id": "open-doodles",
+      "title": "Open Doodles (Pablo Stanley) - hand-drawn illustrations, source folder",
+      "homepage": "https://www.opendoodles.com/",
+      "licence": {
+        "spdx": "CC0-1.0",
+        "url": "https://www.opendoodles.com/about",
+        "readOn": "2026-11-25",
+        "quote": "You can copy, edit, remix, share, or redraw these images for any purpose without restriction under copyright or database law (CC0 license.)"
+      },
+      "credit": null,
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "The only CC0 illustration kit with an official direct link today: the Dropbox folder linked from opendoodles.com/about (\"individual assets and source files on Dropbox\"). Dropbox builds the zip on request, so its bytes and hash can differ between downloads and cannot be pinned; the ledger records the hash of the copy that was fetched. Checked on 2026-11-25 without downloading it: the link redirects (https only) to a zip of about 74.8 MB that starts with a zip signature. NOT inspected here (above this worker's download limit): expect design source files next to PNG/SVG. Drop this source with --skip open-doodles if a set with unpinnable bytes is not wanted.",
+      "items": [
+        {
+          "id": "open-doodles/source",
+          "kind": "archive",
+          "url": "https://www.dropbox.com/sh/egmjlot3o8787sr/AABbIT7a1-3zWvF7HQ8R21_ta?dl=1",
+          "format": "zip",
+          "approxUnpackedBytes": 160000000,
+          "dest": "visual/illustrations/open-doodles"
+        }
+      ]
+    }
+  ]
+}
