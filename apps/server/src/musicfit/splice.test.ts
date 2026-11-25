@@ -61,6 +61,19 @@ describe('the join search', () => {
     console.log(`through-composed: best similarity ${s.candidates[0]!.measured.similarity}`);
     expect(s.candidates[0]!.measured.similarity).toBeLessThan(MUSICFIT.joinWarnSimilarity);
   }, 60_000);
+  it('integration: a song whose channels are opposite (the side copy «הסרת שירה, קלאסי» makes: right = −left) is measured like the same song in phase, not as silence', async () => {
+    const side = (song: FixtureSong): FixtureSong => { const pcm = song.pcm.slice(); for (let n = 0; n < song.frames; n++) pcm[2 * n + 1] = -pcm[2 * n]!; return { ...song, name: `${song.name}-side`, pcm }; };
+    const pt = project(side(throughSong()));
+    const st = await searchJoins(store, pt.doc(), pt.assetId, T.ZERO, 30);
+    const pi = project(throughSong());
+    const si = await searchJoins(store, pi.doc(), pi.assetId, T.ZERO, 30);
+    // before: the mixdown (L + R) of a side copy is silence, every bar measured alike and the best join reported similarity 1
+    expect(st.candidates[0]!.measured.similarity).toBeLessThan(MUSICFIT.joinWarnSimilarity);
+    expect(st.candidates.map((c) => c.measured.similarity)).toEqual(si.candidates.map((c) => c.measured.similarity));
+    const pa = project(side(abaSong()));
+    const sa = await searchJoins(store, pa.doc(), pa.assetId, T.ZERO, 24);
+    expect([T.toSeconds(sa.candidates[0]!.removal.from), T.toSeconds(sa.candidates[0]!.removal.to), sa.candidates[0]!.measured.similarity]).toEqual([8, 40, 1]);
+  }, 120_000);
   it('refuses without bar starts (409 needs_bars)', async () => {
     const song = twoToneSong();
     const p = project(song);

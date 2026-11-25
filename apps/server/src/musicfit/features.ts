@@ -87,16 +87,21 @@ const dbOf = (x: number) => 10 * Math.log10(Math.max(x, 1e-12));
 function sliceFeature(song: DecodedSong, from: number, to: number): { pc: Float64Array; bands: Float64Array; ms: number } {
   const re = new Float64Array(N), im = new Float64Array(N);
   const mid = Math.floor((from + to) / 2), start = mid - N / 2;
-  for (let i = 0; i < N; i++) { const n = start + i; re[i] = n >= 0 && n < song.frames ? ((song.pcm[2 * n]! + song.pcm[2 * n + 1]!) / 65536) * HANN[i]! : 0; }
-  fftMag(re, im);
   const pc = new Float64Array(12), bands = new Float64Array(6);
-  for (let k = 1; k < N / 2; k++) {
-    const hz = (k * SONG_RATE) / N;
-    if (hz < LOW_HZ || hz > HIGH_HZ * 2) continue;
-    const e = re[k]! * re[k]! + im[k]! * im[k]!;
-    if (hz <= HIGH_HZ) pc[(((Math.round(12 * Math.log2(hz / 440)) + 69) % 12) + 12) % 12]! += e;
-    const band = Math.floor(Math.log2(hz / LOW_HZ));
-    if (band >= 0 && band < 6) bands[band]! += e;
+  // each channel's spectrum on its own, energies summed: a mixdown (L + R) would measure a side-only file (right = −left, what
+  // the classic vocal removal makes) as silence (wave 7 integration; splice.test.ts "opposite"). For left = right the pitch classes
+  // are the same and every band 3 dB higher in every bar, so the distances between bars do not change.
+  for (let c = 0; c < 2; c++) {
+    for (let i = 0; i < N; i++) { const n = start + i; re[i] = n >= 0 && n < song.frames ? (song.pcm[2 * n + c]! / 32768) * HANN[i]! : 0; im[i] = 0; }
+    fftMag(re, im);
+    for (let k = 1; k < N / 2; k++) {
+      const hz = (k * SONG_RATE) / N;
+      if (hz < LOW_HZ || hz > HIGH_HZ * 2) continue;
+      const e = re[k]! * re[k]! + im[k]! * im[k]!;
+      if (hz <= HIGH_HZ) pc[(((Math.round(12 * Math.log2(hz / 440)) + 69) % 12) + 12) % 12]! += e;
+      const band = Math.floor(Math.log2(hz / LOW_HZ));
+      if (band >= 0 && band < 6) bands[band]! += e;
+    }
   }
   let norm = 0;
   for (const v of pc) norm += v * v;
