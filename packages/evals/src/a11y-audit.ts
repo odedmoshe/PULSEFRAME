@@ -44,6 +44,7 @@ import { makeRenderCacheCtx, renderCacheA11yScenarios } from './a11y-render-cach
 import { craftA11yScenarios } from './a11y-craft.ts';
 import { stabiliseA11yScenarios } from './a11y-stabilise.ts';
 import { musicfitA11yScenarios } from './a11y-musicfit.ts';
+import { assistantLocalA11yScenarios } from './assistant-local-proof.ui.ts';
 import { pearlsA11yScenarios } from './a11y-pearls.ts';
 import { storyA11yScenarios } from './a11y-story.ts';
 import { searchA11yScenarios } from './a11y-search.ts';
@@ -859,6 +860,12 @@ async function main() {
       }
       // music that fits the film «מוזיקה שמתאימה לסרט» (wave 7 musicfit): the fit block, the swap dialog, the impact controls (a11y-musicfit.ts)
       for (const sc of musicfitA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // the local language assistant (wave 7 assistant): its Settings fields in three states of the check, and the row from «לשאול…» to «הכנס לשורה» (assistant-local-proof.ui.ts; contract-shaped fixtures)
+      for (const sc of assistantLocalA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });

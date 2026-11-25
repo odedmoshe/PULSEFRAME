@@ -90,7 +90,7 @@ describe('the words', () => {
   const dictLocal = (lang: 'he' | 'en') => Object.entries(dictionaries[lang] as Record<string, string>).filter(([k]) => /^assistant\.local\./.test(k) || /^error\.code\.local_/.test(k));
   it('this builder\'s strings have the same keys and placeholders in Hebrew and English, Hebrew has Hebrew, English none', () => {
     expect(Object.keys(L.LOCAL_TEXT_EN).sort()).toEqual(Object.keys(L.LOCAL_TEXT_HE).sort());
-    for (const k of Object.keys(L.LOCAL_TEXT_HE) as L.LocalTextKey[]) {
+    for (const k of Object.keys(L.LOCAL_TEXT_HE) as import('./localAssistant.logic.ts').LocalTextKey[]) {
       expect(placeholdersOf(L.LOCAL_TEXT_EN[k]), k).toEqual(placeholdersOf(L.LOCAL_TEXT_HE[k]));
       expect(/[א-ת]/.test(L.LOCAL_TEXT_HE[k]), k).toBe(true);
       expect(L.LOCAL_TEXT_EN[k], k).not.toMatch(/[א-ת]/);
