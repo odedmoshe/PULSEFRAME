@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import * as T from '@pulseframe/time';
 import {
-  applyTransaction, ASSISTANT_EXCLUDED_OPS, assistantOps, CameraMotionSchema, ClipStabiliseSchema, createProject, cropAreaPercent, getOp, MAX_PROJECT_TRACK_SAMPLES,
+  applyTransaction, ASSISTANT_EXCLUDED_OPS, creativeProjection, diffEntities, planStabilise, restoreEntities, steadySelftest, type SetClipStabiliseOutput, assistantOps, CameraMotionSchema, ClipStabiliseSchema, createProject, cropAreaPercent, getOp, MAX_PROJECT_TRACK_SAMPLES,
   MAX_STEADY_SAMPLES, mergeCameraStretch, OpError, ProjectSchema, SST, STEADY_OPS_BUILT, STEADY_REFUSALS, steadyHalfWindow, steadyMarginFrames, validateProject,
   type CameraStretch, type OpCall, type ProjectDocument,
 } from './index.ts';
@@ -146,7 +146,17 @@ describe('existing ops that meet a stabilised clip', () => {
     const e = refusal(() => tx(r.doc, [{ op: 'replace_clip_media', args: { clipId, assetId: other } }]));
     expect([e.code, e.message]).toEqual(['incompatible', STEADY_REFUSALS.otherFile.message()]);
   });
-  it.todo('W2: replace_clip_asset refuses otherFile on a stabilised clip given a derived copy');
+  it('replace_clip_asset refuses otherFile on a stabilised clip given a derived copy', () => {
+    const { d, clipId, assetId } = stabilised();
+    const derived = { ...videoAsset(600, 3), provenance: { origin: 'derived' as const, importedAt: '2026-11-25T00:00:00Z', importedBy: 'test', derived: { jobId: 'job_x', capabilityId: 'cap', capabilityVersion: '1', graphDigest: 'g', params: {}, sourceAssetIds: [assetId], outputName: 'o', outputRole: 'video', encoding: 'h264', provider: {} } } };
+    const r = tx(d, [{ op: 'import_asset', args: { asset: derived } }], true);
+    const copy = r.results[0]!.output!.assetId as string;
+    const e = refusal(() => tx(r.doc, [{ op: 'replace_clip_asset', args: { clipId, assetId: copy } }]));
+    expect([e.code, e.message]).toEqual(['incompatible', STEADY_REFUSALS.otherFile.message()]);
+    // switched off first, the same call is judged on its own rules again (here the copy's timing), no longer otherFile
+    const off = tx(r.doc, [{ op: 'set_clip_stabilise', args: { clipId, stabilise: null } }]).doc;
+    expect(refusal(() => tx(off, [{ op: 'replace_clip_asset', args: { clipId, assetId: copy } }])).message).not.toBe(STEADY_REFUSALS.otherFile.message());
+  });
 });
 
 describe('the public operations before W2', () => {
@@ -164,9 +174,95 @@ describe('the public operations before W2', () => {
       expect([e.code, e.message]).toEqual(['unknown_op', STEADY_REFUSALS.notBuilt.message(call.op)]);
     }
   });
-  it.todo('W2: set_clip_stabilise — notVideo, multicam, notMeasured, tooLittle; default strength 50; maxCrop bisection with strengthLowered; zoomPm rounded up; null keeps the measurement; one undo');
-  it.todo('W2: remove_camera_motion — noMeasurement, inUse; mode unbind switches the clips off; mode unused-only keeps what stabilised clips show');
-  it.todo('W2: replaying set_clip_stabilise from the op log gives the same zoomPm bits (STEADY_MATHS_V1)');
+  const shaky = (len: number, seed = 1) => {
+    let x = seed;
+    const r = () => { x = (Math.imul(x, 1103515245) + 12345) >>> 0; return ((x >>> 8) % 2001) - 1000; };
+    return { dx: Array.from({ length: len }, () => r()), dy: Array.from({ length: len }, () => r()), dr: Array.from({ length: len }, () => r()), dz: Array.from({ length: len }, () => Math.trunc(r() / 4)), st: [SST.start, ...Array(len - 1).fill(SST.ok)] };
+  };
+  const clipOf = (doc: ProjectDocument, id: string) => doc.sequences[doc.mainSequenceId]!.tracks.flatMap((t) => t.clips).find((c) => c.id === id) as { stabilise?: { strength: number; zoomPm: number } };
+  it('set_clip_stabilise — notVideo, multicam, notMeasured, tooLittle; default strength 50; maxCrop bisection with strengthLowered; zoomPm rounded up; null keeps the measurement; one undo', () => {
+    const { doc, clipId, assetId } = project();
+    const audio = doc.sequences[doc.mainSequenceId]!.tracks.find((t) => t.kind === 'audio')?.clips[0];
+    if (audio) expect(refusal(() => tx(doc, [{ op: 'set_clip_stabilise', args: { clipId: audio.id, stabilise: {} } }])).message).toBe(STEADY_REFUSALS.notVideo.message());
+    const mc = structuredClone(doc);
+    (clipOf(mc, clipId) as { multicam?: unknown }).multicam = { groupId: 'mcg_x', angle: 'x' };
+    expect(refusal(() => tx(mc, [{ op: 'set_clip_stabilise', args: { clipId, stabilise: {} } }])).message).toBe(STEADY_REFUSALS.multicam.message());
+    expect(refusal(() => tx(doc, [{ op: 'set_clip_stabilise', args: { clipId, stabilise: {} } }])).message).toBe(STEADY_REFUSALS.notMeasured.message());
+    const elsewhere = attach(doc, assetId, 300, cols(50)).doc; // the clip shows frames 0..89: none measured
+    expect(refusal(() => tx(elsewhere, [{ op: 'set_clip_stabilise', args: { clipId, stabilise: {} } }])).message).toBe(STEADY_REFUSALS.notMeasured.message());
+    // 40 of the clip's 90 frames ok or weak (44 %), the rest unknown
+    const thin = attach(doc, assetId, 0, { ...cols(90), st: [SST.start, ...Array(39).fill(SST.ok), ...Array(50).fill(SST.unknown)] }).doc;
+    const tl = refusal(() => tx(thin, [{ op: 'set_clip_stabilise', args: { clipId, stabilise: {} } }]));
+    expect([tl.code, tl.message, tl.details.percent]).toEqual(['incompatible', STEADY_REFUSALS.tooLittle.message(44), 44]);
+    // measured: the default strength, the smallest zoom rounded up, one change of the clip entity, one undo
+    const m = attach(doc, assetId, 0, shaky(200)).doc;
+    const r = tx(m, [{ op: 'set_clip_stabilise', args: { clipId, stabilise: {} } }]);
+    const out = r.results[0]!.output as unknown as SetClipStabiliseOutput;
+    const plan = planStabilise(m, clipOf(m, clipId) as never, { strength: 50 });
+    expect(out).toEqual({ stabilise: { strength: 50, zoomPm: plan.zoomPm }, crop: { zoomPm: plan.zoomPm, areaPercent: cropAreaPercent(plan.zoomPm) }, measured: { frames: 90, ok: 90, weak: 0, unknown: 0, outside: 0 }, strengthLowered: false, limitedFrames: [] });
+    expect(plan.zoomPm).toBeGreaterThan(1000);
+    expect(clipOf(r.doc, clipId).stabilise).toEqual({ strength: 50, zoomPm: plan.zoomPm });
+    expect(validateProject(r.doc)).toEqual([]);
+    const changes = diffEntities(m, r.doc);
+    expect(changes.map((c) => c.id)).toEqual([clipId]);
+    const back = structuredClone(r.doc);
+    restoreEntities(back, changes.map((c) => ({ id: c.id, state: c.before })));
+    expect(creativeProjection(back)).toBe(creativeProjection(m));
+    // maxCrop below what strength 100 needs: lowered, the crop within it
+    const full = (tx(m, [{ op: 'set_clip_stabilise', args: { clipId, stabilise: { strength: 100 } } }]).results[0]!.output as unknown as SetClipStabiliseOutput).crop!;
+    const cap = Math.max(1, Math.floor(full.areaPercent) - 1);
+    const low = tx(m, [{ op: 'set_clip_stabilise', args: { clipId, stabilise: { strength: 100, maxCrop: cap } } }]).results[0]!.output as unknown as SetClipStabiliseOutput;
+    expect(low.strengthLowered).toBe(true);
+    expect(low.stabilise!.strength).toBeLessThan(100);
+    expect(100 * (1 - 1e6 / low.crop!.zoomPm ** 2)).toBeLessThanOrEqual(cap);
+    // a given zoom is stored as is
+    expect(tx(m, [{ op: 'set_clip_stabilise', args: { clipId, stabilise: { strength: 70, zoomPm: 1500 } } }]).results[0]!.output).toMatchObject({ stabilise: { strength: 70, zoomPm: 1500 } });
+    // null: switched off, the measurement kept; one undo
+    const off = tx(r.doc, [{ op: 'set_clip_stabilise', args: { clipId, stabilise: null } }]);
+    expect(clipOf(off.doc, clipId).stabilise).toBeUndefined();
+    expect(off.doc.analyses[assetId]!.cameraMotion).toEqual(r.doc.analyses[assetId]!.cameraMotion);
+    expect(off.results[0]!.output).toMatchObject({ stabilise: null, crop: null });
+  });
+  it('remove_camera_motion — noMeasurement, inUse; mode unbind switches the clips off; mode unused-only keeps what stabilised clips show', () => {
+    const { doc, clipId, assetId } = project();
+    expect(refusal(() => tx(doc, [{ op: 'remove_camera_motion', args: { assetId } }])).message).toBe(STEADY_REFUSALS.noMeasurement.message());
+    expect(refusal(() => tx(doc, [{ op: 'remove_camera_motion', args: { assetId: 'ast_none' } }])).message).toBe(STEADY_REFUSALS.assetMissing.message());
+    let m = attach(doc, assetId, 0, shaky(200)).doc;
+    m = attach(m, assetId, 400, cols(50)).doc; // a second stretch, far from the clip
+    const plain = tx(m, [{ op: 'remove_camera_motion', args: { assetId } }]);
+    expect(plain.results[0]!.output).toEqual({ assetId, removedStretches: 2, unbound: [] });
+    expect(plain.doc.analyses[assetId]).toBeUndefined(); // nothing else was on the record
+    const on = tx(m, [{ op: 'set_clip_stabilise', args: { clipId, stabilise: {} } }]).doc;
+    const iu = refusal(() => tx(on, [{ op: 'remove_camera_motion', args: { assetId } }]));
+    expect([iu.code, iu.message]).toEqual(['incompatible', STEADY_REFUSALS.inUse.message(1)]);
+    expect(refusal(() => tx(on, [{ op: 'remove_camera_motion', args: { assetId, mode: 'if-unused' } }])).message).toBe(STEADY_REFUSALS.inUse.message(1));
+    const ub = tx(on, [{ op: 'remove_camera_motion', args: { assetId, mode: 'unbind' } }]);
+    expect(ub.results[0]!.output).toEqual({ assetId, removedStretches: 2, unbound: [clipId] });
+    expect(clipOf(ub.doc, clipId).stabilise).toBeUndefined();
+    expect(validateProject(ub.doc)).toEqual([]);
+    const changes = diffEntities(on, ub.doc), back = structuredClone(ub.doc);
+    restoreEntities(back, changes.map((c) => ({ id: c.id, state: c.before })));
+    expect(creativeProjection(back)).toBe(creativeProjection(on));
+    const uo = tx(on, [{ op: 'remove_camera_motion', args: { assetId, mode: 'unused-only' } }]);
+    expect(uo.results[0]!.output).toEqual({ assetId, removedStretches: 1, unbound: [] });
+    expect(uo.doc.analyses[assetId]!.cameraMotion!.stretches.map((s) => s.from)).toEqual([0]);
+    expect(clipOf(uo.doc, clipId).stabilise).toBeDefined();
+    expect(validateProject(uo.doc)).toEqual([]);
+    // a stabilised clip trimmed off every stretch still uses the nearest one (its frames are drawn with that stretch's poses)
+    const far = tx(on, [{ op: 'slip_clip', args: { clipId, by: T.frameTime(300, R) } }]).doc; // shows 300..389, stretches at 0..199 and 400..449
+    const kept = tx(far, [{ op: 'remove_camera_motion', args: { assetId, mode: 'unused-only' } }]).doc;
+    expect(kept.analyses[assetId]!.cameraMotion!.stretches.length).toBeGreaterThan(0);
+    expect(validateProject(kept)).toEqual([]);
+  });
+  it('replaying set_clip_stabilise from the op log gives the same zoomPm bits (STEADY_MATHS_V1)', () => {
+    const { doc, clipId, assetId } = project();
+    const m = attach(doc, assetId, 0, shaky(300, 7)).doc;
+    const calls: OpCall[] = [{ op: 'set_clip_stabilise', args: { clipId, stabilise: { strength: 100, maxCrop: 3 } } }];
+    const a = tx(m, calls), b = applyTransaction(JSON.parse(JSON.stringify(m)) as ProjectDocument, calls, { idSeed: 'replay_', actor: 'test' }); // a fresh document: no cached poses
+    expect(JSON.stringify(b.results[0]!.output)).toBe(JSON.stringify(a.results[0]!.output));
+    expect(clipOf(b.doc, clipId).stabilise).toEqual(clipOf(a.doc, clipId).stabilise);
+    expect((a.results[0]!.output as unknown as SetClipStabiliseOutput).strengthLowered).toBe(true);
+  });
 });
 
 describe('steady.ts uses only + − × / (STEADY_MATHS_V1)', () => {
@@ -174,6 +270,7 @@ describe('steady.ts uses only + − × / (STEADY_MATHS_V1)', () => {
     const src = fs.readFileSync(new URL('./steady.ts', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     expect(src.match(/Math\.(sin|cos|tan|exp|expm1|log|log1p|log2|log10|pow|atan|atan2|asin|acos|hypot|sqrt|cbrt|sinh|cosh|tanh)\b/g) ?? []).toEqual([]);
   });
-  it.todo('W2: sinCos and expm within 1e-12 of Math; compose/inverse round trip; a steady pan gives the identity pose on every frame, edges included');
-  it.todo('W2: limitToCover covers for 2,000 seeded poses and zooms; neededZoom covers and 0.999 of it does not');
+  it('sinCos and expm, compose/inverse, the steady pan, neededZoom and limitToCover are proved in steady.test.ts (S8, S9, S6 rows); the frozen digest holds', () => {
+    expect(steadySelftest().ok).toBe(true);
+  });
 });

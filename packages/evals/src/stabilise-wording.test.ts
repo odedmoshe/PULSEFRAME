@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, MAX_PROJECT_TRACK_SAMPLES, MAX_STEADY_SAMPLES, OpError, SST, STEADY_COLUMN_PROBLEMS, STEADY_OPS_BUILT, STEADY_REFUSALS, type SteadyRefusalKey } from '@pulseframe/core';
+import { applyTransaction, createProject, type OpCall, type ProjectDocument, MAX_PROJECT_TRACK_SAMPLES, MAX_STEADY_SAMPLES, OpError, SST, STEADY_COLUMN_PROBLEMS, STEADY_OPS_BUILT, STEADY_REFUSALS, type SteadyRefusalKey } from '@pulseframe/core';
 import { STABILISE_SERVER_REFUSALS, type StabiliseServerRefusalKey } from '../../../apps/server/src/stabilise.ts';
 import { dictionaries, STABILISE_REFUSAL_PATTERNS, translateRefusal } from '../../i18n/src/index.ts';
 
@@ -27,15 +27,47 @@ function opSentences(): Record<SteadyRefusalKey, string[]> {
       caught(() => applyTransaction(doc, [{ op: 'remove_camera_motion', args: { assetId } }], { idSeed: 'sw4_', actor: 'test' }))];
   return {
     notBuilt,
-    notVideo: [S.notVideo.message()], multicam: [S.multicam.message()], notMeasured: [S.notMeasured.message()], tooLittle: [S.tooLittle.message(37)],
+    ...(STEADY_OPS_BUILT ? provokedOps() : { notVideo: [S.notVideo.message()], multicam: [S.multicam.message()], notMeasured: [S.notMeasured.message()], tooLittle: [S.tooLittle.message(37)], inUse: [S.inUse.message(2)], noMeasurement: [S.noMeasurement.message()] }),
     clipTooLong: [S.clipTooLong.message(12_000)], fileFull: [S.fileFull.message(MAX_STEADY_SAMPLES + 1)], tooManyStretches: [S.tooManyStretches.message()],
-    budget: [S.budget.message(MAX_PROJECT_TRACK_SAMPLES + 9, MAX_PROJECT_TRACK_SAMPLES)], inUse: [S.inUse.message(2)], otherFile: [S.otherFile.message()],
-    noMeasurement: [S.noMeasurement.message()],
+    budget: [S.budget.message(MAX_PROJECT_TRACK_SAMPLES + 9, MAX_PROJECT_TRACK_SAMPLES)], otherFile: [S.otherFile.message()],
     assetMissing: [attach({ assetId: 'ast_none' })],
     noVideoFile: [S.noVideoFile.message()],
     badColumns: [attach({ dx: [0] }), attach({ dz: [0, 400_000] })],
     outsideFile: [attach({ from: 99 })],
     firstNotStart: [attach({ st: [SST.ok, SST.ok] })],
+  };
+}
+/**
+ * The refusals of set_clip_stabilise and remove_camera_motion, each provoked through its operation (once STEADY_OPS_BUILT): a sound
+ * clip (notVideo), a clip tagged as a multicam segment (multicam), no measurement (notMeasured, noMeasurement), a measurement with
+ * 44 % of the clip's frames measured (tooLittle), two stabilised clips (inUse).
+ */
+function provokedOps(): Pick<Record<SteadyRefusalKey, string[]>, 'notVideo' | 'multicam' | 'notMeasured' | 'tooLittle' | 'inUse' | 'noMeasurement'> {
+  const run = (doc: ProjectDocument, ops: OpCall[], allowInternal = false) => applyTransaction(doc, ops, { idSeed: `swp${k++}_`, actor: 'test', allowInternal });
+  let k = 0;
+  const asset = { kind: 'video' as const, name: 'w.mp4', contentHash: `sha256:${'d'.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.frameTime(300, R), video: { width: 640, height: 360, frameRate: R, codec: 'h264', rotation: 0, frameCount: 300 }, audio: { sampleRate: 48000, channels: 2, codec: 'aac' }, provenance: { origin: 'fixture' as const, importedAt: '2026-11-25T00:00:00Z', importedBy: 'test' } };
+  const r0 = run(createProject({ id: 'prj_swp', name: 'SWP', width: 640, height: 360 }), [{ op: 'import_asset', args: { asset } }], true);
+  const assetId = r0.results[0]!.output!.assetId as string;
+  const r1 = run(r0.doc, [{ op: 'add_clip', args: { assetId, start: T.ZERO, duration: T.frameTime(90, R) } }, { op: 'add_clip', args: { assetId, start: T.frameTime(90, R), sourceIn: T.frameTime(100, R), duration: T.frameTime(90, R) } }]);
+  const doc = r1.doc;
+  const tracks = doc.sequences[doc.mainSequenceId]!.tracks;
+  const [a, b] = tracks.find((t) => t.kind === 'video')!.clips.map((c) => c.id) as [string, string];
+  const sound = tracks.find((t) => t.kind === 'audio')?.clips[0]?.id;
+  const set = (d: ProjectDocument, clipId: string) => caught(() => run(d, [{ op: 'set_clip_stabilise', args: { clipId, stabilise: {} } }]));
+  const z = (n: number) => new Array<number>(n).fill(0);
+  const measure = (st: number[]) => run(doc, [{ op: 'attach_camera_motion', args: { assetId, from: 0, dx: z(st.length), dy: z(st.length), dr: z(st.length), dz: z(st.length), st, method: 't', params: {}, createdAt: 'x' } }], true).doc;
+  const thin = measure([SST.start, ...new Array<number>(39).fill(SST.ok), ...new Array<number>(160).fill(SST.unknown)]);
+  const full = measure([SST.start, ...new Array<number>(199).fill(SST.ok)]);
+  const both = run(full, [{ op: 'set_clip_stabilise', args: { clipId: a, stabilise: {} } }, { op: 'set_clip_stabilise', args: { clipId: b, stabilise: {} } }]).doc;
+  const mc = structuredClone(full);
+  (mc.sequences[mc.mainSequenceId]!.tracks.flatMap((t) => t.clips).find((c) => c.id === a) as { multicam?: unknown }).multicam = { groupId: 'mcg_x', angle: 'x' };
+  return {
+    notVideo: sound ? [set(doc, sound)] : [STEADY_REFUSALS.notVideo.message()],
+    multicam: [set(mc, a)],
+    notMeasured: [set(doc, a)],
+    tooLittle: [set(thin, a)],
+    inUse: [caught(() => run(both, [{ op: 'remove_camera_motion', args: { assetId } }]))],
+    noMeasurement: [caught(() => run(doc, [{ op: 'remove_camera_motion', args: { assetId } }]))],
   };
 }
 function serverSentences(): Record<StabiliseServerRefusalKey, string[]> {
@@ -71,5 +103,9 @@ describe('stabilise refusals in Hebrew', () => {
       expect({ lang, missing }).toEqual({ lang, missing: [] });
     }
   });
-  it.todo('W2: each set_clip_stabilise / remove_camera_motion refusal provoked for real through its operation once STEADY_OPS_BUILT');
+  it('each set_clip_stabilise / remove_camera_motion refusal is provoked for real through its operation and equals the table', () => {
+    expect(STEADY_OPS_BUILT).toBe(true);
+    const S = STEADY_REFUSALS;
+    expect(ops).toMatchObject({ notVideo: [S.notVideo.message()], multicam: [S.multicam.message()], notMeasured: [S.notMeasured.message()], tooLittle: [S.tooLittle.message(44)], inUse: [S.inUse.message(2)], noMeasurement: [S.noMeasurement.message()] });
+  });
 });
