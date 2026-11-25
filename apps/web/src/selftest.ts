@@ -10,6 +10,7 @@ import { FX_FIXTURE_SECONDS, fxFixture, renderFx } from '@pulseframe/engine/audi
 import { plannedClipInput } from './audioGraph.ts';
 import { curveHash, curveSamples, pathPointsMs, v1Shapes } from './curveHash.ts';
 import './editor/lifeline/lifeline.selftest.ts'; // life line (ADR-0021): window.__pfLife, the core calendar in this browser, for proof:lifeline
+import './editor/stabilise/stabilise.selftest.ts'; // stabilisation (wave 7): window.__pfSteadyHash, core steadyPose in this browser, for proof:stabilise S7 (W3)
 
 /**
  * Sound-effect kernels in this browser (ADR-0010 D6): window.__pfFxRun(type, params) runs one kernel over the fixed fixture

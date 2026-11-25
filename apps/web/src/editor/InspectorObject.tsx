@@ -27,6 +27,8 @@ import { TrackingPanel } from './TrackingPanel.tsx';
 import { FollowControls } from './FollowControls.tsx';
 import { RedactControls } from './RedactControls.tsx';
 import { trackingT } from './tracking.strings.ts';
+import { STABILISE_UI_BUILT, StabiliseBlock } from './stabilise/StabiliseBlock.tsx';
+import { stabiliseT } from './stabilise/stabilise.strings.ts';
 import { BlendField, EffectsBlock, LOOK_CATALOG_COUNTS, LooksField, LookTarget, LookTargetLine, MaskControls, musicUnder, useLook, type LookState } from './LookPanel.tsx';
 import { ColourMatchPanel } from './ColourMatchPanel.tsx';
 import { ClipSound, DuckSwitch } from './SoundPanel.tsx';
@@ -641,6 +643,8 @@ function MotionTab({ clip }: PanelProps) {
       <Section id="entrance" title={S.secEntrance} help><AnimateControls key={`anim:${clip.id}`} clipId={clip.id} /></Section>
       {/* motion tracking (ADR-0015): follow for a title or a picture; the tracks of a video clip's file */}
       <Section id="follow" title={tt('follow.title')} defaultOpen={false} help><FollowControls key={`follow:${clip.id}`} /></Section>
+      {/* stabilisation (wave 7): one selected video clip; mounted only once W3 has built the block */}
+      {STABILISE_UI_BUILT && video && clip.type === 'media' && state.selection.length === 1 && <Section id="stabilise" title={stabiliseT(state.lang)('title')} defaultOpen={false} help><StabiliseBlock key={`stabilise:${clip.id}`} clip={clip} /></Section>}
       {video && <Section id="tracking" title={tt('mtrack.title')} defaultOpen={false} help><TrackingPanel key={`tracking:${clip.id}`} /></Section>}
     </>
   );

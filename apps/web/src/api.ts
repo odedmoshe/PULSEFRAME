@@ -3,6 +3,7 @@ import type { MulticamSyncReport, MulticamSyncRequest, MulticamView } from '@pul
 import type { TakePlanView, TakeRequest, TakeResult } from '@pulseframe/core';
 import type { AssistantConfigBody, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, BudgetReleaseAnswer } from '@pulseframe/core';
 import type { ArchiveLibraryMode, CreditsView, LibraryItemsPage, LibraryItemsQuery, LibraryRow, LibraryStatus, LibraryUseBody, LibraryUseResult } from '@pulseframe/core';
+import type { CameraMotionView, StabiliseRunBody } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
 
@@ -238,6 +239,9 @@ export const api = {
   credits: (id: string, q: { sequenceId?: string; lang?: 'he' | 'en' } = {}) => call<CreditsView>(`/projects/${id}/credits?${new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined) as [string, string][])}`),
   /** The archive link: «ארכיון לשיתוף» (strip) or «ארכיון לעצמי» (keep, owner session only); null = the archive as before. */
   archiveUrl: (id: string, opts: { family?: 'keep' | 'omit'; library?: ArchiveLibraryMode | null } = {}) => `/api/v1/projects/${id}/archive${(() => { const q = new URLSearchParams({ ...(opts.family === 'omit' ? { family: 'omit' } : {}), ...(opts.library ? { library: opts.library } : {}) }).toString(); return q ? `?${q}` : ''; })()}`,
+  // stabilisation (wave 7; apps/server/src/stabilise.ts): both answer 501 stabilise_not_built until the job is built
+  stabiliseClip: (id: string, clipId: string, body: StabiliseRunBody = {}) => call<{ jobId: string; status: string }>(`/projects/${id}/clips/${encodeURIComponent(clipId)}/stabilise`, json(body)),
+  cameraMotion: (id: string, assetId: string) => call<CameraMotionView>(`/projects/${id}/assets/${encodeURIComponent(assetId)}/camera-motion`),
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }
