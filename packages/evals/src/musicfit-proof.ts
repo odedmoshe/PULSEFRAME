@@ -3,7 +3,7 @@
  * §4). LEAD: the entry point and the list of checks. The checks are built in three parts, each owned by one builder:
  * musicfit-proof.makers.ts (A: B1, B2, S1–S4, S7, L3, I1, I2), musicfit-proof.hosts.ts (B: B3, B4, S5, S6, L1, L2, W1–W3, W5, W6, I3;
  * run in the integration round, after A merged), musicfit-proof.ui.ts (C: U1). Integration (wave 7 batch B) imports the makers and hosts
- * parts here; the UI part has a marked place below and reports BLOCKED until builder C's file is merged and wired.
+ * parts here, and the UI part (builder C, merged later in the same integration).
  * Five states, each counted on its own: pass; partial (a part of the check could not be measured here: never counted as a pass);
  * blocked (it could not run here, with the reason); fail. Exit 0 only when every check passes, 1 on any failure, 2 otherwise.
  * Fixtures are SYNTHETIC only, made by the proof: built-in tracks from the product; songs written by the proof's own code as WAV (an
@@ -19,6 +19,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runMusicfitMakers } from './musicfit-proof.makers.ts';
 import { closeMusicfitProofHosts, MUSICFIT_HOST_COVERS, MUSICFIT_PROOF_HOSTS } from './musicfit-proof.hosts.ts';
+import { closeMusicfitProofUi, MUSICFIT_PROOF_UI } from './musicfit-proof.ui.ts';
 
 export const MUSICFIT_PROOF_BUILT = true;
 export const MUSICFIT_CHECKS: Readonly<Record<string, string>> = {
@@ -52,16 +53,19 @@ export type MusicfitStatus = 'pass' | 'partial' | 'blocked' | 'fail';
 export interface MusicfitRow { id: string; part: 'makers' | 'hosts' | 'ui'; status: MusicfitStatus; measured?: unknown; missing?: string[]; reason?: string }
 
 // ---------------------------------------------------------------- the UI part (builder C)
-/**
- * UI PART — builder C's `musicfit-proof.ui.ts` (U1) is NOT merged in this build. When it lands, import its runner here and map its
- * results into rows (the file's own export decides the shape). Until then U1 is BLOCKED, never a pass.
- */
+/** UI part — builder C's musicfit-proof.ui.ts (U1), merged and wired at integration. A step that cannot run here reports BLOCKED. */
 async function runUiPart(): Promise<MusicfitRow[]> {
-  const ui = path.join(path.dirname(fileURLToPath(import.meta.url)), 'musicfit-proof.ui.ts');
-  const reason = fs.existsSync(ui)
-    ? 'BLOCKED: UI part present (musicfit-proof.ui.ts) but not wired into this entry yet'
-    : 'BLOCKED: UI part not merged (musicfit-proof.ui.ts, builder C)';
-  return [{ id: 'U1', part: 'ui', status: 'blocked', reason }];
+  const rows: MusicfitRow[] = [];
+  try {
+    for (const [id, fn] of Object.entries(MUSICFIT_PROOF_UI.checks)) {
+      let r: true | string;
+      try { r = await fn(); } catch (e) { r = `error: ${String((e as Error)?.stack ?? e).slice(0, 600)}`; }
+      const status: MusicfitStatus = r === true ? 'pass' : r.startsWith('BLOCKED') ? 'blocked' : 'fail';
+      console.log(`${status.toUpperCase().padEnd(8)} ${id} (ui)${r === true ? '' : `  ${r.slice(0, 600)}`}`);
+      rows.push({ id, part: 'ui', status, ...(r === true ? {} : { reason: r }) });
+    }
+  } finally { await closeMusicfitProofUi(); }
+  return rows;
 }
 
 async function main(): Promise<number> {

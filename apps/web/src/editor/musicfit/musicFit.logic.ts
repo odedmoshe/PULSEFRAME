@@ -56,9 +56,14 @@ export function refusalLine(lang: Lang, key: keyof typeof MUSICFIT_REFUSALS, det
 
 // ---------- the plan in words ----------
 const sec = (n: number) => (Math.round(n * 100) / 100).toString();
-export function endingText(t: MusicFitT, plan: Pick<MusicFitPlan, 'ending'>): string {
-  const seconds = sec(plan.ending.seconds);
-  return t(plan.ending.kind === 'exact' ? 'endsWithFilm' : plan.ending.kind === 'early' ? 'endsEarly' : 'endsCut', { seconds });
+export function endingText(t: MusicFitT, plan: Pick<MusicFitPlan, 'ending'> & Partial<Pick<MusicFitPlan, 'make'>>): string {
+  if (plan.ending.kind === 'exact') {
+    // the planner's ending.seconds is the remainder (0 for an exact ending); the last chord's length is the made track's endFrames
+    // (integration: the sentence said "the last chord starts 0 s before the end")
+    const chord = plan.make?.kind === 'builtin' ? plan.make.endFrames / 48000 : plan.ending.seconds;
+    return chord > 0 ? t('endsWithFilm', { seconds: sec(chord) }) : t('endsWithFilmPlain');
+  }
+  return t(plan.ending.kind === 'early' ? 'endsEarly' : 'endsCut', { seconds: sec(plan.ending.seconds) });
 }
 export function makeText(t: MusicFitT, plan: Pick<MusicFitPlan, 'make' | 'wantedSeconds'>): string {
   const m = plan.make;
@@ -133,7 +138,7 @@ export function joinState(asset: Pick<Asset, 'provenance'> | undefined): JoinSta
 /** The chip on a clip: a shortened song until the owner marks it heard, and built-in music always (nobody has listened). null: nothing to label. */
 export function chipFor(lang: Lang, t: MusicFitT, asset: Pick<Asset, 'provenance'> | undefined): { kind: 'unheard-join' | 'heard-join' | 'unheard-builtin'; text: string } | null {
   const j = joinState(asset);
-  if (j) return j.heard ? { kind: 'heard-join', text: t('chipHeard', { at: j.at ?? '' }) } : { kind: 'unheard-join', text: MUSICFIT_UNHEARD_LABEL[lang] };
+  if (j) return j.heard ? { kind: 'heard-join', text: t('chipHeard', { at: (j.at ?? '').slice(0, 10) }) } /* the day, not the stored instant with milliseconds (integration) */ : { kind: 'unheard-join', text: MUSICFIT_UNHEARD_LABEL[lang] };
   if (asset?.provenance.procedural && /^music\./.test(asset.provenance.procedural.id)) return { kind: 'unheard-builtin', text: MUSIC_UNHEARD_LABEL[lang] };
   return null;
 }

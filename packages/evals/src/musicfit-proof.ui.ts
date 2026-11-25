@@ -8,6 +8,11 @@
  * answer 501 musicfit_not_built until B is merged) or the web bundle (`pnpm build`); what ran before it is in the evidence
  * (docs/evidence/musicfit-proof.ui.json) together with `state`, the data-state the block actually showed. Anything else is a failure.
  * Run alone: `tsx packages/evals/src/musicfit-proof.ui.ts` (exit 0 all pass, 1 a failure, 2 only blocked ones besides passes).
+ * Integration (wave 7 batch B): the routes are built, so the fit flow applies («בצעו», one undo), the swap flow applies and «ליישר
+ * שוב» puts a marked moment back on a beat, a REAL shortened song (a synthetic A·B·A song written by the server's fixture code,
+ * shortened by the product) shows the chip, its join is played and the owner marks it heard (one undo); a non-owner's mark is
+ * refused in words (the browser holds only the owner's session, so that one request is re-sent with an agent's token: labelled).
+ * The fixture's picture is 14 s (a second clip of the barcode video), long enough for every built-in style's shortest ending.
  * Port 19000+ (random); a folder in the temp directory, removed at the end. Pointer use is limited to opening the Sound workspace
  * and the clip's Beat tab; every flow is driven by Tab, Enter, Space, Escape, the arrow keys, B and Alt+B.
  */
@@ -17,7 +22,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type Page } from 'playwright';
 import * as T from '@pulseframe/time';
-import { MUSICFIT_FORBIDDEN_WORDS, MUSICFIT_FORBIDDEN_WORDS_HE, type ProjectDocument } from '@pulseframe/core';
+import { MUSICFIT_FORBIDDEN_WORDS, MUSICFIT_FORBIDDEN_WORDS_HE, planImpact, type MediaClip, type MusicFitPlan, type ProjectDocument } from '@pulseframe/core';
+import { abaSong, songWav } from '../../../apps/server/src/musicfit/songs.testFixture.ts';
 import { startServer, type RunningServer } from '@pulseframe/server';
 import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { MUSICFIT_TESTIDS as ID } from '../../../apps/web/src/editor/musicfit/musicFit.testids.ts';
@@ -43,7 +49,7 @@ async function makeWorld(): Promise<World> {
   const s = await startServer({ port: PORT, dataDir: path.join(base, 'data'), ...(web ? { webDist } : {}), speechPython: null, voicePython: null, backupDir: null });
   const origin = s.url;
   const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
-  const browser = web ? await chromium.launch() : null;
+  const browser = web ? await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] }) : null;
   return { s, base, web, browser, origin, cookie, barcode };
 }
 async function api(method: string, p: string, body?: unknown): Promise<{ status: number; body: any }> {
@@ -57,7 +63,7 @@ async function must(method: string, p: string, body?: unknown) {
   if (r.status < 200 || r.status > 299) throw new Error(`${method} ${p} → ${r.status} ${JSON.stringify(r.body?.error ?? r.body).slice(0, 300)}`);
   return r.body;
 }
-interface Fx { pid: string; videoClip: string; soundClip: string; musicClip: string }
+interface Fx { pid: string; videoClip: string; soundClip: string; musicClip: string; musicAsset?: string }
 let fxP: Promise<Fx> | null = null;
 /** A project with a 4 s clip of the barcode video (source 2 s …, its sound linked) and 24 s of built-in music on another track, all from the start. The impact flow marks the linked SOUND clip: the Beat tab exists for sound clips only (report: video clips have no Beat tab). */
 const makeFixture = async (): Promise<Fx> => {
@@ -68,6 +74,8 @@ const makeFixture = async (): Promise<Fx> => {
   if (!assetId) throw new Error('upload failed');
   const tx = await must('POST', `/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId, start: T.ZERO, sourceIn: T.rt(2, 1), duration: T.rt(4, 1), withLinkedAudio: true } }] });
   const videoClip = tx.results[0].output.clipId as string;
+  // integration: a second clip of the same video makes the picture 14 s (every built-in style's shortest exact ending fits; 4 s did not)
+  await must('POST', `/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId, start: T.rt(4, 1), sourceIn: T.ZERO, duration: T.rt(10, 1), withLinkedAudio: false } }] });
   const d0 = (await must('GET', `/projects/${pid}`)).project as ProjectDocument;
   const linked = d0.sequences[d0.mainSequenceId]!.tracks.find((t) => t.kind === 'audio')!.clips.find((c) => c.type === 'media' && c.linkGroupId === (Object.values(d0.sequences).flatMap((q) => q.tracks.flatMap((t) => t.clips)).find((c) => c.id === videoClip) as { linkGroupId?: string }).linkGroupId)!;
   const soundClip = linked.id;
@@ -124,7 +132,7 @@ const checks: Record<string, Check> = {};
 async function fitFlow(lang: 'he' | 'en', width: number): Promise<true | string> {
   const w = await world();
   if (!w.web) return NO_WEB;
-  const f = await fixture();
+  const f = await makeFixture(); // integration: fresh, since this flow now applies
   const page = await open(f.pid, lang, width);
   try {
     await openInspectorPage(page, 'sound');
@@ -148,12 +156,32 @@ async function fitFlow(lang: 'he' | 'en', width: number): Promise<true | string>
       return `${WAIT_B}; ran: the block opened by Enter, planned, said "not built" in words, nothing was made, layout ok at ${width}`;
     }
     if (state !== 'plan') return `the block ended in state ${state}: ${await textOf(page, T_(ID.block))}`;
-    const plan = await textOf(page, `${T_(ID.block)}-plan`);
+    const plan = await textOf(page, T_(`${ID.block}-plan`));
     if (praise(plan)) return `the plan says something praising: ${plan}`;
     if (!(await page.locator(T_(ID.ending)).count())) return 'the plan has no ending sentence';
+    const ending = await textOf(page, T_(ID.ending));
+    if (/(^|\D)0 (שניות|s)\b/.test(ending)) return `the ending sentence says 0 seconds: ${ending}`; // integration: an exact ending said "0 s"
+    (evidence[`fit.${lang}.${width}`] as Record<string, unknown>).ending = ending;
     if (!(await page.locator(T_(ID.apply)).count())) return 'the plan has no apply button';
     await activate(page, T_(ID.cancel));
     if ((await page.locator(T_(ID.block)).getAttribute('data-state')) !== 'idle') return 'Cancel did not return the block to idle';
+    // integration: plan again and «בצעו» — two revisions (the made file, then one transaction); the clip ends on the last picture frame; one undo
+    const d0 = await docOf(f.pid), rev0 = await revOf(f.pid);
+    const asset0 = (Object.values(d0.sequences).flatMap((q) => q.tracks.flatMap((t) => t.clips)).find((c) => c.id === f.musicClip) as MediaClip).assetId;
+    await activate(page, T_(ID.fit));
+    await page.locator(`${T_(ID.block)}[data-state=plan]`).waitFor({ timeout: 20000 });
+    await activate(page, T_(ID.apply));
+    const applied = await page.waitForFunction(() => /הותאמה לסרט|was fitted to the film/.test(document.querySelector('[data-testid="musicfit-block"] [role=status]')?.textContent ?? ''), undefined, { timeout: 60000 }).then(() => true).catch(() => false);
+    const d1 = await docOf(f.pid), rev1 = await revOf(f.pid);
+    const c1 = Object.values(d1.sequences).flatMap((q) => q.tracks.flatMap((t) => t.clips)).find((c) => c.id === f.musicClip) as MediaClip;
+    const endFrame = T.nearestFrameIndex(T.add(c1.start, c1.duration), R);
+    evidence[`fit.${lang}.${width}.apply`] = { applied, revisions: rev1 - rev0, asset: c1.assetId !== asset0 ? 'made' : 'same', endFrame, fadeOut: c1.fadeOut ?? null, status: await textOf(page, `${T_(ID.block)} [role=status]`).catch(() => '') };
+    if (!applied) return `«בצעו» did not say it was applied (${lang} ${width}): ${JSON.stringify(evidence[`fit.${lang}.${width}.apply`])}`;
+    if (rev1 - rev0 !== 2 || c1.assetId === asset0 || endFrame !== 420 || c1.fadeOut) return `«בצעו» did not make the file and end the music on the last picture frame (420) in one transaction: ${JSON.stringify(evidence[`fit.${lang}.${width}.apply`])}`;
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press('Control+KeyZ');
+    const undone = await (async () => { for (let i = 0; i < 40; i++) { if ((await revOf(f.pid)) > rev1) break; await sleep(150); } const d2 = await docOf(f.pid); return (Object.values(d2.sequences).flatMap((q) => q.tracks.flatMap((t) => t.clips)).find((c) => c.id === f.musicClip) as MediaClip).assetId === asset0; })();
+    if (!undone) return 'one undo did not give the clip its old music back';
     return true;
   } finally { await close(page); }
 }
@@ -161,7 +189,15 @@ async function fitFlow(lang: 'he' | 'en', width: number): Promise<true | string>
 async function swapFlow(lang: 'he' | 'en', width: number): Promise<true | string> {
   const w = await world();
   if (!w.web) return NO_WEB;
-  const f = await fixture();
+  const f = await makeFixture(); // integration: fresh, since this flow now applies
+  // a moment marked on the picture and brought to a beat of the music now (so a swap can move it off and «ליישר שוב» back)
+  await must('POST', `/projects/${f.pid}/transactions`, { ops: [{ op: 'sync_impact', args: { clipId: f.videoClip, moment: T.frameTime(97, R), to: 'beat' } }] });
+  // the style whose plan moves that moment off the beat (asked of the plan route; the interface asks the same)
+  let style = 'music.cinematic';
+  for (const id of ['music.cinematic', 'music.pop', 'music.lofi', 'music.birthday', 'music.festive']) {
+    const p = await api('POST', `/projects/${f.pid}/music-fit/plan`, { target: { clipId: f.musicClip }, music: { builtin: { styleId: id, seed: 1 } }, tailor: true });
+    if (p.status === 200 && (p.body as MusicFitPlan).impacts.some((i) => i.clipId === f.videoClip && i.framesFromBeatAfter !== 0)) { style = id; break; }
+  }
   const page = await open(f.pid, lang, width);
   try {
     await openInspectorPage(page, 'sound');
@@ -176,7 +212,7 @@ async function swapFlow(lang: 'he' | 'en', width: number): Promise<true | string
     if (rows < 6) return `the dialog lists ${rows} rows; the six built-in styles are expected`;
     const problems = await layoutProblems(page, T_(ID.swapDialog));
     if (problems.length) return `swap layout (${lang} ${width}): ${problems.join('; ')}`;
-    const row = page.locator(`${T_(ID.swapRow)}[data-style-id="music.cinematic"]`);
+    const row = page.locator(`${T_(ID.swapRow)}[data-style-id="${style}"]`);
     await row.focus(); await page.keyboard.press('Enter');
     if ((await row.getAttribute('aria-selected')) !== 'true') return 'Enter on a row did not choose it';
     const settled = await page.waitForFunction(() => { const d = document.querySelector('[data-testid="musicfit-swap-dialog"]'); return !!d && (!!d.querySelector('[data-testid="musicfit-swap-what"]') || !!d.querySelector('.mf-note')); }, undefined, { timeout: 20000 }).then(() => true).catch(() => false);
@@ -193,7 +229,29 @@ async function swapFlow(lang: 'he' | 'en', width: number): Promise<true | string
     await page.locator(T_(ID.swapDialog)).waitFor({ state: 'detached', timeout: 5000 });
     if ((await focusedId(page)) !== ID.swap) return `Escape returned the focus to ${await focusedId(page)}, not the swap button`;
     if (JSON.stringify(Object.keys((await docOf(f.pid)).assets)) !== JSON.stringify(Object.keys(before))) return 'the dialog changed the project without «בצעו»';
-    return notBuilt ? `${WAIT_B}; ran: focus trap in both directions (45 Tab each way), Enter chooses a row, "not built" said, Escape returns focus to the button, nothing changed` : true;
+    if (notBuilt) return `${WAIT_B}; ran: focus trap in both directions (45 Tab each way), Enter chooses a row, "not built" said, Escape returns focus to the button, nothing changed`;
+    // integration: open again, choose the same row, «בצעו», then «ליישר שוב»
+    const rev0 = await revOf(f.pid);
+    await activate(page, T_(ID.swap));
+    await page.locator(T_(ID.swapDialog)).waitFor({ timeout: 10000 });
+    await row.focus(); await page.keyboard.press('Enter');
+    await page.locator(T_(ID.swapWhat)).waitFor({ timeout: 20000 });
+    const table = await textOf(page, T_(ID.swapWhat));
+    await activate(page, T_(ID.swapApply));
+    const realign = await page.locator(T_(ID.realign)).waitFor({ timeout: 60000 }).then(() => true).catch(() => false);
+    const rev1 = await revOf(f.pid);
+    const d1 = await docOf(f.pid);
+    const offAfterSwap = planImpact(d1, f.videoClip, undefined, 'beat');
+    evidence[`swap.${lang}.${width}.apply`] = { style, table: table.slice(0, 300), revisions: rev1 - rev0, realignOffered: realign, offAfterSwap: 'refusal' in offAfterSwap ? offAfterSwap.refusal : offAfterSwap.offsetBefore };
+    if (rev1 - rev0 !== 2) return `«בצעו» in the swap dialog did not make the file and one transaction: ${JSON.stringify(evidence[`swap.${lang}.${width}.apply`])}`;
+    if (!realign) return `after the swap moved a marked moment off the beat, «ליישר שוב» was not offered: ${JSON.stringify(evidence[`swap.${lang}.${width}.apply`])}`;
+    await activate(page, T_(ID.realign));
+    await page.locator(T_(ID.swapDialog)).waitFor({ state: 'detached', timeout: 10000 }).catch(() => undefined);
+    for (let i = 0; i < 40 && (await revOf(f.pid)) === rev1; i++) await sleep(150);
+    const after = planImpact(await docOf(f.pid), f.videoClip, undefined, 'beat');
+    (evidence[`swap.${lang}.${width}.apply`] as Record<string, unknown>).afterRealign = 'refusal' in after ? after.refusal : after.offsetBefore;
+    if (!('refusal' in after) || after.refusal !== 'alreadyOnBeat') return `«ליישר שוב» did not put the moment on a beat frame: ${JSON.stringify(evidence[`swap.${lang}.${width}.apply`])}`;
+    return true;
   } finally { await close(page); }
 }
 /** The impact flow by keyboard: mark at the playhead, the offset line, B to the beat (offset before and after), undo, Alt+B. */
@@ -281,6 +339,82 @@ async function chipFlow(lang: 'he' | 'en'): Promise<true | string> {
   } finally { await close(page); }
 }
 
+/** Integration: a REAL shortened song (synthetic A·B·A, shortened by the product through the apply route): the chip, the join played,
+ * a non-owner's mark refused in words, the owner's mark (one revision, the chip changes), one undo. */
+async function heardFlow(lang: 'he' | 'en'): Promise<true | string> {
+  const w = await world();
+  if (!w.web) return NO_WEB;
+  const f = await makeFixture();
+  const aba = abaSong(), file = path.join(w.base, 'fx', `aba-${lang}.wav`);
+  fs.writeFileSync(file, songWav(aba));
+  const up = await fetch(`${w.origin}/api/v1/projects/${f.pid}/assets`, { method: 'POST', headers: { origin: w.origin, cookie: w.cookie, connection: 'close', 'x-filename': 'aba.wav' }, body: new Uint8Array(fs.readFileSync(file)) });
+  const song = ((await up.json()) as { assetId?: string }).assetId!;
+  w.s.store.commit({ projectId: f.pid, actor: 'user:local', ops: [{ op: 'edit_analysis', args: { assetId: song, kind: 'beats', replace: aba.beats, downbeats: aba.downbeats, bpm: aba.bpm, meter: 4 } }] });
+  const req = { target: { clipId: f.musicClip }, music: { assetId: song }, tailor: true };
+  const applied = await api('POST', `/projects/${f.pid}/music-fit/apply`, { ...req, expectedRevision: await revOf(f.pid) });
+  if (applied.status !== 200) return `the song could not be shortened through the route: ${applied.status} ${JSON.stringify(applied.body?.error ?? applied.body).slice(0, 300)}`;
+  const made = applied.body.madeAssetId as string;
+  const page = await open(f.pid, lang);
+  try {
+    await openInspectorPage(page, 'sound');
+    await selectClip(page, f.musicClip);
+    const chip = page.locator(T_(ID.unheardChip));
+    await chip.waitFor({ timeout: 10000 });
+    const unheard = (await chip.innerText()).trim();
+    if (unheard !== (lang === 'he' ? 'חיבור אוטומטי — עוד לא הושמע' : 'Automatic join — not heard yet')) return `the chip of the shortened song says ${JSON.stringify(unheard)}`;
+    const heard = page.locator(T_(ID.heard));
+    if ((await heard.getAttribute('aria-disabled')) !== 'true') return 'the heard control does not wait for the join to be played';
+    const play = page.locator(`.mf-heard ${T_(ID.playJoin)}`);
+    await play.focus(); await page.keyboard.press('Enter');
+    const pressed = await page.waitForFunction(() => document.querySelector('.mf-heard [data-testid="musicfit-play-join"]')?.getAttribute('aria-pressed') === 'true', undefined, { timeout: 15000 }).then(() => true).catch(() => false);
+    const enabled = await page.waitForFunction(() => document.querySelector('[data-testid="musicfit-heard"]')?.getAttribute('aria-disabled') !== 'true', undefined, { timeout: 15000 }).then(() => true).catch(() => false);
+    const playFailed = await page.locator('.mf-heard [role=alert]').count();
+    evidence[`heard.${lang}`] = { made, unheard, playPressed: pressed, heardEnabledAfterPlay: enabled, playFailed: playFailed > 0 };
+    if (!pressed || !enabled) return `playing the join did not open the heard control (aria-pressed ${pressed}, enabled ${enabled}, a play failure shown ${playFailed > 0})`;
+    // a non-owner: the same request re-sent with an agent's token and no session cookie (the browser holds only the owner's session)
+    const rev0 = await revOf(f.pid);
+    await page.route('**/music-join/heard', async (route) => {
+      const h = { ...route.request().headers() }; delete h.cookie;
+      await route.continue({ headers: { ...h, authorization: `Bearer ${w.s.auth.tokens.agent}` } });
+    });
+    await heard.focus(); await page.keyboard.press('Enter');
+    const refusal = await page.locator(T_(`${ID.heard}-refused`)).waitFor({ timeout: 10000 }).then(() => textOf(page, T_(`${ID.heard}-refused`))).catch(() => '');
+    await page.unroute('**/music-join/heard');
+    (evidence[`heard.${lang}`] as Record<string, unknown>).nonOwner = refusal;
+    if (!(lang === 'he' ? /בעל הפרויקט/ : /project owner/).test(refusal)) return `a non-owner's mark was not refused in words: ${JSON.stringify(refusal)}`;
+    if ((await revOf(f.pid)) !== rev0) return 'a non-owner\'s mark changed the project';
+    // the owner
+    await heard.focus(); await page.keyboard.press('Enter');
+    const chipHeard = await page.waitForFunction(() => document.querySelector('[data-testid="musicfit-unheard"]')?.getAttribute('data-heard') === 'true', undefined, { timeout: 10000 }).then(() => true).catch(() => false);
+    const rev1 = await revOf(f.pid);
+    const marked = !!(await docOf(f.pid)).assets[made]?.provenance.fitted?.heard;
+    (evidence[`heard.${lang}`] as Record<string, unknown>).owner = { chipHeard, revisions: rev1 - rev0, marked, chip: chipHeard ? await textOf(page, T_(ID.unheardChip)) : null };
+    if (!chipHeard || rev1 - rev0 !== 1 || !marked) return `the owner's mark: ${JSON.stringify((evidence[`heard.${lang}`] as Record<string, unknown>).owner)}`;
+    if (praise(await textOf(page, T_(ID.block)))) return 'the block praises the join';
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press('Control+KeyZ');
+    for (let i = 0; i < 40 && (await revOf(f.pid)) === rev1; i++) await sleep(150);
+    if ((await docOf(f.pid)).assets[made]?.provenance.fitted?.heard) return 'one undo did not remove the heard mark';
+    return true;
+  } finally { await close(page); }
+}
+/** Integration (lead decision): a VIDEO clip has the Beat tab, and it shows the impact controls. */
+async function videoBeatTab(lang: 'he' | 'en'): Promise<true | string> {
+  const w = await world();
+  if (!w.web) return NO_WEB;
+  const f = await fixture();
+  const page = await open(f.pid, lang);
+  try {
+    await selectClip(page, f.videoClip);
+    const tab = page.locator('[data-testid="insp-tab-beat"]');
+    if (!(await tab.count())) return 'a video clip has no Beat tab';
+    await tab.first().focus(); await page.keyboard.press('Enter');
+    const shown = await page.locator(T_(ID.impact)).waitFor({ timeout: 10000 }).then(() => true).catch(() => false);
+    evidence[`videoBeat.${lang}`] = { shown, state: shown ? await page.locator(T_(ID.impact)).getAttribute('data-state') : null };
+    return shown ? true : 'the Beat tab of a video clip does not show the impact controls';
+  } finally { await close(page); }
+}
+
 checks.U1 = async () => {
   const notes: string[] = [];
   let failed: string | null = null;
@@ -295,6 +429,7 @@ checks.U1 = async () => {
     await run(`swap ${lang} ${width}`, () => swapFlow(lang, width));
   }
   for (const lang of ['he', 'en'] as const) { await run(`impact ${lang}`, () => impactFlow(lang, 1440)); await run(`chip ${lang}`, () => chipFlow(lang)); }
+  for (const lang of ['he', 'en'] as const) { await run(`heard ${lang}`, () => heardFlow(lang)); await run(`video beat tab ${lang}`, () => videoBeatTab(lang)); }
   evidence.notes = notes;
   if (failed) return failed;
   const blocked = notes.filter((n) => /BLOCKED/.test(n));

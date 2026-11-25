@@ -107,6 +107,7 @@ export const MUSICFIT_EXTRA = {
     // commands
     'cmdMarkNeedsClip': 'בחרו קליפ וידאו או קול והציבו את הסמן בתוכו', 'cmdMarked': 'הרגע סומן', 'cmdMoved': 'הרגע הועבר ב־{frames} פריימים',
     'cmdNotMarked': 'סמנו קודם את הרגע', 'cmdUndoLabel': 'סימון רגע',
+    'endsWithFilmPlain': 'המוזיקה מסתיימת עם הסרט',
   },
   en: {
     'planning': 'Planning the fit…', 'replan': 'Plan again', 'close': 'Close',
@@ -154,6 +155,7 @@ export const MUSICFIT_EXTRA = {
     'tickMarked': 'Marked moment', 'tickJoin': 'Where the shortened song joins', 'clipMarked': 'marked moment',
     'cmdMarkNeedsClip': 'Select a video or sound clip and put the playhead inside it', 'cmdMarked': 'The moment was marked', 'cmdMoved': 'The moment was moved by {frames} frames',
     'cmdNotMarked': 'Mark the moment first', 'cmdUndoLabel': 'Mark a moment',
+    'endsWithFilmPlain': 'The music ends with the film',
   },
 } as const;
 type Prefixed<O> = { readonly [K in keyof O & string as `musicfit.${K}`]: O[K] };

@@ -97,6 +97,7 @@ describe('the unheard labels and the owner-only mark', () => {
     expect(chipFor('he', he, fitted())).toMatchObject({ kind: 'unheard-join', text: 'חיבור אוטומטי — עוד לא הושמע' });
     expect(chipFor('en', en, fitted())!.text).toBe('Automatic join — not heard yet');
     expect(chipFor('he', he, fitted({ by: 'user:owner', at: '2026-11-25' }))).toMatchObject({ kind: 'heard-join', text: 'החיבור נשמע (2026-11-25)' });
+    expect(chipFor('en', en, fitted({ by: 'user:owner', at: '2026-11-25T18:44:13.835Z' }))).toMatchObject({ kind: 'heard-join', text: 'The join was heard (2026-11-25)' }); // integration: the stored instant was shown raw
     const builtin = { provenance: { ...prov, origin: 'generated', procedural: { id: 'music.calm', version: 1, generator: 'g', params: {} } } } as unknown as Pick<Asset, 'provenance'>;
     expect(chipFor('he', he, builtin)).toMatchObject({ kind: 'unheard-builtin', text: 'מוזיקה מובנית — עוד לא הושמעה לאף אחד' });
     expect(chipFor('he', he, { provenance: prov } as Pick<Asset, 'provenance'>)).toBeNull();
@@ -120,6 +121,13 @@ describe('failures and plans in words', () => {
   });
   const plan = (over: Partial<MusicFitPlan> = {}): MusicFitPlan => ({
     revision: 4, target: { kind: 'clip', clipId: 'c', runId: null }, make: { kind: 'none' }, wantedSeconds: 30, ending: { kind: 'exact', seconds: 2.4 }, recut: null, impacts: [], warnings: [], blocking: [], basis: [], ...over,
+  });
+  it('integration: an exact ending says how long the last chord lasts from make.endFrames (the plan\'s ending.seconds is the remainder, 0), never "0 s"', () => {
+    const exact = plan({ ending: { kind: 'exact', seconds: 0 }, make: { kind: 'builtin', styleId: 'music.calm', seed: 1, bars: 5, endFrames: 120000 } });
+    expect(endingText(he, exact)).toBe('המוזיקה מסתיימת עם הסרט; האקורד האחרון מתחיל 2.5 שניות לפני הסוף');
+    expect(endingText(en, exact)).toBe('The music ends with the film; the last chord starts 2.5 s before the end');
+    expect(endingText(en, plan({ ending: { kind: 'exact', seconds: 0 }, make: { kind: 'none' } }))).toBe('The music ends with the film');
+    expect(endingText(he, plan({ ending: { kind: 'exact', seconds: 0 }, make: { kind: 'none' } }))).toBe('המוזיקה מסתיימת עם הסרט');
   });
   it('ending and make sentences', () => {
     expect(endingText(he, plan())).toBe('המוזיקה מסתיימת עם הסרט; האקורד האחרון מתחיל 2.4 שניות לפני הסוף');
