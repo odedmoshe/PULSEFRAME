@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import fc from 'fast-check';
 import * as T from '@pulseframe/time';
 import { creativeProjection, FAMILY_FILM_RUN_RECIPE_ID, FAMILY_FILM_TEMPLATE_ID, FAMILY_FILM_VERSION, filmRunRecordParams, findClip, MOMENTS_JOB_TYPE, planFamilyFilm, validateProject, type Asset } from '@pulseframe/core';
 import { Auth } from './auth.ts';
@@ -22,7 +23,7 @@ import { createApp } from './http.ts';
 import { createMcp } from './mcp.ts';
 import { Presence } from './presence.ts';
 import { Speech } from './speech.ts';
-import { Store } from './store.ts';
+import { ApiError, Store } from './store.ts';
 
 const USER: Principal = { actor: 'user:owner', kind: 'user', scopes: ['observe', 'edit'] };
 const R = { num: 30, den: 1 };
@@ -335,6 +336,66 @@ describe('a film clip deleted by hand stays deleted (ADR-0016 decision 6, applie
       expect(validateProject(doc)).toEqual([]);
       expect([findClip(doc, q0[1]!.id)!.track.id, fi(findClip(doc, q0[1]!.id)!.clip.start)]).toEqual([other, q0[1]!.from]);
     });
+
+    it('property (seeded): after hand edits, ripple deletes among them, a film regeneration is one valid revision that undoes exactly and replays, or a refusal that changes nothing; when only places changed nothing is kept as a hand edit and the pictures run from the film\'s start without a gap', async () => {
+      const tally = { runs: 0, refused: 0, ripples: 0, pure: 0, movedBack: 0, kept: 0 };
+      let project = 0;
+      await fc.assert(fc.asyncProperty(fc.array(fc.tuple(fc.nat(5), fc.nat(20), fc.nat(50)), { minLength: 1, maxLength: 4 }), fc.boolean(), async (edits, restore) => {
+        const s = seed(`ff-prop-${project++}`, THREE);
+        const applied = await applyFamilyFilmFor(store, gov, USER, s.pid, { assetIds: s.ids, targetSeconds: 30 });
+        let pure = true;
+        for (const [kind, pick, amount] of edits) {
+          const doc = store.getProject(s.pid).doc;
+          const live = doc.recipeRuns[applied.runId]!.createdIds.filter((id) => !!findClip(doc, id));
+          if (!live.length) break;
+          const found = findClip(doc, live[pick % live.length]!)!, start = fi(found.clip.start);
+          const clipId = found.clip.id;
+          const op = [
+            { op: 'ripple_delete_clips', args: { clipIds: [clipId] } },
+            { op: 'ripple_delete_clips', args: { clipIds: [clipId] } },
+            { op: 'move_clip', args: { clipId, start: T.frameTime(start + 1 + amount, R) } },
+            { op: 'delete_clip', args: { clipId } },
+            { op: 'trim_clip', args: { clipId, edge: 'end', to: T.frameTime(start + 10 + (amount % 40), R) } },
+            { op: 'set_clip_transform', args: { clipId, transform: { rotation: 1 + amount } } },
+          ][kind]!;
+          try { store.commit({ projectId: s.pid, actor: 'user:owner', ops: [op] }); if (kind < 2) tally.ripples++; if (kind > 3) pure = false; } catch (e) { if (!(e instanceof ApiError)) throw e; }
+        }
+        const held = store.getProject(s.pid).doc, before = revision(s.pid);
+        let r: Awaited<ReturnType<typeof regenerateFamilyFilmFor>>;
+        try { r = await regenerateFamilyFilmFor(store, gov, USER, s.pid, applied.runId, {}, undefined, { restoreRemoved: restore }); } catch (e) {
+          if (!(e instanceof ApiError) || ![409, 400].includes(e.status)) throw e;
+          if (revision(s.pid) !== before || JSON.stringify(store.getProject(s.pid).doc) !== JSON.stringify(held)) throw new Error('a refusal changed the project');
+          tally.refused++;
+          return true;
+        }
+        tally.runs++;
+        const doc = store.getProject(s.pid).doc;
+        if (revision(s.pid) !== before + 1) throw new Error('not exactly one revision');
+        if (validateProject(doc).length) throw new Error(`invalid: ${JSON.stringify(validateProject(doc))}`);
+        for (const id of r.protected) { const was = findClip(held, id); if (was && JSON.stringify(findClip(doc, id)?.clip) !== JSON.stringify(was.clip)) throw new Error(`kept clip ${id} changed`); }
+        const codes = r.warnings.map((w) => w.code);
+        if ((r.movedBack ?? []).length !== ((r.warnings.find((w) => w.code === 'moved_back')?.details.keys as string[] | undefined)?.length ?? 0)) throw new Error('movedBack and the warning disagree');
+        const keptClipIds = r.protected.filter((id) => !!findClip(held, id));
+        if (pure) {
+          tally.pure++;
+          if (keptClipIds.length || codes.includes('kept_by_hand') || codes.includes('cut_off_grid_next_to_kept')) throw new Error(`only places changed, yet clips were kept as hand edits: ${JSON.stringify({ kept: keptClipIds, codes })}`);
+          const p = picksOf(s.pid, applied.runId);
+          if (p.some((x, i) => x.from !== (i === 0 ? p[0]!.from : p[i - 1]!.to))) throw new Error(`a gap between the pictures: ${JSON.stringify(p.map((x) => [x.from, x.to]))}`);
+          if (restore && JSON.stringify(p.map((x) => x.file)) !== JSON.stringify(s.ids)) throw new Error(`restoreRemoved after place-only edits did not give every file in order: ${JSON.stringify(p.map((x) => x.file))}`);
+        }
+        if ((r.movedBack ?? []).length) tally.movedBack++;
+        if (keptClipIds.length) tally.kept++;
+        if (JSON.stringify(store.replay(s.pid, revision(s.pid)).doc) !== JSON.stringify(doc)) throw new Error('replay differs');
+        store.undo(s.pid, 'user:owner', 'undo');
+        if (creativeProjection(store.getProject(s.pid).doc) !== creativeProjection(held)) throw new Error('undo of the regeneration is not exact');
+        return true;
+      }), { numRuns: Number(process.env.PF_PROPERTY_RUNS ?? 30), seed: Number(process.env.PF_PROPERTY_SEED ?? 20261124) });
+      console.log(`family film regeneration after hand edits (property): ${JSON.stringify(tally)}`);
+      expect(tally.ripples).toBeGreaterThan(5);
+      expect(tally.pure).toBeGreaterThan(2);
+      expect(tally.movedBack).toBeGreaterThan(2);
+      expect(tally.kept).toBeGreaterThan(0);
+    }, 300_000);
 
     it('a film made before places were recorded: its places are worked out from its own plan, so the same Delete does not freeze the later picks there either; a film whose plan comes out differently keeps them, as before', async () => {
       const s = seed('ff-older', THREE);

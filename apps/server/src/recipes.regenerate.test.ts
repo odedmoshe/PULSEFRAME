@@ -8,13 +8,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import fc from 'fast-check';
 import * as T from '@pulseframe/time';
-import { creativeProjection, findClip, fingerprint, MULTICAM_OPS_BUILT, planRecipe, validateProject, type Asset, type MulticamGroup } from '@pulseframe/core';
+import { creativeProjection, findClip, fingerprint, movedOnly, MULTICAM_OPS_BUILT, planRecipe, validateProject, type Asset, type MulticamGroup } from '@pulseframe/core';
 import { Derivatives } from './derive.ts';
 import { Governance } from './governance.ts';
 import { setMulticamDerivatives } from './multicamSync.ts';
 import { applyRecipe, regenerateRecipe } from './recipes.ts';
-import { Store } from './store.ts';
+import { ApiError, Store } from './store.ts';
 import { speechAt, speechBursts, wav } from './multicamSync.fixtures.ts';
 import type { Principal } from './auth.ts';
 
@@ -174,6 +175,64 @@ describe('regenerate after the in-place branch', () => {
         expect([r.protected, r.movedBack, findClip(store.getProject(n.pid).doc, first[1]!.id)!.track.id, n.at()], `regeneration ${i + 1}`).toEqual([[first[1]!.id], [], other, SIX]);
       }
     });
+
+    it('property (seeded): after hand edits, ripple deletes among them, a regeneration leaves a valid montage with no two pictures on the same frames, keeps exactly the clips changed otherwise, undoes exactly and replays; when only places changed, every clip is back on its beat', async () => {
+      const tally = { runs: 0, ripples: 0, pure: 0, movedBack: 0, kept: 0 };
+      let project = 0;
+      await fc.assert(fc.asyncProperty(fc.array(fc.tuple(fc.nat(5), fc.nat(20), fc.nat(50)), { minLength: 1, maxLength: 4 }), fc.boolean(), async (edits, restore) => {
+        const letters = [0, 1, 2].map((i) => String.fromCharCode(0x80 + ((project * 3 + i) % 0x80))) as [string, string, string];
+        const m = montageProject(`bm-prop-${project++}`, letters);
+        const applied = await applyRecipe(store, gov, owner, m.pid, 'beat-montage', m.params);
+        let pure = true;
+        for (const [kind, pick, amount] of edits) {
+          const pics = m.pictures();
+          if (!pics.length) break;
+          const c = pics[pick % pics.length]!, start = T.nearestFrameIndex(c.start, R);
+          const op = [
+            { op: 'ripple_delete_clips', args: { clipIds: [c.id] } },
+            { op: 'ripple_delete_clips', args: { clipIds: [c.id] } },
+            { op: 'move_clip', args: { clipId: c.id, start: f(start + 1 + amount) } },
+            { op: 'delete_clip', args: { clipId: c.id } },
+            { op: 'trim_clip', args: { clipId: c.id, edge: 'end', to: f(start + 10 + (amount % 40)) } },
+            { op: 'set_clip_transform', args: { clipId: c.id, transform: { rotation: 1 + amount } } },
+          ][kind]!;
+          try { store.commit({ projectId: m.pid, actor: 'user:owner', ops: [op] }); if (kind < 2) tally.ripples++; if (kind > 3) pure = false; } catch (e) { if (!(e instanceof ApiError)) throw e; }
+        }
+        const held = store.getProject(m.pid).doc, run = held.recipeRuns[applied.runId]!;
+        const live = run.createdIds.filter((id) => !!findClip(held, id));
+        const edited = live.filter((id) => fingerprint(findClip(held, id)!.clip) !== run.fingerprints[id] && !movedOnly(held, run, live).includes(id));
+        let r: Awaited<ReturnType<typeof regenerateRecipe>>;
+        try { r = await regenerateRecipe(store, gov, owner, m.pid, applied.runId, m.params, { restoreRemoved: restore }); } catch (e) {
+          if (!(e instanceof ApiError) || e.code !== 'nothing_to_do') throw e;
+          if (JSON.stringify(store.getProject(m.pid).doc) !== JSON.stringify(held)) throw new Error('a refusal changed the project');
+          return true;
+        }
+        tally.runs++;
+        const doc = store.getProject(m.pid).doc;
+        if (validateProject(doc).length) throw new Error(`invalid: ${JSON.stringify(validateProject(doc))}`);
+        if (JSON.stringify([...r.protected].sort()) !== JSON.stringify([...edited].sort())) throw new Error(`kept ${JSON.stringify(r.protected)}, changed otherwise ${JSON.stringify(edited)}`);
+        for (const id of r.protected) if (JSON.stringify(findClip(doc, id)?.clip) !== JSON.stringify(findClip(held, id)!.clip)) throw new Error(`kept clip ${id} changed`);
+        const at = m.at();
+        if (at.some(([s], i) => i > 0 && s! < at[i - 1]![1]!)) throw new Error(`pictures overlap: ${JSON.stringify(at)}`);
+        if (pure) {
+          tally.pure++;
+          if (r.protected.length || at.some(([s, e]) => s! % 60 !== 0 || e! - s! !== 60)) throw new Error(`only places changed, yet not every clip is on its beat: ${JSON.stringify({ at, protected: r.protected })}`);
+          if (restore && JSON.stringify(at) !== JSON.stringify(SIX)) throw new Error(`restoreRemoved after place-only edits did not give the whole montage: ${JSON.stringify(at)}`);
+        }
+        if ((r.movedBack ?? []).length) tally.movedBack++;
+        if (r.protected.length) tally.kept++;
+        for (const id of r.removed ?? []) { const g = run.ranges![id]!; const [gs, ge] = [T.nearestFrameIndex(g.start, R), T.nearestFrameIndex(g.end, R)]; if (at.some(([s, e]) => s! <= gs && ge <= e!)) throw new Error(`removed names ${id}, whose whole range holds a clip`); }
+        if (JSON.stringify(store.replay(m.pid, store.getProject(m.pid).revision).doc) !== JSON.stringify(doc)) throw new Error('replay differs');
+        store.undo(m.pid, 'user:owner', 'undo');
+        if (creativeProjection(store.getProject(m.pid).doc) !== creativeProjection(held)) throw new Error('undo of the regeneration is not exact');
+        return true;
+      }), { numRuns: Number(process.env.PF_PROPERTY_RUNS ?? 30), seed: Number(process.env.PF_PROPERTY_SEED ?? 20261124) });
+      console.log(`beat-montage regeneration after hand edits (property): ${JSON.stringify(tally)}`);
+      expect(tally.ripples).toBeGreaterThan(5);
+      expect(tally.pure).toBeGreaterThan(2);
+      expect(tally.movedBack).toBeGreaterThan(2);
+      expect(tally.kept).toBeGreaterThan(0);
+    }, 300_000);
 
     it('a montage made before tracks were recorded keeps the clips a Delete moved, as before; the answer no longer names the deleted clip as removed when a kept clip lies on its whole range', async () => {
       const m = montageProject('bm-ripple-older', ['p', 'q', 'r']);
