@@ -2248,7 +2248,8 @@ async function main() {
       ff(['-f', 'lavfi', '-t', '14', '-i', 'testsrc2=s=640x360:r=30', '-vf', 'format=yuv420p', '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', vid]);
       const mp = (await call('/projects', { name: 'musicfit keys', width: 640, height: 360 })).body.project.id as string;
       const va = await upload(mp, vid);
-      const placed = await txs(mp, [{ op: 'add_clip', args: { assetId: va.assetId, start: f(0), withLinkedAudio: false } }]);
+      // the clip shows 1 s … 13 s of its file, so a slip has material on both sides (the whole file left no room: noRoom)
+      const placed = await txs(mp, [{ op: 'add_clip', args: { assetId: va.assetId, start: f(0), sourceIn: f(30), duration: f(360), withLinkedAudio: false } }]);
       const videoClip = placed.results[0].output.clipId as string;
       const music = (await call(`/projects/${mp}/music`, { styleId: 'music.calm', bars: 8, seed: 1, start: f(0) })).body.clipId as string;
       await txs(mp, [{ op: 'set_clip_impact', args: { clipId: videoClip, moment: f(37) } }]);
@@ -2288,7 +2289,7 @@ async function main() {
       await pg.keyboard.press('Control+KeyZ');
       let back = false;
       for (let i = 0; i < 50 && !back; i++) { await sleep(100); back = (await clipOf(music)).assetId === asset0; }
-      check('«התאמה לאורך» plans before anything changes; «בצעו» makes the track and ends the music on the last picture frame (frame 420, no fade) in one transaction; one Ctrl+Z gives the old music back', planned && r1 === r0 + 2 && m1.assetId !== asset0 && end === 420 && !m1.fadeOut && back, { planned, revisions: r1 - r0, end, fadeOut: m1.fadeOut ?? null, back });
+      check('«התאמה לאורך» plans before anything changes; «בצעו» makes the track and ends the music on the last picture frame (frame 360, no fade) in one transaction; one Ctrl+Z gives the old music back', planned && r1 === r0 + 2 && m1.assetId !== asset0 && end === 360 && !m1.fadeOut && back, { planned, revisions: r1 - r0, end, fadeOut: m1.fadeOut ?? null, back });
       check('musicfit rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
       await ctx.close();
     }

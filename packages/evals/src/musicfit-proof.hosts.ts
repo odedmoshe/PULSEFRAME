@@ -711,7 +711,7 @@ export const MUSICFIT_HOST_COVERS: Readonly<Record<string, { drop: string[]; rem
   I1: { drop: ['pixels of a server still or an export', 'not measured in exported sound'] },
   I2: { drop: ['not one made by a local-tool job'] },
   S7: { drop: ['not made by a local-tool job'] },
-  S3: { drop: ['the join_weak warning itself'], remaining: ['the strings of the editor\'s block, dialog and chip are builder C\'s (UI part not merged): not checked for praise words here'] },
+  S3: { drop: ['the join_weak warning itself'], remaining: ['the strings of the editor\'s block, dialog and chip are checked for praise words by U1 (the UI part), not here'] },
   L3: { drop: ['the plan route\'s refusal'] },
 };
 export const MUSICFIT_PROOF_HOSTS = { checks, evidence } as const;

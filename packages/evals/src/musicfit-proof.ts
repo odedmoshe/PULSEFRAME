@@ -93,6 +93,12 @@ async function main(): Promise<number> {
     }
   } finally { await closeMusicfitProofHosts(); }
   rows.push(...(await runUiPart()));
+  // S3's last item (the editor's strings hold no praise word) is measured by U1: it counts only when U1 passed
+  const u1 = rows.find((r) => r.id === 'U1'), s3 = rows.find((r) => r.id === 'S3' && r.part === 'makers');
+  if (u1?.status === 'pass' && s3?.missing) {
+    s3.missing = s3.missing.filter((m) => !m.includes('by U1'));
+    if (!s3.missing.length) { delete s3.missing; if (s3.status === 'partial') s3.status = 'pass'; }
+  }
   const order = Object.keys(MUSICFIT_CHECKS);
   rows.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
   const count = (s: MusicfitStatus) => rows.filter((r) => r.status === s).map((r) => r.id);
