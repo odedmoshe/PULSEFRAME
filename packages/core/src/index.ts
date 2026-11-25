@@ -108,3 +108,14 @@ export * from './assistantContract.ts';
 export * from './commandBar/index.ts';
 export * from './commandBar/numbers.ts';
 export * from './commandBar/time.ts';
+// editing craft (wave 7 craft track; .artifacts/wave7/craft-decisions.md): the contract is lead-built; craftOps, timeEntry,
+// rippleTrim, pasteAttributes and findReplace bodies are W1's, versionDiff W2's
+export * from './craftContract.ts';
+export * from './craftOps.ts';
+export * from './timeEntry.ts';
+export * from './rippleTrim.ts';
+export * from './pasteAttributes.ts';
+export * from './findReplace.ts';
+export * from './versionDiff.ts';
+// the one Hebrew mark table and the direction controls (find and replace; the search track folds with the same)
+export { HEBREW_MARKS, BIDI_CONTROLS } from './commandBar/normalize.ts';

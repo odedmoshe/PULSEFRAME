@@ -17,8 +17,15 @@ import { dict } from './dict.ts';
 const HEB = /[א-ת]/;
 const isHeb = (c: string | undefined) => !!c && HEB.test(c);
 const isSpace = (c: string | undefined) => c === undefined || /\s/.test(c);
-/** Niqqud and cantillation, U+0591–U+05C7 without the maqaf, paseq, sof pasuq and nun hafukha (they are not marks). */
-const NIQQUD = /[֑-ׇֽֿׁׂׅׄ]/g;
+/**
+ * Niqqud and cantillation, U+0591–U+05C7 without the maqaf, paseq, sof pasuq and nun hafukha (they are not marks). Exported as the
+ * ONE Hebrew mark table (wave 7: craft's find and replace and the search track fold with it; no second table). Global flag: use
+ * it with replace or matchAll, or reset lastIndex.
+ */
+export const HEBREW_MARKS = /[֑-ׇֽֿׁׂׅׄ]/g;
+const NIQQUD = HEBREW_MARKS;
+/** Direction and joiner controls (ZWNJ, ZWJ, LRM, RLM, embeddings, overrides, isolates): find ignores them whatever the switches say. */
+export const BIDI_CONTROLS = /[\u200C-\u200F\u202A-\u202E\u2066-\u2069]/g;
 const MAQAF = '־';
 
 /** Single proclitics, and the explicit two-letter pairs (plan §4.1 step 4). */

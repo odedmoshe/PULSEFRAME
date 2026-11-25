@@ -50,6 +50,10 @@ export const ASSISTANT_EXCLUDED_OPS = [
   'add_cue', 'update_cue', 'merge_cues', 'set_caption_style', 'set_variant_phrase_text',
   // privacy regions and the motion tracks they follow (a proposal must never take a redaction away)
   'set_redact_region', 'create_motion_track', 'edit_motion_track', 'remove_motion_track',
+  // editing craft (wave 7): replace_text rewrites captions, transcripts and translations the assistant never reads; ripple_trim and
+  // paste_attributes are left out until the owner has tried them (offering them would also change the reviewed prompt,
+  // ASSISTANT_PROMPT_DIGEST, which needs its own review first)
+  'replace_text', 'ripple_trim', 'paste_attributes',
 ] as const;
 /** The ops a proposal may hold: every registered public op minus ASSISTANT_EXCLUDED_OPS and PERSON_OPS, in registry order. */
 export function assistantOps(): string[] {
