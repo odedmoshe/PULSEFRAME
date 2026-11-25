@@ -219,6 +219,18 @@ export const BAR_HE = {
   'set.never': 'לעולם לא נשלח, מה שלא יהיה מסומן:',
   'set.loading': 'טוען…',
   'set.unavailable': 'מצב העוזר לא זמין כרגע: {reason}',
+  // ---- the LOCAL language assistant (wave 7; .artifacts/wave7/assistant-decisions.md §4): Settings fields and the row ----
+  'set.local.port': 'מספר יציאה (במחשב הזה בלבד)',
+  'set.local.portHelp': 'המספר מהמדריך «עוזר שפה מקומי»; העורך פונה רק לכתובת {address}',
+  'set.local.timeout': 'זמן מרבי לבקשה (שניות)',
+  'set.local.check': 'בדיקת חיבור',
+  'set.local.checking': 'בודק…',
+  'set.local.model': 'המודל שהעוזר המקומי מדווח: {model}',
+  'set.local.lastCheck': 'נבדק ב־{time}',
+  'set.local.guide': 'איך מפעילים את העוזר המקומי',
+  'set.local.invalid': 'מספר יציאה הוא מספר שלם בין {min} ל־{max}, וזמן מרבי בין {tmin} ל־{tmax} שניות',
+  'row.local.asking': 'שואל את העוזר המקומי…',
+  'row.local.suggestedLine': 'העוזר הציע: {phrase}',
 } as const;
 
 export type BarTextKey = keyof typeof BAR_HE;
@@ -410,6 +422,17 @@ export const BAR_EN: Record<BarTextKey, string> = {
   'set.never': 'Never sent, whatever is ticked:',
   'set.loading': 'Loading…',
   'set.unavailable': 'The assistant\'s status is not available now: {reason}',
+  'set.local.port': 'Port (on this computer only)',
+  'set.local.portHelp': 'The number from the guide «Local language assistant»; the editor calls only {address}',
+  'set.local.timeout': 'Time limit per request (seconds)',
+  'set.local.check': 'Check the connection',
+  'set.local.checking': 'Checking…',
+  'set.local.model': 'The model the local assistant reports: {model}',
+  'set.local.lastCheck': 'Checked at {time}',
+  'set.local.guide': 'How to start the local assistant',
+  'set.local.invalid': 'A port is a whole number from {min} to {max}, and the time limit is from {tmin} to {tmax} seconds',
+  'row.local.asking': 'Asking the local assistant…',
+  'row.local.suggestedLine': 'The assistant suggested: {phrase}',
 };
 
 export const BAR_TEXT = { he: BAR_HE as Record<BarTextKey, string>, en: BAR_EN } as const;

@@ -159,3 +159,7 @@ export * from './musicSwap.ts';
 // «חיפוש בצילומים» (wave 7 search track): the contract and the agent filter are lead-built; footageSearch.ts is builder A's
 export * from './footageSearchContract.ts';
 export * from './footageSearch.ts';
+// the local language assistant (wave 7 assistant track): the vocabulary is in assistantContract.ts; barUnderstands is lead-built,
+// groundLocalAnswer / localPhrase are builder A's
+export * from './commandBar/understands.ts';
+export * from './commandBar/localIntent.ts';
