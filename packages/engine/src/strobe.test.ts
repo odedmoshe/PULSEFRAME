@@ -211,6 +211,50 @@ describe('strobe: at most three flashes in any one second', () => {
       expect(strengths(pieces, 10, 240, 17)).toEqual(strengths(one, 10, 240, 17));
     }
   });
+
+  it('reported (property seed 1786843907): a flash time inside the last frame before a cut is shown on the cut frame, as in the uncut title', () => {
+    // 24 fps, gap 9 frames, steady 2.646 a second (one every 9.07 frames). Title on frames 4990 … 5301, cut at 5026, 5062 and 5180.
+    // Flash 558 (558 / 2.646 s = timeline frame 5061.22) and flash 571 (frame 5179.14) are shown on frames 5062 and 5180 uncut;
+    // cut there, the piece before the cut ended on that frame and the piece after began after the flash time: both were dropped (29 of 31).
+    const R24: Rate = { num: 24, den: 1 };
+    const one = withStrobe(createProject({ id: 'prj_c', name: 'C', frameRate: R24 }), { rate: 2.646 }, 312, 4990).doc;
+    const pieces = cutTitle(one, [5026, 5062, 5180]);
+    const starts = (d: ProjectDocument) => onsetsOf(frameStrengths(d, 12, 4990)).map((i) => 4990 + i);
+    expect(starts(one)).toHaveLength(31);
+    expect(starts(one)).toEqual(expect.arrayContaining([5062, 5180]));
+    expect(starts(pieces)).toEqual(starts(one));
+    expect(strengths(pieces, 12, 240, 4990)).toEqual(strengths(one, 12, 240, 4990));
+    // the same for a strobe that follows the music: a beat at 2.49 s (frame 74.7 at 30 fps) is shown on frame 75; cut the title there
+    const { doc, assetId } = withMusic(every(500, 400, 990), 4);
+    const music = tx(doc, [{ op: 'add_clip', args: { assetId, start: f(0) } }]).doc;
+    const follow = withStrobe(music, { follow: 'music' }, 300).doc;
+    expect(onsetsOf(frameStrengths(follow, 4))).toContain(75);
+    expect(strengths(cutTitle(follow, [75]), 10)).toEqual(strengths(follow, 10));
+  });
+
+  it('exhaustive near a cut: a cut title starts exactly the flashes of the uncut title, never one more, and starts stay a gap apart', () => {
+    // Every frame rate the properties use, rates at and around the limit and with flash times close to frame edges, every
+    // third start within two gaps, one cut at every frame of the first three gaps (and a second cut a frame or a gap later).
+    const all = (s: FlashSchedule) => [...s.shown.values()].flatMap((a) => [...a]).sort((a, b) => a - b);
+    const big = process.env.STROBE_EXHAUSTIVE === '1';
+    const rates = big ? Array.from({ length: 301 }, (_, i) => i / 100) : [3, 2.999, 2.97, 2.9, 2.646, 2.5, 2.4, 1.7, 1.01, 0.77];
+    let cases = 0;
+    for (const frameRate of [R, { num: 24, den: 1 }, { num: 25, den: 1 }, { num: 60, den: 1 }, { num: 30000, den: 1001 }, { num: 24000, den: 1001 }, { num: 60000, den: 1001 }]) {
+      const fpsN = frameRate.num / frameRate.den, gap = flashGapFrames(fpsN), length = 4 * gap;
+      for (const rate of rates) for (let start = 1000; start < 1000 + 2 * gap; start += 3) {
+        const one = withStrobe(createProject({ id: 'prj_e', name: 'E', frameRate }), { rate }, length, start).doc;
+        const want = all(flashSchedule(one));
+        for (let i = 1; i < want.length; i++) expect(want[i]! - want[i - 1]!).toBeGreaterThanOrEqual(gap);
+        for (let c = 1; c < 3 * gap; c++) for (const second of [0, 1, gap]) {
+          const cuts = second && c + second < length ? [start + c, start + c + second] : [start + c];
+          const got = all(flashSchedule(cutTitle(one, cuts)));
+          expect(got, `${fpsN} fps, rate ${rate}, title from ${start}, cut at ${cuts}`).toEqual(want);
+          cases++;
+        }
+      }
+    }
+    expect(cases).toBeGreaterThan(1000);
+  }, process.env.STROBE_EXHAUSTIVE === '1' ? 3_600_000 : 120_000);
 });
 
 /**
@@ -232,6 +276,8 @@ function expectSafe(doc: ProjectDocument, titleStartFrame: number, seconds: numb
 
 // Random cases per property. STROBE_RUNS=1500 is a longer hunt (some minutes). A failure prints its seed and is not shrunk: one case takes a tenth of a second.
 const RUNS = Number(process.env.STROBE_RUNS ?? 60);
+// STROBE_SEED=<seed> replays a reported failure (with -t naming its property: the seed belongs to one property's run).
+const REPLAY = process.env.STROBE_SEED ? { seed: Number(process.env.STROBE_SEED) } : {};
 
 describe('strobe: the three-a-second limit as a property', () => {
   // beat lists: uneven gaps of 0.05 s to 2 s, runs of quick beats, and an almost even quick grid
@@ -302,7 +348,7 @@ describe('strobe: the three-a-second limit as a property', () => {
       doc = cutTitle(withStrobe(doc, { follow: 'music', every: m.every, rate: m.rate / 1000 }, Math.ceil(21 * perSecond), m.titleStart).doc, m.titleCuts.map((c) => m.titleStart + c));
       flashes += expectSafe(doc, m.titleStart, 20);
       runs++;
-    }), { numRuns: RUNS, endOnFailure: true });
+    }), { numRuns: RUNS, endOnFailure: true, ...REPLAY });
     // the property is not satisfied by never flashing: on average a run flashes many times (about 9 to 15 over random seeds; 8.8 was seen once, so the floor is set well under that)
     expect(flashes / runs).toBeGreaterThan(5);
   }, 60_000 + RUNS * 2000);
@@ -317,7 +363,11 @@ describe('strobe: the three-a-second limit as a property', () => {
       const flashesPerSecond = Math.min(rateValue, maxRate(frameRate));
       expect(count).toBeLessThanOrEqual(Math.floor(12 * flashesPerSecond) + 2); // one more for a first frame that is still bright
       if (rateValue >= 0.5) expect(count).toBeGreaterThanOrEqual(Math.floor(12 * flashesPerSecond) - 1); // and it does flash at its rate
-    }), { numRuns: RUNS, endOnFailure: true });
+    }), {
+      numRuns: RUNS, endOnFailure: true, ...REPLAY,
+      // seed 1786843907: two flash times fell in the frame before a cut and were dropped by both pieces (29 flashes, not 31)
+      examples: [[2.646, { num: 24, den: 1 }, 4990, 2, true, 6, [72, 36, 190]]],
+    });
     // the schema refuses a faster rate
     expect(() => withStrobe(createProject({ id: 'prj_r', name: 'R' }), { rate: 3.01 })).toThrow(OpError);
   }, 60_000 + RUNS * 2000);
@@ -397,7 +447,7 @@ describe('strobe: the three-a-second limit as a property', () => {
       const s = flashSchedule(doc);
       const all = [...new Set([...s.shown.values()].flatMap((x) => [...x]))].sort((a, b) => a - b);
       for (let i = 1; i < all.length; i++) expect(all[i]! - all[i - 1]!).toBeGreaterThanOrEqual(s.gapFrames);
-    }), { numRuns: RUNS, endOnFailure: true });
+    }), { numRuns: RUNS, endOnFailure: true, ...REPLAY });
   }, 60_000 + RUNS * 3000);
 });
 
@@ -554,7 +604,7 @@ describe('light transitions in the one flash schedule (ADR-0012, amending ADR-00
           }
         }
       }
-    }), { numRuns: RUNS, endOnFailure: true });
+    }), { numRuns: RUNS, endOnFailure: true, ...REPLAY });
     // the property is not met by never lighting or never holding: over the runs both happen often
     expect(lights).toBeGreaterThan(RUNS);
     expect(held).toBeGreaterThan(RUNS / 4);
@@ -567,7 +617,7 @@ describe('light transitions in the one flash schedule (ADR-0012, amending ADR-00
       expect(now.lights.size).toBe(0);
       expect(now.shown).toEqual(before.shown);
       expect(now.runOf).toEqual(before.runOf);
-    }), { numRuns: RUNS, endOnFailure: true });
+    }), { numRuns: RUNS, endOnFailure: true, ...REPLAY });
   }, 60_000 + RUNS * 2000);
 
   it('a light transition 4 frames after a kept strobe flash is held with since 4 (and draws no light); 12 frames later it is kept', () => {
