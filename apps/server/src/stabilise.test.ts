@@ -356,6 +356,20 @@ describe('the job', () => {
   }, 120_000);
 });
 
+describe('after W2', () => {
+  it.skipIf(!STEADY_OPS_BUILT)('a stored scene cut of the file is start in the measurement, whatever the kernel saw', async () => {
+    const pid = project('cut');
+    const a = await importInto(pid, shakyFile);
+    const c = placeClip(pid, a, 0, 90);
+    const doc = store.getProject(pid).doc;
+    store.commit({ projectId: pid, actor: 'user:local', allowInternal: true, ops: [{ op: 'restore_entities', args: { targets: [{ id: `analysis:${a}`, state: { kind: 'analysis', analysis: { ...(doc.analyses[a] ?? { assetId: a }), scenes: { origin: { method: 't', params: {}, createdAt: 'x', createdBy: 't', edited: true }, cuts: [T.frameTime(45, R30)] } } } }] } }] });
+    const job = await settle(startStabiliseJob(store, gov, agent, pid, c, {}).id);
+    expect(job.status, JSON.stringify(job.error)).toBe('succeeded');
+    const st = store.getProject(pid).doc.analyses[a]!.cameraMotion!.stretches[0]!.st;
+    expect([st[44], st[45], st[46]]).toEqual([SST.ok, SST.start, SST.ok]);
+  }, 120_000);
+});
+
 describe('the read view', () => {
   it('GET …/camera-motion equals MCP get_camera_motion: ranges, counts, review, usedBy, note; never the columns', async () => {
     const pid = project('view');
