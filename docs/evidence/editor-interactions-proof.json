@@ -1,15 +1,15 @@
 {
-  "ranAt": "2026-11-19T03:13:11.818Z",
+  "ranAt": "2026-11-25T02:04:09.087Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v653 x64",
+    "platform": "Linux 6.18.44-fc-v880 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 70,
-  "total": 70,
+  "passed": 84,
+  "total": 84,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -149,6 +149,78 @@
       }
     },
     {
+      "name": "a toast raised while the curve picker is open is inside it (in its own toast region), one status only, in the accessibility tree and on screen; Tab reaches the toast's action and its × without leaving the modal and wraps back into it; Escape typed on the × closes the modal, and the region is the page's again",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "inModal": true,
+        "host": "modal",
+        "inert": false,
+        "regionName": "התראות",
+        "regions": 1,
+        "statusesWithText": 1,
+        "liveAncestors": 0,
+        "onScreen": true,
+        "notCovered": true,
+        "announced": true,
+        "toastActionReachedByKeyboard": true,
+        "toastCloseReachedByKeyboard": true,
+        "tabWrapsInsideModal": true,
+        "tabStepsThatLeftTheDialog": 0,
+        "focusOnToastClose": true,
+        "closed": true,
+        "toastBackOnPage": true
+      }
+    },
+    {
+      "name": "a toast raised while the effect gallery is open is inside it (in its own toast region), one status only, in the accessibility tree and on screen; Tab reaches the toast's action and its × without leaving the modal and wraps back into it; Escape typed on the × closes the modal, and the region is the page's again",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "inModal": true,
+        "host": "modal",
+        "inert": false,
+        "regionName": "התראות",
+        "regions": 1,
+        "statusesWithText": 1,
+        "liveAncestors": 0,
+        "onScreen": true,
+        "notCovered": true,
+        "announced": true,
+        "toastActionReachedByKeyboard": true,
+        "toastCloseReachedByKeyboard": true,
+        "tabWrapsInsideModal": true,
+        "tabStepsThatLeftTheDialog": 0,
+        "focusOnToastClose": true,
+        "closed": true,
+        "toastBackOnPage": true
+      }
+    },
+    {
+      "name": "a toast raised while the command palette is open is inside it (in its own toast region), one status only, in the accessibility tree and on screen; Tab reaches the toast's action and its × without leaving the modal and wraps back into it; Escape typed on the × closes the modal, and the region is the page's again",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "inModal": true,
+        "host": "modal",
+        "inert": false,
+        "regionName": "התראות",
+        "regions": 1,
+        "statusesWithText": 1,
+        "liveAncestors": 0,
+        "onScreen": true,
+        "notCovered": true,
+        "announced": true,
+        "toastActionReachedByKeyboard": true,
+        "toastCloseReachedByKeyboard": true,
+        "tabWrapsInsideModal": true,
+        "tabStepsThatLeftTheDialog": 0,
+        "focusOnToastClose": true,
+        "closed": true,
+        "toastBackOnPage": true
+      }
+    },
+    {
       "name": "keyframe diamonds: the selected clip's keyframe strip and its passive diamonds once unselected each show one diamond per distinct key frame, effect keys included (an x key on the frame of a radius key counts once)",
       "ok": true,
       "detail": {
@@ -204,7 +276,7 @@
         "vl5": true,
         "tcBefore": "00:00:03:00",
         "tcAfter": "00:00:03:00",
-        "namedKey": "נקודת עוצמה 00:00:02:20 · 140%",
+        "namedKey": "נקודת עוצמה 00:00:02:19 · 140%",
         "keys": [
           [
             40,
@@ -272,9 +344,9 @@
       "name": "Sound tab: \"end the music with the picture\" trims the music to the last detected beat before the picture ends and gives it a fade-out, in one transaction; undo restores it",
       "ok": true,
       "detail": {
-        "pictureEnd": 245,
-        "wantEnd": 239,
-        "gotEnd": 239,
+        "pictureEnd": 290,
+        "wantEnd": 284,
+        "gotEnd": 284,
         "fadeOutFrames": 30,
         "fitUndone": true
       }
@@ -312,7 +384,7 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2,
+        "fwd2": 1.98,
         "sh2": "◀◀ ×1",
         "back1": -0.99,
         "sh3": "◀◀ ×2",
@@ -328,9 +400,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 0.99,
+        "playSpeed": 1,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 2,
+        "shuttleSpeed": 1.99,
         "staysPaused": true
       }
     },
@@ -358,30 +430,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_672de0983a0",
-          "clp_672de0983a1"
+          "clp_ac543e3ae50",
+          "clp_ac543e3ae51"
         ],
         "afterAB": [
-          "clp_672de0983a0",
-          "clp_672de0983a1"
+          "clp_ac543e3ae50",
+          "clp_ac543e3ae51"
         ],
         "afterAdd": [
-          "clp_672de0983a0",
-          "clp_672de0983a1",
-          "clp_672de0983a2"
+          "clp_ac543e3ae50",
+          "clp_ac543e3ae51",
+          "clp_ac543e3ae52"
         ],
         "midEscape": [
-          "clp_672de0983a1"
+          "clp_ac543e3ae51"
         ],
         "afterEscape": [
-          "clp_672de0983a0",
-          "clp_672de0983a1",
-          "clp_672de0983a2"
+          "clp_ac543e3ae50",
+          "clp_ac543e3ae51",
+          "clp_ac543e3ae52"
         ],
         "afterEscapeUp": [
-          "clp_672de0983a0",
-          "clp_672de0983a1",
-          "clp_672de0983a2"
+          "clp_ac543e3ae50",
+          "clp_ac543e3ae51",
+          "clp_ac543e3ae52"
         ]
       }
     },
@@ -447,7 +519,7 @@
         "wantRefusal": "בטקסט של חותמת התאריך מותרים רק ספרות, רווחים והסימנים ⁦. : ' / -⁩, עד 20 תווים",
         "invalid": "true",
         "kept": true,
-        "today": "'26 11 19",
+        "today": "'26 11 25",
         "todaySet": true,
         "refusalGone": true
       }
@@ -543,7 +615,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 15/1799",
+        "valueText": "עוקב קדימה 14/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -799,23 +871,47 @@
       }
     },
     {
+      "name": "a toast raised while the template dialog is open is inside it (in its own toast region), one status only, in the accessibility tree and on screen; Tab reaches the toast's action and its × without leaving the modal and wraps back into it; Escape typed on the × closes the modal, and the region is the page's again",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "inModal": true,
+        "host": "modal",
+        "inert": false,
+        "regionName": "התראות",
+        "regions": 1,
+        "statusesWithText": 1,
+        "liveAncestors": 0,
+        "onScreen": true,
+        "notCovered": true,
+        "announced": true,
+        "toastActionReachedByKeyboard": true,
+        "toastCloseReachedByKeyboard": true,
+        "tabWrapsInsideModal": true,
+        "tabStepsThatLeftTheDialog": 0,
+        "focusOnToastClose": true,
+        "closed": true,
+        "toastBackOnPage": true
+      }
+    },
+    {
       "name": "keyboard only, in Hebrew: a card opens the template dialog (focus inside), Escape closes it and the focus is back on the card; then pick → leave the video out and move a picture earlier → music → a Hebrew text (its counter counts it) → plan (a polite live region, nothing blocking) → Use adds exactly 1 revision (apply_template) with that text on a title, and the post-apply bar appears",
       "ok": true,
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_2d80fec2100",
-          "ast_0288b7793a0",
-          "ast_d9f221c93b0",
-          "ast_d9283ed4630",
-          "ast_32c04c99a20"
+          "ast_573d040c980",
+          "ast_e2aed9a5cf0",
+          "ast_9c740cecc20",
+          "ast_732bc2a3ed0",
+          "ast_1994be31f40"
         ],
         "order1": [
-          "ast_2d80fec2100",
-          "ast_d9283ed4630",
-          "ast_0288b7793a0",
-          "ast_d9f221c93b0",
-          "ast_32c04c99a20"
+          "ast_573d040c980",
+          "ast_732bc2a3ed0",
+          "ast_e2aed9a5cf0",
+          "ast_9c740cecc20",
+          "ast_1994be31f40"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -839,7 +935,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-19T03:09:08.736Z",
+          "createdAt": "2026-11-25T02:00:21.274Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -881,6 +977,200 @@
           [
             "apply_template"
           ]
+        ]
+      }
+    },
+    {
+      "name": "a picture of the applied template deleted with Delete (a new project closes the gap, so the later pictures move earlier): the bar offers «החזרת החלקים שנמחקו» (not before the delete); Shuffle regenerates in 1 revision, leaves the deleted picture out and puts the moved pictures back on their slots, and the bar says both in Hebrew («… פריטים שרק זזו ממקומם חזרו למקומם בתבנית»); the button then makes the deleted picture again in 1 revision and says so; nothing is refused; three undos return exactly, one step each, and the offer is gone",
+      "ok": true,
+      "detail": {
+        "victimKey": "shot1",
+        "deleteOps": [
+          [
+            "ripple_delete_clips"
+          ]
+        ],
+        "places": {
+          "before": {
+            "shot1": [
+              120,
+              30
+            ],
+            "shot2": [
+              150,
+              30
+            ],
+            "shot3": [
+              180,
+              30
+            ],
+            "shot4": [
+              210,
+              30
+            ]
+          },
+          "afterDelete": {
+            "shot2": [
+              120,
+              30
+            ],
+            "shot3": [
+              150,
+              30
+            ],
+            "shot4": [
+              180,
+              30
+            ]
+          },
+          "afterShuffle": {
+            "shot2": [
+              150,
+              30
+            ],
+            "shot3": [
+              180,
+              30
+            ],
+            "shot4": [
+              210,
+              30
+            ]
+          },
+          "afterRestore": {
+            "shot1": [
+              120,
+              30
+            ],
+            "shot2": [
+              150,
+              30
+            ],
+            "shot3": [
+              180,
+              30
+            ],
+            "shot4": [
+              210,
+              30
+            ]
+          }
+        },
+        "movedKeys": [
+          "shot2",
+          "shot3",
+          "shot4"
+        ],
+        "shuffle": {
+          "said": "הוחלפו 10 פריטים. 3 פריטים שרק זזו ממקומם חזרו למקומם בתבנית. 1 פריטים שמחקתם ידנית לא נוצרו שוב.",
+          "refusal": null,
+          "ops": [
+            [
+              "apply_template"
+            ]
+          ],
+          "removed": 1
+        },
+        "restore": {
+          "said": "הוחלפו 10 פריטים. החלקים שנמחקו נוצרו שוב.",
+          "refusal": null,
+          "ops": [
+            [
+              "apply_template"
+            ]
+          ],
+          "removed": 0
+        },
+        "undo": [
+          true,
+          true,
+          true
+        ],
+        "rOfferGone": true
+      }
+    },
+    {
+      "name": "the same Delete, then «החזרת החלקים שנמחקו» at once: 1 revision (apply_template) makes the deleted picture again and returns the moved pictures to their slots, the bar says so in Hebrew and nothing is refused; two undos (the restore, then the delete) return exactly",
+      "ok": true,
+      "detail": {
+        "said": "הוחלפו 10 פריטים. 3 פריטים שרק זזו ממקומם חזרו למקומם בתבנית. החלקים שנמחקו נוצרו שוב.",
+        "refusal": null,
+        "ops": [
+          [
+            "apply_template"
+          ]
+        ],
+        "places": {
+          "shot1": [
+            120,
+            30
+          ],
+          "shot2": [
+            150,
+            30
+          ],
+          "shot3": [
+            180,
+            30
+          ],
+          "shot4": [
+            210,
+            30
+          ]
+        },
+        "removed": 0,
+        "undo": [
+          true,
+          true
+        ]
+      }
+    },
+    {
+      "name": "the same picture deleted with Shift+Delete (the gap is kept): the bar offers «החזרת החלקים שנמחקו»; Shuffle leaves that item out and says so (1 revision, apply_template); the button makes it again (1 revision), says so, and is gone",
+      "ok": true,
+      "detail": {
+        "slots": 11,
+        "victim": "clp_cf15257a400",
+        "deleted": true,
+        "offered": {
+          "count": 1,
+          "text": "החזרת החלקים שנמחקו",
+          "visible": true,
+          "enabled": true
+        },
+        "deleteOps": [
+          [
+            "delete_clip"
+          ]
+        ],
+        "leftOut": {
+          "said": "הוחלפו 10 פריטים. 1 פריטים שמחקתם ידנית לא נוצרו שוב.",
+          "slots": 11,
+          "removed": 1,
+          "stillOffered": 1,
+          "refused": 0
+        },
+        "back": {
+          "said": "הוחלפו 10 פריטים. החלקים שנמחקו נוצרו שוב.",
+          "slots": 11,
+          "removed": 0,
+          "offered": 0,
+          "ops": [
+            [
+              "apply_template"
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "name": "undo three times takes back the restore, the regeneration and the hand delete, one step each: an equal creativeProjection at every step, ending at the shuffled template",
+      "ok": true,
+      "detail": {
+        "steps": [
+          true,
+          true,
+          true
         ]
       }
     },
@@ -965,8 +1255,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_f4f871fc690",
-          "seq_f4f871fc697"
+          "seq_60355f958f0",
+          "seq_60355f958f7"
         ],
         "revisions": 1,
         "transactions": [
@@ -976,7 +1266,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_f4f871fc690",
+          "seq": "seq_60355f958f0",
           "selected": "true"
         }
       }
@@ -1007,9 +1297,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_f4f871fc690"
+          "seq": "seq_60355f958f0"
         },
-        "secondTab": "seq_f4f871fc690",
+        "secondTab": "seq_60355f958f0",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1188,6 +1478,165 @@
       "name": "command bar: no uncaught errors in the page",
       "ok": true,
       "detail": []
+    },
+    {
+      "name": "a toast that appears while a modal dialog is open is rendered inside it, named «התראות», not inert, and in the accessibility tree as a status (announced), while the page behind stays inert and out of that tree",
+      "ok": true,
+      "detail": {
+        "inSheet": true,
+        "host": "modal",
+        "inert": false,
+        "regionName": "התראות",
+        "pageBehindInert": true,
+        "text": "הסרת אדםביטול",
+        "axToast": {
+          "ignored": false,
+          "role": "status"
+        },
+        "axBehind": {
+          "ignored": true,
+          "role": "none"
+        }
+      }
+    },
+    {
+      "name": "the keyboard reaches the toast's «ביטול» inside the modal's focus trap (focus never leaves the sheet); Enter brings the removed person back and the sheet stays open",
+      "ok": true,
+      "detail": {
+        "reached": true,
+        "tabStepsThatLeftTheSheet": 0,
+        "focusedLabel": "ביטול",
+        "restored": true
+      }
+    },
+    {
+      "name": "after the sheet closes, the toast region is back on the page (a child of the body, not inert) and nothing is left inert; no page errors",
+      "ok": true,
+      "detail": {
+        "host": "page",
+        "parentIsBody": true,
+        "inert": false,
+        "anyInert": false,
+        "errors": []
+      }
+    },
+    {
+      "name": "a word deleted in the transcript panel while another clip shows a reversed copy of the recording: the recording's clip is cut, the copy's clip is left whole, and the panel says «הקליפ reversed.mp4 לא נחתך לפי ההקלטה…» as one status note; after switching to English the next cut says it in English; nothing is refused",
+      "ok": true,
+      "detail": {
+        "noteBefore": 0,
+        "he": {
+          "count": 1,
+          "text": "הקליפ reversed.mp4 לא נחתך לפי ההקלטה: הוא מציג עותק שלא שומר על התזמון שלה",
+          "role": "status",
+          "visible": true
+        },
+        "en": {
+          "count": 1,
+          "text": "Clip reversed.mp4 was not cut by the recording's times: it shows a copy that does not keep its timing",
+          "role": "status",
+          "visible": true
+        },
+        "recordingFrames": [
+          [
+            [
+              0,
+              15
+            ],
+            [
+              15,
+              30
+            ]
+          ],
+          [
+            [
+              0,
+              15
+            ],
+            [
+              15,
+              15
+            ]
+          ]
+        ],
+        "copy": [
+          [
+            45,
+            30
+          ],
+          [
+            30,
+            30
+          ]
+        ],
+        "refused": 0,
+        "errors": []
+      }
+    },
+    {
+      "name": "a clip that shows a colour-processed copy which keeps the timing of a measured file shows that file's beat and scene markers on the timeline, at the frames its own moments play (and its tempo); a clip that shows a reversed copy shows none",
+      "ok": true,
+      "detail": {
+        "gradedCopy": {
+          "beats": [
+            30,
+            45,
+            60
+          ],
+          "scenes": [
+            60
+          ],
+          "bpm": "120",
+          "clips": 1
+        },
+        "reversedCopy": {
+          "beats": [],
+          "scenes": [],
+          "bpm": null,
+          "clips": 1
+        },
+        "errors": []
+      }
+    },
+    {
+      "name": "an archive of a project whose translation the owner marked reviewed, imported in the editor: the new project opens with one toast «הארכיון יובא» whose text is the server's note naming «English» in the singular («התרגום … מסומן», «The translation … needs»), without a timer; the translation there needs review again with its wording kept, the source keeps its mark; the toast stays past 7 s, closes with its ×, and a reload does not show it again; in English the same import says it in English",
+      "ok": true,
+      "detail": {
+        "marked": true,
+        "he": {
+          "id": "prj_hC3unxfciXQ",
+          "count": 1,
+          "title": "הארכיון יובא",
+          "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגום «English» מסומן שוב «תרגום מכונה · לא נבדק», והנוסח שלו נשמר. אפשר לעבור עליו בלוח «תמלול» ולבחור «סמן כנבדק».",
+          "visible": true,
+          "timer": 0,
+          "panel": "needed",
+          "badge": 1
+        },
+        "en": {
+          "id": "prj_Q2x67iMkULw",
+          "count": 1,
+          "title": "The archive was imported",
+          "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translation «English» needs review again; its wording is kept. Go through it in the \"Transcript\" panel and choose \"Mark as reviewed\".",
+          "visible": true,
+          "timer": 0,
+          "panel": "needed",
+          "badge": 1
+        },
+        "imported": {
+          "review": "needed",
+          "reviewedBy": null,
+          "wording": [
+            "Hello everyone",
+            "Welcome"
+          ]
+        },
+        "sourceReview": "reviewed",
+        "stays": 1,
+        "closed": 0,
+        "afterReload": 0,
+        "errors": []
+      }
     }
   ]
 }

@@ -9,6 +9,11 @@
  * "cover the whole edit", "Replace media…", the Templates drawer and a keyboard-only template flow with Shuffle and undo.
  * The trend pack's transition options (ADR-0012): beat lock and a ×2 velocity ramp set from the keyboard, each one undo step, with the
  * Hebrew status line in a live region and the velocity choices the clips cannot take shown disabled with what they need.
+ * Wave 6 notes, each seen in a real browser: the Templates bar's «החזרת החלקים שנמחקו» after a hand delete (left out by a
+ * regeneration, made again by the button, each step one exact undo; after a Delete that closes the gap the pictures it moved
+ * are made again on their slots and the bar says so), the transcript panel's note that names a clip showing an
+ * untimed copy the cut left alone (Hebrew and English), and the archive import's note about cleared review marks (shown once, kept
+ * until closed). The untimed copy and the translation are typed fixtures: no provider and no model ran.
  * Still not covered here: audible fades/ducking during live playback (only the offline WebAudio chain is measured).
  *   pnpm build && pnpm proof:editor-interactions
  */
@@ -16,24 +21,43 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { chromium } from 'playwright';
+import { chromium, type Page } from 'playwright';
 import * as T from '@pulseframe/time';
 import { generateTrackingFixture, trackingTruth } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
 import { BEAT_SR } from '../../../apps/server/src/beats.ts';
 import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
 import { dictionaries, effectParamLabel, translateRefusal, fillIn, TREND_PACK_HE } from '../../i18n/src/index.ts';
-import { creativeProjection, beatSwitchFrame, BUILTIN_TEMPLATES, MODEL_GATED_TEMPLATES, PACKS, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
+import { creativeProjection, beatSwitchFrame, BUILTIN_TEMPLATES, MODEL_GATED_TEMPLATES, PACKS, removedByHand, sha256Hex, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 import { TEMPLATE_TESTIDS } from '../../../apps/web/src/editor/templates.testids.ts';
 import { chooseFormat } from './editor-ui.ts';
+import { toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
 import { generateShortsFixture } from '../../fixtures/src/shorts.ts';
 import { SHORTS_TESTIDS } from '../../../apps/web/src/editor/shorts.testids.ts';
 import { PERFORM_TESTIDS } from '../../../apps/web/src/editor/perform/perform.testids.ts';
+import { PEOPLE_TESTIDS } from '../../../apps/web/src/editor/lifeline/people.testids.ts';
+import { TEMPLATE_STRINGS } from '../../../apps/web/src/editor/templates.strings.ts';
+import { IMPORTED_REVIEW_CLEARED } from '../../../apps/server/src/archive.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/editor-interactions');
 const checks: { name: string; ok: boolean; detail?: unknown }[] = [];
 const check = (name: string, ok: boolean, detail?: unknown) => { checks.push({ name, ok, detail }); console.log(`${ok ? '  ok  ' : ' FAIL '} ${name}${detail !== undefined ? `  ${JSON.stringify(detail)}` : ''}`); };
+/**
+ * A toast raised while one of the editor's own modals is open (its own focus trap): the modal is open with its focus inside. The toast
+ * must be inside the modal and focusable by Tab (toastInOpenModal), and Escape typed on the toast's × closes the modal as it does
+ * from anywhere else in it (the design system Dialog's rule), after which the toast region is the page's again.
+ */
+const modalToastCheck = async (p: Page, what: string, dialogTestId: string) => {
+  const lang = (await p.evaluate(() => document.documentElement.lang)) === 'en' ? 'en' : 'he';
+  const r = await toastInOpenModal(p, lang, dialogTestId);
+  await p.keyboard.press('Escape');
+  await p.getByTestId(dialogTestId).waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+  const closed = (await p.getByTestId(dialogTestId).count()) === 0;
+  const after = await toastAfterModal(p);
+  check(`a toast raised while ${what} is open is inside it (in its own toast region), one status only, in the accessibility tree and on screen; Tab reaches the toast's action and its × without leaving the modal and wraps back into it; Escape typed on the × closes the modal, and the region is the page's again`,
+    r.shown === true && closed && after.toastBackOnPage, { ...r, closed, ...after });
+};
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const until2 = async (get: () => Promise<any>, pred: (d: any) => boolean, ms = 20000) => { const t0 = Date.now(); for (;;) { if (pred(await get())) return true; if (Date.now() - t0 > ms) return false; await sleep(150); } };
 const R = { num: 30, den: 1 };
@@ -76,6 +100,8 @@ async function main() {
 
     const page = await (await browser.newContext({ viewport: { width: 1500, height: 3200 }, reducedMotion: 'reduce' })).newPage();
     await page.addInitScript(() => { try { localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
+    await page.addInitScript('globalThis.__name = (f) => f');
+    await page.addInitScript(() => { (globalThis as { __pfToastProof?: boolean }).__pfToastProof = true; }); // the toast hook (window.__pfToast), as the a11y audit sets it
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     page.on('response', (r) => { if (r.status() === 409) void r.text().then((b) => console.log('  409:', r.request().method(), new URL(r.url()).pathname, (r.request().postData() ?? '').slice(0, 300), b.slice(0, 300))).catch(() => {}); });
@@ -265,6 +291,19 @@ async function main() {
       const afterEsc = await focused();
       const revK2 = (await call(`/projects/${pid}`)).body.revision as number;
       check('keyframe strip by keyboard: Alt+K focuses a strip key, Enter opens the curve picker with the focus inside, Escape closes it and the focus is back on the same key; no commit', afterAltK.id === 'key-strip-key' && pickerOpen && inPicker.inPicker && (await page.getByTestId('curve-picker').count()) === 0 && afterEsc.id === 'key-strip-key' && afterEsc.frame === afterAltK.frame && revK2 === revK, { afterAltK, pickerOpen, inPicker, afterEsc, revisions: [revK, revK2] });
+      // a toast raised while the curve picker, the effect gallery and the command palette are open
+      await page.locator(`.clip[data-clip-id="${picClip}"]`).focus();
+      await page.keyboard.press('Alt+KeyK');
+      await page.keyboard.press('Enter');
+      await page.getByTestId('curve-picker').waitFor({ timeout: 5000 }).catch(() => {});
+      await modalToastCheck(page, 'the curve picker', 'curve-picker');
+      await page.locator(`.clip[data-clip-id="${picClip}"]`).click();
+      await page.getByTestId('gallery-open').click({ timeout: 8000 }).catch(() => {});
+      await page.getByTestId('effect-gallery').waitFor({ timeout: 8000 }).catch(() => {});
+      await modalToastCheck(page, 'the effect gallery', 'effect-gallery');
+      await page.getByTestId('open-palette').click();
+      await page.getByTestId('palette-dialog').waitFor({ timeout: 8000 }).catch(() => {});
+      await modalToastCheck(page, 'the command palette', 'palette-dialog');
       await page.locator(`.clip[data-clip-id="${title}"]`).click();
       await page.waitForFunction((id) => document.querySelectorAll(`.clip[data-clip-id="${id}"] i.kf`).length > 0, picClip, { timeout: 5000 }).catch(() => {});
       const passive = await page.locator(`.clip[data-clip-id="${picClip}"] i.kf`).count();
@@ -875,6 +914,8 @@ async function main() {
       const opsSince = async (rev: number) => ((await call(`/projects/${tp}/history?since=${rev}`)).body.events as any[]).filter((e) => e.revision > rev).map((e) => e.ops);
       const adjOf = (d: any) => d.sequences.seq_main.tracks.filter((t: any) => t.kind === 'adjustment').flatMap((t: any) => t.clips);
       const tctx = await browser.newContext({ viewport: { width: 1500, height: 3200 }, reducedMotion: 'reduce' });
+      await tctx.addInitScript('globalThis.__name = (f) => f');
+      await tctx.addInitScript(() => { (globalThis as { __pfToastProof?: boolean }).__pfToastProof = true; }); // the toast hook (window.__pfToast)
       await tctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
       const tpage = await tctx.newPage();
       const tErrors: string[] = [];
@@ -971,6 +1012,10 @@ async function main() {
       await card.focus();
       await tpage.keyboard.press('Enter');
       await tpage.getByTestId(TID.dialog).waitFor({ timeout: 8000 });
+      await modalToastCheck(tpage, 'the template dialog', TID.dialog);
+      await card.focus();
+      await tpage.keyboard.press('Enter');
+      await tpage.getByTestId(TID.dialog).waitFor({ timeout: 8000 });
       const startsInside = await tpage.evaluate(() => !!document.querySelector('[data-testid=template-dialog]')?.contains(document.activeElement));
       await tpage.keyboard.press('Escape');
       await tpage.getByTestId(TID.dialog).waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
@@ -1030,6 +1075,124 @@ async function main() {
       await sleep(300);
       const afterShuffle = await tdoc();
       check('Shuffle on the post-apply bar (regenerate with the next seed, shuffled) adds exactly 1 revision', shuffled && afterShuffle.revision === afterApply.revision + 1, { ops: await opsSince(afterApply.revision) });
+      // a hand delete survives regeneration, and «החזרת החלקים שנמחקו» is the way back (ADR-0016 decision 6; wave 6)
+      {
+        const S = TEMPLATE_STRINGS.he;
+        const bar = tpage.getByTestId(TID.applied), restoreBtn = tpage.getByTestId('template-restore-removed'), barAlert = bar.locator('[role=alert]');
+        const said = async () => ((await bar.locator('[role=status]').textContent()) ?? '').replace(/[⁦-⁩]/g, '');
+        const runNow = async () => (await bar.getAttribute('data-run-id')) ?? '';
+        const slotsOf = (d: any, runId: string) => (Object.hasOwn(d.recipeRuns ?? {}, runId) ? d.recipeRuns[runId].slots ?? [] : []) as { clipId: string }[];
+        const run0 = await runNow();
+        const slots0 = slotsOf(afterShuffle.project, run0);
+        const pShuffled = creativeProjection(afterShuffle.project);
+        // the item deleted by hand: a picture of the run that the timeline shows
+        const victim = slots0.map((x) => x.clipId).find((id) => clipOf(afterShuffle.project, id)?.type === 'media') ?? slots0[0]?.clipId ?? '';
+        const offeredBefore = await restoreBtn.count();
+
+        // (1) Delete, as a new project has it: the gap is closed (ripple delete), so the later pictures move earlier. A clip whose
+        // only change is its place is not edited by hand (ADR-0016 decision 6, amendment of 2026-11-24): the regeneration makes it
+        // again on its slot and the bar says so. First Shuffle (the deleted picture left out), then the button (made again).
+        type Slot = { key: string; kind: string; clipId: string };
+        /** Where each live picture slot of a run lies: key -> [start frame, frames]. */
+        const places = (d: any, runId: string) => Object.fromEntries((slotsOf(d, runId) as unknown as Slot[]).filter((x) => x.kind === 'picture' && clipOf(d, x.clipId)).map((x) => [x.key, [fr(clipOf(d, x.clipId).start), fr(clipOf(d, x.clipId).duration)]] as [string, number[]]).sort(([x], [y]) => (x < y ? -1 : 1)));
+        const waitSaid = (want: string) => tpage.waitForFunction((w) => (document.querySelector('[data-testid=template-applied] [role=status]')?.textContent ?? '').replace(/[\u2066-\u2069]/g, '').includes(w), want, { timeout: 10000 }).catch(() => {});
+        const places0 = places(afterShuffle.project, run0);
+        const victimKey = (slots0 as unknown as Slot[]).find((x) => x.clipId === victim)?.key ?? '';
+        const rest0 = Object.fromEntries(Object.entries(places0).filter(([k]) => k !== victimKey));
+        await tpage.locator(`.clip[data-clip-id="${victim}"]`).click();
+        await tpage.keyboard.press('Delete');
+        const rDeleted = await tuntil((d) => !clipOf(d, victim));
+        await restoreBtn.waitFor({ timeout: 8000 }).catch(() => {});
+        const rOffered = { count: await restoreBtn.count(), text: await restoreBtn.textContent().catch(() => null) };
+        const afterRipple = await tdoc();
+        const rippleOps = await opsSince(afterShuffle.revision);
+        const placesRippled = places(afterRipple.project, run0);
+        const movedKeys = Object.keys(rest0).filter((k) => JSON.stringify(placesRippled[k]) !== JSON.stringify(rest0[k]));
+        // Shuffle: one revision; the deleted picture is left out; the pictures the delete moved are back on their slots; both said
+        await tpage.getByTestId(TID.shuffle).click();
+        await Promise.race([barAlert.waitFor({ timeout: 15000 }).catch(() => {}), revisionReaches(afterRipple.revision + 1, 15000)]);
+        await waitSaid(S.movedBack(movedKeys.length).trim());
+        const afterRShuffle = await tdoc();
+        const runS = await runNow();
+        const rShuffle = { said: await said(), refusal: (await barAlert.count()) ? await barAlert.textContent() : null, ops: await opsSince(afterRipple.revision), places: places(afterRShuffle.project, runS), removed: removedByHand(afterRShuffle.project, slotsOf(afterRShuffle.project, runS) as any).length, offered: await restoreBtn.count() };
+        // the button: one revision; the deleted picture is made again; nothing is left moved
+        await restoreBtn.click();
+        await Promise.race([barAlert.waitFor({ timeout: 15000 }).catch(() => {}), revisionReaches(afterRShuffle.revision + 1, 15000)]);
+        await restoreBtn.waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+        await sleep(300);
+        const afterRRestore = await tdoc();
+        const runR = await runNow();
+        const rRestore = { said: await said(), refusal: (await barAlert.count()) ? await barAlert.textContent() : null, ops: await opsSince(afterRShuffle.revision), places: places(afterRRestore.project, runR), removed: removedByHand(afterRRestore.project, slotsOf(afterRRestore.project, runR) as any).length, offered: await restoreBtn.count() };
+        // exact undo, one step each: the restore, the shuffle, the delete; the offer goes with the delete
+        const pRippled = creativeProjection(afterRipple.project), pRShuffle = creativeProjection(afterRShuffle.project);
+        const rSteps: boolean[] = [];
+        for (const want of [pRShuffle, pRippled, pShuffled]) { await tpage.getByTestId('undo').click(); rSteps.push(await tuntil((d) => creativeProjection(d) === want, 10000)); }
+        await restoreBtn.waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+        const rOfferGone = (await restoreBtn.count()) === 0;
+        check('a picture of the applied template deleted with Delete (a new project closes the gap, so the later pictures move earlier): the bar offers «החזרת החלקים שנמחקו» (not before the delete); Shuffle regenerates in 1 revision, leaves the deleted picture out and puts the moved pictures back on their slots, and the bar says both in Hebrew («… פריטים שרק זזו ממקומם חזרו למקומם בתבנית»); the button then makes the deleted picture again in 1 revision and says so; nothing is refused; three undos return exactly, one step each, and the offer is gone',
+          slots0.length > 1 && !!victim && !!victimKey && offeredBefore === 0 && rDeleted && JSON.stringify(rippleOps) === '[["ripple_delete_clips"]]' && rOffered.count === 1 && rOffered.text === 'החזרת החלקים שנמחקו' && movedKeys.length > 0
+            && afterRShuffle.revision === afterRipple.revision + 1 && JSON.stringify(rShuffle.ops) === '[["apply_template"]]' && rShuffle.refusal === null && JSON.stringify(rShuffle.places) === JSON.stringify(rest0) && rShuffle.removed === 1 && rShuffle.offered === 1
+            && rShuffle.said.includes(S.movedBack(movedKeys.length).trim()) && rShuffle.said.includes('שרק ז') && rShuffle.said.includes('בתבנית') && rShuffle.said.includes(S.removedLeftOut(1).trim())
+            && afterRRestore.revision === afterRShuffle.revision + 1 && JSON.stringify(rRestore.ops) === '[["apply_template"]]' && rRestore.refusal === null && JSON.stringify(rRestore.places) === JSON.stringify(places0) && rRestore.removed === 0 && rRestore.offered === 0 && rRestore.said.endsWith(S.restored)
+            && rSteps.every(Boolean) && rOfferGone,
+          { victimKey, deleteOps: rippleOps, places: { before: places0, afterDelete: placesRippled, afterShuffle: rShuffle.places, afterRestore: rRestore.places }, movedKeys, shuffle: { said: rShuffle.said, refusal: rShuffle.refusal, ops: rShuffle.ops, removed: rShuffle.removed }, restore: { said: rRestore.said, refusal: rRestore.refusal, ops: rRestore.ops, removed: rRestore.removed }, undo: rSteps, rOfferGone });
+
+        // (1b) the same Delete, then the button at once (the path that was refused before): the deleted picture is made again and
+        // the moved ones return to their slots in ONE revision, said in Hebrew; two undos (the restore, the delete) return exactly
+        await tpage.locator(`.clip[data-clip-id="${victim}"]`).click();
+        await tpage.keyboard.press('Delete');
+        const bDeleted = await tuntil((d) => !clipOf(d, victim));
+        await restoreBtn.waitFor({ timeout: 8000 }).catch(() => {});
+        const afterB = await tdoc();
+        await restoreBtn.click();
+        await Promise.race([barAlert.waitFor({ timeout: 15000 }).catch(() => {}), revisionReaches(afterB.revision + 1, 15000)]);
+        await restoreBtn.waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+        await waitSaid(S.restored);
+        const afterBRestore = await tdoc();
+        const runB = await runNow();
+        const bRestore = { said: await said(), refusal: (await barAlert.count()) ? await barAlert.textContent() : null, ops: await opsSince(afterB.revision), places: places(afterBRestore.project, runB), removed: removedByHand(afterBRestore.project, slotsOf(afterBRestore.project, runB) as any).length, offered: await restoreBtn.count() };
+        const bSteps: boolean[] = [];
+        for (const want of [creativeProjection(afterB.project), pShuffled]) { await tpage.getByTestId('undo').click(); bSteps.push(await tuntil((d) => creativeProjection(d) === want, 10000)); }
+        await restoreBtn.waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+        check('the same Delete, then «החזרת החלקים שנמחקו» at once: 1 revision (apply_template) makes the deleted picture again and returns the moved pictures to their slots, the bar says so in Hebrew and nothing is refused; two undos (the restore, then the delete) return exactly',
+          bDeleted && afterBRestore.revision === afterB.revision + 1 && JSON.stringify(bRestore.ops) === '[["apply_template"]]' && bRestore.refusal === null && JSON.stringify(bRestore.places) === JSON.stringify(places0) && bRestore.removed === 0 && bRestore.offered === 0
+            && bRestore.said.includes(S.movedBack(movedKeys.length).trim()) && bRestore.said.endsWith(S.restored) && /[\u0590-\u05FF]/.test(bRestore.said) && !/[A-Za-z]{3,}/.test(bRestore.said) && bSteps.every(Boolean) && (await restoreBtn.count()) === 0,
+          { said: bRestore.said, refusal: bRestore.refusal, ops: bRestore.ops, places: bRestore.places, removed: bRestore.removed, undo: bSteps });
+
+        // (2) Shift+Delete keeps the gap: nothing else moves, so the regeneration runs
+        await tpage.locator(`.clip[data-clip-id="${victim}"]`).click();
+        await tpage.keyboard.press('Shift+Delete');
+        const deleted = await tuntil((d) => !clipOf(d, victim));
+        await restoreBtn.waitFor({ timeout: 8000 }).catch(() => {});
+        const offered = { count: await restoreBtn.count(), text: await restoreBtn.textContent().catch(() => null), visible: await restoreBtn.isVisible().catch(() => false), enabled: await restoreBtn.isEnabled().catch(() => false) };
+        const afterDelete = await tdoc();
+        const deleteOps = await opsSince(afterDelete.revision - 1);
+        // Shuffle regenerates: the deleted item is left out, the bar says so, and the button stays
+        await tpage.getByTestId(TID.shuffle).click();
+        const regenerated = await revisionReaches(afterDelete.revision + 1);
+        await tpage.waitForFunction((want) => (document.querySelector('[data-testid=template-applied] [role=status]')?.textContent ?? '').includes(want), S.removedLeftOut(1).trim(), { timeout: 10000 }).catch(() => {});
+        const afterRegen = await tdoc();
+        const run1 = await runNow();
+        const leftOut = { said: await said(), slots: slotsOf(afterRegen.project, run1).length, removed: removedByHand(afterRegen.project, slotsOf(afterRegen.project, run1) as any).length, stillOffered: await restoreBtn.count(), refused: await barAlert.count() };
+        // the button: the deleted item is made again
+        await restoreBtn.click();
+        const restoredRev = await revisionReaches(afterRegen.revision + 1);
+        await restoreBtn.waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+        await sleep(300);
+        const afterRestore = await tdoc();
+        const run2 = await runNow();
+        const back = { said: await said(), slots: slotsOf(afterRestore.project, run2).length, removed: removedByHand(afterRestore.project, slotsOf(afterRestore.project, run2) as any).length, offered: await restoreBtn.count(), ops: await opsSince(afterRegen.revision) };
+        check('the same picture deleted with Shift+Delete (the gap is kept): the bar offers «החזרת החלקים שנמחקו»; Shuffle leaves that item out and says so (1 revision, apply_template); the button makes it again (1 revision), says so, and is gone',
+          deleted && JSON.stringify(deleteOps) === '[["delete_clip"]]' && offered.count === 1 && offered.text === S.restoreRemoved && offered.text === 'החזרת החלקים שנמחקו' && offered.visible && offered.enabled
+            && regenerated && afterRegen.revision === afterDelete.revision + 1 && leftOut.said.includes(S.removedLeftOut(1).trim()) && leftOut.slots === slots0.length && leftOut.removed === 1 && leftOut.stillOffered === 1 && leftOut.refused === 0
+            && restoredRev && afterRestore.revision === afterRegen.revision + 1 && JSON.stringify(back.ops) === '[["apply_template"]]' && back.said.endsWith(S.restored) && back.slots === slots0.length && back.removed === 0 && back.offered === 0,
+          { slots: slots0.length, victim, deleted, offered, deleteOps, leftOut, back });
+        // exact undo, one step each: the restore, the regeneration, the delete; the project is the shuffled one again
+        const pDeleted = creativeProjection(afterDelete.project), pRegen = creativeProjection(afterRegen.project);
+        const steps: boolean[] = [];
+        for (const want of [pRegen, pDeleted, pShuffled]) { await tpage.getByTestId('undo').click(); steps.push(await tuntil((d) => creativeProjection(d) === want, 10000)); }
+        check('undo three times takes back the restore, the regeneration and the hand delete, one step each: an equal creativeProjection at every step, ending at the shuffled template', steps.every(Boolean) && pShuffled !== pDeleted, { steps });
+      }
       await tpage.getByTestId('template-undo').click();
       const undoShuffle = await tuntil((d) => creativeProjection(d) === projectionApplied, 10000);
       await tpage.getByTestId('undo').click();
@@ -1408,6 +1571,249 @@ async function main() {
       check('command bar: the assistant row reads «עוזר השפה לא מחובר»; «איך מחברים» opens Settings at «עוזר השפה» (provider_not_configured); a refused save reads in Hebrew with its next step and without the server\'s English hint', !!rowText?.includes('עוזר השפה לא מחובר') && settings && setup === 'provider_not_configured' && /PF_ASSISTANT_HOSTS/.test(refused) && /[א-ת]/.test(refused) && refused.includes('; ') && !/restart the server/i.test(refused) && !/לא תורגם/.test(refused), { setup, refused });
       check('command bar: no uncaught errors in the page', cErrors.length === 0, cErrors.slice(0, 4));
       await cctx.close();
+    }
+
+    console.log('\n# a toast while a modal dialog is open (the people sheet, in Hebrew): inside the modal, announced, reachable by Tab, back on the page after');
+    {
+      const mctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+      await mctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const mp = await mctx.newPage();
+      const mErrors: string[] = [];
+      mp.on('pageerror', (e) => mErrors.push(String(e)));
+      await mp.goto(`${s.ownerUrl}&project=${pid}`);
+      await mp.getByTestId('timecode').waitFor();
+      await mp.getByTestId('open-palette').click();
+      await mp.getByTestId('palette-input').fill('אנשים');
+      await mp.locator('[data-testid=palette-option][data-command-id="life.people"]').click({ timeout: 8000 });
+      const sheet = mp.getByTestId(PEOPLE_TESTIDS.sheet);
+      await sheet.waitFor();
+      // a person added in the sheet and removed again: the removal is an undo toast, shown while the sheet is still open
+      await mp.getByTestId(PEOPLE_TESTIDS.personAdd).click();
+      await mp.getByTestId('life-person-new-name').fill('אורחת בדיקה');
+      await mp.getByTestId('life-person-new-save').click();
+      const personId = await mp.waitForFunction(() => [...document.querySelectorAll<HTMLElement>('[data-person-id]')].find((r) => r.querySelector<HTMLInputElement>('input[type=text]')?.value === 'אורחת בדיקה')?.dataset.personId ?? null, undefined, { timeout: 10000 }).then((h) => h.jsonValue() as Promise<string>);
+      await mp.getByTestId(PEOPLE_TESTIDS.personRemove(personId)).click();
+      const toastIn = mp.locator(`[data-testid=${PEOPLE_TESTIDS.sheet}] [data-testid=toasts] [role=status]`);
+      await toastIn.first().waitFor({ timeout: 8000 }).catch(() => {});
+      const where = await mp.evaluate((sheetId) => {
+        const region = document.querySelector<HTMLElement>('[data-testid=toasts]');
+        const t = region?.querySelector<HTMLElement>('[role=status]');
+        return { inSheet: !!t && !!document.querySelector(`[data-testid=${sheetId}]`)?.contains(t), host: region?.dataset.host ?? null, inert: !!t?.closest('[inert]'), regionName: region?.getAttribute('aria-label') ?? null, pageBehindInert: !!document.querySelector('[data-testid=timecode]')?.closest('[inert]'), text: t?.textContent ?? '' };
+      }, PEOPLE_TESTIDS.sheet);
+      // announced = in the accessibility tree as a live status (an inert subtree is pruned from it); the page behind is the control
+      const cdp = await mctx.newCDPSession(mp);
+      const axOf = async (selector: string) => {
+        const { root: docRoot } = await cdp.send('DOM.getDocument', { depth: 0 });
+        const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: docRoot.nodeId, selector });
+        if (!nodeId) return null;
+        const { nodes } = await cdp.send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false });
+        const n = nodes[0] as { ignored?: boolean; role?: { value?: string } } | undefined;
+        return n ? { ignored: !!n.ignored, role: n.role?.value ?? null } : null;
+      };
+      const axToast = await axOf(`[data-testid=${PEOPLE_TESTIDS.sheet}] [data-testid=toasts] [role=status]`);
+      const axBehind = await axOf('[data-testid=open-palette]');
+      check('a toast that appears while a modal dialog is open is rendered inside it, named «התראות», not inert, and in the accessibility tree as a status (announced), while the page behind stays inert and out of that tree',
+        where.inSheet && where.host === 'modal' && !where.inert && where.regionName === 'התראות' && where.pageBehindInert && axToast?.ignored === false && axToast.role === 'status' && axBehind?.ignored === true && where.text.length > 0,
+        { ...where, axToast, axBehind });
+      // the keyboard: Shift+Tab walks the sheet backwards (the toast region is its last part); focus never leaves the sheet;
+      // Enter on «ביטול» undoes exactly the removal (the undo toast lives 6 s and pauses while focused)
+      let left = 0, reached = false;
+      for (let i = 0; i < 60 && !reached; i++) {
+        await mp.keyboard.press('Shift+Tab');
+        const at = await mp.evaluate((id) => ({ inSheet: !!document.querySelector(`[data-testid=${id}]`)?.contains(document.activeElement), onUndo: !!document.activeElement?.closest('[data-testid=toasts] [role=status]') && document.activeElement?.tagName === 'BUTTON' && !document.activeElement.classList.contains('pf-toast-x') }), PEOPLE_TESTIDS.sheet);
+        if (!at.inSheet) left++;
+        reached = at.onUndo;
+      }
+      const focusedLabel = await mp.evaluate(() => document.activeElement?.textContent ?? '');
+      if (reached) await mp.keyboard.press('Enter');
+      const restored = await mp.getByTestId(PEOPLE_TESTIDS.personRow(personId)).waitFor({ timeout: 8000 }).then(() => true, () => false);
+      check('the keyboard reaches the toast\'s «ביטול» inside the modal\'s focus trap (focus never leaves the sheet); Enter brings the removed person back and the sheet stays open',
+        reached && left === 0 && focusedLabel.trim() === 'ביטול' && restored && (await sheet.count()) === 1, { reached, tabStepsThatLeftTheSheet: left, focusedLabel, restored });
+      await mp.keyboard.press('Escape');
+      await sheet.waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      await mp.waitForTimeout(150);
+      // after the sheet closes the region is the page's again (a child of the body, not inert)
+      const after = await mp.evaluate(() => { const r = document.querySelector<HTMLElement>('[data-testid=toasts]'); return { host: r?.dataset.host ?? null, parentIsBody: r?.parentElement === document.body, inert: !!r?.closest('[inert]'), anyInert: !!document.querySelector('[inert]') }; });
+      check('after the sheet closes, the toast region is back on the page (a child of the body, not inert) and nothing is left inert; no page errors', after.host === 'page' && after.parentIsBody && !after.inert && !after.anyInert && mErrors.length === 0, { ...after, errors: mErrors.slice(0, 3) });
+      await mctx.close();
+    }
+
+    console.log('\n# a cut by the transcript beside an untimed copy: the panel names the clip it left alone (Hebrew, then English)');
+    {
+      const up2 = (await call('/projects', { name: 'untimed copy', width: 640, height: 360 })).body.project.id as string;
+      const talkFile = path.join(art, 'talk.mp4'); // a transcript belongs to a file with sound
+      ff(['-f', 'lavfi', '-t', '4', '-i', 'testsrc2=s=640x360:r=30', '-f', 'lavfi', '-t', '4', '-i', 'sine=frequency=330:sample_rate=48000', '-vf', 'format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-shortest', talkFile]);
+      const rec = await upload(up2, talkFile);
+      // The reversed rendition is a real file made here by ffmpeg. It is stored through a side project (one blob store), then attached
+      // to this project by hand as a derived asset with no recorded time mapping (no sourceRangeStart), as a provider's reversed
+      // rendition would be. A typed fixture: no provider ran.
+      const revFile = path.join(art, 'reversed.mp4');
+      ff(['-i', talkFile, '-vf', 'reverse', '-af', 'areverse', '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', revFile]);
+      const side = (await call('/projects', { name: 'untimed copy (blob side project)', width: 640, height: 360 })).body.project.id as string;
+      const sideUp = await upload(side, revFile);
+      const { id: _sideId, ...revAsset } = (await call(`/projects/${side}`)).body.project.assets[sideUp.assetId];
+      const rev = s.store.commit({ projectId: up2, actor: 'fixture', allowInternal: true, ops: [{ op: 'import_asset', args: { asset: { ...revAsset, name: 'reversed.mp4', provenance: { origin: 'derived', importedAt: new Date().toISOString(), importedBy: 'fixture', derived: { jobId: 'job_fixture', capabilityId: 'comfy.video.reverse', capabilityVersion: '0.1.0', graphDigest: `sha256:${'a'.repeat(64)}`, params: {}, sourceAssetIds: [rec.assetId], outputName: 'out', outputRole: 'primary', encoding: 'display', provider: { id: 'fixture' } } } } } }] }).results[0]!.output!.assetId as string;
+      // four words of half a second each on the recording; the recording plays on frames 0..60, the reversed rendition after it
+      const spoken = ['שלום', 'אממ', 'עולם', 'טוב'];
+      await txs(up2, [{ op: 'set_transcript', args: { assetId: rec.assetId, language: 'he', segments: [{ start: T.rt(0, 1), duration: T.rt(2, 1), text: spoken.join(' '), words: spoken.map((text, k) => ({ text, start: T.rt(k, 2), duration: T.rt(1, 2) })) }] } }]);
+      await txs(up2, [{ op: 'add_clip', args: { assetId: rec.assetId, start: f(0), duration: f(60), withLinkedAudio: false } }]);
+      const revClip = (await txs(up2, [{ op: 'add_clip', args: { assetId: rev, start: f(60), duration: f(30), withLinkedAudio: false } }])).results[0].output.clipId as string;
+      const udoc = async () => (await call(`/projects/${up2}`)).body.project;
+      const mediaOf = (d: any, assetId: string) => d.sequences.seq_main.tracks.flatMap((t: any) => t.clips).filter((c: any) => c.type === 'media' && c.assetId === assetId);
+      const revBefore = clipOf(await udoc(), revClip);
+      const uctx = await browser.newContext({ viewport: { width: 1500, height: 3200 }, reducedMotion: 'reduce' });
+      await uctx.addInitScript(() => { try { if (!localStorage.getItem('pf.lang')) localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
+      const upage = await uctx.newPage();
+      const uErrors: string[] = [];
+      upage.on('pageerror', (e) => uErrors.push(String(e)));
+      await upage.goto(`${s.ownerUrl}&project=${up2}`);
+      await upage.locator('[data-testid=transcript-panel][data-state=ready]').waitFor({ timeout: 15000 });
+      const note = upage.getByTestId('transcript-skipped-note');
+      const noteNow = async () => ({ count: await note.count(), text: (await note.first().textContent().catch(() => null)), role: await note.first().getAttribute('role').catch(() => null), visible: await note.first().isVisible().catch(() => false) });
+      const cutWord = async (k: number) => {
+        await upage.getByTestId('transcript-word').nth(k).click();
+        await upage.getByTestId('transcript-delete').click();
+      };
+      const noteBefore = await note.count();
+      await cutWord(1); // «אממ», 0.5–1.0 s of the recording = frames 15..30
+      const cut1 = await until2(udoc, (d) => mediaOf(d, rec.assetId).length === 2);
+      await note.first().waitFor({ timeout: 10000 }).catch(() => {});
+      const he = await noteNow();
+      const d1 = await udoc();
+      const rev1 = clipOf(d1, revClip);
+      const wantHe = dictionaries.he['transcript.untimedSkipped'].replace('{name}', 'reversed.mp4'), wantEn = dictionaries.en['transcript.untimedSkipped'].replace('{name}', 'reversed.mp4');
+      // English: the next cut words its note in the interface language of that moment
+      await upage.getByTestId('lang-toggle').click();
+      await upage.waitForFunction(() => document.documentElement.lang === 'en', undefined, { timeout: 5000 }).catch(() => {});
+      await cutWord(3); // «טוב», 1.5–2.0 s of the recording
+      const cut2 = await until2(udoc, (d) => mediaOf(d, rec.assetId).reduce((n: number, c: any) => n + fr(c.duration), 0) === 30);
+      await upage.waitForFunction((want) => document.querySelector('[data-testid=transcript-skipped-note]')?.textContent === want, wantEn, { timeout: 10000 }).catch(() => {});
+      const en = await noteNow();
+      const d2 = await udoc();
+      const rev2 = clipOf(d2, revClip);
+      const refused = await upage.getByTestId('transcript-error').count();
+      const sameCopy = (c: any) => !!c && fr(c.duration) === 30 && JSON.stringify(c.sourceIn) === JSON.stringify(revBefore.sourceIn) && c.assetId === rev;
+      check('a word deleted in the transcript panel while another clip shows a reversed copy of the recording: the recording\'s clip is cut, the copy\'s clip is left whole, and the panel says «הקליפ reversed.mp4 לא נחתך לפי ההקלטה…» as one status note; after switching to English the next cut says it in English; nothing is refused',
+        noteBefore === 0 && cut1 && he.count === 1 && he.text === wantHe && /^הקליפ reversed\.mp4 לא נחתך לפי ההקלטה/.test(he.text ?? '') && he.role === 'status' && he.visible
+          && mediaOf(d1, rec.assetId).reduce((n: number, c: any) => n + fr(c.duration), 0) === 45 && sameCopy(rev1) && fr(rev1.start) === 45 && mediaOf(d1, rev).length === 1
+          && cut2 && en.count === 1 && en.text === wantEn && en.role === 'status' && en.visible && sameCopy(rev2) && fr(rev2.start) === 30 && mediaOf(d2, rev).length === 1 && refused === 0 && uErrors.length === 0,
+        { noteBefore, he, en, recordingFrames: [mediaOf(d1, rec.assetId).map((c: any) => [fr(c.start), fr(c.duration)]), mediaOf(d2, rec.assetId).map((c: any) => [fr(c.start), fr(c.duration)])], copy: [[fr(rev1?.start), fr(rev1?.duration)], [fr(rev2?.start), fr(rev2?.duration)]], refused, errors: uErrors.slice(0, 3) });
+      await uctx.close();
+    }
+
+    console.log('\n# beat and scene markers of a clip that shows a derived copy of a measured file (fixtures: no provider ran)');
+    {
+      // The measured file: 4 s of picture and sound. Its beats (every half second from 0.5 s, 120 BPM) and scene cuts (1 s and 2.5 s) are
+      // attached by hand as a typed fixture (no analysis ran). Two real files are made from it by ffmpeg and stored through a side
+      // project (one blob store), then attached by hand as derived assets, as a provider's results would be:
+      //   graded.mp4   its 1 s .. 3.5 s with the colour changed; recorded as starting at 1 s of the file (keeps its timing)
+      //   backwards.mp4  the file reversed; no recorded time mapping
+      const filmFile = path.join(art, 'markers-film.mp4'), gradedFile = path.join(art, 'markers-graded.mp4'), backFile = path.join(art, 'markers-backwards.mp4');
+      ff(['-f', 'lavfi', '-t', '4', '-i', 'testsrc2=s=640x360:r=30', '-f', 'lavfi', '-t', '4', '-i', 'sine=frequency=330:sample_rate=48000', '-vf', 'format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-shortest', filmFile]);
+      ff(['-ss', '1', '-t', '2.5', '-i', filmFile, '-vf', 'hue=s=0.3,format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', gradedFile]);
+      ff(['-i', filmFile, '-vf', 'reverse', '-af', 'areverse', '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', backFile]);
+      const mside = (await call('/projects', { name: 'derived copy markers (blob side project)', width: 640, height: 360 })).body.project.id as string;
+      const stored = async (file: string) => { const up = await upload(mside, file); const { id: _id, ...asset } = (await call(`/projects/${mside}`)).body.project.assets[up.assetId]; return asset; };
+      const gradedAsset = await stored(gradedFile), backAsset = await stored(backFile);
+      const derivedFrom = (src: string, capabilityId: string, extra: Record<string, unknown>) => ({ origin: 'derived', importedAt: new Date().toISOString(), importedBy: 'fixture', derived: { jobId: 'job_fixture', capabilityId, capabilityVersion: '0.1.0', graphDigest: `sha256:${'a'.repeat(64)}`, params: {}, sourceAssetIds: [src], outputName: 'out', outputRole: 'primary', encoding: 'display', provider: { id: 'fixture' }, ...extra } });
+      /** A project with the measured file in its library (not on the timeline) and one clip of `copy` of it. */
+      const projectWith = async (name: string, copy: 'graded' | 'backwards') => {
+        const id = (await call('/projects', { name, width: 640, height: 360 })).body.project.id as string;
+        const film = await upload(id, filmFile);
+        s.store.commit({ projectId: id, actor: 'fixture', allowInternal: true, ops: [
+          { op: 'attach_analysis', args: { assetId: film.assetId, kind: 'beats', method: 'typed fixture (no analysis ran)', params: {}, createdAt: new Date().toISOString(), times: [1, 2, 3, 4, 5, 6, 7].map((k) => T.rt(k, 2)), bpm: 120, confidence: 1 } },
+          { op: 'attach_analysis', args: { assetId: film.assetId, kind: 'scenes', method: 'typed fixture (no analysis ran)', params: {}, createdAt: new Date().toISOString(), times: [T.rt(1, 1), T.rt(5, 2)] } },
+        ] });
+        const asset = copy === 'graded'
+          ? { ...gradedAsset, name: 'graded.mp4', provenance: derivedFrom(film.assetId, 'comfy.video.enhance', { sourceRangeStart: T.rt(1, 1), audio: 'source-copied' }) }
+          : { ...backAsset, name: 'backwards.mp4', provenance: derivedFrom(film.assetId, 'comfy.video.reverse', {}) };
+        const copyId = s.store.commit({ projectId: id, actor: 'fixture', allowInternal: true, ops: [{ op: 'import_asset', args: { asset } }] }).results[0]!.output!.assetId as string;
+        // the copy's clip starts at frame 30 and plays the copy from 0.5 s for 1.5 s: for graded.mp4 that is 1.5 s .. 3.0 s of the measured file
+        await txs(id, [{ op: 'add_clip', args: { assetId: copyId, start: f(30), sourceIn: f(15), duration: f(45), withLinkedAudio: false } }]);
+        return id;
+      };
+      const gradedPid = await projectWith('markers on a graded copy', 'graded'), backPid = await projectWith('markers on a reversed copy', 'backwards');
+      const mctx = await browser.newContext({ viewport: { width: 1500, height: 1000 }, reducedMotion: 'reduce' });
+      const mpage = await mctx.newPage();
+      const mErrors: string[] = [];
+      mpage.on('pageerror', (e) => mErrors.push(String(e)));
+      const markersOf = async (id: string) => {
+        await mpage.goto(`${s.ownerUrl}&project=${id}`);
+        await mpage.getByTestId('timecode').waitFor({ timeout: 15000 });
+        await mpage.locator('[data-testid=timeline-markers]').waitFor({ state: 'attached', timeout: 15000 });
+        await mpage.locator('.clip').first().waitFor({ timeout: 15000 });
+        await mpage.waitForTimeout(300);
+        const frames = (testid: string) => mpage.locator(`[data-testid=${testid}]`).evaluateAll((els) => els.map((e) => Number(e.getAttribute('data-frame'))));
+        return { beats: await frames('beat-marker'), scenes: await frames('scene-marker'), bpm: await mpage.getByTestId('tl-bpm').textContent({ timeout: 500 }).catch(() => null), clips: await mpage.locator('.clip').count() };
+      };
+      const onGraded = await markersOf(gradedPid), onBackwards = await markersOf(backPid);
+      await mpage.screenshot({ path: path.join(art, 'markers-reversed-copy.png') }).catch(() => {});
+      // the file's beats at 1.5, 2.0 and 2.5 s and its cut at 2.5 s fall inside the clip: frames 30, 45, 60 and 60; the cut at 1 s and the other beats are outside it
+      check('a clip that shows a colour-processed copy which keeps the timing of a measured file shows that file\'s beat and scene markers on the timeline, at the frames its own moments play (and its tempo); a clip that shows a reversed copy shows none',
+        onGraded.clips === 1 && JSON.stringify(onGraded.beats) === '[30,45,60]' && JSON.stringify(onGraded.scenes) === '[60]' && onGraded.bpm === '120'
+          && onBackwards.clips === 1 && onBackwards.beats.length === 0 && onBackwards.scenes.length === 0 && onBackwards.bpm === null && mErrors.length === 0,
+        { gradedCopy: onGraded, reversedCopy: onBackwards, errors: mErrors.slice(0, 3) });
+      await mctx.close();
+    }
+
+    console.log('\n# archive import of a project whose translation was marked reviewed: the new project says once that the mark was cleared');
+    {
+      const rp = (await call('/projects', { name: 'review marks', width: 640, height: 360 })).body.project.id as string;
+      const voice = await upload(rp, musicFile);
+      await txs(rp, [{ op: 'add_clip', args: { assetId: voice.assetId, start: f(0), duration: f(90) } }]);
+      // a typed Hebrew transcript and its English language format, stored by the op the translation tool commits: no model ran
+      await txs(rp, [{ op: 'set_transcript', args: { assetId: voice.assetId, language: 'he', segments: [{ start: T.rt(0, 1), duration: T.rt(1, 1), text: 'שלום לכולם' }, { start: T.rt(1, 1), duration: T.rt(2, 1), text: 'ברוכים הבאים' }] } }]);
+      const segs = s.store.getProject(rp).doc.transcripts[voice.assetId]!.segments.map((x) => x.id);
+      const variantId = s.store.commit({ projectId: rp, actor: 'fixture', allowInternal: true, ops: [{ op: 'attach_translation', args: { baseVariantId: null, name: 'English', language: 'en', translation: { from: 'he', to: 'en', engine: 'typed fixture (no model ran)', model: 'none', createdAt: new Date().toISOString(), createdBy: 'fixture', sources: { [segs[0]!]: sha256Hex('שלום לכולם'), [segs[1]!]: sha256Hex('ברוכים הבאים') } }, phraseText: { [segs[0]!]: 'Hello everyone', [segs[1]!]: 'Welcome' }, cueText: {} } }] }).results[0]!.output!.variantId as string;
+      const rdoc = async (id: string) => (await call(`/projects/${id}`)).body.project;
+      const rctx = await browser.newContext({ viewport: { width: 1500, height: 3200 }, reducedMotion: 'reduce' });
+      await rctx.addInitScript(() => { try { if (!localStorage.getItem('pf.lang')) localStorage.setItem('pf.lang', 'he'); localStorage.setItem('pf.inspector.tab.v1', 'all'); } catch { /* storage unavailable */ } });
+      const rpage = await rctx.newPage();
+      const rErrors: string[] = [];
+      rpage.on('pageerror', (e) => rErrors.push(String(e)));
+      await rpage.goto(`${s.ownerUrl}&project=${rp}`);
+      await rpage.getByTestId('timecode').waitFor();
+      // the owner marks the translation reviewed in the transcript panel (the server takes the mark from the owner's session only)
+      await rpage.getByTestId('translation-mark').click();
+      const marked = await until2(() => rdoc(rp), (d) => d.variants[variantId]?.translation?.review === 'reviewed');
+      const [rdl] = await Promise.all([rpage.waitForEvent('download'), rpage.getByTestId('archive-download').click()]);
+      const rArc = path.join(art, 'review-marks.tar');
+      await rdl.saveAs(rArc);
+      const plain = (x: string | null) => (x ?? '').replace(/[⁦-⁩‎‏]/g, '');
+      const toast = rpage.locator('[data-testid=toasts] [role=status]');
+      const importHere = async (from: string) => {
+        await rpage.getByTestId('archive-import').setInputFiles(rArc);
+        await rpage.waitForFunction((old) => { const now = new URLSearchParams(location.search).get('project'); return !!now && now !== old; }, from, { timeout: 30000 });
+        await rpage.getByTestId('timecode').waitFor();
+        const id = new URL(rpage.url()).searchParams.get('project')!;
+        await toast.first().waitFor({ timeout: 10000 }).catch(() => {});
+        return { id, count: await toast.count(), title: plain(await toast.first().locator('b').textContent().catch(() => null)), body: plain(await toast.first().locator('p').textContent().catch(() => null)), visible: await toast.first().isVisible().catch(() => false), timer: await toast.first().locator('.pf-toast-timer').count(), panel: await rpage.getByTestId('translation-review').getAttribute('data-review').catch(() => null), badge: await rpage.getByTestId('translation-unreviewed').count() };
+      };
+      const he = await importHere(rp);
+      const heDoc = await rdoc(he.id);
+      const newVariant: any = Object.values(heDoc.variants).find((v: any) => !!v.translation);
+      // it stays until the owner closes it (an undo toast would be gone after 6 s); a reload does not say it again
+      await sleep(7000);
+      const stays = await toast.count();
+      await toast.first().locator('.pf-toast-x').click();
+      await toast.first().waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      const closed = await toast.count();
+      await rpage.reload();
+      await rpage.getByTestId('timecode').waitFor();
+      await sleep(1000);
+      const afterReload = await toast.count();
+      // in English: the same archive imported once more, from the project the first import made
+      await rpage.getByTestId('lang-toggle').click();
+      await rpage.waitForFunction(() => document.documentElement.lang === 'en', undefined, { timeout: 5000 }).catch(() => {});
+      const en = await importHere(he.id);
+      const source = (await rdoc(rp)).variants[variantId].translation;
+      check('an archive of a project whose translation the owner marked reviewed, imported in the editor: the new project opens with one toast «הארכיון יובא» whose text is the server\'s note naming «English» in the singular («התרגום … מסומן», «The translation … needs»), without a timer; the translation there needs review again with its wording kept, the source keeps its mark; the toast stays past 7 s, closes with its ×, and a reload does not show it again; in English the same import says it in English',
+        marked && he.id !== rp && he.count === 1 && he.title === 'הארכיון יובא' && he.body === IMPORTED_REVIEW_CLEARED.he(['«English»']) && he.body.includes('התרגום «English» מסומן שוב') && !/התרגומים|מסומנים/.test(he.body) && he.visible && he.timer === 0 && he.panel === 'needed' && he.badge === 1
+          && newVariant?.translation?.review === 'needed' && newVariant.translation.reviewedBy === undefined && JSON.stringify(Object.values(newVariant.phraseText ?? {}).sort()) === JSON.stringify(['Hello everyone', 'Welcome']) && source.review === 'reviewed'
+          && stays === 1 && closed === 0 && afterReload === 0
+          && en.id !== he.id && en.count === 1 && en.title === 'The archive was imported' && en.body === IMPORTED_REVIEW_CLEARED.en(['«English»']) && en.body.includes('The translation «English» needs review again; its wording is kept') && !/translations/.test(en.body) && en.visible && en.timer === 0 && rErrors.length === 0,
+        { marked, he, en, imported: { review: newVariant?.translation?.review, reviewedBy: newVariant?.translation?.reviewedBy ?? null, wording: Object.values(newVariant?.phraseText ?? {}) }, sourceReview: source.review, stays, closed, afterReload, errors: rErrors.slice(0, 3) });
+      await rctx.close();
     }
 
     await page.close();

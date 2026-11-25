@@ -89,3 +89,73 @@ export async function focusAudit(page: Page, steps: number, clickFirst = true) {
   }
   return { reached: reached.size, missing };
 }
+
+/**
+ * A toast raised while a modal is open (the template dialog, the effect gallery, the curve picker, the command palette). Needs
+ * the page's `__pfToastProof` flag (an init script): the app then exposes `window.__pfToast`, which pushes into the same queue
+ * the editor's notices use. Checks, with the modal open and its focus inside: the toast is inside the modal, in the toast region
+ * the modal hosts (data-host=modal), named in the interface language, not inert, one status only (announced once), in the
+ * accessibility tree as a status, drawn where it can be seen (not under the modal's own content or scrim), and the keyboard
+ * reaches its action and its × (Tab, never leaving the modal; one more Tab comes back into the modal's own controls). Leaves
+ * the focus on the toast's × so the caller's Escape proves Escape still closes the modal from there. `shown` is false on any miss.
+ */
+export async function toastInOpenModal(page: Page, lang: 'he' | 'en', dialogTestId: string): Promise<Record<string, unknown>> {
+  const title = lang === 'he' ? 'בדיקת התראה בתוך חלון' : 'Toast check inside a window';
+  const action = lang === 'he' ? 'לפתיחה' : 'Open';
+  await page.evaluate(([t, a]) => (window as unknown as { __pfToast: (x: unknown) => string }).__pfToast({ kind: 'fix', title: t, action: a, ttl: 0 }), [title, action]);
+  const sel = `[data-testid=${dialogTestId}] [data-testid=toasts] [role=status]`;
+  await page.locator(sel).first().waitFor({ timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(150);
+  const where = await page.evaluate(([id, text]) => {
+    const dlg = document.querySelector<HTMLElement>(`[data-testid=${id}]`);
+    const region = document.querySelector<HTMLElement>('[data-testid=toasts]');
+    const t = region?.querySelector<HTMLElement>('[role=status]');
+    const r = t?.getBoundingClientRect();
+    const liveUp = (el: HTMLElement | null | undefined) => { let n = 0; for (let e = el?.parentElement ?? null; e; e = e.parentElement) if (e.hasAttribute('aria-live') || ['status', 'alert', 'log'].includes(e.getAttribute('role') ?? '')) n++; return el ? n : -1; };
+    const hit = r ? document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) : null;
+    return {
+      inModal: !!t && !!dlg?.contains(t), host: region?.dataset.host ?? null, inert: !t || !!t.closest('[inert]'), regionName: region?.getAttribute('aria-label') ?? null,
+      regions: document.querySelectorAll('[data-testid=toasts]').length, statusesWithText: [...document.querySelectorAll('[role=status]')].filter((e) => e.textContent?.includes(text as string)).length,
+      liveAncestors: liveUp(t),
+      onScreen: !!r && r.width > 0 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight, notCovered: !!t && !!hit && t.contains(hit),
+    };
+  }, [dialogTestId, title]);
+  const cdp = await page.context().newCDPSession(page);
+  let ax: { ignored: boolean; role: string | null } | null = null;
+  try {
+    const { root: d } = await cdp.send('DOM.getDocument', { depth: 0 });
+    const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: d.nodeId, selector: sel });
+    if (nodeId) { const { nodes } = await cdp.send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false }); const n = nodes[0] as { ignored?: boolean; role?: { value?: string } } | undefined; ax = n ? { ignored: !!n.ignored, role: n.role?.value ?? null } : null; }
+  } finally { await cdp.detach().catch(() => {}); }
+  // the keyboard: Tab forward until the toast's action, then its ×; focus must stay in the modal on every step
+  // «the toast» is the one raised here: another toast may still be on screen (an undo toast with its timer), with its own buttons
+  const at = () => page.evaluate(([id, text]) => {
+    const own = document.activeElement?.closest('[data-testid=toasts] [role=status]');
+    const mine = !!own && !!own.textContent?.includes(text as string);
+    return { inModal: !!document.querySelector(`[data-testid=${id}]`)?.contains(document.activeElement), onAction: mine && document.activeElement?.tagName === 'BUTTON' && !document.activeElement.classList.contains('pf-toast-x'), onClose: mine && !!document.activeElement?.classList.contains('pf-toast-x') };
+  }, [dialogTestId, title]);
+  let left = 0, reachedAction = false, reachedClose = false;
+  for (let i = 0; i < 80 && !reachedClose; i++) {
+    await page.keyboard.press('Tab');
+    const s = await at();
+    if (!s.inModal) left++;
+    if (s.onAction) reachedAction = true;
+    if (s.onClose) reachedClose = true;
+  }
+  // one more Tab leaves the toast for the modal's own first control (the trap wraps; it does not let focus out)
+  let wraps = false;
+  if (reachedClose) { await page.keyboard.press('Tab'); const s = await at(); wraps = s.inModal && !s.onClose && !s.onAction; await page.keyboard.press('Shift+Tab'); }
+  const back = await at();
+  const announced = ax?.ignored === false && ax.role === 'status';
+  const shown = where.inModal && where.host === 'modal' && !where.inert && where.regions === 1 && where.statusesWithText === 1 && where.liveAncestors === 0 && announced && where.onScreen && where.notCovered && reachedAction && reachedClose && left === 0 && wraps && back.onClose;
+  return { shown, ...where, announced, toastActionReachedByKeyboard: reachedAction, toastCloseReachedByKeyboard: reachedClose, tabWrapsInsideModal: wraps, tabStepsThatLeftTheDialog: left, focusOnToastClose: back.onClose };
+}
+
+/** After the modal closed: the region is the page's again (a child of the body), the toast is still there (ttl 0) and is closed with its ×. */
+export async function toastAfterModal(page: Page): Promise<{ toastBackOnPage: boolean }> {
+  await page.waitForTimeout(150);
+  const r = await page.evaluate(() => { const reg = document.querySelector<HTMLElement>('[data-testid=toasts]'); return reg?.dataset.host === 'page' && reg.parentElement === document.body && !!reg.querySelector('[role=status]') && !document.querySelector('[inert]'); });
+  const x = page.locator('[data-testid=toasts] .pf-toast-x');
+  while (await x.count()) { await x.first().click({ timeout: 3000 }).catch(() => {}); await page.waitForTimeout(80); if ((await x.count()) > 5) break; }
+  return { toastBackOnPage: r };
+}

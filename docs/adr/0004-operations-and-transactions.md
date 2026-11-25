@@ -45,7 +45,9 @@ Status: accepted (Phase 0); extended in Phase 1 (see "Phase 1 additions")
   wording, a translation's sources) is read with `own`, and only `__proto__` is refused for them, because loading drops that key and assigning under it
   replaces a record's prototype instead of storing.
 - **Writes.** An entry is written under a generated id or under the id of an entity that was just found. `apply_recipe` with a `runId` therefore requires that
-  run to exist (`not_found` otherwise); `restore_entities` refuses a reserved id instead of assigning under it.
+  run to exist (`not_found` otherwise); `restore_entities` refuses a reserved id instead of assigning under it. Two internal ops added later,
+  `apply_template` and `apply_sequence_plan`, record a new run under a run id the server passes in; the guard refuses an inherited name
+  there before the op runs, and an earlier run is read with `own`.
 - `packages/core/src/own.test.ts` applies every registered op with such a name in each string argument and fails on anything but a typed refusal or an ordinary
   result; `inheritedIds.test.ts` does the same for every id argument with every inherited name. A new op is covered by both without being listed. One
   definition of the names: `isInheritedName` in `own.ts`.

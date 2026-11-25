@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { createProject, planTemplate, TemplateError, type TemplateDef } from '@pulseframe/core';
 import { ApiFailure } from '../api.ts';
-import { templateRefusal } from './templateRefusals.ts';
+import { templateHint, templateRefusal } from './templateRefusals.ts';
 import { TEMPLATE_STRINGS } from './templates.strings.ts';
 
 /** Latin letters left in a Hebrew sentence, other than names of programs and formats that have no Hebrew word and identifiers isolated left to right (a text's key). */
@@ -52,7 +52,12 @@ describe('template refusals', () => {
       ['invalid_request', 'this plan would record 500 slots; a run holds at most 400'],
       ['needs_capability', 'template tpl.list places graphic elements, which this machine cannot draw: its ffmpeg has no SVG decoder (librsvg)', 'Install an ffmpeg build with librsvg and restart the server, or choose a template without elements.'],
       ['template_blocked', 'the template cannot regenerate like this: slot(s) s1, s3 were edited by hand and are kept where they are, but no longer lie exactly on the range this plan gives them, so the new pictures would leave frames without a picture',
-        'Regenerate with the run\'s tempo (half), undo the hand edit that moved or trimmed slot(s) s1, s3, or delete that clip so the template fills the slot again.'],
+        'Regenerate with the run\'s tempo (half), undo the hand edit that moved or trimmed slot(s) s1, s3, or delete that clip and regenerate with restoreRemoved: true so the template fills the slot again.'],
+      // the same refusal with the next steps the server gives for other requests (the run's tempo left out; a restore request; an older run)
+      ['template_blocked', 'the template cannot regenerate like this: slot(s) s1, s3 were edited by hand and are kept where they are, but no longer lie exactly on the range this plan gives them, so the new pictures would leave frames without a picture', 'Undo the hand edit that moved or trimmed slot(s) s1, s3, or delete that clip and regenerate with restoreRemoved: true so the template fills the slot again.'],
+      ['template_blocked', 'the template cannot regenerate like this: slot(s) s1, s3 were edited by hand and are kept where they are, but no longer lie exactly on the range this plan gives them, so the new pictures would leave frames without a picture', 'Regenerate with the run\'s tempo (double), undo the hand edit that moved or trimmed slot(s) s1, s3, or delete that clip as well and regenerate with restoreRemoved: true again so the template makes it again too.'],
+      ['template_blocked', 'the template cannot regenerate like this: slot(s) s1, s3 were edited by hand and are kept where they are, but no longer lie exactly on the range this plan gives them, so the new pictures would leave frames without a picture', 'Undo the hand edit that moved or trimmed slot(s) s1, s3, or delete that clip as well and regenerate with restoreRemoved: true again so the template makes it again too. This run was made before places were recorded, and where it placed its clips cannot be worked out again: the template has changed since (the run is of version 1, the template is version 2 now). So a clip that was only moved counts as edited.'],
+      ['nothing_to_do', 'every item of this template was edited or deleted by hand since the last run; there is nothing to make again', 'Regenerate with restoreRemoved: true to make the deleted items again.'],
       ['insufficient_scope', 'this credential may only propose edits, and a template cannot be proposed: it is applied through an internal step that a proposal does not carry', 'Ask the project owner to apply the template, or for a grant in edit mode. plan_template still shows what it would do.'],
       ['not_found', 'template "tpl.nope" does not exist', 'Available: tpl.travel-montage, tpl.birthday (GET /api/v1/templates).'],
       ['not_found', 'template run run_9 not found', 'A template run id is returned by apply (runId).'],
@@ -65,8 +70,41 @@ describe('template refusals', () => {
       // English keeps the server's detail; a hint written for API callers is reworded, the others stay
       const en = templateRefusal('en', new ApiFailure(409, code, message, {}, hint));
       expect(en.message.endsWith(message)).toBe(true);
-      if (hint) expect(en.hint, hint).not.toMatch(/\/api\/|POST |Pass |edit_analysis|plan_template|\(at\)|runId/);
+      if (hint) expect(en.hint, hint).not.toMatch(/\/api\/|POST |Pass |edit_analysis|plan_template|\(at\)|runId|restoreRemoved/);
     }
+  });
+  it('a kept picture off its slot: the hint offers the steps the server sent, in both languages; a restore request is told to delete that clip as well and press the button again; an older run gets its sentence', () => {
+    const he = TEMPLATE_STRINGS.he, en = TEMPLATE_STRINGS.en;
+    const undo = 'undo the hand edit that moved or trimmed slot(s) s2';
+    const del = 'or delete that clip and regenerate with restoreRemoved: true so the template fills the slot again';
+    const delToo = 'or delete that clip as well and regenerate with restoreRemoved: true again so the template makes it again too';
+    const older = ' This run was made before places were recorded, and where it placed its clips cannot be worked out again: the template has changed since (the run is of version 1, the template is version 2 now). So a clip that was only moved counts as edited.';
+    const heUndo = 'לבטל את העריכה ביד שהזיזה או קיצרה את המשבצות';
+    const heDel = `או למחוק את הקליפ וליצור מחדש עם «${he.restoreRemoved}» כדי שהתבנית תמלא את המשבצת שוב`;
+    const heDelToo = `או למחוק גם את הקליפ הזה וללחוץ שוב על «${he.restoreRemoved}» כדי שהתבנית תיצור גם אותו מחדש`;
+    const enDel = `or delete that clip and regenerate with “${en.restoreRemoved}” so the template fills the slot again`;
+    const enDelToo = `or delete that clip as well and press “${en.restoreRemoved}” again so the template makes it again too`;
+    const cases: [string, string, string][] = [
+      [`Regenerate with the run's tempo (half), ${undo}, ${del}.`, `אפשר ליצור מחדש בקצב של ההחלה (${he.tempoNames.half}), ${heUndo}, ${heDel}.`, `Regenerate with the run's tempo (${en.tempoNames.half}), undo the hand edit that moved or trimmed the slots, ${enDel}.`],
+      [`Undo the hand edit that moved or trimmed slot(s) s2, ${del}.`, `אפשר ${heUndo}, ${heDel}.`, `Undo the hand edit that moved or trimmed the slots, ${enDel}.`],
+      [`Regenerate with the run's tempo (normal), ${undo}, ${delToo}.`, `אפשר ליצור מחדש בקצב של ההחלה (${he.tempoNames.normal}), ${heUndo}, ${heDelToo}.`, `Regenerate with the run's tempo (${en.tempoNames.normal}), undo the hand edit that moved or trimmed the slots, ${enDelToo}.`],
+      [`Undo the hand edit that moved or trimmed slot(s) s2, ${delToo}.`, `אפשר ${heUndo}, ${heDelToo}.`, `Undo the hand edit that moved or trimmed the slots, ${enDelToo}.`],
+      [`Undo the hand edit that moved or trimmed slot(s) s2, ${delToo}.${older}`,
+        `אפשר ${heUndo}, ${heDelToo}. ההחלה הזו נוצרה בגרסה קודמת שלא רשמה איפה הונח כל קליפ, ואי אפשר לשחזר את זה עכשיו, ולכן קליפ שרק זז נחשב כאן לקליפ שנערך.`,
+        `Undo the hand edit that moved or trimmed the slots, ${enDelToo}. This run was made by an earlier version that did not record where it placed each clip, and that cannot be worked out again now, so a clip that was only moved counts as edited here.`],
+    ];
+    for (const [server, wantHe, wantEn] of cases) {
+      expect(templateHint('he', server), server).toBe(wantHe);
+      expect(templateHint('en', server), server).toBe(wantEn);
+      expect(latin(wantHe), server).toEqual([]);
+    }
+  });
+  it('the bar says how many items that had only been moved are back on their places, in both languages, one and many', () => {
+    expect(TEMPLATE_STRINGS.he.movedBack(1)).toBe(' פריט אחד שרק זז ממקומו חזר למקומו בתבנית.');
+    expect(TEMPLATE_STRINGS.he.movedBack(3)).toBe(' 3 פריטים שרק זזו ממקומם חזרו למקומם בתבנית.');
+    expect(TEMPLATE_STRINGS.en.movedBack(1)).toBe(' 1 item that had only been moved is back on its place in the template.');
+    expect(TEMPLATE_STRINGS.en.movedBack(3)).toBe(' 3 items that had only been moved are back on their places in the template.');
+    expect(latin(TEMPLATE_STRINGS.he.movedBack(2))).toEqual([]);
   });
   it('the planner\'s built-in-music refusals, provoked for real, are worded in Hebrew with their hints; English hints speak to a person', () => {
     const doc = createProject({ id: 'prj_bm', name: 'BM', width: 1080, height: 1920, frameRate: { num: 30, den: 1 } });

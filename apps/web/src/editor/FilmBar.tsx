@@ -6,7 +6,7 @@
  * It shows only while that run is in the document: an undone film takes its bar with it. FILM_TESTIDS.bar*.
  */
 import { useState, type ReactElement } from 'react';
-import { FAMILY_FILM_DRAFT_LABEL, type FamilyFilmParams } from '@pulseframe/core';
+import { FAMILY_FILM_DRAFT_LABEL, removedByHand, type FamilyFilmParams } from '@pulseframe/core';
 import { AnchoredError, Button, Menu } from '../ds/index.ts';
 import { isolate } from '../ds/util.tsx';
 import { api } from '../api.ts';
@@ -22,6 +22,7 @@ export function FilmBar({ lang, runId }: FilmBarProps): ReactElement | null {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showWhy, setShowWhy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   const S = familyFilmStrings(lang);
   const doc = state.doc;
   const view = doc ? currentFilmRun(doc, runId ?? state.filmRun?.runId) : null;
@@ -36,10 +37,15 @@ export function FilmBar({ lang, runId }: FilmBarProps): ReactElement | null {
     await editor.undoTransaction(filmTxn);
     editor.setFilmRun(null);
   };
-  const regenerate = async (change: Partial<FamilyFilmParams>) => {
+  // clips of the film deleted by hand: a regeneration leaves them out; bringing them back is an explicit choice
+  const removed = removedByHand(doc, view.run.slots ?? []).length;
+  const regenerate = async (change: Partial<FamilyFilmParams>, restoreRemoved = false) => {
     setBusy(true); setError(null);
     try {
-      const r = await api.regenerateFilm(doc.id, view.run.id, change);
+      const r = await api.regenerateFilm(doc.id, view.run.id, change, restoreRemoved);
+      // clips that had only been moved are not kept where they were moved to; the film says so once, when it happened
+      const moved = r.warnings.find((w) => w.code === 'moved_back');
+      setNote(moved ? S.warning(moved) : null);
       editor.setFilmRun({ runId: r.runId, params: { ...params, ...change }, picks: r.picks, excluded: r.excluded, alternatives: [] });
       await editor.load(doc.id);
     } catch (e) { setError(filmFailure(lang, e).message); } finally { setBusy(false); }
@@ -54,8 +60,10 @@ export function FilmBar({ lang, runId }: FilmBarProps): ReactElement | null {
       <Menu label={S.otherLength} onSelect={(id) => void regenerate({ targetSeconds: Number(id) as 30 | 60 | 90 })}
         items={otherLengths(params.targetSeconds).map((s) => ({ id: String(s), label: S.lengthMenu(s) }))}
         trigger={(p) => <Button {...p} size="sm" data-testid={TID.barLength} disabled={busy}>{S.otherLength}</Button>} />
+      {removed > 0 && <Button size="sm" data-testid={TID.barRestore} disabled={busy} onClick={() => void regenerate({}, true)}>{S.restoreRemoved}</Button>}
       <Button size="sm" variant="ghost" data-testid={TID.barWhy} aria-expanded={showWhy} onClick={() => setShowWhy((v) => !v)}>{S.whyClips}</Button>
       {busy && <span role="status" className="pf-film-muted">{S.working}</span>}
+      {note && !busy && <span role="status" className="pf-film-muted" data-testid={TID.barNote}>{note}</span>}
       {error && <AnchoredError onDismiss={() => setError(null)} dismissLabel={S.close}>{error}</AnchoredError>}
       {showWhy && <p className="pf-film-muted pf-film-whynote">{FAMILY_FILM_DRAFT_LABEL[lang]}</p>}
       {showWhy && (

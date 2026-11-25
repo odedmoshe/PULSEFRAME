@@ -8,6 +8,7 @@
  *   clip is one undo, the file stays in the library).
  */
 import * as T from '@pulseframe/time';
+import { own } from '../own.ts';
 import type { OpCall } from '../ops.ts';
 import type { ProjectDocument, Track } from '../schema.ts';
 import type { PackFieldKey, PackFieldValues } from '../templateContract.ts';
@@ -73,7 +74,7 @@ const graphicsOnly = (doc: ProjectDocument, t: Track) => t.kind === 'video' && t
  */
 export function packLookOps(look: PackLook, lang: 'he' | 'en', doc: ProjectDocument, sequenceId?: string): OpCall[] {
   const first = packLookOp(look, lang, sequenceId);
-  const seq = doc.sequences[sequenceId ?? doc.mainSequenceId];
+  const seq = own(doc.sequences, sequenceId ?? doc.mainSequenceId);
   if (!seq) return [first];
   let end: T.RationalTime = T.ZERO;
   for (const t of seq.tracks) if (t.kind === 'video' || t.kind === 'text') for (const c of t.clips) end = T.max(end, T.add(c.start, c.duration));

@@ -87,4 +87,14 @@
 
 /* the pad row needs about 56 px a pad; a narrower stage takes two rows of four */
 @container (max-width: 460px) { .pf-perform-pads { grid-template-columns: repeat(4, minmax(0, 1fr)); } .pf-perform-pad { min-block-size: 52px; } }
+/* the calibrate button: words in a wide panel, its icon in a narrow one (the words stay its name, and its tooltip). With the words,
+   the top row (tabs, record, the calibration badge and button) wrapped to two lines at 1024 × 800 in English, and pad 7's
+   "Not in the library yet" went below the row's fold; looked at in Chromium at 1024, 1280 and 1440 × 800, both languages */
+.pf-perform-calbtn > svg { display: none; }
+@container (max-width: 460px) {
+  .pf-perform-top { gap: var(--pf-sp-3); }
+  .pf-perform-calbtn { padding-inline: 0; inline-size: var(--pf-h-sm, 28px); justify-content: center; }
+  .pf-perform-calbtn > svg { display: inline-block; }
+  .pf-perform-calbtn > .pf-btn-label { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 @media (prefers-reduced-motion: reduce) { .pf-perform-pad { transition: none; } .pf-perform-pad[aria-pressed='true'], .pf-perform-pad[data-state='held-down'] { transform: none; } }

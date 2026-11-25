@@ -217,6 +217,12 @@ export class Exporter {
   incremental: IncrementalRoute | null = null;
   /** The segmented route itself (ADR-0024), set with `incremental`; null = a fast export job fails honestly as not available. */
   segmented: SegmentedRoute | null = null;
+  /**
+   * The browser route (browser-export.ts), set when its routes are registered. Every cancel of an export comes here (REST,
+   * MCP, editor), and a job a tab renders is handed to the route that holds its lease: the tab learns it from its next
+   * heartbeat, stops, discards its partial output and releases the lease.
+   */
+  browserRoute: { requestCancel(jobId: string, actor: string): { jobId: string; status: string; outcome: string; note?: string } } | null = null;
   constructor(private store: Store, private host: RenderHost, private renderPageUrl: () => string, private webDist: string) {}
 
   /**
@@ -394,10 +400,16 @@ export class Exporter {
     if (j.error?.code === RENDER_CACHE_PURGED.code) throw new ApiError(409, RENDER_CACHE_PURGED.code, 'this export was stopped because the project\'s privacy regions changed while it ran; retrying it would render the old picture again', { jobId, projectId: j.projectId, retryable: false }, RENDER_CACHE_PURGED.hint);
     return this.start(j.projectId, actor, undefined, j); // same immutable snapshot and options, new job id
   }
-  /** Queued: removed. Running: encoder and render page are stopped and partial output deleted. */
+  /** Queued: removed. Running: encoder and render page are stopped and partial output deleted. A browser-route job: its tab is told to stop. */
   cancel(jobId: string, actor: string) {
     const j = this.store.getJob(jobId);
     if (['succeeded', 'failed', 'canceled'].includes(j.status)) return { jobId, status: j.status, outcome: 'already-finished' };
+    if (j.input?.route === 'browser') {
+      if (this.browserRoute) return this.browserRoute.requestCancel(jobId, actor);
+      // no browser route in this process, so no tab can hold a lease here: nothing to wait for
+      this.store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: `canceled by ${actor}; no tab held the lease`, retryable: true } });
+      return { jobId, status: 'canceled', outcome: 'no-live-lease' };
+    }
     this.cancelRequested.add(jobId);
     if (j.status === 'queued') { this.store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: `canceled by ${actor} before it started` } }); return { jobId, status: 'canceled', outcome: 'removed-from-queue' }; }
     this.store.updateJob(jobId, { status: 'cancel-requested' });

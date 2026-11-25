@@ -67,6 +67,13 @@ export interface RevisionEvent { seq: number; projectId: string; revision: numbe
   /** The undo or redo that reversed this transaction, else null (ADR-0027: the bar previews the exact undo target). A live event is always null: the reversal's own event names it in `undoes`. */ undoneBy?: string | null }
 export interface JobRow { id: string; projectId: string; type: string; actor: string; status: string; stage: string | null; attempt: number; input: any; output: any; error: any; createdAt: string; updatedAt: string }
 
+/** The data of a live revision event with its changes ({id, after} per entity), as the event stream sends it; serialised once per event for every listener. */
+const withChangesJson = new WeakMap<object, string>();
+export function revisionWithChanges(e: RevisionEvent, changes: readonly EntityChange[]): string {
+  let json = withChangesJson.get(e);
+  if (json === undefined) { json = JSON.stringify({ ...e, changes: changes.map((c) => ({ id: c.id, after: c.after })) }); withChangesJson.set(e, json); }
+  return json;
+}
 const id = (prefix: string, bytes = 8) => `${prefix}_${randomBytes(bytes).toString('base64url').replace(/[-_]/g, 'x')}`;
 const now = () => new Date().toISOString();
 
@@ -172,6 +179,7 @@ export class Store {
 
   // ---------- commits ----------
   commit(req: CommitRequest): CommitResult {
+    let live: { seq: number; changes: EntityChange[] } | null = null;
     const run = this.db.transaction((): CommitResult & { privacyChanged?: true } => {
       const { doc, revision } = this.wholeProject(req.projectId); // a write: the whole document, whoever commits
       if (req.idempotencyKey && !req.dryRun) {
@@ -233,10 +241,13 @@ export class Store {
       const setVersion = this.db.prepare('INSERT INTO entity_versions (project_id, entity_id, revision, deleted, actor) VALUES (?,?,?,?,?) ON CONFLICT(project_id, entity_id) DO UPDATE SET revision = excluded.revision, deleted = excluded.deleted, actor = excluded.actor');
       for (const c of changes) setVersion.run(req.projectId, c.id, next, c.after ? 0 : 1, req.actor);
       const event: Omit<RevisionEvent, 'seq'> = { projectId: req.projectId, revision: next, transactionId: txId, actor: req.actor, label: req.label ?? null, summary: applied.summary, affectedIds, at, kind: req.kind ?? 'edit', ops: [...new Set(req.ops.map((o) => o.op))], undoes: req.undoes ?? null, undoneBy: null };
-      this.db.prepare('INSERT INTO outbox (project_id, kind, payload, created_at) VALUES (?, ?, ?, ?)').run(req.projectId, 'revision', JSON.stringify(event), at);
+      const seq = Number(this.db.prepare('INSERT INTO outbox (project_id, kind, payload, created_at) VALUES (?, ?, ?, ?)').run(req.projectId, 'revision', JSON.stringify(event), at).lastInsertRowid);
+      live = { seq, changes };
       return { ...base, transactionId: txId, revision: next, committed: true, replayed: false, ...(privacy ? { privacyChanged: true } : {}) };
     });
     const { privacyChanged: purge, ...result } = run.immediate();
+    // Only once the transaction is durable: the event published for this row carries the states it left (liveChanges).
+    if (live) { const { seq, changes } = live as { seq: number; changes: EntityChange[] }; if (this.liveBySeq.size > 64) this.liveBySeq.clear(); this.liveBySeq.set(seq, changes); }
     // In the same commit path, before anyone is told of the revision: pictures rendered before the change may show what is now hidden.
     if (purge && this.onPrivacyChange) {
       try { this.onPrivacyChange(req.projectId, result.revision); } catch (e) { console.error('privacy purge of the render cache failed', e); }
@@ -292,11 +303,25 @@ export class Store {
   drainOutbox(): number {
     const rows = this.db.prepare('SELECT seq, kind, payload FROM outbox WHERE published_at IS NULL ORDER BY seq').all() as any[];
     for (const r of rows) {
-      this.events.emit(r.kind, { seq: r.seq, ...JSON.parse(r.payload) });
+      const e = { seq: r.seq, ...JSON.parse(r.payload) };
+      const changes = this.liveBySeq.get(r.seq);
+      if (changes) { this.liveBySeq.delete(r.seq); this.liveOf.set(e, changes); }
+      this.events.emit(r.kind, e);
       this.db.prepare('UPDATE outbox SET published_at = ? WHERE seq = ?').run(now(), r.seq);
     }
     return rows.length;
   }
+  /**
+   * The entity states a live revision event's transaction left, by entity id (null = removed): the transaction's own diff
+   * (diffEntities, the same changes stored for undo), handed to the event stream so that a reader with the whole document at the
+   * revision before can apply it instead of reading the whole document again (apps/web/src/editor/sync.ts). Kept in memory for
+   * the event object published right after the commit only: replayed events, events published after a restart and events
+   * of other kinds have none, and the reader reads the whole document as before. Never stored, never sent to a reader without
+   * the people scope (they may not read entity states whole: apps/server/src/http.ts).
+   */
+  liveChanges(e: object): readonly EntityChange[] | undefined { return this.liveOf.get(e); }
+  private readonly liveBySeq = new Map<number, EntityChange[]>();
+  private readonly liveOf = new WeakMap<object, EntityChange[]>();
   /** Committed revision events after `sinceRevision`, for reconnect/resync. */
   eventsSince(projectId: string, sinceRevision: number): RevisionEvent[] {
     return (this.db.prepare('SELECT revision, id, actor, label, result, created_at, kind, ops, undoes, undone_by FROM transactions WHERE project_id = ? AND revision > ? ORDER BY revision').all(projectId, sinceRevision) as any[]).map((t) => {
@@ -316,6 +341,23 @@ export class Store {
     if (fs.existsSync(dest)) fs.rmSync(tmpFile);
     else fs.renameSync(tmpFile, dest);
     this.db.prepare('INSERT OR IGNORE INTO blobs (hash, size, mime, created_at) VALUES (?,?,?,?)').run(hash, size, mime, now());
+  }
+
+  /**
+   * Run a write that removes private words from rows so that they also leave the FILES: inside one transaction with SQLite's
+   * secure_delete on (freed bytes of the changed rows are overwritten with zeros, not left in the page), and with the write-ahead
+   * log folded into the database and cut to nothing afterwards (the log held the earlier versions of those pages). A backup
+   * made after this holds none of them. The checkpoint is best effort: a reader in another connection can hold it back until
+   * the next one. Not promised: what a filesystem or a disk keeps of blocks it has freed.
+   */
+  erasing<R>(write: () => R): R {
+    const was = this.db.pragma('secure_delete', { simple: true });
+    this.db.pragma('secure_delete = ON');
+    try { return this.db.transaction(write)(); }
+    finally {
+      this.db.pragma(`secure_delete = ${was === 2 ? 'FAST' : was ? 'ON' : 'OFF'}`);
+      try { this.db.pragma('wal_checkpoint(TRUNCATE)'); } catch { /* another connection reads: the next checkpoint folds it */ }
+    }
   }
 
   // ---------- jobs ----------

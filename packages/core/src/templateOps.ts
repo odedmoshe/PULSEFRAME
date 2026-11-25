@@ -11,16 +11,138 @@
  */
 import { z } from 'zod';
 import { createdIdsOf, defineOp, findClip, getOp, OpError, refuseInheritedIds, removeRunClips, runFingerprints } from './ops.ts';
-import { ApplyTemplateArgsSchema, AssetRefSchema, findGatedTemplate, RefSchema, type ApplyTemplateOutput } from './templateContract.ts';
-import type { SlotRecord } from './schema.ts';
+import { ApplyTemplateArgsSchema, AssetRefSchema, findGatedTemplate, RefSchema, type ApplyTemplateOutput, type PlannedSlot, type TemplateStep } from './templateContract.ts';
+import * as T from '@pulseframe/time';
+import type { ProjectDocument, RecipeRun, RunRange, SlotRecord } from './schema.ts';
 import { attachKnownGrid } from './packOps.ts';
-import { analysisEntityId } from './entities.ts';
+import { own } from './own.ts';
+import { analysisEntityId, fingerprint } from './entities.ts';
+import { clipEnd } from './validate.ts';
 
 /** How deep a step's arguments are walked for bindings. */
 export const MAX_BINDING_DEPTH = 64;
 /** A run record holds at most this many slots (schema.ts RecipeRunSchema.slots). */
 const MAX_RUN_SLOTS = 400;
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/**
+ * The slot records of a run whose clip is no longer in the document: items deleted by hand since the run (ADR-0016, decision 6).
+ * Nothing records the delete: the slot record outlives its clip ("an inert, detached slot", schema.ts), so the answer follows the
+ * document and its history (undo the delete and the slot is live again). A regeneration passes them as keepSlots, so the new run
+ * record carries them and the next regeneration still knows; with restoreRemoved it leaves them out and the items are made again.
+ */
+export const removedByHand = (doc: ProjectDocument, slots: readonly SlotRecord[]): SlotRecord[] => slots.filter((s) => !findClip(doc, s.clipId));
+/**
+ * The clips among `ids` whose ONLY change since the run is their place in time (ADR-0016 decision 6, amendment of 2026-11-24):
+ * a ripple delete before them closed the gap, or they were dragged along their track. Such a clip is not "edited by hand" for a
+ * template regeneration; it is replaced and made again on its slot like an untouched one. The test, per clip:
+ * - the run recorded where it placed the clip (run.ranges[id], written by apply_template with recordRanges);
+ * - the clip is on the track recorded there (a clip taken to another track was arranged by hand and stays protected; an entry
+ *   without a track cannot be checked and names nothing);
+ * - its start differs from the recorded start; and
+ * - its content fingerprint with the recorded start put back equals the fingerprint the run recorded, so nothing else differs:
+ *   not its length, source range, speed, transform, keyframes, effects, sound, link, text or style.
+ * A run without recorded places (made before this rule) names none here; the server then works the places out from the run's
+ * own plan (derivedRanges) and passes them as `ranges`, and the same test decides.
+ * Pure; reads the document and the run record only, so undo of the move gives the old answer back.
+ */
+export function movedOnly(doc: ProjectDocument, run: Pick<RecipeRun, 'fingerprints' | 'ranges'>, ids: readonly string[]): string[] {
+  const ranges = run.ranges ?? {}, fingerprints = run.fingerprints ?? {};
+  return ids.filter((id) => {
+    const f = findClip(doc, id);
+    const place = Object.hasOwn(ranges, id) ? ranges[id] : undefined, recorded = Object.hasOwn(fingerprints, id) ? fingerprints[id] : undefined;
+    if (!f || !place || recorded === undefined || place.trackId !== f.track.id || T.eq(f.clip.start, place.start)) return false;
+    return fingerprint({ ...f.clip, start: place.start }) === recorded;
+  });
+}
+/**
+ * movedOnly, narrowed for runs whose clips a person arranges by dragging (the family film, the beat montage; ADR-0026): only a
+ * move that a delete which closed the gap explains. Besides the conditions of movedOnly, the clip's start must be EARLIER than
+ * recorded by exactly the summed length of the run's own clips that are gone from the document and whose recorded range lay
+ * before its recorded start on the same track (exact rational arithmetic) — what ripple_delete_clips does to the clips after a
+ * deleted one. A clip linked to such a clip moves with it by the same amount on its own track (a pick's own sound), so a clip
+ * also counts when it moved by exactly as much as a clip it is linked to that passes the test itself.
+ * Therefore: with no deleted length before it, any move is a move by hand and the clip is not named (it stays kept, and the
+ * planner lays the rest around it); a clip dragged by hand that also lies after a deleted one does not match the sum and is
+ * not named; after several such deletes the sum of all of them is what counts; a delete on another track does not count for
+ * this track; a deleted clip the run did not make (or one already gone when the run was made: not among its createdIds) adds
+ * nothing, so clips moved by it are not named; and a delete that kept its gap adds to the sum without moving anything, so the
+ * clips after it and after a gap-closing delete are not named either. In all those cases the answer is the one from before the
+ * rule: kept by hand.
+ */
+export function closedGapOnly(doc: ProjectDocument, run: Pick<RecipeRun, 'fingerprints' | 'ranges' | 'createdIds'>, ids: readonly string[]): string[] {
+  const ranges = run.ranges ?? {};
+  const place = (id: string) => (Object.hasOwn(ranges, id) ? ranges[id] : undefined);
+  const gone = run.createdIds.filter((id) => !findClip(doc, id)).flatMap((id) => { const r = place(id); return r && r.trackId !== undefined ? [r] : []; });
+  const shiftOf = (id: string) => T.sub(place(id)!.start, findClip(doc, id)!.clip.start);
+  const moved = movedOnly(doc, run, ids);
+  const closed = moved.filter((id) => {
+    const at = place(id)!;
+    const before = gone.filter((g) => g.trackId === at.trackId && !T.lt(at.start, g.end)).reduce((sum, g) => T.add(sum, T.sub(g.end, g.start)), T.ZERO);
+    return !T.isZero(before) && T.eq(shiftOf(id), before);
+  });
+  const groupOf = (id: string) => { const c = findClip(doc, id)!.clip; return c.type === 'media' ? c.linkGroupId : null; };
+  return moved.filter((id) => closed.includes(id) || closed.some((other) => !!groupOf(id) && groupOf(other) === groupOf(id) && T.eq(shiftOf(other), shiftOf(id))));
+}
+/**
+ * The clips among `ids` that lie on another track than the one the run recorded for them: taken there by hand, so edited by hand
+ * and kept where they are, whether or not their time changed too (the fingerprint holds no track, so only a run that recorded
+ * `trackId` can tell). A run without recorded tracks names none and behaves as before.
+ */
+export function onOtherTrack(doc: ProjectDocument, run: Pick<RecipeRun, 'ranges'>, ids: readonly string[]): string[] {
+  const ranges = run.ranges ?? {};
+  return ids.filter((id) => {
+    const f = findClip(doc, id), place = Object.hasOwn(ranges, id) ? ranges[id] : undefined;
+    return !!f && place?.trackId !== undefined && place.trackId !== f.track.id;
+  });
+}
+/**
+ * The places of a run that recorded none (made before run.ranges; ADR-0016 decision 6, amendment of 2026-11-24), worked out from
+ * a plan made again with the run's OWN stored parameters on the document without the run's clips: per live clip of a run slot,
+ * the start (and length) its making step gives it, and the track when that step names an existing one. Only such a clip gets a
+ * `trackId`, and movedOnly accepts a clip only with one, so the kinds covered are those the plan places on a named track:
+ * the pictures of a template and of a film (when the plan finds their track again and does not ask for a new one), a film's
+ * music, a template's graphic elements. A picture's own sound is placed with its picture by the same step on a track that step
+ * chooses: it gets its picture's start and the track it lies on now (its track cannot be checked). Titles, looks, sound effects
+ * and a template's music are placed on a track the operation chooses and are not covered: moved, they stay kept as before.
+ * Nothing here is trusted on its own: movedOnly accepts a clip only when its fingerprint with this start equals the run's.
+ * A clip of a slot that is gone from the document (deleted by hand since) gets the place its step gave it, with the step's own
+ * length: closedGapOnly sums those. A deleted picture's own sound has no slot and is not listed; the sound of a later picture
+ * is told by having moved exactly as far as its picture.
+ */
+export function derivedRanges(doc: ProjectDocument, plan: { ops: readonly TemplateStep[]; slots: readonly PlannedSlot[] }, run: Pick<RecipeRun, 'slots' | 'createdIds'>): Record<string, RunRange> {
+  const out: Record<string, RunRange> = {};
+  const isTime = (v: unknown): v is T.RationalTime => T.isRationalTime(v);
+  for (const record of run.slots ?? []) {
+    const f = findClip(doc, record.clipId);
+    const planned = plan.slots.find((s) => s.key === record.key);
+    if (!planned || typeof planned.clipId === 'string' || (planned.clipId.out !== undefined && planned.clipId.out !== 'clipId')) continue;
+    const bind = planned.clipId.$ref;
+    const step = plan.ops.find((o) => o.bind === bind);
+    const args = step && isObject(step.args) ? step.args : undefined;
+    if (!args) continue;
+    const span = isObject(args.span) ? args.span : args;
+    if (!isTime(span.start)) continue;
+    const start = span.start;
+    const track = typeof args.trackId === 'string' ? { trackId: args.trackId } : {};
+    if (!f) {
+      // a clip the run made that is gone now (deleted by hand since): where it lay, when its step says how long it was. It is
+      // what closedGapOnly sums; a slot carried on from an earlier run (not among createdIds) was never this run's clip
+      if (run.createdIds.includes(record.clipId) && isTime(span.duration)) out[record.clipId] = { start: { ...start }, end: { ...T.add(start, span.duration) }, ...track };
+      continue;
+    }
+    out[record.clipId] = { start: { ...start }, end: { ...T.add(start, f.clip.duration) }, ...track };
+    // the picture's own sound, made by the same step: same start, on the track it is on now
+    if (args.withLinkedAudio === true && f.clip.type === 'media' && f.clip.linkGroupId) {
+      const group = f.clip.linkGroupId;
+      for (const id of run.createdIds) {
+        const p = id === record.clipId ? undefined : findClip(doc, id);
+        if (p && p.clip.type === 'media' && p.clip.linkGroupId === group && p.track.kind === 'audio') out[id] = { start: { ...start }, end: { ...T.add(start, p.clip.duration) }, trackId: p.track.id };
+      }
+    }
+  }
+  return out;
+}
 const BINDING_SHAPE = 'a binding is exactly {"$ref": name} with optional "out" and "at", or {"$asset": key}';
 
 /**
@@ -81,7 +203,7 @@ defineOp({
     const gated = findGatedTemplate(a.templateId);
     if (gated) throw new OpError('incompatible', `template ${gated.id} needs a model that is not installed, so it is never applied`, { templateId: gated.id, needsModel: gated.needsModel }, 'Choose one of the available templates (GET /api/v1/templates).');
     const recipeId = `template:${a.templateId}`;
-    const earlier = a.runId ? d.recipeRuns[a.runId] : undefined;
+    const earlier = a.runId ? own(d.recipeRuns, a.runId) : undefined;
     if (earlier && earlier.recipeId !== recipeId) throw new OpError('invalid_args', `run ${a.runId} is a run of ${earlier.recipeId}, not of ${recipeId}`, { runId: a.runId, recipeId: earlier.recipeId });
     // a. regeneration: the previous run's untouched clips go (and what is left linked to nothing is unlinked)
     const affected = new Set<string>(removeRunClips(d, a.removeClipIds ?? []));
@@ -116,6 +238,21 @@ defineOp({
     }
     // d. what the run made, and the fingerprints that later tell hand edits apart
     const { createdIds, fingerprints } = runFingerprints(d, created, a.keepIds ?? [], earlier?.fingerprints ?? {});
+    // d'. where each clip lies, when asked (recordRanges): the place that goes with its fingerprint. A clip kept from the earlier
+    // run keeps that run's entry (or none, when that run recorded none), as it keeps that run's fingerprint.
+    let ranges: Record<string, RunRange> | undefined;
+    if (a.recordRanges) {
+      ranges = {};
+      const keptIds = new Set(a.keepIds ?? []), before = earlier?.ranges ?? {};
+      for (const cid of createdIds) {
+        const f = findClip(d, cid);
+        if (!f) continue;
+        if (keptIds.has(cid)) {
+          const r = Object.hasOwn(before, cid) ? before[cid] : undefined;
+          if (r) ranges[cid] = { start: { ...r.start }, end: { ...r.end }, ...(r.trackId !== undefined ? { trackId: r.trackId } : {}) };
+        } else ranges[cid] = { start: { ...f.clip.start }, end: { ...clipEnd(f.clip) }, trackId: f.track.id };
+      }
+    }
     // e. every planned slot names a clip that exists now
     const resolved: SlotRecord[] = a.slots.map((s, i) => {
       let clipId: unknown;
@@ -128,7 +265,7 @@ defineOp({
     const slots = [...kept, ...resolved.filter((s) => !kept.some((k) => k.key === s.key && k.clipId === s.clipId))];
     if (slots.length > MAX_RUN_SLOTS) throw new OpError('invalid_args', `a template run holds at most ${MAX_RUN_SLOTS} slots; this one would hold ${slots.length}`, { slots: slots.length });
     const id = a.runId ?? ctx.newId('run');
-    d.recipeRuns[id] = { id, recipeId, params: { ...a.params, templateVersion: a.templateVersion }, createdIds, fingerprints, steps: a.steps, slots };
+    d.recipeRuns[id] = { id, recipeId, params: { ...a.params, templateVersion: a.templateVersion }, createdIds, fingerprints, steps: a.steps, slots, ...(ranges ? { ranges } : {}) };
     affected.add(id);
     const output: ApplyTemplateOutput = { runId: id, createdIds, slots, assetIds: Object.fromEntries(assets) };
     return { affectedIds: [...affected], summary: `${a.runId ? 'Regenerated' : 'Applied'} template ${a.templateId}: ${a.steps[0] ?? ''}`.slice(0, 200), output: output as unknown as Record<string, unknown> };

@@ -10,10 +10,10 @@ import type { MediaPool } from './media.ts';
 import { Player } from './player.ts';
 
 // ---- labelled stand-ins (test only) ----
-const drawn = vi.hoisted(() => ({ calls: [] as { pool: unknown; w: number; h: number }[] }));
+const drawn = vi.hoisted(() => ({ calls: [] as { pool: unknown; w: number; h: number; quality: unknown }[] }));
 vi.mock('@pulseframe/engine', async (importOriginal) => {
   const real = await importOriginal<typeof import('@pulseframe/engine')>();
-  return { ...real, drawGraph: async (ctx: { canvas: { width: number; height: number } }, _g: unknown, provider: unknown) => { drawn.calls.push({ pool: provider, w: ctx.canvas.width, h: ctx.canvas.height }); return { missing: [], unavailableEffects: [] }; } };
+  return { ...real, drawGraph: async (ctx: { canvas: { width: number; height: number } }, _g: unknown, provider: unknown, opts?: { quality?: unknown }) => { drawn.calls.push({ pool: provider, w: ctx.canvas.width, h: ctx.canvas.height, quality: opts?.quality }); return { missing: [], unavailableEffects: [] }; } };
 });
 class FakeCanvas {
   width = 0; height = 0; dataset: Record<string, string> = {};
@@ -124,5 +124,72 @@ describe('draftOnly and follow', () => {
     v.follow(45);
     await vi.waitFor(() => expect(v.painted).toBe(45));
     expect(v.playing).toBe(false);
+  });
+});
+
+describe('pictureQuality (the quality prefetch warms)', () => {
+  it('is the quality pump() draws with: draft for the angle viewer and for playback at a reduced size, else full', async () => {
+    const { doc } = project();
+    const big = { ...doc, settings: { ...doc.settings, width: 3840, height: 2160 } };
+    const viewer = new Player(new FakeCanvas() as unknown as HTMLCanvasElement, pool, () => {}, (e) => { throw e; }, { draftOnly: { maxHeight: 400 } });
+    viewer.doc = doc;
+    expect(viewer.pictureQuality()).toBe('draft'); // even when the project is smaller than maxHeight
+    const small = playing(doc).p;
+    expect(small.pictureQuality()).toBe('full'); // 180 lines play at full size: the original
+    const large = playing(big).p;
+    expect(large.pictureQuality()).toBe('draft');
+    (large as unknown as { playing: boolean }).playing = false;
+    expect(large.pictureQuality()).toBe('full'); // paused: the real picture
+    // and pump() drew with the provider of that quality
+    drawn.calls.length = 0;
+    (large as unknown as { playing: boolean }).playing = true;
+    large.follow(10);
+    await vi.waitFor(() => expect(drawn.calls.length).toBeGreaterThan(0));
+    expect(drawn.calls.at(-1)!.pool).toBe(pool.draftFrames);
+  });
+  it('drawGraph gets the same quality (ADR-0005 amendment of 2026-11-24): draft while playing a reduced picture and in the angle viewer; full when paused and when playing at full size', async () => {
+    const { doc } = project();
+    const big = { ...doc, settings: { ...doc.settings, width: 1920, height: 1080 } };
+    const last = async (p: Player, frame: number) => { drawn.calls.length = 0; p.follow(frame); await vi.waitFor(() => expect(drawn.calls.length).toBeGreaterThan(0)); return drawn.calls.at(-1)!; };
+    const large = playing(big).p;
+    expect(await last(large, 10)).toMatchObject({ pool: pool.draftFrames, quality: 'draft', w: 960, h: 540 }); // the proxies' own scale (pictureSize.ts)
+    const tall = playing({ ...doc, settings: { ...doc.settings, width: 1080, height: 1920 } }).p;
+    expect(await last(tall, 10)).toMatchObject({ pool: pool.draftFrames, quality: 'draft', w: 540, h: 960 });
+    const hd = playing({ ...doc, settings: { ...doc.settings, width: 1280, height: 720 } }).p;
+    expect(hd.pictureQuality()).toBe('draft'); // 720 lines are reduced too, so prefetch warms the proxy
+    expect(await last(hd, 10)).toMatchObject({ pool: pool.draftFrames, quality: 'draft', w: 960, h: 540 });
+    // the viewer's choice «חד יותר» (Player.sharpness): the larger picture from the next frame on, and pictureQuality() follows it
+    large.sharpness = 'sharper';
+    (large as unknown as { playing: boolean }).playing = true;
+    expect(large.pictureQuality()).toBe('draft');
+    expect(await last(large, 14)).toMatchObject({ pool: pool.draftFrames, quality: 'draft', w: 1707, h: 960 });
+    hd.sharpness = 'sharper';
+    expect(hd.pictureQuality()).toBe('full'); // 720 lines are not reduced then: the originals, so prefetch warms those
+    expect(await last(hd, 14)).toMatchObject({ pool: pool.frames, quality: 'full', w: 1280, h: 720 });
+    hd.sharpness = 'smooth';
+    expect(hd.pictureQuality()).toBe('draft');
+    expect(await last(hd, 15)).toMatchObject({ pool: pool.draftFrames, quality: 'draft', w: 960, h: 540 });
+    (large as unknown as { playing: boolean }).playing = false;
+    expect(await last(large, 16)).toMatchObject({ pool: pool.frames, quality: 'full', w: 1920, h: 1080 }); // paused: the full picture whatever the choice
+    (large as unknown as { playing: boolean }).playing = false;
+    expect(await last(large, 11)).toMatchObject({ pool: pool.frames, quality: 'full', h: 1080 }); // paused: the picture a still shows
+    expect(await last(playing(doc).p, 12)).toMatchObject({ pool: pool.frames, quality: 'full', h: 180 }); // 180 lines play at full size
+    const viewer = new Player(new FakeCanvas() as unknown as HTMLCanvasElement, pool, () => {}, (e) => { throw e; }, { draftOnly: { maxHeight: 90 } });
+    viewer.doc = doc;
+    expect(await last(viewer, 13)).toMatchObject({ pool: pool.draftFrames, quality: 'draft' });
+  });
+});
+
+describe('paintedDoc (what prefetch plans from)', () => {
+  it('is the document of the frame on screen: after setPictureDoc it stays the old one until a frame of the new one is painted', async () => {
+    const { doc, picture } = project();
+    const edited = tx(doc, [{ op: 'set_clip_transform', args: { clipId: picture, transform: { x: 0.2 } } }] as OpCall[]).doc;
+    const { p } = playing(doc);
+    p.follow(30);
+    await vi.waitFor(() => expect(p.paintedDoc).toBe(doc));
+    expect(p.setPictureDoc(edited)).toBe(true);
+    expect(p.doc).toBe(edited);
+    expect(p.paintedDoc).toBe(doc); // its first frame is still being drawn
+    await vi.waitFor(() => expect(p.paintedDoc).toBe(edited));
   });
 });

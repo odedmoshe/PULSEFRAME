@@ -11,7 +11,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
 import { defaultBank, performGrid, type ApplyTakeArgs, type Chip, type PadBank, type Tap } from '@pulseframe/core';
 import { api } from '../../api.ts';
-import { Button, Dialog, Seg, Slider, Switch, Tabs } from '../../ds/index.ts';
+import { Timer } from 'lucide-react';
+import { Button, Dialog, Seg, Slider, Switch, Tabs, Tooltip } from '../../ds/index.ts';
 import { useEditorState } from '../store.ts';
 import { analyseCalibration, heardPerfMs, outputLatencyMs, scheduleClicks, type CalibrationResult, type ClickContext } from './calibration.ts';
 import { liveDocument, padStatus, planTake, resolvePadAssets, TapCapture, type PadStatus, type PlanFailure, type TakePlan } from './capture.ts';
@@ -285,7 +286,11 @@ export function PerformView() {
             </div>
             <div className="pf-perform-cal">
               <span className="pf-perform-badge" data-testid={cal.state === 'ok' ? undefined : ID.notCalibrated} data-state={cal.state}>{calText}</span>
-              <Button size="sm" variant="secondary" onClick={() => setCalOpen(true)} data-testid={ID.calibrate}>{t('perform.calibrate')}</Button>
+              {/* in a narrow panel (1024 px wide, English) the words become the icon, still named by them and shown in the tooltip, so the
+                  top row stays one line and pad 7's «Not in the library yet» stays above the transport (perform.css) */}
+              <Tooltip label={t('perform.calibrate')}>
+                <Button size="sm" variant="secondary" className="pf-perform-calbtn" icon={<Timer size={14} strokeWidth={1.75} aria-hidden="true" />} onClick={() => setCalOpen(true)} data-testid={ID.calibrate}>{t('perform.calibrate')}</Button>
+              </Tooltip>
             </div>
           </div>
           {/* in review the take lane (the ghost banner and what became of every tap) comes first: the pads do nothing until the next take */}

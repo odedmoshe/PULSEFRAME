@@ -5,7 +5,7 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import * as T from '@pulseframe/time';
-import { applyTransaction, ASSISTANT_ACTOR, ASSISTANT_GRANT_ID, canonical, clipEnd, diffEntities, OpError, RationalTimeSchema, type EntityChange, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, ASSISTANT_ACTOR, ASSISTANT_GRANT_ID, ASSISTANT_JOB_TYPE, canonical, clipEnd, diffEntities, OpError, RationalTimeSchema, type EntityChange, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { z } from 'zod';
 import { ApiError, type CommitRequest, type CommitResult, type Store } from './store.ts';
 import { assertMayWritePeople, docForPrincipal, docForReader, PEOPLE_ACCESS, type PeopleAccess } from './peoplePrivacy.ts';
@@ -243,7 +243,13 @@ export class Governance {
     const pr = this.getProposal(id);
     if (pr.status !== 'open') throw new ApiError(409, 'proposal_closed', `proposal is already ${pr.status}`, { status: pr.status });
     const set = (status: string, extra: { rev?: number; conflicts?: unknown } = {}) => {
-      this.store.db.prepare('UPDATE proposals SET status = ?, decided_at = ?, decided_by = ?, result_revision = ?, conflicts = ? WHERE id = ?').run(status, now(), by.actor, extra.rev ?? null, extra.conflicts ? JSON.stringify(extra.conflicts) : null, id);
+      const close = () => this.store.db.prepare('UPDATE proposals SET status = ?, decided_at = ?, decided_by = ?, result_revision = ?, conflicts = ? WHERE id = ?').run(status, now(), by.actor, extra.rev ?? null, extra.conflicts ? JSON.stringify(extra.conflicts) : null, id);
+      // The language assistant's proposal (ADR-0027, note of 2026-11-25): the model's sentence, which can repeat what the owner
+      // typed, lives in its job row only while the proposal can still be decided. It is cleared here, in the SAME transaction
+      // as the decision (accepted, rejected or stale), and erased from the files (Store.erasing). The job is found by the
+      // proposal id its output carries: exact, and only this one row is touched.
+      if (pr.actor === ASSISTANT_ACTOR) this.store.erasing(() => { close(); this.store.db.prepare("UPDATE jobs SET output = json_set(output, '$.explanation', json('null')) WHERE type = ? AND json_extract(output, '$.proposalId') = ?").run(ASSISTANT_JOB_TYPE, id); });
+      else close();
       this.store.events.emit('proposal', { projectId: pr.projectId, id, status, actor: pr.actor });
       return this.getProposal(id);
     };

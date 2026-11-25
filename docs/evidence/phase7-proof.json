@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-18T02:32:35.724Z",
+  "ranAt": "2026-11-24T20:45:13.310Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v595 x64",
+    "platform": "Linux 6.18.44-fc-v819 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
@@ -12,7 +12,7 @@
     "distinctBlendResults": "10 of 17 modes give a distinct result when a picture is blended with itself (several are mathematically identical in that special case)",
     "exportWithLooks": {
       "frames": 30,
-      "wallMs": 1322,
+      "wallMs": 1694,
       "minPsnrDb": 42.16,
       "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
     },
@@ -508,8 +508,8 @@
       "ok": true,
       "detail": {
         "p": 0.3757,
-        "mean": 0.171,
-        "max": 0.9203606311044439,
+        "mean": 0.16,
+        "max": 0.8790383170548637,
         "samples": 172800
       }
     },
@@ -634,7 +634,7 @@
       "ok": true,
       "detail": {
         "frames": 30,
-        "wallMs": 1322,
+        "wallMs": 1694,
         "minPsnrDb": 42.16,
         "note": "one 30-frame 640x360 range with a dissolve, a vignette and a colour adjust on this CPU profile; includes job start-up"
       }

@@ -1,19 +1,19 @@
 {
-  "ranAt": "2026-11-19T01:52:29.670Z",
+  "ranAt": "2026-11-25T02:05:11.336Z",
   "result": "PASSED",
   "counts": {
     "pass": 23,
     "fail": 0,
     "blocked": 0,
-    "contract-tested": 5
+    "contract-tested": 6
   },
   "machine": {
-    "platform": "Linux 6.18.44-fc-v653 x64",
+    "platform": "Linux 6.18.44-fc-v880 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
   },
-  "scope": "Headless Chromium on the built editor and in-process servers. The model path (11a–11e) ran against TEST-MOCK-chat, a labelled test double that opens no connection: contract-tested, credentials required — no real provider was called and no network adapter exists. Not provable here: a real provider (no key exists), a screen reader, the owner's own phrasing. Timings are one sample.",
+  "scope": "Headless Chromium on the built editor and in-process servers. The model path (11a–11f) ran against TEST-MOCK-chat, a labelled test double that opens no connection: contract-tested, credentials required — no real provider was called and no network adapter exists. Not provable here: a real provider (no key exists), a screen reader, the owner's own phrasing. Timings are one sample.",
   "checks": [
     {
       "id": "1",
@@ -307,14 +307,14 @@
       "detail": [
         {
           "text": "חתוך כאן",
-          "browser": "1a9027ddef6ddeb1af76e80229ffb6adf621bac872c68e414c68f1a4f9d69ccd",
-          "node": "1a9027ddef6ddeb1af76e80229ffb6adf621bac872c68e414c68f1a4f9d69ccd",
+          "browser": "c4f2040c06758575d973c0115df2809e457d4988eddc4ea8cc3e72557d0d4c09",
+          "node": "c4f2040c06758575d973c0115df2809e457d4988eddc4ea8cc3e72557d0d4c09",
           "same": true
         },
         {
           "text": "מחק את הקליפ",
-          "browser": "9043bd5b260cb30ddfcb1e258029d56e7616ffe72750a33e3019c63928177003",
-          "node": "9043bd5b260cb30ddfcb1e258029d56e7616ffe72750a33e3019c63928177003",
+          "browser": "57aafb374ed7dea1de97b7afd8fd49c963ff00f3aa1527888c36b736b0bc9ac4",
+          "node": "57aafb374ed7dea1de97b7afd8fd49c963ff00f3aa1527888c36b736b0bc9ac4",
           "same": true
         },
         {
@@ -331,8 +331,8 @@
         },
         {
           "text": "הוסף מעבר בין כל הקליפים",
-          "browser": "e17e5b911e22abc40b8c066e079d967ca373c7012c7a332efba4ae838b57bffc",
-          "node": "e17e5b911e22abc40b8c066e079d967ca373c7012c7a332efba4ae838b57bffc",
+          "browser": "d19d1cd5fd184b41fef415db867ae77c3e921009d878c71a4fba83dbfb4b49c9",
+          "node": "d19d1cd5fd184b41fef415db867ae77c3e921009d878c71a4fba83dbfb4b49c9",
           "same": true
         }
       ]
@@ -611,14 +611,14 @@
       "detail": [
         {
           "text": "split here",
-          "browser": "daeecab873c38090885371f1be0f8f9b8ac1f291f3ea2b13144bad51987d86c9",
-          "node": "daeecab873c38090885371f1be0f8f9b8ac1f291f3ea2b13144bad51987d86c9",
+          "browser": "eaa15a99dce079b169a8e87cccf2b6e8c51fbae42ea0489f70a4cabb979f121e",
+          "node": "eaa15a99dce079b169a8e87cccf2b6e8c51fbae42ea0489f70a4cabb979f121e",
           "same": true
         },
         {
           "text": "delete the clip",
-          "browser": "fdbfed30fcea9e51c9059ebbe97a2f888015759e092e84866654afa8a86e3795",
-          "node": "fdbfed30fcea9e51c9059ebbe97a2f888015759e092e84866654afa8a86e3795",
+          "browser": "73f75cc22e5fddf8d439754a7774ea32eb0ca151fedd4cb4e741b5a6bc65e796",
+          "node": "73f75cc22e5fddf8d439754a7774ea32eb0ca151fedd4cb4e741b5a6bc65e796",
           "same": true
         },
         {
@@ -635,8 +635,8 @@
         },
         {
           "text": "add transitions between all clips",
-          "browser": "b769289c508dfd2a8bdf1bdd55e5e68216f94364dcded284e10fa975b29877ae",
-          "node": "b769289c508dfd2a8bdf1bdd55e5e68216f94364dcded284e10fa975b29877ae",
+          "browser": "bd778c94c751944c2a5acc3932565ab0bc962d583bb7325aee5c914f38d0650d",
+          "node": "bd778c94c751944c2a5acc3932565ab0bc962d583bb7325aee5c914f38d0650d",
           "same": true
         }
       ]
@@ -680,7 +680,7 @@
       "detail": {
         "proposer": {
           "status": 200,
-          "proposalId": "prp_6rMlWKhHqcs"
+          "proposalId": "prp_S0qndLxZKyo"
         },
         "observer": 403,
         "revisionsMoved": 0
@@ -740,34 +740,9 @@
           "rowSeenOnScreen": true,
           "scope": "palette dialog",
           "outsideTheDialogInLight": {
-            "lowContrast": 10,
+            "lowContrast": 0,
             "unnamed": 0,
-            "sample": [
-              {
-                "el": "span.asset-name",
-                "ratio": 1.01,
-                "text": "long",
-                "size": 14
-              },
-              {
-                "el": "button[data-testid=rename-ast_3b5bec4abe0].track-btn.inline-rename-btn",
-                "ratio": 3.18,
-                "text": "✎",
-                "size": 13
-              },
-              {
-                "el": "span.asset-name",
-                "ratio": 1.01,
-                "text": "short",
-                "size": 14
-              },
-              {
-                "el": "button[data-testid=rename-ast_847e4508bb0].track-btn.inline-rename-btn",
-                "ratio": 3.18,
-                "text": "✎",
-                "size": 13
-              }
-            ]
+            "sample": []
           },
           "activedescendant": "pf-palette-opt-bar",
           "describedby": "pf-bar-preview",
@@ -807,34 +782,9 @@
           "rowSeenOnScreen": true,
           "scope": "palette dialog",
           "outsideTheDialogInLight": {
-            "lowContrast": 10,
+            "lowContrast": 0,
             "unnamed": 0,
-            "sample": [
-              {
-                "el": "span.asset-name",
-                "ratio": 1.01,
-                "text": "long",
-                "size": 14
-              },
-              {
-                "el": "button[data-testid=rename-ast_a5a413d7f00].track-btn.inline-rename-btn",
-                "ratio": 3.18,
-                "text": "✎",
-                "size": 13
-              },
-              {
-                "el": "span.asset-name",
-                "ratio": 1.01,
-                "text": "short",
-                "size": 14
-              },
-              {
-                "el": "button[data-testid=rename-ast_431c1b1dcf0].track-btn.inline-rename-btn",
-                "ratio": 3.18,
-                "text": "✎",
-                "size": 13
-              }
-            ]
+            "sample": []
           },
           "activedescendant": "pf-palette-opt-bar",
           "describedby": "pf-bar-preview",
@@ -863,6 +813,38 @@
         "accepted": true,
         "undoRestores": true,
         "calls": 1
+      }
+    },
+    {
+      "id": "11f",
+      "name": "MOCK adapter: while a request is pending the row offers «ביטול הבקשה»; reached from the input with Tab and pressed with Enter it cancels the job (canceled after the send, its reservation still counted), no proposal and no change are made, the row says so in words as a status, and the keyboard is back in the input; the heuristic accessibility audit of both states has 0 findings",
+      "status": "contract-tested",
+      "detail": {
+        "offered": true,
+        "tabsToTheButton": 6,
+        "reached": true,
+        "label": "ביטול הבקשה",
+        "text": "הבקשה בוטלה אחרי שכבר נשלחה לשירות, ולכן ייתכן שחויבה; הסכום ששמור לה נשאר בחשבון ההוצאה של החודש. שום דבר לא שונה",
+        "dataSent": "true",
+        "role": "status",
+        "buttonGone": true,
+        "focusAfter": "palette-input",
+        "a11y": {
+          "findings": 0,
+          "focusRing": true,
+          "controlsWhilePending": 108,
+          "controlsAfter": 108,
+          "unnamed": [],
+          "lowContrast": []
+        },
+        "job": {
+          "status": "canceled",
+          "attempt": 1
+        },
+        "ledger": "unknown",
+        "proposals": 0,
+        "calls": 1,
+        "revision": 0
       }
     },
     {
@@ -951,10 +933,10 @@
     },
     {
       "id": "11e",
-      "name": "MOCK adapter: the 11 requests handed to the adapter (1470195 bytes) hold none of the planted private strings (birth date, capture date, event, file name, transcript word, GPS-like path; with the switches off the name, title, marker and track name), nor the word choice «בת» in what the project shapes nor as a word anywhere, nor the key; the system text and tool are the reviewed prompt byte for byte",
+      "name": "MOCK adapter: the 12 requests handed to the adapter (1603845 bytes) hold none of the planted private strings (birth date, capture date, event, file name, transcript word, GPS-like path; with the switches off the name, title, marker and track name), nor the word choice «בת» in what the project shapes nor as a word anywhere, nor the key; the system text and tool are the reviewed prompt byte for byte",
       "status": "contract-tested",
       "detail": {
-        "requests": 11,
+        "requests": 12,
         "fixedSame": true,
         "found": [],
         "formInVariable": false,
@@ -977,8 +959,8 @@
         "assistantFilesInBackup": [],
         "filesHoldingTheKey": [],
         "scanned": {
-          "responses": 534,
-          "logLines": 60
+          "responses": 491,
+          "logLines": 49
         },
         "inResponses": 0,
         "inLogs": 0
@@ -1380,34 +1362,9 @@
         "rowSeenOnScreen": true,
         "scope": "palette dialog",
         "outsideTheDialogInLight": {
-          "lowContrast": 10,
+          "lowContrast": 0,
           "unnamed": 0,
-          "sample": [
-            {
-              "el": "span.asset-name",
-              "ratio": 1.01,
-              "text": "long",
-              "size": 14
-            },
-            {
-              "el": "button[data-testid=rename-ast_3b5bec4abe0].track-btn.inline-rename-btn",
-              "ratio": 3.18,
-              "text": "✎",
-              "size": 13
-            },
-            {
-              "el": "span.asset-name",
-              "ratio": 1.01,
-              "text": "short",
-              "size": 14
-            },
-            {
-              "el": "button[data-testid=rename-ast_847e4508bb0].track-btn.inline-rename-btn",
-              "ratio": 3.18,
-              "text": "✎",
-              "size": 13
-            }
-          ]
+          "sample": []
         },
         "activedescendant": "pf-palette-opt-bar",
         "describedby": "pf-bar-preview",
@@ -1447,34 +1404,9 @@
         "rowSeenOnScreen": true,
         "scope": "palette dialog",
         "outsideTheDialogInLight": {
-          "lowContrast": 10,
+          "lowContrast": 0,
           "unnamed": 0,
-          "sample": [
-            {
-              "el": "span.asset-name",
-              "ratio": 1.01,
-              "text": "long",
-              "size": 14
-            },
-            {
-              "el": "button[data-testid=rename-ast_a5a413d7f00].track-btn.inline-rename-btn",
-              "ratio": 3.18,
-              "text": "✎",
-              "size": 13
-            },
-            {
-              "el": "span.asset-name",
-              "ratio": 1.01,
-              "text": "short",
-              "size": 14
-            },
-            {
-              "el": "button[data-testid=rename-ast_431c1b1dcf0].track-btn.inline-rename-btn",
-              "ratio": 3.18,
-              "text": "✎",
-              "size": 13
-            }
-          ]
+          "sample": []
         },
         "activedescendant": "pf-palette-opt-bar",
         "describedby": "pf-bar-preview",

@@ -7,7 +7,7 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { MOMENTS_JOB_TYPE, StartMomentsBodySchema, TRACKING_JOB_TYPE, TrackRunBody, COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, own, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeAudioCatalog, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
+import { MOMENTS_JOB_TYPE, StartMomentsBodySchema, TRACKING_JOB_TYPE, TrackRunBody, COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, own, transcriptFor, skippedClips, timingCoverage, untimedCopyRefusal, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeAudioCatalog, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
@@ -21,7 +21,7 @@ import { ingestUpload } from './ingest.ts';
 import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScenes, detectSilences, heavy } from './analysis.ts';
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
-import { applyTransaction, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema, FindShortsBodySchema, SHORTS_MEASUREMENT_KIND, sequenceList, shortsRefusal, MulticamSyncBody, multicamGroupOf, MULTICAM_REFUSALS, MULTICAM_SYNC_KIND, TakeRequestSchema } from '@pulseframe/core';
+import { applyTransaction, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema, TemplateRegenerateBodySchema, FindShortsBodySchema, SHORTS_MEASUREMENT_KIND, sequenceList, shortsRefusal, MulticamSyncBody, multicamGroupOf, MULTICAM_REFUSALS, MULTICAM_SYNC_KIND, TakeRequestSchema } from '@pulseframe/core';
 import { addMusic, MusicBody, musicPreview } from './music.ts';
 import { onThisDayFor, readMissingCaptures } from './lifeline.ts';
 import { preflight } from './preflight.ts';
@@ -38,7 +38,7 @@ import { buildOpenApi } from './openapi.ts';
 import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
 import { cancelMomentsJob, momentsLaneOf, startMomentsJob } from './moments.ts';
 import type { Presence } from './presence.ts';
-import { ApiError, type JobRow, type RevisionEvent, type Store } from './store.ts';
+import { ApiError, revisionWithChanges, type JobRow, type RevisionEvent, type Store } from './store.ts';
 import { blobPresent, logMissingMedia, missingAssets, missingMediaError } from './mediaPresence.ts';
 import { measureVoiceCheck, VoiceMeasureBody } from './voiceClean.ts';
 import { ColourMatchBody, matchColour } from './colourMatch.ts';
@@ -51,7 +51,8 @@ import { peopleSuggestions } from './lifeline.ts';
 import { takeFor } from './perform.ts';
 import { ASSISTANT_JOB_TYPE, AssistantConfigBodySchema, AssistantKeyBodySchema, AssistantRequestBodySchema } from '@pulseframe/core';
 import { isOwnerSession, type AssistantDeps } from './assistant/contract.ts';
-import { createAssistantHandlers } from './assistant/routes.ts';
+import { assistantCancelRefusal, createAssistantHandlers, type AssistantJobControls } from './assistant/routes.ts';
+import { assertMayReadProposal, assistantJobStub, mayReadProposal, proposalsFor } from './assistant/visibility.ts';
 
 const TxBody = z
   .object({
@@ -69,6 +70,12 @@ const NewProject = z.object({ name: z.string().min(1).max(200), width: z.number(
 type Env = { Variables: { principal: Principal } };
 /** Public job shape, identical for REST and MCP. Snapshots and resolved graphs stay server-side. */
 export const jobView = ({ input, ...j }: JobRow) => ({ ...j, revision: input.revision ?? input.projectRevision, ...(j.type === 'export' ? { options: input.manifest?.options, estimate: input.manifest?.estimate, warnings: input.warnings ?? [], retryOf: input.retryOf ?? null } : {}), ...(j.type === 'capability' ? { capabilityId: input.capabilityId, capabilityVersion: input.capabilityVersion, graphDigest: input.graphDigest, params: input.params } : {}) });
+/**
+ * A job as `p` may read it, for REST (GET /jobs/:jobId), MCP (get_job) and the event stream alike: jobView, except that a
+ * language-assistant job is whole only for the owner's own session; anyone else reads its id, project, type, status and times
+ * (assistant/visibility.ts, the one place that decides it).
+ */
+export const jobViewFor = (p: Principal, j: JobRow) => assistantJobStub(p, j) ?? jobView(j);
 
 /** The body of a capability run, the same for REST (POST …/runs) and MCP (run_capability). ADR-0017 adds source, apply and confirmLongRun. */
 export const RunBody = z
@@ -309,7 +316,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
       await pipeline(Readable.fromWeb(c.req.raw.body as any), async function* (src) { for await (const chunk of src) { size += chunk.length; if (size > maxBytes) throw new ApiError(413, 'upload_too_large', `archive exceeds ${maxBytes} bytes${maxBytes < cfg.maxUploadBytes * 4 ? ' (the room left under the storage ceiling)' : ''}`, { maxBytes }); yield chunk; } }, fs.createWriteStream(tmp, { mode: 0o600 }));
       const r = importArchive(store, tmp);
       for (const a of Object.values(r.doc.assets)) derivatives.ensure(a);
-      return c.json({ project: { id: r.doc.id, name: r.doc.name }, revision: r.revision, blobsAdded: r.blobsAdded, blobsAlreadyPresent: r.blobsAlreadyPresent }, 201);
+      return c.json({ project: { id: r.doc.id, name: r.doc.name }, revision: r.revision, blobsAdded: r.blobsAdded, blobsAlreadyPresent: r.blobsAlreadyPresent, notes: r.notes }, 201);
     } finally {
       fs.rmSync(tmp, { force: true });
     }
@@ -385,13 +392,15 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   const RecipeBody = z.object({ params: z.record(z.string(), z.unknown()).optional(), expectedRevision: z.number().int().optional() }).strict();
   app.post('/api/v1/projects/:id/recipes/:recipeId/plan', async (c) => { const p = need(c, 'observe'); store.getProject(c.req.param('id')); return c.json(await planRecipeFor(store, c.req.param('id'), c.req.param('recipeId'), (await body(c, RecipeBody)).params, gov, p)); });
   app.post('/api/v1/projects/:id/recipes/:recipeId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeBody); return c.json(await applyRecipe(store, gov, p, c.req.param('id'), c.req.param('recipeId'), b.params, b.expectedRevision)); });
-  app.post('/api/v1/projects/:id/recipe-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeBody); return c.json(await regenerateRecipe(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params)); });
+  // restoreRemoved: the explicit choice to make again what was deleted by hand (template and family film runs; ADR-0016 decision 6)
+  const RecipeRegenerateBody = RecipeBody.extend({ restoreRemoved: z.boolean().optional() }).strict();
+  app.post('/api/v1/projects/:id/recipe-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeRegenerateBody); return c.json(await regenerateRecipe(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params, { restoreRemoved: b.restoreRemoved })); });
   // Templates (ADR-0016): the gallery, a read-only plan, apply as one undoable step, regenerate keeping hand edits. Edit rights and
   // the propose-mode refusal are checked inside (templates.ts), so the refusal names the mode.
   app.get('/api/v1/templates', async (c) => { need(c, 'observe'); return c.json({ templates: await listTemplates() }); });
   app.post('/api/v1/projects/:id/templates/:templateId/plan', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await planTemplateFor(store, gov, p, c.req.param('id'), c.req.param('templateId'), b.params)); });
   app.post('/api/v1/projects/:id/templates/:templateId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await applyTemplateFor(store, gov, p, c.req.param('id'), c.req.param('templateId'), b.params, b.expectedRevision)); });
-  app.post('/api/v1/projects/:id/template-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateBodySchema); return c.json(await regenerateTemplateFor(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params, b.expectedRevision)); });
+  app.post('/api/v1/projects/:id/template-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, TemplateRegenerateBodySchema); return c.json(await regenerateTemplateFor(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params, b.expectedRevision, { restoreRemoved: b.restoreRemoved })); });
   // ----- perform mode (ADR-0025): a take's raw taps, planned here and committed as ONE internal apply_take (dryRun: plan only) -----
   app.post('/api/v1/projects/:id/takes', async (c) => {
     // edit rights and the propose-mode refusal are checked inside (perform.ts), so the refusal names the mode
@@ -491,28 +500,43 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     // job, proposal or presence event never carries a birth date to one without the people scope (peoplePrivacy.ts).
     const listener = c.var.principal;
     const seen = <X,>(e: X): X => forPrincipal(e, listener);
+    // A live revision event carries the states its transaction left (Store.liveChanges), so the editor applies them instead of
+    // reading the whole document again: only to a credential that may read every entity state whole (the people scope; the
+    // owner's session). Others get the event as before and read the document through the store, as their credential may.
+    const whole = peopleAccess(listener) === 'full';
     return streamSSE(c, async (stream) => {
       let last = since;
-      const send = async (e: RevisionEvent) => {
-        if (e.projectId !== projectId || e.revision <= last) return; // drop duplicates
+      const revisionMessage = (e: RevisionEvent) => {
+        if (e.projectId !== projectId || e.revision <= last) return null; // drop duplicates
         last = e.revision;
-        await stream.writeSSE({ event: 'revision', id: String(e.revision), data: JSON.stringify(seen(e)) });
+        const changes = whole ? store.liveChanges(e) : undefined;
+        return { event: 'revision', id: String(e.revision), data: changes ? revisionWithChanges(e, changes) : JSON.stringify(seen(e)) };
       };
+      const send = async (e: RevisionEvent) => { const m = revisionMessage(e); if (m) await stream.writeSSE(m); };
+      // Live events are written in the order they happened, each after the macrotask that emitted it: the answer to the edit that
+      // caused a revision goes out first, and the revision's data (with its changes) is serialised then, not inside Store.commit.
+      let queue: Promise<void> = Promise.resolve();
+      const later = (message: () => { event: string; id?: string; data: string } | null) => {
+        queue = queue.then(() => new Promise<void>((r) => setImmediate(r))).then(async () => { const m = message(); if (m) await stream.writeSSE(m); }).catch(() => {});
+      };
+      const now = (m: { event: string; data: string }) => later(() => m); // the data is taken when the event happens
       const pending: RevisionEvent[] = [];
       let live = false;
-      const onEvent = (e: RevisionEvent) => (live ? void send(e) : pending.push(e));
-      const onJob = (j: any) => j.projectId === projectId && void stream.writeSSE({ event: 'job', data: JSON.stringify(seen({ id: j.id, type: j.type, status: j.status, stage: j.stage, output: j.output, error: j.error })) });
+      const onEvent = (e: RevisionEvent) => (live ? later(() => revisionMessage(e)) : pending.push(e));
+      // an assistant job reaches a listener other than the owner's session as its id, type, status and times only (assistant/visibility.ts)
+      const onJob = (j: any) => j.projectId === projectId && now({ event: 'job', data: JSON.stringify(assistantJobStub(listener, j) ?? seen({ id: j.id, type: j.type, status: j.status, stage: j.stage, output: j.output, error: j.error })) });
       store.events.on('revision', onEvent);
-      const onDerivative = (d: any) => { const a = Object.values(store.getProject(projectId).doc.assets).find((x) => x.contentHash === d.assetHash); if (a) void stream.writeSSE({ event: 'derivative', data: JSON.stringify({ assetId: a.id, kind: d.kind, status: d.status }) }); };
+      const onDerivative = (d: any) => { const a = Object.values(store.getProject(projectId).doc.assets).find((x) => x.contentHash === d.assetHash); if (a) now({ event: 'derivative', data: JSON.stringify({ assetId: a.id, kind: d.kind, status: d.status }) }); };
       store.events.on('job', onJob);
       store.events.on('derivative', onDerivative);
-      const onGov = (kind: string) => (e: any) => e.projectId === projectId && void stream.writeSSE({ event: kind, data: JSON.stringify(seen(e)) });
+      // the assistant's proposals are announced to the owner's session only (assistant/visibility.ts)
+      const onGov = (kind: string) => (e: any) => e.projectId === projectId && (kind !== 'proposal' || mayReadProposal(listener, e)) && now({ event: kind, data: JSON.stringify(seen(e)) });
       const govHandlers = (['control', 'proposal', 'approval'] as const).map((k) => [k, onGov(k)] as const);
       for (const [k, fn] of govHandlers) store.events.on(k, fn);
-      const onPresence = (p: any) => p.projectId === projectId && void stream.writeSSE({ event: 'presence', data: JSON.stringify(seen(p)) });
+      const onPresence = (p: any) => p.projectId === projectId && now({ event: 'presence', data: JSON.stringify(seen(p)) });
       presence.events.on('presence', onPresence);
       // The phone drop's public view (no token, PIN or session: drop.ts), to the owner's own session only: it is the owner's dialog.
-      const onDrop = (d: { projectId: string }) => d.projectId === projectId && void stream.writeSSE({ event: 'drop', data: JSON.stringify(d) });
+      const onDrop = (d: { projectId: string }) => d.projectId === projectId && now({ event: 'drop', data: JSON.stringify(d) });
       if (listener.kind === 'user') extras.door?.events.on('drop', onDrop);
       try {
         await stream.writeSSE({ event: 'hello', data: JSON.stringify({ revision: current }) });
@@ -548,10 +572,10 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     need(c, 'observe');
     const rate = store.getProject(c.req.param('id')).doc.settings.frameRate;
     // entity states and operation arguments of a proposal: without birth dates for a credential that may not read them
-    return c.json({ proposals: forPrincipal(gov.listProposals(c.req.param('id'), c.req.query('status')), c.var.principal).map((p) => ({ ...p, previewFrame: previewFrame(p.changes, rate) })) });
+    return c.json({ proposals: forPrincipal(proposalsFor(c.var.principal, gov.listProposals(c.req.param('id'), c.req.query('status'))), c.var.principal).map((p) => ({ ...p, previewFrame: previewFrame(p.changes, rate) })) });
   });
   app.post('/api/v1/projects/:id/proposals', async (c) => { const b = await body(c, TxBody); return c.json(gov.propose(c.var.principal, c.req.param('id'), b.ops, b.label), 201); });
-  const proposalIn = (c: Context<Env>) => { const pr = gov.getProposal(c.req.param('proposalId')!); if (pr.projectId !== c.req.param('id')) throw new ApiError(404, 'proposal_not_found', 'proposal not found in this project'); return pr; };
+  const proposalIn = (c: Context<Env>) => { const pr = gov.getProposal(c.req.param('proposalId')!); assertMayReadProposal(c.var.principal, pr); if (pr.projectId !== c.req.param('id')) throw new ApiError(404, 'proposal_not_found', 'proposal not found in this project'); return pr; };
   app.get('/api/v1/projects/:id/proposals/:proposalId', (c) => { const who = need(c, 'observe'); return c.json({ proposal: forPrincipal(proposalIn(c), who) }); });
   /** Before/after stills of a proposal, rendered by the same compositor as export. `side=before|after`. */
   app.get('/api/v1/projects/:id/proposals/:proposalId/frame', async (c) => {
@@ -766,12 +790,14 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/jobs/:jobId/budget/release', (c) => { const p = need(c, 'observe'); gov.releaseUnknown(p, c.req.param('jobId')); return c.json({ jobId: c.req.param('jobId'), ledger: gov.ledgerFor(c.req.param('jobId')) }); });
   app.post('/api/v1/jobs/:jobId/retry', (c) => { const pr = need(c, 'edit'); const old = store.getJob(c.req.param('jobId'));
     if (old.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, pr, old, 'retry'); const job = extras.imports.retry(old.id, pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: old.id }, 202); } gov.assertMayAct(pr, old.projectId, 'job'); assertMayTakeJobOutput(pr, old, 'retry this export'); const job = exporter.retry(c.req.param('jobId'), pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: job.input.retryOf }, 202); });
-  app.get('/api/v1/jobs/:jobId', (c) => { need(c, 'observe'); return c.json(jobView(store.getJob(c.req.param('jobId')))); });
+  app.get('/api/v1/jobs/:jobId', (c) => c.json(jobViewFor(need(c, 'observe'), store.getJob(c.req.param('jobId')))));
   app.get('/api/v1/jobs/:jobId/output', (c) => {
     const who = need(c, 'observe');
     const j = store.getJob(c.req.param('jobId'));
     assertMayTakeJobOutput(who, j, 'download this export');
     if (j.status !== 'succeeded') throw new ApiError(409, 'job_not_finished', `job is ${j.status}`, { status: j.status });
+    // only an export leaves a file to download; any other kind of job (an analysis, a language-assistant request) has none
+    if (typeof j.output?.file !== 'string') throw new ApiError(404, 'not_found', 'this job has no file to download', { jobId: j.id }, 'Only a finished export has a file; read other jobs with GET /api/v1/jobs/{jobId}.');
     return sendBlob(c, path.join(store.outDir, path.basename(j.output.file)), j.output.mimeType ?? 'video/mp4', fileMissing('output_missing', 'the exported file'), `pulseframe-${j.id}${path.extname(j.output.file)}`);
   });
   app.get('/api/v1/jobs/:jobId/captions', (c) => {
@@ -791,6 +817,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // ----- the command bar's language assistant (ADR-0027; assistant/contract.ts ASSISTANT_ROUTES): status for any observer, the
   // rest for the owner's own session only (the money and the key are the owner's). The handlers are W2's (assistant/routes.ts).
   const assistant = createAssistantHandlers({ cfg, store, gov, deps: extras.assistant ?? { adapters: new Map(), endpoint: () => null } });
+  // MCP cancel_job reaches an assistant job through this same handler (one cancel path; mcp.ts bindAssistant)
+  (mcp as { bindAssistant?: (a: AssistantJobControls) => void }).bindAssistant?.(assistant);
   const assistantOwner = (c: Context<Env>) => {
     const p = need(c, 'observe');
     if (!isOwnerSession(p)) throw new ApiError(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only', undefined, 'The owner sets it up in Settings.');
@@ -882,11 +910,11 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (j.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, p, j, 'cancel'); return c.json(extras.imports.cancel(j.id, p.actor)); }
     assertMayCancel(gov, p, j);
     if (j.type === ASSISTANT_JOB_TYPE) return c.json(assistant.cancel(p, j.id));
-    if (j.type === 'export' && j.input.route === 'browser') return c.json(browserExport.requestCancel(j.id));
     if (j.type === 'analysis') return c.json(cancelAnalysisJob(store, j.id, p.actor));
     if (j.type === TRACKING_JOB_TYPE) return c.json(cancelTrackingJob(store, j.id, p.actor));
     if (j.type === MOMENTS_JOB_TYPE) return c.json(cancelMomentsJob(store, j.id, p.actor));
     if (speech.handles(j)) return c.json(speech.cancel(j.id, p.actor));
+    // an export the editor's tab renders is handed to its lease holder by Exporter.cancel (browser-export.ts), as for MCP cancel_job
     return c.json(j.type === 'export' ? exporter.cancel(j.id, p.actor) : await capabilities.cancel(j.id, p.actor));
   });
   app.get('/api/v1/jobs/:jobId/outputs/:index', (c) => {
@@ -950,6 +978,16 @@ export function exportCaptions(master: ProjectDocument, trackId: string | undefi
   return { format, text, cues: cues.length, trackId: track.id, mime: format === 'vtt' ? 'text/vtt' : format === 'srt' ? 'application/x-subrip' : 'text/x-ssa' };
 }
 
+/**
+ * Candidates by a recording's times skip the clips that show a copy of it whose timing is unknown and name them (skippedClips, the
+ * editor shows a note); refused only when no clip plays the recording on a known clock and such a copy is there (core cleanup.ts timingCoverage).
+ */
+function untimedSkips(doc: ProjectDocument, assetId: string) {
+  const cov = timingCoverage(doc, assetId);
+  if (cov.mapped === 0 && cov.untimed.length) { const r = untimedCopyRefusal(cov.untimed); throw new ApiError(422, r.code, r.message, r.details, r.hint); }
+  return skippedClips(cov.untimed);
+}
+
 export const SilenceBody = z.object({
   assetId: z.string(),
   thresholdDb: z.number().min(-90).max(-10).optional().describe('Quieter than this counts as silence. Default -35 dB'),
@@ -964,7 +1002,9 @@ export async function findSilences(store: Store, projectId: string, a: z.infer<t
   if (!asset.audio) throw new ApiError(422, 'no_audio', 'this asset has no audio');
   const opts = { thresholdDb: a.thresholdDb ?? -35, minSeconds: a.minSeconds ?? 0.5 };
   const keepSeconds = a.keepSeconds ?? 0.1;
+  const skipped = untimedSkips(p.doc, a.assetId);
   const source = await heavy(() => detectSilences(store.blobPath(asset.contentHash), opts, timeOriginSeconds(asset)));
+  // mapped through every clip that plays this recording: its own and those of copies that keep its timing (core cleanup.ts)
   const candidates = sourceRangesToTimeline(p.doc, a.assetId, source, T.fromSeconds(keepSeconds.toFixed(6)));
   const sec = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));
   return {
@@ -972,8 +1012,8 @@ export async function findSilences(store: Store, projectId: string, a: z.infer<t
     sourceSilences: source.map((r) => ({ startSeconds: sec(r.start), endSeconds: sec(r.end) })),
     candidates: candidates.map((r) => ({ start: r.start, end: r.end, startSeconds: sec(r.start), seconds: sec(T.sub(r.end, r.start)) })),
     removableSeconds: sec(candidates.reduce((n, r) => T.add(n, T.sub(r.end, r.start)), T.ZERO)),
-    ops: cutOps(candidates),
-    note: 'Candidates only. To apply, send `ops` as ONE transaction with expectedRevision set to this revision (or propose it). Quiet speech can be mistaken for silence: review before applying.',
+    ops: cutOps(candidates), skippedClips: skipped,
+    note: `Candidates only. To apply, send \`ops\` as ONE transaction with expectedRevision set to this revision (or propose it). Quiet speech can be mistaken for silence: review before applying.${skipped.length ? ' skippedClips show a copy that does not keep the recording\'s timing and were not searched.' : ''}`,
   };
 }
 
@@ -985,21 +1025,24 @@ export const FillerBody = z.object({
 /** Filler candidates from the transcript's words, and the timeline cuts that would remove them. Read-only. */
 export function findFillerWords(store: Store, projectId: string, a: z.infer<typeof FillerBody>) {
   const p = store.getProject(projectId);
-  const tr = own(p.doc.transcripts, a.assetId);
   if (!own(p.doc.assets, a.assetId)) throw new ApiError(404, 'not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
+  // the asset's own transcript, or that of the recording a time-preserving copy was made from (core lineage.ts)
+  const tr = transcriptFor(p.doc, a.assetId)?.transcript;
   if (!tr) throw new ApiError(404, 'no_transcript', 'this asset has no transcript to search', { assetId: a.assetId }, 'Recognise or import a transcript first.');
+  const anchor = tr.assetId;
+  const skipped = untimedSkips(p.doc, anchor);
   const { candidates: found, skippedPhrases } = findFillers(tr, { repeats: a.repeats, words: a.words });
   const sec = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));
-  // Each word is mapped on its own, so a word that is no longer on the timeline simply yields no cut.
-  const rows = found.map((c) => ({ ...c, timeline: sourceRangesToTimeline(p.doc, a.assetId, [{ start: c.start, end: c.end }]) }));
-  const cuts = sourceRangesToTimeline(p.doc, a.assetId, found.map((c) => ({ start: c.start, end: c.end })));
+  // Each word is mapped on its own, so a word that is no longer on the timeline simply yields no cut. Source times are the transcribed recording's.
+  const rows = found.map((c) => ({ ...c, timeline: sourceRangesToTimeline(p.doc, anchor, [{ start: c.start, end: c.end }]) }));
+  const cuts = sourceRangesToTimeline(p.doc, anchor, found.map((c) => ({ start: c.start, end: c.end })));
   return {
-    revision: p.revision, assetId: a.assetId, method: 'rules over the transcript\'s words (hesitation sounds, immediate repetitions, listed words); no model, no audio',
+    revision: p.revision, assetId: a.assetId, ...(anchor !== a.assetId ? { transcriptAssetId: anchor } : {}), method: 'rules over the transcript\'s words (hesitation sounds, immediate repetitions, listed words); no model, no audio',
     transcript: { origin: tr.origin.kind, language: tr.language, phrasesWithoutWordTiming: skippedPhrases },
     words: rows.map((r) => ({ kind: r.kind, text: r.text, segmentId: r.segmentId, wordIds: r.wordIds, sourceStartSeconds: sec(r.start), sourceEndSeconds: sec(r.end), onTimeline: r.timeline.map((x) => ({ startSeconds: sec(x.start), seconds: sec(T.sub(x.end, x.start)) })) })),
     candidates: cuts.map((r) => ({ start: r.start, end: r.end, startSeconds: sec(r.start), seconds: sec(T.sub(r.end, r.start)) })),
     removableSeconds: sec(cuts.reduce((n, r) => T.add(n, T.sub(r.end, r.start)), T.ZERO)),
-    ops: cutOps(cuts),
+    ops: cutOps(cuts), skippedClips: skipped,
     note: 'Candidates only. Recognisers often leave hesitation sounds out of their text, so an empty list does not mean there are none. Cuts are snapped inward to whole frames; a word shorter than a frame yields no cut. To apply, send `ops` as ONE transaction with expectedRevision set to this revision (or propose it).',
   };
 }
@@ -1159,7 +1202,7 @@ function assertAnalysable(store: Store, projectId: string, a: z.infer<typeof Ana
   if (existing?.origin.edited && !a.overwrite) throw new ApiError(409, 'would_discard_edits', 'this result was corrected by hand; analysing again would discard those corrections', { kind: a.kind }, 'Pass overwrite=true to replace it.');
   // Built-in music (ADR-0022): its beats, bars and sections are known from the recipe. A measurement would replace them with
   // an estimate (the tracker can lock half a beat off or at double tempo) and drop the sections.
-  if (a.kind === 'beats' && !a.overwrite && isBuiltinMusic(asset) && isKnownGrid(p.doc.analyses?.[a.assetId]?.beats)) throw knownByConstruction();
+  if (a.kind === 'beats' && !a.overwrite && isBuiltinMusic(asset) && isKnownGrid(own(p.doc.analyses, a.assetId)?.beats)) throw knownByConstruction();
   if (a.kind === 'scenes' && !asset.video) throw new ApiError(422, 'no_video', 'this asset has no moving picture to analyse');
   if (a.kind === 'beats' && !asset.audio) throw new ApiError(422, 'no_audio', 'this asset has no audio to analyse');
   return asset;
@@ -1267,9 +1310,20 @@ export function cancelAnalysisJob(store: Store, jobId: string, actor: string) {
 export function assertMayTakeJobOutput(p: Principal, job: JobRow, what: string): void {
   if (job.type === 'export' && job.input?.snapshot) assertMayTakeRendered(p, job.input.snapshot as ProjectDocument, what);
 }
-/** Cancelling is an action: a paused agent may not do it, and an agent may only cancel jobs it started. The owner may cancel any job. */
+/**
+ * Cancelling is an action: a paused agent may not do it, and an agent may only cancel jobs it started. The owner may cancel any job.
+ * One exception, for REST and MCP alike: an export the owner's editor tab renders (the browser route) has no agent that started
+ * it, so an agent may stop it when its grant lets it run jobs on that project (edit or autopilot, not paused) and is not limited
+ * to certain tracks or a time range (the export is the whole project). Stopping one publishes nothing; the owner can start it again.
+ * A language-assistant request (assistant.propose, ADR-0027) is the owner's own: no agent credential cancels it, whatever its grant.
+ * It is refused here, after the checks every cancel makes (project in scope, not paused, a grant that runs jobs), with its own
+ * reason and next step (assistant/routes.ts assistantCancelRefusal), the same for REST and MCP.
+ */
 export function assertMayCancel(gov: Governance, p: Principal, job: JobRow) {
   if (p.kind !== 'agent') return;
   gov.assertMayAct(p, job.projectId, 'job');
-  if (job.actor !== p.actor) throw new ApiError(403, 'not_your_job', 'agents can only cancel jobs they started', { jobId: job.id, startedBy: job.actor });
+  if (job.type === ASSISTANT_JOB_TYPE) throw assistantCancelRefusal(job.id);
+  if (job.actor === p.actor) return;
+  if (job.type === 'export' && job.input?.route === 'browser' && !job.actor.startsWith('agent:')) { gov.assertUnrestricted(p, 'stop an export of the whole project'); return; }
+  throw new ApiError(403, 'not_your_job', 'agents can only cancel jobs they started', { jobId: job.id, startedBy: job.actor }, 'Ask the owner to cancel it, or cancel only jobs this credential started.');
 }

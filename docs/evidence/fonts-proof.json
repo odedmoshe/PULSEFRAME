@@ -1,8 +1,8 @@
 {
   "proof": "fonts (ADR-0022)",
-  "commit": "21719a89b057e67ad8f7c296c3f23eeed885a220",
+  "commit": "996334d78570dcee141fcf88b055a39d7bbc9716",
   "chromium": "153.0.8010.12",
-  "at": "2026-11-18T02:25:38.966Z",
+  "at": "2026-11-24T21:59:14.535Z",
   "size": {
     "w": 1920,
     "h": 1080
@@ -5452,8 +5452,8 @@
       "differ": [],
       "missing": [],
       "extra": [],
-      "runs": 5,
-      "verdict": "matches the recording of 2026-11-18T00:30:08.643Z (comparison 5)"
+      "runs": 7,
+      "verdict": "matches the recording of 2026-11-18T00:30:08.643Z (comparison 7)"
     },
     "parity": {
       "rows": [
@@ -5681,6 +5681,6 @@
     }
   },
   "passed": true,
-  "seconds": 158,
+  "seconds": 182,
   "note": "Goldens are recorded in docs/evidence/fonts-golden.json. A first recording of goldens proves nothing by itself."
 }

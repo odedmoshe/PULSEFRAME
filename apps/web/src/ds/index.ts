@@ -10,7 +10,7 @@ export { Slider, type SliderProps } from './Slider.tsx';
 export { PropertyRow, Section, type PropertyRowProps, type SectionProps } from './PropertyRow.tsx';
 export { Tabs, type TabsProps, type TabSpec } from './Tabs.tsx';
 export { Tile, type TileProps } from './Tile.tsx';
-export { ToastProvider, ToastView, useToasts, type ToastInput } from './Toast.tsx';
+export { ToastProvider, ToastSlot, ToastView, useToasts, type ToastInput } from './Toast.tsx';
 export { AnchoredError, type AnchoredErrorProps } from './AnchoredError.tsx';
 export { Dialog, Sheet, type DialogProps } from './Dialog.tsx';
 export { Menu, type MenuProps, type MenuItem } from './Menu.tsx';

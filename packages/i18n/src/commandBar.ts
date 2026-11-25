@@ -115,6 +115,8 @@ const SETUP_HE: Record<string, string> = {
 const BILLING_HE = 'בדקו את החיובים אצל השירות, ואם לא חויבתם, שחררו את הסכום השמור של הבקשה הזו';
 export const HE_ASSISTANT: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^the language assistant is set up and used from the owner's own session only$/, () => 'את עוזר השפה מגדירים ומפעילים רק מהחיבור של בעלי הפרויקט; פתחו את העורך מהקישור של הבעלים והגדירו אותו בהגדרות'],
+  // cancelling a request (routes.ts assistantCancelRefusal; POST /jobs/:jobId/cancel and MCP cancel_job answer an agent credential with it)
+  [/^a language-assistant request belongs to the owner's own session, so an agent credential cannot cancel it$/, () => 'בקשה לעוזר השפה שייכת לחיבור של בעלי הפרויקט, ולכן סוכן אינו יכול לבטל אותה; בקשו מבעלי הפרויקט לבטל אותה בשורת הפקודות שבעורך («ביטול הבקשה»), או המתינו: היא מסתיימת כשהשירות עונה, ויוצרת רק הצעה שהבעלים מאשרים או דוחים'],
   [/^the language assistant is reached over https only$/, () => `הפנייה לעוזר השפה נעשית רק ב־${ltr('https')}; כתבו רק את שם השרת, למשל ${ltr('api.example.com')}`],
   [/^the host (\S+) is not listed in PF_ASSISTANT_HOSTS$/, (m) => `הכתובת ${ltr(m[1]!)} אינה ברשימה ${ltr('PF_ASSISTANT_HOSTS')}; הוסיפו בדיוק את הכתובת הזאת לרשימה, הפעילו את השרת מחדש ושמרו שוב`],
   [/^this request (?:is estimated to|could) cost more than the per-request cap$/, () => 'הבקשה עלולה לעלות יותר מהתקרה לבקשה אחת, ולכן לא נשלחה; קצרו את הבקשה, או הגדילו בהגדרות את התקרה לבקשה אחת'],

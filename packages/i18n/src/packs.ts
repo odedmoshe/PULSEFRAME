@@ -20,6 +20,8 @@ export const PACKS_HE = {
   'template.notice.field_no_date': 'לתמונה שמתחת לכותרת אין תאריך צילום, ולכן נכתב הנוסח החלופי שלה',
   'template.notice.builtin_music_faded': 'המוזיקה המובנית ארוכה מהתמונות: היא נחתכת בתמונה האחרונה ונעלמת בהדרגה',
   'template.notice.element_dropped': 'אלמנט גרפי הושמט, כי היה מונח באותו מקום כמו אלמנט אחר של התבנית',
+  'template.notice.removed_by_hand': 'פריטים שמחקתם ידנית מאז ההחלה הקודמת לא נוצרו שוב; אפשר להחזיר אותם ב«החזרת החלקים שנמחקו»',
+  'template.notice.moved_back': 'פריטים שרק זזו ממקומם מאז ההחלה הקודמת, בלי שום שינוי אחר, נוצרו שוב במקומם בתבנית',
   // the pack fields of a title (templateContract.ts PACK_FIELD_KEYS): the labels of the dialog's fieldset «פרטים»
   'pack.fields': 'פרטים', 'pack.field.name': 'שם', 'pack.field.name2': 'שם נוסף', 'pack.field.age': 'גיל', 'pack.field.night': 'נר', 'pack.field.place': 'מקום', 'pack.field.when': 'מתי',
   'pack.field.date': 'תאריך הצילום', 'pack.field.atLighting': 'צולם בהדלקת הנרות של אותו ערב',
@@ -43,6 +45,8 @@ export const PACKS_EN: Record<keyof typeof PACKS_HE, string> = {
   'template.notice.field_no_date': 'A picture under a title has no capture date, so its fallback words were used',
   'template.notice.builtin_music_faded': 'The built-in music is longer than the pictures: it is cut at the last picture and fades out',
   'template.notice.element_dropped': 'A graphic element was left out because it would lie where another element of the template lies',
+  'template.notice.removed_by_hand': 'Items you deleted by hand since the last run were not made again; "Restore deleted parts" brings them back',
+  'template.notice.moved_back': 'Items that had only been moved since the last run, with nothing else changed, were made again on their places in the template',
   'pack.fields': 'Details', 'pack.field.name': 'Name', 'pack.field.name2': 'Second name', 'pack.field.age': 'Age', 'pack.field.night': 'Candle', 'pack.field.place': 'Place', 'pack.field.when': 'When',
   'pack.field.date': 'Date filmed', 'pack.field.atLighting': 'Filmed at that evening\'s candle lighting',
   'pack.source': 'Made in this build: drawn or composed by formula, no third-party content',

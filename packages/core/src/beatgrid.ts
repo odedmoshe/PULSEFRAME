@@ -105,7 +105,7 @@ const gridOf = (analysis: { beats: readonly T.RationalTime[]; downbeats?: readon
  * A pure function of the document, used to plan things for a whole timeline at once (the flash schedule of the strobes).
  */
 export function followedBeats(doc: ProjectDocument, from: number, to: number, sequenceId = doc.mainSequenceId): { t: number; index: number }[] {
-  const seq = doc.sequences[sequenceId];
+  const seq = own(doc.sequences, sequenceId);
   if (!seq) return [];
   const near: { clip: MediaClip; start: number; end: number }[] = [];
   for (const track of seq.tracks) {

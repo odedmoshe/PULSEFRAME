@@ -1,9 +1,9 @@
 {
- "ranAt": "2026-11-18T03:26:12.957Z",
- "commit": "a30feaffd5112496809e1b0316f2e39d3614d604",
+ "ranAt": "2026-11-24T21:47:04.283Z",
+ "commit": "996334d78570dcee141fcf88b055a39d7bbc9716",
  "baselineCommit": "33a78fce3ea78f9c37867a3d07efdf5722f3be05",
  "machine": {
-  "platform": "Linux 6.18.44-fc-v595 x64",
+  "platform": "Linux 6.18.44-fc-v819 x64",
   "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
   "gpu": "none used: every title look is Canvas2D; the editor browser has no WebGPU; the render worker started as for the trend baseline (PF_RENDER_GPU unset), and no project here uses a GPU effect"
  },
@@ -637,26 +637,22 @@
    "ok": true,
    "detail": {
     "method": "median of 5 server stills (frame 40, at rest) of the decorated title, minus the same for a plain clean-white title: render, read-back and PNG included in both",
-    "plainStillMs": 355,
+    "plainStillMs": 466,
     "addedMsPerFrame": {
-     "neon-tube-pink": 141.3,
-     "neon-tube-cyan": 193.7,
-     "gradient-sunset": 36.6,
-     "gradient-ocean": 29.3,
-     "gradient-gold": 38.4,
-     "double-outline-pop": 57.8,
-     "extrude-retro": 186.4,
-     "extrude-block": 226.4,
-     "long-shadow-flat": 132.3,
-     "wide-minimal": 15.2
+     "neon-tube-pink": 164.3,
+     "neon-tube-cyan": 160.7,
+     "gradient-sunset": 21.1,
+     "gradient-ocean": -5.8,
+     "gradient-gold": -22.4,
+     "double-outline-pop": 6.6,
+     "extrude-retro": 185.2,
+     "extrude-block": 230.2,
+     "long-shadow-flat": 143.6,
+     "wide-minimal": -18
     },
     "over25ms": [
      "neon-tube-pink",
      "neon-tube-cyan",
-     "gradient-sunset",
-     "gradient-ocean",
-     "gradient-gold",
-     "double-outline-pop",
      "extrude-retro",
      "extrude-block",
      "long-shadow-flat"
@@ -1341,26 +1337,22 @@
   },
   "x8": {
    "method": "median of 5 server stills (frame 40, at rest) of the decorated title, minus the same for a plain clean-white title: render, read-back and PNG included in both",
-   "plainStillMs": 355,
+   "plainStillMs": 466,
    "addedMsPerFrame": {
-    "neon-tube-pink": 141.3,
-    "neon-tube-cyan": 193.7,
-    "gradient-sunset": 36.6,
-    "gradient-ocean": 29.3,
-    "gradient-gold": 38.4,
-    "double-outline-pop": 57.8,
-    "extrude-retro": 186.4,
-    "extrude-block": 226.4,
-    "long-shadow-flat": 132.3,
-    "wide-minimal": 15.2
+    "neon-tube-pink": 164.3,
+    "neon-tube-cyan": 160.7,
+    "gradient-sunset": 21.1,
+    "gradient-ocean": -5.8,
+    "gradient-gold": -22.4,
+    "double-outline-pop": 6.6,
+    "extrude-retro": 185.2,
+    "extrude-block": 230.2,
+    "long-shadow-flat": 143.6,
+    "wide-minimal": -18
    },
    "over25ms": [
     "neon-tube-pink",
     "neon-tube-cyan",
-    "gradient-sunset",
-    "gradient-ocean",
-    "gradient-gold",
-    "double-outline-pop",
     "extrude-retro",
     "extrude-block",
     "long-shadow-flat"

@@ -27,6 +27,7 @@ import { PulseStrip, TempoHead, type PulseModel } from './PulseStrip.tsx';
 import { RideBar } from './RideBar.tsx';
 import { barGrid, capPlacement, catalogDragFrom, cutRoom, cutsOf, labelsUnder, laneOrder, lastAtOrBefore, pickSpoken, rulerLabel, rulerStep, signedTimecode, type SpokenChip, type BarGrid, type CatalogDragItem, type Lane, type LaneRole } from './interactions.math.ts';
 import { TL_STRINGS, type TlStrings } from './timeline.strings.ts';
+import { assetHasBeats, timelineTempo } from './pulse.logic.ts';
 import { assetDisplayName } from './assetLabel.ts';
 import { RenderCacheLane } from './RenderCacheLane.tsx';
 import { FilmBar } from './FilmBar.tsx';
@@ -81,7 +82,7 @@ const CLIP_PAD = 3; // space above and below a clip inside its lane
 type Flavour = 'voice' | 'music' | 'sfx' | 'sound';
 function flavourOf(doc: ProjectDocument, assetId: string): Flavour {
   const a = doc.assets[assetId];
-  if (doc.analyses?.[assetId]?.beats?.beats.length) return 'music';
+  if (assetHasBeats(doc, assetId)) return 'music'; // its own beats, or those of the measured music it is a time-preserving copy of
   if (a?.provenance?.voice || transcriptFor(doc, assetId)) return 'voice';
   if (a?.provenance?.procedural) return 'sfx';
   return 'sound';
@@ -566,13 +567,9 @@ export function Timeline() {
       truncated: m.sceneCuts.length + m.beats.length > MAX_MARKERS, beatSeconds: median(beatS), barSeconds: median(m.downbeats.map((b) => T.toSeconds(b))),
     };
     const beatFrames = m.beats.map((b) => T.nearestFrameIndex(b, rate));
-    const all = doc.sequences[doc.mainSequenceId]!.tracks.flatMap((tr) => tr.clips.map((c) => ({ c, tr })));
-    // the tempo shown is the analysis's own estimate for the music on the timeline (the file with the most beats there)
-    const used = all.filter((x) => x.c.type === 'media' && !!doc.analyses?.[x.c.assetId]?.beats?.beats.length).map((x) => doc.analyses![(x.c as MediaClip).assetId]!.beats!);
-    const bpm = used.sort((a, b) => b.beats.length - a.beats.length)[0]?.bpm ?? null;
-    // what "analyse the beat" would analyse: the longest sound on a sound track that has no beat analysis yet
-    const music = all.filter((x) => x.tr.kind === 'audio' && x.c.type === 'media' && !!doc.assets[x.c.assetId]?.audio && !doc.analyses?.[x.c.assetId]?.beats).sort((a, b) => T.cmp(b.c.duration, a.c.duration))[0];
-    return { model, grid: beatFrames.length ? barGrid(beatFrames, barFrames) : null, beatSeconds: beatS, bpm, analysable: music ? (music.c as MediaClip).assetId : null };
+    // the tempo shown and what "analyse the beat" would measure, by the same lineage as the markers (pulse.logic.ts)
+    const { bpm, analysable } = timelineTempo(doc);
+    return { model, grid: beatFrames.length ? barGrid(beatFrames, barFrames) : null, beatSeconds: beatS, bpm, analysable };
   }, [doc, rate]);
   const hasBeats = pulse.model.beats.length > 0;
   const rulerMode = ruler === 'bars' && hasBeats ? 'bars' : 'time';

@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-18T17:35:31.501Z",
+  "ranAt": "2026-11-24T20:44:54.335Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v595 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "platform": "Linux 6.18.44-fc-v819 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "memoryGiB": 15.7,
     "gpu": "none (software)",
@@ -21,7 +21,7 @@
     "exportedFrames": 105
   },
   "measurements": {
-    "editorShellInteractiveMs": 612,
+    "editorShellInteractiveMs": 908,
     "mcp": {
       "negotiatedProtocolVersion": "2026-07-28",
       "server": {
@@ -30,18 +30,18 @@
       }
     },
     "agentEdit": {
-      "requestToCommitMs": 14.1,
-      "requestToVisibleInEditorMs": 116.5,
+      "requestToCommitMs": 19.5,
+      "requestToVisibleInEditorMs": 143.9,
       "note": "single sample, loopback, includes Playwright polling overhead"
     },
     "restCommitLatencyMs": {
       "samples": 30,
-      "median": 4.43,
-      "p95": 7.35,
-      "max": 9.16
+      "median": 5.14,
+      "p95": 10.63,
+      "max": 14.91
     },
     "export": {
-      "file": "job_u4sNlZ9OA3U.mp4",
+      "file": "job_og7pvRTc7RI.mp4",
       "mimeType": "video/mp4",
       "captions": null,
       "bytes": 107979,
@@ -75,7 +75,7 @@
         },
         "assets": [
           {
-            "id": "ast_13a0bf6b3a0",
+            "id": "ast_d5854bde460",
             "contentHash": "sha256:c7e7258d199ae386d741322d2a22c5d626d2af5e3bd3822625e430fb09f7066d",
             "byteSize": 49384,
             "kind": "video",
@@ -149,13 +149,13 @@
         "durationSeconds": 3.5
       },
       "renderStageMs": {
-        "draw": 606,
-        "readback": 612,
-        "upload": 4972
+        "draw": 717,
+        "readback": 788,
+        "upload": 7192
       },
-      "wallSeconds": 7.25,
-      "realtimeFactor": 0.4827586206896552,
-      "uiWallSeconds": 8.514
+      "wallSeconds": 10.368,
+      "realtimeFactor": 0.33757716049382713,
+      "uiWallSeconds": 17.151
     },
     "parityFrame70": {
       "psnrDb": 46.687164,
@@ -181,16 +181,29 @@
       "frameMs": 33.33
     },
     "previewMedia": {
+      "warm": {
+        "decoders": 0,
+        "bytes": 0,
+        "budgetBytes": 0,
+        "off": null,
+        "opened": 0,
+        "reused": 0,
+        "adopted": 0,
+        "evicted": 0,
+        "gaveRoom": 0,
+        "overBudget": 0,
+        "noRoom": 0
+      },
       "decoders": 2,
       "stills": 0,
       "maxDecoders": 10,
       "maxStills": 16,
       "decoderByteCacheBytes": 16777216,
       "sources": {
-        "ast_13a0bf6b3a0": "original"
+        "ast_d5854bde460": "original"
       },
       "sourcesUsed": {
-        "ast_13a0bf6b3a0": [
+        "ast_d5854bde460": [
           "original"
         ]
       },
@@ -200,7 +213,7 @@
       "refused": 0,
       "rangedResponses": 2,
       "statuses": [
-        "ast_13a0bf6b3a0/content:206"
+        "ast_d5854bde460/content:206"
       ]
     },
     "previewSync": {
@@ -208,7 +221,7 @@
       "audioContextState": "running",
       "audioSampleRate": 48000,
       "outputLatencyMs": 42.02,
-      "audioScheduledAheadMaxMs": 2090.7,
+      "audioScheduledAheadMaxMs": 2061.3,
       "audioLookaheadMs": 1500,
       "liveAudioNodes": 0,
       "loops": 0,
@@ -507,12 +520,422 @@
           "peak": 0
         }
       ],
-      "framesRequested": 104,
-      "framesPainted": 104,
+      "framesRequested": 102,
+      "framesPainted": 102,
+      "paintLatenessByFrameMs": [
+        [
+          1,
+          65.33
+        ],
+        [
+          2,
+          42.67
+        ],
+        [
+          3,
+          38.67
+        ],
+        [
+          4,
+          16
+        ],
+        [
+          5,
+          4
+        ],
+        [
+          6,
+          10.67
+        ],
+        [
+          7,
+          17.33
+        ],
+        [
+          8,
+          13.33
+        ],
+        [
+          9,
+          1.33
+        ],
+        [
+          10,
+          16
+        ],
+        [
+          11,
+          14.67
+        ],
+        [
+          12,
+          10.67
+        ],
+        [
+          13,
+          17.33
+        ],
+        [
+          14,
+          13.33
+        ],
+        [
+          15,
+          12
+        ],
+        [
+          16,
+          18.67
+        ],
+        [
+          17,
+          14.67
+        ],
+        [
+          18,
+          10.67
+        ],
+        [
+          19,
+          17.33
+        ],
+        [
+          20,
+          13.33
+        ],
+        [
+          21,
+          20
+        ],
+        [
+          22,
+          18.67
+        ],
+        [
+          23,
+          14.67
+        ],
+        [
+          24,
+          10.67
+        ],
+        [
+          25,
+          17.33
+        ],
+        [
+          26,
+          16
+        ],
+        [
+          27,
+          12
+        ],
+        [
+          28,
+          18.67
+        ],
+        [
+          29,
+          25.33
+        ],
+        [
+          30,
+          10.67
+        ],
+        [
+          31,
+          17.33
+        ],
+        [
+          32,
+          16
+        ],
+        [
+          33,
+          12
+        ],
+        [
+          34,
+          18.67
+        ],
+        [
+          35,
+          14.67
+        ],
+        [
+          36,
+          13.33
+        ],
+        [
+          37,
+          28
+        ],
+        [
+          38,
+          16
+        ],
+        [
+          39,
+          1.33
+        ],
+        [
+          40,
+          18.67
+        ],
+        [
+          41,
+          14.67
+        ],
+        [
+          42,
+          13.33
+        ],
+        [
+          43,
+          20
+        ],
+        [
+          44,
+          16
+        ],
+        [
+          45,
+          12
+        ],
+        [
+          46,
+          10.67
+        ],
+        [
+          47,
+          17.33
+        ],
+        [
+          48,
+          13.33
+        ],
+        [
+          49,
+          20
+        ],
+        [
+          50,
+          26.67
+        ],
+        [
+          51,
+          22.67
+        ],
+        [
+          52,
+          10.67
+        ],
+        [
+          53,
+          28
+        ],
+        [
+          54,
+          13.33
+        ],
+        [
+          55,
+          30.67
+        ],
+        [
+          56,
+          16
+        ],
+        [
+          57,
+          22.67
+        ],
+        [
+          58,
+          10.67
+        ],
+        [
+          59,
+          36
+        ],
+        [
+          60,
+          64
+        ],
+        [
+          61,
+          41.33
+        ],
+        [
+          62,
+          26.67
+        ],
+        [
+          63,
+          4
+        ],
+        [
+          64,
+          21.33
+        ],
+        [
+          65,
+          17.33
+        ],
+        [
+          66,
+          13.33
+        ],
+        [
+          67,
+          12
+        ],
+        [
+          68,
+          18.67
+        ],
+        [
+          70,
+          21.33
+        ],
+        [
+          71,
+          17.33
+        ],
+        [
+          72,
+          13.33
+        ],
+        [
+          73,
+          22.67
+        ],
+        [
+          74,
+          18.67
+        ],
+        [
+          75,
+          14.67
+        ],
+        [
+          76,
+          61.33
+        ],
+        [
+          78,
+          16
+        ],
+        [
+          79,
+          12
+        ],
+        [
+          80,
+          37.33
+        ],
+        [
+          81,
+          14.67
+        ],
+        [
+          82,
+          13.33
+        ],
+        [
+          83,
+          9.33
+        ],
+        [
+          84,
+          16
+        ],
+        [
+          85,
+          22.67
+        ],
+        [
+          86,
+          8
+        ],
+        [
+          87,
+          14.67
+        ],
+        [
+          88,
+          13.33
+        ],
+        [
+          89,
+          20
+        ],
+        [
+          90,
+          16
+        ],
+        [
+          91,
+          12
+        ],
+        [
+          92,
+          10.67
+        ],
+        [
+          93,
+          17.33
+        ],
+        [
+          94,
+          13.33
+        ],
+        [
+          95,
+          9.33
+        ],
+        [
+          96,
+          16
+        ],
+        [
+          97,
+          12
+        ],
+        [
+          98,
+          18.67
+        ],
+        [
+          99,
+          17.33
+        ],
+        [
+          100,
+          13.33
+        ],
+        [
+          101,
+          9.33
+        ],
+        [
+          102,
+          16
+        ],
+        [
+          103,
+          22.67
+        ],
+        [
+          104,
+          29.33
+        ]
+      ],
       "paintLatenessMs": {
         "median": 16,
-        "p95": 25.33,
-        "max": 57.33
+        "p95": 38.67,
+        "max": 65.33
       },
       "fxVoices": 0,
       "fxPrimeMs": 0,
@@ -641,7 +1064,7 @@
       "name": "MCP: tools are generated from the operation registry (internal ops hidden)",
       "ok": true,
       "detail": {
-        "count": 174
+        "count": 187
       }
     },
     {
@@ -649,7 +1072,7 @@
       "ok": true,
       "detail": {
         "right": {
-          "id": "clp_197d4f286d1",
+          "id": "clp_24938ce3661",
           "start": {
             "value": "2",
             "timescale": 1
@@ -669,8 +1092,8 @@
       "name": "live UI update: agent edit appears in the open editor without reload",
       "ok": true,
       "detail": {
-        "requestToCommitMs": 14.1,
-        "requestToVisibleInEditorMs": 116.5,
+        "requestToCommitMs": 19.5,
+        "requestToVisibleInEditorMs": 143.9,
         "note": "single sample, loopback, includes Playwright polling overhead"
       }
     },
@@ -684,11 +1107,11 @@
       "detail": {
         "before": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_30e627f9c60"
+          "selected": "clip-clp_b04cfb25520"
         },
         "after": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_30e627f9c60"
+          "selected": "clip-clp_b04cfb25520"
         }
       }
     },
@@ -734,7 +1157,7 @@
       "ok": true,
       "detail": [
         {
-          "entityId": "clp_30e627f9c60",
+          "entityId": "clp_b04cfb25520",
           "changedAtRevision": 7,
           "by": "agent:local",
           "deleted": false
@@ -790,7 +1213,7 @@
       "name": "when the export finishes the editor says so and the file starts saving by itself; the link stays for another copy",
       "ok": true,
       "detail": {
-        "savedName": "pulseframe-job_u4sNlZ9OA3U.mp4"
+        "savedName": "pulseframe-job_og7pvRTc7RI.mp4"
       }
     },
     {
@@ -872,16 +1295,29 @@
       "detail": {
         "wrong": [],
         "statuses": {
+          "warm": {
+            "decoders": 0,
+            "bytes": 0,
+            "budgetBytes": 0,
+            "off": null,
+            "opened": 0,
+            "reused": 0,
+            "adopted": 0,
+            "evicted": 0,
+            "gaveRoom": 0,
+            "overBudget": 0,
+            "noRoom": 0
+          },
           "decoders": 2,
           "stills": 0,
           "maxDecoders": 10,
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_13a0bf6b3a0": "original"
+            "ast_d5854bde460": "original"
           },
           "sourcesUsed": {
-            "ast_13a0bf6b3a0": [
+            "ast_d5854bde460": [
               "original"
             ]
           },
@@ -891,7 +1327,7 @@
           "refused": 0,
           "rangedResponses": 2,
           "statuses": [
-            "ast_13a0bf6b3a0/content:206"
+            "ast_d5854bde460/content:206"
           ]
         }
       }
@@ -904,7 +1340,7 @@
         "audioContextState": "running",
         "audioSampleRate": 48000,
         "outputLatencyMs": 42.02,
-        "audioScheduledAheadMaxMs": 2090.7,
+        "audioScheduledAheadMaxMs": 2061.3,
         "audioLookaheadMs": 1500,
         "liveAudioNodes": 0,
         "loops": 0,
@@ -1203,12 +1639,422 @@
             "peak": 0
           }
         ],
-        "framesRequested": 104,
-        "framesPainted": 104,
+        "framesRequested": 102,
+        "framesPainted": 102,
+        "paintLatenessByFrameMs": [
+          [
+            1,
+            65.33
+          ],
+          [
+            2,
+            42.67
+          ],
+          [
+            3,
+            38.67
+          ],
+          [
+            4,
+            16
+          ],
+          [
+            5,
+            4
+          ],
+          [
+            6,
+            10.67
+          ],
+          [
+            7,
+            17.33
+          ],
+          [
+            8,
+            13.33
+          ],
+          [
+            9,
+            1.33
+          ],
+          [
+            10,
+            16
+          ],
+          [
+            11,
+            14.67
+          ],
+          [
+            12,
+            10.67
+          ],
+          [
+            13,
+            17.33
+          ],
+          [
+            14,
+            13.33
+          ],
+          [
+            15,
+            12
+          ],
+          [
+            16,
+            18.67
+          ],
+          [
+            17,
+            14.67
+          ],
+          [
+            18,
+            10.67
+          ],
+          [
+            19,
+            17.33
+          ],
+          [
+            20,
+            13.33
+          ],
+          [
+            21,
+            20
+          ],
+          [
+            22,
+            18.67
+          ],
+          [
+            23,
+            14.67
+          ],
+          [
+            24,
+            10.67
+          ],
+          [
+            25,
+            17.33
+          ],
+          [
+            26,
+            16
+          ],
+          [
+            27,
+            12
+          ],
+          [
+            28,
+            18.67
+          ],
+          [
+            29,
+            25.33
+          ],
+          [
+            30,
+            10.67
+          ],
+          [
+            31,
+            17.33
+          ],
+          [
+            32,
+            16
+          ],
+          [
+            33,
+            12
+          ],
+          [
+            34,
+            18.67
+          ],
+          [
+            35,
+            14.67
+          ],
+          [
+            36,
+            13.33
+          ],
+          [
+            37,
+            28
+          ],
+          [
+            38,
+            16
+          ],
+          [
+            39,
+            1.33
+          ],
+          [
+            40,
+            18.67
+          ],
+          [
+            41,
+            14.67
+          ],
+          [
+            42,
+            13.33
+          ],
+          [
+            43,
+            20
+          ],
+          [
+            44,
+            16
+          ],
+          [
+            45,
+            12
+          ],
+          [
+            46,
+            10.67
+          ],
+          [
+            47,
+            17.33
+          ],
+          [
+            48,
+            13.33
+          ],
+          [
+            49,
+            20
+          ],
+          [
+            50,
+            26.67
+          ],
+          [
+            51,
+            22.67
+          ],
+          [
+            52,
+            10.67
+          ],
+          [
+            53,
+            28
+          ],
+          [
+            54,
+            13.33
+          ],
+          [
+            55,
+            30.67
+          ],
+          [
+            56,
+            16
+          ],
+          [
+            57,
+            22.67
+          ],
+          [
+            58,
+            10.67
+          ],
+          [
+            59,
+            36
+          ],
+          [
+            60,
+            64
+          ],
+          [
+            61,
+            41.33
+          ],
+          [
+            62,
+            26.67
+          ],
+          [
+            63,
+            4
+          ],
+          [
+            64,
+            21.33
+          ],
+          [
+            65,
+            17.33
+          ],
+          [
+            66,
+            13.33
+          ],
+          [
+            67,
+            12
+          ],
+          [
+            68,
+            18.67
+          ],
+          [
+            70,
+            21.33
+          ],
+          [
+            71,
+            17.33
+          ],
+          [
+            72,
+            13.33
+          ],
+          [
+            73,
+            22.67
+          ],
+          [
+            74,
+            18.67
+          ],
+          [
+            75,
+            14.67
+          ],
+          [
+            76,
+            61.33
+          ],
+          [
+            78,
+            16
+          ],
+          [
+            79,
+            12
+          ],
+          [
+            80,
+            37.33
+          ],
+          [
+            81,
+            14.67
+          ],
+          [
+            82,
+            13.33
+          ],
+          [
+            83,
+            9.33
+          ],
+          [
+            84,
+            16
+          ],
+          [
+            85,
+            22.67
+          ],
+          [
+            86,
+            8
+          ],
+          [
+            87,
+            14.67
+          ],
+          [
+            88,
+            13.33
+          ],
+          [
+            89,
+            20
+          ],
+          [
+            90,
+            16
+          ],
+          [
+            91,
+            12
+          ],
+          [
+            92,
+            10.67
+          ],
+          [
+            93,
+            17.33
+          ],
+          [
+            94,
+            13.33
+          ],
+          [
+            95,
+            9.33
+          ],
+          [
+            96,
+            16
+          ],
+          [
+            97,
+            12
+          ],
+          [
+            98,
+            18.67
+          ],
+          [
+            99,
+            17.33
+          ],
+          [
+            100,
+            13.33
+          ],
+          [
+            101,
+            9.33
+          ],
+          [
+            102,
+            16
+          ],
+          [
+            103,
+            22.67
+          ],
+          [
+            104,
+            29.33
+          ]
+        ],
         "paintLatenessMs": {
           "median": 16,
-          "p95": 25.33,
-          "max": 57.33
+          "p95": 38.67,
+          "max": 65.33
         },
         "fxVoices": 0,
         "fxPrimeMs": 0,
@@ -1232,7 +2078,7 @@
           2.50006
         ],
         "maxErrorMs": 0.06,
-        "scheduledAheadMaxMs": 2090.7
+        "scheduledAheadMaxMs": 2061.3
       }
     },
     {
@@ -1240,7 +2086,7 @@
       "ok": true,
       "detail": {
         "sourcesUsed": {
-          "ast_13a0bf6b3a0": [
+          "ast_d5854bde460": [
             "original",
             "proxy"
           ]

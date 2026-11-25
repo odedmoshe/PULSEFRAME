@@ -7,7 +7,8 @@
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { CAPTION_PRESETS, type Asset, type MediaClip, type ProjectDocument, type Track } from './schema.ts';
-import { cutOps, sourceTimesToTimeline, sourceRangesToTimeline, type TimeRange } from './cleanup.ts';
+import { cutOps, skippedClips, sourceTimesToTimeline, sourceRangesToTimeline, timingCoverage, untimedCopyRefusal, type SkippedClip, type TimeRange } from './cleanup.ts';
+import { beatsFor, untimedCopyFinder } from './lineage.ts';
 import { FORMAT_PROFILES } from './variants.ts';
 import { defineOp, findClip, getOp, OpError, type OpCall } from './ops.ts';
 import { own } from './own.ts';
@@ -20,7 +21,8 @@ import { planMulticamAuto } from './multicamAuto.ts';
 
 export class RecipeError extends Error {
   /** not_built: a recipe whose planner is only a contract in this build (none at present; multicam-auto was until ADR-0020 W2); the server answers 501. */
-  constructor(public code: 'not_found' | 'needs_analysis' | 'invalid_args' | 'nothing_to_do' | 'not_built', message: string, public hint?: string) { super(message); }
+  /** untimed_copy: a clip shows a copy of the recording made without a recorded time mapping and nothing else plays it on a known clock (cleanup.ts timingCoverage); the server answers 422. */
+  constructor(public code: 'not_found' | 'needs_analysis' | 'invalid_args' | 'nothing_to_do' | 'not_built' | 'untimed_copy', message: string, public hint?: string) { super(message); }
 }
 export interface RecipePlan {
   recipeId: string;
@@ -32,10 +34,17 @@ export interface RecipePlan {
   ops: OpCall[];
   /** Other reasonable parameter choices for the same recipe. */
   alternatives: { label: string; params: Record<string, unknown> }[];
+  /** Clips the plan left alone because they show a copy that does not keep the recording's timing (tidy-speech; cleanup.ts timingCoverage). */
+  skippedClips?: SkippedClip[];
 }
 export interface PlanContext {
   /** Timeline ranges that must be left alone (clips of a previous run that were edited by hand). */
   protectedRanges?: TimeRange[];
+  /**
+   * Timeline ranges of a previous run's clips that were deleted by hand (run.ranges whose clip is gone; beat-montage): left empty,
+   * so a hand delete survives the regeneration (ADR-0016 decision 6). The server passes none with restoreRemoved.
+   */
+  removedRanges?: TimeRange[];
   /** Silent source ranges per asset, measured by the server (tidy-speech only). */
   silences?: Record<string, TimeRange[]>;
   /** Level envelopes by asset id, loaded by the server (multicam-auto only; built on demand, never stored in the document). */
@@ -83,6 +92,12 @@ export const RECIPES = [
   { id: MULTICAM_AUTO_RECIPE_ID, name: { he: 'החלפת זוויות אוטומטית', en: 'Auto-switch angles' }, description: 'Heuristic: cut a multicam program to the angle of the clearly loudest mic, and to the wide angle when both or nobody speak. Not speaker identification.', params: MulticamAutoParams, needs: 'a synced multicam group with speakers mapped to mics, and level envelopes (built on demand)', regenerable: true, aiInput: null, inPlace: true },
 ] as const;
 /**
+ * Recipes whose runs record where each clip was placed (run.ranges, apply_recipe recordRanges), so that a clip deleted by hand
+ * stays deleted on regeneration: the regenerable recipes that remove and re-plan their clips (beat-montage). Not the in-place
+ * multicam auto-switch (switch_angles never fills a gap) and not the family film (its slot records say it).
+ */
+export const recordsRanges = (id: string): boolean => { const r = RECIPES.find((x) => x.id === id) as { regenerable: boolean; inPlace?: boolean } | undefined; return !!r && r.regenerable && !r.inPlace && id !== FAMILY_FILM_RECIPE_ID; };
+/**
  * A recipe regenerated IN PLACE (ADR-0020): regenerateRecipe removes nothing, plans on the current document with the
  * protected ranges, and passes keepIds = the clips edited by hand (apps/server/src/recipes.ts, W2).
  */
@@ -110,15 +125,24 @@ function planMontage(doc: ProjectDocument, raw: unknown, ctx: PlanContext): Reci
   const music = findClip(doc, p.musicClipId);
   if (!music || music.clip.type !== 'media' || music.track.kind !== 'audio') throw new RecipeError('not_found', `music clip ${p.musicClipId} must be a clip on an audio track`);
   const mclip = music.clip;
-  const analysis = doc.analyses?.[mclip.assetId]?.beats;
-  if (!analysis || analysis.beats.length < 2) throw new RecipeError('needs_analysis', 'the music has no beat analysis yet', 'Run analyze_asset kind=beats on the music asset first.');
+  // the beats of the clip's own file, else of the nearest time-preserving source of it that was measured (lineage.ts beatsFor: a
+  // cleaned-up copy of the music keeps its beats), moved exactly onto the clip's file's own clock
+  const measured = beatsFor(doc, mclip.assetId);
+  if (!measured) {
+    // a copy made without a recorded time mapping (reversed, stretched) of measured music: where its beats are is unknown, and said so
+    const untimed = untimedCopyFinder(doc, Object.keys(doc.analyses ?? {}).filter((id) => (doc.analyses[id]!.beats?.beats.length ?? 0) >= 2))(mclip.assetId);
+    if (untimed) throw new RecipeError('untimed_copy', `music clip ${mclip.id} plays a copy of the measured music that does not keep its timing, so where the beats are in it is unknown`, 'Measure the beats of this copy itself (analyze_asset kind=beats), or give the clip the measured music or a copy that keeps its timing (replace_clip_media), and try again.');
+  }
+  const analysis = measured?.beats;
+  if (!measured || !analysis || analysis.beats.length < 2) throw new RecipeError('needs_analysis', 'the music has no beat analysis yet', 'Run analyze_asset kind=beats on the music asset first.');
+  const onOwnClock = (times: T.RationalTime[]) => (T.isZero(measured.offset) ? times : times.map((t) => T.sub(t, measured.offset)));
   for (const id of p.assetIds) { const a = own(doc.assets, id); if (!a || (!a.video && !a.image)) throw new RecipeError('not_found', `asset ${id} is missing or has no picture`); }
   const from = mclip.start, to = T.add(mclip.start, mclip.duration);
   const fi = (t: T.RationalTime) => T.nearestFrameIndex(t, rate);
-  const beatFrames = [...new Set(sourceTimesToTimeline(doc, mclip.assetId, analysis.beats).filter((t) => !T.lt(t, from) && T.lt(t, to)).map(fi))].sort((a, b) => a - b);
+  const beatFrames = [...new Set(sourceTimesToTimeline(doc, mclip.assetId, onOwnClock(analysis.beats)).filter((t) => !T.lt(t, from) && T.lt(t, to)).map(fi))].sort((a, b) => a - b);
   // On bars, the cut points are the analysis's bar starts (the first beat of each bar), which sound like the natural places to cut.
   if (p.cutOn === 'bars' && !analysis.downbeats?.length) throw new RecipeError('needs_analysis', 'the beat analysis of this music has no bar starts', 'Cut on beats instead, or mark the bar starts with edit_analysis (downbeats).');
-  const barFrames = p.cutOn === 'bars' ? [...new Set(sourceTimesToTimeline(doc, mclip.assetId, analysis.downbeats!).filter((t) => !T.lt(t, from) && T.lt(t, to)).map(fi))].sort((a, b) => a - b) : [];
+  const barFrames = p.cutOn === 'bars' ? [...new Set(sourceTimesToTimeline(doc, mclip.assetId, onOwnClock(analysis.downbeats!)).filter((t) => !T.lt(t, from) && T.lt(t, to)).map(fi))].sort((a, b) => a - b) : [];
   const wantedCuts = (p.cutOn === 'bars' ? barFrames : beatFrames).filter((_, i) => i % p.everyBeats === 0);
   // SAFETY (ADR-0009): cuts between pictures of different brightness flash. A cut that would come less than a third of a
   // second after the last one is left out, so the montage never cuts more than three times a second, however fast the music.
@@ -135,9 +159,12 @@ function planMontage(doc: ProjectDocument, raw: unknown, ctx: PlanContext): Reci
   const ops: OpCall[] = [];
   let skipped = 0;
   const prot = (ctx.protectedRanges ?? []).map((r) => [fi(r.start), fi(r.end)] as const);
+  const gone = (ctx.removedRanges ?? []).map((r) => [fi(r.start), fi(r.end)] as const);
+  let leftEmpty = 0;
   for (let i = 0; i + 1 < bounds.length; i++) {
     const a = bounds[i]!, b = bounds[i + 1]!;
     if (prot.some(([s, e]) => a < e && s < b)) { skipped++; continue; }
+    if (gone.some(([s, e]) => a < e && s < b)) { leftEmpty++; continue; }
     const assetId = order[i % order.length]!;
     const asset = own(doc.assets, assetId)!; // every id in the list was found above
     let len = b - a, sourceIn = 0;
@@ -152,12 +179,13 @@ function planMontage(doc: ProjectDocument, raw: unknown, ctx: PlanContext): Reci
     if (len <= 0) continue;
     ops.push({ op: 'add_clip', args: { assetId, start: T.frameTime(a, rate), sourceIn: T.frameTime(sourceIn, rate), duration: T.frameTime(len, rate), withLinkedAudio: false } });
   }
+  if (ops.length === 0 && leftEmpty) throw new RecipeError('nothing_to_do', 'every segment is covered by clips you edited or lies where you deleted clips by hand', 'Regenerate with restoreRemoved: true to fill the places of the deleted clips again.');
   if (ops.length === 0) throw new RecipeError('nothing_to_do', 'every segment is already covered by clips you edited');
   const bpm = analysis.bpm ? `${analysis.bpm.toFixed(1)} BPM` : 'unknown tempo';
   return {
     recipeId: 'beat-montage', params: p,
-    steps: [`Place ${ops.length} picture clips, one every ${p.everyBeats} ${p.cutOn === 'bars' ? 'bar(s), starting on bar starts' : 'beat(s)'}, order: ${p.order}`, ...(thinnedOut ? [`Leave out ${thinnedOut} cut(s) that would come less than a third of a second after the one before, so the montage cuts at most three times a second (faster cutting between bright and dark pictures is a seizure risk for some viewers)`] : []), ...(skipped ? [`Leave ${skipped} segment(s) alone because they hold clips edited by hand`] : [])],
-    basis: [`${p.cutOn === 'bars' ? `${barFrames.length} bar starts among ` : ''}${beatFrames.length} beats of the music clip (${bpm}, confidence ${analysis.confidence ?? 'n/a'}${analysis.origin.edited ? ', corrected by hand' : ''})`, `method: ${analysis.origin.method}`],
+    steps: [`Place ${ops.length} picture clips, one every ${p.everyBeats} ${p.cutOn === 'bars' ? 'bar(s), starting on bar starts' : 'beat(s)'}, order: ${p.order}`, ...(thinnedOut ? [`Leave out ${thinnedOut} cut(s) that would come less than a third of a second after the one before, so the montage cuts at most three times a second (faster cutting between bright and dark pictures is a seizure risk for some viewers)`] : []), ...(skipped ? [`Leave ${skipped} segment(s) alone because they hold clips edited by hand`] : []), ...(leftEmpty ? [`Leave ${leftEmpty} segment(s) empty because their clips were deleted by hand (regenerate with restoreRemoved to fill them again)`] : [])],
+    basis: [`${p.cutOn === 'bars' ? `${barFrames.length} bar starts among ` : ''}${beatFrames.length} beats of the music clip (${bpm}, confidence ${analysis.confidence ?? 'n/a'}${analysis.origin.edited ? ', corrected by hand' : ''})`, `method: ${analysis.origin.method}`, ...(measured.assetId !== mclip.assetId ? [`measured on "${(doc.assets[measured.assetId]?.name ?? measured.assetId).slice(0, 60)}", which the clip's file is a copy of that keeps its timing; its beats are moved exactly onto the copy's own clock`] : [])],
     ops,
     alternatives: [
       ...([1, 2, 4, 8] as const).filter((n) => n !== p.everyBeats).map((n) => ({ label: `Cut every ${n} ${p.cutOn === 'bars' ? 'bar(s)' : 'beat(s)'}`, params: { ...p, everyBeats: n } })),
@@ -195,15 +223,20 @@ function planTidySpeech(doc: ProjectDocument, raw: unknown, ctx: PlanContext): R
   if (!own(doc.assets, p.assetId)?.audio) throw new RecipeError('not_found', `asset ${p.assetId} is missing or has no sound`);
   const silences = own(ctx.silences, p.assetId);
   if (!silences) throw new RecipeError('needs_analysis', 'silence measurement for this asset was not supplied');
+  // clips of copies without a recorded time mapping are skipped and named; with nothing else playing the recording, refused
+  const cov = timingCoverage(doc, p.assetId);
+  if (cov.mapped === 0 && cov.untimed.length) { const r = untimedCopyRefusal(cov.untimed); throw new RecipeError(r.code, r.message, r.hint); }
+  const skipped = skippedClips(cov.untimed);
   const ranges = sourceRangesToTimeline(doc, p.assetId, silences, T.fromSeconds(p.keepSeconds.toFixed(6)));
   const ops: OpCall[] = cutOps(ranges), steps: string[] = [], basis: string[] = [`${silences.length} silent stretch(es) measured in the recording`];
+  for (const c of skipped) basis.push(`clip ${c.clipId} was not searched for pauses: it shows a copy that does not keep the recording's timing`);
   const removed = ranges.reduce((n, r) => n + T.toSeconds(T.sub(r.end, r.start)), 0);
   if (ranges.length) steps.push(`Remove ${ranges.length} pause(s), ${removed.toFixed(1)} s in total, from every track (keeping ${p.keepSeconds} s around speech)`);
   const seq = doc.sequences[doc.mainSequenceId]!;
   if (p.captions && own(doc.transcripts, p.assetId) && !seq.tracks.some((t) => t.kind === 'caption')) { ops.push({ op: 'add_caption_track', args: { mode: 'transcript' } }); steps.push('Show the transcript as captions'); }
   if (p.loudness !== null && doc.settings.loudness?.target !== p.loudness) { ops.push({ op: 'set_loudness_target', args: { target: p.loudness } }); steps.push(`Set the loudness target to ${p.loudness} LUFS`); }
   if (ops.length === 0) throw new RecipeError('nothing_to_do', 'no pauses long enough to remove, and captions and loudness are already set');
-  return { recipeId: 'tidy-speech', params: p, steps, basis, ops, alternatives: [{ label: 'Tighter (keep 0.05 s)', params: { ...p, keepSeconds: 0.05 } }, { label: 'Looser (keep 0.25 s)', params: { ...p, keepSeconds: 0.25 } }] };
+  return { recipeId: 'tidy-speech', params: p, steps, basis, ops, alternatives: [{ label: 'Tighter (keep 0.05 s)', params: { ...p, keepSeconds: 0.05 } }, { label: 'Looser (keep 0.25 s)', params: { ...p, keepSeconds: 0.25 } }], ...(skipped.length ? { skippedClips: skipped } : {}) };
 }
 
 // ---------- portrait blur (ADR-0017): one public op, because a recipe plan cannot name the clips it creates ----------

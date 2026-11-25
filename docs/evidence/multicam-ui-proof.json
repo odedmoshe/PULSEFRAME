@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-18T21:25:48.064Z",
+  "ranAt": "2026-11-24T20:24:23.625Z",
   "result": "PASS",
   "checks": [
     {
@@ -60,7 +60,7 @@
       "name": "U2: the audio tap's onsets equal those of an untouched playback (no gap > 1 ms)",
       "ok": true,
       "detail": {
-        "maxDiffSeconds": 0.000009999999999843467,
+        "maxDiffSeconds": 0,
         "onsets": 28,
         "baselineOnsets": 28
       }
@@ -70,24 +70,37 @@
       "ok": true,
       "detail": {
         "viewer": {
+          "warm": {
+            "decoders": 0,
+            "bytes": 0,
+            "budgetBytes": 0,
+            "off": null,
+            "opened": 0,
+            "reused": 0,
+            "adopted": 0,
+            "evicted": 0,
+            "gaveRoom": 0,
+            "overBudget": 0,
+            "noRoom": 0
+          },
           "decoders": 3,
           "stills": 0,
           "maxDecoders": 4,
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_3136f30f0f0": "proxy",
-            "ast_8180d4e7fb0": "original",
-            "ast_36ae17c1950": "proxy"
+            "ast_0b7143f8290": "proxy",
+            "ast_a919b50b4d0": "original",
+            "ast_132e3dcccf0": "proxy"
           },
           "sourcesUsed": {
-            "ast_3136f30f0f0": [
+            "ast_0b7143f8290": [
               "proxy"
             ],
-            "ast_8180d4e7fb0": [
+            "ast_a919b50b4d0": [
               "original"
             ],
-            "ast_36ae17c1950": [
+            "ast_132e3dcccf0": [
               "proxy"
             ]
           },
@@ -97,30 +110,43 @@
           "refused": 0
         },
         "program": {
-          "decoders": 10,
+          "warm": {
+            "decoders": 0,
+            "bytes": 0,
+            "budgetBytes": 167772160,
+            "off": null,
+            "opened": 5,
+            "reused": 9,
+            "adopted": 12,
+            "evicted": 2,
+            "gaveRoom": 0,
+            "overBudget": 0,
+            "noRoom": 0
+          },
+          "decoders": 5,
           "stills": 0,
           "maxDecoders": 10,
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_3136f30f0f0": "original",
-            "ast_36ae17c1950": "original",
-            "ast_8180d4e7fb0": "original"
+            "ast_0b7143f8290": "original",
+            "ast_a919b50b4d0": "original",
+            "ast_132e3dcccf0": "original"
           },
           "sourcesUsed": {
-            "ast_3136f30f0f0": [
+            "ast_0b7143f8290": [
               "original"
             ],
-            "ast_36ae17c1950": [
+            "ast_a919b50b4d0": [
               "original"
             ],
-            "ast_8180d4e7fb0": [
+            "ast_132e3dcccf0": [
               "original"
             ]
           },
-          "opened": 14,
-          "disposed": 4,
-          "peakDecoders": 10,
+          "opened": 2,
+          "disposed": 0,
+          "peakDecoders": 6,
           "refused": 0
         }
       }
@@ -130,23 +156,37 @@
       "ok": true,
       "detail": {
         "cutFramesMeasured": 12,
-        "medianMs": 71.98,
-        "p95Ms": 170.65,
-        "medianFrames": 2.16,
-        "p95Frames": 5.12,
+        "medianMs": 40,
+        "p95Ms": 93.33,
+        "medianFrames": 1.2,
+        "p95Frames": 2.8,
         "allFrames": {
-          "median": 15.98,
-          "p95": 49.31,
-          "max": 331.98
+          "median": 16,
+          "p95": 40,
+          "max": 444
         },
         "baselineRun": {
-          "median": 16,
-          "p95": 30.67,
-          "max": 58.67
+          "median": 14.67,
+          "p95": 29.33,
+          "max": 61.33
         },
         "progressMd74": "median 5-15 ms, p95 about 21-24 ms after the clock reached the frame (one 3.5 s headless run)",
         "budget": "p95 <= 2 frames",
-        "budgetMet": false
+        "budgetMet": false,
+        "prefetch": {
+          "off": null,
+          "budgetMB": 160,
+          "opened": 5,
+          "reused": 9,
+          "adopted": 12,
+          "evicted": 2,
+          "gaveRoom": 0
+        },
+        "loadAverage": [
+          8.55,
+          7.34,
+          5.93
+        ]
       }
     },
     {
@@ -235,8 +275,8 @@
       "name": "U5: a digit while paused gives +1 history entry, the segment under the playhead shows the angle, and undo restores it",
       "ok": true,
       "detail": {
-        "angleAfter": "ang_82074ed6063",
-        "expected": "ang_82074ed6063"
+        "angleAfter": "ang_69a2bd55b83",
+        "expected": "ang_69a2bd55b83"
       }
     },
     {
@@ -276,64 +316,64 @@
         "shownSegments": 7,
         "badges": [
           {
-            "angle": "ang_82074ed6062",
+            "angle": "ang_69a2bd55b82",
             "badge": {
-              "clipId": "clp_a5a837b6cb1",
-              "angleId": "ang_82074ed6062",
+              "clipId": "clp_66aa5fe5c61",
+              "angleId": "ang_69a2bd55b82",
               "text": "1 · Camera 1",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_82074ed6063",
+            "angle": "ang_69a2bd55b83",
             "badge": {
-              "clipId": "clp_8845342c400",
-              "angleId": "ang_82074ed6063",
+              "clipId": "clp_8a0e10a2d10",
+              "angleId": "ang_69a2bd55b83",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_82074ed6064",
+            "angle": "ang_69a2bd55b84",
             "badge": {
-              "clipId": "clp_8845342c401",
-              "angleId": "ang_82074ed6064",
+              "clipId": "clp_8a0e10a2d11",
+              "angleId": "ang_69a2bd55b84",
               "text": "3 · Camera 3",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_82074ed6063",
+            "angle": "ang_69a2bd55b83",
             "badge": {
-              "clipId": "clp_8845342c402",
-              "angleId": "ang_82074ed6063",
+              "clipId": "clp_8a0e10a2d12",
+              "angleId": "ang_69a2bd55b83",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_82074ed6064",
+            "angle": "ang_69a2bd55b84",
             "badge": {
-              "clipId": "clp_8845342c403",
-              "angleId": "ang_82074ed6064",
+              "clipId": "clp_8a0e10a2d13",
+              "angleId": "ang_69a2bd55b84",
               "text": "3 · Camera 3",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_82074ed6062",
+            "angle": "ang_69a2bd55b82",
             "badge": {
-              "clipId": "clp_8845342c404",
-              "angleId": "ang_82074ed6062",
+              "clipId": "clp_8a0e10a2d14",
+              "angleId": "ang_69a2bd55b82",
               "text": "1 · Camera 1",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_82074ed6063",
+            "angle": "ang_69a2bd55b83",
             "badge": {
-              "clipId": "clp_a5a837b6cb2",
-              "angleId": "ang_82074ed6063",
+              "clipId": "clp_66aa5fe5c62",
+              "angleId": "ang_69a2bd55b83",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
@@ -406,27 +446,27 @@
   "measurements": {
     "sync": [
       {
-        "angleId": "ang_82074ed6061",
+        "angleId": "ang_69a2bd55b81",
         "verdict": "reference",
         "offsetSeconds": 0
       },
       {
-        "angleId": "ang_82074ed6062",
+        "angleId": "ang_69a2bd55b82",
         "verdict": "check",
         "offsetSeconds": -0.625
       },
       {
-        "angleId": "ang_82074ed6063",
+        "angleId": "ang_69a2bd55b83",
         "verdict": "confident",
         "offsetSeconds": 1.194187
       },
       {
-        "angleId": "ang_82074ed6064",
+        "angleId": "ang_69a2bd55b84",
         "verdict": "confident",
         "offsetSeconds": 0.499979
       },
       {
-        "angleId": "ang_82074ed6064",
+        "angleId": "ang_69a2bd55b84",
         "verdict": "unsynced",
         "offsetSeconds": null
       }
@@ -434,16 +474,16 @@
     "initialBoundaries": [
       {
         "frame": 1001,
-        "angleId": "ang_82074ed6063"
+        "angleId": "ang_69a2bd55b83"
       }
     ],
     "baseline": {
       "clock": "audio",
       "onsets": 28,
       "paintLatenessMs": {
-        "median": 16,
-        "p95": 30.67,
-        "max": 58.67
+        "median": 14.67,
+        "p95": 29.33,
+        "max": 61.33
       }
     },
     "u1": {
@@ -500,78 +540,92 @@
       "cuts": [
         {
           "frame": 60,
-          "angleId": "ang_82074ed6063"
+          "angleId": "ang_69a2bd55b83"
         },
         {
           "frame": 100,
-          "angleId": "ang_82074ed6064"
+          "angleId": "ang_69a2bd55b84"
         },
         {
           "frame": 140,
-          "angleId": "ang_82074ed6062"
+          "angleId": "ang_69a2bd55b82"
         },
         {
           "frame": 180,
-          "angleId": "ang_82074ed6063"
+          "angleId": "ang_69a2bd55b83"
         },
         {
           "frame": 220,
-          "angleId": "ang_82074ed6064"
+          "angleId": "ang_69a2bd55b84"
         },
         {
           "frame": 260,
-          "angleId": "ang_82074ed6062"
+          "angleId": "ang_69a2bd55b82"
         },
         {
           "frame": 300,
-          "angleId": "ang_82074ed6063"
+          "angleId": "ang_69a2bd55b83"
         },
         {
           "frame": 340,
-          "angleId": "ang_82074ed6064"
+          "angleId": "ang_69a2bd55b84"
         },
         {
           "frame": 380,
-          "angleId": "ang_82074ed6062"
+          "angleId": "ang_69a2bd55b82"
         },
         {
           "frame": 420,
-          "angleId": "ang_82074ed6063"
+          "angleId": "ang_69a2bd55b83"
         },
         {
           "frame": 460,
-          "angleId": "ang_82074ed6064"
+          "angleId": "ang_69a2bd55b84"
         },
         {
           "frame": 500,
-          "angleId": "ang_82074ed6062"
+          "angleId": "ang_69a2bd55b82"
         },
         {
           "frame": 1001,
-          "angleId": "ang_82074ed6063"
+          "angleId": "ang_69a2bd55b83"
         }
       ]
     },
     "u4": {
       "cutFramesMeasured": 12,
-      "medianMs": 71.98,
-      "p95Ms": 170.65,
-      "medianFrames": 2.16,
-      "p95Frames": 5.12,
+      "medianMs": 40,
+      "p95Ms": 93.33,
+      "medianFrames": 1.2,
+      "p95Frames": 2.8,
       "allFrames": {
-        "median": 15.98,
-        "p95": 49.31,
-        "max": 331.98
+        "median": 16,
+        "p95": 40,
+        "max": 444
       },
       "baselineRun": {
-        "median": 16,
-        "p95": 30.67,
-        "max": 58.67
+        "median": 14.67,
+        "p95": 29.33,
+        "max": 61.33
       },
       "progressMd74": "median 5-15 ms, p95 about 21-24 ms after the clock reached the frame (one 3.5 s headless run)",
       "budget": "p95 <= 2 frames",
       "budgetMet": false,
-      "wave2Prefetch": "NEEDED: the budget was missed"
+      "prefetch": {
+        "off": null,
+        "budgetMB": 160,
+        "opened": 5,
+        "reused": 9,
+        "adopted": 12,
+        "evicted": 2,
+        "gaveRoom": 0
+      },
+      "loadAverage": [
+        8.55,
+        7.34,
+        5.93
+      ],
+      "prefetchVerdict": "budget missed in this run (prefetch on)"
     }
   },
   "notMeasured": []

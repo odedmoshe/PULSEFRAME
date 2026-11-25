@@ -2,13 +2,21 @@
  * Frame-exact source decoding via WebCodecs (Mediabunny). One decoder per clip and decode lane, so that two layers
  * showing the same asset, or the earlier pictures a time effect merges (ADR-0011), never invalidate each other's frame.
  * Sequential requests reuse the decode pipeline; random requests seek from the proper keyframe (Mediabunny handles
- * B-frame/presentation order).
+ * B-frame/presentation order): in one decode that the frames after the sought one continue, or, when seek follows seek
+ * (scrubbing), by a lookup that decodes to the sought frame and no further (ClipDecoder.get has the rule).
  *
  * Decoders used while a frame is drawn are pinned to that drawing (FrameProvider.begin/end): the budget never disposes them under it, whatever other drawings do.
  * A frame that needs more decoders than the budget gets null for the extra pictures, with the reason (`decode_budget`),
  * never a rejection: the compositor then leaves the time effect out and says why.
+ *
+ * Warm decoders (prefetch, multicam live switching): `warm()` keeps decoders of assets that are likely to be shown next open
+ * and decoded up to a given time, inside ONE byte budget, so that a clip that appears (a live cut, the next segment) takes an
+ * open decoder instead of opening one. A warm decoder is an ordinary decoder of the same source a fresh one would read; its
+ * answer for a time does not depend on what it was asked before, so taking one over changes when a picture is ready, never
+ * which picture it is (ADR-0005). Warm decoders count towards `maxDecoders`, are never pinned, and give their slot to a drawing
+ * before any decoder a drawing used lately does.
  */
-import { ALL_FORMATS, AudioBufferSink, BlobSource, Input, UrlSource, VideoSampleSink, type Source, type VideoSample } from 'mediabunny';
+import { ALL_FORMATS, AudioBufferSink, BlobSource, Input, UrlSource, VideoSampleSink, type Source } from 'mediabunny';
 import { LUT_MAX_TEXT_LENGTH, LutError, lutStrip } from '@pulseframe/core';
 import { decodeBudgetReason, type FrameImage, type FrameProvider, type LutStrip, type PictureLayer } from '@pulseframe/engine';
 
@@ -19,13 +27,32 @@ export interface PoolDecoder {
 }
 /** A byte source several decoders of one clip may share (its lanes), and the call that gives it back when one of them is done. */
 interface SharedSource { source: Source; release(): void }
+/** A decoder of the pool: when it was last asked for (use clock and real time), and the drawings (begin tokens) that hold it. */
+interface DecoderEntry { assetId: string; dec: Promise<PoolDecoder>; used: number; pins: Set<number>; last: number }
+/** A warm decoder (see MediaPool.warm): its asset and quality, the bytes the budget counts for it, and whether a decode is running. */
+interface WarmEntry { assetId: string; quality: 'draft' | 'full'; dec: Promise<PoolDecoder>; bytes: number; busy: boolean }
+const now = () => performance.now();
 
-class ClipDecoder implements PoolDecoder {
-  private cur: VideoSample | null = null;
-  private iter: AsyncGenerator<VideoSample, void, unknown> | null = null;
+/** A decoded picture as a decoder holds it: Mediabunny's VideoSample (media.seek.test.ts counts with a stand-in). */
+export interface ClipSample { timestamp: number; duration: number; close(): void; draw(ctx: Parameters<FrameImage['draw']>[0], dx: number, dy: number, dw: number, dh: number): void }
+/** What a decoder needs of its samples: VideoSampleSink's lookup by time, and its iterator in presentation order from a time on. */
+export interface ClipSampleSource { getSample(t: number): Promise<ClipSample | null>; samples(start?: number): AsyncGenerator<ClipSample, void, unknown> }
+
+/** Mediabunny's getSample (1.66.0, mediaSamplesAtTimestamps) takes a sample as started at `t` up to this many seconds before its timestamp. */
+const LOOKUP_TOLERANCE = 1e-10;
+
+export class ClipDecoder implements PoolDecoder {
+  private cur: ClipSample | null = null;
+  private iter: AsyncGenerator<ClipSample, void, unknown> | null = null;
+  /** The sample after `cur`, taken from `iter` by the seek that found `cur`. */
+  private ahead: ClipSample | null = null;
+  /** The last request that was not for the frame held was a jump (see `get`). */
+  private jumped = false;
   private chain: Promise<unknown> = Promise.resolve();
   /** `first` is the timestamp of this file's first video frame; requests are relative to it (original and proxy may differ in container offset). */
-  private constructor(private release: () => void, private sink: VideoSampleSink, private frameDur: number, private first: number) {}
+  private constructor(private release: () => void, private sink: ClipSampleSource, private frameDur: number, private first: number) {}
+  /** TEST ONLY (media.seek.test.ts): a decoder over a stand-in for Mediabunny's sample sink, so what it decodes can be counted without a browser. */
+  static over(sink: ClipSampleSource, fps: number, first: number): ClipDecoder { return new ClipDecoder(() => {}, sink, 1 / fps, first); }
 
   /**
    * `src` is a local Blob/File or a shared URL source. URLs are read with HTTP range requests through a bounded byte cache;
@@ -54,38 +81,94 @@ class ClipDecoder implements PoolDecoder {
     this.chain = p.catch(() => {});
     return p;
   }
-  private covers(s: VideoSample, t: number) {
+  private covers(s: ClipSample, t: number) {
     return t >= s.timestamp && t < s.timestamp + (s.duration || this.frameDur);
   }
-  private wrap(s: VideoSample): FrameImage {
+  private wrap(s: ClipSample): FrameImage {
     return { draw: (ctx, dx, dy, dw, dh) => s.draw(ctx, dx, dy, dw, dh) };
   }
+  /** The next sample in presentation order: the one a seek already took from the iterator, else the iterator's. */
+  private async following(): Promise<ClipSample | null> {
+    const a = this.ahead;
+    this.ahead = null;
+    if (a) return a;
+    const n = await this.iter!.next();
+    return n.done ? null : n.value;
+  }
+  /**
+   * The picture at `t`. What a request costs depends on the requests before it, never on the clock; which picture it gets
+   * depends on neither (media.seek.test.ts holds the decoder of before both changes as the reference):
+   *   the frame held covers `t`                     that frame; nothing changes
+   *   a step (after the frame held, by under 0.5 s) the next samples of the iterator, which is started at the frame held if a
+   *                                                 lookup found it (play starts from a frame scrubbing reached: that one
+   *                                                 time the frames from its key frame are decoded again)
+   *   a jump (anything else), the first request     one decode from the key frame that the steps after it continue (`seek`):
+   *     or the first since a step                   jump, then play
+   *   a jump after a jump, no step in between       the lookup only (getSample: decode to `t`, flush, nothing ahead):
+   *                                                 scrubbing, stepping back, a clip played in reverse
+   */
   private async get(t: number): Promise<FrameImage | null> {
     if (this.cur && this.covers(this.cur, t)) return this.wrap(this.cur);
-    if (this.cur && this.iter && t > this.cur.timestamp && t < this.cur.timestamp + 0.5) {
+    const step = !!this.cur && t > this.cur.timestamp && t < this.cur.timestamp + 0.5;
+    const lookupOnly = !step && this.jumped;
+    this.jumped = !step;
+    if (this.cur && step) {
+      this.iter ??= this.sink.samples(this.cur.timestamp);
       for (;;) {
-        const n = await this.iter.next();
-        if (n.done) break;
-        if (n.value.timestamp <= this.cur.timestamp) { n.value.close(); continue; }
+        const n = await this.following();
+        if (!n) break;
+        if (n.timestamp <= this.cur.timestamp) { n.close(); continue; }
         this.cur.close();
-        this.cur = n.value;
+        this.cur = n;
         if (this.covers(this.cur, t) || this.cur.timestamp > t) break;
       }
       if (this.cur && this.covers(this.cur, t)) return this.wrap(this.cur);
     }
-    await this.iter?.return();
-    this.iter = null;
-    this.cur?.close();
-    this.cur = await this.sink.getSample(t); // last frame with PTS <= t
-    if (!this.cur) return null;
-    this.iter = this.sink.samples(this.cur.timestamp);
-    return this.wrap(this.cur);
+    await this.drop();
+    if (lookupOnly || !(await this.seek(t))) this.cur = await this.sink.getSample(t); // last frame with PTS <= t
+    return this.cur && this.wrap(this.cur);
+  }
+  /**
+   * A seek as ONE decode from the key frame: the iterator that gives the frames after `t` also gives the frame at `t`, its
+   * first sample (the last one that starts at or before `t`; the stream's first when none does). Asking getSample(t) for that
+   * frame and then starting an iterator at it decodes the frames from the key frame to `t` twice.
+   * False: only getSample can say which frame it is, or the iterator failed where getSample, which decodes no further than
+   * `t`, may not; nothing is held then.
+   */
+  private async seek(t: number): Promise<boolean> {
+    const iter = this.sink.samples(t);
+    let at: ClipSample | null = null, next: ClipSample | null = null;
+    try {
+      at = (await iter.next()).value ?? null;
+      if (at && at.timestamp <= t) {
+        next = (await iter.next()).value ?? null; // already decoded when `at` starts before `t`: the iterator knew `at` by seeing this one
+        // getSample takes a sample that starts within its tolerance after `t` as started, if it was decoded on the way to `t`
+        // (B-frames). No time evaluate asks for (the middle of a frame) is this close to a frame's start.
+        if (!next || next.timestamp - t > LOOKUP_TOLERANCE) {
+          this.cur = at;
+          this.iter = iter;
+          this.ahead = next;
+          return true;
+        }
+      }
+    } catch { /* getSample is asked below */ }
+    const before = !!at && at.timestamp > t; // `t` is before the first frame: no picture, as getSample answers
+    at?.close();
+    next?.close();
+    await iter.return().catch(() => {});
+    return before;
+  }
+  /** Close the pipeline and every sample held. */
+  private async drop() {
+    const { iter, cur, ahead } = this;
+    this.iter = this.cur = this.ahead = null;
+    cur?.close();
+    ahead?.close();
+    await iter?.return();
   }
   async dispose() {
     await this.chain.catch(() => {});
-    await this.iter?.return();
-    this.cur?.close();
-    this.cur = null;
+    await this.drop();
     this.release();
     this.release = () => {};
   }
@@ -116,6 +199,55 @@ export interface MediaPoolStats {
   peakDecoders: number;
   /** Pictures refused because their frame needed more decoders than `maxDecoders` (decode_budget). */
   refused: number;
+  /** Prefetch (see `warm`): what is held, within which budget, and what it did. */
+  warm: WarmStats;
+}
+/** A decoder to keep warm: an asset at a quality, decoded up to `seconds` (from the stream's first frame, as sourceSeekSeconds). */
+export interface WarmRequest { assetId: string; quality: 'draft' | 'full'; seconds: number; width: number; height: number }
+export interface WarmStats {
+  /** Warm decoders held now, and the bytes the budget counts for them. */
+  decoders: number; bytes: number; budgetBytes: number;
+  /** Why nothing is kept warm (the budget is 0, e.g. on a low-memory device), or null. */
+  off: string | null;
+  /** Warm decoders opened; taken over from a decoder no drawing used lately; taken over by a picture (the point of it); disposed because the plan or the budget no longer held them. */
+  opened: number; reused: number; adopted: number; evicted: number;
+  /** Of those evicted, the ones disposed to give their slot to a drawing's decoder. */
+  gaveRoom: number;
+  /** Requests left out because they did not fit the budget (last call), or because no decoder slot was free. */
+  overBudget: number; noRoom: number;
+}
+/**
+ * Decoded pictures one decoder may hold at once (the picture shown and its pipeline's queue), at 4 bytes a pixel: deliberately
+ * more than a YUV decoder holds, so the estimate errs on the side of memory.
+ */
+export const WARM_FRAMES_HELD = 8;
+/** What the budget counts for one warm decoder: its byte cache (the most it may read ahead) and the pictures it may hold. */
+export const warmCostBytes = (width: number, height: number, byteCache: number): number => byteCache + Math.max(1, width) * Math.max(1, height) * 4 * WARM_FRAMES_HELD;
+/**
+ * The requests that are kept, in order, within `budgetBytes`: the first of each asset and quality, and only while the running
+ * total fits (a request that does not fit is skipped and a cheaper one after it may still fit). Pure: the eviction rule.
+ */
+export function fitWarmBudget<R extends WarmRequest>(list: readonly R[], budgetBytes: number, cost: (r: R) => number): { keep: R[]; over: R[] } {
+  const keep: R[] = [], over: R[] = [], seen = new Set<string>();
+  let used = 0;
+  for (const r of list) {
+    const k = `${r.assetId}:${r.quality}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const c = cost(r);
+    if (used + c <= budgetBytes) { keep.push(r); used += c; } else over.push(r);
+  }
+  return { keep, over };
+}
+/**
+ * The prefetch budget for this device, from navigator.deviceMemory (GB, as the browser rounds it; undefined where the browser
+ * does not say). Under 2 GB nothing is kept warm (the honest fallback: switches open their decoder when they happen, as before).
+ */
+export function prefetchBudget(deviceMemoryGB: number | undefined): { bytes: number; off: string | null } {
+  const MB = 1 << 20;
+  if (deviceMemoryGB === undefined || !Number.isFinite(deviceMemoryGB)) return { bytes: 64 * MB, off: null }; // not reported: a small budget
+  if (deviceMemoryGB < 2) return { bytes: 0, off: 'low_memory' };
+  return { bytes: (deviceMemoryGB < 4 ? 64 : 160) * MB, off: null };
 }
 
 /** The code of a stored file that is missing on disk: the server's answer (404 missing_media) and the reason a picture is left out. */
@@ -126,7 +258,7 @@ export class MediaPool {
   private local = new Map<string, Blob>();
   private blobs = new Map<string, Promise<Blob>>();
   /** By `${clipId}:${quality}:${lane}`: the decoder, when it was last asked for, and the drawings (begin tokens) that hold it. */
-  private decoders = new Map<string, { assetId: string; dec: Promise<PoolDecoder>; used: number; pins: Set<number> }>();
+  private decoders = new Map<string, DecoderEntry>();
   /** URL sources shared by the lanes of one clip, by `${clipId}:${quality}\n${url}`, with how many decoders read each. */
   private urlSources = new Map<string, { source: UrlSource; users: number }>();
   /** Why the last request for a decoder key resolved null (the budget), by key. */
@@ -147,6 +279,9 @@ export class MediaPool {
   private note(assetId: string, kind: 'local' | 'proxy' | 'original') { this.sources[assetId] = kind; if (!this.used[assetId]?.includes(kind)) (this.used[assetId] ??= []).push(kind); }
   private opened = 0;
   private disposed = 0;
+  /** Warm decoders by `${assetId}:${quality}`, in the order of the last plan (the last is the first to go). */
+  private warmed = new Map<string, WarmEntry>();
+  private warmStats: WarmStats = { decoders: 0, bytes: 0, budgetBytes: 0, off: null, opened: 0, reused: 0, adopted: 0, evicted: 0, gaveRoom: 0, overBudget: 0, noRoom: 0 };
   private maxDecoders: number;
   private maxStills: number;
   private byteCache: number;
@@ -263,13 +398,13 @@ export class MediaPool {
     if (this.drawing === token) this.drawing = 0;
   }
   /** Decoders taken out of use while a drawing still held their picture: disposed when the last such drawing ends. */
-  private retiring = new Set<{ assetId: string; dec: Promise<PoolDecoder>; used: number; pins: Set<number> }>();
+  private retiring = new Set<DecoderEntry>();
   /**
    * Take a decoder out of use (its asset was replaced, or a proxy became ready). One that a drawing in progress holds is
    * closed only when that drawing ends: closing it at once released the picture that drawing was about to paint
    * ('VideoSample is closed', seen in the editor when a proxy finished while a frame was being drawn).
    */
-  private retire(key: string, v: { assetId: string; dec: Promise<PoolDecoder>; used: number; pins: Set<number> }) {
+  private retire(key: string, v: DecoderEntry) {
     this.decoders.delete(key);
     this.disposed++;
     if (v.pins.size) this.retiring.add(v);
@@ -288,19 +423,32 @@ export class MediaPool {
     let d = this.decoders.get(key);
     if (d && d.assetId !== layer.assetId) { this.retire(key, d); d = undefined; }
     if (!d) {
+      const w = this.warmed.get(`${layer.assetId}:${quality}`);
+      if (w) {
+        // a warm decoder of this asset and quality: the same source a fresh one would read, already open and decoded near here
+        this.warmed.delete(`${layer.assetId}:${quality}`);
+        this.warmStats.adopted++;
+        d = { assetId: layer.assetId, dec: w.dec, used: 0, pins: new Set<number>(), last: 0 };
+        this.decoders.set(key, d);
+        const entry = d;
+        w.dec.catch(() => { if (this.decoders.get(key) === entry) this.decoders.delete(key); });
+      }
+    }
+    if (!d) {
       if (!this.makeRoom()) return null;
       const lane = layer.lane ?? 0;
       const dec = this.videoSource(layer.assetId, quality).then((src) => this.opts.openDecoder
         ? this.opts.openDecoder(src, { assetId: layer.assetId, clipId: layer.clipId, quality, lane })
         : ClipDecoder.open(typeof src === 'string' ? this.urlSource(`${layer.clipId}:${quality}`, src) : src, 30));
-      const entry = { assetId: layer.assetId, dec, used: 0, pins: new Set<number>() };
+      const entry = { assetId: layer.assetId, dec, used: 0, pins: new Set<number>(), last: 0 };
       d = entry;
       this.decoders.set(key, entry);
       this.opened++;
-      this.peak = Math.max(this.peak, this.decoders.size);
+      this.peak = Math.max(this.peak, this.decoders.size + this.warmed.size);
       dec.catch(() => { if (this.decoders.get(key) === entry) this.decoders.delete(key); });
     }
     d.used = ++this.useClock;
+    d.last = now();
     if (this.drawing) d.pins.add(this.drawing);
     return d.dec;
   }
@@ -334,10 +482,17 @@ export class MediaPool {
     return { source: entry.source, release: () => { if (given) return; given = true; if (--entry.users === 0 && this.urlSources.get(k) === entry) this.urlSources.delete(k); } };
   }
   /**
-   * Bounded decoder count: before a decoder is opened, the least recently used ones that the current drawing does not use
-   * are disposed until there is room. False when every open decoder is in use by the current drawing (pinned).
+   * Bounded decoder count: before a decoder is opened, decoders the current drawing does not use are disposed until there is
+   * room: first those no drawing used in the last STALE_MS (least recently used first), then warm ones (the least wanted
+   * first), then the least recently used of the rest. False when every open decoder is in use by the current drawing (pinned).
    */
   private makeRoom(): boolean {
+    while (this.decoders.size + this.warmed.size >= this.maxDecoders && this.warmed.size) {
+      if (this.freeStaleSlot()) continue;
+      const [k, w] = [...this.warmed].at(-1)!;
+      this.warmStats.gaveRoom++;
+      this.dropWarm(k, w);
+    }
     while (this.decoders.size >= this.maxDecoders) {
       let oldest: string | null = null, at = Infinity;
       for (const [k, v] of this.decoders) if (v.pins.size === 0 && v.used < at) { at = v.used; oldest = k; }
@@ -349,6 +504,80 @@ export class MediaPool {
     }
     return true;
   }
+  /**
+   * Keep decoders warm for `list` (in order of how likely each is to be shown next), within `budgetBytes` (fitWarmBudget with
+   * warmCostBytes): a warm decoder of each kept asset and quality, decoded up to the time asked for. Warm decoders the list no
+   * longer holds, or that no longer fit, are disposed at once (eviction); `warm([], …)` lets them all go. A warm decoder is:
+   * one already held; else a decoder of that asset and quality that no drawing used in the last STALE_MS (it is taken out of the
+   * drawn ones, so nothing is opened); else a new one, only while a decoder slot is free or a stale decoder can give its slot
+   * (a decoder a drawing holds or used lately is never touched). A decode still running for an entry is not asked again (no
+   * queue builds up). Nothing here changes what any drawing gets for a picture.
+   */
+  warm(list: readonly WarmRequest[], budgetBytes: number, off: string | null = null): WarmStats {
+    const cost = (r: WarmRequest) => warmCostBytes(r.width, r.height, this.byteCache);
+    const usable = list.filter((r) => !(this.missing.has(r.assetId) && !this.local.has(r.assetId)));
+    const { keep, over } = fitWarmBudget(usable, Math.max(0, budgetBytes), cost);
+    Object.assign(this.warmStats, { budgetBytes: Math.max(0, budgetBytes), off: budgetBytes > 0 ? null : off ?? 'no_budget', overBudget: over.length, noRoom: 0 });
+    const want = new Map<string, WarmRequest>(keep.map((r) => [`${r.assetId}:${r.quality}`, r]));
+    for (const [k, w] of [...this.warmed]) if (!want.has(k)) this.dropWarm(k, w);
+    const next = new Map<string, WarmEntry>();
+    for (const [k, r] of want) {
+      let w = this.warmed.get(k) ?? this.reuseStale(r) ?? undefined;
+      if (!w) {
+        if (this.decoders.size + this.warmed.size + next.size >= this.maxDecoders && !this.freeStaleSlot()) { this.warmStats.noRoom++; continue; }
+        const dec = this.videoSource(r.assetId, r.quality).then((src) => this.opts.openDecoder
+          ? this.opts.openDecoder(src, { assetId: r.assetId, clipId: `warm:${r.assetId}`, quality: r.quality, lane: 0 })
+          : ClipDecoder.open(typeof src === 'string' ? this.urlSource(`warm:${k}`, src) : src, 30));
+        w = { assetId: r.assetId, quality: r.quality, dec, bytes: cost(r), busy: false };
+        this.warmStats.opened++;
+        const entry = w;
+        dec.catch(() => { if (this.warmed.get(k) === entry) this.warmed.delete(k); });
+      }
+      w.bytes = cost(r);
+      this.warmed.delete(k);
+      next.set(k, w);
+      if (!w.busy) {
+        const entry = w;
+        entry.busy = true;
+        void entry.dec.then((x) => x.frame(r.seconds)).catch(() => null).finally(() => { entry.busy = false; });
+      }
+    }
+    this.warmed = next; // in the order of this plan
+    this.peak = Math.max(this.peak, this.decoders.size + this.warmed.size);
+    return this.stats().warm;
+  }
+  /** A decoder no drawing holds or used in the last STALE_MS, of this asset and quality, moved out of the drawn ones; null when none. */
+  private reuseStale(r: WarmRequest): WarmEntry | null {
+    const t = now();
+    let best: [string, DecoderEntry] | null = null;
+    for (const [k, v] of this.decoders) {
+      if (v.assetId !== r.assetId || !k.includes(`:${r.quality}:`) || v.pins.size || t - v.last < MediaPool.STALE_MS) continue;
+      if (!best || v.used > best[1].used) best = [k, v];
+    }
+    if (!best) return null;
+    this.decoders.delete(best[0]);
+    this.warmStats.reused++;
+    return { assetId: r.assetId, quality: r.quality, dec: best[1].dec, bytes: 0, busy: false };
+  }
+  /** Dispose the least recently used decoder that no drawing holds or used lately, so a warm one can have its slot. */
+  private freeStaleSlot(): boolean {
+    const t = now();
+    let oldest: string | null = null, at = Infinity;
+    for (const [k, v] of this.decoders) if (v.pins.size === 0 && t - v.last >= MediaPool.STALE_MS && v.used < at) { at = v.used; oldest = k; }
+    if (oldest === null) return false;
+    const v = this.decoders.get(oldest)!;
+    this.decoders.delete(oldest);
+    this.disposed++;
+    void v.dec.then((x) => x.dispose()).catch(() => {});
+    return true;
+  }
+  private dropWarm(k: string, w: WarmEntry) {
+    if (this.warmed.get(k) === w) this.warmed.delete(k);
+    this.warmStats.evicted++;
+    void w.dec.then((x) => x.dispose()).catch(() => {});
+  }
+  /** A decoder that no drawing used for this long may give its slot to, or become, a warm decoder. */
+  static readonly STALE_MS = 250;
   /**
    * Streaming audio decode for preview (bounded: the caller pulls a few buffers ahead of the playhead).
    * Always the ORIGINAL asset, read by range requests; the caller must call `dispose` when playback stops.
@@ -367,12 +596,16 @@ export class MediaPool {
   /** Drop decoders of one asset (e.g. its proxy just became ready, or the asset was replaced). */
   invalidate(assetId: string) {
     for (const [k, v] of [...this.decoders]) if (v.assetId === assetId) this.retire(k, v);
+    for (const [k, w] of [...this.warmed]) if (w.assetId === assetId) this.dropWarm(k, w);
   }
   stats(): MediaPoolStats {
-    return { decoders: this.decoders.size, stills: this.stills.size, maxDecoders: this.maxDecoders, maxStills: this.maxStills, decoderByteCacheBytes: this.byteCache, sources: { ...this.sources }, sourcesUsed: structuredClone(this.used), opened: this.opened, disposed: this.disposed, peakDecoders: this.peak, refused: this.refused };
+    const warm = { ...this.warmStats, decoders: this.warmed.size, bytes: [...this.warmed.values()].reduce((a, w) => a + w.bytes, 0) };
+    return { warm, decoders: this.decoders.size, stills: this.stills.size, maxDecoders: this.maxDecoders, maxStills: this.maxStills, decoderByteCacheBytes: this.byteCache, sources: { ...this.sources }, sourcesUsed: structuredClone(this.used), opened: this.opened, disposed: this.disposed, peakDecoders: this.peak, refused: this.refused };
   }
   async dispose() {
     for (const v of this.decoders.values()) void v.dec.then((d) => d.dispose()).catch(() => {});
+    for (const w of this.warmed.values()) void w.dec.then((d) => d.dispose()).catch(() => {});
+    this.warmed.clear();
     for (const v of this.retiring) void v.dec.then((d) => d.dispose()).catch(() => {});
     this.retiring.clear();
     for (const v of this.stills.values()) void v.img.then((x) => x.bmp.close()).catch(() => {});

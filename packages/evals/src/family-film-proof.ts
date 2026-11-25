@@ -544,7 +544,25 @@ async function main() {
     const c = await regenerate('R3 the last clip moved 3 s later', [lastPic.clip.id]);
     check('F13', 'R3: when the clips left cannot fill the room up to a kept clip, the plan warns pictures_missing with exactly the frames that show no picture', c.holes > 0 && c.missing?.details?.gapFrames === c.holes, { holes: c.holes, firstHoles: c.firstHoles, warned: c.missing?.details ?? null }, 'a gap exists here; warned frames = measured frames');
     for (let i = 0; i < 2; i++) await call(`/projects/${pid}/undo`, {});
-    measurements.f13Note = 'R3 is the only case with not enough material; it records how the planner answers (a warned gap). R1 and R2 have material to spare and must show a picture on every frame.';
+    // R4 (ADR-0026, amendment of 2026-11-24): the second clip deleted with its gap closed (ripple delete, as Delete does in a new
+    // project). The clips after it moved earlier by exactly its length and nothing else about them changed: they are not edits by
+    // hand (R1 and R3 are: a clip dragged by hand is kept). They are not kept one clip early; the film is laid out again without
+    // the deleted file, with no hole, every cut on the grid, and the answer says so
+    const after2 = fm.pictures.slice(2).map((p) => p.clip.id);
+    const afterKeys = fm.slots.filter((x) => after2.includes(x.clipId)).map((x) => x.key).sort();
+    await tx(pid, [{ op: 'ripple_delete_clips', args: { clipIds: [second.clip.id] } }]);
+    const dRipple = await getDoc(pid);
+    const movedEarlier = after2.every((id) => sec(clipById(dRipple, id)!.clip.start) < sec(clipById(d0, id)!.clip.start));
+    const e = await regenerate('R4 the second clip deleted with its gap closed', []);
+    const said = (e.r.warnings as any[]).find((w) => w.code === 'moved_back');
+    check('F13', 'R4: clips a delete moved (it closed the gap before them) are not kept as hand edits: they are replaced, the deleted file stays out, the film has no frame without a picture, every cut is on the grid, and the answer says it (warning moved_back naming their slots)',
+      movedEarlier && e.r.protected.length === 0 && after2.every((id) => !clipById(e.d2, id)) && e.fm2.pictures.every((p) => p.clip.assetId !== second.clip.assetId) && e.holes === 0 && e.offGrid.length === 0 && !e.missing
+        && JSON.stringify([...(said?.details?.keys ?? [])].sort()) === JSON.stringify(afterKeys) && JSON.stringify([...(e.r.movedBack ?? [])].sort()) === JSON.stringify(afterKeys) && (e.r.warnings as any[]).some((w) => w.code === 'removed_by_hand') && !(e.r.warnings as any[]).some((w) => w.code === 'kept_by_hand'),
+      { movedEarlier, protected: e.r.protected, movedBack: e.r.movedBack ?? null, holes: e.holes, offGrid: e.offGrid, warnings: (e.r.warnings as any[]).map((w) => w.code) }, 'replaced; 0 holes; on the grid; moved_back');
+    for (let i = 0; i < 2; i++) await call(`/projects/${pid}/undo`, {});
+    const back4 = await getDoc(pid);
+    check('F13', 'R4: undoing that regeneration and the delete gives back the film byte for byte', sha(JSON.stringify(back4)) === sha(JSON.stringify(d0)), { equal: sha(JSON.stringify(back4)) === sha(JSON.stringify(d0)) }, 'sha256 equal');
+    measurements.f13Note = 'R3 is the only case with not enough material; it records how the planner answers (a warned gap). R1 and R2 have material to spare and must show a picture on every frame. R1 and R3 hold a clip dragged by hand (kept); R4 holds clips a gap-closing delete moved (laid out again).';
   });
 
   // ================================================================ F15, F15b: the mix
@@ -721,6 +739,65 @@ async function main() {
       const d3 = await getDoc(up);
       const run = Object.values(d3.recipeRuns).find((r: any) => r.recipeId === 'template:tpl.family-film') as any;
       check('F19', 'after a reload, «אורך אחר» → 30 in the film bar regenerates the film from the document\'s run', rev3 === rev2 + 1 && run?.params?.targetSeconds === 30, { revisionBefore: rev2, revisionAfter: rev3, targetSeconds: run?.params?.targetSeconds ?? null }, '+1 revision, target 30');
+      // F20 (wave 6): a film clip deleted by hand in the timeline, and «החזרת החלקים שנמחקו» in the film bar
+      {
+        const restore = page.locator('[data-testid=film-bar-restore-removed]'), barError = page.locator('[data-testid=film-bar] .pf-anchored');
+        const slotsOf = (doc: any) => ((Object.values(doc.recipeRuns).find((r: any) => r.recipeId === 'template:tpl.family-film') as any)?.slots ?? []) as { key: string; kind: string; clipId: string }[];
+        const has = (doc: any, id: string) => Object.values(doc.sequences).some((q: any) => q.tracks.some((t: any) => t.clips.some((c: any) => c.id === id)));
+        const removedN = (doc: any) => slotsOf(doc).filter((x) => !has(doc, x.clipId)).length;
+        const shape = (doc: any) => JSON.stringify(doc.sequences);
+        const waitRevision = async (want: number, ms = 120_000) => { const t = Date.now(); while ((await revision(up)) < want && Date.now() - t < ms) await sleep(200); return (await revision(up)) >= want; };
+        const pictures = slotsOf(d3).filter((x) => x.kind === 'picture');
+        const victim = pictures[Math.min(1, pictures.length - 1)]?.clipId ?? '';
+        const onTimeline = await page.locator(`.clip[data-clip-id="${victim}"]`).count();
+        const offeredBefore = await restore.count();
+        // Delete as a new project has it closes the gap, so the film's later clips move earlier, by exactly the deleted clip's
+        // length. That is not an edit by hand (ADR-0026, amendment of 2026-11-24): the button lays the film out again with the
+        // deleted file back at its place, in one revision, and the bar says in Hebrew that the moved clips were not kept (check F21).
+        await page.locator(`.clip[data-clip-id="${victim}"]`).click();
+        await page.keyboard.press('Delete');
+        await waitRevision(rev3 + 1, 20_000);
+        await restore.waitFor({ timeout: 10_000 }).catch(() => {});
+        const obs: Record<string, unknown> = { deleteOps: (((await must(`/projects/${up}/history?since=${rev3}`)).events ?? []) as any[]).filter((e) => e.revision > rev3).map((e) => e.ops), offered: await restore.count() };
+        if (await restore.count()) {
+          const revA = await revision(up);
+          await restore.click();
+          await Promise.race([barError.waitFor({ timeout: 120_000 }).catch(() => {}), waitRevision(revA + 1)]);
+          await sleep(800);
+          const dA = await getDoc(up);
+          const layoutOf = (doc: any) => slotsOf(doc).filter((x) => x.kind === 'picture').flatMap((x) => { const c = Object.values(doc.sequences).flatMap((q: any) => q.tracks.flatMap((t: any) => t.clips)).find((k: any) => k.id === x.clipId) as any; return c ? [[c.assetId, T.nearestFrameIndex(c.start, R), T.nearestFrameIndex(c.duration, R)]] : []; }).sort((x, y) => (x[1] as number) - (y[1] as number));
+          obs.afterButton = { revisions: (await revision(up)) - revA, refusal: (await barError.count()) ? await barError.locator('p').first().textContent() : null, removed: removedN(dA), offered: await restore.count(), note: await page.locator('[data-testid=film-bar-note]').textContent().catch(() => null), sameLayout: JSON.stringify(layoutOf(dA)) === JSON.stringify(layoutOf(d3)), layout: layoutOf(dA), layoutBefore: layoutOf(d3) };
+          if (await barError.count()) await barError.locator('.pf-anchored-x').click().catch(() => {});
+        }
+        for (let n = (await revision(up)) - rev3; n > 0; n--) { await page.locator('[data-testid=undo]').click(); await sleep(700); }
+        let observedUndone = false;
+        for (let i = 0; i < 100 && !observedUndone; i++) { observedUndone = shape(await getDoc(up)) === shape(d3); if (!observedUndone) await sleep(150); }
+        obs.undoneExactly = observedUndone;
+        {
+          const ab = (obs.afterButton ?? {}) as { revisions?: number; refusal?: string | null; removed?: number; offered?: number; note?: string | null; sameLayout?: boolean };
+          check('F21', 'a film clip deleted with Delete (the gap closes, the later clips move earlier): «החזרת החלקים שנמחקו» lays the film out again in one revision with the deleted file back at its place (the same files on the same frames as before the delete), nothing is refused, and the bar says in Hebrew that the clips the delete moved were not kept where they ended up; undo returns exactly',
+            JSON.stringify(obs.deleteOps) === '[["ripple_delete_clips"]]' && obs.offered === 1 && ab.revisions === 1 && ab.refusal === null && ab.removed === 0 && ab.offered === 0 && ab.sameLayout === true
+              && (ab.note ?? '').replace(/[\u2066-\u2069]/g, '') === 'קליפים שזזו בגלל מחיקה לא נשארו במקום שאליו זזו: הסרט סודר מחדש יחד איתם' && observedUndone,
+            obs, '+1 revision, 0 removed, same layout, the Hebrew sentence, exact undo');
+        }
+        // Shift+Delete keeps the gap: nothing else moves; the button makes the clip again
+        const rev4 = await revision(up);
+        await page.locator(`.clip[data-clip-id="${victim}"]`).click();
+        await page.keyboard.press('Shift+Delete');
+        const deleted = (await waitRevision(rev4 + 1, 20_000)) && !has(await getDoc(up), victim);
+        await restore.waitFor({ timeout: 10_000 }).catch(() => {});
+        const offered = { count: await restore.count(), text: await restore.textContent().catch(() => null), visible: await restore.isVisible().catch(() => false), removed: removedN(await getDoc(up)) };
+        await restore.scrollIntoViewIfNeeded().catch(() => {});
+        await page.screenshot({ path: path.join(shots, 'family-film-bar-restore-removed.png') });
+        await restore.click();
+        const made = await waitRevision(rev4 + 2);
+        await restore.waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {});
+        const after = await getDoc(up);
+        const back = { revision: await revision(up), removed: removedN(after), pictureSlots: slotsOf(after).filter((x) => x.kind === 'picture').length, offered: await restore.count(), refusal: (await barError.count()) ? await barError.locator('p').first().textContent() : null };
+        check('F20', 'a film clip deleted by hand with Shift+Delete: the film bar offers «החזרת החלקים שנמחקו» (not before); the button makes the film whole again in one revision and is gone', onTimeline === 1 && offeredBefore === 0 && deleted && offered.count === 1 && (offered.text ?? '').trim() === 'החזרת החלקים שנמחקו' && offered.visible && offered.removed === 1
+          && made && back.revision === rev4 + 2 && back.removed === 0 && back.pictureSlots === pictures.length && back.offered === 0 && back.refusal === null && observedUndone && errors.length === 0,
+          { pictures: pictures.length, onTimeline, offeredBefore, deleted, offered, back, withDefaultDelete: obs, pageErrors: errors.slice(0, 3) }, 'offered once, +1 revision, 0 removed, exact undo');
+      }
     } finally { await browser.close(); }
   });
 

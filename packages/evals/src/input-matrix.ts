@@ -13,6 +13,7 @@ import { chromium } from 'playwright';
 import * as T from '@pulseframe/time';
 import { generateBarcodeFixture, readBarcode } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
+import { openCardMenu } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/input-matrix');
@@ -279,6 +280,10 @@ async function main() {
             else if (got.length < ref.length || ref.some((t, i) => Math.abs((got[i] ?? 99) - t) > 1 / 30)) problemsP.push('sound');
           }
           // the library must tell the user what the editor did with, or does not know about, this file
+          // since the redesigned library the notices are in the card's ⋯ menu: open it (and see it open, so an empty list is read
+          // from the open menu, not from a closed one) before reading them
+          await openCardMenu(ep, up.assetId);
+          await ep.locator(`[data-testid="more-${up.assetId}"][aria-expanded=true]`).waitFor({ timeout: 5000 });
           rp.notices = await ep.locator('[data-testid=asset-notice]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.code));
           if (JSON.stringify([...rp.notices].sort()) !== JSON.stringify([...(c.notices ?? [])].sort())) problemsP.push('notices');
           if (errs.length) { problemsP.push('page error'); rp.errors = errs.slice(0, 2); }

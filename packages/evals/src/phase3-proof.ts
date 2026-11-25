@@ -711,8 +711,11 @@ async function main() {
     await page.locator(`.clip[data-clip-id="${anyClip.id}"]`).click();
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await key('Control+KeyK');
-    await page.getByTestId('palette-input').fill('track up');
+    // the command's exact name: a part of it («track up») is an unknown request for the command bar, which runs nothing on Enter
+    // (ADR-0027, never guessed); an exact registry name still runs that command on Enter (palette.enter.ts)
+    await page.getByTestId('palette-input').fill("Move the selected clip's track up");
     const upCmd = await page.getByTestId('palette-option').first().getAttribute('data-command-id');
+    const upActive = await page.getByTestId('palette-input').getAttribute('aria-activedescendant');
     await key('Enter');
     let mvA = await getDoc();
     for (let i = 0; i < 50 && mvA.revision === mvB.revision; i++) { await new Promise((r) => setTimeout(r, 100)); mvA = await getDoc(); }
@@ -723,7 +726,7 @@ async function main() {
     let mvU = await getDoc();
     for (let i = 0; i < 50 && mvU.revision === mvA.revision; i++) { await new Promise((r) => setTimeout(r, 100)); mvU = await getDoc(); }
     const b0 = orderOf(mvB.project);
-    check('"move track up" from the palette swaps the selected clip\'s track with the one above it in the list, the timeline rows before and after are exactly the lane order of that list (titles, captions, picture stack front-most first, sound in list order), and Ctrl+Z restores the order', upCmd === 'track.moveUp' && JSON.stringify(orderOf(mvA.project)) === JSON.stringify([b0[1], b0[0], ...b0.slice(2)]) && JSON.stringify(shownBefore) === JSON.stringify(laneRows(mvB.project)) && JSON.stringify(shownAfter) === JSON.stringify(laneRows(mvA.project)) && JSON.stringify(orderOf(mvU.project)) === JSON.stringify(b0), { upCmd, before: b0.length, moved: orderOf(mvA.project)[1] === b0[0], shownMatches: JSON.stringify(shownAfter) === JSON.stringify(laneRows(mvA.project)), restored: JSON.stringify(orderOf(mvU.project)) === JSON.stringify(b0), kinds: mvB.project.sequences.seq_main!.tracks.map((t) => t.kind), shownBefore, shownAfter, rowsBefore: laneRows(mvB.project) });
+    check('"move track up" from the palette (its exact name, so Enter runs that command, not the command bar\'s unknown answer) swaps the selected clip\'s track with the one above it in the list, the timeline rows before and after are exactly the lane order of that list (titles, captions, picture stack front-most first, sound in list order), and Ctrl+Z restores the order', upCmd === 'track.moveUp' && upActive === 'pf-palette-opt-track-moveUp' && JSON.stringify(orderOf(mvA.project)) === JSON.stringify([b0[1], b0[0], ...b0.slice(2)]) && JSON.stringify(shownBefore) === JSON.stringify(laneRows(mvB.project)) && JSON.stringify(shownAfter) === JSON.stringify(laneRows(mvA.project)) && JSON.stringify(orderOf(mvU.project)) === JSON.stringify(b0), { upCmd, upActive, before: b0.length, moved: orderOf(mvA.project)[1] === b0[0], shownMatches: JSON.stringify(shownAfter) === JSON.stringify(laneRows(mvA.project)), restored: JSON.stringify(orderOf(mvU.project)) === JSON.stringify(b0), kinds: mvB.project.sequences.seq_main!.tracks.map((t) => t.kind), shownBefore, shownAfter, rowsBefore: laneRows(mvB.project) });
 
     console.log('\n# full history dialog');
     await fetch(`${s.url}/api/v1/projects/${pid}/transactions`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ ops: [{ op: 'add_marker', args: { time: T.frameTime(7, R), label: 'from an agent' } }] }) }); // one edit by an agent, so the filter has something to show
@@ -751,15 +754,16 @@ async function main() {
     await page.waitForFunction((n) => Number(document.querySelector('[data-testid=revision]')?.textContent?.replace(/\D+/g, '')) > n, gb.revision, { timeout: 8000 }).catch(() => {});
     await page.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
     await key('Control+KeyK');
-    await page.getByTestId('palette-input').fill('close empty gaps');
+    await page.getByTestId('palette-input').fill('Close empty gaps in the timeline'); // the exact name (see "move a track")
     const gapCmd = await page.getByTestId('palette-option').first().getAttribute('data-command-id');
+    const gapActive = await page.getByTestId('palette-input').getAttribute('aria-activedescendant');
     await key('Enter');
     let ga = await getDoc();
     /** Frames covered by at least one clip on any track. */
     const covered = (d: ProjectDocument) => { const on = new Set<number>(); for (const tr of d.sequences.seq_main!.tracks) for (const c of tr.clips) for (let i = T.frameIndexAt(c.start, R), e = i + T.frameIndexAt(c.duration, R); i < e; i++) on.add(i); return on.size; };
     const wantEnd = covered(gb.project) + 30; // everything that was covered, plus the late title
     for (let i = 0; i < 50 && endOf(ga.project) !== wantEnd; i++) { await new Promise((r) => setTimeout(r, 100)); ga = await getDoc(); }
-    check('"close empty gaps" from the command palette removes all time that was empty on every track (including the 90 frames before a late title) in one transaction: the timeline is exactly as long as its covered frames, and nothing covered was lost', gapCmd === 'edit.closeGaps' && endOf(ga.project) === wantEnd && covered(ga.project) === wantEnd && ga.revision === gb.revision + 2, { gapCmd, endBefore: gEnd, coveredBefore: covered(gb.project), endAfter: endOf(ga.project), coveredAfter: covered(ga.project), revisions: [gb.revision, ga.revision] });
+    check('"close empty gaps" from the command palette removes all time that was empty on every track (including the 90 frames before a late title) in one transaction: the timeline is exactly as long as its covered frames, and nothing covered was lost', gapCmd === 'edit.closeGaps' && gapActive === 'pf-palette-opt-edit-closeGaps' && endOf(ga.project) === wantEnd && covered(ga.project) === wantEnd && ga.revision === gb.revision + 2, { gapCmd, gapActive, endBefore: gEnd, coveredBefore: covered(gb.project), endAfter: endOf(ga.project), coveredAfter: covered(ga.project), revisions: [gb.revision, ga.revision] });
 
     console.log('\n# frames during playback');
     // While playing, read the barcode straight off the preview canvas together with the frame number the player says it drew,

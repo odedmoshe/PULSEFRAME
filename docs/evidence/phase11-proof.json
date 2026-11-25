@@ -1,15 +1,15 @@
 {
-  "ranAt": "2026-11-17T23:58:27.158Z",
+  "ranAt": "2026-11-25T02:07:20.895Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v553 x64",
+    "platform": "Linux 6.18.44-fc-v880 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
   },
   "scope": "Three rule-based recipes on synthetic material. No language-model Director and no generative steps.",
-  "passed": 12,
-  "total": 12,
+  "passed": 16,
+  "total": 16,
   "checks": [
     {
       "name": "the three phase 11 recipes are listed, and every recipe has a parameter schema and states plainly that no language model is used",
@@ -18,7 +18,9 @@
         "beat-montage",
         "social-pack",
         "tidy-speech",
-        "portrait-blur"
+        "portrait-blur",
+        "family-film",
+        "multicam-auto"
       ]
     },
     {
@@ -119,6 +121,115 @@
         "protectedShown": 1,
         "restored": 8,
         "errors": []
+      }
+    },
+    {
+      "name": "editor: a montage clip deleted with Delete (the gap closes, the later clips move earlier): regenerate does not keep the moved clips one segment early but places clips again up to the montage's end, leaving exactly the deleted clip's frames empty, and says both in Hebrew («חזרו לפעימות אחרי שזזו בגלל מחיקה: N», «נשארו ריקים כי נמחקו ידנית: 1»); «החזרת החלקים שנמחקו» then fills the place (1 revision, no frame empty); the hand-edited clip is kept; undo returns exactly",
+      "ok": true,
+      "detail": {
+        "deleteOps": [
+          [
+            "ripple_delete_clips"
+          ]
+        ],
+        "moved": 4,
+        "deletedFrames": 60,
+        "afterRegenerate": {
+          "said": "הוחלפו: 6 · נשארו כי נערכו ידנית: 1 · חזרו לפעימות אחרי שזזו בגלל מחיקה: 4 · נשארו ריקים כי נמחקו ידנית: 1",
+          "offered": 1,
+          "error": null,
+          "pictures": 13,
+          "over": 0,
+          "holes": 60,
+          "movedStillThere": 0,
+          "kept": true
+        },
+        "afterButton": {
+          "said": "הוחלפו: 12 · נשארו כי נערכו ידנית: 1",
+          "offered": 0,
+          "error": null,
+          "pictures": 15,
+          "revisions": 1,
+          "holes": 0
+        },
+        "undoneExactly": true
+      }
+    },
+    {
+      "name": "editor: a montage clip dragged by hand, with nothing else changed, stays where it was put after regenerate and is counted among «נשארו כי נערכו ידנית» (2 with the clip that carries an effect); nothing is said about a delete; undo returns exactly",
+      "ok": true,
+      "detail": {
+        "dragStatus": 200,
+        "draggedTo": 450,
+        "said": "הוחלפו: 6 · נשארו כי נערכו ידנית: 2",
+        "undoDrag": 200,
+        "dragUndone": true
+      }
+    },
+    {
+      "name": "editor: a montage clip deleted by hand with Shift+Delete: the run does not offer «החזרת החלקים שנמחקו» before a regeneration says so; regenerate leaves the clip's place empty, says «נשארו ריקים כי נמחקו ידנית: 1» in its live line and offers the button; the button fills the place again (1 revision) and is gone; the hand-edited clip is kept throughout",
+      "ok": true,
+      "detail": {
+        "deletedFrames": [
+          195,
+          255
+        ],
+        "offeredBefore": 0,
+        "leftOut": {
+          "said": "הוחלפו: 6 · נשארו כי נערכו ידנית: 1 · נשארו ריקים כי נמחקו ידנית: 1",
+          "live": "polite",
+          "offered": 1,
+          "text": "החזרת החלקים שנמחקו",
+          "visible": true,
+          "over": 0,
+          "kept": true
+        },
+        "back": {
+          "said": "הוחלפו: 12 · נשארו כי נערכו ידנית: 1",
+          "offered": 0,
+          "over": 2,
+          "revision": 22
+        },
+        "withDefaultDelete": {
+          "deleteOps": [
+            [
+              "ripple_delete_clips"
+            ]
+          ],
+          "moved": 4,
+          "deletedFrames": 60,
+          "afterRegenerate": {
+            "said": "הוחלפו: 6 · נשארו כי נערכו ידנית: 1 · חזרו לפעימות אחרי שזזו בגלל מחיקה: 4 · נשארו ריקים כי נמחקו ידנית: 1",
+            "offered": 1,
+            "error": null,
+            "pictures": 13,
+            "over": 0,
+            "holes": 60,
+            "movedStillThere": 0,
+            "kept": true
+          },
+          "afterButton": {
+            "said": "הוחלפו: 12 · נשארו כי נערכו ידנית: 1",
+            "offered": 0,
+            "error": null,
+            "pictures": 15,
+            "revisions": 1,
+            "holes": 0
+          },
+          "undoneExactly": true
+        },
+        "errors": []
+      }
+    },
+    {
+      "name": "editor: Ctrl+Z three times takes back the restore, the regeneration and the hand delete, one step each, ending at the montage as it was",
+      "ok": true,
+      "detail": {
+        "steps": [
+          true,
+          true,
+          true
+        ]
       }
     }
   ]

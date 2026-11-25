@@ -80,6 +80,10 @@ const he = {
   undo: 'ביטול',
   dismiss: 'סגירת הסרגל',
   regenerated: (replaced: number, kept: number) => `הוחלפו ${replaced} פריטים${kept ? `; ${kept} נשמרו כי נערכו ביד` : ''}.`,
+  removedLeftOut: (n: number) => ` ${n} פריטים שמחקתם ידנית לא נוצרו שוב.`,
+  movedBack: (n: number) => (n === 1 ? ' פריט אחד שרק זז ממקומו חזר למקומו בתבנית.' : ` ${n} פריטים שרק זזו ממקומם חזרו למקומם בתבנית.`),
+  restoreRemoved: 'החזרת החלקים שנמחקו',
+  restored: 'החלקים שנמחקו נוצרו שוב.',
   tempoNames: { normal: 'רגיל', half: 'חצי קצב', double: 'קצב כפול' },
   tempoNow: (name: string) => `הקצב עכשיו: ${name}`,
 };
@@ -154,6 +158,10 @@ const en: Strings = {
   undo: 'Undo',
   dismiss: 'Close the bar',
   regenerated: (replaced, kept) => `${replaced} items replaced${kept ? `; ${kept} kept because they were edited by hand` : ''}.`,
+  removedLeftOut: (n) => ` ${n} items you deleted by hand were not made again.`,
+  movedBack: (n) => (n === 1 ? ' 1 item that had only been moved is back on its place in the template.' : ` ${n} items that had only been moved are back on their places in the template.`),
+  restoreRemoved: 'Restore deleted parts',
+  restored: 'The deleted parts were made again.',
   tempoNames: { normal: 'normal', half: 'half tempo', double: 'double tempo' },
   tempoNow: (name) => `Tempo now: ${name}`,
 };

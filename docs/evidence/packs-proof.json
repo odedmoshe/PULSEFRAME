@@ -1,6 +1,6 @@
 {
  "proof": "packs",
- "when": "2026-11-18T02:22:59.611Z",
+ "when": "2026-11-24T21:56:10.161Z",
  "node": "v22.23.4",
  "platform": "linux x64",
  "ok": true,
@@ -320,15 +320,15 @@
     "rows": [
      {
       "frame": 0,
-      "psnr": 48.31
+      "psnr": 48.25
      },
      {
       "frame": 135,
-      "psnr": 46.08
+      "psnr": 46.1
      },
      {
       "frame": 270,
-      "psnr": 48.49
+      "psnr": 49.21
      },
      {
       "frame": 405,
@@ -1022,15 +1022,15 @@
    "rows": [
     {
      "frame": 0,
-     "psnr": 48.31
+     "psnr": 48.25
     },
     {
      "frame": 135,
-     "psnr": 46.08
+     "psnr": 46.1
     },
     {
      "frame": 270,
-     "psnr": 48.49
+     "psnr": 49.21
     },
     {
      "frame": 405,

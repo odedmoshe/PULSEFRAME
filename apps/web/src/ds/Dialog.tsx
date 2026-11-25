@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { initialFocus, trapTarget, type FocusableInfo } from './logic.ts';
+import { ToastSlot } from './Toast.tsx';
 import { CloseIcon, DS, FOCUSABLE, cx } from './util.tsx';
 
 export interface DialogProps {
@@ -24,7 +25,7 @@ const infoOf = (el: HTMLElement): FocusableInfo & { autofocus?: boolean } => ({
   hidden: !!(el.hidden || el.closest('[hidden],[inert]') || el.getClientRects().length === 0), autofocus: el.hasAttribute('data-autofocus'),
 });
 
-/** Modal Dialog / Sheet: role=dialog aria-modal, focus trapped (pure order in logic.ts), Escape closes, focus returns to what opened it. */
+/** Modal Dialog / Sheet: role=dialog aria-modal, focus trapped (pure order in logic.ts), Escape closes, focus returns to what opened it. Toasts move inside while it is open (ToastSlot). */
 export function Dialog({ open, onClose, title, variant = 'dialog', size = 'md', children, footer, closeLabel = 'Close', dismissOnBackdrop = true, className, testId }: DialogProps) {
   const titleId = useId();
   const root = useRef<HTMLDivElement>(null);
@@ -83,6 +84,8 @@ export function Dialog({ open, onClose, title, variant = 'dialog', size = 'md', 
         </header>
         <div className="pf-dialog-body">{children}</div>
         {footer && <footer className="pf-dialog-foot">{footer}</footer>}
+        {/* the toast region while this modal is open: the page behind is inert, so a toast there could be neither reached nor heard */}
+        <ToastSlot />
       </div>
     </div>, document.body);
 }

@@ -1,11 +1,11 @@
 {
- "ranAt": "2026-11-18T01:46:16.892Z",
- "commit": "487861300c75af88c8e073e3cfd798556f1510a4",
+ "ranAt": "2026-11-24T21:28:54.815Z",
+ "commit": "996334d78570dcee141fcf88b055a39d7bbc9716",
  "result": "PASSED",
  "passed": 15,
  "total": 15,
  "machine": {
-  "platform": "Linux 6.18.44-fc-v595 x64",
+  "platform": "Linux 6.18.44-fc-v819 x64",
   "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
   "logicalCpus": 4,
   "node": "v22.23.4"
@@ -999,76 +999,76 @@
    "raster": "canvas 2d, willReadFrequently (the render page's CPU raster path)",
    "results": {
     "none": {
-     "medianMs": 1.1,
-     "meanMs": 1.39,
-     "maxMs": 10.3
+     "medianMs": 1.3,
+     "meanMs": 1.73,
+     "maxMs": 12.3
     },
     "punch-in": {
-     "medianMs": 76.5,
-     "meanMs": 75.99,
-     "maxMs": 87
+     "medianMs": 62.3,
+     "meanMs": 62.06,
+     "maxMs": 72.8
     },
     "punch-out": {
-     "medianMs": 69.7,
-     "meanMs": 66.18,
-     "maxMs": 86.5
+     "medianMs": 64.7,
+     "meanMs": 64.71,
+     "maxMs": 88.9
     },
     "blur-dissolve": {
-     "medianMs": 74.6,
-     "meanMs": 68.33,
-     "maxMs": 108.7
+     "medianMs": 88.8,
+     "meanMs": 78.29,
+     "maxMs": 113.3
     },
     "split-open-h": {
-     "medianMs": 30.2,
-     "meanMs": 30.51,
-     "maxMs": 39.9
+     "medianMs": 26.4,
+     "meanMs": 28.06,
+     "maxMs": 51.5
     },
     "split-open-v": {
-     "medianMs": 29.7,
-     "meanMs": 30.17,
-     "maxMs": 47.5
+     "medianMs": 31,
+     "meanMs": 32.66,
+     "maxMs": 47.1
     },
     "shape-heart": {
-     "medianMs": 5,
-     "meanMs": 5.19,
-     "maxMs": 11.2
+     "medianMs": 7.4,
+     "meanMs": 7.5,
+     "maxMs": 12.5
     },
     "shape-star": {
-     "medianMs": 5,
-     "meanMs": 5.05,
-     "maxMs": 8.4
+     "medianMs": 7.2,
+     "meanMs": 7.22,
+     "maxMs": 8.6
     },
     "block-left": {
-     "medianMs": 6,
-     "meanMs": 5.64,
-     "maxMs": 9.4
+     "medianMs": 7.8,
+     "meanMs": 7.62,
+     "maxMs": 10.7
     },
     "block-right": {
-     "medianMs": 5.9,
-     "meanMs": 5.71,
-     "maxMs": 9.6
+     "medianMs": 7.7,
+     "meanMs": 7.29,
+     "maxMs": 11.6
     },
     "slices-h": {
-     "medianMs": 8.8,
-     "meanMs": 8.44,
-     "maxMs": 12
+     "medianMs": 10.2,
+     "meanMs": 11.72,
+     "maxMs": 16.9
     },
     "slices-v": {
-     "medianMs": 12.1,
-     "meanMs": 11.99,
-     "maxMs": 15.7
+     "medianMs": 13.7,
+     "meanMs": 14.31,
+     "maxMs": 19.8
     },
     "dissolve": {
-     "medianMs": 7.3,
-     "meanMs": 7.23,
-     "maxMs": 9.1
+     "medianMs": 25,
+     "meanMs": 24.35,
+     "maxMs": 30.3
     }
    },
-   "noTransitionMedianMs": 1.1,
+   "noTransitionMedianMs": 1.3,
    "over60ms": [
-    "punch-in: 76.5 ms",
-    "punch-out: 69.7 ms",
-    "blur-dissolve: 74.6 ms"
+    "punch-in: 62.3 ms",
+    "punch-out: 64.7 ms",
+    "blur-dissolve: 88.8 ms"
    ],
    "note": "Lab page in the proof's headless Chromium, one run on this machine; median of the 29 frames of a 29-frame transition; recorded, not a target",
    "pageErrors": []
@@ -2039,7 +2039,7 @@
    }
   },
   {
-   "name": "T8 recorded (not a gate): median ms per frame at 1080×1920 for each new Canvas2D id; over 60 ms: punch-in: 76.5 ms, punch-out: 69.7 ms, blur-dissolve: 74.6 ms",
+   "name": "T8 recorded (not a gate): median ms per frame at 1080×1920 for each new Canvas2D id; over 60 ms: punch-in: 62.3 ms, punch-out: 64.7 ms, blur-dissolve: 88.8 ms",
    "ok": true,
    "detail": {
     "size": "1080x1920",
@@ -2047,76 +2047,76 @@
     "raster": "canvas 2d, willReadFrequently (the render page's CPU raster path)",
     "results": {
      "none": {
-      "medianMs": 1.1,
-      "meanMs": 1.39,
-      "maxMs": 10.3
+      "medianMs": 1.3,
+      "meanMs": 1.73,
+      "maxMs": 12.3
      },
      "punch-in": {
-      "medianMs": 76.5,
-      "meanMs": 75.99,
-      "maxMs": 87
+      "medianMs": 62.3,
+      "meanMs": 62.06,
+      "maxMs": 72.8
      },
      "punch-out": {
-      "medianMs": 69.7,
-      "meanMs": 66.18,
-      "maxMs": 86.5
+      "medianMs": 64.7,
+      "meanMs": 64.71,
+      "maxMs": 88.9
      },
      "blur-dissolve": {
-      "medianMs": 74.6,
-      "meanMs": 68.33,
-      "maxMs": 108.7
+      "medianMs": 88.8,
+      "meanMs": 78.29,
+      "maxMs": 113.3
      },
      "split-open-h": {
-      "medianMs": 30.2,
-      "meanMs": 30.51,
-      "maxMs": 39.9
+      "medianMs": 26.4,
+      "meanMs": 28.06,
+      "maxMs": 51.5
      },
      "split-open-v": {
-      "medianMs": 29.7,
-      "meanMs": 30.17,
-      "maxMs": 47.5
+      "medianMs": 31,
+      "meanMs": 32.66,
+      "maxMs": 47.1
      },
      "shape-heart": {
-      "medianMs": 5,
-      "meanMs": 5.19,
-      "maxMs": 11.2
+      "medianMs": 7.4,
+      "meanMs": 7.5,
+      "maxMs": 12.5
      },
      "shape-star": {
-      "medianMs": 5,
-      "meanMs": 5.05,
-      "maxMs": 8.4
+      "medianMs": 7.2,
+      "meanMs": 7.22,
+      "maxMs": 8.6
      },
      "block-left": {
-      "medianMs": 6,
-      "meanMs": 5.64,
-      "maxMs": 9.4
+      "medianMs": 7.8,
+      "meanMs": 7.62,
+      "maxMs": 10.7
      },
      "block-right": {
-      "medianMs": 5.9,
-      "meanMs": 5.71,
-      "maxMs": 9.6
+      "medianMs": 7.7,
+      "meanMs": 7.29,
+      "maxMs": 11.6
      },
      "slices-h": {
-      "medianMs": 8.8,
-      "meanMs": 8.44,
-      "maxMs": 12
+      "medianMs": 10.2,
+      "meanMs": 11.72,
+      "maxMs": 16.9
      },
      "slices-v": {
-      "medianMs": 12.1,
-      "meanMs": 11.99,
-      "maxMs": 15.7
+      "medianMs": 13.7,
+      "meanMs": 14.31,
+      "maxMs": 19.8
      },
      "dissolve": {
-      "medianMs": 7.3,
-      "meanMs": 7.23,
-      "maxMs": 9.1
+      "medianMs": 25,
+      "meanMs": 24.35,
+      "maxMs": 30.3
      }
     },
-    "noTransitionMedianMs": 1.1,
+    "noTransitionMedianMs": 1.3,
     "over60ms": [
-     "punch-in: 76.5 ms",
-     "punch-out: 69.7 ms",
-     "blur-dissolve: 74.6 ms"
+     "punch-in: 62.3 ms",
+     "punch-out: 64.7 ms",
+     "blur-dissolve: 88.8 ms"
     ],
     "note": "Lab page in the proof's headless Chromium, one run on this machine; median of the 29 frames of a 29-frame transition; recorded, not a target",
     "pageErrors": []

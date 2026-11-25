@@ -38,7 +38,7 @@ export interface JobEvent { id: string; type: string; status: string; stage: str
 export interface PreflightIssue { code: string; severity: 'blocker' | 'warning' | 'note'; message: string; ids: string[]; range?: { startFrame: number; endFrame: number }; fix?: { label: string; ops: OpCall[] } }
 export interface PreflightReport { revision: number; ok: boolean; blockers: number; warnings: number; notes: number; issues: PreflightIssue[]; output: unknown; scope: string }
 export interface CommitResult { revision: number; committed: boolean; /** the transaction this commit made (null when nothing changed): undo names it to reverse exactly this edit */ transactionId?: string | null; summary: string; affectedIds: string[]; results: { op: string; output?: Record<string, any> }[] }
-export interface SilenceResult { revision: number; candidates: { start: unknown; end: unknown; startSeconds: number; seconds: number }[]; removableSeconds: number; ops: OpCall[]; note?: string }
+export interface SilenceResult { revision: number; candidates: { start: unknown; end: unknown; startSeconds: number; seconds: number }[]; removableSeconds: number; ops: OpCall[]; note?: string; /** clips of a copy that does not keep the recording's timing, not searched */ skippedClips?: { clipId: string; assetId: string; reason: 'untimed_copy' }[] }
 /** measure_voice (ADR-0013; apps/server/src/voiceClean.ts): the same shapes as the server's VoiceMeasureBody and VoiceCheck. */
 export interface VoiceMeasureRequest { clipId: string; strength?: number; /** SOURCE-time stretches that hold only noise */ noiseRanges?: { start: RationalTime; end: RationalTime }[]; scope?: 'clip' | 'asset' }
 export interface VoiceCheck { revision: number; assetId: string; clipIds: string[]; method: string; /** ranges in source seconds */ report: VoiceMeasurement; recommendedStrength: number; /** clean_voice candidates: send as ONE transaction */ ops: OpCall[]; note: string }
@@ -50,9 +50,9 @@ export interface LoudnessResult { integratedLufs: number | null; truePeakDbtp: n
 
 export type RecipeParams = Record<string, unknown>;
 export interface RecipeAlternative { label: string; params: RecipeParams }
-export interface RecipePlanResult { revision: number; steps: string[]; basis: string[]; operations?: unknown; alternatives: RecipeAlternative[]; method?: string; note?: string }
+export interface RecipePlanResult { revision: number; steps: string[]; basis: string[]; operations?: unknown; alternatives: RecipeAlternative[]; method?: string; note?: string; /** clips of a copy that does not keep the recording's timing, left alone (tidy-speech) */ skippedClips?: { clipId: string; assetId: string; reason: 'untimed_copy' }[] }
 export interface RecipeApplyResult { revision: number; runId: string; createdIds: string[]; steps: string[]; basis: string[]; alternatives: RecipeAlternative[] }
-export interface RecipeRegenerateResult { revision: number; runId: string; replaced: number; protected: string[]; steps: string[] }
+export interface RecipeRegenerateResult { revision: number; runId: string; replaced: number; protected: string[]; /** clips deleted by hand whose places were left empty (beat montage, family film) */ removed?: string[]; /** clips that a delete which closed the gap had moved, placed again like untouched ones (beat montage) */ movedBack?: string[]; steps: string[] }
 
 export interface AnalyzeResult{ revision: number; summary: string; scenes?: { count: number }; beats?: { bpm: number | null; confidence: number | null; count: number } }
 
@@ -188,7 +188,7 @@ export const api = {
   },
   planRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipePlanResult>(`/projects/${id}/recipes/${recipeId}/plan`, json({ params })),
   applyRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipeApplyResult>(`/projects/${id}/recipes/${recipeId}/apply`, json({ params })),
-  regenerateRecipeRun: (id: string, runId: string, params?: RecipeParams) => call<RecipeRegenerateResult>(`/projects/${id}/recipe-runs/${runId}/regenerate`, json(params ? { params } : {})),
+  regenerateRecipeRun: (id: string, runId: string, params?: RecipeParams, restoreRemoved = false) => call<RecipeRegenerateResult>(`/projects/${id}/recipe-runs/${runId}/regenerate`, json({ ...(params ? { params } : {}), ...(restoreRemoved ? { restoreRemoved: true } : {}) })),
   soundEffects: async () => (await call<{ soundEffects: SoundEffectInfo[] }>('/catalog')).soundEffects,
   soundEffectAudio: async (id: string) => {
     const r = await fetch(`/api/v1/sfx/${encodeURIComponent(id)}/audio`, { credentials: 'same-origin' });
@@ -206,7 +206,7 @@ export const api = {
   planFilm: (projectId: string, params: FamilyFilmParams) => call<FamilyFilmPlanView>(`/projects/${projectId}/recipes/family-film/plan`, json({ params })),
   applyFilm: (projectId: string, params: FamilyFilmParams, expectedRevision: number) => call<FamilyFilmApplyResult>(`/projects/${projectId}/recipes/family-film/apply`, json({ params, expectedRevision })),
   /** Regenerate a film run (from this tab's filmRun or the document's run after a reload) with changed parameters. */
-  regenerateFilm: (projectId: string, runId: string, params?: Partial<FamilyFilmParams>) => call<FamilyFilmRegenerateResult>(`/projects/${projectId}/recipe-runs/${runId}/regenerate`, json(params ? { params } : {})),
+  regenerateFilm: (projectId: string, runId: string, params?: Partial<FamilyFilmParams>, restoreRemoved = false) => call<FamilyFilmRegenerateResult>(`/projects/${projectId}/recipe-runs/${runId}/regenerate`, json({ ...(params ? { params } : {}), ...(restoreRemoved ? { restoreRemoved: true } : {}) })),
   // ----- multicam (ADR-0020): the routes of core multicamApi.ts -----
   /** The group's view: coverage, program tracks, out-of-sync segments, envelope states and capture-time priors. */
   multicamView: (id: string, groupId: string) => call<MulticamView>(`/projects/${id}/multicam/${encodeURIComponent(groupId)}`),

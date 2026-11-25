@@ -61,7 +61,7 @@ describe('the trend-pack kernels (run against the recording MOCK)', () => {
   afterAll(() => { vi.unstubAllGlobals(); });
   let size = 40;
   /** One kernel run on a frame size no earlier run used, so the scratch buffers it creates are its own. */
-  function run(id: string, progress: number, withOutgoing = true, extra: Partial<CanvasTransitionArgs['t']> = {}) {
+  function run(id: string, progress: number, withOutgoing = true, extra: Partial<CanvasTransitionArgs['t']> = {}, draft = false) {
     const W = size++, H = 2 * W;
     const frame = new FakeCanvas(W, H), incoming = new FakeCanvas(W, H), outgoing = new FakeCanvas(W, H);
     const before = FakeCanvas.made.length;
@@ -70,7 +70,7 @@ describe('the trend-pack kernels (run against the recording MOCK)', () => {
       ctx: frame.getContext() as unknown as OffscreenCanvasRenderingContext2D,
       incoming: { canvas: incoming, ctx: incoming.getContext() } as unknown as Buf,
       outgoing: withOutgoing ? ({ canvas: outgoing, ctx: outgoing.getContext() } as unknown as Buf) : null,
-      t: { type: id as never, progress, role: 'in', light: 0, color: null, seed: 0, frame: 7, frames: 15, fps: 30, ...extra }, v: c.v, W, H,
+      t: { type: id as never, progress, role: 'in', light: 0, color: null, seed: 0, frame: 7, frames: 15, fps: 30, ...extra }, v: c.v, W, H, draft,
     });
     const created = FakeCanvas.made.slice(before);
     // the slots the kernel used: scratch() hands back the same buffer for the same slot and size
@@ -91,6 +91,46 @@ describe('the trend-pack kernels (run against the recording MOCK)', () => {
         expect(r.slot6.log.some(([op]) => op === 'drawImage' || op === 'fillRect'), `${id} p=${p}`).toBe(true);
       }
     }
+  });
+
+  it('the plain dissolve puts its weights into the pictures\' alpha (one destination-in fill each) and adds them at full alpha, never with globalAlpha', () => {
+    /** The destination-in fills of a log, as the globalAlpha set before each. */
+    const fades = (log: Call[]) => log.flatMap(([op], i) => (op === 'fillRect' && log.slice(0, i).filter(([o]) => o === '=globalCompositeOperation').at(-1)?.[1][0] === 'destination-in' ? [log.slice(0, i).filter(([o]) => o === '=globalAlpha').at(-1)![1][0]] : []));
+    const r = run('dissolve', 0.3);
+    expect(draws(r.slot6.log)).toEqual([r.outgoing, r.incoming]);
+    // one 8-bit level k = round(255·p) = 77 for both weights, so the two alphas add up to 255
+    expect(fades(r.slot6.log)).toEqual([178 / 255]); // the outgoing copy, faded by (255 − k)/255 in the mix
+    expect(fades(r.incoming.log)).toEqual([77 / 255]); // the incoming layer, faded by k/255 in place
+    // the outgoing copy is faded before the incoming picture is added (lighter); the only globalAlpha below 1 is the fade's
+    const log = r.slot6.log, fill = log.findIndex(([op]) => op === 'fillRect'), lighter = log.findIndex(([op, a]) => op === '=globalCompositeOperation' && a[0] === 'lighter');
+    expect([log.findIndex(([op]) => op === 'drawImage') < fill, fill < lighter, lighter < log.findLastIndex(([op]) => op === 'drawImage')]).toEqual([true, true, true]);
+    expect(log.filter(([op, a]) => op === '=globalAlpha' && a[0] !== 1).map(([, a]) => a[0])).toEqual([178 / 255]); // scratch() resets it to 1
+    expect(draws(r.frame.log)).toEqual([r.slot6]);
+    // no previous clip: only the incoming picture, faded by p, over what is below
+    const alone = run('dissolve', 0.3, false);
+    expect(draws(alone.slot6.log)).toEqual([alone.incoming]);
+    expect(fades(alone.incoming.log)).toEqual([77 / 255]);
+    // at p = 0.5 the weights are 127 and 128, not 128 and 128
+    const half = run('dissolve', 0.5);
+    expect([fades(half.slot6.log), fades(half.incoming.log)]).toEqual([[127 / 255], [128 / 255]]);
+    expect(fades(alone.slot6.log)).toEqual([]);
+  });
+
+  it('draft playback: the dissolve adds the two pictures with globalAlpha (255 − k)/255 and k/255, no fill; with no previous clip it copies the incoming one in', () => {
+    const fills = (log: Call[]) => log.filter(([op]) => op === 'fillRect').length;
+    const alphas = (log: Call[]) => log.filter(([op, a]) => op === '=globalAlpha' && a[0] !== 1).map(([, a]) => a[0]);
+    const ops = (log: Call[]) => log.filter(([op]) => op === '=globalCompositeOperation').map(([, a]) => a[0]);
+    const r = run('dissolve', 0.3, true, {}, true);
+    expect(draws(r.slot6.log)).toEqual([r.outgoing, r.incoming]);
+    expect(alphas(r.slot6.log)).toEqual([178 / 255, 77 / 255]);
+    expect(ops(r.slot6.log)).toContain('lighter'); // (the harness's scratch() call afterwards resets it)
+    expect([fills(r.slot6.log), fills(r.incoming.log)]).toEqual([0, 0]);
+    expect(draws(r.frame.log)).toEqual([r.slot6]);
+    const alone = run('dissolve', 0.3, false, {}, true);
+    expect(draws(alone.slot6.log)).toEqual([alone.incoming]);
+    expect(alphas(alone.slot6.log)).toEqual([77 / 255]);
+    expect([ops(alone.slot6.log).includes('copy'), ops(alone.slot6.log).includes('lighter')]).toEqual([true, false]);
+    expect(fills(alone.incoming.log)).toBe(0);
   });
 
   it('each kernel draws from the side its rule names', () => {

@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-17T23:58:13.651Z",
+  "ranAt": "2026-11-24T20:46:33.952Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v553 x64",
+    "platform": "Linux 6.18.44-fc-v819 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "logicalCpus": 4,
     "gpu": "none"
@@ -26,7 +26,7 @@
       ],
       "precision": 1,
       "recall": 1,
-      "analysisMs": 544,
+      "analysisMs": 384,
       "clipSeconds": 10,
       "note": "one synthetic clip with 5 hard cuts between very different pictures; H.264 with B-frames"
     },
@@ -45,7 +45,7 @@
           "medianErrorMs": 4.667,
           "p95ErrorMs": 10.667,
           "confidence": 0.787,
-          "analysisMs": 402
+          "analysisMs": 383
         },
         {
           "loop": "100",
@@ -55,7 +55,7 @@
           "medianErrorMs": 5,
           "p95ErrorMs": 10,
           "confidence": 0.873,
-          "analysisMs": 551
+          "analysisMs": 593
         },
         {
           "loop": "120",
@@ -65,7 +65,7 @@
           "medianErrorMs": 5,
           "p95ErrorMs": 10,
           "confidence": 0.986,
-          "analysisMs": 431
+          "analysisMs": 339
         },
         {
           "loop": "128",
@@ -75,7 +75,7 @@
           "medianErrorMs": 5.25,
           "p95ErrorMs": 10,
           "confidence": 0.814,
-          "analysisMs": 615
+          "analysisMs": 533
         },
         {
           "loop": "140",
@@ -85,7 +85,7 @@
           "medianErrorMs": 4,
           "p95ErrorMs": 9.429,
           "confidence": 0.984,
-          "analysisMs": 474
+          "analysisMs": 549
         },
         {
           "loop": "drift-120-127",
@@ -95,7 +95,7 @@
           "medianErrorMs": 4.496,
           "p95ErrorMs": 10.126,
           "confidence": 0.571,
-          "analysisMs": 397
+          "analysisMs": 536
         }
       ],
       "note": "24 s synthetic loops (kick with attack click on the beat, quieter hat off the beat, bass tone, noise). Not real music."
@@ -171,7 +171,7 @@
         ],
         "precision": 1,
         "recall": 1,
-        "analysisMs": 544,
+        "analysisMs": 384,
         "clipSeconds": 10,
         "note": "one synthetic clip with 5 hard cuts between very different pictures; H.264 with B-frames"
       }
@@ -196,7 +196,7 @@
           "medianErrorMs": 4.667,
           "p95ErrorMs": 10.667,
           "confidence": 0.787,
-          "analysisMs": 402
+          "analysisMs": 383
         },
         {
           "loop": "100",
@@ -206,7 +206,7 @@
           "medianErrorMs": 5,
           "p95ErrorMs": 10,
           "confidence": 0.873,
-          "analysisMs": 551
+          "analysisMs": 593
         },
         {
           "loop": "120",
@@ -216,7 +216,7 @@
           "medianErrorMs": 5,
           "p95ErrorMs": 10,
           "confidence": 0.986,
-          "analysisMs": 431
+          "analysisMs": 339
         },
         {
           "loop": "128",
@@ -226,7 +226,7 @@
           "medianErrorMs": 5.25,
           "p95ErrorMs": 10,
           "confidence": 0.814,
-          "analysisMs": 615
+          "analysisMs": 533
         },
         {
           "loop": "140",
@@ -236,7 +236,7 @@
           "medianErrorMs": 4,
           "p95ErrorMs": 9.429,
           "confidence": 0.984,
-          "analysisMs": 474
+          "analysisMs": 549
         },
         {
           "loop": "drift-120-127",
@@ -246,7 +246,7 @@
           "medianErrorMs": 4.496,
           "p95ErrorMs": 10.126,
           "confidence": 0.571,
-          "analysisMs": 397
+          "analysisMs": 536
         }
       ]
     },
@@ -378,7 +378,7 @@
         "firstBarFrame": "671",
         "panelBars": "14",
         "summary": {
-          "assetId": "ast_26858f170a0",
+          "assetId": "ast_21336428bd0",
           "sceneCuts": null,
           "beats": 58,
           "bpm": 120.19,

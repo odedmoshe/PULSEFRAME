@@ -5,6 +5,7 @@
  * Transient state (selection, playhead, presence, panel layout) is NOT part of this document.
  */
 import { z } from 'zod';
+import { own } from './own.ts';
 import { AudioFxInstanceSchema, MAX_AUDIO_FX } from './audioEffects.ts';
 import { BLEND_MODES, EffectInstanceSchema, MaskSchema, TransitionSchema } from './effects.ts';
 import { FollowSchema, MAX_REDACT_REGIONS, MotionTrackSchema, RedactRegionSchema } from './tracking.ts';
@@ -521,9 +522,27 @@ export const SlotRecordSchema = z
   .strict();
 export type SlotRecord = z.infer<typeof SlotRecordSchema>;
 
+/**
+ * A timeline range a run's clip was placed on (RecipeRunSchema.ranges). `trackId` (optional, additive) is the track it was placed
+ * on: template, family film and beat-montage runs record it from the amendment of 2026-11-24 on, so that a clip moved to another
+ * track is told from one that was only moved in time.
+ */
+export const RunRangeSchema = z.object({ start: RationalTimeSchema, end: RationalTimeSchema, trackId: Id.optional() }).strict();
+export type RunRange = z.infer<typeof RunRangeSchema>;
 export const RecipeRunSchema = z.object({ id: Id, recipeId: z.string().max(64), params: z.record(z.string(), z.unknown()), createdIds: z.array(Id).max(5000), /** Content fingerprint of each created clip as the recipe left it; a clip whose content differs was edited by hand. */ fingerprints: z.record(Id, z.string()).default({}), steps: z.array(z.string().max(400)).max(50),
   /** Template runs only (recipeId `template:<templateId>`, ADR-0016): what each slot of the template holds. */
-  slots: z.array(SlotRecordSchema).max(400).optional() }).strict();
+  slots: z.array(SlotRecordSchema).max(400).optional(),
+  /**
+   * Beat-montage runs (recipes.ts recordsRanges), OPTIONAL: the timeline range each clip of the run was placed on, by clip id, so
+   * a clip deleted by hand is told by its id missing from the document and its range is left empty on regeneration (ADR-0016
+   * decision 6). Written by apply_recipe only when its arguments ask for it (recordRanges); absent on every older run.
+   * Template runs (apply_template with recordRanges), OPTIONAL too: where each live clip of the run was placed, with its track,
+   * as of the moment its fingerprint was taken (a clip kept from an earlier run keeps that run's entry, like its fingerprint).
+   * It is what tells a clip that was only moved in time from one edited by hand (templateOps.ts movedOnly). Family film runs
+   * record them the same way; beat-montage runs add the track when apply_recipe gets recordTracks (a kept clip keeps the
+   * track recorded for it, its range stays where it lies).
+   */
+  ranges: z.record(Id, RunRangeSchema).optional() }).strict();
 export type RecipeRun = z.infer<typeof RecipeRunSchema>;
 
 // ---------- analysis results (SPEC §19): measured from a source file, stored in SOURCE time, editable ----------
@@ -691,7 +710,7 @@ export const timelineBehaviour = (doc: { settings: { timeline?: TimelineBehaviou
  * Undefined when the sequence has no picture track.
  */
 export const mainTrackOf = (doc: { sequences: Record<string, { tracks: { id: string; kind: string }[] }>; mainSequenceId: string }, sequenceId?: string) =>
-  doc.sequences[sequenceId ?? doc.mainSequenceId]?.tracks.find((t) => t.kind === 'video');
+  own(doc.sequences, sequenceId ?? doc.mainSequenceId)?.tracks.find((t) => t.kind === 'video');
 
 // ---------- sequences of one project (ADR-0018 shorts): optional fields; schema version 3 is the wave-4 bump (identity migration) ----------
 /** A project holds at most this many sequences (every commit rewrites the whole document). */

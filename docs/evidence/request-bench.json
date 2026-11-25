@@ -1,0 +1,6073 @@
+{
+  "about": "pnpm bench:request (packages/evals/src/request-bench.ts). Milliseconds per HTTP edit (replace_clip_keyframes of 1 key and of 2000 keys on the keyframes proof's project, agent token, connection: close, body serialised inside the timing), per listener mode, over `runs` edits after 3 warm-ups, each mode measured `samples` times on a fresh project. Server timers are the real instances wrapped: commitAs (governance + Store.commit), commit (Store.commit, including emit), emit (Store.drainOutbox: the events and the SSE writes it starts), getProject (whole-document reads). wholeReads counts GET /projects/:id made by the listener during the runs. profile: self time of the 2000-key runs in this process (server and client), by function and by file. One machine, one sample of it, under whatever else ran.",
+  "note": "Labels: before-profiled = the code before this change (the editor read the whole project on every revision event), with a CPU profile of the 2000-key runs (modes none, sse, editor-node; the browser mode of that run was not kept); after-profiled = this change, with its profile; ab-<version>-<round> = before and after run alternately, three rounds, the same build of each, so that drift in machine load (other agents) falls on both alike. summary = per mode and version, every sample of the HTTP delta (2000-key p95 minus 1-key p95, and the p50 delta) and their medians, computed from the ab rows above.",
+  "before-profiled": {
+    "ranAt": "2026-11-24T16:24:13.992Z",
+    "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, node v22.23.4, load 3.25 1.74 0.82",
+    "runs": 20,
+    "samples": 1,
+    "modes": {
+      "none": [
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 5.56,
+              "p95": 36.08,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.04,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.98,
+              "p95": 32.84,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.88,
+              "p95": 32.65,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.69,
+              "p95": 2.85,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 28.33,
+              "p95": 62.72,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.71,
+              "p95": 1.43,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 20.98,
+              "p95": 43.51,
+              "n": 20
+            },
+            "commit": {
+              "p50": 20.69,
+              "p95": 41.05,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.76,
+              "p95": 3.85,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 26.64,
+          "deltaP50": 22.78
+        }
+      ],
+      "sse": [
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 5.03,
+              "p95": 7.83,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.07,
+              "p95": 4.75,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.99,
+              "p95": 4.67,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.44,
+              "p95": 0.68,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 31.79,
+              "p95": 45.07,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.75,
+              "p95": 1.5,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 22.22,
+              "p95": 38.23,
+              "n": 20
+            },
+            "commit": {
+              "p50": 21.89,
+              "p95": 37.87,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.81,
+              "p95": 1.52,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 37.24,
+          "deltaP50": 26.76,
+          "events": 43
+        }
+      ],
+      "editor-node": [
+        {
+          "documentBytes": 151162,
+          "oneKey": {
+            "total": {
+              "p50": 6.9,
+              "p95": 13.55,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.51,
+              "p95": 6.52,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.42,
+              "p95": 6.45,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.49,
+              "p95": 2.05,
+              "n": 20
+            },
+            "getProject": {
+              "p50": 0.41,
+              "p95": 0.64,
+              "n": 20
+            },
+            "wholeReads": 20
+          },
+          "keys2000": {
+            "total": {
+              "p50": 37.54,
+              "p95": 57.2,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.68,
+              "p95": 0.94,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 17.44,
+              "p95": 30.6,
+              "n": 20
+            },
+            "commit": {
+              "p50": 16.81,
+              "p95": 30.09,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.69,
+              "p95": 1.3,
+              "n": 20
+            },
+            "getProject": {
+              "p50": 3.17,
+              "p95": 7.75,
+              "n": 20
+            },
+            "wholeReads": 20
+          },
+          "deltaP95": 43.65,
+          "deltaP50": 30.64,
+          "events": 43
+        }
+      ]
+    },
+    "profile": {
+      "none": {
+        "wallMs": 1202.82,
+        "byFile": [
+          {
+            "name": "(native) anonymous",
+            "ms": 314.16
+          },
+          {
+            "name": "(idle)",
+            "ms": 205.84
+          },
+          {
+            "name": "node:inspector",
+            "ms": 159.3
+          },
+          {
+            "name": "apps/server/src/store.ts",
+            "ms": 142.22
+          },
+          {
+            "name": "dep:zod",
+            "ms": 61.33
+          },
+          {
+            "name": "(garbage collector)",
+            "ms": 46.49
+          },
+          {
+            "name": "dep:hono",
+            "ms": 39.55
+          },
+          {
+            "name": "packages/evals/src/request-bench.ts",
+            "ms": 35.34
+          },
+          {
+            "name": "packages/core/src/ops.ts",
+            "ms": 31.17
+          },
+          {
+            "name": "packages/core/src/clone.ts",
+            "ms": 25.81
+          },
+          {
+            "name": "node:internal/deps/undici/undici",
+            "ms": 25.4
+          },
+          {
+            "name": "packages/time/src/index.ts",
+            "ms": 17.02
+          },
+          {
+            "name": "node:internal/webstreams/readablestream",
+            "ms": 8.04
+          },
+          {
+            "name": "packages/core/src/sequenceOps.ts",
+            "ms": 6.39
+          },
+          {
+            "name": "packages/core/src/validate.ts",
+            "ms": 5.47
+          },
+          {
+            "name": "dep:better-sqlite3",
+            "ms": 5.29
+          },
+          {
+            "name": "(program)",
+            "ms": 5.22
+          },
+          {
+            "name": "node:buffer",
+            "ms": 5.2
+          },
+          {
+            "name": "apps/server/src/peoplePrivacy.ts",
+            "ms": 4.47
+          },
+          {
+            "name": "node:internal/encoding",
+            "ms": 4.19
+          },
+          {
+            "name": "node:internal/async_hooks",
+            "ms": 3.92
+          },
+          {
+            "name": "(native) runMicrotasks",
+            "ms": 3.66
+          },
+          {
+            "name": "(native) writev",
+            "ms": 3.61
+          },
+          {
+            "name": "node:internal/process/task_queues",
+            "ms": 3.41
+          },
+          {
+            "name": "dep:@hono+node-server@2.1.8_hono@4.13.18/node_modules",
+            "ms": 3.29
+          }
+        ],
+        "byFunction": [
+          {
+            "name": "(anonymous) (native) anonymous:0",
+            "ms": 298.45
+          },
+          {
+            "name": "(idle) (idle):0",
+            "ms": 205.84
+          },
+          {
+            "name": "post node:inspector:118",
+            "ms": 159.3
+          },
+          {
+            "name": "(anonymous) apps/server/src/store.ts:13",
+            "ms": 105.99
+          },
+          {
+            "name": "(garbage collector) (garbage collector):0",
+            "ms": 46.49
+          },
+          {
+            "name": "(anonymous) dep:hono:105",
+            "ms": 37.89
+          },
+          {
+            "name": "wholeProject apps/server/src/store.ts:13",
+            "ms": 33.8
+          },
+          {
+            "name": "(anonymous) packages/evals/src/request-bench.ts:1",
+            "ms": 32.83
+          },
+          {
+            "name": "walk packages/core/src/clone.ts:1",
+            "ms": 25.64
+          },
+          {
+            "name": "refuseInheritedIds packages/core/src/ops.ts:1",
+            "ms": 17.12
+          },
+          {
+            "name": "inst._zod.run dep:zod:97",
+            "ms": 16.06
+          },
+          {
+            "name": "(anonymous) (native) anonymous:3",
+            "ms": 15.71
+          },
+          {
+            "name": "(anonymous) packages/core/src/ops.ts:1",
+            "ms": 12.77
+          },
+          {
+            "name": "runChecks dep:zod:34",
+            "ms": 11.74
+          },
+          {
+            "name": "inst._zod.parse dep:zod:1199",
+            "ms": 11.73
+          },
+          {
+            "name": "isFrameAligned packages/time/src/index.ts:1",
+            "ms": 8.86
+          },
+          {
+            "name": "inst._zod.parse dep:zod:856",
+            "ms": 5.35
+          },
+          {
+            "name": "(program) (program):0",
+            "ms": 5.22
+          },
+          {
+            "name": "apply packages/core/src/sequenceOps.ts:1",
+            "ms": 4.67
+          },
+          {
+            "name": "(anonymous) apps/server/src/peoplePrivacy.ts:1",
+            "ms": 4.47
+          },
+          {
+            "name": "handleCatchall dep:zod:951",
+            "ms": 4.09
+          },
+          {
+            "name": "prepare dep:better-sqlite3:4",
+            "ms": 3.95
+          },
+          {
+            "name": "setupReadableByteStreamController node:internal/webstreams/readablestream:3257",
+            "ms": 3.8
+          },
+          {
+            "name": "(anonymous) packages/time/src/index.ts:1",
+            "ms": 3.73
+          },
+          {
+            "name": "allocate node:buffer:436",
+            "ms": 3.67
+          },
+          {
+            "name": "runMicrotasks (native) runMicrotasks:0",
+            "ms": 3.66
+          },
+          {
+            "name": "writev (native) writev:0",
+            "ms": 3.61
+          },
+          {
+            "name": "decode node:internal/encoding:442",
+            "ms": 3.52
+          },
+          {
+            "name": "inst._zod.parse dep:zod:2017",
+            "ms": 3.11
+          },
+          {
+            "name": "connectH1 node:internal/deps/undici/undici:6527",
+            "ms": 3.01
+          }
+        ],
+        "nativeByCaller": [
+          {
+            "name": "(native) ← sqliteTransaction dep:better-sqlite3 ← commit apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts",
+            "ms": 245.52
+          },
+          {
+            "name": "(idle) ← (root)",
+            "ms": 205.84
+          },
+          {
+            "name": "(garbage collector) ← (root)",
+            "ms": 46.49
+          },
+          {
+            "name": "(native) ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3 ← commit apps/server/src/store.ts",
+            "ms": 22.01
+          },
+          {
+            "name": "(native) ← drainOutbox apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts ← commit apps/server/src/store.ts",
+            "ms": 19.61
+          },
+          {
+            "name": "(native) ← inst._zod.parse dep:zod ← inst._zod.parse dep:zod ← inst._zod.parse dep:zod",
+            "ms": 14.98
+          },
+          {
+            "name": "(program) ← (root)",
+            "ms": 5.22
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3",
+            "ms": 4.97
+          },
+          {
+            "name": "runMicrotasks ← processTicksAndRejections node:internal/process/task_queues",
+            "ms": 3.66
+          },
+          {
+            "name": "writev ← writevGeneric node:internal/stream_base_commons ← Socket._writeGeneric node:net ← Socket._writev node:net",
+            "ms": 3.61
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← wholeProject apps/server/src/store.ts ← (anonymous) apps/server/src/store.ts",
+            "ms": 1.89
+          },
+          {
+            "name": "connect ← internalConnect node:net ← defaultTriggerAsyncIdScope node:internal/async_hooks ← (anonymous) node:net",
+            "ms": 1.68
+          },
+          {
+            "name": "(native) ← wholeProject apps/server/src/store.ts ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3",
+            "ms": 1.59
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← drainOutbox apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts",
+            "ms": 1.42
+          },
+          {
+            "name": "close ← closeSocketHandle node:net ← Socket._destroy node:net ← _destroy node:internal/streams/destroy",
+            "ms": 1.36
+          },
+          {
+            "name": "run ← randomFillSync node:internal/crypto/random ← randomBytes node:internal/crypto/random ← (anonymous) apps/server/src/store.ts",
+            "ms": 0.7
+          },
+          {
+            "name": "(native) ← isPaused apps/server/src/governance.ts ← assertMayAct apps/server/src/governance.ts ← commitAs apps/server/src/governance.ts",
+            "ms": 0.57
+          },
+          {
+            "name": "RandomBytesJob ← randomFillSync node:internal/crypto/random ← randomBytes node:internal/crypto/random ← (anonymous) apps/server/src/store.ts",
+            "ms": 0.53
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← isPaused apps/server/src/governance.ts ← assertMayAct apps/server/src/governance.ts",
+            "ms": 0.52
+          },
+          {
+            "name": "(native) ← inst._zod.parse dep:zod ← (anonymous) dep:zod ← safeParse dep:zod",
+            "ms": 0.41
+          }
+        ]
+      },
+      "sse": {
+        "wallMs": 1040.15,
+        "byFile": [
+          {
+            "name": "(idle)",
+            "ms": 203.38
+          },
+          {
+            "name": "node:inspector",
+            "ms": 163.71
+          },
+          {
+            "name": "(native) anonymous",
+            "ms": 148.11
+          },
+          {
+            "name": "apps/server/src/store.ts",
+            "ms": 140.31
+          },
+          {
+            "name": "dep:zod",
+            "ms": 72.09
+          },
+          {
+            "name": "(garbage collector)",
+            "ms": 59.48
+          },
+          {
+            "name": "dep:hono",
+            "ms": 37.08
+          },
+          {
+            "name": "node:internal/deps/undici/undici",
+            "ms": 33.05
+          },
+          {
+            "name": "packages/evals/src/request-bench.ts",
+            "ms": 31.74
+          },
+          {
+            "name": "packages/core/src/ops.ts",
+            "ms": 28.42
+          },
+          {
+            "name": "packages/core/src/clone.ts",
+            "ms": 17.3
+          },
+          {
+            "name": "packages/core/src/validate.ts",
+            "ms": 13.07
+          },
+          {
+            "name": "(program)",
+            "ms": 12.84
+          },
+          {
+            "name": "dep:@hono+node-server@2.1.8_hono@4.13.18/node_modules",
+            "ms": 10.69
+          },
+          {
+            "name": "dep:better-sqlite3",
+            "ms": 6.44
+          },
+          {
+            "name": "packages/time/src/index.ts",
+            "ms": 5.77
+          },
+          {
+            "name": "node:internal/webstreams/readablestream",
+            "ms": 5.37
+          },
+          {
+            "name": "packages/core/src/entities.ts",
+            "ms": 4.78
+          },
+          {
+            "name": "(native) runMicrotasks",
+            "ms": 4.78
+          },
+          {
+            "name": "packages/core/src/sequenceOps.ts",
+            "ms": 4
+          },
+          {
+            "name": "node:internal/process/task_queues",
+            "ms": 3.92
+          },
+          {
+            "name": "apps/server/src/peoplePrivacy.ts",
+            "ms": 3.37
+          },
+          {
+            "name": "node:internal/encoding",
+            "ms": 3.06
+          },
+          {
+            "name": "node:internal/streams/readable",
+            "ms": 2.23
+          },
+          {
+            "name": "node:internal/async_hooks",
+            "ms": 2.14
+          }
+        ],
+        "byFunction": [
+          {
+            "name": "(idle) (idle):0",
+            "ms": 203.38
+          },
+          {
+            "name": "post node:inspector:118",
+            "ms": 163.71
+          },
+          {
+            "name": "(anonymous) (native) anonymous:0",
+            "ms": 139.37
+          },
+          {
+            "name": "(anonymous) apps/server/src/store.ts:13",
+            "ms": 106.5
+          },
+          {
+            "name": "(garbage collector) (garbage collector):0",
+            "ms": 59.48
+          },
+          {
+            "name": "wholeProject apps/server/src/store.ts:13",
+            "ms": 33.08
+          },
+          {
+            "name": "(anonymous) dep:hono:105",
+            "ms": 31.92
+          },
+          {
+            "name": "(anonymous) packages/evals/src/request-bench.ts:1",
+            "ms": 31.08
+          },
+          {
+            "name": "walk packages/core/src/clone.ts:1",
+            "ms": 17.3
+          },
+          {
+            "name": "inst._zod.run dep:zod:97",
+            "ms": 13.64
+          },
+          {
+            "name": "refuseInheritedIds packages/core/src/ops.ts:1",
+            "ms": 13.07
+          },
+          {
+            "name": "(program) (program):0",
+            "ms": 12.84
+          },
+          {
+            "name": "(anonymous) packages/core/src/ops.ts:1",
+            "ms": 12.35
+          },
+          {
+            "name": "_Request node:internal/deps/undici/undici:10017",
+            "ms": 12.18
+          },
+          {
+            "name": "inst._zod.parse dep:zod:826",
+            "ms": 10.27
+          },
+          {
+            "name": "handleCatchall dep:zod:951",
+            "ms": 10.12
+          },
+          {
+            "name": "(anonymous) (native) anonymous:3",
+            "ms": 8.74
+          },
+          {
+            "name": "get headers dep:@hono+node-server@2.1.8_hono@4.13.18/node_modules:667",
+            "ms": 8.68
+          },
+          {
+            "name": "(anonymous) packages/core/src/validate.ts:1",
+            "ms": 8.19
+          },
+          {
+            "name": "inst._zod.parse dep:zod:1199",
+            "ms": 8.12
+          },
+          {
+            "name": "runChecks dep:zod:34",
+            "ms": 7.53
+          },
+          {
+            "name": "inst._zod.check dep:zod:292",
+            "ms": 5.54
+          },
+          {
+            "name": "runMicrotasks (native) runMicrotasks:0",
+            "ms": 4.78
+          },
+          {
+            "name": "validateProject packages/core/src/validate.ts:1",
+            "ms": 4.7
+          },
+          {
+            "name": "prepare dep:better-sqlite3:4",
+            "ms": 4.23
+          },
+          {
+            "name": "inst._zod.parse dep:zod:2017",
+            "ms": 4.04
+          },
+          {
+            "name": "apply packages/core/src/sequenceOps.ts:1",
+            "ms": 3.82
+          },
+          {
+            "name": "same packages/core/src/entities.ts:1",
+            "ms": 3.38
+          },
+          {
+            "name": "(anonymous) apps/server/src/peoplePrivacy.ts:1",
+            "ms": 3.37
+          },
+          {
+            "name": "(anonymous) packages/time/src/index.ts:1",
+            "ms": 3.11
+          }
+        ],
+        "nativeByCaller": [
+          {
+            "name": "(idle) ← (root)",
+            "ms": 203.38
+          },
+          {
+            "name": "(native) ← sqliteTransaction dep:better-sqlite3 ← commit apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts",
+            "ms": 91.4
+          },
+          {
+            "name": "(garbage collector) ← (root)",
+            "ms": 59.48
+          },
+          {
+            "name": "(native) ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3 ← commit apps/server/src/store.ts",
+            "ms": 22.91
+          },
+          {
+            "name": "(native) ← drainOutbox apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts ← commit apps/server/src/store.ts",
+            "ms": 14.79
+          },
+          {
+            "name": "(program) ← (root)",
+            "ms": 12.84
+          },
+          {
+            "name": "(native) ← inst._zod.parse dep:zod ← inst._zod.parse dep:zod ← inst._zod.parse dep:zod",
+            "ms": 7.8
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3",
+            "ms": 5.14
+          },
+          {
+            "name": "runMicrotasks ← processTicksAndRejections node:internal/process/task_queues",
+            "ms": 4.78
+          },
+          {
+            "name": "writev ← writevGeneric node:internal/stream_base_commons ← Socket._writeGeneric node:net ← Socket._writev node:net",
+            "ms": 2.05
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← drainOutbox apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts",
+            "ms": 1.93
+          },
+          {
+            "name": "close ← closeSocketHandle node:net ← Socket._destroy node:net ← _destroy node:internal/streams/destroy",
+            "ms": 1.54
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← isPaused apps/server/src/governance.ts ← assertMayAct apps/server/src/governance.ts",
+            "ms": 1.25
+          },
+          {
+            "name": "connect ← internalConnect node:net ← defaultTriggerAsyncIdScope node:internal/async_hooks ← (anonymous) node:net",
+            "ms": 1.1
+          },
+          {
+            "name": "(native) ← byteLength node:buffer ← extractBody node:internal/deps/undici/undici ← _Request node:internal/deps/undici/undici",
+            "ms": 0.79
+          },
+          {
+            "name": "encodeUtf8String ← encode node:internal/encoding ← pull node:internal/deps/undici/undici ← invokePromiseCallback node:internal/webstreams/util",
+            "ms": 0.69
+          },
+          {
+            "name": "run ← randomFillSync node:internal/crypto/random ← randomBytes node:internal/crypto/random ← (anonymous) apps/server/src/store.ts",
+            "ms": 0.66
+          },
+          {
+            "name": "(native) ← wholeProject apps/server/src/store.ts ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3",
+            "ms": 0.57
+          },
+          {
+            "name": "(native) ← inst._zod.parse dep:zod ← fn dep:zod ← _parse dep:zod",
+            "ms": 0.54
+          },
+          {
+            "name": "RandomBytesJob ← randomFillSync node:internal/crypto/random ← randomBytes node:internal/crypto/random ← (anonymous) apps/server/src/store.ts",
+            "ms": 0.54
+          }
+        ]
+      },
+      "editor-node": {
+        "wallMs": 1289.34,
+        "byFile": [
+          {
+            "name": "(native) anonymous",
+            "ms": 215.05
+          },
+          {
+            "name": "node:inspector",
+            "ms": 214.12
+          },
+          {
+            "name": "(idle)",
+            "ms": 193.41
+          },
+          {
+            "name": "apps/server/src/store.ts",
+            "ms": 166.39
+          },
+          {
+            "name": "dep:zod",
+            "ms": 87.86
+          },
+          {
+            "name": "packages/evals/src/request-bench.ts",
+            "ms": 63.61
+          },
+          {
+            "name": "dep:hono",
+            "ms": 62.13
+          },
+          {
+            "name": "node:internal/deps/undici/undici",
+            "ms": 55.06
+          },
+          {
+            "name": "(garbage collector)",
+            "ms": 54.67
+          },
+          {
+            "name": "packages/core/src/ops.ts",
+            "ms": 25.22
+          },
+          {
+            "name": "packages/core/src/clone.ts",
+            "ms": 19.57
+          },
+          {
+            "name": "(native) writev",
+            "ms": 13.26
+          },
+          {
+            "name": "packages/core/src/sequenceOps.ts",
+            "ms": 11.11
+          },
+          {
+            "name": "node:internal/encoding",
+            "ms": 8.49
+          },
+          {
+            "name": "apps/server/src/http.ts",
+            "ms": 7.08
+          },
+          {
+            "name": "node:internal/webstreams/readablestream",
+            "ms": 5.7
+          },
+          {
+            "name": "node:internal/streams/readable",
+            "ms": 5.41
+          },
+          {
+            "name": "(native) runMicrotasks",
+            "ms": 4.39
+          },
+          {
+            "name": "node:internal/webstreams/writablestream",
+            "ms": 4.33
+          },
+          {
+            "name": "packages/core/src/validate.ts",
+            "ms": 4.32
+          },
+          {
+            "name": "node:net",
+            "ms": 4.13
+          },
+          {
+            "name": "packages/time/src/index.ts",
+            "ms": 4.07
+          },
+          {
+            "name": "apps/server/src/peoplePrivacy.ts",
+            "ms": 3.81
+          },
+          {
+            "name": "(program)",
+            "ms": 3.74
+          },
+          {
+            "name": "(native) close",
+            "ms": 3.7
+          }
+        ],
+        "byFunction": [
+          {
+            "name": "post node:inspector:118",
+            "ms": 214.12
+          },
+          {
+            "name": "(anonymous) (native) anonymous:0",
+            "ms": 202.32
+          },
+          {
+            "name": "(idle) (idle):0",
+            "ms": 193.41
+          },
+          {
+            "name": "(anonymous) apps/server/src/store.ts:13",
+            "ms": 86.37
+          },
+          {
+            "name": "wholeProject apps/server/src/store.ts:13",
+            "ms": 79.06
+          },
+          {
+            "name": "(anonymous) packages/evals/src/request-bench.ts:1",
+            "ms": 63.38
+          },
+          {
+            "name": "(garbage collector) (garbage collector):0",
+            "ms": 54.67
+          },
+          {
+            "name": "json dep:hono:336",
+            "ms": 27.85
+          },
+          {
+            "name": "(anonymous) dep:hono:105",
+            "ms": 26.91
+          },
+          {
+            "name": "inst._zod.run dep:zod:97",
+            "ms": 23.17
+          },
+          {
+            "name": "parseJSONFromBytes node:internal/deps/undici/undici:5958",
+            "ms": 20.04
+          },
+          {
+            "name": "walk packages/core/src/clone.ts:1",
+            "ms": 19.57
+          },
+          {
+            "name": "refuseInheritedIds packages/core/src/ops.ts:1",
+            "ms": 14.38
+          },
+          {
+            "name": "writev (native) writev:0",
+            "ms": 13.26
+          },
+          {
+            "name": "(anonymous) (native) anonymous:3",
+            "ms": 12.73
+          },
+          {
+            "name": "inst._zod.parse dep:zod:1199",
+            "ms": 10.96
+          },
+          {
+            "name": "apply packages/core/src/sequenceOps.ts:1",
+            "ms": 10.93
+          },
+          {
+            "name": "runChecks dep:zod:34",
+            "ms": 10.26
+          },
+          {
+            "name": "handleCatchall dep:zod:951",
+            "ms": 9.88
+          },
+          {
+            "name": "decode node:internal/encoding:442",
+            "ms": 8.32
+          },
+          {
+            "name": "(anonymous) packages/core/src/ops.ts:1",
+            "ms": 7.89
+          },
+          {
+            "name": "inst._zod.parse dep:zod:2017",
+            "ms": 7.15
+          },
+          {
+            "name": "(anonymous) apps/server/src/http.ts:1",
+            "ms": 7.08
+          },
+          {
+            "name": "inst._zod.parse dep:zod:2115",
+            "ms": 5.42
+          },
+          {
+            "name": "inst._zod.check dep:zod:362",
+            "ms": 4.55
+          },
+          {
+            "name": "runMicrotasks (native) runMicrotasks:0",
+            "ms": 4.39
+          },
+          {
+            "name": "writableStreamMarkFirstWriteRequestInFlight node:internal/webstreams/writablestream:795",
+            "ms": 4.01
+          },
+          {
+            "name": "(program) (program):0",
+            "ms": 3.74
+          },
+          {
+            "name": "close (native) close:0",
+            "ms": 3.7
+          },
+          {
+            "name": "inst._zod.parse dep:zod:826",
+            "ms": 3.56
+          }
+        ],
+        "nativeByCaller": [
+          {
+            "name": "(idle) ← (root)",
+            "ms": 193.41
+          },
+          {
+            "name": "(native) ← sqliteTransaction dep:better-sqlite3 ← commit apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts",
+            "ms": 158.62
+          },
+          {
+            "name": "(garbage collector) ← (root)",
+            "ms": 54.67
+          },
+          {
+            "name": "writev ← writevGeneric node:internal/stream_base_commons ← Socket._writeGeneric node:net ← Socket._writev node:net",
+            "ms": 13.26
+          },
+          {
+            "name": "(native) ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3 ← commit apps/server/src/store.ts",
+            "ms": 12.85
+          },
+          {
+            "name": "(native) ← inst._zod.parse dep:zod ← inst._zod.parse dep:zod ← inst._zod.parse dep:zod",
+            "ms": 12
+          },
+          {
+            "name": "(native) ← drainOutbox apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts ← commit apps/server/src/store.ts",
+            "ms": 9.49
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3",
+            "ms": 6.19
+          },
+          {
+            "name": "runMicrotasks ← processTicksAndRejections node:internal/process/task_queues",
+            "ms": 4.39
+          },
+          {
+            "name": "(program) ← (root)",
+            "ms": 3.74
+          },
+          {
+            "name": "close ← closeSocketHandle node:net ← Socket._destroy node:net ← _destroy node:internal/streams/destroy",
+            "ms": 3.7
+          },
+          {
+            "name": "(native) ← byteLength node:buffer ← extractBody node:internal/deps/undici/undici ← _Request node:internal/deps/undici/undici",
+            "ms": 3.53
+          },
+          {
+            "name": "(native) ← wholeProject apps/server/src/store.ts ← getProject apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts",
+            "ms": 3.38
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← isPaused apps/server/src/governance.ts ← assertMayAct apps/server/src/governance.ts",
+            "ms": 2.25
+          },
+          {
+            "name": "encodeUtf8String ← encode node:internal/encoding ← pull node:internal/deps/undici/undici ← invokePromiseCallback node:internal/webstreams/util",
+            "ms": 2.18
+          },
+          {
+            "name": "connect ← internalConnect node:net ← defaultTriggerAsyncIdScope node:internal/async_hooks ← (anonymous) node:net",
+            "ms": 2.09
+          },
+          {
+            "name": "(native) ← byteLength node:buffer ← responseViaCache dep:@hono+node-server@2.1.8_hono@4.13.18/node_modules ← responseViaResponseObject dep:@hono+node-server@2.1.8_hono@4.13.18/node_modules",
+            "ms": 1.75
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← drainOutbox apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts",
+            "ms": 1.27
+          },
+          {
+            "name": "writeLatin1String ← handleWriteReq node:internal/stream_base_commons ← writeGeneric node:internal/stream_base_commons ← Socket._writeGeneric node:net",
+            "ms": 1.03
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← wholeProject apps/server/src/store.ts ← getProject apps/server/src/store.ts",
+            "ms": 0.96
+          }
+        ]
+      }
+    }
+  },
+  "after-profiled": {
+    "ranAt": "2026-11-24T18:06:43.185Z",
+    "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, node v22.23.4, load 3.91 4.83 9.08",
+    "runs": 20,
+    "samples": 1,
+    "modes": {
+      "none": [
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 10.48,
+              "p95": 16.05,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 7.13,
+              "p95": 12.59,
+              "n": 20
+            },
+            "commit": {
+              "p50": 6.83,
+              "p95": 12.52,
+              "n": 20
+            },
+            "emit": {
+              "p50": 1.57,
+              "p95": 4.01,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 30.29,
+              "p95": 63.88,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.9,
+              "p95": 1.42,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 22.3,
+              "p95": 51.16,
+              "n": 20
+            },
+            "commit": {
+              "p50": 21.91,
+              "p95": 50.79,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.9,
+              "p95": 3.99,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 47.82,
+          "deltaP50": 19.8
+        }
+      ],
+      "sse": [
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 5.25,
+              "p95": 7.18,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.26,
+              "p95": 2.94,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.13,
+              "p95": 2.67,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.43,
+              "p95": 0.58,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 27.85,
+              "p95": 36.91,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.63,
+              "p95": 1,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 17.87,
+              "p95": 26.77,
+              "n": 20
+            },
+            "commit": {
+              "p50": 17.58,
+              "p95": 26.54,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.62,
+              "p95": 0.99,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 29.73,
+          "deltaP50": 22.59,
+          "events": 43
+        }
+      ],
+      "browser": [
+        {
+          "documentBytes": 151158,
+          "oneKey": {
+            "total": {
+              "p50": 4.04,
+              "p95": 7.22,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.02,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 1.86,
+              "p95": 3.78,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.78,
+              "p95": 3.68,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.39,
+              "p95": 0.84,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 25.2,
+              "p95": 44.25,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.7,
+              "p95": 1.13,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 17.51,
+              "p95": 33.19,
+              "n": 20
+            },
+            "commit": {
+              "p50": 17.2,
+              "p95": 32.63,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.64,
+              "p95": 1.08,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 37.03,
+          "deltaP50": 21.16
+        }
+      ]
+    },
+    "profile": {
+      "none": {
+        "wallMs": 1171.73,
+        "byFile": [
+          {
+            "name": "(idle)",
+            "ms": 205.66
+          },
+          {
+            "name": "apps/server/src/store.ts",
+            "ms": 173.25
+          },
+          {
+            "name": "node:inspector",
+            "ms": 171.4
+          },
+          {
+            "name": "(native) anonymous",
+            "ms": 171.32
+          },
+          {
+            "name": "dep:zod",
+            "ms": 86.1
+          },
+          {
+            "name": "(garbage collector)",
+            "ms": 71.42
+          },
+          {
+            "name": "dep:hono",
+            "ms": 42.72
+          },
+          {
+            "name": "packages/evals/src/request-bench.ts",
+            "ms": 38.69
+          },
+          {
+            "name": "packages/core/src/ops.ts",
+            "ms": 38.06
+          },
+          {
+            "name": "packages/core/src/clone.ts",
+            "ms": 25.71
+          },
+          {
+            "name": "node:internal/deps/undici/undici",
+            "ms": 23.06
+          },
+          {
+            "name": "packages/time/src/index.ts",
+            "ms": 19.45
+          },
+          {
+            "name": "dep:better-sqlite3",
+            "ms": 12.39
+          },
+          {
+            "name": "packages/core/src/validate.ts",
+            "ms": 10.03
+          },
+          {
+            "name": "packages/core/src/sequenceOps.ts",
+            "ms": 10.02
+          },
+          {
+            "name": "node:internal/webstreams/readablestream",
+            "ms": 6.31
+          },
+          {
+            "name": "dep:@hono+node-server@2.1.8_hono@4.13.18/node_modules",
+            "ms": 5.67
+          },
+          {
+            "name": "apps/server/src/peoplePrivacy.ts",
+            "ms": 5.34
+          },
+          {
+            "name": "node:internal/encoding",
+            "ms": 4.89
+          },
+          {
+            "name": "node:internal/process/task_queues",
+            "ms": 4.32
+          },
+          {
+            "name": "node:events",
+            "ms": 3.39
+          },
+          {
+            "name": "node:internal/async_hooks",
+            "ms": 2.81
+          },
+          {
+            "name": "packages/core/src/entities.ts",
+            "ms": 2.69
+          },
+          {
+            "name": "node:net",
+            "ms": 2.68
+          },
+          {
+            "name": "node:_http_outgoing",
+            "ms": 2.28
+          }
+        ],
+        "byFunction": [
+          {
+            "name": "(idle) (idle):0",
+            "ms": 205.66
+          },
+          {
+            "name": "post node:inspector:118",
+            "ms": 171.4
+          },
+          {
+            "name": "(anonymous) (native) anonymous:0",
+            "ms": 157.09
+          },
+          {
+            "name": "(anonymous) apps/server/src/store.ts:13",
+            "ms": 119.07
+          },
+          {
+            "name": "(garbage collector) (garbage collector):0",
+            "ms": 71.42
+          },
+          {
+            "name": "wholeProject apps/server/src/store.ts:13",
+            "ms": 51.22
+          },
+          {
+            "name": "(anonymous) dep:hono:105",
+            "ms": 39.99
+          },
+          {
+            "name": "(anonymous) packages/evals/src/request-bench.ts:1",
+            "ms": 36.68
+          },
+          {
+            "name": "walk packages/core/src/clone.ts:1",
+            "ms": 25.71
+          },
+          {
+            "name": "(anonymous) packages/core/src/ops.ts:1",
+            "ms": 20.51
+          },
+          {
+            "name": "inst._zod.run dep:zod:97",
+            "ms": 16.67
+          },
+          {
+            "name": "refuseInheritedIds packages/core/src/ops.ts:1",
+            "ms": 14.82
+          },
+          {
+            "name": "(anonymous) (native) anonymous:3",
+            "ms": 14.23
+          },
+          {
+            "name": "inst._zod.parse dep:zod:1199",
+            "ms": 12.91
+          },
+          {
+            "name": "handleCatchall dep:zod:951",
+            "ms": 12.5
+          },
+          {
+            "name": "runChecks dep:zod:34",
+            "ms": 12.21
+          },
+          {
+            "name": "prepare dep:better-sqlite3:4",
+            "ms": 10.56
+          },
+          {
+            "name": "apply packages/core/src/sequenceOps.ts:1",
+            "ms": 9.85
+          },
+          {
+            "name": "small packages/time/src/index.ts:1",
+            "ms": 8.45
+          },
+          {
+            "name": "validateProject packages/core/src/validate.ts:1",
+            "ms": 7.91
+          },
+          {
+            "name": "inst._zod.check dep:zod:362",
+            "ms": 7.57
+          },
+          {
+            "name": "inst._zod.parse dep:zod:2017",
+            "ms": 5.45
+          },
+          {
+            "name": "(anonymous) apps/server/src/peoplePrivacy.ts:1",
+            "ms": 5.34
+          },
+          {
+            "name": "decode node:internal/encoding:442",
+            "ms": 4.71
+          },
+          {
+            "name": "(anonymous) packages/time/src/index.ts:1",
+            "ms": 4.65
+          },
+          {
+            "name": "(anonymous) dep:@hono+node-server@2.1.8_hono@4.13.18/node_modules:1040",
+            "ms": 4.45
+          },
+          {
+            "name": "inst._zod.parse dep:zod:635",
+            "ms": 4.22
+          },
+          {
+            "name": "isomorphicEncode node:internal/deps/undici/undici:4854",
+            "ms": 3.88
+          },
+          {
+            "name": "isFrameAligned packages/time/src/index.ts:1",
+            "ms": 3.45
+          },
+          {
+            "name": "inst._zod.parse dep:zod:826",
+            "ms": 3.21
+          }
+        ],
+        "nativeByCaller": [
+          {
+            "name": "(idle) ← (root)",
+            "ms": 205.66
+          },
+          {
+            "name": "(native) ← sqliteTransaction dep:better-sqlite3 ← commit apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts",
+            "ms": 105.82
+          },
+          {
+            "name": "(garbage collector) ← (root)",
+            "ms": 71.42
+          },
+          {
+            "name": "(native) ← drainOutbox apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts ← commit apps/server/src/store.ts",
+            "ms": 26.21
+          },
+          {
+            "name": "(native) ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3 ← commit apps/server/src/store.ts",
+            "ms": 13.35
+          },
+          {
+            "name": "(native) ← inst._zod.parse dep:zod ← inst._zod.parse dep:zod ← inst._zod.parse dep:zod",
+            "ms": 12.43
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3",
+            "ms": 5.6
+          },
+          {
+            "name": "(native) ← wholeProject apps/server/src/store.ts ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3",
+            "ms": 2.16
+          },
+          {
+            "name": "writev ← writevGeneric node:internal/stream_base_commons ← Socket._writeGeneric node:net ← Socket._writev node:net",
+            "ms": 1.91
+          },
+          {
+            "name": "(program) ← (root)",
+            "ms": 1.84
+          },
+          {
+            "name": "connect ← internalConnect node:net ← defaultTriggerAsyncIdScope node:internal/async_hooks ← (anonymous) node:net",
+            "ms": 1.65
+          },
+          {
+            "name": "runMicrotasks ← processTicksAndRejections node:internal/process/task_queues",
+            "ms": 1.46
+          },
+          {
+            "name": "(native) ← byteLength node:buffer ← extractBody node:internal/deps/undici/undici ← _Request node:internal/deps/undici/undici",
+            "ms": 1.19
+          },
+          {
+            "name": "(native) ← inst._zod.parse dep:zod ← fn dep:zod ← _parse dep:zod",
+            "ms": 1.13
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← drainOutbox apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts",
+            "ms": 1.05
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← isPaused apps/server/src/governance.ts ← assertMayAct apps/server/src/governance.ts",
+            "ms": 1.05
+          },
+          {
+            "name": "close ← closeSocketHandle node:net ← Socket._destroy node:net ← _destroy node:internal/streams/destroy",
+            "ms": 0.93
+          },
+          {
+            "name": "encodeUtf8String ← encode node:internal/encoding ← pull node:internal/deps/undici/undici ← invokePromiseCallback node:internal/webstreams/util",
+            "ms": 0.67
+          },
+          {
+            "name": "RandomBytesJob ← randomFillSync node:internal/crypto/random ← randomBytes node:internal/crypto/random ← (anonymous) apps/server/src/store.ts",
+            "ms": 0.51
+          },
+          {
+            "name": "enqueueMicrotask ← queueMicrotask node:internal/process/task_queues ← readRequest node:internal/webstreams/readablestream ← readableStreamFulfillReadRequest node:internal/webstreams/readablestream",
+            "ms": 0.39
+          }
+        ]
+      },
+      "sse": {
+        "wallMs": 934.86,
+        "byFile": [
+          {
+            "name": "(idle)",
+            "ms": 202.36
+          },
+          {
+            "name": "node:inspector",
+            "ms": 148.69
+          },
+          {
+            "name": "apps/server/src/store.ts",
+            "ms": 126.36
+          },
+          {
+            "name": "(native) anonymous",
+            "ms": 108.28
+          },
+          {
+            "name": "packages/evals/src/request-bench.ts",
+            "ms": 59.31
+          },
+          {
+            "name": "dep:zod",
+            "ms": 48.68
+          },
+          {
+            "name": "(garbage collector)",
+            "ms": 36.04
+          },
+          {
+            "name": "dep:hono",
+            "ms": 35.21
+          },
+          {
+            "name": "packages/core/src/ops.ts",
+            "ms": 27.39
+          },
+          {
+            "name": "packages/core/src/clone.ts",
+            "ms": 21.14
+          },
+          {
+            "name": "node:internal/deps/undici/undici",
+            "ms": 18.88
+          },
+          {
+            "name": "packages/core/src/sequenceOps.ts",
+            "ms": 6.94
+          },
+          {
+            "name": "node:internal/webstreams/readablestream",
+            "ms": 6.79
+          },
+          {
+            "name": "(native) encodeUtf8String",
+            "ms": 6.01
+          },
+          {
+            "name": "packages/time/src/index.ts",
+            "ms": 6.01
+          },
+          {
+            "name": "node:internal/encoding",
+            "ms": 5.76
+          },
+          {
+            "name": "packages/core/src/validate.ts",
+            "ms": 5.17
+          },
+          {
+            "name": "apps/server/src/peoplePrivacy.ts",
+            "ms": 4.78
+          },
+          {
+            "name": "dep:better-sqlite3",
+            "ms": 4.73
+          },
+          {
+            "name": "(native) writev",
+            "ms": 4.34
+          },
+          {
+            "name": "node:internal/streams/readable",
+            "ms": 3.94
+          },
+          {
+            "name": "(program)",
+            "ms": 3.4
+          },
+          {
+            "name": "node:internal/process/task_queues",
+            "ms": 2.67
+          },
+          {
+            "name": "node:internal/async_hooks",
+            "ms": 2.63
+          },
+          {
+            "name": "node:net",
+            "ms": 2.53
+          }
+        ],
+        "byFunction": [
+          {
+            "name": "(idle) (idle):0",
+            "ms": 202.36
+          },
+          {
+            "name": "post node:inspector:118",
+            "ms": 148.69
+          },
+          {
+            "name": "(anonymous) (native) anonymous:0",
+            "ms": 100.21
+          },
+          {
+            "name": "(anonymous) apps/server/src/store.ts:13",
+            "ms": 78.11
+          },
+          {
+            "name": "(anonymous) packages/evals/src/request-bench.ts:1",
+            "ms": 59.13
+          },
+          {
+            "name": "(garbage collector) (garbage collector):0",
+            "ms": 36.04
+          },
+          {
+            "name": "wholeProject apps/server/src/store.ts:13",
+            "ms": 27.85
+          },
+          {
+            "name": "(anonymous) dep:hono:105",
+            "ms": 25.02
+          },
+          {
+            "name": "walk packages/core/src/clone.ts:1",
+            "ms": 21.14
+          },
+          {
+            "name": "revisionWithChanges apps/server/src/store.ts:1",
+            "ms": 19.04
+          },
+          {
+            "name": "inst._zod.run dep:zod:97",
+            "ms": 13.17
+          },
+          {
+            "name": "refuseInheritedIds packages/core/src/ops.ts:1",
+            "ms": 12.94
+          },
+          {
+            "name": "(anonymous) packages/core/src/ops.ts:1",
+            "ms": 12.4
+          },
+          {
+            "name": "inst._zod.parse dep:zod:1199",
+            "ms": 8.87
+          },
+          {
+            "name": "(anonymous) (native) anonymous:3",
+            "ms": 8.06
+          },
+          {
+            "name": "writeSSE dep:hono:9",
+            "ms": 7.06
+          },
+          {
+            "name": "apply packages/core/src/sequenceOps.ts:1",
+            "ms": 6.94
+          },
+          {
+            "name": "encodeUtf8String (native) encodeUtf8String:0",
+            "ms": 6.01
+          },
+          {
+            "name": "runChecks dep:zod:34",
+            "ms": 5.83
+          },
+          {
+            "name": "handleCatchall dep:zod:951",
+            "ms": 4.97
+          },
+          {
+            "name": "(anonymous) apps/server/src/peoplePrivacy.ts:1",
+            "ms": 4.78
+          },
+          {
+            "name": "writev (native) writev:0",
+            "ms": 4.34
+          },
+          {
+            "name": "decode node:internal/encoding:442",
+            "ms": 3.56
+          },
+          {
+            "name": "(anonymous) packages/time/src/index.ts:1",
+            "ms": 3.43
+          },
+          {
+            "name": "(program) (program):0",
+            "ms": 3.4
+          },
+          {
+            "name": "(anonymous) packages/core/src/validate.ts:1",
+            "ms": 3.32
+          },
+          {
+            "name": "inst._zod.check dep:zod:362",
+            "ms": 3.04
+          },
+          {
+            "name": "inst._zod.parse dep:zod:856",
+            "ms": 2.86
+          },
+          {
+            "name": "prepare dep:better-sqlite3:4",
+            "ms": 2.77
+          },
+          {
+            "name": "decode (native) decode:0",
+            "ms": 2.45
+          }
+        ],
+        "nativeByCaller": [
+          {
+            "name": "(idle) ← (root)",
+            "ms": 202.36
+          },
+          {
+            "name": "(native) ← sqliteTransaction dep:better-sqlite3 ← commit apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts",
+            "ms": 68.8
+          },
+          {
+            "name": "(garbage collector) ← (root)",
+            "ms": 36.04
+          },
+          {
+            "name": "(native) ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3 ← commit apps/server/src/store.ts",
+            "ms": 12.28
+          },
+          {
+            "name": "(native) ← drainOutbox apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts ← commit apps/server/src/store.ts",
+            "ms": 9.9
+          },
+          {
+            "name": "(native) ← inst._zod.parse dep:zod ← inst._zod.parse dep:zod ← inst._zod.parse dep:zod",
+            "ms": 7.2
+          },
+          {
+            "name": "encodeUtf8String ← encode node:internal/encoding ← write dep:hono ← writeSSE dep:hono",
+            "ms": 4.97
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3",
+            "ms": 4.78
+          },
+          {
+            "name": "writev ← writevGeneric node:internal/stream_base_commons ← Socket._writeGeneric node:net ← Socket._writev node:net",
+            "ms": 4.34
+          },
+          {
+            "name": "(program) ← (root)",
+            "ms": 3.4
+          },
+          {
+            "name": "decode ← decode node:internal/encoding ← (anonymous) packages/evals/src/request-bench.ts ← processTicksAndRejections node:internal/process/task_queues",
+            "ms": 2.45
+          },
+          {
+            "name": "runMicrotasks ← processTicksAndRejections node:internal/process/task_queues",
+            "ms": 2.42
+          },
+          {
+            "name": "close ← closeSocketHandle node:net ← Socket._destroy node:net ← _destroy node:internal/streams/destroy",
+            "ms": 2.38
+          },
+          {
+            "name": "connect ← internalConnect node:net ← defaultTriggerAsyncIdScope node:internal/async_hooks ← (anonymous) node:net",
+            "ms": 1.51
+          },
+          {
+            "name": "(native) ← wholeProject apps/server/src/store.ts ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3",
+            "ms": 1.23
+          },
+          {
+            "name": "(native) ← byteLength node:buffer ← extractBody node:internal/deps/undici/undici ← _Request node:internal/deps/undici/undici",
+            "ms": 1.04
+          },
+          {
+            "name": "encodeUtf8String ← encode node:internal/encoding ← pull node:internal/deps/undici/undici ← invokePromiseCallback node:internal/webstreams/util",
+            "ms": 1.04
+          },
+          {
+            "name": "run ← randomFillSync node:internal/crypto/random ← randomBytes node:internal/crypto/random ← (anonymous) apps/server/src/store.ts",
+            "ms": 0.73
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← drainOutbox apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts",
+            "ms": 0.64
+          },
+          {
+            "name": "(native) ← inst._zod.parse dep:zod ← fn dep:zod ← _parse dep:zod",
+            "ms": 0.52
+          }
+        ]
+      },
+      "browser": {
+        "wallMs": 1011.22,
+        "byFile": [
+          {
+            "name": "node:inspector",
+            "ms": 207.46
+          },
+          {
+            "name": "(idle)",
+            "ms": 204.08
+          },
+          {
+            "name": "(native) anonymous",
+            "ms": 133.78
+          },
+          {
+            "name": "apps/server/src/store.ts",
+            "ms": 130.55
+          },
+          {
+            "name": "dep:zod",
+            "ms": 54.19
+          },
+          {
+            "name": "(garbage collector)",
+            "ms": 38.29
+          },
+          {
+            "name": "dep:hono",
+            "ms": 37.72
+          },
+          {
+            "name": "packages/evals/src/request-bench.ts",
+            "ms": 32.65
+          },
+          {
+            "name": "packages/core/src/ops.ts",
+            "ms": 26.03
+          },
+          {
+            "name": "packages/core/src/clone.ts",
+            "ms": 20.47
+          },
+          {
+            "name": "node:internal/deps/undici/undici",
+            "ms": 15.27
+          },
+          {
+            "name": "(program)",
+            "ms": 11.2
+          },
+          {
+            "name": "packages/core/src/sequenceOps.ts",
+            "ms": 8.97
+          },
+          {
+            "name": "packages/core/src/validate.ts",
+            "ms": 6.44
+          },
+          {
+            "name": "dep:better-sqlite3",
+            "ms": 6.23
+          },
+          {
+            "name": "node:internal/encoding",
+            "ms": 6.18
+          },
+          {
+            "name": "(native) writev",
+            "ms": 5.74
+          },
+          {
+            "name": "(native) encodeUtf8String",
+            "ms": 5.43
+          },
+          {
+            "name": "node:internal/webstreams/readablestream",
+            "ms": 5.26
+          },
+          {
+            "name": "apps/server/src/peoplePrivacy.ts",
+            "ms": 4.7
+          },
+          {
+            "name": "packages/time/src/index.ts",
+            "ms": 4.52
+          },
+          {
+            "name": "node:internal/streams/readable",
+            "ms": 3.29
+          },
+          {
+            "name": "(native) runMicrotasks",
+            "ms": 2.47
+          },
+          {
+            "name": "node:events",
+            "ms": 2.44
+          },
+          {
+            "name": "dep:@hono+node-server@2.1.8_hono@4.13.18/node_modules",
+            "ms": 2.43
+          }
+        ],
+        "byFunction": [
+          {
+            "name": "post node:inspector:118",
+            "ms": 207.46
+          },
+          {
+            "name": "(idle) (idle):0",
+            "ms": 204.08
+          },
+          {
+            "name": "(anonymous) (native) anonymous:0",
+            "ms": 124.09
+          },
+          {
+            "name": "(anonymous) apps/server/src/store.ts:13",
+            "ms": 81.09
+          },
+          {
+            "name": "(garbage collector) (garbage collector):0",
+            "ms": 38.29
+          },
+          {
+            "name": "(anonymous) packages/evals/src/request-bench.ts:1",
+            "ms": 32.28
+          },
+          {
+            "name": "wholeProject apps/server/src/store.ts:13",
+            "ms": 29.73
+          },
+          {
+            "name": "(anonymous) dep:hono:105",
+            "ms": 28.63
+          },
+          {
+            "name": "walk packages/core/src/clone.ts:1",
+            "ms": 20.47
+          },
+          {
+            "name": "revisionWithChanges apps/server/src/store.ts:1",
+            "ms": 17.27
+          },
+          {
+            "name": "refuseInheritedIds packages/core/src/ops.ts:1",
+            "ms": 14.79
+          },
+          {
+            "name": "inst._zod.run dep:zod:97",
+            "ms": 12.16
+          },
+          {
+            "name": "(program) (program):0",
+            "ms": 11.2
+          },
+          {
+            "name": "(anonymous) (native) anonymous:3",
+            "ms": 9.3
+          },
+          {
+            "name": "apply packages/core/src/sequenceOps.ts:1",
+            "ms": 8.97
+          },
+          {
+            "name": "(anonymous) packages/core/src/ops.ts:1",
+            "ms": 8.7
+          },
+          {
+            "name": "runChecks dep:zod:34",
+            "ms": 8.59
+          },
+          {
+            "name": "inst._zod.parse dep:zod:1199",
+            "ms": 7.67
+          },
+          {
+            "name": "handleCatchall dep:zod:951",
+            "ms": 7.55
+          },
+          {
+            "name": "writeSSE dep:hono:9",
+            "ms": 7.18
+          },
+          {
+            "name": "writev (native) writev:0",
+            "ms": 5.74
+          },
+          {
+            "name": "encodeUtf8String (native) encodeUtf8String:0",
+            "ms": 5.43
+          },
+          {
+            "name": "(anonymous) packages/core/src/validate.ts:1",
+            "ms": 5.19
+          },
+          {
+            "name": "(anonymous) apps/server/src/peoplePrivacy.ts:1",
+            "ms": 4.53
+          },
+          {
+            "name": "inst._zod.check dep:zod:362",
+            "ms": 3.95
+          },
+          {
+            "name": "decode node:internal/encoding:442",
+            "ms": 3.48
+          },
+          {
+            "name": "inst._zod.parse dep:zod:2017",
+            "ms": 3.14
+          },
+          {
+            "name": "inst._zod.parse dep:zod:856",
+            "ms": 3.03
+          },
+          {
+            "name": "encode node:internal/encoding:351",
+            "ms": 2.7
+          },
+          {
+            "name": "runMicrotasks (native) runMicrotasks:0",
+            "ms": 2.47
+          }
+        ],
+        "nativeByCaller": [
+          {
+            "name": "(idle) ← (root)",
+            "ms": 204.08
+          },
+          {
+            "name": "(native) ← sqliteTransaction dep:better-sqlite3 ← commit apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts",
+            "ms": 77.68
+          },
+          {
+            "name": "(garbage collector) ← (root)",
+            "ms": 38.29
+          },
+          {
+            "name": "(native) ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3 ← commit apps/server/src/store.ts",
+            "ms": 24.12
+          },
+          {
+            "name": "(program) ← (root)",
+            "ms": 11.2
+          },
+          {
+            "name": "(native) ← drainOutbox apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts ← commit apps/server/src/store.ts",
+            "ms": 11.03
+          },
+          {
+            "name": "(native) ← inst._zod.parse dep:zod ← inst._zod.parse dep:zod ← inst._zod.parse dep:zod",
+            "ms": 7.7
+          },
+          {
+            "name": "writev ← writevGeneric node:internal/stream_base_commons ← Socket._writeGeneric node:net ← Socket._writev node:net",
+            "ms": 5.74
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3",
+            "ms": 5.23
+          },
+          {
+            "name": "encodeUtf8String ← encode node:internal/encoding ← write dep:hono ← writeSSE dep:hono",
+            "ms": 4.93
+          },
+          {
+            "name": "runMicrotasks ← processTicksAndRejections node:internal/process/task_queues",
+            "ms": 2.47
+          },
+          {
+            "name": "close ← closeSocketHandle node:net ← Socket._destroy node:net ← _destroy node:internal/streams/destroy",
+            "ms": 2.09
+          },
+          {
+            "name": "(native) ← byteLength node:buffer ← extractBody node:internal/deps/undici/undici ← _Request node:internal/deps/undici/undici",
+            "ms": 2.02
+          },
+          {
+            "name": "connect ← internalConnect node:net ← defaultTriggerAsyncIdScope node:internal/async_hooks ← (anonymous) node:net",
+            "ms": 1.99
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← drainOutbox apps/server/src/store.ts ← o.<computed> packages/evals/src/request-bench.ts",
+            "ms": 1.6
+          },
+          {
+            "name": "(native) ← inst._zod.parse dep:zod ← (anonymous) dep:zod ← safeParse dep:zod",
+            "ms": 1.08
+          },
+          {
+            "name": "(native) ← prepare dep:better-sqlite3 ← isPaused apps/server/src/governance.ts ← assertMayAct apps/server/src/governance.ts",
+            "ms": 0.88
+          },
+          {
+            "name": "(native) ← isPaused apps/server/src/governance.ts ← assertMayAct apps/server/src/governance.ts ← commitAs apps/server/src/governance.ts",
+            "ms": 0.71
+          },
+          {
+            "name": "(native) ← wholeProject apps/server/src/store.ts ← (anonymous) apps/server/src/store.ts ← sqliteTransaction dep:better-sqlite3",
+            "ms": 0.65
+          },
+          {
+            "name": "run ← randomFillSync node:internal/crypto/random ← randomBytes node:internal/crypto/random ← (anonymous) apps/server/src/store.ts",
+            "ms": 0.53
+          }
+        ]
+      }
+    }
+  },
+  "ab-after-1": {
+    "ranAt": "2026-11-24T18:04:43.090Z",
+    "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, node v22.23.4, load 4.05 5.37 9.82",
+    "runs": 20,
+    "samples": 2,
+    "modes": {
+      "none": [
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 6.5,
+              "p95": 10.04,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 3.45,
+              "p95": 6.88,
+              "n": 20
+            },
+            "commit": {
+              "p50": 3.33,
+              "p95": 6.81,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.8,
+              "p95": 1.36,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 18.96,
+              "p95": 30.55,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.63,
+              "p95": 0.73,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 14.74,
+              "p95": 25.3,
+              "n": 20
+            },
+            "commit": {
+              "p50": 14.42,
+              "p95": 23.91,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.59,
+              "p95": 1.43,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 20.5,
+          "deltaP50": 12.47
+        },
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 4.4,
+              "p95": 5.11,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.27,
+              "p95": 2.67,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.19,
+              "p95": 2.58,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.46,
+              "p95": 0.64,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 20.22,
+              "p95": 30.49,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.59,
+              "p95": 0.86,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 15.11,
+              "p95": 25.43,
+              "n": 20
+            },
+            "commit": {
+              "p50": 14.87,
+              "p95": 25.19,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.61,
+              "p95": 0.79,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 25.38,
+          "deltaP50": 15.82
+        }
+      ],
+      "sse": [
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 4.84,
+              "p95": 5.43,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.11,
+              "p95": 2.72,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.03,
+              "p95": 2.56,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.47,
+              "p95": 0.82,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 23.94,
+              "p95": 33.97,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.65,
+              "p95": 0.75,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 15.87,
+              "p95": 25.57,
+              "n": 20
+            },
+            "commit": {
+              "p50": 15.6,
+              "p95": 25.32,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.69,
+              "p95": 1.37,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 28.54,
+          "deltaP50": 19.1,
+          "events": 43
+        },
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 5.64,
+              "p95": 7.1,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.73,
+              "p95": 3.31,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.62,
+              "p95": 3.16,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.58,
+              "p95": 0.86,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 23.7,
+              "p95": 33.58,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.64,
+              "p95": 0.77,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 14.51,
+              "p95": 25.93,
+              "n": 20
+            },
+            "commit": {
+              "p50": 14.19,
+              "p95": 25.66,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.69,
+              "p95": 1.22,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 26.48,
+          "deltaP50": 18.06,
+          "events": 43
+        }
+      ],
+      "browser": [
+        {
+          "documentBytes": 151158,
+          "oneKey": {
+            "total": {
+              "p50": 6.38,
+              "p95": 9.7,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 3.26,
+              "p95": 6.62,
+              "n": 20
+            },
+            "commit": {
+              "p50": 3.11,
+              "p95": 6.53,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.66,
+              "p95": 3.59,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 33.2,
+              "p95": 54.32,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.64,
+              "p95": 0.82,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 22.53,
+              "p95": 42.21,
+              "n": 20
+            },
+            "commit": {
+              "p50": 22.29,
+              "p95": 41.91,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.72,
+              "p95": 6.09,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 44.62,
+          "deltaP50": 26.82
+        },
+        {
+          "documentBytes": 151158,
+          "oneKey": {
+            "total": {
+              "p50": 4.37,
+              "p95": 10.19,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.02,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.03,
+              "p95": 5.72,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.9,
+              "p95": 5.62,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.4,
+              "p95": 1.07,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 21.82,
+              "p95": 30.33,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.65,
+              "p95": 0.84,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 14.11,
+              "p95": 24.39,
+              "n": 20
+            },
+            "commit": {
+              "p50": 13.83,
+              "p95": 24.14,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.75,
+              "p95": 0.93,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 20.14,
+          "deltaP50": 17.46
+        }
+      ]
+    }
+  },
+  "ab-after-2": {
+    "ranAt": "2026-11-24T18:05:19.350Z",
+    "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, node v22.23.4, load 3.81 5.18 9.59",
+    "runs": 20,
+    "samples": 2,
+    "modes": {
+      "none": [
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 4.64,
+              "p95": 8.34,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.02,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.52,
+              "p95": 3.86,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.45,
+              "p95": 3.73,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.66,
+              "p95": 1.14,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 24.27,
+              "p95": 34.24,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.62,
+              "p95": 1.05,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 16.74,
+              "p95": 26.82,
+              "n": 20
+            },
+            "commit": {
+              "p50": 16.27,
+              "p95": 25.38,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.73,
+              "p95": 1.01,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 25.9,
+          "deltaP50": 19.63
+        },
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 4.04,
+              "p95": 7.07,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.02,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.09,
+              "p95": 3.17,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.99,
+              "p95": 2.98,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.5,
+              "p95": 0.92,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 19.1,
+              "p95": 29.87,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.56,
+              "p95": 0.59,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 14.24,
+              "p95": 25.84,
+              "n": 20
+            },
+            "commit": {
+              "p50": 13.99,
+              "p95": 25.54,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.63,
+              "p95": 0.88,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 22.8,
+          "deltaP50": 15.06
+        }
+      ],
+      "sse": [
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 5.23,
+              "p95": 7.81,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.02,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.33,
+              "p95": 4.34,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.24,
+              "p95": 4.25,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.56,
+              "p95": 0.79,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 23.73,
+              "p95": 32.49,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.58,
+              "p95": 0.97,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 14.59,
+              "p95": 25,
+              "n": 20
+            },
+            "commit": {
+              "p50": 14.26,
+              "p95": 24.76,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.68,
+              "p95": 1.24,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 24.68,
+          "deltaP50": 18.51,
+          "events": 43
+        },
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 4.29,
+              "p95": 7.85,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.06,
+              "p95": 3.72,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.98,
+              "p95": 3.52,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.53,
+              "p95": 0.7,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 23.7,
+              "p95": 34.23,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.65,
+              "p95": 1.22,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 15.43,
+              "p95": 25.52,
+              "n": 20
+            },
+            "commit": {
+              "p50": 15.15,
+              "p95": 25.2,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.65,
+              "p95": 0.88,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 26.38,
+          "deltaP50": 19.41,
+          "events": 43
+        }
+      ],
+      "browser": [
+        {
+          "documentBytes": 151158,
+          "oneKey": {
+            "total": {
+              "p50": 5.37,
+              "p95": 9.3,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.58,
+              "p95": 4.92,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.45,
+              "p95": 4.73,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.54,
+              "p95": 0.74,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 22.52,
+              "p95": 30.49,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.58,
+              "p95": 0.83,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 15.37,
+              "p95": 22.94,
+              "n": 20
+            },
+            "commit": {
+              "p50": 15.13,
+              "p95": 22.65,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.64,
+              "p95": 1.12,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 21.2,
+          "deltaP50": 17.15
+        },
+        {
+          "documentBytes": 151158,
+          "oneKey": {
+            "total": {
+              "p50": 4.49,
+              "p95": 11.58,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.11,
+              "p95": 5.8,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.04,
+              "p95": 5.73,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.53,
+              "p95": 1.79,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 22.61,
+              "p95": 31.76,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.58,
+              "p95": 0.64,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 15.92,
+              "p95": 25.4,
+              "n": 20
+            },
+            "commit": {
+              "p50": 15.64,
+              "p95": 25.1,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.78,
+              "p95": 1.12,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 20.18,
+          "deltaP50": 18.11
+        }
+      ]
+    }
+  },
+  "ab-after-3": {
+    "ranAt": "2026-11-24T18:05:54.493Z",
+    "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, node v22.23.4, load 3.71 5.01 9.37",
+    "runs": 20,
+    "samples": 2,
+    "modes": {
+      "none": [
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 19.93,
+              "p95": 20.18,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 17.81,
+              "p95": 17.98,
+              "n": 20
+            },
+            "commit": {
+              "p50": 17.72,
+              "p95": 17.89,
+              "n": 20
+            },
+            "emit": {
+              "p50": 7.99,
+              "p95": 8.22,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 20.16,
+              "p95": 39.3,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.57,
+              "p95": 0.89,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 15.52,
+              "p95": 33.92,
+              "n": 20
+            },
+            "commit": {
+              "p50": 15.18,
+              "p95": 33.61,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.66,
+              "p95": 1.1,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 19.12,
+          "deltaP50": 0.23
+        },
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 3.76,
+              "p95": 7.07,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.02,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 1.86,
+              "p95": 2.35,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.77,
+              "p95": 2.27,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.36,
+              "p95": 0.61,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 19.55,
+              "p95": 31.24,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.6,
+              "p95": 0.96,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 14.26,
+              "p95": 26.15,
+              "n": 20
+            },
+            "commit": {
+              "p50": 13.79,
+              "p95": 25.89,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.57,
+              "p95": 0.96,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 24.17,
+          "deltaP50": 15.79
+        }
+      ],
+      "sse": [
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 3.73,
+              "p95": 5.98,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 1.6,
+              "p95": 1.89,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.49,
+              "p95": 1.8,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.3,
+              "p95": 0.4,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 23.93,
+              "p95": 34.15,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.62,
+              "p95": 1.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 15.76,
+              "p95": 24.06,
+              "n": 20
+            },
+            "commit": {
+              "p50": 15.44,
+              "p95": 23.83,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.74,
+              "p95": 1.36,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 28.17,
+          "deltaP50": 20.19,
+          "events": 43
+        },
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 4.94,
+              "p95": 49.77,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.02,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.3,
+              "p95": 46.23,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.21,
+              "p95": 46.13,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.61,
+              "p95": 1.05,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 24.95,
+              "p95": 39.15,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.61,
+              "p95": 1.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 16.17,
+              "p95": 28.43,
+              "n": 20
+            },
+            "commit": {
+              "p50": 15.92,
+              "p95": 28.05,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.71,
+              "p95": 1.19,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": -10.62,
+          "deltaP50": 20,
+          "events": 43
+        }
+      ],
+      "browser": [
+        {
+          "documentBytes": 151158,
+          "oneKey": {
+            "total": {
+              "p50": 4.99,
+              "p95": 7.31,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.37,
+              "p95": 3.22,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.27,
+              "p95": 3.11,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.49,
+              "p95": 0.8,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 21.71,
+              "p95": 31.43,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.63,
+              "p95": 0.96,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 15.51,
+              "p95": 24.79,
+              "n": 20
+            },
+            "commit": {
+              "p50": 15.21,
+              "p95": 24.44,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.61,
+              "p95": 1.14,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 24.12,
+          "deltaP50": 16.72
+        },
+        {
+          "documentBytes": 151158,
+          "oneKey": {
+            "total": {
+              "p50": 5.38,
+              "p95": 7.1,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.02,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.53,
+              "p95": 4.68,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.43,
+              "p95": 4.53,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.57,
+              "p95": 1.03,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 20.93,
+              "p95": 29.78,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.57,
+              "p95": 0.87,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 14.89,
+              "p95": 23.84,
+              "n": 20
+            },
+            "commit": {
+              "p50": 14.64,
+              "p95": 23.58,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.6,
+              "p95": 0.83,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 22.69,
+          "deltaP50": 15.56
+        }
+      ]
+    }
+  },
+  "ab-before-1": {
+    "ranAt": "2026-11-24T18:05:02.689Z",
+    "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, node v22.23.4, load 4.17 5.31 9.71",
+    "runs": 20,
+    "samples": 2,
+    "modes": {
+      "none": [
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 7.63,
+              "p95": 15.8,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 4.25,
+              "p95": 11.25,
+              "n": 20
+            },
+            "commit": {
+              "p50": 4.17,
+              "p95": 11.11,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.84,
+              "p95": 4,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 27.01,
+              "p95": 53.3,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.59,
+              "p95": 0.89,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 22.55,
+              "p95": 45.93,
+              "n": 20
+            },
+            "commit": {
+              "p50": 22.31,
+              "p95": 44.1,
+              "n": 20
+            },
+            "emit": {
+              "p50": 4,
+              "p95": 11.09,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 37.49,
+          "deltaP50": 19.37
+        },
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 11.93,
+              "p95": 15.96,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.02,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 9.83,
+              "p95": 13.46,
+              "n": 20
+            },
+            "commit": {
+              "p50": 9.75,
+              "p95": 12.74,
+              "n": 20
+            },
+            "emit": {
+              "p50": 3.99,
+              "p95": 8,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 31.47,
+              "p95": 59.75,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.7,
+              "p95": 1.04,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 24.53,
+              "p95": 53.31,
+              "n": 20
+            },
+            "commit": {
+              "p50": 24.19,
+              "p95": 52.92,
+              "n": 20
+            },
+            "emit": {
+              "p50": 3.97,
+              "p95": 12.91,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 43.79,
+          "deltaP50": 19.54
+        }
+      ],
+      "sse": [
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 11.98,
+              "p95": 16.05,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 9.76,
+              "p95": 13.94,
+              "n": 20
+            },
+            "commit": {
+              "p50": 9.68,
+              "p95": 13.83,
+              "n": 20
+            },
+            "emit": {
+              "p50": 4,
+              "p95": 7.99,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 31.21,
+              "p95": 56.25,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.61,
+              "p95": 0.95,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 25.31,
+              "p95": 50.6,
+              "n": 20
+            },
+            "commit": {
+              "p50": 25.02,
+              "p95": 50.33,
+              "n": 20
+            },
+            "emit": {
+              "p50": 3.98,
+              "p95": 10.8,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 40.2,
+          "deltaP50": 19.23,
+          "events": 43
+        },
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 4.33,
+              "p95": 7.23,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.03,
+              "p95": 2.74,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.93,
+              "p95": 2.66,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.46,
+              "p95": 0.71,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 22.46,
+              "p95": 34.1,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.86,
+              "p95": 1.46,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 17.2,
+              "p95": 28.72,
+              "n": 20
+            },
+            "commit": {
+              "p50": 16.78,
+              "p95": 28.44,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.75,
+              "p95": 1.25,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 26.87,
+          "deltaP50": 18.13,
+          "events": 43
+        }
+      ],
+      "browser": [
+        {
+          "documentBytes": 151158,
+          "oneKey": {
+            "total": {
+              "p50": 12.07,
+              "p95": 30.21,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.02,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 9.05,
+              "p95": 25.04,
+              "n": 20
+            },
+            "commit": {
+              "p50": 8.96,
+              "p95": 24.96,
+              "n": 20
+            },
+            "emit": {
+              "p50": 3.93,
+              "p95": 20.02,
+              "n": 20
+            },
+            "getProject": {
+              "p50": 0.39,
+              "p95": 0.75,
+              "n": 16
+            },
+            "wholeReads": 16
+          },
+          "keys2000": {
+            "total": {
+              "p50": 27.88,
+              "p95": 43.54,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.49,
+              "p95": 0.7,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 15.81,
+              "p95": 39.81,
+              "n": 20
+            },
+            "commit": {
+              "p50": 15.55,
+              "p95": 39.6,
+              "n": 20
+            },
+            "emit": {
+              "p50": 2.33,
+              "p95": 8.68,
+              "n": 20
+            },
+            "getProject": {
+              "p50": 2.02,
+              "p95": 2.88,
+              "n": 16
+            },
+            "wholeReads": 16
+          },
+          "deltaP95": 13.33,
+          "deltaP50": 15.81
+        },
+        {
+          "documentBytes": 151158,
+          "oneKey": {
+            "total": {
+              "p50": 14.88,
+              "p95": 35.98,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 9.32,
+              "p95": 20.46,
+              "n": 20
+            },
+            "commit": {
+              "p50": 9.23,
+              "p95": 20.38,
+              "n": 20
+            },
+            "emit": {
+              "p50": 3.98,
+              "p95": 8.96,
+              "n": 20
+            },
+            "getProject": {
+              "p50": 0.5,
+              "p95": 0.88,
+              "n": 20
+            },
+            "wholeReads": 20
+          },
+          "keys2000": {
+            "total": {
+              "p50": 41.85,
+              "p95": 72.92,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.67,
+              "p95": 0.98,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 32.39,
+              "p95": 48.37,
+              "n": 20
+            },
+            "commit": {
+              "p50": 32.14,
+              "p95": 48,
+              "n": 20
+            },
+            "emit": {
+              "p50": 3.96,
+              "p95": 11.13,
+              "n": 20
+            },
+            "getProject": {
+              "p50": 2.5,
+              "p95": 7.2,
+              "n": 20
+            },
+            "wholeReads": 20
+          },
+          "deltaP95": 36.94,
+          "deltaP50": 26.97
+        }
+      ]
+    }
+  },
+  "ab-before-2": {
+    "ranAt": "2026-11-24T18:05:37.112Z",
+    "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, node v22.23.4, load 3.96 5.12 9.48",
+    "runs": 20,
+    "samples": 2,
+    "modes": {
+      "none": [
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 5.14,
+              "p95": 5.89,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.79,
+              "p95": 3.47,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.71,
+              "p95": 3.39,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.71,
+              "p95": 0.82,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 21.7,
+              "p95": 35.91,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.64,
+              "p95": 1.03,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 16.39,
+              "p95": 29.22,
+              "n": 20
+            },
+            "commit": {
+              "p50": 16.11,
+              "p95": 28.82,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.75,
+              "p95": 1.29,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 30.01,
+          "deltaP50": 16.57
+        },
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 5.26,
+              "p95": 6.7,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.62,
+              "p95": 3.27,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.52,
+              "p95": 3.15,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.54,
+              "p95": 0.71,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 26.75,
+              "p95": 35.3,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.73,
+              "p95": 1.57,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 20.93,
+              "p95": 29.96,
+              "n": 20
+            },
+            "commit": {
+              "p50": 20.65,
+              "p95": 29.68,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.71,
+              "p95": 4.25,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 28.6,
+          "deltaP50": 21.49
+        }
+      ],
+      "sse": [
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 5.86,
+              "p95": 13.46,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.02,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 3.32,
+              "p95": 10.79,
+              "n": 20
+            },
+            "commit": {
+              "p50": 3.21,
+              "p95": 10.39,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.62,
+              "p95": 4.07,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 29.2,
+              "p95": 39.81,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.59,
+              "p95": 0.86,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 23.19,
+              "p95": 34.71,
+              "n": 20
+            },
+            "commit": {
+              "p50": 22.83,
+              "p95": 34.42,
+              "n": 20
+            },
+            "emit": {
+              "p50": 3.98,
+              "p95": 8.4,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 26.35,
+          "deltaP50": 23.35,
+          "events": 43
+        },
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 11.86,
+              "p95": 15.87,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 8.87,
+              "p95": 13.24,
+              "n": 20
+            },
+            "commit": {
+              "p50": 8.76,
+              "p95": 12.78,
+              "n": 20
+            },
+            "emit": {
+              "p50": 3.98,
+              "p95": 5.7,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 26.82,
+              "p95": 50.25,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.63,
+              "p95": 1.02,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 19,
+              "p95": 44.94,
+              "n": 20
+            },
+            "commit": {
+              "p50": 18.59,
+              "p95": 44.64,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.82,
+              "p95": 12.31,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 34.38,
+          "deltaP50": 14.96,
+          "events": 43
+        }
+      ],
+      "browser": [
+        {
+          "documentBytes": 151158,
+          "oneKey": {
+            "total": {
+              "p50": 6.01,
+              "p95": 10.77,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.23,
+              "p95": 6.36,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.16,
+              "p95": 6.29,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.54,
+              "p95": 0.77,
+              "n": 20
+            },
+            "getProject": {
+              "p50": 0.4,
+              "p95": 0.5,
+              "n": 20
+            },
+            "wholeReads": 20
+          },
+          "keys2000": {
+            "total": {
+              "p50": 22.24,
+              "p95": 33.36,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.56,
+              "p95": 0.95,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 17.89,
+              "p95": 26.26,
+              "n": 20
+            },
+            "commit": {
+              "p50": 17.62,
+              "p95": 25.89,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.68,
+              "p95": 1.17,
+              "n": 20
+            },
+            "getProject": {
+              "p50": 2.38,
+              "p95": 2.93,
+              "n": 20
+            },
+            "wholeReads": 20
+          },
+          "deltaP95": 22.58,
+          "deltaP50": 16.23
+        },
+        {
+          "documentBytes": 151158,
+          "oneKey": {
+            "total": {
+              "p50": 10.95,
+              "p95": 16.98,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 7.44,
+              "p95": 10.19,
+              "n": 20
+            },
+            "commit": {
+              "p50": 7.36,
+              "p95": 10.06,
+              "n": 20
+            },
+            "emit": {
+              "p50": 3.08,
+              "p95": 6.95,
+              "n": 20
+            },
+            "getProject": {
+              "p50": 0.43,
+              "p95": 0.7,
+              "n": 20
+            },
+            "wholeReads": 20
+          },
+          "keys2000": {
+            "total": {
+              "p50": 28.18,
+              "p95": 47.64,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.6,
+              "p95": 0.69,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 23.39,
+              "p95": 34.61,
+              "n": 20
+            },
+            "commit": {
+              "p50": 23.09,
+              "p95": 34.33,
+              "n": 20
+            },
+            "emit": {
+              "p50": 3.99,
+              "p95": 11.24,
+              "n": 20
+            },
+            "getProject": {
+              "p50": 2.64,
+              "p95": 6.28,
+              "n": 16
+            },
+            "wholeReads": 3
+          },
+          "deltaP95": 30.66,
+          "deltaP50": 17.24
+        }
+      ]
+    }
+  },
+  "ab-before-3": {
+    "ranAt": "2026-11-24T18:06:11.471Z",
+    "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, node v22.23.4, load 3.73 4.93 9.25",
+    "runs": 20,
+    "samples": 2,
+    "modes": {
+      "none": [
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 5.4,
+              "p95": 8.26,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.05,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.85,
+              "p95": 4.62,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.77,
+              "p95": 4.53,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.7,
+              "p95": 1.41,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 20.06,
+              "p95": 28.7,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.64,
+              "p95": 0.71,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 15.46,
+              "p95": 24.06,
+              "n": 20
+            },
+            "commit": {
+              "p50": 15.21,
+              "p95": 23.77,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.65,
+              "p95": 0.9,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 20.44,
+          "deltaP50": 14.65
+        },
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 4.04,
+              "p95": 6.95,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 1.99,
+              "p95": 3.31,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.91,
+              "p95": 2.77,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.38,
+              "p95": 0.55,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 20.61,
+              "p95": 32.36,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.63,
+              "p95": 1.22,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 15.24,
+              "p95": 25.72,
+              "n": 20
+            },
+            "commit": {
+              "p50": 14.98,
+              "p95": 25.48,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.67,
+              "p95": 1.39,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 25.41,
+          "deltaP50": 16.57
+        }
+      ],
+      "sse": [
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 4.82,
+              "p95": 14.12,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.04,
+              "p95": 9.96,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.97,
+              "p95": 9.86,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.52,
+              "p95": 4.86,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 28.73,
+              "p95": 51.99,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.74,
+              "p95": 1.09,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 22.28,
+              "p95": 45.96,
+              "n": 20
+            },
+            "commit": {
+              "p50": 21.99,
+              "p95": 45.61,
+              "n": 20
+            },
+            "emit": {
+              "p50": 3.97,
+              "p95": 11.08,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 37.87,
+          "deltaP50": 23.91,
+          "events": 43
+        },
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 5.58,
+              "p95": 15.5,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.73,
+              "p95": 12.45,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.66,
+              "p95": 12.32,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.62,
+              "p95": 6.81,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 32.91,
+              "p95": 51.67,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.81,
+              "p95": 1.05,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 26.99,
+              "p95": 45.89,
+              "n": 20
+            },
+            "commit": {
+              "p50": 26.65,
+              "p95": 45.63,
+              "n": 20
+            },
+            "emit": {
+              "p50": 3.98,
+              "p95": 13,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 36.17,
+          "deltaP50": 27.33,
+          "events": 43
+        }
+      ],
+      "browser": [
+        {
+          "documentBytes": 151158,
+          "oneKey": {
+            "total": {
+              "p50": 5.98,
+              "p95": 16.56,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.86,
+              "p95": 8.62,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.78,
+              "p95": 8.52,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.5,
+              "p95": 3.98,
+              "n": 20
+            },
+            "getProject": {
+              "p50": 0.41,
+              "p95": 0.65,
+              "n": 20
+            },
+            "wholeReads": 20
+          },
+          "keys2000": {
+            "total": {
+              "p50": 20.43,
+              "p95": 44.59,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.63,
+              "p95": 1.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 14.38,
+              "p95": 25.46,
+              "n": 20
+            },
+            "commit": {
+              "p50": 14.08,
+              "p95": 25.11,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.66,
+              "p95": 0.92,
+              "n": 20
+            },
+            "getProject": {
+              "p50": 2.51,
+              "p95": 5.97,
+              "n": 6
+            },
+            "wholeReads": 6
+          },
+          "deltaP95": 28.03,
+          "deltaP50": 14.45
+        },
+        {
+          "documentBytes": 151158,
+          "oneKey": {
+            "total": {
+              "p50": 4.84,
+              "p95": 6.42,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.37,
+              "p95": 3.01,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.2,
+              "p95": 2.85,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.55,
+              "p95": 1.04,
+              "n": 20
+            },
+            "getProject": {
+              "p50": 0.45,
+              "p95": 0.72,
+              "n": 20
+            },
+            "wholeReads": 20
+          },
+          "keys2000": {
+            "total": {
+              "p50": 20.01,
+              "p95": 32.32,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.61,
+              "p95": 1.1,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 14.21,
+              "p95": 28.23,
+              "n": 20
+            },
+            "commit": {
+              "p50": 13.6,
+              "p95": 28,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.66,
+              "p95": 0.99,
+              "n": 20
+            },
+            "getProject": {
+              "p50": 3.05,
+              "p95": 5.2,
+              "n": 11
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 25.9,
+          "deltaP50": 15.17
+        }
+      ]
+    }
+  },
+  "summary": {
+    "none before": {
+      "deltaP95": [
+        37.49,
+        43.79,
+        30.01,
+        28.6,
+        20.44,
+        25.41
+      ],
+      "deltaP95Median": 29.31,
+      "deltaP50": [
+        19.37,
+        19.54,
+        16.57,
+        21.49,
+        14.65,
+        16.57
+      ],
+      "deltaP50Median": 17.97,
+      "commitP50Median2000": 18.38,
+      "commitP95Median2000": 29.25,
+      "commitP50Median1": 2.74,
+      "wholeReads2000": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "sse before": {
+      "deltaP95": [
+        40.2,
+        26.87,
+        26.35,
+        34.38,
+        37.87,
+        36.17
+      ],
+      "deltaP95Median": 35.28,
+      "deltaP50": [
+        19.23,
+        18.13,
+        23.35,
+        14.96,
+        23.91,
+        27.33
+      ],
+      "deltaP50Median": 21.29,
+      "commitP50Median2000": 22.41,
+      "commitP95Median2000": 45.13,
+      "commitP50Median1": 2.94,
+      "wholeReads2000": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "browser before": {
+      "deltaP95": [
+        13.33,
+        36.94,
+        22.58,
+        30.66,
+        28.03,
+        25.9
+      ],
+      "deltaP95Median": 26.97,
+      "deltaP50": [
+        15.81,
+        26.97,
+        16.23,
+        17.24,
+        14.45,
+        15.17
+      ],
+      "deltaP50Median": 16.02,
+      "commitP50Median2000": 16.59,
+      "commitP95Median2000": 31.17,
+      "commitP50Median1": 5.07,
+      "wholeReads2000": [
+        16,
+        20,
+        20,
+        3,
+        6,
+        0
+      ]
+    },
+    "none after": {
+      "deltaP95": [
+        20.5,
+        25.38,
+        25.9,
+        22.8,
+        19.12,
+        24.17
+      ],
+      "deltaP95Median": 23.49,
+      "deltaP50": [
+        12.47,
+        15.82,
+        19.63,
+        15.06,
+        0.23,
+        15.79
+      ],
+      "deltaP50Median": 15.43,
+      "commitP50Median2000": 14.65,
+      "commitP95Median2000": 25.46,
+      "commitP50Median1": 2.32,
+      "wholeReads2000": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "sse after": {
+      "deltaP95": [
+        28.54,
+        26.48,
+        24.68,
+        26.38,
+        28.17,
+        -10.62
+      ],
+      "deltaP95Median": 26.43,
+      "deltaP50": [
+        19.1,
+        18.06,
+        18.51,
+        19.41,
+        20.19,
+        20
+      ],
+      "deltaP50Median": 19.26,
+      "commitP50Median2000": 15.3,
+      "commitP95Median2000": 25.26,
+      "commitP50Median1": 2.12,
+      "wholeReads2000": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "browser after": {
+      "deltaP95": [
+        44.62,
+        20.14,
+        21.2,
+        20.18,
+        24.12,
+        22.69
+      ],
+      "deltaP95Median": 21.95,
+      "deltaP50": [
+        26.82,
+        17.46,
+        17.15,
+        18.11,
+        16.72,
+        15.56
+      ],
+      "deltaP50Median": 17.31,
+      "commitP50Median2000": 15.17,
+      "commitP95Median2000": 24.29,
+      "commitP50Median1": 2.35,
+      "wholeReads2000": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "keyframesProofSamples": {
+    "about": "pnpm proof:keyframes, three runs one after another on this change (after pnpm build), with the 1-minute/5-minute/15-minute load average at the start of each (other agents ran on the same 4 CPUs). The proof times 20 edits of each size after 3 warm-ups; its delta is p95(2000 keys) − p95(1 key). Run 2 went over the gated sampler ns/sample (Node) budget under that load; run 3 passed every gate. The evidence file docs/evidence/keyframes-proof.json was left as committed.",
+    "runs": [
+      {
+        "ranAt": "2026-11-24T18:07:49.197Z",
+        "loadAtStart": "2.80 4.42 8.76",
+        "result": "PASSED",
+        "passed": 15,
+        "total": 15,
+        "overBudget": [],
+        "deltaP95": 92.76,
+        "p95_1key": 34.95,
+        "p95_2000keys": 127.72
+      },
+      {
+        "ranAt": "2026-11-24T18:08:21.204Z",
+        "loadAtStart": "4.82 4.77 8.76",
+        "result": "FAILED",
+        "passed": 15,
+        "total": 15,
+        "overBudget": [
+          "sampler ns/sample (Node)"
+        ],
+        "deltaP95": 23.7,
+        "p95_1key": 45.06,
+        "p95_2000keys": 68.76
+      },
+      {
+        "ranAt": "2026-11-24T18:08:51.630Z",
+        "loadAtStart": "7.30 5.43 8.84",
+        "result": "PASSED",
+        "passed": 15,
+        "total": 15,
+        "overBudget": [],
+        "deltaP95": 8.66,
+        "p95_1key": 24.84,
+        "p95_2000keys": 33.51
+      }
+    ]
+  },
+  "regression-wave6": {
+    "ranAt": "2026-11-24T23:24:14.744Z",
+    "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, node v22.23.4, load 1.23 2.17 2.66",
+    "runs": 20,
+    "samples": 3,
+    "modes": {
+      "none": [
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 3.53,
+              "p95": 5.25,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 1.87,
+              "p95": 2.91,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.8,
+              "p95": 2.82,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.41,
+              "p95": 0.63,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 20.61,
+              "p95": 36.53,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.58,
+              "p95": 1.05,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 16.26,
+              "p95": 32.45,
+              "n": 20
+            },
+            "commit": {
+              "p50": 16,
+              "p95": 32.21,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.73,
+              "p95": 2.24,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 31.28,
+          "deltaP50": 17.08
+        },
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 4.09,
+              "p95": 7.16,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.05,
+              "p95": 2.48,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.88,
+              "p95": 2.32,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.36,
+              "p95": 0.46,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 20.26,
+              "p95": 31.04,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.58,
+              "p95": 0.84,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 15.39,
+              "p95": 25.18,
+              "n": 20
+            },
+            "commit": {
+              "p50": 15.11,
+              "p95": 24.79,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.59,
+              "p95": 1.17,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 23.88,
+          "deltaP50": 16.17
+        },
+        {
+          "documentBytes": 151155,
+          "oneKey": {
+            "total": {
+              "p50": 4.32,
+              "p95": 7.65,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.29,
+              "p95": 4.2,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.17,
+              "p95": 4.11,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.45,
+              "p95": 2.46,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 19.68,
+              "p95": 28.08,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.59,
+              "p95": 0.93,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 14.13,
+              "p95": 23.49,
+              "n": 20
+            },
+            "commit": {
+              "p50": 13.8,
+              "p95": 23.22,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.66,
+              "p95": 0.88,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 20.43,
+          "deltaP50": 15.36
+        }
+      ],
+      "sse": [
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 3.63,
+              "p95": 6.81,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 1.8,
+              "p95": 2.8,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.73,
+              "p95": 2.69,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.42,
+              "p95": 0.63,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 22.08,
+              "p95": 29.13,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.51,
+              "p95": 0.66,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 13.49,
+              "p95": 21.59,
+              "n": 20
+            },
+            "commit": {
+              "p50": 13.15,
+              "p95": 21.33,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.68,
+              "p95": 0.96,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 22.31,
+          "deltaP50": 18.45,
+          "events": 43
+        },
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 4.42,
+              "p95": 5.97,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.02,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.02,
+              "p95": 2.79,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.9,
+              "p95": 2.7,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.4,
+              "p95": 0.88,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 23.06,
+              "p95": 29.93,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.56,
+              "p95": 0.7,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 15.31,
+              "p95": 22.54,
+              "n": 20
+            },
+            "commit": {
+              "p50": 15.01,
+              "p95": 22.24,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.71,
+              "p95": 1.24,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 23.97,
+          "deltaP50": 18.64,
+          "events": 43
+        },
+        {
+          "documentBytes": 151154,
+          "oneKey": {
+            "total": {
+              "p50": 4.71,
+              "p95": 7.77,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.22,
+              "p95": 3.72,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.06,
+              "p95": 3.6,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.46,
+              "p95": 0.76,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 23.57,
+              "p95": 36.02,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.56,
+              "p95": 0.9,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 15.1,
+              "p95": 22.41,
+              "n": 20
+            },
+            "commit": {
+              "p50": 14.79,
+              "p95": 22.12,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.61,
+              "p95": 0.99,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 28.25,
+          "deltaP50": 18.85,
+          "events": 43
+        }
+      ],
+      "editor-node": [
+        {
+          "documentBytes": 151162,
+          "oneKey": {
+            "total": {
+              "p50": 4.32,
+              "p95": 5.72,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 1.81,
+              "p95": 2.23,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.7,
+              "p95": 2.15,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.38,
+              "p95": 0.52,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 25.17,
+              "p95": 44.86,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.61,
+              "p95": 0.88,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 13.29,
+              "p95": 22.56,
+              "n": 20
+            },
+            "commit": {
+              "p50": 13.01,
+              "p95": 22.3,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.64,
+              "p95": 0.9,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 39.14,
+          "deltaP50": 20.85,
+          "events": 43
+        },
+        {
+          "documentBytes": 151162,
+          "oneKey": {
+            "total": {
+              "p50": 4.12,
+              "p95": 7.57,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 1.73,
+              "p95": 5.08,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.65,
+              "p95": 5,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.39,
+              "p95": 0.79,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 22.58,
+              "p95": 37.27,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.55,
+              "p95": 0.85,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 12.22,
+              "p95": 19.14,
+              "n": 20
+            },
+            "commit": {
+              "p50": 11.97,
+              "p95": 18.88,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.59,
+              "p95": 0.98,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 29.7,
+          "deltaP50": 18.46,
+          "events": 43
+        },
+        {
+          "documentBytes": 151162,
+          "oneKey": {
+            "total": {
+              "p50": 4.01,
+              "p95": 6.07,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 1.62,
+              "p95": 2.02,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.53,
+              "p95": 1.92,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.33,
+              "p95": 0.48,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 21.01,
+              "p95": 30.57,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.56,
+              "p95": 0.79,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 11.41,
+              "p95": 21,
+              "n": 20
+            },
+            "commit": {
+              "p50": 11.11,
+              "p95": 20.72,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.52,
+              "p95": 0.77,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 24.5,
+          "deltaP50": 17.01,
+          "events": 43
+        }
+      ],
+      "browser": [
+        {
+          "documentBytes": 151158,
+          "oneKey": {
+            "total": {
+              "p50": 3.77,
+              "p95": 6.6,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.02,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 1.67,
+              "p95": 2.28,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.59,
+              "p95": 2.2,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.34,
+              "p95": 0.76,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 18.89,
+              "p95": 28.44,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.5,
+              "p95": 0.62,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 13.14,
+              "p95": 21.37,
+              "n": 20
+            },
+            "commit": {
+              "p50": 12.9,
+              "p95": 21.11,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.66,
+              "p95": 0.98,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 21.83,
+          "deltaP50": 15.12
+        },
+        {
+          "documentBytes": 151158,
+          "oneKey": {
+            "total": {
+              "p50": 4.07,
+              "p95": 6.04,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 1.81,
+              "p95": 2.65,
+              "n": 20
+            },
+            "commit": {
+              "p50": 1.7,
+              "p95": 2.5,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.43,
+              "p95": 0.78,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 19.54,
+              "p95": 24.79,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.55,
+              "p95": 0.71,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 12.88,
+              "p95": 17.97,
+              "n": 20
+            },
+            "commit": {
+              "p50": 12.67,
+              "p95": 17.69,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.62,
+              "p95": 1.1,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 18.75,
+          "deltaP50": 15.47
+        },
+        {
+          "documentBytes": 151158,
+          "oneKey": {
+            "total": {
+              "p50": 4.99,
+              "p95": 5.54,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.01,
+              "p95": 0.01,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 2.2,
+              "p95": 2.73,
+              "n": 20
+            },
+            "commit": {
+              "p50": 2.1,
+              "p95": 2.63,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.55,
+              "p95": 0.85,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "keys2000": {
+            "total": {
+              "p50": 19.8,
+              "p95": 32.57,
+              "n": 20
+            },
+            "stringify": {
+              "p50": 0.56,
+              "p95": 0.73,
+              "n": 20
+            },
+            "commitAs": {
+              "p50": 14.37,
+              "p95": 23.24,
+              "n": 20
+            },
+            "commit": {
+              "p50": 14.09,
+              "p95": 22.71,
+              "n": 20
+            },
+            "emit": {
+              "p50": 0.71,
+              "p95": 0.92,
+              "n": 20
+            },
+            "getProject": {
+              "p50": null,
+              "p95": null,
+              "n": 0
+            },
+            "wholeReads": 0
+          },
+          "deltaP95": 27.03,
+          "deltaP50": 14.8
+        }
+      ]
+    }
+  }
+}

@@ -12,11 +12,21 @@ import * as T from '@pulseframe/time';
 import type { MediaClip, ProjectDocument } from './schema.ts';
 import { clipEnd, sequenceDuration } from './validate.ts';
 import { isRamped, sourceEnd, speedOf, timelineOfSource } from './speed.ts';
+import { transcriptFor, untimedCopyFinder } from './lineage.ts';
+import type { SkippedClip } from './cleanup.ts';
 
 export interface PacingOptions { windowSeconds?: number; staticSeconds?: number; maxCharsPerSecond?: number; maxWordsPerSecond?: number; maxCutsPerWindow?: number; silenceSeconds?: number }
 export interface PacingWindow { start: T.RationalTime; end: T.RationalTime; cuts: number; words: number; wordsPerSecond: number; captionChars: number; charsPerSecond: number }
 export interface PacingIssue { code: 'static_picture' | 'rapid_cuts' | 'dense_speech' | 'fast_captions' | 'speech_gap'; start: T.RationalTime; end: T.RationalTime; value: number; limit: number; clipIds: string[] }
-export interface PacingReport { duration: T.RationalTime; windows: PacingWindow[]; issues: PacingIssue[]; totals: { cuts: number; words: number; cutsPerMinute: number; wordsPerMinute: number } }
+export interface PacingReport {
+  duration: T.RationalTime; windows: PacingWindow[]; issues: PacingIssue[]; totals: { cuts: number; words: number; cutsPerMinute: number; wordsPerMinute: number };
+  /**
+   * Clips whose words are NOT in the counts because they show a copy of a word-timed recording made without a recorded time mapping
+   * (a reversed, stretched or generated rendition; lineage.ts timingRelations 'untimed'): where its words play is unknown. Named as
+   * the other edits by a recording's times name them (cleanup.ts SkippedClip); a picture and its linked sound are two entries.
+   */
+  skippedClips: SkippedClip[];
+}
 
 const key = (t: T.RationalTime) => { const n = T.normalize(t); return `${n.value}/${n.timescale}`; };
 const chars = (s: string) => s.replace(/\s/gu, '').length;
@@ -35,7 +45,7 @@ export function pacingReport(doc: ProjectDocument, opts: PacingOptions = {}): Pa
   const duration = sequenceDuration(doc);
   const seq = doc.sequences[doc.mainSequenceId];
   const zeroTotals = { cuts: 0, words: 0, cutsPerMinute: 0, wordsPerMinute: 0 };
-  if (!seq || !T.lt(T.ZERO, duration)) return { duration, windows: [], issues: [], totals: zeroTotals };
+  if (!seq || !T.lt(T.ZERO, duration)) return { duration, windows: [], issues: [], totals: zeroTotals, skippedClips: [] };
 
   // Exact window grid: window k starts at k * W.
   const W = T.normalize(T.fromSeconds(windowSeconds > 0 ? windowSeconds : 5));
@@ -62,17 +72,20 @@ export function pacingReport(doc: ProjectDocument, opts: PacingOptions = {}): Pa
 
   // Words: each word once per place it plays (a linked picture + sound pair plays it at one place).
   const hasTranscriptCaptions = seq.tracks.some((t) => t.kind === 'caption' && t.caption?.mode === 'transcript');
-  // The word-timed words of an asset in order of their start, built once however many clips use the asset.
+  // The word-timed words of an asset in order of their start, built once however many clips use the asset. A time-preserving copy
+  // (an enhanced picture, a cleaned-up voice) has the words of the recording it was made from, moved exactly onto its own clock.
+  // A copy made without a recorded time mapping has none: where its words are is unknown, so they are not counted.
   const byStart = (a: TimedWord, b: TimedWord) => a.sec - b.sec || T.cmp(a.start, b.start); // seconds never reverse the exact order; equal seconds are compared exactly
   const index = new Map<string, TimedWord[] | null>();
   const wordsOf = (assetId: string) => {
     let list = index.get(assetId);
     if (list !== undefined) return list;
-    const tx = doc.transcripts?.[assetId];
+    const found = transcriptFor(doc, assetId);
     list = null;
-    if (tx) {
+    if (found) {
       list = [];
-      for (const seg of tx.segments) if (seg.timing === 'word') for (const w of seg.words) list.push({ id: w.id, text: w.text, start: w.start, duration: w.duration, sec: T.toSeconds(w.start), len: T.toSeconds(w.duration) });
+      const shift = !T.isZero(found.offset);
+      for (const seg of found.transcript.segments) if (seg.timing === 'word') for (const w of seg.words) { const start = shift ? T.sub(w.start, found.offset) : w.start; list.push({ id: w.id, text: w.text, start, duration: w.duration, sec: T.toSeconds(start), len: T.toSeconds(w.duration) }); }
       for (let i = 1; i < list.length; i++) if (byStart(list[i - 1]!, list[i]!) > 0) { list.sort(byStart); break; }
     }
     index.set(assetId, list);
@@ -86,12 +99,13 @@ export function pacingReport(doc: ProjectDocument, opts: PacingOptions = {}): Pa
   // Clips that play the same stretch of the same asset at the same place in the same way (a picture and its linked sound)
   // place the same words at the same times: the words are walked once, and the pauses found get every such clip's id.
   const sameAs = new Map<string, { start: T.RationalTime; end: T.RationalTime; clipIds: string[] }[]>();
+  const wordless: MediaClip[] = []; // clips whose file has no words by lineage: unrelated to any transcript, or an untimed copy of one
   for (const tr of seq.tracks) {
     if (tr.kind !== 'video' && tr.kind !== 'audio') continue;
     for (const c of tr.clips) {
       if (c.type !== 'media') continue;
       const list = wordsOf(c.assetId);
-      if (!list) continue;
+      if (!list) { if (!c.freeze) wordless.push(c); continue; } // a freeze frame plays no time: never in the way
       const signature = JSON.stringify([c.assetId, key(c.start), key(c.duration), key(c.sourceIn), c.speed, c.speedEnd, c.speedCurve, c.rampWindow && [key(c.rampWindow.offset), key(c.rampWindow.total)], !!c.reverse, !!c.freeze]);
       const seen = sameAs.get(signature);
       if (seen) { for (const g of seen) g.clipIds.push(c.id); continue; }
@@ -201,6 +215,11 @@ export function pacingReport(doc: ProjectDocument, opts: PacingOptions = {}): Pa
   }
   issues.sort((a, b) => T.cmp(a.start, b.start) || ORDER[a.code] - ORDER[b.code]);
 
+  // The clips left out because they show an untimed copy of a word-timed recording, by name (never guessed onto the timeline).
+  const worded = wordless.length ? Object.keys(doc.transcripts ?? {}).filter((id) => doc.transcripts[id]!.segments.some((s) => s.timing === 'word' && s.words.length)) : [];
+  const untimedOf = untimedCopyFinder(doc, worded);
+  const skippedClips: SkippedClip[] = wordless.filter((c) => untimedOf(c.assetId)).map((c) => ({ clipId: c.id, assetId: c.assetId, reason: 'untimed_copy' as const }));
+
   const minutes = T.toSeconds(duration) / 60;
-  return { duration, windows, issues, totals: { cuts: cutList.filter((t) => bucket(t) >= 0).length, words: totalWords, cutsPerMinute: cutList.length / minutes, wordsPerMinute: totalWords / minutes } };
+  return { duration, windows, issues, skippedClips, totals: { cuts: cutList.filter((t) => bucket(t) >= 0).length, words: totalWords, cutsPerMinute: cutList.length / minutes, wordsPerMinute: totalWords / minutes } };
 }

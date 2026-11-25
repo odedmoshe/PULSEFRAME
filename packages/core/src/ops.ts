@@ -7,7 +7,7 @@ import * as T from '@pulseframe/time';
 import {
   ANIMATABLE, AssetSchema, EASINGS, DEFAULT_TEXT_ANIMATION, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, TextAnimationSchema, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
   normaliseTextStyle, TEXT_LOOK_FIELDS, timelineBehaviour,
-  CaptionStyleSchema, DEFAULT_CAPTION_STYLE, SafeAreaSchema, MARKER_COLORS, VariantTranslationSchema,
+  CaptionStyleSchema, DEFAULT_CAPTION_STYLE, RunRangeSchema, SafeAreaSchema, MARKER_COLORS, VariantTranslationSchema,
   type AdjustmentClip, type Asset, type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
@@ -36,6 +36,8 @@ import { isLightChannel } from './keyframeChannels.ts';
 import { isInheritedName, own } from './own.ts';
 import { detachAssetFromEvents } from './events.ts';
 import { handDownCapture } from './capture.ts';
+import { sceneCutsFor, timingRelations, transcriptFor } from './lineage.ts';
+import { skippedClips, timingCoverage, untimedCopyRefusal } from './cleanup.ts';
 import { MULTICAM_REFUSALS, type MulticamRefusalKey, type MulticamRefusalRow } from './multicamRefusals.ts';
 import { DEFAULT_REDACT_REGION, isUsable, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, roundHalfUp, SIZE_UNIT, ST, TrackOpArgs, trackSampleAt, type MotionTrack, type RedactRegion } from './tracking.ts';
 
@@ -43,7 +45,10 @@ export type OpErrorCode =
   | 'unknown_op' | 'invalid_args' | 'not_found' | 'track_locked' | 'overlap' | 'out_of_bounds'
   | 'incompatible' | 'forbidden_op' | 'invalid_result'
   // replace_clip_asset (ADR-0017): the new file does not keep the original's timing / does not cover what the clip shows
-  | 'not_time_preserving' | 'range_not_covered';
+  | 'not_time_preserving' | 'range_not_covered'
+  // edits by a recording's times (delete_transcript_range; tidy-speech and the filler/silence routes use the same code): nothing on the
+  // timeline plays the recording on a known clock, and a clip shows a copy of it that records no time mapping
+  | 'untimed_copy';
 export class OpError extends Error {
   constructor(public code: OpErrorCode, message: string, public details: Record<string, unknown> = {}, public hint?: string) {
     super(message);
@@ -1786,7 +1791,12 @@ defineOp({
   version: 1,
   internal: true,
   description: 'Apply a recipe plan (ordinary public ops) as one step and record which objects it created. Issued by the server from a plan it built; on regeneration it first removes the previous run\'s untouched clips.',
-  args: z.object({ runId: z.string().optional(), recipeId: z.string().max(64), params: z.record(z.string(), z.unknown()), steps: z.array(z.string().max(400)).max(50), removeClipIds: z.array(z.string()).max(5000).optional(), keepIds: z.array(z.string()).max(5000).optional(), ops: z.array(z.object({ op: z.string(), args: z.unknown() }).strict()).min(1).max(2000) }).strict(),
+  args: z.object({ runId: z.string().optional(), recipeId: z.string().max(64), params: z.record(z.string(), z.unknown()), steps: z.array(z.string().max(400)).max(50), removeClipIds: z.array(z.string()).max(5000).optional(), keepIds: z.array(z.string()).max(5000).optional(), ops: z.array(z.object({ op: z.string(), args: z.unknown() }).strict()).min(1).max(2000),
+    // optional and additive (ADR-0016 decision 6): record each clip's range in the run, and carry on the ranges of clips deleted by hand
+    recordRanges: z.literal(true).optional(), keepRanges: z.record(z.string(), RunRangeSchema).optional(),
+    // optional and additive (amendment of 2026-11-24): with recordRanges, record each clip's track too, so a clip that was only moved in
+    // time on its own track is told from one taken to another track (templateOps.ts movedOnly). Absent in every older log.
+    recordTracks: z.literal(true).optional() }).strict(),
   apply(d, a, ctx) {
     // Regeneration replaces an existing run. A run id the project does not hold is refused rather than written under whatever key the caller chose.
     const prior = a.runId === undefined ? undefined : own(d.recipeRuns, a.runId);
@@ -1806,7 +1816,17 @@ defineOp({
     const id = a.runId ?? ctx.newId('run');
     const previous = prior?.fingerprints ?? {};
     const { createdIds, fingerprints } = runFingerprints(d, created, a.keepIds ?? [], previous);
-    d.recipeRuns[id] = { id, recipeId: a.recipeId, params: a.params, createdIds, fingerprints, steps: a.steps };
+    // ranges (beat montage): the clips deleted by hand carried on as given, then every clip of the run where it lies now
+    const ranges: Record<string, z.infer<typeof RunRangeSchema>> = {};
+    if (a.recordRanges) {
+      for (const [cid, r] of Object.entries(a.keepRanges ?? {})) if (!findClip(d, cid)) ranges[cid] = { start: { ...r.start }, end: { ...r.end } };
+      // recordTracks: the track too; a clip kept from the earlier run keeps the track that run recorded for it, so one taken to
+      // another track by hand stays recognisable next time (its range is where it lies now, as before)
+      const earlier = prior?.ranges ?? {};
+      const trackOf = (cid: string, now: string) => ((a.keepIds ?? []).includes(cid) && Object.hasOwn(earlier, cid) && earlier[cid]!.trackId !== undefined ? earlier[cid]!.trackId! : now);
+      for (const cid of createdIds) { const f = findClip(d, cid); if (f) ranges[cid] = { start: { ...f.clip.start }, end: { ...clipEnd(f.clip) }, ...(a.recordTracks ? { trackId: trackOf(cid, f.track.id) } : {}) }; }
+    }
+    d.recipeRuns[id] = { id, recipeId: a.recipeId, params: a.params, createdIds, fingerprints, steps: a.steps, ...(a.recordRanges ? { ranges } : {}) };
     affected.add(id);
     return { affectedIds: [...affected], summary: `${a.runId ? 'Regenerated' : 'Applied'} recipe ${a.recipeId}: ${a.steps[0] ?? ''}`.slice(0, 200), output: { runId: id, createdIds } };
   },
@@ -2136,8 +2156,10 @@ defineOp({
     const f = mustClip(d, a.clipId);
     refuseAdjustment(f.clip, 'split at scene cuts');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only media clips have scenes', { clipId: a.clipId });
-    const cuts = d.analyses[f.clip.assetId]?.scenes?.cuts;
-    if (!cuts) throw new OpError('not_found', 'this asset has no scene analysis yet', { assetId: f.clip.assetId }, 'Run the scene analysis first (analyze_asset kind=scenes).');
+    // the clip's own file, else the nearest time-preserving source it was made from (an enhanced copy keeps its source's shots)
+    const found = sceneCutsFor(d, f.clip.assetId);
+    if (!found) throw new OpError('not_found', 'this asset has no scene analysis yet', { assetId: f.clip.assetId }, 'Run the scene analysis first (analyze_asset kind=scenes).');
+    const cuts = T.isZero(found.offset) ? found.cuts : found.cuts.map((t) => T.sub(t, found.offset));
     if (f.clip.reverse) throw new OpError('incompatible', 'scene cuts cannot be applied to a clip that plays backwards', { clipId: a.clipId }, 'Split it before reversing, or split by hand.');
     const rate = d.settings.frameRate;
     const clip = f.clip;
@@ -2150,7 +2172,7 @@ defineOp({
       created.push(...(r.output!.createdClipIds as string[]));
       current = r.output!.rightClipId as string;
     }
-    return { affectedIds: [clip.id, ...created], summary: `Split into ${points.length + 1} shots`, output: { cuts: points, createdClipIds: created } };
+    return { affectedIds: [clip.id, ...created], summary: `Split into ${points.length + 1} shots`, output: { cuts: points, createdClipIds: created, ...(found.assetId !== clip.assetId ? { analysedAssetId: found.assetId } : {}) } };
   },
 });
 
@@ -3334,8 +3356,7 @@ defineOp({
     refuseAdjustment(f.clip, 'given another file');
     if (f.clip.type !== 'media') throw new OpError('incompatible', 'only clips that play a file can take another file', { clipId: a.clipId }, 'A title changes with update_text, a caption cue with update_cue.');
     const clip = f.clip;
-    const asset = d.assets[a.assetId];
-    if (!asset) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId }, 'Call get_summary to list assets.');
+    const asset = mustAsset(d, a.assetId, 'Call get_summary to list assets.');
     if (asset.kind === 'lut') throw new OpError('incompatible', 'a colour table (LUT) is not placed on the timeline; it is applied to a clip as an effect', { assetId: asset.id }, 'Use apply_lut with a clipId, or add the effect color.lut with this id as its lut parameter.');
     const isStill = asset.kind === 'image';
     const hasPicture = !!asset.video || (isStill && !!asset.image);
@@ -3834,12 +3855,14 @@ defineOp({
 defineOp({
   name: 'delete_transcript_range',
   version: 1,
-  description: 'Text-based editing: remove the given spoken words (first to last, inclusive) from the timeline wherever that media is used. Picture, sound and captions are cut together and later material closes the gap. Needs word-level timing; cut points snap to the nearest frame.',
+  description: 'Text-based editing: remove the given spoken words (first to last, inclusive) from the timeline wherever that media is used, also where a clip shows a copy that keeps its timing (an enhanced picture, a cleaned-up voice, a smoother slow motion; mapped exactly onto the copy\'s own clock). Picture, sound and captions are cut together and later material closes the gap. Needs word-level timing; cut points snap to the nearest frame. assetId may also be such a copy: the transcript of the recording it was made from is used. A clip that shows a copy made without a recorded time mapping (reversed, stretched or generated) is skipped, as a clip that plays backwards is, and named in the output (skippedClips), since where the words are in it is unknown; refused when the words are on no other clip.',
   args: z.object({ sequenceId: z.string().optional(), assetId: z.string(), fromWordId: z.string(), toWordId: z.string(), allowApproximate: z.boolean().optional() }).strict(),
   apply(d, a, ctx) {
     const seq = seqOf(d, a.sequenceId);
-    const tr = own(d.transcripts, a.assetId);
+    // the asset's own transcript, else that of the recording a time-preserving copy was made from (lineage.ts)
+    const tr = transcriptFor(d, a.assetId)?.transcript;
     if (!tr) throw new OpError('not_found', `asset ${a.assetId} has no transcript`, { assetId: a.assetId });
+    const anchor = tr.assetId;
     const flat = tr.segments.flatMap((s) => s.words.map((w) => ({ w, s })));
     const i = flat.findIndex((x) => x.w.id === a.fromWordId), j = flat.findIndex((x) => x.w.id === a.toWordId);
     if (i < 0 || j < i) throw new OpError('not_found', 'fromWordId/toWordId must be words of this transcript, in order', { fromWordId: a.fromWordId, toWordId: a.toWordId });
@@ -3847,22 +3870,29 @@ defineOp({
     if (!a.allowApproximate && picked.some((x) => x.s.timing !== 'word'))
       throw new OpError('incompatible', 'these words only have estimated times, so a word-precise cut would be a guess', { timing: 'approximate' }, 'Use cut_range with explicit times, or pass allowApproximate=true to accept an estimated cut.');
     const srcStart = picked[0]!.w.start, last = picked.at(-1)!.w, srcEnd = T.add(last.start, last.duration);
+    // clips of copies without a recorded time mapping are skipped and named; an edit that finds the words nowhere else is refused
+    const untimed = timingCoverage(d, anchor, seq.id).untimed;
+    const refuseUntimed = () => { const r = untimedCopyRefusal(untimed); return new OpError(r.code, r.message, r.details, r.hint); };
     const rate = d.settings.frameRate;
+    const rel = timingRelations(d, anchor);
     const ranges: { start: T.RationalTime; end: T.RationalTime }[] = [];
     for (const track of seq.tracks)
       for (const c of track.clips) {
-        if (c.type !== 'media' || c.assetId !== a.assetId || c.reverse) continue; // a reversed clip does not play the words
-        const from = T.max(c.sourceIn, srcStart), to = T.min(sourceEnd(c), srcEnd);
+        if (c.type !== 'media' || c.reverse) continue; // a reversed clip does not play the words
+        const k = rel(c.assetId);
+        if (k?.kind !== 'same') continue; // the recording itself, or a time-preserving copy: the words on that file's own clock
+        const from = T.max(c.sourceIn, T.add(srcStart, k.delta)), to = T.min(sourceEnd(c), T.add(srcEnd, k.delta));
         if (!T.lt(from, to)) continue;
         const start = T.snapToFrame(timelineAt(c, from), rate), end = T.snapToFrame(timelineAt(c, to), rate);
         if (T.lt(start, end) && !ranges.some((r) => T.eq(r.start, start) && T.eq(r.end, end))) ranges.push({ start, end });
       }
-    if (ranges.length === 0) throw new OpError('not_found', 'those words are not on the timeline (already cut, or shorter than one frame)', { assetId: a.assetId });
+    if (ranges.length === 0) { if (untimed.length) throw refuseUntimed(); throw new OpError('not_found', 'those words are not on the timeline (already cut, or shorter than one frame)', { assetId: a.assetId }); }
     ranges.sort((x, y) => T.cmp(y.start, x.start)); // latest first, so earlier ranges keep their times
     const affected = new Set<string>();
     for (const r of ranges) { const c = cutRange(d, seq, r.start, r.end, seq.tracks, true, ctx); for (const id of [...c.removed, ...c.changed, ...c.created, ...c.markersMoved, ...c.markersRemoved, ...c.unlinked]) affected.add(id); }
     const text = picked.map((x) => x.w.text).join(' ');
-    return { affectedIds: [...affected], summary: `Removed "${text.slice(0, 40)}" from the timeline`, output: { ranges: ranges.reverse(), words: picked.length } };
+    const skipped = skippedClips(untimed);
+    return { affectedIds: [...affected], summary: `Removed "${text.slice(0, 40)}" from the timeline${skipped.length ? `; ${skipped.length} clip(s) showing a copy that does not keep the recording's timing not searched` : ''}`, output: { ranges: ranges.reverse(), words: picked.length, ...(skipped.length ? { skippedClips: skipped } : {}) } };
   },
 });
 

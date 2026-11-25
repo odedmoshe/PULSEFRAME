@@ -15,6 +15,35 @@ import { ApiError, type Store } from './store.ts';
 import { readerAccess, withoutFamily, type ArchiveFamily } from './peoplePrivacy.ts';
 
 export const ARCHIVE_FORMAT = 'pulseframe-archive/1';
+
+/**
+ * A translation's "reviewed" mark is the owner's word that they read it (ADR-0017; only the owner can give it). An archive is
+ * a file anyone can write, and the mark inside it was given, if at all, on another computer or by another owner: on import it is
+ * cleared (the translation needs review again, its wording is kept), and the import says so in both languages. Owner decision
+ * preferred over keeping marks from this data directory's own exports: one rule, nothing to forge.
+ */
+export const IMPORTED_REVIEW_CLEARED = {
+  code: 'translation_review_cleared',
+  /** `names` are the translations' names, each already in «», in the order of the project's variants. One translation reads in the singular, several in the plural. */
+  he: (names: string[]) => names.length === 1
+    ? `סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגום ${names[0]} מסומן שוב «תרגום מכונה · לא נבדק», והנוסח שלו נשמר. אפשר לעבור עליו בלוח «תמלול» ולבחור «סמן כנבדק».`
+    : `סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגומים ${names.join(', ')} מסומנים שוב «תרגום מכונה · לא נבדק», והנוסח שלהם נשמר. אפשר לעבור עליהם בלוח «תמלול» ולבחור «סמן כנבדק».`,
+  en: (names: string[]) => names.length === 1
+    ? `A translation's "Reviewed" mark does not carry over in an archive import: it was given on another computer or by someone else. The translation ${names[0]} needs review again; its wording is kept. Go through it in the "Transcript" panel and choose "Mark as reviewed".`
+    : `A translation's "Reviewed" mark does not carry over in an archive import: it was given on another computer or by someone else. The translations ${names.join(', ')} need review again; their wording is kept. Go through them in the "Transcript" panel and choose "Mark as reviewed".`,
+} as const;
+export interface ImportNote { code: string; he: string; en: string; variants: { variantId: string; name: string; reviewedBy: string | null; reviewedAt: string | null }[] }
+/** Clears every reviewed mark of the document in place; returns what was cleared (empty when nothing was marked). */
+export function clearImportedReviews(doc: ProjectDocument): ImportNote['variants'] {
+  const cleared: ImportNote['variants'] = [];
+  for (const v of Object.values(doc.variants ?? {})) {
+    if (v.translation?.review !== 'reviewed') continue;
+    const { reviewedBy, reviewedAt, ...rest } = v.translation;
+    v.translation = { ...rest, review: 'needed' };
+    cleared.push({ variantId: v.id, name: v.name, reviewedBy: reviewedBy ?? null, reviewedAt: reviewedAt ?? null });
+  }
+  return cleared;
+}
 const BLOCK = 512;
 interface Entry { name: string; size: number }
 
@@ -83,7 +112,7 @@ const bad = (message: string, details: Record<string, unknown> = {}) => new ApiE
  * Import an archive file as a NEW project. Everything is checked before anything is added: entry names, sizes, every blob's
  * SHA-256 against its name, the manifest against the contents, and the document against the current schema and validator.
  */
-export function importArchive(store: Store, file: string): { doc: ProjectDocument; revision: number; blobsAdded: number; blobsAlreadyPresent: number } {
+export function importArchive(store: Store, file: string): { doc: ProjectDocument; revision: number; blobsAdded: number; blobsAlreadyPresent: number; notes: ImportNote[] } {
   const fd = fs.openSync(file, 'r');
   const total = fs.fstatSync(fd).size;
   const staged: { hash: string; tmp: string; size: number }[] = [];
@@ -151,6 +180,10 @@ export function importArchive(store: Store, file: string): { doc: ProjectDocumen
       }
       if (a.lut?.size !== table.size || a.byteSize !== s.size || a.mimeType !== 'text/plain' || a.container !== 'cube') throw bad(`${label} does not match its description in the project document`, { assetId: a.id, declared: { size: a.lut?.size ?? null, byteSize: a.byteSize, mimeType: a.mimeType.slice(0, 80), container: a.container.slice(0, 40) }, found: { size: table.size, byteSize: s.size, mimeType: 'text/plain', container: 'cube' } });
     }
+    // Reviewed marks are the owner's on this computer, never the archive's (IMPORTED_REVIEW_CLEARED).
+    const cleared = clearImportedReviews(doc);
+    const names = cleared.map((v) => `«${v.name}»`);
+    const notes: ImportNote[] = cleared.length ? [{ code: IMPORTED_REVIEW_CLEARED.code, he: IMPORTED_REVIEW_CLEARED.he(names), en: IMPORTED_REVIEW_CLEARED.en(names), variants: cleared }] : [];
     // All checks passed: add blobs (content-addressed, so existing ones are simply reused) and create the project.
     let added = 0, present = 0;
     const mimeOf = new Map(Object.values(doc.assets).map((a) => [a.contentHash, a.mimeType]));
@@ -159,7 +192,7 @@ export function importArchive(store: Store, file: string): { doc: ProjectDocumen
       store.putBlob(s.hash, s.tmp, s.size, mimeOf.get(s.hash) ?? 'application/octet-stream');
     }
     staged.length = 0;
-    return { ...store.importProject(doc), blobsAdded: added, blobsAlreadyPresent: present };
+    return { ...store.importProject(doc), blobsAdded: added, blobsAlreadyPresent: present, notes };
   } finally {
     fs.closeSync(fd);
     for (const s of staged) fs.rmSync(s.tmp, { force: true });

@@ -6,7 +6,7 @@
  * wave 1; nothing here keeps project state.
  */
 import { useEffect, useId, useRef, useState } from 'react';
-import { TEMPLATE_GENRES, type TemplateSummary } from '@pulseframe/core';
+import { removedByHand, TEMPLATE_GENRES, type TemplateSummary } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { LayoutTemplate } from 'lucide-react';
 import { useEditorState, type TemplateRunInfo } from './store.ts';
@@ -105,23 +105,29 @@ function AppliedBar() {
   const lang = state.lang;
   const S = TEMPLATE_STRINGS[lang];
   const run = state.templateRun;
-  const [busy, setBusy] = useState<'shuffle' | 'tempo' | null>(null);
+  const [busy, setBusy] = useState<'shuffle' | 'tempo' | 'restore' | null>(null);
+
   const [said, setSaid] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   useEffect(() => { setSaid(null); setFailed(null); }, [run?.templateId]);
   if (!run || !state.doc) return null;
-  const regenerate = async (kind: 'shuffle' | 'tempo') => {
+  // items of the run deleted by hand: a regeneration leaves them out, and bringing them back is an explicit choice
+  const removed = removedByHand(state.doc, (Object.hasOwn(state.doc.recipeRuns, run.runId) ? state.doc.recipeRuns[run.runId]!.slots : undefined) ?? []).length;
+  const regenerate = async (kind: 'shuffle' | 'tempo' | 'restore') => {
     const doc = state.doc;
     if (!doc || busy) return;
-    const change = kind === 'shuffle' ? shuffleParams(run.params) : nextTempo(run.params, run.alternatives);
+    const change = kind === 'shuffle' ? shuffleParams(run.params) : kind === 'tempo' ? nextTempo(run.params, run.alternatives) : {};
     setBusy(kind);
     setFailed(null);
     try {
-      const r = await templateApi.regenerate(doc.id, run.runId, change);
+      const r = await templateApi.regenerate(doc.id, run.runId, change, kind === 'restore');
       const next: TemplateRunInfo = { ...run, runId: r.runId, params: { ...run.params, ...change }, created: r.createdIds.length, revision: r.revision };
       editor.setTemplateRun(next);
       const tempo = kind === 'tempo' && change.tempo ? ` ${S.tempoNow(S.tempoNames[change.tempo])}` : '';
-      setSaid(`${S.regenerated(r.replaced, r.protected.length)}${tempo}`);
+      const left = r.removed?.length ?? 0;
+      // items that had only been moved in time (a Delete that closed the gap moved them) are back on their slots: said, not silent
+      const back = r.movedBack?.length ?? 0;
+      setSaid(`${S.regenerated(r.replaced, r.protected.length)}${tempo}${back ? S.movedBack(back) : ''}${left ? S.removedLeftOut(left) : ''}${kind === 'restore' ? ` ${S.restored}` : ''}`);
     } catch (e) {
       const f = templateRefusal(lang, e); // worded in the interface language, as the dialog and the editor's refusals are
       setFailed(f.hint ? `${f.message} — ${f.hint}` : f.message);
@@ -133,6 +139,7 @@ function AppliedBar() {
       <div className="row">
         <button type="button" className="ghost" disabled={!!busy} aria-busy={busy === 'shuffle' || undefined} data-testid={TID.shuffle} onClick={() => void regenerate('shuffle')}>{S.shuffle}</button>
         <button type="button" className="ghost" disabled={!!busy} aria-busy={busy === 'tempo' || undefined} data-testid={TID.otherTempo} onClick={() => void regenerate('tempo')}>{S.otherTempo}</button>
+        {removed > 0 && <button type="button" className="ghost" disabled={!!busy} aria-busy={busy === 'restore' || undefined} data-testid="template-restore-removed" onClick={() => void regenerate('restore')}>{S.restoreRemoved}</button>}
         <button type="button" className="ghost" disabled={!!busy} data-testid="template-undo" onClick={() => { void editor.history('undo'); editor.setTemplateRun(null); }}>{S.undo}</button>
         <button type="button" className="ghost" aria-label={S.dismiss} data-testid="template-applied-close" onClick={() => editor.setTemplateRun(null)}>×</button>
       </div>

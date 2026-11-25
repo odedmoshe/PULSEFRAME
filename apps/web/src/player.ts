@@ -9,6 +9,7 @@
  */
 import * as T from '@pulseframe/time';
 import { canonical, sequenceDuration, type ProjectDocument } from '@pulseframe/core';
+import { pictureSize, type PlaySharpness } from './pictureSize.ts';
 import { audioPlan, drawGraph, evaluate, fillPlayingOrder, FlashGuard, isDecodeBudgetReason, openClipVoice, PitchStretcher, RampResampler, rampSourceFrames, rampSpanOf, soundEnd, type PlannedAudioClip } from '@pulseframe/engine';
 import { interleaved, plannedClipInput, reversedBuffer } from './audioGraph.ts';
 import type { MediaPool } from './media.ts';
@@ -186,6 +187,11 @@ export class Player {
   private shown = false;
   /** Index of the frame most recently painted, for tests and the UI. */
   painted = -1;
+  /**
+   * The document that frame was drawn from. `doc` can already be a newer one whose first frame is still being drawn (a live cut):
+   * prefetch plans from what is on screen, so the warm decoder of the angle being cut to is not let go before that frame takes it.
+   */
+  paintedDoc: ProjectDocument | null = null;
   /** Playback instrumentation: how late (seconds) each painted frame appeared relative to the clock that drives audio. */
   private late: number[] = [];
   /** Measurement only (ADR-0020 U4): the frame and how late (seconds) it was painted, for the last playback, so lateness at chosen frames can be read. */
@@ -230,6 +236,24 @@ export class Player {
     this.request(this.frame);
     return true;
   }
+  /**
+   * The viewer's choice of the playing picture (pictureSize.ts): 'smooth', the proxies' own scale, or 'sharper', the larger
+   * picture. A preference of this browser that the owner of the player sets (editor/store.ts setPlaySharpness); never project
+   * state. The next frame drawn follows it, and so does pictureQuality().
+   */
+  sharpness: PlaySharpness = 'smooth';
+  /** The size and quality the next frame of `settings` is drawn at (pictureSize.ts: the one rule). */
+  private sizeOf(settings: { width: number; height: number }) {
+    return pictureSize(settings, { playing: this.playing, sharpness: this.sharpness, ...(this.opts.draftOnly ? { draftMaxHeight: this.opts.draftOnly.maxHeight } : {}) });
+  }
+  /**
+   * The quality the next frame is drawn at, as pump() chooses it: draft (the proxy) for the angle viewer and while playing at a
+   * reduced size, else full (the original). Prefetch warms decoders of this quality only, so a warm decoder reads the same source
+   * the drawing would.
+   */
+  pictureQuality(): 'draft' | 'full' {
+    return this.sizeOf(this.doc?.settings ?? { width: 0, height: 0 }).quality;
+  }
   /** Playing, or asked to play and waiting for the audio device (a pause-and-resume inside setDoc passes through neither). */
   get active(): boolean { return this.playing || this.starting; }
   /** Draw `frame` of the current document now (coalesced like request()); no transport, no sound. */
@@ -257,13 +281,12 @@ export class Player {
         const frame = this.want;
         this.want = null;
         const doc = this.doc;
-        const { width, height, frameRate } = doc.settings;
+        const { frameRate } = doc.settings;
         // Preview may reduce resolution; layout is resolution-independent so semantics are unchanged.
-        // Draft resolution while playing; FULL project resolution when paused, so a still preview is the real picture (SPEC §8).
-        const draftMax = this.opts.draftOnly?.maxHeight;
-        const scale = draftMax ? Math.min(1, draftMax / height) : this.playing ? Math.min(1, 960 / height) : 1;
-        const w = Math.round(width * scale);
-        const h = Math.round(height * scale);
+        // Draft resolution while playing (the proxies' own scale, so a fitted picture is drawn from its proxy without
+        // resampling: pictureSize.ts); FULL project resolution when paused, so a still preview is the real picture (SPEC §8).
+        const draft = this.pictureQuality() === 'draft'; // the one rule prefetch also follows
+        const { width: w, height: h } = this.sizeOf(doc.settings);
         if (!this.shown && (this.canvas.width !== w || this.canvas.height !== h)) { this.canvas.width = w; this.canvas.height = h; } // the layout gets the right shape at once
         const back = (this.back ??= document.createElement('canvas'));
         if (back.width !== w || back.height !== h) { back.width = w; back.height = h; }
@@ -272,7 +295,9 @@ export class Player {
         // decision: the draw takes as long as it takes), and records what was painted (an effect that could not run drew no light).
         const drawn = await this.flashGuard.paint(evaluate(doc, T.frameTime(frame, frameRate)), {
           now: realTime, // real time, never the audio clock (it can stand still)
-          draw: (g) => drawGraph(back.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, draftMax || scale !== 1 ? this.pool.draftFrames : this.pool.frames),
+          // draft: proxy frames and the draft quality of drawGraph (faded pictures and dissolves without their exact fills, at
+          // most 2 of 255 off with zero mean; ADR-0005 amendment of 2026-11-24); paused, the full picture, identical to a still
+          draw: (g) => drawGraph(back.getContext('2d', { alpha: false })!, { ...g, width: w, height: h }, draft ? this.pool.draftFrames : this.pool.frames, { quality: draft ? 'draft' : 'full' }),
           copy: () => {
             // the finished frame replaces the one on screen at once (resizing the visible canvas clears it, so only now)
             if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
@@ -287,6 +312,7 @@ export class Player {
         this.unavailableReasons = drawn.unavailableReasons ?? {};
         this.retryLater(doc, frame);
         this.painted = frame;
+        this.paintedDoc = doc;
         if (this.playing) {
           const { num, den } = frameRate;
           const lateBy = this.now() - (this.origin.clock + ((frame - this.origin.frame) * den) / num);
@@ -297,8 +323,8 @@ export class Player {
         }
         this.canvas.dataset.frame = String(frame);
         this.canvas.dataset.flashesHeld = String(this.flashGuard.leftOut); // frames on which the safety guard held a strobe flash back
-        this.canvas.dataset.quality = draftMax || scale !== 1 ? 'draft' : 'full';
-        this.canvas.dataset.source = draftMax || scale !== 1 ? 'proxy-or-original' : 'original';
+        this.canvas.dataset.quality = draft ? 'draft' : 'full';
+        this.canvas.dataset.source = draft ? 'proxy-or-original' : 'original';
         this.onTick();
       }
     } catch (e) {

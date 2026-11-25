@@ -56,13 +56,17 @@ export interface BrowserExportOptions {
   /** Sweep period; 0 disables the timer (tests call `sweepLeases` directly). */
   sweepIntervalMs?: number;
 }
-interface Lease { expiresAt: number; cancelRequested: boolean; framesDone: number }
+interface Lease { expiresAt: number; cancelRequested: boolean; framesDone: number; /** Who asked the tab to stop (the owner, or an agent within its grant). */ canceledBy: string | null }
 
 export interface BrowserExport {
   /** Fail (or cancel) every job whose lease passed `expiresAt` without completion. Returns the affected job ids. */
   sweepLeases(now?: number): string[];
-  /** Ask the owning tab to stop: its next heartbeat answers `canceled: true`. Use for jobs with `input.route === 'browser'`. */
-  requestCancel(jobId: string): { jobId: string; status: string; outcome: string };
+  /**
+   * Ask the owning tab to stop: its next heartbeat answers `canceled: true` (with who asked); the tab discards its partial
+   * output and acknowledges with /abandon, which releases the lease. A tab that never answers is canceled at lease expiry.
+   * Use for jobs with `input.route === 'browser'`; `Exporter.cancel` hands them here, so REST and MCP share this path.
+   */
+  requestCancel(jobId: string, actor?: string): { jobId: string; status: string; outcome: string; note?: string };
   /** True for jobs this module owns. */
   isBrowserJob(job: JobRow): boolean;
   stop(): void;
@@ -87,11 +91,12 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
     return r.data;
   };
 
+  const by = (lease: Lease | undefined) => (lease?.canceledBy ? ` by ${lease.canceledBy}` : '');
   const expire = (job: JobRow) => {
     const lease = leases.get(job.id);
     leases.delete(job.id);
     if (lease?.cancelRequested || job.status === 'cancel-requested')
-      store.updateJob(job.id, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'export was canceled; the browser tab did not acknowledge before its lease expired', retryable: true } });
+      store.updateJob(job.id, { status: 'canceled', stage: null, error: { code: 'canceled', message: `export was canceled${by(lease)}; the browser tab did not acknowledge before its lease expired, so nothing was published`, retryable: true, ...(lease?.canceledBy ? { canceledBy: lease.canceledBy } : {}) } });
     else
       store.updateJob(job.id, { status: 'failed', stage: null, error: { code: 'lease_lost', message: `the browser tab stopped sending heartbeats (lease of ${leaseMs / 1000}s expired); nothing was published. Start a new export; it restarts from a fresh snapshot.`, retryable: true } });
   };
@@ -159,14 +164,14 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
     const expiresAt = clock() + leaseMs;
     const job = store.createJob(projectId, 'export', p.actor, { revision, snapshot: doc, manifest, warnings, retryOf: null, route: 'browser', lease: { sessionId: sid.data, expiresAt } });
     store.updateJob(job.id, { status: 'running', stage: 'leased' });
-    leases.set(job.id, { expiresAt, cancelRequested: false, framesDone: 0 });
+    leases.set(job.id, { expiresAt, cancelRequested: false, framesDone: 0, canceledBy: null });
     return c.json({ jobId: job.id, revision, snapshot: doc, manifest, warnings, leaseSeconds: leaseMs / 1000, heartbeatSeconds }, 201);
   });
 
   app.post('/api/v1/jobs/:jobId/heartbeat', async (c) => {
     const b = await parse(c, HeartbeatBody);
     const { job } = owned(c, b.sessionId);
-    if (job.status === 'canceled') return c.json({ ok: true, canceled: true });
+    if (job.status === 'canceled') return c.json({ ok: true, canceled: true, ...(job.error?.canceledBy ? { canceledBy: job.error.canceledBy } : {}) });
     const lease = requireLive(job);
     const manifest: Manifest = job.input.manifest;
     if (b.framesDone > manifest.output.frames) throw new ApiError(400, 'invalid_request', `framesDone ${b.framesDone} exceeds the job's ${manifest.output.frames} frames`);
@@ -174,7 +179,7 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
     lease.framesDone = b.framesDone;
     const canceled = lease.cancelRequested || job.status === 'cancel-requested';
     if (!canceled) store.updateJob(job.id, { stage: `rendering ${b.framesDone}/${manifest.output.frames} (browser)` });
-    return c.json({ ok: true, canceled });
+    return c.json({ ok: true, canceled, ...(canceled && lease.canceledBy ? { canceledBy: lease.canceledBy } : {}) });
   });
 
   app.post('/api/v1/jobs/:jobId/complete', async (c) => {
@@ -210,27 +215,30 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
     const lease = leases.get(job.id);
     const requested = lease?.cancelRequested || job.status === 'cancel-requested';
     leases.delete(job.id);
-    store.updateJob(job.id, { status: 'canceled', stage: null, error: { code: requested ? 'canceled' : 'abandoned_by_client', message: requested ? 'export was canceled; the tab stopped and discarded its partial output' : 'the tab abandoned the export and discarded its partial output', retryable: true } });
+    store.updateJob(job.id, { status: 'canceled', stage: null, error: { code: requested ? 'canceled' : 'abandoned_by_client', message: requested ? `export was canceled${by(lease)}; the tab stopped and discarded its partial output` : 'the tab abandoned the export and discarded its partial output', retryable: true, ...(requested && lease?.canceledBy ? { canceledBy: lease.canceledBy } : {}) } });
     return c.json({ ok: true, status: 'canceled' });
   });
 
-  const requestCancel: BrowserExport['requestCancel'] = (jobId) => {
+  const requestCancel: BrowserExport['requestCancel'] = (jobId, actor) => {
     sweepLeases();
     const job = store.getJob(jobId);
     if (!isBrowserJob(job)) throw new ApiError(409, 'not_a_browser_job', 'this job does not use the browser route');
     if (TERMINAL.includes(job.status)) return { jobId, status: job.status, outcome: 'already-finished' };
     const lease = leases.get(jobId);
     if (!lease) { // nobody holds it: nothing to wait for
-      store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'canceled; no tab held the lease', retryable: true } });
+      store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: `canceled${actor ? ` by ${actor}` : ''}; no tab held the lease`, retryable: true, ...(actor ? { canceledBy: actor } : {}) } });
       return { jobId, status: 'canceled', outcome: 'no-live-lease' };
     }
     lease.cancelRequested = true;
+    lease.canceledBy ??= actor ?? null;
     store.updateJob(jobId, { status: 'cancel-requested' });
-    return { jobId, status: 'cancel-requested', outcome: 'stopping' };
+    return { jobId, status: 'cancel-requested', outcome: 'stopping', note: `the tab stops at its next heartbeat (every ${heartbeatSeconds} s) and discards its partial output; if it does not answer, the job is canceled when its lease of ${leaseMs / 1000} s expires` };
   };
 
   let timer: ReturnType<typeof setInterval> | null = null;
   const every = opts.sweepIntervalMs ?? 1000;
   if (every > 0) { timer = setInterval(() => { try { sweepLeases(); } catch (e) { console.error('lease sweep failed', e); } }, every); timer.unref(); }
-  return { sweepLeases, requestCancel, isBrowserJob, stop: () => { if (timer) clearInterval(timer); timer = null; } };
+  // Every export cancel (REST, MCP, editor) goes through Exporter.cancel, which hands browser jobs to this lease holder.
+  exporter.browserRoute = { requestCancel };
+  return { sweepLeases, requestCancel, isBrowserJob, stop: () => { if (timer) clearInterval(timer); timer = null; if (exporter.browserRoute?.requestCancel === requestCancel) exporter.browserRoute = null; } };
 }

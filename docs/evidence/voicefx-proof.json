@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-11-18T01:16:58.009Z",
+  "ranAt": "2026-11-24T20:59:40.646Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v595 x64",
+    "platform": "Linux 6.18.44-fc-v819 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
     "gpu": "none"
   },
@@ -37,7 +37,7 @@
       "name": "A voice.telephone hiss 0.3 on silence: RMS within ± 1.5 dB of its calibrated level (-60 + 24·hiss dBFS added before the band filters, so band-limited by the measured response; or that level at the output); the same seed gives the same bytes, another seed differs",
       "ok": true,
       "detail": {
-        "measuredDbfs": -52.772,
+        "measuredDbfs": -52.724,
         "generatedDbfs": -52.8,
         "bandLimitedDbfs": -61.61,
         "sameSeedSameBytes": true,
@@ -69,9 +69,9 @@
           "hi": 4713.688
         },
         "amDepthDb": 0.5,
-        "cracklesFull": 4,
-        "cracklesRange": 4,
-        "perSecond": 1.341
+        "cracklesFull": 11,
+        "cracklesRange": 11,
+        "perSecond": 3.687
       }
     },
     {
@@ -482,13 +482,13 @@
       "ok": true,
       "detail": {
         "codec": "mp4/opus",
-        "crackleServer": 11,
-        "crackleBrowser": 11,
+        "crackleServer": 5,
+        "crackleBrowser": 5,
         "worstCrackleOffset": 0,
-        "telephoneBands": 27,
-        "worstBandDifferenceDb": 0.197,
-        "encodedBands": 19,
-        "worstEncodedBandDifferenceDb": 1.863
+        "telephoneBands": 28,
+        "worstBandDifferenceDb": 0.301,
+        "encodedBands": 18,
+        "worstEncodedBandDifferenceDb": 3.966
       }
     },
     {
@@ -585,9 +585,15 @@
             "Rubik",
             "Assistant",
             "Frank Ruhl Libre",
-            "Secular One"
+            "Secular One",
+            "Suez One",
+            "David Libre",
+            "Karantina",
+            "Amatic SC",
+            "Fredoka",
+            "Gveret Levin"
           ],
-          "schemaVersion": 2
+          "schemaVersion": 3
         },
         "audioEffects": [
           {
@@ -641,7 +647,7 @@
         "at8kHzDb": -32.534
       },
       "telephoneHiss": {
-        "measuredDbfs": -52.772,
+        "measuredDbfs": -52.724,
         "generatedDbfs": -52.8,
         "bandLimitedDbfs": -61.61,
         "sameSeedSameBytes": true,
@@ -665,9 +671,9 @@
           "hi": 4713.688
         },
         "amDepthDb": 0.5,
-        "cracklesFull": 4,
-        "cracklesRange": 4,
-        "perSecond": 1.341
+        "cracklesFull": 11,
+        "cracklesRange": 11,
+        "perSecond": 3.687
       },
       "robot": {
         "strongestLinesHz": [
@@ -1018,13 +1024,13 @@
       },
       "radio": {
         "codec": "mp4/opus",
-        "crackleServer": 11,
-        "crackleBrowser": 11,
+        "crackleServer": 5,
+        "crackleBrowser": 5,
         "worstCrackleOffset": 0,
-        "telephoneBands": 27,
-        "worstBandDifferenceDb": 0.197,
-        "encodedBands": 19,
-        "worstEncodedBandDifferenceDb": 1.863
+        "telephoneBands": 28,
+        "worstBandDifferenceDb": 0.301,
+        "encodedBands": 18,
+        "worstEncodedBandDifferenceDb": 3.966
       }
     },
     "E": {
@@ -1074,9 +1080,15 @@
           "Rubik",
           "Assistant",
           "Frank Ruhl Libre",
-          "Secular One"
+          "Secular One",
+          "Suez One",
+          "David Libre",
+          "Karantina",
+          "Amatic SC",
+          "Fredoka",
+          "Gveret Levin"
         ],
-        "schemaVersion": 2
+        "schemaVersion": 3
       },
       "audioEffects": [
         {

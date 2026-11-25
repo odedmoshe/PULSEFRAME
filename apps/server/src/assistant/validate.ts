@@ -18,7 +18,15 @@ export const ModelProposalSchema = z.object({
 }).strict();
 export type ModelProposal = z.infer<typeof ModelProposalSchema>;
 
-export type ProposalCheck = { ok: true; ops: OpCall[]; explanation: string | null } | { ok: false; reason: string };
+/**
+ * Why an answer was refused, as the job row keeps it (ADR-0027, note of 2026-11-25): the category and a FIXED sentence. Nothing
+ * of the answer itself is quoted (not an operation's name, not a key, not a value): the answer can repeat what the owner typed.
+ * What varies in a sentence is only an operation's index, the adapter's finish word, or a schema issue code of this build.
+ */
+export const INVALID_ANSWER_CATEGORIES = ['cut_off', 'ended', 'empty', 'not_json', 'empty_tool_input', 'wrong_shape', 'unknown_op', 'internal_op', 'people_op', 'op_not_allowed', 'private_people_arg', 'invalid_args', 'refused_by_project'] as const;
+export type InvalidAnswerCategory = (typeof INVALID_ANSWER_CATEGORIES)[number];
+export type ProposalCheck = { ok: true; ops: OpCall[]; explanation: string | null } | { ok: false; category: InvalidAnswerCategory; reason: string };
+const no = (category: InvalidAnswerCategory, reason: string): ProposalCheck => ({ ok: false, category, reason });
 
 let allowed: Set<string> | null = null;
 const allowlist = () => (allowed ??= new Set(assistantOps()));
@@ -31,29 +39,29 @@ function holdsPrivatePeopleArg(v: unknown): boolean {
 }
 
 export function checkModelAnswer(r: ChatResponse): ProposalCheck {
-  if (r.finish !== 'tool' && r.finish !== 'stop') return { ok: false, reason: r.finish === 'length' ? 'the answer was cut off at the output token cap (finish: length)' : `the answer ended with finish: ${r.finish}` };
+  if (r.finish !== 'tool' && r.finish !== 'stop') return r.finish === 'length' ? no('cut_off', 'the answer was cut off at the output token cap (finish: length)') : no('ended', `the answer ended with finish: ${r.finish === 'filtered' ? 'filtered' : 'other'}`);
   let raw: unknown = r.toolInput;
   if (raw === null || raw === undefined) {
     const text = r.text?.trim() ?? '';
-    if (!text) return { ok: false, reason: 'the answer is empty: no tool call and no text' };
-    try { raw = JSON.parse(text); } catch { return { ok: false, reason: 'the answer is text that is not a JSON proposal' }; }
+    if (!text) return no('empty', 'the answer is empty: no tool call and no text');
+    try { raw = JSON.parse(text); } catch { return no('not_json', 'the answer is text that is not a JSON proposal'); }
   }
-  if (raw && typeof raw === 'object' && !Array.isArray(raw) && Object.keys(raw).length === 0) return { ok: false, reason: 'the tool input is empty' };
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && Object.keys(raw).length === 0) return no('empty_tool_input', 'the tool input is empty');
   const p = ModelProposalSchema.safeParse(raw);
   if (!p.success) {
-    const first = p.error.issues[0]!;
-    return { ok: false, reason: `the proposal does not have the tool's shape: ${first.path.join('.') || '(top)'}: ${first.message}` };
+    // the issue's code is a word of the schema library (too_big, unrecognized_keys…); its message and path can quote the answer
+    return no('wrong_shape', `the proposal does not have the tool's shape (${p.error.issues[0]!.code})`);
   }
   const ops: OpCall[] = [];
   for (const [i, call] of p.data.ops.entries()) {
     const def = getOp(call.op);
-    if (!def) return { ok: false, reason: `op ${i} "${call.op}" is not an operation of this build` };
-    if (def.internal) return { ok: false, reason: `op ${i} "${call.op}" is internal and cannot be proposed` };
-    if ((PERSON_OPS as readonly string[]).includes(call.op)) return { ok: false, reason: `op ${i} "${call.op}" changes people, which the assistant may not do` };
-    if (!allowlist().has(call.op)) return { ok: false, reason: `op ${i} "${call.op}" is not one the assistant may propose` };
-    if (holdsPrivatePeopleArg(call.args)) return { ok: false, reason: `op ${i} "${call.op}" carries a birth date or a word choice` };
+    if (!def) return no('unknown_op', `op ${i} is not an operation of this build`);
+    if (def.internal) return no('internal_op', `op ${i} is internal and cannot be proposed`);
+    if ((PERSON_OPS as readonly string[]).includes(call.op)) return no('people_op', `op ${i} changes people, which the assistant may not do`);
+    if (!allowlist().has(call.op)) return no('op_not_allowed', `op ${i} is not one the assistant may propose`);
+    if (holdsPrivatePeopleArg(call.args)) return no('private_people_arg', `op ${i} carries a birth date or a word choice`);
     const a = def.args.safeParse(call.args);
-    if (!a.success) { const first = a.error.issues[0]!; return { ok: false, reason: `op ${i} "${call.op}" has invalid arguments: ${first.path.join('.') || '(args)'}: ${first.message}` }; }
+    if (!a.success) return no('invalid_args', `op ${i} has invalid arguments (${a.error.issues[0]!.code})`);
     ops.push({ op: call.op, args: call.args });
   }
   return { ok: true, ops, explanation: p.data.explanation ?? null };

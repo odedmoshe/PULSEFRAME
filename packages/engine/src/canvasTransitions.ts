@@ -11,7 +11,7 @@
 import { switchFrame, transitionDef, transitionProgress } from '@pulseframe/core';
 import type { LayerLook } from './evaluate.ts';
 import { hash32, unit32 } from './gpu.ts';
-import { scratch, type Buf } from './look.ts';
+import { fadeBuf, scratch, type Buf } from './look.ts';
 
 export interface CanvasTransitionArgs {
   ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -25,6 +25,8 @@ export interface CanvasTransitionArgs {
   v: readonly [number, number, number];
   W: number;
   H: number;
+  /** Draft playback (DrawOptions.quality 'draft'): a kernel may use a faster form that is at most 2 of 255 off its full picture, with no bias. */
+  draft?: boolean;
 }
 export type CanvasKernel = (a: CanvasTransitionArgs) => void;
 
@@ -49,13 +51,50 @@ export const CANVAS_TRANSITIONS: Record<string, { kernel: string; v: [number, nu
 
 // ---- the five kernels from before ADR-0012, moved verbatim from look.ts compositeLayer ----
 
-/** Exact cross-fade: out*(1-p) + in*p, mixed additively in a buffer so two opaque pictures never dip toward the background. `zoomed`: the incoming picture settles from 1.3×. */
-function crossfade({ ctx, incoming: layer, outgoing, t, W, H }: CanvasTransitionArgs, zoomed: boolean) {
+/**
+ * Cross-fade: out*(1-p) + in*p, mixed additively in a buffer so two opaque pictures never dip toward the background.
+ * `zoomed`: the incoming picture settles from 1.3×.
+ *
+ * The plain dissolve puts each weight into its picture's own alpha (fadeBuf: the outgoing copy in the mix buffer, the incoming
+ * layer's finished buffer in place, which nothing reads after this kernel) and adds the two at full alpha. Drawn with globalAlpha
+ * instead, Chromium's software canvas truncates: through stills over all 256×256 byte pairs at 20 progress values, the
+ * dissolve between two clips had 1604 bytes 2 off the exact mix at the nearest 8-bit alpha, and the dissolve that reveals a
+ * clip over the tracks below was on average half a level low with 38096 bytes 2 off; with the weights in the alpha every byte
+ * is within 1 (conformance:opacity check 4). The zoom keeps its globalAlpha draws: its incoming picture is resampled anyway.
+ *
+ * Draft playback skips the two fills (about 8 ms each for a 1920×1080 frame): between two clips the outgoing picture is drawn
+ * with globalAlpha (255 − k)/255 into the mix and the incoming one added (lighter) with k/255, whose truncations cancel on
+ * average; with no previous clip the incoming picture is copied into the mix with globalAlpha k/255. Every byte within 2 of the
+ * exact mix, zero mean error (conformance:opacity check 6), a byte that is the same in both pictures unchanged.
+ */
+function crossfade({ ctx, incoming: layer, outgoing, t, W, H, draft }: CanvasTransitionArgs, zoomed: boolean) {
   const p = t.progress;
   const mix = scratch(6, W, H);
+  if (!zoomed) {
+    // One 8-bit level k for both weights, so the two alphas add up to exactly 255: at p = 0.5, 1 − p and p would both round
+    // to 128, and a pixel that is the same in both pictures would come out one level high.
+    const k = Math.round(255 * p);
+    if (draft) {
+      if (outgoing) { mix.ctx.globalAlpha = (255 - k) / 255; mix.ctx.drawImage(outgoing.canvas, 0, 0); mix.ctx.globalCompositeOperation = 'lighter'; }
+      else mix.ctx.globalCompositeOperation = 'copy';
+      mix.ctx.globalAlpha = k / 255;
+      mix.ctx.drawImage(layer.canvas, 0, 0);
+      ctx.drawImage(mix.canvas, 0, 0);
+      return;
+    }
+    if (outgoing) {
+      mix.ctx.drawImage(outgoing.canvas, 0, 0);
+      if (k > 0) fadeBuf(mix, (255 - k) / 255, W, H);
+      mix.ctx.globalCompositeOperation = 'lighter';
+    }
+    if (k < 255) fadeBuf(layer, k / 255, W, H);
+    mix.ctx.drawImage(layer.canvas, 0, 0);
+    ctx.drawImage(mix.canvas, 0, 0);
+    return;
+  }
   if (outgoing) { mix.ctx.globalAlpha = 1 - p; mix.ctx.drawImage(outgoing.canvas, 0, 0); mix.ctx.globalCompositeOperation = 'lighter'; }
   mix.ctx.globalAlpha = p;
-  if (zoomed) { const s = 1.3 - 0.3 * p; mix.ctx.translate(W / 2, H / 2); mix.ctx.scale(s, s); mix.ctx.translate(-W / 2, -H / 2); }
+  const s = 1.3 - 0.3 * p; mix.ctx.translate(W / 2, H / 2); mix.ctx.scale(s, s); mix.ctx.translate(-W / 2, -H / 2);
   mix.ctx.drawImage(layer.canvas, 0, 0);
   ctx.drawImage(mix.canvas, 0, 0);
 }

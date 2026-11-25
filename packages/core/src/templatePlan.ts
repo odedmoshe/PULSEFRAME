@@ -381,7 +381,9 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
   const at = anchorOf(doc, p0.at);
   const p: TemplateInput = { ...p0, at };
   const lang = p.lang;
-  const keep = new Set(ctx.keepKeys ?? []);
+  // items not made again: those edited by hand (kept as they are) and those deleted by hand (left out); see TemplatePlanContext
+  const keptByHand = new Set(ctx.keepKeys ?? []), removedByHand = new Set((ctx.removedKeys ?? []).filter((k) => !keptByHand.has(k)));
+  const keep = new Set([...keptByHand, ...removedByHand]);
   const warnings: TemplateWarning[] = [], blocking: TemplateWarning[] = [], steps: string[] = [], basis: string[] = [];
   const warn = (code: TemplateWarning['code'], message: string, details: Record<string, unknown> = {}) => warnings.push({ code, message, details });
   const notices: TemplateNotice[] = [];
@@ -761,7 +763,11 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
 
   // ----- what the plan rests on -----
   if (clamped.length) basis.push(`item(s) placed at slot(s) ${clamped.join(', ')}, which are not used with this much media, were placed on the last used slot`);
-  if (keep.size) warn('kept_by_hand', `${keep.size} item(s) edited by hand since the last run were kept as they are and not made again`, { keys: [...keep].sort() });
+  if (keptByHand.size) warn('kept_by_hand', `${keptByHand.size} item(s) edited by hand since the last run were kept as they are and not made again`, { keys: [...keptByHand].sort() });
+  if (removedByHand.size) notice('removed_by_hand', `${removedByHand.size} item(s) deleted by hand since the last run were left out and not made again; regenerate with restoreRemoved to make them again`, { keys: [...removedByHand].sort() });
+  // items that had only been moved in time (ctx.movedKeys): the ones this plan makes again are said, by key
+  const movedBack = [...new Set(ctx.movedKeys ?? [])].filter((k) => slots.some((s) => s.key === k)).sort();
+  if (movedBack.length) notice('moved_back', `${movedBack.length} item(s) that were only moved in time since the last run (nothing else about them was changed) were made again on the place the template gives them`, { keys: movedBack });
   const shape = H > W * 1.1 ? 'tall' : W > H * 1.1 ? 'wide' : 'square';
   if (shape !== d.designedFor) warn('designed_for_other_shape', `this template is designed for a ${d.designedFor} frame; this project is ${shape} (${W}×${H})`, { designedFor: d.designedFor, project: shape, width: W, height: H });
   basis.unshift(
@@ -770,6 +776,7 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
       : `no music: a steady grid of ${d.tempo.fallbackBpm} beats a minute from the template, four beats to a bar`,
     `${media.length} chosen picture(s) or video(s), ${kept.length} slot(s) used of ${d.slots.length}; ${rate.num}/${rate.den} frames a second; cuts at least ${gap} frames apart`,
   );
+  if (ops.length === 0 && removedByHand.size) throw new TemplateError('nothing_to_do', 'every item of this template was edited or deleted by hand since the last run; there is nothing to make again', 'Regenerate with restoreRemoved: true to make the deleted items again.');
   if (ops.length === 0) throw new TemplateError('nothing_to_do', 'every item of this template was edited by hand since the last run; there is nothing to make again');
   if (ops.length > MAX_TEMPLATE_OPS) throw new TemplateError('invalid_args', `this plan would need ${ops.length} operations; at most ${MAX_TEMPLATE_OPS} fit in one step`, 'Use fewer media or a shorter template.');
   if (slots.length > 400) throw new TemplateError('invalid_args', `this plan would record ${slots.length} slots; a run holds at most 400`);
@@ -778,6 +785,8 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
     ...(['normal', 'half', 'double'] as const).filter((t) => t !== p.tempo).map((t) => ({ label: t === 'half' ? 'Half tempo: slots twice as long' : t === 'double' ? 'Double tempo: slots half as long' : 'Normal tempo', params: { tempo: t } })),
     p.order === 'shuffle' ? { label: 'Media in the order chosen', params: { order: 'sequence' as const } } : { label: 'Shuffle the media', params: { order: 'shuffle' as const, seed: p.seed + 1 } },
     p.motion === 'full' ? { label: 'No camera moves or animated titles (reduced motion)', params: { motion: 'none' as const } } : { label: 'With camera moves and animated titles', params: { motion: 'full' as const } },
+    // the explicit choice to bring back what was deleted by hand (never taken on its own)
+    ...(removedByHand.size ? [{ label: `Restore the ${removedByHand.size} item(s) deleted by hand`, params: {}, restoreRemoved: true as const }] : []),
   ];
   const predicted: PredictedSlot[] = kept.map((s) => ({ key: s.key, startFrame: s.startFrame, frames: s.endFrame - s.startFrame, assetId: s.assetId, sourceInFrame: s.sourceInFrame, cropShare: s.cropShare }));
   const clip = (s: string) => (s.length > 400 ? `${s.slice(0, 399)}…` : s);

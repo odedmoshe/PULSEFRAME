@@ -92,6 +92,16 @@ describe('AssistantRow', () => {
     expect(f).toHaveBeenCalledTimes(2);
     Row.resetStatusCache();
   });
+  it('a canceled request says what the cancel did, from the job itself: nothing sent, or sent and maybe charged (never "failed")', () => {
+    expect(Row.canceledPhase({ attempt: 0 })).toEqual({ phase: 'canceled', sent: false });
+    expect(Row.canceledPhase({})).toEqual({ phase: 'canceled', sent: false });
+    expect(Row.canceledPhase({ attempt: 1 })).toEqual({ phase: 'canceled', sent: true });
+    expect(Row.canceledWords('he', false)).toBe('הבקשה בוטלה לפני שנשלח משהו. שום דבר לא חויב ושום דבר לא שונה');
+    expect(Row.canceledWords('en', false)).toBe('The request was canceled before anything was sent. Nothing was charged and nothing was changed');
+    expect(Row.canceledWords('he', true)).toMatch(/ייתכן שחויבה/);
+    expect(Row.canceledWords('en', true)).toMatch(/may have been charged/);
+    for (const lang of ['he', 'en'] as const) for (const sent of [true, false]) expect(Row.canceledWords(lang, sent)).not.toMatch(/נכשל|failed|user:local|%/);
+  });
   it('the send line names the cap in cents and the switches that are on', () => {
     const line = Row.sendLine('he', { perRequestCapCents: 12, toggles: { titlesAndMarkers: true, peopleNames: false } } as never);
     expect(line).toContain('12¢');

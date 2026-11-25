@@ -4,7 +4,7 @@ import './ds/shell.css';
 import './editor/stage.css';
 import './editor/timeline.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ToastProvider, useToasts } from './ds/index.ts';
+import { ToastProvider, useToasts, type ToastInput } from './ds/index.ts';
 import { CanvasHandles } from './editor/CanvasHandles.tsx';
 import { TrackPicker } from './editor/TrackPicker.tsx';
 import { CommandPalette } from './editor/CommandPalette.tsx';
@@ -24,6 +24,7 @@ import { Transport } from './editor/Transport.tsx';
 import { isTyping, shortcutAllowed } from './editor/shortcutGate.ts';
 import { Editor, EditorContext, useEditorState } from './editor/store.ts';
 import { toastOf } from './editor/undoToast.ts';
+import { IMPORT_NOTES_KEY } from './editor/DeliverPanel.tsx';
 import { Timeline } from './editor/Timeline.tsx';
 import { Welcome } from './editor/Welcome.tsx';
 import { FamilyFilmDialog } from './editor/FamilyFilmDialog.tsx';
@@ -69,11 +70,11 @@ export function App() {
   );
 }
 
-const APP_STRINGS = { he: { close: 'סגירה', undo: 'ביטול' }, en: { close: 'Close', undo: 'Undo' } } as const;
+const APP_STRINGS = { he: { close: 'סגירה', undo: 'ביטול', notifications: 'התראות', imported: 'הארכיון יובא' }, en: { close: 'Close', undo: 'Undo', notifications: 'Notifications', imported: 'The archive was imported' } } as const;
 /** The toast queue of the editor (ds ToastProvider), in the interface language. */
 function Toasts({ children }: { children: React.ReactNode }) {
   const { state } = useEditorState();
-  return <ToastProvider closeLabel={APP_STRINGS[state.lang].close}>{children}<ToastBridge /></ToastProvider>;
+  return <ToastProvider closeLabel={APP_STRINGS[state.lang].close} label={APP_STRINGS[state.lang].notifications}>{children}<ToastBridge /></ToastProvider>;
 }
 /** The editor's notices (editor.notify) go to the toast queue; an undo toast undoes exactly the transaction it names (undoToast.ts). */
 function ToastBridge() {
@@ -86,6 +87,30 @@ function ToastBridge() {
     seen.current = n.n;
     toasts.push(toastOf(n, APP_STRINGS[state.lang].undo, editor));
   }, [n?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the proofs' test hook, only when the proof's flag is set (like __pfPerformProof): raises a toast through the same queue, so a
+  // browser check can show one while a modal (palette, gallery, curve picker, template dialog) is open
+  useEffect(() => {
+    if (!(globalThis as { __pfToastProof?: unknown }).__pfToastProof) return;
+    const w = window as unknown as { __pfToast?: (t: ToastInput) => string };
+    w.__pfToast = (t) => toasts.push(t);
+    return () => { delete w.__pfToast; };
+  }, [toasts]);
+  // An archive import that changed something on the way in says so once, in the project it made, until the owner closes it.
+  const docId = state.doc?.id;
+  useEffect(() => {
+    if (!docId) return;
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem(IMPORT_NOTES_KEY); } catch { return; }
+    if (!raw) return;
+    let saved: { projectId?: string; notes?: { code?: string; he?: string; en?: string }[] } | null = null;
+    try { saved = JSON.parse(raw); } catch { /* not ours */ }
+    if (saved?.projectId !== docId) return;
+    try { sessionStorage.removeItem(IMPORT_NOTES_KEY); } catch { /* shown once per load at worst */ }
+    for (const note of saved.notes ?? []) {
+      const body = note[state.lang];
+      if (typeof body === 'string' && body) toasts.push({ kind: 'fix', title: APP_STRINGS[state.lang].imported, body, ttl: 0 });
+    }
+  }, [docId]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
 

@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
   applyTransaction, COLOR_LOOKS, createProject, describeOps, findClip, isInheritedName, OpError, own, planRecipe, projectVariant, RecipeError,
-  restoreEntities, sequenceDuration, TEXT_PRESETS, timeline, transcriptView, validateProject, type EntityState, type OpCall, type ProjectDocument,
+  followedBeats, mainTrackOf, readingSpeedIssues, restoreEntities, sequenceDuration, staleTranslations, TEXT_PRESETS, timeLineage, timeline, transcriptFor, transcriptView, validateProject, type EntityState, type OpCall, type ProjectDocument,
 } from './index.ts';
 
 const HOSTILE = ['__proto__', 'constructor', 'toString'] as const;
@@ -460,13 +460,19 @@ describe('a phrase or word named that way (data, as an imported transcript may c
 });
 
 describe('read helpers given such an id', () => {
-  it('find nothing: no format, no timeline, no transcript, no duration, no recipe input', () => {
+  it('find nothing: no format, no timeline, no transcript, no duration, no recipe input, no lineage, no track, no translation', () => {
     const s = studio();
     for (const id of HOSTILE) {
       expect(() => projectVariant(s.doc, id)).toThrow(`variant ${id} not found`);
       expect(timeline(s.doc, id)).toBeNull();
       expect(transcriptView(s.doc, id)).toBeNull();
       expect(sequenceDuration(s.doc, id)).toEqual(T.ZERO);
+      expect(timeLineage(s.doc, id)).toEqual({ rootAssetId: id, offset: T.ZERO, chain: [id] });
+      expect(transcriptFor(s.doc, id)).toBeNull();
+      expect(followedBeats(s.doc, 0, 10, id)).toEqual([]);
+      expect(mainTrackOf(s.doc, id)).toBeUndefined();
+      expect(staleTranslations(s.doc, id)).toEqual([]);
+      expect(readingSpeedIssues(s.doc, id, {})).toEqual([]);
       let caught: unknown;
       try { planRecipe(s.doc, 'tidy-speech', { assetId: id }, { silences: { [id]: [] } }); } catch (e) { caught = e; }
       expect(caught).toBeInstanceOf(RecipeError);

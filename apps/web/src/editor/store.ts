@@ -14,8 +14,9 @@ import { createT, dictionaries, dirOf, translateRefusal, type Key, type Lang } f
 import { initGpu, type GpuStatus, type ImageLayer, type RenderGraph, type TextLayer, type VideoLayer } from '@pulseframe/engine';
 import { api, ApiFailure, type Approval, type CommitResult, type JobEvent, type Proposal, type RevisionEvent } from '../api.ts';
 import { ensureFonts } from '../fonts.ts';
-import { MediaPool } from '../media.ts';
+import { MediaPool, prefetchBudget } from '../media.ts';
 import { Player } from '../player.ts';
+import { parsePlaySharpness, PLAY_SHARPNESS_KEY, type PlaySharpness } from '../pictureSize.ts';
 import { timelineDerivatives } from '../clipVisuals.cache.ts';
 import { failureOf, rememberJob, type ProviderFailure } from './aiTools.recheck.ts';
 import { aiApi, type ApplyMode, type RunSource } from './api.ts';
@@ -23,6 +24,7 @@ import { addAssetArgs, dropAssetArgs } from './placement.ts';
 import { injectSequenceId } from './shorts.view.ts';
 import { followFactor, followOffsetAt, layerOf, ownFromResolved } from './tracking.math.ts';
 import { wholeEditOps, type WholeEditPick } from './commands.ts';
+import { anglePrefetchPlan } from './anglePrefetch.ts';
 import { commitParts, projectionResult, record, reportNotes, reportOf, startSession, unchangedPlaces, type MulticamSession } from './multicamSession.ts';
 import { MULTICAM_STRINGS } from './multicam.strings.ts';
 import { cutBefore, type ObjectTab } from './inspector.model.ts';
@@ -33,6 +35,7 @@ import { RefreshPolicy } from './renderCache.logic.ts';
 import type { DropCodeView, DropPublicView, FamilyFilmParams, FamilyFilmPlanView, FilmExclusion, FilmPick } from '@pulseframe/core';
 import type { ChannelRef, KeyClipboard, KeyRef } from '@pulseframe/core';
 import { pruneKeySel } from './keyStrip.math.ts';
+import { nextFromEvent, type LiveChange } from './sync.ts';
 
 /**
  * The activity list after a live revision event: newest first, at most 50. An undo or redo marks the transaction it reversed
@@ -186,6 +189,8 @@ export interface EditorState {
   curvePicker: { clipId: string; frame: number; channels: ChannelRef[] } | null;
   /** Show the motion path on the stage: a setting of this browser (localStorage 'pf.motionPath'), default on. */
   pathOn: boolean;
+  /** The picture while playing, «חלק» or «חד יותר» (pictureSize.ts): a setting of this browser (localStorage 'pf.playSharpness'), default smooth; never project state. */
+  playSharpness: PlaySharpness;
 }
 /** What the family film dialog starts from (FamilyFilmEntry → editor.openFilm). */
 export interface FilmSource { assetIds: string[]; event: FamilyFilmParams['event'] }
@@ -197,6 +202,7 @@ export const FAST_EXPORT_KEY = 'pf.fastExport';
 export const MOTION_PATH_KEY = 'pf.motionPath';
 const readPathOn = () => { try { return localStorage.getItem(MOTION_PATH_KEY) !== '0'; } catch { return true; } };
 const readFastExport = () => { try { return localStorage.getItem(FAST_EXPORT_KEY) === '1'; } catch { return false; } };
+const readPlaySharpness = (): PlaySharpness => { try { return parsePlaySharpness(localStorage.getItem(PLAY_SHARPNESS_KEY)); } catch { return 'smooth'; } };
 /** A place the ride bar can ask the editor to show: a tab of the inspector, or a gallery (RideBar.tsx, Inspector.tsx). */
 export type PanelTarget = 'speed' | 'animation' | 'effects' | 'transition' | 'transitions-gallery' | 'sound' | 'replace';
 /** The tabs of the effects gallery that can be asked for from outside it. */
@@ -268,7 +274,7 @@ export class Editor {
     segmentPlan: { status: 'off', view: null, revision: null }, fastExport: readFastExport(), planOptions: {}, // the export sheet's first pick (the computer destination: high quality, whose options are all defaults)
     imports: { local: [], jobs: [], room: null, skipped: null }, phoneDropOpen: false, drop: null, dropLive: null, dropProblem: null, planBlockers: [], missingMedia: [],
     filmOpen: false, filmSource: null, filmRun: null,
-    keySel: null, keyClipboard: null, curvePicker: null, pathOn: readPathOn(),
+    keySel: null, keyClipboard: null, curvePicker: null, pathOn: readPathOn(), playSharpness: readPlaySharpness(),
   };
   /**
    * The import queue's editor side (ADR-0023): uploads one at a time to POST …/imports, cards from the job events, placement of
@@ -389,6 +395,46 @@ export class Editor {
   private mediaRetried = '';
   async load(projectId: string) {
     const p = await api.getProject(projectId);
+    this.adopt(p);
+    return p;
+  }
+  /**
+   * Waiters for a revision (reach): an edit of this editor resolves when the revision event brought its result (applied from the
+   * event's changes, sync.ts), instead of reading the whole document again.
+   */
+  private revisionWaiters: { revision: number; resolve: () => void }[] = [];
+  /**
+   * The document at least at `revision`: from the revision event when the event stream is open (the server sends it right
+   * after the edit's answer; at most a second is waited for it), else read whole.
+   */
+  private async reach(projectId: string, revision: number) {
+    if (this.state.revision >= revision) return;
+    if (this.es?.readyState === 1) { // EventSource.OPEN
+      await new Promise<void>((resolve) => {
+        const w = { revision, resolve: () => { clearTimeout(timer); resolve(); } };
+        const timer = setTimeout(() => { this.revisionWaiters = this.revisionWaiters.filter((x) => x !== w); resolve(); }, 1000);
+        this.revisionWaiters.push(w);
+      });
+      if (this.state.revision >= revision) return;
+    }
+    await this.load(projectId);
+  }
+  /**
+   * Read the whole document after an event that could not be applied; events arriving while that read is out lead to one more
+   * read when it is back (a reconnect replays many events without changes: two reads, not one per event).
+   */
+  private rereading = false;
+  private rereadAgain = false;
+  private reread(projectId: string) {
+    if (this.rereading) { this.rereadAgain = true; return; }
+    this.rereading = true;
+    void this.load(projectId).catch(this.fail).finally(() => {
+      this.rereading = false;
+      if (this.rereadAgain) { this.rereadAgain = false; this.reread(projectId); }
+    });
+  }
+  /** Show the document at a revision (read whole, or applied from a revision event's changes). An older one is ignored. */
+  private adopt(p: { project: ProjectDocument; revision: number }) {
     if (p.revision >= this.state.revision || !this.state.doc) {
       // the active sequence resets to the main one when it is gone (as the viewed format does); the editor works on its projection
       const activeSequenceId = Object.hasOwn(p.project.sequences, this.state.activeSequenceId) ? this.state.activeSequenceId : p.project.mainSequenceId;
@@ -416,7 +462,11 @@ export class Editor {
       // while a take is recorded the picture is replaced without stopping the sound when the sound plan is unchanged
       if (vd && !this.state.performGhost) { if (this.state.multicamRec || this.committingSession || this.state.performRecording) this.player?.setPictureDoc(vd); else this.player?.setDoc(vd); }
     }
-    return p;
+    if (this.revisionWaiters.length) {
+      const due = this.revisionWaiters.filter((w) => w.revision <= this.state.revision);
+      this.revisionWaiters = this.revisionWaiters.filter((w) => w.revision > this.state.revision);
+      for (const w of due) w.resolve();
+    }
   }
   /** Show and edit another sequence (a short, or the main edit): the editor's document becomes its projection. Session state only. */
   setActiveSequence(id: string) {
@@ -473,7 +523,8 @@ export class Editor {
       // Preview decodes the frame-identical proxy once it exists; export always uses the original.
       previewUrl: async (assetId) => ((await api.derivatives(projectId, assetId)).derivatives.find((d) => d.kind === 'proxy')?.status === 'ready' ? `/api/v1/projects/${projectId}/assets/${assetId}/derivatives/proxy` : null),
     });
-    this.player = new Player(canvas, this.pool, () => { this.set({ tick: this.state.tick + 1 }); this.announce(projectId); this.multicamTick(); }, (e) => void this.previewFailed(projectId, e));
+    this.player = new Player(canvas, this.pool, () => { this.set({ tick: this.state.tick + 1 }); this.announce(projectId); this.multicamTick(); this.multicamWarm(); }, (e) => void this.previewFailed(projectId, e));
+    this.player.sharpness = this.state.playSharpness;
     (window as any).__pfMedia = () => this.pool?.stats();
     (window as any).__pfSync = () => this.player?.syncStats();
     const p = await this.load(projectId);
@@ -484,10 +535,15 @@ export class Editor {
     if (this.disposed) return;
     const es = (this.es = api.events(projectId, p.revision));
     es.addEventListener('revision', (m) => {
-      const e: RevisionEvent = JSON.parse((m as MessageEvent).data);
+      const { changes, ...e }: RevisionEvent & { changes?: LiveChange[] } = JSON.parse((m as MessageEvent).data);
       if (!this.state.activity.some((x) => x.revision === e.revision)) this.set({ activity: withRevisionEvent(this.state.activity, e) });
       // Committed remote or local change: converge on the server document. Playhead and selection are local and stay put.
-      if (e.revision > this.state.revision) void this.load(projectId).catch(this.fail);
+      // The event's changes give the next document when this one is at the revision before (sync.ts); otherwise read it whole.
+      if (e.revision > this.state.revision) {
+        const next = nextFromEvent(this.state.rawDoc, this.state.revision, { revision: e.revision, ...(changes ? { changes } : {}) });
+        if (next) this.adopt({ project: next, revision: e.revision });
+        else this.reread(projectId);
+      }
       if (this.state.fastExport) this.planPolicy.changed(e.revision);
     });
     // The phone drop's public view (owner sessions only, no secrets): counts, connected, closed.
@@ -651,6 +707,29 @@ export class Editor {
     const vd = this.viewDoc;
     if (vd) p.setPictureDoc(vd);
   }
+  /** The painted frame prefetch was last planned for (-1: nothing is kept warm). */
+  private warmAt = -1;
+  private warmDoc: ProjectDocument | null = null;
+  /**
+   * Prefetch for multicam (anglePrefetch.ts, MediaPool.warm): while a multicam program plays at normal speed, keep the decoders of
+   * the next segment and, while switches are recorded, of the other picture angles warm within the device's budget; planned once
+   * per painted frame. Anything else (paused, shuttling, no program) lets every warm decoder go. Only warms: the picture of every
+   * frame is still whatever evaluate gives for it.
+   */
+  private multicamWarm() {
+    const p = this.player, pool = this.pool;
+    if (!p || !pool) return;
+    const budget = prefetchBudget((globalThis.navigator as { deviceMemory?: number } | undefined)?.deviceMemory);
+    // planned from the frame ON SCREEN and the document it was drawn from: right after a live cut, p.doc already shows the new
+    // angle on air while its first frame is still being drawn, and a plan from it would let go of the very decoder that frame takes
+    const shown = p.painted >= 0 ? p.paintedDoc : null;
+    const prog = p.playing && !p.shuttleRate && shown ? this.multicamProgram() : null;
+    if (!prog || !shown) { if (this.warmAt !== -1) { this.warmAt = -1; pool.warm([], budget.bytes, budget.off); } return; }
+    if (p.painted === this.warmAt && shown === this.warmDoc) return;
+    this.warmAt = p.painted;
+    this.warmDoc = shown;
+    pool.warm(anglePrefetchPlan(shown, prog, p.painted, { quality: p.pictureQuality(), live: this.recordingSwitches }), budget.bytes, budget.off);
+  }
   /** Called on every player tick: a pause or the end of the program (not a pause-and-resume inside setDoc) commits the recording. */
   private multicamTick() {
     const s = this.state.multicamRec, p = this.player;
@@ -806,7 +885,7 @@ export class Editor {
     this.set({ save: 'save.saving', error: null });
     try {
       const r = await api.commit(doc.id, revision, ops, label);
-      await this.load(doc.id);
+      await this.reach(doc.id, r.revision);
       this.set({ save: 'save.saved' });
       return r;
     } catch (e) {
@@ -825,8 +904,8 @@ export class Editor {
     if (!doc) return;
     this.set({ error: null });
     try {
-      await api.undo(doc.id, mode, transactionId);
-      await this.load(doc.id);
+      const r = await api.undo(doc.id, mode, transactionId);
+      await this.reach(doc.id, r.revision);
     } catch (e) {
       if (e instanceof ApiFailure && (e.code === 'nothing_to_undo' || e.code === 'nothing_to_redo' || e.code === 'already_undone')) return;
       this.fail(e instanceof ApiFailure && e.code === 'undo_conflict' ? new Error(this.t('undo.conflict')) : e);
@@ -996,6 +1075,16 @@ export class Editor {
   /** Open the curve picker for these channels at this clip-local frame. */
   openCurvePicker(clipId: string, frame: number, channels: ChannelRef[]) { this.set({ curvePicker: { clipId, frame, channels } }); }
   closeCurvePicker() { if (this.state.curvePicker) this.set({ curvePicker: null }); }
+  /**
+   * The picture while playing (Settings): «חלק», the proxies' own scale, or «חד יותר», the larger picture (pictureSize.ts). A
+   * preference of this browser (localStorage 'pf.playSharpness'), never an edit of the project: no op, no revision. The
+   * player draws its next frame with it; other players of this editor (the source viewer) read it from the state.
+   */
+  setPlaySharpness(playSharpness: PlaySharpness) {
+    try { localStorage.setItem(PLAY_SHARPNESS_KEY, playSharpness); } catch { /* storage unavailable: the choice lasts for this visit */ }
+    if (this.player) this.player.sharpness = playSharpness;
+    this.set({ playSharpness });
+  }
   /** Show or hide the motion path on the stage: a setting of this browser (localStorage 'pf.motionPath'). */
   setPathOn(on: boolean) { try { localStorage.setItem(MOTION_PATH_KEY, on ? '1' : '0'); } catch { /* ignore */ } this.set({ pathOn: on }); }
   /** Ask the inspector to show a tab of the selected object (it ignores a tab the object does not have). */
