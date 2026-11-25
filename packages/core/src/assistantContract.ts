@@ -64,6 +64,9 @@ export const ASSISTANT_EXCLUDED_OPS = [
   // marked ranges («פנינים», wave 7): an accepted proposal commits as the owner, which would pass the owner-only tagging rule; labels
   // are family notes the assistant never reads (and offering them would change the reviewed ASSISTANT_PROMPT_DIGEST)
   'add_source_range', 'update_source_range', 'remove_source_range',
+  // music that fits the film (wave 7 musicfit): every new public op is left out so the reviewed ASSISTANT_PROMPT_DIGEST stays as it is;
+  // both stay on MCP and REST as ordinary reversible edits
+  'set_clip_impact', 'sync_impact',
 ] as const;
 /** The ops a proposal may hold: every registered public op minus ASSISTANT_EXCLUDED_OPS and PERSON_OPS, in registry order. */
 export function assistantOps(): string[] {

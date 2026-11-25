@@ -16,6 +16,8 @@ import { clock, filterByGenre, nextTempo, shuffleParams, templateApi, toggleGenr
 import { TemplateDialog, type AppliedTemplate } from './TemplateDialog.tsx';
 import { templateRefusal } from './templateRefusals.ts';
 import './templates.css';
+import { MUSICFIT_UI_BUILT } from './musicfit/MusicFitBlock.tsx';
+import { SwapMusicButton } from './musicfit/SwapMusicDialog.tsx';
 
 const focusCard = (id: string) => setTimeout(() => document.querySelector<HTMLElement>(`[data-testid=${TID.card}][data-template-id="${CSS.escape(id)}"]`)?.focus(), 0);
 
@@ -140,6 +142,8 @@ function AppliedBar() {
         <button type="button" className="ghost" disabled={!!busy} aria-busy={busy === 'shuffle' || undefined} data-testid={TID.shuffle} onClick={() => void regenerate('shuffle')}>{S.shuffle}</button>
         <button type="button" className="ghost" disabled={!!busy} aria-busy={busy === 'tempo' || undefined} data-testid={TID.otherTempo} onClick={() => void regenerate('tempo')}>{S.otherTempo}</button>
         {removed > 0 && <button type="button" className="ghost" disabled={!!busy} aria-busy={busy === 'restore' || undefined} data-testid="template-restore-removed" onClick={() => void regenerate('restore')}>{S.restoreRemoved}</button>}
+        {/* «מוזיקה אחרת» (wave 7 musicfit): once builder C has built it */}
+        {MUSICFIT_UI_BUILT && <SwapMusicButton host={{ kind: 'template', runId: run.runId }} />}
         <button type="button" className="ghost" disabled={!!busy} data-testid="template-undo" onClick={() => { void editor.history('undo'); editor.setTemplateRun(null); }}>{S.undo}</button>
         <button type="button" className="ghost" aria-label={S.dismiss} data-testid="template-applied-close" onClick={() => editor.setTemplateRun(null)}>×</button>
       </div>

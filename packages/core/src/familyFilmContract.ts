@@ -199,6 +199,13 @@ export interface FilmPlanContext {
    * moved_back says so (one sentence; absent when there is none). A clip dragged by hand is never among them: it is kept.
    */
   movedKeys?: readonly string[];
+  /**
+   * Music that fits the film (wave 7 musicfit, decisions §2.5): set ONLY by the music-fit plan and apply for music whose grid is known
+   * by construction (built-in) and placed from its start. The film's grid past the file's end is then steadyGrid(at, bpm), so the
+   * film's end never depends on the track's length (the track is made for that end afterwards). Absent: every plan is as today.
+   * BUILDER B reads it in familyFilm.ts.
+   */
+  musicGridSteady?: true;
 }
 export class FilmError extends Error {
   constructor(public code: 'not_found' | 'needs_analysis' | 'invalid_args' | 'nothing_to_do', message: string, public hint?: string) { super(message); }

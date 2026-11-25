@@ -38,6 +38,8 @@ import { findingRows } from './send/send.logic.ts';
 import './send/send.css';
 import './templates.css';
 import './timeline.css';
+import { MUSICFIT_UI_BUILT } from './musicfit/MusicFitBlock.tsx';
+import { ImpactTick } from './musicfit/ImpactTick.tsx';
 
 const MAX_MARKERS = 3000;
 type MediaClip = Extract<Clip, { type: 'media' }>;
@@ -451,6 +453,8 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
                 {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (
                   <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as MediaClip).sourceIn} duration={c.type === 'media' && c.freeze ? T.frameTime(1, rate) : toSourceSpan(c, c.duration) /* the stretch of SOURCE shown, so thumbnails and waveform follow the clip speed; a freeze frame shows one picture */} widthPx={width} heightPx={clipH} reverse={c.type === 'media' && !!c.reverse} tintKey={kind} />
                 )}
+                {/* the marked moment and the join of a shortened song (wave 7 musicfit): once builder C has built it */}
+                {MUSICFIT_UI_BUILT && <ImpactTick doc={doc} clip={c} pps={pps} />}
                 <span className="clip-plate">
                   {kind !== 'video' && <KindIcon className="clip-kind" size={12} strokeWidth={1.75} aria-hidden="true" />}
                   {fxNames.length ? <span className="clip-fx-badge" aria-hidden="true" data-testid="clip-fx-badge">∿</span> : null}

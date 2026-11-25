@@ -10,6 +10,7 @@ import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pul
 import type { RationalTime } from '@pulseframe/time';
 import type { ClipLoudnessRequest, ClipLoudnessResult } from '@pulseframe/core';
 import type { PearlsView } from '@pulseframe/core';
+import type { MusicFitApplyRequest, MusicFitApplyResult, MusicFitPlan, MusicFitPlanRequest, JoinRemoval } from '@pulseframe/core';
 
 export class ApiFailure extends Error {
   constructor(public status: number, public code: string, message: string, public details?: unknown, public hint?: string) {
@@ -267,9 +268,18 @@ export const api = {
   applyStory: (projectId: string, params: StoryParams, expectedRevision: number) => call<StoryApplyResult>(`/projects/${projectId}/recipes/story/apply`, json({ params, expectedRevision })),
   /** Rebuild a story run with changed options (never other taps: 409 story_retap_not_built), against the revision the bar showed. */
   regenerateStory: (projectId: string, runId: string, params: Partial<StoryParams> | undefined, expectedRevision: number, restoreRemoved = false) => call<StoryRegenerateResult>(`/projects/${projectId}/template-runs/${runId}/regenerate`, json({ ...(params ? { params } : {}), expectedRevision, ...(restoreRemoved ? { restoreRemoved: true } : {}) })),
+  // ----- «מוזיקה שמתאימה לסרט» (wave 7 musicfit; apps/server/src/musicfit/routes.ts): 501 musicfit_not_built until built -----
+  musicFitPlan: (projectId: string, req: MusicFitPlanRequest) => call<MusicFitPlan>(`/projects/${projectId}/music-fit/plan`, json(req)),
+  musicFitApply: (projectId: string, req: MusicFitApplyRequest) => call<MusicFitApplyResult>(`/projects/${projectId}/music-fit/apply`, json(req)),
+  /** The owner's own session only (agents get 403 human_approval_required). */
+  markJoinHeard: (projectId: string, assetId: string, heard: boolean) => call<unknown>(`/projects/${projectId}/assets/${encodeURIComponent(assetId)}/music-join/heard`, json({ heard })),
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }
 
 /** A request by an agent that only the owner can decide (for example downloading model files). */
 export interface Approval { id: string; kind: string; action: { capabilityId?: string; bytes?: number; models?: { path: string }[] } & Record<string, unknown>; costCents: number; requestedBy: string; status: 'pending' | 'approved' | 'consumed' | 'rejected' | 'expired'; expiresAt: string; createdAt: string }
+
+/** The URL of the four bars around a candidate join (GET …/music-fit/join.wav; same-origin, the owner's session cookie). */
+export const musicJoinUrl = (projectId: string, assetId: string, removal: JoinRemoval, startAt?: RationalTime): string =>
+  `/api/v1/projects/${projectId}/music-fit/join.wav?assetId=${encodeURIComponent(assetId)}&from=${encodeURIComponent(JSON.stringify(removal.from))}&to=${encodeURIComponent(JSON.stringify(removal.to))}${startAt ? `&startAt=${encodeURIComponent(JSON.stringify(startAt))}` : ''}`;

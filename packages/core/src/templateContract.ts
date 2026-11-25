@@ -208,7 +208,9 @@ export const TemplateInputSchema = z.object({
   tempo: z.enum(['normal', 'half', 'double']).default('normal').describe('half = slots twice as long; double = half as long (never under the flash gap)'),
   motion: z.enum(['full', 'none']).default('full').describe('none = no camera moves or animated titles (reduced motion)'),
   /** Optional without a default, like `fields`, so the parameters of plans and runs made before ADR-0022 are unchanged. */
-  builtinMusic: z.object({ styleId: MusicStyleId, seed: z.number().int().min(0).max(MUSIC_MAX_SEED).default(1) }).strict().nullable().optional()
+  builtinMusic: z.object({ styleId: MusicStyleId, seed: z.number().int().min(0).max(MUSIC_MAX_SEED).default(1),
+    /** Wave 7 musicfit: 'exact' = the track is made for exactly the pictures with its own ending (no fade); absent or 'bars' = today. B builds it. */
+    ending: z.enum(['bars', 'exact']).optional() }).strict().nullable().optional()
     .describe('Built-in synthesised music (GET /api/v1/music) made to the length of the template; not together with musicAssetId (send musicAssetId: null with it)'),
   fields: PackFieldsInputSchema.optional().describe('Words for {name} {name2} {age} {night} {place} {when} in the template\'s own titles; literal text'),
 }).strict();
@@ -245,7 +247,7 @@ export interface TemplatePlan {
    * Procedural media the server makes (makeSfx / makeElement / makeMusic) and passes as apply_template.assets under `key`.
    * music: `id` is the style, the track has exactly `bars` bars, and the server passes its known grid as assets[].analysis.
    */
-  assetsNeeded: ({ key: string; kind: 'sfx' | 'element'; id: string; color?: string; color2?: string } | { key: string; kind: 'music'; id: string; bars: number; seed: number })[];
+  assetsNeeded: ({ key: string; kind: 'sfx' | 'element'; id: string; color?: string; color2?: string } | { key: string; kind: 'music'; id: string; bars: number; seed: number; /** wave 7 musicfit: the ending in sample frames (ending 'exact'); absent = one bar */ endFrames?: number })[];
   ops: TemplateStep[];
   slots: PlannedSlot[];
   predicted: { startFrame: number; endFrame: number; boundaries: number[]; gapFrames: number; slots: PredictedSlot[] };

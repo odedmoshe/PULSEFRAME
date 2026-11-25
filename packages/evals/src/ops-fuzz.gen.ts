@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT } from '@pulseframe/core';
+import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT, MUSICFIT_OPS_BUILT } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -607,6 +607,8 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       ...(STEADY_OPS_BUILT && !opts.v1Replay ? [() => genStabilise(doc)] : []),
       // marked ranges «פנינים» (wave 7): the three public operations, once builder A has built the bodies (never in the v1 corpus)
       ...(SOURCE_RANGE_OPS_BUILT && !opts.v1Replay ? [() => genPearls(doc)] : []),
+      // music that fits the film (wave 7 musicfit): the two public operations, once builder A has built the bodies (never in the v1 corpus)
+      ...(MUSICFIT_OPS_BUILT && !opts.v1Replay ? [() => genMusicFit(doc)] : []),
       ...(SEQUENCE_OPS_BUILT ? [...sequenceMenu(doc), () => { const others = Object.keys(doc.sequences).filter((id) => id !== doc.mainSequenceId); return { op: 'add_marker', args: { sequenceId: others.length && rnd() < 0.8 ? pick(others) : rnd() < 0.5 ? doc.mainSequenceId : 'seq_none', time: T.frameTime(int(240), rate) } }; }] : []),
       // send and keep (wave 7): the master limiter on and off, and the loudness match of sound clips with their current gain (accepted)
       // or a changed one (refused stale), sometimes a repeated or unknown clip; left out of the recorded v1 replay corpus
@@ -830,6 +832,23 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     return { op: 'remove_source_range', args: { rangeId } };
   };
   /**
+   * Music that fits the film (wave 7 musicfit track). `genMusicFit(doc)` returns a random set_clip_impact or sync_impact call (public;
+   * `gen` draws them once MUSICFIT_OPS_BUILT): on clips of every kind (stills, freeze frames, titles, sound, reversed and sped-up
+   * clips) and unknown ids; moments on frame edges and off them, inside the part shown, outside it, past the file's end and negative
+   * (refused by the schema or the op); null to clear; sync to beat or bar with every pick, with and without a moment, with and without
+   * music under it.
+   */
+  const genMusicFit = (doc: ProjectDocument): OpCall => {
+    const clips = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips));
+    const c = clips.length && rnd() < 0.93 ? pick(clips) : undefined;
+    const clipId = c?.id ?? 'clp_none';
+    const asset = c && c.type === 'media' && Object.hasOwn(doc.assets, c.assetId) ? doc.assets[c.assetId] : undefined;
+    const dur = asset ? T.toSeconds(asset.duration) : 5;
+    const at = (): T.RationalTime => { const x = rnd() < 0.1 ? dur + 0.5 : rnd() * dur; return rnd() < 0.5 ? T.frameTime(Math.max(0, Math.round(x * 30)), { num: 30, den: 1 }) : T.rt(Math.max(0, Math.round(x * 1000)), 1000); };
+    if (rnd() < 0.45) return { op: 'set_clip_impact', args: { clipId, moment: rnd() < 0.15 ? null : at() } };
+    return { op: 'sync_impact', args: { clipId, to: rnd() < 0.7 ? 'beat' : 'bar', ...(rnd() < 0.4 ? { moment: at() } : {}), ...(rnd() < 0.5 ? { pick: pick(['nearest', 'earlier', 'later'] as const) } : {}) } };
+  };
+  /**
    * The next random call among the named operations: draws from the same menu until one of them comes up (the menu grows with every
    * feature, so a driver that is about a few operations would otherwise meet them too rarely to say anything about them).
    */
@@ -838,5 +857,5 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit };
 }

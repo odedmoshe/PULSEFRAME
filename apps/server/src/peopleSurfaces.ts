@@ -224,6 +224,12 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`POST ${P}/text/find`]: ['reader-document'],
   // marked ranges «פנינים» (wave 7): the reader document (labels '' for 'names'; peoplePrivacy.ts rule 5)
   [`GET ${P}/pearls`]: ['reader-document'],
+  // music that fits the film (wave 7 musicfit): plan reads the reader document; apply commits; the join preview is media bytes;
+  // the heard mark answers the owner's own session only (403 human_approval_required for every agent)
+  [`POST ${P}/music-fit/plan`]: ['reader-document'],
+  [`POST ${P}/music-fit/apply`]: ['reader-document', 'write'],
+  [`GET ${P}/music-fit/join.wav`]: ['no-document'],
+  [`POST ${P}/assets/:assetId/music-join/heard`]: ['owner-only', 'write'],
   // MCP over HTTP: see PEOPLE_MCP_TOOLS and PEOPLE_MCP_RESOURCES
   'ALL /mcp': ['reader-document'],
 };
@@ -264,6 +270,8 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   find_text: ['reader-document'],
   // marked ranges «פנינים» (wave 7 pearls track)
   get_pearls: ['reader-document'],
+  // music that fits the film (wave 7 musicfit track)
+  plan_music_fit: ['reader-document'], apply_music_fit: ['reader-document', 'write'],
 };
 /** MCP resources and prompts (every resource answer passes forPrincipal; prompts carry no project content). */
 export const PEOPLE_MCP_RESOURCES: Readonly<Record<string, readonly PeopleFilter[]>> = {

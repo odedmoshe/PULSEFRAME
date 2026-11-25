@@ -19,6 +19,7 @@ import { MULTICAM_STRINGS } from './multicam.strings.ts';
 import { CRAFT_CHANGES_SELECTION, CRAFT_COMMANDS } from './craft/craft.commands.ts';
 import { STABILISE_CHANGES_SELECTION, STABILISE_COMMANDS } from './stabilise/stabilise.commands.ts';
 import { PEARLS_COMMANDS } from './pearls/pearls.commands.ts';
+import { MUSICFIT_COMMANDS } from './musicfit/musicFit.commands.ts';
 
 export interface Command {
   id: string;
@@ -433,6 +434,8 @@ export const COMMANDS: Command[] = [
   ...PEARLS_COMMANDS,
   // «ספרו מה היה» (wave 7 story track): opens the story dialog on the selected pictures and videos (StoryDialog, W3)
   { id: 'view.openStory', label: 'cmd.openStory', group: 'view', keys: [], enabled: (e) => !!e.doc && sourceFromSelection(e.doc, e.getState().selection).assetIds.length > 0, run: (e) => { if (e.doc) e.openStory(sourceFromSelection(e.doc, e.getState().selection)); } },
+  // music that fits the film (wave 7 musicfit): mark the moment, moment to the beat / bar (musicfit/musicFit.commands.ts; disabled until builder C)
+  ...MUSICFIT_COMMANDS,
 ];
 
 /** Canonical chord for an event: modifiers in fixed order + physical key code. */

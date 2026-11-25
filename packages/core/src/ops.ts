@@ -2058,6 +2058,8 @@ defineOp({
       throw new OpError('range_not_covered', `the new file covers ${fmt(from)}–${fmt(to)} of the original; the clip needs ${fmt(clip.sourceIn)}–${fmt(needEnd)}`, { clipId: clip.id, assetId: next.id, covers: { start: from, end: to }, needs: { start: clip.sourceIn, end: needEnd } }, 'Run the tool on the whole stretch the clip uses, including the frames a transition after it plays.');
     clip.assetId = next.id;
     clip.sourceIn = T.sub(clip.sourceIn, from);
+    // the marked moment «הרגע» (wave 7 musicfit) moves to the copy's clock; it is dropped when the copy does not hold it
+    if (clip.impact) { const at = T.sub(clip.impact, from); if (T.isNegative(at) || !T.lt(at, next.duration)) delete clip.impact; else clip.impact = at; }
     return { affectedIds: [clip.id], summary: `Clip now shows "${next.name.slice(0, 60)}"`, output: { previousAssetId, sourceIn: clip.sourceIn } };
   },
 });
@@ -3449,7 +3451,8 @@ defineOp({
     }
     const unchanged = targets.every((t) => t.clip.assetId === asset.id && T.eq(t.clip.sourceIn, sourceIn)) && (follow || !partners.length);
     if (unchanged) throw new OpError('invalid_args', 'the clip already plays this file from this point', { clipId: clip.id, assetId: asset.id, sourceIn });
-    for (const { clip: c } of targets) { c.assetId = asset.id; c.sourceIn = sourceIn; }
+    // the marked moment «הרגע» (wave 7 musicfit) is a time of the clip's file: another file leaves it without meaning
+    for (const { clip: c } of targets) { if (c.assetId !== asset.id) delete c.impact; c.assetId = asset.id; c.sourceIn = sourceIn; }
     // detach: this clip leaves its link group; a partner left alone in it is unlinked too (refused while it is on a locked track)
     let unlinked: string[] = [];
     if (!follow && group && partners.length) { clip.linkGroupId = null; unlinked = [clip.id, ...dissolveLoneLinks(d, [group])]; }
