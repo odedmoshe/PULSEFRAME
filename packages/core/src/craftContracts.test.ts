@@ -1,8 +1,8 @@
 /**
  * The craft contracts (wave 7 craft pre-pass; .artifacts/wave7/craft-decisions.md §4): the three ops are registered with their
  * final schemas and refuse as not built, changing nothing; every stub refuses instead of answering; the assistant cannot propose
- * them; the shared shift words differ from Delete's; the one mark table is the command bar's. The it.todo rows name what each
- * builder makes pass (W1: craft.test.ts; W2: versionDiff.test.ts), and are removed here when built.
+ * them; the shared shift words differ from Delete's; the one mark table is the command bar's. Each builder's tests are
+ * craft.test.ts (W1) and versionDiff.test.ts (W2); their it.todo rows here were removed when built.
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
@@ -47,10 +47,10 @@ describe('craft contracts', () => {
     expect(ReplaceTextArgsSchema.safeParse({ edits: [{ at: { kind: 'title', clipId: 'c' }, was: 'a', text: '' }] }).success).toBe(false);
     expect(ReplaceTextArgsSchema.safeParse({ edits: [{ at: { kind: 'phrase', assetId: 'a', segmentId: 's' }, was: 'a', text: 'x'.repeat(4001) }] }).success).toBe(false);
   });
-  it('every stub not built yet refuses with CraftNotBuilt instead of answering; W1\'s answer (craft.test.ts)', () => {
-    const stubs: (() => unknown)[] = [() => privacyDigest(doc), () => composeRestore(doc, doc), () => describeDiff(doc, doc)];
-    for (const s of stubs) expect(s).toThrow(CraftNotBuilt);
+  it('every craft function is built and answers (W1: craft.test.ts; W2: versionDiff.test.ts); CraftNotBuilt stays for the record', () => {
+    expect(new CraftNotBuilt('x').message).toBe('x is not built in this build yet');
     const built: (() => unknown)[] = [
+      () => privacyDigest(doc), () => composeRestore(doc, doc), () => describeDiff(doc, doc),
       () => parseTimeEntry('5s', R), () => rippleTrimTarget(doc, { clipIds: [], sequenceId: doc.mainSequenceId }, 0), () => rippleTrimCall(doc, 'c', 'start', 0),
       () => durationOps(doc, ['c'], 150), () => matchText('נעה', 'נעה', flags), () => findText(doc, query), () => planReplace(doc, query, 'נועה'),
     ];
@@ -78,5 +78,4 @@ describe('craft contracts', () => {
     expect('א⁧ב⁩‏'.replace(BIDI_CONTROLS, '')).toBe('אב');
     expect('־'.replace(HEBREW_MARKS, '')).toBe('־'); // maqaf is not a mark
   });
-  it.todo('W2: privacyDigest, composeRestore, describeDiff (versionDiff.test.ts)');
 });
