@@ -262,6 +262,14 @@ const r3 = (x: number) => Number(x.toFixed(3));
  */
 export const masterLookaheadFrames = (plan: AudioPlan): number => (plan.limiter ? limiterWindow(plan.sampleRate).lookahead - 1 : 0);
 
+/**
+ * Bytes the export's mix holds on disk at its peak, asked of the storage ceiling before it starts: the raw float stereo mix
+ * (totalSamples + masterLookaheadFrames frames of 2 × 4 bytes), with a limiter also its float output (totalSamples × 2 × 4, written
+ * while the raw file is still there), and the 16-bit WAV (totalSamples × 2 × 2). Without a limiter: max(1, n) · 2 · (4 + 2), as before
+ * wave 7; with one: max(1, n) · 2 · (4 + 4 + 2) + 8 · (M − 1), M = the look-ahead.
+ */
+export const mixRoomBytes = (plan: AudioPlan, totalSamples: number): number => Math.max(1, totalSamples) * 2 * (4 + (plan.limiter ? 4 : 0) + 2) + 2 * 4 * masterLookaheadFrames(plan);
+
 /** The limiter's job-output report. */
 type LimiterReport = NonNullable<MixResult['limiter']>;
 
