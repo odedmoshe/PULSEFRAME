@@ -111,7 +111,7 @@ export const BAR_HE = {
   'act.language.en': 'מעבר לאנגלית',
   'act.command': 'הפעלת הפקודה: {name}',
   'act.recipe': 'פתיחת התבניות והמתכונים ({name})',
-  'dest.reels': 'רילס', 'dest.youtube': 'יוטיוב', 'dest.whatsapp': 'וואטסאפ', 'dest.computer': 'שמירה למחשב',
+  'dest.reels': 'רילס', 'dest.youtube': 'יוטיוב', 'dest.whatsapp': 'מתאים לשליחה', 'dest.computer': 'שמירה למחשב',
   // ---- refusals: the next step beside each reason (house rule) ----
   'hint.nothing_selected': 'בחרו קליפ בציר הזמן ונסו שוב',
   'hint.no_clip_here': 'הזיזו את הסמן אל קליפ, או בחרו קליפ, ונסו שוב',
@@ -307,7 +307,7 @@ export const BAR_EN: Record<BarTextKey, string> = {
   'act.language.en': 'Switch to English',
   'act.command': 'Run the command: {name}',
   'act.recipe': 'Open templates and recipes ({name})',
-  'dest.reels': 'Reels', 'dest.youtube': 'YouTube', 'dest.whatsapp': 'WhatsApp', 'dest.computer': 'Save to the computer',
+  'dest.reels': 'Reels', 'dest.youtube': 'YouTube', 'dest.whatsapp': 'Fits to send', 'dest.computer': 'Save to the computer',
   'hint.nothing_selected': 'Select a clip on the timeline and try again',
   'hint.no_clip_here': 'Move the playhead onto a clip, or select one, and try again',
   'hint.no_title': 'Select a title, or add one with add title "text"',
