@@ -44,4 +44,11 @@
 .pf-asst-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-4); }
 .pf-asst-json { margin: 0; max-block-size: 240px; overflow: auto; padding: var(--pf-sp-4); border-radius: var(--pf-r-sm); background: var(--pf-surface-1); color: var(--pf-text); font-family: var(--pf-font-mono); font-size: var(--pf-fs-xs); direction: ltr; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; }
 .pf-asst-bad { color: var(--pf-attention); font-size: var(--pf-fs-xs); }
+/* the month's held amounts: one row each, the amount and its release button */
+.pf-asst-held { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--pf-sp-3); }
+.pf-asst-held li { justify-content: space-between; color: var(--pf-text); font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); }
+.pf-asst-released:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; border-radius: var(--pf-r-xs); }
+/* the release confirmation: three short paragraphs, the refusal (if any) under them */
+[data-testid='assistant-release-dialog'] .pf-dialog-body p { margin: 0; }
+[data-testid='assistant-release-dialog'] .pf-dialog-body p + p { margin-block-start: var(--pf-sp-4); }
 @media (max-width: 560px) { .pf-asst-field { grid-template-columns: 1fr; } }

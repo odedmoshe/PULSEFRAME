@@ -9,6 +9,7 @@ import { applyTransaction, ASSISTANT_ACTOR, ASSISTANT_GRANT_ID, ASSISTANT_JOB_TY
 import { z } from 'zod';
 import { ApiError, type CommitRequest, type CommitResult, type Store } from './store.ts';
 import { assertMayWritePeople, docForPrincipal, docForReader, PEOPLE_ACCESS, type PeopleAccess } from './peoplePrivacy.ts';
+import { assertMayReleaseBudget } from './assistant/visibility.ts';
 
 export type Mode = 'observe' | 'propose' | 'edit' | 'autopilot';
 export const GrantInput = z
@@ -379,9 +380,19 @@ export class Governance {
   }
   /** The owner confirms that an unresolved reservation was not charged (e.g. after checking the provider's billing). */
   releaseUnknown(by: Principal, jobId: string) {
-    if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'only the owner can release a reservation');
+    assertMayReleaseBudget(by, jobId); // the owner's own session only (assistant/visibility.ts): the refusal tells nothing of the ledger
     const r = this.store.db.prepare("UPDATE budget_ledger SET state = 'released', updated_at = ? WHERE job_id = ? AND state = 'unknown'").run(now(), jobId);
-    if (r.changes !== 1) throw new ApiError(409, 'nothing_to_release', 'this job has no unresolved reservation');
+    if (r.changes !== 1) throw new ApiError(409, 'nothing_to_release', 'this job has no unresolved reservation', { jobId }, 'Nothing is held for it any more (it was released, settled, or never sent); the month\'s amounts in Settings are up to date.');
+  }
+  /**
+   * The assistant's held amounts of the month of `at`: ledger rows left 'unknown' (a request canceled or failed after it was
+   * sent, or whose sending is not known), which stay counted until the owner releases them. Oldest first. `status` is how the
+   * job ended, null when its project (and so the job) was deleted since: the amount is still counted, and still releasable.
+   */
+  assistantHeld(at = this.clock()): { jobId: string; cents: number; requestedAt: string; status: string | null }[] {
+    const m = this.assistantMonth(at);
+    return this.store.db.prepare("SELECT l.job_id AS jobId, l.reserved_cents AS cents, l.created_at AS requestedAt, j.status AS status FROM budget_ledger l LEFT JOIN jobs j ON j.id = l.job_id WHERE l.grant_id = ? AND l.state = 'unknown' AND l.created_at >= ? AND l.created_at < ? ORDER BY l.created_at, l.job_id")
+      .all(ASSISTANT_GRANT_ID, m.from, m.to) as { jobId: string; cents: number; requestedAt: string; status: string | null }[];
   }
   ledgerFor(jobId: string) {
     return (this.store.db.prepare('SELECT reserved_cents AS reservedCents, actual_cents AS actualCents, state FROM budget_ledger WHERE job_id = ?').get(jobId) as { reservedCents: number; actualCents: number | null; state: string } | undefined) ?? null;
