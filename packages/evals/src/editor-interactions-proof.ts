@@ -19,6 +19,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium, type Page } from 'playwright';
@@ -40,6 +41,8 @@ import { PERFORM_TESTIDS } from '../../../apps/web/src/editor/perform/perform.te
 import { PEOPLE_TESTIDS } from '../../../apps/web/src/editor/lifeline/people.testids.ts';
 import { TEMPLATE_STRINGS } from '../../../apps/web/src/editor/templates.strings.ts';
 import { IMPORTED_REVIEW_CLEARED } from '../../../apps/server/src/archive.ts';
+import { startStandIn } from '../../../apps/server/src/assistant/local/standIn.ts';
+import { COMMAND_BAR_TESTIDS as BAR_TID } from '../../../apps/web/src/editor/commandBar/commandBar.testids.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/editor-interactions');
@@ -2427,6 +2430,79 @@ async function main() {
       check('«התאמה לאורך» plans before anything changes; «בצעו» makes the track and ends the music on the last picture frame (frame 360, no fade) in one transaction; one Ctrl+Z gives the old music back', planned && r1 === r0 + 2 && m1.assetId !== asset0 && end === 360 && !m1.fadeOut && back, { planned, revisions: r1 - r0, end, fadeOut: m1.fadeOut ?? null, back });
       check('musicfit rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
       await ctx.close();
+    }
+
+    // the LOCAL language assistant (wave 7 assistant, integration): against a labelled STAND-IN of llama.cpp's server on 127.0.0.1 (no
+    // model runs). From the keyboard: an unknown request offers «לשאול את העוזר המקומי»; the suggestion; «הכנס לשורה» puts the phrase in
+    // the bar; the bar's own preview; Enter commits exactly one transaction by the owner; one Ctrl+Z gives the exact document back. Then
+    // with nothing listening on the saved port: the row says so in words, offers no phrase and speaks of no money.
+    console.log('\n# Local language assistant: ask from the keyboard, the suggestion, insert, one commit, one undo; the stopped server in words');
+    {
+      const LOUD = 'המוזיקה חזקה מדי, תורידי אותה בשש דציבל', NOISE = 'תעשה שזה יהיה מרגש';
+      const stand = await startStandIn({ answers: { [LOUD]: JSON.stringify({ intent: 'gain_change', slots: { target: 'music', dir: 'down', db: '6' } }) } });
+      const lp = (await call('/projects', { name: 'local assistant keys', width: 640, height: 360 })).body.project.id as string;
+      const lm = await upload(lp, musicFile);
+      await txs(lp, [{ op: 'add_clip', args: { assetId: lm.assetId, start: f(0) } }]);
+      await call(`/projects/${lp}/assets/${lm.assetId}/analyze`, { kind: 'beats' });
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+      await ctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const pg = await ctx.newPage();
+      const errs: string[] = [];
+      pg.on('pageerror', (e) => errs.push(String(e)));
+      try {
+        await pg.goto(`${s.ownerUrl}&project=${lp}`);
+        await pg.getByTestId('timecode').waitFor({ timeout: 30000 });
+        const saveLocal = (port: number) => pg.evaluate(async (pt) => (await fetch('/api/v1/assistant/config', { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ adapter: 'local-llama-server', host: null, model: null, pricesCentsPerMTok: null, monthlyLimitCents: 0, perRequestCapCents: 0, toggles: { titlesAndMarkers: false, peopleNames: false }, local: { port: pt, timeoutSeconds: 60 } }) })).status, port);
+        const focusedId = () => pg.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.testid ?? null);
+        const tabTo = async (id: string) => { for (let i = 0; i < 15; i++) { if ((await focusedId()) === id) return i; await pg.keyboard.press('Tab'); } return null; };
+        const typeInBar = async (text: string) => {
+          if (!(await pg.getByTestId('palette-dialog').count())) { await pg.getByTestId('open-palette').focus(); await pg.keyboard.press('Enter'); await pg.getByTestId('palette-input').waitFor({ timeout: 8000 }); }
+          await pg.getByTestId('palette-input').press('Control+a'); await pg.keyboard.press('Backspace'); await pg.keyboard.type(text);
+          await pg.getByTestId(BAR_TID.assistantLocalAsk).waitFor({ timeout: 8000 }).catch(() => {});
+        };
+        const saved = await saveLocal(stand.port);
+        await typeInBar(LOUD);
+        const tabs = await tabTo(BAR_TID.assistantLocalAsk);
+        const rev0 = (await call(`/projects/${lp}`)).body.revision as number, hash0 = sha256Hex(JSON.stringify(await doc2(lp)));
+        await pg.keyboard.press('Enter');
+        const suggested = await pg.getByTestId(BAR_TID.assistantLocalSuggestion).waitFor({ timeout: 40000 }).then(() => true, () => false);
+        const phrase = (await pg.locator(`[data-testid=${BAR_TID.assistantLocalSuggestion}] [dir=auto]`).textContent().catch(() => null))?.trim() ?? '';
+        check('local assistant: Tab from the bar\'s input reaches «לשאול את העוזר המקומי», Enter asks, and the stand-in\'s answer shows as the assistant\'s suggestion (nothing changed yet)', saved === 200 && tabs !== null && suggested && phrase.length > 0 && (await call(`/projects/${lp}`)).body.revision === rev0, { saved, tabs, suggested, phrase });
+        if ((await focusedId()) !== BAR_TID.assistantLocalInsert) await tabTo(BAR_TID.assistantLocalInsert);
+        await pg.keyboard.press('Enter');
+        const inserted = await pg.waitForFunction((ph) => document.querySelector<HTMLInputElement>('[data-testid=palette-input]')?.value === ph && document.querySelector<HTMLElement>('[data-testid=bar-result]')?.dataset.kind === 'plan', phrase, { timeout: 8000 }).then(() => true, () => false);
+        const bar = await pg.evaluate(() => { const i = document.querySelector<HTMLInputElement>('[data-testid=palette-input]'); const r = document.querySelector<HTMLElement>('[data-testid=bar-result]'); return { caretAtEnd: !!i && i.selectionStart === i.value.length && document.activeElement === i, kind: r?.dataset.kind ?? null, intent: r?.dataset.intent ?? null }; });
+        const badge = (await pg.getByTestId(BAR_TID.assistantLocalBadge).count()) === 1;
+        check('local assistant: «הכנס לשורה» puts the phrase in the bar with the caret at the end and the badge, and the bar\'s own grammar previews it (gain_change); nothing committed', inserted && bar.caretAtEnd && bar.kind === 'plan' && bar.intent === 'gain_change' && badge && (await call(`/projects/${lp}`)).body.revision === rev0, { inserted, ...bar, badge });
+        await pg.waitForFunction(() => { const r = document.querySelector<HTMLElement>('[data-testid=bar-result]'); return r?.dataset.kind === 'plan' && (window as unknown as { __pfBar?: { lastPlan?: { planHash?: string } } }).__pfBar?.lastPlan?.planHash === r.dataset.planHash; }, undefined, { timeout: 8000 }).catch(() => {});
+        await pg.keyboard.press('Enter');
+        let rev1 = rev0;
+        for (let i = 0; i < 100 && rev1 === rev0; i++) { await sleep(100); rev1 = (await call(`/projects/${lp}`)).body.revision as number; }
+        const tx = s.store.db.prepare('SELECT label, actor FROM transactions WHERE project_id = ? AND revision = ?').get(lp, rev1) as { label: string; actor: string } | undefined;
+        check('local assistant: Enter commits exactly one transaction, «Command bar: gain_change», by the owner', rev1 === rev0 + 1 && tx?.label === 'Command bar: gain_change' && tx.actor === 'user:local', { revisions: rev1 - rev0, tx });
+        await pg.getByTestId('palette-dialog').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+        await pg.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+        await pg.keyboard.press('Control+KeyZ');
+        let back = false;
+        for (let i = 0; i < 60 && !back; i++) { await sleep(100); back = sha256Hex(JSON.stringify(await doc2(lp))) === hash0; }
+        const rev2 = (await call(`/projects/${lp}`)).body.revision as number;
+        check('local assistant: one Ctrl+Z gives the exact document from before the commit', back && rev2 === rev1 + 1, { back, revisions: rev2 - rev1 });
+        // nothing listens on the saved port: an honest state in words
+        const dead = await new Promise<number>((r) => { const x = net.createServer(); x.listen(0, '127.0.0.1', () => { const pt = (x.address() as net.AddressInfo).port; x.close(() => r(pt)); }); });
+        await saveLocal(dead);
+        await typeInBar(NOISE);
+        await tabTo(BAR_TID.assistantLocalAsk);
+        await pg.keyboard.press('Enter');
+        await pg.locator('[data-local-state=failed]').waitFor({ timeout: 30000 }).catch(() => {});
+        const said = (await pg.locator('[data-local-state=failed]').textContent().catch(() => null)) ?? '';
+        const noPhrase = (await pg.getByTestId(BAR_TID.assistantLocalInsert).count()) === 0 && (await pg.getByTestId(BAR_TID.assistantLocalSuggestion).count()) === 0;
+        check('local assistant: with nothing listening on the saved port the row says «העוזר המקומי לא פועל כרגע» with the guide as the next step, offers no phrase, names no money and marks nothing untranslated', said.includes('העוזר המקומי לא פועל כרגע') && said.includes('המדריך') && noPhrase && !/חויב|חיוב|שחרור הסכום|סכום שמור/.test(said) && !said.includes(dictionaries.he['refusal.untranslated']), { said: said.slice(0, 200), noPhrase });
+        await pg.keyboard.press('Escape');
+        check('local assistant rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
+      } finally {
+        await ctx.close();
+        await stand.close();
+      }
     }
 
     await page.close();

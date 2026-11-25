@@ -21,6 +21,8 @@ import { barUnderstands, LOCAL_INTENT_BUILT } from '@pulseframe/core';
 import { startServer, type RunningServer } from '@pulseframe/server';
 import { createLlamaAdapter } from '@pulseframe/server/assistant/local/llamaAdapter.ts';
 import { startStandIn, type StandIn } from '@pulseframe/server/assistant/local/standIn.ts';
+import { BEAT_SR } from '../../../apps/server/src/beats.ts';
+import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
 import { COMMAND_BAR_TESTIDS as TID } from '../../../apps/web/src/editor/commandBar/commandBar.testids.ts';
 import type { AssistantLocalProofPart } from './assistant-local-proof.server.ts';
 
@@ -49,8 +51,13 @@ const freePort = async () => { const x = net.createServer(); await new Promise<v
 
 async function fixtureProject(s: RunningServer, name: string): Promise<string> {
   fs.mkdirSync(art, { recursive: true });
+  // «המוזיקה» is the audio track whose clip has a beat analysis (core trackRole): a drum loop, analysed below, as proof:command-bar does
   const wav = path.join(art, 'song.wav');
-  if (!fs.existsSync(wav)) execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-f', 'lavfi', '-t', '8', '-i', 'sine=frequency=220:sample_rate=48000', '-ac', '2', '-c:a', 'pcm_s16le', wav], { maxBuffer: 1 << 26 });
+  if (!fs.existsSync(wav)) {
+    const loop = drumLoop(() => 120, 16, 0.5, 9); const raw = path.join(art, 'm.f32');
+    fs.writeFileSync(raw, Buffer.from(loop.x.buffer, loop.x.byteOffset, loop.x.byteLength));
+    execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-f', 'f32le', '-ar', String(BEAT_SR), '-ac', '1', '-i', raw, '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', wav], { maxBuffer: 1 << 26 });
+  }
   const auth = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const made = await fetch(`${s.url}/api/v1/projects`, { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ name, width: 640, height: 360, frameRate: { num: 30, den: 1 } }) });
   const pid = (await made.json() as { project: { id: string } }).project.id;
@@ -58,6 +65,8 @@ async function fixtureProject(s: RunningServer, name: string): Promise<string> {
   const assetId = (await up.json() as { assetId: string }).assetId;
   const tx = await fetch(`${s.url}/api/v1/projects/${pid}/transactions`, { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ ops: [{ op: 'add_clip', args: { assetId, start: { value: '0', timescale: 30 }, withLinkedAudio: false } }] }) });
   if (tx.status !== 200) throw new Error(`the fixture clip was refused: ${tx.status}`);
+  const beats = await fetch(`${s.url}/api/v1/projects/${pid}/assets/${assetId}/analyze`, { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'beats' }) });
+  if (beats.status !== 200) throw new Error(`the fixture's beat analysis was refused: ${beats.status}`);
   return pid;
 }
 

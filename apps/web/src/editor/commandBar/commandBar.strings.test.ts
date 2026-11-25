@@ -51,6 +51,14 @@ describe('a word for every code of the contract', () => {
   });
 });
 
+describe('the local assistant\'s words are the bar\'s own (wave 7, moved from localAssistant.logic.ts)', () => {
+  it('every key the local row and Settings use is in both dictionaries of this file', async () => {
+    const { LOCAL_TEXT_KEYS } = await import('./localAssistant.logic.ts');
+    expect(LOCAL_TEXT_KEYS.length).toBeGreaterThan(15);
+    for (const k of LOCAL_TEXT_KEYS) { expect(BAR_HE[k], k).toMatch(/[א-ת]/); expect(BAR_EN[k], k).toBeTruthy(); }
+  });
+});
+
 describe('helpers', () => {
   it('fill replaces placeholders and keeps unknown ones; plain removes isolates', () => {
     expect(fill('a {x} b {y}', { x: 1 })).toBe('a 1 b {y}');

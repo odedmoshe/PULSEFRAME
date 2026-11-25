@@ -96,7 +96,7 @@ export function LocalSettingsFields({ lang, form, set, savedPort, check, onCheck
     <div className="pf-asst" role="group" aria-labelledby="pf-asst-local-h" data-testid={TID.assistantLocalSettings}>
       <h4 id="pf-asst-local-h" className="pf-set-h">{dict(lang, 'assistant.local.title')}</h4>
       {labelled('pf-asst-lport', t('set.local.port'), TID.assistantLocalPort, form.port, (v) => set('port', v))}
-      <p className="pf-asst-note">{t('set.local.portHelp', { address: ltr(LOCAL_ADDRESS) })} · {localText(lang, 'set.noHost')}</p>
+      <p className="pf-asst-note">{t('set.local.portHelp', { address: ltr(LOCAL_ADDRESS) })} · {localText(lang, 'set.local.noHost')}</p>
       {labelled('pf-asst-ltimeout', t('set.local.timeout'), TID.assistantLocalTimeout, form.timeout, (v) => set('timeout', v))}
       <p className="pf-asst-note">{t('set.local.invalid', { min: LOCAL_PORT_MIN, max: LOCAL_PORT_MAX, tmin: LOCAL_TIMEOUT_MIN, tmax: LOCAL_TIMEOUT_MAX })}</p>
       <div className="pf-asst-row">
@@ -108,9 +108,9 @@ export function LocalSettingsFields({ lang, form, set, savedPort, check, onCheck
         {check.result && !check.busy && !check.failed && <span className="pf-asst-note"> · {t('set.local.lastCheck', { time: ltr(new Date(check.result.checkedAt).toLocaleTimeString(lang === 'he' ? 'he-IL' : 'en-GB')) })}</span>}
       </p>
       {check.result?.state === 'running' && check.result.model && <p className="pf-asst-note" data-testid={TID.assistantLocalModel}>{t('set.local.model', { model: ltr(check.result.model) })}</p>}
-      <h4 className="pf-set-h">{localText(lang, 'set.what')}</h4>
-      <p className="pf-asst-note">{localText(lang, 'set.whatSent')}</p>
-      <p className="pf-asst-note">{localText(lang, 'set.runsHere', { address: ltr(LOCAL_ADDRESS) })}</p>
+      <h4 className="pf-set-h">{localText(lang, 'set.local.what')}</h4>
+      <p className="pf-asst-note">{localText(lang, 'set.local.whatSent')}</p>
+      <p className="pf-asst-note">{localText(lang, 'set.local.runsHere', { address: ltr(LOCAL_ADDRESS) })}</p>
       <p className="pf-asst-note">{dict(lang, 'assistant.local.nothingLeaves')}</p>
       <p className="pf-asst-note" data-testid={TID.assistantLocalUnmeasured}>{dict(lang, 'assistant.local.unmeasured')}</p>
       <p className="pf-asst-note" data-testid={TID.assistantLocalGuide}>{localText(lang, 'set.local.guideLine')}</p>
