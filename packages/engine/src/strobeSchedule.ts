@@ -105,26 +105,32 @@ export function flashSchedule(doc: ProjectDocument, sequenceId = doc.mainSequenc
         if (fx.type !== 'light.strobe' || !fx.enabled) continue;
         const first = firstFrameAt(clip.start, rate), end = firstFrameAt(T.add(clip.start, clip.duration), rate); // drawn on frames first … end - 1
         const from = T.toSeconds(clip.start), to = T.toSeconds(T.add(clip.start, clip.duration));
+        // Pieces join a run only with exactly the same settings: a later piece that shows the age of an earlier piece's flash
+        // with a higher amount (or another colour) would make the light rise at the cut without a scheduled start.
+        const settings = JSON.stringify([fx.params.amount, fx.params.color, fx.params.rate, fx.params.follow, fx.params.every]);
+        const run = open.get(fx.id);
+        const continues = !!run && run.end === first && run.settings === settings;
+        const key = continues ? run.key : keyOf(clip.id, fx.id);
+        open.set(fx.id, { key, end, settings });
+        schedule.runOf.set(keyOf(clip.id, fx.id), key);
+        // A piece that continues a run takes every time that its frames show: a time in the frame before the cut is shown on
+        // the piece's first frame, as in the uncut clip (the piece before ends there). It used to be dropped by both pieces.
+        // Any other clip takes no time from before its start (a strobe does not begin with the rest of a flash it never showed).
+        const inside = (t: number) => (continues ? Math.ceil(t * fps - 1e-6) >= first : t > from - 1e-6);
         let times: number[];
         if (fx.params.follow === 'music') {
           if (!beats) { let last = 0; for (const tr of seq.tracks) for (const c of tr.clips) last = Math.max(last, T.toSeconds(T.add(c.start, c.duration))); beats = followedBeats(doc, 0, last, sequenceId); }
           const step = Math.max(1, Math.round(num(fx.params.every, 1)));
           let all = thinned.get(step);
           if (!all) thinned.set(step, (all = thinnedHits(beats, step, gapFrames / fps)));
-          times = all.filter((t) => t >= from && t < to);
+          times = all.filter((t) => (continues ? inside(t) : t >= from) && t < to);
         } else {
           // a steady strobe never asks for more than the limit allows, so its flashes stay evenly spaced
           const r = Math.min(fps / gapFrames, Math.max(0, num(fx.params.rate, 2)));
+          const lo = continues ? Math.min(from, (first - 1) / fps) : from;
           times = [];
-          if (r > 0) for (let k = Math.ceil(from * r - 1e-9); k / r < to; k++) if (k / r > from - 1e-6) times.push(k / r); // never a flash time from before the clip (a rate near zero has none inside it)
+          if (r > 0) for (let k = Math.ceil(lo * r - 1e-9); k / r < to; k++) if (inside(k / r)) times.push(k / r); // never a flash time from before the clip (a rate near zero has none inside it)
         }
-        // Pieces join a run only with exactly the same settings: a later piece that shows the age of an earlier piece's flash
-        // with a higher amount (or another colour) would make the light rise at the cut without a scheduled start.
-        const settings = JSON.stringify([fx.params.amount, fx.params.color, fx.params.rate, fx.params.follow, fx.params.every]);
-        const run = open.get(fx.id);
-        const key = run && run.end === first && run.settings === settings ? run.key : keyOf(clip.id, fx.id);
-        open.set(fx.id, { key, end, settings });
-        schedule.runOf.set(keyOf(clip.id, fx.id), key);
         for (const t of times) { const frame = Math.max(first, Math.ceil(t * fps - 1e-6)); if (frame < end) wanted.push({ frame, key }); }
       }
     }
