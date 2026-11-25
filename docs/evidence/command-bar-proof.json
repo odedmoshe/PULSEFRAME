@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T02:05:11.336Z",
+  "ranAt": "2026-11-25T08:23:01.217Z",
   "result": "PASSED",
   "counts": {
     "pass": 23,
@@ -9,7 +9,7 @@
   },
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "logicalCpus": 4,
     "gpu": "none"
   },
@@ -307,14 +307,14 @@
       "detail": [
         {
           "text": "חתוך כאן",
-          "browser": "c4f2040c06758575d973c0115df2809e457d4988eddc4ea8cc3e72557d0d4c09",
-          "node": "c4f2040c06758575d973c0115df2809e457d4988eddc4ea8cc3e72557d0d4c09",
+          "browser": "7eedd095f22dd2fc4484dc3bbfb53e5c37181e2ffc05768bacfece25d44304d5",
+          "node": "7eedd095f22dd2fc4484dc3bbfb53e5c37181e2ffc05768bacfece25d44304d5",
           "same": true
         },
         {
           "text": "מחק את הקליפ",
-          "browser": "57aafb374ed7dea1de97b7afd8fd49c963ff00f3aa1527888c36b736b0bc9ac4",
-          "node": "57aafb374ed7dea1de97b7afd8fd49c963ff00f3aa1527888c36b736b0bc9ac4",
+          "browser": "c252dda9adcbcb4c09aa354344af1d6a15942bc0826b17f8d872a8aecc8c85d6",
+          "node": "c252dda9adcbcb4c09aa354344af1d6a15942bc0826b17f8d872a8aecc8c85d6",
           "same": true
         },
         {
@@ -331,8 +331,8 @@
         },
         {
           "text": "הוסף מעבר בין כל הקליפים",
-          "browser": "d19d1cd5fd184b41fef415db867ae77c3e921009d878c71a4fba83dbfb4b49c9",
-          "node": "d19d1cd5fd184b41fef415db867ae77c3e921009d878c71a4fba83dbfb4b49c9",
+          "browser": "9a96d32cfc102571cb1c7239af3c11ca8d4dfa3694dda0b655adc43f511caf96",
+          "node": "9a96d32cfc102571cb1c7239af3c11ca8d4dfa3694dda0b655adc43f511caf96",
           "same": true
         }
       ]
@@ -611,14 +611,14 @@
       "detail": [
         {
           "text": "split here",
-          "browser": "eaa15a99dce079b169a8e87cccf2b6e8c51fbae42ea0489f70a4cabb979f121e",
-          "node": "eaa15a99dce079b169a8e87cccf2b6e8c51fbae42ea0489f70a4cabb979f121e",
+          "browser": "24b313409c48acf0b5a77f07840bba864a4b09581d38d47d2ed73159edb6892f",
+          "node": "24b313409c48acf0b5a77f07840bba864a4b09581d38d47d2ed73159edb6892f",
           "same": true
         },
         {
           "text": "delete the clip",
-          "browser": "73f75cc22e5fddf8d439754a7774ea32eb0ca151fedd4cb4e741b5a6bc65e796",
-          "node": "73f75cc22e5fddf8d439754a7774ea32eb0ca151fedd4cb4e741b5a6bc65e796",
+          "browser": "67687b4edb6f03f5b7ab19240b2dc6d3d82efcedbfbfec556bf542da50d24833",
+          "node": "67687b4edb6f03f5b7ab19240b2dc6d3d82efcedbfbfec556bf542da50d24833",
           "same": true
         },
         {
@@ -635,8 +635,8 @@
         },
         {
           "text": "add transitions between all clips",
-          "browser": "bd778c94c751944c2a5acc3932565ab0bc962d583bb7325aee5c914f38d0650d",
-          "node": "bd778c94c751944c2a5acc3932565ab0bc962d583bb7325aee5c914f38d0650d",
+          "browser": "33c127a25a522b9e38c445a13a0f3874832064a04afbf521e26c74cb957d4b24",
+          "node": "33c127a25a522b9e38c445a13a0f3874832064a04afbf521e26c74cb957d4b24",
           "same": true
         }
       ]
@@ -680,7 +680,7 @@
       "detail": {
         "proposer": {
           "status": 200,
-          "proposalId": "prp_S0qndLxZKyo"
+          "proposalId": "prp_l0Ak5r2uRpA"
         },
         "observer": 403,
         "revisionsMoved": 0
@@ -959,7 +959,7 @@
         "assistantFilesInBackup": [],
         "filesHoldingTheKey": [],
         "scanned": {
-          "responses": 491,
+          "responses": 490,
           "logLines": 49
         },
         "inResponses": 0,

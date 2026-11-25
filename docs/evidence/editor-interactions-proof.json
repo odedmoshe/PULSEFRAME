@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-25T02:04:09.087Z",
+  "ranAt": "2026-11-25T08:36:03.525Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "logicalCpus": 4,
     "gpu": "none"
   },
@@ -276,7 +276,7 @@
         "vl5": true,
         "tcBefore": "00:00:03:00",
         "tcAfter": "00:00:03:00",
-        "namedKey": "נקודת עוצמה 00:00:02:19 · 140%",
+        "namedKey": "נקודת עוצמה 00:00:02:20 · 140%",
         "keys": [
           [
             40,
@@ -384,7 +384,7 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 1.98,
+        "fwd2": 1.96,
         "sh2": "◀◀ ×1",
         "back1": -0.99,
         "sh3": "◀◀ ×2",
@@ -400,9 +400,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 1,
+        "playSpeed": 0.99,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.99,
+        "shuttleSpeed": 2,
         "staysPaused": true
       }
     },
@@ -430,30 +430,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_ac543e3ae50",
-          "clp_ac543e3ae51"
+          "clp_64efdd98d90",
+          "clp_64efdd98d91"
         ],
         "afterAB": [
-          "clp_ac543e3ae50",
-          "clp_ac543e3ae51"
+          "clp_64efdd98d90",
+          "clp_64efdd98d91"
         ],
         "afterAdd": [
-          "clp_ac543e3ae50",
-          "clp_ac543e3ae51",
-          "clp_ac543e3ae52"
+          "clp_64efdd98d90",
+          "clp_64efdd98d91",
+          "clp_64efdd98d92"
         ],
         "midEscape": [
-          "clp_ac543e3ae51"
+          "clp_64efdd98d91"
         ],
         "afterEscape": [
-          "clp_ac543e3ae50",
-          "clp_ac543e3ae51",
-          "clp_ac543e3ae52"
+          "clp_64efdd98d90",
+          "clp_64efdd98d91",
+          "clp_64efdd98d92"
         ],
         "afterEscapeUp": [
-          "clp_ac543e3ae50",
-          "clp_ac543e3ae51",
-          "clp_ac543e3ae52"
+          "clp_64efdd98d90",
+          "clp_64efdd98d91",
+          "clp_64efdd98d92"
         ]
       }
     },
@@ -615,7 +615,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 14/1799",
+        "valueText": "עוקב קדימה 30/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -900,18 +900,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_573d040c980",
-          "ast_e2aed9a5cf0",
-          "ast_9c740cecc20",
-          "ast_732bc2a3ed0",
-          "ast_1994be31f40"
+          "ast_c3e7060b0a0",
+          "ast_553fe41f2a0",
+          "ast_4d82b2d4700",
+          "ast_a4445622600",
+          "ast_e6b2e0ca670"
         ],
         "order1": [
-          "ast_573d040c980",
-          "ast_732bc2a3ed0",
-          "ast_e2aed9a5cf0",
-          "ast_9c740cecc20",
-          "ast_1994be31f40"
+          "ast_c3e7060b0a0",
+          "ast_a4445622600",
+          "ast_553fe41f2a0",
+          "ast_4d82b2d4700",
+          "ast_e6b2e0ca670"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -935,7 +935,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-25T02:00:21.274Z",
+          "createdAt": "2026-11-25T08:31:46.773Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -1130,7 +1130,7 @@
       "ok": true,
       "detail": {
         "slots": 11,
-        "victim": "clp_cf15257a400",
+        "victim": "clp_9e12625a2e0",
         "deleted": true,
         "offered": {
           "count": 1,
@@ -1255,8 +1255,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_60355f958f0",
-          "seq_60355f958f7"
+          "seq_2f0d94a5fa0",
+          "seq_2f0d94a5fa7"
         ],
         "revisions": 1,
         "transactions": [
@@ -1266,7 +1266,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_60355f958f0",
+          "seq": "seq_2f0d94a5fa0",
           "selected": "true"
         }
       }
@@ -1297,9 +1297,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_60355f958f0"
+          "seq": "seq_2f0d94a5fa0"
         },
-        "secondTab": "seq_60355f958f0",
+        "secondTab": "seq_2f0d94a5fa0",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1604,7 +1604,7 @@
       "detail": {
         "marked": true,
         "he": {
-          "id": "prj_hC3unxfciXQ",
+          "id": "prj_CiIGuFGt0n8",
           "count": 1,
           "title": "הארכיון יובא",
           "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגום «English» מסומן שוב «תרגום מכונה · לא נבדק», והנוסח שלו נשמר. אפשר לעבור עליו בלוח «תמלול» ולבחור «סמן כנבדק».",
@@ -1614,7 +1614,7 @@
           "badge": 1
         },
         "en": {
-          "id": "prj_Q2x67iMkULw",
+          "id": "prj_hbLBATxZYrw",
           "count": 1,
           "title": "The archive was imported",
           "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translation «English» needs review again; its wording is kept. Go through it in the \"Transcript\" panel and choose \"Mark as reviewed\".",
