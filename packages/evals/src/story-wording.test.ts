@@ -46,6 +46,4 @@ describe('story refusals in Hebrew', () => {
       expect({ s, he: STORY_FORBIDDEN_WORDS_HE.test(s) }).toEqual({ s, he: false });
     }
   });
-  it.todo('W1: narrationMissing, narrationNotSound, narrationTooLong, nothingToShow and badParams are provoked through planStory and equal the table');
-  it.todo('W1: narration_removed and kept_narration_not_followable are provoked through a regeneration and equal STORY_BLOCKING_TEXT');
 });
