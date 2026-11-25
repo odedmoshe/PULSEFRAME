@@ -31,6 +31,7 @@ import { assetHasBeats, timelineTempo } from './pulse.logic.ts';
 import { assetDisplayName } from './assetLabel.ts';
 import { RenderCacheLane } from './RenderCacheLane.tsx';
 import { FilmBar } from './FilmBar.tsx';
+import { StoryBar } from './story/StoryBar.tsx';
 import { dictionaries } from '@pulseframe/i18n';
 import type { ExportChecks } from '@pulseframe/core';
 import { findingRows } from './send/send.logic.ts';
@@ -788,7 +789,7 @@ export function Timeline() {
         </div>
       </div>
       {/* the family film's bar (ADR-0026): only while the document holds a film run; it mirrors with the interface */}
-      <div className="tl-film" dir={uiDir}><FilmBar lang={lang} /></div>
+      <div className="tl-film" dir={uiDir}><FilmBar lang={lang} /><StoryBar lang={lang} /></div>
       {menu && <ClipMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} />}
       <div className="tl-scroll" ref={setScroller} {...containerProps} onPointerDownCapture={() => { kbdNav.current = false; }} onFocusCapture={(e) => { if ((e.target as HTMLElement).classList?.contains('clip') && (e.target as HTMLElement).matches(':focus-visible')) kbdNav.current = true; }}>
         <div className="tl-inner" style={{ width: innerWidth, '--tl-head': `${head}px`, '--tl-step': `${step * pps}px` } as React.CSSProperties} {...marqueeProps} onKeyDown={onLanesKey}

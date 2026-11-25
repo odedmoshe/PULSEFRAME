@@ -431,6 +431,8 @@ export const COMMANDS: Command[] = [
   ...STABILISE_COMMANDS,
   // marked ranges «פנינים» (wave 7): open the pearls view, unbound (pearls/pearls.commands.ts; disabled until builder C)
   ...PEARLS_COMMANDS,
+  // «ספרו מה היה» (wave 7 story track): opens the story dialog on the selected pictures and videos (StoryDialog, W3)
+  { id: 'view.openStory', label: 'cmd.openStory', group: 'view', keys: [], enabled: (e) => !!e.doc && sourceFromSelection(e.doc, e.getState().selection).assetIds.length > 0, run: (e) => { if (e.doc) e.openStory(sourceFromSelection(e.doc, e.getState().selection)); } },
 ];
 
 /** Canonical chord for an event: modifiers in fixed order + physical key code. */

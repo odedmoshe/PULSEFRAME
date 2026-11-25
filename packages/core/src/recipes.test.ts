@@ -218,7 +218,7 @@ describe('portrait blur recipe (ADR-0017): a still picture over a blurred copy o
 describe('the recipe catalog (GET /catalog → recipes, list_catalog)', () => {
   it('lists every recipe with its parameter schema and its method, and says which one rests on a result an AI model made earlier', () => {
     const cat = describeRecipes();
-    expect(cat.map((r) => r.id)).toEqual(['beat-montage', 'social-pack', 'tidy-speech', 'portrait-blur', 'family-film', 'multicam-auto']);
+    expect(cat.map((r) => r.id)).toEqual(['beat-montage', 'social-pack', 'tidy-speech', 'portrait-blur', 'family-film', 'multicam-auto', 'story']);
     for (const r of cat) {
       expect((r.paramsSchema as { type?: string }).type, r.id).toBe('object');
       expect(r.method, r.id).toMatch(/^rule-based plan from project data; no language model/);

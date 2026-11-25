@@ -432,7 +432,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/recipes/:recipeId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeBody); return c.json(await applyRecipe(store, gov, p, c.req.param('id'), c.req.param('recipeId'), b.params, b.expectedRevision)); });
   // restoreRemoved: the explicit choice to make again what was deleted by hand (template and family film runs; ADR-0016 decision 6)
   const RecipeRegenerateBody = RecipeBody.extend({ restoreRemoved: z.boolean().optional() }).strict();
-  app.post('/api/v1/projects/:id/recipe-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeRegenerateBody); return c.json(await regenerateRecipe(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params, { restoreRemoved: b.restoreRemoved })); });
+  app.post('/api/v1/projects/:id/recipe-runs/:runId/regenerate', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeRegenerateBody); return c.json(await regenerateRecipe(store, gov, p, c.req.param('id'), c.req.param('runId'), b.params, { restoreRemoved: b.restoreRemoved }, b.expectedRevision)); });
   // Templates (ADR-0016): the gallery, a read-only plan, apply as one undoable step, regenerate keeping hand edits. Edit rights and
   // the propose-mode refusal are checked inside (templates.ts), so the refusal names the mode.
   app.get('/api/v1/templates', async (c) => { need(c, 'observe'); return c.json({ templates: await listTemplates() }); });

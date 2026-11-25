@@ -7,7 +7,7 @@
   var STR = {
     he: {
       title: 'העלאה מהטלפון', langBtn: 'English',
-      pickMedia: 'בחירת סרטונים ותמונות', pickOriginal: 'סרטונים באיכות מקורית',
+      pickMedia: 'בחירת סרטונים ותמונות', pickOriginal: 'סרטונים באיכות מקורית', pickVoice: 'הקלטת קול',
       pickHint: 'בחלק מהטלפונים הגלריה מכווצת סרטונים. כדי לשמור על האיכות המקורית, בחרו מ"קבצים".',
       pinLabel: 'הקוד בן 6 הספרות שמופיע במחשב', pinGo: 'התחברות',
       connecting: 'מתחבר למחשב…', connected: 'מחובר למחשב. אפשר לבחור קבצים.', total: '{done} מתוך {all}',
@@ -28,7 +28,7 @@
     },
     en: {
       title: 'Upload from the phone', langBtn: 'עברית',
-      pickMedia: 'Choose videos and pictures', pickOriginal: 'Videos in original quality',
+      pickMedia: 'Choose videos and pictures', pickOriginal: 'Videos in original quality', pickVoice: 'A voice recording',
       pickHint: 'Some phones shrink videos in the gallery. To keep the original quality, choose from "Files".',
       pinLabel: 'The 6-digit code shown on the computer', pinGo: 'Connect',
       connecting: 'Connecting to the computer…', connected: 'Connected to the computer. You can choose files.', total: '{done} of {all}',
@@ -365,6 +365,7 @@
   $('lang').onclick = function () { lang = lang === 'he' ? 'en' : 'he'; paintStatic(); };
   $('pickMedia').onchange = choose;
   $('pickOriginal').onchange = choose;
+  $('pickVoice').onchange = choose;
   $('done').onclick = async function () {
     closed = true;
     $('done').disabled = true;
