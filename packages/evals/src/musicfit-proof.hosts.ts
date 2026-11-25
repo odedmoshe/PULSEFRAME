@@ -237,7 +237,12 @@ const checks: Record<string, () => Promise<true | string>> = {
     if (agent.status !== 403 || codeOf(agent.body) !== 'human_approval_required') return fail('the agent was not refused', agent.body);
     const tools = await fetch(`${w.s.url}/mcp`, { method: 'POST', headers: { authorization: `Bearer ${w.agentToken}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }) });
     const text = await tools.text();
-    if (/heard/.test(text.replace(/"description":"[^"]*"/g, ''))) return fail('an MCP tool names the heard mark');
+    // integration: a tool that marks a join heard would be named for it or take a `heard` argument; descriptions may say "not heard"
+    // (the plan's own wording), so they are not searched (the earlier text match failed on escaped quotes inside descriptions)
+    const listed = JSON.parse((tools.headers.get('content-type') ?? '').includes('text/event-stream') ? text.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5)).join('') : text) as { result: { tools: { name: string; inputSchema?: { properties?: Record<string, unknown> } }[] } };
+    const named = listed.result.tools.filter((t) => /heard/i.test(t.name) || Object.keys(t.inputSchema?.properties ?? {}).some((k) => /heard/i.test(k)) || t.name === 'mark_join_heard').map((t) => t.name);
+    if (!listed.result.tools.length) return fail('tools/list returned no tools');
+    if (named.length) return fail('an MCP tool names the heard mark', named);
     const owner = await as(w.owner, 'POST', `/projects/${s.pid}/assets/${s.madeAssetId}/music-join/heard`, { heard: true });
     if (codeOf(owner.body) === 'musicfit_not_built') return WAIT_A('heard mark (mark_join_heard)');
     if (owner.status !== 200) return fail('the owner\'s mark', owner.body);
@@ -284,7 +289,7 @@ const checks: Record<string, () => Promise<true | string>> = {
     const d = await doc(s.pid);
     const made = d.assets[s.madeAssetId]!;
     const warn = libraryExportWarnings(d).map((x) => x.code);
-    const plannedExport = await as(w.owner, 'POST', `/projects/${s.pid}/exports/plan`, { format: 'mp4' });
+    const plannedExport = await as(w.owner, 'POST', `/projects/${s.pid}/exports/plan`, { format: 'mp4-h264-aac' }); // integration: 'mp4' is not an export format (400)
     const strip = archiveLibraryPlan(d);
     evidence.L2 = { flags: made.provenance.library?.flags, warn, exportPlan: plannedExport.status, strip: JSON.stringify(strip).slice(0, 300) };
     if (!made.provenance.library?.flags.nonCommercial) return fail('the made file is not non-commercial');
@@ -317,8 +322,13 @@ const checks: Record<string, () => Promise<true | string>> = {
     const half = (60 * 2) / slow.bpm;
     const run = d.recipeRuns[f.runId]!;
     const made = run.createdIds.map((id) => findClip(d, id)).filter((x) => x && x.track.kind === 'video').map((x) => nf(x!.clip.start));
-    const off = made.filter((fr) => { const k = Math.round(fr / 30 / half); return Math.abs(nf(T.fromSeconds((k * half).toFixed(6))) - fr) > 0; });
-    evidence.W1 = { from: fast.id, to: slow.id, madeCuts: sorted(made), off };
+    // a pick kept by hand stays where it is (decisions §3) and the plan counts it off the grid: the cut at ITS end is the kept pick's,
+    // not one the plan chose. The kept pick must be listed in recut.offGrid; only the end frames of listed clips are set aside.
+    const offGrid = (p.body as MusicFitPlan).recut?.offGrid ?? [];
+    if (!offGrid.includes(pick.clipId)) return fail('the pick trimmed by hand is not counted off the grid', (p.body as MusicFitPlan).recut);
+    const keptEnds = new Set(offGrid.map((id) => findClip(d, id)).filter((x) => !!x).map((x) => nf(T.add(x!.clip.start, x!.clip.duration))));
+    const off = made.filter((fr) => !keptEnds.has(fr)).filter((fr) => { const k = Math.round(fr / 30 / half); return Math.abs(nf(T.fromSeconds((k * half).toFixed(6))) - fr) > 0; });
+    evidence.W1 = { from: fast.id, to: slow.id, madeCuts: sorted(made), keptEnds: [...keptEnds], offGrid, off };
     if (off.length) return fail('cuts the plan made are not on the new grid', evidence.W1);
     await must((await world()).owner, 'POST', `/projects/${pid}/undo`, {});
     const afterUndo = await doc(pid);
@@ -422,9 +432,11 @@ const checks: Record<string, () => Promise<true | string>> = {
     const vid = String(t.results[0]!.output!.clipId);
     const m = await builtinOnTimeline(pid, 'music.festive', '12');
     await ownerTx(pid, [{ op: 'sync_impact', args: { clipId: vid, moment: T.frameTime(95, R), to: 'beat' } }]);
-    const body = { target: { clipId: m.clipId }, music: { builtin: { styleId: 'music.calm', seed: 1 } }, tailor: true };
+    // integration: music.calm (80 BPM) needs at least 10.5 s and the picture is 10 s (400 too_short); music.pop needs 6.6 s
+    const body = { target: { clipId: m.clipId }, music: { builtin: { styleId: 'music.pop', seed: 1 } }, tailor: true };
     const p = await plan(pid, body);
     if (!routesBuilt(p)) return WAIT_ROUTES;
+    if (p.status !== 200) return fail('plan', p.body);
     const listed = (p.body as MusicFitPlan).impacts?.find((x) => x.clipId === vid);
     if (!listed) return fail('the plan does not list the marked clip', p.body?.impacts);
     const a = await apply(pid, body);
@@ -456,7 +468,7 @@ async function songFit(name: string, file: string, licence?: string, flags: Libr
   return { pid, clipId, madeAssetId: a.body.madeAssetId, plan: p.body as MusicFitPlan, record };
 }
 
-export const MUSICFIT_PROOF_HOSTS = { checks } as const;
+export const MUSICFIT_PROOF_HOSTS = { checks, evidence } as const;
 /** Stop the server and remove everything this part wrote. */
 export async function closeMusicfitProofHosts(): Promise<void> {
   if (!worldP) return;
