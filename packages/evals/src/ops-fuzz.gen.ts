@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT } from '@pulseframe/core';
+import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -598,6 +598,8 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       ...(KEYFRAME_OPS_BUILT && !opts.v1Replay ? keyframeMenu(doc) : []),
       // multicam (ADR-0020): once W1 has built the bodies
       ...(MULTICAM_OPS_BUILT && !opts.v1Replay ? multicamMenu(doc) : []),
+      // the content library (wave 7): the credits card, once worker B has built the bodies
+      ...(LIBRARY_OPS_BUILT && !opts.v1Replay ? [() => genLibrary(doc)] : []),
       ...(SEQUENCE_OPS_BUILT ? [...sequenceMenu(doc), () => { const others = Object.keys(doc.sequences).filter((id) => id !== doc.mainSequenceId); return { op: 'add_marker', args: { sequenceId: others.length && rnd() < 0.8 ? pick(others) : rnd() < 0.5 ? doc.mainSequenceId : 'seq_none', time: T.frameTime(int(240), rate) } }; }] : []),
     ];
     return pick(menu)();
@@ -693,6 +695,29 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     return { op: 'add_builtin_music', args: { asset: a, grid: g, ...(rnd() < 0.6 ? { place: { start: rnd() < 0.9 ? fr() : T.rt(1, 1000) } } : {}) } };
   };
   /**
+   * The content library (wave 7 library track). `genLibrary(doc)` returns a random add_credits_card call (public; `gen` draws it once
+   * LIBRARY_OPS_BUILT): sometimes on an unknown sequence, sometimes with an out-of-range length (both refused by the schema or the op).
+   * `genLibraryUse()` returns a random use_library_item call (internal; a driver commits it with allowInternal, as the server does):
+   * records under CC0, CC BY (with and without credit), CC BY-NC, ND, an unknown custom licence and the allow-listed custom row,
+   * flags right and wrong, the same content again (deduplicated or record attached), and now and then no record at all (refused).
+   */
+  const genLibrary = (doc: ProjectDocument): OpCall => {
+    const seqs = Object.keys(doc.sequences);
+    return { op: 'add_credits_card', args: { ...(rnd() < 0.3 ? { sequenceId: rnd() < 0.9 ? pick(seqs) : 'seq_none' } : {}), ...(rnd() < 0.5 ? { seconds: pick([3, 4, 8, 20, 2, 21]) } : {}), ...(rnd() < 0.4 ? { lang: pick(['he', 'en'] as const) } : {}) } };
+  };
+  const genLibraryUse = (): OpCall => {
+    const licences: [string, Record<string, unknown>][] = [
+      ['CC0-1.0', {}], ['CC-BY-4.0', { credit: { text: 'Song Composer (example.invalid)', placement: 'description' } }], ['CC-BY-4.0', {}],
+      ['CC-BY-NC-4.0', { credit: { text: 'NC Composer', placement: 'either' } }], ['CC-BY-NC-4.0', { credit: { text: 'NC Composer', placement: 'either' }, flags: { nonCommercial: true, diskOnly: true } }],
+      ['CC-BY-ND-4.0', {}], ['custom:unknown-source', {}], ['custom:musopen-flac', { flags: { diskOnly: true } }],
+    ];
+    const [id, extra] = pick(licences);
+    const k = int(4);
+    const record = { itemId: `synthetic/${k}.wav`, sourceId: id.startsWith('custom:') ? id.slice(7) : 'synthetic', kind: 'sound' as const, title: `Fuzz ${k}`, sourceSha256: sha256Hex(`lib${k}`), ledger: { item: `synthetic/${k}` }, licence: { id }, flags: {}, ...extra };
+    const asset = { kind: 'audio' as const, name: `lib${k}.wav`, contentHash: `sha256:${rnd() < 0.15 ? '2'.repeat(64) : sha256Hex(`lib${k}`)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(2 + k, 1), audio: { sampleRate: 48000, channels: 1, codec: 'pcm_s16le' }, provenance: { origin: 'upload' as const, importedAt: '2026-11-25T00:00:00Z', importedBy: 'fuzz', ...(rnd() < 0.95 ? { library: record } : {}) } };
+    return { op: 'use_library_item', args: { asset } };
+  };
+  /**
    * The next random call among the named operations: draws from the same menu until one of them comes up (the menu grows with every
    * feature, so a driver that is about a few operations would otherwise meet them too rarely to say anything about them).
    */
@@ -701,5 +726,5 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse };
 }

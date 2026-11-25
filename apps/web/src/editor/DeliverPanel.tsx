@@ -8,6 +8,9 @@ import { EXPORT_STRINGS } from './exportSheet.strings.ts';
 import { formatFileSize } from './exportSheet.logic.ts';
 import './deliverPanel.css';
 import { ArchiveFamilyOption } from './lifeline/ArchiveFamilyOption.tsx';
+import type { ArchiveLibraryMode } from '@pulseframe/core';
+import { ArchiveLibraryOption } from './library/ArchiveLibraryOption.tsx';
+import { CreditsPanel } from './library/CreditsPanel.tsx';
 import { addVariantGuard, frameOps, isShortActive } from './shorts.view.ts';
 
 interface BatchJob { jobId: string; variantId: string; status: string; stage: string | null }
@@ -55,6 +58,7 @@ function ProjectFrame() {
 export function DeliverPanel() {
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [archiveHref, setArchiveHref] = useState<string | null>(null); // the archive without family details, when chosen (ArchiveFamilyOption)
+  const [libraryMode, setLibraryMode] = useState<ArchiveLibraryMode | null>(null); // «ארכיון לשיתוף» / «ארכיון לעצמי» (ArchiveLibraryOption, wave 7)
   const { editor, state, t } = useEditorState();
   const { doc, viewVariantId, lang, revision, exportJob } = state;
   const variants = doc ? Object.values(doc.variants ?? {}) : [];
@@ -216,16 +220,19 @@ export function DeliverPanel() {
           </ul>
         )}
       </section>
+      {/* credits of library files (wave 7 library track) */}
+      {doc && <CreditsPanel projectId={doc.id} />}
       <section aria-label={t('archive.title')}>
         <h3>{t('archive.title')}</h3>
         <p className="muted small">{t('archive.note')}</p>
         <div className="row">
-          {doc && <a className="ghost" href={archiveHref ?? `/api/v1/projects/${doc.id}/archive`} download data-testid="archive-download">{t('archive.download')}</a>}
+          {doc && <a className="ghost" href={withLibraryMode(archiveHref ?? `/api/v1/projects/${doc.id}/archive`, libraryMode)} download data-testid="archive-download">{t('archive.download')}</a>}
           <label className="ghost file">{t('archive.import')}
             <input type="file" accept=".tar,application/x-tar" data-testid="archive-import" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void importArchiveFile(file, (m) => setArchiveError(m)); }} />
           </label>
         </div>
         {doc && <ArchiveFamilyOption projectId={doc.id} onHref={setArchiveHref} />}
+        {doc && <ArchiveLibraryOption projectId={doc.id} onMode={setLibraryMode} />}
         {archiveError && <p className="danger" role="alert" data-testid="archive-error">{archiveError}</p>}
       </section>
     </div>
@@ -246,4 +253,9 @@ async function importArchiveFile(file: File, onError: (message: string) => void)
   } catch (e) {
     onError(e instanceof Error ? e.message : String(e));
   }
+}
+
+/** The archive link with the library choice added (wave 7 library track); null keeps the link exactly as it was. */
+export function withLibraryMode(href: string, mode: ArchiveLibraryMode | null): string {
+  return mode ? `${href}${href.includes('?') ? '&' : '?'}library=${mode}` : href;
 }

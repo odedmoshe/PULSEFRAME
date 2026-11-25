@@ -119,6 +119,40 @@ export const UploadProvenanceSchema = z
   })
   .strict();
 export type UploadProvenance = z.infer<typeof UploadProvenanceSchema>;
+// ---------- the content library on disk (wave 7, library track). Optional fields only; no schema version bump. ----------
+/** What a library item is, as the catalogue lists it (apps/server/src/library readers). Instruments, models, fonts, maps and transitions are counted, never listed. */
+export const LIBRARY_KINDS = ['music', 'sound', 'loop', 'sticker', 'icon', 'illustration', 'texture', 'backdrop', 'video'] as const;
+export type LibraryKind = (typeof LIBRARY_KINDS)[number];
+/** Where a credit must go: the video's description text, on screen in the video, or either of them satisfies the licence. */
+export const CREDIT_PLACEMENTS = ['description', 'on_screen', 'either'] as const;
+const Hex64 = z.string().regex(/^[0-9a-f]{64}$/);
+/**
+ * Asset.provenance.library: the licence record of a file copied from the owner's library folder (tools/library ledger). It lives
+ * in the document so credits, the non-commercial warning and the archive rule work from the project alone, on a machine without
+ * the library. Written only by the internal operation use_library_item (libraryOps.ts); origin stays 'upload' and there is no
+ * provenance.upload beside it (validate.ts library_provenance). Every flag is either true or absent.
+ */
+export const LibraryRecordSchema = z
+  .object({
+    /** `${sourceId}/${path inside the item}` or `${sourceId}/${path}#${member}` (an icon inside a set file). */
+    itemId: z.string().min(1).max(300),
+    sourceId: z.string().min(1).max(64),
+    kind: z.enum(LIBRARY_KINDS),
+    title: z.string().max(200),
+    author: z.string().max(200).optional(),
+    /** SHA-256 (hex) of the file on disk as it was copied; for a rasterised sticker, of the SVG text that was rasterised. */
+    sourceSha256: Hex64,
+    /** Which download it came from: the ledger entry's item id and, when the ledger has them, its tree hash, version or commit. */
+    ledger: z.object({ item: z.string().min(1).max(200), treeSha256: Hex64.optional(), version: z.string().max(80).optional(), commit: z.string().max(64).optional() }).strict(),
+    /** The licence id the core table knows (an exact SPDX id, or `custom:<sourceId>` for an allow-listed custom licence). */
+    licence: z.object({ id: z.string().min(1).max(80), url: z.string().max(500).optional() }).strict(),
+    credit: z.object({ text: z.string().min(1).max(500), placement: z.enum(CREDIT_PLACEMENTS) }).strict().optional(),
+    flags: z.object({ nonCommercial: z.literal(true).optional(), diskOnly: z.literal(true).optional(), people: z.literal(true).optional(), aiGenerated: z.literal(true).optional(), trademark: z.literal(true).optional() }).strict(),
+    /** Present when the server rasterised an SVG into this PNG: the long side asked for, the colour given to one-colour icons, and what made the bytes. */
+    raster: z.object({ longSide: z.number().int().min(64).max(2048), color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(), by: z.literal('ffmpeg-librsvg') }).strict().optional(),
+  })
+  .strict();
+export type LibraryRecord = z.infer<typeof LibraryRecordSchema>;
 /** A project holds at most this many events. */
 export const MAX_LIFE_EVENTS = 2000;
 /** An event holds at most this many files (and at least one). */
@@ -241,6 +275,8 @@ export const AssetSchema = z
          * `relativePath` (the path inside a dropped folder, cut to 512 characters) only for 'folder' (validate.ts import_provenance).
          */
         upload: UploadProvenanceSchema.optional(),
+        /** Present for a file copied from the owner's library folder (wave 7 library track): its licence record (LibraryRecordSchema). */
+        library: LibraryRecordSchema.optional(),
         /** Present for generated speech (SPEC §17): what was said, by which engine and model, in which voice. A voice taken from a recording carries the consent statement its owner made; an agent cannot make one. */
         voice: z
           .object({
@@ -413,7 +449,9 @@ export type TextAnimation = z.infer<typeof TextAnimationSchema>;
 export const DEFAULT_TEXT_ANIMATION = { by: 'word', in: null, out: null, loop: null, inFrames: 20, outFrames: 15 } as const satisfies TextAnimation;
 export const TextClipSchema = z.object({ ...ClipBase, type: z.literal('text'), text: z.string().max(2000), style: TextStyleSchema, animation: TextAnimationSchema.optional(),
   /** Live fields (life line, ADR-0021): `{date}`, `{hebrewDate}`, `{event}` … in `text` are resolved by the evaluator (core fields.ts); `{{` and `}}` are braces. Absent = the text is drawn verbatim, as before. */
-  fields: z.literal(true).optional() }).strict();
+  fields: z.literal(true).optional(),
+  /** 'credits' marks the cards add_credits_card made (wave 7 library track), so running it again replaces them. Absent = an ordinary title. */
+  role: z.literal('credits').optional() }).strict();
 
 // ---------- captions and transcripts (SPEC §16) ----------
 export const CAPTION_PRESETS = ['classic', 'karaoke', 'word-pop', 'box-highlight', 'reveal', 'underline', 'dim-ahead'] as const;

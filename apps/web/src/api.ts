@@ -2,6 +2,7 @@ import type { Asset, BuildShortsBody, ExportMode, FindShortsBody, ReframePlanBod
 import type { MulticamSyncReport, MulticamSyncRequest, MulticamView } from '@pulseframe/core';
 import type { TakePlanView, TakeRequest, TakeResult } from '@pulseframe/core';
 import type { AssistantConfigBody, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, BudgetReleaseAnswer } from '@pulseframe/core';
+import type { ArchiveLibraryMode, CreditsView, LibraryItemsPage, LibraryItemsQuery, LibraryRow, LibraryStatus, LibraryUseBody, LibraryUseResult } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
 
@@ -221,6 +222,22 @@ export const api = {
     const r = await fetch(`/api/v1/projects/${id}/assets/${assetId}/derivatives/envelope`, { credentials: 'same-origin' });
     return r.ok ? new Uint8Array(await r.arrayBuffer()) : null;
   },
+  // the content library on disk (wave 7 library track; apps/server/src/library/contract.ts). Every route answers 501
+  // library_not_built until the server worker builds it; keys travel percent-encoded (they hold slashes)
+  libraryStatus: () => call<LibraryStatus>('/library/status'),
+  setLibraryRoot: (root: string | null) => call<LibraryStatus>('/library/root', { ...json({ root }), method: 'PUT' }),
+  reindexLibrary: () => call<LibraryStatus>('/library/reindex', json({})),
+  cancelLibraryReindex: () => call<LibraryStatus>('/library/reindex', { method: 'DELETE' }),
+  libraryItems: (q: LibraryItemsQuery) => call<LibraryItemsPage>(`/library/items?${new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))}`),
+  libraryItem: (key: string) => call<LibraryRow>(`/library/items/${encodeURIComponent(key)}`),
+  /** URLs for an <audio> element, an <img> and a link: never fetched into a blob (the audio streams with Range). */
+  libraryAudioUrl: (key: string) => `/api/v1/library/items/${encodeURIComponent(key)}/audio`,
+  libraryThumbUrl: (key: string, size: 128 | 256 = 128) => `/api/v1/library/items/${encodeURIComponent(key)}/thumb?size=${size}`,
+  libraryLicenceUrl: (key: string) => `/api/v1/library/items/${encodeURIComponent(key)}/licence`,
+  useLibraryItem: (id: string, body: LibraryUseBody) => call<LibraryUseResult>(`/projects/${id}/library/use`, json(body)),
+  credits: (id: string, q: { sequenceId?: string; lang?: 'he' | 'en' } = {}) => call<CreditsView>(`/projects/${id}/credits?${new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined) as [string, string][])}`),
+  /** The archive link: «ארכיון לשיתוף» (strip) or «ארכיון לעצמי» (keep, owner session only); null = the archive as before. */
+  archiveUrl: (id: string, opts: { family?: 'keep' | 'omit'; library?: ArchiveLibraryMode | null } = {}) => `/api/v1/projects/${id}/archive${(() => { const q = new URLSearchParams({ ...(opts.family === 'omit' ? { family: 'omit' } : {}), ...(opts.library ? { library: opts.library } : {}) }).toString(); return q ? `?${q}` : ''; })()}`,
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }

@@ -9,8 +9,12 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** Files of the data directory a backup never holds (the assistant's key and its config: assistant/contract.ts ASSISTANT_KEY_FILE, ASSISTANT_CONFIG_FILE). */
-export const NEVER_BACKED_UP = ['assistant.key', 'assistant.json'] as const;
+/**
+ * Files of the data directory a backup never holds: the assistant's key and its config (assistant/contract.ts ASSISTANT_KEY_FILE,
+ * ASSISTANT_CONFIG_FILE); the library folder setting and the library's derived index (library/contract.ts LIBRARY_CONFIG_FILE,
+ * LIBRARY_INDEX_FILE): after a restore the state is «הספרייה לא מוגדרת».
+ */
+export const NEVER_BACKED_UP = ['assistant.key', 'assistant.json', 'library.json', 'library-index.sqlite'] as const;
 export interface BackupResult { dest: string; /** Projects in the verified database copy. */ projects: number; databaseBytes: number; filesCopied: number; /** Newly copied media files whose content hash was checked against their name. */ filesVerified: number; filesSkipped: number; bytesCopied: number }
 
 const sha256File = (file: string) => new Promise<string>((resolve, reject) => {

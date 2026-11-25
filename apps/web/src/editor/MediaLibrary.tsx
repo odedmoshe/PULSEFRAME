@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { LibraryAssetBadges } from './library/LibraryAssetBadges.tsx';
 import { createPortal } from 'react-dom';
 import { AudioLines, Check, Ellipsis, Eye, FileMusic, Film, Image as ImageIcon, Palette, Plus, Trash2, Info, TriangleAlert } from 'lucide-react';
 import * as T from '@pulseframe/time';
@@ -212,6 +213,7 @@ export function MediaGrid({ onView, query = '', filter = 'all', only }: { onView
             <span className="pf-mc-name"><span className="asset-name" dir="auto" title={a.name}>{stem(assetDisplayName(a, state.lang) ?? a.name)}</span>
               <InlineRename value={a.name} label={`${t('media.rename')}: ${a.name}`} testid={`rename-${a.id}`} className="pf-mc-rename" onCommit={(name) => void editor.commit([{ op: 'rename_asset', args: { assetId: a.id, name } }], 'Rename file')} /></span>
             <DateBadge assetId={a.id} />
+            <LibraryAssetBadges asset={a} />
             {(bpm || shots || lang) && (
               <span className="pf-mc-glyphs">
                 {bpm && <span title={C.badgeBeat}><bdi className="num">{bpm}</bdi> {C.bpmWord}</span>}

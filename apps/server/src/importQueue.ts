@@ -22,6 +22,7 @@ import { randomBytes } from 'node:crypto';
 import { IMPORT_STAGE, convertingStage, importCardState, importErrorRetryable, LUT_MAX_TEXT_LENGTH, type Asset, type ImportErrorCode, type ImportJobView, type ImportRoom } from '@pulseframe/core';
 import { readCapture } from './captureMeta.ts';
 import { CONFORM_RECIPE, diskReserveRefuses, IMPORT_JOB_TYPE, importIdempotencyKey, importTempName, type ImportJobError, type ImportJobInput, type ImportJobOutput, type ImportQueue, type ImportQueueDeps, type ReceiveRequest } from './importContracts.ts';
+import { libraryError } from './library/contract.ts';
 import { buildImportedAsset, cleanRelativePath, cleanUploadName, ConformError, conformRecord, conformVideo, describeMedia, NeedsConform, prepareWithoutConform, receiveOriginal, type MediaMeta } from './ingest.ts';
 import { assertStorageRoom, dataDirBytes, freeDiskBytes, UploadLedger } from './storage.ts';
 import { ApiError, type JobRow } from './store.ts';
@@ -385,6 +386,12 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
   const queue: ImportQueue = {
     async receive(req: ReceiveRequest): Promise<JobRow> {
       if (stopped) throw new ApiError(503, 'shutting_down', 'the server is stopping; send the file again once it is back');
+      // ---- LIBRARY BRANCH (wave 7 library track, worker A; library/contract.ts) ----
+      // A copy from the library folder: check req.library.expect against the received bytes before anything is stored, keep
+      // input.library on the job, and commit use_library_item (commitAsset) instead of import_asset; provenanceOf gives
+      // provenance.library and no provenance.upload. Until worker A builds it, nothing is read: 501 library_not_built.
+      if (req.library) throw libraryError('notBuilt');
+      // ---- end of the library branch ----
       if (!store.db.prepare('SELECT 1 FROM projects WHERE id = ?').get(req.projectId)) throw new ApiError(404, 'project_not_found', `project ${req.projectId} not found`, { projectId: req.projectId }, 'Call list_projects.');
       const { name, isCube } = cleanUploadName(req.name);
       const relativePath = req.via === 'folder' ? cleanRelativePath(req.relativePath) : undefined;

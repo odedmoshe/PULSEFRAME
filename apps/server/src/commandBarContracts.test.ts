@@ -137,7 +137,8 @@ describe('the key and the config never leave the data directory by backup (decis
     const src = tmp('pf-cb-bk-src-'), dest = path.join(tmp('pf-cb-bk-dest-'), 'copy');
     const store = new Store(src);
     store.createProject({ name: 'p' });
-    expect([...NEVER_BACKED_UP].sort()).toEqual([ASSISTANT_CONFIG_FILE, ASSISTANT_KEY_FILE].sort());
+    // the assistant's two files; the library track (wave 7) adds its own setting and index to the same list
+    expect([...NEVER_BACKED_UP]).toEqual(expect.arrayContaining([ASSISTANT_CONFIG_FILE, ASSISTANT_KEY_FILE]));
     fs.writeFileSync(path.join(src, ASSISTANT_KEY_FILE), 'TEST-DOUBLE-NOT-A-KEY', { mode: 0o600 });
     fs.writeFileSync(path.join(src, ASSISTANT_CONFIG_FILE), '{}', { mode: 0o600 });
     fs.mkdirSync(dest, { recursive: true });

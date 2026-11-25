@@ -53,6 +53,8 @@ import { ASSISTANT_JOB_TYPE, AssistantConfigBodySchema, AssistantKeyBodySchema, 
 import { isOwnerSession, type AssistantDeps } from './assistant/contract.ts';
 import { assistantCancelRefusal, createAssistantHandlers, type AssistantJobControls } from './assistant/routes.ts';
 import { assertMayReadProposal, assertMayReleaseBudget, assistantJobStub, mayReadProposal, proposalsFor } from './assistant/visibility.ts';
+import { libraryOwner } from './library/contract.ts';
+import { registerLibraryRoutes } from './library/routes.ts';
 
 const TxBody = z
   .object({
@@ -296,8 +298,12 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     // people scope gets the document as it may read it either way (names, no birth dates): planArchive reads through the store.
     const family = c.req.query('family') ?? 'keep';
     if (family !== 'keep' && family !== 'omit') throw new ApiError(400, 'invalid_request', 'family must be keep or omit', { family: family.slice(0, 16) });
-    void who;
-    const plan = planArchive(store, c.req.param('id'), { family });
+    // ?library=strip «ארכיון לשיתוף» leaves restricted library files out; ?library=keep «ארכיון לעצמי» keeps them, owner's own session only
+    // (wave 7 library track; archive.ts planArchive, worker B)
+    const library = c.req.query('library');
+    if (library !== undefined && library !== 'strip' && library !== 'keep') throw new ApiError(400, 'invalid_request', 'library must be strip or keep', { library: library.slice(0, 16) });
+    if (library === 'keep') libraryOwner(who);
+    const plan = planArchive(store, c.req.param('id'), { family, ...(library ? { library } : {}) });
     const name = plan.doc.name.replace(/[^\p{L}\p{N} _.-]+/gu, '_').slice(0, 60) || 'project';
     return new Response(Readable.toWeb(Readable.from(writeArchive(plan))) as ReadableStream, { headers: { 'content-type': 'application/x-tar', 'content-length': String(plan.bytes), 'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}.pulseframe.tar` } });
   });
@@ -822,6 +828,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // ----- import queue and phone drop (ADR-0023); render cache (ADR-0024) -----
   if (extras.imports) registerImportRoutes(app, { cfg, store, gov, imports: extras.imports, door: extras.door ?? null, need });
   if (extras.renderCache) registerRenderCacheRoutes(app, extras.renderCache, need);
+  // the content library on disk (wave 7 library track): every library route, and GET …/credits (library/contract.ts LIBRARY_ROUTES)
+  registerLibraryRoutes(app, { cfg, store, gov, imports: extras.imports ?? null, need });
 
   // ----- the command bar's language assistant (ADR-0027; assistant/contract.ts ASSISTANT_ROUTES): status for any observer (whole
   // for the owner's own session, connected or not for anyone else: assistant/visibility.ts), the rest for the owner's own session

@@ -56,6 +56,7 @@ import type { EventEmitter } from 'node:events';
 import type { ChildProcess } from 'node:child_process';
 import type { NetworkInterfaceInfo } from 'node:os';
 import type { Readable } from 'node:stream';
+import type { LibraryRecord } from '@pulseframe/core';
 import { isPhoneActor, MAX_NAME_HEADER_BYTES, type DropAddress, type DropCloseReason, type DropCodeView, type DropState, type ImportJobView, type ImportRoom, type ImportVia } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import type { Config } from './config.ts';
@@ -95,6 +96,8 @@ export interface ImportJobInput {
   commitKind: 'edit' | 'background';
   batchId?: string;
   retryOf?: string | null;
+  /** A copy from the owner's library folder (wave 7 library track): the commit is use_library_item with this record, not import_asset. */
+  library?: LibraryJobInput;
 }
 
 export interface ReceiveRequest {
@@ -119,6 +122,18 @@ export interface ReceiveRequest {
   declaredLastModified?: string; batchId?: string;
   /** Aborting it stops the stream and deletes the partial file; nothing is enqueued. */
   signal?: AbortSignal;
+  /**
+   * A copy from the owner's library folder (wave 7 library track; library/contract.ts). `via` stays the request's origin
+   * ('browser'); the asset gets provenance.library and NO provenance.upload. `expect` is checked against the received bytes before
+   * anything is stored (library_hash_mismatch / library_changed_since_index): a file item's ledger sha256, or a tree file's indexed
+   * size and mtime (its bytes are hashed as every import is).
+   */
+  library?: LibraryJobInput;
+}
+/** The library part of an import (ReceiveRequest.library, ImportJobInput.library). Worker A fills the branch in importQueue.ts. */
+export interface LibraryJobInput {
+  record: LibraryRecord;
+  expect: { sha256: string } | { bytes: number; mtimeMs: number };
 }
 export interface ImportQueue {
   /**
