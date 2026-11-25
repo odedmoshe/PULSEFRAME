@@ -3,10 +3,10 @@
  * Pure. Candidates are suggestions: callers show them or submit them as a proposal; nothing here edits a document.
  */
 import * as T from '@pulseframe/time';
-import type { ProjectDocument } from './schema.ts';
+import type { MediaClip, ProjectDocument } from './schema.ts';
 import type { OpCall } from './ops.ts';
 import { sourceEnd, timelineAt, timelineOfSource } from './speed.ts';
-import { timingRelations } from './lineage.ts';
+import { beatsFor, sceneCutsFor, timingRelations } from './lineage.ts';
 
 export interface TimeRange { start: T.RationalTime; end: T.RationalTime }
 
@@ -108,14 +108,37 @@ export function sourceTimesToTimeline(doc: ProjectDocument, assetId: string, tim
     }
   return out.sort(T.cmp).filter((t, i, a) => i === 0 || !T.eq(a[i - 1]!, t));
 }
-/** Beats and scene cuts as they fall on the timeline right now (derived, never stored: they follow every edit). */
+/**
+ * Beats and scene cuts as they fall on the timeline right now (derived, never stored: they follow every edit). Each clip shows the
+ * beats and scene cuts of its own file, or of the nearest time-preserving source of it that was measured (lineage.ts beatsFor,
+ * sceneCutsFor: a cleaned-up or enhanced copy keeps its source's moments, moved exactly onto its own clock). A copy made without a
+ * recorded time mapping (reversed, stretched, generated) has none of its source's: where they lie in it is unknown.
+ */
 export function timelineMarkers(doc: ProjectDocument) {
   const beats: T.RationalTime[] = [], scenes: T.RationalTime[] = [], downbeats: T.RationalTime[] = [];
-  for (const a of Object.values(doc.analyses ?? {})) {
-    if (a.beats) beats.push(...sourceTimesToTimeline(doc, a.assetId, a.beats.beats));
-    if (a.beats?.downbeats) downbeats.push(...sourceTimesToTimeline(doc, a.assetId, a.beats.downbeats));
-    if (a.scenes) scenes.push(...sourceTimesToTimeline(doc, a.assetId, a.scenes.cuts));
-  }
+  const own = (times: T.RationalTime[] | undefined, offset: T.RationalTime) => (!times ? [] : T.isZero(offset) ? times : times.map((t) => T.sub(t, offset)));
+  // per file, on its own clock, found once however many clips show it
+  const byAsset = new Map<string, { beats: T.RationalTime[]; downbeats: T.RationalTime[]; scenes: T.RationalTime[] }>();
+  const timesOf = (assetId: string) => {
+    let m = byAsset.get(assetId);
+    if (!m) {
+      const b = beatsFor(doc, assetId), s = sceneCutsFor(doc, assetId);
+      m = { beats: b ? own(b.beats.beats, b.offset) : [], downbeats: b ? own(b.beats.downbeats, b.offset) : [], scenes: s ? own(s.cuts, s.offset) : [] };
+      byAsset.set(assetId, m);
+    }
+    return m;
+  };
+  const through = (c: MediaClip, times: T.RationalTime[], out: T.RationalTime[]) => {
+    if (!times.length) return;
+    const end = sourceEnd(c);
+    for (const t of times) if (!T.lt(t, c.sourceIn) && T.lt(t, end)) out.push(timelineOfSource(c, t));
+  };
+  for (const track of doc.sequences[doc.mainSequenceId]?.tracks ?? [])
+    for (const c of track.clips) {
+      if (c.type !== 'media') continue;
+      const m = timesOf(c.assetId);
+      through(c, m.beats, beats); through(c, m.downbeats, downbeats); through(c, m.scenes, scenes);
+    }
   const uniq = (l: T.RationalTime[]) => l.sort(T.cmp).filter((t, i, x) => i === 0 || !T.eq(x[i - 1]!, t));
   return { beats: uniq(beats), sceneCuts: uniq(scenes), /** Beats that start a bar (a subset of `beats`). */ downbeats: uniq(downbeats) };
 }

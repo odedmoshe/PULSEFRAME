@@ -3,6 +3,7 @@ import * as T from '@pulseframe/time';
 import { pacingReport } from '@pulseframe/core';
 import { useEditorState } from './store.ts';
 import { pacingStrings } from './pacing.strings.ts';
+import { skippedNotes } from './transcriptLineage.logic.ts';
 import './pacingPanel.css';
 
 const CUTS_FULL = 8, WPS_FULL = 4.5; // the default limits: a cell is fully saturated at its limit
@@ -45,6 +46,8 @@ export function PacingPanel() {
         ))}
       </div>
       <p className="pacing-totals" data-testid="pacing-totals">{S.totals(num(report.totals.cutsPerMinute), num(report.totals.wordsPerMinute))}</p>
+      {/* clips left out of the word counts because they show a copy that does not keep the recording's timing, by name (as the transcript panel's note) */}
+      {skippedNotes(doc, report.skippedClips, S.untimedSkipped).map((n) => <p key={n} className="muted" role="status" data-testid="pacing-skipped-note">{n}</p>)}
       {report.issues.length === 0 ? <p className="muted" data-testid="pacing-clear">{S.clear}</p> : (
         <ul className="pacing-issues" data-testid="pacing-issues">
           {report.issues.map((i, k) => {

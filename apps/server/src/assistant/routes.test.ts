@@ -182,9 +182,10 @@ describe('the owner sets it up', () => {
     expect(r.status).toBe(202);
     const jobId = r.body.jobId as string;
     await sentNow;
-    // an agent did not start it: refused before the assistant's handler
+    // the request is the owner's: an agent credential is refused before the assistant's handler (mcpCancel.test.ts has the whole rule)
     const agent = await rest('POST', `/jobs/${jobId}/cancel`, bearer(auth.tokens.agent));
     expect(agent.status).toBe(403);
+    expect(agent.body.error.code).toBe('owner_required');
     const c = await rest('POST', `/jobs/${jobId}/cancel`, ownerHeaders());
     expect(c.status).toBe(200);
     expect(c.body).toMatchObject({ jobId, outcome: 'requested' });

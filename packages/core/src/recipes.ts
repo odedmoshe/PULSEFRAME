@@ -8,6 +8,7 @@ import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { CAPTION_PRESETS, type Asset, type MediaClip, type ProjectDocument, type Track } from './schema.ts';
 import { cutOps, skippedClips, sourceTimesToTimeline, sourceRangesToTimeline, timingCoverage, untimedCopyRefusal, type SkippedClip, type TimeRange } from './cleanup.ts';
+import { beatsFor, untimedCopyFinder } from './lineage.ts';
 import { FORMAT_PROFILES } from './variants.ts';
 import { defineOp, findClip, getOp, OpError, type OpCall } from './ops.ts';
 import { flashGapFrames } from './flashSafety.ts';
@@ -123,15 +124,24 @@ function planMontage(doc: ProjectDocument, raw: unknown, ctx: PlanContext): Reci
   const music = findClip(doc, p.musicClipId);
   if (!music || music.clip.type !== 'media' || music.track.kind !== 'audio') throw new RecipeError('not_found', `music clip ${p.musicClipId} must be a clip on an audio track`);
   const mclip = music.clip;
-  const analysis = doc.analyses?.[mclip.assetId]?.beats;
-  if (!analysis || analysis.beats.length < 2) throw new RecipeError('needs_analysis', 'the music has no beat analysis yet', 'Run analyze_asset kind=beats on the music asset first.');
+  // the beats of the clip's own file, else of the nearest time-preserving source of it that was measured (lineage.ts beatsFor: a
+  // cleaned-up copy of the music keeps its beats), moved exactly onto the clip's file's own clock
+  const measured = beatsFor(doc, mclip.assetId);
+  if (!measured) {
+    // a copy made without a recorded time mapping (reversed, stretched) of measured music: where its beats are is unknown, and said so
+    const untimed = untimedCopyFinder(doc, Object.keys(doc.analyses ?? {}).filter((id) => (doc.analyses[id]!.beats?.beats.length ?? 0) >= 2))(mclip.assetId);
+    if (untimed) throw new RecipeError('untimed_copy', `music clip ${mclip.id} plays a copy of the measured music that does not keep its timing, so where the beats are in it is unknown`, 'Measure the beats of this copy itself (analyze_asset kind=beats), or give the clip the measured music or a copy that keeps its timing (replace_clip_media), and try again.');
+  }
+  const analysis = measured?.beats;
+  if (!measured || !analysis || analysis.beats.length < 2) throw new RecipeError('needs_analysis', 'the music has no beat analysis yet', 'Run analyze_asset kind=beats on the music asset first.');
+  const onOwnClock = (times: T.RationalTime[]) => (T.isZero(measured.offset) ? times : times.map((t) => T.sub(t, measured.offset)));
   for (const id of p.assetIds) { const a = doc.assets[id]; if (!a || (!a.video && !a.image)) throw new RecipeError('not_found', `asset ${id} is missing or has no picture`); }
   const from = mclip.start, to = T.add(mclip.start, mclip.duration);
   const fi = (t: T.RationalTime) => T.nearestFrameIndex(t, rate);
-  const beatFrames = [...new Set(sourceTimesToTimeline(doc, mclip.assetId, analysis.beats).filter((t) => !T.lt(t, from) && T.lt(t, to)).map(fi))].sort((a, b) => a - b);
+  const beatFrames = [...new Set(sourceTimesToTimeline(doc, mclip.assetId, onOwnClock(analysis.beats)).filter((t) => !T.lt(t, from) && T.lt(t, to)).map(fi))].sort((a, b) => a - b);
   // On bars, the cut points are the analysis's bar starts (the first beat of each bar), which sound like the natural places to cut.
   if (p.cutOn === 'bars' && !analysis.downbeats?.length) throw new RecipeError('needs_analysis', 'the beat analysis of this music has no bar starts', 'Cut on beats instead, or mark the bar starts with edit_analysis (downbeats).');
-  const barFrames = p.cutOn === 'bars' ? [...new Set(sourceTimesToTimeline(doc, mclip.assetId, analysis.downbeats!).filter((t) => !T.lt(t, from) && T.lt(t, to)).map(fi))].sort((a, b) => a - b) : [];
+  const barFrames = p.cutOn === 'bars' ? [...new Set(sourceTimesToTimeline(doc, mclip.assetId, onOwnClock(analysis.downbeats!)).filter((t) => !T.lt(t, from) && T.lt(t, to)).map(fi))].sort((a, b) => a - b) : [];
   const wantedCuts = (p.cutOn === 'bars' ? barFrames : beatFrames).filter((_, i) => i % p.everyBeats === 0);
   // SAFETY (ADR-0009): cuts between pictures of different brightness flash. A cut that would come less than a third of a
   // second after the last one is left out, so the montage never cuts more than three times a second, however fast the music.
@@ -174,7 +184,7 @@ function planMontage(doc: ProjectDocument, raw: unknown, ctx: PlanContext): Reci
   return {
     recipeId: 'beat-montage', params: p,
     steps: [`Place ${ops.length} picture clips, one every ${p.everyBeats} ${p.cutOn === 'bars' ? 'bar(s), starting on bar starts' : 'beat(s)'}, order: ${p.order}`, ...(thinnedOut ? [`Leave out ${thinnedOut} cut(s) that would come less than a third of a second after the one before, so the montage cuts at most three times a second (faster cutting between bright and dark pictures is a seizure risk for some viewers)`] : []), ...(skipped ? [`Leave ${skipped} segment(s) alone because they hold clips edited by hand`] : []), ...(leftEmpty ? [`Leave ${leftEmpty} segment(s) empty because their clips were deleted by hand (regenerate with restoreRemoved to fill them again)`] : [])],
-    basis: [`${p.cutOn === 'bars' ? `${barFrames.length} bar starts among ` : ''}${beatFrames.length} beats of the music clip (${bpm}, confidence ${analysis.confidence ?? 'n/a'}${analysis.origin.edited ? ', corrected by hand' : ''})`, `method: ${analysis.origin.method}`],
+    basis: [`${p.cutOn === 'bars' ? `${barFrames.length} bar starts among ` : ''}${beatFrames.length} beats of the music clip (${bpm}, confidence ${analysis.confidence ?? 'n/a'}${analysis.origin.edited ? ', corrected by hand' : ''})`, `method: ${analysis.origin.method}`, ...(measured.assetId !== mclip.assetId ? [`measured on "${(doc.assets[measured.assetId]?.name ?? measured.assetId).slice(0, 60)}", which the clip's file is a copy of that keeps its timing; its beats are moved exactly onto the copy's own clock`] : [])],
     ops,
     alternatives: [
       ...([1, 2, 4, 8] as const).filter((n) => n !== p.everyBeats).map((n) => ({ label: `Cut every ${n} ${p.cutOn === 'bars' ? 'bar(s)' : 'beat(s)'}`, params: { ...p, everyBeats: n } })),

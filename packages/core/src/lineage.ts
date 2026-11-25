@@ -94,19 +94,62 @@ export function timingRelations(doc: ProjectDocument, anchorId: string): (assetI
 }
 
 /**
- * Scene cuts of an asset, or of the nearest time-preserving source of it that was analysed (as transcriptFor), with the offset to
- * subtract from them to get this asset's own times. null when none of the chain has scene analysis.
+ * What `pick` finds for an asset, or for the nearest time-preserving source of it (the asset itself first, then up its chain, as
+ * transcriptFor), with the offset to subtract from that source's times to get this asset's own. null when nothing of the chain has it.
  */
-export function sceneCutsFor(doc: ProjectDocument, assetId: string): { cuts: T.RationalTime[]; offset: T.RationalTime; assetId: string } | null {
+function nearestInChain<V>(doc: ProjectDocument, assetId: string, pick: (id: string) => V | undefined): { value: V; offset: T.RationalTime; assetId: string } | null {
   const lin = timeLineage(doc, assetId);
   let offset: T.RationalTime = T.ZERO;
   for (let i = 0; i < lin.chain.length; i++) {
     const id = lin.chain[i]!;
     if (i > 0) offset = T.add(offset, doc.assets[lin.chain[i - 1]!]!.provenance.derived!.sourceRangeStart!);
-    const cuts = Object.hasOwn(doc.analyses ?? {}, id) ? doc.analyses[id]!.scenes?.cuts : undefined;
-    if (cuts) return { cuts, offset, assetId: id };
+    const value = pick(id);
+    if (value !== undefined) return { value, offset, assetId: id };
   }
   return null;
+}
+const analysisOf = (doc: ProjectDocument, id: string) => (Object.hasOwn(doc.analyses ?? {}, id) ? doc.analyses[id] : undefined);
+
+/**
+ * Scene cuts of an asset, or of the nearest time-preserving source of it that was analysed (as transcriptFor), with the offset to
+ * subtract from them to get this asset's own times. null when none of the chain has scene analysis.
+ */
+export function sceneCutsFor(doc: ProjectDocument, assetId: string): { cuts: T.RationalTime[]; offset: T.RationalTime; assetId: string } | null {
+  const found = nearestInChain(doc, assetId, (id) => analysisOf(doc, id)?.scenes?.cuts);
+  return found ? { cuts: found.value, offset: found.offset, assetId: found.assetId } : null;
+}
+
+export type BeatAnalysis = NonNullable<ProjectDocument['analyses'][string]['beats']>;
+/**
+ * The beat analysis of an asset, or of the nearest time-preserving source of it whose beats were measured (as sceneCutsFor: a
+ * cleaned-up or re-encoded copy of a piece of music keeps its beats), with the offset to subtract from its beat and bar times to get
+ * this asset's own. null when none of the chain has one; a copy made without a recorded time mapping never takes its source's.
+ */
+export function beatsFor(doc: ProjectDocument, assetId: string): { beats: BeatAnalysis; offset: T.RationalTime; assetId: string } | null {
+  const found = nearestInChain(doc, assetId, (id) => analysisOf(doc, id)?.beats);
+  return found ? { beats: found.value, offset: found.offset, assetId: found.assetId } : null;
+}
+
+/**
+ * For surfaces that read each clip's own nearest transcript or analysis (the pacing report, the beat montage): whether an asset
+ * that has none is an UNTIMED copy of one of the transcribed or measured recordings `anchorIds` (timingRelations 'untimed'), so
+ * that leaving it out can be said by name. Answers the first such recording, or null.
+ */
+export function untimedCopyFinder(doc: ProjectDocument, anchorIds: readonly string[]): (assetId: string) => { anchorId: string; viaAssetId: string } | null {
+  const rels = new Map<string, ReturnType<typeof timingRelations>>();
+  const memo = new Map<string, { anchorId: string; viaAssetId: string } | null>();
+  return (assetId) => {
+    if (memo.has(assetId)) return memo.get(assetId)!;
+    let out: { anchorId: string; viaAssetId: string } | null = null;
+    for (const anchorId of anchorIds) {
+      let rel = rels.get(anchorId);
+      if (!rel) { rel = timingRelations(doc, anchorId); rels.set(anchorId, rel); }
+      const r = rel(assetId);
+      if (r?.kind === 'untimed') { out = { anchorId, viaAssetId: r.viaAssetId }; break; }
+    }
+    memo.set(assetId, out);
+    return out;
+  };
 }
 
 /** The current master text of a translated id: a transcript phrase (segment id) or a manual caption cue (clip id); null when it no longer exists. */

@@ -44,6 +44,18 @@ only to its honest setup state** (2026-11-19). It reopens B-9 per the owner's ap
     phrasings would need the owner's explicit consent and is not built.
 13. Optional schema use only; no version bump.
 
+## Note 2026-11-24 — who may cancel an assistant job
+Decision 10 says job cancel reaches assistant jobs. It reaches them from the owner's own session only, through
+`POST /jobs/{jobId}/cancel` and MCP `cancel_job` alike (one handler, `AssistantJobs.cancel`; `cancel_job` had no
+dispatch for these jobs before). An agent credential is refused on both surfaces with 403 `owner_required`, whatever
+its grant: the request is the owner's (their typed text, decision 12; their money, decision 9), it runs as
+agent:assistant, which no token can be (decision 8), and ADR-0002's "agents may only cancel their own jobs" has one
+exception, the owner's in-tab export, which is not this. The refusal gives the reason, the next step and the job id it
+was asked about, and nothing of the request or of the job's state; the checks before it (edit scope, project in scope,
+agents not paused, a grant that runs jobs) answer as for any job, so a credential learns no more than `get_job`
+already tells it. Covered by `apps/server/src/assistant/mcpCancel.test.ts`. The editor has no control that cancels a
+request yet (the wording «ביטול הבקשה» exists, unused): the owner cancels through their session's REST or MCP.
+
 ## Consequences / what is not promised
 - Without a provider the assistant row says it is not connected («עוזר השפה לא מחובר»). Nothing is fabricated.
 - The lexicon covers listed phrasings only; there is no corpus of how the owner speaks.

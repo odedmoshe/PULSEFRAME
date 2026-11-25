@@ -22,11 +22,22 @@ import { assistantSummary } from './summary.ts';
 
 export interface AssistantRouteContext { cfg: Config; store: Store; gov: Governance; deps: AssistantDeps }
 export interface AssistantJobControls {
-  /** POST /api/v1/jobs/:jobId/cancel for an assistant.propose job (the lead wires it in http.ts). */
+  /** POST /api/v1/jobs/:jobId/cancel and MCP cancel_job for an assistant.propose job: the one cancel both surfaces call (http.ts hands it to createMcp's bindAssistant). */
   cancel(p: Principal, jobId: string): ReturnType<AssistantJobs['cancel']>;
   /** Resolves when a job started here has finished its run. */
   done(jobId: string): Promise<void>;
 }
+
+/**
+ * Who may cancel an assistant job (ADR-0027 decisions 8 and 10 with its note of 2026-11-24; ADR-0002): the owner's own session only.
+ * The request is the owner's (their words, their money), it runs as agent:assistant, a principal no token can be, and "agents
+ * may only cancel their own jobs" has one exception, which is not this. The one refusal REST and MCP give an agent credential
+ * (http.ts assertMayCancel, and the handler below): the reason with the next step, the job id it was asked about and nothing else
+ * of the job (no status, no stage, nothing of the request).
+ */
+export const assistantCancelRefusal = (jobId: string) => new ApiError(403, 'owner_required',
+  'a language-assistant request belongs to the owner\'s own session, so an agent credential cannot cancel it', { jobId },
+  'Ask the owner to cancel it from their own session; left alone it ends when the service answers, and it only ever makes a proposal the owner accepts or rejects.');
 
 const owner = (p: Principal) => {
   if (!isOwnerSession(p)) throw new ApiError(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only', undefined, 'The owner sets it up in Settings.');
@@ -62,7 +73,7 @@ export function createAssistantHandlers(ctx: AssistantRouteContext): AssistantHa
     putKey: (p, key) => { owner(p); return rt.files.writeKey(key); },
     deleteKey: (p) => { owner(p); return rt.files.deleteKey(); },
     request: (p, projectId, body) => { owner(p); return jobs.start(p, projectId, body); },
-    cancel: (p, jobId) => { owner(p); return jobs.cancel(jobId, p.actor); },
+    cancel: (p, jobId) => { if (!isOwnerSession(p)) throw assistantCancelRefusal(jobId); return jobs.cancel(jobId, p.actor); },
     done: (jobId) => jobs.done(jobId),
   };
 }

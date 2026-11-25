@@ -1,7 +1,7 @@
 {
-  "ranAt": "2026-11-24T23:34:58.777Z",
+  "ranAt": "2026-11-25T00:19:00.857Z",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
+    "platform": "Linux 6.18.44-fc-v880 x64",
     "browser": "153.0.8010.12"
   },
   "scope": "Automated heuristic audit of the editor with all Inspector panels shown and one clip selected, in the dark theme (every state) and the light theme (the main states), in Hebrew and English. Not a WCAG conformance claim; no screen-reader or user testing.",
@@ -145,7 +145,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_55a0015e4c0]",
+          "focusAfterClose": "button[data-testid=more-ast_812f89484c0]",
           "focusReturned": true
         },
         {
@@ -644,7 +644,7 @@
         },
         {
           "state": "cache-sheet-first",
-          "controls": 476,
+          "controls": 475,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -653,7 +653,7 @@
         },
         {
           "state": "cache-sheet-ready",
-          "controls": 478,
+          "controls": 477,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -765,7 +765,7 @@
         },
         {
           "state": "multicam-panel",
-          "controls": 381,
+          "controls": 382,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -852,6 +852,16 @@
           "noFocusRing": [],
           "shown": true,
           "text": "הקליפ reversed.mp4 לא נחתך לפי ההקלטה: הוא מציג עותק שלא שומר על התזמון שלה"
+        },
+        {
+          "state": "pacing-skipped-note",
+          "controls": 364,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "המילים של הקליפ reversed.mp4 לא נספרו: הוא מציג עותק שלא שומר על התזמון של ההקלטה"
         },
         {
           "state": "archive-import-note",
@@ -1016,7 +1026,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_55a0015e4c0]",
+          "focusAfterClose": "button[data-testid=more-ast_812f89484c0]",
           "focusReturned": true
         },
         {
@@ -1515,7 +1525,7 @@
         },
         {
           "state": "cache-sheet-first",
-          "controls": 476,
+          "controls": 475,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1542,7 +1552,7 @@
         },
         {
           "state": "cache-sheet-disabled",
-          "controls": 476,
+          "controls": 477,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1725,6 +1735,16 @@
           "text": "Clip reversed.mp4 was not cut by the recording's times: it shows a copy that does not keep its timing"
         },
         {
+          "state": "pacing-skipped-note",
+          "controls": 364,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "The words of clip reversed.mp4 are not counted: it shows a copy that does not keep the recording's timing"
+        },
+        {
           "state": "archive-import-note",
           "controls": 341,
           "unnamed": [],
@@ -1845,6 +1865,16 @@
           "text": "הקליפ reversed.mp4 לא נחתך לפי ההקלטה: הוא מציג עותק שלא שומר על התזמון שלה"
         },
         {
+          "state": "pacing-skipped-note",
+          "controls": 364,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "המילים של הקליפ reversed.mp4 לא נספרו: הוא מציג עותק שלא שומר על התזמון של ההקלטה"
+        },
+        {
           "state": "archive-import-note",
           "controls": 341,
           "unnamed": [],
@@ -1915,7 +1945,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 472,
+          "controls": 471,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1959,12 +1989,12 @@
         },
         {
           "state": "missing-media",
-          "controls": 329,
+          "controls": 328,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
-          "shown": false
+          "shown": true
         },
         {
           "state": "transcript-skipped-note",
@@ -1975,6 +2005,16 @@
           "noFocusRing": [],
           "shown": true,
           "text": "Clip reversed.mp4 was not cut by the recording's times: it shows a copy that does not keep its timing"
+        },
+        {
+          "state": "pacing-skipped-note",
+          "controls": 364,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "The words of clip reversed.mp4 are not counted: it shows a copy that does not keep the recording's timing"
         },
         {
           "state": "archive-import-note",
@@ -2013,32 +2053,32 @@
       ]
     }
   ],
-  "findings": 1,
+  "findings": 0,
   "findingsByRun": [
     {
       "theme": "dark",
       "uiLanguage": "he",
-      "states": 76,
+      "states": 77,
       "findings": 0
     },
     {
       "theme": "dark",
       "uiLanguage": "en",
-      "states": 76,
+      "states": 77,
       "findings": 0
     },
     {
       "theme": "light",
       "uiLanguage": "he",
-      "states": 11,
+      "states": 12,
       "findings": 0
     },
     {
       "theme": "light",
       "uiLanguage": "en",
-      "states": 11,
-      "findings": 1
+      "states": 12,
+      "findings": 0
     }
   ],
-  "result": "FINDINGS"
+  "result": "NO FINDINGS (heuristic)"
 }

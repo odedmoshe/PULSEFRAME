@@ -4,8 +4,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, pacingReport, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { dictionaries } from '@pulseframe/i18n';
+import { pacingStrings } from './pacing.strings.ts';
 import { recordingAt, recordingToTimeline, skippedNotes, speechClipsOf, transcriptOfSelection } from './transcriptLineage.logic.ts';
 
 const R = { num: 30, den: 1 };
@@ -59,5 +60,14 @@ describe('the transcript of a clip that shows a derived copy', () => {
     expect(skippedNotes(s.doc, skipped, dictionaries.he['transcript.untimedSkipped'])).toEqual(['הקליפ reversed.mp4 לא נחתך לפי ההקלטה: הוא מציג עותק שלא שומר על התזמון שלה']);
     expect(skippedNotes(s.doc, skipped, dictionaries.en['transcript.untimedSkipped'])).toEqual(['Clip reversed.mp4 was not cut by the recording\'s times: it shows a copy that does not keep its timing']);
     expect(skippedNotes(s.doc, undefined, dictionaries.en['transcript.untimedSkipped'])).toEqual([]);
+  });
+  it('the pacing panel names the clips the pacing report left out, one note per file, in its own words (nothing is cut there), in both languages', () => {
+    const s = setup();
+    // the report's own data: the reversed rendition on the timeline (the fixture's clip), named by core pacingReport
+    const report = pacingReport(s.doc);
+    expect(report.skippedClips.map((c) => c.assetId)).toContain(s.rev);
+    expect(skippedNotes(s.doc, report.skippedClips, pacingStrings.he.untimedSkipped)).toEqual(['המילים של הקליפ reversed.mp4 לא נספרו: הוא מציג עותק שלא שומר על התזמון של ההקלטה']);
+    expect(skippedNotes(s.doc, report.skippedClips, pacingStrings.en.untimedSkipped)).toEqual(['The words of clip reversed.mp4 are not counted: it shows a copy that does not keep the recording\'s timing']);
+    for (const lang of ['he', 'en'] as const) expect(pacingStrings[lang].untimedSkipped.match(/\{\w+\}/g)).toEqual(['{name}']);
   });
 });

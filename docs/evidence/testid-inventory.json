@@ -1,7 +1,7 @@
 {
-  "ranAt": "2026-11-24T23:34:55.234Z",
+  "ranAt": "2026-11-25T00:25:33.608Z",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
+    "platform": "Linux 6.18.44-fc-v880 x64",
     "browser": "153.0.8010.12"
   },
   "scope": "Every data-testid a proof or the a11y audit (packages/evals/src) refers to. static: found in the web source (attribute, attribute template, or string constant; via: the templates that can emit it), and never on weaker evidence than the report before it. dynamic: the states of the built editor, on a synthetic project at 1440x900, in whose DOM the id was present; an empty list means the id is reached only in its own proof scenario. Not a proof that a control works: the proofs do that.",
@@ -34,14 +34,14 @@
     "13-export-finished"
   ],
   "summary": {
-    "ids": 656,
+    "ids": 659,
     "patterns": 29,
     "staticMissing": [],
-    "inTheDomOfAState": 280,
-    "onlyInItsOwnProofScenario": 376,
+    "inTheDomOfAState": 282,
+    "onlyInItsOwnProofScenario": 377,
     "lostSinceTheLastReport": [],
     "acceptedWithLosses": false,
-    "unreadableReferences": 50
+    "unreadableReferences": 51
   },
   "result": "PASS",
   "ids": [
@@ -321,10 +321,12 @@
     {"id":"insp-tab-effects","kind":"exact","usedBy":["creative-tools-proof.ts"],"static":{"found":true,"how":"template","where":["apps/web/src/editor/InspectorObject.tsx (template literal)"],"via":["insp-tab-*"]},"dynamic":["03-clip-selected","04-format-9x16","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes"]},
     {"id":"inspector-panel-*","kind":"pattern","usedBy":["editor-ui.ts","phase3-proof.ts"],"static":{"found":true,"how":"template","where":["apps/web/src/editor/Inspector.tsx","apps/web/src/editor/Inspector.tsx (template literal)"],"via":["inspector-panel-*"]},"dynamic":["01-start-empty","02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates","13-export-finished"]},
     {"id":"inspector-tab-*","kind":"pattern","usedBy":["editor-ui.ts","phase3-proof.ts"],"static":{"found":true,"how":"template","where":["apps/web/src/editor/Inspector.tsx","apps/web/src/editor/Inspector.tsx (template literal)","apps/web/src/editor/InspectorObject.tsx (template literal)"],"via":["inspector-tab-*"]},"dynamic":["01-start-empty","02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates","13-export-finished"]},
-    {"id":"inspector-tab-all","kind":"exact","usedBy":["editor-ui.ts","phase3-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/Inspector.tsx"]},"dynamic":["01-start-empty","02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates","13-export-finished"]},
+    {"id":"inspector-tab-all","kind":"exact","usedBy":["a11y-audit.ts","editor-ui.ts","phase3-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/Inspector.tsx"]},"dynamic":["01-start-empty","02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates","13-export-finished"]},
     {"id":"inspector-tab-clip","kind":"exact","usedBy":["editor-interactions-proof.ts","gpu-proof.ts"],"static":{"found":true,"how":"template","where":["apps/web/src/editor/Inspector.tsx","apps/web/src/editor/Inspector.tsx (template literal)","apps/web/src/editor/InspectorObject.tsx (template literal)"],"via":["inspector-tab-*"]},"dynamic":["03-clip-selected","04-format-9x16","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates"]},
+    {"id":"inspector-tab-deliver","kind":"exact","usedBy":["a11y-audit.ts"],"static":{"found":true,"how":"template","where":["apps/web/src/editor/Inspector.tsx","apps/web/src/editor/Inspector.tsx (template literal)","apps/web/src/editor/InspectorObject.tsx (template literal)"],"via":["inspector-tab-*"]},"dynamic":["10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates"]},
     {"id":"inspector-tab-sound","kind":"exact","usedBy":["voice-proof.ts"],"static":{"found":true,"how":"template","where":["apps/web/src/editor/Inspector.tsx","apps/web/src/editor/Inspector.tsx (template literal)","apps/web/src/editor/InspectorObject.tsx (template literal)"],"via":["inspector-tab-*"]},"dynamic":["09-tab-sound","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates"]},
     {"id":"inspector-tab-speech","kind":"exact","usedBy":["speech-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/AiTools.tsx"]},"dynamic":["08-tab-captions","x-tab-speech","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates"]},
+    {"id":"inspector-tabs-back","kind":"exact","usedBy":["a11y-audit.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/Inspector.tsx"]},"dynamic":["x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates"]},
     {"id":"key-strip","kind":"exact","usedBy":["a11y-audit.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/keyframes.testids.ts"]},"dynamic":[]},
     {"id":"key-strip-key","kind":"exact","usedBy":["a11y-audit.ts","editor-interactions-proof.ts","keyframes-proof.ts","phase3-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/keyframes.testids.ts"]},"dynamic":[]},
     {"id":"keyframe-add","kind":"exact","usedBy":["editor-interactions-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/InspectorObject.tsx"]},"dynamic":["03-clip-selected","04-format-9x16","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu"]},
@@ -418,6 +420,7 @@
     {"id":"narration-use-reference","kind":"exact","usedBy":["voice-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/SoundPanel.tsx"]},"dynamic":[]},
     {"id":"open-palette","kind":"exact","usedBy":["a11y-audit.ts","command-bar-proof.ts","editor-interactions-proof.ts","lifeline-ui-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/Header.tsx"]},"dynamic":["01-start-empty","02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates","x-rail-ai","13-export-finished"]},
     {"id":"pacing-issues","kind":"exact","usedBy":["creative-tools-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/PacingPanel.tsx"]},"dynamic":[]},
+    {"id":"pacing-skipped-note","kind":"exact","usedBy":["a11y-audit.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/PacingPanel.tsx"]},"dynamic":[]},
     {"id":"pacing-strip","kind":"exact","usedBy":["creative-tools-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/PacingPanel.tsx"]},"dynamic":["10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates"]},
     {"id":"pacing-totals","kind":"exact","usedBy":["creative-tools-proof.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/PacingPanel.tsx"]},"dynamic":["10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates"]},
     {"id":"pack-back","kind":"exact","usedBy":["a11y-audit.ts","lifeline-ui-proof.ts"],"static":{"found":true,"how":"constant","where":["apps/web/src/editor/packs.testids.ts"]},"dynamic":[]},
@@ -703,7 +706,8 @@
     {"id":"workspace-switch","kind":"exact","usedBy":["editor-interactions-proof.ts","editor-ui.ts"],"static":{"found":true,"how":"attribute","where":["apps/web/src/editor/Header.tsx"]},"dynamic":["01-start-empty","02-main","03-clip-selected","04-format-9x16","05-busy-timeline","06-gallery-transitions","07-text-selected","08-tab-captions","09-tab-sound","10-tab-deliver","11-command-palette","12-english-main","14-projects-dialog","x-tab-speech","x-tab-review","x-tab-recipes","x-tab-all-clip-selected","x-source-viewer","x-clip-menu","x-card-menu","x-agent-menu","x-rail-text","x-rail-elements","x-rail-templates","x-rail-ai","13-export-finished"]}
   ],
   "unreadableReferences": [
-    {"file":"packages/evals/src/a11y-audit.ts","line":357,"text":"data-testid=${id}]","why":"no call passes a literal for \"id\""},
+    {"file":"packages/evals/src/a11y-audit.ts","line":160,"text":"data-testid=\"${was}\"","why":"no call passes a literal for \"was\""},
+    {"file":"packages/evals/src/a11y-audit.ts","line":384,"text":"data-testid=${id}]","why":"no call passes a literal for \"id\""},
     {"file":"packages/evals/src/a11y-render-cache.ts","line":61,"text":"data-testid=${id}]","why":"no call passes a literal for \"id\""},
     {"file":"packages/evals/src/a11y-render-cache.ts","line":66,"text":"data-testid=${id}]","why":"no call passes a literal for \"id\""},
     {"file":"packages/evals/src/a11y-render-cache.ts","line":71,"text":"data-testid=${id}]","why":"no call passes a literal for \"id\""},
