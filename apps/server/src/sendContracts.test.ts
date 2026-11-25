@@ -2,7 +2,7 @@
  * Lead contracts of track send on the server (wave 7): the clip-loudness route and MCP tool answer an honest 501 not_built until
  * worker A builds the measurement (after the body and existence checks); a target size is an honest blocker until worker B builds
  * the fit; the browser route refuses a target size and the limiter; the options of older jobs parse as before; programmeLoudness
- * moved to its own file and is still the one REST and MCP use. The it.todo rows name what A and B must make pass.
+ * moved to its own file and is still the one REST and MCP use. What A and B built is tested in clipLoudness.test.ts, sizeFit.test.ts and exportMetadata.test.ts.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -106,11 +106,4 @@ describe('send: server contracts (wave 7 pre-pass)', () => {
     expect(PEOPLE_MCP_TOOLS.measure_clip_loudness).toEqual(['reader-document']);
     expect(exporter.fitFault).toBeNull();
   });
-  it.todo('A: measure_clip_loudness returns revision, per-clip LUFS/peak/gain/status and the median; too_short under 0.4 s (clipLoudness.test.ts)');
-  it.todo('A: programmeLoudness returns limiter (what export would do) and soundChecks read from the WAV export would write');
-  it.todo('A: without settings.limiter the exported WAV is byte-identical to the path before wave 7 (proof L3)');
-  it.todo('B: plan with sizeFit gives manifest.fit and size_fit_format / size_fit_too_small (details.minBytes) instead of size_fit_not_built (sizeFit.test.ts)');
-  it.todo('B: segment keys are the same with and without sizeFit');
-  it.todo('B: startServer(…, { fitFault }) sets Exporter.fitFault and the job output labels it TEST; nothing reads the environment');
-  it.todo('B: every MP4 output carries only ALLOWED_OUTPUT_TAGS (exportMetadata.test.ts)');
 });
