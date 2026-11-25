@@ -181,7 +181,7 @@ describe('restore', () => {
     expect(conflict.message.startsWith('restoring this version would make the project invalid: ')).toBe(true);
     expect(whole().revision).toBe(rev);
     expect(refusal(() => restoreVersion(store, gov, OWNER, pid, 'ver_none', {})).code).toBe('version_not_found');
-  });
+  }, 60_000); // 5,001 markers are committed and diffed: seconds on a busy machine
   it('V5: a file removed since and cleaned up from storage comes back with its bytes', () => {
     const blob = path.join(store.blobDir, HEX);
     fs.writeFileSync(blob, 'abcd');
