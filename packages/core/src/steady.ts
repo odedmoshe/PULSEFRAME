@@ -339,8 +339,9 @@ const zoomPmOf = (need: number) => Math.max(1000, Math.min(2000, Math.ceil(1000 
  * - zoomPm given: stored as is (maxCrop is then ignored). Otherwise without maxCrop: zoomPmOf(strength).
  * - maxCrop: when the asked strength's zoom fits (integer test cropFits), it is kept. Otherwise the strength is bisected in
  *   integers on [STEADY_MIN_STRENGTH, asked]: lo always a strength whose zoom was computed and fits, hi one that does not
- *   (at most 7 plans); the result is lo (verified by construction). When even the floor does not fit: strength
- *   STEADY_MIN_STRENGTH with the largest zoom that fits maxCrop, and the cover limit engages (limitedFrames).
+ *   (the asked strength and the floor, then at most 7 bisection plans); the result is lo, verified by construction (its zoom
+ *   was computed and fits), so no step-down is needed. When even the floor does not fit: strength STEADY_MIN_STRENGTH with the
+ *   largest zoom that fits maxCrop, and the cover limit engages (limitedFrames).
  * - limitedFrames: runs [from, to) of source frames whose pose needs more than the zoom (exactly where limitToCover limits);
  *   reason 'reach' outside [first, last].
  */
