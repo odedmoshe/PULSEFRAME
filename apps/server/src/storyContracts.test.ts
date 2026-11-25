@@ -140,9 +140,6 @@ describe('the story through the recipe routes and tools (lead)', () => {
     if (STORY_REGEN_BUILT) return;
     expect(() => storyRegeneration(null as never, null as never, {})).toThrow(/not built/);
   });
-  it.todo('W2: plan answers the view with context (voice measure, voiceState) and no ops; apply commits one revision; regenerate keeps hand edits');
-  it.todo('W2: a regeneration with other cutsMs answers 409 story_retap_not_built and changes nothing');
-  it.todo('W2: plan and apply wait at most STORY.waitWaveformMs for the waveform row, then answer voice_pending');
 });
 
 describe('the recipe regenerate route passes expectedRevision (pre-pass fix)', () => {
