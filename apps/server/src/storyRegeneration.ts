@@ -12,12 +12,13 @@
  *   the removed picks (params.removedPicks) are among ctx.picked, so each comes back at its own cut.
  * - The run's tracks by role (pictures, own sound, music: familyFilm.ts filmRunTracks; voice: the narration's track) are reused, and
  *   the previous mix is passed, so a level or ducking set by hand on a reused track survives a rebuild that does not change the mix.
- * Fill rule, recorded cuts and keys: the planner (core story.ts). Nothing is stored beyond the run record (storyRunRecordParams).
+ * Fill rule, recorded cuts and keys: the planner (core story.ts). Nothing is stored beyond the run record (storyRegenRecordParams:
+ * storyRunRecordParams plus the kept picks' records).
  */
 import * as T from '@pulseframe/time';
 import {
-  clipEnd, findClip, removedByHand, STORY_BINDS, storyRunPicked, storyRunRemovedPicks,
-  type FilmKeptClip, type ProjectDocument, type RecipeRun, type RegenerateOptions, type SlotRecord, type StoryPicked, type StoryPlanContext,
+  clipEnd, findClip, removedByHand, STORY_BINDS, storyRunPicked, storyRunRecordParams, storyRunRemovedPicks,
+  type FilmKeptClip, type ProjectDocument, type RecipeRun, type RegenerateOptions, type SlotRecord, type StoryPicked, type StoryPlan, type StoryPlanContext,
 } from '@pulseframe/core';
 import { filmRunTracks } from './familyFilm.ts';
 import { runHandEdits, withoutClips } from './templates.ts';
@@ -31,6 +32,8 @@ export interface StoryRegeneration {
   /** Clips kept by hand and their link partners (the narration clip always among keepIds, not necessarily here). */
   protectedIds: string[];
   keepSlots: SlotRecord[]; removedSlots: SlotRecord[]; removedPicks: StoryPicked[];
+  /** The pick records of the pictures kept by hand (their recorded file and cut): they travel on in the new run record (storyRegenRecordParams), so a later rebuild still knows which pick a kept clip holds — also when it was replaced by hand. */
+  keptPicks: StoryPicked[];
   /** Ids the new run record keeps: kept clips, the narration clip, and the run's tracks that still exist. */
   keepIds: string[];
   /** The document without the removable clips (what the plan is made against). */
@@ -68,6 +71,7 @@ export function storyRegeneration(doc: ProjectDocument, run: RecipeRun, params: 
   const known = new Map<string, StoryPicked>();
   for (const r of [...carried, ...picked]) known.set(r.key, r);
   const removedPicks = removedSlots.flatMap((s) => { const k = known.get(s.key); return s.kind === 'picture' && k ? [k] : []; });
+  const keptPicks = keptSlots.flatMap((s) => { const k = known.get(s.key); return s.kind === 'picture' && k ? [k] : []; });
   const narrationLives = !!narrationId && !!findClip(doc, narrationId);
   const keepSlots = [...keptSlots, ...removedSlots, ...(narrationSlot && narrationLives ? [narrationSlot] : [])];
   const without = withoutClips(doc, removable);
@@ -100,5 +104,17 @@ export function storyRegeneration(doc: ProjectDocument, run: RecipeRun, params: 
     ...(previousOwnSound ? { previousOwnSound } : {}),
     previousMusic,
   };
-  return { removable, protectedIds, keepSlots, removedSlots, removedPicks, keepIds, without, ctx, movedKeys };
+  return { removable, protectedIds, keepSlots, removedSlots, removedPicks, keptPicks, keepIds, without, ctx, movedKeys };
+}
+
+/**
+ * The params of the rebuilt run record: storyRunRecordParams of the new plan (its picks, the picks deleted by hand), plus the records
+ * of the picks kept by hand (integration fix: without them a second rebuild no longer knew that a clip replaced by hand holds its
+ * pick, and placed the replaced file again).
+ */
+export function storyRegenRecordParams(plan: Pick<StoryPlan, 'params' | 'picks'>, g: Pick<StoryRegeneration, 'removedPicks' | 'keptPicks'>): Record<string, unknown> {
+  const rec = storyRunRecordParams(plan, g.removedPicks);
+  const placed = new Set(plan.picks.map((p) => p.key));
+  const kept = g.keptPicks.filter((k) => !placed.has(k.key)).map((k) => ({ key: k.key, assetId: k.assetId, cutMs: k.cutMs, how: k.how }));
+  return kept.length ? { ...rec, picked: [...(rec.picked as StoryPicked[]), ...kept] } : rec;
 }

@@ -43,6 +43,15 @@ export function defaultChoices(source: StorySource, doc: ProjectDocument, lang: 
   const ids = [...new Set(source.assetIds)].filter((id) => isPictureAsset(doc.assets[id])).slice(0, 200);
   return { narrationAssetId: null, assetIds: ids, musicAssetId: null, ownSound: 'under', openingTitle: true, openingText: '', event: source.event ?? null, lang };
 }
+/**
+ * The dialog's first choices: the ones kept while the owner went to the phone dialog (Editor.storyToPhone), with any file that left
+ * the library dropped; otherwise the defaults of the source.
+ */
+export function initialChoices(source: StorySource, doc: ProjectDocument, lang: Lang, kept: StoryChoices | null): StoryChoices {
+  if (!kept) return defaultChoices(source, doc, lang);
+  const sound = (id: string | null) => (id && doc.assets[id]?.kind === 'audio' ? id : null);
+  return { ...kept, assetIds: kept.assetIds.filter((id) => isPictureAsset(doc.assets[id])), narrationAssetId: sound(kept.narrationAssetId), musicAssetId: sound(kept.musicAssetId) };
+}
 /** The request for the plan routes (no taps: the tap view adds cutsMs). Null while there is no narration. */
 export function buildStoryParams(c: StoryChoices): StoryParams | null {
   if (!c.narrationAssetId || c.assetIds.length === 0) return null;

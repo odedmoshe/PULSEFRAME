@@ -3,10 +3,8 @@
  * apply / regenerate through the recipe routes with the film's permission checks, the retap refusal, the blocked state, the
  * planner's refusals as API errors, and that nothing about the voice is stored.
  *
- * Until W1 lands, planStory and voiceActivity throw StoryNotBuilt. These tests then run on LABELLED TEST DOUBLES: the core
- * planStoryDouble (story.testDouble.ts) and a threshold double of voiceActivity below; each is used only while the real one is not
- * built (STORY_PLANNER_BUILT / VOICE_ACTIVITY_BUILT), so after W1 the same tests run on the real planner. The regeneration body
- * (storyRegeneration, W1) has no double: its success path runs only once STORY_REGEN_BUILT is true; before, it answers 501.
+ * planStory and voiceActivity are the real ones (W1 merged); the mock below only counts calls and lets a test change one plan.
+ * (Integration removed the labelled doubles and the rows that ran only while W1 was not built.)
  */
 import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
@@ -20,32 +18,20 @@ import type { Asset, StoryPlan, VoiceMeasure } from '@pulseframe/core';
 const doubles = vi.hoisted(() => ({ planCalls: 0, voiceCalls: [] as { buckets: number; totalSamples: number }[], nextPlan: null as null | ((p: StoryPlan) => StoryPlan) }));
 vi.mock('@pulseframe/core', async (importOriginal) => {
   const real = await importOriginal<typeof import('@pulseframe/core')>();
-  const { planStoryDouble } = await import('../../../packages/core/src/story.testDouble.ts');
-  /** LABELLED TEST DOUBLE of voiceActivity (until W1): ranges where a bucket's peak passes 1000, in source samples; never the real rule. */
-  const voiceDouble = (peaks: Int16Array, totalSamples: number): VoiceMeasure => {
-    const ranges: { start: number; end: number }[] = [];
-    for (let k = 0; k < peaks.length / 2; k++) {
-      const loud = Math.max(-peaks[2 * k]!, peaks[2 * k + 1]!) > 1000;
-      const last = ranges.at(-1);
-      if (loud && last && last.end === k * 256) last.end = Math.min(totalSamples, (k + 1) * 256);
-      else if (loud) ranges.push({ start: k * 256, end: Math.min(totalSamples, (k + 1) * 256) });
-    }
-    return { algo: 1, noiseDb10: -600, voiceDb10: -120, flat: ranges.length === 0, ranges };
-  };
   const voiceActivity: typeof real.voiceActivity = (peaks, totalSamples) => {
     doubles.voiceCalls.push({ buckets: peaks.length / 2, totalSamples });
-    return real.VOICE_ACTIVITY_BUILT ? real.voiceActivity(peaks, totalSamples) : voiceDouble(peaks, totalSamples);
+    return real.voiceActivity(peaks, totalSamples);
   };
   const planStory: typeof real.planStory = (doc, params, ctx) => {
     doubles.planCalls++;
-    const plan = real.STORY_PLANNER_BUILT ? real.planStory(doc, params, ctx) : planStoryDouble(doc, params, ctx);
+    const plan = real.planStory(doc, params, ctx);
     const f = doubles.nextPlan; doubles.nextPlan = null;
     return f ? f(plan) : plan;
   };
   return { ...real, voiceActivity, planStory };
 });
 
-import { STORY_PLANNER_BUILT, STORY_RUN_RECIPE_ID, STORY_TEMPLATE_ID, STORY_BLOCKING_TEXT, VOICE_ACTIVITY_BUILT } from '@pulseframe/core';
+import { STORY_RUN_RECIPE_ID, STORY_TEMPLATE_ID, STORY_BLOCKING_TEXT } from '@pulseframe/core';
 import { NARRATION_BURSTS, storyFixtureArgs } from '../../../packages/evals/src/story-fixtures.ts';
 import { Auth } from './auth.ts';
 import { Capabilities } from './capabilities.ts';
@@ -60,7 +46,6 @@ import { Presence } from './presence.ts';
 import { Speech } from './speech.ts';
 import { Store } from './store.ts';
 import { readVoicePeaks, STORY_API_ERRORS, STORY_SERVER_BUILT, storyContext } from './story.ts';
-import { STORY_REGEN_BUILT } from './storyRegeneration.ts';
 
 const USER: Principal = { actor: 'user:owner', kind: 'user', scopes: ['observe', 'edit'] };
 const R = { num: 30, den: 1 };
@@ -205,7 +190,7 @@ describe('plan, apply and regenerate through the recipe routes', () => {
     expect(r.body.context.voiceState).toBe('measured');
     expect(r.body.context.voice.algo).toBe(1);
     expect(doubles.voiceCalls).toEqual([{ buckets: Math.ceil(24 * 48000 / 256), totalSamples: 24 * 48000 }]);
-    if (!VOICE_ACTIVITY_BUILT) expect(r.body.context.voice.ranges.length).toBe(5); // the double joins nothing; the real rule joins the 0.3 s pause (S1)
+    expect(r.body.context.voice.ranges.length).toBe(4); // the real rule joins the 0.3 s pause (S1)
     expect(Object.keys(r.body.context.capture).sort()).toEqual([...s.ids].sort());
     expect(docHash(s.pid)).toBe(before);
     // an observe-only grant and a propose-mode agent may plan
@@ -227,7 +212,7 @@ describe('plan, apply and regenerate through the recipe routes', () => {
     expect(r.status).toBe(200);
     expect(r.body.context.voiceState).toBe('pending');
     expect(r.body.context.voice).toBeNull();
-    if (STORY_PLANNER_BUILT) expect(r.body.warnings.map((w: { code: string }) => w.code)).toContain('voice_pending');
+    expect(r.body.warnings.map((w: { code: string }) => w.code)).toContain('voice_pending');
     expect(took).toBeGreaterThanOrEqual(4900);
     expect(took).toBeLessThan(6000);
   }, 15_000);
@@ -319,7 +304,7 @@ describe('plan, apply and regenerate through the recipe routes', () => {
     // the same taps in another order are the same request: not refused as a retap (built or not)
     const same = await rest('POST', `/projects/${s.pid}/recipe-runs/${a.body.runId}/regenerate`, { params: { cutsMs: [8200, 4500, 4500], ownSound: 'mute' } }, editor());
     expect(same.body?.error?.code).not.toBe('story_retap_not_built');
-    if (!STORY_REGEN_BUILT) expect([same.status, same.body.error.code]).toEqual([501, 'story_not_built']);
+    expect(same.status).toBe(200);
   });
   it('a regeneration of a run that is not a story, or of no run, answers 404; propose mode 403; params not an object 400', async () => {
     const s = await storyProject('regen-refusals');
@@ -332,25 +317,23 @@ describe('plan, apply and regenerate through the recipe routes', () => {
     await expect(store0.regenerateStoryFor(store, gov, USER, s.pid, a.body.runId, 'x')).rejects.toMatchObject({ status: 400, code: 'invalid_request' });
     await expect(store0.regenerateStoryFor(store, gov, USER, s.pid, 'run_nope', {})).rejects.toMatchObject({ status: 404 });
   });
-  it.runIf(STORY_REGEN_BUILT)('regenerate with other music keeps the taps, commits one revision and one undo returns the document', async () => {
+  it('regenerate with other music keeps the taps, commits one revision and one undo returns the document; nothing about the voice is stored', async () => {
     const s = await storyProject('regen');
     const t = editor(), actor = gov.principalForToken(t)!.actor;
+    const rows = () => store.db.prepare('SELECT * FROM derivatives ORDER BY asset_hash, kind').all();
+    const rowsBefore = rows();
     const a = await rest('POST', `/projects/${s.pid}/recipes/story/apply`, { params: { narrationAssetId: s.narration, assetIds: s.ids, cutsMs: [4500, 8200, 15000] } }, t);
     expect(a.status).toBe(200);
     const before = docHash(s.pid), rev = revision(s.pid);
     const r = await rest('POST', `/projects/${s.pid}/recipe-runs/${a.body.runId}/regenerate`, { params: { ownSound: 'mute' }, expectedRevision: rev }, t);
     expect(r.status).toBe(200);
     expect(revision(s.pid)).toBe(rev + 1);
+    // integration (privacy evidence): a rebuild measures the voice again in memory and stores none of it, in the document or in any derivative row
+    const text = JSON.stringify(store.getProject(s.pid).doc);
+    for (const word of ['noiseDb10', 'voiceDb10', '"flat"', 'voiceState', 'onsetsMs']) expect({ word, stored: text.includes(word) }).toEqual({ word, stored: false });
+    expect(rows()).toEqual(rowsBefore);
     expect(r.body.predicted.cuts).toEqual(a.body.predicted.cuts);
     store.undo(s.pid, actor, 'undo');
-    expect(docHash(s.pid)).toBe(before);
-  });
-  it.runIf(!STORY_REGEN_BUILT)('until W1 builds storyRegeneration, a regeneration answers 501 story_not_built and changes nothing', async () => {
-    const s = await storyProject('regen-nb');
-    const a = await rest('POST', `/projects/${s.pid}/recipes/story/apply`, { params: { narrationAssetId: s.narration, assetIds: s.ids } }, editor());
-    const before = docHash(s.pid);
-    const r = await rest('POST', `/projects/${s.pid}/recipe-runs/${a.body.runId}/regenerate`, { params: { ownSound: 'mute' } }, editor());
-    expect([r.status, r.body.error.code]).toEqual([501, 'story_not_built']);
     expect(docHash(s.pid)).toBe(before);
   });
   it('storyContext reads the capture times and the title from the document after the wait', async () => {

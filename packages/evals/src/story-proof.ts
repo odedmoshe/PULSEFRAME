@@ -48,12 +48,15 @@
  *     no screen holds a banned word. U12 every microphone track reads readyState 'ended' after stop, record-again, closing the
  *     dialog, unmount and the page hidden. U13 a key hammered at 10/s: no two cuts shown closer than the gap. U14 the ghost's cut
  *     frames equal the server's after apply. U15 narration-alac.m4a shows «הקובץ לא מתנגן בעורך» and both build buttons are disabled.
+ * Integration (in story-proof.ui.ts): S11e, S11's editor half (ripple trim W, «החלפת מדיה», Delete, «בנייה מחדש» from the bar, one
+ *     undo, «החזרת החלקים שנמחקו»); U2 also checks that the take leaves the page only as one POST to the authenticated import queue;
+ *     U12 also covers «מהטלפון» (the dialog unmounts for the phone dialog and comes back with the picture order kept).
  * Must stay green: typecheck, test, audit:testids, audit:a11y, proof:editor-interactions, proof:perform, proof:family-film,
  * proof:templates, proof:phone-drop, proof:lifeline-ui, proof:music, proof:phase8, conformance:parity, conformance:inputs, conformance:images.
  * Not provable here (the owner's laptop): a real microphone and Windows' permission settings, tap latency with real sound, how the
  * music under the voice sounds, the pause thresholds on a real voice with children in the room, real phone memos (AMR), the Hebrew.
  */
-import { STORY_PROOF_SERVER } from './story-proof.server.ts';
+import { STORY_PROOF_SERVER, stopStoryProofServer } from './story-proof.server.ts';
 import { STORY_PROOF_UI } from './story-proof.ui.ts';
 
 /** One part of the proof: built or not, and its checks (id → run). Each run returns true (pass) or a failure sentence. */
@@ -71,5 +74,8 @@ for (const [name, part] of Object.entries(parts)) {
     console.log(`${r === true ? 'PASS' : 'FAIL'} ${id} (${name})${r === true ? '' : `: ${r}`}`);
     if (r !== true) failed++;
   }
+  // the server part's server (and the jobs it still runs) stops before the browser part starts: on this shared machine its
+  // leftover work made the first browser checks wait past their timeouts (integration, first full run)
+  if (name === 'server') await stopStoryProofServer();
 }
 process.exit(failed ? 1 : 0);

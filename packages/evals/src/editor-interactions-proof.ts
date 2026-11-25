@@ -2238,6 +2238,76 @@ async function main() {
       await ctx.close();
     }
 
+
+    // «ספרו מה היה» (wave 7 story, integration): the palette opens the dialog on the library's pictures; the strip moves a picture
+    // with Alt+arrow; Escape closes it and gives the focus back; «בנו בלי הקשות» applies ONE revision and the story bar appears; the
+    // bar's «בנייה מחדש» opens its menu from the keyboard; Ctrl+Z returns the exact document and takes the bar with it.
+    // The whole story is proved in pnpm proof:story; these rows keep the editor's own keys and surfaces honest around it.
+    console.log('\n# story: palette, strip keys, Escape, build without taps, the bar by keyboard, one undo');
+    {
+      const narr = path.join(art, 'story-narration.wav');
+      ff(['-f', 'lavfi', '-i', "aevalsrc='0.4*sin(2*PI*440*t)*between(mod(t,3),0.3,2.4)':s=48000:d=12", '-ac', '1', '-c:a', 'pcm_s16le', narr]);
+      const stp = (await call('/projects', { name: 'story keys', width: 640, height: 360 })).body.project.id as string;
+      const shots: string[] = [];
+      for (const [i, c] of ['dc1e1e', '1ec81e', '1e1edc'].entries()) { const out = path.join(art, `story-still-${i}.png`); ff(['-f', 'lavfi', '-i', `color=c=0x${c}:s=640x360`, '-frames:v', '1', out]); shots.push((await upload(stp, out)).assetId as string); }
+      const narration = (await upload(stp, narr)).assetId as string;
+      const sctx = await browser.newContext({ viewport: { width: 1500, height: 1000 }, reducedMotion: 'reduce' });
+      await sctx.addInitScript('globalThis.__name = (f) => f');
+      await sctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const sp = await sctx.newPage();
+      const serrs: string[] = [];
+      sp.on('pageerror', (e) => serrs.push(String(e)));
+      await sp.goto(`${s.ownerUrl}&project=${stp}`);
+      await sp.getByTestId('timecode').waitFor({ timeout: 30000 });
+      const shash = async () => JSON.stringify((await call(`/projects/${stp}`)).body.project);
+      const srev = async () => (await call(`/projects/${stp}`)).body.revision as number;
+      await sp.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
+      await sp.keyboard.press('Control+k');
+      await sp.getByTestId('palette-input').fill('ספרו מה היה');
+      await sp.getByTestId('palette-option').first().waitFor({ timeout: 8000 }).catch(() => {});
+      await sp.keyboard.press('Enter');
+      const opened = await sp.getByTestId('story-dialog').waitFor({ timeout: 8000 }).then(() => true, () => false);
+      const items = async () => sp.getByTestId('story-item').evaluateAll((els) => els.map((x) => x.getAttribute('data-asset-id')));
+      const first = await items();
+      await sp.getByTestId('story-item').first().focus();
+      await sp.keyboard.press('Alt+ArrowLeft');
+      const moved = await items();
+      check('story: the palette\'s «ספרו מה היה» with nothing selected opens the dialog on the library\'s three pictures; Alt+← (Hebrew: later) moves the focused picture one place later', opened && first.length === 3 && moved[1] === first[0] && moved[0] === first[1], { first, moved });
+      await sp.keyboard.press('Escape');
+      const closed = await sp.getByTestId('story-dialog').waitFor({ state: 'detached', timeout: 5000 }).then(() => true, () => false);
+      const focusOk = await sp.evaluate(() => !!document.activeElement && document.activeElement !== document.body ? document.activeElement.isConnected : true);
+      check('story: Escape closes the dialog and the focus is on a live element of the page (not lost in the closed dialog)', closed && focusOk, { closed, focusOk });
+      // build without taps
+      await sp.keyboard.press('Control+k');
+      await sp.getByTestId('palette-input').fill('ספרו מה היה');
+      await sp.getByTestId('palette-option').first().waitFor({ timeout: 8000 }).catch(() => {});
+      await sp.keyboard.press('Enter');
+      await sp.getByTestId('story-dialog').waitFor({ timeout: 8000 }).catch(() => {});
+      await sp.getByTestId('story-from-library').selectOption(narration);
+      await sp.waitForFunction(() => document.querySelector('[data-testid=story-build-no-taps]')?.getAttribute('aria-disabled') !== 'true', undefined, { timeout: 15000 }).catch(() => {});
+      const h0 = await shash(), r0 = await srev();
+      await sp.getByTestId('story-build-no-taps').click();
+      const bar = await sp.getByTestId('story-bar').waitFor({ timeout: 30000 }).then(() => true, () => false);
+      const r1 = await srev();
+      check('story: «בנו בלי הקשות» applies the story as ONE revision, closes the dialog and shows the story bar', bar && r1 === r0 + 1 && (await sp.getByTestId('story-dialog').count()) === 0, { r0, r1, bar });
+      await sp.getByTestId('story-bar-rebuild').focus();
+      await sp.keyboard.press('Enter');
+      const menu = await sp.getByRole('menuitem').first().waitFor({ timeout: 5000 }).then(() => true, () => false);
+      const menuItems = await sp.getByRole('menuitem').allInnerTexts();
+      await sp.keyboard.press('Escape');
+      const menuGone = await sp.getByRole('menuitem').first().waitFor({ state: 'detached', timeout: 5000 }).then(() => true, () => false);
+      check('story: the bar\'s «בנייה מחדש» opens its menu with Enter (other music or none, the clips\' own sound) and Escape closes it; nothing is committed', menu && menuItems.length >= 1 && menuGone && (await srev()) === r1, { menuItems });
+      await sp.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
+      await sp.keyboard.press('Control+z');
+      let back = false;
+      for (let i = 0; i < 60 && !back; i++) { back = (await shash()) === h0; if (!back) await sleep(150); }
+      const barGone = await sp.getByTestId('story-bar').waitFor({ state: 'detached', timeout: 8000 }).then(() => true, () => false);
+      const kept = !!(await call(`/projects/${stp}`)).body.project.assets[narration];
+      check('story: one Ctrl+Z returns the exact document from before the story, the bar goes with it, and the narration stays in the library', back && barGone && kept, { back, barGone, kept });
+      check('story rows: the page logged no script error', serrs.length === 0, { errors: serrs.slice(0, 4) });
+      await sctx.close();
+    }
+
     await page.close();
   } catch (e) {
     console.error(e);
