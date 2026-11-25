@@ -46,7 +46,7 @@ type RT = T.RationalTime;
  */
 export interface SongFitter {
   /** Up to MUSICFIT.maxCandidates removals of whole bars from the song played from `startAt`, ordered (core orderCandidates). */
-  candidates(a: { store: Store; projectId: string; doc: ProjectDocument; assetId: string; startAt: RT; wantedSeconds: number; signal?: AbortSignal }): Promise<{ candidates: JoinCandidate[]; basis: string[] }>;
+  candidates(a: { store: Store; projectId: string; doc: ProjectDocument; assetId: string; startAt: RT; wantedSeconds: number; signal?: AbortSignal }): Promise<{ candidates: JoinCandidate[]; basis: string[]; /** The song's usable end (source clock, whole 48 kHz frames), so the made length is exact. */ usableEnd?: RT }>;
   /** The made file of one removal (checked against the song's current analysis: 409 fit_stale otherwise), stored, not committed. */
   make(a: { store: Store; projectId: string; doc: ProjectDocument; assetId: string; startAt: RT; removal: JoinRemoval; actor: string; signal?: AbortSignal }): Promise<{ asset: Omit<Asset, 'id'>; grid: FittedGrid }>;
 }
@@ -69,7 +69,7 @@ export const builtSongFitter: SongFitter = {
       `the song's bar starts come from its own beat analysis: ${s.bars} bar starts in the part used, from ${secs(startAt)} s to its usable end at ${secs(s.usableEnd)} s; only whole bars are removed`,
       `measured beat-interval spread ${s.tempoSpreadMs.toFixed(1)} ms; beat confidence ${s.beatConfidence === null ? 'not given' : s.beatConfidence.toFixed(2)}; each candidate is scored on the pitch classes and band levels of the bars on both sides of the join (${s.candidates.length} candidate(s) kept)`,
     ];
-    return { candidates: s.candidates, basis };
+    return { candidates: s.candidates, basis, usableEnd: s.usableEnd };
   },
   async make({ store, doc, assetId, startAt, removal, actor, signal }) {
     const m = await makeFittedSong(store, doc, assetId, startAt, removal, actor, signal ? { signal } : {});
@@ -304,6 +304,9 @@ async function prepareClip(store: Store, projectId: string, doc: ProjectDocument
     planMake = { kind: 'fitted', sourceAssetId: choice.assetId, candidates: r.candidates, chosen: r.chosen };
     const c = r.candidates[r.chosen]!;
     ending = endingOf(c.madeSeconds, wantedSeconds, false);
+    // the clip ends where the made file ends when that comes before the target (ending early): the same rule planMusicSwap applies
+    // on the made file in apply's second plan (its end floored to a frame from the clip's start), else apply refuses fit_unstable
+    if (found.usableEnd) firstEndFrame = Math.min(firstEndFrame, T.frameIndexAt(T.add(clip.start, madeLength(startAt, c.removal, found.usableEnd)), doc.settings.frameRate));
     warnings.push(...joinNotes(c));
     basis.push(...found.basis, ...joinBasis(c));
   } else {
@@ -330,6 +333,11 @@ async function prepareClip(store: Store, projectId: string, doc: ProjectDocument
   if (impacts.some((x) => x.framesFromBeatAfter !== 0)) warnings.push(impactNote(impacts));
   const plan: MusicFitPlan = { revision, target: { kind: runId ? (doc.recipeRuns[runId]!.recipeId === FAMILY_FILM_RUN_RECIPE_ID ? 'film' : 'template') : 'clip', clipId, runId }, make: planMake, wantedSeconds: Math.round(wantedSeconds * 1000) / 1000, ending, recut: null, impacts, warnings, blocking: [], basis };
   return { plan, make, firstEndFrame, edit };
+}
+/** The exact length of a made file (splice.ts: e − s − (t − f), every time taken to its nearest 48 kHz frame). */
+function madeLength(startAt: RT, removal: JoinRemoval, usableEnd: RT): RT {
+  const fr = (t: RT) => T.nearestSampleIndex(t, MUSIC_SAMPLE_RATE);
+  return T.rt(fr(usableEnd) - fr(startAt) - (fr(removal.to) - fr(removal.from)), MUSIC_SAMPLE_RATE);
 }
 function impactNote(impacts: MusicFitPlan['impacts']): MusicFitNote {
   const off = impacts.filter((x) => x.framesFromBeatAfter !== 0);
