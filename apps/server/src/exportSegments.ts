@@ -378,6 +378,8 @@ export interface SegmentedExportDeps {
   canceled(): boolean;
   stage(text: string): void;
   onProcess(p: { kill(signal?: NodeJS.Signals): boolean } | null): void;
+  /** Picture checks (wave 7 send, C10): the cells of every programme frame of the range, in order, as the flash report reads them (stored ones for reused segments). */
+  onCells?(cells: FlashCells): void;
 }
 export interface SegmentedExportResult { report: SegmentedExportReport; photosensitivity: PhotosensitivityReport | null; audio: MixResult; validation: Record<string, unknown>; renderStageMs: unknown }
 
@@ -668,7 +670,9 @@ async function segmentedExport(deps: SegmentedExportDeps, pin: SegmentPin): Prom
       const o = sink!.outcomes.get(i)!;
       return o.storedKey ? store.readCellsSync(o.storedKey) : decodeCells(fs.readFileSync(o.cellsFile!));
     };
-    const photosensitivity = output.frames > 1 ? reportFromCells((function* () { for (let i = 0; i < plan.segments.length; i++) yield* cellsOf(i); })(), rate, output.firstFrame) : null;
+    // the same cells feed the picture checks (deps.onCells), so reused segments are checked without rendering them again
+    const onCells = deps.onCells;
+    const photosensitivity = output.frames > 1 ? reportFromCells((function* () { for (let i = 0; i < plan.segments.length; i++) for (const c of cellsOf(i)) { onCells?.(c); yield c; } })(), rate, output.firstFrame) : null;
 
     // 9. Join by stream copy, then validate.
     checkCancel();
