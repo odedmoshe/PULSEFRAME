@@ -2010,7 +2010,11 @@ async function main() {
       await D2.pg.keyboard.press('Enter');
       let gone = false;
       for (let i = 0; i < 80 && !gone; i++) { gone = (await doc2(sd)).settings.limiter === undefined; if (!gone) await sleep(100); }
-      check('L7 switching it off removes the field from the project and the bar from the meter', gone && (await D2.pg.locator('[data-testid=meter-reduction][data-state=on],[data-testid=meter-reduction][data-state=unavailable]').count()) === 0, { gone });
+      // the project changes on the server first; the editor hears it over its event stream, so the bar is read until it goes (8 s)
+      const barsOn = () => D2.pg.locator('[data-testid=meter-reduction][data-state=on],[data-testid=meter-reduction][data-state=unavailable]').count();
+      let bars = await barsOn();
+      for (let i = 0; i < 80 && bars > 0; i++) { await sleep(100); bars = await barsOn(); }
+      check('L7 switching it off removes the field from the project and the bar from the meter', gone && bars === 0, { gone, bars });
 
       // the match: select both clips, measure, see the plan, commit, read the result, undo
       await D2.pg.locator(`.clip[data-clip-id="${qId}"]`).first().click();
@@ -2069,6 +2073,9 @@ async function main() {
       check('Space on a switch reached with Tab presses the switch (the limiter is set) and does not play the film', kb.active && kb.visible && pressed && !playedOnKeyboard, { kb, limiter: await limiterOf(), playing: playedOnKeyboard });
       // mouse focus: click the switch (it turns the limiter off and keeps the focus, without :focus-visible), then Space plays
       if (playedOnKeyboard) await pg.keyboard.press('Space');
+      // the focus leaves the switch first: Chromium keeps :focus-visible on an element that already had keyboard focus when it is
+      // then clicked (the click does not move the focus), so a click on the still-focused switch would not be a mouse focus
+      await pg.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
       await sw.click();
       const off = await settle(null);
       const ms = await sw.evaluate((el) => ({ active: document.activeElement === el, visible: el.matches(':focus-visible') }));
