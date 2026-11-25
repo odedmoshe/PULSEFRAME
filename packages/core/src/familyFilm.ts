@@ -128,6 +128,30 @@ function recordOf(doc: ProjectDocument, assetId: string): FilmMomentsRecord | nu
   return m ? { algo: m.algo, flat: m.flat, file: m.file, windows: m.windows } : null;
 }
 const measured = (r: FilmMomentsRecord | null): r is FilmMomentsRecord => !!r && r.algo === MOMENTS_ALGO;
+
+/**
+ * The window in the source that a pick of `projFrames` project frames shows (the film's rule, lifted from planFamilyFilm unchanged
+ * for the story track, wave 7): a still shows itself; a video with a measured window starts FILM.leadIn of the length before the
+ * window's peak, clamped to the window (or centred on it when the window is shorter than the clip); otherwise the middle of the
+ * file; always clamped so the clip never reads past the file. Pure.
+ */
+export function filmSourceWindow(a: Asset, rec: FilmMomentsRecord | null, windowIndex: number | null, F: number, rate: { num: number; den: number }, opts: { chosenByYou?: boolean; second?: boolean } = {}) {
+  if (isStill(a)) return { sourceInFrame: null, sourceFrames: null, kind: 'still' as const, windowIndex: null, reasons: filmReasonsFor(a, null, 0, 0) };
+  const frames = videoFrames(a)!;
+  const ls = sourceFramesFor(a, F, rate);
+  const latest = Math.max(0, latestStart(a, F, rate));
+  const w = windowIndex !== null && measured(rec) && !rec.flat ? rec.windows[windowIndex] ?? null : null;
+  let start: number;
+  if (w) start = w.toFrame - w.fromFrame >= ls ? clampInt(w.peakFrame - Math.round(FILM.leadIn * ls), w.fromFrame, w.toFrame - ls) : Math.round((w.fromFrame + w.toFrame - ls) / 2);
+  else start = Math.floor((frames - ls) / 2);
+  start = clampInt(start, 0, latest);
+  const kind = start === 0 && ls >= frames ? 'whole-clip' as const : w ? 'measured' as const : 'default-middle' as const;
+  return { sourceInFrame: start, sourceFrames: ls, kind, windowIndex: w ? windowIndex : null, reasons: filmReasonsFor(a, rec, start, ls, opts) as FilmReason[] };
+}
+/** Exported for the story planner (wave 7): the longest clip a file can fill at speed 1, the latest start, and its moments record. */
+export const filmCapacityOf = (asset: Asset, rate: { num: number; den: number }): number => capacityOf(asset, rate);
+export const filmLatestStart = (asset: Asset, projFrames: number, rate: { num: number; den: number }): number => latestStart(asset, projFrames, rate);
+export const filmMomentsOf = (doc: ProjectDocument, assetId: string): FilmMomentsRecord | null => recordOf(doc, assetId);
 type Cls = 'A' | 'B' | 'C';
 function classOf(asset: Asset, r: FilmMomentsRecord | null, w: MomentWindow | null): Cls {
   if (isStill(asset) || !measured(r)) return 'C';
@@ -597,20 +621,7 @@ export const planFamilyFilm: PlanFamilyFilm = (doc: ProjectDocument, params: unk
 
   // ===== 6. the window in the source of each slot =====
   const picks: FilmPick[] = [];
-  const windowOf = (c: Cand, F: number) => {
-    const a = c.asset;
-    if (isStill(a)) return { sourceInFrame: null, sourceFrames: null, kind: 'still' as const, windowIndex: null, reasons: filmReasonsFor(a, null, 0, 0) };
-    const frames = videoFrames(a)!;
-    const ls = sourceFramesFor(a, F, rate);
-    const latest = Math.max(0, latestStart(a, F, rate));
-    const w = c.windowIndex !== null && measured(c.rec) && !c.rec.flat ? c.rec.windows[c.windowIndex] ?? null : null;
-    let start: number;
-    if (w) start = w.toFrame - w.fromFrame >= ls ? clampInt(w.peakFrame - Math.round(FILM.leadIn * ls), w.fromFrame, w.toFrame - ls) : Math.round((w.fromFrame + w.toFrame - ls) / 2);
-    else start = Math.floor((frames - ls) / 2);
-    start = clampInt(start, 0, latest);
-    const kind = start === 0 && ls >= frames ? 'whole-clip' as const : w ? 'measured' as const : 'default-middle' as const;
-    return { sourceInFrame: start, sourceFrames: ls, kind, windowIndex: w ? c.windowIndex : null, reasons: filmReasonsFor(a, c.rec, start, ls, { chosenByYou: c.chosen, second: c.second }) as FilmReason[] };
-  };
+  const windowOf = (c: Cand, F: number) => filmSourceWindow(c.asset, c.rec, c.windowIndex, F, rate, { chosenByYou: c.chosen, second: c.second });
   const spanOf = (s: Slot): FilmPick['span'] => {
     if (s.startJ === null || s.endJ === null) return null;
     const a = unitAt(s.startJ)!, b = unitAt(s.endJ)!;

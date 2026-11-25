@@ -28,6 +28,7 @@ import { IMPORT_NOTES_KEY } from './editor/DeliverPanel.tsx';
 import { Timeline } from './editor/Timeline.tsx';
 import { Welcome } from './editor/Welcome.tsx';
 import { FamilyFilmDialog } from './editor/FamilyFilmDialog.tsx';
+import { StoryDialog } from './editor/story/StoryDialog.tsx';
 import { CurvePicker } from './editor/CurvePicker.tsx';
 import { findClip, findEffect } from '@pulseframe/core';
 import { isDecodeBudgetReason } from '@pulseframe/engine';
@@ -191,6 +192,8 @@ function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasEle
       <GalleryHost />
       {/* the family film dialog (ADR-0026): draws nothing until an entry, the event card or the palette opens it */}
       <FamilyFilmDialog lang={state.lang} />
+      {/* «ספרו מה היה» (wave 7 story track): open while storyOpen */}
+      <StoryDialog lang={state.lang} />
       {/* the curve picker (ADR-0019): draws nothing until a keyframe, a strip key or a curve chip opens it */}
       <CurvePicker />
     </div>

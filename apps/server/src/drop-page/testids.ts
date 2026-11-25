@@ -6,6 +6,8 @@
 export const DROP_PAGE_TESTIDS = {
   /** The two pickers: «בחירת סרטונים ותמונות» (accept="image/*,video/*") and the one for videos in original quality (no accept). */
   pickMedia: 'drop-pick-media', pickOriginal: 'drop-pick-original',
+  /** The third picker «הקלטת קול» (accept="audio/*"; wave 7 story track): a voice memo for «ספרו מה היה». Same upload path. */
+  pickVoice: 'drop-pick-voice',
   /** The typed fallback: the 6-digit code field and its button (shown when the page was opened without a token in the fragment). */
   pin: 'drop-pin', pinSubmit: 'drop-pin-submit',
   /** One row per chosen file (i from 0 in the order chosen), its state text and its progress bar. */

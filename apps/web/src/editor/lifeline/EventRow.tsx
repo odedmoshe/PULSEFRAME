@@ -16,6 +16,7 @@ import { useEditorState } from '../store.ts';
 import { onMenuKeyDown } from '../menuKeys.ts';
 import { LifeThumb } from './LifeThumb.tsx';
 import { FamilyFilmEntry } from '../FamilyFilmEntry.tsx';
+import { StoryEntry } from '../story/StoryEntry.tsx';
 import { isPictureAsset } from '../familyFilm.logic.ts';
 import { ClockShift } from './CaptureEditor.tsx';
 import { LIFE_STRINGS, fill } from './lifeline.strings.ts';
@@ -173,6 +174,8 @@ export function EventRow({ eventId }: { eventId: string }): ReactElement | null 
             <button type="button" role="menuitem" className="pf-mc-item" disabled={!prev} data-testid={`life-event-merge-${eventId}`} onClick={() => void act('merge')}>{S.eventMergePrev}</button>
             <button type="button" role="menuitem" className="pf-mc-item" disabled={files.length < 2} data-testid={`life-event-splitopen-${eventId}`} onClick={() => void act('split')}>{S.eventSplitHere}</button>
             <button type="button" role="menuitem" className="pf-mc-item" onClick={() => void act('shift')}>{S.shiftClock}</button>
+            {/* «ספרו מה היה» (wave 7 story track; C14): in the ⋯ menu, never a second button in the row */}
+            {filmFiles.length > 0 && <StoryEntry variant="event-menu" lang={lang} onChosen={() => setMenu(null)} source={{ assetIds: filmFiles, event: m.name ? { id: eventId, name: m.name.slice(0, 80), ...(m.first && /^\d{4}-\d{2}-\d{2}/.test(m.first) ? { date: m.first.slice(0, 10) } : {}) } : null }} />}
             <div role="separator" className="pf-mc-sep" />
             <button type="button" role="menuitem" className="pf-mc-item is-danger" data-testid={`life-event-remove-${eventId}`} onClick={() => void act('remove')}>{S.eventRemove}</button>
           </div>

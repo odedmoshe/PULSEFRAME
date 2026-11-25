@@ -1,3 +1,4 @@
+import type { StoryApplyResult, StoryParams, StoryPlanView, StoryRegenerateResult } from '@pulseframe/core';
 import type { Asset, BuildShortsBody, ExportMode, FindShortsBody, ReframePlanBody, ReframePlanView, SequenceSummary, ShortCandidatesView, ShortsApplyResult, ShortsPlanView, FamilyFilmApplyResult, FamilyFilmParams, FamilyFilmPlanView, FamilyFilmRegenerateResult, MomentsData, OpCall, ProjectDocument, RenderCacheStatus, SegmentPlanView, SelfCheckMode, StartMomentsBody } from '@pulseframe/core';
 import type { MulticamSyncReport, MulticamSyncRequest, MulticamView } from '@pulseframe/core';
 import type { TakePlanView, TakeRequest, TakeResult } from '@pulseframe/core';
@@ -258,6 +259,11 @@ export const api = {
   // stabilisation (wave 7; apps/server/src/stabilise.ts)
   stabiliseClip: (id: string, clipId: string, body: StabiliseRunBody = {}) => call<{ jobId: string; status: string }>(`/projects/${id}/clips/${encodeURIComponent(clipId)}/stabilise`, json(body)),
   cameraMotion: (id: string, assetId: string) => call<CameraMotionView>(`/projects/${id}/assets/${encodeURIComponent(assetId)}/camera-motion`),
+  // ----- «ספרו מה היה» (wave 7 story track): the recipe routes and the template-runs route (which passes expectedRevision) -----
+  planStory: (projectId: string, params: StoryParams) => call<StoryPlanView>(`/projects/${projectId}/recipes/story/plan`, json({ params })),
+  applyStory: (projectId: string, params: StoryParams, expectedRevision: number) => call<StoryApplyResult>(`/projects/${projectId}/recipes/story/apply`, json({ params, expectedRevision })),
+  /** Rebuild a story run with changed options (never other taps: 409 story_retap_not_built), against the revision the bar showed. */
+  regenerateStory: (projectId: string, runId: string, params: Partial<StoryParams> | undefined, expectedRevision: number, restoreRemoved = false) => call<StoryRegenerateResult>(`/projects/${projectId}/template-runs/${runId}/regenerate`, json({ ...(params ? { params } : {}), expectedRevision, ...(restoreRemoved ? { restoreRemoved: true } : {}) })),
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }

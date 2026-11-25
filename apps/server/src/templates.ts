@@ -14,7 +14,7 @@
  */
 import * as T from '@pulseframe/time';
 import {
-  clipEnd, closedGapOnly, derivedRanges, FAMILY_FILM_RUN_RECIPE_ID, findClip, movedOnly, onOtherTrack, removedByHand, findGatedTemplate, findTemplate, fingerprint, gatedTemplateError, gatedTemplateSummary, MODEL_GATED_TEMPLATES, planTemplate, summarizeTemplate, TemplateError, TEMPLATE_METHOD, TEMPLATES,
+  clipEnd, closedGapOnly, derivedRanges, FAMILY_FILM_RUN_RECIPE_ID, STORY_RUN_RECIPE_ID, findClip, movedOnly, onOtherTrack, removedByHand, findGatedTemplate, findTemplate, fingerprint, gatedTemplateError, gatedTemplateSummary, MODEL_GATED_TEMPLATES, planTemplate, summarizeTemplate, TemplateError, TEMPLATE_METHOD, TEMPLATES,
   type Asset, type KnownGrid, type ProjectDocument, type RecipeRun, type RunRange, type SlotRecord, type RegenerateOptions, type TemplateApplyResult, type TemplateDef, type TemplatePlan, type TemplatePlanView, type TemplateRegenerateResult, type TemplateSummary,
 } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
@@ -250,6 +250,11 @@ export async function regenerateTemplateFor(store: Store, gov: Governance, princ
     const { regenerateFamilyFilmFor } = await import('./familyFilm.ts');
     // the answer is the film's own (FamilyFilmRegenerateResult: its warnings are film warnings, with picks and exclusions)
     return await regenerateFamilyFilmFor(store, gov, principal, projectId, runId, newParams, expectedRevision, options) as unknown as TemplateRegenerateResult;
+  }
+  // a story (wave 7 story track) is recorded as a template run too, planned by the story planner
+  if (run.recipeId === STORY_RUN_RECIPE_ID) {
+    const { regenerateStoryFor } = await import('./story.ts');
+    return await regenerateStoryFor(store, gov, principal, projectId, runId, newParams, expectedRevision, options) as unknown as TemplateRegenerateResult;
   }
   if (newParams !== undefined && (typeof newParams !== 'object' || newParams === null || Array.isArray(newParams))) throw new ApiError(400, 'invalid_request', 'params must be an object of template parameters to change');
   const def = templateOf(run.recipeId.slice('template:'.length));

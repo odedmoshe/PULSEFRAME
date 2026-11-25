@@ -138,3 +138,7 @@ export { HEBREW_MARKS, BIDI_CONTROLS } from './commandBar/normalize.ts';
 export * from './steadyContract.ts';
 export * from './steady.ts';
 export * from './steadyOps.ts';
+// «ספרו מה היה» (wave 7 story track): the contract is lead-built; story.ts and voiceActivity.ts are W1's
+export * from './storyContract.ts';
+export * from './story.ts';
+export * from './voiceActivity.ts';

@@ -428,6 +428,8 @@ export const COMMANDS: Command[] = [
   ...CRAFT_COMMANDS,
   // stabilisation (wave 7): «ייצוב תמונה» on or off, unbound (stabilise/stabilise.commands.ts; disabled until W3)
   ...STABILISE_COMMANDS,
+  // «ספרו מה היה» (wave 7 story track): opens the story dialog on the selected pictures and videos (StoryDialog, W3)
+  { id: 'view.openStory', label: 'cmd.openStory', group: 'view', keys: [], enabled: (e) => !!e.doc && sourceFromSelection(e.doc, e.getState().selection).assetIds.length > 0, run: (e) => { if (e.doc) e.openStory(sourceFromSelection(e.doc, e.getState().selection)); } },
 ];
 
 /** Canonical chord for an event: modifiers in fixed order + physical key code. */

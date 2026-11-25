@@ -155,12 +155,14 @@ describe('page.js and the page', () => {
   });
   it('the fixed test ids are on the page, the pickers are right, the live region, language, direction and viewport are set', () => {
     const all = html + js;
-    for (const id of [DROP_PAGE_TESTIDS.pickMedia, DROP_PAGE_TESTIDS.pickOriginal, DROP_PAGE_TESTIDS.pin, DROP_PAGE_TESTIDS.pinSubmit, DROP_PAGE_TESTIDS.fileState, DROP_PAGE_TESTIDS.fileProgress, DROP_PAGE_TESTIDS.total, DROP_PAGE_TESTIDS.status, DROP_PAGE_TESTIDS.done, DROP_PAGE_TESTIDS.lang])
+    for (const id of [DROP_PAGE_TESTIDS.pickMedia, DROP_PAGE_TESTIDS.pickOriginal, DROP_PAGE_TESTIDS.pickVoice, DROP_PAGE_TESTIDS.pin, DROP_PAGE_TESTIDS.pinSubmit, DROP_PAGE_TESTIDS.fileState, DROP_PAGE_TESTIDS.fileProgress, DROP_PAGE_TESTIDS.total, DROP_PAGE_TESTIDS.status, DROP_PAGE_TESTIDS.done, DROP_PAGE_TESTIDS.lang])
       expect(all, id).toContain(`data-testid="${id}"`);
     expect(js).toContain(DROP_PAGE_TESTIDS.file(0).replace('0', ''));
     expect(html).toMatch(/id="pickMedia" type="file" accept="image\/\*,video\/\*" multiple/);
     expect(html).toMatch(/id="pickOriginal" type="file" multiple/);
     expect(html).not.toMatch(/id="pickOriginal"[^>]*accept=/);
+    expect(html).toMatch(/id="pickVoice" type="file" accept="audio\/\*" multiple/);
+    expect(js).toMatch(/\$\('pickVoice'\)\.onchange = choose;/);
     expect(html).toMatch(/id="status"[^>]*role="status"/);
     expect(html).toMatch(/<html lang="he" dir="rtl">/);
     expect(html).toContain('name="viewport"');
