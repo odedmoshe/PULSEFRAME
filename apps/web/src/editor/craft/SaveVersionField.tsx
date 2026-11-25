@@ -8,7 +8,7 @@ import { api } from '../../api.ts';
 import { useEditorState } from '../store.ts';
 import { CRAFT_TESTIDS as TID } from './craft.testids.ts';
 import { craftSurface } from './craft.state.ts';
-import { craftApi, craftFailure, defaultVersionName, nameProblem, say, type Failure } from './craft.logic.ts';
+import { craftFailure, defaultVersionName, nameProblem, say, type Failure } from './craft.logic.ts';
 
 export function SaveVersionField() {
   const { editor, state } = useEditorState();
@@ -38,7 +38,7 @@ export function SaveVersionField() {
     if (problem) { setError({ code: null, message: problem }); input.current?.focus(); return; }
     setBusy(true); setError(null);
     try {
-      const r = await craftApi.saveVersion(pid, name.trim());
+      const r = await api.saveVersion(pid, name.trim());
       editor.notify({ kind: 'info', title: say(lang, 'saveSaved', { name: r.name }) });
       close();
     } catch (e) { setError(craftFailure(lang, e)); setBusy(false); input.current?.focus(); }

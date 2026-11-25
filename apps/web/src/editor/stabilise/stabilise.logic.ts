@@ -199,3 +199,21 @@ export function sliderKey(key: string, value: number): number | null {
   if (key === 'End') return 100;
   return null;
 }
+
+// ---------- following a run ----------
+/** How often the block asks the server for its run when the event stream is not connected (the stream is the way; this is only the fallback). */
+export const FALLBACK_POLL_MS = 2000;
+/** The fallback read is needed only when the stream is down, or has told nothing of this run yet. */
+export const needsFallbackRead = (streamOpen: boolean, stored: { status: string } | undefined | null): boolean => !streamOpen || !stored;
+/** What a job event, as the store holds it, means for the block: still open, or how it ended. */
+export type Settled =
+  | { kind: 'open' }
+  | { kind: 'done'; strengthLowered: boolean }
+  | { kind: 'canceled' }
+  | { kind: 'failed'; code: string; message: string };
+export function settledOf(job: { status: string; output?: unknown; error?: { code?: string; message?: string } | null }): Settled {
+  if (OPEN_JOB.has(job.status)) return { kind: 'open' };
+  if (job.status === 'succeeded') return { kind: 'done', strengthLowered: !!(job.output as { strengthLowered?: boolean } | null)?.strengthLowered };
+  if (job.status === 'canceled') return { kind: 'canceled' };
+  return { kind: 'failed', code: job.error?.code ?? 'failed', message: job.error?.message ?? '' };
+}
