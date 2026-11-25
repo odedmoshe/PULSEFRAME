@@ -174,3 +174,20 @@ describe('export: the credit lines, the non-commercial warning, the job output',
     expect(exportLicence(store.getProject(seeded(store, false).pid).doc)).toBeNull();
   });
 });
+
+describe('the editor reads the export output as the server writes it (integration)', () => {
+  it('web exportLicence over export.ts exportLicence: every line counted, the description text and the non-commercial titles', async () => {
+    const { exportLicence: editorReads } = await import('../../../web/src/editor/library/library.logic.ts');
+    const store = world();
+    const { pid } = seeded(store);
+    const doc = store.getProject(pid).doc;
+    const written = exportLicence(doc)!;
+    const read = editorReads(JSON.parse(JSON.stringify({ licence: written })) as Record<string, unknown>);
+    expect(written.lines.length).toBeGreaterThan(0);
+    expect(read).toEqual({ nonCommercial: ['Bird'], credits: { lines: written.lines.length, descriptionText: collectCredits(doc).descriptionText('he') }, people: 0 });
+    // a project without library duties: the server writes no licence, the editor shows nothing
+    const plain = world();
+    expect(exportLicence(plain.getProject(seeded(plain, false).pid).doc)).toBeNull();
+    expect(editorReads({})).toBeNull();
+  });
+});

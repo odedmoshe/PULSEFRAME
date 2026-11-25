@@ -14,7 +14,6 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { CUSTOM_LICENCES, licenceDuties, SPDX_LICENCES, type LicenceDuties } from '@pulseframe/core';
 import { makeTransport, run } from '../../../tools/library/fetch.mjs';
 
 const sha256 = (b: Buffer | string) => createHash('sha256').update(b).digest('hex');
@@ -256,28 +255,4 @@ export async function makeLibraryFixture(base: string, log: (s: string) => void 
     restoreLedger() { fs.writeFileSync(ledgerFile, original); },
     touchTreeFile() { const p = path.join(root, 'sounds', 'fx-cc0', 'tone-b.wav'); const t2 = new Date(Date.now() + 60_000); fs.utimesSync(p, t2, t2); },
   };
-}
-
-/**
- * TEST STAND-IN for worker B's core licenceDuties, used by the server's library TESTS only while core's is not built in this
- * build (`coreDutiesBuilt()` false); never by the server and never by pnpm proof:library. It follows the fail-closed rules written
- * in packages/core/src/libraryDuties.ts over its own tables (SPDX_LICENCES, CUSTOM_LICENCES); it is not the product's table.
- */
-export function coreDutiesBuilt(): boolean {
-  try { licenceDuties('x', { spdx: 'MIT' }, {}); return true; } catch { return false; }
-}
-export function fixtureDutiesStandIn(sourceId: string, l: { spdx?: string; custom?: string }, f: Readonly<Record<string, boolean>>): LicenceDuties {
-  const no = (use: LicenceDuties['use']): LicenceDuties => ({ use, licenceId: l.spdx ?? `custom:${sourceId}`, credit: false, nonCommercial: false, shareable: false, placement: 'description' });
-  let row: { credit: boolean; nonCommercial: boolean; shareable: boolean } | undefined, id: string;
-  if (l.spdx) {
-    id = l.spdx; row = Object.hasOwn(SPDX_LICENCES, l.spdx) ? SPDX_LICENCES[l.spdx] : undefined;
-    if (!row) return no(/-ND/.test(l.spdx) ? 'licence_no_derivatives' : /-SA|^GPL/.test(l.spdx) ? 'licence_share_alike' : 'licence_unknown');
-  } else {
-    const c = Object.hasOwn(CUSTOM_LICENCES, sourceId) ? CUSTOM_LICENCES[sourceId] : undefined;
-    if (!c || c.custom !== l.custom) return no('licence_unknown');
-    row = c; id = `custom:${sourceId}`;
-  }
-  if (f.shareAlike) return no('licence_share_alike');
-  const nonCommercial = row.nonCommercial || !!f.personalOnly;
-  return { use: 'ok', licenceId: id, credit: row.credit, nonCommercial, shareable: row.shareable && !nonCommercial && !f.diskOnly && f.repoAllowed !== false, placement: f.creditOnScreen ? 'on_screen' : 'description' }; // lead amendment 2026-11-25: on screen only with creditOnScreen
 }

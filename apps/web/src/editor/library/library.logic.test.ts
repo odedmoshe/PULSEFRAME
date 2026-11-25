@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { Asset, LibraryRow, LibraryStatus } from '@pulseframe/core';
 import {
-  archiveModes, assetBadges, auditionable, exportLicence, facetsOf, filtersActive, formatLength, hasHebrew, lengthLabel, NO_FILTERS, ownerArchiveHref, panelState,
+  archiveModes, assetBadges, auditionable, exportLicence, filtersActive, formatLength, hasHebrew, lengthLabel, NO_FILTERS, ownerArchiveHref, panelState,
   queryOf, restrictedAssets, rowBadges, shownKinds, tempoLabel, useBody, AUDIO_KINDS, VISUAL_KINDS,
 } from './library.logic.ts';
 import { LibraryRowView } from './LibraryBrowser.tsx';
@@ -39,7 +39,6 @@ describe('query', () => {
     expect(formatLength(67)).toBe('1:07');
     expect(hasHebrew('menorah')).toBe(false); expect(hasHebrew('חנוכיה')).toBe(true);
     expect(filtersActive(NO_FILTERS, ' ')).toBe(false); expect(filtersActive({ ...NO_FILTERS, mood: 'x' }, '')).toBe(true);
-    expect(facetsOf([row(), row({ meta: { genre: ['jazz', 'calm'], mood: [], instruments: [], tags: [] } })])).toEqual({ genre: ['calm', 'jazz'], mood: ['happy'] });
   });
 });
 
@@ -92,7 +91,8 @@ describe('project file card, export lines, archive', () => {
   });
   it('export lines read output.licence only; nothing without it', () => {
     expect(exportLicence({})).toBeNull();
-    const out = { licence: { nonCommercial: [{ assetId: 'a', title: 'Song' }, { assetId: 'b', title: 'Song' }], credits: { lines: [{}], descriptionText: 'Credits\n\nby K' }, people: [] } };
+    // the server's shape (export.ts exportLicence): lines at the top, the text under credits
+    const out = { licence: { lines: [{ assetId: 'a', title: 'Song', text: 'by K', placement: 'description', group: 'music' }], onScreenMissing: [], nonCommercial: [{ assetId: 'a', title: 'Song' }, { assetId: 'b', title: 'Song' }], people: [], credits: { descriptionText: 'Credits\n\nby K', file: 'j.credits.txt' } } };
     expect(exportLicence(out)).toEqual({ nonCommercial: ['Song'], credits: { lines: 1, descriptionText: 'Credits\n\nby K' }, people: 0 });
     expect(renderToStaticMarkup(createElement(ExportLicenceLinesView, { output: {}, lang: 'he' }))).toBe('');
     const html = renderToStaticMarkup(createElement(ExportLicenceLinesView, { output: out, lang: 'he' }));
@@ -104,6 +104,19 @@ describe('project file card, export lines, archive', () => {
     expect(ownerArchiveHref('p 1')).toBe('/api/v1/projects/p%201/archive?library=keep');
     const html = renderToStaticMarkup(createElement(ArchiveChoiceView, { lang: 'he', count: 2, owner: false, mode: 'strip', onChange: () => {} }));
     expect(html).toContain(TID.archiveStrip); expect(html).not.toContain(TID.archiveKeep);
+    // when «ארכיון לעצמי» is not offered, a note says who can download it
+    expect(html).toContain(TID.archiveOwnerOnly); expect(html).toContain('רק בעל הפרויקט יכול להוריד ארכיון עם כל הקבצים');
+    expect(renderToStaticMarkup(createElement(ArchiveChoiceView, { lang: 'en', count: 2, owner: true, mode: 'strip', onChange: () => {} }))).not.toContain(TID.archiveOwnerOnly);
+  });
+  it('a refused credits card says so with the reason; a row without an open project says why use is off', () => {
+    const line = { assetId: 'a', title: 'T', text: 'by K', placement: 'description' as const, group: 'music' as const };
+    const view = { lines: [line], descriptionText: 'x', onScreenMissing: [], nonCommercial: [], people: [] };
+    const html = renderToStaticMarkup(createElement(CreditsView_, { view, lang: 'he', copied: false, busy: false, onCopy: () => {}, onCard: () => {}, cardRefused: 'הסיבה' }));
+    expect(html).toContain('כרטיס הקרדיטים לא נוסף: הסיבה');
+    expect(renderToStaticMarkup(createElement(CreditsView_, { view, lang: 'en', copied: false, busy: false, onCopy: () => {}, onCard: () => {}, cardRefused: '' }))).toContain('The credits card was not added<');
+    expect(renderToStaticMarkup(createElement(CreditsView_, { view, lang: 'he', copied: false, busy: false, onCopy: () => {}, onCard: () => {} }))).not.toContain('לא נוסף');
+    const rowHtml = renderToStaticMarkup(createElement(LibraryRowView, { row: row(), lang: 'he', playing: false, busy: false, thumb: false, blockedReason: 'קודם פותחים פרויקט, ואז אפשר להוסיף אליו', onUse: () => {} }));
+    expect(rowHtml).toContain('קודם פותחים פרויקט');
   });
   it('credits panel lists lines, the missing-on-screen alert and the buttons', () => {
     const line = { assetId: 'a', title: 'T', text: 'by K', placement: 'on_screen' as const, group: 'music' as const };

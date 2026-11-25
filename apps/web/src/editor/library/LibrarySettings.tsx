@@ -66,6 +66,9 @@ function LibrarySettingsOwner({ lang }: { lang: Lang }): ReactElement {
           <div className="row">
             <Button variant="primary" size="sm" data-testid={TID.settingsSave} busy={busy} onClick={() => void run(() => api.setLibraryRoot(root.trim() || null))}>{L.save}</Button>
             <Button variant="secondary" size="sm" data-testid={TID.settingsReindex} busy={busy} disabledReason={status && status.state !== 'not_configured' ? undefined : stateText(lang, 'not_configured')} onClick={() => void run(() => api.reindexLibrary())}>{L.reindex}</Button>
+            {status?.state === 'indexing' && (
+              <Button variant="secondary" size="sm" data-testid={TID.settingsCancel} busy={busy} onClick={() => void run(async () => { const s = await api.cancelLibraryReindex(); setNote({ ok: true, text: L.reindexStopped }); return s; })}>{L.cancelReindex}</Button>
+            )}
           </div>
           {failure && !notBuilt && <p className="pf-lib-state is-err" role="alert">{sayFailure(lang, failure)}</p>}
           {note && <p className={`pf-lib-state${note.ok ? '' : ' is-err'}`} role="alert">{note.text}</p>}

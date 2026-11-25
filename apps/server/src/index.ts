@@ -28,6 +28,7 @@ import { incrementalAvailable, runSegmentedExport } from './exportSegments.ts';
 import { frameKeyFor } from './renderCacheEnv.ts';
 import { createRenderCacheService, type RenderCacheService } from './renderCacheRoutes.ts';
 import { RENDER_CACHE_DIR, SegmentStore } from './segmentStore.ts';
+import { closeLibraryService } from './library/index.ts';
 import { dataDirBytes, setStorageHooks } from './storage.ts';
 import { recoverAssistantJobs } from './assistant/job.ts'; // command bar assistant recovery (ADR-0027)
 import type { AssistantDeps } from './assistant/contract.ts';
@@ -145,6 +146,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
       store.onPrivacyChange = null;
       setStorageHooks(store, null);
       segments.close();
+      closeLibraryService(cfg.dataDir); // the catalogue's index file and any build in progress (a restart rebuilds a cut one)
       store.close();
     },
   };

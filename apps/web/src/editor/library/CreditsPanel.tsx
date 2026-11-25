@@ -11,10 +11,10 @@ import { Button } from '../../ds/index.ts';
 import { api } from '../../api.ts';
 import { useEditorState } from '../store.ts';
 import { LIBRARY_TESTIDS as TID } from './library.testids.ts';
-import { LIBRARY_UI_STRINGS } from './library.strings.ts';
+import { fillLib, LIBRARY_UI_STRINGS } from './library.strings.ts';
 import { sayFailure } from './LibraryBrowser.tsx';
 
-export function CreditsView_({ view, lang, copied, busy, onCopy, onCard }: { view: CreditsView; lang: Lang; copied: boolean; busy: boolean; onCopy: () => void; onCard: () => void }): ReactElement {
+export function CreditsView_({ view, lang, copied, busy, onCopy, onCard, cardRefused }: { view: CreditsView; lang: Lang; copied: boolean; busy: boolean; onCopy: () => void; onCard: () => void; cardRefused?: string | null }): ReactElement {
   const L = LIBRARY_UI_STRINGS[lang];
   return (
     <section className="pf-lib-credits" data-testid={TID.credits} aria-labelledby="pf-credits-h">
@@ -34,6 +34,7 @@ export function CreditsView_({ view, lang, copied, busy, onCopy, onCard }: { vie
         </div>
       )}
       {view.lines.length > 0 && <p className="pf-lib-muted">{L.creditsCardNote}</p>}
+      {cardRefused != null && <p className="pf-lib-state is-err" role="alert">{fillLib(L.creditsCardRefused, { reason: cardRefused }).replace(/: $/, "")}</p>}
     </section>
   );
 }
@@ -45,6 +46,7 @@ export function CreditsPanel({ projectId }: { projectId: string }): ReactElement
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [refused, setRefused] = useState(false);
   useEffect(() => {
     let alive = true;
     setCopied(false);
@@ -59,7 +61,9 @@ export function CreditsPanel({ projectId }: { projectId: string }): ReactElement
   const copy = async () => { try { await navigator.clipboard.writeText(view.descriptionText); setCopied(true); } catch { setCopied(false); } };
   const card = async () => {
     setBusy(true);
-    try { await editor.commit([{ op: 'add_credits_card', args: { lang, ...(state.activeSequenceId ? { sequenceId: state.activeSequenceId } : {}) } }], 'Credits card'); } finally { setBusy(false); }
+    setRefused(false);
+    // the editor's commit answers null when the server refused it (the reason is then the editor's error line, in the interface language)
+    try { setRefused(!(await editor.commit([{ op: 'add_credits_card', args: { lang, ...(state.activeSequenceId ? { sequenceId: state.activeSequenceId } : {}) } }], 'Credits card'))); } catch { setRefused(true); } finally { setBusy(false); }
   };
-  return <CreditsView_ view={view} lang={lang} copied={copied} busy={busy} onCopy={() => void copy()} onCard={() => void card()} />;
+  return <CreditsView_ view={view} lang={lang} copied={copied} busy={busy} onCopy={() => void copy()} onCard={() => void card()} cardRefused={refused ? state.error ?? '' : null} />;
 }

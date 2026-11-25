@@ -25,6 +25,14 @@ export const LIBRARY_UI_HE = {
   archiveTitle: 'קבצים מהספרייה בארכיון', archiveStrip: 'ארכיון לשיתוף', archiveStripNote: 'בלי קבצים שאסור להעביר לאחרים',
   archiveKeep: 'ארכיון לעצמי', archiveKeepNote: 'למחשבים שלך בלבד — כולל קבצים שאסור להעביר לאחרים',
   nonCommercialLine: 'לשימוש לא מסחרי בלבד: {titles}',
+  // integration (wave 7 library track)
+  cancelReindex: 'עצירת הסריקה', reindexStopped: 'הסריקה נעצרה. הרשימה הקודמת נשארת בשימוש',
+  more: 'עוד',
+  tempoSlow: 'איטי', tempoMid: 'בינוני', tempoFast: 'מהיר',
+  lengthShort: 'קצר', lengthMid: 'בינוני', lengthLong: 'ארוך',
+  noProject: 'קודם פותחים פרויקט, ואז אפשר להוסיף אליו',
+  creditsCardRefused: 'כרטיס הקרדיטים לא נוסף: {reason}',
+  archiveKeepOwnerOnly: 'רק בעל הפרויקט יכול להוריד ארכיון עם כל הקבצים. אם צריך כזה, בקשו ממנו',
 } as const;
 export const LIBRARY_UI_EN: Record<keyof typeof LIBRARY_UI_HE, string> = {
   audioTab: 'From the library', elementsBuiltin: 'Built-in', elementsLibrary: 'From the library',
@@ -44,6 +52,14 @@ export const LIBRARY_UI_EN: Record<keyof typeof LIBRARY_UI_HE, string> = {
   archiveTitle: 'Library files in the archive', archiveStrip: 'Archive to share', archiveStripNote: 'Without files that may not be passed on',
   archiveKeep: 'Archive for yourself', archiveKeepNote: 'For your own computers only — holds files that may not be passed on',
   nonCommercialLine: 'Non-commercial use only: {titles}',
+  // integration (wave 7 library track)
+  cancelReindex: 'Stop the scan', reindexStopped: 'The scan was stopped. The previous list stays in use',
+  more: 'More',
+  tempoSlow: 'Slow', tempoMid: 'Medium', tempoFast: 'Fast',
+  lengthShort: 'Short', lengthMid: 'Medium', lengthLong: 'Long',
+  noProject: 'Open a project first, then you can add to it',
+  creditsCardRefused: 'The credits card was not added: {reason}',
+  archiveKeepOwnerOnly: 'Only the project owner can download an archive with every file. If you need one, ask them',
 };
 export const LIBRARY_UI_STRINGS = { he: LIBRARY_UI_HE, en: LIBRARY_UI_EN } as const;
 export const fillLib = (s: string, vars: Record<string, string | number> = {}): string => s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));

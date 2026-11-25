@@ -27,6 +27,7 @@ export function ArchiveChoiceView({ lang, count, owner, mode, onChange }: { lang
           <span>{label[m]}<small className="pf-lib-muted">{note[m]}</small></span>
         </label>
       ))}
+      {!owner && <p className="pf-lib-muted" data-testid={TID.archiveOwnerOnly}>{L.archiveKeepOwnerOnly}</p>}
     </fieldset>
   );
 }

@@ -19,7 +19,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import {
-  currentEntries, heQueryForms, heSkeleton, LEDGER_PATH, LedgerEntrySchema, LedgerSchema, LIBRARY_PAGE_MAX, LIBRARY_READERS_VERSION, LIBRARY_WORDS_HE,
+  currentEntries, heQueryForms, LIBRARY_FACETS_MAX, type LibraryFacets, heSkeleton, LEDGER_PATH, LedgerEntrySchema, LedgerSchema, LIBRARY_PAGE_MAX, LIBRARY_READERS_VERSION, LIBRARY_WORDS_HE,
   licenceDuties as coreLicenceDuties, searchKey, type LedgerEntry, type LibraryItemsPage, type LibraryItemsQuery, type LibraryKind, type LibraryRow,
   type LibraryState, type LibraryStatus, type LibraryUnusable,
 } from '@pulseframe/core';
@@ -45,6 +45,8 @@ export interface IndexedRow {
   /** The row's own licence (as the reader named it) and the duties the core table gave it. */
   licence: { spdx?: string; custom?: string; url?: string };
 }
+/** Genre and mood values by kind: search key → the first spelling seen and the row count. */
+type FacetCounts = Partial<Record<LibraryKind, { genre: Record<string, [string, number]>; mood: Record<string, [string, number]> }>>;
 interface Summary { counts: Partial<Record<LibraryKind, number>>; svgCounts: Partial<Record<LibraryKind, number>>; notListed: { dir: string; entries: number }[]; unusable: Partial<Record<LibraryUnusable, number>>; problems: { item: string | null; reason: string }[] }
 
 export interface LibraryServiceOptions {
@@ -223,6 +225,7 @@ export class LibraryService {
       const insItem = db.prepare('INSERT INTO items (key, kind, svg, credit, nc, bpm, dur, genre, mood, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
       const insFts = db.prepare('INSERT INTO fts (rowid, title, body, tsk, bsk) VALUES (?, ?, ?, ?, ?)');
       const sum: Summary = { counts: {}, svgCounts: {}, notListed: [], unusable: {}, problems: [] };
+      const facets: FacetCounts = {};
       const problem = (item: string | null, reason: string) => { if (sum.problems.length < 20) sum.problems.push({ item, reason: reason.slice(0, 300) }); };
       // entries: validated one by one; a bad one is named, never fatal
       const valid: LedgerEntry[] = [];
@@ -319,6 +322,15 @@ export class LibraryService {
             throw err;
           }
           insFts.run(info.lastInsertRowid, title, body, heSkeleton(title), heSkeleton(body));
+          const fk = (facets[r.kind] ??= { genre: {}, mood: {} });
+          for (const [name, values] of [['genre', r.meta.genre], ['mood', r.meta.mood]] as const) {
+            for (const v of new Set(values.map((x) => x.trim()).filter(Boolean))) {
+              const k = searchKey(v);
+              if (!k) continue;
+              const had = Object.hasOwn(fk[name], k) ? fk[name][k] : undefined;
+              fk[name][k] = had ? [had[0], had[1] + 1] : [v.slice(0, 64), 1];
+            }
+          }
           sum.counts[r.kind] = (sum.counts[r.kind] ?? 0) + 1;
           if (r.format === 'svg') sum.svgCounts[r.kind] = (sum.svgCounts[r.kind] ?? 0) + 1;
           if (unusable) sum.unusable[unusable] = (sum.unusable[unusable] ?? 0) + 1;
@@ -339,6 +351,7 @@ export class LibraryService {
       setMeta.run('readersVersion', String(LIBRARY_READERS_VERSION));
       setMeta.run('builtAt', new Date().toISOString());
       setMeta.run('summary', JSON.stringify(sum));
+      setMeta.run('facets', JSON.stringify(facets));
       db.close();
       if (b.cancel || this.closed) return;
       // swap in whole: close the old one first (Windows cannot rename over an open file)
@@ -418,6 +431,20 @@ export class LibraryService {
       .map((r) => (JSON.parse(r.data) as IndexedRow).row);
     const next = offset + rows.length < total ? String(offset + rows.length) : null;
     return { rows, next, total };
+  }
+  /** The genres and moods of the catalogue (one kind, or all), the source's own spelling, most rows first; empty without an index. */
+  facets(kind?: LibraryKind): LibraryFacets {
+    const raw = this.meta('facets');
+    const all = raw ? (JSON.parse(raw) as FacetCounts) : {};
+    const merged = { genre: new Map<string, [string, number]>(), mood: new Map<string, [string, number]>() };
+    for (const [k, f] of Object.entries(all) as [LibraryKind, NonNullable<FacetCounts[LibraryKind]>][]) {
+      if (kind && k !== kind) continue;
+      for (const name of ['genre', 'mood'] as const) {
+        for (const [key, [value, n]] of Object.entries(f[name])) { const had = merged[name].get(key); merged[name].set(key, had ? [had[0], had[1] + n] : [value, n]); }
+      }
+    }
+    const list = (m: Map<string, [string, number]>) => [...m.values()].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count || a.value.localeCompare(b.value)).slice(0, LIBRARY_FACETS_MAX);
+    return { genre: list(merged.genre), mood: list(merged.mood) };
   }
   /** The stored licence text's path (relative to the root) of a source, from the ledger's licenceTexts (the last stored one), or null. */
   async licencePath(sourceId: string): Promise<string | null> {

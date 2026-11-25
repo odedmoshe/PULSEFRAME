@@ -5,9 +5,9 @@
  * route itself is worker A's; until it lands the record is attached in-process with the same internal operation). No downloaded
  * file is used.
  *
- * Check 13 has two halves: the core half (licence table, the operation's refusal) runs here; the catalogue half (an Iconify-shaped
- * CC BY set's credit names its author; a CC BY row without credit is listed credit_missing and use answers 409) needs worker A's
- * readers and routes and answers BLOCKED while GET /api/v1/library/status answers 501 library_not_built.
+ * Check 13 has two halves: the core half (licence table, the operation's refusal) and the catalogue half (an Iconify-shaped CC BY
+ * set's credit names its author; a CC BY row without credit is listed credit_missing and use answers 409), the latter over the
+ * SYNTHETIC LIBRARY of library-fixtures.ts set as the folder by the owner's session.
  *
  * Run alone: `tsx packages/evals/src/library-proof.duties.ts` (exit 0 pass, 1 fail, 2 blocked). Needs `pnpm build` (the still).
  */
@@ -23,6 +23,7 @@ import { startServer } from '@pulseframe/server';
 import { backupDataDir } from '../../../apps/server/src/backup.ts';
 import { LIBRARY_CONFIG_FILE, LIBRARY_INDEX_FILE } from '../../../apps/server/src/library/contract.ts';
 import type { LibraryProofPart } from './library-proof.ts';
+import { FIX_ICON_AUTHOR, FIX_KEYS, makeLibraryFixture } from './library-fixtures.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const sha = (x: string | Buffer) => createHash('sha256').update(x).digest('hex');
@@ -36,7 +37,7 @@ let port = 18930;
 /** A fresh server in its own temp data directory, with REST helpers as the agent (bearer) and as the owner (session cookie). */
 async function world() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-libproof-b-'));
-  const s = await startServer({ port: port++, dataDir: path.join(dir, 'data') });
+  const s = await startServer({ port: port++, dataDir: path.join(dir, 'data'), libraryDir: null });
   const cookie = s.auth.issueSession(new Request(`${s.url}/api/v1/session`, { headers: { origin: s.url, 'x-pf-owner-key': s.auth.tokens.owner } })).split(';')[0]!;
   const who = { agent: { authorization: `Bearer ${s.auth.tokens.agent}` }, owner: { cookie, origin: s.url } } as const;
   const call = async (p: string, body?: unknown, as: keyof typeof who = 'agent', method?: string) => {
@@ -172,12 +173,27 @@ async function check13(): Promise<true | string> {
   let refused: string | null = null;
   try { applyTransaction(doc, [{ op: 'use_library_item', args: { asset } }], { idSeed: 'p13_', actor: 'proof', allowInternal: true }); } catch (e) { if (e instanceof OpError) refused = e.message; else throw e; }
   if (refused !== LIBRARY_REFUSALS.creditMissing.message()) return fail('a CC BY record without credit was not refused as credit_missing', refused);
-  // catalogue half: worker A's readers and routes
+  // catalogue half: worker A's readers and routes over the SYNTHETIC LIBRARY (library-fixtures.ts), the folder set by the owner
   const w = await world();
   try {
-    const st = await w.call('/library/status');
-    if (st.status === 501 && st.body?.error?.code === 'library_not_built') return 'BLOCKED: the core half passed; the catalogue half (Iconify CC BY credit names its author, credit_missing row, use 409) needs worker A\'s library routes (GET /library/status answers 501 library_not_built)';
-    return 'BLOCKED: worker A\'s routes answer; the catalogue half is to be written against library-fixtures.ts once it lands (lead integration)';
+    const fx = await makeLibraryFixture(path.join(w.dir, 'fixture'));
+    const set = await w.call('/library/root', { root: fx.root }, 'owner', 'PUT');
+    if (set.status !== 200) return fail('the owner could not set the synthetic library folder', set.body);
+    let st: any;
+    for (let i = 0; i < 300; i++) { st = (await w.call('/library/status')).body; if (st?.state === 'ready') break; await sleep(100); }
+    if (st?.state !== 'ready') return fail('the synthetic library did not become ready', st);
+    const item = async (key: string) => w.call(`/library/items/${encodeURIComponent(key)}`);
+    const cc = await item(FIX_KEYS.ccbyIcon);
+    if (cc.status !== 200) return fail('the CC BY icon row is not listed', cc.body);
+    if (cc.body.licenceId !== 'CC-BY-4.0' || !cc.body.duties?.credit || !cc.body.credit?.text?.includes(FIX_ICON_AUTHOR)) return fail('the CC BY icon set\'s credit does not name its author', { licenceId: cc.body.licenceId, credit: cc.body.credit, duties: cc.body.duties });
+    const na = await item(FIX_KEYS.ccbyNoAuthor);
+    if (na.status !== 200 || na.body.unusable !== 'credit_missing') return fail('a CC BY row without credit is not listed as credit_missing', { status: na.status, unusable: na.body?.unusable, credit: na.body?.credit });
+    const pid = (await w.call('/projects', { name: 'p13 catalogue', width: 640, height: 360, frameRate: R })).body.project.id as string;
+    const assetsBefore = Object.keys(w.s.store.getProject(pid).doc.assets).length;
+    const use = await w.call(`/projects/${pid}/library/use`, { key: FIX_KEYS.ccbyNoAuthor, start: f(0) });
+    if (use.status !== 409 || use.body?.error?.code !== 'library_item_unusable' || use.body.error.details?.reason !== 'credit_missing') return fail('using the CC BY row without credit was not refused 409 library_item_unusable (credit_missing)', { status: use.status, error: use.body?.error });
+    if (Object.keys(w.s.store.getProject(pid).doc.assets).length !== assetsBefore) return fail('a refused use stored a file');
+    return true;
   } finally { await w.close(); }
 }
 

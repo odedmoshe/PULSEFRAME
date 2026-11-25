@@ -19,7 +19,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import type { Context } from 'hono';
 import {
-  applyTransaction, CreditsQuerySchema, LIBRARY_OPS_BUILT, LibraryItemsQuerySchema, LibraryRecordSchema, LibraryRootBodySchema, LibraryUseBodySchema,
+  applyTransaction, CreditsQuerySchema, LIBRARY_OPS_BUILT, LibraryFacetsQuerySchema, LibraryItemsQuerySchema, LibraryRecordSchema, LibraryRootBodySchema, LibraryUseBodySchema,
   OpError, type Asset, type LibraryRecord, type LibraryUseBody, type LibraryUseResult, type OpCall,
 } from '@pulseframe/core';
 import type { Principal } from '../auth.ts';
@@ -93,6 +93,12 @@ export function registerLibraryRoutes(app: LibraryApp, deps: LibraryRouteDeps): 
     const q = parse(LibraryItemsQuerySchema, c.req.query());
     if (!lib.configured()) throw libraryError('notConfigured');
     return c.json(await lib.search(q));
+  });
+  app.get('/api/v1/library/facets', (c) => {
+    need(c, 'observe');
+    const q = parse(LibraryFacetsQuerySchema, c.req.query());
+    if (!lib.configured()) throw libraryError('notConfigured');
+    return c.json(lib.facets(q.kind));
   });
   app.get('/api/v1/library/items/:key', async (c) => {
     need(c, 'observe');

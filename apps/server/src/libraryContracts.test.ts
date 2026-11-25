@@ -2,9 +2,8 @@
  * The server contract of the content library (wave 7 library track; library/contract.ts), through the real app and the real MCP
  * handler: every route is registered, documented and classified; the owner rule holds before anything else; the archive's library
  * modes are worker B's (below); the backup leaves the library's files out. Worker A's rows (the catalogue,
- * audition, thumbnails, use) run over the SYNTHETIC LIBRARY (packages/evals/src/library-fixtures.ts). While worker B's core
- * licenceDuties is not built in this build, the library service of this data directory is made first with the fixtures' labelled
- * TEST STAND-IN for it; once built, core's own table is used. The it.todo rows name what is still to be made pass.
+ * audition, thumbnails, use) run over the SYNTHETIC LIBRARY (packages/evals/src/library-fixtures.ts) against core's own licence
+ * table. The it.todo rows name what is still to be made pass.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -19,8 +18,8 @@ import { Exporter } from './export.ts';
 import { Governance, type Principal } from './governance.ts';
 import { createHash } from 'node:crypto';
 import * as T from '@pulseframe/time';
-import { collectCredits, creditsView, LIBRARY_OPS_BUILT } from '@pulseframe/core';
-import { coreDutiesBuilt, FIX_COUNTS, FIX_KEYS, fixtureDutiesStandIn, makeLibraryFixture, type LibraryFixture } from '../../../packages/evals/src/library-fixtures.ts';
+import { collectCredits, creditsView, LIBRARY_OPS_BUILT, libraryRecordIssues, licenceDuties } from '@pulseframe/core';
+import { FIX_COUNTS, FIX_KEYS, makeLibraryFixture, type LibraryFixture } from '../../../packages/evals/src/library-fixtures.ts';
 import { createApp, DATA_CSP } from './http.ts';
 import { createImportQueue } from './importQueue.ts';
 import { FifoComputeLane } from './lane.ts';
@@ -83,7 +82,6 @@ beforeAll(async () => {
   dir = path.join(dir, 'data');
   fs.mkdirSync(dir);
   cfg = { ...loadConfig({}), dataDir: dir, port: 23, speechPython: null, voicePython: null, backupDir: null, libraryDir: null };
-  if (!coreDutiesBuilt()) libraryServiceFor(cfg, { duties: fixtureDutiesStandIn }); // labelled TEST STAND-IN until core's table is built
   store = new Store(dir);
   auth = new Auth(cfg);
   const exporter = new Exporter(store, null as never, () => '', path.join(dir, 'no-web-dist'));
@@ -233,6 +231,15 @@ describe('what the workers make pass', () => {
     expect([lic.status, lic.headers.get('content-type')]).toEqual([200, 'text/plain; charset=utf-8']);
     expect(await lic.text()).toContain('SYNTHETIC licence text for incompetech');
   });
+  it('integration: GET /library/facets offers the catalogue\'s genres and moods (the source\'s spelling, with counts), whatever rows are loaded', async () => {
+    const music = await rest(observer, 'GET', '/api/v1/library/facets?kind=music');
+    expect(music.status).toBe(200);
+    expect(music.body).toEqual({ genre: [{ value: 'Ambient', count: 1 }, { value: 'Electronic', count: 1 }], mood: [{ value: 'Bright', count: 1 }, { value: 'Calm', count: 1 }, { value: 'Driving', count: 1 }] });
+    expect((await rest(observer, 'GET', '/api/v1/library/facets?kind=sticker')).body).toEqual({ genre: [], mood: [] });
+    expect((await rest(observer, 'GET', '/api/v1/library/facets?kind=nothing')).status).toBe(400);
+    // a value offered filters exactly its rows
+    expect((await rest(observer, 'GET', '/api/v1/library/items?kind=music&genre=Ambient')).body.rows.map((x: any) => x.key)).toEqual([FIX_KEYS.track90]);
+  });
   it('A: audition answers 206 with exactly the asked bytes (a tree file and a file item); m4a and a picture answer 415', async () => {
     const file = fs.readFileSync(path.join(fx.root, 'sounds', 'fx-cc0', 'tone-a.wav'));
     const r = await raw(observer, 'GET', item(FIX_KEYS.toneA, '/audio'), undefined, { range: 'bytes=100-199' });
@@ -319,6 +326,11 @@ describe('what the workers make pass', () => {
     expect(a.contentHash).toBe(`sha256:${ledger.sha256}`);
     expect(a.provenance.upload).toBeUndefined();
     expect(a.provenance.library).toMatchObject({ itemId: row.key, sourceId: 'incompetech', licence: { id: row.licenceId }, credit: row.credit, sourceSha256: ledger.sha256 });
+    // the record's duties are core's table's (licenceDuties over the ledger entry), never a stand-in: CC BY, not shareable (the
+    // ledger does not allow passing it on), so disk-only; commercial use allowed; the credit goes in the description
+    const duties = licenceDuties(ledger.source, ledger.licence, ledger.flags);
+    expect({ diskOnly: a.provenance.library!.flags.diskOnly === true, nonCommercial: a.provenance.library!.flags.nonCommercial === true, placement: a.provenance.library!.credit?.placement }).toEqual({ diskOnly: !duties.shareable, nonCommercial: duties.nonCommercial, placement: duties.placement });
+    expect(libraryRecordIssues(a.provenance.library!)).toEqual([]);
     expect(r.body.placed?.clipId ?? r.body.placed?.clipIds).toBeTruthy();
     const undo = await rest(owner, 'POST', `/api/v1/projects/${pid}/undo`, {});
     expect(undo.status).toBe(200);
@@ -379,5 +391,33 @@ describe('what the workers make pass', () => {
     const keep = await app.fetch(new Request(`${base()}/api/v1/projects/${lp}/archive?library=keep`, { headers: owner() }));
     expect(keep.status).toBe(200);
     expect(Buffer.from(await keep.arrayBuffer()).includes(Buffer.from(`blobs/${nc.slice(7)}`))).toBe(true);
+  });
+});
+
+describe('integration (wave 7 library): the keep archive\'s name, the export\'s credits download', () => {
+  it('«ארכיון לעצמי» downloads as ….private.pulseframe.tar; «ארכיון לשיתוף» keeps the plain name', async () => {
+    const lp = libraryProject();
+    const keep = await app.fetch(new Request(`${base()}/api/v1/projects/${lp}/archive?library=keep`, { headers: owner() }));
+    expect(keep.headers.get('content-disposition')).toMatch(/\.private\.pulseframe\.tar$/);
+    await keep.arrayBuffer();
+    const strip = await app.fetch(new Request(`${base()}/api/v1/projects/${lp}/archive?library=strip`, { headers: owner() }));
+    expect(strip.headers.get('content-disposition')).toMatch(/[^e]\.pulseframe\.tar$/);
+    expect(strip.headers.get('content-disposition')).not.toContain('private');
+    await strip.arrayBuffer();
+  });
+  it('GET /jobs/:jobId/credits answers the sidecar (server route) or the job row\'s text (browser route); 404 without credits, 409 unfinished', async () => {
+    const lp = libraryProject();
+    const text = collectCredits(store.getProject(lp).doc).descriptionText('he');
+    fs.mkdirSync(store.outDir, { recursive: true });
+    const mk = (output: Record<string, unknown> | null, status = 'succeeded') => { const j = store.createJob(lp, 'export', 'user:local', {}); store.updateJob(j.id, { status, ...(output ? { output } : {}) } as never); return j.id; };
+    const server = mk({ licence: { lines: [{}], credits: { descriptionText: text, file: 'jx.credits.txt' } } });
+    fs.writeFileSync(path.join(store.outDir, 'jx.credits.txt'), text);
+    const browser = mk({ licence: { lines: [{}], credits: { descriptionText: text, file: null } } });
+    for (const id of [server, browser]) {
+      const r = await raw(agent, 'GET', `/api/v1/jobs/${id}/credits`);
+      expect({ status: r.status, type: r.headers.get('content-type'), body: await r.text() }).toEqual({ status: 200, type: 'text/plain; charset=utf-8', body: text });
+    }
+    expect((await rest(agent, 'GET', `/api/v1/jobs/${mk({ file: 'x.wav' })}/credits`)).status).toBe(404);
+    expect((await rest(agent, 'GET', `/api/v1/jobs/${mk(null, 'running')}/credits`)).body?.error?.code).toBe('job_not_finished');
   });
 });

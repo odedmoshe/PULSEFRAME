@@ -1,13 +1,12 @@
 /**
- * The catalogue (library/index.ts) and its readers over the SYNTHETIC LIBRARY (packages/evals/src/library-fixtures.ts). While
- * worker B's core licenceDuties is not built in this build, the index is given the labelled TEST STAND-IN of the fixtures file;
- * once it is built, these tests run against core's own table.
+ * The catalogue (library/index.ts) and its readers over the SYNTHETIC LIBRARY (packages/evals/src/library-fixtures.ts), against
+ * core's own licence table (licenceDuties); no stand-in.
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { coreDutiesBuilt, FIX_COUNTS, FIX_ICON_AUTHOR, FIX_KEYS, FIX_NOT_LISTED, FIX_SVG_COUNTS, fixtureDutiesStandIn, makeLibraryFixture, type LibraryFixture } from '../../../../packages/evals/src/library-fixtures.ts';
+import { FIX_COUNTS, FIX_ICON_AUTHOR, FIX_KEYS, FIX_NOT_LISTED, FIX_SVG_COUNTS, makeLibraryFixture, type LibraryFixture } from '../../../../packages/evals/src/library-fixtures.ts';
 import type { Config } from '../config.ts';
 import { ftsQuery, LibraryService, type LibraryServiceOptions } from './index.ts';
 import { REPO_ROOT } from './paths.ts';
@@ -16,12 +15,11 @@ import { parseAnnotations } from './readers/cldr.ts';
 import { admittedSets } from './readers/iconify.ts';
 
 let base: string, fx: LibraryFixture;
-const duties = coreDutiesBuilt() ? {} : { duties: fixtureDutiesStandIn };
 const services: LibraryService[] = [];
 function service(name: string, o: LibraryServiceOptions & { env?: string | null } = {}): LibraryService {
   const dataDir = path.join(base, name);
   fs.mkdirSync(dataDir, { recursive: true });
-  const s = new LibraryService({ dataDir, libraryDir: o.env === undefined ? fx.root : o.env } as Config, { ...duties, ...o });
+  const s = new LibraryService({ dataDir, libraryDir: o.env === undefined ? fx.root : o.env } as Config, o);
   services.push(s);
   return s;
 }
@@ -127,7 +125,7 @@ describe('the index file: swapped whole, cancellable, rebuilt after a cut', () =
       (gate as (() => void) | null)?.();
       await s.idle();
       fs.writeFileSync(path.join(base, 'swap', 'library-index.sqlite.tmp'), tmpCopy);
-      const again = new LibraryService({ dataDir: path.join(base, 'swap'), libraryDir: fx.root } as Config, duties);
+      const again = new LibraryService({ dataDir: path.join(base, 'swap'), libraryDir: fx.root } as Config);
       services.push(again);
       await ready(again);
       expect((await again.status(true)).counts).toEqual({ ...FIX_COUNTS, music: FIX_COUNTS.music + 1 });

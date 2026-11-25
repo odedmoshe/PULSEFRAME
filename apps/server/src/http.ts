@@ -309,7 +309,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (library === 'keep') libraryOwner(who);
     const plan = planArchive(store, c.req.param('id'), { family, ...(library ? { library } : {}) });
     const name = plan.doc.name.replace(/[^\p{L}\p{N} _.-]+/gu, '_').slice(0, 60) || 'project';
-    return new Response(Readable.toWeb(Readable.from(writeArchive(plan))) as ReadableStream, { headers: { 'content-type': 'application/x-tar', 'content-length': String(plan.bytes), 'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}.pulseframe.tar` } });
+    // «ארכיון לעצמי» says so in its name: it holds library files that may not be passed on (archive.ts planArchive().library)
+    const suffix = plan.library === 'keep' ? '.private.pulseframe.tar' : '.pulseframe.tar';
+    return new Response(Readable.toWeb(Readable.from(writeArchive(plan))) as ReadableStream, { headers: { 'content-type': 'application/x-tar', 'content-length': String(plan.bytes), 'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}${suffix}` } });
   });
   // What the archive «בלי פרטי משפחה» would change, for the dialog before the download: titles whose words change inside them
   // (frozen at their first value) and titles whose people field has no words. The owner's own session only.
@@ -847,6 +849,17 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (j.status !== 'succeeded') throw new ApiError(409, 'job_not_finished', `job is ${j.status}`, { status: j.status });
     if (!j.output?.captions) throw new ApiError(404, 'not_found', 'this export has no caption file');
     return sendBlob(c, path.join(store.outDir, path.basename(j.output.captions.file)), j.output.captions.format === 'vtt' ? 'text/vtt' : 'application/x-subrip', fileMissing('output_missing', 'the caption file of this export'), `pulseframe-${j.id}.${j.output.captions.format}`);
+  });
+  // the credits text written with an export of library material (wave 7 library track; export.ts exportLicence): the sidecar
+  // file of the server route, or the text of the job row for the browser route (which stores no file)
+  app.get('/api/v1/jobs/:jobId/credits', (c) => {
+    need(c, 'observe');
+    const j = store.getJob(c.req.param('jobId'));
+    if (j.status !== 'succeeded') throw new ApiError(409, 'job_not_finished', `job is ${j.status}`, { status: j.status });
+    const credits = j.output?.licence?.credits as { descriptionText?: unknown; file?: unknown } | undefined;
+    if (!credits || typeof credits.descriptionText !== 'string' || !credits.descriptionText) throw new ApiError(404, 'not_found', 'this export has no credits text', { jobId: j.id }, 'Only an export holding library material whose licence asks for a credit has one; read the project\'s credits with GET /api/v1/projects/{id}/credits.');
+    if (typeof credits.file === 'string') return sendBlob(c, path.join(store.outDir, path.basename(credits.file)), 'text/plain; charset=utf-8', fileMissing('output_missing', 'the credits file of this export'), `pulseframe-${j.id}.credits.txt`);
+    return c.body(credits.descriptionText, 200, { 'content-type': 'text/plain; charset=utf-8', 'content-disposition': `attachment; filename="pulseframe-${j.id}.credits.txt"` });
   });
   // ----- browser export route: the tab renders and encodes; the server holds the durable job and a tab lease -----
   const browserExport = registerBrowserExportRoutes(app, store, exporter);

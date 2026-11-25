@@ -59,13 +59,6 @@ export const hasHebrew = (s: string): boolean => /[֐-׿]/.test(s);
 /** True when any filter narrows the list (the empty state then says nothing matched, not that the library is empty). */
 export const filtersActive = (f: LibraryFilters, text: string): boolean => !!(text.trim() || f.genre || f.mood || f.tempo || f.length || f.noCredit || f.commercial);
 
-/** The genres and moods seen in the rows loaded so far, each once, sorted; the server has no facet route, so the chips offer what was seen. */
-export function facetsOf(rows: readonly LibraryRow[]): { genre: string[]; mood: string[] } {
-  const g = new Set<string>(), m = new Set<string>();
-  for (const r of rows) { for (const x of r.meta.genre) g.add(x); for (const x of r.meta.mood) m.add(x); }
-  const sort = (s: Set<string>) => [...s].sort((a, b) => a.localeCompare(b));
-  return { genre: sort(g), mood: sort(m) };
-}
 
 // ---------- the panel's state from the status ----------
 export type PanelState =
@@ -149,14 +142,18 @@ export function assetBadges(asset: Pick<Asset, 'provenance'>): AssetBadge[] {
 // ---------- the export job's licence lines ----------
 export interface ExportLicence { nonCommercial: string[]; credits: { lines: number; descriptionText: string } | null; people: number }
 const isRec = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-/** Read output.licence of a finished export job; null when the job holds none. Shapes it does not know are skipped, not guessed. */
+/**
+ * Read output.licence of a finished export job; null when the job holds none. The server writes it (apps/server/src/export.ts
+ * exportLicence): core's CreditsView without its descriptionText — `lines`, `onScreenMissing`, `nonCommercial` and `people` (each
+ * an array of {assetId, title, …}) — plus `credits: {descriptionText, file}`. Shapes it does not know are skipped, not guessed.
+ */
 export function exportLicence(output: Record<string, unknown> | null | undefined): ExportLicence | null {
   const l = output?.licence;
   if (!isRec(l)) return null;
-  const nc = Array.isArray(l.nonCommercial) ? l.nonCommercial.map((x) => (isRec(x) && typeof x.title === 'string' ? x.title : typeof x === 'string' ? x : '')).filter(Boolean) : [];
+  const nc = Array.isArray(l.nonCommercial) ? l.nonCommercial.map((x) => (isRec(x) && typeof x.title === 'string' ? x.title : '')).filter(Boolean) : [];
   const c = isRec(l.credits) ? l.credits : null;
   const text = c && typeof c.descriptionText === 'string' ? c.descriptionText : '';
-  const lines = c && Array.isArray(c.lines) ? c.lines.length : 0;
+  const lines = Array.isArray(l.lines) ? l.lines.length : 0;
   return { nonCommercial: [...new Set(nc)], credits: lines > 0 && text ? { lines, descriptionText: text } : null, people: Array.isArray(l.people) ? l.people.length : 0 };
 }
 
