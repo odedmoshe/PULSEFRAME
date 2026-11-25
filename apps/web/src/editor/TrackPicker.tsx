@@ -8,7 +8,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
-import { findClip } from '@pulseframe/core';
+import { contentTransform, findClip } from '@pulseframe/core';
 import { boxToTrackUnits, frameToLayerSource, frameToScreen, layerSourceToFrame, screenToFrame, toTrackUnits, type FrameBox, type LayerPlacement } from './tracking.math.ts';
 import { pickAnnouncement, TRACKING_TESTIDS as ID, trackingT } from './tracking.strings.ts';
 import { useEditorState, type Editor } from './store.ts';
@@ -25,7 +25,9 @@ function targetNow(editor: Editor, clipId: string): { frame: FrameBox; layer: La
   const at = editor.layerAt(clipId);
   if (!at || at.layer.kind !== 'video') return null;
   const l = at.layer;
-  return { frame: { W: at.graph.width, H: at.graph.height, fit: at.graph.fit }, layer: { srcW: l.sourceWidth, srcH: l.sourceHeight, transform: l.transform }, sourceFrame: l.sourceFrameIndex };
+  // a stabilised clip's picture sits inside its own placement, moved by that frame's correction (core contentTransform), so a pick lands on the source point it shows
+  const transform = l.steady ? { ...l.transform, ...contentTransform(l.transform, l.steady, l.steady.zoom, at.graph.width, at.graph.height, at.graph.fit, l.sourceWidth, l.sourceHeight) } : l.transform;
+  return { frame: { W: at.graph.width, H: at.graph.height, fit: at.graph.fit }, layer: { srcW: l.sourceWidth, srcH: l.sourceHeight, transform }, sourceFrame: l.sourceFrameIndex };
 }
 
 export function TrackPicker(props: { canvas: HTMLCanvasElement | null }) {

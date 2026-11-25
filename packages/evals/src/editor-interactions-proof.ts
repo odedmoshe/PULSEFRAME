@@ -2035,6 +2035,80 @@ async function main() {
       await D2.ctx.close();
     }
 
+    // ---------------------------------------------------------------------------------------------------------------
+    // picture stabilisation (wave 7): the «ייצוב תמונה» block on a shaky SYNTHETIC clip (packages/fixtures steady.ts, F1 at 480×270): not
+    // measured → «ייצבו את הקליפ» → measuring with «עצירה» → on with the crop line; the slider from the keyboard (PageUp = +10) is ONE
+    // commit and the crop line equals what the operation stored; the switch off and on again (the strength is remembered); one undo.
+    // ---------------------------------------------------------------------------------------------------------------
+    {
+      console.log('\n# stabilisation block');
+      const { steadyFixture, writeSteadyFixture } = await import('../../fixtures/src/steady.ts');
+      const fx = steadyFixture({ variant: 'F1', frames: 240 });
+      const file = path.join(art, 'stabilise-f1.mp4');
+      await writeSteadyFixture(fx, file, { width: 480, height: 270 });
+      const sp = (await call('/projects', { name: 'stabilise-ui', width: 480, height: 270 })).body.project.id as string;
+      const up = await upload(sp, file);
+      const clipId = (await txs(sp, [{ op: 'add_clip', args: { assetId: up.assetId, start: T.frameTime(0, { num: 30, den: 1 }), sourceIn: T.frameTime(30, { num: 30, den: 1 }), duration: T.frameTime(150, { num: 30, den: 1 }), withLinkedAudio: false } }])).results[0].output.clipId as string;
+      const sctx = await browser.newContext({ viewport: { width: 1500, height: 950 }, reducedMotion: 'reduce' });
+      await sctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const spage = await sctx.newPage();
+      const sErrors: string[] = [];
+      spage.on('pageerror', (e) => sErrors.push(String(e)));
+      await spage.goto(`${s.ownerUrl}&project=${sp}`);
+      await spage.getByTestId('timecode').waitFor({ timeout: 30000 });
+      await spage.locator(`.clip[data-clip-id="${clipId}"]`).click({ position: { x: 4, y: 4 } });
+      await spage.getByTestId('insp-tab-motion').click({ timeout: 8000 }).catch(() => {});
+      const sec = spage.getByTestId('section-stabilise');
+      await sec.waitFor({ timeout: 8000 });
+      if ((await sec.getAttribute('data-open')) !== 'true') await sec.locator('.pf-section-toggle').click();
+      const stateOf = () => spage.getByTestId('stab-panel').getAttribute('data-state');
+      await spage.getByTestId('stab-panel').waitFor({ timeout: 8000 });
+      const s0 = await stateOf();
+      const runVisible = await spage.getByTestId('stab-run').count();
+      const rev0 = (await call(`/projects/${sp}`)).body.revision as number;
+      await spage.getByTestId('stab-run').click();
+      await spage.waitForFunction(() => document.querySelector('[data-testid=stab-panel]')?.getAttribute('data-state') === 'measuring', undefined, { timeout: 8000 }).catch(() => {});
+      const sMeasuring = await stateOf();
+      const stopVisible = await spage.getByTestId('stab-stop').count();
+      await spage.waitForFunction(() => { const st = document.querySelector('[data-testid=stab-panel]')?.getAttribute('data-state'); return st === 'on' || st === 'limited' || st === 'refused'; }, undefined, { timeout: 120000 });
+      const sOn = await stateOf();
+      const jobRevisions = ((await call(`/projects/${sp}`)).body.revision as number) - rev0;
+      const read = async () => ({ zoomPm: Number(await spage.getByTestId('stab-crop').getAttribute('data-zoom-pm')), area: Number(await spage.getByTestId('stab-crop').getAttribute('data-area-percent')), strength: Number(await spage.getByTestId('stab-strength').inputValue()), text: ((await spage.getByTestId('stab-crop').textContent()) ?? '').trim() });
+      const onShown = await read();
+      const stored = async () => { const d = (await call(`/projects/${sp}`)).body.project as ProjectDocument; const c = Object.values(d.sequences).flatMap((q) => q.tracks.flatMap((t) => t.clips)).find((x) => x.id === clipId) as MediaClip; return c.stabilise; };
+      const st0 = await stored();
+      // the slider from the keyboard: PageUp is +10, leaving the slider ends the change
+      const rev1 = (await call(`/projects/${sp}`)).body.revision as number;
+      await spage.getByTestId('stab-strength').focus();
+      await spage.keyboard.press('PageUp');
+      const live = Number(await spage.getByTestId('stab-strength').inputValue());
+      await spage.keyboard.press('Tab');
+      for (let i = 0; i < 80 && ((await call(`/projects/${sp}`)).body.revision as number) === rev1; i++) await sleep(100);
+      await sleep(400);
+      const rev2 = (await call(`/projects/${sp}`)).body.revision as number;
+      const st1 = await stored();
+      const afterSlider = await read();
+      // the switch: off, then on again with the strength it had
+      await spage.getByTestId('stab-toggle').click();
+      await spage.waitForFunction(() => document.querySelector('[data-testid=stab-panel]')?.getAttribute('data-state') === 'off', undefined, { timeout: 8000 }).catch(() => {});
+      const sOff = await stateOf();
+      const offChecked = await spage.getByTestId('stab-toggle').getAttribute('aria-checked');
+      await spage.getByTestId('stab-toggle').click();
+      await spage.waitForFunction(() => { const st = document.querySelector('[data-testid=stab-panel]')?.getAttribute('data-state'); return st === 'on' || st === 'limited'; }, undefined, { timeout: 8000 }).catch(() => {});
+      const st2 = await stored();
+      // one undo returns the switch to off
+      await spage.keyboard.press('Control+KeyZ');
+      await spage.waitForFunction(() => document.querySelector('[data-testid=stab-panel]')?.getAttribute('data-state') === 'off', undefined, { timeout: 8000 }).catch(() => {});
+      const sUndo = await stateOf();
+      const rtl = await spage.evaluate(() => getComputedStyle(document.documentElement).direction);
+      const standing = (await spage.getByTestId('stab-panel').innerText()).includes('בלי מודל');
+      check('stabilisation block: not measured shows «ייצבו את הקליפ»; one press runs the job (measuring, with «עצירה»), the clip ends up on with a crop line, and the whole job is ONE revision', s0 === 'not-measured' && runVisible === 1 && sMeasuring === 'measuring' && stopVisible === 1 && (sOn === 'on') && jobRevisions === 1 && !!st0, { s0, runVisible, sMeasuring, stopVisible, sOn, jobRevisions, stored: st0 });
+      check('stabilisation block: the crop line shows the stored zoom and its area (the operation\'s numbers), in Hebrew with the standing «בלי מודל» line', onShown.zoomPm === st0?.zoomPm && Math.abs(onShown.area - Math.round(1000 * (1 - 1e6 / (st0!.zoomPm ** 2))) / 10) < 1e-9 && /חיתוך שוליים/.test(onShown.text) && standing && rtl === 'rtl', { onShown, standing, rtl });
+      check('stabilisation block: PageUp on the slider is +10 and leaving it is ONE commit; the crop line then shows the stored zoom', live === (st0?.strength ?? 0) + 10 && rev2 - rev1 === 1 && st1?.strength === live && afterSlider.zoomPm === st1?.zoomPm && afterSlider.strength === live, { live, commits: rev2 - rev1, stored: st1, afterSlider });
+      check('stabilisation block: the switch turns it off (aria-checked false, the state «off», the measurement stays) and on again with the strength it had; one undo returns it to off', sOff === 'off' && offChecked === 'false' && st2?.strength === st1?.strength && sUndo === 'off' && sErrors.length === 0, { sOff, offChecked, before: st1?.strength, after: st2?.strength, sUndo, pageErrors: sErrors.slice(0, 3) });
+      await sctx.close();
+    }
+
     await page.close();
   } catch (e) {
     console.error(e);

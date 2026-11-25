@@ -9,7 +9,7 @@
  */
 export const STABILISE_HE = {
   'op.attach_camera_motion': 'שמירת מדידת תנועת המצלמה', 'op.set_clip_stabilise': 'ייצוב תמונה', 'op.remove_camera_motion': 'הסרת מדידת תנועת המצלמה',
-  'error.code.stabilise_not_built': 'ייצוב התמונה עוד לא נבנה בגרסה הזו', 'error.code.stabilise_in_progress': 'המדידה כבר רצה', 'error.code.clip_changed': 'הקליפ השתנה בזמן המדידה',
+  'error.code.stabilise_in_progress': 'המדידה כבר רצה', 'error.code.clip_changed': 'הקליפ השתנה בזמן המדידה',
   'cmd.stabiliseToggle': 'ייצוב תמונה: הפעלה או כיבוי',
   // the inspector block
   'stab.title': 'ייצוב תמונה', 'stab.run': 'ייצבו את הקליפ', 'stab.stop': 'עצירה', 'stab.toggle': 'ייצוב פועל', 'stab.strength': 'עוצמה',
@@ -28,7 +28,7 @@ export const STABILISE_HE = {
 } as const;
 export const STABILISE_EN: Record<keyof typeof STABILISE_HE, string> = {
   'op.attach_camera_motion': 'Saved a camera motion measurement', 'op.set_clip_stabilise': 'Stabilisation', 'op.remove_camera_motion': 'Removed a camera motion measurement',
-  'error.code.stabilise_not_built': 'Stabilisation is not built in this version yet', 'error.code.stabilise_in_progress': 'The measurement is already running', 'error.code.clip_changed': 'The clip changed while it was measured',
+  'error.code.stabilise_in_progress': 'The measurement is already running', 'error.code.clip_changed': 'The clip changed while it was measured',
   'cmd.stabiliseToggle': 'Stabilisation: on or off',
   'stab.title': 'Stabilisation', 'stab.run': 'Stabilise the clip', 'stab.stop': 'Stop', 'stab.toggle': 'Stabilisation on', 'stab.strength': 'Strength',
   'stab.crop': 'Edge crop: {percent}% of the picture (zoom ×{zoom})', 'stab.recalc': 'Recalculate the edge crop', 'stab.remove': 'Remove the measurement',
@@ -63,7 +63,6 @@ export const HE_STABILISE: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^the camera measurement ends at frame (\d+), but the file has (\d+) frames$/, (m) => `המדידה מסתיימת בפריים ${m[1]}, אבל בקובץ יש ${m[2]} פריימים. אפשר למדוד שוב`],
   [/^the first sample of a camera measurement must be a start sample$/, () => 'הדגימה הראשונה של מדידה חייבת לסמן התחלה. אפשר למדוד שוב'],
   // apps/server/src/stabilise.ts STABILISE_SERVER_REFUSALS
-  [/^stabilisation of video clips is not built in this build yet$/, () => 'ייצוב התמונה עוד לא נבנה בגרסה הזו. אפשר לעדכן את התוכנה'],
   [/^the camera motion of this file is already being measured$/, () => 'תנועת המצלמה של הקובץ כבר נמדדת. אפשר לחכות לסיום או לעצור את המדידה'],
   [/^too many camera measurements and motion tracks are already running or waiting; try again shortly$/, () => 'יותר מדי מדידות ומסלולי מעקב כבר רצים או ממתינים. אפשר לנסות שוב בעוד חצי דקה'],
   [/^the clip changed while its camera motion was measured; nothing was saved$/, () => 'הקליפ השתנה בזמן המדידה; דבר לא נשמר. אפשר לייצב שוב'],
