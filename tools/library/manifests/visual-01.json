@@ -210,20 +210,24 @@
           "kind": "archive",
           "url": "https://naciscdn.org/naturalearth/50m/raster/NE1_50M_SR_W.zip",
           "format": "zip",
+          "sha256": "9e85417223414bbed425aea5dca0f0b4c5661fc94d4f14494140a21a08dfa450",
           "bytes": 88413091,
           "approxUnpackedBytes": 175041619,
           "strip": 1,
-          "dest": "visual/maps/natural-earth/raster-3.2.0/NE1_50M_SR_W"
+          "dest": "visual/maps/natural-earth/raster-3.2.0/NE1_50M_SR_W",
+          "notes": "first seen on 2026-11-25 (the publisher gives no hash)"
         },
         {
           "id": "natural-earth/ne2-50m-sr-w",
           "kind": "archive",
           "url": "https://naciscdn.org/naturalearth/50m/raster/NE2_50M_SR_W.zip",
           "format": "zip",
+          "sha256": "7e0e07089b699a3cccad98dd1b2446390d8e3f8c5006359d477a329cebcafaa9",
           "bytes": 88903451,
           "approxUnpackedBytes": 175041753,
           "strip": 1,
-          "dest": "visual/maps/natural-earth/raster-3.2.0/NE2_50M_SR_W"
+          "dest": "visual/maps/natural-earth/raster-3.2.0/NE2_50M_SR_W",
+          "notes": "first seen on 2026-11-25 (the publisher gives no hash)"
         },
         {
           "id": "natural-earth/50m-cultural",

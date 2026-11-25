@@ -30,6 +30,12 @@ node fetch.mjs --root E:\PULSEFRAME-Library --manifest visual-01.json
 - `--delay-ms n` (default 500) is the pause between request starts to one host; at most two requests per host are open at once.
 - `--verify` re-hashes folders that are already present (files are always re-hashed).
 - Exit code 0: everything selected is present. 1: an item failed or was refused. 2: bad arguments, invalid manifest, or another run holds the library.
+- The very last line on stdout is always `EXIT <code>` (0, 1 or 2, the same number as the exit code, printed after the SUMMARY block), for a wrapper script that loses the process exit code. `--help` prints the usage only.
+- Git items need no global git setting: every git command the tool runs in a repository it created passes `-c safe.directory=<that folder>` on its own command line, so a drive that records no file owner (git's "dubious ownership") works without touching `git config --global`.
+
+### Running detached on Windows
+
+Put the command in a `.ps1` file and start it with `powershell -NoProfile -File <file>`; never as an inline `-Command` string with nested quotes (an inline `"exit $LASTEXITCODE"` once ran as `exit 0` and stopped a two-step run after its first step). Read the `EXIT <code>` line at the end of the output as well as the process exit code.
 
 Run it again after a failure: finished items are recognised as present, and a partial download continues where it stopped when the server gave a strong `ETag` and honours `Range` (otherwise it starts again). Nothing is ever overwritten: a file or folder that is in the way with other content is reported and left alone.
 

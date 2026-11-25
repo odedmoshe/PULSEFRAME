@@ -515,7 +515,9 @@ export async function extractZip(file, dest, { strip = 0, keep = null, tick = ()
 const GIT_SAFE = ['-c', 'credential.helper=', '-c', 'core.askPass=', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always'];
 export function runGit(args, { cwd, insecureOk = false } = {}) {
   return new Promise((resolve) => {
-    const pre = insecureOk ? [...GIT_SAFE, '-c', 'protocol.file.allow=always'] : GIT_SAFE;
+    const pre = insecureOk ? [...GIT_SAFE, '-c', 'protocol.file.allow=always'] : [...GIT_SAFE];
+    // A drive that records no owner makes git call the repository's owner someone else; `safe.directory` on the command line (a protected scope) trusts exactly this folder, so no global setting is needed.
+    if (cwd) pre.push('-c', `safe.directory=${path.resolve(cwd).replaceAll('\\', '/')}`);
     const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_LFS_SKIP_SMUDGE: '1', GCM_INTERACTIVE: 'never', GIT_ASKPASS: '' };
     const p = spawn('git', [...pre, ...args], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, timeout: 2 * 3600 * 1000 });
     let out = '', err = '';
@@ -827,5 +829,7 @@ const isMain = (() => { try { return fs.realpathSync(process.argv[1] ?? '') === 
 if (isMain) {
   const args = process.argv.slice(2);
   if (args.includes('--help') || args.includes('-h')) { console.log(USAGE); process.exit(0); }
-  run(args).then((r) => { process.exitCode = r.code; }, (e) => { console.error(`error: ${e?.stack ?? e}`); process.exitCode = 1; });
+  // The very last stdout line is `EXIT <code>`, for wrappers that lose the process exit code.
+  const finish = (code) => { process.exitCode = code; console.log(`EXIT ${code}`); };
+  run(args).then((r) => finish(r.code), (e) => { console.error(`error: ${e?.stack ?? e}`); finish(1); });
 }

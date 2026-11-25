@@ -639,8 +639,9 @@
           "kind": "file",
           "url": "https://zenodo.org/records/3987831/files/Cnn14_mAP%3D0.431.pth?download=1",
           "dest": "models/audio_tagging/panns/Cnn14_mAP=0.431.pth",
+          "sha256": "0dc499e40e9761ef5ea061ffc77697697f277f6a960894903df3ada000e34b31",
           "bytes": 327428481,
-          "notes": "Publisher md5 541141fa2ee191a88f24a3219fff024e"
+          "notes": "Publisher md5 541141fa2ee191a88f24a3219fff024e; first seen on 2026-11-25 (the publisher gives no hash)"
         }
       ]
     }
