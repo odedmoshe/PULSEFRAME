@@ -41,6 +41,7 @@ import { startServer } from '@pulseframe/server';
 import { withExif } from '../../../apps/server/src/captureMeta.fixtures.ts';
 import { chooseFormat, formatOptions, openCardMenu } from './editor-ui.ts';
 import { makeRenderCacheCtx, renderCacheA11yScenarios } from './a11y-render-cache.ts';
+import { stabiliseA11yScenarios } from './a11y-stabilise.ts';
 import { makeApi, ownerApi } from './incremental-fixtures.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
 import { auditInPage, focusAudit, toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
@@ -803,6 +804,12 @@ async function main() {
         const r = await sc.prepare(rcCtx);
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, sc.id.startsWith('cache-sheet'));
         await sc.leave?.(rcCtx);
+      }
+      // stabilisation (wave 7): the block's states in the inspector (a11y-stabilise.ts, W3)
+      for (const sc of stabiliseA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
       }
       if (await page.getByTestId('cache-fast-switch').count() === 0) { await page.getByTestId('export').click(); await page.getByTestId('cache-fast-switch').waitFor({ timeout: 8000 }).catch(() => {}); }
       if ((await page.getByTestId('cache-fast-switch').getAttribute('aria-checked').catch(() => null)) === 'true') await page.getByTestId('cache-fast-switch').click();

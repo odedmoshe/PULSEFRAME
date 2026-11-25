@@ -3,7 +3,8 @@
  * refusals.ts) in step with the fixed English sentences of core steadyContract.ts STEADY_REFUSALS and apps/server/src/stabilise.ts
  * STABILISE_SERVER_REFUSALS: every sentence, with every reason it can carry, is worded in Hebrew, says what to do next, and every
  * pattern of the table is used. notBuilt and the attach refusals are provoked for real; the rest come from the table until W2's
- * bodies exist — W2 then provokes each through its operation here (it.todo below).
+ * bodies exist — W2 then provokes each through its operation here (it.todo below). The server's inProgress, busy and clipChanged
+ * are provoked for real by W1 in apps/server/src/stabilise.test.ts.
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
@@ -71,5 +72,4 @@ describe('stabilise refusals in Hebrew', () => {
     }
   });
   it.todo('W2: each set_clip_stabilise / remove_camera_motion refusal provoked for real through its operation once STEADY_OPS_BUILT');
-  it.todo('W1: inProgress, busy and clipChanged provoked for real through the route and the job (stabilise.ts)');
 });
