@@ -127,6 +127,28 @@ Hebrew: the voice model garbles unpointed Hebrew (a second model recovered 8 of 
 
 **Evidence and limits.** `pnpm proof:voice` (23 checks), `docs/evidence/voice-proof.json`, sample `docs/demo/narration-sample-he.m4a`. Nobody has listened to the output. Not established: pronunciation, stress, naturalness, numbers and foreign words, other languages, GPU speed (CPU, single run: about 37 s for the first sentence including the model load, about 15 s for each following one while the worker stays alive).
 
+## Picture search «חיפוש בתמונה» (optional, owner only — wave 7 search track)
+Search by file name, date, event and spoken words needs none of this and works as it is. The picture part finds moments by typed words such as "a cake with candles": a scan looks at one whole frame per second of each video (256×256, no face, person or region is cut out, detected or named) and a text query is compared with those frames. It is off until you set it up, never starts by itself, and its answers are a model's ranking aid that can be wrong: the order is shown, never a number. The model was not tested in Hebrew; Hebrew words go to it as typed, and typing English may find more. What the scan keeps is vectors in `<data dir>/search/index.sqlite` on this computer only: not in the project, a backup or an archive, and erased with the video, by «מחק את מפתח החיפוש בתמונה», or when no project holds the file. The status line in the media drawer says which step is missing.
+
+**Honest state.** Until the server part of this track is merged the routes answer 501 `footage_search_not_built` and the drawer says the picture search is not built yet. After that, without the steps below it says «החיפוש בתמונה לא מותקן» with the first missing step.
+
+**1. Python environment (Windows x64, Python 3.13, CPU torch).**
+```bat
+py -3.13 -m venv .artifacts\search\venv
+.artifacts\search\venv\Scripts\python -m pip install --require-hashes --only-binary=:all: -r apps\server\tools\requirements-search-win-cpu.txt
+set PF_TOOLS_PYTHON=%CD%\.artifacts\search\venv\Scripts\python.exe
+```
+`apps/server/tools/requirements-search-win-cpu.txt` pins the closure of torch 2.15.0, transformers 5.23.0, tokenizers 0.23.3, sentencepiece 0.2.3, safetensors 0.8.0 and numpy 2.5.4 (40 wheels) with the SHA-256 of each wheel from PyPI's JSON API. It was written without installing anything and has not been run through pip's own resolver: the first install on the laptop is its test, and an error there means the list is to be corrected, not that `--require-hashes` is to be dropped. The PyPI torch wheel for Windows is the CPU build; a CUDA lock is a second file, made after checking the driver with `nvidia-smi` (the `nvidia-*` wheels are NVIDIA-proprietary, installed by the operator, never committed or archived).
+
+**2. The model, from the library folder only.** `google/siglip2-base-patch16-256` at revision `3f9f96cb90da5dbc758b01813f2f6f1aee24c1ab` is in `tools/library/manifests/models-01.json` (seven files, 1,539,637,736 bytes, each pinned by size and SHA-256). Fetch it with the library's own fetcher (`tools/library/fetch.mjs`, see `tools/library/README.md`) into `<library>/models/search/siglip2-base-patch16-256/`, or point `PF_SEARCH_MODEL_DIR` at a folder that holds the seven files. The editor never downloads it, never commits it and never puts it in an archive. It is ready only when all seven files are there at the exact bytes and SHA-256; one changed byte is «model_missing».
+The model is published under Apache 2.0 (its card). The publisher's own README describes the model's word list (`tokenizer.model`) as the Gemma tokenizer; Google's Gemma terms are at gemma.ai/resources/terms and its prohibited use policy at gemma.ai/resources/prohibited_use_policy, and the publisher does not state whether those terms reach that one file (this is not legal advice; what is unclear is put to you rather than decided for you).
+
+**3. Scan.** In the media drawer type a word, open the picture part and press «סרוק עכשיו»; «עצור» stops at the end of the current batch of at most 32 frames, and what was already scanned is kept; the scan resumes after a restart.
+
+**What runs where.** Reading frames (ffmpeg) and ranking (Node, int8) run on the CPU. The image side of the model runs on the GPU in half precision when torch sees a CUDA device, otherwise on the CPU; the text side always runs on the CPU. By arithmetic the image side is about 93 million parameters (about 0.19 GB at half precision) and the text side about 282 million (about 1.1 GB of memory). With the CPU build of torch (step 1) everything runs on the CPU. **Speed, and memory on the laptop's RTX 3050 with 4 GB, have not been measured**; the media drawer says so, and the first real run on the laptop decides what to say.
+
+**Not established.** Quality in Hebrew; the relevance floor `PICTURE_MIN_RELEVANCE` (0.001, provisional: it can show too little or too much until measured); scan time; whether the install list resolves on the laptop. `pnpm proof:search` uses a labelled test double of the model and proves the plumbing, never the quality; `pnpm proof:search-real` runs the real model once steps 1 and 2 are done.
+
 ## Running on the owner's GPU laptop (RTX 3050, 4 GB) — untested guidance
 Nothing below has been run; it is the intended procedure, to be corrected by the first real run.
 1. Install Node 22, pnpm, FFmpeg and Python 3.11–3.13; clone, `pnpm install && pnpm build`.
