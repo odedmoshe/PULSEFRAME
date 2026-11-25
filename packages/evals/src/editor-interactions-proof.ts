@@ -1828,6 +1828,10 @@ async function main() {
       await lctx.addInitScript('globalThis.__name = (f) => f');
       await lctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
       const lpage = await lctx.newPage();
+      const lErrors: string[] = [];
+      const lFailed: string[] = [];
+      lpage.on('console', (m) => m.type() === 'error' && lErrors.push(m.text()));
+      lpage.on('response', (r) => { if (r.status() >= 400 && new URL(r.url()).pathname.startsWith('/api/v1/library')) lFailed.push(`${r.status()} ${new URL(r.url()).pathname}`); });
       await lpage.goto(`${s.ownerUrl}&project=${pid}`);
       await lpage.getByTestId('timecode').waitFor({ timeout: 30000 });
       await lpage.getByTestId('rail-audio').click();
@@ -1859,6 +1863,8 @@ async function main() {
       await lpage.getByTestId('elements-tab-builtin').focus();
       await lpage.keyboard.press('Enter');
       const builtinBack = await lpage.getByTestId('elements-browser').waitFor({ timeout: 5000 }).then(() => true, () => false);
+      // a library that is not set up (a fresh install) is an honest state, not an error: no library request fails, nothing is logged
+      check('library: with no library folder set, the panels log no console error and no library request answers an error status', lErrors.length === 0 && lFailed.length === 0, { errors: lErrors.slice(0, 4), failed: lFailed.slice(0, 4) });
       check('library: the elements drawer has «מובנים» (the built-in browser, unchanged) and «מהספרייה» tabs; the library tab shows one honest state; switching back restores the built-in browser', est.state !== 'none' && est.overlaps.length === 0 && builtinBack, { state: est.state, overlaps: est.overlaps, builtinBack });
       await lctx.close();
     }

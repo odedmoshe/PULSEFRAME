@@ -13,7 +13,8 @@ import { startServer } from '@pulseframe/server';
 import { closeLibraryService } from '../../../apps/server/src/library/index.ts';
 import { LIBRARY_TESTIDS as TID } from '../../../apps/web/src/editor/library/library.testids.ts';
 import type { LibraryProofPart } from './library-proof.ts';
-import { makeLibraryFixture } from './library-fixtures.ts';
+import { FIX_KEYS, makeLibraryFixture } from './library-fixtures.ts';
+import { openInspectorPage } from './editor-ui.ts';
 
 /** Every fixed id that is a plain string (the row and kind ids are per element). */
 const FIXED_IDS: string[] = (Object.values(TID) as unknown[]).filter((v): v is string => typeof v === 'string');
@@ -77,7 +78,11 @@ async function check17(): Promise<true | string> {
       } else { await page.waitForTimeout(500); }
       // 2: rows, audition aria-pressed true while playing, false after Escape
       await page.getByTestId(TID.row).first().waitFor({ timeout: 15000 }).catch(() => {});
-      const play = page.getByTestId(TID.play).first();
+      // the synthetic 120 BPM track (a sound that plays; the fixture's planted rows — a link out, a changed file — are refused at
+      // audition by design, so «the first row» is not a fair choice)
+      const trackRow = page.locator(`[data-testid="${TID.row}"][data-key="${FIX_KEYS.track120}"]`);
+      await trackRow.waitFor({ timeout: 15000 }).catch(() => {});
+      const play = trackRow.getByTestId(TID.play);
       if (await play.count()) {
         await play.click();
         const on = await play.getAttribute('aria-pressed');
@@ -98,11 +103,14 @@ async function check17(): Promise<true | string> {
       // 4: use a track, then the credits panel's copy button puts descriptionText of the interface language on the clipboard
       await page.getByTestId('rail-audio').click();
       await page.getByTestId(TID.audioTab).click();
-      await page.getByTestId(TID.use).first().click().catch(() => {});
+      await page.locator(`[data-testid="${TID.row}"][data-key="${FIX_KEYS.track120}"]`).getByTestId(TID.use).click().catch(() => {});
       await sleep(1500);
-      await page.getByTestId('export').click().catch(() => {});
+      // Deliver → «קרדיטים»: the CC BY track needs a credit, so the copy button must be there
+      await openInspectorPage(page, 'deliver').catch(() => {});
       const copy = page.getByTestId(TID.creditsCopy);
-      if (await copy.count()) {
+      await copy.waitFor({ timeout: 8000 }).catch(() => {});
+      if (!(await copy.count())) problems.push(`${tag}: no «העתקת קרדיטים לתיאור» in Deliver after using a CC BY track`);
+      else {
         await copy.click();
         const clip = await page.evaluate(() => navigator.clipboard.readText());
         const want = (await api(`/projects/${pid}/credits?lang=${lang}`)).body?.descriptionText;
