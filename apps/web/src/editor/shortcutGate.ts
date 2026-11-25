@@ -62,7 +62,8 @@ export interface FocusedControl extends KeyTarget {
   role?: string | null;
   /** an `a` element with an href is a link */
   hasHref?: boolean;
-  /** el.matches(':focus-visible'): the browser's own judgement that the focus came from the keyboard */
+  /** the browser's own judgement that the focus came from the keyboard: el.matches(':focus-visible') read WHEN THE ELEMENT WAS FOCUSED
+   *  (Chromium turns it on at the first key pressed on a mouse-focused element, so App.tsx keeps the value from focusin) */
   focusVisible: boolean;
 }
 const SPACE_TAGS = new Set(['BUTTON', 'SUMMARY', 'SELECT']);

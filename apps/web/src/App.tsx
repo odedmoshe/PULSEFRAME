@@ -45,11 +45,17 @@ export function App() {
 
   // One keyboard dispatcher for every command. Editing shortcuts are disabled while typing (SPEC §3).
   useEffect(() => {
+    // How the focused element got its focus: :focus-visible read when it was focused. Chromium turns :focus-visible on at the
+    // first key pressed on a mouse-focused element, so reading it in keydown would always say "keyboard" (measured in the
+    // editor-interactions Space rows); the rule wants the state the focus came with.
+    let origin: { el: EventTarget | null; visible: boolean } = { el: null, visible: false };
+    const onFocus = (e: FocusEvent) => { const el = e.target instanceof HTMLElement ? e.target : null; origin = { el, visible: !!el?.matches(':focus-visible') }; };
+    document.addEventListener('focusin', onFocus, true);
     const onKey = (e: KeyboardEvent) => {
       const chord = chordOf(e);
       const target = e.target instanceof HTMLElement ? e.target : null;
       // Space on a control that has keyboard focus presses that control (a mouse-focused one still lets Space play and pause)
-      const typing = isTyping(e.target as HTMLInputElement | null, chord) || spaceBelongsToControl(target && { tagName: target.tagName, isContentEditable: target.isContentEditable, type: (target as HTMLInputElement).type, role: target.getAttribute('role'), hasHref: target.hasAttribute('href'), focusVisible: target.matches(':focus-visible') }, chord);
+      const typing = isTyping(e.target as HTMLInputElement | null, chord) || spaceBelongsToControl(target && { tagName: target.tagName, isContentEditable: target.isContentEditable, type: (target as HTMLInputElement).type, role: target.getAttribute('role'), hasHref: target.hasAttribute('href'), focusVisible: origin.el === target ? origin.visible : target.matches(':focus-visible') }, chord);
       // a chord may belong to more than one command (the cut's , and . before the keyframe steps): the first that can run now acts
       const bound = keymap.lookupAll(chord);
       const cmd = bound.find((c) => !c.enabled || c.enabled(editor)) ?? bound[0];
@@ -62,7 +68,7 @@ export function App() {
       if (!cmd.enabled || cmd.enabled(editor)) void cmd.run(editor);
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => { window.removeEventListener('keydown', onKey); document.removeEventListener('focusin', onFocus, true); };
   }, [editor, keymap]);
 
   return (
