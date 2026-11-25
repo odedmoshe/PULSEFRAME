@@ -115,5 +115,5 @@ describe('ripple delete is byte-identical to its recording from before the share
     // every refusal the shared shift raises is among the hand-built cases
     for (const re of [/^refused:track_locked:linked clip \S+ is on locked track/, /^refused:incompatible:linked clips \S+ and \S+ would move by different amounts/, /^refused:out_of_bounds:closing the gap would place clip \S+ before 0/])
       expect(hand.some((h) => re.test(h)), String(re)).toBe(true);
-  });
+  }, 180_000); // about 2 s alone; minutes when the machine is shared (one sample each)
 });
