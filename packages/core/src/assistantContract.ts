@@ -50,6 +50,9 @@ export const ASSISTANT_EXCLUDED_OPS = [
   'add_cue', 'update_cue', 'merge_cues', 'set_caption_style', 'set_variant_phrase_text',
   // privacy regions and the motion tracks they follow (a proposal must never take a redaction away)
   'set_redact_region', 'create_motion_track', 'edit_motion_track', 'remove_motion_track',
+  // the content library (wave 7): the credits card writes licence text the assistant never reads; offering it would also change
+  // the reviewed prompt (ASSISTANT_PROMPT_DIGEST), which needs its own review first
+  'add_credits_card',
 ] as const;
 /** The ops a proposal may hold: every registered public op minus ASSISTANT_EXCLUDED_OPS and PERSON_OPS, in registry order. */
 export function assistantOps(): string[] {
