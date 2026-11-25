@@ -139,19 +139,27 @@ async function skippedNoteState(page: Page, lang: 'he' | 'en'): Promise<Record<s
 
 /**
  * The pacing panel's note in the same project (after the transcript panel's): the pacing report leaves the clip of the reversed copy
- * out of its word counts and names its file. `shown` is false (a finding) unless the one note is a visible status with the panel's wording.
+ * out of its word counts and names its file. `shown` is false (a finding) unless the one note is a visible status with the panel's
+ * wording. The panel sits on the inspector's Deliver page: when the open mode has no such tab the all-tools view is opened for the
+ * audit, and `back` leaves it again so the states that follow see the inspector as before.
  */
-async function pacingNoteState(page: Page, lang: 'he' | 'en'): Promise<Record<string, unknown>> {
+async function pacingNoteState(page: Page, lang: 'he' | 'en'): Promise<{ extra: Record<string, unknown>; back: () => Promise<void> }> {
   const note = page.getByTestId('pacing-skipped-note');
   const seen = () => note.first().isVisible().catch(() => false);
-  // the pacing panel sits on the inspector's Deliver page (or on the page with every tool)
-  if (!(await seen())) await page.getByTestId('inspector-tab-deliver').click({ timeout: 3000 }).catch(() => {});
-  if (!(await seen())) await page.getByTestId('inspector-tab-all').click({ timeout: 3000 }).catch(() => {});
+  const was = await page.locator('.inspector-tabs button[role=tab][aria-selected=true]').first().getAttribute('data-testid', { timeout: 2000 }).catch(() => null);
+  let opened: 'tab' | 'all' | null = null;
+  if (!(await seen()) && (await page.locator('button[role=tab][data-testid="inspector-tab-deliver"]').count())) { await page.getByTestId('inspector-tab-deliver').click({ timeout: 3000 }).catch(() => {}); opened = 'tab'; }
+  if (!(await seen()) && (await page.locator('aside.inspector[data-view=all]').count()) === 0) { await page.getByTestId('inspector-tab-all').first().click({ timeout: 3000 }).catch(() => {}); opened = 'all'; }
   await note.first().waitFor({ timeout: 10000 }).catch(() => {});
   await note.first().scrollIntoViewIfNeeded().catch(() => {});
   const text = await note.first().textContent().catch(() => null);
   const want = pacingStrings[lang].untimedSkipped.replace('{name}', 'reversed.mp4');
-  return { shown: (await note.count()) === 1 && text === want && (await note.first().getAttribute('role').catch(() => null)) === 'status' && (await seen()), text };
+  const extra = { shown: (await note.count()) === 1 && text === want && (await note.first().getAttribute('role').catch(() => null)) === 'status' && (await seen()), text };
+  const back = async () => {
+    if (opened === 'all') await page.getByTestId('inspector-tabs-back').click({ timeout: 3000 }).catch(() => {});
+    if (opened && was && was !== 'inspector-tab-all') await page.locator(`.inspector-tabs button[role=tab][data-testid="${was}"]`).click({ timeout: 3000 }).catch(() => {});
+  };
+  return { extra, back };
 }
 
 /**
@@ -889,7 +897,7 @@ async function main() {
       await page.getByTestId('timecode').waitFor({ timeout: 15000 }).catch(() => {});
       if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
       await auditState('transcript-skipped-note', await skippedNoteState(page, lang));
-      await auditState('pacing-skipped-note', await pacingNoteState(page, lang));
+      { const pacing = await pacingNoteState(page, lang); await auditState('pacing-skipped-note', pacing.extra); await pacing.back(); }
       {
         const note = await importNoteState(page, lang, revArchive);
         await auditState('archive-import-note', note.extra);
@@ -981,7 +989,7 @@ async function main() {
       // wave 6 notes in the light theme: the skipped-clip note, the archive import's note, and the Templates bar after a hand delete
       await open(await untimedProject(`a11y-untimed-light-${lang}`));
       await auditState('transcript-skipped-note', await skippedNoteState(page, lang));
-      await auditState('pacing-skipped-note', await pacingNoteState(page, lang));
+      { const pacing = await pacingNoteState(page, lang); await auditState('pacing-skipped-note', pacing.extra); await pacing.back(); }
       {
         const note = await importNoteState(page, lang, revArchive);
         await auditState('archive-import-note', note.extra);
