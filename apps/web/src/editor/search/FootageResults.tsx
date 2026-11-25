@@ -17,7 +17,7 @@
  * Keyboard: ArrowDown from the box into the list, ArrowUp/Down/Home/End between rows, Enter «הצג», Shift+Enter «הכנס במקום הסמן»,
  * Escape back to the box. Ids: SEARCH_TESTIDS. Words: search.strings.ts and i18n `footage.*`. Logical CSS only (RTL).
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactElement, type RefObject } from 'react';
 import { Eye, Film as FilmIcon, Plus, ScanSearch, Square, Trash2 } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { FootageSearchNotBuilt, FOOTAGE_LIMITS, placeRangeArgs, searchFootage, type FootageAnswer, type Moment, type SourceRange, type SourceSpan } from '@pulseframe/core';
@@ -43,13 +43,13 @@ export const FOOTAGE_UI_BUILT = true;
 
 const DEBOUNCE_MS = 150;
 const POLL_MS = 1500;
-const BOX = '[data-testid="media-search"]';
 
 interface Asked { q: string; answer: FootageAnswer | null; failure: { status: number; code: string; message: string } | null; busy: boolean }
 interface Progress { done: number; total: number }
 interface Viewing { assetId: string; span: SourceSpan | null; key: string }
 
-export function FootageResults({ query, onView }: { query: string; onView: (assetId: string) => void }): ReactElement | null {
+/** `box`: the media drawer's search box (Library.tsx), on which Enter and ArrowDown are heard and to which focus returns. */
+export function FootageResults({ query, onView, box }: { query: string; onView: (assetId: string) => void; box: RefObject<HTMLInputElement | null> }): ReactElement | null {
   const { editor, state } = useEditorState();
   const lang = state.lang;
   const F = footageT(lang);
@@ -136,8 +136,8 @@ export function FootageResults({ query, onView }: { query: string; onView: (asse
 
   // ---- the box: Enter asks the pictures, ArrowDown goes into the list
   useEffect(() => {
-    const box = document.querySelector<HTMLInputElement>(BOX);
-    if (!box) return;
+    const el = box.current;
+    if (!el) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.isComposing) return;
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void askRef.current(); }
@@ -146,9 +146,9 @@ export function FootageResults({ query, onView }: { query: string; onView: (asse
         if (first) { e.preventDefault(); first.focus(); }
       }
     };
-    box.addEventListener('keydown', onKey);
-    return () => box.removeEventListener('keydown', onKey);
-  }, []);
+    el.addEventListener('keydown', onKey);
+    return () => el.removeEventListener('keydown', onKey);
+  }, [box]);
 
   // ---- the viewer and the placements
   const [viewing, setViewing] = useState<Viewing | null>(null);
@@ -229,10 +229,10 @@ export function FootageResults({ query, onView }: { query: string; onView: (asse
   const onRowKey = (e: KeyboardEvent<HTMLLIElement>, r: Row) => {
     const i = rowEls().indexOf(e.currentTarget);
     if (e.key === 'ArrowDown') { e.preventDefault(); focusRow(i + 1); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); if (i <= 0) document.querySelector<HTMLElement>(BOX)?.focus(); else focusRow(i - 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (i <= 0) box.current?.focus(); else focusRow(i - 1); }
     else if (e.key === 'Home') { e.preventDefault(); focusRow(0); }
     else if (e.key === 'End') { e.preventDefault(); focusRow(rowEls().length - 1); }
-    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); document.querySelector<HTMLElement>(BOX)?.focus(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); box.current?.focus(); }
     else if (e.target !== e.currentTarget) return; // the keys below belong to the row, not to a button inside it
     else if (e.key === 'Enter') { e.preventDefault(); if (e.shiftKey) void place(r, 'insert'); else view(r); }
   };

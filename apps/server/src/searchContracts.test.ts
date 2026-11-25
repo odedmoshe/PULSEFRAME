@@ -1,10 +1,11 @@
 /**
  * The server contract of «חיפוש בצילומים» (wave 7 search track; search/contract.ts), through the real app and MCP handler: every route
  * is registered, documented and classified; the owner rule holds BEFORE anything is read (an unknown project gives an agent the same
- * 403); a restricted grant is refused; until builder B builds the runtime every route answers 501 after its checks, never a made-up
- * result; MCP has exactly one search tool; the asset-gone listener and the purge hooks fire; the model pins equal the manifest. What
- * builder B builds is tested in search/*.test.ts.
+ * 403); a restricted grant is refused; MCP has exactly one search tool; the asset-gone listener and the purge hooks fire; the model pins
+ * equal the manifest; the reviewed worker digest is the digest of the shipped pf_search.py. What builder B built is tested in
+ * search/*.test.ts (the seven rows this file once held as to-dos are covered there: see search/runtime.test.ts and workers.test.ts).
  */
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -129,21 +130,6 @@ describe('checks before anything is read', () => {
   });
 });
 
-describe.skipIf(SEARCH_SERVER_BUILT)('not built yet: honest 501 after the checks, never a made-up result', () => {
-  it('the owner and agents get 501 footage_search_not_built; an unknown project is 404 for the search', async () => {
-    for (const route of SEARCH_ROUTES) {
-      const r = await rest(owner, methodOf(route), urlOf(route), bodyFor(route));
-      expect({ route, status: r.status, code: r.body?.error?.code }).toEqual({ route, status: 501, code: 'footage_search_not_built' });
-    }
-    const a = await rest(agent, 'POST', `/api/v1/projects/${pid}/search`, { query: 'נרות' });
-    expect({ status: a.status, code: a.body?.error?.code }).toEqual({ status: 501, code: 'footage_search_not_built' });
-    expect((await rest(agent, 'POST', `/api/v1/projects/prj_none/search`, { query: 'נרות' })).status).toBe(404);
-    const m = await rpc(agent, 'tools/call', { name: 'find_in_footage', arguments: { projectId: pid, query: 'נרות' } });
-    expect(m.result.isError).toBe(true);
-    expect(m.result.content[0].text).toContain('footage search is not built');
-  });
-});
-
 describe('the deletion hooks (landed in the pre-pass; builder B registers the index behind them)', () => {
   it('Store.addAssetsGoneListener hears the content hash of a removed file, and again after undo and redo of its import', () => {
     const heard: [string, string[]][] = [];
@@ -204,8 +190,11 @@ describe('the picture model readiness record', () => {
     expect(searchLaneLabel('prj_x').startsWith(SEARCH_LANE_PREFIX)).toBe(true);
     expect('local.translate he-en'.startsWith(SEARCH_LANE_PREFIX)).toBe(false);
   });
-  it('the reviewed worker digest is set once the worker is built', () => {
-    expect(SEARCH_SERVER_BUILT ? typeof SEARCH_WORKER_SHA256 : SEARCH_WORKER_SHA256).toBe(SEARCH_SERVER_BUILT ? 'string' : null);
+  it('the server is built and the reviewed worker digest is exactly the lead-approved digest of the shipped pf_search.py', () => {
+    expect(SEARCH_SERVER_BUILT).toBe(true);
+    // approved by the lead on 2026-11-25 after reading all of the script; a changed byte is engine_unverified until it is read again
+    expect(SEARCH_WORKER_SHA256).toBe('3b7d40990385b166b5f42b0a99eab60a717e4741e569c6f4762cf15b3e5141c1');
+    expect(createHash('sha256').update(fs.readFileSync(new URL('../tools/pf_search.py', import.meta.url))).digest('hex')).toBe(SEARCH_WORKER_SHA256);
   });
   it('picture search is not a capability: nothing in the capability list names it', async () => {
     const r = await rest(owner, 'GET', '/api/v1/capabilities');
@@ -215,15 +204,4 @@ describe('the picture model readiness record', () => {
     expect(loadConfig({}).searchModelDir).toBeNull();
     expect(loadConfig({ PF_SEARCH_MODEL_DIR: '/x/m' } as never).searchModelDir).toBe(path.resolve('/x/m'));
   });
-});
-
-// builder B: these rows name what the runtime must make pass (full tests in search/*.test.ts)
-describe('builder B', () => {
-  it.todo('POST …/search as the agent token: every moment has exactly assetId/start/end/sources ⊂ name/date/event/transcript; a planted pearl label and tagged person name never match and never appear (people full grant too)');
-  it.todo('POST …/search as the owner with the labelled test double: picture rows carry embedder TEST-DOUBLE-embedder/1 and no score field');
-  it.todo('a scan job of type search-index ends succeeded with frames = sampleFrameTargets per file; restart resumes; cancel leaves the unfinished file without rows');
-  it.todo('remove_asset of a file no other project holds deletes its rows; a removal during that file\'s scan leaves no rows (stillWanted inside the write transaction)');
-  it.todo('the backup output holds no search/ folder and a project archive holds no index bytes');
-  it.todo('a planted query string is in no file of the data dir or tmp dir and in no log line after search, scan and refusals');
-  it.todo('setup: PF_TOOLS_PYTHON unset → engine_not_configured; module missing → engine_not_working naming it; a pin absent or one byte changed → model_missing with the missing bytes; never ready otherwise');
 });

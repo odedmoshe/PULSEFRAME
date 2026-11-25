@@ -25,3 +25,6 @@
 .pf-fs-detail { color: var(--pf-text-2); overflow-wrap: anywhere; }
 .pf-fs-progress { inline-size: 100%; block-size: 8px; }
 .pf-fs-controls, .pf-fs-ask { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+/* the design system's buttons never wrap; in the narrow drawer a button's words wrap instead of scrolling the results sideways
+   (proof:search U1 at 1280 and 1440 px; search.css.test.ts) */
+.pf-fs .pf-btn { white-space: normal; block-size: auto; max-inline-size: 100%; padding-block: 4px; text-align: start; }

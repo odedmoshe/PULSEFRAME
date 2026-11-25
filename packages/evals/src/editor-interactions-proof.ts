@@ -32,6 +32,7 @@ import { creativeProjection, beatSwitchFrame, BUILTIN_TEMPLATES, MODEL_GATED_TEM
 import { TEMPLATE_TESTIDS } from '../../../apps/web/src/editor/templates.testids.ts';
 import { chooseFormat, openInspectorPage, startExport } from './editor-ui.ts';
 import { MUSICFIT_TESTIDS } from '../../../apps/web/src/editor/musicfit/musicFit.testids.ts';
+import { SEARCH_TESTIDS } from '../../../apps/web/src/editor/search/search.testids.ts';
 import { libraryPanelsProbe } from './library-proof.ui.ts';
 import { toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
 import { generateShortsFixture } from '../../fixtures/src/shorts.ts';
@@ -2426,6 +2427,63 @@ async function main() {
       for (let i = 0; i < 50 && !back; i++) { await sleep(100); back = (await clipOf(music)).assetId === asset0; }
       check('«התאמה לאורך» plans before anything changes; «בצעו» makes the track and ends the music on the last picture frame (frame 360, no fade) in one transaction; one Ctrl+Z gives the old music back', planned && r1 === r0 + 2 && m1.assetId !== asset0 && end === 360 && !m1.fadeOut && back, { planned, revisions: r1 - r0, end, fadeOut: m1.fadeOut ?? null, back });
       check('musicfit rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
+      await ctx.close();
+    }
+
+    // «חיפוש בצילומים» (wave 7 search, integration): the media drawer's box finds a typed transcript word without a model; ArrowDown goes
+    // into the results and Escape back to the box; Enter asks the pictures and the status line says honestly that picture search is not
+    // installed (no picture row); Shift+Enter on a row places exactly that word span in ONE commit and one Ctrl+Z returns the document.
+    // The whole track is proved in pnpm proof:search; these rows keep the editor's own keys honest around it.
+    console.log('\n# footage search: the box, ArrowDown and Escape, Enter for pictures, Shift+Enter, one undo');
+    {
+      const said = path.join(art, 'search-said.mp4');
+      ff(['-f', 'lavfi', '-t', '3', '-i', 'testsrc2=s=640x360:r=30', '-f', 'lavfi', '-t', '3', '-i', 'sine=frequency=440:sample_rate=48000', '-vf', 'format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-c:a', 'aac', '-shortest', said]);
+      const sp = (await call('/projects', { name: 'footage search keys', width: 640, height: 360 })).body.project.id as string;
+      const sa = (await upload(sp, said)).assetId as string;
+      // a typed transcript (no model ran): «שלום» is said from 0.5 s to 1 s
+      await txs(sp, [{ op: 'set_transcript', args: { assetId: sa, language: 'he', segments: [{ start: T.rt(0, 1), duration: T.rt(3, 2), text: 'אז שלום לכולם', words: [{ text: 'אז', start: T.rt(0, 1), duration: T.rt(1, 2) }, { text: 'שלום', start: T.rt(1, 2), duration: T.rt(1, 2) }, { text: 'לכולם', start: T.rt(1, 1), duration: T.rt(1, 2) }] }] } }]);
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+      await ctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const pg = await ctx.newPage();
+      const errs: string[] = [];
+      pg.on('pageerror', (e) => errs.push(String(e)));
+      await pg.goto(`${s.ownerUrl}&project=${sp}`);
+      await pg.getByTestId('timecode').waitFor({ timeout: 30000 });
+      if (!/\bis-on\b/.test((await pg.getByTestId('rail-media').getAttribute('class')) ?? '')) await pg.getByTestId('rail-media').click();
+      const box = pg.getByTestId('media-search');
+      await box.fill('שלום');
+      const row = pg.getByTestId(SEARCH_TESTIDS.row).first();
+      const found = await row.waitFor({ timeout: 10000 }).then(() => true, () => false);
+      const attrs = found ? { n: await pg.getByTestId(SEARCH_TESTIDS.row).count(), asset: await row.getAttribute('data-asset-id'), start: await row.getAttribute('data-start'), end: await row.getAttribute('data-end'), sources: await row.getAttribute('data-sources') } : null;
+      check('search: «שלום» in the media drawer\'s box finds exactly the word said in the typed transcript, its span [1/2, 1/1) s, without a model', !!attrs && attrs.n === 1 && attrs.asset === sa && attrs.start === '1/2' && attrs.end === '1/1' && attrs.sources === 'transcript', attrs);
+      const focused = () => pg.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? null);
+      await box.focus();
+      await pg.keyboard.press('ArrowDown');
+      const inList = await focused();
+      await pg.keyboard.press('Escape');
+      const back = await focused();
+      check('search: ArrowDown from the box reaches the row and Escape returns to the box', inList === SEARCH_TESTIDS.row && back === 'media-search', { inList, back });
+      await pg.keyboard.press('Enter');
+      const asked = await pg.waitForFunction((t) => { const st = document.querySelector(`[data-testid="${t}"]`)?.getAttribute('data-state'); return !!st && st !== 'loading'; }, SEARCH_TESTIDS.status, { timeout: 15000 }).then(() => true, () => false);
+      await sleep(500);
+      const status = { state: await pg.getByTestId(SEARCH_TESTIDS.status).getAttribute('data-state').catch(() => null), text: ((await pg.getByTestId(SEARCH_TESTIDS.status).textContent().catch(() => '')) ?? '').slice(0, 160), pictureRows: await pg.locator(`[data-testid="${SEARCH_TESTIDS.row}"][data-section="picture"]`).count() };
+      check('search: Enter asks the pictures; the status line says «החיפוש בתמונה לא מותקן» (no Python configured here) and no picture row appears', asked && status.state === 'not_installed' && status.text.includes('החיפוש בתמונה לא מותקן') && status.pictureRows === 0, status);
+      const before = JSON.stringify(await doc2(sp));
+      const rev0 = (await call(`/projects/${sp}`)).body.revision as number;
+      await box.focus();
+      await pg.keyboard.press('ArrowDown');
+      await pg.keyboard.press('Shift+Enter');
+      let rev1 = rev0;
+      for (let i = 0; i < 50 && rev1 === rev0; i++) { await sleep(100); rev1 = (await call(`/projects/${sp}`)).body.revision as number; }
+      await sleep(400);
+      const d1 = await doc2(sp);
+      const clips = Object.values(d1.sequences as Record<string, { tracks: { clips: MediaClip[] }[] }>).flatMap((q) => q.tracks.flatMap((t) => t.clips)).filter((c) => c.type === 'media' && c.assetId === sa);
+      check('search: Shift+Enter on the row places exactly the word span (frames 15–30 of the file) in ONE commit', rev1 - rev0 === 1 && clips.length >= 1 && clips.every((c) => T.eq(c.sourceIn, T.rt(15, 30)) && T.eq(c.duration, T.rt(15, 30))), { commits: (await call(`/projects/${sp}`)).body.revision - rev0, clips: clips.map((c) => [T.toSeconds(c.sourceIn), T.toSeconds(c.duration)]) });
+      await pg.keyboard.press('Control+z');
+      let undone = false;
+      for (let i = 0; i < 50 && !undone; i++) { await sleep(100); undone = JSON.stringify(await doc2(sp)) === before; }
+      check('search: one Ctrl+Z returns the exact document from before the placement', undone, { undone });
+      check('search rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
       await ctx.close();
     }
 
