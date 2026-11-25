@@ -1,0 +1,4011 @@
+{
+ "note": "Find matcher golden (wave 7 craft, proof F8): core matchText over these cases gives these ranges in Node (craft.test.ts) and in headless Chromium (craft.selftest.ts). Recorded by W1 from the built matcher; the rules are asserted case by case in craft.test.ts. Regenerating it is a behaviour change to review.",
+ "cases": [
+  {
+   "text": "שָׁלוֹם עולם, שלום!",
+   "needle": "שלום",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     14,
+     18
+    ]
+   ]
+  },
+  {
+   "text": "שָׁלוֹם עולם, שלום!",
+   "needle": "שלום",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     14,
+     18
+    ]
+   ]
+  },
+  {
+   "text": "שָׁלוֹם עולם, שלום!",
+   "needle": "שלום",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     7
+    ],
+    [
+     14,
+     18
+    ]
+   ]
+  },
+  {
+   "text": "שָׁלוֹם עולם, שלום!",
+   "needle": "שלום",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     7
+    ],
+    [
+     14,
+     18
+    ]
+   ]
+  },
+  {
+   "text": "שָׁלוֹם עולם, שלום!",
+   "needle": "שלום",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     14,
+     18
+    ]
+   ]
+  },
+  {
+   "text": "שָׁלוֹם עולם, שלום!",
+   "needle": "שלום",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     14,
+     18
+    ]
+   ]
+  },
+  {
+   "text": "שָׁלוֹם עולם, שלום!",
+   "needle": "שלום",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     7
+    ],
+    [
+     14,
+     18
+    ]
+   ]
+  },
+  {
+   "text": "שָׁלוֹם עולם, שלום!",
+   "needle": "שלום",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     7
+    ],
+    [
+     14,
+     18
+    ]
+   ]
+  },
+  {
+   "text": "שָׁלוֹם",
+   "needle": "שָׁלוֹם",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "שָׁלוֹם",
+   "needle": "שָׁלוֹם",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "שָׁלוֹם",
+   "needle": "שָׁלוֹם",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "שָׁלוֹם",
+   "needle": "שָׁלוֹם",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "שָׁלוֹם",
+   "needle": "שָׁלוֹם",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "שָׁלוֹם",
+   "needle": "שָׁלוֹם",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "שָׁלוֹם",
+   "needle": "שָׁלוֹם",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "שָׁלוֹם",
+   "needle": "שָׁלוֹם",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "שׁ שׂ ש",
+   "needle": "שׁ",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ]
+   ]
+  },
+  {
+   "text": "שׁ שׂ ש",
+   "needle": "שׁ",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ]
+   ]
+  },
+  {
+   "text": "שׁ שׂ ש",
+   "needle": "שׁ",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ],
+    [
+     3,
+     5
+    ],
+    [
+     6,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "שׁ שׂ ש",
+   "needle": "שׁ",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ],
+    [
+     3,
+     5
+    ],
+    [
+     6,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "שׁ שׂ ש",
+   "needle": "שׁ",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ]
+   ]
+  },
+  {
+   "text": "שׁ שׂ ש",
+   "needle": "שׁ",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ]
+   ]
+  },
+  {
+   "text": "שׁ שׂ ש",
+   "needle": "שׁ",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ],
+    [
+     3,
+     5
+    ],
+    [
+     6,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "שׁ שׂ ש",
+   "needle": "שׁ",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ],
+    [
+     3,
+     5
+    ],
+    [
+     6,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "מלך מלכה מלכים",
+   "needle": "מלכ",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ],
+    [
+     9,
+     12
+    ]
+   ]
+  },
+  {
+   "text": "מלך מלכה מלכים",
+   "needle": "מלכ",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "מלך מלכה מלכים",
+   "needle": "מלכ",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ],
+    [
+     9,
+     12
+    ]
+   ]
+  },
+  {
+   "text": "מלך מלכה מלכים",
+   "needle": "מלכ",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "מלך מלכה מלכים",
+   "needle": "מלכ",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     9,
+     12
+    ]
+   ]
+  },
+  {
+   "text": "מלך מלכה מלכים",
+   "needle": "מלכ",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ]
+   ]
+  },
+  {
+   "text": "מלך מלכה מלכים",
+   "needle": "מלכ",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     9,
+     12
+    ]
+   ]
+  },
+  {
+   "text": "מלך מלכה מלכים",
+   "needle": "מלכ",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ]
+   ]
+  },
+  {
+   "text": "מלך מלכה",
+   "needle": "מלך",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ]
+   ]
+  },
+  {
+   "text": "מלך מלכה",
+   "needle": "מלך",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ]
+   ]
+  },
+  {
+   "text": "מלך מלכה",
+   "needle": "מלך",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ]
+   ]
+  },
+  {
+   "text": "מלך מלכה",
+   "needle": "מלך",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ]
+   ]
+  },
+  {
+   "text": "מלך מלכה",
+   "needle": "מלך",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "מלך מלכה",
+   "needle": "מלך",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ]
+   ]
+  },
+  {
+   "text": "מלך מלכה",
+   "needle": "מלך",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "מלך מלכה",
+   "needle": "מלך",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ]
+   ]
+  },
+  {
+   "text": "ילדים הילד ילד ילד.",
+   "needle": "ילד",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     7,
+     10
+    ],
+    [
+     11,
+     14
+    ],
+    [
+     15,
+     18
+    ]
+   ]
+  },
+  {
+   "text": "ילדים הילד ילד ילד.",
+   "needle": "ילד",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     11,
+     14
+    ],
+    [
+     15,
+     18
+    ]
+   ]
+  },
+  {
+   "text": "ילדים הילד ילד ילד.",
+   "needle": "ילד",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     7,
+     10
+    ],
+    [
+     11,
+     14
+    ],
+    [
+     15,
+     18
+    ]
+   ]
+  },
+  {
+   "text": "ילדים הילד ילד ילד.",
+   "needle": "ילד",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     11,
+     14
+    ],
+    [
+     15,
+     18
+    ]
+   ]
+  },
+  {
+   "text": "ילדים הילד ילד ילד.",
+   "needle": "ילד",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     7,
+     10
+    ],
+    [
+     11,
+     14
+    ],
+    [
+     15,
+     18
+    ]
+   ]
+  },
+  {
+   "text": "ילדים הילד ילד ילד.",
+   "needle": "ילד",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     11,
+     14
+    ],
+    [
+     15,
+     18
+    ]
+   ]
+  },
+  {
+   "text": "ילדים הילד ילד ילד.",
+   "needle": "ילד",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     7,
+     10
+    ],
+    [
+     11,
+     14
+    ],
+    [
+     15,
+     18
+    ]
+   ]
+  },
+  {
+   "text": "ילדים הילד ילד ילד.",
+   "needle": "ילד",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     11,
+     14
+    ],
+    [
+     15,
+     18
+    ]
+   ]
+  },
+  {
+   "text": "נעה ונעה נעה־שירה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     5,
+     8
+    ],
+    [
+     9,
+     12
+    ]
+   ]
+  },
+  {
+   "text": "נעה ונעה נעה־שירה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     9,
+     12
+    ]
+   ]
+  },
+  {
+   "text": "נעה ונעה נעה־שירה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     5,
+     8
+    ],
+    [
+     9,
+     12
+    ]
+   ]
+  },
+  {
+   "text": "נעה ונעה נעה־שירה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     9,
+     12
+    ]
+   ]
+  },
+  {
+   "text": "נעה ונעה נעה־שירה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     5,
+     8
+    ],
+    [
+     9,
+     12
+    ]
+   ]
+  },
+  {
+   "text": "נעה ונעה נעה־שירה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     9,
+     12
+    ]
+   ]
+  },
+  {
+   "text": "נעה ונעה נעה־שירה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     5,
+     8
+    ],
+    [
+     9,
+     12
+    ]
+   ]
+  },
+  {
+   "text": "נעה ונעה נעה־שירה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     9,
+     12
+    ]
+   ]
+  },
+  {
+   "text": "צה\"ל צה״ל צה״לי",
+   "needle": "צה״ל",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     4
+    ],
+    [
+     5,
+     9
+    ],
+    [
+     10,
+     14
+    ]
+   ]
+  },
+  {
+   "text": "צה\"ל צה״ל צה״לי",
+   "needle": "צה״ל",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     4
+    ],
+    [
+     5,
+     9
+    ]
+   ]
+  },
+  {
+   "text": "צה\"ל צה״ל צה״לי",
+   "needle": "צה״ל",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     4
+    ],
+    [
+     5,
+     9
+    ],
+    [
+     10,
+     14
+    ]
+   ]
+  },
+  {
+   "text": "צה\"ל צה״ל צה״לי",
+   "needle": "צה״ל",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     4
+    ],
+    [
+     5,
+     9
+    ]
+   ]
+  },
+  {
+   "text": "צה\"ל צה״ל צה״לי",
+   "needle": "צה״ל",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     4
+    ],
+    [
+     5,
+     9
+    ],
+    [
+     10,
+     14
+    ]
+   ]
+  },
+  {
+   "text": "צה\"ל צה״ל צה״לי",
+   "needle": "צה״ל",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     4
+    ],
+    [
+     5,
+     9
+    ]
+   ]
+  },
+  {
+   "text": "צה\"ל צה״ל צה״לי",
+   "needle": "צה״ל",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     4
+    ],
+    [
+     5,
+     9
+    ],
+    [
+     10,
+     14
+    ]
+   ]
+  },
+  {
+   "text": "צה\"ל צה״ל צה״לי",
+   "needle": "צה״ל",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     4
+    ],
+    [
+     5,
+     9
+    ]
+   ]
+  },
+  {
+   "text": "ג׳ורג׳ ג' ג",
+   "needle": "ג",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     1
+    ],
+    [
+     4,
+     5
+    ],
+    [
+     7,
+     8
+    ],
+    [
+     10,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "ג׳ורג׳ ג' ג",
+   "needle": "ג",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     7,
+     8
+    ],
+    [
+     10,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "ג׳ורג׳ ג' ג",
+   "needle": "ג",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     1
+    ],
+    [
+     4,
+     5
+    ],
+    [
+     7,
+     8
+    ],
+    [
+     10,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "ג׳ורג׳ ג' ג",
+   "needle": "ג",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     7,
+     8
+    ],
+    [
+     10,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "ג׳ורג׳ ג' ג",
+   "needle": "ג",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     1
+    ],
+    [
+     4,
+     5
+    ],
+    [
+     7,
+     8
+    ],
+    [
+     10,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "ג׳ורג׳ ג' ג",
+   "needle": "ג",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     7,
+     8
+    ],
+    [
+     10,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "ג׳ורג׳ ג' ג",
+   "needle": "ג",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     1
+    ],
+    [
+     4,
+     5
+    ],
+    [
+     7,
+     8
+    ],
+    [
+     10,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "ג׳ורג׳ ג' ג",
+   "needle": "ג",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     7,
+     8
+    ],
+    [
+     10,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "Noa noa NOA noah",
+   "needle": "noa",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ],
+    [
+     12,
+     15
+    ]
+   ]
+  },
+  {
+   "text": "Noa noa NOA noah",
+   "needle": "noa",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "Noa noa NOA noah",
+   "needle": "noa",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ],
+    [
+     12,
+     15
+    ]
+   ]
+  },
+  {
+   "text": "Noa noa NOA noah",
+   "needle": "noa",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "Noa noa NOA noah",
+   "needle": "noa",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ],
+    [
+     12,
+     15
+    ]
+   ]
+  },
+  {
+   "text": "Noa noa NOA noah",
+   "needle": "noa",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "Noa noa NOA noah",
+   "needle": "noa",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ],
+    [
+     12,
+     15
+    ]
+   ]
+  },
+  {
+   "text": "Noa noa NOA noah",
+   "needle": "noa",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "Noa noa NOA noah",
+   "needle": "noa",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     8,
+     11
+    ],
+    [
+     12,
+     15
+    ]
+   ]
+  },
+  {
+   "text": "Noa noa NOA noah",
+   "needle": "noa",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "Noa noa NOA noah",
+   "needle": "noa",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     8,
+     11
+    ],
+    [
+     12,
+     15
+    ]
+   ]
+  },
+  {
+   "text": "Noa noa NOA noah",
+   "needle": "noa",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "Noa noa NOA noah",
+   "needle": "noa",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     8,
+     11
+    ],
+    [
+     12,
+     15
+    ]
+   ]
+  },
+  {
+   "text": "Noa noa NOA noah",
+   "needle": "noa",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "Noa noa NOA noah",
+   "needle": "noa",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     8,
+     11
+    ],
+    [
+     12,
+     15
+    ]
+   ]
+  },
+  {
+   "text": "Noa noa NOA noah",
+   "needle": "noa",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "Ärger ÄRGER",
+   "needle": "ärger",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "Ärger ÄRGER",
+   "needle": "ärger",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "Ärger ÄRGER",
+   "needle": "ärger",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "Ärger ÄRGER",
+   "needle": "ärger",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "Ärger ÄRGER",
+   "needle": "ärger",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "Ärger ÄRGER",
+   "needle": "ärger",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "Ärger ÄRGER",
+   "needle": "ärger",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "Ärger ÄRGER",
+   "needle": "ärger",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "Ärger ÄRGER",
+   "needle": "ärger",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": true
+   },
+   "ranges": []
+  },
+  {
+   "text": "Ärger ÄRGER",
+   "needle": "ärger",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": true
+   },
+   "ranges": []
+  },
+  {
+   "text": "Ärger ÄRGER",
+   "needle": "ärger",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": true
+   },
+   "ranges": []
+  },
+  {
+   "text": "Ärger ÄRGER",
+   "needle": "ärger",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": true
+   },
+   "ranges": []
+  },
+  {
+   "text": "Ärger ÄRGER",
+   "needle": "ärger",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": true
+   },
+   "ranges": []
+  },
+  {
+   "text": "Ärger ÄRGER",
+   "needle": "ärger",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": true
+   },
+   "ranges": []
+  },
+  {
+   "text": "Ärger ÄRGER",
+   "needle": "ärger",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": true
+   },
+   "ranges": []
+  },
+  {
+   "text": "Ärger ÄRGER",
+   "needle": "ärger",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": true
+   },
+   "ranges": []
+  },
+  {
+   "text": "שלום ⁧נעה⁩ ‏נ‍עה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     6,
+     9
+    ],
+    [
+     12,
+     16
+    ]
+   ]
+  },
+  {
+   "text": "שלום ⁧נעה⁩ ‏נ‍עה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     6,
+     9
+    ],
+    [
+     12,
+     16
+    ]
+   ]
+  },
+  {
+   "text": "שלום ⁧נעה⁩ ‏נ‍עה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     6,
+     9
+    ],
+    [
+     12,
+     16
+    ]
+   ]
+  },
+  {
+   "text": "שלום ⁧נעה⁩ ‏נ‍עה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     6,
+     9
+    ],
+    [
+     12,
+     16
+    ]
+   ]
+  },
+  {
+   "text": "שלום ⁧נעה⁩ ‏נ‍עה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     6,
+     9
+    ],
+    [
+     12,
+     16
+    ]
+   ]
+  },
+  {
+   "text": "שלום ⁧נעה⁩ ‏נ‍עה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     6,
+     9
+    ],
+    [
+     12,
+     16
+    ]
+   ]
+  },
+  {
+   "text": "שלום ⁧נעה⁩ ‏נ‍עה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     6,
+     9
+    ],
+    [
+     12,
+     16
+    ]
+   ]
+  },
+  {
+   "text": "שלום ⁧נעה⁩ ‏נ‍עה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     6,
+     9
+    ],
+    [
+     12,
+     16
+    ]
+   ]
+  },
+  {
+   "text": "א⁧נעה⁩ב",
+   "needle": "אנעה",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     5
+    ]
+   ]
+  },
+  {
+   "text": "א⁧נעה⁩ב",
+   "needle": "אנעה",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "א⁧נעה⁩ב",
+   "needle": "אנעה",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     5
+    ]
+   ]
+  },
+  {
+   "text": "א⁧נעה⁩ב",
+   "needle": "אנעה",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "א⁧נעה⁩ב",
+   "needle": "אנעה",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     5
+    ]
+   ]
+  },
+  {
+   "text": "א⁧נעה⁩ב",
+   "needle": "אנעה",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "א⁧נעה⁩ב",
+   "needle": "אנעה",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     5
+    ]
+   ]
+  },
+  {
+   "text": "א⁧נעה⁩ב",
+   "needle": "אנעה",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "שׁלום שלום",
+   "needle": "שלום",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     5,
+     9
+    ]
+   ]
+  },
+  {
+   "text": "שׁלום שלום",
+   "needle": "שלום",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     5,
+     9
+    ]
+   ]
+  },
+  {
+   "text": "שׁלום שלום",
+   "needle": "שלום",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     5,
+     9
+    ]
+   ]
+  },
+  {
+   "text": "שׁלום שלום",
+   "needle": "שלום",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     5,
+     9
+    ]
+   ]
+  },
+  {
+   "text": "שׁלום שלום",
+   "needle": "שלום",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     5,
+     9
+    ]
+   ]
+  },
+  {
+   "text": "שׁלום שלום",
+   "needle": "שלום",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     5,
+     9
+    ]
+   ]
+  },
+  {
+   "text": "שׁלום שלום",
+   "needle": "שלום",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     5,
+     9
+    ]
+   ]
+  },
+  {
+   "text": "שׁלום שלום",
+   "needle": "שלום",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     5,
+     9
+    ]
+   ]
+  },
+  {
+   "text": "10 שניות 100 1000",
+   "needle": "10",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ],
+    [
+     9,
+     11
+    ],
+    [
+     13,
+     15
+    ]
+   ]
+  },
+  {
+   "text": "10 שניות 100 1000",
+   "needle": "10",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ]
+   ]
+  },
+  {
+   "text": "10 שניות 100 1000",
+   "needle": "10",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ],
+    [
+     9,
+     11
+    ],
+    [
+     13,
+     15
+    ]
+   ]
+  },
+  {
+   "text": "10 שניות 100 1000",
+   "needle": "10",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ]
+   ]
+  },
+  {
+   "text": "10 שניות 100 1000",
+   "needle": "10",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ],
+    [
+     9,
+     11
+    ],
+    [
+     13,
+     15
+    ]
+   ]
+  },
+  {
+   "text": "10 שניות 100 1000",
+   "needle": "10",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ]
+   ]
+  },
+  {
+   "text": "10 שניות 100 1000",
+   "needle": "10",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ],
+    [
+     9,
+     11
+    ],
+    [
+     13,
+     15
+    ]
+   ]
+  },
+  {
+   "text": "10 שניות 100 1000",
+   "needle": "10",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ]
+   ]
+  },
+  {
+   "text": "aaaa",
+   "needle": "aa",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ],
+    [
+     2,
+     4
+    ]
+   ]
+  },
+  {
+   "text": "aaaa",
+   "needle": "aa",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "aaaa",
+   "needle": "aa",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ],
+    [
+     2,
+     4
+    ]
+   ]
+  },
+  {
+   "text": "aaaa",
+   "needle": "aa",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "aaaa",
+   "needle": "aa",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ],
+    [
+     2,
+     4
+    ]
+   ]
+  },
+  {
+   "text": "aaaa",
+   "needle": "aa",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "aaaa",
+   "needle": "aa",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ],
+    [
+     2,
+     4
+    ]
+   ]
+  },
+  {
+   "text": "aaaa",
+   "needle": "aa",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "aaaa",
+   "needle": "aa",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ],
+    [
+     2,
+     4
+    ]
+   ]
+  },
+  {
+   "text": "aaaa",
+   "needle": "aa",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": true
+   },
+   "ranges": []
+  },
+  {
+   "text": "aaaa",
+   "needle": "aa",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ],
+    [
+     2,
+     4
+    ]
+   ]
+  },
+  {
+   "text": "aaaa",
+   "needle": "aa",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": true
+   },
+   "ranges": []
+  },
+  {
+   "text": "aaaa",
+   "needle": "aa",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ],
+    [
+     2,
+     4
+    ]
+   ]
+  },
+  {
+   "text": "aaaa",
+   "needle": "aa",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": true
+   },
+   "ranges": []
+  },
+  {
+   "text": "aaaa",
+   "needle": "aa",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ],
+    [
+     2,
+     4
+    ]
+   ]
+  },
+  {
+   "text": "aaaa",
+   "needle": "aa",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": true
+   },
+   "ranges": []
+  },
+  {
+   "text": "אאא",
+   "needle": "אא",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ]
+   ]
+  },
+  {
+   "text": "אאא",
+   "needle": "אא",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "אאא",
+   "needle": "אא",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ]
+   ]
+  },
+  {
+   "text": "אאא",
+   "needle": "אא",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "אאא",
+   "needle": "אא",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ]
+   ]
+  },
+  {
+   "text": "אאא",
+   "needle": "אא",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "אאא",
+   "needle": "אא",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     2
+    ]
+   ]
+  },
+  {
+   "text": "אאא",
+   "needle": "אא",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "",
+   "needle": "א",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "",
+   "needle": "א",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "",
+   "needle": "א",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "",
+   "needle": "א",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "",
+   "needle": "א",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "",
+   "needle": "א",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "",
+   "needle": "א",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "",
+   "needle": "א",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "שלום",
+   "needle": "",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "שלום",
+   "needle": "",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "שלום",
+   "needle": "",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "שלום",
+   "needle": "",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "שלום",
+   "needle": "",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "שלום",
+   "needle": "",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "שלום",
+   "needle": "",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "שלום",
+   "needle": "",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": []
+  },
+  {
+   "text": "בַּיִת בית ביִת",
+   "needle": "בַּיִת",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     6
+    ]
+   ]
+  },
+  {
+   "text": "בַּיִת בית ביִת",
+   "needle": "בַּיִת",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     6
+    ]
+   ]
+  },
+  {
+   "text": "בַּיִת בית ביִת",
+   "needle": "בַּיִת",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     6
+    ],
+    [
+     7,
+     10
+    ],
+    [
+     11,
+     15
+    ]
+   ]
+  },
+  {
+   "text": "בַּיִת בית ביִת",
+   "needle": "בַּיִת",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     6
+    ],
+    [
+     7,
+     10
+    ],
+    [
+     11,
+     15
+    ]
+   ]
+  },
+  {
+   "text": "בַּיִת בית ביִת",
+   "needle": "בַּיִת",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     6
+    ]
+   ]
+  },
+  {
+   "text": "בַּיִת בית ביִת",
+   "needle": "בַּיִת",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     6
+    ]
+   ]
+  },
+  {
+   "text": "בַּיִת בית ביִת",
+   "needle": "בַּיִת",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     6
+    ],
+    [
+     7,
+     10
+    ],
+    [
+     11,
+     15
+    ]
+   ]
+  },
+  {
+   "text": "בַּיִת בית ביִת",
+   "needle": "בַּיִת",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     6
+    ],
+    [
+     7,
+     10
+    ],
+    [
+     11,
+     15
+    ]
+   ]
+  },
+  {
+   "text": "שלום־עולם שלום-עולם",
+   "needle": "שלום-עולם",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     9
+    ],
+    [
+     10,
+     19
+    ]
+   ]
+  },
+  {
+   "text": "שלום־עולם שלום-עולם",
+   "needle": "שלום-עולם",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     9
+    ],
+    [
+     10,
+     19
+    ]
+   ]
+  },
+  {
+   "text": "שלום־עולם שלום-עולם",
+   "needle": "שלום-עולם",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     9
+    ],
+    [
+     10,
+     19
+    ]
+   ]
+  },
+  {
+   "text": "שלום־עולם שלום-עולם",
+   "needle": "שלום-עולם",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     9
+    ],
+    [
+     10,
+     19
+    ]
+   ]
+  },
+  {
+   "text": "שלום־עולם שלום-עולם",
+   "needle": "שלום-עולם",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     9
+    ],
+    [
+     10,
+     19
+    ]
+   ]
+  },
+  {
+   "text": "שלום־עולם שלום-עולם",
+   "needle": "שלום-עולם",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     9
+    ],
+    [
+     10,
+     19
+    ]
+   ]
+  },
+  {
+   "text": "שלום־עולם שלום-עולם",
+   "needle": "שלום-עולם",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     9
+    ],
+    [
+     10,
+     19
+    ]
+   ]
+  },
+  {
+   "text": "שלום־עולם שלום-עולם",
+   "needle": "שלום-עולם",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     9
+    ],
+    [
+     10,
+     19
+    ]
+   ]
+  },
+  {
+   "text": "ץ צ ף פ ן נ ם מ ך כ",
+   "needle": "צ",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     2,
+     3
+    ]
+   ]
+  },
+  {
+   "text": "ץ צ ף פ ן נ ם מ ך כ",
+   "needle": "צ",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     2,
+     3
+    ]
+   ]
+  },
+  {
+   "text": "ץ צ ף פ ן נ ם מ ך כ",
+   "needle": "צ",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     2,
+     3
+    ]
+   ]
+  },
+  {
+   "text": "ץ צ ף פ ן נ ם מ ך כ",
+   "needle": "צ",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     2,
+     3
+    ]
+   ]
+  },
+  {
+   "text": "ץ צ ף פ ן נ ם מ ך כ",
+   "needle": "צ",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     1
+    ],
+    [
+     2,
+     3
+    ]
+   ]
+  },
+  {
+   "text": "ץ צ ף פ ן נ ם מ ך כ",
+   "needle": "צ",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     1
+    ],
+    [
+     2,
+     3
+    ]
+   ]
+  },
+  {
+   "text": "ץ צ ף פ ן נ ם מ ך כ",
+   "needle": "צ",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     1
+    ],
+    [
+     2,
+     3
+    ]
+   ]
+  },
+  {
+   "text": "ץ צ ף פ ן נ ם מ ך כ",
+   "needle": "צ",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     0,
+     1
+    ],
+    [
+     2,
+     3
+    ]
+   ]
+  },
+  {
+   "text": "🙂נעה🙂 נעה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     2,
+     5
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "🙂נעה🙂 נעה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     2,
+     5
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "🙂נעה🙂 נעה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     2,
+     5
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "🙂נעה🙂 נעה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     2,
+     5
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "🙂נעה🙂 נעה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     2,
+     5
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "🙂נעה🙂 נעה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     2,
+     5
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "🙂נעה🙂 נעה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     2,
+     5
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "🙂נעה🙂 נעה",
+   "needle": "נעה",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     2,
+     5
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "abc ABC aBc",
+   "needle": "ABC",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "abc ABC aBc",
+   "needle": "ABC",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "abc ABC aBc",
+   "needle": "ABC",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "abc ABC aBc",
+   "needle": "ABC",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "abc ABC aBc",
+   "needle": "ABC",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "abc ABC aBc",
+   "needle": "ABC",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "abc ABC aBc",
+   "needle": "ABC",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "abc ABC aBc",
+   "needle": "ABC",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": false
+   },
+   "ranges": [
+    [
+     4,
+     7
+    ]
+   ]
+  },
+  {
+   "text": "abc ABC aBc",
+   "needle": "ABC",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "abc ABC aBc",
+   "needle": "ABC",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": false,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "abc ABC aBc",
+   "needle": "ABC",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "abc ABC aBc",
+   "needle": "ABC",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": false,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "abc ABC aBc",
+   "needle": "ABC",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "abc ABC aBc",
+   "needle": "ABC",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": false,
+    "finalsEqual": true,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "abc ABC aBc",
+   "needle": "ABC",
+   "flags": {
+    "wholeWord": false,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "text": "abc ABC aBc",
+   "needle": "ABC",
+   "flags": {
+    "wholeWord": true,
+    "ignoreMarks": true,
+    "finalsEqual": true,
+    "ignoreCase": true
+   },
+   "ranges": [
+    [
+     0,
+     3
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  }
+ ]
+}

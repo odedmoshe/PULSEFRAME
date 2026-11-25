@@ -22,6 +22,8 @@ import { MULTICAM_STRINGS } from './multicam.strings.ts';
 import { TL_STRINGS } from './timeline.strings.ts';
 import './mediaLibrary.css';
 import './multicam.css';
+import { PEARLS_UI_BUILT } from './pearls/PearlsList.tsx';
+import { WhoInClipItem } from './pearls/WhoInClip.tsx';
 
 type Loaded = LoadedDerivative<ImageBitmap> | null;
 
@@ -157,6 +159,8 @@ function CardMenu({ a, doc, isLut, isUsed, onView }: { a: Asset; doc: ProjectDoc
           <div className="pf-mc-menu" role="menu" aria-label={`${S.cardMore}: ${a.name}`} onKeyDown={(e) => { if (e.key === 'Tab') close(); else onMenuKeyDown(e); }}>
           {a.kind !== 'image' && !isLut && <button type="button" role="menuitem" className="pf-mc-item" data-testid={`view-${a.id}`} onClick={() => { setAt(null); onView(a.id); }}><Eye size={16} strokeWidth={1.75} aria-hidden="true" />{t('source.open')}</button>}
           {(a.kind === 'video' || a.kind === 'image') && <button type="button" role="menuitem" className="pf-mc-item" data-testid={LIFE_TESTIDS.captureEdit} onClick={() => { setAt(null); setDating(true); }}>{LIFE_STRINGS[state.lang].captureMenu}</button>}
+          {/* «מי בקליפ?» (wave 7 pearls): who is in the whole file, the owner's tag; once builder C has built it */}
+          {PEARLS_UI_BUILT && !isLut && <WhoInClipItem asset={a} close={() => setAt(null)} />}
           <div role="separator" className="pf-mc-sep" />
           <button type="button" role="menuitem" className="pf-mc-item is-danger" disabled={isUsed} aria-disabled={isUsed || undefined} aria-describedby={isUsed ? `why-${a.id}` : undefined} title={isUsed ? (isLut ? M.lutRemoveUsed : t('media.remove.used')) : undefined} data-testid={`remove-${a.id}`}
             onClick={() => { close(); void editor.commit([{ op: 'remove_asset', args: { assetId: a.id } }], 'Remove file'); }}><Trash2 size={16} strokeWidth={1.75} aria-hidden="true" />{S.cardRemove}</button>

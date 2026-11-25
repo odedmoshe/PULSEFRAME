@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, creativeProjection, diffEntities, LIBRARY_OPS_BUILT, OpError, ProjectSchema, projectVariant, restoreEntities, summarize, timeline, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, creativeProjection, diffEntities, LIBRARY_OPS_BUILT, STEADY_OPS_BUILT, SST, OpError, ProjectSchema, projectVariant, restoreEntities, summarize, timeline, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, evaluate } from '@pulseframe/engine';
 import { createFuzz } from './ops-fuzz.gen.ts';
 
@@ -32,6 +32,20 @@ function run(seed: number, focus: () => string[] = () => []) {
     const used = applyTransaction(doc, [{ op: 'use_library_item', args: { asset } }], ctx(true));
     doc = applyTransaction(used.doc, [{ op: 'add_clip', args: { assetId: used.results[0]!.output!.assetId as string, start: f(0), duration: f(30) } }], ctx()).doc;
   }
+  // stabilisation (wave 7): camera motion of the first video, as the stabilise job attaches it (an internal operation), so
+  // set_clip_stabilise and remove_camera_motion have a measurement to work on; fixed numbers, no draw from the random stream
+  if (STEADY_OPS_BUILT) {
+    const vid = Object.values(doc.assets).find((a) => a.video);
+    if (vid) {
+      const k = Math.min(120, vid.video!.frameCount ?? 120);
+      const col = (m: number, amp: number) => Array.from({ length: k }, (_, i) => ((i * m) % (2 * amp + 1)) - amp);
+      doc = applyTransaction(doc, [{ op: 'attach_camera_motion', args: { assetId: vid.id, from: 0, dx: col(37, 200), dy: col(53, 150), dr: col(71, 900), dz: col(29, 120), st: Array.from({ length: k }, (_, i) => (i === 0 ? SST.start : SST.ok)), method: 'fuzz', params: { algo: 1, input: 'proxy' }, createdAt: '2026-11-25T00:00:00Z' } }], ctx(true)).doc;
+    }
+  }
+  // two caption cues, one after the other, so merge_cues (which needs a cue with a following cue) does not depend on two rare
+  // add_cue draws landing in the same run; fixed numbers, no draw from the random stream
+  doc = applyTransaction(doc, [{ op: 'add_caption_track', args: { mode: 'manual' } }], ctx()).doc;
+  doc = applyTransaction(doc, [{ op: 'add_cue', args: { start: f(30), duration: f(20), text: 'first' } }, { op: 'add_cue', args: { start: f(50), duration: f(20), text: 'second' } }], ctx()).doc;
   // Every sixth step draws among the operations no earlier step of the run has seen accepted (the menu grows with every
   // feature, so plain draws can miss one by chance after an unrelated row changes the stream); every other step draws as before.
   const gen = (step: number) => { const f = step % 6 === 5 ? focus() : []; return f.length ? fz.genFocused(doc, f) : fz.gen(doc); };

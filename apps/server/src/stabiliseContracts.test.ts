@@ -1,10 +1,8 @@
 /**
  * The server contract of stabilisation (wave 7 stabilise track; stabilise.ts), through the real app and the real MCP handler,
- * before W1: both routes are registered, documented and classified; scopes hold before anything else; every entry point answers
- * the honest 501 stabilise_not_built and stores nothing; cancel dispatches the new job type; recovery ends a stray row honestly;
- * the analysis read view never sends the camera columns; the tracking route counts camera samples in the shared budget.
- * The it.todo rows name what W1 must make pass (and STABILISE_JOBS_BUILT turns the 501 rows off).
- */
+ * both routes are registered, documented and classified; scopes hold before anything else; a missing clip is 404; the analysis read view
+ * never sends the camera columns; the tracking route counts camera samples in the shared budget. The it.todo rows name what the
+ * job's own tests (stabilise.test.ts) cover. */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -23,7 +21,7 @@ import { buildOpenApi } from './openapi.ts';
 import { PEOPLE_MCP_TOOLS, PEOPLE_REST_SURFACES } from './peopleSurfaces.ts';
 import { Presence } from './presence.ts';
 import { Speech } from './speech.ts';
-import { recoverStabiliseJobs, STABILISE_JOBS_BUILT, STABILISE_SERVER_REFUSALS } from './stabilise.ts';
+import { STABILISE_JOBS_BUILT } from './stabilise.ts';
 import { Store } from './store.ts';
 import { trackingRange } from './tracking.ts';
 
@@ -83,36 +81,6 @@ describe('the stabilise routes are registered, documented and classified', () =>
   });
 });
 
-describe.skipIf(STABILISE_JOBS_BUILT)('before W1: scopes first, then the honest 501', () => {
-  it('an observer cannot start a measurement (403); the owner and an agent get 501 stabilise_not_built with the fixed sentence', async () => {
-    expect((await rest(observer, 'POST', `/api/v1/projects/${pid}/clips/clp_none/stabilise`, {})).status).toBe(403);
-    for (const who of [owner, agent]) {
-      const r = await rest(who, 'POST', `/api/v1/projects/${pid}/clips/clp_none/stabilise`, { strength: 50 });
-      expect({ status: r.status, code: r.body?.error?.code, message: r.body?.error?.message }).toEqual({ status: 501, code: 'stabilise_not_built', message: STABILISE_SERVER_REFUSALS.notBuilt.message() });
-    }
-    expect((await rest(owner, 'POST', `/api/v1/projects/${pid}/clips/clp_none/stabilise`, { strength: 0 })).status).toBe(400);
-  });
-  it('the read view answers 404 for a file that is not there and nothing else', async () => {
-    expect((await rest(observer, 'GET', `/api/v1/projects/${pid}/assets/ast_none/camera-motion`)).status).toBe(404);
-  });
-  it('MCP stabilise_clip and get_camera_motion answer stabilise_not_built or not_found; nothing was stored', async () => {
-    const before = store.getProject(pid).revision;
-    const s = await tool(agent, 'stabilise_clip', { projectId: pid, clipId: 'clp_none' });
-    expect([s.isError, s.text.includes('stabilise_not_built')]).toEqual([true, true]);
-    const g = await tool(agent, 'get_camera_motion', { projectId: pid, assetId: 'ast_none' });
-    expect(g.isError).toBe(true);
-    expect(store.getProject(pid).revision).toBe(before);
-    expect(store.openJobs(STABILISE_JOB_TYPE)).toEqual([]);
-  });
-  it('cancel dispatches the stabilise job type (REST and MCP); recovery ends a stray row honestly', async () => {
-    const j = store.createJob(pid, STABILISE_JOB_TYPE, 'user:local', {});
-    expect((await rest(owner, 'POST', `/api/v1/jobs/${j.id}/cancel`)).body?.error?.code).toBe('stabilise_not_built');
-    expect((await tool(owner, 'cancel_job', { jobId: j.id })).text).toContain('stabilise_not_built');
-    expect(recoverStabiliseJobs(store)).toBe(0);
-    expect([store.getJob(j.id).status, (store.getJob(j.id).error as { code?: string })?.code]).toEqual(['failed', 'stabilise_not_built']);
-  });
-});
-
 const R = { num: 30, den: 1 };
 let n = 0;
 const tx = (doc: ProjectDocument, ops: OpCall[], allowInternal = false) => applyTransaction(doc, ops, { idSeed: `sc${n++}_`, actor: 'test', allowInternal });
@@ -143,11 +111,29 @@ describe('shared surfaces', () => {
   });
 });
 
-describe('what W1 makes pass', () => {
-  it.todo('W1: 202 + one transaction [attach_camera_motion, set_clip_stabilise] with dependsOn; one undo returns the document');
-  it.todo('W1: clipTooLong, fileFull and budget refused (422) before 202; 409 stabilise_in_progress; 429 busy above five open vision jobs');
-  it.todo('W1: clip deleted mid-run → failed clip_changed, document unchanged; set_clip_stabilise refused → failed with its refusal and details');
-  it.todo('W1: cancel mid-run → canceled, ffmpeg gone, nothing attached; restart mid-run → runs again and attaches once; shutdown leaves the row running');
-  it.todo('W1: frames already measured with the same algo and input are not read again (a second clip of the same file)');
-  it.todo('W1: GET …/camera-motion = MCP get_camera_motion: counts, review runs, usedBy, note; never the columns');
+/**
+ * What W1 made pass lives in stabilise.test.ts (it needs real H.264 files and the job runner):
+ * - 202 + one transaction [attach_camera_motion, set_clip_stabilise] with dependsOn; one undo → 'the job › runs on a real H.264 file…'
+ * - clipTooLong, fileFull, budget 422 before 202; 409 stabilise_in_progress; 429 busy → 'refused before 202 (nothing created)'
+ * - clip deleted mid-run → clip_changed; set_clip_stabilise refused → its refusal → 'the job › the clip deleted…', '…the operation refuses…'
+ * - cancel mid-run; restart mid-run; shutdown leaves the row running → 'the job › cancel mid-run…', '…restart mid-run…', '…shutdown…'
+ * - frames already measured are not read again → 'the job › frames already measured…' (and 'what is measured')
+ * - GET …/camera-motion = MCP get_camera_motion, never the columns → 'the read view'
+ */
+describe('after W1: the routes answer the built job', () => {
+  it('the job is built, so no route answers 501 any more: a missing clip is 404 and an observer still cannot start one', async () => {
+    expect(STABILISE_JOBS_BUILT).toBe(true);
+    expect((await rest(observer, 'POST', `/api/v1/projects/${pid}/clips/clp_none/stabilise`, {})).status).toBe(403);
+    const r = await rest(agent, 'POST', `/api/v1/projects/${pid}/clips/clp_none/stabilise`, { strength: 50 });
+    expect([r.status, r.body?.error?.code]).toEqual([404, 'not_found']);
+    expect((await rest(owner, 'POST', `/api/v1/projects/${pid}/clips/clp_none/stabilise`, { strength: 0 })).status).toBe(400);
+    expect(store.openJobs(STABILISE_JOB_TYPE)).toEqual([]);
+    // an observer reads a file that is not there as 404 (not 403); MCP stabilise_clip on a missing clip fails and stores nothing
+    expect((await rest(observer, 'GET', `/api/v1/projects/${pid}/assets/ast_none/camera-motion`)).status).toBe(404);
+    const before = store.getProject(pid).revision;
+    const s = await tool(agent, 'stabilise_clip', { projectId: pid, clipId: 'clp_none' });
+    expect(s.isError).toBe(true);
+    expect(store.getProject(pid).revision).toBe(before);
+    expect(store.openJobs(STABILISE_JOB_TYPE)).toEqual([]);
+  });
 });

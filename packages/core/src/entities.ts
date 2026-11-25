@@ -7,7 +7,7 @@
  * if nobody changed them since" — a compensating transaction, never a history rewrite.
  */
 import * as T from '@pulseframe/time';
-import type { Analysis, Asset, Clip, LifeEvent, Marker, MulticamGroup, Person, ProjectDocument, RecipeRun, Sequence, Track, Transcript, Variant } from './schema.ts';
+import type { Analysis, Asset, Clip, LifeEvent, Marker, MulticamGroup, Person, ProjectDocument, RecipeRun, Sequence, SourceRange, Track, Transcript, Variant } from './schema.ts';
 import { isInheritedName, own } from './own.ts';
 import type { MotionTrack } from './tracking.ts';
 
@@ -49,6 +49,13 @@ export type EntityState =
    * `multicam` key: undoing the first create_multicam deletes the emptied map (the people precedent).
    */
   | { kind: 'multicamGroup'; group: MulticamGroup }
+  /**
+   * A marked source range («פנינה», wave 7 pearls track), keyed by its own id. The state holds the label (a family note): it is
+   * stored with the transaction for undo and never leaves the server for a credential without the people scope
+   * (apps/server/src/peoplePrivacy.ts scrubPeople). A project without ranges has no `sourceRanges` key: undoing the first
+   * add_source_range deletes the emptied map (the people precedent).
+   */
+  | { kind: 'sourceRange'; range: SourceRange }
   /** The stacking order of a sequence's tracks. Compared only over the tracks both sides have, so adding or removing a track is not an order change. */
   | { kind: 'trackOrder'; sequenceId: string; ids: string[] };
 /** Entity id of an asset's analysis results. */
@@ -82,6 +89,7 @@ export function entityMap(doc: ProjectDocument): Map<string, EntityState> {
   for (const e of Object.values(doc.events ?? {})) m.set(e.id, { kind: 'lifeEvent', event: e });
   for (const p of Object.values(doc.people ?? {})) m.set(p.id, { kind: 'person', person: p });
   for (const g of Object.values(doc.multicam ?? {})) m.set(g.id, { kind: 'multicamGroup', group: g });
+  for (const r of Object.values(doc.sourceRanges ?? {})) m.set(r.id, { kind: 'sourceRange', range: r });
   for (const seq of Object.values(doc.sequences)) {
     const { tracks: _tracks, ...own } = seq;
     m.set(seq.id, { kind: 'sequence', sequence: own });
@@ -176,6 +184,7 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
       // a project without people has no `people` key at all, so undoing the first add_person gives the stored document back exactly
       if (cur?.kind === 'person' && draft.people) { delete draft.people[cur.person.id]; if (Object.keys(draft.people).length === 0) delete draft.people; }
       if (cur?.kind === 'multicamGroup' && draft.multicam) { delete draft.multicam[cur.group.id]; if (Object.keys(draft.multicam).length === 0) delete draft.multicam; }
+      if (cur?.kind === 'sourceRange' && draft.sourceRanges) { delete draft.sourceRanges[cur.range.id]; if (Object.keys(draft.sourceRanges).length === 0) delete draft.sourceRanges; }
       if (cur?.kind === 'track') {
         const seq = own(draft.sequences, cur.sequenceId)!;
         const track = seq.tracks.find((t) => t.id === id)!;
@@ -197,6 +206,7 @@ export function restoreEntities(draft: ProjectDocument, targets: RestoreTarget[]
     else if (state.kind === 'lifeEvent') put((draft.events ??= {}), state.event.id, structuredClone(state.event));
     else if (state.kind === 'person') put((draft.people ??= {}), state.person.id, structuredClone(state.person));
     else if (state.kind === 'multicamGroup') put((draft.multicam ??= {}), state.group.id, structuredClone(state.group));
+    else if (state.kind === 'sourceRange') put((draft.sourceRanges ??= {}), state.range.id, structuredClone(state.range));
   }
   // 2. tracks (so restored clips have a home), lowest original index first
   for (const { id, state } of targets.filter((t) => t.state?.kind === 'track').sort((x, y) => (x.state as any).index - (y.state as any).index)) {

@@ -208,12 +208,15 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
   issues.push(...fieldIssues(doc));
   // 10. multicam (ADR-0020): a program segment out of step with the master sound by more than half a frame (warning; fix: slip)
   issues.push(...multicamIssues(master, opts.sequenceId ?? master.mainSequenceId));
+  // 11. stabilisation (wave 7): frames of a stabilised clip whose source frames were not measured, and frames where the cover
+  // limit weakens the correction (warnings; the fix recalculates the crop)
+  issues.push(...stabiliseIssues(doc, rate));
 
   const count = (s: PreflightIssue['severity']) => issues.filter((i) => i.severity === s).length;
   return {
     revision, variantId: opts.variantId ?? null, sequenceId: opts.sequenceId ?? null, output: { width: W, height: H, frames: total, fit: doc.settings.fit ?? 'contain', safeArea: guide?.safeArea ?? null },
     ok: count('blocker') === 0, blockers: count('blocker'), warnings: count('warning'), notes: count('note'), issues,
-    scope: 'Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, video decoders needed at once, transition handles (velocity ramps included), upscaling, safe areas (estimated text extents), caption reading speed, title fields without data and capture-sourced date stamps without a date, motion tracking (clips that follow a track or blur along it, on frames where the tracking is lost or uncertain or the followed picture is absent), multicam segments out of step with the master sound by more than half a frame. Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.',
+    scope: 'Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, video decoders needed at once, transition handles (velocity ramps included), upscaling, safe areas (estimated text extents), caption reading speed, title fields without data and capture-sourced date stamps without a date, motion tracking (clips that follow a track or blur along it, on frames where the tracking is lost or uncertain or the followed picture is absent), multicam segments out of step with the master sound by more than half a frame, stabilised clips (frames whose camera motion was not measured, frames where the correction is weakened so no empty edge shows). Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.',
   };
 }
 
@@ -331,6 +334,82 @@ export function trackingIssues(doc: ProjectDocument, rate: { num: number; den: n
     if (r.ranges.length > MAX_TRACK_RUNS) {
       const more = r.ranges.slice(MAX_TRACK_RUNS);
       out.push({ code: r.kind, severity: 'warning', message: `${more.length} more stretch(es) of the same problem on ${name(c)}, ${more.reduce((n, [a, b]) => n + b - a, 0)} frame(s) in all, from frame ${more[0]![0]} to frame ${more.at(-1)![1] - 1}${r.kind === 'redact_track_loss' ? '; automatic tracking is not guaranteed redaction' : ''}`, ids: [...r.ids] });
+    }
+  }
+  return out;
+}
+
+/** The most ranges listed per stabilised clip and code; more are summed up in one more issue. */
+const MAX_STEADY_RUNS = 20;
+/**
+ * Stabilisation (wave 7; core steady.ts) found by running the evaluator over every frame of each stabilised clip, and over the
+ * frames it plays on into its handle while the next clip's transition runs, so speed, reverse, ramps, time taps and transitions
+ * are mapped exactly as they render. Only the tracks of stabilised clips are evaluated. Per clip, as timeline ranges:
+ * - stabilise_unmeasured: a picture of the clip (its own, a tap's or a ramp's) shows a source frame no measured stretch holds
+ *   (state `outside`): it keeps the correction of the nearest measured frame. Next step: measure again.
+ * - stabilise_limited: the cover limit weakened the correction there (VideoLayer.steady.limited). 'clip': the clip changed since
+ *   its crop was computed; 'reach': only a velocity ramp or a transition handle shows frames outside the clip. The fix recalculates
+ *   the crop at the clip's strength (set_clip_stabilise, whose zoom covers the reach as well).
+ * Warnings only: a weaker correction or a held one never shows an empty edge.
+ */
+export function stabiliseIssues(doc: ProjectDocument, rate: { num: number; den: number }): PreflightIssue[] {
+  const seq = doc.sequences[doc.mainSequenceId]!;
+  const fi = (t: T.RationalTime) => T.frameIndexAt(t, rate);
+  const bound = new Map<string, MediaClip>();
+  const keep = new Set<string>();
+  const spans: [number, number][] = [];
+  for (const track of seq.tracks)
+    for (const c of track.clips) {
+      if (c.type !== 'media' || !c.stabilise || track.kind !== 'video') continue;
+      bound.set(c.id, c);
+      keep.add(track.id);
+      const end = T.add(c.start, c.duration);
+      const next = track.clips.find((x) => x.type === 'media' && x.id !== c.id && T.eq(x.start, end) && x.transition);
+      const handle = next && next.type === 'media' && next.transition ? Math.min(next.transition.frames, T.frameCount(next.duration, rate)) : 0;
+      spans.push([fi(c.start), fi(end) + handle]);
+    }
+  if (!bound.size) return [];
+  const only = { ...doc, sequences: { ...doc.sequences, [doc.mainSequenceId]: { ...seq, tracks: seq.tracks.filter((t) => keep.has(t.id)) } } };
+  spans.sort((a, b) => a[0] - b[0]);
+  type Kind = 'stabilise_unmeasured' | 'stabilise_limited';
+  const runs = new Map<string, { kind: Kind; clipId: string; reasons: Set<string>; ranges: [number, number][] }>();
+  const mark = (kind: Kind, clipId: string, f: number, reason = '') => {
+    const key = `${kind}|${clipId}`;
+    let r = runs.get(key);
+    if (!r) runs.set(key, (r = { kind, clipId, reasons: new Set(), ranges: [] }));
+    if (reason) r.reasons.add(reason);
+    const last = r.ranges.at(-1);
+    if (last && last[1] === f) last[1] = f + 1;
+    else if (!last || last[1] < f) r.ranges.push([f, f + 1]);
+  };
+  let cursor = -1;
+  for (const [a, b] of spans)
+    for (let f = Math.max(a, cursor); f < b; f++) {
+      cursor = f + 1;
+      const g = evaluate(only, T.frameTime(f, rate));
+      for (const l of g.layers) {
+        if (l.kind !== 'video' || !bound.has(l.clipId)) continue;
+        const pictures = [l, ...(l.time?.taps ?? []).map((t) => t.layer).filter((x): x is typeof l => x.kind === 'video')];
+        const steady = pictures.map((p) => p.steady).filter((x) => !!x);
+        if (steady.some((s) => s.state === 'outside')) mark('stabilise_unmeasured', l.clipId, f);
+        const limited = steady.find((s) => s.limited);
+        if (limited?.limited) mark('stabilise_limited', l.clipId, f, limited.limited);
+      }
+    }
+  const name = (c: MediaClip) => `"${doc.assets[c.assetId]?.name ?? c.id}"`;
+  const out: PreflightIssue[] = [];
+  for (const r of runs.values()) {
+    const c = bound.get(r.clipId)!;
+    const why = r.reasons.has('clip') ? 'the clip changed since its crop was computed' : 'a transition handle or a velocity ramp shows frames outside the clip';
+    const fix = { label: 'Recalculate the crop', ops: [{ op: 'set_clip_stabilise', args: { clipId: c.id, stabilise: { strength: c.stabilise!.strength } } }] };
+    const listed = r.ranges.length > MAX_STEADY_RUNS ? r.ranges.slice(0, MAX_STEADY_RUNS - 1) : r.ranges;
+    for (const [a, b] of listed)
+      out.push(r.kind === 'stabilise_unmeasured'
+        ? { code: r.kind, severity: 'warning', message: `on ${frames(a, b)} the camera motion of ${name(c)} was not measured for the source frames shown; they keep the correction of the nearest measured frame. Measure the clip again (stabilise_clip) to steady them`, ids: [c.id, c.assetId], range: { startFrame: a, endFrame: b } }
+        : { code: r.kind, severity: 'warning', message: `on ${frames(a, b)} the stabilisation of ${name(c)} is weakened so that no empty edge shows: ${why}. Recalculate the crop`, ids: [c.id], range: { startFrame: a, endFrame: b }, fix });
+    if (listed.length < r.ranges.length) {
+      const more = r.ranges.slice(listed.length);
+      out.push({ code: r.kind, severity: 'warning', message: `${more.length} more stretch(es) of the same problem on ${name(c)}, ${more.reduce((n, [a, b]) => n + b - a, 0)} frame(s) in all, from frame ${more[0]![0]} to frame ${more.at(-1)![1] - 1}`, ids: r.kind === 'stabilise_unmeasured' ? [c.id, c.assetId] : [c.id], ...(r.kind === 'stabilise_limited' ? { fix } : {}) });
     }
   }
   return out;

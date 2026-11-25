@@ -7,10 +7,12 @@ import './strictPage.ts';
 import { audioEffectParams, type AudioFxParams } from '@pulseframe/core';
 import { mixClip, type PlannedAudioClip } from '@pulseframe/engine';
 import { FX_FIXTURE_SECONDS, fxFixture, renderFx } from '@pulseframe/engine/audiofx/kernels/index.ts';
+import { limiterCeilingLinear, limiterFixture, limiterRun, limiterWindow } from '@pulseframe/engine/masterLimiter.ts';
 import { plannedClipInput } from './audioGraph.ts';
 import { curveHash, curveSamples, pathPointsMs, v1Shapes } from './curveHash.ts';
 import './editor/lifeline/lifeline.selftest.ts'; // life line (ADR-0021): window.__pfLife, the core calendar in this browser, for proof:lifeline
 import './editor/craft/craft.selftest.ts'; // editing craft (wave 7): window.__pfCraftMatch, core matchText in this browser, for proof:craft F8 (W3)
+import './editor/pearls/pearls.selftest.ts'; // marked ranges (wave 7): window.__pfPearlsHash, core usage and screen time in this browser, for proof:pearls P15 (builder C)
 import './editor/stabilise/stabilise.selftest.ts'; // stabilisation (wave 7): window.__pfSteadyHash, core steadyPose in this browser, for proof:stabilise S7 (W3)
 
 /**
@@ -36,6 +38,46 @@ function fxRun(type: string, params: AudioFxParams = {}): { base64: string; fram
 (window as unknown as { __pfCurveSamples: typeof curveSamples }).__pfCurveSamples = curveSamples;
 (window as unknown as { __pfV1Shapes: typeof v1Shapes }).__pfV1Shapes = v1Shapes;
 (window as unknown as { __pfPathPointsMs: typeof pathPointsMs }).__pfPathPointsMs = pathPointsMs;
+
+/**
+ * Master limiter (wave 7, track send; proof:send L6): the same seeded input (engine limiterFixture) through
+ *  - __pfLimiterRun: the engine kernel, here in this browser, in 128-frame blocks;
+ *  - __pfLimiterWorkletRun: the PUBLIC worklet file /pf-master-limiter.js itself, rendered by an OfflineAudioContext;
+ * each returns the SHA-256 of the output (little-endian Float32, interleaved stereo) so the proof can compare it with Node's.
+ */
+async function sha256Hex(x: Float32Array): Promise<string> {
+  const d = await crypto.subtle.digest('SHA-256', new Uint8Array(x.buffer, x.byteOffset, x.byteLength) as Uint8Array<ArrayBuffer>);
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+async function limiterKernelRun(sampleRate = 48000, seconds = 2, ceilingDb = -1): Promise<{ sha256: string; frames: number; ms: number }> {
+  const input = limiterFixture(sampleRate, seconds);
+  const t = performance.now();
+  const { out } = limiterRun(input, sampleRate, ceilingDb, 128);
+  const ms = performance.now() - t;
+  return { sha256: await sha256Hex(out), frames: out.length >> 1, ms: +ms.toFixed(2) };
+}
+async function limiterWorkletRun(sampleRate = 48000, seconds = 2, ceilingDb = -1): Promise<{ sha256: string; frames: number; messages: number }> {
+  const input = limiterFixture(sampleRate, seconds), n = input.left.length;
+  const ctx = new OfflineAudioContext(2, n, sampleRate);
+  await ctx.audioWorklet.addModule('/pf-master-limiter.js');
+  const buf = ctx.createBuffer(2, n, sampleRate);
+  buf.copyToChannel(input.left as Float32Array<ArrayBuffer>, 0);
+  buf.copyToChannel(input.right as Float32Array<ArrayBuffer>, 1);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const node = new AudioWorkletNode(ctx, 'pf-master-limiter', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit', processorOptions: { ceiling: limiterCeilingLinear(ceilingDb), lookahead: limiterWindow(sampleRate).lookahead, startSample: 0 } });
+  let messages = 0;
+  node.port.onmessage = () => { messages++; };
+  src.connect(node);
+  node.connect(ctx.destination);
+  src.start(0);
+  const r = await ctx.startRendering();
+  const L = r.getChannelData(0), R = r.getChannelData(1), out = new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) { out[i * 2] = L[i]!; out[i * 2 + 1] = R[i]!; }
+  return { sha256: await sha256Hex(out), frames: n, messages };
+}
+(window as unknown as { __pfLimiterRun: typeof limiterKernelRun }).__pfLimiterRun = limiterKernelRun;
+(window as unknown as { __pfLimiterWorkletRun: typeof limiterWorkletRun }).__pfLimiterWorkletRun = limiterWorkletRun;
 
 async function audioChainMatchesReference() {
   const sr = 48000, total = 60000;

@@ -33,6 +33,7 @@ import { DropChip, ImportMenu } from './ImportHosts.tsx';
 import { collectDropped } from './imports.logic.ts';
 import { MulticamLibraryEntry } from './MulticamLibraryEntry.tsx';
 import '../ds/chrome.css';
+import { PEARLS_UI_BUILT, PearlsList } from './pearls/PearlsList.tsx'; // «פנינים» (wave 7): the fourth view, once builder C has built it
 
 const ACCEPT = 'video/*,audio/*,image/png,image/jpeg,image/webp,.cube';
 
@@ -144,7 +145,7 @@ function MediaDrawer({ onView }: { onView: (id: string) => void }) {
             {chips.filter(([f]) => f === 'all' || n(f) > 0).map(([f, label]) => <Chip key={f} pressed={filter === f} count={n(f)} disabled={view !== 'all'} onClick={() => setFilter(f)} data-testid={`media-filter-${f}`}>{label}</Chip>)}
           </div>
           <LifeViewSwitch view={view} onChange={setLifeView} />
-          <div className="pf-bw-scroll">{view === 'all' ? <MediaGrid onView={onView} query={q} filter={filter} /> : <LifeLibrary view={view} onView={onView} />}</div>
+          <div className="pf-bw-scroll">{view === 'all' || (view === 'pearls' && !PEARLS_UI_BUILT) ? <MediaGrid onView={onView} query={q} filter={filter} /> : view === 'pearls' ? <PearlsList onView={onView} /> : <LifeLibrary view={view} onView={onView} />}</div>
           <MulticamLibraryEntry lang={state.lang} />
         </>
       )}

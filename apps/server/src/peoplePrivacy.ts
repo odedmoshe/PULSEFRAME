@@ -27,6 +27,11 @@
  *     net, to every MCP tool and resource result, and to every event of the event stream).
  *  4. The archive of a project carries its people. The owner may take one «בלי פרטי משפחה» (family: 'omit', withoutFamily);
  *     a 'names' credential always gets the archive of the document as it may read it (names, no birth dates).
+ *  5. Marked source ranges («פנינים», wave 7; .artifacts/wave7/pearls-decisions.md §3). A range's LABEL can hold a child's words, so
+ *     it is read like a birth date: a 'names' credential reads '' everywhere (namesOnly, scrubPeople) and may not give one
+ *     (assertMayWritePeople). Person TAGS on ranges are the owner's alone: every credential that is not the owner's own session,
+ *     people 'full' grants included, is refused any tag, any change to a tagged range and remove_person of a tagged person
+ *     (assertOwnerTagsPeople, 403 human_tag_required). The archive «בלי פרטי משפחה» carries no range at all.
  *
  * EVERY SURFACE an agent credential can reach, with the helper of this module that guards it, is listed in
  * peopleSurfaces.ts; peopleSurfaces.test.ts keeps that list complete and walks it with a planted birth date.
@@ -37,7 +42,7 @@
  * (Store.wholeProject). Outside any request (server start, recovered jobs, the owner's exports) the reader is 'full'.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { applyTransaction, freezeOps, holdsAgeFields, isPersonToken, OpError, parseFields, PERSON_OPS, PERSON_PRIVATE_ARGS, validateProject, type OpCall, type ProjectDocument, type TextClip } from '@pulseframe/core';
+import { applyTransaction, freezeOps, holdsAgeFields, isPersonToken, OpError, parseFields, PERSON_OPS, PERSON_PRIVATE_ARGS, validateProject, type OpCall, type ProjectDocument, type SourceRange, type TextClip } from '@pulseframe/core';
 import type { Principal } from './governance.ts';
 import { ApiError } from './store.ts';
 
@@ -69,11 +74,18 @@ const namesOnlyDocs = new WeakMap<ProjectDocument, ProjectDocument>();
  * holds either; otherwise a copy that shares everything else, kept per document (committed documents are not changed).
  */
 export function namesOnly(doc: ProjectDocument): ProjectDocument {
-  const people = doc.people;
-  if (!people || !Object.values(people).some((p) => p.birthDate !== null || p.form !== undefined)) return doc;
+  const people = doc.people, ranges = doc.sourceRanges;
+  const dated = !!people && Object.values(people).some((p) => p.birthDate !== null || p.form !== undefined);
+  // marked ranges (wave 7): their labels are family notes, read like a birth date (rule 5)
+  const labelled = !!ranges && Object.values(ranges).some((r) => r.label !== '');
+  if (!dated && !labelled) return doc;
   let out = namesOnlyDocs.get(doc);
   if (!out) {
-    out = { ...doc, people: Object.fromEntries(Object.entries(people).map(([key, p]) => [key, { id: p.id, name: p.name, birthDate: null }])) };
+    out = {
+      ...doc,
+      ...(dated ? { people: Object.fromEntries(Object.entries(people!).map(([key, p]) => [key, { id: p.id, name: p.name, birthDate: null }])) } : {}),
+      ...(labelled ? { sourceRanges: Object.fromEntries(Object.entries(ranges!).map(([key, r]) => [key, { ...r, label: '' }])) } : {}),
+    };
     namesOnlyDocs.set(doc, out);
     namesOnlyDocs.set(out, out);
   }
@@ -88,6 +100,10 @@ export const docForReader = (doc: ProjectDocument): ProjectDocument => docForAcc
 // ---------- rows and answers that are not a document read through the store ----------
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const personOps: readonly string[] = PERSON_OPS;
+/** The operations that give a range's label (rule 5). */
+const LABEL_OPS: readonly string[] = ['add_source_range', 'update_source_range'];
+/** A marked range wherever it sits (a document's map, an entity state, a row of the pearls view): its label is blanked for 'names'. */
+const isRangeLike = (v: Record<string, unknown>): boolean => typeof v.label === 'string' && (v.kind === 'pearl' || v.kind === 'presence') && typeof v.assetId === 'string' && Object.hasOwn(v, 'span');
 /**
  * Any JSON value without what a 'names' credential may not read, wherever it sits: every `birthDate` becomes null and the
  * `form` next to it is dropped (a person, in a document or in an entity state of a diff), and the birthDate and form
@@ -106,9 +122,13 @@ export function scrubPeople<T>(value: T): T {
     const set = (key: string, to: unknown, drop = false) => { out ??= { ...v }; if (drop) delete out[key]; else out[key] = to; };
     const person = Object.hasOwn(v, 'birthDate');
     const call = typeof v.op === 'string' && personOps.includes(v.op) && isObject(v.args);
+    const range = isRangeLike(v);
+    const labelCall = typeof v.op === 'string' && LABEL_OPS.includes(v.op) && isObject(v.args) && Object.hasOwn(v.args, 'label');
     for (const [key, x] of Object.entries(v)) {
       if (person && key === 'birthDate') { if (x !== null && x !== undefined) set(key, null); continue; }
       if (person && key === 'form') { set(key, undefined, true); continue; }
+      if (range && key === 'label') { if (x !== '') set(key, ''); continue; }
+      if (labelCall && key === 'args') { const { label: _l, ...kept } = x as Record<string, unknown>; set(key, kept); continue; }
       if (call && key === 'args') {
         const args = x as Record<string, unknown>;
         const kept = Object.fromEntries(Object.entries(args).filter(([k]) => !(PERSON_PRIVATE_ARGS as readonly string[]).includes(k)));
@@ -125,7 +145,7 @@ export function scrubPeople<T>(value: T): T {
 /** A value as this credential may read it: untouched for 'full', scrubbed for 'names'. */
 export const forPrincipal = <T,>(value: T, p: Principal): T => (peopleAccess(p) === 'full' ? value : scrubPeople(value));
 /** True when a serialised JSON answer may hold something scrubPeople takes out (so the REST net parses only those). */
-export const mayHoldPeople = (json: string): boolean => /"birthDate"\s*:\s*"|"form"\s*:\s*"[mf]"/.test(json);
+export const mayHoldPeople = (json: string): boolean => /"birthDate"\s*:\s*"|"form"\s*:\s*"[mf]"|"kind"\s*:\s*"(?:pearl|presence)"|"op"\s*:\s*"(?:add|update)_source_range"/.test(json);
 
 // ---------- writes ----------
 /**
@@ -143,6 +163,60 @@ export function assertMayWritePeople(p: Principal, ops: unknown): void {
   };
   walk(ops);
   if (given.size) throw new ApiError(403, PEOPLE_SCOPE_REQUIRED, `this credential may give a person's name only, not ${[...given].join(' or ')}`, { arguments: [...given], people: 'names' }, HINT);
+  // rule 5: nor a range's label (a refusal such as "already has these details" would otherwise answer guesses)
+  if (callsOf(ops, LABEL_OPS).some((c) => Object.hasOwn(c.args, 'label'))) throw new ApiError(403, PEOPLE_SCOPE_REQUIRED, HUMAN_TAG_REFUSALS.label, { arguments: ['label'], people: 'names' }, 'Add the pearl without a name; the owner names it in the editor.');
+}
+
+// ---------- tags on marked ranges: the owner's alone (rule 5) ----------
+export const HUMAN_TAG_REQUIRED = 'human_tag_required';
+/** Fixed English of the guards of rule 5; the Hebrew is packages/i18n/src/pearls.ts HE_PEARLS. */
+export const HUMAN_TAG_REFUSALS = {
+  tagging: 'only the project owner tags people on marked ranges, from their own session',
+  taggedRange: 'this marked range has people tagged by the project owner; only the owner may change or remove it',
+  taggedPerson: 'this person is tagged in marked ranges; only the project owner may remove them',
+  label: 'this credential may not give the name of a marked range: pearl names are family notes',
+} as const;
+const TAG_HINT = 'Ask the owner to do this step in the editor. Marking and changing ranges without people stays open to you.';
+/** Every operation call named `ops` holds (also nested: apply_transaction steps, template steps), with object arguments. */
+function callsOf(ops: unknown, names: readonly string[]): { op: string; args: Record<string, unknown> }[] {
+  const out: { op: string; args: Record<string, unknown> }[] = [];
+  const walk = (v: unknown): void => {
+    if (Array.isArray(v)) { for (const x of v) walk(x); return; }
+    if (!isObject(v)) return;
+    if (typeof v.op === 'string' && names.includes(v.op) && isObject(v.args)) out.push({ op: v.op, args: v.args });
+    for (const x of Object.values(v)) walk(x);
+  };
+  walk(ops);
+  return out;
+}
+const TAG_OPS: readonly string[] = ['add_source_range', 'update_source_range', 'remove_source_range', 'remove_person'];
+/**
+ * Only the owner's own session tags people on marked ranges (rule 5; decisions §2.2). Keyed on the credential's KIND, never on its
+ * people access: a grant with people 'full' is refused as well. Refused before any operation runs, for a commit, a dry run and a
+ * proposal alike, also inside nested operation lists, 403 human_tag_required, when:
+ *  - add_source_range or update_source_range carries a `people` key (also []), or add_source_range has kind 'presence';
+ *  - update_source_range or remove_source_range names a range that holds people in the WHOLE document;
+ *  - remove_person names a person that some range holds.
+ * `wholeDoc` is read only when such a call is present; lookups are own-property, and an unknown id is left to the op's not_found.
+ */
+export function assertOwnerTagsPeople(p: Principal, ops: unknown, wholeDoc: () => ProjectDocument): void {
+  if (p.kind === 'user') return;
+  const calls = callsOf(ops, TAG_OPS);
+  if (!calls.length) return;
+  const refuse = (key: keyof typeof HUMAN_TAG_REFUSALS, details: Record<string, unknown>) => { throw new ApiError(403, HUMAN_TAG_REQUIRED, HUMAN_TAG_REFUSALS[key], details, TAG_HINT); };
+  for (const c of calls) if (c.op !== 'remove_person' && c.op !== 'remove_source_range' && (Object.hasOwn(c.args, 'people') || (c.op === 'add_source_range' && c.args.kind === 'presence'))) refuse('tagging', { op: c.op });
+  let ranges: Record<string, SourceRange> | null = null;
+  const all = () => (ranges ??= wholeDoc().sourceRanges ?? {});
+  for (const c of calls) {
+    if (c.op === 'update_source_range' || c.op === 'remove_source_range') {
+      const id = c.args.rangeId;
+      const r = typeof id === 'string' && Object.hasOwn(all(), id) ? all()[id]! : null;
+      if (r?.people?.length) refuse('taggedRange', { op: c.op, rangeId: id });
+    } else if (c.op === 'remove_person') {
+      const id = c.args.personId;
+      if (typeof id === 'string' && Object.values(all()).some((r) => r.people?.includes(id))) refuse('taggedPerson', { op: c.op, personId: id });
+    }
+  }
 }
 
 // ---------- films and stills rendered from the whole document ----------
@@ -254,6 +328,8 @@ export function withoutFamily(doc: ProjectDocument): FamilyFreeDocument {
     }
   } else out = { ...doc };
   delete out.people;
+  // marked ranges (rule 5): labels are family notes and tags name people, so the archive without family details holds none
+  delete out.sourceRanges;
   // the archive is never written with people data left in under this name
   const issues = validateProject(out);
   const left = peopleTitles(out).map((t) => t.clipId);

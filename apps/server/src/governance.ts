@@ -8,7 +8,7 @@ import * as T from '@pulseframe/time';
 import { applyTransaction, ASSISTANT_ACTOR, ASSISTANT_GRANT_ID, ASSISTANT_JOB_TYPE, canonical, clipEnd, diffEntities, OpError, RationalTimeSchema, type EntityChange, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { z } from 'zod';
 import { ApiError, type CommitRequest, type CommitResult, type Store } from './store.ts';
-import { assertMayWritePeople, docForPrincipal, docForReader, PEOPLE_ACCESS, type PeopleAccess } from './peoplePrivacy.ts';
+import { assertMayWritePeople, assertOwnerTagsPeople, docForPrincipal, docForReader, PEOPLE_ACCESS, type PeopleAccess } from './peoplePrivacy.ts';
 import { assertMayReleaseBudget } from './assistant/visibility.ts';
 
 export type Mode = 'observe' | 'propose' | 'edit' | 'autopilot';
@@ -178,6 +178,8 @@ export class Governance {
    */
   commitAs(p: Principal, req: Omit<CommitRequest, 'actor' | 'guard'>): CommitResult | ReturnType<Governance['propose']> {
     if (p.kind === 'user') return this.store.commit({ ...req, actor: p.actor });
+    // marked ranges (wave 7): only the owner's own session tags people or changes a tagged range (commits, dry runs, propose mode)
+    assertOwnerTagsPeople(p, req.ops, () => this.store.wholeProject(req.projectId).doc);
     assertMayWritePeople(p, req.ops); // a credential without the people scope gives names only (also in a dry run)
     if (modeOf(p) === 'propose' && !req.dryRun) return this.propose(p, req.projectId, req.ops, req.label);
     this.assertMayAct(p, req.projectId, req.dryRun ? 'propose' : 'edit');
@@ -194,6 +196,7 @@ export class Governance {
   /** Validate against the current document and store the exact diff for review. Nothing is committed. */
   propose(p: Principal, projectId: string, ops: OpCall[], label?: string) {
     this.assertMayAct(p, projectId, 'propose');
+    assertOwnerTagsPeople(p, ops, () => this.store.wholeProject(projectId).doc);
     assertMayWritePeople(p, ops);
     // Worked out on the document as the proposer may read it (whatever request this runs in): the diff stored for review then
     // holds nothing the proposer could not see. Accepting applies the operations to the whole document again (decide → commit).

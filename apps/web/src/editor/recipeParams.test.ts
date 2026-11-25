@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, describeRecipes, FAMILY_FILM_RECIPE_ID, MULTICAM_AUTO_RECIPE_ID, planRecipe, RecipeError, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, describeRecipes, FAMILY_FILM_RECIPE_ID, MULTICAM_AUTO_RECIPE_ID, planRecipe, STORY_RECIPE_ID, RecipeError, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { RECIPE_FORM_IDS, recipeParams, recipeSources } from './recipeParams.ts';
 
 const R = { num: 30, den: 1 };
@@ -41,9 +41,10 @@ describe('recipes panel parameters', () => {
     // the panel offers only the recipes it has a form for, so every recipe needs one here — except the family film (ADR-0026),
     // which has its own dialog (FamilyFilmDialog) and is planned by its own planner, not by planRecipe — and the multicam
     // auto-switch (ADR-0020), which has its own sheet in the multicam panel
-    const panelRecipes = describeRecipes().filter((r) => r.id !== FAMILY_FILM_RECIPE_ID && r.id !== MULTICAM_AUTO_RECIPE_ID);
+    const panelRecipes = describeRecipes().filter((r) => r.id !== FAMILY_FILM_RECIPE_ID && r.id !== MULTICAM_AUTO_RECIPE_ID && r.id !== STORY_RECIPE_ID); // and the story (wave 7): its own dialog, planned by planStory
     expect(panelRecipes.map((r) => r.id).filter((id) => !RECIPE_FORM_IDS.includes(id))).toEqual([]);
     expect(RECIPE_FORM_IDS).not.toContain(FAMILY_FILM_RECIPE_ID);
+    expect(RECIPE_FORM_IDS).not.toContain(STORY_RECIPE_ID);
     for (const selected of [s.picClip, s.songClip, undefined]) {
       const src = recipeSources(s.doc, selected);
       for (const r of panelRecipes) {

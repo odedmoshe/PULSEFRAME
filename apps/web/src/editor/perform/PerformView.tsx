@@ -13,6 +13,9 @@ import { defaultBank, performGrid, type ApplyTakeArgs, type Chip, type PadBank, 
 import { api } from '../../api.ts';
 import { Timer } from 'lucide-react';
 import { Button, Dialog, Seg, Slider, Switch, Tabs, Tooltip } from '../../ds/index.ts';
+import { StoryTapView } from '../story/StoryTapView.tsx';
+import { storyStrings } from '../story/story.strings.ts';
+import { STORY_TESTIDS } from '../story/story.testids.ts';
 import { useEditorState } from '../store.ts';
 import { analyseCalibration, heardPerfMs, outputLatencyMs, scheduleClicks, type CalibrationResult, type ClickContext } from './calibration.ts';
 import { liveDocument, padStatus, planTake, resolvePadAssets, TapCapture, type PadStatus, type PlanFailure, type TakePlan } from './capture.ts';
@@ -56,7 +59,10 @@ export function PerformView() {
   const S = performT(lang);
   const doc = state.doc;
   const [prefs, setPrefsRaw] = useState<PerformPrefs>(() => loadPrefs());
-  const [tab, setTab] = useState<'pads' | 'camera'>('pads');
+  const [tab, setTab] = useState<'pads' | 'camera' | 'story'>('pads');
+  // «ספרו מה היה» (wave 7 story track): while a story draft exists the «סיפור» tab is offered, and chosen when the draft appears
+  const storyDraft = !!state.storyDraft;
+  useEffect(() => { setTab((cur) => (storyDraft ? 'story' : cur === 'story' ? 'pads' : cur)); }, [storyDraft]);
   const [phase, setPhase] = useState<Phase>('idle');
   const [take, setTake] = useState<TakePlan | null>(null);
   const [chips, setChips] = useState<Chip[]>([]);
@@ -269,12 +275,14 @@ export function PerformView() {
   return (
     <section className="pf-ds pf-perform pf-force-dark" data-testid={ID.view} data-phase={phase} aria-label={S('pv.aria.view')} dir={lang === 'he' ? 'rtl' : 'ltr'}>
       <p className="pf-sr" role="status" aria-live="polite" data-testid={ID.live}>{liveText}</p>
-      {tab === 'camera' ? (
+      {tab === 'story' && storyDraft ? (
+        <StoryTapView lang={lang} onDone={() => setTab('pads')} />
+      ) : tab === 'camera' ? (
         <CameraOverlay lang={lang} camera={prefs.camera} onCamera={(c) => setPrefs((p) => ({ ...p, camera: c }))} say={say} onClose={() => setTab('pads')} />
       ) : (
         <div className="pf-perform-panel">
           <div className="pf-perform-top">
-            <Tabs label={S('pv.cam.tabs')} value={tab} onChange={(id) => setTab(id as 'pads' | 'camera')} tabs={[{ id: 'pads', label: S('pv.cam.pads') }, { id: 'camera', label: t('perform.camera'), testId: ID.camera }]} />
+            <Tabs label={S('pv.cam.tabs')} value={tab} onChange={(id) => setTab(id as 'pads' | 'camera' | 'story')} tabs={[{ id: 'pads', label: S('pv.cam.pads') }, { id: 'camera', label: t('perform.camera'), testId: ID.camera }, ...(storyDraft ? [{ id: 'story', label: storyStrings(lang).tab, testId: STORY_TESTIDS.tab }] : [])]} />
             <div className="pf-perform-transport" role="group" aria-label={S('pv.record')}>
               {phase === 'idle' && <Button variant="primary" onClick={record} keys={['R']} data-testid={ID.record} disabledReason={!bank ? S('pv.plannerMissing') : undefined}>{S('pv.record')}</Button>}
               {phase === 'recording' && <Button variant="danger" onClick={stop} keys={['Space']} data-testid={ID.stop}>{S('pv.stop')}</Button>}

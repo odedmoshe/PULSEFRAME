@@ -15,6 +15,7 @@ import { own } from './own.ts';
 import { flashGapFrames } from './flashSafety.ts';
 import { clipEnd } from './validate.ts';
 import { FAMILY_FILM_RECIPE_ID, FamilyFilmParamsSchema } from './familyFilmContract.ts';
+import { STORY_RECIPE_ID, StoryParamsSchema } from './storyContract.ts';
 import type { LevelEnvelope } from './multicamEnvelope.ts';
 import { MULTICAM_AUTO_RECIPE_ID, MulticamAutoParams } from './multicamApi.ts';
 import { planMulticamAuto } from './multicamAuto.ts';
@@ -90,13 +91,16 @@ export const RECIPES = [
   // auto-switch of a multicam program (ADR-0020): planned on the CURRENT document and regenerated in place (isInPlaceRecipe);
   // it has its own sheet in the multicam panel, not a form in the recipes panel
   { id: MULTICAM_AUTO_RECIPE_ID, name: { he: 'החלפת זוויות אוטומטית', en: 'Auto-switch angles' }, description: 'Heuristic: cut a multicam program to the angle of the clearly loudest mic, and to the wide angle when both or nobody speak. Not speaker identification.', params: MulticamAutoParams, needs: 'a synced multicam group with speakers mapped to mics, and level envelopes (built on demand)', regenerable: true, aiInput: null, inPlace: true },
+  // «ספרו מה היה» (wave 7 story track, storyContract.ts): planned by planStory and applied through apply_template, so a run of it is
+  // recorded as 'template:tpl.story'; its own dialog, not a form in the recipes panel
+  { id: STORY_RECIPE_ID, name: { he: 'ספרו מה היה', en: 'Tell what happened' }, description: 'A film built on a recorded narration: each picture starts where you tapped while listening (or at measured pauses of the voice when there is no tap), with the narration, an opening title and music lowered under the voice. One undoable step; hand edits survive rebuilding. Heuristic level measurement; no model, no speech recognition.', params: StoryParamsSchema, needs: 'a sound file as narration (record it in the editor or bring a voice memo); taps from the editor\'s tap-along, or none', regenerable: true, aiInput: null },
 ] as const;
 /**
  * Recipes whose runs record where each clip was placed (run.ranges, apply_recipe recordRanges), so that a clip deleted by hand
  * stays deleted on regeneration: the regenerable recipes that remove and re-plan their clips (beat-montage). Not the in-place
  * multicam auto-switch (switch_angles never fills a gap) and not the family film (its slot records say it).
  */
-export const recordsRanges = (id: string): boolean => { const r = RECIPES.find((x) => x.id === id) as { regenerable: boolean; inPlace?: boolean } | undefined; return !!r && r.regenerable && !r.inPlace && id !== FAMILY_FILM_RECIPE_ID; };
+export const recordsRanges = (id: string): boolean => { const r = RECIPES.find((x) => x.id === id) as { regenerable: boolean; inPlace?: boolean } | undefined; return !!r && r.regenerable && !r.inPlace && id !== FAMILY_FILM_RECIPE_ID && id !== STORY_RECIPE_ID; };
 /**
  * A recipe regenerated IN PLACE (ADR-0020): regenerateRecipe removes nothing, plans on the current document with the
  * protected ranges, and passes keepIds = the clips edited by hand (apps/server/src/recipes.ts, W2).
@@ -342,5 +346,6 @@ export function planRecipe(doc: ProjectDocument, recipeId: string, params: unkno
   if (recipeId === 'portrait-blur') return planPortraitBlur(doc, params);
   if (recipeId === MULTICAM_AUTO_RECIPE_ID) return planMulticamAuto(doc, params, ctx);
   if (recipeId === FAMILY_FILM_RECIPE_ID) throw new RecipeError('invalid_args', 'family-film is planned by planFamilyFilm; the server applies it through apply_template', 'Use the recipe routes (POST /api/v1/projects/{id}/recipes/family-film/plan or /apply) or the MCP recipe tools, which the server answers with the film planner.');
+  if (recipeId === STORY_RECIPE_ID) throw new RecipeError('invalid_args', 'story is planned by planStory; the server applies it through apply_template', 'Use the recipe routes (POST /api/v1/projects/{id}/recipes/story/plan or /apply) or the MCP recipe tools, which the server answers with the story planner.');
   throw new RecipeError('not_found', `recipe "${recipeId}" does not exist`, `Available: ${RECIPES.map((r) => r.id).join(', ')}`);
 }

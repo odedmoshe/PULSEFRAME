@@ -35,6 +35,8 @@ import { CAPTURE_MAX_YEAR, CAPTURE_MIN_YEAR, MAX_PEOPLE, MAX_PERSON_NAME, WALL_D
 import { peopleOf, personNameKey, personOf, storedPersonName } from './people.ts';
 import { fieldUsersOfPerson } from './fields.ts';
 import { isValidGregorian } from './hebrewCalendar.ts';
+import { untagPerson } from './sourceRanges.ts';
+import { SOURCE_RANGE_SUMMARIES } from './sourceRangesContract.ts';
 
 /**
  * True: the three apply bodies are built (W1). The operations fuzz (packages/evals/src/ops-fuzz.gen.ts) draws the people rows
@@ -165,15 +167,17 @@ defineOp({
 defineOp({
   name: 'remove_person',
   version: 1,
-  description: 'Remove a person from the project. Refused while a title (or a format\'s wording of one) holds a field for them; the titles are listed. Make those titles plain text first, or delete the fields.',
+  description: 'Remove a person from the project. Refused while a title (or a format\'s wording of one) holds a field for them; the titles are listed. Make those titles plain text first, or delete the fields. The person is also taken off every marked range (pearl) they are tagged in, and a "who is in it" tag left with nobody is removed; the summary says how many. Only the project owner\'s own session may remove a person who is tagged.',
   args: RemovePersonArgs,
   apply(d, a) {
     const p = mustPerson(d, a.personId);
     const users = fieldUsersOfPerson(d, p.id);
     if (users.length) throw peopleRefusal('personInUse', { personId: p.id, clipIds: users.slice(0, 50) }, users.length);
+    // marked ranges (wave 7 pearls): the person leaves every range (the owner's own session only; the server refuses others)
+    const untagged = untagPerson(d, p.id);
     delete d.people![p.id];
     // a project without people is stored exactly as before this build: no `people` key
     if (Object.keys(d.people!).length === 0) delete d.people;
-    return { affectedIds: [p.id], summary: PERSON_SUMMARIES.removed(p.name) };
+    return { affectedIds: [p.id, ...untagged], summary: PERSON_SUMMARIES.removed(p.name) + (untagged.length ? SOURCE_RANGE_SUMMARIES.untagged(untagged.length) : '') };
   },
 });

@@ -3,11 +3,12 @@
  * (replace what the last run created and nobody touched; keep what was edited by hand).
  */
 import * as T from '@pulseframe/time';
-import { FAMILY_FILM_RECIPE_ID, FAMILY_FILM_RUN_RECIPE_ID, timeOriginSeconds, closedGapOnly, findClip, fingerprint, isInPlaceRecipe, onOtherTrack, MULTICAM_AUTO_RECIPE_ID, multicamGroupOf, planRecipe, RecipeError, recordsRanges, type LevelEnvelope, type PlanContext, type RecipePlan, type RegenerateOptions, type TimeRange } from '@pulseframe/core';
+import { FAMILY_FILM_RECIPE_ID, FAMILY_FILM_RUN_RECIPE_ID, STORY_RECIPE_ID, STORY_RUN_RECIPE_ID, timeOriginSeconds, closedGapOnly, findClip, fingerprint, isInPlaceRecipe, onOtherTrack, MULTICAM_AUTO_RECIPE_ID, multicamGroupOf, planRecipe, RecipeError, recordsRanges, type LevelEnvelope, type PlanContext, type RecipePlan, type RegenerateOptions, type TimeRange } from '@pulseframe/core';
 import { envelopeOf } from './envelope.ts';
 import { multicamDerivatives } from './multicamSync.ts';
 import { applyFamilyFilmFor, planFamilyFilmFor, regenerateFamilyFilmFor } from './familyFilm.ts';
 import { own } from '@pulseframe/core';
+import { applyStoryFor, planStoryFor, regenerateStoryFor } from './story.ts';
 import type { Principal } from './auth.ts';
 import { detectSilences, heavy } from './analysis.ts';
 import type { Governance } from './governance.ts';
@@ -54,6 +55,8 @@ const needsCaller = (gov?: Governance, principal?: Principal): { gov: Governance
 };
 export async function planRecipeFor(store: Store, projectId: string, recipeId: string, params: unknown, gov?: Governance, principal?: Principal) {
   if (recipeId === FAMILY_FILM_RECIPE_ID) { const c = needsCaller(gov, principal); return planFamilyFilmFor(store, c.gov, c.principal, projectId, params); }
+  // «ספרו מה היה» (wave 7 story track): planned by its own planner, applied through apply_template (story.ts)
+  if (recipeId === STORY_RECIPE_ID) { const c = needsCaller(gov, principal); return planStoryFor(store, c.gov, c.principal, projectId, params); }
   const p = store.getProject(projectId);
   const ctx = await context(store, projectId, recipeId, params);
   return view(p.revision, wrap(() => planRecipe(p.doc, recipeId, params, ctx)));
@@ -61,6 +64,7 @@ export async function planRecipeFor(store: Store, projectId: string, recipeId: s
 
 export async function applyRecipe(store: Store, gov: Governance, principal: Principal, projectId: string, recipeId: string, params: unknown, expectedRevision?: number) {
   if (recipeId === FAMILY_FILM_RECIPE_ID) return applyFamilyFilmFor(store, gov, principal, projectId, params, expectedRevision);
+  if (recipeId === STORY_RECIPE_ID) return applyStoryFor(store, gov, principal, projectId, params, expectedRevision);
   const p = store.getProject(projectId);
   const ctx = await context(store, projectId, recipeId, params);
   const plan = wrap(() => planRecipe(p.doc, recipeId, params, ctx));
@@ -69,11 +73,16 @@ export async function applyRecipe(store: Store, gov: Governance, principal: Prin
   return { revision: r.revision, runId: r.results?.[0]?.output?.runId ?? null, createdIds: r.results?.[0]?.output?.createdIds ?? [], steps: plan.steps, basis: plan.basis, alternatives: plan.alternatives, ...(plan.skippedClips ? { skippedClips: plan.skippedClips } : {}), ...(r.proposal ? { proposal: r.proposal } : {}) };
 }
 
-export async function regenerateRecipe(store: Store, gov: Governance, principal: Principal, projectId: string, runId: string, newParams?: unknown, options: RegenerateOptions = {}) {
+/**
+ * `expectedRevision` (the route's body; the pre-pass of the story track fixed the route that dropped it): the commit is made against
+ * it, so a regeneration planned on an older revision is refused (409) instead of silently built on a moved project.
+ */
+export async function regenerateRecipe(store: Store, gov: Governance, principal: Principal, projectId: string, runId: string, newParams?: unknown, options: RegenerateOptions = {}, expectedRevision?: number) {
   const p = store.getProject(projectId);
   const run = own(p.doc.recipeRuns, runId);
   if (!run) throw new ApiError(404, 'not_found', `recipe run ${runId} not found`, { runId });
-  if (run.recipeId === FAMILY_FILM_RUN_RECIPE_ID) return regenerateFamilyFilmFor(store, gov, principal, projectId, runId, newParams, undefined, options);
+  if (run.recipeId === FAMILY_FILM_RUN_RECIPE_ID) return regenerateFamilyFilmFor(store, gov, principal, projectId, runId, newParams, expectedRevision, options);
+  if (run.recipeId === STORY_RUN_RECIPE_ID) return regenerateStoryFor(store, gov, principal, projectId, runId, newParams, expectedRevision, options);
   // "Protected" = a clip the run created whose content no longer matches what the run left (compared by content fingerprint,
   // so the answer does not depend on history: an undo that restores a hand edit restores its protection too).
   // A run that records where its clips were, with their tracks (beat-montage from the amendment of 2026-11-24 on): a clip that
@@ -109,6 +118,6 @@ export async function regenerateRecipe(store: Store, gov: Governance, principal:
   const removed = Object.keys(removedRanges).filter((id) => !filled(removedRanges[id]!));
   const movedBack = moved.filter((id) => !protectedIds.includes(id));
   const steps = [...plan.steps, ...(movedBack.length ? [`Place ${movedBack.length} clip(s) again that had moved earlier only because a delete before them closed the gap`] : [])].slice(0, 50);
-  const r = gov.commitAs(principal, { projectId, expectedRevision: p.revision, allowInternal: true, label: `Regenerate recipe: ${plan.steps[0] ?? run.recipeId}`.slice(0, 120), ops: [{ op: 'apply_recipe', args: { runId, recipeId: run.recipeId, params: plan.params, steps, removeClipIds: removable, keepIds: protectedIds, ops: plan.ops, ...(recordsRanges(run.recipeId) ? { recordRanges: true, recordTracks: true, ...(Object.keys(removedRanges).length ? { keepRanges: removedRanges } : {}) } : {}) } }] }) as any;
+  const r = gov.commitAs(principal, { projectId, expectedRevision: expectedRevision ?? p.revision, allowInternal: true, label: `Regenerate recipe: ${plan.steps[0] ?? run.recipeId}`.slice(0, 120), ops: [{ op: 'apply_recipe', args: { runId, recipeId: run.recipeId, params: plan.params, steps, removeClipIds: removable, keepIds: protectedIds, ops: plan.ops, ...(recordsRanges(run.recipeId) ? { recordRanges: true, recordTracks: true, ...(Object.keys(removedRanges).length ? { keepRanges: removedRanges } : {}) } : {}) } }] }) as any;
   return { revision: r.revision, runId, replaced: removable.length, protected: protectedIds, removed, movedBack, createdIds: r.results?.[0]?.output?.createdIds ?? [], steps, basis: plan.basis, alternatives: plan.alternatives };
 }

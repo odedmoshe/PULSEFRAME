@@ -43,6 +43,7 @@ import { chooseFormat, formatOptions, openCardMenu } from './editor-ui.ts';
 import { makeRenderCacheCtx, renderCacheA11yScenarios } from './a11y-render-cache.ts';
 import { craftA11yScenarios } from './a11y-craft.ts';
 import { stabiliseA11yScenarios } from './a11y-stabilise.ts';
+import { pearlsA11yScenarios } from './a11y-pearls.ts';
 import { makeApi, ownerApi } from './incremental-fixtures.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
 import { auditInPage, focusAudit, toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
@@ -835,6 +836,12 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      // marked ranges «פנינים» (wave 7): the list, the pearl form, «מי בקליפ?» and the screen-time table (a11y-pearls.ts, builder C)
+      for (const sc of pearlsA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       if (await page.getByTestId('cache-fast-switch').count() === 0) { await page.getByTestId('export').click(); await page.getByTestId('cache-fast-switch').waitFor({ timeout: 8000 }).catch(() => {}); }
       if ((await page.getByTestId('cache-fast-switch').getAttribute('aria-checked').catch(() => null)) === 'true') await page.getByTestId('cache-fast-switch').click();
       if (await page.getByTestId('export-sheet').count()) { await page.keyboard.press('Escape'); await page.getByTestId('export-sheet').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {}); }
@@ -948,6 +955,62 @@ async function main() {
         const note = await importNoteState(page, lang, revArchive);
         await auditState('archive-import-note', note.extra);
         Object.assign(states.at(-1), await note.close());
+      }
+      // «שליחה ושמירה» (wave 7 send): the tile with its size choices, the fitted size and the refusal in the sheet; the file card with the
+      // fit line and the findings (one export of a film with a one-second gap, fitted to 16 MB); the sound panel with the limiter on and
+      // the clip loudness match planned and then done. Every state is audited like the resting page; the dialog checks hold for the sheet.
+      {
+        const ff = (args: string[]) => execFileSync('ffmpeg', ['-v', 'error', '-y', ...args]);
+        const upl = async (id: string, file: string) => (await (await fetch(`${s.url}/api/v1/projects/${id}/assets`, { method: 'POST', headers: { ...h, 'x-filename': path.basename(file) }, body: fs.readFileSync(file) })).json()) as any;
+        const talk = path.join(art, `send-talk-${lang}.mp4`);
+        ff(['-f', 'lavfi', '-t', '3', '-i', 'testsrc2=s=640x360:r=30', '-f', 'lavfi', '-t', '3', '-i', 'sine=frequency=330:sample_rate=48000', '-vf', 'format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-shortest', talk]);
+        const gapPid = (await post('/projects', { name: `a11y-send-gap-${lang}`, width: 640, height: 360 })).project.id as string;
+        const gapUp = await upl(gapPid, talk);
+        await post(`/projects/${gapPid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: gapUp.assetId, start: f(0), duration: f(45) } }] });
+        await post(`/projects/${gapPid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: gapUp.assetId, start: f(75), duration: f(45) } }] });
+        await page.goto(`${s.ownerUrl}&project=${gapPid}`);
+        await page.getByTestId('timecode').waitFor({ timeout: 15000 });
+        if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+        const ss = await dialogBehaviour('export-sheet', async () => { await page.getByTestId('export').click(); }, '[data-testid=export]');
+        await page.locator('[data-testid=export-dest][data-id=whatsapp]').click();
+        await page.getByTestId('send-size').waitFor({ timeout: 8000 }).catch(() => {});
+        await auditState('send-tile', { startsInside: ss.startsInside, tabStepsThatLeftTheDialog: ss.tabStepsThatLeftTheDialog, shown: (await page.getByTestId('send-size').count()) === 1 && (await page.getByTestId('send-size-choice').count()) >= 3 && (await page.locator('[data-testid=send-size-choice][aria-checked=true]').count()) === 0 && (await page.getByTestId('export-start').getAttribute('aria-disabled')) === 'true' }, true);
+        await page.getByTestId('send-size-input').fill('0.5');
+        await page.getByTestId('send-size-refusal').waitFor({ timeout: 5000 }).catch(() => {});
+        await auditState('send-size-refusal', { shown: (await page.getByTestId('send-size-refusal').count()) === 1 && (await page.getByTestId('export-start').getAttribute('aria-disabled')) === 'true' }, true);
+        await page.locator('[data-testid=send-size-choice][data-mb="16"]').click();
+        await page.getByTestId('send-size-fitted').waitFor({ timeout: 15000 }).catch(() => {});
+        await auditState('send-size-fitted', { shown: (await page.getByTestId('send-size-fitted').count()) === 1 && (await page.getByTestId('send-size-refusal').count()) === 0 }, true);
+        await page.getByTestId('export-start').click();
+        await page.getByTestId('export-done').waitFor({ timeout: 180000 }).catch(() => {});
+        await page.getByTestId('export-checks').waitFor({ timeout: 10000 }).catch(() => {});
+        await auditState('send-file-card', { shown: (await page.getByTestId('export-fit-line').count()) === 1 && (await page.getByTestId('export-checks').count()) === 1 && (await page.locator('[data-testid=export-check-item]').count()) >= 1 && (await page.locator('[data-testid=export-check-jump]').count()) >= 1 }, true);
+        Object.assign(states.at(-4), await ss.close());
+        const soundPid = (await post('/projects', { name: `a11y-send-sound-${lang}`, width: 640, height: 360 })).project.id as string;
+        const wq = path.join(art, `send-quiet-${lang}.wav`), wl = path.join(art, `send-loud-${lang}.wav`);
+        ff(['-f', 'lavfi', '-t', '6', '-i', 'sine=frequency=220:sample_rate=48000', '-af', 'volume=0.05', '-ac', '2', '-c:a', 'pcm_s16le', wq]);
+        ff(['-f', 'lavfi', '-t', '6', '-i', 'sine=frequency=330:sample_rate=48000', '-af', 'volume=0.4', '-ac', '2', '-c:a', 'pcm_s16le', wl]);
+        const aq = await upl(soundPid, wq), al = await upl(soundPid, wl);
+        const r1 = (await post(`/projects/${soundPid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: aq.assetId, start: f(0) } }] })).results[0].output;
+        const r2 = (await post(`/projects/${soundPid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: al.assetId, start: f(200) } }] })).results[0].output;
+        const c1 = (r1.audioClipId ?? r1.clipId) as string, c2 = (r2.audioClipId ?? r2.clipId) as string;
+        await page.goto(`${s.ownerUrl}&project=${soundPid}`);
+        await page.getByTestId('timecode').waitFor({ timeout: 15000 });
+        if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
+        await page.getByTestId('master-limiter-switch').waitFor({ timeout: 15000 }).catch(() => {});
+        await page.getByTestId('master-limiter-switch').focus();
+        await page.keyboard.press('Enter'); // outside a dialog the editor's Space plays and pauses, even on a focused button
+        await page.getByTestId('master-limiter-ceiling').waitFor({ timeout: 8000 }).catch(() => {});
+        await auditState('limiter-on', { shown: (await page.getByTestId('master-limiter-ceiling').count()) === 1 && (await page.getByTestId('meter-reduction').count()) === 1 });
+        await page.locator(`.clip[data-clip-id="${c1}"]`).first().click();
+        await page.locator(`.clip[data-clip-id="${c2}"]`).first().click({ modifiers: ['Shift'] });
+        await page.getByTestId('loudness-match-run').focus();
+        await page.keyboard.press('Enter');
+        await page.getByTestId('loudness-match-plan').waitFor({ timeout: 60000 }).catch(() => {});
+        await auditState('loudness-match-plan', { shown: (await page.locator('[data-testid=loudness-match-preview] li').count()) === 2 });
+        await page.getByTestId('loudness-match-apply').click();
+        await page.getByTestId('loudness-match-result').waitFor({ timeout: 15000 }).catch(() => {});
+        await auditState('loudness-match-result', { shown: (await page.locator('[data-testid=loudness-match-result] li').count()) === 2 && (await page.getByTestId('loudness-match-undo').count()) === 1 });
       }
       // the start hub of an empty project
       await page.goto(`${s.ownerUrl}&project=${emptyPid}`);

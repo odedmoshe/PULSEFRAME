@@ -230,6 +230,7 @@ describe('ops given an id that names an inherited member', () => {
       ['transcript', { kind: 'transcript', transcript: { ...s.doc.transcripts[s.assetId]!, assetId: '__proto__' } }],
       ['analysis', { kind: 'analysis', analysis: { ...s.doc.analyses[s.assetId]!, assetId: '__proto__' } }],
       ['recipeRun', { kind: 'recipeRun', run: { ...s.doc.recipeRuns[s.runId]!, id: '__proto__' } }],
+      ['sourceRange', { kind: 'sourceRange', range: { id: '__proto__', assetId: s.assetId, kind: 'pearl', span: { start: T.rt(1, 1), end: T.rt(2, 1) }, label: '', createdBy: 'test' } }],
     ];
     for (const [kind, state] of states) {
       // through a transaction (the guard answers first: the id is an argument named `id` or `assetId`)
@@ -292,6 +293,7 @@ describe('every registered op', () => {
       apply_text_preset: title, update_text: title, set_text_animation: title, add_text: { trackId: undefined }, update_cue: cue, merge_cues: cue,
       set_volume_keyframe: sound, draw_volume: sound, delete_volume_keyframe: sound, set_clip_fades: sound, set_audio_crossfade: sound, fit_music: sound,
       set_track_audio: soundTrack, add_adjustment: { trackId: undefined }, set_clip_follow: title, set_text_fields: title, match_clip_loudness: sound,
+      paste_attributes: { fromClipId: s.clipId, toClipIds: [s.textId], groups: ['effects'] },
       add_audio_effect: sound, apply_audio_preset: sound, update_audio_effect: { ...sound, effectId: s.audioEffectId }, remove_audio_effect: { ...sound, effectId: s.audioEffectId }, set_ducking: { ...soundTrack, sourceTrackIds: [s.trackId] }, set_caption_style: captions, apply_caption_look: captions, add_cue: captions,
     };
     // Arguments the schema alone cannot make meaningful.
@@ -341,6 +343,7 @@ describe('every registered op', () => {
       apply_recipe: { runId: s.runId, recipeId: 'fixture', params: {}, steps: ['again'], removeClipIds: [], keepIds: [s.clipId], ops: [{ op: 'add_marker', args: { time: f(200) } }] },
       restore_entities: { targets: [{ id: s.markerId, state: null }] },
       split_clip: { clipId: s.clipId, at: f(60) },
+      set_clip_reverse: { clipId: s.clipId, reverse: true }, set_clip_pitch: { clipId: s.audioClipId, keepPitch: true }, animate_clip: { clipId: s.textId, in: 'fade' },
       rename_asset: { assetId: s.assetId, name: 'b.mp4' },
       remove_marker: { markerId: s.markerId },
       update_marker: { markerId: s.markerId, label: 'x' },
@@ -383,7 +386,7 @@ describe('every registered op', () => {
 });
 
 describe('a document that carries such an id', () => {
-  it('is refused by validation: no asset, sequence, track, clip, marker, motion track or format may be named that way', () => {
+  it('is refused by validation: no asset, sequence, track, clip, marker, motion track, format or marked range may be named that way', () => {
     const s = studio();
     expect(validateProject(s.doc)).toEqual([]);
     for (const id of [...HOSTILE, 'hasOwnProperty']) {
@@ -401,6 +404,11 @@ describe('a document that carries such an id', () => {
       delete tracked.motionTracks[s.motionTrackId];
       Object.defineProperty(tracked.motionTracks, id, { value: { ...mt, id }, enumerable: true, writable: true, configurable: true });
       expect(validateProject(tracked).map((i) => i.code)).toEqual(['reserved_id']);
+      // a marked source range (wave 7 pearls) is an entity of its own as well
+      const ranged = structuredClone(s.doc);
+      ranged.sourceRanges = {};
+      Object.defineProperty(ranged.sourceRanges, id, { value: { id, assetId: s.assetId, kind: 'pearl', span: { start: T.rt(1, 1), end: T.rt(2, 1) }, label: '', createdBy: 'test' }, enumerable: true, writable: true, configurable: true });
+      expect(validateProject(ranged).map((i) => i.code)).toContain('reserved_id');
     }
     const mismatched = structuredClone(s.doc);
     mismatched.motionTracks.mtk_other = { ...mismatched.motionTracks[s.motionTrackId]!, id: 'mtk_b' };

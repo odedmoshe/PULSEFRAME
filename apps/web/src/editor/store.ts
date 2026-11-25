@@ -35,6 +35,7 @@ import type { PhoneDropProblem } from './phoneDrop.strings.ts';
 import { RefreshPolicy } from './renderCache.logic.ts';
 import type { DropCodeView, DropPublicView, FamilyFilmParams, FamilyFilmPlanView, FilmExclusion, FilmPick } from '@pulseframe/core';
 import type { ChannelRef, KeyClipboard, KeyRef } from '@pulseframe/core';
+import type { StoryChip, StoryExclusion, StoryParams, StoryPick, StoryPlanView } from '@pulseframe/core';
 import { pruneKeySel } from './keyStrip.math.ts';
 import { nextFromEvent, type LiveChange } from './sync.ts';
 
@@ -181,6 +182,14 @@ export interface EditorState {
   filmSource: FilmSource | null;
   /** The film applied from this tab, for the film bar (undo, other moments, another length, why these clips). Session state only; after a reload the document's run (recipeId template:tpl.family-film) is used. */
   filmRun: FilmRunInfo | null;
+  /** «ספרו מה היה» (wave 7 story track): the dialog is open. Session state only. */
+  storyOpen: boolean;
+  /** What the story dialog was opened with: an event's files or the library selection (openStory). */
+  storySource: StorySource | null;
+  /** The story being made (dialog → tap-along → review): never stored or sent; lost on reload (a saved recording is already in the library). The perform workspace shows its «סיפור» tab while it exists. */
+  storyDraft: StoryDraft | null;
+  /** The story applied from this tab, for the story bar. Session state only; after a reload the document's run (recipeId template:tpl.story) is used. */
+  storyRun: StoryRunInfo | null;
   // ---- keyframe curves and motion paths (ADR-0019): session state, never stored in the document or sent in presence ----
   /** The selected keys of the keyframe strip (one clip at a time); pruned on load when the clip is gone (W2). */
   keySel: { clipId: string; keys: KeyRef[] } | null;
@@ -197,6 +206,15 @@ export interface EditorState {
 export interface FilmSource { assetIds: string[]; event: FamilyFilmParams['event'] }
 /** The film run this tab made (the film bar's and FilmWhy's state). */
 export interface FilmRunInfo { runId: string; params: FamilyFilmParams; picks: FilmPick[]; excluded: FilmExclusion[]; alternatives: FamilyFilmPlanView['alternatives'] }
+/** What the story dialog starts from (StoryEntry → editor.openStory). */
+export interface StorySource { assetIds: string[]; event: StoryParams['event'] }
+/**
+ * The story being made (session state; W3 fills it): the parameters so far (narration, pictures in show order, options, taps), the
+ * server's plan view (its `context` is what the browser plans the ghost with), and the workspace to return to after accept or discard.
+ */
+export interface StoryDraft { params: Partial<StoryParams>; view: StoryPlanView | null; returnTo: Workspace }
+/** The story run this tab made (the story bar's state). */
+export interface StoryRunInfo { runId: string; params: StoryParams; picks: StoryPick[]; excluded: StoryExclusion[]; chips: StoryChip[] }
 /** localStorage key of the «ייצוא מהיר» switch. */
 export const FAST_EXPORT_KEY = 'pf.fastExport';
 /** localStorage key of the motion path switch (ADR-0019; view.motionPath). */
@@ -275,6 +293,7 @@ export class Editor {
     segmentPlan: { status: 'off', view: null, revision: null }, fastExport: readFastExport(), planOptions: {}, // the export sheet's first pick (the computer destination: high quality, whose options are all defaults)
     imports: { local: [], jobs: [], room: null, skipped: null }, phoneDropOpen: false, drop: null, dropLive: null, dropProblem: null, planBlockers: [], missingMedia: [],
     filmOpen: false, filmSource: null, filmRun: null,
+    storyOpen: false, storySource: null, storyDraft: null, storyRun: null,
     keySel: null, keyClipboard: null, curvePicker: null, pathOn: readPathOn(), playSharpness: readPlaySharpness(),
   };
   /**
@@ -1023,6 +1042,11 @@ export class Editor {
   openFilm(source: FilmSource) { this.set({ filmOpen: true, filmSource: { assetIds: [...source.assetIds], event: source.event ?? null } }); }
   closeFilm() { this.set({ filmOpen: false }); }
   setFilmRun(run: FilmRunInfo | null) { this.set({ filmRun: run }); }
+  /** «ספרו מה היה» (wave 7): open the dialog on an event's files or a selection; close it; the draft while tapping; the run this tab made. */
+  openStory(source: StorySource) { this.set({ storyOpen: true, storySource: { assetIds: [...source.assetIds], event: source.event ?? null } }); }
+  closeStory() { this.set({ storyOpen: false }); }
+  setStoryDraft(draft: StoryDraft | null) { this.set({ storyDraft: draft }); }
+  setStoryRun(run: StoryRunInfo | null) { this.set({ storyRun: run }); }
   openPhoneDrop() { this.set({ phoneDropOpen: true }); }
   hidePhoneDrop() { this.set({ phoneDropOpen: false }); }
   /** The live code of this project, if any (after a reload; a code never survives a server restart: then it is gone, said so). */

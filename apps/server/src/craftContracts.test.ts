@@ -1,8 +1,8 @@
 /**
- * The server contract of the craft track (wave 7; craft/contract.ts), through the real app and the real MCP handler, before W2:
- * every route is registered, documented and classified; the owner rule and the propose rule hold before anything else; every
- * route answers the honest 501 craft_not_built; MCP find_text answers the same; storage lists the versions table for project
- * deletion and keeps the files a version names. The it.todo rows name what W2 makes pass (in craft/routes.test.ts).
+ * The server contract of the craft track (wave 7; craft/contract.ts), through the real app and the real MCP handler: every route
+ * is registered, documented and classified; the owner rule and the propose rule hold before anything else; with W2 built no
+ * route answers 501 and an unknown project is 404 first; MCP find_text answers; storage lists the versions table for project
+ * deletion and keeps the files a version names. What W2 built is tested in craft/routes.test.ts and craft/versions.test.ts.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -15,7 +15,7 @@ import { Derivatives } from './derive.ts';
 import { Exporter } from './export.ts';
 import { Governance, type Principal } from './governance.ts';
 import { createApp } from './http.ts';
-import { CRAFT_ROUTES, CRAFT_SERVER_REFUSALS, VERSIONS_TABLE } from './craft/contract.ts';
+import { CRAFT_ROUTES, CRAFT_SERVER_BUILT, CRAFT_SERVER_REFUSALS, VERSIONS_TABLE } from './craft/contract.ts';
 import { createMcp } from './mcp.ts';
 import { buildOpenApi } from './openapi.ts';
 import { PEOPLE_MCP_TOOLS, PEOPLE_REST_SURFACES } from './peopleSurfaces.ts';
@@ -89,7 +89,7 @@ describe('the craft routes are registered, documented and classified', () => {
 });
 
 const bodyFor = (route: string) => (route.endsWith('/text/find') ? { text: 'נעה', wholeWord: false, ignoreMarks: true, finalsEqual: true, ignoreCase: false } : route.endsWith('/versions') || route.startsWith('PUT') ? { name: 'לפני הקיצור' } : {});
-describe('before W2: honest 501, owner and propose rules first', () => {
+describe('built (W2): owner and propose rules first, no 501', () => {
   it('rename and delete refuse an agent with 403 owner_required before anything else', async () => {
     for (const route of CRAFT_ROUTES.filter((r) => r.startsWith('PUT') || r.startsWith('DELETE'))) {
       const r = await rest(agent, route.split(' ')[0]!, urlOf(route), bodyFor(route));
@@ -102,22 +102,23 @@ describe('before W2: honest 501, owner and propose rules first', () => {
       expect({ route, status: r.status, message: r.body?.error?.message }).toEqual({ route, status: 403, message: CRAFT_SERVER_REFUSALS.proposeOnly.message() });
     }
   });
-  it('an observer may not save or restore (403) and reads the list, which answers 501', async () => {
+  it('an observer may not save or restore (403) and reads the list', async () => {
     expect((await rest(observer, 'POST', urlOf(`POST /api/v1/projects/:id/versions`), { name: 'x' })).status).toBe(403);
-    expect((await rest(observer, 'GET', urlOf(`GET /api/v1/projects/:id/versions`))).status).toBe(501);
+    expect((await rest(observer, 'GET', urlOf(`GET /api/v1/projects/:id/versions`))).status).toBe(200);
   });
-  it('every route answers 501 craft_not_built to the owner, with the fixed sentence; an unknown project is 404 first', async () => {
+  it('no route answers 501 craft_not_built to the owner; an unknown project is 404 first', async () => {
+    expect(CRAFT_SERVER_BUILT).toBe(true);
     for (const route of CRAFT_ROUTES) {
       const r = await rest(owner, route.split(' ')[0]!, urlOf(route), route.startsWith('GET') ? undefined : bodyFor(route));
-      expect({ route, status: r.status, code: r.body?.error?.code, message: r.body?.error?.message }).toEqual({ route, status: 501, code: 'craft_not_built', message: CRAFT_SERVER_REFUSALS.notBuilt.message() });
+      expect({ route, notBuilt: r.status === 501 || r.body?.error?.code === 'craft_not_built' }).toEqual({ route, notBuilt: false });
       const missing = await rest(owner, route.split(' ')[0]!, urlOf(route).replace(pid, 'prj_none'), route.startsWith('GET') ? undefined : bodyFor(route));
       expect({ route, status: missing.status }).toEqual({ route, status: 404 });
     }
   });
-  it('MCP find_text answers craft_not_built', async () => {
+  it('MCP find_text answers', async () => {
     const f = await tool(agent, 'find_text', { projectId: pid, text: 'נעה', wholeWord: false, ignoreMarks: true, finalsEqual: true, ignoreCase: false });
-    expect(f.isError).toBe(true);
-    expect(JSON.stringify(f.data)).toContain('craft_not_built');
+    expect(f.isError).toBe(false);
+    expect(f.data).toMatchObject({ matches: [], total: 0, truncated: false });
   });
 });
 
@@ -127,14 +128,4 @@ describe('storage knows the versions table before it exists', () => {
     expect(src).toContain(`'${VERSIONS_TABLE}'`);
     expect(src).toContain(`SELECT doc FROM ${VERSIONS_TABLE}`);
   });
-});
-
-describe('what W2 makes pass (craft/routes.test.ts, craft/versions.test.ts)', () => {
-  it.todo('save: copy = stored document of that revision (V1), privacy_digest stored, storage room 507, version_limit at 50, version_limit_agents at 10');
-  it.todo('list: names, sizes, sameAsCurrent, privacyChanged; never a document; rename and delete owner-only, delete erased from the file');
-  it.todo('privacy gate: a version whose digest differs answers 403 version_privacy_changed to agents and observers on diff and frame; the owner sees it');
-  it.todo('restore: one restore_entities transaction through governance with the caller\'s guard; undo exact; nothing_to_restore, stale_revision, restore_needs_confirmation, restore_too_large, version_conflict');
-  it.todo('people: no birth date in any versions answer to a credential without the people scope (the people walk covers the routes)');
-  it.todo('find: REST POST …/text/find = MCP find_text = core findText over the reader document; truncated at CRAFT_LIMITS.findMatches with the total');
-  it.todo('deleting the project leaves no project_versions row; storage clean-up keeps a file only a version names (V5, V7)');
 });

@@ -101,6 +101,13 @@ export const FamilyFilmParamsSchema = z.object({
     include: AssetIds.max(MOMENTS_MAX_ASSETS).optional(),
     /** assetId -> index into that asset's candidate windows. Read with an own-property test (ids that name Object.prototype members find nothing). */
     window: z.record(z.string().min(1).max(64), z.number().int().min(0).max(MOMENTS_MAX_WINDOWS - 1)).optional(),
+    /**
+     * Marked ranges («פנינים», wave 7): 'prefer' = a chosen file with a pearl (kind pearl, with a span) gets its FIRST pearl (span order,
+     * then range id) as its pick, starting at the pearl's first frame (never centred); its other pearls are named in pearl_left_out
+     * (one_per_file). ABSENT = pearls are not read at all, so a stored run re-plans exactly as before (ADR-0026 amendment); absent from
+     * the resolved params and the run record when not given (never 'off'). Mode 'only' is not in version 1.
+     */
+    pearls: z.enum(['prefer']).optional(),
   }).strict().optional(),
   at: RationalTimeSchema.optional().describe('Frame-aligned start; default 0 on an empty main sequence, else the end of the last picture or title'),
   lang: z.enum(['he', 'en']).optional(), motion: z.enum(['full', 'none']).optional(),
@@ -108,17 +115,22 @@ export const FamilyFilmParamsSchema = z.object({
 export type FamilyFilmParams = z.infer<typeof FamilyFilmParamsSchema>;
 export type ResolvedFilmParams = Required<Omit<FamilyFilmParams, 'event' | 'openingText' | 'closingText' | 'at' | 'picks' | 'musicAssetId'>>
   & Pick<FamilyFilmParams, 'event' | 'openingText' | 'closingText'>
-  & { musicAssetId: string | null; at: z.infer<typeof RationalTimeSchema>; picks: { exclude: string[]; include: string[]; window: Record<string, number> } };
+  & { musicAssetId: string | null; at: z.infer<typeof RationalTimeSchema>; picks: { exclude: string[]; include: string[]; window: Record<string, number>; pearls?: 'prefer' } };
 /** Defaults of the resolved params. */
 export const FILM_DEFAULTS = { targetSeconds: 60, order: 'capture', ownSound: 'under', openingTitle: true, closingCard: true, lang: 'he', motion: 'full' } as const;
 
-export const FILM_REASON_CODES = ['inner_motion', 'measured_moment', 'loud_sound', 'sound_burst', 'sharp', 'active_throughout', 'second_moment', 'chosen_by_you', 'past_clean_stretch', 'not_measured', 'no_clear_moment', 'default_middle', 'whole_clip', 'still'] as const;
+export const FILM_REASON_CODES = ['inner_motion', 'measured_moment', 'loud_sound', 'sound_burst', 'sharp', 'active_throughout', 'second_moment', 'chosen_by_you', 'past_clean_stretch', 'not_measured', 'no_clear_moment', 'default_middle', 'whole_clip', 'still',
+  // marked ranges (wave 7): the owner's own choice («פנינה שסימנתם»), never a measurement; carries rangeId and seconds, never the label
+  'pearl'] as const;
 export type FilmReasonCode = (typeof FILM_REASON_CODES)[number];
-export interface FilmReason { code: FilmReasonCode; /** seconds inside the file, one decimal, for wording only */ fromSecond?: number; toSecond?: number; value?: number; unit?: 'permille' | 'db' | 'ratio' }
+export interface FilmReason { code: FilmReasonCode; /** seconds inside the file, one decimal, for wording only */ fromSecond?: number; toSecond?: number; value?: number; unit?: 'permille' | 'db' | 'ratio'; /** code 'pearl': the marked range (the editor resolves its label from the document; «פנינה שנמחקה» when it is gone) */ rangeId?: string }
 /** removed_by_hand (regeneration): a clip of this file in the last film was deleted by hand, so the file is left out (restoreRemoved brings it back). */
 export const FILM_EXCLUSION_CODES = ['no_room', 'too_short', 'excluded_by_you', 'no_picture', 'kept_by_hand', 'removed_by_hand'] as const;
 export interface FilmExclusion { assetId: string; code: (typeof FILM_EXCLUSION_CODES)[number]; details: Record<string, unknown> }
-export const FILM_WARNING_CODES = ['shorter_than_target', 'longer_than_target', 'music_short', 'low_beat_confidence', 'not_measured', 'no_capture_time', 'mixed_orientation', 'cuts_merged', 'kept_by_hand', 'cut_off_grid_next_to_kept', 'title_resolved_static', 'kept_music_not_followable', 'lead_music_rises', 'pictures_missing', 'removed_by_hand', 'music_removed', 'moved_back'] as const;
+export const FILM_WARNING_CODES = ['shorter_than_target', 'longer_than_target', 'music_short', 'low_beat_confidence', 'not_measured', 'no_capture_time', 'mixed_orientation', 'cuts_merged', 'kept_by_hand', 'cut_off_grid_next_to_kept', 'title_resolved_static', 'kept_music_not_followable', 'lead_music_rises', 'pictures_missing', 'removed_by_hand', 'music_removed', 'moved_back',
+  // marked ranges (wave 7): a pearl longer than the longest slot (details { rangeId, seconds } lost), pearls not in the film
+  // (details.items [{ rangeId, why }], why in FILM_PEARL_LEFT_OUT_WHY), and a pearl with sound under music in mix 'under'
+  'pearl_cut_short', 'pearl_left_out', 'pearl_under_music'] as const;
 export type FilmWarningCode = (typeof FILM_WARNING_CODES)[number];
 export interface FilmWarning { code: FilmWarningCode; message: string; details: Record<string, unknown> }
 export interface FilmPick {
@@ -126,12 +138,19 @@ export interface FilmPick {
   startFrame: number; frames: number;                                  // project frames
   span: { count: number; unit: 'beat' | 'bar' } | null;                // null off the grid: next to a kept clip, or the first pick when music kept by hand was moved off the film start
   sourceInFrame: number | null; sourceFrames: number | null;           // asset frames; null for a still
-  kind: 'measured' | 'default-middle' | 'whole-clip' | 'still';
+  kind: 'measured' | 'default-middle' | 'whole-clip' | 'still' | 'pearl';
   windowIndex: number | null; windowsAvailable: number;
   reasons: FilmReason[]; captureAt: string | null; ownSound: boolean;
+  /** kind 'pearl' (wave 7): the marked range this pick shows. Its key is 'm' + sha256(`${assetId}:p:${rangeId}`)[0..12] (filmPearlKeySource). */
+  rangeId?: string;
 }
 /** What the run record keeps of a pick (params.picked), so "why this clip" survives a reload. */
-export type FilmPicked = Pick<FilmPick, 'key' | 'assetId' | 'kind' | 'windowIndex' | 'reasons'>;
+export type FilmPicked = Pick<FilmPick, 'key' | 'assetId' | 'kind' | 'windowIndex' | 'reasons' | 'rangeId'>;
+/** Why a pearl of a chosen file is not in the film (warning pearl_left_out). */
+export const FILM_PEARL_LEFT_OUT_WHY = ['cap', 'kept_by_hand', 'merged', 'music_end', 'too_short', 'one_per_file'] as const;
+export type FilmPearlLeftOutWhy = (typeof FILM_PEARL_LEFT_OUT_WHY)[number];
+/** The text hashed into a pearl pick's key: stable whatever else changes, and never equal to an ordinal key's `${assetId}:${n}`. */
+export const filmPearlKeySource = (assetId: string, rangeId: string): string => `${assetId}:p:${rangeId}`;
 
 /**
  * A title of the film. `text` is what the title clip holds; `resolved` what it shows now, when the server could work it out.
@@ -226,12 +245,16 @@ export function filmRunParams(params: Readonly<Record<string, unknown>>): Record
   const { picked: _p, removedPicks: _r, cutOn: _c, templateVersion: _v, ...rest } = params;
   return rest;
 }
-/** A pick of the film deleted by hand: its key, its file and the window it showed (null: the file's only possible pick). */
-export interface FilmRemovedPick { key: string; assetId: string; windowIndex: number | null }
+/**
+ * A pick of the film deleted by hand: its key, its file and the window it showed (null: the file's only possible pick). rangeId
+ * (wave 7): a pearl pick; then only that pearl leaves the film (tested BEFORE the windowIndex null branch), never the file, and a
+ * range no longer in the document leaves nothing out.
+ */
+export interface FilmRemovedPick { key: string; assetId: string; windowIndex: number | null; rangeId?: string }
 /** The picks deleted by hand a run record carries on (params.removedPicks), or []. Never throws. */
 export function filmRunRemovedPicks(params: Readonly<Record<string, unknown>>): FilmRemovedPick[] {
   const p = Object.hasOwn(params, 'removedPicks') ? params.removedPicks : undefined;
-  return Array.isArray(p) ? p.filter((x): x is FilmRemovedPick => !!x && typeof x === 'object' && typeof x.key === 'string' && typeof x.assetId === 'string' && (x.windowIndex === null || Number.isInteger(x.windowIndex))).map((x) => ({ key: x.key, assetId: x.assetId, windowIndex: x.windowIndex })) : [];
+  return Array.isArray(p) ? p.filter((x): x is FilmRemovedPick => !!x && typeof x === 'object' && typeof x.key === 'string' && typeof x.assetId === 'string' && (x.windowIndex === null || Number.isInteger(x.windowIndex))).map((x) => ({ key: x.key, assetId: x.assetId, windowIndex: x.windowIndex, ...(typeof x.rangeId === 'string' ? { rangeId: x.rangeId } : {}) })) : [];
 }
 /**
  * The params a film run records (the server and the test double): the plan's params, the picks (picked, so "why this clip"
@@ -239,7 +262,7 @@ export function filmRunRemovedPicks(params: Readonly<Record<string, unknown>>): 
  * the cuts followed after the music was deleted by hand (cutOn). Both are optional additions: a record without them reads as before.
  */
 export function filmRunRecordParams(plan: Pick<FamilyFilmPlan, 'params' | 'picks' | 'musicRemoved'>, removedPicks: readonly FilmRemovedPick[]): Record<string, unknown> {
-  const picked: FilmPicked[] = plan.picks.map((k) => ({ key: k.key, assetId: k.assetId, kind: k.kind, windowIndex: k.windowIndex, reasons: k.reasons }));
+  const picked: FilmPicked[] = plan.picks.map((k) => ({ key: k.key, assetId: k.assetId, kind: k.kind, windowIndex: k.windowIndex, reasons: k.reasons, ...(k.rangeId !== undefined ? { rangeId: k.rangeId } : {}) }));
   return { ...plan.params, picked, ...(removedPicks.length ? { removedPicks: removedPicks.map((r) => ({ ...r })) } : {}), ...(plan.musicRemoved ? { cutOn: plan.musicRemoved.cutOn } : {}) };
 }
 /** The picks a run record keeps (params.picked), or [] for a record without them. Never throws. */

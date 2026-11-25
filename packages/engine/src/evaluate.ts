@@ -17,6 +17,7 @@ import { OVERLAY_TYPES, heldOverlayParams } from './overlays.ts';
 import { pieceAt, runStart, stutterFrame, tapOffsets, tapWeights } from './taps.ts';
 import { beatPositionAt, isTimeEffect, temporalOf, type BeatPosition, type TextAnimation, effectParamsAt, pictureSourceAt, provideSoundTails, sourceAt, sourceFrameIndexAt, transformAt, type BlendMode, type Clip, type FollowInfo, type Mask, type ProjectDocument, type ResolvedRegion, type SoundTail, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
 import { beatSwitchFrame, lightEnvelope, makeFieldIndex, resolveFields, stampText, switchFrame, transitionDef, transitionProgress, velocityOffsets, type FieldIndex } from '@pulseframe/core';
+import { clipSourceFrames, limitToCover, steadyPose, type Asset, type MediaClip } from '@pulseframe/core';
 import { audioPlan, soundEnd, type AudioPlan } from './audio.ts';
 import { resolveFollows, resolveRegions, type Follower } from './follow.ts';
 
@@ -80,7 +81,7 @@ export interface VideoLayer extends LayerLook {
   regions?: ResolvedRegion[];
   /**
    * Stabilisation (wave 7; core steadyContract.ts / steady.ts), a render quantity of THIS picture, set by barePicture at its own
-   * source frame from clip.stabilise and the file's camera motion, after limitToCover (W2 builds it). The compositor draws the
+   * source frame from clip.stabilise and the file's camera motion, after limitToCover (steadyOf below). The compositor draws the
    * picture as: own transform → clip to the picture's own rectangle → translate(zoom·t·w) · rotate(r) · scale(zoom·e^l); after the
    * privacy regions the buffer is masked to the own rectangle. `transform` keeps its meaning (the clip's own placement).
    * limited: false, or why the cover guarantee weakened the correction ('clip': the clip changed since its zoom was computed;
@@ -137,6 +138,24 @@ const look = (cx: Ctx, clip: Clip, time: T.RationalTime): LayerLook => {
 };
 
 /**
+ * Stabilisation of the picture of source frame `idx` (wave 7; core steady.ts STEADY_MATHS_V1): the clip's correction at its
+ * strength (steadyPose, cached per stretch), weakened by limitToCover until it covers the clip's own rectangle at its zoom, so no
+ * empty edge is ever drawn. limited: 'reach' when the frame lies outside the clip's own source frames (a velocity ramp or a
+ * transition handle reaches it), else 'clip'. Absent for a clip without the switch (validation keeps the switch on clips whose
+ * file has camera motion; a document without it draws the clip unstabilised rather than failing).
+ */
+function steadyOf(doc: ProjectDocument, clip: MediaClip, asset: Asset & { video: NonNullable<Asset['video']> }, idx: number): VideoLayer['steady'] {
+  const motion = clip.stabilise ? doc.analyses?.[asset.id]?.cameraMotion : undefined;
+  if (!clip.stabilise || !motion) return undefined;
+  const v = asset.video, zoom = clip.stabilise.zoomPm / 1000;
+  const pose = steadyPose(motion, idx, clip.stabilise.strength, v.frameRate);
+  const { pose: p, limited } = limitToCover(pose, zoom, v.height / (2 * v.width));
+  let why: false | 'clip' | 'reach' = false;
+  if (limited) { const f = clipSourceFrames(doc, clip); why = idx < f.first || idx > f.last ? 'reach' : 'clip'; }
+  return { v: 1, tx: p.tx, ty: p.ty, r: p.r, l: p.l, zoom, state: pose.state, limited: why };
+}
+
+/**
  * The picture of a media clip at `time` without any look: what a time tap reads (ADR-0011) and what a layer is placed from.
  * The source position is clamped to the last frame, so a clip asked to play past its source (a transition handle that no
  * longer exists) freezes instead of failing.
@@ -160,8 +179,11 @@ function barePicture(doc: ProjectDocument, track: Track, clip: Extract<Clip, { t
     sourceWidth: asset.video.width, sourceHeight: asset.video.height, transform: transformAt(clip, time),
     // privacy regions (ADR-0015) at THIS picture's source frame: a time tap or the stutter picture is built here too, with its own
     ...(clip.redact ? { regions: resolveRegions(doc, clip, { video: asset.video }, idx) } : {}),
+    // stabilisation (wave 7) at THIS picture's source frame too: a tap, the stutter picture and a ramp's picture carry their own
+    ...(clip.stabilise ? withSteady(steadyOf(doc, clip, { ...asset, video: asset.video }, idx)) : {}),
   };
 }
+const withSteady = (steady: VideoLayer['steady']) => (steady ? { steady } : {});
 /** A title at `time` without any look; its letter animation is placed at `time` too. */
 const textAnimationAt = (clip: Extract<Clip, { type: 'text' }>, time: T.RationalTime, rate: T.Rate): Pick<TextLayer, 'animation'> =>
   clip.animation ? { animation: { ...clip.animation, local: T.toSeconds(T.sub(time, clip.start)), total: T.toSeconds(clip.duration), fps: rate.num / rate.den } } : {};
@@ -265,8 +287,9 @@ function withPictureOf<L extends VideoLayer | ImageLayer | TextLayer>(layer: L, 
   if (layer.kind !== 'video' || !from || from.kind !== 'video' || layer.time || layer.remap) return layer;
   // the privacy regions go with the picture (ADR-0015): they were resolved at the picture's own source frame, so a velocity ramp
   // that shows another frame must hide what is in THAT frame
-  const { regions: _own, ...rest } = layer as VideoLayer;
-  return { ...rest, sourceTime: from.sourceTime, sourceFrameIndex: from.sourceFrameIndex, sourceSeekSeconds: from.sourceSeekSeconds, ...(from.regions ? { regions: from.regions } : {}) } as L;
+  // and so does the stabilisation (wave 7): it is the correction of THAT source frame
+  const { regions: _own, steady: _ownSteady, ...rest } = layer as VideoLayer;
+  return { ...rest, sourceTime: from.sourceTime, sourceFrameIndex: from.sourceFrameIndex, sourceSeekSeconds: from.sourceSeekSeconds, ...(from.regions ? { regions: from.regions } : {}), ...(from.steady ? { steady: from.steady } : {}) } as L;
 }
 
 export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId = doc.mainSequenceId): RenderGraph {
@@ -407,6 +430,8 @@ export function describeMoment(doc: ProjectDocument, time: T.RationalTime) {
   const clipOf = (l: { clipId: string; trackId: string }) => seq?.tracks.find((t) => t.id === l.trackId)?.clips.find((c) => c.id === l.clipId);
   /** A privacy region as resolved on a picture (ADR-0015): whether it covers the whole layer (loss fallback) and its track state there. */
   const regionOf = (r: ResolvedRegion) => ({ id: r.id, state: r.state, whole: r.whole, style: r.style, sourceFrame: r.sourceFrame });
+  /** Stabilisation of a picture (wave 7): its sample state, whether and why the cover limit weakened it, the zoom and the pose drawn. */
+  const steadyOfLayer = (l: VideoLayer) => (l.steady ? { steady: { state: l.steady.state, limited: l.steady.limited, zoom: l.steady.zoom, pose: { r: l.steady.r, l: l.steady.l, tx: l.steady.tx, ty: l.steady.ty } } } : {});
   const lookOf = (l: Exclude<Layer, CaptionLayer | AdjustLayer>) => {
     // the effect instances behind the layer's effects: the clip's enabled effects, without the time effect the evaluator took out
     const clip = clipOf(l);
@@ -418,7 +443,8 @@ export function describeMoment(doc: ProjectDocument, time: T.RationalTime) {
     return {
       ...(l.follow ? { follow: { ...l.follow, transform: l.transform } } : {}),
       ...(l.kind === 'video' && l.regions ? { regions: l.regions.map(regionOf) } : {}),
-      ...(l.time ? { time: { type: l.time.type, taps: l.time.taps.map((t) => ({ lane: t.lane, ...(t.layer.kind === 'video' ? { sourceFrameIndex: t.layer.sourceFrameIndex, ...(t.layer.regions ? { regions: t.layer.regions.map(regionOf) } : {}) } : {}), weight: t.weight })) } } : {}),
+      ...(l.kind === 'video' ? steadyOfLayer(l) : {}),
+      ...(l.time ? { time: { type: l.time.type, taps: l.time.taps.map((t) => ({ lane: t.lane, ...(t.layer.kind === 'video' ? { sourceFrameIndex: t.layer.sourceFrameIndex, ...(t.layer.regions ? { regions: t.layer.regions.map(regionOf) } : {}), ...steadyOfLayer(t.layer) } : {}), weight: t.weight })) } } : {}),
       ...(l.remap ? { remap: { type: l.remap.type, shownFrame: l.remap.shownFrame } } : {}),
       ...(l.effects ? { effects: l.effects.map((e) => e.type) } : {}), ...(modulated.length ? { modulated } : {}), ...(l.blend ? { blend: l.blend } : {}), ...(l.mask ? { mask: l.mask.shape } : {}),
       ...(l.transition ? { transition: { type: l.transition.type, role: l.transition.role, progress: Number(l.transition.progress.toFixed(4)) } } : {}),

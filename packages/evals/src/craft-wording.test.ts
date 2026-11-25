@@ -10,9 +10,12 @@ import * as T from '@pulseframe/time';
 import { applyTransaction, ATTRIBUTE_GROUPS, CRAFT_OPS_BUILT, CRAFT_REFUSALS, createProject, OpError, RIPPLE_TRIM_WORDS, TIME_ENTRY_REFUSALS, type CraftRefusalKey } from '@pulseframe/core';
 import { CRAFT_SERVER_REFUSALS, type CraftServerRefusalKey } from '../../../apps/server/src/craft/contract.ts';
 import { CRAFT_REFUSAL_PATTERNS, dictionaries, translateRefusal } from '../../i18n/src/index.ts';
+import { buildFilm } from './craft-proof.ops.ts';
+import type { OpCall, ProjectDocument } from '@pulseframe/core';
 
 const caught = (fn: () => unknown): string => { try { fn(); } catch (e) { if (e instanceof OpError) return e.message; throw e; } throw new Error('not refused'); };
 const OPS = ['ripple_trim', 'paste_attributes', 'replace_text'] as const;
+const findClipTrack = (doc: ProjectDocument, clipId: string) => doc.sequences[doc.mainSequenceId]!.tracks.find((t) => t.clips.some((c) => c.id === clipId))!.id;
 
 function opSentences(): Record<CraftRefusalKey, string[]> {
   const doc = createProject({ id: 'prj_cw', name: 'CW', width: 640, height: 360 });
@@ -73,6 +76,46 @@ describe('craft refusals in Hebrew', () => {
       expect({ lang, missing }).toEqual({ lang, missing: [] });
     }
   });
-  it.todo('W1: each operation refusal provoked for real through ripple_trim, paste_attributes and replace_text once CRAFT_OPS_BUILT');
-  it.todo('W2: each server refusal provoked for real through its route (craft/routes.test.ts)');
+  it('each operation refusal provoked for real through ripple_trim, paste_attributes and replace_text, worded in Hebrew with a next step', () => {
+    expect(CRAFT_OPS_BUILT).toBe(true);
+    let doc = createProject({ id: 'prj_cw', name: 'CW', width: 640, height: 360, frameRate: { num: 30, den: 1 } });
+    let n = 0;
+    const run = (d: ProjectDocument, ops: OpCall[], internal = false) => applyTransaction(d, ops, { idSeed: `cwr${n++}_`, actor: 'test', allowInternal: internal });
+    const film = buildFilm((ops, internal) => { const r = run(doc, ops, internal); doc = r.doc; return { doc, outputs: r.results.map((x) => x.output) }; });
+    const f = (k: number) => T.frameTime(k, { num: 30, den: 1 });
+    const on = (d: ProjectDocument, ops: OpCall[]) => caught(() => run(d, ops));
+    const rt = (clipId: string, edge: string, to: number) => ({ op: 'ripple_trim', args: { clipId, edge, to: f(to) } });
+    // J-cut: B's sound moved before 0 would be; a sound in the way of a moving one; two clips linked across the edge
+    const jcut = run(doc, [{ op: 'delete_clip', args: { clipId: film.As, includeLinked: false } }, { op: 'move_clip', args: { clipId: film.Bs, start: f(2), includeLinked: false } }]).doc;
+    const blocked = run(run(doc, [{ op: 'delete_clip', args: { clipId: film.As, includeLinked: false } }]).doc, [{ op: 'add_clip', args: { assetId: film.mus, start: f(20), duration: f(6), trackId: findClipTrack(doc, film.Bs) } }]).doc;
+    const crossed = structuredClone(doc);
+    for (const id of [film.A, film.C]) { const c = crossed.sequences[crossed.mainSequenceId]!.tracks.flatMap((t) => t.clips).find((x) => x.id === id)!; if (c.type === 'media') c.linkGroupId = 'lnk_cw'; }
+    const withFields = run(doc, [{ op: 'add_text', args: { text: 'נעה {date}', start: f(75), duration: f(10), fields: true } }]);
+    const ft = (withFields.results[0]!.output as { clipId: string }).clipId;
+    const t = { kind: 'title', clipId: film.title };
+    const rep = (...edits: object[]) => [{ op: 'replace_text', args: { edits } }];
+    const real: Record<Exclude<CraftRefusalKey, 'notBuilt'>, string> = {
+      rippleStartLonger: on(doc, [rt(film.B, 'start', 20)]),
+      rippleNoChange: on(doc, [rt(film.B, 'end', 60)]),
+      rippleDifferentAmounts: on(crossed, [rt(film.B, 'end', 50)]),
+      rippleBeforeZero: on(jcut, [rt(film.A, 'start', 10)]),
+      rippleOver: on(blocked, [rt(film.A, 'end', 15)]),
+      pasteSourceIsTarget: on(doc, [{ op: 'paste_attributes', args: { fromClipId: film.A, toClipIds: [film.A], groups: ['colour'] } }]),
+      pasteNothing: on(doc, [{ op: 'paste_attributes', args: { fromClipId: film.A, toClipIds: [film.B], groups: ['colour'] } }]),
+      replaceChanged: on(doc, rep({ at: t, was: 'stale', text: 'x' })),
+      replaceEmpty: on(doc, rep({ at: t, was: 'שלום נעה', text: '  ' })),
+      replaceFields: on(withFields.doc, rep({ at: { kind: 'title', clipId: ft }, was: 'נעה {date}', text: 'נועה' })),
+      replaceTooLong: on(doc, rep({ at: t, was: 'שלום נעה', text: 'א'.repeat(2417) })),
+      replaceMissing: on(doc, rep({ at: { kind: 'title', clipId: 'clp_t' }, was: 'a', text: 'b' })),
+      replaceTwice: on(doc, rep({ at: t, was: 'שלום נעה', text: 'a' }, { at: t, was: 'שלום נעה', text: 'b' })),
+    };
+    const table = opSentences();
+    for (const [key, en] of Object.entries(real) as [Exclude<CraftRefusalKey, 'notBuilt'>, string][]) {
+      // the sentence the op said has the table's shape (its values differ: real clip ids), and is worded in Hebrew
+      expect({ key, shaped: CRAFT_REFUSAL_PATTERNS.some((re) => re.test(en) && table[key].some((x) => re.test(x))) }).toEqual({ key, shaped: true });
+      const he = translateRefusal('he', en);
+      expect({ key, en, hebrew: !!he && /[֐-׿]/.test(he) && !/לא עבר בדיקה/.test(he) }).toEqual({ key, en, hebrew: true });
+      if (key.startsWith('ripple')) expect({ key, he: /Shift\+Delete/.test(he!) }).toEqual({ key, he: false });
+    }
+  });
 });

@@ -18,6 +18,7 @@ import { angleForDigit } from './multicamSession.ts';
 import { MULTICAM_STRINGS } from './multicam.strings.ts';
 import { CRAFT_CHANGES_SELECTION, CRAFT_COMMANDS } from './craft/craft.commands.ts';
 import { STABILISE_CHANGES_SELECTION, STABILISE_COMMANDS } from './stabilise/stabilise.commands.ts';
+import { PEARLS_COMMANDS } from './pearls/pearls.commands.ts';
 
 export interface Command {
   id: string;
@@ -428,6 +429,10 @@ export const COMMANDS: Command[] = [
   ...CRAFT_COMMANDS,
   // stabilisation (wave 7): «ייצוב תמונה» on or off, unbound (stabilise/stabilise.commands.ts; disabled until W3)
   ...STABILISE_COMMANDS,
+  // marked ranges «פנינים» (wave 7): open the pearls view, unbound (pearls/pearls.commands.ts; disabled until builder C)
+  ...PEARLS_COMMANDS,
+  // «ספרו מה היה» (wave 7 story track): opens the story dialog on the selected pictures and videos (StoryDialog, W3)
+  { id: 'view.openStory', label: 'cmd.openStory', group: 'view', keys: [], enabled: (e) => !!e.doc && sourceFromSelection(e.doc, e.getState().selection).assetIds.length > 0, run: (e) => { if (e.doc) e.openStory(sourceFromSelection(e.doc, e.getState().selection)); } },
 ];
 
 /** Canonical chord for an event: modifiers in fixed order + physical key code. */

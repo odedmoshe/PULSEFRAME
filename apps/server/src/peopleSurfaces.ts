@@ -222,6 +222,8 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`GET ${P}/versions/:versionId/frame`]: ['reader-document'],
   [`POST ${P}/versions/:versionId/restore`]: ['reader-document', 'write'],
   [`POST ${P}/text/find`]: ['reader-document'],
+  // marked ranges «פנינים» (wave 7): the reader document (labels '' for 'names'; peoplePrivacy.ts rule 5)
+  [`GET ${P}/pearls`]: ['reader-document'],
   // MCP over HTTP: see PEOPLE_MCP_TOOLS and PEOPLE_MCP_RESOURCES
   'ALL /mcp': ['reader-document'],
 };
@@ -260,6 +262,8 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   measure_clip_loudness: ['reader-document'],
   // editing craft (wave 7 craft track)
   find_text: ['reader-document'],
+  // marked ranges «פנינים» (wave 7 pearls track)
+  get_pearls: ['reader-document'],
 };
 /** MCP resources and prompts (every resource answer passes forPrincipal; prompts carry no project content). */
 export const PEOPLE_MCP_RESOURCES: Readonly<Record<string, readonly PeopleFilter[]>> = {

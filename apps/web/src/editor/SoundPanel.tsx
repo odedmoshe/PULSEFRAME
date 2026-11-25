@@ -11,6 +11,11 @@ import { trackRole } from './inspector.model.ts';
 import { Switch } from '../ds/index.ts';
 import { IconOnBeat } from './icons.tsx';
 import { isShortActive, loudnessOps } from './shorts.view.ts';
+import { dictionaries } from '@pulseframe/i18n';
+import { LimiterSwitch, ReductionMeter } from './send/LimiterSwitch.tsx';
+import { LoudnessMatch } from './send/LoudnessMatch.tsx';
+import { defaultCeiling, trackClipIds } from './send/send.logic.ts';
+import './send/send.css';
 
 type Track = ProjectDocument['sequences'][string]['tracks'][number];
 
@@ -378,6 +383,8 @@ export function SoundPanel() {
   const [err, setErr] = useState<string | null>(null);
   const [res, setRes] = useState<LoudnessResult | null>(null);
   const [resRev, setResRev] = useState(0);
+  // «השוואת עוצמה»: the selected sound clips, or every clip of the track the owner named (null: the selection)
+  const [matchTrack, setMatchTrack] = useState<string | null>(null);
   if (!doc) return null;
   const S = INSPECTOR_STRINGS[state.lang];
   const tracks = (doc.sequences[doc.mainSequenceId]?.tracks ?? []).filter((x) => x.kind === 'audio');
@@ -392,6 +399,12 @@ export function SoundPanel() {
     finally { setBusy(false); }
   };
   const ducked = tracks.filter((x) => x.audio?.duck).length;
+  const D = dictionaries[state.lang];
+  // the sound clips of the selection; when none of the selected clips is on a sound track the raw selection goes to the measurement, which says why it cannot match them
+  const selectedAudio = state.selection.filter((id) => tracks.some((tr) => tr.clips.some((c) => c.id === id)));
+  const scopeTrack = matchTrack ? tracks.find((x) => x.id === matchTrack) ?? null : null;
+  const matchIds = scopeTrack ? trackClipIds(scopeTrack) : selectedAudio.length ? selectedAudio : state.selection;
+  const setLimiter = (ceiling: number | null) => void editor.commit([{ op: 'set_master_limiter', args: { ceiling } }], 'Master limiter');
   return (
     <div className="fields sound" data-testid="sound-panel">
       <div className="mix" role="group" aria-label={t('sound.tracks')}>
@@ -402,6 +415,7 @@ export function SoundPanel() {
           </ul>
         )}
         <Meter measured={res && resRev === state.revision && res.integratedLufs !== null && Number.isFinite(res.integratedLufs) ? res.integratedLufs : null} target={target} />
+        <ReductionMeter lang={state.lang} ceiling={doc.settings.limiter?.ceiling ?? null} loudnessTarget={target} />
       </div>
       {tracks.length > 0 && <p className="muted pf-help mix-duck-hint" data-ducked={ducked}>{t('sound.duck.hint')}</p>}
 
@@ -421,6 +435,7 @@ export function SoundPanel() {
           </select>
         </label>
         <p className="muted pf-help">{t('sound.loudness.hint')}</p>
+        <LimiterSwitch lang={state.lang} ceiling={doc.settings.limiter?.ceiling ?? null} fallback={defaultCeiling(doc)} onChange={setLimiter} />
         <button className="ghost" disabled={busy} aria-busy={busy} onClick={() => void measure()} data-testid="sound-measure">{busy ? t('sound.measuring') : t('sound.measure')}</button>
         {err && <p className="muted danger" role="alert" data-testid="sound-error">{err}</p>}
         {res && (
@@ -440,6 +455,18 @@ export function SoundPanel() {
         )}
       </div>
 
+      <Section id="send-match" title={D['send.match']} defaultOpen={false} help>
+        {tracks.length > 1 && (
+          <div className="row" role="group" aria-label={D['send.matchTrack']} data-testid="loudness-match-tracks">
+            {tracks.map((tr) => (
+              <button key={tr.id} type="button" className="ghost" aria-pressed={matchTrack === tr.id} disabled={trackClipIds(tr).length === 0} onClick={() => setMatchTrack(matchTrack === tr.id ? null : tr.id)} data-testid="loudness-match-track" data-track-id={tr.id}>
+                {D['send.matchTrack']}: <bdi>{tr.name}</bdi>
+              </button>
+            ))}
+          </div>
+        )}
+        <LoudnessMatch lang={state.lang} projectId={doc.id} clipIds={matchIds} scopeLabel={scopeTrack?.name} />
+      </Section>
       <Section id="narration" title={t('narration')} defaultOpen={false} help><Narration /></Section>
       <Section id="sfx" title={S.sfxLibrary} defaultOpen={false}><SfxBrowser /></Section>
     </div>
