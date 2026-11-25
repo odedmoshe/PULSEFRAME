@@ -82,7 +82,7 @@ export const stabiliseA11yScenarios: StabiliseA11yScenario[] = [
       const m = await openBlock(ctx);
       await toNotMeasured(ctx, m);
       const st = await state(ctx.page);
-      return { shown: st === 'not-measured' && (await ctx.page.getByTestId('stab-run').count()) === 1, modal: false, detail: { state: st } };
+      return { shown: st === 'not-measured' && (await ctx.page.getByTestId('stab-run').count()) === 1, modal: false, detail: { blockState: st } };
     },
   },
   {
@@ -93,7 +93,7 @@ export const stabiliseA11yScenarios: StabiliseA11yScenario[] = [
       await ctx.page.getByTestId('stab-run').click();
       await waitState(ctx.page, ['measuring'], 8000);
       const st = await state(ctx.page);
-      return { shown: st === 'measuring' && (await ctx.page.getByTestId('stab-stop').count()) === 1 && (await ctx.page.locator('[data-testid=stab-panel] [role=progressbar]').count()) === 1, modal: false, detail: { state: st, job: 'the real measurement of the synthetic clip' } };
+      return { shown: st === 'measuring' && (await ctx.page.getByTestId('stab-stop').count()) === 1 && (await ctx.page.locator('[data-testid=stab-panel] [role=progressbar]').count()) === 1, modal: false, detail: { blockState: st, job: 'the real measurement of the synthetic clip' } };
     },
     async leave(ctx) {
       if ((await ctx.page.getByTestId('stab-stop').count()) > 0) { await ctx.page.getByTestId('stab-stop').click().catch(() => {}); await waitState(ctx.page, ['not-measured'], 20_000); }
@@ -105,7 +105,7 @@ export const stabiliseA11yScenarios: StabiliseA11yScenario[] = [
       await openBlock(ctx);
       await toOn(ctx);
       const st = await state(ctx.page);
-      return { shown: st === 'on' && (await ctx.page.getByTestId('stab-strength').count()) === 1 && (await ctx.page.getByTestId('stab-crop').count()) === 1 && (await ctx.page.getByTestId('stab-toggle').getAttribute('aria-checked')) === 'true', modal: false, detail: { state: st } };
+      return { shown: st === 'on' && (await ctx.page.getByTestId('stab-strength').count()) === 1 && (await ctx.page.getByTestId('stab-crop').count()) === 1 && (await ctx.page.getByTestId('stab-toggle').getAttribute('aria-checked')) === 'true', modal: false, detail: { blockState: st } };
     },
   },
   {
@@ -116,7 +116,7 @@ export const stabiliseA11yScenarios: StabiliseA11yScenario[] = [
       await api(ctx.page, 'POST', `/projects/${m.pid}/transactions`, { ops: [{ op: 'set_clip_stabilise', args: { clipId: m.clipId, stabilise: { strength: 100, zoomPm: 1000 } } }] });
       await waitState(ctx.page, ['limited'], 8000);
       const st = await state(ctx.page);
-      return { shown: st === 'limited' && (await ctx.page.getByTestId('stab-recalc').count()) === 1, modal: false, detail: { state: st, how: 'set_clip_stabilise with zoomPm 1000 on a clip that needs more' } };
+      return { shown: st === 'limited' && (await ctx.page.getByTestId('stab-recalc').count()) === 1, modal: false, detail: { blockState: st, how: 'set_clip_stabilise with zoomPm 1000 on a clip that needs more' } };
     },
     async leave(ctx) {
       if (made) await api(ctx.page, 'POST', `/projects/${made.pid}/transactions`, { ops: [{ op: 'set_clip_stabilise', args: { clipId: made.clipId, stabilise: { strength: 50 } } }] });
@@ -132,7 +132,7 @@ export const stabiliseA11yScenarios: StabiliseA11yScenario[] = [
       await waitState(ctx.page, ['refused'], 8000);
       const st = await state(ctx.page);
       const text = ((await ctx.page.getByTestId('stab-status').textContent()) ?? '').trim();
-      return { shown: st === 'refused' && text.length > 0 && (await ctx.page.getByTestId('stab-status').getAttribute('role')) === 'alert', modal: false, detail: { state: st, answer: 'the server\'s own 429 busy body, written out by the audit', text } };
+      return { shown: st === 'refused' && text.length > 0 && (await ctx.page.getByTestId('stab-status').getAttribute('role')) === 'alert', modal: false, detail: { blockState: st, answer: 'the server\'s own 429 busy body, written out by the audit', text } };
     },
     async leave(ctx) { await ctx.page.unroute('**/clips/*/stabilise').catch(() => {}); },
   },

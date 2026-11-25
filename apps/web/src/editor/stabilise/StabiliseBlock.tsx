@@ -199,9 +199,9 @@ export function StabiliseBlock({ clip: given }: { clip: MediaClip }) {
               )}
             </div>
           )}
-          <p className="muted pf-help">{t('noModel')}</p>
-          <p className="muted pf-help">{t('notCorrected')}</p>
-          <p className="muted pf-help">{t('synthetic')}</p>
+          <p className="muted stab-standing">{t('noModel')}</p>
+          <p className="muted stab-standing">{t('notCorrected')}</p>
+          <p className="muted stab-standing">{t('synthetic')}</p>
         </>
       )}
       <p className={`tracking-msg${err ? ' danger' : ''}`} role={err ? 'alert' : 'status'} aria-live="polite" data-testid={ID.status} data-status={job?.status}>{err ?? said}</p>
