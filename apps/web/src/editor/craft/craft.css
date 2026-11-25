@@ -1,0 +1,70 @@
+/* Editing craft surfaces (wave 7): the time field, the one-line save field, the paste dialog, the find panel, the versions dialog.
+   Logical properties only, so Hebrew (rtl) and English (ltr) both lay out; colours are the design tokens. */
+.pf-craft-pop { position: fixed; z-index: 90; inline-size: min(360px, 94vw); display: flex; flex-direction: column; gap: 6px; padding: 12px; background: var(--pf-surface-3); color: var(--pf-text); border: 1px solid var(--pf-line-strong-solid); border-radius: 8px; box-shadow: var(--pf-e2); text-align: start; }
+.pf-craft-pop h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.pf-craft-pop input[type=text] { inline-size: 100%; box-sizing: border-box; padding: 6px 8px; background: var(--pf-surface-2); color: var(--pf-text); border: 1px solid var(--pf-line-control); border-radius: 6px; font: inherit; }
+.pf-craft-pop input[type=text][dir=ltr] { font-variant-numeric: tabular-nums; text-align: start; }
+.pf-craft-line { min-block-size: 1.4em; margin: 0; color: var(--pf-text-2); }
+.pf-craft-line[data-kind=refused] { color: var(--pf-danger); }
+.pf-craft-line[data-kind=ok] { color: var(--pf-text); }
+.pf-craft-hint { margin: 0; color: var(--pf-text-3); font-size: 12px; }
+.pf-craft-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pf-craft-row .spacer { flex: 1; }
+.pf-craft-save { inset-block-start: 56px; inset-inline-start: 50%; transform: translateX(-50%); }
+:root[dir=rtl] .pf-craft-save { transform: translateX(50%); }
+.pf-craft-error { margin: 0; color: var(--pf-danger); }
+button.pf-craft-link { all: unset; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+button.pf-craft-link:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+
+/* paste dialog */
+.pf-craft-groups { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pf-craft-groups label { display: flex; align-items: flex-start; gap: 8px; }
+.pf-craft-groups .why { display: block; color: var(--pf-text-2); font-size: 12px; }
+.pf-craft-rows { margin: 0; padding-inline-start: 18px; max-block-size: 24vh; overflow: auto; font-size: 12px; color: var(--pf-text-2); }
+.pf-craft-rows li[data-skipped=true] { color: var(--pf-attention); }
+
+/* find panel: over the inspector column, the stage and the timeline stay live */
+.pf-craft-find { inset-block-start: 56px; inset-inline-end: 12px; inline-size: min(420px, 94vw); max-block-size: calc(100vh - 72px); overflow: auto; }
+.pf-craft-find fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pf-craft-find legend { padding: 0; font-weight: 600; }
+.pf-craft-flag { display: flex; flex-direction: column; }
+.pf-craft-flag label { display: flex; align-items: center; gap: 6px; }
+.pf-craft-flag .rule { margin-inline-start: 24px; color: var(--pf-text-3); font-size: 12px; }
+.pf-craft-list { margin: 0; padding: 0; max-block-size: 34vh; overflow: auto; border: 1px solid var(--pf-line-strong-solid); border-radius: 6px; }
+.pf-craft-list:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 1px; }
+.pf-craft-gl { padding: 4px 8px; background: var(--pf-surface-4); color: var(--pf-text-2); font-size: 12px; font-weight: 600; position: sticky; inset-block-start: 0; }
+.pf-craft-opt { display: flex; gap: 8px; padding: 6px 8px; border-block-end: 1px solid var(--pf-line); cursor: pointer; }
+.pf-craft-opt[data-active=true] { background: var(--pf-frame-soft); outline: 2px solid var(--pf-focus); outline-offset: -2px; }
+.pf-craft-opt[aria-disabled=true] { opacity: .75; cursor: default; }
+.pf-craft-opt .tick { inline-size: 16px; flex: none; }
+.pf-craft-opt .lines { display: flex; flex-direction: column; gap: 2px; min-inline-size: 0; }
+.pf-craft-opt .lines > div { overflow-wrap: anywhere; }
+.pf-craft-opt .after { color: var(--pf-text-2); }
+.pf-craft-opt mark { background: var(--pf-pulse-soft); color: inherit; box-shadow: inset 0 -2px 0 var(--pf-pulse); border-radius: 2px; }
+.pf-craft-opt .where { color: var(--pf-text-3); font-size: 11px; }
+.pf-craft-notes { margin: 0; padding-inline-start: 18px; color: var(--pf-attention); }
+
+/* versions dialog */
+.pf-craft-versions { display: flex; flex-direction: column; gap: 8px; }
+.pf-craft-vlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-block-size: 28vh; overflow: auto; }
+.pf-craft-vrow { display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--pf-line-strong-solid); border-radius: 6px; }
+.pf-craft-vrow[aria-current=true] { border-color: var(--pf-frame); }
+.pf-craft-vrow .name { font-weight: 600; overflow-wrap: anywhere; }
+.pf-craft-vrow .meta { color: var(--pf-text-2); font-size: 12px; }
+.pf-craft-badge { display: inline-block; padding: 0 6px; border: 1px solid var(--pf-line-control); border-radius: 10px; font-size: 11px; color: var(--pf-text-2); }
+.pf-craft-badge[data-tone=privacy] { color: var(--pf-attention); border-color: var(--pf-attention); }
+.pf-craft-cmp { display: flex; flex-direction: column; gap: 6px; border-block-start: 1px solid var(--pf-line); padding-block-start: 8px; }
+.pf-craft-cmp input[type=text] { inline-size: 9ch; box-sizing: border-box; padding: 4px 6px; background: var(--pf-surface-2); color: var(--pf-text); border: 1px solid var(--pf-line-control); border-radius: 6px; font: inherit; }
+.pf-craft-cmp select { max-inline-size: 100%; }
+.pf-craft-diff { margin: 0; padding-inline-start: 18px; max-block-size: 22vh; overflow: auto; }
+.pf-craft-warn { padding: 8px; border: 1px solid var(--pf-attention); border-radius: 6px; color: var(--pf-text); }
+.pf-craft-still-msg { padding: 24px 12px; text-align: center; color: var(--pf-text-2); border: 1px dashed var(--pf-line-control); border-radius: 6px; }
+
+/* the clip time block's rows */
+.pf-craft-rowbtn { all: unset; cursor: pointer; border-radius: 4px; padding-inline: 2px; }
+.pf-craft-rowbtn:hover { background: var(--pf-surface-4); }
+.pf-craft-rowbtn:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 1px; }
+.transport .timecode.tc.pf-craft-tcbtn { appearance: none; cursor: pointer; border-radius: 4px; }
+.transport .timecode.tc.pf-craft-tcbtn:hover { background: rgb(255 255 255 / .08); }
+.transport .timecode.tc.pf-craft-tcbtn:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .pf-craft-pop, .pf-craft-opt { transition: none; } }
