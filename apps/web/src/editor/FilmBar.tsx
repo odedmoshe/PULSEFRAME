@@ -22,6 +22,7 @@ export function FilmBar({ lang, runId }: FilmBarProps): ReactElement | null {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showWhy, setShowWhy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   const S = familyFilmStrings(lang);
   const doc = state.doc;
   const view = doc ? currentFilmRun(doc, runId ?? state.filmRun?.runId) : null;
@@ -42,6 +43,9 @@ export function FilmBar({ lang, runId }: FilmBarProps): ReactElement | null {
     setBusy(true); setError(null);
     try {
       const r = await api.regenerateFilm(doc.id, view.run.id, change, restoreRemoved);
+      // clips that had only been moved are not kept where they were moved to; the film says so once, when it happened
+      const moved = r.warnings.find((w) => w.code === 'moved_back');
+      setNote(moved ? S.warning(moved) : null);
       editor.setFilmRun({ runId: r.runId, params: { ...params, ...change }, picks: r.picks, excluded: r.excluded, alternatives: [] });
       await editor.load(doc.id);
     } catch (e) { setError(filmFailure(lang, e).message); } finally { setBusy(false); }
@@ -59,6 +63,7 @@ export function FilmBar({ lang, runId }: FilmBarProps): ReactElement | null {
       {removed > 0 && <Button size="sm" data-testid={TID.barRestore} disabled={busy} onClick={() => void regenerate({}, true)}>{S.restoreRemoved}</Button>}
       <Button size="sm" variant="ghost" data-testid={TID.barWhy} aria-expanded={showWhy} onClick={() => setShowWhy((v) => !v)}>{S.whyClips}</Button>
       {busy && <span role="status" className="pf-film-muted">{S.working}</span>}
+      {note && !busy && <span role="status" className="pf-film-muted" data-testid={TID.barNote}>{note}</span>}
       {error && <AnchoredError onDismiss={() => setError(null)} dismissLabel={S.close}>{error}</AnchoredError>}
       {showWhy && <p className="pf-film-muted pf-film-whynote">{FAMILY_FILM_DRAFT_LABEL[lang]}</p>}
       {showWhy && (

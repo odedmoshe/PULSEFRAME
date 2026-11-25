@@ -523,7 +523,8 @@ export type SlotRecord = z.infer<typeof SlotRecordSchema>;
 
 /**
  * A timeline range a run's clip was placed on (RecipeRunSchema.ranges). `trackId` (optional, additive) is the track it was placed
- * on: template runs record it, so that a clip moved to another track is told from one that was only moved in time.
+ * on: template, family film and beat-montage runs record it from the amendment of 2026-11-24 on, so that a clip moved to another
+ * track is told from one that was only moved in time.
  */
 export const RunRangeSchema = z.object({ start: RationalTimeSchema, end: RationalTimeSchema, trackId: Id.optional() }).strict();
 export type RunRange = z.infer<typeof RunRangeSchema>;
@@ -536,8 +537,9 @@ export const RecipeRunSchema = z.object({ id: Id, recipeId: z.string().max(64), 
    * decision 6). Written by apply_recipe only when its arguments ask for it (recordRanges); absent on every older run.
    * Template runs (apply_template with recordRanges), OPTIONAL too: where each live clip of the run was placed, with its track,
    * as of the moment its fingerprint was taken (a clip kept from an earlier run keeps that run's entry, like its fingerprint).
-   * It is what tells a clip that was only moved in time from one edited by hand (templateOps.ts movedOnly). A family film
-   * records none.
+   * It is what tells a clip that was only moved in time from one edited by hand (templateOps.ts movedOnly). Family film runs
+   * record them the same way; beat-montage runs add the track when apply_recipe gets recordTracks (a kept clip keeps the
+   * track recorded for it, its range stays where it lies).
    */
   ranges: z.record(Id, RunRangeSchema).optional() }).strict();
 export type RecipeRun = z.infer<typeof RecipeRunSchema>;

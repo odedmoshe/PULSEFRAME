@@ -11,7 +11,7 @@
  */
 import { z } from 'zod';
 import { createdIdsOf, defineOp, findClip, getOp, OpError, refuseInheritedIds, removeRunClips, runFingerprints } from './ops.ts';
-import { ApplyTemplateArgsSchema, AssetRefSchema, findGatedTemplate, RefSchema, type ApplyTemplateOutput } from './templateContract.ts';
+import { ApplyTemplateArgsSchema, AssetRefSchema, findGatedTemplate, RefSchema, type ApplyTemplateOutput, type PlannedSlot, type TemplateStep } from './templateContract.ts';
 import * as T from '@pulseframe/time';
 import type { ProjectDocument, RecipeRun, RunRange, SlotRecord } from './schema.ts';
 import { attachKnownGrid } from './packOps.ts';
@@ -36,11 +36,13 @@ export const removedByHand = (doc: ProjectDocument, slots: readonly SlotRecord[]
  * a ripple delete before them closed the gap, or they were dragged along their track. Such a clip is not "edited by hand" for a
  * template regeneration; it is replaced and made again on its slot like an untouched one. The test, per clip:
  * - the run recorded where it placed the clip (run.ranges[id], written by apply_template with recordRanges);
- * - the clip is on the track recorded there (a clip taken to another track was arranged by hand and stays protected);
+ * - the clip is on the track recorded there (a clip taken to another track was arranged by hand and stays protected; an entry
+ *   without a track cannot be checked and names nothing);
  * - its start differs from the recorded start; and
  * - its content fingerprint with the recorded start put back equals the fingerprint the run recorded, so nothing else differs:
  *   not its length, source range, speed, transform, keyframes, effects, sound, link, text or style.
- * A run without recorded places (made before this rule, or a family film) names none: its moved clips stay protected as before.
+ * A run without recorded places (made before this rule) names none here; the server then works the places out from the run's
+ * own plan (derivedRanges) and passes them as `ranges`, and the same test decides.
  * Pure; reads the document and the run record only, so undo of the move gives the old answer back.
  */
 export function movedOnly(doc: ProjectDocument, run: Pick<RecipeRun, 'fingerprints' | 'ranges'>, ids: readonly string[]): string[] {
@@ -51,6 +53,55 @@ export function movedOnly(doc: ProjectDocument, run: Pick<RecipeRun, 'fingerprin
     if (!f || !place || recorded === undefined || place.trackId !== f.track.id || T.eq(f.clip.start, place.start)) return false;
     return fingerprint({ ...f.clip, start: place.start }) === recorded;
   });
+}
+/**
+ * The clips among `ids` that lie on another track than the one the run recorded for them: taken there by hand, so edited by hand
+ * and kept where they are, whether or not their time changed too (the fingerprint holds no track, so only a run that recorded
+ * `trackId` can tell). A run without recorded tracks names none and behaves as before.
+ */
+export function onOtherTrack(doc: ProjectDocument, run: Pick<RecipeRun, 'ranges'>, ids: readonly string[]): string[] {
+  const ranges = run.ranges ?? {};
+  return ids.filter((id) => {
+    const f = findClip(doc, id), place = Object.hasOwn(ranges, id) ? ranges[id] : undefined;
+    return !!f && place?.trackId !== undefined && place.trackId !== f.track.id;
+  });
+}
+/**
+ * The places of a run that recorded none (made before run.ranges; ADR-0016 decision 6, amendment of 2026-11-24), worked out from
+ * a plan made again with the run's OWN stored parameters on the document without the run's clips: per live clip of a run slot,
+ * the start (and length) its making step gives it, and the track when that step names an existing one. Only such a clip gets a
+ * `trackId`, and movedOnly accepts a clip only with one, so the kinds covered are those the plan places on a named track:
+ * the pictures of a template and of a film (when the plan finds their track again and does not ask for a new one), a film's
+ * music, a template's graphic elements. A picture's own sound is placed with its picture by the same step on a track that step
+ * chooses: it gets its picture's start and the track it lies on now (its track cannot be checked). Titles, looks, sound effects
+ * and a template's music are placed on a track the operation chooses and are not covered: moved, they stay kept as before.
+ * Nothing here is trusted on its own: movedOnly accepts a clip only when its fingerprint with this start equals the run's.
+ */
+export function derivedRanges(doc: ProjectDocument, plan: { ops: readonly TemplateStep[]; slots: readonly PlannedSlot[] }, run: Pick<RecipeRun, 'slots' | 'createdIds'>): Record<string, RunRange> {
+  const out: Record<string, RunRange> = {};
+  const isTime = (v: unknown): v is T.RationalTime => T.isRationalTime(v);
+  for (const record of run.slots ?? []) {
+    const f = findClip(doc, record.clipId);
+    const planned = plan.slots.find((s) => s.key === record.key);
+    if (!f || !planned || typeof planned.clipId === 'string' || (planned.clipId.out !== undefined && planned.clipId.out !== 'clipId')) continue;
+    const bind = planned.clipId.$ref;
+    const step = plan.ops.find((o) => o.bind === bind);
+    const args = step && isObject(step.args) ? step.args : undefined;
+    if (!args) continue;
+    const span = isObject(args.span) ? args.span : args;
+    if (!isTime(span.start)) continue;
+    const start = span.start;
+    out[record.clipId] = { start: { ...start }, end: { ...T.add(start, f.clip.duration) }, ...(typeof args.trackId === 'string' ? { trackId: args.trackId } : {}) };
+    // the picture's own sound, made by the same step: same start, on the track it is on now
+    if (args.withLinkedAudio === true && f.clip.type === 'media' && f.clip.linkGroupId) {
+      const group = f.clip.linkGroupId;
+      for (const id of run.createdIds) {
+        const p = id === record.clipId ? undefined : findClip(doc, id);
+        if (p && p.clip.type === 'media' && p.clip.linkGroupId === group && p.track.kind === 'audio') out[id] = { start: { ...start }, end: { ...T.add(start, p.clip.duration) }, trackId: p.track.id };
+      }
+    }
+  }
+  return out;
 }
 const BINDING_SHAPE = 'a binding is exactly {"$ref": name} with optional "out" and "at", or {"$asset": key}';
 

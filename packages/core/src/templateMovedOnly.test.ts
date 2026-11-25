@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  applyTransaction, createProject, findClip, fingerprint, movedOnly, planTemplate, TEMPLATE_NOTICE_CODES, validateProject,
+  applyTransaction, createProject, derivedRanges, findClip, fingerprint, movedOnly, onOtherTrack, planTemplate, TEMPLATE_NOTICE_CODES, validateProject,
   type ApplyTemplateArgs, type ApplyTemplateOutput, type OpCall, type ProjectDocument, type TemplateDef, type TemplateStep,
 } from './index.ts';
 
@@ -132,6 +132,105 @@ describe('movedOnly: the only change is the place in time, on the same track', (
     const old = applied({});
     const oldDoc = tx(old.doc, [{ op: 'ripple_delete_clips', args: { clipIds: [old.id('s1')] } }]);
     expect(moved(oldDoc, old.runId, old.live.filter((x) => !!findClip(oldDoc, x)))).toEqual([]);
+  });
+});
+
+describe('onOtherTrack: a clip on another track than the run recorded', () => {
+  it('names a clip taken to another track, with or without a time shift, and no other; a run that recorded no track names none', () => {
+    const a = applied();
+    const withTrack = applyTransaction(a.doc, [{ op: 'add_track', args: { kind: 'video' } }], { idSeed: `mo${n++}_`, actor: 'test' });
+    const other = withTrack.results[0]!.output!.trackId as string;
+    const s3 = a.id('s3');
+    expect(onOtherTrack(withTrack.doc, withTrack.doc.recipeRuns[a.runId]!, a.live)).toEqual([]);
+    const sameTime = tx(withTrack.doc, [{ op: 'move_clip', args: { clipId: s3, start: f(60), trackId: other } }]);
+    expect(fingerprint(findClip(sameTime, s3)!.clip)).toBe(sameTime.recipeRuns[a.runId]!.fingerprints[s3]); // the fingerprint holds no track
+    expect(onOtherTrack(sameTime, sameTime.recipeRuns[a.runId]!, a.live)).toEqual([s3]);
+    const away = tx(withTrack.doc, [{ op: 'move_clip', args: { clipId: s3, start: f(150), trackId: other } }]);
+    expect(onOtherTrack(away, away.recipeRuns[a.runId]!, a.live)).toEqual([s3]);
+    // moved along its own track only: not on another track
+    const along = tx(withTrack.doc, [{ op: 'move_clip', args: { clipId: s3, start: f(150) } }]);
+    expect(onOtherTrack(along, along.recipeRuns[a.runId]!, a.live)).toEqual([]);
+    const old = applied({});
+    const oldTrack = applyTransaction(old.doc, [{ op: 'add_track', args: { kind: 'video' } }], { idSeed: `mo${n++}_`, actor: 'test' });
+    const oldMoved = tx(oldTrack.doc, [{ op: 'move_clip', args: { clipId: old.id('s3'), start: f(60), trackId: oldTrack.results[0]!.output!.trackId as string } }]);
+    expect(onOtherTrack(oldMoved, oldMoved.recipeRuns[old.runId]!, old.live)).toEqual([]);
+  });
+});
+
+describe('derivedRanges: the places of a run that recorded none, from its own plan made again', () => {
+  const words = (en: string) => ({ he: `${en} (he)`, en });
+  const DEF: TemplateDef = {
+    id: 'tpl.moved-derived', version: 1, name: words('Derived'), hint: words('Derived'), genre: 'montage', designedFor: 'wide', tempo: { fallbackBpm: 120 }, music: { need: 'none', startAt: 'zero' },
+    slots: ['s1', 's2', 's3'].map((key) => ({ key, role: words(key), accept: 'any' as const, span: { beats: 2 }, keepAudio: key === 's2' })), slotUse: { mode: 'all', min: 1 },
+    texts: [{ key: 'title', role: words('Title'), default: words('Hello'), maxChars: 20, presetId: 'clean-white', at: { slot: 's1' }, place: { x: 0, y: 0 } }], elements: [], sfx: [],
+    adjust: [{ key: 'look', span: 'all', effects: [{ type: 'color.adjust', params: { saturation: 1.1 } }] }],
+  };
+  /** A run of DEF committed without recordRanges, as before the amendment. */
+  function olderRun() {
+    const doc0 = createProject({ id: 'prj_derived', name: 'D', width: 640, height: 360, frameRate: R });
+    doc0.assets.vid = { id: 'vid', ...video('d') };
+    const params = { media: ['vid'] };
+    const plan = planTemplate(doc0, DEF, params);
+    const r = applyTransaction(doc0, [{ op: 'apply_template', args: { templateId: DEF.id, templateVersion: DEF.version, params: plan.params, steps: plan.steps, ops: plan.ops, slots: plan.slots } }], { idSeed: `mo${n++}_`, actor: 'test', allowInternal: true });
+    const out = r.results[0]!.output as unknown as ApplyTemplateOutput;
+    const run = r.doc.recipeRuns[out.runId]!;
+    const id = (key: string) => run.slots!.find((x) => x.key === key)!.clipId;
+    return { doc: r.doc, run, runId: out.runId, id, live: run.createdIds.filter((x) => !!findClip(r.doc, x)) };
+  }
+  const replan = (doc: ProjectDocument, runId: string, live: readonly string[]) => {
+    const run = doc.recipeRuns[runId]!;
+    const base = structuredClone(doc);
+    for (const cid of live) { const found = findClip(base, cid); if (found) found.track.clips.splice(found.index, 1); }
+    const { templateVersion: _v, ...own } = run.params;
+    return derivedRanges(doc, planTemplate(base, DEF, own), run);
+  };
+
+  it('pictures get their start and the track the plan names; a picture\'s own sound its picture\'s start; titles and looks get no track (not covered)', () => {
+    const a = olderRun();
+    expect(a.run).not.toHaveProperty('ranges');
+    const places = replan(a.doc, a.runId, a.live);
+    const track = findClip(a.doc, a.id('s1'))!.track.id;
+    expect([places[a.id('s1')], places[a.id('s2')], places[a.id('s3')]]).toEqual([{ start: f(0), end: f(30), trackId: track }, { start: f(30), end: f(60), trackId: track }, { start: f(60), end: f(90), trackId: track }]);
+    const sound = a.live.find((x) => x !== a.id('s2') && (findClip(a.doc, x)!.clip as { linkGroupId?: string | null }).linkGroupId)!;
+    expect(places[sound]).toEqual({ start: f(30), end: f(60), trackId: findClip(a.doc, sound)!.track.id });
+    expect([places[a.id('title')], places[a.id('look')]]).toEqual([{ start: f(0), end: f(30) }, { start: f(0), end: f(90) }]);
+  });
+
+  it('with them movedOnly tells the clips a ripple delete moved (pictures, a sound with its picture); an edited one, one on another track and a moved title are not named', () => {
+    const a = olderRun();
+    const sound = a.live.find((x) => x !== a.id('s2') && (findClip(a.doc, x)!.clip as { linkGroupId?: string | null }).linkGroupId)!;
+    const rippled = tx(a.doc, [{ op: 'ripple_delete_clips', args: { clipIds: [a.id('s1')] } }, { op: 'move_clip', args: { clipId: a.id('title'), start: f(15) } }]);
+    const live = a.live.filter((x) => !!findClip(rippled, x));
+    const named = (doc: ProjectDocument) => movedOnly(doc, { fingerprints: a.run.fingerprints, ranges: replan(doc, a.runId, live) }, live).sort();
+    expect(named(rippled)).toEqual([a.id('s2'), a.id('s3'), sound].sort());
+    expect(named(tx(rippled, [{ op: 'set_clip_transform', args: { clipId: a.id('s3'), transform: { rotation: 3 } } }]))).toEqual([a.id('s2'), sound].sort());
+    const withTrack = applyTransaction(rippled, [{ op: 'add_track', args: { kind: 'video' } }], { idSeed: `mo${n++}_`, actor: 'test' });
+    const away = tx(withTrack.doc, [{ op: 'move_clip', args: { clipId: a.id('s3'), start: f(200), trackId: withTrack.results[0]!.output!.trackId as string } }]);
+    expect(named(away)).toEqual([a.id('s2'), sound].sort());
+  });
+});
+
+describe('apply_recipe records each clip\'s track when asked (recordTracks)', () => {
+  it('with recordRanges and recordTracks a range holds the track; without recordTracks it does not, as before; a kept clip keeps the track recorded for it', () => {
+    const doc0 = createProject({ id: 'prj_rt', name: 'R', width: 640, height: 360, frameRate: R });
+    doc0.assets.img = { id: 'img', ...picture('e') };
+    const ops = [{ op: 'add_clip', args: { assetId: 'img', start: f(0), duration: f(30) } }, { op: 'add_clip', args: { assetId: 'img', start: f(30), duration: f(30) } }];
+    const run = (extra: Record<string, unknown>, doc = doc0) => applyTransaction(doc, [{ op: 'apply_recipe', args: { recipeId: 'beat-montage', params: {}, steps: ['s'], ops, recordRanges: true, ...extra } }], { idSeed: `mo${n++}_`, actor: 'test', allowInternal: true });
+    const before = run({});
+    const idB = before.results[0]!.output!.runId as string;
+    for (const r of Object.values(before.doc.recipeRuns[idB]!.ranges!)) expect(r).not.toHaveProperty('trackId');
+    const now = run({ recordTracks: true });
+    const id = now.results[0]!.output!.runId as string, created = now.results[0]!.output!.createdIds as string[];
+    const track = findClip(now.doc, created[0]!)!.track.id;
+    expect(Object.values(now.doc.recipeRuns[id]!.ranges!).map((r) => r.trackId)).toEqual([track, track]);
+    expect(validateProject(now.doc)).toEqual([]);
+    // the first clip is taken to another track and kept by the next run: its range is where it lies, its track the recorded one
+    const added = applyTransaction(now.doc, [{ op: 'add_track', args: { kind: 'video' } }], { idSeed: `mo${n++}_`, actor: 'test' });
+    const other = added.results[0]!.output!.trackId as string;
+    const movedDoc = tx(added.doc, [{ op: 'move_clip', args: { clipId: created[0]!, start: f(0), trackId: other } }]);
+    const again = applyTransaction(movedDoc, [{ op: 'apply_recipe', args: { runId: id, recipeId: 'beat-montage', params: {}, steps: ['s'], removeClipIds: [created[1]!], keepIds: [created[0]!], ops: [ops[1]!], recordRanges: true, recordTracks: true } }], { idSeed: `mo${n++}_`, actor: 'test', allowInternal: true });
+    expect(again.doc.recipeRuns[id]!.ranges![created[0]!]).toEqual({ start: f(0), end: f(30), trackId: track });
+    expect(onOtherTrack(again.doc, again.doc.recipeRuns[id]!, [created[0]!])).toEqual([created[0]]);
   });
 });
 

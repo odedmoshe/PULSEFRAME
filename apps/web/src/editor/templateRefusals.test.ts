@@ -53,10 +53,10 @@ describe('template refusals', () => {
       ['needs_capability', 'template tpl.list places graphic elements, which this machine cannot draw: its ffmpeg has no SVG decoder (librsvg)', 'Install an ffmpeg build with librsvg and restart the server, or choose a template without elements.'],
       ['template_blocked', 'the template cannot regenerate like this: slot(s) s1, s3 were edited by hand and are kept where they are, but no longer lie exactly on the range this plan gives them, so the new pictures would leave frames without a picture',
         'Regenerate with the run\'s tempo (half), undo the hand edit that moved or trimmed slot(s) s1, s3, or delete that clip and regenerate with restoreRemoved: true so the template fills the slot again.'],
-      // the same refusal with the next steps the server leaves out when they would repeat the request (the run's tempo, restoreRemoved)
+      // the same refusal with the next steps the server gives for other requests (the run's tempo left out; a restore request; an older run)
       ['template_blocked', 'the template cannot regenerate like this: slot(s) s1, s3 were edited by hand and are kept where they are, but no longer lie exactly on the range this plan gives them, so the new pictures would leave frames without a picture', 'Undo the hand edit that moved or trimmed slot(s) s1, s3, or delete that clip and regenerate with restoreRemoved: true so the template fills the slot again.'],
-      ['template_blocked', 'the template cannot regenerate like this: slot(s) s1, s3 were edited by hand and are kept where they are, but no longer lie exactly on the range this plan gives them, so the new pictures would leave frames without a picture', 'Regenerate with the run\'s tempo (double), or undo the hand edit that moved or trimmed slot(s) s1, s3.'],
-      ['template_blocked', 'the template cannot regenerate like this: slot(s) s1, s3 were edited by hand and are kept where they are, but no longer lie exactly on the range this plan gives them, so the new pictures would leave frames without a picture', 'Undo the hand edit that moved or trimmed slot(s) s1, s3.'],
+      ['template_blocked', 'the template cannot regenerate like this: slot(s) s1, s3 were edited by hand and are kept where they are, but no longer lie exactly on the range this plan gives them, so the new pictures would leave frames without a picture', 'Regenerate with the run\'s tempo (double), undo the hand edit that moved or trimmed slot(s) s1, s3, or delete that clip as well and regenerate with restoreRemoved: true again so the template makes it again too.'],
+      ['template_blocked', 'the template cannot regenerate like this: slot(s) s1, s3 were edited by hand and are kept where they are, but no longer lie exactly on the range this plan gives them, so the new pictures would leave frames without a picture', 'Undo the hand edit that moved or trimmed slot(s) s1, s3, or delete that clip as well and regenerate with restoreRemoved: true again so the template makes it again too. This run was made before places were recorded, and where it placed its clips cannot be worked out again: the template has changed since (the run is of version 1, the template is version 2 now). So a clip that was only moved counts as edited.'],
       ['nothing_to_do', 'every item of this template was edited or deleted by hand since the last run; there is nothing to make again', 'Regenerate with restoreRemoved: true to make the deleted items again.'],
       ['insufficient_scope', 'this credential may only propose edits, and a template cannot be proposed: it is applied through an internal step that a proposal does not carry', 'Ask the project owner to apply the template, or for a grant in edit mode. plan_template still shows what it would do.'],
       ['not_found', 'template "tpl.nope" does not exist', 'Available: tpl.travel-montage, tpl.birthday (GET /api/v1/templates).'],
@@ -73,27 +73,31 @@ describe('template refusals', () => {
       if (hint) expect(en.hint, hint).not.toMatch(/\/api\/|POST |Pass |edit_analysis|plan_template|\(at\)|runId|restoreRemoved/);
     }
   });
-  it('a kept picture off its slot: the hint offers only the steps the server sent, in both languages (a restore request is not sent back to «החזרת החלקים שנמחקו»)', () => {
+  it('a kept picture off its slot: the hint offers the steps the server sent, in both languages; a restore request is told to delete that clip as well and press the button again; an older run gets its sentence', () => {
     const he = TEMPLATE_STRINGS.he, en = TEMPLATE_STRINGS.en;
     const undo = 'undo the hand edit that moved or trimmed slot(s) s2';
-    const del = 'delete that clip and regenerate with restoreRemoved: true so the template fills the slot again';
+    const del = 'or delete that clip and regenerate with restoreRemoved: true so the template fills the slot again';
+    const delToo = 'or delete that clip as well and regenerate with restoreRemoved: true again so the template makes it again too';
+    const older = ' This run was made before places were recorded, and where it placed its clips cannot be worked out again: the template has changed since (the run is of version 1, the template is version 2 now). So a clip that was only moved counts as edited.';
+    const heUndo = 'לבטל את העריכה ביד שהזיזה או קיצרה את המשבצות';
+    const heDel = `או למחוק את הקליפ וליצור מחדש עם «${he.restoreRemoved}» כדי שהתבנית תמלא את המשבצת שוב`;
+    const heDelToo = `או למחוק גם את הקליפ הזה וללחוץ שוב על «${he.restoreRemoved}» כדי שהתבנית תיצור גם אותו מחדש`;
+    const enDel = `or delete that clip and regenerate with “${en.restoreRemoved}” so the template fills the slot again`;
+    const enDelToo = `or delete that clip as well and press “${en.restoreRemoved}” again so the template makes it again too`;
     const cases: [string, string, string][] = [
-      [`Regenerate with the run's tempo (half), ${undo}, or ${del}.`,
-        `אפשר ליצור מחדש בקצב של ההחלה (${he.tempoNames.half}), לבטל את העריכה ביד שהזיזה או קיצרה את המשבצות, או למחוק את הקליפ וליצור מחדש עם «${he.restoreRemoved}» כדי שהתבנית תמלא את המשבצת שוב.`,
-        `Regenerate with the run's tempo (${en.tempoNames.half}), undo the hand edit that moved or trimmed the slots, or delete that clip and regenerate with “${en.restoreRemoved}” so the template fills the slot again.`],
-      [`Undo the hand edit that moved or trimmed slot(s) s2, or ${del}.`,
-        `אפשר לבטל את העריכה ביד שהזיזה או קיצרה את המשבצות, או למחוק את הקליפ וליצור מחדש עם «${he.restoreRemoved}» כדי שהתבנית תמלא את המשבצת שוב.`,
-        `Undo the hand edit that moved or trimmed the slots, or delete that clip and regenerate with “${en.restoreRemoved}” so the template fills the slot again.`],
-      [`Regenerate with the run's tempo (normal), or ${undo}.`,
-        `אפשר ליצור מחדש בקצב של ההחלה (${he.tempoNames.normal}), או לבטל את העריכה ביד שהזיזה או קיצרה את המשבצות.`,
-        `Regenerate with the run's tempo (${en.tempoNames.normal}), or undo the hand edit that moved or trimmed the slots.`],
-      ['Undo the hand edit that moved or trimmed slot(s) s2.', 'אפשר לבטל את העריכה ביד שהזיזה או קיצרה את המשבצות.', 'Undo the hand edit that moved or trimmed the slots.'],
+      [`Regenerate with the run's tempo (half), ${undo}, ${del}.`, `אפשר ליצור מחדש בקצב של ההחלה (${he.tempoNames.half}), ${heUndo}, ${heDel}.`, `Regenerate with the run's tempo (${en.tempoNames.half}), undo the hand edit that moved or trimmed the slots, ${enDel}.`],
+      [`Undo the hand edit that moved or trimmed slot(s) s2, ${del}.`, `אפשר ${heUndo}, ${heDel}.`, `Undo the hand edit that moved or trimmed the slots, ${enDel}.`],
+      [`Regenerate with the run's tempo (normal), ${undo}, ${delToo}.`, `אפשר ליצור מחדש בקצב של ההחלה (${he.tempoNames.normal}), ${heUndo}, ${heDelToo}.`, `Regenerate with the run's tempo (${en.tempoNames.normal}), undo the hand edit that moved or trimmed the slots, ${enDelToo}.`],
+      [`Undo the hand edit that moved or trimmed slot(s) s2, ${delToo}.`, `אפשר ${heUndo}, ${heDelToo}.`, `Undo the hand edit that moved or trimmed the slots, ${enDelToo}.`],
+      [`Undo the hand edit that moved or trimmed slot(s) s2, ${delToo}.${older}`,
+        `אפשר ${heUndo}, ${heDelToo}. ההחלה הזו נוצרה בגרסה קודמת שלא רשמה איפה הונח כל קליפ, ואי אפשר לשחזר את זה עכשיו, ולכן קליפ שרק זז נחשב כאן לקליפ שנערך.`,
+        `Undo the hand edit that moved or trimmed the slots, ${enDelToo}. This run was made by an earlier version that did not record where it placed each clip, and that cannot be worked out again now, so a clip that was only moved counts as edited here.`],
     ];
     for (const [server, wantHe, wantEn] of cases) {
       expect(templateHint('he', server), server).toBe(wantHe);
       expect(templateHint('en', server), server).toBe(wantEn);
+      expect(latin(wantHe), server).toEqual([]);
     }
-    expect(cases[2]![1] + cases[3]![1]).not.toContain(he.restoreRemoved);
   });
   it('the bar says how many items that had only been moved are back on their places, in both languages, one and many', () => {
     expect(TEMPLATE_STRINGS.he.movedBack(1)).toBe(' פריט אחד שרק זז ממקומו חזר למקומו בתבנית.');

@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { findClip, fingerprint, MULTICAM_OPS_BUILT, validateProject, type Asset, type MulticamGroup } from '@pulseframe/core';
+import { creativeProjection, findClip, fingerprint, MULTICAM_OPS_BUILT, planRecipe, validateProject, type Asset, type MulticamGroup } from '@pulseframe/core';
 import { Derivatives } from './derive.ts';
 import { Governance } from './governance.ts';
 import { setMulticamDerivatives } from './multicamSync.ts';
@@ -103,36 +103,100 @@ describe('regenerate after the in-place branch', () => {
     expect(over().length).toBeGreaterThan(0);
     expect(JSON.stringify(store.replay(pid, store.getProject(pid).revision).doc)).toBe(JSON.stringify(store.getProject(pid).doc));
   });
-  it('beat-montage: after a ripple delete the shifted clips are kept where the delete left them (they count as edited by hand) and the freed last segment is filled; no frame is empty, nothing overlaps (the template rule "only moved = made again" is not applied here)', async () => {
-    const pid = store.createProject({ name: 'bm-ripple', width: 640, height: 360, frameRate: R }).doc.id;
-    const r = store.commit({ projectId: pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'import_asset', args: { asset: { ...fake('g', 'audio'), duration: T.rt(12, 1) } } }, { op: 'import_asset', args: { asset: fake('h', 'video') } }, { op: 'import_asset', args: { asset: fake('i', 'video') } }] });
-    const [M, A, B] = r.results.map((x) => x.output!.assetId as string) as [string, string, string];
-    const mc = store.commit({ projectId: pid, actor: 'user:owner', ops: [{ op: 'add_clip', args: { assetId: M, start: f(0) } }] }).results[0]!.output!;
-    store.commit({ projectId: pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'attach_analysis', args: { assetId: M, kind: 'beats', method: 'test', params: {}, createdAt: 'x', times: Array.from({ length: 24 }, (_, i) => T.rt(i, 2)), bpm: 120, confidence: 1 } }] });
-    const params = { musicClipId: (mc.audioClipId ?? mc.clipId) as string, assetIds: [A, B], everyBeats: 4 };
-    const applied = await applyRecipe(store, gov, owner, pid, 'beat-montage', params);
-    const pictures = () => Object.values(store.getProject(pid).doc.sequences).flatMap((q) => q.tracks).filter((t) => t.kind === 'video').flatMap((t) => t.clips);
-    const at = () => pictures().map((c) => [T.nearestFrameIndex(c.start, R), T.nearestFrameIndex(T.add(c.start, c.duration), R)]);
-    const six = [[0, 60], [60, 120], [120, 180], [180, 240], [240, 300], [300, 360]];
-    expect(at()).toEqual(six);
-    const before = pictures();
-    store.commit({ projectId: pid, actor: 'user:owner', ops: [{ op: 'ripple_delete_clips', args: { clipIds: [before[2]!.id] } }] });
-    expect(at()).toEqual(six.slice(0, 5));
-    const survivors = before.slice(3).map((c) => c.id);
-    const shifted = structuredClone(pictures().filter((c) => survivors.includes(c.id)));
-    const regen = await regenerateRecipe(store, gov, owner, pid, applied.runId, params);
-    // the three shifted clips are kept byte for byte, on the beat one segment earlier; the two before them are replaced; the last
-    // segment, freed by the delete, gets a new clip; the deleted clip is named, but a kept clip lies on its old range
-    expect([[...regen.protected].sort(), regen.replaced, regen.removed]).toEqual([[...survivors].sort(), 2, [before[2]!.id]]);
-    expect(pictures().filter((c) => survivors.includes(c.id))).toEqual(shifted);
-    expect(at()).toEqual(six);
-    expect(validateProject(store.getProject(pid).doc)).toEqual([]);
-    // restoreRemoved gives the same full montage: the deleted clip's place is taken, so the new clip is the one at the end
-    const back = await regenerateRecipe(store, gov, owner, pid, applied.runId, params, { restoreRemoved: true });
-    expect([[...back.protected].sort(), back.removed]).toEqual([[...survivors].sort(), []]);
-    expect(pictures().filter((c) => survivors.includes(c.id))).toEqual(shifted);
-    expect(at()).toEqual(six);
-    expect(JSON.stringify(store.replay(pid, store.getProject(pid).revision).doc)).toBe(JSON.stringify(store.getProject(pid).doc));
+  describe('beat-montage: a clip that was only moved in time is not edited by hand (ADR-0016 decision 6, amendment of 2026-11-24)', () => {
+    const SIX = [[0, 60], [60, 120], [120, 180], [180, 240], [240, 300], [300, 360]];
+    /** A project with 12 s of music (a beat every half second) on the timeline and two long videos. */
+    function montageProject(name: string, letters: [string, string, string]) {
+      const pid = store.createProject({ name, width: 640, height: 360, frameRate: R }).doc.id;
+      const r = store.commit({ projectId: pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'import_asset', args: { asset: { ...fake(letters[0], 'audio'), duration: T.rt(12, 1) } } }, { op: 'import_asset', args: { asset: fake(letters[1], 'video') } }, { op: 'import_asset', args: { asset: fake(letters[2], 'video') } }] });
+      const [M, A, B] = r.results.map((x) => x.output!.assetId as string) as [string, string, string];
+      const mc = store.commit({ projectId: pid, actor: 'user:owner', ops: [{ op: 'add_clip', args: { assetId: M, start: f(0) } }] }).results[0]!.output!;
+      store.commit({ projectId: pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'attach_analysis', args: { assetId: M, kind: 'beats', method: 'test', params: {}, createdAt: 'x', times: Array.from({ length: 24 }, (_, i) => T.rt(i, 2)), bpm: 120, confidence: 1 } }] });
+      const params = { musicClipId: (mc.audioClipId ?? mc.clipId) as string, assetIds: [A, B], everyBeats: 4 };
+      const pictures = () => Object.values(store.getProject(pid).doc.sequences).flatMap((q) => q.tracks).filter((t) => t.kind === 'video').flatMap((t) => t.clips).sort((x, y) => T.cmp(x.start, y.start));
+      const at = () => pictures().map((c) => [T.nearestFrameIndex(c.start, R), T.nearestFrameIndex(T.add(c.start, c.duration), R)]);
+      return { pid, params, pictures, at };
+    }
+
+    it('after a Delete that closes the gap the later clips are placed again on the beat (not kept one segment early), the deleted clip\'s place stays empty and is the only one named; restoreRemoved fills it; exact undo', async () => {
+      const m = montageProject('bm-ripple', ['g', 'h', 'i']);
+      const applied = await applyRecipe(store, gov, owner, m.pid, 'beat-montage', m.params);
+      const doc0 = store.getProject(m.pid).doc;
+      expect(m.at()).toEqual(SIX);
+      // the run records each clip's place with its track
+      for (const c of m.pictures()) expect(doc0.recipeRuns[applied.runId]!.ranges![c.id]).toEqual({ start: c.start, end: T.add(c.start, c.duration), trackId: findClip(doc0, c.id)!.track.id });
+      const before = m.pictures();
+      store.commit({ projectId: m.pid, actor: 'user:owner', ops: [{ op: 'ripple_delete_clips', args: { clipIds: [before[2]!.id] } }] });
+      const rippled = store.getProject(m.pid).doc;
+      expect(m.at()).toEqual(SIX.slice(0, 5));
+      const survivors = before.slice(3).map((c) => c.id);
+      const regen = await regenerateRecipe(store, gov, owner, m.pid, applied.runId, m.params);
+      expect([regen.protected, regen.replaced, regen.removed, [...(regen.movedBack ?? [])].sort()]).toEqual([[], 5, [before[2]!.id], [...survivors].sort()]);
+      expect(regen.steps.join(' ')).toMatch(/Place 3 clip\(s\) again that had only been moved in time/);
+      expect(regen.steps.join(' ')).not.toMatch(/edited by hand/);
+      let doc = store.getProject(m.pid).doc;
+      expect(validateProject(doc)).toEqual([]);
+      for (const id of survivors) expect(findClip(doc, id)).toBeFalsy();
+      expect(m.at()).toEqual(SIX.filter((_, i) => i !== 2)); // every clip on its beat; the deleted clip's segment empty
+      // restoreRemoved: the place is filled again
+      const back = await regenerateRecipe(store, gov, owner, m.pid, applied.runId, m.params, { restoreRemoved: true });
+      expect([back.protected, back.removed, back.movedBack, m.at()]).toEqual([[], [], [], SIX]);
+      doc = store.getProject(m.pid).doc;
+      expect(JSON.stringify(store.replay(m.pid, store.getProject(m.pid).revision).doc)).toBe(JSON.stringify(doc));
+      store.undo(m.pid, 'user:owner', 'undo'); store.undo(m.pid, 'user:owner', 'undo');
+      expect(creativeProjection(store.getProject(m.pid).doc)).toBe(creativeProjection(rippled));
+      store.undo(m.pid, 'user:owner', 'undo');
+      expect(creativeProjection(store.getProject(m.pid).doc)).toBe(creativeProjection(doc0));
+      // the button at once after the Delete: one regeneration gives the whole montage back, on the beat
+      store.commit({ projectId: m.pid, actor: 'user:owner', ops: [{ op: 'ripple_delete_clips', args: { clipIds: [before[2]!.id] } }] });
+      const at = await regenerateRecipe(store, gov, owner, m.pid, applied.runId, m.params, { restoreRemoved: true });
+      expect([at.protected, at.removed, at.movedBack?.length, m.at()]).toEqual([[], [], 3, SIX]);
+    });
+
+    it('moved and trimmed is still edited by hand and kept; a clip taken to another track at its own time is kept there, and still at the next regeneration', async () => {
+      const m = montageProject('bm-ripple-edited', ['j', 'k', 'l']);
+      const applied = await applyRecipe(store, gov, owner, m.pid, 'beat-montage', m.params);
+      const before = m.pictures();
+      store.commit({ projectId: m.pid, actor: 'user:owner', ops: [{ op: 'ripple_delete_clips', args: { clipIds: [before[2]!.id] } }, { op: 'trim_clip', args: { clipId: before[3]!.id, edge: 'end', to: f(170) } }] });
+      const kept = structuredClone(findClip(store.getProject(m.pid).doc, before[3]!.id)!.clip);
+      const regen = await regenerateRecipe(store, gov, owner, m.pid, applied.runId, m.params);
+      expect([regen.protected, [...(regen.movedBack ?? [])].sort(), regen.removed]).toEqual([[before[3]!.id], [before[4]!.id, before[5]!.id].sort(), [before[2]!.id]]);
+      expect(findClip(store.getProject(m.pid).doc, before[3]!.id)!.clip).toEqual(kept);
+      expect(validateProject(store.getProject(m.pid).doc)).toEqual([]);
+      // another montage: one clip taken to another picture track, at its own time
+      const n = montageProject('bm-other-track', ['m', 'n', 'o']);
+      const made = await applyRecipe(store, gov, owner, n.pid, 'beat-montage', n.params);
+      const first = n.pictures();
+      const other = store.commit({ projectId: n.pid, actor: 'user:owner', ops: [{ op: 'add_track', args: { kind: 'video' } }] }).results[0]!.output!.trackId as string;
+      store.commit({ projectId: n.pid, actor: 'user:owner', ops: [{ op: 'move_clip', args: { clipId: first[1]!.id, start: f(60), trackId: other } }] });
+      for (let i = 0; i < 2; i++) {
+        const r = await regenerateRecipe(store, gov, owner, n.pid, made.runId, n.params);
+        expect([r.protected, r.movedBack, findClip(store.getProject(n.pid).doc, first[1]!.id)!.track.id, n.at()], `regeneration ${i + 1}`).toEqual([[first[1]!.id], [], other, SIX]);
+      }
+    });
+
+    it('a montage made before tracks were recorded keeps the clips a Delete moved, as before; the answer no longer names the deleted clip as removed when a kept clip lies on its whole range', async () => {
+      const m = montageProject('bm-ripple-older', ['p', 'q', 'r']);
+      // as a server before this amendment committed it: recordRanges without recordTracks
+      const doc = store.getProject(m.pid).doc;
+      const plan = planRecipe(doc, 'beat-montage', m.params, {});
+      const runId = store.commit({ projectId: m.pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'apply_recipe', args: { recipeId: 'beat-montage', params: plan.params, steps: plan.steps, ops: plan.ops, recordRanges: true } }] }).results[0]!.output!.runId as string;
+      const before = m.pictures();
+      expect(store.getProject(m.pid).doc.recipeRuns[runId]!.ranges![before[0]!.id]).toEqual({ start: f(0), end: f(60) });
+      store.commit({ projectId: m.pid, actor: 'user:owner', ops: [{ op: 'ripple_delete_clips', args: { clipIds: [before[2]!.id] } }] });
+      const survivors = before.slice(3).map((c) => c.id);
+      const shifted = structuredClone(m.pictures().filter((c) => survivors.includes(c.id)));
+      const regen = await regenerateRecipe(store, gov, owner, m.pid, runId, m.params);
+      // the three shifted clips are kept byte for byte (no track was recorded to check them against), the freed last segment is
+      // filled, and nothing is named as removed: a kept clip lies on the deleted clip's old range
+      expect([[...regen.protected].sort(), regen.replaced, regen.removed, regen.movedBack]).toEqual([[...survivors].sort(), 2, [], []]);
+      expect(m.pictures().filter((c) => survivors.includes(c.id))).toEqual(shifted);
+      expect(m.at()).toEqual(SIX);
+      expect(validateProject(store.getProject(m.pid).doc)).toEqual([]);
+      // the record still remembers the deleted clip's place, so nothing is forgotten if the kept clips go later
+      expect(store.getProject(m.pid).doc.recipeRuns[runId]!.ranges![before[2]!.id]).toEqual({ start: f(120), end: f(180) });
+      expect(JSON.stringify(store.replay(m.pid, store.getProject(m.pid).revision).doc)).toBe(JSON.stringify(store.getProject(m.pid).doc));
+    });
   });
   it('tidy-speech: regenerating a run is planned on the document without its untouched clips, as before', async () => {
     const pid = store.createProject({ name: 'ts', width: 640, height: 360, frameRate: R }).doc.id;

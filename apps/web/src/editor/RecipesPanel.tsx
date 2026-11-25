@@ -28,7 +28,7 @@ export function RecipesPanel() {
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
   const [errors, setErrors] = useState<Record<string, Failure | null>>({});
   const [busy, setBusy] = useState<string | null>(null);
-  const [regen, setRegen] = useState<Record<string, { replaced: number; protectedCount: number; removedCount: number }>>({});
+  const [regen, setRegen] = useState<Record<string, { replaced: number; protectedCount: number; removedCount: number; movedBackCount: number }>>({});
 
   const rate = doc?.settings.frameRate;
   const sources = recipeSources(doc ?? null, editor.selected?.clip.id);
@@ -72,7 +72,7 @@ export function RecipesPanel() {
     if (!doc) return Promise.resolve();
     return guard(`regen:${runId}`, recipeId, async () => {
       const r = await api.regenerateRecipeRun(doc.id, runId, paramsFor(recipeId), restoreRemoved);
-      setRegen((g) => ({ ...g, [runId]: { replaced: r.replaced, protectedCount: r.protected.length, removedCount: r.removed?.length ?? 0 } }));
+      setRegen((g) => ({ ...g, [runId]: { replaced: r.replaced, protectedCount: r.protected.length, removedCount: r.removed?.length ?? 0, movedBackCount: r.movedBack?.length ?? 0 } }));
     });
   };
   const useAlternative = (recipeId: string, alt: RecipeAlternative) => { loadParams(recipeId, alt.params); void plan(recipeId, alt.params); };
@@ -273,7 +273,7 @@ export function RecipesPanel() {
                   )}
                   {g && (
                     <p aria-live="polite" data-testid="recipe-regenerate-result" data-replaced={g.replaced} data-protected={g.protectedCount}>
-                      {t('recipes.replaced')}: {g.replaced} · {t('recipes.kept')}: {g.protectedCount}{g.removedCount > 0 && <> · {t('recipes.removed')}: {g.removedCount}</>}
+                      {t('recipes.replaced')}: {g.replaced} · {t('recipes.kept')}: {g.protectedCount}{g.movedBackCount > 0 && <> · {t('recipes.movedBack')}: {g.movedBackCount}</>}{g.removedCount > 0 && <> · {t('recipes.removed')}: {g.removedCount}</>}
                     </p>
                   )}
                   {g && g.removedCount > 0 && (

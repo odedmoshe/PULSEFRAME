@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { FAMILY_FILM_RUN_RECIPE_ID, FAMILY_FILM_TEMPLATE_ID, findClip, MOMENTS_JOB_TYPE, validateProject, type Asset } from '@pulseframe/core';
+import { creativeProjection, FAMILY_FILM_RUN_RECIPE_ID, FAMILY_FILM_TEMPLATE_ID, FAMILY_FILM_VERSION, filmRunRecordParams, findClip, MOMENTS_JOB_TYPE, planFamilyFilm, validateProject, type Asset } from '@pulseframe/core';
 import { Auth } from './auth.ts';
 import { Capabilities } from './capabilities.ts';
 import { loadConfig, type Config } from './config.ts';
@@ -257,42 +257,116 @@ describe('a film clip deleted by hand stays deleted (ADR-0016 decision 6, applie
     expect([m.isError, m.body.removed]).toEqual([false, []]);
     expect(JSON.stringify(store.replay(s.pid, revision(s.pid)).doc)).toBe(JSON.stringify(store.getProject(s.pid).doc));
   });
-  it('a pick deleted with a ripple delete: the later picks, moved earlier by it, are kept where the delete left them (the film keeps a moved clip and lays the rest around it); the film stays whole, and restoreRemoved places the deleted file after them', async () => {
-    const s = seed('ff-ripple', ['2026-12-05T18:00:00', '2026-12-05T18:10:00', '2026-12-05T18:20:00']);
-    const applied = await applyFamilyFilmFor(store, gov, USER, s.pid, { assetIds: s.ids, targetSeconds: 30 });
+  describe('a clip that was only moved in time is not edited by hand (ADR-0016 decision 6, amendment of 2026-11-24)', () => {
     const fi = (t: T.RationalTime) => T.nearestFrameIndex(t, R);
-    /** The film's pictures in timeline order: [start, end, file]. */
-    const picks = () => {
-      const doc = store.getProject(s.pid).doc;
-      return (doc.recipeRuns[applied.runId]!.slots ?? []).filter((x) => x.kind === 'picture').flatMap((x) => { const f = findClip(doc, x.clipId); return f && f.clip.type === 'media' ? [{ id: f.clip.id, key: x.key, from: fi(f.clip.start), to: fi(T.add(f.clip.start, f.clip.duration)), file: f.clip.assetId }] : []; }).sort((a, b) => a.from - b.from);
+    /** The film's pictures in timeline order: where each lies and which file it shows. */
+    const picksOf = (pid: string, runId: string) => {
+      const doc = store.getProject(pid).doc;
+      return (doc.recipeRuns[runId]!.slots ?? []).filter((x) => x.kind === 'picture').flatMap((x) => { const f = findClip(doc, x.clipId); return f && f.clip.type === 'media' ? [{ id: f.clip.id, key: x.key, from: fi(f.clip.start), to: fi(T.add(f.clip.start, f.clip.duration)), file: f.clip.assetId, track: f.track.id }] : []; }).sort((a, b) => a.from - b.from);
     };
-    const closingAt = () => { const doc = store.getProject(s.pid).doc; return fi(findClip(doc, doc.recipeRuns[applied.runId]!.slots!.find((x) => x.key === 'closing')!.clipId)!.clip.start); };
-    const whole = () => { const p = picks(); return p.every((x, i) => x.from === (i === 0 ? 0 : p[i - 1]!.to)); };
-    const p0 = picks();
-    expect([p0.map((x) => x.file), whole(), closingAt()]).toEqual([s.ids, true, p0[2]!.to]);
-    store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'ripple_delete_clips', args: { clipIds: [p0[1]!.id] } }] });
-    const moved = picks()[1]!;
-    expect([moved.id, moved.from]).toEqual([p0[2]!.id, p0[1]!.from]);
-    const keptClip = structuredClone(findClip(store.getProject(s.pid).doc, moved.id)!.clip);
-    // regenerate: the moved pick is kept exactly (with its own sound), said as kept by hand; the deleted file stays out; the first
-    // pick is made again before it and the closing card right after it: no gap, no overlap
-    const r = await regenerateFamilyFilmFor(store, gov, USER, s.pid, applied.runId, {});
-    expect(r.protected).toContain(moved.id);
-    expect(r.removed).toEqual([p0[1]!.key]);
-    expect(r.warnings.map((w) => w.code)).toEqual(expect.arrayContaining(['kept_by_hand', 'removed_by_hand']));
-    let doc = store.getProject(s.pid).doc;
-    expect(validateProject(doc)).toEqual([]);
-    expect(findClip(doc, moved.id)!.clip).toEqual(keptClip);
-    expect([picks().map((x) => x.file), whole(), closingAt()]).toEqual([[s.ids[0], s.ids[2]], true, picks().at(-1)!.to]);
-    // restoreRemoved: the moved pick is still kept where it is, and the deleted file is placed after the kept picks, not back at
-    // its old place between them: the film is whole, but no longer in the order the files were filmed
-    const b = await regenerateFamilyFilmFor(store, gov, USER, s.pid, applied.runId, {}, undefined, { restoreRemoved: true });
-    expect([b.removed, b.protected.includes(moved.id)]).toEqual([[], true]);
-    doc = store.getProject(s.pid).doc;
-    expect(validateProject(doc)).toEqual([]);
-    expect(findClip(doc, moved.id)!.clip).toEqual(keptClip);
-    expect([picks().map((x) => x.file), whole(), closingAt()]).toEqual([[s.ids[0], s.ids[2], s.ids[1]], true, picks().at(-1)!.to]);
-    expect(JSON.stringify(store.replay(s.pid, revision(s.pid)).doc)).toBe(JSON.stringify(doc));
+    const layout = (pid: string, runId: string) => picksOf(pid, runId).map((x) => [x.file, x.from, x.to]);
+    const closingAt = (pid: string, runId: string) => { const doc = store.getProject(pid).doc; return fi(findClip(doc, doc.recipeRuns[runId]!.slots!.find((x) => x.key === 'closing')!.clipId)!.clip.start); };
+    const THREE = ['2026-12-05T18:00:00', '2026-12-05T18:10:00', '2026-12-05T18:20:00'];
+
+    it('a pick deleted with a Delete that closes the gap: the later picks it moved are laid out again with the film (not kept as hand edits), the deleted file stays out and the answer says both; restoreRemoved puts the file back at its place; exact undo, one step each', async () => {
+      const s = seed('ff-ripple', THREE);
+      const applied = await applyFamilyFilmFor(store, gov, USER, s.pid, { assetIds: s.ids, targetSeconds: 30 });
+      const doc0 = store.getProject(s.pid).doc;
+      const run0 = doc0.recipeRuns[applied.runId]!;
+      // the run records where it placed each clip, with its track
+      for (const x of picksOf(s.pid, applied.runId)) expect(run0.ranges![x.id]).toMatchObject({ trackId: x.track });
+      const p0 = picksOf(s.pid, applied.runId), l0 = layout(s.pid, applied.runId);
+      expect([p0.map((x) => x.file), closingAt(s.pid, applied.runId)]).toEqual([s.ids, p0[2]!.to]);
+      store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'ripple_delete_clips', args: { clipIds: [p0[1]!.id] } }] });
+      const rippled = store.getProject(s.pid).doc;
+      expect(picksOf(s.pid, applied.runId)[1]).toMatchObject({ id: p0[2]!.id, from: p0[1]!.from });
+      const r = await regenerateFamilyFilmFor(store, gov, USER, s.pid, applied.runId, {});
+      expect([r.protected, r.removed]).toEqual([[], [p0[1]!.key]]);
+      const codes = r.warnings.map((w) => w.code);
+      expect(codes).toEqual(expect.arrayContaining(['moved_back', 'removed_by_hand']));
+      expect(codes).not.toContain('kept_by_hand');
+      expect(codes).not.toContain('cut_off_grid_next_to_kept');
+      expect(r.warnings.find((w) => w.code === 'moved_back')!.details).toEqual({ keys: [p0[2]!.key] });
+      let doc = store.getProject(s.pid).doc;
+      expect(validateProject(doc)).toEqual([]);
+      // the moved pick was replaced, not kept: the film of the two files left is laid out afresh, whole, the card right after it
+      expect(findClip(doc, p0[2]!.id)).toBeUndefined();
+      const after = picksOf(s.pid, applied.runId);
+      expect([after.map((x) => x.file), after[0]!.from, after[1]!.from === after[0]!.to, closingAt(s.pid, applied.runId)]).toEqual([[s.ids[0], s.ids[2]], 0, true, after[1]!.to]);
+      // restoreRemoved: the file is back at its place between the other two, and the film is the one first made
+      const b = await regenerateFamilyFilmFor(store, gov, USER, s.pid, applied.runId, {}, undefined, { restoreRemoved: true });
+      expect([b.removed, b.protected, b.warnings.map((w) => w.code).filter((c) => ['moved_back', 'kept_by_hand', 'removed_by_hand', 'cut_off_grid_next_to_kept'].includes(c))]).toEqual([[], [], []]);
+      doc = store.getProject(s.pid).doc;
+      expect(validateProject(doc)).toEqual([]);
+      expect([layout(s.pid, applied.runId), closingAt(s.pid, applied.runId)]).toEqual([l0, p0[2]!.to]);
+      expect(JSON.stringify(store.replay(s.pid, revision(s.pid)).doc)).toBe(JSON.stringify(doc));
+      // undo: the restore, the regeneration, the delete
+      store.undo(s.pid, 'user:owner', 'undo'); store.undo(s.pid, 'user:owner', 'undo');
+      expect(creativeProjection(store.getProject(s.pid).doc)).toBe(creativeProjection(rippled));
+      store.undo(s.pid, 'user:owner', 'undo');
+      expect(creativeProjection(store.getProject(s.pid).doc)).toBe(creativeProjection(doc0));
+      // the button at once after the Delete (through the template route, which hands film runs to the film path)
+      store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'ripple_delete_clips', args: { clipIds: [p0[1]!.id] } }] });
+      const at = await rest('POST', `/projects/${s.pid}/template-runs/${applied.runId}/regenerate`, { restoreRemoved: true }, auth.tokens.agent);
+      expect([at.status, at.body.removed, at.body.protected, layout(s.pid, applied.runId)]).toEqual([200, [], [], l0]);
+    });
+
+    it('a pick changed in another way and moved is still an edit by hand: kept exactly, the film laid around it; a pick taken to another track at its own time is kept too', async () => {
+      const s = seed('ff-ripple-edited', THREE);
+      const applied = await applyFamilyFilmFor(store, gov, USER, s.pid, { assetIds: s.ids, targetSeconds: 30 });
+      const p0 = picksOf(s.pid, applied.runId);
+      store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'ripple_delete_clips', args: { clipIds: [p0[1]!.id] } }, { op: 'set_clip_transform', args: { clipId: p0[2]!.id, transform: { rotation: 4 } } }] });
+      const kept = structuredClone(findClip(store.getProject(s.pid).doc, p0[2]!.id)!.clip);
+      const r = await regenerateFamilyFilmFor(store, gov, USER, s.pid, applied.runId, {});
+      expect(r.protected).toContain(p0[2]!.id);
+      expect(r.warnings.map((w) => w.code)).toEqual(expect.arrayContaining(['kept_by_hand', 'removed_by_hand']));
+      expect(r.warnings.map((w) => w.code)).not.toContain('moved_back');
+      expect(findClip(store.getProject(s.pid).doc, p0[2]!.id)!.clip).toEqual(kept);
+      expect(validateProject(store.getProject(s.pid).doc)).toEqual([]);
+      // another film: a pick taken to another picture track at its own time (nothing else changed) is where the person put it
+      const t = seed('ff-other-track', THREE);
+      const made = await applyFamilyFilmFor(store, gov, USER, t.pid, { assetIds: t.ids, targetSeconds: 30 });
+      const q0 = picksOf(t.pid, made.runId);
+      const other = store.commit({ projectId: t.pid, actor: 'user:owner', ops: [{ op: 'add_track', args: { kind: 'video' } }] }).results[0]!.output!.trackId as string;
+      store.commit({ projectId: t.pid, actor: 'user:owner', ops: [{ op: 'move_clip', args: { clipId: q0[1]!.id, start: T.frameTime(q0[1]!.from, R), trackId: other, includeLinked: false } }] });
+      const k = await regenerateFamilyFilmFor(store, gov, USER, t.pid, made.runId, {});
+      expect(k.protected).toContain(q0[1]!.id);
+      const doc = store.getProject(t.pid).doc;
+      expect(validateProject(doc)).toEqual([]);
+      expect([findClip(doc, q0[1]!.id)!.track.id, fi(findClip(doc, q0[1]!.id)!.clip.start)]).toEqual([other, q0[1]!.from]);
+    });
+
+    it('a film made before places were recorded: its places are worked out from its own plan, so the same Delete does not freeze the later picks there either; a film whose plan comes out differently keeps them, as before', async () => {
+      const s = seed('ff-older', THREE);
+      const params = { assetIds: s.ids, targetSeconds: 30 };
+      // as a server before run.ranges committed a film: the plan's own steps and slots, no recordRanges
+      const older = (pid: string) => {
+        const doc = store.getProject(pid).doc;
+        const plan = planFamilyFilm(doc, params, filmContext(doc, params));
+        const r = store.commit({ projectId: pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'apply_template', args: { templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: FAMILY_FILM_VERSION, params: filmRunRecordParams(plan, []), steps: plan.steps, ops: plan.ops, slots: plan.slots } }] });
+        return r.results[0]!.output!.runId as string;
+      };
+      const runId = older(s.pid);
+      expect(store.getProject(s.pid).doc.recipeRuns[runId]).not.toHaveProperty('ranges');
+      const p0 = picksOf(s.pid, runId), l0 = layout(s.pid, runId);
+      store.commit({ projectId: s.pid, actor: 'user:owner', ops: [{ op: 'ripple_delete_clips', args: { clipIds: [p0[1]!.id] } }] });
+      const r = await regenerateFamilyFilmFor(store, gov, USER, s.pid, runId, {});
+      expect([r.protected, r.removed, r.warnings.map((w) => w.code).includes('moved_back')]).toEqual([[], [p0[1]!.key], true]);
+      expect(findClip(store.getProject(s.pid).doc, p0[2]!.id)).toBeUndefined();
+      const b = await regenerateFamilyFilmFor(store, gov, USER, s.pid, runId, {}, undefined, { restoreRemoved: true });
+      expect([b.removed, b.protected, layout(s.pid, runId)]).toEqual([[], [], l0]);
+      expect(Object.keys(store.getProject(s.pid).doc.recipeRuns[runId]!.ranges ?? {}).length).toBeGreaterThan(0);
+      // a film of another version: its plan is not made again, so a moved pick is kept where the delete left it, as before
+      const t = seed('ff-older-version', THREE);
+      const doc = store.getProject(t.pid).doc;
+      const plan = planFamilyFilm(doc, { assetIds: t.ids, targetSeconds: 30 }, filmContext(doc, { assetIds: t.ids, targetSeconds: 30 }));
+      const old = store.commit({ projectId: t.pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'apply_template', args: { templateId: FAMILY_FILM_TEMPLATE_ID, templateVersion: FAMILY_FILM_VERSION + 1, params: filmRunRecordParams(plan, []), steps: plan.steps, ops: plan.ops, slots: plan.slots } }] }).results[0]!.output!.runId as string;
+      const q0 = picksOf(t.pid, old);
+      store.commit({ projectId: t.pid, actor: 'user:owner', ops: [{ op: 'ripple_delete_clips', args: { clipIds: [q0[1]!.id] } }] });
+      const k = await regenerateFamilyFilmFor(store, gov, USER, t.pid, old, {});
+      expect([k.protected.includes(q0[2]!.id), k.warnings.map((w) => w.code).includes('kept_by_hand')]).toEqual([true, true]);
+      expect(validateProject(store.getProject(t.pid).doc)).toEqual([]);
+    });
   });
   it('the music deleted by hand: the regenerated film has the no-music mix (own sound at full level, nothing ducked) and says the cuts stay on its bars', async () => {
     const s = seed('ff-music-deleted', ['2026-12-05T18:00:00', '2026-12-05T18:10:00', '2026-12-05T18:20:00']);

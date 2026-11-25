@@ -510,14 +510,15 @@ async function main() {
     };
 
     // R1: hand edits that leave no hole of their own: the second clip's end trimmed by 15 frames, the third moved 15 frames
-    // earlier into that room, a gain set by hand on the film's own-sound track; then another length (30 s)
+    // earlier into that room and turned by 2° (a clip that was ONLY moved is no longer a hand edit: R4), a gain set by hand on
+    // the film's own-sound track; then another length (30 s)
     const second = fm.pictures[1]!, third = fm.pictures[2]!, lastPic = fm.pictures.at(-1)!;
     const edits0 = await revision(pid);
     await tx(pid, [{ op: 'trim_clip', args: { clipId: second.clip.id, edge: 'end', to: T.sub(T.add(second.clip.start, second.clip.duration), q) } }]);
-    await tx(pid, [{ op: 'move_clip', args: { clipId: third.clip.id, start: T.sub(third.clip.start, q) } }]);
+    await tx(pid, [{ op: 'move_clip', args: { clipId: third.clip.id, start: T.sub(third.clip.start, q) } }, { op: 'set_clip_transform', args: { clipId: third.clip.id, transform: { rotation: 2 } } }]);
     await tx(pid, [{ op: 'set_track_audio', args: { trackId: own.id, gain: 0.6 } }]);
     const a = await regenerate('R1 trim + move + hand gain', [second.clip.id, third.clip.id]);
-    check('F13', 'R1: the moved clip and the trimmed clip are byte-identical and present after regenerating at 30 s', a.keptOk, { protected: a.r.protected, replaced: a.r.replaced }, 'both equal');
+    check('F13', 'R1: the clip moved and turned by hand and the trimmed clip are byte-identical and present after regenerating at 30 s', a.keptOk, { protected: a.r.protected, replaced: a.r.replaced }, 'both equal');
     check('F13', 'R1: no kept clip\'s file picked again, no moment twice, no slot key twice, no frame without a picture in [first slot start, last slot end)', a.repicked.length === 0 && a.windowsTwice.length === 0 && new Set(a.keys).size === a.keys.length && a.holes === 0, { repicked: a.repicked, windowsTwice: a.windowsTwice, keys: a.keys.length, distinctKeys: new Set(a.keys).size, holes: a.holes, firstHoles: a.firstHoles, range: [a.from, a.to] }, 'none');
     check('F13', 'R1: off-grid cuts only next to kept clips', a.offGrid.every((f) => a.keptFrames.has(f)), { offGrid: a.offGrid, keptEdges: [...a.keptFrames] }, 'off-grid ⊆ kept edges');
     const own2 = tracksOf(a.d2).find((t) => t.id === own.id) as any;
@@ -538,13 +539,24 @@ async function main() {
     check('F13', 'R2: the kept clip that runs past the shorter target stays, the film runs up to it with no frame without a picture, and the plan says it is longer', b.keptOk && lastEndS > 30 && b.to >= Math.round(lastEndS * FPS) && b.holes === 0 && b.repicked.length === 0 && (b.r.warnings as any[]).some((w) => w.code === 'longer_than_target'), { keptClipEndsAt: r2(lastEndS), filmPicturesEndAt: r2(b.to / FPS), holes: b.holes, repicked: b.repicked, warnings: (b.r.warnings as any[]).map((w) => w.code) }, 'kept, covered, longer_than_target');
     for (let i = 0; i < 2; i++) await call(`/projects/${pid}/undo`, {});
 
-    // R3: the last clip moved 3 s later (a hole the person made) — more room than the clips left can fill: the plan must say how
-    // long the film shows no picture (pictures_missing), never leave a silent black stretch
-    await tx(pid, [{ op: 'move_clip', args: { clipId: lastPic.clip.id, start: T.add(lastPic.clip.start, T.frameTime(90, R)) } }]);
-    const c = await regenerate('R3 the last clip moved 3 s later', [lastPic.clip.id]);
+    // R3: the last clip moved 3 s later and turned by 2° (a hole the person made, around a clip edited by hand) — more room than
+    // the clips left can fill: the plan must say how long the film shows no picture (pictures_missing), never leave a silent black stretch
+    await tx(pid, [{ op: 'move_clip', args: { clipId: lastPic.clip.id, start: T.add(lastPic.clip.start, T.frameTime(90, R)) } }, { op: 'set_clip_transform', args: { clipId: lastPic.clip.id, transform: { rotation: 2 } } }]);
+    const c = await regenerate('R3 the last clip moved 3 s later and turned', [lastPic.clip.id]);
     check('F13', 'R3: when the clips left cannot fill the room up to a kept clip, the plan warns pictures_missing with exactly the frames that show no picture', c.holes > 0 && c.missing?.details?.gapFrames === c.holes, { holes: c.holes, firstHoles: c.firstHoles, warned: c.missing?.details ?? null }, 'a gap exists here; warned frames = measured frames');
     for (let i = 0; i < 2; i++) await call(`/projects/${pid}/undo`, {});
-    measurements.f13Note = 'R3 is the only case with not enough material; it records how the planner answers (a warned gap). R1 and R2 have material to spare and must show a picture on every frame.';
+    // R4 (ADR-0016 decision 6, amendment of 2026-11-24): the same clip ONLY moved 3 s later, nothing else changed, is not an edit by
+    // hand: it is not kept where it was moved to, the film is laid out again with no hole, and the answer says so
+    await tx(pid, [{ op: 'move_clip', args: { clipId: lastPic.clip.id, start: T.add(lastPic.clip.start, T.frameTime(90, R)) } }]);
+    const e = await regenerate('R4 the last clip only moved 3 s later', []);
+    const said = (e.r.warnings as any[]).find((w) => w.code === 'moved_back');
+    check('F13', 'R4: a clip that was only moved is not kept: it is replaced, the film has no frame without a picture, every cut is on the grid, and the answer says it (warning moved_back naming its slot)',
+      e.r.protected.length === 0 && !clipById(e.d2, lastPic.clip.id) && e.holes === 0 && e.offGrid.length === 0 && !e.missing && JSON.stringify(said?.details?.keys) === JSON.stringify(fm.slots.filter((x) => x.clipId === lastPic.clip.id).map((x) => x.key)) && JSON.stringify(e.r.movedBack) === JSON.stringify(said?.details?.keys),
+      { protected: e.r.protected, movedBack: e.r.movedBack ?? null, holes: e.holes, offGrid: e.offGrid, warnings: (e.r.warnings as any[]).map((w) => w.code) }, 'replaced; 0 holes; on the grid; moved_back');
+    for (let i = 0; i < 2; i++) await call(`/projects/${pid}/undo`, {});
+    const back4 = await getDoc(pid);
+    check('F13', 'R4: undoing that regeneration and the move gives back the film byte for byte', sha(JSON.stringify(back4)) === sha(JSON.stringify(d0)), { equal: sha(JSON.stringify(back4)) === sha(JSON.stringify(d0)) }, 'sha256 equal');
+    measurements.f13Note = 'R3 is the only case with not enough material; it records how the planner answers (a warned gap). R1 and R2 have material to spare and must show a picture on every frame. In R1 and R3 the moved clip is also turned by hand, because a clip that was only moved is no longer kept (R4).';
   });
 
   // ================================================================ F15, F15b: the mix
@@ -733,8 +745,9 @@ async function main() {
         const victim = pictures[Math.min(1, pictures.length - 1)]?.clipId ?? '';
         const onTimeline = await page.locator(`.clip[data-clip-id="${victim}"]`).count();
         const offeredBefore = await restore.count();
-        // Observed first, judged only for exact undo: Delete as a new project has it closes the gap, so the film's later clips move
-        // earlier. What the bar's button then does (the clip made again, or a refusal in words) is recorded in `withDefaultDelete`.
+        // Delete as a new project has it closes the gap, so the film's later clips move earlier. They were only moved, so they are
+        // not hand edits (ADR-0016 decision 6, amendment of 2026-11-24): the button lays the film out again with the deleted
+        // file back at its place, in one revision, and the bar says in Hebrew that the moved clips were not kept (check F21).
         await page.locator(`.clip[data-clip-id="${victim}"]`).click();
         await page.keyboard.press('Delete');
         await waitRevision(rev3 + 1, 20_000);
@@ -745,13 +758,22 @@ async function main() {
           await restore.click();
           await Promise.race([barError.waitFor({ timeout: 120_000 }).catch(() => {}), waitRevision(revA + 1)]);
           await sleep(800);
-          obs.afterButton = { revisions: (await revision(up)) - revA, refusal: (await barError.count()) ? await barError.locator('p').first().textContent() : null, removed: removedN(await getDoc(up)), offered: await restore.count() };
+          const dA = await getDoc(up);
+          const layoutOf = (doc: any) => slotsOf(doc).filter((x) => x.kind === 'picture').flatMap((x) => { const c = Object.values(doc.sequences).flatMap((q: any) => q.tracks.flatMap((t: any) => t.clips)).find((k: any) => k.id === x.clipId) as any; return c ? [[c.assetId, T.nearestFrameIndex(c.start, R), T.nearestFrameIndex(c.duration, R)]] : []; }).sort((x, y) => (x[1] as number) - (y[1] as number));
+          obs.afterButton = { revisions: (await revision(up)) - revA, refusal: (await barError.count()) ? await barError.locator('p').first().textContent() : null, removed: removedN(dA), offered: await restore.count(), note: await page.locator('[data-testid=film-bar-note]').textContent().catch(() => null), sameLayout: JSON.stringify(layoutOf(dA)) === JSON.stringify(layoutOf(d3)), layout: layoutOf(dA), layoutBefore: layoutOf(d3) };
           if (await barError.count()) await barError.locator('.pf-anchored-x').click().catch(() => {});
         }
         for (let n = (await revision(up)) - rev3; n > 0; n--) { await page.locator('[data-testid=undo]').click(); await sleep(700); }
         let observedUndone = false;
         for (let i = 0; i < 100 && !observedUndone; i++) { observedUndone = shape(await getDoc(up)) === shape(d3); if (!observedUndone) await sleep(150); }
         obs.undoneExactly = observedUndone;
+        {
+          const ab = (obs.afterButton ?? {}) as { revisions?: number; refusal?: string | null; removed?: number; offered?: number; note?: string | null; sameLayout?: boolean };
+          check('F21', 'a film clip deleted with Delete (the gap closes, the later clips move earlier): «החזרת החלקים שנמחקו» lays the film out again in one revision with the deleted file back at its place (the same files on the same frames as before the delete), nothing is refused, and the bar says in Hebrew that clips which had only been moved were not kept where they were; undo returns exactly',
+            JSON.stringify(obs.deleteOps) === '[["ripple_delete_clips"]]' && obs.offered === 1 && ab.revisions === 1 && ab.refusal === null && ab.removed === 0 && ab.offered === 0 && ab.sameLayout === true
+              && (ab.note ?? '').replace(/[\u2066-\u2069]/g, '') === 'קליפים שרק זזו ממקומם לא נשארו במקום שאליו זזו: הסרט סודר מחדש יחד איתם' && observedUndone,
+            obs, '+1 revision, 0 removed, same layout, the Hebrew sentence, exact undo');
+        }
         // Shift+Delete keeps the gap: nothing else moves; the button makes the clip again
         const rev4 = await revision(up);
         await page.locator(`.clip[data-clip-id="${victim}"]`).click();

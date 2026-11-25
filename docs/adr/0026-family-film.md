@@ -34,6 +34,23 @@ draft.
    and reuses the film's own tracks by role; track gain and ducking are set again only when the mix changes. A
 kept picture beyond the new end stays and the plan warns. `picks.include` pins an asset against being dropped
 for lack of room.
+   - *Amendment (2026-11-24): a clip that was only moved is not a hand edit* (ADR-0016 decision 6 has the rule
+     and its test, `movedOnly`). Before, one Delete of a pick that closed the gap moved every later pick, and each
+     of them then counted as edited by hand in every later regeneration: kept where the delete left it, off the
+     beat grid, with a restored file placed after them. Now a film run records where it placed each clip, with
+     its track (`run.ranges`, optional, written by `apply_template` when the film asks with `recordRanges`), and a
+     clip whose only change is its start on that track goes with the untouched clips: the film is laid out again.
+     After such a Delete a regeneration leaves the deleted file out and lays the others on the grid, and
+     `restoreRemoved` puts the file back at its place. The answer says it in one sentence only when it happened:
+     warning `moved_back` (keys in `details.keys`, the same in `movedBack`), worded in Hebrew and English and shown
+     in the film bar. A pick changed in any other way is kept exactly as before, also when it was moved as well
+     (the planner lays the new picks around it), and so is a pick taken to another track than recorded. This also
+     means a pick dragged to another time on its own track, with nothing else changed, is no longer kept there:
+     to keep an arrangement, the order of the chosen files is the film's `order: given`. A film made before
+     places were recorded: its places are worked out from its own plan made again (same parameters, the film's
+     tracks, what had been deleted before that run) and a clip counts as moved only when its fingerprint agrees;
+     when the plan comes out differently (another film version, other measured moments, a clip kept in that run)
+     the moved picks stay kept, as before.
 4. **Sound.** Clips' own sound sits on a dedicated track; "under the music" is a track gain (−12 dB, only when
    there is music). The «הקולות מובילים» mix ("lead") is kept: the music is lowered 9 dB while a clip has
    sound; it rises over stills and silent clips (warning `lead_music_rises`).
