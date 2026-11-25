@@ -100,7 +100,7 @@ describe('describeAction', () => {
     });
   }
   it('Hebrew export line says nothing is exported until the button', () => {
-    expect(plain(describeAction(samples.export_sheet, 'he'))).toBe('פותח את חלון הייצוא, יעד וואטסאפ. הייצוא מתחיל רק בכפתור "ייצוא"');
+    expect(plain(describeAction(samples.export_sheet, 'he'))).toBe('פותח את חלון הייצוא, יעד מתאים לשליחה. הייצוא מתחיל רק בכפתור "ייצוא"');
   });
 });
 

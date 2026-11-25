@@ -116,3 +116,9 @@ export * from './libraryCredits.ts';
 export * from './librarySearch.ts';
 export * from './svgSafety.ts';
 export * from './libraryOps.ts';
+// send and keep (wave 7, track send): the contract and the two ops are lead-built; sizeFit.ts / exportChecks.ts are worker B's stubs
+export * from './sendContract.ts';
+export * from './loudnessMatch.ts';
+export * from './sendOps.ts';
+export * from './sizeFit.ts';
+export * from './exportChecks.ts';

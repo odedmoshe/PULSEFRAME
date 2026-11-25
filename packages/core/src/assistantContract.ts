@@ -53,6 +53,8 @@ export const ASSISTANT_EXCLUDED_OPS = [
   // the content library (wave 7): the credits card writes licence text the assistant never reads; offering it would also change
   // the reviewed prompt (ASSISTANT_PROMPT_DIGEST), which needs its own review first
   'add_credits_card',
+  // send and keep (wave 7): a project setting, and a match that needs measurements the assistant never reads
+  'set_master_limiter', 'match_clip_loudness',
 ] as const;
 /** The ops a proposal may hold: every registered public op minus ASSISTANT_EXCLUDED_OPS and PERSON_OPS, in registry order. */
 export function assistantOps(): string[] {

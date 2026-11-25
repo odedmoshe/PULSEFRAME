@@ -601,6 +601,20 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       // the content library (wave 7): the credits card, once worker B has built the bodies
       ...(LIBRARY_OPS_BUILT && !opts.v1Replay ? [() => genLibrary(doc)] : []),
       ...(SEQUENCE_OPS_BUILT ? [...sequenceMenu(doc), () => { const others = Object.keys(doc.sequences).filter((id) => id !== doc.mainSequenceId); return { op: 'add_marker', args: { sequenceId: others.length && rnd() < 0.8 ? pick(others) : rnd() < 0.5 ? doc.mainSequenceId : 'seq_none', time: T.frameTime(int(240), rate) } }; }] : []),
+      // send and keep (wave 7): the master limiter on and off, and the loudness match of sound clips with their current gain (accepted)
+      // or a changed one (refused stale), sometimes a repeated or unknown clip; left out of the recorded v1 replay corpus
+      ...(opts.v1Replay ? [] : [
+      () => ({ op: 'set_master_limiter', args: { ceiling: pick([null, -1, -3, -0.5, 0]) } }),
+      () => {
+        const pool = audioClips.length ? audioClips : [];
+        const take = pool.length ? Array.from({ length: 1 + int(Math.min(3, pool.length)) }, () => pick(pool).c) : [];
+        const uniq = [...new Map(take.map((c) => [c.id, c])).values()];
+        const rows = uniq.map((c) => ({ clipId: c.id, measuredLufs: -(10 + int(40)), peakDbfs: -int(30), gain: c.type === 'media' && c.gain > 0 && rnd() < 0.9 ? c.gain : 0.37 }));
+        if (rows.length === 0 || rnd() < 0.05) rows.push({ clipId: any(), measuredLufs: -20, peakDbfs: -6, gain: 1 });
+        if (rnd() < 0.05) rows.push({ ...rows[0]! });
+        return { op: 'match_clip_loudness', args: { target: pick([-14, -16, -18, -23]), clips: rows } };
+      },
+      ]),
     ];
     return pick(menu)();
   };

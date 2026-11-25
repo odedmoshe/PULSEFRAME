@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import type { Readable } from 'node:stream';
 import { mixClip, openClipVoice, PitchStretcher, RampResampler, rampSpanOf, soundEnd, type AudioPlan, type ClipVoice, type PlannedAudioClip } from '@pulseframe/engine';
 import { ApiError } from './store.ts';
+import type { SoundChecks } from '@pulseframe/core';
 
 const CHUNK = 48_000; // frames per mixing step (default)
 const HIGH_WATER = 8 << 20;
@@ -47,6 +48,10 @@ export interface MixResult {
   mixPeakDbfs: number | null;
   loudness: null | { measuredLufs: number | null; truePeakDbtp: number | null; target: number; ceiling: number; appliedGainDb: number; limitedByPeak: boolean; method: string };
   clipped: boolean;
+  /** Master limiter (wave 7 send; worker A): present only when the plan has one. Gain, largest reduction, seconds limited, achieved loudness, true peak, trim. */
+  limiter?: { ceiling: number; gainDb: number; maxReductionDb: number; secondsLimited: number; achievedLufs: number | null; truePeakDbtp: number | null; trimDb: number; method: string };
+  /** Sound checks (wave 7 send; worker A), read from the written 16-bit WAV; times are timeline samples. */
+  checks?: SoundChecks;
 }
 export interface Loudness { integratedLufs: number | null; truePeakDbtp: number | null; rangeLu: number | null }
 

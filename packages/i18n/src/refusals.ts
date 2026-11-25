@@ -11,6 +11,7 @@ import { HE_MULTICAM } from './multicam.ts';
 import { HE_PERFORM } from './perform.ts';
 import { HE_ASSISTANT } from './commandBar.ts';
 import { HE_LIBRARY } from './library.ts';
+import { HE_SEND } from './send.ts';
 
 /**
  * Hebrew wording for the detail text of the refusals a person meets most often in the editor. The server's messages are
@@ -278,7 +279,7 @@ const HE_MEDIA: [RegExp, (m: RegExpExecArray) => string][] = [
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA, ...HE_LIBRARY]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA, ...HE_LIBRARY, ...HE_SEND]) { const m = re.exec(message); if (m) return say(m); }
   for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
   // The export routes wrap the first blocker (Exporter.start, the browser export): worded only when the blocker itself is.
   const start = /^export cannot start: ([\s\S]+)$/.exec(message);
@@ -333,3 +334,5 @@ export const ASSISTANT_REFUSAL_PATTERNS: readonly RegExp[] = HE_ASSISTANT.map(([
 export const MEDIA_REFUSAL_PATTERNS: readonly RegExp[] = HE_MEDIA.map(([re]) => re);
 /** The patterns of the content library (library.ts HE_LIBRARY, wave 7), for packages/evals/src/library-wording.test.ts. */
 export const LIBRARY_REFUSAL_PATTERNS: readonly RegExp[] = HE_LIBRARY.map(([re]) => re);
+/** The patterns of send and keep (send.ts HE_SEND, wave 7), for packages/evals/src/send-wording.test.ts. */
+export const SEND_REFUSAL_PATTERNS: readonly RegExp[] = HE_SEND.map(([re]) => re);

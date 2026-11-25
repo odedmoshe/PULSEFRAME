@@ -15,7 +15,7 @@
  */
 import type { Hono } from 'hono';
 import { z } from 'zod';
-import { BROWSER_EXPORT_SIDECAR_REFUSED, RationalTimeSchema } from '@pulseframe/core';
+import { BROWSER_EXPORT_SIDECAR_REFUSED, RationalTimeSchema, SEND_API_REFUSALS } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import { GENERIC_BLOCKER_HINT, renderDocFor, type Exporter, type Manifest } from './export.ts';
 import { PHOTOSENSITIVITY_METHOD } from './flashCheck.ts';
@@ -156,6 +156,8 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
     // sidecar is refused below: this route writes no subtitle file).
     const doc = renderDocFor(stored, manifest.options);
     // Loudness normalisation needs the R128 measurement pass, which only the server route has. Refuse rather than export at a different level.
+    // send and keep (wave 7): the browser route neither fits a target size nor runs the master limiter (server export only)
+    if (manifest.options.sizeFit || doc.settings.limiter) throw new ApiError(SEND_API_REFUSALS.browserRoute.status, SEND_API_REFUSALS.browserRoute.code, SEND_API_REFUSALS.browserRoute.message(), { ...(manifest.options.sizeFit ? { sizeFit: manifest.options.sizeFit } : {}), ...(doc.settings.limiter ? { limiter: doc.settings.limiter } : {}) }, SEND_API_REFUSALS.browserRoute.hint);
     if (doc.settings.loudness) throw new ApiError(409, 'unsupported_in_browser_export', 'this project has a loudness target; the browser export route cannot measure and normalise loudness', { loudness: doc.settings.loudness }, 'Use the server export, or clear the loudness target.');
     if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, blockers[0]!.hint ?? GENERIC_BLOCKER_HINT);
     // The tab writes no subtitle file and the snapshot hides the caption tracks unless they are burned: refuse a sidecar rather than lose the captions.

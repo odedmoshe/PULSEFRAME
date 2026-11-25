@@ -30,6 +30,7 @@ import { RENDER_CACHE_DIR, SegmentStore } from './segmentStore.ts';
 import { dataDirBytes, setStorageHooks } from './storage.ts';
 import { recoverAssistantJobs } from './assistant/job.ts'; // command bar assistant recovery (ADR-0027)
 import type { AssistantDeps } from './assistant/contract.ts';
+import type { SizeFitFault } from '@pulseframe/core';
 
 export { loadConfig, type Config } from './config.ts';
 export interface RunningServer {
@@ -43,7 +44,7 @@ export interface RunningServer {
  * `deps.assistant`: the command bar assistant's installed adapters (ADR-0027). Wave 1 ships none, so the CLI passes nothing and
  * the setup state is honest (provider_not_configured); tests and pnpm proof:command-bar install the labelled MOCK adapter here.
  */
-export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter; assistant?: AssistantDeps } = {}): Promise<RunningServer> {
+export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter; assistant?: AssistantDeps; /** TEST only (wave 7 send proof S3/S4): a labelled size-fit fault, never from the environment */ fitFault?: SizeFitFault } = {}): Promise<RunningServer> {
   const cfg = { ...loadConfig(), ...overrides };
   if (overrides.dataDir && !overrides.speechModelsDir && !process.env.PF_SPEECH_MODELS_DIR) cfg.speechModelsDir = path.join(cfg.dataDir, 'speech-models');
   const backup = new BackupScheduler(cfg.dataDir, cfg.backupDir, cfg.backupEveryHours, cfg.backupKeep); // throws on a destination inside the data directory, before anything is opened
@@ -57,6 +58,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   const lane = new FifoComputeLane();
   const exporter = new Exporter(store, host, () => `${url}/render.html`, cfg.webDist);
   exporter.lane = lane;
+  if (deps.fitFault) exporter.fitFault = deps.fitFault;
   const localTools = new LocalTools(store, cfg, lane);
   const capabilities = new Capabilities(store, cfg, deps.providerAdapter, { lane, localTools });
   const derivatives = new Derivatives(store);

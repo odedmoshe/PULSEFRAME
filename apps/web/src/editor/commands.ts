@@ -415,6 +415,8 @@ export const COMMANDS: Command[] = [
   { id: 'file.importFolder', label: 'cmd.importFolder', group: 'file', keys: [], enabled: (e) => !!e.doc, run: () => document.querySelector<HTMLInputElement>('[data-testid=folder-input]')?.click() },
   { id: 'file.phoneDrop', label: 'cmd.phoneDrop', group: 'file', keys: [], enabled: (e) => !!e.doc && e.getState().actor === 'user:local', run: (e) => e.openPhoneDrop() },
   { id: 'file.export', label: 'export', text: { he: COMMAND_STRINGS.he.exportOpen, en: COMMAND_STRINGS.en.exportOpen }, group: 'file', keys: ['Mod+KeyE'], enabled: (e) => !!e.doc && (e.player?.frameCount ?? 0) > 0, run: (e) => e.openExportSheet() },
+  // send and keep (wave 7): the export sheet with «מתאים לשליחה» chosen (the size is chosen there; nothing starts by itself)
+  { id: 'export.send', label: 'export', text: { he: 'ייצוא לשליחה…', en: 'Export to send…' }, group: 'file', keys: [], enabled: (e) => !!e.doc && (e.player?.frameCount ?? 0) > 0, run: (e) => e.openExportSheet('whatsapp') },
   { id: 'view.palette', label: 'cmd.palette', group: 'view', keys: ['Mod+KeyK'], run: (e) => e.set({ paletteOpen: !e.getState().paletteOpen }) },
   { id: 'view.language', label: 'lang.label', group: 'view', keys: [], run: (e) => e.setLang(e.getState().lang === 'he' ? 'en' : 'he') },
   { id: 'view.zoomIn', label: 'cmd.zoomIn', group: 'view', keys: ['Equal'], run: (e) => e.set({ pxPerSecond: Math.min(720, e.getState().pxPerSecond * 1.5) }) },

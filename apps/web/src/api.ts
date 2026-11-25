@@ -5,6 +5,7 @@ import type { AssistantConfigBody, AssistantKeyState, AssistantRequestBody, Assi
 import type { ArchiveLibraryMode, CreditsView, LibraryItemsPage, LibraryItemsQuery, LibraryRow, LibraryStatus, LibraryUseBody, LibraryUseResult } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
+import type { ClipLoudnessRequest, ClipLoudnessResult } from '@pulseframe/core';
 
 export class ApiFailure extends Error {
   constructor(public status: number, public code: string, message: string, public details?: unknown, public hint?: string) {
@@ -146,6 +147,8 @@ export const api = {
   /** The programme loudness of the main edit, or of one sequence (a short) with `sequenceId`. */
   measureLoudness: (id: string, sequenceId?: string) => call<LoudnessResult>(`/projects/${id}/analysis/loudness`, json(sequenceId ? { sequenceId } : {})),
   measureVoice: (id: string, body: VoiceMeasureRequest) => call<VoiceCheck>(`/projects/${id}/analysis/voice`, json(body)),
+  /** Loudness of single clips (wave 7 send; 501 not_built until built). Commit match_clip_loudness with expectedRevision = revision. */
+  measureClipLoudness: (id: string, body: ClipLoudnessRequest) => call<ClipLoudnessResult>(`/projects/${id}/analysis/clip-loudness`, json(body)),
   /** The same measurement as a durable job (its output is { kind: 'voice', result: VoiceCheck }). */
   startVoiceMeasureJob: (id: string, body: VoiceMeasureRequest) => call<{ jobId: string; status: string }>(`/projects/${id}/analysis/voice`, json({ ...body, background: true })),
   matchColour: (id: string, body: ColourMatchRequest) => call<ColourMatch>(`/projects/${id}/analysis/colour-match`, json(body)),
