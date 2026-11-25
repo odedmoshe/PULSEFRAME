@@ -6,12 +6,12 @@
  * Text is shaped by the browser engine (HarfBuzz inside Chromium) using a bundled, pinned font file.
  */
 import * as T from '@pulseframe/time';
-import { hasTextLook } from '@pulseframe/core';
+import { contentTransform, expm, hasTextLook } from '@pulseframe/core';
 import { gpuTransition, isGpuTransition, lutIdOf, takeUnavailable, type LutStrip } from './gpu.ts';
 import { ADJUST_PASS_SLOT, type AdjustLayer, type ImageLayer, type PictureLayer, type RenderGraph, type TextLayer, type VideoLayer } from './evaluate.ts';
 import { visualOrder, wordDir, wrapWords, type CaptionLayer } from './captions.ts';
 import { textAtRest, unitPose } from './textAnimation.ts';
-import { applyColourMatrix, applyEffects, hasGpuEffect, applyMask, applyRegions, BT709_AS_BT601, COMPOSITE, compositeLayer, fadeBuf, scratch, type Buf, type LayerBox, type LookEnv, type PixelRect } from './look.ts';
+import { applyColourMatrix, applyEffects, hasGpuEffect, applyMask, applyRegions, BT709_AS_BT601, COMPOSITE, compositeLayer, drawMaskShape, fadeBuf, REGION_MASK_SLOT, scratch, type Buf, type LayerBox, type LookEnv, type PixelRect } from './look.ts';
 import { fitScale } from '@pulseframe/core';
 import { TAP_PLACE_SLOT, tapMerger } from './taps.ts';
 import { enterUnit, INK_METRICS_MAX_PX, paintTitle, paragraphSpacing, restPoses, type Box, type TextNote, type TitleUnit } from './textEffects.ts';
@@ -345,11 +345,54 @@ function boxOf(g: RenderGraph, layer: VideoLayer | ImageLayer | TextLayer): Laye
   const { w, h } = placedSize(g, layer), t = layer.transform;
   return { cx: g.width / 2 + t.x * g.width, cy: g.height / 2 + t.y * g.height, w, h, rotation: t.rotation, scale: t.scale };
 }
-/** Draw a layer's picture (or title) with its transform and opacity, nothing else: the first step of every layer and of every time tap. */
+/**
+ * Draw a layer's picture (or title) with its transform and opacity, nothing else: the first step of every layer and of every time tap.
+ * A stabilised picture (wave 7, VideoLayer.steady): own transform → clip to the picture's own rectangle → translate(zoom·t·w) ·
+ * rotate(r) · scale(zoom·e^l) → draw. The clip keeps a pillar-boxed or picture-in-picture clip inside its own edges; a picture
+ * without `steady` is drawn exactly as before.
+ */
 function placeLayer(c: Ctx2D, g: RenderGraph, layer: VideoLayer | ImageLayer | TextLayer, img: FrameImage | null, note?: TextNote) {
   if (layer.kind === 'text') { drawText(c, g, layer, note); return; }
   const { w, h } = placedSize(g, layer);
-  withTransform(c, g, layer, () => img!.draw(c, -w / 2, -h / 2, w, h));
+  const st = layer.kind === 'video' ? layer.steady : undefined;
+  if (!st) { withTransform(c, g, layer, () => img!.draw(c, -w / 2, -h / 2, w, h)); return; }
+  withTransform(c, g, layer, () => {
+    c.beginPath();
+    c.rect(-w / 2, -h / 2, w, h);
+    c.clip();
+    c.translate(st.zoom * st.tx * w, st.zoom * st.ty * w);
+    c.rotate(st.r);
+    const k = st.zoom * expm(st.l);
+    c.scale(k, k);
+    img!.draw(c, -w / 2, -h / 2, w, h);
+  });
+}
+/**
+ * The box privacy regions are drawn in (ADR-0015): the placed box, or for a stabilised picture (wave 7) where its CONTENT is drawn
+ * (core contentTransform), so a region stays on what it hides. Masks and layer effects keep the own box (a window stays still).
+ */
+function regionBox(g: RenderGraph, layer: VideoLayer): LayerBox {
+  if (!layer.steady) return boxOf(g, layer);
+  const { w, h } = placedSize(g, layer);
+  const ct = contentTransform(layer.transform, layer.steady, layer.steady.zoom, g.width, g.height, g.fit, layer.sourceWidth, layer.sourceHeight);
+  return { cx: g.width / 2 + ct.x * g.width, cy: g.height / 2 + ct.y * g.height, w, h, rotation: ct.rotation, scale: ct.scale };
+}
+/**
+ * After the privacy regions of a stabilised picture: keep only its own rectangle (destination-in with the own box). A region at the
+ * content's edge, or the whole-picture fallback, is drawn with the content's box, which is larger than the own one by the crop;
+ * this keeps its colour or blur off the pillar-box area and the picture beside a picture-in-picture clip.
+ */
+function keepOwnRectangle(buf: Buf, g: RenderGraph, layer: VideoLayer) {
+  const m = scratch(REGION_MASK_SLOT, g.width, g.height);
+  drawMaskShape(m.ctx, boxOf(g, layer), 'rect', 0, 0, 1, 1);
+  const b = buf.ctx;
+  b.save();
+  b.setTransform(1, 0, 0, 1, 0, 0);
+  b.globalAlpha = 1;
+  b.filter = 'none';
+  b.globalCompositeOperation = 'destination-in';
+  b.drawImage(m.canvas, 0, 0);
+  b.restore();
 }
 /**
  * The adjustment pass (ADR-0016): the frame drawn so far (every layer before this one) is copied into scratch slot
@@ -540,7 +583,10 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider, opt
         placeLayer(slot.ctx, g, tap.layer, tapImgs[k] ?? null, textNote);
         if (tap.layer.kind === 'video' && tap.layer.colourFix === 'bt709-as-bt601') applyColourMatrix(slot, BT709_AS_BT601);
         // each earlier picture hides its own privacy regions, resolved at its own source frame (ADR-0015), before the merge
-        if (tap.layer.kind === 'video' && tap.layer.regions?.length) applyRegions(slot, tap.layer.regions, { width: g.width, height: g.height, box: boxOf(g, tap.layer) });
+        if (tap.layer.kind === 'video' && tap.layer.regions?.length) {
+          applyRegions(slot, tap.layer.regions, { width: g.width, height: g.height, box: regionBox(g, tap.layer) });
+          if (tap.layer.steady) keepOwnRectangle(slot, g, tap.layer); // wave 7: nothing outside the picture's own rectangle
+        }
         merger.add(k, slot.ctx.getImageData(0, 0, g.width, g.height).data);
       });
       const merged = buf.ctx.createImageData(g.width, g.height);
@@ -563,7 +609,13 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider, opt
         fadeBuf(buf, layer.transform.opacity, g.width, g.height, opts.fadeArea === 'frame' ? undefined : placedArea(g, layer));
       } else placeLayer(buf.ctx, g, layer, img ?? null, textNote);
       if (colourFix === 'bt709-as-bt601') applyColourMatrix(buf, BT709_AS_BT601); // before effects: it corrects the source, it is not a look
-      if (regions?.length) applyRegions(buf, regions, env); // privacy regions (ADR-0015): on the placed picture, before any effect
+      if (regions?.length) {
+        // privacy regions (ADR-0015): on the placed picture, before any effect; on a stabilised picture (wave 7) with the content's
+        // box, then cut back to the own rectangle
+        const steadyLayer = layer.kind === 'video' && layer.steady ? layer : null;
+        applyRegions(buf, regions, steadyLayer ? { ...env, box: regionBox(g, steadyLayer) } : env);
+        if (steadyLayer) keepOwnRectangle(buf, g, steadyLayer);
+      }
     }
     if (layer.effects?.length) buf = await applyEffects(buf, layer.effects, env);
     if (layer.mask) applyMask(buf, layer.mask, env);

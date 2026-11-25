@@ -8,7 +8,7 @@
  */
 import * as T from '@pulseframe/time';
 import {
-  lossFlags, placed, regionGeometry, sourceToFrame, SIZE_UNIT, TRACK_STATES, TRACK_UNIT, trackSampleAt,
+  contentTransform, lossFlags, placed, regionGeometry, sourceToFrame, SIZE_UNIT, TRACK_STATES, TRACK_UNIT, trackSampleAt,
   type Asset, type Clip, type Follow, type FollowInfo, type MediaClip, type MotionTrack, type ProjectDocument, type ResolvedRegion, type Sequence, type Track, type Transform,
 } from '@pulseframe/core';
 import type { ImageLayer, RenderGraph, TextLayer, VideoLayer } from './evaluate.ts';
@@ -91,9 +91,10 @@ function followTarget(doc: ProjectDocument, seq: Sequence, graph: RenderGraph, f
 /**
  * The follow post-pass (ADR-0015), run by evaluate after its layer loop and before captions are added. Each follower's
  * transform becomes the resolved one; its own transform is an offset from the tracked point:
- *   P = sourceToFrame(placed(W, H, fit, target source size, target transform), x/TRACK_UNIT, y/TRACK_UNIT) of the sample at the
- *       target picture's sourceFrameIndex (smoothed over ±follow.smooth source frames),
- *   m = follow.scale ? s/SIZE_UNIT · target scale : 1,
+ *   P = sourceToFrame(placed(W, H, fit, target source size, target placement), x/TRACK_UNIT, y/TRACK_UNIT) of the sample at the
+ *       target picture's sourceFrameIndex (smoothed over ±follow.smooth source frames); the placement is the target's transform,
+ *       or for a stabilised target (wave 7) where its content is drawn (core contentTransform),
+ *   m = follow.scale ? s/SIZE_UNIT · that placement's scale : 1,
  *   x = (P.x + own.x·W·m − W/2)/W, y = (P.y + own.y·H·m − H/2)/H, scale = own.scale·m; rotation and opacity stay its own.
  * All targets are read before any follower is changed, so the result never depends on layer order (a chain, which the
  * operations refuse, would read its leader's own transform). With no target the own transform is kept ('target-missing').
@@ -109,8 +110,10 @@ export function resolveFollows(doc: ProjectDocument, seq: Sequence, graph: Rende
     if (!mt || !target) return [layer, own, { motionTrackId: f.motionTrackId, state: 'target-missing', sourceFrame: null, confidence: 0, targetClipId: null }];
     const t = target.layer;
     const sample = trackSampleAt(mt, t.sourceFrameIndex, f.smooth);
-    const P = sourceToFrame(placed(W, H, graph.fit, t.sourceWidth, t.sourceHeight, t.transform), sample.x / TRACK_UNIT, sample.y / TRACK_UNIT);
-    const m = f.scale ? (sample.s / SIZE_UNIT) * t.transform.scale : 1;
+    // a stabilised target (wave 7) is read where its content is drawn: the own placement with the correction nested inside
+    const at = t.steady ? contentTransform(t.transform, t.steady, t.steady.zoom, W, H, graph.fit, t.sourceWidth, t.sourceHeight) : t.transform;
+    const P = sourceToFrame(placed(W, H, graph.fit, t.sourceWidth, t.sourceHeight, at), sample.x / TRACK_UNIT, sample.y / TRACK_UNIT);
+    const m = f.scale ? (sample.s / SIZE_UNIT) * at.scale : 1;
     const transform: Transform = { ...own, x: (P.px + own.x * W * m - W / 2) / W, y: (P.py + own.y * H * m - H / 2) / H, scale: own.scale * m };
     const state = target.absent ? 'target-absent' : sample.outside ? 'outside' : TRACK_STATES[sample.st] ?? 'unknown';
     return [layer, transform, { motionTrackId: mt.id, state, sourceFrame: t.sourceFrameIndex, confidence: sample.outside ? 0 : sample.q, targetClipId: t.clipId }];
