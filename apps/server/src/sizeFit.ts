@@ -127,10 +127,11 @@ export async function runSizeFit(d: SizeFitDeps): Promise<SizeFitResult> {
     if (d.canceled()) throw canceled();
     const out = path.join(d.workDir, `fit-${attempt}.mp4`);
     const [p1, p2] = twoPassArgs({ intermediate: d.intermediate, wav: d.wav, passLog: path.join(d.workDir, `fitpass-${attempt}`), videoBitrate: v, audioBitrate: fit.audioBitrate, frameRate: output.frameRate, outFile: out });
-    d.stage(`fitting size 1/2${attempt === 2 ? ' (retry)' : ''}`);
+    // the stage keeps only the words i18n knows (STAGE_WORDS 'fitting size' + its count): a retry shows the same two steps again
+    d.stage('fitting size 1/2');
     await run(p1, d.onProcess);
     if (d.canceled()) throw canceled();
-    d.stage(`fitting size 2/2${attempt === 2 ? ' (retry)' : ''}`);
+    d.stage('fitting size 2/2');
     await run(p2, d.onProcess);
     if (d.canceled()) throw canceled();
     d.stage('checking size');

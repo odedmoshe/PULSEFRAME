@@ -144,7 +144,7 @@ describe('runSizeFit (real ffmpeg on a synthetic intermediate)', () => {
     expect(r.fit.attempts[1]!.videoBitrate).toBeLessThan(r.fit.attempts[0]!.videoBitrate);
     expect(r.fit.bytes).toBeLessThanOrEqual(300_000);
     expect(r.fit.test).toMatch(/^TEST fault: overshoot-once/);
-    expect(stages).toContain('fitting size 2/2 (retry)');
+    expect(stages.filter((x) => x === 'fitting size 2/2')).toHaveLength(2);
   }, 90_000);
   it('overshoot-always: size_fit_missed with both byte counts, no fitted file left', async () => {
     const { d, work } = deps(300_000, 'overshoot-always');
