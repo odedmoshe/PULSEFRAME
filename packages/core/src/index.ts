@@ -241,3 +241,9 @@ export * from './madeOps.ts';
 export * from './sourcesContract.ts';
 export * from './sourceDuties.ts';
 export * from './sourceOps.ts';
+// «מה יש בקליפ» (wave 8 understand track): the contract (limits, notes format, producer, pointer, settings, states, wire types, the
+// describer's prompt, refusals) and attach_footage_notes are lead-built; understand.ts is W1's, understandReply.ts is W2's
+export * from './understandContract.ts';
+export * from './understand.ts';
+export * from './understandReply.ts';
+export * from './understandOps.ts';

@@ -15,7 +15,7 @@
  */
 import {
   agentAnswerOf, AgentFootageAnswerSchema, FOOTAGE_LIMITS, FootageSearchNotBuilt, FOOTAGE_NOTE, FootageAnswerSchema, int8Dot, mergePictureHits, PICTURE_MIN_RELEVANCE,
-  quantiseInt8, sampleFrameTargets, searchFootage, type AgentFootageAnswer, type FootageAnswer, type Moment, type PictureState, type ProjectDocument, type SearchSetup,
+  quantiseInt8, sampleFrameTargets, searchFootage, type AgentFootageAnswer, type FootageNotesData, type FootageAnswer, type Moment, type PictureState, type ProjectDocument, type SearchSetup,
 } from '@pulseframe/core';
 import { isOwnerSession } from '../assistant/contract.ts';
 import type { Principal } from '../governance.ts';
@@ -84,6 +84,8 @@ export interface PictureContext {
   embedder(setup: SearchSetup): Embedder | null;
   index(): SearchIndexDb | null;
   scanOpen(projectId: string): boolean;
+  /** «לפי מה שתואר» (wave 8 understand): the footage notes of the document's picture assets by asset id (understand/view.ts notesMapFor, W1); the notes section is answered to every credential (decision 6) */
+  notes(doc: ProjectDocument): ReadonlyMap<string, FootageNotesData>;
 }
 
 export interface PictureSection { pictureState: PictureState; setup: SearchSetup; scanned: { files: number; of: number }; embedder?: string; picture: Moment[] }

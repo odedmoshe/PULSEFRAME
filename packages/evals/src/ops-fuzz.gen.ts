@@ -807,6 +807,26 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     return { op: 'use_library_item', args: { asset } };
   };
   /**
+   * «מה יש בקליפ» (wave 8 understand; internal: the describe job commits it with allowInternal). `genFootageNotes(doc)` returns a random
+   * attach_footage_notes call: one to three items naming picture assets (sometimes a sound file, a missing id, the same id twice), counts
+   * that add up (sometimes not), a photo with one span (sometimes two), truncated now and then. Not drawn by `gen`.
+   */
+  const genFootageNotes = (doc: ProjectDocument): OpCall => {
+    const lib = Object.values(doc.assets);
+    const anyId = () => (lib.length && rnd() < 0.9 ? pick(lib).id : 'ast_none');
+    const n = 1 + int(3);
+    const items = Array.from({ length: n }, (_, k) => {
+      const assetId = k > 0 && rnd() < 0.1 ? 'dup' : anyId();
+      const a = Object.hasOwn(doc.assets, assetId) ? doc.assets[assetId] : undefined;
+      const spans = a?.kind === 'image' ? (rnd() < 0.9 ? 1 : 2) : int(40);
+      const described = int(spans + 1);
+      const failed = rnd() < 0.9 ? spans - described : spans - described + 1;
+      return { assetId, producer: sha256Hex(`p${int(3)}`).slice(0, 16), model: pick(['TEST-DOUBLE-describer/1', 'qwen3-vl-2b', 'claude-haiku-5-5']), data: `sha256:${sha256Hex(`n${k}${int(9)}`)}`, spans, described, failed, ...(rnd() < 0.1 ? { truncated: true as const } : {}) };
+    });
+    if (items.length > 1 && items[1]!.assetId === 'dup') items[1]!.assetId = items[0]!.assetId;
+    return { op: 'attach_footage_notes', args: { method: 'fuzz notes', createdAt: '2026-11-26T00:00:00Z', items } };
+  };
+  /**
    * Stock sources (wave 8 `sources`; internal: the source_fetch job commits it with allowInternal). `genSource()` returns a random
    * use_source_item call: a fetched file with a source record — licences CC0, PDM, CC BY with and without credit, CC BY-NC with and
    * without its marks, CC BY-SA, CC BY-ND, provider:pixabay, unknown with and without its mark, an id outside the table — a link record on a non-link provider, a hash that differs from
@@ -1093,5 +1113,5 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLiving, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience, genInk, genLesson, genTripMap, genMade, genSource };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLiving, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience, genInk, genLesson, genTripMap, genMade, genSource, genFootageNotes };
 }

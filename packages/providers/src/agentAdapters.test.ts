@@ -68,7 +68,7 @@ describe('anthropic-messages converters (R§1.2)', () => {
     const body = toAnthropicRequest(req({ system: 'You edit films.', tools: two, cache: true, parallelToolCalls: false }), 'm');
     expect(body.tool_choice).toEqual({ type: 'auto', disable_parallel_tool_use: true });
     expect(body.system).toEqual([{ type: 'text', text: 'You edit films.', cache_control: { type: 'ephemeral' } }]);
-    expect(body.tools.map((t) => t.cache_control ?? null)).toEqual([null, { type: 'ephemeral' }]);
+    expect(body.tools!.map((t) => t.cache_control ?? null)).toEqual([null, { type: 'ephemeral' }]);
     expect(toAnthropicRequest(req({ system: 'plain', tools: [] }), 'm')).not.toHaveProperty('tool_choice');
     expect(toAnthropicRequest(req({ system: 'plain' }), 'm').system).toBe('plain');
   });
@@ -99,6 +99,20 @@ describe('anthropic-messages converters (R§1.2)', () => {
     expect((odd.messages[1]!.content as { type: string }[]).map((b) => b.type)).toEqual(['text', 'tool_use']);
     // the openai-chat family ignores it
     expect(JSON.stringify(toOpenAIChatRequest(req({ messages }), 'gpt', preset('openai')))).not.toContain('TEST-ONLY-signature');
+  });
+});
+
+describe('a request without tools (wave 8 understand, verify C1: the describer sends one picture request and no tools)', () => {
+  const img: AgentImage = { mediaType: 'image/jpeg', base64: '/9j/', label: 'frame 1 of 1, 00:04.0' };
+  it('omits `tools` (an empty array is not a documented value), tool_choice and parallel_tool_calls in both families, as the probes do', () => {
+    const r = req({ system: 'Describe.', tools: [], parallelToolCalls: false, messages: [{ role: 'user', text: 'One frame', images: [img] }], maxOutputTokens: 800 });
+    for (const id of ['openai', 'llamacpp', 'ollama']) {
+      const body = toOpenAIChatRequest(r, 'm', preset(id));
+      expect(Object.keys(body).sort(), id).toEqual(['max_tokens', 'messages', 'model']);
+    }
+    const a = toAnthropicRequest(r, 'm');
+    expect(Object.keys(a).sort()).toEqual(['max_tokens', 'messages', 'model', 'system']);
+    expect(JSON.stringify(a)).not.toMatch(/temperature|top_p|top_k/);
   });
 });
 

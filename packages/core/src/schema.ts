@@ -11,6 +11,7 @@ import { DrawnPayloadSchema } from './drawn.ts';
 import { FollowSchema, MAX_REDACT_REGIONS, MotionTrackSchema, RedactRegionSchema } from './tracking.ts';
 import { ANIMATABLE, KeyframeSchema, MAX_TRANSFORM_KEYS, RationalTimeSchema, type Animatable } from './keyframe.ts';
 import { CameraMotionSchema, ClipStabiliseSchema } from './steadyContract.ts';
+import { NotesPointerSchema } from './understandContract.ts';
 import { ClipDepthSchema } from './livingContract.ts';
 import { MadeRecordSchema } from './madeContract.ts';
 import { SourceRecordSchema } from './sourcesContract.ts';
@@ -715,6 +716,12 @@ export const AnalysisSchema = z
       truncated: z.literal(true).optional() }).strict().optional(),
     /** Camera motion of a video, measured per SOURCE frame by the model-free stabilise job (wave 7, steadyContract.ts); attached by attach_camera_motion. */
     cameraMotion: CameraMotionSchema.optional(),
+    /**
+     * Footage notes «מה יש בקליפ» (wave 8 understand, understandContract.ts): a POINTER to the notes the describe job stored outside the
+     * document (the footage_notes table, per content hash and producer) — which producer, the model, a digest and counts. Written by
+     * attach_footage_notes (understandOps.ts). Optional, so documents and logs written before it read unchanged (no version change).
+     */
+    notes: NotesPointerSchema.optional(),
   })
   .strict();
 

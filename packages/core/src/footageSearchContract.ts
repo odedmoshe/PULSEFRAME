@@ -41,11 +41,20 @@ export const FOOTAGE_LIMITS = {
   maxScanAssets: 2000,
 } as const;
 
-/** Where a moment was found. `pearl` (a pearl's name) and `person` (a person tagged on a pearl) are read for the owner's own session only. */
-export const MOMENT_SOURCES = ['name', 'date', 'event', 'transcript', 'pearl', 'person', 'picture'] as const;
+/**
+ * Where a moment was found. `pearl` (a pearl's name) and `person` (a person tagged on a pearl) are read for the owner's own session only.
+ * `seen` (a caption or tag of footage notes) and `onscreen` (text a model read on screen) come from «מה יש בקליפ» (wave 8 understand,
+ * understandContract.ts): the notes section, given to every credential (decision 6, verify C8).
+ */
+export const MOMENT_SOURCES = ['name', 'date', 'event', 'transcript', 'pearl', 'person', 'picture', 'seen', 'onscreen'] as const;
 export type MomentSource = (typeof MOMENT_SOURCES)[number];
 /** The only sources an agent's answer may name (agentAnswerOf drops a moment found by nothing else). */
-export const AGENT_SOURCES: readonly MomentSource[] = ['name', 'date', 'event', 'transcript'];
+export const AGENT_SOURCES = ['name', 'date', 'event', 'transcript', 'seen', 'onscreen'] as const satisfies readonly MomentSource[];
+/** The sources of the notes section «לפי מה שתואר» (wave 8 understand). */
+export const NOTE_SOURCES = ['seen', 'onscreen'] as const satisfies readonly MomentSource[];
+/** The state of the notes section: ready (every picture file of the project has notes), partly (some), none (no notes yet), not_built. */
+export const NOTES_STATES = ['ready', 'partly', 'none', 'not_built'] as const;
+export type NotesState = (typeof NOTES_STATES)[number];
 
 /**
  * The state of the picture section. not_installed: the setup state says why (setup.code); not_scanned / partly_scanned / stale: the
@@ -87,8 +96,10 @@ export const MomentSchema = z.object({
   sources: z.array(z.enum(MOMENT_SOURCES)).min(1),
   /** OWNER ONLY: the source frame whose sprite tile shows the moment (picture rows: the best frame) */
   frame: z.number().int().nonnegative().optional(),
-  /** OWNER ONLY: the transcript words of a transcript hit (≤ 200 characters), or the pearl's name of a pearl hit */
+  /** OWNER ONLY: the transcript words of a transcript hit (≤ 200 characters), or the pearl's name of a pearl hit; in the notes section (every credential): the caption */
   snippet: z.string().max(200).optional(),
+  /** notes section: the model that wrote the caption (shown «תיאור של {by} · לא נבדק») */
+  by: z.string().max(128).optional(),
 }).strict();
 export type Moment = z.infer<typeof MomentSchema>;
 /** What an agent receives of a moment: nothing else, ever. */
@@ -97,6 +108,14 @@ export const AgentMomentSchema = z.object({
   sources: z.array(z.enum(['name', 'date', 'event', 'transcript'])).min(1),
 }).strict();
 export type AgentMoment = z.infer<typeof AgentMomentSchema>;
+/** A moment of the notes section as EVERY credential receives it (decision 6: notes are not withheld): no frame, the caption, the model. */
+export const NoteMomentSchema = z.object({
+  assetId: Id, start: RationalTimeSchema.nullable(), end: RationalTimeSchema.nullable(),
+  sources: z.array(z.enum(NOTE_SOURCES)).min(1),
+  snippet: z.string().max(200).optional(),
+  by: z.string().max(128).optional(),
+}).strict();
+export type NoteMoment = z.infer<typeof NoteMomentSchema>;
 
 export const SearchSetupSchema = z.object({
   code: z.enum(['ready', 'engine_not_configured', 'engine_not_working', 'engine_unverified', 'model_missing', 'licence_blocked', 'disk_insufficient', 'not_built']),
@@ -121,13 +140,20 @@ export const FootageAnswerSchema = z.object({
   scanned: z.object({ files: z.number().int().nonnegative(), of: z.number().int().nonnegative() }).optional(),
   /** owner only: the embedder of the picture rows (the test double names itself) */
   embedder: z.string().optional(),
+  /** «לפי מה שתואר» (wave 8 understand): found in the footage notes (a model's descriptions); absent before W1 builds it */
+  notes: z.array(NoteMomentSchema).optional(),
+  notesState: z.enum(NOTES_STATES).optional(),
   heuristic: z.literal(true),
   note: z.string(),
 }).strict();
 export type FootageAnswer = z.infer<typeof FootageAnswerSchema>;
 export const AgentFootageAnswerSchema = z.object({
   exact: z.array(AgentMomentSchema), picture: z.array(AgentMomentSchema).max(0),
-  pictureState: z.literal('owner_only'), heuristic: z.literal(true), note: z.string(),
+  pictureState: z.literal('owner_only'),
+  /** the notes section, the same as the owner's (decision 6, C8) */
+  notes: z.array(NoteMomentSchema).optional(),
+  notesState: z.enum(NOTES_STATES).optional(),
+  heuristic: z.literal(true), note: z.string(),
 }).strict();
 export type AgentFootageAnswer = z.infer<typeof AgentFootageAnswerSchema>;
 
@@ -188,12 +214,19 @@ export class FootageSearchNotBuilt extends Error {
  * searchFootage(…, { reader: 'agent' }), which never reads a pearl's name or a tag.
  */
 export function agentAnswerOf(answer: Pick<FootageAnswer, 'exact'> & Partial<FootageAnswer>): AgentFootageAnswer {
-  const allowed = new Set<string>(AGENT_SOURCES);
+  const allowed = new Set<string>(['name', 'date', 'event', 'transcript']);
   const exact: AgentMoment[] = [];
   for (const m of answer.exact) {
     const sources = [...new Set(m.sources.filter((s) => allowed.has(s)))] as AgentMoment['sources'];
     if (!sources.length) continue;
     exact.push({ assetId: m.assetId, start: m.start ? { value: m.start.value, timescale: m.start.timescale } : null, end: m.end ? { value: m.end.value, timescale: m.end.timescale } : null, sources });
   }
-  return { exact, picture: [], pictureState: 'owner_only', heuristic: true, note: FOOTAGE_NOTE.en };
+  // the notes section is NOT withheld (decision 6, C8): rebuilt from its own keys (never spread), sources cut to NOTE_SOURCES
+  const noteSources = new Set<string>(NOTE_SOURCES);
+  const notes: NoteMoment[] | undefined = answer.notes?.flatMap((m) => {
+    const sources = [...new Set(m.sources.filter((s) => noteSources.has(s)))] as NoteMoment['sources'];
+    if (!sources.length) return [];
+    return [{ assetId: m.assetId, start: m.start ? { value: m.start.value, timescale: m.start.timescale } : null, end: m.end ? { value: m.end.value, timescale: m.end.timescale } : null, sources, ...(m.snippet !== undefined ? { snippet: m.snippet } : {}), ...(m.by !== undefined ? { by: m.by } : {}) }];
+  });
+  return { exact, picture: [], pictureState: 'owner_only', ...(notes ? { notes } : {}), ...(answer.notesState ? { notesState: answer.notesState } : {}), heuristic: true, note: FOOTAGE_NOTE.en };
 }

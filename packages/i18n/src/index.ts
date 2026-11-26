@@ -31,6 +31,7 @@ import { AUDIENCES_EN, AUDIENCES_HE } from './audiences.ts';
 import { LIVING_EN, LIVING_HE } from './living.ts';
 import { MADE_EN, MADE_HE } from './made.ts';
 import { SOURCES_EN, SOURCES_HE } from './sources.ts';
+import { UNDERSTAND_EN, UNDERSTAND_HE } from './understand.ts';
 import { GRADE_EN, GRADE_HE } from './grade.ts';
 import { INSTRUMENTS_EN, INSTRUMENTS_HE } from './instruments.ts';
 import { COVER_EN, COVER_HE } from './cover.ts';
@@ -259,6 +260,7 @@ export const he = {
   ...LIVING_HE,
   ...MADE_HE,
   ...SOURCES_HE,
+  ...UNDERSTAND_HE,
   ...FOOTAGE_HE,
   ...PICMODELS_HE,
   ...INSTRUMENTS_HE,
@@ -487,6 +489,7 @@ export const en: Record<keyof typeof he, string> = {
   ...LIVING_EN,
   ...MADE_EN,
   ...SOURCES_EN,
+  ...UNDERSTAND_EN,
   ...FOOTAGE_EN,
   ...PICMODELS_EN,
   ...INSTRUMENTS_EN,
@@ -530,6 +533,7 @@ export * from './audiences.ts';
 export * from './living.ts';
 export * from './made.ts';
 export * from './sources.ts';
+export * from './understand.ts';
 export * from './footageSearch.ts';
 export * from './picmodels.ts';
 export * from './instruments.ts';

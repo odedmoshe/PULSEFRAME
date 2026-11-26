@@ -38,6 +38,7 @@ import { SEARCH_TESTIDS as ID } from './search.testids.ts';
 import '../pearls/pearls.css';
 import './search.css';
 import { focusNow } from '../../ds/focus.ts';
+import { NotesSection, UNDERSTAND_UI_BUILT } from '../understand/ShotNotes.tsx';
 
 /** True once the results are built (Library.tsx mounts them regardless; until then they render nothing). */
 export const FOOTAGE_UI_BUILT = true;
@@ -348,6 +349,8 @@ export function FootageResults({ query, onView, box }: { query: string; onView: 
           {pictureSection === 'empty' && <p className="pf-fs-empty" role="status" data-testid={ID.empty} data-section="picture">{F('footage.pictureNothing')}</p>}
           {pictureAsked && answerState && answerState !== 'ready' && answerState !== 'busy' && answerState !== 'partly_scanned' && answerState !== 'stale' && <p className="pf-fs-note" role="status">{answerState === 'not_installed' ? F('footage.notInstalled') : answerState === 'owner_only' ? F('footage.ownerOnly') : answerState === 'not_scanned' ? F('footage.notScanned') : F('footage.notBuilt')}</p>}
         </section>
+        {/* «לפי מה שתואר» (wave 8 understand): the notes section, every credential; mounted only once built (W3) */}
+        {UNDERSTAND_UI_BUILT && <NotesSection query={qNow} onView={onView} />}
       </div>
       {viewing && <SourceViewer assetId={viewing.assetId} startAt={viewing.span!.start} initialSpan={viewing.span!} onClose={closeViewer} />}
       <Dialog open={confirming} onClose={() => setConfirming(false)} title={F('footage.forgetTitle')} size="sm" dismissOnBackdrop={false} closeLabel={F('footage.forgetCancel')} testId="footage-forget-dialog"

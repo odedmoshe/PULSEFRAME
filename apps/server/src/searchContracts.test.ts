@@ -95,7 +95,8 @@ describe('the search routes are registered, documented and classified', () => {
   });
   it('MCP has exactly one search tool, read-only, taking text only', async () => {
     const tools: { name: string; inputSchema: { properties: Record<string, unknown> }; annotations?: { readOnlyHint?: boolean } }[] = (await rpc(owner, 'tools/list', {})).result.tools;
-    const searchy = tools.filter((t) => /footage|search_index|scan|similar|like_this/.test(t.name)).map((t) => t.name);
+    // understand_footage (wave 8 understand) starts the describe job: it takes no query, image or frame (understandContracts.test.ts)
+    const searchy = tools.filter((t) => /footage|search_index|scan|similar|like_this/.test(t.name) && t.name !== 'understand_footage').map((t) => t.name);
     expect(searchy).toEqual([...SEARCH_MCP_TOOLS]);
     const t = tools.find((x) => x.name === 'find_in_footage')!;
     expect(Object.keys(t.inputSchema.properties).sort()).toEqual(['limit', 'projectId', 'query']);

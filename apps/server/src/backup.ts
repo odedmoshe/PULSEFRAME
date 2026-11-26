@@ -8,7 +8,7 @@ import Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { OWN_TEMPLATE_STORE } from '@pulseframe/core';
+import { OWN_TEMPLATE_STORE, UNDERSTAND_SETTINGS_FILE } from '@pulseframe/core';
 import { CONNECTORS_FILE } from './connectors/keys.ts';
 
 /** The owner's own templates file (apps/server/src/ownTemplates.ts OWN_TEMPLATES_FILE; core OWN_TEMPLATE_STORE.file). */
@@ -109,6 +109,15 @@ export async function backupDataDir(src: string, dest: string): Promise<BackupRe
     try { fs.chmodSync(part, 0o600); } catch { /* Windows */ }
     fs.renameSync(part, conOut);
   } else fs.rmSync(conOut, { force: true });
+  // 3e. the settings of «מה יש בקליפ» (wave 8 understand: core UNDERSTAND_SETTINGS_FILE; auto, density, the chosen describing model, no
+  //     secret): copied every time like 3b; removed from the destination when the source has none. The notes are database rows (step 1).
+  const und = path.join(src, UNDERSTAND_SETTINGS_FILE), undOut = path.join(dest, UNDERSTAND_SETTINGS_FILE);
+  if (fs.existsSync(und)) {
+    const part = `${undOut}.part`;
+    fs.copyFileSync(und, part);
+    try { fs.chmodSync(part, 0o600); } catch { /* Windows */ }
+    fs.renameSync(part, undOut);
+  } else fs.rmSync(undOut, { force: true });
   // 4. never: the language assistant's key and config (ADR-0027, lead decision 9) — the owner enters them again after a restore.
   //    Nothing above copies them; a copy left in the destination by hand is removed so a backup never holds one.
   for (const name of NEVER_BACKED_UP) fs.rmSync(path.join(dest, name), { force: true, recursive: true }); // 'agent' and 'connectors' are folders (C12; sources C1)

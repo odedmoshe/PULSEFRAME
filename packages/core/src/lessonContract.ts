@@ -116,7 +116,7 @@ const TEXT_ANIMATION_SUB = { by: v, in: v, out: v, loop: v, inFrames: 'frames', 
 const GRADE_SUB = { exposure: v, temperature: v, tint: v, contrast: v, saturation: v, shadows: v, highlights: v, fade: v } as const;
 
 /**
- * Every registered op of this build, in registry order (163 ops, 141 public on 2026-11-26 with apply_made_clip and use_source_item; 26 learnable, 23 of them steps).
+ * Every registered op of this build, in registry order (164 ops, 141 public on 2026-11-26 with apply_made_clip, use_source_item and attach_footage_notes; 26 learnable, 23 of them steps).
  * Corrections to the designer's table from teach-verify.md: C4 (merging ops fold by key), C5 (effect params by catalogue),
  * C6 (frames inside values), C7 (index is a position), C8 (crossfade and ripple cut), C9 (effect lives upserted).
  */
@@ -193,6 +193,8 @@ export const LEARN: Readonly<Record<string, LearnRow>> = {
   apply_made_clip: no('internal'),
   // wave 8 sources (verify C17c): an internal op the server issues after a fetched file was stored and checked
   use_source_item: no('internal'),
+  // «מה יש בקליפ» (wave 8 understand): an internal op the describe job issues (like attach_moments)
+  attach_footage_notes: no('internal'),
   create_multicam: no('multicam'), attach_multicam_sync: no('internal'), set_multicam_sync: no('multicam'), update_multicam: no('multicam'), set_angle_look: no('multicam'),
   place_multicam: no('multicam'), switch_angles: no('multicam'), detach_from_multicam: no('multicam'), remove_multicam: no('multicam'),
   apply_take: no('internal'), use_library_item: no('internal'),
