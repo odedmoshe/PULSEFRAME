@@ -305,11 +305,11 @@ async function oneLanguage(lang: 'he' | 'en'): Promise<{ I16: string[]; I17: str
 }
 
 async function runAll() {
-  noLib = await startServer({ port: await freePort(), host: '127.0.0.1', dataDir: path.join(art, 'data-a'), backupDir: null, libraryDir: null });
+  noLib = await startServer({ port: 0, host: '127.0.0.1', dataDir: path.join(art, 'data-a'), backupDir: null, libraryDir: null });
   // the LABELLED synthetic test kit: strings under a synthetic CC BY source, piano under a synthetic CC BY-NC source (every duty shown)
   const lib = writeSyntheticKit(path.join(art, 'lib'), { strings: SYNTHETIC_SOURCES.ccBy, piano: SYNTHETIC_SOURCES.ccByNc });
-  withLib = await startServer({ port: await freePort(), host: '127.0.0.1', dataDir: path.join(art, 'data-b'), backupDir: null, libraryDir: lib.root });
-  withKit = await startServer({ port: await freePort(), host: '127.0.0.1', dataDir: path.join(art, 'data-c'), backupDir: null, libraryDir: lib.root }, { musicKits: [lib.kit] });
+  withLib = await startServer({ port: 0, host: '127.0.0.1', dataDir: path.join(art, 'data-b'), backupDir: null, libraryDir: lib.root });
+  withKit = await startServer({ port: 0, host: '127.0.0.1', dataDir: path.join(art, 'data-c'), backupDir: null, libraryDir: lib.root }, { musicKits: [lib.kit] });
   // what the real server answers for the pair the page will ask for (bars 16, seed 1: the row's defaults)
   const ask = async (want: 'synth' | 'recorded') => {
     const r = await fetch(`${withKit!.url}/api/v1/music/music.calm/audio?bars=16&seed=1${want === 'recorded' ? '&instruments=recorded' : ''}&match=1`, { headers: { authorization: `Bearer ${withKit!.auth.tokens.agent}` } });

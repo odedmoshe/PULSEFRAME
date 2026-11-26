@@ -30,7 +30,6 @@ import { prepareMusicFit } from '../../../apps/server/src/musicfit/plan.ts';
 import { abaSong, throughSong, type FixtureSong } from '../../../apps/server/src/musicfit/songs.testFixture.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const PORT = 21000 + Math.floor(Math.random() * 1000);
 const R = { num: 30, den: 1 };
 const SR = 48000;
 const evidence: Record<string, unknown> = {};
@@ -99,7 +98,7 @@ async function makeWorld(): Promise<World> {
   fs.writeFileSync(songs.nc, songWav(60, 120, 2));
   const webDist = path.join(ROOT, 'apps/web/dist');
   const web = fs.existsSync(path.join(webDist, 'render.html'));
-  const s = await startServer({ port: PORT, dataDir: path.join(dir, 'data'), ...(web ? { webDist } : {}), speechPython: null, voicePython: null, backupDir: null });
+  const s = await startServer({ port: 0, dataDir: path.join(dir, 'data'), ...(web ? { webDist } : {}), speechPython: null, voicePython: null, backupDir: null });
   const origin = s.url;
   const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
   return { s, dir, web, owner: { origin, cookie, connection: 'close' }, agent: { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' }, agentToken: s.auth.tokens.agent, videos, songs };

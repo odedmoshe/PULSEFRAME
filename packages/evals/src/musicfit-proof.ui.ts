@@ -13,7 +13,7 @@
  * shortened by the product) shows the chip, its join is played and the owner marks it heard (one undo); a non-owner's mark is
  * refused in words (the browser holds only the owner's session, so that one request is re-sent with an agent's token: labelled).
  * The fixture's picture is 14 s (a second clip of the barcode video), long enough for every built-in style's shortest ending.
- * Port 19000+ (random); a folder in the temp directory, removed at the end. Pointer use is limited to opening the Sound workspace
+ * Port 0 (the system picks a free one); a folder in the temp directory, removed at the end. Pointer use is limited to opening the Sound workspace
  * and the clip's Beat tab; every flow is driven by Tab, Enter, Space, Escape, the arrow keys, B and Alt+B.
  */
 import fs from 'node:fs';
@@ -30,7 +30,6 @@ import { MUSICFIT_TESTIDS as ID } from '../../../apps/web/src/editor/musicfit/mu
 import { openInspectorPage } from './editor-ui.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const PORT = 19000 + Math.floor(Math.random() * 90);
 const R = { num: 30, den: 1 };
 const evidence: Record<string, unknown> = {};
 const errors: string[] = [];
@@ -46,7 +45,7 @@ async function makeWorld(): Promise<World> {
   const barcode = (await generateBarcodeFixture({ out: path.join(base, 'fx', 'bar30.mp4'), frames: 300, fps: R })).file;
   const webDist = path.join(ROOT, 'apps/web/dist');
   const web = fs.existsSync(path.join(webDist, 'index.html'));
-  const s = await startServer({ port: PORT, dataDir: path.join(base, 'data'), ...(web ? { webDist } : {}), speechPython: null, voicePython: null, backupDir: null });
+  const s = await startServer({ port: 0, dataDir: path.join(base, 'data'), ...(web ? { webDist } : {}), speechPython: null, voicePython: null, backupDir: null });
   const origin = s.url;
   const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
   const browser = web ? await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] }) : null;

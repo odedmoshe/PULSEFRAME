@@ -14,7 +14,6 @@
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import net from 'node:net';
 import path from 'node:path';
 import { chromium, type Browser, type Page } from 'playwright';
 import { barUnderstands, LOCAL_INTENT_BUILT } from '@pulseframe/core';
@@ -47,7 +46,6 @@ const MONEY = /חויב|חיוב|שחרור הסכום|charge|reserv|billed/i;
 let server: RunningServer | null = null, stand: StandIn | null = null, browser: Browser | null = null;
 let once: Promise<true | string> | null = null;
 
-const freePort = async () => { const x = net.createServer(); await new Promise<void>((r) => x.listen(0, '127.0.0.1', r)); const p = (x.address() as net.AddressInfo).port; await new Promise((r) => x.close(r)); return p; };
 
 async function fixtureProject(s: RunningServer, name: string): Promise<string> {
   fs.mkdirSync(art, { recursive: true });
@@ -203,8 +201,7 @@ async function runL13(): Promise<true | string> {
   if (!fs.existsSync(path.join(root, 'apps/web/dist/render.html'))) return 'web bundle missing: run `pnpm build` first';
   fs.mkdirSync(art, { recursive: true });
   stand = await startStandIn({ answers: { [ASK.he.loud]: GAIN6, [ASK.he.noise]: NONE, [ASK.en.loud]: GAIN6, [ASK.en.noise]: NONE } });
-  const port = await freePort();
-  server = await startServer({ port, host: '127.0.0.1', dataDir: path.join(art, 'data'), backupDir: null }, { assistant: { adapters: new Map(), endpoint: () => null, local: createLlamaAdapter({}) } });
+  server = await startServer({ port: 0, host: '127.0.0.1', dataDir: path.join(art, 'data'), backupDir: null }, { assistant: { adapters: new Map(), endpoint: () => null, local: createLlamaAdapter({}) } });
   browser = await chromium.launch();
   const out: Run[] = [];
   for (const lang of ['he', 'en'] as const) out.push(await oneLanguage(server, stand, browser, lang));

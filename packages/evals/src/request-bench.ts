@@ -56,7 +56,7 @@ const take = (label: string) => { const v = timers[label] ?? []; timers[label] =
 
 async function main() {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-reqbench-'));
-  const s = await startServer({ port: 8913, dataDir });
+  const s = await startServer({ port: 0, dataDir });
   timeMethod(s.governance, 'commitAs', 'commitAs');
   timeMethod(s.store, 'commit', 'commit');
   timeMethod(s.store, 'drainOutbox', 'emit');

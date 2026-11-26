@@ -126,7 +126,7 @@ async function main() {
   const truth = await generateShortsFixture({ out: path.join(art, 'shorts.mp4') });
   const fixtureFile = path.join(art, 'shorts.mp4');
   measurements.fixture = { seconds: truth.seconds, words: truth.words.length, statements: truth.statements.length, cuts: truth.cuts, generateSeconds: r2((Date.now() - tGen) / 1000) };
-  const server = await startServer({ port: 8851, dataDir: path.join(art, 'data'), webDist: path.join(root, 'apps/web/dist') });
+  const server = await startServer({ port: 0, dataDir: path.join(art, 'data'), webDist: path.join(root, 'apps/web/dist') });
   const h = { authorization: `Bearer ${server.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown, token?: string) => {
     const r = await fetch(`${server.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

@@ -35,7 +35,6 @@ import { pageFold, pageTurnSource } from '../../engine/src/gpu.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/trend-light');
-const PORT = 8893, PORT_OFF = 8894;
 const W = 360, H = 640;
 const R30 = { num: 30, den: 1 }, R60 = { num: 60, den: 1 };
 const NEW_IDS = ['film-burn', 'light-leak', 'ink-bleed', 'brush-left', 'brush-right', 'page-turn-left', 'page-turn-right'] as const;
@@ -85,7 +84,7 @@ async function main() {
   }
 
   delete process.env.PF_RENDER_GPU; // as gpu-proof: the render host finds a launch mode that gives a graphics device, if this machine has one
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   {
     const b = await chromium.launch({ args: ['--enable-unsafe-webgpu'] });
     const p = await b.newPage();
@@ -345,7 +344,7 @@ async function main() {
 
   // ---------- L6: no adapter in the render worker: a still of each new id is refused, naming it ----------
   process.env.PF_RENDER_GPU = 'off';
-  const s2 = await startServer({ port: PORT_OFF, dataDir: path.join(art, 'data') });
+  const s2 = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   try {
     const h2 = { authorization: `Bearer ${s2.auth.tokens.agent}`, connection: 'close' };
     const pid = ((await (await fetch(`${s2.url}/api/v1/projects`, { headers: h2 })).json()) as any).projects.find((p: any) => p.name === 'trend-light blue').id as string;

@@ -128,7 +128,7 @@ async function main() {
   const videoFile = path.join(art, 'pic.mp4');
   ff(['-y', '-f', 'lavfi', '-t', '4', '-i', `testsrc2=s=${W0}x${H0}:r=30`, '-vf', 'format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', videoFile]);
 
-  const s = await startServer({ port: 8836, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

@@ -25,8 +25,8 @@ import type { StoryProofPart } from './story-proof.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/story-proof');
-const PORT = Number(process.env.PF_STORY_PROOF_PORT ?? 8981);
-const DROP_PORT = PORT + 1;
+/** The phone door's port, read from the code the door issues (it binds a free port while a code is live: dropPort 0). */
+let doorPort = 0;
 const DOOR = '127.0.0.1';
 const W = 640, H = 360;
 const R30 = { num: 30, den: 1 }, R25 = { num: 25, den: 1 }, R2997 = { num: 30000, den: 1001 };
@@ -93,7 +93,7 @@ async function makeEnv(): Promise<Env> {
   ff(['-y', '-f', 'lavfi', '-i', 'sine=f=3000:d=30:sample_rate=48000', '-ac', '1', '-c:a', 'pcm_s16le', music]);
   ff(['-y', '-f', 'lavfi', '-i', 'sine=f=2000:d=30:sample_rate=48000', '-ac', '1', '-c:a', 'pcm_s16le', music2]);
   const webDist = path.join(root, 'apps/web/dist');
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data'), webDist, homeZone: 'Asia/Jerusalem', dropPort: DROP_PORT, dropAdmitAddresses: [DOOR] });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), webDist, homeZone: 'Asia/Jerusalem', dropPort: 0, dropAdmitAddresses: [DOOR] });
   server = s;
   process.once('beforeExit', () => { void s.close(); });
   const ownerCookie = (await fetch(`${s.url}/api/v1/session`, { headers: { origin: s.url, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
@@ -515,6 +515,7 @@ export const STORY_PROOF_SERVER: StoryProofPart = {
       const still = await upload(e, pid, e.pics['s0.png']!);
       const code = await e.owner(`/projects/${pid}/drop`, { address: DOOR });
       if (code.status !== 201) return `BLOCKED: the phone door could not open here: ${code.status} ${j(code.body)}`;
+      doorPort = Number(code.body.drop.port);
       const token = String(code.body.drop.url).slice(String(code.body.drop.url).indexOf('#') + 1);
       const hello = await door('POST', '/hello', { 'content-type': 'application/json' }, Buffer.from(JSON.stringify({ token })));
       const session = hello.json?.session;
@@ -608,7 +609,7 @@ function duckChecks(e: Env) {
 /** One request to the phone door (127.0.0.1, its own port; Host exactly address:port). */
 function door(method: string, p: string, headers: Record<string, string>, body: Buffer): Promise<{ status: number; json: any }> {
   return new Promise((resolve) => {
-    const req = http.request({ host: DOOR, port: DROP_PORT, method, path: p, agent: false, headers: { host: `${DOOR}:${DROP_PORT}`, connection: 'close', 'content-length': String(body.length), ...headers } }, (res) => {
+    const req = http.request({ host: DOOR, port: doorPort, method, path: p, agent: false, headers: { host: `${DOOR}:${doorPort}`, connection: 'close', 'content-length': String(body.length), ...headers } }, (res) => {
       const parts: Buffer[] = [];
       res.on('data', (d) => parts.push(d));
       res.on('end', () => { let json: any = null; try { json = JSON.parse(Buffer.concat(parts).toString('utf8')); } catch { /* empty */ } resolve({ status: res.statusCode ?? 0, json }); });

@@ -59,7 +59,6 @@ import { EXPORT_COLOR_TAGS, EXPORT_PIXEL_FILTER } from '@pulseframe/server/expor
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/trend-transitions');
 const evidence = path.join(root, 'docs/evidence/trend-transitions-proof.json');
-const PORT = 8887;
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -119,7 +118,7 @@ async function main() {
   // cannot render here are listed as such, never counted as passing)
   const hadGpuMode = process.env.PF_RENDER_GPU;
   delete process.env.PF_RENDER_GPU;
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

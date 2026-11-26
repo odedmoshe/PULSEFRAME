@@ -46,7 +46,6 @@ const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/trend-text');
 const evidence = path.join(root, 'docs/evidence/trend-text-proof.json');
 const baselineFile = path.join(root, 'docs/evidence/trend-baseline.json');
-const PORT = 8893;
 const W = 1080, H = 1920;
 const R30 = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R30);
@@ -157,7 +156,7 @@ async function main() {
   const baseline = JSON.parse(fs.readFileSync(baselineFile, 'utf8')) as { commit: string; text: Record<string, string | { refused: string }> };
 
   delete process.env.PF_RENDER_GPU; // as trend-baseline.ts: the worker that recorded the baseline
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

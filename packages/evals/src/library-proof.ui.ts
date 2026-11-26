@@ -46,7 +46,7 @@ async function check17(): Promise<true | string> {
   const root = (await makeLibraryFixture(path.join(base, 'fixture'))).root;
   const dataDir = path.join(base, 'data');
   fs.mkdirSync(dataDir);
-  const s = await startServer({ port: 8817, dataDir, libraryDir: null });
+  const s = await startServer({ port: 0, dataDir, libraryDir: null });
   const browser = await chromium.launch();
   const problems: string[] = [];
   try {

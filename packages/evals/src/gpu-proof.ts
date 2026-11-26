@@ -66,7 +66,7 @@ async function main() {
   ff(['-f', 'lavfi', '-i', `color=c=black:s=${W}x${H},drawbox=x=170:y=0:w=20:h=${H}:color=white:t=fill`, '-frames:v', '1', '-y', stripe]);
 
   delete process.env.PF_RENDER_GPU; // unset: the render host itself finds a launch mode that gives a graphics device
-  const s = await startServer({ port: 8861, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   // Is there an adapter at all on this machine? (WebGPU exists only on a secure origin, so this needs the running server.)
   {
     const b = await chromium.launch({ args: GPU_ARGS });
@@ -1045,7 +1045,7 @@ async function main() {
 
   // ---------- no adapter in the render worker ----------
   process.env.PF_RENDER_GPU = 'off';
-  const s2 = await startServer({ port: 8862, dataDir: path.join(art, 'data') });
+  const s2 = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   try {
     const h = { authorization: `Bearer ${s2.auth.tokens.agent}`, connection: 'close' };
     const pid = ((await (await fetch(`${s2.url}/api/v1/projects`, { headers: h })).json()) as any).projects.find((p: any) => p.name === 'key').id as string;

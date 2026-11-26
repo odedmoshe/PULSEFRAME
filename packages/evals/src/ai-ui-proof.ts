@@ -26,7 +26,6 @@ import { startServer } from '@pulseframe/server';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/ai-ui');
-const PORT = Number(process.env.PF_PROOF_PORT ?? 8806);
 const VOCALS = 'local.audio.vocals-classic', VOICE = 'local.voice.clean';
 const checks: { name: string; ok: boolean; detail?: unknown }[] = [];
 const check = (name: string, ok: boolean, detail?: unknown) => { checks.push({ name, ok, detail }); console.log(`${ok ? '  ok  ' : ' FAIL '} ${name}${detail !== undefined ? `  ${JSON.stringify(detail)}` : ''}`); };
@@ -40,7 +39,7 @@ async function main() {
   fs.mkdirSync(art, { recursive: true });
   // The voice-cleanup engine stays unset on purpose: its card must say so. Nothing needs the tools environment either.
   delete process.env.PF_DENOISE_BIN;
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data'), denoiseBin: null, toolsPython: null, comfyuiUrl: null });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), denoiseBin: null, toolsPython: null, comfyuiUrl: null });
   try {
     if (!fs.existsSync(path.join(s.cfg.webDist, 'index.html'))) blocked(`the editor is not built (${s.cfg.webDist}); run pnpm build`);
     const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };

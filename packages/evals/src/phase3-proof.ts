@@ -28,7 +28,7 @@ async function main() {
   fs.mkdirSync(art, { recursive: true });
   fs.mkdirSync(base, { recursive: true });
   const fixture = await generateBarcodeFixture({ out: path.join(art, 'fixture.mp4') });
-  const s = await startServer({ port: 8794, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const browser = await chromium.launch();
   // Reduced motion: deterministic screenshots (no mid-animation frames) and it exercises that preference.

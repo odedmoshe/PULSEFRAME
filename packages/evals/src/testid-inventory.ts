@@ -23,7 +23,6 @@
  *   pnpm audit:testids -- --accept               record the DOM as it is now (only with a listed migration of the ids lost)
  *   pnpm audit:testids -- --static               the source check only, against the committed report: no server, no browser,
  *                                                the report is not written (the unit test runs the same check)
- *   PF_TESTIDS_PORT=8942 pnpm audit:testids      another port (default 8889)
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -296,7 +295,7 @@ async function domStates(): Promise<{ states: Record<string, string[]>; browser:
   ff(['-f', 'lavfi', '-t', '24', '-i', "aevalsrc='0.55*sin(2*PI*(55+70*exp(-mod(t,0.5)*30))*t)*exp(-mod(t,0.5)*9)+0.1*sin(2*PI*220*t)':s=48000:c=stereo", '-c:a', 'libmp3lame', '-b:a', '128k', media.music]);
   ff(['-f', 'lavfi', '-t', '8', '-i', "aevalsrc='0.3*sin(2*PI*(160+40*sin(2*PI*3*t))*t)*(0.5+0.5*sin(2*PI*1.5*t))':s=48000", '-c:a', 'aac', '-b:a', '64k', media.voice]);
 
-  const s = await startServer({ port: Number(process.env.PF_TESTIDS_PORT ?? 8889), dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const post = async (p: string, body: unknown) => { const r = await fetch(`${s.url}/api/v1${p}`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json() as any; if (!r.ok) throw new Error(`${p}: ${JSON.stringify(j).slice(0, 300)}`); return j; };
   const tx = async (pid: string, ops: unknown[]) => (await post(`/projects/${pid}/transactions`, { ops })).results as any[];

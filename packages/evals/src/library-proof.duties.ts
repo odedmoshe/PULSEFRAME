@@ -32,12 +32,11 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 type Server = Awaited<ReturnType<typeof startServer>>;
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
-let port = 18930;
 
 /** A fresh server in its own temp data directory, with REST helpers as the agent (bearer) and as the owner (session cookie). */
 async function world() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-libproof-b-'));
-  const s = await startServer({ port: port++, dataDir: path.join(dir, 'data'), libraryDir: null });
+  const s = await startServer({ port: 0, dataDir: path.join(dir, 'data'), libraryDir: null });
   const cookie = s.auth.issueSession(new Request(`${s.url}/api/v1/session`, { headers: { origin: s.url, 'x-pf-owner-key': s.auth.tokens.owner } })).split(';')[0]!;
   const who = { agent: { authorization: `Bearer ${s.auth.tokens.agent}` }, owner: { cookie, origin: s.url } } as const;
   const call = async (p: string, body?: unknown, as: keyof typeof who = 'agent', method?: string) => {

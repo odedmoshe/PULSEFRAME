@@ -66,7 +66,7 @@ async function main() {
   fs.mkdirSync(art, { recursive: true });
   fs.mkdirSync(base, { recursive: true });
   const fixture = await generateBarcodeFixture({ out: path.join(art, 'speech.mp4'), frames: 240 });
-  const s = await startServer({ port: 8796, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const bearer = (t: string) => ({ authorization: `Bearer ${t}`, connection: 'close' });
   const h = bearer(s.auth.tokens.agent);
   const call = async (p: string, body?: unknown, headers: Record<string, string> = h) => {

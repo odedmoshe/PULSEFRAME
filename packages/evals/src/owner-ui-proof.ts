@@ -24,7 +24,7 @@ async function main() {
   fs.mkdirSync(art, { recursive: true });
   const tone = path.join(art, 'tone.wav');
   execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=f=440:r=48000:d=8', '-ac', '2', '-c:a', 'pcm_s16le', tone]);
-  const s = await startServer({ port: 8807, dataDir: path.join(art, 'data'), backupDir: path.join(art, 'backup'), backupEveryHours: 24, backupKeep: 3 });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), backupDir: path.join(art, 'backup'), backupEveryHours: 24, backupKeep: 3 });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown, headers: Record<string, string> = h) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { connection: 'close', ...headers, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

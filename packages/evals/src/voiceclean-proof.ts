@@ -83,7 +83,7 @@ async function main() {
   const speechSpans = between(rec.pauses, rec.seconds);
   measurements.fixture = { seconds: rec.seconds, pauses: rec.pauses.length, pauseShare: r3(rec.pauses.reduce((s, p) => s + p.end - p.start, 0) / rec.seconds), truthBandsDb: rec.truth.bandsDb.map(r2), noiseDb: rec.truth.noiseDb, speechDb: rec.truth.speechDb, hum: rec.truth.hum };
 
-  const s: RunningServer = await startServer({ port: 8867, dataDir: path.join(art, 'data') });
+  const s: RunningServer = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

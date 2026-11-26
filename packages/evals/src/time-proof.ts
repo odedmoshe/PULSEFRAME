@@ -37,7 +37,6 @@ import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/time-proof');
-const PORT = 8877;
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
 const W = 640, H = 360, GW = 320, GH = 180;
@@ -75,7 +74,7 @@ async function main() {
   // The render worker without WebGPU: everything here must work on the CPU alone.
   const hadGpuMode = process.env.PF_RENDER_GPU;
   process.env.PF_RENDER_GPU = 'off';
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

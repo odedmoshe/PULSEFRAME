@@ -29,7 +29,6 @@ import { startServer } from '@pulseframe/server';
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/phone-drop-baseline');
 export const PHONE_DROP_BASELINE_EVIDENCE = path.join(root, 'docs/evidence/phone-drop-baseline.json');
-const PORT = Number(process.env.PF_PROOF_PORT ?? 8931);
 const ff = (args: string[]) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-nostdin', '-y', ...args], { maxBuffer: 1 << 28 });
 const probe = (file: string): any => JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', file], { maxBuffer: 1 << 24 }).toString());
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
@@ -107,7 +106,7 @@ async function main(): Promise<number> {
   }
   let freeDiskBytes: number | null = null;
   try { const s = fs.statfsSync(art); freeDiskBytes = s.bavail * s.bsize; } catch { /* not measurable */ }
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data'), homeZone: 'Asia/Jerusalem' });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), homeZone: 'Asia/Jerusalem' });
   const out: PhoneDropBaseline = {
     commit, recordedAt: new Date().toISOString(), ffmpeg: execFileSync('ffmpeg', ['-version']).toString().split('\n')[0]!, freeDiskBytes,
     compareIgnores: ['id', 'provenance.importedAt', 'capture', 'provenance.upload'], files: {},

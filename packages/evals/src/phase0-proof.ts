@@ -24,7 +24,6 @@ const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/proof');
 const evidenceDir = path.join(root, 'docs/evidence');
 const dataDir = path.join(art, 'data');
-const PORT = Number(process.env.PF_PROOF_PORT ?? 8799);
 
 const checks: { name: string; ok: boolean; detail?: unknown }[] = [];
 const measurements: Record<string, unknown> = {};
@@ -46,8 +45,9 @@ async function main() {
   check('fixture generated (H.264 High + B-frames + AAC, frame-index barcode, 1 kHz beep each second)', fs.statSync(fixture.file).size > 10_000, { bytes: fs.statSync(fixture.file).size });
 
   console.log('\n# server');
-  let server = await startServer({ port: PORT, dataDir });
+  let server = await startServer({ port: 0, dataDir });
   const base = server.url;
+  const boundPort = Number(new URL(base).port); // the restart at the end must come back on this port: `base` is used again after it
   const { agent: agentToken, observer: observerToken } = server.auth.tokens;
   const rest = (p: string, init: RequestInit = {}, token: string | null = agentToken) =>
     fetch(`${base}/api/v1${p}`, { ...init, headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(init.body ? { 'content-type': 'application/json' } : {}), ...init.headers } });
@@ -62,7 +62,7 @@ async function main() {
   check('cross-origin page cannot obtain a browser session -> 403', (await fetch(`${base}/api/v1/session`, { headers: { origin: 'https://evil.example' } })).status === 403);
   const rebind = await new Promise<number>((resolve) => {
     // fetch() will not let us forge Host, so speak HTTP directly.
-    import('node:http').then(({ request }) => request({ host: '127.0.0.1', port: PORT, path: '/api/v1/projects', headers: { host: 'attacker.example', authorization: `Bearer ${agentToken}` } }, (r) => resolve(r.statusCode ?? 0)).end());
+    import('node:http').then(({ request }) => request({ host: '127.0.0.1', port: boundPort, path: '/api/v1/projects', headers: { host: 'attacker.example', authorization: `Bearer ${agentToken}` } }, (r) => resolve(r.statusCode ?? 0)).end());
   });
   check('foreign Host header (DNS rebinding) -> 403 even with a valid token', rebind === 403);
 
@@ -388,7 +388,7 @@ async function main() {
   await mcp.close();
   await browser.close();
   await server.close();
-  server = await startServer({ port: PORT, dataDir });
+  server = await startServer({ port: boundPort, dataDir });
   const afterRestart = await (await fetch(`${base}/api/v1/projects/${projectId}`, { headers: { authorization: `Bearer ${server.auth.tokens.agent}` } })).json();
   const hist = await (await fetch(`${base}/api/v1/projects/${projectId}/history?since=0`, { headers: { authorization: `Bearer ${server.auth.tokens.agent}` } })).json();
   check('restart: project, revision and tokens persist; history is complete and gap-free', afterRestart.revision === live.revision && JSON.stringify(afterRestart.project) === JSON.stringify(live.project) && server.auth.tokens.agent === agentToken && hist.events.length === live.revision && hist.events.every((e: any, i: number) => e.revision === i + 1));

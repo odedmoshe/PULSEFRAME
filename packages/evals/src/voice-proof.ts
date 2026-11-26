@@ -35,7 +35,7 @@ async function main() {
   fs.mkdirSync(art, { recursive: true });
 
   {
-    const s = await startServer({ port: 8845, dataDir: path.join(art, 'data-off'), speechPython: null, voicePython: null });
+    const s = await startServer({ port: 0, dataDir: path.join(art, 'data-off'), speechPython: null, voicePython: null });
     const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close', 'content-type': 'application/json' };
     try {
       const st = (await (await fetch(`${s.url}/api/v1/speech`, { headers: h })).json()) as any;
@@ -46,7 +46,7 @@ async function main() {
     } finally { await s.close(); }
   }
 
-  const s = await startServer({ port: 8846, dataDir: path.join(art, 'data'), speechPython: speechPy, voicePython: voicePy, speechModelsDir: MODELS });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), speechPython: speechPy, voicePython: voicePy, speechModelsDir: MODELS });
   const origin = s.url;
   const agent = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;

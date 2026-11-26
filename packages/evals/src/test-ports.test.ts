@@ -3,47 +3,28 @@
  * Two git worktrees run the suite at the same time on one machine; a fixed number gives EADDRINUSE, or worse, a test that
  * silently talks to the other worktree's server. This scans every *.test.ts under apps/ and packages/ for startServer /
  * createDropDoor / serve calls with a port other than 0, and for .listen( with a first argument other than 0 or an options
- * object. The proofs (*-proof*.ts) are not unit tests and are not scanned.
+ * object. A second block does the same for the proof, audit, conformance and bench scripts in packages/evals/src (a proof
+ * that fixes a port collides with a second proof, or with the dev server, when both run at the same time).
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { portFindings, proofScripts, walkTs } from './test-ports.scan.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const SELF = 'packages/evals/src/test-ports.test.ts';
 /** file: reason. A file listed here may pass a non-zero or computed port; say why. */
+export const ALLOWED_PROOFS: Record<string, string> = {
+  'packages/evals/src/phase0-proof.ts': 'the restart check at the end starts the second server on the first one\'s bound port (read from its url): the proof keeps using the same base URL after the restart',
+  'packages/evals/src/soak.ts': 'the restart check starts the second server on the first one\'s bound port (read from its url): the owner cookie and the origin it was issued for are used again after the restart',
+  'packages/evals/src/phone-drop-server.ts': 'the launcher that proof:phone-drop spawns as a child: it takes --port and --drop-port from its argv and passes them on; the proof passes --port 0 and a drop port it has just asked the system for (the door binds only while a code is live, and P2/P3c/P20 assert that the port refuses while none is, so the number must be known first)',
+};
 export const ALLOWED: Record<string, string> = {
   'apps/server/src/drop.test.ts': 'the door test must know the door\'s port on 127.0.0.2 before it opens a code (to test refused connections and Host headers), so freePort() picks a free one per test; the busy-port test takes its port from a live blocker',
 };
 
-function* walk(dir: string): Generator<string> {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (e.name === 'node_modules' || e.name === 'dist' || e.name.startsWith('.')) continue;
-    const p = path.join(dir, e.name);
-    if (e.isDirectory()) yield* walk(p);
-    else if (e.name.endsWith('.test.ts')) yield p;
-  }
-}
-
-/** Findings in one source text: [line, snippet]. */
-export function portFindings(src: string): Array<[number, string]> {
-  const out: Array<[number, string]> = [];
-  const lineOf = (i: number) => src.slice(0, i).split('\n').length;
-  // calls that take an options object with a port
-  for (const m of src.matchAll(/\b(startServer|createDropDoor|serve)\(\s*\{/g)) {
-    const window = src.slice(m.index!, m.index! + 600);
-    const port = /[{,]\s*port\b(?:\s*:\s*([^,}]+))?/.exec(window);
-    if (port && (port[1] ?? '').trim() !== '0') out.push([lineOf(m.index!), `${m[1]}( ... port${port[1] ? ': ' + port[1].trim() : ''}`]);
-  }
-  // net / http servers: .listen(<port>, ...) with anything but 0 or an options object / callback
-  for (const m of src.matchAll(/\.listen\(\s*([^,)\s][^,)]*)/g)) {
-    const a = m[1]!.trim();
-    if (a === '0' || a.startsWith('{') || a.includes('=>') || a.startsWith('(')) continue;
-    out.push([lineOf(m.index!), `.listen(${a}`]);
-  }
-  return out;
-}
+const walk = (dir: string) => walkTs(dir, (n) => n.endsWith('.test.ts'));
 
 describe('unit tests never listen on a fixed port', () => {
   it('portFindings sees fixed, computed and shorthand ports and passes 0', () => {
@@ -71,5 +52,27 @@ describe('unit tests never listen on a fixed port', () => {
     }
     expect(bad, 'use port 0 and read the real port from the returned server (or add the file to ALLOWED with a reason)').toEqual([]);
     for (const f of Object.keys(ALLOWED)) expect(seen.has(f), `${f} no longer needs its allowlist entry`).toBe(true);
+  });
+});
+
+describe('proofs, audits and benches never listen on a fixed or random port', () => {
+  it('sees a dropPort, a random port in a constant-free call, and passes port 0 with dropPort 0', () => {
+    expect(portFindings("await startServer({ port: 0, dataDir: d, dropPort: 8804 });")).toHaveLength(1);
+    expect(portFindings("await startServer({ port: 18600 + Math.floor(Math.random() * 90), dataDir: d });")).toHaveLength(1);
+    expect(portFindings("await startServer({ port: 0, dataDir: d, dropPort: 0, dropAdmitAddresses: ['127.0.0.1'] });")).toEqual([]);
+  });
+
+  it('no script in packages/evals/src outside the allowlist passes a non-zero port to startServer, createDropDoor, serve or listen', () => {
+    const bad: string[] = [];
+    const seen = new Set<string>();
+    for (const file of proofScripts(root)) {
+      const rel = path.relative(root, file).split(path.sep).join('/');
+      const found = portFindings(fs.readFileSync(file, 'utf8'));
+      if (!found.length) continue;
+      seen.add(rel);
+      if (!ALLOWED_PROOFS[rel]) for (const [line, snip] of found) bad.push(`${rel}:${line}  ${snip}`);
+    }
+    expect(bad, 'use port 0 (and dropPort 0) and read the real one from the returned server (or add the file to ALLOWED_PROOFS with a reason)').toEqual([]);
+    for (const f of Object.keys(ALLOWED_PROOFS)) expect(seen.has(f), `${f} no longer needs its allowlist entry`).toBe(true);
   });
 });
