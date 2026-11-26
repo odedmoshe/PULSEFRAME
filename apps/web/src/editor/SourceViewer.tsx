@@ -5,7 +5,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, type Asset, type ProjectDocument, type SourceSpan } from '@pulseframe/core';
+import { type SourceSpan } from '@pulseframe/core';
+import { sourceDocument } from './sourceDocument.ts';
 import { Player } from '../player.ts';
 import { describeError } from './ProjectsDialog.tsx';
 import { focusNow } from '../ds/focus.ts';
@@ -19,13 +20,7 @@ import { PEARLS_TESTIDS as PEARL_ID } from './pearls/pearls.testids.ts';
 
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
 
-/** A document holding only this file as one clip from its first frame, in the project's rate; the frame is the file's own picture shape. */
-export function sourceDocument(project: ProjectDocument, asset: Asset): ProjectDocument {
-  const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
-  const base = createProject({ id: 'prj_source_viewer', name: asset.name, width: even(asset.video?.width ?? 640), height: even(asset.video?.height ?? 120), frameRate: project.settings.frameRate, sampleRate: project.settings.sampleRate });
-  base.assets[asset.id] = asset;
-  return applyTransaction(base, [{ op: 'add_clip', args: { assetId: asset.id, start: T.ZERO } }], { idSeed: 'src_', actor: 'source-viewer' }).doc;
-}
+export { sourceDocument } from './sourceDocument.ts';
 
 /**
  * `startAt`: where the viewer opens, in the file's own time (the Shorts review opens a candidate at its context start). A view only,

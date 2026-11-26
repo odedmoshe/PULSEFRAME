@@ -198,6 +198,17 @@ describe('planTemplate: what it refuses, blocks and reports', () => {
     expect(validateProject(apply(doc, plan).doc)).toEqual([]);
   });
 
+  it('a transition into the first slot after a freeze frame on the track plays over the held picture (wave 8: the freeze-handle rule)', () => {
+    const doc = project(R30, null);
+    // a held frame of vid_a at frames 0–30 on the picture track: the template starts at its end
+    const held = applyTransaction(doc, [{ op: 'add_clip', args: { assetId: 'vid_a', start: T.frameTime(0, R30), duration: T.frameTime(30, R30), sourceIn: T.frameTime(100, R30), freeze: true } }], { idSeed: 'hold', actor: 'test' }).doc;
+    const def = simple([one({ seconds: '1' }, { transitionIn: { type: 'dissolve', seconds: 0.5, dir: 'fixed' } })]);
+    const plan = planTemplate(held, def, { media: ['vid_b'] });
+    expect(plan.warnings).not.toContainEqual(expect.objectContaining({ code: 'transition_shortened' }));
+    expect(plan.ops.find((o) => o.op === 'set_transition')!.args).toMatchObject({ type: 'dissolve', frames: 15 });
+    expect(validateProject(apply(held, plan).doc)).toEqual([]);
+  });
+
   it('a long enough video keeps the next transition\'s frames free after its window, and a reused video starts further in', () => {
     const doc = project(R30, null);
     const def = simple(Array.from({ length: 4 }, (_, i) => ({ ...one({ seconds: '1' }, i ? { transitionIn: { type: 'dissolve', seconds: 0.5, dir: 'fixed' } } : {}), key: `k${i}` })));

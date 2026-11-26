@@ -1,4 +1,5 @@
 import type { StoryApplyResult, StoryParams, StoryPlanView, StoryRegenerateResult } from '@pulseframe/core';
+import type { GrowingApplyResult, GrowingApplyRequest, GrowingPlanView, GrowingRebuildRequest, GrowingRegenerateResult } from '@pulseframe/core';
 import type { Asset, BuildShortsBody, ExportMode, FindShortsBody, ReframePlanBody, ReframePlanView, SequenceSummary, ShortCandidatesView, ShortsApplyResult, ShortsPlanView, FamilyFilmApplyResult, FamilyFilmParams, FamilyFilmPlanView, FamilyFilmRegenerateResult, MomentsData, OpCall, ProjectDocument, RenderCacheStatus, SegmentPlanView, SelfCheckMode, StartMomentsBody } from '@pulseframe/core';
 import type { MulticamSyncReport, MulticamSyncRequest, MulticamView } from '@pulseframe/core';
 import type { TakePlanView, TakeRequest, TakeResult } from '@pulseframe/core';
@@ -274,6 +275,11 @@ export const api = {
   applyStory: (projectId: string, params: StoryParams, expectedRevision: number) => call<StoryApplyResult>(`/projects/${projectId}/recipes/story/apply`, json({ params, expectedRevision })),
   /** Rebuild a story run with changed options (never other taps: 409 story_retap_not_built), against the revision the bar showed. */
   regenerateStory: (projectId: string, runId: string, params: Partial<StoryParams> | undefined, expectedRevision: number, restoreRemoved = false) => call<StoryRegenerateResult>(`/projects/${projectId}/template-runs/${runId}/regenerate`, json({ ...(params ? { params } : {}), expectedRevision, ...(restoreRemoved ? { restoreRemoved: true } : {}) })),
+  // ----- «גדלים מול העיניים» (wave 8 growing): the recipe routes, owner's own session only; the eyes travel here once and are never stored -----
+  planGrowing: (projectId: string, req: Pick<GrowingApplyRequest, 'params'>) => call<GrowingPlanView>(`/projects/${projectId}/recipes/growing/plan`, json({ params: req.params })),
+  applyGrowing: (projectId: string, req: GrowingApplyRequest) => call<GrowingApplyResult>(`/projects/${projectId}/recipes/growing/apply`, json(req)),
+  /** Rebuild: untouched pictures keep their place (their eyes are worked out from their transforms); a picture marked again sends its eyes in params.picks. */
+  regenerateGrowing: (projectId: string, runId: string, req: GrowingRebuildRequest) => call<GrowingRegenerateResult>(`/projects/${projectId}/recipe-runs/${runId}/regenerate`, json(req)),
   // ----- «מוזיקה שמתאימה לסרט» (wave 7 musicfit; apps/server/src/musicfit/routes.ts) -----
   musicFitPlan: (projectId: string, req: MusicFitPlanRequest) => call<MusicFitPlan>(`/projects/${projectId}/music-fit/plan`, json(req)),
   musicFitApply: (projectId: string, req: MusicFitApplyRequest) => call<MusicFitApplyResult>(`/projects/${projectId}/music-fit/apply`, json(req)),

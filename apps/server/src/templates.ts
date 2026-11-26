@@ -14,7 +14,7 @@
  */
 import * as T from '@pulseframe/time';
 import {
-  clipEnd, closedGapOnly, derivedRanges, FAMILY_FILM_RUN_RECIPE_ID, STORY_RUN_RECIPE_ID, findClip, movedOnly, onOtherTrack, removedByHand, findGatedTemplate, findTemplate, fingerprint, gatedTemplateError, gatedTemplateSummary, MODEL_GATED_TEMPLATES, planTemplate, summarizeTemplate, TemplateError, TEMPLATE_METHOD, TEMPLATES,
+  clipEnd, closedGapOnly, derivedRanges, FAMILY_FILM_RUN_RECIPE_ID, GROWING_RUN_RECIPE_ID, STORY_RUN_RECIPE_ID, findClip, movedOnly, onOtherTrack, removedByHand, findGatedTemplate, findTemplate, fingerprint, gatedTemplateError, gatedTemplateSummary, MODEL_GATED_TEMPLATES, planTemplate, summarizeTemplate, TemplateError, TEMPLATE_METHOD, TEMPLATES,
   type Asset, type KnownGrid, type ProjectDocument, type RecipeRun, type RunRange, type SlotRecord, type RegenerateOptions, type TemplateApplyResult, type TemplateDef, type TemplatePlan, type TemplatePlanView, type TemplateRegenerateResult, type TemplateSummary,
 } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
@@ -242,6 +242,13 @@ function movedBackKeys(doc: ProjectDocument, slots: readonly SlotRecord[], ids: 
  * `restoreRemoved` is the explicit choice to make them again. Nothing new is stored: undo the delete and the item is live again.
  */
 export async function regenerateTemplateFor(store: Store, gov: Governance, principal: Principal, projectId: string, runId: string, newParams?: unknown, expectedRevision?: number, options: RegenerateOptions = {}): Promise<TemplateRegenerateResult> {
+  // «גדלים מול העיניים» (wave 8): its own checks come first (owner's own session only, 403 owner_required), before the edit rights
+  gov.assertMayAct(principal, projectId, 'observe');
+  const peek = store.getProject(projectId).doc.recipeRuns;
+  if (peek && Object.hasOwn(peek, runId) && peek[runId]!.recipeId === GROWING_RUN_RECIPE_ID) {
+    const { regenerateGrowingFor } = await import('./growing.ts');
+    return await regenerateGrowingFor(store, gov, principal, projectId, runId, newParams, expectedRevision, options) as unknown as TemplateRegenerateResult;
+  }
   mayApply(gov, principal, projectId);
   const p = store.getProject(projectId);
   const run = Object.hasOwn(p.doc.recipeRuns, runId) ? p.doc.recipeRuns[runId] : undefined;

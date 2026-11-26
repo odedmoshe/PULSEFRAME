@@ -95,6 +95,13 @@ describe('the cut at the start of a clip', () => {
     expect(cutBefore(p.doc, p.song)).toBeNull();
     expect(cutBefore(p.doc, p.title)).toBeNull();
   });
+  it('after a held frame (a freeze) the spare source after it is unlimited (null), as for a still (wave 8, core spareAfter)', () => {
+    const r = tx(p.doc, [{ op: 'add_clip', args: { assetId: (findClip(p.doc, p.first)!.clip as { assetId: string }).assetId, start: f(210), sourceIn: f(299), duration: f(30), freeze: true } }, { op: 'add_clip', args: { assetId: (findClip(p.doc, p.second)!.clip as { assetId: string }).assetId, start: f(240), sourceIn: f(0), duration: f(30), withLinkedAudio: false } }]);
+    const cut = cutBefore(r.doc, r.results[1]!.output!.clipId as string)!;
+    expect(cut.prev.id).toBe(r.results[0]!.output!.clipId);
+    expect(cut.handleAfter).toBeNull();
+    expect(cut.handleBefore).toBe(0);
+  });
   it('rolls the cut with two trims, the side that gives frames up first, and the core accepts both directions', () => {
     const cut = cutBefore(p.doc, p.second)!;
     const later = rollCutOps(p.doc, cut, 3)!;

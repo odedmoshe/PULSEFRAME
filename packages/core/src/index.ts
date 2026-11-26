@@ -146,6 +146,9 @@ export * from './sourceRangeOps.ts';
 // «ספרו מה היה» (wave 7 story track): the contract is lead-built; story.ts and voiceActivity.ts are W1's
 export * from './storyContract.ts';
 export * from './story.ts';
+// «גדלים מול העיניים» (wave 8 growing track): the contract is lead-built; growing.ts is W1's
+export * from './growingContract.ts';
+export * from './growing.ts';
 export * from './voiceActivity.ts';
 // music that fits the film «מוזיקה שמתאימה לסרט» (wave 7 musicfit track): the contract and validation are lead-built; the op bodies,
 // musicGrid, impact and musicJoin are A's; musicSwap is B's

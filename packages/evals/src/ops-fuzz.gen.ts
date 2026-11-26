@@ -413,6 +413,13 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       },
       () => ({ op: 'add_clip', args: { assetId: pick(assetIds), start: fr(), trackId: trackId() } }),
       () => { const x = media.length ? pick(media) : null; return { op: 'add_clip', args: { assetId: x && x.c.type === 'media' ? x.c.assetId : pick(assetIds), start: x ? T.add(x.c.start, x.c.duration) : fr(), ...(x ? { trackId: x.t.id } : {}), duration: f(10 + int(60)), sourceIn: T.frameTime(int(60), SRC) } }; },
+      // a held frame (add_clip freeze, wave 8 growing): mostly a video picture right after a picture clip (where a dissolve out of it can
+      // follow), now and then a still, linked sound, no duration or a picture past the end (each refused)
+      () => {
+        const x = videoClips.length && rnd() < 0.7 ? pick(videoClips) : null;
+        const r = rnd();
+        return { op: 'add_clip', args: { assetId: r < 0.1 ? pick(assetIds) : vid, start: x ? T.add(x.c.start, x.c.duration) : fr(), ...(x ? { trackId: x.t.id } : {}), ...(r < 0.95 ? { duration: f(1 + int(90)) } : {}), sourceIn: T.frameTime(int(r < 0.9 ? 240 : 400), SRC), freeze: true as const, ...(r > 0.9 ? { withLinkedAudio: rnd() < 0.5 } : {}) } };
+      },
       () => ({ op: 'add_text', args: { text: pick(['שלום', 'Hello עולם 123', 'בְּרֵאשִׁית']), start: fr(), duration: dur() } }),
       // a finished title in one step (ADR-0022): a text style, an animation and live fields with the add; an unknown style or a
       // text that is not fields refuses the whole add
