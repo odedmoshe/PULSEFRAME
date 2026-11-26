@@ -54,10 +54,10 @@ export async function runTripmapDraw(): Promise<DrawResult> {
   const chunkName = assets.find((f) => /^outlines\.data.*\.js$/.test(f));
   {
     const text = chunkName ? fs.readFileSync(path.join(webDist, 'assets', chunkName), 'utf8') : '';
-    const notices = fs.existsSync(path.join(root, 'THIRD_PARTY_NOTICES.txt')) ? fs.readFileSync(path.join(root, 'THIRD_PARTY_NOTICES.txt'), 'utf8') : '';
+    const notices = fs.existsSync(path.join(webDist, 'THIRD_PARTY_NOTICES.txt')) ? fs.readFileSync(path.join(webDist, 'THIRD_PARTY_NOTICES.txt'), 'utf8') : '';
     const levels = OUTLINES.levels.map((l) => ({ id: l.id, keys: Object.keys(l).sort() }));
     const onlyLandLakes = levels.every((l) => l.keys.join() === (l.id === 'detail' ? 'box,id,lakes,land,q,use' : 'id,lakes,land,q,use'));
-    check(16, 'the web bundle holds the outline chunk (a separate file); THIRD_PARTY_NOTICES.txt holds the Natural Earth block; the map data has only land and lakes levels (no border of any kind)',
+    check(16, 'the web bundle holds the outline chunk (a separate file); the bundle\'s THIRD_PARTY_NOTICES.txt holds the Natural Earth block; the map data has only land and lakes levels (no border of any kind)',
       !!chunkName && text.includes('f1890d9f152c896d250a77557a5751a93d494776') && !/admin|countries|boundar/i.test(text) && /Natural Earth/.test(notices) && onlyLandLakes,
       { chunk: chunkName ?? null, chunkBytes: text.length, notices: /Natural Earth/.test(notices), levels });
   }
