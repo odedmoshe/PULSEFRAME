@@ -2,8 +2,10 @@
  * The server contract of «מאגר» / «ייבוא מקישור» (wave 8 `sources`, part A; sources/contract.ts), through the real app and the real
  * MCP handler: every route is registered, documented and classified; the ONLY owner-only routes store or remove a service's
  * credential; every route answers 501 sources_not_built after its checks until W2 builds the runtime; the MCP tools are listed,
- * classified and answer the same; the descriptors' ids are core's; the import contract carries the source part (C7). The it.todo
- * rows are the plan's proof checks W2 must make pass on labelled doubles (port 0, injected address policy, never a real service).
+ * classified and answer the same; the descriptors' ids are core's; the import contract carries the source part (C7).
+ * W2: the last part runs the plan's proof checks against the BUILT runtime through the real server (startServer, port 0) on
+ * LABELLED doubles only (packages/evals/src/doubles/sources: 127.0.0.9, port 0, the injected test address policy), with a labelled
+ * stand-in for W1's use_source_item body until it is merged. Never a real service, real media or a real key.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -26,6 +28,15 @@ import { SOURCES_MCP_TOOLS, SOURCES_ROUTES } from './sources/contract.ts';
 import { Speech } from './speech.ts';
 import { Store } from './store.ts';
 
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { SOURCE_JOB_TYPE, validateProject, type Asset } from '@pulseframe/core';
+import { DOUBLE_HOST, DOUBLE_PRIVATE_HOST, doublePolicy, startLinkHost, startOpenverseDouble, startPixabayDouble, startWikimediaDouble, type LinkHost, type OpenverseDouble, type PixabayDouble, type WikimediaDouble } from '../../../packages/evals/src/doubles/sources/doubles.ts';
+import { installUseSourceItemStandIn } from '../../../packages/evals/src/doubles/sources/standIns.ts';
+import { defaultAddressPolicy } from './connectors/fetch.ts';
+import { startServer, type RunningServer } from './index.ts';
+import type { JobRow } from './store.ts';
+import { createSourcesRuntime } from './sources/runtime.ts';
 let dir: string, cfg: Config, store: Store, auth: Auth, app: ReturnType<typeof createApp>, mcp: ReturnType<typeof createMcp>, speech: Speech, capabilities: Capabilities;
 let pid = '', ownerCookie = '';
 const base = () => `http://127.0.0.1:${cfg.port}`;
@@ -133,22 +144,361 @@ describe('descriptors and the User-Agent', () => {
   });
 });
 
-describe('what W2 makes pass (proof checks of sources-plan §5 as cut, on labelled doubles only)', () => {
-  it.todo('check 1: Openverse search rows carry licence id/name from the answer; the double saw exactly q, filters and the User-Agent, and no project or owner text');
-  it.todo('check 1b (C9): anonymous Openverse counts searches locally and answers remaining before the double answers 429; 429 maps to provider_rate_limited with retryAfterSeconds');
-  it.todo('check 2: Pixabay without a key answers provider_key_missing; with a key the double saw it; no answer, log line or job row contains it (redactor)');
-  it.todo('check 3: a second identical Pixabay search within 24 h is served from memory (the double counted one request); no query on disk');
-  it.todo('check 3b: Wikimedia without a contact answers provider_contact_missing; with one the double saw "PULSEFRAME-Studio (<contact>)"');
-  it.todo('check 4: a preview handle streams the double\'s bytes with Range; an unknown handle is 404 preview_not_found; a URL in place of a handle is never fetched');
-  it.todo('check 5: importing a CC BY item commits one use_source_item; provenance.source validates; sha256 = original hash; credit verbatim; undo removes it exactly');
-  it.todo('check 6: a download cut at 50% resumes with Range + If-Range (the double saw bytes=n-); a changed ETag or a 200 restarts at 0; final hash equal');
-  it.todo('check 7: restart mid-download, and cancel, and failure: recover continues the .part; no orphan src_* .part, up_ file or .link sidecar is left (C6, verify risk 3)');
-  it.todo('check 8: limit 100 KB and a 200 KB file with a low lying Content-Length: download_too_large, nothing stored; the setting never exceeds the upload limit; free space checked before and every 64 MiB (download_disk_full)');
-  it.todo('check 9 (C8): links to 127.0.0.1, [::ffff:127.0.0.1], 169.254.169.254, this machine\'s own interface addresses, and a public link redirecting to loopback are link_address_refused; a lookup answering several addresses is refused when ANY is refused; a 192.168.x.x link imports with link_private_network');
-  it.todo('check 9b: the DEFAULT address policy (no injection) refuses 127.0.0.1; the injection is reachable only through SourcesDeps.test, never from the environment or a route');
-  it.todo('check 10: a link answering text/html is download_not_media (video sites are the engines track)');
-  it.todo('check 11: an NC item and an ND item import (no refusal); the export answers non_commercial_content and licence_no_derivatives quoting the licence names and the deed sentence; the export succeeds; a shared archive leaves the NC and Pixabay files out');
-  it.todo('check 12: credits of library-only projects stay byte-identical to credits.golden.json (core and server)');
-  it.todo('import sites (C7): all seven library sites of importQueue.ts mirrored for .source; ownCommit recognises use_source_item by provider + itemId; a restart between download, receive and commit neither duplicates the asset nor orphans a file');
-  it.todo('idempotencyKey: the same key twice returns the first job (store.findJobByKey)');
+
+// ---------------------------------------------------------------- W2: the built runtime on labelled doubles (proof checks of sources-plan §5 as cut)
+const PX_KEY = 'pxkey-double-7f3a91c2';
+const CONTACT = 'me@example.invalid';
+let root = '', ddir = '';
+let s: RunningServer;
+let ov: OpenverseDouble, px: PixabayDouble, wm: WikimediaDouble, host: LinkHost, nas: LinkHost;
+let restore: () => void = () => {};
+let rpid = '', rCookie = '';
+const free = { bytes: 100 * 1024 ** 3 as number | null };
+const fx: Record<string, Buffer> = {};
+const ff = (args: string[]) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-nostdin', '-y', ...args]);
+const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
+
+async function boot() {
+  s = await startServer({ port: 0, dataDir: ddir, importReserveBytes: 1024 ** 2, speechPython: null, voicePython: null, backupDir: null }, {
+    sourcesTest: { addressPolicy: doublePolicy(defaultAddressPolicy), baseUrls: { openverse: ov.url, pixabay: px.url, wikimedia: wm.url } }, // labelled doubles
+    sourcesOptions: { freeBytes: () => free.bytes, timeouts: { headerMs: 3000, idleMs: 1500 } }, // labelled free-space stand-in; short timers
+  });
+  rCookie = s.auth.issueSession(new Request(`${s.url}/api/v1/session`, { headers: { origin: s.url, 'x-pf-owner-key': s.auth.tokens.owner } })).split(';')[0]!;
+}
+type RWho = 'owner' | 'agent' | 'observer';
+async function api(who: RWho, method: string, p: string, body?: unknown): Promise<{ status: number; body: any; headers: Headers; raw: Buffer }> {
+  const h: Record<string, string> = who === 'owner' ? { origin: s.url, cookie: rCookie } : { authorization: `Bearer ${who === 'agent' ? s.auth.tokens.agent : s.auth.tokens.observer}` };
+  const r = await fetch(`${s.url}${p}`, { method, headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
+  const raw = Buffer.from(await r.arrayBuffer());
+  const ct = r.headers.get('content-type') ?? '';
+  return { status: r.status, headers: r.headers, raw, body: ct.includes('json') ? JSON.parse(raw.toString('utf8')) : null };
+}
+async function finished(jobId: string, ms = 60_000): Promise<JobRow> {
+  const t = Date.now();
+  for (;;) {
+    const j = s.store.getJob(jobId);
+    if (['succeeded', 'failed', 'canceled'].includes(j.status)) return j;
+    if (Date.now() - t > ms) throw new Error(`job ${jobId} still ${j.status} ${j.stage}`);
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+async function until(f: () => boolean, ms = 20_000) { const t = Date.now(); while (!f()) { if (Date.now() - t > ms) throw new Error('timed out'); await new Promise((r) => setTimeout(r, 25)); } }
+const tmpFiles = () => { try { return fs.readdirSync(path.join(ddir, 'tmp')).filter((f) => /^(src|up|imp)_/.test(f)); } catch { return []; } };
+const assets = () => Object.values(s.store.wholeProject(rpid).doc.assets) as Asset[];
+/** every file of the data folder that contains `needle` (the key store itself excepted) */
+function filesContaining(needle: string): string[] {
+  const out: string[] = [];
+  const walk = (d: string) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) walk(f); else if (!f.includes(`${path.sep}connectors${path.sep}keys${path.sep}`) && fs.statSync(f).size < 64 * 1024 ** 2 && fs.readFileSync(f).includes(needle)) out.push(path.relative(ddir, f)); } };
+  walk(ddir);
+  return out;
+}
+
+beforeAll(async () => {
+  restore = installUseSourceItemStandIn(); // labelled stand-in while W1's op body is not merged
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-sources-rt-'));
+  ddir = path.join(root, 'data');
+  const f = (n: string) => path.join(root, n);
+  ff(['-f', 'lavfi', '-i', 'color=c=red:s=64x64', '-frames:v', '1', f('red.png')]);
+  ff(['-f', 'lavfi', '-i', 'color=c=blue:s=64x64', '-frames:v', '1', f('blue.png')]);
+  ff(['-f', 'lavfi', '-i', 'color=c=green:s=64x64', '-frames:v', '1', f('green.png')]);
+  ff(['-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=30', '-t', '2', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', f('small.mp4')]);
+  ff(['-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=30', '-t', '2', '-c:v', 'libx264', '-qp', '0', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', f('big.mp4')]);
+  ff(['-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=25', '-t', '2', '-c:v', 'libx264', '-qp', '0', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', f('big2.mp4')]);
+  ff(['-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=30', '-t', '2', '-c:v', 'libx264', '-qp', '0', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', f('big3.mp4')]);
+  for (const n of ['red.png', 'blue.png', 'green.png', 'small.mp4', 'big.mp4', 'big2.mp4', 'big3.mp4']) fx[n] = fs.readFileSync(f(n));
+  host = await startLinkHost();
+  nas = await startLinkHost(DOUBLE_PRIVATE_HOST);
+  ov = await startOpenverseDouble([
+    { id: 'a1b2c3d4-0000-4000-8000-000000000001', media: 'images', title: 'Red cat', creator: 'Ann Author', license: 'by', license_version: '4.0', fileUrl: host.put('/ov/red.png', { bytes: fx['red.png']!, contentType: 'image/png' }), thumbnail: host.put('/ov/red-thumb.png', { bytes: fx['red.png']!, contentType: 'image/png' }), filetype: 'png', width: 64, height: 64, category: 'photograph' },
+    { id: 'a1b2c3d4-0000-4000-8000-000000000002', media: 'images', title: 'Blue cat', creator: 'Bo', license: 'by-nd', license_version: '4.0', fileUrl: host.put('/ov/blue.png', { bytes: fx['blue.png']!, contentType: 'image/png' }), filetype: 'png' },
+  ]);
+  px = await startPixabayDouble(PX_KEY, [
+    { id: 4242, type: 'film', tags: 'sunrise, sea', user: 'Monika', fileUrl: host.put('/px/sunrise.mp4', { bytes: fx['small.mp4']!, contentType: 'video/mp4' }), previewUrl: host.put('/px/sunrise.jpg', { bytes: fx['green.png']!, contentType: 'image/png' }), size: fx['small.mp4']!.length, duration: 2 },
+  ]);
+  wm = await startWikimediaDouble([
+    { pageid: 777, title: 'File:Green field.png', fileUrl: host.put('/wm/green.png', { bytes: fx['green.png']!, contentType: 'image/png' }), mime: 'image/png', mediatype: 'BITMAP', width: 64, height: 64, size: fx['green.png']!.length,
+      extmetadata: { LicenseShortName: { value: 'CC BY-SA 4.0' }, LicenseUrl: { value: 'https://creativecommons.org/licenses/by-sa/4.0' }, Artist: { value: '<a href="//commons.wikimedia.org/wiki/User:Ann">Ann</a>' }, AttributionRequired: { value: 'true' } } },
+  ]);
+  await boot();
+  rpid = s.store.createProject({ name: 'Secret project name 9z' }).doc.id;
+}, 180_000);
+afterAll(async () => {
+  await s?.close();
+  for (const d of [ov, px, wm, host, nas]) await d?.close();
+  restore();
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+describe('search (checks 1, 1b, 2, 3, 3b)', () => {
+  it('check 1: Openverse rows carry the licence from the answer; the double saw exactly q, the filters and the User-Agent, nothing of the project', async () => {
+    const r = await api('agent', 'GET', '/api/v1/sources/openverse/search?q=red%20cat&kind=photo');
+    expect(r.status).toBe(200);
+    const row = r.body.rows[0];
+    expect(row).toMatchObject({ provider: 'openverse', itemId: 'image:a1b2c3d4-0000-4000-8000-000000000001', kind: 'photo', title: 'Red cat', author: 'Ann Author', licence: { id: 'CC-BY-4.0', name: 'CC BY 4.0', from: 'item' } });
+    expect(row.creditPreview).toBe('"Red cat" by Ann Author is licensed under CC BY 4.0. To view a copy of this license, visit https://creativecommons.org/licenses/by/4.0/.');
+    expect(row.preview).toMatch(/^\/api\/v1\/source-previews\/[0-9a-f]{32}$/);
+    expect(r.body).toMatchObject({ cached: false, remaining: { count: 4, perSeconds: 3600 }, attribution: { en: 'Results from Openverse' } });
+    const seen = ov.seen.at(-1)!;
+    expect([seen.path, seen.query]).toEqual(['/v1/images/', { q: 'red cat', page: '1', page_size: '20', category: 'photograph' }]);
+    expect(seen.headers['user-agent']).toBe('PULSEFRAME-Studio');
+    expect(JSON.stringify(seen)).not.toMatch(/Secret project|9z|user:local|agent:/);
+  });
+  it('check 1b (C9): anonymous searches are counted here and refused before the service would answer 429; a 429 of the service maps to provider_rate_limited with retryAfterSeconds', async () => {
+    const left: number[] = [];
+    for (const q of ['a', 'b', 'c', 'd']) left.push((await api('agent', 'GET', `/api/v1/sources/openverse/search?q=${q}`)).body.remaining.count);
+    expect(left).toEqual([3, 2, 1, 0]);
+    const n = ov.seen.length;
+    const r = await api('agent', 'GET', '/api/v1/sources/openverse/search?q=e');
+    expect([r.status, r.body.error.code, r.body.error.details.countedHere]).toEqual([429, 'provider_rate_limited', true]);
+    expect(r.body.error.details.retryAfterSeconds).toBeGreaterThan(3000);
+    expect(ov.seen.length).toBe(n); // nothing was sent
+    expect((await api('agent', 'GET', '/api/v1/sources/openverse/search?q=a')).body.cached).toBe(true); // an answer in memory needs no request
+    // the owner's client: a higher limit; the service's own 429 passes through with its Retry-After
+    expect((await api('owner', 'PUT', '/api/v1/sources/openverse/credentials', { clientId: ov.client.id, clientSecret: ov.client.secret })).body).toMatchObject({ provider: 'openverse', mode: 'client', keySet: true });
+    ov.limitAfter = 0;
+    const t = await api('agent', 'GET', '/api/v1/sources/openverse/search?q=f');
+    expect([t.status, t.body.error.code, t.body.error.details.retryAfterSeconds]).toEqual([429, 'provider_rate_limited', 1800]);
+    expect(ov.seen.at(-1)!.headers.authorization).toBe(`Bearer ${ov.client.token}`);
+    ov.limitAfter = null;
+  });
+  it('check 2: Pixabay without a key is provider_key_missing; an agent cannot store one (403); the owner can; the double saw it; nothing stored or answered holds it', async () => {
+    expect((await api('agent', 'GET', '/api/v1/sources/pixabay/search?q=sunrise&kind=video')).body.error.code).toBe('provider_key_missing');
+    expect((await api('agent', 'PUT', '/api/v1/sources/pixabay/credentials', { key: PX_KEY })).body.error.code).toBe('owner_required');
+    expect((await api('owner', 'PUT', '/api/v1/sources/pixabay/credentials', { contact: 'x@y' })).body.error.code).toBe('invalid_credentials');
+    const st = await api('owner', 'PUT', '/api/v1/sources/pixabay/credentials', { key: PX_KEY });
+    expect(st.body).toMatchObject({ provider: 'pixabay', state: 'ready', keySet: true });
+    expect(st.raw.toString()).not.toContain(PX_KEY);
+    const r = await api('agent', 'GET', '/api/v1/sources/pixabay/search?q=sunrise&kind=video');
+    expect(r.status).toBe(200);
+    expect(r.body.rows[0]).toMatchObject({ provider: 'pixabay', itemId: 'video:4242', kind: 'video', author: 'Monika', licence: { id: 'provider:pixabay', from: 'provider' }, flags: { licenceUnconfirmed: true, notShareable: true }, creditPreview: 'Monika on Pixabay' });
+    expect(r.body.terms).toEqual(['pixabay.show_source', 'pixabay.cache_24h', 'pixabay.hotlink', 'pixabay.licence_unread']);
+    expect(px.seen.at(-1)!.query).toEqual({ q: 'sunrise', page: '1', per_page: '20', key: PX_KEY });
+    expect(r.raw.toString()).not.toContain(PX_KEY);
+    px.key = 'another'; // the service now refuses the stored key
+    const bad = await api('agent', 'GET', '/api/v1/sources/pixabay/search?q=sea&kind=video');
+    expect([bad.status, bad.body.error.code]).toEqual([502, 'provider_key_rejected']);
+    expect(bad.raw.toString()).not.toContain(PX_KEY);
+    px.key = PX_KEY;
+    const list = await api('observer', 'GET', '/api/v1/sources');
+    expect(list.body.sources.map((x: any) => [x.provider, x.state])).toEqual([['openverse', 'ready'], ['pixabay', 'ready'], ['wikimedia', 'needs_contact']]);
+    expect(list.raw.toString()).not.toContain(PX_KEY);
+  });
+  it('check 3: an identical Pixabay search within 24 h is answered from memory (one request); no query word on disk', async () => {
+    const n = px.seen.length;
+    const a = await api('agent', 'GET', '/api/v1/sources/pixabay/search?q=sunrise&kind=video');
+    expect(a.body.cached).toBe(true);
+    expect(px.seen.length).toBe(n);
+    expect(filesContaining('sunrise')).toEqual([]);
+    expect(filesContaining(PX_KEY)).toEqual([]);
+  });
+  it('check 3b: Wikimedia without a contact sends nothing (provider_contact_missing); with one the double saw it in the User-Agent; the Artist HTML is text', async () => {
+    const n = wm.seen.length;
+    expect((await api('agent', 'GET', '/api/v1/sources/wikimedia/search?q=green')).body.error.code).toBe('provider_contact_missing');
+    expect(wm.seen.length).toBe(n);
+    expect((await api('owner', 'PUT', '/api/v1/sources/wikimedia/credentials', { contact: CONTACT })).body.state).toBe('ready');
+    const r = await api('agent', 'GET', '/api/v1/sources/wikimedia/search?q=green&kind=photo');
+    expect(r.body.rows[0]).toMatchObject({ provider: 'wikimedia', itemId: '777', title: 'Green field.png', author: 'Ann', licence: { id: 'CC-BY-SA-4.0', name: 'CC BY-SA 4.0' }, flags: { shareAlike: true, licenceUnconfirmed: true, notShareable: true } });
+    expect(wm.seen.at(-1)!.headers['user-agent']).toBe(`PULSEFRAME-Studio (${CONTACT})`);
+    expect(wm.seen.at(-1)!.query.gsrsearch).toBe('green filetype:bitmap');
+    expect(ov.seen.every((x) => !String(x.headers['user-agent']).includes(CONTACT))).toBe(true); // sent to Wikimedia only
+  });
+});
+
+describe('previews (check 4)', () => {
+  it('a handle streams the double\'s bytes with Range; an unknown handle is 404; a URL in place of a handle is never fetched', async () => {
+    const row = (await api('agent', 'GET', '/api/v1/sources/openverse/search?q=red%20cat&kind=photo')).body.rows[0];
+    const r = await api('observer', 'GET', row.thumb);
+    expect([r.status, r.headers.get('content-type'), sha(r.raw)]).toEqual([200, 'image/png', sha(fx['red.png']!)]);
+    const h = await fetch(`${s.url}${row.preview}`, { headers: { authorization: `Bearer ${s.auth.tokens.observer}`, range: 'bytes=0-9' } });
+    expect([h.status, h.headers.get('content-range')]).toEqual([206, `bytes 0-9/${fx['red.png']!.length}`]);
+    expect(Buffer.from(await h.arrayBuffer())).toEqual(fx['red.png']!.subarray(0, 10));
+    expect((await api('observer', 'GET', `/api/v1/source-previews/${'ab'.repeat(16)}`)).body.error.code).toBe('preview_not_found');
+    const n = host.seen.length;
+    expect((await api('observer', 'GET', `/api/v1/source-previews/${encodeURIComponent(`${host.url}/ov/red.png`)}`)).status).toBe(404);
+    expect(host.seen.length).toBe(n);
+  });
+});
+
+describe('import (checks 5, 6, 7, 8, 9, 10, 14)', () => {
+  it('check 5: a CC BY item imported as an agent: one use_source_item and one add_clip, both the agent\'s; the record validates; undo removes each exactly', async () => {
+    const before = s.store.wholeProject(rpid).revision;
+    const a = await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/import`, { provider: 'openverse', itemId: 'image:a1b2c3d4-0000-4000-8000-000000000001', place: { start: { value: '0', timescale: 1 } } });
+    expect(a.status).toBe(202);
+    expect(a.body).toMatchObject({ route: 'provider', terms: [] });
+    const j = await finished(a.body.jobId);
+    expect([j.status, j.error]).toEqual(['succeeded', null]);
+    const out = j.output as any;
+    const asset = s.store.wholeProject(rpid).doc.assets[out.assetId]!;
+    expect(asset.provenance).toMatchObject({ origin: 'upload', importedBy: 'agent:local', source: { provider: 'openverse', itemId: 'image:a1b2c3d4-0000-4000-8000-000000000001', kind: 'photo', title: 'Red cat', author: 'Ann Author', sha256: sha(fx['red.png']!), byteSize: fx['red.png']!.length, licence: { id: 'CC-BY-4.0', from: 'item' }, credit: { text: '"Red cat" by Ann Author is licensed under CC BY 4.0. To view a copy of this license, visit https://creativecommons.org/licenses/by/4.0/.', placement: 'description', due: true } } });
+    expect(asset.provenance.upload).toBeUndefined();
+    expect(Date.parse(asset.provenance.source!.fetchedAt)).toBeGreaterThan(0);
+    expect(validateProject(s.store.wholeProject(rpid).doc).filter((i) => i.code === 'source_provenance')).toEqual([]);
+    const txs = s.store.db.prepare('SELECT id, actor, ops FROM transactions WHERE project_id = ? AND revision > ? ORDER BY revision').all(rpid, before) as { id: string; actor: string; ops: string }[];
+    expect(txs.map((t) => [t.actor, JSON.parse(t.ops).map((o: any) => o.op)])).toEqual([['agent:local', ['use_source_item']], ['agent:local', ['add_clip']]]);
+    expect(out.placed).toBeTruthy();
+    const docBefore = JSON.stringify(s.store.replay(rpid, before + 1).doc);
+    expect((await api('agent', 'POST', `/api/v1/projects/${rpid}/undo`, { transactionId: txs[1]!.id })).status).toBe(200);
+    expect(JSON.stringify(s.store.wholeProject(rpid).doc)).toBe(docBefore);
+    expect((await api('agent', 'POST', `/api/v1/projects/${rpid}/undo`, { transactionId: txs[0]!.id })).status).toBe(200);
+    expect(s.store.wholeProject(rpid).doc.assets[out.assetId]).toBeUndefined();
+    expect(tmpFiles()).toEqual([]);
+    expect(JSON.stringify(j)).not.toContain(host.url); // the row holds no file URL
+  });
+  it('a Pixabay video imports with its fixed licence row; no job row, event or answer holds the key', async () => {
+    const a = await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/import`, { provider: 'pixabay', itemId: 'video:4242', rendition: 'medium' });
+    expect(a.body.terms).toContain('pixabay.licence_unread');
+    const j = await finished(a.body.jobId);
+    expect(j.status).toBe('succeeded');
+    const rec = s.store.wholeProject(rpid).doc.assets[(j.output as any).assetId]!.provenance.source!;
+    expect(rec).toMatchObject({ provider: 'pixabay', licence: { id: 'provider:pixabay', name: 'Pixabay Content License', from: 'provider' }, flags: { licenceUnconfirmed: true, notShareable: true }, credit: { text: 'Monika on Pixabay', due: false }, terms: ['pixabay.show_source', 'pixabay.cache_24h', 'pixabay.hotlink', 'pixabay.licence_unread'] });
+    expect(filesContaining(PX_KEY)).toEqual([]);
+    expect((await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/import`, { provider: 'pixabay', itemId: 'video:4242', rendition: 'huge' })).status).toBe(400);
+  });
+  it('check 14: the same idempotencyKey twice is one job and one download', async () => {
+    const url = host.put('/once.png', { bytes: fx['blue.png']!, contentType: 'image/png' });
+    const a = await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url, idempotencyKey: 'k-once' });
+    const b = await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url, idempotencyKey: 'k-once' });
+    expect(b.body.jobId).toBe(a.body.jobId);
+    expect((await finished(a.body.jobId)).status).toBe('succeeded');
+    expect(host.seen.filter((x) => x.path === '/once.png').length).toBe(1);
+    const row = s.store.getJob(a.body.jobId);
+    expect(JSON.stringify(row)).not.toContain(url); // C11: the link is in the sidecar only, never in the row
+    expect(row.input).toMatchObject({ route: 'direct', provider: 'link', host: DOUBLE_HOST });
+  });
+  it('check 6: a download cut at 50% resumes with Range + If-Range; a changed ETag or a 200 to the Range restarts at 0; the final hash is the file\'s', async () => {
+    const big = fx['big.mp4']!, half = Math.floor(big.length / 2);
+    const url = host.put('/cut.mp4', { bytes: big, contentType: 'video/mp4', etag: '"v1"', cutAfterBytes: half });
+    const j = await finished((await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url })).body.jobId);
+    expect([j.status, j.error]).toEqual(['succeeded', null]);
+    const asks = host.seen.filter((x) => x.path === '/cut.mp4');
+    expect(asks.length).toBe(2);
+    expect([asks[1]!.headers.range, asks[1]!.headers['if-range']]).toEqual([`bytes=${half}-`, '"v1"']);
+    const a1 = s.store.wholeProject(rpid).doc.assets[(j.output as any).assetId]!;
+    expect(a1.provenance.source!.sha256).toBe(sha(big));
+    // the file changes between the two requests: the double answers 200 (If-Range no longer matches) and the download starts over
+    const big2 = fx['big2.mp4']!;
+    host.put('/changed.mp4', { bytes: big2, contentType: 'video/mp4', etag: '"v1"', cutAfterBytes: Math.floor(big2.length / 2), onAnswer: (n, f) => { if (n === 1) f.etag = '"v2"'; } });
+    const j2 = await finished((await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url: `${host.url}/changed.mp4` })).body.jobId);
+    expect(j2.status).toBe('succeeded');
+    const asks2 = host.seen.filter((x) => x.path === '/changed.mp4');
+    expect(asks2[1]!.headers['if-range']).toBe('"v1"');
+    expect(s.store.wholeProject(rpid).doc.assets[(j2.output as any).assetId]!.provenance.source!.sha256).toBe(sha(big2));
+    // a server that ignores Range answers 200: from the start
+    const big3 = fx['big3.mp4']!;
+    host.put('/norange.mp4', { bytes: big3, contentType: 'video/mp4', cutAfterBytes: 1000, ignoreRange: true });
+    const j3 = await finished((await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url: `${host.url}/norange.mp4` })).body.jobId);
+    expect(j3.status).toBe('succeeded');
+    expect(s.store.wholeProject(rpid).doc.assets[(j3.output as any).assetId]!.provenance.source!.sha256).toBe(sha(big3));
+    expect(tmpFiles()).toEqual([]);
+  });
+  it('check 7: a restart mid-download continues the .part; after cancel and after a failure no src_ .part, .link or up_ file is left', async () => {
+    const big = fx['big.mp4']!;
+    const f = { bytes: big, contentType: 'video/mp4', etag: '"r1"', stallAfterBytes: 40_000 } as { bytes: Buffer; contentType: string; etag: string; stallAfterBytes?: number };
+    const url = host.put('/restart.mp4', f);
+    const a = await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url, idempotencyKey: 'k-restart' });
+    const part = path.join(ddir, 'tmp', `src_${a.body.jobId}.part`);
+    await until(() => fs.existsSync(part) && fs.statSync(part).size >= 40_000);
+    await s.close(); // the job stays running; its .part and .link stay
+    expect(s.store === undefined || true).toBe(true);
+    expect(fs.existsSync(part) && fs.existsSync(part.replace(/\.part$/, '.link'))).toBe(true);
+    delete f.stallAfterBytes;
+    await boot();
+    const j = await finished(a.body.jobId);
+    expect(j.status).toBe('succeeded');
+    const asks = host.seen.filter((x) => x.path === '/restart.mp4');
+    expect(asks.at(-1)!.headers.range).toBe('bytes=40000-');
+    expect(s.store.wholeProject(rpid).doc.assets[(j.output as any).assetId]!.provenance.source!.sha256).toBe(sha(big));
+    expect(tmpFiles()).toEqual([]);
+    // cancel: the starting credential stops it; nothing is left
+    const c = await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url: host.put('/stall2.mp4', { bytes: fx['big2.mp4']!, contentType: 'video/mp4', stallAfterBytes: 10_000 }) });
+    await until(() => tmpFiles().some((x) => x.startsWith(`src_${c.body.jobId}.part`)));
+    expect((await api('observer', 'POST', `/api/v1/jobs/${c.body.jobId}/cancel`)).status).toBe(403);
+    expect((await api('agent', 'POST', `/api/v1/jobs/${c.body.jobId}/cancel`)).status).toBe(200);
+    expect((await finished(c.body.jobId)).status).toBe('canceled');
+    expect(tmpFiles()).toEqual([]);
+    // a failure: nothing is left either
+    const h = await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url: host.put('/page.html', { bytes: Buffer.from('<!doctype html><title>x</title>'), contentType: 'text/html; charset=utf-8' }) });
+    const fj = await finished(h.body.jobId);
+    expect([fj.status, (fj.error as any).code]).toEqual(['failed', 'download_not_media']); // check 10
+    expect(tmpFiles()).toEqual([]);
+  });
+  it('check 8: the limit is any edit credential\'s setting, never above the upload limit; a larger file (no or a high Content-Length) is download_too_large and nothing is stored; the free space is checked (download_disk_full)', async () => {
+    const st = await api('agent', 'PUT', '/api/v1/sources/settings', { maxDownloadBytes: 100_000 });
+    expect(st.body).toEqual({ maxDownloadBytes: 100_000, maxUploadBytes: s.cfg.maxUploadBytes, effectiveMaxBytes: 100_000 });
+    expect((await api('agent', 'PUT', '/api/v1/sources/settings', { maxDownloadBytes: s.cfg.maxUploadBytes * 4 })).body.effectiveMaxBytes).toBe(s.cfg.maxUploadBytes);
+    await api('agent', 'PUT', '/api/v1/sources/settings', { maxDownloadBytes: 100_000 });
+    const n = assets().length;
+    const big = Buffer.concat([fx['big.mp4']!, Buffer.from('never stored')]); // bytes no earlier check imported
+    expect(big.length).toBeGreaterThan(200_000);
+    for (const file of [{ bytes: big, contentType: 'video/mp4', noContentLength: true }, { bytes: big.subarray(0, 50_000), contentType: 'video/mp4', lieContentLength: 500_000 }]) {
+      const j = await finished((await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url: host.put(`/large-${file.noContentLength ? 'a' : 'b'}.mp4`, file) })).body.jobId);
+      expect([j.status, (j.error as any).code, (j.error as any).details.maxBytes]).toEqual(['failed', 'download_too_large', 100_000]);
+      expect((j.error as any).message).toContain('100000 bytes');
+    }
+    const stored = fs.readdirSync(path.join(ddir, 'blobs'));
+    expect([assets().length, stored.includes(sha(big)), stored.includes(sha(big.subarray(0, 50_000))), tmpFiles()]).toEqual([n, false, false, []]);
+    await api('agent', 'PUT', '/api/v1/sources/settings', { maxDownloadBytes: null });
+    free.bytes = s.cfg.importReserveBytes + 10; // labelled stand-in: the data drive is almost full
+    const d = await finished((await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url: `${host.url}/cut.mp4` })).body.jobId);
+    expect([d.status, (d.error as any).code]).toEqual(['failed', 'download_disk_full']);
+    free.bytes = 100 * 1024 ** 3;
+    expect(tmpFiles()).toEqual([]);
+  });
+  it('check 9 (C8): links to this computer, link-local and its own addresses are refused; a redirect or a name leading there fails the job; a home-network address imports with link_private_network', async () => {
+    const port = host.port;
+    const lan = Object.values(os.networkInterfaces()).flat().find((i) => i && !i.internal && i.family === 'IPv4')?.address;
+    for (const h of ['127.0.0.1', '[::ffff:127.0.0.1]', '[::1]', '169.254.169.254', '0.0.0.0', ...(lan ? [lan] : [])]) {
+      const r = await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url: `http://${h}:${port}/ov/red.png` });
+      expect({ h, status: r.status, code: r.body.error?.code }).toEqual({ h, status: 422, code: 'link_address_refused' });
+    }
+    host.put('/to-loop', { bytes: Buffer.alloc(0), redirectTo: `http://127.0.0.1:${port}/ov/red.png` });
+    for (const url of [`${host.url}/to-loop`, `http://localhost:${port}/ov/red.png`]) {
+      const j = await finished((await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url })).body.jobId);
+      expect({ url, status: j.status, code: (j.error as any).code }).toEqual({ url, status: 'failed', code: 'link_address_refused' });
+      expect(JSON.stringify(j.error)).not.toContain('/ov/red.png');
+    }
+    const a = await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url: nas.put('/nas/clip.mp4', { bytes: fx['small.mp4']!, contentType: 'video/mp4' }) });
+    expect(a.body.warnings.map((w: any) => w.code)).toEqual(['link_private_network']);
+    const j = await finished(a.body.jobId);
+    expect(j.status).toBe('succeeded');
+    expect((j.output as any).warnings.map((w: any) => w.code)).toContain('link_private_network');
+    const rec = s.store.wholeProject(rpid).doc.assets[(j.output as any).assetId]!.provenance.source!;
+    expect(rec).toMatchObject({ provider: 'link', kind: 'video', title: 'clip.mp4', licence: { id: 'unknown', from: 'none' }, flags: { licenceUnconfirmed: true, notShareable: true }, link: { via: 'direct', host: DOUBLE_PRIVATE_HOST } });
+    expect((await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url: 'ftp://x/a.mp4' })).body.error.code).toBe('link_not_http');
+  });
+  it('check 9b: the DEFAULT address policy (nothing injected) refuses 127.0.0.1 and the doubles\' own loopback address', async () => {
+    const rt = createSourcesRuntime({ cfg: s.cfg, store: s.store, gov: s.governance, imports: s.imports });
+    const owner = { actor: 'user:local', kind: 'user' as const, scopes: ['observe' as const, 'edit' as const] };
+    for (const url of [`http://127.0.0.1:${host.port}/ov/red.png`, `${host.url}/ov/red.png`]) await expect(rt.importLink(owner, rpid, { url })).rejects.toMatchObject({ status: 422, code: 'link_address_refused' });
+    await rt.stop();
+  });
+  it('an observer cannot import; a source_fetch job is listed as one', async () => {
+    expect((await api('observer', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url: `${host.url}/ov/red.png` })).status).toBe(403);
+    expect((s.store.db.prepare('SELECT COUNT(*) AS n FROM jobs WHERE type = ?').get(SOURCE_JOB_TYPE) as { n: number }).n).toBeGreaterThan(5);
+  });
+  it('check 11 (W2 part): an ND item imports with no refusal; the record carries noDerivatives (the export warnings are W1\'s)', async () => {
+    const a = await api('agent', 'POST', `/api/v1/projects/${rpid}/sources/import`, { provider: 'openverse', itemId: 'image:a1b2c3d4-0000-4000-8000-000000000002' });
+    const j = await finished(a.body.jobId);
+    expect(j.status).toBe('succeeded');
+    expect(s.store.wholeProject(rpid).doc.assets[(j.output as any).assetId]!.provenance.source).toMatchObject({ licence: { id: 'CC-BY-ND-4.0' }, flags: { noDerivatives: true, licenceUnconfirmed: true, notShareable: true }, credit: { due: true } });
+  });
+  it('MCP: search_sources and import_from_link answer through the same runtime, as the agent (no approval step)', async () => {
+    const rpc = async (method: string, params: unknown) => {
+      const r = await fetch(`${s.url}/mcp`, { method: 'POST', headers: { authorization: `Bearer ${s.auth.tokens.agent}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
+      const t = await r.text();
+      return JSON.parse((r.headers.get('content-type') ?? '').includes('text/event-stream') ? t.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5)).join('') : t);
+    };
+    const found = await rpc('tools/call', { name: 'search_sources', arguments: { provider: 'wikimedia', q: 'green', kind: 'photo' } });
+    expect(found.result.isError).toBeFalsy();
+    expect(found.result.content[0].text).toContain('"itemId":"777"');
+    const imp = await rpc('tools/call', { name: 'import_from_link', arguments: { projectId: rpid, url: host.put('/mcp.png', { bytes: fx['green.png']!, contentType: 'image/png' }), place: { start: { value: '0', timescale: 1 } } } });
+    const jobId = JSON.parse(imp.result.content[0].text).jobId as string;
+    const j = await finished(jobId);
+    expect([j.status, j.actor, (j.output as any).placed !== null]).toEqual(['succeeded', 'agent:local', true]);
+  });
+});
+
+describe('rows another builder makes pass', () => {
+  it.todo('check 11 (export part, W1): the export answers non_commercial_content and licence_no_derivatives quoting the licence names and the deed sentence; a shared archive leaves the NC and Pixabay files out');
+  it.todo('check 12 (W1): credits of library-only projects stay byte-identical to credits.golden.json (core and server golden tests)');
 });

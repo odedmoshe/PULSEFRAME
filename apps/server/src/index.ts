@@ -42,11 +42,14 @@ import { createPictureModelsRuntime } from './picmodels/runtime.ts';
 
 import { AutonomySettings } from './autonomy.ts';
 import { AssistantFiles } from './assistant/credential.ts';
+import type { SourcesDeps } from './sources/contract.ts';
+import { createSourcesRuntime, type SourcesRuntimeImpl, type SourcesRuntimeOptions } from './sources/runtime.ts';
 export { loadConfig, type Config } from './config.ts';
 export interface RunningServer {
   url: string; /** Link that opens the editor as the owner (carries the launch secret). */ ownerUrl: string; cfg: Config; store: Store; auth: Auth; derivatives: Derivatives; governance: Governance; backup: BackupScheduler;
   /** The import queue and the phone drop door (ADR-0023), the render cache (ADR-0024): for proofs and tests that look inside. */
   imports: ImportQueue; door: DropDoor; renderCache: RenderCacheService;
+  /** «מאגר» (wave 8 sources): the stock-source runtime, for proofs and tests that look inside */ sources: SourcesRuntimeImpl;
   close(): Promise<void>;
 }
 
@@ -54,7 +57,7 @@ export interface RunningServer {
  * `deps.assistant`: the command bar assistant's installed adapters (ADR-0027). Wave 1 ships none, so the CLI passes nothing and
  * the setup state is honest (provider_not_configured); tests and pnpm proof:command-bar install the labelled MOCK adapter here.
  */
-export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter; assistant?: AssistantDeps; /** TEST only (wave 7 send proof S3/S4): a labelled size-fit fault, never from the environment */ fitFault?: SizeFitFault; /** TEST only (wave 7 search proof): the labelled test double of the picture model (search/testEmbedder.ts), never from the environment */ searchEmbedder?: Embedder; /** TEST only (wave 8 picmodels proof): the labelled fake worker, its digest, a synthetic registry and library root; never from the environment */ picmodelsTest?: PictureModelsTestSeams; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS (packages/fixtures/src/instruments.ts), never from the environment */ musicKits?: readonly MusicKit[] } = {}): Promise<RunningServer> {
+export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter; assistant?: AssistantDeps; /** TEST only (wave 7 send proof S3/S4): a labelled size-fit fault, never from the environment */ fitFault?: SizeFitFault; /** TEST only (wave 7 search proof): the labelled test double of the picture model (search/testEmbedder.ts), never from the environment */ searchEmbedder?: Embedder; /** TEST only (wave 8 picmodels proof): the labelled fake worker, its digest, a synthetic registry and library root; never from the environment */ picmodelsTest?: PictureModelsTestSeams; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS (packages/fixtures/src/instruments.ts), never from the environment */ musicKits?: readonly MusicKit[]; /** TEST and PROOF only (wave 8 sources): the labelled doubles' base URLs and the address policy that lets the downloader reach them; never from the environment */ sourcesTest?: SourcesDeps['test']; /** TEST only (wave 8 sources): labelled free-space and timeout stand-ins */ sourcesOptions?: SourcesRuntimeOptions } = {}): Promise<RunningServer> {
   const cfg = { ...loadConfig(), ...overrides };
   if (overrides.dataDir && !overrides.speechModelsDir && !process.env.PF_SPEECH_MODELS_DIR) cfg.speechModelsDir = path.join(cfg.dataDir, 'speech-models');
   const backup = new BackupScheduler(cfg.dataDir, cfg.backupDir, cfg.backupEveryHours, cfg.backupKeep); // throws on a destination inside the data directory, before anything is opened
@@ -123,8 +126,10 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   // open mode: standing warnings outside Capabilities for get_controls (D6 the assistant's unlisted host, I9 no upload cap)
   const assistantFiles = new AssistantFiles(cfg.dataDir, cfg.assistantHosts, cfg);
   const standingWarnings = () => [...assistantHostWarnings(cfg, assistantFiles.readConfig().config), ...uploadCapWarnings(cfg)];
-  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { autonomy, imports, renderCache, search, standingWarnings });
-  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { autonomy, imports, door, renderCache, search, pictureModels, assistant: assistantDeps, renderHost: host, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}) });
+  // «מאגר» / «ייבוא מקישור» (wave 8 sources; sources/runtime.ts): the services, the safe downloader and the source_fetch job
+  const sources = createSourcesRuntime({ cfg, store, gov: governance, imports, ...(deps.sourcesTest ? { test: deps.sourcesTest } : {}) }, deps.sourcesOptions ?? {});
+  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { autonomy, imports, renderCache, search, standingWarnings, sources });
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { autonomy, imports, door, renderCache, search, pictureModels, assistant: assistantDeps, renderHost: host, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}), sources });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   const bound = (server.address() as AddressInfo).port;
@@ -139,6 +144,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   }
   await capabilities.recover();
   imports.recover(); // after the capability jobs: an interrupted conversion takes the lane only once they are back in line
+  sources.recover(); // after the imports (which removed src_* files of finished downloads): open downloads continue from their .part
   recoverAnalysisJobs(store);
   recoverTrackingJobs(store, { derivatives });
   recoverStabiliseJobs(store, { derivatives }); // stabilisation (wave 7): run again from the start
@@ -153,7 +159,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   // ---- end command bar assistant recovery ----
   backup.start();
   return {
-    url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance, backup, imports, door, renderCache,
+    url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance, backup, imports, door, renderCache, sources,
     async close() {
       (app as any).browserExport?.stop();
       await mcp.close();
@@ -168,6 +174,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
       await stopStillsJobs(store); // likewise (wave 8 cover)
       await stopMomentsJobs(store); // likewise: measured again after a restart (cached files make it cheap)
       await door.stop(); // the code closes ('shutdown') and the second listener with it; uploads in flight are aborted
+      await sources.stop(); // downloads stop; their rows stay running and continue from the .part after a restart (wave 8 sources)
       await imports.stop(); // the running ffmpeg is killed; the rows stay running for recover()
       await derivatives.stop();
       // Stop accepting, then drop connections that are still open (event streams of pages that were not closed, idle keep-alives):
