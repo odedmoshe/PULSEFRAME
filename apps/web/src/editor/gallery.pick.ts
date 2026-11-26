@@ -3,7 +3,7 @@
  * Every pick is one registered op; nothing here keeps project state.
  */
 import * as T from '@pulseframe/time';
-import { COLOR_LOOKS, findClip, handleBeforeStart, previousAdjacent, spareAfter, velocityNeeds, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { COLOR_LOOKS, findClip, opOnlyEffect, handleBeforeStart, previousAdjacent, spareAfter, velocityNeeds, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 
 export type PickKind = 'effect' | 'look' | 'transition' | 'text' | 'motion';
 export interface PickItem { kind: PickKind; id: string }
@@ -27,7 +27,8 @@ export function isOn(clip: Clip, it: PickItem): boolean {
  */
 export function pickCall(clip: Clip, it: PickItem, transitionFrames?: number): OpCall | null {
   const clipId = clip.id;
-  if (it.kind === 'effect') return isOn(clip, it) ? null : { op: 'add_effect', args: { clipId, type: it.id } };
+  // a living picture is made from the Motion tab after its depth is drawn (verifier C4): never through add_effect
+  if (it.kind === 'effect') return isOn(clip, it) || opOnlyEffect(it.id) ? null : { op: 'add_effect', args: { clipId, type: it.id } };
   if (it.kind === 'look') return { op: 'apply_look', args: { clipId, lookId: it.id } };
   if (it.kind === 'transition') return { op: 'set_transition', args: { clipId, type: it.id, ...(transitionFrames !== undefined ? { frames: transitionFrames } : {}) } };
   if (it.kind === 'motion') return { op: 'apply_motion_preset', args: { clipId, presetId: it.id } };

@@ -44,6 +44,8 @@ const EFFECT_STIR: Record<string, string> = {
   'overlay.bokeh': 'none',
   'overlay.speed-lines': 'shake', // lead: fast streaks; the owner can keep them per clip
   'stylize.date-stamp': 'none', 'stylize.digicam': 'none', 'stylize.crt': 'none',
+  // «תמונה חיה» (wave 8 living, verifier C12): unsure — parallax; capped by LIVING_MAX_RATE, gentler than the Ken Burns both versions keep
+  'depth.living': 'none',
 };
 const TRANSITION_STIR: Record<string, string> = {
   dissolve: 'none', 'dip-black': 'light', 'dip-white': 'light',
@@ -73,7 +75,7 @@ describe('stir classification of the registries (C12)', () => {
     for (const t of TRANSITIONS) expect(STIR_CLASSES as readonly string[], t.id).toContain((t as { stir?: string }).stir);
     expect(Object.fromEntries(EFFECTS.map((e) => [e.id, e.stir]))).toEqual(EFFECT_STIR);
     expect(Object.fromEntries(TRANSITIONS.map((t) => [t.id, t.stir]))).toEqual(TRANSITION_STIR);
-    expect([EFFECTS.length, TRANSITIONS.length]).toEqual([53, 69]);
+    expect([EFFECTS.length, TRANSITIONS.length]).toEqual([54, 69]);
   });
   it('the flags agree with the other registry flags: light and cover transitions and the strobe change light', () => {
     for (const t of TRANSITIONS) if ((t as { light?: true }).light || (t as { cover?: true }).cover) expect(['light', 'light-shake'], t.id).toContain(t.stir);

@@ -17,7 +17,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import * as T from '@pulseframe/time';
-import { EFFECTS, SPEED_CURVES, MOTION_PRESETS } from '@pulseframe/core';
+// the gallery lists every effect a person picks (a living picture is made from the Motion tab: core PICKABLE_EFFECTS, wave 8 living C4)
+import { PICKABLE_EFFECTS as EFFECTS, SPEED_CURVES, MOTION_PRESETS } from '@pulseframe/core';
 import { generateBarcodeFixture, readBarcode } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
 

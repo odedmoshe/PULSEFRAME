@@ -14,6 +14,7 @@ import { defineOp, findClip, getOp, OpError, type OpCall } from './ops.ts';
 import { flashGapFrames } from './flashSafety.ts';
 import { clipEnd } from './validate.ts';
 import { FAMILY_FILM_RECIPE_ID, FamilyFilmParamsSchema } from './familyFilmContract.ts';
+import { opOnlyEffect } from './livingContract.ts';
 import { STORY_RECIPE_ID, StoryParamsSchema } from './storyContract.ts';
 import type { LevelEnvelope } from './multicamEnvelope.ts';
 import { MULTICAM_AUTO_RECIPE_ID, MulticamAutoParams } from './multicamApi.ts';
@@ -289,6 +290,9 @@ defineOp({
     const copy = structuredClone(clip);
     copy.id = ctx.newId('clp');
     copy.linkGroupId = null;
+    // «תמונה חיה» (wave 8, verifier C11): the blurred backdrop stays still; the living picture and its depth stay on the clip only
+    delete copy.depth;
+    if (copy.effects) { copy.effects = copy.effects.filter((e) => !opOnlyEffect(e.type)); if (!copy.effects.length) delete copy.effects; }
     const count = f.seq.tracks.filter((t) => t.kind === 'video').length + 1;
     // The copy is part of the clip's picture: it is shown exactly when the clip's own track is (a clip on a hidden track stays unseen).
     const below: Track = { id: ctx.newId('trk'), kind: 'video', name: `V${count}`, locked: false, muted: false, hidden: f.track.hidden, clips: [copy] };

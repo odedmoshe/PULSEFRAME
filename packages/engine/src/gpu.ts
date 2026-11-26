@@ -22,8 +22,26 @@ import type { BeatPosition } from '@pulseframe/core';
  * entry (r, g, b)) plus `key`, which is unique per content (the asset's content hash) and names its texture on the device.
  */
 export interface LutStrip { key: string; size: number; width: number; height: number; data: Uint8Array }
+/**
+ * «תמונה חיה» (wave 8 living): a layer's nearness grid (core depthGrid) as the pass samples it at binding 3: RGBA8 with nearness in R
+ * (G, B, A zero), made by the colour table's raw-bytes path (writeTexture: no premultiplication, no colour conversion) and sharing the
+ * bound of MAX_LUT_TEXTURES. `key` is core depthKey (prefixed `depth:`, so it never collides with a colour table's content hash).
+ * Type only in the pre-pass; W2 builds the texture path (`dataTexture`).
+ */
+export interface DepthStrip { key: string; width: number; height: number; data: Uint8Array }
+/** The placed picture's rectangle in frame pixels (look.ts LayerBox): centre, size before scale, rotation in degrees, scale. */
+export interface EffectBox { cx: number; cy: number; w: number; h: number; rotation: number; scale: number }
 interface EffectEnv {
-  width: number; height: number; /** Timeline time of the frame in seconds: effects that move are a function of it, so any frame can be drawn on its own. */ seconds?: number; /** Where the frame falls in the beats of the music playing there, if any. */ beat?: BeatPosition | null;
+  width: number; height: number;
+  /**
+   * The placed layer's box (verifier C2: no GPU pass was layer-relative before). The living pass maps frame uv to picture-local
+   * coordinates with it, and clamps its sample point and sizes its overscan to the VISIBLE rectangle = the picture's rectangle cut to
+   * the frame, inset half a texel (livingVisibleRect), so a photo larger than the frame (Ken Burns up to 1.18) never smears its edges.
+   */
+  box?: EffectBox;
+  /** The layer's depth for a pass with `depth: true`; null = could not be supplied (why: depthReason). Never drawn flat (C6). */
+  depth?: DepthStrip | null;
+  depthReason?: string; /** Timeline time of the frame in seconds: effects that move are a function of it, so any frame can be drawn on its own. */ seconds?: number; /** Where the frame falls in the beats of the music playing there, if any. */ beat?: BeatPosition | null;
   /** Colour tables of this frame by asset id, loaded by drawGraph before drawing; null = could not be supplied (why: `lutReasons`). */
   luts?: ReadonlyMap<string, LutStrip | null>;
   lutReasons?: ReadonlyMap<string, string>;
@@ -32,6 +50,19 @@ interface GpuEffect {
   /** Body of `fn effect(uv: vec2f) -> vec4f` (premultiplied in, premultiplied out). `P` holds the eight parameters. */ wgsl: string; /** Up to eight numbers, in the order the shader reads them. */ params(p: Record<string, unknown>, env: EffectEnv): number[];
   /** Name of the string parameter holding the id of a colour table. The pass then samples that table as `lut` (binding 3); with an empty id the picture passes through unchanged. */
   lut?: string;
+  /**
+   * «תמונה חיה» (wave 8 living; W2): the pass samples the layer's depth (env.depth) as `depth` at binding 3 — free per pass: every
+   * pass has its own bind group, a colour table and a living picture are two passes, a transition is a later pass on the finished
+   * layer (verifier C14 h). Depth is read with textureLoad and the pass's own f32 bilinear, never the hardware sampler.
+   */
+  depth?: true;
+  /**
+   * The pass reads twelve numbers: `P` grows by `c: vec4f` (the uniform buffer is already 48 bytes and runPass already writes 12
+   * floats). Living: a = (box cx, cy in uv; 1/half-width, 1/half-height in uv), b = (the visible rect x0, y0, x1, y1 in picture-local
+   * units, livingVisibleRect), c = (slide: the signed horizontal shift toward the end of reading, push: the zoom, in picture units;
+   * focus; K = core livingSteps of the shift in DEPTH-GRID texels, C7: the same at every output size; overscan S).
+   */
+  wide?: true;
 }
 
 const n = (v: unknown, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
@@ -1175,4 +1206,29 @@ export function pageTurnSource(s: number, p: number): { face: 'front' | 'back' |
   }
   const top = 2 * f + Math.PI * r - s;
   return top <= 1 ? { face: 'back', at: top } : { face: 'front', at: s };
+}
+
+// ---- depth.living («תמונה חיה», wave 8 living): the contract of the pass; bodies are W2's ----
+/** W2 sets this when the pass, its texture path and livingModel are built and match on the software adapter. */
+export const LIVING_PASS_BUILT: boolean = false;
+export class LivingPassNotBuilt extends Error { readonly code = 'living_not_built'; constructor(readonly fn: string) { super(`${fn}: the living picture's pass is not built in this build yet`); } }
+/**
+ * The visible rectangle of a placed picture in picture-local units q ∈ [0,1]² (verifier C2): the picture's rectangle cut to the
+ * frame, inset half a depth texel; null when nothing of the picture is in the frame. Rotation ≠ 0 is not supported (cut: the
+ * compositor reports such a clip unavailable, core livingUnavailable). The overscan S and the clamp of the sample point use it.
+ */
+export function livingVisibleRect(box: EffectBox, frame: { width: number; height: number }, grid: { width: number; height: number }): { x0: number; y0: number; x1: number; y1: number } | null {
+  void box; void frame; void grid;
+  throw new LivingPassNotBuilt('livingVisibleRect');
+}
+/**
+ * The JavaScript model of the pass (ADR-0008 decision 4; precedents crtMap, digicamTone): for an output pixel at frame uv, the
+ * frame uv the pass samples the colour from, in the shader's arithmetic order with Math.fround, or null outside the picture (the pass
+ * returns the layer's own pixel there). Same inputs as the pass: the twelve numbers of `params`, the grid (core depthGrid) and the
+ * search of plan §4.1 as corrected (K from the grid, C7; iterate from the largest s down and stop at the first crossing; at a depth
+ * edge take the far side). It matches the GPU within tolerance, not bit for bit (f32 on the device, C14 e).
+ */
+export function livingModel(uv: readonly [number, number], numbers: readonly number[], grid: { width: number; height: number; data: Uint8Array }): [number, number] | null {
+  void uv; void numbers; void grid;
+  throw new LivingPassNotBuilt('livingModel');
 }

@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, KEEP_RULES, musicAt, sourceAt, type MediaClip } from '@pulseframe/core';
+import { animatableParams, LIVING_BUILT, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, KEEP_RULES, musicAt, sourceAt, type MediaClip } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -611,6 +611,8 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       ...(MUSICFIT_OPS_BUILT && !opts.v1Replay ? [() => genMusicFit(doc)] : []),
       // versions for an audience (wave 8 audiences): the three public operations, once W1 has built the projection (never in the v1 corpus)
       ...(AUDIENCE_PROJECTION_BUILT && !opts.v1Replay ? [() => genAudience(doc)] : []),
+      // «תמונה חיה» (wave 8 living): set_clip_depth always (lead-built), set_living_picture once W1 has built it (never in the v1 corpus)
+      ...(opts.v1Replay ? [] : [() => genLiving(doc)]),
       // a held frame (add_clip freeze, wave 8 growing; never in the v1 corpus, which keyframe-replay and ripple-delete-golden pin): mostly a video picture right after a picture clip (where a dissolve out of it can
       // follow), now and then a still, linked sound, no duration or a picture past the end (each refused)
       ...(opts.v1Replay ? [] : [() => {
@@ -890,6 +892,21 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     return { op: 'set_audience_keep', args: { variantId, clipId: clips.length && rnd() < 0.92 ? pick(clips).id : 'clp_none', rule: pick([...KEEP_RULES]), keep: rnd() < 0.7 } };
   };
   /**
+   * «תמונה חיה» (wave 8 living track). `genLiving(doc)` returns a random set_clip_depth or (once LIVING_BUILT) set_living_picture call:
+   * mostly on a photo clip, sometimes on a video, a title or an unknown id (refused notPhoto / not_found); depths within the caps,
+   * now and then an odd stroke (refused depth_invalid) or null (refused while a living picture is on the clip); moves, amounts that fit
+   * and amounts above the comfort cap (refused living_too_fast with max), curves, remove.
+   */
+  const genLiving = (doc: ProjectDocument): OpCall => {
+    const clips = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips));
+    const photos = clips.filter((c) => c.type === 'media' && doc.assets[c.assetId]?.kind === 'image');
+    const clipId = photos.length && rnd() < 0.8 ? pick(photos).id : clips.length && rnd() < 0.9 ? pick(clips).id : 'clp_none';
+    const stroke = () => { const n = 1 + int(6); const pts = Array.from({ length: 2 * n }, () => int(1001)); if (rnd() < 0.05) pts.pop(); return { layer: pick(['near', 'far'] as const), size: 5 + int(296), pts }; };
+    const depth = () => ({ v: 1 as const, base: rnd() < 0.6 ? { kind: 'ramp' as const, horizon: int(1000) } : { kind: 'flat' as const }, strokes: Array.from({ length: int(5) }, stroke) });
+    if (!LIVING_BUILT || rnd() < 0.5) return { op: 'set_clip_depth', args: { clipId, depth: rnd() < 0.12 ? null : depth() } };
+    return { op: 'set_living_picture', args: { clipId, ...(rnd() < 0.15 ? { remove: true as const } : { ...(rnd() < 0.7 ? { depth: depth() } : {}), ...(rnd() < 0.6 ? { move: pick(['push', 'slide'] as const) } : {}), ...(rnd() < 0.6 ? { amount: pick([0.1, 0.25, 0.5, 0.75, 1]) } : {}), ...(rnd() < 0.4 ? { curve: pick(['ease-in-out', 'linear', 'gentle'] as const) } : {}) }) } };
+  };
+  /**
    * The next random call among the named operations: draws from the same menu until one of them comes up (the menu grows with every
    * feature, so a driver that is about a few operations would otherwise meet them too rarely to say anything about them).
    */
@@ -898,5 +915,5 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLiving, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience };
 }

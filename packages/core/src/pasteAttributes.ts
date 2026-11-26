@@ -35,6 +35,7 @@ import { cloneDocument } from './clone.ts';
 import { makeIdSource } from './ops.ts';
 import { craftRefusal, type AttributeGroup, type PasteAttributesArgs, type PasteAttributesOutput, type PastePlan, type PasteSkip } from './craftContract.ts';
 import type { Keyframe } from './keyframe.ts';
+import { opOnlyEffect } from './livingContract.ts';
 
 /** Run a registered public op on the draft, as apply_recipe runs its steps (its arguments parsed by its own schema). */
 function runOp(d: ProjectDocument, ctx: OpContext, op: string, args: unknown): OpResult {
@@ -48,6 +49,12 @@ function runOp(d: ProjectDocument, ctx: OpContext, op: string, args: unknown): O
 /** The order the groups are applied in (animation before transform, C3). */
 export const PASTE_ORDER: readonly AttributeGroup[] = ['colour', 'effects', 'animation', 'transform', 'sound', 'titleStyle'];
 const isColour = (type: string) => type.startsWith('color.');
+/**
+ * The effects group: every effect that is not colour, except the ones only their own op adds (opOnlyEffect: a living picture needs
+ * the target's own drawn depth, verifier C4). Those are neither copied nor removed from the target; the output counts the source's
+ * (opOnlyLeftOut) so the dialog can say so.
+ */
+const isPastedEffect = (type: string) => !isColour(type) && !opOnlyEffect(type);
 
 /** A pair left out without running an op: the source has nothing in the group, or the target is animated. */
 class Skip extends Error { constructor(public code: 'source_empty' | 'target_animated', message: string) { super(message); } }
@@ -107,9 +114,9 @@ const GROUPS: Record<AttributeGroup, { empty: (c: Ctx) => boolean; apply: (c: Ct
     apply: (c, id) => pasteEffects(c, id, isColour),
   },
   effects: {
-    empty: (c) => !(c.src.effects ?? []).some((e) => !isColour(e.type)) && !c.src.blend && !(c.src.type !== 'text' && c.src.type !== 'caption' && 'mask' in c.src && c.src.mask),
+    empty: (c) => !(c.src.effects ?? []).some((e) => isPastedEffect(e.type)) && !c.src.blend && !(c.src.type !== 'text' && c.src.type !== 'caption' && 'mask' in c.src && c.src.mask),
     apply: (c, id) => {
-      pasteEffects(c, id, (t) => !isColour(t));
+      pasteEffects(c, id, isPastedEffect);
       runOp(c.d, c.ctx, 'set_clip_blend', { clipId: id, mode: c.src.blend ?? 'normal' });
       const t = target(c.d, id);
       const mask = 'mask' in c.src ? c.src.mask : undefined;
@@ -209,6 +216,8 @@ function pasteRoutine(d: ProjectDocument, args: PasteAttributesArgs, ctx: OpCont
     }
   }
   out.keysLeftOut = c.left;
+  const opOnly = groups.includes('effects') ? (c.src.effects ?? []).filter((e) => opOnlyEffect(e.type)).length : 0;
+  if (opOnly) out.opOnlyLeftOut = opOnly;
   return out;
 }
 

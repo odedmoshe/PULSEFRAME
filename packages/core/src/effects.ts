@@ -4,12 +4,15 @@
  * The single implementation lives in the shared compositor (packages/engine), used by preview and export alike.
  *
  * Scope of this batch: what a Canvas2D compositor can do faithfully. GPU shader families (distortion, glitch,
- * film, keying, depth) are not here and are not approximated under their names.
+ * film, keying) run as WebGPU passes (cost 'gpu') and are not approximated under their names. Depth: only `depth.living` («תמונה חיה»,
+ * wave 8, livingContract.ts), on a depth the owner draws by hand; it is added only with set_living_picture (opOnlyEffect).
  * Lengths are fractions of the output frame height, so a scaled preview or export looks the same.
  */
 import { z } from 'zod';
 // the one keyframe definition (ADR-0019), shared with transform keys (schema.ts); keyframe.ts imports zod only
 import { CURVES, KeyframeSchema, MAX_EFFECT_KEYS } from './keyframe.ts';
+// livingContract.ts imports zod only
+import { LIVING_DEFAULTS, LIVING_MOVES, OP_ONLY_EFFECTS } from './livingContract.ts';
 
 const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/).describe('#RRGGBB');
 const frac = (max: number, def: number, what: string) => z.number().min(0).max(max).default(def).describe(what);
@@ -175,7 +178,17 @@ export const EFFECTS = [
     params: z.object({ amount: frac(1, 0.8, 'strength'), sharpen: z.number().min(0).max(2).default(0.7), noise: frac(1, 0.3, 'coloured noise'), bloom: frac(1, 0.35, 'highlight bloom'), cool: z.number().min(-1).max(1).default(0.4).describe('negative is warmer'), seed: SEED }).strict() }),
   def({ id: 'stylize.crt', version: 1, category: 'stylize', name: { he: 'מסך שפופרת', en: 'CRT screen' }, description: 'An old picture-tube screen in one pass: curved glass with rounded corners, beam lines that widen in bright areas, an RGB phosphor mask and a slight glow. Does not flicker. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false, stir: 'none',
     params: z.object({ curvature: z.number().min(0).max(0.3).default(0.12), phosphor: z.enum(['grille', 'dots', 'slot']).default('grille'), pitch: z.number().min(0.001).max(0.01).default(0.0028).describe('width of one RGB triad, fraction of frame height'), lines: z.number().int().min(120).max(1080).default(480).describe('beam lines over the frame height'), amount: frac(1, 0.8, 'strength'), glow: frac(1, 0.3, 'glow') }).strict() }),
+  // ---- «תמונה חיה» (wave 8 living): appended, so the order of the rows above is unchanged ----
+  // stir: unsure — parallax; capped by LIVING_MAX_RATE (verifier C12: gentler than the Ken Burns both audience versions keep)
+  def({ id: 'depth.living', version: 1, category: 'motion', name: { he: 'תמונה חיה', en: 'Living picture' }, description: 'A still photo moves slowly in depth: what the owner drew as near moves more than what is far (clip.depth, a hand drawing; nothing is estimated). Added only with set_living_picture, which needs the depth and keys `travel` from 0 at the first frame to 1 at the last; add_effect refuses it. The amount is capped by the clip length (a comfort rule of thumb). Photos only, not rotated. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false, stir: 'none',
+    params: z.object({ move: z.enum(LIVING_MOVES).default(LIVING_DEFAULTS.move).describe('push = a slow push in; slide = a slow slide toward the end of reading'), amount: frac(1, LIVING_DEFAULTS.amount, 'size of the move; 1 = the nearest and farthest points shift apart by 3% of the frame height. One value for the whole clip'), travel: frac(1, 0, 'how far along the move: 0 = start, 1 = end (set_living_picture keys it over the clip)') }).strict() }),
 ] as const;
+/**
+ * The effects a person or an agent picks from a list (the gallery, the Look panel's add select, the library, the command palette):
+ * every row except the ones only their own op adds (livingContract.ts opOnlyEffect; verifier C4). The registry itself, the catalog
+ * (list_catalog, with `addedWith`) and the Lab keep every row.
+ */
+export const PICKABLE_EFFECTS = EFFECTS.filter((e) => !Object.hasOwn(OP_ONLY_EFFECTS, e.id));
 /** Effects that run as WebGPU passes (ADR-0008). */
 export const GPU_EFFECT_IDS: readonly string[] = (EFFECTS as readonly EffectDef[]).filter((e) => e.cost === 'gpu').map((e) => e.id);
 export type EffectType = (typeof EFFECTS)[number]['id'];
@@ -361,6 +374,8 @@ export const NOT_ANIMATABLE: Readonly<Record<string, readonly string[]>> = {
   // windows and counts of time effects are whole numbers that define which pictures are read; interpolating them would read fractional frames
   'time.echo': ['count', 'delay'], 'time.split': ['lag'], 'time.shutter': ['angle', 'samples'], 'time.stutter': ['hold', 'every'],
   'overlay.speed-lines': ['lines'],
+  // the overscan and the comfort cap are worked out from one amount per clip (livingComfort.ts)
+  'depth.living': ['amount'],
 };
 /** Names of an effect's parameters that are numbers and can therefore be animated. */
 export function animatableParams(type: string): string[] {
@@ -403,6 +418,7 @@ export function describeCatalog() {
       id: e.id, version: e.version, category: e.category, name: e.name, description: e.description, cost: e.cost, seeded: e.seeded, temporal: e.temporal,
       implementation: e.cost === 'gpu' ? 'webgpu pass (needs a graphics adapter)' : e.cost === 'time' ? 'evaluator time taps + canvas2d (no graphics adapter)' : 'canvas2d',
       modulatable: modulatableParams(e.id),
+      ...(Object.hasOwn(OP_ONLY_EFFECTS, e.id) ? { addedWith: OP_ONLY_EFFECTS[e.id] } : {}),
       defaults: e.params.parse({}), paramsSchema: z.toJSONSchema(e.params),
     })),
     transitions: TRANSITIONS.map((t) => ({

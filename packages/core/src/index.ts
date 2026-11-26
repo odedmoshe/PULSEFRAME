@@ -186,3 +186,11 @@ export * from './audienceContract.ts';
 export * from './audienceValidate.ts';
 export * from './audience.ts';
 export * from './audienceOps.ts';
+// «תמונה חיה» (wave 8 living track): the contract, comfort rule, validation and set_clip_depth are lead-built; depthGrid.ts, living.ts and
+// set_living_picture's body (livingOps.ts) are W1's
+export * from './livingContract.ts';
+export * from './livingComfort.ts';
+export * from './livingValidate.ts';
+export * from './depthGrid.ts';
+export * from './living.ts';
+export * from './livingOps.ts';

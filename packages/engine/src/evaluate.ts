@@ -17,7 +17,7 @@ import { OVERLAY_TYPES, heldOverlayParams } from './overlays.ts';
 import { pieceAt, runStart, stutterFrame, tapOffsets, tapWeights } from './taps.ts';
 import { beatPositionAt, isTimeEffect, temporalOf, type BeatPosition, type TextAnimation, effectParamsAt, pictureSourceAt, provideSoundTails, sourceAt, sourceFrameIndexAt, transformAt, type BlendMode, type Clip, type FollowInfo, type Mask, type ProjectDocument, type ResolvedRegion, type SoundTail, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
 import { beatSwitchFrame, lightEnvelope, makeFieldIndex, resolveFields, stampText, switchFrame, transitionDef, transitionProgress, velocityOffsets, type FieldIndex } from '@pulseframe/core';
-import { clipSourceFrames, drawnSummary, limitToCover, steadyPose, type Asset, type DrawnPayload, type MediaClip } from '@pulseframe/core';
+import { clipSourceFrames, drawnSummary, limitToCover, steadyPose, type Asset, type ClipDepth, type DrawnPayload, type MediaClip } from '@pulseframe/core';
 import { audioPlan, soundEnd, type AudioPlan } from './audio.ts';
 import { resolveFollows, resolveRegions, type Follower } from './follow.ts';
 
@@ -90,7 +90,11 @@ export interface VideoLayer extends LayerLook {
   steady?: { v: 1; tx: number; ty: number; r: number; l: number; zoom: number; state: 'ok' | 'weak' | 'unknown' | 'start' | 'outside'; limited: false | 'clip' | 'reach' };
 }
 /** A still picture. Same placement rules as video; one decoded image for the whole clip. */
-export interface ImageLayer extends LayerLook { kind: 'image'; clipId: string; trackId: string; assetId: string; sourceWidth: number; sourceHeight: number; transform: Transform }
+/**
+ * `depth` (wave 8 living, core livingContract.ts): the clip's drawn depth, copied as stored, so the frame key (canonical JSON of the
+ * graph) covers every stroke with no change to FrameInputs. Type only in the pre-pass; W2 copies it in evaluate (living-plan §3.4).
+ */
+export interface ImageLayer extends LayerLook { kind: 'image'; clipId: string; trackId: string; assetId: string; sourceWidth: number; sourceHeight: number; transform: Transform; depth?: ClipDepth }
 export interface TextLayer extends LayerLook { kind: 'text'; clipId: string; trackId: string; text: string; style: TextStyle; transform: Transform; /** Letter/word/line animation with where this frame is in the clip (seconds from its start, and the clip's length). */ animation?: TextAnimation & { local: number; total: number; fps: number } }
 /**
  * Adjustment clip active at this time (ADR-0016). It never asks the FrameProvider for a picture: drawGraph copies the frame

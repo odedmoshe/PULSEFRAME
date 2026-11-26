@@ -30,6 +30,8 @@ import { RedactControls } from './RedactControls.tsx';
 import { trackingT } from './tracking.strings.ts';
 import { ClipTimeRows } from './craft/ClipTimeRows.tsx';
 import { STABILISE_UI_BUILT, StabiliseBlock } from './stabilise/StabiliseBlock.tsx';
+import { LIVING_UI_BUILT, LivingBlock } from './living/LivingBlock.tsx';
+import { livingT } from './living/living.strings.ts';
 import { stabiliseT } from './stabilise/stabilise.strings.ts';
 import { COVER_UI_BUILT, SharpBlock } from './cover/SharpBlock.tsx';
 import { coverT } from './cover/cover.strings.ts';
@@ -654,6 +656,8 @@ function MotionTab({ clip }: PanelProps) {
       {STABILISE_UI_BUILT && video && clip.type === 'media' && state.selection.length === 1 && <Section id="stabilise" title={stabiliseT(state.lang)('title')} defaultOpen={false} help><StabiliseBlock key={`stabilise:${clip.id}`} clip={clip} /></Section>}
       {/* «הפריים הכי חד» (wave 8 cover): one selected video or picture clip; mounted only once W3 has built the block */}
       {COVER_UI_BUILT && picture && clip.type === 'media' && state.selection.length === 1 && <Section id="sharpest" title={coverT(state.lang)('title')} defaultOpen={false} help><SharpBlock key={`sharpest:${clip.id}`} clip={clip} /></Section>}
+      {/* «תמונה חיה» (wave 8 living): one selected photo clip; mounted only once W3 has built the block */}
+      {LIVING_UI_BUILT && !video && picture && clip.type === 'media' && state.selection.length === 1 && <Section id="living" title={livingT(state.lang)('living.title')} defaultOpen={false} help><LivingBlock key={`living:${clip.id}`} clip={clip} /></Section>}
       {video && <Section id="tracking" title={tt('mtrack.title')} defaultOpen={false} help><TrackingPanel key={`tracking:${clip.id}`} /></Section>}
     </>
   );

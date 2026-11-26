@@ -36,6 +36,8 @@ describe('gallery picks', () => {
     expect(effectsOf(doc, p.first).filter((e) => e.type === 'color.sepia').length).toBe(1);
     // another effect is still offered, and the other clip is not affected
     expect(pickCall(clipOf(doc, p.first), { kind: 'effect', id: 'color.invert' })).not.toBeNull();
+    // «תמונה חיה» (wave 8 living, C4): made from the Motion tab after the depth is drawn, never through add_effect
+    expect(pickCall(clipOf(doc, p.first), { kind: 'effect', id: 'depth.living' })).toBeNull();
     expect(pickCall(clipOf(doc, p.second), tile)).not.toBeNull();
     // what used to happen: the op itself accepts a second copy, so the tile must not send it
     expect(effectsOf(tx(doc, [call!]).doc, p.first).filter((e) => e.type === 'color.sepia').length).toBe(2);

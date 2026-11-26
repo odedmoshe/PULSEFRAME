@@ -1,7 +1,7 @@
 import { useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, ChevronDown, Eye, EyeOff, Trash2 } from 'lucide-react';
 import * as T from '@pulseframe/time';
-import { adjustmentRefusal, beatPositionAt, BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, lutAssets, isTimeEffect, temporalOf, modulatableParams, paramRange, type Clip, type EffectInstance, type Mask, type Modulator, type OpCall, type ProjectDocument, beatSwitchFrame, TRANSITION_CATEGORIES, transitionDef, velocityLimit, velocityNeeds } from '@pulseframe/core';
+import { adjustmentRefusal, beatPositionAt, BLEND_MODES, COLOR_LOOKS, DEFAULT_MASK, EFFECTS, PICKABLE_EFFECTS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, describeCatalog, TRANSITIONS, findEffect, animatableParams, effectParamsAt, findClip, clipEnd, lutAssets, isTimeEffect, temporalOf, modulatableParams, paramRange, type Clip, type EffectInstance, type Mask, type Modulator, type OpCall, type ProjectDocument, beatSwitchFrame, TRANSITION_CATEGORIES, transitionDef, velocityLimit, velocityNeeds } from '@pulseframe/core';
 import { effectOptionLabel, effectParamLabel, type Key, fillIn, translateRefusal } from '@pulseframe/i18n';
 import { useEditorState } from './store.ts';
 import { ApplyToGroup, EffectGalleryButton, type ApplyTo } from './EffectGallery.tsx';
@@ -613,7 +613,7 @@ export function EffectsBlock({ look }: { look: LookState }) {
           <option value="">+ {t('look.effect.add')}</option>
           {CATEGORIES.map((c) => (
             <optgroup key={c} label={t(`look.cat.${c}` as Key)}>
-              {EFFECTS.filter((e) => e.category === c).map((e) => {
+              {PICKABLE_EFFECTS.filter((e) => e.category === c).map((e) => { /* a living picture: the Motion tab (opOnlyEffect) */
                 const noGpu = e.cost === 'gpu' && !state.gpu?.available, refused = !!refusedHere(e.id);
                 return <option key={e.id} value={e.id} disabled={noGpu || refused}>{e.name[state.lang]}{refused ? ` — ${A.notOnAdjustment}` : noGpu ? ` — ${t('look.gpu.needed')}` : ''}</option>;
               })}

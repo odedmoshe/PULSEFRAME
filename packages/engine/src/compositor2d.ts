@@ -7,7 +7,7 @@
  */
 import * as T from '@pulseframe/time';
 import { contentTransform, expm, hasTextLook } from '@pulseframe/core';
-import { gpuTransition, isGpuTransition, lutIdOf, takeUnavailable, type LutStrip } from './gpu.ts';
+import { gpuTransition, isGpuTransition, lutIdOf, takeUnavailable, type DepthStrip, type LutStrip } from './gpu.ts';
 import { ADJUST_PASS_SLOT, type AdjustLayer, type DrawnLayer, type ImageLayer, type PictureLayer, type PlacedLayer, type RenderGraph, type TextLayer, type VideoLayer } from './evaluate.ts';
 import { drawnPainter, noPainterId } from './drawnPainters.ts';
 import { visualOrder, wordDir, wrapWords, type CaptionLayer } from './captions.ts';
@@ -28,6 +28,12 @@ export interface FrameProvider {
   (layer: PictureLayer): Promise<FrameImage | null>;
   /** The strip of a colour table asset (core `lutStrip` of the file text, with a key unique per content), or null when there is none. May reject. */
   lut?(assetId: string): Promise<LutStrip | null>;
+  /**
+   * «תמונה חיה» (wave 8 living; W2): the nearness grid of an image layer's drawn depth as a texture strip (core depthGrid, cached by
+   * depthKey in the media pool, never rasterised per frame), or null when it cannot be had: the living picture is then reported
+   * unavailable with the reason (preview notice; still and export refuse), never drawn flat (verifier C6). May reject.
+   */
+  depth?(layer: ImageLayer): Promise<DepthStrip | null>;
   /**
    * Called once at the start of every drawGraph, before any frame is asked for. The frames this drawing asks for (all
    * synchronously after begin) are pinned to the token it returns, and stay pinned until `end(token)`: several drawings may

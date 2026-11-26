@@ -15,6 +15,7 @@ import { applyTransaction, OpError, previousAdjacent, type OpCall } from '../ops
 import type { MediaClip, Track } from '../schema.ts';
 import { speedValue } from '../speed.ts';
 import { clipEnd } from '../validate.ts';
+import { LIVING_REFUSALS, opOnlyEffect } from '../livingContract.ts';
 import { VERBS } from './lexicon.ts';
 import type { FamilyParse, Hit, SpeedSpec, TimeSpec } from './match.ts';
 import { ex, exNeg, exText } from './numbers.ts';
@@ -384,6 +385,8 @@ const catalogPlanner = (intent: 'effect' | 'look', op: 'add_effect' | 'apply_loo
   if (!env.values.has('name')) return incomplete(env, intent, ['mode'], intent === 'effect' ? 'הוסף אפקט שחור לבן' : 'החל מראה חם', intent === 'effect' ? 'add effect black & white' : 'apply look vintage');
   const id = v<string | null>(env, 'name');
   if (!id) return refused(env, intent, 'unknown_name');
+  // «תמונה חיה» (wave 8 living, verifier C4): added only with its own op from the Motion tab, after the owner draws the depth
+  if (intent === 'effect' && opOnlyEffect(id)) { const r = LIVING_REFUSALS.useOp; return refused(env, intent, 'op_refused', { opError: { code: r.code, message: r.message(), index: 0 } }); }
   return withTargets(env, intent, resolveClips(env.ctx, clipWord(env), isPicture, { allowMany: true, atFrame: env.ctx.playheadFrame }), (items, notes) =>
     finishPlan(env, intent, items.map((f) => ({ op, args: op === 'add_effect' ? { clipId: f.clip.id, type: id } : { clipId: f.clip.id, lookId: id } })), items.map((f) => clipStep(env, op, f)), notes));
 };
