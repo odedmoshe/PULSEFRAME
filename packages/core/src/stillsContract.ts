@@ -31,7 +31,7 @@
  * THE SAVED PICTURE (C5, C7, C8, C10, C11): core stillDocument(asset, frame) — a one-clip document at the file's own width, height
  * and rate, fit contain, default transform, sourceIn = sourceTimeOfFrame — rendered 1:1 through Exporter.renderStill (the same
  * evaluate + compositor as preview and export; never an ffmpeg decode of the source), then ffmpeg `crop=w:h:x:y` on the lossless
- * PNG, then PNG (`-c:v png -map_metadata -1`) or JPEG (`-vf format=yuvj444p -c:v mjpeg -q:v 2 -flags +bitexact -map_metadata -1
+ * PNG, then PNG (`-c:v png -map_metadata -1`) or JPEG (`-vf format=yuvj444p -c:v mjpeg -q:v 1 -qmin 1 -flags +bitexact -map_metadata -1
  * -frames:v 1`). The output is checked (codec, exact size = crop, no format or stream tags) before success. A side over
  * STILL_MAX_SIDE is refused; above STILL_TRIED_MAX_PIXELS it is labelled as not tried here. Only the owner's own session may ask
  * for `still` (403 owner_required for every other credential); agents read numbers only.

@@ -5,7 +5,10 @@
  *
  *   crop    `crop=w:h:x:y:exact=1,setsar=1` on the RGB picture: a copy of whole pixels, never a resample.
  *   PNG     `-c:v png -map_metadata -1`.
- *   JPEG    `-vf …,format=yuvj444p -c:v mjpeg -q:v 2 -flags +bitexact -map_metadata -1 -frames:v 1` (4:4:4, JFIF full range;
+ *   JPEG    `-vf …,format=yuvj444p -c:v mjpeg -q:v 1 -qmin 1 -flags +bitexact -map_metadata -1 -frames:v 1` (4:4:4, JFIF full range;
+ *           quality 1 needs -qmin 1: mjpeg's default qmin is 2, so `-q:v 1` alone wrote the same bytes as `-q:v 2`. Measured on proof P1's
+ *           one-pixel checkerboard (ffmpeg 6.1.1): q2 37.70 dB, q1 alone 37.70 dB, q1 with qmin 1 41.59 dB (bound 40) and a file 35%
+ *           larger; the colour round trip alone is 52.96 dB. JPEG stays lossy; PNG is the exact form;
  *           +bitexact stops the "Lavc…" comment).
  *
  * The written file is checked before the export may succeed: ffprobe codec and exact size (= the crop), no format or stream tags,
@@ -33,7 +36,7 @@ export function stillFileArgs(o: { input: string; crop: StillCrop; format: Still
     '-hide_banner', '-v', 'error', '-y', '-i', o.input, '-map', '0:v:0',
     ...(o.format === 'png'
       ? ['-vf', crop, '-c:v', 'png', '-map_metadata', '-1', '-frames:v', '1', '-f', 'image2', '-update', '1']
-      : ['-vf', `${crop},format=yuvj444p`, '-c:v', 'mjpeg', '-q:v', '2', '-flags', '+bitexact', '-map_metadata', '-1', '-frames:v', '1', '-f', 'image2', '-update', '1']),
+      : ['-vf', `${crop},format=yuvj444p`, '-c:v', 'mjpeg', '-q:v', '1', '-qmin', '1', '-flags', '+bitexact', '-map_metadata', '-1', '-frames:v', '1', '-f', 'image2', '-update', '1']),
     o.outFile,
   ];
 }

@@ -42,11 +42,13 @@ async function rest(method: string, p: string, body?: unknown, raw?: Buffer): Pr
 async function project(name: string, file: string, clips: number[]): Promise<{ pid: string; assetId: string; clipIds: string[] }> {
   const pid = (await rest('POST', '/projects', { name, width: 640, height: 360 })).body.project.id as string;
   const up = await rest('POST', `/projects/${pid}/assets`, undefined, fs.readFileSync(file));
+  if (typeof up.body?.assetId !== 'string') throw new Error(`upload refused ${up.status}: ${JSON.stringify(up.body).slice(0, 300)}`);
   const assetId = up.body.assetId as string;
   const clipIds: string[] = [];
   let at = 0;
   for (const n of clips) {
     const tx = await rest('POST', `/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId, start: rt(at), sourceIn: rt(0), duration: rt(n), withLinkedAudio: false } }] });
+    if (!tx.body?.results) throw new Error(`add_clip refused ${tx.status}: ${JSON.stringify(tx.body).slice(0, 300)}`);
     clipIds.push(tx.body.results[0].output.clipId as string); at += n;
   }
   return { pid, assetId, clipIds };
@@ -200,17 +202,21 @@ async function u4(): Promise<true | string> {
     const server = ctx.getImageData(0, 0, c.width, c.height).data;
     // the tile's own canvas (it is behind the dialog; same document, same frame)
     const tc = document.querySelector<HTMLCanvasElement>(`[data-testid=sharp-tile][data-frame="${frame}"] canvas`);
+    const tileError = document.querySelector(`[data-testid=sharp-tile][data-frame="${frame}"] [data-still-error]`)?.textContent ?? null;
     if (!tc) return { error: 'no tile canvas' };
     const tctx = tc.getContext('2d');
     if (!tctx) return { error: 'tile canvas has no 2d context' };
     if (tc.width !== c.width || tc.height !== c.height) return { error: `sizes differ: tile ${tc.width}x${tc.height}, still ${c.width}x${c.height}` };
     const t = tctx.getImageData(0, 0, tc.width, tc.height).data;
-    let diff = 0; for (let i = 0; i < t.length; i++) if (t[i] !== server[i]) diff++;
-    return { diff, bytes: t.length };
+    let diff = 0, max = 0, sum = 0; for (let i = 0; i < t.length; i++) { const d = Math.abs(t[i]! - server[i]!); if (d) { diff++; sum += d; if (d > max) max = d; } }
+    const toUrl = (cv: HTMLCanvasElement) => cv.toDataURL('image/png');
+    return { diff, bytes: t.length, maxDiff: max, meanAbs: +(sum / t.length).toFixed(3), tile: { ...tc.dataset, error: tileError }, tilePng: diff ? toUrl(tc) : '', stillPng: diff ? toUrl(c) : '' };
   }, { href, frame });
   await page.context().close();
   if ('error' in r) return r.error as string;
-  details.u4 = r;
+  if (process.env.PF_STILLS_UI_DUMP && r.diff) for (const k of ['tilePng', 'stillPng'] as const) fs.writeFileSync(path.join(process.env.PF_STILLS_UI_DUMP, `${k}.png`), Buffer.from(r[k].split(',')[1]!, 'base64'));
+  const { tilePng: _t, stillPng: _s, ...kept } = r;
+  details.u4 = { frame, ...kept };
   return r.diff === 0 ? true : `the tile and the server still differ in ${r.diff} of ${r.bytes} bytes (frame ${frame})`;
 }
 

@@ -1220,6 +1220,12 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      // «הפריים הכי חד» and «שמירת התמונה» (wave 8 cover) in the light theme: the same scenarios as the dark pass (a11y-cover.ts)
+      for (const sc of coverA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       // «כלים מוקלטים» (wave 7 instruments) in the light theme: the same five scenarios as the dark pass; the «צליל» radiogroup not set, not calibrated, ready with its duties, the blind pair, a refused add (a11y-instruments.ts)
       for (const sc of instrumentsA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });

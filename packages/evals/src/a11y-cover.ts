@@ -34,6 +34,7 @@ async function ensureClip(page: Page) {
   const origin = new URL(page.url()).origin;
   if (made && made.origin === origin) return made;
   const file = path.join(os.tmpdir(), `pf-a11y-cover-${process.pid}.mp4`);
+  process.once('exit', () => { try { fs.rmSync(file, { force: true }); } catch { /* best effort */ } }); // the fixture is deleted when the audit ends
   if (!fs.existsSync(file)) execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30:duration=5', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '12', '-pix_fmt', 'yuv420p', '-g', '15', '-an', file]);
   const pid = (await api(page, 'POST', '/projects', { name: 'a11y-cover', width: 640, height: 360 })).body.project.id as string;
   const up = await api(page, 'POST', `/projects/${pid}/assets`, undefined, fs.readFileSync(file));

@@ -124,11 +124,11 @@ describe('stillFile: the crop of the rendered PNG, PNG and JPEG without metadata
     console.log(`stillExport.test: JPEG q2 4:4:4 PSNR on the one-pixel checkerboard crop = ${db.toFixed(2)} dB (one sample)`);
     expect(db).toBeGreaterThan(20);
   }, 60_000);
-  it('the arguments: crop=w:h:x:y:exact=1; PNG -c:v png -map_metadata -1; JPEG format=yuvj444p -c:v mjpeg -q:v 2 -flags +bitexact', () => {
+  it('the arguments: crop=w:h:x:y:exact=1; PNG -c:v png -map_metadata -1; JPEG format=yuvj444p -c:v mjpeg -q:v 1 -qmin 1 -flags +bitexact', () => {
     const png = stillFileArgs({ input: 'in.png', crop: { x: 3, y: 1, w: 16, h: 20 }, format: 'png', outFile: 'o.png' }).join(' ');
     expect(png).toContain('-vf crop=16:20:3:1:exact=1,setsar=1 -c:v png -map_metadata -1');
     const jpg = stillFileArgs({ input: 'in.png', crop: { x: 3, y: 1, w: 16, h: 20 }, format: 'jpeg', outFile: 'o.jpg' }).join(' ');
-    expect(jpg).toContain('-vf crop=16:20:3:1:exact=1,setsar=1,format=yuvj444p -c:v mjpeg -q:v 2 -flags +bitexact -map_metadata -1 -frames:v 1');
+    expect(jpg).toContain('-vf crop=16:20:3:1:exact=1,setsar=1,format=yuvj444p -c:v mjpeg -q:v 1 -qmin 1 -flags +bitexact -map_metadata -1 -frames:v 1');
     expect(() => stillFileArgs({ input: 'i', crop: { x: 0.5, y: 0, w: 16, h: 16 }, format: 'png', outFile: 'o' })).toThrow(RangeError);
   });
   it('the check can fail: a PNG with tEXt, tIME, eXIf or iCCP, a JPEG with an EXIF APP1 or a comment is still_tags', async () => {
