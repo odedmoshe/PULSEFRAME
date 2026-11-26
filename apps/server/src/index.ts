@@ -40,7 +40,6 @@ import { createSearchRuntime } from './search/runtime.ts';
 import type { PictureModelsTestSeams } from './picmodels/contract.ts';
 import { createPictureModelsRuntime } from './picmodels/runtime.ts';
 import { MadeHost } from '@pulseframe/renderer';
-import { MADE_JOB_TYPE } from '@pulseframe/core';
 import { MadeJobs } from './made/job.ts';
 import { createMadeRunner, type MadeRuntime } from './made/runner.ts';
 
@@ -128,10 +127,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   // ---- «קליפ מקוד» (wave 8 motioncode, W1): the made browser (separate from the export browser), the made.render job and its runner ----
   const madeHost = new MadeHost();
   const made = createMadeRunner(store, new MadeJobs({ store, lane, host: madeHost }));
-  // the generic cancel (REST /jobs/:id/cancel and MCP cancel_job) ends in capabilities.cancel for a type it does not name: a made
-  // render is handed to its own cancel here (stand-in until the dispatch line `if (j.type === MADE_JOB_TYPE && extras.made) …` lands in http.ts and mcp.ts)
-  const capabilitiesCancel = capabilities.cancel.bind(capabilities);
-  capabilities.cancel = async (jobId: string, actor: string) => (store.getJob(jobId).type === MADE_JOB_TYPE ? made.cancel(jobId, actor) as any : capabilitiesCancel(jobId, actor));
+  // the generic cancel (REST /jobs/:id/cancel and MCP cancel_job) dispatches a made render to made.cancel (http.ts, mcp.ts bindMade)
   // ---- end made clips ----
   const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { autonomy, imports, door, renderCache, search, pictureModels, assistant: assistantDeps, renderHost: host, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}), made });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });

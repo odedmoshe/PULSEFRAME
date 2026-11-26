@@ -11,7 +11,7 @@ import { MADE_JOB_TYPE } from '@pulseframe/core';
 import { startServer } from '../index.ts';
 
 describe('made runner wiring', () => {
-  it('fails a render the restart cut off, and the generic cancel reaches a made render', async () => {
+  it('fails a render the restart cut off, and the generic cancel (REST and MCP) reaches a made render; list_catalog names the built-in pages', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-made-wire-'));
     let s = await startServer({ port: 0, dataDir: dir });
     try {
@@ -26,6 +26,19 @@ describe('made runner wiring', () => {
       expect(r.status).toBe(200);
       expect(await r.json()).toMatchObject({ jobId: queued.id, status: 'canceled', outcome: 'removed-from-queue' });
       expect(s.store.getJob(queued.id)).toMatchObject({ status: 'canceled', error: { code: 'made_canceled', why: 'canceled' } });
+      // MCP cancel_job takes the same dispatch (mcp.ts bindMade; the stand-in that patched capabilities.cancel is gone)
+      const mcp = async (name: string, args: Record<string, unknown>) => {
+        const m = await fetch(`${s.url}/mcp`, { method: 'POST', headers: { authorization: `Bearer ${s.auth.tokens.agent}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream', connection: 'close' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }) });
+        const raw = await m.text();
+        const msg = JSON.parse((m.headers.get('content-type') ?? '').includes('text/event-stream') ? raw.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5)).join('') : raw);
+        return JSON.parse(msg.result.content[0].text);
+      };
+      const queued2 = s.store.createJob(projectId, MADE_JOB_TYPE, 'agent:local', { pageSha256: 'sha256:' + '0'.repeat(64) }); // a stand-in, as above
+      expect(await mcp('cancel_job', { jobId: queued2.id })).toMatchObject({ jobId: queued2.id, status: 'canceled', outcome: 'removed-from-queue' });
+      expect(s.store.getJob(queued2.id)).toMatchObject({ status: 'canceled', error: { code: 'made_canceled' } });
+      // list_catalog names the built-in pages (madeTemplates)
+      const cat = await mcp('list_catalog', {});
+      expect(cat.madeTemplates.map((t: { id: string }) => t.id)).toEqual(expect.arrayContaining(['rising-title', 'lower-third', 'counter', 'intro-plate', 'end-card']));
     } finally {
       await s.close();
       fs.rmSync(dir, { recursive: true, force: true });

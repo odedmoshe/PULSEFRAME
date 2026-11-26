@@ -73,15 +73,6 @@ const parse = <S extends z.ZodType>(schema: S, body: unknown): z.infer<S> => {
 };
 const sha = (text: string) => `sha256:${createHash('sha256').update(text, 'utf8').digest('hex')}`;
 
-const services = new WeakMap<Store, MadeService>();
-/**
- * The service registerMadeRoutes made for this store (the MCP tools use it, so REST and MCP share one runner, one capacity count and
- * one autoApply table); without the app (an MCP endpoint made alone, some tests) a service over the not-built runner.
- */
-export function madeServiceFor(store: Store, gov: Governance): MadeService {
-  return services.get(store) ?? createMadeService(store, gov, notBuiltMadeRunner);
-}
-
 export function createMadeService(store: Store, gov: Governance, runner: MadeRunner): MadeService {
   /** renders between the capacity check and the job row (start is async) */
   const starting: string[] = [];
@@ -207,10 +198,11 @@ export function createMadeService(store: Store, gov: Governance, runner: MadeRun
   };
 }
 
-export function registerMadeRoutes(app: MadeApp, deps: MadeRouteDeps): void {
+/** Registers the routes and returns their service: createApp hands it to the MCP endpoint (mcp.ts bindMade), so REST and MCP share
+ *  one runner, one capacity count and one autoApply table. */
+export function registerMadeRoutes(app: MadeApp, deps: MadeRouteDeps): MadeService {
   const { store, gov, need } = deps;
   const svc = createMadeService(store, gov, deps.runner ?? notBuiltMadeRunner);
-  services.set(store, svc);
   const P = '/api/v1/projects/:id';
   const json = async (c: { req: { json: () => Promise<unknown> } }) => c.req.json().catch(() => undefined);
 
@@ -232,4 +224,5 @@ export function registerMadeRoutes(app: MadeApp, deps: MadeRouteDeps): void {
   app.post(`${P}/made/jobs/:jobId/apply`, async (c) => { const p = need(c, 'edit'); return c.json(await svc.apply(p, c.req.param('id'), c.req.param('jobId'), await json(c))); });
   app.post(`${P}/made/jobs/:jobId/dismiss`, (c) => { const p = need(c, 'edit'); return c.json(svc.dismiss(p, c.req.param('id'), c.req.param('jobId'))); });
   app.get(`${P}/made/assets/:assetId/page`, (c) => { const p = need(c, 'observe'); return c.json(svc.page(p, c.req.param('id'), c.req.param('assetId'))); });
+  return svc;
 }
