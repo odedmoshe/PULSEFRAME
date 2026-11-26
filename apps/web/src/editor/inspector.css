@@ -138,8 +138,8 @@
 .pf-insp input[type='color'] { block-size: var(--pf-h-sm); padding: 2px; border: 0; border-radius: var(--pf-r-sm); background: var(--pf-surface-2); box-shadow: inset 0 0 0 1px var(--pf-line-control); }
 
 /* check boxes */
-.pf-insp input[type='checkbox'] { appearance: none; flex: none; position: relative; inline-size: 16px; block-size: 16px; margin: 0; border-radius: var(--pf-r-xs); background: var(--pf-surface-2); box-shadow: inset 0 0 0 1px var(--pf-line-control); cursor: pointer; }
-.pf-insp input[type='checkbox']:checked { background: var(--pf-frame); box-shadow: none; }
+.pf-insp input[type='checkbox'] { appearance: none; flex: none; position: relative; inline-size: 24px; block-size: 24px; box-sizing: border-box; border: 4px solid transparent; background-clip: padding-box; /* 16 px drawn, 24 px target */ margin: 0; border-radius: var(--pf-r-xs); background-color: var(--pf-surface-2); box-shadow: inset 0 0 0 1px var(--pf-line-control); cursor: pointer; }
+.pf-insp input[type='checkbox']:checked { background-color: var(--pf-frame); box-shadow: none; }
 .pf-insp input[type='checkbox']:checked::after { content: ''; position: absolute; inset: 3px; background: var(--pf-frame-ink); clip-path: polygon(8% 52%, 22% 38%, 40% 58%, 78% 16%, 92% 30%, 40% 88%); }
 .pf-insp input[type='checkbox']:disabled { opacity: .5; cursor: not-allowed; }
 .pf-insp input[type='checkbox']:focus-visible, .pf-insp input[type='radio']:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
