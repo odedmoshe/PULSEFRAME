@@ -78,7 +78,9 @@ describe('instruments refusals in Hebrew', () => {
       const w = world();
       const kit = w.lib!.kit;
       await take(makeMusic(w.store, { styleId: 'music.pop', bars: 4, seed: 1, instruments: 'recorded' as const }, 't', createMusicQueue(), { cfg: w.cfg, kits: [kit] }));
-      await take(makeMusic(w.store, { styleId: 'music.calm', bars: 4, seed: 1, instruments: 'recorded' as const }, 't', createMusicQueue(), { cfg: w.cfg }));
+      // a kit with an instrument that has no entry and no files is not calibrated (the shipped kit was, until 2026-11-26)
+      const unread = structuredClone(kit); unread.instruments[0]!.entry = null; unread.instruments[0]!.files = [];
+      await take(makeMusic(w.store, { styleId: 'music.calm', bars: 4, seed: 1, instruments: 'recorded' as const }, 't', createMusicQueue(), { cfg: w.cfg, kits: [unread] }));
       const check = await checkKit(w.cfg, kit);
       if (check.state !== 'ready') throw check.error;
       await take(loadBank(check, kit, [{ part: 'lead', midi: 127, vel: 1, gate: 10 }], undefined, stand));

@@ -340,6 +340,7 @@ const PARAMS: Record<string, () => string> = {
   capabilityId: () => 'none.cap', recipeId: () => 'family-film', runId: () => 'run_none', templateId: () => 'none', variantId: () => 'var_none', approvalId: () => 'apr_none', grantId: () => 'grt_none',
   sfxId: () => 'none', modelId: () => 'none', index: () => '0', styleId: () => 'none', sequenceId: () => 'seq_main', groupId: () => 'mcg_none',
   key: () => encodeURIComponent('none/none'), versionId: () => 'ver_none', clipId: () => 'clp_none',
+  kitId: () => 'kit.none', which: () => 'none', rowId: () => 'none',
 };
 const QUERY: Record<string, string> = { 'GET /api/v1/projects/:id/frame': '?index=40', 'GET /api/v1/projects/:id/proposals/:proposalId/frame': '?index=40', 'GET /api/v1/on-this-day': '?date=2024-11-04' };
 const LABEL_OP = (): OpCall => ({ op: 'update_source_range', args: { rangeId: 'rng_c', label: SECRET } });
