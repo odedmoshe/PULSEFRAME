@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { EFFECTS, effectParams, GPU_TRANSITION_IDS, TRANSITIONS, transitionDef } from '@pulseframe/core';
-import { brushFront, burnThreshold, crtMap, digicamTick, digicamTone, GPU_EFFECTS, GPU_TRANSITIONS, hash32, PAGE_RADIUS, pageFold, pageTurnSource, transitionUniforms, unit32, LIVING_PASS_BUILT, LivingPassNotBuilt, livingModel, livingVisibleRect } from './gpu.ts';
+import { brushFront, burnThreshold, crtMap, digicamTick, digicamTone, GPU_EFFECTS, GPU_TRANSITIONS, hash32, PAGE_RADIUS, pageFold, pageTurnSource, transitionUniforms, unit32, LIVING_PASS_BUILT, LIVING_SLIDE_SIGN, depthStrip, livingModel, livingVisibleRect } from './gpu.ts';
 
 const defaults = (type: string) => effectParams(type, {}) as Record<string, unknown>;
 const env = (seconds: number) => ({ width: 360, height: 640, seconds, beat: null });
@@ -182,15 +182,108 @@ describe('trend-pack transitions (ADR-0012)', () => {
 });
 
 describe('depth.living («תמונה חיה», wave 8 living): the pass contract (W2)', () => {
-  it('until W2 builds it, the pass, its geometry and its model are typed stubs that say so', () => {
-    expect(LIVING_PASS_BUILT).toBe(false);
-    expect(() => livingModel([0.5, 0.5], [], { width: 1, height: 1, data: new Uint8Array(1) })).toThrow(LivingPassNotBuilt);
-    expect(() => livingVisibleRect({ cx: 0, cy: 0, w: 1, h: 1, rotation: 0, scale: 1 }, { width: 1, height: 1 }, { width: 1, height: 1 })).toThrow(LivingPassNotBuilt);
+  // A STAND-IN depth grid, not core depthGrid (W1 builds that in a sibling worktree): flat far (0) with one near disc (255) of
+  // radius 8 texels and a 2-texel soft rim, on a 64×36 grid. The pass reads any grid of this shape; only the bytes matter here.
+  const G = 64, GH = 36;
+  const dab = (() => { const data = new Uint8Array(G * GH); for (let y = 0; y < GH; y++) for (let x = 0; x < G; x++) { const r = Math.hypot(x + 0.5 - G / 2, y + 0.5 - GH / 2); data[y * G + x] = r <= 8 ? 255 : r >= 10 ? 0 : Math.round(255 * (10 - r) / 2); } return { width: G, height: GH, data }; })();
+  const flat = { width: G, height: GH, data: new Uint8Array(G * GH) };
+  const W = 640, H = 360;
+  const fullBox = { cx: W / 2, cy: H / 2, w: W, h: H, rotation: 0, scale: 1 };
+  const env = (box = fullBox, w = W, h = H, depth: { width: number; height: number } = dab) => ({ width: w, height: h, box, depth: { key: 'depth:t', ...depth, data: new Uint8Array(0) } });
+  const fx = GPU_EFFECTS['depth.living']!;
+
+  it('is built: a wide pass (12 numbers) that samples the depth at binding 3; its shader is checked by gpu.validation.test.ts', () => {
+    expect(LIVING_PASS_BUILT).toBe(true);
+    expect(fx.depth).toBe(true);
+    expect(fx.wide).toBe(true);
+    expect(fx.params({ move: 'slide', amount: 1, travel: 0.5 }, env())).toHaveLength(12);
+    expect(fx.wgsl).toContain('near(');
+    expect(fx.wgsl).not.toContain('textureSampleLevel(depth'); // depth only through textureLoad (near), never the sampler
   });
-  it.todo('W2 the pass is wide (12 numbers) and samples the depth at binding 3; its shader passes checkWgsl (gpu.validation.test.ts loop)');
-  it.todo('W2 livingVisibleRect: the picture rectangle cut to the frame, inset half a texel; a photo at Ken Burns scale 1.18 clamps inside the frame (C2)');
-  it.todo('W2 the step count comes from the depth grid (core livingSteps): the same numbers at 640×360, 1280×720 and 1920×1080 (C7)');
-  it.todo('W2 livingModel: a flat depth with one near dab moves the dab by the expected shift and leaves the far plane (push: still; slide: −f·d)');
-  it.todo('W2 evaluate copies clip.depth into the ImageLayer, so the frame key covers every stroke: a changed stroke changes the key, an equal record keeps it (frameKey tests)');
-  it.todo('W2 with no depth or rotated (core livingUnavailable) the effect is recorded unavailable with the reason, never drawn flat (C6)');
+  it('livingVisibleRect: the picture cut to the frame, inset half a depth texel (C2); null when it leaves the frame or is rotated', () => {
+    const r = livingVisibleRect(fullBox, { width: W, height: H }, { width: G, height: GH })!;
+    expect(r.x0).toBeCloseTo(0.5 / G, 12); expect(r.x1).toBeCloseTo(1 - 0.5 / G, 12);
+    expect(r.y0).toBeCloseTo(0.5 / GH, 12); expect(r.y1).toBeCloseTo(1 - 0.5 / GH, 12);
+    // Ken Burns at 1.18, off centre: every corner of the rectangle lies inside the frame, by at least half a texel
+    const kb = { cx: W / 2 + 20, cy: H / 2 - 10, w: W, h: H, rotation: 0, scale: 1.18 };
+    const k = livingVisibleRect(kb, { width: W, height: H }, { width: 256, height: 144 })!;
+    const hw = W * 1.18, hh = H * 1.18, left = kb.cx - hw / 2, top = kb.cy - hh / 2;
+    for (const [x, y] of [[k.x0, k.y0], [k.x1, k.y1]] as const) { const fx0 = left + x * hw, fy0 = top + y * hh; expect(fx0).toBeGreaterThan(0); expect(fx0).toBeLessThan(W); expect(fy0).toBeGreaterThan(0); expect(fy0).toBeLessThan(H); }
+    expect(left + k.x0 * hw).toBeCloseTo(0.5 * hw / 256, 9);
+    expect(livingVisibleRect({ ...kb, cx: -2 * W }, { width: W, height: H }, { width: 256, height: 144 })).toBeNull();
+    expect(livingVisibleRect({ ...kb, rotation: 10 }, { width: W, height: H }, { width: 256, height: 144 })).toBeNull();
+  });
+  it('the step count comes from the depth grid (core livingSteps): the same twelve numbers but the box at 640×360, 1280×720 and 1920×1080 (C7)', () => {
+    for (const move of ['push', 'slide'] as const) for (const amount of [0.3, 0.5, 1]) {
+      const at = (w: number, h: number) => fx.params({ move, amount, travel: 0.4 }, env({ cx: w / 2, cy: h / 2, w, h, rotation: 0, scale: 1 }, w, h, { width: 256, height: 144 }));
+      const [a, b, c] = [at(640, 360), at(1280, 720), at(1920, 1080)];
+      expect(b[10]).toBe(a[10]); expect(c[10]).toBe(a[10]);
+      for (const i of [4, 5, 6, 7, 8, 9, 11]) { expect(b[i]).toBeCloseTo(a[i]!, 12); expect(c[i]).toBeCloseTo(a[i]!, 12); }
+      // and constant over the clip: K and S do not depend on travel
+      const later = fx.params({ move, amount, travel: 1 }, env({ cx: 320, cy: 180, w: 640, h: 360, rotation: 0, scale: 1 }, 640, 360, { width: 256, height: 144 }));
+      expect(later[10]).toBe(a[10]); expect(later[11]).toBe(a[11]);
+    }
+    // slide at amount 1 on the hand grid: 3% of 360 px = 10.8 px of 640 = 4.32 texels of 256 → 2·5 + 3 = 13
+    expect(fx.params({ move: 'slide', amount: 1, travel: 1 }, env(fullBox, W, H, { width: 256, height: 144 }))[10]).toBe(13);
+  });
+  it('livingModel, slide, amount 1, travel 1: the far plane shows the picture moved by −f·d, the near dab by (1 − f)·d (RTL: near moves right)', () => {
+    const nums = fx.params({ move: 'slide', amount: 1, travel: 1 }, env());
+    const [, , , , x0, y0, x1, y1, d, f, , S] = nums as number[];
+    expect(f).toBe(0.5);
+    expect(d! * W).toBeCloseTo(LIVING_SLIDE_SIGN * 0.03 * H, 9); // A = 3% of the frame height, in picture units of this full-frame photo
+    const cv = [(x0! + x1!) / 2, (y0! + y1!) / 2];
+    const expectSource = (u: number, v: number, s: number) => [cv[0]! + (u - cv[0]!) / S! - s * d!, cv[1]! + (v - cv[1]!) / S!];
+    for (const [u, v, s] of [[0.1, 0.2, -0.5], [0.9, 0.8, -0.5], [0.5, 0.5, 0.5], [0.51, 0.47, 0.5]] as const) {
+      const got = livingModel([u, v], nums, dab)!;
+      const want = expectSource(u, v, s);
+      expect(Math.abs(got[0] - want[0]!) * W, `${u},${v}`).toBeLessThan(0.01);
+      expect(Math.abs(got[1] - want[1]!) * H, `${u},${v}`).toBeLessThan(0.01);
+    }
+    // relative shift between near and far: d = 10.8 px
+    const near = livingModel([0.5, 0.5], nums, dab)!, far = livingModel([0.1, 0.5], nums, dab)!;
+    const rest = (u: number) => cv[0]! + (u - cv[0]!) / S!;
+    expect(((far[0] - rest(0.1)) - (near[0] - rest(0.5))) * W).toBeCloseTo(LIVING_SLIDE_SIGN * 0.03 * H, 3);
+  });
+  it('livingModel, push: the far plane stays exactly where it was (focus 0, no overscan); the near dab is magnified about the centre', () => {
+    const nums = fx.params({ move: 'push', amount: 1, travel: 1 }, env());
+    expect(nums[9]).toBe(0); expect(nums[11]).toBe(1);
+    for (const [u, v] of [[0.1, 0.1], [0.8, 0.3], [0.95, 0.9]] as const) { const got = livingModel([u, v], nums, dab)!; expect(Math.abs(got[0] - u) * W).toBeLessThan(1e-3); expect(Math.abs(got[1] - v) * H).toBeLessThan(1e-3); }
+    const zoom = nums[8]!;
+    const got = livingModel([0.52, 0.53], nums, dab)!;
+    expect(got[0]).toBeCloseTo(0.5 + 0.02 * (1 - zoom), 5); expect(got[1]).toBeCloseTo(0.5 + 0.03 * (1 - zoom), 5);
+    // the corner moves by A·u: zoom · half-diagonal = 3% of the height
+    expect(zoom * Math.hypot(W, H) / 2).toBeCloseTo(0.03 * H, 9);
+  });
+  it('livingModel: a flat depth under slide moves the whole picture by −f·d; travel 0.5 is the picture at rest (d = 0); null outside the picture', () => {
+    const half = fx.params({ move: 'slide', amount: 1, travel: 0.5 }, env());
+    expect(half[8]).toBe(0);
+    const pip = fx.params({ move: 'slide', amount: 1, travel: 1 }, env({ cx: 160, cy: 90, w: W, h: H, rotation: 0, scale: 0.4 }));
+    expect(livingModel([0.9, 0.9], pip, flat)).toBeNull();
+    expect(livingModel([0.25, 0.25], pip, flat)).not.toBeNull();
+    // every sample point of the picture-in-picture stays inside its visible rectangle (the clamp)
+    const [ax, ay, az, aw, x0, y0, x1, y1] = pip as number[];
+    for (let i = 0; i < 200; i++) {
+      const u = (i % 20) / 20 * 0.25 + 0.0, v = Math.floor(i / 20) / 10 * 0.25;
+      const got = livingModel([u, v], pip, dab); if (!got) continue;
+      const qx = (got[0] - ax!) * az! * 0.5 + 0.5, qy = (got[1] - ay!) * aw! * 0.5 + 0.5;
+      expect(qx).toBeGreaterThanOrEqual(x0! - 1e-6); expect(qx).toBeLessThanOrEqual(x1! + 1e-6); expect(qy).toBeGreaterThanOrEqual(y0! - 1e-6); expect(qy).toBeLessThanOrEqual(y1! + 1e-6);
+    }
+  });
+  it('livingModel at a depth edge takes the far side: no sample point falls inside the dab where the picture behind it opens (slide)', () => {
+    const nums = fx.params({ move: 'slide', amount: 1, travel: 1 }, env());
+    const S = nums[11]!;
+    // along the middle row, every output pixel shows a source that is either well outside the dab or inside it, and the source x
+    // never decreases from left to right by more than the far-side stretch allows (the picture is not folded back)
+    let last = -Infinity;
+    for (let x = 0; x < W; x++) { const got = livingModel([(x + 0.5) / W, 0.5], nums, dab)!; expect(got[0] * W).toBeGreaterThanOrEqual(last - 0.05 * S); last = got[0] * W; }
+  });
+  it('depthStrip: a core grid as RGBA8 with nearness in R; the key must be a depth key', () => {
+    const st = depthStrip(dab, 'depth:r1:x');
+    expect(st.data.length).toBe(G * GH * 4);
+    expect([st.data[(18 * G + 32) * 4], st.data[(18 * G + 32) * 4 + 1], st.data[(18 * G + 32) * 4 + 3]]).toEqual([255, 0, 0]);
+    expect(() => depthStrip(dab, 'sha256:abc')).toThrow();
+    // the model reads the strip's bytes as it reads the grid
+    const nums = fx.params({ move: 'slide', amount: 1, travel: 1 }, env());
+    expect(livingModel([0.5, 0.5], nums, st)).toEqual(livingModel([0.5, 0.5], nums, dab));
+  });
 });

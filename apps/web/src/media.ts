@@ -17,8 +17,8 @@
  * before any decoder a drawing used lately does.
  */
 import { ALL_FORMATS, AudioBufferSink, BlobSource, Input, UrlSource, VideoSampleSink, type Source } from 'mediabunny';
-import { LUT_MAX_TEXT_LENGTH, LutError, lutStrip } from '@pulseframe/core';
-import { decodeBudgetReason, type FrameImage, type FrameProvider, type LutStrip, type PictureLayer } from '@pulseframe/engine';
+import { depthGrid, depthKey, LUT_MAX_TEXT_LENGTH, LutError, lutStrip } from '@pulseframe/core';
+import { decodeBudgetReason, depthStrip, type DepthStrip, type FrameImage, type FrameProvider, type ImageLayer, type LutStrip, type PictureLayer } from '@pulseframe/engine';
 
 /** What the pool needs of a decoder: the picture at a time from the stream's first frame, and prompt disposal. */
 export interface PoolDecoder {
@@ -252,6 +252,8 @@ export function prefetchBudget(deviceMemoryGB: number | undefined): { bytes: num
 
 /** The code of a stored file that is missing on disk: the server's answer (404 missing_media) and the reason a picture is left out. */
 export const MISSING_MEDIA = 'missing_media';
+/** Depth strips kept at once (wave 8 living): each at most 256×256×4 bytes for a hand drawing. */
+export const MAX_DEPTHS = 16;
 
 let pools = 0;
 export class MediaPool {
@@ -379,11 +381,33 @@ export class MediaPool {
     });
     return l;
   }
+  /**
+   * «תמונה חיה» (wave 8 living): the drawn depth of a photo layer as the strip its pass samples. Core depthGrid (integer, the same
+   * bytes in every context) at the grid size of the picture as shown, rasterised ONCE per record and shown size and kept here by
+   * depthKey, never per frame (verifier C14 d: up to 24 M integer steps). The texture key is depthKey plus the grid size, so two
+   * photos of other shapes with the same drawing never share a texture. null when the layer has no depth; a grid that cannot be
+   * made rejects (the compositor then reports the living picture unavailable with that reason). The pass reads any grid of this
+   * shape whoever made it.
+   */
+  depth(layer: ImageLayer): Promise<DepthStrip | null> {
+    if (!layer.depth) return Promise.resolve(null);
+    const shown = { width: layer.sourceWidth, height: layer.sourceHeight };
+    const key = `${depthKey(layer.depth)}@${shown.width}x${shown.height}`;
+    let d = this.depths.get(key);
+    if (d) { this.depths.delete(key); this.depths.set(key, d); return d; } // most recently used last
+    const depth = layer.depth;
+    d = Promise.resolve().then(() => { const grid = depthGrid(depth, shown); return depthStrip(grid, `${depthKey(depth)}@${grid.width}x${grid.height}`); });
+    this.depths.set(key, d);
+    d.catch(() => { if (this.depths.get(key) === d) this.depths.delete(key); }); // a failure is not kept: the next frame tries again
+    while (this.depths.size > MAX_DEPTHS) this.depths.delete(this.depths.keys().next().value!);
+    return d;
+  }
+  private depths = new Map<string, Promise<DepthStrip>>();
   private readonly name = `pool${++pools}`;
   /** Full quality: always the original media (export, agent stills, paused preview). */
-  readonly frames: FrameProvider = Object.assign((layer: PictureLayer) => this.frame(layer, 'full'), { lut: (assetId: string) => this.lut(assetId), begin: () => this.begin(), end: (t: unknown) => this.end(t), refusal: (layer: PictureLayer) => this.refusal(layer, 'full') });
+  readonly frames: FrameProvider = Object.assign((layer: PictureLayer) => this.frame(layer, 'full'), { lut: (assetId: string) => this.lut(assetId), depth: (layer: ImageLayer) => this.depth(layer), begin: () => this.begin(), end: (t: unknown) => this.end(t), refusal: (layer: PictureLayer) => this.refusal(layer, 'full') });
   /** Draft quality: the frame-identical proxy when one exists (playback). A colour table has no proxy: both providers give the same one. */
-  readonly draftFrames: FrameProvider = Object.assign((layer: PictureLayer) => this.frame(layer, 'draft'), { lut: (assetId: string) => this.lut(assetId), begin: () => this.begin(), end: (t: unknown) => this.end(t), refusal: (layer: PictureLayer) => this.refusal(layer, 'draft') });
+  readonly draftFrames: FrameProvider = Object.assign((layer: PictureLayer) => this.frame(layer, 'draft'), { lut: (assetId: string) => this.lut(assetId), depth: (layer: ImageLayer) => this.depth(layer), begin: () => this.begin(), end: (t: unknown) => this.end(t), refusal: (layer: PictureLayer) => this.refusal(layer, 'draft') });
   /**
    * A new drawing starts: the decoders it asks for are pinned to its token until it ends, whatever other drawings (another
    * player on the same pool, such as the source viewer's) start and end meanwhile. Under a shared counter, a second
@@ -614,6 +638,7 @@ export class MediaPool {
     this.stills.clear();
     this.luts.clear();
     this.lutFailures.clear();
+    this.depths.clear();
     this.blobs.clear();
   }
 }
