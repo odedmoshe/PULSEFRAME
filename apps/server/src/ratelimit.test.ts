@@ -10,7 +10,7 @@ describe('agent rate limit', () => {
   let now = 1_000_000;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-rate-'));
   beforeAll(async () => {
-    s = await startServer({ port: 8931, dataDir: dir, agentRequestsPerMinute: 60 }); // 1 per second, bucket of 10
+    s = await startServer({ port: 0, dataDir: dir, agentRequestsPerMinute: 60 }); // 1 per second, bucket of 10
     s.auth.now = () => now;
   });
   afterAll(async () => { await s.close(); fs.rmSync(dir, { recursive: true, force: true }); });
@@ -45,7 +45,7 @@ describe('agent rate limit', () => {
   });
   it('a grant can carry its own budget: it applies where the server-wide limit is off, and replaces it where it is on', async () => {
     const dir3 = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-rate-g-'));
-    const open = await startServer({ port: 8933, dataDir: dir3, agentRequestsPerMinute: 0 });
+    const open = await startServer({ port: 0, dataDir: dir3, agentRequestsPerMinute: 0 });
     try {
       let t = 50_000; open.auth.now = () => t;
       const cookie = (await fetch(`${open.url}/api/v1/session`, { headers: { origin: open.url, 'x-pf-owner-key': open.auth.tokens.owner, connection: 'close' } })).headers.get('set-cookie')!.split(';')[0]!;
@@ -70,7 +70,7 @@ describe('agent rate limit', () => {
   });
   it('0 switches the limit off', async () => {
     const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-rate0-'));
-    const open = await startServer({ port: 8932, dataDir: dir2, agentRequestsPerMinute: 0 });
+    const open = await startServer({ port: 0, dataDir: dir2, agentRequestsPerMinute: 0 });
     try {
       open.auth.now = () => 5;
       const all: number[] = [];

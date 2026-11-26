@@ -7,7 +7,7 @@ import { startServer } from './index.ts';
 describe('server shutdown', () => {
   it('closes promptly even while a client still holds an event stream open', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-shutdown-'));
-    const s = await startServer({ port: 8979, dataDir: dir });
+    const s = await startServer({ port: 0, dataDir: dir });
     try {
       const h = { authorization: `Bearer ${s.auth.tokens.agent}` };
       const pid = ((await (await fetch(`${s.url}/api/v1/projects`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ name: 'open stream' }) })).json()) as any).project.id;

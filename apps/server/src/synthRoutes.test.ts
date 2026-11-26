@@ -23,7 +23,7 @@ describe('adding a sound or an element: a refused placement leaves the project u
   const project = async (pid: string) => (await (await fetch(`${s.url}/api/v1/projects/${pid}`, { headers: h })).json()) as { revision: number; project: { assets: Record<string, { name: string }>; sequences: Record<string, { tracks: { id: string; kind: string; clips: unknown[] }[] }> } };
   const shape = async (pid: string) => { const p = await project(pid); return { revision: p.revision, assets: Object.values(p.project.assets).map((a) => a.name), clips: Object.values(p.project.sequences).flatMap((q) => q.tracks).reduce((n, t) => n + t.clips.length, 0) }; };
   const create = async (name: string) => ((await (await post('/projects', { name, width: 640, height: 360, frameRate: { num: 30, den: 1 } })).json()) as { project: { id: string } }).project.id;
-  beforeAll(async () => { s = await startServer({ port: 8991, dataDir: dir }); h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' }; }, 60_000);
+  beforeAll(async () => { s = await startServer({ port: 0, dataDir: dir }); h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' }; }, 60_000);
   afterAll(async () => { await s.close(); fs.rmSync(dir, { recursive: true, force: true }); });
 
   it('element: start off the frame grid, unknown track, zero duration, occupied track -> error and no asset, no revision', async () => {
@@ -205,7 +205,7 @@ describe('element pictures and the storage ceiling', () => {
   const QUOTA = 3_000_000;
   let h: Record<string, string> = {};
   const post = (p: string, body: unknown) => fetch(`${s.url}/api/v1${p}`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  beforeAll(async () => { s = await startServer({ port: 8992, dataDir: dir, maxStorageBytes: QUOTA }); h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' }; }, 60_000);
+  beforeAll(async () => { s = await startServer({ port: 0, dataDir: dir, maxStorageBytes: QUOTA }); h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' }; }, 60_000);
   afterAll(async () => { await s.close(); fs.rmSync(dir, { recursive: true, force: true }); });
 
   it('once the ceiling is reached a new picture is refused with 507 on the route and for the agent tool alike, and nothing is added', async () => {
