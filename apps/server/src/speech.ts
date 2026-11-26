@@ -33,6 +33,7 @@ import { assertStorageRoom } from './storage.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 import { PYTHON_WORKER_FLAGS } from './pythonArgs.ts';
 import { SpeechEngineInstaller, type EngineDeps } from './speechEngine.ts';
+import { actsAsOwner } from './autonomy.ts';
 
 type ModelFile = CapabilityDescriptor['models'][number];
 export interface SpeechModel { id: string; kind: 'asr' | 'tts'; title: { he: string; en: string }; languages: string[]; note: string; engineModel: string; dir: string; files: ModelFile[] }
@@ -509,7 +510,7 @@ export class Speech {
       if (a.consent) throw new ApiError(400, 'invalid_request', 'consent is only meaningful together with referenceAssetId');
       return {};
     }
-    if (principal.kind !== 'user') throw new ApiError(403, 'human_approval_required', 'speaking in a recorded person\'s voice needs the owner\'s own consent statement; an agent credential cannot give it', {}, 'Use the built-in voice, or ask the owner to start this from the editor.');
+    if (!actsAsOwner(principal)) throw new ApiError(403, 'human_approval_required', 'speaking in a recorded person\'s voice needs the owner\'s own consent statement; an agent credential cannot give it', {}, 'Use the built-in voice, or ask the owner to start this from the editor.');
     if (!a.consent) throw new ApiError(422, 'consent_required', 'a reference voice needs a consent statement: whose voice it is, and that they agreed', {}, 'Send consent: { speaker, confirmed: true }.');
     const ref = doc.assets[a.referenceAssetId];
     if (!ref) throw new ApiError(404, 'not_found', `asset ${a.referenceAssetId} not found`, { assetId: a.referenceAssetId });

@@ -25,6 +25,7 @@ import type { Config } from '../config.ts';
 import type { Governance } from '../governance.ts';
 import type { ImportQueue } from '../importContracts.ts';
 import { ApiError, type Store } from '../store.ts';
+import { actsAsOwner } from '../autonomy.ts';
 
 /** In the data directory, outside every project, archive and backup (backup.ts NEVER_BACKED_UP). */
 export const LIBRARY_CONFIG_FILE = 'library.json';
@@ -94,6 +95,6 @@ export interface LibraryRouteDeps {
 export type LibraryApp = Hono<LibraryEnv>;
 /** The owner's own session, or 403 owner_required. */
 export function libraryOwner(p: Principal): Principal {
-  if (p.kind !== 'user') throw libraryError('ownerOnly');
+  if (!actsAsOwner(p)) throw libraryError('ownerOnly');
   return p;
 }

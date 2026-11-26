@@ -1,0 +1,130 @@
+/**
+ * Strings of «מאגר» (stock sources) and «ייבוא מקישור» (import from a link) — wave 8 `sources`, part A; core sourcesContract.ts.
+ * Spread into `he` and `en` (index.ts); Hebrew first, plural address («בחרו», «הדביקו»), no gendered forms; the English dictionary
+ * covers the same keys. A licence finding is a WARNING that names the licence and quotes its own words (core SOURCE_TERMS), never our
+ * conclusion (verify C15); nothing is called safe, allowed or verified. packages/evals/src/sources-wording.test.ts keeps it in step.
+ * Namespaces: `op.*`; `sources.*` (the «מאגר» tab, the link box, download rows, badges: W3); `sources.connect.*` (Settings ›
+ * «חיבורים», W3, C1); `sources.fail.<why>` (job failures, W2/W3); `sources.warn.<code>` (warnings, W1/W3).
+ * Also here: HE_SOURCES, the Hebrew of every refusal of use_source_item (SOURCE_OP_REFUSALS) and of the sources routes (SOURCES_API),
+ * each with the next step.
+ */
+const ltr = (s: string) => `⁦${s}⁩`;
+
+export const SOURCES_HE = {
+  'op.use_source_item': 'קובץ ממאגר',
+  // the «מאגר» tab (W3): a second tab of the media drawer beside «הקבצים שלי»
+  'sources.tab': 'מאגר', 'sources.mine': 'הקבצים שלי',
+  'sources.search': 'חיפוש במאגר', 'sources.searchHint': 'מילים פשוטות למה שאתם מחפשים. המילים נשלחות לשירות שבחרתם',
+  'sources.kind.video': 'וידאו', 'sources.kind.photo': 'תמונות', 'sources.kind.illustration': 'איורים', 'sources.kind.music': 'מוזיקה', 'sources.kind.sound': 'אפקטים קוליים',
+  'sources.needsKey': 'צריך מפתח', 'sources.needsContact': 'צריך פרטי קשר', 'sources.connect': 'חיבור',
+  'sources.addToProject': 'הוספה לפרויקט', 'sources.addAtPlayhead': 'הוספה בסמן',
+  'sources.preview': 'תצוגה מקדימה', 'sources.noResults': 'לא נמצאו תוצאות. נסו מילים אחרות',
+  'sources.resultsFrom': 'תוצאות מ־{name}', 'sources.remaining': 'נשארו {n} חיפושים בשעה הזאת',
+  'sources.cached': 'מהזיכרון (בלי בקשה חדשה)', 'sources.more': 'עוד תוצאות',
+  // the link box (W3)
+  'sources.link.paste': 'הדביקו קישור', 'sources.link.import': 'ייבוא',
+  'sources.link.hint': 'קישור ישיר לקובץ וידאו, צליל או תמונה (גם קישור שיתוף של Dropbox)',
+  'sources.downloading': 'מורידים… {pct}%', 'sources.downloadingBytes': 'מורידים… {got} מתוך {total}', 'sources.cancel': 'ביטול',
+  'sources.stage.resolving': 'בודקים את הפריט', 'sources.stage.downloading': 'מורידים', 'sources.stage.importing': 'מכינים את הקובץ', 'sources.stage.placing': 'מוסיפים לציר',
+  // badges and asset lines (W3): licence names are shown as the service gives them, in <bdi>
+  'sources.badge.cc0': 'רישיון CC0', 'sources.badge.by': 'רישיון CC BY', 'sources.badge.nc': 'לשימוש לא מסחרי בלבד', 'sources.badge.unconfirmed': 'רישיון לא אושר',
+  'sources.badge.nd': 'רישיון בלי שינויים (ND)', 'sources.badge.sa': 'רישיון שיתוף זהה (SA)',
+  'sources.openPage': 'פתיחת עמוד המקור', 'sources.credit': 'קרדיט', 'sources.fetchedAt': 'הורד ב־{at}', 'sources.from': 'מ־{name}',
+  'sources.quoteTranslation': '(תרגום)', 'sources.readOn': 'נקרא ב־{date}',
+  // warnings (codes of core SOURCE_WARNING_CODES): the licence's own name and words, never our conclusion
+  'sources.warn.licence_no_derivatives': 'הרישיון {name} אומר בלשונו:', 'sources.warn.licence_share_alike': 'הרישיון {name} אומר בלשונו:',
+  'sources.warn.licence_unknown': 'הרישיון לא ידוע: השירות או הקישור לא ציינו רישיון',
+  'sources.warn.licence_unconfirmed': 'הרישיון {name} לא נקרא כאן במלואו. קראו אותו בקישור לפני פרסום',
+  'sources.warn.source_terms': 'תנאי השירות של {name}:', 'sources.warn.link_private_network': 'כתובת ברשת הביתית',
+  'sources.warn.non_commercial_content': 'לשימוש לא מסחרי בלבד',
+  // job failures (core SOURCE_JOB_FAILURES by why), each with its next step
+  'sources.fail.source_not_found': 'השירות כבר לא מחזיק בפריט הזה. חפשו שוב ובחרו פריט אחר',
+  'sources.fail.provider_key_missing': 'המפתח של השירות נמחק. חברו אותו שוב בהגדרות › «חיבורים»',
+  'sources.fail.provider_key_rejected': 'השירות דחה את המפתח השמור. בדקו את המפתח באתר השירות ושמרו אותו שוב',
+  'sources.fail.provider_rate_limited': 'הגעתם למגבלת הבקשות של השירות. נסו את הייבוא שוב מאוחר יותר',
+  'sources.fail.link_address_refused': 'הקישור הוביל לכתובת של המחשב הזה או לכתובת מקומית. השתמשו בקישור באינטרנט או במכשיר אחר',
+  'sources.fail.download_not_media': 'הקישור לא מוביל לקובץ וידאו, צליל או תמונה. העתיקו את הקישור של הקובץ עצמו',
+  'sources.fail.download_too_large': 'הקובץ גדול ממגבלת ההורדה. הגדילו את המגבלה בהגדרות › «חיבורים» (עד מגבלת ההעלאה)',
+  'sources.fail.download_disk_full': 'נגמר המקום בכונן הנתונים בזמן ההורדה. פנו מקום ונסו את הייבוא שוב',
+  'sources.fail.download_stalled': 'לא הגיעו נתונים זמן רב. נסו את הייבוא שוב; הוא ימשיך מהמקום שנעצר כשהשרת מאפשר',
+  'sources.fail.canceled': 'ההורדה נעצרה. ייבאו שוב כשתרצו את הקובץ',
+  // Settings › «חיבורים» (W3; C1: the track's own card with the agent's strings where they exist)
+  'sources.connect.title': 'חיבורים', 'sources.connect.key': 'מפתח', 'sources.connect.save': 'שמירה', 'sources.connect.forget': 'שכחת המפתח',
+  'sources.connect.keySet': 'מפתח שמור (נוסף ב־{at})', 'sources.connect.noKey': 'אין מפתח שמור',
+  'sources.connect.sent': 'מה נשלח: רק המילים שחיפשתם והמסננים, ועם המפתח או שורת הקשר שהשירות מבקש. שום דבר על הפרויקט',
+  'sources.connect.ownerOnly': 'מפתחות נשמרים רק מחלון העורך של הבעלים',
+  'sources.connect.signup': 'קבלת מפתח חינמי',
+  'sources.connect.openverseClient': 'רישום לקוח חינמי ב־Openverse (100 בדקה, 10,000 ביום)', 'sources.connect.clientId': 'מזהה לקוח', 'sources.connect.clientSecret': 'סוד לקוח',
+  'sources.connect.contact': 'פרטי קשר לוויקימדיה', 'sources.connect.contactHint': 'כתובת מייל, אתר או שם משתמש בוויקי. נשלח לוויקימדיה עם כל בקשה, כפי שהמדיניות שלה מבקשת',
+  'sources.connect.maxBytes': 'מגבלת הורדה', 'sources.connect.maxBytesHint': 'לכל היותר מגבלת ההעלאה ({max})',
+  'sources.connect.windows': 'ב־Windows המפתח מוגן בהרשאות של תיקיית הנתונים',
+} as const;
+
+export const SOURCES_EN: Record<keyof typeof SOURCES_HE, string> = {
+  'op.use_source_item': 'File from a source',
+  'sources.tab': 'Sources', 'sources.mine': 'My files',
+  'sources.search': 'Search sources', 'sources.searchHint': 'Plain words for what you want. The words are sent to the service you chose',
+  'sources.kind.video': 'Video', 'sources.kind.photo': 'Photos', 'sources.kind.illustration': 'Illustrations', 'sources.kind.music': 'Music', 'sources.kind.sound': 'Sound effects',
+  'sources.needsKey': 'Needs a key', 'sources.needsContact': 'Needs a contact', 'sources.connect': 'Connect',
+  'sources.addToProject': 'Add to project', 'sources.addAtPlayhead': 'Add at playhead',
+  'sources.preview': 'Preview', 'sources.noResults': 'Nothing found. Try other words',
+  'sources.resultsFrom': 'Results from {name}', 'sources.remaining': '{n} searches left this hour',
+  'sources.cached': 'From memory (no new request)', 'sources.more': 'More results',
+  'sources.link.paste': 'Paste a link', 'sources.link.import': 'Import',
+  'sources.link.hint': 'A direct link to a video, sound or picture file (a Dropbox share link works too)',
+  'sources.downloading': 'Downloading… {pct}%', 'sources.downloadingBytes': 'Downloading… {got} of {total}', 'sources.cancel': 'Cancel',
+  'sources.stage.resolving': 'Checking the item', 'sources.stage.downloading': 'Downloading', 'sources.stage.importing': 'Preparing the file', 'sources.stage.placing': 'Adding to the timeline',
+  'sources.badge.cc0': 'CC0 licence', 'sources.badge.by': 'CC BY licence', 'sources.badge.nc': 'Non-commercial use only', 'sources.badge.unconfirmed': 'Licence not confirmed',
+  'sources.badge.nd': 'No-derivatives licence (ND)', 'sources.badge.sa': 'Share-alike licence (SA)',
+  'sources.openPage': 'Open the source page', 'sources.credit': 'Credit', 'sources.fetchedAt': 'Downloaded {at}', 'sources.from': 'From {name}',
+  'sources.quoteTranslation': '(translation)', 'sources.readOn': 'Read on {date}',
+  'sources.warn.licence_no_derivatives': 'The licence {name} says in its own words:', 'sources.warn.licence_share_alike': 'The licence {name} says in its own words:',
+  'sources.warn.licence_unknown': 'Licence unknown: the service or the link named no licence',
+  'sources.warn.licence_unconfirmed': 'The licence {name} was not read in full here. Read it at the link before publishing',
+  'sources.warn.source_terms': 'Terms of {name}:', 'sources.warn.link_private_network': 'An address on the home network',
+  'sources.warn.non_commercial_content': 'Non-commercial use only',
+  'sources.fail.source_not_found': 'The service no longer has this item. Search again and choose another',
+  'sources.fail.provider_key_missing': 'The service\'s key was removed. Connect it again in Settings › Connections',
+  'sources.fail.provider_key_rejected': 'The service refused the stored key. Check it on the service\'s site and store it again',
+  'sources.fail.provider_rate_limited': 'The service\'s request limit is reached. Retry the import later',
+  'sources.fail.link_address_refused': 'The link led to an address of this computer or a local address. Use a link on the internet or on another device',
+  'sources.fail.download_not_media': 'The link does not lead to a video, sound or picture file. Copy the link of the file itself',
+  'sources.fail.download_too_large': 'The file is larger than the download limit. Raise it in Settings › Connections (at most the upload limit)',
+  'sources.fail.download_disk_full': 'The data drive ran out of room while downloading. Free space and retry the import',
+  'sources.fail.download_stalled': 'No bytes arrived for a long time. Retry the import; it continues where it stopped when the server allows it',
+  'sources.fail.canceled': 'The download was stopped. Import it again when you want the file',
+  'sources.connect.title': 'Connections', 'sources.connect.key': 'Key', 'sources.connect.save': 'Save', 'sources.connect.forget': 'Forget the key',
+  'sources.connect.keySet': 'A key is stored (added {at})', 'sources.connect.noKey': 'No key stored',
+  'sources.connect.sent': 'What is sent: only the words you searched for and the filters, with the key or contact line the service asks for. Nothing about the project',
+  'sources.connect.ownerOnly': 'Keys are stored from the owner\'s own editor window only',
+  'sources.connect.signup': 'Get a free key',
+  'sources.connect.openverseClient': 'Register a free Openverse client (100 a minute, 10,000 a day)', 'sources.connect.clientId': 'Client id', 'sources.connect.clientSecret': 'Client secret',
+  'sources.connect.contact': 'Contact for Wikimedia', 'sources.connect.contactHint': 'An email address, a website or a wiki user name. Sent to Wikimedia with every request, as its policy asks',
+  'sources.connect.maxBytes': 'Download limit', 'sources.connect.maxBytesHint': 'At most the upload limit ({max})',
+  'sources.connect.windows': 'On Windows the key is protected by the data folder\'s permissions',
+};
+
+/** The Hebrew of every refusal of use_source_item and of the sources routes (the English is core's, fixed). */
+export const HE_SOURCES: [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^use_source_item: files from stock sources are not built in this build yet$/, () => 'קבצים ממאגרים עוד לא נבנו בגרסה הזו של העורך. שום דבר לא השתנה; עדכנו את העורך ונסו שוב'],
+  [/^this file has no source record$/, () => 'לקובץ הזה אין רישום מקור. ייבאו אותו דרך «מאגר» או «ייבוא מקישור»'],
+  [/^the source record names other bytes than this file$/, () => 'רישום המקור מתאר קובץ אחר. ייבאו את הפריט שוב'],
+  [/^the source record is weaker than its own licence: it must be marked (.+)$/, (m) => `רישום המקור חסר סימון שהרישיון שלו דורש (${ltr(m[1]!)}). ייבאו את הפריט שוב`],
+  [/^the licence of this item names a credit, and the record has no credit text$/, () => 'הרישיון של הפריט דורש קרדיט, ולרישום אין טקסט קרדיט. ייבאו אותו שוב או בחרו פריט אחר'],
+  [/^stock sources and link import are not built in this version yet$/, () => 'מאגרים וייבוא מקישור עוד לא נבנו בגרסה הזו של העורך. שום דבר לא השתנה; עדכנו את העורך ונסו שוב'],
+  [/^no such source$/, () => 'אין שירות כזה. בחרו אחד מהשירותים ברשימה'],
+  [/^a key or contact line of a service is stored from the owner's own editor window$/, () => 'מפתח או פרטי קשר של שירות נשמרים רק מחלון העורך של הבעלים. פתחו את העורך כבעלים וחברו את השירות בהגדרות › «חיבורים»'],
+  [/^this source needs a key, and none is stored$/, () => 'השירות הזה צריך מפתח, ואין מפתח שמור. חברו אותו בהגדרות › «חיבורים» (המפתח חינמי באתר השירות)'],
+  [/^Wikimedia Commons asks every program for a contact line, and none is stored$/, () => 'ויקישיתוף מבקשת מכל תוכנה פרטי קשר, ואין פרטים שמורים. הקלידו מייל, אתר או שם משתמש בוויקי בהגדרות › «חיבורים»'],
+  [/^the service refused the stored key$/, () => 'השירות דחה את המפתח השמור. בדקו את המפתח באתר השירות ושמרו אותו שוב'],
+  [/^the service's request limit is reached$/, () => 'הגעתם למגבלת הבקשות של השירות. חכו מעט, או חברו לקוח משלכם למגבלה גבוהה יותר'],
+  [/^the service did not answer as expected$/, () => 'השירות לא ענה כמצופה. נסו שוב בעוד כמה דקות'],
+  [/^what was typed is not the form this service's key takes$/, () => 'מה שהוקלד לא נראה כמו מפתח של השירות. הדביקו את המפתח בדיוק כפי שהשירות מציג אותו'],
+  [/^the service has no such item \(any more\)$/, () => 'לשירות אין (כבר) פריט כזה. חפשו שוב ובחרו פריט אחר'],
+  [/^this preview is no longer available$/, () => 'התצוגה המקדימה כבר לא זמינה. חפשו שוב'],
+  [/^only http and https links can be imported$/, () => 'אפשר לייבא רק קישורי http ו־https. הדביקו כתובת שמתחילה ב־https://'],
+  [/^this link points to this computer, its own network doors or a link-local address$/, () => 'הקישור מוביל למחשב הזה או לכתובת מקומית. השתמשו בקישור באינטרנט או במכשיר אחר'],
+  [/^the link does not lead to a video, sound or picture file$/, () => 'הקישור לא מוביל לקובץ וידאו, צליל או תמונה. פתחו את העמוד והעתיקו את הקישור של הקובץ עצמו'],
+  [/^the file is larger than the download limit$/, () => 'הקובץ גדול ממגבלת ההורדה. הגדילו את המגבלה בהגדרות › «חיבורים», או בחרו גרסה קטנה יותר'],
+  [/^there is not enough free space for this download$/, () => 'אין מספיק מקום פנוי להורדה. פנו מקום בכונן הנתונים ונסו שוב'],
+];

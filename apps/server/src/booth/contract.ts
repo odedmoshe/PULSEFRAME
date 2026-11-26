@@ -27,6 +27,7 @@ import type { DropDoor } from '../importContracts.ts';
 import type { SearchRuntime } from '../search/contract.ts';
 import type { Speech } from '../speech.ts';
 import { ApiError, type Store } from '../store.ts';
+import { actsAsOwner } from '../autonomy.ts';
 
 /** True since the wave 8 booth integration: the routes answer. (While it was false every booth route answered 501 booth_not_built after the owner check.) */
 export const BOOTH_BUILT: boolean = true;
@@ -78,7 +79,7 @@ export function boothError<K extends BoothRefusalKey>(key: K, ...args: Parameter
 }
 /** The first line of every booth handler: the owner's own session (assistant/contract.ts isOwnerSession), else 403 owner_required. */
 export function boothOwner(p: Principal): Principal {
-  if (!isOwnerSession(p)) throw boothError('ownerOnly');
+  if (!actsAsOwner(p)) throw boothError('ownerOnly');
   return p;
 }
 

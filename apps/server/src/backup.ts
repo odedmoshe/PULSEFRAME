@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { OWN_TEMPLATE_STORE } from '@pulseframe/core';
+import { CONNECTORS_FILE } from './connectors/keys.ts';
 
 /** The owner's own templates file (apps/server/src/ownTemplates.ts OWN_TEMPLATES_FILE; core OWN_TEMPLATE_STORE.file). */
 const OWN_TEMPLATES_FILE = OWN_TEMPLATE_STORE.file;
@@ -20,9 +21,11 @@ export const AGENT_OWNER_MODELS_FILE = 'agent-models.json';
  * ASSISTANT_CONFIG_FILE); the library folder setting and the library's derived index (library/contract.ts LIBRARY_CONFIG_FILE,
  * LIBRARY_INDEX_FILE): after a restore the state is «הספרייה לא מוגדרת»; the owner's review-booth answers (booth/contract.ts
  * OWNER_REVIEW_FILE: machine state of this computer, never carried to another); the in-editor agent's folder (agent/contract.ts
- * AGENT_DIR: provider keys, provider settings and the owner's model rows; wave 8 autonomy decision 3), a DIRECTORY, removed recursively.
+ * AGENT_DIR: provider keys, provider settings and the owner's model rows; wave 8 autonomy decision 3), a DIRECTORY, removed recursively;
+ * the outside services' keys (connectors/keys.ts CONNECTORS_DIR: the Pixabay key, Openverse's client, Wikimedia's contact line; wave 8
+ * sources C1), a DIRECTORY too.
  */
-export const NEVER_BACKED_UP = ['assistant.key', 'assistant.json', 'library.json', 'library-index.sqlite', 'owner-review.json', 'agent'] as const;
+export const NEVER_BACKED_UP = ['assistant.key', 'assistant.json', 'library.json', 'library-index.sqlite', 'owner-review.json', 'agent', 'connectors'] as const;
 export interface BackupResult { dest: string; /** Projects in the verified database copy. */ projects: number; databaseBytes: number; filesCopied: number; /** Newly copied media files whose content hash was checked against their name. */ filesVerified: number; filesSkipped: number; bytesCopied: number }
 
 const sha256File = (file: string) => new Promise<string>((resolve, reject) => {
@@ -97,9 +100,18 @@ export async function backupDataDir(src: string, dest: string): Promise<BackupRe
   //     same way. The keys and provider settings under agent/ are NOT copied (NEVER_BACKED_UP below).
   const models = path.join(src, AGENT_OWNER_MODELS_FILE), modelsOut = path.join(dest, AGENT_OWNER_MODELS_FILE);
   if (fs.existsSync(models)) { fs.copyFileSync(models, `${modelsOut}.part`); try { fs.chmodSync(`${modelsOut}.part`, 0o600); } catch { /* Windows */ } fs.renameSync(`${modelsOut}.part`, modelsOut); } else fs.rmSync(modelsOut, { force: true });
+  // 3d. the outside services' settings (wave 8 sources, D8: connectors/keys.ts CONNECTORS_FILE; the download limit, no secret): copied
+  //     every time like 3b (rewritten in place); removed from the destination when the source has none. Its keys are never copied (4).
+  const con = path.join(src, CONNECTORS_FILE), conOut = path.join(dest, CONNECTORS_FILE);
+  if (fs.existsSync(con)) {
+    const part = `${conOut}.part`;
+    fs.copyFileSync(con, part);
+    try { fs.chmodSync(part, 0o600); } catch { /* Windows */ }
+    fs.renameSync(part, conOut);
+  } else fs.rmSync(conOut, { force: true });
   // 4. never: the language assistant's key and config (ADR-0027, lead decision 9) — the owner enters them again after a restore.
   //    Nothing above copies them; a copy left in the destination by hand is removed so a backup never holds one.
-  for (const name of NEVER_BACKED_UP) fs.rmSync(path.join(dest, name), { force: true, recursive: true }); // 'agent' is a folder (C12)
+  for (const name of NEVER_BACKED_UP) fs.rmSync(path.join(dest, name), { force: true, recursive: true }); // 'agent' and 'connectors' are folders (C12; sources C1)
   return r;
 }
 

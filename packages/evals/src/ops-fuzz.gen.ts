@@ -804,6 +804,30 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     return { op: 'use_library_item', args: { asset } };
   };
   /**
+   * Stock sources (wave 8 `sources`; internal: the source_fetch job commits it with allowInternal). `genSource()` returns a random
+   * use_source_item call: a fetched file with a source record — licences CC0, PDM, CC BY with and without credit, CC BY-NC with and
+   * without its marks, CC BY-SA, CC BY-ND, provider:pixabay, unknown — a link record on a non-link provider, a hash that differs from
+   * the record's, and sometimes no record. Not drawn by `gen`. Until W1 builds the body every call is refused with sources_not_built;
+   * after, a licence finding is never a refusal (only the data facts of SOURCE_OP_REFUSALS are).
+   */
+  const genSource = (): OpCall => {
+    const k = int(4);
+    const hex = sha256Hex(`src${k}`);
+    const credit = { text: `"Fuzz ${k}" by Someone is licensed under CC BY 4.0`, placement: 'description', due: true };
+    const licences: [string, Record<string, unknown>][] = [
+      ['CC0-1.0', {}], ['PDM-1.0', {}], ['CC-BY-4.0', { credit }], ['CC-BY-4.0', {}],
+      ['CC-BY-NC-4.0', { credit, flags: { nonCommercial: true, notShareable: true } }], ['CC-BY-NC-4.0', { credit }],
+      ['CC-BY-SA-4.0', { credit, flags: { shareAlike: true, licenceUnconfirmed: true, notShareable: true } }], ['CC-BY-ND-4.0', { credit, flags: { noDerivatives: true, licenceUnconfirmed: true, notShareable: true } }],
+      ['provider:pixabay', { flags: { licenceUnconfirmed: true, notShareable: true } }], ['unknown', {}],
+    ];
+    const [id, extra] = pick(licences);
+    const provider = pick(['openverse', 'pixabay', 'wikimedia', 'link']);
+    const record = { provider, itemId: `fuzz-${k}`, kind: 'sound', title: `Fuzz ${k}`, fetchedAt: '2026-11-26T00:00:00Z', sha256: hex, byteSize: 1, licence: { id, name: id, from: 'item' }, flags: {},
+      ...(provider === 'link' || rnd() < 0.1 ? { link: { via: 'direct', host: 'example.invalid' } } : {}), ...extra };
+    const asset = { kind: 'audio' as const, name: `src${k}.wav`, contentHash: `sha256:${rnd() < 0.15 ? '3'.repeat(64) : hex}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(2 + k, 1), audio: { sampleRate: 48000, channels: 1, codec: 'pcm_s16le' }, provenance: { origin: 'upload' as const, importedAt: '2026-11-26T00:00:00Z', importedBy: 'fuzz', ...(rnd() < 0.93 ? { source: record } : {}) } };
+    return { op: 'use_source_item', args: { asset } };
+  };
+  /**
    * Editing craft (wave 7 craft track). `genCraft(doc)` returns a random ripple_trim, paste_attributes or replace_text call: ripple
    * trims at frame times inside, at and past a clip's edges (the start edge also earlier: refused), pastes of random groups among
    * clips of every kind (a source among its targets: refused), replacements of titles with the text they hold or a stale one
@@ -1063,5 +1087,5 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLiving, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience, genInk, genLesson, genTripMap, genMade };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLiving, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience, genInk, genLesson, genTripMap, genMade, genSource };
 }

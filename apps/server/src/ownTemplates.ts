@@ -21,6 +21,7 @@ import type { Scope } from './auth.ts';
 import type { Config } from './config.ts';
 import type { Governance, Principal } from './governance.ts';
 import { ApiError, type Store } from './store.ts';
+import { actsAsOwner } from './autonomy.ts';
 
 /** The file name in the data directory (backup.ts copies it every time: step 3b). */
 export const OWN_TEMPLATES_FILE = OWN_TEMPLATE_STORE.file;
@@ -30,7 +31,7 @@ export const ownTemplatesPath = (dataDir: string): string => path.join(dataDir, 
 export const ownTemplateApiError = (e: OwnTemplateRefusal): ApiError => new ApiError(e.status, e.code, e.message, e.details, e.hint);
 /** The first line of every own-template handler: the owner's own session, else 403 owner_required. */
 export function ownTemplateOwner(p: Principal): Principal {
-  if (!isOwnerSession(p)) throw ownTemplateApiError(ownTemplateRefusal('ownerRequired'));
+  if (!actsAsOwner(p)) throw ownTemplateApiError(ownTemplateRefusal('ownerRequired'));
   return p;
 }
 

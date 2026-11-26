@@ -188,4 +188,6 @@ export const DRAWN_SITES: readonly DrawnSite[] = [
   { file: "apps/server/src/agent/loop.ts", snippet: "t = content.filter((c) => c.type === 'text').map((c) =>", class: 'n/a', note: "an MCP content block of type text (the agent loop reads a tool answer), not a title" },
   { file: "apps/server/src/agent/loop.ts", snippet: "parse(content.find((c) => c.type === 'text')?.text ?? '", class: 'n/a', note: "an MCP content block of type text (the agent loop reads a tool answer), not a title" },
   { file: "apps/server/src/agent/loop.ts", snippet: "?? []).filter((c: any) => c.type === 'text').map((c: an", class: 'n/a', note: "an MCP content block of type text (wait_for_job reads get_job), not a title" },
+  { file: "packages/evals/src/autonomy-proof.ts", snippet: "ent as any[]).find((x) => x.type === 'text')?.text;", class: 'proof', note: "MCP tool answer text, not a clip" },
+  { file: "packages/evals/src/autonomy-proof.ts", snippet: "ent as any[]).find((x) => x.type === 'text')?.text; let", class: 'proof', note: "MCP tool answer text, not a clip" },
 ];

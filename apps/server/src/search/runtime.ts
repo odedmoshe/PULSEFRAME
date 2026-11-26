@@ -27,6 +27,7 @@ import { ScanJobs } from './indexJob.ts';
 import { removeIndexFiles, SearchIndexDb } from './indexDb.ts';
 import { TEST_DOUBLE_LABEL } from './testEmbedder.ts';
 import { probeSearchPython, SearchWorkers } from './workers.ts';
+import { actsAsOwner } from '../autonomy.ts';
 
 /** The reviewed worker script. */
 export const SEARCH_WORKER = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../tools/pf_search.py');
@@ -168,7 +169,7 @@ export function createSearchRuntime(deps: SearchRuntimeOptions): SearchRuntime &
       return { setup: s, embedder: e?.id ?? null, files: { scanned: c.scanned, stale: c.stale, of: c.of }, bytes: c.bytes, job: open ? { jobId: open.id, status: open.status } : null };
     },
     startScan: (p, projectId, body) => {
-      if (!isOwnerSession(p)) throw searchError('ownerOnly'); // the route checked it; a second net
+      if (!actsAsOwner(p)) throw searchError('ownerOnly'); // the route checked it; a second net
       return scans.start(p, projectId, body);
     },
     cancel: (jobId, actor) => scans.cancel(jobId, actor),

@@ -1,0 +1,236 @@
+{
+ "library": {
+  "licence": {
+   "lines": [
+    {
+     "assetId": "ast_song",
+     "title": "Song",
+     "text": "Song Somebody   Else (example.invalid)\nLicensed under CC BY 4.0",
+     "placement": "on_screen",
+     "group": "music"
+    },
+    {
+     "assetId": "ast_zero",
+     "title": "Zero",
+     "text": "Zero by Somebody (courtesy)",
+     "placement": "description",
+     "group": "music"
+    },
+    {
+     "assetId": "ast_bird",
+     "title": "Bird",
+     "text": "Bird by Rec",
+     "placement": "either",
+     "group": "sound"
+    },
+    {
+     "assetId": "ast_star",
+     "title": "Star",
+     "text": "Star set by Ann — CC BY 4.0 (https://example.invalid)",
+     "placement": "description",
+     "group": "picture"
+    }
+   ],
+   "onScreenMissing": [
+    {
+     "assetId": "ast_song",
+     "title": "Song",
+     "text": "Song Somebody   Else (example.invalid)\nLicensed under CC BY 4.0",
+     "placement": "on_screen",
+     "group": "music"
+    }
+   ],
+   "nonCommercial": [
+    {
+     "assetId": "ast_bird",
+     "title": "Bird"
+    }
+   ],
+   "people": [
+    {
+     "assetId": "ast_walk",
+     "title": "Walk"
+    }
+   ],
+   "credits": {
+    "descriptionText": "קרדיטים\n\nSong Somebody   Else (example.invalid)\nLicensed under CC BY 4.0\n\nZero by Somebody (courtesy)\n\nBird by Rec\n\nStar set by Ann — CC BY 4.0 (https://example.invalid)\n\nלשימוש לא מסחרי בלבד: Bird",
+    "file": null
+   }
+  },
+  "warnings": [
+   {
+    "code": "non_commercial_content",
+    "message": "this video holds library material for non-commercial use only (\"Bird\"); it may not be used commercially, and those files are never passed on in a shared archive",
+    "ids": [
+     "ast_bird"
+    ],
+    "hint": "Keep the video for non-commercial use, or replace those files."
+   },
+   {
+    "code": "credits_for_description",
+    "message": "2 credit line(s) of library files must go in the video's description: copy them from the credits (GET /api/v1/projects/{id}/credits) when you publish. A credits card at the end can also be added (add_credits_card); it is optional",
+    "ids": [
+     "ast_bird",
+     "ast_star"
+    ]
+   },
+   {
+    "code": "credit_not_on_screen",
+    "message": "1 credit(s) that the licence wants in the video itself appear in no visible title (\"Song\")",
+    "ids": [
+     "ast_song"
+    ],
+    "hint": "Add a credits card (add_credits_card), or a title of your own with the credit."
+   },
+   {
+    "code": "stock_people",
+    "message": "the video holds stock footage that shows people (\"Walk\")",
+    "ids": [
+     "ast_walk"
+    ]
+   }
+  ]
+ },
+ "instruments": {
+  "licence": {
+   "lines": [
+    {
+     "assetId": "ast_r",
+     "title": "Piano",
+     "text": "Piano samples by Nobody, CC BY 4.0",
+     "placement": "description",
+     "group": "music"
+    },
+    {
+     "assetId": "ast_r",
+     "title": "Strings",
+     "text": "Strings samples by Nobody, CC BY-NC 4.0",
+     "placement": "description",
+     "group": "music"
+    }
+   ],
+   "onScreenMissing": [],
+   "nonCommercial": [
+    {
+     "assetId": "ast_r",
+     "title": "Strings"
+    }
+   ],
+   "people": [],
+   "credits": {
+    "descriptionText": "קרדיטים\n\nPiano samples by Nobody, CC BY 4.0\n\nStrings samples by Nobody, CC BY-NC 4.0\n\nלשימוש לא מסחרי בלבד: Strings",
+    "file": null
+   }
+  },
+  "warnings": [
+   {
+    "code": "non_commercial_content",
+    "message": "this video holds library material for non-commercial use only (\"Strings\"); it may not be used commercially, and those files are never passed on in a shared archive",
+    "ids": [
+     "ast_r"
+    ],
+    "hint": "Keep the video for non-commercial use, or replace those files."
+   },
+   {
+    "code": "credits_for_description",
+    "message": "2 credit line(s) of library files must go in the video's description: copy them from the credits (GET /api/v1/projects/{id}/credits) when you publish. A credits card at the end can also be added (add_credits_card); it is optional",
+    "ids": [
+     "ast_r",
+     "ast_r"
+    ]
+   }
+  ]
+ },
+ "musicfit": {
+  "licence": {
+   "lines": [
+    {
+     "assetId": "ast_tune",
+     "title": "Tune",
+     "text": "\"Tune\" by Player, CC BY 3.0",
+     "placement": "description",
+     "group": "music",
+     "modified": "shortened"
+    },
+    {
+     "assetId": "ast_zero_fit",
+     "title": "Zero",
+     "text": "Zero by Somebody (courtesy)",
+     "placement": "description",
+     "group": "music",
+     "modified": "shortened"
+    }
+   ],
+   "onScreenMissing": [],
+   "nonCommercial": [],
+   "people": [],
+   "credits": {
+    "descriptionText": "קרדיטים\n\n\"Tune\" by Player, CC BY 3.0\n(קוצר בעורך: הוסרו תיבות מהאמצע)\n\nZero by Somebody (courtesy)\n(קוצר בעורך: הוסרו תיבות מהאמצע)",
+    "file": null
+   }
+  },
+  "warnings": [
+   {
+    "code": "credits_for_description",
+    "message": "1 credit line(s) of library files must go in the video's description: copy them from the credits (GET /api/v1/projects/{id}/credits) when you publish. A credits card at the end can also be added (add_credits_card); it is optional",
+    "ids": [
+     "ast_tune"
+    ]
+   }
+  ]
+ },
+ "derived": {
+  "licence": {
+   "lines": [
+    {
+     "assetId": "ast_bird",
+     "title": "Bird",
+     "text": "Bird by Rec",
+     "placement": "either",
+     "group": "sound"
+    },
+    {
+     "assetId": "ast_read",
+     "title": "Reading",
+     "text": "Reading by Speaker, CC BY 4.0",
+     "placement": "either",
+     "group": "sound"
+    }
+   ],
+   "onScreenMissing": [],
+   "nonCommercial": [
+    {
+     "assetId": "ast_bird",
+     "title": "Bird"
+    }
+   ],
+   "people": [],
+   "credits": {
+    "descriptionText": "קרדיטים\n\nBird by Rec\n\nReading by Speaker, CC BY 4.0\n\nלשימוש לא מסחרי בלבד: Bird",
+    "file": null
+   }
+  },
+  "warnings": [
+   {
+    "code": "non_commercial_content",
+    "message": "this video holds library material for non-commercial use only (\"Bird\"); it may not be used commercially, and those files are never passed on in a shared archive",
+    "ids": [
+     "ast_bird"
+    ],
+    "hint": "Keep the video for non-commercial use, or replace those files."
+   },
+   {
+    "code": "credits_for_description",
+    "message": "2 credit line(s) of library files must go in the video's description: copy them from the credits (GET /api/v1/projects/{id}/credits) when you publish. A credits card at the end can also be added (add_credits_card); it is optional",
+    "ids": [
+     "ast_bird",
+     "ast_read"
+    ]
+   }
+  ]
+ },
+ "plain": {
+  "licence": null,
+  "warnings": []
+ }
+}

@@ -19,6 +19,7 @@
 import { findClip, LESSON_API_REFUSALS, LESSON_OPS_BUILT, type DerivedLessonView, type LessonTxRow } from '@pulseframe/core';
 import type { Governance, Principal } from '../governance.ts';
 import { ApiError, type Store } from '../store.ts';
+import { actsAsOwner } from '../autonomy.ts';
 
 /** True once W2 has built the body below. */
 export const LESSON_SERVER_BUILT: boolean = false;
@@ -29,7 +30,7 @@ export const lessonApiError = (key: 'notBuilt' | 'ownerRequired') => new ApiErro
 /** The first checks of the derive route (complete). Throws ApiError 403 / 404 (and the project's own 403 / 404). */
 export function assertLessonCaller(store: Store, gov: Governance, principal: Principal, projectId: string, clipId: string): void {
   gov.assertMayAct(principal, projectId, 'observe');
-  if (principal.kind !== 'user') throw lessonApiError('ownerRequired'); // the owner's browser session (http.ts owner(); auth.ts makes no other user session)
+  if (!actsAsOwner(principal)) throw lessonApiError('ownerRequired'); // the owner's browser session (http.ts owner(); auth.ts makes no other user session)
   if (!findClip(store.getProject(projectId).doc, clipId)) throw new ApiError(A.clipNotFound.status, A.clipNotFound.code, A.clipNotFound.message(clipId), { clipId }, A.clipNotFound.hint);
 }
 

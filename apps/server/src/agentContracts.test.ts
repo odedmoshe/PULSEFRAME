@@ -97,6 +97,15 @@ describe('contract pieces', () => {
   });
 });
 
+describe('C8.1: a run\'s actor is unique', () => {
+  it('a grant may not take a name of the run_ prefix (agent:run_<id> is a run\'s own actor), as the assistant\'s name is reserved', () => {
+    const g = new Governance(store);
+    const owner = { actor: 'user:local', kind: 'user' as const, scopes: ['observe', 'edit'] as ('observe' | 'edit')[] };
+    expect(() => g.createGrant({ name: 'run_abcdefgh12345678', mode: 'edit' }, owner)).toThrow(expect.objectContaining({ status: 400, code: 'invalid_request' }));
+    expect(g.createGrant({ name: 'runner', mode: 'edit' }, owner).grant.name).toBe('runner');
+  });
+});
+
 describe('routes and MCP tools: honest until built', () => {
   const fill = (p: string) => p.replace(':id', pid).replace(':runId', 'run_abcdefgh').replace(':providerId', 'anthropic');
   const bodyFor = (p: string) => (p.endsWith('/agent/runs') ? { goal: 'תחתכו את השקטים' } : p.endsWith('/undo-actor') ? { actor: 'agent:local' } : p.endsWith('/models') ? { rows: [] } : {});

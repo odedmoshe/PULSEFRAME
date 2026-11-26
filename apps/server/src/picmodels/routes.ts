@@ -8,6 +8,7 @@ import { EyesProposeBodySchema, pictureModelsFor } from '@pulseframe/core';
 import { isOwnerSession } from '../assistant/contract.ts';
 import { ApiError } from '../store.ts';
 import { picmodelsError, type PicmodelsApp, type PicmodelsRouteDeps } from './contract.ts';
+import { actsAsOwner } from '../autonomy.ts';
 
 export function registerPicmodelsRoutes(app: PicmodelsApp, deps: PicmodelsRouteDeps): void {
   const { store, runtime, need } = deps;
@@ -16,12 +17,12 @@ export function registerPicmodelsRoutes(app: PicmodelsApp, deps: PicmodelsRouteD
     const p = need(c, 'observe');
     const rows = await runtime.list();
     c.header('cache-control', 'no-store');
-    return c.json({ models: pictureModelsFor(isOwnerSession(p), rows), built: rows.some((r) => r.code !== 'not_built') });
+    return c.json({ models: pictureModelsFor(actsAsOwner(p), rows), built: rows.some((r) => r.code !== 'not_built') });
   });
 
   app.post('/api/v1/projects/:id/eyes/propose', async (c) => {
     const p = need(c, 'observe');
-    if (!isOwnerSession(p)) throw picmodelsError('ownerOnly');
+    if (!actsAsOwner(p)) throw picmodelsError('ownerOnly');
     const id = c.req.param('id');
     store.getProject(id);
     let raw: unknown;

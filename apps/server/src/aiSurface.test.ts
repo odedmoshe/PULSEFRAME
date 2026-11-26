@@ -102,7 +102,10 @@ describe('translation review: the owner\'s mark, never an agent\'s', () => {
   it('no MCP tool marks a translation reviewed or downloads anything; review_translation is not callable through the generic transaction either', async () => {
     const names: string[] = (await rpc('tools/list', {})).tools.map((t: any) => t.name);
     expect(names).toEqual(expect.arrayContaining(['run_capability', 'estimate_capability', 'translate_captions', 'request_model_download']));
-    expect(names.filter((n) => /review|download/.test(n))).toEqual(['request_model_download']);
+    // autonomy (decision 2): start_model_download exists for open mode; in guarded (this suite) it refuses exactly as the REST route
+    expect(names.filter((n) => /review|download/.test(n))).toEqual(['request_model_download', 'start_model_download']);
+    const start = await tool('start_model_download', { projectId: pid, kind: 'capability', id: 'image.upscale', confirmBytes: 1 });
+    expect([start.isError, start.body.error.code]).toEqual([true, 'human_approval_required']);
     const viaTx = await tool('apply_transaction', { projectId: pid, ops: [{ op: 'review_translation', args: { variantId, review: 'reviewed' } }] });
     expect([viaTx.isError, viaTx.body.error.code]).toEqual([true, 'forbidden_op']);
     expect(store.getProject(pid).doc.variants[variantId]!.translation!.review).toBe('needed');

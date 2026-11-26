@@ -7,6 +7,7 @@ import { useEditorState } from './store.ts';
 import { RenderCacheStorage } from './RenderCacheStorage.tsx';
 import { AssistantSettings } from './commandBar/AssistantSettings.tsx';
 import { LibrarySettings } from './library/LibrarySettings.tsx';
+import { ConnectionsSection, SOURCES_UI_BUILT } from './sources/SourcesTab.tsx';
 
 const THEME_KEY = 'pf.theme';
 export const readTheme = (): 'dark' | 'light' => { try { return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark'; } catch { return 'dark'; } };
@@ -54,6 +55,8 @@ export function SettingsDialog() {
         {settingsOpen && <AssistantSettings />}
         {/* the owner's content library folder (wave 7 library track; LibrarySettings decides what each session sees) */}
         {settingsOpen && <LibrarySettings />}
+        {/* «חיבורים» (wave 8 sources, C1): the outside services' keys and the download limit; mounted only once built */}
+        {settingsOpen && SOURCES_UI_BUILT && <ConnectionsSection />}
       </div>
     </Dialog>
   );

@@ -33,6 +33,7 @@ import { libraryServiceFor, type IndexedRow, type LibraryService } from './index
 import { checkedDigest, copyChecked, isInside, openChecked, safeSegments } from './paths.ts';
 import { rasteriseRow } from './raster.ts';
 import { libraryThumb } from './thumbs.ts';
+import { actsAsOwner } from '../autonomy.ts';
 
 const AUDIO_KINDS = new Set(['music', 'sound', 'loop']);
 const assetKindOf = (k: string): 'audio' | 'image' | 'video' => (AUDIO_KINDS.has(k) ? 'audio' : k === 'video' ? 'video' : 'image');
@@ -69,7 +70,7 @@ export function registerLibraryRoutes(app: LibraryApp, deps: LibraryRouteDeps): 
   const lib = libraryServiceFor(deps.cfg);
   registered.set(store, deps);
 
-  app.get('/api/v1/library/status', async (c) => { const p = need(c, 'observe'); return c.json(await lib.status(p.kind === 'user')); });
+  app.get('/api/v1/library/status', async (c) => { const p = need(c, 'observe'); return c.json(await lib.status(actsAsOwner(p))); });
   app.put('/api/v1/library/root', async (c) => {
     libraryOwner(need(c, 'observe'));
     const b = parse(LibraryRootBodySchema, await jsonBody(c));

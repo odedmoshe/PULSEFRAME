@@ -19,6 +19,7 @@ import { peopleAccess } from './peoplePrivacy.ts';
 import { frameKeyFor, segmentEnvFor, type SegmentEnvSource } from './renderCacheEnv.ts';
 import type { SegmentStore } from './segmentStore.ts';
 import { ApiError, type Store } from './store.ts';
+import { actsAsOwner } from './autonomy.ts';
 
 export interface RenderCacheService {
   readonly store: SegmentStore;
@@ -40,7 +41,7 @@ export function createRenderCacheService(deps: { store: Store; exporter: Exporte
     store: segments,
     status: () => (deps.status ?? (() => segments.status()))(),
     clear(by) {
-      if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'only the owner can clear the render cache');
+      if (!actsAsOwner(by)) throw new ApiError(403, 'owner_required', 'only the owner can clear the render cache');
       return { ...segments.clear(), status: (deps.status ?? (() => segments.status()))() };
     },
     async plan(by, projectId, rawOptions) {

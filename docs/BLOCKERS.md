@@ -84,6 +84,16 @@ Each is built, integrated and passes its proof in this container (final regressi
 - Until then: the kit is selectable where the library is set, labelled unheard, at the placeholder gains; the product's own validation refuses a track that fails its checks.
 - **Update 2026-11-26 (later the same day): unblocked by (a).** The owner allowed drive D; the helper cloned into `D:\\PULSEFRAME-Tools\\app` (NTFS by `Get-Volume`; `fsutil` was refused without elevation and not retried), installed, and ran the check: `SUMMARY ok` (ADR-0029, evidence file). Starting gains are committed. Still open: the run with the new gains, L3 timing, and the owner listening (L5).
 
+## Unverified after this evening's merges (2026-11-26; laptop rows)
+- Made clips: sandbox, net-log channels and alpha decode are measured in the Linux container only; the owner's Windows laptop rows
+  L1–L6 of the motioncode plan remain.
+- In-editor agent: whether each provider accepts the adapters' requests (headers, `max_tokens`, images, tool calls, a probe while
+  the model thinks) is unknown until the laptop runs them with a real key typed by the owner into the connect card.
+- Sources: real Openverse, Pixabay and Wikimedia answers and their live limits, Pixabay's licence page and CDN hosts, and the
+  Windows file permissions on `connectors/keys` are unverified.
+- `proof:incremental` did not finish on the loaded machine (I14 lag 239.6 ms against 100 ms at load 25; I12 not reached): rerun
+  alone on a quiet machine or on the laptop.
+
 ## Owner decisions recorded on 2026-11-26 (not blockers; kept here because they change standing rules)
 
 - **A second door on the home network, by the owner's request.** In their own words: as there is a way to upload videos by QR, they want a way to export / download finished videos to the phone from the system by QR. Until now the only thing exposed beyond loopback was the upload-only phone drop (ADR-0023), and a review link on the home network had been rejected. The new door («לטלפון ב־QR», track `pickup` of wave 8) will let whoever holds a short-lived code read ONE finished export file, over plain HTTP on the home Wi-Fi. It is being designed and security-reviewed; nothing of it is built. Its ADR must amend ADR-0002 and ADR-0023 and say plainly what the door exposes.

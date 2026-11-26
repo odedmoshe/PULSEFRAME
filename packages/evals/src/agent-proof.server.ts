@@ -7,8 +7,8 @@
  * Fixture made here by ffmpeg: 20 s 640×360 testsrc2 with a 1 kHz tone silent over [4, 7] s and [12, 15] s, and a typed Hebrew
  * transcript set as data (no speech engine). Deleted at the end.
  * Check 6 kills a child editor (SIGKILL) during a model call and recovers the run in a new editor on the same data folder; the kill
- * during a TOOL step is apps/server/src/agentRecover.test.ts (a child process too). Check 14 needs Part 1 (open/guarded mode):
- * reported blocked until it lands.
+ * during a TOOL step is apps/server/src/agentRecover.test.ts (a child process too). 
+ * Check 14 switches the server mode itself (PUT /api/v1/autonomy as the owner); the rest run in the proofs' default mode (proof-mode.ts).
  */
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { execFileSync, spawn } from 'node:child_process';
@@ -260,7 +260,43 @@ export async function runServerChecks(check: Check): Promise<void> {
       !st.isError && g.data.run.status === 'succeeded' && !un.isError && !!un.data.transactionId && un.data.notUndone.some((x: any) => x.kind === 'export_file' && x.count === 1) && un.data.notUndone.some((x: any) => x.kind === 'money_spent') && un.data.notUndone.some((x: any) => x.kind === 'data_sent'),
       { start: st.data, status: g.data.run?.status, undo: { tx: un.data.transactionId, notUndone: un.data.notUndone, error: un.data.error } });
 
-    check('14 mode (Part 1): BLOCKED — the open/guarded mode (wt/auto-p1) is not merged into this build; the loop has its seams (stamp, modeEvents) and agentLoop.test.ts stops runs on a guarded switch with a stand-in emitter', false, { blocked: true });
+    // ---------- check 14: the run's principal is an ordinary agent under the server mode (Part 1, autonomy.ts) ----------
+    const setMode = async (mode: 'open' | 'guarded') => (await rest('/autonomy', { mode }, 'PUT')).status;
+    const p14 = await newProject('mode');
+    const born = (await rest(`/projects/${p14}/transactions`, { ops: [{ op: 'add_person', args: { name: 'נועה', birthDate: '2020-03-15', form: 'f' } }] })).body;
+    const personId = born?.results?.[0]?.output?.personId as string;
+    await rest(`/projects/${p14}/transactions`, { ops: [{ op: 'add_text', args: { text: `{name:${personId}} ({age:${personId}})`, start: T.rt(0, 1), duration: T.rt(2, 1) } }] });
+    const guarded = await setMode('guarded');
+    set([
+      { toolCalls: [{ name: 'get_summary', input: {} }] },
+      { toolCalls: [{ name: 'export_project', input: { format: 'mp4-h264-aac', scale: 0.25, quality: 'draft' } }] },
+      fin(),
+    ]);
+    const a14 = await finalRun(p14, (await startRun(p14, { goal: 'סיכום וייצוא' })).runId);
+    const t14 = a14.steps.filter((x) => x.kind === 'tool');
+    const namesOnly = /"peopleAccess":\{"access":"names"/.test(t14[0]?.tool?.resultSummary ?? '');
+    const refusedExport = t14[1]?.tool?.isError === true && t14[1]?.tool?.errorCode === 'people_scope_required';
+    let release14: () => void = () => {};
+    const gate14 = new Promise<void>((r) => { release14 = r; });
+    const open = await setMode('open');
+    set([
+      { toolCalls: [{ name: 'get_summary', input: {} }] },
+      { toolCalls: [{ name: 'get_summary', input: {} }] },
+      fin(),
+    ], async (turn) => { if (turn === 1) await gate14; });
+    const r14 = (await startRun(p14, { goal: 'סיכום' })).runId;
+    await until(async () => slot.turns, (n) => n >= 2, 30_000);
+    const switched = await setMode('guarded');
+    const stopped = await getRun(p14, r14);
+    release14();
+    let cont = { status: 0 };
+    await until(async () => (cont = await rest(`/projects/${p14}/agent/runs/${r14}/continue`, {})).status, (st) => st !== 409 || cont.status === 200, 10_000);
+    const b14 = await finalRun(p14, r14);
+    const openFull = !/"peopleAccess"/.test(b14.steps.find((x) => x.kind === 'tool')?.tool?.resultSummary ?? 'peopleAccess');
+    check('14 mode (Part 1, merged): in guarded mode the run reads people as names only and its export of an {age} title is a failed step (people_scope_required), not a crash; in open mode the same run is an open agent (full read); switching to guarded stops the open run as stopped_mode_changed and continue resumes it (C4)',
+      [guarded, open, switched].every((x) => x === 200) && a14.run.status === 'succeeded' && namesOnly && refusedExport && openFull && stopped.run.status === 'stopped_mode_changed' && stopped.run.stopReason === 'mode_changed' && cont.status === 200 && b14.run.status === 'succeeded',
+      { puts: [guarded, open, switched], guardedRun: [a14.run.status, namesOnly, t14[1]?.tool?.errorCode], openRead: openFull, stopped: [stopped.run.status, stopped.run.stopReason], continued: [cont.status, b14.run.status] });
+    await setMode('guarded');
     reader.cancel().catch(() => {});
   } finally {
     await s.close();
@@ -329,7 +365,7 @@ process.stdout.write('RUN ' + pid + ' ' + b.runId + '\\n');
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const results: { id: string; ok: boolean }[] = [];
   await runServerChecks((id, ok, detail) => { results.push({ id, ok }); console.log(`${ok ? '  ok  ' : ' FAIL '} ${id}${detail !== undefined ? `  ${JSON.stringify(detail)}` : ''}`); });
-  const failed = results.filter((r) => !r.ok && !r.id.startsWith('14 '));
-  console.log(`agent-proof.server: ${results.length - failed.length - (results.some((r) => r.id.startsWith('14 ')) ? 1 : 0)} passed, ${failed.length} failed, 14 blocked (Part 1)`);
-  process.exit(failed.length ? 1 : 2);
+  const failed = results.filter((r) => !r.ok);
+  console.log(`agent-proof.server: ${results.length - failed.length} passed, ${failed.length} failed`);
+  process.exit(failed.length ? 1 : 0);
 }

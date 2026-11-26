@@ -26,6 +26,7 @@ import { onThisDay, peopleOf, personNameKey, type Asset, type Capture, type OnTh
 import type { Principal } from './auth.ts';
 import { readCapture, type CaptureContext } from './captureMeta.ts';
 import { ApiError, type Store } from './store.ts';
+import { actsAsOwner } from './autonomy.ts';
 
 /** At most this many files are re-read in one call of readMissingCaptures. */
 export const MAX_CAPTURE_READS = 500;
@@ -40,7 +41,7 @@ const MAX_REMEMBERED = 50_000;
 /** Files of the owner's projects taken on `today`'s date in earlier years. `today` is a real WALL_DATE (the route checks it). */
 export function onThisDayFor(store: Store, p: Principal, today: string): OnThisDayItem[] {
   // it reads across every project, which no grant covers: the owner's own session only (the route refuses first; this is the second lock)
-  if (p.kind !== 'user') throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
+  if (!actsAsOwner(p)) throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
   const projects: { projectId: string; projectName: string; doc: ReturnType<Store['getProject']>['doc'] }[] = [];
   for (const row of store.listProjects()) {
     // a project that cannot be opened is left out of the card; it is not a reason to show nothing
@@ -62,7 +63,7 @@ export const MAX_PEOPLE_SUGGESTIONS = 200;
  */
 export function peopleSuggestions(store: Store, p: Principal): PersonSuggestion[] {
   // birth dates across every project, which no grant covers: the owner's own session only (the route refuses first; this is the second lock)
-  if (p.kind !== 'user') throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
+  if (!actsAsOwner(p)) throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
   const byName = new Map<string, PersonSuggestion>();
   // listProjects is newest change first, so the first project that has a name is the one that wins
   for (const row of store.listProjects()) {

@@ -13,6 +13,7 @@ import { ANIMATABLE, KeyframeSchema, MAX_TRANSFORM_KEYS, RationalTimeSchema, typ
 import { CameraMotionSchema, ClipStabiliseSchema } from './steadyContract.ts';
 import { ClipDepthSchema } from './livingContract.ts';
 import { MadeRecordSchema } from './madeContract.ts';
+import { SourceRecordSchema } from './sourcesContract.ts';
 import { AUDIENCE_MUSIC_DB_MAX, AUDIENCE_MUSIC_DB_MIN, AUDIENCE_PROFILES, AUDIENCE_RULES_VERSION, KEEP_RULES, SOUND_ROLES } from './audienceLimits.ts';
 import { MOMENTS_MAX_WINDOWS, MomentsFileSchema, MomentsMeasuredSchema, MomentWindowSchema } from './momentsContract.ts';
 import { ANGLE_KINDS, MAX_ANCHORS_PER_PIECE, MAX_ANGLES, MAX_PIECES, MAX_SPEAKERS, MAX_SYNC_CANDIDATES, SYNC_VERDICTS } from './multicamLimits.ts';
@@ -365,6 +366,8 @@ export const AssetSchema = z
         instruments: RecordedInstrumentsSchema.optional(),
         /** Present for a clip made by a page («קליפ מקוד», wave 8 motioncode; madeContract.ts MadeRecordSchema). origin is 'generated', kind 'video'. */
         made: MadeRecordSchema.optional(),
+        /** Present for a file fetched from a stock source or a direct link (wave 8 `sources`; sourcesContract.ts SourceRecordSchema): service, item, licence verbatim, credit, fetch time, hash. origin 'upload' (or 'derived' for a shortened song, which carries its one source's record). Written only by use_source_item. */
+        source: SourceRecordSchema.optional(),
       })
       .strict(),
   })

@@ -19,3 +19,6 @@ export * from './localChat.ts';
 export * from './agentModel.ts';
 export * from './agentModels.ts';
 export * from './agentScripted.ts';
+// stock sources «מאגר» (wave 8 sources): descriptors as data, the User-Agent rule, and the pure mappings of the services' answers (W2)
+export * from './connectors/sources.ts';
+export * from './connectors/map.ts';

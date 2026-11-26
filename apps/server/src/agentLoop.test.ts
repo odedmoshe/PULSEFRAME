@@ -259,7 +259,7 @@ describe('the loop (MOCK scripted model)', () => {
     await u.svc.whenIdle(id);
     u.svc.continue(OWNER, pid, id, {}); // the owner's press: a NEW call, never the lost one resent
     expect((await final(u.svc, id)).run.status).toBe('succeeded');
-  });
+  }, 30_000); // ten runs in one test: 5 s was passed under a machine load above 20 (it passed alone)
 
   it('423: a paused project makes the run wait without burning a step; resumed, it goes on (C16)', async () => {
     gov.setPaused(pid, true, OWNER);

@@ -22,7 +22,7 @@ import { markJoinHeardFor } from './routes.ts';
 import { crossfadeFrames, makeFittedSong, previewWindow, spliceSpec } from './splice.ts';
 import { abaSong, songWav, throughSong, twoToneSong, type FixtureSong } from './songs.testFixture.ts';
 
-const OWNER: Principal = { actor: 'user:owner', kind: 'user', scopes: ['observe', 'edit'] };
+const OWNER: Principal = { actor: 'user:local', kind: 'user', scopes: ['observe', 'edit'] };
 let dir: string, store: Store, gov: Governance;
 beforeAll(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-musicfit-splice-')); store = new Store(dir); gov = new Governance(store); });
 afterAll(() => { store.close(); fs.rmSync(dir, { recursive: true, force: true }); });
@@ -87,7 +87,7 @@ describe('the made file', () => {
     const song = abaSong();
     const p = project(song);
     const removal = { from: T.rt(8, 1), to: T.rt(40, 1) };
-    const made = await makeFittedSong(store, p.doc(), p.assetId, T.ZERO, removal, 'user:owner');
+    const made = await makeFittedSong(store, p.doc(), p.assetId, T.ZERO, removal, 'user:local');
     const got = readWavSamples(fs.readFileSync(store.blobPath(made.asset.contentHash)));
     const f = 8 * 48000, t = 40 * 48000, e = 28 * 96000;
     expect(got.length).toBe(2 * (e - (t - f)));
@@ -100,18 +100,18 @@ describe('the made file', () => {
     const mapped = song.beats.filter((b) => T.lt(b, removal.from) || !T.lt(b, removal.to)).map((b) => (T.lt(b, removal.from) ? b : T.sub(b, T.rt(32, 1)))).filter((b) => T.lt(b, made.asset.duration));
     expect(made.grid.beats.length).toBe(mapped.length);
     expect(made.grid.beats.every((b, i) => T.eq(b, mapped[i]!))).toBe(true);
-    const r = store.commit({ projectId: p.pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'add_fitted_music', args: { asset: made.asset, grid: made.grid, place: { start: T.ZERO } } }] });
+    const r = store.commit({ projectId: p.pid, actor: 'user:local', allowInternal: true, ops: [{ op: 'add_fitted_music', args: { asset: made.asset, grid: made.grid, place: { start: T.ZERO } } }] });
     expect(r.results[0]!.output).toMatchObject({ deduplicated: false, analysisAttached: true });
     expect(validateProject(p.doc())).toEqual([]);
     // the same request makes the same bytes
-    const again = await makeFittedSong(store, p.doc(), p.assetId, T.ZERO, removal, 'user:owner');
+    const again = await makeFittedSong(store, p.doc(), p.assetId, T.ZERO, removal, 'user:local');
     expect(again.asset.contentHash).toBe(made.asset.contentHash);
   }, 60_000);
   it('two-tone: the crossfade samples equal the closed form of a linear equal-gain crossfade ending on the join', async () => {
     const song = twoToneSong();
     const p = project(song);
     const removal = { from: T.rt(4, 1), to: T.rt(20, 1) }; // bars 2 → 10: a 440 Hz side joined to a 660 Hz side
-    const made = await makeFittedSong(store, p.doc(), p.assetId, T.ZERO, removal, 'user:owner');
+    const made = await makeFittedSong(store, p.doc(), p.assetId, T.ZERO, removal, 'user:local');
     const got = readWavSamples(fs.readFileSync(store.blobPath(made.asset.contentHash)));
     const X = crossfadeFrames(song.beats, removal.to), j = 4 * 48000, t = 20 * 48000;
     expect(X).toBe(2880); // a quarter beat is 125 ms; at most 60 ms
@@ -131,7 +131,7 @@ describe('the made file', () => {
     await expect(makeFittedSong(store, p.doc(), p.assetId, T.ZERO, { from: T.rt(5, 1), to: T.rt(20, 1) }, 'x')).rejects.toMatchObject({ status: 409, code: 'fit_stale' });
     // a file that is itself a shortened song (the licence rule's first case): refused before anything is made
     const made = await makeFittedSong(store, p.doc(), p.assetId, T.ZERO, { from: T.rt(4, 1), to: T.rt(20, 1) }, 'x');
-    const id = store.commit({ projectId: p.pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'add_fitted_music', args: { asset: made.asset, grid: made.grid } }] }).results[0]!.output!.assetId as string;
+    const id = store.commit({ projectId: p.pid, actor: 'user:local', allowInternal: true, ops: [{ op: 'add_fitted_music', args: { asset: made.asset, grid: made.grid } }] }).results[0]!.output!.assetId as string;
     const blobs = fs.readdirSync(path.join(dir, 'blobs'), { recursive: true }).length;
     await expect(makeFittedSong(store, p.doc(), id, T.ZERO, { from: T.rt(2, 1), to: T.rt(6, 1) }, 'x')).rejects.toMatchObject({ status: 409, code: 'incompatible', message: 'this music is already a shortened copy' });
     expect(fs.readdirSync(path.join(dir, 'blobs'), { recursive: true }).length).toBe(blobs);
@@ -143,7 +143,7 @@ describe('join.wav and the heard mark', () => {
     const song = abaSong();
     const p = project(song);
     const removal = { from: T.rt(8, 1), to: T.rt(40, 1) };
-    const made = await makeFittedSong(store, p.doc(), p.assetId, T.ZERO, removal, 'user:owner');
+    const made = await makeFittedSong(store, p.doc(), p.assetId, T.ZERO, removal, 'user:local');
     const file = readWavSamples(fs.readFileSync(store.blobPath(made.asset.contentHash)));
     const q = { assetId: p.assetId, from: JSON.stringify(removal.from), to: JSON.stringify(removal.to) };
     const wav = readWavSamples(await renderJoinPreview(store, p.pid, q));
@@ -157,13 +157,13 @@ describe('join.wav and the heard mark', () => {
   it('the owner\'s heard mark commits mark_join_heard as one undoable revision; a file that is not shortened is refused', async () => {
     const song = twoToneSong();
     const p = project(song);
-    const made = await makeFittedSong(store, p.doc(), p.assetId, T.ZERO, { from: T.rt(4, 1), to: T.rt(20, 1) }, 'user:owner');
-    const id = store.commit({ projectId: p.pid, actor: 'user:owner', allowInternal: true, ops: [{ op: 'add_fitted_music', args: { asset: made.asset, grid: made.grid } }] }).results[0]!.output!.assetId as string;
+    const made = await makeFittedSong(store, p.doc(), p.assetId, T.ZERO, { from: T.rt(4, 1), to: T.rt(20, 1) }, 'user:local');
+    const id = store.commit({ projectId: p.pid, actor: 'user:local', allowInternal: true, ops: [{ op: 'add_fitted_music', args: { asset: made.asset, grid: made.grid } }] }).results[0]!.output!.assetId as string;
     const before = store.getProject(p.pid).revision;
     markJoinHeardFor(store, gov, OWNER, p.pid, id, true);
     expect(store.getProject(p.pid).revision).toBe(before + 1);
-    expect(p.doc().assets[id]!.provenance.fitted!.heard).toMatchObject({ by: 'user:owner' });
-    store.undo(p.pid, 'user:owner', 'undo');
+    expect(p.doc().assets[id]!.provenance.fitted!.heard).toMatchObject({ by: 'user:local' });
+    store.undo(p.pid, 'user:local', 'undo');
     expect(p.doc().assets[id]!.provenance.fitted!.heard).toBeUndefined();
     let err: unknown;
     try { commitJoinHeard(gov, OWNER, p.pid, p.assetId, true); } catch (e) { err = e; }

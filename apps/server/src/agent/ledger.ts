@@ -5,19 +5,20 @@
  * (counted against the budget) until the owner releases it.
  *
  * Which ledger group a call spends from (C13): the principal's own grant when it carries a budget (> 0), else the owner-wide group
- * `open-agents` (Part 1's OPEN_AGENTS_LEDGER, autonomy.ts; the same string here until the integrator imports it). The owner-wide
+ * `open-agents` (Part 1's OPEN_AGENTS_LEDGER, autonomy.ts). The owner-wide
  * budget (Part 1's AutonomySettings.agentBudgetCents; null = no limit) is checked at reservation against settled + held rows.
  *
  * The bound reserved is an ESTIMATE (a heuristic, labelled): input tokens ≈ the request's JSON characters / 4, output = the turn's
  * maxOutputTokens, at the model row's prices; 0 when the row has no prices (the run then counts tokens).
  */
 import { costCents, type AgentModelRow, type AgentProviderErrorCode } from '@pulseframe/providers';
+import { OPEN_AGENTS_LEDGER } from '../autonomy.ts';
 import type { Principal } from '../governance.ts';
 import { ApiError, type Store } from '../store.ts';
 import { modelCallLedgerId } from './contract.ts';
 
-/** TODO(integrator, Part 1): import OPEN_AGENTS_LEDGER from '../autonomy.ts' instead of this copy of its value. */
-export const OPEN_AGENTS_GROUP = 'open-agents';
+/** Part 1's owner-wide group (autonomy.ts OPEN_AGENTS_LEDGER): Governance.reserveOpen and the run's model calls spend from the same rows. */
+export const OPEN_AGENTS_GROUP = OPEN_AGENTS_LEDGER;
 const now = () => new Date().toISOString();
 
 /** The heuristic bound of one call in cents (see the file header); 0 when unpriced. */

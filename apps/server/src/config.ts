@@ -2,6 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { DEFAULT_SERVER_MODE, parseMode, type ServerMode } from './autonomy-mode.ts';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 export interface Config {
   host: string;
@@ -28,6 +29,11 @@ export interface Config {
    * which writes <dataDir>/library.json (apps/server/src/library/contract.ts LIBRARY_CONFIG_FILE); the environment wins when both exist.
    */
   libraryDir?: string | null;
+  /**
+   * The download limit of stock sources and link import in bytes (wave 8 sources; PF_SOURCES_MAX_BYTES). Wins over the setting in
+   * <dataDir>/connectors.json; null/absent = the setting, else the upload limit. Never above maxUploadBytes (core sourcesMaxBytes, C6).
+   */
+  sourcesMaxBytes?: number | null;
   /** Ceiling for everything in the data directory (media, derivatives, exports, database), in bytes; 0 = no ceiling (the default). New uploads and exports are refused once it is reached. */
   maxStorageBytes: number;
   /**
@@ -36,6 +42,10 @@ export interface Config {
    * (the convergence test and the soak do), and a default limit throttled them. The owner's browser session is never limited.
    */
   agentRequestsPerMinute: number;
+  /** Autonomy (autonomy.ts): 'open' (default) or 'guarded' (today's behaviour). From PF_MODE; the owner's stored switch otherwise. */
+  mode: ServerMode;
+  /** True when PF_MODE set the mode (it then wins over the owner's stored switch at start-up). */
+  modeFromEnv: boolean;
   /** Add `Secure` to the owner session cookie (set when the server is reached through HTTPS, i.e. behind a TLS-terminating proxy). Off by default: the local profile is plain HTTP on loopback. */
   secureCookie: boolean;
   /** Directory for automatic backups (outside the data directory); null = automatic backups off (the default). */
@@ -149,8 +159,13 @@ export function loadConfig(env = process.env): Config {
     modelHosts: env.PF_MODEL_HOSTS !== undefined ? env.PF_MODEL_HOSTS.split(',').filter(Boolean) : [...DEFAULT_MODEL_HOSTS],
     assistantHosts: (env.PF_ASSISTANT_HOSTS ?? '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean),
     libraryDir: env.PF_LIBRARY_DIR ? path.resolve(env.PF_LIBRARY_DIR) : null,
+    sourcesMaxBytes: env.PF_SOURCES_MAX_BYTES && Number(env.PF_SOURCES_MAX_BYTES) > 0 ? Math.floor(Number(env.PF_SOURCES_MAX_BYTES)) : null,
     maxStorageBytes: Math.max(0, Number(env.PF_MAX_STORAGE_BYTES ?? 0)) || 0,
     agentRequestsPerMinute: Math.max(0, Number(env.PF_AGENT_RPM ?? 0)) || 0,
+    // `loadConfig({})` (test and proof harnesses) also reads PF_MODE from the process, and ONLY that variable: vitest.config.ts
+    // and the proof scripts set PF_MODE=guarded, so existing suites keep today's behaviour unless a test asks for open (C14).
+    mode: parseMode(env.PF_MODE) ?? parseMode(process.env.PF_MODE) ?? DEFAULT_SERVER_MODE,
+    modeFromEnv: parseMode(env.PF_MODE) !== undefined || parseMode(process.env.PF_MODE) !== undefined,
     secureCookie: env.PF_SECURE_COOKIE === '1',
     backupDir: env.PF_BACKUP_DIR ? path.resolve(env.PF_BACKUP_DIR) : null,
     backupEveryHours: Math.max(0, Number(env.PF_BACKUP_EVERY_HOURS ?? 24)) || 0,

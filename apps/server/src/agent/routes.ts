@@ -14,7 +14,7 @@ import type { Context, Hono } from 'hono';
 import { z } from 'zod';
 import { AGENT_PROVIDER_PRESETS, AgentModelTableSchema } from '@pulseframe/providers';
 import { AGENT_REFUSAL_CODES, AgentContinueBodySchema, AgentStartBodySchema, UndoActorBodySchema } from '@pulseframe/core';
-import { isOwnerSession } from '../assistant/contract.ts';
+import { isOwnerFloor } from '../autonomy.ts';
 import type { Scope } from '../auth.ts';
 import type { Governance, Principal } from '../governance.ts';
 import { ApiError, type Store } from '../store.ts';
@@ -28,9 +28,9 @@ export const ProviderSettingsBodySchema = z.object({ baseUrl: z.string().min(1).
 export type AgentEnv = { Variables: { principal: Principal } };
 export interface AgentRouteDeps { store: Store; gov: Governance; need: (c: Context<AgentEnv>, scope: Scope) => Principal; /** read per request: mcp.ts agentService() (W1's service once index.ts binds it, else the not-built one) */ service: () => AgentRunService }
 
-/** The owner floor of the provider routes (Part 1: replaced by isOwnerFloor). */
+/** The owner floor of the provider routes (autonomy.ts FLOOR_SITES, C9b): a provider's key and address, in both modes. */
 export function agentOwnerFloor(p: Principal): Principal {
-  if (!isOwnerSession(p)) throw new ApiError(AGENT_REFUSAL_CODES.ownerRequired.status, AGENT_REFUSAL_CODES.ownerRequired.code, 'a model provider\'s key and address are set from the owner\'s own editor window', {}, 'Open the editor as the owner and connect the provider in the «סוכן» tab.');
+  if (!isOwnerFloor(p)) throw new ApiError(AGENT_REFUSAL_CODES.ownerRequired.status, AGENT_REFUSAL_CODES.ownerRequired.code, 'a model provider\'s key and address are set from the owner\'s own editor window', {}, 'Open the editor as the owner and connect the provider in the «סוכן» tab.');
   return p;
 }
 const parse = async <S extends z.ZodType>(c: Context<AgentEnv>, schema: S): Promise<z.infer<S>> => {

@@ -31,6 +31,7 @@ import { AGENT_LIMITS, AGENT_REFUSAL_CODES, AGENT_RUN_CONTINUABLE, AGENT_RUN_FIN
 import { AgentProviderError, costCents, type AgentImage, type AgentMessage, type AgentModelAdapter, type AgentToolCall, type AgentToolSpec, type AgentTurnRequest } from '@pulseframe/providers';
 import { createHash } from 'node:crypto';
 import type { z } from 'zod';
+import { actsAsOwner as actsAsOwnerPolicy } from '../autonomy.ts';
 import type { Governance, Principal } from '../governance.ts';
 import { forPrincipal, mayHoldPeople, peopleAccess, scrubPeople } from '../peoplePrivacy.ts';
 import { ApiError, type Store } from '../store.ts';
@@ -72,13 +73,13 @@ export interface AgentServiceDeps {
   /** TEST and proof seam (contract.ts): an adapter per family replaces the resolved one (the MOCK scripted model). */
   adapters?: AgentAdapters;
   mode?: () => ServerMode;
-  /** Part 1's stamp. TODO(integrator, Part 1): `(p) => stampOpen(p, autonomy.mode)` from '../autonomy.ts'; identity until then. */
+  /** Part 1's stamp: index.ts passes `(p) => stampOpen(p, autonomy.mode)` (autonomy.ts); identity when omitted (tests). */
   stamp?: (p: Principal) => Principal;
-  /** Part 1's policy predicate. TODO(integrator, Part 1): actsAsOwner from '../autonomy.ts'; `p.kind === 'user'` until then. */
+  /** Part 1's policy predicate (autonomy.ts actsAsOwner, also the default). */
   actsAsOwner?: (p: Principal) => boolean;
-  /** Part 1's mode event (AutonomySettings emits 'mode' {mode, before}). TODO(integrator, Part 1): pass the AutonomySettings object. */
+  /** Part 1's mode event (AutonomySettings emits 'mode' {mode, before}): index.ts passes the AutonomySettings object. */
   modeEvents?: { on(e: 'mode', fn: (m: { mode: ServerMode; before: ServerMode }) => void): unknown; off(e: 'mode', fn: (m: { mode: ServerMode; before: ServerMode }) => void): unknown };
-  /** Part 1's owner-wide agent budget in cents (AutonomySettings.agentBudgetCents; null = none). TODO(integrator, Part 1). */
+  /** Part 1's owner-wide agent budget in cents (AutonomySettings.agentBudgetCents; null = none): index.ts passes it. */
   ownerBudgetCents?: () => number | null;
   /** TEST seam: waits (rate limits, retries) without real time. */
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
@@ -110,7 +111,7 @@ export function createAgentService(deps: AgentServiceDeps): AgentRunService & { 
   const { store, gov } = deps;
   const runs = new RunRepo(store);
   const stamp = deps.stamp ?? ((p: Principal) => p);
-  const actsAsOwner = deps.actsAsOwner ?? ((p: Principal) => p.kind === 'user');
+  const actsAsOwner = deps.actsAsOwner ?? actsAsOwnerPolicy;
   const sleep = deps.sleep ?? realSleep;
   const ctls = new Map<string, RunCtl>();
   let stopping = false;

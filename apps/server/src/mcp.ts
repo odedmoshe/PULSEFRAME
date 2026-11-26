@@ -18,7 +18,7 @@ import { measureClipLoudness } from './clipLoudness.ts';
 import { Governance } from './governance.ts';
 import type { Presence } from './presence.ts';
 import { describeMoment } from '@pulseframe/engine';
-import { addElement, ElementBody, addSfx, packSuggestions, assertMayCancel, assertMayTakeJobOutput, analysisViewOf, analyzeAsset, cancelAnalysisJob, startAnalysisJob, startMeasurementJob, AnalyzeBody, catalog, exportCaptions, findSilences, findFillerWords, FillerBody, jobViewFor, programmeLoudness, requestModelDownload, RunBody, runRequestOf, SfxBody, SilenceBody, ExportBatchBody, startExportBatch } from './http.ts';
+import { addElement, ElementBody, addSfx, packSuggestions, assertMayCancel, assertMayTakeJobOutput, analysisViewOf, analyzeAsset, cancelAnalysisJob, startAnalysisJob, startMeasurementJob, AnalyzeBody, catalog, exportCaptions, findSilences, findFillerWords, FillerBody, jobViewFor, programmeLoudness, requestModelDownload, startModelDownloadFor, RunBody, runRequestOf, SfxBody, SilenceBody, ExportBatchBody, startExportBatch } from './http.ts';
 import { applyShorts, cachedShortCandidates, planReframeFor, planShortsFor, shortsApiError, withShortsErrors } from './shorts.ts';
 import { measureVoiceCheck, VoiceMeasureBody } from './voiceClean.ts';
 import { addMusic, MusicBody, musicOptionsFor, musicQueue } from './music.ts';
@@ -39,6 +39,8 @@ import { creditsFor } from './library/credits.ts';
 import { useLibraryItemFor } from './library/routes.ts';
 import { MadeRenderRequestSchema } from '@pulseframe/core';
 import { madeError } from './made/contract.ts';
+import { SOURCE_JOB_TYPE, SourceImportBodySchema, SourceLinkBodySchema, SourceSearchQuerySchema, SEARCHABLE_SOURCES } from '@pulseframe/core';
+import { notBuiltSourcesRuntime, type SourcesRuntime } from './sources/contract.ts';
 import { FindQuerySchema } from '@pulseframe/core';
 import { findTextFor } from './craft/findText.ts';
 import { pearlsView } from './pearls.ts';
@@ -57,13 +59,20 @@ import type { AssistantJobControls } from './assistant/routes.ts';
 import { proposalsFor } from './assistant/visibility.ts';
 import { notBuiltRuntime, SEARCH_INDEX_JOB_TYPE, type SearchRuntime } from './search/contract.ts';
 import { findInFootageFor } from './search/routes.ts';
+import { actsAsOwner, OPEN_AGENTS_LEDGER, ownerKeeps, type AutonomySettings } from './autonomy.ts';
+import { RenameVersionBodySchema, RestoreVersionBodySchema, SaveVersionBodySchema } from '@pulseframe/core';
+import { mayWriteVersions } from './craft/contract.ts';
+import { deleteVersion, listVersions, renameVersion, restoreVersion, saveVersion } from './craft/versions.ts';
+import { collectGarbage, storageReport } from './storage.ts';
+import { deriveLessonFor } from './lessons/routes.ts';
 
 export const SERVER_INFO = { name: 'pulseframe-studio', version: '0.0.0' };
 
 /** `derivatives` lets tracking jobs read an asset's editing proxy; without it they read the stored media. */
-export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, presence: Presence, governance?: Governance, speech?: Speech, derivatives?: Derivatives, extras: { imports?: ImportQueue; renderCache?: RenderCacheService; /** picture search (wave 7 search track; search/runtime.ts); index.ts always passes the built runtime; absent (a test host) = the not-built runtime */ search?: SearchRuntime } = {}) {
+export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, presence: Presence, governance?: Governance, speech?: Speech, derivatives?: Derivatives, extras: { /** the server mode (autonomy.ts): a switch ends non-owner listen streams */ autonomy?: AutonomySettings; imports?: ImportQueue; renderCache?: RenderCacheService; /** picture search (wave 7 search track; search/runtime.ts); index.ts always passes the built runtime; absent (a test host) = the not-built runtime */ search?: SearchRuntime; /** «מאגר» (wave 8 sources; sources/contract.ts): index.ts passes W2's runtime; absent = the not-built runtime (501 sources_not_built) */ sources?: SourcesRuntime } = {}) {
   const gov = governance ?? new Governance(store);
   const search = extras.search ?? notBuiltRuntime();
+  const sources = extras.sources ?? notBuiltSourcesRuntime;
   /**
    * The assistant's job controls (ADR-0027), handed over by createApp once it has made them (bindAssistant below): cancel_job
    * cancels an assistant.propose job through the very handler POST /jobs/:jobId/cancel calls. Null only for an MCP endpoint
@@ -190,6 +199,15 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
       run('edit', () => { read(projectId); throw madeError('notBuilt'); }));
     server.registerTool('view_made_clip', { description: 'The report of a «קליפ מקוד» render (status, stage, frame progress, the checks with their numbers, warnings, the failure with its next step) and, once it succeeded, three stills (first, middle, last frame) as images, to judge the design and draw again. Your own renders, or any for the owner.', inputSchema: z.object({ projectId: pid, jobId: z.string() }), annotations: ro }, ({ projectId }) =>
       run('observe', () => { read(projectId); throw madeError('notBuilt'); }));
+    // «מאגר» / «ייבוא מקישור» (wave 8 sources; sources/contract.ts SOURCES_MCP_TOOLS): one handler with REST each (the runtime); 501 sources_not_built until W2
+    server.registerTool('list_sources', { description: 'The stock sources this editor can search (Openverse: photos, illustrations, music, sound effects, no key; Pixabay: video, photos, illustrations, the owner\'s key; Wikimedia Commons: photos, video, sound, with the contact line the owner typed), each with its state (ready, needs_key, needs_contact), the searches left in the service\'s current window as counted here, and the download limit. Never a key. Read-only.', inputSchema: z.object({}), annotations: ro }, () =>
+      run('observe', () => sources.list(principal)));
+    server.registerTool('search_sources', { description: 'Search a stock source. q: plain words for the picture or sound wanted; the words are sent to the chosen service (nothing else about the project is). Rows carry title, author, length, size, the licence as the service names it with its warnings (no-derivatives, share-alike, unknown, non-commercial: warnings quoting the licence, never refusals), a credit preview, and an itemId for import_source. Answers are kept in memory (Pixabay 24 hours, as its terms ask). Read-only.', inputSchema: z.object({ provider: z.enum(SEARCHABLE_SOURCES), ...SourceSearchQuerySchema.shape }), annotations: ro }, ({ provider, ...q }) =>
+      run('observe', () => sources.search(principal, provider, SourceSearchQuerySchema.parse(q))));
+    server.registerTool('import_source', { description: 'Import a search result into the project as a durable job (source_fetch: download, import, use_source_item with the source record — service, item, licence verbatim, credit, fetch time, hash — and, with place, add_clip at that frame-aligned time), committed as you; wait with get_job, stop with cancel_job. Licence findings come back as warnings, never refusals. idempotencyKey makes a repeat return the first job.', inputSchema: z.object({ projectId: pid, ...SourceImportBodySchema.shape }) }, ({ projectId, ...b }) =>
+      run('edit', () => { read(projectId); gov.assertMayAct(principal, projectId, 'job'); return sources.importItem(principal, projectId, SourceImportBodySchema.parse(b)); }));
+    server.registerTool('import_from_link', { description: 'Import a file from a direct http(s) link (a Dropbox share link too) as a durable job (source_fetch), committed as you; the link must lead to a video, sound or picture file. Links to this computer, its own network doors or link-local addresses are refused (link_address_refused); home-network addresses work with a warning. Video-site pages are not files (download_not_media). The link is kept out of the job row and logs.', inputSchema: z.object({ projectId: pid, ...SourceLinkBodySchema.shape }) }, ({ projectId, ...b }) =>
+      run('edit', () => { read(projectId); gov.assertMayAct(principal, projectId, 'job'); return sources.importLink(principal, projectId, SourceLinkBodySchema.parse(b)); }));
     server.registerTool('perform_take', { description: 'Record a performance take (perform mode): pad presses (timeline seconds, pads 0-7) with the pad bank (built-in moves: adjustment hits, zoom punch, sounds, titles, stickers; catalogue ids, never asset ids), the project assets each sound or sticker pad resolved to, and the snap settings (snap off/beat/half, tempo, strength). The server quantises and plans the take with fixed rules (no model) and commits it as ONE undoable step; a hit that would change light faster than three times a second, or needs what is missing, is left out and its chip says why. dryRun plans without changing anything (observe). Credentials in propose mode are refused. Answers 501 take_not_built while this build has no planner; 409 take_empty when no tap could be kept.', inputSchema: z.object({ projectId: pid, ...TakeRequestSchema.shape }) }, ({ projectId, ...b }) =>
       run('observe', () => { read(projectId); return takeFor(store, gov, principal, projectId, TakeRequestSchema.parse(b)); }));
     // the content library on disk (wave 7 library track): use an item by its catalogue key, and read the credits a sequence needs.
@@ -247,8 +265,8 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
         for (const f of frames) content.push({ type: 'image' as const, data: (await exporter.renderStill(doc, p.revision, f, 0.25)).toString('base64'), mimeType: 'image/png' });
         return { content };
       }));
-    server.registerTool('get_controls', { description: 'Your own permission mode and limits on this project, whether the owner has paused agents, and what you may read about its people (names = ids and names only; full = also birth dates and the ages titles show). The money here (budgetCents, spentCents, reservedCents) is your OWN grant\'s ledger, so you can tell whether paid work can start. The in-editor language assistant\'s spending, limits, prices, service host and model are the owner\'s and are read by no agent credential; GET /api/v1/assistant/status tells you only whether it is connected.', inputSchema: z.object({ projectId: pid }), annotations: ro }, ({ projectId }) =>
-      run('observe', () => (read(projectId), { projectId, actor: principal.actor, mode: principal.mode ?? (principal.scopes.includes('edit') ? 'edit' : 'observe'), agentsPaused: gov.isPaused(projectId), people: peopleAccess(principal), limits: principal.grant ? { projectIds: principal.grant.projectIds, trackIds: principal.grant.trackIds, range: principal.grant.range, budgetCents: principal.grant.budgetCents, ...gov.spend(principal.grant.id), expiresAt: principal.grant.expiresAt } : null })));
+    server.registerTool('get_controls', { description: 'Your own permission mode and limits on this project (in open server mode, serverMode "open" and actsAsOwner true: you may do what the owner\'s own window may, people full), whether the owner has paused agents, and what you may read about its people (names = ids and names only; full = also birth dates and the ages titles show). The money here (budgetCents, spentCents, reservedCents) is your OWN grant\'s ledger, so you can tell whether paid work can start. The in-editor language assistant\'s spending, limits, prices, service host and model are the owner\'s and are read by no agent credential; GET /api/v1/assistant/status tells you only whether it is connected.', inputSchema: z.object({ projectId: pid }), annotations: ro }, ({ projectId }) =>
+      run('observe', () => (read(projectId), { projectId, actor: principal.actor, mode: principal.mode ?? (principal.scopes.includes('edit') ? 'edit' : 'observe'), agentsPaused: gov.isPaused(projectId), people: peopleAccess(principal), ...(principal.open && actsAsOwner(principal) ? { serverMode: 'open', actsAsOwner: true, agentBudgetCents: extras.autonomy?.agentBudgetCents ?? null, agentsSpend: gov.spend(OPEN_AGENTS_LEDGER) } : {}), limits: principal.grant ? { projectIds: principal.grant.projectIds, trackIds: principal.grant.trackIds, range: principal.grant.range, budgetCents: principal.grant.budgetCents, ...gov.spend(principal.grant.id), expiresAt: principal.grant.expiresAt } : null })));
     server.registerTool('set_view', { description: 'Show collaborators where you are looking: your playhead frame and selected clip ids appear in the editor as a labelled ghost. Transient; does not edit the project and never moves the human\'s own playhead unless they chose to follow you.', inputSchema: z.object({ projectId: pid, frame: z.number().int().min(0).optional(), selection: z.array(z.string()).max(200).optional(), label: z.string().max(80).optional().describe('Short note about what you are doing') }), annotations: ro }, ({ projectId, frame, selection, label }) =>
       run('observe', () => { read(projectId); return presence.update(projectId, { sessionId: 'mcp', actor: principal.actor, kind: principal.kind, frame: frame ?? null, selection: selection ?? [], label: label ?? null }); }));
     server.registerTool(
@@ -337,6 +355,30 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
       }));
     server.registerTool('request_model_download', { description: 'Ask the project owner to approve downloading a capability\'s missing model files. It only creates a pending approval bound to the exact byte count and file hashes shown by list_capabilities; nothing is downloaded until the owner approves it in the editor. Agents cannot start a download themselves.', inputSchema: z.object({ projectId: pid, capabilityId: z.string() }) }, ({ projectId, capabilityId }) =>
       run('observe', async () => ({ approval: await requestModelDownload(capabilities, gov, principal, projectId, capabilityId) })));
+    // ---- autonomy (autonomy.ts, decision 2): MCP tools for actions that were the owner's window's only. Each calls the same
+    // server function its REST route calls, so the gate is one authority: in guarded mode an agent gets the route's refusal.
+    server.registerTool('start_model_download', { description: 'Download a capability\'s or a speech model\'s missing files now, for the exact missing byte count list_capabilities (or get_speech_status) shows (REST …/models/download). Files are checked against their pinned SHA-256 and the disk margin is kept. In open server mode an editing agent may start it; in guarded mode only the owner\'s own session may (use request_model_download there).', inputSchema: z.object({ projectId: pid, kind: z.enum(['capability', 'speech']).describe('capability = a ComfyUI/local tool\'s model files; speech = a speech recognition model'), id: z.string().describe('The capability id, or the speech model id'), confirmBytes: z.number().int().positive().describe('The exact missing byte count shown') }) }, ({ projectId, kind, id, confirmBytes }) =>
+      run('edit', async () => { gov.assertMayAct(principal, projectId, 'job'); if (!speech) throw new ApiError(503, 'speech_not_ready', 'the speech service is not running in this server'); const job = await startModelDownloadFor({ capabilities, speech }, principal, projectId, kind, id, confirmBytes); return { jobId: job.id, status: job.status, type: job.type }; }));
+    server.registerTool('get_speech_engine', { description: 'The speech engine install «התקנת מנוע הדיבור»: state, what an install downloads (bytes) and where (REST GET /speech/engine). Open server mode: any editing agent; guarded: the owner\'s own session only.', inputSchema: z.object({}), annotations: ro }, () =>
+      run('observe', async () => { if (!speech) throw new ApiError(503, 'speech_not_ready', 'the speech service is not running in this server'); speech.engineInstall.assertOwner(principal); return speech.engineInstall.view(principal); }));
+    server.registerTool('install_speech_engine', { description: 'Install the speech engine into the data directory as a durable job, for the exact byte count get_speech_engine shows (REST POST …/speech/engine/install); follow it with get_job. Then transcribe_asset works. Open server mode: any editing agent; guarded: the owner\'s own session only.', inputSchema: z.object({ projectId: pid, confirmBytes: z.number().int().positive(), replace: z.boolean().optional() }) }, ({ projectId, confirmBytes, replace }) =>
+      run('observe', async () => { if (!speech) throw new ApiError(503, 'speech_not_ready', 'the speech service is not running in this server'); speech.engineInstall.assertOwner(principal); read(projectId); const job = await speech.engineInstall.start(principal, projectId, confirmBytes, replace ?? false); return { jobId: job.id, status: job.status, type: job.type }; }));
+    server.registerTool('list_versions', { description: 'Saved versions «גרסאות שמורות» of a project (never the documents themselves) (REST GET …/versions).', inputSchema: z.object({ projectId: pid }), annotations: ro }, ({ projectId }) =>
+      run('observe', () => { read(projectId); return { versions: listVersions(store, principal, projectId) }; }));
+    server.registerTool('save_version', { description: 'Save the project as it is now as a named version (REST POST …/versions). Not an edit: the timeline does not change.', inputSchema: z.object({ projectId: pid, ...SaveVersionBodySchema.shape }) }, ({ projectId, name }) =>
+      run('observe', () => { read(projectId); mayWriteVersions(gov, principal, projectId); return { version: saveVersion(store, gov, principal, projectId, name) }; }));
+    server.registerTool('restore_version', { description: 'Bring a saved version back as ONE undoable edit (REST POST …/versions/{versionId}/restore).', inputSchema: z.object({ projectId: pid, versionId: z.string(), ...RestoreVersionBodySchema.shape }) }, ({ projectId, versionId, expectRevision, confirmPrivacy }) =>
+      run('observe', () => { read(projectId); mayWriteVersions(gov, principal, projectId); return restoreVersion(store, gov, principal, projectId, versionId, { ...(expectRevision !== undefined ? { expectRevision } : {}), ...(confirmPrivacy !== undefined ? { confirmPrivacy } : {}) }); }));
+    server.registerTool('rename_version', { description: 'Rename a saved version (REST PUT …/versions/{versionId}). Open server mode: any editing agent; guarded: the owner\'s own session only.', inputSchema: z.object({ projectId: pid, versionId: z.string(), ...RenameVersionBodySchema.shape }) }, ({ projectId, versionId, name }) =>
+      run('edit', () => { read(projectId); return { version: renameVersion(store, principal, projectId, versionId, name) }; }));
+    server.registerTool('delete_version', { description: 'Delete a saved version (REST DELETE …/versions/{versionId}). Not an edit and not undoable: the copy is gone. Open server mode: any editing agent; guarded: the owner\'s own session only.', inputSchema: z.object({ projectId: pid, versionId: z.string() }) }, ({ projectId, versionId }) =>
+      run('edit', () => { read(projectId); return deleteVersion(store, principal, projectId, versionId); }));
+    server.registerTool('get_storage', { description: 'What the data directory holds: projects, media, derived files, unreferenced files (REST GET /api/v1/storage).', inputSchema: z.object({}), annotations: ro }, () =>
+      run('observe', () => { const rep = storageReport(store, principal); const { hashes: _h, ...unref } = rep.unreferenced; return { ...rep, unreferenced: unref }; }));
+    server.registerTool('collect_storage', { description: 'Find (apply false) or delete (apply true) media no project references any more (REST POST /api/v1/storage/gc). Deleting is not undoable. Open server mode: any editing agent; guarded: the owner\'s own session only.', inputSchema: z.object({ apply: z.boolean().optional() }) }, ({ apply }) =>
+      run('observe', () => collectGarbage(store, principal, apply === true)));
+    server.registerTool('derive_lesson', { description: 'The lesson of one clip «למדו אותי פעם אחת»: the recent edits of it that apply_lesson can repeat on other clips (REST GET …/clips/{clipId}/lesson). Open server mode: any editing agent; guarded: the owner\'s own session only.', inputSchema: z.object({ projectId: pid, clipId: z.string() }), annotations: ro }, ({ projectId, clipId }) =>
+      run('observe', () => deriveLessonFor(store, gov, principal, projectId, clipId)));
     server.registerTool('cancel_job', { description: 'Request cancellation of a job (export, capability, analysis, transcription, narration, model download, motion tracking, moments measurement, import, a language-assistant request). The result states what actually happened (removed from queue, interrupt requested, already finished). Agents cancel jobs they started; an export the owner\'s editor tab renders (route browser) may also be stopped with a grant that runs jobs on the whole project: the tab stops at its next heartbeat, publishes nothing and the job ends canceled. A language-assistant request (type assistant.propose) is cancelled from the owner\'s own session only: an agent credential is refused with owner_required and asks the owner. A reservation left unresolved after a cancel is released by the owner only (no tool does it).', inputSchema: z.object({ jobId: z.string() }) }, ({ jobId }) =>
       run('edit', () => {
         const j = store.getJob(jobId);
@@ -344,6 +386,7 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
         if (j.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, principal, j, 'cancel'); return extras.imports.cancel(jobId, principal.actor); }
         // an in-editor agent run (lead decision 5): its own cancel, the same as POST /projects/{id}/agent/runs/{runId}/cancel (edit scope)
         if (j.type === AGENT_JOB_TYPE) return agentService.cancel(principal, j.projectId, String((j.input as { runId?: unknown } | null)?.runId ?? ''));
+        if (j.type === SOURCE_JOB_TYPE) return sources.cancel(principal, jobId); // a stock-source download (wave 8 sources; W2: who may cancel)
         assertMayCancel(gov, principal, j);
         // the same dispatch as POST /jobs/:jobId/cancel (http.ts)
         if (j.type === ASSISTANT_JOB_TYPE) {
@@ -392,6 +435,9 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
   };
   store.events.on('revision', onRevision);
   store.events.on('projects', onProjects);
+  // a mode switch (autonomy.ts) ends every listen stream but the owner's own (C4): the client reconnects under the new mode
+  const onMode = () => { for (const [key, h] of handlers) if (!ownerKeeps(h.principal)) { handlers.delete(key); void h.handler.close().catch(() => {}); } };
+  extras.autonomy?.on('mode', onMode);
 
   /** Authenticate first, then hand the verified principal to the SDK (which does no token checks itself). */
   const serve = async (req: Request): Promise<Response> => {
@@ -401,7 +447,7 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
     return readingAs(principal, () => handlerFor(principal).fetch(req, { authInfo: { token: 'redacted', clientId: principal.actor, scopes: principal.scopes, extra: { principal } } }));
   };
   /** Stop notifying and end open listen streams (server shutdown). */
-  const close = async () => { store.events.off('revision', onRevision); store.events.off('projects', onProjects); await Promise.all([...handlers.values()].map((h) => h.handler.close().catch(() => {}))); handlers.clear(); };
+  const close = async () => { extras.autonomy?.off('mode', onMode); store.events.off('revision', onRevision); store.events.off('projects', onProjects); await Promise.all([...handlers.values()].map((h) => h.handler.close().catch(() => {}))); handlers.clear(); };
   /**
    * The in-editor agent's door (wave 8 autonomy Part 2; verifier C9): the same handler as `serve` for a principal the CALLER built
    * (agent/contract.ts runPrincipal, stamped by Part 1's stampOpen), with no token and no HTTP check. Not reachable from http.ts: only

@@ -21,6 +21,7 @@ import { isOwnerSession } from '../assistant/contract.ts';
 import type { Principal } from '../governance.ts';
 import { searchError, type Embedder } from './contract.ts';
 import type { SearchIndexDb } from './indexDb.ts';
+import { actsAsOwner } from '../autonomy.ts';
 
 /** Builder A's pure functions, as the runtime calls them. Tests before A is merged pass small labelled doubles; production the core ones. */
 export interface FootageCore {
@@ -122,7 +123,7 @@ export function footageAnswer(ctx: PictureContext, p: Principal, projectId: stri
 }
 async function answerFor(ctx: PictureContext, p: Principal, projectId: string, doc: ProjectDocument, q: { query: string; picture?: boolean; limit?: number }, signal: AbortSignal): Promise<FootageAnswer | AgentFootageAnswer> {
   const limit = q.limit ?? FOOTAGE_LIMITS.defaultResults;
-  if (!isOwnerSession(p)) {
+  if (!actsAsOwner(p)) {
     // fail-closed: reader 'agent' on the reader document, then the privacy filter; nothing of the picture part is read
     return AgentFootageAnswerSchema.parse(agentAnswerOf({ exact: ctx.core.searchFootage(doc, q.query, { reader: 'agent', limit }) }));
   }

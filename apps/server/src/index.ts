@@ -43,6 +43,7 @@ import { createSearchRuntime } from './search/runtime.ts';
 import type { PictureModelsTestSeams } from './picmodels/contract.ts';
 import { createPictureModelsRuntime } from './picmodels/runtime.ts';
 
+import { actsAsOwner, AutonomySettings, stampOpen } from './autonomy.ts';
 export { loadConfig, type Config } from './config.ts';
 export interface RunningServer {
   url: string; /** Link that opens the editor as the owner (carries the launch secret). */ ownerUrl: string; cfg: Config; store: Store; auth: Auth; derivatives: Derivatives; governance: Governance; backup: BackupScheduler;
@@ -61,6 +62,9 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { /** t
   const backup = new BackupScheduler(cfg.dataDir, cfg.backupDir, cfg.backupEveryHours, cfg.backupKeep); // throws on a destination inside the data directory, before anything is opened
   const store = new Store(cfg.dataDir, cfg.maxStorageBytes);
   const auth = new Auth(cfg);
+  // the server mode (autonomy.ts): read on every authentication, so the owner's switch reaches the very next request
+  const autonomy = new AutonomySettings(cfg.dataDir, cfg);
+  auth.serverMode = () => autonomy.mode;
   const host = new RenderHost();
   let url = `http://${cfg.host}:${cfg.port}`; // re-derived below once the listener is bound (port 0 = any free port)
   // One heavy holder at a time on this machine (ADR-0017): speech, narration, local AI tools and each ComfyUI chunk take the lane;
@@ -76,6 +80,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { /** t
   const presence = new Presence();
   const governance = new Governance(store);
   auth.resolveGrant = (token) => governance.principalForToken(token);
+  governance.openAgentBudgetCents = () => autonomy.agentBudgetCents;
   capabilities.governance = governance;
   const speech = new Speech(store, cfg, lane);
   // picture search «חיפוש בצילומים» (wave 7 search track; search/runtime.ts, builder B): the not-built runtime until built
@@ -116,13 +121,13 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { /** t
   // the command bar assistant (ADR-0027) and, wave 7, the LOCAL assistant: the loopback-only adapter (it contacts 127.0.0.1:<port> only
   // when the owner chose it and asks) and the compute lane; tests may pass their own (a labelled MOCK) in deps.assistant.local
   const assistantDeps: AssistantDeps = { ...(deps.assistant ?? { adapters: new Map(), endpoint: () => null }), lane, local: deps.assistant?.local !== undefined ? deps.assistant.local : createLlamaAdapter() };
-  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { imports, renderCache, search });
-  // the in-editor agent «סוכן» (wave 8 autonomy Part 2, W1): its loop calls MCP in process through serveAs (C9)
-  // Part 1 (open/guarded mode) is not merged into this build: the seams stay identity / p.kind === 'user' (lead decision 8).
-  // TODO(integrator, Part 1): stamp: (p) => stampOpen(p, autonomy.mode), actsAsOwner, modeEvents: autonomy, ownerBudgetCents: () => autonomy.agentBudgetCents
-  const agentService = createAgentService({ store, gov: governance, mcp, providers: deps.agent?.providers ?? createAgentProviders(cfg.dataDir, ...(deps.agent?.adapters ? [deps.agent.adapters] : [])), ...(deps.agent?.adapters ? { adapters: deps.agent.adapters } : {}) });
+  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { autonomy, imports, renderCache, search });
+  // the in-editor agent «סוכן» (wave 8 autonomy Part 2): its loop calls MCP in process through serveAs (C9)
+  const agentService = createAgentService({ store, gov: governance, mcp, providers: deps.agent?.providers ?? createAgentProviders(cfg.dataDir, ...(deps.agent?.adapters ? [deps.agent.adapters] : [])), ...(deps.agent?.adapters ? { adapters: deps.agent.adapters } : {}),
+    // Part 1 (autonomy.ts): the run's principal is stamped like any agent's, every step; the owner-or-open predicate; a switch to guarded stops open runs (C4); the owner-wide budget
+    stamp: (p) => stampOpen(p, autonomy.mode), actsAsOwner, modeEvents: autonomy, ownerBudgetCents: () => autonomy.agentBudgetCents });
   mcp.bindAgent(agentService);
-  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { imports, door, renderCache, search, pictureModels, assistant: assistantDeps, renderHost: host, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}) });
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { autonomy, imports, door, renderCache, search, pictureModels, assistant: assistantDeps, renderHost: host, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}) });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   const bound = (server.address() as AddressInfo).port;
