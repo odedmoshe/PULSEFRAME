@@ -7,7 +7,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { timeOriginSeconds } from '@pulseframe/core';
+import { assembleChecks, explainFindings, timeOriginSeconds } from '@pulseframe/core';
 import { audioPlan } from '@pulseframe/engine';
 import { masterChain, masterLookaheadFrames, measureLoudness, mixToRaw } from './audiomix.ts';
 import { heavy } from './analysis.ts';
@@ -40,7 +40,8 @@ export async function programmeLoudness(store: Store, projectId: string, t: Loud
       revision: p.revision, clips, seconds: Number((plan.totalSamples / plan.sampleRate).toFixed(3)), ...m,
       mixPeakDbfs: chain.mixPeakDbfs, wouldClipWithoutNormalisation: extra ? (chain.mixPeakDbfs ?? -Infinity) > 0 : peak > 1,
       target, exportWouldApplyGainDb: chain.loudness?.appliedGainDb ?? 0, limitedByPeak: chain.loudness?.limitedByPeak ?? false,
-      limiter: chain.limiter ?? null, soundChecks: chain.checks!,
+      // wave 8 qc (C6): the same explanation pass as the export, so its sound findings stay byte-equal (proof:send K4)
+      limiter: chain.limiter ?? null, soundChecks: explainFindings(p.doc, 0, assembleChecks({ method: 'not measured: the loudness route mixes the sound only', status: 'not_measured', findings: [] }, chain.checks!)).sound,
       method: 'ffmpeg ebur128 (EBU R128 / ITU-R BS.1770) on the same mix export renders',
     };
   } finally {
