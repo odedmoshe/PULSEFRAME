@@ -210,7 +210,7 @@ describe('integration (lead points 3, 4 and the seam of the picture card)', () =
     expect(answerBody(view(music[0]!), { verdict: 'ok', extras: { mic: { peakDbfs: -20, clipped: 0 } } })).toEqual({ verdict: 'ok', recipe: sha });
   });
   it('GET /booth is asked with the adapters the rows found (browser and export), none when a row has none', () => {
-    const row = (id: 'browser-gpu' | 'export-gpu', adapter?: string) => ({ id, state: 'ok' as const, code: null, data: adapter ? { adapter } : {} });
+    const row = (id: 'browser-gpu' | 'export-gpu', adapter?: string) => ({ id, state: 'ok' as const, code: null, data: (adapter ? { adapter } : {}) as Record<string, string> });
     expect(viewQuery({})).toEqual({});
     expect(viewQuery({ 'browser-gpu': row('browser-gpu', 'intel|gen-12lp||'), 'export-gpu': row('export-gpu', 'nvidia|ampere||') })).toEqual({ browserAdapter: 'intel|gen-12lp||', exportAdapter: 'nvidia|ampere||' });
     expect(viewQuery({ 'browser-gpu': row('browser-gpu') })).toEqual({});

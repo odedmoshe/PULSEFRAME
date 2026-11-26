@@ -57,7 +57,12 @@ const openFromRail = async (p: Page) => { await p.locator(sel(ID.rail)).focus();
 /** Shift+Tab until the start button has the focus (the check button holds it first), then Enter: the sitting starts from the keyboard. */
 async function startFromKeyboard(p: Page, problems: string[]): Promise<void> {
   for (let i = 0; i < 8 && !(await focusId(p)).includes(`|${START}|`); i++) await p.keyboard.press('Shift+Tab');
-  if (!(await focusId(p)).includes(`|${START}|`)) { problems.push(`the start button could not be reached with Shift+Tab (focus ${await focusId(p)})`); await p.locator(sel(START)).focus(); }
+  if (!(await focusId(p)).includes(`|${START}|`)) {
+    const where = await p.evaluate(() => `dialog ${document.querySelector('[data-testid="booth-dialog"]') ? 'open' : 'closed'}, mode ${document.querySelector('.pf-booth')?.getAttribute('data-mode') ?? document.querySelector('.pf-booth')?.getAttribute('data-state') ?? 'none'}, start buttons ${document.querySelectorAll('[data-testid="booth-start"]').length}`);
+    problems.push(`the start button could not be reached with Shift+Tab (focus ${await focusId(p)}; ${where})`);
+    if (!(await p.locator(sel(START)).count())) throw new Error(`no start button: ${where}; ${problems.join('; ')}`);
+    await p.locator(sel(START)).focus();
+  }
   await p.keyboard.press('Enter');
   await p.locator(sel(ID.card)).or(p.locator(sel(ID.windowsStep))).first().waitFor({ timeout: 20000 });
 }
@@ -255,7 +260,7 @@ export async function runBoothUiProof(): Promise<BoothUiRow[]> {
     const rows: BoothUiRow[] = [];
     for (const run of [b12, b13, b14]) {
       try { rows.push(await run(browser, server, pid)); }
-      catch (e) { rows.push({ id: (run === b12 ? 'B12' : run === b13 ? 'B13' : 'B14'), status: 'fail', detail: `threw: ${String(e).split('\n')[0]}` }); }
+      catch (e) { const at = (String((e as Error)?.stack ?? '').split('\n').find((l) => l.includes('booth-proof.ui.ts')) ?? '').trim().replace(/^.*booth-proof\.ui\.ts/, 'booth-proof.ui.ts'); rows.push({ id: (run === b12 ? 'B12' : run === b13 ? 'B13' : 'B14'), status: 'fail', detail: `threw: ${String(e).split('\n')[0]}${at ? ` (at ${at})` : ''}` }); }
     }
     return rows;
   } finally {

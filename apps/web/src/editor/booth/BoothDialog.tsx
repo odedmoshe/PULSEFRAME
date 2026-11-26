@@ -218,18 +218,10 @@ function Sitting({ lang }: { lang: Lang }): ReactElement {
   const box = useMemo(() => (view ? reportBox(reportInput(view, rows, localDay(new Date())), say) : null), [view, rows, say]);
   const nameCount = Object.values(names).reduce((a, b) => a + b, 0);
 
-  if (!view) {
-    return (
-      <div className="pf-booth" data-state={loadError ? 'failed' : 'loading'}>
-        {loadError
-          ? <><p role="alert" className="pf-booth-warn">{say('page.loadFailed', { why: loadError })}</p><Button onClick={() => setLoadTick((t) => t + 1)}>{say('page.retry')}</Button></>
-          : <p role="status">{say('page.loading')}</p>}
-      </div>
-    );
-  }
-
-  const first = firstPartCounts(view.items);
-  const exportStripViews = view.items.filter((v) => v.item.exportStrip);
+  // The first screen is drawn at once, before the view arrives (the self-check needs no view): the ds Dialog gives the first focus
+  // when it opens, so «הפעלת בדיקת המחשב» (data-autofocus) must exist then; nothing moves the focus when the view comes later.
+  const loadState = view ? 'ready' : loadError ? 'failed' : 'loading';
+  const exportStripViews = view ? view.items.filter((v) => v.item.exportStrip) : [];
   const live = <p className="pf-booth-live" role="status" aria-live="polite" data-part="live">{announce}</p>;
   const problemBar = saveProblem && (
     <div className="pf-booth-warn" role="alert" data-part="save-problem">
@@ -239,7 +231,7 @@ function Sitting({ lang }: { lang: Lang }): ReactElement {
   );
 
   // ================================================================ the cards
-  if (queue && entry) {
+  if (view && queue && entry) {
     const counts = queueCounts(queue, view.items);
     const nextPart = nextPartIndex(queue, at);
     const cardsBefore = queue.slice(0, at).filter((e) => e.t === 'card').length;
@@ -281,12 +273,13 @@ function Sitting({ lang }: { lang: Lang }): ReactElement {
   }
 
   // ================================================================ the first screen
-  const more = moreGroups(view.items);
-  const answeredAny = view.items.some((v) => v.state === 'answered');
+  const more = view ? moreGroups(view.items) : [];
+  const answeredAny = !!view && view.items.some((v) => v.state === 'answered');
   return (
-    <div className="pf-booth" data-mode="home">
+    <div className="pf-booth" data-mode="home" data-state={loadState}>
       <h3 ref={homeRef} tabIndex={-1} className="pf-booth-title">{say('page.firstScreenHeading')}</h3>
-      <p role="status" aria-live="polite" className="pf-booth-first" data-testid={TID.progress}>{say('booth.firstPart', first)}</p>
+      <p role="status" aria-live="polite" className="pf-booth-first" data-testid={TID.progress}>{view ? say('booth.firstPart', firstPartCounts(view.items)) : loadError ? '' : say('page.loading')}</p>
+      {loadError && !view && <div role="alert" className="pf-booth-warn" data-part="load-failed"><p>{say('page.loadFailed', { why: loadError })}</p><Button onClick={() => setLoadTick((t) => t + 1)}>{say('page.retry')}</Button></div>}
       <p className="pf-booth-note">{say('booth.firstPartMinutes')}</p>
       <p>{say('booth.intro')}</p>
       <p className="pf-booth-note">{say('booth.afterRestart')}</p>
@@ -294,7 +287,7 @@ function Sitting({ lang }: { lang: Lang }): ReactElement {
       {problemBar}
       {live}
       <div className="pf-booth-actions">
-        <Button variant="primary" data-testid="booth-start" busy={starting} onClick={() => void start()}>{starting ? say('page.starting') : answeredAny ? say('page.resume') : say('page.start')}</Button>
+        <Button variant="primary" data-testid="booth-start" busy={starting || loadState === 'loading'} disabledReason={loadState === 'failed' ? say('page.retry') : undefined} onClick={() => void start()}>{starting ? say('page.starting') : answeredAny ? say('page.resume') : say('page.start')}</Button>
       </div>
 
       <section className="pf-booth-check" aria-labelledby="pf-booth-check-h">
@@ -340,7 +333,7 @@ function Sitting({ lang }: { lang: Lang }): ReactElement {
         </section>
       )}
 
-      {box && <ReportBox say={say} box={box} notes={hasNotes(view.items)} names={nameCount} />}
+      {view && box && <ReportBox say={say} box={box} notes={hasNotes(view.items)} names={nameCount} />}
     </div>
   );
 }
