@@ -33,8 +33,8 @@ describe.skipIf(!pythonPath())('R1: the setup order of a model', () => {
     for (const x of rows.slice(1)) expect(x.code, x.id).toBe('not_built');
     for (const x of rows) noPath(x.detail);
   });
-  it('the real registry: yunet not_built (nothing is offered until integration flips it)', async () => {
-    expect((await yunet(rt({ registry: [...PICTURE_MODELS] }))).code).toBe('not_built');
+  it('the real registry: yunet is built, and without its file on this machine the honest state is model_missing', async () => {
+    expect((await yunet(rt({ registry: [...PICTURE_MODELS] }))).code).toBe('model_missing');
   });
   it('licence not allowed → licence_blocked; the ledger naming another licence → licence_blocked', async () => {
     const bad = w.registry.map((m) => (m.id === 'yunet' ? { ...m, licence: { ...m.licence, spdx: 'GPL-3.0' as never } } : m));

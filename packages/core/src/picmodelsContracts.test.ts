@@ -20,7 +20,9 @@ describe('picture models registry', () => {
     expect(PICTURE_MODELS.map((m) => m.id)).toEqual([...PICTURE_MODEL_IDS]);
     for (const m of PICTURE_MODELS) expect(PictureModelSchema.safeParse(m).success, m.id).toBe(true);
     expect(PICTURE_MODELS.filter((m) => m.output === 'eyes').map((m) => m.id)).toEqual(['yunet']);
-    expect(PICMODELS_BUILT).toBe(false);
+    // the lead read and pinned the worker on 2026-11-26: the eyes role is built; nothing has run on a real model yet
+    expect(PICMODELS_BUILT).toBe(true);
+    expect(PICTURE_MODELS.find((m) => m.id === 'yunet')?.built).toBe(true);
     // depth and matte are not built in this wave (decisions); nothing may flip them before the laptop wave
     for (const m of PICTURE_MODELS.filter((x) => x.output !== 'eyes')) expect(m.built, m.id).toBe(false);
   });

@@ -36,14 +36,14 @@ import type { Governance } from '../governance.ts';
 import { ApiError, type Store } from '../store.ts';
 
 /** True once W1's runtime and routes are built (set at integration). Until then the eyes route answers 501 eyes_not_built after the owner check. */
-export const PICMODELS_SERVER_BUILT = false;
+export const PICMODELS_SERVER_BUILT = true;
 /** The reviewed worker script, relative to the repository root. */
 export const PICTURE_WORKER = 'apps/server/tools/pf_picture.py';
 /**
  * SHA-256 of the reviewed pf_picture.py (any other file is engine_unverified). NULL until the lead has read ALL of the script at
  * integration and approved exactly that content; a changed byte after that is a new review, never a silent re-pin.
  */
-export const PICTURE_WORKER_SHA256: string | null = null;
+export const PICTURE_WORKER_SHA256: string | null = '4bb15a5053122a10b442d1770a93da23b44bfa97c4401e183565b094725d6e25'; // read line by line by the lead on 2026-11-26 (436 lines: stdin one line, stdout one line, the model file read-only, no subprocess, no file written)
 
 const P = '/api/v1/projects/:id';
 /** Every picmodels route, as Hono registers it (peopleSurfaces.ts classifies each; openapi.ts documents each). No map route this wave. */

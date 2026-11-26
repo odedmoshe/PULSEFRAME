@@ -279,9 +279,16 @@ class ServeWithAStandInRuntime(unittest.TestCase):
         self.assertEqual((code, lines), (0, ['{"id":5,"event":"result","tooMany":true}']))
 
     def test_no_file_is_written_into_the_working_directory(self):
-        before = set(os.listdir(os.getcwd()))
-        self.run_serve(FakeOrt(lambda iw, ih: heads(iw, ih, [])))
-        self.assertEqual(set(os.listdir(os.getcwd())), before)
+        # a private empty folder: the shared temp folder gets other programs' files while this runs
+        import tempfile
+        here = os.getcwd()
+        with tempfile.TemporaryDirectory() as d:
+            os.chdir(d)
+            try:
+                self.run_serve(FakeOrt(lambda iw, ih: heads(iw, ih, [])))
+                self.assertEqual(os.listdir(d), [])
+            finally:
+                os.chdir(here)
 
 
 class Requests(unittest.TestCase):

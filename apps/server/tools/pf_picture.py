@@ -1,6 +1,6 @@
 """
 PULSEFRAME picture-model worker (wave 8 picmodels; .artifacts/wave8/picmodels-plan.md §3.4 as corrected by picmodels-verify.md; the
-protocol is apps/server/src/picmodels/contract.ts). Started by the server with `python -I`, the working directory the data
+protocol is apps/server/src/picmodels/contract.ts). Started by the server with `python -I -X utf8`, the working directory the data
 directory's tmp folder, and the offline variables set; never by hand in production. It is NOT pf_tools.py and NOT pf_search.py and
 shares nothing with them. ONE SELF-CONTAINED FILE (verify C6: under -I nothing beside it can be imported); its SHA-256 is pinned in
 contract.ts PICTURE_WORKER_SHA256 only after the lead has read all of it (until then the server reports engine_unverified).

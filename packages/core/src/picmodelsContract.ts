@@ -28,7 +28,7 @@ import { z } from 'zod';
 import { EyePointSchema } from './growingContract.ts';
 
 /** True once W1 and W2 have built the runtime and the eyes role and the lead has pinned the worker's digest. */
-export const PICMODELS_BUILT: boolean = false;
+export const PICMODELS_BUILT: boolean = true;
 
 // ---------- the models (registry; pins copied from tools/library/manifests/models-01.json, a test keeps them equal) ----------
 export const PICTURE_MODEL_IDS = ['yunet', 'da3-small', 'da3-base', 'sam2-1-hiera-tiny', 'sam2-1-hiera-small'] as const;
@@ -74,7 +74,7 @@ export const PICTURE_MODELS: readonly PictureModel[] = [
     pins: [{ item: 'yunet/face_detection_yunet_2023mar.onnx', name: 'face_detection_yunet_2023mar.onnx', bytes: 232589, sha256: '8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4' }],
     licence: { spdx: 'MIT', url: `${HF}/opencv/face_detection_yunet/blob/3cc26e7f1014a5ee5d74a42acee58bafc9d0a310/LICENSE`, quote: 'README: "All files in this directory are licensed under MIT License." LICENSE file: "MIT License / Copyright (c) 2020 Shiqi Yu <shiqi.yu@gmail.com>".' },
     duties: { creditInExport: false, keepLicenceItem: 'yunet/license' },
-    engine: 'onnxruntime', input: { longSide: 640, multipleOf: 32 }, output: 'eyes', built: false,
+    engine: 'onnxruntime', input: { longSide: 640, multipleOf: 32 }, output: 'eyes', built: true,
   },
   {
     id: 'da3-small', source: 'da3-small', revision: 'e08cab65ca0ec38e7826075418411ab90cab4da3',

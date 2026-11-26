@@ -343,7 +343,7 @@ describe('eyes in open mode (ADR-0036): an editing agent acts as the owner, read
       const none = await call(s.auth.tokens.agent, `/api/v1/projects/${opid}/eyes/propose`, { assetId: 'no-such', frame: null });
       expect([none.status, none.body.error?.code]).toEqual([404, 'not_found']);
       const rows = await call(s.auth.tokens.agent, '/api/v1/picture-models', undefined, 'GET');
-      expect(rows.body.models[0]).toMatchObject({ id: 'yunet', code: 'not_built' });
+      expect(rows.body.models[0]).toMatchObject({ id: 'yunet', code: 'engine_not_configured' }); // built since the lead's pin; this test server has no picture engine configured (the first honest setup state)
       expect(rows.body.models[0].detail).toMatch(/\w/);
     } finally { await s.close(); fs.rmSync(d, { recursive: true, force: true }); }
   }, 60_000);
