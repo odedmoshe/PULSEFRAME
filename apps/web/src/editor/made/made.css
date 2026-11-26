@@ -1,0 +1,25 @@
+/* «קליפ מקוד» (wave 8 motioncode W3). Logical properties only; tokens already in ds/tokens.css; no new colours. */
+.pf-made-body { display: flex; flex-direction: column; gap: 14px; }
+.pf-made-form { border: 0; margin: 0; padding: 0; min-inline-size: 0; display: flex; flex-direction: column; gap: 14px; }
+.pf-made-h { display: block; font-weight: 600; margin-block-end: 4px; margin-block-start: 0; font-size: inherit; }
+.pf-made-note { margin: 2px 0; font-size: 0.9em; }
+.pf-made-error { margin: 0; color: var(--pf-danger, inherit); font-weight: 600; }
+.pf-made-progress { margin: 0; min-block-size: 1.4em; }
+.pf-made-lines { margin: 0; padding-inline-start: 18px; }
+.pf-made-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.pf-made-tile { min-block-size: 56px; padding: 8px 10px; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); background: var(--pf-surface-2); color: var(--pf-text); font: inherit; cursor: pointer; text-align: start; }
+.pf-made-tile[aria-checked='true'] { border-color: var(--pf-frame); outline: 2px solid var(--pf-frame); outline-offset: -2px; }
+.pf-made-tile:focus-visible { outline: 2px solid var(--pf-frame); outline-offset: 2px; }
+.pf-made-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.pf-made-field { display: flex; flex-direction: column; gap: 4px; }
+.pf-made-input { min-inline-size: 0; inline-size: 100%; min-block-size: 32px; padding-inline: 8px; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); background: var(--pf-surface-2); color: var(--pf-text); font: inherit; }
+.pf-made-code { font-family: var(--pf-font-mono, monospace); direction: ltr; text-align: left; padding-block: 6px; }
+.pf-made-ask { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); }
+.pf-made-result { display: flex; flex-direction: column; gap: 12px; }
+.pf-made-stills { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pf-made-videobox { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+/* the checkerboard shows the transparency: two surface tokens, no new colour */
+.pf-made-checker { inline-size: 100%; line-height: 0; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); overflow: hidden;
+  background-color: var(--pf-surface); background-image: conic-gradient(var(--pf-surface-2) 25%, transparent 0 50%, var(--pf-surface-2) 0 75%, transparent 0); background-size: 16px 16px; }
+.pf-made-checker img, .pf-made-checker video { inline-size: 100%; block-size: auto; display: block; }
+.pf-made-inspector { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; padding-block: 8px; }
