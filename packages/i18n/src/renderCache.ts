@@ -11,7 +11,7 @@
  */
 export const RENDER_CACHE_HE = {
   // the export sheet's switch (a per-viewer preference, localStorage 'pf.fastExport')
-  'cache.fast.label': 'ייצוא מהיר — מרנדר רק מה שהשתנה',
+  'cache.fast.label': 'ייצוא מהיר: רק מה שהשתנה מאז הייצוא הקודם',
   'cache.fast.hint': 'הקובץ עשוי להיות גדול במעט מייצוא רגיל באותה איכות',
   'cache.fast.mp4Only': 'ייצוא מהיר זמין כרגע רק ל־MP4',
   'cache.fast.off': 'מטמון הרינדור כבוי במחשב הזה',

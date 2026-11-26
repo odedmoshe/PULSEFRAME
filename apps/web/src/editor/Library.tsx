@@ -240,7 +240,8 @@ function CatalogueDrawer({ kind }: { kind: 'effects' | 'transitions' | 'looks' }
           <li key={i.id}>
             <button type="button" className="pf-bw-row" disabled={!clip} onClick={() => void apply(i.id, i.name[lang])} data-testid="catalogue-row" data-kind={spec.kind} data-id={i.id}>
               <span className="pf-bw-rowName" lang={lang}>{i.name[lang]}</span>
-              <span className="pf-bw-rowAlt" lang={lang === 'he' ? 'en' : 'he'}>{i.name[lang === 'he' ? 'en' : 'he']}</span>
+              {/* the other language's name is a search alias only; shown beside the name in English, never as English in the Hebrew UI */}
+              {lang !== 'he' && <span className="pf-bw-rowAlt" lang="he">{i.name.he}</span>}
               <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
             </button>
           </li>
