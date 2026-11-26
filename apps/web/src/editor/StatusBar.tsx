@@ -8,6 +8,7 @@ import { Check, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { capStageLabel } from './statusStage.ts';
 import { Ring } from '../ds/index.ts';
 import { CHROME_STRINGS } from './chrome.strings.ts';
+import { STATUS_STRINGS } from './status.strings.ts';
 import { setSettingsOpen } from './chromeState.ts';
 import { filmClock } from './filmLength.ts';
 import { useEditorState } from './store.ts';
@@ -27,7 +28,15 @@ export function StatusBar() {
   const job = capJob && ['queued', 'running'].includes(capJob.status) ? capJob : null;
   const pct = job && typeof job.output?.progress === 'number' ? Math.round(job.output.progress * 100) : null;
   // What still needs setting up: the graphics adapter and the local AI provider. Known facts only; an unknown state is not counted.
-  const needs = [gpu && !gpu.available ? 'gpu' : null, provider && !provider.provider.configured ? 'ai' : null].filter(Boolean).length;
+  const known = [
+    gpu ? { name: S.gpu, ready: gpu.available } : null,
+    provider ? { name: S.ai, ready: provider.provider.configured } : null,
+  ].filter((x): x is { name: string; ready: boolean } => x !== null);
+  const needNames = known.filter((x) => !x.ready).map((x) => x.name);
+  const needs = needNames.length;
+  const P = STATUS_STRINGS[state.lang];
+  const pipWord = needs ? P.need(needs) : S.pipsAll;
+  const pipTitle = needs ? P.needTitle(needNames) : known.length ? P.allTitle(known.map((x) => x.name)) : S.statusCentre;
   // the last export's file checks (wave 7 send): shown only when something was found; a quiet report stays in the export sheet
   const checks = exportJob?.status === 'succeeded' ? ((exportJob.output as { checks?: ExportChecks } | null)?.checks ?? null) : null;
   const flash = exportJob?.status === 'succeeded' && exportJob.output?.photosensitivity ? exportJob.output.photosensitivity : null;
@@ -44,9 +53,8 @@ export function StatusBar() {
         )}
       </div>
       <div className="pf-status-end">
-        <button type="button" className={`pf-status-pip${needs ? ' is-need' : ''}`} onClick={() => setSettingsOpen(true)} aria-haspopup="dialog" aria-label={`${S.statusCentre}: ${needs ? S.pipsNeed(needs) : S.pipsAll}`} data-testid="status-pips">
-          <span className="pf-status-dots" aria-hidden="true"><i className={gpu ? (gpu.available ? 'ok' : 'off') : ''} /><i className={provider ? (provider.provider.configured ? 'ok' : 'off') : ''} /></span>
-          <span>{needs ? S.pipsNeed(needs) : S.pipsAll}</span>
+        <button type="button" className={`pf-status-pip${needs ? ' is-need' : ''}`} onClick={() => setSettingsOpen(true)} aria-haspopup="dialog" title={pipTitle} aria-label={`${S.statusCentre}: ${pipWord}. ${pipTitle}`} data-testid="status-pips">
+          <span>{pipWord}</span>
         </button>
         {flash && <FlashResult report={flash} />}
         {checks && findingCount(checks) > 0 && <CheckFindings checks={checks} />}
