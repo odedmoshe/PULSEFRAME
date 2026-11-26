@@ -5,13 +5,19 @@
  *  - a refusal is a typed OpError and leaves the document unchanged; nothing else may be thrown;
  *  - the document can be evaluated (picture graph, audio plan, timeline and summary queries, every linked format);
  *  - the entity diff of the step, applied backwards, restores the previous document exactly (the undo path).
+ * Two drawn clips of the TEST-ONLY kind (drawn.testKind.ts) are on the timeline before the random steps, so every operation
+ * meets them (text operations refuse them with drawn_not_text; placement edits move, cut and copy them).
  * Deterministic: seeds 1..PF_FUZZ_SEEDS (default 60), PF_FUZZ_STEPS steps each (default 90). A failure names seed, step and op.
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, creativeProjection, diffEntities, LIBRARY_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, SOURCE_RANGE_OPS_BUILT, STEADY_OPS_BUILT, SST, OpError, ProjectSchema, projectVariant, restoreEntities, summarize, timeline, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, creativeProjection, diffEntities, LIBRARY_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, MAP_OPS_BUILT, SOURCE_RANGE_OPS_BUILT, STEADY_OPS_BUILT, SST, OpError, ProjectSchema, projectVariant, restoreEntities, summarize, timeline, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, evaluate } from '@pulseframe/engine';
 import { createFuzz } from './ops-fuzz.gen.ts';
+import { registerTestDrawnOp, testDrawn } from '@pulseframe/core/drawn.testKind.ts';
+
+// drawn clips (wave 8 carrier): the TEST-ONLY drawn kind and its add op, registered in this test only (production registers no kind)
+registerTestDrawnOp();
 
 const SEEDS = Math.max(1, Number(process.env.PF_FUZZ_SEEDS ?? 60));
 const STEPS = Math.max(1, Number(process.env.PF_FUZZ_STEPS ?? 90));
@@ -100,6 +106,24 @@ function run(seed: number, focus: () => string[] = () => []) {
     doc = next;
     return output ?? {};
   };
+  // two drawn clips of the test kind before the random steps (fixed numbers, no draw from the random stream), then a fixed
+  // split, trim-start and text edit of the first through the same oracles: the edit is a typed refusal (drawn_not_text)
+  const drawnA = step({ op: 'add_test_drawn', args: { start: f(5), duration: f(40), drawn: testDrawn({ offset: 3 }), transform: { x: 0.1, opacity: 0.6 } } }, 'drawn add')?.clipId as string | undefined;
+  step({ op: 'add_test_drawn', args: { start: f(20), duration: f(60), drawn: testDrawn({ color: '#30A0E0', w: 500, h: 900 }) } }, 'drawn add 2');
+  if (drawnA) {
+    step({ op: 'split_clip', args: { clipId: drawnA, at: f(25) } }, 'drawn split');
+    step({ op: 'trim_clip', args: { clipId: drawnA, edge: 'start', to: f(8) } }, 'drawn trim');
+    if (step({ op: 'update_text', args: { clipId: drawnA, text: 'x' } }, 'drawn words') !== null) throw new Error(`seed ${seed}: update_text was accepted on a drawn clip`);
+  }
+  // «ציור חי» (wave 8 ink): one fixed drawing, a split, a trim-start, an edit and a text edit (refused) through the same oracles, so
+  // each is accepted in every run; fixed numbers, no draw from the random stream
+  const inkA = step({ op: 'add_ink', args: { start: f(10), strokes: [{ brush: 'neon', color: '#ffcc00', width: 80, at: 0, x: [-500, 0, 500], y: [0, 300, 0], t: [0, 40, 90] }, { brush: 'highlighter', color: '#00FFAA', width: 240, at: 200, x: [0], y: [-200], t: [0] }] } }, 'ink add')?.clipId as string | undefined;
+  if (inkA) {
+    step({ op: 'split_clip', args: { clipId: inkA, at: f(20) } }, 'ink split');
+    step({ op: 'trim_clip', args: { clipId: inkA, edge: 'start', to: f(13) } }, 'ink trim');
+    step({ op: 'edit_ink', args: { clipId: inkA, play: 'all', fadeOut: true } }, 'ink edit');
+    if (step({ op: 'update_text', args: { clipId: inkA, text: 'x' } }, 'ink words') !== null) throw new Error(`seed ${seed}: update_text was accepted on a drawing`);
+  }
   for (let s = 0; s < STEPS; s++) step(gen(s), s);
   // marked ranges (wave 7): after the random steps (so no other operation's sequence moves), one fixed add, update and remove of a
   // pearl through the same oracles, so each of the three is accepted in every run that still has a timed file; fixed numbers, no draw
@@ -125,6 +149,20 @@ function run(seed: number, focus: () => string[] = () => []) {
     if (variantId) {
       step({ op: 'update_audience_version', args: { variantId, musicDb: -9, ...(sound ? { sound: { trackId: sound.id, role: 'music' } } : {}) } }, 'audience update');
       if (clip) { step({ op: 'set_audience_keep', args: { variantId, clipId: clip.id, rule: 'effect', keep: true } }, 'audience keep'); step({ op: 'set_audience_keep', args: { variantId, clipId: clip.id, rule: 'effect', keep: false } }, 'audience give back'); }
+    }
+  }
+  // trip maps (wave 8 tripmap): after the random steps, one fixed add (three stops, even timing), update, retime, split and trim-start of
+  // the map, and a text edit on it (a typed refusal, drawn_not_text) through the same oracles; fixed numbers, no draw from the random stream
+  if (MAP_OPS_BUILT) {
+    const end = T.frameIndexAt(timeline(doc)!.duration, rate) + 10;
+    const stops = [{ name: 'תל אביב', lon: 34_768_066, lat: 32_081_937 }, { name: 'ירושלים', lon: 35_206_626, lat: 31_778_408, via: 'road' }, { name: 'לונדון', lon: -118_668, lat: 51_501_941, via: 'flight' }];
+    const mapId = step({ op: 'add_trip_map', args: { start: f(end), duration: f(240), stops } }, 'map add')?.clipId as string | undefined;
+    if (mapId) {
+      step({ op: 'update_trip_map', args: { clipId: mapId, look: 'night' } }, 'map update');
+      step({ op: 'time_trip_map', args: { clipId: mapId, to: 'even' } }, 'map even');
+      step({ op: 'split_clip', args: { clipId: mapId, at: f(end + 120) } }, 'map split');
+      step({ op: 'trim_clip', args: { clipId: mapId, edge: 'start', to: f(end + 15) } }, 'map trim');
+      if (step({ op: 'update_text', args: { clipId: mapId, text: 'x' } }, 'map words') !== null) throw new Error(`seed ${seed}: update_text was accepted on a trip map`);
     }
   }
   return stats;

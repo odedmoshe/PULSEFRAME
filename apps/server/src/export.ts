@@ -6,6 +6,7 @@
  * Jobs are durable rows; a job interrupted by a restart re-runs from its immutable snapshot and
  * publishes its output with an atomic rename, so a retry never yields a duplicate or partial file.
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
@@ -16,7 +17,7 @@ import * as T from '@pulseframe/time';
 import { collectCredits, creditDue, creditsView, type CreditsView } from '@pulseframe/core';
 import { AUTO_SELF_CHECK_CLEAN_EXPORTS, EXPORT_MODES, INCREMENTAL_NOT_BUILT_REASON, RENDER_CACHE_BLOCKERS, SEGMENTED_ROUTE, SELF_CHECK_MODES, type RenderCacheStatus, type SegmentedExportReport } from '@pulseframe/core';
 import { assembleChecks, flagsOf, pictureExpectation, planSizeFit, SEND_API_REFUSALS, SEND_FIT, SIZE_FIT_BUILT, type ExportFinding, type PictureChecks, type SizeFitFault, type SizeFitManifest, type SizeFitOutput, type SoundChecks } from '@pulseframe/core';
-import { STILL_EXCLUSIVE_OPTIONS, STILL_EXPORT_BUILT, STILLS_REFUSALS, StillExportSchema } from '@pulseframe/core';
+import { cropFitsPaper, printFit, STILL_EXCLUSIVE_OPTIONS, STILL_EXPORT_BUILT, STILL_TRIED_MAX_PIXELS, stillDocument, STILLS_REFUSALS, StillExportSchema, StillsRefusal, sourceTimeOfFrame, type Asset, type StillCrop, type StillOutput } from '@pulseframe/core';
 import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, own, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, OUTPUT_WARNINGS, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { AUDIO_FX_ENGINE, audioPlan, captionCues, PictureCheck, soundEnd, type AudioPlan, type FlashCells, type PlannedAudioClip } from '@pulseframe/engine';
@@ -28,6 +29,7 @@ import { ffprobe } from './ingest.ts';
 import { assertStorageRoom } from './storage.ts';
 import { FrameFlashCheck, type PhotosensitivityReport } from './flashCheck.ts';
 import { assertOutputTags, runSizeFit } from './sizeFit.ts';
+import { writeStillFile } from './stillFile.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 import { blobPresent, MISSING_MEDIA_HINT } from './mediaPresence.ts';
 import type { ComputeLane } from './aiContracts.ts';
@@ -59,6 +61,17 @@ export const ExportOptionsSchema = z
   })
   .strict();
 export type ExportOptions = z.infer<typeof ExportOptionsSchema>;
+/**
+ * Idempotency keys of exports (wave 8 autonomy C8): every export job started inside `fn` stores `<key>#<n>` (n = 0, 1, … in start
+ * order) in its input, so a resend with the same key finds the jobs (priorExportJobs) instead of starting new ones.
+ */
+const jobKeyScope = new AsyncLocalStorage<{ key: string; n: number }>();
+export function withJobKey<R>(key: string | undefined, fn: () => R): R { return key ? jobKeyScope.run({ key, n: 0 }, fn) : fn(); }
+/** The export jobs an actor started with this key, in start order ([] = none). */
+export function priorExportJobs(store: Store, actor: string, key: string): JobRow[] {
+  const out: JobRow[] = [];
+  for (let n = 0; ; n++) { const j = store.findJobByKey('export', actor, `${key}#${n}`); if (!j) return out; out.push(j); }
+}
 const hideCaptions = (doc: ProjectDocument): ProjectDocument => ({ ...doc, sequences: Object.fromEntries(Object.entries(doc.sequences).map(([id, s]) => [id, { ...s, tracks: s.tracks.map((t) => (t.kind === 'caption' ? { ...t, hidden: true } : t)) }])) });
 /** Subtitle file for an export: the first caption track as it plays, shifted and clipped to the exported range. */
 function captionSidecar(doc: ProjectDocument, manifest: Manifest): { format: 'srt' | 'vtt'; text: string; cues: number } | null {
@@ -211,6 +224,8 @@ export interface Manifest {
   estimate: { bytes: number | null; basis: string };
   /** Size-fit (wave 7 send): the planned fit when options.sizeFit is set; the estimate stays the full-quality intermediate's. */
   fit?: SizeFitManifest;
+  /** «שמירת התמונה» (wave 8 cover): the picture the still's document draws 1:1 (the stored file's own pixels) and the crop cut from it afterwards (= output size). */
+  still?: { source: { width: number; height: number }; crop: StillCrop };
 }
 /** `hint`: the fix for this blocker when it has one of its own; the refusal then offers it instead of the generic advice. */
 export interface Blocker { code: string; message: string; ids: string[]; hint?: string; /** size_fit_too_small only: the smallest target that works for this film (bytes) */ minBytes?: number }
@@ -324,6 +339,8 @@ export class Exporter {
     const parsed = ExportOptionsSchema.safeParse(raw ?? {});
     if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error), { issues: parsed.error.issues });
     let options = parsed.data;
+    // «שמירת התמונה» (wave 8 cover): a still has its own plan (planStill); its option checks stay the lead's (stillOptionBlockers)
+    if (options.still) return this.planStill(doc, revision, options);
     const target = { sequenceId: options.sequenceId, variantId: options.variantId };
     const targetWarnings = opts.resolved ? [] : outputWarnings(doc, target);
     if (!opts.resolved) doc = outputDoc(doc, target);
@@ -347,7 +364,7 @@ export class Exporter {
       if (frames <= 0) blockers.push({ code: 'empty_range', message: `range [${options.range.startFrame}, ${options.range.endFrame}) contains no frames (sequence has ${total})`, ids: [] });
     }
     if (total === 0) blockers.push({ code: 'empty_sequence', message: 'the sequence has no clips to export', ids: [] });
-    // «שמירת התמונה» (wave 8 cover): the option checks are the lead's (stillOptionBlockers); W2 replaces the plan of a still here
+    // «שמירת התמונה» (wave 8 cover): without `still` only "jpeg needs a still" can come from here; a still is planned by planStill
     blockers.push(...stillOptionBlockers(options));
     // size-fit (wave 7 send, C4–C6): the plan picks the picture size (never above the asked scale) and the rates; the job then
     // renders the full-quality intermediate at that size (quality high) and fits it. Segment keys see only quality, size and frames,
@@ -440,6 +457,45 @@ export class Exporter {
     };
   }
   /**
+   * The plan of a saved picture (wave 8 cover, verify C5/C7/C8): the asset must be in the document (404 not_found otherwise, as
+   * other routes); core stillDocument's refusals (no picture, frame outside the file, a side over 8192) and the crop rules
+   * (inside the picture; the paper's shape within one pixel when a paper is given) are blockers with their hints. The output is
+   * the crop's own size (no even rounding); the render draws the still's document at the file's own size and the crop is cut
+   * afterwards. A job snapshots stillDocument(asset, frame) (start), never the project: the same asset and frame always give the
+   * same document, and a retry renders its snapshot again. Nothing here reads the source's pixels.
+   */
+  private planStill(doc: ProjectDocument, revision: number, options: ExportOptions): { manifest: Manifest; blockers: Blocker[]; warnings: Blocker[] } {
+    const s = options.still!;
+    const R = STILLS_REFUSALS;
+    const blockers: Blocker[] = [...stillOptionBlockers(options)];
+    const asset: Asset | undefined = Object.hasOwn(doc.assets, s.assetId) ? doc.assets[s.assetId] : undefined;
+    if (!asset) throw new ApiError(404, 'not_found', `asset ${s.assetId} not found`, { assetId: s.assetId });
+    let stillDoc: ProjectDocument | undefined;
+    try { stillDoc = stillDocument(asset, s.sourceFrame); } catch (e) {
+      if (!(e instanceof StillsRefusal)) throw e;
+      blockers.push({ code: e.code, message: e.message, ids: [asset.id], hint: e.hint });
+    }
+    const width = stillDoc?.settings.width ?? 0, height = stillDoc?.settings.height ?? 0;
+    const crop: StillCrop = s.crop ?? { x: 0, y: 0, w: width, h: height };
+    if (stillDoc) {
+      if (s.crop && (s.crop.x + s.crop.w > width || s.crop.y + s.crop.h > height)) blockers.push({ code: R.stillCrop.code, message: R.stillCrop.message(width, height), ids: [asset.id], hint: R.stillCrop.hint });
+      else if (s.paper && s.orientation && !cropFitsPaper(crop, s.paper, s.orientation)) blockers.push({ code: R.stillPaperShape.code, message: R.stillPaperShape.message(s.paper, s.orientation), ids: [asset.id], hint: R.stillPaperShape.hint });
+    }
+    if (!blobPresent(this.store, asset)) blockers.push({ code: 'missing_media', message: `source media for "${asset.name}" is not available to the render worker`, ids: [asset.id], hint: MISSING_MEDIA_HINT });
+    if (!fs.existsSync(path.join(this.webDist, 'render.html'))) blockers.push({ code: 'renderer_unavailable', message: 'the web bundle with the render page has not been built (run `pnpm build`)', ids: [] });
+    const frameRate = stillDoc?.settings.frameRate ?? doc.settings.frameRate;
+    return {
+      manifest: {
+        revision, engine: { ...ENGINE, schemaVersion: doc.schemaVersion }, options,
+        output: { width: crop.w, height: crop.h, firstFrame: 0, frames: 1, frameRate, sampleRate: doc.settings.sampleRate },
+        assets: [{ id: asset.id, contentHash: asset.contentHash, byteSize: asset.byteSize, kind: asset.kind, clips: 1 }],
+        fonts: [], effects: [], transitions: [], audioEffects: [], estimate: { bytes: null, basis: 'not estimated for stills' },
+        still: { source: { width, height }, crop },
+      },
+      blockers, warnings: [],
+    };
+  }
+  /**
    * Sound effects of the exported range (ADR-0010): which effect implementations the mix depends on, a blocker for any effect this
    * build cannot run (it would otherwise be dropped silently) and a warning for each echo or reverb cut at the end of the video.
    */
@@ -502,10 +558,14 @@ export class Exporter {
     // A variant export snapshots the PROJECTED document, so the job renders exactly what was planned even if the variant changes later.
     // Snapshot what will be rendered. For a clean picture, caption tracks are hidden in the snapshot; a requested subtitle file
     // is fixed now from the same document, so later edits cannot change it.
-    const resolved = retryOf ? p.doc : outputDoc(p.doc, { sequenceId: manifest.options.sequenceId, variantId: manifest.options.variantId });
-    const snapshot = retryOf ? p.doc : renderDocFor(p.doc, manifest.options);
-    const sidecar = retryOf ? retryOf.input.sidecar ?? null : captionSidecar(resolved, manifest);
-    const job = this.store.createJob(projectId, 'export', actor, { revision: p.revision, snapshot, sidecar, manifest, warnings, retryOf: retryOf?.id ?? null });
+    // A saved picture (wave 8 cover) snapshots its one-clip document (core stillDocument), never the project, and has no subtitle file.
+    const still = manifest.options.still;
+    const stillDoc = !retryOf && still ? stillDocument(p.doc.assets[still.assetId]!, still.sourceFrame) : undefined;
+    const resolved = retryOf || stillDoc ? p.doc : outputDoc(p.doc, { sequenceId: manifest.options.sequenceId, variantId: manifest.options.variantId });
+    const snapshot = retryOf ? p.doc : stillDoc ?? renderDocFor(p.doc, manifest.options);
+    const sidecar = retryOf ? retryOf.input.sidecar ?? null : stillDoc ? null : captionSidecar(resolved, manifest);
+    const scope = retryOf ? undefined : jobKeyScope.getStore(); // wave 8 autonomy C8: export_project / export_batch with an idempotencyKey
+    const job = this.store.createJob(projectId, 'export', actor, { revision: p.revision, snapshot, sidecar, manifest, warnings, retryOf: retryOf?.id ?? null, ...(scope ? { idempotencyKey: `${scope.key}#${scope.n++}` } : {}) });
     this.enqueue(job);
     return job;
   }
@@ -555,7 +615,14 @@ export class Exporter {
     const { manifest, blockers } = this.plan(doc, revision, { format: 'png', frame: frameIndex, scale });
     const hard = blockers.filter((b) => b.code !== 'empty_sequence');
     if (hard.length) throw new ApiError(422, hard[0]!.code === 'out_of_bounds' ? 'out_of_bounds' : 'render_blocked', hard[0]!.message, { blockers: hard }, hard[0]!.hint);
-    const { token, url } = this.open(doc, revision, null, { width: manifest.output.width, height: manifest.output.height, firstFrame: frameIndex, frames: 1 });
+    return this.pageStill(doc, revision, null, { width: manifest.output.width, height: manifest.output.height, firstFrame: frameIndex });
+  }
+  /**
+   * One frame of `doc` drawn by the render page (the shared evaluate + compositor) as PNG at exactly width × height: renderStill
+   * (agents' render_frame, the PNG export) and the saved picture (wave 8 cover: its document at the file's own, possibly odd, size).
+   */
+  private async pageStill(doc: ProjectDocument, revision: number, jobId: string | null, out: { width: number; height: number; firstFrame: number }): Promise<Buffer> {
+    const { token, url } = this.open(doc, revision, jobId, { ...out, frames: 1 });
     try {
       // Stills are reachable with a read-only credential and each opens a browser page: run at most two at a time.
       return await stillLimit(() => this.host.renderStill(url, 0, { gpu: usesGpuEffects(doc) }));
@@ -648,12 +715,25 @@ export class Exporter {
       let renderStageMs: unknown = null;
       let validation: Record<string, unknown>;
       let segmentsReport: SegmentedExportReport | null = null;
+      let stillOut: StillOutput | null = null;
       // Picture checks (wave 7 send, C10): fed with the flash check's own cells on both routes; report only, never blocks.
       const picture = pictureCheckFor(doc, options.format, output);
 
       // The fast export runs only through the segmented route (ADR-0024), which is wired after its workers; until then a job asking
       // for it (planning refuses it, so only a hand-made job could) fails honestly instead of being exported another way.
-      if (options.mode === 'incremental') {
+      if (options.still) {
+        // «שמירת התמונה» (wave 8 cover, C5/C7/C10): the still's document drawn 1:1 by the render page (never an ffmpeg decode of the
+        // source), the lossless PNG cropped by ffmpeg and encoded without metadata, then checked (codec, size, tags, chunks).
+        const st = manifest.still!, asset = doc.assets[options.still.assetId]!;
+        this.store.updateJob(jobId, { stage: 'rendering still' });
+        const rendered = path.join(work, 'rendered.png');
+        fs.writeFileSync(rendered, await this.pageStill(doc, job.input.revision, jobId, { width: st.source.width, height: st.source.height, firstFrame: 0 }));
+        if (canceled()) throw new Error('canceled');
+        this.store.updateJob(jobId, { stage: 'checking the export' });
+        const format = options.format === 'jpeg' ? 'jpeg' : 'png';
+        validation = { ...(await writeStillFile({ renderedPng: rendered, crop: st.crop, format, outFile: partial, onProcess: (p) => { if (this.running) this.running.ff = p ?? undefined; } })), source: st.source };
+        stillOut = stillOutputOf(asset, options.still, st, format);
+      } else if (options.mode === 'incremental') {
         // The segmented route (ADR-0024): the same snapshot, the same render page and compositor, only the changed segments rendered.
         const seg = this.segmented;
         const b = !seg ? unavailableBlocker(INCREMENTAL_NOT_BUILT_REASON) : incrementalBlockers(options, this.incremental)[0];
@@ -784,7 +864,7 @@ export class Exporter {
         status: 'succeeded', stage: null,
         output: {
           file: path.basename(final), mimeType: { mp4: 'video/mp4', webm: 'video/webm', gif: 'image/gif', wav: 'audio/wav', png: 'image/png', jpg: 'image/jpeg' }[ext], captions: captionsOut, ...(licence ? { licence } : {}), bytes, revision: job.input.revision, route: segmentsReport ? SEGMENTED_ROUTE : 'server-software-canvas2d', ...(segmentsReport ? { segments: segmentsReport } : {}), options, manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, audioEffects: manifest.audioEffects ?? [], output },
-          estimate: { ...manifest.estimate, actualBytes: bytes }, ...(flashReport ? { photosensitivity: flashReport } : {}), ...(fitOut ? { fit: fitOut } : {}), ...(checks ? { checks } : {}), audioClipsMixed: audioClips, audio: audioMix && { mixPeakDbfs: audioMix.mixPeakDbfs, clipped: audioMix.clipped, loudness: audioMix.loudness, ...(audioMix.limiter ? { limiter: audioMix.limiter } : {}) }, validation, renderStageMs, wallSeconds: wall, realtimeFactor: output.frames > 1 ? (output.frames * frameRate.den) / frameRate.num / wall : null,
+          estimate: { ...manifest.estimate, actualBytes: bytes }, ...(flashReport ? { photosensitivity: flashReport } : {}), ...(fitOut ? { fit: fitOut } : {}), ...(stillOut ? { still: stillOut } : {}), ...(checks ? { checks } : {}), audioClipsMixed: audioClips, audio: audioMix && { mixPeakDbfs: audioMix.mixPeakDbfs, clipped: audioMix.clipped, loudness: audioMix.loudness, ...(audioMix.limiter ? { limiter: audioMix.limiter } : {}) }, validation, renderStageMs, wallSeconds: wall, realtimeFactor: output.frames > 1 ? (output.frames * frameRate.den) / frameRate.num / wall : null,
         },
       });
     } catch (e: any) {
@@ -831,4 +911,26 @@ export function pictureCheckFor(doc: ProjectDocument, format: ExportOptions['for
 export function soundChecksOf(mix: MixResult | null): SoundChecks {
   if (mix?.checks) return mix.checks;
   return { method: mix ? 'Not measured in this build: the sound checks of the written 16-bit WAV are not built yet.' : 'Not measured: this export has no sound.', status: 'not_measured', findings: [] };
+}
+
+/** The file name a saved picture is offered under: `{asset name} · {frame time}` (no date, decisions "cover" 3); a picture file has no frame time. */
+export function stillFileName(asset: Pick<Asset, 'name' | 'kind' | 'video' | 'image'>, sourceFrame: number, format: 'png' | 'jpeg'): string {
+  const base = (asset.name.replace(/\.[A-Za-z0-9]{1,5}$/, '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').trim() || 'picture').slice(0, 120);
+  const ext = format === 'jpeg' ? 'jpg' : 'png';
+  if (asset.kind === 'image' || !asset.video) return `${base}.${ext}`;
+  const t = sourceTimeOfFrame(asset, sourceFrame);
+  const ms = (BigInt(t.value) * 1000n) / BigInt(t.timescale); // exact, floored: never through float seconds
+  const h = ms / 3_600_000n, m = (ms / 60_000n) % 60n, sec = (ms / 1000n) % 60n, milli = ms % 1000n;
+  const pad = (v: bigint, n: number) => v.toString().padStart(n, '0');
+  return `${base} · ${h > 0n ? `${h}h${pad(m, 2)}m` : `${m}m`}${pad(sec, 2)}.${pad(milli, 3)}s.${ext}`;
+}
+/** output.still of a finished saved picture (StillOutput). */
+export function stillOutputOf(asset: Asset, s: NonNullable<ExportOptions['still']>, st: NonNullable<Manifest['still']>, format: 'png' | 'jpeg'): StillOutput {
+  return {
+    format, width: st.crop.w, height: st.crop.h, crop: st.crop,
+    source: { width: st.source.width, height: st.source.height, rate: asset.kind === 'image' || !asset.video ? null : asset.video.frameRate, conformed: asset.conform?.reasons ?? null },
+    print: s.paper && s.orientation ? { paper: s.paper, orientation: s.orientation, ...printFit(st.crop, s.paper, s.orientation) } : null,
+    untriedSize: st.source.width * st.source.height > STILL_TRIED_MAX_PIXELS,
+    fileName: stillFileName(asset, s.sourceFrame, format),
+  };
 }

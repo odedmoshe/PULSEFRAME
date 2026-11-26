@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-26T04:28:22.485Z",
+  "ranAt": "2026-11-26T07:23:19.045Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "browser": "153.0.8010.12"
@@ -145,7 +145,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_ecb0e3bf240]",
+          "focusAfterClose": "button[data-testid=more-ast_b611c4fc680]",
           "focusReturned": true
         },
         {
@@ -764,7 +764,7 @@
         },
         {
           "state": "cache-sheet-first",
-          "controls": 486,
+          "controls": 485,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1706,7 +1706,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_ecb0e3bf240]",
+          "focusAfterClose": "button[data-testid=more-ast_b611c4fc680]",
           "focusReturned": true
         },
         {
@@ -3786,7 +3786,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 481,
+          "controls": 482,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],

@@ -1,4 +1,5 @@
 export * from './schema.ts';
+export * from './drawn.ts';
 export * from './validate.ts';
 export * from './ops.ts';
 export * from './queries.ts';
@@ -43,6 +44,13 @@ export * from './geometry.ts';
 export * from './templateContract.ts';
 export * from './templateCatalog.ts';
 export * from './templatePlan.ts';
+// wave 8 owntemplate «שמירת הסרט כתבנית» (lead pre-pass: contract, whitelist, stubs)
+export * from './ownTemplateContract.ts';
+export * from './ownTemplateKeys.ts';
+export * from './ownTemplate.strings.ts';
+export * from './ownTemplate.ts';
+export * from './ownTemplateScan.ts';
+export * from './ownTemplatePlan.ts';
 export * from './templateOps.ts';
 export * from './lineage.ts';
 export * from './sha256.ts';
@@ -124,6 +132,9 @@ export * from './loudnessMatch.ts';
 export * from './sendOps.ts';
 export * from './sizeFit.ts';
 export * from './exportChecks.ts';
+// «בדיקה לפני ייצוא» (wave 8 qc): the contract is the lead's; the rules and the explanation pass are B1's (qcChecks.ts)
+export * from './qcContract.ts';
+export * from './qcChecks.ts';
 // «הפריים הכי חד» and «שמירת התמונה» (wave 8 cover, version 1): the contract is lead-built; stillsRank is W1's, printFit and
 // stillDocument W2's (stubs until then)
 export * from './stillsContract.ts';
@@ -179,6 +190,9 @@ export * from './booth/contract.ts';
 export * from './booth/report.ts';
 export * from './booth/scrub.ts';
 export * from './booth/scene.ts';
+// the local picture-model runtime and `eyes` (wave 8 picmodels track): lead contract; the picture-map contract is types only this wave
+export * from './picmodelsContract.ts';
+export * from './pictureMapContract.ts';
 // a version for every audience «גרסה לכל קהל» (wave 8 audiences track): the contract, limits, validation and the three ops are
 // lead-built; audience.ts (rules, sound roles, change list) is W1's
 export * from './audienceLimits.ts';
@@ -186,3 +200,39 @@ export * from './audienceContract.ts';
 export * from './audienceValidate.ts';
 export * from './audience.ts';
 export * from './audienceOps.ts';
+// trip map (wave 8 tripmap): the drawn kind `map` (registered on import), its pure functions and its three ops
+export * from './mapContract.ts';
+export * from './tripMap.ts';
+export * from './mapOps.ts';
+// «למדו אותי פעם אחת» teach once (wave 8 teach track): the contract (the LEARN table, the lesson format, the catalogue parameter
+// classes), the validation and apply_lesson are lead-built; lesson.ts (derive, the apply routine, the plan) is W1's. pairRun.ts is
+// the per-pair helper paste attributes and teach share (saveTarget / restoreTarget are exported through pasteAttributes.ts).
+export * from './lessonContract.ts';
+export * from './lessonValidate.ts';
+export * from './lesson.ts';
+export * from './lessonOps.ts';
+export { inFixedOrder, runRegisteredOp, type SavedClip } from './pairRun.ts';
+// «תמונה חיה» (wave 8 living track): the contract, comfort rule, validation and set_clip_depth are lead-built; depthGrid.ts, living.ts and
+// set_living_picture's body (livingOps.ts) are W1's
+export * from './livingContract.ts';
+export * from './livingComfort.ts';
+export * from './livingValidate.ts';
+export * from './depthGrid.ts';
+export * from './living.ts';
+export * from './livingOps.ts';
+// «ציור חי» (wave 8 ink track): the payload kind `ink` of the drawn clip (drawn.ts), registered on import; the contract, packing,
+// play rule and the two ops are lead-built; simplifyInkStroke is W1's (stub until then)
+export * from './inkContract.ts';
+export * from './inkOps.ts';
+export * from './inkSimplify.ts';
+// colour curves «עקומות» (wave 8 grade track): the contract, validation rule, canonical form, presets and the op set_grade_curves are
+// lead-built; the table maths (gradeCurveTable / gradeCurveTables / gradeCurveTablesRgba / gradeCurveTablesDigest) is W1's
+export * from './gradeCurves.ts';
+export * from './gradeCurvesOps.ts';
+// the in-editor agent «סוכן» (wave 8 autonomy Part 2): runs, steps, statuses, limits, routes, what undo-all cannot undo (lead pre-pass)
+export * from './agentContract.ts';
+// «קליפ מקוד» (wave 8 motioncode track): the contract (limits, record, wire types, refusals) and apply_made_clip's registration are
+// lead-built; the op body (madeOps.ts) and checkMadePage / madeFieldsCheck (madeCheck.ts) are W2's
+export * from './madeContract.ts';
+export * from './madeCheck.ts';
+export * from './madeOps.ts';

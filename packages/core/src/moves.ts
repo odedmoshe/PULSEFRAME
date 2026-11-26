@@ -242,7 +242,7 @@ export const planPerformance: PlanPerformance = (doc, input) => {
 
   // the end of the edit: the last picture or title (a sound past it would lengthen the film)
   let editEnd = 0;
-  for (const t of seq.tracks) for (const c of t.clips) if ((t.kind === 'video' && c.type === 'media') || (t.kind === 'text' && c.type === 'text')) editEnd = Math.max(editEnd, endFrame(c, rate));
+  for (const t of seq.tracks) for (const c of t.clips) if ((t.kind === 'video' && c.type === 'media') || (t.kind === 'text' && (c.type === 'text' || c.type === 'drawn'))) editEnd = Math.max(editEnd, endFrame(c, rate));
 
   // the flash model: changes of light already in the sequence, kept changes of this take, light ranges (old and this take's strobes)
   const changes: number[] = lightChanges(doc, new Set(), seqId, FLASH_TABLE_V1).map((c) => c.frame).sort((x, y) => x - y);

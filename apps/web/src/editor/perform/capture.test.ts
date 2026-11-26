@@ -203,7 +203,7 @@ function planner(clip: string, over: Partial<Planner> = {}): { p: Planner; calls
     performGrid: (_d, s) => { calls.push(`grid:${s.snap}`); return [1, 2]; },
     quantiseTaps: (taps, grid, s) => { calls.push(`quantise:${taps.length}:${grid.length}:${s.snap}:${s.strength}`); return taps.map((t, i) => ({ tap: i, pad: t.pad, frame: 30, frames: 3, snapped: false, movedMs: 0 })); },
     planPerformance: (_d, input) => { calls.push(`plan:${input.hits.length}:${input.bank.filter(Boolean).length}`); return plan; },
-    flashSchedule: () => ({ fps: 30, gapFrames: 11, shown: new Map(), runOf: new Map(), lights: new Map() }),
+    flashSchedule: () => ({ fps: 30, gapFrames: 11, shown: new Map(), runOf: new Map(), lights: new Map(), flashing: [] }),
     ...over,
   };
   return { p, calls };
@@ -271,7 +271,7 @@ describe('markStrobeHolds and counts', () => {
       { tap: 0, pad: 0, moveId: 'm', frame: 30, frames: 30, state: 'kept' }, { tap: 1, pad: 0, moveId: 'm', frame: 90, frames: 30, state: 'kept' },
       { tap: 2, pad: 1, moveId: 'p', frame: 100, frames: 3, state: 'kept' }, { tap: 3, pad: 0, moveId: 'm', frame: 150, frames: 30, state: 'held', reason: 'no_music' },
     ];
-    const { p } = planner('x', { flashSchedule: () => ({ fps: 30, gapFrames: 11, shown: new Map([['clp_s1\nclp_s1_e', Float64Array.from([36, 48])]]), runOf: new Map(), lights: new Map() }) });
+    const { p } = planner('x', { flashSchedule: () => ({ fps: 30, gapFrames: 11, shown: new Map([['clp_s1\nclp_s1_e', Float64Array.from([36, 48])]]), runOf: new Map(), lights: new Map(), flashing: [] }) });
     const out = markStrobeHolds(doc, withStrobes, chips, strobeBank, p);
     expect(out.map((c) => [c.state, c.reason])).toEqual([['kept', undefined], ['held', 'flash_limit'], ['kept', undefined], ['held', 'no_music']]);
     expect(countChips(out)).toEqual({ kept: 2, merged: 0, held: 2, byReason: { flash_limit: 1, no_music: 1 } });

@@ -99,10 +99,14 @@ export const MUSIC_KITS: readonly MusicKit[] = [
     ],
     parts: {
       // edge 2: no sustained-strings instrument of the set covers every note of pad (47..78 seen) and double (69..88) (lead, 2026-11-26)
-      pad: { instrument: 'strings', gainDb: -18, vel: [40, 100], edge: 2 },
-      double: { instrument: 'strings', gainDb: -18, vel: [40, 100], edge: 2 },
-      arp: { instrument: 'piano', gainDb: -18, vel: [40, 110] },
-      lead: { instrument: 'piano', gainDb: -18, vel: [50, 120] },
+      // Starting gains from the first run on the real samples (owner's computer, 2026-11-26, `pnpm kit:check`, 16 bars, seed 1;
+      // docs/evidence/kit-check-calm-vsco-2026-11-26.txt): for each part the lower of (the gain at which its RMS alone equals the
+      // synthesised part's) and (the gain at which its peak alone equals the synthesised part's peak), so no recorded part is
+      // louder than its synthesised twin by either measure. One sample; nobody has listened; the owner's ear decides (L5).
+      pad: { instrument: 'strings', gainDb: -11.4, vel: [40, 100], edge: 2 },
+      double: { instrument: 'strings', gainDb: -13.9, vel: [40, 100], edge: 2 },
+      arp: { instrument: 'piano', gainDb: 3.7, vel: [40, 110] },
+      lead: { instrument: 'piano', gainDb: 3.4, vel: [50, 120] },
     },
   },
 ];

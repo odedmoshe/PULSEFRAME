@@ -4,12 +4,14 @@ import { sourceEnd, speedValue } from './speed.ts';
 import { findAudioEffect } from './audioEffects.ts';
 import { ANIMATABLE, CaptureSchema, LifeEventSchema, MAX_LIFE_EVENTS, MAX_PEOPLE, MAX_SEQUENCES, PersonSchema, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
 import { personNameKey } from './people.ts';
+import { drawnIssues } from './drawn.ts';
 import { lifeIssues } from './fields.ts';
 import { isInheritedName, own } from './own.ts';
 import { MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, TRACK_STATES } from './tracking.ts';
 import { momentsProblem } from './momentsContract.ts';
 import { type Keyframe } from './keyframe.ts';
 import { turnsBack } from './curves.ts';
+import { gradeCurvesListIssues } from './gradeCurves.ts';
 
 /**
  * Keyframe curves (ADR-0019). Both rules can fire only on documents that use the new fields (`bezier`, the new easings).
@@ -24,6 +26,8 @@ import { steadyIssues } from './steadyValidate.ts';
 import { validateSourceRanges } from './sourceRanges.ts';
 import { musicFitIssues } from './musicFitValidate.ts';
 import { audienceIssues } from './audienceValidate.ts';
+import { livingIssues } from './livingValidate.ts';
+import { LIVING_EFFECT, LIVING_ON_ADJUSTMENT } from './livingContract.ts';
 import { instrumentsIssues } from './instrumentsValidate.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
@@ -47,6 +51,7 @@ export function adjustmentRefusal(type: string): string | null {
   if (isTimeEffect(type)) return 'a time effect needs a clip\'s own source; it cannot act on the picture below';
   if (type === 'key.chroma') return 'a chroma key over the whole picture below would cut holes through to the background';
   if (type === 'stylize.shadow') return 'a drop shadow has no visible result on a full-frame picture';
+  if (type === LIVING_EFFECT) return LIVING_ON_ADJUSTMENT;
   return null;
 }
 
@@ -116,6 +121,15 @@ export function validateProject(doc: ProjectDocument): Issue[] {
       if ((fr.mapping === 'interpolated') !== (fr.multiplier !== undefined)) issues.push({ code: 'derived_frames', message: `asset ${a.id}: an interpolated result names its multiplier, and only it does`, ids: [a.id] });
       if (fr.heldFrames.some((f, i) => i > 0 && f <= fr.heldFrames[i - 1]!)) issues.push({ code: 'derived_frames', message: `asset ${a.id}: held frames must be strictly ascending`, ids: [a.id] });
     }
+    // «קליפ מקוד» (wave 8 motioncode): a clip made by a page is a generated video whose record matches its file
+    const made = a.provenance.made;
+    if (made) {
+      if (a.provenance.origin !== 'generated' || a.kind !== 'video') issues.push({ code: 'made_provenance', message: `asset ${a.id}: only a generated video records the page that made it`, ids: [a.id] });
+      if (a.video && a.video.frameCount !== made.frames) issues.push({ code: 'made_provenance', message: `asset ${a.id}: the made record says ${made.frames} frames, the file has ${a.video.frameCount}`, ids: [a.id] });
+      if (a.video && made.checks.alpha !== !!a.video.hasAlpha) issues.push({ code: 'made_provenance', message: `asset ${a.id}: the made record and the file disagree about transparency`, ids: [a.id] });
+      const keys = new Set(made.fields.map((f) => f.key));
+      for (const k of Object.keys(made.values)) if (!keys.has(k)) issues.push({ code: 'made_provenance', message: `asset ${a.id}: the value ${k} names no field of the page`, ids: [a.id] });
+    }
     // ADR-0023: how a file arrived through the import queue. Only uploads carry it; a phone file names its drop code (by id) and
     // only a phone file does; only a folder file has a path inside the folder.
     const up = a.provenance.upload;
@@ -182,6 +196,8 @@ export function validateProject(doc: ProjectDocument): Issue[] {
           });
         }
         const seenFx = new Set<string>();
+        // colour curves (wave 8 grade, gradeCurves.ts): only on color.grade, each curve valid; a field only new documents carry
+        for (const g of gradeCurvesListIssues(c.effects, `clip ${c.id}`)) issues.push({ ...g, ids: [c.id] });
         for (const fx of c.effects ?? []) {
           const d = findEffect(fx.type);
           if (!d) issues.push({ code: 'unknown_effect', message: `clip ${c.id} uses effect "${fx.type}", which this build does not have`, ids: [c.id] });
@@ -218,7 +234,7 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         if ((c.effects?.length || c.blend) && (tr.kind === 'audio' || tr.kind === 'caption')) issues.push({ code: 'incompatible_track', message: `clip ${c.id} on a ${tr.kind} track cannot carry picture effects`, ids: [c.id, tr.id] });
         // Motion tracking (ADR-0015): new optional fields, so these rules can only fire on documents that use them.
         if (c.follow) {
-          if (!(c.type === 'text' || (c.type === 'media' && tr.kind === 'video'))) issues.push({ code: 'follow_clip', message: `clip ${c.id}: only a title, or a picture on a video track, can follow a motion track`, ids: [c.id, tr.id] });
+          if (!(c.type === 'text' || c.type === 'drawn' || (c.type === 'media' && tr.kind === 'video'))) issues.push({ code: 'follow_clip', message: `clip ${c.id}: only a title or a drawing, or a picture on a video track, can follow a motion track`, ids: [c.id, tr.id] });
           if (!Object.hasOwn(motionTracks, c.follow.motionTrackId)) issues.push({ code: 'follow_track', message: `clip ${c.id} follows motion track ${c.follow.motionTrackId}, which does not exist`, ids: [c.id, c.follow.motionTrackId] });
           const first = c.effects?.find((e) => e.enabled);
           if (first && isTimeEffect(first.type)) issues.push({ code: 'follow_time_effect', message: `clip ${c.id}: a clip with a time effect cannot follow a motion track yet`, ids: [c.id] });
@@ -268,6 +284,12 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         }
         if (c.type === 'text' || c.type === 'caption') {
           if (tr.kind !== c.type) issues.push({ code: 'incompatible_track', message: `${c.type} clip ${c.id} on ${tr.kind} track`, ids: [c.id, tr.id] });
+          continue;
+        }
+        if (c.type === 'drawn') {
+          // a drawn overlay (wave 8 carrier, drawn.ts) lives on a text track only; its kind adds its own document checks
+          if (tr.kind !== 'text') issues.push({ code: 'drawn_track', message: `drawn clip ${c.id} on ${tr.kind} track: a drawing goes on a titles track`, ids: [c.id, tr.id] });
+          for (const i of drawnIssues(c.drawn, { doc, clipId: c.id, sequenceId: seq.id })) issues.push({ code: i.code, message: `drawn clip ${c.id}: ${i.message}`, ids: [c.id] });
           continue;
         }
         if (tr.kind === 'caption') issues.push({ code: 'incompatible_track', message: `media clip ${c.id} on caption track`, ids: [c.id, tr.id] });
@@ -435,6 +457,8 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   issues.push(...instrumentsIssues(doc));
   // versions for an audience (wave 8 audiences; audienceValidate.ts, codes audience_*)
   issues.push(...audienceIssues(doc));
+  // «תמונה חיה» (wave 8 living; livingValidate.ts, codes clip_depth, living_effect)
+  issues.push(...livingIssues(doc));
   return issues;
 }
 const hasTags = (doc: ProjectDocument) => Object.values(doc.sequences).some((s) => s.tracks.some((t) => t.clips.some((c) => c.type === 'media' && !!c.multicam)));

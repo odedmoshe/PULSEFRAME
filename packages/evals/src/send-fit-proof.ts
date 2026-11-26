@@ -39,7 +39,6 @@ const execP = promisify(execFile);
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/send-fit');
 const dataDir = path.join(art, 'data');
-const PORT = Number(process.env.PF_PROOF_PORT ?? 8951);
 
 // ---- expected numbers, typed here (never computed by the code under test) ----
 const W = 640, H = 360, FRAMES = 360, TARGET = 1_500_000, FLOOR_SHARE = 0.85, HALF_TARGET = 1_000_000, BIG_TARGET = 500_000_000;
@@ -99,7 +98,7 @@ async function main() {
   spawnSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=s=640x360', '-frames:v', '1', stillPng]);
   const webBuilt = fs.existsSync(path.join(root, 'apps/web/dist/render.html'));
 
-  let s = await startServer({ port: PORT, dataDir });
+  let s = await startServer({ port: 0, dataDir });
   let api = makeApi(s.url, s.auth.tokens.agent);
   const f1 = async (name: string, size = { width: W, height: H }) => {
     const pid = (await api.call('/projects', { name, ...size })).body.project.id as string;
@@ -211,7 +210,7 @@ async function main() {
     // ---- S3 / S4: the labelled test fault (a server restarted with startServer deps) ----
     await s.close();
     for (const fault of ['overshoot-once', 'overshoot-always'] as const) {
-      s = await startServer({ port: PORT, dataDir }, { fitFault: fault });
+      s = await startServer({ port: 0, dataDir }, { fitFault: fault });
       api = makeApi(s.url, s.auth.tokens.agent);
       const j = await exportAndWait(api, pidF1, { sizeFit: { targetBytes: TARGET } });
       if (fault === 'overshoot-once') {

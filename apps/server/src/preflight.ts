@@ -4,7 +4,7 @@
  * Blockers stop an export; warnings and notes do not. Read-only. Text extents are ESTIMATES (the server does not shape text).
  */
 import * as T from '@pulseframe/time';
-import { BACKDROP, BACKDROP_MIN_BLUR, MULTICAM_PREFLIGHT_CODE, own, multicamGroupOf, segmentSyncOffset, outputSafeArea, previousAdjacent, sequenceDuration, sequenceOf, velocityLimit, velocityNeeds, type Clip, type FollowStateName, type MediaClip, type OpCall, type ProjectDocument, type ResolvedRegion, type Track, type Transition } from '@pulseframe/core';
+import { BACKDROP, BACKDROP_MIN_BLUR, documentChecks, QC_BUILT, QC_LIMITS, drawnBox, drawnName, type DrawnClip, MULTICAM_PREFLIGHT_CODE, own, multicamGroupOf, segmentSyncOffset, outputSafeArea, previousAdjacent, sequenceDuration, sequenceOf, velocityLimit, velocityNeeds, type Clip, type FollowStateName, type MediaClip, type OpCall, type ProjectDocument, type ResolvedRegion, type Track, type Transition } from '@pulseframe/core';
 import { audioPlan, captionCues, decodeOverBudget, evaluate, type DecodeStretch, type Layer } from '@pulseframe/engine';
 import type { Exporter } from './export.ts';
 import { LIBRARY_EXPORT_NOTES, outputDoc } from './export.ts';
@@ -16,6 +16,8 @@ export interface PreflightIssue {
   message: string;
   ids: string[];
   range?: { startFrame: number; endFrame: number };
+  /** The numbers behind the issue (wave 8 qc: every document rule of qcChecks.ts carries them; older codes may not). Additive. */
+  measured?: Record<string, number>;
   /** A mechanical fix the caller may apply as one transaction (or propose). Absent when the fix needs judgement. */
   fix?: { label: string; ops: OpCall[] };
 }
@@ -160,13 +162,17 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
           if (enlarge > 1.5) issues.push({ code: 'upscaled', severity: 'warning', message: `"${asset!.name}" (${dims.width}×${dims.height}) is shown ${enlarge.toFixed(2)}× larger than its own pixels in this ${W}×${H} output and will look soft`, ids: [c.id, c.assetId] });
         }
       }
-      // 6. titles against the safe area (estimated extent)
-      if (c.type === 'text' && guide?.safeArea && !track.hidden) {
+      // 6. titles against the safe area (estimated extent); a drawn overlay (wave 8) by its kind's exact box, when the kind
+      // has one (a kind without a box covers the whole frame on purpose, a map, and is not checked)
+      const dbox = c.type === 'drawn' ? drawnBox(c.drawn) : null;
+      if ((c.type === 'text' || dbox) && guide?.safeArea && !track.hidden) {
         const sa = guide.safeArea;
-        const lines = (c.fields ? fieldTextExtent(doc, seq.id, c) : c.text).split('\n'); // a title with live fields: the longest text it resolves to (ADR-0021)
-        const hFrac = lines.length * c.style.sizeFrac * c.style.lineHeight * c.transform.scale;
-        const wFrac = Math.min(0.9, Math.max(...lines.map((l) => l.length)) * c.style.sizeFrac * 0.55 * (H / W)) * c.transform.scale;
-        const cx = 0.5 + c.transform.x, cy = 0.5 + c.transform.y;
+        const lines = c.type === 'text' ? (c.fields ? fieldTextExtent(doc, seq.id, c) : c.text).split('\n') : []; // a title with live fields: the longest text it resolves to (ADR-0021)
+        const hFrac = c.type === 'text' ? lines.length * c.style.sizeFrac * c.style.lineHeight * c.transform.scale : dbox!.h * c.transform.scale;
+        const wFrac = c.type === 'text' ? Math.min(0.9, Math.max(...lines.map((l) => l.length)) * c.style.sizeFrac * 0.55 * (H / W)) * c.transform.scale : dbox!.w * (H / W) * c.transform.scale;
+        // the box's centre relative to the anchor (a title is centred on it), in frame fractions
+        const ox = dbox ? (dbox.x + dbox.w / 2) * (H / W) * c.transform.scale : 0, oy = dbox ? (dbox.y + dbox.h / 2) * c.transform.scale : 0;
+        const cx = 0.5 + c.transform.x + ox, cy = 0.5 + c.transform.y + oy;
         const e = 1e-3; // rounding slack, so a title placed by the fix is not flagged again
         const out = { top: cy - hFrac / 2 < sa.top - e, bottom: cy + hFrac / 2 > 1 - sa.bottom + e, left: cx - wFrac / 2 < sa.left - e, right: cx + wFrac / 2 > 1 - sa.right + e };
         if (out.top || out.bottom || out.left || out.right) {
@@ -175,9 +181,9 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
           const k = Math.min(1, (availW / wFrac) * 0.98, (availH / hFrac) * 0.98);
           const w2 = wFrac * k, h2 = hFrac * k;
           const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-          const nx = clamp(cx, sa.left + w2 / 2, 1 - sa.right - w2 / 2) - 0.5, ny = clamp(cy, sa.top + h2 / 2, 1 - sa.bottom - h2 / 2) - 0.5;
+          const nx = clamp(cx, sa.left + w2 / 2, 1 - sa.right - w2 / 2) - 0.5 - ox * k, ny = clamp(cy, sa.top + h2 / 2, 1 - sa.bottom - h2 / 2) - 0.5 - oy * k;
           const transform = { x: Number(nx.toFixed(4)), y: Number(ny.toFixed(4)), ...(k < 1 ? { scale: Number((c.transform.scale * k).toFixed(4)) } : {}) };
-          issues.push({ code: 'outside_safe_area', severity: 'warning', message: `the title "${c.text.slice(0, 30)}" probably reaches outside the safe area of ${guide.name} (${Object.entries(out).filter(([, v]) => v).map(([k2]) => k2).join(', ')}); app interface elements may cover it. The extent is an estimate`, ids: [c.id, guide.id],
+          issues.push({ code: 'outside_safe_area', severity: 'warning', message: `${c.type === 'text' ? `the title "${c.text.slice(0, 30)}" probably reaches` : `the ${drawnName((c as DrawnClip).drawn).en.toLowerCase()} reaches`} outside the safe area of ${guide.name} (${Object.entries(out).filter(([, v]) => v).map(([k2]) => k2).join(', ')}); app interface elements may cover it. The extent is an estimate`, ids: [c.id, guide.id],
             fix: variant
               ? { label: k < 1 ? 'Shrink and move it inside the safe area in this format only' : 'Move it inside the safe area in this format only', ops: [{ op: 'set_variant_override', args: { variantId: variant.id, clipId: c.id, transform } }] }
               : { label: k < 1 ? 'Shrink and move it inside the safe area of this short' : 'Move it inside the safe area of this short', ops: [{ op: 'set_clip_transform', args: { clipId: c.id, transform } }] } });
@@ -211,14 +217,20 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
   // 11. stabilisation (wave 7): frames of a stabilised clip whose source frames were not measured, and frames where the cover
   // limit weakens the correction (warnings; the fix recalculates the crop)
   issues.push(...stabiliseIssues(doc, rate));
+  // 12. «בדיקה לפני ייצוא» (wave 8 qc): the document rules of core qcChecks.ts on this output (flash_clip, held_past_picture,
+  // title_hidden, ends_mid_word, cut_mid_word), each with its frame range and measured numbers. Until B1 builds them: none.
+  issues.push(...documentChecks(doc).issues);
 
   const count = (s: PreflightIssue['severity']) => issues.filter((i) => i.severity === s).length;
   return {
     revision, variantId: opts.variantId ?? null, sequenceId: opts.sequenceId ?? null, output: { width: W, height: H, frames: total, fit: doc.settings.fit ?? 'contain', safeArea: guide?.safeArea ?? null },
     ok: count('blocker') === 0, blockers: count('blocker'), warnings: count('warning'), notes: count('note'), issues,
-    scope: 'Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, video decoders needed at once, transition handles (velocity ramps included), upscaling, safe areas (estimated text extents), caption reading speed, title fields without data and capture-sourced date stamps without a date, motion tracking (clips that follow a track or blur along it, on frames where the tracking is lost or uncertain or the followed picture is absent), multicam segments out of step with the master sound by more than half a frame, stabilised clips (frames whose camera motion was not measured, frames where the correction is weakened so no empty edge shows). Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.',
+    scope: `Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, video decoders needed at once, transition handles (velocity ramps included), upscaling, safe areas (estimated text extents), caption reading speed, title fields without data and capture-sourced date stamps without a date, motion tracking (clips that follow a track or blur along it, on frames where the tracking is lost or uncertain or the followed picture is absent), multicam segments out of step with the master sound by more than half a frame, stabilised clips (frames whose camera motion was not measured, frames where the correction is weakened so no empty edge shows).${QC_BUILT ? QC_SCOPE : ''} Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.`,
   };
 }
+
+/** What the qc rules add to the scope once built (rules of thumb with their numbers; nothing here says the film is fine). */
+const QC_SCOPE = ` Rules of thumb (wave 8 qc): a picture shorter than ${QC_LIMITS.flashClipSeconds.num}/${QC_LIMITS.flashClipSeconds.den} s rounded up to frames (flash_clip), a last or first picture held because the file's sound runs past it (held_past_picture), a title covered at every frame by a full-frame opaque picture without effects that move, warp or key it (title_hidden; adjustment clips are not modelled), the film ending or a cut lying at least ${QC_LIMITS.wordMarginFrames} frame inside a transcript word (ends_mid_word, cut_mid_word; only clips with word timing).`;
 
 /**
  * Multicam (ADR-0020 plan §7): every tagged picture segment of the sequence whose group time at its start or end differs from
@@ -318,7 +330,7 @@ export function trackingIssues(doc: ProjectDocument, rate: { num: number; den: n
           }
       }
     }
-  const name = (c: Clip) => (c.type === 'text' ? `the title "${c.text.slice(0, 30)}"` : c.type === 'media' ? `"${doc.assets[c.assetId]?.name ?? c.id}"` : c.id);
+  const name = (c: Clip) => (c.type === 'text' ? `the title "${c.text.slice(0, 30)}"` : c.type === 'media' ? `"${doc.assets[c.assetId]?.name ?? c.id}"` : c.type === 'drawn' ? `the ${drawnName(c.drawn).en.toLowerCase()}` : c.id);
   const trackName = (ids: Set<string>) => [...ids].map((id) => own(doc.motionTracks, id)?.name).filter(Boolean).map((n) => `"${n}"`).join(', ') || 'its motion track';
   const out: PreflightIssue[] = [];
   for (const r of runs.values()) {

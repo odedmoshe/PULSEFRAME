@@ -1,6 +1,7 @@
 import { pearlsSummary } from './sourceRanges.ts';
 import { sequenceList } from './sequences.ts';
 import * as T from '@pulseframe/time';
+import { drawnSummary } from './drawn.ts';
 import type { Asset, MediaClip, ProjectDocument } from './schema.ts';
 import { clipEnd, sequenceDuration } from './validate.ts';
 import { timelineMarkers } from './cleanup.ts';
@@ -8,6 +9,7 @@ import { assetNotices } from './notices.ts';
 import { own } from './own.ts';
 import { eventDisplayName } from './events.ts';
 import { shareable } from './libraryCredits.ts';
+import { audienceMusicDb, hasFormatOverride } from './audienceContract.ts';
 
 const sec = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));
 
@@ -64,7 +66,10 @@ export function summarize(doc: ProjectDocument) {
     // shorts (ADR-0018): every sequence of the project, the main edit first; `tracks` above are the main edit's
     sequences: sequenceList(doc),
     recipeRuns: Object.values(doc.recipeRuns ?? {}).map((r) => ({ id: r.id, recipeId: r.recipeId, created: r.createdIds.length, steps: r.steps })),
-    variants: Object.values(doc.variants ?? {}).map((v) => ({ id: v.id, name: v.name, width: v.width, height: v.height, fit: v.fit, safeArea: v.safeArea, captionStyle: v.captionStyle ?? null, overrides: Object.keys(v.overrides).length })),
+    // `overrides` counts the clips adjusted for this format; a clip whose only entry is a kept audience rule is not one (C14).
+    // `audience` (wave 8): a version for an audience, its profile and the music level it uses (dB relative to the rest of the mix).
+    variants: Object.values(doc.variants ?? {}).map((v) => ({ id: v.id, name: v.name, width: v.width, height: v.height, fit: v.fit, safeArea: v.safeArea, captionStyle: v.captionStyle ?? null, overrides: Object.values(v.overrides).filter(hasFormatOverride).length,
+      audience: v.audience ? { profile: v.audience.profile, musicDb: audienceMusicDb(v.audience) } : null })),
     // the STORED records, one per measured file, on purpose not by lineage (lineage.ts): this lists what exists to be read or
     // corrected (get_analysis, edit_analysis). A copy that follows its source's record has no entry (pinned in beatLineage.test.ts)
     analyses: Object.values(doc.analyses ?? {}).map((a) => ({ assetId: a.assetId, sceneCuts: a.scenes?.cuts.length ?? null, beats: a.beats?.beats.length ?? null, bpm: a.beats?.bpm ?? null, bars: a.beats?.downbeats?.length ?? null, meter: a.beats?.meter ?? null })),
@@ -93,7 +98,7 @@ export function timeline(doc: ProjectDocument, sequenceId = doc.mainSequenceId) 
       clips: t.clips.map((c) => ({
         id: c.id, type: c.type, start: c.start, duration: c.duration, end: clipEnd(c),
         startSeconds: sec(c.start), endSeconds: sec(clipEnd(c)),
-        ...(c.type === 'media' ? { assetId: c.assetId, sourceIn: c.sourceIn, gain: c.gain, linkGroupId: c.linkGroupId, ...(c.speed ? { speed: c.speed.num / c.speed.den } : {}), ...(t.kind === 'audio' ? soundFields(c, tails) : {}) } : c.type === 'text' ? { text: c.text, style: c.style, ...(c.fields ? { fields: true as const } : {}) } : c.type === 'caption' ? { text: c.text } : { ...(c.label ? { label: c.label } : {}) }),
+        ...(c.type === 'media' ? { assetId: c.assetId, sourceIn: c.sourceIn, gain: c.gain, linkGroupId: c.linkGroupId, ...(c.speed ? { speed: c.speed.num / c.speed.den } : {}), ...(t.kind === 'audio' ? soundFields(c, tails) : {}) } : c.type === 'text' ? { text: c.text, style: c.style, ...(c.fields ? { fields: true as const } : {}) } : c.type === 'caption' ? { text: c.text } : c.type === 'drawn' ? { drawn: drawnSummary(c.drawn) } : { ...(c.label ? { label: c.label } : {}) }),
         transform: c.transform,
       })),
     })),
@@ -112,4 +117,24 @@ export function transcriptView(doc: ProjectDocument, assetId: string) {
       words: s.words.map((w) => ({ id: w.id, text: w.text, startSeconds: sec(w.start), endSeconds: sec(T.add(w.start, w.duration)), ...(w.confidence !== null ? { confidence: w.confidence } : {}) })),
     })),
   };
+}
+
+/**
+ * One page of a transcript view (MCP get_transcript paging, wave 8 autonomy C11): the segments that overlap the SOURCE window
+ * [fromSeconds, toSeconds), at most `limit` of them, and `nextFromSeconds` (the start of the first segment left out, or null).
+ * `compact` replaces each segment by one line `id start-end text` (no words): an hour of speech in a few thousand tokens; ask the
+ * same window without compact for the word ids. Without any option the view is returned as it is (the answer of before).
+ */
+export type TranscriptView = NonNullable<ReturnType<typeof transcriptView>>;
+export interface TranscriptPageOptions { fromSeconds?: number; toSeconds?: number; limit?: number; compact?: boolean }
+export function transcriptPage(view: TranscriptView, o: TranscriptPageOptions) {
+  if (o.fromSeconds === undefined && o.toSeconds === undefined && o.limit === undefined && !o.compact) return view;
+  const from = o.fromSeconds ?? 0, to = o.toSeconds ?? Number.POSITIVE_INFINITY;
+  const inWindow = view.segments.filter((s) => s.endSeconds > from && s.startSeconds < to);
+  const kept = o.limit === undefined ? inWindow : inWindow.slice(0, o.limit);
+  const next = kept.length < inWindow.length ? inWindow[kept.length]!.startSeconds : null;
+  const page = { fromSeconds: from, toSeconds: Number.isFinite(to) ? to : null, segments: kept.length, totalSegments: view.segments.length, nextFromSeconds: next };
+  const { segments: _all, ...head } = view;
+  if (o.compact) return { ...head, page, lines: kept.map((s) => `${s.id} ${s.startSeconds.toFixed(2)}-${s.endSeconds.toFixed(2)} ${s.text}`) };
+  return { ...head, page, segments: kept };
 }

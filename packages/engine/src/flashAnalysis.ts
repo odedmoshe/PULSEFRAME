@@ -20,6 +20,9 @@
  * - a frame fails when, in some window, more than a quarter of the cells are flashing at once (the guidelines' "combined
  *   area of flashes occurring concurrently", 25% of the 10-degree field). A cell partly covered by a flashing object
  *   counts whole, so the check errs on the side of reporting.
+ * - the rate a failing stretch reports is the same rule asked for a higher count: the most transitions that more than a
+ *   quarter of one window each reached, halved ("flashes a second over the failing area"). The busiest single cell is
+ *   reported apart; it can be far higher (a barcode strip changing every frame) without failing on its own.
  *
  * Frames are fed one at a time (streaming), so an export can check what it encodes without keeping the frames.
  */
@@ -31,8 +34,19 @@ export interface FlashRange {
   from: number;
   to: number;
   kind: 'general' | 'red';
-  /** The most flashes counted in one second inside the stretch. */
+  /**
+   * Flashes a second over the failing area: the most transitions T, in a second ending on some frame of the stretch, that
+   * more than a quarter of the cells of one 10-degree window each reached (at least T), halved (a flash is two
+   * transitions). This is the verdict's own area rule asked for T instead of 7, so a failing stretch always reads more
+   * than 3 (7 transitions read 3.5).
+   */
   flashesPerSecond: number;
+  /**
+   * The busiest single cell of the stretch: its transitions in one second, halved. One cell is far less than the area the
+   * rule needs (a fast barcode strip can read 14 here while the area that fails flashes 5 times a second), so this is a
+   * pointer to where the picture changes fastest, not the rate of the failing flash.
+   */
+  busiestCellFlashesPerSecond: number;
   /** Share of the frame (0…1) covered by the blocks that failed somewhere in the stretch; 1 when the whole frame failed. */
   area: number;
 }
@@ -41,6 +55,11 @@ export interface FlashReport {
   frames: number;
   verdict: 'pass' | 'fail';
   ranges: FlashRange[];
+  /**
+   * Over the whole video, failing or not: the most flashes a second over more than a quarter of some 10-degree window
+   * (as FlashRange.flashesPerSecond). The check fails exactly where this is above 3; at 3 a video passes at the limit.
+   */
+  areaPeak: { general: number; red: number };
 }
 
 /** Cells per side of the grid; the window of the 10-degree field is a third of it in each direction. */
@@ -107,10 +126,15 @@ export class FlashAnalyser {
   private cells: Cell[] = [];
   private frame = 0;
   private readonly block: number;
-  /** Frames that failed: kind, the most transitions of a flashing cell in a failing window, the share of the frame flashing. */
-  private failing: { frame: number; kind: 'general' | 'red'; count: number; flashing: Uint8Array }[] = [];
+  /**
+   * Frames that failed: kind, the transitions over the failing area (areaCount), the most transitions of any one cell, and
+   * which cells were flashing.
+   */
+  private failing: { frame: number; kind: 'general' | 'red'; count: number; busiest: number; flashing: Uint8Array }[] = [];
   /** The most transitions of each kind any one cell had in any one-second window so far (peak()). */
   private highest = { general: 0, red: 0 };
+  /** The highest areaCount of each kind on any frame so far (report().areaPeak, in transitions). */
+  private highestArea = { general: 0, red: 0 };
   constructor(readonly fps: number, private readonly grid = FLASH_GRID) {
     if (!(fps > 0)) throw new RangeError('frame rate must be positive');
     this.block = Math.max(1, Math.round(grid / 3));
@@ -121,10 +145,10 @@ export class FlashAnalyser {
     });
   }
   push(cells: FlashCells): void {
-    const G = this.grid, B = this.block;
+    const G = this.grid;
     if (cells.cols !== G || cells.rows !== G) throw new RangeError(`cells must be ${G} × ${G}`);
     const window = Math.max(1, Math.round(this.fps)); // frames in one second
-    const flags = { general: new Uint8Array(G * G), red: new Uint8Array(G * G) };
+    const counts = { general: new Int32Array(G * G), red: new Int32Array(G * G) };
     const most = { general: 0, red: 0 };
     this.cells.forEach((cell, c) => {
       const r = cells.rgb[c * 3]!, g = cells.rgb[c * 3 + 1]!, b = cells.rgb[c * 3 + 2]!;
@@ -132,23 +156,42 @@ export class FlashAnalyser {
       if (cell.red.next(redValue(r, g, b), [r, g, b])) cell.rTimes.push(this.frame);
       for (const [times, kind] of [[cell.gTimes, 'general'], [cell.rTimes, 'red']] as const) {
         while (times.length && times[0]! <= this.frame - window) times.shift();
-        if (times.length > this.highest[kind]) this.highest[kind] = times.length;
-        if (times.length > 6) { flags[kind][c] = 1; most[kind] = Math.max(most[kind], times.length); }
+        counts[kind][c] = times.length;
+        if (times.length > most[kind]) most[kind] = times.length;
       }
     });
     for (const kind of ['general', 'red'] as const) {
-      if (!most[kind]) continue;
-      // flashing cells per window, by a summed-area table
-      const f = flags[kind], sum = new Int32Array((G + 1) * (G + 1));
-      for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) sum[(y + 1) * (G + 1) + x + 1] = f[y * G + x]! + sum[y * (G + 1) + x + 1]! + sum[(y + 1) * (G + 1) + x]! - sum[y * (G + 1) + x]!;
-      let fails = false;
-      for (let y = 0; y + B <= G && !fails; y++) for (let x = 0; x + B <= G && !fails; x++) {
-        const n = sum[(y + B) * (G + 1) + x + B]! - sum[y * (G + 1) + x + B]! - sum[(y + B) * (G + 1) + x]! + sum[y * (G + 1) + x]!;
-        if (n * 4 > B * B) fails = true;
+      if (most[kind] > this.highest[kind]) this.highest[kind] = most[kind];
+      const area = this.areaCount(counts[kind], most[kind]);
+      if (area > this.highestArea[kind]) this.highestArea[kind] = area;
+      // the verdict: a frame fails when more than a quarter of some window flashes more than three times (> 6 transitions)
+      if (area > 6) {
+        const f = new Uint8Array(G * G);
+        for (let c = 0; c < G * G; c++) if (counts[kind][c]! > 6) f[c] = 1;
+        this.failing.push({ frame: this.frame, kind, count: area, busiest: most[kind], flashing: f });
       }
-      if (fails) this.failing.push({ frame: this.frame, kind, count: most[kind], flashing: f });
     }
     this.frame++;
+  }
+  /** Whether more than a quarter of the cells of some window (block × block, slid one cell at a time) have at least `t` transitions. */
+  private quarterAtLeast(counts: Int32Array, t: number): boolean {
+    const G = this.grid, B = this.block, sum = new Int32Array((G + 1) * (G + 1));
+    for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) sum[(y + 1) * (G + 1) + x + 1] = (counts[y * G + x]! >= t ? 1 : 0) + sum[y * (G + 1) + x + 1]! + sum[(y + 1) * (G + 1) + x]! - sum[y * (G + 1) + x]!;
+    for (let y = 0; y + B <= G; y++) for (let x = 0; x + B <= G; x++) {
+      const n = sum[(y + B) * (G + 1) + x + B]! - sum[y * (G + 1) + x + B]! - sum[(y + B) * (G + 1) + x]! + sum[y * (G + 1) + x]!;
+      if (n * 4 > B * B) return true;
+    }
+    return false;
+  }
+  /**
+   * Transitions over the area on this frame: the largest T (0 … `most`) such that more than a quarter of the cells of some
+   * window had at least T transitions in the second ending here. The frame fails exactly when this is above 6, so the
+   * number and the verdict are one rule. Monotone in T (a cell with T + 1 also has T), so found by bisection.
+   */
+  private areaCount(counts: Int32Array, most: number): number {
+    let lo = 0, hi = most; // quarterAtLeast(counts, 0) is always true
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (this.quarterAtLeast(counts, mid)) lo = mid; else hi = mid - 1; }
+    return lo;
   }
   /**
    * The most transitions (of luminance, and of saturated red) that any one cell had in any one-second window of the frames
@@ -163,20 +206,20 @@ export class FlashAnalyser {
     const ranges: FlashRange[] = [];
     for (const kind of ['general', 'red'] as const) {
       const hits = this.failing.filter((f) => f.kind === kind);
-      let cur: { from: number; to: number; most: number; covered: Uint8Array } | null = null;
+      let cur: { from: number; to: number; most: number; busiest: number; covered: Uint8Array } | null = null;
       const close = () => {
         if (!cur) return;
-        ranges.push({ from: cur.from, to: cur.to, kind, flashesPerSecond: Math.floor(cur.most / 2), area: Number((cur.covered.reduce((s, v) => s + v, 0) / cur.covered.length).toFixed(3)) });
+        ranges.push({ from: cur.from, to: cur.to, kind, flashesPerSecond: cur.most / 2, busiestCellFlashesPerSecond: cur.busiest / 2, area: Number((cur.covered.reduce((s, v) => s + v, 0) / cur.covered.length).toFixed(3)) });
         cur = null;
       };
       for (const h of hits) {
         const from = Math.max(0, h.frame - window + 1); // the one-second window that failed ends on this frame
-        if (cur && from <= cur.to + 1) { cur.to = h.frame; cur.most = Math.max(cur.most, h.count); for (let i = 0; i < h.flashing.length; i++) cur.covered[i] = cur.covered[i]! | h.flashing[i]!; }
-        else { close(); cur = { from, to: h.frame, most: h.count, covered: h.flashing.slice() }; }
+        if (cur && from <= cur.to + 1) { cur.to = h.frame; cur.most = Math.max(cur.most, h.count); cur.busiest = Math.max(cur.busiest, h.busiest); for (let i = 0; i < h.flashing.length; i++) cur.covered[i] = cur.covered[i]! | h.flashing[i]!; }
+        else { close(); cur = { from, to: h.frame, most: h.count, busiest: h.busiest, covered: h.flashing.slice() }; }
       }
       close();
     }
     ranges.sort((a, b) => a.from - b.from || (a.kind < b.kind ? -1 : 1));
-    return { fps: this.fps, frames: this.frame, verdict: ranges.length ? 'fail' : 'pass', ranges };
+    return { fps: this.fps, frames: this.frame, verdict: ranges.length ? 'fail' : 'pass', ranges, areaPeak: { general: this.highestArea.general / 2, red: this.highestArea.red / 2 } };
   }
 }

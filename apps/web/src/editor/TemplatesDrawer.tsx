@@ -19,6 +19,8 @@ import { templateRefusal } from './templateRefusals.ts';
 import './templates.css';
 import { MUSICFIT_UI_BUILT } from './musicfit/MusicFitBlock.tsx';
 import { SwapMusicButton } from './musicfit/SwapMusicDialog.tsx';
+import { OwnTemplateSection } from './owntemplate/OwnTemplateSection.tsx';
+import type { OwnTemplateSummary } from '@pulseframe/core';
 
 /** The card is in the page while its dialog is open: the focus goes back to it first, then the dialog closes, in one task. */
 const focusCard = (id: string) => focusNow(document.querySelector<HTMLElement>(`[data-testid=${TID.card}][data-template-id="${CSS.escape(id)}"]`));
@@ -64,6 +66,8 @@ export function TemplatesDrawer() {
       {open && (
         <div id={bodyId} className="pf-tpl-body">
           <p className="muted">{S.intro}</p>
+          {/* «התבניות שלכם» and «שמירת הסרט כתבנית» (wave 8 owntemplate; draws nothing until W3, who owns this file and the section) */}
+          <OwnTemplateSection lang={lang} templates={(list ?? []).filter((x): x is OwnTemplateSummary => 'own' in x && !!(x as { own?: unknown }).own)} onOpen={(x) => setDialog(x)} onDeleted={() => { setList(null); load(); }} />
           <div className="pf-tpl-chips" role="group" aria-label={S.genres}>
             {TEMPLATE_GENRES.map((g) => (
               <button key={g} type="button" className="ghost pf-tpl-chip" data-testid={TID.genreChip} data-genre={g} aria-pressed={genres.includes(g)} onClick={() => setGenres((x) => toggleGenre(x, g))}>{S.genre[g]}</button>

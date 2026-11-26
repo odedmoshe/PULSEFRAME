@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import type { ProjectDocument } from '@pulseframe/core';
+import type { ProjectDocument, TextClip } from '@pulseframe/core';
 import { Exporter, renderDocFor } from './export.ts';
 import { Store } from './store.ts';
 
@@ -60,5 +60,27 @@ describe('export retry (C1)', () => {
     expect(exporter.plan(p.doc, p.revision, { variantId }).manifest.output).toMatchObject({ width: 360, height: 640 });
     expect(exporter.plan(p.doc, p.revision, { variantId }, { resolved: true }).manifest.output).toMatchObject({ width: 640, height: 360 });
   });
-  it.todo('W2: a retry of a grandparents export renders titles ×4/3 once (the same frame hashes as the first run), once W1 has built the scale');
+  it('a retry of a grandparents export plans its snapshot as it is: titles ×4/3 once, the same snapshot and manifest as the first run', () => {
+    const pid = store.createProject({ name: 'retry-gp', width: 640, height: 360, frameRate: R }).doc.id;
+    const added = store.commit({ projectId: pid, actor: 'user:owner', ops: [{ op: 'add_text', args: { text: 'כותרת', start: T.ZERO, duration: T.frameTime(30, R) } }] });
+    const clipId = added.results[0]!.output!.clipId as string;
+    store.commit({ projectId: pid, actor: 'user:owner', ops: [{ op: 'update_text', args: { clipId, style: { sizeFrac: 0.09 } } }] });
+    const variantId = store.commit({ projectId: pid, actor: 'user:owner', ops: [{ op: 'add_audience_version', args: { profile: 'grandparents' } }] }).results[0]!.output!.variantId as string;
+    const p = store.getProject(pid);
+    const sizeIn = (d: ProjectDocument) => (d.sequences[d.mainSequenceId]!.tracks.flatMap((t) => t.clips).find((c) => c.id === clipId) as TextClip).style.sizeFrac;
+    expect(sizeIn(p.doc)).toBe(0.09);
+    const first = exporter.plan(p.doc, p.revision, { variantId });
+    expect(first.blockers).toEqual([]);
+    const snapshot = renderDocFor(p.doc, first.manifest.options) as ProjectDocument;
+    const once = Math.min(0.5, (0.09 * 4) / 3); // by hand: the inherited size × 4/3 under the cap
+    expect(sizeIn(snapshot)).toBe(once);
+    const job = store.createJob(pid, 'export', 'user:owner', { revision: p.revision, snapshot, sidecar: null, manifest: first.manifest, warnings: first.warnings, retryOf: null });
+    store.updateJob(job.id, { status: 'failed', error: { code: 'export_failed', message: 'test', retryable: true } });
+    const again = exporter.retry(job.id, 'user:owner');
+    expect(sizeIn(again.input.snapshot as ProjectDocument)).toBe(once); // not × 16/9
+    expect(again.input.snapshot).toEqual(snapshot);
+    expect(again.input.manifest).toEqual(first.manifest);
+    // the control: planning the snapshot as unresolved WOULD scale again (what C1 prevents)
+    expect(sizeIn(renderDocFor(snapshot, first.manifest.options) as ProjectDocument)).toBe(Math.min(0.5, (once * 4) / 3));
+  });
 });

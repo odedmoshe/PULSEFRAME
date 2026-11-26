@@ -23,7 +23,7 @@ export const EXPORT_STRINGS = {
     checking: 'בודקים…', allClear: 'לא נמצאו בעיות', recheck: 'בדיקה מחדש',
     preflightFail: 'הבדיקה לא הושלמה', retry: 'ניסיון חוזר',
     flashRow: 'בדיקת הבהובים', flashPending: 'תרוץ בסוף הייצוא ותוצג כאן, עם קפיצה לקטע אם יימצא',
-    loud: 'עוצמת שמע', loudMeasuring: 'מודדים…', loudOk: (v: string) => `${v} LUFS · מתאים לרשתות`, loudLow: (v: string) => `${v} LUFS · שקט מדי לרשתות`, loudHigh: (v: string) => `${v} LUFS · חזק מדי לרשתות`, loudSet: 'יישור ל־14−', loudNone: 'אין שמע בסרטון',
+    loud: 'עוצמת שמע', loudMeasuring: 'מודדים…', loudOk: (v: string) => `${v} LUFS · מתאים לרשתות`, loudLow: (v: string) => `${v} LUFS · שקט מדי לרשתות`, loudHigh: (v: string) => `${v} LUFS · חזק מדי לרשתות`, loudSet: 'יישור ל־14−', loudNone: 'אין שמע בסרטון', loudLeadOnly: 'נמדד רק הראשון מבין הפורמטים שנבחרו:',
     // the labels of the fix buttons the server's checks offer (apps/server preflight.ts words them in English), read by exportSheet.logic.ts fixLabel
     fix: {
       removeStretch: 'להסיר את הקטע הזה מכל הערוצים', removeTransition: 'להסיר את המעבר', removeRamp: 'להסיר את שינוי המהירות במעבר',
@@ -41,6 +41,12 @@ export const EXPORT_STRINGS = {
       decode_budget: ['יותר מדי תמונות ברגע אחד', 'חלק מהפריימים יסורבו בייצוא', ''],
       no_sound: ['אין שמע בסרטון', 'הסרטון ייוצא שקט', ''],
       no_loudness_target: ['לא נקבעה עוצמה לשמע', 'אפשר לקבוע יעד עוצמה בלשונית הסאונד', 'קביעת יעד ל־14−'],
+      // wave 8 qc (qcContract.ts QC_CODES): rules of thumb; the numbers come from the issue's `measured` (B2 shows them)
+      flash_clip: ['קליפ קצר מאוד', 'קצר מעשירית שנייה: אולי שארית של חיתוך. אם זה בכוונה, אפשר להתעלם', ''],
+      held_past_picture: ['התמונה נשארת בזמן שהקול ממשיך', 'הקול בקובץ ממשיך אחרי התמונה, והתמונה האחרונה נשארת', 'קיצור התמונה לסוף שלה בקובץ'],
+      title_hidden: ['כותרת מוסתרת', 'תמונה מלאה מעליה מכסה אותה לכל אורכה', ''],
+      ends_mid_word: ['הסרט נגמר באמצע מילה', 'לפי זמני המילים בתמליל', ''],
+      cut_mid_word: ['חיתוך באמצע מילה', 'לפי זמני המילים בתמליל', ''],
     } as Record<string, [string, string, string]>,
     blocker: 'חוסם', warning: 'שימו לב',
     // progress
@@ -83,7 +89,7 @@ export const EXPORT_STRINGS = {
     checking: 'Checking…', allClear: 'No problems found', recheck: 'Check again',
     preflightFail: 'The check did not finish', retry: 'Try again',
     flashRow: 'Flash check', flashPending: 'Runs at the end of the export and shows here, with a jump to the stretch if one is found',
-    loud: 'Sound level', loudMeasuring: 'Measuring…', loudOk: (v: string) => `${v} LUFS · fits social networks`, loudLow: (v: string) => `${v} LUFS · too quiet for social networks`, loudHigh: (v: string) => `${v} LUFS · too loud for social networks`, loudSet: 'Set to −14', loudNone: 'The video has no sound',
+    loud: 'Sound level', loudMeasuring: 'Measuring…', loudOk: (v: string) => `${v} LUFS · fits social networks`, loudLow: (v: string) => `${v} LUFS · too quiet for social networks`, loudHigh: (v: string) => `${v} LUFS · too loud for social networks`, loudSet: 'Set to −14', loudNone: 'The video has no sound', loudLeadOnly: 'Only the first of the chosen formats is measured:',
     fix: {
       removeStretch: 'Remove this stretch from every track', removeTransition: 'Remove the transition', removeRamp: 'Remove the velocity ramp',
       shorten: (m: string) => `Shorten the transition to ${m} frames`, lowerRamp: (v: string) => `Lower the velocity ramp to ×${v}`,
@@ -100,6 +106,11 @@ export const EXPORT_STRINGS = {
       decode_budget: ['Too many pictures at once', 'Some frames would be refused in the export', ''],
       no_sound: ['The video has no sound', 'It will export silent', ''],
       no_loudness_target: ['No sound level target set', 'You can set one in the Sound tab', 'Set the target to −14'],
+      flash_clip: ['A very short clip', 'Under a tenth of a second: maybe left over from a trim. If it is on purpose, it can be ignored', ''],
+      held_past_picture: ['The picture stays while the sound goes on', 'The sound in the file goes on after the picture, and the last picture stays', 'Trim the picture to its end in the file'],
+      title_hidden: ['A hidden title', 'A full picture above it covers it for its whole length', ''],
+      ends_mid_word: ['The film ends inside a word', 'By the transcript\'s word times', ''],
+      cut_mid_word: ['A cut inside a word', 'By the transcript\'s word times', ''],
     } as Record<string, [string, string, string]>,
     blocker: 'Blocks export', warning: 'Heads up',
     progressTitle: (label: string) => `Exporting · ${label}`, frameWord: 'frames', framesOf: (a: number, b: number) => `${a} / ${b}`,

@@ -40,7 +40,6 @@ import { startServer, type RunningServer } from '@pulseframe/server';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/adjust-proof');
-const PORT = 8913, PORT_OFF = 8914;
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
 const W = 640, H = 360;
@@ -125,7 +124,7 @@ async function main() {
   // The main server: no PF_RENDER_GPU, so the render host finds a launch mode with a graphics device when a frame needs one
   const hadGpuMode = process.env.PF_RENDER_GPU;
   delete process.env.PF_RENDER_GPU;
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const { call, tx, upload, docOf, newProject, stillPng, waitJob } = client(s);
   const still = async (pid: string, index: number, variant?: string) => pngToRgb(await stillPng(pid, index, variant));
   let outputs = 0;
@@ -378,7 +377,7 @@ async function main() {
 
   // ---------- 9. no adapter in the render worker ----------
   process.env.PF_RENDER_GPU = 'off';
-  const s2 = await startServer({ port: PORT_OFF, dataDir: path.join(art, 'data-off') });
+  const s2 = await startServer({ port: 0, dataDir: path.join(art, 'data-off') });
   try {
     const c2 = client(s2);
     const pid = await c2.newProject('adjust-grade-no-gpu');

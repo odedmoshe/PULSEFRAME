@@ -17,6 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { FOOTAGE_EMBEDDERS, type SearchSetup } from '@pulseframe/core';
 import { searchError, type Embedder } from './contract.ts';
+import { PYTHON_WORKER_FLAGS } from '../pythonArgs.ts';
 
 export const OFFLINE_ENV = { HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1', HF_HUB_DISABLE_TELEMETRY: '1' } as const;
 export interface WorkerSpec {
@@ -31,7 +32,7 @@ export interface WorkerSpec {
 export interface ReadyInfo { device: 'cuda' | 'cpu'; dtype: string; logitScale: number; logitBias: number; loadSeconds: number; versions: Record<string, string> }
 
 const spawnWorker = (spec: Pick<WorkerSpec, 'python' | 'script' | 'tmpDir'>, args: string[], stdin: boolean): ChildProcess =>
-  spawn(spec.python, ['-I', spec.script, ...args], { stdio: [stdin ? 'pipe' : 'ignore', 'pipe', 'pipe'], cwd: spec.tmpDir, env: { ...process.env, ...OFFLINE_ENV } });
+  spawn(spec.python, [...PYTHON_WORKER_FLAGS, spec.script, ...args], { stdio: [stdin ? 'pipe' : 'ignore', 'pipe', 'pipe'], cwd: spec.tmpDir, env: { ...process.env, ...OFFLINE_ENV } });
 
 function lines(p: ChildProcess, onLine: (o: any) => void): void {
   let buf = '';

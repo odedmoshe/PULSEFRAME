@@ -53,7 +53,7 @@ async function main() {
 
   // ---------- 1. not configured: an honest setup state ----------
   {
-    const s = await startServer({ port: 8841, dataDir: path.join(art, 'data-off'), speechPython: null });
+    const s = await startServer({ port: 0, dataDir: path.join(art, 'data-off'), speechPython: null });
     const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
     try {
       const st = (await (await fetch(`${s.url}/api/v1/speech`, { headers: h })).json()) as any;
@@ -67,7 +67,7 @@ async function main() {
   }
 
   // ---------- 2. configured ----------
-  const s = await startServer({ port: 8842, dataDir: path.join(art, 'data'), speechPython: python, speechModelsDir: MODELS });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), speechPython: python, speechModelsDir: MODELS });
   const origin = s.url;
   const agent = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;

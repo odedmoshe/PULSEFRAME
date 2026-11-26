@@ -32,7 +32,6 @@ import { SEARCH_TESTIDS as ID } from '../../../apps/web/src/editor/search/search
 import { FOOTAGE_BASELINE_QUERIES, footageBaselineDigest, footageBaselineJson, footageProofDoc, type FootageProofPart } from './footage-search-proof.core.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const PORT = 18700 + Math.floor(Math.random() * 90);
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
 const evidence: Record<string, unknown> = {};
@@ -52,7 +51,7 @@ async function makeWorld(): Promise<World> {
   const file = (await generateBarcodeFixture({ out: path.join(base, 'fx', 'colours.mp4'), frames: 150, fps: R })).file;
   const webDist = path.join(ROOT, 'apps/web/dist');
   const web = fs.existsSync(path.join(webDist, 'index.html')) && fs.existsSync(path.join(webDist, 'selftest.html'));
-  const s = await startServer({ port: PORT, dataDir: path.join(base, 'data'), ...(web ? { webDist } : {}), speechPython: null, voicePython: null, backupDir: null });
+  const s = await startServer({ port: 0, dataDir: path.join(base, 'data'), ...(web ? { webDist } : {}), speechPython: null, voicePython: null, backupDir: null });
   const origin = s.url;
   const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
   const browser = web ? await chromium.launch() : null;

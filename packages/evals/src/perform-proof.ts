@@ -60,7 +60,6 @@ import { PERFORM_TESTIDS as ID } from '../../../apps/web/src/editor/perform/perf
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/perform/proof');
 const OUT = path.join(root, 'docs/evidence/perform-proof.json');
-const PORT = 8996;
 const R = { num: 30, den: 1 };
 const FPS = 30;
 const W = 640, H = 360;
@@ -139,7 +138,7 @@ async function main() {
   // R = u (x / (w − 1)), G = v (y / (h − 1)), B = 0: the centre pixel names the source point; magenta (B high) is never the card
   ff(['-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-vf', "format=rgb24,geq=r='X/(W-1)*255':g='Y/(H-1)*255':b='0'", '-frames:v', '1', ramp]);
 
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

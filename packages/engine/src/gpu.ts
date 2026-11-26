@@ -16,14 +16,40 @@
  */
 type C2D = OffscreenCanvasRenderingContext2D;
 export interface GpuStatus { available: boolean; reason: string; adapter: { vendor: string | null; architecture: string | null; software: boolean } | null }
-import type { BeatPosition } from '@pulseframe/core';
+import type { BeatPosition, GradeCurves } from '@pulseframe/core';
 /**
  * A colour table as a pass samples it: core's `lutStrip` (RGBA8, width = size*size, height = size; pixel (r + b*size, g) holds
  * entry (r, g, b)) plus `key`, which is unique per content (the asset's content hash) and names its texture on the device.
  */
 export interface LutStrip { key: string; size: number; width: number; height: number; data: Uint8Array }
+/**
+ * «תמונה חיה» (wave 8 living): a layer's nearness grid (core depthGrid) as the pass samples it at binding 3: RGBA8 with nearness in R
+ * (G, B, A zero), made by the colour table's raw-bytes path (writeTexture: no premultiplication, no colour conversion) and sharing the
+ * bound of MAX_LUT_TEXTURES. `key` is core depthKey (prefixed `depth:`, so it never collides with a colour table's content hash).
+ * Type only in the pre-pass; W2 builds the texture path (`dataTexture`).
+ */
+export interface DepthStrip { key: string; width: number; height: number; data: Uint8Array }
+/** The placed picture's rectangle in frame pixels (look.ts LayerBox): centre, size before scale, rotation in degrees, scale. */
+export interface EffectBox { cx: number; cy: number; w: number; h: number; rotation: number; scale: number }
+/**
+ * What a GPU effect gets besides its parameters: the instance's fields that are not parameters (params hold numbers, strings and
+ * booleans only, effects.ts). Today: the colour curves of a color.grade instance (wave 8 grade, grade-verify C2). Absent for every
+ * other effect, so their passes are unchanged.
+ */
+export interface GpuEffectExtra { curves?: GradeCurves }
+/** The second texture a pass reads at binding 3: a colour table (color.lut), or the 256×1 table of a grade's curves (key = core gradeCurvesKey, rgba = gradeCurveTablesRgba). */
+type PassAux = { kind: 'lut'; strip: LutStrip } | { kind: 'curve'; key: string; rgba: Uint8Array };
 interface EffectEnv {
-  width: number; height: number; /** Timeline time of the frame in seconds: effects that move are a function of it, so any frame can be drawn on its own. */ seconds?: number; /** Where the frame falls in the beats of the music playing there, if any. */ beat?: BeatPosition | null;
+  width: number; height: number;
+  /**
+   * The placed layer's box (verifier C2: no GPU pass was layer-relative before). The living pass maps frame uv to picture-local
+   * coordinates with it, and clamps its sample point and sizes its overscan to the VISIBLE rectangle = the picture's rectangle cut to
+   * the frame, inset half a texel (livingVisibleRect), so a photo larger than the frame (Ken Burns up to 1.18) never smears its edges.
+   */
+  box?: EffectBox;
+  /** The layer's depth for a pass with `depth: true`; null = could not be supplied (why: depthReason). Never drawn flat (C6). */
+  depth?: DepthStrip | null;
+  depthReason?: string; /** Timeline time of the frame in seconds: effects that move are a function of it, so any frame can be drawn on its own. */ seconds?: number; /** Where the frame falls in the beats of the music playing there, if any. */ beat?: BeatPosition | null;
   /** Colour tables of this frame by asset id, loaded by drawGraph before drawing; null = could not be supplied (why: `lutReasons`). */
   luts?: ReadonlyMap<string, LutStrip | null>;
   lutReasons?: ReadonlyMap<string, string>;
@@ -32,6 +58,19 @@ interface GpuEffect {
   /** Body of `fn effect(uv: vec2f) -> vec4f` (premultiplied in, premultiplied out). `P` holds the eight parameters. */ wgsl: string; /** Up to eight numbers, in the order the shader reads them. */ params(p: Record<string, unknown>, env: EffectEnv): number[];
   /** Name of the string parameter holding the id of a colour table. The pass then samples that table as `lut` (binding 3); with an empty id the picture passes through unchanged. */
   lut?: string;
+  /**
+   * «תמונה חיה» (wave 8 living; W2): the pass samples the layer's depth (env.depth) as `depth` at binding 3 — free per pass: every
+   * pass has its own bind group, a colour table and a living picture are two passes, a transition is a later pass on the finished
+   * layer (verifier C14 h). Depth is read with textureLoad and the pass's own f32 bilinear, never the hardware sampler.
+   */
+  depth?: true;
+  /**
+   * The pass reads twelve numbers: `P` grows by `c: vec4f` (the uniform buffer is already 48 bytes and runPass already writes 12
+   * floats). Living: a = (box cx, cy in uv; 1/half-width, 1/half-height in uv), b = (the visible rect x0, y0, x1, y1 in picture-local
+   * units, livingVisibleRect), c = (slide: the signed horizontal shift toward the end of reading, push: the zoom, in picture units;
+   * focus; K = core livingSteps of the shift in DEPTH-GRID texels, C7: the same at every output size; overscan S).
+   */
+  wide?: true;
 }
 
 const n = (v: unknown, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
@@ -50,7 +89,7 @@ export function smoothNoise(seed: number, t: number): number {
  * The movement of the time-driven "motion" effects as plain numbers: zoom, rotation (radians) and offset (fractions of the
  * frame height) at a moment. The shader only applies them, so the picture can be checked against these numbers.
  */
-import { BEAT_WINDOW_SECONDS } from '@pulseframe/core';
+import { BEAT_WINDOW_SECONDS, GRADE_CURVE_TABLE_SIZE, MAX_GRADE_CURVE_TEXTURES } from '@pulseframe/core';
 /**
  * For an effect set to follow the music: how far the moment is into the current hit (`phase`: 0 on the hit, rising to 1
  * just before the next), the seconds between the two hits (`period`) and the seconds since the hit (`since`). Null when
@@ -885,12 +924,18 @@ const VERTEX = `
     var p = array<vec2f, 3>(vec2f(-1, -1), vec2f(3, -1), vec2f(-1, 3));
     var o: V; o.pos = vec4f(p[i], 0, 1); o.uv = vec2f(p[i].x * 0.5 + 0.5, 0.5 - p[i].y * 0.5); return o;
   }`;
-const shaderOf = (body: string, withLut = false) => `${VERTEX}
+/**
+ * The WGSL of an effect pass. `aux` names the texture at binding 3: none; 'lut' (a colour table strip, `lut`); 'curve' (the 256×1
+ * rgba8 table of a grade's curves, `crv`, read with textureLoad only — never the sampler: grade-verify C6). The text for 'none' and
+ * 'lut' is exactly what it was before the curves (byte-identical pipelines, so every existing baseline holds: G9).
+ */
+const shaderOf = (body: string, aux: 'none' | 'lut' | 'curve' = 'none') => `${VERTEX}
   struct Params { a: vec4f, b: vec4f }
   @group(0) @binding(0) var src: texture_2d<f32>;
   @group(0) @binding(1) var smp: sampler;
-  @group(0) @binding(2) var<uniform> P: Params;${withLut ? `
-  @group(0) @binding(3) var lut: texture_2d<f32>;` : ''}
+  @group(0) @binding(2) var<uniform> P: Params;${aux === 'lut' ? `
+  @group(0) @binding(3) var lut: texture_2d<f32>;` : aux === 'curve' ? `
+  @group(0) @binding(3) var crv: texture_2d<f32>;` : ''}
   fn hash(x: u32) -> u32 { let v = x * 747796405u + 2891336453u; let w = ((v >> ((v >> 28u) + 4u)) ^ v) * 277803737u; return (w >> 22u) ^ w; }
   fn unit(x: u32) -> f32 { return f32(x >> 8u) / 16777216.0; }
   fn luma(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
@@ -903,7 +948,7 @@ const shaderOf = (body: string, withLut = false) => `${VERTEX}
 const REFERENCE = { wgsl: `${VERTEX}
   @fragment fn f(i: V) -> @location(0) vec4f { let p = i.pos; var c = vec3f(0); for (var k = 0; k < 16; k++) { c += 0.0625 * (0.5 + 0.5 * sin(vec3f(p.x, p.y, p.x + p.y) * 0.01 * f32(k + 1))); } return vec4f(c, 1); }`, first: [133, 133, 138, 255], middle: [116, 128, 133, 255] };
 
-interface State { adapter: any; device: any; sampler: any; pipelines: Map<string, any>; /** Why the shader of a pass key did not compile on this device: never compiled again, always reported. */ brokenPipelines: Map<string, string>; size: { source: any; source2: any; target: any; readback: any; stride: number; width: number; height: number } | null; uniforms: any; /** Colour-table textures by LutStrip.key: made once per table, bounded, gone with the device. */ luts: Map<string, any> }
+interface State { adapter: any; device: any; sampler: any; pipelines: Map<string, any>; /** Why the shader of a pass key did not compile on this device: never compiled again, always reported. */ brokenPipelines: Map<string, string>; size: { source: any; source2: any; target: any; readback: any; stride: number; width: number; height: number } | null; uniforms: any; /** Colour-table textures by LutStrip.key: made once per table, bounded, gone with the device. */ luts: Map<string, any>; /** Curve-table textures by gradeCurvesKey (256×1, 1 KB each), bounded by MAX_GRADE_CURVE_TEXTURES, gone with the device. */ curves: Map<string, any> }
 /** Colour-table textures kept on the device at once (the largest is 4225 x 65, about 1.1 MB). */
 const MAX_LUT_TEXTURES = 8;
 let state: State | null = null;
@@ -957,9 +1002,9 @@ export function initGpu(): Promise<GpuStatus> {
       buf.unmap(); buf.destroy(); target.destroy();
       if (!same(first, REFERENCE.first) || !same(middle, REFERENCE.middle)) return fail(`the adapter renders the reference shader differently (${JSON.stringify(middle)} instead of ${JSON.stringify(REFERENCE.middle)})`, about);
       // ---- ready ----
-      state = { adapter, device, sampler: device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' }), pipelines: new Map(), brokenPipelines: new Map(), size: null, uniforms: device.createBuffer({ size: 48, usage: 0x40 /* UNIFORM */ | 0x08 /* COPY_DST */ }), luts: new Map() }; // 48 bytes: the transition Params {a, b, c} (ADR-0012); a 32-byte effect struct binds the same buffer
+      state = { adapter, device, sampler: device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' }), pipelines: new Map(), brokenPipelines: new Map(), size: null, uniforms: device.createBuffer({ size: 48, usage: 0x40 /* UNIFORM */ | 0x08 /* COPY_DST */ }), luts: new Map(), curves: new Map() }; // 48 bytes: the transition Params {a, b, c} (ADR-0012); a 32-byte effect struct binds the same buffer
       const made = state;
-      device.lost.then((l: { message?: string }) => { for (const t of made.luts.values()) { try { t.destroy(); } catch { /* already gone with the device */ } } made.luts.clear(); state = null; status = { available: false, reason: `the graphics device was lost: ${l?.message ?? 'no reason given'}`, adapter: about }; starting = null; });
+      device.lost.then((l: { message?: string }) => { for (const t of [...made.luts.values(), ...made.curves.values()]) { try { t.destroy(); } catch { /* already gone with the device */ } } made.luts.clear(); made.curves.clear(); state = null; status = { available: false, reason: `the graphics device was lost: ${l?.message ?? 'no reason given'}`, adapter: about }; starting = null; });
       return (status = { available: true, reason: `${about.software ? 'software' : 'hardware'} adapter${about.vendor ? ` (${about.vendor})` : ''}, reference pixels match`, adapter: about });
     } catch (e) { return fail(`WebGPU could not be started: ${String((e as Error)?.message ?? e).slice(0, 200)}`); }
   })();
@@ -972,9 +1017,11 @@ export function initGpu(): Promise<GpuStatus> {
  * draws the layer unchanged. When the adapter rejects the pass (its shader does not compile there, say) the adapter's message
  * is recorded as the reason. Callers must not let another frame use the same buffers while this is pending.
  */
-export function gpuEffect(type: string, params: Record<string, unknown>, src: OffscreenCanvas, dst: C2D, env: EffectEnv): Promise<boolean> {
+export function gpuEffect(type: string, params: Record<string, unknown>, src: OffscreenCanvas, dst: C2D, env: EffectEnv, extra?: GpuEffectExtra): Promise<boolean> {
   const fx = GPU_EFFECTS[type];
   if (!fx) { skipped.add(type); return Promise.resolve(false); }
+  // A grade with curves (wave 8 grade): its own pipeline `fx:color.grade+curves`; a grade without curves runs the unchanged one below.
+  if (type === 'color.grade' && extra?.curves) return gradeWithCurves(params, extra.curves, src, dst, env);
   if (!fx.lut) return runPass(type, `fx:${type}`, () => shaderOf(fx.wgsl), fx.params(params, env), src, null, dst, env);
   const id = lutIdOf(type, params);
   // No table chosen: the picture as it is. That is what the effect means with its default parameters, so it is not a missing effect.
@@ -986,7 +1033,7 @@ export function gpuEffect(type: string, params: Record<string, unknown>, src: Of
     skipped.add(type);
     return Promise.resolve(false);
   }
-  return runPass(type, `fx:${type}`, () => shaderOf(fx.wgsl, true), fx.params(params, env), src, null, dst, env, strip);
+  return runPass(type, `fx:${type}`, () => shaderOf(fx.wgsl, 'lut'), fx.params(params, env), src, null, dst, env, { kind: 'lut', strip });
 }
 /**
  * Run one GPU transition: `outgoing` (may be absent: then it is transparent) and `incoming` into `dst`, in the state `t`
@@ -997,6 +1044,33 @@ export function gpuTransition(t: TransitionState, outgoing: OffscreenCanvas | nu
   const g = GPU_TRANSITIONS[t.type];
   if (!g) { skipped.add(t.type); return Promise.resolve(false); }
   return runPass(t.type, `tr:${g.kernel}`, () => transitionShader(T2[g.kernel]!), transitionUniforms(t, env.width, env.height), outgoing, incoming, dst, env);
+}
+/** Why a grade with curves is not drawn in this build (the reason export and the inspector show; i18n HE_GRADE words it). */
+export const GRADE_CURVES_PASS_NOT_BUILT = 'color.grade: colour curves are not built in this build yet';
+/**
+ * W1: the grade with its curves. Pipeline key `fx:color.grade+curves`, shader `shaderOf(<grade body with the curve step>, 'curve')`
+ * (the WGSL of grade-plan §3.5 replaces the grade's last line: textureLoad of the two neighbouring entries, mixed in f32, then
+ * premultiplied), binding 3 = curveTexture(s, gradeCurvesKey(curves), gradeCurveTablesRgba(gradeCurveTables(curves))).
+ * Until then: refused as unavailable with GRADE_CURVES_PASS_NOT_BUILT (the layer is drawn without its grade and export refuses),
+ * never drawn without the curves as if they were not there.
+ */
+function gradeWithCurves(params: Record<string, unknown>, curves: GradeCurves, src: OffscreenCanvas, dst: C2D, env: EffectEnv): Promise<boolean> {
+  void params; void curves; void src; void dst; void env;
+  skipped.add('color.grade');
+  // without an adapter the adapter is the reason given (as for a colour table that was not supplied)
+  if (state && !skippedWhy.has('color.grade')) skippedWhy.set('color.grade', GRADE_CURVES_PASS_NOT_BUILT);
+  return Promise.resolve(false);
+}
+/** The texture of a grade's curve table (256×1 rgba8, raw bytes: no premultiplication or colour conversion), made on first use; at most MAX_GRADE_CURVE_TEXTURES, then all are dropped (C3). */
+function curveTexture(s: State, key: string, rgba: Uint8Array): any {
+  let tex = s.curves.get(key);
+  if (tex) return tex;
+  if (rgba.length !== GRADE_CURVE_TABLE_SIZE * 4) throw new Error('the curve table has the wrong size');
+  if (s.curves.size >= MAX_GRADE_CURVE_TEXTURES) { for (const t of s.curves.values()) t.destroy(); s.curves.clear(); }
+  tex = s.device.createTexture({ size: [GRADE_CURVE_TABLE_SIZE, 1], format: 'rgba8unorm', usage: 0x02 /* COPY_DST */ | 0x04 /* TEXTURE_BINDING */ });
+  s.device.queue.writeTexture({ texture: tex }, rgba, { bytesPerRow: GRADE_CURVE_TABLE_SIZE * 4, rowsPerImage: 1 }, [GRADE_CURVE_TABLE_SIZE, 1]);
+  s.curves.set(key, tex);
+  return tex;
 }
 /** The texture of a colour table, made on first use. Raw bytes (writeTexture), so no premultiplication or colour conversion touches the table. */
 function lutTexture(s: State, strip: LutStrip): any {
@@ -1026,8 +1100,8 @@ function rejected(type: string, why: string): false {
   if (!skippedWhy.has(type)) skippedWhy.set(type, why);
   return false;
 }
-/** One pass: `first` (and for a transition `second`) in, `dst` replaced. `first` null means a transparent picture. `lut`: the colour table an effect samples at binding 3. */
-async function runPass(type: string, key: string, shader: () => string, numbers: number[], first: OffscreenCanvas | null, second: OffscreenCanvas | null, dst: C2D, env: EffectEnv, lut: LutStrip | null = null): Promise<boolean> {
+/** One pass: `first` (and for a transition `second`) in, `dst` replaced. `first` null means a transparent picture. `aux`: the colour table or curve table an effect reads at binding 3. */
+async function runPass(type: string, key: string, shader: () => string, numbers: number[], first: OffscreenCanvas | null, second: OffscreenCanvas | null, dst: C2D, env: EffectEnv, aux: PassAux | null = null): Promise<boolean> {
   const s = state;
   if (!s) { skipped.add(type); return false; }
   const { device } = s;
@@ -1071,7 +1145,7 @@ async function runPass(type: string, key: string, shader: () => string, numbers:
       const p = new Float32Array(12);
       p.set(numbers.slice(0, 12));
       device.queue.writeBuffer(s.uniforms, 0, p);
-      const bind = device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: z.source.createView() }, { binding: 1, resource: s.sampler }, { binding: 2, resource: { buffer: s.uniforms } }, ...(second ? [{ binding: 3, resource: z.source2.createView() }] : lut ? [{ binding: 3, resource: lutTexture(s, lut).createView() }] : [])] });
+      const bind = device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: z.source.createView() }, { binding: 1, resource: s.sampler }, { binding: 2, resource: { buffer: s.uniforms } }, ...(second ? [{ binding: 3, resource: z.source2.createView() }] : aux?.kind === 'lut' ? [{ binding: 3, resource: lutTexture(s, aux.strip).createView() }] : aux?.kind === 'curve' ? [{ binding: 3, resource: curveTexture(s, aux.key, aux.rgba).createView() }] : [])] });
       const enc = device.createCommandEncoder();
       const pass = enc.beginRenderPass({ colorAttachments: [{ view: z.target.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 0] }] });
       pass.setPipeline(pipe); pass.setBindGroup(0, bind); pass.draw(3); pass.end();
@@ -1175,4 +1249,29 @@ export function pageTurnSource(s: number, p: number): { face: 'front' | 'back' |
   }
   const top = 2 * f + Math.PI * r - s;
   return top <= 1 ? { face: 'back', at: top } : { face: 'front', at: s };
+}
+
+// ---- depth.living («תמונה חיה», wave 8 living): the contract of the pass; bodies are W2's ----
+/** W2 sets this when the pass, its texture path and livingModel are built and match on the software adapter. */
+export const LIVING_PASS_BUILT: boolean = false;
+export class LivingPassNotBuilt extends Error { readonly code = 'living_not_built'; constructor(readonly fn: string) { super(`${fn}: the living picture's pass is not built in this build yet`); } }
+/**
+ * The visible rectangle of a placed picture in picture-local units q ∈ [0,1]² (verifier C2): the picture's rectangle cut to the
+ * frame, inset half a depth texel; null when nothing of the picture is in the frame. Rotation ≠ 0 is not supported (cut: the
+ * compositor reports such a clip unavailable, core livingUnavailable). The overscan S and the clamp of the sample point use it.
+ */
+export function livingVisibleRect(box: EffectBox, frame: { width: number; height: number }, grid: { width: number; height: number }): { x0: number; y0: number; x1: number; y1: number } | null {
+  void box; void frame; void grid;
+  throw new LivingPassNotBuilt('livingVisibleRect');
+}
+/**
+ * The JavaScript model of the pass (ADR-0008 decision 4; precedents crtMap, digicamTone): for an output pixel at frame uv, the
+ * frame uv the pass samples the colour from, in the shader's arithmetic order with Math.fround, or null outside the picture (the pass
+ * returns the layer's own pixel there). Same inputs as the pass: the twelve numbers of `params`, the grid (core depthGrid) and the
+ * search of plan §4.1 as corrected (K from the grid, C7; iterate from the largest s down and stop at the first crossing; at a depth
+ * edge take the far side). It matches the GPU within tolerance, not bit for bit (f32 on the device, C14 e).
+ */
+export function livingModel(uv: readonly [number, number], numbers: readonly number[], grid: { width: number; height: number; data: Uint8Array }): [number, number] | null {
+  void uv; void numbers; void grid;
+  throw new LivingPassNotBuilt('livingModel');
 }

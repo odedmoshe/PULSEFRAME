@@ -38,7 +38,6 @@ const art = path.join(root, '.artifacts/ai-trials');
 const evidenceFile = path.join(root, 'docs/evidence/ai-trials-cpu.json');
 const COMFY = process.env.PF_COMFYUI_URL ?? 'http://127.0.0.1:8188';
 const MODELS = path.resolve(root, process.env.PF_COMFYUI_MODELS_DIR ?? '.artifacts/comfyui/models');
-const PORT = Number(process.env.PF_PROOF_PORT ?? 8799);
 const NTSC = { num: 30000, den: 1001 };
 const checks: { name: string; ok: boolean; detail?: unknown }[] = [];
 const check = (name: string, ok: boolean, detail?: unknown) => { checks.push({ name, ok, detail }); console.log(`${ok ? '  ok  ' : ' FAIL '} ${name}${detail !== undefined ? `  ${JSON.stringify(detail)}` : ''}`); };
@@ -108,7 +107,7 @@ async function main() {
 
   console.log('\n# RIFE v4.25 through the owner-approval download path');
   {
-    const s = await startServer({ port: PORT, dataDir: path.join(art, 'server'), comfyuiUrl: COMFY, comfyuiModelsDir: MODELS });
+    const s = await startServer({ port: 0, dataDir: path.join(art, 'server'), comfyuiUrl: COMFY, comfyuiModelsDir: MODELS });
     const origin = s.url;
     const agent = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
     const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;

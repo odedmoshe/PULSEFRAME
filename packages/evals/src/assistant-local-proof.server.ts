@@ -100,9 +100,9 @@ async function makeEnv(): Promise<Env> {
       return sock;
     },
   });
-  const port = await freePort();
-  const s = await startServer({ port, host: '127.0.0.1', dataDir: path.join(art, 'data'), backupDir: null }, { assistant: { adapters: new Map(), endpoint: () => null, local } });
+  const s = await startServer({ port: 0, host: '127.0.0.1', dataDir: path.join(art, 'data'), backupDir: null }, { assistant: { adapters: new Map(), endpoint: () => null, local } });
   server = s;
+  const port = Number(new URL(s.url).port); // the port the system gave the server
   const request = (method: string, p: string, headers: Record<string, string>, body?: unknown): Promise<Res> => new Promise((resolve) => {
     const data = body === undefined ? null : Buffer.from(JSON.stringify(body));
     const req = http.request({ host: '127.0.0.1', port, method, path: `/api/v1${p}`, agent: false, headers: { host: `127.0.0.1:${port}`, connection: 'close', ...(data ? { 'content-type': 'application/json', 'content-length': String(data.length) } : {}), ...headers } }, (res) => {

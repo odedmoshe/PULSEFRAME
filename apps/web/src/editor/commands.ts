@@ -5,7 +5,7 @@
  */
 import * as T from '@pulseframe/time';
 import { effectParamLabel, type Key } from '@pulseframe/i18n';
-import { adjustmentRefusal, carriedChannels, CURVES_BUILT, COLOR_LOOKS, copyKeys, curveOps, deleteKeysOps, findClip, findEffect, getOp, keyTimes, moveKeysOps, pasteKeysOps, channelKey, type ChannelRef, type Clip, type CurveHandles, type Easing, type OpCall, type ProjectDocument, type Track, clipEnd, deleteOps, editEnd, emptyTrackIds, rippleDeleteOn } from '@pulseframe/core';
+import { adjustmentRefusal, carriedChannels, drawnName, CURVES_BUILT, COLOR_LOOKS, copyKeys, curveOps, deleteKeysOps, findClip, findEffect, getOp, keyTimes, moveKeysOps, pasteKeysOps, channelKey, type ChannelRef, type Clip, type CurveHandles, type Easing, type OpCall, type ProjectDocument, type Track, clipEnd, deleteOps, editEnd, emptyTrackIds, rippleDeleteOn } from '@pulseframe/core';
 import type { Editor, Notice } from './store.ts';
 import { COMMAND_STRINGS } from './commands.strings.ts';
 import { cutBefore } from './inspector.model.ts';
@@ -13,14 +13,17 @@ import { cutToBeat, rollCut } from './cutActions.ts';
 import { arrangeByEvents, canArrange, freezeSelectedTitle, liveTitleId, openPeopleSheet, readCaptureDates } from './lifeline/lifeCommands.ts';
 import { sourceFromSelection } from './familyFilm.logic.ts';
 import { BOOTH_COMMANDS } from './booth/booth.commands.ts';
+import { OWN_TEMPLATE_COMMANDS } from './owntemplate/ownTemplate.commands.ts';
 import { channelName, clampDelta, remapKeySel } from './keyStrip.math.ts';
 import { MULTICAM_ANGLE_COMMANDS, MULTICAM_CUT_COMMANDS, MULTICAM_KEYS } from './multicam.keys.ts';
 import { angleForDigit } from './multicamSession.ts';
 import { MULTICAM_STRINGS } from './multicam.strings.ts';
 import { CRAFT_CHANGES_SELECTION, CRAFT_COMMANDS } from './craft/craft.commands.ts';
 import { STABILISE_CHANGES_SELECTION, STABILISE_COMMANDS } from './stabilise/stabilise.commands.ts';
+import { TEACH_CHANGES_SELECTION, TEACH_COMMANDS } from './teach/teach.commands.ts';
 import { PEARLS_COMMANDS } from './pearls/pearls.commands.ts';
 import { MUSICFIT_COMMANDS } from './musicfit/musicFit.commands.ts';
+import { INK_COMMANDS } from './ink/ink.commands.ts';
 
 export interface Command {
   id: string;
@@ -180,7 +183,7 @@ const deleteSelected = (keepGap: boolean) => async (e: Editor) => {
     if (!doc) return null;
     const ripple = !keepGap && rippleDeleteOn(doc);
     const plan = deleteOps(doc, ids, ripple);
-    said = plan ? { moved: plan.moved, deleted: plan.deleted, ripple: ripple && plan.ops.length > plan.deleted, name: plan.deleted === 1 ? deletedName(doc, plan.first) : null } : null;
+    said = plan ? { moved: plan.moved, deleted: plan.deleted, ripple: ripple && plan.ops.length > plan.deleted, name: plan.deleted === 1 ? deletedName(doc, plan.first, e.getState().lang) : null } : null;
     return plan?.ops ?? null;
   }, keepGap ? 'Delete, keep the gap' : 'Delete');
   const s = said as { moved: number; deleted: number; ripple: boolean; name: string | null } | null;
@@ -188,10 +191,10 @@ const deleteSelected = (keepGap: boolean) => async (e: Editor) => {
   return r;
 };
 /** What a deleted clip is called in its toast: the file's name, the title's words or the adjustment's label; null when it has none. */
-function deletedName(doc: ProjectDocument, clipId: string): string | null {
+function deletedName(doc: ProjectDocument, clipId: string, lang: 'he' | 'en'): string | null {
   const c = findClip(doc, clipId)?.clip;
   if (!c) return null;
-  const name = c.type === 'media' ? doc.assets[c.assetId]?.name : c.type === 'adjustment' ? c.label : c.type === 'text' ? c.text : undefined;
+  const name = c.type === 'media' ? doc.assets[c.assetId]?.name : c.type === 'adjustment' ? c.label : c.type === 'text' ? c.text : c.type === 'drawn' ? drawnName(c.drawn)[lang] : undefined;
   const one = name?.replace(/\s+/g, ' ').trim();
   return one ? (one.length > 40 ? `${one.slice(0, 39)}…` : one) : null;
 }
@@ -437,8 +440,14 @@ export const COMMANDS: Command[] = [
   { id: 'view.openStory', label: 'cmd.openStory', group: 'view', keys: [], enabled: (e) => !!e.doc && sourceFromSelection(e.doc, e.getState().selection).assetIds.length > 0, run: (e) => { if (e.doc) e.openStory(sourceFromSelection(e.doc, e.getState().selection)); } },
   // music that fits the film (wave 7 musicfit): mark the moment, moment to the beat / bar (musicfit/musicFit.commands.ts; disabled until builder C)
   ...MUSICFIT_COMMANDS,
+  // «ציור חי» (wave 8 ink): the mode's Shift+D, empty until W3 builds the mode
+  ...INK_COMMANDS,
   // «תא הבדיקה» (wave 8 booth): «פתיחת תא הבדיקה», owner's own session only (booth/booth.commands.ts; empty until builder W3)
   ...BOOTH_COMMANDS,
+  // «שמירת הסרט כתבנית» (wave 8 owntemplate): owner's own session only (owntemplate/ownTemplate.commands.ts; empty until builder W3)
+  ...OWN_TEMPLATE_COMMANDS,
+  // «למדו אותי פעם אחת» (wave 8 teach): «החילו את העריכות האחרונות על…», no default key (teach/teach.commands.ts; empty until builder W3)
+  ...TEACH_COMMANDS,
 ];
 
 /** Canonical chord for an event: modifiers in fixed order + physical key code. */
@@ -480,6 +489,6 @@ export function chordLabel(chord: string, mac = typeof navigator !== 'undefined'
 }
 
 // Commands that change the selected clips do nothing while a selected clip is on a locked track.
-const CHANGES_SELECTION = new Set(['edit.rollLater', 'edit.rollEarlier', 'edit.slideLater', 'edit.slideEarlier', 'edit.split', 'edit.delete', 'edit.deleteKeepGap', 'cut.rollEarlier', 'cut.rollLater', 'cut.rollEarlier5', 'cut.rollLater5', 'cut.toBeat', 'edit.cut', 'edit.duplicate', 'edit.trimStart', 'edit.trimEnd', 'edit.nudgeLeft', 'edit.nudgeRight', 'edit.nudgeLeft10', 'edit.nudgeRight10', 'edit.slipLater', 'edit.slipEarlier', 'edit.slipLater10', 'edit.slipEarlier10', 'keyframe.remove', ...CRAFT_CHANGES_SELECTION, ...STABILISE_CHANGES_SELECTION]);
+const CHANGES_SELECTION = new Set(['edit.rollLater', 'edit.rollEarlier', 'edit.slideLater', 'edit.slideEarlier', 'edit.split', 'edit.delete', 'edit.deleteKeepGap', 'cut.rollEarlier', 'cut.rollLater', 'cut.rollEarlier5', 'cut.rollLater5', 'cut.toBeat', 'edit.cut', 'edit.duplicate', 'edit.trimStart', 'edit.trimEnd', 'edit.nudgeLeft', 'edit.nudgeRight', 'edit.nudgeLeft10', 'edit.nudgeRight10', 'edit.slipLater', 'edit.slipEarlier', 'edit.slipLater10', 'edit.slipEarlier10', 'keyframe.remove', ...CRAFT_CHANGES_SELECTION, ...STABILISE_CHANGES_SELECTION, ...TEACH_CHANGES_SELECTION]);
 for (const c of COMMANDS) if (CHANGES_SELECTION.has(c.id)) { const was = c.enabled; c.enabled = (e) => !e.selectionLocked && (!was || was(e)); }
 

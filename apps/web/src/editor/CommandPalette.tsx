@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { dictionaries, type Key, type Lang } from '@pulseframe/i18n';
 import { COMMANDS, chordLabel, chordOf, type Command, type Keymap } from './commands.ts';
-import { COLOR_LOOKS, EFFECTS, TRANSITIONS } from '@pulseframe/core';
+import { COLOR_LOOKS, PICKABLE_EFFECTS, TRANSITIONS } from '@pulseframe/core';
 import { Film, Search, Sparkles } from 'lucide-react';
 import { CHROME_STRINGS } from './chrome.strings.ts';
 import { getChrome, setPaletteView } from './chromeState.ts';
@@ -29,7 +29,7 @@ const otherLang = (l: Lang): Lang => (l === 'he' ? 'en' : 'he');
 type Scope = 'all' | 'commands' | 'catalogue' | 'media' | 'assistant';
 interface CatItem { key: string; kind: PickKind; id: string; he: string; en: string }
 const CATALOGUE: CatItem[] = [
-  ...EFFECTS.map((e) => ({ key: `effect:${e.id}`, kind: 'effect' as const, id: e.id, he: e.name.he, en: e.name.en })),
+  ...PICKABLE_EFFECTS.map((e) => ({ key: `effect:${e.id}`, kind: 'effect' as const, id: e.id, he: e.name.he, en: e.name.en })), // a living picture: the Motion tab (opOnlyEffect)
   ...TRANSITIONS.map((x) => ({ key: `transition:${x.id}`, kind: 'transition' as const, id: x.id, he: x.name.he, en: x.name.en })),
   ...COLOR_LOOKS.map((l) => ({ key: `look:${l.id}`, kind: 'look' as const, id: l.id, he: l.name.he, en: l.name.en })),
 ];

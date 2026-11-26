@@ -11,7 +11,7 @@ import {
   contentTransform, lossFlags, placed, regionGeometry, sourceToFrame, SIZE_UNIT, TRACK_STATES, TRACK_UNIT, trackSampleAt,
   type Asset, type Clip, type Follow, type FollowInfo, type MediaClip, type MotionTrack, type ProjectDocument, type ResolvedRegion, type Sequence, type Track, type Transform,
 } from '@pulseframe/core';
-import type { ImageLayer, RenderGraph, TextLayer, VideoLayer } from './evaluate.ts';
+import type { PlacedLayer, RenderGraph, VideoLayer } from './evaluate.ts';
 
 /** The loss fallback blurs the whole layer at least this strongly, whatever the region's own strength (ADR-0015). */
 export const WHOLE_BLUR_MIN_STRENGTH = 0.6;
@@ -42,9 +42,9 @@ export function resolveRegions(doc: ProjectDocument, clip: MediaClip, asset: Pic
 }
 
 /** A layer whose clip follows a motion track, found by the evaluator's layer loop. */
-export interface Follower { layer: VideoLayer | ImageLayer | TextLayer; clip: Clip & { follow: Follow } }
+export interface Follower { layer: PlacedLayer; clip: Clip & { follow: Follow } }
 /** The evaluator's own layer of a clip at a time (evaluate.ts clipLayer), for a target that is not drawn in this frame. */
-export type LayerAt = (track: Track, clip: Clip, time: T.RationalTime) => VideoLayer | ImageLayer | TextLayer | null;
+export type LayerAt = (track: Track, clip: Clip, time: T.RationalTime) => PlacedLayer | null;
 
 const clipEnd = (c: Clip) => T.add(c.start, c.duration);
 /**

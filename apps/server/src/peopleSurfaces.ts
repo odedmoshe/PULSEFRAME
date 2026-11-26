@@ -64,6 +64,7 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   'GET /api/v1/capabilities': ['no-document'],
   'POST /api/v1/capabilities/import': ['no-document'],
   'GET /api/v1/speech': ['no-document'],
+  'GET /api/v1/speech/engine': ['owner-only'],
   'GET /api/v1/sfx/:sfxId/audio': ['no-document'],
   'GET /api/v1/packs': ['no-document'],
   // with projectId the birthdays of its people are hints: read through the store, so without birth dates for a 'names' credential
@@ -186,6 +187,7 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`POST ${P}/capabilities/:capabilityId/models/request`]: ['no-document'],
   [`POST ${P}/capabilities/:capabilityId/models/download`]: ['no-document'],
   [`POST ${P}/speech/models/:modelId/download`]: ['no-document'],
+  [`POST ${P}/speech/engine/install`]: ['owner-only'],
   // exports and jobs
   [`POST ${P}/exports/plan`]: ['reader-document'],
   [`POST ${P}/exports`]: ['rendered-refused', 'reader-document'],
@@ -248,9 +250,26 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   // owner's «שמעתי» mark answers the owner's own session only (403 owner_required for every agent, observer and the phone drop)
   'GET /api/v1/music/kits': ['no-document'],
   'POST /api/v1/music/kits/:kitId/heard': ['owner-only'],
+  // the local picture-model runtime (wave 8 picmodels; picmodels/contract.ts): the state report holds no document (codes and numbers;
+  // the yunet row only for the owner's own session); eye suggestions answer the owner's own session only and are never stored
+  'GET /api/v1/picture-models': ['no-document'],
+  [`POST ${P}/eyes/propose`]: ['owner-only'],
   // «תא הבדיקה» (wave 8 booth track; booth/contract.ts): machine state of the owner's computer, no project, no people; every route
   // the owner's own session only (403 owner_required for every agent, observer and propose credential, GET included)
   'GET /api/v1/booth': ['owner-only'],
+  // «קליפ מקוד» (wave 8 motioncode; made/contract.ts): a page draws pixels from typed values only; it never reads the document's people
+  'GET /api/v1/made/templates': ['no-document'],
+  [`POST ${P}/made/render`]: ['write'],
+  [`GET ${P}/made/jobs/:jobId`]: ['no-document'],
+  [`GET ${P}/made/jobs/:jobId/still/:index`]: ['no-document'],
+  [`GET ${P}/made/jobs/:jobId/file`]: ['no-document'],
+  [`POST ${P}/made/jobs/:jobId/apply`]: ['write'],
+  [`POST ${P}/made/jobs/:jobId/dismiss`]: ['no-document'],
+  [`GET ${P}/made/assets/:assetId/page`]: ['reader-document'],
+  // «שמירת הסרט כתבנית» (wave 8 owntemplate; ownTemplates.ts): the owner's own session only; the stored template holds no person by construction (whitelist)
+  [`POST ${P}/own-templates/preview`]: ['owner-only'],
+  [`POST ${P}/own-templates`]: ['owner-only'],
+  'DELETE /api/v1/own-templates/:templateId': ['owner-only'],
   'GET /api/v1/booth/items/:id/audio': ['owner-only'],
   'GET /api/v1/booth/test-picture/:which': ['owner-only'],
   'GET /api/v1/booth/items/:id/export-still': ['owner-only'],
@@ -259,6 +278,16 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   'POST /api/v1/booth/checks/:rowId': ['owner-only'],
   // versions for an audience (wave 8): the change list holds ids, frames and dB only, no names
   [`GET ${P}/variants/:variantId/audience`]: ['reader-document'],
+  // «למדו אותי פעם אחת» (wave 8 teach): the owner's own history of one clip; registry values and times, no words of the clip
+  [`GET ${P}/clips/:clipId/lesson`]: ['owner-only'],
+  // the in-editor agent «סוכן» (wave 8 autonomy Part 2): run rows (goal, plan, step inputs and result summaries) pass forPrincipal
+  // for the reader (agent/loop.ts W1); providers, keys and the model table hold nothing of a project
+  [`POST ${P}/agent/runs`]: ['rows-scrubbed'], [`GET ${P}/agent/runs`]: ['rows-scrubbed'], [`GET ${P}/agent/runs/:runId`]: ['rows-scrubbed'],
+  [`POST ${P}/agent/runs/:runId/cancel`]: ['rows-scrubbed'], [`POST ${P}/agent/runs/:runId/continue`]: ['rows-scrubbed'],
+  [`POST ${P}/agent/runs/:runId/undo-all`]: ['write'], [`POST ${P}/undo-actor`]: ['write'],
+  'GET /api/v1/agent/providers': ['no-document'], 'PUT /api/v1/agent/providers/:providerId': ['owner-only'], 'PUT /api/v1/agent/providers/:providerId/key': ['owner-only'],
+  'DELETE /api/v1/agent/providers/:providerId/key': ['owner-only'], 'POST /api/v1/agent/providers/:providerId/probe': ['owner-only'],
+  'GET /api/v1/agent/models': ['no-document'], 'PUT /api/v1/agent/models': ['owner-only'],
   // MCP over HTTP: see PEOPLE_MCP_TOOLS and PEOPLE_MCP_RESOURCES
   'ALL /mcp': ['reader-document'],
 };
@@ -303,10 +332,14 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   plan_music_fit: ['reader-document'], apply_music_fit: ['reader-document', 'write'],
   // versions for an audience (wave 8 audiences track)
   get_audience_changes: ['reader-document'],
+  // «קליפ מקוד» (wave 8 motioncode): a page draws pixels from typed values only
+  submit_made_clip: ['write'], view_made_clip: ['no-document'],
   // find it in your footage (wave 7 search track): text only, the reader document without pearl names or tags
   find_in_footage: ['reader-document'],
   // «הפריים הכי חד» (wave 8 cover): numbers only, no picture
   find_sharp_frames: ['reader-document'], read_sharp_frames: ['reader-document'],
+  // the in-editor agent «סוכן» (wave 8 autonomy Part 2): run rows pass forPrincipal (mcp.ts text); undo writes through Store.undoActor
+  start_agent_run: ['rows-scrubbed'], get_agent_run: ['rows-scrubbed'], undo_actor_since: ['write'],
 };
 /** MCP resources and prompts (every resource answer passes forPrincipal; prompts carry no project content). */
 export const PEOPLE_MCP_RESOURCES: Readonly<Record<string, readonly PeopleFilter[]>> = {

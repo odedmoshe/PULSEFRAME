@@ -577,7 +577,7 @@ export function stampText(doc: ProjectDocument, sequenceId: string, clip: Clip, 
   let wall: string | null = null;
   try {
     if (clip.type === 'media') { const dated = captureIn(ix, clip.assetId); wall = dated ? momentOf(ix, { clip, dated, how: 'under', at: time }) : null; }
-    else if (clip.type === 'adjustment' || clip.type === 'text') wall = momentAt(ix, sequenceId, clip, time, 'under')?.anchor.wall ?? null;
+    else if (clip.type === 'adjustment' || clip.type === 'text' || clip.type === 'drawn') wall = momentAt(ix, sequenceId, clip, time, 'under')?.anchor.wall ?? null;
   } catch (e) { if (!(e instanceof RangeError)) throw e; }
   if (wall === null) return '';
   const { date, seconds } = parseWall(wall);

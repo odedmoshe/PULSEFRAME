@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-24T23:05:09.718Z",
+  "ranAt": "2026-11-26T08:21:59.855Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "gpu": "none"
   },
   "scope": "Synthetic four-quadrant pictures made with Pillow, each stored in a different way; checked at four points (six for the portrait picture) with a tolerance of 24 of 255 per channel, on a server-rendered still and on the editor preview. Not checked: fine detail, gradients, colour profiles (ICC), HDR, very large files beyond one 20-megapixel JPEG, real photographs.",

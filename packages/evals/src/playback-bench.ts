@@ -74,7 +74,7 @@ async function playInEditor() {
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
   const R = { num: 30, den: 1 }, f = (n: number) => T.frameTime(n, R), sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  const s = await startServer({ port: 8997, dataDir: path.join(dir, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(dir, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => { const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }); return { status: r.status, body: (await r.json()) as any }; };
   const tx = async (pid: string, ops: unknown[]) => { const r = await call(`/projects/${pid}/transactions`, { ops }); if (r.status !== 200) throw new Error(JSON.stringify(r.body).slice(0, 300)); return r.body; };

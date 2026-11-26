@@ -6,7 +6,9 @@ import { CAPTION_LOOKS, CAPTION_PRESETS, FONT_CATALOG } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { api, type SilenceResult, type SpeechStatus } from '../api.ts';
 import { CaptionLooks } from './CaptionLooks.tsx';
+import { EngineInstall } from './EngineInstall.tsx';
 import { CAP_STRINGS } from './captions.strings.ts';
+import { captionSource, showTranscriptOps, transcriptNotShown } from './captionSource.logic.ts';
 import './captionsPanel.css';
 import { useEditorState, type Editor } from './store.ts';
 import { openItems, readingLimitFor, readReadingLimits, reviewRows, writeReadingLimit, type ReviewRow } from './aiTools.recheck.ts';
@@ -95,10 +97,12 @@ function AutoTranscribe({ assetId, language, overwrite, align }: { assetId: stri
         <div className="muted" data-testid="asr-unavailable">
           <p>{C.broken}</p>
           <details><summary>{C.brokenDetail}</summary><bdi>{tr.detail}</bdi></details>
+          {status.engine.source === 'installed' && <EngineInstall broken onChanged={() => void refresh()} />}
         </div>
       ) : !overwrite && !align ? (
         <div className="muted" data-testid="asr-unavailable">
           <p>{C.notConfigured}</p>
+          <EngineInstall onChanged={() => void refresh()} />
           <details><summary>{C.howTo}</summary><ol>{C.notConfiguredHow.map((x) => <li key={x}>{x}</li>)}</ol></details>
         </div>
       ) : null}
@@ -182,6 +186,7 @@ export function TranscriptPanel() {
   return (
     <div className="transcript pf-ds pf-cap" data-testid="transcript-panel" data-state="ready" data-asset-id={assetId ?? undefined}>
       <header className="pf-cap-head"><h2>{CAP_STRINGS[state.lang].title} <span className="num">{transcript.segments.length}</span></h2><span className="pf-cap-hint">{CAP_STRINGS[state.lang].wordsHint}</span></header>
+      <ShowAsCaptions where="speech" />
       <TranslationReview />
       <div className="row">
         <button className="ghost danger" disabled={lo < 0} onClick={() => void cut(false)} data-testid="transcript-delete">{t('transcript.delete')}</button>
@@ -553,6 +558,45 @@ function firstCueText(doc: NonNullable<ReturnType<typeof useEditorState>['state'
   return tr?.segments[0]?.text;
 }
 
+/**
+ * The one press that makes the captions show the transcript (owner report 2026-11-26), in ONE commit: no caption track yet,
+ * an empty manual track made before the transcript existed (replaced, its name and look kept), or a hidden transcript track.
+ * «תמלול» tab: offered while the transcript is not on the picture. «כתוביות» tab: the notice says why nothing is shown.
+ */
+function ShowAsCaptions({ where }: { where: 'speech' | 'captions' }) {
+  const { editor, state } = useEditorState();
+  const { doc } = state;
+  if (!doc || !transcriptNotShown(doc)) return null;
+  const C = CAP_STRINGS[state.lang];
+  const src = captionSource(doc);
+  const ops = showTranscriptOps(doc);
+  const show = () => { if (ops) void editor.commit(ops, 'Show transcript as captions'); };
+  if (where === 'speech') {
+    return ops
+      ? <p className="pf-cap-show"><button type="button" className="primary" onClick={show} data-testid="transcript-show-captions">{C.showOnVideo}</button></p>
+      : <p className="muted" role="note" data-testid="transcript-captions-locked">{C.locked}</p>;
+  }
+  if (src.kind === 'none') return null; // the «כתוביות» tab offers «הוספת רצועת כתוביות», which shows the transcript
+  return (
+    <div className="pf-cap-notice" role="note" data-testid="caption-unlinked" data-kind={src.kind === 'transcript' ? 'hidden' : src.kind === 'unlinked' && src.locked ? 'locked' : 'unlinked'}>
+      <p>{src.kind === 'transcript' ? C.hidden : C.unlinked}</p>
+      {src.kind === 'unlinked' && src.locked && <p className="muted">{C.locked}</p>}
+      {ops && <button type="button" className="primary" onClick={show} data-testid="caption-show-transcript">{src.kind === 'transcript' ? C.showHidden : C.showTranscript}</button>}
+    </div>
+  );
+}
+
+/** One line: what the captions currently come from (the notice of ShowAsCaptions says it when they show nothing). */
+function CaptionSourceLine() {
+  const { state } = useEditorState();
+  const { doc } = state;
+  if (!doc) return null;
+  const src = captionSource(doc);
+  if (src.kind === 'none' || src.kind === 'unlinked') return null;
+  const C = CAP_STRINGS[state.lang];
+  return <p className="muted pf-cap-source" data-testid="caption-source" data-kind={src.kind}>{src.kind === 'transcript' ? C.sourceTranscript : C.sourceManual(src.cues)}</p>;
+}
+
 export function CaptionControls({ editor }: { editor: Editor }) {
   const { state, t } = useEditorState();
   const { doc } = state;
@@ -577,6 +621,8 @@ export function CaptionControls({ editor }: { editor: Editor }) {
         <button className="ghost" onClick={() => void editor.commit([{ op: 'add_caption_track', args: { mode: hasTranscript ? 'transcript' : 'manual' } }], 'Add caption track')} data-testid="caption-add">{t('caption.add')}</button>
       ) : (
         <>
+          <CaptionSourceLine />
+          <ShowAsCaptions where="captions" />
           {track.caption?.mode === 'manual' && (
             <button type="button" className="ghost" data-testid="cue-add" onClick={() => void (async () => {
               // a two-second cue at the playhead (shorter if another cue follows sooner); it is selected so its text can be typed in the Inspector

@@ -7,7 +7,7 @@
  */
 import type { BeatPosition, BlendMode, Mask, ResolvedRegion } from '@pulseframe/core';
 import type { LayerLook } from './evaluate.ts';
-import { gpuEffect, isGpuEffect, type LutStrip } from './gpu.ts';
+import { gpuEffect, isGpuEffect, type DepthStrip, type LutStrip } from './gpu.ts';
 import { boundRadius, overlayParticles, shapeAlpha, speedLines, wedgeCorners, type Particle } from './overlays.ts';
 import { STAMP_TEXT, stampPolygons } from './stamp.ts';
 import { CANVAS_KERNELS, CANVAS_TRANSITIONS } from './canvasTransitions.ts';
@@ -16,7 +16,7 @@ type C2D = OffscreenCanvasRenderingContext2D;
 export interface Buf { canvas: OffscreenCanvas; ctx: C2D }
 /** Geometry of the placed layer, so layer-relative effects and masks follow its transform. */
 export interface LayerBox { cx: number; cy: number; w: number; h: number; rotation: number; scale: number }
-export interface LookEnv { width: number; height: number; frameIndex: number; /** Timeline time of the frame in seconds. */ seconds: number; /** Clip-local seconds of the frame (bursts at the clip start). */ local?: number; box: LayerBox; /** Where the frame falls in the beats of the music playing there, if any (core beatgrid.ts). */ beat?: BeatPosition | null; /** Colour tables of this frame by asset id (null = could not be supplied; the reason is in `lutReasons`). Filled by drawGraph for color.lut. */ luts?: ReadonlyMap<string, LutStrip | null>; lutReasons?: ReadonlyMap<string, string> }
+export interface LookEnv { /** «תמונה חיה» (wave 8 living; W2 fills it in drawPinned): the layer's depth strip, null = could not be had (why: depthReason). */ depth?: DepthStrip | null; depthReason?: string; width: number; height: number; frameIndex: number; /** Timeline time of the frame in seconds. */ seconds: number; /** Clip-local seconds of the frame (bursts at the clip start). */ local?: number; box: LayerBox; /** Where the frame falls in the beats of the music playing there, if any (core beatgrid.ts). */ beat?: BeatPosition | null; /** Colour tables of this frame by asset id (null = could not be supplied; the reason is in `lutReasons`). Filled by drawGraph for color.lut. */ luts?: ReadonlyMap<string, LutStrip | null>; lutReasons?: ReadonlyMap<string, string> }
 
 const pools = new Map<string, Buf[]>();
 /**
@@ -361,7 +361,9 @@ export async function applyEffects(a: Buf, effects: NonNullable<LayerLook['effec
       drawFiltered(next.ctx, cur.canvas, css, blur, env.width, env.height);
     } else if (isGpuEffect(effects[i]!.type)) {
       // Not available (no adapter, or the reference check failed): the layer goes on unchanged and the effect is recorded as missing.
-      if (!(await gpuEffect(effects[i]!.type, effects[i]!.params, cur.canvas, next.ctx, env))) next.ctx.drawImage(cur.canvas, 0, 0);
+      // the instance's non-parameter fields ride as `extra` (a grade's colour curves, wave 8 grade C2); absent for every other effect
+      const curves = effects[i]!.curves;
+      if (!(await gpuEffect(effects[i]!.type, effects[i]!.params, cur.canvas, next.ctx, env, curves ? { curves } : undefined))) next.ctx.drawImage(cur.canvas, 0, 0);
       i++;
     } else {
       layerEffect(effects[i]!.type, effects[i]!.params, cur.canvas, next.ctx, env);

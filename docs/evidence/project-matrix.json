@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-24T23:06:58.060Z",
+  "ranAt": "2026-11-26T10:35:46.545Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "gpu": "none"
   },
   "scope": "One synthetic 4-second 30 fps source in projects with different frame rates and sizes; server export route for all; browser export and editor preview for the non-integer and extreme rates, the vertical and the odd size. Every exported frame is read from its barcode; sound by beep onsets (±12 ms on the server route, one frame on the browser routes). Not covered: sources at other rates in these projects, captions and effects at non-integer rates, long timelines at 29.97 fps (timecode drift).",

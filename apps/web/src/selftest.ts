@@ -15,6 +15,7 @@ import './editor/craft/craft.selftest.ts'; // editing craft (wave 7): window.__p
 import './editor/pearls/pearls.selftest.ts'; // marked ranges (wave 7): window.__pfPearlsHash, core usage and screen time in this browser, for proof:pearls P15 (builder C)
 import './editor/stabilise/stabilise.selftest.ts'; // stabilisation (wave 7): window.__pfSteadyHash, core steadyPose in this browser, for proof:stabilise S7 (W3)
 import './editor/search/search.selftest.ts'; // footage search (wave 7): window.__pfFootageSearch, core searchFootage in this browser, for proof:search S3
+import './editor/grade/gradeCurves.selftest.ts'; // colour curves (wave 8 grade): window.__pfGradeCurveHash, core gradeCurveTables in this browser, for proof:grade G1 (W1)
 
 /**
  * Sound-effect kernels in this browser (ADR-0010 D6): window.__pfFxRun(type, params) runs one kernel over the fixed fixture

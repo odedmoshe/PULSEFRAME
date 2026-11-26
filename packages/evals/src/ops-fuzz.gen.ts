@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, KEEP_RULES, musicAt, sourceAt, type MediaClip } from '@pulseframe/core';
+import { animatableParams, LIVING_BUILT, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, KEEP_RULES, GRADE_CURVE_PRESETS, LESSON_OPS_BUILT, LESSON_PART_ORDER, MAP_OPS_BUILT, MAP_MODES, MAP_LOOKS, musicAt, sourceAt, type MediaClip } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -392,7 +392,7 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     const motionTracks = Object.values(doc.motionTracks ?? {});
     const mtId = () => (motionTracks.length && rnd() < 0.9 ? pick(motionTracks).id : 'mtk_none');
     const videoTracks = tracks.filter((t) => t.kind === 'video');
-    const followers = clips.filter((x) => x.c.type === 'text' || (x.c.type === 'media' && x.t.kind === 'video'));
+    const followers = clips.filter((x) => x.c.type === 'text' || x.c.type === 'drawn' || (x.c.type === 'media' && x.t.kind === 'video'));
     const adjusts = clips.filter((x) => x.c.type === 'adjustment');
     const adjustId = () => (adjusts.length && rnd() < 0.9 ? pick(adjusts).c.id : any());
     const menu: (() => OpCall)[] = [
@@ -611,6 +611,36 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       ...(MUSICFIT_OPS_BUILT && !opts.v1Replay ? [() => genMusicFit(doc)] : []),
       // versions for an audience (wave 8 audiences): the three public operations, once W1 has built the projection (never in the v1 corpus)
       ...(AUDIENCE_PROJECTION_BUILT && !opts.v1Replay ? [() => genAudience(doc)] : []),
+      // trip maps (wave 8 tripmap): the three public operations, once W1 has built the bodies (never in the v1 corpus)
+      ...(MAP_OPS_BUILT && !opts.v1Replay ? [() => genTripMap(doc)] : []),
+      // «למדו אותי פעם אחת» (wave 8 teach): apply_lesson, once W1 has built lesson.ts (never in the v1 corpus)
+      ...(LESSON_OPS_BUILT && !opts.v1Replay ? [() => genLesson(doc)] : []),
+      // «תמונה חיה» (wave 8 living): set_clip_depth always (lead-built), set_living_picture once W1 has built it (never in the v1 corpus)
+      ...(opts.v1Replay ? [] : [() => genLiving(doc)]),
+      // «ציור חי» (wave 8 ink): add_ink and edit_ink (never in the v1 corpus)
+      ...(opts.v1Replay ? [] : [() => genInk(doc)]),
+      // colour curves (wave 8 grade, verifier C10d): set_grade_curves beside set_colour_grade — valid sets (the presets, generated
+      // monotone and non-monotone ones), identity channels (dropped), null (removes; adds nothing on an ungraded clip), and invalid sets
+      // (one point, 13 points, a value of 256 or 0.5, unordered or too close inputs, a missing end); on video clips mostly, sometimes any
+      // clip (titles accepted; captions and sound refused) — locked tracks come from update_track; never in the v1 replay corpus
+      ...(!opts.v1Replay ? [() => {
+        const curve = (): [number, number][] => {
+          const r = rnd();
+          if (r < 0.06) return [[0, 0]];
+          if (r < 0.1) return Array.from({ length: 13 }, (_, i) => [Math.min(255, i * 21), int(256)] as [number, number]);
+          if (r < 0.14) return [[0, 0], [128, rnd() < 0.5 ? 256 : 0.5], [255, 255]];
+          if (r < 0.18) return [[0, 0], [120, 40], [rnd() < 0.5 ? 118 : 122, 60], [255, 255]];
+          if (r < 0.21) return [[rnd() < 0.5 ? 3 : 0, 0], [rnd() < 0.5 ? 255 : 250, 255]];
+          if (r < 0.3) return [[0, 0], [255, 255]];
+          const k = 2 + int(rnd() < 0.9 ? 6 : 11), xs = new Set<number>([0, 255]);
+          while (xs.size < k) xs.add(4 + int(248));
+          const sorted = [...xs].sort((a, b) => a - b).filter((x, i, a) => i === 0 || x - a[i - 1]! >= 4);
+          if (sorted[sorted.length - 1] !== 255) sorted[sorted.length - 1] = 255;
+          return sorted.map((x) => [x, int(256)] as [number, number]);
+        };
+        const curves = rnd() < 0.15 ? null : rnd() < 0.15 ? pick([...GRADE_CURVE_PRESETS]).curves : Object.fromEntries((['master', 'r', 'g', 'b'] as const).filter(() => rnd() < 0.45).map((ch) => [ch, curve()]));
+        return { op: 'set_grade_curves', args: { clipId: rnd() < 0.8 ? videoId() : any(), curves } };
+      }] : []),
       // a held frame (add_clip freeze, wave 8 growing; never in the v1 corpus, which keyframe-replay and ripple-delete-golden pin): mostly a video picture right after a picture clip (where a dissolve out of it can
       // follow), now and then a still, linked sound, no duration or a picture past the end (each refused)
       ...(opts.v1Replay ? [] : [() => {
@@ -673,6 +703,30 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
         ops: steps, slots: regen ? slots.filter((s) => !(regen.slots ?? []).some((k) => k.key === s.key && touched.includes(k.clipId))) : slots,
       },
     };
+  };
+  /**
+   * «קליפ מקוד» (wave 8 motioncode; internal: the made routes commit it with allowInternal from a finished job). `genMade(doc)` returns a
+   * random apply_made_clip call: a made asset (a VP9 file with alpha and its made record, frames matching), sometimes without the record,
+   * as a picture, or with frames that disagree; then place (at a random frame, on a new or an existing track), replace (an asset on the
+   * timeline, an unused one or an unknown id), library only, or place AND replace (refused). Not drawn by `gen`. Until W2 builds the
+   * body every call is refused with made_not_built.
+   */
+  const genMade = (doc: ProjectDocument): OpCall => {
+    const frames = 30 + int(90);
+    const hash = `sha256:${Array.from({ length: 64 }, () => '0123456789abcdef'[int(16)]).join('')}`;
+    const record = { v: 1, pageSha256: hash, pageBytes: 200 + int(4000), templateId: pick(['rising-title', 'lower-third', 'counter', 'intro-plate', 'end-card']), templateVersion: 1, fields: [{ key: 'title', kind: 'text', label: { he: 'כותרת', en: 'Title' }, default: 'שלום' }], values: { title: pick(['טיול לגליל 2026', 'Hello', '']) }, frames, width: 640, height: 360, browser: 'fuzz', sandbox: 'chromium', checks: { determinism: { frames: [0, frames >> 1, frames - 1] }, flash: { black: { general: 0, red: 0 }, white: { general: 0, red: 0 } }, alpha: true } };
+    const r = rnd();
+    const asset = {
+      kind: r < 0.05 ? 'image' : 'video', name: 'made.webm', contentHash: hash, byteSize: 1000 + int(9000), container: 'webm', mimeType: 'video/webm', duration: f(frames),
+      video: { width: 640, height: 360, frameRate: rate, codec: 'vp9', rotation: 0, frameCount: r < 0.1 ? frames + 1 : frames, hasAlpha: true },
+      provenance: { origin: 'generated', importedAt: '2026-11-26T00:00:00Z', importedBy: 'fuzz', ...(r < 0.15 ? {} : { made: record }) },
+    };
+    const used = Object.values(doc.sequences).flatMap((sq) => sq.tracks.flatMap((t) => t.clips)).flatMap((c) => (c.type === 'media' ? [c.assetId] : []));
+    const tracks = Object.values(doc.sequences).flatMap((sq) => sq.tracks).filter((t) => t.kind === 'video');
+    const place = { start: fr(), ...(tracks.length && rnd() < 0.3 ? { trackId: pick(tracks).id } : {}) };
+    const replaceAssetId = used.length && rnd() < 0.7 ? pick(used) : rnd() < 0.5 ? Object.keys(doc.assets)[0] ?? 'ast_none' : 'ast_none';
+    const w = rnd();
+    return { op: 'apply_made_clip', args: { asset, ...(w < 0.45 ? { place } : w < 0.75 ? { replaceAssetId } : w < 0.9 ? {} : { place, replaceAssetId }) } };
   };
   /**
    * A random apply_take call (perform mode, ADR-0025; internal: a driver commits it with allowInternal, as POST /takes does): a
@@ -874,6 +928,40 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
    * audience versions mostly, sometimes on a plain format or an unknown id (refused); levels inside and outside −20..0 and null; roles
    * on sound tracks, picture tracks and unknown tracks; every keep rule on clips of every kind (title_size in a calm version refused).
    */
+  /**
+   * «למדו אותי פעם אחת» (wave 8 teach). `genLesson(doc)` returns a random apply_lesson call (public; `gen` draws it once LESSON_OPS_BUILT):
+   * a source clip and 1–4 targets of any kind (sometimes the source itself, an unknown id or a target named twice: refused or counted
+   * once); 1–3 parts from a menu of learnable steps (trims by ±frames on either edge, gain, fades, a look, a merged grade, a transform,
+   * an effect life with its own $ref, a transition with $frames, a sound preset), sometimes in the wrong part, with a literal clip id,
+   * an unknown $-key, a never-carried argument or a non-learnable op (all refused whole by validation). W1 extends the menu.
+   */
+  const genLesson = (doc: ProjectDocument): OpCall => {
+    const clips = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips));
+    const ids = clips.map((c) => c.id);
+    const any = () => (ids.length && rnd() < 0.93 ? pick(ids) : 'clp_none');
+    const src = any();
+    const targets = Array.from({ length: 1 + int(4) }, () => (rnd() < 0.05 ? src : any()));
+    const slot = { $slot: rnd() < 0.8 ? 'clip' : 'sound' };
+    const by = () => T.frameTime(1 + int(12), rate);
+    const steps: Record<string, () => { kind: string; steps: { op: string; args: Record<string, unknown>; bind?: string }[] }> = {
+      trim: () => { const edge = pick(['start', 'end'] as const); return { kind: 'trim', steps: [{ op: 'trim_clip', args: { clipId: slot, edge, to: { $edge: edge, by: rnd() < 0.5 ? by() : T.sub(T.ZERO, by()) } } }] }; },
+      gain: () => ({ kind: 'gain', steps: [{ op: 'set_clip_gain', args: { clipId: slot, gain: pick([0, 0.5, 0.7, 1, 2]) } }] }),
+      fades: () => ({ kind: 'fades', steps: [{ op: 'set_clip_fades', args: { clipId: slot, fadeIn: { $dur: by() }, ...(rnd() < 0.5 ? { fadeOut: { $dur: by() } } : {}) } }] }),
+      look: () => ({ kind: 'look', steps: [{ op: 'apply_look', args: { clipId: slot, lookId: pick(['warm-sun', 'skin-warm', 'look_none']) } }, ...(rnd() < 0.5 ? [{ op: 'set_colour_grade', args: { clipId: slot, mode: 'merge', params: { contrast: pick([0.9, 1.1, 1.3]) } } }] : [])] }),
+      transform: () => ({ kind: 'transform', steps: [{ op: 'set_clip_transform', args: { clipId: slot, transform: { scale: pick([0.5, 1, 1.2]), ...(rnd() < 0.5 ? { x: pick([-0.2, 0, 0.3]) } : {}) } } }] }),
+      effect: () => ({ kind: 'effect', steps: [{ op: 'add_effect', args: { clipId: slot, type: pick(['blur.gaussian', 'color.adjust', 'time.echo']), ...(rnd() < 0.3 ? { params: {} } : {}) }, bind: 'fx' }, ...(rnd() < 0.5 ? [{ op: 'update_effect', args: { clipId: slot, effectId: { $ref: 'fx', out: 'effectId' }, enabled: false } }] : [])] }),
+      transition: () => ({ kind: 'transition', steps: [{ op: 'set_transition', args: { clipId: slot, type: pick(['dissolve', 'wipe-left']), frames: { $frames: 1 + int(20), rate } } }] }),
+      soundFx: () => ({ kind: 'soundFx', steps: [{ op: 'apply_audio_preset', args: { clipId: slot, presetId: pick([...AUDIO_PRESETS.map((p) => p.id), null]) } }] }),
+    };
+    const keys = Object.keys(steps);
+    const parts = Array.from({ length: 1 + int(3) }, (_, i) => ({ key: `p${i}`, ...steps[pick(keys)]!() }));
+    const r = rnd();
+    if (r < 0.04) parts[0]!.kind = pick([...LESSON_PART_ORDER]); // the wrong part: refused
+    else if (r < 0.07) parts[0]!.steps[0]!.args.clipId = any(); // a literal clip: refused
+    else if (r < 0.09) parts[0]!.steps[0]!.args.$frames = 1; // an unknown $-key: refused
+    else if (r < 0.11) parts[0]!.steps.push({ op: 'add_person', args: { name: 'x' } }); // not a step op: refused
+    return { op: 'apply_lesson', args: { sourceClipId: src, targets, parts } };
+  };
   const genAudience = (doc: ProjectDocument): OpCall => {
     const all = Object.values(doc.variants ?? {});
     const aud = all.filter((v) => v.audience);
@@ -890,6 +978,83 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     return { op: 'set_audience_keep', args: { variantId, clipId: clips.length && rnd() < 0.92 ? pick(clips).id : 'clp_none', rule: pick([...KEEP_RULES]), keep: rnd() < 0.7 } };
   };
   /**
+   * Trip maps (wave 8 tripmap track). `genTripMap(doc)` returns a random add_trip_map, update_trip_map or time_trip_map call (public;
+   * `gen` draws them once MAP_OPS_BUILT): 2–12 stops mostly (sometimes 1 or 13), micro-degree coordinates off the 0.01° grid (the op
+   * rounds), latitudes now and then beyond ±80°, repeated places, empty and 41-letter names, hidden stops, travel modes (sometimes on
+   * stop 0), times on every stop, on none or on some; updates and timings on map clips mostly, sometimes on another clip or an unknown id.
+   */
+  const genTripMap = (doc: ProjectDocument): OpCall => {
+    const maps = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips)).filter((c) => c.type === 'drawn' && c.drawn.kind === 'map');
+    const others = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips)).filter((c) => !(c.type === 'drawn' && c.drawn.kind === 'map'));
+    const clipId = maps.length && rnd() < 0.85 ? pick(maps).id : others.length && rnd() < 0.7 ? pick(others).id : 'clp_none';
+    const stops = () => {
+      const n = rnd() < 0.9 ? 2 + int(11) : pick([1, 13]);
+      const timed = rnd() < 0.2 ? 'all' : rnd() < 0.1 ? 'some' : 'none';
+      let at = int(30);
+      return Array.from({ length: n }, (_, i) => {
+        at += 1 + int(rnd() < 0.9 ? 90 : 20);
+        const same = i > 0 && rnd() < 0.04;
+        return {
+          name: rnd() < 0.03 ? '' : rnd() < 0.02 ? 'א'.repeat(41) : pick(['תל אביב', 'ירושלים', 'אילת', 'London', 'פטרה', 'חיפה']),
+          lon: same ? 34_770_000 : int(360_000_001) - 180_000_000, lat: same ? 32_080_000 : int(rnd() < 0.95 ? 160_000_001 : 180_000_001) - (rnd() < 0.95 ? 80_000_000 : 90_000_000),
+          ...(i > 0 || rnd() < 0.05 ? (rnd() < 0.7 ? { via: pick([...MAP_MODES]) } : {}) : {}),
+          ...(rnd() < 0.08 ? { hidden: true as const } : {}),
+          ...(timed === 'all' || (timed === 'some' && rnd() < 0.5) ? { at } : {}),
+        };
+      });
+    };
+    const r = rnd();
+    if (r < 0.45 || !maps.length) return { op: 'add_trip_map', args: { start: fr(), duration: f(30 + int(400)), stops: stops(), ...(rnd() < 0.5 ? { look: pick([...MAP_LOOKS]) } : {}) } };
+    if (r < 0.75) return { op: 'update_trip_map', args: { clipId, ...(rnd() < 0.6 ? { stops: stops() } : {}), ...(rnd() < 0.5 ? { look: pick([...MAP_LOOKS]) } : {}) } };
+    return { op: 'time_trip_map', args: { clipId, to: rnd() < 0.6 ? 'even' : 'bars' } };
+  };
+  /**
+   * «תמונה חיה» (wave 8 living track). `genLiving(doc)` returns a random set_clip_depth or (once LIVING_BUILT) set_living_picture call:
+   * mostly on a photo clip, sometimes on a video, a title or an unknown id (refused notPhoto / not_found); depths within the caps,
+   * now and then an odd stroke (refused depth_invalid) or null (refused while a living picture is on the clip); moves, amounts that fit
+   * and amounts above the comfort cap (refused living_too_fast with max), curves, remove.
+   */
+  const genLiving = (doc: ProjectDocument): OpCall => {
+    const clips = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips));
+    const photos = clips.filter((c) => c.type === 'media' && doc.assets[c.assetId]?.kind === 'image');
+    const clipId = photos.length && rnd() < 0.8 ? pick(photos).id : clips.length && rnd() < 0.9 ? pick(clips).id : 'clp_none';
+    const stroke = () => { const n = 1 + int(6); const pts = Array.from({ length: 2 * n }, () => int(1001)); if (rnd() < 0.05) pts.pop(); return { layer: pick(['near', 'far'] as const), size: 5 + int(296), pts }; };
+    const depth = () => ({ v: 1 as const, base: rnd() < 0.6 ? { kind: 'ramp' as const, horizon: int(1000) } : { kind: 'flat' as const }, strokes: Array.from({ length: int(5) }, stroke) });
+    if (!LIVING_BUILT || rnd() < 0.5) return { op: 'set_clip_depth', args: { clipId, depth: rnd() < 0.12 ? null : depth() } };
+    return { op: 'set_living_picture', args: { clipId, ...(rnd() < 0.15 ? { remove: true as const } : { ...(rnd() < 0.7 ? { depth: depth() } : {}), ...(rnd() < 0.6 ? { move: pick(['push', 'slide'] as const) } : {}), ...(rnd() < 0.6 ? { amount: pick([0.1, 0.25, 0.5, 0.75, 1]) } : {}), ...(rnd() < 0.4 ? { curve: pick(['ease-in-out', 'linear', 'gentle'] as const) } : {}) }) } };
+  };
+  /**
+   * «ציור חי» (wave 8 ink). `genInk(doc)` returns a random add_ink (1–4 strokes of 1–40 points around the frame centre, every brush,
+   * mixed-case colours, sometimes a long one, a bad time list, uneven arrays, a point too far or a pause too long — each refused with
+   * its ink row; with and without duration and track) or edit_ink (play, speed, fadeOut on drawings mostly, sometimes on a title or
+   * an unknown clip, refused; sometimes nothing to change, refused).
+   */
+  const genInk = (doc: ProjectDocument): OpCall => {
+    const all = Object.values(doc.sequences).flatMap((sq) => sq.tracks.flatMap((t) => t.clips.map((c) => ({ c, t }))));
+    const inks = all.filter((x) => x.c.type === 'drawn' && x.c.drawn.kind === 'ink');
+    if (inks.length && rnd() < 0.35) {
+      const r = rnd();
+      const clipId = r < 0.85 ? pick(inks).c.id : r < 0.95 && all.length ? pick(all).c.id : 'clp_none';
+      const args: Record<string, unknown> = { clipId };
+      if (rnd() < 0.6) args.play = pick(['drawn', 'all'] as const);
+      if (rnd() < 0.3) args.speed = '1';
+      if (rnd() < 0.3) args.fadeOut = true;
+      return { op: 'edit_ink', args };
+    }
+    const stroke = () => {
+      const n = 1 + int(rnd() < 0.1 ? 400 : 40);
+      const x0 = int(16_000) - 8_000, y0 = int(9_000) - 4_500;
+      const x = Array.from({ length: n }, (_, j) => x0 + j * (int(60) - 30));
+      const y = Array.from({ length: n }, (_, j) => y0 + j * (int(60) - 30));
+      const t = Array.from({ length: n }, (_, j) => j * (1 + int(30)));
+      const bad = rnd();
+      if (bad < 0.03) t[0] = 5; else if (bad < 0.06 && n > 1) t[n - 1] = t[n - 1]! + 70_000; else if (bad < 0.08) x[0] = 40_000; else if (bad < 0.1) y.push(0);
+      return { brush: pick(['marker', 'highlighter', 'neon'] as const), color: pick(['#FFCC00', '#ff3366', '#00ffAA', '#FFFFFF']), width: pick([40, 80, 160, 240, 400]), at: int(3_000), x, y, t };
+    };
+    const texts = Object.values(doc.sequences).flatMap((sq) => sq.tracks).filter((t) => t.kind === 'text');
+    return { op: 'add_ink', args: { start: fr(), strokes: Array.from({ length: 1 + int(4) }, stroke), ...(rnd() < 0.4 ? { duration: f(1 + int(120)) } : {}), ...(texts.length && rnd() < 0.3 ? { trackId: pick(texts).id } : {}), ...(rnd() < 0.2 ? { play: 'all' as const } : {}) } };
+  };
+  /**
    * The next random call among the named operations: draws from the same menu until one of them comes up (the menu grows with every
    * feature, so a driver that is about a few operations would otherwise meet them too rarely to say anything about them).
    */
@@ -898,5 +1063,5 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLiving, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience, genInk, genLesson, genTripMap, genMade };
 }

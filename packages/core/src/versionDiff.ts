@@ -21,6 +21,7 @@
 import { canonical, diffEntities, entityMap, sameEntity, type EntityState } from './entities.ts';
 import type { ProjectDocument } from './schema.ts';
 import { sha256Hex } from './sha256.ts';
+import { drawnName } from './drawn.ts';
 import type { DiffEntityKind, DiffRow, DiffSummary } from './craftContract.ts';
 
 /** Rows «מה השתנה» lists before it only counts. */
@@ -115,6 +116,7 @@ function nameOf(s: EntityState, id: string, docs: ProjectDocument[]): string {
       const c = s.clip;
       if (c.type === 'text' || c.type === 'caption') return short(c.text) || id;
       if (c.type === 'media') return asset(c.assetId);
+      if (c.type === 'drawn') return drawnName(c.drawn).he; // a drawing or a map: its kind's name (it has no words of its own)
       return c.label || id;
     }
     case 'transcript': return asset(s.transcript.assetId);

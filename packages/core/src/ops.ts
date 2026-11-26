@@ -4,11 +4,12 @@
  */
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
+import { DRAWN_NOT_TEXT, drawnName, DrawnPayloadSchema, type DrawnPayload } from './drawn.ts';
 import {
   ANIMATABLE, AssetSchema, EASINGS, DEFAULT_TEXT_ANIMATION, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, TextAnimationSchema, RationalTimeSchema as RT, TextStyleSchema, TransformSchema,
   normaliseTextStyle, TEXT_LOOK_FIELDS, timelineBehaviour,
   CaptionStyleSchema, DEFAULT_CAPTION_STYLE, RunRangeSchema, SafeAreaSchema, MARKER_COLORS, VariantTranslationSchema,
-  type AdjustmentClip, type Asset, type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
+  type AdjustmentClip, type Asset, type DrawnClip, type Transform, type CaptionStyle, type Clip, type MediaClip, type ProjectDocument, type Marker, type Sequence, type Track, type Transcript, type Variant,
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
@@ -40,6 +41,8 @@ import { ownBeats, sceneCutsFor, timingRelations, transcriptFor } from './lineag
 import { skippedClips, timingCoverage, untimedCopyRefusal } from './cleanup.ts';
 import { MULTICAM_REFUSALS, type MulticamRefusalKey, type MulticamRefusalRow } from './multicamRefusals.ts';
 import { projectCameraSamples, STEADY_REFUSALS } from './steadyContract.ts';
+import { LIVING_EFFECT, LIVING_REFUSALS, opOnlyEffect, type LivingRefusalKey, type LivingRefusalRow } from './livingContract.ts';
+import { livingComfort } from './livingComfort.ts';
 import { detachRangesOfAsset } from './sourceRanges.ts';
 import { DEFAULT_REDACT_REGION, isUsable, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, roundHalfUp, SIZE_UNIT, ST, TrackOpArgs, trackSampleAt, type MotionTrack, type RedactRegion } from './tracking.ts';
 
@@ -50,7 +53,9 @@ export type OpErrorCode =
   | 'not_time_preserving' | 'range_not_covered'
   // edits by a recording's times (delete_transcript_range; tidy-speech and the filler/silence routes use the same code): nothing on the
   // timeline plays the recording on a known clock, and a clip shows a copy of it that records no time mapping
-  | 'untimed_copy';
+  | 'untimed_copy'
+  // a text operation (words, text style, letter animation, live fields, format wording) aimed at a drawn clip (wave 8 carrier, drawn.ts)
+  | 'drawn_not_text';
 export class OpError extends Error {
   constructor(public code: OpErrorCode, message: string, public details: Record<string, unknown> = {}, public hint?: string) {
     super(message);
@@ -58,6 +63,21 @@ export class OpError extends Error {
   toJSON() {
     return { code: this.code, message: this.message, details: this.details, hint: this.hint };
   }
+}
+/** A refusal of «תמונה חיה» (livingContract.ts LIVING_REFUSALS): the row's code, its sentence and next step, details.why names the case. */
+export function livingRefusal<K extends LivingRefusalKey>(key: K, details: Record<string, unknown>, ...values: Parameters<(typeof LIVING_REFUSALS)[K]['message']>): OpError {
+  const r = LIVING_REFUSALS[key] as LivingRefusalRow<unknown[]>;
+  return new OpError(r.code, r.message(...values), { ...details, why: r.why }, r.hint);
+}
+
+/**
+ * Every text operation calls this before its own "not a text clip" check: a drawn clip (drawn.ts; a drawing or a map) has
+ * no words, text style, letter animation or live fields, and is refused with drawn_not_text, which names what it is.
+ */
+export function refuseDrawnText(clip: Clip | null | undefined): void {
+  if (clip?.type !== 'drawn') return;
+  const name = drawnName(clip.drawn);
+  throw new OpError(DRAWN_NOT_TEXT.code, DRAWN_NOT_TEXT.message(name.en.toLowerCase()), { clipId: clip.id, kind: clip.drawn.kind, name }, DRAWN_NOT_TEXT.hint);
 }
 
 /** A multicam refusal (ADR-0020, multicamRefusals.ts) raised by an op of this file; multicamContract.ts multicamRefusal is the same for multicamOps.ts. */
@@ -662,6 +682,30 @@ defineOp({
   },
 });
 
+/**
+ * The carrier's placement of a new drawn clip (wave 8, drawn.ts), for the ops of each drawn kind (add_ink, add_trip_map …):
+ * placed like add_text (a named text track, else the first unlocked text track free over the range, else a new text track;
+ * frame-aligned start and duration, the range free), with a title's default transform unless one is given. The payload is
+ * checked against the registry here (an unknown kind or a payload its schema refuses is invalid_args), so the op fails
+ * with a plain reason rather than at document validation. The caller returns the clip and track ids.
+ */
+export function placeDrawnClip(d: ProjectDocument, a: { sequenceId?: string; trackId?: string; start: T.RationalTime; duration: T.RationalTime; drawn: DrawnPayload; transform?: Partial<Transform> }, ctx: OpContext): { clip: DrawnClip; track: Track } {
+  const seq = seqOf(d, a.sequenceId);
+  assertAligned(d, a.start, 'start');
+  assertAligned(d, a.duration, 'duration');
+  if (!T.lt(T.ZERO, a.duration) || T.isNegative(a.start)) throw new OpError('invalid_args', 'start must be >= 0 and duration > 0');
+  const parsed = DrawnPayloadSchema.safeParse(a.drawn);
+  if (!parsed.success) throw new OpError('invalid_args', `drawn payload refused: ${parsed.error.issues.map((i) => `${i.path.join('.') || 'drawn'}: ${i.message}`).join('; ').slice(0, 400)}`, { kind: a.drawn?.kind });
+  const end = T.add(a.start, a.duration);
+  const track = a.trackId ? mustTrack(seq, a.trackId) : placeTrack(seq, 'text', a.start, end, ctx);
+  if (track.kind !== 'text') throw new OpError('incompatible', `a drawing cannot go on ${track.kind} track`, { trackId: track.id }, 'Choose a titles track, or omit trackId to auto-place.');
+  assertFree(track, a.start, end);
+  const clip: DrawnClip = { id: ctx.newId('clp'), type: 'drawn', start: a.start, duration: a.duration, transform: { ...DEFAULT_TRANSFORM, ...a.transform }, drawn: structuredClone(a.drawn) };
+  track.clips.push(clip);
+  sortClips(track);
+  return { clip, track };
+}
+
 /** The registered operation `name`, for an operation that includes another's body (looked up when it runs, so the order of the files does not matter). */
 function sameOp(name: string): OpDefinition {
   const def = registry.get(name);
@@ -688,6 +732,7 @@ defineOp({
   args: z.object({ clipId: z.string(), presetId: z.string() }).strict(),
   apply(d, a, ctx) {
     const { clip } = mustClip(d, a.clipId);
+    refuseDrawnText(clip);
     if (clip.type !== 'text') throw new OpError('incompatible', `clip ${a.clipId} is not a text clip`, { clipId: a.clipId });
     applyTextPreset(clip, a.presetId, ctx);
     return { affectedIds: [clip.id], summary: `Applied text style ${a.presetId}`, output: { style: clip.style } };
@@ -701,6 +746,7 @@ defineOp({
   args: z.object({ clipId: z.string(), text: z.string().min(1).max(2000).optional(), style: TextStyleSchema.partial().optional() }).strict(),
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
+    refuseDrawnText(clip);
     if (clip.type !== 'text') throw new OpError('incompatible', `clip ${a.clipId} is not a text clip`, { clipId: a.clipId });
     if (a.text !== undefined) clip.text = a.text;
     if (a.style) clip.style = normaliseTextStyle({ ...clip.style, ...a.style });
@@ -715,6 +761,7 @@ defineOp({
   args: z.object({ clipId: z.string(), animation: TextAnimationSchema.partial().nullable() }).strict(),
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
+    refuseDrawnText(clip);
     if (clip.type !== 'text') throw new OpError('incompatible', `clip ${a.clipId} is not a text clip`, { clipId: a.clipId }, 'Captions animate through their caption style; picture clips through motions.');
     if (a.animation === null) { delete clip.animation; return { affectedIds: [clip.id], summary: 'Removed text animation' }; }
     const next = { ...(clip.animation ?? DEFAULT_TEXT_ANIMATION), ...a.animation };
@@ -1226,7 +1273,7 @@ defineOp({
           if (ramp) clip.rampWindow = { offset: T.add(ramp.offset, delta), total: ramp.total };
         }
         assertFree(track, a.to, end, new Set([clip.id]));
-        shiftKeyframes(clip, delta); // the animation stays attached to the content, not to the moved edge
+        shiftKeyframes(clip, delta, d.settings.frameRate); // the animation stays attached to the content, not to the moved edge
         clip.start = a.to;
         clip.duration = T.sub(end, a.to);
         clampFades(clip);
@@ -1385,7 +1432,7 @@ defineOp({
       copyOverrides(d, clip.id, right.id);
       right.start = a.at;
       right.duration = T.sub(clip.duration, left);
-      shiftKeyframes(right, left);
+      shiftKeyframes(right, left, d.settings.frameRate);
       if (clip.type === 'caption') { delete clip.words; delete (right as typeof clip).words; }
       if (right.type === 'media') delete right.transition; // the transition belongs to the original cut point
       if (right.type === 'media' && clip.type === 'media') { delete right.fadeIn; delete clip.fadeOut; } // fades stay on the outer edges
@@ -1452,7 +1499,7 @@ defineOp({
         copyOverrides(d, clip.id, right.id);
         right.start = T.add(a.at, a.duration);
         right.duration = T.sub(clip.duration, left);
-        shiftKeyframes(right, left);
+        shiftKeyframes(right, left, d.settings.frameRate);
         delete right.transition;
         delete right.fadeIn;
         delete clip.fadeOut;
@@ -2006,6 +2053,7 @@ defineOp({
     const next = { ...cur };
     if (a.transform === null) delete next.transform; else if (a.transform) next.transform = { ...cur.transform, ...a.transform };
     if (a.hidden !== undefined) { if (a.hidden) next.hidden = true; else delete next.hidden; }
+    if (a.text != null || a.textStyle != null) refuseDrawnText(f.clip); // a drawing has no wording or text style per format; its placement per format is allowed
     if ((a.text != null && f.clip.type !== 'text' && f.clip.type !== 'caption') || (a.textStyle != null && f.clip.type !== 'text')) throw new OpError('incompatible', 'wording can be set per format on title and caption clips, text style on title clips', { clipId: a.clipId });
     if (a.text === null) delete next.text; else if (a.text !== undefined) next.text = a.text;
     if (next.text !== cur.text) needsReviewAgain(v); // a reworded cue of a reviewed translation is no longer what was reviewed
@@ -2723,6 +2771,8 @@ defineOp({
   apply(d, a, ctx) {
     const { clip } = pictureClip(d, a.clipId);
     refuseAdjustmentEffect(clip, a.type);
+    // «תמונה חיה» needs a depth and keyed travel: only its own op adds it (verifier C4)
+    if (opOnlyEffect(a.type)) throw livingRefusal('useOp', { clipId: clip.id, type: a.type });
     const list = [...(clip.effects ?? [])];
     if (list.length >= 16) throw new OpError('out_of_bounds', 'a clip can carry at most 16 effects', { clipId: clip.id });
     const fx = { id: ctx.newId('fx'), type: a.type, enabled: true, params: parseEffect(a.type, a.params) };
@@ -2756,8 +2806,10 @@ defineOp({
     const list = [...clip.effects!];
     const fx = { ...list[i]! };
     refuseAdjustmentEffect(clip, fx.type); // changed or moved, it is still an effect the adjustment may carry
+    const before = { ...fx };
     if (a.params) { fx.params = parseEffect(fx.type, { ...fx.params, ...a.params }); assertLutRef(d, fx.type, fx.params); }
     if (a.enabled !== undefined) fx.enabled = a.enabled;
+    if (fx.type === LIVING_EFFECT) refuseLivingUpdate(d, clip, before, fx);
     list.splice(i, 1);
     list.splice(effectSlot(list, fx.type, a.index ?? i), 0, fx);
     refuseFollowTimeEffect(clip, list);
@@ -2765,6 +2817,21 @@ defineOp({
     return { affectedIds: [clip.id], summary: `Updated effect ${fx.type}${a.enabled === false ? ' (bypassed)' : ''}`, output: { params: fx.params } };
   },
 });
+/**
+ * update_effect on a living picture (verifier C5, C6): a change of amount or move may not make the move faster than the comfort rule
+ * of thumb allows (a change that does not make it faster is accepted, so an amount can always be lowered), and it is not switched
+ * on where the clip has no depth. Hand keys that break the rule are left to preflight's living_too_fast warning.
+ */
+function refuseLivingUpdate(d: ProjectDocument, clip: Clip, before: EffectInstance, after: EffectInstance): void {
+  if (after.enabled && !before.enabled && (clip.type !== 'media' || !clip.depth)) throw livingRefusal('needsDepth', { clipId: clip.id });
+  const frames = T.frameIndexAt(clip.duration, d.settings.frameRate);
+  const now = livingComfort(after, frames, d.settings.frameRate);
+  if (now.ok) return;
+  const was = livingComfort(before, frames, d.settings.frameRate);
+  if (now.peakRate > was.peakRate * (1 + 1e-9)) {
+    throw livingRefusal('tooFast', { clipId: clip.id, max: now.maxAmount }, now.maxAmount);
+  }
+}
 const FxKeyTarget = { clipId: z.string(), effectId: z.string(), param: z.string().max(48), time: RT.describe('Offset from the clip start (frame-aligned)') };
 defineOp({
   name: 'set_effect_keyframe',
@@ -3285,8 +3352,8 @@ defineOp({
   apply(d, a) {
     const f = mustClip(d, a.clipId);
     const { clip, track } = f;
-    if (!(clip.type === 'text' || (clip.type === 'media' && track.kind === 'video')))
-      throw new OpError('incompatible', 'only a title, or a picture on a video track, can follow a motion track', { clipId: clip.id, type: clip.type, trackKind: track.kind });
+    if (!(clip.type === 'text' || clip.type === 'drawn' || (clip.type === 'media' && track.kind === 'video')))
+      throw new OpError('incompatible', 'only a title or a drawing, or a picture on a video track, can follow a motion track', { clipId: clip.id, type: clip.type, trackKind: track.kind });
     const offset = () => { if (a.offset) clip.transform = { ...clip.transform, x: a.offset.x, y: a.offset.y }; };
     if (a.follow === null) {
       const had = !!clip.follow;
@@ -3446,6 +3513,8 @@ defineOp({
     // Stabilisation (wave 7) uses the camera motion measured on the current file: switch it off first rather than drop it silently.
     for (const { clip: c } of targets)
       if (c.stabilise && c.assetId !== asset.id) throw new OpError(STEADY_REFUSALS.otherFile.code, STEADY_REFUSALS.otherFile.message(), { clipId: c.id }, STEADY_REFUSALS.otherFile.hint);
+    // «תמונה חיה» (wave 8): the depth was drawn on the current photo; another file would move a drawing that no longer matches it
+    for (const { clip: c } of targets) if (c.depth && c.assetId !== asset.id) throw livingRefusal('depthOtherFile', { clipId: c.id });
     // The source a clip needs from sourceIn: its stretch of source (a freeze frame needs one picture inside the file).
     const needed = (c: MediaClip) => toSourceSpan(c, c.duration);
     const fits = (c: MediaClip, sourceIn: T.RationalTime) => isStill || (!T.isNegative(sourceIn) && (c.freeze ? T.lt(sourceIn, asset.duration) : T.lte(T.add(sourceIn, needed(c)), asset.duration)));
@@ -3769,7 +3838,7 @@ function cutRange(d: ProjectDocument, seq: Sequence, start: T.RationalTime, end:
         if (right.type === 'media') delete right.fadeIn;
         if (right.type === 'media' && clip.type === 'media') setPart(right, clip, delta, T.sub(cEnd, end));
         if (right.type === 'caption') delete right.words;
-        shiftKeyframes(right, delta);
+        shiftKeyframes(right, delta, d.settings.frameRate);
         right.start = ripple ? start : end;
         right.duration = T.sub(cEnd, end);
         clampFades(right);
@@ -3848,7 +3917,7 @@ function openGap(d: ProjectDocument, at: T.RationalTime, len: T.RationalTime, tr
       }
       if (right.type === 'media' && clip.type === 'media') { delete right.transition; delete right.fadeIn; setPart(right, clip, delta, T.sub(cEnd, at)); }
       if (right.type === 'caption') delete right.words;
-      shiftKeyframes(right, delta);
+      shiftKeyframes(right, delta, d.settings.frameRate);
       right.start = T.add(at, len);
       right.duration = T.sub(cEnd, at);
       clampFades(right);

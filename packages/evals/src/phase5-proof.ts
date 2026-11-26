@@ -28,7 +28,7 @@ async function main() {
   fs.rmSync(art, { recursive: true, force: true });
   fs.mkdirSync(art, { recursive: true });
   const fixture = await generateBarcodeFixture({ out: path.join(art, 'fixture.mp4') });
-  const s = await startServer({ port: 8792, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const origin = s.url;
   // The owner's own session (as the editor obtains it) and a REST helper for any credential.
   const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
@@ -259,7 +259,7 @@ async function main() {
     const hPage = await hdr('/'), hApi = await hdr(`/api/v1/projects/${pid}`), hMedia = await hdr(`/api/v1/projects/${pid}/assets/${assetId}/content`);
     const pageCsp = hPage.get('content-security-policy') ?? '';
     const common = (h: Headers) => h.get('x-content-type-options') === 'nosniff' && h.get('referrer-policy') === 'no-referrer' && h.get('x-frame-options') === 'DENY';
-    check('every response carries nosniff, no-referrer and a frame ban; pages allow only same-origin scripts (no inline, eval or blob:), no plugins and no framing; API and media responses allow nothing and are sandboxed', common(hPage) && common(hApi) && common(hMedia) && /script-src 'self'(;|$)/.test(pageCsp) && !/unsafe-inline|unsafe-eval|script-src[^;]*blob:/.test(pageCsp) && /object-src 'none'/.test(pageCsp) && /frame-ancestors 'none'/.test(pageCsp) && /default-src 'none'.*sandbox/.test(hApi.get('content-security-policy') ?? '') && /default-src 'none'.*sandbox/.test(hMedia.get('content-security-policy') ?? ''), { page: pageCsp, api: hApi.get('content-security-policy'), media: Object.fromEntries(['content-security-policy', 'x-content-type-options', 'referrer-policy', 'x-frame-options'].map((k) => [k, hMedia.get(k)])) });
+    check('every response carries nosniff, no-referrer and a frame ban; pages allow only same-origin scripts (no inline, eval or blob:), no plugins and no framing; workers only from this origin and blob: (mediabunny\'s alpha merger, wave 8 motioncode G1), never wider; API and media responses allow nothing and are sandboxed', common(hPage) && common(hApi) && common(hMedia) && /script-src 'self'(;|$)/.test(pageCsp) && /(^|; )worker-src 'self' blob:(;|$)/.test(pageCsp) && !/unsafe-inline|unsafe-eval|script-src[^;]*blob:/.test(pageCsp) && /object-src 'none'/.test(pageCsp) && /frame-ancestors 'none'/.test(pageCsp) && /default-src 'none'.*sandbox/.test(hApi.get('content-security-policy') ?? '') && /default-src 'none'.*sandbox/.test(hMedia.get('content-security-policy') ?? ''), { page: pageCsp, api: hApi.get('content-security-policy'), media: Object.fromEntries(['content-security-policy', 'x-content-type-options', 'referrer-policy', 'x-frame-options'].map((k) => [k, hMedia.get(k)])) });
     // Stored markup: put active HTML into every free-text field a collaborator or agent can write, then open the editor.
     const EVIL = '<img src=x onerror="window.__pwn=1"><script>window.__pwn=2</script>';
     const xp = (await rest('/projects', { name: `x ${EVIL}`.slice(0, 190) })).body.project.id;

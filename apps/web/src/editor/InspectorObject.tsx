@@ -5,14 +5,17 @@
  * controls that proofs drive keep their test ids on the same native elements.
  */
 import { useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { sizeToCommit } from './audience/audience.logic.ts';
 import {
   Activity, Blend as BlendIcon, Captions, ChevronRight, Contrast, Droplet, Ellipsis, Film, Gauge, Layers, Maximize2, Minimize2, Move, Music,
-  Scissors, SlidersHorizontal, Sparkles, Spline, SquareDashed, Timer, Trash2, Type, Volume2, type LucideProps,
+  Scissors, Shapes, SlidersHorizontal, Sparkles, Spline, SquareDashed, Timer, Trash2, Type, Volume2, type LucideProps,
 } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import type { Asset, Clip, OpCall, ProjectDocument } from '@pulseframe/core';
 import { assetDisplayName } from './assetLabel.ts';
-import { beatPositionAt, clipEnd, fieldsToDisplay, findClip, findEffect, fitScale, speedValue, TEXT_PRESETS, transitionDef } from '@pulseframe/core';
+import { beatPositionAt, clipEnd, drawnName, fieldsToDisplay, findClip, findEffect, fitScale, speedValue, TEXT_PRESETS, transitionDef } from '@pulseframe/core';
+import { drawnPanel } from './drawnPanels.tsx';
+import './tripMap/register.ts'; // the trip map's panel (wave 8 tripmap)
 import { beatFacts } from './analysis.logic.ts';
 import { effectParamLabel, type Key } from '@pulseframe/i18n';
 import { CurveChip } from './CurvePicker.tsx';
@@ -29,6 +32,8 @@ import { RedactControls } from './RedactControls.tsx';
 import { trackingT } from './tracking.strings.ts';
 import { ClipTimeRows } from './craft/ClipTimeRows.tsx';
 import { STABILISE_UI_BUILT, StabiliseBlock } from './stabilise/StabiliseBlock.tsx';
+import { LIVING_UI_BUILT, LivingBlock } from './living/LivingBlock.tsx';
+import { livingT } from './living/living.strings.ts';
 import { stabiliseT } from './stabilise/stabilise.strings.ts';
 import { COVER_UI_BUILT, SharpBlock } from './cover/SharpBlock.tsx';
 import { coverT } from './cover/cover.strings.ts';
@@ -55,6 +60,7 @@ import { FieldLiveLine, FieldMenu, FieldTextBox } from './lifeline/FieldMenu.tsx
 import { MulticamClipBlock } from './MulticamClipBlock.tsx';
 import { MUSICFIT_UI_BUILT } from './musicfit/MusicFitBlock.tsx';
 import { ImpactControls } from './musicfit/ImpactControls.tsx';
+import { CurvesBlock } from './grade/CurvesBlock.tsx';
 
 type Media = Extract<Clip, { type: 'media' }>;
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -63,11 +69,11 @@ const ico = (Icon: (p: LucideProps) => ReactNode, size = 18) => <Icon size={size
 
 const TAB_ICON: Record<ObjectTab, (p: LucideProps) => ReactNode> = {
   project: Film, shared: Layers, basic: SlidersHorizontal, motion: Spline, speed: Gauge, colour: Contrast, effects: Sparkles, mask: SquareDashed, audio: Volume2,
-  text: Type, style: Droplet, anim: Spline, place: Move, cue: Captions, timing: Timer, soundfx: Sparkles, beat: Activity, range: SlidersHorizontal, cut: Scissors, transition: BlendIcon,
+  text: Type, drawn: Shapes, style: Droplet, anim: Spline, place: Move, cue: Captions, timing: Timer, soundfx: Sparkles, beat: Activity, range: SlidersHorizontal, cut: Scissors, transition: BlendIcon,
 };
 const TAB_LABEL: Record<ObjectTab, keyof typeof INSPECTOR_STRINGS.en> = {
   project: 'tabProject', shared: 'tabShared', basic: 'tabBasic', motion: 'tabMotion', speed: 'tabSpeed', colour: 'tabColour', effects: 'tabEffects', mask: 'tabMask', audio: 'tabAudio',
-  text: 'tabText', style: 'tabStyle', anim: 'tabAnim', place: 'tabPlace', cue: 'tabCue', timing: 'tabTiming', soundfx: 'tabSoundFx', beat: 'tabBeat', range: 'tabRange', cut: 'tabCut', transition: 'tabTransition',
+  text: 'tabText', drawn: 'tabDrawn', style: 'tabStyle', anim: 'tabAnim', place: 'tabPlace', cue: 'tabCue', timing: 'tabTiming', soundfx: 'tabSoundFx', beat: 'tabBeat', range: 'tabRange', cut: 'tabCut', transition: 'tabTransition',
 };
 
 /* ------------------------------------------------------------------ header ------------------------------------------------------------------ */
@@ -96,6 +102,7 @@ export function ObjectHeader({ kind, keymap }: { kind: ObjectKind; keymap: Keyma
       // the earlier clip first in reading order, the arrow pointing the way the edit runs (← in Hebrew, → in English)
       meta = <span dir={state.lang === 'he' ? 'rtl' : 'ltr'}><bdi dir="ltr">{names[0]}</bdi> {S.cutArrow} <bdi dir="ltr">{names[1]}</bdi></span>;
     } else if (c.type === 'text') { name = (c.fields ? fieldsToDisplay(state.lang, c.text, doc) : c.text).split('\n')[0] || S.kindText; tile = <span className="oh-abc" aria-hidden="true">אבג</span>; tone = 'text'; meta = <><span className="oh-part">{S.kindText} · {sec(c.duration)}</span> · <span className="oh-part">{trackName}</span></>; }
+    else if (c.type === 'drawn') { const kindName = drawnName(c.drawn)[state.lang]; name = kindName || S.kindDrawn; tile = ico(Shapes, 20); tone = 'text'; meta = <><span className="oh-part">{S.kindDrawn} · {sec(c.duration)}</span> · <span className="oh-part">{trackName}</span></>; }
     else if (c.type === 'caption') { name = c.text || S.kindCaption; tile = ico(Captions, 20); tone = 'caption'; meta = <>{S.kindCaption} · {sec(c.duration)}</>; }
     else if (c.type === 'adjustment') { name = c.label || S.kindAdjust; tile = ico(Layers, 20); tone = 'adjust'; meta = <>{S.kindAdjust} · {sec(c.duration)}</>; }
     else {
@@ -652,6 +659,8 @@ function MotionTab({ clip }: PanelProps) {
       {STABILISE_UI_BUILT && video && clip.type === 'media' && state.selection.length === 1 && <Section id="stabilise" title={stabiliseT(state.lang)('title')} defaultOpen={false} help><StabiliseBlock key={`stabilise:${clip.id}`} clip={clip} /></Section>}
       {/* «הפריים הכי חד» (wave 8 cover): one selected video or picture clip; mounted only once W3 has built the block */}
       {COVER_UI_BUILT && picture && clip.type === 'media' && state.selection.length === 1 && <Section id="sharpest" title={coverT(state.lang)('title')} defaultOpen={false} help><SharpBlock key={`sharpest:${clip.id}`} clip={clip} /></Section>}
+      {/* «תמונה חיה» (wave 8 living): one selected photo clip; mounted only once W3 has built the block */}
+      {LIVING_UI_BUILT && !video && picture && clip.type === 'media' && state.selection.length === 1 && <Section id="living" title={livingT(state.lang)('living.title')} defaultOpen={false} help><LivingBlock key={`living:${clip.id}`} clip={clip} /></Section>}
       {video && <Section id="tracking" title={tt('mtrack.title')} defaultOpen={false} help><TrackingPanel key={`tracking:${clip.id}`} /></Section>}
     </>
   );
@@ -742,6 +751,8 @@ function ColourTab({ clip, look, trackKind }: PanelProps) {
     <>
       <Section id="looks" title={S.secLooks} summary={S.looksCount(LOOK_CATALOG_COUNTS.looks)}><LookTargetLine look={look} /><LooksField look={look} /></Section>
       <ManualGrade clip={clip} />
+      {/* colour curves «עקומות» (wave 8 grade, W2): renders nothing until CURVES_UI_BUILT */}
+      {clip.type !== 'caption' && <CurvesBlock clip={clip} />}
       {media && clip.type === 'media' && <Section id="match" title={S.secMatch} defaultOpen={false} help><ColourMatchPanel key={`cm:${clip.id}`} clip={clip} /></Section>}
     </>
   );
@@ -756,7 +767,7 @@ function EffectsTab({ clip, look }: PanelProps) {
     <div className="look-panel" data-testid="look-panel">
       <LookTarget look={look} />
       <Section id="look" title={S.secStack} summary={S.stackCount(n)} help><EffectsBlock look={look} /></Section>
-      {clip.type === 'text' && <Section id="blend-text" title={S.secBlend} defaultOpen={false}><BlendField clip={clip} /></Section>}
+      {(clip.type === 'text' || clip.type === 'drawn') && <Section id="blend-text" title={S.secBlend} defaultOpen={false}><BlendField clip={clip} /></Section>}
     </div>
   );
 }
@@ -822,6 +833,7 @@ function TextTab({ clip, viewClip }: PanelProps) {
     ? [{ op: 'set_variant_override', args: { variantId, clipId: clip.id, textStyle: { sizeFrac: v } } }]
     : [{ op: 'update_text', args: { clipId: clip.id, style: { sizeFrac: v } } }], 'Text size');
   const size = viewClip.type === 'text' ? viewClip.style.sizeFrac : 0.05;
+  const audienceViewed = !!(variantId && editor.doc?.variants?.[variantId]?.audience);
   return (
     <>
       <Section id="text" title={S.secWords}>
@@ -844,21 +856,24 @@ function TextTab({ clip, viewClip }: PanelProps) {
         {/* the font picker (ADR-0022): each face drawn in itself, category chips, «ניקוד נבדק», pairings; one update_text */}
         <FontPicker label={t('font.family')} lang={state.lang} value={{ family: clip.style.fontFamily, weight: clip.style.fontWeight }}
           onChange={(f) => void editor.commit([{ op: 'update_text', args: { clipId: clip.id, style: { fontFamily: f.family, fontWeight: f.weight } } }], 'Font')} />
-        <SizeRow key={variantId ?? 'master'} size={size} commit={sizeCommit} />
+        <SizeRow key={variantId ?? 'master'} size={size} commit={sizeCommit} audienceViewed={audienceViewed} />
       </Section>
     </>
   );
 }
 
 /** The text size: the slider and its readout follow a drag; one commit when it ends. Keyed by the viewed format only, so focus stays. */
-function SizeRow({ size, commit }: { size: number; commit: (v: number) => Promise<unknown> }) {
+const SIZE_RANGE = { min: 0.02, max: 0.2, step: 0.005 } as const;
+function SizeRow({ size, commit, audienceViewed }: { size: number; commit: (v: number) => Promise<unknown>; audienceViewed: boolean }) {
   const { state, t } = useEditorState();
   const S = INSPECTOR_STRINGS[state.lang];
   const [live, setDraft] = useDraft(size);
-  const done = (v: number) => { setDraft(v); settle(v !== size && commit(v), setDraft); };
+  // in a version for an audience the shown size is the PROJECTED one: the value the slider hands back after a mere visit (snapped to its
+  // step and range) is not a change and is never written as the version's own absolute size (verifier C3; audience.logic.ts sizeToCommit)
+  const done = (v: number) => { setDraft(v); const next = sizeToCommit(v, size, SIZE_RANGE, audienceViewed); settle(next !== null && commit(next), setDraft); };
   return (
     <Row label={S.fontSize} value={<bdi className="val num pf-read">{Math.round(live * 100)}%</bdi>}>
-      <input type="range" min={0.02} max={0.2} step={0.005} value={live} aria-label={t('text.size')} aria-valuetext={`${Math.round(live * 100)}%`} data-testid="text-size"
+      <input type="range" min={SIZE_RANGE.min} max={SIZE_RANGE.max} step={SIZE_RANGE.step} value={live} aria-label={t('text.size')} aria-valuetext={`${Math.round(live * 100)}%`} data-testid="text-size"
         onChange={(e) => setDraft(Number(e.currentTarget.value))} onPointerUp={(e) => done(Number(e.currentTarget.value))} onKeyUp={(e) => { if (RANGE_KEYS.has(e.key)) done(Number(e.currentTarget.value)); }} />
     </Row>
   );
@@ -909,6 +924,14 @@ function PlaceTab({ clip, viewClip, shown, keymap }: PanelProps) {
       <Section id="time" title={S.secTime} defaultOpen={false} summary={`${secondsText(T.toSeconds(clip.duration))} ${S.seconds}`}><TimeBlock clip={clip} keymap={keymap} /></Section>
     </>
   );
+}
+
+/** A drawn clip's own tab (wave 8 carrier): the panel its kind registers (drawnPanels.tsx), or a neutral note. Never a text control. */
+function DrawnTab({ clip }: PanelProps) {
+  const { state } = useEditorState();
+  if (clip.type !== 'drawn') return null;
+  const Panel = drawnPanel(clip.drawn.kind);
+  return Panel ? <Panel clip={clip} lang={state.lang} /> : <p className="muted" data-testid="drawn-no-panel">{INSPECTOR_STRINGS[state.lang].drawnNoPanel}</p>;
 }
 
 function CueTab({ clip, viewClip }: PanelProps) {
@@ -1072,6 +1095,7 @@ function ObjectTabBody({ id, kind, clip, viewClip, shown, keymap, trackKind, loo
     case 'style': return <StyleTab {...p} />;
     case 'anim': return <AnimTab {...p} />;
     case 'place': return <PlaceTab {...p} />;
+    case 'drawn': return <DrawnTab {...p} />;
     case 'cue': return <CueTab {...p} />;
     case 'timing': return <TimingTab {...p} />;
     case 'soundfx': return <SoundFxTab {...p} />;

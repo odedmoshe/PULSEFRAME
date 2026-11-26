@@ -71,6 +71,18 @@ export const ASSISTANT_EXCLUDED_OPS = [
   // versions for an audience (wave 8 audiences): left out so the reviewed ASSISTANT_PROMPT_DIGEST stays as it is; on MCP and REST as
   // ordinary reversible edits
   'add_audience_version', 'update_audience_version', 'set_audience_keep',
+  // trip map (wave 8 tripmap): left out so the reviewed ASSISTANT_PROMPT_DIGEST stays as it is; on MCP and REST as ordinary reversible edits
+  'add_trip_map', 'update_trip_map', 'time_trip_map',
+  // «למדו אותי פעם אחת» (wave 8 teach): a model never authors a macro of other edits; in version 1 every agent's apply_lesson is
+  // refused by governance as well (apps/server/src/lessons/guard.ts). Left out, the reviewed ASSISTANT_PROMPT_DIGEST stays as it is
+  'apply_lesson',
+  // «תמונה חיה» (wave 8 living): left out so the reviewed ASSISTANT_PROMPT_DIGEST stays as it is; on MCP and REST as ordinary reversible edits
+  'set_living_picture', 'set_clip_depth',
+  // «ציור חי» (wave 8 ink): left out so the reviewed ASSISTANT_PROMPT_DIGEST stays as it is; on MCP and REST as ordinary reversible edits
+  'add_ink', 'edit_ink',
+  // colour curves (wave 8 grade, verifier C10c): left out in version 1 so the reviewed ASSISTANT_PROMPT_DIGEST (and the local
+  // assistant's) stays as it is; on MCP and REST as an ordinary reversible edit
+  'set_grade_curves',
 ] as const;
 /** The ops a proposal may hold: every registered public op minus ASSISTANT_EXCLUDED_OPS and PERSON_OPS, in registry order. */
 export function assistantOps(): string[] {
@@ -207,6 +219,11 @@ export interface AssistantSummary {
     id: string; trackId: string; type: string; start: T.RationalTime; duration: T.RationalTime;
     asset: string | null; assetKind: 'video' | 'image' | 'audio' | null; linked: boolean; gain: number | null; speed: number | null;
     transition: boolean; effects: number; text?: string; chars?: number; hasFields?: boolean;
+    /**
+     * A drawn clip (wave 8 carrier, drawn.ts): its kind and the kind's name always; the kind's own summary (drawnSummary) only
+     * with toggles.titlesAndMarkers, like a title's words (a map's stops are owner-typed names). Never the payload itself.
+     */
+    drawn?: { kind: string; name: { he: string; en: string } } & Record<string, unknown>;
   }[];
   folded: { trackId: string; clips: number }[] | null;
   music: { asset: string; beats: number; bpm: number | null }[];

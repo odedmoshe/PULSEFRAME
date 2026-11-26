@@ -28,8 +28,8 @@ import type { SearchRuntime } from '../search/contract.ts';
 import type { Speech } from '../speech.ts';
 import { ApiError, type Store } from '../store.ts';
 
-/** True once W1's routes answer (flipped at integration). While false every booth route answers 501 booth_not_built after the owner check. */
-export const BOOTH_BUILT: boolean = false;
+/** True since the wave 8 booth integration: the routes answer. (While it was false every booth route answered 501 booth_not_built after the owner check.) */
+export const BOOTH_BUILT: boolean = true;
 /** In the data directory (never in a project, archive or backup; backup.ts NEVER_BACKED_UP): the owner's answers, 0600, atomic. */
 export const OWNER_REVIEW_FILE = 'owner-review.json';
 export const OWNER_REVIEW_FILE_MODE = 0o600;

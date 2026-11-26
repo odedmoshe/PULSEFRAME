@@ -4,7 +4,7 @@
  * "on this day" card, the date stamp's source, the people sheet, the family option of the archive and the packs shelf mount;
  * the test ids of apps/web/src/editor/lifeline/lifeline.testids.ts, people.testids.ts and packs.testids.ts.
  *
- *   pnpm build && pnpm proof:lifeline-ui          needs ffmpeg and Playwright's Chromium; port 8890 free
+ *   pnpm build && pnpm proof:lifeline-ui          needs ffmpeg and Playwright's Chromium; no fixed port (the server listens on a free port the system picks)
  *   evidence: docs/evidence/lifeline-ui-proof.json (screenshots stay in the temp folder)
  *   exit 0 = every check passed · 1 = a check failed · 2 = blocked (the web bundle is not built)
  *
@@ -28,7 +28,6 @@ import { LIFE_TESTIDS, fieldSlug } from '../../../apps/web/src/editor/lifeline/l
 import { PEOPLE_TESTIDS } from '../../../apps/web/src/editor/lifeline/people.testids.ts';
 import { openInspectorPage } from './editor-ui.ts';
 
-const PORT = 8890;
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(os.tmpdir(), 'pf-lifeline-ui-proof');
 const R = { num: 30, den: 1 };
@@ -55,7 +54,7 @@ async function main() {
   const stampVideo = path.join(art, 'clock.mov');
   ff(['-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=30', '-t', '3', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-movflags', 'use_metadata_tags', '-metadata', 'com.apple.quicktime.creationdate=2024-12-25T18:15:10+0200', stampVideo]);
 
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data'), homeZone: 'Asia/Jerusalem' });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), homeZone: 'Asia/Jerusalem' });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

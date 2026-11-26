@@ -5,7 +5,8 @@
  * is shown only when the server's plan carries one.
  */
 import type { ExportRequest } from './store.ts';
-import { FORMAT_PROFILES, type ProjectDocument } from '@pulseframe/core';
+import { FORMAT_PROFILES, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { isShortActive, loudnessOps } from './shorts.view.ts';
 
 export const ACTIVE_JOB = ['queued', 'running', 'cancel-requested'] as const;
 export const isActiveJob = (status: string) => (ACTIVE_JOB as readonly string[]).includes(status);
@@ -127,7 +128,7 @@ export function exportTargets(doc: ProjectDocument): ExportTarget[] {
   const s = doc.settings;
   const out: ExportTarget[] = [{ key: 'master', kind: 'master', variantId: null, profileId: null, width: s.width, height: s.height, fit: s.fit ?? 'contain', name: aspectName(s.width, s.height) }];
   const variants = Object.values(doc.variants ?? {});
-  for (const v of variants) out.push({ key: `variant:${v.id}`, kind: 'variant', variantId: v.id, profileId: v.profileId ?? null, width: v.width, height: v.height, fit: v.fit, name: aspectName(v.width, v.height, v.name) });
+  for (const v of variants) out.push({ key: variantTargetKey(v.id), kind: 'variant', variantId: v.id, profileId: v.profileId ?? null, width: v.width, height: v.height, fit: v.fit, name: aspectName(v.width, v.height, v.name) });
   for (const p of FORMAT_PROFILES) {
     const taken = variants.some((v) => v.profileId === p.id) || (p.width === s.width && p.height === s.height);
     if (!taken) out.push({ key: `profile:${p.id}`, kind: 'profile', variantId: null, profileId: p.id, width: p.width, height: p.height, fit: p.fit, name: aspectName(p.width, p.height) });
@@ -169,6 +170,17 @@ export function destinationKey(d: Destination, targets: ExportTarget[]): string 
 export function destinationPick(d: Destination, targets: ExportTarget[], choices: ExportChoices): { dest: Destination['id']; keys?: string[]; choices: ExportChoices } {
   const key = destinationKey(d, targets);
   return { dest: d.id, ...(key ? { keys: [key] } : {}), choices: { ...choices, targetBytes: null, ...d.choices } };
+}
+
+/** The export target key of a linked format or a version for an audience (exportTargets' `variant:` rows). */
+export const variantTargetKey = (variantId: string): string => `variant:${variantId}`;
+/**
+ * What the sheet chooses when it is opened ON a version (the audience panel's «לשליחה»): that version's target alone, as a click on its
+ * format row would leave it (a custom destination, so no target size is carried over). A key the project no longer has is dropped by the
+ * sheet's own check (back to the master), so a version removed meanwhile never exports something else silently.
+ */
+export function variantPick(variantId: string, choices: ExportChoices): { dest: 'custom'; keys: string[]; choices: ExportChoices } {
+  return { dest: 'custom', keys: [variantTargetKey(variantId)], choices: { ...choices, targetBytes: null } };
 }
 
 /** Size of the output of a target at a scale: even numbers, as the server rounds them. */
@@ -231,3 +243,13 @@ export function sendBlock(dest: Destination['id'] | null, choices: Pick<ExportCh
 }
 /** Job stage words of the size fit ('fitting size 1/2', 'checking size', 'checking the export'), for the progress line. */
 export const isFitStage = (stage: string | null | undefined) => !!stage && /^(fitting size|checking size|checking the export)( |$)/.test(stage);
+
+/**
+ * The output the sheet's loudness row measures and what its «יישור ל־14−» commits (wave 8 qc, verifier C2): the CHOSEN output, as
+ * export renders it — the short on screen (a short exports as itself, store.startExport) and the lead format or audience version.
+ * On a short the fix sets that short's own target (update_sequence format.loudness), never the project's; otherwise the project's.
+ */
+export function loudnessCheckOf(raw: ProjectDocument | null, activeSequenceId: string, variantId: string | null | undefined): { sequenceId: string | null; variantId: string | null; fix: (target: number) => OpCall[] } {
+  const sequenceId = isShortActive(raw, activeSequenceId) ? activeSequenceId : null;
+  return { sequenceId, variantId: variantId ?? null, fix: (target) => (raw ? loudnessOps(raw, activeSequenceId, target) : [{ op: 'set_loudness_target', args: { target } }]) };
+}

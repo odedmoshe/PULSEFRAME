@@ -42,7 +42,8 @@ describe('the kit table (decisions §4.1)', () => {
     expect(kitForStyle('music.calm')?.id).toBe('kit.calm.vsco');
     expect(kitForStyle('music.pop')).toBeUndefined();
     expect(Object.keys(MUSIC_KITS[0]!.parts).sort()).toEqual(['arp', 'double', 'lead', 'pad']);
-    for (const p of Object.values(MUSIC_KITS[0]!.parts)) expect(p!.gainDb).toBe(-18);
+    // starting gains measured on the real samples on 2026-11-26 (musicKits.ts comment); the placeholder was −18 everywhere
+    expect(Object.fromEntries(Object.entries(MUSIC_KITS[0]!.parts).map(([k, p]) => [k, p!.gainDb]))).toEqual({ pad: -11.4, double: -13.9, arp: 3.7, lead: 3.4 });
   });
   it('a kit is calibrated only when every used instrument names its entry and lists its files (never offered otherwise)', () => {
     // both instruments of the real kit were read on the owner's computer on 2026-11-26
@@ -109,7 +110,7 @@ describe('the kit table (decisions §4.1)', () => {
   });
   it('kit.calm.vsco: edge 2 on pad and double only, nothing else about those parts changed', () => {
     const p = MUSIC_KITS[0]!.parts;
-    expect([p.pad, p.double]).toEqual([{ instrument: 'strings', gainDb: -18, vel: [40, 100], edge: 2 }, { instrument: 'strings', gainDb: -18, vel: [40, 100], edge: 2 }]);
+    expect([p.pad, p.double]).toEqual([{ instrument: 'strings', gainDb: -11.4, vel: [40, 100], edge: 2 }, { instrument: 'strings', gainDb: -13.9, vel: [40, 100], edge: 2 }]);
     expect([p.arp?.edge, p.lead?.edge]).toEqual([undefined, undefined]);
   });
 });

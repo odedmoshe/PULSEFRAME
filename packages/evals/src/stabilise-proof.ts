@@ -199,7 +199,7 @@ async function main() {
 
   // ---------- the server ----------
   const dataDir = path.join(art, 'data');
-  const s = await startServer({ port: 8851, dataDir });
+  const s = await startServer({ port: 0, dataDir });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

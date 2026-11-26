@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowUpFromLine, Captions as CaptionsIcon, ImagePlus, Plus, Search, Sparkles, Type } from 'lucide-react';
-import { COLOR_LOOKS, EFFECTS, TRANSITIONS, type Clip } from '@pulseframe/core';
+import { COLOR_LOOKS, PICKABLE_EFFECTS, TRANSITIONS, type Clip } from '@pulseframe/core';
 import { Button, Chip, Tabs } from '../ds/index.ts';
 import { AiTools } from './AiTools.tsx';
 import { CHROME_STRINGS } from './chrome.strings.ts';
@@ -23,6 +23,8 @@ import { SourceViewer } from './SourceViewer.tsx';
 import { useEditorState } from './store.ts';
 import { TemplatesDrawer } from './TemplatesDrawer.tsx';
 import { TextStyles } from './TextStyles.tsx';
+import { TripMapEntry, TRIPMAP_ENTRY_SHOWN } from './tripMap/TripMapDialog.tsx';
+import { MadeEntry, MADE_UI_BUILT } from './made/MadeEntry.tsx';
 import { LifeHost, LifeLibrary, LifeViewSwitch } from './lifeline/LifeLibrary.tsx';
 import { FontsSection, MusicTab, PacksSection } from './lifeline/PacksMount.tsx';
 import { PACKS_MOUNT_STRINGS } from './lifeline/packs.mount.strings.ts';
@@ -72,6 +74,9 @@ export function Library() {
         <Pane title={S.textTitle}>
           <p className="pf-bw-lead">{S.textLead}</p>
           <Button variant="primary" size="md" icon={<Type size={16} aria-hidden="true" />} disabled={!doc} onClick={() => void editor.addText()} data-testid="add-text">{t('text.add')}</Button>
+          {/* «מפת טיול חדשה» (wave 8 tripmap): mounted only once the map is built, so no dead button is shown */}
+          {TRIPMAP_ENTRY_SHOWN && <TripMapEntry />}
+          {MADE_UI_BUILT && <MadeEntry />}
           {/* the text styles as tiles: they apply to the selected title (apply_text_preset) and say so while none is selected */}
           <div className="pf-bw-scroll"><TextStyles testId="text-preset-drawer" /><FontsSection /></div>
         </Pane>
@@ -194,7 +199,7 @@ function AudioDrawer({ onView }: { onView: (id: string) => void }) {
 }
 
 const CATALOGUE: Record<'effects' | 'transitions' | 'looks', { kind: PickKind; items: () => { id: string; name: { he: string; en: string } }[] }> = {
-  effects: { kind: 'effect', items: () => EFFECTS.map((e) => ({ id: e.id, name: e.name })) },
+  effects: { kind: 'effect', items: () => PICKABLE_EFFECTS.map((e) => ({ id: e.id, name: e.name })) }, // a living picture: the Motion tab (opOnlyEffect)
   transitions: { kind: 'transition', items: () => TRANSITIONS.map((x) => ({ id: x.id, name: x.name })) },
   looks: { kind: 'look', items: () => COLOR_LOOKS.map((l) => ({ id: l.id, name: l.name })) },
 };

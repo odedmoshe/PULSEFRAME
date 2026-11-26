@@ -11,7 +11,9 @@ import { useEditorState } from './store.ts';
 import { Menu, rovingNext, useDir } from '../ds/index.ts';
 import { STAGE_STRINGS } from './stage.strings.ts';
 import { AUDIENCE_UI_BUILT } from './audience/AudiencePanel.tsx';
-import { audienceMenuItems, isAudienceMenuId } from './audience/audienceMenu.ts';
+import { audienceMenuChoice, audienceMenuItems, isAudienceMenuId } from './audience/audienceMenu.ts';
+import { isDiverged } from './audience/audience.logic.ts';
+import { AUDIENCE_TESTIDS } from './audience/audience.testids.ts';
 
 const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
 /** "16:9", "9:16", "1:1", "4:5": the shape of a frame in the smallest whole numbers (a shape that has none short enough is written as a decimal ratio). */
@@ -29,8 +31,9 @@ export function FormatPrism() {
   if (!doc) return null;
   const variants = Object.values(doc.variants ?? {});
   const chips = [
-    { id: '', name: S.master, width: doc.settings.width, height: doc.settings.height, diverged: false },
-    ...variants.map((v) => ({ id: v.id, name: v.name, width: v.width, height: v.height, diverged: Object.keys(v.overrides ?? {}).length > 0 })),
+    { id: '', name: S.master, width: doc.settings.width, height: doc.settings.height, diverged: false, profile: undefined as string | undefined },
+    // a format is «adjusted» only by overrides that are more than kept rules (verifier C14)
+    ...variants.map((v) => ({ id: v.id, name: v.name, width: v.width, height: v.height, diverged: isDiverged(v), profile: v.audience?.profile })),
   ];
   const current = state.viewVariantId ?? '';
   const active = Math.max(0, chips.findIndex((c) => c.id === current));
@@ -49,6 +52,13 @@ export function FormatPrism() {
     const id = r?.results[0]?.output?.variantId;
     if (typeof id === 'string') editor.setViewVariant(id);
   };
+  const addAudience = async (id: string) => {
+    const choice = audienceMenuChoice(id, state.lang);
+    if (!choice) return;
+    const r = await editor.commit([{ op: 'add_audience_version', args: { profile: choice.profile, name: choice.name } }], 'Add version for an audience');
+    const vid = r?.results[0]?.output?.variantId;
+    if (typeof vid === 'string') editor.setViewVariant(vid);
+  };
   return (
     <div className="prism">
       <div className="prism-chips" role="radiogroup" aria-label={S.formats} data-testid="format-switch" data-value={current}>
@@ -65,6 +75,7 @@ export function FormatPrism() {
             <>
               <span className="prism-shape" aria-hidden="true"><i style={c.width >= c.height ? { inlineSize: 22, blockSize: Math.max(6, Math.round((22 * c.height) / c.width)) } : { blockSize: 18, inlineSize: Math.max(6, Math.round((18 * c.width) / c.height)) }} /></span>
               <span className="num">{ratio}</span>
+              {c.profile && <span className="prism-mark" aria-hidden="true" data-testid={AUDIENCE_TESTIDS.chipMark} data-profile={c.profile}>{c.profile === 'calm' ? '◠' : 'A+'}</span>}
               {c.diverged && <i className="prism-dot" aria-hidden="true" />}
             </>
           );
@@ -74,12 +85,9 @@ export function FormatPrism() {
             : <button key={c.id || 'master'} {...props} data-testid="format-chip">{inner}</button>;
         })}
       </div>
-      {/* «גרסה לקהל» (wave 8 audiences): W3 appends audienceMenuItems and routes its ids (isAudienceMenuId); W3 also makes the menu render
-          when no format profile is left to add (verifier C14) */}
-      {addable.length > 0 && (
-        <Menu label={S.addFormat} items={[...addable.map((p) => ({ id: p.id, label: `${p.name[state.lang]} · ${p.width}×${p.height}` })), ...(AUDIENCE_UI_BUILT ? audienceMenuItems(state.lang) : [])]} onSelect={(id) => { if (!isAudienceMenuId(id)) void add(id); }}
-          trigger={(p) => <button type="button" className="prism-add" aria-label={S.addFormat} title={S.addFormat} data-testid="prism-add" {...p}><Plus size={16} strokeWidth={1.75} aria-hidden="true" /></button>} />
-      )}
+      {/* the menu is always there: the audience group stays reachable once all four formats exist (verifier C14) */}
+      <Menu label={S.addFormat} items={[...addable.map((p) => ({ id: p.id, label: `${p.name[state.lang]} · ${p.width}×${p.height}` })), ...(AUDIENCE_UI_BUILT ? audienceMenuItems(state.lang) : [])]} onSelect={(id) => { if (isAudienceMenuId(id)) void addAudience(id); else void add(id); }}
+        trigger={(p) => <button type="button" className="prism-add" aria-label={S.addFormat} title={S.addFormat} data-testid="prism-add" {...p}><Plus size={16} strokeWidth={1.75} aria-hidden="true" /></button>} />
     </div>
   );
 }

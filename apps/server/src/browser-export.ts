@@ -42,7 +42,9 @@ const CompleteBody = z
     photosensitivity: z.object({
       verdict: z.enum(['pass', 'fail']),
       frames: z.number().int().nonnegative(),
-      ranges: z.array(z.object({ from: RationalTimeSchema, to: RationalTimeSchema, kind: z.enum(['general', 'red']), flashesPerSecond: z.number().int().nonnegative().max(1000), area: z.number().min(0).max(1) }).strict()).max(10_000),
+      // flashesPerSecond: over the failing area, in halves (7 transitions read 3.5); the busiest cell and areaPeak are absent from older tabs
+      ranges: z.array(z.object({ from: RationalTimeSchema, to: RationalTimeSchema, kind: z.enum(['general', 'red']), flashesPerSecond: z.number().nonnegative().multipleOf(0.5).max(1000), busiestCellFlashesPerSecond: z.number().nonnegative().multipleOf(0.5).max(1000).optional(), area: z.number().min(0).max(1) }).strict()).max(10_000),
+      areaPeak: z.object({ general: z.number().nonnegative().multipleOf(0.5).max(1000), red: z.number().nonnegative().multipleOf(0.5).max(1000) }).strict().optional(),
     }).strict().optional(),
   })
   .strict();
@@ -195,6 +197,11 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
     if (b.frames !== manifest.output.frames) throw new ApiError(422, 'frames_mismatch', `the tab reports ${b.frames} frames but the snapshot has ${manifest.output.frames}`, { expected: manifest.output.frames, got: b.frames });
     const ps = b.photosensitivity;
     if (ps && (ps.frames !== b.frames || (ps.verdict === 'fail') !== ps.ranges.length > 0)) throw new ApiError(422, 'invalid_photosensitivity', 'the photosensitivity report does not match the export (frames, or verdict and ranges, disagree)', { frames: ps.frames, expected: b.frames, verdict: ps.verdict, ranges: ps.ranges.length });
+    // a report that gives the rate over the failing area (it carries the busiest cell): every failing stretch is above 3 a second
+    // over its area (the verdict's own rule), no single cell is below the area's rate, and a pass never peaks above 3
+    const ratesDisagree = ps && (ps.ranges.some((x) => x.busiestCellFlashesPerSecond !== undefined && (x.flashesPerSecond <= 3 || x.busiestCellFlashesPerSecond < x.flashesPerSecond))
+      || (ps.areaPeak && ps.verdict === 'pass' && (ps.areaPeak.general > 3 || ps.areaPeak.red > 3)));
+    if (ratesDisagree) throw new ApiError(422, 'invalid_photosensitivity', 'the photosensitivity report does not match its own rule (a failing stretch at 3 flashes a second or less over its area, a busiest cell below the area, or a pass above 3)', { ranges: ps!.ranges.length, verdict: ps!.verdict });
     leases.delete(job.id);
     const { width, height, firstFrame, frames, frameRate, sampleRate } = manifest.output;
     // the credits of library files (wave 7 library track), from the snapshot the tab rendered; no sidecar file is written on this

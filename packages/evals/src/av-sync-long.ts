@@ -34,7 +34,7 @@ async function main() {
   const t0 = Date.now();
   const fixture = await generateBarcodeFixture({ out: path.join(art, 'long.mp4'), frames: SECONDS * 30 });
   const genSeconds = (Date.now() - t0) / 1000;
-  const s = await startServer({ port: 8795, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const post = async (p: string, body?: unknown) => (await fetch(`${s.url}/api/v1${p}`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}) })).json() as Promise<any>;
   try {
@@ -151,7 +151,7 @@ async function mainIncremental() {
   fs.rmSync(art, { recursive: true, force: true });
   fs.mkdirSync(art, { recursive: true });
   const fixture = await generateBarcodeFixture({ out: path.join(art, 'long.mp4'), frames: SECONDS * 30 });
-  const s = await startServer({ port: 8795, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const call = async (token: string, p: string, body?: unknown, method?: string) => (await fetch(`${s.url}/api/v1${p}`, { method: method ?? (body === undefined ? 'GET' : 'POST'), headers: { authorization: `Bearer ${token}`, connection: 'close', ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) })).json() as Promise<any>;
   const post = (p: string, body?: unknown) => call(s.auth.tokens.agent, p, body ?? {});
   const run = async (pid: string, options: object, tag: string) => {

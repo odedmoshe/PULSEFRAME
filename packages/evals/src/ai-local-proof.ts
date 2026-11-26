@@ -29,7 +29,6 @@ const art = path.join(root, '.artifacts/ai-local-proof');
 const evidenceFile = path.join(root, 'docs/evidence/ai-local-cpu.json');
 const SAMPLE = path.join(root, 'docs/demo/narration-sample-he.m4a');
 const SMALL_SOURCE = path.join(root, '.artifacts/tools/models/opus-small');
-const PORT = 8857;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 const tool = (id: string): LocalToolDescriptor => LOCAL_TOOLS.find((d) => d.id === id)!;
@@ -122,7 +121,7 @@ async function main() {
   }
 
   startRssSampler(denoiseBin!);
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data'), toolsPython: python, denoiseBin, toolsModelsDir: modelsDir });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), toolsPython: python, denoiseBin, toolsModelsDir: modelsDir });
   const origin = s.url;
   const agent = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;

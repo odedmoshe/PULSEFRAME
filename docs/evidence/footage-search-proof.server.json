@@ -1,5 +1,5 @@
 {
- "when": "2026-11-26T04:49:07.668Z",
+ "when": "2026-11-26T07:48:18.667Z",
  "aBuilt": true,
  "evidence": {
   "core": "builder A (real)",
@@ -112,9 +112,9 @@
   },
   "S15": {
    "scanLabels": [
-    "local.search.picture scan prj_8F4M1CEVRSU"
+    "local.search.picture scan prj_IFEqnBTwMaA"
    ],
-   "toolMs": 356,
+   "toolMs": 364,
    "queryDuringScan": "busy"
   },
   "S16": {

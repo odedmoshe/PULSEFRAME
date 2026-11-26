@@ -21,4 +21,6 @@ export const BOOTH_TESTIDS = {
   windowsStep: 'booth-windows-step',
   /** the report box (read-only) and «העתקת הדוח» */
   reportBox: 'booth-report-box', reportCopy: 'booth-report-copy',
+  /** (integration, append-only) the picture card's own «הפעלה»: the sound card keeps `play` */
+  picturePlay: 'booth-picture-play',
 } as const;

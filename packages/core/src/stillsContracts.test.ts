@@ -70,16 +70,13 @@ describe('cover contract: refusals and labels', () => {
     expect(STILLS_LABEL.en).toContain('Not checked by eye');
     for (const s of [STILLS_LABEL.he, STILLS_LABEL.en]) expect(s).not.toMatch(/טוב|good|best|safe|verified/i);
   });
-  it('the W1/W2 stubs refuse with the typed not-built refusal until built', () => {
+  it('the bodies are built: the flags are on and nothing refuses as not built (W1 stillsRank.test.ts, W2 printFit.test.ts and stillDocument.test.ts hold the rules)', () => {
+    expect([STILLS_MEASURE_BUILT, STILL_EXPORT_BUILT]).toEqual([true, true]);
     const asset = { video: { width: 4, height: 4, frameRate: { num: 30, den: 1 }, codec: 'h264', rotation: 0, frameCount: 30 } };
-    const refused = (f: () => unknown, code: string) => { try { f(); } catch (e) { expect(e).toBeInstanceOf(StillsRefusal); expect((e as StillsRefusal).code).toBe(code); return; } throw new Error('not refused'); };
-    if (!STILLS_MEASURE_BUILT) { refused(() => rankStills(asset, [], 0, 1), 'stills_not_built'); refused(() => rangeOfClip({} as never, 'c'), 'stills_not_built'); }
-    if (!STILL_EXPORT_BUILT) { refused(() => printFit({ w: 1620, h: 1080 }, '10x15', 'landscape'), 'still_not_built'); refused(() => stillDocument({} as never, 0), 'still_not_built'); }
+    expect(rankStills(asset, [], 0, 1)).toEqual({ median: null, candidates: [] });
+    expect(printFit({ w: 1620, h: 1080 }, '10x15', 'landscape').ppi).toBe(270);
+    let code = '';
+    try { stillDocument({ id: 'ast_x', kind: 'audio' } as never, 0); } catch (e) { code = (e as StillsRefusal).code; }
+    expect(code).toBe('still_no_picture');
   });
-  it.todo('W1 rankStills: median over every frame; local maxima; sharp desc, motion asc (null last), frame asc; ≥ 1 s apart; at most 3; incomplete range → no candidates');
-  it.todo('W1 rankStills: manyClipped above 50‰ white; sharpRatioPermille = round(1000·sharp/max(1, median)); time = sourceTimeOfFrame');
-  it.todo('W1 rangeOfClip: speed, reverse and freeze honoured through speed.ts; a 60 fps file in a 30 fps project counts every source frame; over 600 → stills_range_too_long');
-  it.todo('W2 printFit: 1920x1080 → 10x15 landscape 1620x1080 = 270 usual; A4 landscape 1527x1080 = 130 soft; 3840x2160 A4 = 261 usual; a table of 12 hand values');
-  it.todo('W2 defaultCrop / snapCrop / cropFitsPaper: largest centred paper-shaped rectangle; moves stay inside; ratio within one pixel');
-  it.todo('W2 stillDocument: the file\'s own size (odd kept) and rate, fit contain, default transform, sourceIn = sourceTimeOfFrame; refusals over 8192 and outside the file');
 });

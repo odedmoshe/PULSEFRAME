@@ -8,14 +8,19 @@ import Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { OWN_TEMPLATE_STORE } from '@pulseframe/core';
+
+/** The owner's own templates file (apps/server/src/ownTemplates.ts OWN_TEMPLATES_FILE; core OWN_TEMPLATE_STORE.file). */
+const OWN_TEMPLATES_FILE = OWN_TEMPLATE_STORE.file;
 
 /**
  * Files of the data directory a backup never holds: the assistant's key and its config (assistant/contract.ts ASSISTANT_KEY_FILE,
  * ASSISTANT_CONFIG_FILE); the library folder setting and the library's derived index (library/contract.ts LIBRARY_CONFIG_FILE,
  * LIBRARY_INDEX_FILE): after a restore the state is «הספרייה לא מוגדרת»; the owner's review-booth answers (booth/contract.ts
- * OWNER_REVIEW_FILE: machine state of this computer, never carried to another).
+ * OWNER_REVIEW_FILE: machine state of this computer, never carried to another); the in-editor agent's folder (agent/contract.ts
+ * AGENT_DIR: provider keys, provider settings and the owner's model rows; wave 8 autonomy decision 3), a DIRECTORY, removed recursively.
  */
-export const NEVER_BACKED_UP = ['assistant.key', 'assistant.json', 'library.json', 'library-index.sqlite', 'owner-review.json'] as const;
+export const NEVER_BACKED_UP = ['assistant.key', 'assistant.json', 'library.json', 'library-index.sqlite', 'owner-review.json', 'agent'] as const;
 export interface BackupResult { dest: string; /** Projects in the verified database copy. */ projects: number; databaseBytes: number; filesCopied: number; /** Newly copied media files whose content hash was checked against their name. */ filesVerified: number; filesSkipped: number; bytesCopied: number }
 
 const sha256File = (file: string) => new Promise<string>((resolve, reject) => {
@@ -76,9 +81,19 @@ export async function backupDataDir(src: string, dest: string): Promise<BackupRe
   // 3. credentials
   const tokens = path.join(src, 'tokens.json');
   if (fs.existsSync(tokens)) { fs.copyFileSync(tokens, path.join(dest, 'tokens.json')); fs.chmodSync(path.join(dest, 'tokens.json'), 0o600); }
+  // 3b. the owner's templates saved from their films (wave 8 owntemplate, verifier C1): owner work, nothing private by construction
+  //     (built by whitelist). Copied EVERY time (tmp + rename), never by copyTree's size test: the file is rewritten in place and
+  //     may keep its length. A destination copy is removed when the source has none, so a restore never brings back deleted ones.
+  const own = path.join(src, OWN_TEMPLATES_FILE), ownOut = path.join(dest, OWN_TEMPLATES_FILE);
+  if (fs.existsSync(own)) {
+    const part = `${ownOut}.part`;
+    fs.copyFileSync(own, part);
+    try { fs.chmodSync(part, 0o600); } catch { /* Windows */ }
+    fs.renameSync(part, ownOut);
+  } else fs.rmSync(ownOut, { force: true });
   // 4. never: the language assistant's key and config (ADR-0027, lead decision 9) — the owner enters them again after a restore.
   //    Nothing above copies them; a copy left in the destination by hand is removed so a backup never holds one.
-  for (const name of NEVER_BACKED_UP) fs.rmSync(path.join(dest, name), { force: true });
+  for (const name of NEVER_BACKED_UP) fs.rmSync(path.join(dest, name), { force: true, recursive: true }); // 'agent' is a folder (C12)
   return r;
 }
 

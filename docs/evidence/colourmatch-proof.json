@@ -1,11 +1,11 @@
 {
-  "ranAt": "2026-11-24T21:04:29.416Z",
+  "ranAt": "2026-11-26T05:54:43.925Z",
   "result": "PASSED",
   "passed": 17,
   "total": 17,
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "gpu": "none: the WebGPU adapter here is a software one"
   },
   "scope": "Colour match and automatic colour balance (ADR-0014) on synthetic pictures (ffmpeg's test pattern, blurred and brought into the mid-tones, with casts made by ffmpeg filters; M2b on the pattern as it is) at 640x360, through the real server, render worker (software WebGPU) and editor. It proves the measurement, the fit, the verification, the op, the refusals and the panel; it does not show that a match looks right on real footage: nobody has compared the results by eye yet.",
@@ -43,7 +43,7 @@
       },
       "verified": 0.05,
       "model": 0.06,
-      "seconds": 4.206
+      "seconds": 4.081
     },
     "m2b": {
       "known": {
@@ -120,35 +120,35 @@
     "m5": {
       "targets": [
         {
-          "clipId": "clp_364ad8d9840",
+          "clipId": "clp_9ee20e48d60",
           "verdict": "close",
           "verified": 0.43,
           "limitedBy": [],
           "warnings": []
         },
         {
-          "clipId": "clp_67eb8fd0580",
+          "clipId": "clp_933325d6950",
           "verdict": "close",
           "verified": 0.38,
           "limitedBy": [],
           "warnings": []
         },
         {
-          "clipId": "clp_cc26e328150",
+          "clipId": "clp_932133bf250",
           "verdict": "close",
           "verified": 0.13,
           "limitedBy": [],
           "warnings": []
         },
         {
-          "clipId": "clp_bcb6c50bb80",
+          "clipId": "clp_5a9677b51f0",
           "verdict": "close",
           "verified": 0.14,
           "limitedBy": [],
           "warnings": []
         },
         {
-          "clipId": "clp_49d44e1b550",
+          "clipId": "clp_c0c81fb1a00",
           "verdict": "close",
           "verified": 0.27,
           "limitedBy": [],
@@ -276,38 +276,38 @@
       {
         "check": "M2",
         "targets": 1,
-        "seconds": 4.21,
-        "secondsPerTarget": 4.21
+        "seconds": 4.08,
+        "secondsPerTarget": 4.08
       },
       {
         "check": "M2b",
         "targets": 1,
-        "seconds": 4.04,
-        "secondsPerTarget": 4.04
+        "seconds": 4.05,
+        "secondsPerTarget": 4.05
       },
       {
         "check": "M3",
         "targets": 1,
-        "seconds": 3.53,
-        "secondsPerTarget": 3.53
+        "seconds": 3.03,
+        "secondsPerTarget": 3.03
       },
       {
         "check": "M5",
         "targets": 5,
-        "seconds": 12.61,
-        "secondsPerTarget": 2.52
+        "seconds": 12.16,
+        "secondsPerTarget": 2.43
       },
       {
         "check": "M6",
         "targets": 2,
-        "seconds": 6.23,
-        "secondsPerTarget": 3.12
+        "seconds": 6.11,
+        "secondsPerTarget": 3.05
       },
       {
         "check": "M9",
         "targets": 1,
-        "seconds": 2.58,
-        "secondsPerTarget": 2.58
+        "seconds": 3.06,
+        "secondsPerTarget": 3.06
       }
     ]
   },
@@ -348,7 +348,7 @@
         },
         "verified": 0.05,
         "model": 0.06,
-        "seconds": 4.206
+        "seconds": 4.081
       }
     },
     {
@@ -441,35 +441,35 @@
       "detail": {
         "targets": [
           {
-            "clipId": "clp_364ad8d9840",
+            "clipId": "clp_9ee20e48d60",
             "verdict": "close",
             "verified": 0.43,
             "limitedBy": [],
             "warnings": []
           },
           {
-            "clipId": "clp_67eb8fd0580",
+            "clipId": "clp_933325d6950",
             "verdict": "close",
             "verified": 0.38,
             "limitedBy": [],
             "warnings": []
           },
           {
-            "clipId": "clp_cc26e328150",
+            "clipId": "clp_932133bf250",
             "verdict": "close",
             "verified": 0.13,
             "limitedBy": [],
             "warnings": []
           },
           {
-            "clipId": "clp_bcb6c50bb80",
+            "clipId": "clp_5a9677b51f0",
             "verdict": "close",
             "verified": 0.14,
             "limitedBy": [],
             "warnings": []
           },
           {
-            "clipId": "clp_49d44e1b550",
+            "clipId": "clp_c0c81fb1a00",
             "verdict": "close",
             "verified": 0.27,
             "limitedBy": [],
@@ -693,7 +693,7 @@
       "ok": true,
       "detail": {
         "status": 503,
-        "error": "the reference clip clp_de58932ef50 uses an effect that needs a graphics adapter, and the render worker has none, so it cannot be measured: the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_u"
+        "error": "the reference clip clp_ea2452c0cd0 uses an effect that needs a graphics adapter, and the render worker has none, so it cannot be measured: the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_u"
       }
     },
     {
@@ -703,38 +703,38 @@
         {
           "check": "M2",
           "targets": 1,
-          "seconds": 4.21,
-          "secondsPerTarget": 4.21
+          "seconds": 4.08,
+          "secondsPerTarget": 4.08
         },
         {
           "check": "M2b",
           "targets": 1,
-          "seconds": 4.04,
-          "secondsPerTarget": 4.04
+          "seconds": 4.05,
+          "secondsPerTarget": 4.05
         },
         {
           "check": "M3",
           "targets": 1,
-          "seconds": 3.53,
-          "secondsPerTarget": 3.53
+          "seconds": 3.03,
+          "secondsPerTarget": 3.03
         },
         {
           "check": "M5",
           "targets": 5,
-          "seconds": 12.61,
-          "secondsPerTarget": 2.52
+          "seconds": 12.16,
+          "secondsPerTarget": 2.43
         },
         {
           "check": "M6",
           "targets": 2,
-          "seconds": 6.23,
-          "secondsPerTarget": 3.12
+          "seconds": 6.11,
+          "secondsPerTarget": 3.05
         },
         {
           "check": "M9",
           "targets": 1,
-          "seconds": 2.58,
-          "secondsPerTarget": 2.58
+          "seconds": 3.06,
+          "secondsPerTarget": 3.06
         }
       ]
     }

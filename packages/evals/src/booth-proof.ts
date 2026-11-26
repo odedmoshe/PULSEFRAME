@@ -1,14 +1,18 @@
 /**
  * pnpm proof:booth — «תא הבדיקה» and «בדיקת המחשב» (wave 8 booth track; .artifacts/wave8/booth-plan.md §5 as corrected by
  * booth-verify.md). LEAD: the entry point and the list of checks. Built in two parts: booth-proof.server.ts (W1: B1–B11) and
- * booth-proof.ui.ts (W3: B12–B14, with W2's picture and mic cards). Integration imports both here. Needs `pnpm build`; CPU only.
+ * booth-proof.ui.ts (W3: B12–B14, with W2's picture and mic cards), both imported here (integration). Needs `pnpm build`; CPU only.
+ * `--server` or `--ui` runs one part (no evidence file is written then); with no flag both run and docs/evidence/booth-proof.json is written.
  * States, each counted on its own: pass; partial (a part could not be measured here: never a pass); blocked (could not run here, with
  * the reason); fail; pending (not built yet). Exit 0 only when every check passes, 1 on any failure, 2 otherwise.
  * Fixtures are SYNTHETIC, made in the proof and deleted after: a temporary data dir, a project with an asset named
  * `נועה-גן-2026.mp4` (ffmpeg testsrc, 1 s), a person «נועה» with a birth date, a library root, planted paths (a home path with a
  * space, a forward-slash path, a OneDrive-style folder). Nobody here can see or hear: every check is a measurement or an equality.
  */
-export const BOOTH_PROOF_BUILT = false;
+import fs from 'node:fs';
+import path from 'node:path';
+
+export const BOOTH_PROOF_BUILT = true;
 export const BOOTH_CHECKS_PROOF: Readonly<Record<string, string>> = {
   B1: 'the registry has one item per catalogue member it covers and a BOOTH_LATER row with a reason for each member it does not; ids unique; the first sitting is exactly 14 cards',
   B2: 'recipes are equal across two server starts; a labelled synthetic registry with one changed SFX graph changes only that item\'s recipe; the SFX recipe holds the ffmpeg version line',
@@ -27,10 +31,35 @@ export const BOOTH_CHECKS_PROOF: Readonly<Record<string, string>> = {
 };
 export type BoothProofStatus = 'pass' | 'partial' | 'blocked' | 'fail' | 'pending';
 
-function main(): void {
-  const rows = Object.keys(BOOTH_CHECKS_PROOF).map((id) => ({ id, part: Number(id.slice(1)) >= 12 ? 'ui' : 'server', status: 'pending' as BoothProofStatus }));
-  for (const r of rows) console.log(`${r.status.toUpperCase().padEnd(8)} ${r.id.padEnd(4)} [${r.part}] ${BOOTH_CHECKS_PROOF[r.id]}`);
-  console.log(`\n${rows.length} checks pending; nothing built yet (wave 8 booth pre-pass). Exit 2.`);
-  process.exitCode = 2;
+interface ProofRow { id: string; part: 'server' | 'ui'; status: BoothProofStatus; check: string; sample: string }
+
+async function main(): Promise<void> {
+  // imported here, not at the top: booth-proof.server.ts imports BoothProofStatus from this file
+  const { runBoothServerProof } = await import('./booth-proof.server.ts');
+  const { runBoothUiProof } = await import('./booth-proof.ui.ts');
+  const only = process.argv.includes('--server') ? 'server' : process.argv.includes('--ui') ? 'ui' : null;
+  const rows: ProofRow[] = [];
+  const t0 = Date.now();
+  // one part at a time (one browser at a time on this machine): the server part, then the page
+  if (only !== 'ui') for (const r of await runBoothServerProof()) rows.push({ id: r.id, part: 'server', status: r.status, check: BOOTH_CHECKS_PROOF[r.id] ?? '', sample: r.sample });
+  if (only !== 'server') for (const r of await runBoothUiProof()) rows.push({ id: r.id, part: 'ui', status: r.status, check: BOOTH_CHECKS_PROOF[r.id] ?? '', sample: r.detail });
+  for (const id of Object.keys(BOOTH_CHECKS_PROOF)) if (!rows.some((r) => r.id === id)) rows.push({ id, part: Number(id.slice(1)) >= 12 ? 'ui' : 'server', status: 'pending', check: BOOTH_CHECKS_PROOF[id]!, sample: only ? `not run (--${only})` : 'not run' });
+  rows.sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
+  for (const r of rows) console.log(`${r.status.toUpperCase().padEnd(8)} ${r.id.padEnd(4)} [${r.part}] ${r.sample}`);
+  const count = (st: BoothProofStatus) => rows.filter((r) => r.status === st).length;
+  const summary = `${count('pass')} pass, ${count('partial')} partial, ${count('blocked')} blocked, ${count('fail')} fail, ${count('pending')} pending (of ${rows.length}); one sample each`;
+  console.log(`\n${summary}`);
+  if (!only) {
+    const out = path.resolve(import.meta.dirname, '../../../docs/evidence/booth-proof.json');
+    fs.writeFileSync(out, `${JSON.stringify({
+      proof: 'proof:booth', date: new Date().toISOString().slice(0, 10), seconds: Math.round((Date.now() - t0) / 1000), summary,
+      machine: 'the build container: 4 shared CPUs, no hardware GPU, no microphone, headless Chromium; nobody here hears or sees anything',
+      rows,
+    }, null, 2)}\n`);
+    console.log(`evidence: ${path.relative(process.cwd(), out)}`);
+  }
+  process.exitCode = count('fail') ? 1 : count('pass') === rows.length ? 0 : 2;
 }
-main();
+await main();
+// the render host, the MCP server and the browser may keep handles open
+setTimeout(() => process.exit(process.exitCode), 1000).unref();

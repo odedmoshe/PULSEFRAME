@@ -27,6 +27,9 @@
  * pacing panel's note that names the same clip as left out of its word counts, the
  * archive import's toast about cleared review marks (closed with its ×), and the Templates bar's «החזרת החלקים שנמחקו» after a hand
  * delete (undone again). The untimed copy and the reviewed translation are typed fixtures: no provider and no model ran.
+ * In both themes, «תא הבדיקה» (wave 8 booth, a11y-booth.ts): the first screen, the self-check, a music card, a picture card (or its
+ * «דורש כרטיס מסך» state), the report.
+ * delete (undone again). In both themes, wave 8: the audience panel open on a calm version (a11y-audiences.ts). The untimed copy and the reviewed translation are typed fixtures: no provider and no model ran.
  *   pnpm build && pnpm audit:a11y
  */
 import { execFileSync } from 'node:child_process';
@@ -43,12 +46,16 @@ import { chooseFormat, formatOptions, openCardMenu } from './editor-ui.ts';
 import { makeRenderCacheCtx, renderCacheA11yScenarios } from './a11y-render-cache.ts';
 import { craftA11yScenarios } from './a11y-craft.ts';
 import { stabiliseA11yScenarios } from './a11y-stabilise.ts';
+import { coverA11yScenarios } from './a11y-cover.ts';
+import { tripmapA11yScenarios } from './a11y-tripmap.ts';
 import { musicfitA11yScenarios } from './a11y-musicfit.ts';
 import { instrumentsA11yScenarios } from './a11y-instruments.ts';
+import { boothA11yScenarios } from './a11y-booth.ts';
 import { assistantLocalA11yScenarios } from './assistant-local-proof.ui.ts';
 import { pearlsA11yScenarios } from './a11y-pearls.ts';
 import { storyA11yScenarios } from './a11y-story.ts';
 import { searchA11yScenarios } from './a11y-search.ts';
+import { audiencesA11yScenarios } from './a11y-audiences.ts';
 import { makeApi, ownerApi } from './incremental-fixtures.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
 import { auditInPage, focusAudit, toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
@@ -225,7 +232,7 @@ async function main() {
   fs.mkdirSync(art, { recursive: true });
   const fixture = await generateBarcodeFixture({ out: path.join(art, 'fixture.mp4'), frames: 120 });
   // the phone drop's dialog is audited with a live code: the door may bind loopback for this audit only (startServer's override)
-  const s = await startServer({ port: 8803, dataDir: path.join(art, 'data'), dropPort: 8804, dropAdmitAddresses: ['127.0.0.1'] });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), dropPort: 0, dropAdmitAddresses: ['127.0.0.1'] });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const post = async (p: string, body: unknown) => (await fetch(`${s.url}/api/v1${p}`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) })).json() as Promise<any>;
   const browser = await chromium.launch();
@@ -841,6 +848,8 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      for (const sc of coverA11yScenarios) { const r = await sc.prepare({ page, lang, pid }); await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal); await sc.leave?.({ page, lang, pid }); } // «הפריים הכי חד» (wave 8 cover, a11y-cover.ts)
+      for (const sc of tripmapA11yScenarios) { const r = await sc.prepare({ page, lang, pid }); await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal); await sc.leave?.({ page, lang, pid }); } // «מפת טיול» (wave 8 tripmap, a11y-tripmap.ts)
       // marked ranges «פנינים» (wave 7): the list, the pearl form, «מי בקליפ?» and the screen-time table (a11y-pearls.ts, builder C)
       for (const sc of pearlsA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
@@ -859,6 +868,12 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      // «גרסה לכל קהל» (wave 8 audiences): the panel «מה שונה בגרסה הזו» open on a calm version, on a scratch project (a11y-audiences.ts)
+      for (const sc of audiencesA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       // music that fits the film «מוזיקה שמתאימה לסרט» (wave 7 musicfit): the fit block, the swap dialog, the impact controls (a11y-musicfit.ts)
       for (const sc of musicfitA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
@@ -873,6 +888,12 @@ async function main() {
       }
       // «כלים מוקלטים» (wave 7 instruments): the «צליל» radiogroup not set, not calibrated, ready with its duties, the blind pair, a refused add (a11y-instruments.ts)
       for (const sc of instrumentsA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // «תא הבדיקה» (wave 8 booth): the first screen, the self-check, a music card, a picture card or its «דורש כרטיס מסך» state, the report (a11y-booth.ts)
+      for (const sc of boothA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
@@ -1206,6 +1227,12 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      // «גרסה לכל קהל» (wave 8 audiences): the panel «מה שונה בגרסה הזו» open on a calm version, in the light theme, on a scratch project (a11y-audiences.ts)
+      for (const sc of audiencesA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       // «חיפוש בצילומים» (wave 7 search) in the light theme: the same scenarios as the dark pass, each on its own scratch project (a11y-search.ts)
       for (const sc of searchA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
@@ -1218,8 +1245,26 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      // «הפריים הכי חד» and «שמירת התמונה» (wave 8 cover) in the light theme: the same scenarios as the dark pass (a11y-cover.ts)
+      for (const sc of coverA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // «מפת טיול» (wave 8 tripmap) in the light theme: the dialog and the picker, as in the dark pass (a11y-tripmap.ts)
+      for (const sc of tripmapA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       // «כלים מוקלטים» (wave 7 instruments) in the light theme: the same five scenarios as the dark pass; the «צליל» radiogroup not set, not calibrated, ready with its duties, the blind pair, a refused add (a11y-instruments.ts)
       for (const sc of instrumentsA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // «תא הבדיקה» (wave 8 booth) in the light theme: the first screen, the self-check, a music card, a picture card or its «דורש כרטיס מסך» state, the report (a11y-booth.ts)
+      for (const sc of boothA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });

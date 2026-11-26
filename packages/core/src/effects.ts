@@ -4,12 +4,16 @@
  * The single implementation lives in the shared compositor (packages/engine), used by preview and export alike.
  *
  * Scope of this batch: what a Canvas2D compositor can do faithfully. GPU shader families (distortion, glitch,
- * film, keying, depth) are not here and are not approximated under their names.
+ * film, keying) run as WebGPU passes (cost 'gpu') and are not approximated under their names. Depth: only `depth.living` («תמונה חיה»,
+ * wave 8, livingContract.ts), on a depth the owner draws by hand; it is added only with set_living_picture (opOnlyEffect).
  * Lengths are fractions of the output frame height, so a scaled preview or export looks the same.
  */
 import { z } from 'zod';
 // the one keyframe definition (ADR-0019), shared with transform keys (schema.ts); keyframe.ts imports zod only
 import { CURVES, KeyframeSchema, MAX_EFFECT_KEYS } from './keyframe.ts';
+// livingContract.ts imports zod only
+import { LIVING_DEFAULTS, LIVING_MOVES, OP_ONLY_EFFECTS } from './livingContract.ts';
+import { GradeCurvesSchema } from './gradeCurves.ts';
 
 const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/).describe('#RRGGBB');
 const frac = (max: number, def: number, what: string) => z.number().min(0).max(max).default(def).describe(what);
@@ -138,7 +142,7 @@ export const EFFECTS = [
     params: z.object({ rate: z.number().min(-720).max(720).default(90).describe('degrees per second; negative turns the other way'), zoom: z.number().min(0.2).max(4).default(1).describe('size while turning') }).strict() }),
   def({ id: 'light.leak', version: 1, category: 'light', name: { he: 'דליפת אור', en: 'Light leak' }, description: 'Soft coloured light drifts over the picture, as from a leak in an old camera. Seeded. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: true, stir: 'light',
     params: z.object({ color: Color.default('#FF7A2F'), amount: frac(2, 0.6, 'strength'), speed: z.number().min(0).max(5).default(0.3).describe('how fast the light drifts'), seed: z.number().int().min(0).max(1_000_000).default(1) }).strict() }),
-  def({ id: 'light.strobe', version: 1, category: 'light', name: { he: 'הבזקים', en: 'Strobe' }, description: 'Brief flashes, at a steady rate or on the beats of the music. All strobes on a timeline share one limit of three flash starts a second (faster flashing is a seizure risk for some viewers), so with several strobes or fast music some flashes are left out. A strobe that follows the music shows nothing where no analysed music plays. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false, stir: 'light',
+  def({ id: 'light.strobe', version: 1, category: 'light', name: { he: 'הבזקים', en: 'Strobe' }, description: 'Brief flashes, at a steady rate or on the beats of the music. All strobes on a timeline share one limit of three flash starts a second, together with the transitions that are a flash themselves (flash, dip to white or black, colour blocks, page turn; faster flashing is a seizure risk for some viewers), so with several strobes, such a transition nearby or fast music some flashes are left out. A strobe that follows the music shows nothing where no analysed music plays. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false, stir: 'light',
     params: z.object({ rate: z.number().min(0).max(3).default(2).describe('with follow=steady: flashes per second (at most 3, shared with every other strobe on the timeline)'), amount: frac(1, 0.6, 'brightness of the flash'), color: Color.default('#FFFFFF'), ...FOLLOW }).strict() }),
   def({ id: 'stylize.film', version: 1, category: 'stylize', name: { he: 'פילם ישן', en: 'Old film' }, description: 'The frame weaves, the light flickers, dust and scratches come and go, the colour fades toward brown. Seeded; the same frame always looks the same. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: true, stir: 'light-shake',
     params: z.object({ amount: frac(1, 0.6, 'strength'), seed: z.number().int().min(0).max(1_000_000).default(1) }).strict() }),
@@ -175,7 +179,17 @@ export const EFFECTS = [
     params: z.object({ amount: frac(1, 0.8, 'strength'), sharpen: z.number().min(0).max(2).default(0.7), noise: frac(1, 0.3, 'coloured noise'), bloom: frac(1, 0.35, 'highlight bloom'), cool: z.number().min(-1).max(1).default(0.4).describe('negative is warmer'), seed: SEED }).strict() }),
   def({ id: 'stylize.crt', version: 1, category: 'stylize', name: { he: 'מסך שפופרת', en: 'CRT screen' }, description: 'An old picture-tube screen in one pass: curved glass with rounded corners, beam lines that widen in bright areas, an RGB phosphor mask and a slight glow. Does not flicker. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false, stir: 'none',
     params: z.object({ curvature: z.number().min(0).max(0.3).default(0.12), phosphor: z.enum(['grille', 'dots', 'slot']).default('grille'), pitch: z.number().min(0.001).max(0.01).default(0.0028).describe('width of one RGB triad, fraction of frame height'), lines: z.number().int().min(120).max(1080).default(480).describe('beam lines over the frame height'), amount: frac(1, 0.8, 'strength'), glow: frac(1, 0.3, 'glow') }).strict() }),
+  // ---- «תמונה חיה» (wave 8 living): appended, so the order of the rows above is unchanged ----
+  // stir: unsure — parallax; capped by LIVING_MAX_RATE (verifier C12: gentler than the Ken Burns both audience versions keep)
+  def({ id: 'depth.living', version: 1, category: 'motion', name: { he: 'תמונה חיה', en: 'Living picture' }, description: 'A still photo moves slowly in depth: what the owner drew as near moves more than what is far (clip.depth, a hand drawing; nothing is estimated). Added only with set_living_picture, which needs the depth and keys `travel` from 0 at the first frame to 1 at the last; add_effect refuses it. The amount is capped by the clip length (a comfort rule of thumb). Photos only, not rotated. Needs a graphics adapter (WebGPU).', cost: 'gpu', temporal: false, seeded: false, stir: 'none',
+    params: z.object({ move: z.enum(LIVING_MOVES).default(LIVING_DEFAULTS.move).describe('push = a slow push in; slide = a slow slide toward the end of reading'), amount: frac(1, LIVING_DEFAULTS.amount, 'size of the move; 1 = the nearest and farthest points shift apart by 3% of the frame height. One value for the whole clip'), travel: frac(1, 0, 'how far along the move: 0 = start, 1 = end (set_living_picture keys it over the clip)') }).strict() }),
 ] as const;
+/**
+ * The effects a person or an agent picks from a list (the gallery, the Look panel's add select, the library, the command palette):
+ * every row except the ones only their own op adds (livingContract.ts opOnlyEffect; verifier C4). The registry itself, the catalog
+ * (list_catalog, with `addedWith`) and the Lab keep every row.
+ */
+export const PICKABLE_EFFECTS = EFFECTS.filter((e) => !Object.hasOwn(OP_ONLY_EFFECTS, e.id));
 /** Effects that run as WebGPU passes (ADR-0008). */
 export const GPU_EFFECT_IDS: readonly string[] = (EFFECTS as readonly EffectDef[]).filter((e) => e.cost === 'gpu').map((e) => e.id);
 export type EffectType = (typeof EFFECTS)[number]['id'];
@@ -221,6 +235,13 @@ export interface TransitionDef {
   readonly options: readonly TransitionOption[];
   /** Adds light over the picture: its light joins the timeline flash schedule (ADR-0012). */
   readonly light?: true;
+  /**
+   * The transition is itself a general flash, measured on flat grey with the export's flash check (engine
+   * flashTransitions.test.ts): this many flashes over a large area (1: up and back down; 2: more changes, the colour blocks'
+   * three shades, the page turn's lit back and shade). It is drawn as it is; it counts this many flashes in the light plan
+   * in every second that touches its frames, so strobe and light starts too close to it are held back (strobeSchedule.ts).
+   */
+  readonly flashes?: 1 | 2;
   /** Passes through a full-frame third colour (dip, flash, colour blocks). */
   readonly cover?: true;
   /** No pixel's incoming share ever decreases. */
@@ -235,12 +256,13 @@ export interface TransitionDef {
  * `kernel` is the piece of code that draws a transition; several entries share one with different directions.
  * `gpu: true` entries are WebGPU passes over both pictures (ADR-0008) and exist only where an adapter has proved itself.
  * The Canvas2D ones are drawn by the kernel of that name (engine canvasTransitions.ts CANVAS_KERNELS).
- * `flash` is a `cover` transition but not a `light` one: it stays outside the flash schedule (ADR-0011:80).
+ * `flash` is a `cover` transition but not a `light` one: its own flash is never held or changed (ADR-0011:80); it is one of
+ * the transitions marked `flashes`, which reserve their frames in the flash schedule so strobe starts keep away from them.
  */
 export const TRANSITIONS = [
   { id: 'dissolve', kernel: 'dissolve', gpu: false, stir: 'none', name: { he: 'מעבר רך', en: 'Cross dissolve' }, usesOutgoing: true, category: 'basic', options: [] },
-  { id: 'dip-black', kernel: 'dip', gpu: false, stir: 'light', name: { he: 'דרך שחור', en: 'Dip to black' }, usesOutgoing: true, category: 'basic', options: [], cover: true },
-  { id: 'dip-white', kernel: 'dip', gpu: false, stir: 'light', name: { he: 'דרך לבן', en: 'Dip to white' }, usesOutgoing: true, category: 'basic', options: [], cover: true },
+  { id: 'dip-black', kernel: 'dip', gpu: false, stir: 'light', name: { he: 'דרך שחור', en: 'Dip to black' }, usesOutgoing: true, category: 'basic', options: [], cover: true, flashes: 1 },
+  { id: 'dip-white', kernel: 'dip', gpu: false, stir: 'light', name: { he: 'דרך לבן', en: 'Dip to white' }, usesOutgoing: true, category: 'basic', options: [], cover: true, flashes: 1 },
   { id: 'wipe-left', kernel: 'wipe', gpu: false, stir: 'none', name: { he: 'ניגוב שמאלה', en: 'Wipe left' }, usesOutgoing: true, category: 'wipe', options: [] },
   { id: 'wipe-right', kernel: 'wipe', gpu: false, stir: 'none', name: { he: 'ניגוב ימינה', en: 'Wipe right' }, usesOutgoing: true, category: 'wipe', options: [] },
   { id: 'wipe-up', kernel: 'wipe', gpu: false, stir: 'none', name: { he: 'ניגוב למעלה', en: 'Wipe up' }, usesOutgoing: true, category: 'wipe', options: [] },
@@ -274,7 +296,7 @@ export const TRANSITIONS = [
   { id: 'iris-close', kernel: 'iris', gpu: true, stir: 'none', name: { he: "עיגול נסגר", en: 'Iris close' }, usesOutgoing: true, category: 'mask', options: [] },
   { id: 'diamond-open', kernel: 'diamond', gpu: true, stir: 'none', name: { he: "מעוין נפתח", en: 'Diamond open' }, usesOutgoing: true, category: 'mask', options: [] },
   { id: 'diamond-close', kernel: 'diamond', gpu: true, stir: 'none', name: { he: "מעוין נסגר", en: 'Diamond close' }, usesOutgoing: true, category: 'mask', options: [] },
-  { id: 'flash', kernel: 'flash', gpu: true, stir: 'light', name: { he: "הבזק", en: 'Flash' }, usesOutgoing: true, category: 'light', options: [], cover: true },
+  { id: 'flash', kernel: 'flash', gpu: true, stir: 'light', name: { he: "הבזק", en: 'Flash' }, usesOutgoing: true, category: 'light', options: [], cover: true, flashes: 1 },
   { id: 'luma-bright', kernel: 'luma', gpu: true, stir: 'none', name: { he: "התמוססות מהבהיר", en: 'Luma fade, bright first' }, usesOutgoing: true, category: 'mask', options: [] },
   { id: 'luma-dark', kernel: 'luma', gpu: true, stir: 'none', name: { he: "התמוססות מהכהה", en: 'Luma fade, dark first' }, usesOutgoing: true, category: 'mask', options: [] },
   { id: 'squeeze-h', kernel: 'squeeze', gpu: true, stir: 'none', name: { he: "כיווץ אופקי", en: 'Squeeze sideways' }, usesOutgoing: true, category: 'slide', options: [] },
@@ -297,8 +319,8 @@ export const TRANSITIONS = [
   { id: 'split-open-v', kernel: 'split', gpu: false, stir: 'none', name: { he: 'פתיחה מפוצלת למעלה ולמטה', en: 'Split open up and down' }, usesOutgoing: true, category: 'slide', options: [], singleCrossing: true },
   { id: 'shape-heart', kernel: 'shape', gpu: false, stir: 'none', name: { he: 'לב נפתח', en: 'Heart reveal' }, usesOutgoing: true, category: 'mask', options: ['color'], singleCrossing: true, shapeDependent: true },
   { id: 'shape-star', kernel: 'shape', gpu: false, stir: 'none', name: { he: 'כוכב נפתח', en: 'Star reveal' }, usesOutgoing: true, category: 'mask', options: ['color'], singleCrossing: true, shapeDependent: true },
-  { id: 'block-left', kernel: 'block', gpu: false, stir: 'light', name: { he: 'בלוקי צבע שמאלה', en: 'Colour blocks left' }, usesOutgoing: true, category: 'mg', options: ['color'], cover: true, defaults: { color: '#3DE0C8' } },
-  { id: 'block-right', kernel: 'block', gpu: false, stir: 'light', name: { he: 'בלוקי צבע ימינה', en: 'Colour blocks right' }, usesOutgoing: true, category: 'mg', options: ['color'], cover: true, defaults: { color: '#3DE0C8' } },
+  { id: 'block-left', kernel: 'block', gpu: false, stir: 'light', name: { he: 'בלוקי צבע שמאלה', en: 'Colour blocks left' }, usesOutgoing: true, category: 'mg', options: ['color'], cover: true, flashes: 2, defaults: { color: '#3DE0C8' } },
+  { id: 'block-right', kernel: 'block', gpu: false, stir: 'light', name: { he: 'בלוקי צבע ימינה', en: 'Colour blocks right' }, usesOutgoing: true, category: 'mg', options: ['color'], cover: true, flashes: 2, defaults: { color: '#3DE0C8' } },
   { id: 'slices-h', kernel: 'slices', gpu: false, stir: 'shake', name: { he: 'פרוסות מהירות אופקיות', en: 'Velocity slices, horizontal' }, usesOutgoing: true, category: 'glitch', options: ['seed'], singleCrossing: true, defaults: { seed: 0 } },
   { id: 'slices-v', kernel: 'slices', gpu: false, stir: 'shake', name: { he: 'פרוסות מהירות אנכיות', en: 'Velocity slices, vertical' }, usesOutgoing: true, category: 'glitch', options: ['seed'], singleCrossing: true, defaults: { seed: 0 } },
   { id: 'film-burn', kernel: 'burn', gpu: true, stir: 'light', name: { he: 'צריבת פילם', en: 'Film burn' }, usesOutgoing: true, category: 'light', options: ['color', 'seed'], light: true, defaults: { color: '#FF9A4A', seed: 0 } },
@@ -306,8 +328,8 @@ export const TRANSITIONS = [
   { id: 'ink-bleed', kernel: 'ink', gpu: true, stir: 'none', name: { he: 'כתם דיו', en: 'Ink bleed' }, usesOutgoing: true, category: 'mask', options: ['seed'], singleCrossing: true, defaults: { seed: 0 } },
   { id: 'brush-left', kernel: 'brush', gpu: true, stir: 'none', name: { he: 'משיכת מכחול שמאלה', en: 'Brush stroke left' }, usesOutgoing: true, category: 'mask', options: ['seed'], singleCrossing: true, defaults: { seed: 0 } },
   { id: 'brush-right', kernel: 'brush', gpu: true, stir: 'none', name: { he: 'משיכת מכחול ימינה', en: 'Brush stroke right' }, usesOutgoing: true, category: 'mask', options: ['seed'], singleCrossing: true, defaults: { seed: 0 } },
-  { id: 'page-turn-left', kernel: 'page', gpu: true, stir: 'none', name: { he: 'דפדוף שמאלה', en: 'Page turn left' }, usesOutgoing: true, category: 'paper', options: [], singleCrossing: true, shapeDependent: true },
-  { id: 'page-turn-right', kernel: 'page', gpu: true, stir: 'none', name: { he: 'דפדוף ימינה', en: 'Page turn right' }, usesOutgoing: true, category: 'paper', options: [], singleCrossing: true, shapeDependent: true },
+  { id: 'page-turn-left', kernel: 'page', gpu: true, stir: 'none', name: { he: 'דפדוף שמאלה', en: 'Page turn left' }, usesOutgoing: true, category: 'paper', options: [], singleCrossing: true, shapeDependent: true, flashes: 2 },
+  { id: 'page-turn-right', kernel: 'page', gpu: true, stir: 'none', name: { he: 'דפדוף ימינה', en: 'Page turn right' }, usesOutgoing: true, category: 'paper', options: [], singleCrossing: true, shapeDependent: true, flashes: 2 },
 ] as const satisfies readonly TransitionDef[];
 export const TRANSITION_IDS = TRANSITIONS.map((t) => t.id) as [TransitionType, ...TransitionType[]];
 /** Transitions that run as WebGPU passes (ADR-0008). */
@@ -348,6 +370,8 @@ export const EffectInstanceSchema = z
     keyframes: z.record(z.string(), z.array(KeyframeSchema).min(1).max(MAX_EFFECT_KEYS)).optional(),
     /** Parameters that kick on the beats of the music under the clip (render-time; nothing computed is stored). At most 4. */
     modulate: z.record(z.string().max(48), ModulatorSchema).refine((m) => Object.keys(m).length <= 4, 'at most 4 modulated parameters').optional(),
+    /** Colour curves of a color.grade instance only (wave 8 grade; gradeCurves.ts): not a parameter (params cannot hold arrays), not animatable. */
+    curves: GradeCurvesSchema.optional(),
   })
   .strict();
 /**
@@ -361,6 +385,8 @@ export const NOT_ANIMATABLE: Readonly<Record<string, readonly string[]>> = {
   // windows and counts of time effects are whole numbers that define which pictures are read; interpolating them would read fractional frames
   'time.echo': ['count', 'delay'], 'time.split': ['lag'], 'time.shutter': ['angle', 'samples'], 'time.stutter': ['hold', 'every'],
   'overlay.speed-lines': ['lines'],
+  // the overscan and the comfort cap are worked out from one amount per clip (livingComfort.ts)
+  'depth.living': ['amount'],
 };
 /** Names of an effect's parameters that are numbers and can therefore be animated. */
 export function animatableParams(type: string): string[] {
@@ -403,6 +429,7 @@ export function describeCatalog() {
       id: e.id, version: e.version, category: e.category, name: e.name, description: e.description, cost: e.cost, seeded: e.seeded, temporal: e.temporal,
       implementation: e.cost === 'gpu' ? 'webgpu pass (needs a graphics adapter)' : e.cost === 'time' ? 'evaluator time taps + canvas2d (no graphics adapter)' : 'canvas2d',
       modulatable: modulatableParams(e.id),
+      ...(Object.hasOwn(OP_ONLY_EFFECTS, e.id) ? { addedWith: OP_ONLY_EFFECTS[e.id] } : {}),
       defaults: e.params.parse({}), paramsSchema: z.toJSONSchema(e.params),
     })),
     transitions: TRANSITIONS.map((t) => ({

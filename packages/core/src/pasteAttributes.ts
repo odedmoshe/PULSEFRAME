@@ -27,27 +27,28 @@
  *   titleStyle the whole style of a title (look fields the source has not are switched off on the target).
  * - Always the master document (the editor disables the command while a format is viewed).
  */
-import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { findClip, getOp, OpError, partnersOf, refuseInheritedIds, type OpContext, type OpResult } from './ops.ts';
+import { findClip, OpError, type OpContext } from './ops.ts';
+import { inFixedOrder, restoreTarget, runRegisteredOp, saveTarget } from './pairRun.ts';
 import { ANIMATABLE, TEXT_LOOK_FIELDS, type Clip, type ProjectDocument, type Track } from './schema.ts';
 import { cloneDocument } from './clone.ts';
 import { makeIdSource } from './ops.ts';
 import { craftRefusal, type AttributeGroup, type PasteAttributesArgs, type PasteAttributesOutput, type PastePlan, type PasteSkip } from './craftContract.ts';
 import type { Keyframe } from './keyframe.ts';
+import { opOnlyEffect } from './livingContract.ts';
 
-/** Run a registered public op on the draft, as apply_recipe runs its steps (its arguments parsed by its own schema). */
-function runOp(d: ProjectDocument, ctx: OpContext, op: string, args: unknown): OpResult {
-  const def = getOp(op)!;
-  const parsed = def.args.safeParse(args);
-  if (!parsed.success) throw new OpError('invalid_args', `${op}: ${z.prettifyError(parsed.error)}`, { op });
-  refuseInheritedIds(parsed.data, op, '', def.checksOwnIds);
-  return def.apply(d, parsed.data, ctx);
-}
+/** Run a registered public op on the draft (pairRun.ts, shared with teach). */
+const runOp = runRegisteredOp;
 
 /** The order the groups are applied in (animation before transform, C3). */
 export const PASTE_ORDER: readonly AttributeGroup[] = ['colour', 'effects', 'animation', 'transform', 'sound', 'titleStyle'];
 const isColour = (type: string) => type.startsWith('color.');
+/**
+ * The effects group: every effect that is not colour, except the ones only their own op adds (opOnlyEffect: a living picture needs
+ * the target's own drawn depth, verifier C4). Those are neither copied nor removed from the target; the output counts the source's
+ * (opOnlyLeftOut) so the dialog can say so.
+ */
+const isPastedEffect = (type: string) => !isColour(type) && !opOnlyEffect(type);
 
 /** A pair left out without running an op: the source has nothing in the group, or the target is animated. */
 class Skip extends Error { constructor(public code: 'source_empty' | 'target_animated', message: string) { super(message); } }
@@ -58,20 +59,8 @@ function keysWithin(keys: readonly Keyframe[], duration: T.RationalTime): { keys
   return { keys: kept, left: keys.length - kept.length };
 }
 
-// ---------------------------------------------------------------- rollback (the target and its linked clips)
-interface Saved { track: Track; clip: Clip }
-/** Copies of the target and of every clip linked to it, wherever they are. */
-export function saveTarget(d: ProjectDocument, clipId: string): Saved[] {
-  const f = findClip(d, clipId)!;
-  return [{ track: f.track, clip: structuredClone(f.clip) }, ...partnersOf(d, f.clip).map((p) => ({ track: p.track, clip: structuredClone(p.clip) as Clip }))];
-}
-/** Put the copies back in place (the ops of the table never move a clip in time or between tracks). */
-export function restoreTarget(saved: readonly Saved[]): void {
-  for (const s of saved) {
-    const i = s.track.clips.findIndex((c) => c.id === s.clip.id);
-    if (i >= 0) s.track.clips[i] = s.clip; else s.track.clips.push(s.clip);
-  }
-}
+// ---------------------------------------------------------------- rollback: pairRun.ts saveTarget / restoreTarget (re-exported here)
+export { restoreTarget, saveTarget } from './pairRun.ts';
 
 // ---------------------------------------------------------------- the groups
 interface Ctx { d: ProjectDocument; ctx: OpContext; src: Clip; srcTrack: Track; groups: readonly AttributeGroup[]; left: number }
@@ -90,6 +79,9 @@ function pasteEffects(c: Ctx, id: string, family: (type: string) => boolean): vo
     const r = runOp(d, ctx, 'add_effect', { clipId: id, type: s.type, params: s.params, ...(at !== undefined ? { index: at } : {}) });
     const effectId = (r.output as { effectId: string }).effectId;
     at = target(d, id).clip.effects!.findIndex((e) => e.id === effectId) + 1;
+    // colour curves (wave 8 grade, verifier C4): not a parameter, so add_effect cannot carry them; copied onto THIS new instance (a
+    // clip with two colour grades keeps each one's own curves, which set_grade_curves, always the first grade, could not)
+    if (s.curves) target(d, id).clip.effects![at - 1]!.curves = structuredClone(s.curves);
     if (!s.enabled) runOp(d, ctx, 'update_effect', { clipId: id, effectId, enabled: false });
     for (const [param, keys] of Object.entries(s.keyframes ?? {})) {
       const w = keysWithin(keys, duration);
@@ -107,9 +99,9 @@ const GROUPS: Record<AttributeGroup, { empty: (c: Ctx) => boolean; apply: (c: Ct
     apply: (c, id) => pasteEffects(c, id, isColour),
   },
   effects: {
-    empty: (c) => !(c.src.effects ?? []).some((e) => !isColour(e.type)) && !c.src.blend && !(c.src.type !== 'text' && c.src.type !== 'caption' && 'mask' in c.src && c.src.mask),
+    empty: (c) => !(c.src.effects ?? []).some((e) => isPastedEffect(e.type)) && !c.src.blend && !(c.src.type !== 'text' && c.src.type !== 'caption' && 'mask' in c.src && c.src.mask),
     apply: (c, id) => {
-      pasteEffects(c, id, (t) => !isColour(t));
+      pasteEffects(c, id, isPastedEffect);
       runOp(c.d, c.ctx, 'set_clip_blend', { clipId: id, mode: c.src.blend ?? 'normal' });
       const t = target(c.d, id);
       const mask = 'mask' in c.src ? c.src.mask : undefined;
@@ -189,7 +181,7 @@ function pasteRoutine(d: ProjectDocument, args: PasteAttributesArgs, ctx: OpCont
   // the source as it is before anything is pasted (a copy: a later step never reads a half-pasted source)
   const c: Ctx = { d, ctx, src: structuredClone(sf.clip), srcTrack: sf.track, groups: args.groups, left: 0 };
   const out: PasteAttributesOutput = { applied: [], skipped: [], keysLeftOut: 0 };
-  const groups = PASTE_ORDER.filter((g) => args.groups.includes(g));
+  const groups = inFixedOrder(PASTE_ORDER, args.groups);
   for (const id of targets) {
     for (const group of groups) {
       const g = GROUPS[group];
@@ -209,6 +201,8 @@ function pasteRoutine(d: ProjectDocument, args: PasteAttributesArgs, ctx: OpCont
     }
   }
   out.keysLeftOut = c.left;
+  const opOnly = groups.includes('effects') ? (c.src.effects ?? []).filter((e) => opOnlyEffect(e.type)).length : 0;
+  if (opOnly) out.opOnlyLeftOut = opOnly;
   return out;
 }
 

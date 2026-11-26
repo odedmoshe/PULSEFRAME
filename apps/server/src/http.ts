@@ -12,6 +12,7 @@ import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
 import { NarrationBody, NarrationScriptBody, Speech, TranscribeBody } from './speech.ts';
+import { SPEECH_ENGINE_JOB_TYPE } from './speechEngine.ts';
 import type { Capabilities } from './capabilities.ts';
 import type { Config } from './config.ts';
 import type { DerivativeKind, Derivatives } from './derive.ts';
@@ -42,12 +43,13 @@ import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking
 import { cameraMotionView, cancelStabiliseJob, startStabiliseJob } from './stabilise.ts';
 import { pearlsView } from './pearls.ts';
 import { audienceChangesFor } from './audiences/routes.ts';
+import { deriveLessonFor } from './lessons/routes.ts';
 import { applyMusicFitFor, markJoinHeardFor, musicJoinPreviewFor, planMusicFitFor, refuseHeardByAgent } from './musicfit/routes.ts';
 import { MusicFitApplyRequestSchema, MusicFitPlanRequestSchema } from '@pulseframe/core';
 import { STABILISE_JOB_TYPE, StabiliseRunBodySchema } from '@pulseframe/core';
 import type { MusicKit } from '@pulseframe/core';
 import { cancelMomentsJob, momentsLaneOf, startMomentsJob } from './moments.ts';
-import { cancelStillsJob, readSharpFrames, startStillsJob, withStillsErrors } from './stills.ts';
+import { cancelStillsJob, readSharpFrames, startStillsJob, stillsReady, withStillsErrors } from './stills.ts';
 import { FindSharpBodySchema, ReadSharpQuerySchema, STILLS_JOB_TYPE } from '@pulseframe/core';
 import type { Presence } from './presence.ts';
 import { ApiError, revisionWithChanges, type JobRow, type RevisionEvent, type Store } from './store.ts';
@@ -72,6 +74,13 @@ import { registerLibraryRoutes } from './library/routes.ts';
 import { notBuiltRuntime, SEARCH_INDEX_JOB_TYPE, type SearchRuntime } from './search/contract.ts';
 import { registerSearchRoutes } from './search/routes.ts';
 import { registerBoothRoutes } from './booth/routes.ts';
+import { notBuiltPictureModels, type PictureModelsRuntime } from './picmodels/contract.ts';
+import { registerPicmodelsRoutes } from './picmodels/routes.ts';
+import { registerOwnTemplateRoutes } from './ownTemplates.ts';
+import { registerAgentRoutes } from './agent/routes.ts';
+import { notBuiltAgentService, type AgentRunService } from './agent/loop.ts';
+import { registerMadeRoutes } from './made/routes.ts';
+import type { MadeRunner } from './made/contract.ts';
 import type { RenderHost } from '@pulseframe/renderer';
 
 const TxBody = z
@@ -140,13 +149,19 @@ export function reviewTranslation(gov: Governance, p: Principal, projectId: stri
 }
 const ImportBody = z.object({ id: z.string().regex(/^[a-z0-9]+(\.[a-z0-9-]+)+$/), title: z.string().min(1).max(120), graph: z.unknown() }).strict();
 
-/** Content security policy of the app's pages: same-origin code only, no inline or blob: scripts, no plugins, no framing. Style attributes set from code are allowed by the browser without 'unsafe-inline'. */
-export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+/**
+ * Content security policy of the app's pages: same-origin code only, no inline or blob: scripts, no plugins, no framing. Style attributes set from code are allowed by the browser without 'unsafe-inline'.
+ * `worker-src 'self' blob:` (wave 8 motioncode, gate G1): mediabunny 1.66 decodes the alpha of a VP8/VP9 WebM in a pool of workers it makes from a blob: URL
+ * (media-sink.js ColorAlphaMerger), with no hook to self-host it; under `worker-src 'self'` a transparent video failed to draw in the preview and in
+ * render_frame (made-g1.ts, measured). What it opens: script already running under `script-src 'self'` can run a string as worker code (no DOM, the same
+ * connect-src 'self'). script-src keeps no blob:; proof:phase5 asserts worker-src is exactly 'self' blob:.
+ */
+export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 /** Policy of every non-page response (JSON, media, exports): nothing may load or run if it is ever opened as a document. */
 export const DATA_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
 
 /** Services wired by the server (index.ts) that tests may leave out: the import queue and the phone drop (ADR-0023), the render cache (ADR-0024). */
-export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps; /** picture search (wave 7 search track; search/runtime.ts): absent = the not-built runtime */ search?: SearchRuntime; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS, never from the environment */ musicKits?: readonly MusicKit[]; /** The render host whose identity the export uses (wave 8 booth: self-check row export-gpu); absent in test apps without one */ renderHost?: RenderHost }
+export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps; /** picture search (wave 7 search track; search/runtime.ts): absent = the not-built runtime */ search?: SearchRuntime; /** the local picture-model runtime and eyes (wave 8 picmodels; picmodels/runtime.ts): absent = the not-built runtime */ pictureModels?: PictureModelsRuntime; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS, never from the environment */ musicKits?: readonly MusicKit[]; /** The render host whose identity the export uses (wave 8 booth: self-check row export-gpu); absent in test apps without one */ renderHost?: RenderHost; /** «קליפ מקוד» (wave 8 motioncode): the render runner (made/contract.ts MadeRunner, W1); absent = 501 made_not_built */ made?: MadeRunner }
 export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler, speechService?: Speech, extras: AppExtras = {}) {
   setMeasurementExporter(exporter); // colour-match jobs render stills, also when they are recovered after a restart
   const gov = governance ?? new Governance(store);
@@ -421,14 +436,16 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/stills', async (c) => {
     const p = need(c, 'edit');
     const b = await body(c, FindSharpBodySchema);
+    await stillsReady(); // the cache check needs the ffmpeg build line (a first POST after start must not measure again)
     const r = withStillsErrors(() => startStillsJob(store, gov, p, c.req.param('id'), b, { derivatives, lane: momentsLaneOf(exporter.lane) }));
     return 'cached' in r ? c.json(r, 200) : c.json({ jobId: r.jobId, status: r.status }, 202);
   });
-  app.get('/api/v1/projects/:id/stills', (c) => {
+  app.get('/api/v1/projects/:id/stills', async (c) => {
     const p = need(c, 'observe');
     gov.assertMayAct(p, c.req.param('id'), 'observe');
     const q = ReadSharpQuerySchema.safeParse(c.req.query());
     if (!q.success) throw new ApiError(400, 'invalid_request', z.prettifyError(q.error), { issues: q.error.issues });
+    await stillsReady(); // a first read right after start answers what is stored, not "nothing measured"
     return c.json(withStillsErrors(() => readSharpFrames(store, c.req.param('id'), q.data, { derivatives })));
   });
   app.get('/api/v1/projects/:id/motion-tracks/:motionTrackId', (c) => {
@@ -456,6 +473,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   });
   // ----- versions for an audience «גרסה לכל קהל» (wave 8; audiences/routes.ts): the change list, 501 audience_not_built until built -----
   app.get('/api/v1/projects/:id/variants/:variantId/audience', (c) => { need(c, 'observe'); return c.json(audienceChangesFor(store, c.req.param('id'), c.req.param('variantId'))); });
+  // ----- «למדו אותי פעם אחת» (wave 8 teach; lessons/routes.ts): the lesson of one clip, the owner's own session only; 501 teach_not_built until built -----
+  app.get('/api/v1/projects/:id/clips/:clipId/lesson', (c) => { const p = need(c, 'observe'); return c.json(deriveLessonFor(store, gov, p, c.req.param('id'), c.req.param('clipId'))); });
   const RecipeBody = z.object({ params: z.record(z.string(), z.unknown()).optional(), expectedRevision: z.number().int().optional() }).strict();
   app.post('/api/v1/projects/:id/recipes/:recipeId/plan', async (c) => { const p = need(c, 'observe'); store.getProject(c.req.param('id')); return c.json(await planRecipeFor(store, c.req.param('id'), c.req.param('recipeId'), (await body(c, RecipeBody)).params, gov, p)); });
   app.post('/api/v1/projects/:id/recipes/:recipeId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeBody); return c.json(await applyRecipe(store, gov, p, c.req.param('id'), c.req.param('recipeId'), b.params, b.expectedRevision)); });
@@ -529,11 +548,12 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/analysis/loudness', async (c) => {
     const p = need(c, 'observe');
     const b = await c.req.json().catch(() => ({}));
-    // { sequenceId } measures that sequence (a short) as it exports (ADR-0018); absent = the main edit
-    const sequenceId = b && typeof b === 'object' && typeof (b as { sequenceId?: unknown }).sequenceId === 'string' ? (b as { sequenceId: string }).sequenceId : undefined;
-    if (sequenceId !== undefined) outputDoc(store.getProject(c.req.param('id')).doc, { sequenceId }); // 404 before any job exists
-    if (b && typeof b === 'object' && (b as { background?: unknown }).background === true) { const j = startMeasurementJob(store, p, c.req.param('id'), 'loudness', sequenceId !== undefined ? { sequenceId } : {}); return c.json({ jobId: j.id, status: j.status }, 202); }
-    return c.json(await programmeLoudness(store, c.req.param('id'), sequenceId));
+    // { sequenceId } measures that sequence (a short) as it exports (ADR-0018); { variantId } that linked format or audience version
+    // (wave 8 qc, verifier C2); both together the version of the short; absent = the main edit
+    const t = loudnessTargetOf(b);
+    if (t.sequenceId !== undefined || t.variantId !== undefined) outputDoc(store.getProject(c.req.param('id')).doc, t); // 404 before any job exists
+    if (b && typeof b === 'object' && (b as { background?: unknown }).background === true) { const j = startMeasurementJob(store, p, c.req.param('id'), 'loudness', { ...t }); return c.json({ jobId: j.id, status: j.status }, 202); }
+    return c.json(await programmeLoudness(store, c.req.param('id'), t));
   });
   // loudness of single clips (wave 7 send): read-only; the match is committed separately with match_clip_loudness and expectedRevision
   app.post('/api/v1/projects/:id/analysis/clip-loudness', async (c) => {
@@ -943,6 +963,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // document, agentAnswerOf), the picture index for the owner's own session only; index.ts passes the built runtime (a test host without one gets 501)
   const searchRuntime = extras.search ?? notBuiltRuntime();
   registerSearchRoutes(app, { cfg, store, gov, runtime: searchRuntime, need });
+  // the local picture-model runtime and «הציעו עיניים» (wave 8 picmodels; picmodels/contract.ts PICMODELS_ROUTES): the state report for
+  // observers (no yunet row but for the owner's own session), eyes for the owner's own session only; nothing of eyes is stored
+  registerPicmodelsRoutes(app, { cfg, store, gov, runtime: extras.pictureModels ?? notBuiltPictureModels(), need });
 
   // ----- the command bar's language assistant (ADR-0027; assistant/contract.ts ASSISTANT_ROUTES): status for any observer (whole
   // for the owner's own session, connected or not for anyone else: assistant/visibility.ts), the rest for the owner's own session
@@ -951,7 +974,12 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // MCP cancel_job reaches an assistant job through this same handler (one cancel path; mcp.ts bindAssistant)
   (mcp as { bindAssistant?: (a: AssistantJobControls) => void }).bindAssistant?.(assistant);
   // «תא הבדיקה» (wave 8 booth track; booth/contract.ts BOOTH_ROUTES): every route the owner's own session only, GET included
+  // «שמירת הסרט כתבנית» (wave 8 owntemplate; ownTemplates.ts, core OWN_TEMPLATE_ROUTES): the owner's own session only; 501 own_template_not_built until W2
+  registerOwnTemplateRoutes(app, { cfg, store, gov, need });
+  registerMadeRoutes(app, { cfg, store, gov, need, ...(extras.made ? { runner: extras.made } : {}) }); // «קליפ מקוד» (wave 8 motioncode; made/contract.ts MADE_ROUTES): 501 made_not_built until W1/W2
   registerBoothRoutes(app, { cfg, store, gov, need, exporter, renderHost: extras.renderHost ?? null, speech, assistant, search: searchRuntime, door: extras.door ?? null, ...(extras.musicKits ? { musicKits: extras.musicKits } : {}) });
+  // the in-editor agent «סוכן» (wave 8 autonomy Part 2; agent/routes.ts, core AGENT_ROUTES): runs, undo-all, providers; 501 agent_not_built until built
+  registerAgentRoutes(app, { store, gov, need, service: () => (mcp as { agentService?: () => AgentRunService }).agentService?.() ?? notBuiltAgentService() });
   const assistantOwner = (c: Context<Env>) => {
     const p = need(c, 'observe');
     if (!isOwnerSession(p)) throw new ApiError(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only', undefined, 'The owner sets it up in Settings.');
@@ -1012,6 +1040,15 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // ---- local speech recognition (optional; an honest setup state when the engine or the model is absent) ----
   app.get('/api/v1/speech', async (c) => { need(c, 'observe'); return c.json(await speech.status()); });
   // As with capability models: a deliberate human action for the exact byte count shown, never an agent's.
+  // «התקנת מנוע הדיבור» (speechEngine.ts): the owner's own session only, before anything is read; no MCP tool.
+  app.get('/api/v1/speech/engine', async (c) => { const p = need(c, 'observe'); speech.engineInstall.assertOwner(p); return c.json(await speech.engineInstall.view(p)); });
+  app.post('/api/v1/projects/:id/speech/engine/install', async (c) => {
+    const p = need(c, 'observe');
+    speech.engineInstall.assertOwner(p);
+    const b = await body(c, z.object({ confirmBytes: z.number().int().positive(), replace: z.boolean().optional() }).strict());
+    const job = await speech.engineInstall.start(p, c.req.param('id'), b.confirmBytes, b.replace ?? false);
+    return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
+  });
   app.post('/api/v1/projects/:id/speech/models/:modelId/download', async (c) => {
     const p = need(c, 'edit');
     if (p.kind !== 'user') throw new ApiError(403, 'human_approval_required', 'model downloads must be started from the owner\'s own session, not by an agent credential');
@@ -1042,8 +1079,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     return c.json({ sentences: r.sentences, jobs: r.jobs.map((j) => ({ jobId: j.id, status: j.status, type: j.type })) }, 202);
   });
   app.post('/api/v1/jobs/:jobId/cancel', async (c) => {
-    const p = need(c, 'edit');
     const j = store.getJob(c.req.param('jobId'));
+    if (j.type === SPEECH_ENGINE_JOB_TYPE) speech.engineInstall.assertOwner(c.var.principal); // the owner's own, before any scope is named
+    const p = need(c, 'edit');
     if (j.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, p, j, 'cancel'); return c.json(extras.imports.cancel(j.id, p.actor)); }
     assertMayCancel(gov, p, j);
     if (j.type === ASSISTANT_JOB_TYPE) return c.json(assistant.cancel(p, j.id));
@@ -1218,6 +1256,11 @@ export const catalog = () => ({
 /** Moved to programmeLoudness.ts (wave 7 send pre-pass; worker A's file); re-exported so REST, MCP and tests keep one import. */
 export { programmeLoudness } from './programmeLoudness.ts';
 import { programmeLoudness } from './programmeLoudness.ts';
+/** The output a loudness body names (REST body or a job's stored options): string sequenceId / variantId, anything else ignored as before. */
+function loudnessTargetOf(b: unknown): { sequenceId?: string; variantId?: string } {
+  const o = b && typeof b === 'object' ? b as { sequenceId?: unknown; variantId?: unknown } : {};
+  return { ...(typeof o.sequenceId === 'string' ? { sequenceId: o.sequenceId } : {}), ...(typeof o.variantId === 'string' ? { variantId: o.variantId } : {}) };
+}
 
 export const SfxBody = z.object({ sfxId: z.string(), start: RationalTimeSchema.optional().describe('Place it on the timeline at this frame-aligned time (omit to only add it to the media library)'), trackId: z.string().optional() }).strict();
 /** Synthesise a built-in sound effect, attach it as a normal asset, and optionally place it. Goes through governance like any edit. */
@@ -1416,7 +1459,7 @@ async function runAnalysisJob(store: Store, jobId: string) {
     if (j.input.kind === 'silences' || j.input.kind === 'loudness' || j.input.kind === 'voice' || j.input.kind === 'colour' || j.input.kind === SHORTS_MEASUREMENT_KIND || j.input.kind === 'clip-loudness') {
       const kind = j.input.kind as MeasurementKind;
       const result = kind === 'silences' ? await findSilences(store, j.projectId, j.input.options)
-        : kind === 'loudness' ? await programmeLoudness(store, j.projectId, typeof j.input.options?.sequenceId === 'string' ? j.input.options.sequenceId : undefined)
+        : kind === 'loudness' ? await programmeLoudness(store, j.projectId, loudnessTargetOf(j.input.options))
         // shorts (ADR-0018): measure the audio features that are missing, then rank; stops between windows once cancel is requested
         : kind === SHORTS_MEASUREMENT_KIND ? await withShortsErrors(() => findShortCandidates(store, j.projectId, FindShortsBodySchema.parse(j.input.options), () => store.getJob(jobId).status === 'cancel-requested'))
         : kind === 'clip-loudness' ? await measureClipLoudness(store, j.projectId, ClipLoudnessBody.parse(j.input.options), () => store.getJob(jobId).status === 'cancel-requested')
@@ -1466,6 +1509,8 @@ export function assertMayTakeJobOutput(p: Principal, job: JobRow, what: string):
  * reason and next step (assistant/routes.ts assistantCancelRefusal), the same for REST and MCP.
  */
 export function assertMayCancel(gov: Governance, p: Principal, job: JobRow) {
+  // the speech engine install runs software on the owner's computer: only the owner's own session stops it (REST and MCP alike)
+  if (job.type === SPEECH_ENGINE_JOB_TYPE && !isOwnerSession(p)) throw new ApiError(403, 'owner_required', 'the speech engine install is stopped only from the owner\'s own editor window', { jobId: job.id }, 'Ask the owner to cancel it in the speech panel.');
   if (p.kind !== 'agent') return;
   gov.assertMayAct(p, job.projectId, 'job');
   if (job.type === ASSISTANT_JOB_TYPE) throw assistantCancelRefusal(job.id);

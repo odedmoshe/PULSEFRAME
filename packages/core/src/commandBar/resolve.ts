@@ -17,6 +17,7 @@ import type { BarContext, BarNote, BarRefusalCode } from '../commandBarContract.
 import { trackRole } from '../editHelpers.ts';
 import type { Clip, ProjectDocument, Track } from '../schema.ts';
 import { clipEnd } from '../validate.ts';
+import { drawnName } from '../drawn.ts';
 
 export interface Found { clip: Clip; track: Track }
 export interface Option<T> { items: T[]; he: string; en: string }
@@ -27,7 +28,7 @@ export type Resolved<T> =
 
 /** What a clip is called in the preview: the file's name, the title's words or the adjustment's label (owner's browser only). */
 export function clipName(doc: ProjectDocument, c: Clip): string {
-  const name = c.type === 'media' ? doc.assets[c.assetId]?.name : c.type === 'adjustment' ? c.label : c.type === 'text' ? c.text : undefined;
+  const name = c.type === 'media' ? doc.assets[c.assetId]?.name : c.type === 'adjustment' ? c.label : c.type === 'text' ? c.text : c.type === 'drawn' ? drawnName(c.drawn).he : undefined;
   return (name ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
 }
 export const tracksOf = (doc: ProjectDocument): Track[] => doc.sequences[doc.mainSequenceId]?.tracks ?? [];
@@ -153,6 +154,7 @@ export function soundClipOf(doc: ProjectDocument, f: Found): Found | null {
   for (const track of tracksOf(doc)) if (track.kind === 'audio') for (const clip of track.clips) if (linkOf(clip) === g) return { clip, track };
   return null;
 }
-export const isPicture = (f: Found) => (f.track.kind === 'video' && f.clip.type === 'media') || f.clip.type === 'text';
+/** A clip with a picture of its own to look at: a picture on a video track, a title or a drawn overlay (wave 8). */
+export const isPicture = (f: Found) => (f.track.kind === 'video' && f.clip.type === 'media') || f.clip.type === 'text' || f.clip.type === 'drawn';
 export const isVideoClip = (doc: ProjectDocument) => (f: Found) => f.track.kind === 'video' && f.clip.type === 'media' && !!doc.assets[f.clip.assetId]?.video && doc.assets[f.clip.assetId]?.kind === 'video';
 export const isMedia = (f: Found) => f.clip.type === 'media';

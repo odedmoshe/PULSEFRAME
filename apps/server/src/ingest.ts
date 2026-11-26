@@ -75,8 +75,28 @@ const EDITABLE_VIDEO = new Set(['h264', 'vp8', 'vp9', 'av1']);
 const HDR_TRANSFERS = new Set(['smpte2084', 'arib-std-b67']);
 const HDR_TO_SDR = 'zscale=t=linear:npl=203,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=mobius:param=0.6:desat=0,zscale=t=bt709:m=bt709:r=tv';
 export class NeedsConform extends Error {
-  constructor(public reasons: ('variable-frame-rate' | 'rotation' | 'codec' | 'pixel-aspect' | 'still-format' | 'hdr')[], public original: NonNullable<Asset['conform']>['original'], public targetRate: { num: number; den: number }) { super('needs conform'); }
+  /** `alpha`: the source carries transparency; the conformed copy is then VP9 with alpha in WebM (made clips, wave 8 G2), never H.264. */
+  constructor(public reasons: ('variable-frame-rate' | 'rotation' | 'codec' | 'pixel-aspect' | 'still-format' | 'hdr')[], public original: NonNullable<Asset['conform']>['original'], public targetRate: { num: number; den: number }, public alpha = false) { super('needs conform'); }
 }
+/**
+ * Whether a video stream carries transparency (made clips, wave 8 G2). VP8/VP9 in WebM keep alpha as side data and say so with the
+ * stream tag `alpha_mode` = 1; ffprobe then reports the colour plane alone (yuv420p), so the pixel format would miss it. Other
+ * codecs (ProRes 4444, QuickTime Animation, PNG in MOV) report a pixel format with alpha.
+ */
+export function videoHasAlpha(v: { pix_fmt?: unknown; tags?: Record<string, unknown> }): boolean {
+  const tag = Object.entries(v.tags ?? {}).find(([k]) => k.toLowerCase() === 'alpha_mode')?.[1];
+  return String(tag ?? '').trim() === '1' || (ALPHA_PIX.test(String(v.pix_fmt ?? '')) && !/^pal8/.test(String(v.pix_fmt)));
+}
+/** The words of a refusal when a transparent file needs a conversion that cannot keep its alpha (high dynamic range tone-mapping). */
+export const ALPHA_CONFORM_REFUSAL = {
+  he: 'הקובץ שקוף, וההמרה שהוא צריך (טווח דינמי גבוה) הייתה מוחקת את השקיפות, ולכן הוא לא יובא',
+  en: 'the file is transparent, and the conversion it needs (high dynamic range) would remove its transparency, so it was not imported',
+  hint: 'Export it again in standard range (BT.709) with its alpha (VP9 WebM with alpha, or ProRes 4444) and import that.',
+} as const;
+/** Decoder options to put before `-i` so a VP8/VP9 source keeps its alpha (ffmpeg's native decoders drop it); none for other codecs. */
+export const alphaDecoderArgs = (codec: string): string[] => (codec === 'vp9' ? ['-c:v', 'libvpx-vp9'] : codec === 'vp8' ? ['-c:v', 'libvpx'] : []);
+/** Extension of the conformed copy: WebM keeps alpha (Matroska BlockAdditional); everything else stays H.264 in MP4. */
+export const conformExtension = (needs: NeedsConform): 'webm' | 'mp4' => (needs.alpha ? 'webm' : 'mp4');
 const STANDARD_RATES = [[24000, 1001], [24, 1], [25, 1], [30000, 1001], [30, 1], [50, 1], [60000, 1001], [60, 1]] as const;
 /** Probe a local file and describe it as asset metadata. Used for uploads and for provider outputs alike. */
 export async function describeMedia(file: string): Promise<MediaMeta> {
@@ -135,11 +155,13 @@ export async function describeMedia(file: string): Promise<MediaMeta> {
     if (sarN! > 0 && sarD! > 0 && Math.abs(sarN! / sarD! - 1) > 0.005) reasons.push('pixel-aspect');
     // High dynamic range (PQ or HLG): the editor works in standard range (BT.709, 8 bits), so the copy is tone-mapped. Read as it is, such a picture looks grey and washed out.
     if (HDR_TRANSFERS.has(String(v.color_transfer))) reasons.push('hdr');
+    const hasAlpha = videoHasAlpha(v);
+    if (hasAlpha && reasons.includes('hdr')) throw new ApiError(415, 'unsupported_media', ALPHA_CONFORM_REFUSAL.en, { alpha: true, reasons, he: ALPHA_CONFORM_REFUSAL.he }, ALPHA_CONFORM_REFUSAL.hint);
     if (reasons.length) {
       // Constant target rate: the standard rate nearest the average rate (a documented choice, not a guess per frame).
       const avg = rate.num / rate.den;
       const [num, den] = [...STANDARD_RATES].sort((x, y) => Math.abs(x[0] / x[1] - avg) - Math.abs(y[0] / y[1] - avg))[0]!;
-      throw new NeedsConform(reasons, { codec: v.codec_name, width: v.width, height: v.height, avgFrameRate: v.avg_frame_rate, rFrameRate: v.r_frame_rate, rotation, frameCount, durationSeconds: Number(probe.format?.duration ?? 0) }, reasons.includes('variable-frame-rate') ? { num, den } : rate);
+      throw new NeedsConform(reasons, { codec: v.codec_name, width: v.width, height: v.height, avgFrameRate: v.avg_frame_rate, rFrameRate: v.r_frame_rate, rotation, frameCount, durationSeconds: Number(probe.format?.duration ?? 0) }, reasons.includes('variable-frame-rate') ? { num, den } : rate, hasAlpha);
     }
     // Where the picture starts in the file. Not 0 after many remuxes, in Matroska/TS, or with B-frames and no edit list.
     const start = Number(v.start_time ?? 0) - origin;
@@ -157,7 +179,7 @@ export async function describeMedia(file: string): Promise<MediaMeta> {
     }
     // No statement of how colours are encoded (matrix). Decoders then guess, and they do not all guess alike.
     const untagged = !v.color_space || v.color_space === 'unknown';
-    video = { width: v.width, height: v.height, frameRate: rate, codec: v.codec_name, rotation, frameCount, ...(startTime ? { startTime } : {}), ...(untagged ? { untaggedColour: true as const } : {}) };
+    video = { width: v.width, height: v.height, frameRate: rate, codec: v.codec_name, rotation, frameCount, ...(startTime ? { startTime } : {}), ...(untagged ? { untaggedColour: true as const } : {}), ...(hasAlpha ? { hasAlpha: true as const } : {}) };
   }
   const aStart = a ? Number(a.start_time ?? 0) - origin : 0;
   const audio = a ? { sampleRate: Number(a.sample_rate), channels: Number(a.channels), codec: String(a.codec_name), ...(Number.isFinite(aStart) && Math.abs(aStart) > 1e-6 ? { startTime: T.fromSeconds(aStart.toFixed(6)) } : {}) } : undefined;
@@ -291,7 +313,7 @@ export async function prepareWithoutConform(src: string, opts: { isCube: boolean
 /** The conform record of an asset whose edited copy was made from the original (Asset.conform). */
 export function conformRecord(needs: NeedsConform, originalHash: string, originalSize: number): NonNullable<Asset['conform']> {
   if (needs.reasons.includes('still-format')) return { originalContentHash: originalHash, originalByteSize: originalSize, reasons: needs.reasons, original: needs.original, frameMapping: 'identity', method: 'ffmpeg, first picture to PNG (lossless)' };
-  return { originalContentHash: originalHash, originalByteSize: originalSize, reasons: needs.reasons, original: needs.original, frameMapping: needs.reasons.includes('variable-frame-rate') ? 'cfr-nearest-timestamp' : 'identity', method: `ffmpeg libx264 crf 15, constant rate ${needs.targetRate.num}/${needs.targetRate.den} (fps filter), display rotation applied${needs.reasons.includes('hdr') ? '; high dynamic range tone-mapped to standard range (reference white 203 nits, mobius roll-off of highlights, BT.709)' : ''}` };
+  return { originalContentHash: originalHash, originalByteSize: originalSize, reasons: needs.reasons, original: needs.original, frameMapping: needs.reasons.includes('variable-frame-rate') ? 'cfr-nearest-timestamp' : 'identity', method: needs.alpha ? `ffmpeg libvpx-vp9 crf 15 with alpha (yuva420p, WebM), alpha kept, constant rate ${needs.targetRate.num}/${needs.targetRate.den} (fps filter), display rotation applied` : `ffmpeg libx264 crf 15, constant rate ${needs.targetRate.num}/${needs.targetRate.den} (fps filter), display rotation applied${needs.reasons.includes('hdr') ? '; high dynamic range tone-mapped to standard range (reference white 203 nits, mobius roll-off of highlights, BT.709)' : ''}` };
 }
 /** The asset an import commits, in the field order of the synchronous ingest. */
 export function buildImportedAsset(p: { meta: MediaMeta; name: string; contentHash: string; byteSize: number; provenance: Asset['provenance']; capture: Capture | null; conform?: Asset['conform'] }): Omit<Asset, 'id'> {
@@ -303,6 +325,16 @@ export function buildImportedAsset(p: { meta: MediaMeta; name: string; contentHa
  * constant-rate, upright H.264 copy. conformVideo adds only `-progress pipe:1 -nostats` (reporting, not output).
  */
 export function conformArgs(src: string, out: string, needs: NeedsConform): string[] {
+  if (needs.alpha) {
+    // A transparent source (made clips, wave 8 G2): the same constant rate, rotation and square pixels, but VP9 with its alpha plane
+    // in WebM (H.264 has no alpha). High dynamic range never reaches here: describeMedia refuses that combination in words.
+    // ffmpeg's native VP8/VP9 decoders drop the alpha side data (verify C2b): such a source is read with libvpx.
+    return ['-hide_banner', '-v', 'error', '-nostdin', '-y', '-protocol_whitelist', 'file', ...alphaDecoderArgs(needs.original.codec), '-i', src,
+      '-map', '0:v:0', '-map', '0:a:0?',
+      '-vf', `fps=${needs.targetRate.num}/${needs.targetRate.den},scale=trunc(iw*sar/2)*2:trunc(ih/2)*2:out_color_matrix=bt709:out_range=tv,setsar=1,format=yuva420p`,
+      '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-auto-alt-ref', '0', '-crf', '15', '-b:v', '0', '-row-mt', '1', '-metadata:s:v:0', 'alpha_mode=1',
+      '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-c:a', 'libopus', '-b:a', '192k', out];
+  }
   return ['-hide_banner', '-v', 'error', '-nostdin', '-y', '-protocol_whitelist', 'file', '-i', src,
     '-map', '0:v:0', '-map', '0:a:0?',
     // out_color_matrix converts the pixel data to BT.709 (the source's own matrix, or BT.601 when it states none, is the input);
@@ -436,7 +468,7 @@ export async function ingestUpload(store: Store, body: ReadableStream<Uint8Array
     }
     if (prepared.route === 'conform') {
       const e = prepared.needs;
-      const out = `${tmp}.conform.mp4`;
+      const out = `${tmp}.conform.${conformExtension(e)}`;
       try {
         const c = await conformVideo(tmp, e, out);
         store.putBlob(originalHash, tmp, size, 'application/octet-stream');

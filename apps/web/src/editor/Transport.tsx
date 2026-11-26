@@ -6,6 +6,7 @@
  * every language.
  */
 import { useEffect, useState } from 'react';
+import { AudienceStageNote } from './audience/AudienceStageNote.tsx';
 import { SkipBack, SkipForward } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { beatPositionAt } from '@pulseframe/core';
@@ -66,6 +67,7 @@ function StageOverlay() {
       <div className="stage-over pf-ds pf-force-dark">
         {noClips && <p className="stage-empty" data-testid="stage-empty"><strong>{S.emptyStage}</strong><span>{S.emptyOr} <b className="num">+</b> {S.emptyKeyHint}</span></p>}
         <p className="stage-note" role="status" data-testid="stage-note" data-on={note ? 'true' : 'false'}>{note?.text ?? ''}</p>
+        <AudienceStageNote />
       </div>
     </>
   );

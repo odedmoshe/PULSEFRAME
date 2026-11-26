@@ -10,11 +10,14 @@ import type { CameraMotionView, StabiliseRunBody } from '@pulseframe/core';
 import type { FindSharpBody, FindSharpResult, SharpAnswer, StillExport } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
-import type { ClipLoudnessRequest, ClipLoudnessResult } from '@pulseframe/core';
+import type { ClipLoudnessRequest, ClipLoudnessResult, SoundChecks } from '@pulseframe/core';
 import type { PearlsView } from '@pulseframe/core';
 import type { AudienceChanges } from '@pulseframe/core';
+import type { DerivedLessonView } from '@pulseframe/core';
 import type { MusicFitApplyRequest, MusicFitApplyResult, MusicFitPlan, MusicFitPlanRequest, JoinRemoval } from '@pulseframe/core';
 import type { MusicKitStatus } from '@pulseframe/core';
+import type { OwnTemplateDeleteAnswer, OwnTemplatePreviewAnswer, OwnTemplatePreviewBody, OwnTemplateSaveAnswer, OwnTemplateSaveBody } from '@pulseframe/core';
+import type { AgentProbeAnswer, AgentProvidersAnswer, AgentRunAnswer, AgentRunListAnswer, AgentStartAnswer, AgentStartBody, UndoAllAnswer } from '@pulseframe/core';
 import type { BoothAnswerBody, BoothAnswerResult, BoothCheckRow, BoothServerCheckId, BoothView } from '@pulseframe/core';
 
 export class ApiFailure extends Error {
@@ -47,7 +50,8 @@ export interface RevisionEvent { projectId: string; revision: number; transactio
   /** The undo or redo that reversed this one, else null (ADR-0027: the bar names its exact undo target). */ undoneBy?: string | null }
 export interface Proposal { id: string; actor: string; label: string | null; summary: string; status: string; baseRevision: number; createdAt: string; previewFrame: number }
 export interface JobEvent { id: string; type: string; status: string; stage: string | null; output: any; error: any }
-export interface PreflightIssue { code: string; severity: 'blocker' | 'warning' | 'note'; message: string; ids: string[]; range?: { startFrame: number; endFrame: number }; fix?: { label: string; ops: OpCall[] } }
+/** `range` in the chosen output's own frames; `measured`: the numbers behind the issue (wave 8 qc rules carry them, older codes may not). */
+export interface PreflightIssue { code: string; severity: 'blocker' | 'warning' | 'note'; message: string; ids: string[]; range?: { startFrame: number; endFrame: number }; measured?: Record<string, number>; fix?: { label: string; ops: OpCall[] } }
 export interface PreflightReport { revision: number; ok: boolean; blockers: number; warnings: number; notes: number; issues: PreflightIssue[]; output: unknown; scope: string }
 export interface CommitResult { revision: number; committed: boolean; /** the transaction this commit made (null when nothing changed): undo names it to reverse exactly this edit */ transactionId?: string | null; summary: string; affectedIds: string[]; results: { op: string; output?: Record<string, any> }[] }
 export interface SilenceResult { revision: number; candidates: { start: unknown; end: unknown; startSeconds: number; seconds: number }[]; removableSeconds: number; ops: OpCall[]; note?: string; /** clips of a copy that does not keep the recording's timing, not searched */ skippedClips?: { clipId: string; assetId: string; reason: 'untimed_copy' }[] }
@@ -58,7 +62,7 @@ export interface VoiceCheck { revision: number; assetId: string; clipIds: string
 export interface ColourMatchRequest { method?: 'match' | 'balance'; referenceClipId?: string; targetClipIds: string[] | 'all'; amount?: number; samples?: 1 | 3 }
 export interface ColourMatchTarget { clipId: string; params: GradeParams; residual: { model: number; verified: number | null }; verdict: GradeFit['verdict']; limitedBy: (keyof GradeParams)[]; warnings: ('changes_within_clip' | 'not_verified' | 'replaces_grade' | 'animated_grade')[]; statsBefore: PictureStats; statsAfter: PictureStats | null }
 export interface ColourMatch { revision: number; method: 'match' | 'balance'; reference: { clipId: string; stats: PictureStats } | null; targets: ColourMatchTarget[]; /** set_colour_grade candidates: send as ONE transaction */ ops: OpCall[]; unavailable: string | null; note: string }
-export interface LoudnessResult { integratedLufs: number | null; truePeakDbtp: number | null; rangeLu: number | null; mixPeakDbfs: number | null; wouldClipWithoutNormalisation: boolean; target: number | null; exportWouldApplyGainDb: number | null; limitedByPeak: boolean; method: string; note?: string }
+export interface LoudnessResult { integratedLufs: number | null; truePeakDbtp: number | null; rangeLu: number | null; mixPeakDbfs: number | null; wouldClipWithoutNormalisation: boolean; /** the measured output's loudness target (a short's own format loudness, else the project's); null = no normalisation */ target: { target: number; truePeak: number } | null; exportWouldApplyGainDb: number | null; limitedByPeak: boolean; method: string; note?: string; /** silence and clipped sound read from the WAV export would write for this output (wave 7 send); wave 8 qc shows them before export */ soundChecks?: SoundChecks }
 
 export type RecipeParams = Record<string, unknown>;
 export interface RecipeAlternative { label: string; params: RecipeParams }
@@ -86,8 +90,18 @@ export interface GrantItem { id: string; name: string; mode: GrantMode; projectI
 export interface SpeechStatus {
   narration: { ready: boolean; reason: 'engine_not_configured' | 'engine_not_working' | 'model_missing' | null; detail: string; device: 'cpu' | 'cuda' | null; maxCharacters: number };
   transcription: { ready: boolean; reason: 'engine_not_configured' | 'engine_not_working' | 'model_missing' | null; detail: string; device: 'cpu' | 'cuda' | null };
-  engine: { configured: boolean; ok: boolean; detail: string };
+  engine: { configured: boolean; ok: boolean; detail: string; source?: 'environment' | 'installed' | null };
   models: { id: string; kind: 'asr' | 'tts'; title: { he: string; en: string }; license: string | null; totalBytes: number; missingDownloadBytes: number; ready: boolean }[];
+}
+/** «התקנת מנוע הדיבור» (GET /speech/engine; the owner's own session only, 403 owner_required otherwise). */
+export interface SpeechEngineInstall {
+  state: 'environment' | 'installed' | 'installing' | 'not_installed';
+  job: { id: string; status: string; stage: string | null } | null;
+  lastFailure: { jobId: string; code: string; message: string; details?: Record<string, unknown> } | null;
+  plan: {
+    supported: boolean; host: string; downloadBytes: number | null; files: number | null; diskNeededBytes: number | null; diskFreeBytes: number | null; minPython: string | null; maxPython: string | null;
+    python: { found: false; tried: string[] } | { found: true; version: string; fits: boolean; min: string; max: string; bits: number };
+  };
 }
 export interface SoundEffectInfo { id: string; version: number; name: { he: string; en: string }; seconds: number; category: string }
 export const api = {
@@ -159,8 +173,8 @@ export const api = {
   findSilences: (id: string, body: { assetId: string; minSeconds: number; keepSeconds: number }) =>
     call<SilenceResult>(`/projects/${id}/analysis/silences`, json(body)),
   findFillers: (id: string, body: { assetId: string; words?: string[] }) => call<SilenceResult & { words: { kind: 'hesitation' | 'repeat' | 'listed'; text: string; sourceStartSeconds: number; onTimeline: { startSeconds: number }[] }[] }>(`/projects/${id}/analysis/fillers`, json(body)),
-  /** The programme loudness of the main edit, or of one sequence (a short) with `sequenceId`. */
-  measureLoudness: (id: string, sequenceId?: string) => call<LoudnessResult>(`/projects/${id}/analysis/loudness`, json(sequenceId ? { sequenceId } : {})),
+  /** The programme loudness of one output as it exports: the main edit, a sequence (a short) with `sequenceId`, a linked format or audience version with `variantId`. `target` is that output's own. */
+  measureLoudness: (id: string, t: { sequenceId?: string | null; variantId?: string | null } = {}) => call<LoudnessResult>(`/projects/${id}/analysis/loudness`, json({ ...(t.sequenceId ? { sequenceId: t.sequenceId } : {}), ...(t.variantId ? { variantId: t.variantId } : {}) })),
   measureVoice: (id: string, body: VoiceMeasureRequest) => call<VoiceCheck>(`/projects/${id}/analysis/voice`, json(body)),
   /** Loudness of single clips (wave 7 send; 501 not_built until built). Commit match_clip_loudness with expectedRevision = revision. */
   measureClipLoudness: (id: string, body: ClipLoudnessRequest) => call<ClipLoudnessResult>(`/projects/${id}/analysis/clip-loudness`, json(body)),
@@ -176,6 +190,8 @@ export const api = {
   derivatives: (id: string, assetId: string) => call<{ derivatives: { kind: string; status: string; meta: any }[] }>(`/projects/${id}/assets/${assetId}/derivatives`),
   presence: (id: string, sessionId: string, frame: number, selection: string[]) => call<unknown>(`/projects/${id}/presence`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId, frame, selection }) }),
   speech: () => call<SpeechStatus>('/speech'),
+  speechEngine: () => call<SpeechEngineInstall>('/speech/engine'),
+  installSpeechEngine: (id: string, confirmBytes: number, replace = false) => call<{ jobId: string }>(`/projects/${id}/speech/engine/install`, json({ confirmBytes, ...(replace ? { replace: true } : {}) })),
   downloadSpeechModel: (id: string, modelId: string, confirmBytes: number) => call<{ jobId: string }>(`/projects/${id}/speech/models/${encodeURIComponent(modelId)}/download`, json({ confirmBytes })),
   transcribe: (id: string, assetId: string, body: { language: string; overwrite?: boolean; mode?: 'recognise' | 'align' }) => call<{ jobId: string }>(`/projects/${id}/assets/${assetId}/transcribe`, json(body)),
   transcribeAll: (id: string, language: string) => call<{ jobs: { assetId: string; jobId: string }[]; alreadyQueued: number }>(`/projects/${id}/transcribe`, json({ language })),
@@ -296,19 +312,41 @@ export const api = {
   /** The owner's own session only (agents get 403 human_approval_required). */
   // ----- «גרסה לכל קהל» (wave 8 audiences; apps/server/src/audiences/routes.ts): 501 audience_not_built until built -----
   audienceChanges: (projectId: string, variantId: string) => call<AudienceChanges>(`/projects/${projectId}/variants/${encodeURIComponent(variantId)}/audience`),
+  // ----- «למדו אותי פעם אחת» (wave 8 teach): the lesson of one clip, the owner's own session only (501 teach_not_built until built) -----
+  deriveLesson: (projectId: string, clipId: string) => call<DerivedLessonView>(`/projects/${projectId}/clips/${encodeURIComponent(clipId)}/lesson`),
   markJoinHeard: (projectId: string, assetId: string, heard: boolean) => call<unknown>(`/projects/${projectId}/assets/${encodeURIComponent(assetId)}/music-join/heard`, json({ heard })),
   // ----- «כלים מוקלטים» (wave 7 instruments; apps/server/src/instruments/routes.ts) -----
   musicKits: () => call<{ kits: MusicKitStatus[] }>('/music/kits'),
   /** The owner's own session only (everyone else gets 403 owner_required). */
   markKitHeard: (kitId: string, heard: boolean) => call<{ kitId: string; version: number; heard: { at: string } | null }>(`/music/kits/${encodeURIComponent(kitId)}/heard`, json({ heard })),
+  // «שמירת הסרט כתבנית» (wave 8 owntemplate; core OWN_TEMPLATE_ROUTES): owner's own session only; 501 own_template_not_built until W2
+  previewOwnTemplate: (projectId: string, body: OwnTemplatePreviewBody) => call<OwnTemplatePreviewAnswer>(`/projects/${encodeURIComponent(projectId)}/own-templates/preview`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  saveOwnTemplate: (projectId: string, body: OwnTemplateSaveBody) => call<OwnTemplateSaveAnswer>(`/projects/${encodeURIComponent(projectId)}/own-templates`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  deleteOwnTemplate: (templateId: string) => call<OwnTemplateDeleteAnswer>(`/own-templates/${encodeURIComponent(templateId)}`, { method: 'DELETE' }),
   // «תא הבדיקה» (wave 8 booth; apps/server/src/booth/contract.ts BOOTH_ROUTES): owner's own session only; 501 booth_not_built until W1
-  booth: () => call<BoothView>('/booth'),
+  booth: (q: { browserAdapter?: string; exportAdapter?: string } = {}) => {
+    const p = new URLSearchParams(Object.entries(q).filter((e): e is [string, string] => typeof e[1] === 'string' && e[1].length > 0)).toString();
+    return call<BoothView>(`/booth${p ? `?${p}` : ''}`);
+  },
   boothAudioUrl: (itemId: string) => `/api/v1/booth/items/${encodeURIComponent(itemId)}/audio`,
   boothTestPictureUrl: (which: 'a' | 'b') => `/api/v1/booth/test-picture/${which}`,
   boothExportStillUrl: (itemId: string) => `/api/v1/booth/items/${encodeURIComponent(itemId)}/export-still`,
   putBoothAnswer: (itemId: string, body: BoothAnswerBody) => call<BoothAnswerResult>(`/booth/answers/${encodeURIComponent(itemId)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
   deleteBoothAnswer: (itemId: string) => call<void>(`/booth/answers/${encodeURIComponent(itemId)}`, { method: 'DELETE' }),
   runBoothCheck: (rowId: BoothServerCheckId, signal?: AbortSignal) => call<BoothCheckRow>(`/booth/checks/${encodeURIComponent(rowId)}`, { method: 'POST', ...(signal ? { signal } : {}) }),
+  // the in-editor agent «סוכן» (wave 8 autonomy Part 2; core AGENT_ROUTES). 501 agent_not_built until built. Providers/keys answer keySet only.
+  startAgentRun: (projectId: string, body: AgentStartBody) => call<AgentStartAnswer>(`/projects/${projectId}/agent/runs`, json(body)),
+  listAgentRuns: (projectId: string) => call<AgentRunListAnswer>(`/projects/${projectId}/agent/runs`),
+  getAgentRun: (projectId: string, runId: string) => call<AgentRunAnswer>(`/projects/${projectId}/agent/runs/${encodeURIComponent(runId)}`),
+  cancelAgentRun: (projectId: string, runId: string) => call<AgentRunAnswer>(`/projects/${projectId}/agent/runs/${encodeURIComponent(runId)}/cancel`, json({})),
+  continueAgentRun: (projectId: string, runId: string, addSteps?: number) => call<AgentRunAnswer>(`/projects/${projectId}/agent/runs/${encodeURIComponent(runId)}/continue`, json(addSteps ? { addSteps } : {})),
+  undoAgentRun: (projectId: string, runId: string, opts: { dryRun?: boolean; partial?: boolean } = {}) => call<UndoAllAnswer>(`/projects/${projectId}/agent/runs/${encodeURIComponent(runId)}/undo-all`, json(opts)),
+  agentProviders: () => call<AgentProvidersAnswer>('/agent/providers'),
+  setAgentProvider: (providerId: string, body: { baseUrl?: string; model?: string | null }) => call<unknown>(`/agent/providers/${encodeURIComponent(providerId)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  setAgentKey: (providerId: string, key: string) => call<{ keySet: boolean; keyAddedAt: string | null }>(`/agent/providers/${encodeURIComponent(providerId)}/key`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key }) }),
+  deleteAgentKey: (providerId: string) => call<{ keySet: boolean; keyAddedAt: string | null }>(`/agent/providers/${encodeURIComponent(providerId)}/key`, { method: 'DELETE' }),
+  probeAgentProvider: (providerId: string) => call<AgentProbeAnswer>(`/agent/providers/${encodeURIComponent(providerId)}/probe`, json({})),
+  agentModels: () => call<{ rows: unknown[] }>('/agent/models'),
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }

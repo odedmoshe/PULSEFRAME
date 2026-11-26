@@ -33,6 +33,7 @@ import { describeMedia } from './ingest.ts';
 import { ModelStore } from './models.ts';
 import { assertStorageRoom } from './storage.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
+import { PYTHON_WORKER_FLAGS } from './pythonArgs.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** Repository root: codeFiles are repository-relative (the server runs from source, `tsx src/main.ts`). */
@@ -885,7 +886,7 @@ export class LocalTools implements LocalToolRunner {
   private spawnWorker(python: string, args: string[], stdin: boolean): ChildProcess {
     // -I: the interpreter ignores PYTHON* variables, the user site and the script's directory, so only the worker and its installed
     // packages run. The working directory is the data directory's tmp, never a ComfyUI folder.
-    return spawn(python, ['-I', this.worker, ...args], { stdio: [stdin ? 'pipe' : 'ignore', 'pipe', 'pipe'], cwd: this.store.tmpDir, env: { ...process.env, HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1' } });
+    return spawn(python, [...PYTHON_WORKER_FLAGS, this.worker, ...args], { stdio: [stdin ? 'pipe' : 'ignore', 'pipe', 'pipe'], cwd: this.store.tmpDir, env: { ...process.env, HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1' } });
   }
   private oneShot(python: string, args: string[], onLine: (o: any) => void, jobId: string | null, timeoutMs = 12 * 3600_000): Promise<{ code: number | null; stderr: string }> {
     return new Promise((resolve, reject) => {

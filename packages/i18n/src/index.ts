@@ -18,21 +18,32 @@ import { COMMAND_BAR_EN, COMMAND_BAR_HE } from './commandBar.ts';
 import { LIBRARY_EN, LIBRARY_HE } from './library.ts';
 import { CRAFT_EN, CRAFT_HE } from './craft.ts';
 import { STABILISE_EN, STABILISE_HE } from './stabilise.ts';
+import { DRAWN_EN, DRAWN_HE } from './drawn.ts';
+import { TRIPMAP_EN, TRIPMAP_HE } from './tripMap.ts';
+import { INK_EN, INK_HE } from './ink.ts';
 import { PEARLS_EN, PEARLS_HE } from './pearls.ts';
 import { STORY_EN, STORY_HE } from './story.ts';
 import { GROWING_EN, GROWING_HE } from './growing.ts';
+import { TEACH_EN, TEACH_HE } from './teach.ts';
 import { MUSICFIT_EN, MUSICFIT_HE } from './musicFit.ts';
 import { AUDIENCES_EN, AUDIENCES_HE } from './audiences.ts';
+import { LIVING_EN, LIVING_HE } from './living.ts';
+import { MADE_EN, MADE_HE } from './made.ts';
+import { GRADE_EN, GRADE_HE } from './grade.ts';
 import { INSTRUMENTS_EN, INSTRUMENTS_HE } from './instruments.ts';
 import { COVER_EN, COVER_HE } from './cover.ts';
+import { OWNTEMPLATE_EN, OWNTEMPLATE_HE } from './owntemplate.ts';
+import { AGENT_EN, AGENT_HE } from './agent.ts';
 import { FOOTAGE_EN, FOOTAGE_HE } from './footageSearch.ts';
+import { PICMODELS_EN, PICMODELS_HE } from './picmodels.ts';
 import { BOOTH_EN, BOOTH_HE } from './booth.ts';
+import { QC_EN, QC_HE } from './qc.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
   'save.saved': 'נשמר', 'save.saving': 'שומר…', 'save.offline': 'לא מקוון', 'save.conflict': 'התנגשות — נטען מחדש',
   // photosensitivity check of an export (ADR-0009)
-  'flash.pass': 'בדיקת הבהובים: לא נמצאו', 'flash.passTitle': 'הסרטון נבדק: אין בו קטע שמהבהב יותר משלוש פעמים בשנייה על שטח גדול', 'flash.fail': 'נמצאו הבהובים מסוכנים', 'flash.failIntro': 'בקטעים האלה התמונה מהבהבת יותר משלוש פעמים בשנייה על שטח גדול. זה עלול לגרום להתקפים אצל צופים רגישים. הייצוא לא שונה; אפשר לתקן ולייצא שוב.', 'flash.general': 'הבהוב', 'flash.red': 'הבהוב אדום', 'flash.perSecond': 'בשנייה', 'flash.area': 'מהמסך', 'flash.jump': 'מעבר לקטע', 'flash.method': 'הבדיקה מקורבת (WCAG 2.3.1) ואינה אישור רשמי.',
+  'flash.pass': 'בדיקת הבהובים: לא נמצאו', 'flash.passTitle': 'הסרטון נבדק: אין בו קטע שמהבהב יותר משלוש פעמים בשנייה על שטח גדול', 'flash.fail': 'נמצאו הבהובים מסוכנים', 'flash.failIntro': 'בקטעים האלה התמונה מהבהבת יותר משלוש פעמים בשנייה על שטח גדול. זה עלול לגרום להתקפים אצל צופים רגישים. הייצוא לא שונה; אפשר לתקן ולייצא שוב.', 'flash.general': 'הבהוב', 'flash.red': 'הבהוב אדום', 'flash.perSecond': 'בשנייה', 'flash.perSecondArea': 'בשנייה על השטח המהבהב', 'flash.area': 'מהמסך', 'flash.jump': 'מעבר לקטע', 'flash.method': 'הבדיקה מקורבת (WCAG 2.3.1) ואינה אישור רשמי.',
   'revision': 'גרסה', 'export': 'ייצוא', 'export.running': 'מייצא…', 'export.done': 'הורדת הסרטון שוב', 'export.finished': 'הייצוא הסתיים והקובץ נשמר בהורדות', 'export.failed': 'הייצוא נכשל',
   'media': 'מדיה', 'media.import': 'ייבוא קובץ', 'media.uploading': 'מעלה…', 'media.empty': 'אין עדיין מדיה. ייבאו קובץ וידאו או אודיו.', 'media.add': 'הוספה לציר הזמן', 'media.dragHint': 'אפשר גם לגרור את הקובץ אל ציר הזמן', 'media.unsupported': 'הקובץ אינו נתמך',
   'text': 'טקסט', 'text.add': 'הוספת טקסט', 'text.default': 'טקסט חדש', 'text.content': 'תוכן', 'text.size': 'גודל', 'text.y': 'מיקום אנכי',
@@ -233,21 +244,32 @@ export const he = {
   ...SEND_HE,
   ...CRAFT_HE,
   ...STABILISE_HE,
+  ...DRAWN_HE,
+  ...TRIPMAP_HE,
+  ...INK_HE,
   ...PEARLS_HE,
   ...STORY_HE,
   ...GROWING_HE,
+  ...TEACH_HE,
   ...MUSICFIT_HE,
   ...AUDIENCES_HE,
+  ...LIVING_HE,
+  ...MADE_HE,
   ...FOOTAGE_HE,
+  ...PICMODELS_HE,
   ...INSTRUMENTS_HE,
   ...BOOTH_HE,
   ...COVER_HE,
+  ...OWNTEMPLATE_HE,
+  ...GRADE_HE,
+  ...QC_HE,
+  ...AGENT_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
   'save.saved': 'Saved', 'save.saving': 'Saving…', 'save.offline': 'Offline', 'save.conflict': 'Conflict — reloaded',
   // photosensitivity check of an export (ADR-0009)
-  'flash.pass': 'Flash check: none found', 'flash.passTitle': 'The video was checked: no stretch flashes more than three times a second over a large area', 'flash.fail': 'Dangerous flashing found', 'flash.failIntro': 'In these stretches the picture flashes more than three times a second over a large area, which can trigger seizures in sensitive viewers. The export was not changed; you can fix them and export again.', 'flash.general': 'flashing', 'flash.red': 'red flashing', 'flash.perSecond': 'a second', 'flash.area': 'of the screen', 'flash.jump': 'Go to this stretch', 'flash.method': 'The check is an approximation (WCAG 2.3.1), not a certification.',
+  'flash.pass': 'Flash check: none found', 'flash.passTitle': 'The video was checked: no stretch flashes more than three times a second over a large area', 'flash.fail': 'Dangerous flashing found', 'flash.failIntro': 'In these stretches the picture flashes more than three times a second over a large area, which can trigger seizures in sensitive viewers. The export was not changed; you can fix them and export again.', 'flash.general': 'flashing', 'flash.red': 'red flashing', 'flash.perSecond': 'a second', 'flash.perSecondArea': 'a second over the failing area', 'flash.area': 'of the screen', 'flash.jump': 'Go to this stretch', 'flash.method': 'The check is an approximation (WCAG 2.3.1), not a certification.',
   'revision': 'Revision', 'export': 'Export', 'export.running': 'Exporting…', 'export.done': 'Download the video again', 'export.finished': 'Export finished; the file was saved to Downloads', 'export.failed': 'Export failed',
   'media': 'Media', 'media.import': 'Import file', 'media.uploading': 'Uploading…', 'media.empty': 'No media yet. Import a video or audio file.', 'media.add': 'Add to timeline', 'media.dragHint': 'You can also drag the file onto the timeline', 'media.unsupported': 'Unsupported file',
   'text': 'Text', 'text.add': 'Add text', 'text.default': 'New text', 'text.content': 'Content', 'text.size': 'Size', 'text.y': 'Vertical position',
@@ -448,15 +470,26 @@ export const en: Record<keyof typeof he, string> = {
   ...SEND_EN,
   ...CRAFT_EN,
   ...STABILISE_EN,
+  ...DRAWN_EN,
+  ...TRIPMAP_EN,
+  ...INK_EN,
   ...PEARLS_EN,
   ...STORY_EN,
   ...GROWING_EN,
+  ...TEACH_EN,
   ...MUSICFIT_EN,
   ...AUDIENCES_EN,
+  ...LIVING_EN,
+  ...MADE_EN,
   ...FOOTAGE_EN,
+  ...PICMODELS_EN,
   ...INSTRUMENTS_EN,
   ...BOOTH_EN,
   ...COVER_EN,
+  ...OWNTEMPLATE_EN,
+  ...GRADE_EN,
+  ...QC_EN,
+  ...AGENT_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -484,9 +517,18 @@ export * from './stabilise.ts';
 export * from './pearls.ts';
 export * from './story.ts';
 export * from './growing.ts';
+export * from './teach.ts';
+export * from './agent.ts';
 export * from './musicFit.ts';
 export * from './audiences.ts';
+export * from './living.ts';
+export * from './made.ts';
 export * from './footageSearch.ts';
+export * from './picmodels.ts';
 export * from './instruments.ts';
 export * from './booth.ts';
 export * from './cover.ts';
+export * from './tripMap.ts';
+export * from './owntemplate.ts';
+export * from './ink.ts';
+export * from './grade.ts';

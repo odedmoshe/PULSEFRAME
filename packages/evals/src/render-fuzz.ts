@@ -41,7 +41,7 @@ async function main() {
   ff(['-itsoffset', '0.5', '-i', short, '-i', short, '-map', '0:v', '-map', '1:a', '-c', 'copy', late]);
   const files = [video, sound, picture, late];
 
-  const s = await startServer({ port: 8827, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -120,12 +120,16 @@ async function main() {
         }
         row.dressing = { transitionsAdded: dressed, clipsWithCurves: curved, curveRefusals };
       }
+      // one version for an audience (wave 8 audiences), calm or grandparents by seed: step 5 renders its still like every linked format
+      const aud = await call(`/projects/${pid}/transactions`, { ops: [{ op: 'add_audience_version', args: { profile: seed % 2 ? 'grandparents' : 'calm' } }] });
+      row.audienceVersion = aud.status === 200 ? { profile: seed % 2 ? 'grandparents' : 'calm', variantId: aud.body.results?.[0]?.output?.variantId ?? null } : { refused: aud.body?.error?.code ?? aud.status };
       const d = await doc();
       const tl = (await call(`/projects/${pid}/timeline`)).body;
       const frames = T.frameIndexAt(tl.duration, rate);
       const clips = d.sequences.seq_main.tracks.flatMap((t: any) => t.clips);
       row.session = { accepted, refused, clips: clips.length, frames, seconds: Number(T.toSeconds(tl.duration).toFixed(2)), formats: Object.keys(d.variants ?? {}).length, effects: clips.reduce((n: number, c: any) => n + (c.effects?.length ?? 0), 0), freezes: clips.filter((c: any) => c.freeze).length, sped: clips.filter((c: any) => c.speed).length, transitions: clips.filter((c: any) => c.transition).length, masks: clips.filter((c: any) => c.mask).length, blends: clips.filter((c: any) => c.blend && c.blend !== 'normal').length, captions: clips.filter((c: any) => c.type === 'caption').length, titles: clips.filter((c: any) => c.type === 'text').length };
       const problems: string[] = [];
+      if (row.audienceVersion?.refused) problems.push(`audience version refused: ${row.audienceVersion.refused}`);
       if (frames < 1) { row.outcome = 'empty-timeline (nothing to render)'; continue; }
       // 1. preflight answers
       const pre = await call(`/projects/${pid}/preflight`);

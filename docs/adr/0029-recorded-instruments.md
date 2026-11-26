@@ -79,6 +79,21 @@ nothing. Nobody here can listen: nothing below says how anything sounds.
   bound once); the 96 MB refusal was exercised only with a lowered bound.
 
 ## Not built / not known
+- 2026-11-26, first run on the real samples (`pnpm kit:check` on the owner's computer, Windows, Node 22.17, commit 138a392, 16 bars,
+  seed 1; `docs/evidence/kit-check-calm-vsco-2026-11-26.txt`; one sample): the kit is `ready` through the product's own check (97 files,
+  325,350,091 bytes, every size and sha256 as in the table); no note out of range; three pad notes one semitone above and three double
+  notes two semitones below the viola's keys were played by the edge rule; no recording ended before its note; the track passed the
+  product's validation; the PCM hash was equal twice in one process and in a child process; the two instruments goldens and the six
+  music goldens recomputed there equal the committed files (L2 on Windows). At the placeholder −18 dB the piano parts were far below
+  their synthesised twins (RMS 0.004 against 0.048 for the arp). Starting gains set from that report: pad −11.4, double −13.9, arp +3.7,
+  lead +3.4 dB — for each part the lower of the RMS-matching and the peak-matching gain, so no recorded part is louder than its
+  synthesised twin by either measure (the RMS-matching gains alone gave 2,488 clamped samples in the mix against 8).
+- Same day, rerun at commit a9a77f9 with those gains (`docs/evidence/kit-check-calm-vsco-2026-11-26-rerun.txt`; one sample each): the
+  track is valid, 594 samples of 2,304,000 reach the soft clip (8 at the placeholder gains), PCM and all eight goldens equal again.
+  L3, a 129 s piece in a fresh process: cold 6,357 ms (20.3× real time, event-loop maximum 99.8 ms, against the 100 ms the proof's
+  I13 allows), warm 5,449 ms (23.7×, 62.7 ms), peak RSS 247.6 MB. L5: the level-matched blind pair was written to
+  `D:\PULSEFRAME-Tools\audition` (A.wav, B.wav, key.txt; the helper did not open the key). Nobody has listened yet: the owner's ear
+  decides the gains and whether the recorded sound is worth offering first.
 - 2026-11-26: the upright piano's 70 files (`UprightPiano.sfz`, 253,644,252 bytes, table digest f002db28…d4a0, recomputed here from the
   lines the owner's computer printed) are in the kit table (`packages/core/src/musicKits.vsco.ts`). The overview of the 50 piano, harp
   and strings instruments read there showed no missing file, no path leaving the item and no `..` segment, so `sfzPath` needs no

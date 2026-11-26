@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
+import { shiftDrawn } from './drawn.ts';
 import { ANIMATABLE, TransformSchema, type Animatable, type Clip, type Keyframe, type Transform } from './schema.ts';
 import { NOT_ANIMATABLE, paramRange, type EffectInstance } from './effects.ts';
 import { isV1Easing, NO_RANGE, type V1Easing, type ValueRange } from './keyframe.ts';
@@ -65,8 +66,13 @@ export function transformAt(clip: Clip, time: T.RationalTime): Transform {
   return out;
 }
 
-/** Shift every key by -delta (used when the clip start moves relative to its content: trim-start and the right half of a split). */
-export function shiftKeyframes(clip: Clip, delta: T.RationalTime): void {
+/**
+ * Shift every key by -delta (used when the clip start moves relative to its content: trim-start and the right half of a split).
+ * A drawn clip (drawn.ts) hands the move to its kind (shiftDrawn), so a drawing or a map stays continuous across the cut;
+ * `rate` is the project's frame rate, which the kind gets with the move.
+ */
+export function shiftKeyframes(clip: Clip, delta: T.RationalTime, rate: T.Rate): void {
+  if (clip.type === 'drawn') clip.drawn = shiftDrawn(clip.drawn, delta, rate);
   if (clip.keyframes) for (const p of ANIMATABLE) { const keys = clip.keyframes[p]; if (keys) clip.keyframes[p] = keys.map((k) => ({ ...k, time: T.sub(k.time, delta) })); }
   if (clip.type === 'media' && clip.volume) clip.volume = clip.volume.map((k) => ({ ...k, time: T.sub(k.time, delta) }));
   // Effect parameter animation is attached to the content in the same way.

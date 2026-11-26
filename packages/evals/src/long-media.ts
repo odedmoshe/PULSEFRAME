@@ -42,7 +42,7 @@ async function main() {
   const measurements: Record<string, unknown> = { minutes: MINUTES, fileMB: r1(fs.statSync(file).size / 1e6), generateSeconds: r1((Date.now() - tGen) / 1000) };
   const cutsTruth = Array.from({ length: MINUTES - 1 }, (_, i) => (i + 1) * 1800);
 
-  const s = await startServer({ port: 8815, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

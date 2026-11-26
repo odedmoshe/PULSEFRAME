@@ -10,7 +10,7 @@
  * checked on a real adapter by `pnpm proof:gpu`.
  */
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { GPU_EFFECTS, gpuEffect, gpuTransition, initGpu, takeUnavailable } from './gpu.ts';
+import { GPU_EFFECTS, GRADE_CURVES_PASS_NOT_BUILT, gpuEffect, gpuTransition, initGpu, takeUnavailable } from './gpu.ts';
 
 type Rgba = [number, number, number, number];
 interface Tex { valid: boolean; w: number; h: number; data: Uint8Array; createView(): { texture: Tex }; destroy(): void }
@@ -185,6 +185,21 @@ describe('a GPU pass the adapter rejects (mock device)', () => {
     expect(takeUnavailable().effects).toEqual([]);
     expect(fake.scopes).toEqual([]);
   });
+
+  it('a grade with colour curves is refused with its reason until the curve pass is built; a grade without curves is unchanged (wave 8 grade pre-pass)', async () => {
+    const plain = fakeContext();
+    const before = fake.shaderModules.length;
+    expect(await gpuEffect('color.grade', {}, picture, plain.ctx, env)).toBe(true);
+    expect(fake.shaderModules.slice(before).some((c) => c.includes('var crv'))).toBe(false);
+    expect(takeUnavailable().effects).toEqual([]);
+    const curved = fakeContext();
+    expect(await gpuEffect('color.grade', {}, picture, curved.ctx, env, { curves: { master: [[0, 0], [128, 160], [255, 255]] } })).toBe(false);
+    expect(curved.pixels()).toBeNull();
+    const told = takeUnavailable();
+    expect(told.effects).toEqual(['color.grade']);
+    expect(told.reasons['color.grade']).toBe(GRADE_CURVES_PASS_NOT_BUILT);
+  });
+  it.todo('W1: a grade with curves runs the pipeline fx:color.grade+curves with `var crv` at binding 3 (a 256×1 rgba8 texture written raw), the plain grade keeps fx:color.grade; the curve texture cache holds at most 16 and clears all when full');
 
   it('an effect whose shader does not compile is unavailable too', async () => {
     const crt = GPU_EFFECTS['stylize.crt']!.wgsl;

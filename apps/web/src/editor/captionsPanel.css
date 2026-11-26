@@ -24,3 +24,9 @@
 .pf-asr .muted { color: var(--pf-text-3); }
 .pf-asr summary { cursor: pointer; color: var(--pf-info); min-block-size: 24px; display: flex; align-items: center; }
 .pf-asr ol { margin: var(--pf-sp-3) 0 0; padding-inline-start: var(--pf-sp-7); display: grid; gap: var(--pf-sp-3); color: var(--pf-text-2); }
+
+/* where the captions come from, and the notice when they show nothing (owner report 2026-11-26) */
+.pf-cap-show { margin: 0; }
+.pf-cap-source { margin: 0; font-size: var(--pf-fs-xs); }
+.pf-cap-notice { padding: var(--pf-sp-5); border: 1px solid var(--pf-line-strong); border-inline-start: 3px solid var(--pf-pulse); border-radius: var(--pf-r-md); background: var(--pf-surface-2); display: flex; flex-direction: column; gap: var(--pf-sp-4); align-items: flex-start; }
+.pf-cap-notice p { margin: 0; }

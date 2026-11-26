@@ -8,7 +8,10 @@
 import { describe, expect, it } from 'vitest';
 import { BOOTH_CHECKS, BOOTH_FIRST_SITTING_CARDS, BOOTH_GROUPS, BOOTH_PROBLEM_IDS, INSTRUMENTS_FORBIDDEN_WORDS, INSTRUMENTS_FORBIDDEN_WORDS_HE } from '@pulseframe/core';
 import { BOOTH_SERVER_REFUSALS } from '../../../apps/server/src/booth/contract.ts';
+import fs from 'node:fs';
 import { BOOTH_EN, BOOTH_HE, BOOTH_REFUSAL_PATTERNS, dictionaries, translateRefusal } from '../../i18n/src/index.ts';
+import { BOOTH_PAGE } from '../../../apps/web/src/editor/booth/booth.strings.ts';
+import { BOOTH_PAGE_STRINGS } from '../../../apps/web/src/editor/booth/check/check.strings.ts';
 
 const heb = /[֐-׿]/;
 const enWord = (w: string) => new RegExp(`\\b${w}\\b`, 'i');
@@ -20,8 +23,13 @@ const PRAISE_HE = ['מעולה', 'מושלם', 'מושלמת', 'מצוין', 'מ
 const PRAISE_EN = ['good', 'great', 'perfect', 'excellent', 'sharp', 'safe', 'verified', 'correct', 'right', 'high quality'];
 const sample = (k: keyof typeof BOOTH_SERVER_REFUSALS) => (BOOTH_SERVER_REFUSALS[k].message as () => string)();
 
+/** W2's page strings: plain strings, and functions called with sample numbers and an adapter. */
+const W2_TEXTS = (): string[] => Object.values(BOOTH_PAGE_STRINGS).flatMap((S) => Object.values(S).map((v) => (typeof v === 'function' ? (v as (...a: unknown[]) => string)(3, 7) : v) as string))
+  .concat(Object.values(BOOTH_PAGE_STRINGS).flatMap((S) => [S.adapterLine('intel|gen-12lp||'), S.stripAdapter('nvidia|ampere||')]));
 const TEXTS = (): string[] => [...Object.values(BOOTH_HE), ...Object.values(BOOTH_EN), ...Object.values(BOOTH_SERVER_REFUSALS).map((r) => r.hint),
-  ...(Object.keys(BOOTH_SERVER_REFUSALS) as (keyof typeof BOOTH_SERVER_REFUSALS)[]).flatMap((k) => [sample(k), translateRefusal('he', sample(k)) ?? ''])];
+  ...(Object.keys(BOOTH_SERVER_REFUSALS) as (keyof typeof BOOTH_SERVER_REFUSALS)[]).flatMap((k) => [sample(k), translateRefusal('he', sample(k)) ?? '']),
+  // integration: W3's page-only strings (booth.strings.ts BOOTH_PAGE) and W2's (check/check.strings.ts)
+  ...Object.values(BOOTH_PAGE.he), ...Object.values(BOOTH_PAGE.en), ...W2_TEXTS()];
 
 describe('booth strings', () => {
   it('Hebrew first, English for the same keys, both served by the dictionaries', () => {
@@ -71,6 +79,32 @@ describe('booth strings', () => {
       for (const w of [...INSTRUMENTS_FORBIDDEN_WORDS_HE, ...PRAISE_HE]) expect({ s, w, hit: heWord(w).test(s) }).toEqual({ s, w, hit: false });
       for (const w of [...INSTRUMENTS_FORBIDDEN_WORDS, ...PRAISE_EN]) expect({ s, w, hit: enWord(w).test(s) }).toEqual({ s, w, hit: false });
     }
+  });
+  it('integration: W3\'s page strings have the same keys in both languages, Hebrew in the Hebrew ones', () => {
+    expect(Object.keys(BOOTH_PAGE.en).sort()).toEqual(Object.keys(BOOTH_PAGE.he).sort());
+    expect(Object.keys(BOOTH_PAGE_STRINGS.en).sort()).toEqual(Object.keys(BOOTH_PAGE_STRINGS.he).sort());
+    for (const [k, v] of Object.entries(BOOTH_PAGE.he)) if (!/^booth\.check\.|^booth\.windows|dBFS|ffmpeg|SVG/.test(k)) expect({ k, he: heb.test(v) }).toEqual({ k, he: true });
+  });
+  it('integration: every literal reason code a self-check row can give has words in both languages (booth.check.<id>.<code> or booth.check.<code>)', () => {
+    const codes = new Set<string>();
+    const server = fs.readFileSync(new URL('../../../apps/server/src/booth/checks.ts', import.meta.url), 'utf8');
+    for (const m of server.matchAll(/row\('([a-z-]+)', '[a-z]+', '([a-z_]+)'/g)) codes.add(`${m[1]}|${m[2]}`);
+    for (const m of server.matchAll(/'(encoder_present|encoder_absent)'/g)) codes.add(`ffmpeg|${m[1]}`);
+    const browser = fs.readFileSync(new URL('../../../apps/web/src/editor/booth/check/browserChecks.ts', import.meta.url), 'utf8');
+    for (const m of browser.matchAll(/code: '([a-z_]+)'/g)) for (const id of ['browser-gpu', 'browser-codecs', 'mic']) if (new RegExp(`code: '${m[1]}'`).test(browser)) codes.add(`${id}|${m[1]}`);
+    expect(codes.size).toBeGreaterThan(20);
+    // codes whose meaning the state word already carries in full (the row says «דילגנו…», «אין תשובה בזמן», «כשל», «עדיין מחפש…»)
+    const STATE_SAYS_IT = new Set(['busy', 'timeout', 'error']);
+    // a browser code belongs to the row that gives it: only check pairs whose code exists for some row in the dictionary or is that row's
+    const missing: string[] = [];
+    for (const pair of codes) {
+      const [id, code] = pair.split('|') as [string, string];
+      if (STATE_SAYS_IT.has(code)) continue;
+      for (const d of [BOOTH_HE, BOOTH_EN] as Record<string, string>[]) if (!d[`booth.check.${id}.${code}`] && !d[`booth.check.${code}`]) missing.push(`${pair} (${d === (BOOTH_HE as Record<string, string>) ? 'he' : 'en'})`);
+    }
+    // the browser file's codes are per row; a code another row gives is listed against all three, so keep only the real pairs
+    const real = missing.filter((m) => !/^(browser-gpu|browser-codecs)\|(granted|prompt|denied)|^(browser-codecs|mic)\|(software_adapter|integrated)/.test(m));
+    expect(real).toEqual([]);
   });
   it('every command in a next step works unchanged in cmd and PowerShell (no $env:, &&, ; or backticks)', () => {
     for (const [k, s] of Object.entries({ ...BOOTH_HE, ...BOOTH_EN })) if (k.startsWith('booth.next.') && /\b(pnpm|node|git|npx)\b/.test(s)) expect({ k, shellSyntax: /\$env:|&&|;|`/.test(s) }).toEqual({ k, shellSyntax: false });

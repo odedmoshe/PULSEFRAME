@@ -23,7 +23,6 @@ import { CRAFT_STRINGS } from '../../../apps/web/src/editor/craft/craft.strings.
 import type { CraftProofPart } from './craft-proof.ts';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../..');
-const PORT = 19900 + Math.floor(Math.random() * 90);
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -41,7 +40,7 @@ function setup(): Promise<Ctx> {
   ctxP ??= (async () => {
     if (!built()) throw new Error('the web bundle (apps/web/dist) is not built: run `pnpm build` first');
     const art = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-craft-ui-'));
-    const s = await startServer({ port: PORT, dataDir: path.join(art, 'data') });
+    const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
     await generateBarcodeFixture({ out: path.join(art, 'sea.mp4'), width: 320, height: 180, frames: 90 });
     const browser = await chromium.launch();
     return { s, browser, art, closed: false, agent: { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' } };

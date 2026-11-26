@@ -49,7 +49,6 @@ const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/fonts-proof');
 const evidenceFile = path.join(root, 'docs/evidence/fonts-proof.json');
 const goldenFile = path.join(root, 'docs/evidence/fonts-golden.json');
-const PORT = 8897;
 const W = 1920, H = 1080;
 const R30 = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R30);
@@ -304,7 +303,7 @@ async function main() {
   const lap = (what: string) => console.log(`  … ${what} (${((Date.now() - started) / 1000).toFixed(0)} s)`);
 
   delete process.env.PF_RENDER_GPU;
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const hdr = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...hdr, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

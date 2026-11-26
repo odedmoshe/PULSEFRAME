@@ -28,7 +28,7 @@ async function main() {
   fs.rmSync(art, { recursive: true, force: true });
   fs.mkdirSync(art, { recursive: true });
   const fixture = await generateBarcodeFixture({ out: path.join(art, 'fixture.mp4') });
-  const s = await startServer({ port: 8793, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -161,7 +161,7 @@ async function main() {
       const sec = (x: { value: string; timescale: number }) => Number(x.value) / x.timescale;
       const range = rep?.ranges?.[0];
       if (range) flashFrom = Math.floor(sec(range.from) * 30);
-      measurements.photosensitivity = { flashing: rep && { verdict: rep.verdict, frames: rep.frames, ranges: rep.ranges.map((r: any) => ({ fromSeconds: sec(r.from), toSeconds: sec(r.to), kind: r.kind, flashesPerSecond: r.flashesPerSecond, area: r.area })) }, calm: j1.output?.photosensitivity?.verdict };
+      measurements.photosensitivity = { flashing: rep && { verdict: rep.verdict, frames: rep.frames, ranges: rep.ranges.map((r: any) => ({ fromSeconds: sec(r.from), toSeconds: sec(r.to), kind: r.kind, flashesPerSecond: r.flashesPerSecond, busiestCellFlashesPerSecond: r.busiestCellFlashesPerSecond, area: r.area })) }, calm: j1.output?.photosensitivity?.verdict };
       check('photosensitivity: an export that alternates black and white every 3 frames for 3 s reports dangerous flashing over the whole frame in that stretch (and succeeds: nothing is changed or blocked); the calm fixture export passed', built.status === 200 && fj.status === 'succeeded' && rep?.verdict === 'fail' && rep.ranges.length === 1 && range.kind === 'general' && range.area === 1 && range.flashesPerSecond >= 4 && sec(range.from) >= 0 && sec(range.from) <= 1.2 && sec(range.to) >= 3.9 && sec(range.to) <= 5 && j1.output?.photosensitivity?.verdict === 'pass', measurements.photosensitivity);
     }
 

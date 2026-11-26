@@ -2,7 +2,7 @@
  * pnpm proof:command-bar — the Hebrew command bar end to end (ADR-0027; .artifacts/command-bar-plan.md §9 as corrected by its
  * verifier, and the lead's decisions in .artifacts/wave5-decisions.md). The servers run in this process (startServer), the
  * editor runs in headless Chromium after `pnpm build`. Writes docs/evidence/command-bar-proof.json and screenshots in
- * .artifacts/command-bar/proof. Its own ports: PF_PROOF_PORT (default 8961) for the real server, the next one for the server with
+ * .artifacts/command-bar/proof. Both servers listen on a free port the system picks (port 0); the second one has
  * the labelled MOCK adapter installed.
  *
  * The fixture (server A): three video clips with handles, one without (its source ends where the clip ends), a still picture,
@@ -72,7 +72,6 @@ import { auditInPage, focusAudit } from './a11y-lib.ts';
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/command-bar/proof');
 const OUT = path.join(root, 'docs/evidence/command-bar-proof.json');
-const PORT = Number(process.env.PF_PROOF_PORT ?? 8961);
 const R = { num: 30, den: 1 };
 const NTSC = { num: 30000, den: 1001 };
 const f = (n: number) => T.frameTime(n, R);
@@ -226,7 +225,7 @@ async function main() {
   await new Promise<void>((r) => counter.listen(0, '127.0.0.1', () => r()));
   const proxyPort = (counter.address() as net.AddressInfo).port;
 
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data-a') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data-a') });
   const agent = restOf(s.url, s.auth.tokens.agent);
   const observer = restOf(s.url, s.auth.tokens.observer);
   const owner = { actor: 'user:local', kind: 'user' as const, scopes: ['observe', 'edit'] as ('observe' | 'edit')[] };
@@ -586,7 +585,7 @@ async function main() {
   const adapter = new TestChatAdapter(); // TEST DOUBLE — NOT A PROVIDER: it opens no connection and answers from a script
   const backupDir = path.join(art, 'backups');
   fs.mkdirSync(backupDir, { recursive: true });
-  const s2 = await startServer({ port: PORT + 1, dataDir: path.join(art, 'data-b'), backupDir, assistantHosts: [HOST] }, { assistant: { adapters: new Map([[adapter.id, adapter]]), endpoint: () => null } });
+  const s2 = await startServer({ port: 0, dataDir: path.join(art, 'data-b'), backupDir, assistantHosts: [HOST] }, { assistant: { adapters: new Map([[adapter.id, adapter]]), endpoint: () => null } });
   const browser2 = await chromium.launch({ args: [`--proxy-server=http://127.0.0.1:${proxyPort}`] });
   try {
     const agent2 = restOf(s2.url, s2.auth.tokens.agent);

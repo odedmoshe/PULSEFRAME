@@ -10,7 +10,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
-  applyTransaction, COLOR_LOOKS, createProject, describeOps, findClip, isInheritedName, OpError, own, planRecipe, projectVariant, RecipeError,
+  applyTransaction, COLOR_LOOKS, createProject, describeOps, findClip, INK_BRUSHES, INK_WIDTH_MIN, isInheritedName, OpError, own, planRecipe, projectVariant, RecipeError,
   followedBeats, mainTrackOf, readingSpeedIssues, restoreEntities, sequenceDuration, staleTranslations, TEXT_PRESETS, timeLineage, timeline, transcriptFor, transcriptView, validateProject, type EntityState, type OpCall, type ProjectDocument,
 } from './index.ts';
 
@@ -84,8 +84,10 @@ function studio() {
   run('set_effect_keyframe', { clipId, effectId, param: 'radius', time: f(0), value: 0.02 });
   const runId = run('apply_recipe', { recipeId: 'fixture', params: {}, steps: ['add a title'], ops: [{ op: 'add_text', args: { text: 'From a recipe', start: f(150), duration: f(30) } }] }, true).runId as string;
   const rangeId = run('add_source_range', { assetId, start: T.rt(1, 1), end: T.rt(2, 1) }).rangeId as string;
+  const audienceId = run('add_audience_version', { profile: 'calm' }).variantId as string;
+  const mapId = run('add_trip_map', { start: f(400), duration: f(120), stops: [{ name: 'Haifa', lon: 34_990_000, lat: 32_790_000 }, { name: 'Eilat', lon: 34_950_000, lat: 29_560_000 }] }).clipId as string;
   expect(validateProject(doc)).toEqual([]);
-  return { doc, assetId, lutId, clipId, audioClipId, trackId, audioTrackId, textId, captionTrackId, cueId, markerId, variantId, segmentId, fromWordId, toWordId, effectId, audioEffectId, motionTrackId, eventId, personId, shortId, groupId, angleIds, runId, rangeId };
+  return { doc, assetId, lutId, clipId, audioClipId, trackId, audioTrackId, textId, captionTrackId, cueId, markerId, variantId, segmentId, fromWordId, toWordId, effectId, audioEffectId, motionTrackId, eventId, personId, shortId, groupId, angleIds, runId, rangeId, audienceId, mapId };
 }
 
 describe('own', () => {
@@ -345,6 +347,10 @@ describe('every registered op', () => {
       restore_entities: { targets: [{ id: s.markerId, state: null }] },
       split_clip: { clipId: s.clipId, at: f(60) },
       update_source_range: { rangeId: s.rangeId, label: 'A moment' },
+      update_audience_version: { variantId: s.audienceId, name: 'Calm' }, set_audience_keep: { variantId: s.audienceId, clipId: s.clipId, rule: 'effect', keep: true },
+      add_trip_map: { start: f(600), duration: f(120), stops: [{ name: 'Acre', lon: 35_080_000, lat: 32_920_000 }, { name: 'Jaffa', lon: 34_750_000, lat: 32_050_000, via: 'boat' }] },
+      update_trip_map: { clipId: s.mapId, look: 'night' }, time_trip_map: { clipId: s.mapId, to: 'even' },
+      add_ink: { start: f(800), strokes: [{ brush: INK_BRUSHES[0], color: '#ff0000', width: INK_WIDTH_MIN, at: 0, x: [0, 100, 200], y: [0, 50, 100], t: [0, 40, 80] }] },
       set_clip_reverse: { clipId: s.clipId, reverse: true }, set_clip_pitch: { clipId: s.audioClipId, keepPitch: true }, animate_clip: { clipId: s.textId, in: 'fade' },
       rename_asset: { assetId: s.assetId, name: 'b.mp4' },
       remove_marker: { markerId: s.markerId },

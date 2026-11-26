@@ -10,6 +10,7 @@ import type { Issue } from './validate.ts';
 import type { ProjectDocument } from './schema.ts';
 import { isPlacedVerdict, MAX_MULTICAM_GROUPS, MAX_PROJECT_ANCHORS } from './multicamLimits.ts';
 import { pieceCoverage, syncGrid } from './multicam.ts';
+import { gradeCurvesListIssues } from './gradeCurves.ts';
 
 /** Every multicam issue of the document. `uniq` is validateProject's: a group is an entity of its own (entities.ts), so its id must not be another entity's. */
 export function multicamIssues(doc: ProjectDocument, uniq: (id: string) => void): Issue[] {
@@ -26,6 +27,8 @@ export function multicamIssues(doc: ProjectDocument, uniq: (id: string) => void)
     const angleIds = new Set<string>();
     for (const an of g.angles) { if (angleIds.has(an.id)) bad(`two angles have id ${an.id}`); angleIds.add(an.id); }
     const angleOf = (id: string) => g.angles.find((an) => an.id === id);
+    // an angle's look holds effect instances too (schema.ts AngleLookSchema): the colour-curve rule walks them (wave 8 grade, verifier C4)
+    for (const an of g.angles) for (const x of gradeCurvesListIssues(an.look?.effects, `multicam group ${g.id} angle ${an.id}`)) issues.push({ ...x, ids: [g.id] });
     const seenAssets = new Set<string>();
     for (const an of g.angles) {
       an.pieces.forEach((p, i) => {

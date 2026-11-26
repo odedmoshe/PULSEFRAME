@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-26T02:14:13.347Z",
+  "ranAt": "2026-11-26T07:09:59.066Z",
   "result": "PASS",
   "passed": 28,
   "failed": 0,
@@ -122,9 +122,9 @@
       "name": "SHA-256 of the canonical apply_take args: equal across two server dry runs and the browser view",
       "status": "pass",
       "detail": {
-        "browser": "ba16fda6d525090e5983da628359056c7370e4ff8b6dde2bcf174a309ad934b2",
-        "server1": "ba16fda6d525090e5983da628359056c7370e4ff8b6dde2bcf174a309ad934b2",
-        "server2": "ba16fda6d525090e5983da628359056c7370e4ff8b6dde2bcf174a309ad934b2"
+        "browser": "3aee621d38031833e7c1c85233c34abcddb45a27401585615a37a2eaf4c2e654",
+        "server1": "3aee621d38031833e7c1c85233c34abcddb45a27401585615a37a2eaf4c2e654",
+        "server2": "3aee621d38031833e7c1c85233c34abcddb45a27401585615a37a2eaf4c2e654"
       }
     },
     {
@@ -144,11 +144,11 @@
       "name": "undo (Ctrl+Z in the editor): the document hash equals the one before the take; redo (Ctrl+Shift+Z) equals the one after; Store.replay of that revision equals the stored document",
       "status": "pass",
       "detail": {
-        "before": "3f9b67209de26947",
-        "after": "fa7d5f8a637b6b4e",
-        "undone": "3f9b67209de26947",
-        "redone": "fa7d5f8a637b6b4e",
-        "replay": "fa7d5f8a637b6b4e"
+        "before": "57be2051fed00481",
+        "after": "35099b4a7bc7550f",
+        "undone": "57be2051fed00481",
+        "redone": "35099b4a7bc7550f",
+        "replay": "35099b4a7bc7550f"
       }
     },
     {
@@ -409,33 +409,33 @@
         "rows": [
           {
             "pad": 0,
-            "down": 2.0021,
-            "clock": 2.0063165000044707,
-            "diffMs": -4.2
+            "down": 2.0317,
+            "clock": 2.0322350000059606,
+            "diffMs": -0.5
           },
           {
             "pad": 1,
-            "down": 2.2653,
-            "clock": 2.2901958333318433,
-            "diffMs": -24.89
+            "down": 2.3148,
+            "clock": 2.3325300000059603,
+            "diffMs": -17.7
           },
           {
             "pad": 2,
-            "down": 2.5505,
-            "clock": 2.551726333337804,
-            "diffMs": -1.2
+            "down": 2.5917,
+            "clock": 2.5919316666666665,
+            "diffMs": -0.2
           },
           {
             "pad": 3,
-            "down": 2.8221,
-            "clock": 2.8425515,
-            "diffMs": -20.5
+            "down": 2.8558,
+            "clock": 2.8567053333303534,
+            "diffMs": -0.9
           },
           {
             "pad": 5,
-            "down": 3.1019,
-            "clock": 3.1192700000059603,
-            "diffMs": -17.4
+            "down": 3.132,
+            "clock": 3.132603666675607,
+            "diffMs": -0.6
           }
         ]
       }
@@ -457,19 +457,19 @@
       "detail": {
         "hits": 200,
         "runsMs": [
-          11.4,
-          11,
+          11.9,
+          11.6,
+          12.4,
           9.2,
-          16.8,
-          20.8,
-          13.9,
-          9.5,
-          12.9,
-          10.2,
-          8.9
+          12.1,
+          17.4,
+          13.1,
+          18.3,
+          12.5,
+          15
         ],
-        "warmupMs": 15.4,
-        "slowestMs": 20.8,
+        "warmupMs": 14.4,
+        "slowestMs": 18.3,
         "budgetMs": 33.33,
         "machine": "Intel(R) Xeon(R) Processor @ 2.30GHz ×4",
         "note": "one sample of this machine, under whatever else ran on it; not a general claim"
@@ -1122,19 +1122,19 @@
     "n1LivePath": {
       "hits": 200,
       "runsMs": [
-        11.4,
-        11,
+        11.9,
+        11.6,
+        12.4,
         9.2,
-        16.8,
-        20.8,
-        13.9,
-        9.5,
-        12.9,
-        10.2,
-        8.9
+        12.1,
+        17.4,
+        13.1,
+        18.3,
+        12.5,
+        15
       ],
-      "warmupMs": 15.4,
-      "slowestMs": 20.8,
+      "warmupMs": 14.4,
+      "slowestMs": 18.3,
       "budgetMs": 33.33,
       "machine": "Intel(R) Xeon(R) Processor @ 2.30GHz ×4",
       "note": "one sample of this machine, under whatever else ran on it; not a general claim"

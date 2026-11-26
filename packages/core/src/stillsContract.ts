@@ -31,7 +31,7 @@
  * THE SAVED PICTURE (C5, C7, C8, C10, C11): core stillDocument(asset, frame) — a one-clip document at the file's own width, height
  * and rate, fit contain, default transform, sourceIn = sourceTimeOfFrame — rendered 1:1 through Exporter.renderStill (the same
  * evaluate + compositor as preview and export; never an ffmpeg decode of the source), then ffmpeg `crop=w:h:x:y` on the lossless
- * PNG, then PNG (`-c:v png -map_metadata -1`) or JPEG (`-vf format=yuvj444p -c:v mjpeg -q:v 2 -flags +bitexact -map_metadata -1
+ * PNG, then PNG (`-c:v png -map_metadata -1`) or JPEG (`-vf format=yuvj444p -c:v mjpeg -q:v 1 -qmin 1 -flags +bitexact -map_metadata -1
  * -frames:v 1`). The output is checked (codec, exact size = crop, no format or stream tags) before success. A side over
  * STILL_MAX_SIDE is refused; above STILL_TRIED_MAX_PIXELS it is labelled as not tried here. Only the owner's own session may ask
  * for `still` (403 owner_required for every other credential); agents read numbers only.
@@ -42,10 +42,10 @@ import type { Asset } from './schema.ts';
 import { startOffsetFrames } from './speed.ts';
 
 // ---------- flags (flipped at integration) ----------
-/** True once W1 has built the measurement job, the ranking and the routes' bodies. */
-export const STILLS_MEASURE_BUILT = false;
-/** True once W2 has built stillDocument, printFit and the `still` branch of the export. */
-export const STILL_EXPORT_BUILT = false;
+/** True once W1 has built the measurement job, the ranking and the routes' bodies (flipped at the wave 8 cover integration). */
+export const STILLS_MEASURE_BUILT = true;
+/** True once W2 has built stillDocument, printFit and the `still` branch of the export (flipped at the wave 8 cover integration). */
+export const STILL_EXPORT_BUILT = true;
 
 // ---------- the measurement ----------
 /** The measurement rules' version (part of the cache key). */
@@ -192,6 +192,8 @@ export const stillsStage = (done: number, total: number) => `measuring sharpness
 // ---------- the saved picture (export option `still`) ----------
 /** A side longer than this is refused (C8: the frame cap, schema.ts). */
 export const STILL_MAX_SIDE = 8192;
+/** A side shorter than this is refused: a still's document is the file's own size, and the schema's frame is at least 16 px a side. */
+export const STILL_MIN_SIDE = 16;
 /** Pictures over this many pixels have not been tried here (C8: 3000×2000 is proven); the answer says so. */
 export const STILL_TRIED_MAX_PIXELS = 24_000_000;
 export const STILL_FORMATS = ['png', 'jpeg'] as const;
@@ -246,6 +248,8 @@ export const STILLS_REFUSALS = {
   inProgress: row(409, 'stills_in_progress', () => 'the sharpest frame is already being measured in this project', 'Wait for that measurement to finish, or stop it, then try again.'),
   busy: row(429, 'busy', (max: number) => `${max} measurements are already running on this computer`, 'Try again when one of them has finished.'),
   decodeFailed: row(0, 'frame_count_mismatch', (got: number, want: number) => `the file delivered ${got} of the ${want} frames asked for; nothing was saved`, 'The file may be damaged or unusual. Try a shorter stretch, or import the file again.'),
+  decodeTimes: row(0, 'frame_count_mismatch', (n: number, earlier: number) => `the file delivered ${n} frames, but not the ${n} frames asked for (their times differ by more than a quarter of a frame, also after reading from ${earlier} s earlier); nothing was saved`, 'The file may be damaged or unusual. Try a shorter stretch, or import the file again.'),
+  warming: row(503, 'stills_warming', () => 'the measurement is still starting (the version of ffmpeg is not known yet); nothing was read', 'Try again in a moment.'),
   greyCheck: row(0, 'grey_check_failed', (white: number, black: number) => `this ffmpeg reads grey levels outside the expected range (white ${white}, black ${black}); nothing was measured`, 'Use the ffmpeg that comes with the program, then measure again.'),
   // the saved picture
   stillNotBuilt: row(422, 'still_not_built', () => 'saving a picture from a file is not built in this version yet', 'Export one frame of the film as PNG for now.'),
@@ -256,6 +260,7 @@ export const STILLS_REFUSALS = {
   stillNoPicture: row(422, 'still_no_picture', (assetId: string) => `file ${assetId} has no picture to save`, 'Choose a video or picture file.'),
   stillFrame: row(422, 'out_of_bounds', (frame: number, frames: number) => `frame ${frame} is outside the file's ${frames} frames`, 'Choose a frame inside the file.'),
   stillTooLarge: row(422, 'still_too_large', (w: number, h: number) => `the picture is ${w}x${h}, larger than 8192 pixels on a side; it cannot be saved at full size`, 'Nothing was saved. A frame of the film can still be exported at the film\'s size.'),
+  stillTooSmall: row(422, 'still_too_small', (w: number, h: number) => `the picture is ${w}x${h}, smaller than 16 pixels on a side; it cannot be saved as a picture on its own`, 'Nothing was saved. Place it in the film and export a frame of the film instead.'),
   stillCrop: row(422, 'still_options', (w: number, h: number) => `the crop must lie inside the picture of ${w}x${h} pixels and be at least 16 pixels on each side`, 'Move or shrink the frame until it lies inside the picture.'),
   stillPaperShape: row(422, 'still_options', (paper: string, orientation: string) => `the crop does not have the shape of paper ${paper} (${orientation}) within one pixel`, 'Choose the paper again so the frame takes its shape, or save the whole frame.'),
   ownerRequired: row(403, 'owner_required', () => 'saving a full-size picture is for the project owner\'s own session only', 'Agents read the numbers (find_sharp_frames); the owner saves the picture in the editor.'),

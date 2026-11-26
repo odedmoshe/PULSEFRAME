@@ -105,7 +105,7 @@ async function main() {
   const fx = await generateMulticamFixture({ outDir: path.join(art, 'fx'), seconds: 150, seed: 7, narrationPath: narration, extras: true });
   const dx = await generateMulticamFixture({ outDir: path.join(art, 'dialogue'), seconds: 120, seed: 9, narrationPath: narration, dialogue: true });
   measurements.fixtures = { mainSeconds: 150, dialogueSeconds: 120, angles: fx.angles.map((a) => ({ label: a.label, files: a.files.length, expect: a.expect })), turns: dx.turns.length, generateSeconds: r2((Date.now() - tGen) / 1000) };
-  const server = await startServer({ port: 8857, dataDir: path.join(art, 'data'), webDist: path.join(root, 'apps/web/dist') });
+  const server = await startServer({ port: 0, dataDir: path.join(art, 'data'), webDist: path.join(root, 'apps/web/dist') });
   const h = { authorization: `Bearer ${server.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown, method?: string) => {
     const r = await fetch(`${server.url}/api/v1${p}`, { method: method ?? (body === undefined ? 'GET' : 'POST'), headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

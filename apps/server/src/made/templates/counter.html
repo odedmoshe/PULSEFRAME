@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>counter</title>
+<style>html,body{margin:0;background:transparent;overflow:hidden}canvas{display:block}</style></head>
+<body><canvas id="c"></canvas>
+<script>
+// «מונה» / counter (PULSEFRAME built-in page, version 1). A number counts from one value to another and settles, with a label under it.
+// The value shown at a frame is a function of the frame number only (eased, rounded to whole numbers). Text is drawn, never markup.
+(function () {
+  var c = document.getElementById('c'), x = c.getContext('2d');
+  c.width = PF.width; c.height = PF.height;
+  var rtlOf = function (s) { var m = /[A-Za-zÀ-ɏ]|[֐-׿؀-ۿ]/.exec(s); return !!m && /[֐-׿؀-ۿ]/.test(m[0]); };
+  var clamp = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; };
+  var easeInOut = function (p) { return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; };
+  var group = function (v) { var s = String(Math.abs(v)), o = ''; while (s.length > 3) { o = ',' + s.slice(-3) + o; s = s.slice(0, -3); } return (v < 0 ? '-' : '') + s + o; };
+  PF.render = function (frame) {
+    var f = PF.fields, W = PF.width, H = PF.height, n = PF.frames;
+    var from = Number(f.from) || 0, to = Number(f.to) || 0, label = String(f.label || ''), colour = String(f.colour || '#ffffff');
+    var p = easeInOut(clamp(frame / Math.max(1, Math.round(n * 0.75))));
+    var value = Math.round(from + (to - from) * p);
+    x.clearRect(0, 0, W, H);
+    var size = Math.round(H * 0.2);
+    x.textAlign = 'center'; x.fillStyle = colour;
+    x.shadowColor = 'rgba(0,0,0,0.45)'; x.shadowBlur = Math.round(size * 0.08);
+    x.direction = 'ltr'; x.font = '700 ' + size + 'px Rubik';
+    x.fillText(group(value), W / 2, H * 0.52);
+    if (label) { x.direction = rtlOf(label) ? 'rtl' : 'ltr'; x.font = '400 ' + Math.round(size * 0.3) + 'px Rubik'; x.fillText(label, W / 2, H * 0.52 + size * 0.5); }
+  };
+})();
+</script></body></html>

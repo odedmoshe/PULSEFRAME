@@ -5,7 +5,7 @@
  * numbers) are wrapped by ltr(); names and typed words by auto() (BarPreview turns the isolates into <bdi>).
  */
 import * as T from '@pulseframe/time';
-import { TRANSITIONS, findClip, type BarAction, type BarNote, type OpCall, type PlanStep, type ProjectDocument, type StepDetail } from '@pulseframe/core';
+import { TRANSITIONS, drawnName, findClip, type BarAction, type BarNote, type OpCall, type PlanStep, type ProjectDocument, type StepDetail } from '@pulseframe/core';
 import { dictionaries, translateRefusal, type Lang } from '@pulseframe/i18n';
 import { CHROME_STRINGS } from '../chrome.strings.ts';
 import { COMMANDS } from '../commands.ts';
@@ -136,12 +136,12 @@ export function describeAction(a: BarAction, lang: Lang, rate?: T.Rate): string 
   }
 }
 
-const clipLabel = (doc: ProjectDocument, id: unknown): string | null => {
+const clipLabel = (doc: ProjectDocument, id: unknown, lang: Lang): string | null => {
   if (typeof id !== 'string') return null;
   const f = findClip(doc, id);
   if (!f) return null;
   const c = f.clip;
-  const name = c.type === 'media' ? doc.assets[c.assetId]?.name : c.type === 'adjustment' ? c.label : c.type === 'text' ? c.text : undefined;
+  const name = c.type === 'media' ? doc.assets[c.assetId]?.name : c.type === 'adjustment' ? c.label : c.type === 'text' ? c.text : c.type === 'drawn' ? drawnName(c.drawn)[lang] : undefined;
   return name?.replace(/\s+/g, ' ').trim().slice(0, 40) || id;
 };
 const trackLabel = (doc: ProjectDocument, id: unknown): string | null => {
@@ -156,7 +156,7 @@ const trackLabel = (doc: ProjectDocument, id: unknown): string | null => {
 export function describeCall(doc: ProjectDocument, call: OpCall, lang: Lang): StepWords {
   const a = (call.args ?? {}) as Record<string, unknown>;
   const parts: string[] = [];
-  const clip = clipLabel(doc, a.clipId);
+  const clip = clipLabel(doc, a.clipId, lang);
   if (clip) parts.push(barText(lang, 'detail.clip', { name: auto(clip) }));
   const track = trackLabel(doc, a.trackId);
   if (track) parts.push(barText(lang, 'detail.track', { name: auto(track) }));

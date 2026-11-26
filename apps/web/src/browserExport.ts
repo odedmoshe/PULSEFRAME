@@ -48,7 +48,7 @@ export interface BrowserExportResult { blob: Blob; jobId: string; videoCodec: st
   /** The photosensitivity check of the encoded frames (ADR-0009), as sent to the server with the completion. */
   photosensitivity: BrowserPhotosensitivity }
 /** Failing stretches in timeline time (exact rationals). The server adds the method text when it records it. */
-export interface BrowserPhotosensitivity { verdict: 'pass' | 'fail'; frames: number; ranges: { from: T.RationalTime; to: T.RationalTime; kind: 'general' | 'red'; flashesPerSecond: number; area: number }[] }
+export interface BrowserPhotosensitivity { verdict: 'pass' | 'fail'; frames: number; ranges: { from: T.RationalTime; to: T.RationalTime; kind: 'general' | 'red'; flashesPerSecond: number; busiestCellFlashesPerSecond: number; area: number }[]; areaPeak: { general: number; red: number } }
 export interface BrowserExportRun {
   projectId: string;
   options?: Record<string, unknown>;
@@ -396,7 +396,7 @@ export async function runBrowserExport(opts: BrowserExportRun): Promise<BrowserE
     progress('completing', framesDone, out.frames);
     clearInterval(timer);
     const fr = flash.report(), at = (k: number) => T.frameTime(out.firstFrame + k, rate);
-    const photosensitivity: BrowserPhotosensitivity = { verdict: fr.verdict, frames: fr.frames, ranges: fr.ranges.map((x) => ({ from: at(x.from), to: at(x.to + 1), kind: x.kind, flashesPerSecond: x.flashesPerSecond, area: x.area })) };
+    const photosensitivity: BrowserPhotosensitivity = { verdict: fr.verdict, frames: fr.frames, ranges: fr.ranges.map((x) => ({ from: at(x.from), to: at(x.to + 1), kind: x.kind, flashesPerSecond: x.flashesPerSecond, busiestCellFlashesPerSecond: x.busiestCellFlashesPerSecond, area: x.area })), areaPeak: fr.areaPeak };
     await api(apiBase, `/jobs/${jobId}/complete`, { sessionId, bytes: buffer.byteLength, sha256, videoCodec: decision.videoCodec, audioCodec: decision.audioCodec, frames: framesDone, container: decision.container, photosensitivity });
     const media = pool.stats();
     return { blob: new Blob([buffer], { type: mime }), jobId, videoCodec: decision.videoCodec, audioCodec: decision.audioCodec, container: decision.container, frames: framesDone, sha256, bytes: buffer.byteLength, substitutions: decision.substitutions, capabilities: caps, wallMs: performance.now() - started, decoders: { peak: media.peakDecoders, max: media.maxDecoders, opened: media.opened, disposed: media.disposed, refused: media.refused }, photosensitivity };

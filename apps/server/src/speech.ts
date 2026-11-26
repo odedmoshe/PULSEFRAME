@@ -3,7 +3,8 @@
  * this reports an honest setup state.
  *
  * - The engine is a Python worker (apps/server/speech/pf_speech.py, faster-whisper) started per job with `python -I`.
- *   `PF_SPEECH_PYTHON` names the interpreter of an environment that has the engine installed.
+ *   `PF_SPEECH_PYTHON` names the interpreter of an environment that has the engine installed; without it, the engine the owner
+ *   installed from the speech panel (speechEngine.ts, <dataDir>/engines/speech/venv) is used once its marker says the install finished.
  * - Model files are pinned by revision, byte size and SHA-256 and handled by the same verified store as provider models
  *   (models.ts): a download is an explicit owner action for the exact missing bytes; the worker itself never downloads.
  * - Recognition is a durable job. Its result is checked (times inside the media, ascending, no empty words) and attached with
@@ -30,6 +31,8 @@ import { describeMedia } from './ingest.ts';
 import { ModelStore, type ModelStatus } from './models.ts';
 import { assertStorageRoom } from './storage.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
+import { PYTHON_WORKER_FLAGS } from './pythonArgs.ts';
+import { SpeechEngineInstaller, type EngineDeps } from './speechEngine.ts';
 
 type ModelFile = CapabilityDescriptor['models'][number];
 export interface SpeechModel { id: string; kind: 'asr' | 'tts'; title: { he: string; en: string }; languages: string[]; note: string; engineModel: string; dir: string; files: ModelFile[] }
@@ -159,7 +162,8 @@ export function sanitizeRecognition(segments: WorkerSegment[], mediaSeconds: num
   return { segments: out, stats: { phrases: out.length, words, lowConfidenceWords: low, adjustedTimes: adjusted, droppedPhrases: dropped, degeneratePhrases: garbled } };
 }
 
-interface EngineState { configured: boolean; ok: boolean; detail: string; engine?: string; version?: string; python?: string; cudaDevices?: number }
+/** source: which interpreter was probed: PF_SPEECH_PYTHON / PF_VOICE_PYTHON ('environment'), the engine installed from the panel ('installed'), or none. */
+interface EngineState { configured: boolean; ok: boolean; detail: string; source: 'environment' | 'installed' | null; engine?: string; version?: string; python?: string; cudaDevices?: number }
 
 export class Speech {
   readonly models: ModelStore;
@@ -168,11 +172,24 @@ export class Speech {
   private chain: Promise<void> = Promise.resolve();
   private stopped = false;
   private laneWaits = new Map<string, AbortController>();
-  /** @param lane the compute lane (ADR-0017); null = no lane (speech jobs then only queue behind each other). */
-  constructor(private store: Store, private cfg: Config, private lane: ComputeLane | null = null) {
+  /** «התקנת מנוע הדיבור»: the owner's install of the engine into the data folder (speechEngine.ts). */
+  readonly engineInstall: SpeechEngineInstaller;
+  /**
+   * @param lane the compute lane (ADR-0017); null = no lane (speech jobs then only queue behind each other).
+   * @param engineDeps TESTS ONLY: the installer's spawner, file system and requirements folder.
+   */
+  constructor(private store: Store, private cfg: Config, private lane: ComputeLane | null = null, engineDeps: Partial<EngineDeps> = {}) {
     this.dir = cfg.speechModelsDir;
     this.models = new ModelStore(this.dir, cfg.modelHosts);
+    this.engineInstall = new SpeechEngineInstaller(store, cfg.dataDir, {
+      envPython: () => this.cfg.speechPython,
+      speechBusy: () => this.store.openJobs(TRANSCRIBE).length + this.store.openJobs(NARRATE).length > 0,
+      changed: async () => { this.probes.clear(); await this.releaseKept(); },
+    }, lane, engineDeps);
   }
+  /** The recognition interpreter: PF_SPEECH_PYTHON wins; else the engine installed from the panel, once its install finished. */
+  asrPython(): string | null { return this.cfg.speechPython ?? this.engineInstall.installedPython(); }
+  private asrSource(): EngineState['source'] { return this.cfg.speechPython ? 'environment' : this.engineInstall.installedPython() ? 'installed' : null; }
   /**
    * Wait for the compute lane; the job row says what it waits for. Resolves to the release function, or null when the job was canceled
    * (or the server stopped) while it waited.
@@ -208,7 +225,7 @@ export class Speech {
   private worker(python: string, args: string[], onLine: (o: any) => void, jobId?: string): Promise<{ code: number | null; stderr: string }> {
     return new Promise((resolve, reject) => {
       // -I: the interpreter ignores the environment and the current directory when importing, so only the worker and its installed packages run.
-      const p = spawn(python, ['-I', WORKER, ...args], { stdio: ['ignore', 'pipe', 'pipe'], timeout: MAX_RUN_MS, killSignal: 'SIGKILL' });
+      const p = spawn(python, [...PYTHON_WORKER_FLAGS, WORKER, ...args], { stdio: ['ignore', 'pipe', 'pipe'], timeout: MAX_RUN_MS, killSignal: 'SIGKILL' });
       if (jobId) this.running.set(jobId, p);
       let buf = '', err = '';
       p.stdout.setEncoding('utf8');
@@ -237,7 +254,7 @@ export class Speech {
     return new Promise((resolve, reject) => {
       let k = this.kept.get(python);
       if (!k) {
-        const p = spawn(python, ['-I', WORKER, 'serve'], { stdio: ['pipe', 'pipe', 'pipe'] });
+        const p = spawn(python, [...PYTHON_WORKER_FLAGS, WORKER, 'serve'], { stdio: ['pipe', 'pipe', 'pipe'] });
         const entry = { p, idle: null as NodeJS.Timeout | null, onLine: null as ((o: any) => void) | null, done: null as ((r: { code: number | null; stderr: string }) => void) | null, err: '' };
         k = entry;
         this.kept.set(python, entry);
@@ -272,27 +289,28 @@ export class Speech {
       entry.p.stdin!.write(`${JSON.stringify(req)}\n`);
     });
   }
-  private async probeOne(python: string | null, what: 'asr' | 'tts'): Promise<EngineState> {
-    const unset = what === 'asr' ? 'PF_SPEECH_PYTHON is not set: no speech engine is configured' : 'neither PF_VOICE_PYTHON nor PF_SPEECH_PYTHON is set: no voice engine is configured';
-    if (!python) return { configured: false, ok: false, detail: unset };
+  private async probeOne(python: string | null, what: 'asr' | 'tts', source: EngineState['source']): Promise<EngineState> {
+    const unset = what === 'asr' ? 'PF_SPEECH_PYTHON is not set and the speech engine has not been installed from the speech panel: no speech engine is configured' : 'neither PF_VOICE_PYTHON nor PF_SPEECH_PYTHON is set: no voice engine is configured';
+    if (!python) return { configured: false, ok: false, detail: unset, source: null };
     let result: any = null;
     try {
       const r = await this.worker(python, ['probe'], (o) => { if (o.event === 'result') result = o; });
-      if (!result) return { configured: true, ok: false, detail: `the speech worker did not answer (exit ${r.code})` };
-    } catch (e: any) { return { configured: true, ok: false, detail: e.message }; }
+      if (!result) return { configured: true, ok: false, source, detail: `the speech worker did not answer (exit ${r.code})` };
+    } catch (e: any) { return { configured: true, ok: false, source, detail: e.message }; }
     const e = result[what];
-    if (!e) return { configured: true, ok: false, python: result.python, detail: `the ${what === 'asr' ? 'recognition' : 'voice'} engine is not installed in that Python environment (${result[`${what}Error`] ?? 'import failed'})` };
-    return { configured: true, ok: true, detail: 'engine answers', engine: e.engine, version: e.version, python: result.python, cudaDevices: what === 'asr' ? result.cudaDevices : result.torchCuda ? 1 : 0 };
+    if (!e) return { configured: true, ok: false, source, python: result.python, detail: `the ${what === 'asr' ? 'recognition' : 'voice'} engine is not installed in that Python environment (${result[`${what}Error`] ?? 'import failed'})` };
+    return { configured: true, ok: true, source, detail: 'engine answers', engine: e.engine, version: e.version, python: result.python, cudaDevices: what === 'asr' ? result.cudaDevices : result.torchCuda ? 1 : 0 };
   }
   private probes = new Map<string, { at: number; value: EngineState }>();
   private async engineOf(what: 'asr' | 'tts'): Promise<EngineState> {
     const cached = this.probes.get(what);
     if (cached && cached.value.ok && Date.now() - cached.at < 60_000) return cached.value;
-    const value = await this.probeOne(what === 'asr' ? this.cfg.speechPython : this.cfg.voicePython ?? this.cfg.speechPython, what);
+    const value = what === 'asr' ? await this.probeOne(this.asrPython(), 'asr', this.asrSource())
+      : await this.probeOne(this.cfg.voicePython ?? this.asrPython(), 'tts', this.cfg.voicePython ? 'environment' : this.asrSource());
     this.probes.set(what, { at: Date.now(), value });
     return value;
   }
-  private voicePython() { return (this.cfg.voicePython ?? this.cfg.speechPython)!; }
+  private voicePython() { return (this.cfg.voicePython ?? this.asrPython())!; }
   private async modelStatus(m: SpeechModel) {
     const files: ModelStatus[] = [];
     for (const f of m.files) files.push(await this.models.status(f));
@@ -421,7 +439,7 @@ export class Speech {
       if (this.canceled(jobId)) return this.finishCanceled(jobId);
       let result: unknown = null, failure: { code: string; message: string } | null = null, lastStage = 0;
       this.store.updateJob(jobId, { stage: `recognising speech: 0 of ${Math.round(seconds)} s` });
-      const r = await this.request(this.cfg.speechPython!, ['transcribe', '--model', path.join(this.dir, model.dir), '--audio', wav, '--language', j.input.language, '--device', this.cfg.speechDevice], (o) => {
+      const r = await this.request(this.asrPython()!, ['transcribe', '--model', path.join(this.dir, model.dir), '--audio', wav, '--language', j.input.language, '--device', this.cfg.speechDevice], (o) => {
         if (o.event === 'result') result = o;
         else if (o.event === 'error') failure = { code: String(o.code), message: String(o.message).slice(0, 500) };
         else if (o.event === 'progress' && Date.now() - lastStage > 1000) { lastStage = Date.now(); this.store.updateJob(jobId, { stage: `recognising speech: ${Math.round(o.seconds)} of ${Math.round(seconds)} s` }); }
@@ -665,9 +683,11 @@ export class Speech {
     } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   }
 
-  handles(job: JobRow) { return job.type === DOWNLOAD || job.type === TRANSCRIBE || job.type === NARRATE; }
+  handles(job: JobRow) { return job.type === DOWNLOAD || job.type === TRANSCRIBE || job.type === NARRATE || this.engineInstall.handles(job); }
+  /** The engine install is the owner's own (http.ts assertMayCancel refuses everyone else before this is reached). */
   cancel(jobId: string, actor: string) {
     const j = this.store.getJob(jobId);
+    if (this.engineInstall.handles(j)) return this.engineInstall.cancel(jobId);
     if (['succeeded', 'failed', 'canceled'].includes(j.status)) return { jobId, status: j.status, outcome: 'already-finished' };
     if (j.type === DOWNLOAD) { this.aborts.get(jobId)?.abort(); if (!this.aborts.has(jobId)) this.finishCanceled(jobId); return { jobId, status: 'canceled', outcome: 'download-stopped' }; }
     if (j.status === 'queued') { this.laneWaits.get(jobId)?.abort(); this.store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: `canceled by ${actor} before it started` } }); return { jobId, status: 'canceled', outcome: 'removed-from-queue' }; }
@@ -677,13 +697,15 @@ export class Speech {
   }
   /** Jobs interrupted by a restart: downloads resume from the part on disk, recognitions start again. */
   recover(): number {
+    const installs = this.engineInstall.recover();
     const downloads = this.store.recoverJobs(DOWNLOAD), jobs = [...this.store.recoverJobs(TRANSCRIBE), ...this.store.recoverJobs(NARRATE)];
     for (const j of downloads) void this.driveDownload(j.id);
     for (const j of jobs) this.enqueue(j.id);
-    return downloads.length + jobs.length;
+    return installs + downloads.length + jobs.length;
   }
   async stop() {
     this.stopped = true;
+    await this.engineInstall.stop();
     for (const c of this.laneWaits.values()) c.abort();
     for (const c of this.aborts.values()) c.abort();
     for (const p of this.running.values()) p.kill('SIGKILL');

@@ -8,9 +8,12 @@ import { z } from 'zod';
 import { own } from './own.ts';
 import { AudioFxInstanceSchema, MAX_AUDIO_FX } from './audioEffects.ts';
 import { BLEND_MODES, EffectInstanceSchema, MaskSchema, TransitionSchema } from './effects.ts';
+import { DrawnPayloadSchema } from './drawn.ts';
 import { FollowSchema, MAX_REDACT_REGIONS, MotionTrackSchema, RedactRegionSchema } from './tracking.ts';
 import { ANIMATABLE, KeyframeSchema, MAX_TRANSFORM_KEYS, RationalTimeSchema, type Animatable } from './keyframe.ts';
 import { CameraMotionSchema, ClipStabiliseSchema } from './steadyContract.ts';
+import { ClipDepthSchema } from './livingContract.ts';
+import { MadeRecordSchema } from './madeContract.ts';
 import { AUDIENCE_MUSIC_DB_MAX, AUDIENCE_MUSIC_DB_MIN, AUDIENCE_PROFILES, AUDIENCE_RULES_VERSION, KEEP_RULES, SOUND_ROLES } from './audienceLimits.ts';
 import { MOMENTS_MAX_WINDOWS, MomentsFileSchema, MomentsMeasuredSchema, MomentWindowSchema } from './momentsContract.ts';
 import { ANGLE_KINDS, MAX_ANCHORS_PER_PIECE, MAX_ANGLES, MAX_PIECES, MAX_SPEAKERS, MAX_SYNC_CANDIDATES, SYNC_VERDICTS } from './multicamLimits.ts';
@@ -270,7 +273,9 @@ export const AssetSchema = z
         /** True when the file does not say how its colours are encoded. It is then shown as the browser reads it (BT.709 in Chromium), which for standard-definition material differs slightly from the BT.601 reading other players use. */
         untaggedColour: z.literal(true).optional(),
         /** The owner's choice for a file with `untaggedColour`: read its colours as BT.601 (standard-definition material) instead of the browser's BT.709 reading. Applied as a colour correction in the compositor, so preview, stills and export agree. */
-        readColourAs: z.literal('bt601').optional() })
+        readColourAs: z.literal('bt601').optional(),
+        /** The file carries transparency (an alpha plane: VP8/VP9 with `alpha_mode` 1, or a pixel format with alpha such as ProRes 4444). Set by the server's probe only (made clips, wave 8). It gets no H.264 proxy (which would drop it) and never counts as covering the frame. */
+        hasAlpha: z.literal(true).optional() })
       .strict()
       .optional(),
     audio: z.object({ sampleRate: z.number().int().positive(), channels: z.number().int().positive(), codec: z.string(),
@@ -359,6 +364,8 @@ export const AssetSchema = z
         fitted: FittedMusicSchema.optional(),
         /** Present for built-in music made with recorded instruments of the owner's library (wave 7 instruments track): RecordedInstrumentsSchema. origin is 'generated'. */
         instruments: RecordedInstrumentsSchema.optional(),
+        /** Present for a clip made by a page («קליפ מקוד», wave 8 motioncode; madeContract.ts MadeRecordSchema). origin is 'generated', kind 'video'. */
+        made: MadeRecordSchema.optional(),
       })
       .strict(),
   })
@@ -483,6 +490,13 @@ export const MediaClipSchema = z
      * fingerprint: a marked clip counts as edited by hand on regeneration. validate.ts clip_impact.
      */
     impact: RationalTimeSchema.optional(),
+    /**
+     * «תמונה חיה» (wave 8 living, livingContract.ts): what the owner drew as near and far on this photo, for the effect depth.living.
+     * Photo clips (an image file) on video tracks only (validate.ts clip_depth). Ordinary document data, like a mask. Kept by split,
+     * duplicate, paste, versions, variants and archives; dropped by the portrait backdrop copy; replace_clip_media to another file
+     * is refused while it is there (livingSites.test.ts lists every copier).
+     */
+    depth: ClipDepthSchema.optional(),
   })
   .strict();
 /**
@@ -791,7 +805,13 @@ export type MulticamGroup = z.infer<typeof MulticamGroupSchema>;
  * The mask is in frame space (the adjustment's box is the whole frame).
  */
 export const AdjustmentClipSchema = z.object({ ...ClipBase, type: z.literal('adjustment'), label: z.string().max(80).optional(), mask: MaskSchema.optional() }).strict();
-export const ClipSchema = z.discriminatedUnion('type', [MediaClipSchema, TextClipSchema, CaptionClipSchema, AdjustmentClipSchema]);
+/**
+ * A drawn overlay on a text track (wave 8 carrier, drawn.ts): a drawing or a trip map, by its `drawn.kind`. It has a title's
+ * placement (transform, keyframes, effects, blend, follow) and none of its words (text, style, letter animation, live fields, role).
+ * The payload's kind must be registered in this build (drawn.ts DrawnPayloadSchema); production registers none until ink or the map lands.
+ */
+export const DrawnClipSchema = z.object({ ...ClipBase, type: z.literal('drawn'), drawn: DrawnPayloadSchema }).strict();
+export const ClipSchema = z.discriminatedUnion('type', [MediaClipSchema, TextClipSchema, CaptionClipSchema, AdjustmentClipSchema, DrawnClipSchema]);
 
 export const TrackSchema = z
   .object({
@@ -1021,6 +1041,7 @@ export type MediaClip = z.infer<typeof MediaClipSchema>;
 export type TextClip = z.infer<typeof TextClipSchema>;
 export type CaptionClip = z.infer<typeof CaptionClipSchema>;
 export type AdjustmentClip = z.infer<typeof AdjustmentClipSchema>;
+export type DrawnClip = z.infer<typeof DrawnClipSchema>;
 export type CaptionStyle = z.infer<typeof CaptionStyleSchema>;
 export type Transcript = z.infer<typeof TranscriptSchema>;
 export type Analysis = z.infer<typeof AnalysisSchema>;

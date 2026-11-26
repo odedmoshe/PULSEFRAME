@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { findClip, FORMAT_PROFILES } from '@pulseframe/core';
+import { findClip, FORMAT_PROFILES, hasFormatOverride } from '@pulseframe/core';
 import { dictionaries, jobStageLabel, type Key } from '@pulseframe/i18n';
 import { api, type PreflightReport } from '../api.ts';
 import { useEditorState } from './store.ts';
@@ -14,6 +14,7 @@ import type { ArchiveLibraryMode } from '@pulseframe/core';
 import { ArchiveLibraryOption } from './library/ArchiveLibraryOption.tsx';
 import { CreditsPanel } from './library/CreditsPanel.tsx';
 import { AUDIENCE_UI_BUILT, AudiencePanel } from './audience/AudiencePanel.tsx';
+import { overrideCount } from './audience/audience.logic.ts';
 import { addVariantGuard, frameOps, isShortActive } from './shorts.view.ts';
 
 interface BatchJob { jobId: string; variantId: string; status: string; stage: string | null }
@@ -137,7 +138,7 @@ export function DeliverPanel() {
         {variants.length === 0 ? <p className="muted">{t('deliver.none')}</p> : (
           <ul className="deliver-list">
             {variants.map((v) => {
-              const n = Object.keys(v.overrides).length;
+              const n = overrideCount(v); // kept rules are not format overrides (verifier C14)
               return (
                 <li key={v.id} data-testid="format-row" data-variant-id={v.id} className={v.id === viewVariantId ? 'current' : ''}>
                   <span dir="auto"><strong>{v.name}</strong> <bdi className="muted">{v.width}×{v.height}</bdi></span>
@@ -163,7 +164,7 @@ export function DeliverPanel() {
           <div className="fields" data-testid="format-clip-overrides">
             <label className="check"><input type="checkbox" data-testid="format-hide-clip" checked={!!overrideOf?.hidden}
               onChange={(e) => void editor.commit([{ op: 'set_variant_override', args: { variantId: viewed.id, clipId: sel.clip.id, hidden: e.target.checked } }], 'Hide in format')} /> {t('deliver.hide')}</label>
-            <button type="button" className="ghost small" data-testid="format-clear-override" disabled={!overrideOf}
+            <button type="button" className="ghost small" data-testid="format-clear-override" disabled={!hasFormatOverride(overrideOf)}
               onClick={() => void editor.commit([{ op: 'set_variant_override', args: { variantId: viewed.id, clipId: sel.clip.id, transform: null, hidden: false } }], 'Clear override')}>{t('deliver.clear')}</button>
           </div>
         )}

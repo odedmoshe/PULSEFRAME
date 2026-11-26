@@ -1,10 +1,10 @@
 {
- "ranAt": "2026-11-24T21:47:04.283Z",
- "commit": "996334d78570dcee141fcf88b055a39d7bbc9716",
+ "ranAt": "2026-11-26T13:18:31.025Z",
+ "commit": "1e69ee8824c0e2a2947b213a718cdeb50196658e",
  "baselineCommit": "33a78fce3ea78f9c37867a3d07efdf5722f3be05",
  "machine": {
-  "platform": "Linux 6.18.44-fc-v819 x64",
-  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "platform": "Linux 6.18.44-fc-v880 x64",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
   "gpu": "none used: every title look is Canvas2D; the editor browser has no WebGPU; the render worker started as for the trend baseline (PF_RENDER_GPU unset), and no project here uses a GPU effect"
  },
  "scope": "Server stills and exports at 1080x1920 through the render worker, and the editor in headless Chromium (Playwright), on this container. X1 compares pixel hashes with docs/evidence/trend-baseline.json, which holds only on the machine and build that recorded it. Nobody has judged the looks on a video by eye.",
@@ -637,25 +637,30 @@
    "ok": true,
    "detail": {
     "method": "median of 5 server stills (frame 40, at rest) of the decorated title, minus the same for a plain clean-white title: render, read-back and PNG included in both",
-    "plainStillMs": 466,
+    "plainStillMs": 1159.9,
     "addedMsPerFrame": {
-     "neon-tube-pink": 164.3,
-     "neon-tube-cyan": 160.7,
-     "gradient-sunset": 21.1,
-     "gradient-ocean": -5.8,
-     "gradient-gold": -22.4,
-     "double-outline-pop": 6.6,
-     "extrude-retro": 185.2,
-     "extrude-block": 230.2,
-     "long-shadow-flat": 143.6,
-     "wide-minimal": -18
+     "neon-tube-pink": 592.2,
+     "neon-tube-cyan": 757.6,
+     "gradient-sunset": 139.1,
+     "gradient-ocean": 1569.5,
+     "gradient-gold": 1371.4,
+     "double-outline-pop": 911.6,
+     "extrude-retro": 1195.5,
+     "extrude-block": 2046.8,
+     "long-shadow-flat": 912.9,
+     "wide-minimal": 570.1
     },
     "over25ms": [
      "neon-tube-pink",
      "neon-tube-cyan",
+     "gradient-sunset",
+     "gradient-ocean",
+     "gradient-gold",
+     "double-outline-pop",
      "extrude-retro",
      "extrude-block",
-     "long-shadow-flat"
+     "long-shadow-flat",
+     "wide-minimal"
     ]
    }
   },
@@ -1337,25 +1342,30 @@
   },
   "x8": {
    "method": "median of 5 server stills (frame 40, at rest) of the decorated title, minus the same for a plain clean-white title: render, read-back and PNG included in both",
-   "plainStillMs": 466,
+   "plainStillMs": 1159.9,
    "addedMsPerFrame": {
-    "neon-tube-pink": 164.3,
-    "neon-tube-cyan": 160.7,
-    "gradient-sunset": 21.1,
-    "gradient-ocean": -5.8,
-    "gradient-gold": -22.4,
-    "double-outline-pop": 6.6,
-    "extrude-retro": 185.2,
-    "extrude-block": 230.2,
-    "long-shadow-flat": 143.6,
-    "wide-minimal": -18
+    "neon-tube-pink": 592.2,
+    "neon-tube-cyan": 757.6,
+    "gradient-sunset": 139.1,
+    "gradient-ocean": 1569.5,
+    "gradient-gold": 1371.4,
+    "double-outline-pop": 911.6,
+    "extrude-retro": 1195.5,
+    "extrude-block": 2046.8,
+    "long-shadow-flat": 912.9,
+    "wide-minimal": 570.1
    },
    "over25ms": [
     "neon-tube-pink",
     "neon-tube-cyan",
+    "gradient-sunset",
+    "gradient-ocean",
+    "gradient-gold",
+    "double-outline-pop",
     "extrude-retro",
     "extrude-block",
-    "long-shadow-flat"
+    "long-shadow-flat",
+    "wide-minimal"
    ]
   },
   "x9": {

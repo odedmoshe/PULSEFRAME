@@ -22,7 +22,6 @@ const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/browser-export-proof');
 const webDist = path.join(root, 'apps/web/dist');
 const evidenceDir = path.join(root, 'docs/evidence');
-const PORT = Number(process.env.PF_BX_PORT ?? 8801);
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -51,7 +50,7 @@ async function main() {
   if (!fs.existsSync(path.join(webDist, 'browser-export.html'))) throw new Error('web bundle missing: run `pnpm build` first');
 
   const fixture = await generateBarcodeFixture({ out: path.join(art, 'barcode_640x360_30fps_4s.mp4') });
-  const server = await startServer({ port: PORT, dataDir: path.join(art, 'data'), webDist });
+  const server = await startServer({ port: 0, dataDir: path.join(art, 'data'), webDist });
   const base = server.url;
   const h = { authorization: `Bearer ${server.auth.tokens.agent}` };
   const rest = async (p: string, body?: unknown, headers: Record<string, string> = h) => {
@@ -187,7 +186,7 @@ async function main() {
       const bRep = rb.ok ? rb.result.photosensitivity : null, sRep = sj.output?.photosensitivity;
       const bJob = rb.ok ? (await rest(`/jobs/${rb.result.jobId}`)).body.output?.photosensitivity : null;
       const sec = (x: { value: string; timescale: number }) => Number(x.value) / x.timescale;
-      measurements.photosensitivity = { browser: bRep && { verdict: bRep.verdict, ranges: bRep.ranges.map((r: any) => ({ from: sec(r.from), to: sec(r.to), kind: r.kind, perSecond: r.flashesPerSecond, area: r.area })) }, server: sRep && { verdict: sRep.verdict, ranges: sRep.ranges.map((r: any) => ({ from: sec(r.from), to: sec(r.to), kind: r.kind, perSecond: r.flashesPerSecond, area: r.area })) } };
+      measurements.photosensitivity = { browser: bRep && { verdict: bRep.verdict, ranges: bRep.ranges.map((r: any) => ({ from: sec(r.from), to: sec(r.to), kind: r.kind, perSecond: r.flashesPerSecond, busiestCell: r.busiestCellFlashesPerSecond, area: r.area })) }, server: sRep && { verdict: sRep.verdict, ranges: sRep.ranges.map((r: any) => ({ from: sec(r.from), to: sec(r.to), kind: r.kind, perSecond: r.flashesPerSecond, busiestCell: r.busiestCellFlashesPerSecond, area: r.area })) } };
       check('a timeline flashing 5 times a second for 3 s, exported in the browser: the tab reports one failing stretch over the whole frame, recorded on its job, and the export still succeeds',
         !!bRep && bRep.verdict === 'fail' && bRep.ranges.length === 1 && bRep.ranges[0]!.kind === 'general' && bRep.ranges[0]!.area === 1 && sec(bRep.ranges[0]!.from) <= 1.2 && sec(bRep.ranges[0]!.to) >= 3.9 && bJob?.verdict === 'fail' && bJob?.measuredBy === 'browser', measurements.photosensitivity);
       check('the server export of the same timeline reports the same stretch (same analyser, same frames)', !!sRep && !!bRep && JSON.stringify(sRep.ranges) === JSON.stringify(bRep.ranges), measurements.photosensitivity);
