@@ -298,6 +298,10 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   export_project: ['rendered-refused', 'reader-document'], plan_export: ['reader-document'], retry_job: ['rendered-refused'], get_job: ['no-document'],
   list_capabilities: ['no-document'], run_capability: ['reader-document', 'write'], estimate_capability: ['reader-document'], translate_captions: ['reader-document', 'write'],
   request_model_download: ['no-document'], cancel_job: ['no-document'],
+  // autonomy (autonomy.ts, decision 2): the owner window's actions, open to an editing agent in open mode, refused as their route in guarded
+  start_model_download: ['no-document'], get_speech_engine: ['no-document'], install_speech_engine: ['no-document'],
+  list_versions: ['no-document'], save_version: ['no-document'], restore_version: ['write'], rename_version: ['no-document'], delete_version: ['no-document'],
+  get_storage: ['no-document'], collect_storage: ['no-document'], derive_lesson: ['reader-document'],
   // shorts (ADR-0018)
   list_sequences: ['reader-document'], find_short_candidates: ['reader-document'], plan_shorts: ['reader-document'], make_shorts: ['reader-document', 'write'],
   plan_reframe: ['reader-document'], export_batch: ['rendered-refused', 'reader-document'],

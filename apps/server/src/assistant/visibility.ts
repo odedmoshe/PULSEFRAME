@@ -36,12 +36,12 @@ export interface AssistantJobStub { id: string; projectId: string; type: typeof 
 
 /** The reduced job for `p`, or null when `p` reads the job whole (not an assistant job, or the owner's own session). */
 export function assistantJobStub(p: Principal, j: Pick<JobRow, 'id' | 'projectId' | 'type' | 'status' | 'createdAt' | 'updatedAt'>): AssistantJobStub | null {
-  if (j.type !== ASSISTANT_JOB_TYPE || isOwnerSession(p)) return null;
+  if (j.type !== ASSISTANT_JOB_TYPE || actsAsOwner(p)) return null;
   return { id: j.id, projectId: j.projectId, type: ASSISTANT_JOB_TYPE, actor: ASSISTANT_ACTOR, status: j.status, createdAt: j.createdAt, updatedAt: j.updatedAt };
 }
 
 /** Whether `p` may read a proposal (a stored row or its event): every proposal but the assistant's, which is the owner's own. */
-export const mayReadProposal = (p: Principal, proposal: { actor: string }): boolean => proposal.actor !== ASSISTANT_ACTOR || isOwnerSession(p);
+export const mayReadProposal = (p: Principal, proposal: { actor: string }): boolean => proposal.actor !== ASSISTANT_ACTOR || actsAsOwner(p);
 /** The proposals `p` may read, in order. */
 export const proposalsFor = <P extends { actor: string }>(p: Principal, rows: P[]): P[] => rows.filter((r) => mayReadProposal(p, r));
 /** A proposal answered by id: refused exactly as an id that does not exist (Governance.getProposal), so asking tells nothing. */
@@ -60,7 +60,7 @@ export const PUBLIC_STATUS_DETAIL = {
  * that carries the status goes through here (GET /assistant/status, PUT /assistant/config).
  */
 export function assistantStatusFor(p: Principal, whole: AssistantStatus): AssistantStatusAnswer {
-  if (isOwnerSession(p)) return whole;
+  if (actsAsOwner(p)) return whole;
   const setup = whole.setup === 'ready' ? 'ready' : 'not_connected';
   return { connected: setup === 'ready', setup, detail: PUBLIC_STATUS_DETAIL[setup] };
 }

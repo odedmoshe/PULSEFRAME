@@ -45,6 +45,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { applyTransaction, freezeOps, holdsAgeFields, isPersonToken, OpError, parseFields, PERSON_OPS, PERSON_PRIVATE_ARGS, validateProject, type OpCall, type ProjectDocument, type SourceRange, type TextClip } from '@pulseframe/core';
 import type { Principal } from './governance.ts';
 import { ApiError } from './store.ts';
+import { actsAsOwner } from './autonomy.ts';
 
 export type PeopleAccess = 'names' | 'full';
 export const PEOPLE_ACCESS = ['names', 'full'] as const;
@@ -54,7 +55,7 @@ const HINT = 'Ask the owner: they can do this step themselves, or create a grant
 
 /** What this credential may read about people: the owner's session everything; an agent what its grant says, 'names' when it says nothing or there is no grant. */
 export function peopleAccess(p: Principal): PeopleAccess {
-  if (p.kind === 'user') return 'full';
+  if (actsAsOwner(p)) return 'full'; // C1: the owner's window, or an open agent (autonomy.ts): one line covers every surface
   return p.grant?.people === 'full' ? 'full' : 'names';
 }
 
@@ -200,7 +201,7 @@ const TAG_OPS: readonly string[] = ['add_source_range', 'update_source_range', '
  * `wholeDoc` is read only when such a call is present; lookups are own-property, and an unknown id is left to the op's not_found.
  */
 export function assertOwnerTagsPeople(p: Principal, ops: unknown, wholeDoc: () => ProjectDocument): void {
-  if (p.kind === 'user') return;
+  if (actsAsOwner(p)) return; // C6
   const calls = callsOf(ops, TAG_OPS);
   if (!calls.length) return;
   const refuse = (key: keyof typeof HUMAN_TAG_REFUSALS, details: Record<string, unknown>) => { throw new ApiError(403, HUMAN_TAG_REQUIRED, HUMAN_TAG_REFUSALS[key], details, TAG_HINT); };

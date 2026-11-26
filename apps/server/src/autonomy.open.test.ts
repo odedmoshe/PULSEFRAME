@@ -98,3 +98,68 @@ export const FAMILY_B: Case[] = [
   { family: 'B', id: 'B4/D2 speech model download', method: 'POST', path: '/api/v1/projects/{pid}/speech/models/none/download', body: { confirmBytes: 1 }, guarded: 'human_approval_required' },
 ];
 describe('family B — approvals (the download gate)', () => { bothModes(FAMILY_B); });
+
+describe('family C — what agents see (C1, C2): a planted birth date, in both modes', () => {
+  for (const mode of ['guarded', 'open'] as const)
+    it(`${mode}: the agent ${mode === 'guarded' ? 'reads the name only and may not write a birth date (today)' : 'reads the birth date the owner entered and may write one'}`, async () => {
+      const m = await modeServer(mode);
+      try {
+        const owner = await ownerCall(m.s);
+        const tx = await owner('POST', `/api/v1/projects/${m.pid}/transactions`, { ops: [{ op: 'add_person', args: { name: 'Noa', birthDate: '2019-03-04' } }] });
+        expect(tx.status, JSON.stringify(tx.json)).toBe(200);
+        const read = JSON.stringify((await m.call('GET', `/api/v1/projects/${m.pid}`)).json);
+        expect(read).toContain('Noa');
+        const write = await m.call('POST', `/api/v1/projects/${m.pid}/transactions`, { ops: [{ op: 'add_person', args: { name: 'Dan', birthDate: '2021-05-06' } }] });
+        if (mode === 'guarded') { expect(read).not.toContain('2019-03-04'); expect(write.status).toBe(403); }
+        else { expect(read).toContain('2019-03-04'); expect(write.status, JSON.stringify(write.json)).toBe(200); }
+      } finally { await m.s.close(); }
+    }, 60_000);
+});
+
+/** An MCP tool call over HTTP with the agent token (stateless JSON-RPC, as an outside agent sends it). */
+export async function mcpTool(s: RunningServer, name: string, args: Record<string, unknown>, token = s.auth.tokens.agent) {
+  const r = await fetch(`${s.url}/mcp`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream', connection: 'close' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }) });
+  const text = await r.text();
+  const msg = JSON.parse((r.headers.get('content-type') ?? '').includes('text/event-stream') ? text.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5)).join('') : text);
+  if (msg.error) throw new Error(`MCP protocol error: ${JSON.stringify(msg.error)}`);
+  let body: any; try { body = JSON.parse(msg.result.content[0].text); } catch { body = { error: { code: 'mcp_text', message: msg.result.content[0].text } }; }
+  return { isError: msg.result.isError === true, body, code: body?.error?.code as string | undefined };
+}
+
+describe('decision 2 — the new MCP tools, in both modes (one authority with their REST routes)', () => {
+  for (const mode of ['guarded', 'open'] as const)
+    it(`${mode}: start_model_download, speech engine, versions, storage, lessons`, async () => {
+      const m = await modeServer(mode);
+      try {
+        const pid = m.pid;
+        const owned = [
+          ['start_model_download', { projectId: pid, kind: 'capability', id: 'image.upscale', confirmBytes: 1 }, 'human_approval_required'],
+          ['get_speech_engine', {}, 'owner_required'],
+          ['install_speech_engine', { projectId: pid, confirmBytes: 1 }, 'owner_required'],
+          ['rename_version', { projectId: pid, versionId: 'ver_none', name: 'x' }, 'owner_required'],
+          ['delete_version', { projectId: pid, versionId: 'ver_none' }, 'owner_required'],
+          ['collect_storage', { apply: false }, 'owner_required'],
+          ['get_storage', {}, 'owner_required'],
+          ['derive_lesson', { projectId: pid, clipId: 'clip_none' }, 'owner_required'],
+        ] as const;
+        for (const [name, args, refusal] of owned) {
+          const r = await mcpTool(m.s, name, args as Record<string, unknown>);
+          if (mode === 'guarded') expect([name, r.code]).toEqual([name, refusal]);
+          else expect([name, OWNER_REFUSALS.includes(r.code ?? '')]).toEqual([name, false]);
+        }
+        // the same in both modes: list, save and restore were never owner-only (an editing agent)
+        const saved = await mcpTool(m.s, 'save_version', { projectId: pid, name: 'before agent' });
+        expect(saved.isError, JSON.stringify(saved.body)).toBe(false);
+        const listed = await mcpTool(m.s, 'list_versions', { projectId: pid });
+        expect(listed.body.versions.map((v: any) => v.name)).toContain('before agent');
+        if (mode === 'open') {
+          const renamed = await mcpTool(m.s, 'rename_version', { projectId: pid, versionId: saved.body.version.id, name: 'renamed by agent' });
+          expect(renamed.body.version?.name, JSON.stringify(renamed.body)).toBe('renamed by agent');
+          const deleted = await mcpTool(m.s, 'delete_version', { projectId: pid, versionId: saved.body.version.id });
+          expect(deleted.isError, JSON.stringify(deleted.body)).toBe(false);
+          const controls = await mcpTool(m.s, 'get_controls', { projectId: pid });
+          expect(controls.body).toMatchObject({ serverMode: 'open', actsAsOwner: true, people: 'full', mode: 'autopilot' });
+        }
+      } finally { await m.s.close(); }
+    }, 90_000);
+});

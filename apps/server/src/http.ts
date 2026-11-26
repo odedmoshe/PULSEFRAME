@@ -131,6 +131,15 @@ export const EstimateBody = z.object({
  * propose can ask; it creates a pending approval bound to the exact missing bytes and model hashes and starts no job. Only the
  * owner's decision (POST …/approvals/{id}/approve) starts the download.
  */
+/**
+ * Start a model download for the exact missing byte count (REST …/models/download and …/speech/models/:id/download, MCP
+ * start_model_download): one authority. The owner's own session, or an agent the open server stamped (autonomy.ts, B4/D2);
+ * pinned hashes and the disk margin are checked by the download itself in both modes.
+ */
+export async function startModelDownloadFor(svc: { capabilities: Capabilities; speech: Speech }, p: Principal, projectId: string, kind: 'capability' | 'speech', id: string, confirmBytes: number) {
+  if (!actsAsOwner(p)) throw new ApiError(403, 'human_approval_required', 'model downloads must be started from the owner\'s own session, not by an agent credential');
+  return kind === 'capability' ? svc.capabilities.startDownload(projectId, id, confirmBytes, p) : svc.speech.startDownload(projectId, id, confirmBytes, p.actor);
+}
 export async function requestModelDownload(capabilities: Capabilities, gov: Governance, p: Principal, projectId: string, capabilityId: string) {
   gov.assertMayAct(p, projectId, 'propose'); // asking for something is a proposal-level act: refused while paused or in Observe mode
   const info = (await capabilities.list()).capabilities.find((x) => x.id === capabilityId);
@@ -1032,7 +1041,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const p = need(c, 'edit');
     if (!actsAsOwner(p)) throw new ApiError(403, 'human_approval_required', 'model downloads must be started from the owner\'s own session, not by an agent credential');
     const b = await body(c, z.object({ confirmBytes: z.number().int().positive() }).strict());
-    const job = await capabilities.startDownload(c.req.param('id'), c.req.param('capabilityId'), b.confirmBytes, p);
+    const job = await startModelDownloadFor({ capabilities, speech }, p, c.req.param('id'), 'capability', c.req.param('capabilityId'), b.confirmBytes);
     return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
   });
   // ---- local speech recognition (optional; an honest setup state when the engine or the model is absent) ----
@@ -1051,7 +1060,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const p = need(c, 'edit');
     if (!actsAsOwner(p)) throw new ApiError(403, 'human_approval_required', 'model downloads must be started from the owner\'s own session, not by an agent credential');
     const b = await body(c, z.object({ confirmBytes: z.number().int().positive() }).strict());
-    const job = await speech.startDownload(c.req.param('id'), c.req.param('modelId'), b.confirmBytes, p.actor);
+    const job = await startModelDownloadFor({ capabilities, speech }, p, c.req.param('id'), 'speech', c.req.param('modelId'), b.confirmBytes);
     return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
   });
   app.post('/api/v1/projects/:id/assets/:assetId/transcribe', async (c) => {
