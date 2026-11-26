@@ -1,0 +1,587 @@
+{
+  "ranAt": "2026-11-26T05:46:47.807Z",
+  "result": "PASSED",
+  "passed": 26,
+  "total": 26,
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "logicalCpus": 4,
+    "gpu": "none used: the render worker ran without WebGPU (PF_RENDER_GPU=off)",
+    "node": "v22.23.4",
+    "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers"
+  },
+  "scope": "Time effects (echo, time split, shutter, stutter) on synthetic fixtures: a 640x360 frame-barcode video, a 320x180 flat-grey lossless video, a white bar and a coloured still image, a generated click track; server stills and exports, one browser export, the paused editor preview. Correctness, agreement, decoder budget and flash safety at defaults; one cost sample. Not covered: real footage, playback frame rate in the editor, a hardware graphics adapter, the owner's laptop.",
+  "measurements": {
+    "stillMs": 328,
+    "greyDecoded": {
+      "frames": 29,
+      "differentFromEncodedLevel": 3,
+      "plainStillsAgree": true
+    },
+    "stutterMusic": {
+      "analysedBeats": {
+        "method": "spectral-flux onsets + dynamic-programming beat tracking (no model); assumes a steady pulse; no regular bar accent found",
+        "params": {
+          "sampleRate": 22050,
+          "hop": 256
+        },
+        "createdAt": "2026-11-26T05:46:00.869Z",
+        "createdBy": "agent:local",
+        "edited": false,
+        "bpm": 132.51,
+        "confidence": 0.707,
+        "count": 10,
+        "beatSeconds": [
+          0.668,
+          1.12,
+          1.562,
+          2.014,
+          2.467,
+          2.92,
+          3.361,
+          3.814,
+          4.267,
+          4.72
+        ]
+      },
+      "plannedFrames": [
+        21,
+        34,
+        47,
+        61,
+        75,
+        88,
+        101,
+        115,
+        129,
+        142
+      ],
+      "changes": [
+        3,
+        6,
+        9,
+        12,
+        15,
+        18,
+        21,
+        34,
+        47,
+        61,
+        75,
+        88,
+        101,
+        115
+      ],
+      "flashGapFrames": 11
+    },
+    "browserExportDecoders": {
+      "peak": 10,
+      "max": 12,
+      "opened": 10,
+      "disposed": 0,
+      "refused": 0,
+      "wallMs": 3714,
+      "frames": 120
+    },
+    "previewVsStill": {
+      "frame": 20,
+      "meanDifference": 0,
+      "maxDifference": 0
+    },
+    "exportVsStillPsnr": {
+      "frame20": 43.27,
+      "frame45": 46.31
+    },
+    "flash": {
+      "no effect": {
+        "verdict": "pass",
+        "frames": 90,
+        "ranges": []
+      },
+      "time.echo": {
+        "verdict": "pass",
+        "frames": 90,
+        "ranges": []
+      },
+      "time.split": {
+        "verdict": "pass",
+        "frames": 90,
+        "ranges": []
+      },
+      "time.shutter": {
+        "verdict": "pass",
+        "frames": 90,
+        "ranges": []
+      },
+      "time.stutter": {
+        "verdict": "pass",
+        "frames": 90,
+        "ranges": []
+      }
+    },
+    "cost": {
+      "size": "1080x1920",
+      "frames": 30,
+      "drawMsPerFrame": {
+        "noEffect": 5.7,
+        "echo5": 132.8
+      },
+      "wallSeconds": {
+        "noEffect": 2.669,
+        "echo5": 6.571
+      },
+      "note": "server export, software canvas, one run on this machine; not a target"
+    }
+  },
+  "checks": [
+    {
+      "name": "time.split (stills): red shows frame F, green F − 4, blue F − 8 (never before the clip start), read as one barcode per channel on 120 stills in a shuffled order: 0 errors",
+      "ok": true,
+      "detail": {
+        "stills": 120,
+        "wrong": []
+      }
+    },
+    {
+      "name": "Seek equals sequential: the same 120 stills rendered in a shuffled order are byte-identical to those rendered in order",
+      "ok": true,
+      "detail": {
+        "stills": 120,
+        "different": 0
+      }
+    },
+    {
+      "name": "time.split (export): every frame of a 90-frame export carries the three barcodes, 0 errors",
+      "ok": true,
+      "detail": {
+        "frames": 90,
+        "wrong": []
+      }
+    },
+    {
+      "name": "time.split across a cut at frame 37: stills of frames 37–45 are byte-identical to those of the uncut clip",
+      "ok": true,
+      "detail": {
+        "different": 0
+      }
+    },
+    {
+      "name": "Grey fixture: every frame decodes to one flat grey (the reference levels g(F) for the echo checks)",
+      "ok": true,
+      "detail": {
+        "frames": 29,
+        "offPixels": 0
+      }
+    },
+    {
+      "name": "time.echo blend (stills, defaults): each still equals (ΣW_k·g(F − 3k) + 2048) >> 12 exactly, with W from tapWeights (sum 4096) and clamped at the clip start",
+      "ok": true,
+      "detail": {
+        "weights": [
+          1882,
+          1129,
+          678,
+          407
+        ],
+        "rows": [
+          {
+            "F": 2,
+            "got": 89,
+            "expected": 89,
+            "offPixels": 0
+          },
+          {
+            "F": 7,
+            "got": 67,
+            "expected": 67,
+            "offPixels": 0
+          },
+          {
+            "F": 20,
+            "got": 59,
+            "expected": 59,
+            "offPixels": 0
+          },
+          {
+            "F": 33,
+            "got": 126,
+            "expected": 126,
+            "offPixels": 0
+          },
+          {
+            "F": 47,
+            "got": 83,
+            "expected": 83,
+            "offPixels": 0
+          },
+          {
+            "F": 61,
+            "got": 120,
+            "expected": 120,
+            "offPixels": 0
+          },
+          {
+            "F": 88,
+            "got": 144,
+            "expected": 144,
+            "offPixels": 0
+          },
+          {
+            "F": 119,
+            "got": 156,
+            "expected": 156,
+            "offPixels": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "time.echo blend (export): every frame of the export is within ±3 of the formula on the encoded levels",
+      "ok": true,
+      "detail": {
+        "frames": 120,
+        "worst": 1
+      }
+    },
+    {
+      "name": "time.echo lighten (stills): each still equals max_k ((G_k·g(F − 3k) + 2048) >> 12), G_k = round(4096·0.6^k)",
+      "ok": true,
+      "detail": [
+        {
+          "F": 2,
+          "got": 146,
+          "expected": 146
+        },
+        {
+          "F": 7,
+          "got": 59,
+          "expected": 59
+        },
+        {
+          "F": 20,
+          "got": 44,
+          "expected": 44
+        },
+        {
+          "F": 33,
+          "got": 205,
+          "expected": 205
+        },
+        {
+          "F": 47,
+          "got": 68,
+          "expected": 68
+        },
+        {
+          "F": 61,
+          "got": 105,
+          "expected": 105
+        },
+        {
+          "F": 88,
+          "got": 128,
+          "expected": 128
+        },
+        {
+          "F": 119,
+          "got": 187,
+          "expected": 187
+        }
+      ]
+    },
+    {
+      "name": "time.shutter at 360°: a bar moving 16 px a frame is smeared into the box-filter model (eight places one frame wide), within 3 of 255 on every pixel of the row",
+      "ok": true,
+      "detail": {
+        "worstDifference": 0,
+        "partlyLitPixels": 28,
+        "profile": [
+          [
+            160,
+            0,
+            0
+          ],
+          [
+            162,
+            0,
+            0
+          ],
+          [
+            164,
+            0,
+            0
+          ],
+          [
+            166,
+            0,
+            0
+          ],
+          [
+            168,
+            0,
+            0
+          ],
+          [
+            170,
+            0,
+            0
+          ],
+          [
+            172,
+            0,
+            0
+          ],
+          [
+            174,
+            0,
+            0
+          ],
+          [
+            176,
+            0,
+            0
+          ],
+          [
+            178,
+            0,
+            0
+          ],
+          [
+            180,
+            0,
+            0
+          ],
+          [
+            182,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "name": "time.shutter at 0°: byte-identical to the clip without the effect (moving bar)",
+      "ok": true,
+      "detail": {
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "time.shutter at 0°: byte-identical to no effect on a video clip (frames 10 and 77)",
+      "ok": true,
+      "detail": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Titles (no decode), time.echo: the still is the weighted sum of the title at frames 20, 17, 14 and 11 (within 2 of 255 on every pixel: straight-alpha rounding at the letter edges)",
+      "ok": true,
+      "detail": {
+        "worstDifference": 0,
+        "maxDifferenceFromPlain": 138,
+        "differsFromPlain": 0.5,
+        "shutter0VsPlainMax": 0
+      }
+    },
+    {
+      "name": "Titles (no decode), time.stutter: frame 20 shows the title exactly as on frame 18 (held with its movement)",
+      "ok": true,
+      "detail": {
+        "maxDifference": 0
+      }
+    },
+    {
+      "name": "time.stutter (export, hold 3): every frame shows the picture of F − F mod 3",
+      "ok": true,
+      "detail": {
+        "frames": 90,
+        "wrong": []
+      }
+    },
+    {
+      "name": "time.stutter with a cut at frame 37: the same frames as without the cut",
+      "ok": true,
+      "detail": {
+        "different": []
+      }
+    },
+    {
+      "name": "time.stutter following the music (export): the picture changes only on planned beat frames (thinned, at least flashGapFrames apart) and shows the frame of the latest one; steady steps before the first beat",
+      "ok": true,
+      "detail": {
+        "planned": 10,
+        "wrong": [],
+        "offPlan": [],
+        "smallestSpacing": 13
+      }
+    },
+    {
+      "name": "Decode lanes: two echo-5 clips under a 15-frame transition need 10 decoders at once (bound and exact count agree) and export every frame within the worker's 12 (a frame that needed more would have been refused)",
+      "ok": true,
+      "detail": {
+        "maxDecodeLanes": {
+          "lanes": 10,
+          "fromFrame": 60,
+          "toFrame": 75
+        },
+        "exactAbove9": [
+          {
+            "fromFrame": 70,
+            "toFrame": 75,
+            "peak": 10
+          }
+        ],
+        "frames": 120,
+        "renderStageMs": {
+          "draw": 2816,
+          "readback": 93,
+          "upload": 1128
+        }
+      }
+    },
+    {
+      "name": "Decode lanes (browser export): the same project exports with at most 12 decoders open at once and none refused",
+      "ok": true,
+      "detail": {
+        "peak": 10,
+        "max": 12,
+        "opened": 10,
+        "disposed": 0,
+        "refused": 0,
+        "wallMs": 3714,
+        "frames": 120
+      }
+    },
+    {
+      "name": "Decode lanes: three overlapping echo-5 clips (15 pictures): the still is refused with effect_unavailable naming decode_budget, never delivered without the effect",
+      "ok": true,
+      "detail": {
+        "status": 503,
+        "error": "the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: time.echo: decode_budget: this frame needs more than 12 video decoders\n    at y (http://127.0.0.1:4318"
+      }
+    },
+    {
+      "name": "Decode lanes: in the same project the still of frame 22 (all three play; 11 decoders, as pictures shown twice are decoded once) is delivered",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "error": null,
+        "exact": [
+          {
+            "fromFrame": 24,
+            "toFrame": 40,
+            "peak": 15,
+            "clipIds": [
+              "clp_501b0962a00",
+              "clp_a933f5c0f41",
+              "clp_b81888dfc21"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Decode lanes: preflight lists decode_budget for exactly the frames that need more than 12 decoders (24–39, up to 15), naming the three clips",
+      "ok": true,
+      "detail": [
+        {
+          "code": "decode_budget",
+          "severity": "warning",
+          "message": "on frames 24–39, more video pictures must be decoded at once than the 12 the renderer can open (up to 15); those frames would be refused. Time effects such as echo and time split decode each earlier picture separately (a picture shown more than once in a frame is decoded once). Lower the count of a time effect, remove one, or move the overlapping clips apart",
+          "ids": [
+            "clp_501b0962a00",
+            "clp_a933f5c0f41",
+            "clp_b81888dfc21"
+          ],
+          "range": {
+            "startFrame": 24,
+            "endFrame": 40
+          }
+        }
+      ]
+    },
+    {
+      "name": "Decode lanes: three echo-5 copies stacked at frame 0 (bound 15, 7 decoders needed): no decode_budget warning and the still of frame 30 is delivered",
+      "ok": true,
+      "detail": {
+        "bound": {
+          "lanes": 15,
+          "fromFrame": 0,
+          "toFrame": 40
+        },
+        "still": 200,
+        "issues": [
+          "no_sound"
+        ]
+      }
+    },
+    {
+      "name": "Agreement: the paused editor preview of an echo frame (stepped to frame by frame) matches the still (mean difference under 0.5 of 255)",
+      "ok": true,
+      "detail": {
+        "frame": 20,
+        "meanDifference": 0,
+        "maxDifference": 0,
+        "pageErrors": []
+      }
+    },
+    {
+      "name": "Agreement: the export matches the still (PSNR at least 36 dB, frames 20 and 45)",
+      "ok": true,
+      "detail": {
+        "frame20": 43.27,
+        "frame45": 46.31
+      }
+    },
+    {
+      "name": "Flash safety (ADR-0009): the FlashAnalyser verdict is pass on a 3-second export of each time effect at its defaults (a moving picture)",
+      "ok": true,
+      "detail": {
+        "no effect": {
+          "verdict": "pass",
+          "frames": 90,
+          "ranges": []
+        },
+        "time.echo": {
+          "verdict": "pass",
+          "frames": 90,
+          "ranges": []
+        },
+        "time.split": {
+          "verdict": "pass",
+          "frames": 90,
+          "ranges": []
+        },
+        "time.shutter": {
+          "verdict": "pass",
+          "frames": 90,
+          "ranges": []
+        },
+        "time.stutter": {
+          "verdict": "pass",
+          "frames": 90,
+          "ranges": []
+        }
+      }
+    },
+    {
+      "name": "Recorded (not gated): milliseconds per frame of echo-5 at 1080×1920 on the CPU, against the same clip without the effect",
+      "ok": true,
+      "detail": {
+        "size": "1080x1920",
+        "frames": 30,
+        "drawMsPerFrame": {
+          "noEffect": 5.7,
+          "echo5": 132.8
+        },
+        "wallSeconds": {
+          "noEffect": 2.669,
+          "echo5": 6.571
+        },
+        "note": "server export, software canvas, one run on this machine; not a target"
+      }
+    }
+  ]
+}

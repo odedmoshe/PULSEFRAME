@@ -1,0 +1,21 @@
+/* The folding sections of the inspector (Section.tsx). The look is the ds Section (ds/primitives.css: .pf-section …); these
+   rules add what the inspector's own section has: an icon and a name that never wrap, the "on the beat" tone, and the notes
+   that wait behind "?". */
+.pf-sec { border-block-start: 1px solid var(--pf-line); padding-block: var(--pf-sp-2); }
+.pf-sec:first-child { border-block-start: 0; }
+.pf-sec .pf-section-head { display: flex; align-items: center; gap: var(--pf-sp-2); min-block-size: var(--pf-h-md); }
+.pf-sec .pf-section-title { flex: 1; min-inline-size: 0; margin: 0; }
+.pf-sec .pf-section-toggle { display: flex; align-items: center; gap: var(--pf-sp-3); inline-size: 100%; min-block-size: var(--pf-h-md); padding: 0 var(--pf-sp-1); border: 0; border-radius: var(--pf-r-xs); background: none; box-shadow: none;
+  color: var(--pf-text); font: var(--pf-fw-semibold) var(--pf-fs-sm)/var(--pf-lh-sm) var(--pf-font); text-align: start; cursor: pointer; }
+.pf-sec .pf-section-toggle:hover { background: var(--pf-surface-2); border: 0; }
+.pf-sec .pf-section-chev { flex: none; color: var(--pf-text-3); transition: transform var(--pf-dur-base) var(--pf-ease-out); }
+.pf-sec:not(.is-open) .pf-section-chev { transform: rotate(-90deg); }
+[dir='rtl'] .pf-sec:not(.is-open) .pf-section-chev { transform: rotate(90deg); }
+.pf-sec-name { flex: none; white-space: nowrap; }
+.pf-sec .pf-section-summary { flex: 1; min-inline-size: 0; margin-inline-start: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: end; color: var(--pf-text-3); font-weight: var(--pf-fw-regular); font-size: var(--pf-fs-xs); }
+.pf-sec .pf-section-help { flex: none; display: grid; place-items: center; inline-size: 24px; block-size: 24px; padding: 0; border: 0; border-radius: 50%; background: transparent; box-shadow: none; color: var(--pf-text-3); cursor: pointer; }
+.pf-sec .pf-section-help:hover, .pf-sec .pf-section-help[aria-expanded='true'] { color: var(--pf-text); background: var(--pf-surface-3); border: 0; }
+.pf-sec .pf-section-body { display: grid; gap: var(--pf-sp-3); padding-block: var(--pf-sp-2) var(--pf-sp-4); min-inline-size: 0; }
+.pf-sec .pf-section-body[hidden] { display: none; }
+.pf-sec.is-pulse .pf-section-toggle { color: var(--pf-pulse); }
+@media (prefers-reduced-motion: reduce) { .pf-sec .pf-section-chev { transition: none; } }

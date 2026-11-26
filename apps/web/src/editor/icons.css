@@ -1,0 +1,12 @@
+/* Icons sit before their label (flex gap, so the side follows the reading direction). Colour is currentColor. */
+.pf-ico { flex: none; display: inline-block; vertical-align: middle; pointer-events: none; }
+button > .pf-ico, a > .pf-ico, [role='tab'] > .pf-ico { margin: 0; }
+.track-btn { display: inline-flex; align-items: center; justify-content: center; }
+.track-btn .pf-ico { inline-size: 13px; block-size: 13px; }
+.clip-menu button .pf-ico { opacity: .85; }
+/* directional meaning follows the reading direction */
+[dir='rtl'] .pf-ico-flip { transform: scaleX(-1); }
+/* Direction. Glyphs in a timeline, transport or waveform meaning never mirror; the ones that point mirror with the reading direction. */
+.pf-ico-fixed { transform: none; }
+[dir='rtl'] .pf-ico-fixed.pf-ico-flip { transform: none; }
+.pf-glyph-gold { color: var(--pf-pulse); }

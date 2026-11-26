@@ -1,0 +1,298 @@
+{
+  "ranAt": "2026-11-26T06:01:01.443Z",
+  "result": "PASSED",
+  "passed": 11,
+  "total": 11,
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "logicalCpus": 4,
+    "node": "v22.23.4",
+    "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers"
+  },
+  "scope": "Adjustment layers (ADR-0016) through the real server on synthetic still pictures at 640x360 (1080x1920 for the cost sample): stills, exports, undo and replay, a format variant, strobes through the timeline flash schedule (software WebGPU adapter where the machine has one), a GPU effect without an adapter. Not covered: real footage, the editor preview (proof:editor-interactions), a hardware graphics adapter, the owner's laptop.",
+  "measurements": {
+    "strobes": {
+      "frames": 120,
+      "flashStarts": [
+        0,
+        11,
+        22,
+        33,
+        44,
+        55,
+        66,
+        77,
+        88,
+        99,
+        110
+      ],
+      "plannedStarts": [
+        0,
+        11,
+        22,
+        33,
+        44,
+        55,
+        66,
+        77,
+        88,
+        99,
+        110
+      ],
+      "smallestSpacing": 11,
+      "flashGapFrames": 11,
+      "photosensitivity": {
+        "verdict": "pass",
+        "ranges": 0
+      }
+    },
+    "cost": {
+      "size": "1080x1920",
+      "frames": 30,
+      "drawMsPerFrame": {
+        "none": {
+          "samples": 30,
+          "medianMs": 20,
+          "p95Ms": 24,
+          "meanOf30FrameExportMs": 0.83
+        },
+        "color.adjust": {
+          "samples": 30,
+          "medianMs": 64,
+          "p95Ms": 72,
+          "meanOf30FrameExportMs": 31.3
+        },
+        "blur.gaussian 0.01": {
+          "samples": 30,
+          "medianMs": 84,
+          "p95Ms": 103,
+          "meanOf30FrameExportMs": 41.77
+        },
+        "overlay.snow": {
+          "samples": 30,
+          "medianMs": 50,
+          "p95Ms": 60,
+          "meanOf30FrameExportMs": 12.13
+        }
+      },
+      "note": "server export, software canvas, this machine under whatever load it had; each per-frame sample is a one-frame export (one frame drawn in a fresh render page, its picture decode included); the mean is the draw stage of one 30-frame export. Recorded, not a target."
+    }
+  },
+  "checks": [
+    {
+      "name": "1. A whole-edit color.adjust over three full-frame clips equals the same effect on each clip: max |Δ| ≤ 1/255 over every pixel of three stills (one per clip)",
+      "ok": true,
+      "detail": [
+        {
+          "frame": 15,
+          "maxDifference": 0
+        },
+        {
+          "frame": 45,
+          "maxDifference": 0
+        },
+        {
+          "frame": 75,
+          "maxDifference": 0
+        }
+      ]
+    },
+    {
+      "name": "2. Opacity 0.5: every byte of the still is within 1 of round((with + without) / 2) (a whole-edit color.invert)",
+      "ok": true,
+      "detail": {
+        "worstDifference": 1,
+        "fullVsWithout": 211,
+        "bytes": 691200,
+        "bytesEqual": 306900,
+        "distinctBytePairsInTheStill": 15
+      }
+    },
+    {
+      "name": "3a. Pixels outside the mask (frame 30, inside the span) and whole frames outside the span (10 and 70): 0 differing bytes against the render without the adjustment; inside the mask the picture is inverted",
+      "ok": true,
+      "detail": {
+        "outsidePixels": 171796,
+        "outsideDifferingBytes": 0,
+        "framesOutsideSpanDifferingBytes": 0,
+        "insideChangedBytes": 169812,
+        "insideBytes": 169812
+      }
+    },
+    {
+      "name": "3b. The pixels the captions cover fully, and those a title on a track above the FX track covers fully (each text alone is equal on a black and on a white background there): 0 differing bytes against the render without the adjustment (a whole-edit color.invert that changes the picture under them). Rim pixels a text covers only partly mix with the picture below; they are counted, not compared",
+      "ok": true,
+      "detail": {
+        "trackOrder": [
+          "video",
+          "adjustment",
+          "text",
+          "caption",
+          "audio"
+        ],
+        "titlePixels": 5812,
+        "titleDifferingBytes": 0,
+        "captionPixels": 4125,
+        "captionDifferingBytes": 0,
+        "pictureDifferingBytes": 661332,
+        "leftOut": {
+          "titleRimPixels": 981,
+          "titleRimDifferingBytes": 2936,
+          "captionRimPixels": 1056,
+          "captionRimDifferingBytes": 3118
+        },
+        "stillAfterMeasuringCoverageDifferingBytes": 0
+      }
+    },
+    {
+      "name": "4. The FX track moved above the title track: the title's fully covered pixels differ (> 0); the caption's still do not (captions are drawn last)",
+      "ok": true,
+      "detail": {
+        "trackOrder": [
+          "video",
+          "text",
+          "adjustment",
+          "caption",
+          "audio"
+        ],
+        "titleDifferingBytes": 17436,
+        "captionDifferingBytes": 0
+      }
+    },
+    {
+      "name": "5. Still against the exported frame at frames 5, 30 and 55 within the parity-suite tolerance (PSNR ≥ 36 dB and SSIM ≥ 0.985)",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "frames": 60,
+        "rows": [
+          {
+            "frame": 5,
+            "psnr": 43.04,
+            "ssim": 0.9997
+          },
+          {
+            "frame": 30,
+            "psnr": 43.04,
+            "ssim": 0.9997
+          },
+          {
+            "frame": 55,
+            "psnr": 43.04,
+            "ssim": 0.9997
+          }
+        ]
+      }
+    },
+    {
+      "name": "6. Undo of the four adjustment edits gives an equal creativeProjection; replaying the op log equals the live document (now and at the edited revision)",
+      "ok": true,
+      "detail": {
+        "undoStatuses": [
+          200,
+          200,
+          200,
+          200
+        ],
+        "revisions": {
+          "edited": 10,
+          "afterUndo": 14
+        }
+      }
+    },
+    {
+      "name": "7. A variant's hidden override removes the adjustment in that variant's still only: the variant still equals its still before the adjustment (0 differing bytes), the master still keeps it (0 differing bytes from before the override)",
+      "ok": true,
+      "detail": {
+        "variantWithAdjustmentDiffering": 388800,
+        "variantHiddenDiffering": 0,
+        "masterDiffering": 0
+      }
+    },
+    {
+      "name": "8. A strobe on the adjustment (3/s) and a strobe on the clip below (2.5/s): the exported file's flash starts are at least 11 frames apart at 30 fps (the one schedule), they keep flashing (≥ 2 starts a second), and the export's photosensitivity check reports 0 failing ranges",
+      "ok": true,
+      "detail": {
+        "frames": 120,
+        "flashStarts": [
+          0,
+          11,
+          22,
+          33,
+          44,
+          55,
+          66,
+          77,
+          88,
+          99,
+          110
+        ],
+        "plannedStarts": [
+          0,
+          11,
+          22,
+          33,
+          44,
+          55,
+          66,
+          77,
+          88,
+          99,
+          110
+        ],
+        "smallestSpacing": 11,
+        "flashGapFrames": 11,
+        "photosensitivity": {
+          "verdict": "pass",
+          "ranges": 0
+        }
+      }
+    },
+    {
+      "name": "10. Recorded (not gated): draw milliseconds per frame at 1080×1920 with no adjustment and with a whole-edit color.adjust, blur.gaussian 0.01 and overlay.snow (median and p95 over 30 frames, and a 30-frame export mean)",
+      "ok": true,
+      "detail": {
+        "size": "1080x1920",
+        "frames": 30,
+        "drawMsPerFrame": {
+          "none": {
+            "samples": 30,
+            "medianMs": 20,
+            "p95Ms": 24,
+            "meanOf30FrameExportMs": 0.83
+          },
+          "color.adjust": {
+            "samples": 30,
+            "medianMs": 64,
+            "p95Ms": 72,
+            "meanOf30FrameExportMs": 31.3
+          },
+          "blur.gaussian 0.01": {
+            "samples": 30,
+            "medianMs": 84,
+            "p95Ms": 103,
+            "meanOf30FrameExportMs": 41.77
+          },
+          "overlay.snow": {
+            "samples": 30,
+            "medianMs": 50,
+            "p95Ms": 60,
+            "meanOf30FrameExportMs": 12.13
+          }
+        },
+        "note": "server export, software canvas, this machine under whatever load it had; each per-frame sample is a one-frame export (one frame drawn in a fresh render page, its picture decode included); the mean is the draw stage of one 30-frame export. Recorded, not a target."
+      }
+    },
+    {
+      "name": "9. color.grade on an adjustment with the render worker started without WebGPU (PF_RENDER_GPU=off): the export is refused with the adapter reason, and the still too (nothing is delivered without the effect)",
+      "ok": true,
+      "detail": {
+        "exportStatus": "failed",
+        "exportError": "{\"code\":\"export_failed\",\"message\":\"render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses color.grade, which needs a graphics adapter in the render worker; the browser offers WebGPU but gave no graphics adapter\\n    at y (http://127.0.0.1:34841/assets/render-B_RhiCGW.js:1:762",
+        "stillStatus": 503,
+        "stillError": "{\"error\":{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses color.grade, which needs a graphics adapter in the render worker; the browser offers WebGPU but gave no graphics adapter\\n\""
+      }
+    }
+  ]
+}

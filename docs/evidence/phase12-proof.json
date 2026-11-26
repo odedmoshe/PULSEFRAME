@@ -1,0 +1,279 @@
+{
+  "ranAt": "2026-11-26T05:39:36.008Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "scope": "Linked formats, safe-area guides (generic, not platform specifications), preflight and batch export on one synthetic fixture. No publishing, thumbnails or metadata.",
+  "measurements": {
+    "coverVsCrop": {
+      "psnrDb": 46.86,
+      "note": "variant frame vs the master frame cropped and scaled by ffmpeg (different resampling filters, so not identical)"
+    },
+    "captionsPerFormat": {
+      "master": {
+        "top": 0.844,
+        "bottom": 0.883,
+        "height": 0.0417
+      },
+      "tall": {
+        "top": 0.842,
+        "bottom": 0.883,
+        "height": 0.0422
+      },
+      "tallWithOwnStyle": {
+        "top": 0.145,
+        "bottom": 0.23,
+        "height": 0.0859
+      },
+      "tallAfterReset": {
+        "top": 0.842,
+        "bottom": 0.883,
+        "height": 0.0422
+      }
+    }
+  },
+  "passed": 20,
+  "total": 20,
+  "checks": [
+    {
+      "name": "catalog offers format profiles; a 9:16 variant renders at its own size; \"cover\" fills the frame with the centre of the picture, \"contain\" shows the whole picture with bars",
+      "ok": true,
+      "detail": {
+        "psnrDb": 46.86,
+        "note": "variant frame vs the master frame cropped and scaled by ffmpeg (different resampling filters, so not identical)"
+      }
+    },
+    {
+      "name": "an override moves the title in that format only: master and the other formats are byte-identical to before",
+      "ok": true,
+      "detail": {
+        "titleTopAfter": 2584,
+        "titleBottomBefore": 1161
+      }
+    },
+    {
+      "name": "master edits reach the variant and the override survives them: after a ripple cut and a text change, both title pieces in the variant are still at the overridden position",
+      "ok": true,
+      "detail": {
+        "pieces": 2
+      }
+    },
+    {
+      "name": "captions per format: with a format-only style (top, twice the size) the tall version draws the caption in the top half at about twice the height, while the master frame draws its caption in exactly the same rows as before; clearing it returns the tall version to the master style",
+      "ok": true,
+      "detail": {
+        "master": {
+          "top": 0.844,
+          "bottom": 0.883,
+          "height": 0.0417
+        },
+        "tall": {
+          "top": 0.842,
+          "bottom": 0.883,
+          "height": 0.0422
+        },
+        "tallWithOwnStyle": {
+          "top": 0.145,
+          "bottom": 0.23,
+          "height": 0.0859
+        },
+        "tallAfterReset": {
+          "top": 0.842,
+          "bottom": 0.883,
+          "height": 0.0422
+        }
+      }
+    },
+    {
+      "name": "exporting a format gives a file at that size from an immutable snapshot: 360×640, 30 frames, matches the still of the same frame, unaffected by an override changed after the job started",
+      "ok": true,
+      "detail": {
+        "psnrDb": 37.33
+      }
+    },
+    {
+      "name": "batch export: one job per format with the right sizes; a batch naming a missing format creates no job at all",
+      "ok": true,
+      "detail": {
+        "sizes": [
+          "360x640",
+          "360x360"
+        ],
+        "bad": "not_found"
+      }
+    },
+    {
+      "name": "a clean project passes with no issues",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "preflight of a format reports each planted problem with the objects involved: empty picture, missing loudness target, title and captions outside the safe area, captions too fast, soft upscaled picture",
+      "ok": true,
+      "detail": {
+        "found": [
+          "captions_outside_safe_area",
+          "captions_too_fast",
+          "empty_picture",
+          "no_loudness_target",
+          "outside_safe_area",
+          "upscaled"
+        ],
+        "warnings": 5,
+        "notes": 1
+      }
+    },
+    {
+      "name": "the same edit checked as the master has no safe-area or upscaling issues (those belong to the format); a looser reading-speed setting clears that warning",
+      "ok": true,
+      "detail": [
+        "captions_too_fast",
+        "empty_picture",
+        "no_loudness_target"
+      ]
+    },
+    {
+      "name": "applying the offered fixes clears those issues; the title fix is a format-only override (master position unchanged); what remains needs judgement",
+      "ok": true,
+      "detail": {
+        "applied": [
+          "empty_picture",
+          "no_loudness_target",
+          "outside_safe_area",
+          "captions_outside_safe_area"
+        ],
+        "remaining": [
+          "captions_too_fast",
+          "upscaled"
+        ]
+      }
+    },
+    {
+      "name": "a render blocker (font that is not bundled) makes preflight not ok",
+      "ok": true
+    },
+    {
+      "name": "a transition that lost its source handle through later edits is reported with both clips, and its fix removes the freeze",
+      "ok": true,
+      "detail": {
+        "fix": "Remove the transition"
+      }
+    },
+    {
+      "name": "agent adds a format from a profile, sees it in the summary, runs preflight for it, and exports it",
+      "ok": true,
+      "detail": {
+        "preflight": [
+          "no_loudness_target",
+          "upscaled",
+          "upscaled"
+        ],
+        "job": "succeeded"
+      }
+    },
+    {
+      "name": "editor: choosing a format changes the preview to its shape with a format badge and the safe-area guide; a profile button adds a format; preflight lists issues for the viewed format and its fix button applies the fix",
+      "ok": true,
+      "detail": {
+        "masterRatio": 1.778,
+        "variantRatio": 0.563,
+        "shownCodes": [
+          "no_loudness_target",
+          "upscaled",
+          "upscaled"
+        ],
+        "target": -14,
+        "errors": []
+      }
+    },
+    {
+      "name": "editor: the project frame form refuses an odd size, changes size and background in one transaction (the server still is 480×480 with the new colour in its corners), Ctrl+Z restores the old frame; a library file in use cannot be removed, an unused one is removed from the library",
+      "ok": true,
+      "detail": {
+        "oddBlocked": true,
+        "size": "480x480",
+        "corner": [
+          32,
+          64,
+          96
+        ],
+        "restored": 640,
+        "usedDisabled": true,
+        "removed": true
+      }
+    },
+    {
+      "name": "editor: with a format selected, changing the caption position is stored for that format only (master stays \"bottom\"); \"follow the master again\" clears it; no page errors",
+      "ok": true,
+      "detail": {
+        "formatPos": "center",
+        "masterPos": "bottom",
+        "errors": []
+      }
+    },
+    {
+      "name": "editor: a caption cue's text can be edited; with a format selected the new wording applies to that format only (its rendered frame changes, the master frame is byte-identical and the cue keeps its text), \"back to the master text\" restores the format's frame byte for byte, and on the master view the field edits the cue itself",
+      "ok": true,
+      "detail": {
+        "masterTextDuringOverride": "HELLO",
+        "tallChanged": true,
+        "masterSame": true,
+        "restored": true,
+        "finalText": "HELLO AGAIN",
+        "errors": []
+      }
+    },
+    {
+      "name": "editor: \"new caption at the playhead\" adds a two-second cue at frame 90, selects it, and the text typed in the Inspector is what the cue says; a caption is drawn at frame 100 and nothing at frame 70, between the two cues",
+      "ok": true,
+      "detail": {
+        "start": {
+          "value": "3",
+          "timescale": 1
+        },
+        "duration": {
+          "value": "2",
+          "timescale": 1
+        },
+        "text": "שורה שנייה",
+        "captionTopAt100": 0.853,
+        "captionTopAt70": -0.003,
+        "errors": []
+      }
+    },
+    {
+      "name": "editor: \"merge with the next caption\" joins two cues into one covering both; \"hide this caption in this format\" removes it from that format's frame only (the master frame is byte-identical)",
+      "ok": true,
+      "detail": {
+        "text": "HELLO AGAIN שורה שנייה",
+        "duration": {
+          "value": "5",
+          "timescale": 1
+        },
+        "tallBefore": 0.767,
+        "tallAfter": -0.002,
+        "masterSame": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "transcript phrase wording per format: edited in the editor while a format is viewed, it is stored for that format only; that format's frame and subtitle file show the new wording while the master frame is byte-identical and the master subtitle file and transcript (text and word timing) are unchanged; \"back to the master wording\" restores the format's frame and file exactly; an unknown format is refused",
+      "ok": true,
+      "detail": {
+        "noteShown": true,
+        "stored": "SHORT",
+        "panelText": "SHORT",
+        "masterSame": true,
+        "tallChanged": true,
+        "srtTall": "1\n00:00:00,000 --> 00:00:02,000\nSHORT\n\n2\n00:00:02,000 --> 00:00:04,000\nsecond phrase\n",
+        "restored": true,
+        "badVariant": 404,
+        "errors": []
+      }
+    }
+  ]
+}

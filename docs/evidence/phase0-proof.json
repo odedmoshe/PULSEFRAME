@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-14T21:30:40.870Z",
+  "ranAt": "2026-11-26T05:30:06.719Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v470 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "logicalCpus": 4,
     "memoryGiB": 15.7,
     "gpu": "none (software)",
@@ -21,7 +21,7 @@
     "exportedFrames": 105
   },
   "measurements": {
-    "editorShellInteractiveMs": 185,
+    "editorShellInteractiveMs": 593,
     "mcp": {
       "negotiatedProtocolVersion": "2026-07-28",
       "server": {
@@ -30,22 +30,129 @@
       }
     },
     "agentEdit": {
-      "requestToCommitMs": 14.5,
-      "requestToVisibleInEditorMs": 38.9,
+      "requestToCommitMs": 16,
+      "requestToVisibleInEditorMs": 147.7,
       "note": "single sample, loopback, includes Playwright polling overhead"
     },
     "restCommitLatencyMs": {
       "samples": 30,
-      "median": 5.91,
-      "p95": 10.05,
-      "max": 10.78
+      "median": 4.28,
+      "p95": 7.07,
+      "max": 13.25
     },
     "export": {
-      "file": "job_0xf4ydUhkZ0.mp4",
+      "file": "job_nscoXzTOZ7g.mp4",
+      "mimeType": "video/mp4",
+      "captions": null,
       "bytes": 107979,
-      "revision": 36,
+      "revision": 45,
       "route": "server-software-canvas2d",
+      "options": {
+        "format": "mp4-h264-aac",
+        "captions": "burned",
+        "quality": "high",
+        "scale": 1
+      },
+      "manifest": {
+        "engine": {
+          "compositor": "canvas2d/1",
+          "evaluator": "evaluate/1",
+          "audio": "plan/2 voice/1",
+          "fontFamilies": [
+            "Heebo",
+            "Rubik",
+            "Assistant",
+            "Frank Ruhl Libre",
+            "Secular One",
+            "Suez One",
+            "David Libre",
+            "Karantina",
+            "Amatic SC",
+            "Fredoka",
+            "Gveret Levin"
+          ],
+          "schemaVersion": 3
+        },
+        "assets": [
+          {
+            "id": "ast_6348845b130",
+            "contentHash": "sha256:c7e7258d199ae386d741322d2a22c5d626d2af5e3bd3822625e430fb09f7066d",
+            "byteSize": 49384,
+            "kind": "video",
+            "clips": 4
+          }
+        ],
+        "fonts": [
+          {
+            "family": "Heebo",
+            "files": [
+              {
+                "name": "heebo-hebrew-400-normal-CVTJgQVK.woff2",
+                "sha256": "2bc607f150e17d5e334f2ce917a2385661f5f4457f212b5b3bed6a22fc1d2077"
+              },
+              {
+                "name": "heebo-hebrew-700-normal-BmueYKsA.woff2",
+                "sha256": "7dee88b8da46dc5bbc8e7a4a14f1ae18ea506679b60f80ea765cf373a0c3073b"
+              },
+              {
+                "name": "heebo-latin-400-normal-BGyEuwIV.woff2",
+                "sha256": "2fbe59e5561759450e111cff78825304c9278ec6ba5e808cbaff1c4a97dfa6fa"
+              },
+              {
+                "name": "heebo-latin-700-normal-PoyjiH5f.woff2",
+                "sha256": "2dd5f140b9902257dc0f38e89f47f79d40b31438abef118637d916861fd370bb"
+              }
+            ]
+          }
+        ],
+        "audioEffects": [],
+        "output": {
+          "width": 1080,
+          "height": 1920,
+          "firstFrame": 0,
+          "frames": 105,
+          "frameRate": {
+            "num": 30,
+            "den": 1
+          },
+          "sampleRate": 48000
+        }
+      },
+      "estimate": {
+        "bytes": 3894240,
+        "basis": "heuristic bits-per-pixel for the chosen quality; real size depends on content",
+        "actualBytes": 107979
+      },
+      "photosensitivity": {
+        "method": "General and red flash thresholds of WCAG 2.3.1 (ITU-R BT.1702 family), approximated on 24 × 24 cells of the rendered frames: a stretch fails when more than a quarter of a 10-degree window (a third of the width and height) flashes more than three times in a second. A guide, not a certification.",
+        "verdict": "pass",
+        "frames": 105,
+        "ranges": []
+      },
+      "checks": {
+        "picture": {
+          "method": "HEURISTIC on the 24 × 24 cells of the flash check (block means of a sample, so a small detail can be missed): black = every cell at or under 8-bit level 4 for at least 0.5 s; frozen = every cell unchanged for at least 2 s while the document says a video plays (a video clip that is not a freeze frame, inside its source, on a visible track, not covered by an opaque full-frame clip; opacity keys and effects are not modelled). Report only.",
+          "status": "measured",
+          "findings": []
+        },
+        "sound": {
+          "method": "measured on the written 16-bit sound, before AAC: 0.1 s blocks; clipped = a block with at least 3 samples at -32768 or 32767; silence = blocks with RMS under -60 dBFS for at least 2 s",
+          "status": "measured",
+          "findings": []
+        },
+        "lookedFor": [
+          "black",
+          "frozen",
+          "silence",
+          "clipped"
+        ]
+      },
       "audioClipsMixed": 2,
+      "audio": {
+        "mixPeakDbfs": -5.72,
+        "clipped": false,
+        "loudness": null
+      },
       "validation": {
         "videoCodec": "h264",
         "audioCodec": "aac",
@@ -60,13 +167,13 @@
         "durationSeconds": 3.5
       },
       "renderStageMs": {
-        "draw": 657,
-        "readback": 685,
-        "upload": 5233
+        "draw": 545,
+        "readback": 619,
+        "upload": 5022
       },
-      "wallSeconds": 7.365,
-      "realtimeFactor": 0.47522063815342835,
-      "uiWallSeconds": 7.422
+      "wallSeconds": 7.308,
+      "realtimeFactor": 0.4789272030651341,
+      "uiWallSeconds": 12.166
     },
     "parityFrame70": {
       "psnrDb": 46.687164,
@@ -90,6 +197,788 @@
       ],
       "maxAbsErrorMs": 0.06,
       "frameMs": 33.33
+    },
+    "previewMedia": {
+      "warm": {
+        "decoders": 0,
+        "bytes": 0,
+        "budgetBytes": 0,
+        "off": null,
+        "opened": 0,
+        "reused": 0,
+        "adopted": 0,
+        "evicted": 0,
+        "gaveRoom": 0,
+        "overBudget": 0,
+        "noRoom": 0
+      },
+      "decoders": 2,
+      "stills": 0,
+      "maxDecoders": 10,
+      "maxStills": 16,
+      "decoderByteCacheBytes": 16777216,
+      "sources": {
+        "ast_6348845b130": "original"
+      },
+      "sourcesUsed": {
+        "ast_6348845b130": [
+          "original"
+        ]
+      },
+      "opened": 2,
+      "disposed": 0,
+      "peakDecoders": 2,
+      "refused": 0,
+      "rangedResponses": 2,
+      "statuses": [
+        "ast_6348845b130/content:206"
+      ]
+    },
+    "previewSync": {
+      "clock": "audio",
+      "audioContextState": "running",
+      "audioSampleRate": 48000,
+      "outputLatencyMs": 42.02,
+      "audioScheduledAheadMaxMs": 2090.7,
+      "audioLookaheadMs": 1500,
+      "liveAudioNodes": 0,
+      "loops": 0,
+      "audioOnsetsTimelineSeconds": [
+        0.00006,
+        1.00006,
+        2.50006
+      ],
+      "audioLevels": [
+        {
+          "t": -0.130667,
+          "peak": 0
+        },
+        {
+          "t": -0.07,
+          "peak": 0
+        },
+        {
+          "t": -0.02,
+          "peak": 0.5178
+        },
+        {
+          "t": 0.03,
+          "peak": 0.5047
+        },
+        {
+          "t": 0.08,
+          "peak": 0.5015
+        },
+        {
+          "t": 0.13,
+          "peak": 0
+        },
+        {
+          "t": 0.18,
+          "peak": 0
+        },
+        {
+          "t": 0.23,
+          "peak": 0
+        },
+        {
+          "t": 0.28,
+          "peak": 0
+        },
+        {
+          "t": 0.33,
+          "peak": 0
+        },
+        {
+          "t": 0.38,
+          "peak": 0
+        },
+        {
+          "t": 0.43,
+          "peak": 0
+        },
+        {
+          "t": 0.48,
+          "peak": 0
+        },
+        {
+          "t": 0.53,
+          "peak": 0
+        },
+        {
+          "t": 0.58,
+          "peak": 0
+        },
+        {
+          "t": 0.63,
+          "peak": 0
+        },
+        {
+          "t": 0.68,
+          "peak": 0
+        },
+        {
+          "t": 0.73,
+          "peak": 0
+        },
+        {
+          "t": 0.78,
+          "peak": 0
+        },
+        {
+          "t": 0.83,
+          "peak": 0
+        },
+        {
+          "t": 0.88,
+          "peak": 0
+        },
+        {
+          "t": 0.93,
+          "peak": 0
+        },
+        {
+          "t": 0.98,
+          "peak": 0.5011
+        },
+        {
+          "t": 1.03,
+          "peak": 0.5003
+        },
+        {
+          "t": 1.08,
+          "peak": 0.5004
+        },
+        {
+          "t": 1.13,
+          "peak": 0
+        },
+        {
+          "t": 1.18,
+          "peak": 0
+        },
+        {
+          "t": 1.23,
+          "peak": 0
+        },
+        {
+          "t": 1.28,
+          "peak": 0
+        },
+        {
+          "t": 1.33,
+          "peak": 0
+        },
+        {
+          "t": 1.38,
+          "peak": 0
+        },
+        {
+          "t": 1.43,
+          "peak": 0
+        },
+        {
+          "t": 1.48,
+          "peak": 0
+        },
+        {
+          "t": 1.53,
+          "peak": 0
+        },
+        {
+          "t": 1.58,
+          "peak": 0
+        },
+        {
+          "t": 1.63,
+          "peak": 0
+        },
+        {
+          "t": 1.68,
+          "peak": 0
+        },
+        {
+          "t": 1.73,
+          "peak": 0
+        },
+        {
+          "t": 1.78,
+          "peak": 0
+        },
+        {
+          "t": 1.83,
+          "peak": 0
+        },
+        {
+          "t": 1.88,
+          "peak": 0
+        },
+        {
+          "t": 1.93,
+          "peak": 0
+        },
+        {
+          "t": 1.98,
+          "peak": 0.0038
+        },
+        {
+          "t": 2.03,
+          "peak": 0
+        },
+        {
+          "t": 2.08,
+          "peak": 0
+        },
+        {
+          "t": 2.13,
+          "peak": 0
+        },
+        {
+          "t": 2.18,
+          "peak": 0
+        },
+        {
+          "t": 2.23,
+          "peak": 0
+        },
+        {
+          "t": 2.28,
+          "peak": 0
+        },
+        {
+          "t": 2.33,
+          "peak": 0
+        },
+        {
+          "t": 2.38,
+          "peak": 0
+        },
+        {
+          "t": 2.43,
+          "peak": 0
+        },
+        {
+          "t": 2.48,
+          "peak": 0.5055
+        },
+        {
+          "t": 2.53,
+          "peak": 0.5004
+        },
+        {
+          "t": 2.58,
+          "peak": 0.5015
+        },
+        {
+          "t": 2.63,
+          "peak": 0
+        },
+        {
+          "t": 2.68,
+          "peak": 0
+        },
+        {
+          "t": 2.73,
+          "peak": 0
+        },
+        {
+          "t": 2.78,
+          "peak": 0
+        },
+        {
+          "t": 2.83,
+          "peak": 0
+        },
+        {
+          "t": 2.88,
+          "peak": 0
+        },
+        {
+          "t": 2.93,
+          "peak": 0
+        },
+        {
+          "t": 2.98,
+          "peak": 0
+        },
+        {
+          "t": 3.03,
+          "peak": 0
+        },
+        {
+          "t": 3.08,
+          "peak": 0
+        },
+        {
+          "t": 3.13,
+          "peak": 0
+        },
+        {
+          "t": 3.18,
+          "peak": 0
+        },
+        {
+          "t": 3.23,
+          "peak": 0
+        },
+        {
+          "t": 3.28,
+          "peak": 0
+        },
+        {
+          "t": 3.33,
+          "peak": 0
+        },
+        {
+          "t": 3.38,
+          "peak": 0
+        },
+        {
+          "t": 3.43,
+          "peak": 0
+        }
+      ],
+      "framesRequested": 104,
+      "framesPainted": 104,
+      "paintLatenessByFrameMs": [
+        [
+          1,
+          76
+        ],
+        [
+          2,
+          42.67
+        ],
+        [
+          3,
+          28
+        ],
+        [
+          4,
+          16
+        ],
+        [
+          5,
+          22.67
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          17.33
+        ],
+        [
+          8,
+          24
+        ],
+        [
+          9,
+          20
+        ],
+        [
+          10,
+          16
+        ],
+        [
+          11,
+          12
+        ],
+        [
+          12,
+          0
+        ],
+        [
+          13,
+          17.33
+        ],
+        [
+          14,
+          21.33
+        ],
+        [
+          15,
+          1.33
+        ],
+        [
+          16,
+          16
+        ],
+        [
+          17,
+          14.67
+        ],
+        [
+          18,
+          0
+        ],
+        [
+          19,
+          17.33
+        ],
+        [
+          20,
+          24
+        ],
+        [
+          21,
+          1.33
+        ],
+        [
+          22,
+          16
+        ],
+        [
+          23,
+          14.67
+        ],
+        [
+          24,
+          21.33
+        ],
+        [
+          25,
+          17.33
+        ],
+        [
+          26,
+          13.33
+        ],
+        [
+          27,
+          1.33
+        ],
+        [
+          28,
+          18.67
+        ],
+        [
+          29,
+          14.67
+        ],
+        [
+          30,
+          0
+        ],
+        [
+          31,
+          17.33
+        ],
+        [
+          32,
+          24
+        ],
+        [
+          33,
+          12
+        ],
+        [
+          34,
+          18.67
+        ],
+        [
+          35,
+          14.67
+        ],
+        [
+          36,
+          2.67
+        ],
+        [
+          37,
+          17.33
+        ],
+        [
+          38,
+          16
+        ],
+        [
+          39,
+          22.67
+        ],
+        [
+          40,
+          18.67
+        ],
+        [
+          41,
+          25.33
+        ],
+        [
+          42,
+          10.67
+        ],
+        [
+          43,
+          20
+        ],
+        [
+          44,
+          16
+        ],
+        [
+          45,
+          12
+        ],
+        [
+          46,
+          18.67
+        ],
+        [
+          47,
+          14.67
+        ],
+        [
+          48,
+          21.33
+        ],
+        [
+          49,
+          20
+        ],
+        [
+          50,
+          16
+        ],
+        [
+          51,
+          22.67
+        ],
+        [
+          52,
+          18.67
+        ],
+        [
+          53,
+          17.33
+        ],
+        [
+          54,
+          16
+        ],
+        [
+          55,
+          20
+        ],
+        [
+          56,
+          16
+        ],
+        [
+          57,
+          22.67
+        ],
+        [
+          58,
+          10.67
+        ],
+        [
+          59,
+          17.33
+        ],
+        [
+          60,
+          42.67
+        ],
+        [
+          61,
+          30.67
+        ],
+        [
+          62,
+          16
+        ],
+        [
+          63,
+          22.67
+        ],
+        [
+          64,
+          10.67
+        ],
+        [
+          65,
+          17.33
+        ],
+        [
+          66,
+          24
+        ],
+        [
+          67,
+          4
+        ],
+        [
+          68,
+          16
+        ],
+        [
+          69,
+          12
+        ],
+        [
+          70,
+          21.33
+        ],
+        [
+          71,
+          17.33
+        ],
+        [
+          72,
+          13.33
+        ],
+        [
+          73,
+          12
+        ],
+        [
+          74,
+          18.67
+        ],
+        [
+          75,
+          14.67
+        ],
+        [
+          76,
+          10.67
+        ],
+        [
+          77,
+          17.33
+        ],
+        [
+          78,
+          13.33
+        ],
+        [
+          79,
+          20
+        ],
+        [
+          80,
+          18.67
+        ],
+        [
+          81,
+          14.67
+        ],
+        [
+          82,
+          21.33
+        ],
+        [
+          83,
+          17.33
+        ],
+        [
+          84,
+          16
+        ],
+        [
+          85,
+          22.67
+        ],
+        [
+          86,
+          18.67
+        ],
+        [
+          87,
+          14.67
+        ],
+        [
+          88,
+          21.33
+        ],
+        [
+          89,
+          17.33
+        ],
+        [
+          90,
+          16
+        ],
+        [
+          91,
+          22.67
+        ],
+        [
+          92,
+          0
+        ],
+        [
+          93,
+          14.67
+        ],
+        [
+          94,
+          21.33
+        ],
+        [
+          95,
+          20
+        ],
+        [
+          96,
+          16
+        ],
+        [
+          97,
+          22.67
+        ],
+        [
+          98,
+          0
+        ],
+        [
+          99,
+          14.67
+        ],
+        [
+          100,
+          21.33
+        ],
+        [
+          101,
+          20
+        ],
+        [
+          102,
+          16
+        ],
+        [
+          103,
+          12
+        ],
+        [
+          104,
+          0
+        ]
+      ],
+      "paintLatenessMs": {
+        "median": 17.33,
+        "p95": 25.33,
+        "max": 76
+      },
+      "fxVoices": 0,
+      "fxPrimeMs": 0,
+      "fxPrimeTimedOut": false,
+      "fxLateStarts": 0,
+      "fxLateSkips": 0,
+      "bypassAudioFx": false,
+      "auditioning": false,
+      "unavailableAudioFx": {},
+      "limiter": {
+        "active": false,
+        "ceilingDb": null,
+        "unavailable": null,
+        "reductions": []
+      },
+      "note": "one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it",
+      "audioOnsetMaxErrorMs": 0.06
     }
   },
   "checks": [
@@ -111,6 +1000,16 @@
     {
       "name": "observe-only token cannot create a project -> 403",
       "ok": true
+    },
+    {
+      "name": "the owner session needs the launch secret: no key, a wrong key, or an agent token with a same-origin header all get 401; the right key gets a cookie",
+      "ok": true,
+      "detail": {
+        "noKey": 401,
+        "badKey": 401,
+        "agent": 401,
+        "good": 200
+      }
     },
     {
       "name": "cross-origin page cannot obtain a browser session -> 403",
@@ -146,6 +1045,15 @@
       }
     },
     {
+      "name": "ingest derivatives: thumbnails, waveform peaks and a frame-identical proxy are produced in the background",
+      "ok": true,
+      "detail": [
+        "proxy:ready:42755",
+        "thumbnails:ready:4235",
+        "waveform:ready:3948"
+      ]
+    },
+    {
       "name": "edit: add to timeline creates linked picture + audio clips",
       "ok": true
     },
@@ -162,10 +1070,11 @@
       "ok": true
     },
     {
-      "name": "preview: canvas shows source frame 60 at timeline frame 60 (barcode read from preview pixels)",
+      "name": "preview: paused canvas is full project resolution and shows source frame 60 at timeline frame 60 (barcode read from preview pixels)",
       "ok": true,
       "detail": {
-        "canvas": "540x960"
+        "canvas": "1080x1920",
+        "quality": "full"
       }
     },
     {
@@ -187,7 +1096,7 @@
       "name": "MCP: tools are generated from the operation registry (internal ops hidden)",
       "ok": true,
       "detail": {
-        "count": 22
+        "count": 210
       }
     },
     {
@@ -195,7 +1104,7 @@
       "ok": true,
       "detail": {
         "right": {
-          "id": "clp_453697befb1",
+          "id": "clp_ca52390ca81",
           "start": {
             "value": "2",
             "timescale": 1
@@ -215,8 +1124,8 @@
       "name": "live UI update: agent edit appears in the open editor without reload",
       "ok": true,
       "detail": {
-        "requestToCommitMs": 14.5,
-        "requestToVisibleInEditorMs": 38.9,
+        "requestToCommitMs": 16,
+        "requestToVisibleInEditorMs": 147.7,
         "note": "single sample, loopback, includes Playwright polling overhead"
       }
     },
@@ -230,11 +1139,11 @@
       "detail": {
         "before": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_e0e56417910"
+          "selected": "clip-clp_47af883cb40"
         },
         "after": {
           "timecode": "00:00:02:10",
-          "selected": "clip-clp_e0e56417910"
+          "selected": "clip-clp_47af883cb40"
         }
       }
     },
@@ -252,7 +1161,7 @@
           "expectedRevision": 5,
           "currentRevision": 6
         },
-        "hint": "Re-read the timeline at the current revision and resubmit."
+        "hint": "Re-read the timeline at the current revision and resubmit, or send baseRevision to allow a safe rebase."
       }
     },
     {
@@ -265,6 +1174,38 @@
     },
     {
       "name": "rejected edits did not change the revision",
+      "ok": true
+    },
+    {
+      "name": "rebase: an agent edit based on an older revision is accepted when it touches items nobody changed since",
+      "ok": true,
+      "detail": {
+        "rebasedFrom": 6,
+        "revision": 8
+      }
+    },
+    {
+      "name": "conflict: the same stale base is refused for an item that changed, naming the item, revision and actor",
+      "ok": true,
+      "detail": [
+        {
+          "entityId": "clp_47af883cb40",
+          "changedAtRevision": 7,
+          "by": "agent:local",
+          "deleted": false
+        }
+      ]
+    },
+    {
+      "name": "agent undo: reverses its own last edit as a new revision",
+      "ok": true
+    },
+    {
+      "name": "human undo (Ctrl+Z) restores the deleted clip and its linked audio; the agent edit made in between is kept",
+      "ok": true
+    },
+    {
+      "name": "redo then undo via the header buttons round-trips",
       "ok": true
     },
     {
@@ -286,7 +1227,7 @@
       "name": "render_frame returns a PNG with revision metadata",
       "ok": true,
       "detail": {
-        "revision": 36,
+        "revision": 45,
         "frameIndex": 70,
         "time": {
           "value": "7",
@@ -301,11 +1242,18 @@
       "ok": true
     },
     {
+      "name": "when the export finishes the editor says so and the file starts saving by itself; the link stays for another copy",
+      "ok": true,
+      "detail": {
+        "savedName": "pulseframe-job_nscoXzTOZ7g.mp4"
+      }
+    },
+    {
       "name": "export: durable job succeeded and used the pre-edit snapshot revision",
       "ok": true,
       "detail": {
         "status": "succeeded",
-        "revision": 36,
+        "revision": 45,
         "error": null
       }
     },
@@ -370,7 +1318,835 @@
       "name": "replaying the op log from revision 0 reproduces the materialized document exactly",
       "ok": true,
       "detail": {
-        "revision": 37
+        "revision": 46
+      }
+    },
+    {
+      "name": "paused preview after reload decodes the ORIGINAL by HTTP range requests (no whole-file download) and shows the exact source frame on 12 random-access seeks",
+      "ok": true,
+      "detail": {
+        "wrong": [],
+        "statuses": {
+          "warm": {
+            "decoders": 0,
+            "bytes": 0,
+            "budgetBytes": 0,
+            "off": null,
+            "opened": 0,
+            "reused": 0,
+            "adopted": 0,
+            "evicted": 0,
+            "gaveRoom": 0,
+            "overBudget": 0,
+            "noRoom": 0
+          },
+          "decoders": 2,
+          "stills": 0,
+          "maxDecoders": 10,
+          "maxStills": 16,
+          "decoderByteCacheBytes": 16777216,
+          "sources": {
+            "ast_6348845b130": "original"
+          },
+          "sourcesUsed": {
+            "ast_6348845b130": [
+              "original"
+            ]
+          },
+          "opened": 2,
+          "disposed": 0,
+          "peakDecoders": 2,
+          "refused": 0,
+          "rangedResponses": 2,
+          "statuses": [
+            "ast_6348845b130/content:206"
+          ]
+        }
+      }
+    },
+    {
+      "name": "preview playback ran to the end on a measured clock; paint lateness recorded (measurement, not a pass/fail target)",
+      "ok": true,
+      "detail": {
+        "clock": "audio",
+        "audioContextState": "running",
+        "audioSampleRate": 48000,
+        "outputLatencyMs": 42.02,
+        "audioScheduledAheadMaxMs": 2090.7,
+        "audioLookaheadMs": 1500,
+        "liveAudioNodes": 0,
+        "loops": 0,
+        "audioOnsetsTimelineSeconds": [
+          0.00006,
+          1.00006,
+          2.50006
+        ],
+        "audioLevels": [
+          {
+            "t": -0.130667,
+            "peak": 0
+          },
+          {
+            "t": -0.07,
+            "peak": 0
+          },
+          {
+            "t": -0.02,
+            "peak": 0.5178
+          },
+          {
+            "t": 0.03,
+            "peak": 0.5047
+          },
+          {
+            "t": 0.08,
+            "peak": 0.5015
+          },
+          {
+            "t": 0.13,
+            "peak": 0
+          },
+          {
+            "t": 0.18,
+            "peak": 0
+          },
+          {
+            "t": 0.23,
+            "peak": 0
+          },
+          {
+            "t": 0.28,
+            "peak": 0
+          },
+          {
+            "t": 0.33,
+            "peak": 0
+          },
+          {
+            "t": 0.38,
+            "peak": 0
+          },
+          {
+            "t": 0.43,
+            "peak": 0
+          },
+          {
+            "t": 0.48,
+            "peak": 0
+          },
+          {
+            "t": 0.53,
+            "peak": 0
+          },
+          {
+            "t": 0.58,
+            "peak": 0
+          },
+          {
+            "t": 0.63,
+            "peak": 0
+          },
+          {
+            "t": 0.68,
+            "peak": 0
+          },
+          {
+            "t": 0.73,
+            "peak": 0
+          },
+          {
+            "t": 0.78,
+            "peak": 0
+          },
+          {
+            "t": 0.83,
+            "peak": 0
+          },
+          {
+            "t": 0.88,
+            "peak": 0
+          },
+          {
+            "t": 0.93,
+            "peak": 0
+          },
+          {
+            "t": 0.98,
+            "peak": 0.5011
+          },
+          {
+            "t": 1.03,
+            "peak": 0.5003
+          },
+          {
+            "t": 1.08,
+            "peak": 0.5004
+          },
+          {
+            "t": 1.13,
+            "peak": 0
+          },
+          {
+            "t": 1.18,
+            "peak": 0
+          },
+          {
+            "t": 1.23,
+            "peak": 0
+          },
+          {
+            "t": 1.28,
+            "peak": 0
+          },
+          {
+            "t": 1.33,
+            "peak": 0
+          },
+          {
+            "t": 1.38,
+            "peak": 0
+          },
+          {
+            "t": 1.43,
+            "peak": 0
+          },
+          {
+            "t": 1.48,
+            "peak": 0
+          },
+          {
+            "t": 1.53,
+            "peak": 0
+          },
+          {
+            "t": 1.58,
+            "peak": 0
+          },
+          {
+            "t": 1.63,
+            "peak": 0
+          },
+          {
+            "t": 1.68,
+            "peak": 0
+          },
+          {
+            "t": 1.73,
+            "peak": 0
+          },
+          {
+            "t": 1.78,
+            "peak": 0
+          },
+          {
+            "t": 1.83,
+            "peak": 0
+          },
+          {
+            "t": 1.88,
+            "peak": 0
+          },
+          {
+            "t": 1.93,
+            "peak": 0
+          },
+          {
+            "t": 1.98,
+            "peak": 0.0038
+          },
+          {
+            "t": 2.03,
+            "peak": 0
+          },
+          {
+            "t": 2.08,
+            "peak": 0
+          },
+          {
+            "t": 2.13,
+            "peak": 0
+          },
+          {
+            "t": 2.18,
+            "peak": 0
+          },
+          {
+            "t": 2.23,
+            "peak": 0
+          },
+          {
+            "t": 2.28,
+            "peak": 0
+          },
+          {
+            "t": 2.33,
+            "peak": 0
+          },
+          {
+            "t": 2.38,
+            "peak": 0
+          },
+          {
+            "t": 2.43,
+            "peak": 0
+          },
+          {
+            "t": 2.48,
+            "peak": 0.5055
+          },
+          {
+            "t": 2.53,
+            "peak": 0.5004
+          },
+          {
+            "t": 2.58,
+            "peak": 0.5015
+          },
+          {
+            "t": 2.63,
+            "peak": 0
+          },
+          {
+            "t": 2.68,
+            "peak": 0
+          },
+          {
+            "t": 2.73,
+            "peak": 0
+          },
+          {
+            "t": 2.78,
+            "peak": 0
+          },
+          {
+            "t": 2.83,
+            "peak": 0
+          },
+          {
+            "t": 2.88,
+            "peak": 0
+          },
+          {
+            "t": 2.93,
+            "peak": 0
+          },
+          {
+            "t": 2.98,
+            "peak": 0
+          },
+          {
+            "t": 3.03,
+            "peak": 0
+          },
+          {
+            "t": 3.08,
+            "peak": 0
+          },
+          {
+            "t": 3.13,
+            "peak": 0
+          },
+          {
+            "t": 3.18,
+            "peak": 0
+          },
+          {
+            "t": 3.23,
+            "peak": 0
+          },
+          {
+            "t": 3.28,
+            "peak": 0
+          },
+          {
+            "t": 3.33,
+            "peak": 0
+          },
+          {
+            "t": 3.38,
+            "peak": 0
+          },
+          {
+            "t": 3.43,
+            "peak": 0
+          }
+        ],
+        "framesRequested": 104,
+        "framesPainted": 104,
+        "paintLatenessByFrameMs": [
+          [
+            1,
+            76
+          ],
+          [
+            2,
+            42.67
+          ],
+          [
+            3,
+            28
+          ],
+          [
+            4,
+            16
+          ],
+          [
+            5,
+            22.67
+          ],
+          [
+            6,
+            0
+          ],
+          [
+            7,
+            17.33
+          ],
+          [
+            8,
+            24
+          ],
+          [
+            9,
+            20
+          ],
+          [
+            10,
+            16
+          ],
+          [
+            11,
+            12
+          ],
+          [
+            12,
+            0
+          ],
+          [
+            13,
+            17.33
+          ],
+          [
+            14,
+            21.33
+          ],
+          [
+            15,
+            1.33
+          ],
+          [
+            16,
+            16
+          ],
+          [
+            17,
+            14.67
+          ],
+          [
+            18,
+            0
+          ],
+          [
+            19,
+            17.33
+          ],
+          [
+            20,
+            24
+          ],
+          [
+            21,
+            1.33
+          ],
+          [
+            22,
+            16
+          ],
+          [
+            23,
+            14.67
+          ],
+          [
+            24,
+            21.33
+          ],
+          [
+            25,
+            17.33
+          ],
+          [
+            26,
+            13.33
+          ],
+          [
+            27,
+            1.33
+          ],
+          [
+            28,
+            18.67
+          ],
+          [
+            29,
+            14.67
+          ],
+          [
+            30,
+            0
+          ],
+          [
+            31,
+            17.33
+          ],
+          [
+            32,
+            24
+          ],
+          [
+            33,
+            12
+          ],
+          [
+            34,
+            18.67
+          ],
+          [
+            35,
+            14.67
+          ],
+          [
+            36,
+            2.67
+          ],
+          [
+            37,
+            17.33
+          ],
+          [
+            38,
+            16
+          ],
+          [
+            39,
+            22.67
+          ],
+          [
+            40,
+            18.67
+          ],
+          [
+            41,
+            25.33
+          ],
+          [
+            42,
+            10.67
+          ],
+          [
+            43,
+            20
+          ],
+          [
+            44,
+            16
+          ],
+          [
+            45,
+            12
+          ],
+          [
+            46,
+            18.67
+          ],
+          [
+            47,
+            14.67
+          ],
+          [
+            48,
+            21.33
+          ],
+          [
+            49,
+            20
+          ],
+          [
+            50,
+            16
+          ],
+          [
+            51,
+            22.67
+          ],
+          [
+            52,
+            18.67
+          ],
+          [
+            53,
+            17.33
+          ],
+          [
+            54,
+            16
+          ],
+          [
+            55,
+            20
+          ],
+          [
+            56,
+            16
+          ],
+          [
+            57,
+            22.67
+          ],
+          [
+            58,
+            10.67
+          ],
+          [
+            59,
+            17.33
+          ],
+          [
+            60,
+            42.67
+          ],
+          [
+            61,
+            30.67
+          ],
+          [
+            62,
+            16
+          ],
+          [
+            63,
+            22.67
+          ],
+          [
+            64,
+            10.67
+          ],
+          [
+            65,
+            17.33
+          ],
+          [
+            66,
+            24
+          ],
+          [
+            67,
+            4
+          ],
+          [
+            68,
+            16
+          ],
+          [
+            69,
+            12
+          ],
+          [
+            70,
+            21.33
+          ],
+          [
+            71,
+            17.33
+          ],
+          [
+            72,
+            13.33
+          ],
+          [
+            73,
+            12
+          ],
+          [
+            74,
+            18.67
+          ],
+          [
+            75,
+            14.67
+          ],
+          [
+            76,
+            10.67
+          ],
+          [
+            77,
+            17.33
+          ],
+          [
+            78,
+            13.33
+          ],
+          [
+            79,
+            20
+          ],
+          [
+            80,
+            18.67
+          ],
+          [
+            81,
+            14.67
+          ],
+          [
+            82,
+            21.33
+          ],
+          [
+            83,
+            17.33
+          ],
+          [
+            84,
+            16
+          ],
+          [
+            85,
+            22.67
+          ],
+          [
+            86,
+            18.67
+          ],
+          [
+            87,
+            14.67
+          ],
+          [
+            88,
+            21.33
+          ],
+          [
+            89,
+            17.33
+          ],
+          [
+            90,
+            16
+          ],
+          [
+            91,
+            22.67
+          ],
+          [
+            92,
+            0
+          ],
+          [
+            93,
+            14.67
+          ],
+          [
+            94,
+            21.33
+          ],
+          [
+            95,
+            20
+          ],
+          [
+            96,
+            16
+          ],
+          [
+            97,
+            22.67
+          ],
+          [
+            98,
+            0
+          ],
+          [
+            99,
+            14.67
+          ],
+          [
+            100,
+            21.33
+          ],
+          [
+            101,
+            20
+          ],
+          [
+            102,
+            16
+          ],
+          [
+            103,
+            12
+          ],
+          [
+            104,
+            0
+          ]
+        ],
+        "paintLatenessMs": {
+          "median": 17.33,
+          "p95": 25.33,
+          "max": 76
+        },
+        "fxVoices": 0,
+        "fxPrimeMs": 0,
+        "fxPrimeTimedOut": false,
+        "fxLateStarts": 0,
+        "fxLateSkips": 0,
+        "bypassAudioFx": false,
+        "auditioning": false,
+        "unavailableAudioFx": {},
+        "limiter": {
+          "active": false,
+          "ceilingDb": null,
+          "unavailable": null,
+          "reductions": []
+        },
+        "note": "one 3.5 s playback in headless Chromium on the CPU profile; lateness = when a frame was painted minus when the playback clock reached it",
+        "audioOnsetMaxErrorMs": 0.06
+      }
+    },
+    {
+      "name": "preview audio (streamed, bounded lookahead): beeps reach the output stage within one frame of their timeline positions on the audio clock",
+      "ok": true,
+      "detail": {
+        "onsets": [
+          0.00006,
+          1.00006,
+          2.50006
+        ],
+        "maxErrorMs": 0.06,
+        "scheduledAheadMaxMs": 2090.7
+      }
+    },
+    {
+      "name": "playback used the frame-identical proxy (draft quality), also read by range requests",
+      "ok": true,
+      "detail": {
+        "sourcesUsed": {
+          "ast_6348845b130": [
+            "original",
+            "proxy"
+          ]
+        }
+      }
+    },
+    {
+      "name": "decoder count stays within its budget",
+      "ok": true,
+      "detail": {
+        "decoders": 2,
+        "max": 10,
+        "opened": 2,
+        "disposed": 0
       }
     },
     {

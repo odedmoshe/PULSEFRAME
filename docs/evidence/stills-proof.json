@@ -1,0 +1,835 @@
+{
+ "proof": "stills",
+ "status": "pass",
+ "at": "2026-11-26T09:26:44.975Z",
+ "wallMs": 169856,
+ "summary": {
+  "pass": 26,
+  "fail": 0,
+  "blocked": 0
+ },
+ "checks": [
+  {
+   "id": "M1",
+   "status": "pass",
+   "says": "F1 blur ramp (120 frames 1280x720, lossless, frame k box-blurred by |k−47|): every frame measured (complete), candidate 1 is frame 47; the proof's own decode + Sobel + Immerkær σ gives the same integers"
+  },
+  {
+   "id": "M2",
+   "status": "pass",
+   "says": "a barcode clip with B-frames, measured at frames 913–960 of 1200 by input seek, delivers exactly those frames (barcode read in rgb24 from the same seek)"
+  },
+  {
+   "id": "M3",
+   "status": "pass",
+   "says": "the same file remuxed to MPEG-TS with a start time of about 1.4 s delivers exactly the same frames"
+  },
+  {
+   "id": "M4",
+   "status": "pass",
+   "says": "a 60 fps file in a 30 fps project: rangeOfClip counts every source frame of the clip; the answer has one record per source frame"
+  },
+  {
+   "id": "M5",
+   "status": "pass",
+   "says": "noise (C3) PASSES: a blurred frame with grain σ 6 ranks below a clean sharp frame; its sigma100 is about 600 and its raw sobel above its sharp"
+  },
+  {
+   "id": "M6",
+   "status": "pass",
+   "says": "F3 motion: frames 31–35 shifted 6 px and box-blurred along x rank below the static frame 37; their motion > 0 and frame 37's is 0"
+  },
+  {
+   "id": "M7",
+   "status": "pass",
+   "says": "F4 exposure: candidates in 60–70 report hi ≥ 250‰ and manyClipped; the answer carries STILLS_METHOD and both labels"
+  },
+  {
+   "id": "M8",
+   "status": "pass",
+   "says": "a second request is { cached: true } and starts no ffmpeg (spawn counter); extending the stretch reads only the new frames (plus the one before); two cold runs give byte-identical data files"
+  },
+  {
+   "id": "M9",
+   "status": "pass",
+   "says": "a stretch of 601 frames is 422 stills_range_too_long with its Hebrew; a picture file is no_video; a clip of another file invalid_request"
+  },
+  {
+   "id": "M10",
+   "status": "pass",
+   "says": "cancel during the read writes no derivative; a job cut off by a restart is recovered and completes"
+  },
+  {
+   "id": "M11",
+   "status": "pass",
+   "says": "a server export started during a measurement finishes first (the moments lane); one stills job per project (409), three per server (429)"
+  },
+  {
+   "id": "M12",
+   "status": "pass",
+   "says": "an agent credential: find_sharp_frames and read_sharp_frames answer numbers only (no image part); the observer may read and not start"
+  },
+  {
+   "id": "P1",
+   "status": "pass",
+   "numbers": {
+    "png": {
+     "bytes": [
+      5248800,
+      5248800
+     ],
+     "differing": 0,
+     "maxDifference": 0
+    },
+    "jpegPsnrDb": 41.59,
+    "still": {
+     "format": "png",
+     "width": 1620,
+     "height": 1080,
+     "crop": {
+      "x": 37,
+      "y": 21,
+      "w": 1620,
+      "h": 1080
+     },
+     "source": {
+      "width": 3000,
+      "height": 2000,
+      "rate": null,
+      "conformed": null
+     },
+     "print": {
+      "paper": "10x15",
+      "orientation": "landscape",
+      "ppi": 270,
+      "tier": "usual"
+     },
+     "untriedSize": false,
+     "fileName": "F5.png"
+    },
+    "oneSampleMs": {
+     "png": 2308,
+     "jpeg": 2378
+    }
+   },
+   "says": "F5 photo 3000x2000 PNG (one-pixel checkerboard + coordinate barcode), 10x15 landscape crop at (37, 21): the PNG output equals the source crop pixel for pixel (PNG is the exact form); JPEG (mjpeg 4:4:4, lossy) within PSNR ≥ 40 dB of it"
+  },
+  {
+   "id": "P2",
+   "status": "pass",
+   "numbers": {
+    "probe": {
+     "codec": "png",
+     "width": 3001,
+     "height": 2001,
+     "pixFmt": "rgb24",
+     "tags": []
+    },
+    "pixels": {
+     "bytes": [
+      18015003,
+      18015003
+     ],
+     "differing": 0,
+     "maxDifference": 0
+    },
+    "oneSampleMs": 4160
+   },
+   "says": "an odd-sized PNG (3001x2001) saved whole is exactly 3001x2001 and equal pixel for pixel"
+  },
+  {
+   "id": "P3",
+   "status": "pass",
+   "numbers": {
+    "size": [
+     1920,
+     1080
+    ],
+    "barcodes": {
+     "0": 0,
+     "37": 37,
+     "59": 59
+    }
+   },
+   "says": "F6 barcode video 1920x1080 in a 1280x720 project: the still is 1920x1080 (above the project size) and its barcode reads the asked source frame"
+  },
+  {
+   "id": "P4",
+   "status": "pass",
+   "numbers": {
+    "assetImage": {
+     "width": 200,
+     "height": 300,
+     "codec": "mjpeg",
+     "hasAlpha": false
+    },
+    "probe": {
+     "width": 200,
+     "height": 300
+    },
+    "againstServerStill": {
+     "bytes": [
+      180000,
+      180000
+     ],
+     "differing": 0,
+     "maxDifference": 0
+    },
+    "topRight": [
+     230,
+     20,
+     21
+    ],
+    "topLeft": [
+     41,
+     120,
+     161
+    ]
+   },
+   "says": "a JPEG photo with EXIF orientation 6 (APP1 inserted by proof code) is saved turned, equal to the server still of the same stillDocument"
+  },
+  {
+   "id": "P5",
+   "status": "pass",
+   "numbers": {
+    "rows": 12,
+    "wrong": [],
+    "ruleHe": "כלל אצבע לפי מספר הפיקסלים בלבד; טשטוש, רעש ודחיסה לא נכללים",
+    "ruleEn": "A rule of thumb from the pixel count only; blur, noise and compression are not counted"
+   },
+   "says": "printFit: 1920x1080 → 10x15 landscape 270 usual, A4 landscape 130 soft; 3840x2160 A4 261; a table of 12 hand values; the ppi tiers are labelled a rule of thumb"
+  },
+  {
+   "id": "P6",
+   "status": "pass",
+   "numbers": {
+    "rows": [
+     {
+      "what": "P1 png",
+      "codec": "png",
+      "width": 1620,
+      "height": 1080,
+      "tags": [],
+      "problems": [],
+      "parts": [
+       "IHDR",
+       "pHYs",
+       "IDAT",
+       "IEND"
+      ],
+      "exifBytes": false,
+      "want": [
+       1620,
+       1080
+      ]
+     },
+     {
+      "what": "P1 jpeg",
+      "codec": "mjpeg",
+      "width": 1620,
+      "height": 1080,
+      "tags": [],
+      "problems": [],
+      "parts": [
+       "d8",
+       "e0(JFIF)",
+       "db",
+       "c4",
+       "c0",
+       "da",
+       "d9"
+      ],
+      "exifBytes": false,
+      "want": [
+       1620,
+       1080
+      ]
+     },
+     {
+      "what": "P2 png",
+      "codec": "png",
+      "width": 3001,
+      "height": 2001,
+      "tags": [],
+      "problems": [],
+      "parts": [
+       "IHDR",
+       "pHYs",
+       "IDAT",
+       "IEND"
+      ],
+      "exifBytes": false,
+      "want": [
+       3001,
+       2001
+      ]
+     },
+     {
+      "what": "P3 png",
+      "codec": "png",
+      "width": 1920,
+      "height": 1080,
+      "tags": [],
+      "problems": [],
+      "parts": [
+       "IHDR",
+       "pHYs",
+       "IDAT",
+       "IEND"
+      ],
+      "exifBytes": false,
+      "want": [
+       1920,
+       1080
+      ]
+     },
+     {
+      "what": "P4 png",
+      "codec": "png",
+      "width": 200,
+      "height": 300,
+      "tags": [],
+      "problems": [],
+      "parts": [
+       "IHDR",
+       "pHYs",
+       "IDAT",
+       "IEND"
+      ],
+      "exifBytes": false,
+      "want": [
+       200,
+       300
+      ]
+     }
+    ]
+   },
+   "says": "a still output carries no format or stream tags (ffprobe), the codec is png or mjpeg and the size equals the crop; no date, no EXIF"
+  },
+  {
+   "id": "P7",
+   "status": "pass",
+   "numbers": {
+    "rest": [
+     403,
+     "owner_required"
+    ],
+    "batch": [
+     403,
+     "owner_required"
+    ],
+    "exportProject": [
+     true,
+     "owner_required"
+    ],
+    "exportBatch": [
+     true,
+     "owner_required"
+    ],
+    "ownerJob": "canceled",
+    "retry": [
+     403,
+     "owner_required"
+    ],
+    "retryJob": [
+     true,
+     "owner_required"
+    ],
+    "browser": [
+     409,
+     "unsupported_in_browser_export"
+    ]
+   },
+   "says": "an agent asking for still gets 403 owner_required at POST …/exports, export_project, export_batch and retry; the browser route refuses it 409"
+  },
+  {
+   "id": "P8",
+   "status": "pass",
+   "numbers": {
+    "wideAsset": {
+     "width": 8193,
+     "height": 100,
+     "codec": "png",
+     "hasAlpha": false
+    },
+    "flatAsset": {
+     "width": 6000,
+     "height": 4100,
+     "codec": "png",
+     "hasAlpha": false
+    },
+    "tooBig": [
+     422,
+     "still_too_large"
+    ],
+    "hebrew": "התמונה גדולה מ־8192 פיקסלים בצד (⁦8193×100⁩): אי אפשר לשמור אותה בגודל המלא. לא נשמר דבר; אפשר עדיין לייצא פריים מהסרט בגודל הסרט",
+    "over24mp": {
+     "untriedSize": true,
+     "oneSampleMs": 2534,
+     "error": null,
+     "pixels": 24600000
+    },
+    "outside": [
+     422,
+     "out_of_bounds"
+    ]
+   },
+   "says": "a picture over 8192 on a side is still_too_large with its Hebrew; over 24 MP is labelled untried; a frame outside the file out_of_bounds"
+  },
+  {
+   "id": "P9",
+   "status": "pass",
+   "numbers": {
+    "rows": {
+     "rotated": {
+      "reasons": [
+       "rotation"
+      ],
+      "conformed": [
+       "rotation"
+      ],
+      "size": [
+       240,
+       320
+      ]
+     },
+     "hdr": {
+      "reasons": [
+       "hdr"
+      ],
+      "conformed": [
+       "hdr"
+      ],
+      "size": [
+       320,
+       240
+      ]
+     }
+    },
+    "words": {
+     "he": "הקובץ הומר בייבוא ({reasons}): התמונה היא מההעתק המומר, לא מהמקור",
+     "hdr": "הומר מ־HDR",
+     "browser": "התמונה היא הקריאה של הדפדפן לקובץ השמור"
+    }
+   },
+   "says": "a conformed file's still says so (reasons; «הומר מ־HDR» for hdr) and the output records source.conformed"
+  },
+  {
+   "id": "U1",
+   "status": "pass",
+   "says": "Hebrew: the inspector section «הפריים הכי חד» on a selected clip → up to three tiles with numbers, σ and the label; «נמצאו {n}» for a clip shorter than 2 s"
+  },
+  {
+   "id": "U2",
+   "status": "pass",
+   "says": "← / → change the tile's frame by one source frame and its numbers; Shift one second; a frame without a record says «לא נמדד»"
+  },
+  {
+   "id": "U3",
+   "status": "pass",
+   "says": "the save dialog by keyboard only: paper radios, orientation, the crop moved with arrows changes the ppi line; Escape returns focus; RTL without overlap; English pass too"
+  },
+  {
+   "id": "U4",
+   "status": "pass",
+   "says": "the paused editor tile equals the server still of the same one-clip document byte for byte (the same stillDocument)"
+  },
+  {
+   "id": "U5",
+   "status": "pass",
+   "says": "one timing sample of a 600-frame 1080p stretch (stage times), labelled \"one sample, this container\"; new states in audit:a11y, ids in audit:testids"
+  }
+ ],
+ "evidence": {
+  "measure": {
+   "M1": {
+    "grey": {
+     "width": 960,
+     "height": 540
+    },
+    "candidates": [
+     {
+      "frame": 47,
+      "sharp": 1851,
+      "ratio": 1851000
+     },
+     {
+      "frame": 119,
+      "sharp": 1,
+      "ratio": 1000
+     }
+    ],
+    "median": 1
+   },
+   "M2": {
+    "plainSeek": {
+     "firstBarcode": 912,
+     "lastBarcode": 960,
+     "delivered": 49,
+     "readerRefused": null
+    },
+    "job": {
+     "reads": [
+      {
+       "first": 912,
+       "count": 49,
+       "prerollUs": 0
+      }
+     ],
+     "firstBarcode": 912,
+     "lastBarcode": 960
+    },
+    "startTime": null
+   },
+   "M3": {
+    "plainSeek": {
+     "firstBarcode": 960,
+     "lastBarcode": 1008,
+     "delivered": 49,
+     "readerRefused": {
+      "first": 912,
+      "count": 49,
+      "got": 49,
+      "seek": "30.383333",
+      "trim": null,
+      "firstUs": 1616667,
+      "wantFirstUs": 16667,
+      "lastUs": 3216667,
+      "wantLastUs": 1616667,
+      "toleranceUs": 8333
+     }
+    },
+    "job": {
+     "reads": [
+      {
+       "first": 912,
+       "count": 49,
+       "prerollUs": 0
+      },
+      {
+       "first": 912,
+       "count": 49,
+       "prerollUs": 10000000
+      }
+     ],
+     "firstBarcode": 912,
+     "lastBarcode": 960
+    },
+    "startTime": {
+     "value": "1466667",
+     "timescale": 1000000
+    }
+   },
+   "M4": {
+    "range": {
+     "assetId": "ast_0bb1196b060",
+     "from": 60,
+     "to": 119
+    }
+   },
+   "M5": {
+    "grainy": {
+     "frame": 10,
+     "sobel": 58,
+     "sigma100": 601,
+     "sharp": 4,
+     "motion": 19,
+     "hi": 0,
+     "lo": 0
+    },
+    "sharp": {
+     "frame": 20,
+     "sobel": 37,
+     "sigma100": 275,
+     "sharp": 26,
+     "motion": 11,
+     "hi": 0,
+     "lo": 0
+    },
+    "naiveTop": 10,
+    "correctedTop": 20,
+    "label": "Heuristic: measured sharpness, noise, movement and clipped areas. No AI model, no face detection. Not checked by eye"
+   },
+   "M6": {
+    "moved": [
+     {
+      "frame": 31,
+      "sharp": 658,
+      "motion": 171
+     },
+     {
+      "frame": 32,
+      "sharp": 668,
+      "motion": 126
+     },
+     {
+      "frame": 33,
+      "sharp": 680,
+      "motion": 125
+     },
+     {
+      "frame": 34,
+      "sharp": 691,
+      "motion": 124
+     },
+     {
+      "frame": 35,
+      "sharp": 698,
+      "motion": 122
+     }
+    ],
+    "static37": {
+     "frame": 37,
+     "sobel": 2054,
+     "sigma100": 2051,
+     "sharp": 1423,
+     "motion": 0,
+     "hi": 0,
+     "lo": 0
+    },
+    "candidates": [
+     30
+    ]
+   },
+   "M7": {
+    "candidates": [
+     {
+      "frame": 65,
+      "hi": 300,
+      "manyClipped": true
+     },
+     {
+      "frame": 99,
+      "hi": 0,
+      "manyClipped": false
+     }
+    ]
+   },
+   "M8": {
+    "coldBlobs": [
+     "sha256:786d93cdca45d3413e4ff8dc7f3ec8b83cf984eb5c317541002f5d7137af9dd9",
+     "sha256:786d93cdca45d3413e4ff8dc7f3ec8b83cf984eb5c317541002f5d7137af9dd9"
+    ],
+    "extendedReads": [
+     {
+      "from": 9,
+      "to": 40,
+      "digest": "6451cbad10504f8f16835bfd65d825aa1094c8fea9bc91829ed382e97e59899c"
+     },
+     {
+      "from": 39,
+      "to": 50,
+      "digest": "8ab1fd40011885e1bd7970ee32eb72ca5bb941abc13e9f2f37b7b3a06963b7f2"
+     }
+    ]
+   },
+   "M9": {
+    "long": {
+     "code": "stills_range_too_long",
+     "message": "too long to measure frame by frame: the stretch has 601 frames, at most 600",
+     "details": {
+      "from": 0,
+      "to": 601,
+      "max": 600
+     },
+     "hint": "Trim the clip, or choose a shorter stretch, of at most 600 frames."
+    },
+    "picture": "no_video",
+    "other": "invalid_request",
+    "he": "הקטע ארוך מדי למדידה פריים־פריים: ⁦601⁩ פריימים. קצרו אותו עד ⁦600⁩ פריימים"
+   },
+   "M11": {
+    "pausedFrames": 117,
+    "same": "stills_in_progress",
+    "sameJob": true,
+    "busy": "busy",
+    "max": 3,
+    "note": "export = the lane flag export.ts sets, not a rendered export"
+   },
+   "M12": {
+    "parts": [
+     "text"
+    ],
+    "cached": true,
+    "readComplete": true,
+    "observerStart": true
+   }
+  },
+  "ui": {
+   "u4": {
+    "frame": 89,
+    "diff": 0,
+    "bytes": 921600,
+    "maxDiff": 0,
+    "meanAbs": 0,
+    "tile": {
+     "frame": "0",
+     "flashesHeld": "0",
+     "quality": "full",
+     "source": "original",
+     "error": null
+    }
+   },
+   "u5": {
+    "label": "one sample, this container",
+    "wallMs": 20056,
+    "stages": [
+     {
+      "ms": 1201,
+      "stage": "מדידת חדות 2/600"
+     },
+     {
+      "ms": 1588,
+      "stage": "מדידת חדות 11/600"
+     },
+     {
+      "ms": 2214,
+      "stage": "מדידת חדות 33/600"
+     },
+     {
+      "ms": 3205,
+      "stage": "מדידת חדות 38/600"
+     },
+     {
+      "ms": 3631,
+      "stage": "מדידת חדות 43/600"
+     },
+     {
+      "ms": 3981,
+      "stage": "מדידת חדות 58/600"
+     },
+     {
+      "ms": 4850,
+      "stage": "מדידת חדות 75/600"
+     },
+     {
+      "ms": 5235,
+      "stage": "מדידת חדות 85/600"
+     },
+     {
+      "ms": 5649,
+      "stage": "מדידת חדות 91/600"
+     },
+     {
+      "ms": 6234,
+      "stage": "מדידת חדות 104/600"
+     },
+     {
+      "ms": 6546,
+      "stage": "מדידת חדות 121/600"
+     },
+     {
+      "ms": 7258,
+      "stage": "מדידת חדות 134/600"
+     },
+     {
+      "ms": 7569,
+      "stage": "מדידת חדות 150/600"
+     },
+     {
+      "ms": 8014,
+      "stage": "מדידת חדות 156/600"
+     },
+     {
+      "ms": 8452,
+      "stage": "מדידת חדות 168/600"
+     },
+     {
+      "ms": 9106,
+      "stage": "מדידת חדות 181/600"
+     },
+     {
+      "ms": 9721,
+      "stage": "מדידת חדות 198/600"
+     },
+     {
+      "ms": 10081,
+      "stage": "מדידת חדות 216/600"
+     },
+     {
+      "ms": 10831,
+      "stage": "מדידת חדות 244/600"
+     },
+     {
+      "ms": 11568,
+      "stage": "מדידת חדות 263/600"
+     },
+     {
+      "ms": 12176,
+      "stage": "מדידת חדות 287/600"
+     },
+     {
+      "ms": 12847,
+      "stage": "מדידת חדות 310/600"
+     },
+     {
+      "ms": 13121,
+      "stage": "מדידת חדות 334/600"
+     },
+     {
+      "ms": 13537,
+      "stage": "מדידת חדות 352/600"
+     },
+     {
+      "ms": 14171,
+      "stage": "מדידת חדות 370/600"
+     },
+     {
+      "ms": 14539,
+      "stage": "מדידת חדות 384/600"
+     },
+     {
+      "ms": 15216,
+      "stage": "מדידת חדות 395/600"
+     },
+     {
+      "ms": 15506,
+      "stage": "מדידת חדות 419/600"
+     },
+     {
+      "ms": 16237,
+      "stage": "מדידת חדות 433/600"
+     },
+     {
+      "ms": 16536,
+      "stage": "מדידת חדות 457/600"
+     },
+     {
+      "ms": 17284,
+      "stage": "מדידת חדות 494/600"
+     },
+     {
+      "ms": 17614,
+      "stage": "מדידת חדות 506/600"
+     },
+     {
+      "ms": 18278,
+      "stage": "מדידת חדות 520/600"
+     },
+     {
+      "ms": 18669,
+      "stage": "מדידת חדות 540/600"
+     },
+     {
+      "ms": 19036,
+      "stage": "מדידת חדות 552/600"
+     },
+     {
+      "ms": 19723,
+      "stage": "מדידת חדות 576/600"
+     },
+     {
+      "ms": 20056,
+      "stage": "found"
+     }
+    ],
+    "finalState": "found"
+   }
+  }
+ },
+ "notes": [
+  "synthetic fixtures only, made and deleted by the proof",
+  "timings are one sample in this container, never gated",
+  "nobody has looked at a tile or a saved picture"
+ ]
+}

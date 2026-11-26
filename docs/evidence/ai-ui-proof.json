@@ -1,0 +1,118 @@
+{
+  "proof": "ai-ui",
+  "adr": "ADR-0017",
+  "ranAt": "2026-11-26T07:50:01.814Z",
+  "machine": "Linux 6.18.44-fc-v880 x64",
+  "note": "The run used the ffmpeg-only classic vocal remover; the translation is a typed fixture (no model ran). Functional evidence only, CPU profile.",
+  "checks": [
+    {
+      "name": "with PF_DENOISE_BIN unset the AI voice-cleanup card says engine_not_configured; its setup steps (shown on request) are at least two, in Hebrew owner language, and no environment variable is named anywhere on the card (technical detail included)",
+      "ok": true,
+      "detail": {
+        "voiceTech": "הגדרת החיבור חסרה: לא הותקן מנוע לכלי הזה (ההתקנה היא של מי שמתקין, לא של התוכנה)",
+        "voiceState": "engine_not_configured",
+        "voiceSteps": [
+          "הכלי הזה צריך תוכנה נלווית שעדיין לא מותקנת במחשב. העורך לא מתקין תוכנות בעצמו.",
+          "מי שמתקין את העורך מוסיף אותה ומפעיל את העורך מחדש.",
+          "אחרי זה לוחצים \"בדיקה חוזרת\"."
+        ]
+      }
+    },
+    {
+      "name": "its run button is not offered while the engine is not set up",
+      "ok": true
+    },
+    {
+      "name": "the classic vocal remover is ready (ffmpeg only)",
+      "ok": true
+    },
+    {
+      "name": "the run sheet reads the selected clip",
+      "ok": true
+    },
+    {
+      "name": "the estimate states its basis: no time is guessed before a measurement",
+      "ok": true,
+      "detail": "זמן: לא נמדד עדיין"
+    },
+    {
+      "name": "the run succeeded and its result was placed in the clip",
+      "ok": true,
+      "detail": {
+        "status": "succeeded",
+        "attachment": "attached",
+        "text": "הקליפ מציג עכשיו את התוצאה. ביטול הפעולה (Ctrl+Z) מחזיר את המקור.ביטול הפעולההשוואה בין לפני לאחריהשמעהכמה מהתוצאה שומעים (השאר: המקור)חיצים: 1%, Shift עם חץ: 10%, Home ו-End: הקצוות. 50% מהתוצאה"
+      }
+    },
+    {
+      "name": "the progress is a role=progressbar with aria-valuenow and aria-valuemax (measured, complete)",
+      "ok": true,
+      "detail": {
+        "role": "progressbar",
+        "now": "144000",
+        "max": "144000",
+        "text": "3 מתוך 3 שניות קול (נמדד)"
+      }
+    },
+    {
+      "name": "the end of the run was announced (aria-live)",
+      "ok": true
+    },
+    {
+      "name": "the clip's file was replaced by a copy made from it (derived provenance)",
+      "ok": true,
+      "detail": {
+        "assetId": "ast_de35f733240"
+      }
+    },
+    {
+      "name": "the before/after compare is a native range input operated by the keyboard (arrow 1 %, Shift+arrow 10 %, End, Home)",
+      "ok": true,
+      "detail": {
+        "v0": 50,
+        "v1": 51,
+        "v2": 61,
+        "v3": 100,
+        "v4": 0
+      }
+    },
+    {
+      "name": "undo restores the clip's original file",
+      "ok": true,
+      "detail": {
+        "back": "ast_c5603a41430"
+      }
+    },
+    {
+      "name": "the translation shows side by side, each side in its own direction, marked «תרגום מכונה · לא נבדק»",
+      "ok": true,
+      "detail": {
+        "badge": "תרגום מכונה · לא נבדק",
+        "masterDir": "rtl",
+        "transDir": "ltr",
+        "rows": 2
+      }
+    },
+    {
+      "name": "the owner's session is offered «סמן כנבדק»",
+      "ok": true
+    },
+    {
+      "name": "an agent credential trying to mark the translation reviewed is refused (403 human_approval_required)",
+      "ok": true,
+      "detail": {
+        "code": "human_approval_required",
+        "message": "only the project owner can mark a translation reviewed or not, from their own session",
+        "details": {
+          "variantId": "var_0cb96c3db10"
+        },
+        "hint": "Tell the owner which phrases to read; they mark it in the editor."
+      }
+    },
+    {
+      "name": "the translation still needs review",
+      "ok": true
+    }
+  ],
+  "result": "PASS"
+}

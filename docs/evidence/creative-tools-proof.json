@@ -1,0 +1,626 @@
+{
+ "generatedAt": "2026-11-26T05:58:17.900Z",
+ "profile": {
+  "os": "Linux 6.18.44-fc-v880",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+  "note": "CPU-only container; Chromium with the software WebGPU adapter. Functional checks only; nothing here judges how a curve, motion, thumbnail or sound looks or sounds."
+ },
+ "checks": [
+  {
+   "name": "apply_speed_curve hero: the clip became five parts, the first keeps the id",
+   "ok": true,
+   "detail": {
+    "frames": [
+     33,
+     14,
+     85,
+     13,
+     33
+    ],
+    "total": 178
+   }
+  },
+  {
+   "name": "the export has exactly as many frames as the curve says",
+   "ok": true,
+   "detail": {
+    "exported": 178,
+    "expected": 178
+   }
+  },
+  {
+   "name": "every exported frame is readable and the source never runs backwards; the biggest jump between two frames is what the fastest part plays in a frame",
+   "ok": true,
+   "detail": {
+    "unread": 0,
+    "backwards": 0,
+    "biggestStep": 3
+   }
+  },
+  {
+   "name": "the curve starts on the first source frame and ends short of the last one by less than the last part plays in two frames (parts are rounded down to whole frames, never past the old end)",
+   "ok": true,
+   "detail": {
+    "first": 0,
+    "last": 235,
+    "sourceFrames": 240
+   }
+  },
+  {
+   "name": "each part starts on the source frame its sourceIn names (within one frame)",
+   "ok": true,
+   "detail": [
+    {
+     "part": 1,
+     "frames": 33,
+     "from": 2.5,
+     "to": 2.5,
+     "firstShown": 0,
+     "expectFirst": 0,
+     "measuredAverage": 2.5
+    },
+    {
+     "part": 2,
+     "frames": 14,
+     "from": 2.5,
+     "to": 0.4,
+     "firstShown": 82,
+     "expectFirst": 82,
+     "measuredAverage": 1.538
+    },
+    {
+     "part": 3,
+     "frames": 85,
+     "from": 0.4,
+     "to": 0.4,
+     "firstShown": 102,
+     "expectFirst": 102,
+     "measuredAverage": 0.405
+    },
+    {
+     "part": 4,
+     "frames": 13,
+     "from": 0.4,
+     "to": 2.5,
+     "firstShown": 136,
+     "expectFirst": 136,
+     "measuredAverage": 1.417
+    },
+    {
+     "part": 5,
+     "frames": 33,
+     "from": 2.5,
+     "to": 2.5,
+     "firstShown": 155,
+     "expectFirst": 155,
+     "measuredAverage": 2.5
+    }
+   ]
+  },
+  {
+   "name": "each part plays at the average speed it declares (2.5×, eased, 0.4×, eased, 2.5×), measured on the exported frames",
+   "ok": true
+  },
+  {
+   "name": "the linked sound was divided the same way and the exported mix is as long as the picture",
+   "ok": true,
+   "detail": {
+    "seconds": 5.933,
+    "expected": 5.933333333333334
+   }
+  },
+  {
+   "name": "undo puts the single clip back",
+   "ok": true,
+   "detail": {
+    "status": 200
+   }
+  },
+  {
+   "name": "all 14 presets apply to the same clip through the API and give one part per segment",
+   "ok": true,
+   "detail": {
+    "hero": 178,
+    "bullet": 206,
+    "montage": 200,
+    "jump-cut": 200,
+    "flash-in": 168,
+    "flash-out": 168,
+    "slow-down": 490,
+    "build-up": 204,
+    "wave": 192,
+    "emphasis": 320,
+    "surge": 180,
+    "fast-forward": 127,
+    "smooth-ramp": 160,
+    "stutter": 338
+   }
+  },
+  {
+   "name": "motion.in.zoom-in writes keyframes; the first frame of the title changes and a frame after the entrance does not",
+   "ok": true,
+   "detail": {
+    "properties": [
+     "scale",
+     "opacity"
+    ]
+   }
+  },
+  {
+   "name": "an exit added afterwards keeps the entrance: the entrance keys are still there and the last opacity key is 0 at the clip end",
+   "ok": true,
+   "detail": {
+    "scaleKeys": 2,
+    "opacityKeys": 5
+   }
+  },
+  {
+   "name": "all 53 motion presets apply through the API on the same clip",
+   "ok": true,
+   "detail": {
+    "applied": 53
+   }
+  },
+  {
+   "name": "14 curve tiles, each with a drawn line",
+   "ok": true,
+   "detail": {
+    "tiles": 14
+   }
+  },
+  {
+   "name": "clicking the Bullet tile divides the clip into five parts, selects them all, and says so",
+   "ok": true,
+   "detail": {
+    "selected": 5,
+    "statusText": "העקומה הוחלה: 5 חלקים נבחרו בציר הזמן. Ctrl+Z מבטל. כדי לנסות עקומה אחרת, מבטלים קודם."
+   }
+  },
+  {
+   "name": "Ctrl+Z in the editor puts the single clip back",
+   "ok": true
+  },
+  {
+   "name": "the hand-made curve: flat is not offered; raising the middle point by keyboard to 2× and applying gives four parts that speed up to 2× and back",
+   "ok": true,
+   "detail": {
+    "valueNow": "2",
+    "lengthNote": "אורך אחרי ההחלה: כ-6.7 שנ׳ (עכשיו 8 שנ׳)"
+   }
+  },
+  {
+   "name": "the gallery opens on the effects tab with a thumbnail drawn for every effect this browser can run",
+   "ok": true,
+   "detail": {
+    "nEffects": 53,
+    "rendered": 53,
+    "unavailable": 0,
+    "webgpu": true
+   }
+  },
+  {
+   "name": "the strobe tile shows its flash: its mean difference from the plain picture at the tile's size is more than 20 levels",
+   "ok": true,
+   "detail": {
+    "rendered": true,
+    "unavailable": false,
+    "meanDifference": 54.98
+   }
+  },
+  {
+   "name": "under reduced motion, hovering the snow, echo and strobe tiles animates nothing: no tile's picture changes over a second",
+   "ok": true,
+   "detail": {
+    "tiles": 53,
+    "changed": []
+   }
+  },
+  {
+   "name": "a hovered strobe tile animates (its light rises again) but shows at most three rises in any second of real time (sampled on every animation frame for at least 2 s and until 60 samples, at most 20 s), and the dialog carries data-flashes-held from its flash guard",
+   "ok": true,
+   "detail": {
+    "samples": 64,
+    "seconds": 9.1,
+    "rises": 3,
+    "mostInOneSecond": 1,
+    "flashesHeld": "1",
+    "changes": 24,
+    "levels": [
+     75,
+     183
+    ],
+    "riseTimes": [
+     2.256,
+     4.39,
+     8.782
+    ],
+    "sampleGapsMs": {
+     "median": 154,
+     "max": 396
+    },
+    "errors": []
+   }
+  },
+  {
+   "name": "search narrows the tiles; picking a colour look in the gallery adds the grade to the clip",
+   "ok": true,
+   "detail": {
+    "found": 1,
+    "lookClickable": true
+   }
+  },
+  {
+   "name": "Escape closes the gallery and focus returns to the button that opened it",
+   "ok": true,
+   "detail": {
+    "focusBack": "gallery-open"
+   }
+  },
+  {
+   "name": "80 sounds listed; the drum chip and a search by English name narrow the list",
+   "ok": true,
+   "detail": {
+    "rows": 80,
+    "drums": 9,
+    "winds": 1
+   }
+  },
+  {
+   "name": "listen fetches the sound (HTTP 200), shows the playing state on a four-second sound, and a second press stops it",
+   "ok": true,
+   "detail": {
+    "audioRequests": [
+     200,
+     200
+    ],
+    "pressedWhilePlaying": "true",
+    "pressedAfterStop": "false"
+   }
+  },
+  {
+   "name": "pressing listen twice quickly (before the sound has loaded) leaves nothing playing",
+   "ok": true
+  },
+  {
+   "name": "add places the sound on the timeline as an ordinary audio clip whose asset records how it was made",
+   "ok": true,
+   "detail": {
+    "sfxStatus": "נוסף: רוח ב־0.00 שנ׳",
+    "generator": {
+     "id": "sfx.wind",
+     "version": 1,
+     "generator": "ffmpeg lavfi formula; no third-party content"
+    }
+   }
+  },
+  {
+   "name": "the pacing strip has one cell per five seconds of timeline, and totals are shown",
+   "ok": true,
+   "detail": {
+    "cells": 2,
+    "totalSeconds": 8
+   }
+  },
+  {
+   "name": "clicking a cell moves the playhead to the start of that stretch",
+   "ok": true,
+   "detail": {
+    "frameBefore": "0",
+    "frameAfter": "150"
+   }
+  },
+  {
+   "name": "an eight-second shot with no cut is reported as a long static picture",
+   "ok": true,
+   "detail": {
+    "staticIssue": 1
+   }
+  },
+  {
+   "name": "the motion tab shows all 53 motions with a drawn thumbnail; picking the slow zoom writes scale keyframes on the clip",
+   "ok": true,
+   "detail": {
+    "nMotion": 53,
+    "motionRendered": 53
+   }
+  },
+  {
+   "name": "the caption controls list the ready-made looks; choosing one restyles the caption track and the list then shows that look as the current one",
+   "ok": true,
+   "detail": {
+    "lookOptions": 46,
+    "chosen": "caption.documentary",
+    "shownLook": "caption.documentary"
+   }
+  },
+  {
+   "name": "a layout for the wrong number of pictures is refused with the layouts that do fit; with two picture clips selected the editor offers the two-picture layouts, and \"side by side\" fills the left half with the lower track's picture and the right half with the upper one, each cropped to its cell by its mask, on a rendered still (without the masks the upper picture covers part of the left half, so this check depends on them)",
+   "ok": true,
+   "detail": {
+    "refusedStatus": 422,
+    "tilesShown": 11,
+    "left": [
+     253,
+     0,
+     0
+    ],
+    "right": [
+     0,
+     0,
+     254
+    ],
+    "topLeft": [
+     253,
+     0,
+     0
+    ],
+    "bottomRight": [
+     0,
+     0,
+     254
+    ],
+    "nearSeamLeft": [
+     253,
+     0,
+     0
+    ],
+    "seamLeft": [
+     253,
+     0,
+     0
+    ],
+    "withoutMasks": [
+     [
+      0,
+      0,
+      254
+     ],
+     [
+      0,
+      0,
+      254
+     ]
+    ],
+    "restored": true
+   }
+  },
+  {
+   "name": "typewriter by letter on an English title: one letter at the first frame, on the left; more ink at every later sample; from the end of the entrance on, the frame is byte-identical to the same title without animation",
+   "ok": true,
+   "detail": {
+    "ink": [
+     "0:115",
+     "4:329",
+     "8:558",
+     "12:738",
+     "16:959",
+     "20:1143",
+     "22:1144",
+     "45:1144"
+    ],
+    "restInk": 1144,
+    "firstLetterSpan": [
+     237,
+     250
+    ],
+    "titleSpan": [
+     237,
+     402
+    ]
+   }
+  },
+  {
+   "name": "fade out by word: unchanged before the exit begins, less ink during it, almost none on the last frame, and the words leave one after another (the first and last word differ in what is left of them during the exit)",
+   "ok": true,
+   "detail": {
+    "rest": 1144,
+    "during": 470,
+    "last": 0,
+    "shares": [
+     {
+      "k": 72,
+      "first": 0.92,
+      "last": 1
+     },
+     {
+      "k": 75,
+      "first": 0.14,
+      "last": 1
+     },
+     {
+      "k": 78,
+      "first": 0.1,
+      "last": 1
+     },
+     {
+      "k": 81,
+      "first": 0,
+      "last": 0.95
+     },
+     {
+      "k": 84,
+      "first": 0,
+      "last": 0.85
+     },
+     {
+      "k": 87,
+      "first": 0,
+      "last": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "a wave loop moves the letters: the same frame is identical when rendered again, differs from another frame and from the title at rest, and keeps about the same amount of ink",
+   "ok": true,
+   "detail": {
+    "rest": 1144,
+    "wave": 1143
+   }
+  },
+  {
+   "name": "the same on a Hebrew title starts from the right: the first letter appears at the right end, half-way the ink is still on the right side, and at rest it is byte-identical to the plain title",
+   "ok": true,
+   "detail": {
+    "firstLetterSpan": [
+     392,
+     403
+    ],
+    "halfWaySpan": [
+     311,
+     403
+    ],
+    "titleSpan": [
+     237,
+     403
+    ]
+   }
+  },
+  {
+   "name": "an entrance and exit that together are longer than the title are refused",
+   "ok": true,
+   "detail": {
+    "status": 422
+   }
+  },
+  {
+   "name": "the title panel sets a text animation through the same operation; the timeline zoom buttons change the clip's width on screen both ways; after zooming far in, \"fit\" brings the whole timeline into view and lets it fill at least half of the view",
+   "ok": true,
+   "detail": {
+    "widthBefore": 269,
+    "widthAfterZoomIn": 404,
+    "widthAfterZoomOut": 179,
+    "widthFarIn": 2049,
+    "fit": {
+     "right": 1096,
+     "scrollRight": 1420,
+     "left": 164,
+     "scrollLeft": 8,
+     "width": 932,
+     "viewWidth": 1412,
+     "scrolledBy": 0,
+     "canScroll": true
+    }
+   }
+  },
+  {
+   "name": "graphic elements through the API: the catalogue lists them, one is made as a PNG picture asset that records how it was made, placed as a three-second picture clip, and drawn in the asked colour over a transparent background on a rendered still; an unknown element and a colour that is not #RRGGBB are refused",
+   "ok": true,
+   "detail": {
+    "count": 302,
+    "asset": {
+     "width": 1024,
+     "height": 1024,
+     "codec": "png",
+     "hasAlpha": true
+    },
+    "redPixels": 14603,
+    "otherBrightPixels": 274,
+    "unknown": 404,
+    "badColour": 400
+   }
+  },
+  {
+   "name": "the elements browser in the library shows every element as a drawn thumbnail, filters by category, and a click adds the element at the playhead as a picture clip",
+   "ok": true,
+   "detail": {
+    "tilesAll": 302,
+    "bubbles": 25,
+    "statusText": "נוסף לציר הזמן: בועת דיבור מלבנית, זנב למטה"
+   }
+  },
+  {
+   "name": "no console or page errors during the editor session",
+   "ok": true,
+   "detail": []
+  }
+ ],
+ "measurements": {
+  "heroParts": [
+   {
+    "part": 1,
+    "frames": 33,
+    "from": 2.5,
+    "to": 2.5,
+    "firstShown": 0,
+    "expectFirst": 0,
+    "measuredAverage": 2.5
+   },
+   {
+    "part": 2,
+    "frames": 14,
+    "from": 2.5,
+    "to": 0.4,
+    "firstShown": 82,
+    "expectFirst": 82,
+    "measuredAverage": 1.538
+   },
+   {
+    "part": 3,
+    "frames": 85,
+    "from": 0.4,
+    "to": 0.4,
+    "firstShown": 102,
+    "expectFirst": 102,
+    "measuredAverage": 0.405
+   },
+   {
+    "part": 4,
+    "frames": 13,
+    "from": 0.4,
+    "to": 2.5,
+    "firstShown": 136,
+    "expectFirst": 136,
+    "measuredAverage": 1.417
+   },
+   {
+    "part": 5,
+    "frames": 33,
+    "from": 2.5,
+    "to": 2.5,
+    "firstShown": 155,
+    "expectFirst": 155,
+    "measuredAverage": 2.5
+   }
+  ],
+  "curveLengthsFrames": {
+   "hero": 178,
+   "bullet": 206,
+   "montage": 200,
+   "jump-cut": 200,
+   "flash-in": 168,
+   "flash-out": 168,
+   "slow-down": 490,
+   "build-up": 204,
+   "wave": 192,
+   "emphasis": 320,
+   "surge": 180,
+   "fast-forward": 127,
+   "smooth-ramp": 160,
+   "stutter": 338
+  },
+  "galleryStrobeHover": {
+   "samples": 64,
+   "seconds": 9.1,
+   "rises": 3,
+   "mostInOneSecond": 1,
+   "flashesHeld": "1",
+   "changes": 24,
+   "levels": [
+    75,
+    183
+   ],
+   "riseTimes": [
+    2.256,
+    4.39,
+    8.782
+   ],
+   "sampleGapsMs": {
+    "median": 154,
+    "max": 396
+   }
+  }
+ },
+ "passed": 41,
+ "failed": 0
+}

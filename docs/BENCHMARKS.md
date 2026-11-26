@@ -30,5 +30,31 @@ Linux 6.18 x64 · Intel Xeon @ 2.10 GHz, 4 logical CPUs · 15.7 GiB RAM · no GP
 ## G0 provider smoke (ComfyUI 0.45.0, CPU)
 `comfy.smoke.solid-image`, 320×192, batch 1: preparing 0.21 s · submit 0.01 s · queue+inference 0.47 s (200 ms polling granularity) · transfer 0.01 s · validation 0.06 s. Peak device memory: not measurable on a CPU device.
 
+## Phase 2 measurements (same machine, 2026-11-14)
+
+| Measurement | Value | Samples | Notes |
+|---|---|---|---|
+| Random-seek correctness | 0 wrong of 7,000 | 7 fixtures × 1,000 seeded seeks | Through the real decode + export path; each single-frame clip is its own decoder. `docs/evidence/seek-conformance.json` |
+| Random-seek export time | 24–44 s per 1,000-frame export at 640×360 | 7 | Long GOP (250) is the slow one (44 s) |
+| Ten-minute export | 163 s for 562.6 s of 640×360 video = **3.45× real time** | 1 | draw 30 s, readback 11 s, transfer+encode 115 s. `docs/evidence/av-sync-long.json` |
+| A/V sync over ten minutes | max offset 0.063 ms; drift 0 ms | 563 flash/beep pairs | One edit in the middle |
+| Preview audio onset error | 0.06 ms | 3 beeps, 1 run | Sample-accurate tap on the audio clock, headless |
+| Preview frame paint lateness | median 5–15 ms, p95 21–24 ms, max 24–28 ms | 104 frames × 2 runs | 1080×1920 project previewed at 540×960 from the proxy; software raster |
+| Ingest derivatives (90-frame 640×360 clip) | 0.64 s for thumbnails + waveform + proxy | 1 | Worker-reported |
+| BiRefNet image matting, CPU | ~30 s including model load, 640×480 input | 1 | Functional trial only; not a GPU figure |
+
+## Phase 4 measurements (same machine, 2026-11-14)
+
+| Measurement | Value | Samples | Notes |
+|---|---|---|---|
+| Server export 1920×1080, 600 frames, quality high | 38.5 s = **0.52× real time** | 1 | draw 5.6 s, readback 3.7 s, transfer+encode 27.9 s. Software everything |
+| Browser export 640×360, 105 frames (WebCodecs H.264 + Opus) | 0.59 s ≈ 5.9× real time | 1 | Worker-reported; in-memory output; software encoder in headless Chromium |
+| Cancel a running export | 166 ms to `canceled`, no leftovers | 1 | |
+| Paused preview vs headless still | byte-identical, 30/30 frames | 2 scenes | Same compositor, two hosts |
+| Compositor vs H.264 high export | min PSNR 36.8 dB, min SSIM 0.997 | 47 frames | 640×360 synthetic scene with Hebrew text, alpha image, rotation, keyframes |
+| Quality ladder (min PSNR / min SSIM) | standard 35.7 / 0.993 · draft 32.0 / 0.979 · WebM standard 35.65 / 0.985 | 38 frames each | Report only |
+| Small text region, H.264 4:2:0 | 14 px: 29.1–31.4 dB · 28.8 px @720p: 33.9 dB · 43 px @1080p: 35.8 dB | flash frames | One synthetic scene; content-dependent |
+| Size estimate vs actual | 22.3 MB estimated vs 0.75 MB actual (1080p synthetic) | 1 | The heuristic is far off for flat synthetic content; it is labelled an estimate |
+
 ## Not measured
-Preview frame rate, seek latency, large-timeline behaviour, memory growth, cold start, any GPU figure, any model workload.
+Preview frames per second, interactive seek latency (ms to the correct frame), large-timeline behaviour, memory growth/soak, cold start, any GPU figure, any model workload on a GPU.

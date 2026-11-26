@@ -1,0 +1,55 @@
+/**
+ * pnpm proof:agent — the in-editor agent «סוכן» (wave 8 autonomy Part 2; autonomy-plan.md §2.8 as corrected by autonomy-verify.md
+ * C6–C9, C11, C16 and the lead's decisions; skills are Part 3, so the plan's checks 11–12 are cut here and check 12 keeps only the
+ * outside client starting and undoing a run). LEAD: the entry point and the list of checks.
+ * Built in parts by W1 (agent-proof.server.ts: 1–10, 12, 14), W2 (agent-proof.adapters.ts: 11, 13) and W3 (agent-ui-proof.ts: the
+ * «סוכן» tab in headless Chromium against this server and the same labelled scripted model; rows U1…); the integration imported
+ * them here (AGENT_PROOF_BUILT). Exit 0 = every check passed; 1 = a check failed; 2 = none failed but one is BLOCKED (check 14 until
+ * Part 1 is merged, the UI rows when the editor is not built or Chromium cannot start).
+ * EVERY model here is the LABELLED test double `MOCK-scripted-model` (packages/providers agentScripted.ts), placed once in each
+ * family's slot; nothing is claimed about a real model. What only real keys on the owner's laptop can show is listed in
+ * .artifacts/wave8/agent-integration.md. Fixture made by ffmpeg in the proof: 20 s 640×360 testsrc2 with a 1 kHz tone holding two
+ * 3 s silences, plus a typed Hebrew transcript set as data (no speech engine).
+ */
+export const AGENT_PROOF_BUILT = true;
+export const AGENT_CHECKS: Readonly<Record<string, string>> = {
+  1: 'the walk «תחתכו את השקטים, תוסיפו כתוביות בעברית, תעשו גרסה 9:16 ותייצאו» with the scripted model (get_summary, get_timeline, find_silences → apply_transaction, add_caption_track mode transcript, add_variant profileId vertical-9x16, preflight, export_project + wait_for_job, finish) reaches succeeded; the plan (update_plan) is readable over REST and the job event before the first acting step',
+  2: 'every step passes queued → running → done/failed with its tool name, arguments, result summary, transaction and job ids; started_at is committed before the call (C8.2)',
+  3: 'every edit is a transaction by agent:run_<id> committed through serveAs → Governance.commitAs → Store.commit; a grep finds no .commit( and no UPDATE projects in apps/server/src/agent/',
+  4: 'measured on the result: the timeline lost both detected silences — the expected loss is the detected ranges rounded inward to whole frames (find_silences\' rule), ± 1 frame per cut (lead decision 1), rational — a caption track exists, a 9:16 variant exists, the export file exists with the variant\'s size and frame count',
+  5: '«ביטול הכול» brings the entity digest back to the start revision\'s in ONE new revision; C6 interleaved case: run edits X (r10), owner edits X (r11), run edits X (r12) → 409 undo_conflict listing X with by=user:local and nothing applied; partial undoes the rest, and X, changed later by someone else, is skipped (left as it is) and listed (lead decision 2); a redo of the composite restores the run\'s states and clears every undone_by mark',
+  6: 'C8: the server is killed after step 4\'s row is written and before its answer; restarted, the run resumes and finishes with no duplicate transaction and no second export job (keys <runId>.<n>.<k>); a model call in flight is recorded as unknown money',
+  7: 'step limit 3 stops at step 3 as stopped_at_limit with the reason on the same line; continue (+100) finishes it',
+  8: 'money (C8/C9): one ledger row per model call (<jobId>:<n>) settled explicitly; scripted usage × the table\'s prices over a 1-cent spend limit: the run\'s own limit stops as spend_limit after the call that reached it, with the plain sentence (budget_reached is the owner-wide or grant budget refused at reservation: agentLoop.test.ts; lead decision 2); no limit runs',
+  9: 'a tool error (a scripted wrong clip id) returns to the model as an error result and the next scripted turn recovers; a turn with an unparseable call twice stops model_no_tools, not counted as a step',
+  10: 'C16 failure rows with the scripted double: unauthorized, no_credit, rate_limited (waiting with retry-after, no step burned), overloaded, local_server_down, context_too_long (images then old results trimmed, a note step), 423 paused (waiting), unknown_after_send (never re-sent); each worded in Hebrew with its next step',
+  11: 'both families\' converters (W2) on the research\'s quoted examples: anthropic-messages (input object, tool_result first with is_error, anthropic-version 2026-10-21, no temperature, tool_choice auto, images inside tool_result) and openai-chat (arguments a JSON string, role tool, stills in a following user message, no tool_choice for Ollama, parallel off for local)',
+  12: 'an outside MCP client (the official SDK client, as in proof:phase5) starts a run with start_agent_run, reads it with get_agent_run and undoes it with undo_actor_since; undo-all after an export lists notUndone (1 export file, money, data sent) (C7)',
+  13: 'keys: the key file is mode 0600 (on Linux), absent from a backup (agent/ removed recursively), and appears in no route answer, step, SSE event or log line; GET providers says keySet only; a LAN http base URL is stored and flagged unencrypted',
+  14: 'mode (with Part 1): in guarded mode the same run\'s people-reading step gets names only and an export with an {age} title is a failed step, not a crash; switching to guarded stops an open run as stopped_mode_changed and continue resumes it (C4)',
+};
+
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+type Status = 'pass' | 'fail' | 'blocked';
+/** Runs every part once and prints each check with pass / fail / blocked and its sample. */
+export async function runAgentProof(): Promise<{ id: string; status: Status }[]> {
+  const out: { id: string; status: Status }[] = [];
+  const print = (id: string, status: Status, detail?: unknown) => { out.push({ id, status }); console.log(`${status === 'pass' ? '  ok   ' : status === 'fail' ? ' FAIL  ' : ' BLOCK '} ${id}${detail !== undefined ? `  ${JSON.stringify(detail).slice(0, 1500)}` : ''}`); };
+  console.log('proof:agent — every model here is the LABELLED test double MOCK-scripted-model; nothing is claimed about a real model');
+  const { runServerChecks } = await import('./agent-proof.server.ts');
+  await runServerChecks((id, ok, detail) => print(id, ok ? 'pass' : (detail as { blocked?: boolean } | undefined)?.blocked ? 'blocked' : 'fail', detail));
+  const { runAgentAdapterProof } = await import('./agent-proof.adapters.ts');
+  for (const r of await runAgentAdapterProof()) print(`${r.id} (adapters)`, r.status, r.sample);
+  const { runAgentUiProof } = await import('./agent-ui-proof.ts');
+  await runAgentUiProof((id, status, detail) => print(id, status, detail));
+  return out;
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  const rows = await runAgentProof();
+  const n = (s: Status) => rows.filter((r) => r.status === s).length;
+  console.log(`\nproof:agent: ${n('pass')} passed, ${n('fail')} failed, ${n('blocked')} blocked (${rows.length} checks)`);
+  process.exit(n('fail') ? 1 : n('blocked') ? 2 : 0);
+}

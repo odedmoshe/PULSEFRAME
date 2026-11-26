@@ -1,0 +1,415 @@
+{
+  "ranAt": "2026-11-26T08:07:14.667Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "gpu": "none"
+  },
+  "scope": "Synthetic fixtures remuxed with shifted video timestamps (MP4 and Matroska): server export, scene detection, and paused preview frames in the editor. Sound that starts late is measured on the server export, preview playback and browser export. Not covered: playback (proxy) picture frames, negative start times, real camera files.",
+  "passed": 4,
+  "total": 4,
+  "rows": [
+    {
+      "case": "zero",
+      "projectId": "prj_BfvAcB3D9MI",
+      "container": "mp4",
+      "startTime": 0,
+      "storedStart": null,
+      "assetFrames": 120,
+      "assetSeconds": 4,
+      "exportedFrames": 120,
+      "first8": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "last3": [
+        117,
+        118,
+        119
+      ],
+      "lagFrames": [
+        0
+      ],
+      "sceneStatus": 200
+    },
+    {
+      "case": "off-0.010",
+      "projectId": "prj_Bhyqe0sEouo",
+      "container": "mp4",
+      "startTime": 0.010026,
+      "storedStart": {
+        "value": "5013",
+        "timescale": 500000
+      },
+      "assetFrames": 120,
+      "assetSeconds": 4,
+      "exportedFrames": 120,
+      "first8": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "last3": [
+        117,
+        118,
+        119
+      ],
+      "lagFrames": [
+        0
+      ],
+      "sceneStatus": 200
+    },
+    {
+      "case": "off-0.021",
+      "projectId": "prj_l8as11xPXMg",
+      "container": "mp4",
+      "startTime": 0.021029,
+      "storedStart": {
+        "value": "21029",
+        "timescale": 1000000
+      },
+      "assetFrames": 120,
+      "assetSeconds": 4.033333333333333,
+      "exportedFrames": 121,
+      "first8": [
+        0,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "last3": [
+        117,
+        118,
+        119
+      ],
+      "lagFrames": [
+        1
+      ],
+      "sceneStatus": 200
+    },
+    {
+      "case": "off-0.021-mkv",
+      "projectId": "prj_zGheifSpoGY",
+      "container": "mkv",
+      "startTime": 0.042,
+      "storedStart": {
+        "value": "21",
+        "timescale": 500
+      },
+      "assetFrames": 120,
+      "assetSeconds": 4.033333333333333,
+      "exportedFrames": 121,
+      "first8": [
+        0,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "last3": [
+        117,
+        118,
+        119
+      ],
+      "lagFrames": [
+        1
+      ],
+      "sceneStatus": 200
+    },
+    {
+      "case": "off-0.500",
+      "projectId": "prj_pWfFYwFUdxs",
+      "container": "mp4",
+      "startTime": 0.5,
+      "storedStart": {
+        "value": "1",
+        "timescale": 2
+      },
+      "assetFrames": 120,
+      "assetSeconds": 4.5,
+      "exportedFrames": 135,
+      "first8": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "last3": [
+        117,
+        118,
+        119
+      ],
+      "lagFrames": [
+        15
+      ],
+      "sceneStatus": 200
+    },
+    {
+      "cutCase": {
+        "offset": 0,
+        "detectedCutFrames": [
+          60
+        ],
+        "pictureChangesAtFrame": 60,
+        "expected": 60
+      }
+    },
+    {
+      "cutCase": {
+        "offset": 0.021,
+        "detectedCutFrames": [
+          61
+        ],
+        "pictureChangesAtFrame": 61,
+        "expected": 61
+      }
+    },
+    {
+      "cutCase": {
+        "offset": 0.5,
+        "detectedCutFrames": [
+          75
+        ],
+        "pictureChangesAtFrame": 75,
+        "expected": 75
+      }
+    },
+    {
+      "audioLate": {
+        "storedAudioStart": {
+          "value": "239",
+          "timescale": 500
+        },
+        "want": [
+          0.5,
+          1.5,
+          2.5,
+          3.5
+        ],
+        "serverOnsets": [
+          0.499,
+          1.499,
+          2.499,
+          3.499
+        ],
+        "previewClock": "audio",
+        "previewOnsets": [
+          0.499,
+          1.499,
+          2.499,
+          3.499
+        ],
+        "browserOnsets": [
+          0.499,
+          1.499,
+          2.499,
+          3.499
+        ],
+        "browserNote": "mp4/opus"
+      }
+    }
+  ],
+  "checks": [
+    {
+      "name": "every shifted file exports; the picture is placed the nearest whole frame after time 0 (0.010 s → 0, 0.021 s → 1, 0.042 s → 1, 0.5 s → 15 frames), the first frame is held until then, and every source frame up to the last is shown exactly once",
+      "ok": true,
+      "detail": [
+        {
+          "case": "zero",
+          "startTime": 0,
+          "lag": [
+            0
+          ],
+          "frames": 120,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "last3": [
+            117,
+            118,
+            119
+          ]
+        },
+        {
+          "case": "off-0.010",
+          "startTime": 0.010026,
+          "lag": [
+            0
+          ],
+          "frames": 120,
+          "first4": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "last3": [
+            117,
+            118,
+            119
+          ]
+        },
+        {
+          "case": "off-0.021",
+          "startTime": 0.021029,
+          "lag": [
+            1
+          ],
+          "frames": 121,
+          "first4": [
+            0,
+            0,
+            1,
+            2
+          ],
+          "last3": [
+            117,
+            118,
+            119
+          ]
+        },
+        {
+          "case": "off-0.021-mkv",
+          "startTime": 0.042,
+          "lag": [
+            1
+          ],
+          "frames": 121,
+          "first4": [
+            0,
+            0,
+            1,
+            2
+          ],
+          "last3": [
+            117,
+            118,
+            119
+          ]
+        },
+        {
+          "case": "off-0.500",
+          "startTime": 0.5,
+          "lag": [
+            15
+          ],
+          "frames": 135,
+          "first4": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "last3": [
+            117,
+            118,
+            119
+          ]
+        }
+      ]
+    },
+    {
+      "name": "scene detection agrees with the picture for shifted files: the one detected cut is exactly the exported frame where the picture changes (60, 61 and 75)",
+      "ok": true,
+      "detail": [
+        {
+          "offset": 0,
+          "detectedCutFrames": [
+            60
+          ],
+          "pictureChangesAtFrame": 60,
+          "expected": 60
+        },
+        {
+          "offset": 0.021,
+          "detectedCutFrames": [
+            61
+          ],
+          "pictureChangesAtFrame": 61,
+          "expected": 61
+        },
+        {
+          "offset": 0.5,
+          "detectedCutFrames": [
+            75
+          ],
+          "pictureChangesAtFrame": 75,
+          "expected": 75
+        }
+      ]
+    },
+    {
+      "name": "editor preview of the file that starts 15 frames late: paused frames 0, 14 and 15 show source frame 0, then 16 → 1, 100 → 85, 134 → 119; no page errors",
+      "ok": true,
+      "detail": {
+        "seen": {
+          "0": 0,
+          "14": 0,
+          "15": 0,
+          "16": 1,
+          "100": 85,
+          "134": 119
+        },
+        "errors": []
+      }
+    },
+    {
+      "name": "sound that starts 0.5 s late in the file is heard 0.5 s late on every route: server export within 3 ms; preview playback (audio clock) and browser export within one frame",
+      "ok": true,
+      "detail": {
+        "want": [
+          0.5,
+          1.5,
+          2.5,
+          3.5
+        ],
+        "serverOnsets": [
+          0.499,
+          1.499,
+          2.499,
+          3.499
+        ],
+        "previewClock": "audio",
+        "previewOnsets": [
+          0.499,
+          1.499,
+          2.499,
+          3.499
+        ],
+        "browserOnsets": [
+          0.499,
+          1.499,
+          2.499,
+          3.499
+        ],
+        "browserNote": "mp4/opus"
+      }
+    }
+  ]
+}

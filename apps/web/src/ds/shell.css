@@ -1,0 +1,55 @@
+/*
+ * The shell: one fixed grid the size of the window (docs/design/UX_REDESIGN.md §4.1). The document never scrolls; every pane
+ * has min-height 0 and scrolls inside itself. Imported first by App.tsx, so it sits before every component sheet; theme.css
+ * comes after it. Owned by the lead: workers place nothing in the grid themselves and fill the mounts named below.
+ *
+ *   areas   top  top     top   top          the top bar (Header.tsx): one row that neither wraps nor grows
+ *           err  err     err   err          the error bar (ErrorBar.tsx): no height while there is no error
+ *           rail browser stage inspector    Rail.tsx · Library.tsx · <main class="stage"> · Inspector.tsx
+ *           rail split   split split        Splitter.tsx (viewer / timeline)
+ *           rail tl      tl    tl           Timeline.tsx
+ *           rail status  status status      StatusBar.tsx
+ *
+ * Sizes are the --pf-shell-* properties on .app. They hold what the editor drew before the redesign, so this sheet changes
+ * no size by itself. Three of them belong to mounts that are still empty (rail, splitter, status bar): they are 0 while the
+ * mount has no content and open to the design-system size (ds/tokens.css) when the worker's component renders something.
+ * The lead points the others at the tokens (--pf-topbar, --pf-browser, --pf-inspector, --pf-tl-h) when the new chrome lands.
+ * The splitter resizes the timeline by setting --pf-shell-tl on .app.
+ */
+.app {
+  --pf-shell-top: 47.3px; /* the bar's height before the redesign, to the fraction: 7px padding twice, a 32.3px control, a 1px line */
+  --pf-shell-rail: 0px;
+  --pf-shell-browser: 290px;
+  --pf-shell-inspector: 330px;
+  --pf-shell-splitter: 0px;
+  --pf-shell-tl: clamp(230px, 34vh, 420px);
+  --pf-shell-status: 0px;
+  position: fixed; inset: 0; block-size: 100dvh; overflow: clip;
+  display: grid;
+  grid-template-columns: var(--pf-shell-rail) var(--pf-shell-browser) minmax(0, 1fr) var(--pf-shell-inspector);
+  grid-template-rows: var(--pf-shell-top) auto minmax(0, 1fr) var(--pf-shell-splitter) var(--pf-shell-tl) var(--pf-shell-status);
+  grid-template-areas:
+    'top  top     top    top'
+    'err  err     err    err'
+    'rail browser stage  inspector'
+    'rail split   split  split'
+    'rail tl      tl     tl'
+    'rail status  status status';
+}
+.app:has(> [data-shell-slot='rail']:not(:empty)) { --pf-shell-rail: var(--pf-rail, 72px); }
+.app:has(> [data-shell-slot='splitter']:not(:empty)) { --pf-shell-splitter: var(--pf-splitter, 8px); }
+.app:has(> [data-shell-slot='status']:not(:empty)) { --pf-shell-status: var(--pf-statusbar, 24px); }
+
+/* panes: placed by the shell only, and never larger than their cell */
+.app > * { min-inline-size: 0; min-block-size: 0; }
+.app > .pf-top { grid-area: top; }
+.app > .error { grid-area: err; }
+.app > [data-shell-slot='rail'] { grid-area: rail; }
+.app > .library { grid-area: browser; }
+.app > .stage { grid-area: stage; }
+.app > .inspector { grid-area: inspector; }
+.app > [data-shell-slot='splitter'] { grid-area: split; }
+.app > .timeline { grid-area: tl; }
+.app > [data-shell-slot='status'] { grid-area: status; }
+/* an empty mount is not a pane yet */
+.app > [data-shell-slot]:empty { display: none; }

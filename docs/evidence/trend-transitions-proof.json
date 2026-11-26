@@ -1,0 +1,2126 @@
+{
+ "ranAt": "2026-11-26T06:20:15.013Z",
+ "commit": "1e69ee8824c0e2a2947b213a718cdeb50196658e",
+ "result": "PASSED",
+ "passed": 15,
+ "total": 15,
+ "machine": {
+  "platform": "Linux 6.18.44-fc-v880 x64",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+  "logicalCpus": 4,
+  "node": "v22.23.4"
+ },
+ "scope": "Trend-pack transitions (ADR-0012) on synthetic fixtures: the blue two-picture fixture at 640x360 and 360x640, a frame-barcode video, flat pictures for the flash check; server stills and exports, the paused editor preview, the Lab bench. The GPU ids count only where this machine's render worker could run them, and count as verified only after the owner's hardware run (ADR-0011:85). Not covered: real footage, a hardware graphics adapter, playback frame rate in the editor.",
+ "measurements": {
+  "flashPictures": {
+   "dark/bright": [
+    "0x101012",
+    "0xe8e8e4"
+   ],
+   "equal luminance": [
+    "0xc47440",
+    "0x2690ca"
+   ],
+   "luminance": {
+    "warm": 0.246,
+    "cool": 0.2462
+   }
+  },
+  "middleFrames": {
+   "punch-in": "differs from both sides",
+   "punch-out": "differs from both sides",
+   "blur-dissolve": "differs from both sides",
+   "split-open-h": "differs from both sides",
+   "split-open-v": "differs from both sides",
+   "shape-heart": "differs from both sides",
+   "shape-star": "differs from both sides",
+   "block-left": "differs from both sides",
+   "block-right": "differs from both sides",
+   "slices-h": "differs from both sides",
+   "slices-v": "differs from both sides",
+   "film-burn": "differs from both sides",
+   "light-leak": "differs from both sides",
+   "ink-bleed": "differs from both sides",
+   "brush-left": "differs from both sides",
+   "brush-right": "differs from both sides",
+   "page-turn-left": "differs from both sides",
+   "page-turn-right": "differs from both sides"
+  },
+  "singleCrossing": {
+   "split-open-h 360x640": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 255,
+    "ok": true
+   },
+   "split-open-h 640x360": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 255,
+    "ok": true
+   },
+   "split-open-v 360x640": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 255,
+    "ok": true
+   },
+   "split-open-v 640x360": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 255,
+    "ok": true
+   },
+   "shape-heart 360x640": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 238.2,
+    "ok": true
+   },
+   "shape-heart 640x360": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 254.5,
+    "ok": true
+   },
+   "shape-star 360x640": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 255,
+    "ok": true
+   },
+   "shape-star 640x360": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 254.6,
+    "ok": true
+   },
+   "slices-h 360x640": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 255,
+    "ok": true
+   },
+   "slices-h 640x360": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 255,
+    "ok": true
+   },
+   "slices-v 360x640": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 255,
+    "ok": true
+   },
+   "slices-v 640x360": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 255,
+    "ok": true
+   },
+   "ink-bleed 360x640": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 255,
+    "ok": true
+   },
+   "ink-bleed 640x360": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 255,
+    "ok": true
+   },
+   "brush-left 360x640": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 255,
+    "ok": true
+   },
+   "brush-left 640x360": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 255,
+    "ok": true
+   },
+   "brush-right 360x640": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 255,
+    "ok": true
+   },
+   "brush-right 640x360": {
+    "worstShareLosingBlue": 0,
+    "blueMean61": 0,
+    "blueMean87": 255,
+    "ok": true
+   },
+   "page-turn-left 360x640": {
+    "shareGoingBackFromIncoming": 0,
+    "shareLosingBlueWhileIncoming": 0,
+    "shareBetweenPageAndIncoming": 0,
+    "largestBlueLossOnThePage": 19,
+    "shareOffTheModelEdge": 0,
+    "shareLosingBlueOnThePagesBack": 0.08056,
+    "blueMean61": 0,
+    "blueMean87": 252,
+    "ok": true
+   },
+   "page-turn-left 640x360": {
+    "shareGoingBackFromIncoming": 0,
+    "shareLosingBlueWhileIncoming": 0,
+    "shareBetweenPageAndIncoming": 0,
+    "largestBlueLossOnThePage": 19,
+    "shareOffTheModelEdge": 0,
+    "shareLosingBlueOnThePagesBack": 0.08125,
+    "blueMean61": 0,
+    "blueMean87": 252.1,
+    "ok": true
+   },
+   "page-turn-right 360x640": {
+    "shareGoingBackFromIncoming": 0,
+    "shareLosingBlueWhileIncoming": 0,
+    "shareBetweenPageAndIncoming": 0,
+    "largestBlueLossOnThePage": 19,
+    "shareOffTheModelEdge": 0,
+    "shareLosingBlueOnThePagesBack": 0.08056,
+    "blueMean61": 0,
+    "blueMean87": 252,
+    "ok": true
+   },
+   "page-turn-right 640x360": {
+    "shareGoingBackFromIncoming": 0,
+    "shareLosingBlueWhileIncoming": 0,
+    "shareBetweenPageAndIncoming": 0,
+    "largestBlueLossOnThePage": 19,
+    "shareOffTheModelEdge": 0,
+    "shareLosingBlueOnThePagesBack": 0.08125,
+    "blueMean61": 0,
+    "blueMean87": 252.1,
+    "ok": true
+   }
+  },
+  "geometry": {
+   "heart 360x640": {
+    "centre": 255,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "aboveNotch": 0,
+    "ok": true
+   },
+   "heart 640x360": {
+    "centre": 255,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "aboveNotch": 0,
+    "ok": true
+   },
+   "star 360x640": {
+    "centre": 255,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "ok": true
+   },
+   "star 640x360": {
+    "centre": 255,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "ok": true
+   },
+   "split-open-h 360x640": {
+    "centreColumn": 255,
+    "x2": 0,
+    "x357": 0,
+    "ok": true
+   },
+   "split-open-h 640x360": {
+    "centreColumn": 255,
+    "x2": 0,
+    "x637": 0,
+    "ok": true
+   }
+  },
+  "blocks": {
+   "block-left 360x640": {
+    "switchFrame": 1,
+    "frame88": 0,
+    "frame70": {
+     "barColumnBlue": 120,
+     "farColumnBlue": 0
+    },
+    "barEnteredFromItsSide": true,
+    "ok": true
+   },
+   "block-left 640x360": {
+    "switchFrame": 1,
+    "frame88": 0,
+    "frame70": {
+     "barColumnBlue": 120,
+     "farColumnBlue": 0
+    },
+    "barEnteredFromItsSide": true,
+    "ok": true
+   },
+   "block-right 360x640": {
+    "switchFrame": 1,
+    "frame88": 0,
+    "frame70": {
+     "barColumnBlue": 120,
+     "farColumnBlue": 0
+    },
+    "barEnteredFromItsSide": true,
+    "ok": true
+   },
+   "block-right 640x360": {
+    "switchFrame": 1,
+    "frame88": 0,
+    "frame70": {
+     "barColumnBlue": 120,
+     "farColumnBlue": 0
+    },
+    "barEnteredFromItsSide": true,
+    "ok": true
+   }
+  },
+  "slicesSeeds": {
+   "slices-h": {
+    "sameSeedIdentical": true,
+    "seeds1and2Differ": 1
+   },
+   "slices-v": {
+    "sameSeedIdentical": true,
+    "seeds1and2Differ": 1
+   }
+  },
+  "blurDissolve": {
+   "61": {
+    "p": 0.00119,
+    "expected": 0.3,
+    "centreBlueMean": 0
+   },
+   "74": {
+    "p": 0.5,
+    "expected": 127.5,
+    "centreBlueMean": 128
+   },
+   "87": {
+    "p": 0.99881,
+    "expected": 254.7,
+    "centreBlueMean": 255
+   }
+  },
+  "beatLock": {
+   "punch-in": {
+    "70, 75, 80": {
+     "model": 75,
+     "want": 75,
+     "firstFrameWithBlueMeanAtLeast127": 75,
+     "ok": true
+    },
+    "moved +1": {
+     "model": 76,
+     "want": 76,
+     "firstFrameWithBlueMeanAtLeast127": 76,
+     "ok": true
+    },
+    "moved +2 (a tie)": {
+     "model": 72,
+     "want": 72,
+     "firstFrameWithBlueMeanAtLeast127": 72,
+     "ok": true
+    },
+    "no beats: sync on = sync off": true
+   },
+   "dissolve": {
+    "70, 75, 80": {
+     "model": 75,
+     "want": 75,
+     "worstDistanceFromLockedCurve": 0.5,
+     "mostFromUnlockedCurve": 71.22,
+     "ok": true
+    },
+    "moved +1": {
+     "model": 76,
+     "want": 76,
+     "worstDistanceFromLockedCurve": 0.49,
+     "mostFromUnlockedCurve": 78.22,
+     "ok": true
+    },
+    "moved +2 (a tie)": {
+     "model": 72,
+     "want": 72,
+     "worstDistanceFromLockedCurve": 0.49,
+     "mostFromUnlockedCurve": 85.46,
+     "ok": true
+    },
+    "no beats: sync on = sync off": true
+   }
+  },
+  "velocity": {
+   "wipe-left n=15 ×2": {
+    "stillFramesWithErrors": 0,
+    "exportFramesWithErrors": 0,
+    "cellsRead": 234,
+    "lowestBitReadOn": {
+     "out": 2,
+     "in": 12
+    },
+    "needs": {
+     "outFrames": 22,
+     "headFrames": 7
+    },
+    "export": "succeeded"
+   },
+   "wipe-left n=15 ×3": {
+    "stillFramesWithErrors": 0,
+    "exportFramesWithErrors": 0,
+    "cellsRead": 234,
+    "lowestBitReadOn": {
+     "out": 2,
+     "in": 12
+    },
+    "needs": {
+     "outFrames": 29,
+     "headFrames": 14
+    },
+    "export": "succeeded"
+   },
+   "wipe-left n=15 ×4": {
+    "stillFramesWithErrors": 0,
+    "exportFramesWithErrors": 0,
+    "cellsRead": 234,
+    "lowestBitReadOn": {
+     "out": 2,
+     "in": 12
+    },
+    "needs": {
+     "outFrames": 36,
+     "headFrames": 21
+    },
+    "export": "succeeded"
+   },
+   "wipe-left n=29 ×2": {
+    "stillFramesWithErrors": 0,
+    "exportFramesWithErrors": 0,
+    "cellsRead": 450,
+    "lowestBitReadOn": {
+     "out": 4,
+     "in": 23
+    },
+    "needs": {
+     "outFrames": 43,
+     "headFrames": 14
+    },
+    "export": "succeeded"
+   },
+   "wipe-left n=29 ×3": {
+    "stillFramesWithErrors": 0,
+    "exportFramesWithErrors": 0,
+    "cellsRead": 450,
+    "lowestBitReadOn": {
+     "out": 4,
+     "in": 23
+    },
+    "needs": {
+     "outFrames": 57,
+     "headFrames": 28
+    },
+    "export": "succeeded"
+   },
+   "wipe-left n=29 ×4": {
+    "stillFramesWithErrors": 0,
+    "exportFramesWithErrors": 0,
+    "cellsRead": 450,
+    "lowestBitReadOn": {
+     "out": 4,
+     "in": 23
+    },
+    "needs": {
+     "outFrames": 71,
+     "headFrames": 42
+    },
+    "export": "succeeded"
+   },
+   "wipe-right n=15 ×2": {
+    "stillFramesWithErrors": 0,
+    "exportFramesWithErrors": 0,
+    "cellsRead": 234,
+    "lowestBitReadOn": {
+     "out": 12,
+     "in": 2
+    },
+    "needs": {
+     "outFrames": 22,
+     "headFrames": 7
+    },
+    "export": "succeeded"
+   },
+   "wipe-right n=15 ×3": {
+    "stillFramesWithErrors": 0,
+    "exportFramesWithErrors": 0,
+    "cellsRead": 234,
+    "lowestBitReadOn": {
+     "out": 12,
+     "in": 2
+    },
+    "needs": {
+     "outFrames": 29,
+     "headFrames": 14
+    },
+    "export": "succeeded"
+   },
+   "wipe-right n=15 ×4": {
+    "stillFramesWithErrors": 0,
+    "exportFramesWithErrors": 0,
+    "cellsRead": 234,
+    "lowestBitReadOn": {
+     "out": 12,
+     "in": 2
+    },
+    "needs": {
+     "outFrames": 36,
+     "headFrames": 21
+    },
+    "export": "succeeded"
+   },
+   "wipe-right n=29 ×2": {
+    "stillFramesWithErrors": 0,
+    "exportFramesWithErrors": 0,
+    "cellsRead": 450,
+    "lowestBitReadOn": {
+     "out": 23,
+     "in": 4
+    },
+    "needs": {
+     "outFrames": 43,
+     "headFrames": 14
+    },
+    "export": "succeeded"
+   },
+   "wipe-right n=29 ×3": {
+    "stillFramesWithErrors": 0,
+    "exportFramesWithErrors": 0,
+    "cellsRead": 450,
+    "lowestBitReadOn": {
+     "out": 23,
+     "in": 4
+    },
+    "needs": {
+     "outFrames": 57,
+     "headFrames": 28
+    },
+    "export": "succeeded"
+   },
+   "wipe-right n=29 ×4": {
+    "stillFramesWithErrors": 0,
+    "exportFramesWithErrors": 0,
+    "cellsRead": 450,
+    "lowestBitReadOn": {
+     "out": 23,
+     "in": 4
+    },
+    "needs": {
+     "outFrames": 71,
+     "headFrames": 42
+    },
+    "export": "succeeded"
+   }
+  },
+  "velocityRefusals": {
+   "21 frames after the previous clip": {
+    "expectedMaxVelocity": 1,
+    "×2": {
+     "code": "out_of_bounds",
+     "maxVelocity": 1
+    },
+    "×3": {
+     "code": "out_of_bounds",
+     "maxVelocity": 1
+    },
+    "×4": {
+     "code": "out_of_bounds",
+     "maxVelocity": 1
+    }
+   },
+   "22 frames after the previous clip": {
+    "expectedMaxVelocity": 2,
+    "×2": "accepted",
+    "×3": {
+     "code": "out_of_bounds",
+     "maxVelocity": 2
+    },
+    "×4": {
+     "code": "out_of_bounds",
+     "maxVelocity": 2
+    }
+   },
+   "28 frames after the previous clip": {
+    "expectedMaxVelocity": 2,
+    "×2": "accepted",
+    "×3": {
+     "code": "out_of_bounds",
+     "maxVelocity": 2
+    },
+    "×4": {
+     "code": "out_of_bounds",
+     "maxVelocity": 2
+    }
+   },
+   "29 frames after the previous clip": {
+    "expectedMaxVelocity": 3,
+    "×2": "accepted",
+    "×3": "accepted",
+    "×4": {
+     "code": "out_of_bounds",
+     "maxVelocity": 3
+    }
+   },
+   "35 frames after the previous clip": {
+    "expectedMaxVelocity": 3,
+    "×2": "accepted",
+    "×3": "accepted",
+    "×4": {
+     "code": "out_of_bounds",
+     "maxVelocity": 3
+    }
+   },
+   "36 frames after the previous clip": {
+    "expectedMaxVelocity": 4,
+    "×2": "accepted",
+    "×3": "accepted",
+    "×4": "accepted"
+   }
+  },
+  "flash": {
+   "punch-in dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "punch-in equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "punch-out dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "punch-out equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "blur-dissolve dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "blur-dissolve equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "split-open-h dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "split-open-h equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "split-open-v dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "split-open-v equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "shape-heart dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "shape-heart equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "shape-star dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "shape-star equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "block-left dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "block-left equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "block-right dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "block-right equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "slices-h dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "slices-h equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "slices-v dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "slices-v equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "film-burn dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "film-burn equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "light-leak dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "light-leak equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "ink-bleed dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "ink-bleed equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "brush-left dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "brush-left equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "brush-right dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "brush-right equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "page-turn-left dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "page-turn-left equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "page-turn-right dark/bright": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   },
+   "page-turn-right equal luminance": {
+    "frames": 180,
+    "verdict": "pass",
+    "ranges": [],
+    "server": "pass"
+   }
+  },
+  "flashShortClips": {
+   "note": "fifteen 4-frame clips (dark/bright) with a 4-frame transition on every cut; a measurement, not a gate",
+   "block-left": {
+    "frames": 60,
+    "verdict": "fail",
+    "ranges": [
+     {
+      "from": 0,
+      "to": 59,
+      "kind": "general",
+      "flashesPerSecond": 8,
+      "area": 1
+     }
+    ],
+    "server": "fail"
+   },
+   "block-right": {
+    "frames": 60,
+    "verdict": "fail",
+    "ranges": [
+     {
+      "from": 0,
+      "to": 59,
+      "kind": "general",
+      "flashesPerSecond": 8,
+      "area": 1
+     }
+    ],
+    "server": "fail"
+   },
+   "dip-black": {
+    "frames": 60,
+    "verdict": "fail",
+    "ranges": [
+     {
+      "from": 1,
+      "to": 59,
+      "kind": "general",
+      "flashesPerSecond": 4,
+      "area": 1
+     }
+    ],
+    "server": "fail"
+   }
+  },
+  "agreement": {
+   "punch-in": {
+    "export": {
+     "exportMinPsnrDb": 46.55,
+     "nearerItsOwnFrameByDb": 9.23,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 43.58,
+     "conversionAloneMinPsnrDb": 44.57
+    },
+    "previewVsStill": {
+     "70": {
+      "identical": true,
+      "differingValues": 0,
+      "maxDifference": 0,
+      "meanDifference": 0
+     },
+     "74": {
+      "identical": true,
+      "differingValues": 0,
+      "maxDifference": 0,
+      "meanDifference": 0
+     },
+     "78": {
+      "identical": true,
+      "differingValues": 0,
+      "maxDifference": 0,
+      "meanDifference": 0
+     }
+    }
+   },
+   "shape-heart": {
+    "export": {
+     "exportMinPsnrDb": 45.86,
+     "nearerItsOwnFrameByDb": 32.07,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 32.94,
+     "conversionAloneMinPsnrDb": 33.32
+    },
+    "previewVsStill": {
+     "70": {
+      "identical": true,
+      "differingValues": 0,
+      "maxDifference": 0,
+      "meanDifference": 0
+     },
+     "74": {
+      "identical": true,
+      "differingValues": 0,
+      "maxDifference": 0,
+      "meanDifference": 0
+     },
+     "78": {
+      "identical": true,
+      "differingValues": 0,
+      "maxDifference": 0,
+      "meanDifference": 0
+     }
+    }
+   },
+   "blur-dissolve": {
+    "export": {
+     "exportMinPsnrDb": 46.37,
+     "nearerItsOwnFrameByDb": 19.94,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 43.99,
+     "conversionAloneMinPsnrDb": 45.05
+    },
+    "previewVsStill": {
+     "70": {
+      "identical": true,
+      "differingValues": 0,
+      "maxDifference": 0,
+      "meanDifference": 0
+     },
+     "74": {
+      "identical": true,
+      "differingValues": 0,
+      "maxDifference": 0,
+      "meanDifference": 0
+     },
+     "78": {
+      "identical": true,
+      "differingValues": 0,
+      "maxDifference": 0,
+      "meanDifference": 0
+     }
+    }
+   },
+   "slices-h": {
+    "export": {
+     "exportMinPsnrDb": 46.03,
+     "nearerItsOwnFrameByDb": 20.52,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 36.52,
+     "conversionAloneMinPsnrDb": 36.82
+    },
+    "previewVsStill": {
+     "70": {
+      "identical": true,
+      "differingValues": 0,
+      "maxDifference": 0,
+      "meanDifference": 0
+     },
+     "74": {
+      "identical": true,
+      "differingValues": 0,
+      "maxDifference": 0,
+      "meanDifference": 0
+     },
+     "78": {
+      "identical": true,
+      "differingValues": 0,
+      "maxDifference": 0,
+      "meanDifference": 0
+     }
+    }
+   },
+   "wipe-left (from before the pack)": {
+    "export": {
+     "exportMinPsnrDb": 49.1,
+     "nearerItsOwnFrameByDb": 33.33,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 37.78,
+     "conversionAloneMinPsnrDb": 37.96
+    }
+   },
+   "note": "exportMinPsnrDb: the export against the stills through the export's own 4:2:0 conversion and a lossless encode (the gate, with nearerItsOwnFrameByDb); conversionAloneMinPsnrDb: those against the stills as rendered, which is what 4:2:0 costs the picture with no codec loss; exportAgainstTheStillsAsRenderedMinPsnrDb: both together (recorded)"
+  },
+  "cost": {
+   "size": "1080x1920",
+   "frames": 29,
+   "raster": "canvas 2d, willReadFrequently (the render page's CPU raster path)",
+   "results": {
+    "none": {
+     "medianMs": 1,
+     "meanMs": 1.45,
+     "maxMs": 12.5
+    },
+    "punch-in": {
+     "medianMs": 75.4,
+     "meanMs": 76.5,
+     "maxMs": 106.6
+    },
+    "punch-out": {
+     "medianMs": 97,
+     "meanMs": 91.2,
+     "maxMs": 140.1
+    },
+    "blur-dissolve": {
+     "medianMs": 116.1,
+     "meanMs": 104.89,
+     "maxMs": 176.5
+    },
+    "split-open-h": {
+     "medianMs": 36.3,
+     "meanMs": 36.6,
+     "maxMs": 44
+    },
+    "split-open-v": {
+     "medianMs": 38.5,
+     "meanMs": 37.06,
+     "maxMs": 46.9
+    },
+    "shape-heart": {
+     "medianMs": 11.1,
+     "meanMs": 11.89,
+     "maxMs": 22.4
+    },
+    "shape-star": {
+     "medianMs": 11.6,
+     "meanMs": 11.63,
+     "maxMs": 14.5
+    },
+    "block-left": {
+     "medianMs": 12.1,
+     "meanMs": 11.27,
+     "maxMs": 16.1
+    },
+    "block-right": {
+     "medianMs": 10,
+     "meanMs": 10.44,
+     "maxMs": 15.1
+    },
+    "slices-h": {
+     "medianMs": 11.9,
+     "meanMs": 12.51,
+     "maxMs": 19
+    },
+    "slices-v": {
+     "medianMs": 20.5,
+     "meanMs": 20.5,
+     "maxMs": 53.8
+    },
+    "dissolve": {
+     "medianMs": 25.2,
+     "meanMs": 24.99,
+     "maxMs": 32
+    }
+   },
+   "noTransitionMedianMs": 1,
+   "over60ms": [
+    "punch-in: 75.4 ms",
+    "punch-out: 97 ms",
+    "blur-dissolve: 116.1 ms"
+   ],
+   "note": "Lab page in the proof's headless Chromium, one run on this machine; median of the 29 frames of a 29-frame transition; recorded, not a target",
+   "pageErrors": []
+  }
+ },
+ "checks": [
+  {
+   "name": "T1 /catalog lists 69 transitions, each with its category and options (and what it accepts: sync beat, velocity 2|3|4)",
+   "ok": true,
+   "detail": {
+    "count": 69,
+    "newIds": [
+     "punch-in:camera:-",
+     "punch-out:camera:-",
+     "blur-dissolve:blur:-",
+     "split-open-h:slide:-",
+     "split-open-v:slide:-",
+     "shape-heart:mask:color",
+     "shape-star:mask:color",
+     "block-left:mg:color",
+     "block-right:mg:color",
+     "slices-h:glitch:seed",
+     "slices-v:glitch:seed",
+     "film-burn:light:color+seed",
+     "light-leak:light:color+seed",
+     "ink-bleed:mask:seed",
+     "brush-left:mask:seed",
+     "brush-right:mask:seed",
+     "page-turn-left:paper:-",
+     "page-turn-right:paper:-"
+    ]
+   }
+  },
+  {
+   "name": "T1 every new id's middle frame (74) differs from the outgoing (59) and the incoming (89) picture (a GPU id the render worker cannot run here is listed, not counted)",
+   "ok": true,
+   "detail": {
+    "punch-in": "differs from both sides",
+    "punch-out": "differs from both sides",
+    "blur-dissolve": "differs from both sides",
+    "split-open-h": "differs from both sides",
+    "split-open-v": "differs from both sides",
+    "shape-heart": "differs from both sides",
+    "shape-star": "differs from both sides",
+    "block-left": "differs from both sides",
+    "block-right": "differs from both sides",
+    "slices-h": "differs from both sides",
+    "slices-v": "differs from both sides",
+    "film-burn": "differs from both sides",
+    "light-leak": "differs from both sides",
+    "ink-bleed": "differs from both sides",
+    "brush-left": "differs from both sides",
+    "brush-right": "differs from both sides",
+    "page-turn-left": "differs from both sides",
+    "page-turn-right": "differs from both sides"
+   }
+  },
+  {
+   "name": "T2 11 single-crossing ids at 360×640 and 640×360, frames 60..88: at most 0.1 % of pixels lose more than 6/255 of blue between frames (page turn, whose page shows its whitened, shaded back: at most 0.1 % go back from the incoming picture, blue >= 128, to the page or lose blue while incoming, the page loses at most 20/255, and the incoming region is s > pageFold(p).edge); blue mean < 70 on frame 61 and > 185 on frame 87",
+   "ok": true,
+   "detail": {
+    "notOk": {},
+    "split-open-h 360x640": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 255,
+     "ok": true
+    },
+    "split-open-h 640x360": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 255,
+     "ok": true
+    },
+    "split-open-v 360x640": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 255,
+     "ok": true
+    },
+    "split-open-v 640x360": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 255,
+     "ok": true
+    },
+    "shape-heart 360x640": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 238.2,
+     "ok": true
+    },
+    "shape-heart 640x360": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 254.5,
+     "ok": true
+    },
+    "shape-star 360x640": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 255,
+     "ok": true
+    },
+    "shape-star 640x360": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 254.6,
+     "ok": true
+    },
+    "slices-h 360x640": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 255,
+     "ok": true
+    },
+    "slices-h 640x360": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 255,
+     "ok": true
+    },
+    "slices-v 360x640": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 255,
+     "ok": true
+    },
+    "slices-v 640x360": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 255,
+     "ok": true
+    },
+    "ink-bleed 360x640": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 255,
+     "ok": true
+    },
+    "ink-bleed 640x360": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 255,
+     "ok": true
+    },
+    "brush-left 360x640": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 255,
+     "ok": true
+    },
+    "brush-left 640x360": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 255,
+     "ok": true
+    },
+    "brush-right 360x640": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 255,
+     "ok": true
+    },
+    "brush-right 640x360": {
+     "worstShareLosingBlue": 0,
+     "blueMean61": 0,
+     "blueMean87": 255,
+     "ok": true
+    },
+    "page-turn-left 360x640": {
+     "shareGoingBackFromIncoming": 0,
+     "shareLosingBlueWhileIncoming": 0,
+     "shareBetweenPageAndIncoming": 0,
+     "largestBlueLossOnThePage": 19,
+     "shareOffTheModelEdge": 0,
+     "shareLosingBlueOnThePagesBack": 0.08056,
+     "blueMean61": 0,
+     "blueMean87": 252,
+     "ok": true
+    },
+    "page-turn-left 640x360": {
+     "shareGoingBackFromIncoming": 0,
+     "shareLosingBlueWhileIncoming": 0,
+     "shareBetweenPageAndIncoming": 0,
+     "largestBlueLossOnThePage": 19,
+     "shareOffTheModelEdge": 0,
+     "shareLosingBlueOnThePagesBack": 0.08125,
+     "blueMean61": 0,
+     "blueMean87": 252.1,
+     "ok": true
+    },
+    "page-turn-right 360x640": {
+     "shareGoingBackFromIncoming": 0,
+     "shareLosingBlueWhileIncoming": 0,
+     "shareBetweenPageAndIncoming": 0,
+     "largestBlueLossOnThePage": 19,
+     "shareOffTheModelEdge": 0,
+     "shareLosingBlueOnThePagesBack": 0.08056,
+     "blueMean61": 0,
+     "blueMean87": 252,
+     "ok": true
+    },
+    "page-turn-right 640x360": {
+     "shareGoingBackFromIncoming": 0,
+     "shareLosingBlueWhileIncoming": 0,
+     "shareBetweenPageAndIncoming": 0,
+     "largestBlueLossOnThePage": 19,
+     "shareOffTheModelEdge": 0,
+     "shareLosingBlueOnThePagesBack": 0.08125,
+     "blueMean61": 0,
+     "blueMean87": 252.1,
+     "ok": true
+    }
+   }
+  },
+  {
+   "name": "T3 heart and star at the middle frame (p = 0.5): centre blue > 200, the 4 corners < 55, above the heart's notch < 55; split-open-h: centre column incoming, x = 2 and x = W−3 outgoing",
+   "ok": true,
+   "detail": {
+    "heart 360x640": {
+     "centre": 255,
+     "corners": [
+      0,
+      0,
+      0,
+      0
+     ],
+     "aboveNotch": 0,
+     "ok": true
+    },
+    "heart 640x360": {
+     "centre": 255,
+     "corners": [
+      0,
+      0,
+      0,
+      0
+     ],
+     "aboveNotch": 0,
+     "ok": true
+    },
+    "star 360x640": {
+     "centre": 255,
+     "corners": [
+      0,
+      0,
+      0,
+      0
+     ],
+     "ok": true
+    },
+    "star 640x360": {
+     "centre": 255,
+     "corners": [
+      0,
+      0,
+      0,
+      0
+     ],
+     "ok": true
+    },
+    "split-open-h 360x640": {
+     "centreColumn": 255,
+     "x2": 0,
+     "x357": 0,
+     "ok": true
+    },
+    "split-open-h 640x360": {
+     "centreColumn": 255,
+     "x2": 0,
+     "x637": 0,
+     "ok": true
+    }
+   }
+  },
+  {
+   "name": "T3 block-left/right: on the switch frame (74) at least 99.5 % of the pixels are within ±2 of a block colour, on frame 88 at most 0.5 %; the bars enter from the side the id names",
+   "ok": true,
+   "detail": {
+    "block-left 360x640": {
+     "switchFrame": 1,
+     "frame88": 0,
+     "frame70": {
+      "barColumnBlue": 120,
+      "farColumnBlue": 0
+     },
+     "barEnteredFromItsSide": true,
+     "ok": true
+    },
+    "block-left 640x360": {
+     "switchFrame": 1,
+     "frame88": 0,
+     "frame70": {
+      "barColumnBlue": 120,
+      "farColumnBlue": 0
+     },
+     "barEnteredFromItsSide": true,
+     "ok": true
+    },
+    "block-right 360x640": {
+     "switchFrame": 1,
+     "frame88": 0,
+     "frame70": {
+      "barColumnBlue": 120,
+      "farColumnBlue": 0
+     },
+     "barEnteredFromItsSide": true,
+     "ok": true
+    },
+    "block-right 640x360": {
+     "switchFrame": 1,
+     "frame88": 0,
+     "frame70": {
+      "barColumnBlue": 120,
+      "farColumnBlue": 0
+     },
+     "barEnteredFromItsSide": true,
+     "ok": true
+    }
+   }
+  },
+  {
+   "name": "T3 slices: the same seed renders identically twice; seeds 1 and 2 differ in at least 10 % of the pixels (middle frame)",
+   "ok": true,
+   "detail": {
+    "slices-h": {
+     "sameSeedIdentical": true,
+     "seeds1and2Differ": 1
+    },
+    "slices-v": {
+     "sameSeedIdentical": true,
+     "seeds1and2Differ": 1
+    }
+   }
+  },
+  {
+   "name": "T3 blur-dissolve: the blue mean of the centre region is 255·p ± 3 on frames 61, 74 and 87",
+   "ok": true,
+   "detail": {
+    "61": {
+     "p": 0.00119,
+     "expected": 0.3,
+     "centreBlueMean": 0
+    },
+    "74": {
+     "p": 0.5,
+     "expected": 127.5,
+     "centreBlueMean": 128
+    },
+    "87": {
+     "p": 0.99881,
+     "expected": 254.7,
+     "centreBlueMean": 255
+    }
+   }
+  },
+  {
+   "name": "T4 beat lock with beats set by edit_analysis: the switch is on frame 75 for beats at 70/75/80, 76 when they move +1, 72 when they move +2 (72 and 77 tie, the earlier wins: the done_when's 77 contradicts the contract's tie rule), as beatSwitchFrame says — punch-in: the first frame with blue mean ≥ 127; dissolve: every frame on the locked curve (±1.5); with no beats sync on is SHA-identical to sync off",
+   "ok": true,
+   "detail": {
+    "punch-in": {
+     "70, 75, 80": {
+      "model": 75,
+      "want": 75,
+      "firstFrameWithBlueMeanAtLeast127": 75,
+      "ok": true
+     },
+     "moved +1": {
+      "model": 76,
+      "want": 76,
+      "firstFrameWithBlueMeanAtLeast127": 76,
+      "ok": true
+     },
+     "moved +2 (a tie)": {
+      "model": 72,
+      "want": 72,
+      "firstFrameWithBlueMeanAtLeast127": 72,
+      "ok": true
+     },
+     "no beats: sync on = sync off": true
+    },
+    "dissolve": {
+     "70, 75, 80": {
+      "model": 75,
+      "want": 75,
+      "worstDistanceFromLockedCurve": 0.5,
+      "mostFromUnlockedCurve": 71.22,
+      "ok": true
+     },
+     "moved +1": {
+      "model": 76,
+      "want": 76,
+      "worstDistanceFromLockedCurve": 0.49,
+      "mostFromUnlockedCurve": 78.22,
+      "ok": true
+     },
+     "moved +2 (a tie)": {
+      "model": 72,
+      "want": 72,
+      "worstDistanceFromLockedCurve": 0.49,
+      "mostFromUnlockedCurve": 85.46,
+      "ok": true
+     },
+     "no beats: sync on = sync off": true
+    }
+   }
+  },
+  {
+   "name": "T5 velocity ×2/×3/×4 at n = 15 and 29: in the regions the wipe gives each side, the outgoing picture shows its frame end + l + out(l) and the incoming one sourceIn + l − in(l): 0 frames with an error, on stills and on a server export (wipe-left reads the incoming side's lowest bits, wipe-right the outgoing side's)",
+   "ok": true,
+   "detail": {
+    "wipe-left n=15 ×2": {
+     "stillFramesWithErrors": 0,
+     "exportFramesWithErrors": 0,
+     "cellsRead": 234,
+     "lowestBitReadOn": {
+      "out": 2,
+      "in": 12
+     },
+     "needs": {
+      "outFrames": 22,
+      "headFrames": 7
+     },
+     "export": "succeeded"
+    },
+    "wipe-left n=15 ×3": {
+     "stillFramesWithErrors": 0,
+     "exportFramesWithErrors": 0,
+     "cellsRead": 234,
+     "lowestBitReadOn": {
+      "out": 2,
+      "in": 12
+     },
+     "needs": {
+      "outFrames": 29,
+      "headFrames": 14
+     },
+     "export": "succeeded"
+    },
+    "wipe-left n=15 ×4": {
+     "stillFramesWithErrors": 0,
+     "exportFramesWithErrors": 0,
+     "cellsRead": 234,
+     "lowestBitReadOn": {
+      "out": 2,
+      "in": 12
+     },
+     "needs": {
+      "outFrames": 36,
+      "headFrames": 21
+     },
+     "export": "succeeded"
+    },
+    "wipe-left n=29 ×2": {
+     "stillFramesWithErrors": 0,
+     "exportFramesWithErrors": 0,
+     "cellsRead": 450,
+     "lowestBitReadOn": {
+      "out": 4,
+      "in": 23
+     },
+     "needs": {
+      "outFrames": 43,
+      "headFrames": 14
+     },
+     "export": "succeeded"
+    },
+    "wipe-left n=29 ×3": {
+     "stillFramesWithErrors": 0,
+     "exportFramesWithErrors": 0,
+     "cellsRead": 450,
+     "lowestBitReadOn": {
+      "out": 4,
+      "in": 23
+     },
+     "needs": {
+      "outFrames": 57,
+      "headFrames": 28
+     },
+     "export": "succeeded"
+    },
+    "wipe-left n=29 ×4": {
+     "stillFramesWithErrors": 0,
+     "exportFramesWithErrors": 0,
+     "cellsRead": 450,
+     "lowestBitReadOn": {
+      "out": 4,
+      "in": 23
+     },
+     "needs": {
+      "outFrames": 71,
+      "headFrames": 42
+     },
+     "export": "succeeded"
+    },
+    "wipe-right n=15 ×2": {
+     "stillFramesWithErrors": 0,
+     "exportFramesWithErrors": 0,
+     "cellsRead": 234,
+     "lowestBitReadOn": {
+      "out": 12,
+      "in": 2
+     },
+     "needs": {
+      "outFrames": 22,
+      "headFrames": 7
+     },
+     "export": "succeeded"
+    },
+    "wipe-right n=15 ×3": {
+     "stillFramesWithErrors": 0,
+     "exportFramesWithErrors": 0,
+     "cellsRead": 234,
+     "lowestBitReadOn": {
+      "out": 12,
+      "in": 2
+     },
+     "needs": {
+      "outFrames": 29,
+      "headFrames": 14
+     },
+     "export": "succeeded"
+    },
+    "wipe-right n=15 ×4": {
+     "stillFramesWithErrors": 0,
+     "exportFramesWithErrors": 0,
+     "cellsRead": 234,
+     "lowestBitReadOn": {
+      "out": 12,
+      "in": 2
+     },
+     "needs": {
+      "outFrames": 36,
+      "headFrames": 21
+     },
+     "export": "succeeded"
+    },
+    "wipe-right n=29 ×2": {
+     "stillFramesWithErrors": 0,
+     "exportFramesWithErrors": 0,
+     "cellsRead": 450,
+     "lowestBitReadOn": {
+      "out": 23,
+      "in": 4
+     },
+     "needs": {
+      "outFrames": 43,
+      "headFrames": 14
+     },
+     "export": "succeeded"
+    },
+    "wipe-right n=29 ×3": {
+     "stillFramesWithErrors": 0,
+     "exportFramesWithErrors": 0,
+     "cellsRead": 450,
+     "lowestBitReadOn": {
+      "out": 23,
+      "in": 4
+     },
+     "needs": {
+      "outFrames": 57,
+      "headFrames": 28
+     },
+     "export": "succeeded"
+    },
+    "wipe-right n=29 ×4": {
+     "stillFramesWithErrors": 0,
+     "exportFramesWithErrors": 0,
+     "cellsRead": 450,
+     "lowestBitReadOn": {
+      "out": 23,
+      "in": 4
+     },
+     "needs": {
+      "outFrames": 71,
+      "headFrames": 42
+     },
+     "export": "succeeded"
+    }
+   }
+  },
+  {
+   "name": "T5 refusals at n = 15: with 22, 29 and 36 frames of handle ×2, ×3 and ×4 are accepted; one frame less, the next velocity is refused (out_of_bounds) with maxVelocity one lower",
+   "ok": true,
+   "detail": {
+    "21 frames after the previous clip": {
+     "expectedMaxVelocity": 1,
+     "×2": {
+      "code": "out_of_bounds",
+      "maxVelocity": 1
+     },
+     "×3": {
+      "code": "out_of_bounds",
+      "maxVelocity": 1
+     },
+     "×4": {
+      "code": "out_of_bounds",
+      "maxVelocity": 1
+     }
+    },
+    "22 frames after the previous clip": {
+     "expectedMaxVelocity": 2,
+     "×2": "accepted",
+     "×3": {
+      "code": "out_of_bounds",
+      "maxVelocity": 2
+     },
+     "×4": {
+      "code": "out_of_bounds",
+      "maxVelocity": 2
+     }
+    },
+    "28 frames after the previous clip": {
+     "expectedMaxVelocity": 2,
+     "×2": "accepted",
+     "×3": {
+      "code": "out_of_bounds",
+      "maxVelocity": 2
+     },
+     "×4": {
+      "code": "out_of_bounds",
+      "maxVelocity": 2
+     }
+    },
+    "29 frames after the previous clip": {
+     "expectedMaxVelocity": 3,
+     "×2": "accepted",
+     "×3": "accepted",
+     "×4": {
+      "code": "out_of_bounds",
+      "maxVelocity": 3
+     }
+    },
+    "35 frames after the previous clip": {
+     "expectedMaxVelocity": 3,
+     "×2": "accepted",
+     "×3": "accepted",
+     "×4": {
+      "code": "out_of_bounds",
+      "maxVelocity": 3
+     }
+    },
+    "36 frames after the previous clip": {
+     "expectedMaxVelocity": 4,
+     "×2": "accepted",
+     "×3": "accepted",
+     "×4": "accepted"
+    }
+   }
+  },
+  {
+   "name": "T6 FlashAnalyser on a server export of each new Canvas2D transition at its defaults (six back-to-back 1 s clips, dark/bright and equal-luminance pictures): verdict pass",
+   "ok": true,
+   "detail": {
+    "punch-in dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "punch-in equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "punch-out dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "punch-out equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "blur-dissolve dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "blur-dissolve equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "split-open-h dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "split-open-h equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "split-open-v dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "split-open-v equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "shape-heart dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "shape-heart equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "shape-star dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "shape-star equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "block-left dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "block-left equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "block-right dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "block-right equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "slices-h dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "slices-h equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "slices-v dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "slices-v equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    }
+   }
+  },
+  {
+   "name": "T6 the same for the new GPU transitions where the render worker could run them (the rest are listed as not rendered here, not as passing)",
+   "ok": true,
+   "detail": {
+    "film-burn dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "film-burn equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "light-leak dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "light-leak equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "ink-bleed dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "ink-bleed equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "brush-left dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "brush-left equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "brush-right dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "brush-right equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "page-turn-left dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "page-turn-left equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "page-turn-right dark/bright": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    },
+    "page-turn-right equal luminance": {
+     "frames": 180,
+     "verdict": "pass",
+     "ranges": [],
+     "server": "pass"
+    }
+   }
+  },
+  {
+   "name": "T6 recorded (not a gate): the colour blocks and dip-black between 4-frame dark/bright clips",
+   "ok": true,
+   "detail": {
+    "note": "fifteen 4-frame clips (dark/bright) with a 4-frame transition on every cut; a measurement, not a gate",
+    "block-left": {
+     "frames": 60,
+     "verdict": "fail",
+     "ranges": [
+      {
+       "from": 0,
+       "to": 59,
+       "kind": "general",
+       "flashesPerSecond": 8,
+       "area": 1
+      }
+     ],
+     "server": "fail"
+    },
+    "block-right": {
+     "frames": 60,
+     "verdict": "fail",
+     "ranges": [
+      {
+       "from": 0,
+       "to": 59,
+       "kind": "general",
+       "flashesPerSecond": 8,
+       "area": 1
+      }
+     ],
+     "server": "fail"
+    },
+    "dip-black": {
+     "frames": 60,
+     "verdict": "fail",
+     "ranges": [
+      {
+       "from": 1,
+       "to": 59,
+       "kind": "general",
+       "flashesPerSecond": 4,
+       "area": 1
+      }
+     ],
+     "server": "fail"
+    }
+   }
+  },
+  {
+   "name": "T7 punch-in, shape-heart, blur-dissolve and slices-h: the paused editor preview is byte-identical to the still (frames 70, 74, 78); the export reaches PSNR ≥ 40 dB against the stills as its 4:2:0 conversion carries them without codec loss (frames 61, 66, 70, 73, 74, 75, 78, 82, 87) and on 73, 74 and 75 is at least 6 dB nearer its own frame than the one before or after; wipe-left, from before the pack, the same; no page errors",
+   "ok": true,
+   "detail": {
+    "punch-in": {
+     "exportMinPsnrDb": 46.55,
+     "nearerItsOwnFrameByDb": 9.23,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 43.58,
+     "conversionAloneMinPsnrDb": 44.57,
+     "previewIdentical": true
+    },
+    "shape-heart": {
+     "exportMinPsnrDb": 45.86,
+     "nearerItsOwnFrameByDb": 32.07,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 32.94,
+     "conversionAloneMinPsnrDb": 33.32,
+     "previewIdentical": true
+    },
+    "blur-dissolve": {
+     "exportMinPsnrDb": 46.37,
+     "nearerItsOwnFrameByDb": 19.94,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 43.99,
+     "conversionAloneMinPsnrDb": 45.05,
+     "previewIdentical": true
+    },
+    "slices-h": {
+     "exportMinPsnrDb": 46.03,
+     "nearerItsOwnFrameByDb": 20.52,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 36.52,
+     "conversionAloneMinPsnrDb": 36.82,
+     "previewIdentical": true
+    },
+    "wipe-left": {
+     "exportMinPsnrDb": 49.1,
+     "nearerItsOwnFrameByDb": 33.33,
+     "exportAgainstTheStillsAsRenderedMinPsnrDb": 37.78,
+     "conversionAloneMinPsnrDb": 37.96
+    },
+    "pageErrors": []
+   }
+  },
+  {
+   "name": "T8 recorded (not a gate): median ms per frame at 1080×1920 for each new Canvas2D id; over 60 ms: punch-in: 75.4 ms, punch-out: 97 ms, blur-dissolve: 116.1 ms",
+   "ok": true,
+   "detail": {
+    "size": "1080x1920",
+    "frames": 29,
+    "raster": "canvas 2d, willReadFrequently (the render page's CPU raster path)",
+    "results": {
+     "none": {
+      "medianMs": 1,
+      "meanMs": 1.45,
+      "maxMs": 12.5
+     },
+     "punch-in": {
+      "medianMs": 75.4,
+      "meanMs": 76.5,
+      "maxMs": 106.6
+     },
+     "punch-out": {
+      "medianMs": 97,
+      "meanMs": 91.2,
+      "maxMs": 140.1
+     },
+     "blur-dissolve": {
+      "medianMs": 116.1,
+      "meanMs": 104.89,
+      "maxMs": 176.5
+     },
+     "split-open-h": {
+      "medianMs": 36.3,
+      "meanMs": 36.6,
+      "maxMs": 44
+     },
+     "split-open-v": {
+      "medianMs": 38.5,
+      "meanMs": 37.06,
+      "maxMs": 46.9
+     },
+     "shape-heart": {
+      "medianMs": 11.1,
+      "meanMs": 11.89,
+      "maxMs": 22.4
+     },
+     "shape-star": {
+      "medianMs": 11.6,
+      "meanMs": 11.63,
+      "maxMs": 14.5
+     },
+     "block-left": {
+      "medianMs": 12.1,
+      "meanMs": 11.27,
+      "maxMs": 16.1
+     },
+     "block-right": {
+      "medianMs": 10,
+      "meanMs": 10.44,
+      "maxMs": 15.1
+     },
+     "slices-h": {
+      "medianMs": 11.9,
+      "meanMs": 12.51,
+      "maxMs": 19
+     },
+     "slices-v": {
+      "medianMs": 20.5,
+      "meanMs": 20.5,
+      "maxMs": 53.8
+     },
+     "dissolve": {
+      "medianMs": 25.2,
+      "meanMs": 24.99,
+      "maxMs": 32
+     }
+    },
+    "noTransitionMedianMs": 1,
+    "over60ms": [
+     "punch-in: 75.4 ms",
+     "punch-out: 97 ms",
+     "blur-dissolve: 116.1 ms"
+    ],
+    "note": "Lab page in the proof's headless Chromium, one run on this machine; median of the 29 frames of a 29-frame transition; recorded, not a target",
+    "pageErrors": []
+   }
+  }
+ ]
+}

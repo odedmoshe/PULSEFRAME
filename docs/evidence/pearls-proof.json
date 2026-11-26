@@ -1,0 +1,511 @@
+{
+ "when": "2026-11-26T07:43:08.999Z",
+ "exit": 0,
+ "checksPassed": 16,
+ "checks": 16,
+ "results": [
+  {
+   "check": "P1",
+   "part": "core",
+   "verdict": "PASS",
+   "seconds": 0.1
+  },
+  {
+   "check": "P2",
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 6
+  },
+  {
+   "check": "P3",
+   "part": "ui",
+   "verdict": "PASS",
+   "seconds": 9.2
+  },
+  {
+   "check": "P4",
+   "part": "ui",
+   "verdict": "PASS",
+   "seconds": 2.6
+  },
+  {
+   "check": "P5",
+   "part": "ui",
+   "verdict": "PASS",
+   "seconds": 6.8
+  },
+  {
+   "check": "P6",
+   "part": "core",
+   "verdict": "PASS",
+   "seconds": 2.2
+  },
+  {
+   "check": "P6",
+   "part": "integration",
+   "verdict": "PASS",
+   "seconds": 11.8
+  },
+  {
+   "check": "P7",
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 0.7
+  },
+  {
+   "check": "P7",
+   "part": "ui",
+   "verdict": "PASS",
+   "seconds": 3.2
+  },
+  {
+   "check": "P8",
+   "part": "core",
+   "verdict": "PASS",
+   "seconds": 0
+  },
+  {
+   "check": "P8",
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 0.4
+  },
+  {
+   "check": "P9",
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 0.1
+  },
+  {
+   "check": "P9",
+   "part": "ui",
+   "verdict": "PASS",
+   "seconds": 2.8
+  },
+  {
+   "check": "P10",
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 0.2
+  },
+  {
+   "check": "P11",
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 0
+  },
+  {
+   "check": "P12",
+   "part": "server",
+   "verdict": "PASS",
+   "seconds": 1.6
+  },
+  {
+   "check": "P13",
+   "part": "ui",
+   "verdict": "PASS",
+   "seconds": 5
+  },
+  {
+   "check": "P14",
+   "part": "core",
+   "verdict": "PASS",
+   "seconds": 0
+  },
+  {
+   "check": "P15",
+   "part": "core",
+   "verdict": "PASS",
+   "seconds": 0.8
+  },
+  {
+   "check": "P15",
+   "part": "ui",
+   "verdict": "PASS",
+   "seconds": 0.6
+  },
+  {
+   "check": "P15",
+   "part": "integration",
+   "verdict": "PASS",
+   "seconds": 1.4
+  },
+  {
+   "check": "P16",
+   "part": "core",
+   "verdict": "PASS",
+   "seconds": 0.1
+  }
+ ],
+ "evidence": {
+  "core": {
+   "P1": {
+    "frameKeysCompared": 10,
+    "replayed": true
+   },
+   "P6": {
+    "mode": "evaluate() source frame, barcode read from the decoded file (no export)",
+    "programmeFrames": 1130,
+    "ranges": {
+     "pearl": {
+      "expected": 202,
+      "reported": 202,
+      "equal": true,
+      "sample": [
+       30,
+       31,
+       32,
+       33
+      ]
+     },
+     "word": {
+      "expected": 200,
+      "reported": 200,
+      "equal": true,
+      "sample": [
+       31,
+       32,
+       33,
+       34
+      ]
+     },
+     "ntsc": {
+      "expected": 46,
+      "reported": 46,
+      "equal": true,
+      "sample": [
+       640,
+       641,
+       642,
+       643
+      ]
+     },
+     "onCopy": {
+      "expected": 63,
+      "reported": 63,
+      "equal": true,
+      "sample": [
+       55,
+       56,
+       57,
+       58
+      ]
+     }
+    }
+   },
+   "P8": {
+    "onCopy": [
+     {
+      "fromFrame": 810,
+      "toFrame": 855
+     }
+    ],
+    "untimedCopies": [
+     "ast_pp35_1"
+    ],
+    "reversedCounted": false
+   },
+   "P14": {
+    "removeAssetSummary": "Removed \"tone.wav\" from the library; 2 marked range(s) went with it",
+    "removePersonSummary": "Removed \"אלף\" from the people of the project; untagged from 3 marked range(s)",
+    "removeAssetSaysCount": true
+   },
+   "P15": {
+    "node": "4cde4ffee73e0cc56f69c1d024ea06f8d463ff8ec108e308eebfe98784f95427",
+    "documents": 20,
+    "ranges": 107,
+    "browser": "compared by the integration run (window.__pfPearlsHash over pearlsDeterminismDocs())"
+   },
+   "P16": {
+    "sample": "one sample each (shared machine)",
+    "usageMs700x300": 31,
+    "screenTimeMs": 1.6,
+    "uses": 517,
+    "pictureFrames": 28000,
+    "commitMsAdd2000th": 32,
+    "commitMsOtherOpAt2000": 27.2,
+    "the2001stRefused": "out_of_bounds",
+    "documentBytes": 413804
+   }
+  },
+  "server": {
+   "P2": {
+    "refusalsWithoutHebrew": [],
+    "rest": {
+     "revisions": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "summaries": [
+      "Imported video \"a30.mp4\"",
+      "Marked a pearl in \"a30.mp4\"",
+      "Changed a marked range in \"a30.mp4\"",
+      "Removed a marked range from \"a30.mp4\""
+     ]
+    }
+   },
+   "P7": {
+    "before": {
+     "uses": [
+      [
+       30,
+       75
+      ]
+     ],
+     "unused": [
+      "rng_c"
+     ]
+    },
+    "after": {
+     "uses": [
+      [
+       30,
+       50
+      ]
+     ],
+     "unused": [
+      "rng_c"
+     ]
+    }
+   },
+   "P8": {
+    "uses": [
+     [
+      0,
+      45,
+      {
+       "start": {
+        "value": "1",
+        "timescale": 1
+       },
+       "end": {
+        "value": "5",
+        "timescale": 2
+       }
+      }
+     ]
+    ],
+    "untimedCopies": [
+     "ast_5735c9045f1"
+    ]
+   },
+   "P9": {
+    "picture": 150,
+    "untagged": 30,
+    "people": [
+     [
+      "per_itai",
+      60
+     ],
+     [
+      "per_noa",
+      90
+     ]
+    ]
+   },
+   "P10": {
+    "fails": [],
+    "waits": []
+   },
+   "P11": {
+    "roundTrip": true,
+    "omitHasKey": false,
+    "omitIssues": 0
+   },
+   "P12": {
+    "picks": [
+     [
+      "ast_d2d7b2fcab0",
+      "pearl",
+      "rng_a1",
+      60
+     ],
+     [
+      "ast_012a4464c70",
+      "pearl",
+      "rng_b",
+      44
+     ],
+     [
+      "ast_f28765b3730",
+      "pearl",
+      "rng_c",
+      15
+     ]
+    ],
+    "leftOut": [
+     {
+      "rangeId": "rng_a2",
+      "why": "one_per_file"
+     }
+    ],
+    "rendered": true,
+    "fails": []
+   }
+  },
+  "ui": {
+   "P3": {
+    "baseUnused": true,
+    "marks": {
+     "in": "30",
+     "out": "75"
+    },
+    "escape": {
+     "form": 0,
+     "viewer": 1,
+     "focus": "pearl-save",
+     "revision": 0
+    },
+    "after": {
+     "ranges": 1,
+     "commits": 1,
+     "formError": null
+    }
+   },
+   "P4": {
+    "after": {
+     "ranges": 1,
+     "note": "הפנינה נשמרה",
+     "commits": 1
+    }
+   },
+   "P5": {
+    "listState": "list",
+    "insert": {
+     "commits": 1,
+     "clipFrames": 45,
+     "bars": [
+      30,
+      74
+     ]
+    },
+    "word": {
+     "clipFrames": 46,
+     "bars": [
+      30,
+      75
+     ]
+    }
+   },
+   "P7": {
+    "before": {
+     "a": "בשימוש: 1.5 מתוך 1.5 שניות",
+     "c": "לא בשימוש",
+     "cUsed": "no"
+    },
+    "after": {
+     "a": "בשימוש: 0.7 מתוך 1.5 שניות",
+     "c": "לא בשימוש",
+     "cUsed": "no"
+    }
+   },
+   "P9": {
+    "he": {
+     "state": "table",
+     "label": "לפי תיוג ידני בלבד, בלי זיהוי פנים. נספר כל קליפ מתויג שמוצג",
+     "frames": {
+      "noa": 90,
+      "itai": 60,
+      "untagged": 30
+     }
+    },
+    "en": {
+     "state": "table",
+     "label": "From manual tags only, no face recognition. Every tagged cli",
+     "frames": {
+      "noa": 90,
+      "itai": 60,
+      "untagged": 30
+     }
+    }
+   },
+   "P13": {
+    "twoSecond": {
+     "disabled": true,
+     "reason": "הפנינה קצרה מ־3 שניות: סמנו קטע ארוך יותר"
+    },
+    "short": {
+     "sequences": 1,
+     "sourceIn": "2/1"
+    },
+    "withWords": {
+     "warnings": [
+      "snapped_to_words",
+      "no_scene_cuts",
+      "upscaled"
+     ],
+     "start": 1.9,
+     "end": 6.25
+    }
+   },
+   "P15": {
+    "documents": 20,
+    "ranges": 154,
+    "node": "ef0c39bb311a72f5",
+    "browser": "ef0c39bb311a72f5"
+   }
+  },
+  "integration": {
+   "P6export": {
+    "exportedFrames": 1130,
+    "ranges": {
+     "pearl": {
+      "expected": 202,
+      "reported": 202,
+      "equal": true,
+      "sample": [
+       30,
+       31,
+       32,
+       33
+      ]
+     },
+     "word": {
+      "expected": 200,
+      "reported": 200,
+      "equal": true,
+      "sample": [
+       31,
+       32,
+       33,
+       34
+      ]
+     },
+     "ntsc": {
+      "expected": 46,
+      "reported": 46,
+      "equal": true,
+      "sample": [
+       640,
+       641,
+       642,
+       643
+      ]
+     },
+     "onCopy": {
+      "expected": 63,
+      "reported": 63,
+      "equal": true,
+      "sample": [
+       55,
+       56,
+       57,
+       58
+      ]
+     }
+    },
+    "untimed": [
+     "ast_pp18_1"
+    ]
+   },
+   "P15browser": {
+    "documents": 20,
+    "node": "4cde4ffee73e0cc56f69c1d024ea06f8d463ff8ec108e308eebfe98784f95427",
+    "chromium": "4cde4ffee73e0cc56f69c1d024ea06f8d463ff8ec108e308eebfe98784f95427"
+   }
+  }
+ },
+ "note": "SYNTHETIC fixtures only (made by the proof); timings are one sample each on a shared machine"
+}

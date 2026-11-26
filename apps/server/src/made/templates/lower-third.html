@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>lower third</title>
+<style>
+html,body{margin:0;background:transparent;overflow:hidden;width:100vw;height:100vh}
+#box{position:absolute;bottom:12vh;inset-inline-start:6vw;display:flex;flex-direction:column;gap:0.6vh;font-family:Rubik;animation:enter 0.6s cubic-bezier(.2,.8,.2,1) both}
+#bar{position:absolute;inset-inline-start:-1.2vw;top:0;bottom:0;width:0.6vw;background:var(--accent);transform-origin:top;animation:grow 0.5s 0.1s ease-out both}
+#name{font-weight:700;font-size:6.2vh;color:var(--colour);background:rgba(0,0,0,0.55);padding:0.4vh 1.4vw;white-space:nowrap}
+#role{font-weight:400;font-size:3.6vh;color:var(--colour);background:rgba(0,0,0,0.4);padding:0.3vh 1.4vw;white-space:nowrap;animation:enter 0.6s 0.25s cubic-bezier(.2,.8,.2,1) both;align-self:flex-start}
+@keyframes enter{from{opacity:0;transform:translateX(var(--from))}to{opacity:1;transform:none}}
+@keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+</style></head>
+<body><div id="box"><div id="bar"></div><div id="name"></div><div id="role"></div></div>
+<script>
+// «שורת שם» / lower third (PULSEFRAME built-in page, version 1). A name and a role slide in from the reading side beside an accent bar.
+// CSS @keyframes only: the harness pauses every animation and seeks it to the frame's time. Values are set with textContent only.
+(function () {
+  var f = PF.fields, name = String(f.name || ''), role = String(f.role || '');
+  var rtl = (function (s) { var m = /[A-Za-zÀ-ɏ]|[֐-׿؀-ۿ]/.exec(s); return !!m && /[֐-׿؀-ۿ]/.test(m[0]); })(name);
+  document.documentElement.dir = rtl ? 'rtl' : 'ltr';
+  var root = document.documentElement.style;
+  root.setProperty('--colour', String(f.colour || '#ffffff'));
+  root.setProperty('--accent', String(f.accent || '#f5b400'));
+  root.setProperty('--from', rtl ? '8vw' : '-8vw');
+  document.getElementById('name').textContent = name;
+  document.getElementById('role').textContent = role;
+  if (!role) document.getElementById('role').style.display = 'none';
+})();
+</script></body></html>

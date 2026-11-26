@@ -1,0 +1,144 @@
+{
+ "when": "2026-11-26T15:20:07.556Z",
+ "web": true,
+ "pageErrors": [],
+ "evidence": {
+  "fit.he.1280": {
+   "state": "plan",
+   "text": "מוזיקה מובנית — עוד לא הושמעה לאף אחד התאמה לאורך מוזיקה אחרת תיווצר מוזיקה מובנית באורך המדויק של הסרט (14 שניות) המוזיקה מסתיימת עם הסרט; האקורד האחרון מתחיל 2 שניות לפני הסוף סיום אחר כדאי לדעת המוזיקה נבנית מחדש באותו סגנון לאורך הזה; אלה לא אותם צלילים על מה זה מתבסס (הפירוט באנגלית) בצעו ביטול",
+   "ending": "המוזיקה מסתיימת עם הסרט; האקורד האחרון מתחיל 2 שניות לפני הסוף"
+  },
+  "fit.he.1280.apply": {
+   "applied": true,
+   "revisions": 2,
+   "asset": "made",
+   "endFrame": 420,
+   "fadeOut": null,
+   "status": "המוזיקה הותאמה לסרט. ביטול אחד מחזיר הכול"
+  },
+  "swap.he.1280": {
+   "text": "מוזיקה אחרת מחליפים את המוזיקה של הקליפ מוזיקה מובנית חגיגי 125 פעימות לדקה · הקצב ידוע מהמתכון יום הולדת עליז 120 פעימות לדקה · הקצב ידוע מהמתכון רגוע ונעים 80 פעימות לדקה · הקצב ידוע מהמתכון פופ קצבי 128 פעימות לדקה · הקצב ידוע מהמתכון לו־פיי 90 פעימות לדקה · הקצב ידוע מהמתכון קולנועי מרגש 72 פעימות לדקה · הקצב ידוע מהמתכון נבחר שירים בפרויקט עם פעימות מדודות אין בפרויקט שירים עם פעימות מדודות. אפשר לייבא שיר ולמדוד את הפעימות שלו להתאים גם את האורך מה ישתנה תיווצר מוזיקה מובנית באורך המדויק ש"
+  },
+  "swap.he.1280.apply": {
+   "style": "music.cinematic",
+   "table": "מה ישתנה תיווצר מוזיקה מובנית באורך המדויק של הסרט (14 שניות) המוזיקה מסתיימת עם הסרט; האקורד האחרון מתחיל 4 שניות לפני הסוף רגעים מסומנים שיזוזו מהפעימה: 1 כדאי לדעת המוזיקה נבנית מחדש באותו סגנון לאורך הזה; אלה לא אותם צלילים",
+   "revisions": 2,
+   "realignOffered": true,
+   "offAfterSwap": {
+    "frames": -5,
+    "ms": -166.7
+   },
+   "afterRealign": "alreadyOnBeat"
+  },
+  "fit.he.1440": {
+   "state": "plan",
+   "text": "מוזיקה מובנית — עוד לא הושמעה לאף אחד התאמה לאורך מוזיקה אחרת תיווצר מוזיקה מובנית באורך המדויק של הסרט (14 שניות) המוזיקה מסתיימת עם הסרט; האקורד האחרון מתחיל 2 שניות לפני הסוף סיום אחר כדאי לדעת המוזיקה נבנית מחדש באותו סגנון לאורך הזה; אלה לא אותם צלילים על מה זה מתבסס (הפירוט באנגלית) בצעו ביטול",
+   "ending": "המוזיקה מסתיימת עם הסרט; האקורד האחרון מתחיל 2 שניות לפני הסוף"
+  },
+  "fit.he.1440.apply": {
+   "applied": true,
+   "revisions": 2,
+   "asset": "made",
+   "endFrame": 420,
+   "fadeOut": null,
+   "status": "המוזיקה הותאמה לסרט. ביטול אחד מחזיר הכול"
+  },
+  "swap.he.1440": {
+   "text": "מוזיקה אחרת מחליפים את המוזיקה של הקליפ מוזיקה מובנית חגיגי 125 פעימות לדקה · הקצב ידוע מהמתכון יום הולדת עליז 120 פעימות לדקה · הקצב ידוע מהמתכון רגוע ונעים 80 פעימות לדקה · הקצב ידוע מהמתכון פופ קצבי 128 פעימות לדקה · הקצב ידוע מהמתכון לו־פיי 90 פעימות לדקה · הקצב ידוע מהמתכון קולנועי מרגש 72 פעימות לדקה · הקצב ידוע מהמתכון נבחר שירים בפרויקט עם פעימות מדודות אין בפרויקט שירים עם פעימות מדודות. אפשר לייבא שיר ולמדוד את הפעימות שלו להתאים גם את האורך מה ישתנה תיווצר מוזיקה מובנית באורך המדויק ש"
+  },
+  "swap.he.1440.apply": {
+   "style": "music.cinematic",
+   "table": "מה ישתנה תיווצר מוזיקה מובנית באורך המדויק של הסרט (14 שניות) המוזיקה מסתיימת עם הסרט; האקורד האחרון מתחיל 4 שניות לפני הסוף רגעים מסומנים שיזוזו מהפעימה: 1 כדאי לדעת המוזיקה נבנית מחדש באותו סגנון לאורך הזה; אלה לא אותם צלילים",
+   "revisions": 2,
+   "realignOffered": true,
+   "offAfterSwap": {
+    "frames": -5,
+    "ms": -166.7
+   },
+   "afterRealign": "alreadyOnBeat"
+  },
+  "fit.en.1440": {
+   "state": "plan",
+   "text": "Built-in music — nobody has listened to it yet Fit to length Other music Built-in music of exactly the film's length will be made (14 s) The music ends with the film; the last chord starts 2 s before the end Other ending Worth knowing The music is composed again in the same style for this length; these are not the same notes What this rests on Do it Cancel",
+   "ending": "The music ends with the film; the last chord starts 2 s before the end"
+  },
+  "fit.en.1440.apply": {
+   "applied": true,
+   "revisions": 2,
+   "asset": "made",
+   "endFrame": 420,
+   "fadeOut": null,
+   "status": "The music was fitted to the film. One undo reverses everything"
+  },
+  "swap.en.1440": {
+   "text": "Other music Replacing the music of the clip Built-in music Festive 125 beats a minute · The tempo is known from the recipe Cheerful birthday 120 beats a minute · The tempo is known from the recipe Calm and warm 80 beats a minute · The tempo is known from the recipe Upbeat pop 128 beats a minute · The tempo is known from the recipe Lo-fi 90 beats a minute · The tempo is known from the recipe Cinematic 72 beats a minute · The tempo is known from the recipe Chosen Songs in the project with measured"
+  },
+  "swap.en.1440.apply": {
+   "style": "music.cinematic",
+   "table": "What changes Built-in music of exactly the film's length will be made (14 s) The music ends with the film; the last chord starts 4 s before the end Marked moments that will move off the beat: 1 Worth knowing The music is composed again in the same style for this length; these are not the same notes",
+   "revisions": 2,
+   "realignOffered": true,
+   "offAfterSwap": {
+    "frames": -5,
+    "ms": -166.7
+   },
+   "afterRealign": "alreadyOnBeat"
+  },
+  "impact.he.1440.line": "הרגע 10 פריימים אחרי הפעימה",
+  "impact.he.1440.after": "הרגע על הפריים של הפעימה",
+  "impact.en.1440.line": "The moment is 10 frames after the beat",
+  "impact.en.1440.after": "The moment is on the beat's frame",
+  "heard.he": {
+   "made": "ast_04a70f4c270",
+   "unheard": "חיבור אוטומטי — עוד לא הושמע",
+   "playPressed": true,
+   "heardEnabledAfterPlay": true,
+   "playFailed": false,
+   "nonOwner": "רק בעל הפרויקט יכול לסמן שהחיבור נשמע, מהחלון שלו. השמיעו את החיבור בעורך וסמנו",
+   "owner": {
+    "chipHeard": true,
+    "revisions": 1,
+    "marked": true,
+    "chip": "החיבור נשמע (2026-11-26)"
+   }
+  },
+  "videoBeat.he": {
+   "shown": true,
+   "state": "unmarked"
+  },
+  "heard.en": {
+   "made": "ast_548e1434560",
+   "unheard": "Automatic join — not heard yet",
+   "playPressed": true,
+   "heardEnabledAfterPlay": true,
+   "playFailed": false,
+   "nonOwner": "only the project owner can mark a join as heard, from their own session. Tell the owner which join to play; they mark it in the editor.",
+   "owner": {
+    "chipHeard": true,
+    "revisions": 1,
+    "marked": true,
+    "chip": "The join was heard (2026-11-26)"
+   }
+  },
+  "videoBeat.en": {
+   "shown": true,
+   "state": "unmarked"
+  },
+  "notes": [
+   "fit he 1280: pass",
+   "swap he 1280: pass",
+   "fit he 1440: pass",
+   "swap he 1440: pass",
+   "fit en 1440: pass",
+   "swap en 1440: pass",
+   "impact he: pass",
+   "chip he: pass",
+   "impact en: pass",
+   "chip en: pass",
+   "heard he: pass",
+   "video beat tab he: pass",
+   "heard en: pass",
+   "video beat tab en: pass"
+  ]
+ }
+}

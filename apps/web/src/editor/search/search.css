@@ -1,0 +1,30 @@
+/* «חיפוש בצילומים» (wave 7 search track): the results under the media drawer's box. Logical properties only (the editor is right to
+   left in Hebrew); targets are at least 32 px; nothing is told by colour alone; nothing animates; every control shows a focus ring. */
+.pf-fs { display: flex; flex-direction: column; gap: 8px; margin-block-end: 8px; }
+.pf-fs-live { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.pf-fs-keys, .pf-fs-fine { margin: 0; font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
+.pf-fs-sections { display: flex; flex-direction: column; gap: 12px; }
+.pf-fs-section { display: flex; flex-direction: column; gap: 6px; }
+.pf-fs-section h4 { margin: 0; font-size: var(--pf-fs-sm); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pf-fs-note, .pf-fs-empty, .pf-fs-problem { margin: 0; padding: 8px 10px; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); font-size: var(--pf-fs-sm); color: var(--pf-text-2); }
+.pf-fs-problem { color: var(--pf-danger); border-color: var(--pf-danger); font-weight: 700; }
+.pf-fs-rows { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.pf-fs-row { display: grid; grid-template-columns: 96px 1fr; gap: 4px 8px; padding: 6px; border: 1px solid var(--pf-line); border-radius: var(--pf-r-md); background: var(--pf-surface-1); }
+.pf-fs-row:focus-visible, .pf-fs button:focus-visible { outline: 2px solid var(--pf-frame); outline-offset: 2px; }
+.pf-fs-main { display: flex; flex-direction: column; gap: 2px; min-inline-size: 0; }
+.pf-fs-name { overflow-wrap: anywhere; }
+.pf-fs-time, .pf-fs-snippet, .pf-fs-model { font-size: var(--pf-fs-sm); color: var(--pf-text-2); }
+.pf-fs-snippet { overflow-wrap: anywhere; }
+.pf-fs-model { font-style: italic; }
+.pf-fs-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.pf-fs-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; }
+.pf-fs-status { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); background: var(--pf-surface-2); }
+.pf-fs-status[data-state='busy'] { border-style: dashed; }
+.pf-fs-status-text, .pf-fs-setup p { margin: 0; font-size: var(--pf-fs-sm); }
+.pf-fs-setup { display: flex; flex-direction: column; gap: 4px; }
+.pf-fs-detail { color: var(--pf-text-2); overflow-wrap: anywhere; }
+.pf-fs-progress { inline-size: 100%; block-size: 8px; }
+.pf-fs-controls, .pf-fs-ask { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+/* the design system's buttons never wrap; in the narrow drawer a button's words wrap instead of scrolling the results sideways
+   (proof:search U1 at 1280 and 1440 px; search.css.test.ts) */
+.pf-fs .pf-btn { white-space: normal; block-size: auto; max-inline-size: 100%; padding-block: 4px; text-align: start; }

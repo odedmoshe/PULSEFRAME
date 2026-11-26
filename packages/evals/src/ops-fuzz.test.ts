@@ -1,0 +1,187 @@
+/**
+ * Fuzz of the editing operations as a whole (SPEC §6, Appendix C3 "Model"): random sequences drawn from 45 operations,
+ * at five project frame rates, with these oracles after every step:
+ *  - an accepted transaction yields a document that passes validation and the schema, and did not mutate its input;
+ *  - a refusal is a typed OpError and leaves the document unchanged; nothing else may be thrown;
+ *  - the document can be evaluated (picture graph, audio plan, timeline and summary queries, every linked format);
+ *  - the entity diff of the step, applied backwards, restores the previous document exactly (the undo path).
+ * Two drawn clips of the TEST-ONLY kind (drawn.testKind.ts) are on the timeline before the random steps, so every operation
+ * meets them (text operations refuse them with drawn_not_text; placement edits move, cut and copy them).
+ * Deterministic: seeds 1..PF_FUZZ_SEEDS (default 60), PF_FUZZ_STEPS steps each (default 90). A failure names seed, step and op.
+ */
+import { describe, expect, it } from 'vitest';
+import * as T from '@pulseframe/time';
+import { applyTransaction, createProject, creativeProjection, diffEntities, LIBRARY_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, MAP_OPS_BUILT, SOURCE_RANGE_OPS_BUILT, STEADY_OPS_BUILT, SST, OpError, ProjectSchema, projectVariant, restoreEntities, summarize, timeline, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { audioPlan, evaluate } from '@pulseframe/engine';
+import { createFuzz } from './ops-fuzz.gen.ts';
+import { registerTestDrawnOp, testDrawn } from '@pulseframe/core/drawn.testKind.ts';
+
+// drawn clips (wave 8 carrier): the TEST-ONLY drawn kind and its add op, registered in this test only (production registers no kind)
+registerTestDrawnOp();
+
+const SEEDS = Math.max(1, Number(process.env.PF_FUZZ_SEEDS ?? 60));
+const STEPS = Math.max(1, Number(process.env.PF_FUZZ_STEPS ?? 90));
+
+function run(seed: number, focus: () => string[] = () => []) {
+  const fz = createFuzz(seed);
+  const { rate, f, int } = fz;
+  let n = 0;
+  const ctx = (allowInternal = false) => ({ idSeed: `z${seed}_${n++}_`, actor: 'fuzz', allowInternal });
+  let doc = applyTransaction(createProject({ id: 'prj_fuzz', name: 'fuzz', width: 640, height: 360, frameRate: rate }), fz.importOps, ctx(true)).doc;
+  doc = applyTransaction(doc, fz.setup(doc), ctx()).doc;
+  doc = applyTransaction(doc, fz.aiSetup(doc), ctx(true)).doc; // ADR-0017 fixtures: derived copies and a translation (internal operations)
+  { const ops = fz.setupInternal(doc); if (ops.length) doc = applyTransaction(doc, ops, ctx(true)).doc; } // ADR-0015: measured samples for the motion track (an internal operation)
+  // the content library (wave 7): one CC BY sound from the library on the timeline, so add_credits_card has a credit to card
+  if (LIBRARY_OPS_BUILT) {
+    const library = { itemId: 'synthetic/fuzz.wav', sourceId: 'synthetic', kind: 'sound' as const, title: 'Fuzz', sourceSha256: '5'.repeat(64), ledger: { item: 'synthetic' }, licence: { id: 'CC-BY-4.0' }, credit: { text: 'Fuzz by Synthetic (example.invalid)', placement: 'on_screen' as const }, flags: {} };
+    const asset = { kind: 'audio' as const, name: 'lib.wav', contentHash: `sha256:${'5'.repeat(64)}`, byteSize: 1, container: 'wav', mimeType: 'audio/wav', duration: T.rt(3, 1), audio: { sampleRate: 48000, channels: 1, codec: 'pcm_s16le' }, provenance: { origin: 'upload' as const, importedAt: '2026-11-25T00:00:00Z', importedBy: 'fuzz', library } };
+    const used = applyTransaction(doc, [{ op: 'use_library_item', args: { asset } }], ctx(true));
+    doc = applyTransaction(used.doc, [{ op: 'add_clip', args: { assetId: used.results[0]!.output!.assetId as string, start: f(0), duration: f(30) } }], ctx()).doc;
+  }
+  // stabilisation (wave 7): camera motion of the first video, as the stabilise job attaches it (an internal operation), so
+  // set_clip_stabilise and remove_camera_motion have a measurement to work on; fixed numbers, no draw from the random stream
+  if (STEADY_OPS_BUILT) {
+    const vid = Object.values(doc.assets).find((a) => a.video);
+    if (vid) {
+      const k = Math.min(120, vid.video!.frameCount ?? 120);
+      const col = (m: number, amp: number) => Array.from({ length: k }, (_, i) => ((i * m) % (2 * amp + 1)) - amp);
+      doc = applyTransaction(doc, [{ op: 'attach_camera_motion', args: { assetId: vid.id, from: 0, dx: col(37, 200), dy: col(53, 150), dr: col(71, 900), dz: col(29, 120), st: Array.from({ length: k }, (_, i) => (i === 0 ? SST.start : SST.ok)), method: 'fuzz', params: { algo: 1, input: 'proxy' }, createdAt: '2026-11-25T00:00:00Z' } }], ctx(true)).doc;
+    }
+  }
+  // two caption cues, one after the other, so merge_cues (which needs a cue with a following cue) does not depend on two rare
+  // add_cue draws landing in the same run; fixed numbers, no draw from the random stream
+  doc = applyTransaction(doc, [{ op: 'add_caption_track', args: { mode: 'manual' } }], ctx()).doc;
+  doc = applyTransaction(doc, [{ op: 'add_cue', args: { start: f(30), duration: f(20), text: 'first' } }, { op: 'add_cue', args: { start: f(50), duration: f(20), text: 'second' } }], ctx()).doc;
+  // music that fits the film (wave 7): the measured music under a picture clip near the start, so sync_impact meets beats under a
+  // shown moment (the random draws rarely put the two together); fixed numbers, no draw from the random stream
+  if (MUSICFIT_OPS_BUILT) {
+    const [v, m] = Object.keys(doc.assets) as [string, string];
+    doc = applyTransaction(doc, [{ op: 'add_clip', args: { assetId: m, start: f(0), withLinkedAudio: false } }, { op: 'add_clip', args: { assetId: v, start: f(0), sourceIn: f(30), duration: f(90), withLinkedAudio: false } }], ctx()).doc;
+  }
+  // Every sixth step draws among the operations no earlier step of the run has seen accepted (the menu grows with every
+  // feature, so plain draws can miss one by chance after an unrelated row changes the stream); every other step draws as before.
+  const gen = (step: number) => { const f = step % 6 === 5 ? focus() : []; return f.length ? fz.genFocused(doc, f) : fz.gen(doc); };
+
+  const stats = { accepted: 0, refused: 0, byOp: {} as Record<string, [number, number]> };
+  /** One step with every oracle; returns the operation's output when accepted, null when refused. */
+  const step = (call: OpCall, label: string | number): Record<string, unknown> | null => {
+    const where = `seed ${seed} (${rate.num}/${rate.den}) step ${label}: ${JSON.stringify(call).slice(0, 300)}`;
+    const before = doc;
+    const beforeJson = JSON.stringify(doc);
+    const tally = (stats.byOp[call.op] ??= [0, 0]);
+    let next: ProjectDocument;
+    let output: Record<string, unknown> | undefined;
+    try {
+      const r = applyTransaction(doc, [call], ctx());
+      next = r.doc;
+      output = r.results[0]?.output;
+    } catch (e) {
+      if (!(e instanceof OpError)) throw new Error(`${where}\n  threw something that is not a typed refusal: ${String((e as Error)?.stack ?? e).slice(0, 600)}`);
+      if (JSON.stringify(doc) !== beforeJson) throw new Error(`${where}\n  a refused operation changed the document`);
+      stats.refused++; tally[1]++;
+      return null;
+    }
+    stats.accepted++; tally[0]++;
+    if (JSON.stringify(before) !== beforeJson) throw new Error(`${where}\n  the operation mutated its input document`);
+    const issues = validateProject(next);
+    if (issues.length) throw new Error(`${where}\n  accepted, but the document is invalid: ${JSON.stringify(issues.slice(0, 3))}`);
+    const parsed = ProjectSchema.safeParse(next);
+    if (!parsed.success) throw new Error(`${where}\n  accepted, but the document fails the schema: ${JSON.stringify(parsed.error.issues.slice(0, 2))}`);
+    try {
+      const total = T.frameIndexAt(timeline(next)!.duration, rate);
+      for (const i of [0, int(Math.max(1, total)), Math.max(0, total - 1)]) evaluate(next, f(i));
+      const plan = audioPlan(next);
+      for (const c of plan.clips) {
+        if (!(c.length > 0) || !Number.isFinite(c.gain) || !(c.speed > 0)) throw new Error(`audio plan clip ${c.clipId} has length ${c.length}, gain ${c.gain}, speed ${c.speed}`);
+        for (const env of [c.fade, c.duck, c.vol ?? []]) for (let k = 1; k < env.length; k++) if (env[k]!.s < env[k - 1]!.s || !Number.isFinite(env[k]!.g)) throw new Error(`audio plan clip ${c.clipId} has a non-monotonic or non-finite envelope`);
+      }
+      summarize(next);
+      for (const v of Object.keys(next.variants ?? {})) { const pv = projectVariant(next, v); const vi = validateProject(pv); if (vi.length) throw new Error(`format ${v} projects to an invalid document: ${JSON.stringify(vi.slice(0, 2))}`); evaluate(pv, f(0)); }
+    } catch (e) { throw new Error(`${where}\n  accepted, but the document cannot be used: ${String((e as Error)?.stack ?? e).slice(0, 700)}`); }
+    // undo path: the step's entity changes, applied backwards, restore the previous document
+    const changes = diffEntities(before, next);
+    const back = structuredClone(next);
+    try { restoreEntities(back, changes.map((c) => ({ id: c.id, state: c.before }))); } catch (e) { throw new Error(`${where}\n  the step could not be undone: ${String(e).slice(0, 300)}`); }
+    if (creativeProjection(back) !== creativeProjection(before)) throw new Error(`${where}\n  undoing the step does not restore the previous document (entities changed: ${changes.map((c) => c.id).slice(0, 8).join(', ')})`);
+    doc = next;
+    return output ?? {};
+  };
+  // two drawn clips of the test kind before the random steps (fixed numbers, no draw from the random stream), then a fixed
+  // split, trim-start and text edit of the first through the same oracles: the edit is a typed refusal (drawn_not_text)
+  const drawnA = step({ op: 'add_test_drawn', args: { start: f(5), duration: f(40), drawn: testDrawn({ offset: 3 }), transform: { x: 0.1, opacity: 0.6 } } }, 'drawn add')?.clipId as string | undefined;
+  step({ op: 'add_test_drawn', args: { start: f(20), duration: f(60), drawn: testDrawn({ color: '#30A0E0', w: 500, h: 900 }) } }, 'drawn add 2');
+  if (drawnA) {
+    step({ op: 'split_clip', args: { clipId: drawnA, at: f(25) } }, 'drawn split');
+    step({ op: 'trim_clip', args: { clipId: drawnA, edge: 'start', to: f(8) } }, 'drawn trim');
+    if (step({ op: 'update_text', args: { clipId: drawnA, text: 'x' } }, 'drawn words') !== null) throw new Error(`seed ${seed}: update_text was accepted on a drawn clip`);
+  }
+  // «ציור חי» (wave 8 ink): one fixed drawing, a split, a trim-start, an edit and a text edit (refused) through the same oracles, so
+  // each is accepted in every run; fixed numbers, no draw from the random stream
+  const inkA = step({ op: 'add_ink', args: { start: f(10), strokes: [{ brush: 'neon', color: '#ffcc00', width: 80, at: 0, x: [-500, 0, 500], y: [0, 300, 0], t: [0, 40, 90] }, { brush: 'highlighter', color: '#00FFAA', width: 240, at: 200, x: [0], y: [-200], t: [0] }] } }, 'ink add')?.clipId as string | undefined;
+  if (inkA) {
+    step({ op: 'split_clip', args: { clipId: inkA, at: f(20) } }, 'ink split');
+    step({ op: 'trim_clip', args: { clipId: inkA, edge: 'start', to: f(13) } }, 'ink trim');
+    step({ op: 'edit_ink', args: { clipId: inkA, play: 'all', fadeOut: true } }, 'ink edit');
+    if (step({ op: 'update_text', args: { clipId: inkA, text: 'x' } }, 'ink words') !== null) throw new Error(`seed ${seed}: update_text was accepted on a drawing`);
+  }
+  for (let s = 0; s < STEPS; s++) step(gen(s), s);
+  // marked ranges (wave 7): after the random steps (so no other operation's sequence moves), one fixed add, update and remove of a
+  // pearl through the same oracles, so each of the three is accepted in every run that still has a timed file; fixed numbers, no draw
+  if (SOURCE_RANGE_OPS_BUILT) {
+    const file = Object.values(doc.assets).sort((x, y) => (x.id < y.id ? -1 : 1)).find((a) => (a.kind === 'video' || a.kind === 'audio') && T.cmp(a.duration, T.rt(1, 1)) >= 0);
+    if (file) {
+      const added = step({ op: 'add_source_range', args: { assetId: file.id, start: T.rt(1, 7), end: T.rt(5, 7), label: 'fuzz פנינה' } }, 'pearl add');
+      const rangeId = added?.rangeId as string | undefined;
+      if (rangeId) {
+        step({ op: 'update_source_range', args: { rangeId, start: T.rt(2, 7), end: T.rt(6, 7) } }, 'pearl update');
+        step({ op: 'remove_source_range', args: { rangeId } }, 'pearl remove');
+      }
+    }
+  }
+  // versions for an audience (wave 8): after the random steps, one fixed add, update, keep and give-back through the same oracles, so
+  // each of the three is accepted in every run (the random draws reach them rarely); fixed choices, no draw from the random stream
+  if (AUDIENCE_PROJECTION_BUILT) {
+    const added = step({ op: 'add_audience_version', args: { profile: seed % 2 ? 'calm' : 'grandparents' } }, 'audience add');
+    const variantId = added?.variantId as string | undefined;
+    const tracks = Object.values(doc.sequences).flatMap((s) => s.tracks);
+    const sound = tracks.find((t) => t.kind === 'audio');
+    const clip = tracks.filter((t) => t.kind !== 'audio').flatMap((t) => t.clips)[0];
+    if (variantId) {
+      step({ op: 'update_audience_version', args: { variantId, musicDb: -9, ...(sound ? { sound: { trackId: sound.id, role: 'music' } } : {}) } }, 'audience update');
+      if (clip) { step({ op: 'set_audience_keep', args: { variantId, clipId: clip.id, rule: 'effect', keep: true } }, 'audience keep'); step({ op: 'set_audience_keep', args: { variantId, clipId: clip.id, rule: 'effect', keep: false } }, 'audience give back'); }
+    }
+  }
+  // trip maps (wave 8 tripmap): after the random steps, one fixed add (three stops, even timing), update, retime, split and trim-start of
+  // the map, and a text edit on it (a typed refusal, drawn_not_text) through the same oracles; fixed numbers, no draw from the random stream
+  if (MAP_OPS_BUILT) {
+    const end = T.frameIndexAt(timeline(doc)!.duration, rate) + 10;
+    const stops = [{ name: 'תל אביב', lon: 34_768_066, lat: 32_081_937 }, { name: 'ירושלים', lon: 35_206_626, lat: 31_778_408, via: 'road' }, { name: 'לונדון', lon: -118_668, lat: 51_501_941, via: 'flight' }];
+    const mapId = step({ op: 'add_trip_map', args: { start: f(end), duration: f(240), stops } }, 'map add')?.clipId as string | undefined;
+    if (mapId) {
+      step({ op: 'update_trip_map', args: { clipId: mapId, look: 'night' } }, 'map update');
+      step({ op: 'time_trip_map', args: { clipId: mapId, to: 'even' } }, 'map even');
+      step({ op: 'split_clip', args: { clipId: mapId, at: f(end + 120) } }, 'map split');
+      step({ op: 'trim_clip', args: { clipId: mapId, edge: 'start', to: f(end + 15) } }, 'map trim');
+      if (step({ op: 'update_text', args: { clipId: mapId, text: 'x' } }, 'map words') !== null) throw new Error(`seed ${seed}: update_text was accepted on a trip map`);
+    }
+  }
+  return stats;
+}
+
+describe('fuzz: all editing operations, five frame rates', () => {
+  const total = { accepted: 0, refused: 0, byOp: {} as Record<string, [number, number]> };
+  for (let seed = 1; seed <= SEEDS; seed++) {
+    it(`seed ${seed}`, () => {
+      const s = run(seed, () => Object.entries(total.byOp).filter(([, [a]]) => a === 0).map(([k]) => k));
+      total.accepted += s.accepted; total.refused += s.refused;
+      for (const [k, [a, r]] of Object.entries(s.byOp)) { const t = (total.byOp[k] ??= [0, 0]); t[0] += a; t[1] += r; }
+    });
+  }
+  it('the fuzz exercised every operation it knows, and each was accepted at least once', () => {
+    const never = Object.entries(total.byOp).filter(([, [a]]) => a === 0).map(([k]) => k);
+    console.log(`fuzz totals: ${total.accepted} accepted, ${total.refused} refused over ${SEEDS} seeds × ${STEPS} steps; never accepted: ${never.join(', ') || 'none'}`);
+    console.log(`fuzz per operation (accepted/attempted): ${Object.entries(total.byOp).sort((x, y) => x[1][0] / (x[1][0] + x[1][1]) - y[1][0] / (y[1][0] + y[1][1])).map(([k, [ok, no]]) => `${k} ${ok}/${ok + no}`).join(', ')}`);
+    expect(Object.keys(total.byOp).length).toBeGreaterThanOrEqual(40);
+    if (SEEDS >= 40) expect(never).toEqual([]);
+  });
+});

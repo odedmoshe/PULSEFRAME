@@ -1,0 +1,22 @@
+/* «מה שונה בגרסה הזו» (wave 8 audiences) — inside .pf-dlv; tokens only */
+.aud-panel { display: flex; flex-direction: column; gap: var(--pf-sp-3); padding: var(--pf-sp-4) var(--pf-sp-5); background: var(--pf-surface-1); border: 1px solid var(--pf-line); border-radius: var(--pf-r-md); }
+.aud-panel h4, .aud-panel h5 { margin: 0; }
+.aud-panel h5 { font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
+.aud-lead { margin: 0; color: var(--pf-text-2); }
+.aud-rows, .aud-sound, .aud-not { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--pf-sp-2); }
+.aud-rows li { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); align-items: center; }
+.aud-row { display: flex; flex: 1; min-inline-size: 0; gap: var(--pf-sp-3); align-items: baseline; justify-content: space-between; text-align: start; padding: var(--pf-sp-2) var(--pf-sp-3); background: transparent; color: var(--pf-text); border: 1px solid transparent; border-radius: var(--pf-r-sm); font: inherit; cursor: pointer; }
+.aud-row:hover { background: var(--pf-surface-2); }
+.aud-row.is-elsewhere { cursor: default; flex-wrap: wrap; }
+.aud-row.is-elsewhere:hover { background: transparent; }
+.aud-row:focus-visible { outline: 2px solid var(--pf-focus, var(--pf-frame)); outline-offset: 1px; }
+.aud-time { color: var(--pf-text-3); flex: none; }
+.aud-kept { color: var(--pf-text-2); font-style: italic; }
+.aud-level { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); align-items: center; }
+.aud-level input { inline-size: 5rem; }
+.aud-sound li { display: grid; gap: var(--pf-sp-2); }
+.aud-not { color: var(--pf-text-2); list-style: disc; padding-inline-start: var(--pf-sp-6); }
+/* the profile glyph on an audience version's chip (FormatPrism) */
+.prism-mark { font-size: var(--pf-fs-xs); line-height: 1; color: var(--pf-text-2); }
+/* the note under the viewer (Transport) */
+.stage-audience { margin: 0; font-size: var(--pf-fs-xs); color: var(--pf-text-2); text-align: center; }

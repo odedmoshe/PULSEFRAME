@@ -1,0 +1,567 @@
+{
+ "proof": "audiences",
+ "when": "2026-11-26T09:09:03.051Z",
+ "cpus": 4,
+ "note": "one sample of each check; every check is a measurement; nobody has looked at or listened to anything; fixtures are synthetic and deleted",
+ "results": [
+  {
+   "id": "1",
+   "part": "core",
+   "status": "PASS",
+   "seconds": 0.2,
+   "load1": 6.77,
+   "note": null
+  },
+  {
+   "id": "2",
+   "part": "core",
+   "status": "PASS",
+   "seconds": 0.3,
+   "load1": 6.77,
+   "note": null
+  },
+  {
+   "id": "3",
+   "part": "core",
+   "status": "PASS",
+   "seconds": 0.2,
+   "load1": 6.77,
+   "note": null
+  },
+  {
+   "id": "4",
+   "part": "core",
+   "status": "PASS",
+   "seconds": 0.3,
+   "load1": 6.77,
+   "note": null
+  },
+  {
+   "id": "5",
+   "part": "core",
+   "status": "PASS",
+   "seconds": 0.3,
+   "load1": 6.77,
+   "note": null
+  },
+  {
+   "id": "6",
+   "part": "server",
+   "status": "PASS",
+   "seconds": 18.4,
+   "load1": 6.78,
+   "note": null
+  },
+  {
+   "id": "9",
+   "part": "core",
+   "status": "PASS",
+   "seconds": 0.2,
+   "load1": 8.11,
+   "note": null
+  },
+  {
+   "id": "14",
+   "part": "server",
+   "status": "PASS",
+   "seconds": 4.2,
+   "load1": 8.11,
+   "note": null
+  },
+  {
+   "id": "15",
+   "part": "server",
+   "status": "PASS",
+   "seconds": 0,
+   "load1": 7.86,
+   "note": null
+  },
+  {
+   "id": "16",
+   "part": "server",
+   "status": "PASS",
+   "seconds": 7.7,
+   "load1": 7.86,
+   "note": null
+  },
+  {
+   "id": "17",
+   "part": "server",
+   "status": "PASS",
+   "seconds": 3.4,
+   "load1": 8.97,
+   "note": null
+  },
+  {
+   "id": "20",
+   "part": "ui",
+   "status": "PASS",
+   "seconds": 3.7,
+   "load1": 8.97,
+   "note": null
+  },
+  {
+   "id": "21",
+   "part": "ui",
+   "status": "PASS",
+   "seconds": 8.4,
+   "load1": 9.21,
+   "note": null
+  }
+ ],
+ "evidence": {
+  "core": {
+   "fixture": {
+    "clips": 16,
+    "tracks": [
+     "video:V1",
+     "video:V2",
+     "adjustment:FX1",
+     "text:T1",
+     "caption:C1",
+     "audio:A1",
+     "audio:music",
+     "audio:speech",
+     "audio:mixed"
+    ],
+    "effectsPlaced": 13,
+    "effectsRefused": {}
+   },
+   "c1": {
+    "offEffects": 14,
+    "wrong": [],
+    "classNoneChanged": [],
+    "adjustmentStrobeOff": 1,
+    "masterStillOn": 14,
+    "masterHash": "sha256:2516f1b7792bc6a3fece96f033c4e934ee2b257015c4bc58674793c83806259f"
+   },
+   "c2": {
+    "softened": 20,
+    "wrong": [],
+    "validateCalm": [],
+    "validateGrandparents": [],
+    "dissolveKept": {
+     "type": "dissolve",
+     "frames": 6
+    }
+   },
+   "c3": {
+    "opsInTransaction": [
+     "add_effect"
+    ],
+    "masterEnabled": true,
+    "versionEnabled": false,
+    "variantUnchanged": true
+   },
+   "c4": {
+    "keptBeforeSplit": true,
+    "pieces": [
+     {
+      "id": "clp_dff47335831",
+      "keep": [
+       "effect"
+      ],
+      "strobeOn": true
+     },
+     {
+      "id": "clp_914deb7ab81",
+      "keep": [
+       "effect"
+      ],
+      "strobeOn": true
+     }
+    ],
+    "undoRestoresHash": true
+   },
+   "c5": {
+    "rows": {
+     "title": [
+      0.12,
+      0.12
+     ],
+     "bigTitle": [
+      0.5,
+      0.5
+     ],
+     "ownTitle": [
+      0.08,
+      0.08
+     ],
+     "captionSize": [
+      0.08,
+      0.08
+     ],
+     "captionChars": [
+      26,
+      26
+     ],
+     "captionBackground": [
+      "#000000B3",
+      "#000000B3"
+     ],
+     "captionPreset": [
+      "classic",
+      "classic"
+     ],
+     "musicGain": [
+      0.31848573644279776,
+      0.31848573644279776
+     ],
+     "musicDuck": [
+      16,
+      16
+     ],
+     "speechGain": [
+      1,
+      1
+     ],
+     "speechDuck": [
+      null,
+      null
+     ],
+     "mixedGain": [
+      1,
+      1
+     ],
+     "camGain": [
+      1,
+      1
+     ],
+     "ownerCamAsMusic": [
+      0.3981071705534972,
+      0.3981071705534972
+     ],
+     "ownerMusicAsOther": [
+      0.8,
+      0.8
+     ]
+    },
+    "wrong": []
+   },
+   "c9": {
+    "calm": {
+     "changes": 19,
+     "byDiff": {
+      "effect": 10,
+      "modulator": 1,
+      "transition": 2,
+      "text_loop": 0,
+      "title_size": 0,
+      "caption_look": 0,
+      "music_level": 1,
+      "ducking": 0
+     },
+     "byList": {
+      "effect": 10,
+      "modulator": 1,
+      "transition": 2,
+      "text_loop": 0,
+      "title_size": 0,
+      "caption_look": 0,
+      "music_level": 1,
+      "ducking": 0
+     },
+     "outside": [],
+     "kept": [
+      "effect:clp_8a2fb696681",
+      "effect:clp_8a2fb696681",
+      "effect:clp_8a2fb696681",
+      "effect:clp_8a2fb696681",
+      "text_loop:clp_8ef39412a10"
+     ],
+     "keptWant": [
+      "effect:clp_8a2fb696681",
+      "text_loop:clp_8ef39412a10"
+     ],
+     "keysUnique": true,
+     "stable": true
+    },
+    "grandparents": {
+     "changes": 26,
+     "byDiff": {
+      "effect": 10,
+      "modulator": 1,
+      "transition": 2,
+      "text_loop": 0,
+      "title_size": 2,
+      "caption_look": 4,
+      "music_level": 1,
+      "ducking": 1
+     },
+     "byList": {
+      "effect": 10,
+      "modulator": 1,
+      "transition": 2,
+      "text_loop": 0,
+      "title_size": 2,
+      "caption_look": 4,
+      "music_level": 1,
+      "ducking": 1
+     },
+     "outside": [],
+     "kept": [
+      "effect:clp_8a2fb696681",
+      "effect:clp_8a2fb696681",
+      "effect:clp_8a2fb696681",
+      "effect:clp_8a2fb696681",
+      "text_loop:clp_8ef39412a10"
+     ],
+     "keptWant": [
+      "effect:clp_8a2fb696681",
+      "text_loop:clp_8ef39412a10"
+     ],
+     "keysUnique": true,
+     "stable": true
+    }
+   }
+  },
+  "server": {
+   "fixtureBytes": {
+    "video": 68785,
+    "speech": 288078
+   },
+   "mixSettings": {
+    "loudness": null,
+    "limiter": null
+   },
+   "timeline": [
+    {
+     "kind": "video",
+     "name": "V1",
+     "clips": [
+      [
+       15,
+       90
+      ],
+      [
+       90,
+       165
+      ]
+     ]
+    },
+    {
+     "kind": "video",
+     "name": "V2",
+     "clips": []
+    },
+    {
+     "kind": "adjustment",
+     "name": "FX1",
+     "clips": [
+      [
+       15,
+       165
+      ]
+     ]
+    },
+    {
+     "kind": "text",
+     "name": "T1",
+     "clips": [
+      [
+       0,
+       180
+      ]
+     ]
+    },
+    {
+     "kind": "audio",
+     "name": "A1",
+     "clips": []
+    },
+    {
+     "kind": "audio",
+     "name": "music",
+     "clips": [
+      [
+       0,
+       60
+      ]
+     ]
+    },
+    {
+     "kind": "audio",
+     "name": "mixed",
+     "clips": [
+      [
+       60,
+       105
+      ],
+      [
+       150,
+       180
+      ]
+     ]
+    },
+    {
+     "kind": "audio",
+     "name": "speech",
+     "clips": [
+      [
+       105,
+       150
+      ]
+     ]
+    }
+   ],
+   "c6": {
+    "profile": "calm",
+    "frames": 180,
+    "sameFrames": true,
+    "sameManifest": true,
+    "retryOf": "job_nqewBaKF6x8",
+    "firstOutput": {
+     "width": 320,
+     "height": 180,
+     "firstFrame": 0,
+     "frames": 180,
+     "frameRate": {
+      "num": 30,
+      "den": 1
+     },
+     "sampleRate": 48000
+    },
+    "retryOutput": {
+     "width": 320,
+     "height": 180,
+     "firstFrame": 0,
+     "frames": 180,
+     "frameRate": {
+      "num": 30,
+      "den": 1
+     },
+     "sampleRate": 48000
+    },
+    "masterDiffers": true
+   },
+   "c14": {
+    "profile": "grandparents",
+    "frames": 180,
+    "sameFrames": true,
+    "sameManifest": true,
+    "retryOf": "job_bjLFBezhfQE",
+    "firstOutput": {
+     "width": 320,
+     "height": 180,
+     "firstFrame": 0,
+     "frames": 180,
+     "frameRate": {
+      "num": 30,
+      "den": 1
+     },
+     "sampleRate": 48000
+    },
+    "retryOutput": {
+     "width": 320,
+     "height": 180,
+     "firstFrame": 0,
+     "frames": 180,
+     "frameRate": {
+      "num": 30,
+      "den": 1
+     },
+     "sampleRate": 48000
+    },
+    "masterDiffers": true
+   },
+   "c15": {
+    "note": "one sample; a measurement of the export's own flash check, not gated",
+    "master": {
+     "verdict": "fail",
+     "frames": 180,
+     "ranges": [
+      {
+       "from": 0.133,
+       "to": 5.8,
+       "kind": "general",
+       "flashesPerSecond": 14,
+       "area": 0.993
+      }
+     ]
+    },
+    "calm": {
+     "verdict": "pass",
+     "frames": 180,
+     "ranges": []
+    },
+    "masterWallSeconds": 6.685
+   },
+   "c16": [
+    {
+     "profile": "calm",
+     "frame": 0,
+     "chose": "var_6e0e5f76480",
+     "previewSame": true,
+     "maxDiff": 0,
+     "exportPsnr": 64.35,
+     "parityLimit": 36,
+     "versionDiffersFromMaster": false,
+     "errors": []
+    },
+    {
+     "profile": "grandparents",
+     "frame": 0,
+     "chose": "var_3340333d9f0",
+     "previewSame": true,
+     "maxDiff": 0,
+     "exportPsnr": 61.57,
+     "parityLimit": 36,
+     "versionDiffersFromMaster": true,
+     "errors": []
+    }
+   ],
+   "c17": {
+    "note": "measured from the exported WAVs, version against master on the same stretch; nobody has listened («לא נשמע»)",
+    "mix": {
+     "loudness": null,
+     "limiter": null
+    },
+    "stretches": {
+     "musicOnly": {
+      "seconds": [
+       0.2,
+       1.8
+      ],
+      "masterRms": 0.070551,
+      "versionRms": 0.028087,
+      "db": -8
+     },
+     "mixedTrackMusic": {
+      "seconds": [
+       2.2,
+       3.3
+      ],
+      "masterRms": 0.151125,
+      "versionRms": 0.151125,
+      "db": 0
+     },
+     "speechOnly": {
+      "seconds": [
+       3.7,
+       4.8
+      ],
+      "masterRms": 0.031752,
+      "versionRms": 0.031752,
+      "db": 0
+     },
+     "cameraSound": {
+      "seconds": [
+       4.98,
+       5.2
+      ],
+      "masterRms": 0.238146,
+      "versionRms": 0.238146,
+      "db": 0
+     }
+    },
+    "expectedDb": {
+     "musicOnly": -8,
+     "mixedTrackMusic": 0,
+     "speechOnly": 0,
+     "cameraSound": 0
+    },
+    "tolerance": 0.1
+   }
+  }
+ }
+}

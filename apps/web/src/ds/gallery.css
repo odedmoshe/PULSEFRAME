@@ -1,0 +1,19 @@
+/* Development gallery of the primitives (ds.html). Layout only; the primitives bring their own look. */
+html, body { margin: 0; background: var(--pf-canvas); color: var(--pf-text); font: var(--pf-fw-regular) var(--pf-fs-sm)/var(--pf-lh-sm) var(--pf-font); -webkit-font-smoothing: antialiased; }
+.g-page { max-inline-size: 1840px; margin-inline: auto; padding: var(--pf-sp-8) var(--pf-sp-9) var(--pf-sp-11); display: grid; gap: var(--pf-sp-8); }
+.g-top { display: flex; align-items: center; gap: var(--pf-sp-6); flex-wrap: wrap; position: sticky; inset-block-start: 0; z-index: 5; padding-block: var(--pf-sp-5); background: color-mix(in srgb, var(--pf-canvas) 92%, transparent); }
+.g-top h1 { margin: 0; font-family: var(--pf-font-display); font-size: var(--pf-fs-xl); line-height: var(--pf-lh-xl); font-weight: 700; flex: 1; }
+.g-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: var(--pf-sp-6); align-items: start; }
+.g-card { background: var(--pf-surface-1); border-radius: var(--pf-r-lg); box-shadow: var(--pf-e1), var(--pf-hilite); padding: var(--pf-sp-6) var(--pf-sp-7); display: grid; gap: var(--pf-sp-5); align-content: start; min-inline-size: 0; }
+.g-card.wide { grid-column: 1 / -1; }
+.g-card h2 { margin: 0; font-size: var(--pf-fs-lg); line-height: var(--pf-lh-lg); font-weight: var(--pf-fw-semibold); }
+.g-card h3 { margin: 0; font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); font-weight: var(--pf-fw-medium); color: var(--pf-text-2); }
+.g-row { display: flex; flex-wrap: wrap; gap: var(--pf-sp-4); align-items: center; }
+.g-matrix { display: grid; grid-template-columns: 120px repeat(6, max-content); gap: var(--pf-sp-4) var(--pf-sp-5); align-items: center; }
+.g-matrix > span:not(.pf-tip-anchor) { color: var(--pf-text-3); font-size: var(--pf-fs-xs); }
+.g-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--pf-sp-4); }
+.g-stack { display: grid; gap: var(--pf-sp-4); }
+.g-demo-tip { position: static !important; animation: none !important; }
+.g-toasts { display: grid; gap: var(--pf-sp-4); justify-items: start; }
+.g-inspector { inline-size: 332px; max-inline-size: 100%; }
+.g-scene { inline-size: 100%; block-size: 100%; display: block; }

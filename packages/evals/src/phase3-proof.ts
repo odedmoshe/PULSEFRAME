@@ -1,0 +1,891 @@
+/**
+ * Phase 3 gate (SPEC Appendix D): keyboard-only import/arrange/trim/split/keyframe workflow, direct
+ * manipulation, command palette, remappable shortcuts, presence without stealing control, visual baselines.
+ * Real server, real browser, real MCP client.   pnpm build && pnpm proof:phase3
+ */
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { chromium, type Page } from 'playwright';
+import * as T from '@pulseframe/time';
+import { transformAt, type ProjectDocument } from '@pulseframe/core';
+import { generateBarcodeFixture, readBarcode } from '@pulseframe/fixtures';
+import { startServer } from '@pulseframe/server';
+import { openCardMenu, setWorkspace, workspaceValue } from './editor-ui.ts';
+
+const root = path.resolve(import.meta.dirname, '../../..');
+const art = path.join(root, '.artifacts/phase3');
+const ev = path.join(root, 'docs/evidence');
+const base = path.join(ev, 'baselines');
+const checks: { name: string; ok: boolean; detail?: unknown }[] = [];
+const check = (name: string, ok: boolean, detail?: unknown) => { checks.push({ name, ok, detail }); console.log(`${ok ? '  ok  ' : ' FAIL '} ${name}${detail !== undefined ? `  ${JSON.stringify(detail)}` : ''}`); };
+const R = { num: 30, den: 1 };
+
+async function main() {
+  fs.rmSync(art, { recursive: true, force: true });
+  fs.mkdirSync(art, { recursive: true });
+  fs.mkdirSync(base, { recursive: true });
+  const fixture = await generateBarcodeFixture({ out: path.join(art, 'fixture.mp4') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
+  const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
+  const browser = await chromium.launch();
+  // Reduced motion: deterministic screenshots (no mid-animation frames) and it exercises that preference.
+  const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
+  // the all-tools view on the first load; a reload keeps what the editor stored since (the workspaces section reloads)
+  await page.addInitScript(() => { try { if (!sessionStorage.getItem('pf.proof.boot')) { sessionStorage.setItem('pf.proof.boot', '1'); localStorage.setItem('pf.inspector.tab.v1', 'all'); } } catch { /* storage unavailable */ } });
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  /** Library files this proof removed (see the last check). */
+  const removedAssets = new Set<string>();
+  page.on('console', (m) => m.type() === 'error' && errors.push(`${m.text()}${m.location().url ? ` [${m.location().url.replace(/^https?:\/\/[^/]+/, '')}]` : ''}`)); // with the address, so a failed request can be traced
+  try {
+    await page.goto(s.ownerUrl);
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-name]')?.textContent === 'הפרויקט שלי');
+    const pid: string = (await (await fetch(`${s.url}/api/v1/projects`, { headers: h })).json()).projects[0].id;
+    const getDoc = async () => (await (await fetch(`${s.url}/api/v1/projects/${pid}`, { headers: h })).json()) as { project: ProjectDocument; revision: number };
+    const rev = async () => Number((await page.getByTestId('revision').textContent())!.replace(/\D+/g, ''));
+    const waitRev = (r: number) => page.waitForFunction((x) => Number(document.querySelector('[data-testid=revision]')?.textContent?.replace(/\D+/g, '')) >= x, r);
+    const tc = () => page.getByTestId('timecode').textContent();
+    const key = async (k: string, n = 1) => { for (let i = 0; i < n; i++) await page.keyboard.press(k); };
+    const clips = async (kind: string) => (await getDoc()).project.sequences.seq_main!.tracks.filter((t) => t.kind === kind).flatMap((t) => t.clips);
+    /** Press a key that should commit exactly one transaction. */
+    const edit = async (k: string) => { const r = await rev(); await key(k); await waitRev(r + 1); return (await rev()) - r; };
+
+    console.log('\n# keyboard-only workflow (no pointer input in this section)');
+    // Import: reach the file control by Tab, then choose a file (the OS file dialog itself cannot be driven headlessly).
+    let tabs = 0;
+    while (tabs++ < 40 && !(await page.evaluate(() => (document.activeElement as HTMLElement)?.dataset?.testid === 'file-input'))) await key('Tab');
+    check('import control is reachable with Tab and shows a visible focus ring', tabs <= 40 && (await page.evaluate(() => getComputedStyle(document.activeElement!.closest('label')!).outlineStyle !== 'none')), { tabs });
+    await page.getByTestId('file-input').setInputFiles(fixture.file);
+    await page.locator('.assets li').first().waitFor();
+    tabs = 0;
+    while (tabs++ < 10 && !(await page.evaluate(() => (document.activeElement as HTMLElement)?.dataset?.testid?.startsWith('add-ast')))) await key('Tab');
+    let r0 = await rev();
+    await key('Enter');
+    await waitRev(r0 + 1);
+    check('arrange: "add to timeline" activated with Enter creates the linked clips', (await clips('video')).length === 1 && (await clips('audio')).length === 1);
+    await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+    await key('Alt+ArrowDown');
+    check('select next clip from the keyboard', (await page.locator('.clip.selected').count()) === 1);
+    await key('Shift+ArrowRight', 3);
+    check('split with S at the playhead (frame 30): one transaction', (await edit('KeyS')) === 1 && (await clips('video')).length === 2 && (await tc()) === '00:00:01:00');
+    // Select the right-hand video clip, trim its start 10 frames in, then nudge it one frame later.
+    const [, right] = await clips('video');
+    for (let i = 0; i < 8 && (await page.locator('.clip.selected').getAttribute('data-clip-id')) !== right!.id; i++) await key('Alt+ArrowDown');
+    await key('Shift+ArrowRight');
+    await edit('BracketLeft');
+    let v = await clips('video');
+    check('trim start with [ : clip now starts at frame 40 and its source in-point advanced with it', T.frameIndexAt(v[1]!.start, R) === 40 && v[1]!.type === 'media' && T.frameIndexAt(v[1]!.sourceIn, R) === 40);
+    await edit('Alt+ArrowRight');
+    v = await clips('video');
+    const a = await clips('audio');
+    check('nudge with Alt+→ moves the clip and its linked audio by exactly one frame', T.frameIndexAt(v[1]!.start, R) === 41 && T.frameIndexAt(a[1]!.start, R) === 41);
+    // Keyframes: add text (T), key it (K), move 20 frames, change vertical position from the keyboard, step between keys.
+    await key('Home');
+    r0 = await rev();
+    await key('KeyT');
+    await waitRev(r0 + 1);
+    // the revision number can update a moment before the new title is selected; K acts on the selection
+    await page.waitForFunction(() => !!document.querySelector('.track.text .clip.selected'), undefined, { timeout: 8000 });
+    await edit('KeyK');
+    await key('Shift+ArrowRight', 2);
+    await page.getByTestId('transform-y').focus();
+    r0 = await rev();
+    await key('ArrowRight');
+    await waitRev(r0 + 1);
+    await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+    const text = (await clips('text'))[0]!;
+    const ys = text.keyframes?.y ?? [];
+    check('keyframe workflow: K sets keys at the playhead; changing an animated property 20 frames later adds a second key', ys.length === 2 && T.frameIndexAt(ys[0]!.time, R) === 0 && T.frameIndexAt(ys[1]!.time, R) === 20 && ys[1]!.value !== ys[0]!.value, ys.map((k) => [T.frameIndexAt(k.time, R), k.value]));
+    const mid = transformAt(text, T.frameTime(10, R)).y;
+    check('the property interpolates between the two keys', mid > Math.min(ys[0]!.value, ys[1]!.value) && mid < Math.max(ys[0]!.value, ys[1]!.value), { at10: mid });
+    await key('Comma');
+    const atPrev = await tc();
+    await key('Period');
+    check('previous/next keyframe navigation ( , and . )', atPrev === '00:00:00:00' && (await tc()) === '00:00:00:20' && (await page.locator('.clip.selected .kf, [data-testid=key-strip-key]').count()) >= 2); // the selected clip's keys show on its keyframe strip (ADR-0019), other clips keep the diamonds
+    r0 = await rev();
+    await key('Control+KeyZ');
+    await waitRev(r0 + 1);
+    check('undo from the keyboard removes the second keyframe', ((await clips('text'))[0]!.keyframes?.y ?? []).length === 1);
+
+    console.log('\n# command palette and remappable shortcuts');
+    await key('Control+KeyK');
+    await page.getByTestId('palette-dialog').waitFor();
+    check('Ctrl+K opens a modal dialog and focuses the search field', (await page.evaluate(() => (document.activeElement as HTMLElement)?.dataset.testid)) === 'palette-input' && (await page.getByTestId('palette-dialog').getAttribute('aria-modal')) === 'true');
+    const before = await tc();
+    await key('ArrowRight');
+    check('editing shortcuts are inert while the palette is open', (await tc()) === before);
+    await page.getByTestId('palette-input').fill('redo');
+    const firstEn = await page.getByTestId('palette-option').first().getAttribute('data-command-id');
+    await page.getByTestId('palette-input').fill('פיצול');
+    const firstHe = await page.getByTestId('palette-option').first().getAttribute('data-command-id');
+    check('search finds commands in either language regardless of the interface language', firstEn === 'history.redo' && firstHe === 'edit.split', { firstEn, firstHe });
+    await page.getByTestId('palette-input').fill('ביצוע מחדש');
+    r0 = await rev();
+    await key('Enter');
+    await waitRev(r0 + 1);
+    check('Enter runs the command (redo) and closes the palette', (await page.getByTestId('palette-dialog').count()) === 0 && ((await clips('text'))[0]!.keyframes?.y ?? []).length === 2);
+    // Rebind split from S to X.
+    await key('Control+KeyK');
+    await page.getByTestId('palette-shortcuts').click();
+    await page.getByTestId('shortcut-table').waitFor();
+    await page.locator('[data-testid=shortcut-table] [data-command-id="edit.split"] button').first().click();
+    await key('KeyX');
+    await key('Escape');
+    if (await page.getByTestId('palette-dialog').count()) await key('Escape');
+    await page.getByTestId('preview').click({ position: { x: 5, y: 5 } });
+    for (let i = 0; i < 8 && (await page.locator('.clip.selected').getAttribute('data-track-kind')) !== 'video'; i++) await key('Alt+ArrowDown');
+    await key('Home');
+    await key('Shift+ArrowRight');
+    const nBefore = (await clips('video')).length;
+    r0 = await rev();
+    await key('KeyS');
+    await page.waitForTimeout(300);
+    const sStill = (await rev()) === r0;
+    await key('KeyX');
+    await waitRev(r0 + 1);
+    check('remapped shortcut: split now runs on X and no longer on S; the setting is personal (localStorage), not in the project', sStill && (await clips('video')).length === nBefore + 1 && (await page.evaluate(() => localStorage.getItem('pf.keymap.v1')))!.includes('KeyX') && !JSON.stringify((await getDoc()).project).includes('KeyX'));
+
+    console.log('\n# direct manipulation: one gesture = one transaction');
+    const firstClip = page.locator('[data-track-kind=video]').first();
+    const idMoved = await firstClip.getAttribute('data-clip-id');
+    const box0 = (await firstClip.boundingBox())!;
+    // The first video clip is [0,10) after the split; drag the LAST video clip instead to free space on the right.
+    const last = page.locator('[data-track-kind=video]').last();
+    const lastId = await last.getAttribute('data-clip-id');
+    const lb = (await last.boundingBox())!;
+    const startBefore = T.frameIndexAt((await clips('video')).find((c) => c.id === lastId)!.start, R);
+    r0 = await rev();
+    await page.mouse.move(lb.x + lb.width / 2, lb.y + lb.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(lb.x + lb.width / 2 + 60, lb.y + lb.height / 2, { steps: 6 });
+    const ghostSeen = (await page.getByTestId('clip-ghost').count()) === 1;
+    const midRev = await rev();
+    await page.mouse.move(lb.x + lb.width / 2 + 180, lb.y + lb.height / 2, { steps: 6 });
+    await page.mouse.up();
+    await waitRev(r0 + 1);
+    await page.waitForTimeout(200);
+    const startAfter = T.frameIndexAt((await clips('video')).find((c) => c.id === lastId)!.start, R);
+    check('drag to move: a ghost previews the move, nothing is committed mid-drag, release commits exactly one transaction on a frame boundary', ghostSeen && midRev === r0 && (await rev()) === r0 + 1 && startAfter - startBefore === 60, { startBefore, startAfter, idMoved: idMoved === lastId ? 'same' : 'other', firstWidth: Math.round(box0.width) });
+    const lb2 = (await last.boundingBox())!;
+    const durBefore = T.frameIndexAt((await clips('video')).find((c) => c.id === lastId)!.duration, R);
+    r0 = await rev();
+    await page.mouse.move(lb2.x + lb2.width - 2, lb2.y + lb2.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(lb2.x + lb2.width - 62, lb2.y + lb2.height / 2, { steps: 6 });
+    await page.mouse.up();
+    await waitRev(r0 + 1);
+    const durAfter = T.frameIndexAt((await clips('video')).find((c) => c.id === lastId)!.duration, R);
+    check('drag the right edge to trim: one transaction, duration shortened by the dragged distance (20 frames at 90 px/s)', (await rev()) === r0 + 1 && durBefore - durAfter === 20, { durBefore, durAfter });
+    r0 = await rev();
+    await last.click();
+    await page.waitForTimeout(150);
+    check('a plain click selects without committing anything', (await rev()) === r0 && (await page.locator('.clip.selected').getAttribute('data-clip-id')) === lastId);
+    // Canvas handles on the text layer.
+    await page.locator('[data-track-kind=text]').first().click();
+    await key('Home');
+    await key('Shift+ArrowRight');
+    await page.getByTestId('canvas-handles').waitFor();
+    const mv = page.locator('[data-testid=canvas-handles] [data-handle=move]');
+    const mb = (await mv.boundingBox())!;
+    const cb = (await page.getByTestId('preview').boundingBox())!;
+    const xBefore = transformAt((await clips('text'))[0]!, T.frameTime(10, R)).x;
+    r0 = await rev();
+    await page.mouse.move(mb.x + mb.width / 2, mb.y + mb.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(mb.x + mb.width / 2 + 40, mb.y + mb.height / 2 + 2, { steps: 5 });
+    await page.mouse.up();
+    await waitRev(r0 + 1);
+    const xAfter = transformAt((await clips('text'))[0]!, T.frameTime(10, R)).x;
+    check('canvas handle: dragging the layer moves it by the dragged fraction of the frame in one transaction', (await rev()) === r0 + 1 && Math.abs(xAfter - xBefore - 40 / cb.width) < 0.01 && String(xAfter).length <= 7, { xBefore, xAfter, expectedDelta: +(40 / cb.width).toFixed(4) });
+    const rot = page.locator('[data-testid=canvas-handles] [data-handle=rotate]');
+    await rot.focus();
+    r0 = await rev();
+    await key('Shift+ArrowRight');
+    await waitRev(r0 + 1);
+    check('canvas handle keyboard equivalent: Shift+→ on the rotation handle rotates by 15°', Math.abs(transformAt((await clips('text'))[0]!, T.frameTime(10, R)).rotation - 15) < 1e-9);
+    await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+
+    console.log('\n# presence: the agent is visible, and never takes the view unless followed');
+    const mcp = new Client({ name: 'phase3-agent', version: '0' }, { versionNegotiation: { mode: { pin: '2026-07-28' } } });
+    await mcp.connect(new StreamableHTTPClientTransport(new URL(`${s.url}/mcp`), { requestInit: { headers: { authorization: `Bearer ${s.auth.tokens.agent}` } } }));
+    const view = (frame: number, selection: string[] = []) => mcp.callTool({ name: 'set_view', arguments: { projectId: pid, frame, selection, label: 'בודק מעבר' } });
+    const mine = await tc();
+    const mySel = await page.locator('.clip.selected').getAttribute('data-clip-id');
+    const r1 = await rev();
+    await view(72, [lastId!]);
+    await page.locator('[data-testid=ghost-playhead][data-frame="72"]').waitFor();
+    check('agent ghost: labelled marker and dashed outline appear; my playhead, selection and the revision are untouched', (await tc()) === mine && (await page.locator('.clip.selected').getAttribute('data-clip-id')) === mySel && (await page.locator('.clip.ghost-selected').getAttribute('data-clip-id')) === lastId && (await rev()) === r1 && (await page.getByTestId('ghost-playhead').textContent())!.includes('בודק מעבר'));
+    await page.getByTestId('follow-agent').check();
+    await view(48);
+    await page.waitForFunction(() => document.querySelector('[data-testid=timecode]')?.textContent === '00:00:01:18');
+    check('Follow Agent (opt-in): my playhead follows the agent', true);
+    await page.getByTestId('preview').click({ position: { x: 5, y: 5 } });
+    await key('ArrowRight');
+    const afterManual = await tc();
+    await view(5);
+    await page.locator('[data-testid=ghost-playhead][data-frame="5"]').waitFor();
+    await page.waitForTimeout(200);
+    check('a manual seek ends Follow Agent; later agent moves no longer move my view', !(await page.getByTestId('follow-agent').isChecked()) && (await tc()) === afterManual && afterManual === '00:00:01:19');
+    await mcp.close();
+
+    console.log('\n# bilingual layout and visual baselines');
+    await key('Home');
+    await page.evaluate(() => { (document.activeElement as HTMLElement)?.blur(); });
+    const shots: Record<string, string> = {};
+    const shoot = async (name: string) => { const f = path.join(art, `${name}.png`); await page.screenshot({ path: f }); shots[name] = f; };
+    await shoot('editor-he');
+    await page.getByTestId('lang-toggle').click();
+    await page.waitForFunction(() => document.documentElement.dir === 'ltr');
+    const order = await page.evaluate(() => { const l = document.querySelector('.library')!.getBoundingClientRect().left; const i = document.querySelector('.inspector')!.getBoundingClientRect().left; return { libraryLeft: l, inspectorLeft: i, timelineDir: document.querySelector('.timeline')!.getAttribute('dir') }; });
+    await shoot('editor-en');
+    check('English: library on the left, inspector on the right; timeline stays LTR in both languages', order.libraryLeft < order.inspectorLeft && order.timelineDir === 'ltr', order);
+    await key('Control+KeyK');
+    await page.getByTestId('palette-dialog').waitFor();
+    await shoot('palette-en');
+    await key('Escape');
+    await page.getByTestId('lang-toggle').click();
+    const baselines: Record<string, unknown> = {};
+    for (const [name, file] of Object.entries(shots)) {
+      const ref = path.join(base, `phase3-${name}.png`);
+      if (!fs.existsSync(ref) || process.env.PF_UPDATE_BASELINES === '1') { fs.copyFileSync(file, ref); baselines[name] = 'baseline written'; continue; }
+      const r = spawnSync('ffmpeg', ['-hide_banner', '-i', file, '-i', ref, '-lavfi', 'ssim', '-f', 'null', '-'], { encoding: 'utf8' });
+      baselines[name] = Number(/All:([\d.]+)/.exec(r.stderr)?.[1]);
+    }
+    const feed = await page.locator('[data-testid=activity] li').first().textContent();
+    check('activity feed is written in the interface language (Hebrew), not in server English', /[\u0590-\u05FF]/.test(feed ?? '') && !/Keyframe|Moved|Trimmed/.test(feed ?? ''), feed);
+    check('visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run', Object.values(baselines).every((b) => b === 'baseline written' || (typeof b === 'number' && b >= 0.98)), baselines);
+
+    console.log('\n# source viewer');
+    const svBefore = await getDoc();
+    const assetId = Object.values(svBefore.project.assets).find((a) => a.kind === 'video')!.id;
+    const clipsBefore = svBefore.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).length;
+    const srcCode = async () => {
+      const shot = await page.evaluate(() => { const cv = document.querySelector('[data-testid=source-canvas]') as HTMLCanvasElement; return { w: cv.width, frame: cv.dataset.frame, quality: cv.dataset.quality, data: Array.from(cv.getContext('2d')!.getImageData(0, Math.round(cv.height / 12), cv.width, 1).data.filter((_, i) => i % 4 !== 3)) }; });
+      return { code: readBarcode(Uint8Array.from(shot.data), shot.w, 3, { x: 0, y: 0, w: shot.w, h: 0 }), frame: Number(shot.frame) };
+    };
+    const srcAt = async (f: number) => { await page.waitForFunction((t) => { const cv = document.querySelector('[data-testid=source-canvas]') as HTMLCanvasElement | null; return cv?.dataset.frame === String(t) && cv?.dataset.quality === 'full'; }, f, { timeout: 15000 }); return (await srcCode()).code; };
+    // "view" is an item of the media card's ⋯ menu (UX_REDESIGN §8): the menu is opened from the keyboard, then its item
+    await page.getByTestId(`more-${assetId}`).focus();
+    await page.keyboard.press('Enter');
+    await page.getByTestId(`view-${assetId}`).focus();
+    await page.keyboard.press('Enter');
+    await page.getByTestId('source-viewer').waitFor();
+    const svFirst = await srcAt(0);
+    await page.getByTestId('source-scrub').fill('30');
+    const at30 = await srcAt(30);
+    await page.keyboard.press('i'); // mark in at frame 30
+    for (let i = 0; i < 4; i++) await page.keyboard.press('Shift+ArrowRight'); // +40
+    await page.keyboard.press('ArrowRight'); // 71
+    const at71 = await srcAt(71);
+    await page.keyboard.press('o'); // frame 71 is the last one included
+    const svRange = await page.getByTestId('source-range').evaluate((el) => ({ in: Number((el as HTMLElement).dataset.in), out: Number((el as HTMLElement).dataset.out) }));
+    // shortcuts pressed in the dialog must not reach the timeline behind it
+    const playheadBefore = await page.getByTestId('timecode').textContent();
+    await page.keyboard.press('Home');
+    await page.keyboard.press('m');
+    const untouched = (await page.getByTestId('timecode').textContent()) === playheadBefore && (await getDoc()).revision === svBefore.revision;
+    await page.getByTestId('source-play').click();
+    await page.waitForFunction(() => Number((document.querySelector('[data-testid=source-canvas]') as HTMLCanvasElement)?.dataset.frame) > 80, undefined, { timeout: 8000 }).catch(() => {});
+    const svPlayed = (await srcCode()).frame > 80;
+    await page.getByTestId('source-add').click();
+    await page.getByTestId('source-viewer').waitFor({ state: 'detached' });
+    // the menu item that opened the viewer is gone with its menu: the focus goes back to the card's ⋯ button that opened the menu
+    const focusBack = await page.evaluate((id) => (document.activeElement as HTMLElement | null)?.dataset?.testid === `more-${id}`, assetId);
+    let svAfter = await getDoc();
+    for (let i = 0; i < 50 && svAfter.revision === svBefore.revision; i++) { await new Promise((r) => setTimeout(r, 100)); svAfter = await getDoc(); }
+    const svAdded = svAfter.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).filter((c) => !svBefore.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).some((o) => o.id === c.id));
+    const pic = svAdded.find((c) => c.type === 'media' && svAfter.project.sequences.seq_main!.tracks.find((tr) => tr.clips.includes(c))!.kind === 'video') as any;
+    // the timeline shows source frame 30 at the new clip's svFirst frame and 71 at its last
+    const startFrame = pic ? T.frameIndexAt(pic.start, R) : -1;
+    const stillCode = async (index: number) => {
+      const png = Buffer.from(await (await fetch(`${s.url}/api/v1/projects/${pid}/frame?index=${index}`, { headers: h })).arrayBuffer());
+      const r = spawnSync('ffmpeg', ['-hide_banner', '-v', 'error', '-f', 'image2pipe', '-i', '-', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { input: png, maxBuffer: 1 << 28 });
+      const w = svAfter.project.settings.width, hgt = svAfter.project.settings.height;
+      // the 16:9 picture is fitted into the project frame: find its rectangle
+      const ph = Math.round((w * 360) / 640), py = Math.round((hgt - ph) / 2);
+      return readBarcode(new Uint8Array(r.stdout), w, 3, { x: 0, y: py, w, h: ph });
+    };
+    const shownFirst = pic ? await stillCode(startFrame) : -1, shownLast = pic ? await stillCode(startFrame + 41) : -1;
+    check('source viewer: opens from the library by keyboard, shows the file\'s own frames (0, 30, 71 by barcode), plays; I and O mark a range of 42 frames; "add" places exactly that range at the end of the timeline as one transaction (picture + linked sound) and the timeline then shows source frames 30 and 71 at its first and last frame; shortcuts typed in the viewer do not move the timeline behind it; focus returns to the button', svFirst === 0 && at30 === 30 && at71 === 71 && svRange.in === 30 && svRange.out === 72 && untouched && svPlayed && focusBack && svAfter.revision === svBefore.revision + 1 && svAdded.length === 2 && !!pic && T.frameIndexAt(pic.sourceIn, R) === 30 && T.frameIndexAt(pic.duration, R) === 42 && shownFirst === 30 && shownLast === 71, { svFirst, at30, at71, svRange, untouched, svPlayed, focusBack, revisions: [svBefore.revision, svAfter.revision], svAdded: svAdded.length, clipsBefore, sourceIn: pic && T.frameIndexAt(pic.sourceIn, R), frames: pic && T.frameIndexAt(pic.duration, R), shownFirst, shownLast });
+
+    console.log('\n# insert at the playhead');
+    const ib = await getDoc();
+    const vTrack = (d: ProjectDocument) => d.sequences.seq_main!.tracks.find((tr) => tr.clips.some((c) => c.id === pic.id))!;
+    const startOf = T.frameIndexAt(pic.start, R);
+    // put the playhead 10 frames into the clip added above, then insert source frames 100..119 there
+    await page.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
+    await page.keyboard.press('Home');
+    for (let i = 0; i < Math.floor((startOf + 10) / 10); i++) await page.keyboard.press('Shift+ArrowRight');
+    for (let i = 0; i < (startOf + 10) % 10; i++) await page.keyboard.press('ArrowRight');
+    await page.waitForFunction((t) => document.querySelector('[data-testid=preview]')?.getAttribute('data-frame') === String(t), startOf + 10, { timeout: 10000 }).catch(() => {});
+    const atFrame = Number(await page.getByTestId('preview').getAttribute('data-frame'));
+    await openCardMenu(page, assetId); await page.getByTestId(`view-${assetId}`).click();
+    await page.getByTestId('source-viewer').waitFor();
+    await page.getByTestId('source-scrub').fill('100');
+    await srcAt(100);
+    await page.keyboard.press('i');
+    await page.getByTestId('source-scrub').fill('119');
+    await srcAt(119);
+    await page.keyboard.press('o');
+    await page.getByTestId('source-insert').click();
+    await page.getByTestId('source-viewer').waitFor({ state: 'detached' });
+    let ia = await getDoc();
+    for (let i = 0; i < 50 && ia.revision === ib.revision; i++) { await new Promise((r) => setTimeout(r, 100)); ia = await getDoc(); }
+    const row = vTrack(ia.project).clips.filter((c) => T.frameIndexAt(c.start, R) >= startOf).sort((a, b) => T.cmp(a.start, b.start)).map((c: any) => [T.frameIndexAt(c.start, R) - startOf, T.frameIndexAt(c.duration, R), T.frameIndexAt(c.sourceIn, R)]);
+    const k = atFrame - startOf;
+    const shown = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 19), await stillCode(atFrame + 20), await stillCode(startOf + 41 + 20)];
+    const lenBefore = T.frameIndexAt(ib.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).reduce((m, c) => T.max(m, T.add(c.start, c.duration)), T.ZERO), R);
+    const lenAfter = T.frameIndexAt(ia.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).reduce((m, c) => T.max(m, T.add(c.start, c.duration)), T.ZERO), R);
+    check('"insert at the playhead" from the source viewer is one transaction: the clip under the playhead is split there, the 20-frame range sits in the gap, everything later moves 20 frames, and the timeline shows the frames in order (…, before the cut, the inserted 100–119, then the continuation)', atFrame === startOf + 10 && ia.revision === ib.revision + 1 && JSON.stringify(row) === JSON.stringify([[0, k, 30], [k, 20, 100], [k + 20, 42 - k, 30 + k]]) && JSON.stringify(shown) === JSON.stringify([30 + k - 1, 100, 119, 30 + k, 71]) && lenAfter === lenBefore + 20, { atFrame, startOf, row, shown, lenBefore, lenAfter, revisions: [ib.revision, ia.revision] });
+
+    console.log('\n# overwrite at the playhead');
+    // the playhead is still at atFrame (start of the inserted 100–119 range): overwrite its first 10 frames with source 60–69
+    const ob = await getDoc();
+    await openCardMenu(page, assetId); await page.getByTestId(`view-${assetId}`).click();
+    await page.getByTestId('source-viewer').waitFor();
+    await page.getByTestId('source-scrub').fill('60');
+    await srcAt(60);
+    await page.keyboard.press('i');
+    await page.getByTestId('source-scrub').fill('69');
+    await srcAt(69);
+    await page.keyboard.press('o');
+    await page.getByTestId('source-overwrite').click();
+    await page.getByTestId('source-viewer').waitFor({ state: 'detached' });
+    let oa = await getDoc();
+    for (let i = 0; i < 50 && oa.revision === ob.revision; i++) { await new Promise((r) => setTimeout(r, 100)); oa = await getDoc(); }
+    const endOf = (d: ProjectDocument) => T.frameIndexAt(d.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).reduce((m, c) => T.max(m, T.add(c.start, c.duration)), T.ZERO), R);
+    const oShown = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9), await stillCode(atFrame + 10), await stillCode(atFrame + 19), await stillCode(atFrame + 20)];
+    const overlaps = oa.project.sequences.seq_main!.tracks.some((tr) => [...tr.clips].sort((a, b) => T.cmp(a.start, b.start)).some((c, i, arr) => i > 0 && T.lt(c.start, T.add(arr[i - 1]!.start, arr[i - 1]!.duration))));
+    check('"overwrite at the playhead" replaces exactly the range\'s length on the picture and sound tracks in one transaction: the timeline keeps its length, nothing later moves, and it shows the new frames 60–69 followed by what was already there (110–119, then the continuation)', oa.revision === ob.revision + 1 && endOf(oa.project) === endOf(ob.project) && !overlaps && JSON.stringify(oShown) === JSON.stringify([30 + k - 1, 60, 69, 110, 119, 30 + k]), { oShown, lengths: [endOf(ob.project), endOf(oa.project)], overlaps, revisions: [ob.revision, oa.revision] });
+
+    console.log('\n# target tracks for the source viewer');
+    const post = async (ops: unknown[]) => (await (await fetch(`${s.url}/api/v1/projects/${pid}/transactions`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ ops }) })).json()) as any;
+    const tt0 = await getDoc();
+    const added = await post([{ op: 'add_track', args: { kind: 'video', name: 'V-target' } }, { op: 'add_track', args: { kind: 'audio', name: 'A-target' } }]);
+    const vT = added.results[0].output.trackId as string, aT = added.results[1].output.trackId as string;
+    await page.waitForFunction((n) => document.querySelectorAll('.track').length >= n, tt0.project.sequences.seq_main!.tracks.length + 2, { timeout: 8000 }).catch(() => {});
+    const ttB = await getDoc();
+    await openCardMenu(page, assetId); await page.getByTestId(`view-${assetId}`).click();
+    await page.getByTestId('source-viewer').waitFor();
+    await page.getByTestId('source-scrub').fill('20');
+    await srcAt(20);
+    await page.keyboard.press('i');
+    await page.getByTestId('source-scrub').fill('29');
+    await srcAt(29);
+    await page.keyboard.press('o');
+    await page.getByTestId('source-target-picture').selectOption(vT);
+    await page.getByTestId('source-target-sound').selectOption(aT);
+    await page.getByTestId('source-overwrite').click();
+    await page.getByTestId('source-viewer').waitFor({ state: 'detached' });
+    let ttA = await getDoc();
+    for (let i = 0; i < 50 && ttA.revision === ttB.revision; i++) { await new Promise((r) => setTimeout(r, 100)); ttA = await getDoc(); }
+    const onTrack = (d: ProjectDocument, id: string) => d.sequences.seq_main!.tracks.find((tr) => tr.id === id)!.clips.map((c: any) => [T.frameIndexAt(c.start, R), T.frameIndexAt(c.duration, R), T.frameIndexAt(c.sourceIn, R)]);
+    const others = (d: ProjectDocument) => JSON.stringify(d.sequences.seq_main!.tracks.filter((tr) => tr.id !== vT && tr.id !== aT).map((tr) => tr.clips));
+    const targeted = { picture: onTrack(ttA.project, vT), sound: onTrack(ttA.project, aT), othersUntouched: others(ttA.project) === others(ttB.project), revisions: ttA.revision - ttB.revision, shown: await stillCode(atFrame) };
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+z');
+    for (let i = 0; i < 50 && onTrack(ttA.project, vT).length; i++) { await new Promise((r) => setTimeout(r, 100)); ttA = await getDoc(); }
+    // target tracks on the timeline: with ◎ pressed on the two new tracks, "add to timeline" from the library and paste land on them
+    const targetBtns = page.locator(`.track:has([data-testid=track-target])`);
+    const pressTarget = async (name: string) => { await page.locator('.track', { has: page.locator(`.track-name[title="${name}"]`) }).getByTestId('track-target').click(); };
+    await pressTarget('V-target');
+    await pressTarget('A-target');
+    const pressedTargets = await page.locator('[data-testid=track-target][aria-pressed=true]').count();
+    const tgB = await getDoc();
+    await page.getByTestId(`add-${assetId}`).click();
+    let tgA = await getDoc();
+    for (let i = 0; i < 50 && tgA.revision === tgB.revision; i++) { await new Promise((r) => setTimeout(r, 100)); tgA = await getDoc(); }
+    const addedOnTargets = [onTrack(tgA.project, vT).length, onTrack(tgA.project, aT).length, others(tgA.project) === others(tgB.project)];
+    // copy the clip just added (it is on the target picture track) and paste at frame 0: the copies go to the target tracks again
+    const addedClip = tgA.project.sequences.seq_main!.tracks.find((tr) => tr.id === vT)!.clips[0]!;
+    await page.locator(`.clip[data-clip-id="${addedClip.id}"]`).click();
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+c');
+    await page.getByTestId('ruler').click({ position: { x: 0.5, y: 5 } });
+    await key('Control+v');
+    let tgP = await getDoc();
+    for (let i = 0; i < 50 && tgP.revision === tgA.revision; i++) { await new Promise((r) => setTimeout(r, 100)); tgP = await getDoc(); }
+    const pastedOnTargets = [onTrack(tgP.project, vT).length, onTrack(tgP.project, aT).length, others(tgP.project) === others(tgB.project)];
+    check('timeline target tracks: with ◎ pressed on a picture track and a sound track, "add to timeline" puts the file\'s picture and sound on those tracks and a paste of the copied picture clip puts the copy on the target picture track (the sound clip was not selected, so it is not copied); every other track is untouched', (await targetBtns.count()) >= 2 && pressedTargets === 2 && JSON.stringify(addedOnTargets) === '[1,1,true]' && JSON.stringify(pastedOnTargets) === '[2,1,true]', { pressedTargets, addedOnTargets, pastedOnTargets });
+    await post([...tgP.project.sequences.seq_main!.tracks.filter((tr) => tr.id === vT).flatMap((tr) => tr.clips).map((c) => ({ op: 'delete_clip', args: { clipId: c.id } }))]);
+    const removed = await post([{ op: 'remove_track', args: { trackId: vT } }, { op: 'remove_track', args: { trackId: aT } }]);
+    await page.waitForFunction((n) => document.querySelectorAll('.track').length === n, tt0.project.sequences.seq_main!.tracks.length, { timeout: 8000 }).catch(() => {});
+    check('source viewer target tracks: with a picture track and a sound track chosen, "overwrite" puts the range (source 20–29) on exactly those tracks at the playhead in one transaction, leaves every other track as it was, and the frame there now shows the new picture on top; undo and removing the two tracks restore the timeline',
+      JSON.stringify(targeted.picture) === JSON.stringify([[atFrame, 10, 20]]) && JSON.stringify(targeted.sound) === JSON.stringify([[atFrame, 10, 20]]) && targeted.othersUntouched && targeted.revisions === 1 && targeted.shown === 20 && !removed.error && JSON.stringify((await getDoc()).project.sequences.seq_main!.tracks.map((tr) => tr.clips)) === JSON.stringify(tt0.project.sequences.seq_main!.tracks.map((tr) => tr.clips)), targeted);
+
+    console.log('\n# drag a library file onto the timeline');
+    const dgB = await getDoc();
+    const lastFrame = endOf(dgB.project);
+    const v1 = dgB.project.sequences.seq_main!.tracks.find((tr) => tr.kind === 'video')!;
+    const v1Box = (await page.locator(`.track[data-track-id="${v1.id}"]`).boundingBox())!;
+    const rulerBox = (await page.getByTestId('ruler').boundingBox())!;
+    const dropFrame = lastFrame + 10;
+    await page.getByTestId(`asset-${assetId}`).dragTo(page.locator(`.track[data-track-id="${v1.id}"]`), { targetPosition: { x: rulerBox.x - v1Box.x + dropFrame * 3, y: v1Box.height / 2 } });
+    let dgA = await getDoc();
+    for (let i = 0; i < 50 && dgA.revision === dgB.revision; i++) { await new Promise((r) => setTimeout(r, 100)); dgA = await getDoc(); }
+    const dropped = dgA.project.sequences.seq_main!.tracks.find((tr) => tr.id === v1.id)!.clips.find((c) => !v1.clips.some((o) => o.id === c.id)) as any;
+    const droppedInfo = dropped ? { frame: T.frameIndexAt(dropped.start, R), asset: dropped.assetId === assetId, linked: !!dropped.linkGroupId, lineGone: (await page.getByTestId('drop-line').count()) === 0 } : null;
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+z');
+    for (let i = 0; i < 50 && endOf(dgA.project) !== lastFrame; i++) { await new Promise((r) => setTimeout(r, 100)); dgA = await getDoc(); }
+    check('dragging a file from the library onto a picture track puts it on that track at the frame under the pointer (within one frame), with its linked sound, in one transaction; the drop marker goes away; undo removes it', !!droppedInfo && Math.abs(droppedInfo.frame - dropFrame) <= 1 && droppedInfo.asset && droppedInfo.linked && droppedInfo.lineGone && endOf(dgA.project) === lastFrame, { dropFrame, droppedInfo });
+
+    console.log('\n# drop a file from the computer onto the timeline');
+    const osB = await getDoc();
+    const osFrame = endOf(osB.project) + 20;
+    const osFile = await generateBarcodeFixture({ out: path.join(art, 'dropped.mp4'), frames: 45 }); // different bytes from the file already in the library
+    const osBytes = fs.readFileSync(osFile.file).toString('base64');
+    await page.evaluate(async ({ b64, x, y, trackId }) => {
+      const bin = atob(b64), bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const dt = new DataTransfer();
+      dt.items.add(new File([bytes], 'dropped.mp4', { type: 'video/mp4' }));
+      const track = document.querySelector(`.track[data-track-id="${trackId}"]`)!;
+      for (const type of ['dragover', 'drop']) track.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, dataTransfer: dt }));
+    }, { b64: osBytes, x: rulerBox.x + osFrame * 3, y: v1Box.y + v1Box.height / 2, trackId: v1.id });
+    let osA = await getDoc();
+    for (let i = 0; i < 150 && Object.keys(osA.project.assets).length === Object.keys(osB.project.assets).length + 0 && endOf(osA.project) === endOf(osB.project); i++) { await new Promise((r) => setTimeout(r, 100)); osA = await getDoc(); }
+    for (let i = 0; i < 100 && endOf(osA.project) === endOf(osB.project); i++) { await new Promise((r) => setTimeout(r, 100)); osA = await getDoc(); }
+    const newAsset = Object.values(osA.project.assets).find((a) => !osB.project.assets[a.id]);
+    const osClip = osA.project.sequences.seq_main!.tracks.find((tr) => tr.id === v1.id)!.clips.find((c: any) => c.assetId === newAsset?.id) as any;
+    const osInfo = { imported: newAsset?.name, clipFrame: osClip ? T.frameIndexAt(osClip.start, R) : null, wanted: osFrame };
+    // put the project back: undo the placement, then remove the imported file
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+z');
+    for (let i = 0; i < 50 && endOf(osA.project) !== endOf(osB.project); i++) { await new Promise((r) => setTimeout(r, 100)); osA = await getDoc(); }
+    if (newAsset) { removedAssets.add(newAsset.id); await post([{ op: 'remove_asset', args: { assetId: newAsset.id } }]); }
+    check('a file dropped from the computer onto a picture track is imported into the library and placed on that track at the frame under the pointer (within one frame)', osInfo.imported === 'dropped.mp4' && osInfo.clipFrame !== null && Math.abs(osInfo.clipFrame - osFrame) <= 1, osInfo);
+
+    console.log('\n# drop two files from the computer at once');
+    const twoB = await getDoc();
+    const twoFrame = endOf(twoB.project) + 20;
+    const twoFiles = [await generateBarcodeFixture({ out: path.join(art, 'two-b.mp4'), frames: 36 }), await generateBarcodeFixture({ out: path.join(art, 'two-a.mp4'), frames: 30 })]; // given out of name order on purpose
+    await page.evaluate(async ({ files, x, y, trackId }) => {
+      const dt = new DataTransfer();
+      for (const f of files) { const bin = atob(f.b64), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); dt.items.add(new File([bytes], f.name, { type: 'video/mp4' })); }
+      const track = document.querySelector(`.track[data-track-id="${trackId}"]`)!;
+      for (const type of ['dragover', 'drop']) track.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, dataTransfer: dt }));
+    }, { files: twoFiles.map((f) => ({ name: path.basename(f.file), b64: fs.readFileSync(f.file).toString('base64') })), x: rulerBox.x + twoFrame * 3, y: v1Box.y + v1Box.height / 2, trackId: v1.id });
+    let twoA = await getDoc();
+    const placedTwo = () => Object.values(twoA.project.assets).filter((a) => !twoB.project.assets[a.id]).map((a) => ({ name: a.name, clip: twoA.project.sequences.seq_main!.tracks.find((tr) => tr.id === v1.id)!.clips.find((c: any) => c.assetId === a.id) as any })).sort((x, y) => x.name.localeCompare(y.name));
+    for (let i = 0; i < 300 && placedTwo().filter((x) => x.clip).length < 2; i++) { await new Promise((r) => setTimeout(r, 100)); twoA = await getDoc(); }
+    const two = placedTwo();
+    const twoInfo = { names: two.map((x) => x.name), frames: two.map((x) => (x.clip ? [T.frameIndexAt(x.clip.start, R), T.frameIndexAt(T.add(x.clip.start, x.clip.duration), R)] : null)), wanted: twoFrame };
+    check('two files dropped together are both imported and placed one after the other in name order, the first at the frame under the pointer', twoInfo.names.join() === 'two-a.mp4,two-b.mp4' && !!twoInfo.frames[0] && !!twoInfo.frames[1] && Math.abs(twoInfo.frames[0]![0]! - twoFrame) <= 1 && twoInfo.frames[1]![0] === twoInfo.frames[0]![1], twoInfo);
+    // put the project back (after the editor has finished asking about the new files: removing one while it still asks leaves a failed request in the page)
+    await new Promise((r) => setTimeout(r, 2500));
+    await post(two.filter((x) => x.clip).map((x) => ({ op: 'delete_clip', args: { clipId: x.clip.id } })));
+    await new Promise((r) => setTimeout(r, 1500));
+    twoA = await getDoc();
+    const goneTwo = Object.values(twoA.project.assets).filter((a) => !twoB.project.assets[a.id]);
+    for (const a of goneTwo) removedAssets.add(a.id);
+    await post(goneTwo.map((a) => ({ op: 'remove_asset', args: { assetId: a.id } })));
+
+    console.log('\n# slip');
+    const sb = await getDoc();
+    const slipClip = sb.project.sequences.seq_main!.tracks.filter((tr) => tr.kind === 'video').flatMap((tr) => tr.clips).find((c) => T.frameIndexAt(c.start, R) === atFrame)!;
+    await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click();
+    for (let i = 0; i < 3; i++) await key('Control+Alt+ArrowRight');
+    await key('Control+Alt+Shift+ArrowRight');
+    let sa = await getDoc();
+    for (let i = 0; i < 50 && sa.revision < sb.revision + 4; i++) { await new Promise((r) => setTimeout(r, 100)); sa = await getDoc(); }
+    const slipped = sa.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).find((c) => c.id === slipClip.id) as any;
+    const slipShown = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9), await stillCode(atFrame + 10)];
+    check('slip by keyboard (three single frames and one step of ten): the selected clip keeps its place and length and now shows source 73–82; its neighbours are unchanged', sa.revision === sb.revision + 4 && T.eq(slipped.start, slipClip.start) && T.eq(slipped.duration, slipClip.duration) && T.frameIndexAt(slipped.sourceIn, R) === 73 && JSON.stringify(slipShown) === JSON.stringify([30 + k - 1, 73, 82, 110]), { slipShown, sourceIn: T.frameIndexAt(slipped.sourceIn, R), revisions: [sb.revision, sa.revision] });
+
+    console.log('\n# roll');
+    const rollB = await getDoc();
+    await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click();
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+BracketRight', 2);
+    let rollA = await getDoc();
+    for (let i = 0; i < 50 && rollA.revision < rollB.revision + 2; i++) { await new Promise((r) => setTimeout(r, 100)); rollA = await getDoc(); }
+    const rolled = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 1), await stillCode(atFrame + 2), await stillCode(atFrame + 9), await stillCode(atFrame + 10)];
+    const lenRolled = endOf(rollA.project);
+    await key('Control+BracketLeft', 2);
+    for (let i = 0; i < 50 && rollA.revision < rollB.revision + 4; i++) { await new Promise((r) => setTimeout(r, 100)); rollA = await getDoc(); }
+    const unrolled = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9)];
+    check('roll by keyboard: the cut before the selected clip moves two frames later (the earlier clip plays two frames more, the selected clip starts two frames later with the same picture at every other frame), the timeline keeps its length, and rolling back restores it', JSON.stringify(rolled) === JSON.stringify([30 + k - 1, 30 + k, 30 + k + 1, 75, 82, 110]) && lenRolled === endOf(rollB.project) && JSON.stringify(unrolled) === JSON.stringify([30 + k - 1, 73, 82]) && rollA.revision === rollB.revision + 4, { rolled, unrolled, lengths: [endOf(rollB.project), lenRolled], revisions: [rollB.revision, rollA.revision] });
+
+    console.log('\n# roll by dragging');
+    const rdB = await getDoc();
+    const rdBox = (await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).boundingBox())!;
+    const pxPerFrame = rdBox.width / T.frameIndexAt(slipClip.duration, R);
+    await page.keyboard.down('Control');
+    await page.mouse.move(rdBox.x + 2, rdBox.y + rdBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(rdBox.x + 2 + pxPerFrame, rdBox.y + rdBox.height / 2, { steps: 3 });
+    await page.mouse.move(rdBox.x + 2 + 2 * pxPerFrame, rdBox.y + rdBox.height / 2, { steps: 3 });
+    await page.mouse.up();
+    await page.keyboard.up('Control');
+    let rdA = await getDoc();
+    for (let i = 0; i < 50 && rdA.revision === rdB.revision; i++) { await new Promise((r) => setTimeout(r, 100)); rdA = await getDoc(); }
+    const rolledByDrag = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 1), await stillCode(atFrame + 2), await stillCode(atFrame + 9), await stillCode(atFrame + 10)];
+    const lenDrag = endOf(rdA.project), revDrag = rdA.revision;
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+z');
+    for (let i = 0; i < 50 && rdA.revision === revDrag; i++) { await new Promise((r) => setTimeout(r, 100)); rdA = await getDoc(); }
+    const undragged = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9)];
+    check('roll by dragging: Ctrl + dragging the start edge of a clip two frames later moves the cut exactly as the keyboard roll does, in one transaction, without changing the timeline length; one undo restores it', JSON.stringify(rolledByDrag) === JSON.stringify(rolled) && revDrag === rdB.revision + 1 && lenDrag === endOf(rdB.project) && JSON.stringify(undragged) === JSON.stringify(unrolled), { rolledByDrag, rolled, revisions: revDrag - rdB.revision, undragged });
+
+    console.log('\n# slide');
+    const sdB = await getDoc();
+    await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click();
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+Shift+BracketRight', 3);
+    let sdA = await getDoc();
+    for (let i = 0; i < 50 && sdA.revision < sdB.revision + 3; i++) { await new Promise((r) => setTimeout(r, 100)); sdA = await getDoc(); }
+    // before: … 39 | 73…82 | 110…  after sliding three frames later: … 39 40 41 42 | 73…82 | 113…
+    const slid = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 2), await stillCode(atFrame + 3), await stillCode(atFrame + 12), await stillCode(atFrame + 13)];
+    const lenSlid = endOf(sdA.project);
+    await key('Control+Shift+BracketLeft', 3);
+    for (let i = 0; i < 50 && sdA.revision < sdB.revision + 6; i++) { await new Promise((r) => setTimeout(r, 100)); sdA = await getDoc(); }
+    const unslid = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9), await stillCode(atFrame + 10)];
+    check('slide by keyboard: three presses move the selected clip three frames later between its neighbours (same ten pictures; the clip before it plays three frames more, the clip after it starts three frames later), the timeline keeps its length, and sliding back restores it', JSON.stringify(slid) === JSON.stringify([30 + k - 1, 30 + k, 30 + k + 2, 73, 82, 113]) && lenSlid === endOf(sdB.project) && JSON.stringify(unslid) === JSON.stringify([30 + k - 1, 73, 82, 110]) && sdA.revision === sdB.revision + 6, { slid, unslid, lengths: [endOf(sdB.project), lenSlid], revisions: [sdB.revision, sdA.revision] });
+
+    console.log('\n# slide by dragging');
+    const sgB = await getDoc();
+    const sgBox = (await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).boundingBox())!;
+    const sgPx = sgBox.width / T.frameIndexAt(slipClip.duration, R);
+    await page.keyboard.down('Control');
+    await page.mouse.move(sgBox.x + sgBox.width / 2, sgBox.y + sgBox.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 3; i++) await page.mouse.move(sgBox.x + sgBox.width / 2 + i * sgPx, sgBox.y + sgBox.height / 2, { steps: 2 });
+    await page.mouse.up();
+    await page.keyboard.up('Control');
+    let sgA = await getDoc();
+    for (let i = 0; i < 50 && sgA.revision === sgB.revision; i++) { await new Promise((r) => setTimeout(r, 100)); sgA = await getDoc(); }
+    const slidByDrag = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 2), await stillCode(atFrame + 3), await stillCode(atFrame + 12), await stillCode(atFrame + 13)];
+    const lenSg = endOf(sgA.project), revSg = sgA.revision;
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+z');
+    for (let i = 0; i < 50 && sgA.revision === revSg; i++) { await new Promise((r) => setTimeout(r, 100)); sgA = await getDoc(); }
+    const unslidDrag = [await stillCode(atFrame - 1), await stillCode(atFrame), await stillCode(atFrame + 9), await stillCode(atFrame + 10)];
+    check('slide by dragging: Ctrl + dragging the clip three frames later gives the same frames as three keyboard slides, in one transaction, with the timeline length unchanged; one undo restores it', JSON.stringify(slidByDrag) === JSON.stringify(slid) && revSg === sgB.revision + 1 && lenSg === endOf(sgB.project) && JSON.stringify(unslidDrag) === JSON.stringify(unslid), { slidByDrag, slid, revisions: revSg - sgB.revision, unslidDrag });
+
+    console.log('\n# reverse');
+    const rb0 = await getDoc();
+    await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click(); // the clip showing source 73–82 at atFrame..atFrame+9
+    await page.getByTestId('reverse-toggle').click();
+    let ra = await getDoc();
+    for (let i = 0; i < 50 && ra.revision === rb0.revision; i++) { await new Promise((r) => setTimeout(r, 100)); ra = await getDoc(); }
+    const revShown: number[] = []; for (let i = -1; i <= 10; i++) revShown.push(await stillCode(atFrame + i));
+    const revClip = ra.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).find((c) => c.id === slipClip.id) as any;
+    // the paused preview draws the same frame as the still (focus first leaves the checkbox: shortcuts are off while a field has focus)
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press('Home');
+    for (let i = 0; i < Math.floor((atFrame + 2) / 10); i++) await page.keyboard.press('Shift+ArrowRight');
+    for (let i = 0; i < (atFrame + 2) % 10; i++) await page.keyboard.press('ArrowRight');
+    await page.waitForFunction((t) => { const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null; return cv?.dataset.frame === String(t) && cv?.dataset.quality === 'full'; }, atFrame + 2, { timeout: 15000 }).catch(() => {});
+    const previewFrame = Number(await page.getByTestId('preview').getAttribute('data-frame'));
+    const previewCode = await page.evaluate(() => { const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement; const ph = (cv.width * 360) / 640, py = (cv.height - ph) / 2; const row = cv.getContext('2d')!.getImageData(0, Math.round(py + ph / 12), cv.width, 1).data; return { w: cv.width, data: Array.from(row.filter((_, k) => k % 4 !== 3)) }; }).then((x) => readBarcode(Uint8Array.from(x.data), x.w, 3, { x: 0, y: 0, w: x.w, h: 0 }));
+    // the exported file shows the same order (server export of just this stretch, read by barcode)
+    const exJob = (await (await fetch(`${s.url}/api/v1/projects/${pid}/exports`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ range: { startFrame: atFrame - 1, endFrame: atFrame + 11 }, quality: 'high' }) })).json()) as any;
+    let exStatus = '';
+    for (let i = 0; i < 600; i++) { exStatus = ((await (await fetch(`${s.url}/api/v1/jobs/${exJob.jobId}`, { headers: h })).json()) as any).status; if (['succeeded', 'failed', 'canceled'].includes(exStatus)) break; await new Promise((r) => setTimeout(r, 200)); }
+    const exFile = path.join(art, 'reverse-range.mp4');
+    fs.writeFileSync(exFile, Buffer.from(await (await fetch(`${s.url}/api/v1/jobs/${exJob.jobId}/output`, { headers: h })).arrayBuffer()));
+    const exRaw = spawnSync('ffmpeg', ['-hide_banner', '-v', 'error', '-i', exFile, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { maxBuffer: 1 << 30 }).stdout;
+    const ew = ra.project.settings.width, eh = ra.project.settings.height, eph = Math.round((ew * 360) / 640), epy = Math.round((eh - eph) / 2), efb = ew * eh * 3;
+    const exported = Array.from({ length: Math.floor(exRaw.length / efb) }, (_, i) => readBarcode(new Uint8Array(exRaw.buffer, exRaw.byteOffset + i * efb, efb), ew, 3, { x: 0, y: epy, w: ew, h: eph }));
+    const marked = await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).getAttribute('data-reverse');
+    await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click();
+    await page.getByTestId('reverse-toggle').click();
+    for (let i = 0; i < 50 && ra.revision !== rb0.revision + 2; i++) { await new Promise((r) => setTimeout(r, 100)); ra = await getDoc(); }
+    const fwdAgain = [await stillCode(atFrame), await stillCode(atFrame + 9)];
+    check('"play backwards" in the Inspector: the clip keeps its place and length and its ten frames now show source 82 down to 73 on server stills (neighbours unchanged), the paused preview shows the same frame as the still, an exported file of that stretch shows the same twelve frames in the same order, the clip is marked on the timeline, and unchecking restores 73…82', JSON.stringify(revShown) === JSON.stringify([30 + k - 1, 82, 81, 80, 79, 78, 77, 76, 75, 74, 73, 110]) && revClip.reverse === true && T.eq(revClip.start, slipClip.start) && T.eq(revClip.duration, slipClip.duration) && previewFrame === atFrame + 2 && previewCode === 80 && exStatus === 'succeeded' && JSON.stringify(exported) === JSON.stringify(revShown) && marked === 'true' && JSON.stringify(fwdAgain) === JSON.stringify([73, 82]), { revShown, exported, exStatus, previewFrame, previewCode, marked, fwdAgain });
+
+    console.log('\n# detach');
+    const ub = await getDoc();
+    const allClips = (d: ProjectDocument) => d.sequences.seq_main!.tracks.flatMap((tr) => tr.clips.map((c) => ({ c: c as any, kind: tr.kind })));
+    const lk = allClips(ub.project).find((x) => x.kind === 'video' && x.c.linkGroupId);
+    let detached = false, buttonGone = false, partnerFree = false, oneRevision = false;
+    if (lk) {
+      const partner = allClips(ub.project).find((x) => x.c.linkGroupId === lk.c.linkGroupId && x.c.id !== lk.c.id)!;
+      await page.locator(`.clip[data-clip-id="${lk.c.id}"]`).click();
+      await page.getByTestId('unlink-clip').click();
+      let ua = await getDoc();
+      for (let i = 0; i < 50 && ua.revision === ub.revision; i++) { await new Promise((r) => setTimeout(r, 100)); ua = await getDoc(); }
+      const now = (id: string) => allClips(ua.project).find((x) => x.c.id === id)!.c;
+      detached = now(lk.c.id).linkGroupId === null; partnerFree = now(partner.c.id).linkGroupId === null; oneRevision = ua.revision === ub.revision + 1;
+      await page.waitForFunction(() => !document.querySelector('[data-testid=unlink-clip]'), undefined, { timeout: 5000 }).catch(() => {});
+      buttonGone = (await page.getByTestId('unlink-clip').count()) === 0;
+    }
+    check('"detach picture from sound" in the Inspector unlinks the selected picture clip and its sound clip in one transaction; the button is then no longer offered', !!lk && detached && partnerFree && oneRevision && buttonGone, { found: !!lk, detached, partnerFree, oneRevision, buttonGone });
+
+    console.log('\n# track lock and hide');
+    const tb = await getDoc();
+    const vTrk = tb.project.sequences.seq_main!.tracks.find((tr) => tr.clips.some((c) => c.id === slipClip.id))!;
+    const trackEl = page.locator(`.track[data-track-id="${vTrk.id}"]`);
+    const litBefore = await stillCode(atFrame);
+    await trackEl.getByTestId('track-hide').click();
+    let ta = await getDoc();
+    for (let i = 0; i < 50 && ta.revision === tb.revision; i++) { await new Promise((r) => setTimeout(r, 100)); ta = await getDoc(); }
+    const hiddenFlag = ta.project.sequences.seq_main!.tracks.find((tr) => tr.id === vTrk.id)!.hidden;
+    const hiddenPng = Buffer.from(await (await fetch(`${s.url}/api/v1/projects/${pid}/frame?index=${atFrame}`, { headers: h })).arrayBuffer());
+    const hiddenRgb = spawnSync('ffmpeg', ['-hide_banner', '-v', 'error', '-f', 'image2pipe', '-i', '-', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { input: hiddenPng, maxBuffer: 1 << 28 }).stdout;
+    // the fixture picture is bright in its middle; with the track hidden nothing of it is drawn there
+    const w3 = ta.project.settings.width, h3 = ta.project.settings.height;
+    const midLevel = (buf: Buffer) => { let sum = 0, n = 0; for (let y = Math.floor(h3 * 0.45); y < Math.floor(h3 * 0.55); y += 4) for (let x = Math.floor(w3 * 0.2); x < Math.floor(w3 * 0.8); x += 4) { const o = (y * w3 + x) * 3; sum += buf[o]! + buf[o + 1]! + buf[o + 2]!; n += 3; } return sum / n; };
+    const shownRgb = async () => spawnSync('ffmpeg', ['-hide_banner', '-v', 'error', '-f', 'image2pipe', '-i', '-', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { input: Buffer.from(await (await fetch(`${s.url}/api/v1/projects/${pid}/frame?index=${atFrame}`, { headers: h })).arrayBuffer()), maxBuffer: 1 << 28 }).stdout;
+    const levelHidden = midLevel(hiddenRgb);
+    const offMark = await trackEl.getAttribute('data-off');
+    await trackEl.getByTestId('track-hide').click();
+    for (let i = 0; i < 50 && ta.revision !== tb.revision + 2; i++) { await new Promise((r) => setTimeout(r, 100)); ta = await getDoc(); }
+    const levelShown = midLevel(await shownRgb()), litAfter = await stillCode(atFrame);
+    // lock: an edit to a clip on the track is refused for everyone, the editor says so on the track, unlocking allows it again
+    await trackEl.getByTestId('track-lock').click();
+    for (let i = 0; i < 50 && ta.revision !== tb.revision + 3; i++) { await new Promise((r) => setTimeout(r, 100)); ta = await getDoc(); }
+    const lockMark = await trackEl.getAttribute('data-locked');
+    const refused = await (await fetch(`${s.url}/api/v1/projects/${pid}/transactions`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ ops: [{ op: 'delete_clip', args: { clipId: slipClip.id } }] }) })).json() as any;
+    await page.locator(`.clip[data-clip-id="${slipClip.id}"]`).click();
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press('Delete');
+    await new Promise((r) => setTimeout(r, 600));
+    const stillThere = (await getDoc()).project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).some((c) => c.id === slipClip.id);
+    await trackEl.getByTestId('track-lock').click();
+    for (let i = 0; i < 50 && ta.project.sequences.seq_main!.tracks.find((tr) => tr.id === vTrk.id)!.locked !== false; i++) { await new Promise((r) => setTimeout(r, 100)); ta = await getDoc(); }
+    check('track buttons: hiding a picture track removes its picture from the server still and marks the track; showing it restores the same frame; locking marks the track and an edit to its clips is refused (API and Delete key in the editor); unlocking clears it', hiddenFlag === true && levelHidden < levelShown * 0.5 && offMark === 'true' && litBefore === litAfter && lockMark === 'true' && refused?.error?.code === 'track_locked' && stillThere && ta.project.sequences.seq_main!.tracks.find((tr) => tr.id === vTrk.id)!.locked === false, { hiddenFlag, levelHidden: +levelHidden.toFixed(1), levelShown: +levelShown.toFixed(1), offMark, lockMark, refused: refused?.error?.code, stillThere });
+
+    console.log('\n# add and rename tracks, rename a library file');
+    const nb = await getDoc();
+    await page.getByTestId('add-track-text').click();
+    let na = await getDoc();
+    for (let i = 0; i < 50 && na.revision === nb.revision; i++) { await new Promise((r) => setTimeout(r, 100)); na = await getDoc(); }
+    const addedTrack = na.project.sequences.seq_main!.tracks.find((tr) => !nb.project.sequences.seq_main!.tracks.some((o) => o.id === tr.id));
+    await page.locator(`.track[data-track-id="${vTrk.id}"]`).getByTestId('track-rename').click();
+    await page.getByTestId('track-rename-input').fill('ראשי Main');
+    await page.keyboard.press('Enter');
+    for (let i = 0; i < 50 && na.project.sequences.seq_main!.tracks.find((tr) => tr.id === vTrk.id)!.name !== 'ראשי Main'; i++) { await new Promise((r) => setTimeout(r, 100)); na = await getDoc(); }
+    const focusOnRename = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset?.testid === 'track-rename');
+    // Escape leaves the name alone
+    await page.locator(`.track[data-track-id="${vTrk.id}"]`).getByTestId('track-rename').click();
+    await page.getByTestId('track-rename-input').fill('discard me');
+    await page.keyboard.press('Escape');
+    await page.getByTestId(`rename-${assetId}`).click();
+    await page.getByTestId(`rename-${assetId}-input`).fill('ראיון.mp4');
+    await page.keyboard.press('Enter');
+    for (let i = 0; i < 50 && na.project.assets[assetId]!.name !== 'ראיון.mp4'; i++) { await new Promise((r) => setTimeout(r, 100)); na = await getDoc(); }
+    await new Promise((r) => setTimeout(r, 300));
+    na = await getDoc();
+    check('editor: a track is added from the timeline; a track and a library file are renamed in place (Hebrew + Latin), Enter commits and focus returns to the rename button, Escape discards; three transactions in all', !!addedTrack && addedTrack.kind === 'text' && na.project.sequences.seq_main!.tracks.find((tr) => tr.id === vTrk.id)!.name === 'ראשי Main' && na.project.assets[assetId]!.name === 'ראיון.mp4' && focusOnRename && na.revision === nb.revision + 3, { added: addedTrack?.kind, trackName: na.project.sequences.seq_main!.tracks.find((tr) => tr.id === vTrk.id)!.name, assetName: na.project.assets[assetId]!.name, focusOnRename, revisions: [nb.revision, na.revision] });
+
+    console.log('\n# rename project, clear keyframes, remove empty tracks');
+    const qb = await getDoc();
+    await page.getByTestId('project-rename').click();
+    await page.getByTestId('project-rename-input').fill('סרט הדגמה Demo');
+    await page.keyboard.press('Enter');
+    let qa = await getDoc();
+    for (let i = 0; i < 50 && qa.project.name !== 'סרט הדגמה Demo'; i++) { await new Promise((r) => setTimeout(r, 100)); qa = await getDoc(); }
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-name]')?.textContent === 'סרט הדגמה Demo', undefined, { timeout: 8000 }).catch(() => {}); // the page learns of the commit a moment after the server has it
+    const shownName = await page.getByTestId('project-name').textContent();
+    const keyed = qa.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).find((c) => c.keyframes && Object.keys(c.keyframes).length > 0);
+    let cleared = false;
+    if (keyed) {
+      await page.locator(`.clip[data-clip-id="${keyed.id}"]`).click();
+      await page.getByTestId('keyframes-clear').click();
+      for (let i = 0; i < 50; i++) { qa = await getDoc(); if (!qa.project.sequences.seq_main!.tracks.flatMap((tr) => tr.clips).find((c) => c.id === keyed.id)!.keyframes) { cleared = true; break; } await new Promise((r) => setTimeout(r, 100)); }
+    }
+    const emptyBefore = qa.project.sequences.seq_main!.tracks.filter((tr) => tr.clips.length === 0).length;
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+KeyK');
+    await page.getByTestId('palette-input').fill('remove empty tracks');
+    const emptyCmd = await page.getByTestId('palette-option').first().getAttribute('data-command-id');
+    await key('Enter');
+    for (let i = 0; i < 50; i++) { qa = await getDoc(); if (qa.project.sequences.seq_main!.tracks.every((tr) => tr.clips.length > 0)) break; await new Promise((r) => setTimeout(r, 100)); }
+    check('editor: the project is renamed in the header; "clear all keyframes" removes a clip\'s animation; "remove empty tracks" from the palette removes the empty track added earlier, in one transaction each', qa.project.name === 'סרט הדגמה Demo' && shownName === 'סרט הדגמה Demo' && !!keyed && cleared && emptyBefore >= 1 && emptyCmd === 'track.removeEmpty' && qa.project.sequences.seq_main!.tracks.every((tr) => tr.clips.length > 0) && qa.revision === qb.revision + 3, { name: qa.project.name, shownName, keyed: !!keyed, cleared, emptyBefore, emptyCmd, revisions: [qb.revision, qa.revision] });
+
+    console.log('\n# move a track');
+    const mvB = await getDoc();
+    const orderOf = (d: ProjectDocument) => d.sequences.seq_main!.tracks.map((tr) => tr.id);
+    // the timeline rows, top to bottom (UX_REDESIGN §4.7): titles, captions, the picture stack as drawn (adjustment and video
+    // tracks, front-most first), then sound in list order. The project lists picture tracks bottom-most first.
+    const laneRows = (d: ProjectDocument) => { const tr = d.sequences.seq_main!.tracks; const back = (k: string[]) => tr.filter((t) => k.includes(t.kind)).reverse().map((t) => t.id); return [...back(['text']), ...back(['caption']), ...back(['adjustment', 'video']), ...tr.filter((t) => t.kind === 'audio').map((t) => t.id)]; };
+    const shownOrder = async () => page.locator('.track').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.trackId));
+    await page.waitForFunction((want) => JSON.stringify([...document.querySelectorAll('.track')].map((e) => (e as HTMLElement).dataset.trackId)) === want, JSON.stringify(laneRows(mvB.project)), { timeout: 8000 }).catch(() => {});
+    const shownBefore = await shownOrder();
+    const anyClip = mvB.project.sequences.seq_main!.tracks[0]!.clips[0]!; // a clip on the first track in the list (shown at the bottom)
+    await page.locator(`.clip[data-clip-id="${anyClip.id}"]`).click();
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+KeyK');
+    // the command's exact name: a part of it («track up») is an unknown request for the command bar, which runs nothing on Enter
+    // (ADR-0027, never guessed); an exact registry name still runs that command on Enter (palette.enter.ts)
+    await page.getByTestId('palette-input').fill("Move the selected clip's track up");
+    const upCmd = await page.getByTestId('palette-option').first().getAttribute('data-command-id');
+    const upActive = await page.getByTestId('palette-input').getAttribute('aria-activedescendant');
+    await key('Enter');
+    let mvA = await getDoc();
+    for (let i = 0; i < 50 && mvA.revision === mvB.revision; i++) { await new Promise((r) => setTimeout(r, 100)); mvA = await getDoc(); }
+    await page.waitForFunction((want) => JSON.stringify([...document.querySelectorAll('.track')].map((e) => (e as HTMLElement).dataset.trackId)) === want, JSON.stringify(laneRows(mvA.project)), { timeout: 8000 }).catch(() => {});
+    const shownAfter = await shownOrder();
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await key('Control+KeyZ');
+    let mvU = await getDoc();
+    for (let i = 0; i < 50 && mvU.revision === mvA.revision; i++) { await new Promise((r) => setTimeout(r, 100)); mvU = await getDoc(); }
+    const b0 = orderOf(mvB.project);
+    check('"move track up" from the palette (its exact name, so Enter runs that command, not the command bar\'s unknown answer) swaps the selected clip\'s track with the one above it in the list, the timeline rows before and after are exactly the lane order of that list (titles, captions, picture stack front-most first, sound in list order), and Ctrl+Z restores the order', upCmd === 'track.moveUp' && upActive === 'pf-palette-opt-track-moveUp' && JSON.stringify(orderOf(mvA.project)) === JSON.stringify([b0[1], b0[0], ...b0.slice(2)]) && JSON.stringify(shownBefore) === JSON.stringify(laneRows(mvB.project)) && JSON.stringify(shownAfter) === JSON.stringify(laneRows(mvA.project)) && JSON.stringify(orderOf(mvU.project)) === JSON.stringify(b0), { upCmd, upActive, before: b0.length, moved: orderOf(mvA.project)[1] === b0[0], shownMatches: JSON.stringify(shownAfter) === JSON.stringify(laneRows(mvA.project)), restored: JSON.stringify(orderOf(mvU.project)) === JSON.stringify(b0), kinds: mvB.project.sequences.seq_main!.tracks.map((t) => t.kind), shownBefore, shownAfter, rowsBefore: laneRows(mvB.project) });
+
+    console.log('\n# full history dialog');
+    await fetch(`${s.url}/api/v1/projects/${pid}/transactions`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ ops: [{ op: 'add_marker', args: { time: T.frameTime(7, R), label: 'from an agent' } }] }) }); // one edit by an agent, so the filter has something to show
+    const hb = await getDoc();
+    await page.waitForFunction((n) => Number(document.querySelector('[data-testid=revision]')?.textContent?.replace(/\D+/g, '')) >= n, hb.revision, { timeout: 8000 }).catch(() => {});
+    await page.getByTestId('activity-open').click();
+    await page.getByTestId('activity-dialog').waitFor();
+    await page.waitForFunction((n) => document.querySelectorAll('[data-testid=activity-full] li').length === n, hb.revision, { timeout: 8000 }).catch(() => {});
+    const allRows = await page.locator('[data-testid=activity-full] li').count();
+    const firstRev = await page.locator('[data-testid=activity-full] li').first().getAttribute('data-revision');
+    const rawNames = await page.locator('[data-testid=activity-full] li').evaluateAll((els) => els.map((e) => e.textContent ?? '').filter((x) => /\b[a-z]+_[a-z_]+\b/.test(x)).length); // an untranslated operation name looks like set_clip_reverse
+    await page.getByTestId('activity-filter').selectOption('agent');
+    const agentRows = await page.locator('[data-testid=activity-full] li').count();
+    const agentOnly = await page.locator('[data-testid=activity-full] li').evaluateAll((els) => els.every((e) => (e as HTMLElement).dataset.actor?.startsWith('agent')));
+    await page.keyboard.press('Escape');
+    const closedH = (await page.getByTestId('activity-dialog').count()) === 0;
+    await page.waitForFunction(() => (document.activeElement as HTMLElement | null)?.dataset?.testid === 'activity-open', undefined, { timeout: 3000 }).catch(() => {}); // focus is handed back just after the dialog is removed
+    const focusH = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset?.testid === 'activity-open');
+    check('"full history" lists every transaction of the project newest first, in the interface language (no raw operation names), filters to agent edits, and Escape closes it and returns focus', allRows === hb.revision && firstRev === String(hb.revision) && rawNames === 0 && agentRows === 7 && agentOnly && closedH && focusH, { revision: hb.revision, allRows, firstRev, rawNames, agentRows, agentOnly, closedH, focusH });
+
+    console.log('\n# close gaps');
+    const gb = await getDoc();
+    const gEnd = endOf(gb.project);
+    await fetch(`${s.url}/api/v1/projects/${pid}/transactions`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ ops: [{ op: 'add_text', args: { text: 'far', start: T.frameTime(gEnd + 90, R), duration: T.frameTime(30, R) } }] }) });
+    await page.waitForFunction((n) => Number(document.querySelector('[data-testid=revision]')?.textContent?.replace(/\D+/g, '')) > n, gb.revision, { timeout: 8000 }).catch(() => {});
+    await page.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
+    await key('Control+KeyK');
+    await page.getByTestId('palette-input').fill('Close empty gaps in the timeline'); // the exact name (see "move a track")
+    const gapCmd = await page.getByTestId('palette-option').first().getAttribute('data-command-id');
+    const gapActive = await page.getByTestId('palette-input').getAttribute('aria-activedescendant');
+    await key('Enter');
+    let ga = await getDoc();
+    /** Frames covered by at least one clip on any track. */
+    const covered = (d: ProjectDocument) => { const on = new Set<number>(); for (const tr of d.sequences.seq_main!.tracks) for (const c of tr.clips) for (let i = T.frameIndexAt(c.start, R), e = i + T.frameIndexAt(c.duration, R); i < e; i++) on.add(i); return on.size; };
+    const wantEnd = covered(gb.project) + 30; // everything that was covered, plus the late title
+    for (let i = 0; i < 50 && endOf(ga.project) !== wantEnd; i++) { await new Promise((r) => setTimeout(r, 100)); ga = await getDoc(); }
+    check('"close empty gaps" from the command palette removes all time that was empty on every track (including the 90 frames before a late title) in one transaction: the timeline is exactly as long as its covered frames, and nothing covered was lost', gapCmd === 'edit.closeGaps' && gapActive === 'pf-palette-opt-edit-closeGaps' && endOf(ga.project) === wantEnd && covered(ga.project) === wantEnd && ga.revision === gb.revision + 2, { gapCmd, gapActive, endBefore: gEnd, coveredBefore: covered(gb.project), endAfter: endOf(ga.project), coveredAfter: covered(ga.project), revisions: [gb.revision, ga.revision] });
+
+    console.log('\n# frames during playback');
+    // While playing, read the barcode straight off the preview canvas together with the frame number the player says it drew,
+    // then compare with the server still of that same frame. (Paused frames are compared elsewhere; this is the moving picture.)
+    await page.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
+    await page.keyboard.press('Home');
+    await page.keyboard.press('Space');
+    const samples: { frame: number; code: number; quality: string }[] = [];
+    for (let i = 0; i < 40; i++) {
+      const smp = await page.evaluate(() => {
+        const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement;
+        const ph = (cv.width * 360) / 640, py = (cv.height - ph) / 2;
+        const row = cv.getContext('2d')!.getImageData(0, Math.round(py + ph / 12), cv.width, 1).data;
+        return { frame: Number(cv.dataset.frame), quality: cv.dataset.quality ?? '', w: cv.width, data: Array.from(row.filter((_, k) => k % 4 !== 3)) };
+      });
+      samples.push({ frame: smp.frame, quality: smp.quality, code: readBarcode(Uint8Array.from(smp.data), smp.w, 3, { x: 0, y: 0, w: smp.w, h: 0 }) });
+      await new Promise((r) => setTimeout(r, 90));
+    }
+    await page.keyboard.press('Space');
+    const moving = samples.filter((x) => x.quality === 'draft');
+    const distinct = [...new Map(moving.map((x) => [x.frame, x])).values()];
+    const mismatches: unknown[] = [];
+    for (const x of distinct) { const want = await stillCode(x.frame); if (want !== x.code) mismatches.push({ frame: x.frame, playback: x.code, still: want }); }
+    check('during playback the preview draws, for every frame it reports, the same source frame as the server still of that timeline frame (read by barcode from the moving canvas)', distinct.length >= 15 && mismatches.length === 0 && new Set(distinct.map((x) => x.code)).size >= 10, { sampled: samples.length, movingFramesCompared: distinct.length, differentSourceFrames: new Set(distinct.map((x) => x.code)).size, firstFrames: distinct.slice(0, 6), mismatches: mismatches.slice(0, 5) });
+
+    console.log('\n# workspaces');
+    // Since the redesign (UX_REDESIGN §4.9) the mode bar offers Edit (pro), Look (color), Sound, Captions and Deliver; Quick,
+    // Motion and Custom are still modes of the inspector but no longer on the bar, so this proof chooses them the way the
+    // editor keeps a mode (editor-ui.ts setWorkspace). The inspector's own panel tabs are read from its tab row: the rail and
+    // the object's tab set are role=tab too now. A mode change leaves the all-tools view, as the bar does.
+    const wb = await getDoc();
+    const tabsShown = async () => page.locator('aside.inspector .inspector-tabs [role=tab]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.testid!.replace('inspector-tab-', '')));
+    const panelsShown = async () => page.locator('.inspector-panel:not([hidden])').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.testid!.replace('inspector-panel-', '')));
+    const proTabs = await tabsShown(); // the all-tools view stored at the start: every panel
+    await setWorkspace(page, 'quick');
+    const quick = { tabs: await tabsShown(), panels: await panelsShown() };
+    await setWorkspace(page, 'sound');
+    const sound = { tabs: await tabsShown(), panels: await panelsShown() };
+    const captions = await (async () => { await setWorkspace(page, 'captions'); return { tabs: await tabsShown(), panels: await panelsShown() }; })();
+    const deliver = await (async () => { await setWorkspace(page, 'deliver'); return { tabs: await tabsShown(), panels: await panelsShown() }; })();
+    await setWorkspace(page, 'sound');
+    // a target track chosen before the reload is still chosen after it
+    await page.getByTestId('track-target').first().click();
+    await page.reload();
+    await page.getByTestId('timecode').waitFor();
+    await page.getByTestId('track-target').first().waitFor();
+    const targetKept = await page.locator('[data-testid=track-target][aria-pressed=true]').count();
+    await page.locator('[data-testid=track-target][aria-pressed=true]').first().click().catch(() => {});
+    const afterReload = { ws: await workspaceValue(page), tabs: await tabsShown() };
+    // Motion and Look (color): the selection only, each opening the picture clip on its own tab (a picture clip is selected first).
+    // What a tab holds is counted when it is on screen: every tab of the object is mounted, the others hidden.
+    const wsClip = (await getDoc()).project.sequences.seq_main!.tracks.find((tr) => tr.kind === 'video')!.clips[0]!;
+    const vis = (id: string) => page.locator(`[data-testid=${id}]:visible`).count();
+    const parts = async () => ({ tabs: await tabsShown(), objectTab: await page.locator('aside.inspector .insp-object').first().getAttribute('data-tab'), transform: await vis('transform-x'), speed: await vis('speed-field'), animate: await vis('animate-controls'), look: await vis('look-apply'), analysis: await vis('analysis-panel') });
+    await setWorkspace(page, 'motion');
+    await page.locator(`.clip[data-clip-id="${wsClip.id}"]`).click();
+    const motion = await parts();
+    await setWorkspace(page, 'color');
+    const color = await parts();
+    // scopes in the Color workspace: their numbers against the server still of the same frame
+    await page.getByTestId('scopes').waitFor({ timeout: 5000 }).catch(() => {});
+    await page.waitForFunction(() => { const el = document.querySelector('[data-testid=scopes]') as HTMLElement | null; return !!el?.dataset.mean && el.dataset.frame === (document.querySelector('[data-testid=preview]') as HTMLCanvasElement).dataset.frame; }, undefined, { timeout: 8000 }).catch(() => {});
+    const scope = await page.getByTestId('scopes').evaluate((el) => ({ ...(el as HTMLElement).dataset })).catch(() => ({} as Record<string, string | undefined>));
+    const scopePng = Buffer.from(await (await fetch(`${s.url}/api/v1/projects/${pid}/frame?index=${scope.frame ?? 0}`, { headers: h })).arrayBuffer());
+    const scopeRgb = spawnSync('ffmpeg', ['-hide_banner', '-v', 'error', '-f', 'image2pipe', '-i', '-', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { input: scopePng, maxBuffer: 1 << 28 }).stdout;
+    let lumaSum = 0, lumaMax = 0, lumaMin = 255;
+    for (let i = 0; i < scopeRgb.length; i += 3) { const l = 0.2126 * scopeRgb[i]! + 0.7152 * scopeRgb[i + 1]! + 0.0722 * scopeRgb[i + 2]!; lumaSum += l; lumaMax = Math.max(lumaMax, l); lumaMin = Math.min(lumaMin, l); }
+    const stillMean = lumaSum / (scopeRgb.length / 3);
+    const vecInk = await page.getByTestId('scope-vectorscope').evaluate((c) => { const d = (c as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 128, 128).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]! > 60) n++; return n; }).catch(() => 0);
+    const histInk = await page.getByTestId('scope-histogram').evaluate((c) => { const d = (c as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 256, 64).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n; }).catch(() => 0);
+    const waveInk = await page.getByTestId('scope-waveform').evaluate((c) => { const d = (c as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 192, 96).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n; }).catch(() => 0);
+    const scopeCheck = { frame: scope.frame, mean: Number(scope.mean), stillMean: Number(stillMean.toFixed(1)), min: Number(scope.min), max: Number(scope.max), stillMin: Math.round(lumaMin), stillMax: Math.round(lumaMax), histInk, waveInk, vecInk, saturation: Number(scope.saturation) };
+    check('Color workspace scopes: drawn (histogram, waveform and vectorscope all have ink) for the frame the preview shows, and their average luma is within 3 levels of the server still of that frame (range within 12: the scope reads a scaled-down preview)', histInk > 20 && waveInk > 20 && vecInk > 3 && Number.isFinite(scopeCheck.saturation) && Math.abs(scopeCheck.mean - scopeCheck.stillMean) <= 3 && Math.abs(scopeCheck.min - scopeCheck.stillMin) <= 12 && Math.abs(scopeCheck.max - scopeCheck.stillMax) <= 12, scopeCheck);
+    await setWorkspace(page, 'pro');
+    const proParts = await parts();
+    await page.getByTestId('inspector-tab-all').click();
+    const allParts = await parts();
+    check('workspaces Motion and Look: both offer the selection only (no panel tabs); Motion opens the picture clip on its motion tab (entrances shown, no look controls, no position or speed on screen); Look opens it on its colour tab (the look controls without position, speed or entrances); Edit opens it on its basic tab (position/size, no look controls); the all-tools view shows all of it with every panel',
+      JSON.stringify(motion) === JSON.stringify({ tabs: [], objectTab: 'motion', transform: 0, speed: 0, animate: 1, look: 0, analysis: 0 }) && JSON.stringify(color) === JSON.stringify({ tabs: [], objectTab: 'colour', transform: 0, speed: 0, animate: 0, look: 1, analysis: 0 })
+      && proParts.tabs.length === 0 && proParts.objectTab === 'basic' && proParts.transform === 1 && proParts.look === 0
+      && allParts.transform === 1 && allParts.speed === 1 && allParts.animate === 1 && allParts.look === 1 && allParts.analysis === 1 && allParts.tabs.length === 8, { motion, color, proParts, allParts });
+    // the custom workspace: the user's own choice of panels, kept across a reload
+    await setWorkspace(page, 'custom');
+    const customDefault = await tabsShown();
+    await page.getByTestId('custom-panel-captions').check();
+    await page.getByTestId('custom-panel-sound').uncheck();
+    const customChosen = await tabsShown();
+    await page.reload();
+    await page.getByTestId('timecode').waitFor();
+    const customKept = { ws: await workspaceValue(page), tabs: await tabsShown() };
+    await page.getByTestId('custom-panel-clip').uncheck();
+    await page.getByTestId('custom-panel-deliver').uncheck();
+    const lastLocked = await page.getByTestId('custom-panel-captions').isDisabled();
+    await page.getByTestId('custom-panel-clip').check(); await page.getByTestId('custom-panel-deliver').check(); await page.getByTestId('custom-panel-sound').check(); await page.getByTestId('custom-panel-captions').uncheck();
+    check('custom workspace: starts with clip, sound and deliver; ticking and unticking panels changes the tabs on offer; the choice survives a reload; the last remaining panel cannot be unticked', JSON.stringify(customDefault) === JSON.stringify(['clip', 'sound', 'deliver']) && JSON.stringify(customChosen) === JSON.stringify(['clip', 'captions', 'deliver']) && customKept.ws === 'custom' && JSON.stringify(customKept.tabs) === JSON.stringify(['clip', 'captions', 'deliver']) && lastLocked, { customDefault, customChosen, customKept, lastLocked });
+    await setWorkspace(page, 'pro');
+    const back = await tabsShown();
+    const allButton = await page.getByTestId('inspector-tab-all').count();
+    await page.getByTestId('inspector-tab-all').click();
+    const allAgain = await tabsShown();
+    const wa = await getDoc();
+    check('workspaces: Quick offers recipes, speech, captions and deliver and shows the recipes panel; Sound offers sound and clip; Captions offers captions, speech and clip; Deliver offers deliver, review and recipes; each shows its first panel; the choice survives a reload, and so does a chosen target track; Edit shows the selection only, with the all-tools button that offers every panel again; the project is not changed by any of it',
+      targetKept === 1 && proTabs.length === 8 && JSON.stringify(quick.tabs) === JSON.stringify(['recipes', 'speech', 'captions', 'deliver']) && JSON.stringify(quick.panels) === JSON.stringify(['recipes']) && JSON.stringify(sound.tabs) === JSON.stringify(['sound', 'clip']) && JSON.stringify(sound.panels) === JSON.stringify(['sound'])
+      && JSON.stringify(captions.tabs) === JSON.stringify(['captions', 'speech', 'clip']) && JSON.stringify(captions.panels) === JSON.stringify(['captions']) && JSON.stringify(deliver.tabs) === JSON.stringify(['deliver', 'review', 'recipes']) && JSON.stringify(deliver.panels) === JSON.stringify(['deliver'])
+      && afterReload.ws === 'sound' && JSON.stringify(afterReload.tabs) === JSON.stringify(['sound', 'clip']) && back.length === 0 && allButton === 1 && allAgain.length === 8 && wa.revision === wb.revision && JSON.stringify(wa.project) === JSON.stringify(wb.project), { proTabs: proTabs.length, quick, sound, captions, deliver, afterReload, back, allButton, allAgain: allAgain.length });
+    // A library file the proof removed may still be being looked up by the editor at that moment (its thumbnails, its list of
+    // derived files): the server then rightly answers 404, which the browser logs. Those, and only those, are not errors of the editor.
+    const removedLookup = (e: string) => /status of 404/.test(e) && [...removedAssets].some((id) => e.includes(`/assets/${id}/derivatives`));
+    const unexpected = errors.filter((e) => !removedLookup(e));
+    check('no uncaught errors in the editor page (404s for derived files of library files this proof had just removed are left out)', unexpected.length === 0, { unexpected: unexpected.slice(0, 4), leftOut: errors.length - unexpected.length });
+  } catch (e) {
+    // A crash must never look like a pass: record it as a failed check so the report says FAILED.
+    console.error(e);
+    check('proof ran to completion', false, String(e).slice(0, 600));
+  } finally {
+    await browser.close();
+    await s.close();
+    const failed = checks.filter((c) => !c.ok);
+    const report = { ranAt: new Date().toISOString(), result: failed.length ? 'FAILED' : 'PASSED', machine: { platform: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model, logicalCpus: os.cpus().length, gpu: 'none' }, notDone: ['automated accessibility audit (no axe run)', 'screen-reader walkthrough', 'pointer drag across tracks', 'multi-select and marquee', 'source viewer', 'minimap and loop range'], checks };
+    fs.writeFileSync(path.join(ev, 'phase3-proof.json'), JSON.stringify(report, null, 2) + '\n');
+    console.log(`\n${report.result}: ${checks.length - failed.length}/${checks.length} checks. Evidence: docs/evidence/phase3-proof.json`);
+    if (failed.length) process.exitCode = 1;
+  }
+}
+main().catch((e) => { console.error(e); process.exit(1); });

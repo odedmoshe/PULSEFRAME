@@ -1,0 +1,14 @@
+/* The zoom control at the end of the timeline's toolbar: the whole edit, zoom out, the slider, zoom in.
+   Time runs left to right in every language, so the group is LTR: out on the left, in on the right. */
+/* in the normal flow of the toolbar, never laid over it (plain selector: a test of the cascade reads it by name) */
+.tl-zoom { display: flex; inline-size: fit-content; }
+.timeline.pf-ds .tl-zoom { display: inline-flex; inline-size: auto; align-items: center; gap: var(--pf-sp-1); margin: 0; padding: 0; color: var(--pf-text-2); }
+.timeline.pf-ds .tl-zoom-btn { box-shadow: none; }
+.timeline.pf-ds .tl-zoom-slider { -webkit-appearance: none; appearance: none; inline-size: 88px; block-size: 24px; margin: 0 var(--pf-sp-2); padding: 0; border: 0; background: transparent; cursor: pointer; accent-color: var(--pf-frame); }
+.timeline.pf-ds .tl-zoom-slider::-webkit-slider-runnable-track { block-size: 3px; border-radius: 2px; background: linear-gradient(to right, var(--pf-frame) var(--v, 50%), var(--pf-surface-4) var(--v, 50%)); }
+.timeline.pf-ds .tl-zoom-slider::-webkit-slider-thumb { -webkit-appearance: none; inline-size: 14px; block-size: 14px; margin-block-start: -5.5px; border-radius: 50%; border: 0; background: var(--pf-text); box-shadow: 0 0 0 3px var(--pf-surface-1), 0 1px 3px var(--pf-canvas); }
+.timeline.pf-ds .tl-zoom-slider::-moz-range-track { block-size: 3px; border-radius: 2px; background: var(--pf-surface-4); }
+.timeline.pf-ds .tl-zoom-slider::-moz-range-progress { block-size: 3px; border-radius: 2px; background: var(--pf-frame); }
+.timeline.pf-ds .tl-zoom-slider::-moz-range-thumb { inline-size: 14px; block-size: 14px; border-radius: 50%; border: 0; background: var(--pf-text); }
+.timeline.pf-ds .tl-zoom-slider:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; border-radius: var(--pf-r-xs); }
+@media (max-width: 1280px) { .timeline.pf-ds .tl-zoom-slider { inline-size: 64px; } }

@@ -1,0 +1,623 @@
+{
+  "proof": "shorts",
+  "adr": "ADR-0018",
+  "status": "pass",
+  "generatedAt": "2026-11-26T07:01:34.598Z",
+  "machine": {
+    "platform": "linux",
+    "cpus": 4,
+    "node": "v22.23.4"
+  },
+  "note": "CPU only, no model; synthetic word bursts with a manual transcript; one run on one machine. The candidate score is a relative heuristic within one video.",
+  "checks": [
+    {
+      "id": "S1",
+      "name": "Q (the question, +6 dB) ranks in the top 3",
+      "value": {
+        "rank": 1,
+        "top3": [
+          {
+            "rank": 1,
+            "score": 71,
+            "firstWords": "האם שמתם לב כמה זה פשוט בעצם? שבה"
+          },
+          {
+            "rank": 2,
+            "score": 60,
+            "firstWords": "אחר לגמרי. גדול היום שבה וגם שלנו הדרך."
+          },
+          {
+            "rank": 3,
+            "score": 51,
+            "firstWords": "היום שבה וגם שלנו הדרך קטן. על בצוות"
+          }
+        ]
+      },
+      "budget": "rank ≤ 3",
+      "pass": true
+    },
+    {
+      "id": "S1",
+      "name": "X is listed as excluded with its word and exact time",
+      "value": {
+        "excluded": [
+          {
+            "start": {
+              "value": "25920",
+              "timescale": 1000
+            },
+            "end": {
+              "value": "1922",
+              "timescale": 25
+            },
+            "word": "פוליטיקה",
+            "at": {
+              "value": "76160",
+              "timescale": 1000
+            }
+          }
+        ],
+        "wordAt": "76160/1000"
+      },
+      "budget": "listed, at T.eq the word start, in no candidate",
+      "pass": true
+    },
+    {
+      "id": "S1",
+      "name": "every candidate edge is T.eq a statement edge",
+      "value": {
+        "candidates": 7,
+        "offEdge": []
+      },
+      "budget": "0 off-edge",
+      "pass": true
+    },
+    {
+      "id": "S1",
+      "name": "R (opens with «אז כמו שאמרתי») carries context_added or starts_with_reference",
+      "value": {
+        "start": {
+          "value": "43200",
+          "timescale": 1000
+        },
+        "end": {
+          "value": "1324",
+          "timescale": 25
+        },
+        "reasons": [
+          "complete_statements",
+          "pace",
+          "context_added"
+        ],
+        "warnings": []
+      },
+      "budget": "one of the two",
+      "pass": true
+    },
+    {
+      "id": "S1",
+      "name": "louder_than_usual of the +6 dB statement",
+      "value": {
+        "dB": 5.94
+      },
+      "budget": "6.0 ± 0.5 dB",
+      "pass": true
+    },
+    {
+      "id": "S1",
+      "name": "two runs give identical JSON",
+      "value": {
+        "bytes": 10500
+      },
+      "budget": "identical",
+      "pass": true
+    },
+    {
+      "id": "S1",
+      "name": "no viral wording; the method says heuristic",
+      "value": {
+        "method": "shorts-rank 1: weighted percentiles of measured signals within this one video (statements, voice level, pace, fillers, pauses, shot changes); heuristic; not a prediction of views or retention"
+      },
+      "budget": "no match; \"heuristic\"",
+      "pass": true
+    },
+    {
+      "id": "S1",
+      "name": "ranking time with cached features",
+      "value": {
+        "ms": 53.68
+      },
+      "budget": "≤ 2000 ms",
+      "pass": true
+    },
+    {
+      "id": "S2",
+      "name": "every edge within 0.15 s of a planted silence edge",
+      "value": {
+        "candidates": 6,
+        "off": []
+      },
+      "budget": "≤ 0.15 s",
+      "pass": true
+    },
+    {
+      "id": "S2",
+      "name": "no word reasons",
+      "value": {
+        "withWordReasons": 0
+      },
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "id": "S2",
+      "name": "every candidate has no_transcript",
+      "value": {
+        "candidates": 6
+      },
+      "budget": "all",
+      "pass": true
+    },
+    {
+      "id": "S3",
+      "name": "one revision and 3 sequences; operations",
+      "value": {
+        "revisions": 1,
+        "sequences": 3,
+        "operations": 12
+      },
+      "budget": "1 revision, 3 sequences, ≤ 2000 ops",
+      "pass": true
+    },
+    {
+      "id": "S3",
+      "name": "the main edit is unchanged",
+      "value": null,
+      "budget": "identical",
+      "pass": true
+    },
+    {
+      "id": "S3",
+      "name": "an out-of-order undo after a title on a plan-made track is refused; document unchanged",
+      "value": {
+        "status": 409,
+        "code": "undo_conflict"
+      },
+      "budget": "409 undo_conflict, unchanged",
+      "pass": true
+    },
+    {
+      "id": "S3",
+      "name": "undo and redo give equal creativeProjection",
+      "value": {
+        "undoEqual": true,
+        "redoEqual": true
+      },
+      "budget": "equal",
+      "pass": true
+    },
+    {
+      "id": "S3",
+      "name": "document bytes per short",
+      "value": {
+        "bytes": 3004
+      },
+      "budget": "≤ 60 KB",
+      "pass": true
+    },
+    {
+      "id": "S3",
+      "name": "commit p95 with six shorts in the project",
+      "value": {
+        "beforeMs": 22.53,
+        "afterMs": 22.75
+      },
+      "budget": "≤ +15 ms",
+      "pass": true
+    },
+    {
+      "id": "S4",
+      "name": "every kept word lies inside a piece",
+      "value": {
+        "words": 12,
+        "outside": []
+      },
+      "budget": "0 outside",
+      "pass": true
+    },
+    {
+      "id": "S4",
+      "name": "starts and durations are frame-aligned",
+      "value": {
+        "clips": 12,
+        "unaligned": 0
+      },
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "id": "S4",
+      "name": "sequenceDuration equals the sum of the pieces",
+      "value": {
+        "duration": {
+          "value": "53",
+          "timescale": 10
+        },
+        "sum": {
+          "value": "53",
+          "timescale": 10
+        },
+        "pieces": 6
+      },
+      "budget": "T.eq",
+      "pass": true
+    },
+    {
+      "id": "S4",
+      "name": "the tightened wav has no silence of 0.5 s or more",
+      "value": {
+        "silenceStarts": []
+      },
+      "budget": "0 at −35 dB / 0.5 s",
+      "pass": true
+    },
+    {
+      "id": "S4",
+      "name": "RMS in the 50 ms after each first-word onset matches the source",
+      "value": {
+        "dB": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "budget": "|Δ| ≤ 0.5 dB",
+      "pass": true
+    },
+    {
+      "id": "S4",
+      "name": "picture cuts are at least 11 frames apart",
+      "value": {
+        "cuts": [
+          11,
+          26,
+          41,
+          56,
+          85
+        ],
+        "minGap": 15
+      },
+      "budget": "≥ 11 frames",
+      "pass": true
+    },
+    {
+      "id": "S4",
+      "name": "fades are exactly 1/100 s, at removal joins only",
+      "value": {
+        "joins": 5,
+        "wrong": []
+      },
+      "budget": "all exact; ≥ 1 join",
+      "pass": true
+    },
+    {
+      "id": "S5",
+      "name": "the disc stays near the centre in settled frames",
+      "value": {
+        "settled": 59,
+        "within": 59,
+        "maxOffsetPx": 57.47
+      },
+      "budget": "≥ 95% within 0.10·W",
+      "pass": true
+    },
+    {
+      "id": "S5",
+      "name": "no #000 pixel in the 2-px edge columns",
+      "value": {
+        "blackPixels": 0
+      },
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "id": "S5",
+      "name": "at every planted cut the new piece starts on the new shot",
+      "value": {
+        "cuts": []
+      },
+      "budget": "new shot at the piece start, old shot before",
+      "pass": true
+    },
+    {
+      "id": "S6",
+      "name": "the foreground band height",
+      "value": {
+        "top": 438,
+        "bottom": 843,
+        "height": 405,
+        "want": 405
+      },
+      "budget": "405 ± 2 px",
+      "pass": true
+    },
+    {
+      "id": "S6",
+      "name": "the bands above and below are not background-coloured",
+      "value": {
+        "meanLumAbove": 51.75,
+        "meanLumBelow": 47.24
+      },
+      "budget": "mean luminance > 10 (black is 0)",
+      "pass": true
+    },
+    {
+      "id": "S6",
+      "name": "the bands are blurred: Laplacian variance",
+      "value": {
+        "bands": 0.12,
+        "foreground": 189.69,
+        "ratio": 0
+      },
+      "budget": "≤ 10% of the foreground",
+      "pass": true
+    },
+    {
+      "id": "S6",
+      "name": "no 'upscaled' warning for the blurred copy",
+      "value": {
+        "upscaled": 0
+      },
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "id": "S7",
+      "name": "ffprobe: 720×1280, frames, 30/1, AAC",
+      "value": {
+        "size": "720×1280",
+        "frames": 688,
+        "want": 688,
+        "rate": "30/1",
+        "audio": "aac"
+      },
+      "budget": "720×1280, 688 frames, 30/1, aac",
+      "pass": true
+    },
+    {
+      "id": "S7",
+      "name": "burned and caption-free exports differ in the caption band only",
+      "value": {
+        "captionBand": 106.15,
+        "above": 0,
+        "frame": 15
+      },
+      "budget": "≥ 5 levels in the band, ≤ 1 above",
+      "pass": true
+    },
+    {
+      "id": "S7",
+      "name": "the first SRT cue starts at the snapped time of the first word",
+      "value": {
+        "cue": 0,
+        "snapped": 0
+      },
+      "budget": "± 0.5 ms (SRT has milliseconds)",
+      "pass": true
+    },
+    {
+      "id": "S7",
+      "name": "loudness of the short",
+      "value": {
+        "lufs": -14.1
+      },
+      "budget": "−14 ± 0.5 LUFS",
+      "pass": true
+    },
+    {
+      "id": "S7",
+      "name": "the photosensitivity report has 0 failures",
+      "value": {
+        "verdict": "pass",
+        "ranges": 0
+      },
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "id": "S7",
+      "name": "a batch of 2 items makes 2 jobs; a bad item makes none (404)",
+      "value": {
+        "batch": 202,
+        "jobs": 2,
+        "bad": 404,
+        "jobsAfterBad": 0
+      },
+      "budget": "202 + 2 jobs; 404 + 0 jobs",
+      "pass": true
+    },
+    {
+      "id": "S8",
+      "name": "/frame?sequence= and a png export of the same frame",
+      "value": {
+        "meanAbsDiff": 0,
+        "size": "720×1280"
+      },
+      "budget": "mean |Δ| ≤ 1 level",
+      "pass": true
+    },
+    {
+      "id": "S8",
+      "name": "a browser export of the same frame",
+      "value": {
+        "ssim": 0.9993500000000001
+      },
+      "budget": "SSIM ≥ 0.97 (two encoders)",
+      "pass": true
+    },
+    {
+      "id": "S9",
+      "name": "find → plan → make → contact sheet (sequenceId) → preflight → export",
+      "value": {
+        "plan": true,
+        "make": true,
+        "sheet": true,
+        "preflight": true,
+        "export": true
+      },
+      "budget": "every step succeeds",
+      "pass": true
+    },
+    {
+      "id": "S9",
+      "name": "propose mode is refused on make_shorts",
+      "value": {
+        "error": "insufficient_scope"
+      },
+      "budget": "403 insufficient_scope",
+      "pass": true
+    },
+    {
+      "id": "S9",
+      "name": "a non-verbatim quote title is refused (MCP and REST)",
+      "value": {
+        "mcp": {
+          "code": "not_verbatim",
+          "message": "the quote title of pick 1 is not a run of words spoken in its excerpt",
+          "details": {
+            "pick": 0,
+            "title": "מילים שלא נאמרו בכלל"
+          },
+          "hint": "Copy the words exactly as transcribed, or give the title origin 'typed'."
+        },
+        "rest": 422
+      },
+      "budget": "422 not_verbatim",
+      "pass": true
+    },
+    {
+      "id": "S9",
+      "name": "render_frame reports 720×1280",
+      "value": {
+        "width": 720,
+        "height": 1280
+      },
+      "budget": "720×1280",
+      "pass": true
+    },
+    {
+      "id": "S10",
+      "name": "real-time factor of measuring 20 minutes",
+      "value": {
+        "seconds": 1200,
+        "wallSeconds": 7.54,
+        "rtf": 159.26
+      },
+      "budget": "≥ 20×",
+      "pass": true
+    },
+    {
+      "id": "S10",
+      "name": "RSS growth while measuring",
+      "value": {
+        "baselineMB": 381,
+        "peakMB": 386,
+        "growthMB": 5
+      },
+      "budget": "≤ 400 MB",
+      "pass": true
+    },
+    {
+      "id": "S10",
+      "name": "hops = ceil(seconds·10)",
+      "value": {
+        "hops": 12000,
+        "want": 12000
+      },
+      "budget": "12000",
+      "pass": true
+    },
+    {
+      "id": "S10",
+      "name": "no missing or duplicated hop at the 1200 s seam",
+      "value": {
+        "around": [
+          {
+            "h": 11995,
+            "db": -14.97
+          },
+          {
+            "h": 11996,
+            "db": -100
+          },
+          {
+            "h": 11997,
+            "db": -100
+          },
+          {
+            "h": 11998,
+            "db": -100
+          },
+          {
+            "h": 11999,
+            "db": -100
+          }
+        ]
+      },
+      "budget": "clicks every 5 hops on both sides",
+      "pass": true
+    },
+    {
+      "id": "S10",
+      "name": "commit p95 on the 20-minute project",
+      "value": {
+        "ms": 7.68,
+        "baselineMs": 22.53
+      },
+      "budget": "≤ +15 ms over the 4-minute project",
+      "pass": true
+    }
+  ],
+  "blocked": [],
+  "measurements": {
+    "fixture": {
+      "seconds": 240,
+      "words": 447,
+      "statements": 57,
+      "cuts": [
+        1500,
+        2700,
+        4200,
+        5700
+      ],
+      "generateSeconds": 156.9
+    },
+    "sceneCuts": {
+      "planted": [
+        1500,
+        2700,
+        4200,
+        5700
+      ],
+      "found": []
+    },
+    "s1MeasuredByJob": true,
+    "commitP95": {
+      "beforeMs": 22.53,
+      "afterMs": 22.75,
+      "shorts": 6
+    },
+    "long": {
+      "seconds": 1200,
+      "wallSeconds": 7.54,
+      "realtimeFactor": 159.26,
+      "rssBaselineMB": 381,
+      "rssPeakMB": 386,
+      "cpus": 4
+    },
+    "longCommitP95Ms": 7.68
+  }
+}

@@ -1,0 +1,392 @@
+{
+ "proof": "proof:music (ADR-0022)",
+ "when": "2026-11-26T06:51:20.161Z",
+ "node": "v22.23.4",
+ "platform": "linux x64",
+ "cpus": 4,
+ "ok": true,
+ "note": "Nobody has listened: every style is review 'unheard'. LUFS and the tracker's F1 are recorded, not gated; the tracker numbers are on synthesised music with exact ground truth, not recordings.",
+ "checks": [
+  {
+   "name": "every style still carries review 'unheard' (the owner has not listened)",
+   "ok": true,
+   "detail": [
+    [
+     "music.festive",
+     "unheard"
+    ],
+    [
+     "music.birthday",
+     "unheard"
+    ],
+    [
+     "music.calm",
+     "unheard"
+    ],
+    [
+     "music.pop",
+     "unheard"
+    ],
+    [
+     "music.lofi",
+     "unheard"
+    ],
+    [
+     "music.cinematic",
+     "unheard"
+    ]
+   ]
+  },
+  {
+   "name": "GET /music lists the six styles, each labelled unheard",
+   "ok": true,
+   "detail": {
+    "status": 200,
+    "count": 6
+   }
+  },
+  {
+   "name": "P6 the plan asks for built-in music and has nothing blocking",
+   "ok": true,
+   "detail": {
+    "status": 200,
+    "notices": []
+   }
+  },
+  {
+   "name": "P6 setup: the pictures are long enough that the plan keeps the composed ending (no builtin_music_faded)",
+   "ok": true,
+   "detail": {
+    "faded": false
+   }
+  },
+  {
+   "name": "P6 apply succeeds",
+   "ok": true,
+   "detail": {
+    "status": 200
+   }
+  },
+  {
+   "name": "P6 the music clip starts at the template start and ends no later than the last picture, at most one frame before it",
+   "ok": true,
+   "detail": {
+    "start": {
+     "value": "0",
+     "timescale": 1
+    },
+    "end": {
+     "value": "23",
+     "timescale": 3
+    },
+    "lastPicture": {
+     "value": "23",
+     "timescale": 3
+    }
+   }
+  },
+  {
+   "name": "P6 when the plan did not fade the track, the clip has no fade-out (no fit_music: the composed ending is kept)",
+   "ok": true,
+   "detail": {
+    "faded": false
+   }
+  },
+  {
+   "name": "P6 the track's beats are known by construction (not measured)",
+   "ok": true,
+   "detail": {
+    "method": "known by construction: PULSEFRAME built-in music; beats, bars and sections come from the recipe, nothing was measured"
+   }
+  },
+  {
+   "name": "P6 the exported sound is the synthesised track at the clip's start: best lag = start ±1 sample, normalised peak >= 0.99",
+   "ok": true,
+   "detail": {
+    "lag": 0,
+    "peak": 1,
+    "expected": 0,
+    "ok": true
+   }
+  },
+  {
+   "name": "P6 the last 10 ms of the export are below −60 dBFS",
+   "ok": true,
+   "detail": {
+    "dbfs": -240
+   }
+  },
+  {
+   "name": "P6 CONTROL: with the clip one frame late the alignment check fails, and the best lag moved by one frame",
+   "ok": true,
+   "detail": {
+    "original": {
+     "lag": 770,
+     "peak": 0.238272939155031,
+     "expected": 0,
+     "ok": false
+    },
+    "moved": {
+     "lag": 1600,
+     "peak": 1,
+     "expected": 1600,
+     "ok": true
+    },
+    "ok": true
+   }
+  },
+  {
+   "name": "P7 POST /music adds the track and one clip (201)",
+   "ok": true,
+   "detail": {
+    "status": 201
+   }
+  },
+  {
+   "name": "P7 the file is 44 + 16·N·samplesPerBeat bytes and its duration is exact",
+   "ok": true,
+   "detail": {
+    "byteSize": 2880044,
+    "expected": 2880044
+   }
+  },
+  {
+   "name": "P7 the second identical request is deduplicated: the same asset, nothing committed",
+   "ok": true,
+   "detail": {
+    "first": 1,
+    "second": 1
+   }
+  },
+  {
+   "name": "P7 measuring the built-in track's beats is refused (409 known_by_construction) and beats and sections stay",
+   "ok": true,
+   "detail": {
+    "status": 409
+   }
+  },
+  {
+   "name": "P7 one undo removes asset, analysis and clip: the document is the one before",
+   "ok": true,
+   "detail": {
+    "status": 200
+   }
+  },
+  {
+   "name": "P8 music.festive: the preview route plays exactly the bytes the synthesiser makes (16 bars, 30.72 s)",
+   "ok": true,
+   "detail": {
+    "status": 200
+   }
+  },
+  {
+   "name": "P8 music.birthday: the preview route plays exactly the bytes the synthesiser makes (16 bars, 32.00 s)",
+   "ok": true,
+   "detail": {
+    "status": 200
+   }
+  },
+  {
+   "name": "P8 music.calm: the preview route plays exactly the bytes the synthesiser makes (16 bars, 48.00 s)",
+   "ok": true,
+   "detail": {
+    "status": 200
+   }
+  },
+  {
+   "name": "P8 music.pop: the preview route plays exactly the bytes the synthesiser makes (16 bars, 30.00 s)",
+   "ok": true,
+   "detail": {
+    "status": 200
+   }
+  },
+  {
+   "name": "P8 music.lofi: the preview route plays exactly the bytes the synthesiser makes (16 bars, 42.67 s)",
+   "ok": true,
+   "detail": {
+    "status": 200
+   }
+  },
+  {
+   "name": "P8 music.cinematic: the preview route plays exactly the bytes the synthesiser makes (16 bars, 53.33 s)",
+   "ok": true,
+   "detail": {
+    "status": 200
+   }
+  },
+  {
+   "name": "speed music.cinematic: 126.7 s rendered in 2.47 s (plan: under 6 s)",
+   "ok": true,
+   "detail": {
+    "seconds": 126.67,
+    "renderMs": 2473,
+    "realTimeFactor": 51.2
+   }
+  },
+  {
+   "name": "speed music.pop: 127.5 s rendered in 2.48 s (plan: under 6 s)",
+   "ok": true,
+   "detail": {
+    "seconds": 127.5,
+    "renderMs": 2481,
+    "realTimeFactor": 51.4
+   }
+  }
+ ],
+ "styles": {
+  "music.festive": {
+   "review": "unheard",
+   "bpm": 125,
+   "bars": 16,
+   "seconds": 30.72,
+   "bytes": 5898284,
+   "peakDbfs": -3.52,
+   "rmsDbfs": -18.15,
+   "clampedSamples": 365,
+   "lufs": -15.9,
+   "lufsTarget": "-16 ± 2 (reported, not gated)",
+   "lufsInTarget": true,
+   "renderMs": 585,
+   "realTimeFactor": 52.5,
+   "tracker": {
+    "label": "synthesised music with exact ground truth; not recordings",
+    "toleranceSeconds": 0.07,
+    "detectedBpm": 83.36,
+    "f1": 0.369,
+    "precision": 0.487,
+    "recall": 0.297
+   },
+   "audition": ".artifacts/music-audition/festive-16bars-seed1.wav"
+  },
+  "music.birthday": {
+   "review": "unheard",
+   "bpm": 120,
+   "bars": 16,
+   "seconds": 32,
+   "bytes": 6144044,
+   "peakDbfs": -3.52,
+   "rmsDbfs": -17.71,
+   "clampedSamples": 315,
+   "lufs": -15.4,
+   "lufsTarget": "-16 ± 2 (reported, not gated)",
+   "lufsInTarget": true,
+   "renderMs": 636,
+   "realTimeFactor": 50.3,
+   "tracker": {
+    "label": "synthesised music with exact ground truth; not recordings",
+    "toleranceSeconds": 0.07,
+    "detectedBpm": 120.19,
+    "f1": 0.968,
+    "precision": 1,
+    "recall": 0.938
+   },
+   "audition": ".artifacts/music-audition/birthday-16bars-seed1.wav"
+  },
+  "music.calm": {
+   "review": "unheard",
+   "bpm": 80,
+   "bars": 16,
+   "seconds": 48,
+   "bytes": 9216044,
+   "peakDbfs": -3.52,
+   "rmsDbfs": -17.97,
+   "clampedSamples": 1248,
+   "lufs": -15.6,
+   "lufsTarget": "-16 ± 2 (reported, not gated)",
+   "lufsInTarget": true,
+   "renderMs": 1116,
+   "realTimeFactor": 43,
+   "tracker": {
+    "label": "synthesised music with exact ground truth; not recordings",
+    "toleranceSeconds": 0.07,
+    "detectedBpm": 161.51,
+    "f1": 0.656,
+    "precision": 0.504,
+    "recall": 0.938
+   },
+   "audition": ".artifacts/music-audition/calm-16bars-seed1.wav"
+  },
+  "music.pop": {
+   "review": "unheard",
+   "bpm": 128,
+   "bars": 16,
+   "seconds": 30,
+   "bytes": 5760044,
+   "peakDbfs": -3.52,
+   "rmsDbfs": -16.87,
+   "clampedSamples": 496,
+   "lufs": -14.8,
+   "lufsTarget": "-16 ± 2 (reported, not gated)",
+   "lufsInTarget": true,
+   "renderMs": 673,
+   "realTimeFactor": 44.6,
+   "tracker": {
+    "label": "synthesised music with exact ground truth; not recordings",
+    "toleranceSeconds": 0.07,
+    "detectedBpm": 129.2,
+    "f1": 0,
+    "precision": 0,
+    "recall": 0
+   },
+   "audition": ".artifacts/music-audition/pop-16bars-seed1.wav",
+   "long": {
+    "seconds": 127.5,
+    "renderMs": 2481,
+    "realTimeFactor": 51.4
+   }
+  },
+  "music.lofi": {
+   "review": "unheard",
+   "bpm": 90,
+   "bars": 16,
+   "seconds": 42.6667,
+   "bytes": 8192044,
+   "peakDbfs": -3.52,
+   "rmsDbfs": -18.73,
+   "clampedSamples": 333,
+   "lufs": -17.2,
+   "lufsTarget": "-16 ± 2 (reported, not gated)",
+   "lufsInTarget": true,
+   "renderMs": 1274,
+   "realTimeFactor": 33.5,
+   "tracker": {
+    "label": "synthesised music with exact ground truth; not recordings",
+    "toleranceSeconds": 0.07,
+    "detectedBpm": 90.66,
+    "f1": 0.846,
+    "precision": 0.881,
+    "recall": 0.813
+   },
+   "audition": ".artifacts/music-audition/lofi-16bars-seed1.wav"
+  },
+  "music.cinematic": {
+   "review": "unheard",
+   "bpm": 72,
+   "bars": 16,
+   "seconds": 53.3333,
+   "bytes": 10240044,
+   "peakDbfs": -3.52,
+   "rmsDbfs": -18.6,
+   "clampedSamples": 1009,
+   "lufs": -16.7,
+   "lufsTarget": "-16 ± 2 (reported, not gated)",
+   "lufsInTarget": true,
+   "renderMs": 1116,
+   "realTimeFactor": 47.8,
+   "tracker": {
+    "label": "synthesised music with exact ground truth; not recordings",
+    "toleranceSeconds": 0.07,
+    "detectedBpm": 143.54,
+    "f1": 0.652,
+    "precision": 0.504,
+    "recall": 0.922
+   },
+   "audition": ".artifacts/music-audition/cinematic-16bars-seed1.wav",
+   "long": {
+    "seconds": 126.67,
+    "renderMs": 2473,
+    "realTimeFactor": 51.2
+   }
+  }
+ }
+}

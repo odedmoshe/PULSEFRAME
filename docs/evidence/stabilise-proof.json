@@ -1,0 +1,853 @@
+{
+  "ranAt": "2026-11-26T07:42:08.179Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "scope": "Model-free picture stabilisation on synthetic fixtures only (a textured world with five ringed discs seen through a known shaky camera path; no real footage, no person). Stills through render_frame, exports decoded with ffmpeg, the editor in headless Chromium. S28 is recorded, not gated. Not covered: real phone footage, rolling shutter, whether the result looks steady to a person, speed on the owner's laptop.",
+  "fixtures": {
+    "width": 1280,
+    "height": 720,
+    "frames": 180,
+    "fps": 30,
+    "long": "900 frames at 640×360 (S24, S25)"
+  },
+  "checks": {
+    "S1": "kernel on F1: every frame after the first is ok; translation error p95 ≤ 0.3 source px, rotation p95 ≤ 0.02° (measured values reported)",
+    "S2": "kernel on F2: the same bounds as S1 (the block's points are rejected)",
+    "S3": "F3: at least 80 % of the frames with the block are weak, none ok (competing motions at ≥ 24 points and ≥ 40 % support; both ratios reported)",
+    "S4": "F4: under 50 % measured; set_clip_stabilise refused with tooLittle; the document unchanged",
+    "S5": "F5: frame 90 is start, 89 and 91 ok; the poses of 89 and 90 use no sample across the cut",
+    "S6": "F7: zoomPm 1000 and an identity pose on every frame, edges included, at strengths 1, 50 and 100",
+    "S7": "steadyPose digest over F1 at strengths 1, 50, 100 is identical in Node and in headless Chromium (window.__pfSteadyHash)",
+    "S8": "sinCos and expm are within 1e-12 of Math.sin, Math.cos, Math.exp over their ranges",
+    "S9": "2,000 seeded poses and zooms: limitToCover returns a pose that covers; neededZoom covers and 0.999 of it does not",
+    "S10": "export of F1 at strength 50: disc-centroid acceleration RMS ≤ 1/10 of the unstabilised export; each centroid within 0.5 px of the prediction",
+    "S11": "no background pixel on ≥ 30 lossless render_frame stills per variant (automatic zoom, and zoomPm 1010 where the frames are listed limited), and on the export within a stated colour tolerance",
+    "S12": "areaPercent equals 100·(1 − 10⁶/zoomPm²); zoomPm is within 0.5 % above the zoom the truth needs",
+    "S13": "five frames as render_frame stills, decoded from the export and read from the editor preview agree within the parity tolerances",
+    "S14": "the still of a source frame is byte-identical before and after split_clip, slip_clip, set_clip_speed 2 and 0.5, set_clip_reverse; the freeze frame equals its frame",
+    "S15": "echo taps and a velocity ramp carry the pose of their own source frame (describe_moment); cover holds; ramp-only limits say reach",
+    "S16": "a tracked region on a disc, stabilised: ≥ 80 % Laplacian loss on every exported frame; its centre within 1.5 px of the disc",
+    "S17": "a sticker that follows a disc is within 1.5 px of its centroid in the stabilised export",
+    "S18": "F8: no content outside its own rectangle on any frame",
+    "S19": "after the job one undo returns the document hash from before the press; redo returns the stabilised hash",
+    "S20": "F9 with a covering privacy region at its edge, and in the whole-picture fallback: no changed pixel outside its own rectangle",
+    "S21": "a strength change is one commit, no job, no decode; the crop line equals the operation's output",
+    "S22": "the slider at 100 on a clip measured at 50 starts no job and lists no outside frame",
+    "S23": "a second clip of the same file stabilised: the still of a frame of the first clip is byte-identical",
+    "S24": "cancel mid-run: status canceled, FFmpeg gone, the document unchanged",
+    "S25": "the clip deleted while the job runs: the job fails clip_changed, the document unchanged",
+    "S26": "a measurement that would pass 43,200 shared samples is refused with budget before 202; nothing attached",
+    "S27": "preflight lists stabilise_limited and stabilise_unmeasured at the right timeline ranges at speed 1 and 2; warnings only",
+    "S28": "recorded, not gated (one run): frames a second, event-loop lag p50/p99, commit delta at 10,800 camera samples, planStabilise time at 1,800 frames"
+  },
+  "passed": 28,
+  "failed": 0,
+  "blocked": 0,
+  "verdicts": [
+    {
+      "id": "S8",
+      "status": "passed",
+      "detail": {
+        "sinCosMaxAbs": 1.1491675666608359e-14,
+        "expmMaxRel": 1.5543122344752192e-15,
+        "ranges": "|x| ≤ 100 (sin, cos, step 0.00731); |x| ≤ 1 (exp, relative, step 0.000173)"
+      }
+    },
+    {
+      "id": "S9",
+      "status": "passed",
+      "detail": {
+        "poses": 2000,
+        "finiteNeed": 2000,
+        "limited": 974,
+        "limitToCoverFailures": 0,
+        "neededZoomNotCovering": 0,
+        "neededZoomNotTight": 0
+      }
+    },
+    {
+      "id": "S7",
+      "status": "passed",
+      "detail": {
+        "node": "6b7bc5931ea2722f",
+        "chromium": "6b7bc5931ea2722f",
+        "frames": 180,
+        "frozenSelftestDigestOk": true,
+        "ms": 1.2
+      }
+    },
+    {
+      "id": "S1",
+      "status": "passed",
+      "detail": {
+        "stretches": 1,
+        "framesAfterFirst": 179,
+        "notOk": 0,
+        "input": "proxy",
+        "translationPx": {
+          "median": 0.0944,
+          "p95": 0.2015,
+          "max": 0.3281
+        },
+        "rotationDeg": {
+          "median": 0.0012,
+          "p95": 0.0045,
+          "max": 0.0119
+        }
+      }
+    },
+    {
+      "id": "S12",
+      "status": "passed",
+      "detail": {
+        "strength": 50,
+        "zoomPm": 1043,
+        "areaPercentStored": 8.1,
+        "areaPercentFormula": 8.075,
+        "cropAreaPercent": 8.1,
+        "truthNeed": 1.0425,
+        "zoomOverTruth": 1.0005,
+        "strengthLowered": false,
+        "plan": {
+          "zoomPm": 1043,
+          "limited": 0
+        }
+      }
+    },
+    {
+      "id": "S22",
+      "status": "passed",
+      "detail": {
+        "status": 200,
+        "revisionAfter": 1,
+        "jobsOpenAfter": 0,
+        "measured": {
+          "frames": 120,
+          "ok": 120,
+          "weak": 0,
+          "unknown": 0,
+          "outside": 0
+        },
+        "outsideFrames": 0,
+        "zoomPm": 1043
+      }
+    },
+    {
+      "id": "S10",
+      "status": "passed",
+      "detail": {
+        "frames": 120,
+        "missing": 0,
+        "accelerationRmsPx": {
+          "unstabilised": 6.344,
+          "stabilised": 0.18,
+          "ratio": 0.0284
+        },
+        "centroidErrorVsPredictionPx": {
+          "median": 0.085,
+          "p95": 0.189,
+          "max": 0.272
+        }
+      }
+    },
+    {
+      "id": "S11",
+      "status": "passed",
+      "detail": {
+        "automatic zoom": {
+          "stills": 30,
+          "worstNonGreyPixelsOnAStill": 0,
+          "exportFrames": 120,
+          "worstBackgroundPixelsOnAnExportFrame": 0
+        },
+        "zoomPm 1010 (the limit engages)": {
+          "stills": 30,
+          "worstNonGreyPixelsOnAStill": 0,
+          "exportFrames": 120,
+          "worstBackgroundPixelsOnAnExportFrame": 0
+        },
+        "zoomPm 1010": {
+          "stills": 30,
+          "worstNonGreyPixelsOnAStill": 0,
+          "exportFrames": 120,
+          "worstBackgroundPixelsOnAnExportFrame": 0,
+          "limitedSourceFrames": 99,
+          "limitedRuns": 14,
+          "preflightStabiliseLimitedIssues": 14
+        }
+      }
+    },
+    {
+      "id": "S21",
+      "status": "passed",
+      "detail": {
+        "restCommits": 1,
+        "restJobs": 0,
+        "ffmpegRunning": 0,
+        "opCrop": {
+          "zoomPm": 1043,
+          "areaPercent": 8.1
+        },
+        "blockBefore": {
+          "zoomPm": 1043,
+          "areaPercent": 8.1
+        },
+        "uiCommits": 1,
+        "storedAfterEnd": {
+          "strength": 100,
+          "zoomPm": 1043
+        },
+        "blockAfter": {
+          "zoom": 1043,
+          "area": 8.1
+        },
+        "line": "חיתוך שוליים: 8.1% מהתמונה (הגדלה ×1.04)",
+        "pageErrors": []
+      }
+    },
+    {
+      "id": "S13",
+      "status": "passed",
+      "detail": {
+        "tolerances": "still vs export PSNR ≥ 36 dB and SSIM ≥ 0.985 (the parity suite); disc centroid within 1 px (preview vs still, still vs export)",
+        "rows": [
+          {
+            "frame": 10,
+            "stillVsExport": {
+              "psnr": 46.108,
+              "ssim": 0.9923
+            },
+            "centroidStillVsExportPx": 0.086,
+            "centroidPreviewVsStillPx": 0,
+            "previewSize": "1280×720"
+          },
+          {
+            "frame": 35,
+            "stillVsExport": {
+              "psnr": 46.17,
+              "ssim": 0.9923
+            },
+            "centroidStillVsExportPx": 0.04,
+            "centroidPreviewVsStillPx": 0,
+            "previewSize": "1280×720"
+          },
+          {
+            "frame": 60,
+            "stillVsExport": {
+              "psnr": 46.333,
+              "ssim": 0.9925
+            },
+            "centroidStillVsExportPx": 0.072,
+            "centroidPreviewVsStillPx": 0,
+            "previewSize": "1280×720"
+          },
+          {
+            "frame": 85,
+            "stillVsExport": {
+              "psnr": 45.988,
+              "ssim": 0.992
+            },
+            "centroidStillVsExportPx": 0.107,
+            "centroidPreviewVsStillPx": 0,
+            "previewSize": "1280×720"
+          },
+          {
+            "frame": 110,
+            "stillVsExport": {
+              "psnr": 45.575,
+              "ssim": 0.9912
+            },
+            "centroidStillVsExportPx": 0.032,
+            "centroidPreviewVsStillPx": 0,
+            "previewSize": "1280×720"
+          }
+        ],
+        "pageErrors": []
+      }
+    },
+    {
+      "id": "S2",
+      "status": "passed",
+      "detail": {
+        "block": {
+          "areaShare": 0.25
+        },
+        "notOk": 0,
+        "translationPx": {
+          "median": 0.079,
+          "p95": 0.1608,
+          "max": 0.2925
+        },
+        "rotationDeg": {
+          "median": 0.0019,
+          "p95": 0.005,
+          "max": 0.0094
+        }
+      }
+    },
+    {
+      "id": "S3",
+      "status": "passed",
+      "detail": {
+        "block": {
+          "areaShare": 0.65
+        },
+        "frames": 179,
+        "weak": 179,
+        "ok": 0,
+        "other": 0,
+        "weakShare": 1
+      }
+    },
+    {
+      "id": "S4",
+      "status": "passed",
+      "detail": {
+        "job": "failed",
+        "error": {
+          "code": "incompatible",
+          "message": "only 0% of this clip's frames could be measured: the picture has too little detail or moves too fast"
+        },
+        "measuredPercent": 0,
+        "documentUnchanged": true,
+        "cameraMotionStored": false
+      }
+    },
+    {
+      "id": "S5",
+      "status": "passed",
+      "detail": {
+        "states": {
+          "88": 1,
+          "89": 1,
+          "90": 3,
+          "91": 1,
+          "92": 1
+        },
+        "expect": "ok ok start ok",
+        "poseIgnoresOtherSide": {
+          "89@1": true,
+          "90@1": true,
+          "89@50": true,
+          "90@50": true,
+          "89@100": true,
+          "90@100": true
+        },
+        "otherStarts": [
+          0,
+          90
+        ]
+      }
+    },
+    {
+      "id": "S6",
+      "status": "passed",
+      "detail": {
+        "strength 1": {
+          "status": 200,
+          "zoomPm": 1000,
+          "worstPoseComponent": 0,
+          "edgesIncluded": "0..179"
+        },
+        "strength 50": {
+          "status": 200,
+          "zoomPm": 1000,
+          "worstPoseComponent": 0,
+          "edgesIncluded": "0..179"
+        },
+        "strength 100": {
+          "status": 200,
+          "zoomPm": 1000,
+          "worstPoseComponent": 0,
+          "edgesIncluded": "0..179"
+        }
+      }
+    },
+    {
+      "id": "S14",
+      "status": "passed",
+      "detail": {
+        "split_clip": {
+          "46": "identical (timeline frame 16)",
+          "60": "identical (timeline frame 30)",
+          "100": "identical (timeline frame 70)"
+        },
+        "slip_clip": {
+          "46": "identical (timeline frame 6)",
+          "60": "identical (timeline frame 20)",
+          "100": "identical (timeline frame 60)"
+        },
+        "set_clip_speed 2": {
+          "46": "identical (timeline frame 8)",
+          "60": "identical (timeline frame 15)",
+          "100": "identical (timeline frame 35)"
+        },
+        "set_clip_speed 0.5": {
+          "46": "identical (timeline frame 32)",
+          "60": "identical (timeline frame 60)",
+          "100": "identical (timeline frame 140)"
+        },
+        "set_clip_reverse": {
+          "46": "identical (timeline frame 103)",
+          "60": "identical (timeline frame 89)",
+          "100": "identical (timeline frame 49)"
+        },
+        "freeze_frame": {
+          "heldFramesEqualSourceFrame60": [
+            true,
+            true,
+            true
+          ]
+        }
+      }
+    },
+    {
+      "id": "S15",
+      "status": "passed",
+      "detail": {
+        "echo": {
+          "taps": 12,
+          "bad": 0
+        },
+        "ramp": {
+          "incomingSourceFrame": 84,
+          "clipStartsAtSource": 100,
+          "limited": "reach",
+          "ownPose": true,
+          "outgoingHandleSourceFrame": 150,
+          "outgoingOwnPose": true,
+          "uncoveredLayers": 0
+        }
+      }
+    },
+    {
+      "id": "S16",
+      "status": "passed",
+      "detail": {
+        "frames": 120,
+        "lossMin": 0.815,
+        "lossMedian": 0.828,
+        "centreOffsetPx": {
+          "median": 1.088,
+          "p95": 1.209,
+          "max": 1.29
+        }
+      }
+    },
+    {
+      "id": "S17",
+      "status": "passed",
+      "detail": {
+        "frames": 120,
+        "stickerMissing": 0,
+        "distanceToDiscPx": {
+          "median": 0.629,
+          "p95": 0.896,
+          "max": 1.054
+        },
+        "note": "the disc position is the truth and the same smoothing, written out by hand (Math functions)"
+      }
+    },
+    {
+      "id": "S18",
+      "status": "passed",
+      "detail": {
+        "cornerPixel": [
+          255,
+          0,
+          255
+        ],
+        "stabilised": {
+          "strength": 100,
+          "zoomPm": 1045
+        },
+        "rect": "x 437.5..842.5 of 1280",
+        "framesLooked": 30,
+        "worstPixelsOutsideTheRectangleThatAreNotTheBackground": 0,
+        "greyOrBackgroundTintInsideTheRectangle": 0
+      }
+    },
+    {
+      "id": "S20",
+      "status": "passed",
+      "detail": {
+        "covering region at the edge": {
+          "framesLooked": 6,
+          "pixelsChangedOutsideTheRectangle": 0,
+          "pixelsChangedInside": 12594
+        },
+        "whole-picture fallback": {
+          "framesLooked": 5,
+          "pixelsChangedOutsideTheRectangle": 0,
+          "pixelsChangedInside": 227334
+        }
+      }
+    },
+    {
+      "id": "S19",
+      "status": "passed",
+      "detail": {
+        "undoStatus": 200,
+        "redoStatus": 200,
+        "undoEqualsBefore": true,
+        "redoEqualsStabilised": true,
+        "changedByJob": true
+      }
+    },
+    {
+      "id": "S23",
+      "status": "passed",
+      "detail": {
+        "secondJob": "succeeded",
+        "error": null,
+        "firstClipStillsIdentical": [
+          true,
+          true,
+          true
+        ],
+        "stretchesBefore": [
+          [
+            0,
+            165
+          ]
+        ],
+        "stretchesAfter": [
+          [
+            0,
+            180
+          ]
+        ]
+      }
+    },
+    {
+      "id": "S24",
+      "status": "passed",
+      "detail": {
+        "status": "canceled",
+        "afterMs": 119,
+        "ffmpegLeft": 0,
+        "documentUnchanged": true
+      }
+    },
+    {
+      "id": "S25",
+      "status": "passed",
+      "detail": {
+        "status": "failed",
+        "error": {
+          "code": "clip_changed",
+          "message": "the clip changed while its camera motion was measured; nothing was saved"
+        },
+        "cameraMotionStored": false,
+        "clipsLeft": 0,
+        "stable": true
+      }
+    },
+    {
+      "id": "S26",
+      "status": "passed",
+      "detail": {
+        "httpStatus": 422,
+        "code": "out_of_bounds",
+        "message": "the motion tracks and camera measurements of a project can hold at most 43200 samples in all; this edit would make 43365",
+        "documentUnchanged": true,
+        "jobsStarted": 0,
+        "cameraMotionOfTheClipFile": false
+      }
+    },
+    {
+      "id": "S27",
+      "status": "passed",
+      "detail": {
+        "speed 1 slip": 100,
+        "speed 1": {
+          "clipFrames": 45,
+          "limited": {
+            "got": [
+              [
+                0,
+                2
+              ],
+              [
+                4,
+                7
+              ],
+              [
+                8,
+                10
+              ],
+              [
+                12,
+                17
+              ]
+            ],
+            "want": [
+              [
+                0,
+                2
+              ],
+              [
+                4,
+                7
+              ],
+              [
+                8,
+                10
+              ],
+              [
+                12,
+                17
+              ]
+            ]
+          },
+          "unmeasured": {
+            "got": [
+              [
+                20,
+                45
+              ]
+            ],
+            "want": [
+              [
+                20,
+                45
+              ]
+            ]
+          },
+          "severities": [
+            "warning"
+          ],
+          "blocking": false
+        },
+        "speed 2 slip": 50,
+        "speed 2": {
+          "clipFrames": 22,
+          "limited": {
+            "got": [
+              [
+                0,
+                1
+              ],
+              [
+                2,
+                5
+              ],
+              [
+                6,
+                9
+              ]
+            ],
+            "want": [
+              [
+                0,
+                1
+              ],
+              [
+                2,
+                5
+              ],
+              [
+                6,
+                9
+              ]
+            ]
+          },
+          "unmeasured": {
+            "got": [
+              [
+                10,
+                22
+              ]
+            ],
+            "want": [
+              [
+                10,
+                22
+              ]
+            ]
+          },
+          "severities": [
+            "warning"
+          ],
+          "blocking": false
+        }
+      }
+    },
+    {
+      "id": "S28",
+      "status": "passed",
+      "detail": {
+        "job": {
+          "framesPerSecond": 50.2,
+          "measuredFrames": 180
+        },
+        "eventLoopLagMs": {
+          "p50": 17.367,
+          "p99": 25.887
+        },
+        "jobStatus": "succeeded",
+        "commitMs": {
+          "baselineP95": 1.969,
+          "with10800SamplesP95": 16.45,
+          "deltaP95": 14.48
+        },
+        "planStabilise1800Frames": {
+          "coldMs": 3.899,
+          "afterPoseCacheMs": 2.525,
+          "strengthStored": 50,
+          "zoomPm": 1055,
+          "lowered": false
+        },
+        "note": "one sample each, recorded, not gated"
+      }
+    }
+  ],
+  "measurements": {
+    "S8": {
+      "sinCosMaxAbs": 1.1491675666608359e-14,
+      "expmMaxRel": 1.5543122344752192e-15
+    },
+    "S7": {
+      "node": "6b7bc5931ea2722f",
+      "chromium": "6b7bc5931ea2722f",
+      "selftest": {
+        "digest": "79bce733c0e94af7",
+        "expected": "79bce733c0e94af7",
+        "ok": true,
+        "strengths": [
+          1,
+          50,
+          100
+        ],
+        "ms": 8.2
+      }
+    },
+    "job": {
+      "status": "succeeded",
+      "output": {
+        "assetId": "ast_6d892a10540",
+        "clipId": "clp_b70827136a0",
+        "measuredFrames": 180,
+        "readFrames": 180,
+        "applied": true,
+        "crop": {
+          "zoomPm": 1043,
+          "areaPercent": 8.1
+        },
+        "strengthLowered": false,
+        "revision": 4,
+        "measuringFps": 50.2
+      },
+      "error": null,
+      "eventLoopMs": {
+        "p50": 17.367,
+        "p99": 25.887
+      }
+    },
+    "S1": {
+      "stretches": 1,
+      "framesAfterFirst": 179,
+      "notOk": 0,
+      "input": "proxy",
+      "translationPx": {
+        "median": 0.0944,
+        "p95": 0.2015,
+        "max": 0.3281
+      },
+      "rotationDeg": {
+        "median": 0.0012,
+        "p95": 0.0045,
+        "max": 0.0119
+      }
+    },
+    "S10": {
+      "frames": 120,
+      "missing": 0,
+      "accelerationRmsPx": {
+        "unstabilised": 6.344,
+        "stabilised": 0.18,
+        "ratio": 0.0284
+      },
+      "centroidErrorVsPredictionPx": {
+        "median": 0.085,
+        "p95": 0.189,
+        "max": 0.272
+      }
+    },
+    "S2": {
+      "block": {
+        "areaShare": 0.25
+      },
+      "notOk": 0,
+      "translationPx": {
+        "median": 0.079,
+        "p95": 0.1608,
+        "max": 0.2925
+      },
+      "rotationDeg": {
+        "median": 0.0019,
+        "p95": 0.005,
+        "max": 0.0094
+      }
+    },
+    "S3": {
+      "block": {
+        "areaShare": 0.65
+      },
+      "frames": 179,
+      "weak": 179,
+      "ok": 0,
+      "other": 0,
+      "weakShare": 1
+    },
+    "S16": {
+      "frames": 120,
+      "lossMin": 0.815,
+      "lossMedian": 0.828,
+      "centreOffsetPx": {
+        "median": 1.088,
+        "p95": 1.209,
+        "max": 1.29
+      }
+    },
+    "S17": {
+      "frames": 120,
+      "stickerMissing": 0,
+      "distanceToDiscPx": {
+        "median": 0.629,
+        "p95": 0.896,
+        "max": 1.054
+      },
+      "note": "the disc position is the truth and the same smoothing, written out by hand (Math functions)"
+    },
+    "S28": {
+      "job": {
+        "framesPerSecond": 50.2,
+        "measuredFrames": 180
+      },
+      "eventLoopLagMs": {
+        "p50": 17.367,
+        "p99": 25.887
+      },
+      "jobStatus": "succeeded",
+      "commitMs": {
+        "baselineP95": 1.969,
+        "with10800SamplesP95": 16.45,
+        "deltaP95": 14.48
+      },
+      "planStabilise1800Frames": {
+        "coldMs": 3.899,
+        "afterPoseCacheMs": 2.525,
+        "strengthStored": 50,
+        "zoomPm": 1055,
+        "lowered": false
+      },
+      "note": "one sample each, recorded, not gated"
+    }
+  }
+}

@@ -1,0 +1,142 @@
+/* The life-line screens (ADR-0021): library by date and by event, date badge, capture date and clock shift, "on this day", field menu
+   and live line, date stamp source, people sheet, archive option. Pulse design system tokens only (ds/tokens.css); logical properties
+   so everything mirrors in Hebrew; no state is shown by colour alone (every state has a word, a shape or an icon). */
+
+/* ---- media drawer: the view switch and the group headers ---- */
+.pf-life-view { flex: none; }
+.pf-life { display: flex; flex-direction: column; gap: var(--pf-sp-6); min-inline-size: 0; }
+.pf-life-note { margin: 0; color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); overflow-wrap: anywhere; }
+.pf-life-bar { display: flex; justify-content: flex-end; }
+.pf-life-year { display: flex; flex-direction: column; gap: var(--pf-sp-5); min-inline-size: 0; }
+.pf-life-yh { position: sticky; inset-block-start: 0; z-index: 2; margin: 0; padding-block: var(--pf-sp-3); display: flex; align-items: baseline; gap: var(--pf-sp-4); background: var(--pf-surface-1); color: var(--pf-text); font-size: var(--pf-fs-md); line-height: var(--pf-lh-md); font-weight: 600; box-shadow: 0 1px 0 var(--pf-line); }
+.pf-life-month { display: flex; flex-direction: column; gap: var(--pf-sp-4); min-inline-size: 0; }
+.pf-life-mh { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--pf-sp-3); color: var(--pf-text-2); font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); font-weight: 500; }
+.pf-life-mdot { color: var(--pf-text-3); }
+.pf-life-heb { color: var(--pf-text-2); }
+.pf-life-cnt { margin-inline-start: auto; padding-inline: var(--pf-sp-3); border-radius: var(--pf-r-pill); background: var(--pf-surface-3); color: var(--pf-text-2); font-size: var(--pf-fs-digits); line-height: var(--pf-lh-digits); font-weight: 400; }
+.pf-life-undated .pf-life-yh { color: var(--pf-text); }
+.pf-life-read { display: flex; flex-direction: column; align-items: flex-start; gap: var(--pf-sp-3); }
+.pf-life-nudge { display: flex; align-items: center; flex-wrap: wrap; gap: var(--pf-sp-4); padding: var(--pf-sp-5); border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: 0 0 0 1px var(--pf-line-strong); color: var(--pf-text); font-size: var(--pf-fs-sm); }
+.pf-life-nudge svg { flex: none; color: var(--pf-pulse); }
+.pf-life-nudge span { flex: 1 1 auto; min-inline-size: 0; }
+
+/* ---- the date badge of a media card: solid for a firm date, dashed AND worded for an estimate ---- */
+.pf-life-date { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--pf-sp-3); max-inline-size: 100%; padding-inline: var(--pf-sp-3); border-radius: var(--pf-r-xs); background: var(--pf-surface-3); color: var(--pf-text-2); font-size: var(--pf-fs-digits); line-height: var(--pf-lh-digits); box-shadow: inset 0 0 0 1px var(--pf-line-strong); }
+.pf-life-date.is-circa { background: transparent; box-shadow: none; border: 1px dashed var(--pf-line-control); }
+.pf-life-date-n { font-family: var(--pf-font-mono); }
+.pf-life-date-w { font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); color: var(--pf-text-2); }
+
+/* ---- events ---- */
+.pf-ev-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--pf-sp-5); }
+/* one column: beside the name, the «add the event» button (auto width) left the name ~13 px in the media drawer, one letter per line */
+.pf-ev { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "strip" "head" "actions"; gap: var(--pf-sp-4) var(--pf-sp-4); padding: var(--pf-sp-5); border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: var(--pf-e1); min-inline-size: 0; }
+.pf-ev > .pf-ev-strip { grid-area: strip; }
+.pf-ev > .pf-ev-head { grid-area: head; }
+.pf-ev > .pf-ev-actions { grid-area: actions; align-self: start; justify-content: space-between; }
+.pf-ev > :not(.pf-ev-strip):not(.pf-ev-head):not(.pf-ev-actions) { grid-column: 1 / -1; }
+.pf-ev-strip { display: flex; gap: var(--pf-sp-2); min-inline-size: 0; overflow: hidden; border-radius: var(--pf-r-sm); }
+.pf-ev-th { flex: 1 1 0; min-inline-size: 0; aspect-ratio: 16 / 9; object-fit: cover; background: #000; display: grid; place-items: center; color: var(--pf-text-3); }
+.pf-ev-more { flex: none; align-self: center; padding-inline: var(--pf-sp-3); color: var(--pf-text-2); font-size: var(--pf-fs-digits); }
+.pf-ev-head { display: flex; flex-direction: column; gap: var(--pf-sp-2); min-inline-size: 0; }
+.pf-ev-title { display: flex; align-items: center; flex-wrap: wrap; gap: var(--pf-sp-3); min-inline-size: 0; }
+.pf-ev-name { font-size: var(--pf-fs-md); line-height: var(--pf-lh-md); font-weight: 600; color: var(--pf-text); overflow-wrap: anywhere; }
+.pf-ev-meta { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--pf-sp-2) var(--pf-sp-4); color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-ev-meta .num { font-size: var(--pf-fs-digits); }
+.pf-ev-heb { color: var(--pf-text); }
+/* the actions wrap: «add the event», «a film from the event» (ADR-0026) and the menu are wider together than the media drawer,
+   and on one line they ran out of the event card and gave the drawer a horizontal scroll (lifeline-ui proof, 1440x900) */
+.pf-ev-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3); min-inline-size: 0; }
+.pf-ev-rename { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3); inline-size: 100%; }
+.pf-ev-rename label { flex: 1 1 140px; min-inline-size: 0; }
+.pf-ev-rename input { inline-size: 100%; }
+.pf-ev-split { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--pf-sp-3); }
+.pf-life-more { display: inline-grid; place-items: center; inline-size: var(--pf-h-sm); block-size: var(--pf-h-sm); padding: 0; border: 0; border-radius: var(--pf-r-sm); background: transparent; color: var(--pf-text-2); cursor: pointer; box-shadow: none; }
+.pf-life-more:hover { background: var(--pf-surface-3); color: var(--pf-text); }
+.pf-life-more:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+/* the before/after-sunset question: a real fieldset with a legend and two radios; a drawn mark AND the label say which is chosen */
+.pf-ev-sunset { margin: 0; padding: var(--pf-sp-4) var(--pf-sp-5); display: flex; flex-direction: column; gap: var(--pf-sp-3); border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); min-inline-size: 0; }
+.pf-ev-sunset legend { padding-inline: var(--pf-sp-3); color: var(--pf-text); font-size: var(--pf-fs-sm); font-weight: 600; }
+.pf-life-radio { display: flex; align-items: flex-start; gap: var(--pf-sp-4); min-block-size: var(--pf-h-md); color: var(--pf-text); font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); cursor: pointer; }
+.pf-life-radio input { flex: none; inline-size: 18px; block-size: 18px; margin: 1px 0 0; accent-color: var(--pf-frame); }
+.pf-life-radio input:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+
+/* ---- dialogs: capture date, clock shift ---- */
+.pf-life-form { display: flex; flex-direction: column; gap: var(--pf-sp-5); min-inline-size: 0; }
+.pf-life-file { margin: 0; color: var(--pf-text-2); font-size: var(--pf-fs-sm); overflow-wrap: anywhere; }
+.pf-life-field { display: flex; flex-direction: column; gap: var(--pf-sp-2); color: var(--pf-text-2); font-size: var(--pf-fs-xs); min-inline-size: 0; }
+.pf-life-field input, .pf-life-field select { inline-size: 100%; min-inline-size: 0; }
+/* a visible ring on every field of the life screens; a date input is focused in its parts and its calendar button, where only :focus-within reaches the input */
+.pf-life-field :is(input, select):focus-visible, .pf-life-field input[type='date']:focus-within { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+.pf-life-field.is-num { flex: 1 1 0; }
+.pf-life-row { display: flex; gap: var(--pf-sp-4); }
+.pf-life-check { display: flex; align-items: center; gap: var(--pf-sp-4); min-block-size: var(--pf-h-md); color: var(--pf-text); font-size: var(--pf-fs-sm); cursor: pointer; min-inline-size: 0; }
+.pf-life-check.is-off { color: var(--pf-text-3); cursor: default; }
+.pf-life-check input { flex: none; accent-color: var(--pf-frame); }
+.pf-life-name { flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-life-n { flex: none; color: var(--pf-text-2); font-size: var(--pf-fs-digits); }
+.pf-life-why { display: block; padding-inline-start: var(--pf-sp-9); color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-life-echo { margin: 0; min-block-size: var(--pf-lh-sm); color: var(--pf-text); font-size: var(--pf-fs-sm); font-weight: 500; }
+.pf-life-files { margin: 0; padding: var(--pf-sp-4); border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); min-inline-size: 0; }
+.pf-life-files legend { padding-inline: var(--pf-sp-3); color: var(--pf-text); font-size: var(--pf-fs-sm); font-weight: 600; }
+.pf-life-files ul { list-style: none; margin: 0; padding: 0; max-block-size: 220px; overflow-y: auto; display: flex; flex-direction: column; }
+
+/* ---- the start hub's "on this day" card: stills only, nothing plays ---- */
+.pf-otd { display: flex; align-items: center; gap: var(--pf-sp-5); padding: var(--pf-sp-5) var(--pf-sp-6); border-radius: var(--pf-r-lg); background: var(--pf-surface-2); box-shadow: var(--pf-e1), var(--pf-hilite); min-inline-size: 0; }
+.pf-otd-ic { flex: none; color: var(--pf-pulse); align-self: flex-start; margin-block-start: var(--pf-sp-2); }
+.pf-otd-body { flex: 1 1 auto; min-inline-size: 0; display: flex; flex-direction: column; gap: var(--pf-sp-2); }
+.pf-otd-h { margin: 0; color: var(--pf-text); font-size: var(--pf-fs-md); line-height: var(--pf-lh-md); font-weight: 600; }
+.pf-otd-sub { margin: 0; color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); overflow-wrap: anywhere; }
+.pf-otd-strip { list-style: none; margin: var(--pf-sp-3) 0 0; padding: 0; display: flex; gap: var(--pf-sp-3); align-items: center; min-inline-size: 0; }
+.pf-otd-strip li { flex: 0 1 72px; min-inline-size: 0; }
+.pf-otd-th { display: grid; place-items: center; inline-size: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--pf-r-sm); background: #000; color: var(--pf-text-3); }
+.pf-otd-strip .pf-otd-more { flex: none; color: var(--pf-text-2); font-size: var(--pf-fs-digits); }
+@media (max-width: 640px) { .pf-otd { flex-wrap: wrap; } }
+
+/* ---- title inspector: the field menu, its live line and the readable box ---- */
+.pf-fm { display: flex; flex-direction: column; gap: var(--pf-sp-3); min-inline-size: 0; }
+.pf-fm-bar { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); }
+.pf-fm-pop { inline-size: 320px; max-block-size: min(440px, calc(100vh - 16px)); overflow-y: auto; }
+.pf-fm-group { display: flex; flex-direction: column; gap: 2px; }
+.pf-fm-group + .pf-fm-group { margin-block-start: var(--pf-sp-3); padding-block-start: var(--pf-sp-3); border-block-start: 1px solid var(--pf-line); }
+.pf-fm-gh { margin: 0; padding: var(--pf-sp-2) var(--pf-sp-4); color: var(--pf-text-3); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); font-weight: 600; }
+.pf-fm-item { justify-content: space-between; text-align: start; }
+.pf-fm-name { flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-fm-val { flex: 0 1 45%; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pf-text-2); font-size: var(--pf-fs-xs); text-align: end; }
+.pf-fm-live { display: flex; flex-direction: column; gap: var(--pf-sp-3); }
+.pf-fm-now { margin: 0; color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); overflow-wrap: anywhere; }
+.pf-fm-text { color: var(--pf-text); font-size: var(--pf-fs-sm); font-weight: 500; }
+
+/* ---- look panel: the date stamp's source ---- */
+.pf-stamp { display: flex; flex-direction: column; gap: var(--pf-sp-4); }
+
+/* ---- people sheet and the archive option ---- */
+.pf-pp { display: flex; flex-direction: column; gap: var(--pf-sp-6); min-inline-size: 0; }
+.pf-pp-privacy { margin: 0; padding: var(--pf-sp-5); border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: 0 0 0 1px var(--pf-line-strong); color: var(--pf-text); font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); }
+.pf-pp-privacy p { margin: 0; }
+.pf-pp-privacy details { margin-top: var(--pf-sp-3); }
+.pf-pp-privacy summary { cursor: pointer; color: var(--pf-info); min-block-size: 24px; display: flex; align-items: center; }
+.pf-pp-privacy details p { color: var(--pf-text-2); }
+.pf-pp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--pf-sp-5); }
+.pf-pp-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--pf-sp-4) var(--pf-sp-5); padding: var(--pf-sp-5); border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: var(--pf-e1); min-inline-size: 0; }
+.pf-pp-row.is-new { box-shadow: 0 0 0 1px var(--pf-frame); }
+.pf-pp-heb { color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-pp-formrow, .pf-pp-remove { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3); min-inline-size: 0; }
+.pf-pp-remove { justify-content: flex-start; }
+.pf-pp-actions { display: flex; flex-direction: column; align-items: flex-start; gap: var(--pf-sp-5); }
+.pf-pp-copy { display: flex; flex-direction: column; gap: var(--pf-sp-3); inline-size: 100%; }
+.pf-pp-suggest { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--pf-sp-2); }
+.pf-pp-suggest li { display: flex; align-items: center; gap: var(--pf-sp-4); min-block-size: var(--pf-h-lg); }
+.pf-pp-sname { flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pf-text); font-size: var(--pf-fs-sm); }
+.pf-fam { display: flex; flex-direction: column; gap: var(--pf-sp-3); }
+.pf-fam-list { margin: 0; padding-inline-start: var(--pf-sp-7); color: var(--pf-text); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+@media (max-width: 520px) { .pf-pp-row { grid-template-columns: 1fr; } }
+
+/* ---- mounts of the packs, the music and the fonts in the browser drawer (PacksMount.tsx) ---- */
+.pf-bw-audio > .pf-tabs { margin: var(--pf-sp-3) var(--pf-sp-6) var(--pf-sp-4); }
+.pf-bw-audio > [role='tabpanel'] { min-block-size: 0; }
+.pf-bw-audio > [role='tabpanel']:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: -2px; }
+.pf-packs-mount { display: flex; flex-direction: column; gap: var(--pf-sp-5); min-inline-size: 0; }
+.pf-fonts-mount { display: flex; flex-direction: column; gap: var(--pf-sp-4); margin-block-start: var(--pf-sp-6); min-inline-size: 0; }
+.pf-fonts-mount .pf-bw-title { margin: 0; font-size: var(--pf-fs-md); line-height: var(--pf-lh-md); font-weight: 600; color: var(--pf-text); }
+/* the media drawer's view switch sits between the filter chips and the cards */
+.pf-bw-pane > .pf-life-view { margin-block-end: var(--pf-sp-2); }

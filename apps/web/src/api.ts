@@ -1,30 +1,168 @@
-import type { Asset, OpCall, ProjectDocument } from '@pulseframe/core';
+import type { StoryApplyResult, StoryParams, StoryPlanView, StoryRegenerateResult } from '@pulseframe/core';
+import type { GrowingApplyResult, GrowingApplyRequest, GrowingPlanView, GrowingRebuildRequest, GrowingRegenerateResult } from '@pulseframe/core';
+import type { Asset, BuildShortsBody, ExportMode, FindShortsBody, ReframePlanBody, ReframePlanView, SequenceSummary, ShortCandidatesView, ShortsApplyResult, ShortsPlanView, FamilyFilmApplyResult, FamilyFilmParams, FamilyFilmPlanView, FamilyFilmRegenerateResult, MomentsData, OpCall, ProjectDocument, RenderCacheStatus, SegmentPlanView, SelfCheckMode, StartMomentsBody } from '@pulseframe/core';
+import type { MulticamSyncReport, MulticamSyncRequest, MulticamView } from '@pulseframe/core';
+import type { TakePlanView, TakeRequest, TakeResult } from '@pulseframe/core';
+import type { DiffSummary, FindQuery, FindResult, VersionInfo } from '@pulseframe/core';
+import type { AssistantConfigBody, AssistantLocalCheck, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, BudgetReleaseAnswer } from '@pulseframe/core';
+import type { ArchiveLibraryMode, CreditsView, LibraryFacets, LibraryItemsPage, LibraryItemsQuery, LibraryKind, LibraryRow, LibraryStatus, LibraryUseBody, LibraryUseResult } from '@pulseframe/core';
+import type { CameraMotionView, StabiliseRunBody } from '@pulseframe/core';
+import type { FindSharpBody, FindSharpResult, SharpAnswer, StillExport } from '@pulseframe/core';
+import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
+import type { RationalTime } from '@pulseframe/time';
+import type { ClipLoudnessRequest, ClipLoudnessResult, SoundChecks } from '@pulseframe/core';
+import type { PearlsView } from '@pulseframe/core';
+import type { AudienceChanges } from '@pulseframe/core';
+import type { DerivedLessonView } from '@pulseframe/core';
+import type { MusicFitApplyRequest, MusicFitApplyResult, MusicFitPlan, MusicFitPlanRequest, JoinRemoval } from '@pulseframe/core';
+import type { MusicKitStatus } from '@pulseframe/core';
+import type { OwnTemplateDeleteAnswer, OwnTemplatePreviewAnswer, OwnTemplatePreviewBody, OwnTemplateSaveAnswer, OwnTemplateSaveBody } from '@pulseframe/core';
+import type { AgentModelsAnswer, AgentProbeAnswer, AgentProvidersAnswer, AgentRunAnswer, AgentRunListAnswer, AgentStartAnswer, AgentStartBody, UndoActorBody, UndoAllAnswer } from '@pulseframe/core';
+import type { BoothAnswerBody, BoothAnswerResult, BoothCheckRow, BoothServerCheckId, BoothView } from '@pulseframe/core';
 
 export class ApiFailure extends Error {
-  constructor(public status: number, public code: string, message: string, public details?: unknown) {
+  constructor(public status: number, public code: string, message: string, public details?: unknown, public hint?: string) {
     super(message);
   }
+}
+/**
+ * The owner link printed by the server carries `?key=…`. It is sent once to obtain the session cookie and then removed
+ * from the address bar, so it does not linger in the visible URL or get copied by accident.
+ */
+export function ownerKeyHeader(): Record<string, string> {
+  const url = new URL(location.href);
+  const key = url.searchParams.get('key');
+  if (!key) return {};
+  url.searchParams.delete('key');
+  history.replaceState(null, '', url);
+  return { 'x-pf-owner-key': key };
 }
 async function call<R>(path: string, init?: RequestInit): Promise<R> {
   const r = await fetch(`/api/v1${path}`, { credentials: 'same-origin', ...init });
   const data = r.headers.get('content-type')?.includes('json') ? await r.json() : undefined;
-  if (!r.ok) throw new ApiFailure(r.status, data?.error?.code ?? 'http_error', data?.error?.message ?? `HTTP ${r.status}`, data?.error?.details);
+  if (!r.ok) throw new ApiFailure(r.status, data?.error?.code ?? 'http_error', data?.error?.message ?? `HTTP ${r.status}`, data?.error?.details, data?.error?.hint);
   return data as R;
 }
 const json = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
-export interface RevisionEvent { projectId: string; revision: number; transactionId: string; actor: string; label: string | null; summary: string; affectedIds: string[]; at: string }
+export interface RevisionEvent { projectId: string; revision: number; transactionId: string; actor: string; label: string | null; summary: string; affectedIds: string[]; at: string; kind?: string; ops?: string[];
+  /** The transaction this one reverses (an undo or redo), else null. */ undoes?: string | null;
+  /** The undo or redo that reversed this one, else null (ADR-0027: the bar names its exact undo target). */ undoneBy?: string | null }
+export interface Proposal { id: string; actor: string; label: string | null; summary: string; status: string; baseRevision: number; createdAt: string; previewFrame: number }
 export interface JobEvent { id: string; type: string; status: string; stage: string | null; output: any; error: any }
-export interface CommitResult { revision: number; committed: boolean; summary: string; affectedIds: string[]; results: { op: string; output?: Record<string, any> }[] }
+/** `range` in the chosen output's own frames; `measured`: the numbers behind the issue (wave 8 qc rules carry them, older codes may not). */
+export interface PreflightIssue { code: string; severity: 'blocker' | 'warning' | 'note'; message: string; ids: string[]; range?: { startFrame: number; endFrame: number }; measured?: Record<string, number>; fix?: { label: string; ops: OpCall[] } }
+export interface PreflightReport { revision: number; ok: boolean; blockers: number; warnings: number; notes: number; issues: PreflightIssue[]; output: unknown; scope: string }
+export interface CommitResult { revision: number; committed: boolean; /** the transaction this commit made (null when nothing changed): undo names it to reverse exactly this edit */ transactionId?: string | null; summary: string; affectedIds: string[]; results: { op: string; output?: Record<string, any> }[] }
+export interface SilenceResult { revision: number; candidates: { start: unknown; end: unknown; startSeconds: number; seconds: number }[]; removableSeconds: number; ops: OpCall[]; note?: string; /** clips of a copy that does not keep the recording's timing, not searched */ skippedClips?: { clipId: string; assetId: string; reason: 'untimed_copy' }[] }
+/** measure_voice (ADR-0013; apps/server/src/voiceClean.ts): the same shapes as the server's VoiceMeasureBody and VoiceCheck. */
+export interface VoiceMeasureRequest { clipId: string; strength?: number; /** SOURCE-time stretches that hold only noise */ noiseRanges?: { start: RationalTime; end: RationalTime }[]; scope?: 'clip' | 'asset' }
+export interface VoiceCheck { revision: number; assetId: string; clipIds: string[]; method: string; /** ranges in source seconds */ report: VoiceMeasurement; recommendedStrength: number; /** clean_voice candidates: send as ONE transaction */ ops: OpCall[]; note: string }
+/** match_colour (ADR-0014; apps/server/src/colourMatch.ts): the same shapes as the server's ColourMatchBody and ColourMatch. */
+export interface ColourMatchRequest { method?: 'match' | 'balance'; referenceClipId?: string; targetClipIds: string[] | 'all'; amount?: number; samples?: 1 | 3 }
+export interface ColourMatchTarget { clipId: string; params: GradeParams; residual: { model: number; verified: number | null }; verdict: GradeFit['verdict']; limitedBy: (keyof GradeParams)[]; warnings: ('changes_within_clip' | 'not_verified' | 'replaces_grade' | 'animated_grade')[]; statsBefore: PictureStats; statsAfter: PictureStats | null }
+export interface ColourMatch { revision: number; method: 'match' | 'balance'; reference: { clipId: string; stats: PictureStats } | null; targets: ColourMatchTarget[]; /** set_colour_grade candidates: send as ONE transaction */ ops: OpCall[]; unavailable: string | null; note: string }
+export interface LoudnessResult { integratedLufs: number | null; truePeakDbtp: number | null; rangeLu: number | null; mixPeakDbfs: number | null; wouldClipWithoutNormalisation: boolean; /** the measured output's loudness target (a short's own format loudness, else the project's); null = no normalisation */ target: { target: number; truePeak: number } | null; exportWouldApplyGainDb: number | null; limitedByPeak: boolean; method: string; note?: string; /** silence and clipped sound read from the WAV export would write for this output (wave 7 send); wave 8 qc shows them before export */ soundChecks?: SoundChecks }
 
+export type RecipeParams = Record<string, unknown>;
+export interface RecipeAlternative { label: string; params: RecipeParams }
+export interface RecipePlanResult { revision: number; steps: string[]; basis: string[]; operations?: unknown; alternatives: RecipeAlternative[]; method?: string; note?: string; /** clips of a copy that does not keep the recording's timing, left alone (tidy-speech) */ skippedClips?: { clipId: string; assetId: string; reason: 'untimed_copy' }[] }
+export interface RecipeApplyResult { revision: number; runId: string; createdIds: string[]; steps: string[]; basis: string[]; alternatives: RecipeAlternative[] }
+export interface RecipeRegenerateResult { revision: number; runId: string; replaced: number; protected: string[]; /** clips deleted by hand whose places were left empty (beat montage, family film) */ removed?: string[]; /** clips that a delete which closed the gap had moved, placed again like untouched ones (beat montage) */ movedBack?: string[]; steps: string[] }
+
+export interface AnalyzeResult{ revision: number; summary: string; scenes?: { count: number }; beats?: { bpm: number | null; confidence: number | null; count: number } }
+
+const SNAP_BEATS_KEY = 'pf.snap.beats.v1';
+/** Personal setting (default on), never stored in the project. */
+export function readSnapBeats(): boolean {
+  try { return globalThis.localStorage?.getItem(SNAP_BEATS_KEY) !== '0'; } catch { return true; }
+}
+export function writeSnapBeats(on: boolean): void {
+  try { globalThis.localStorage?.setItem(SNAP_BEATS_KEY, on ? '1' : '0'); } catch { /* storage unavailable */ }
+}
+
+export interface ProjectListItem { id: string; name: string; revision: number; updatedAt?: string }
+export interface StorageReport { projects: number; databaseBytes: number; media: { files: number; bytes: number }; exportsBytes: number; totalBytes: number; quotaBytes: number | null; unreferenced: { files: number; bytes: number; tooNewToJudge?: number }; rule: string; /** Present when the render cache is wired (ADR-0024). */ renderCache?: RenderCacheStatus }
+export interface GcResult { applied: boolean; wouldRemove?: { files: number; bytes: number }; removed?: { files: number; bytes: number }; note?: string }
+export type GrantMode = 'observe' | 'propose' | 'edit' | 'autopilot';
+export interface GrantItem { id: string; name: string; mode: GrantMode; projectIds: string[] | null; trackIds: string[] | null; range: unknown; budgetCents: number; requestsPerMinute?: number | null; exportsPerDay?: number | null; expiresAt: string | null; revokedAt: string | null; createdAt: string }
+
+export interface SpeechStatus {
+  narration: { ready: boolean; reason: 'engine_not_configured' | 'engine_not_working' | 'model_missing' | null; detail: string; device: 'cpu' | 'cuda' | null; maxCharacters: number };
+  transcription: { ready: boolean; reason: 'engine_not_configured' | 'engine_not_working' | 'model_missing' | null; detail: string; device: 'cpu' | 'cuda' | null };
+  engine: { configured: boolean; ok: boolean; detail: string; source?: 'environment' | 'installed' | null };
+  models: { id: string; kind: 'asr' | 'tts'; title: { he: string; en: string }; license: string | null; totalBytes: number; missingDownloadBytes: number; ready: boolean }[];
+}
+/** «התקנת מנוע הדיבור» (GET /speech/engine; the owner's own session only, 403 owner_required otherwise). */
+export interface SpeechEngineInstall {
+  state: 'environment' | 'installed' | 'installing' | 'not_installed';
+  job: { id: string; status: string; stage: string | null } | null;
+  lastFailure: { jobId: string; code: string; message: string; details?: Record<string, unknown> } | null;
+  plan: {
+    supported: boolean; host: string; downloadBytes: number | null; files: number | null; diskNeededBytes: number | null; diskFreeBytes: number | null; minPython: string | null; maxPython: string | null;
+    python: { found: false; tried: string[] } | { found: true; version: string; fits: boolean; min: string; max: string; bits: number };
+  };
+}
+export interface SoundEffectInfo { id: string; version: number; name: { he: string; en: string }; seconds: number; category: string }
 export const api = {
-  session: () => call<{ actor: string }>('/session'),
+  listProjectsFull: () => call<{ projects: ProjectListItem[] }>('/projects'),
+  deleteProject: (id: string, confirmName: string) => call<unknown>(`/projects/${encodeURIComponent(id)}/delete`, json({ confirmName })),
+  storage: () => call<StorageReport>('/storage'),
+  backup: () => call<BackupStatus>('/backup'),
+  backupNow: () => call<BackupStatus>('/backup', json({})),
+  storageGc: (apply: boolean) => call<GcResult>('/storage/gc', json(apply ? { apply: true } : {})),
+  // render cache (ADR-0024): the owner's size row and «ניקוי מטמון הרינדור»; the routes are mounted by the lead's wiring (renderCacheRoutes.ts)
+  renderCache: () => call<RenderCacheStatus>('/storage/render-cache'),
+  clearRenderCache: () => call<{ removed: number; bytes: number; keptPinned: number }>('/storage/render-cache', { method: 'DELETE' }),
+  /** What a fast export of these options would reuse and render (the sheet line and the timeline lane); aborted when a newer revision asks. */
+  planSegments: (id: string, options: object, signal?: AbortSignal) => call<SegmentPlanView>(`/projects/${id}/exports/segments/plan`, { ...json(options), ...(signal ? { signal } : {}) }),
+  listGrants: () => call<{ grants: GrantItem[] }>('/grants'),
+  createGrant: (body: { name: string; mode: GrantMode; projectIds?: string[]; budgetCents?: number; requestsPerMinute?: number; exportsPerDay?: number }) => call<{ grant: GrantItem; token: string }>('/grants', json(body)),
+  revokeGrant: (id: string) => call<{ grant: GrantItem }>(`/grants/${encodeURIComponent(id)}/revoke`, json({})),
+  analyzeAsset: (id: string, assetId: string, body: { kind: 'scenes' | 'beats'; threshold?: number }) =>
+    call<AnalyzeResult>(`/projects/${id}/assets/${assetId}/analyze`, json(body)),
+  /** The same analysis as a background job (long media cannot time out a request). Resolves when the job has finished; a failed job rejects with its typed error. */
+  analyzeAssetJob: async (id: string, assetId: string, body: { kind: 'scenes' | 'beats'; threshold?: number }, onJob?: (jobId: string) => void) => {
+    const { jobId } = await call<{ jobId: string; status: string }>(`/projects/${id}/assets/${assetId}/analyze`, json({ ...body, background: true }));
+    onJob?.(jobId);
+    for (;;) {
+      const j = await call<{ status: string; error?: { code?: string; message?: string } | null }>(`/jobs/${jobId}`);
+      if (j.status === 'succeeded') return;
+      if (j.status === 'failed' || j.status === 'canceled') throw new ApiFailure(409, j.error?.code ?? j.status, j.error?.message ?? `analysis ${j.status}`);
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  },
+  session: () => call<{ actor: string }>('/session', { headers: ownerKeyHeader() }),
   listProjects: () => call<{ projects: { id: string; name: string; revision: number }[] }>('/projects'),
   createProject: (name: string) => call<{ project: ProjectDocument; revision: number }>('/projects', json({ name })),
   getProject: (id: string) => call<{ project: ProjectDocument; revision: number }>(`/projects/${id}`),
   history: (id: string) => call<{ events: RevisionEvent[] }>(`/projects/${id}/history?since=0`),
-  commit: (id: string, expectedRevision: number, ops: OpCall[], label?: string) =>
-    call<CommitResult>(`/projects/${id}/transactions`, json({ expectedRevision, idempotencyKey: crypto.randomUUID(), label, ops })),
+  /** `dependsOn`: entity ids the edit relies on beyond those its ops name (the server's transaction body takes it; a stale base conflicts if any changed). */
+  commit: (id: string, baseRevision: number, ops: OpCall[], label?: string, dependsOn?: string[]) =>
+    call<CommitResult>(`/projects/${id}/transactions`, json({ baseRevision, idempotencyKey: crypto.randomUUID(), label, ops, ...(dependsOn ? { dependsOn } : {}) })),
+  /**
+   * The command bar's STRICT commit (ADR-0027): refused with 409 stale_revision unless `expectedRevision` is current (never
+   * rebased onto a newer revision), and replayed, not applied twice, when `idempotencyKey` was used with the same ops.
+   */
+  commitExact: (id: string, expectedRevision: number, ops: OpCall[], label: string, idempotencyKey: string) =>
+    call<CommitResult & { replayed?: boolean }>(`/projects/${id}/transactions`, json({ expectedRevision, idempotencyKey, label, ops })),
+  // the command bar's language assistant (ADR-0027): the status never holds the key, and is whole only for the owner's session
+  // (any other credential reads connected or not); the rest is the owner's session only
+  assistantStatus: () => call<AssistantStatusAnswer>('/assistant/status'),
+  /** The owner releases an amount held for a job whose cost is not known: only this server's own count changes, never a charge. */
+  releaseBudget: (jobId: string) => call<BudgetReleaseAnswer>(`/jobs/${encodeURIComponent(jobId)}/budget/release`, json({})),
+  assistantSummary: (id: string, q: { playheadFrame: number; selection: readonly string[]; sequenceId?: string }) =>
+    call<AssistantSummary>(`/projects/${id}/assistant/summary?${new URLSearchParams({ playheadFrame: String(q.playheadFrame), selection: q.selection.join(','), ...(q.sequenceId ? { sequenceId: q.sequenceId } : {}) })}`),
+  setAssistantConfig: (body: AssistantConfigBody) => call<AssistantStatus>('/assistant/config', { ...json(body), method: 'PUT' }),
+  setAssistantKey: (key: string) => call<AssistantKeyState>('/assistant/key', { ...json({ key }), method: 'PUT' }),
+  deleteAssistantKey: () => call<AssistantKeyState>('/assistant/key', { method: 'DELETE' }),
+  askAssistant: (id: string, body: AssistantRequestBody) => call<{ jobId: string }>(`/projects/${id}/assistant/requests`, json(body)),
+  /** The local assistant (wave 7; the owner's session only): what answers on 127.0.0.1 at the saved port. The body is empty: no address is ever sent. */
+  assistantLocalCheck: () => call<AssistantLocalCheck>('/assistant/local/check', json({})),
+  /** The owner's tab took («הכנס לשורה») or ignored («התעלם») a local phrase: the server erases the phrase and any text slot (204). */
+  assistantTaken: (jobId: string) => call<void>(`/assistant/jobs/${encodeURIComponent(jobId)}/taken`, json({})),
+  /** Without `transactionId` the server reverses the caller's own newest edit; with it, exactly that transaction (the owner may name an agent's). */
+  undo: (id: string, mode: 'undo' | 'redo', transactionId?: string) => call<CommitResult>(`/projects/${id}/${mode}`, json(transactionId ? { transactionId } : {})),
   upload: (id: string, file: File) =>
     call<{ assetId: string; revision: number; asset: Asset }>(`/projects/${id}/assets`, { method: 'POST', headers: { 'x-filename': encodeURIComponent(file.name), 'content-type': 'application/octet-stream' }, body: file }),
   assetBlob: async (id: string, assetId: string) => {
@@ -32,8 +170,194 @@ export const api = {
     if (!r.ok) throw new ApiFailure(r.status, 'asset_fetch_failed', `HTTP ${r.status}`);
     return r.blob();
   },
+  findSilences: (id: string, body: { assetId: string; minSeconds: number; keepSeconds: number }) =>
+    call<SilenceResult>(`/projects/${id}/analysis/silences`, json(body)),
+  findFillers: (id: string, body: { assetId: string; words?: string[] }) => call<SilenceResult & { words: { kind: 'hesitation' | 'repeat' | 'listed'; text: string; sourceStartSeconds: number; onTimeline: { startSeconds: number }[] }[] }>(`/projects/${id}/analysis/fillers`, json(body)),
+  /** The programme loudness of one output as it exports: the main edit, a sequence (a short) with `sequenceId`, a linked format or audience version with `variantId`. `target` is that output's own. */
+  measureLoudness: (id: string, t: { sequenceId?: string | null; variantId?: string | null } = {}) => call<LoudnessResult>(`/projects/${id}/analysis/loudness`, json({ ...(t.sequenceId ? { sequenceId: t.sequenceId } : {}), ...(t.variantId ? { variantId: t.variantId } : {}) })),
+  measureVoice: (id: string, body: VoiceMeasureRequest) => call<VoiceCheck>(`/projects/${id}/analysis/voice`, json(body)),
+  /** Loudness of single clips (wave 7 send; 501 not_built until built). Commit match_clip_loudness with expectedRevision = revision. */
+  measureClipLoudness: (id: string, body: ClipLoudnessRequest) => call<ClipLoudnessResult>(`/projects/${id}/analysis/clip-loudness`, json(body)),
+  /** The same measurement as a durable job (its output is { kind: 'voice', result: VoiceCheck }). */
+  startVoiceMeasureJob: (id: string, body: VoiceMeasureRequest) => call<{ jobId: string; status: string }>(`/projects/${id}/analysis/voice`, json({ ...body, background: true })),
+  matchColour: (id: string, body: ColourMatchRequest) => call<ColourMatch>(`/projects/${id}/analysis/colour-match`, json(body)),
+  /** The same match as a durable job (its output is { kind: 'colour', result: ColourMatch }). */
+  startColourMatchJob: (id: string, body: ColourMatchRequest) => call<{ jobId: string; status: string }>(`/projects/${id}/analysis/colour-match`, json({ ...body, background: true })),
   capabilities: () => call<{ provider: { configured: boolean; reason: string | null; readiness: { reachable: boolean; runtimeVersion: string | null; device: { name: string; type: string } | null } | null }; capabilities: { id: string; runnable: boolean; title: { he: string; en: string } }[] }>('/capabilities'),
   runCapability: (id: string, capabilityId: string, params: Record<string, unknown>) => call<{ jobId: string }>(`/projects/${id}/capabilities/${capabilityId}/runs`, json({ params, idempotencyKey: crypto.randomUUID() })),
-  startExport: (id: string) => call<{ jobId: string }>(`/projects/${id}/exports`, { method: 'POST' }),
+  /** Assets whose stored file is missing on disk (the server's one check: gone, or no longer its imported size). */
+  missingMedia: (id: string) => call<{ missing: string[] }>(`/projects/${id}/missing-media`),
+  derivatives: (id: string, assetId: string) => call<{ derivatives: { kind: string; status: string; meta: any }[] }>(`/projects/${id}/assets/${assetId}/derivatives`),
+  presence: (id: string, sessionId: string, frame: number, selection: string[]) => call<unknown>(`/projects/${id}/presence`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId, frame, selection }) }),
+  speech: () => call<SpeechStatus>('/speech'),
+  speechEngine: () => call<SpeechEngineInstall>('/speech/engine'),
+  installSpeechEngine: (id: string, confirmBytes: number, replace = false) => call<{ jobId: string }>(`/projects/${id}/speech/engine/install`, json({ confirmBytes, ...(replace ? { replace: true } : {}) })),
+  downloadSpeechModel: (id: string, modelId: string, confirmBytes: number) => call<{ jobId: string }>(`/projects/${id}/speech/models/${encodeURIComponent(modelId)}/download`, json({ confirmBytes })),
+  transcribe: (id: string, assetId: string, body: { language: string; overwrite?: boolean; mode?: 'recognise' | 'align' }) => call<{ jobId: string }>(`/projects/${id}/assets/${assetId}/transcribe`, json(body)),
+  transcribeAll: (id: string, language: string) => call<{ jobs: { assetId: string; jobId: string }[]; alreadyQueued: number }>(`/projects/${id}/transcribe`, json({ language })),
+  narrate: (id: string, body: { text: string; language: string; start?: unknown; referenceAssetId?: string; consent?: { speaker: string; confirmed: true } }) => call<{ jobId: string }>(`/projects/${id}/narration`, json(body)),
+  narrateScript: (id: string, body: { text: string; language: string; start: unknown; referenceAssetId?: string; consent?: { speaker: string; confirmed: true } }) => call<{ sentences: string[]; jobs: { jobId: string }[] }>(`/projects/${id}/narration/script`, json(body)),
+  cancelJob: (jobId: string) => call<{ status: string; outcome: string }>(`/jobs/${jobId}/cancel`, json({})),
+  retryJob: (jobId: string) => call<{ jobId: string }>(`/jobs/${jobId}/retry`, json({})),
+  controls: (id: string) => call<{ agentsPaused: boolean }>(`/projects/${id}/controls`),
+  setPaused: (id: string, paused: boolean) => call<{ agentsPaused: boolean }>(`/projects/${id}/agents/${paused ? 'pause' : 'resume'}`, json({})),
+  approvals: (id: string) => call<{ approvals: Approval[] }>(`/projects/${id}/approvals`),
+  decideApproval: (id: string, approvalId: string, decision: 'approve' | 'reject') => call<{ approval: Approval; jobId?: string }>(`/projects/${id}/approvals/${approvalId}/${decision}`, json({})),
+  proposals: (id: string) => call<{ proposals: Proposal[] }>(`/projects/${id}/proposals?status=open`),
+  decideProposal: (id: string, proposalId: string, decision: 'accept' | 'reject') => call<{ proposal: Proposal }>(`/projects/${id}/proposals/${proposalId}/${decision}`, json({})),
+  startExport: (id: string, options?: { variantId?: string; sequenceId?: string; format?: string; frame?: number; mode?: ExportMode; selfCheck?: SelfCheckMode }) => call<{ jobId: string }>(`/projects/${id}/exports`, options ? json(options) : { method: 'POST' }),
+  exportBatch: (id: string, variantIds: string[]) => call<{ jobs: { jobId: string; variantId: string; status: string }[] }>(`/projects/${id}/exports/batch`, json({ variantIds })),
+  /** One export job per sequence (shorts), all or nothing. */
+  exportSequences: (id: string, sequenceIds: string[], options?: { format?: string }) => call<{ jobs: { jobId: string; sequenceId?: string; status: string }[] }>(`/projects/${id}/exports/batch`, json({ items: sequenceIds.map((sequenceId) => ({ sequenceId })), ...(options ? { options } : {}) })),
+  // ----- perform mode (ADR-0025): a take's raw taps, planned on the server and committed as ONE undoable step (dryRun: plan only) -----
+  performTake: (id: string, body: TakeRequest) => call<TakeResult | TakePlanView>(`/projects/${id}/takes`, json(body)),
+  // ----- shorts (ADR-0018): sequences, candidate moments, plan, make, reframe -----
+  sequences: (id: string) => call<{ revision: number; sequences: SequenceSummary[] }>(`/projects/${id}/sequences`),
+  /** The ranked candidates when the audio is already measured (200), else a measuring job to poll (202). */
+  findShorts: (id: string, body: Partial<FindShortsBody> & { assetId: string }) => call<ShortCandidatesView | { jobId: string; status: string }>(`/projects/${id}/shorts/candidates`, json(body)),
+  planShorts: (id: string, body: Partial<BuildShortsBody>) => call<ShortsPlanView>(`/projects/${id}/shorts/plan`, json(body)),
+  /** Makes the shorts as ONE undoable step. */
+  makeShorts: (id: string, body: Partial<BuildShortsBody>) => call<ShortsApplyResult>(`/projects/${id}/shorts`, json(body)),
+  planReframe: (id: string, sequenceId: string, body: Partial<ReframePlanBody>) => call<ReframePlanView>(`/projects/${id}/sequences/${encodeURIComponent(sequenceId)}/reframe-plan`, json(body)),
+  job: (jobId: string) => call<JobEvent & { status: string; /** an export's stored options (POST /exports body) */ options?: { variantId?: string; format?: string; scale?: number; quality?: string; captions?: string } }>(`/jobs/${jobId}`),
+  preflight: (id: string, variantId: string | null, sequenceId?: string | null) => {
+    const q = [variantId ? `variant=${encodeURIComponent(variantId)}` : '', sequenceId ? `sequence=${encodeURIComponent(sequenceId)}` : ''].filter(Boolean).join('&');
+    return call<PreflightReport>(`/projects/${id}/preflight${q ? `?${q}` : ''}`);
+  },
+  planRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipePlanResult>(`/projects/${id}/recipes/${recipeId}/plan`, json({ params })),
+  applyRecipe: (id: string, recipeId: string, params: RecipeParams) => call<RecipeApplyResult>(`/projects/${id}/recipes/${recipeId}/apply`, json({ params })),
+  regenerateRecipeRun: (id: string, runId: string, params?: RecipeParams, restoreRemoved = false) => call<RecipeRegenerateResult>(`/projects/${id}/recipe-runs/${runId}/regenerate`, json({ ...(params ? { params } : {}), ...(restoreRemoved ? { restoreRemoved: true } : {}) })),
+  soundEffects: async () => (await call<{ soundEffects: SoundEffectInfo[] }>('/catalog')).soundEffects,
+  soundEffectAudio: async (id: string) => {
+    const r = await fetch(`/api/v1/sfx/${encodeURIComponent(id)}/audio`, { credentials: 'same-origin' });
+    if (!r.ok) throw new ApiFailure(r.status, 'sfx_fetch_failed', `HTTP ${r.status}`);
+    return r.blob();
+  },
+  addElement: (id: string, body: { elementId: string; color?: string; color2?: string; start?: unknown; duration?: unknown; trackId?: string }) => call<{ assetId: string; revision: number; placed: unknown }>(`/projects/${id}/elements`, json(body)),
+  addSoundEffect: (id: string, body: { sfxId: string; start?: unknown; trackId?: string }) => call<{ assetId: string; revision: number; placed: unknown }>(`/projects/${id}/sfx`, json(body)),
   events: (id: string, since: number) => new EventSource(`/api/v1/projects/${id}/events?since=${since}`, { withCredentials: true }),
+  // ----- the family film (ADR-0026): measured moments and the film recipe -----
+  /** Start measuring moments (202 → job; poll it as any job, cancel with cancelJob), or { cached: true } when every file already has a current measurement. */
+  measureMoments: (projectId: string, body: StartMomentsBody) => call<{ jobId: string; status: string } | { cached: true; revision: number }>(`/projects/${projectId}/moments`, json(body)),
+  /** The per-sample series of one file (the derivative of kind moments); 404 derivative_not_ready until it is measured. */
+  momentsData: (projectId: string, assetId: string) => call<MomentsData>(`/projects/${projectId}/assets/${assetId}/derivatives/moments`),
+  planFilm: (projectId: string, params: FamilyFilmParams) => call<FamilyFilmPlanView>(`/projects/${projectId}/recipes/family-film/plan`, json({ params })),
+  applyFilm: (projectId: string, params: FamilyFilmParams, expectedRevision: number) => call<FamilyFilmApplyResult>(`/projects/${projectId}/recipes/family-film/apply`, json({ params, expectedRevision })),
+  /** Regenerate a film run (from this tab's filmRun or the document's run after a reload) with changed parameters. */
+  regenerateFilm: (projectId: string, runId: string, params?: Partial<FamilyFilmParams>, restoreRemoved = false) => call<FamilyFilmRegenerateResult>(`/projects/${projectId}/recipe-runs/${runId}/regenerate`, json({ ...(params ? { params } : {}), ...(restoreRemoved ? { restoreRemoved: true } : {}) })),
+  // ----- multicam (ADR-0020): the routes of core multicamApi.ts -----
+  /** The group's view: coverage, program tracks, out-of-sync segments, envelope states and capture-time priors. */
+  multicamView: (id: string, groupId: string) => call<MulticamView>(`/projects/${id}/multicam/${encodeURIComponent(groupId)}`),
+  /** Sync by sound. Without `background` the report (200); with it a durable job to poll (202). A hand-synced file measured again without `overwrite` answers 409 would_discard_edits. */
+  multicamSync: (id: string, groupId: string, body: MulticamSyncRequest = {}) => call<MulticamSyncReport | { jobId: string; status: string }>(`/projects/${id}/multicam/${encodeURIComponent(groupId)}/sync`, json(body)),
+  /** Build (on demand) the level envelope of a file; its bytes come from envelopeBytes. */
+  buildEnvelope: (id: string, assetId: string) => call<{ kind: string; status: string }>(`/projects/${id}/assets/${assetId}/derivatives/envelope`, { method: 'POST' }),
+  envelopeBytes: async (id: string, assetId: string): Promise<Uint8Array | null> => {
+    const r = await fetch(`/api/v1/projects/${id}/assets/${assetId}/derivatives/envelope`, { credentials: 'same-origin' });
+    return r.ok ? new Uint8Array(await r.arrayBuffer()) : null;
+  },
+  // the content library on disk (wave 7 library track; apps/server/src/library/contract.ts). Every route answers 501
+  // library_not_built until the server worker builds it; keys travel percent-encoded (they hold slashes)
+  libraryStatus: () => call<LibraryStatus>('/library/status'),
+  setLibraryRoot: (root: string | null) => call<LibraryStatus>('/library/root', { ...json({ root }), method: 'PUT' }),
+  reindexLibrary: () => call<LibraryStatus>('/library/reindex', json({})),
+  cancelLibraryReindex: () => call<LibraryStatus>('/library/reindex', { method: 'DELETE' }),
+  libraryItems: (q: LibraryItemsQuery) => call<LibraryItemsPage>(`/library/items?${new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))}`),
+  libraryItem: (key: string) => call<LibraryRow>(`/library/items/${encodeURIComponent(key)}`),
+  /** The genres and moods of the whole catalogue (of one kind), for the filter chips (they never depend on the rows loaded). */
+  libraryFacets: (kind?: LibraryKind) => call<LibraryFacets>(`/library/facets${kind ? `?kind=${encodeURIComponent(kind)}` : ''}`),
+  /** URLs for an <audio> element, an <img> and a link: never fetched into a blob (the audio streams with Range). */
+  libraryAudioUrl: (key: string) => `/api/v1/library/items/${encodeURIComponent(key)}/audio`,
+  libraryThumbUrl: (key: string, size: 128 | 256 = 128) => `/api/v1/library/items/${encodeURIComponent(key)}/thumb?size=${size}`,
+  libraryLicenceUrl: (key: string) => `/api/v1/library/items/${encodeURIComponent(key)}/licence`,
+  useLibraryItem: (id: string, body: LibraryUseBody) => call<LibraryUseResult>(`/projects/${id}/library/use`, json(body)),
+  credits: (id: string, q: { sequenceId?: string; lang?: 'he' | 'en' } = {}) => call<CreditsView>(`/projects/${id}/credits?${new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined) as [string, string][])}`),
+  /** The archive link: «ארכיון לשיתוף» (strip) or «ארכיון לעצמי» (keep, owner session only); null = the archive as before. */
+  archiveUrl: (id: string, opts: { family?: 'keep' | 'omit'; library?: ArchiveLibraryMode | null } = {}) => `/api/v1/projects/${id}/archive${(() => { const q = new URLSearchParams({ ...(opts.family === 'omit' ? { family: 'omit' } : {}), ...(opts.library ? { library: opts.library } : {}) }).toString(); return q ? `?${q}` : ''; })()}`,
+  // editing craft (wave 7 craft track; apps/server/src/craft/contract.ts). Every route answers 501 craft_not_built until W2 builds it
+  versions: (id: string) => call<{ versions: VersionInfo[] }>(`/projects/${id}/versions`),
+  saveVersion: (id: string, name: string) => call<{ version: VersionInfo }>(`/projects/${id}/versions`, json({ name })).then((r) => r.version),
+  renameVersion: (id: string, versionId: string, name: string) => call<{ version: VersionInfo }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}`, { ...json({ name }), method: 'PUT' }).then((r) => r.version),
+  deleteVersion: (id: string, versionId: string) => call<{ deleted: string }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}`, { method: 'DELETE' }),
+  versionDiff: (id: string, versionId: string, against: 'current' | string = 'current') => call<{ diff: DiffSummary }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}/diff?against=${encodeURIComponent(against)}`).then((r) => r.diff),
+  /** For an <img>: one frame of the saved version (404 version_frame_out_of_range past its end). */
+  versionFrameUrl: (id: string, versionId: string, index: number) => `/api/v1/projects/${id}/versions/${encodeURIComponent(versionId)}/frame?index=${index}`,
+  restoreVersion: (id: string, versionId: string, body: { expectRevision?: number; confirmPrivacy?: boolean } = {}) => call<{ revision: number; transactionId: string | null; summary: string; diff: DiffSummary }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}/restore`, json(body)),
+  findText: (id: string, query: FindQuery) => call<FindResult>(`/projects/${id}/text/find`, json(query)),
+  // stabilisation (wave 7; apps/server/src/stabilise.ts)
+  // «הפריים הכי חד» and «שמירת התמונה» (wave 8 cover; apps/server/src/stills.ts, export option still)
+  /** Start measuring one stretch (202 → job; its output.answer is the SharpAnswer), or { cached: true, answer } when every frame is measured. */
+  findSharpFrames: (id: string, body: FindSharpBody) => call<FindSharpResult>(`/projects/${id}/stills`, json(body)),
+  /** What is stored for source frames [from, to) of a file (never starts a job). */
+  readSharpFrames: (id: string, assetId: string, from: number, to: number) => call<SharpAnswer>(`/projects/${id}/stills?assetId=${encodeURIComponent(assetId)}&from=${from}&to=${to}`),
+  /** Save one source frame as a picture: a server export job (owner's own session only); output.still describes it. */
+  exportStill: (id: string, format: 'png' | 'jpeg', still: StillExport) => call<{ jobId: string; status: string }>(`/projects/${id}/exports`, json({ format, still })),
+  stabiliseClip: (id: string, clipId: string, body: StabiliseRunBody = {}) => call<{ jobId: string; status: string }>(`/projects/${id}/clips/${encodeURIComponent(clipId)}/stabilise`, json(body)),
+  cameraMotion: (id: string, assetId: string) => call<CameraMotionView>(`/projects/${id}/assets/${encodeURIComponent(assetId)}/camera-motion`),
+  // marked ranges «פנינים» (wave 7; apps/server/src/pearls.ts): usage and screen time of one sequence; labels empty with labelsHidden for a credential without the people scope
+  pearls: (id: string, sequenceId?: string) => call<PearlsView>(`/projects/${id}/pearls${sequenceId ? `?sequenceId=${encodeURIComponent(sequenceId)}` : ''}`),
+  // ----- «ספרו מה היה» (wave 7 story track): the recipe routes and the template-runs route (which passes expectedRevision) -----
+  planStory: (projectId: string, params: StoryParams) => call<StoryPlanView>(`/projects/${projectId}/recipes/story/plan`, json({ params })),
+  applyStory: (projectId: string, params: StoryParams, expectedRevision: number) => call<StoryApplyResult>(`/projects/${projectId}/recipes/story/apply`, json({ params, expectedRevision })),
+  /** Rebuild a story run with changed options (never other taps: 409 story_retap_not_built), against the revision the bar showed. */
+  regenerateStory: (projectId: string, runId: string, params: Partial<StoryParams> | undefined, expectedRevision: number, restoreRemoved = false) => call<StoryRegenerateResult>(`/projects/${projectId}/template-runs/${runId}/regenerate`, json({ ...(params ? { params } : {}), expectedRevision, ...(restoreRemoved ? { restoreRemoved: true } : {}) })),
+  // ----- «גדלים מול העיניים» (wave 8 growing): the recipe routes, owner's own session only; the eyes travel here once and are never stored -----
+  planGrowing: (projectId: string, req: Pick<GrowingApplyRequest, 'params'>) => call<GrowingPlanView>(`/projects/${projectId}/recipes/growing/plan`, json({ params: req.params })),
+  applyGrowing: (projectId: string, req: GrowingApplyRequest) => call<GrowingApplyResult>(`/projects/${projectId}/recipes/growing/apply`, json(req)),
+  /** Rebuild: untouched pictures keep their place (their eyes are worked out from their transforms); a picture marked again sends its eyes in params.picks. */
+  regenerateGrowing: (projectId: string, runId: string, req: GrowingRebuildRequest) => call<GrowingRegenerateResult>(`/projects/${projectId}/recipe-runs/${runId}/regenerate`, json(req)),
+  // ----- «מוזיקה שמתאימה לסרט» (wave 7 musicfit; apps/server/src/musicfit/routes.ts) -----
+  musicFitPlan: (projectId: string, req: MusicFitPlanRequest) => call<MusicFitPlan>(`/projects/${projectId}/music-fit/plan`, json(req)),
+  musicFitApply: (projectId: string, req: MusicFitApplyRequest) => call<MusicFitApplyResult>(`/projects/${projectId}/music-fit/apply`, json(req)),
+  /** The owner's own session only (agents get 403 human_approval_required). */
+  // ----- «גרסה לכל קהל» (wave 8 audiences; apps/server/src/audiences/routes.ts): 501 audience_not_built until built -----
+  audienceChanges: (projectId: string, variantId: string) => call<AudienceChanges>(`/projects/${projectId}/variants/${encodeURIComponent(variantId)}/audience`),
+  // ----- «למדו אותי פעם אחת» (wave 8 teach): the lesson of one clip, the owner's own session only (501 teach_not_built until built) -----
+  deriveLesson: (projectId: string, clipId: string) => call<DerivedLessonView>(`/projects/${projectId}/clips/${encodeURIComponent(clipId)}/lesson`),
+  markJoinHeard: (projectId: string, assetId: string, heard: boolean) => call<unknown>(`/projects/${projectId}/assets/${encodeURIComponent(assetId)}/music-join/heard`, json({ heard })),
+  // ----- «כלים מוקלטים» (wave 7 instruments; apps/server/src/instruments/routes.ts) -----
+  musicKits: () => call<{ kits: MusicKitStatus[] }>('/music/kits'),
+  /** The owner's own session only (everyone else gets 403 owner_required). */
+  markKitHeard: (kitId: string, heard: boolean) => call<{ kitId: string; version: number; heard: { at: string } | null }>(`/music/kits/${encodeURIComponent(kitId)}/heard`, json({ heard })),
+  // «שמירת הסרט כתבנית» (wave 8 owntemplate; core OWN_TEMPLATE_ROUTES): owner's own session only; 501 own_template_not_built until W2
+  previewOwnTemplate: (projectId: string, body: OwnTemplatePreviewBody) => call<OwnTemplatePreviewAnswer>(`/projects/${encodeURIComponent(projectId)}/own-templates/preview`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  saveOwnTemplate: (projectId: string, body: OwnTemplateSaveBody) => call<OwnTemplateSaveAnswer>(`/projects/${encodeURIComponent(projectId)}/own-templates`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  deleteOwnTemplate: (templateId: string) => call<OwnTemplateDeleteAnswer>(`/own-templates/${encodeURIComponent(templateId)}`, { method: 'DELETE' }),
+  // «תא הבדיקה» (wave 8 booth; apps/server/src/booth/contract.ts BOOTH_ROUTES): owner's own session only; 501 booth_not_built until W1
+  booth: (q: { browserAdapter?: string; exportAdapter?: string } = {}) => {
+    const p = new URLSearchParams(Object.entries(q).filter((e): e is [string, string] => typeof e[1] === 'string' && e[1].length > 0)).toString();
+    return call<BoothView>(`/booth${p ? `?${p}` : ''}`);
+  },
+  boothAudioUrl: (itemId: string) => `/api/v1/booth/items/${encodeURIComponent(itemId)}/audio`,
+  boothTestPictureUrl: (which: 'a' | 'b') => `/api/v1/booth/test-picture/${which}`,
+  boothExportStillUrl: (itemId: string) => `/api/v1/booth/items/${encodeURIComponent(itemId)}/export-still`,
+  putBoothAnswer: (itemId: string, body: BoothAnswerBody) => call<BoothAnswerResult>(`/booth/answers/${encodeURIComponent(itemId)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  deleteBoothAnswer: (itemId: string) => call<void>(`/booth/answers/${encodeURIComponent(itemId)}`, { method: 'DELETE' }),
+  runBoothCheck: (rowId: BoothServerCheckId, signal?: AbortSignal) => call<BoothCheckRow>(`/booth/checks/${encodeURIComponent(rowId)}`, { method: 'POST', ...(signal ? { signal } : {}) }),
+  // the in-editor agent «סוכן» (wave 8 autonomy Part 2; core AGENT_ROUTES). 501 agent_not_built until built. Providers/keys answer keySet only.
+  startAgentRun: (projectId: string, body: AgentStartBody) => call<AgentStartAnswer>(`/projects/${projectId}/agent/runs`, json(body)),
+  listAgentRuns: (projectId: string) => call<AgentRunListAnswer>(`/projects/${projectId}/agent/runs`),
+  getAgentRun: (projectId: string, runId: string) => call<AgentRunAnswer>(`/projects/${projectId}/agent/runs/${encodeURIComponent(runId)}`),
+  cancelAgentRun: (projectId: string, runId: string) => call<AgentRunAnswer>(`/projects/${projectId}/agent/runs/${encodeURIComponent(runId)}/cancel`, json({})),
+  continueAgentRun: (projectId: string, runId: string, addSteps?: number) => call<AgentRunAnswer>(`/projects/${projectId}/agent/runs/${encodeURIComponent(runId)}/continue`, json(addSteps ? { addSteps } : {})),
+  undoAgentRun: (projectId: string, runId: string, opts: { dryRun?: boolean; partial?: boolean } = {}) => call<UndoAllAnswer>(`/projects/${projectId}/agent/runs/${encodeURIComponent(runId)}/undo-all`, json(opts)),
+  agentProviders: () => call<AgentProvidersAnswer>('/agent/providers'),
+  setAgentProvider: (providerId: string, body: { baseUrl?: string; model?: string | null }) => call<unknown>(`/agent/providers/${encodeURIComponent(providerId)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  setAgentKey: (providerId: string, key: string) => call<{ keySet: boolean; keyAddedAt: string | null }>(`/agent/providers/${encodeURIComponent(providerId)}/key`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key }) }),
+  deleteAgentKey: (providerId: string) => call<{ keySet: boolean; keyAddedAt: string | null }>(`/agent/providers/${encodeURIComponent(providerId)}/key`, { method: 'DELETE' }),
+  probeAgentProvider: (providerId: string) => call<AgentProbeAnswer>(`/agent/providers/${encodeURIComponent(providerId)}/probe`, json({})),
+  agentModels: () => call<AgentModelsAnswer>('/agent/models'),
+  /** «ביטול הכול» of any actor since a revision (core UndoActorBodySchema; agent:local defaults to its last session, shown by dryRun). */
+  undoActor: (projectId: string, body: UndoActorBody) => call<UndoAllAnswer>(`/projects/${projectId}/undo-actor`, json(body)),
+  /** A frame the agent looked at, drawn now through the editor's compositor (GET /projects/:id/frame); `rev` only keys the browser cache. */
+  agentFrameUrl: (projectId: string, f: { frame: number; revision: number; sequenceId?: string; variantId?: string }) => `/api/v1/projects/${encodeURIComponent(projectId)}/frame?index=${f.frame}${f.sequenceId ? `&sequence=${encodeURIComponent(f.sequenceId)}` : ''}${f.variantId ? `&variant=${encodeURIComponent(f.variantId)}` : ''}&rev=${f.revision}`,
 };
+
+export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }
+
+/** A request by an agent that only the owner can decide (for example downloading model files). */
+export interface Approval { id: string; kind: string; action: { capabilityId?: string; bytes?: number; models?: { path: string }[] } & Record<string, unknown>; costCents: number; requestedBy: string; status: 'pending' | 'approved' | 'consumed' | 'rejected' | 'expired'; expiresAt: string; createdAt: string }
+
+/** The URL of the four bars around a candidate join (GET …/music-fit/join.wav; same-origin, the owner's session cookie). */
+export const musicJoinUrl = (projectId: string, assetId: string, removal: JoinRemoval, startAt?: RationalTime): string =>
+  `/api/v1/projects/${projectId}/music-fit/join.wav?assetId=${encodeURIComponent(assetId)}&from=${encodeURIComponent(JSON.stringify(removal.from))}&to=${encodeURIComponent(JSON.stringify(removal.to))}${startAt ? `&startAt=${encodeURIComponent(JSON.stringify(startAt))}` : ''}`;

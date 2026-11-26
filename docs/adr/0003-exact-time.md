@@ -15,6 +15,11 @@ Rules implemented and tested:
 - Source frame selection (schema v1): `sourceTime = sourceIn + (t - clipStart)`, `sourceFrame = floor(sourceTime * assetRate)`, clamped to the last frame.
   Float-second decoder APIs receive the mid-frame time `(index + 0.5) / rate` to avoid boundary ambiguity.
 
-## Limits today
-Speed is fixed at 1 (no ramps/reverse/freeze), sources must be constant frame rate and unrotated (VFR and rotated files are rejected at ingest with a typed error). A first PTS of 0 is assumed and not yet checked.
+## Limits today (updated Phase 2)
+Speed is fixed at 1 (no ramps/reverse/freeze). Editable sources are constant-frame-rate, upright H.264/VP8/VP9/AV1.
+Anything else (variable frame rate, rotation metadata, other codecs such as HEVC) goes through the **conform route** at ingest: the original bytes are kept
+unchanged and a constant-rate, upright H.264 copy is what the timeline references; the asset records `conform` (reasons, original stream facts, frame mapping).
+For VFR the target is the standard rate nearest the average rate and each conformed frame is the source frame nearest in time (`cfr-nearest-timestamp`);
+rotation and codec-only conforms keep an identity frame mapping (tested: `apps/server/src/conform.test.ts`).
+Source timestamps of the original are therefore not editable to sub-frame precision for VFR media; a first PTS of 0 is still assumed and unchecked.
 Drop-frame timecode display is not implemented; display timecode is non-drop at the rounded-up base.

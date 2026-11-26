@@ -1,0 +1,535 @@
+/**
+ * A request to the language assistant is the owner's own (ADR-0027, note of 2026-11-25; assistant/visibility.ts): the job it runs
+ * and the proposal it leaves are whole only for the owner's own session. THE WALK: words are planted in what the owner typed, in
+ * the labelled MOCK adapter's explanation, in the operations it proposes, in a service error and in an invalid answer; then every
+ * surface an agent credential can reach is called (every REST route of peopleSurfaces.ts, whose table peopleSurfaces.test.ts keeps
+ * equal to the registered routes; every MCP tool that reads, names a job or a proposal; every resource; the event stream) with an
+ * observer, the agent token and grants of every mode, and the planted words must be nowhere. Controls prove the plant: the owner's
+ * session reads them. Before the rule, GET /jobs/:jobId, MCP get_job and the event stream handed the explanation, the proposal id,
+ * the cost and the error text to any observer of the project, and the proposals routes handed over the operations.
+ * Also here: exactly what a job row keeps of a request (never the typed text), and where the explanation is stored.
+ * The assistant is the labelled MOCK adapter (testAdapter.ts); the key is a labelled test double. No provider, no port, no network.
+ * Last, the LOCAL assistant (wave 7; the labelled local MOCK, local/localTestAdapter.ts, and while builder A's core functions are not
+ * merged their labelled double): the same walk with a planted phrase and text slot, and what is kept at rest until «הכנס לשורה» /
+ * «התעלם» (taken).
+ */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { ASSISTANT_ACTOR, ASSISTANT_JOB_TYPE } from '@pulseframe/core';
+import { ChatProviderError } from '@pulseframe/providers';
+import { Auth } from '../auth.ts';
+import { archiveBlobs } from '../archive.ts';
+import { backupDataDir } from '../backup.ts';
+import { Capabilities } from '../capabilities.ts';
+import { loadConfig, type Config } from '../config.ts';
+import { Derivatives } from '../derive.ts';
+import { Exporter } from '../export.ts';
+import { Governance, type Principal } from '../governance.ts';
+import { createApp } from '../http.ts';
+import { createMcp } from '../mcp.ts';
+import { PEOPLE_REST_SURFACES } from '../peopleSurfaces.ts';
+import { Presence } from '../presence.ts';
+import { Speech } from '../speech.ts';
+import { Store } from '../store.ts';
+import { f, plantedProject } from './assistantFixture.ts';
+import { mockToolAnswer, TestChatAdapter } from './testAdapter.ts';
+import { createLocalMockAdapter } from './local/localTestAdapter.ts';
+
+// builder A's groundLocalAnswer / localPhrase: the labelled DOUBLE while core's LOCAL_INTENT_BUILT is false, the real ones after
+vi.mock('@pulseframe/core', async (importOriginal) => (await import('./local/localTestAdapter.ts')).withLocalIntentDouble(await importOriginal()));
+
+const KEY = 'TEST-DOUBLE-NOT-A-KEY-job-privacy-7e42';
+const HOST = 'api.example.test';
+// ---------- the plant: words found nowhere else in the fixture ----------
+const TYPED_MARK = 'קישקושון', EXPL_MARK = 'זרזיפון', OPS_MARK = 'אבטיחונת', ERR_MARK = 'צפרדעונת', BAD_MARK = 'op_gvinonet';
+const TYPED = `הוסף סמן בשם ${TYPED_MARK} אחרי השיר`;
+const MARKS = [TYPED_MARK, EXPL_MARK, OPS_MARK, ERR_MARK, BAD_MARK] as const;
+const OWNER: Principal = { actor: 'user:local', kind: 'user', scopes: ['observe', 'edit'] };
+
+let dir: string, cfg: Config, store: Store, auth: Auth, gov: Governance, app: ReturnType<typeof createApp>, mcp: ReturnType<typeof createMcp>;
+let derivatives: Derivatives, capabilities: Capabilities, speech: Speech;
+let pid = '', ownerCookie = '', okJob = '', errJob = '', badJob = '', proposalId = '';
+const adapter = new TestChatAdapter();
+// ---------- the LOCAL plant (wave 7): a title text the owner typed (it can be a child's name), a word only in the typed request ----------
+const L_SLOT = 'פרפרונית', L_TYPED = 'גחליליונת';
+const L_REQ = `שימי בפתיחה כיתוב ${L_SLOT} בבקשה ${L_TYPED}`;
+const localMock = createLocalMockAdapter({ [L_REQ]: JSON.stringify({ intent: 'add_title', slots: { text: L_SLOT, at: 'start' } }) });
+const base = () => `http://127.0.0.1:${cfg.port}`;
+type Who = { name: string; headers: () => Record<string, string> };
+const tokens: Record<string, string> = {};
+const bearer = (name: string, token: () => string): Who => ({ name, headers: () => ({ host: `127.0.0.1:${cfg.port}`, authorization: `Bearer ${token()}`, 'content-type': 'application/json' }) });
+const OWNER_WHO: Who = { name: 'the owner\'s session', headers: () => ({ host: `127.0.0.1:${cfg.port}`, origin: base(), cookie: ownerCookie, 'content-type': 'application/json' }) };
+/** Every kind of credential that is not the owner's session: none of them reads the assistant's work, whatever its grant. */
+const OTHERS: Who[] = [
+  bearer('the observer token', () => auth.tokens.observer), bearer('the agent token', () => auth.tokens.agent),
+  bearer('an observe grant', () => tokens.observe!), bearer('a propose grant', () => tokens.propose!), bearer('an edit grant', () => tokens.edit!),
+  bearer('an autopilot grant of this project', () => tokens.autopilot!), bearer('an edit grant with people full', () => tokens.full!),
+];
+const fetchRaw = async (who: Who, method: string, url: string, body?: unknown) => {
+  const r = await app.fetch(new Request(url, { method, headers: who.headers(), ...(body === undefined ? {} : { body: JSON.stringify(body) }) }));
+  const buf = Buffer.from(await r.arrayBuffer());
+  return { status: r.status, type: r.headers.get('content-type') ?? '', buf, headers: JSON.stringify(Object.fromEntries(r.headers.entries())) };
+};
+const rest = async (who: Who, method: string, p: string, body?: unknown) => { const r = await fetchRaw(who, method, `${base()}/api/v1${p}`, body); return { status: r.status, body: (r.type.includes('json') && r.buf.length ? JSON.parse(r.buf.toString('utf8')) : null) as any }; };
+let rpcId = 0;
+const rpc = async (who: Who, method: string, params: unknown): Promise<{ text: string; result: any }> => {
+  const r = await mcp(new Request(`${base()}/mcp`, { method: 'POST', headers: { ...who.headers(), accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method, params }) }));
+  const raw = await r.text();
+  const text = (r.headers.get('content-type') ?? '').includes('text/event-stream') ? raw.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5)).join('') : raw;
+  const msg = JSON.parse(text);
+  return { text, result: msg.result ?? { protocolError: msg.error } };
+};
+/** The planted word a text holds, in the bytes as sent and with JSON's \u escapes undone, or null. */
+const markIn = (text: string): string | null => {
+  const plain = text.replace(/\\u([0-9a-fA-F]{4})/g, (_, h: string) => String.fromCharCode(parseInt(h, 16)));
+  return MARKS.find((m) => text.includes(m) || plain.includes(m)) ?? null;
+};
+const ask = async (text = TYPED) => { const r = await rest(OWNER_WHO, 'POST', `/projects/${pid}/assistant/requests`, { text, selection: [], playheadFrame: 0 }); expect(r.status).toBe(202); return r.body.jobId as string; };
+const settled = async (jobId: string) => {
+  for (let i = 0; i < 400; i++) { const j = store.getJob(jobId); if (['succeeded', 'failed', 'submission-unknown', 'canceled'].includes(j.status)) return j; await new Promise((res) => setTimeout(res, 10)); }
+  return store.getJob(jobId);
+};
+const answers = {
+  ok: () => mockToolAnswer([{ op: 'add_marker', args: { time: f(45), label: OPS_MARK } }], `MOCK ${EXPL_MARK}`),
+  err: () => ({ throw: new ChatProviderError('bad_request', false, `MOCK: ${ERR_MARK}`) }),
+  bad: () => mockToolAnswer([{ op: BAD_MARK, args: {} }], `MOCK ${EXPL_MARK}`),
+};
+
+beforeAll(async () => {
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-ajp-'));
+  cfg = { ...loadConfig({}), dataDir: dir, port: 8, speechPython: null, voicePython: null, backupDir: null, assistantHosts: [HOST] };
+  store = new Store(dir);
+  auth = new Auth(cfg);
+  const exporter = new Exporter(store, null as never, () => '', path.join(dir, 'no-web-dist'));
+  capabilities = new Capabilities(store, cfg);
+  const presence = new Presence();
+  gov = new Governance(store);
+  auth.resolveGrant = (token) => gov.principalForToken(token);
+  speech = new Speech(store, cfg);
+  mcp = createMcp(store, auth, exporter, capabilities, presence, gov, speech);
+  derivatives = new Derivatives(store);
+  app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, gov, undefined, speech, { assistant: { adapters: new Map([[adapter.id, adapter]]), endpoint: () => null, local: localMock } });
+  ownerCookie = auth.issueSession(new Request(`${base()}/api/v1/session`, { headers: { origin: base(), 'x-pf-owner-key': auth.tokens.owner } })).split(';')[0]!;
+  pid = plantedProject(store).pid;
+  for (const [name, mode, extra] of [['observe', 'observe', {}], ['propose', 'propose', {}], ['edit', 'edit', {}], ['autopilot', 'autopilot', { projectIds: [pid] }], ['full', 'edit', { people: 'full' }]] as const)
+    tokens[name] = gov.createGrant({ name: `walk-${name}`, mode, ...extra }, OWNER).token;
+  expect((await rest(OWNER_WHO, 'PUT', '/assistant/config', { adapter: adapter.id, host: HOST, model: 'mock-model', pricesCentsPerMTok: { input: 300, output: 1500 }, monthlyLimitCents: 100_000, perRequestCapCents: 10_000, toggles: { titlesAndMarkers: false, peopleNames: false } })).status).toBe(200);
+  expect((await rest(OWNER_WHO, 'PUT', '/assistant/key', { key: KEY })).status).toBe(200);
+  // three requests of the owner: one answered with a proposal, one the service refuses, one whose answer is not valid
+  adapter.queue(answers.ok()); okJob = await ask(); expect((await settled(okJob)).status).toBe('succeeded');
+  adapter.queue(answers.err()); errJob = await ask(); expect((await settled(errJob)).status).toBe('failed');
+  adapter.queue(answers.bad()); badJob = await ask(); expect((await settled(badJob)).status).toBe('failed');
+  proposalId = store.getJob(okJob).output.proposalId as string;
+});
+afterAll(async () => {
+  (app as any).browserExport?.stop();
+  await mcp.close();
+  await speech.stop();
+  await capabilities.stop();
+  await derivatives.stop();
+  store.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+describe('controls: the plant is there to be found', () => {
+  it('the owner\'s session reads the explanation, the error texts and the proposed operations', async () => {
+    const ok = await rest(OWNER_WHO, 'GET', `/jobs/${okJob}`);
+    expect(ok.body).toMatchObject({ status: 'succeeded', actor: ASSISTANT_ACTOR, output: { proposalId, explanation: `MOCK ${EXPL_MARK}`, opsCount: 1, costBasis: 'reported' } });
+    expect((await rest(OWNER_WHO, 'GET', `/jobs/${errJob}`)).body.error.message).toContain(ERR_MARK);
+    // an answer that is not valid is recorded by its category and a fixed sentence: the model's own words are not kept, for the owner either
+    expect((await rest(OWNER_WHO, 'GET', `/jobs/${badJob}`)).body.error).toEqual({ code: 'invalid_model_output', category: 'unknown_op', message: 'op 0 is not an operation of this build', retryable: false });
+    const viaTool = await rpc(OWNER_WHO, 'tools/call', { name: 'get_job', arguments: { jobId: okJob } });
+    expect(viaTool.text).toContain(EXPL_MARK);
+    const listed = await rest(OWNER_WHO, 'GET', `/projects/${pid}/proposals`);
+    expect(listed.body.proposals.map((p: { id: string }) => p.id)).toContain(proposalId);
+    expect(JSON.stringify(listed.body)).toContain(OPS_MARK);
+    expect((await rest(OWNER_WHO, 'GET', `/projects/${pid}/proposals/${proposalId}`)).body.proposal).toMatchObject({ id: proposalId, actor: ASSISTANT_ACTOR, status: 'open' });
+    expect((await rpc(OWNER_WHO, 'tools/call', { name: 'list_proposals', arguments: { projectId: pid } })).text).toContain(proposalId);
+  });
+});
+
+describe('anyone but the owner\'s session reads of an assistant job its id, project, type, status and times, and nothing else of it', () => {
+  for (const who of OTHERS) it(`GET /jobs/:jobId and MCP get_job as ${who.name}`, async () => {
+    for (const [jobId, status] of [[okJob, 'succeeded'], [errJob, 'failed'], [badJob, 'failed']] as const) {
+      const row = store.getJob(jobId);
+      const want = { id: jobId, projectId: pid, type: ASSISTANT_JOB_TYPE, actor: ASSISTANT_ACTOR, status, createdAt: row.createdAt, updatedAt: row.updatedAt };
+      const viaRest = await rest(who, 'GET', `/jobs/${jobId}`);
+      expect(viaRest.status).toBe(200);
+      expect(viaRest.body).toEqual(want); // no output, no error, no stage, no attempt, no revision (the actor is the same for every assistant job)
+      const viaTool = await rpc(who, 'tools/call', { name: 'get_job', arguments: { jobId } });
+      expect(JSON.parse(viaTool.result.content[0].text)).toEqual(want);
+    }
+  });
+  it('the assistant\'s proposal is not listed, not answered by id (as an id that does not exist), not rendered; other proposals still are', async () => {
+    const edit = OTHERS.find((w) => w.name === 'an edit grant')!, propose = OTHERS.find((w) => w.name === 'a propose grant')!;
+    const own = await rest(propose, 'POST', `/projects/${pid}/proposals`, { ops: [{ op: 'add_marker', args: { time: f(90), label: 'an agent\'s own' } }] });
+    expect(own.status).toBe(201);
+    for (const who of OTHERS) {
+      const listed = await rest(who, 'GET', `/projects/${pid}/proposals`);
+      expect(listed.body.proposals.map((p: { id: string }) => p.id), who.name).toEqual([own.body.proposalId]);
+      const byId = await rest(who, 'GET', `/projects/${pid}/proposals/${proposalId}`), missing = await rest(who, 'GET', `/projects/${pid}/proposals/prp_does_not_exist`);
+      expect([byId.status, byId.body.error.code], who.name).toEqual([404, 'proposal_not_found']);
+      expect(byId.body.error.message.replace(proposalId, 'ID')).toBe(missing.body.error.message.replace('prp_does_not_exist', 'ID'));
+      expect((await rest(who, 'GET', `/projects/${pid}/proposals/${proposalId}/frame`)).status, who.name).toBe(404);
+      const viaTool = await rpc(who, 'tools/call', { name: 'list_proposals', arguments: { projectId: pid } });
+      expect(JSON.parse(viaTool.result.content[0].text).proposals.map((p: { id: string }) => p.id), who.name).toEqual([own.body.proposalId]);
+    }
+    expect((await rest(edit, 'POST', `/projects/${pid}/proposals/${proposalId}/accept`)).status).toBe(404);
+    expect(store.db.prepare('SELECT status FROM proposals WHERE id = ?').get(proposalId)).toEqual({ status: 'open' });
+  });
+});
+
+describe('the walk: the planted words reach no credential but the owner\'s session, on any surface', () => {
+  const PARAMS = (jobId: string): Record<string, string> => ({ id: pid, jobId, proposalId, sequenceId: 'seq_main', index: '0', kind: 'thumb' });
+  for (const who of OTHERS) it(`REST, every route, as ${who.name}`, async () => {
+    const leaks: string[] = [];
+    let called = 0, answered = 0;
+    for (const key of Object.keys(PEOPLE_REST_SURFACES)) {
+      const [method, route] = key.split(' ') as [string, string];
+      if (PEOPLE_REST_SURFACES[key]!.includes('renderer-only') || key === 'ALL /mcp' || route.endsWith('/events')) continue; // the event stream has its own test below
+      // every read; and every write that names a job, a proposal or the assistant (a refusal or an answer about them is searched too).
+      // Other writes change the project and answer about their own change, never about a job.
+      if (method !== 'GET' && !/:jobId|proposal|assistant/.test(route)) continue;
+      for (const jobId of route.includes(':jobId') ? [okJob, errJob, badJob] : [okJob]) {
+        const params = PARAMS(jobId);
+        const url = `${base()}${route.replace(/:([A-Za-z]+)/g, (_, k: string) => encodeURIComponent(params[k] ?? 'none'))}`;
+        const r = await fetchRaw(who, method, url, method === 'GET' ? undefined : { __walk: 1 });
+        called++;
+        if (r.status < 300) answered++;
+        const found = markIn(r.buf.toString('utf8')) ?? markIn(r.buf.toString('latin1')) ?? markIn(r.headers);
+        if (found) leaks.push(`${key} → ${r.status}: ${found}`);
+      }
+    }
+    expect(called, 'routes called').toBeGreaterThan(80);
+    expect(answered, 'routes that answered with content, not a refusal').toBeGreaterThan(25);
+    expect(leaks).toEqual([]);
+  }, 120_000);
+  for (const who of OTHERS) it(`MCP, every tool that reads or names a job or a proposal, every resource and prompt, as ${who.name}`, async () => {
+    const leaks: string[] = [];
+    const tools = (await rpc(who, 'tools/list', {})).result.tools as { name: string; annotations?: { readOnlyHint?: boolean }; inputSchema?: { properties?: Record<string, unknown> } }[];
+    const walked = tools.filter((t) => t.annotations?.readOnlyHint || Object.hasOwn(t.inputSchema?.properties ?? {}, 'jobId') || /propos/.test(t.name));
+    expect(walked.map((t) => t.name)).toEqual(expect.arrayContaining(['get_job', 'cancel_job', 'retry_job', 'list_proposals', 'get_summary', 'get_timeline']));
+    for (const t of walked) for (const jobId of Object.hasOwn(t.inputSchema?.properties ?? {}, 'jobId') ? [okJob, errJob, badJob] : [okJob]) {
+      const res = await rpc(who, 'tools/call', { name: t.name, arguments: { projectId: pid, jobId, frameIndex: 10, frames: [0, 10], ...(t.name === 'propose_transaction' ? { ops: [] } : {}) } });
+      const found = markIn(res.text);
+      if (found) leaks.push(`tool ${t.name}: ${found}`);
+    }
+    const uris = [...((await rpc(who, 'resources/list', {})).result.resources ?? []).map((r: { uri: string }) => r.uri), 'pulseframe://guide', 'pulseframe://ops', 'pulseframe://catalog', `pulseframe://projects/${pid}/summary`, `pulseframe://projects/${pid}/timeline`];
+    for (const uri of new Set(uris)) { const found = markIn((await rpc(who, 'resources/read', { uri })).text); if (found) leaks.push(`resource ${uri}: ${found}`); }
+    for (const p of (await rpc(who, 'prompts/list', {})).result.prompts ?? []) { const found = markIn((await rpc(who, 'prompts/get', { name: p.name, arguments: { projectId: pid } })).text); if (found) leaks.push(`prompt ${p.name}: ${found}`); }
+    expect(leaks).toEqual([]);
+  }, 120_000);
+
+  it('the event stream: a listener other than the owner\'s session gets an assistant job as id, type, status and times, and no word of its proposal', async () => {
+    const listen = async (who: Who) => {
+      const r = await app.fetch(new Request(`${base()}/api/v1/projects/${pid}/events`, { headers: who.headers() }));
+      expect(r.status).toBe(200);
+      const reader = r.body!.getReader();
+      const s = { text: '' };
+      const read = async (until: (t: string) => boolean) => { const end = Date.now() + 5000; while (!until(s.text) && Date.now() < end) { const c = await Promise.race([reader.read(), new Promise<null>((ok) => setTimeout(() => ok(null), 100))]); if (c && !c.done) s.text += Buffer.from(c.value).toString('utf8'); } };
+      await read((t) => t.includes('event: hello'));
+      return { s, read, close: () => reader.cancel() };
+    };
+    const listeners = await Promise.all([OWNER_WHO, ...OTHERS].map(async (who) => ({ who, ...(await listen(who)) })));
+    // while they listen: a request answered with a proposal, one the service refuses, one whose answer is not valid
+    adapter.queue(answers.ok()); const a = await ask(); await settled(a);
+    adapter.queue(answers.err()); const b = await ask(); await settled(b);
+    adapter.queue(answers.bad()); const c = await ask(); await settled(c);
+    const ended = (t: string) => [a, b, c].every((id) => new RegExp(`"id":"${id}"[^\\n]*"status":"(succeeded|failed)"`).test(t));
+    for (const l of listeners) { await l.read(ended); await l.close(); }
+    const events = (t: string, kind: string) => t.split('\n\n').filter((x) => x.includes(`event: ${kind}`)).map((x) => JSON.parse(x.split('\n').find((y) => y.startsWith('data:'))!.slice(5)));
+    const [owner, ...others] = listeners;
+    // control: the owner's own session is told everything, as before
+    expect(owner!.s.text).toContain(EXPL_MARK);
+    expect(owner!.s.text).toContain(ERR_MARK);
+    expect(owner!.s.text).toContain('"category":"unknown_op"');
+    expect(events(owner!.s.text, 'proposal').some((e) => e.actor === ASSISTANT_ACTOR)).toBe(true);
+    for (const l of others) {
+      expect(ended(l.s.text), `${l.who.name} heard the three jobs end`).toBe(true);
+      expect(markIn(l.s.text), l.who.name).toBeNull();
+      const jobs = events(l.s.text, 'job');
+      expect(jobs.length, l.who.name).toBeGreaterThanOrEqual(6);
+      for (const e of jobs) expect(Object.keys(e).sort(), l.who.name).toEqual(['actor', 'createdAt', 'id', 'projectId', 'status', 'type', 'updatedAt']);
+      expect(events(l.s.text, 'proposal').filter((e) => e.actor === ASSISTANT_ACTOR), l.who.name).toEqual([]);
+    }
+  }, 60_000);
+});
+
+describe('what is kept of a request (ADR-0027 decision 12)', () => {
+  it('the job row: digests and sizes, never the typed text; the explanation is stored in its output; the proposal holds the operations', async () => {
+    const row = store.getJob(okJob);
+    expect(Object.keys(row.input).sort()).toEqual(['adapter', 'estimate', 'host', 'kind', 'maxOutputTokens', 'model', 'projectRevision', 'promptDigest', 'requestedBy', 'reservationBasis', 'reservedCents', 'sequenceId', 'summary', 'text']);
+    expect(Object.keys(row.input.text).sort()).toEqual(['chars', 'sha256']); // a digest and a length of what was typed
+    expect(row.input.text.chars).toBe([...TYPED].length);
+    expect(Object.keys(row.input.summary).sort()).toEqual(['bytes', 'folded', 'sent', 'sha256']);
+    expect(Object.keys(row.output).sort()).toEqual(['costBasis', 'costCents', 'explanation', 'opsCount', 'proposalId']);
+    expect(row.output.explanation).toBe(`MOCK ${EXPL_MARK}`); // stored, and read from here by the owner's tab
+    expect(Object.keys(store.getJob(errJob).error).sort()).toEqual(['code', 'message', 'providerCode', 'retryable']);
+  });
+  it('on disk and in a backup: the typed text is in no file; the explanation, the error texts and the proposal are in the database (and so in its backups); the assistant\'s key and config are in no backup', async () => {
+    store.db.pragma('wal_checkpoint(TRUNCATE)');
+    const filesOf = (root: string): string[] => fs.readdirSync(root, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? filesOf(path.join(root, e.name)) : [path.join(root, e.name)]));
+    const holding = (root: string, word: string) => filesOf(root).filter((file) => fs.readFileSync(file).includes(Buffer.from(word, 'utf8'))).map((file) => path.relative(root, file));
+    expect(holding(dir, TYPED_MARK)).toEqual([]);
+    const db = path.relative(dir, store.db.name);
+    for (const word of [EXPL_MARK, ERR_MARK, OPS_MARK]) expect(holding(dir, word), word).toEqual([db]);
+    expect(holding(dir, BAD_MARK)).toEqual([]); // the words of an answer that was not valid are never stored
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-ajp-backup-'));
+    try {
+      await backupDataDir(dir, dest);
+      expect(holding(dest, TYPED_MARK)).toEqual([]);
+      expect(holding(dest, EXPL_MARK).length).toBe(1); // the database copy holds the job rows as they are
+      expect(holding(dest, KEY)).toEqual([]);
+      expect(filesOf(dest).map((x) => path.basename(x)).filter((n) => n.startsWith('assistant.'))).toEqual([]);
+    } finally { fs.rmSync(dest, { recursive: true, force: true }); }
+  });
+  it('a project archive holds no job and no proposal: none of the planted words, for the owner too', async () => {
+    // the fixture's two files have no stored bytes: a byte each stands in, so the archive can be written (it is not imported)
+    const standIns: string[] = [];
+    for (const hash of archiveBlobs(store.getProject(pid).doc)) { const file = store.blobPath(hash); if (!fs.existsSync(file)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'x'); standIns.push(file); } }
+    const r = await fetchRaw(OWNER_WHO, 'GET', `${base()}/api/v1/projects/${pid}/archive`);
+    expect(r.status).toBe(200);
+    expect(r.buf.length).toBeGreaterThan(1000);
+    expect(r.buf.toString('utf8')).toContain('manifest.json');
+    expect(markIn(r.buf.toString('utf8'))).toBeNull();
+    for (const word of [okJob, proposalId, ASSISTANT_JOB_TYPE]) expect(r.buf.includes(Buffer.from(word))).toBe(false);
+    for (const file of standIns) fs.rmSync(file); // a backup checks stored files against their names: the stand-ins are not real content
+  });
+});
+
+describe('the model\'s sentence lives only while its proposal can still be decided (ADR-0027, note of 2026-11-25)', () => {
+  const filesOf = (root: string): string[] => fs.readdirSync(root, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? filesOf(path.join(root, e.name)) : [path.join(root, e.name)]));
+  /** The files under `root` whose bytes hold the word (the database, its write-ahead log, anything else). */
+  const holding = (root: string, word: string) => filesOf(root).filter((file) => fs.readFileSync(file).includes(Buffer.from(word, 'utf8'))).map((file) => path.relative(root, file));
+  const backupHolding = async (word: string) => {
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-ajp-backup-'));
+    try { await backupDataDir(dir, dest); return holding(dest, word); } finally { fs.rmSync(dest, { recursive: true, force: true }); }
+  };
+  const dbFile = () => path.relative(dir, store.db.name);
+  /** A request answered with one marker at `frame` and an explanation that holds `word`; resolves to the job and its open proposal. */
+  const proposed = async (word: string, frame: number, op: { op: string; args: Record<string, unknown> } = { op: 'add_marker', args: { time: f(frame), label: 'סמן' } }) => {
+    adapter.queue(mockToolAnswer([op], `MOCK ${word}`));
+    const jobId = await ask();
+    const job = await settled(jobId);
+    expect(job.status).toBe('succeeded');
+    expect(job.output.explanation).toBe(`MOCK ${word}`);
+    return { jobId, proposalId: job.output.proposalId as string };
+  };
+  const explanationOf = (jobId: string) => store.getJob(jobId).output.explanation as string | null;
+
+  it('accepted: the sentence is in the database and in a backup made while the proposal is pending; after the owner accepts it is in no file and in no backup made afterwards; undo and redo of the edit are unaffected', async () => {
+    const WORD = 'דובדבנית';
+    const p = await proposed(WORD, 120);
+    // pending: stored, and a backup made now holds it (stated in the ADR; the owner decides or cancels before backing up to avoid it)
+    expect(holding(dir, WORD).length).toBeGreaterThan(0);
+    expect((await backupHolding(WORD)).length).toBe(1);
+    const rev = store.getProject(pid).revision, markers = () => Object.values(store.getProject(pid).doc.markers ?? {}).length, before = markers();
+    const accepted = await rest(OWNER_WHO, 'POST', `/projects/${pid}/proposals/${p.proposalId}/accept`);
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.proposal.status).toBe('accepted');
+    expect([store.getProject(pid).revision, markers()]).toEqual([rev + 1, before + 1]);
+    // the row keeps everything else (the proposal id, the count, the cost); only the sentence is gone
+    expect(store.getJob(p.jobId)).toMatchObject({ status: 'succeeded', output: { proposalId: p.proposalId, explanation: null, opsCount: 1, costBasis: 'reported' } });
+    expect((await rest(OWNER_WHO, 'GET', `/jobs/${p.jobId}`)).body.output.explanation).toBeNull();
+    expect(holding(dir, WORD)).toEqual([]); // not in the database file, not in its write-ahead log
+    expect(await backupHolding(WORD)).toEqual([]);
+    // the accepted edit is the owner's own transaction: undo takes it back, redo brings it again
+    expect((await rest(OWNER_WHO, 'POST', `/projects/${pid}/undo`, {})).status).toBe(200);
+    expect(markers()).toBe(before);
+    expect((await rest(OWNER_WHO, 'POST', `/projects/${pid}/redo`, {})).status).toBe(200);
+    expect(markers()).toBe(before + 1);
+    expect(holding(dir, WORD)).toEqual([]);
+  });
+  it('rejected: cleared with the decision; a second decision is refused as before', async () => {
+    const WORD = 'תאנונת';
+    const p = await proposed(WORD, 150);
+    expect(explanationOf(p.jobId)).toContain(WORD);
+    expect((await rest(OWNER_WHO, 'POST', `/projects/${pid}/proposals/${p.proposalId}/reject`)).body.proposal.status).toBe('rejected');
+    expect(explanationOf(p.jobId)).toBeNull();
+    expect(holding(dir, WORD)).toEqual([]);
+    expect(await backupHolding(WORD)).toEqual([]);
+    expect((await rest(OWNER_WHO, 'POST', `/projects/${pid}/proposals/${p.proposalId}/accept`)).body.error.code).toBe('proposal_closed');
+  });
+  it('stale: a proposal that can no longer apply is closed as stale by the accept that finds it out, and its sentence is cleared', async () => {
+    const WORD = 'רימונית';
+    // the proposal renames a marker; the owner deletes that marker before deciding
+    const made = store.commit({ projectId: pid, actor: 'user:local', ops: [{ op: 'add_marker', args: { time: f(200), label: 'זמני' } }] });
+    const markerId = made.results[0]!.output!.markerId as string;
+    const p = await proposed(WORD, 0, { op: 'update_marker', args: { markerId, label: 'אחר' } });
+    store.commit({ projectId: pid, actor: 'user:local', ops: [{ op: 'remove_marker', args: { markerId } }] });
+    const r = await rest(OWNER_WHO, 'POST', `/projects/${pid}/proposals/${p.proposalId}/accept`);
+    expect([r.status, r.body.error.code]).toEqual([409, 'proposal_stale']);
+    expect(store.db.prepare('SELECT status FROM proposals WHERE id = ?').get(p.proposalId)).toEqual({ status: 'stale' });
+    expect(explanationOf(p.jobId)).toBeNull();
+    expect(holding(dir, WORD)).toEqual([]);
+    expect(await backupHolding(WORD)).toEqual([]);
+  });
+  it('another agent\'s proposal is decided as before: no job is touched', async () => {
+    const own = await rest(OTHERS.find((w) => w.name === 'a propose grant')!, 'POST', `/projects/${pid}/proposals`, { ops: [{ op: 'add_marker', args: { time: f(260), label: 'של סוכן' } }] });
+    const pending = await proposed('אגסונת', 290);
+    expect((await rest(OWNER_WHO, 'POST', `/projects/${pid}/proposals/${own.body.proposalId}/reject`)).body.proposal.status).toBe('rejected');
+    expect(explanationOf(pending.jobId)).toContain('אגסונת'); // still pending: still shown
+    expect(explanationOf(okJob)).toContain(EXPL_MARK);
+  });
+  it('an answer that is not valid: the row holds the category and a fixed sentence, and the model\'s words are in no file and no backup', async () => {
+    const cases: [string, ReturnType<typeof mockToolAnswer>, string, string][] = [
+      ['an operation that does not exist', mockToolAnswer([{ op: 'op_shezifonet', args: {} }]), 'unknown_op', 'op 0 is not an operation of this build'],
+      ['a key the tool does not have', { respond: { toolInput: { ops: [{ op: 'add_marker', args: { time: f(5) } }], key_mishmishonet: 1 }, text: null, finish: 'tool', usage: { inputTokens: 10, outputTokens: 10 } } }, 'wrong_shape', 'the proposal does not have the tool\'s shape (unrecognized_keys)'],
+      ['an argument the operation does not have', mockToolAnswer([{ op: 'add_marker', args: { time: f(5), arg_afarsekonet: 'x' } }]), 'invalid_args', 'op 0 has invalid arguments (unrecognized_keys)'],
+      ['an operation the project refuses', mockToolAnswer([{ op: 'update_marker', args: { markerId: 'mrk_tapuzonet', label: 'x' } }]), 'refused_by_project', 'the project refused the proposed operations (not_found)'],
+    ];
+    for (const [name, step, category, message] of cases) {
+      adapter.queue(step);
+      const job = await settled(await ask());
+      expect(job.error, name).toEqual({ code: 'invalid_model_output', category, message, retryable: false });
+    }
+    for (const word of ['shezifonet', 'mishmishonet', 'afarsekonet', 'tapuzonet']) {
+      expect(holding(dir, word), word).toEqual([]);
+      expect(await backupHolding(word), word).toEqual([]);
+    }
+  });
+  it('a cancelled request leaves no sentence: nothing of an answer is stored for it (pinned; it held before too)', async () => {
+    adapter.queue({ wait: (signal) => new Promise((_res, rej) => { signal.addEventListener('abort', () => rej(new Error('MOCK: aborted'))); }) });
+    const jobId = await ask();
+    for (let i = 0; i < 200 && store.getJob(jobId).status !== 'running'; i++) await new Promise((res) => setTimeout(res, 5));
+    expect((await rest(OWNER_WHO, 'POST', `/jobs/${jobId}/cancel`)).body.outcome).toBe('requested');
+    const job = await settled(jobId);
+    expect(job).toMatchObject({ status: 'canceled', output: null, error: { code: 'canceled', message: 'canceled while the request was with the service; it may have been charged' } });
+  });
+  it('a deleted project: its pending proposal, its job and the sentence leave the database file with it, and no backup made afterwards holds them', async () => {
+    const SENTENCE = 'חבושונת', LABEL = 'שסקונת';
+    const other = plantedProject(store).pid;
+    adapter.queue(mockToolAnswer([{ op: 'add_marker', args: { time: f(45), label: LABEL } }], `MOCK ${SENTENCE}`));
+    const asked = await rest(OWNER_WHO, 'POST', `/projects/${other}/assistant/requests`, { text: TYPED, selection: [], playheadFrame: 0 });
+    expect((await settled(asked.body.jobId)).status).toBe('succeeded');
+    for (const word of [SENTENCE, LABEL]) expect(holding(dir, word).length, word).toBeGreaterThan(0);
+    const gone = await rest(OWNER_WHO, 'POST', `/projects/${other}/delete`, { confirmName: store.getProject(other).doc.name });
+    expect(gone.status).toBe(200);
+    expect(store.db.prepare('SELECT (SELECT COUNT(*) FROM jobs WHERE project_id = ?) AS jobs, (SELECT COUNT(*) FROM proposals WHERE project_id = ?) AS proposals').get(other, other)).toEqual({ jobs: 0, proposals: 0 });
+    for (const word of [SENTENCE, LABEL]) { expect(holding(dir, word), word).toEqual([]); expect(await backupHolding(word), word).toEqual([]); }
+    // the project that stays is untouched
+    expect(explanationOf(okJob)).toContain(EXPL_MARK);
+  });
+  it('a service error text stays (the owner needs it; it is the service\'s sentence, not the model\'s answer), and so does a pending proposal\'s sentence', () => {
+    expect(store.getJob(errJob).error.message).toContain(ERR_MARK);
+    expect(holding(dir, EXPL_MARK)).toContain(dbFile());
+  });
+});
+
+describe('the LOCAL assistant (wave 7): a local job is the owner\'s own; its phrase and text slot live only until taken', () => {
+  const L_MARKS = [L_SLOT, L_TYPED] as const;
+  const markLocal = (text: string): string | null => {
+    const plain = text.replace(/\\u([0-9a-fA-F]{4})/g, (_, h: string) => String.fromCharCode(parseInt(h, 16)));
+    return L_MARKS.find((m) => text.includes(m) || plain.includes(m)) ?? null;
+  };
+  const filesOf = (root: string): string[] => fs.readdirSync(root, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? filesOf(path.join(root, e.name)) : [path.join(root, e.name)]));
+  const holding = (root: string, word: string) => filesOf(root).filter((file) => fs.readFileSync(file).includes(Buffer.from(word, 'utf8'))).map((file) => path.relative(root, file));
+  const askLocal = async () => { const r = await rest(OWNER_WHO, 'POST', `/projects/${pid}/assistant/requests`, { text: L_REQ, selection: [], playheadFrame: 0, lang: 'he' }); expect(r.status).toBe(202); return r.body.jobId as string; };
+  let localJob = '';
+  const logged: string[] = [];
+  beforeAll(async () => {
+    const put = await rest(OWNER_WHO, 'PUT', '/assistant/config', { adapter: 'local-llama-server', host: null, model: null, pricesCentsPerMTok: null, monthlyLimitCents: 0, perRequestCapCents: 0, toggles: { titlesAndMarkers: false, peopleNames: false }, local: { port: 18791, timeoutSeconds: 60 } });
+    expect(put.status).toBe(200);
+    for (const m of ['log', 'info', 'warn', 'error', 'debug'] as const) vi.spyOn(console, m).mockImplementation((...a: unknown[]) => { logged.push(a.map(String).join(' ')); });
+    localJob = await askLocal();
+    expect((await settled(localJob)).status).toBe('succeeded');
+  });
+  afterAll(() => { vi.restoreAllMocks(); });
+
+  it('control: the owner\'s session reads the phrase and the text slot', async () => {
+    const r = await rest(OWNER_WHO, 'GET', `/jobs/${localJob}`);
+    expect(r.body.output).toMatchObject({ kind: 'local-intent', intent: 'add_title', slots: { text: L_SLOT, at: 'start' } });
+    expect(r.body.output.phrase).toContain(L_SLOT);
+    expect((await rpc(OWNER_WHO, 'tools/call', { name: 'get_job', arguments: { jobId: localJob } })).text).toContain(L_SLOT);
+  });
+  it('the job row keeps the text\'s digest and length, never the typed request; no log line holds either', () => {
+    const row = store.getJob(localJob);
+    expect(Object.keys(row.input).sort()).toEqual(['adapter', 'kind', 'lang', 'port', 'profile', 'promptDigest', 'requestedBy', 'text', 'timeoutSeconds']);
+    expect(markLocal(JSON.stringify(row.input))).toBeNull();
+    expect(JSON.stringify(row)).not.toContain(L_TYPED);
+    expect(logged.filter((l) => markLocal(l))).toEqual([]);
+  });
+  for (const who of OTHERS) it(`as ${who.name}: GET /jobs/:jobId and MCP get_job give the stub; both local routes 403 owner_required; every REST route and MCP tool and resource is free of the plant`, async () => {
+    const row = store.getJob(localJob);
+    const want = { id: localJob, projectId: pid, type: ASSISTANT_JOB_TYPE, actor: ASSISTANT_ACTOR, status: 'succeeded', createdAt: row.createdAt, updatedAt: row.updatedAt };
+    expect((await rest(who, 'GET', `/jobs/${localJob}`)).body).toEqual(want);
+    expect(JSON.parse((await rpc(who, 'tools/call', { name: 'get_job', arguments: { jobId: localJob } })).result.content[0].text)).toEqual(want);
+    for (const [method, route] of [['POST', '/assistant/local/check'], ['POST', `/assistant/jobs/${localJob}/taken`]] as const) {
+      const r = await rest(who, method, route, {});
+      expect([r.status, r.body.error.code], route).toEqual([403, 'owner_required']);
+      expect(markLocal(JSON.stringify(r.body))).toBeNull();
+    }
+    const leaks: string[] = [];
+    const params: Record<string, string> = { id: pid, jobId: localJob, proposalId, sequenceId: 'seq_main', index: '0', kind: 'thumb' };
+    for (const key of Object.keys(PEOPLE_REST_SURFACES)) {
+      const [method, route] = key.split(' ') as [string, string];
+      if (PEOPLE_REST_SURFACES[key]!.includes('renderer-only') || key === 'ALL /mcp' || route.endsWith('/events')) continue;
+      if (method !== 'GET' && !/:jobId|proposal|assistant/.test(route)) continue;
+      const url = `${base()}${route.replace(/:([A-Za-z]+)/g, (_, k: string) => encodeURIComponent(params[k] ?? 'none'))}`;
+      const r = await fetchRaw(who, method, url, method === 'GET' ? undefined : { __walk: 1 });
+      const found = markLocal(r.buf.toString('utf8')) ?? markLocal(r.headers);
+      if (found) leaks.push(`${key} → ${r.status}: ${found}`);
+    }
+    const tools = (await rpc(who, 'tools/list', {})).result.tools as { name: string; annotations?: { readOnlyHint?: boolean }; inputSchema?: { properties?: Record<string, unknown> } }[];
+    for (const t of tools.filter((x) => x.annotations?.readOnlyHint || Object.hasOwn(x.inputSchema?.properties ?? {}, 'jobId'))) {
+      const found = markLocal((await rpc(who, 'tools/call', { name: t.name, arguments: { projectId: pid, jobId: localJob, frameIndex: 10, frames: [0, 10] } })).text);
+      if (found) leaks.push(`tool ${t.name}: ${found}`);
+    }
+    for (const r of (await rpc(who, 'resources/list', {})).result.resources ?? []) { const found = markLocal((await rpc(who, 'resources/read', { uri: r.uri })).text); if (found) leaks.push(`resource ${r.uri}: ${found}`); }
+    expect(leaks).toEqual([]);
+  }, 120_000);
+  it('the event stream: a listener other than the owner\'s session hears a local job (and its taken) as the stub only', async () => {
+    const listen = async (who: Who) => {
+      const r = await app.fetch(new Request(`${base()}/api/v1/projects/${pid}/events`, { headers: who.headers() }));
+      const reader = r.body!.getReader();
+      const s = { text: '' };
+      const read = async (until: (t: string) => boolean) => { const end = Date.now() + 5000; while (!until(s.text) && Date.now() < end) { const c = await Promise.race([reader.read(), new Promise<null>((ok) => setTimeout(() => ok(null), 100))]); if (c && !c.done) s.text += Buffer.from(c.value).toString('utf8'); } };
+      await read((t) => t.includes('event: hello'));
+      return { who, s, read, close: () => reader.cancel() };
+    };
+    const ls = await Promise.all([OWNER_WHO, ...OTHERS].map(listen));
+    const j = await askLocal(); await settled(j);
+    expect((await rest(OWNER_WHO, 'POST', `/assistant/jobs/${j}/taken`, {})).status).toBe(204);
+    const heard = (t: string) => new RegExp(`"id":"${j}"[^\\n]*"status":"succeeded"`).test(t);
+    for (const l of ls) { await l.read(heard); await l.close(); }
+    const [own, ...others] = ls;
+    expect(own!.s.text).toContain(L_SLOT); // control
+    expect(own!.s.text).toContain('"cleared":true');
+    for (const l of others) {
+      expect(heard(l.s.text), l.who.name).toBe(true);
+      expect(markLocal(l.s.text), l.who.name).toBeNull();
+      for (const e of l.s.text.split('\n\n').filter((x) => x.includes('event: job')).map((x) => JSON.parse(x.split('\n').find((y) => y.startsWith('data:'))!.slice(5)))) {
+        expect(Object.keys(e).sort(), l.who.name).toEqual(['actor', 'createdAt', 'id', 'projectId', 'status', 'type', 'updatedAt']);
+      }
+    }
+  }, 60_000);
+  it('at rest: the typed request is in no file; the text slot is in the database only until taken («הכנס לשורה» / «התעלם»), then in no file, no backup made afterwards and no archive', async () => {
+    // the event-stream test's request already cleared the first job's phrase (the next request on the project clears it)
+    expect(store.getJob(localJob).output).toMatchObject({ cleared: true, phrase: null, slots: {} });
+    const fresh = await askLocal(); await settled(fresh);
+    store.db.pragma('wal_checkpoint(TRUNCATE)');
+    expect(holding(dir, L_TYPED)).toEqual([]);
+    expect(holding(dir, L_SLOT).length).toBeGreaterThan(0); // control: until taken
+    const r = await rest(OWNER_WHO, 'POST', `/assistant/jobs/${fresh}/taken`, {});
+    expect(r.status).toBe(204);
+    expect(store.getJob(fresh).output).toMatchObject({ cleared: true, phrase: null, slots: {} });
+    expect(holding(dir, L_SLOT)).toEqual([]);
+    expect(holding(dir, L_TYPED)).toEqual([]);
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-ajp-lbackup-'));
+    try {
+      await backupDataDir(dir, dest);
+      for (const w of L_MARKS) expect(holding(dest, w), w).toEqual([]);
+    } finally { fs.rmSync(dest, { recursive: true, force: true }); }
+    // a phrase still pending is not in an archive either (an archive holds no job at all)
+    const pending = await askLocal(); await settled(pending);
+    const standIns: string[] = [];
+    for (const hash of archiveBlobs(store.getProject(pid).doc)) { const file = store.blobPath(hash); if (!fs.existsSync(file)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'x'); standIns.push(file); } }
+    const arc = await fetchRaw(OWNER_WHO, 'GET', `${base()}/api/v1/projects/${pid}/archive`);
+    expect(arc.status).toBe(200);
+    expect(markLocal(arc.buf.toString('utf8'))).toBeNull();
+    for (const file of standIns) fs.rmSync(file);
+    expect(logged.filter((l) => markLocal(l))).toEqual([]);
+  });
+});

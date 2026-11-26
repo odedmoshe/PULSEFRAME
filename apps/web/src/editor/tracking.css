@@ -1,0 +1,34 @@
+/* Motion tracking UI (ADR-0015). The picker's geometry uses physical left/top on purpose (the canvas is never mirrored), like
+   the canvas handles (interactions.css); its bar and the panels follow the page direction. Colours are the theme tokens. */
+.tp-clip { position: absolute; inset: 0; overflow: clip; pointer-events: none; z-index: 4; }
+.tp-root { position: absolute; direction: ltr; pointer-events: none; }
+.tp-surface { position: absolute; inset: 0; pointer-events: auto; cursor: crosshair; touch-action: none; outline-offset: -3px; }
+.tp-surface:focus-visible { outline: 2px solid var(--pf-frame); }
+.tp-point { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border: 2px solid var(--pf-pulse); border-radius: 50%; box-shadow: 0 0 0 1px var(--pf-plate); pointer-events: none; }
+.tp-point::before, .tp-point::after { content: ''; position: absolute; background: var(--pf-pulse); left: 50%; top: 50%; }
+.tp-point::before { width: 26px; height: 2px; margin: -1px 0 0 -13px; }
+.tp-point::after { width: 2px; height: 26px; margin: -13px 0 0 -1px; }
+.tp-box { position: absolute; box-sizing: border-box; border: 2px dashed var(--pf-pulse); box-shadow: 0 0 0 1px var(--pf-plate); pointer-events: none; }
+.tp-bar { position: absolute; inset-inline-start: var(--pf-sp-6); top: var(--pf-sp-6); max-width: min(420px, 60%); z-index: 5; display: grid; gap: var(--pf-sp-4);
+  padding: var(--pf-sp-5); background: var(--pf-surface-3); color: var(--pf-text); border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); box-shadow: var(--pf-e2); }
+.tp-help { margin: 0; font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
+.tp-error { margin: 0; font-size: var(--pf-fs-xs); color: var(--pf-danger); }
+
+/* panels */
+.mtrack-list, .mtrack-problems, .redact-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--pf-sp-4); }
+.mtrack-item, .redact-region { display: grid; gap: var(--pf-sp-4); padding: var(--pf-sp-4); border: 0; box-shadow: inset 0 0 0 1px var(--pf-line-strong); border-radius: var(--pf-r-md); background: var(--pf-surface-2); }
+.mtrack-item[data-active='true'] { box-shadow: inset 0 0 0 1.5px var(--pf-frame); }
+.mtrack-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-4); }
+.mtrack-name { font-weight: 700; overflow-wrap: anywhere; }
+.mtrack-counts { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; list-style: none; font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
+.mtrack-problems li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-4); font-size: var(--pf-fs-xs); }
+.mtrack-bar { inline-size: 100%; block-size: 8px; border-radius: 4px; background: var(--pf-surface-4); overflow: hidden; }
+.mtrack-bar > span { display: block; block-size: 100%; background: var(--pf-frame); }
+.mtrack-bar[data-indeterminate='true'] > span { inline-size: 30% !important; opacity: 0.6; }
+/* The standing warning of privacy regions: always in view while a region is tracked, never folded behind "?" */
+.redact-warning { position: relative; margin: 0; padding: var(--pf-sp-4) var(--pf-sp-5); padding-inline-start: calc(var(--pf-sp-5) + 4px); border: 0; border-radius: var(--pf-r-md); color: var(--pf-text);
+  background: color-mix(in srgb, var(--pf-attention) 14%, var(--pf-surface-2)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pf-attention) 55%, transparent); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); font-weight: var(--pf-fw-medium); }
+.redact-warning::before { content: ''; position: absolute; inset-block: 0; inset-inline-start: 0; inline-size: 4px; border-start-start-radius: var(--pf-r-md); border-end-start-radius: var(--pf-r-md); background: var(--pf-attention); }
+.follow-state { font-size: var(--pf-fs-xs); color: var(--pf-text-2); margin: 0; }
+.tracking-msg { margin: 0; font-size: var(--pf-fs-xs); }
+.tracking-msg.danger { color: var(--pf-danger); }

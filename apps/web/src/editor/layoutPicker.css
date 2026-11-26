@@ -1,0 +1,14 @@
+/* Layout tiles: a small drawing of the cells in the project's own frame shape. Colours are the brand tokens. */
+.layout-picker { border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); padding: var(--pf-sp-4); margin: var(--pf-sp-4) 0; min-width: 0; }
+.layout-picker legend { padding: 0 var(--pf-sp-3); font-weight: 600; }
+.lp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: var(--pf-sp-3); margin: var(--pf-sp-3) 0; }
+.lp-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: var(--pf-sp-3) 4px; background: var(--pf-surface-2); border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-sm); color: var(--pf-text); cursor: pointer; min-width: 0; }
+.lp-tile:hover { border-color: var(--pf-frame); }
+.lp-tile:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+.lp-frame { fill: var(--pf-stage); stroke: var(--pf-line-strong); }
+.lp-cell { stroke: none; }
+.lp-cell-0 { fill: var(--pf-info); } .lp-cell-1 { fill: var(--pf-frame); } .lp-cell-2 { fill: var(--pf-k-text); } .lp-cell-3 { fill: var(--pf-pulse); }
+.lp-name { font-size: var(--pf-fs-xs); text-align: center; line-height: 1.25; }
+.pf-insp .layout-picker { box-shadow: none; padding: 0; margin: 0; border: 0; }
+.pf-insp .lp-tile { border: 0; box-shadow: inset 0 0 0 1px var(--pf-line-strong); border-radius: var(--pf-r-md); }
+.pf-insp .lp-tile:hover { box-shadow: inset 0 0 0 1.5px var(--pf-frame); border: 0; background: var(--pf-surface-3); }

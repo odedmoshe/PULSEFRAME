@@ -1,0 +1,271 @@
+{
+ "when": "2026-11-26T15:15:16.003Z",
+ "exit": 0,
+ "results": [
+  {
+   "check": "1 Openverse search: rows carry licence id and name from the answer; the double saw exactly q, the filters and \"User-Agent: PULSEFRAME-Studio\", and no project or owner text",
+   "state": "pass"
+  },
+  {
+   "check": "1b Openverse anonymous: the remaining-searches number counts down from 5 an hour; before the double would answer 429 the answer says how many are left; a 429 maps to provider_rate_limited with retryAfterSeconds",
+   "state": "pass"
+  },
+  {
+   "check": "2 Pixabay without a key: provider_key_missing; with the key stored by the owner's session the double saw it; no answer, log line, job row or SSE event contains it; an agent storing a key gets 403 owner_required",
+   "state": "pass"
+  },
+  {
+   "check": "3 a second identical Pixabay search within 24 h is served from memory (the double counted one request); no query on disk (grep of the data directory)",
+   "state": "pass"
+  },
+  {
+   "check": "3b Wikimedia without a contact: provider_contact_missing; with one the double saw \"PULSEFRAME-Studio (<contact>)\"; Artist HTML is shown as text",
+   "state": "pass"
+  },
+  {
+   "check": "4 a preview handle streams the double's bytes with Range (206); an unknown handle is 404 preview_not_found; a URL in place of a handle is never fetched",
+   "state": "pass"
+  },
+  {
+   "check": "5 import of a CC BY item as an AGENT credential: one use_source_item commit and one add_clip at the playhead, both as that agent; provenance.source validates; sha256 = the original hash; the credit verbatim; fetchedAt set; undo removes it exactly",
+   "state": "pass"
+  },
+  {
+   "check": "6 the download breaks at 50%: the job resumes with Range + If-Range (the double saw bytes=n-); with a changed ETag, or a 200 to the Range, it restarts at 0; the final hash is equal",
+   "state": "pass"
+  },
+  {
+   "check": "7 server restart mid-download: recover continues the .part; after success, after cancel and after a failure no src_* .part, up_ file or .link sidecar is left",
+   "state": "pass"
+  },
+  {
+   "check": "8 limit 100 KB: a larger file with no Content-Length, and one whose Content-Length is above the limit, fail download_too_large naming the number, nothing stored; one whose Content-Length lies low is cut at the declared length by HTTP/1.1 and fails, nothing stored; a setting above the upload limit is capped at it",
+   "state": "pass"
+  },
+  {
+   "check": "9 links to 127.0.0.1, [::ffff:127.0.0.1], [::1], 169.254.169.254, 0.0.0.0, this machine's own interface address, a public link redirecting to loopback and the name localhost: link_address_refused; a home-network link (the double's private address) imports with link_private_network (a name answering a public AND a loopback address: apps/server connectors/fetch.test.ts, with an injected lookup)",
+   "state": "pass"
+  },
+  {
+   "check": "9b the DEFAULT address policy (nothing injected) refuses 127.0.0.1",
+   "state": "pass"
+  },
+  {
+   "check": "10 a link answering text/html: download_not_media; a Dropbox share link (dl=0) is fetched as dl=1 and its pageUrl keeps dl=0 out",
+   "state": "pass"
+  },
+  {
+   "check": "11 an NC item and an ND item: imported with warnings (no refusal); the export answers non_commercial_content and licence_no_derivatives naming the licences and quoting the ND deed sentence; the export succeeds; a shared archive leaves the NC and the Pixabay files out",
+   "state": "pass"
+  },
+  {
+   "check": "12 credits of the library-only golden documents are byte-identical to credits.golden.json; a project with only a CC BY source credit gets a credits card and an export reminder (C3)",
+   "state": "pass"
+  },
+  {
+   "check": "13 music fit of a CC BY-SA Openverse song: shortened with the share-alike warning quoting the deed; the copy carries the source record; its credit is listed with the shortened line (C4)",
+   "state": "pass"
+  },
+  {
+   "check": "14 the same idempotencyKey twice: one job, one download",
+   "state": "pass"
+  },
+  {
+   "check": "15 UI (headless Chromium): the «מאגר» tab reaches results, Space previews, Enter places at the playhead, the link box imports; Settings › «חיבורים» stores a key from the owner's session; RTL; the keyboard path without a mouse",
+   "state": "pass"
+  }
+ ],
+ "evidence": {
+  "1": {
+   "query": {
+    "q": "red cat",
+    "page": "1",
+    "page_size": "20",
+    "category": "photograph"
+   },
+   "userAgent": "PULSEFRAME-Studio",
+   "remaining": {
+    "count": 4,
+    "perSeconds": 3600
+   }
+  },
+  "2": {
+   "sseBytes": 7120,
+   "jobId": "job_9rUfVASB8bQ",
+   "keyFoundIn": []
+  },
+  "3": {
+   "cached": true,
+   "requestsAdded": 0,
+   "rows": 1
+  },
+  "4": {
+   "status": 206,
+   "contentRange": "bytes 0-9/190"
+  },
+  "5": {
+   "commits": [
+    "use_source_item",
+    "add_clip"
+   ],
+   "sha256": "b9934c0b1102308dc82c4e579ccef94781a150157cbfaaf40bd741b7b8ac8340",
+   "credit": "\"Red cat\" by Ann Author is licensed under CC BY 4.0. To view a copy of this license, visit https://creativecommons.org/licenses/by/4.0/."
+  },
+  "6": {
+   "resumedFrom": 221650,
+   "range": "bytes=221650-",
+   "ifRange": "\"v1\""
+  },
+  "7": {
+   "resumedRange": "bytes=40000-",
+   "afterSuccessCancelFailure": []
+  },
+  "8": {
+   "refused": [
+    [
+     "download_too_large",
+     100000
+    ],
+    [
+     "download_too_large",
+     100000
+    ],
+    [
+     "lies low",
+     "unsupported_media"
+    ]
+   ],
+   "fileBytes": 443313
+  },
+  "9": {
+   "refused": [
+    "127.0.0.1",
+    "[::ffff:127.0.0.1]",
+    "[::1]",
+    "169.254.169.254",
+    "0.0.0.0",
+    "192.0.2.2"
+   ],
+   "redirectAndNameRefused": true,
+   "privateHost": "127.0.0.10",
+   "machineAddressTested": true,
+   "dualAnswerName": "localhost (resolves to 127.0.0.1 and ::1 here; a name answering one public and one loopback address needs a DNS double: not built)"
+  },
+  "10": {
+   "notMedia": "download_not_media",
+   "dropboxRequest": "https://www.dropbox.com/s/<id>/clip.mp4?dl=1",
+   "pageUrl": "http://127.0.0.9:<port>/s/abc123/clip.mp4",
+   "note": "the Dropbox host itself is not contacted: canonicalLink is checked as a function, and the double serves the same path"
+  },
+  "11": {
+   "exportJob": "job_vaWcxRPBMS0",
+   "exportWarnings": [],
+   "preflight": [
+    [
+     "non_commercial_content",
+     "warning"
+    ],
+    [
+     "credits_for_description",
+     "note"
+    ],
+    [
+     "licence_no_derivatives",
+     "warning"
+    ],
+    [
+     "licence_unconfirmed",
+     "warning"
+    ],
+    [
+     "source_terms",
+     "warning"
+    ],
+    [
+     "no_sound",
+     "note"
+    ],
+    [
+     "upscaled",
+     "warning"
+    ],
+    [
+     "upscaled",
+     "warning"
+    ],
+    [
+     "upscaled",
+     "warning"
+    ]
+   ],
+   "archiveLeavesOut": 3
+  },
+  "12": {
+   "goldenDocs": 5,
+   "reminder": true,
+   "card": 200
+  },
+  "13": {
+   "warnings": [
+    "licence_share_alike"
+   ],
+   "madeRecord": {
+    "id": "CC-BY-SA-4.0",
+    "name": "CC BY-SA 4.0",
+    "url": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "from": "item"
+   },
+   "credit": [
+    {
+     "text": "\"Proof song\" by Dee is licensed under CC BY-SA 4.0. To view a copy of this license, visit https://creativecommons.org/licenses/by-sa/4.0/.",
+     "modified": "shortened"
+    }
+   ]
+  },
+  "14": {
+   "jobId": "job_S7IhF8Q4NBE",
+   "downloads": 1
+  },
+  "15": {
+   "dir": "rtl",
+   "badge": "CC BY 4.0",
+   "previewShown": true,
+   "previewAutoplay": false,
+   "arrowPresses": 0,
+   "placedAtPlayhead": true,
+   "assetsAdded": 2,
+   "linkAnswer": "הקובץ יורד ישירות מהכתובת שהדבקתם",
+   "keyStored": true,
+   "keyLeftInPage": false,
+   "pageErrors": []
+  },
+  "1b": {
+   "counted": [
+    3,
+    2,
+    1,
+    0
+   ],
+   "refusedHere": {
+    "retryAfterSeconds": 3600,
+    "limit": {
+     "requests": 5,
+     "perSeconds": 3600
+    },
+    "countedHere": true
+   },
+   "serviceRetryAfter": 1800
+  },
+  "3b": {
+   "userAgent": "PULSEFRAME-Studio (me@example.invalid)",
+   "author": "Ann"
+  },
+  "9b": {
+   "codes": [
+    "link_address_refused",
+    "link_address_refused"
+   ]
+  }
+ },
+ "note": "LABELLED DOUBLES only (127.0.0.9/10, port 0); synthetic fixtures; no real service, media or key"
+}

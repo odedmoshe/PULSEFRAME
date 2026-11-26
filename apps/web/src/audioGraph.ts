@@ -1,0 +1,66 @@
+/**
+ * WebAudio realisation of one planned audio clip (packages/engine/src/audio.ts), shared by preview and browser export.
+ * chain: source(s) -> clip gain -> [volume automation] -> fade envelope -> duck envelope -> left/right balance -> destination
+ * Envelopes use exact linear ramps between the plan's points, so they match the server's reference mixer.
+ */
+import { envAt, panGains, type EnvPoint, type PlannedAudioClip } from '@pulseframe/engine';
+
+function automate(param: AudioParam, env: EnvPoint[], sampleRate: number, timeOfLocalZero: number, fromLocal: number) {
+  const t = (s: number) => timeOfLocalZero + s / sampleRate;
+  param.setValueAtTime(envAt(env, fromLocal), Math.max(0, t(fromLocal)));
+  for (const p of env) if (p.s > fromLocal) param.linearRampToValueAtTime(p.g, Math.max(0, t(p.s)));
+}
+
+/**
+ * Build the chain for `clip` and return the node that sources connect to.
+ * `timeOfLocalZero` is the context time at which clip-local sample 0 plays (may be in the past when starting mid-clip);
+ * `fromLocal` is the first clip-local sample that will actually be heard.
+ */
+export function plannedClipInput(ctx: BaseAudioContext, clip: PlannedAudioClip, sampleRate: number, destination: AudioNode, timeOfLocalZero: number, fromLocal: number): GainNode {
+  const input = ctx.createGain();
+  // Mono sources are up-mixed to stereo here, so balance and the mix see two channels.
+  input.channelCount = 2;
+  input.channelCountMode = 'explicit';
+  input.channelInterpretation = 'speakers';
+  input.gain.value = clip.gain;
+  const fade = ctx.createGain();
+  const duck = ctx.createGain();
+  automate(fade.gain, clip.fade, sampleRate, timeOfLocalZero, fromLocal);
+  automate(duck.gain, clip.duck, sampleRate, timeOfLocalZero, fromLocal);
+  if (clip.vol) {
+    const vol = ctx.createGain();
+    automate(vol.gain, clip.vol, sampleRate, timeOfLocalZero, fromLocal);
+    input.connect(vol).connect(fade).connect(duck);
+  } else input.connect(fade).connect(duck);
+  if (clip.pan === 0) duck.connect(destination);
+  else {
+    const [gl, gr] = panGains(clip.pan);
+    const split = ctx.createChannelSplitter(2), merge = ctx.createChannelMerger(2);
+    const l = ctx.createGain(), r = ctx.createGain();
+    l.gain.value = gl;
+    r.gain.value = gr;
+    duck.connect(split);
+    split.connect(l, 0).connect(merge, 0, 0);
+    split.connect(r, 1).connect(merge, 0, 1);
+    merge.connect(destination);
+  }
+  return input;
+}
+
+/** A copy of `b` with every channel reversed in time. */
+export function reversedBuffer(ctx: BaseAudioContext, b: AudioBuffer): AudioBuffer {
+  const out = ctx.createBuffer(b.numberOfChannels, b.length, b.sampleRate);
+  for (let ch = 0; ch < b.numberOfChannels; ch++) { const src = b.getChannelData(ch), dst = out.getChannelData(ch); for (let i = 0, n = src.length; i < n; i++) dst[i] = src[n - 1 - i]!; }
+  return out;
+}
+
+/** Seconds [from, to) of a decoded buffer as interleaved stereo float at the buffer's own rate (a mono buffer fills both sides), optionally backwards. */
+export function interleaved(buffer: AudioBuffer, from: number, to: number, backwards: boolean): { sr: number; data: Float32Array } {
+  const sr = buffer.sampleRate;
+  const a = Math.max(0, Math.round(from * sr)), b = Math.min(buffer.length, Math.round(to * sr));
+  const n = Math.max(0, b - a);
+  const l = buffer.getChannelData(0), r = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : l;
+  const data = new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) { const k = backwards ? b - 1 - i : a + i; data[i * 2] = l[k]!; data[i * 2 + 1] = r[k]!; }
+  return { sr, data };
+}

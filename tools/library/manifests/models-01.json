@@ -1,0 +1,649 @@
+{
+  "manifestVersion": 1,
+  "id": "models-01",
+  "title": "First local model set (tier 1): clip search, segmentation, matting, depth, face boxes, small Hebrew-capable assistants, niqqud, audio tagging",
+  "created": "2026-11-25",
+  "notes": "Only models that are not gated (the API reports gated=false; downloaded without an account or accepted terms) and whose licence was read at the publisher on 2026-11-25. Every Hugging Face URL is pinned to a 40-digit commit; bytes and SHA-256 come from the repository tree API (lfs.oid for large files) or, for small non-LFS files, from downloading them on 2026-11-25. Preferred formats: safetensors, ONNX, GGUF; pickle only where nothing else exists (PANNs). Left out because they are gated or non-commercial: see the report. Model files are data: never executed. Sizes are about 8.8 GB in total.",
+  "sources": [
+    {
+      "id": "siglip2-base-patch16-256",
+      "title": "SigLIP 2 base (patch 16, 256 px) - image/text embeddings for clip search",
+      "homepage": "https://huggingface.co/google/siglip2-base-patch16-256",
+      "licence": {
+        "spdx": "Apache-2.0",
+        "url": "https://huggingface.co/google/siglip2-base-patch16-256/blob/3f9f96cb90da5dbc758b01813f2f6f1aee24c1ab/README.md",
+        "readOn": "2026-11-25",
+        "quote": "Model card front matter: \"license: apache-2.0\". Card text: \"SigLIP 2 is pre-trained on the WebLI dataset\"."
+      },
+      "credit": null,
+      "diskOnly": true,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": false,
+      "notes": "Revision 3f9f96cb90da5dbc758b01813f2f6f1aee24c1ab (head on 2026-11-25). Training data: WebLI, undisclosed web data (accepted-risk class in docs/research/2026-11-25-library-models.md section 13 q5). Titled multilingual but the publisher gives no Hebrew figure: Hebrew queries may need translation to English first. The upstream repository is not gated. transformers format (safetensors). Disk only (wave 7 search decisions): the model reads frames of family videos and stays on the owner's disk, never in the repository or a shared archive. Tokenizer (read at source 2026-11-25): the publisher's big_vision README calls it the \"Gemma tokenizer\"; the model card and file list say only apache-2.0 and carry no LICENSE file; the Gemma Terms of Use (ai.google.dev/gemma/terms, last modified 2026-04-01) define Gemma as the models listed in their Appendix, where SigLIP is not listed, and never mention a tokenizer - whether they reach this file is not stated. Their notice and copy-of-terms duties attach to reproducing or distributing to a third party, which this library never does; if a file were ever shared those duties could apply. Terms: gemma.ai/resources/terms and gemma.ai/resources/prohibited_use_policy.",
+      "items": [
+        {
+          "id": "siglip2-base-patch16-256/model.safetensors",
+          "kind": "file",
+          "url": "https://huggingface.co/google/siglip2-base-patch16-256/resolve/3f9f96cb90da5dbc758b01813f2f6f1aee24c1ab/model.safetensors",
+          "dest": "models/search/siglip2-base-patch16-256/model.safetensors",
+          "sha256": "6125cacc01fa93bdc98a0c5101cefcd69b2ed1f8ab4f38d86f4ad5984f5dc863",
+          "bytes": 1500985224
+        },
+        {
+          "id": "siglip2-base-patch16-256/config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/google/siglip2-base-patch16-256/resolve/3f9f96cb90da5dbc758b01813f2f6f1aee24c1ab/config.json",
+          "dest": "models/search/siglip2-base-patch16-256/config.json",
+          "sha256": "7b5aedcb8893e31376e129c1ffd7a5392f1a806dbc793ce53eda220c2ec59edf",
+          "bytes": 276
+        },
+        {
+          "id": "siglip2-base-patch16-256/preprocessor_config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/google/siglip2-base-patch16-256/resolve/3f9f96cb90da5dbc758b01813f2f6f1aee24c1ab/preprocessor_config.json",
+          "dest": "models/search/siglip2-base-patch16-256/preprocessor_config.json",
+          "sha256": "d14ba2ee3fd816f3de8abaddc31953565128eaf37c73ad4bed32101a98465aff",
+          "bytes": 394
+        },
+        {
+          "id": "siglip2-base-patch16-256/special_tokens_map.json",
+          "kind": "file",
+          "url": "https://huggingface.co/google/siglip2-base-patch16-256/resolve/3f9f96cb90da5dbc758b01813f2f6f1aee24c1ab/special_tokens_map.json",
+          "dest": "models/search/siglip2-base-patch16-256/special_tokens_map.json",
+          "sha256": "baec30ea10906f16adb8c18af7a34023002c1746542612b8b41c9f09e1351351",
+          "bytes": 636
+        },
+        {
+          "id": "siglip2-base-patch16-256/tokenizer.json",
+          "kind": "file",
+          "url": "https://huggingface.co/google/siglip2-base-patch16-256/resolve/3f9f96cb90da5dbc758b01813f2f6f1aee24c1ab/tokenizer.json",
+          "dest": "models/search/siglip2-base-patch16-256/tokenizer.json",
+          "sha256": "cb9140fae3ac5122c972d37adf83e1248471a38147ad76f8215c8872c6fd8322",
+          "bytes": 34363039
+        },
+        {
+          "id": "siglip2-base-patch16-256/tokenizer.model",
+          "kind": "file",
+          "url": "https://huggingface.co/google/siglip2-base-patch16-256/resolve/3f9f96cb90da5dbc758b01813f2f6f1aee24c1ab/tokenizer.model",
+          "dest": "models/search/siglip2-base-patch16-256/tokenizer.model",
+          "sha256": "61a7b147390c64585d6c3543dd6fc636906c9af3865a5548f27f31aee1d4c8e2",
+          "bytes": 4241003
+        },
+        {
+          "id": "siglip2-base-patch16-256/tokenizer_config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/google/siglip2-base-patch16-256/resolve/3f9f96cb90da5dbc758b01813f2f6f1aee24c1ab/tokenizer_config.json",
+          "dest": "models/search/siglip2-base-patch16-256/tokenizer_config.json",
+          "sha256": "14afe629fe4959b9e0d51e1852b8d9f7ad074f90a1a7125a4fcdd17f06e78fc8",
+          "bytes": 47164
+        },
+        {
+          "id": "siglip2-base-patch16-256/readme.md",
+          "kind": "file",
+          "url": "https://huggingface.co/google/siglip2-base-patch16-256/resolve/3f9f96cb90da5dbc758b01813f2f6f1aee24c1ab/README.md",
+          "dest": "models/search/siglip2-base-patch16-256/README.md",
+          "sha256": "3f093559c3a18d94d9336249cf2e4e42ec8752413f07eb6634e2820e4ea120ad",
+          "bytes": 3375
+        }
+      ]
+    },
+    {
+      "id": "sam2-1-hiera-tiny",
+      "title": "SAM 2.1 Hiera tiny - click-to-segment and video propagation",
+      "homepage": "https://huggingface.co/facebook/sam2.1-hiera-tiny",
+      "licence": {
+        "spdx": "Apache-2.0",
+        "url": "https://huggingface.co/facebook/sam2.1-hiera-tiny/blob/de431c4043854a71d8101e17995dfe596bf101a5/README.md",
+        "readOn": "2026-11-25",
+        "quote": "Model card front matter: \"license: apache-2.0\"."
+      },
+      "credit": null,
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "Revision de431c4043854a71d8101e17995dfe596bf101a5 (head on 2026-11-25). The pickle checkpoint of the same repository (sam2.1_hiera_tiny.pt) is left out on purpose because the safetensors file carries the same weights. Training-data terms (the SA-V video set) were not reviewed by the research.",
+      "items": [
+        {
+          "id": "sam2-1-hiera-tiny/model.safetensors",
+          "kind": "file",
+          "url": "https://huggingface.co/facebook/sam2.1-hiera-tiny/resolve/de431c4043854a71d8101e17995dfe596bf101a5/model.safetensors",
+          "dest": "models/segmentation/sam2.1-hiera-tiny/model.safetensors",
+          "sha256": "48c14467e5cf9e51870511feb72c89688e82dd74523142c0538b663e193ac2a7",
+          "bytes": 155908064
+        },
+        {
+          "id": "sam2-1-hiera-tiny/config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/facebook/sam2.1-hiera-tiny/resolve/de431c4043854a71d8101e17995dfe596bf101a5/config.json",
+          "dest": "models/segmentation/sam2.1-hiera-tiny/config.json",
+          "sha256": "860aff9751b139d83a4ad7df1e5535416fded533e0ead02625edbefcb9953cce",
+          "bytes": 5695
+        },
+        {
+          "id": "sam2-1-hiera-tiny/preprocessor_config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/facebook/sam2.1-hiera-tiny/resolve/de431c4043854a71d8101e17995dfe596bf101a5/preprocessor_config.json",
+          "dest": "models/segmentation/sam2.1-hiera-tiny/preprocessor_config.json",
+          "sha256": "6ebf229ee259368ce4a8d4f2fe893a72b053023710853e257253939e601f583d",
+          "bytes": 683
+        },
+        {
+          "id": "sam2-1-hiera-tiny/processor_config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/facebook/sam2.1-hiera-tiny/resolve/de431c4043854a71d8101e17995dfe596bf101a5/processor_config.json",
+          "dest": "models/segmentation/sam2.1-hiera-tiny/processor_config.json",
+          "sha256": "f8a68e865cfad115c1c2763f3d93eca7b1c622da06da2a9273eb437fb2389b6d",
+          "bytes": 95
+        },
+        {
+          "id": "sam2-1-hiera-tiny/video_preprocessor_config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/facebook/sam2.1-hiera-tiny/resolve/de431c4043854a71d8101e17995dfe596bf101a5/video_preprocessor_config.json",
+          "dest": "models/segmentation/sam2.1-hiera-tiny/video_preprocessor_config.json",
+          "sha256": "9fccfe5f464ec38c2f236d0e6a68e95511c80c22132fc2fa4b9f7b65f24fad95",
+          "bytes": 705
+        },
+        {
+          "id": "sam2-1-hiera-tiny/sam2.1_hiera_t.yaml",
+          "kind": "file",
+          "url": "https://huggingface.co/facebook/sam2.1-hiera-tiny/resolve/de431c4043854a71d8101e17995dfe596bf101a5/sam2.1_hiera_t.yaml",
+          "dest": "models/segmentation/sam2.1-hiera-tiny/sam2.1_hiera_t.yaml",
+          "sha256": "43e114f609a1af7efede061f5c186119d498acd31f118f300c07acf57d4a5eca",
+          "bytes": 3855
+        },
+        {
+          "id": "sam2-1-hiera-tiny/readme.md",
+          "kind": "file",
+          "url": "https://huggingface.co/facebook/sam2.1-hiera-tiny/resolve/de431c4043854a71d8101e17995dfe596bf101a5/README.md",
+          "dest": "models/segmentation/sam2.1-hiera-tiny/README.md",
+          "sha256": "dfa401b1b9358b9650ae487dd2f2bb336fd745c3609e3244adf2e97a22343857",
+          "bytes": 19965
+        }
+      ]
+    },
+    {
+      "id": "sam2-1-hiera-small",
+      "title": "SAM 2.1 Hiera small - click-to-segment and video propagation",
+      "homepage": "https://huggingface.co/facebook/sam2.1-hiera-small",
+      "licence": {
+        "spdx": "Apache-2.0",
+        "url": "https://huggingface.co/facebook/sam2.1-hiera-small/blob/ee5bba1d82bb8749febdf90f45e84b687142ba03/README.md",
+        "readOn": "2026-11-25",
+        "quote": "Model card front matter: \"license: apache-2.0\"."
+      },
+      "credit": null,
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "Revision ee5bba1d82bb8749febdf90f45e84b687142ba03 (head on 2026-11-25). The pickle checkpoint of the same repository (sam2.1_hiera_small.pt) is left out on purpose because the safetensors file carries the same weights. Training-data terms (the SA-V video set) were not reviewed by the research.",
+      "items": [
+        {
+          "id": "sam2-1-hiera-small/model.safetensors",
+          "kind": "file",
+          "url": "https://huggingface.co/facebook/sam2.1-hiera-small/resolve/ee5bba1d82bb8749febdf90f45e84b687142ba03/model.safetensors",
+          "dest": "models/segmentation/sam2.1-hiera-small/model.safetensors",
+          "sha256": "0a4067b11ce1e23d5229203f11c718a823060d15a4b23fa2372a7d4b77cbbc60",
+          "bytes": 184305280
+        },
+        {
+          "id": "sam2-1-hiera-small/config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/facebook/sam2.1-hiera-small/resolve/ee5bba1d82bb8749febdf90f45e84b687142ba03/config.json",
+          "dest": "models/segmentation/sam2.1-hiera-small/config.json",
+          "sha256": "97ff9f65b76d107acda4247885f0a5555d0048850ae3c5f97183df289aaecde9",
+          "bytes": 5698
+        },
+        {
+          "id": "sam2-1-hiera-small/preprocessor_config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/facebook/sam2.1-hiera-small/resolve/ee5bba1d82bb8749febdf90f45e84b687142ba03/preprocessor_config.json",
+          "dest": "models/segmentation/sam2.1-hiera-small/preprocessor_config.json",
+          "sha256": "6ebf229ee259368ce4a8d4f2fe893a72b053023710853e257253939e601f583d",
+          "bytes": 683
+        },
+        {
+          "id": "sam2-1-hiera-small/processor_config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/facebook/sam2.1-hiera-small/resolve/ee5bba1d82bb8749febdf90f45e84b687142ba03/processor_config.json",
+          "dest": "models/segmentation/sam2.1-hiera-small/processor_config.json",
+          "sha256": "f8a68e865cfad115c1c2763f3d93eca7b1c622da06da2a9273eb437fb2389b6d",
+          "bytes": 95
+        },
+        {
+          "id": "sam2-1-hiera-small/video_preprocessor_config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/facebook/sam2.1-hiera-small/resolve/ee5bba1d82bb8749febdf90f45e84b687142ba03/video_preprocessor_config.json",
+          "dest": "models/segmentation/sam2.1-hiera-small/video_preprocessor_config.json",
+          "sha256": "9fccfe5f464ec38c2f236d0e6a68e95511c80c22132fc2fa4b9f7b65f24fad95",
+          "bytes": 705
+        },
+        {
+          "id": "sam2-1-hiera-small/sam2.1_hiera_s.yaml",
+          "kind": "file",
+          "url": "https://huggingface.co/facebook/sam2.1-hiera-small/resolve/ee5bba1d82bb8749febdf90f45e84b687142ba03/sam2.1_hiera_s.yaml",
+          "dest": "models/segmentation/sam2.1-hiera-small/sam2.1_hiera_s.yaml",
+          "sha256": "632e5cd0104f5ab6cd4f9d2dfd80a8e7240e481ad7960a13cad2ae3504b88dbd",
+          "bytes": 3761
+        },
+        {
+          "id": "sam2-1-hiera-small/readme.md",
+          "kind": "file",
+          "url": "https://huggingface.co/facebook/sam2.1-hiera-small/resolve/ee5bba1d82bb8749febdf90f45e84b687142ba03/README.md",
+          "dest": "models/segmentation/sam2.1-hiera-small/README.md",
+          "sha256": "6ec2d54879e41ad876d8cded0d641e8bc6ab74d5e095a73afc3f8406372ee6e9",
+          "bytes": 19974
+        }
+      ]
+    },
+    {
+      "id": "birefnet-lite",
+      "title": "BiRefNet lite (Swin-T) - background removal for video frames",
+      "homepage": "https://huggingface.co/ZhengPeng7/BiRefNet_lite",
+      "licence": {
+        "spdx": "MIT",
+        "url": "https://huggingface.co/ZhengPeng7/BiRefNet_lite/blob/aa62cd87eafb9cc43056d08ef3615a14628b831d/README.md",
+        "readOn": "2026-11-25",
+        "quote": "Model card front matter: \"license: mit\"; badge in the card links License-MIT."
+      },
+      "credit": null,
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "Revision aa62cd87eafb9cc43056d08ef3615a14628b831d (head on 2026-11-25). The Python files (birefnet.py, BiRefNet_config.py, handler.py) are the publisher's model code that transformers loads with trust_remote_code: stored as data here, never executed by the fetcher; read them before the editor runs them. Training-data terms were not reviewed by the research.",
+      "items": [
+        {
+          "id": "birefnet-lite/model.safetensors",
+          "kind": "file",
+          "url": "https://huggingface.co/ZhengPeng7/BiRefNet_lite/resolve/aa62cd87eafb9cc43056d08ef3615a14628b831d/model.safetensors",
+          "dest": "models/background_removal/birefnet-lite/model.safetensors",
+          "sha256": "4417d89795250e698c3cb0ae8df15743810065f646f48a694fdfa7ca052d0815",
+          "bytes": 177634392
+        },
+        {
+          "id": "birefnet-lite/config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/ZhengPeng7/BiRefNet_lite/resolve/aa62cd87eafb9cc43056d08ef3615a14628b831d/config.json",
+          "dest": "models/background_removal/birefnet-lite/config.json",
+          "sha256": "9dc8614fccddd40c601aeadc69b9db6dd820598179b2a2198492e6ffa016a824",
+          "bytes": 410
+        },
+        {
+          "id": "birefnet-lite/birefnet_config.py",
+          "kind": "file",
+          "url": "https://huggingface.co/ZhengPeng7/BiRefNet_lite/resolve/aa62cd87eafb9cc43056d08ef3615a14628b831d/BiRefNet_config.py",
+          "dest": "models/background_removal/birefnet-lite/BiRefNet_config.py",
+          "sha256": "e7b8c2a74f6cea6a59553d517f71d47f2c1d90e670a13416af17c25fe2f3dc52",
+          "bytes": 298
+        },
+        {
+          "id": "birefnet-lite/birefnet.py",
+          "kind": "file",
+          "url": "https://huggingface.co/ZhengPeng7/BiRefNet_lite/resolve/aa62cd87eafb9cc43056d08ef3615a14628b831d/birefnet.py",
+          "dest": "models/background_removal/birefnet-lite/birefnet.py",
+          "sha256": "af8568b5be406bf4d2a68a7ed6d72e40f73b37a1fb6fc9ebd71b5b3cbcd069c9",
+          "bytes": 92134
+        },
+        {
+          "id": "birefnet-lite/handler.py",
+          "kind": "file",
+          "url": "https://huggingface.co/ZhengPeng7/BiRefNet_lite/resolve/aa62cd87eafb9cc43056d08ef3615a14628b831d/handler.py",
+          "dest": "models/background_removal/birefnet-lite/handler.py",
+          "sha256": "15630ff8225d2d343ca3f7c0a9ef688ce0335d87a3255ae5a7903a16b147259f",
+          "bytes": 4712
+        },
+        {
+          "id": "birefnet-lite/requirements.txt",
+          "kind": "file",
+          "url": "https://huggingface.co/ZhengPeng7/BiRefNet_lite/resolve/aa62cd87eafb9cc43056d08ef3615a14628b831d/requirements.txt",
+          "dest": "models/background_removal/birefnet-lite/requirements.txt",
+          "sha256": "bdfdd83a090d31a2acf64f7350653fa63cd8b5d9d6e0ff3e135bea7ce3786341",
+          "bytes": 149
+        },
+        {
+          "id": "birefnet-lite/readme.md",
+          "kind": "file",
+          "url": "https://huggingface.co/ZhengPeng7/BiRefNet_lite/resolve/aa62cd87eafb9cc43056d08ef3615a14628b831d/README.md",
+          "dest": "models/background_removal/birefnet-lite/README.md",
+          "sha256": "22fe432bdd706e8079ee1c53dcd6192962291d023c84d5416df3c983f6e665a2",
+          "bytes": 8727
+        }
+      ]
+    },
+    {
+      "id": "da3-small",
+      "title": "Depth Anything 3 Small - monocular depth",
+      "homepage": "https://huggingface.co/depth-anything/DA3-SMALL",
+      "licence": {
+        "spdx": "Apache-2.0",
+        "url": "https://huggingface.co/depth-anything/DA3-SMALL/blob/e08cab65ca0ec38e7826075418411ab90cab4da3/README.md",
+        "readOn": "2026-11-25",
+        "quote": "Model card front matter: \"license: apache-2.0\"; card table: \"License | Apache 2.0\"."
+      },
+      "credit": null,
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "Revision e08cab65ca0ec38e7826075418411ab90cab4da3 (head on 2026-11-25). Only the Small and Base sizes are Apache-2.0; DA3 Large, Giant and Nested are CC BY-NC 4.0 and are not in this manifest. Training-data terms were not reviewed by the research.",
+      "items": [
+        {
+          "id": "da3-small/model.safetensors",
+          "kind": "file",
+          "url": "https://huggingface.co/depth-anything/DA3-SMALL/resolve/e08cab65ca0ec38e7826075418411ab90cab4da3/model.safetensors",
+          "dest": "models/depth/da3-small/model.safetensors",
+          "sha256": "364492e38a3a06d221ac75da7f6621ada3f2361cd24fde11ba79091e9f40efcf",
+          "bytes": 137248940
+        },
+        {
+          "id": "da3-small/config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/depth-anything/DA3-SMALL/resolve/e08cab65ca0ec38e7826075418411ab90cab4da3/config.json",
+          "dest": "models/depth/da3-small/config.json",
+          "sha256": "a486e29e82b7ab4a7d4cefc1ea4526cfe2ae438a572c8ca98917cfbcde7447d2",
+          "bytes": 1202
+        },
+        {
+          "id": "da3-small/readme.md",
+          "kind": "file",
+          "url": "https://huggingface.co/depth-anything/DA3-SMALL/resolve/e08cab65ca0ec38e7826075418411ab90cab4da3/README.md",
+          "dest": "models/depth/da3-small/README.md",
+          "sha256": "0a711be055e4eb5293e31586e3176c09ce12eb2e79593f6b96a41f7fe5b415d0",
+          "bytes": 4694
+        }
+      ]
+    },
+    {
+      "id": "da3-base",
+      "title": "Depth Anything 3 Base - monocular depth",
+      "homepage": "https://huggingface.co/depth-anything/DA3-BASE",
+      "licence": {
+        "spdx": "Apache-2.0",
+        "url": "https://huggingface.co/depth-anything/DA3-BASE/blob/f4a6c9b3c95e41c82048423d3493a81ec3fa810e/README.md",
+        "readOn": "2026-11-25",
+        "quote": "Model card front matter: \"license: apache-2.0\"; card table: \"License | Apache 2.0\"."
+      },
+      "credit": null,
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "Revision f4a6c9b3c95e41c82048423d3493a81ec3fa810e (head on 2026-11-25). Only the Small and Base sizes are Apache-2.0; DA3 Large, Giant and Nested are CC BY-NC 4.0 and are not in this manifest. Training-data terms were not reviewed by the research.",
+      "items": [
+        {
+          "id": "da3-base/model.safetensors",
+          "kind": "file",
+          "url": "https://huggingface.co/depth-anything/DA3-BASE/resolve/f4a6c9b3c95e41c82048423d3493a81ec3fa810e/model.safetensors",
+          "dest": "models/depth/da3-base/model.safetensors",
+          "sha256": "e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5",
+          "bytes": 541518028
+        },
+        {
+          "id": "da3-base/config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/depth-anything/DA3-BASE/resolve/f4a6c9b3c95e41c82048423d3493a81ec3fa810e/config.json",
+          "dest": "models/depth/da3-base/config.json",
+          "sha256": "5e34115ebc17bd2d8d43033c5f72e9446ac8833fd61d3fa160b7e67e0bb5b7b5",
+          "bytes": 1205
+        },
+        {
+          "id": "da3-base/readme.md",
+          "kind": "file",
+          "url": "https://huggingface.co/depth-anything/DA3-BASE/resolve/f4a6c9b3c95e41c82048423d3493a81ec3fa810e/README.md",
+          "dest": "models/depth/da3-base/README.md",
+          "sha256": "5388563071b4361b11d6d811b354d454f26aed2adba634fcf4ee3775c8eda480",
+          "bytes": 5682
+        }
+      ]
+    },
+    {
+      "id": "yunet",
+      "title": "YuNet face detection (2023 Mar) - boxes and five landmarks, for framing only",
+      "homepage": "https://huggingface.co/opencv/face_detection_yunet",
+      "licence": {
+        "spdx": "MIT",
+        "url": "https://huggingface.co/opencv/face_detection_yunet/blob/3cc26e7f1014a5ee5d74a42acee58bafc9d0a310/LICENSE",
+        "readOn": "2026-11-25",
+        "quote": "README: \"All files in this directory are licensed under MIT License.\" LICENSE file: \"MIT License / Copyright (c) 2020 Shiqi Yu <shiqi.yu@gmail.com>\"."
+      },
+      "credit": null,
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "Revision 3cc26e7f1014a5ee5d74a42acee58bafc9d0a310 (head on 2026-11-25). Detection only: no face recognition, embedding or grouping of people is proposed anywhere (lead decision). Training-data terms (WIDER Face) were not reviewed by the research. The int8 variants and the demo code of the repository are left out.",
+      "items": [
+        {
+          "id": "yunet/face_detection_yunet_2023mar.onnx",
+          "kind": "file",
+          "url": "https://huggingface.co/opencv/face_detection_yunet/resolve/3cc26e7f1014a5ee5d74a42acee58bafc9d0a310/face_detection_yunet_2023mar.onnx",
+          "dest": "models/face_detection/yunet/face_detection_yunet_2023mar.onnx",
+          "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+          "bytes": 232589
+        },
+        {
+          "id": "yunet/license",
+          "kind": "file",
+          "url": "https://huggingface.co/opencv/face_detection_yunet/resolve/3cc26e7f1014a5ee5d74a42acee58bafc9d0a310/LICENSE",
+          "dest": "models/face_detection/yunet/LICENSE",
+          "sha256": "c83b8120c50ccbd4c4f96edf53141bdd566ebb8f8e9227e415326aa1b1aba958",
+          "bytes": 1085
+        },
+        {
+          "id": "yunet/readme.md",
+          "kind": "file",
+          "url": "https://huggingface.co/opencv/face_detection_yunet/resolve/3cc26e7f1014a5ee5d74a42acee58bafc9d0a310/README.md",
+          "dest": "models/face_detection/yunet/README.md",
+          "sha256": "a45578c40b04f9aaa1e154bca1d0179ffad6dab840458ac8f7cb0a9362413b72",
+          "bytes": 2745
+        }
+      ]
+    },
+    {
+      "id": "dictalm-3-1-7b-thinking-gguf",
+      "title": "DictaLM 3.0 1.7B Thinking (Q4_K_M GGUF) - Hebrew command assistant, candidate A",
+      "homepage": "https://huggingface.co/dicta-il/DictaLM-3.0-1.7B-Thinking-GGUF",
+      "licence": {
+        "spdx": "Apache-2.0",
+        "url": "https://huggingface.co/dicta-il/DictaLM-3.0-1.7B-Thinking-GGUF/blob/34cd052348a4ca310ee4b5011ca73468cc60792a/README.md",
+        "readOn": "2026-11-25",
+        "quote": "Model card front matter: \"license: apache-2.0\"."
+      },
+      "credit": null,
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "Revision 34cd052348a4ca310ee4b5011ca73468cc60792a (head on 2026-11-25). A reasoning (\"Thinking\") model initialised from Qwen3-1.7B-Base. Training corpora (Hebrew and English) are described by the publisher only in general terms. Hebrew instruction and tool-call quality is unmeasured (research section 10). The BF16, Q5_K_M and Q8_0 files of the repository are not fetched. Needs a llama.cpp-class runtime (operator-installed).",
+      "items": [
+        {
+          "id": "dictalm-3-1-7b-thinking-gguf/dictalm-3.0-1.7b-thinking-q4_k_m.gguf",
+          "kind": "file",
+          "url": "https://huggingface.co/dicta-il/DictaLM-3.0-1.7B-Thinking-GGUF/resolve/34cd052348a4ca310ee4b5011ca73468cc60792a/DictaLM-3.0-1.7B-Thinking-Q4_K_M.gguf",
+          "dest": "models/llm/dictalm-3.0-1.7b-thinking-gguf/DictaLM-3.0-1.7B-Thinking-Q4_K_M.gguf",
+          "sha256": "a92a6b58ea48a3ea1b6099bda070bb0dab440b17e2afc527874827be96d28c94",
+          "bytes": 1107409152
+        },
+        {
+          "id": "dictalm-3-1-7b-thinking-gguf/readme.md",
+          "kind": "file",
+          "url": "https://huggingface.co/dicta-il/DictaLM-3.0-1.7B-Thinking-GGUF/resolve/34cd052348a4ca310ee4b5011ca73468cc60792a/README.md",
+          "dest": "models/llm/dictalm-3.0-1.7b-thinking-gguf/README.md",
+          "sha256": "9f8c4dc0a92aa6948e9812ac332d321aeb17b06d1dc224696ca7cf9f16fb02eb",
+          "bytes": 4626
+        }
+      ]
+    },
+    {
+      "id": "gemma-4-e2b-it-qat-q4-0-gguf",
+      "title": "Gemma 4 E2B instruction-tuned (QAT Q4_0 GGUF) - local assistant, candidate B",
+      "homepage": "https://huggingface.co/google/gemma-4-E2B-it-qat-q4_0-gguf",
+      "licence": {
+        "spdx": "Apache-2.0",
+        "url": "https://ai.google.dev/gemma/docs/gemma_4_license",
+        "readOn": "2026-11-25",
+        "quote": "Model card front matter: \"license: apache-2.0\" with \"license_link: https://ai.google.dev/gemma/docs/gemma_4_license\"; card header: \"License: Apache 2.0 | Authors: Google DeepMind\"."
+      },
+      "credit": null,
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "Revision 675cff42a74c774d6cb76f76d8eacb49b48c9b93 (head on 2026-11-25). Not gated (checked: gated=false in the API). Training data is not itemised by the publisher (research section 13 q5). The multimodal projector file (gemma-4-E2B-it-mmproj.gguf, 987 MB) is not fetched: text commands only. Hebrew is not named in the card's language list. Needs a llama.cpp-class runtime (operator-installed).",
+      "items": [
+        {
+          "id": "gemma-4-e2b-it-qat-q4-0-gguf/gemma-4-e2b_q4_0-it.gguf",
+          "kind": "file",
+          "url": "https://huggingface.co/google/gemma-4-E2B-it-qat-q4_0-gguf/resolve/675cff42a74c774d6cb76f76d8eacb49b48c9b93/gemma-4-E2B_q4_0-it.gguf",
+          "dest": "models/llm/gemma-4-e2b-it-qat-q4_0-gguf/gemma-4-E2B_q4_0-it.gguf",
+          "sha256": "fa401b55b07ee70a54c6dae3903c783a6e65064312529ea57175cb5f8dec6634",
+          "bytes": 3349516256
+        },
+        {
+          "id": "gemma-4-e2b-it-qat-q4-0-gguf/readme.md",
+          "kind": "file",
+          "url": "https://huggingface.co/google/gemma-4-E2B-it-qat-q4_0-gguf/resolve/675cff42a74c774d6cb76f76d8eacb49b48c9b93/README.md",
+          "dest": "models/llm/gemma-4-e2b-it-qat-q4_0-gguf/README.md",
+          "sha256": "942e93b96c2f7f2b5fdd8d5578f0f1215e4a354f12e202999b4fbc864bb02ef5",
+          "bytes": 29260
+        }
+      ]
+    },
+    {
+      "id": "dictabert-large-char-menaked",
+      "title": "DictaBERT large char menaked - Hebrew niqqud (vowel points) for captions",
+      "homepage": "https://huggingface.co/dicta-il/dictabert-large-char-menaked",
+      "licence": {
+        "spdx": "CC-BY-4.0",
+        "url": "https://huggingface.co/dicta-il/dictabert-large-char-menaked/blob/4dfc20b94565d7868e1c8c00bf039d38c071a062/README.md",
+        "readOn": "2026-11-25",
+        "quote": "Model card: \"This work is licensed under a Creative Commons Attribution 4.0 International License.\" (front matter \"license: cc-by-4.0\")."
+      },
+      "credit": "Hebrew diacritics: DictaBERT-large-char-menaked by Dicta (https://huggingface.co/dicta-il/dictabert-large-char-menaked), CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)",
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "Revision 4dfc20b94565d7868e1c8c00bf039d38c071a062 (head on 2026-11-25). Credit line composed from the card (the publisher gives no credit sentence of its own). Trained on \"a corpus of modern Hebrew texts manually diacritized by linguistic experts\"; \"not intended for earlier layers of Hebrew (e.g. Biblical, Rabbinic, Premodern), nor for poetic texts\". BertForDiacritization.py is publisher code loaded with trust_remote_code: stored as data, never executed by the fetcher. The same model is the upstream of the Phonikud pointing model already in use.",
+      "items": [
+        {
+          "id": "dictabert-large-char-menaked/model.safetensors",
+          "kind": "file",
+          "url": "https://huggingface.co/dicta-il/dictabert-large-char-menaked/resolve/4dfc20b94565d7868e1c8c00bf039d38c071a062/model.safetensors",
+          "dest": "models/hebrew_nikud/dictabert-large-char-menaked/model.safetensors",
+          "sha256": "c2927643c61f408c7d5ff1652b605b322ed896fa07ded344bd508a02b76bf50e",
+          "bytes": 1222010788
+        },
+        {
+          "id": "dictabert-large-char-menaked/config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/dicta-il/dictabert-large-char-menaked/resolve/4dfc20b94565d7868e1c8c00bf039d38c071a062/config.json",
+          "dest": "models/hebrew_nikud/dictabert-large-char-menaked/config.json",
+          "sha256": "296542de4279f3c252a9566bc78b5182162c5677bfdc26a50cfbb230c7d9f5f0",
+          "bytes": 1273
+        },
+        {
+          "id": "dictabert-large-char-menaked/bertfordiacritization.py",
+          "kind": "file",
+          "url": "https://huggingface.co/dicta-il/dictabert-large-char-menaked/resolve/4dfc20b94565d7868e1c8c00bf039d38c071a062/BertForDiacritization.py",
+          "dest": "models/hebrew_nikud/dictabert-large-char-menaked/BertForDiacritization.py",
+          "sha256": "ce6b896b37aca294291bda0931f9d2ee0cfd8e8dbbd27637224f3604d06a5bb6",
+          "bytes": 7889
+        },
+        {
+          "id": "dictabert-large-char-menaked/special_tokens_map.json",
+          "kind": "file",
+          "url": "https://huggingface.co/dicta-il/dictabert-large-char-menaked/resolve/4dfc20b94565d7868e1c8c00bf039d38c071a062/special_tokens_map.json",
+          "dest": "models/hebrew_nikud/dictabert-large-char-menaked/special_tokens_map.json",
+          "sha256": "5d5b662e421ea9fac075174bb0688ee0d9431699900b90662acd44b2a350503a",
+          "bytes": 695
+        },
+        {
+          "id": "dictabert-large-char-menaked/tokenizer.json",
+          "kind": "file",
+          "url": "https://huggingface.co/dicta-il/dictabert-large-char-menaked/resolve/4dfc20b94565d7868e1c8c00bf039d38c071a062/tokenizer.json",
+          "dest": "models/hebrew_nikud/dictabert-large-char-menaked/tokenizer.json",
+          "sha256": "8e62e3b46c924e14fc32c749ef8944c311411ce9c4dc01c5b606953a169140ba",
+          "bytes": 18016
+        },
+        {
+          "id": "dictabert-large-char-menaked/tokenizer_config.json",
+          "kind": "file",
+          "url": "https://huggingface.co/dicta-il/dictabert-large-char-menaked/resolve/4dfc20b94565d7868e1c8c00bf039d38c071a062/tokenizer_config.json",
+          "dest": "models/hebrew_nikud/dictabert-large-char-menaked/tokenizer_config.json",
+          "sha256": "d742c6b550860659466c889e0983fe808e29c49511f8442f915c4c511859ff92",
+          "bytes": 1352
+        },
+        {
+          "id": "dictabert-large-char-menaked/vocab.txt",
+          "kind": "file",
+          "url": "https://huggingface.co/dicta-il/dictabert-large-char-menaked/resolve/4dfc20b94565d7868e1c8c00bf039d38c071a062/vocab.txt",
+          "dest": "models/hebrew_nikud/dictabert-large-char-menaked/vocab.txt",
+          "sha256": "a0da54b6930c826ba75e41c256181cd53164ab4fd4bfeedca06f75d8d75f9209",
+          "bytes": 3013
+        },
+        {
+          "id": "dictabert-large-char-menaked/readme.md",
+          "kind": "file",
+          "url": "https://huggingface.co/dicta-il/dictabert-large-char-menaked/resolve/4dfc20b94565d7868e1c8c00bf039d38c071a062/README.md",
+          "dest": "models/hebrew_nikud/dictabert-large-char-menaked/README.md",
+          "sha256": "a5056f78260f1157c1a69341acc80671e247a9416548c5a907fc8f47bd2534e6",
+          "bytes": 3017
+        }
+      ]
+    },
+    {
+      "id": "panns-cnn14",
+      "title": "PANNs Cnn14 (AudioSet tagger) - finds laughter, singing, applause, music in clips",
+      "homepage": "https://zenodo.org/records/3987831",
+      "licence": {
+        "spdx": "CC-BY-4.0",
+        "url": "https://zenodo.org/records/3987831",
+        "readOn": "2026-11-25",
+        "quote": "Zenodo record 3987831 (PANNs pretrained models): licence \"Creative Commons Attribution 4.0 International\" (API field license.id = cc-by-4.0); description: \"This upload includes all of the pretrained models from AudioSet introduced in the paper [1] Kong, Qiuqiang, Yin Cao, Turab Iqbal, Yuxuan Wang, Wenwu Wang, and Mark D. Plumbley.\""
+      },
+      "credit": "PANNs: Large-Scale Pretrained Audio Neural Networks for Audio Pattern Recognition, Kong, Cao, Iqbal, Wang, Wang, Plumbley (arXiv:1912.10211), https://doi.org/10.5281/zenodo.3987831, CC BY 4.0",
+      "diskOnly": false,
+      "creditInExport": false,
+      "shareAlike": false,
+      "people": false,
+      "aiGenerated": false,
+      "repoAllowed": true,
+      "notes": "Pickle format: load only with weights_only (the file is a PyTorch .pth; no safetensors or ONNX equivalent is published by the authors). Zenodo publishes md5 only (541141fa2ee191a88f24a3219fff024e, verified to be the value in the API on 2026-11-25); the SHA-256 below is not from the publisher: it was computed by the fetcher on the first download and recorded in the ledger, so this item has bytes only. Host zenodo.org must be added to PF_MODEL_HOSTS before the product downloads it itself. Training data: AudioSet (YouTube clips). AudioSet data is CC BY 4.0 but its ontology (the class names) is CC BY-SA 4.0 (\"Google Inc. ... the ontology is available under a Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0) license\", research.google.com/audioset/download.html, read 2026-11-25): showing the class names in the editor needs an owner decision (research section 13 q6). The code of panns_inference is MIT but was not reviewed.",
+      "items": [
+        {
+          "id": "panns-cnn14/cnn14-map-0.431",
+          "kind": "file",
+          "url": "https://zenodo.org/records/3987831/files/Cnn14_mAP%3D0.431.pth?download=1",
+          "dest": "models/audio_tagging/panns/Cnn14_mAP=0.431.pth",
+          "sha256": "0dc499e40e9761ef5ea061ffc77697697f277f6a960894903df3ada000e34b31",
+          "bytes": 327428481,
+          "notes": "Publisher md5 541141fa2ee191a88f24a3219fff024e; first seen on 2026-11-25 (the publisher gives no hash)"
+        }
+      ]
+    }
+  ]
+}

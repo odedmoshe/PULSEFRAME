@@ -1,0 +1,553 @@
+{
+ "proof": "pnpm proof:ai-local",
+ "at": "2026-11-17T15:35:14.663Z",
+ "label": "CPU only: this machine, one run each. Functional checks and measurements, not a quality review: nobody has read the Hebrew output or listened to the cleaned voice. Timings are for this machine only.",
+ "machine": {
+  "cpus": 4,
+  "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "ramBytes": 16869134336,
+  "platform": "linux-x64",
+  "node": "v22.23.4"
+ },
+ "peakRssKb": {
+  "toolsWorker": 1370032,
+  "ffmpeg": 49640,
+  "deepFilter": 51696,
+  "serverProcess": 308360,
+  "basis": "VmRSS of the engine processes sampled every 100 ms from /proc; maxRSS of this process (the server ran in it)"
+ },
+ "digests": {
+  "deepFilterBinarySha256": "70775e251eee44c0f2451a1e833326cf8bcbbe304d3e7cd12851e6fce72ef7da",
+  "tools": [
+   {
+    "id": "local.text.translate-he-en",
+    "codeDigest": "sha256:0554aaec9f8fc5ce8367a01a7f59ba4fb1c29ae04291c5476fb6f18e3996c700",
+    "models": [
+     {
+      "path": "translate/opus-mt-tc-big-he-en/model.safetensors",
+      "sha256": "a87ec3a7225963cbc97874f7f39c6faaaa9de869dd5e84485617c6612ceac823",
+      "bytes": 476295730
+     },
+     {
+      "path": "translate/opus-mt-tc-big-he-en/config.json",
+      "sha256": "1683ad5411d493dd6a912b64a23b05a66685b8b0857968783ded5d69a5caefc9",
+      "bytes": 1076
+     },
+     {
+      "path": "translate/opus-mt-tc-big-he-en/generation_config.json",
+      "sha256": "178cc4339ea8866ac2ff9e1f20fb609786db7af6bee92824e9cdb26f6648bfb5",
+      "bytes": 301
+     },
+     {
+      "path": "translate/opus-mt-tc-big-he-en/source.spm",
+      "sha256": "13dabf370542066abcfd660e72887d0ce1296a04e15913d2ec47793656434257",
+      "bytes": 881489
+     },
+     {
+      "path": "translate/opus-mt-tc-big-he-en/special_tokens_map.json",
+      "sha256": "09059cedc26bc46bc09a52f05b92d4922e11917e87f3b92059bb1a63a59ab2c4",
+      "bytes": 65
+     },
+     {
+      "path": "translate/opus-mt-tc-big-he-en/target.spm",
+      "sha256": "da28ecbe4e59653b716708410b78edbd9fd639978f01002e2a8bc9319b1ee933",
+      "bytes": 799154
+     },
+     {
+      "path": "translate/opus-mt-tc-big-he-en/tokenizer_config.json",
+      "sha256": "a762d3bfc6544225c4dd9940cd2d4e33330be65caf3bb339229e2b3564ce6cd5",
+      "bytes": 337
+     },
+     {
+      "path": "translate/opus-mt-tc-big-he-en/vocab.json",
+      "sha256": "abe93c914993f4dd8c10a7ff9cd97e813fcd1dd28dafb539504b509d8ad6183f",
+      "bytes": 2072892
+     }
+    ]
+   },
+   {
+    "id": "local.text.translate-en-he",
+    "codeDigest": "sha256:0554aaec9f8fc5ce8367a01a7f59ba4fb1c29ae04291c5476fb6f18e3996c700",
+    "models": [
+     {
+      "path": "translate/opus-mt-en-he/pytorch_model.bin",
+      "sha256": "c0aad3671d8043d87ecbead016c218162f4c1549a4eb6ad8785e59657d22708b",
+      "bytes": 313806597
+     },
+     {
+      "path": "translate/opus-mt-en-he/config.json",
+      "sha256": "b36e190a703da93920e504505f743ba90f6c19bb364a57e14167d6cc63afad9e",
+      "bytes": 1381
+     },
+     {
+      "path": "translate/opus-mt-en-he/generation_config.json",
+      "sha256": "078524b1a757630498b0ab013ffaa9c1b95685bd0a1d4f4d679206cafdc9a405",
+      "bytes": 293
+     },
+     {
+      "path": "translate/opus-mt-en-he/source.spm",
+      "sha256": "d390d1e87cfdc0f22eeb61aa787992cd4d622bbf8f5b9ae53eef3e9fda478967",
+      "bytes": 799290
+     },
+     {
+      "path": "translate/opus-mt-en-he/target.spm",
+      "sha256": "fc2027ba8b1dfda75e44d91c87d203551731c56872c12b0af9b7e1b5de6cd69d",
+      "bytes": 890322
+     },
+     {
+      "path": "translate/opus-mt-en-he/tokenizer_config.json",
+      "sha256": "615d815e4d8519af3c1f1776a53105e00b38d6eef88303f3d4c66a671c20182f",
+      "bytes": 42
+     },
+     {
+      "path": "translate/opus-mt-en-he/vocab.json",
+      "sha256": "cc36fc104f67548ff398155cd4022418397b0ed3ec5aaac99ec5e3557f5799a1",
+      "bytes": 2153795
+     }
+    ]
+   },
+   {
+    "id": "local.voice.clean",
+    "codeDigest": "sha256:4018c1b7ba6467857354008f8d007772c2b35db771be1fdbcaf7ba75752c24f5",
+    "models": [
+     {
+      "path": "denoise/DeepFilterNet3_onnx.tar.gz",
+      "sha256": "c94d91f70911001c946e0fabb4aa9adc37045f45a03b56008cb0c8244cb63616",
+      "bytes": 7983136
+     }
+    ]
+   },
+   {
+    "id": "local.audio.vocals-classic",
+    "codeDigest": "sha256:4018c1b7ba6467857354008f8d007772c2b35db771be1fdbcaf7ba75752c24f5",
+    "models": []
+   }
+  ]
+ },
+ "setup": {
+  "local.text.translate-he-en": {
+   "code": "model_missing",
+   "detail": "1 model file(s) are not present and verified: 476295730 bytes to download (owner approval)",
+   "missingBytes": 476295730
+  },
+  "local.text.translate-en-he": {
+   "code": "model_missing",
+   "detail": "1 model file(s) are not present and verified: 313806597 bytes to download (owner approval)",
+   "missingBytes": 313806597
+  },
+  "local.voice.clean": {
+   "code": "ready",
+   "detail": "deep-filter 0.5.6 verified by SHA-256",
+   "device": "cpu",
+   "versions": {
+    "engine": "deep_filter 0.5.6",
+    "ffmpeg": "6.1.1-3ubuntu5"
+   },
+   "missingBytes": 0
+  },
+  "local.audio.vocals-classic": {
+   "code": "ready",
+   "detail": "ffmpeg answers",
+   "device": "cpu",
+   "missingBytes": 0
+  }
+ },
+ "downloads": {
+  "seededSmallFiles": [
+   "translate/opus-mt-tc-big-he-en/config.json",
+   "translate/opus-mt-tc-big-he-en/generation_config.json",
+   "translate/opus-mt-tc-big-he-en/source.spm",
+   "translate/opus-mt-tc-big-he-en/special_tokens_map.json",
+   "translate/opus-mt-tc-big-he-en/target.spm",
+   "translate/opus-mt-tc-big-he-en/tokenizer_config.json",
+   "translate/opus-mt-tc-big-he-en/vocab.json",
+   "translate/opus-mt-en-he/config.json",
+   "translate/opus-mt-en-he/generation_config.json",
+   "translate/opus-mt-en-he/source.spm",
+   "translate/opus-mt-en-he/target.spm",
+   "translate/opus-mt-en-he/tokenizer_config.json",
+   "translate/opus-mt-en-he/vocab.json"
+  ],
+  "local.text.translate-he-en": {
+   "bytes": 476295730,
+   "wallSeconds": 23.049,
+   "note": "network-dependent, single sample"
+  },
+  "local.text.translate-en-he": {
+   "bytes": 313806597,
+   "wallSeconds": 15.454,
+   "note": "network-dependent, single sample"
+  }
+ },
+ "translation": {
+  "local.text.translate-he-en": {
+   "run": {
+    "engine": "transformers 5.23.0 MarianMT (torch 2.15.0+cu132)",
+    "model": "Helsinki-NLP/opus-mt-tc-big-he-en@134c5a85",
+    "device": "cpu",
+    "phrases": 10,
+    "loadSeconds": 2.826,
+    "translateSeconds": 2.887,
+    "secondsPerPhrase": 0.2887,
+    "wallSeconds": 9.675
+   },
+   "engine": "transformers 5.23.0 MarianMT (torch 2.15.0+cu132)",
+   "model": "Helsinki-NLP/opus-mt-tc-big-he-en@134c5a85",
+   "phrases": [
+    {
+     "source": "שלום וברוכים הבאים לסרטון שלנו.",
+     "machineTranslation": "Hello and welcome to our video."
+    },
+    {
+     "source": "היום נלמד איך לערוך וידאו בקלות.",
+     "machineTranslation": "Today we will learn how to edit video easily."
+    },
+    {
+     "source": "קודם כול נפתח פרויקט חדש.",
+     "machineTranslation": "First, we'll start a new project."
+    },
+    {
+     "source": "אחר כך נוסיף את הקטעים לציר הזמן.",
+     "machineTranslation": "Then we add the passages to the timeline."
+    },
+    {
+     "source": "אפשר לחתוך כל קטע בדיוק במקום הנכון.",
+     "machineTranslation": "Each section can be cut in exactly the right place."
+    },
+    {
+     "source": "נוסיף מוזיקה ברקע ונכוון את העוצמה.",
+     "machineTranslation": "Add music in the background and adjust the intensity."
+    },
+    {
+     "source": "הכתוביות נוצרות מתוך התמלול.",
+     "machineTranslation": "Subtitles are created from the transcript."
+    },
+    {
+     "source": "בסוף נייצא את הסרטון בגודל המתאים.",
+     "machineTranslation": "In the end, we will export the video of the appropriate size."
+    },
+    {
+     "source": "תודה רבה שצפיתם.",
+     "machineTranslation": "Thank you so much for watching."
+    },
+    {
+     "source": "נתראה בפרק הבא.",
+     "machineTranslation": "See you in the next chapter."
+    }
+   ],
+   "review": "not reviewed: machine translation; no quality claim"
+  },
+  "local.text.translate-en-he": {
+   "run": {
+    "engine": "transformers 5.23.0 MarianMT (torch 2.15.0+cu132)",
+    "model": "Helsinki-NLP/opus-mt-en-he@b3df900a",
+    "device": "cpu",
+    "phrases": 10,
+    "loadSeconds": 1.219,
+    "translateSeconds": 1.109,
+    "secondsPerPhrase": 0.1109,
+    "wallSeconds": 2.356
+   },
+   "engine": "transformers 5.23.0 MarianMT (torch 2.15.0+cu132)",
+   "model": "Helsinki-NLP/opus-mt-en-he@b3df900a",
+   "phrases": [
+    {
+     "source": "Welcome to our video.",
+     "machineTranslation": "ברוכים הבאים לסרטון שלנו."
+    },
+    {
+     "source": "Today we will learn how to edit a video.",
+     "machineTranslation": "היום נלמד איך לערוך וידאו."
+    },
+    {
+     "source": "First, we open a new project.",
+     "machineTranslation": "ראשית, נפתח פרויקט חדש."
+    },
+    {
+     "source": "Then we add the clips to the timeline.",
+     "machineTranslation": "ואז נוסיף את הקליפים לציר הזמן."
+    },
+    {
+     "source": "You can trim every clip at exactly the right frame.",
+     "machineTranslation": "אתה יכול לקצץ כל קליפ בדיוק במסגרת הנכונה."
+    },
+    {
+     "source": "We add background music and set its volume.",
+     "machineTranslation": "נוסיף מוזיקת רקע ונכוון את עוצמת הקול שלה."
+    },
+    {
+     "source": "The captions are made from the transcript.",
+     "machineTranslation": "הכיתובים עשויים מהתעתיק."
+    },
+    {
+     "source": "At the end we export the video in the right size.",
+     "machineTranslation": "בסוף אנחנו מייצאים את הווידאו בגודל הנכון."
+    },
+    {
+     "source": "Thank you for watching.",
+     "machineTranslation": "תודה שצפיתם."
+    },
+    {
+     "source": "See you in the next episode.",
+     "machineTranslation": "נתראה בפרק הבא."
+    }
+   ],
+   "review": "not reviewed: machine translation; no quality claim"
+  }
+ },
+ "voiceClean": {
+  "input": {
+   "file": "docs/demo/narration-sample-he.m4a + 1 s pauses + pink noise (ffmpeg anoisesrc seed 7) at 5 dB SNR over the speech",
+   "samples": 624000,
+   "sha256": "4f5780d5d93984d944cc811dbe1c90021740acf0d6098fa2df986635d8b5777e"
+  },
+  "engine": {
+   "engine": "deep_filter 0.5.6",
+   "ffmpeg": "6.1.1-3ubuntu5"
+  },
+  "validation": {
+   "samples": 624000,
+   "sampleRate": 48000,
+   "sourcePeakDb": -0.1,
+   "sourceRmsDb": -19.4,
+   "engineSamples": 670560,
+   "trimmedSamples": 46560,
+   "lagSamples": 0,
+   "lagMs": 0,
+   "match": 0.9438,
+   "peakDb": -1.9,
+   "rmsDb": -21.8,
+   "finite": true,
+   "resultPeakDb": -1.9,
+   "resultRmsDb": -21.8,
+   "resultClippedSamples": 0
+  },
+  "run": {
+   "engine": "deep_filter 0.5.6",
+   "device": "cpu",
+   "audioSeconds": 13,
+   "wallSeconds": 5.944,
+   "realTimeFactor": 0.457,
+   "stageSeconds": {
+    "reading": 0.133,
+    "engine": 5.404,
+    "validation": 0.379,
+    "basis": "measured (wall clock)"
+   }
+  },
+  "pauseFloorDbfs": {
+   "input": -25.18,
+   "output": -56.91,
+   "loweredDb": 31.73
+  },
+  "siSdrDb": {
+   "input": 4.92,
+   "output": 11.57,
+   "gain": 6.66
+  },
+  "resultSha256": "sha256:4a8462e6d37880a7c82bf6182344afadde9231020816e4cf6702d7a9a202a337",
+  "note": "measurements only; nobody has listened to the result (not quality-reviewed)"
+ },
+ "vocalsClassic": {
+  "input": {
+   "samples": 240000,
+   "sha256": "47e64431eebdfa4f953ff8a011dd33c8c52696c69ac4e4400774a8a1336fcc61"
+  },
+  "centreDropDb": 122.02,
+  "leftToneChangeDb": 0,
+  "run": {
+   "engine": "ffmpeg",
+   "device": "cpu",
+   "audioSeconds": 5,
+   "wallSeconds": 0.341,
+   "realTimeFactor": 0.068,
+   "stageSeconds": {
+    "reading": 0.126,
+    "engine": 0.089,
+    "validation": 0.113,
+    "basis": "measured (wall clock)"
+   }
+  },
+  "resultSha256": "sha256:ca29ff7c80d9ebac5989bcdf71d92c14d91435b9a9675727fbb5422ce3cfa615"
+ },
+ "checks": [
+  {
+   "name": "Setup: deep-filter is the reviewed build (SHA-256) and the voice model is present and verified",
+   "ok": true,
+   "detail": {
+    "code": "ready",
+    "detail": "deep-filter 0.5.6 verified by SHA-256",
+    "device": "cpu",
+    "versions": {
+     "engine": "deep_filter 0.5.6",
+     "ffmpeg": "6.1.1-3ubuntu5"
+    },
+    "missingBytes": 0
+   }
+  },
+  {
+   "name": "Setup: vocals-classic needs only ffmpeg",
+   "ok": true,
+   "detail": {
+    "code": "ready",
+    "detail": "ffmpeg answers",
+    "device": "cpu",
+    "missingBytes": 0
+   }
+  },
+  {
+   "name": "local.text.translate-he-en: an agent cannot start the download itself",
+   "ok": true,
+   "detail": {
+    "status": 403,
+    "code": "human_approval_required"
+   }
+  },
+  {
+   "name": "local.text.translate-he-en: the owner's approval downloads exactly the missing bytes, verifies them and the tool reads ready",
+   "ok": true,
+   "detail": {
+    "status": "succeeded",
+    "error": null,
+    "bytes": 476295730,
+    "setup": "ready"
+   }
+  },
+  {
+   "name": "local.text.translate-en-he: an agent cannot start the download itself",
+   "ok": true,
+   "detail": {
+    "status": 403,
+    "code": "human_approval_required"
+   }
+  },
+  {
+   "name": "local.text.translate-en-he: the owner's approval downloads exactly the missing bytes, verifies them and the tool reads ready",
+   "ok": true,
+   "detail": {
+    "status": "succeeded",
+    "error": null,
+    "bytes": 313806597,
+    "setup": "ready"
+   }
+  },
+  {
+   "name": "local.text.translate-he-en: a typed 10-phrase he transcript becomes a en language format with the same phrase ids, all non-empty, review \"needed\"",
+   "ok": true,
+   "detail": {
+    "status": "succeeded",
+    "error": null,
+    "language": "en",
+    "review": "needed",
+    "phrases": 10
+   }
+  },
+  {
+   "name": "local.text.translate-he-en: the format's SRT has exactly the master's cue times, with the translated words",
+   "ok": true,
+   "detail": {
+    "masterCues": 10,
+    "variantCues": 10
+   }
+  },
+  {
+   "name": "local.text.translate-he-en: the master text of every phrase is recorded by SHA-256",
+   "ok": true
+  },
+  {
+   "name": "local.text.translate-en-he: a typed 10-phrase en transcript becomes a he language format with the same phrase ids, all non-empty, review \"needed\"",
+   "ok": true,
+   "detail": {
+    "status": "succeeded",
+    "error": null,
+    "language": "he",
+    "review": "needed",
+    "phrases": 10
+   }
+  },
+  {
+   "name": "local.text.translate-en-he: the format's SRT has exactly the master's cue times, with the translated words",
+   "ok": true,
+   "detail": {
+    "masterCues": 10,
+    "variantCues": 10
+   }
+  },
+  {
+   "name": "local.text.translate-en-he: the master text of every phrase is recorded by SHA-256",
+   "ok": true
+  },
+  {
+   "name": "Voice cleanup: the job succeeds and the clip is given the cleaned copy",
+   "ok": true,
+   "detail": {
+    "status": "succeeded",
+    "error": null,
+    "attachment": {
+     "status": "attached",
+     "assetId": "ast_8151019c100",
+     "deduplicated": false,
+     "clipId": "clp_1431c4238b0",
+     "revision": 4,
+     "transactionId": "tx_Z2kiURRJsd4"
+    }
+   }
+  },
+  {
+   "name": "Voice cleanup: equal sample count",
+   "ok": true,
+   "detail": {
+    "result": 624000,
+    "source": 624000
+   }
+  },
+  {
+   "name": "Voice cleanup: lag ≤ 1 ms (measured again here)",
+   "ok": true,
+   "detail": {
+    "lagSamples": 0,
+    "match": 0.912,
+    "runnerLag": 0
+   }
+  },
+  {
+   "name": "Voice cleanup: the noise floor in the pauses is lowered by at least 10 dB",
+   "ok": true,
+   "detail": {
+    "inDbfs": -25.18,
+    "outDbfs": -56.91,
+    "loweredDb": 31.73
+   }
+  },
+  {
+   "name": "Voice cleanup: undo gives the clip its original file back",
+   "ok": true,
+   "detail": {
+    "status": 200
+   }
+  },
+  {
+   "name": "Vocals classic: the job succeeds and the clip is given the result",
+   "ok": true,
+   "detail": {
+    "status": "succeeded",
+    "error": null
+   }
+  },
+  {
+   "name": "Vocals classic: the centred 440 Hz tone drops by at least 40 dB",
+   "ok": true,
+   "detail": {
+    "droppedDb": 122.02
+   }
+  },
+  {
+   "name": "Vocals classic: the hard-left 660 Hz tone stays within 1 dB",
+   "ok": true,
+   "detail": {
+    "changeDb": 0
+   }
+  }
+ ],
+ "passed": true
+}

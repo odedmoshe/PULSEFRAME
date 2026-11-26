@@ -31,6 +31,12 @@ Sources: `pnpm licenses list --json` (reads the `license` field of each installe
 | tsx | 4.23.15 | MIT | root (devDependencies) | no |
 | vitest | 5.1.0 | MIT | root (devDependencies) | no |
 | fast-check | 4.10.2 | MIT | root (devDependencies) | no |
+| gsap | 3.15.1 | Standard "no charge" licence (proprietary, not open source; see below) | @pulseframe/renderer (served to made-clip pages, wave 8 motioncode) | yes (via apps/server) |
+| three | 0.187.0 | MIT | @pulseframe/renderer (served to made-clip pages, wave 8 motioncode) | yes (via apps/server) |
+
+**gsap 3.15.1** (added 2026-11-26, lead decision 4 of wave 8 motioncode). The package ships no LICENSE file; its `package.json` `license` field reads "Standard 'no charge' license: https://gsap.com/standard-license." and every file carries the notice "@license Copyright 2026, GreenSock. All rights reserved. Subject to the terms at https://gsap.com/standard-license." That notice must not be removed or altered (the licence's RESTRICTIONS). The licence page, read 2026-11-26, defines the one prohibited use: "\"Prohibited Uses\" means any implementation and/or use of GSAP Products in tools that allow users to build visual animations without code that encourages, induces, or materially assists in creating a solution that competes with Webflow’s visual animation building capabilities." The files are served unchanged, only to pages drawn offline by the made-clip browser (`https://made.invalid/lib/gsap@3.15.1/…`). Webflow may terminate the licence.
+
+**three 0.187.0** (added 2026-11-26). `package/LICENSE`: "The MIT License — Copyright © 2010-2026 three.js authors" (the MIT text follows in that file); `package.json` `license`: "MIT". Served unchanged to made-clip pages (`https://made.invalid/lib/three@0.187.0/build/…`).
 
 Workspace packages (`@pulseframe/*`, all `private`, version `0.0.0`) are first-party and are not listed here. The root package `pulseframe` is also first-party.
 
@@ -71,7 +77,17 @@ Bundled font files and their SHA-256 hashes (verified against the installed pack
 | heebo-latin-400-normal.woff2 | 2fbe59e5561759450e111cff78825304c9278ec6ba5e808cbaff1c4a97dfa6fa |
 | heebo-latin-700-normal.woff2 | 2dd5f140b9902257dc0f38e89f47f79d40b31438abef118637d916861fd370bb |
 
-The OFL requires the licence text to accompany the font. The web bundle does not currently copy `node_modules/@fontsource/heebo/LICENSE` into `apps/web/dist` (see section 6).
+The OFL requires the licence text to accompany the font. The full OFL-1.1 text and copyright line from `@fontsource/heebo/LICENSE` are emitted into `apps/web/dist/THIRD_PARTY_NOTICES.txt` at build time (served at `/THIRD_PARTY_NOTICES.txt`).
+
+### Interface fonts (UI redesign "Pulse", `apps/web/src/ds/uiFonts.css`)
+
+Bundled for the interface only; the canvas and export fonts above are unchanged. All three are SIL Open Font License, Version 1.1 (OFL-1.1), recorded in each package's `package.json` and `LICENSE`, pinned exactly (5.3.0).
+
+- **IBM Plex Sans Hebrew** (400/500/600/700, Hebrew and Latin subsets), `@fontsource/ibm-plex-sans-hebrew` 5.3.0. Copyright 2019 IBM Corp. All rights reserved.
+- **IBM Plex Mono** (400/500, Latin subset), `@fontsource/ibm-plex-mono` 5.3.0. Copyright 2017 IBM Corp. All rights reserved.
+- **Karantina** (400/700, Hebrew and Latin subsets; display sizes only), `@fontsource/karantina` 5.3.0. Copyright 2020 The Karantina Project Authors (https://github.com/ronykoch/Karantina).
+
+`apps/web/notices-plugin.ts` emits the full OFL-1.1 text and copyright lines of these three packages into `apps/web/dist/THIRD_PARTY_NOTICES.txt` at build time, next to the Heebo notice.
 
 ## 4. External runtimes used but NOT distributed by this repository
 
@@ -86,13 +102,11 @@ The items below are system-installed or operator-installed. They are not vendore
 
 mediabunny 1.66.0 is licensed MPL-2.0 and is bundled unmodified into the web app. Files covered by MPL-2.0 keep their licence, and the source-availability and notice duties of MPL-2.0 apply on distribution. See https://www.mozilla.org/en-US/MPL/2.0/FAQ/
 
-A notices file in the built bundle has not been created yet.
+The build emits `THIRD_PARTY_NOTICES.txt` with the full MPL-2.0 text, the package repository URL, the npm tarball URL for the exact version (`https://registry.npmjs.org/mediabunny/-/mediabunny-1.66.0.tgz`) and a statement that it is bundled unmodified.
 
 ## 6. Open compliance items
 
-- No NOTICE or licence bundle is emitted into `apps/web/dist`. `apps/web/vite.config.ts` contains no step that copies licence files.
-- The OFL licence text is not shipped with the Heebo font.
-- The MPL-2.0 notice for mediabunny is not shipped with the web bundle.
+- Done: `apps/web/notices-plugin.ts` emits `apps/web/dist/THIRD_PARTY_NOTICES.txt` listing every third-party package in the bundle (heebo, mediabunny, react, react-dom, scheduler, zod at the last build) with full licence texts; the build fails if a bundled package has no licence file and no `license` field. `pnpm check:notices` verifies the output after `pnpm build`.
 - The transitive licence review is an automated listing from `pnpm licenses list`. It is not a legal review.
 - No model or media licences apply yet, because no model weights or media assets are shipped.
 
@@ -100,3 +114,20 @@ A notices file in the built bundle has not been created yet.
 
 - The logo and design tokens in `packages/brand` are original to this project.
 - Procedural test fixtures are generated by `packages/fixtures`. No third-party media is used.
+
+## 8. Map data
+
+**Natural Earth v5.1.2** (`nvkelso/natural-earth-vector`, tag `v5.1.2` = commit `f1890d9f152c896d250a77557a5751a93d494776`), used by the trip map («מפת טיול»).
+
+- Licence, read at that tag (`LICENSE.md`): "Everything here is public domain." … "All versions of Natural Earth raster + vector map data found on this website are in the public domain." … "No permission is needed to use Natural Earth. Crediting the authors is unnecessary."
+- Place names (`NAME_HE`, `NAME_EN`): the Natural Earth terms of use say "The authors' used name data for more than 20 languages from Wikidata which is under a CC0 (public domain) license."
+- Inputs (downloaded once on 2026-11-26 from `https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/`, deleted after processing; SHA-256 pinned in `tools/tripmap/build-data.mjs`): `LICENSE.md`, `geojson/ne_50m_land.geojson`, `geojson/ne_50m_lakes.geojson`, `geojson/ne_10m_land.geojson`, `geojson/ne_10m_lakes.geojson`, `geojson/ne_10m_populated_places.geojson`.
+- What was changed: land and lakes clipped at ±80° latitude (the 1:10m files also cropped to lon 29–39.5, lat 27–36.5), projected to Mercator, simplified (Douglas–Peucker) and quantised; places reduced to the box above plus `SCALERANK` ≤ 3 worldwide, with the fields NE_ID, Hebrew name, English name and coordinates at 0.01°. No admin (border) file is read or shipped; no capital or feature class is kept.
+- Committed outputs (regenerated only by the script; size and SHA-256 tested in `tools/tripmap/data.test.ts`):
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| packages/engine/src/map/outlines.data.ts | 146370 | c90df74f225e7f9205f77052763bf7d6693347ee638655b2382c3f4641c64475 |
+| apps/web/src/editor/tripMap/places.data.ts | 30464 | 866edd5bebcfca5e0261987b690935c145c3932351b0bc64fe14c5a6a775142f |
+
+`apps/web/notices-plugin.ts` adds a Natural Earth block to `THIRD_PARTY_NOTICES.txt` («Made with Natural Earth»), although the terms do not require one.

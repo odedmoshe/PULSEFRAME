@@ -1,0 +1,1297 @@
+{
+  "ranAt": "2026-11-26T07:09:59.066Z",
+  "result": "PASS",
+  "passed": 28,
+  "failed": 0,
+  "blocked": 0,
+  "total": 28,
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "logicalCpus": 4,
+    "webgpu": "present (on this Linux container it is a software adapter, as in proof:gpu)"
+  },
+  "scope": "Perform mode (ADR-0025) through the real server and the editor in headless Chromium. Not checked: key-to-picture and key-to-sound latency (nothing is called in sync), a hardware graphics adapter (F2 ran on the software adapter when present), and how a take feels on the owner's laptop. Timings are one sample of this machine.",
+  "blockedParts": [],
+  "checks": [
+    {
+      "id": "Q1",
+      "name": "quantise (nearest beat, ×1): 64 taps at the target ± U(−60, 60) ms land on frameOfSeconds(target), in the browser view and on the server",
+      "status": "pass",
+      "detail": {
+        "taps": 64,
+        "browserOnTarget": 64,
+        "serverOnTarget": 64,
+        "misses": []
+      }
+    },
+    {
+      "id": "Q1",
+      "name": "quantise (half beat, ×1): 64 taps at the target ± U(−60, 60) ms land on frameOfSeconds(target), in the browser view and on the server",
+      "status": "pass",
+      "detail": {
+        "taps": 64,
+        "browserOnTarget": 64,
+        "serverOnTarget": 64,
+        "misses": []
+      }
+    },
+    {
+      "id": "Q1",
+      "name": "quantise (nearest beat, ÷2): 32 taps at the target ± U(−60, 60) ms land on frameOfSeconds(target), in the browser view and on the server",
+      "status": "pass",
+      "detail": {
+        "taps": 32,
+        "browserOnTarget": 32,
+        "serverOnTarget": 32,
+        "misses": []
+      }
+    },
+    {
+      "id": "Q1",
+      "name": "quantise (nearest beat, ×2): 64 taps at the target ± U(−60, 60) ms land on frameOfSeconds(target), in the browser view and on the server",
+      "status": "pass",
+      "detail": {
+        "taps": 64,
+        "browserOnTarget": 64,
+        "serverOnTarget": 64,
+        "misses": []
+      }
+    },
+    {
+      "id": "B1",
+      "name": "the 8 punch taps are kept on their beat frames",
+      "status": "pass",
+      "detail": {
+        "hitFrames": [
+          75,
+          120,
+          165,
+          210,
+          255,
+          300,
+          345,
+          390
+        ],
+        "chips": [
+          {
+            "frame": 75,
+            "frames": 6,
+            "state": "kept"
+          },
+          {
+            "frame": 120,
+            "frames": 6,
+            "state": "kept"
+          },
+          {
+            "frame": 165,
+            "frames": 6,
+            "state": "kept"
+          },
+          {
+            "frame": 210,
+            "frames": 6,
+            "state": "kept"
+          },
+          {
+            "frame": 255,
+            "frames": 6,
+            "state": "kept"
+          },
+          {
+            "frame": 300,
+            "frames": 6,
+            "state": "kept"
+          },
+          {
+            "frame": 345,
+            "frames": 6,
+            "state": "kept"
+          },
+          {
+            "frame": 390,
+            "frames": 6,
+            "state": "kept"
+          }
+        ]
+      }
+    },
+    {
+      "id": "D1",
+      "name": "SHA-256 of the canonical apply_take args: equal across two server dry runs and the browser view",
+      "status": "pass",
+      "detail": {
+        "browser": "3aee621d38031833e7c1c85233c34abcddb45a27401585615a37a2eaf4c2e654",
+        "server1": "3aee621d38031833e7c1c85233c34abcddb45a27401585615a37a2eaf4c2e654",
+        "server2": "3aee621d38031833e7c1c85233c34abcddb45a27401585615a37a2eaf4c2e654"
+      }
+    },
+    {
+      "id": "N1",
+      "name": "accept: the revision moves by exactly 1 and there is exactly one new history entry, an apply_take",
+      "status": "pass",
+      "detail": {
+        "revisions": 1,
+        "newEntries": 1,
+        "ops": [
+          "apply_take"
+        ]
+      }
+    },
+    {
+      "id": "U1",
+      "name": "undo (Ctrl+Z in the editor): the document hash equals the one before the take; redo (Ctrl+Shift+Z) equals the one after; Store.replay of that revision equals the stored document",
+      "status": "pass",
+      "detail": {
+        "before": "57be2051fed00481",
+        "after": "35099b4a7bc7550f",
+        "undone": "57be2051fed00481",
+        "redone": "35099b4a7bc7550f",
+        "replay": "35099b4a7bc7550f"
+      }
+    },
+    {
+      "id": "B1",
+      "name": "lossless stills: the zoom measured from the strip's lower edge and from the box is 1.18 ± 0.02 on every hit frame (and the next)",
+      "status": "pass",
+      "detail": [
+        {
+          "hit": 75,
+          "edgeBefore": 59.954,
+          "zoomFromEdge": 1.1794,
+          "zoomFromEdgeNextFrame": 1.1798,
+          "zoomFromBox": 1.1789,
+          "frameBeforeIdentical": true,
+          "frameAfterReleaseIdentical": true
+        },
+        {
+          "hit": 120,
+          "edgeBefore": 59.994,
+          "zoomFromEdge": 1.1796,
+          "zoomFromEdgeNextFrame": 1.1797,
+          "zoomFromBox": 1.1787,
+          "frameBeforeIdentical": true,
+          "frameAfterReleaseIdentical": true
+        },
+        {
+          "hit": 165,
+          "edgeBefore": 59.964,
+          "zoomFromEdge": 1.1795,
+          "zoomFromEdgeNextFrame": 1.1793,
+          "zoomFromBox": 1.1788,
+          "frameBeforeIdentical": true,
+          "frameAfterReleaseIdentical": true
+        },
+        {
+          "hit": 210,
+          "edgeBefore": 60.003,
+          "zoomFromEdge": 1.1794,
+          "zoomFromEdgeNextFrame": 1.1799,
+          "zoomFromBox": 1.1791,
+          "frameBeforeIdentical": true,
+          "frameAfterReleaseIdentical": true
+        },
+        {
+          "hit": 255,
+          "edgeBefore": 60.016,
+          "zoomFromEdge": 1.1793,
+          "zoomFromEdgeNextFrame": 1.1797,
+          "zoomFromBox": 1.179,
+          "frameBeforeIdentical": true,
+          "frameAfterReleaseIdentical": true
+        },
+        {
+          "hit": 300,
+          "edgeBefore": 59.923,
+          "zoomFromEdge": 1.1794,
+          "zoomFromEdgeNextFrame": 1.1791,
+          "zoomFromBox": 1.1788,
+          "frameBeforeIdentical": true,
+          "frameAfterReleaseIdentical": true
+        },
+        {
+          "hit": 345,
+          "edgeBefore": 60.059,
+          "zoomFromEdge": 1.1794,
+          "zoomFromEdgeNextFrame": 1.179,
+          "zoomFromBox": 1.179,
+          "frameBeforeIdentical": true,
+          "frameAfterReleaseIdentical": true
+        },
+        {
+          "hit": 390,
+          "edgeBefore": 59.911,
+          "zoomFromEdge": 1.1795,
+          "zoomFromEdgeNextFrame": 1.1787,
+          "zoomFromBox": 1.179,
+          "frameBeforeIdentical": true,
+          "frameAfterReleaseIdentical": true
+        }
+      ]
+    },
+    {
+      "id": "B1",
+      "name": "lossless stills: the frame before each hit and the frame after its release are byte-identical to the stills before the take",
+      "status": "pass",
+      "detail": [
+        {
+          "hit": 75,
+          "before": true,
+          "after": true
+        },
+        {
+          "hit": 120,
+          "before": true,
+          "after": true
+        },
+        {
+          "hit": 165,
+          "before": true,
+          "after": true
+        },
+        {
+          "hit": 210,
+          "before": true,
+          "after": true
+        },
+        {
+          "hit": 255,
+          "before": true,
+          "after": true
+        },
+        {
+          "hit": 300,
+          "before": true,
+          "after": true
+        },
+        {
+          "hit": 345,
+          "before": true,
+          "after": true
+        },
+        {
+          "hit": 390,
+          "before": true,
+          "after": true
+        }
+      ]
+    },
+    {
+      "id": "P1",
+      "name": "the preview canvas equals the render_frame still pixel for pixel on 4 hit frames, for the ghost under review and for the committed take",
+      "status": "pass",
+      "detail": [
+        {
+          "frame": 75,
+          "ghostVsStill": {
+            "max": 0,
+            "mean": 0
+          },
+          "committedPreviewVsStill": {
+            "max": 0,
+            "mean": 0
+          },
+          "canvas": "640x360"
+        },
+        {
+          "frame": 120,
+          "ghostVsStill": {
+            "max": 0,
+            "mean": 0
+          },
+          "committedPreviewVsStill": {
+            "max": 0,
+            "mean": 0
+          },
+          "canvas": "640x360"
+        },
+        {
+          "frame": 165,
+          "ghostVsStill": {
+            "max": 0,
+            "mean": 0
+          },
+          "committedPreviewVsStill": {
+            "max": 0,
+            "mean": 0
+          },
+          "canvas": "640x360"
+        },
+        {
+          "frame": 210,
+          "ghostVsStill": {
+            "max": 0,
+            "mean": 0
+          },
+          "committedPreviewVsStill": {
+            "max": 0,
+            "mean": 0
+          },
+          "canvas": "640x360"
+        }
+      ]
+    },
+    {
+      "id": "B1",
+      "name": "export: for all 8 hits the first zoomed frame (by position in the file) is the hit frame and the frame before is unzoomed; the barcode read on that frame names its own position",
+      "status": "pass",
+      "detail": [
+        {
+          "hit": 75,
+          "zoomBefore": 1.001,
+          "zoomAtHit": 1.179,
+          "barcodeBefore": 74
+        },
+        {
+          "hit": 120,
+          "zoomBefore": 1,
+          "zoomAtHit": 1.179,
+          "barcodeBefore": 119
+        },
+        {
+          "hit": 165,
+          "zoomBefore": 1,
+          "zoomAtHit": 1.18,
+          "barcodeBefore": 164
+        },
+        {
+          "hit": 210,
+          "zoomBefore": 1.001,
+          "zoomAtHit": 1.18,
+          "barcodeBefore": 209
+        },
+        {
+          "hit": 255,
+          "zoomBefore": 1,
+          "zoomAtHit": 1.178,
+          "barcodeBefore": 254
+        },
+        {
+          "hit": 300,
+          "zoomBefore": 1,
+          "zoomAtHit": 1.179,
+          "barcodeBefore": 299
+        },
+        {
+          "hit": 345,
+          "zoomBefore": 1,
+          "zoomAtHit": 1.177,
+          "barcodeBefore": 344
+        },
+        {
+          "hit": 390,
+          "zoomBefore": 1.001,
+          "zoomAtHit": 1.18,
+          "barcodeBefore": 389
+        }
+      ]
+    },
+    {
+      "id": "N1",
+      "name": "while playing: the sound session (Player.origin and the AudioContext) is the same object before and after 50 injected taps, pause() was not called, and the revision did not move",
+      "status": "pass",
+      "detail": {
+        "sameOrigin": true,
+        "sameContext": true,
+        "pauses": 0,
+        "playing": true,
+        "clock": "audio",
+        "revisionMoved": 0
+      }
+    },
+    {
+      "id": "K1",
+      "name": "keyboard take (WIRING ONLY, not latency): each of 5 real key presses made one tap on its pad, within 30 ms of the audio clock read in a keydown handler of the same event (calibration offset 0: not calibrated)",
+      "status": "pass",
+      "detail": {
+        "clock": "audio",
+        "rows": [
+          {
+            "pad": 0,
+            "down": 2.0317,
+            "clock": 2.0322350000059606,
+            "diffMs": -0.5
+          },
+          {
+            "pad": 1,
+            "down": 2.3148,
+            "clock": 2.3325300000059603,
+            "diffMs": -17.7
+          },
+          {
+            "pad": 2,
+            "down": 2.5917,
+            "clock": 2.5919316666666665,
+            "diffMs": -0.2
+          },
+          {
+            "pad": 3,
+            "down": 2.8558,
+            "clock": 2.8567053333303534,
+            "diffMs": -0.9
+          },
+          {
+            "pad": 5,
+            "down": 3.132,
+            "clock": 3.132603666675607,
+            "diffMs": -0.6
+          }
+        ]
+      }
+    },
+    {
+      "id": "K1",
+      "name": "Shift+1…7 while recording: no tap and no change of mode (the take is still recording in perform)",
+      "status": "pass",
+      "detail": {
+        "taps": 5,
+        "phase": "recording",
+        "stillPerform": true
+      }
+    },
+    {
+      "id": "N1",
+      "name": "the live path (raw taps planned and applied in memory) for 200 hits takes under one frame period (33.3 ms) on the slowest of 10 runs after a warm-up",
+      "status": "pass",
+      "detail": {
+        "hits": 200,
+        "runsMs": [
+          11.9,
+          11.6,
+          12.4,
+          9.2,
+          12.1,
+          17.4,
+          13.1,
+          18.3,
+          12.5,
+          15
+        ],
+        "warmupMs": 14.4,
+        "slowestMs": 18.3,
+        "budgetMs": 33.33,
+        "machine": "Intel(R) Xeon(R) Processor @ 2.30GHz ×4",
+        "note": "one sample of this machine, under whatever else ran on it; not a general claim"
+      }
+    },
+    {
+      "id": "N1",
+      "name": "a recorded take: the revision is unchanged through recording and review, +1 on accept, exactly one new history entry",
+      "status": "pass",
+      "detail": {
+        "duringReview": 0,
+        "onAccept": 1,
+        "newEntries": 1
+      }
+    },
+    {
+      "id": "A1",
+      "name": "a keyboard-only take (Shift+7 entered the mode; R, 2, 4, Space, Enter): two taps on pads 2 and 4, exactly one new history entry",
+      "status": "pass",
+      "detail": {
+        "entered": true,
+        "taps": [
+          1,
+          3
+        ],
+        "newEntries": 1
+      }
+    },
+    {
+      "id": "A1",
+      "name": "the view: every control has a name; the 8 pads carry aria-pressed and aria-keyshortcuts 1…8; the live region spoke; no text calls a take in sync",
+      "status": "pass",
+      "detail": {
+        "unnamed": [],
+        "pads": [
+          {
+            "pressed": "false",
+            "keys": "1",
+            "name": "1: זום פתאומי"
+          },
+          {
+            "pressed": "false",
+            "keys": "2",
+            "name": "2: פיצול צבעים"
+          },
+          {
+            "pressed": "false",
+            "keys": "3",
+            "name": "3: טשטוש"
+          },
+          {
+            "pressed": "false",
+            "keys": "4",
+            "name": "4: פיקסלים"
+          },
+          {
+            "pressed": "false",
+            "keys": "5",
+            "name": "5: שחור-לבן"
+          },
+          {
+            "pressed": "false",
+            "keys": "6",
+            "name": "6: קונפטי"
+          },
+          {
+            "pressed": "false",
+            "keys": "7",
+            "name": "7: צליל מכה"
+          },
+          {
+            "pressed": "false",
+            "keys": "8",
+            "name": "8: וואו!"
+          }
+        ],
+        "inSyncWords": false,
+        "live": "נשמרו 2, אוחדו 0, לא יוצגו 0"
+      }
+    },
+    {
+      "id": "run",
+      "name": "no page errors during the editor run",
+      "status": "pass",
+      "detail": []
+    },
+    {
+      "id": "S1",
+      "name": "the impact pad is added to the library from the pad (one ordinary import entry, before any take); its 5 hits start within one frame (33.3 ms) of their hit frames in the exported sound",
+      "status": "pass",
+      "detail": {
+        "importEntries": 1,
+        "rows": [
+          {
+            "hitFrame": 30,
+            "state": "kept",
+            "onsetSeconds": 1,
+            "offsetMs": 0.04
+          },
+          {
+            "hitFrame": 71,
+            "state": "kept",
+            "onsetSeconds": 2.3667,
+            "offsetMs": 0.04
+          },
+          {
+            "hitFrame": 111,
+            "state": "kept",
+            "onsetSeconds": 3.7,
+            "offsetMs": 0.04
+          },
+          {
+            "hitFrame": 152,
+            "state": "kept",
+            "onsetSeconds": 5.0667,
+            "offsetMs": 0.04
+          },
+          {
+            "hitFrame": 198,
+            "state": "kept",
+            "onsetSeconds": 6.6,
+            "offsetMs": 0.04
+          }
+        ],
+        "peakBeforeFirstHit": 0
+      }
+    },
+    {
+      "id": "F1",
+      "name": "two colour pads (grey, invert) alternating at 20 taps a second on a saturated red card: the take's export passes the export's flash check, and the same taps with the flash rule switched off fail it (control)",
+      "status": "pass",
+      "detail": {
+        "label": "two colour pads (grey, invert) alternating at 20 taps a second on a saturated red card",
+        "takeStatus": 200,
+        "taps": 60,
+        "kept": 1,
+        "held": 30,
+        "keptStarts": [
+          30
+        ],
+        "ruleOn": {
+          "verdict": "pass",
+          "ranges": 0
+        },
+        "ruleOff": {
+          "verdict": "fail",
+          "ranges": 1,
+          "adjustments": 60
+        }
+      }
+    },
+    {
+      "id": "F2",
+      "name": "the strobe pad («הבזק על הפעימה», follows the analysed 120 BPM music) alternating with two colour pads at 20 taps a second — on the SOFTWARE WebGPU adapter launch of proof:gpu: the take's export passes the export's flash check, and the same taps with the flash rule switched off fail it (control)",
+      "status": "pass",
+      "detail": {
+        "label": "the strobe pad («הבזק על הפעימה», follows the analysed 120 BPM music) alternating with two colour pads at 20 taps a second — on the SOFTWARE WebGPU adapter launch of proof:gpu",
+        "takeStatus": 200,
+        "taps": 60,
+        "kept": 1,
+        "held": 40,
+        "keptStarts": [
+          30
+        ],
+        "ruleOn": {
+          "verdict": "pass",
+          "ranges": 0
+        },
+        "ruleOff": {
+          "verdict": "fail",
+          "ranges": 2,
+          "adjustments": 41
+        }
+      }
+    },
+    {
+      "id": "C1",
+      "name": "camera stills: the centre pixel on 12 frames is within 0.01 (source units) of the dense spring path, and no pixel of the magenta project background shows",
+      "status": "pass",
+      "detail": {
+        "keys": 48,
+        "residual": 0.00463,
+        "rows": [
+          {
+            "frame": 15,
+            "u": 0.6627,
+            "v": 0.5961,
+            "denseU": 0.6646,
+            "denseV": 0.5971,
+            "err": 0.0018,
+            "backgroundPixels": 0
+          },
+          {
+            "frame": 26,
+            "u": 0.7333,
+            "v": 0.6118,
+            "denseU": 0.7336,
+            "denseV": 0.6127,
+            "err": 0.0009,
+            "backgroundPixels": 0
+          },
+          {
+            "frame": 37,
+            "u": 0.7608,
+            "v": 0.549,
+            "denseU": 0.7623,
+            "denseV": 0.5492,
+            "err": 0.0015,
+            "backgroundPixels": 0
+          },
+          {
+            "frame": 47,
+            "u": 0.6627,
+            "v": 0.4392,
+            "denseU": 0.6659,
+            "denseV": 0.4406,
+            "err": 0.0031,
+            "backgroundPixels": 0
+          },
+          {
+            "frame": 58,
+            "u": 0.4706,
+            "v": 0.3922,
+            "denseU": 0.4735,
+            "denseV": 0.3928,
+            "err": 0.0029,
+            "backgroundPixels": 0
+          },
+          {
+            "frame": 69,
+            "u": 0.2941,
+            "v": 0.4706,
+            "denseU": 0.296,
+            "denseV": 0.4722,
+            "err": 0.0019,
+            "backgroundPixels": 0
+          },
+          {
+            "frame": 80,
+            "u": 0.2314,
+            "v": 0.5686,
+            "denseU": 0.233,
+            "denseV": 0.5713,
+            "err": 0.0027,
+            "backgroundPixels": 0
+          },
+          {
+            "frame": 91,
+            "u": 0.3176,
+            "v": 0.5373,
+            "denseU": 0.3199,
+            "denseV": 0.5388,
+            "err": 0.0023,
+            "backgroundPixels": 0
+          },
+          {
+            "frame": 102,
+            "u": 0.5059,
+            "v": 0.4902,
+            "denseU": 0.5079,
+            "denseV": 0.4898,
+            "err": 0.002,
+            "backgroundPixels": 0
+          },
+          {
+            "frame": 112,
+            "u": 0.6745,
+            "v": 0.4588,
+            "denseU": 0.6779,
+            "denseV": 0.4617,
+            "err": 0.0034,
+            "backgroundPixels": 0
+          },
+          {
+            "frame": 123,
+            "u": 0.7647,
+            "v": 0.4392,
+            "denseU": 0.7668,
+            "denseV": 0.4394,
+            "err": 0.0021,
+            "backgroundPixels": 0
+          },
+          {
+            "frame": 134,
+            "u": 0.7529,
+            "v": 0.4824,
+            "denseU": 0.7544,
+            "denseV": 0.4814,
+            "err": 0.0014,
+            "backgroundPixels": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "C1",
+      "name": "camera export: the centre (3×3 mean) on the same 12 frames is within 0.03 of the dense path",
+      "status": "pass",
+      "detail": [
+        {
+          "frame": 15,
+          "err": 0.0088
+        },
+        {
+          "frame": 26,
+          "err": 0.0061
+        },
+        {
+          "frame": 37,
+          "err": 0.008
+        },
+        {
+          "frame": 47,
+          "err": 0.0053
+        },
+        {
+          "frame": 58,
+          "err": 0.0072
+        },
+        {
+          "frame": 69,
+          "err": 0.0095
+        },
+        {
+          "frame": 80,
+          "err": 0.0066
+        },
+        {
+          "frame": 91,
+          "err": 0.0063
+        },
+        {
+          "frame": 102,
+          "err": 0.0111
+        },
+        {
+          "frame": 112,
+          "err": 0.0094
+        },
+        {
+          "frame": 123,
+          "err": 0.006
+        },
+        {
+          "frame": 134,
+          "err": 0.0052
+        }
+      ]
+    },
+    {
+      "id": "C1",
+      "name": "a partial camera retake (clip-local 40..80) keeps the x/y/scale keys outside its range, every frame outside it samples the same, and the inside changed",
+      "status": "pass",
+      "detail": {
+        "replacedKeys": 54,
+        "keysKept": true,
+        "framesOutsideMoved": [],
+        "insideChanged": true
+      }
+    },
+    {
+      "id": "C1",
+      "name": "a camera retake (clip-local 40..80) on a clip with NO keys: every sampled frame outside the range is byte-identical on stills to before the take, and the inside moved",
+      "status": "pass",
+      "detail": {
+        "replacedKeys": 0,
+        "keys": 25,
+        "warnings": [],
+        "frames": [
+          {
+            "frame": 140,
+            "identical": true
+          },
+          {
+            "frame": 141,
+            "identical": true
+          },
+          {
+            "frame": 160,
+            "identical": true
+          },
+          {
+            "frame": 175,
+            "identical": true
+          },
+          {
+            "frame": 179,
+            "identical": true
+          },
+          {
+            "frame": 221,
+            "identical": true
+          },
+          {
+            "frame": 222,
+            "identical": true
+          },
+          {
+            "frame": 240,
+            "identical": true
+          },
+          {
+            "frame": 259,
+            "identical": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "C1",
+      "name": "the camera overlay from the keyboard (+ to zoom, Enter, Shift+→ while filming at half speed, Enter): a review with the confirm saying the framing outside the range stays, nothing written while filming, accept = one transaction (history lists its op once: replace_clip_keyframes) that keyed x, y and scale",
+      "status": "pass",
+      "detail": {
+        "confirm": "הצילום יחליף 30 נקודות מפתח של מיקום וגודל בטווח שצולם. המסגור מחוץ לטווח נשאר כמו שהוא. אפשר לבטל בבת אחת. נקודות מפתח חדשות: 12",
+        "revisions": 1,
+        "ops": [
+          "replace_clip_keyframes"
+        ],
+        "keys": [
+          {
+            "p": "x",
+            "keys": 34
+          },
+          {
+            "p": "y",
+            "keys": 34
+          },
+          {
+            "p": "scale",
+            "keys": 34
+          }
+        ],
+        "errors": []
+      }
+    }
+  ],
+  "measurements": {
+    "webgpuAdapter": "present (on this Linux container it is a software adapter, as in proof:gpu)",
+    "beatAnalysis": {
+      "analysedBeats": 79,
+      "generatedBeats": 79,
+      "bpm": 120.19,
+      "worstDistanceToAGeneratedBeatSeconds": 0.01
+    },
+    "q1": {
+      "nearest beat, ×1": {
+        "taps": 64,
+        "browserOnTarget": 64,
+        "serverOnTarget": 64,
+        "misses": []
+      },
+      "half beat, ×1": {
+        "taps": 64,
+        "browserOnTarget": 64,
+        "serverOnTarget": 64,
+        "misses": []
+      },
+      "nearest beat, ÷2": {
+        "taps": 32,
+        "browserOnTarget": 32,
+        "serverOnTarget": 32,
+        "misses": []
+      },
+      "nearest beat, ×2": {
+        "taps": 64,
+        "browserOnTarget": 64,
+        "serverOnTarget": 64,
+        "misses": []
+      }
+    },
+    "b1Stills": [
+      {
+        "hit": 75,
+        "edgeBefore": 59.954,
+        "zoomFromEdge": 1.1794,
+        "zoomFromEdgeNextFrame": 1.1798,
+        "zoomFromBox": 1.1789,
+        "frameBeforeIdentical": true,
+        "frameAfterReleaseIdentical": true
+      },
+      {
+        "hit": 120,
+        "edgeBefore": 59.994,
+        "zoomFromEdge": 1.1796,
+        "zoomFromEdgeNextFrame": 1.1797,
+        "zoomFromBox": 1.1787,
+        "frameBeforeIdentical": true,
+        "frameAfterReleaseIdentical": true
+      },
+      {
+        "hit": 165,
+        "edgeBefore": 59.964,
+        "zoomFromEdge": 1.1795,
+        "zoomFromEdgeNextFrame": 1.1793,
+        "zoomFromBox": 1.1788,
+        "frameBeforeIdentical": true,
+        "frameAfterReleaseIdentical": true
+      },
+      {
+        "hit": 210,
+        "edgeBefore": 60.003,
+        "zoomFromEdge": 1.1794,
+        "zoomFromEdgeNextFrame": 1.1799,
+        "zoomFromBox": 1.1791,
+        "frameBeforeIdentical": true,
+        "frameAfterReleaseIdentical": true
+      },
+      {
+        "hit": 255,
+        "edgeBefore": 60.016,
+        "zoomFromEdge": 1.1793,
+        "zoomFromEdgeNextFrame": 1.1797,
+        "zoomFromBox": 1.179,
+        "frameBeforeIdentical": true,
+        "frameAfterReleaseIdentical": true
+      },
+      {
+        "hit": 300,
+        "edgeBefore": 59.923,
+        "zoomFromEdge": 1.1794,
+        "zoomFromEdgeNextFrame": 1.1791,
+        "zoomFromBox": 1.1788,
+        "frameBeforeIdentical": true,
+        "frameAfterReleaseIdentical": true
+      },
+      {
+        "hit": 345,
+        "edgeBefore": 60.059,
+        "zoomFromEdge": 1.1794,
+        "zoomFromEdgeNextFrame": 1.179,
+        "zoomFromBox": 1.179,
+        "frameBeforeIdentical": true,
+        "frameAfterReleaseIdentical": true
+      },
+      {
+        "hit": 390,
+        "edgeBefore": 59.911,
+        "zoomFromEdge": 1.1795,
+        "zoomFromEdgeNextFrame": 1.1787,
+        "zoomFromBox": 1.179,
+        "frameBeforeIdentical": true,
+        "frameAfterReleaseIdentical": true
+      }
+    ],
+    "p1": [
+      {
+        "frame": 75,
+        "ghostVsStill": {
+          "max": 0,
+          "mean": 0
+        },
+        "committedPreviewVsStill": {
+          "max": 0,
+          "mean": 0
+        },
+        "canvas": "640x360"
+      },
+      {
+        "frame": 120,
+        "ghostVsStill": {
+          "max": 0,
+          "mean": 0
+        },
+        "committedPreviewVsStill": {
+          "max": 0,
+          "mean": 0
+        },
+        "canvas": "640x360"
+      },
+      {
+        "frame": 165,
+        "ghostVsStill": {
+          "max": 0,
+          "mean": 0
+        },
+        "committedPreviewVsStill": {
+          "max": 0,
+          "mean": 0
+        },
+        "canvas": "640x360"
+      },
+      {
+        "frame": 210,
+        "ghostVsStill": {
+          "max": 0,
+          "mean": 0
+        },
+        "committedPreviewVsStill": {
+          "max": 0,
+          "mean": 0
+        },
+        "canvas": "640x360"
+      }
+    ],
+    "b1Export": {
+      "frames": 420,
+      "rows": [
+        {
+          "hit": 75,
+          "zoomBefore": 1.001,
+          "zoomAtHit": 1.179,
+          "barcodeBefore": 74
+        },
+        {
+          "hit": 120,
+          "zoomBefore": 1,
+          "zoomAtHit": 1.179,
+          "barcodeBefore": 119
+        },
+        {
+          "hit": 165,
+          "zoomBefore": 1,
+          "zoomAtHit": 1.18,
+          "barcodeBefore": 164
+        },
+        {
+          "hit": 210,
+          "zoomBefore": 1.001,
+          "zoomAtHit": 1.18,
+          "barcodeBefore": 209
+        },
+        {
+          "hit": 255,
+          "zoomBefore": 1,
+          "zoomAtHit": 1.178,
+          "barcodeBefore": 254
+        },
+        {
+          "hit": 300,
+          "zoomBefore": 1,
+          "zoomAtHit": 1.179,
+          "barcodeBefore": 299
+        },
+        {
+          "hit": 345,
+          "zoomBefore": 1,
+          "zoomAtHit": 1.177,
+          "barcodeBefore": 344
+        },
+        {
+          "hit": 390,
+          "zoomBefore": 1.001,
+          "zoomAtHit": 1.18,
+          "barcodeBefore": 389
+        }
+      ],
+      "threshold": "unzoomed < 1.05, zoomed > 1.12 (strip-edge zoom; the export is lossy, the 1.18 ± 0.02 measure is on the stills)"
+    },
+    "latency": "not checked: key-to-picture and key-to-sound latency are not measured here (headless, no audio device; the owner's tap calibration on the laptop is still open)",
+    "n1LivePath": {
+      "hits": 200,
+      "runsMs": [
+        11.9,
+        11.6,
+        12.4,
+        9.2,
+        12.1,
+        17.4,
+        13.1,
+        18.3,
+        12.5,
+        15
+      ],
+      "warmupMs": 14.4,
+      "slowestMs": 18.3,
+      "budgetMs": 33.33,
+      "machine": "Intel(R) Xeon(R) Processor @ 2.30GHz ×4",
+      "note": "one sample of this machine, under whatever else ran on it; not a general claim"
+    },
+    "F1": {
+      "label": "two colour pads (grey, invert) alternating at 20 taps a second on a saturated red card",
+      "takeStatus": 200,
+      "taps": 60,
+      "kept": 1,
+      "held": 30,
+      "keptStarts": [
+        30
+      ],
+      "ruleOn": {
+        "verdict": "pass",
+        "ranges": 0
+      },
+      "ruleOff": {
+        "verdict": "fail",
+        "ranges": 1,
+        "adjustments": 60
+      }
+    },
+    "F2": {
+      "label": "the strobe pad («הבזק על הפעימה», follows the analysed 120 BPM music) alternating with two colour pads at 20 taps a second — on the SOFTWARE WebGPU adapter launch of proof:gpu",
+      "takeStatus": 200,
+      "taps": 60,
+      "kept": 1,
+      "held": 40,
+      "keptStarts": [
+        30
+      ],
+      "ruleOn": {
+        "verdict": "pass",
+        "ranges": 0
+      },
+      "ruleOff": {
+        "verdict": "fail",
+        "ranges": 2,
+        "adjustments": 41
+      }
+    },
+    "c1": {
+      "keys": 48,
+      "residual": 0.00462524769642203,
+      "overTolerance": false,
+      "maxZoom": 2.84765625,
+      "rows": [
+        {
+          "frame": 15,
+          "u": 0.6627,
+          "v": 0.5961,
+          "denseU": 0.6646,
+          "denseV": 0.5971,
+          "err": 0.0018,
+          "backgroundPixels": 0
+        },
+        {
+          "frame": 26,
+          "u": 0.7333,
+          "v": 0.6118,
+          "denseU": 0.7336,
+          "denseV": 0.6127,
+          "err": 0.0009,
+          "backgroundPixels": 0
+        },
+        {
+          "frame": 37,
+          "u": 0.7608,
+          "v": 0.549,
+          "denseU": 0.7623,
+          "denseV": 0.5492,
+          "err": 0.0015,
+          "backgroundPixels": 0
+        },
+        {
+          "frame": 47,
+          "u": 0.6627,
+          "v": 0.4392,
+          "denseU": 0.6659,
+          "denseV": 0.4406,
+          "err": 0.0031,
+          "backgroundPixels": 0
+        },
+        {
+          "frame": 58,
+          "u": 0.4706,
+          "v": 0.3922,
+          "denseU": 0.4735,
+          "denseV": 0.3928,
+          "err": 0.0029,
+          "backgroundPixels": 0
+        },
+        {
+          "frame": 69,
+          "u": 0.2941,
+          "v": 0.4706,
+          "denseU": 0.296,
+          "denseV": 0.4722,
+          "err": 0.0019,
+          "backgroundPixels": 0
+        },
+        {
+          "frame": 80,
+          "u": 0.2314,
+          "v": 0.5686,
+          "denseU": 0.233,
+          "denseV": 0.5713,
+          "err": 0.0027,
+          "backgroundPixels": 0
+        },
+        {
+          "frame": 91,
+          "u": 0.3176,
+          "v": 0.5373,
+          "denseU": 0.3199,
+          "denseV": 0.5388,
+          "err": 0.0023,
+          "backgroundPixels": 0
+        },
+        {
+          "frame": 102,
+          "u": 0.5059,
+          "v": 0.4902,
+          "denseU": 0.5079,
+          "denseV": 0.4898,
+          "err": 0.002,
+          "backgroundPixels": 0
+        },
+        {
+          "frame": 112,
+          "u": 0.6745,
+          "v": 0.4588,
+          "denseU": 0.6779,
+          "denseV": 0.4617,
+          "err": 0.0034,
+          "backgroundPixels": 0
+        },
+        {
+          "frame": 123,
+          "u": 0.7647,
+          "v": 0.4392,
+          "denseU": 0.7668,
+          "denseV": 0.4394,
+          "err": 0.0021,
+          "backgroundPixels": 0
+        },
+        {
+          "frame": 134,
+          "u": 0.7529,
+          "v": 0.4824,
+          "denseU": 0.7544,
+          "denseV": 0.4814,
+          "err": 0.0014,
+          "backgroundPixels": 0
+        }
+      ]
+    }
+  }
+}

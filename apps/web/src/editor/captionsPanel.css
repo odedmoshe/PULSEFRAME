@@ -1,0 +1,38 @@
+/* Captions mode panel (UX_REDESIGN §4.9): the transcript first, the speech engine's honest state. ds tokens only. */
+.pf-cap { display: flex; flex-direction: column; gap: var(--pf-sp-4); color: var(--pf-text); font-family: var(--pf-font); }
+.pf-cap-head { display: flex; flex-direction: column; align-items: flex-start; gap: var(--pf-sp-1); }
+.pf-cap-count { color: var(--pf-text-2); font-size: var(--pf-fs-sm); font-weight: var(--pf-fw-semibold); white-space: nowrap; }
+.pf-cap-hint { display: flex; flex-wrap: wrap; column-gap: var(--pf-sp-4); color: var(--pf-text-3); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-cap-hint kbd { font-family: var(--pf-font-mono); font-size: var(--pf-fs-digits); padding-inline: 4px; border-radius: var(--pf-r-xs); background: var(--pf-surface-3); color: var(--pf-text-2); direction: ltr; unicode-bidi: isolate; }
+.pf-cap-reason { display: inline-flex; }
+/* the phrase cards: compact (14/22, 6/10), words close together, the list scrolls with the panel and not inside a 320 px box (design review D6) */
+.pf-cap .phrases { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--pf-sp-2); max-height: none; overflow: visible; }
+.pf-cap .phrases > li { align-items: center; gap: var(--pf-sp-3); padding: 6px 10px; background: var(--pf-surface-2); border: 1px solid var(--pf-line); border-radius: var(--pf-r-md); font-size: var(--pf-fs-sm); line-height: 22px; }
+.pf-cap .phrase-text { line-height: 22px; }
+.pf-cap .pf-cap-pencil { flex: none; display: inline-grid; place-items: center; inline-size: 24px; block-size: 24px; min-inline-size: 24px; padding: 0; border: 0; background: transparent; color: var(--pf-text-3); box-shadow: none; margin-inline-start: auto; }
+.pf-cap .pf-cap-pencil:hover { background: var(--pf-surface-4); color: var(--pf-text); }
+.pf-cap .pf-cap-pencil:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 1px; }
+.pf-cap .word { padding: 0 1px; border-radius: var(--pf-r-xs); color: var(--pf-text); }
+.pf-cap .word:hover { background: var(--pf-surface-4); }
+.pf-cap .word.sel { background: var(--pf-frame-soft); box-shadow: inset 0 0 0 1px var(--pf-frame); color: var(--pf-text); }
+.pf-cap .word.now { background: var(--pf-pulse-soft); box-shadow: inset 0 -2px 0 var(--pf-pulse); }
+.pf-cap .word:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 1px; }
+
+.pf-asr { padding: var(--pf-sp-5); border: 1px dashed var(--pf-line-control); border-radius: var(--pf-r-md); background: var(--pf-surface-1); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); display: flex; flex-direction: column; gap: var(--pf-sp-3); }
+.pf-asr[data-state='ready'] { border-style: solid; border-color: var(--pf-line-strong); background: var(--pf-surface-2); }
+.pf-asr p { margin: 0; }
+.pf-asr-head { display: flex; align-items: center; justify-content: space-between; gap: var(--pf-sp-4); flex-wrap: wrap; }
+.pf-asr-head b { font-size: var(--pf-fs-sm); font-weight: var(--pf-fw-semibold); }
+.pf-asr-pill { padding: 2px var(--pf-sp-4); border: 1px solid var(--pf-line-control); border-radius: var(--pf-r-pill); color: var(--pf-text-2); }
+.pf-asr-pill.is-ready { border-color: var(--pf-frame); color: var(--pf-frame); background: var(--pf-frame-soft); }
+.pf-asr-pill.is-running { border-color: var(--pf-agent); color: var(--pf-agent); background: var(--pf-agent-soft); }
+.pf-asr-pill.is-off { border-style: dashed; color: var(--pf-text-3); }
+.pf-asr .muted { color: var(--pf-text-3); }
+.pf-asr summary { cursor: pointer; color: var(--pf-info); min-block-size: 24px; display: flex; align-items: center; }
+.pf-asr ol { margin: var(--pf-sp-3) 0 0; padding-inline-start: var(--pf-sp-7); display: grid; gap: var(--pf-sp-3); color: var(--pf-text-2); }
+
+/* where the captions come from, and the notice when they show nothing (owner report 2026-11-26) */
+.pf-cap-show { margin: 0; }
+.pf-cap-source { margin: 0; font-size: var(--pf-fs-xs); }
+.pf-cap-notice { padding: var(--pf-sp-5); border: 1px solid var(--pf-line-strong); border-inline-start: 3px solid var(--pf-pulse); border-radius: var(--pf-r-md); background: var(--pf-surface-2); display: flex; flex-direction: column; gap: var(--pf-sp-4); align-items: flex-start; }
+.pf-cap-notice p { margin: 0; }

@@ -1,0 +1,57 @@
+/* Multicam (ADR-0020): the docked panel, the angle viewer, the sync dialog, the library entry and the inspector block. Tokens only; logical properties so RTL needs no mirror rules. */
+.mc-panel { display: grid; align-content: start; gap: var(--pf-sp-4); }
+.mc-panel h2 { margin: 0; font-size: var(--pf-fs-md); }
+.mc-panel h3 { margin: 0; font-size: var(--pf-fs-sm); color: var(--pf-text-2); font-weight: var(--pf-fw-semibold); }
+.mc-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--pf-sp-3); }
+.mc-viewer { display: grid; }
+.mc-viewer-canvas { inline-size: 100%; block-size: auto; aspect-ratio: 16 / 9; background: var(--pf-canvas); border-radius: var(--pf-r-sm); box-shadow: 0 0 0 1px var(--pf-line-strong); }
+.mc-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--pf-sp-3); margin: 0; padding: 0; list-style: none; }
+.mc-tile { display: grid; gap: var(--pf-sp-2); text-align: start; padding: var(--pf-sp-3); min-block-size: var(--pf-hit-touch, 44px); color: var(--pf-text); background: var(--pf-surface-2); border: 1px solid var(--pf-line-control); border-radius: var(--pf-r-md); cursor: pointer; font: inherit; }
+.mc-tile:hover { background: var(--pf-surface-3); }
+.mc-tile:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+.mc-tile[aria-pressed='true'] { border-color: var(--pf-pulse); box-shadow: inset 0 0 0 1px var(--pf-pulse); }
+.mc-tile-top { display: flex; align-items: center; justify-content: space-between; gap: var(--pf-sp-2); }
+.mc-tile-n { font-family: var(--pf-font-mono); color: var(--pf-text-2); }
+.mc-onair { font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-semibold); padding: 1px var(--pf-sp-3); border-radius: var(--pf-r-pill); background: var(--pf-pulse); color: var(--pf-pulse-ink); }
+.mc-meter { block-size: 6px; border-radius: 3px; background: var(--pf-surface-4); overflow: hidden; }
+.mc-meter > i { display: block; block-size: 100%; inline-size: var(--mc-level, 0%); background: var(--pf-ok); transition: inline-size var(--pf-dur-fast) linear; }
+.mc-thumb { display: grid; gap: 2px; }
+.mc-thumb canvas { inline-size: 100%; block-size: auto; aspect-ratio: 16 / 9; object-fit: contain; background: var(--pf-canvas); border-radius: var(--pf-r-xs); }
+.mc-thumb-note { font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
+.mc-rec { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3); }
+.mc-rec label { display: inline-flex; align-items: center; gap: var(--pf-sp-2); font-size: var(--pf-fs-sm); }
+.mc-rec input[type='number'] { inline-size: 4.5em; }
+.mc-recording { color: var(--pf-danger); font-weight: var(--pf-fw-semibold); }
+.mc-note { margin: 0; font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
+.mc-live { margin: 0; min-block-size: 1.2em; font-size: var(--pf-fs-sm); }
+.mc-table { inline-size: 100%; border-collapse: collapse; font-size: var(--pf-fs-sm); }
+.mc-table th { text-align: start; font-weight: var(--pf-fw-semibold); color: var(--pf-text-2); padding: var(--pf-sp-2); }
+.mc-table td { padding: var(--pf-sp-2); border-block-start: 1px solid var(--pf-line); vertical-align: middle; }
+.mc-table select, .mc-table input { max-inline-size: 100%; }
+.mc-sheet { border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); padding: var(--pf-sp-4); display: grid; gap: var(--pf-sp-3); }
+.mc-sheet > summary { cursor: pointer; font-weight: var(--pf-fw-semibold); }
+.mc-sheet ul, .mc-sheet ol { margin: 0; padding-inline-start: 1.2em; }
+.mc-disclaimer { margin: 0; padding: var(--pf-sp-3); border-radius: var(--pf-r-sm); background: var(--pf-surface-3); font-size: var(--pf-fs-sm); }
+.mc-setup { margin: 0; padding: var(--pf-sp-3); border-radius: var(--pf-r-sm); border: 1px dashed var(--pf-line-strong); font-size: var(--pf-fs-sm); }
+/* sync dialog */
+.mc-sync { display: grid; gap: var(--pf-sp-5); }
+.mc-chip { display: inline-flex; align-items: center; gap: var(--pf-sp-2); padding: 1px var(--pf-sp-3); border-radius: var(--pf-r-pill); border: 1px solid var(--pf-line-strong); font-size: var(--pf-fs-xs); white-space: nowrap; }
+.mc-chip::before { content: attr(data-mark); font-weight: var(--pf-fw-bold); }
+.mc-chip[data-verdict='confident'], .mc-chip[data-verdict='reference'], .mc-chip[data-verdict='manual'] { border-color: var(--pf-ok); }
+.mc-chip[data-verdict='check'], .mc-chip[data-verdict='ambiguous'] { border-color: var(--pf-attention); }
+.mc-chip[data-verdict='no-shared-sound'], .mc-chip[data-verdict='inconsistent'], .mc-chip[data-verdict='unsynced'] { border-color: var(--pf-danger); }
+.mc-nudge { display: inline-flex; align-items: center; gap: var(--pf-sp-2); }
+.mc-nudge [role='spinbutton'] { min-inline-size: 3.5em; text-align: center; font-family: var(--pf-font-mono); padding: var(--pf-sp-2); border: 1px solid var(--pf-line-control); border-radius: var(--pf-r-sm); }
+.mc-nudge [role='spinbutton']:focus-visible { outline: 2px solid var(--pf-focus); }
+.mc-cands { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); align-items: center; }
+/* library entry and inspector block */
+.mc-entry { display: grid; gap: var(--pf-sp-3); padding: var(--pf-sp-4); border-block-start: 1px solid var(--pf-line); }
+.mc-steps { margin: 0; padding-inline-start: 1.2em; font-size: var(--pf-fs-sm); }
+/* The pick box sits top-left in both directions, like the card's own badges (physical left: the thumbnail is a picture, not
+   text), and the format badge moves to its right; top-right in RTL would cover the "used" tick (MediaLibrary.tsx, chrome.css). */
+.mc-pick { position: absolute; inset-block-start: 5px; left: 6px; z-index: 2; inline-size: 20px; block-size: 20px; margin: 0; }
+.pf-mc-thumb:has(> .mc-pick) .pf-mc-fmt { left: 32px; }
+.clip-badge.mc-clip-badge { font-family: var(--pf-font-mono); }
+.mc-block { display: grid; gap: var(--pf-sp-3); }
+.mc-block fieldset { margin: 0; padding: 0; border: 0; display: grid; gap: var(--pf-sp-2); }
+@media (prefers-reduced-motion: reduce) { .mc-meter > i { transition: none; } .mc-tile { transition: none; } }

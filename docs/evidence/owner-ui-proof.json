@@ -1,0 +1,86 @@
+{
+  "ranAt": "2026-11-26T05:59:00.100Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "logicalCpus": 4,
+    "gpu": "none"
+  },
+  "scope": "Owner-facing controls in headless Chromium.",
+  "passed": 9,
+  "total": 9,
+  "checks": [
+    {
+      "name": "creating a grant in the editor shows its token once with the MCP endpoint; the default mode is \"propose\"; the token sees only this project, cannot commit an edit directly, and cannot read another project",
+      "ok": true,
+      "detail": {
+        "mode": "propose",
+        "directCommit": 200,
+        "committed": false,
+        "proposal": true
+      }
+    },
+    {
+      "name": "after dismissing, the token is no longer shown; revoking the grant in the editor stops the token immediately",
+      "ok": true
+    },
+    {
+      "name": "a grant created with \"requests per minute\" 12 and \"exports per 24 hours\" 3 shows both limits in the list, and its token is answered 429 on the third request in a row (two allowed at once)",
+      "ok": true,
+      "detail": {
+        "rpmShown": "12",
+        "epdShown": "3",
+        "burst": [
+          200,
+          200,
+          429
+        ]
+      }
+    },
+    {
+      "name": "the crossfade control fades the selected clip in from the clip before it (0.2 s = 6 frames on both sides, earlier clip extended)",
+      "ok": true,
+      "detail": {
+        "leftFrames": 21
+      }
+    },
+    {
+      "name": "loop playback: with loop on, a 1-second timeline wraps around at least twice and keeps playing; turning loop off lets it stop at the end",
+      "ok": true,
+      "detail": {
+        "loops": 2
+      }
+    },
+    {
+      "name": "project manager: the automatic backup panel shows the schedule and the snapshots present; \"Back up now\" writes a new dated snapshot that is on disk",
+      "ok": true,
+      "detail": {
+        "backupShown": true,
+        "backupTwo": true,
+        "backupOnDisk": true,
+        "backupLast": "11/26/2026, 5:58:57 AM"
+      }
+    },
+    {
+      "name": "project manager: lists the projects; delete is disabled until the exact name is typed, then removes the project; storage check is a dry run; Escape closes the dialog and returns focus to the button that opened it",
+      "ok": true,
+      "detail": {
+        "rows0": 2,
+        "blocked": true,
+        "gone": true,
+        "closed": true,
+        "focusBack": true
+      }
+    },
+    {
+      "name": "\"new project\" creates it and opens it in the editor",
+      "ok": true
+    },
+    {
+      "name": "no uncaught errors in the page",
+      "ok": true,
+      "detail": []
+    }
+  ]
+}

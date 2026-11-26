@@ -1,0 +1,116 @@
+/**
+ * The status bar (docs/design/UX_REDESIGN.md §4.8), 24 px at the bottom. Start side: the project's format and frame rate,
+ * the duration, and a background job with its mini ring. End side: capability pips ("2 להגדרה", which opens the status
+ * centre), and the last export's flash check (data-testid flash-pass / flash-fail moved here from the top bar).
+ * The shell (ds/shell.css) gives the row its height once this renders something. Styles: ds/chrome.css.
+ */
+import { Check, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { capStageLabel } from './statusStage.ts';
+import { Ring } from '../ds/index.ts';
+import { CHROME_STRINGS } from './chrome.strings.ts';
+import { STATUS_STRINGS } from './status.strings.ts';
+import { setSettingsOpen } from './chromeState.ts';
+import { filmClock } from './filmLength.ts';
+import { useEditorState } from './store.ts';
+import { dictionaries } from '@pulseframe/i18n';
+import type { ExportChecks } from '@pulseframe/core';
+import { SEND_TESTIDS as SEND_ID } from './send/send.testids.ts';
+import { SEND_STRINGS } from './send/send.strings.ts';
+import { findingCount, findingRows } from './send/send.logic.ts';
+import '../ds/chrome.css';
+
+export function StatusBar() {
+  const { state, t } = useEditorState();
+  const S = CHROME_STRINGS[state.lang];
+  const { doc, capJob, gpu, provider, exportJob } = state;
+  const clock = filmClock(doc);
+  const fps = doc ? Math.round((doc.settings.frameRate.num / doc.settings.frameRate.den) * 100) / 100 : 0;
+  const job = capJob && ['queued', 'running'].includes(capJob.status) ? capJob : null;
+  const pct = job && typeof job.output?.progress === 'number' ? Math.round(job.output.progress * 100) : null;
+  // What still needs setting up: the graphics adapter and the local AI provider. Known facts only; an unknown state is not counted.
+  const known = [
+    gpu ? { name: S.gpu, ready: gpu.available } : null,
+    provider ? { name: S.ai, ready: provider.provider.configured } : null,
+  ].filter((x): x is { name: string; ready: boolean } => x !== null);
+  const needNames = known.filter((x) => !x.ready).map((x) => x.name);
+  const needs = needNames.length;
+  const P = STATUS_STRINGS[state.lang];
+  const pipWord = needs ? P.need(needs) : S.pipsAll;
+  const pipTitle = needs ? P.needTitle(needNames) : known.length ? P.allTitle(known.map((x) => x.name)) : S.statusCentre;
+  // the last export's file checks (wave 7 send): shown only when something was found; a quiet report stays in the export sheet
+  const checks = exportJob?.status === 'succeeded' ? ((exportJob.output as { checks?: ExportChecks } | null)?.checks ?? null) : null;
+  const flash = exportJob?.status === 'succeeded' && exportJob.output?.photosensitivity ? exportJob.output.photosensitivity : null;
+  return (
+    <footer className="pf-ds pf-status" data-shell-slot="status" aria-label={S.statusFormat}>
+      <div className="pf-status-start">
+        {doc && <span className="num pf-status-fmt" dir="ltr" title={S.statusFormat}>{doc.settings.width}×{doc.settings.height} · {fps} fps</span>}
+        {doc && <span className="num pf-status-dur" dir="ltr">{clock}</span>}
+        {job && (
+          <span className="pf-status-job" role="status" aria-label={S.statusJobs}>
+            <Ring value={pct} label={S.statusJobs} size={28} />
+            <span className="pf-status-jobText">{capJob?.stage ? <bdi>{capStageLabel(capJob.stage, state.lang)}</bdi> : S.statusJobs}{pct != null && <> · <span className="num">{pct}%</span></>}</span>
+          </span>
+        )}
+      </div>
+      <div className="pf-status-end">
+        <button type="button" className={`pf-status-pip${needs ? ' is-need' : ''}`} onClick={() => setSettingsOpen(true)} aria-haspopup="dialog" title={pipTitle} aria-label={`${S.statusCentre}: ${pipWord}. ${pipTitle}`} data-testid="status-pips">
+          <span>{pipWord}</span>
+        </button>
+        {flash && <FlashResult report={flash} />}
+        {checks && findingCount(checks) > 0 && <CheckFindings checks={checks} />}
+      </div>
+    </footer>
+  );
+}
+
+/** The photosensitivity result of the last export (ADR-0009): a quiet status when it passed; otherwise the stretches, with jump-to. */
+function FlashResult({ report }: { report: { verdict: 'pass' | 'fail'; ranges: { from: { value: string; timescale: number }; to: { value: string; timescale: number }; kind: 'general' | 'red'; flashesPerSecond: number; busiestCellFlashesPerSecond?: number; area: number }[] } }) {
+  const { editor, state, t } = useEditorState();
+  const S = CHROME_STRINGS[state.lang];
+  if (report.verdict === 'pass') return <span className="pf-status-flash is-ok" role="status" data-testid="flash-pass" title={t('flash.passTitle')}><ShieldCheck size={13} strokeWidth={1.75} aria-hidden="true" /><span>{S.flashChecked}</span><Check size={12} strokeWidth={2.25} aria-hidden="true" /></span>;
+  const rate = state.doc?.settings.frameRate;
+  const sec = (x: { value: string; timescale: number }) => Number(x.value) / x.timescale;
+  const clock = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
+  return (
+    <details className="pf-status-flashFail" data-testid="flash-fail">
+      <summary role="status"><TriangleAlert size={13} strokeWidth={1.75} aria-hidden="true" /> {t('flash.fail')} ({report.ranges.length})</summary>
+      <div className="pf-status-flashBody" role="group" aria-label={t('flash.fail')}>
+        <p>{t('flash.failIntro')}</p>
+        <ul>
+          {report.ranges.map((r, i) => (
+            <li key={i} data-testid="flash-range">
+              <bdi dir="ltr">{clock(sec(r.from))}–{clock(sec(r.to))}</bdi> · {t(r.kind === 'red' ? 'flash.red' : 'flash.general')} {r.flashesPerSecond} {t(r.busiestCellFlashesPerSecond === undefined ? 'flash.perSecond' : 'flash.perSecondArea')} · {Math.round(r.area * 100)}% {t('flash.area')}
+              {rate && <button type="button" className="pf-status-jump" onClick={() => editor.seek(Math.floor((sec(r.from) * rate.num) / rate.den))} data-testid="flash-jump">{t('flash.jump')}</button>}
+            </li>
+          ))}
+        </ul>
+        <p className="muted">{t('flash.method')}</p>
+      </div>
+    </details>
+  );
+}
+
+/** What the last export's file checks found, with a jump to each stretch. Report only. */
+function CheckFindings({ checks }: { checks: ExportChecks }) {
+  const { editor, state } = useEditorState();
+  const D = dictionaries[state.lang], S = SEND_STRINGS[state.lang];
+  const rate = state.doc?.settings.frameRate;
+  if (!rate) return null;
+  const rows = findingRows(checks, rate);
+  return (
+    <details className="pf-status-flashFail" data-testid="export-checks-status">
+      <summary role="status"><TriangleAlert size={13} strokeWidth={1.75} aria-hidden="true" /> {D['send.checks']} ({rows.length})</summary>
+      <div className="pf-status-flashBody" role="group" aria-label={D['send.checks']}>
+        <ul>
+          {rows.map((r) => (
+            <li key={r.key} data-testid={SEND_ID.checkItem} data-kind={r.kind}>
+              <b>{D[`send.find.${r.kind}` as 'send.find.black']}</b> · <bdi dir="ltr">{r.fromText}–{r.toText}</bdi>
+              <button type="button" className="pf-status-jump" onClick={() => editor.seek(r.frame)} data-testid={SEND_ID.checkJump}>{D['send.jump']}</button>
+            </li>
+          ))}
+        </ul>
+        <p className="muted">{D['send.heuristic']} · {S.reportOnly}</p>
+      </div>
+    </details>
+  );
+}

@@ -2,13 +2,29 @@
  * Reviewed workflow import (Amendment A1 FF-03). Pure parsing: no network, no execution, no installs,
  * no filesystem access. The result is always a DRAFT whose blockers explain why it is not publishable.
  */
-import { ComfyGraphSchema, graphDigest, publicationBlockers, type Blocker, type CapabilityDescriptor } from './descriptor.ts';
+import { ComfyGraphSchema, graphDigest, publicationBlockers, type Blocker, type ComfyDescriptor } from './descriptor.ts';
 
-/** Node classes shipped in ComfyUI core that the importer can attribute without a runtime. Extend only after review. */
-export const KNOWN_CORE_NODES = new Set(['EmptyImage', 'SaveImage', 'PreviewImage', 'LoadImage', 'ImageScale', 'ImageInvert', 'ImageBlur', 'ImageBatch', 'SolidMask', 'MaskToImage', 'ImageCompositeMasked', 'ImagePadForOutpaint']);
+/**
+ * Node classes shipped in ComfyUI core that the importer can attribute without a runtime. Extend only after review.
+ * ADR-0017 additions, each read in the core source at the pinned commit eee59185 (comfy_extras/nodes_upscale_model.py, nodes.py
+ * ImageScaleBy, nodes_video.py, nodes_frame_interpolation.py, the MediaPipe face and DA3 depth nodes, nodes_primitive.py and the
+ * logic nodes that ComfyUI's own "Frame Interpolation" blueprint uses), so a graph built from them imports without unknown_node_pack.
+ * Being known says only who ships the class; every imported graph is still a draft that a reviewer must publish.
+ */
+export const KNOWN_CORE_NODES = new Set([
+  'EmptyImage', 'SaveImage', 'PreviewImage', 'LoadImage', 'ImageScale', 'ImageInvert', 'ImageBlur', 'ImageBatch', 'SolidMask', 'MaskToImage', 'ImageCompositeMasked', 'ImagePadForOutpaint', 'LoadBackgroundRemovalModel', 'RemoveBackground', 'JoinImageWithAlpha', 'InvertMask',
+  // upscaling (Real-ESRGAN through spandrel) and exact scale factors
+  'UpscaleModelLoader', 'ImageUpscaleWithModel', 'ImageScaleBy',
+  // video in and out, frame interpolation (RIFE / FILM)
+  'LoadVideo', 'GetVideoComponents', 'CreateVideo', 'SaveVideo', 'FrameInterpolationModelLoader', 'FrameInterpolate',
+  // faces (wave 1b) and depth (wave 1b)
+  'LoadMediaPipeFaceLandmarker', 'MediaPipeFaceLandmarker', 'MediaPipeFaceMask', 'LoadDA3Model', 'DA3Inference', 'DA3Render',
+  // primitives and logic used by core blueprints
+  'PrimitiveInt', 'PrimitiveBoolean', 'ComfySwitchNode', 'ComfyMathExpression',
+]);
 const OUTPUT_NODES: Record<string, 'image' | 'video' | 'audio'> = { SaveImage: 'image', PreviewImage: 'image', SaveAnimatedWEBP: 'video', SaveAnimatedPNG: 'video', SaveVideo: 'video', SaveWEBM: 'video', VHS_VideoCombine: 'video', SaveAudio: 'audio' };
 const MEDIA_LOADERS: Record<string, 'image' | 'video' | 'audio'> = { LoadImage: 'image', LoadVideo: 'video', VHS_LoadVideo: 'video', LoadAudio: 'audio' };
-const MODEL_FIELD = /^(ckpt_name|lora_name|vae_name|unet_name|clip_name\d*|control_net_name|model_name|upscale_model|style_model_name|clip_vision_name|gligen_name)$/;
+const MODEL_FIELD = /^(bg_removal_name|ckpt_name|lora_name|vae_name|unet_name|clip_name\d*|control_net_name|model_name|upscale_model|style_model_name|clip_vision_name|gligen_name)$/;
 const MODEL_FILE = /\.(safetensors|ckpt|pt|pth|gguf|onnx|bin|sft)$/i;
 const isLink = (v: unknown) => Array.isArray(v) && v.length === 2 && typeof v[0] === 'string' && typeof v[1] === 'number';
 const NA = { status: 'not_assessed' as const };
@@ -18,7 +34,7 @@ export class ImportError extends Error {
     super(message);
   }
 }
-export interface ImportResult { draft: CapabilityDescriptor; blockers: Blocker[]; findings: string[] }
+export interface ImportResult { draft: ComfyDescriptor; blockers: Blocker[]; findings: string[] }
 
 export function importComfyWorkflow(json: unknown, meta: { id: string; title: string; sourceRepository?: string; sourceCommit?: string }): ImportResult {
   if (json && typeof json === 'object' && Array.isArray((json as any).nodes) && 'links' in (json as any))
@@ -28,10 +44,10 @@ export function importComfyWorkflow(json: unknown, meta: { id: string; title: st
   const graph = parsed.data;
   if (Object.keys(graph).length > 2000) throw new ImportError('graph_too_large', 'graph has more than 2000 nodes');
   const findings: string[] = [];
-  const inputs: CapabilityDescriptor['inputs'] = [];
-  const outputs: CapabilityDescriptor['outputs'] = [];
-  const models: CapabilityDescriptor['models'] = [];
-  let egress: CapabilityDescriptor['egress'] = 'none';
+  const inputs: ComfyDescriptor['inputs'] = [];
+  const outputs: ComfyDescriptor['outputs'] = [];
+  const models: ComfyDescriptor['models'] = [];
+  let egress: ComfyDescriptor['egress'] = 'none';
   const used = new Set<string>();
   const name = (base: string) => { let n = base.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^[^a-z]+/, '') || 'p'; n = n[0]!.toLowerCase() + n.slice(1); let k = n; for (let i = 2; used.has(k); i++) k = `${n}_${i}`; used.add(k); return k; };
 
@@ -43,7 +59,7 @@ export function importComfyWorkflow(json: unknown, meta: { id: string; title: st
       }
       if (typeof value === 'string' && /^[a-z][a-z0-9+.-]*:\/\//i.test(value)) { egress = 'graph-defined'; findings.push(`node ${nodeId} (${node.class_type}) field "${field}" contains a URL; graph-defined endpoints are never contacted on import and block publication`); }
       if (typeof value === 'string' && (MODEL_FIELD.test(field) || MODEL_FILE.test(value))) {
-        models.push({ role: field, path: value, publisher: null, revision: null, sha256: null, bytes: null, license: null, licenseEvidence: null, commercialUse: 'unknown', gated: false });
+        models.push({ role: field, path: value, publisher: null, revision: null, sha256: null, bytes: null, license: null, licenseEvidence: null, commercialUse: 'unknown', gated: false, source: null, attribution: null });
         continue;
       }
       const media = MEDIA_LOADERS[node.class_type];
@@ -56,16 +72,17 @@ export function importComfyWorkflow(json: unknown, meta: { id: string; title: st
       else findings.push(`node ${nodeId} field "${field}" has a structured literal that is kept fixed`);
     }
     const out = OUTPUT_NODES[node.class_type];
-    if (out) outputs.push({ name: name(`out_${nodeId}`), role: 'primary', mediaType: out, nodeId, encoding: 'display', reviewed: false });
+    if (out) outputs.push({ name: name(`out_${nodeId}`), role: 'primary', mediaType: out, nodeId, encoding: 'display', expectSize: null, expectFrames: null, dataSchema: null, reviewed: false });
   }
   const classes = [...new Set(Object.values(graph).map((n) => n.class_type))].sort();
-  const draft: CapabilityDescriptor = {
+  const draft: ComfyDescriptor = {
     id: meta.id, version: '0.0.1', provider: 'comfyui', state: 'draft',
+    cost: { cents: 0, basis: 'not declared; a reviewer must state the cost before publishing' },
     title: { he: meta.title, en: meta.title }, description: { he: '', en: '' },
     source: { repository: meta.sourceRepository ?? null, commit: meta.sourceCommit ?? null, notices: null },
     graph, graphDigest: graphDigest(graph), inputs, outputs,
     requiredNodes: classes.map((classType) => ({ classType, pack: KNOWN_CORE_NODES.has(classType) ? 'core' : null, packVersion: null })),
-    models, runtime: { comfyuiCommit: null, imageDigest: null }, limits: { maxFrames: null, maxPixels: null },
+    models, runtime: { comfyuiCommit: null, imageDigest: null }, frames: null, limits: { maxFrames: null, maxPixels: null },
     resources: { downloadBytes: 0, estimatedResidencyBytes: null, hostRamBytes: null, measuredProfiles: [] },
     egress, languages: [], limitations: ['Imported draft: not reviewed, not executed, not quality-checked.'],
     qualification: { schemaValid: { status: 'pass', evidence: 'parsed as ComfyUI API-format graph; all links resolve' }, dependencyReady: NA, licenseReviewed: NA, executed: NA, qualityReviewed: NA, hebrewQualified: NA, hardwareQualified: NA },

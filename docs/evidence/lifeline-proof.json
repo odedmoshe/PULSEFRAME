@@ -1,0 +1,1988 @@
+{
+  "proof": "lifeline",
+  "adr": "ADR-0021",
+  "ranAt": "2026-11-26T06:42:14.587Z",
+  "result": "PASSED",
+  "passed": 17,
+  "total": 17,
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "logicalCpus": 4,
+    "node": "v22.23.4",
+    "icu": "78.3",
+    "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers"
+  },
+  "scope": "The life line (ADR-0021) through the real server, the render worker and headless Chromium, on files generated here (ffmpeg -metadata, a hand-built EXIF segment) at 640x360: capture dates at import, title fields and the capture-sourced date stamp, people (what a credential without the people scope reads on every surface, and the archive without family details on a second server) against the same words typed by hand, H.264 export and the paused preview against the stills, \"make it plain text\", undo of every operation, the preflight, the calendar in Chromium, cost. Not covered: real phone files (the owner's own clips), cameras that write local time labelled as UTC or the end of the recording, HEIC photos, the editor screens (proof:lifeline-ui). Nobody looked at the pictures.",
+  "homeZone": "Asia/Jerusalem",
+  "measurements": {
+    "captures": {
+      "right": 8,
+      "of": 8,
+      "rows": [
+        {
+          "what": "container creation time, winter (15:30 UTC)",
+          "got": {
+            "at": "2024-12-25T17:30:00",
+            "utcOffsetMinutes": null,
+            "source": "container",
+            "assumedZone": "Asia/Jerusalem"
+          },
+          "conformed": false
+        },
+        {
+          "what": "container creation time, summer (15:30 UTC)",
+          "got": {
+            "at": "2024-07-01T18:30:00",
+            "utcOffsetMinutes": null,
+            "source": "container",
+            "assumedZone": "Asia/Jerusalem"
+          },
+          "conformed": false
+        },
+        {
+          "what": "Apple creation date beside another creation time",
+          "got": {
+            "at": "2023-08-10T09:05:07",
+            "utcOffsetMinutes": -420,
+            "source": "container"
+          },
+          "conformed": false
+        },
+        {
+          "what": "JPEG EXIF, little-endian, with its offset",
+          "got": {
+            "at": "2024-12-26T10:00:00",
+            "utcOffsetMinutes": 120,
+            "source": "exif"
+          },
+          "conformed": false
+        },
+        {
+          "what": "JPEG EXIF, big-endian, no offset",
+          "got": {
+            "at": "2019-07-04T08:00:00",
+            "utcOffsetMinutes": null,
+            "source": "exif"
+          },
+          "conformed": false
+        },
+        {
+          "what": "no date inside, a camera file name",
+          "got": {
+            "at": "2024-03-15T18:15:00",
+            "utcOffsetMinutes": null,
+            "source": "filename",
+            "circa": true
+          },
+          "conformed": false
+        },
+        {
+          "what": "a forwarded video: container time, marked as an estimate",
+          "got": {
+            "at": "2024-12-26T10:00:00",
+            "utcOffsetMinutes": null,
+            "source": "container",
+            "circa": true,
+            "assumedZone": "Asia/Jerusalem"
+          },
+          "conformed": false
+        },
+        {
+          "what": "rotated, variable frame rate: conformed, the date kept",
+          "got": {
+            "at": "2023-04-06T10:00:00",
+            "utcOffsetMinutes": null,
+            "source": "container",
+            "assumedZone": "Asia/Jerusalem"
+          },
+          "conformed": true
+        }
+      ]
+    },
+    "fieldEqualsLiteral": {
+      "equal": 8,
+      "of": 8,
+      "rows": [
+        {
+          "field": "{date}",
+          "literal": "צולם ב־26 בדצמבר 2024",
+          "equal": true,
+          "sha": "1ee2ff105aae8ac99165b7a9e5571f10d0607d2a580a428a6f3c6e67d2abcb34"
+        },
+        {
+          "field": "{date:numeric}",
+          "literal": "צולם ב־26.12.2024",
+          "equal": true,
+          "sha": "58fad1350793824e83f3c967d82ce3bc9ad7098786da52e69762f246be66c32a"
+        },
+        {
+          "field": "{hebrewDate}",
+          "literal": "כ״ה בכסלו תשפ״ה · חנוכה",
+          "equal": true,
+          "sha": "64f6f364d9b7e72f240148918ca74dd2365338e4218a679105f69272113c4f1e"
+        },
+        {
+          "field": "{year}",
+          "literal": "שנת 2024",
+          "equal": true,
+          "sha": "d58e970b348cc3e5d524be1fa5177f4e481af931bd78e54ba6d2ab8866010e7e"
+        },
+        {
+          "field": "{hebrewYear}",
+          "literal": "שנת תשפ״ה",
+          "equal": true,
+          "sha": "37a4f41f8f9b485890481de264999b32c21434ca4be7a7ea0bd30b2e843af617"
+        },
+        {
+          "field": "{event}",
+          "literal": "האירוע: חנוכה אצל סבתא",
+          "equal": true,
+          "sha": "2a29b10c8823d3dfab765360ddda24d03f57f029257e761ac501dc84883185d2"
+        },
+        {
+          "field": "{date:long-en}",
+          "literal": "Filmed on 26 December 2024",
+          "equal": true,
+          "sha": "7024bc1435794c4ba39d23aabd0f18534429a340d674fa4223f5b6782a7b0ff4"
+        },
+        {
+          "field": "{date:monthYear-en}",
+          "literal": "December 2024 at home",
+          "equal": true,
+          "sha": "13f1a4856e8d4ffb1d92afba35234416241cb468ca2e2c2e744f71c7f91dac89"
+        }
+      ]
+    },
+    "exportAgainstStill": {
+      "box": {
+        "x0": 160,
+        "y0": 218,
+        "x1": 479,
+        "y1": 286
+      },
+      "differingPixels": 10491,
+      "frames": 120,
+      "lastFrameOfA": {
+        "frame": 59,
+        "psnrGlobal": 48.226,
+        "psnrGlobalOther": 17.979,
+        "psnrStillAgainstRgb": 32.626,
+        "psnrSubsamplingAlone": 32.637,
+        "psnrBoxOwn": 31.1,
+        "psnrBoxOther": 7.716,
+        "farPixelsOwn": 1929,
+        "farPixelsOther": 11307
+      },
+      "firstFrameOfB": {
+        "frame": 60,
+        "psnrGlobal": 47.334,
+        "psnrGlobalOther": 17.993,
+        "psnrStillAgainstRgb": 32.69,
+        "psnrSubsamplingAlone": 32.723,
+        "psnrBoxOwn": 31.609,
+        "psnrBoxOther": 7.703,
+        "farPixelsOwn": 1547,
+        "farPixelsOther": 11429
+      },
+      "bounds": {
+        "psnr": 36,
+        "regionalPsnr": 30,
+        "fartherByDb": 6,
+        "shareStillDiffering": 0.5
+      }
+    },
+    "previewAgainstStill": {
+      "lastFrameOfA": {
+        "frame": 59,
+        "own": {
+          "fractionWithin2": 1,
+          "maxDiff": 0,
+          "farPixels": 0
+        },
+        "ownBox": {
+          "fractionWithin2": 1,
+          "maxDiff": 0,
+          "farPixels": 0
+        },
+        "otherBoxFarPixels": 10491
+      },
+      "firstFrameOfB": {
+        "frame": 60,
+        "own": {
+          "fractionWithin2": 1,
+          "maxDiff": 0,
+          "farPixels": 0
+        },
+        "ownBox": {
+          "fractionWithin2": 1,
+          "maxDiff": 0,
+          "farPixels": 0
+        },
+        "otherBoxFarPixels": 10491
+      }
+    },
+    "exactUndo": {
+      "exact": 8,
+      "of": 8,
+      "rows": [
+        {
+          "op": "set_asset_capture",
+          "undoExact": true,
+          "redoExact": true,
+          "changed": true
+        },
+        {
+          "op": "shift_asset_captures",
+          "undoExact": true,
+          "redoExact": true,
+          "changed": true
+        },
+        {
+          "op": "set_text_fields",
+          "undoExact": true,
+          "redoExact": true,
+          "changed": true
+        },
+        {
+          "op": "cluster_events",
+          "undoExact": true,
+          "redoExact": true,
+          "changed": true
+        },
+        {
+          "op": "add_event",
+          "undoExact": true,
+          "redoExact": true,
+          "changed": true
+        },
+        {
+          "op": "update_event",
+          "undoExact": true,
+          "redoExact": true,
+          "changed": true
+        },
+        {
+          "op": "remove_event",
+          "undoExact": true,
+          "redoExact": true,
+          "changed": true
+        },
+        {
+          "op": "attach_asset_capture (POST captures/read)",
+          "undoExact": true,
+          "redoExact": true,
+          "changed": true
+        }
+      ],
+      "replayEqual": true
+    },
+    "familyFreeArchive": {
+      "bytes": 48128,
+      "familyCheck": {
+        "varying": [
+          "clp_365cc207561"
+        ],
+        "empty": [
+          "clp_365cc207565"
+        ]
+      },
+      "frozen": {
+        "name": "נועה (בת שנה)",
+        "cut": "בת שנה · 1 ביוני 2021",
+        "itai": "איתי: "
+      },
+      "stills": [
+        {
+          "frame": 10,
+          "sha256": "6db05a9329dc449ebd5bd3a72df6dd88e12c94a8d9c5935109daa2404fe5371e",
+          "equal": true
+        },
+        {
+          "frame": 45,
+          "sha256": "9bb9c1bf2334db41c24c6aa10f75d2526c336d1808b60b85809f27ee4b7d6e37",
+          "equal": true
+        },
+        {
+          "frame": 95,
+          "sha256": "7701c3f2126b13f3afb4306f0f4b92482ff580ec0955422204cff1522e81f7c0",
+          "equal": true
+        }
+      ]
+    },
+    "peopleWalk": {
+      "routes": 164,
+      "tools": 210,
+      "perCredential": {
+        "agent token": {
+          "answered": 40,
+          "refused": 119,
+          "leaks": 0
+        },
+        "observer token": {
+          "answered": 39,
+          "refused": 120,
+          "leaks": 0
+        },
+        "grant with people left at its default": {
+          "answered": 40,
+          "refused": 119,
+          "leaks": 0
+        }
+      }
+    },
+    "calendarInChromium": {
+      "chromium": "153.0.8010.12",
+      "days": 2191,
+      "date": 0,
+      "numerals": 0,
+      "weekday": 0,
+      "roundTrip": 0,
+      "unknownMonth": 0,
+      "numeralsOracle": {
+        "letters": 0,
+        "digits": 2191
+      },
+      "first": [],
+      "sample": "כ״ה בכסלו תשפ״ה | Hanukkah day 1 | חנוכה — היום הראשון"
+    },
+    "holidayTable": {
+      "5785": [
+        {
+          "date": "2024-10-03",
+          "part": "both",
+          "id": "rosh-hashana",
+          "he": "ראש השנה",
+          "en": "Rosh Hashana"
+        },
+        {
+          "date": "2024-10-04",
+          "part": "both",
+          "id": "rosh-hashana-2",
+          "he": "ראש השנה — היום השני",
+          "en": "Rosh Hashana, day 2"
+        },
+        {
+          "date": "2024-10-11",
+          "part": "day",
+          "id": "erev-yom-kippur",
+          "he": "ערב יום כיפור",
+          "en": "Erev Yom Kippur"
+        },
+        {
+          "date": "2024-10-12",
+          "part": "both",
+          "id": "yom-kippur",
+          "he": "יום כיפור",
+          "en": "Yom Kippur"
+        },
+        {
+          "date": "2024-10-16",
+          "part": "day",
+          "id": "erev-sukkot",
+          "he": "ערב סוכות",
+          "en": "Erev Sukkot"
+        },
+        {
+          "date": "2024-10-17",
+          "part": "both",
+          "id": "sukkot",
+          "he": "סוכות",
+          "en": "Sukkot"
+        },
+        {
+          "date": "2024-10-18",
+          "part": "both",
+          "id": "chol-hamoed-sukkot",
+          "he": "חול המועד סוכות",
+          "en": "Chol HaMoed Sukkot"
+        },
+        {
+          "date": "2024-10-19",
+          "part": "both",
+          "id": "chol-hamoed-sukkot",
+          "he": "חול המועד סוכות",
+          "en": "Chol HaMoed Sukkot"
+        },
+        {
+          "date": "2024-10-20",
+          "part": "both",
+          "id": "chol-hamoed-sukkot",
+          "he": "חול המועד סוכות",
+          "en": "Chol HaMoed Sukkot"
+        },
+        {
+          "date": "2024-10-21",
+          "part": "both",
+          "id": "chol-hamoed-sukkot",
+          "he": "חול המועד סוכות",
+          "en": "Chol HaMoed Sukkot"
+        },
+        {
+          "date": "2024-10-22",
+          "part": "both",
+          "id": "chol-hamoed-sukkot",
+          "he": "חול המועד סוכות",
+          "en": "Chol HaMoed Sukkot"
+        },
+        {
+          "date": "2024-10-23",
+          "part": "both",
+          "id": "hoshana-rabba",
+          "he": "הושענא רבה",
+          "en": "Hoshana Rabba"
+        },
+        {
+          "date": "2024-10-24",
+          "part": "both",
+          "id": "simchat-torah",
+          "he": "שמחת תורה",
+          "en": "Simchat Torah"
+        },
+        {
+          "date": "2024-12-25",
+          "part": "day",
+          "id": "erev-hanukkah",
+          "he": "ערב חנוכה",
+          "en": "Erev Hanukkah"
+        },
+        {
+          "date": "2024-12-26",
+          "part": "night",
+          "id": "hanukkah-candle-1",
+          "he": "חנוכה — נר ראשון",
+          "en": "Hanukkah, candle 1"
+        },
+        {
+          "date": "2024-12-26",
+          "part": "day",
+          "id": "hanukkah-day-1",
+          "he": "חנוכה — היום הראשון",
+          "en": "Hanukkah, day 1"
+        },
+        {
+          "date": "2024-12-27",
+          "part": "night",
+          "id": "hanukkah-candle-2",
+          "he": "חנוכה — נר שני",
+          "en": "Hanukkah, candle 2"
+        },
+        {
+          "date": "2024-12-27",
+          "part": "day",
+          "id": "hanukkah-day-2",
+          "he": "חנוכה — היום השני",
+          "en": "Hanukkah, day 2"
+        },
+        {
+          "date": "2024-12-28",
+          "part": "night",
+          "id": "hanukkah-candle-3",
+          "he": "חנוכה — נר שלישי",
+          "en": "Hanukkah, candle 3"
+        },
+        {
+          "date": "2024-12-28",
+          "part": "day",
+          "id": "hanukkah-day-3",
+          "he": "חנוכה — היום השלישי",
+          "en": "Hanukkah, day 3"
+        },
+        {
+          "date": "2024-12-29",
+          "part": "night",
+          "id": "hanukkah-candle-4",
+          "he": "חנוכה — נר רביעי",
+          "en": "Hanukkah, candle 4"
+        },
+        {
+          "date": "2024-12-29",
+          "part": "day",
+          "id": "hanukkah-day-4",
+          "he": "חנוכה — היום הרביעי",
+          "en": "Hanukkah, day 4"
+        },
+        {
+          "date": "2024-12-30",
+          "part": "night",
+          "id": "hanukkah-candle-5",
+          "he": "חנוכה — נר חמישי",
+          "en": "Hanukkah, candle 5"
+        },
+        {
+          "date": "2024-12-30",
+          "part": "day",
+          "id": "hanukkah-day-5",
+          "he": "חנוכה — היום החמישי",
+          "en": "Hanukkah, day 5"
+        },
+        {
+          "date": "2024-12-31",
+          "part": "night",
+          "id": "hanukkah-candle-6",
+          "he": "חנוכה — נר שישי",
+          "en": "Hanukkah, candle 6"
+        },
+        {
+          "date": "2024-12-31",
+          "part": "day",
+          "id": "hanukkah-day-6",
+          "he": "חנוכה — היום השישי",
+          "en": "Hanukkah, day 6"
+        },
+        {
+          "date": "2025-01-01",
+          "part": "night",
+          "id": "hanukkah-candle-7",
+          "he": "חנוכה — נר שביעי",
+          "en": "Hanukkah, candle 7"
+        },
+        {
+          "date": "2025-01-01",
+          "part": "day",
+          "id": "hanukkah-day-7",
+          "he": "חנוכה — היום השביעי",
+          "en": "Hanukkah, day 7"
+        },
+        {
+          "date": "2025-01-02",
+          "part": "night",
+          "id": "hanukkah-candle-8",
+          "he": "חנוכה — נר שמיני",
+          "en": "Hanukkah, candle 8"
+        },
+        {
+          "date": "2025-01-02",
+          "part": "day",
+          "id": "hanukkah-day-8",
+          "he": "חנוכה — היום השמיני",
+          "en": "Hanukkah, day 8"
+        },
+        {
+          "date": "2025-02-13",
+          "part": "both",
+          "id": "tu-bishvat",
+          "he": "ט״ו בשבט",
+          "en": "Tu BiShvat"
+        },
+        {
+          "date": "2025-02-28",
+          "part": "both",
+          "id": "family-day",
+          "he": "יום המשפחה",
+          "en": "Family Day"
+        },
+        {
+          "date": "2025-03-14",
+          "part": "both",
+          "id": "purim",
+          "he": "פורים",
+          "en": "Purim"
+        },
+        {
+          "date": "2025-03-15",
+          "part": "both",
+          "id": "shushan-purim",
+          "he": "שושן פורים",
+          "en": "Shushan Purim"
+        },
+        {
+          "date": "2025-04-12",
+          "part": "day",
+          "id": "erev-pesach",
+          "he": "ערב פסח",
+          "en": "Erev Pesach"
+        },
+        {
+          "date": "2025-04-13",
+          "part": "night",
+          "id": "seder",
+          "he": "ליל הסדר",
+          "en": "Seder night"
+        },
+        {
+          "date": "2025-04-13",
+          "part": "day",
+          "id": "pesach",
+          "he": "פסח",
+          "en": "Pesach"
+        },
+        {
+          "date": "2025-04-14",
+          "part": "both",
+          "id": "chol-hamoed-pesach",
+          "he": "חול המועד פסח",
+          "en": "Chol HaMoed Pesach"
+        },
+        {
+          "date": "2025-04-15",
+          "part": "both",
+          "id": "chol-hamoed-pesach",
+          "he": "חול המועד פסח",
+          "en": "Chol HaMoed Pesach"
+        },
+        {
+          "date": "2025-04-16",
+          "part": "both",
+          "id": "chol-hamoed-pesach",
+          "he": "חול המועד פסח",
+          "en": "Chol HaMoed Pesach"
+        },
+        {
+          "date": "2025-04-17",
+          "part": "both",
+          "id": "chol-hamoed-pesach",
+          "he": "חול המועד פסח",
+          "en": "Chol HaMoed Pesach"
+        },
+        {
+          "date": "2025-04-18",
+          "part": "both",
+          "id": "chol-hamoed-pesach",
+          "he": "חול המועד פסח",
+          "en": "Chol HaMoed Pesach"
+        },
+        {
+          "date": "2025-04-19",
+          "part": "both",
+          "id": "pesach-7",
+          "he": "שביעי של פסח",
+          "en": "Seventh day of Pesach"
+        },
+        {
+          "date": "2025-04-20",
+          "part": "both",
+          "id": "mimouna",
+          "he": "מימונה",
+          "en": "Mimouna"
+        },
+        {
+          "date": "2025-04-24",
+          "part": "both",
+          "id": "yom-hashoah",
+          "he": "יום השואה",
+          "en": "Yom HaShoah"
+        },
+        {
+          "date": "2025-04-30",
+          "part": "both",
+          "id": "yom-hazikaron",
+          "he": "יום הזיכרון",
+          "en": "Yom HaZikaron"
+        },
+        {
+          "date": "2025-05-01",
+          "part": "both",
+          "id": "yom-haatzmaut",
+          "he": "יום העצמאות",
+          "en": "Yom HaAtzmaut"
+        },
+        {
+          "date": "2025-05-16",
+          "part": "both",
+          "id": "lag-baomer",
+          "he": "ל״ג בעומר",
+          "en": "Lag BaOmer"
+        },
+        {
+          "date": "2025-05-26",
+          "part": "both",
+          "id": "jerusalem-day",
+          "he": "יום ירושלים",
+          "en": "Jerusalem Day"
+        },
+        {
+          "date": "2025-06-01",
+          "part": "day",
+          "id": "erev-shavuot",
+          "he": "ערב שבועות",
+          "en": "Erev Shavuot"
+        },
+        {
+          "date": "2025-06-02",
+          "part": "both",
+          "id": "shavuot",
+          "he": "שבועות",
+          "en": "Shavuot"
+        },
+        {
+          "date": "2025-08-03",
+          "part": "both",
+          "id": "tisha-bav",
+          "he": "תשעה באב",
+          "en": "Tisha B'Av"
+        },
+        {
+          "date": "2025-08-09",
+          "part": "both",
+          "id": "tu-bav",
+          "he": "ט״ו באב",
+          "en": "Tu B'Av"
+        },
+        {
+          "date": "2025-09-22",
+          "part": "day",
+          "id": "erev-rosh-hashana",
+          "he": "ערב ראש השנה",
+          "en": "Erev Rosh Hashana"
+        }
+      ],
+      "5786": [
+        {
+          "date": "2025-09-23",
+          "part": "both",
+          "id": "rosh-hashana",
+          "he": "ראש השנה",
+          "en": "Rosh Hashana"
+        },
+        {
+          "date": "2025-09-24",
+          "part": "both",
+          "id": "rosh-hashana-2",
+          "he": "ראש השנה — היום השני",
+          "en": "Rosh Hashana, day 2"
+        },
+        {
+          "date": "2025-10-01",
+          "part": "day",
+          "id": "erev-yom-kippur",
+          "he": "ערב יום כיפור",
+          "en": "Erev Yom Kippur"
+        },
+        {
+          "date": "2025-10-02",
+          "part": "both",
+          "id": "yom-kippur",
+          "he": "יום כיפור",
+          "en": "Yom Kippur"
+        },
+        {
+          "date": "2025-10-06",
+          "part": "day",
+          "id": "erev-sukkot",
+          "he": "ערב סוכות",
+          "en": "Erev Sukkot"
+        },
+        {
+          "date": "2025-10-07",
+          "part": "both",
+          "id": "sukkot",
+          "he": "סוכות",
+          "en": "Sukkot"
+        },
+        {
+          "date": "2025-10-08",
+          "part": "both",
+          "id": "chol-hamoed-sukkot",
+          "he": "חול המועד סוכות",
+          "en": "Chol HaMoed Sukkot"
+        },
+        {
+          "date": "2025-10-09",
+          "part": "both",
+          "id": "chol-hamoed-sukkot",
+          "he": "חול המועד סוכות",
+          "en": "Chol HaMoed Sukkot"
+        },
+        {
+          "date": "2025-10-10",
+          "part": "both",
+          "id": "chol-hamoed-sukkot",
+          "he": "חול המועד סוכות",
+          "en": "Chol HaMoed Sukkot"
+        },
+        {
+          "date": "2025-10-11",
+          "part": "both",
+          "id": "chol-hamoed-sukkot",
+          "he": "חול המועד סוכות",
+          "en": "Chol HaMoed Sukkot"
+        },
+        {
+          "date": "2025-10-12",
+          "part": "both",
+          "id": "chol-hamoed-sukkot",
+          "he": "חול המועד סוכות",
+          "en": "Chol HaMoed Sukkot"
+        },
+        {
+          "date": "2025-10-13",
+          "part": "both",
+          "id": "hoshana-rabba",
+          "he": "הושענא רבה",
+          "en": "Hoshana Rabba"
+        },
+        {
+          "date": "2025-10-14",
+          "part": "both",
+          "id": "simchat-torah",
+          "he": "שמחת תורה",
+          "en": "Simchat Torah"
+        },
+        {
+          "date": "2025-12-14",
+          "part": "day",
+          "id": "erev-hanukkah",
+          "he": "ערב חנוכה",
+          "en": "Erev Hanukkah"
+        },
+        {
+          "date": "2025-12-15",
+          "part": "night",
+          "id": "hanukkah-candle-1",
+          "he": "חנוכה — נר ראשון",
+          "en": "Hanukkah, candle 1"
+        },
+        {
+          "date": "2025-12-15",
+          "part": "day",
+          "id": "hanukkah-day-1",
+          "he": "חנוכה — היום הראשון",
+          "en": "Hanukkah, day 1"
+        },
+        {
+          "date": "2025-12-16",
+          "part": "night",
+          "id": "hanukkah-candle-2",
+          "he": "חנוכה — נר שני",
+          "en": "Hanukkah, candle 2"
+        },
+        {
+          "date": "2025-12-16",
+          "part": "day",
+          "id": "hanukkah-day-2",
+          "he": "חנוכה — היום השני",
+          "en": "Hanukkah, day 2"
+        },
+        {
+          "date": "2025-12-17",
+          "part": "night",
+          "id": "hanukkah-candle-3",
+          "he": "חנוכה — נר שלישי",
+          "en": "Hanukkah, candle 3"
+        },
+        {
+          "date": "2025-12-17",
+          "part": "day",
+          "id": "hanukkah-day-3",
+          "he": "חנוכה — היום השלישי",
+          "en": "Hanukkah, day 3"
+        },
+        {
+          "date": "2025-12-18",
+          "part": "night",
+          "id": "hanukkah-candle-4",
+          "he": "חנוכה — נר רביעי",
+          "en": "Hanukkah, candle 4"
+        },
+        {
+          "date": "2025-12-18",
+          "part": "day",
+          "id": "hanukkah-day-4",
+          "he": "חנוכה — היום הרביעי",
+          "en": "Hanukkah, day 4"
+        },
+        {
+          "date": "2025-12-19",
+          "part": "night",
+          "id": "hanukkah-candle-5",
+          "he": "חנוכה — נר חמישי",
+          "en": "Hanukkah, candle 5"
+        },
+        {
+          "date": "2025-12-19",
+          "part": "day",
+          "id": "hanukkah-day-5",
+          "he": "חנוכה — היום החמישי",
+          "en": "Hanukkah, day 5"
+        },
+        {
+          "date": "2025-12-20",
+          "part": "night",
+          "id": "hanukkah-candle-6",
+          "he": "חנוכה — נר שישי",
+          "en": "Hanukkah, candle 6"
+        },
+        {
+          "date": "2025-12-20",
+          "part": "day",
+          "id": "hanukkah-day-6",
+          "he": "חנוכה — היום השישי",
+          "en": "Hanukkah, day 6"
+        },
+        {
+          "date": "2025-12-21",
+          "part": "night",
+          "id": "hanukkah-candle-7",
+          "he": "חנוכה — נר שביעי",
+          "en": "Hanukkah, candle 7"
+        },
+        {
+          "date": "2025-12-21",
+          "part": "day",
+          "id": "hanukkah-day-7",
+          "he": "חנוכה — היום השביעי",
+          "en": "Hanukkah, day 7"
+        },
+        {
+          "date": "2025-12-22",
+          "part": "night",
+          "id": "hanukkah-candle-8",
+          "he": "חנוכה — נר שמיני",
+          "en": "Hanukkah, candle 8"
+        },
+        {
+          "date": "2025-12-22",
+          "part": "day",
+          "id": "hanukkah-day-8",
+          "he": "חנוכה — היום השמיני",
+          "en": "Hanukkah, day 8"
+        },
+        {
+          "date": "2026-02-02",
+          "part": "both",
+          "id": "tu-bishvat",
+          "he": "ט״ו בשבט",
+          "en": "Tu BiShvat"
+        },
+        {
+          "date": "2026-02-17",
+          "part": "both",
+          "id": "family-day",
+          "he": "יום המשפחה",
+          "en": "Family Day"
+        },
+        {
+          "date": "2026-03-03",
+          "part": "both",
+          "id": "purim",
+          "he": "פורים",
+          "en": "Purim"
+        },
+        {
+          "date": "2026-03-04",
+          "part": "both",
+          "id": "shushan-purim",
+          "he": "שושן פורים",
+          "en": "Shushan Purim"
+        },
+        {
+          "date": "2026-04-01",
+          "part": "day",
+          "id": "erev-pesach",
+          "he": "ערב פסח",
+          "en": "Erev Pesach"
+        },
+        {
+          "date": "2026-04-02",
+          "part": "night",
+          "id": "seder",
+          "he": "ליל הסדר",
+          "en": "Seder night"
+        },
+        {
+          "date": "2026-04-02",
+          "part": "day",
+          "id": "pesach",
+          "he": "פסח",
+          "en": "Pesach"
+        },
+        {
+          "date": "2026-04-03",
+          "part": "both",
+          "id": "chol-hamoed-pesach",
+          "he": "חול המועד פסח",
+          "en": "Chol HaMoed Pesach"
+        },
+        {
+          "date": "2026-04-04",
+          "part": "both",
+          "id": "chol-hamoed-pesach",
+          "he": "חול המועד פסח",
+          "en": "Chol HaMoed Pesach"
+        },
+        {
+          "date": "2026-04-05",
+          "part": "both",
+          "id": "chol-hamoed-pesach",
+          "he": "חול המועד פסח",
+          "en": "Chol HaMoed Pesach"
+        },
+        {
+          "date": "2026-04-06",
+          "part": "both",
+          "id": "chol-hamoed-pesach",
+          "he": "חול המועד פסח",
+          "en": "Chol HaMoed Pesach"
+        },
+        {
+          "date": "2026-04-07",
+          "part": "both",
+          "id": "chol-hamoed-pesach",
+          "he": "חול המועד פסח",
+          "en": "Chol HaMoed Pesach"
+        },
+        {
+          "date": "2026-04-08",
+          "part": "both",
+          "id": "pesach-7",
+          "he": "שביעי של פסח",
+          "en": "Seventh day of Pesach"
+        },
+        {
+          "date": "2026-04-09",
+          "part": "both",
+          "id": "mimouna",
+          "he": "מימונה",
+          "en": "Mimouna"
+        },
+        {
+          "date": "2026-04-14",
+          "part": "both",
+          "id": "yom-hashoah",
+          "he": "יום השואה",
+          "en": "Yom HaShoah"
+        },
+        {
+          "date": "2026-04-21",
+          "part": "both",
+          "id": "yom-hazikaron",
+          "he": "יום הזיכרון",
+          "en": "Yom HaZikaron"
+        },
+        {
+          "date": "2026-04-22",
+          "part": "both",
+          "id": "yom-haatzmaut",
+          "he": "יום העצמאות",
+          "en": "Yom HaAtzmaut"
+        },
+        {
+          "date": "2026-05-05",
+          "part": "both",
+          "id": "lag-baomer",
+          "he": "ל״ג בעומר",
+          "en": "Lag BaOmer"
+        },
+        {
+          "date": "2026-05-15",
+          "part": "both",
+          "id": "jerusalem-day",
+          "he": "יום ירושלים",
+          "en": "Jerusalem Day"
+        },
+        {
+          "date": "2026-05-21",
+          "part": "day",
+          "id": "erev-shavuot",
+          "he": "ערב שבועות",
+          "en": "Erev Shavuot"
+        },
+        {
+          "date": "2026-05-22",
+          "part": "both",
+          "id": "shavuot",
+          "he": "שבועות",
+          "en": "Shavuot"
+        },
+        {
+          "date": "2026-07-23",
+          "part": "both",
+          "id": "tisha-bav",
+          "he": "תשעה באב",
+          "en": "Tisha B'Av"
+        },
+        {
+          "date": "2026-07-29",
+          "part": "both",
+          "id": "tu-bav",
+          "he": "ט״ו באב",
+          "en": "Tu B'Av"
+        },
+        {
+          "date": "2026-09-11",
+          "part": "day",
+          "id": "erev-rosh-hashana",
+          "he": "ערב ראש השנה",
+          "en": "Erev Rosh Hashana"
+        }
+      ],
+      "5787": [
+        {
+          "date": "2026-09-12",
+          "part": "both",
+          "id": "rosh-hashana",
+          "he": "ראש השנה",
+          "en": "Rosh Hashana"
+        },
+        {
+          "date": "2026-09-13",
+          "part": "both",
+          "id": "rosh-hashana-2",
+          "he": "ראש השנה — היום השני",
+          "en": "Rosh Hashana, day 2"
+        },
+        {
+          "date": "2026-09-20",
+          "part": "day",
+          "id": "erev-yom-kippur",
+          "he": "ערב יום כיפור",
+          "en": "Erev Yom Kippur"
+        },
+        {
+          "date": "2026-09-21",
+          "part": "both",
+          "id": "yom-kippur",
+          "he": "יום כיפור",
+          "en": "Yom Kippur"
+        },
+        {
+          "date": "2026-09-25",
+          "part": "day",
+          "id": "erev-sukkot",
+          "he": "ערב סוכות",
+          "en": "Erev Sukkot"
+        },
+        {
+          "date": "2026-09-26",
+          "part": "both",
+          "id": "sukkot",
+          "he": "סוכות",
+          "en": "Sukkot"
+        },
+        {
+          "date": "2026-09-27",
+          "part": "both",
+          "id": "chol-hamoed-sukkot",
+          "he": "חול המועד סוכות",
+          "en": "Chol HaMoed Sukkot"
+        },
+        {
+          "date": "2026-09-28",
+          "part": "both",
+          "id": "chol-hamoed-sukkot",
+          "he": "חול המועד סוכות",
+          "en": "Chol HaMoed Sukkot"
+        },
+        {
+          "date": "2026-09-29",
+          "part": "both",
+          "id": "chol-hamoed-sukkot",
+          "he": "חול המועד סוכות",
+          "en": "Chol HaMoed Sukkot"
+        },
+        {
+          "date": "2026-09-30",
+          "part": "both",
+          "id": "chol-hamoed-sukkot",
+          "he": "חול המועד סוכות",
+          "en": "Chol HaMoed Sukkot"
+        },
+        {
+          "date": "2026-10-01",
+          "part": "both",
+          "id": "chol-hamoed-sukkot",
+          "he": "חול המועד סוכות",
+          "en": "Chol HaMoed Sukkot"
+        },
+        {
+          "date": "2026-10-02",
+          "part": "both",
+          "id": "hoshana-rabba",
+          "he": "הושענא רבה",
+          "en": "Hoshana Rabba"
+        },
+        {
+          "date": "2026-10-03",
+          "part": "both",
+          "id": "simchat-torah",
+          "he": "שמחת תורה",
+          "en": "Simchat Torah"
+        },
+        {
+          "date": "2026-12-04",
+          "part": "day",
+          "id": "erev-hanukkah",
+          "he": "ערב חנוכה",
+          "en": "Erev Hanukkah"
+        },
+        {
+          "date": "2026-12-05",
+          "part": "night",
+          "id": "hanukkah-candle-1",
+          "he": "חנוכה — נר ראשון",
+          "en": "Hanukkah, candle 1"
+        },
+        {
+          "date": "2026-12-05",
+          "part": "day",
+          "id": "hanukkah-day-1",
+          "he": "חנוכה — היום הראשון",
+          "en": "Hanukkah, day 1"
+        },
+        {
+          "date": "2026-12-06",
+          "part": "night",
+          "id": "hanukkah-candle-2",
+          "he": "חנוכה — נר שני",
+          "en": "Hanukkah, candle 2"
+        },
+        {
+          "date": "2026-12-06",
+          "part": "day",
+          "id": "hanukkah-day-2",
+          "he": "חנוכה — היום השני",
+          "en": "Hanukkah, day 2"
+        },
+        {
+          "date": "2026-12-07",
+          "part": "night",
+          "id": "hanukkah-candle-3",
+          "he": "חנוכה — נר שלישי",
+          "en": "Hanukkah, candle 3"
+        },
+        {
+          "date": "2026-12-07",
+          "part": "day",
+          "id": "hanukkah-day-3",
+          "he": "חנוכה — היום השלישי",
+          "en": "Hanukkah, day 3"
+        },
+        {
+          "date": "2026-12-08",
+          "part": "night",
+          "id": "hanukkah-candle-4",
+          "he": "חנוכה — נר רביעי",
+          "en": "Hanukkah, candle 4"
+        },
+        {
+          "date": "2026-12-08",
+          "part": "day",
+          "id": "hanukkah-day-4",
+          "he": "חנוכה — היום הרביעי",
+          "en": "Hanukkah, day 4"
+        },
+        {
+          "date": "2026-12-09",
+          "part": "night",
+          "id": "hanukkah-candle-5",
+          "he": "חנוכה — נר חמישי",
+          "en": "Hanukkah, candle 5"
+        },
+        {
+          "date": "2026-12-09",
+          "part": "day",
+          "id": "hanukkah-day-5",
+          "he": "חנוכה — היום החמישי",
+          "en": "Hanukkah, day 5"
+        },
+        {
+          "date": "2026-12-10",
+          "part": "night",
+          "id": "hanukkah-candle-6",
+          "he": "חנוכה — נר שישי",
+          "en": "Hanukkah, candle 6"
+        },
+        {
+          "date": "2026-12-10",
+          "part": "day",
+          "id": "hanukkah-day-6",
+          "he": "חנוכה — היום השישי",
+          "en": "Hanukkah, day 6"
+        },
+        {
+          "date": "2026-12-11",
+          "part": "night",
+          "id": "hanukkah-candle-7",
+          "he": "חנוכה — נר שביעי",
+          "en": "Hanukkah, candle 7"
+        },
+        {
+          "date": "2026-12-11",
+          "part": "day",
+          "id": "hanukkah-day-7",
+          "he": "חנוכה — היום השביעי",
+          "en": "Hanukkah, day 7"
+        },
+        {
+          "date": "2026-12-12",
+          "part": "night",
+          "id": "hanukkah-candle-8",
+          "he": "חנוכה — נר שמיני",
+          "en": "Hanukkah, candle 8"
+        },
+        {
+          "date": "2026-12-12",
+          "part": "day",
+          "id": "hanukkah-day-8",
+          "he": "חנוכה — היום השמיני",
+          "en": "Hanukkah, day 8"
+        },
+        {
+          "date": "2027-01-23",
+          "part": "both",
+          "id": "tu-bishvat",
+          "he": "ט״ו בשבט",
+          "en": "Tu BiShvat"
+        },
+        {
+          "date": "2027-02-07",
+          "part": "both",
+          "id": "family-day",
+          "he": "יום המשפחה",
+          "en": "Family Day"
+        },
+        {
+          "date": "2027-03-23",
+          "part": "both",
+          "id": "purim",
+          "he": "פורים",
+          "en": "Purim"
+        },
+        {
+          "date": "2027-03-24",
+          "part": "both",
+          "id": "shushan-purim",
+          "he": "שושן פורים",
+          "en": "Shushan Purim"
+        },
+        {
+          "date": "2027-04-21",
+          "part": "day",
+          "id": "erev-pesach",
+          "he": "ערב פסח",
+          "en": "Erev Pesach"
+        },
+        {
+          "date": "2027-04-22",
+          "part": "night",
+          "id": "seder",
+          "he": "ליל הסדר",
+          "en": "Seder night"
+        },
+        {
+          "date": "2027-04-22",
+          "part": "day",
+          "id": "pesach",
+          "he": "פסח",
+          "en": "Pesach"
+        },
+        {
+          "date": "2027-04-23",
+          "part": "both",
+          "id": "chol-hamoed-pesach",
+          "he": "חול המועד פסח",
+          "en": "Chol HaMoed Pesach"
+        },
+        {
+          "date": "2027-04-24",
+          "part": "both",
+          "id": "chol-hamoed-pesach",
+          "he": "חול המועד פסח",
+          "en": "Chol HaMoed Pesach"
+        },
+        {
+          "date": "2027-04-25",
+          "part": "both",
+          "id": "chol-hamoed-pesach",
+          "he": "חול המועד פסח",
+          "en": "Chol HaMoed Pesach"
+        },
+        {
+          "date": "2027-04-26",
+          "part": "both",
+          "id": "chol-hamoed-pesach",
+          "he": "חול המועד פסח",
+          "en": "Chol HaMoed Pesach"
+        },
+        {
+          "date": "2027-04-27",
+          "part": "both",
+          "id": "chol-hamoed-pesach",
+          "he": "חול המועד פסח",
+          "en": "Chol HaMoed Pesach"
+        },
+        {
+          "date": "2027-04-28",
+          "part": "both",
+          "id": "pesach-7",
+          "he": "שביעי של פסח",
+          "en": "Seventh day of Pesach"
+        },
+        {
+          "date": "2027-04-29",
+          "part": "both",
+          "id": "mimouna",
+          "he": "מימונה",
+          "en": "Mimouna"
+        },
+        {
+          "date": "2027-05-04",
+          "part": "both",
+          "id": "yom-hashoah",
+          "he": "יום השואה",
+          "en": "Yom HaShoah"
+        },
+        {
+          "date": "2027-05-11",
+          "part": "both",
+          "id": "yom-hazikaron",
+          "he": "יום הזיכרון",
+          "en": "Yom HaZikaron"
+        },
+        {
+          "date": "2027-05-12",
+          "part": "both",
+          "id": "yom-haatzmaut",
+          "he": "יום העצמאות",
+          "en": "Yom HaAtzmaut"
+        },
+        {
+          "date": "2027-05-25",
+          "part": "both",
+          "id": "lag-baomer",
+          "he": "ל״ג בעומר",
+          "en": "Lag BaOmer"
+        },
+        {
+          "date": "2027-06-04",
+          "part": "both",
+          "id": "jerusalem-day",
+          "he": "יום ירושלים",
+          "en": "Jerusalem Day"
+        },
+        {
+          "date": "2027-06-10",
+          "part": "day",
+          "id": "erev-shavuot",
+          "he": "ערב שבועות",
+          "en": "Erev Shavuot"
+        },
+        {
+          "date": "2027-06-11",
+          "part": "both",
+          "id": "shavuot",
+          "he": "שבועות",
+          "en": "Shavuot"
+        },
+        {
+          "date": "2027-08-12",
+          "part": "both",
+          "id": "tisha-bav",
+          "he": "תשעה באב",
+          "en": "Tisha B'Av"
+        },
+        {
+          "date": "2027-08-18",
+          "part": "both",
+          "id": "tu-bav",
+          "he": "ט״ו באב",
+          "en": "Tu B'Av"
+        },
+        {
+          "date": "2027-10-01",
+          "part": "day",
+          "id": "erev-rosh-hashana",
+          "he": "ערב ראש השנה",
+          "en": "Erev Rosh Hashana"
+        }
+      ]
+    },
+    "cost": {
+      "evaluate": {
+        "frames": 1000,
+        "liveTitles": 20,
+        "medianMsPerFrameLive": 0.009,
+        "medianMsPerFrameTyped": 0.007,
+        "addedMsPerFrame": 0.002,
+        "budgetMs": 0.2,
+        "withinBudget": true,
+        "firstFrameAfterAnEditMs": 0.037
+      },
+      "commit": {
+        "datedFiles": 500,
+        "events": 60,
+        "created": 60,
+        "commits": 30,
+        "medianMs": 24.423,
+        "maxMs": 34.826
+      }
+    }
+  },
+  "checks": [
+    {
+      "name": "1. capture dates: 8/8 uploaded files get exactly the date typed here; the same UTC hour is 17:30 in winter and 18:30 in summer; the conformed file keeps its date",
+      "ok": true,
+      "detail": {
+        "wrong": [],
+        "conformedPhone": true
+      }
+    },
+    {
+      "name": "1b. a clock that was never set (1970) gives no date; files that say where they were taken are imported with their date and no location anywhere in the project, its summary or its history",
+      "ok": true,
+      "detail": {
+        "deadClock": null,
+        "fixtureHasPlace": true,
+        "looked": true,
+        "leaked": null,
+        "placeCapture": {
+          "at": "2024-07-01T18:30:00",
+          "utcOffsetMinutes": 180,
+          "source": "container"
+        },
+        "gpsCapture": {
+          "at": "2024-07-01T18:30:00",
+          "utcOffsetMinutes": 180,
+          "source": "exif"
+        }
+      }
+    },
+    {
+      "name": "2. field = literal: 8/8 kinds of field give a still with the same PNG SHA-256 as the words typed by hand (six Hebrew-side kinds and two English), and other words give another hash",
+      "ok": true,
+      "detail": {
+        "rows": [
+          {
+            "field": "{date}",
+            "literal": "צולם ב־26 בדצמבר 2024",
+            "equal": true
+          },
+          {
+            "field": "{date:numeric}",
+            "literal": "צולם ב־26.12.2024",
+            "equal": true
+          },
+          {
+            "field": "{hebrewDate}",
+            "literal": "כ״ה בכסלו תשפ״ה · חנוכה",
+            "equal": true
+          },
+          {
+            "field": "{year}",
+            "literal": "שנת 2024",
+            "equal": true
+          },
+          {
+            "field": "{hebrewYear}",
+            "literal": "שנת תשפ״ה",
+            "equal": true
+          },
+          {
+            "field": "{event}",
+            "literal": "האירוע: חנוכה אצל סבתא",
+            "equal": true
+          },
+          {
+            "field": "{date:long-en}",
+            "literal": "Filmed on 26 December 2024",
+            "equal": true
+          },
+          {
+            "field": "{date:monthYear-en}",
+            "literal": "December 2024 at home",
+            "equal": true
+          }
+        ],
+        "sensitive": true
+      }
+    },
+    {
+      "name": "4. export = still, inside the title's box: each H.264 frame is within the suite's bounds of its own still (PSNR ≥ 36 dB whole frame against the still as 4:2:0 can hold it, ≥ 30 dB in the box against the still itself) and at least 6 dB farther from the other still, whole frame and in the box; 120 frames exported",
+      "ok": true,
+      "detail": {
+        "box": {
+          "x0": 160,
+          "y0": 218,
+          "x1": 479,
+          "y1": 286
+        },
+        "differingPixels": 10491,
+        "lastFrameOfA": {
+          "frame": 59,
+          "psnrGlobal": 48.226,
+          "psnrGlobalOther": 17.979,
+          "psnrStillAgainstRgb": 32.626,
+          "psnrSubsamplingAlone": 32.637,
+          "psnrBoxOwn": 31.1,
+          "psnrBoxOther": 7.716,
+          "farPixelsOwn": 1929,
+          "farPixelsOther": 11307
+        },
+        "firstFrameOfB": {
+          "frame": 60,
+          "psnrGlobal": 47.334,
+          "psnrGlobalOther": 17.993,
+          "psnrStillAgainstRgb": 32.69,
+          "psnrSubsamplingAlone": 32.723,
+          "psnrBoxOwn": 31.609,
+          "psnrBoxOther": 7.703,
+          "farPixelsOwn": 1547,
+          "farPixelsOther": 11429
+        }
+      }
+    },
+    {
+      "name": "4a. (determinism only) the PNG export of both frames is byte-equal to render_frame",
+      "ok": true
+    },
+    {
+      "name": "5. the paused editor preview of both frames equals its server still by the parity suite's preview bound (≥ 99.9 % within 2 levels, none off by more than 16) and inside the title's box is far from the other still",
+      "ok": true,
+      "detail": {
+        "lastFrameOfA": {
+          "frame": 59,
+          "own": {
+            "fractionWithin2": 1,
+            "maxDiff": 0,
+            "farPixels": 0
+          },
+          "ownBox": {
+            "fractionWithin2": 1,
+            "maxDiff": 0,
+            "farPixels": 0
+          },
+          "otherBoxFarPixels": 10491
+        },
+        "firstFrameOfB": {
+          "frame": 60,
+          "own": {
+            "fractionWithin2": 1,
+            "maxDiff": 0,
+            "farPixels": 0
+          },
+          "ownBox": {
+            "fractionWithin2": 1,
+            "maxDiff": 0,
+            "farPixels": 0
+          },
+          "otherBoxFarPixels": 10491
+        },
+        "differingPixels": 10491,
+        "pageErrors": []
+      }
+    },
+    {
+      "name": "3. two dates over a cut: the last frame before the cut equals «1 ביוני 2021» typed by hand, the first frame after it equals «26 בדצמבר 2024», and they are two pictures (PNG SHA-256)",
+      "ok": true,
+      "detail": {
+        "beforeCut": true,
+        "afterCut": true,
+        "differ": true,
+        "juneWordsAfterTheCutAreAnotherPicture": true
+      }
+    },
+    {
+      "name": "6. the date stamp from the capture date equals the same stamp typed by hand; with the clock, the frame 60 seconds later equals the typed next minute and not the first",
+      "ok": true,
+      "detail": {
+        "capture": {
+          "at": "2024-12-25T18:15:10",
+          "utcOffsetMinutes": 120,
+          "source": "container"
+        },
+        "dateEqualsTyped": true,
+        "clockAtStartEqualsTyped": true,
+        "clockAfter60sEqualsTypedNextMinute": true,
+        "minuteMoved": true
+      }
+    },
+    {
+      "name": "7. \"make it plain text\": the still is byte-equal before and after, the title holds the words typed here and no fields; undo restores the fields and the same still",
+      "ok": true,
+      "detail": {
+        "stillEqual": true,
+        "text": "צולם ב־26 בדצמבר 2024 · כ״ה בכסלו תשפ״ה",
+        "fieldsAfter": null,
+        "fieldsAfterUndo": true,
+        "ops": [
+          "update_text",
+          "set_text_fields"
+        ]
+      }
+    },
+    {
+      "name": "8. exact undo: 8/8 operations (seven public ones through REST, attach through the re-read route) are undone to the creative projection of before and redone to that of after; replay equals the stored document",
+      "ok": true,
+      "detail": {
+        "rows": [
+          {
+            "op": "set_asset_capture",
+            "undoExact": true,
+            "redoExact": true,
+            "changed": true
+          },
+          {
+            "op": "shift_asset_captures",
+            "undoExact": true,
+            "redoExact": true,
+            "changed": true
+          },
+          {
+            "op": "set_text_fields",
+            "undoExact": true,
+            "redoExact": true,
+            "changed": true
+          },
+          {
+            "op": "cluster_events",
+            "undoExact": true,
+            "redoExact": true,
+            "changed": true
+          },
+          {
+            "op": "add_event",
+            "undoExact": true,
+            "redoExact": true,
+            "changed": true
+          },
+          {
+            "op": "update_event",
+            "undoExact": true,
+            "redoExact": true,
+            "changed": true
+          },
+          {
+            "op": "remove_event",
+            "undoExact": true,
+            "redoExact": true,
+            "changed": true
+          },
+          {
+            "op": "attach_asset_capture (POST captures/read)",
+            "undoExact": true,
+            "redoExact": true,
+            "changed": true
+          }
+        ],
+        "replayEqual": true,
+        "reread": {
+          "read": 1,
+          "dated": 1,
+          "revision": 28
+        },
+        "attached": {
+          "at": "2024-12-25T18:00:00",
+          "utcOffsetMinutes": null,
+          "source": "container",
+          "assumedZone": "Asia/Jerusalem"
+        }
+      }
+    },
+    {
+      "name": "9a. an undated picture under a title with a field, a dated one later on the same track: the field is empty (not the other picture's date), the preflight has the blocker field_no_data with the title and its frames, and the export is refused",
+      "ok": true,
+      "detail": {
+        "issues": [
+          {
+            "code": "field_no_data",
+            "severity": "blocker",
+            "message": "the title \"צולם ב־{date}\" has a field without data, so those words would be missing from the film ({date}: there is no capture date to take it from (the picture under the title has none, or no dated picture is on the timeline))",
+            "ids": [
+              "clp_893a17c7250",
+              "clp_af987aeca10"
+            ],
+            "range": {
+              "startFrame": 0,
+              "endFrame": 60
+            }
+          }
+        ],
+        "stillEqualsTitleWithoutTheField": true,
+        "stillDiffersFromTheOtherDate": true,
+        "exportStatus": 422,
+        "exportCode": "render_blocked"
+      }
+    },
+    {
+      "name": "9b. an evening picture with {hebrewDate}: field_sunset_undecided naming the title and the event; after update_event afterSunset=true the still equals «כ״ה בכסלו תשפ״ה» typed by hand (not the day before) and the plan has no blocker",
+      "ok": true,
+      "detail": {
+        "undecided": [
+          {
+            "code": "field_sunset_undecided",
+            "severity": "blocker",
+            "message": "the title \"{hebrewDate}\" shows a Hebrew date ({hebrewDate}) for a picture taken around sunset: the Hebrew date depends on whether it was filmed before or after sunset, and that has not been answered. Answer it for the event (update_event afterSunset); it is never guessed",
+            "ids": [
+              "clp_cfcbeb453d0",
+              "evt_0ca9bc92cc0"
+            ],
+            "range": {
+              "startFrame": 0,
+              "endFrame": 60
+            }
+          }
+        ],
+        "blockedPlan": [
+          "field_sunset_undecided"
+        ],
+        "cleared": [],
+        "clearPlan": [],
+        "stillEqualsTyped": true,
+        "differsFromTheDayBefore": true
+      }
+    },
+    {
+      "name": "10a. privacy: a credential without the people scope (agent token, observer token, a grant left at its default) reads each person as id and name with a null birth date, is refused both owner routes (403) and gets an archive with names and no birth date; its still of «{name} ({age})» equals «נועה ()» typed by hand while the owner's equals «נועה (בת שנה)»; controls: the owner and a grant with people \"full\" read the birth date",
+      "ok": true,
+      "detail": {
+        "reads": {
+          "agent token": {
+            "projectRead": true,
+            "ownerRoutes": [
+              403,
+              403,
+              403
+            ],
+            "archive": {
+              "status": 200,
+              "people": "names",
+              "leak": null
+            }
+          },
+          "observer token": {
+            "projectRead": true,
+            "ownerRoutes": [
+              403,
+              403,
+              403
+            ],
+            "archive": {
+              "status": 200,
+              "people": "names",
+              "leak": null
+            }
+          },
+          "grant with people left at its default": {
+            "projectRead": true,
+            "ownerRoutes": [
+              403,
+              403,
+              403
+            ],
+            "archive": {
+              "status": 200,
+              "people": "names",
+              "leak": null
+            }
+          }
+        },
+        "controls": true,
+        "fullGrantOwnerRoutes": [
+          403,
+          403
+        ],
+        "agentStillEqualsTypedWithoutAge": true,
+        "ownerStillEqualsTypedAge": true
+      }
+    },
+    {
+      "name": "11. the archive «בלי פרטי משפחה» imported on a second server: no people and no birth date in it, no title with a people field, each such title plain text with the words it showed at its first frame («נועה (בת שנה)»), the {date} title still live; the stills of the frames 10, 45, 95 are byte-equal to the source server's; the family check listed the title whose words change (varying) and the one with a field without words (empty)",
+      "ok": true,
+      "detail": {
+        "manifest": {
+          "family": "omit",
+          "people": "none"
+        },
+        "birthLeak": null,
+        "peopleOnSecondServer": null,
+        "peopleFieldLeft": [],
+        "frozen": {
+          "name": "נועה (בת שנה)",
+          "cut": "בת שנה · 1 ביוני 2021",
+          "itai": "איתי: "
+        },
+        "plainFields": true,
+        "stills": [
+          {
+            "frame": 10,
+            "equal": true
+          },
+          {
+            "frame": 45,
+            "equal": true
+          },
+          {
+            "frame": 95,
+            "equal": true
+          }
+        ],
+        "familyCheck": {
+          "varying": [
+            "clp_365cc207561"
+          ],
+          "empty": [
+            "clp_365cc207565"
+          ]
+        },
+        "afterTheCutTheCopyShowsTheFirstValue": true
+      }
+    },
+    {
+      "name": "10b. the walk: with the birth date planted in the project, a proposal's arguments and entity states and an export job, every REST route of the surface table (164) and every MCP tool (210), resource and prompt, called as each credential without the people scope: 0 answers hold the birth date (any spelling, also on the Hebrew calendar), an age or the word choice",
+      "ok": true,
+      "detail": {
+        "planted": true,
+        "walk": {
+          "agent token": {
+            "answered": 40,
+            "refused": 119,
+            "leaks": []
+          },
+          "observer token": {
+            "answered": 39,
+            "refused": 120,
+            "leaks": []
+          },
+          "grant with people left at its default": {
+            "answered": 40,
+            "refused": 119,
+            "leaks": []
+          }
+        }
+      }
+    },
+    {
+      "name": "12. the calendar inside headless Chromium 153.0.8010.12: 2191 days of 2022–2027 against the page's own Intl (date, weekday, round trips; Hebrew-letter numerals against Intl's letters on 0 days and, where this browser's Intl writes digits, read back to Intl's numbers on 2191 days): 0 mismatches",
+      "ok": true,
+      "detail": {
+        "days": 2191,
+        "date": 0,
+        "numerals": 0,
+        "weekday": 0,
+        "roundTrip": 0,
+        "unknownMonth": 0,
+        "numeralsOracle": {
+          "letters": 0,
+          "digits": 2191
+        },
+        "first": [],
+        "sample": "כ״ה בכסלו תשפ״ה | Hanukkah day 1 | חנוכה — היום הראשון"
+      }
+    },
+    {
+      "name": "13. cost recorded: evaluate over 1,000 frames with 20 live titles against the same timeline with typed titles, and the commit latency with 500 dated files and 60 events",
+      "ok": true,
+      "detail": {
+        "evaluate": {
+          "frames": 1000,
+          "liveTitles": 20,
+          "medianMsPerFrameLive": 0.009,
+          "medianMsPerFrameTyped": 0.007,
+          "addedMsPerFrame": 0.002,
+          "budgetMs": 0.2,
+          "withinBudget": true,
+          "firstFrameAfterAnEditMs": 0.037
+        },
+        "commit": {
+          "datedFiles": 500,
+          "events": 60,
+          "created": 60,
+          "commits": 30,
+          "medianMs": 24.423,
+          "maxMs": 34.826
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,955 @@
+{
+  "ranAt": "2026-11-26T05:53:28.364Z",
+  "result": "PASSED",
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "cores": 4,
+    "gpu": "none"
+  },
+  "scope": "One deterministic synthetic recording (speech-like formant pulses at -20 dBFS RMS with 30 % pauses, noise of a known 24-band spectrum at -48 dBFS, 50 Hz hum k = 1..4 at -40 dBFS in total), 1 kHz bursts for sync, 48 kHz projects, the server mix and export, the editor preview and the self-test page in headless Chromium. No real speech, no recorded room, nobody has listened: this shows the cleanup measures, cleans, stays in sync and sounds the same on every route, not that it sounds good.",
+  "passed": 11,
+  "total": 11,
+  "checks": [
+    {
+      "name": "C1 measure_voice on the 30 s recording: every noise band within ±2 dB of the truth; hum at 50 Hz; the quiet ranges found cover at least 80 % of the true pauses; the revision is unchanged; MCP returns the same report and ops",
+      "ok": true,
+      "detail": {
+        "bandErrorsDb": [
+          -0.1,
+          0.04,
+          0.17,
+          -0.06,
+          -0.21,
+          0.18,
+          -0.24,
+          0.05,
+          0.05,
+          0,
+          0.25,
+          0.25,
+          0.24,
+          0.01,
+          -0.03,
+          0.03,
+          -0.02,
+          -0.02,
+          -0.01,
+          0.03,
+          -0.01,
+          -0.03,
+          0.02,
+          -0.01
+        ],
+        "worstBandErrorDb": 0.25,
+        "hum": {
+          "hz": 50,
+          "levelDb": -40.01,
+          "harmonics": 4
+        },
+        "pauseCoverage": 1,
+        "quietSeconds": 9.083,
+        "confidence": 1,
+        "warning": null,
+        "speech": {
+          "levelDb": -19.75,
+          "peakDb": -2.99,
+          "snrDb": 19.47
+        },
+        "recommendedStrength": 0.61,
+        "ops": [
+          {
+            "op": "clean_voice",
+            "args": {
+              "clipId": "clp_bccec669420",
+              "includeLinked": false,
+              "strength": 0.6,
+              "profile": "KtKlLDL6M1NiOZO3PRPiPkPjPdPYPPPEPAO_PDPOPhP5QWQ3",
+              "source": "ast_d701c80cec0",
+              "mainsHz": "50"
+            }
+          }
+        ],
+        "revision": {
+          "before": 3,
+          "reported": 3,
+          "after": 3
+        },
+        "mcpSameReport": true
+      }
+    },
+    {
+      "name": "C2 clean_voice at strength 0.6, applied as the ONE candidate op in one transaction with expectedRevision: noise in the pauses (above 400 Hz) at least 10 dB lower; each hum line at least 30 dB lower; the vowel band (300–3400 Hz) of the phrases within 1.5 dB; one undo restores the document; MCP applies the same op to the same mix and its undo restores it too",
+      "ok": true,
+      "detail": {
+        "strength": 0.6,
+        "effects": [
+          "cleanup.dehum",
+          "cleanup.denoise",
+          "cleanup.speech"
+        ],
+        "revisions": {
+          "applied": 4,
+          "undone": 5
+        },
+        "noiseInPausesDbfs": {
+          "dry": -50.34,
+          "cleaned": -64,
+          "reductionDb": 13.67
+        },
+        "humLineReductionDb": [
+          57.61,
+          45.97,
+          48.15,
+          49.38
+        ],
+        "vowelBandDbfs": {
+          "dry": -19.67,
+          "cleaned": -20.05,
+          "changeDb": -0.38
+        },
+        "withoutSpeechEnhancer": {
+          "noiseReductionDb": 14.41,
+          "humLineReductionDb": [
+            41.55,
+            45.24,
+            47.82,
+            48.78
+          ],
+          "vowelBandChangeDb": 0
+        },
+        "oneOpSet": true,
+        "undoRestores": true,
+        "mcp": {
+          "applied": true,
+          "sameMixAsRest": true,
+          "undo": true,
+          "undoRestores": true
+        }
+      }
+    },
+    {
+      "name": "C3 a 2 s range of the cleaned mix against the full mix: bit-exact from the start (from ≤ warmRing), within 2^-17 of the peak elsewhere; the WAV range export from the start is identical and a mid range within one 16-bit step",
+      "ok": true,
+      "detail": {
+        "warmRing": 0,
+        "warmWindow": 98787,
+        "aheadWindow": 13038,
+        "peak": 0.677,
+        "floatRanges": [
+          {
+            "fromSample": 0,
+            "maxDifference": 0,
+            "identical": true,
+            "boundRelative": 0
+          },
+          {
+            "fromSample": 336333,
+            "maxDifference": 2.9802322387695312e-8,
+            "identical": false,
+            "boundRelative": 0.006
+          },
+          {
+            "fromSample": 960000,
+            "maxDifference": 2.3283064365386963e-10,
+            "identical": false,
+            "boundRelative": 0
+          }
+        ],
+        "wav": {
+          "fromStartIdentical": true,
+          "midMaxDifference": 0
+        }
+      }
+    },
+    {
+      "name": "C4 bursts with hard onsets through the cleanup (dehum, denoise, speech enhancer), the cleaned mix against the dry mix by cross-correlation (every burst correlates at 0.9 or more): every white-noise burst lines up within 1 sample (the chain delays nothing); the carrier of every 1 kHz burst sits within 1 sample of the phase delay the chain's filters have at 1 kHz by design (the low cut, the presence EQ and the hum notches turn the phase of a tone; that is not a delay)",
+      "ok": true,
+      "detail": {
+        "effects": [
+          "cleanup.dehum",
+          "cleanup.denoise",
+          "cleanup.speech"
+        ],
+        "broadbandBursts": 14,
+        "broadbandLagsSamples": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "toneBursts": 15,
+        "toneCarrierLagsSamples": [
+          -3,
+          -3,
+          -3,
+          -3,
+          -3,
+          -3,
+          -3,
+          -3,
+          -3,
+          -3,
+          -3,
+          -3,
+          -3,
+          -3,
+          -3
+        ],
+        "designedPhaseDelayAt1kHzSamples": -2.51,
+        "designedPhaseDelayPerEffect": {
+          "cleanup.dehum": -0.156,
+          "cleanup.denoise": 0,
+          "cleanup.speech": -2.354
+        },
+        "toneAgainstDesignSamples": [
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49,
+          -0.49
+        ],
+        "weakestNormalisedCorrelation": 0.981,
+        "cleanVoice": {
+          "clipId": "clp_39d96468120",
+          "includeLinked": false,
+          "strength": 0.6,
+          "profile": "F9F8GiLyMyNkOQO1PPPiPqPpPkPYPNPFO_O-PEPOPhP5QWQ4",
+          "source": "ast_1660ff13f60",
+          "mainsHz": "50"
+        }
+      }
+    },
+    {
+      "name": "C6 each cleanup voice (dehum, denoise, speech enhancer, and the three together as clean_voice sets them) runs at least 20 times faster than real time in Node (whole voice: time map, effect, gains), on 30 s of sound",
+      "ok": true,
+      "detail": [
+        {
+          "effects": "cleanup.dehum",
+          "realtime": 224
+        },
+        {
+          "effects": "cleanup.denoise",
+          "realtime": 57
+        },
+        {
+          "effects": "cleanup.speech",
+          "realtime": 143
+        },
+        {
+          "effects": "cleanup.dehum + cleanup.denoise + cleanup.speech",
+          "realtime": 42
+        }
+      ]
+    },
+    {
+      "name": "C8 splitting a cleaned clip at a sample that is not a multiple of the STFT hop (49600 = 193.75 × 256): both parts carry the cleanup and the mix stays within 2^-17 of the peak of the unsplit mix (bit equality reported)",
+      "ok": true,
+      "detail": {
+        "splitAtSample": 49600,
+        "hop": 256,
+        "offGrid": 192,
+        "parts": 2,
+        "maxDifference": 0,
+        "relativeTo2pow17Peak": 0,
+        "bitEqual": true
+      }
+    },
+    {
+      "name": "C9 honest states: clean_voice on a sound that keeps its pitch at speed 1.5 is refused with a hint; measure_voice on a picture-only asset gives 422 no_audio; the catalogue states each cleanup effect's look-ahead in ms and that nobody has listened yet",
+      "ok": true,
+      "detail": {
+        "keepPitch": {
+          "status": 422,
+          "code": "incompatible",
+          "message": "this sound keeps its pitch at another speed or changes speed gradually, so it cannot carry sound effects yet",
+          "hint": "Give it one speed and let its pitch follow the speed (set_clip_speed, set_clip_pitch keepPitch=false), then add the sound effect."
+        },
+        "pictureOnly": {
+          "status": 422,
+          "code": "no_audio"
+        },
+        "catalogue": [
+          {
+            "id": "cleanup.dehum",
+            "aheadMs": 0,
+            "latency": "none (0 samples)",
+            "limits": "Steady mains hum only; not other buzz or whine. Measured on synthetic hum; not yet listened to by the owner."
+          },
+          {
+            "id": "cleanup.denoise",
+            "aheadMs": 50,
+            "latency": "none: reads up to 50 ms ahead and compensates it, so the sound is not delayed (ADR-0010 D4)",
+            "limits": "Steady noise only: not voices, music, barks or doors. Moving the clip by a fraction of a frame changes the result very slightly. Measured on synthetic speech; not yet listened to by the owner."
+          },
+          {
+            "id": "cleanup.speech",
+            "aheadMs": 250,
+            "latency": "none: reads up to 250 ms ahead and compensates it, so the sound is not delayed (ADR-0010 D4)",
+            "limits": "The ceiling applies to this clip before clip gain and volume keys; it is not a master limiter. Pauses are never raised. Not yet listened to by the owner."
+          }
+        ]
+      }
+    },
+    {
+      "name": "C10 a clip at speed 2 (pitch follows speed): the 50 Hz hum is heard at 100, 200, 300 and 400 Hz, and clean_voice reduces each line by at least 30 dB",
+      "ok": true,
+      "detail": {
+        "mainsHz": "50",
+        "humLineReductionDb": [
+          48.32,
+          49.83,
+          50.02,
+          47.16
+        ],
+        "pausesUsed": 7
+      }
+    },
+    {
+      "name": "C5 four clips cleaned in one transaction (scope asset), played in the editor preview with nothing scheduled late: the samples the preview schedules are the export within one 16-bit step; every 50 ms window above -40 dBFS, as heard at the output (left channel), within 0.5 dB of the export; starting 10 s in, the voices are primed within 500 ms with no late start; main-thread long tasks at most twice the bypassed playback (100 ms allowed over a near-zero baseline)",
+      "ok": true,
+      "detail": {
+        "failing": [],
+        "opsApplied": 4,
+        "machineLoad": {
+          "cores": 4,
+          "loadAverageBefore": [
+            1.06,
+            1.75,
+            2.12
+          ],
+          "loadAverageAfter": [
+            1.85,
+            1.84,
+            2.13
+          ]
+        },
+        "comparedRun": {
+          "fxVoices": 4,
+          "fxPrimeMs": 103,
+          "fxLateStarts": 0,
+          "fxLateSkips": 0,
+          "firstWindowAtSeconds": -0.112
+        },
+        "scheduledSamples": {
+          "captured": true,
+          "buffers": 403,
+          "notOnTheSampleGrid": 0,
+          "comparedSeconds": 12,
+          "maxDifferenceFromExportIn16BitSteps": 0.5,
+          "maxDifferenceFromServerFloatMix": 2.9802322387695312e-8,
+          "peak": 0.332
+        },
+        "windows": 229,
+        "worstWindowDb": 0.02,
+        "worstWindow": {
+          "t": 7.238,
+          "previewDb": -34.7,
+          "exportDb": -34.72
+        },
+        "sample": [
+          {
+            "t": 0.588,
+            "previewDb": -25.83,
+            "exportDb": -25.83
+          },
+          {
+            "t": 1.588,
+            "previewDb": -18.34,
+            "exportDb": -18.34
+          },
+          {
+            "t": 2.588,
+            "previewDb": -15.66,
+            "exportDb": -15.66
+          },
+          {
+            "t": 3.588,
+            "previewDb": -16.06,
+            "exportDb": -16.06
+          },
+          {
+            "t": 4.588,
+            "previewDb": -10.77,
+            "exportDb": -10.77
+          },
+          {
+            "t": 5.588,
+            "previewDb": -11.5,
+            "exportDb": -11.5
+          },
+          {
+            "t": 6.588,
+            "previewDb": -11.72,
+            "exportDb": -11.72
+          },
+          {
+            "t": 7.588,
+            "previewDb": -12.28,
+            "exportDb": -12.29
+          },
+          {
+            "t": 8.588,
+            "previewDb": -13.85,
+            "exportDb": -13.85
+          },
+          {
+            "t": 9.588,
+            "previewDb": -10.61,
+            "exportDb": -10.61
+          },
+          {
+            "t": 10.588,
+            "previewDb": -12.46,
+            "exportDb": -12.46
+          },
+          {
+            "t": 11.588,
+            "previewDb": -13.61,
+            "exportDb": -13.61
+          }
+        ],
+        "prime": {
+          "fxPrimeMs": 274,
+          "fxPrimeTimedOut": false,
+          "fxLateStarts": 0
+        },
+        "cost": {
+          "withEffects": {
+            "fxVoices": 4,
+            "fxLateStarts": 0,
+            "fxLateSkips": 0,
+            "longTaskMs": 0,
+            "longTasks": 0
+          },
+          "bypassed": {
+            "fxVoices": 0,
+            "longTaskMs": 0,
+            "longTasks": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "C7 each cleanup kernel (defaults and the golden-hash variant) gives the same output in Chromium as in Node within 1e-6 on the fixed 3 s fixture (bit equality reported, not promised)",
+      "ok": true,
+      "detail": {
+        "bitEqual": 6,
+        "of": 6,
+        "worst": 0
+      }
+    },
+    {
+      "name": "no page errors in the preview or self-test pages",
+      "ok": true,
+      "detail": []
+    }
+  ],
+  "measurements": {
+    "fixture": {
+      "seconds": 30,
+      "pauses": 13,
+      "pauseShare": 0.27,
+      "truthBandsDb": [
+        -34.16,
+        -33.88,
+        -35.51,
+        -38.04,
+        -40.84,
+        -43.5,
+        -45.8,
+        -47.62,
+        -48.92,
+        -49.71,
+        -50.04,
+        -50,
+        -49.69,
+        -49.22,
+        -48.7,
+        -48.25,
+        -47.96,
+        -47.92,
+        -48.16,
+        -48.74,
+        -49.64,
+        -50.84,
+        -52.31,
+        -53.96
+      ],
+      "noiseDb": -48,
+      "speechDb": -20,
+      "hum": {
+        "hz": 50,
+        "lines": 4,
+        "totalDb": -40
+      }
+    },
+    "C1": {
+      "bandErrorsDb": [
+        -0.1,
+        0.04,
+        0.17,
+        -0.06,
+        -0.21,
+        0.18,
+        -0.24,
+        0.05,
+        0.05,
+        0,
+        0.25,
+        0.25,
+        0.24,
+        0.01,
+        -0.03,
+        0.03,
+        -0.02,
+        -0.02,
+        -0.01,
+        0.03,
+        -0.01,
+        -0.03,
+        0.02,
+        -0.01
+      ],
+      "worstBandErrorDb": 0.25,
+      "hum": {
+        "hz": 50,
+        "levelDb": -40.01,
+        "harmonics": 4
+      },
+      "pauseCoverage": 1,
+      "quietSeconds": 9.083,
+      "confidence": 1,
+      "warning": null,
+      "speech": {
+        "levelDb": -19.75,
+        "peakDb": -2.99,
+        "snrDb": 19.47
+      },
+      "recommendedStrength": 0.61,
+      "ops": [
+        {
+          "op": "clean_voice",
+          "args": {
+            "clipId": "clp_bccec669420",
+            "includeLinked": false,
+            "strength": 0.6,
+            "profile": "KtKlLDL6M1NiOZO3PRPiPkPjPdPYPPPEPAO_PDPOPhP5QWQ3",
+            "source": "ast_d701c80cec0",
+            "mainsHz": "50"
+          }
+        }
+      ],
+      "revision": {
+        "before": 3,
+        "reported": 3,
+        "after": 3
+      },
+      "mcpSameReport": true
+    },
+    "C2": {
+      "strength": 0.6,
+      "effects": [
+        "cleanup.dehum",
+        "cleanup.denoise",
+        "cleanup.speech"
+      ],
+      "revisions": {
+        "applied": 4,
+        "undone": 5
+      },
+      "noiseInPausesDbfs": {
+        "dry": -50.34,
+        "cleaned": -64,
+        "reductionDb": 13.67
+      },
+      "humLineReductionDb": [
+        57.61,
+        45.97,
+        48.15,
+        49.38
+      ],
+      "vowelBandDbfs": {
+        "dry": -19.67,
+        "cleaned": -20.05,
+        "changeDb": -0.38
+      },
+      "withoutSpeechEnhancer": {
+        "noiseReductionDb": 14.41,
+        "humLineReductionDb": [
+          41.55,
+          45.24,
+          47.82,
+          48.78
+        ],
+        "vowelBandChangeDb": 0
+      },
+      "oneOpSet": true,
+      "undoRestores": true,
+      "mcp": {
+        "applied": true,
+        "sameMixAsRest": true,
+        "undo": true,
+        "undoRestores": true
+      }
+    },
+    "C3": {
+      "warmRing": 0,
+      "warmWindow": 98787,
+      "aheadWindow": 13038,
+      "peak": 0.677,
+      "floatRanges": [
+        {
+          "fromSample": 0,
+          "maxDifference": 0,
+          "identical": true,
+          "boundRelative": 0
+        },
+        {
+          "fromSample": 336333,
+          "maxDifference": 2.9802322387695312e-8,
+          "identical": false,
+          "boundRelative": 0.006
+        },
+        {
+          "fromSample": 960000,
+          "maxDifference": 2.3283064365386963e-10,
+          "identical": false,
+          "boundRelative": 0
+        }
+      ],
+      "wav": {
+        "fromStartIdentical": true,
+        "midMaxDifference": 0
+      }
+    },
+    "C4": {
+      "effects": [
+        "cleanup.dehum",
+        "cleanup.denoise",
+        "cleanup.speech"
+      ],
+      "broadbandBursts": 14,
+      "broadbandLagsSamples": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "toneBursts": 15,
+      "toneCarrierLagsSamples": [
+        -3,
+        -3,
+        -3,
+        -3,
+        -3,
+        -3,
+        -3,
+        -3,
+        -3,
+        -3,
+        -3,
+        -3,
+        -3,
+        -3,
+        -3
+      ],
+      "designedPhaseDelayAt1kHzSamples": -2.51,
+      "designedPhaseDelayPerEffect": {
+        "cleanup.dehum": -0.156,
+        "cleanup.denoise": 0,
+        "cleanup.speech": -2.354
+      },
+      "toneAgainstDesignSamples": [
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49,
+        -0.49
+      ],
+      "weakestNormalisedCorrelation": 0.981,
+      "cleanVoice": {
+        "clipId": "clp_39d96468120",
+        "includeLinked": false,
+        "strength": 0.6,
+        "profile": "F9F8GiLyMyNkOQO1PPPiPqPpPkPYPNPFO_O-PEPOPhP5QWQ4",
+        "source": "ast_1660ff13f60",
+        "mainsHz": "50"
+      }
+    },
+    "C6": [
+      {
+        "effects": "cleanup.dehum",
+        "realtime": 224
+      },
+      {
+        "effects": "cleanup.denoise",
+        "realtime": 57
+      },
+      {
+        "effects": "cleanup.speech",
+        "realtime": 143
+      },
+      {
+        "effects": "cleanup.dehum + cleanup.denoise + cleanup.speech",
+        "realtime": 42
+      }
+    ],
+    "C8": {
+      "splitAtSample": 49600,
+      "hop": 256,
+      "offGrid": 192,
+      "parts": 2,
+      "maxDifference": 0,
+      "relativeTo2pow17Peak": 0,
+      "bitEqual": true
+    },
+    "C9": {
+      "keepPitch": {
+        "status": 422,
+        "code": "incompatible",
+        "message": "this sound keeps its pitch at another speed or changes speed gradually, so it cannot carry sound effects yet",
+        "hint": "Give it one speed and let its pitch follow the speed (set_clip_speed, set_clip_pitch keepPitch=false), then add the sound effect."
+      },
+      "pictureOnly": {
+        "status": 422,
+        "code": "no_audio"
+      },
+      "catalogue": [
+        {
+          "id": "cleanup.dehum",
+          "aheadMs": 0,
+          "latency": "none (0 samples)",
+          "limits": "Steady mains hum only; not other buzz or whine. Measured on synthetic hum; not yet listened to by the owner."
+        },
+        {
+          "id": "cleanup.denoise",
+          "aheadMs": 50,
+          "latency": "none: reads up to 50 ms ahead and compensates it, so the sound is not delayed (ADR-0010 D4)",
+          "limits": "Steady noise only: not voices, music, barks or doors. Moving the clip by a fraction of a frame changes the result very slightly. Measured on synthetic speech; not yet listened to by the owner."
+        },
+        {
+          "id": "cleanup.speech",
+          "aheadMs": 250,
+          "latency": "none: reads up to 250 ms ahead and compensates it, so the sound is not delayed (ADR-0010 D4)",
+          "limits": "The ceiling applies to this clip before clip gain and volume keys; it is not a master limiter. Pauses are never raised. Not yet listened to by the owner."
+        }
+      ]
+    },
+    "C10": {
+      "mainsHz": "50",
+      "humLineReductionDb": [
+        48.32,
+        49.83,
+        50.02,
+        47.16
+      ],
+      "pausesUsed": 7
+    },
+    "C5": {
+      "failing": [],
+      "opsApplied": 4,
+      "machineLoad": {
+        "cores": 4,
+        "loadAverageBefore": [
+          1.06,
+          1.75,
+          2.12
+        ],
+        "loadAverageAfter": [
+          1.85,
+          1.84,
+          2.13
+        ]
+      },
+      "comparedRun": {
+        "fxVoices": 4,
+        "fxPrimeMs": 103,
+        "fxLateStarts": 0,
+        "fxLateSkips": 0,
+        "firstWindowAtSeconds": -0.112
+      },
+      "scheduledSamples": {
+        "captured": true,
+        "buffers": 403,
+        "notOnTheSampleGrid": 0,
+        "comparedSeconds": 12,
+        "maxDifferenceFromExportIn16BitSteps": 0.5,
+        "maxDifferenceFromServerFloatMix": 2.9802322387695312e-8,
+        "peak": 0.332
+      },
+      "windows": 229,
+      "worstWindowDb": 0.02,
+      "worstWindow": {
+        "t": 7.238,
+        "previewDb": -34.7,
+        "exportDb": -34.72
+      },
+      "sample": [
+        {
+          "t": 0.588,
+          "previewDb": -25.83,
+          "exportDb": -25.83
+        },
+        {
+          "t": 1.588,
+          "previewDb": -18.34,
+          "exportDb": -18.34
+        },
+        {
+          "t": 2.588,
+          "previewDb": -15.66,
+          "exportDb": -15.66
+        },
+        {
+          "t": 3.588,
+          "previewDb": -16.06,
+          "exportDb": -16.06
+        },
+        {
+          "t": 4.588,
+          "previewDb": -10.77,
+          "exportDb": -10.77
+        },
+        {
+          "t": 5.588,
+          "previewDb": -11.5,
+          "exportDb": -11.5
+        },
+        {
+          "t": 6.588,
+          "previewDb": -11.72,
+          "exportDb": -11.72
+        },
+        {
+          "t": 7.588,
+          "previewDb": -12.28,
+          "exportDb": -12.29
+        },
+        {
+          "t": 8.588,
+          "previewDb": -13.85,
+          "exportDb": -13.85
+        },
+        {
+          "t": 9.588,
+          "previewDb": -10.61,
+          "exportDb": -10.61
+        },
+        {
+          "t": 10.588,
+          "previewDb": -12.46,
+          "exportDb": -12.46
+        },
+        {
+          "t": 11.588,
+          "previewDb": -13.61,
+          "exportDb": -13.61
+        }
+      ],
+      "prime": {
+        "fxPrimeMs": 274,
+        "fxPrimeTimedOut": false,
+        "fxLateStarts": 0
+      },
+      "cost": {
+        "withEffects": {
+          "fxVoices": 4,
+          "fxLateStarts": 0,
+          "fxLateSkips": 0,
+          "longTaskMs": 0,
+          "longTasks": 0
+        },
+        "bypassed": {
+          "fxVoices": 0,
+          "longTaskMs": 0,
+          "longTasks": 0
+        }
+      }
+    },
+    "C7": [
+      {
+        "type": "cleanup.dehum",
+        "params": "{}",
+        "maxAbsDiff": 0,
+        "bitEqual": true,
+        "chromiumMs": 15.2
+      },
+      {
+        "type": "cleanup.dehum",
+        "params": "{\"mainsHz\":\"60\",\"harmonics\":8,\"width\":1}",
+        "maxAbsDiff": 0,
+        "bitEqual": true,
+        "chromiumMs": 15.4
+      },
+      {
+        "type": "cleanup.denoise",
+        "params": "{}",
+        "maxAbsDiff": 0,
+        "bitEqual": true,
+        "chromiumMs": 41.8
+      },
+      {
+        "type": "cleanup.denoise",
+        "params": "{\"reductionDb\":30,\"sensitivityDb\":10,\"profile\":\"MgMgMgMgMgMgMgMgMgMgMgMgMgMgMgMg",
+        "maxAbsDiff": 0,
+        "bitEqual": true,
+        "chromiumMs": 29.6
+      },
+      {
+        "type": "cleanup.speech",
+        "params": "{}",
+        "maxAbsDiff": 0,
+        "bitEqual": true,
+        "chromiumMs": 44.6
+      },
+      {
+        "type": "cleanup.speech",
+        "params": "{\"lowCutHz\":150,\"presence\":1,\"levelDb\":15,\"targetDb\":-12,\"ceilingDb\":-6}",
+        "maxAbsDiff": 0,
+        "bitEqual": true,
+        "chromiumMs": 28.2
+      }
+    ]
+  }
+}

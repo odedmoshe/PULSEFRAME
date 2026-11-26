@@ -1,0 +1,28 @@
+/* The font picker (ADR-0022). Tokens and the .pf-ds root come from the redesign (ds/tokens.css, ds/primitives.css). Logical properties only. */
+.pf-fp { display: grid; gap: var(--pf-sp-4); color: var(--pf-text); font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); }
+.pf-fp-label { color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); font-weight: var(--pf-fw-medium); }
+.pf-fp-chips { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); }
+.pf-fp-list { display: grid; max-block-size: 264px; overflow-y: auto; padding: var(--pf-sp-2); border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: 0 0 0 1px var(--pf-line-control); outline: none; }
+.pf-fp-list:focus-visible { box-shadow: 0 0 0 2px var(--pf-focus); }
+.pf-fp-option { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: 'name badge check' 'sample sample sample'; align-items: center; column-gap: var(--pf-sp-4); row-gap: var(--pf-sp-1); padding: var(--pf-sp-4) var(--pf-sp-5); border-radius: var(--pf-r-sm); cursor: pointer; }
+.pf-fp-option:hover { background: var(--pf-surface-3); }
+.pf-fp-option.is-active { box-shadow: inset 0 0 0 2px var(--pf-focus); }
+.pf-fp-option.is-on { background: var(--pf-frame-soft); }
+.pf-fp-name { grid-area: name; color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); text-align: start; }
+.pf-fp-option.is-on .pf-fp-name { color: var(--pf-text); }
+.pf-fp-sample { grid-area: sample; font-size: 22px; line-height: 30px; text-align: start; unicode-bidi: isolate; overflow-wrap: anywhere; }
+.pf-fp-badge { grid-area: badge; }
+.pf-fp-check { grid-area: check; color: var(--pf-frame); }
+.pf-fp-empty, .pf-fp-pairs-none { margin: 0; color: var(--pf-text-3); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-fp-pairs { display: grid; gap: var(--pf-sp-3); }
+.pf-fp-pairs-title { color: var(--pf-text-2); font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-medium); }
+.pf-fp-pairs-list { display: grid; gap: var(--pf-sp-3); margin: 0; padding: 0; list-style: none; }
+.pf-fp-pair { display: grid; grid-template-columns: auto auto; justify-content: start; align-items: baseline; column-gap: var(--pf-sp-4); inline-size: 100%; padding: var(--pf-sp-3) var(--pf-sp-5); border: 0; border-radius: var(--pf-r-sm); background: var(--pf-surface-2); color: var(--pf-text); box-shadow: 0 0 0 1px var(--pf-line-strong); font: inherit; text-align: start; cursor: pointer; }
+.pf-fp-pair:hover:not(:disabled) { background: var(--pf-surface-3); }
+.pf-fp-pair:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+.pf-fp-pair:disabled { color: var(--pf-text-disabled); cursor: not-allowed; }
+.pf-fp-pair-face { font-size: 18px; line-height: 26px; }
+.pf-fp-pair-role { color: var(--pf-text-3); font-size: var(--pf-fs-xs); }
+.pf-fp-pair-note { grid-column: 1 / -1; color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-fp.is-disabled { opacity: .6; }
+@media (prefers-reduced-motion: no-preference) { .pf-fp-option, .pf-fp-pair { transition: background-color var(--pf-dur-fast) var(--pf-ease-out); } }

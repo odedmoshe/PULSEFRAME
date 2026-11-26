@@ -1,0 +1,37 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>end card</title>
+<style>html,body{margin:0;background:transparent;overflow:hidden}svg{display:block}</style></head>
+<body><svg id="s" xmlns="http://www.w3.org/2000/svg"><rect id="btn" rx="0" ry="0"/><text id="cta" text-anchor="middle" dominant-baseline="middle"></text><text id="thanks" text-anchor="middle"></text></svg>
+<script>
+// «כרטיס סיום» / end card (PULSEFRAME built-in page, version 1). A thank-you line fades in, then a call-to-action button (for example
+// «הירשמו לערוץ» / "Subscribe") scales up softly and breathes slowly (one gentle swell every two seconds, no change of light).
+// SVG text with direction set from the value's first strong letter. Values are set with textContent only; drawn from the frame number.
+(function () {
+  var s = document.getElementById('s'), btn = document.getElementById('btn'), cta = document.getElementById('cta'), thanks = document.getElementById('thanks');
+  var rtlOf = function (v) { var m = /[A-Za-zÀ-ɏ]|[֐-׿؀-ۿ]/.exec(v); return !!m && /[֐-׿؀-ۿ]/.test(m[0]); };
+  var clamp = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; };
+  var easeOut = function (p) { return 1 - Math.pow(1 - p, 3); };
+  var W = PF.width, H = PF.height, f = PF.fields;
+  s.setAttribute('width', W); s.setAttribute('height', H); s.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  var line = String(f.thanks || ''), action = String(f.action || ''), colour = String(f.colour || '#e53935'), text = String(f.textColour || '#ffffff');
+  thanks.textContent = line; cta.textContent = action;
+  thanks.setAttribute('direction', rtlOf(line) ? 'rtl' : 'ltr'); thanks.setAttribute('unicode-bidi', 'plaintext');
+  cta.setAttribute('direction', rtlOf(action) ? 'rtl' : 'ltr'); cta.setAttribute('unicode-bidi', 'plaintext');
+  thanks.setAttribute('font-family', 'Assistant'); thanks.setAttribute('font-weight', '700'); thanks.setAttribute('fill', text);
+  cta.setAttribute('font-family', 'Assistant'); cta.setAttribute('font-weight', '700'); cta.setAttribute('fill', text);
+  btn.setAttribute('fill', colour);
+  var fps = PF.fps.num / PF.fps.den;
+  PF.render = function (frame) {
+    var n = PF.frames, t = frame / fps;
+    var a = easeOut(clamp(frame / Math.max(1, Math.round(n * 0.25))));
+    var b = easeOut(clamp((frame - n * 0.2) / Math.max(1, n * 0.25)));
+    var breathe = 1 + 0.03 * Math.sin((2 * Math.PI * t) / 2) * b;
+    var ts = Math.round(H * 0.075), bs = Math.round(H * 0.06);
+    thanks.setAttribute('font-size', ts); thanks.setAttribute('x', W / 2); thanks.setAttribute('y', H * 0.4 - (1 - a) * H * 0.04); thanks.setAttribute('opacity', a.toFixed(4));
+    var bw = Math.max(bs * 6, bs * 0.62 * action.length + bs * 2) * b * breathe, bh = bs * 2 * b * breathe;
+    btn.setAttribute('x', (W / 2 - bw / 2).toFixed(2)); btn.setAttribute('y', (H * 0.6 - bh / 2).toFixed(2));
+    btn.setAttribute('width', bw.toFixed(2)); btn.setAttribute('height', bh.toFixed(2)); btn.setAttribute('rx', (bh / 2).toFixed(2)); btn.setAttribute('ry', (bh / 2).toFixed(2));
+    cta.setAttribute('font-size', (bs * b * breathe).toFixed(2)); cta.setAttribute('x', W / 2); cta.setAttribute('y', H * 0.6); cta.setAttribute('opacity', b.toFixed(4));
+  };
+})();
+</script></body></html>

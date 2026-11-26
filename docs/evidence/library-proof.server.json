@@ -1,0 +1,199 @@
+{
+ "when": "2026-11-26T15:16:43.218Z",
+ "rasteriser": true,
+ "evidence": {
+  "1": {
+   "state": "not_configured",
+   "items": 409,
+   "use": 409,
+   "outbound": 0,
+   "ui": "the tabs' «הספרייה לא מוגדרת» is part ui (check 17)"
+  },
+  "2": {
+   "counts": {
+    "music": 7,
+    "sound": 6,
+    "illustration": 3,
+    "sticker": 4,
+    "icon": 5
+   },
+   "notListed": [
+    {
+     "dir": "instruments",
+     "entries": 1
+    },
+    {
+     "dir": "source:fsd50k",
+     "entries": 1
+    }
+   ],
+   "unusable": {
+    "credit_unresolved": 1,
+    "licence_no_derivatives": 1,
+    "licence_unknown": 1,
+    "animated": 1,
+    "credit_missing": 1
+   },
+   "states": {
+    "missing folder": "root_missing",
+    "missing ledger": "ledger_missing",
+    "ledgerVersion 2": "ledger_invalid"
+   }
+  },
+  "3": {
+   "firsts": {
+    "חנוכיה": "fx-fluent/assets/assets/Menorah/3D/menorah_3d.png",
+    "החנוכיה": "fx-fluent/assets/assets/Menorah/3D/menorah_3d.png",
+    "חֲנֻכִּיָּה": "fx-fluent/assets/assets/Menorah/3D/menorah_3d.png",
+    "menorah": "fx-fluent/assets/assets/Menorah/3D/menorah_3d.png"
+   },
+   "bpm": [
+    "fx-incompetech/tone-120/Tone Track.mp3"
+   ],
+   "ccbyRows": 6,
+   "creditNoneRows": 19
+  },
+  "4": {
+   "range": "bytes 100-199/176478",
+   "m4a": "library_audio_unsupported",
+   "picture": "library_audio_unsupported"
+  },
+  "5": {
+   "contentHash": "sha256:924fe1498c4f03f779de26ee3c650a5c39f22d1a1c789cf0c7b2b6228dd18343",
+   "record": {
+    "itemId": "fx-incompetech/tone-120/Tone Track.mp3",
+    "sourceId": "incompetech",
+    "kind": "music",
+    "title": "Tone Track",
+    "licenceId": "CC-BY-4.0",
+    "credit": {
+     "text": "Tone Track Kevin MacLeod (incompetech.com)\nLicensed under Creative Commons: By Attribution 4.0\nhttps://creativecommons.org/licenses/by/4.0/",
+     "placement": "description"
+    }
+   },
+   "clipStart": {
+    "value": "30",
+    "timescale": 30
+   },
+   "onsetSeconds": 1.0004375
+  },
+  "6": {
+   "assets": 2,
+   "recordAttached": true,
+   "deduplicated": true
+  },
+  "7": {
+   "refusals": {
+    "tampered": "library_hash_mismatch",
+    "touched": "library_changed_since_index",
+    "link": "library_path_escape",
+    "dotdot": "library_path_escape"
+   },
+   "counts": {
+    "blobs": 4,
+    "jobs": 4,
+    "assets": 2
+   },
+   "opensSeen": 16,
+   "outsideOpens": 0
+  },
+  "8": {
+   "mitRows": 3,
+   "bannedRows": 0,
+   "personal": {
+    "credit": false,
+    "nonCommercial": true,
+    "shareable": false
+   },
+   "incompetechCredit": "Tone Track Kevin MacLeod (incompetech.com)"
+  },
+  "9": {
+   "reasons": {
+    "fx-nd/nd/nd.wav": [
+     "licence_no_derivatives",
+     409,
+     "licence_no_derivatives"
+    ],
+    "fx-custom/custom/custom.wav": [
+     "licence_unknown",
+     409,
+     "licence_unknown"
+    ],
+    "fx-people/anim/anim.png": [
+     "animated",
+     409,
+     "animated"
+    ]
+   },
+   "core": {
+    "code": "incompatible",
+    "message": "this licence forbids changing the work, and putting it in a video changes it"
+   }
+  },
+  "11": {
+   "libraryAnswers": 58,
+   "svgAnswers": 0
+  },
+  "16": {
+   "cancelKept": {
+    "music": 7,
+    "sound": 6,
+    "illustration": 3,
+    "sticker": 4,
+    "icon": 5
+   },
+   "afterRestart": {
+    "music": 8,
+    "sound": 6,
+    "illustration": 3,
+    "sticker": 4,
+    "icon": 5
+   }
+  },
+  "18": {
+   "rows": 600000,
+   "problems": [],
+   "indexMs": 29840,
+   "queryMs": 352,
+   "prefixQueryMs": 1623,
+   "firstPage": 50,
+   "note": "one sample, recorded, not gated"
+  },
+  "10.sticker": {
+   "width": 256,
+   "height": 256,
+   "codec": "png",
+   "hasAlpha": true
+  },
+  "10.still": {
+   "w": 640,
+   "h": 360,
+   "rgba": [
+    255,
+    170,
+    0,
+    255
+   ]
+  },
+  "10.icon": {
+   "w": 256,
+   "h": 256,
+   "rgba": [
+    255,
+    0,
+    0,
+    255
+   ],
+   "raster": {
+    "longSide": 256,
+    "color": "#ff0000",
+    "by": "ffmpeg-librsvg"
+   }
+  },
+  "10.unsafe": {
+   "status": 422,
+   "why": "this SVG cannot be used safely: it holds a script",
+   "rasterRuns": "unchanged"
+  }
+ }
+}

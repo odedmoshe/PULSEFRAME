@@ -1,0 +1,632 @@
+{
+  "ranAt": "2026-11-26T07:08:12.247Z",
+  "result": "PASS",
+  "checks": [
+    {
+      "name": "U1: 12 digit keydowns during playback give exactly 1 new history entry with 12 cuts at the painted frames (+-0, reaction 0)",
+      "ok": true,
+      "detail": {
+        "newEntries": 1,
+        "cutFrames": [
+          60,
+          100,
+          140,
+          180,
+          220,
+          260,
+          300,
+          340,
+          380,
+          420,
+          460,
+          500,
+          1001
+        ],
+        "paintedFrames": [
+          60,
+          100,
+          140,
+          180,
+          220,
+          260,
+          300,
+          340,
+          380,
+          420,
+          460,
+          500
+        ],
+        "placedBoundaries": [
+          1001
+        ],
+        "live": "12 חתכים נשמרו. מקום אחד בתוכנית נשאר כמו שהיה: לזווית אין תמונה שם"
+      }
+    },
+    {
+      "name": "U1: the live report says 12 cuts were saved and none was lost",
+      "ok": true,
+      "detail": {
+        "live": "12 חתכים נשמרו. מקום אחד בתוכנית נשאר כמו שהיה: לזווית אין תמונה שם"
+      }
+    },
+    {
+      "name": "U2: player.pause() is called 0 times during the session",
+      "ok": true,
+      "detail": {
+        "pausesDuring": 0
+      }
+    },
+    {
+      "name": "U2: the audio tap's onsets equal those of an untouched playback (no gap > 1 ms)",
+      "ok": true,
+      "detail": {
+        "maxDiffSeconds": 0,
+        "onsets": 28,
+        "baselineOnsets": 28
+      }
+    },
+    {
+      "name": "U3: the viewer pool peaks at <= 4 decoders and the program pool refused 0 pictures",
+      "ok": true,
+      "detail": {
+        "viewer": {
+          "warm": {
+            "decoders": 0,
+            "bytes": 0,
+            "budgetBytes": 0,
+            "off": null,
+            "opened": 0,
+            "reused": 0,
+            "adopted": 0,
+            "evicted": 0,
+            "gaveRoom": 0,
+            "overBudget": 0,
+            "noRoom": 0
+          },
+          "decoders": 3,
+          "stills": 0,
+          "maxDecoders": 4,
+          "maxStills": 16,
+          "decoderByteCacheBytes": 16777216,
+          "sources": {
+            "ast_476a8cab4e0": "proxy",
+            "ast_1db26967d90": "original",
+            "ast_cd636783e40": "proxy"
+          },
+          "sourcesUsed": {
+            "ast_476a8cab4e0": [
+              "proxy"
+            ],
+            "ast_1db26967d90": [
+              "original"
+            ],
+            "ast_cd636783e40": [
+              "proxy"
+            ]
+          },
+          "opened": 3,
+          "disposed": 0,
+          "peakDecoders": 3,
+          "refused": 0
+        },
+        "program": {
+          "warm": {
+            "decoders": 0,
+            "bytes": 0,
+            "budgetBytes": 167772160,
+            "off": null,
+            "opened": 5,
+            "reused": 9,
+            "adopted": 12,
+            "evicted": 2,
+            "gaveRoom": 0,
+            "overBudget": 0,
+            "noRoom": 0
+          },
+          "decoders": 5,
+          "stills": 0,
+          "maxDecoders": 10,
+          "maxStills": 16,
+          "decoderByteCacheBytes": 16777216,
+          "sources": {
+            "ast_476a8cab4e0": "original",
+            "ast_1db26967d90": "original",
+            "ast_cd636783e40": "original"
+          },
+          "sourcesUsed": {
+            "ast_476a8cab4e0": [
+              "original"
+            ],
+            "ast_1db26967d90": [
+              "original"
+            ],
+            "ast_cd636783e40": [
+              "original"
+            ]
+          },
+          "opened": 2,
+          "disposed": 0,
+          "peakDecoders": 6,
+          "refused": 0
+        }
+      }
+    },
+    {
+      "name": "U4: program paint lateness at the cut frames recorded against the baseline (a miss is reported, it decides wave-2 prefetch)",
+      "ok": true,
+      "detail": {
+        "cutFramesMeasured": 12,
+        "medianMs": 21.33,
+        "p95Ms": 40,
+        "medianFrames": 0.64,
+        "p95Frames": 1.2,
+        "allFrames": {
+          "median": 13.33,
+          "p95": 30.67,
+          "max": 266.67
+        },
+        "baselineRun": {
+          "median": 16,
+          "p95": 29.33,
+          "max": 60
+        },
+        "progressMd74": "median 5-15 ms, p95 about 21-24 ms after the clock reached the frame (one 3.5 s headless run)",
+        "budget": "p95 <= 2 frames",
+        "budgetMet": true,
+        "prefetch": {
+          "off": null,
+          "budgetMB": 160,
+          "opened": 5,
+          "reused": 9,
+          "adopted": 12,
+          "evicted": 2,
+          "gaveRoom": 0
+        },
+        "loadAverage": [
+          2.17,
+          2.61,
+          2.57
+        ]
+      }
+    },
+    {
+      "name": "U6: the preview canvas barcode equals render_frame at 5 cut frames (every picture angle) and names the angle cut to",
+      "ok": true,
+      "detail": [
+        {
+          "frame": 60,
+          "preview": [
+            60,
+            2
+          ],
+          "renderFrame": [
+            60,
+            2
+          ],
+          "expectedAngleIndex": 2,
+          "ok": true
+        },
+        {
+          "frame": 100,
+          "preview": [
+            99,
+            3
+          ],
+          "renderFrame": [
+            99,
+            3
+          ],
+          "expectedAngleIndex": 3,
+          "ok": true
+        },
+        {
+          "frame": 140,
+          "preview": [
+            139,
+            1
+          ],
+          "renderFrame": [
+            139,
+            1
+          ],
+          "expectedAngleIndex": 1,
+          "ok": true
+        },
+        {
+          "frame": 300,
+          "preview": [
+            300,
+            2
+          ],
+          "renderFrame": [
+            300,
+            2
+          ],
+          "expectedAngleIndex": 2,
+          "ok": true
+        },
+        {
+          "frame": 460,
+          "preview": [
+            459,
+            3
+          ],
+          "renderFrame": [
+            459,
+            3
+          ],
+          "expectedAngleIndex": 3,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "U1: one undo removes all 12 cuts",
+      "ok": true,
+      "detail": {
+        "segmentsBefore": 2,
+        "segmentsAfter": 2,
+        "boundariesAfter": [
+          1001
+        ]
+      }
+    },
+    {
+      "name": "U5: a digit while paused gives +1 history entry, the segment under the playhead shows the angle, and undo restores it",
+      "ok": true,
+      "detail": {
+        "angleAfter": "ang_a33a866b863",
+        "expected": "ang_a33a866b863"
+      }
+    },
+    {
+      "name": "U7: an agent cut_range during recording, then stop, lands the cuts at their group times with 0 lost",
+      "ok": true,
+      "detail": {
+        "conflictsSeen": 1,
+        "lost": 0,
+        "found": [
+          {
+            "frame": 90,
+            "groupTimeKept": true,
+            "cutAtMoment": true
+          },
+          {
+            "frame": 130,
+            "groupTimeKept": true,
+            "cutAtMoment": true
+          },
+          {
+            "frame": 170,
+            "groupTimeKept": true,
+            "cutAtMoment": true
+          },
+          {
+            "frame": 210,
+            "groupTimeKept": true,
+            "cutAtMoment": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "U8: the Timeline shows a multicam badge «n · label» on every program segment on screen, naming its own angle",
+      "ok": true,
+      "detail": {
+        "shownSegments": 7,
+        "badges": [
+          {
+            "angle": "ang_a33a866b862",
+            "badge": {
+              "clipId": "clp_bdd2302d161",
+              "angleId": "ang_a33a866b862",
+              "text": "1 · Camera 1",
+              "w": 96.40625
+            }
+          },
+          {
+            "angle": "ang_a33a866b863",
+            "badge": {
+              "clipId": "clp_178a8facd70",
+              "angleId": "ang_a33a866b863",
+              "text": "2 · Camera 2",
+              "w": 96.40625
+            }
+          },
+          {
+            "angle": "ang_a33a866b864",
+            "badge": {
+              "clipId": "clp_178a8facd71",
+              "angleId": "ang_a33a866b864",
+              "text": "3 · Camera 3",
+              "w": 96.40625
+            }
+          },
+          {
+            "angle": "ang_a33a866b863",
+            "badge": {
+              "clipId": "clp_178a8facd72",
+              "angleId": "ang_a33a866b863",
+              "text": "2 · Camera 2",
+              "w": 96.40625
+            }
+          },
+          {
+            "angle": "ang_a33a866b864",
+            "badge": {
+              "clipId": "clp_178a8facd73",
+              "angleId": "ang_a33a866b864",
+              "text": "3 · Camera 3",
+              "w": 96.40625
+            }
+          },
+          {
+            "angle": "ang_a33a866b862",
+            "badge": {
+              "clipId": "clp_178a8facd74",
+              "angleId": "ang_a33a866b862",
+              "text": "1 · Camera 1",
+              "w": 96.40625
+            }
+          },
+          {
+            "angle": "ang_a33a866b863",
+            "badge": {
+              "clipId": "clp_bdd2302d162",
+              "angleId": "ang_a33a866b863",
+              "text": "2 · Camera 2",
+              "w": 96.40625
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "U8: the angle viewer canvas reads right to left like the tiles (tile 1's angle in the top-right cell, tile 2's in the top-left)",
+      "ok": true,
+      "detail": {
+        "topRight": 1,
+        "topLeft": 2,
+        "atFrame": 300,
+        "tile1Angle": 1,
+        "tile2Angle": 2
+      }
+    },
+    {
+      "name": "U8: RTL tile order (tile 1 first in reading order, right-most in the first row), accessible names, a non-modal panel and a modal sync dialog with verdicts in words and spinbuttons with a value text",
+      "ok": true,
+      "detail": {
+        "dir": "rtl",
+        "tiles": [
+          {
+            "n": "1",
+            "x": 489,
+            "y": 312.5,
+            "pressed": "true",
+            "keys": "1"
+          },
+          {
+            "n": "2",
+            "x": 379.65625,
+            "y": 312.5,
+            "pressed": "false",
+            "keys": "2"
+          },
+          {
+            "n": "3",
+            "x": 531.9375,
+            "y": 403.390625,
+            "pressed": "false",
+            "keys": "3"
+          }
+        ],
+        "unnamed": [],
+        "rows": 5,
+        "spin": {
+          "role": "spinbutton",
+          "now": "0",
+          "text": "ללא הזזה"
+        }
+      }
+    },
+    {
+      "name": "U8: a keyboard-only path from the library multi-select to a placed program",
+      "ok": true,
+      "detail": {
+        "reviewStopShown": true,
+        "programTracks": 2
+      }
+    },
+    {
+      "name": "no page errors during the run",
+      "ok": true,
+      "detail": []
+    }
+  ],
+  "measurements": {
+    "sync": [
+      {
+        "angleId": "ang_a33a866b861",
+        "verdict": "reference",
+        "offsetSeconds": 0
+      },
+      {
+        "angleId": "ang_a33a866b862",
+        "verdict": "check",
+        "offsetSeconds": -0.625
+      },
+      {
+        "angleId": "ang_a33a866b863",
+        "verdict": "confident",
+        "offsetSeconds": 1.194187
+      },
+      {
+        "angleId": "ang_a33a866b864",
+        "verdict": "confident",
+        "offsetSeconds": 0.499979
+      },
+      {
+        "angleId": "ang_a33a866b864",
+        "verdict": "unsynced",
+        "offsetSeconds": null
+      }
+    ],
+    "initialBoundaries": [
+      {
+        "frame": 1001,
+        "angleId": "ang_a33a866b863"
+      }
+    ],
+    "baseline": {
+      "clock": "audio",
+      "onsets": 28,
+      "paintLatenessMs": {
+        "median": 16,
+        "p95": 29.33,
+        "max": 60
+      }
+    },
+    "u1": {
+      "pressed": [
+        {
+          "digit": 2,
+          "painted": 60
+        },
+        {
+          "digit": 3,
+          "painted": 100
+        },
+        {
+          "digit": 1,
+          "painted": 140
+        },
+        {
+          "digit": 2,
+          "painted": 180
+        },
+        {
+          "digit": 3,
+          "painted": 220
+        },
+        {
+          "digit": 1,
+          "painted": 260
+        },
+        {
+          "digit": 2,
+          "painted": 300
+        },
+        {
+          "digit": 3,
+          "painted": 340
+        },
+        {
+          "digit": 1,
+          "painted": 380
+        },
+        {
+          "digit": 2,
+          "painted": 420
+        },
+        {
+          "digit": 3,
+          "painted": 460
+        },
+        {
+          "digit": 1,
+          "painted": 500
+        }
+      ],
+      "cuts": [
+        {
+          "frame": 60,
+          "angleId": "ang_a33a866b863"
+        },
+        {
+          "frame": 100,
+          "angleId": "ang_a33a866b864"
+        },
+        {
+          "frame": 140,
+          "angleId": "ang_a33a866b862"
+        },
+        {
+          "frame": 180,
+          "angleId": "ang_a33a866b863"
+        },
+        {
+          "frame": 220,
+          "angleId": "ang_a33a866b864"
+        },
+        {
+          "frame": 260,
+          "angleId": "ang_a33a866b862"
+        },
+        {
+          "frame": 300,
+          "angleId": "ang_a33a866b863"
+        },
+        {
+          "frame": 340,
+          "angleId": "ang_a33a866b864"
+        },
+        {
+          "frame": 380,
+          "angleId": "ang_a33a866b862"
+        },
+        {
+          "frame": 420,
+          "angleId": "ang_a33a866b863"
+        },
+        {
+          "frame": 460,
+          "angleId": "ang_a33a866b864"
+        },
+        {
+          "frame": 500,
+          "angleId": "ang_a33a866b862"
+        },
+        {
+          "frame": 1001,
+          "angleId": "ang_a33a866b863"
+        }
+      ]
+    },
+    "u4": {
+      "cutFramesMeasured": 12,
+      "medianMs": 21.33,
+      "p95Ms": 40,
+      "medianFrames": 0.64,
+      "p95Frames": 1.2,
+      "allFrames": {
+        "median": 13.33,
+        "p95": 30.67,
+        "max": 266.67
+      },
+      "baselineRun": {
+        "median": 16,
+        "p95": 29.33,
+        "max": 60
+      },
+      "progressMd74": "median 5-15 ms, p95 about 21-24 ms after the clock reached the frame (one 3.5 s headless run)",
+      "budget": "p95 <= 2 frames",
+      "budgetMet": true,
+      "prefetch": {
+        "off": null,
+        "budgetMB": 160,
+        "opened": 5,
+        "reused": 9,
+        "adopted": 12,
+        "evicted": 2,
+        "gaveRoom": 0
+      },
+      "loadAverage": [
+        2.17,
+        2.61,
+        2.57
+      ],
+      "prefetchVerdict": "budget met in this run"
+    }
+  },
+  "notMeasured": []
+}

@@ -1,0 +1,78 @@
+/* Templates drawer, template dialog, post-apply bar, and the adjustment layer look on the timeline (ADR-0016). Logical properties only: the
+   editor is right to left in Hebrew. No animation in wave 1 (no animated previews); what moves respects prefers-reduced-motion. */
+
+/* ---------- adjustment tracks and clips on the timeline: striped, so they read as "acts on what is below" ---------- */
+.track.adjustment { background: repeating-linear-gradient(135deg, rgb(155 140 255 / 0.06) 0 6px, transparent 6px 12px); }
+.track.adjustment .clip, .clip.adjust-clip {
+  background-color: #4a3f8f;
+  background-image: repeating-linear-gradient(135deg, rgb(255 255 255 / 0.10) 0 6px, rgb(0 0 0 / 0.10) 6px 12px);
+  border-color: #9b8cff;
+}
+.clip.adjust-clip.selected { border-color: #fff; }
+.track-kind { font-size: 11px; font-weight: 600; color: var(--pf-accent-3); }
+
+/* ---------- "apply to" (Look panel, effects gallery) and the inspector blocks ---------- */
+.pf-apply-to { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 4px 0; padding: 6px 8px; border: 1px solid var(--pf-border); border-radius: var(--pf-r-md); }
+.pf-apply-to legend { padding-inline: 4px; font-size: var(--pf-fs-sm, 12px); color: var(--pf-text-muted); }
+.pf-apply-to p { flex-basis: 100%; margin: 0; font-size: var(--pf-fs-sm, 12px); }
+.pf-gal-body .pf-apply-to { margin-block-end: 8px; }
+.pf-replace { display: flex; flex-direction: column; gap: 4px; }
+.pf-replace-list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.pf-replace-list button { inline-size: 100%; justify-content: flex-start; text-align: start; }
+
+/* ---------- the drawer ---------- */
+.pf-tpl-drawer { display: flex; flex-direction: column; gap: 6px; }
+.pf-tpl-head { margin: 0; }
+.pf-tpl-toggle { inline-size: 100%; justify-content: flex-start; gap: 6px; font: inherit; font-weight: 700; }
+.pf-tpl-toggle[aria-expanded='true'] { color: var(--pf-accent); }
+.pf-tpl-body { display: flex; flex-direction: column; gap: 6px; }
+.pf-tpl-body > p { margin: 0; font-size: var(--pf-fs-sm, 12px); }
+.pf-tpl-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.pf-tpl-chip { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--pf-border); font-size: var(--pf-fs-sm, 12px); }
+.pf-tpl-chip[aria-pressed='true'] { background: var(--pf-accent); color: #0e1013; border-color: var(--pf-accent); }
+.pf-tpl-cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.pf-tpl-card { inline-size: 100%; block-size: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 8px; text-align: start; white-space: normal;
+  background: var(--pf-surface-raised); color: var(--pf-text); border: 1px solid var(--pf-border); border-radius: var(--pf-r-md); cursor: pointer; }
+.pf-tpl-card:hover:not(.unavailable), .pf-tpl-card:focus-visible { border-color: var(--pf-accent); }
+.pf-tpl-card:focus-visible { outline: 2px solid var(--pf-accent); outline-offset: 2px; }
+.pf-tpl-card.unavailable { cursor: not-allowed; border-style: dashed; }
+.pf-tpl-name { font-size: var(--pf-fs-md, 13px); }
+.pf-tpl-hint, .pf-tpl-meta { font-size: var(--pf-fs-sm, 12px); color: var(--pf-text-muted); }
+.pf-tpl-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.pf-tpl-badge { padding: 0 6px; border-radius: var(--pf-r-sm); border: 1px solid var(--pf-border); font-size: 11px; color: var(--pf-text); }
+.pf-tpl-badge.off { border-color: var(--pf-warn); color: var(--pf-warn); }
+.pf-tpl-reason { font-size: 11px; color: var(--pf-text); }
+
+/* ---------- after apply ---------- */
+.pf-tpl-applied { display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--pf-accent); border-radius: var(--pf-r-md); background: var(--pf-surface-raised); }
+.pf-tpl-applied p { margin: 0; font-size: var(--pf-fs-sm, 12px); }
+.pf-tpl-applied .row { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* ---------- the dialog ---------- */
+.pf-tpl-dialog { inline-size: min(760px, 94vw); }
+.pf-tpl-dialog h3 { margin: 4px 0; }
+.pf-tpl-dialog h4 { margin: 8px 0 2px; font-size: var(--pf-fs-md, 13px); }
+.pf-tpl-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.pf-tpl-steps button { gap: 6px; }
+.pf-tpl-steps button[aria-current='step'] { border-color: var(--pf-accent); color: var(--pf-accent); }
+.pf-tpl-steps .n, .pf-tpl-media .n { display: inline-grid; place-items: center; inline-size: 20px; block-size: 20px; border-radius: 50%; border: 1px solid var(--pf-border); font-size: 11px; }
+.pf-tpl-media { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-block-size: 40vh; overflow: auto; }
+.pf-tpl-media li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px; border: 1px solid var(--pf-border); border-radius: var(--pf-r-sm); }
+.pf-tpl-media li[data-included='false'] { opacity: 0.7; }
+.pf-tpl-media button[aria-disabled='true'] { opacity: 0.5; cursor: default; }
+.pf-tpl-music { display: flex; flex-direction: column; gap: 6px; border: 0; padding: 0; margin: 0; }
+.pf-tpl-music-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pf-tpl-text { display: flex; flex-direction: column; gap: 2px; margin-block-end: 6px; }
+.pf-tpl-text input { inline-size: 100%; }
+.pf-tpl-plan { min-block-size: 3em; }
+.pf-tpl-plan ol, .pf-tpl-plan ul { margin: 0; padding-inline-start: 20px; font-size: var(--pf-fs-sm, 12px); }
+.pf-tpl-alts { display: flex; flex-direction: column; gap: 6px; }
+.pf-tpl-alts fieldset { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; border: 1px solid var(--pf-border); border-radius: var(--pf-r-md); }
+.pf-tpl-nav { border-block-start: 1px solid var(--pf-border); padding-block-start: 8px; }
+
+/* ---------- Welcome: the fourth step ---------- */
+.welcome-steps .welcome-template-step button { padding: 2px 10px; }
+/* the dialog's «הבא» / «שימוש» in the light theme: the legacy .primary colours (dark ink on --pf-accent) measured 2.81:1 there; the frame tokens follow the theme (as the Deliver panel's primary button) */
+.pf-tpl-dialog button.primary { background-color: var(--pf-frame); background-image: none; color: var(--pf-frame-ink); }
+
+@media (prefers-reduced-motion: reduce) { .pf-tpl-drawer *, .pf-tpl-dialog * { transition: none !important; animation: none !important; } }

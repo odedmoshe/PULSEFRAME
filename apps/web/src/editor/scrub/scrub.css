@@ -1,0 +1,8 @@
+/* The playhead's press area (wave 8D P5 a): invisible, GRAB_PX wide, centred on the cap over the top rows; the line widens while it is held. */
+.timeline.pf-ds .playhead-grab { position: absolute; inset-block: 0; left: 50%; transform: translateX(-50%); pointer-events: auto; cursor: ew-resize; touch-action: none; background: transparent; }
+.timeline.pf-ds .playhead-cap .playhead-grab { z-index: 1; }
+.timeline.pf-ds .ruler { touch-action: none; }
+.timeline.pf-ds[data-scrubbing='true'], .timeline.pf-ds[data-scrubbing='true'] * { cursor: ew-resize !important; user-select: none; }
+.timeline.pf-ds[data-scrubbing='true'] .playhead { inline-size: 3px; margin-left: -1.5px; }
+/* a marker's flag stays pressable when the playhead stands beside it (the cap's grab area is z 3) */
+.timeline.pf-ds .ruler .user-marker { z-index: 4; }

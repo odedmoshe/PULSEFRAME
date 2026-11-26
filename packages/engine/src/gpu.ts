@@ -1,0 +1,1533 @@
+/**
+ * WebGPU effect passes (ADR-0008). Layout, text and layering stay in the Canvas2D compositor; an effect whose maths needs
+ * every pixel runs here: the layer buffer is uploaded as a texture, one WGSL fragment pass renders it into a texture, and the
+ * result is read back into the 2D pipeline. One WGSL source per effect, for preview, stills and export.
+ *
+ * The result comes back through a buffer, not by drawing a WebGPU canvas into the 2D canvas: measured on the software
+ * adapter of the headless worker, that shortcut returns an empty picture and loses the device. The buffer path costs a
+ * readback per effect (9 ms for 1080x1920 in one sample on integrated graphics) and makes the pass asynchronous.
+ *
+ * Nothing here is assumed to work: `initGpu()` asks for an adapter and renders a fixed shader whose two reference pixels
+ * must come back (the same pixels were measured on Intel, NVIDIA and a software adapter). Until that has passed, GPU effects
+ * are reported as unavailable and are never approximated: the layer is drawn without the effect and the effect id is
+ * recorded so the caller can say so (preview) or refuse (still, export).
+ *
+ * Conventions: 8-bit, premultiplied alpha in and out, non-linear (sRGB-encoded) maths like the rest of the compositor.
+ */
+type C2D = OffscreenCanvasRenderingContext2D;
+export interface GpuStatus { available: boolean; reason: string; adapter: { vendor: string | null; architecture: string | null; software: boolean } | null }
+import type { BeatPosition, DepthGrid, GradeCurves } from '@pulseframe/core';
+/**
+ * A colour table as a pass samples it: core's `lutStrip` (RGBA8, width = size*size, height = size; pixel (r + b*size, g) holds
+ * entry (r, g, b)) plus `key`, which is unique per content (the asset's content hash) and names its texture on the device.
+ */
+export interface LutStrip { key: string; size: number; width: number; height: number; data: Uint8Array }
+/**
+ * «תמונה חיה» (wave 8 living): a layer's nearness grid (core depthGrid) as the pass samples it at binding 3: RGBA8 with nearness in R
+ * (G, B, A zero), made by the colour table's raw-bytes path (writeTexture: no premultiplication, no colour conversion) and sharing the
+ * bound of MAX_LUT_TEXTURES. `key` is core depthKey (prefixed `depth:`, so it never collides with a colour table's content hash).
+ * Type only in the pre-pass; W2 builds the texture path (`dataTexture`).
+ */
+export interface DepthStrip { key: string; width: number; height: number; data: Uint8Array }
+/** The placed picture's rectangle in frame pixels (look.ts LayerBox): centre, size before scale, rotation in degrees, scale. */
+export interface EffectBox { cx: number; cy: number; w: number; h: number; rotation: number; scale: number }
+/**
+ * What a GPU effect gets besides its parameters: the instance's fields that are not parameters (params hold numbers, strings and
+ * booleans only, effects.ts). Today: the colour curves of a color.grade instance (wave 8 grade, grade-verify C2). Absent for every
+ * other effect, so their passes are unchanged.
+ */
+export interface GpuEffectExtra { curves?: GradeCurves }
+/** The second texture a pass reads at binding 3: a colour table (color.lut), or the 256×1 table of a grade's curves (key = core gradeCurvesKey, rgba = gradeCurveTablesRgba). */
+type PassAux = { kind: 'lut'; strip: LutStrip } | { kind: 'curve'; key: string; rgba: Uint8Array } | { kind: 'depth'; strip: DepthStrip };
+interface EffectEnv {
+  width: number; height: number;
+  /**
+   * The placed layer's box (verifier C2: no GPU pass was layer-relative before). The living pass maps frame uv to picture-local
+   * coordinates with it, and clamps its sample point and sizes its overscan to the VISIBLE rectangle = the picture's rectangle cut to
+   * the frame, inset half a texel (livingVisibleRect), so a photo larger than the frame (Ken Burns up to 1.18) never smears its edges.
+   */
+  box?: EffectBox;
+  /** The layer's depth for a pass with `depth: true`; null = could not be supplied (why: depthReason). Never drawn flat (C6). */
+  depth?: DepthStrip | null;
+  depthReason?: string; /** Timeline time of the frame in seconds: effects that move are a function of it, so any frame can be drawn on its own. */ seconds?: number; /** Where the frame falls in the beats of the music playing there, if any. */ beat?: BeatPosition | null;
+  /** Colour tables of this frame by asset id, loaded by drawGraph before drawing; null = could not be supplied (why: `lutReasons`). */
+  luts?: ReadonlyMap<string, LutStrip | null>;
+  lutReasons?: ReadonlyMap<string, string>;
+}
+interface GpuEffect {
+  /** Body of `fn effect(uv: vec2f) -> vec4f` (premultiplied in, premultiplied out). `P` holds the eight parameters. */ wgsl: string; /** Up to eight numbers, in the order the shader reads them. */ params(p: Record<string, unknown>, env: EffectEnv): number[];
+  /** Name of the string parameter holding the id of a colour table. The pass then samples that table as `lut` (binding 3); with an empty id the picture passes through unchanged. */
+  lut?: string;
+  /**
+   * «תמונה חיה» (wave 8 living; W2): the pass samples the layer's depth (env.depth) as `depth` at binding 3 — free per pass: every
+   * pass has its own bind group, a colour table and a living picture are two passes, a transition is a later pass on the finished
+   * layer (verifier C14 h). Depth is read with textureLoad and the pass's own f32 bilinear, never the hardware sampler.
+   */
+  depth?: true;
+  /**
+   * The pass reads twelve numbers: `P` grows by `c: vec4f` (the uniform buffer is already 48 bytes and runPass already writes 12
+   * floats). Living: a = (box cx, cy in uv; 1/half-width, 1/half-height in uv), b = (the visible rect x0, y0, x1, y1 in picture-local
+   * units, livingVisibleRect), c = (slide: the signed horizontal shift toward the end of reading, push: the zoom, in picture units;
+   * focus; K = core livingSteps of the shift in DEPTH-GRID texels, C7: the same at every output size; overscan S).
+   */
+  wide?: true;
+}
+
+const n = (v: unknown, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+const rgb = (hex: unknown, fallback: string) => { const h = typeof hex === 'string' && /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : fallback; return [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255]; };
+
+/** The integer hash used by every seeded pass, in JavaScript: the same numbers as the WGSL `hash`/`unit`. */
+export const hash32 = (x: number) => { const v = (Math.imul(x >>> 0, 747796405) + 2891336453) >>> 0; const w = Math.imul(((v >>> ((v >>> 28) + 4)) ^ v) >>> 0, 277803737) >>> 0; return ((w >>> 22) ^ w) >>> 0; };
+export const unit32 = (x: number) => (x >>> 8) / 16777216;
+/** Smooth seeded noise in [-1, 1]: random values at whole numbers of `t`, eased in between. A pure function of (seed, t). */
+export function smoothNoise(seed: number, t: number): number {
+  const i = Math.floor(t), f = t - i, u = f * f * (3 - 2 * f);
+  const at = (k: number) => unit32(hash32((hash32(seed >>> 0) ^ hash32((k + 0x40000000) >>> 0)) >>> 0)) * 2 - 1;
+  return at(i) * (1 - u) + at(i + 1) * u;
+}
+/**
+ * The movement of the time-driven "motion" effects as plain numbers: zoom, rotation (radians) and offset (fractions of the
+ * frame height) at a moment. The shader only applies them, so the picture can be checked against these numbers.
+ */
+import { BEAT_WINDOW_SECONDS, GRADE_CURVE_TABLE_SIZE, gradeCurvesKey, gradeCurveTables, gradeCurveTablesRgba, MAX_GRADE_CURVE_TEXTURES } from '@pulseframe/core';
+import { depthGridSize, LIVING_FOCUS, LIVING_MAX_SHIFT, livingMoveOf, livingSteps } from '@pulseframe/core';
+/**
+ * For an effect set to follow the music: how far the moment is into the current hit (`phase`: 0 on the hit, rising to 1
+ * just before the next), the seconds between the two hits (`period`) and the seconds since the hit (`since`). Null when
+ * the effect keeps its own steady setting or no analysed music plays there.
+ *
+ * The hits are the beats whose running number (counted from the first bar start, not from each bar) is a multiple of
+ * `every`. Without `minGapSeconds` the place between two hits is read from the beat count, which continues the grid
+ * before the first beat and after the last.
+ *
+ * With `minGapSeconds` (the strobe) only real beats of music that is followed are hits (BeatPosition.hits: the beats of
+ * every piece of the music, and of other music followed just before or after, each where it is heard), and two hits that
+ * count are never closer together than that. A hit counts when both of these hold:
+ *  1. it is not thinned out: `every` is multiplied by the smallest whole number that makes the median gap between the
+ *     remaining hits at least `minGapSeconds` (the lower median, and a hair more than the gap), judged over the half
+ *     second of timeline the hit lies in together with the half second before and after it (so music played fast keeps
+ *     a regular flash on every second, third… hit);
+ *  2. no other hit that passes 1 lies less than `minGapSeconds` before it, whether or not that one counts.
+ * Each rule looks only at the beats near the hit, never at the moment being drawn, so a hit counts at one moment exactly
+ * when it counts at every other: the hits that count are one fixed list, and by rule 2 any two of them are at least
+ * `minGapSeconds` apart. `since` is Infinity before the first hit that counts, and after a moment without followed
+ * music until the next hit that counts (a hit from before the break is not picked up again).
+ */
+export function musicHit(p: Record<string, unknown>, beat: BeatPosition | null | undefined, minGapSeconds = 0): { phase: number; period: number; since: number } | null {
+  if (p.follow !== 'music' || !beat) return null;
+  const every = Math.max(1, Math.round(n(p.every, 1)));
+  if (!(minGapSeconds > 0)) {
+    const x = beat.sinceFirstBar / every + n(p.offset, 0), phase = x - Math.floor(x + 1e-9), period = beat.period * every;
+    return { phase, period, since: phase * period };
+  }
+  const gap = minGapSeconds, now = beat.at;
+  const base = beat.hits.filter((h) => mod(h.index, every) === 0); // the hits of this effect, in time order
+  const factors = new Map<number, number>();
+  const factorAt = (t: number): number => {
+    const block = Math.floor(t / THIN_BLOCK);
+    let k = factors.get(block);
+    if (k === undefined) { const from = (block - 1) * THIN_BLOCK, to = (block + 2) * THIN_BLOCK; factors.set(block, (k = thinning(base.filter((h) => h.t >= from && h.t < to), every, gap))); }
+    return k;
+  };
+  const kept = (h: { t: number; index: number }) => mod(h.index, every * factorAt(h.t)) === 0; // rule 1
+  const counts = (i: number): boolean => {
+    if (!kept(base[i]!)) return false;
+    for (let j = i - 1; j >= 0 && base[i]!.t - base[j]!.t < gap; j--) if (kept(base[j]!)) return false; // rule 2
+    return true;
+  };
+  // Only hits well inside the listed window are judged, so that every beat their rules look at is listed too: a hit's
+  // rules reach back by the gap, then to the start of that hit's block and half a second before it (two blocks at most),
+  // and ahead to a second after the start of its own block. A hit further back than `back` no longer shows anyway (its
+  // flash has faded to nothing long before); with a gap too long for the window nothing counts.
+  const ahead = BEAT_WINDOW_SECONDS - 2 * THIN_BLOCK - 0.05, back = ahead - gap;
+  let last = -1, next = -1;
+  for (let i = base.length - 1; i >= 0 && now - base[i]!.t <= back; i--) if (base[i]!.t <= now && counts(i)) { last = i; break; }
+  for (let i = 0; back > 0 && i < base.length && base[i]!.t - now <= ahead; i++) if (base[i]!.t > now && counts(i)) { next = i; break; }
+  const since = last >= 0 && base[last]!.t >= beat.followedFrom ? now - base[last]!.t : Infinity;
+  const period = last >= 0 && next >= 0 ? base[next]!.t - base[last]!.t : Math.max(gap, beat.period * every * factorAt(now));
+  return { phase: Math.min(1, since / period), period, since };
+}
+/**
+ * The beats a strobe that follows the music may flash on, before the timeline-wide limit is applied (strobeSchedule.ts):
+ * the beats whose running number is a multiple of `every`, thinned regularly (rule 1 of musicHit) so that music played
+ * fast keeps an even flash on every second, third… hit instead of an irregular one. Times in seconds, in order.
+ */
+export function thinnedHits(hits: readonly { t: number; index: number }[], every: number, gap: number): number[] {
+  const step = Math.max(1, Math.round(every));
+  const base = hits.filter((h) => mod(h.index, step) === 0); // in time order
+  const firstAtOrAfter = (t: number) => { let lo = 0, hi = base.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (base[mid]!.t < t) lo = mid + 1; else hi = mid; } return lo; };
+  const factors = new Map<number, number>();
+  const factorAt = (t: number): number => {
+    const block = Math.floor(t / THIN_BLOCK);
+    let k = factors.get(block);
+    if (k === undefined) factors.set(block, (k = thinning(base.slice(firstAtOrAfter((block - 1) * THIN_BLOCK), firstAtOrAfter((block + 2) * THIN_BLOCK)), step, gap)));
+    return k;
+  };
+  return base.filter((h) => mod(h.index, step * factorAt(h.t)) === 0).map((h) => h.t);
+}
+const mod = (a: number, m: number) => ((a % m) + m) % m;
+/** Thinning is judged per half second of timeline (see musicHit). */
+const THIN_BLOCK = 0.5;
+/**
+ * The smallest whole factor k for which those of the given hits (an effect's hits, in time order) whose running number is
+ * a multiple of every * k have a median gap of at least `gap` seconds. Never more than one above the number of hits.
+ */
+function thinning(hits: { t: number; index: number }[], every: number, gap: number): number {
+  for (let k = 1; k <= hits.length; k++) {
+    const at = hits.filter((h) => mod(h.index, every * k) === 0);
+    if (at.length < 2) return k;
+    const gaps = at.slice(1).map((h, i) => h.t - at[i]!.t).sort((x, y) => x - y);
+    if (gaps[(gaps.length - 1) >> 1]! >= gap * (1 + 1e-9)) return k; // a hair more than the gap itself, so that rounding in an even grid exactly at the limit cannot drop some of its hits by rule 2 and keep others
+  }
+  return hits.length + 1;
+}
+/** How fast a flash fades, per second. */
+export const STROBE_FADE = 20;
+/** Largest brightness swing of the old-film flicker at full amount (see 'stylize.film'). */
+const FILM_FLICKER = 0.045;
+/** The computed parameter through which the evaluator tells a strobe how long ago its last flash started (seconds; absent = never). Not stored in documents. */
+export const FLASH_SINCE = '__flashSince';
+export function motionAt(type: string, p: Record<string, unknown>, seconds: number, beat?: BeatPosition | null): { scale: number; rotation: number; dx: number; dy: number } {
+  const amount = n(p.amount, 0), speed = n(p.speed, 1), seed = Math.round(n(p.seed, 1));
+  const hit = musicHit(p, beat);
+  switch (type) {
+    // following the music, the shake is a jolt on each hit that dies away before the next; the zoom that hides the edges stays
+    case 'motion.shake': { const t = seconds * speed, a = amount * (hit ? Math.exp(-hit.phase * 5) : 1); return { scale: 1 + amount * 2.4, rotation: smoothNoise(seed + 2, t) * a * 0.6, dx: smoothNoise(seed, t) * a, dy: smoothNoise(seed + 1, t) * a }; }
+    // a beat: full size on the beat, back to rest before the next one
+    case 'motion.pulse': { const b = seconds * (n(p.bpm, 120) / 60) + n(p.offset); const ph = hit ? hit.phase : b - Math.floor(b + 1e-9); return { scale: 1 + amount * Math.exp(-ph * n(p.decay, 6)), rotation: 0, dx: 0, dy: 0 }; }
+    case 'motion.sway': { const w = 2 * Math.PI * speed * seconds; return { scale: 1 + Math.abs(amount) * 1.2, rotation: Math.sin(w) * amount * 0.5, dx: Math.sin(w * 0.5) * amount * 0.5, dy: 0 }; }
+    case 'motion.spin': return { scale: n(p.zoom, 1), rotation: (n(p.rate, 90) * Math.PI / 180) * seconds, dx: 0, dy: 0 };
+    default: return { scale: 1, rotation: 0, dx: 0, dy: 0 };
+  }
+}
+const XFORM_WGSL = `
+      let asp = vec2f(P.b.x, 1.0);
+      let d = (uv - vec2f(0.5)) * asp - vec2f(P.a.z, P.a.w);
+      let r = vec2f(d.x * cos(P.a.y) + d.y * sin(P.a.y), -d.x * sin(P.a.y) + d.y * cos(P.a.y)) / P.a.x;
+      let at = vec2f(0.5) + r / asp;
+      // what moves in from outside the picture is the picture itself, mirrored: never an empty edge
+      let f = abs(fract(at * 0.5 + vec2f(0.5)) * 2.0 - vec2f(1.0));
+      return textureSampleLevel(src, smp, vec2f(1.0) - f, 0.0);`;
+const xform = (type: string): GpuEffect => ({ wgsl: XFORM_WGSL, params: (p, env) => { const m = motionAt(type, p, env.seconds ?? 0, env.beat); return [m.scale, m.rotation, m.dx, m.dy, env.width / env.height]; } });
+
+/** The implementation of every effect whose registry entry has cost 'gpu' (packages/core/src/effects.ts). */
+export const GPU_EFFECTS: Record<string, GpuEffect> = {
+  // Remove a background colour. Distance is measured in the chroma plane (Cb, Cr), so brightness changes of the screen matter less.
+  'key.chroma': {
+    params: (p) => [...rgb(p.color, '#00FF00'), n(p.tolerance, 0.18), n(p.softness, 0.08), n(p.spill, 0.5)],
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      if (s.a <= 0.0) { return s; }
+      let c = s.rgb / s.a;
+      let key = vec3f(P.a.x, P.a.y, P.a.z);
+      let d = distance(chroma(c), chroma(key));
+      let keep = smoothstep(P.a.w, P.a.w + max(P.b.x, 0.0001), d);
+      // spill: pull colours that are still close to the key toward their own grey
+      let near = 1.0 - smoothstep(P.a.w + P.b.x, P.a.w + P.b.x + 0.25, d);
+      let grey = vec3f(dot(c, vec3f(0.2126, 0.7152, 0.0722)));
+      let outc = mix(c, grey, near * P.b.y);
+      let a = s.a * keep;
+      return vec4f(outc * a, a);`,
+  },
+  // Displace the picture along a travelling sine wave. Lengths are fractions of the frame height.
+  'distort.wave': {
+    // the wave travels: its phase advances by one full turn per wave that passes (a clip saved before `speed` existed has none and stays still)
+    params: (p, env) => [n(p.amplitude, 0.01), Math.max(n(p.wavelength, 0.2), 0.005), (n(p.phase) * Math.PI) / 180 + 2 * Math.PI * (((n(p.speed) * (env.seconds ?? 0)) % 1 + 1) % 1), p.direction === 'vertical' ? 1 : 0, env.height / env.width],
+    wgsl: `
+      let amp = P.a.x; let len = P.a.y; let phase = P.a.z; let aspect = P.b.x;
+      var at = uv;
+      if (P.a.w > 0.5) { at.y = at.y + amp * sin(6.2831853 * (uv.x / (len * aspect)) + phase); }
+      else { at.x = at.x + amp * aspect * sin(6.2831853 * (uv.y / len) + phase); }
+      // Beyond the picture's edge the edge itself continues (as a wave of water would show it). Showing nothing there
+      // uncovered and covered dark strips at the frame's sides with every passing wave: at high speeds, a large area
+      // flashing many times a second.
+      return textureSampleLevel(src, smp, clamp(at, vec2f(0.0), vec2f(1.0)), 0.0);`,
+  },
+  // Magnify (amount > 0) or pinch (amount < 0) inside a circle. Lengths are fractions of the frame height.
+  'distort.bulge': {
+    params: (p, env) => [n(p.amount, 0.5), Math.max(n(p.radius, 0.35), 0.001), n(p.x, 0.5), n(p.y, 0.5), env.width / env.height],
+    wgsl: `
+      let c = vec2f(P.a.z, P.a.w); let asp = vec2f(P.b.x, 1.0);
+      let d = (uv - c) * asp; let k = length(d) / P.a.y;
+      if (k >= 1.0) { return textureSampleLevel(src, smp, uv, 0.0); }
+      return textureSampleLevel(src, smp, c + d * pow(max(k, 0.00001), P.a.x) / asp, 0.0);`,
+  },
+  // Rotate the picture around a point, most at the centre and not at all at the radius.
+  'distort.swirl': {
+    params: (p, env) => [(n(p.angle, 180) * Math.PI) / 180, Math.max(n(p.radius, 0.4), 0.001), n(p.x, 0.5), n(p.y, 0.5), env.width / env.height],
+    wgsl: `
+      let c = vec2f(P.a.z, P.a.w); let asp = vec2f(P.b.x, 1.0);
+      let d = (uv - c) * asp; let k = length(d) / P.a.y;
+      if (k >= 1.0) { return textureSampleLevel(src, smp, uv, 0.0); }
+      let t = P.a.x * (1.0 - k) * (1.0 - k);
+      let r = vec2f(d.x * cos(t) - d.y * sin(t), d.x * sin(t) + d.y * cos(t));
+      return textureSampleLevel(src, smp, c + r / asp, 0.0);`,
+  },
+  // Show one half of the picture mirrored onto the other.
+  'distort.mirror': {
+    params: (p) => [({ left: 0, right: 1, top: 2, bottom: 3 } as Record<string, number>)[String(p.keep)] ?? 0],
+    wgsl: `
+      var at = uv; let m = P.a.x;
+      if (m < 0.5) { if (at.x > 0.5) { at.x = 1.0 - at.x; } }
+      else if (m < 1.5) { if (at.x < 0.5) { at.x = 1.0 - at.x; } }
+      else if (m < 2.5) { if (at.y > 0.5) { at.y = 1.0 - at.y; } }
+      else { if (at.y < 0.5) { at.y = 1.0 - at.y; } }
+      return textureSampleLevel(src, smp, at, 0.0);`,
+  },
+  // Blur along lines through a point: 16 samples between the pixel and a point `amount` of the way toward the centre.
+  'blur.zoom': {
+    params: (p) => [n(p.amount, 0.15), n(p.x, 0.5), n(p.y, 0.5)],
+    wgsl: `
+      let c = vec2f(P.a.y, P.a.z);
+      var sum = vec4f(0.0);
+      for (var i = 0; i < 16; i++) { sum += textureSampleLevel(src, smp, c + (uv - c) * (1.0 - P.a.x * f32(i) / 15.0), 0.0); }
+      return sum / 16.0;`,
+  },
+  // Reduce each colour channel to a few levels.
+  'stylize.posterize': {
+    params: (p) => [Math.max(2, Math.round(n(p.levels, 4)))],
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      if (s.a <= 0.0) { return s; }
+      let L = P.a.x;
+      let c = min(floor(s.rgb / s.a * L), vec3f(L - 1.0)) / (L - 1.0);
+      return vec4f(c * s.a, s.a);`,
+  },
+  // Outlines: the strength of brightness changes around each pixel (Sobel), mixed over the picture.
+  'stylize.edges': {
+    params: (p, env) => [n(p.amount, 1), n(p.strength, 2), 1 / env.width, 1 / env.height],
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      if (s.a <= 0.0) { return s; }
+      let t = vec2f(P.a.z, P.a.w);
+      var l: array<f32, 9>;
+      for (var j = 0; j < 3; j++) { for (var i = 0; i < 3; i++) {
+        let q = textureSampleLevel(src, smp, uv + vec2f(f32(i - 1), f32(j - 1)) * t, 0.0);
+        l[j * 3 + i] = dot(q.rgb, vec3f(0.2126, 0.7152, 0.0722));
+      } }
+      let gx = (l[2] + 2.0 * l[5] + l[8]) - (l[0] + 2.0 * l[3] + l[6]);
+      let gy = (l[6] + 2.0 * l[7] + l[8]) - (l[0] + 2.0 * l[1] + l[2]);
+      let e = clamp(length(vec2f(gx, gy)) * P.a.y, 0.0, 1.0);
+      return vec4f(mix(s.rgb, vec3f(e) * s.a, P.a.x), s.a);`,
+  },
+  // Horizontal bands jump sideways and the colours split, a different pattern `speed` times per second.
+  // The pattern comes from an integer hash of (band, step, seed), so it is the same on every adapter and for every repeat of a frame.
+  'digital.glitch': {
+    params: (p, env) => [n(p.amount, 0.08), Math.max(1, Math.round(n(p.bands, 24))), Math.min(1, Math.max(0, n(p.density, 0.35))), Math.round(n(p.seed, 1)), Math.floor((env.seconds ?? 0) * n(p.speed, 12) + 1e-6), n(p.split, 0.004) * (env.height / env.width)],
+    wgsl: `
+      let band = u32(floor(uv.y * P.a.y));
+      let key = hash(band * 7919u + u32(P.a.w) * 104729u) ^ hash(u32(P.b.x) + 1u);
+      var at = uv;
+      var split = 0.0;
+      if (unit(key) < P.a.z) { at.x = fract(uv.x + (unit(hash(key)) - 0.5) * 2.0 * P.a.x); split = P.b.y; }
+      let r = textureSampleLevel(src, smp, vec2f(at.x + split, at.y), 0.0);
+      let g = textureSampleLevel(src, smp, at, 0.0);
+      let b = textureSampleLevel(src, smp, vec2f(at.x - split, at.y), 0.0);
+      return vec4f(r.r, g.g, b.b, max(g.a, max(r.a, b.a)));`,
+  },
+  // Colour grading in one pass: exposure, white balance, contrast, saturation, tinted shadows and highlights, faded blacks.
+  // All maths is on the stored (non-linear) values, like the rest of the compositor. The 40 named looks are parameter sets of this pass.
+  'color.grade': {
+    params: (p) => [n(p.temperature), n(p.tint), n(p.exposure), n(p.contrast, 1), n(p.saturation, 1), n(p.fade), n(p.shadows), n(p.highlights)],
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      if (s.a <= 0.0) { return s; }
+      var c = s.rgb / s.a;
+      c = c * pow(2.0, P.a.z);
+      c = c * vec3f(1.0 + 0.2 * P.a.x, 1.0 - 0.1 * P.a.y, 1.0 - 0.2 * P.a.x);
+      c = (c - vec3f(0.5)) * P.a.w + vec3f(0.5);
+      let l = luma(clamp(c, vec3f(0.0), vec3f(1.0)));
+      c = mix(vec3f(l), c, P.b.x);
+      c = c + (1.0 - l) * (1.0 - l) * P.b.z * vec3f(-0.08, 0.02, 0.10) + l * l * P.b.w * vec3f(0.10, 0.04, -0.08);
+      c = c * (1.0 - 0.25 * P.b.y) + vec3f(0.12 * P.b.y);
+      return vec4f(clamp(c, vec3f(0.0), vec3f(1.0)) * s.a, s.a);`,
+  },
+  // A 3D colour table (.cube) held as a strip of blue slices. The same arithmetic as core's sampleStrip, which is its tested model:
+  // straight colour clamped to 0..1, one bilinear tap (half-texel inset, so a tap never bleeds into the next slice) in each of the
+  // two nearest blue slices, blended by the blue fraction, then mixed with the original by the intensity. The table's size is
+  // read from the texture, so one pipeline serves every table.
+  'color.lut': {
+    lut: 'lut',
+    params: (p) => [Math.min(1, Math.max(0, n(p.intensity, 1)))],
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      if (s.a <= 0.0) { return s; }
+      let c = clamp(s.rgb / s.a, vec3f(0.0), vec3f(1.0));
+      let size = f32(textureDimensions(lut).y);
+      let d = size - 1.0;
+      let q = c * d;
+      let b0 = min(floor(q.z), d);
+      let b1 = min(b0 + 1.0, d);
+      let ty = (q.y + 0.5) / size;
+      let t0 = textureSampleLevel(lut, smp, vec2f((b0 * size + q.x + 0.5) / (size * size), ty), 0.0).rgb;
+      let t1 = textureSampleLevel(lut, smp, vec2f((b1 * size + q.x + 0.5) / (size * size), ty), 0.0).rgb;
+      let o = mix(c, mix(t0, t1, q.z - b0), P.a.x);
+      return vec4f(o * s.a, s.a);`,
+  },
+  // Map dark to one colour and bright to another.
+  'stylize.duotone': {
+    params: (p) => [...rgb(p.dark, '#1B1464'), n(p.amount, 1), ...rgb(p.light, '#FFD166')],
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      if (s.a <= 0.0) { return s; }
+      let c = s.rgb / s.a;
+      let two = mix(vec3f(P.a.x, P.a.y, P.a.z), vec3f(P.b.x, P.b.y, P.b.z), luma(c));
+      return vec4f(mix(c, two, P.a.w) * s.a, s.a);`,
+  },
+  // Print dots: a rotated grid of dots of the picture's own colour on white, larger where the picture is darker.
+  'stylize.halftone': {
+    params: (p, env) => [Math.max(n(p.spacing, 0.012) * env.height, 2), (n(p.angle, 45) * Math.PI) / 180, env.width, env.height],
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      if (s.a <= 0.0) { return s; }
+      let size = P.a.x; let ca = cos(P.a.y); let sa = sin(P.a.y); let dim = vec2f(P.a.z, P.a.w);
+      let q = uv * dim;
+      let r = vec2f(q.x * ca + q.y * sa, -q.x * sa + q.y * ca);
+      let cell = (floor(r / size) + vec2f(0.5)) * size;
+      let back = vec2f(cell.x * ca - cell.y * sa, cell.x * sa + cell.y * ca) / dim;
+      let k = textureSampleLevel(src, smp, clamp(back, vec2f(0.0), vec2f(1.0)), 0.0);
+      let kc = k.rgb / max(k.a, 0.0001);
+      let radius = sqrt(1.0 - luma(kc)) * size * 0.72;
+      let ink = 1.0 - smoothstep(radius - 0.75, radius + 0.75, distance(r, cell));
+      return vec4f(mix(vec3f(1.0), kc * 0.85, ink) * s.a, s.a);`,
+  },
+  // Darken every other horizontal line.
+  'stylize.scanlines': {
+    params: (p) => [Math.max(2, Math.round(n(p.lines, 240))), n(p.amount, 0.35)],
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      let dark = step(0.5, fract(uv.y * P.a.x * 0.5));
+      return vec4f(s.rgb * (1.0 - P.a.y * dark), s.a);`,
+  },
+  // Old tape: lines wobble sideways, colour smears to the right, lines and grain on top. Seeded; a new pattern `speed` times per second.
+  'stylize.vhs': {
+    params: (p, env) => [n(p.amount, 0.5), Math.round(n(p.seed, 1)), Math.floor((env.seconds ?? 0) * n(p.speed, 24) + 1e-6), env.height, 1 / env.width],
+    wgsl: `
+      let a = P.a.x; let tick = u32(P.a.z); let seed = u32(P.a.y) * 104729u;
+      let row = u32(uv.y * P.a.w);
+      let wob = (unit(hash(hash(row / 3u + seed) ^ hash(tick + 7u))) - 0.5) * 0.012 * a;
+      let at = vec2f(uv.x + wob, uv.y);
+      let y = textureSampleLevel(src, smp, at, 0.0);
+      // colour is taken from a few pixels to the left: it trails behind the brightness
+      var smear = vec3f(0.0);
+      for (var i = 1; i <= 6; i++) { smear += textureSampleLevel(src, smp, at - vec2f(f32(i) * 2.0 * P.b.x * a, 0.0), 0.0).rgb; }
+      smear = smear / 6.0;
+      let ly = luma(y.rgb); let ls = luma(smear);
+      var c = mix(y.rgb, smear + vec3f(ly - ls), 0.8 * a);
+      c = c * (1.0 - 0.18 * a * step(0.5, fract(uv.y * P.a.w * 0.25)));
+      let grain = unit(hash(hash(u32(uv.x / P.b.x) + row * 8191u + seed) ^ hash(tick))) - 0.5;
+      c = c + vec3f(grain * 0.10 * a) * y.a;
+      return vec4f(clamp(c, vec3f(0.0), vec3f(y.a)), y.a);`,
+  },
+  // Repeat one wedge of the picture around a point.
+  'distort.kaleidoscope': {
+    params: (p, env) => [Math.max(2, Math.round(n(p.segments, 6))), (n(p.angle) * Math.PI) / 180, n(p.x, 0.5), n(p.y, 0.5), env.width / env.height],
+    wgsl: `
+      let c = vec2f(P.a.z, P.a.w); let asp = vec2f(P.b.x, 1.0);
+      let d = (uv - c) * asp;
+      let wedge = 6.2831853 / P.a.x;
+      var t = atan2(d.y, d.x) - P.a.y;
+      t = t - wedge * floor(t / wedge);
+      if (t > wedge * 0.5) { t = wedge - t; }
+      t = t + P.a.y;
+      let at = c + length(d) * vec2f(cos(t), sin(t)) / asp;
+      // a wedge can reach outside the picture: fold back in rather than show nothing
+      let f = abs(fract(at * 0.5 + vec2f(0.5)) * 2.0 - vec2f(1.0));
+      return textureSampleLevel(src, smp, vec2f(1.0) - f, 0.0);`,
+  },
+  // Lens curvature over the whole frame: positive bends the edges outward (barrel), negative inward.
+  'distort.fisheye': {
+    params: (p, env) => [n(p.amount, 0.4), env.width / env.height],
+    wgsl: `
+      let asp = vec2f(P.a.y, 1.0);
+      let d = (uv - vec2f(0.5)) * asp;
+      let at = vec2f(0.5) + d * (1.0 + P.a.x * dot(d, d) * 2.0) / asp;
+      if (at.x < 0.0 || at.x > 1.0 || at.y < 0.0 || at.y > 1.0) { return vec4f(0.0); }
+      return textureSampleLevel(src, smp, at, 0.0);`,
+  },
+  // Blur along one direction: 17 samples centred on the pixel. The length is a fraction of the frame height.
+  'blur.directional': {
+    params: (p, env) => { const a = (n(p.angle) * Math.PI) / 180, d = n(p.amount, 0.03); return [(Math.cos(a) * d * env.height) / env.width, Math.sin(a) * d]; },
+    wgsl: `
+      let o = vec2f(P.a.x, P.a.y);
+      var sum = vec4f(0.0);
+      for (var i = 0; i < 17; i++) { sum += textureSampleLevel(src, smp, uv + o * (f32(i) / 16.0 - 0.5), 0.0); }
+      return sum / 17.0;`,
+  },
+  // Sharp in a horizontal band, increasingly blurred above and below it.
+  'blur.tilt-shift': {
+    params: (p, env) => [n(p.position, 0.5), Math.max(n(p.width, 0.2), 0.001), n(p.amount, 0.02), env.height / env.width],
+    wgsl: `
+      let away = clamp((abs(uv.y - P.a.x) - P.a.y * 0.5) / max(P.a.y, 0.0001), 0.0, 1.0);
+      let radius = P.a.z * away;
+      if (radius <= 0.0) { return textureSampleLevel(src, smp, uv, 0.0); }
+      var sum = vec4f(0.0);
+      // 20 points on a spiral: an even disc without a visible pattern
+      for (var i = 0; i < 20; i++) {
+        let t = f32(i) * 2.3999632; let r = sqrt((f32(i) + 0.5) / 20.0) * radius;
+        sum += textureSampleLevel(src, smp, uv + vec2f(cos(t) * r * P.a.w, sin(t) * r), 0.0);
+      }
+      return sum / 20.0;`,
+  },
+  // Bright areas spill light onto their surroundings.
+  'light.glow': {
+    params: (p, env) => [n(p.threshold, 0.7), n(p.radius, 0.03), n(p.amount, 0.8), env.height / env.width],
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      var sum = vec3f(0.0);
+      for (var i = 0; i < 24; i++) {
+        let t = f32(i) * 2.3999632; let r = sqrt((f32(i) + 0.5) / 24.0) * P.a.y;
+        let q = textureSampleLevel(src, smp, uv + vec2f(cos(t) * r * P.a.w, sin(t) * r), 0.0);
+        sum += q.rgb * smoothstep(P.a.x, min(P.a.x + 0.2, 1.0), luma(q.rgb));
+      }
+      // light is added inside the layer's own shape only
+      return vec4f(min(s.rgb + sum / 24.0 * P.a.z * s.a, vec3f(s.a)), s.a);`,
+  },
+  // Time-driven movement of the whole layer (see motionAt): one shader, four kinds of motion.
+  'motion.shake': xform('motion.shake'), 'motion.pulse': xform('motion.pulse'), 'motion.sway': xform('motion.sway'), 'motion.spin': xform('motion.spin'),
+  // Soft coloured light drifting over the picture, added on top (screen), as from a leak in the camera.
+  'light.leak': {
+    params: (p, env) => { const t = (env.seconds ?? 0) * n(p.speed, 0.3), seed = Math.round(n(p.seed, 1)); return [...rgb(p.color, '#FF7A2F'), n(p.amount, 0.6), 0.5 + 0.45 * smoothNoise(seed, t), 0.5 + 0.45 * smoothNoise(seed + 1, t), 0.5 + 0.45 * smoothNoise(seed + 2, t * 0.7), env.width / env.height]; },
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      let asp = vec2f(P.b.w, 1.0);
+      let a = length((uv - vec2f(P.b.x, P.b.y)) * asp); let b = length((uv - vec2f(1.0 - P.b.y, P.b.z)) * asp);
+      let glow = exp(-a * a * 5.0) + 0.7 * exp(-b * b * 9.0);
+      let leak = vec3f(P.a.x, P.a.y, P.a.z) * clamp(glow * P.a.w, 0.0, 1.0);
+      let c = s.rgb / max(s.a, 0.0001);
+      return vec4f((vec3f(1.0) - (vec3f(1.0) - c) * (vec3f(1.0) - leak)) * s.a, s.a);`,
+  },
+  // Brief flashes of light. SAFETY: all strobes of a timeline together never start more than three flashes in any one
+  // second (faster flashing is a seizure risk for some viewers). See strobeSchedule.ts.
+  'light.strobe': {
+    // The strobe does not decide when it flashes. The evaluator gives every strobe the seconds since its last flash start
+    // from ONE schedule for the whole timeline (strobeSchedule.ts), in which the flash starts of all strobes together are
+    // never closer than a third of a second plus a frame. Without that number (the effect drawn outside the evaluator)
+    // there is no flash at all.
+    params: (p) => {
+      const since = typeof p[FLASH_SINCE] === 'number' ? Math.max(0, p[FLASH_SINCE] as number) : Infinity;
+      return [...rgb(p.color, '#FFFFFF'), since * STROBE_FADE > 12 ? 0 : n(p.amount, 0.6) * Math.exp(-since * STROBE_FADE)]; // after 0.6 s a flash is below one part in 150,000: exactly nothing
+    },
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      return vec4f(mix(s.rgb, vec3f(P.a.x, P.a.y, P.a.z) * s.a, P.a.w), s.a);`,
+  },
+  // Old film: the frame weaves a little, the light flickers, dust and scratches come and go, the colour fades toward brown.
+  // The light flickers 18 times a second. The swing is kept small enough that even on a white picture, at full amount,
+  // two frames never differ by a tenth of the luminance range (a multiplier of at least 0.955 on encoded values is at
+  // least 0.9 in linear light): a flicker, never a flash in the sense of the photosensitivity guidelines.
+  'stylize.film': {
+    params: (p, env) => { const tick = Math.floor((env.seconds ?? 0) * 18 + 1e-6), seed = Math.round(n(p.seed, 1)), a = n(p.amount, 0.6); return [a, seed, tick, (unit32(hash32(seed * 31 + tick)) - 0.5) * 0.004 * a, 1 - FILM_FLICKER * a * unit32(hash32(seed * 57 + tick + 9)), env.width, env.height]; },
+    wgsl: `
+      let a = P.a.x; let seed = u32(P.a.y) * 104729u; let tick = u32(P.a.z);
+      let s = textureSampleLevel(src, smp, vec2f(uv.x, uv.y + P.a.w), 0.0);
+      if (s.a <= 0.0) { return s; }
+      var c = s.rgb / s.a;
+      let l = luma(c);
+      c = mix(c, vec3f(l * 1.07, l * 0.98, l * 0.82), 0.55 * a) * P.b.x;
+      // scratches: a few thin vertical lines per frame
+      let col = u32(uv.x * P.b.y);
+      let sc = step(0.9975, unit(hash(hash(col / 2u + seed) ^ hash(tick / 3u + 5u))));
+      // dust: sparse dark specks in cells
+      let cell = vec2u(u32(uv.x * P.b.y / 6.0), u32(uv.y * P.b.z / 6.0));
+      let du = step(0.9985, unit(hash(hash(cell.x + cell.y * 8191u + seed) ^ hash(tick + 77u))));
+      c = c * (1.0 - 0.6 * a * du) + vec3f(0.35 * a * sc);
+      return vec4f(clamp(c, vec3f(0.0), vec3f(1.0)) * s.a, s.a);`,
+  },
+  // The colour channels jump apart in a direction that changes several times a second.
+  'digital.rgb-shake': {
+    params: (p, env) => { const tick = Math.floor((env.seconds ?? 0) * n(p.speed, 14) + 1e-6), seed = Math.round(n(p.seed, 1)); const hit = musicHit(p, env.beat); const ang = unit32(hash32(seed * 131 + tick)) * 2 * Math.PI, k = n(p.amount, 0.01) * (hit ? Math.exp(-hit.phase * 5) : unit32(hash32(seed * 977 + tick + 3))); return [(Math.cos(ang) * k * env.height) / env.width, Math.sin(ang) * k]; },
+    wgsl: `
+      let o = vec2f(P.a.x, P.a.y);
+      let r = textureSampleLevel(src, smp, uv + o, 0.0);
+      let g = textureSampleLevel(src, smp, uv, 0.0);
+      let b = textureSampleLevel(src, smp, uv - o, 0.0);
+      return vec4f(r.r, g.g, b.b, max(g.a, max(r.a, b.a)));`,
+  },
+  // Star-shaped glints: bright spots send short streaks sideways and up and down.
+  'light.sparkle': {
+    params: (p, env) => [n(p.threshold, 0.8), n(p.length, 0.04), n(p.amount, 1), env.height / env.width],
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      var sum = vec3f(0.0);
+      for (var i = 1; i <= 10; i++) {
+        let t = f32(i) / 10.0; let w = 1.0 - t;
+        let h = vec2f(t * P.a.y * P.a.w, 0.0); let v = vec2f(0.0, t * P.a.y);
+        for (var k = 0; k < 4; k++) {
+          var o = h; if (k == 1) { o = -h; } else if (k == 2) { o = v; } else if (k == 3) { o = -v; }
+          let q = textureSampleLevel(src, smp, uv + o, 0.0);
+          sum += q.rgb * smoothstep(P.a.x, min(P.a.x + 0.15, 1.0), luma(q.rgb)) * w;
+        }
+      }
+      return vec4f(min(s.rgb + sum / 10.0 * P.a.z * s.a, vec3f(s.a)), s.a);`,
+  },
+  // A mid-2000s pocket camera (ADR-0011): oversharpened, highlights that bloom, a cool cast, blocky colour and fine coloured
+  // noise. digicamTone below is the same arithmetic on a flat patch (its proof model). SAFETY (ADR-0009): the noise is the only
+  // part that changes with time, 15 times a second (digicamTick, worked out here, not in the shader). In every 2 x 2 pixel cell
+  // its four offsets are a, b, -b, -a, so they cancel over the cell, and no channel moves by more than 0.03 * noise: the area
+  // brightness the flash guidelines look at does not change at all from one tick to the next.
+  'stylize.digicam': {
+    params: (p, env) => [n(p.amount, 0.8), n(p.sharpen, 0.7), n(p.noise, 0.3), n(p.bloom, 0.35), n(p.cool, 0.4), Math.round(n(p.seed, 1)), digicamTick(env.seconds ?? 0), 0],
+    wgsl: `
+      let s = textureSampleLevel(src, smp, uv, 0.0);
+      if (s.a <= 0.0) { return s; }
+      let dim = vec2f(textureDimensions(src));
+      let t = 1.0 / dim;
+      let px = uv * dim;
+      let c0 = s.rgb / s.a;
+      // 1. unsharp mask: the [1 2 1] x [1 2 1] blur from four bilinear taps half a pixel off the diagonals
+      let bl = (textureSampleLevel(src, smp, uv + vec2f(-0.5, -0.5) * t, 0.0) + textureSampleLevel(src, smp, uv + vec2f(0.5, -0.5) * t, 0.0)
+        + textureSampleLevel(src, smp, uv + vec2f(-0.5, 0.5) * t, 0.0) + textureSampleLevel(src, smp, uv + vec2f(0.5, 0.5) * t, 0.0)) * 0.25;
+      let sharp = s.rgb + P.a.y * (s.rgb - bl.rgb);
+      // 2. bloom: light of the neighbourhood above luma 0.8, from 12 points on a spiral 1.2% of the frame height across, inside the layer's shape
+      var glow = vec3f(0.0);
+      for (var i = 0; i < 12; i++) {
+        let ang = f32(i) * 2.3999632; let rad = sqrt((f32(i) + 0.5) / 12.0) * 0.012 * dim.y;
+        let g = textureSampleLevel(src, smp, uv + vec2f(cos(ang), sin(ang)) * rad * t, 0.0);
+        glow += g.rgb * smoothstep(0.8, 1.0, luma(g.rgb));
+      }
+      var k = (sharp + glow / 12.0 * P.a.w * s.a) / s.a;
+      // 3. white balance: cool (positive) takes red down and blue up
+      let wb = vec3f(1.0 - 0.05 * P.b.x, 1.0 + 0.01 * P.b.x, 1.0 + 0.08 * P.b.x);
+      k = k * wb;
+      // 4. blocky colour: the colour (not the brightness) of the pixel's 8 x 8 block, mixed in 0.4
+      let blk = floor(px / 8.0) * 8.0;
+      let b = (textureSampleLevel(src, smp, (blk + vec2f(2.0, 2.0)) * t, 0.0) + textureSampleLevel(src, smp, (blk + vec2f(6.0, 2.0)) * t, 0.0)
+        + textureSampleLevel(src, smp, (blk + vec2f(2.0, 6.0)) * t, 0.0) + textureSampleLevel(src, smp, (blk + vec2f(6.0, 6.0)) * t, 0.0)) * 0.25;
+      if (b.a > 0.0) { let bc = b.rgb / b.a * wb; k = k + 0.4 * ((bc - vec3f(luma(bc))) - (k - vec3f(luma(k)))); }
+      // 5. noise: one pair of random colours (na, nb) per 2 x 2 cell and tick, placed as na, nb / -nb, -na
+      let ip = vec2u(px);
+      let cp = ip / 2u;
+      let inCell = ip - cp * 2u;
+      let h = hash(hash(cp.x * 7919u + cp.y * 104723u + u32(P.b.y) * 2654435u) ^ hash(u32(P.b.z) * 2246822519u + 3u));
+      let na = vec3f(unit(hash(h ^ 1u)), unit(hash(h ^ 2u)), unit(hash(h ^ 3u))) * 2.0 - vec3f(1.0);
+      let nb = vec3f(unit(hash(h ^ 4u)), unit(hash(h ^ 5u)), unit(hash(h ^ 6u))) * 2.0 - vec3f(1.0);
+      var nz = na;
+      if (inCell.x == 1u && inCell.y == 0u) { nz = nb; } else if (inCell.x == 0u && inCell.y == 1u) { nz = -nb; } else if (inCell.x == 1u && inCell.y == 1u) { nz = -na; }
+      k = k + nz * (0.03 * P.a.z);
+      // 6. strength
+      let o = mix(c0, clamp(k, vec3f(0.0), vec3f(1.0)), P.a.x);
+      return vec4f(o * s.a, s.a);`,
+  },
+  // An old picture-tube screen (ADR-0011): curved glass with rounded corners, beam lines that widen where the picture is bright,
+  // an RGB phosphor mask and a slight glow. crtMap below is the same curve (its proof model). Nothing here reads the time, so
+  // it cannot flicker (ADR-0009). The mask lies on the glass, in output pixels; the beam lines follow the curved picture.
+  'stylize.crt': {
+    params: (p, env) => [n(p.curvature, 0.12), ({ grille: 0, dots: 1, slot: 2 } as Record<string, number>)[String(p.phosphor)] ?? 0, Math.max(1, n(p.pitch, 0.0028) * env.height), Math.max(1, Math.round(n(p.lines, 480))), n(p.amount, 0.8), n(p.glow, 0.3), env.width / env.height, 0],
+    wgsl: `
+      let dim = vec2f(textureDimensions(src));
+      let asp = P.b.z;
+      // 1. curved glass: the output point d (in frame heights from the centre) shows the picture at d (1 + curvature |d|^2)
+      let d = (uv - vec2f(0.5)) * vec2f(asp, 1.0);
+      let qd = d * (1.0 + P.a.x * dot(d, d));
+      let at = vec2f(0.5) + qd / vec2f(asp, 1.0);
+      // outside the glass, a box with rounded corners (radius growing with the curvature), is black
+      let rr = 0.4 * P.a.x;
+      let e = abs(qd) - vec2f(asp * 0.5, 0.5) + vec2f(rr);
+      let sd = length(max(e, vec2f(0.0))) + min(max(e.x, e.y), 0.0) - rr;
+      let inside = 1.0 - smoothstep(-0.5 / dim.y, 0.0, sd);
+      let s0 = textureSampleLevel(src, smp, uv, 0.0);
+      let s = textureSampleLevel(src, smp, at, 0.0);
+      var c = vec3f(0.0);
+      if (s.a > 0.0) { c = s.rgb / s.a; }
+      // 2. beam lines: across each of the lines a gaussian, wider where the picture is bright, scaled to mean 1 over the line
+      let sigma = mix(0.22, 0.4, luma(c));
+      let f = fract(at.y * P.a.w) - 0.5;
+      let sg = sigma - 0.22;
+      let scan = exp(-0.5 * f * f / (sigma * sigma)) / (0.5386 + 2.0342 * sg - 3.5167 * sg * sg);
+      // 3. phosphor mask: each pixel column lies in the red, green or blue stripe of a triad P.a.z pixels wide; gains of mean 1
+      let xp = uv.x * dim.x; let yp = uv.y * dim.y; let pitch = P.a.z;
+      var shift = 0.0; var rowGain = 1.0;
+      if (P.a.y > 1.5) {
+        // slot mask: rows of slots two triads high, every other row shifted by half a triad, a dark gap at the end of each slot
+        let slotRow = floor(yp / (2.0 * pitch));
+        shift = 1.5 * (slotRow - 2.0 * floor(slotRow * 0.5));
+        rowGain = select(1.0705882, 0.6, fract(yp / (2.0 * pitch)) > 0.85);
+      } else if (P.a.y > 0.5) {
+        // dots: rows of triads one triad high, every other row shifted by half a triad, darker between the rows
+        let dotRow = floor(yp / pitch);
+        shift = 1.5 * (dotRow - 2.0 * floor(dotRow * 0.5));
+        rowGain = 1.0 + 0.3 * cos(6.2831853 * fract(yp / pitch));
+      }
+      let stripe = floor(3.0 * xp / pitch + shift);
+      let which = stripe - 3.0 * floor(stripe / 3.0);
+      var mask = vec3f(0.7);
+      if (which < 0.5) { mask.x = 1.6; } else if (which < 1.5) { mask.y = 1.6; } else { mask.z = 1.6; }
+      mask = mask * rowGain;
+      // 4. glow: light from 8 points around, 0.6% of the frame height away
+      var gl = vec3f(0.0);
+      for (var i = 0; i < 8; i++) { let ang = f32(i) * 0.7853982; gl += textureSampleLevel(src, smp, at + vec2f(cos(ang), sin(ang)) * 0.006 / vec2f(asp, 1.0), 0.0).rgb; }
+      let crt = c * scan * mask + gl / 8.0 * (0.6 * P.b.y);
+      let o = mix(c, clamp(crt, vec3f(0.0), vec3f(1.0)), P.b.x);
+      return vec4f(o * s.a * inside, mix(s0.a, s.a, inside));`,
+  },
+  // «תמונה חיה» (wave 8 living; living-plan §4.1 as corrected by living-verify C2, C7, C14 e): a still photo moved in depth by the
+  // owner's drawn nearness (env.depth, binding 3). livingModel below is the same arithmetic in JavaScript (its proof model).
+  // Twelve numbers (livingParams): a = picture centre and 1/half-size in uv; b = the visible rectangle (picture ∩ frame, inset) in
+  // picture-local units; c = (slide: the horizontal shift, push: the zoom; focus f; K steps; overscan S). The move is told by f:
+  // push keeps the far plane still (f = 0), slide turns about the middle (f = 0.5), core LIVING_FOCUS.
+  // For every output pixel q it solves s = m(q − s·d), m = nearness − f, by K samples of s from the largest down, stopping at the
+  // first crossing: the nearest surface wins. A smooth crossing is refined linearly; a jump in nearness (a depth edge, a gap that
+  // opens) takes the far side, so the background is stretched across the gap; nothing is invented there.
+  // Privacy regions are drawn before effects (look.ts, compositor2d.ts drawPinned; verifier C14 f): this pass only moves pixels
+  // that are already hidden, it never brings back what a region covers.
+  'depth.living': {
+    depth: true,
+    wide: true,
+    params: (p, env) => livingParams(p, env),
+    wgsl: `
+      let s0 = textureSampleLevel(src, smp, uv, 0.0);
+      let hs = vec2f(1.0) / P.a.zw;
+      let q0 = (uv - P.a.xy) / hs * 0.5 + vec2f(0.5);
+      // outside the picture's own rectangle: the layer as it is (the picture keeps its rectangle)
+      if (q0.x < 0.0 || q0.x > 1.0 || q0.y < 0.0 || q0.y > 1.0 || s0.a <= 0.0) { return s0; }
+      let lo = P.b.xy;
+      let hi = P.b.zw;
+      let cv = (lo + hi) * 0.5;
+      let q = cv + (q0 - cv) / P.c.w;
+      let f = P.c.y;
+      var d = vec2f(P.c.x, 0.0);
+      if (f < 0.25) { d = (q - vec2f(0.5)) * P.c.x; }
+      let kn = i32(P.c.z);
+      let dk = 1.0 / f32(kn - 1);
+      var sHi = -f + f32(kn - 1) * dk;
+      var mHi = near(q - d * sHi) - f;
+      var s = sHi;
+      for (var k = kn - 2; k >= 0; k--) {
+        let sLo = -f + f32(k) * dk;
+        let mLo = near(q - d * sLo) - f;
+        let rLo = sLo - mLo;
+        if (rLo <= 0.0) {
+          let rHi = sHi - mHi;
+          if (abs(mHi - mLo) <= 2.0 * dk) {
+            var t = 0.0;
+            if (rHi - rLo > 0.0) { t = -rLo / (rHi - rLo); }
+            s = sLo + (sHi - sLo) * t;
+          } else { s = sHi; }
+          break;
+        }
+        sHi = sLo;
+        mHi = mLo;
+      }
+      let p = clamp(q - d * s, lo, hi);
+      let c = textureSampleLevel(src, smp, P.a.xy + (p - vec2f(0.5)) * 2.0 * hs, 0.0);
+      if (c.a <= 0.0) { return s0; }
+      return vec4f(c.rgb / c.a * s0.a, s0.a);`,
+  },
+};
+export const isGpuEffect = (type: string) => type in GPU_EFFECTS;
+/** The id of the colour table an effect instance names, or '' when it names none (or is not a table effect). */
+export const lutIdOf = (type: string, params: Record<string, unknown>): string => { const key = GPU_EFFECTS[type]?.lut; const id = key ? params[key] : ''; return typeof id === 'string' ? id : ''; };
+
+/**
+ * Transitions over two pictures (the outgoing one and the incoming one). `kernel` picks the WGSL body; `v` are up to three
+ * numbers that tell the variants of one kernel apart (`va` in the body). In the body: `p` is the progress 0..1, `asp` width/height,
+ * `O(uv)` and `I(uv)` sample the outgoing and incoming pictures (premultiplied), and the result is premultiplied.
+ */
+const T2: Record<string, string> = {
+  'cross-zoom': `
+    let k = sin(p * 3.14159265) * 0.45 * va.x; let c = vec2f(0.5);
+    var a = vec4f(0.0); var b = vec4f(0.0);
+    for (var i = 0; i < 12; i++) { let t = f32(i) / 11.0; a += O(c + (uv - c) * (1.0 - k * t)); b += I(c + (uv - c) * (1.0 - k * t)); }
+    return mix(a / 12.0, b / 12.0, smoothstep(0.3, 0.7, p));`,
+  swirl: `
+    let d = (uv - vec2f(0.5)) * vec2f(asp, 1.0); let r = length(d) / 0.75;
+    let t = sin(p * 3.14159265) * 5.0 * va.x * (1.0 - clamp(r, 0.0, 1.0)) * (1.0 - clamp(r, 0.0, 1.0));
+    let q = vec2f(0.5) + vec2f(d.x * cos(t) - d.y * sin(t), d.x * sin(t) + d.y * cos(t)) / vec2f(asp, 1.0);
+    return mix(O(q), I(q), p);`,
+  wave: `
+    let k = sin(p * 3.14159265) * 0.06;
+    var q = uv;
+    if (va.x > 0.5) { q.y = q.y + k * sin(uv.x * 18.0 + p * 12.0); } else { q.x = q.x + k * sin(uv.y * 18.0 + p * 12.0); }
+    return mix(O(q), I(q), p);`,
+  glitch: `
+    let band = u32(floor(uv.y * 28.0)); let tick = u32(floor(p * 14.0));
+    let h = hash(band * 7919u + 13u) ; let j = hash(h ^ hash(tick + 3u));
+    let k = sin(p * 3.14159265);
+    var q = uv; q.x = fract(uv.x + (unit(j) - 0.5) * 0.35 * k * step(0.45, unit(hash(j))));
+    // each band switches to the new picture at its own moment
+    let sw = step(unit(h), p * 1.2 - 0.1);
+    let o = vec4f(O(q + vec2f(0.006 * k, 0.0)).r, O(q).g, O(q - vec2f(0.006 * k, 0.0)).b, O(q).a);
+    let n = vec4f(I(q + vec2f(0.006 * k, 0.0)).r, I(q).g, I(q - vec2f(0.006 * k, 0.0)).b, I(q).a);
+    return mix(o, n, sw);`,
+  pixelate: `
+    let cells = mix(dim.y, 14.0, pow(sin(p * 3.14159265), 0.6));
+    let q = (floor(uv * vec2f(cells * asp, cells)) + vec2f(0.5)) / vec2f(cells * asp, cells);
+    return mix(O(q), I(q), step(0.5, p));`,
+  clock: `
+    let d = (uv - vec2f(0.5)) * vec2f(asp, 1.0);
+    var a = atan2(d.x * va.x, -d.y) / 6.2831853; a = a - floor(a);
+    return mix(O(uv), I(uv), 1.0 - smoothstep(p - 0.004, p + 0.004, a + 0.004 - step(1.0, p)));`,
+  'soft-wipe': `
+    let dir = vec2f(va.x, va.y); let reach = abs(dir.x) + abs(dir.y);
+    let s = (dot(uv - vec2f(0.5), dir) / reach) + 0.5; let soft = 0.12;
+    return mix(O(uv), I(uv), 1.0 - smoothstep(p * (1.0 + soft) - soft, p * (1.0 + soft), s));`,
+  blinds: `
+    let f = fract(select(uv.y, uv.x, va.x > 0.5) * 9.0);
+    return mix(O(uv), I(uv), 1.0 - smoothstep(p - 0.02, p + 0.02, f * 0.96 + 0.02 - step(1.0, p)));`,
+  iris: `
+    let r = length((uv - vec2f(0.5)) * vec2f(asp, 1.0)) / (0.5 * length(vec2f(asp, 1.0)));
+    let open = 1.0 - smoothstep(p * 1.04 - 0.04, p * 1.04, r);
+    let close = smoothstep(1.0 - p * 1.04, 1.0 - p * 1.04 + 0.04, r);
+    return mix(O(uv), I(uv), select(open, close, va.x > 0.5));`,
+  diamond: `
+    let d = abs((uv - vec2f(0.5)) * vec2f(asp, 1.0)); let r = (d.x + d.y) / (0.5 * (asp + 1.0));
+    let open = 1.0 - smoothstep(p * 1.04 - 0.04, p * 1.04, r);
+    let close = smoothstep(1.0 - p * 1.04, 1.0 - p * 1.04 + 0.04, r);
+    return mix(O(uv), I(uv), select(open, close, va.x > 0.5));`,
+  flash: `
+    let c = mix(O(uv), I(uv), smoothstep(0.4, 0.6, p));
+    let w = pow(sin(p * 3.14159265), 2.0);
+    return vec4f(min(c.rgb + vec3f(w), vec3f(1.0)), max(c.a, w));`,
+  luma: `
+    let o = O(uv); var l = luma(o.rgb / max(o.a, 0.0001)); if (va.x > 0.5) { l = 1.0 - l; }
+    let soft = 0.15; let edge = 1.0 - p * (1.0 + soft);
+    return mix(o, I(uv), smoothstep(edge, edge + soft, l));`,
+  squeeze: `
+    let t = select(uv.x, uv.y, va.x > 0.5); let cut = 1.0 - p;
+    if (t < cut) { let s = t / max(cut, 0.0001); return O(select(vec2f(s, uv.y), vec2f(uv.x, s), va.x > 0.5)); }
+    let s = (t - cut) / max(p, 0.0001); return I(select(vec2f(s, uv.y), vec2f(uv.x, s), va.x > 0.5));`,
+  checker: `
+    let cell = floor(uv * vec2f(8.0 * asp, 8.0)); let local = fract(uv * vec2f(8.0 * asp, 8.0));
+    let late = (cell.x + cell.y) - 2.0 * floor((cell.x + cell.y) * 0.5);
+    let q = clamp(p * 2.0 - late, 0.0, 1.0);
+    return mix(O(uv), I(uv), step(local.x, q) * step(0.00001, q));`,
+  bars: `
+    let along = select(uv.x, uv.y, va.x > 0.5); let across = select(uv.y, uv.x, va.x > 0.5);
+    let delay = unit(hash(u32(floor(across * 22.0)) * 7919u + 5u)) * 0.6;
+    let q = clamp((p * 1.6 - delay), 0.0, 1.0);
+    return mix(O(uv), I(uv), step(along, q) * step(0.00001, q));`,
+  ripple: `
+    let d = (uv - vec2f(0.5)) * vec2f(asp, 1.0); let r = length(d);
+    let q = uv + normalize(d + vec2f(0.00001)) * sin(r * 40.0 - p * 18.0) * 0.03 * sin(p * 3.14159265) / vec2f(asp, 1.0);
+    return mix(O(q), I(q), p);`,
+  // Whip pan (ADR-0011): both pictures lie side by side on one strip that moves past by one frame in the direction va
+  // (strip coordinate w: the outgoing picture on [0, 1), the incoming one on [1, 2)), blurred along the move by 16 samples
+  // over a length that is largest half-way. The incoming share of the frame is p, so it never goes back.
+  whip: `
+    let dir = vec2f(va.x, va.y);
+    let w = dot(uv - vec2f(0.5), dir) + 0.5 + p;
+    let sp = sin(p * 3.14159265); let len = 0.45 * sp * sp;
+    var acc = vec4f(0.0);
+    for (var i = 0; i < 16; i++) {
+      let o = len * (f32(i) / 15.0 - 0.5);
+      if (w + o < 1.0) { acc += O(uv + dir * (p + o)); } else { acc += I(uv + dir * (p + o - 1.0)); }
+    }
+    return acc / 16.0;`,
+  // Spin (ADR-0011): one whole turn (va.x = 1 clockwise, -1 counter-clockwise) with a zoom that is largest half-way, blurred
+  // along the turn by 12 samples behind it (as a shutter open while it turns records it, so the two directions differ even
+  // half-way); the outgoing picture before p = 0.45, the incoming one after 0.55, crossfaded between; what turns in from
+  // outside the picture is the picture mirrored.
+  spin: `
+    let d = (uv - vec2f(0.5)) * vec2f(asp, 1.0);
+    let sp = sin(p * 3.14159265);
+    let zoom = 1.0 + 0.8 * sp; let sweep = 0.6 * sp * sp;
+    var a = vec4f(0.0); var b = vec4f(0.0);
+    for (var i = 0; i < 12; i++) {
+      let t = va.x * (6.2831853 * p - sweep * f32(i) / 11.0);
+      let r = vec2f(d.x * cos(t) + d.y * sin(t), -d.x * sin(t) + d.y * cos(t)) / zoom;
+      let at = vec2f(0.5) + r / vec2f(asp, 1.0);
+      let q = vec2f(1.0) - abs(fract(at * 0.5) * 2.0 - vec2f(1.0));
+      a += O(q); b += I(q);
+    }
+    return mix(a / 12.0, b / 12.0, smoothstep(0.45, 0.55, p));`,
+  // ---- trend pack (ADR-0012), uniform v2: `light` (0..1, already the envelope the flash schedule allowed: 0 when the schedule
+  // held this transition's flash start), `tint` (rgb, the transition's colour) and `seed` (u32) are read in transition();
+  // `fbm`/`vnoise` are module helpers. With light 0 every incoming share below only grows with p; light is only ever added as
+  // light * (…) * tint, so a held light adds exactly nothing. JavaScript models of the geometry: burnThreshold, brushFront,
+  // pageFold and pageTurnSource (below), for the proofs.
+  //
+  // Film burn: the incoming picture burns in where seeded fbm noise falls below a threshold that sweeps 1.25 p - 0.1; the
+  // burning rim and, with less weight, the whole frame are lit by the tint, whitened toward the rim. The noise is first spread
+  // evenly over 0..1 (fbm is about normal, mean 0.5, sd 0.13; a logistic of slope 13 is its distribution function), so the
+  // burnt area grows evenly with the threshold and the rim covers about the same area all along: the light it adds then
+  // follows the scheduled envelope (ADR-0012).
+  burn: `
+    let n = 1.0 / (1.0 + exp((0.5 - fbm(uv * vec2f(asp, 1.0) * 2.5 + vec2f(f32(seed) * 0.37, 0.0), seed)) * 13.0));
+    let th = 1.25 * p - 0.1;
+    let inn = 1.0 - smoothstep(th - 0.02, th + 0.02, n);
+    let e = 1.0 - smoothstep(0.0, 0.12, abs(n - th));
+    let col = mix(tint, vec3f(1.0, 0.95, 0.85), 0.6 * e);
+    let base = mix(O(uv), I(uv), inn);
+    return vec4f(min(base.rgb + light * (0.35 + 0.65 * e) * col * base.a, vec3f(base.a)), base.a);`,
+  // Light leak: three soft blobs of the tint (Gaussian, sigma 0.25..0.45 of the frame height, strength 0.5..0.8) drift
+  // between seeded points inside the frame while the pictures cross-fade; the light is screened over the picture.
+  leak: `
+    let pic = mix(O(uv), I(uv), smoothstep(0.35, 0.65, p));
+    let q = uv * vec2f(asp, 1.0);
+    var field = 0.0;
+    for (var i = 0u; i < 3u; i++) {
+      let h = hash(seed + i);
+      let a0 = vec2f(0.1 + 0.8 * unit(hash(h + 1u)), 0.1 + 0.8 * unit(hash(h + 2u))) * vec2f(asp, 1.0);
+      let a1 = vec2f(0.1 + 0.8 * unit(hash(h + 3u)), 0.1 + 0.8 * unit(hash(h + 4u))) * vec2f(asp, 1.0);
+      let sg = 0.25 + 0.2 * unit(hash(h + 5u));
+      let d = q - mix(a0, a1, p);
+      field += (0.5 + 0.3 * unit(hash(h + 6u))) * exp(-dot(d, d) / (2.0 * sg * sg));
+    }
+    field = min(field * (0.8 + 0.4 * fbm(q * 3.0, seed + 17u)), 1.0);
+    let add = light * field * tint;
+    return vec4f(pic.rgb + add * (vec3f(pic.a) - pic.rgb), pic.a);`,
+  // Ink bleed: domain-warped seeded fbm, weighted toward the centre of the frame, spreads the incoming picture outward as its
+  // threshold sweeps 1.3 p - 0.15.
+  ink: `
+    let w = uv * 3.0;
+    let q = uv * vec2f(asp, 1.0) * 3.0 + 0.35 * vec2f(fbm(w + 11.0, seed + 1u), fbm(w + 23.0, seed + 2u));
+    let n = fbm(q, seed);
+    let r = length((uv - vec2f(0.5)) * vec2f(asp, 1.0)) / (0.5 * length(vec2f(asp, 1.0)));
+    let v = 1.0 - mix(n, 1.0 - r, 0.4);
+    let th = 1.3 * p - 0.15;
+    return mix(O(uv), I(uv), smoothstep(v - 0.015, v + 0.015, th));`,
+  // Brush stroke: four horizontal bands, each starting up to a quarter of the way late (seeded), paint the incoming picture
+  // across the frame (va.x < 0: from right to left) with a bristle edge.
+  brush: `
+    let band = min(u32(floor(uv.y * 4.0)), 3u);
+    let delay = unit(hash(band + seed)) * 0.25;
+    let along = select(uv.x, 1.0 - uv.x, va.x < 0.0);
+    let bristle = fbm(vec2f(1.5 * uv.x, 40.0 * uv.y), seed);
+    return mix(O(uv), I(uv), smoothstep(-0.01, 0.01, (1.5 * p - delay) - along - 0.08 * bristle));`,
+  // Page turn: the outgoing picture is a page rolled up from one edge around a cylinder of radius r = 0.12 (of the width)
+  // whose axis sweeps from 1 + r to -r; s is the distance from the edge the page is turned toward (va.x < 0: the left edge,
+  // so the right edge lifts first). On the curl the upper half shows the back of the page and the lower half its front,
+  // shaded by at most 0.3; flat on top lies the back of the page, mirrored and 25% toward white; where the page has gone the
+  // incoming picture shows, under the curl's shadow 0.25 exp(-d / 0.04).
+  page: `
+    let r = 0.12; let pi = 3.14159265;
+    let f = mix(1.0 + r, -r, p);
+    let left = va.x < 0.0;
+    let s = select(1.0 - uv.x, uv.x, left);
+    let edge = f + r * sin(min(max(1.0 - f, 0.0) / r, 0.5 * pi));
+    if (s > edge) { let i = I(uv); return vec4f(i.rgb * (1.0 - 0.25 * exp(-(s - edge) / 0.04)), i.a); }
+    if (s > f) {
+      let a = asin(clamp((s - f) / r, 0.0, 1.0));
+      let up = f + r * (pi - a);
+      let shade = 1.0 - 0.3 * clamp((s - f) / r, 0.0, 1.0);
+      if (up <= 1.0) { let o = O(vec2f(select(1.0 - up, up, left), uv.y)); return vec4f(mix(o.rgb, vec3f(o.a), 0.25) * shade, o.a); }
+      let dn = f + r * a;
+      let o = O(vec2f(select(1.0 - dn, dn, left), uv.y));
+      return vec4f(o.rgb * shade, o.a);
+    }
+    let top = 2.0 * f + pi * r - s;
+    if (top <= 1.0) { let o = O(vec2f(select(1.0 - top, top, left), uv.y)); return vec4f(mix(o.rgb, vec3f(o.a), 0.25), o.a); }
+    return O(uv);`,
+};
+/** Transition id -> kernel and the numbers that set its variant. */
+export const GPU_TRANSITIONS: Record<string, { kernel: string; v: [number, number, number] }> = {
+  'cross-zoom-in': { kernel: 'cross-zoom', v: [1, 0, 0] }, 'cross-zoom-out': { kernel: 'cross-zoom', v: [-1, 0, 0] },
+  'swirl-cw': { kernel: 'swirl', v: [1, 0, 0] }, 'swirl-ccw': { kernel: 'swirl', v: [-1, 0, 0] },
+  'wave-h': { kernel: 'wave', v: [0, 0, 0] }, 'wave-v': { kernel: 'wave', v: [1, 0, 0] },
+  'glitch-cut': { kernel: 'glitch', v: [0, 0, 0] }, pixelate: { kernel: 'pixelate', v: [0, 0, 0] },
+  'clock-cw': { kernel: 'clock', v: [1, 0, 0] }, 'clock-ccw': { kernel: 'clock', v: [-1, 0, 0] },
+  'soft-wipe-right': { kernel: 'soft-wipe', v: [1, 0, 0] }, 'soft-wipe-left': { kernel: 'soft-wipe', v: [-1, 0, 0] }, 'soft-wipe-down': { kernel: 'soft-wipe', v: [0, 1, 0] }, 'soft-wipe-up': { kernel: 'soft-wipe', v: [0, -1, 0] },
+  'soft-wipe-down-right': { kernel: 'soft-wipe', v: [1, 1, 0] }, 'soft-wipe-down-left': { kernel: 'soft-wipe', v: [-1, 1, 0] }, 'soft-wipe-up-right': { kernel: 'soft-wipe', v: [1, -1, 0] }, 'soft-wipe-up-left': { kernel: 'soft-wipe', v: [-1, -1, 0] },
+  'blinds-h': { kernel: 'blinds', v: [0, 0, 0] }, 'blinds-v': { kernel: 'blinds', v: [1, 0, 0] },
+  'iris-open': { kernel: 'iris', v: [0, 0, 0] }, 'iris-close': { kernel: 'iris', v: [1, 0, 0] },
+  'diamond-open': { kernel: 'diamond', v: [0, 0, 0] }, 'diamond-close': { kernel: 'diamond', v: [1, 0, 0] },
+  flash: { kernel: 'flash', v: [0, 0, 0] },
+  'luma-bright': { kernel: 'luma', v: [0, 0, 0] }, 'luma-dark': { kernel: 'luma', v: [1, 0, 0] },
+  'squeeze-h': { kernel: 'squeeze', v: [0, 0, 0] }, 'squeeze-v': { kernel: 'squeeze', v: [1, 0, 0] },
+  checker: { kernel: 'checker', v: [0, 0, 0] },
+  'bars-h': { kernel: 'bars', v: [0, 0, 0] }, 'bars-v': { kernel: 'bars', v: [1, 0, 0] },
+  ripple: { kernel: 'ripple', v: [0, 0, 0] },
+  // whip: the direction the camera turns (the picture moves the other way); spin: 1 clockwise, -1 counter-clockwise
+  'whip-left': { kernel: 'whip', v: [-1, 0, 0] }, 'whip-right': { kernel: 'whip', v: [1, 0, 0] }, 'whip-up': { kernel: 'whip', v: [0, -1, 0] }, 'whip-down': { kernel: 'whip', v: [0, 1, 0] },
+  'spin-cw': { kernel: 'spin', v: [1, 0, 0] }, 'spin-ccw': { kernel: 'spin', v: [-1, 0, 0] },
+  // trend pack (ADR-0012): brush and page, v0 = -1 left, 1 right
+  'film-burn': { kernel: 'burn', v: [0, 0, 0] }, 'light-leak': { kernel: 'leak', v: [0, 0, 0] }, 'ink-bleed': { kernel: 'ink', v: [0, 0, 0] },
+  'brush-left': { kernel: 'brush', v: [-1, 0, 0] }, 'brush-right': { kernel: 'brush', v: [1, 0, 0] },
+  'page-turn-left': { kernel: 'page', v: [-1, 0, 0] }, 'page-turn-right': { kernel: 'page', v: [1, 0, 0] },
+};
+export const isGpuTransition = (type: string) => type in GPU_TRANSITIONS;
+/** What a GPU transition pass needs of the frame's transition state (evaluate.ts LayerLook.transition). */
+export interface TransitionState { type: string; progress: number; light?: number; color?: string | null; seed?: number }
+/**
+ * The twelve numbers of a transition pass, uniform v2 (ADR-0012): a = (p, v0, v1, v2), b = (W/H, W, H, light),
+ * c = (tint r, g, b, seed). A missing or malformed colour is white; light and seed default to 0.
+ */
+export function transitionUniforms(t: TransitionState, width: number, height: number): number[] {
+  const g = GPU_TRANSITIONS[t.type];
+  if (!g) throw new Error(`no GPU transition ${t.type}`);
+  const n = /^#[0-9a-fA-F]{6}$/.test(t.color ?? '') ? parseInt(t.color!.slice(1), 16) : 0xffffff;
+  return [t.progress, ...g.v, width / height, width, height, t.light ?? 0, ((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255, t.seed ?? 0];
+}
+const transitionShader = (body: string) => `${VERTEX}
+  struct Params { a: vec4f, b: vec4f, c: vec4f }
+  @group(0) @binding(0) var outT: texture_2d<f32>;
+  @group(0) @binding(1) var smp: sampler;
+  @group(0) @binding(2) var<uniform> P: Params;
+  @group(0) @binding(3) var inT: texture_2d<f32>;
+  fn hash(x: u32) -> u32 { let v = x * 747796405u + 2891336453u; let w = ((v >> ((v >> 28u) + 4u)) ^ v) * 277803737u; return (w >> 22u) ^ w; }
+  fn unit(x: u32) -> f32 { return f32(x >> 8u) / 16777216.0; }
+  fn luma(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
+  fn h2(i: vec2i, s: u32) -> f32 { return unit(hash((bitcast<u32>(i.x) * 73856093u) ^ hash((bitcast<u32>(i.y) * 19349663u) ^ s))); }
+  fn vnoise(x: vec2f, s: u32) -> f32 { let i = vec2i(floor(x)); let f = fract(x); let u = f * f * (3.0 - 2.0 * f); return mix(mix(h2(i, s), h2(i + vec2i(1, 0), s), u.x), mix(h2(i + vec2i(0, 1), s), h2(i + vec2i(1, 1), s), u.x), u.y); }
+  fn fbm(x: vec2f, s: u32) -> f32 { var a = 0.5; var t = 0.0; var q = x; for (var o = 0u; o < 5u; o++) { t += a * vnoise(q, hash(s + o)); q = q * 2.03 + vec2f(17.0, 31.0); a *= 0.5; } return t / 0.96875; }
+  fn O(uv: vec2f) -> vec4f { return textureSampleLevel(outT, smp, uv, 0.0); }
+  fn I(uv: vec2f) -> vec4f { return textureSampleLevel(inT, smp, uv, 0.0); }
+  fn transition(uv: vec2f) -> vec4f {
+    let p = P.a.x; let va = vec3f(P.a.y, P.a.z, P.a.w); let asp = P.b.x; let dim = vec2f(P.b.y, P.b.z);
+    let light = P.b.w; let tint = P.c.xyz; let seed = u32(P.c.w);
+    // every body reads all of them or not; touching them here keeps one binding layout for all kernels
+    let keep = va.z + asp + dim.x + O(vec2f(0.0)).a * 0.0 + I(vec2f(0.0)).a * 0.0 + light + tint.x + f32(seed);
+    if (keep != keep) { return vec4f(0.0); }${body}
+  }
+  @fragment fn f(i: V) -> @location(0) vec4f { let c = transition(i.uv); if (c.a <= 0.0) { return vec4f(0.0); } return vec4f(c.rgb / c.a, c.a); }`;
+
+const VERTEX = `
+  struct V { @builtin(position) pos: vec4f, @location(0) uv: vec2f }
+  @vertex fn v(@builtin(vertex_index) i: u32) -> V {
+    var p = array<vec2f, 3>(vec2f(-1, -1), vec2f(3, -1), vec2f(-1, 3));
+    var o: V; o.pos = vec4f(p[i], 0, 1); o.uv = vec2f(p[i].x * 0.5 + 0.5, 0.5 - p[i].y * 0.5); return o;
+  }`;
+/**
+ * The WGSL of an effect pass. `aux` names the texture at binding 3: none; 'lut' (a colour table strip, `lut`); 'curve' (the 256×1
+ * rgba8 table of a grade's curves, `crv`, read with textureLoad only — never the sampler: grade-verify C6). The text for 'none' and
+ * 'lut' is exactly what it was before the curves (byte-identical pipelines, so every existing baseline holds: G9).
+ */
+const shaderOf = (body: string, aux: 'none' | 'lut' | 'curve' = 'none') => `${VERTEX}
+  struct Params { a: vec4f, b: vec4f }
+  @group(0) @binding(0) var src: texture_2d<f32>;
+  @group(0) @binding(1) var smp: sampler;
+  @group(0) @binding(2) var<uniform> P: Params;${aux === 'lut' ? `
+  @group(0) @binding(3) var lut: texture_2d<f32>;` : aux === 'curve' ? `
+  @group(0) @binding(3) var crv: texture_2d<f32>;` : ''}
+  fn hash(x: u32) -> u32 { let v = x * 747796405u + 2891336453u; let w = ((v >> ((v >> 28u) + 4u)) ^ v) * 277803737u; return (w >> 22u) ^ w; }
+  fn unit(x: u32) -> f32 { return f32(x >> 8u) / 16777216.0; }
+  fn luma(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
+  fn chroma(c: vec3f) -> vec2f { return vec2f(-0.1146 * c.r - 0.3854 * c.g + 0.5 * c.b, 0.5 * c.r - 0.4542 * c.g - 0.0458 * c.b); }
+  fn effect(uv: vec2f) -> vec4f {${body}
+  }
+  // straight alpha out: the result is read back as ordinary image data
+  @fragment fn f(i: V) -> @location(0) vec4f { let c = effect(i.uv); if (c.a <= 0.0) { return vec4f(0.0); } return vec4f(c.rgb / c.a, c.a); }`;
+/**
+ * The WGSL of a pass that reads a depth grid (GpuEffect.depth; wave 8 living): twelve numbers (`P.c`), the grid at binding 3 as
+ * `depth`, and `near(p)`: the nearness at picture-local p by the pass's own f32 bilinear over textureLoad (never the hardware
+ * sampler, whose sub-texel weights are not specified), texel centres at (i + 0.5)/size, edges clamped. livingModel's `nearAt` is
+ * the same arithmetic. Its own template, so the text of every other pass (shaderOf) is unchanged.
+ */
+const depthShaderOf = (body: string) => `${VERTEX}
+  struct Params { a: vec4f, b: vec4f, c: vec4f }
+  @group(0) @binding(0) var src: texture_2d<f32>;
+  @group(0) @binding(1) var smp: sampler;
+  @group(0) @binding(2) var<uniform> P: Params;
+  @group(0) @binding(3) var depth: texture_2d<f32>;
+  fn near(p: vec2f) -> f32 {
+    let dim = vec2f(textureDimensions(depth));
+    let g = p * dim - vec2f(0.5);
+    let g0 = floor(g);
+    let t = g - g0;
+    let mx = vec2i(dim) - vec2i(1);
+    let i0 = clamp(vec2i(g0), vec2i(0), mx);
+    let i1 = clamp(vec2i(g0) + vec2i(1), vec2i(0), mx);
+    let n00 = textureLoad(depth, vec2i(i0.x, i0.y), 0).r;
+    let n10 = textureLoad(depth, vec2i(i1.x, i0.y), 0).r;
+    let n01 = textureLoad(depth, vec2i(i0.x, i1.y), 0).r;
+    let n11 = textureLoad(depth, vec2i(i1.x, i1.y), 0).r;
+    let top = n00 + (n10 - n00) * t.x;
+    let bot = n01 + (n11 - n01) * t.x;
+    return top + (bot - top) * t.y;
+  }
+  fn effect(uv: vec2f) -> vec4f {${body}
+  }
+  // straight alpha out: the result is read back as ordinary image data
+  @fragment fn f(i: V) -> @location(0) vec4f { let c = effect(i.uv); if (c.a <= 0.0) { return vec4f(0.0); } return vec4f(c.rgb / c.a, c.a); }`;
+/** The fixed shader of the adapter check, and the pixels it must give at (0,0) and (540,960) of a 1080x1920 target. */
+const REFERENCE = { wgsl: `${VERTEX}
+  @fragment fn f(i: V) -> @location(0) vec4f { let p = i.pos; var c = vec3f(0); for (var k = 0; k < 16; k++) { c += 0.0625 * (0.5 + 0.5 * sin(vec3f(p.x, p.y, p.x + p.y) * 0.01 * f32(k + 1))); } return vec4f(c, 1); }`, first: [133, 133, 138, 255], middle: [116, 128, 133, 255] };
+
+interface State { adapter: any; device: any; sampler: any; pipelines: Map<string, any>; /** Why the shader of a pass key did not compile on this device: never compiled again, always reported. */ brokenPipelines: Map<string, string>; size: { source: any; source2: any; target: any; readback: any; stride: number; width: number; height: number } | null; uniforms: any; /** Colour-table textures by LutStrip.key: made once per table, bounded, gone with the device. */ luts: Map<string, any>; /** Curve-table textures by gradeCurvesKey (256×1, 1 KB each), bounded by MAX_GRADE_CURVE_TEXTURES, gone with the device. */ curves: Map<string, any> }
+/** Colour-table textures kept on the device at once (the largest is 4225 x 65, about 1.1 MB). */
+const MAX_LUT_TEXTURES = 8;
+let state: State | null = null;
+let status: GpuStatus = { available: false, reason: 'not checked yet', adapter: null };
+let starting: Promise<GpuStatus> | null = null;
+/** Effect ids that could not be applied since the last `takeUnavailable()`. */
+const skipped = new Set<string>();
+/** For the skipped effects whose cause is not the adapter (a colour table that could not be supplied): why, by effect id. */
+const skippedWhy = new Map<string, string>();
+
+export const gpuStatus = (): GpuStatus => status;
+/** The skipped effect ids and, where the cause is not the adapter, the reason; both are cleared. */
+export function takeUnavailable(): { effects: string[]; reasons: Record<string, string> } {
+  const out = { effects: [...skipped], reasons: Object.fromEntries(skippedWhy) };
+  skipped.clear(); skippedWhy.clear();
+  return out;
+}
+
+/** Ask for an adapter and prove it renders the reference pixels. Safe to call many times; resolves to the same status. */
+export function initGpu(): Promise<GpuStatus> {
+  starting ??= (async () => {
+    const fail = (reason: string, adapter: GpuStatus['adapter'] = null) => (status = { available: false, reason, adapter });
+    try {
+      const gpu = (globalThis.navigator as { gpu?: any } | undefined)?.gpu;
+      if (!gpu || typeof OffscreenCanvas === 'undefined') return fail('this browser has no WebGPU');
+      const adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
+      if (!adapter) return fail('the browser offers WebGPU but gave no graphics adapter');
+      const info = adapter.info ?? {};
+      const about = { vendor: info.vendor ?? null, architecture: info.architecture ?? null, software: !!(adapter.isFallbackAdapter ?? info.isFallbackAdapter) };
+      const device = await adapter.requestDevice();
+      // ---- reference check ----
+      const W = 1080, H = 1920;
+      device.pushErrorScope('validation');
+      const target = device.createTexture({ size: [W, H], format: 'rgba8unorm', usage: 0x10 | 0x01 });
+      const mod = device.createShaderModule({ code: REFERENCE.wgsl });
+      const pipe = device.createRenderPipeline({ layout: 'auto', vertex: { module: mod, entryPoint: 'v' }, fragment: { module: mod, entryPoint: 'f', targets: [{ format: 'rgba8unorm' }] } });
+      const enc = device.createCommandEncoder();
+      const pass = enc.beginRenderPass({ colorAttachments: [{ view: target.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }] });
+      pass.setPipeline(pipe); pass.draw(3); pass.end();
+      const stride = Math.ceil((W * 4) / 256) * 256;
+      const buf = device.createBuffer({ size: stride * H, usage: 0x01 | 0x08 });
+      enc.copyTextureToBuffer({ texture: target }, { buffer: buf, bytesPerRow: stride }, [W, H]);
+      device.queue.submit([enc.finish()]);
+      const invalid = await device.popErrorScope();
+      if (invalid) return fail(`the adapter rejected the reference pass: ${String(invalid.message).slice(0, 160)}`, about);
+      await buf.mapAsync(0x01);
+      const bytes = new Uint8Array(buf.getMappedRange());
+      const at = (x: number, y: number) => Array.from(bytes.slice(stride * y + x * 4, stride * y + x * 4 + 4));
+      const same = (a: number[], b: number[]) => a.every((v, i) => Math.abs(v - b[i]!) <= 1);
+      const first = at(0, 0), middle = at(W >> 1, H >> 1);
+      buf.unmap(); buf.destroy(); target.destroy();
+      if (!same(first, REFERENCE.first) || !same(middle, REFERENCE.middle)) return fail(`the adapter renders the reference shader differently (${JSON.stringify(middle)} instead of ${JSON.stringify(REFERENCE.middle)})`, about);
+      // ---- ready ----
+      state = { adapter, device, sampler: device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' }), pipelines: new Map(), brokenPipelines: new Map(), size: null, uniforms: device.createBuffer({ size: 48, usage: 0x40 /* UNIFORM */ | 0x08 /* COPY_DST */ }), luts: new Map(), curves: new Map() }; // 48 bytes: the transition Params {a, b, c} (ADR-0012); a 32-byte effect struct binds the same buffer
+      const made = state;
+      device.lost.then((l: { message?: string }) => { for (const t of [...made.luts.values(), ...made.curves.values()]) { try { t.destroy(); } catch { /* already gone with the device */ } } made.luts.clear(); made.curves.clear(); state = null; status = { available: false, reason: `the graphics device was lost: ${l?.message ?? 'no reason given'}`, adapter: about }; starting = null; });
+      return (status = { available: true, reason: `${about.software ? 'software' : 'hardware'} adapter${about.vendor ? ` (${about.vendor})` : ''}, reference pixels match`, adapter: about });
+    } catch (e) { return fail(`WebGPU could not be started: ${String((e as Error)?.message ?? e).slice(0, 200)}`); }
+  })();
+  return starting;
+}
+
+/**
+ * Run one GPU effect from `src` into `dst` (both the size of the frame; `dst` is replaced).
+ * Resolves to false, and records the effect as unavailable, when WebGPU is not ready or the pass fails: the caller then
+ * draws the layer unchanged. When the adapter rejects the pass (its shader does not compile there, say) the adapter's message
+ * is recorded as the reason. Callers must not let another frame use the same buffers while this is pending.
+ */
+export function gpuEffect(type: string, params: Record<string, unknown>, src: OffscreenCanvas, dst: C2D, env: EffectEnv, extra?: GpuEffectExtra): Promise<boolean> {
+  const fx = GPU_EFFECTS[type];
+  if (!fx) { skipped.add(type); return Promise.resolve(false); }
+  // A grade with curves (wave 8 grade): its own pipeline `fx:color.grade+curves`; a grade without curves runs the unchanged one below.
+  if (type === 'color.grade' && extra?.curves) return gradeWithCurves(params, extra.curves, src, dst, env);
+  if (fx.depth) return livingPass(type, fx, params, src, dst, env); // «תמונה חיה» (wave 8 living): the layer's depth at binding 3
+  if (!fx.lut) return runPass(type, `fx:${type}`, () => shaderOf(fx.wgsl), fx.params(params, env), src, null, dst, env);
+  const id = lutIdOf(type, params);
+  // No table chosen: the picture as it is. That is what the effect means with its default parameters, so it is not a missing effect.
+  if (!id) { dst.drawImage(src, 0, 0); return Promise.resolve(true); }
+  const strip = env.luts?.get(id) ?? null;
+  if (!strip) {
+    // A named table that was not supplied: unavailable, with the reason (when the adapter is missing too, that is the reason given).
+    if (state && !skippedWhy.has(type)) skippedWhy.set(type, env.lutReasons?.get(id) ?? `colour table ${id} was not supplied to this view`);
+    skipped.add(type);
+    return Promise.resolve(false);
+  }
+  return runPass(type, `fx:${type}`, () => shaderOf(fx.wgsl, 'lut'), fx.params(params, env), src, null, dst, env, { kind: 'lut', strip });
+}
+/**
+ * Run one GPU transition: `outgoing` (may be absent: then it is transparent) and `incoming` into `dst`, in the state `t`
+ * (its progress 0..1, and for the trend-pack kernels its light, colour and seed: transitionUniforms).
+ * Same contract as gpuEffect: false, and recorded as unavailable, when it cannot run.
+ */
+export function gpuTransition(t: TransitionState, outgoing: OffscreenCanvas | null, incoming: OffscreenCanvas, dst: C2D, env: EffectEnv): Promise<boolean> {
+  const g = GPU_TRANSITIONS[t.type];
+  if (!g) { skipped.add(t.type); return Promise.resolve(false); }
+  return runPass(t.type, `tr:${g.kernel}`, () => transitionShader(T2[g.kernel]!), transitionUniforms(t, env.width, env.height), outgoing, incoming, dst, env);
+}
+/** Why a grade with curves is not drawn in this build (the reason export and the inspector show; i18n HE_GRADE words it). Kept for older callers: the pass is built (wave 8 grade W1), so this build no longer gives it. */
+export const GRADE_CURVES_PASS_NOT_BUILT = 'color.grade: colour curves are not built in this build yet';
+/** The last line of the color.grade body, which the curve variant replaces (checked: the grade's text itself is never changed). */
+const GRADE_LAST_LINE = 'return vec4f(clamp(c, vec3f(0.0), vec3f(1.0)) * s.a, s.a);';
+/**
+ * The curve step (grade-plan §3.5; model: colourMatch.ts curvePixel): the clamped straight colour indexes the 256×1 table with
+ * textureLoad (never the sampler, grade-verify C6): the two neighbouring entries mixed in f32 by the fraction, then premultiplied.
+ */
+const GRADE_CURVE_STEP = `let o = clamp(c, vec3f(0.0), vec3f(1.0));
+      let q = o * 255.0; let i = min(floor(q), vec3f(254.0)); let f = q - i;
+      let r = mix(textureLoad(crv, vec2i(i32(i.r), 0), 0).r, textureLoad(crv, vec2i(i32(i.r) + 1, 0), 0).r, f.r);
+      let g = mix(textureLoad(crv, vec2i(i32(i.g), 0), 0).g, textureLoad(crv, vec2i(i32(i.g) + 1, 0), 0).g, f.g);
+      let b = mix(textureLoad(crv, vec2i(i32(i.b), 0), 0).b, textureLoad(crv, vec2i(i32(i.b) + 1, 0), 0).b, f.b);
+      return vec4f(vec3f(r, g, b) * s.a, s.a);`;
+/** The WGSL of the grade with curves: the grade's own body with its last line replaced by the curve step, crv at binding 3. */
+export function gradeCurvesShader(): string {
+  const body = GPU_EFFECTS['color.grade']!.wgsl;
+  if (body.split(GRADE_LAST_LINE).length !== 2) throw new Error('the color.grade body no longer ends with the line the curve step replaces');
+  return shaderOf(body.replace(GRADE_LAST_LINE, GRADE_CURVE_STEP), 'curve');
+}
+/** Table bytes by gradeCurvesKey, so a frame does not rebuild them (bounded like the textures; 1 KB each). */
+const curveBytes = new Map<string, Uint8Array>();
+/**
+ * The grade with its curves: pipeline `fx:color.grade+curves`, shader gradeCurvesShader(), binding 3 = the composed R, G, B tables
+ * (curveTexture, keyed by gradeCurvesKey). The same uniforms as the plain grade. A curves value the tables refuse (never in a valid
+ * document) is unavailable with its reason, never drawn without the curves as if they were not there.
+ */
+function gradeWithCurves(params: Record<string, unknown>, curves: GradeCurves, src: OffscreenCanvas, dst: C2D, env: EffectEnv): Promise<boolean> {
+  const key = gradeCurvesKey(curves);
+  // a curves value whose channels are all the identity: the plain grade is the same picture (and the same pipeline as before)
+  if (!key) return runPass('color.grade', 'fx:color.grade', () => shaderOf(GPU_EFFECTS['color.grade']!.wgsl), GPU_EFFECTS['color.grade']!.params(params, env), src, null, dst, env);
+  let rgba = curveBytes.get(key);
+  if (!rgba) {
+    try { rgba = gradeCurveTablesRgba(gradeCurveTables(curves)); } catch (e) {
+      skipped.add('color.grade');
+      if (!skippedWhy.has('color.grade')) skippedWhy.set('color.grade', `color.grade: the colour curves could not be turned into a table: ${String((e as Error)?.message ?? e).slice(0, 200)}`);
+      return Promise.resolve(false);
+    }
+    if (curveBytes.size >= MAX_GRADE_CURVE_TEXTURES) curveBytes.clear();
+    curveBytes.set(key, rgba);
+  }
+  return runPass('color.grade', 'fx:color.grade+curves', gradeCurvesShader, GPU_EFFECTS['color.grade']!.params(params, env), src, null, dst, env, { kind: 'curve', key, rgba });
+}
+/** The texture of a grade's curve table (256×1 rgba8, raw bytes: no premultiplication or colour conversion), made on first use; at most MAX_GRADE_CURVE_TEXTURES, then all are dropped (C3). */
+function curveTexture(s: State, key: string, rgba: Uint8Array): any {
+  let tex = s.curves.get(key);
+  if (tex) return tex;
+  if (rgba.length !== GRADE_CURVE_TABLE_SIZE * 4) throw new Error('the curve table has the wrong size');
+  if (s.curves.size >= MAX_GRADE_CURVE_TEXTURES) { for (const t of s.curves.values()) t.destroy(); s.curves.clear(); }
+  tex = s.device.createTexture({ size: [GRADE_CURVE_TABLE_SIZE, 1], format: 'rgba8unorm', usage: 0x02 /* COPY_DST */ | 0x04 /* TEXTURE_BINDING */ });
+  s.device.queue.writeTexture({ texture: tex }, rgba, { bytesPerRow: GRADE_CURVE_TABLE_SIZE * 4, rowsPerImage: 1 }, [GRADE_CURVE_TABLE_SIZE, 1]);
+  s.curves.set(key, tex);
+  return tex;
+}
+/** The texture of a colour table, made on first use. Raw bytes (writeTexture), so no premultiplication or colour conversion touches the table. */
+function lutTexture(s: State, strip: LutStrip): any {
+  let tex = s.luts.get(strip.key);
+  if (tex) return tex;
+  if (strip.width !== strip.size * strip.size || strip.height !== strip.size || strip.data.length !== strip.width * strip.height * 4) throw new Error('the colour table strip has the wrong dimensions');
+  if (s.luts.size >= MAX_LUT_TEXTURES) { for (const t of s.luts.values()) t.destroy(); s.luts.clear(); }
+  tex = s.device.createTexture({ size: [strip.width, strip.height], format: 'rgba8unorm', usage: 0x02 /* COPY_DST */ | 0x04 /* TEXTURE_BINDING */ });
+  s.device.queue.writeTexture({ texture: tex }, strip.data, { bytesPerRow: strip.width * 4, rowsPerImage: strip.height }, [strip.width, strip.height]);
+  s.luts.set(strip.key, tex);
+  return tex;
+}
+/**
+ * A raw-bytes data texture (wave 8 living: a depth strip, RGBA8 with nearness in R), made by the colour table's path (writeTexture:
+ * no premultiplication, no colour conversion), kept in the same map as the colour tables and sharing their bound of
+ * MAX_LUT_TEXTURES. Its key starts with `depth:` (core depthKey), so it can never be a colour table's content hash (C14 g); a
+ * texture of that key with other dimensions is made again.
+ */
+function dataTexture(s: State, strip: DepthStrip): any {
+  let tex = s.luts.get(strip.key);
+  if (tex && tex.width === strip.width && tex.height === strip.height) return tex;
+  if (!strip.key.startsWith('depth:')) throw new Error('a depth strip key must start with depth:');
+  if (!(strip.width >= 1 && strip.height >= 1) || strip.data.length !== strip.width * strip.height * 4) throw new Error('the depth strip has the wrong dimensions');
+  if (tex) { tex.destroy(); s.luts.delete(strip.key); }
+  if (s.luts.size >= MAX_LUT_TEXTURES) { for (const t of s.luts.values()) t.destroy(); s.luts.clear(); }
+  tex = s.device.createTexture({ size: [strip.width, strip.height], format: 'rgba8unorm', usage: 0x02 /* COPY_DST */ | 0x04 /* TEXTURE_BINDING */ });
+  s.device.queue.writeTexture({ texture: tex }, strip.data, { bytesPerRow: strip.width * 4, rowsPerImage: strip.height }, [strip.width, strip.height]);
+  s.luts.set(strip.key, tex);
+  return tex;
+}
+/**
+ * Validation errors of what `make` sends to the device. WebGPU does not throw for an invalid shader, pipeline, bind group or
+ * command buffer: the object is invalid, a submit of it does nothing, and the error is seen only through an error scope.
+ * The scope is popped even when `make` throws (the stack is shared by every pass), and nothing is awaited inside it.
+ */
+function validated<T>(device: any, make: () => T): { value: T; error: Promise<{ message: string } | null> } {
+  device.pushErrorScope('validation');
+  let value: T;
+  try { value = make(); } catch (e) { (device.popErrorScope() as Promise<unknown>).catch(() => {}); throw e; }
+  return { value, error: device.popErrorScope() };
+}
+/** Records `type` as unavailable because the adapter rejected its pass, with the adapter's message. */
+function rejected(type: string, why: string): false {
+  skipped.add(type);
+  if (!skippedWhy.has(type)) skippedWhy.set(type, why);
+  return false;
+}
+/** One pass: `first` (and for a transition `second`) in, `dst` replaced. `first` null means a transparent picture. `aux`: the colour table or curve table an effect reads at binding 3. */
+async function runPass(type: string, key: string, shader: () => string, numbers: number[], first: OffscreenCanvas | null, second: OffscreenCanvas | null, dst: C2D, env: EffectEnv, aux: PassAux | null = null): Promise<boolean> {
+  const s = state;
+  if (!s) { skipped.add(type); return false; }
+  const { device } = s;
+  const W = env.width, H = env.height;
+  try {
+    // The pipeline first, alone in its error scope: a shader this adapter does not compile is remembered and never drawn.
+    let pipe = s.pipelines.get(key);
+    if (!pipe) {
+      const broken = s.brokenPipelines.get(key);
+      if (broken) return rejected(type, broken);
+      const made = validated(device, () => {
+        const mod = device.createShaderModule({ code: shader() });
+        return device.createRenderPipeline({ layout: 'auto', vertex: { module: mod, entryPoint: 'v' }, fragment: { module: mod, entryPoint: 'f', targets: [{ format: 'rgba8unorm' }] } });
+      });
+      const invalid = await made.error;
+      if (invalid) {
+        const why = `its GPU pass did not compile on this adapter: ${String(invalid.message).slice(0, 300)}`;
+        s.brokenPipelines.set(key, why);
+        return rejected(type, why);
+      }
+      pipe = made.value;
+      s.pipelines.set(key, pipe);
+    }
+    // The rest of the pass in one error scope: if the adapter rejects any of it, the submit did nothing and the shared readback
+    // buffer still holds the last pass that did run, so its bytes must not be used.
+    const sent = validated(device, () => {
+      if (!s.size || s.size.width !== W || s.size.height !== H) {
+        s.size?.source.destroy(); s.size?.source2.destroy(); s.size?.target.destroy(); s.size?.readback.destroy();
+        const stride = Math.ceil((W * 4) / 256) * 256;
+        s.size = {
+          source: device.createTexture({ size: [W, H], format: 'rgba8unorm', usage: 0x02 /* COPY_DST */ | 0x04 /* TEXTURE_BINDING */ | 0x10 /* RENDER_ATTACHMENT */ }),
+          source2: device.createTexture({ size: [W, H], format: 'rgba8unorm', usage: 0x02 | 0x04 | 0x10 }),
+          target: device.createTexture({ size: [W, H], format: 'rgba8unorm', usage: 0x10 /* RENDER_ATTACHMENT */ | 0x01 /* COPY_SRC */ }),
+          readback: device.createBuffer({ size: stride * H, usage: 0x01 /* MAP_READ */ | 0x08 /* COPY_DST */ }), stride, width: W, height: H,
+        };
+      }
+      const z = s.size;
+      if (first) device.queue.copyExternalImageToTexture({ source: first }, { texture: z.source, premultipliedAlpha: true }, [W, H]);
+      else { const e0 = device.createCommandEncoder(); e0.beginRenderPass({ colorAttachments: [{ view: z.source.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 0] }] }).end(); device.queue.submit([e0.finish()]); }
+      if (second) device.queue.copyExternalImageToTexture({ source: second }, { texture: z.source2, premultipliedAlpha: true }, [W, H]);
+      const p = new Float32Array(12);
+      p.set(numbers.slice(0, 12));
+      device.queue.writeBuffer(s.uniforms, 0, p);
+      const bind = device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: z.source.createView() }, { binding: 1, resource: s.sampler }, { binding: 2, resource: { buffer: s.uniforms } }, ...(second ? [{ binding: 3, resource: z.source2.createView() }] : aux?.kind === 'lut' ? [{ binding: 3, resource: lutTexture(s, aux.strip).createView() }] : aux?.kind === 'curve' ? [{ binding: 3, resource: curveTexture(s, aux.key, aux.rgba).createView() }] : aux?.kind === 'depth' ? [{ binding: 3, resource: dataTexture(s, aux.strip).createView() }] : [])] });
+      const enc = device.createCommandEncoder();
+      const pass = enc.beginRenderPass({ colorAttachments: [{ view: z.target.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 0] }] });
+      pass.setPipeline(pipe); pass.setBindGroup(0, bind); pass.draw(3); pass.end();
+      enc.copyTextureToBuffer({ texture: z.target }, { buffer: z.readback, bytesPerRow: z.stride }, [W, H]);
+      device.queue.submit([enc.finish()]);
+      return z;
+    });
+    const z = sent.value;
+    // Both settled before either is used: the adapter's own message wins over the map failing because of the same error.
+    const [checked, mapped] = await Promise.allSettled([sent.error, z.readback.mapAsync(0x01)]);
+    const invalid = checked.status === 'fulfilled' ? checked.value : null;
+    if (invalid) {
+      if (mapped.status === 'fulfilled') z.readback.unmap();
+      return rejected(type, `the adapter rejected its GPU pass: ${String(invalid.message).slice(0, 300)}`);
+    }
+    if (checked.status === 'rejected') throw checked.reason;
+    if (mapped.status === 'rejected') throw mapped.reason;
+    const bytes = new Uint8Array(z.readback.getMappedRange());
+    const img = dst.createImageData(W, H);
+    if (z.stride === W * 4) img.data.set(bytes.subarray(0, W * H * 4));
+    else for (let y = 0; y < H; y++) img.data.set(bytes.subarray(y * z.stride, y * z.stride + W * 4), y * W * 4);
+    z.readback.unmap();
+    dst.putImageData(img, 0, 0);
+    return true;
+  } catch (e) {
+    // a lost device or a call that threw: say so once, never draw something else in its place
+    status = { ...status, available: !!state, reason: `a GPU pass failed: ${String((e as Error)?.message ?? e).slice(0, 160)}` };
+    skipped.add(type);
+    return false;
+  }
+}
+
+// ---- stylize.digicam and stylize.crt: exact JavaScript models of the shader arithmetic, for their proofs (ADR-0011) ----
+// There is no CPU twin of either pass (ADR-0008 decision 2): these model only what a proof can measure, step for step in the
+// shader's order, so a still can be checked against them.
+/** Noise tick of stylize.digicam at timeline seconds (15 per second). */
+export const digicamTick = (seconds: number) => Math.floor(seconds * 15 + 1e-6);
+const LUMA = [0.2126, 0.7152, 0.0722] as const;
+const lumaOf = (c: readonly number[]) => LUMA[0] * c[0]! + LUMA[1] * c[1]! + LUMA[2] * c[2]!;
+/** WGSL smoothstep. */
+const smoothstep = (lo: number, hi: number, x: number) => { const t = Math.min(1, Math.max(0, (x - lo) / (hi - lo))); return t * t * (3 - 2 * t); };
+/**
+ * stylize.digicam on a flat patch (no noise, no neighbours): straight RGB 0..1 in and out. On a flat opaque patch the unsharp
+ * mask changes nothing, the bloom adds the patch's own colour times bloom * smoothstep(0.8, 1, luma), the block colour is the
+ * patch's colour with the white balance (without the bloom), and the noise is left out (its mean over every 2 x 2 cell is 0).
+ */
+export function digicamTone(rgb: [number, number, number], p: Record<string, unknown>): [number, number, number] {
+  const amount = n(p.amount, 0.8), bloom = n(p.bloom, 0.35), cool = n(p.cool, 0.4);
+  const wb = [1 - 0.05 * cool, 1 + 0.01 * cool, 1 + 0.08 * cool];
+  const lift = smoothstep(0.8, 1, lumaOf(rgb)) * bloom;
+  let k = rgb.map((v, i) => (v + v * lift) * wb[i]!);
+  const b = rgb.map((v, i) => v * wb[i]!);
+  const lb = lumaOf(b), lk = lumaOf(k);
+  k = k.map((v, i) => v + 0.4 * ((b[i]! - lb) - (v - lk)));
+  const out = k.map((v, i) => rgb[i]! * (1 - amount) + Math.min(1, Math.max(0, v)) * amount); // WGSL mix(c0, clamp(k), amount)
+  return [out[0]!, out[1]!, out[2]!];
+}
+/**
+ * Source uv the stylize.crt pass samples for output uv, or null outside the curved glass: the point d (frame heights from the
+ * centre) shows the picture at d (1 + curvature |d|^2); the glass is the frame with corners rounded by 0.4 * curvature.
+ */
+export function crtMap(u: number, v: number, p: Record<string, unknown>, aspect: number): [number, number] | null {
+  const k = n(p.curvature, 0.12);
+  const dx = (u - 0.5) * aspect, dy = v - 0.5, f = 1 + k * (dx * dx + dy * dy);
+  const qx = dx * f, qy = dy * f, rr = 0.4 * k;
+  const ex = Math.abs(qx) - aspect / 2 + rr, ey = Math.abs(qy) - 0.5 + rr;
+  const sd = Math.hypot(Math.max(ex, 0), Math.max(ey, 0)) + Math.min(Math.max(ex, ey), 0) - rr;
+  if (sd > 0) return null;
+  return [0.5 + qx / aspect, 0.5 + qy];
+}
+
+// ---- trend-pack transitions (ADR-0012): JavaScript models of the geometry the proofs measure, in the shader's order ----
+// No CPU twin of the passes (ADR-0008 decision 2): these give only the positions a still can be checked against.
+/** film-burn: the (evenly spread) noise level below which a pixel already shows the incoming picture at progress p. */
+export const burnThreshold = (p: number) => 1.25 * p - 0.1;
+/**
+ * brush-left/right: how far along its stroke (0 at the edge the stroke starts from, 1 at the other) band 0..3 (top to bottom,
+ * quarters of the height) has painted the incoming picture at progress p, before the bristle edge (which holds the front
+ * back by at most 0.08) and the ±0.01 soft edge. brush-right paints from the left edge, brush-left from the right edge.
+ */
+export const brushFront = (p: number, band: number, seed: number) => 1.5 * p - unit32(hash32((band + seed) >>> 0)) * 0.25;
+/** page-turn: radius of the curl (a fraction of the frame width). */
+export const PAGE_RADIUS = 0.12;
+/**
+ * page-turn at progress p, in s = the distance (fraction of the width) from the edge the page is turned toward (page-turn-left:
+ * the left edge, s = u; page-turn-right: s = 1 − u): `fold` is the axis of the curl, `edge` the farthest the page still
+ * reaches (the incoming picture shows beyond it), and `mirror` the line about which the flat back of the page mirrors the
+ * outgoing picture (a point at s shows the outgoing picture's s' = 2·mirror − s).
+ */
+export function pageFold(p: number): { fold: number; edge: number; mirror: number } {
+  const r = PAGE_RADIUS, f = (1 + r) * (1 - p) + -r * p; // WGSL mix(1 + r, −r, p)
+  return { fold: f, edge: f + r * Math.sin(Math.min(Math.max(1 - f, 0) / r, Math.PI / 2)), mirror: f + (Math.PI * r) / 2 };
+}
+/** page-turn: what the pass shows at s (as in pageFold) and progress p: the page's back or front at its own s', or the incoming picture. */
+export function pageTurnSource(s: number, p: number): { face: 'front' | 'back' | 'incoming'; at: number } {
+  const r = PAGE_RADIUS, { fold: f, edge } = pageFold(p);
+  if (s > edge) return { face: 'incoming', at: s };
+  if (s > f) {
+    const a = Math.asin(Math.min(1, Math.max(0, (s - f) / r))), up = f + r * (Math.PI - a);
+    return up <= 1 ? { face: 'back', at: up } : { face: 'front', at: f + r * a };
+  }
+  const top = 2 * f + Math.PI * r - s;
+  return top <= 1 ? { face: 'back', at: top } : { face: 'front', at: s };
+}
+
+// ---- depth.living («תמונה חיה», wave 8 living): the pass's numbers, its geometry, its texture and its JavaScript model ----
+/**
+ * Set when the pass, its texture path and livingModel are built and the pass matched the model on the software adapter (W2: the
+ * WGSL compiled and the coordinate photo decoded to livingModel's sources, one run; see the W2 report). The editor's block needs it.
+ */
+export const LIVING_PASS_BUILT: boolean = true;
+export class LivingPassNotBuilt extends Error { readonly code = 'living_not_built'; constructor(readonly fn: string) { super(`${fn}: the living picture's pass is not built in this build yet`); } }
+/**
+ * Which way «גלישה הצידה» slides. A project stores no reading direction, and the editor reads right to left (Hebrew), so the end
+ * of reading is the LEFT: the view moves leftward, i.e. over the clip what is near moves to the right against what is far
+ * (d grows from −A to +A along +x; the output at q shows the picture from q − s·d). A later per-project direction flips this sign.
+ */
+export const LIVING_SLIDE_SIGN = 1;
+/** Why a living picture is not drawn (English; the editor's words are i18n living.unavailable.*). Never drawn flat (C6). */
+export const LIVING_UNAVAILABLE_WHY = {
+  no_depth: 'The living picture has no drawn depth, so it is not shown. Draw the depth',
+  rotated: 'The picture is rotated, so the living picture is not shown. Set the rotation back to 0',
+  no_provider: 'this view cannot load a drawn depth, so the living picture is not shown',
+} as const;
+/** A core DepthGrid (one byte per cell, 255 = near) as the strip the pass samples: RGBA8, nearness in R, the rest 0. `key` must start with `depth:` (core depthKey). */
+export function depthStrip(grid: DepthGrid, key: string): DepthStrip {
+  if (!key.startsWith('depth:')) throw new Error('a depth strip key must start with depth:');
+  if (grid.data.length !== grid.width * grid.height) throw new Error('the depth grid has the wrong size');
+  const data = new Uint8Array(grid.width * grid.height * 4);
+  for (let i = 0; i < grid.data.length; i++) data[i * 4] = grid.data[i]!;
+  return { key, width: grid.width, height: grid.height, data };
+}
+/**
+ * The visible rectangle of a placed picture in picture-local units q ∈ [0,1]² (verifier C2): the picture's rectangle cut to the
+ * frame, inset half a depth texel (and at least half an output pixel); null when nothing of the picture is in the frame, or when the
+ * picture is rotated (not supported: the compositor reports such a clip unavailable first, core livingUnavailable). The overscan S
+ * and the clamp of the sample point use it, so a photo larger than the frame (Ken Burns up to 1.18) never samples past the frame.
+ */
+export function livingVisibleRect(box: EffectBox, frame: { width: number; height: number }, grid: { width: number; height: number }): { x0: number; y0: number; x1: number; y1: number } | null {
+  if (box.rotation !== 0) return null;
+  const hw = box.w * box.scale, hh = box.h * box.scale;
+  if (!(hw > 0 && hh > 0) || !(grid.width >= 1 && grid.height >= 1)) return null;
+  const left = box.cx - hw / 2, top = box.cy - hh / 2;
+  const ix0 = Math.max(left, 0), ix1 = Math.min(left + hw, frame.width), iy0 = Math.max(top, 0), iy1 = Math.min(top + hh, frame.height);
+  const ex = Math.max(0.5 / grid.width, 0.5 / hw), ey = Math.max(0.5 / grid.height, 0.5 / hh);
+  const r = { x0: (ix0 - left) / hw + ex, x1: (ix1 - left) / hw - ex, y0: (iy0 - top) / hh + ey, y1: (iy1 - top) / hh - ey };
+  return r.x1 > r.x0 && r.y1 > r.y0 ? r : null;
+}
+/**
+ * The twelve numbers of the pass (GpuEffect.wide) for an instance's parameters (move, amount, travel at this frame) and the layer:
+ * a = (box centre in uv; 1/half-width, 1/half-height in uv), b = the visible rectangle (livingVisibleRect), c = (slide: the signed
+ * horizontal shift in picture-x units, push: the zoom; focus; K; overscan S). A = amount · LIVING_MAX_SHIFT of the frame height:
+ * slide d = A·(2u − 1) along x (LIVING_SLIDE_SIGN); push zoom = A·u / the picture's half-diagonal, so the corner moves by A·u.
+ * K = core livingSteps of the largest relative shift of the WHOLE move (u at its end) in depth-grid texels (C7): a ratio of picture
+ * sizes, so the same at every output size and constant over the clip; S likewise (the slide's largest excursion, max(f, 1−f)·A).
+ * Without a box or a grid (a caller that has none) the frame and core depthGridSize stand in, so the numbers are always defined.
+ */
+export function livingParams(p: Record<string, unknown>, env: Pick<EffectEnv, 'width' | 'height' | 'box' | 'depth'>): number[] {
+  const W = env.width, H = env.height;
+  const box: EffectBox = env.box ?? { cx: W / 2, cy: H / 2, w: W, h: H, rotation: 0, scale: 1 };
+  const grid = env.depth ?? depthGridSize({ width: box.w, height: box.h });
+  const move = livingMoveOf(p);
+  const amount = Math.min(1, Math.max(0, n(p.amount, 0.5))), u = Math.min(1, Math.max(0, n(p.travel, 0)));
+  const f = LIVING_FOCUS[move];
+  const hw = box.w * box.scale, hh = box.h * box.scale;
+  const A = amount * LIVING_MAX_SHIFT * H; // frame px
+  const vis = livingVisibleRect(box, { width: W, height: H }, grid) ?? { x0: 0, y0: 0, x1: 1, y1: 1 };
+  let c0: number, texels: number, S = 1;
+  if (move === 'slide') {
+    const full = A / hw; // picture-x units at |2u − 1| = 1
+    c0 = LIVING_SLIDE_SIGN * full * (2 * u - 1);
+    texels = full * grid.width;
+    const reach = Math.max(f, 1 - f) * full, wv = vis.x1 - vis.x0;
+    S = wv - 2 * reach > wv / 2 ? wv / (wv - 2 * reach) : 2;
+  } else {
+    const halfDiagonal = Math.hypot(hw, hh) / 2;
+    const zoomFull = A / halfDiagonal;
+    c0 = zoomFull * u;
+    texels = zoomFull * 0.5 * Math.hypot(grid.width, grid.height);
+    // push moves every point toward the picture's centre (p = c + (q − c)(1 − s·zoom), s ∈ [0, 1]): no overscan
+  }
+  return [box.cx / W, box.cy / H, W / (hw / 2), H / (hh / 2), vis.x0, vis.y0, vis.x1, vis.y1, c0, f, livingSteps(texels), S];
+}
+/** The last numbers the living pass sent (diagnostics for proof check 19 only; at most 64, cleared when read; nothing stored). */
+const livingSent: number[][] = [];
+export function takeLivingNumbers(): number[][] { return livingSent.splice(0); }
+(globalThis as { __pfLivingNumbers?: () => number[][] }).__pfLivingNumbers = takeLivingNumbers;
+function livingPass(type: string, fx: GpuEffect, params: Record<string, unknown>, src: OffscreenCanvas, dst: C2D, env: EffectEnv): Promise<boolean> {
+  const strip = env.depth ?? null, box = env.box;
+  const why = !box || box.rotation !== 0 ? LIVING_UNAVAILABLE_WHY.rotated : !strip ? env.depthReason ?? LIVING_UNAVAILABLE_WHY.no_depth : null;
+  if (why || !strip || !box) {
+    // as for a colour table that was not supplied: without an adapter the adapter is the reason given
+    if (state && !skippedWhy.has(type)) skippedWhy.set(type, why ?? LIVING_UNAVAILABLE_WHY.no_depth);
+    skipped.add(type);
+    return Promise.resolve(false);
+  }
+  // nothing of the picture is in the frame: there is nothing to move
+  if (!livingVisibleRect(box, env, strip)) { dst.drawImage(src, 0, 0); return Promise.resolve(true); }
+  const numbers = fx.params(params, env);
+  if (livingSent.length >= 64) livingSent.shift();
+  livingSent.push(numbers);
+  return runPass(type, `fx:${type}`, () => depthShaderOf(fx.wgsl), numbers, src, null, dst, env, { kind: 'depth', strip });
+}
+/** Nearness 0..1 at picture-local p: the pass's near() in f32 (bilinear over texel centres, edges clamped). */
+function nearAt(px: number, py: number, grid: { width: number; height: number; data: Uint8Array }): number {
+  const F = Math.fround, stride = grid.data.length === grid.width * grid.height * 4 ? 4 : 1;
+  const gx = F(F(px * grid.width) - 0.5), gy = F(F(py * grid.height) - 0.5);
+  const fx0 = Math.floor(gx), fy0 = Math.floor(gy);
+  const tx = F(gx - fx0), ty = F(gy - fy0);
+  const cl = (v: number, m: number) => Math.min(m, Math.max(0, v));
+  const x0 = cl(fx0, grid.width - 1), x1 = cl(fx0 + 1, grid.width - 1), y0 = cl(fy0, grid.height - 1), y1 = cl(fy0 + 1, grid.height - 1);
+  const at = (x: number, y: number) => F(grid.data[(y * grid.width + x) * stride]! / 255);
+  const n00 = at(x0, y0), n10 = at(x1, y0), n01 = at(x0, y1), n11 = at(x1, y1);
+  const top = F(n00 + F(F(n10 - n00) * tx)), bot = F(n01 + F(F(n11 - n01) * tx));
+  return F(top + F(F(bot - top) * ty));
+}
+/**
+ * The JavaScript model of the pass (ADR-0008 decision 4; precedents crtMap, digicamTone): for an output pixel at frame uv, the frame
+ * uv the pass samples the colour from, in the shader's arithmetic order with Math.fround, or null outside the picture (the pass
+ * returns the layer's own pixel there). Same inputs as the pass: the twelve numbers (livingParams) and the grid (core depthGrid,
+ * one byte per cell, or a DepthStrip's RGBA bytes). It matches the GPU within tolerance, not bit for bit (C14 e): at a depth edge
+ * the choice between the refined crossing and the far side can flip between adapters.
+ */
+export function livingModel(uv: readonly [number, number], numbers: readonly number[], grid: { width: number; height: number; data: Uint8Array }): [number, number] | null {
+  const F = Math.fround;
+  const [ax, ay, az, aw, bx0, by0, bx1, by1, cx, f, kf, S] = Array.from({ length: 12 }, (_, i) => F(numbers[i] ?? 0));
+  const hsx = F(1 / az!), hsy = F(1 / aw!);
+  const q0x = F(F(F(F(uv[0]) - ax!) / hsx) * 0.5 + 0.5), q0y = F(F(F(F(uv[1]) - ay!) / hsy) * 0.5 + 0.5);
+  if (q0x < 0 || q0x > 1 || q0y < 0 || q0y > 1) return null;
+  const cvx = F(F(bx0! + bx1!) * 0.5), cvy = F(F(by0! + by1!) * 0.5);
+  const qx = F(cvx + F(F(q0x - cvx) / S!)), qy = F(cvy + F(F(q0y - cvy) / S!));
+  let dx = cx!, dy = 0;
+  if (f! < 0.25) { dx = F(F(qx - 0.5) * cx!); dy = F(F(qy - 0.5) * cx!); }
+  const kn = Math.trunc(kf!);
+  const dk = F(1 / (kn - 1));
+  const m = (s: number) => F(nearAt(F(qx - F(dx * s)), F(qy - F(dy * s)), grid) - f!);
+  let sHi = F(-f! + F((kn - 1) * dk)), mHi = m(sHi), s = sHi;
+  for (let k = kn - 2; k >= 0; k--) {
+    const sLo = F(-f! + F(k * dk)), mLo = m(sLo), rLo = F(sLo - mLo);
+    if (rLo <= 0) {
+      const rHi = F(sHi - mHi);
+      if (Math.abs(F(mHi - mLo)) <= F(2 * dk)) {
+        let t = 0;
+        if (F(rHi - rLo) > 0) t = F(-rLo / F(rHi - rLo));
+        s = F(sLo + F(F(sHi - sLo) * t));
+      } else s = sHi;
+      break;
+    }
+    sHi = sLo; mHi = mLo;
+  }
+  const px = Math.min(bx1!, Math.max(bx0!, F(qx - F(dx * s)))), py = Math.min(by1!, Math.max(by0!, F(qy - F(dy * s))));
+  return [F(ax! + F(F(F(px - 0.5) * 2) * hsx)), F(ay! + F(F(F(py - 0.5) * 2) * hsy))];
+}
