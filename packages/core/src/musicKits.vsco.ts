@@ -80,3 +80,39 @@ export const VSCO_UPRIGHT_PIANO_FILES: readonly KitFile[] = [
   { path: 'Keys/Upright Piano/Player_dyn3_rr1_044.wav', bytes: 615094, sha256: '5625c4930fa958ff18e92106002e6b63ef73a1a37f99c57cf7b7900abaf8ccd3' },
   { path: 'UprightPiano.sfz', bytes: 7614, sha256: '9c88ebcf6ea66d5694c377e4119fd38c1875c3c211bb2e61c2e41f96a8e4364a' },
 ];
+
+/**
+ * The files of VSCO-2 CE's viola ensemble, sustained with vibrato (`ViolaEnsSusVib.sfz`), the strings instrument of `kit.calm.vsco@1`:
+ * read the same way on 2026-11-26, 27 files, 71,705,839 bytes, table digest sha256
+ * c960f1a78a00d818923903688b9548f8d7e222f15570c59f4dc3543b37030741 (same line format, recomputed by the test). Its regions name keys
+ * 48..86; the calm style's pad and double reach a little outside, which the parts' `edge: 2` covers (ADR-0029 decision 11).
+ */
+export const VSCO_VIOLA_ENS_SUSVIB_FILES: readonly KitFile[] = [
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_A3_v1_1.wav', bytes: 2491352, sha256: '7cea6482a8f67536e3108f01b688d54d198e5820ffcd0ac5a49652d38f6ec065' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_A3_v2_1.wav', bytes: 2861282, sha256: '35984c7bfffe781d8e33bee045f66427a827794ff5c53c3d3bb82baeee3272dd' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_B2_v1_1.wav', bytes: 2861510, sha256: 'ad96d747c5125adec8f069c49091ee3ba937efd4a5b909d3c4938f17e3c8513d' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_B2_v2_1.wav', bytes: 3268364, sha256: 'edc77038a83f47cf49296c0009fdac23cb5ade3133a2beabd0d2d1f591ccf3cb' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_B4_v1_1.wav', bytes: 2203118, sha256: 'abb1fe57a4a3175e1e243ceba0c0c0052ec5af5c3061e4f446266b9c832d6d02' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_B4_v2_1.wav', bytes: 2893766, sha256: 'cac7c5f73d9f7974156ef52c7b5202428271d8fcf9ceb11936e694c199be2f31' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_C2_v1_1.wav', bytes: 2642360, sha256: '8b4e0e0985d245ac9ddc39cdd06cec5bd74fa80056c074736d6eb38fdccfe636' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_C2_v2_1.wav', bytes: 3318188, sha256: '09db4ed2c8eda02d1f6a27258a2292b56e65e94ecc0337265bbbac5d9978dc92' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_C4_v1_1.wav', bytes: 2289656, sha256: '144ec7666be1b3b4da50937db4b1fc3675ca34bc2e871264707d83b8a0d526e6' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_C4_v2_1.wav', bytes: 2954936, sha256: '81e1ef9109a1434974092c0165ffee44918b2553fd4afeeee42b91b8007ad263' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_D2_v1_1.wav', bytes: 2359898, sha256: '49b09bcaec177f67382644913da5ca5582fe1d1d74a9f097edb6e0b5db43d35f' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_D2_v2_1.wav', bytes: 3049772, sha256: 'd3bf192cc03925a4da5ee626763287f85aad1dc498578abf612a97eb548736eb' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_D3_v1_1.wav', bytes: 2789648, sha256: '61ab4cfc0ea90c683433a7c50b3bb4fa86a81c9d4854589562707d54ed028349' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_D3_v2_1.wav', bytes: 3596756, sha256: 'f941028c5d5e854b4391669056f0f639799f80ac7c8da3939c7788b1a394d16c' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_D5_v1_1.wav', bytes: 2087798, sha256: '801bcea9c53c2521900cbbbe70ff2fe4f66a1c182f26744f608144905ec5f880' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_D5_v2_1.wav', bytes: 2638244, sha256: 'd3c5d05da8f90533aa7587649f18f4e68147aa7abc7a5559d8741089bea32239' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_E2_v1_1.wav', bytes: 2520044, sha256: '5c4c636583ce43b694583e8cbf7a14d1f3efcb0e871fe7dedff8a6b354c432bf' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_E2_v2_1.wav', bytes: 3027656, sha256: 'bb31bed6936b5c855fceb94d829e2d3a0492f9af4ad7a2cee57e783719710ceb' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_E4_v1_1.wav', bytes: 2044358, sha256: 'b70d7b94014a9fc40f0e8cc12542fa85e0304386fe411ef4305b55b7f194afcb' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_E4_v2_1.wav', bytes: 2559086, sha256: '29899afd4513761c3f1e3a4cc56f5c11cdb4de2b204f9f1467946327362e4bd7' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_F3_v1_1.wav', bytes: 2487818, sha256: '7a37f00ecb58fcaa5c32427a5ffb30950787b40c247409a8e18cfe0880955fd8' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_F3_v2_1.wav', bytes: 3471944, sha256: 'd281171e60b852451deecce57a6f5e9b623eea9632916336324c52c4ada6c750' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_G2_v1_1.wav', bytes: 2001644, sha256: '557c2e033951015c30765bf18266bce0dd0412e3ca646dd1a225c32422c60662' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_G2_v2_1.wav', bytes: 3637364, sha256: 'e3552ebd2d1ac5d089cd2424d31ea88be8d887643311cb23abf5b416838ce2ba' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_G4_v1_1.wav', bytes: 2542586, sha256: '624a70ef842744cb7847a07fba3115ace5689746a107da91f237bf2534d42b03' },
+  { path: 'Strings/Viola Section/susvib/ViolaEns_susvib_G4_v2_1.wav', bytes: 3103628, sha256: 'b09b8338945b814b9ce6dd8980a49323d10e55f89f1c4dcf6d58b04cd672d99c' },
+  { path: 'ViolaEnsSusVib.sfz', bytes: 3063, sha256: 'd62dc6b6bfa83d4ebe49a44f6f1337d0621a32d7f10c699e26fc98720a640871' },
+];

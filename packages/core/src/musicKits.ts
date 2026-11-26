@@ -19,7 +19,7 @@ import { z } from 'zod';
 import type { LedgerEntry } from './libraryContract.ts';
 import type { LicenceDuties } from './libraryDuties.ts';
 import type { LibraryRecord } from './schema.ts';
-import { VSCO_UPRIGHT_PIANO_FILES } from './musicKits.vsco.ts';
+import { VSCO_UPRIGHT_PIANO_FILES, VSCO_VIOLA_ENS_SUSVIB_FILES } from './musicKits.vsco.ts';
 
 /** Version of the sampler (recorded in provenance.instruments.sampler); a change that gives other bytes for the same kit raises it. */
 export const MUSIC_SAMPLER_VERSION = 1;
@@ -86,14 +86,15 @@ export type MusicKit = z.infer<typeof MusicKitSchema>;
 const VSCO = { ledgerItem: 'vsco-2-ce/repo', ledgerPin: '28092772094b2d9f1148d84cea97f4545b8c687d' } as const;
 /**
  * The kits of this build. ONE in v1 (decisions §1): calm, from VSCO-2 CE only. The .sfz names and file lists are filled by the lead
- * after laptop check L1; until then the kit is not calibrated and every recorded request for it is refused with that reason.
+ * after laptop check L1 (done 2026-11-26 for both instruments: musicKits.vsco.ts). A kit with an instrument that has no entry or no
+ * files is not calibrated and every recorded request for it is refused with that reason.
  */
 export const MUSIC_KITS: readonly MusicKit[] = [
   {
     id: 'kit.calm.vsco', version: 1, styleId: 'music.calm', review: 'unheard',
     instruments: [
-      { id: 'strings', title: { he: 'מיתרים (VSCO-2 CE)', en: 'Strings (VSCO-2 CE)' }, ...VSCO, entry: null, files: [] },
-      // the upright piano's 70 files, read on the owner's computer 2026-11-26 (musicKits.vsco.ts); strings not read yet: not calibrated
+      { id: 'strings', title: { he: 'מיתרים (VSCO-2 CE)', en: 'Strings (VSCO-2 CE)' }, ...VSCO, entry: 'ViolaEnsSusVib.sfz', files: [...VSCO_VIOLA_ENS_SUSVIB_FILES] },
+      // both file tables were read on the owner's computer 2026-11-26 (musicKits.vsco.ts); nobody has heard the kit
       { id: 'piano', title: { he: 'פסנתר (VSCO-2 CE)', en: 'Piano (VSCO-2 CE)' }, ...VSCO, entry: 'UprightPiano.sfz', files: [...VSCO_UPRIGHT_PIANO_FILES] },
     ],
     parts: {

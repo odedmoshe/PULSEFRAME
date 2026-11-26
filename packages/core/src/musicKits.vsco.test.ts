@@ -5,7 +5,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { KitFileSchema, kitCalibrated, MUSIC_KITS } from './musicKits.ts';
-import { VSCO_UPRIGHT_PIANO_FILES } from './musicKits.vsco.ts';
+import { VSCO_UPRIGHT_PIANO_FILES, VSCO_VIOLA_ENS_SUSVIB_FILES } from './musicKits.vsco.ts';
 
 describe('VSCO_UPRIGHT_PIANO_FILES', () => {
   it('70 files, 253,644,252 bytes, table digest f002db28… (sha256 of the lines "sha256  bytes  path" joined by \\n, in order)', () => {
@@ -16,14 +16,24 @@ describe('VSCO_UPRIGHT_PIANO_FILES', () => {
     for (const f of VSCO_UPRIGHT_PIANO_FILES) expect(KitFileSchema.safeParse(f).success, f.path).toBe(true);
     expect(new Set(VSCO_UPRIGHT_PIANO_FILES.map((f) => f.path)).size).toBe(70);
   });
-  it('is the piano of kit.calm.vsco with entry UprightPiano.sfz (a listed file); the kit stays not calibrated (strings not read)', () => {
+  it('the viola ensemble: 27 files, 71,705,839 bytes, table digest c960f1a7…', () => {
+    expect(VSCO_VIOLA_ENS_SUSVIB_FILES.length).toBe(27);
+    expect(VSCO_VIOLA_ENS_SUSVIB_FILES.reduce((s, f) => s + f.bytes, 0)).toBe(71_705_839);
+    const text = VSCO_VIOLA_ENS_SUSVIB_FILES.map((f) => `${f.sha256}  ${f.bytes}  ${f.path}`).join('\n');
+    expect(createHash('sha256').update(text).digest('hex')).toBe('c960f1a78a00d818923903688b9548f8d7e222f15570c59f4dc3543b37030741');
+    for (const f of VSCO_VIOLA_ENS_SUSVIB_FILES) expect(KitFileSchema.safeParse(f).success, f.path).toBe(true);
+    expect(new Set(VSCO_VIOLA_ENS_SUSVIB_FILES.map((f) => f.path)).size).toBe(27);
+  });
+  it('kit.calm.vsco: piano = UprightPiano.sfz, strings = ViolaEnsSusVib.sfz, each entry a listed file; the kit is calibrated and still unheard', () => {
     const kit = MUSIC_KITS.find((k) => k.id === 'kit.calm.vsco')!;
     const piano = kit.instruments.find((i) => i.id === 'piano')!;
     expect(piano.entry).toBe('UprightPiano.sfz');
     expect(piano.files).toEqual([...VSCO_UPRIGHT_PIANO_FILES]);
-    expect(piano.files.some((f) => f.path === piano.entry)).toBe(true);
     const strings = kit.instruments.find((i) => i.id === 'strings')!;
-    expect([strings.entry, strings.files.length]).toEqual([null, 0]);
-    expect(kitCalibrated(kit)).toBe(false);
+    expect(strings.entry).toBe('ViolaEnsSusVib.sfz');
+    expect(strings.files).toEqual([...VSCO_VIOLA_ENS_SUSVIB_FILES]);
+    for (const i of [piano, strings]) expect(i.files.some((f) => f.path === i.entry)).toBe(true);
+    expect(kitCalibrated(kit)).toBe(true);
+    expect(kit.review).toBe('unheard');
   });
 });

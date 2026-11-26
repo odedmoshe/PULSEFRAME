@@ -44,10 +44,13 @@ describe('the kit table (decisions §4.1)', () => {
     expect(Object.keys(MUSIC_KITS[0]!.parts).sort()).toEqual(['arp', 'double', 'lead', 'pad']);
     for (const p of Object.values(MUSIC_KITS[0]!.parts)) expect(p!.gainDb).toBe(-18);
   });
-  it('until laptop check L1 names the files, the kit is not calibrated (never offered)', () => {
-    // the piano's files are listed (2026-11-26); the strings' are not read yet, so the kit stays not calibrated
-    expect(MUSIC_KITS[0]!.instruments.map((i) => [i.id, i.entry, i.files.length])).toEqual([['strings', null, 0], ['piano', 'UprightPiano.sfz', 70]]);
-    expect(kitCalibrated(MUSIC_KITS[0]!)).toBe(false);
+  it('a kit is calibrated only when every used instrument names its entry and lists its files (never offered otherwise)', () => {
+    // both instruments of the real kit were read on the owner's computer on 2026-11-26
+    expect(MUSIC_KITS[0]!.instruments.map((i) => [i.id, i.entry, i.files.length])).toEqual([['strings', 'ViolaEnsSusVib.sfz', 27], ['piano', 'UprightPiano.sfz', 70]]);
+    expect(kitCalibrated(MUSIC_KITS[0]!)).toBe(true);
+    const unread: MusicKit = structuredClone(MUSIC_KITS[0]!) as MusicKit;
+    unread.instruments[0]!.entry = null; unread.instruments[0]!.files = [];
+    expect(kitCalibrated(unread)).toBe(false);
     const k: MusicKit = structuredClone(MUSIC_KITS[0]!) as MusicKit;
     for (const i of k.instruments) { i.entry = `${i.id}.sfz`; i.files = [{ path: `${i.id}.sfz`, bytes: 10, sha256: 'b'.repeat(64) }, { path: `${i.id}/c4.wav`, bytes: 100, sha256: 'c'.repeat(64) }]; }
     expect(kitCalibrated(k)).toBe(true);
