@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as T from '@pulseframe/time';
 import { api, ApiFailure, type SoundEffectInfo } from '../api.ts';
+import { NumUnit } from '../ds/index.ts';
 import { useEditorState } from './store.ts';
 import { SFX_CATEGORIES, SFX_STRINGS } from './sfx.strings.ts';
 import './sfxBrowser.css';
@@ -98,7 +99,7 @@ export function SfxBrowser() {
           return (
             <li key={fx.id} className="sfx-row" role="listitem" data-testid="sfx-row" data-id={fx.id}>
               <span className="sfx-name" dir="auto" title={name}>{name}</span>
-              <bdi className="sfx-len" dir="ltr">{fx.seconds.toFixed(1)} {s.seconds}</bdi>
+              <span className="sfx-len"><NumUnit value={fx.seconds.toFixed(1)} unit={s.seconds} /></span>
               <button type="button" aria-pressed={playing === fx.id} aria-label={`${s.play}: ${name}`} onClick={() => void play(fx)} data-testid="sfx-play">{playing === fx.id ? '■' : '▶'}</button>
               <button type="button" aria-label={`${s.add}: ${name}`} disabled={adding !== null} aria-busy={adding === fx.id} onClick={() => void add(fx)} data-testid="sfx-add">＋</button>
             </li>

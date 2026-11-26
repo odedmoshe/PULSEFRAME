@@ -15,5 +15,5 @@ export { AnchoredError, type AnchoredErrorProps } from './AnchoredError.tsx';
 export { Dialog, Sheet, type DialogProps } from './Dialog.tsx';
 export { Menu, type MenuProps, type MenuItem } from './Menu.tsx';
 export { ProgressBar, Ring, JobRow, type ProgressBarProps, type RingProps, type JobRowProps, type JobState } from './Progress.tsx';
-export { useDir, cx } from './util.tsx';
+export { useDir, cx, NumUnit } from './util.tsx';
 export * from './logic.ts';

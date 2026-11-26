@@ -12,7 +12,7 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { useEditorState } from './store.ts';
-import { Kbd } from '../ds/index.ts';
+import { Kbd, NumUnit } from '../ds/index.ts';
 import { IconCutPlus } from './icons.tsx';
 import { STAGE_STRINGS } from './stage.strings.ts';
 import { cutBefore, secondsText } from './inspector.model.ts';
@@ -50,7 +50,7 @@ export function CutLoupe() {
   const url = (index: number) => `/api/v1/projects/${encodeURIComponent(doc.id)}/frame?index=${index}${variant}&rev=${state.revision}`;
   const name = (assetId: string) => (doc.assets[assetId]?.name ?? '').replace(/\.[a-z0-9]{2,5}$/i, '');
   const tc = (frame: number) => T.toTimecode(T.frameTime(frame, rate), rate);
-  const spare = (frames: number | null) => (frames === null ? S.still : `${secondsText(frames / fps)} ${state.lang === 'he' ? 'ש׳' : 's'}`);
+  const spare = (frames: number | null) => (frames === null ? S.still : <NumUnit value={secondsText(frames / fps)} unit={state.lang === 'he' ? 'ש׳' : 's'} />);
   const pct = (frames: number | null) => (frames === null ? 100 : Math.max(2, Math.min(100, (frames / fps / 2) * 100)));
   const after = cut.next.transition ? Math.min(cut.next.transition.frames, Math.max(0, T.frameIndexAt(cut.next.duration, rate) - 1)) : 0;
   const side = (which: 'out' | 'in') => {
@@ -66,7 +66,7 @@ export function CutLoupe() {
         <figcaption title={title}><span className="loupe-what" dir={state.lang === 'he' ? 'rtl' : 'ltr'}>{what}</span><bdi className="loupe-name" dir="ltr">{name(clip.assetId)}</bdi><span className="tc">{tc(frame)}</span></figcaption>
         <Still src={url(frame)} alt={title} />
         <div className={`loupe-handle${handle !== null && handle / fps < 0.5 ? ' is-short' : ''}`}>
-          <span dir="auto">{which === 'out' ? S.spareEnd : S.spareStart}</span><span className="num">{spare(handle)}</span>
+          <span dir="auto">{which === 'out' ? S.spareEnd : S.spareStart}</span><span>{spare(handle)}</span>
           <span className="loupe-meter" aria-hidden="true"><i style={{ width: `${pct(handle)}%` }} /></span>
         </div>
       </figure>
