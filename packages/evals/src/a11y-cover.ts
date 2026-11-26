@@ -1,13 +1,12 @@
 /**
  * The accessibility audit scenarios of «הפריים הכי חד» and «שמירת התמונה» (wave 8 cover, W3): the block idle, measuring (with «עצירה»),
- * found (tiles with their numbers), refused (the server's own 422 for a stretch over 600 frames, answered through the page), the picture
+ * found (tiles with their numbers), refused (a real 630-frame clip, refused with core's own stills_range_too_long words), the picture
  * file, and the save dialog (paper chosen, the crop frame and the ppi lines). Each scenario PREPARES the page and says whether the state
  * is shown (and whether it is modal); a11y-audit.ts then runs its full heuristic on it.
  *
  * SYNTHETIC clip made here (ffmpeg testsrc2, 640x360, 30 fps, 150 frames) in its own project. The states come from the real editor and
  * the real routes: this needs W1's and W2's bodies; before they are merged the scenario reports shown:false with the server's own
- * answer in `detail`, never a pass. The refused state answers POST …/stills with the server's own 422 wording, written out here and
- * said so in the detail (the audit looks at how the block says a refusal, not at the server).
+ * answer in `detail`, never a pass. The refused state is real: a second clip of 630 frames of a tiny file.
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -22,7 +21,7 @@ export interface CoverA11yScenario {
   leave?(ctx: CoverA11yCtx): Promise<void>;
 }
 const rt = (n: number) => ({ value: String(n), timescale: 30 });
-let made: { origin: string; pid: string; clipId: string; assetId: string } | null = null;
+let made: { origin: string; pid: string; clipId: string; assetId: string; longClipId: string } | null = null;
 
 async function api(page: Page, method: 'GET' | 'POST', p: string, body?: unknown, raw?: Buffer): Promise<any> {
   const origin = new URL(page.url()).origin;
@@ -40,16 +39,24 @@ async function ensureClip(page: Page) {
   const up = await api(page, 'POST', `/projects/${pid}/assets`, undefined, fs.readFileSync(file));
   const assetId = up.body.assetId as string;
   const tx = await api(page, 'POST', `/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId, start: rt(0), sourceIn: rt(0), duration: rt(90), withLinkedAudio: false } }] });
-  made = { origin, pid, clipId: tx.body.results[0].output.clipId as string, assetId };
+  // a second, long clip (630 frames of a tiny file) for the refused state: the block refuses it with core's own
+  // stills_range_too_long wording (rangeOfClip, over 600 frames), whatever the other clip has stored
+  const longFile = path.join(os.tmpdir(), `pf-a11y-cover-long-${process.pid}.mp4`);
+  process.once('exit', () => { try { fs.rmSync(longFile, { force: true }); } catch { /* best effort */ } });
+  if (!fs.existsSync(longFile)) execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=30:duration=21', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '30', '-pix_fmt', 'yuv420p', '-an', longFile]);
+  const upLong = await api(page, 'POST', `/projects/${pid}/assets`, undefined, fs.readFileSync(longFile));
+  const txLong = await api(page, 'POST', `/projects/${pid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: upLong.body.assetId, start: rt(90), sourceIn: rt(0), duration: rt(630), withLinkedAudio: false } }] });
+  made = { origin, pid, clipId: tx.body.results[0].output.clipId as string, assetId, longClipId: txLong.body.results[0].output.clipId as string };
   return made;
 }
-async function openBlock(ctx: CoverA11yCtx) {
+async function openBlock(ctx: CoverA11yCtx, which: 'clipId' | 'longClipId' = 'clipId') {
   const { page, lang } = ctx;
   const m = await ensureClip(page);
+  const clipId = m[which];
   await page.goto(`${m.origin}/?project=${m.pid}`);
   await page.getByTestId('timecode').waitFor();
   if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
-  await page.locator(`.clip[data-clip-id="${m.clipId}"]`).click({ position: { x: 4, y: 4 } });
+  await page.locator(`.clip[data-clip-id="${clipId}"]`).click({ position: { x: 4, y: 4 } });
   await page.getByTestId('insp-tab-motion').click({ timeout: 8000 }).catch(() => {});
   const sec = page.getByTestId('section-sharpest');
   await sec.waitFor({ timeout: 8000 });
@@ -90,17 +97,10 @@ export const coverA11yScenarios: CoverA11yScenario[] = [
   {
     id: 'cover-refused',
     async prepare(ctx) {
-      await openBlock(ctx);
-      if ((await state(ctx.page)) === 'found') return { shown: false, modal: false, detail: { note: 'a stored answer is shown on open; the refusal state needs an unmeasured stretch' } };
-      await ctx.page.route('**/projects/*/stills', (route) => (route.request().method() === 'POST'
-        ? route.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify({ error: { code: 'stills_range_too_long', message: 'too long to measure frame by frame: the stretch has 1200 frames, at most 600', hint: 'Trim the clip, or choose a shorter stretch, of at most 600 frames.' } }) })
-        : route.continue()));
-      await ctx.page.getByTestId('sharp-measure').click();
-      await waitState(ctx.page, ['refused'], 8000);
+      await openBlock(ctx, 'longClipId');
       const st = await state(ctx.page), text = await why(ctx.page);
-      return { shown: st === 'refused' && text.length > 0 && (await ctx.page.getByTestId('sharp-status').getAttribute('role')) === 'alert', modal: false, detail: { blockState: st, answer: 'the server\'s own 422 wording, written out by the audit', text } };
+      return { shown: st === 'refused' && text.length > 0 && (await ctx.page.getByTestId('sharp-status').getAttribute('role')) === 'alert', modal: false, detail: { blockState: st, answer: 'core rangeOfClip refuses a 630-frame clip (stills_range_too_long)', text } };
     },
-    async leave(ctx) { await ctx.page.unroute('**/projects/*/stills').catch(() => {}); },
   },
   {
     id: 'cover-dialog',
