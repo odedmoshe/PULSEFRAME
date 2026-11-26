@@ -16,4 +16,5 @@
 .depth-tools legend { padding: 0; margin-block-end: var(--pf-sp-2); font-weight: var(--pf-fw-medium); }
 .depth-tools button[aria-pressed='true'] { box-shadow: inset 0 0 0 1.5px var(--pf-frame); }
 .depth-size { display: grid; gap: var(--pf-sp-2); }
-.depth-dlg button.primary { background-color: var(--pf-frame); background-image: linear-gradient(180deg, var(--pf-frame-strong), var(--pf-frame) 60%); color: var(--pf-frame-ink); }
+/* the dialog's own footer (Save) as well: the theme's bright accent gradient under dark text read 2.81:1 against its colour in the light theme (audit:a11y) */
+.depth-dlg button.primary, .pf-dialog:has(.depth-dlg) .pf-dialog-foot button.primary { background-color: var(--pf-frame); background-image: linear-gradient(180deg, var(--pf-frame-strong), var(--pf-frame) 60%); color: var(--pf-frame-ink); }
