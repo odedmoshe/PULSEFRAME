@@ -61,6 +61,9 @@
 /* ---------- the viewer's tools: at the end of the transport bar (StageHeader.tsx StageTools); no row above the picture ---------- */
 .stage-head { display: flex; align-items: center; justify-content: flex-end; gap: var(--pf-sp-3); min-inline-size: 0; }
 .stage-head .stage-view { flex: none; }
+.stage-quality select { block-size: var(--pf-h-sm); padding: 0 var(--pf-sp-3); border: 0; border-radius: var(--pf-r-pill); background: var(--pf-surface-3); color: var(--pf-text-2); font: var(--pf-fs-xs) var(--pf-font); cursor: pointer; }
+.stage-quality select:hover { color: var(--pf-text); }
+.stage-quality select:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
 .transport .tp-facts { flex: none; color: var(--pf-text-3); font-size: var(--pf-fs-digits); white-space: nowrap; }
 .stage-btn { flex: none; display: grid; place-items: center; inline-size: var(--pf-h-sm); block-size: var(--pf-h-sm); padding: 0; border: 0; border-radius: var(--pf-r-sm); background: transparent; box-shadow: none; color: var(--pf-text-2); cursor: pointer; }
 .stage-btn:hover { background: var(--pf-surface-3); color: var(--pf-text); border: 0; }
@@ -84,7 +87,7 @@
 .prism-add:hover, .prism-add[aria-expanded='true'] { background: var(--pf-surface-3); color: var(--pf-text); border: 0; }
 /* a narrow transport keeps the prism and full screen; the frame size goes first (container: the transport) */
 @container (max-width: 760px) { .transport .tp-facts { display: none; } }
-@container (max-width: 520px) { .stage-head .stage-view, .stage-toggle { display: none; } }
+@container (max-width: 520px) { .stage-head .stage-view, .stage-toggle, .stage-quality { display: none; } }
 @container (max-width: 380px) { .stage-head .stage-btn { display: none; } }
 
 /* ---------- over the viewer ---------- */

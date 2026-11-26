@@ -13,6 +13,7 @@ import { FormatPrism } from './FormatPrism.tsx';
 import { SequenceSwitcher } from './SequenceSwitcher.tsx';
 import { Seg } from '../ds/index.ts';
 import { STAGE_STRINGS } from './stage.strings.ts';
+import { CHROME_STRINGS } from './chrome.strings.ts';
 import './stage.css';
 import { focusNow } from '../ds/focus.ts';
 import { INK_UI_BUILT, InkModeButton } from './ink/InkMode.tsx';
@@ -22,6 +23,7 @@ export function StageHeader() { return null; }
 export function StageTools() {
   const { editor, state } = useEditorState();
   const S = STAGE_STRINGS[state.lang];
+  const C = CHROME_STRINGS[state.lang];
   const [source, setSource] = useState<string | null>(null);
   const [full, setFull] = useState(false);
   useEffect(() => {
@@ -54,6 +56,14 @@ export function StageTools() {
           <ScanLine size={16} strokeWidth={1.75} aria-hidden="true" /><span className="stage-toggle-label pf-sr">{S.safeArea}</span>
         </label>
       )}
+      {/* the picture while playing: the same browser setting as Settings «התמונה בזמן ניגון» (store setPlaySharpness), one click nearer */}
+      <label className="stage-quality" title={`${C.playSharpness}. ${C.playSharpnessWhy}`}>
+        <span className="pf-sr">{C.playSharpness}</span>
+        <select value={state.playSharpness} data-testid="stage-play-sharpness" onChange={(e) => editor.setPlaySharpness(e.target.value === 'sharper' ? 'sharper' : 'smooth')}>
+          <option value="smooth">{C.playSmooth}</option>
+          <option value="sharper">{C.playSharper}</option>
+        </select>
+      </label>
       <button type="button" className="stage-btn" aria-label={full ? S.exitFullscreen : S.fullscreen} title={full ? S.exitFullscreen : S.fullscreen} aria-pressed={full} data-testid="stage-fullscreen" onClick={toggleFull}>
         {full ? <Minimize size={16} strokeWidth={1.75} aria-hidden="true" /> : <Maximize size={16} strokeWidth={1.75} aria-hidden="true" />}
       </button>

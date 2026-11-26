@@ -1,18 +1,19 @@
 /**
  * The top bar (docs/design/UX_REDESIGN.md §4.2): one row with fixed slots that never wraps.
  * From the start edge: logo, the project name (opens the projects dialog) over the save line, the mode bar, the command bar
- * (opens the palette), presence (the owner and the agent, whose menu holds "pause"), undo and redo, language, the export
+ * (opens the palette), presence (the owner and the agent, whose menu holds "pause"), language, the export
  * state and the primary Export button. Export always opens the export sheet (ExportSheet.tsx, owner decision); its progress
  * is a ring chip here, a button that reopens the sheet, never a text run in the bar. Cancel, retry, the finished file and the
  * flash check live in the sheet; the flash check also stays in the status bar (StatusBar.tsx). The format switch and the
- * safe-area guide live in the stage header (StageHeader.tsx, FormatPrism.tsx). Styles: ds/chrome.css (everything under .pf-ds).
+ * safe-area guide live at the end of the transport (StageHeader.tsx StageTools); undo and redo, with their words, at the start of
+ * the timeline's toolbar (TimelineToolbar.tsx; same test ids, same keys). Styles: ds/chrome.css (everything under .pf-ds).
  */
 import { useEffect, useRef, useState } from 'react';
 import { Bot, Check, ChevronDown, CircleAlert, CloudOff, Pencil, Search, TriangleAlert, User } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { LOGO_SVG } from '@pulseframe/brand';
 import type { Key } from '@pulseframe/i18n';
-import { IconButton, ModeBar, Ring, Tooltip, type SegOption } from '../ds/index.ts';
+import { ModeBar, Ring, Tooltip, type SegOption } from '../ds/index.ts';
 import { chordLabel, editEnd } from './commands.ts';
 import { CHROME_STRINGS } from './chrome.strings.ts';
 import { onMenuKeyDown } from './menuKeys.ts';
@@ -20,7 +21,7 @@ import { InlineRename } from './InlineRename.tsx';
 import { openExportSheet, useExportSheet } from './ExportSheet.tsx';
 import { describeExport, isActiveJob, jobFraction, overallFraction } from './exportSheet.logic.ts';
 import { ProjectsDialog } from './ProjectsDialog.tsx';
-import { IconExport, IconRedo, IconUndo } from './icons.tsx';
+import { IconExport } from './icons.tsx';
 import { WORKSPACES, useEditorState, type Workspace } from './store.ts';
 import { CraftHost } from './craft/CraftHost.tsx';
 import { TeachHost } from './teach/TeachHost.tsx';
@@ -113,10 +114,6 @@ export function Header() {
 
       <div className="pf-top-end">
         <Presence />
-        <div className="pf-top-hist">
-          <IconButton label={S.undoTip} keys={[chordLabel('Mod+KeyZ').split('+')[0]!, 'Z']} size="md" disabled={!doc} onClick={() => void editor.history('undo')} data-testid="undo" icon={<IconUndo className="pf-ico-flip" />} />
-          <IconButton label={S.redoTip} keys={[chordLabel('Mod+KeyZ').split('+')[0]!, 'Shift', 'Z']} size="md" disabled={!doc} onClick={() => void editor.history('redo')} data-testid="redo" icon={<IconRedo className="pf-ico-flip" />} />
-        </div>
         <Tooltip label={S.language}>
           <button type="button" className="pf-top-lang" onClick={() => editor.setLang(lang === 'he' ? 'en' : 'he')} aria-label={t('lang.label')} data-testid="lang-toggle">{t('lang.toggle')}</button>
         </Tooltip>

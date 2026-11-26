@@ -1,7 +1,7 @@
 import { MULTICAM_STRINGS } from './multicam.strings.ts';
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import {
-  AudioLines, Captions, ChevronsUpDown, Clapperboard, Film, Layers, Link2, MapPin, Metronome, Mic, MousePointer2, Music, Pencil, Plus, Rewind, Scissors, Shapes, Snowflake, Sparkles, TrendingUp, Type, Zap,
+  AudioLines, Captions, ChevronsUpDown, Clapperboard, Film, Layers, Mic, Music, Pencil, Plus, Rewind, Shapes, Snowflake, Sparkles, TrendingUp, Type, Zap,
 } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import {
@@ -10,9 +10,8 @@ import {
 } from '@pulseframe/core';
 import { duckEnvelope, flashSchedule, speechRanges } from '@pulseframe/engine';
 import type { Key, Lang } from '@pulseframe/i18n';
-import { api, readSnapBeats, writeSnapBeats } from '../api.ts';
+import { api, readSnapBeats } from '../api.ts';
 import { ClipVisuals } from '../ClipVisuals.tsx';
-import { IconButton, Seg, Tooltip } from '../ds/index.ts';
 import { focusNow } from '../ds/focus.ts';
 import { VolumeLine } from './VolumeLine.tsx';
 import { KeyStrip } from './KeyStrip.tsx';
@@ -21,11 +20,12 @@ import { useTimelineDrag, type TimelineGhost } from './TimelineDrag.tsx';
 import { COMMANDS, chordLabel } from './commands.ts';
 import { useMarquee } from './TimelineMarquee.tsx';
 import { TimelineZoom, useWheelZoom } from './TimelineZoom.tsx';
-import { BAR_ICON_COMPONENTS, IconBeatLock, IconHide, IconLock, IconMainMagnet, IconMute, IconRippleDelete, IconShow, IconSound, IconTarget, IconUnlock } from './icons.tsx';
+import { BAR_ICON_COMPONENTS, IconBeatLock, IconHide, IconLock, IconMainMagnet, IconMute, IconShow, IconSound, IconTarget, IconUnlock } from './icons.tsx';
 import { soundTailsFor } from './AudioFxBlock.tsx';
 import { CutChip, cutSelection, useSelectedCut } from './CutChip.tsx';
 import { PulseStrip, TempoHead, type PulseModel } from './PulseStrip.tsx';
 import { RideBar } from './RideBar.tsx';
+import { SnapSwitch, ToolbarActions, ToolbarMoreMenu } from './TimelineToolbar.tsx';
 import { barGrid, capPlacement, catalogDragFrom, COLLAPSED_LANE_PX, cutRoom, cutsOf, FIT_ON_OPEN_MAX_S, labelsUnder, laneCollapsed, laneOrder, lastAtOrBefore, pickSpoken, rulerLabel, rulerStep, signedTimecode, type SpokenChip, type BarGrid, type CatalogDragItem, type Lane, type LaneRole } from './interactions.math.ts';
 import { fitPps } from './zoom.math.ts';
 import { TL_STRINGS, type TlStrings } from './timeline.strings.ts';
@@ -800,28 +800,23 @@ export function Timeline() {
       {/* The toolbar is one row of fixed height, so the lanes below it get exactly the height that is left (timeline.css). It mirrors with the interface; the lanes never do. */}
       <div className="tl-bar" dir={uiDir} role="group" aria-label={s.toolbar}>
         <div className="tl-tools">
-          <Seg label={s.tools} size="sm" iconOnly value={tool} onChange={setTool} className="tl-tool"
-            options={[{ value: 'select', label: s.toolSelect, ariaLabel: `${s.toolSelect} (V)`, icon: <MousePointer2 size={15} strokeWidth={1.75} aria-hidden="true" />, testId: 'tl-tool-select' }, { value: 'blade', label: s.toolBlade, ariaLabel: `${s.toolBlade} (C)`, icon: <Scissors size={15} strokeWidth={1.75} aria-hidden="true" />, testId: 'tl-tool-blade' }]} />
-          <span className="tl-sep" aria-hidden="true" />
-          <IconButton size="sm" className="tl-magnet" data-testid="tl-magnet" label={s.magnet} pressed={!!behaviour?.mainMagnet} disabledReason={!doc ? s.needClip : canBehave ? undefined : s.magnetSoon} icon={<IconMainMagnet size={16} />} onClick={() => setBehaviour({ mainMagnet: !behaviour?.mainMagnet })} />
-          <IconButton size="sm" className="tl-ripple" data-testid="tl-ripple" label={s.ripple} pressed={!!behaviour?.rippleDelete} disabledReason={!doc ? s.needClip : canBehave ? undefined : s.magnetSoon} icon={<IconRippleDelete size={16} />} onClick={() => setBehaviour({ rippleDelete: !behaviour?.rippleDelete })} />
-          <Tooltip label={s.snapBeats}>
-            <button type="button" role="switch" aria-checked={snapBeats} aria-label={s.snapBeats} className={`pf-btn pf-btn-ghost pf-btn-sm pf-iconbtn tl-snap${snapBeats ? ' is-on' : ''}`} data-testid="snap-beats" onClick={() => { setSnapBeats(!snapBeats); writeSnapBeats(!snapBeats); }}><Metronome size={16} strokeWidth={1.75} aria-hidden="true" /></button>
-          </Tooltip>
-          <span className="tl-sep" aria-hidden="true" />
           <ToolbarActions s={s} />
         </div>
         <div className="tl-ride-zone"><RideBar anchor={anchor} grid={pulse.grid} /></div>
         <div className="tl-view">
-          {!hasBeats && <TempoHead lang={lang} bpm={pulse.bpm} hasBeats={false} canAnalyse={!!pulse.analysable} analysing={analysing} onAnalyse={analyse} />}
           {collapsedIds.length > 0 && (
-            <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm tl-empty-lanes" data-testid="tl-empty-lanes" title={s.emptyLanesShow} aria-label={`${s.emptyLanesShow}: ${s.emptyLanes(collapsedIds.length)}`}
+            <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm tl-act tl-empty-lanes" data-testid="tl-empty-lanes" title={s.emptyLanesShow} aria-label={`${s.emptyLanesShow}: ${s.emptyLanes(collapsedIds.length)}`}
               onClick={() => { for (const id of collapsedIds) openLane(id); }}>
-              <ChevronsUpDown size={15} strokeWidth={1.75} aria-hidden="true" /><span>{s.emptyLanes(collapsedIds.length)}</span>
+              <ChevronsUpDown size={15} strokeWidth={1.75} aria-hidden="true" /><span className="pf-btn-label">{s.emptyLanes(collapsedIds.length)}</span>
             </button>
           )}
-          <Seg label={s.rulerMode} size="sm" value={rulerMode} onChange={(v) => { setRuler(v); try { localStorage.setItem(RULER_KEY, v); } catch { /* the choice lasts for this visit */ } }} className="tl-ruler-mode"
-            options={[{ value: 'time', label: s.rulerTime, testId: 'tl-ruler-time' }, { value: 'bars', label: s.rulerBars, disabled: !hasBeats, testId: 'tl-ruler-bars' }]} />
+          {/* beat snapping stands on the row once beats exist; before that it is in «עוד» with the analysis */}
+          {hasBeats && <SnapSwitch s={s} on={snapBeats} set={setSnapBeats} />}
+          <ToolbarMoreMenu s={s} m={{
+            tool, setTool, behaviour, canBehave, setBehaviour, snapBeats, setSnapBeats, hasBeats, rulerMode,
+            setRuler: (v) => { setRuler(v); try { localStorage.setItem(RULER_KEY, v); } catch { /* the choice lasts for this visit */ } },
+            analyse: !hasBeats ? <TempoHead lang={lang} bpm={pulse.bpm} hasBeats={false} canAnalyse={!!pulse.analysable} analysing={analysing} onAnalyse={analyse} /> : null,
+          }} />
           <TimelineZoom pps={pps} lang={lang} />
         </div>
       </div>
@@ -894,22 +889,6 @@ export function Timeline() {
       </div>
       <BeatAnnouncer grid={pulse.grid} s={s} />
     </section>
-  );
-}
-
-/** The toolbar's own actions: link, split at the playhead, a marker. They follow the playhead, so they listen to the player themselves. */
-function ToolbarActions({ s }: { s: TlStrings }) {
-  const { editor, state } = useEditorState();
-  void state.tick;
-  const cmd = (id: string) => COMMANDS.find((c) => c.id === id)!;
-  const can = (id: string) => { const c = cmd(id); return !!state.doc && (!c.enabled || c.enabled(editor)); };
-  const keys = (id: string) => { const k = cmd(id).keys[0]; return k ? chordLabel(k).split('+') : undefined; };
-  return (
-    <>
-      <IconButton size="sm" data-testid="tl-link" label={s.link} disabledReason={can('edit.link') ? undefined : s.linkNeed} icon={<Link2 size={16} strokeWidth={1.75} aria-hidden="true" />} onClick={() => void cmd('edit.link').run(editor)} />
-      <IconButton size="sm" data-testid="tl-split" label={s.split} keys={keys('edit.split')} disabledReason={can('edit.split') ? undefined : s.splitNeed} icon={<Scissors size={16} strokeWidth={1.75} aria-hidden="true" />} onClick={() => void cmd('edit.split').run(editor)} />
-      <IconButton size="sm" data-testid="tl-marker" label={s.marker} keys={keys('marker.add')} disabledReason={can('marker.add') ? undefined : s.markerThere} icon={<MapPin size={16} strokeWidth={1.75} aria-hidden="true" />} onClick={() => void cmd('marker.add').run(editor)} />
-    </>
   );
 }
 
