@@ -1,9 +1,11 @@
 # ADR-0029: Recorded instruments for the built-in music «כלים מוקלטים»
 
-Status: **Built and integrated on a synthetic test kit; not offered** (wave 7 instruments track, 2026-11-25). Amends ADR-0022 §4.
-Version 1's only real kit (`kit.calm.vsco@1`, VSCO-2 CE) has no file list and no checksums yet, because the owner's computer has not
-downloaded that sample set: in the product it is `not_calibrated`, it is offered nowhere, and a recorded request makes nothing.
-Nobody here can listen: nothing below says how anything sounds.
+Status: **Accepted (lead, 2026-11-26); built and integrated on a synthetic test kit; not offered.** Amends ADR-0022 §4. The lead
+read the two untrusted-file readers (`sfzPath`, `readWavInfo` / `readFmt`) line by line. Version 1's only real kit
+(`kit.calm.vsco@1`, VSCO-2 CE) has no file list and no checksums yet: the owner's computer finished the audio manifest on
+2026-11-26 with that git source failed (git's ownership check on the staging folder; a re-run with the newer fetcher was asked
+for). Until its files are read there, the kit is `not_calibrated` in the product, offered nowhere, and a recorded request makes
+nothing. Nobody here can listen: nothing below says how anything sounds.
 
 ## Context
 - ADR-0022 §4 defines the built-in music as a synthesiser: "no recordings, no samples" (`MUSIC_GENERATOR`). The owner keeps
@@ -62,6 +64,11 @@ Nobody here can listen: nothing below says how anything sounds.
 - Measured here on the synthetic kit only (one sample each, on a shared 4-CPU machine): a 128 s recorded render of a 73 MiB synthetic
   kit about 30× real time, event-loop max under 100 ms after the fix, a peak of tens of MB. Nothing is known about the real set's sizes
   or speed until the laptop steps.
+
+- Final regression of wave 7 (2026-11-26, merged tree, quiet machine, one sample each): `proof:instruments` 22/22 on the synthetic
+  kit, `proof:music` 24/24, `proof:musicfit` 23/23; M10 alone 4,215 ms and 3,476 ms with event-loop delays 28.5 and 25.3 ms.
+- Open: the start of a recorded request still holds the event loop 60–80 ms at idle (I13 passed at 88.7 ms against its 100 ms
+  bound once); the 96 MB refusal was exercised only with a lowered bound.
 
 ## Not built / not known
 - The real kit's files, checksums, gains (−18 dB placeholder) and whether its `.sfz` files use `..\Samples\…` paths, which `sfzPath`

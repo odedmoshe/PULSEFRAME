@@ -1,8 +1,8 @@
 # ADR-0028: «ספרו מה היה» — a film built on the owner's recorded narration and taps
 
-Status: **Draft for the lead (integration, 2026-11-25)** — built by three workers on the lead's contracts, merged, integrated;
-`pnpm proof:story` run end to end on this machine (numbers below). Nobody has listened to it, used a real microphone or tapped
-with real sound.
+Status: **Accepted (lead, 2026-11-26)** — built by three workers on the lead's contracts, merged, integrated, and read by the
+lead (the recorder's release of the microphone and `storyRegeneration.ts` were reviewed line by line). `pnpm proof:story` passes
+on the merged wave 7 tree (numbers below). Nobody has listened to it, used a real microphone or tapped with real sound.
 
 ## Context
 - The owner tells what happened, in their own voice, and taps «התמונה הבאה» while listening back; the editor lays the chosen
@@ -85,5 +85,9 @@ with real sound.
   run (one tap 2 frames off under load) and passed three times alone and in the full run.
 - Faults found by integration and fixed: a second rebuild placed the file of a picture replaced by hand again (decision 6); the
   dialog lost the picture order when the owner went to the phone page.
+- Final regression of wave 7 (2026-11-26, the merged tree 0311eaa, one worker alone on a quiet machine, one sample each):
+  `proof:story` 34/34, `proof:family-film` 45/45, `pnpm test` 6,825 passed and 0 failed, `audit:a11y` 0 findings (135 dark and
+  51 light states per language, the story and pearls states included), `proof:perform` N1 8.9–20.8 ms over ten runs at load 1.5
+  (the 150 ms above was one sample at load 15–20).
 - Not verified: a real microphone and Windows' permission settings, a Bluetooth headset, tap latency with real sound, real phone
   voice memos (AMR cannot be made here), the music under the voice by ear, the Hebrew.
