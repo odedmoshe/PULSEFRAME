@@ -38,7 +38,7 @@ describe('reversed sound in the server export', () => {
     for (let i = 0; i < 300; i++) { const j: any = await (await fetch(`${s.url}/api/v1/jobs/${job.jobId}`, { headers: h })).json(); if (j.status === 'succeeded') break; if (['failed', 'canceled'].includes(j.status)) throw new Error(`export ${j.status}: ${JSON.stringify(j.error)}`); await new Promise((r) => setTimeout(r, 100)); }
     return Buffer.from(await (await fetch(`${s.url}/api/v1/jobs/${job.jobId}/output`, { headers: h })).arrayBuffer());
   };
-  beforeAll(async () => { s = await startServer({ port: 8981, dataDir: dir }); h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' }; }, 60_000);
+  beforeAll(async () => { s = await startServer({ port: 0, dataDir: dir }); h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' }; }, 60_000);
   afterAll(async () => { await s.close(); fs.rmSync(dir, { recursive: true, force: true }); });
 
   it('a reversed clip is heard mirrored in time, also when only part of it is exported and at double speed', async () => {

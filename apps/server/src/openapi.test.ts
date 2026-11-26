@@ -89,7 +89,7 @@ describe('openapi against the real server', () => {
 
   beforeAll(async () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-openapi-'));
-    server = await startServer({ port: 20000 + Math.floor(Math.random() * 20000), dataDir: dir });
+    server = await startServer({ port: 0, dataDir: dir });
     h = { authorization: `Bearer ${server.auth.tokens.agent}`, connection: 'close' };
   });
   afterAll(async () => {

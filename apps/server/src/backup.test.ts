@@ -22,7 +22,7 @@ const f = (n: number) => ({ value: String(n), timescale: 30 });
 describe('backup of a running server and restore', () => {
   it('a backup taken while the server runs restores to exactly the state at that moment: project, history, media bytes and credentials', async () => {
     const src = tmp('pf-bk-src-'), dest = path.join(tmp('pf-bk-dest-'), 'copy');
-    const a = await startServer({ port: 8961, dataDir: src });
+    const a = await startServer({ port: 0, dataDir: src });
     const h = { authorization: `Bearer ${a.auth.tokens.agent}`, connection: 'close' };
     const post = async (url: string, p: string, body: unknown) => (await fetch(`${url}/api/v1${p}`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) })).json() as Promise<any>;
     const get = async (url: string, p: string) => (await fetch(`${url}/api/v1${p}`, { headers: h })).json() as Promise<any>;
@@ -47,7 +47,7 @@ describe('backup of a running server and restore', () => {
       await post(a.url, `/projects/${pid}/transactions`, { ops: [{ op: 'add_text', args: { text: 'after backup', start: f(60), duration: f(30) } }] });
       expect((await get(a.url, `/projects/${pid}`)).revision).toBe(atBackup.revision + 1);
 
-      b = await startServer({ port: 8962, dataDir: dest });
+      b = await startServer({ port: 0, dataDir: dest });
       expect(b.auth.tokens).toEqual(a.auth.tokens); // same credentials: the same token works
       const restored = await get(b.url, `/projects/${pid}`);
       expect(restored.revision).toBe(atBackup.revision);
@@ -65,11 +65,14 @@ describe('backup of a running server and restore', () => {
 
   it('a second backup into the same place copies only what is new; a destination inside the data directory or a wrong source is refused', async () => {
     const src = tmp('pf-bk2-src-'), dest = path.join(tmp('pf-bk2-dest-'), 'copy');
-    const a = await startServer({ port: 8963, dataDir: src });
+    const a = await startServer({ port: 0, dataDir: src });
     const h = { authorization: `Bearer ${a.auth.tokens.agent}`, connection: 'close' };
     try {
       const pid = (await (await fetch(`${a.url}/api/v1/projects`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ name: 'inc' }) })).json()).project.id;
       await fetch(`${a.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'tone.wav' }, body: new Uint8Array(wav()) });
+      // The upload returns before its waveform is made: ffmpeg interns it into blobs/ afterwards. A backup that runs while it is pending
+      // is right not to hold it, and the next one is right to copy it (1 new file). So wait until the server's derivation queue is idle first.
+      await a.derivatives.idle();
       const first = await backupDataDir(src, dest);
       const second = await backupDataDir(src, dest);
       expect(first.filesCopied).toBeGreaterThan(0);
@@ -95,7 +98,7 @@ describe('backup of a running server and restore', () => {
 
   it('backups with history keep the newest dated snapshots, never lose media an older snapshot needs, and an older snapshot restores', async () => {
     const src = tmp('pf-bk3-src-'), dest = path.join(tmp('pf-bk3-dest-'), 'copy');
-    const a = await startServer({ port: 8964, dataDir: src });
+    const a = await startServer({ port: 0, dataDir: src });
     const h = { authorization: `Bearer ${a.auth.tokens.agent}`, connection: 'close' };
     const post = async (url: string, p: string, body: unknown) => (await fetch(`${url}/api/v1${p}`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) })).json() as Promise<any>;
     let b: Awaited<ReturnType<typeof startServer>> | undefined;
@@ -158,7 +161,7 @@ describe('backup of a running server and restore', () => {
       fs.writeFileSync(path.join(dest, 'snapshots', snap), snapBytes);
       // going back: the oldest retained snapshot over the copy's database starts as a working server at that revision
       fs.copyFileSync(path.join(dest, 'snapshots', 'pulseframe-20260101T050000Z.sqlite'), path.join(dest, 'pulseframe.sqlite'));
-      b = await startServer({ port: 8965, dataDir: dest });
+      b = await startServer({ port: 0, dataDir: dest });
       const restored: any = await (await fetch(`${b.url}/api/v1/projects/${pid}`, { headers: h })).json();
       expect(restored.revision).toBe(revs[2]);
       expect(Object.keys(restored.project.markers ?? {}).length || restored.project.markers.length).toBe(3);
@@ -168,7 +171,7 @@ describe('backup of a running server and restore', () => {
   it('the scheduler runs on its interval, reports status over the API, lets only the owner start a run, records a failure without stopping, and is off unless configured', async () => {
     const src = tmp('pf-bk4-src-'), dest = path.join(tmp('pf-bk4-dest-'), 'auto');
     expect(() => new BackupScheduler(src, path.join(src, 'in'), 1, 3)).toThrow(/outside/);
-    const a = await startServer({ port: 8966, dataDir: src, backupDir: dest, backupEveryHours: 24, backupKeep: 2 });
+    const a = await startServer({ port: 0, dataDir: src, backupDir: dest, backupEveryHours: 24, backupKeep: 2 });
     const agent = { authorization: `Bearer ${a.auth.tokens.agent}`, connection: 'close' };
     const ownerOf = async (srv: typeof a) => ({ origin: srv.url, connection: 'close', cookie: (await fetch(`${srv.url}/api/v1/session`, { headers: { origin: srv.url, 'x-pf-owner-key': srv.auth.tokens.owner, connection: 'close' } })).headers.get('set-cookie')!.split(';')[0]! });
     const ownerH = await ownerOf(a);
@@ -195,9 +198,9 @@ describe('backup of a running server and restore', () => {
       expect(await ok.json()).toMatchObject({ lastOk: true, lastError: null });
     } finally { await a.close(); }
     // a restart with a fresh snapshot present waits for the interval instead of running at once
-    const a2 = await startServer({ port: 8966, dataDir: src, backupDir: dest, backupEveryHours: 24, backupKeep: 2 });
+    const a2 = await startServer({ port: 0, dataDir: src, backupDir: dest, backupEveryHours: 24, backupKeep: 2 });
     try { expect(a2.backup.status().nextAt!).toBeGreaterThan(Date.now() + 23 * 3600_000); } finally { await a2.close(); }
-    const off = await startServer({ port: 8967, dataDir: tmp('pf-bk5-src-') });
+    const off = await startServer({ port: 0, dataDir: tmp('pf-bk5-src-') });
     try {
       expect(await (await fetch(`${off.url}/api/v1/backup`, { headers: { authorization: `Bearer ${off.auth.tokens.agent}` } })).json()).toMatchObject({ enabled: false, nextAt: null });
       expect((await fetch(`${off.url}/api/v1/backup`, { method: 'POST', headers: await ownerOf(off) })).status).toBe(409);

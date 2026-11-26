@@ -22,7 +22,7 @@ const rest = async (p: string, body: unknown, headers: Record<string, string>) =
 let p1 = '', p2 = '', owner: Record<string, string> = {};
 
 beforeAll(async () => {
-  s = await startServer({ port: 8941, dataDir: dir });
+  s = await startServer({ port: 0, dataDir: dir });
   const cookie = (await fetch(`${s.url}/api/v1/session`, { headers: { origin: s.url, 'x-pf-owner-key': s.auth.tokens.owner, connection: 'close' } })).headers.get('set-cookie')!.split(';')[0]!;
   owner = { cookie, origin: s.url };
   p1 = (await rest('/projects', { name: 'First' }, owner)).project.id;

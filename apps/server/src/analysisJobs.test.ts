@@ -20,7 +20,7 @@ describe('analysis as a durable job', () => {
   it('background analysis returns a job at once, attaches the same kind of result as the in-request path, survives a restart, and can be canceled', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-anjob-'));
     dirs.push(dir);
-    let s: RunningServer = await startServer({ port: 8971, dataDir: dir });
+    let s: RunningServer = await startServer({ port: 0, dataDir: dir });
     const h = () => ({ authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' });
     const post = async (p: string, body: unknown) => { const r = await fetch(`${s.url}/api/v1${p}`, { method: 'POST', headers: { ...h(), 'content-type': 'application/json' }, body: JSON.stringify(body) }); return { status: r.status, body: await r.json() as any }; };
     const get = async (p: string) => (await fetch(`${s.url}/api/v1${p}`, { headers: h() })).json() as Promise<any>;
@@ -62,7 +62,7 @@ describe('analysis as a durable job', () => {
       await post(`/projects/${pid}/transactions`, { ops: [{ op: 'edit_analysis', args: { assetId, kind: 'beats', add: [{ value: '1', timescale: 4 }] } }] }); // hand correction
       const stale = s.store.createJob(pid, 'analysis', 'agent:local', { assetId, kind: 'beats' }); // queued without overwrite
       await s.close();
-      s = await startServer({ port: 8972, dataDir: dir });
+      s = await startServer({ port: 0, dataDir: dir });
       const recovered = await done(interrupted.id);
       expect(recovered.status).toBe('succeeded');
       expect(recovered.output.beats.count).toBeGreaterThanOrEqual(20);
@@ -75,7 +75,7 @@ describe('analysis as a durable job', () => {
   it('a library file removed while its analysis job is waiting: the job fails with a typed error, nothing is attached, the server keeps serving', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-anjob2-'));
     dirs.push(dir);
-    const s = await startServer({ port: 8973, dataDir: dir });
+    const s = await startServer({ port: 0, dataDir: dir });
     const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
     const post = async (p: string, body: unknown) => { const r = await fetch(`${s.url}/api/v1${p}`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) }); return { status: r.status, body: await r.json() as any }; };
     const get = async (p: string) => (await fetch(`${s.url}/api/v1${p}`, { headers: h })).json() as Promise<any>;
@@ -101,7 +101,7 @@ describe('analysis as a durable job', () => {
   it('silence and loudness measurements can run as jobs: the job output equals the in-request result and the project is not changed', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-anjob3-'));
     dirs.push(dir);
-    const s = await startServer({ port: 8974, dataDir: dir });
+    const s = await startServer({ port: 0, dataDir: dir });
     const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
     const post = async (p: string, body: unknown) => { const r = await fetch(`${s.url}/api/v1${p}`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) }); return { status: r.status, body: await r.json() as any }; };
     const done = async (jobId: string) => { for (let i = 0; i < 300; i++) { const j: any = await (await fetch(`${s.url}/api/v1/jobs/${jobId}`, { headers: h })).json(); if (['succeeded', 'failed', 'canceled'].includes(j.status)) return j; await sleep(100); } throw new Error('job did not finish'); };

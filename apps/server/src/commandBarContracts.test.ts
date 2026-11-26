@@ -213,7 +213,7 @@ describe('the assistant routes are registered and refuse honestly', () => {
   let s: Awaited<ReturnType<typeof startServer>> | undefined;
   afterAll(async () => { await s?.close(); });
   it('owner-only routes refuse an agent with 403 owner_required; status answers 501 not_built or connected-or-not (not connected, three fields); no job', async () => {
-    s = await startServer({ port: 8987, dataDir: tmp('pf-cb-routes-') });
+    s = await startServer({ port: 0, dataDir: tmp('pf-cb-routes-') });
     const pid = s.store.createProject({ name: 'p' }).doc.id;
     const call = async (method: string, p: string, token: string | null, body?: unknown) => {
       const r = await fetch(`${s!.url}${p}`, { method, headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), 'content-type': 'application/json', connection: 'close' }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });

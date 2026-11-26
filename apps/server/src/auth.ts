@@ -34,9 +34,16 @@ export class Auth {
     const stored: Partial<Tokens> = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
     this.tokens = { agent: stored.agent ?? `pfa_${randomBytes(24).toString('base64url')}`, observer: stored.observer ?? `pfo_${randomBytes(24).toString('base64url')}`, owner: stored.owner ?? `pfk_${randomBytes(24).toString('base64url')}` };
     if (!stored.agent || !stored.observer || !stored.owner) fs.writeFileSync(file, JSON.stringify(this.tokens, null, 2), { mode: 0o600 });
-    const hosts = ['127.0.0.1', 'localhost', '[::1]'].map((h) => `${h}:${cfg.port}`);
-    this.allowedHosts = new Set([...hosts, ...cfg.extraOrigins.map((o) => new URL(o).host)]);
-    this.allowedOrigins = new Set([...hosts.map((h) => `http://${h}`), ...cfg.extraOrigins]);
+    this.allowedHosts = new Set();
+    this.allowedOrigins = new Set();
+    this.bindPort(cfg.port);
+  }
+
+  /** (Re)derive the Host and Origin allowlists for the port the listener really bound (cfg.port 0 asks for any free port). */
+  bindPort(port: number) {
+    const hosts = ['127.0.0.1', 'localhost', '[::1]'].map((h) => `${h}:${port}`);
+    this.allowedHosts = new Set([...hosts, ...this.cfg.extraOrigins.map((o) => new URL(o).host)]);
+    this.allowedOrigins = new Set([...hosts.map((h) => `http://${h}`), ...this.cfg.extraOrigins]);
   }
 
   private same(a: string, b: string) {

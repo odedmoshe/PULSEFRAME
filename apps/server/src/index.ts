@@ -56,7 +56,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   const store = new Store(cfg.dataDir, cfg.maxStorageBytes);
   const auth = new Auth(cfg);
   const host = new RenderHost();
-  const url = `http://${cfg.host}:${cfg.port}`;
+  let url = `http://${cfg.host}:${cfg.port}`; // re-derived below once the listener is bound (port 0 = any free port)
   // One heavy holder at a time on this machine (ADR-0017): speech, narration, local AI tools and each ComfyUI chunk take the lane;
   // a running server export pauses new chunks. Before heavy work starts, the kept speech and tool workers (2–4 GB each) are let go,
   // except the one whose own job is starting.
@@ -112,7 +112,9 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { imports, door, renderCache, search, assistant: assistantDeps, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}) });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
-  if ((server.address() as AddressInfo).port !== cfg.port) throw new Error('unexpected port');
+  const bound = (server.address() as AddressInfo).port;
+  if (cfg.port !== 0 && bound !== cfg.port) throw new Error('unexpected port');
+  if (cfg.port === 0) { cfg.port = bound; url = `http://${cfg.host}:${bound}`; auth.bindPort(bound); } // everything derived from the port (Host/Origin allowlist, the render page URL, the links) uses the bound one
   // Crash recovery: publish any committed-but-unpublished events, restart interrupted jobs.
   store.drainOutbox();
   // Browser-route jobs belong to a tab: after a restart their lease is gone, so they are never re-run by the server exporter.

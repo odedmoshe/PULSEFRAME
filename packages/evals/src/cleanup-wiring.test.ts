@@ -21,7 +21,7 @@ const post = async (p: string, body: unknown) => {
 };
 
 beforeAll(async () => {
-  s = await startServer({ port: 21000 + Math.floor(Math.random() * 20000), dataDir: dir });
+  s = await startServer({ port: 0, dataDir: dir });
   pid = (await post('/projects', { name: 'cleanup wiring' })).body.project.id;
 });
 afterAll(async () => {
