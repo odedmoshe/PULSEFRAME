@@ -112,6 +112,10 @@
 /* ---- people sheet and the archive option ---- */
 .pf-pp { display: flex; flex-direction: column; gap: var(--pf-sp-6); min-inline-size: 0; }
 .pf-pp-privacy { margin: 0; padding: var(--pf-sp-5); border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: 0 0 0 1px var(--pf-line-strong); color: var(--pf-text); font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); }
+.pf-pp-privacy p { margin: 0; }
+.pf-pp-privacy details { margin-top: var(--pf-sp-3); }
+.pf-pp-privacy summary { cursor: pointer; color: var(--pf-info); min-block-size: 24px; display: flex; align-items: center; }
+.pf-pp-privacy details p { color: var(--pf-text-2); }
 .pf-pp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--pf-sp-5); }
 .pf-pp-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--pf-sp-4) var(--pf-sp-5); padding: var(--pf-sp-5); border-radius: var(--pf-r-md); background: var(--pf-surface-2); box-shadow: var(--pf-e1); min-inline-size: 0; }
 .pf-pp-row.is-new { box-shadow: 0 0 0 1px var(--pf-frame); }

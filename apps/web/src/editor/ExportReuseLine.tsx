@@ -1,5 +1,5 @@
 /**
- * The export sheet's fast-export block (ADR-0024, plan §8): the «ייצוא מהיר — מרנדר רק מה שהשתנה» switch with its hint and its
+ * The export sheet's fast-export block (ADR-0024, plan §8): the «ייצוא מהיר: רק מה שהשתנה מאז הייצוא הקודם» switch with its hint and its
  * disabled reason (MP4 only, cache off, not available: from the plan's blocker codes), and a role=status aria-live=polite block
  * with the reuse line, what is rendered, the first-export and nothing-changed variants, the measured ETA (only when
  * estimate.seconds is not null) and the honest notes (ripple, music). Every number sits in <bdi dir="ltr">.

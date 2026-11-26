@@ -26,7 +26,7 @@ describe('people strings and test ids', () => {
     expect(PEOPLE_STRINGS.he.privacy).toContain('השמות בלבד');
     expect(PEOPLE_STRINGS.he.privacy).toContain('לא את תאריכי הלידה ולא את הגילים שמחושבים מהם');
     expect(PEOPLE_STRINGS.he.privacy).toContain('ייצוא שמציג גיל נחסם');
-    expect(PEOPLE_STRINGS.he.privacy).toContain('אלא אם נתת לו הרשאה לתאריכי לידה');
+    expect(PEOPLE_STRINGS.he.privacy).toContain('אלא אם נתתם לו הרשאה לתאריכי לידה');
     expect(PEOPLE_STRINGS.he.privacy).toContain('גיל שנקבע כטקסט רגיל');
     expect(PEOPLE_STRINGS.en.privacy).toMatch(/names only: not the birth dates and not the ages worked out from them/);
     expect(PEOPLE_STRINGS.he.archiveFamilyNote).toContain('קובצי המדיה עצמם לא משתנים');

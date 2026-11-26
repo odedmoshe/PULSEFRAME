@@ -258,13 +258,9 @@
 .pf-status-fmt, .pf-status-dur { font-size: var(--pf-fs-digits); color: var(--pf-text-2); white-space: nowrap; }
 .pf-status-job { display: inline-flex; align-items: center; gap: var(--pf-sp-3); color: var(--pf-text-2); white-space: nowrap; }
 .pf-status-job .pf-ring { zoom: .6; }
-.pf-status-pip { display: inline-flex; align-items: center; gap: var(--pf-sp-3); block-size: 20px; padding: 0 var(--pf-sp-3); border: 0; border-radius: var(--pf-r-xs); background: transparent; color: var(--pf-text-2); font: inherit; font-size: var(--pf-fs-xs); cursor: pointer; box-shadow: none; }
+.pf-status-pip { display: inline-flex; align-items: center; gap: var(--pf-sp-3); block-size: var(--pf-h-xs, 24px); padding: 0 var(--pf-sp-3); border: 0; border-radius: var(--pf-r-xs); background: transparent; color: var(--pf-text-2); font: inherit; font-size: var(--pf-fs-xs); cursor: pointer; box-shadow: none; }
 .pf-status-pip:hover { background: var(--pf-surface-3); color: var(--pf-text); }
 .pf-status-pip.is-need { color: var(--pf-attention); }
-.pf-status-dots { display: inline-flex; gap: 3px; }
-.pf-status-dots i { inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--pf-line-control); }
-.pf-status-dots i.ok { background: var(--pf-ok); }
-.pf-status-dots i.off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--pf-attention); }
 .pf-status-flash { display: inline-flex; align-items: center; gap: var(--pf-sp-2); color: var(--pf-ok); white-space: nowrap; }
 .pf-status-flashFail { position: relative; }
 .pf-status-flashFail > summary { display: inline-flex; align-items: center; gap: var(--pf-sp-2); cursor: pointer; color: var(--pf-attention); list-style: none; white-space: nowrap; }

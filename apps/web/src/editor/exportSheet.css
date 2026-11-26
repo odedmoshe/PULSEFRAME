@@ -7,6 +7,8 @@
 [dir='ltr'] .pf-xs .pf-dialog-foot { flex-direction: row; justify-content: flex-end; }
 .pf-xs .pf-xs-ambient { margin-inline-end: auto; color: var(--pf-text-3); font-size: var(--pf-fs-xs); }
 [dir='ltr'] .pf-xs .pf-xs-ambient { margin-inline-end: 0; margin-inline-start: 0; margin-right: auto; }
+.pf-xs .pf-xs-pre { color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); text-align: end; }
+.pf-xs .pf-xs-pre[data-blockers]:not([data-blockers='0']) { color: var(--pf-danger); }
 .pf-xs .pf-xs-err { color: var(--pf-danger); font-size: var(--pf-fs-xs); flex-basis: 100%; }
 .pf-xs h3 { margin: 0 0 var(--pf-sp-4); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); font-weight: var(--pf-fw-semibold); color: var(--pf-text-2); }
 
