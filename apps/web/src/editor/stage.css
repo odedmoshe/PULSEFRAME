@@ -195,7 +195,12 @@
 @container (max-width: 520px) { .transport .tp-total, .transport .tp-outer, .tp-beat-word { display: none; } }
 @container (max-width: 340px) { .transport .tp-btn, .transport .tp-end { display: none; } }
 @container (max-width: 220px) { .transport .tp-time { display: none; } }
-@media (max-height: 780px) { .transport.pf-ds { min-block-size: 46px; } .transport .tp-play { inline-size: 38px; block-size: 38px; min-inline-size: 38px; min-block-size: 38px; } }
+/* a short window (125 % scaling and below): every pixel of chrome goes to the picture (DESIGN_REVIEW §6: ≥ 360 px at 1528×704, ≥ 320 at 1366×650) */
+@media (max-height: 780px) {
+  .transport.pf-ds { min-block-size: 42px; padding-block-end: 0; } .transport .tp-play { inline-size: 36px; block-size: 36px; min-inline-size: 36px; min-block-size: 36px; }
+  .app > .stage { margin-block: 2px; }
+  .app > .stage > .canvas-wrap { padding-block: var(--pf-sp-3) 0; }
+}
 
 /* ---------- source viewer (the dialog the "source" side of the stage opens) ---------- */
 .source-viewer .source-canvas { inline-size: 100%; max-block-size: 46vh; object-fit: contain; background: var(--pf-stage); border-radius: var(--pf-r-sm); }

@@ -119,7 +119,7 @@
 @media (min-width:1800px){:root{--pf-browser:348px;--pf-inspector:372px;--pf-lane-v1:86px;--pf-lane-a1:52px;--pf-lane-a2:52px}}
 @media (min-width:2300px){:root{--pf-topbar:60px;--pf-rail:84px;--pf-browser:440px;--pf-inspector:430px;--pf-lane-v1:118px;--pf-lane-a1:72px;--pf-lane-a2:72px;--pf-lane-a3:36px}}
 @media (max-width:1366px){:root{--pf-browser:268px;--pf-inspector:304px;--pf-track-head:128px}}
-@media (max-height:780px){:root{--pf-topbar:48px;--pf-lane-t:24px;--pf-lane-c:24px;--pf-lane-v2:26px;--pf-lane-v1:50px;--pf-lane-a1:34px;--pf-lane-a2:34px;--pf-lane-a3:22px}}
+@media (max-height:780px){:root{--pf-topbar:44px;--pf-lane-t:24px;--pf-lane-c:24px;--pf-lane-v2:26px;--pf-lane-v1:50px;--pf-lane-a1:34px;--pf-lane-a2:34px;--pf-lane-a3:22px}}
 @media (prefers-reduced-motion:reduce){:root{--pf-dur-press:1ms;--pf-dur-fast:1ms;--pf-dur-base:120ms;--pf-dur-slow:120ms;--pf-ease-snap:linear}}
 @media (forced-colors:active){/* rings become Highlight outlines; kind stripes keep icons; no information by colour alone */}
 .num,.tc{font-family:var(--pf-font-mono);font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
