@@ -111,3 +111,36 @@ node kit-inventory.mjs --root E:\PULSEFRAME-Library --item instruments/vsco-2-ce
 - Without `--sfz`: one `SFZ` line per instrument file — regions, files used, bytes, samples that are missing, outside the item, found only by letter case, written with `..` or a backslash; key range; loop modes; sample rate, bit depth, channels and the shortest / median / longest sample in seconds.
 - With `--sfz` (repeatable): the file table of those instruments between `BEGIN` and `END`, one line per file (`sha256  bytes  path`), then `TABLE files=N bytes=N sha256=…`, the SHA-256 of the lines joined by a line feed, so a copy of the lines can be checked. The lines are also saved under `<root>/_manifests/kit-inventory/`. Exit code 1 when a named instrument has a missing or outside file.
 - `.git` and symbolic links are never entered. Nothing the script reads is executed.
+
+## Checking a recorded kit (`pnpm kit:check`)
+
+Unlike the scripts above, this one is not a single file: it runs the product's own code (the kit check, the loader, the sampler, the
+renderer and the validation of `apps/server`), so it needs a full clone of the repository. It needs no build (`pnpm build` is not
+used), starts no server, uses no network, and writes nothing into the library or the clone. On the laptop, in a tools folder outside
+the library (for example `E:\PULSEFRAME-Tools`):
+
+```
+git clone <repository url> pulseframe
+cd pulseframe
+pnpm install --frozen-lockfile
+pnpm kit:check --library E:\PULSEFRAME-Library --kit kit.calm.vsco --bars 16 --seed 1
+pnpm kit:check --library E:\PULSEFRAME-Library --kit kit.calm.vsco --long
+pnpm kit:check --library E:\PULSEFRAME-Library --kit kit.calm.vsco --audition %TEMP%\pf-audition
+```
+
+- `%TEMP%` is the Command Prompt spelling; in PowerShell write `$env:TEMP\pf-audition`.
+- It prints one plain-text report, ASCII only, every line starting with its tag, in this order: `KIT` (kit, bank, sampler, the clone's
+  commit, Node, platform), `L1` (the kit's state through the same `checkKit` a real request uses; per instrument its regions, zones,
+  ignored opcodes, warnings, rates, bit depths and the bytes this request decodes), `L4` (out-of-range and edge notes, notes whose
+  recording ends before gate + release, clamp counts, the mix's peak and RMS, the server's validation), `GAIN` and `L6` (each sampled
+  part alone with the synthesiser and with the samples; the proposed `gainDb`), `L2` (PCM hashes twice here and once in a child
+  process; both golden files recomputed), `L3` with `--long` (a 128 s request cold and warm in a fresh process: wall time, real-time
+  factor, event-loop maximum, peak RSS; one sample), `L5` with `--audition`, and `SUMMARY`. Paths are relative to the library or the
+  kit's item; the library, clone, home and temp folders and the user name appear only as `<library>`, `<repo>`, `<home>`, `<tmp>`, `<user>`.
+- Exit code 0: L1 ready, no out-of-range note, the track valid, every L2 hash equal. 1: a check failed (a kit that is not `ready` stops
+  after its `L1 state=` line). 2: bad arguments, or a refused audition folder.
+- `--audition <dir>` writes `A.wav`, `B.wav` (the synthesised and the recorded version, level-matched, in an order only the key names)
+  and `key.txt`; the folder must be absent or empty, outside any git working copy and outside the library. `--save` also writes the
+  report to the temp folder and prints its name. `--kit-table <json>` reads a kit list instead of the build's (tests; trying gains).
+- Tested only in the Linux container, on the labelled synthetic test kit (`packages/evals/src/kit-check.test.ts`). Nobody has run it on
+  Windows.
