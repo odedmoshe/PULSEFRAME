@@ -3,6 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts", "./*": "./src/*" },
-  "dependencies": { "playwright": "1.63.0" }
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "gsap": "3.15.1",
+    "playwright": "1.63.0",
+    "three": "0.187.0"
+  }
 }

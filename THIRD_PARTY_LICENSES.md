@@ -31,6 +31,12 @@ Sources: `pnpm licenses list --json` (reads the `license` field of each installe
 | tsx | 4.23.15 | MIT | root (devDependencies) | no |
 | vitest | 5.1.0 | MIT | root (devDependencies) | no |
 | fast-check | 4.10.2 | MIT | root (devDependencies) | no |
+| gsap | 3.15.1 | Standard "no charge" licence (proprietary, not open source; see below) | @pulseframe/renderer (served to made-clip pages, wave 8 motioncode) | yes (via apps/server) |
+| three | 0.187.0 | MIT | @pulseframe/renderer (served to made-clip pages, wave 8 motioncode) | yes (via apps/server) |
+
+**gsap 3.15.1** (added 2026-11-26, lead decision 4 of wave 8 motioncode). The package ships no LICENSE file; its `package.json` `license` field reads "Standard 'no charge' license: https://gsap.com/standard-license." and every file carries the notice "@license Copyright 2026, GreenSock. All rights reserved. Subject to the terms at https://gsap.com/standard-license." That notice must not be removed or altered (the licence's RESTRICTIONS). The licence page, read 2026-11-26, defines the one prohibited use: "\"Prohibited Uses\" means any implementation and/or use of GSAP Products in tools that allow users to build visual animations without code that encourages, induces, or materially assists in creating a solution that competes with Webflow’s visual animation building capabilities." The files are served unchanged, only to pages drawn offline by the made-clip browser (`https://made.invalid/lib/gsap@3.15.1/…`). Webflow may terminate the licence.
+
+**three 0.187.0** (added 2026-11-26). `package/LICENSE`: "The MIT License — Copyright © 2010-2026 three.js authors" (the MIT text follows in that file); `package.json` `license`: "MIT". Served unchanged to made-clip pages (`https://made.invalid/lib/three@0.187.0/build/…`).
 
 Workspace packages (`@pulseframe/*`, all `private`, version `0.0.0`) are first-party and are not listed here. The root package `pulseframe` is also first-party.
 
