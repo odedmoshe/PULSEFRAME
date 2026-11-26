@@ -9,7 +9,7 @@ import * as T from '@pulseframe/time';
 import { contentTransform, expm, hasTextLook } from '@pulseframe/core';
 import { gpuTransition, isGpuTransition, lutIdOf, takeUnavailable, type LutStrip } from './gpu.ts';
 import { ADJUST_PASS_SLOT, type AdjustLayer, type DrawnLayer, type ImageLayer, type PictureLayer, type PlacedLayer, type RenderGraph, type TextLayer, type VideoLayer } from './evaluate.ts';
-import { drawnPainter, noPainterId } from './drawnPainters.ts';
+import { drawnPainter, drawnUnready, noPainterId, prepareDrawn } from './drawnPainters.ts';
 import { visualOrder, wordDir, wrapWords, type CaptionLayer } from './captions.ts';
 import { textAtRest, unitPose } from './textAnimation.ts';
 import { applyColourMatrix, applyEffects, hasGpuEffect, applyMask, applyRegions, BT709_AS_BT601, COMPOSITE, compositeLayer, drawMaskShape, fadeBuf, REGION_MASK_SLOT, scratch, type Buf, type LayerBox, type LookEnv, type PixelRect } from './look.ts';
@@ -377,6 +377,8 @@ function placeLayer(c: Ctx2D, g: RenderGraph, layer: PlacedLayer, img: FrameImag
 function paintDrawn(c: Ctx2D, g: RenderGraph, layer: DrawnLayer, note?: TextNote) {
   const paint = drawnPainter(layer.drawn.kind);
   if (!paint) { note?.(noPainterId(layer.drawn.kind), `this build has no painter for drawn ${layer.drawn.kind} clips`); return; }
+  const unready = drawnUnready(layer.drawn.kind);
+  if (unready) { note?.(noPainterId(layer.drawn.kind), unready); return; }
   withTransform(c, g, layer, () => paint(c, layer.drawn, { width: g.width, height: g.height, clipTime: layer.clipTime, localFrame: layer.localFrame, fps: layer.fps, note: (id, why) => note?.(id, why) }));
 }
 /** A layer with no picture to fetch: a title or a drawn overlay. */
@@ -547,7 +549,9 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider, opt
     // a tap whose picture cannot be decoded leaves its time effect out of this frame (reported below), it does not fail the frame
     return ask(layer).then((img) => { if (!img) tapWhy.set(`${i}:${k}`, frames.refusal?.(layer) ?? 'source frame unavailable'); return img; }, (e) => { tapWhy.set(`${i}:${k}`, `source frame unavailable: ${String((e as Error)?.message ?? e).slice(0, 200)}`); return null; });
   })));
-  const [images, tapImages] = await Promise.all([Promise.all(requests), Promise.all(tapRequests.map((t) => (t ? Promise.all(t) : null))), Promise.all([...luts.keys()].map(loadLut))]);
+  // drawn kinds that load data once per page (drawnPainters.ts prepareDrawn) are prepared with the pictures
+  const drawnKinds = g.layers.flatMap((l) => [...(l.kind === 'drawn' ? [l.drawn.kind] : []), ...(l.kind !== 'caption' && l.kind !== 'adjust' && l.time ? l.time.taps.flatMap((t) => (t.layer.kind === 'drawn' ? [t.layer.drawn.kind] : [])) : [])]);
+  const [images, tapImages] = await Promise.all([Promise.all(requests), Promise.all(tapRequests.map((t) => (t ? Promise.all(t) : null))), Promise.all([...luts.keys()].map(loadLut)), drawnKinds.length ? prepareDrawn(drawnKinds) : null]);
   /** Time effects of this frame that could not be drawn faithfully (a tap picture was missing), with why. */
   const timeLeftOut = new Map<string, string>();
   /** Title looks this browser could not draw (ADR-0012: 'text.tracking', 'text.glow', 'text.blur'), with why. */

@@ -98,6 +98,12 @@ export function noticesPlugin(): Plugin {
         if (font) parts.push('', `${font.family} font files (${font.slug}-*.woff2/.woff) are distributed under the SIL Open Font License 1.1; the licence text below accompanies them.`);
         parts.push('', '-'.repeat(78), p.text);
       }
+      // map data (wave 8 tripmap; THIRD_PARTY_LICENSES.md §8): public domain, no notice duty; credited and described anyway
+      parts.push('', '='.repeat(78), 'Natural Earth v5.1.2 (map data: coastlines, lakes, populated places)', 'License: public domain',
+        'Repository: https://github.com/nvkelso/natural-earth-vector (tag v5.1.2, commit f1890d9f152c896d250a77557a5751a93d494776)',
+        '', '"Everything here is public domain." ... "No permission is needed to use Natural Earth. Crediting the authors is unnecessary." (LICENSE.md at that tag)',
+        'Place names from Wikidata (CC0), per the Natural Earth terms of use. Made with Natural Earth.',
+        'Changed: clipped at 80 degrees of latitude, projected to Mercator, simplified and quantised (tools/tripmap/build-data.mjs). No border data is shipped.');
       this.emitFile({ type: 'asset', fileName: 'THIRD_PARTY_NOTICES.txt', source: parts.join('\n') + '\n' });
     },
   };

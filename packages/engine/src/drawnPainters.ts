@@ -34,13 +34,37 @@ export interface DrawnPaintEnv {
 export type DrawnPainter = (ctx: Ctx2D, payload: DrawnPayload, env: DrawnPaintEnv) => void;
 
 const PAINTERS = new Map<string, DrawnPainter>();
+/**
+ * Optional per-kind preparation (additive hook, tripmap pre-pass): a kind whose painter needs data loaded once per page (the trip
+ * map's outline chunk, imported lazily) registers `ready`. drawGraph awaits it (prepareDrawn) before drawing any frame that holds
+ * the kind, with the frame's pictures; a painter is only called once its kind is ready. A `ready` that rejects leaves the kind
+ * unready: that frame reports `drawn.<kind>` with the reason (so a still or an export refuses), and the next frame asks again.
+ */
+export interface DrawnPainterOptions { ready?: () => Promise<void> }
+interface ReadyState { ready: () => Promise<void>; done: boolean; pending: Promise<void> | null; why: string | null }
+const READY = new Map<string, ReadyState>();
 /** Register the painter of a drawn kind (once per page). Throws when the kind already has one. */
-export function registerDrawnPainter(kind: string, paint: DrawnPainter): void {
+export function registerDrawnPainter(kind: string, paint: DrawnPainter, opts: DrawnPainterOptions = {}): void {
   if (PAINTERS.has(kind)) throw new Error(`drawn kind ${kind} already has a painter`);
   PAINTERS.set(kind, paint);
+  if (opts.ready) READY.set(kind, { ready: opts.ready, done: false, pending: null, why: null });
 }
 /** Tests only. */
-export const unregisterDrawnPainter = (kind: string): boolean => PAINTERS.delete(kind);
+export const unregisterDrawnPainter = (kind: string): boolean => { READY.delete(kind); return PAINTERS.delete(kind); };
+/** Await the preparation of these kinds (never rejects; a failure is kept as the kind's reason until a later call succeeds). */
+export async function prepareDrawn(kinds: Iterable<string>): Promise<void> {
+  await Promise.all([...new Set(kinds)].map((k) => {
+    const st = READY.get(k);
+    if (!st || st.done) return undefined;
+    st.pending ??= st.ready().then(
+      () => { st.done = true; st.why = null; st.pending = null; },
+      (e: unknown) => { st.why = `drawn ${k} data could not be loaded: ${String((e as Error)?.message ?? e).slice(0, 200)}`; st.pending = null; },
+    );
+    return st.pending;
+  }));
+}
+/** Null when the kind may be painted now (no preparation, or it finished); else why not. */
+export const drawnUnready = (kind: string): string | null => { const st = READY.get(kind); return !st || st.done ? null : st.why ?? `drawn ${kind} data is not loaded yet`; };
 export const drawnPainter = (kind: string): DrawnPainter | undefined => PAINTERS.get(kind);
 /** The id a frame reports when a drawn kind has no painter in this build. */
 export const noPainterId = (kind: string) => `drawn.${kind}`;
