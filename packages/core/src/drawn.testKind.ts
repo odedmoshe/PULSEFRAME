@@ -40,7 +40,7 @@ export function registerTestDrawnKind(): void {
 export const testDrawn = (over: Partial<TestDrawn> = {}): TestDrawn => ({ kind: 'test', color: '#E03030', w: 2000, h: 1000, offset: 0, ...over });
 
 /**
- * TEST-ONLY op `add_test_drawn` (internal): places a test-kind drawn clip through the carrier's placeDrawnClip, as a kind's
+ * TEST-ONLY op `add_test_drawn`: places a test-kind drawn clip through the carrier's placeDrawnClip, as a kind's
  * own add op will. Registered by registerTestDrawnOp() in tests only; it also registers the kind.
  */
 export function registerTestDrawnOp(): void {
@@ -49,7 +49,7 @@ export function registerTestDrawnOp(): void {
   defineOp({
     name: 'add_test_drawn',
     version: 1,
-    internal: true,
+    // public (not internal) so a fuzz step adds it with the ordinary credential; it exists only where a test registered it
     description: 'TEST ONLY: add a test-kind drawn clip on a text track.',
     args: z.object({ sequenceId: z.string().optional(), trackId: z.string().optional(), start: RationalTimeSchema, duration: RationalTimeSchema, drawn: TestDrawnSchema, transform: z.object({ x: z.number(), y: z.number(), scale: z.number(), rotation: z.number(), opacity: z.number() }).partial().strict().optional() }).strict(),
     apply(d, a, ctx) {

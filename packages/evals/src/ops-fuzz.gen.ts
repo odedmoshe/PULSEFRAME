@@ -392,7 +392,7 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     const motionTracks = Object.values(doc.motionTracks ?? {});
     const mtId = () => (motionTracks.length && rnd() < 0.9 ? pick(motionTracks).id : 'mtk_none');
     const videoTracks = tracks.filter((t) => t.kind === 'video');
-    const followers = clips.filter((x) => x.c.type === 'text' || (x.c.type === 'media' && x.t.kind === 'video'));
+    const followers = clips.filter((x) => x.c.type === 'text' || x.c.type === 'drawn' || (x.c.type === 'media' && x.t.kind === 'video'));
     const adjusts = clips.filter((x) => x.c.type === 'adjustment');
     const adjustId = () => (adjusts.length && rnd() < 0.9 ? pick(adjusts).c.id : any());
     const menu: (() => OpCall)[] = [
