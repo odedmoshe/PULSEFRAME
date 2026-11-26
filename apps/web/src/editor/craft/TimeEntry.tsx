@@ -9,7 +9,7 @@ import * as T from '@pulseframe/time';
 import { durationOps, findClip } from '@pulseframe/core';
 import { useEditorState } from '../store.ts';
 import { CRAFT_TESTIDS as TID } from './craft.testids.ts';
-import { craftSurface } from './craft.state.ts';
+import { closeSurface, craftSurface } from './craft.state.ts';
 import { durationNotice, laterThatStayed, say, timeLine, type Lang, type TimeLine, type TimeMode } from './craft.logic.ts';
 
 export interface TimeFieldProps {
@@ -51,7 +51,7 @@ export function TimeEntry({ target }: { target: 'goto' | 'duration' }) {
   const titleId = useId();
   const ids = state.selection.filter((id) => doc && findClip(doc, id));
   const rate = editor.rate;
-  const close = () => { craftSurface.set(null); const o = opener.current; setTimeout(() => (o && o !== document.body && o.isConnected ? o : document.querySelector<HTMLElement>('[data-testid=timecode]'))?.focus(), 0); };
+  const close = () => { const o = opener.current; closeSurface(o && o !== document.body && o.isConnected ? o : document.querySelector<HTMLElement>('[data-testid=timecode]')); };
   // a click anywhere else closes the field (it is not modal); the focus stays where the click put it
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
