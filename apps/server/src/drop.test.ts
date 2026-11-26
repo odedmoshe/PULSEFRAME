@@ -1,7 +1,7 @@
 /**
  * The phone drop door (ADR-0023, W1): the second listener as an attacker on the same Wi-Fi sees it. The door is bound to
  * 127.0.0.2 through an injected interface list (admitted, since loopback is not a private range: the range rule itself is in
- * dropNet.test.ts); "the phone" connects from 127.0.0.3 and "another device" from 127.0.0.4 (fixed ports 9001-9004). A fake
+ * dropNet.test.ts); "the phone" connects from 127.0.0.3 and "another device" from 127.0.0.4 (the door's port is a free one picked per test, see freePort). A fake
  * clock drives the code's lifetime, the stall timer and the refusal drain; the import queue is a labelled FAKE that reads the
  * body as the real receive() does and records what it was asked to enqueue and which uploads were aborted.
  */
@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import http from 'node:http';
 import net from 'node:net';
 import type { NetworkInterfaceInfo } from 'node:os';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { DropPublicView, ImportRoom } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import type { DropPage } from './drop-page/index.ts';
@@ -21,8 +21,10 @@ const BIND = '127.0.0.2';
 const PHONE = '127.0.0.3';
 const OTHER = '127.0.0.4';
 const ALT = '127.0.0.6';
-const PORT = 9001;
-const BUSY_PORT = 9002;
+/** The door's port: a free one on BIND, picked before each test (never a fixed number: two worktrees running this file at once must not meet). */
+let PORT = 0;
+const freePort = async (): Promise<number> => { const s = net.createServer(); await new Promise<void>((r) => s.listen(0, BIND, () => r())); const p = (s.address() as net.AddressInfo).port; await new Promise<void>((r) => s.close(() => r())); return p; };
+beforeEach(async () => { PORT = await freePort(); });
 const PROJECT = 'prj_drop1';
 const OWNER: Principal = { actor: 'user:local', kind: 'user', scopes: ['observe', 'edit'] };
 const AGENT: Principal = { actor: 'agent:local', kind: 'agent', scopes: ['observe', 'edit'] };
@@ -337,7 +339,8 @@ describe('opening a code (owner only, one confirmed address)', { timeout: 60_000
 
   it('a port that cannot be opened answers drop_listen_failed and leaves no code', async () => {
     const blocker = net.createServer();
-    await new Promise<void>((r) => blocker.listen(BUSY_PORT, BIND, () => r()));
+    await new Promise<void>((r) => blocker.listen(0, BIND, () => r()));
+    const BUSY_PORT = (blocker.address() as net.AddressInfo).port;
     try {
       const { door } = setup({}, { port: BUSY_PORT });
       await expect(door.open(OWNER, PROJECT, BIND)).rejects.toMatchObject({ status: 503, code: 'drop_listen_failed' });

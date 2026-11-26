@@ -21,6 +21,7 @@ import { presenceOf, presenceOp } from './pearls.logic.ts';
 import { pearlsT } from './pearls.strings.ts';
 import { PEARLS_TESTIDS as ID } from './pearls.testids.ts';
 import './pearls.css';
+import { focusNow } from '../../ds/focus.ts';
 
 export function WhoDialog({ assetId, onClose }: { assetId: string; onClose: () => void }): ReactElement | null {
   const { editor, state } = useEditorState();
@@ -81,7 +82,9 @@ export function openWhoDialog(editor: Editor, assetId: string): void {
   document.body.appendChild(host);
   const root = createRoot(host);
   const trigger = document.querySelector<HTMLElement>(`[data-testid="more-${CSS.escape(assetId)}"]`);
-  const done = () => setTimeout(() => { root.unmount(); host.remove(); (trigger?.isConnected ? trigger : null)?.focus(); }, 0);
+  // The trigger is behind the open dialog (the page is inert while it is open), so it can take the focus only once the dialog is gone: unmount
+  // (React 19 runs the dialog's cleanup, which lifts the inert, before unmount() returns), then focus, all in this task.
+  const done = () => { root.unmount(); host.remove(); focusNow(trigger); };
   root.render(<EditorContext.Provider value={editor}><WhoDialog assetId={assetId} onClose={done} /></EditorContext.Provider>);
 }
 

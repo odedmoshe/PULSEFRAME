@@ -103,7 +103,7 @@ function ffmpeg(args: string[]) { const r = spawnSync('ffmpeg', ['-hide_banner',
 let pid = '', voiceAsset = '', clipA = '', clipB = '', otherClip = '', stillClip = '', videoPicture = '', videoSound = '';
 const voice20 = recording(20);
 beforeAll(async () => {
-  s = await startServer({ port: 42000 + Math.floor(Math.random() * 18000), dataDir: path.join(dir, 'data') });
+  s = await startServer({ port: 0, dataDir: path.join(dir, 'data') });
   pid = (await call('/projects', { name: 'ניקוי קול' })).body.project.id;
   voiceAsset = await upload(pid, 'voice.wav', voice20);
   const other = await upload(pid, 'other.wav', recording(4, { seed: 9, humDb: null }));

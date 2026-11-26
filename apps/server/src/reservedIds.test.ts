@@ -36,7 +36,7 @@ describe('ids that name an inherited member, over HTTP', () => {
 
   beforeAll(async () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-reserved-'));
-    server = await startServer({ port: 20000 + Math.floor(Math.random() * 20000), dataDir: dir });
+    server = await startServer({ port: 0, dataDir: dir });
     const created = await call('POST', '/projects', { name: 'reserved ids' });
     projectId = JSON.parse(created.text).project.id;
     // The library entry is attached the way the ingest job does it; no media bytes are needed for what is asked here.

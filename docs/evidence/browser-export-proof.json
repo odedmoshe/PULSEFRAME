@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T21:22:43.190Z",
+  "ranAt": "2026-11-26T01:32:48.330Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
@@ -59,14 +59,14 @@
     },
     "browserExport": {
       "frames": 105,
-      "wallSeconds": 0.92,
-      "realtimeFactor": 3.821,
+      "wallSeconds": 0.75,
+      "realtimeFactor": 4.654,
       "bytes": 283785,
-      "wallInPageMs": 894,
+      "wallInPageMs": 734,
       "note": "headless Chromium, software (no GPU), 640x360 high quality; wall time includes asset fetch, audio mix, encode, SHA-256, base64 transfer"
     },
     "parity": {
-      "serverRouteWallSeconds": 2.289,
+      "serverRouteWallSeconds": 1.835,
       "serverBytes": 76665,
       "browserBytes": 283785,
       "ssimByFrame": {
@@ -106,17 +106,17 @@
       }
     },
     "leaseLoss": {
-      "closedTabToFailedSeconds": 12.45,
+      "closedTabToFailedSeconds": 12.39,
       "leaseSeconds": 15
     },
     "agentCancel": {
       "frames": 3600,
       "framesAtCancel": 37,
-      "framesAtStop": 1333,
-      "cancelToStopSeconds": 4.73,
+      "framesAtStop": 1489,
+      "cancelToStopSeconds": 4.82,
       "heartbeatSeconds": 5,
       "tool": {
-        "jobId": "job_JvNZsHy7loU",
+        "jobId": "job_jGtc6HS1oCY",
         "status": "cancel-requested",
         "outcome": "stopping",
         "note": "the tab stops at its next heartbeat (every 5 s) and discards its partial output; if it does not answer, the job is canceled when its lease of 15 s expires"
@@ -317,7 +317,7 @@
           "location": "client-download",
           "note": "the media bytes were produced and stay in the browser tab that held the lease; the server stores only this record",
           "bytes": 283785,
-          "sha256": "e7f5374dfd52aae33676cad73678b68f9a92ce9dee669c6a36da885500f41115",
+          "sha256": "486bf49827ed9bf88475885f71ce840ba979d4c4b302b81ae9133a3fdf2c43df",
           "videoCodec": "avc",
           "audioCodec": "opus",
           "frames": 105,
@@ -353,8 +353,8 @@
       "name": "job row sha256 and bytes equal those of the file the proof received",
       "ok": true,
       "detail": {
-        "server": "e7f5374dfd52aae33676cad73678b68f9a92ce9dee669c6a36da885500f41115",
-        "received": "e7f5374dfd52aae33676cad73678b68f9a92ce9dee669c6a36da885500f41115"
+        "server": "486bf49827ed9bf88475885f71ce840ba979d4c4b302b81ae9133a3fdf2c43df",
+        "received": "486bf49827ed9bf88475885f71ce840ba979d4c4b302b81ae9133a3fdf2c43df"
       }
     },
     {
@@ -394,7 +394,7 @@
       "detail": {
         "status": "failed",
         "error": "lease_lost",
-        "afterSeconds": 12.45
+        "afterSeconds": 12.39
       }
     },
     {
@@ -409,8 +409,8 @@
       "name": "restart: a NEW job over a fresh snapshot succeeds; exactly one succeeded job carries its output; the lost job published nothing",
       "ok": true,
       "detail": {
-        "newJob": "job_aKRB2MKa0cM",
-        "lostJob": "job_z5IKxEaJzRg"
+        "newJob": "job_VNwofEBetSg",
+        "lostJob": "job_qMiqi6GhmVU"
       }
     },
     {
@@ -419,11 +419,11 @@
       "detail": {
         "frames": 3600,
         "framesAtCancel": 37,
-        "framesAtStop": 1333,
-        "cancelToStopSeconds": 4.73,
+        "framesAtStop": 1489,
+        "cancelToStopSeconds": 4.82,
         "heartbeatSeconds": 5,
         "tool": {
-          "jobId": "job_JvNZsHy7loU",
+          "jobId": "job_jGtc6HS1oCY",
           "status": "cancel-requested",
           "outcome": "stopping",
           "note": "the tab stops at its next heartbeat (every 5 s) and discards its partial output; if it does not answer, the job is canceled when its lease of 15 s expires"

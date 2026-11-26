@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { isModified, parseTyped, resetValue, scrubKey, scrubValue, type ScrubSpec } from './logic.ts';
 import { DS, cx } from './util.tsx';
+import { focusNow } from './focus.ts';
 
 export interface ScrubFieldProps extends ScrubSpec {
   value: number;
@@ -63,9 +64,10 @@ export function ScrubField(props: ScrubFieldProps) {
   const finish = (accept: boolean, refocus: boolean) => {
     if (ended.current) return;
     ended.current = true;
+    // the field itself (root) is in the page the whole time: the focus goes to it first, in this task, while the input still exists (its blur finds `ended` set)
+    if (refocus) focusNow(root.current);
     setEditing(false);
     if (accept) { const v = parseTyped(text, spec); if (v !== null && v !== value) { onChange(v); onCommit?.(v); } }
-    if (refocus) requestAnimationFrame(() => root.current?.focus());
   };
   const label2 = `${shown}${unit ? ` ${unit}` : ''}`;
   return (

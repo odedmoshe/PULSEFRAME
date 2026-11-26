@@ -1,5 +1,5 @@
 {
- "when": "2026-11-25T22:55:26.841Z",
+ "when": "2026-11-26T00:54:02.028Z",
  "exit": 0,
  "results": [
   {
@@ -78,25 +78,25 @@
    "check": 18,
    "part": "server",
    "verdict": "PASS",
-   "seconds": 16.7
+   "seconds": 15.9
   },
   {
    "check": 12,
    "part": "duties",
    "verdict": "PASS",
-   "seconds": 1.8
+   "seconds": 1.5
   },
   {
    "check": 13,
    "part": "duties",
    "verdict": "PASS",
-   "seconds": 1.5
+   "seconds": 1.2
   },
   {
    "check": 14,
    "part": "duties",
    "verdict": "PASS",
-   "seconds": 1
+   "seconds": 0.9
   },
   {
    "check": 15,
@@ -108,7 +108,7 @@
    "check": 17,
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 21.1
+   "seconds": 18.7
   }
  ],
  "note": "SYNTHETIC LIBRARY only (made by the proof); timings are one sample each"

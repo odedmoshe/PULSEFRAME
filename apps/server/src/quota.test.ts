@@ -21,7 +21,7 @@ describe('storage ceiling', () => {
   };
   const upload = (bytes: Buffer, name: string) => fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...owner, 'x-filename': name, connection: 'close' }, body: new Uint8Array(bytes) });
   beforeAll(async () => {
-    s = await startServer({ port: 8951, dataDir: dir, maxStorageBytes: QUOTA });
+    s = await startServer({ port: 0, dataDir: dir, maxStorageBytes: QUOTA });
     const cookie = (await fetch(`${s.url}/api/v1/session`, { headers: { origin: s.url, 'x-pf-owner-key': s.auth.tokens.owner, connection: 'close' } })).headers.get('set-cookie')!.split(';')[0]!;
     owner = { cookie, origin: s.url };
     pid = (await (await fetch(`${s.url}/api/v1/projects`, { method: 'POST', headers: { ...owner, 'content-type': 'application/json', connection: 'close' }, body: JSON.stringify({ name: 'quota' }) })).json()).project.id;

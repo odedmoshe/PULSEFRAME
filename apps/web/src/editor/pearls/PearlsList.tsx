@@ -31,6 +31,7 @@ import { pearlsT } from './pearls.strings.ts';
 import { PEARLS_TESTIDS as ID } from './pearls.testids.ts';
 import { getPearlsUi, usePearlsUi } from './pearls.ui.ts';
 import './pearls.css';
+import { focusNow } from '../../ds/focus.ts';
 
 /** True once the pearls surfaces are built (every mount point checks it). */
 export const PEARLS_UI_BUILT = true;
@@ -72,7 +73,8 @@ export function PearlsList({ onView }: { onView?: (assetId: string) => void }): 
   const chips = useMemo(() => personChips(pearls), [pearls]);
   const st: ListState = listState(res.view && !pearls.length ? { ...res.view, ranges: [] } : res.view, res.failure);
   const rawDoc = state.rawDoc, doc = state.doc;
-  const onClose = useCallback(() => { const id = viewing?.rangeId; setViewing(null); if (id) requestAnimationFrame(() => listRef.current?.querySelector<HTMLElement>(`[data-range-id="${CSS.escape(id)}"] [data-testid="${ID.rowShow}"]`)?.focus()); }, [viewing]);
+  // the row is in the page while the viewer is open: its button takes the focus first, then the viewer closes, in one task
+  const onClose = useCallback(() => { const id = viewing?.rangeId; if (id) focusNow(listRef.current?.querySelector<HTMLElement>(`[data-range-id="${CSS.escape(id)}"] [data-testid="${ID.rowShow}"]`)); setViewing(null); }, [viewing]);
   const [focusId, setFocusId] = useState<string | null>(null);
   const renameGuard = useRef<string | null>(null);
   if (!doc || !rawDoc) return null;

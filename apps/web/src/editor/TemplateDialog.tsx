@@ -4,11 +4,12 @@
  * focus to the card that opened it. Planning is read-only; "Use" applies the plan as ONE transaction on the server
  * (POST …/apply with the plan's revision as expectedRevision), so the editor sees one new revision and one undo step.
  */
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import * as T from '@pulseframe/time';
 import type { TemplateApplyResult, TemplateInput, TemplatePlanView, TemplateSummary } from '@pulseframe/core';
 import { api, ApiFailure } from '../api.ts';
 import { ToastSlot } from '../ds/index.ts';
+import { focusIn } from '../ds/focus.ts';
 import { useEditorState } from './store.ts';
 import { TEMPLATE_STRINGS } from './templates.strings.ts';
 import { TEMPLATE_TESTIDS as TID } from './templates.testids.ts';
@@ -112,7 +113,30 @@ export function TemplateDialog({ summary, onClose, onApplied }: { summary: Templ
     if (e.shiftKey && (at === first || !dialogRef.current?.contains(at))) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && (at === last || !dialogRef.current?.contains(at))) { e.preventDefault(); first.focus(); }
   };
-  const go = (s: Step) => { setStep(s); setNote(null); setTimeout(() => document.getElementById(`${titleId}-${s}`)?.focus(), 0); };
+  /**
+   * A step change moves the focus to the new step's heading in the same commit that draws the step (a layout effect), never in a later
+   * task: a deferred focus() fired after the person (or a script) had already put the focus in the new step's first field and taken
+   * the typing with it (editor-interactions: one Hebrew letter of «יום הולדת שמח» landed on the heading).
+   */
+  const focusStep = useRef<Step | null>(null);
+  useLayoutEffect(() => {
+    if (focusStep.current !== step) return;
+    focusStep.current = null;
+    document.getElementById(`${titleId}-${step}`)?.focus();
+  }, [step, titleId]);
+  const focusMove = useRef<{ id: string; which: 'earlier' | 'later' } | null>(null);
+  useLayoutEffect(() => {
+    const m = focusMove.current;
+    if (!m) return;
+    focusMove.current = null;
+    focusIn(dialogRef.current, `li[data-asset-id="${CSS.escape(m.id)}"] [data-testid="${m.which === 'earlier' ? TID.mediaEarlier : TID.mediaLater}"]`);
+  });
+  const go = (s: Step) => {
+    setNote(null);
+    if (s === step) { document.getElementById(`${titleId}-${s}`)?.focus(); return; }
+    focusStep.current = s;
+    setStep(s);
+  };
   const at = STEPS.indexOf(step);
   if (!doc) return null;
 
@@ -122,7 +146,7 @@ export function TemplateDialog({ summary, onClose, onApplied }: { summary: Templ
   const move = (index: number, by: -1 | 1, which: 'earlier' | 'later') => {
     const id = media[index]?.assetId;
     setMedia((m) => moveItem(m, index, by));
-    if (id) setTimeout(() => dialogRef.current?.querySelector<HTMLElement>(`li[data-asset-id="${CSS.escape(id)}"] [data-testid="${which === 'earlier' ? TID.mediaEarlier : TID.mediaLater}"]`)?.focus(), 0);
+    if (id) focusMove.current = { id, which }; // the row is moved (re-inserted) by the next commit, which drops the focus: given back in that commit's layout effect
   };
   const rows = plan ? planRows(plan, doc.settings.frameRate) : null;
   const shownPlan = plan ?? lastPlan;

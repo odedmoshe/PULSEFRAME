@@ -1153,7 +1153,12 @@ async function main() {
       await open(missPid);
       await page.getByTestId(`missing-${missUp.assetId}`).waitFor({ timeout: 10000 }).catch(() => {});
       await page.waitForTimeout(500);
-      await auditState('missing-media', { shown: (await page.getByTestId(`missing-${missUp.assetId}`).count()) === 1 && (await page.locator('.clip.missing').count()) >= 1 && (await page.locator('.error[role=alert]').count()) === 0 });
+      {
+        // the three conditions in the state's detail, so a failure says which one (the card once, the clip's look, no error alert)
+        const cards = await page.getByTestId(`missing-${missUp.assetId}`).count(), clipsMissing = await page.locator('.clip.missing').count();
+        const alerts = await page.locator('.error[role=alert]').allTextContents();
+        await auditState('missing-media', { shown: cards === 1 && clipsMissing >= 1 && alerts.length === 0, cards, clipsMissing, alerts });
+      }
       // wave 6 notes in the light theme: the skipped-clip note, the archive import's note, and the Templates bar after a hand delete
       await open(await untimedProject(`a11y-untimed-light-${lang}`));
       await auditState('transcript-skipped-note', await skippedNoteState(page, lang));

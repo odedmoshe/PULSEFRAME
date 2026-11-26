@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T21:31:19.992Z",
+  "ranAt": "2026-11-26T01:37:41.611Z",
   "result": "PASS",
   "checks": [
     {
@@ -89,18 +89,18 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_7fd63c3e6c0": "proxy",
-            "ast_75185b153e0": "original",
-            "ast_cca991df5c0": "proxy"
+            "ast_55c38c6d460": "proxy",
+            "ast_6cc7681e8d0": "original",
+            "ast_fd908d1b530": "proxy"
           },
           "sourcesUsed": {
-            "ast_7fd63c3e6c0": [
+            "ast_55c38c6d460": [
               "proxy"
             ],
-            "ast_75185b153e0": [
+            "ast_6cc7681e8d0": [
               "original"
             ],
-            "ast_cca991df5c0": [
+            "ast_fd908d1b530": [
               "proxy"
             ]
           },
@@ -129,18 +129,18 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_7fd63c3e6c0": "original",
-            "ast_75185b153e0": "original",
-            "ast_cca991df5c0": "original"
+            "ast_55c38c6d460": "original",
+            "ast_6cc7681e8d0": "original",
+            "ast_fd908d1b530": "original"
           },
           "sourcesUsed": {
-            "ast_7fd63c3e6c0": [
+            "ast_55c38c6d460": [
               "original"
             ],
-            "ast_75185b153e0": [
+            "ast_6cc7681e8d0": [
               "original"
             ],
-            "ast_cca991df5c0": [
+            "ast_fd908d1b530": [
               "original"
             ]
           },
@@ -156,19 +156,19 @@
       "ok": true,
       "detail": {
         "cutFramesMeasured": 12,
-        "medianMs": 29.31,
-        "p95Ms": 47.98,
-        "medianFrames": 0.88,
-        "p95Frames": 1.44,
+        "medianMs": 21.33,
+        "p95Ms": 34.67,
+        "medianFrames": 0.64,
+        "p95Frames": 1.04,
         "allFrames": {
-          "median": 17.31,
-          "p95": 31.98,
-          "max": 190.65
+          "median": 13.33,
+          "p95": 21.33,
+          "max": 222.67
         },
         "baselineRun": {
-          "median": 17.33,
-          "p95": 42.67,
-          "max": 174.67
+          "median": 16,
+          "p95": 25.33,
+          "max": 30.67
         },
         "progressMd74": "median 5-15 ms, p95 about 21-24 ms after the clock reached the frame (one 3.5 s headless run)",
         "budget": "p95 <= 2 frames",
@@ -183,9 +183,9 @@
           "gaveRoom": 0
         },
         "loadAverage": [
-          5.75,
-          6.1,
-          7.06
+          1.76,
+          1.73,
+          1.94
         ]
       }
     },
@@ -275,8 +275,8 @@
       "name": "U5: a digit while paused gives +1 history entry, the segment under the playhead shows the angle, and undo restores it",
       "ok": true,
       "detail": {
-        "angleAfter": "ang_192484bcf53",
-        "expected": "ang_192484bcf53"
+        "angleAfter": "ang_3a87278f743",
+        "expected": "ang_3a87278f743"
       }
     },
     {
@@ -316,64 +316,64 @@
         "shownSegments": 7,
         "badges": [
           {
-            "angle": "ang_192484bcf52",
+            "angle": "ang_3a87278f742",
             "badge": {
-              "clipId": "clp_db88f4bfed1",
-              "angleId": "ang_192484bcf52",
+              "clipId": "clp_33f90063311",
+              "angleId": "ang_3a87278f742",
               "text": "1 · Camera 1",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_192484bcf53",
+            "angle": "ang_3a87278f743",
             "badge": {
-              "clipId": "clp_78f0c93a920",
-              "angleId": "ang_192484bcf53",
+              "clipId": "clp_f73f4c875f0",
+              "angleId": "ang_3a87278f743",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_192484bcf54",
+            "angle": "ang_3a87278f744",
             "badge": {
-              "clipId": "clp_78f0c93a921",
-              "angleId": "ang_192484bcf54",
+              "clipId": "clp_f73f4c875f1",
+              "angleId": "ang_3a87278f744",
               "text": "3 · Camera 3",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_192484bcf53",
+            "angle": "ang_3a87278f743",
             "badge": {
-              "clipId": "clp_78f0c93a922",
-              "angleId": "ang_192484bcf53",
+              "clipId": "clp_f73f4c875f2",
+              "angleId": "ang_3a87278f743",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_192484bcf54",
+            "angle": "ang_3a87278f744",
             "badge": {
-              "clipId": "clp_78f0c93a923",
-              "angleId": "ang_192484bcf54",
+              "clipId": "clp_f73f4c875f3",
+              "angleId": "ang_3a87278f744",
               "text": "3 · Camera 3",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_192484bcf52",
+            "angle": "ang_3a87278f742",
             "badge": {
-              "clipId": "clp_78f0c93a924",
-              "angleId": "ang_192484bcf52",
+              "clipId": "clp_f73f4c875f4",
+              "angleId": "ang_3a87278f742",
               "text": "1 · Camera 1",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_192484bcf53",
+            "angle": "ang_3a87278f743",
             "badge": {
-              "clipId": "clp_db88f4bfed2",
-              "angleId": "ang_192484bcf53",
+              "clipId": "clp_33f90063312",
+              "angleId": "ang_3a87278f743",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
@@ -446,27 +446,27 @@
   "measurements": {
     "sync": [
       {
-        "angleId": "ang_192484bcf51",
+        "angleId": "ang_3a87278f741",
         "verdict": "reference",
         "offsetSeconds": 0
       },
       {
-        "angleId": "ang_192484bcf52",
+        "angleId": "ang_3a87278f742",
         "verdict": "check",
         "offsetSeconds": -0.625
       },
       {
-        "angleId": "ang_192484bcf53",
+        "angleId": "ang_3a87278f743",
         "verdict": "confident",
         "offsetSeconds": 1.194187
       },
       {
-        "angleId": "ang_192484bcf54",
+        "angleId": "ang_3a87278f744",
         "verdict": "confident",
         "offsetSeconds": 0.499979
       },
       {
-        "angleId": "ang_192484bcf54",
+        "angleId": "ang_3a87278f744",
         "verdict": "unsynced",
         "offsetSeconds": null
       }
@@ -474,16 +474,16 @@
     "initialBoundaries": [
       {
         "frame": 1001,
-        "angleId": "ang_192484bcf53"
+        "angleId": "ang_3a87278f743"
       }
     ],
     "baseline": {
       "clock": "audio",
       "onsets": 28,
       "paintLatenessMs": {
-        "median": 17.33,
-        "p95": 42.67,
-        "max": 174.67
+        "median": 16,
+        "p95": 25.33,
+        "max": 30.67
       }
     },
     "u1": {
@@ -540,73 +540,73 @@
       "cuts": [
         {
           "frame": 60,
-          "angleId": "ang_192484bcf53"
+          "angleId": "ang_3a87278f743"
         },
         {
           "frame": 100,
-          "angleId": "ang_192484bcf54"
+          "angleId": "ang_3a87278f744"
         },
         {
           "frame": 140,
-          "angleId": "ang_192484bcf52"
+          "angleId": "ang_3a87278f742"
         },
         {
           "frame": 180,
-          "angleId": "ang_192484bcf53"
+          "angleId": "ang_3a87278f743"
         },
         {
           "frame": 220,
-          "angleId": "ang_192484bcf54"
+          "angleId": "ang_3a87278f744"
         },
         {
           "frame": 260,
-          "angleId": "ang_192484bcf52"
+          "angleId": "ang_3a87278f742"
         },
         {
           "frame": 300,
-          "angleId": "ang_192484bcf53"
+          "angleId": "ang_3a87278f743"
         },
         {
           "frame": 340,
-          "angleId": "ang_192484bcf54"
+          "angleId": "ang_3a87278f744"
         },
         {
           "frame": 380,
-          "angleId": "ang_192484bcf52"
+          "angleId": "ang_3a87278f742"
         },
         {
           "frame": 420,
-          "angleId": "ang_192484bcf53"
+          "angleId": "ang_3a87278f743"
         },
         {
           "frame": 460,
-          "angleId": "ang_192484bcf54"
+          "angleId": "ang_3a87278f744"
         },
         {
           "frame": 500,
-          "angleId": "ang_192484bcf52"
+          "angleId": "ang_3a87278f742"
         },
         {
           "frame": 1001,
-          "angleId": "ang_192484bcf53"
+          "angleId": "ang_3a87278f743"
         }
       ]
     },
     "u4": {
       "cutFramesMeasured": 12,
-      "medianMs": 29.31,
-      "p95Ms": 47.98,
-      "medianFrames": 0.88,
-      "p95Frames": 1.44,
+      "medianMs": 21.33,
+      "p95Ms": 34.67,
+      "medianFrames": 0.64,
+      "p95Frames": 1.04,
       "allFrames": {
-        "median": 17.31,
-        "p95": 31.98,
-        "max": 190.65
+        "median": 13.33,
+        "p95": 21.33,
+        "max": 222.67
       },
       "baselineRun": {
-        "median": 17.33,
-        "p95": 42.67,
-        "max": 174.67
+        "median": 16,
+        "p95": 25.33,
+        "max": 30.67
       },
       "progressMd74": "median 5-15 ms, p95 about 21-24 ms after the clock reached the frame (one 3.5 s headless run)",
       "budget": "p95 <= 2 frames",
@@ -621,9 +621,9 @@
         "gaveRoom": 0
       },
       "loadAverage": [
-        5.75,
-        6.1,
-        7.06
+        1.76,
+        1.73,
+        1.94
       ],
       "prefetchVerdict": "budget met in this run"
     }

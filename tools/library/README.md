@@ -97,3 +97,17 @@ Content of a source marked `diskOnly` stays on the owner's disk. It is never com
 ## Gated models (`fetch-gated.mjs`)
 
 `node fetch-gated.mjs [--root <library>]` is run by the owner in their own terminal. It reads `expected/gated-models-01.json`, asks for a Hugging Face access key in a hidden prompt (refused when there is no terminal), and downloads the gated files into `models/gated/…`, checking each size (and SHA-256 where one is recorded). The key stays in memory for the run, is sent to `huggingface.co` only (redirects are followed by hand without it) and is never written, printed or passed on a command line. It prints the SHA-256 of every file and saves them to `_manifests/gated-hashes.txt`, from which the lead records the reference values. Tested in the Linux container: a public file without a key, a repeated run, no terminal (exit 2), a malformed key (nothing sent), a dummy key against the gated list (HTTP 401, the rest skipped). Not tested: a real key, Windows.
+
+## Looking inside a sample set (`kit-inventory.mjs`)
+
+Read-only, built-ins only, no network. After a sample-instrument item is in the library:
+
+```
+node kit-inventory.mjs --root E:\PULSEFRAME-Library --item instruments/vsco-2-ce
+node kit-inventory.mjs --root E:\PULSEFRAME-Library --item instruments/vsco-2-ce --match piano,violin
+node kit-inventory.mjs --root E:\PULSEFRAME-Library --item instruments/vsco-2-ce --sfz "<path of an .sfz in the item>"
+```
+
+- Without `--sfz`: one `SFZ` line per instrument file — regions, files used, bytes, samples that are missing, outside the item, found only by letter case, written with `..` or a backslash; key range; loop modes; sample rate, bit depth, channels and the shortest / median / longest sample in seconds.
+- With `--sfz` (repeatable): the file table of those instruments between `BEGIN` and `END`, one line per file (`sha256  bytes  path`), then `TABLE files=N bytes=N sha256=…`, the SHA-256 of the lines joined by a line feed, so a copy of the lines can be checked. The lines are also saved under `<root>/_manifests/kit-inventory/`. Exit code 1 when a named instrument has a missing or outside file.
+- `.git` and symbolic links are never entered. Nothing the script reads is executed.

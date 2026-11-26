@@ -10,13 +10,13 @@ const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-sess-'))
 
 describe('owner session cookie', () => {
   it('is HttpOnly, SameSite=Strict and not Secure by default; with secureCookie it is Secure, is issued to a listed https origin and refused to an unlisted one', async () => {
-    const plain = await startServer({ port: 8971, dataDir: tmp() });
+    const plain = await startServer({ port: 0, dataDir: tmp() });
     try {
       const r = await fetch(`${plain.url}/api/v1/session`, { headers: { origin: plain.url, 'x-pf-owner-key': plain.auth.tokens.owner, connection: 'close' } });
       const c = r.headers.get('set-cookie')!;
       expect(c).toMatch(/^pf_session=[\w-]+; HttpOnly; SameSite=Strict; Path=\/$/);
     } finally { await plain.close(); }
-    const tls = await startServer({ port: 8972, dataDir: tmp(), secureCookie: true, extraOrigins: ['https://studio.example'] });
+    const tls = await startServer({ port: 0, dataDir: tmp(), secureCookie: true, extraOrigins: ['https://studio.example'] });
     try {
       const key = { 'x-pf-owner-key': tls.auth.tokens.owner, connection: 'close' };
       const ok = await fetch(`${tls.url}/api/v1/session`, { headers: { ...key, origin: 'https://studio.example' } });

@@ -5,7 +5,8 @@
  * and Undo (each one transaction: regenerate keeps hand-edited items; Undo is the editor's own). No animated previews in
  * wave 1; nothing here keeps project state.
  */
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type MutableRefObject } from 'react';
+import { focusNow } from '../ds/focus.ts';
 import { removedByHand, TEMPLATE_GENRES, type TemplateSummary } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { LayoutTemplate } from 'lucide-react';
@@ -19,7 +20,8 @@ import './templates.css';
 import { MUSICFIT_UI_BUILT } from './musicfit/MusicFitBlock.tsx';
 import { SwapMusicButton } from './musicfit/SwapMusicDialog.tsx';
 
-const focusCard = (id: string) => setTimeout(() => document.querySelector<HTMLElement>(`[data-testid=${TID.card}][data-template-id="${CSS.escape(id)}"]`)?.focus(), 0);
+/** The card is in the page while its dialog is open: the focus goes back to it first, then the dialog closes, in one task. */
+const focusCard = (id: string) => focusNow(document.querySelector<HTMLElement>(`[data-testid=${TID.card}][data-template-id="${CSS.escape(id)}"]`));
 
 export function TemplatesDrawer() {
   const { editor, state, t } = useEditorState();
@@ -35,16 +37,19 @@ export function TemplatesDrawer() {
   useEffect(() => { if (open && !list) load(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   // opened from the palette or Welcome: the focus goes to the first card once the cards are there (to the toggle if none load)
   const focused = useRef(0);
-  useEffect(() => {
+  // a layout effect: the focus is given in the commit that draws the cards (or the failure note), not in a later task
+  useLayoutEffect(() => {
     if (!state.templatesFocus || focused.current === state.templatesFocus || (!list && !failed)) return;
     focused.current = state.templatesFocus;
-    setTimeout(() => (document.querySelector<HTMLElement>(`[data-testid=${TID.drawer}] [data-testid=${TID.card}]`) ?? document.querySelector<HTMLElement>(`[data-testid=${TID.drawer}] [data-testid=templates-toggle]`))?.focus(), 0);
+    focusNow(document.querySelector<HTMLElement>(`[data-testid=${TID.drawer}] [data-testid=${TID.card}]`) ?? document.querySelector<HTMLElement>(`[data-testid=${TID.drawer}] [data-testid=templates-toggle]`));
   }, [state.templatesFocus, list, failed]);
+  // the run bar (and its Shuffle button) is drawn by the commit that stores the applied run: AppliedBar takes the focus then
+  const shuffleFor = useRef<string | null>(null);
 
   const applied = (s: TemplateSummary, a: AppliedTemplate) => {
+    shuffleFor.current = a.result.runId; // before the store is told: its listeners may draw the bar at once
     setDialog(null);
     editor.setTemplateRun({ runId: a.result.runId, templateId: s.id, name: s.name, params: a.params, alternatives: a.alternatives, created: a.result.createdIds.length, revision: a.result.revision });
-    setTimeout(() => document.querySelector<HTMLElement>(`[data-testid=${TID.shuffle}]`)?.focus(), 0);
   };
   const shown = list ? filterByGenre(list, genres) : [];
   const reasonOf = (s: TemplateSummary) => (s.needs.model ? t(`template.unavailable.${s.needs.model}` as Key) : null) ?? s.unavailableReason ?? '';
@@ -95,14 +100,14 @@ export function TemplatesDrawer() {
           </ul>
         </div>
       )}
-      <AppliedBar />
-      {dialog && <TemplateDialog summary={dialog} onClose={() => { const id = dialog.id; setDialog(null); focusCard(id); }} onApplied={(a) => applied(dialog, a)} />}
+      <AppliedBar shuffleFor={shuffleFor} />
+      {dialog && <TemplateDialog summary={dialog} onClose={() => { focusCard(dialog.id); setDialog(null); }} onApplied={(a) => applied(dialog, a)} />}
     </section>
   );
 }
 
 /** After apply: what was done, and Shuffle / Another tempo (regenerate, one transaction each) and Undo. Not modal. */
-function AppliedBar() {
+function AppliedBar({ shuffleFor }: { shuffleFor: MutableRefObject<string | null> }) {
   const { editor, state } = useEditorState();
   const lang = state.lang;
   const S = TEMPLATE_STRINGS[lang];
@@ -112,6 +117,11 @@ function AppliedBar() {
   const [said, setSaid] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   useEffect(() => { setSaid(null); setFailed(null); }, [run?.templateId]);
+  useLayoutEffect(() => {
+    if (!run || shuffleFor.current !== run.runId) return;
+    shuffleFor.current = null;
+    focusNow(document.querySelector<HTMLElement>(`[data-testid=${TID.shuffle}]`));
+  }, [run?.runId]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!run || !state.doc) return null;
   // items of the run deleted by hand: a regeneration leaves them out, and bringing them back is an explicit choice
   const removed = removedByHand(state.doc, (Object.hasOwn(state.doc.recipeRuns, run.runId) ? state.doc.recipeRuns[run.runId]!.slots : undefined) ?? []).length;

@@ -64,7 +64,7 @@ beforeAll(async () => {
   clipFile = path.join(dir, 'clip.mp4');
   const r = spawnSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=s=320x240:r=30', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-t', '2', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', clipFile]);
   if (r.status !== 0) throw new Error(`ffmpeg: ${r.stderr}`);
-  s = await startServer({ port: 21000 + Math.floor(Math.random() * 20000), dataDir: path.join(dir, 'data'), dropPort: 0, dropAdmitAddresses: ['127.0.0.1'] });
+  s = await startServer({ port: 0, dataDir: path.join(dir, 'data'), dropPort: 0, dropAdmitAddresses: ['127.0.0.1'] });
   ownerCookie = (await fetch(`${s.url}/api/v1/session`, { headers: { origin: s.url, 'x-pf-owner-key': s.auth.tokens.owner, connection: 'close' } })).headers.get('set-cookie')!.split(';')[0]!;
 }, 120_000);
 afterAll(async () => { await s?.close(); fs.rmSync(dir, { recursive: true, force: true }); });

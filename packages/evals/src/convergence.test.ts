@@ -436,8 +436,7 @@ async function runSeed(seed: number) {
 
 describe('phase 1 convergence (two REST clients over SSE + one MCP client, one project)', () => {
   beforeAll(async () => {
-    const port = 20000 + Math.floor(Math.random() * 20000);
-    server = await startServer({ port, dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'pf-convergence-')) });
+    server = await startServer({ port: 0, dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'pf-convergence-')) });
     base = server.url;
     agentToken = server.auth.tokens.agent;
     observerToken = server.auth.tokens.observer;
