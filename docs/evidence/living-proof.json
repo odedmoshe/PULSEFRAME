@@ -1,0 +1,500 @@
+{
+  "ranAt": "2026-11-26T15:04:05.071Z",
+  "result": "FAILED",
+  "passed": 16,
+  "failed": 2,
+  "blocked": 0,
+  "notRun": 0,
+  "total": 18,
+  "secondsOneSample": 774,
+  "machine": {
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+    "gpu": "none: the WebGPU adapter here is a software one"
+  },
+  "scope": "«תמונה חיה» on synthetic pictures only (a coordinate photo, a disc, a gradient; hand depths: a disc and a ramp) at 640×360 on a software WebGPU adapter: measurements against core and the JavaScript model of the pass (livingModel), the operations, preflight, the export plan and the editor. No hardware adapter, no real photo, no model depth; nobody has looked at the result.",
+  "checks": [
+    {
+      "id": 1,
+      "check": "slide, amount 1, the still at the last frame: pixels well outside the disc decode to source x shifted by the amount for m = −f, well inside by m = 1 − f, each within 1 px of livingModel",
+      "status": "pass",
+      "parts": [
+        {
+          "name": "slide, amount 1, the still at the last frame (270): pixels well outside the disc (m = −f) and well inside it (m = 1 − f) decode to livingModel's source within 1 px",
+          "ok": true,
+          "detail": {
+            "outside": {
+              "compared": 10188,
+              "within1px": 10188,
+              "maxPx": 0.5,
+              "skipped": 869,
+              "worst": []
+            },
+            "inside": {
+              "compared": 384,
+              "within1px": 384,
+              "maxPx": 0.48,
+              "skipped": 283,
+              "worst": []
+            },
+            "travel": 1,
+            "numbers": [
+              0.5,
+              0.5,
+              2,
+              2,
+              0.001953125,
+              0.003472222222222222,
+              0.998046875,
+              0.9965277777777778,
+              0.016874999999999998,
+              0.5,
+              13,
+              1.0172331258975587
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "check": "300 random pixels of a still at travel 0.5 decode to livingModel's source within 1 px, skipping pixels within ⌈A⌉+2 px of a depth edge (C14 e); for the ramp, each row's shift is proportional to (y − h)/(1 − h) within 1 px",
+      "status": "pass",
+      "parts": [
+        {
+          "name": "300 random pixels of the still at the middle frame (135) decode to livingModel within 1 px (pixels near a depth edge skipped, C14 e); the ramp's rows follow livingModel and shift in proportion to (y − h)/(1 − h) within 1 px",
+          "ok": true,
+          "detail": {
+            "random": {
+              "compared": 242,
+              "within1px": 242,
+              "maxPx": 0.5,
+              "skipped": 58,
+              "worst": []
+            },
+            "ramp": {
+              "compared": 174,
+              "within1px": 174,
+              "maxPx": 0.5,
+              "skipped": 3,
+              "worst": []
+            },
+            "worstRowPx": 0.43
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "check": "the band beside the disc's trailing edge is at most ⌈A⌉ + 2 px wide, every band pixel decodes to a source outside the disc (the far side), and no pixel inside the picture is transparent",
+      "status": "pass",
+      "parts": [
+        {
+          "name": "the band beside the disc's trailing edge is at most ⌈A⌉ + 2 = 13 px wide, its pixels come from outside the disc, and no pixel of the picture is transparent",
+          "ok": true,
+          "detail": {
+            "longestBandPx": 0,
+            "bandPixelsFromInsideTheDisc": 0,
+            "transparentPixels": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "check": "a rotated photo (rotation 10°): set_living_picture refuses living_rotated; a living picture rotated afterwards is reported unavailable (preview notice, still refused naming the clip), never drawn flat",
+      "status": "pass",
+      "parts": [
+        {
+          "name": "a rotated photo: set_living_picture refuses living_rotated; a living picture rotated afterwards is refused as a still, naming the effect and the rotation (never drawn flat)",
+          "ok": true,
+          "detail": {
+            "refusal": 422,
+            "refusalWhy": "living_rotated",
+            "still": 422,
+            "stillMessage": "{\"error\":{\"code\":\"render_blocked\",\"message\":\"the living picture (depth.living) on clip clp_a7d2ad75fd0 cannot be drawn: The picture is rotated, so the living picture is not shown. Set the rotation back to 0\",\"details\":{\"blockers\":[{\"code\":\"living_unavailable\",\"message\":\"the living picture (depth.liv"
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "check": "the effect disabled: the still equals the still without the effect byte for byte",
+      "status": "pass",
+      "parts": [
+        {
+          "name": "the living picture disabled: the still equals the still of the same photo without it, byte for byte",
+          "ok": true,
+          "detail": {
+            "equal": true
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "check": "the paused editor preview equals render_frame byte for byte at frames 0, 45 and 89 (gpu-proof.ts method)",
+      "status": "pass",
+      "parts": [
+        {
+          "name": "the paused editor preview equals render_frame byte for byte at frames 0, 135 and 270",
+          "ok": true,
+          "detail": [
+            {
+              "frame": 0,
+              "differingBytes": 0
+            },
+            {
+              "frame": 135,
+              "differingBytes": 0
+            },
+            {
+              "frame": 270,
+              "differingBytes": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "check": "export (MP4): the disc's decoded centre at frames 0, 22, 45, 67, 89 follows the ease-in-out keys within 1.5 px; every exported frame within 36 dB PSNR of its still",
+      "status": "fail",
+      "parts": [
+        {
+          "name": "export (MP4): the disc's decoded centre at frames 0, 68, 135, 203, 270 follows the ease-in-out keys within 1.5 px; every exported frame within 36 dB PSNR of its still",
+          "ok": false,
+          "detail": {
+            "frames": 271,
+            "centre": [
+              {
+                "frame": 0,
+                "travel": 0,
+                "got": 326,
+                "want": 325.39
+              },
+              {
+                "frame": 68,
+                "travel": 0.06389920235736421,
+                "got": 324,
+                "want": 324.7
+              },
+              {
+                "frame": 135,
+                "travel": 0.5,
+                "got": 319,
+                "want": 319.99
+              },
+              {
+                "frame": 203,
+                "travel": 0.938878626225677,
+                "got": 314,
+                "want": 315.25
+              },
+              {
+                "frame": 270,
+                "travel": 1,
+                "got": 313,
+                "want": 314.59
+              }
+            ],
+            "worstCentrePx": 1.59,
+            "worstPsnrDb": 32.42,
+            "exportSecondsOneSample": 646.2,
+            "withoutTheEffectForReference": {
+              "frames": 30,
+              "worstPsnrDb": 43.33,
+              "centreDecodedX": 319,
+              "centreAtRestX": 319.5
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "check": "the page's depthGrid digest equals Node's for the hand disc and the ramp",
+      "status": "pass",
+      "parts": [
+        {
+          "name": "the page's depthGrid digest equals Node's for the hand disc and the ramp",
+          "ok": true,
+          "detail": [
+            {
+              "name": "hand disc",
+              "page": "2d696fdca3d467dc",
+              "node": "2d696fdca3d467dc"
+            },
+            {
+              "name": "ramp",
+              "page": "0bb59c59848eb069",
+              "node": "0bb59c59848eb069"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "check": "an agent token: set_clip_depth and set_living_picture work as ordinary edits (hand depth is document data, LD4); render_frame shows the moved disc; add_effect depth.living is refused living_use_op",
+      "status": "pass",
+      "parts": [
+        {
+          "name": "agent token: set_clip_depth and set_living_picture commit; the still at frame 89 differs from the photo without the effect (the disc moved) and frame 0 does not; add_effect depth.living refused living_use_op",
+          "ok": true,
+          "detail": {
+            "setClipDepth": 200,
+            "setLiving": 200,
+            "pixelsChangedAt89": 480,
+            "pixelsChangedAt0": 0,
+            "stills": [
+              200,
+              200,
+              200
+            ],
+            "addEffect": [
+              422,
+              "living_use_op"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "check": "the calm audience version: the still at frame 89 equals the master's (stir none, C12)",
+      "status": "pass",
+      "parts": [
+        {
+          "name": "the calm audience version: the still at the last frame (270) equals the master's (stir none, C12)",
+          "ok": true,
+          "detail": {
+            "equal": true
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "check": "set_living_picture on a 2-second clip at amount 1 → living_too_fast with max = livingMaxAmount; update_effect raising the amount past it is refused; keys made faster by replace_effect_keyframes → preflight living_too_fast with the clip id",
+      "status": "pass",
+      "parts": [
+        {
+          "name": "a 2-second clip at amount 1 is refused living_too_fast with max 0.43 (livingMaxAmount); update_effect raising it is refused; faster hand keys give preflight living_too_fast naming the clip",
+          "ok": true,
+          "detail": {
+            "refused": [
+              422,
+              "living_too_fast",
+              0.43
+            ],
+            "max": 0.43,
+            "raise": [
+              422,
+              "living_too_fast"
+            ],
+            "before": 0,
+            "warning": {
+              "ids": [
+                "clp_9751e8349b0",
+                "fx_9658d627e40"
+              ],
+              "range": {
+                "startFrame": 0,
+                "endFrame": 60
+              },
+              "measured": {
+                "peakRate": 0.03870000000000003,
+                "limit": 0.02,
+                "amount": 0.43,
+                "maxAmount": 0.22,
+                "clipFrames": 60
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "check": "PF_RENDER_GPU=off: the still is refused with the GPU reason; the block shows «דורש כרטיס מסך» (living-gpu-note)",
+      "status": "pass",
+      "parts": [
+        {
+          "name": "PF_RENDER_GPU=off: the still is refused with the GPU reason; the block shows «דורש כרטיס מסך» (living-gpu-note)",
+          "ok": true,
+          "detail": {
+            "gpuNote": 1,
+            "still": "the still refusal is read by the server half of the proof"
+          }
+        },
+        {
+          "name": "PF_RENDER_GPU=off: the still of a living picture is refused with the graphics-adapter reason naming depth.living (not delivered flat)",
+          "ok": true,
+          "detail": {
+            "status": 503,
+            "error": "the render worker could not produce the frame: render page failed: page.evaluate: Error: gpu_effect_unavailable: frame 0 uses depth.living, which needs a graphics adapter in the render worker; the browser offers WebGPU but gave no graphics adapter"
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "check": "editor, keyboard only: select the photo, the Motion tab, «הפכו לתמונה חיה» (Enter) opens the depth dialog with the ramp, «שמירה» commits ONE set_living_picture carrying the depth (C13), arrow to «גלישה הצידה»; the preview differs between frames 0 and 89; one Ctrl+Z restores the clip exactly (entity diff empty)",
+      "status": "fail",
+      "parts": [
+        {
+          "name": "editor, keyboard only: select the photo, the Motion tab, «הפכו לתמונה חיה» (Enter) opens the depth dialog with the ramp, «שמירה» commits ONE set_living_picture carrying the depth (C13), arrow to «גלישה הצידה»; the preview differs between frames 0 and 89; one Ctrl+Z restores the clip exactly (entity diff empty)",
+          "ok": false,
+          "detail": {
+            "blockVisible": true,
+            "rampHorizon": "450",
+            "transactionsOnSave": [
+              [
+                "set_living_picture"
+              ]
+            ],
+            "depthStored": true,
+            "slideChecked": "true",
+            "previewBytesDifferingFrame0vs89": 0,
+            "seeked": [
+              true,
+              true
+            ],
+            "firstUndoEqualsAfterSave": true,
+            "secondUndoEqualsBefore": true
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "check": "the dialog: open, move the horizon with the arrow keys, one pointer stroke «קרוב», «שמירה» = exactly one set_clip_depth in history; Escape on a second open saves nothing and returns focus to living-depth-open",
+      "status": "pass",
+      "parts": [
+        {
+          "name": "the dialog: open, move the horizon with the arrow keys, one pointer stroke «קרוב», «שמירה» = exactly one set_clip_depth in history; Escape on a second open saves nothing and returns focus to living-depth-open",
+          "ok": true,
+          "detail": {
+            "horizonAfterKey": "460",
+            "transactionsOnSave": [
+              [
+                "set_clip_depth"
+              ]
+            ],
+            "storedHorizon": 460,
+            "storedStrokes": [
+              [
+                "near",
+                10
+              ]
+            ],
+            "transactionsAfterEscape": 0,
+            "focusAfterEscape": "living-depth-open"
+          }
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "check": "C2: a photo at Ken Burns scale 1.18 (larger than the frame): the outer 2% of rows and columns decode to sources inside the frame (no edge smear)",
+      "status": "pass",
+      "parts": [
+        {
+          "name": "C2: a photo at scale 1.18 (larger than the frame): the outer 2% of rows and columns decode to livingModel's sources, all inside the frame (no edge smear)",
+          "ok": true,
+          "detail": {
+            "compared": 6284,
+            "within1px": 6284,
+            "maxPx": 0.89,
+            "skipped": 111,
+            "worst": [],
+            "modelPointsOutsideTheFrame": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "check": "C3: on a clip with Ken Burns in, set_living_picture removes the motion.move keys in the same transaction; the block shows «התנועה הקודמת הוחלפה בתמונה חיה»; one undo brings both back",
+      "status": "pass",
+      "parts": [
+        {
+          "name": "C3: on a clip with Ken Burns in, set_living_picture removes the motion.move keys in the same transaction; the block shows «התנועה הקודמת הוחלפה בתמונה חיה»; one undo brings both back",
+          "ok": true,
+          "detail": {
+            "kenBurnsKeys": [
+              "scale"
+            ],
+            "replacedLine": 1,
+            "transactions": [
+              [
+                "set_living_picture"
+              ]
+            ],
+            "moveKeysLeft": [],
+            "oneUndoRestoresBoth": true
+          }
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "check": "C7: the pass's step count K is the same for the paused preview at 640×360, a still at 1280×720 and export at 640×360 (read back from the uniforms the page sends)",
+      "status": "pass",
+      "parts": [
+        {
+          "name": "C7: the pass's step count K is the same for the paused preview at 640×360 (read back from the editor page), a still at 1280×720 and the export at 640×360",
+          "ok": true,
+          "detail": {
+            "preview": [
+              13
+            ],
+            "still1280": 13,
+            "export640": 13
+          }
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "check": "C6: set_clip_depth null with a living picture on the clip is refused («קודם הסירו את התמונה החיה»); a document with an enabled living picture and no depth: still refused naming the clip, preview notice, export plan blocked",
+      "status": "pass",
+      "parts": [
+        {
+          "name": "set_clip_depth null under a living picture is refused living_needs_depth; an archived document with an enabled living picture and no depth: the still is refused naming the clip, the export plan is blocked, preflight warns living_no_depth",
+          "ok": true,
+          "detail": {
+            "nulled": [
+              422,
+              "living_needs_depth"
+            ],
+            "imported": 201,
+            "still": [
+              422,
+              "{\"error\":{\"code\":\"render_blocked\",\"message\":\"the living picture (depth.living) on clip clp_f3b0fd96a00 cannot be drawn: The living picture has no drawn depth, so it is not shown. Draw the depth\",\"details\":{\"blockers\":[{\"code\":\"living_unavailable\",\"message\":\"the living picture (depth.living) on clip "
+            ],
+            "planBlockers": [
+              {
+                "code": "living_unavailable",
+                "message": "the living picture (depth.living) on clip clp_f3b0fd96a00 cannot be drawn: The living picture has no drawn depth, so it is not shown. Draw the depth",
+                "ids": [
+                  "clp_f3b0fd96a00"
+                ],
+                "hint": "Draw the depth (set_clip_depth), or remove the living picture (set_living_picture with remove: true)."
+              }
+            ],
+            "preflight": 1
+          }
+        },
+        {
+          "name": "preview: the editor shows the notice over the preview with the reason «no drawn depth» in the interface language (never drawn flat)",
+          "ok": true,
+          "detail": {
+            "notice": "התמונה מוצגת כרגע בלי האפקט הזה, כי החומר שלו לא נטען. המערכת מנסה שוב מעצמה; ייצוא ותמונות בודדות יסורבו עד שייטען.תמונה חיה — לתמונה החיה אין עומק מצויר, ולכן היא לא מוצגת. ציירו עומק"
+          }
+        }
+      ]
+    }
+  ]
+}

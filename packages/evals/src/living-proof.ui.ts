@@ -109,7 +109,9 @@ export async function check15(ctx: LivingUiCtx): Promise<LivingUiResult> {
   // the preview at frames 0 and 89
   const seeks = [await seek(page, 0)]; const p0 = await stablePreview(page);
   seeks.push(await seek(page, 89)); const p89 = await stablePreview(page);
-  let differing = 0; for (let i = 0; i < p0.length; i++) if (Math.abs(p0[i]! - p89[i]!) > 2) differing++;
+  // any byte: the preview is drawn deterministically, and on this smooth 64×36 gradient a slide at amount 0.5 changes a pixel by at most
+  // about 2 of 255 (the largest relative shift is 2.7 px at 0.4 levels a pixel), so a tolerance would hide the move itself
+  let differing = 0; for (let i = 0; i < p0.length; i++) if (p0[i] !== p89[i]) differing++;
   // one Ctrl+Z undoes the move change exactly; a second undoes the living picture with its depth exactly (one step)
   await undo(page, pid);
   const undo1 = await doc(page, pid);
