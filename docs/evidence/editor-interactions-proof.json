@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-11-26T13:54:50.240Z",
-  "result": "FAILED",
+  "ranAt": "2026-11-26T14:20:03.055Z",
+  "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
@@ -8,7 +8,7 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 142,
+  "passed": 146,
   "total": 146,
   "checks": [
     {
@@ -108,7 +108,7 @@
     },
     {
       "name": "effect keyframes in the editor: the ◆ button sets a key at the playhead; moving the playhead and changing the slider adds a second key 20 frames later instead of changing the static value",
-      "ok": false,
+      "ok": true,
       "detail": {
         "keys": [
           [
@@ -116,7 +116,7 @@
             0.01
           ],
           [
-            24,
+            25,
             0.1
           ]
         ]
@@ -227,13 +227,13 @@
         "distinct": [
           5,
           8,
-          24
+          25
         ],
         "keys": 4,
         "stripFrames": [
           5,
           8,
-          24
+          25
         ],
         "passive": 3
       }
@@ -344,9 +344,9 @@
       "name": "Sound tab: \"end the music with the picture\" trims the music to the last detected beat before the picture ends and gives it a fade-out, in one transaction; undo restores it",
       "ok": true,
       "detail": {
-        "pictureEnd": 290,
-        "wantEnd": 284,
-        "gotEnd": 284,
+        "pictureEnd": 245,
+        "wantEnd": 239,
+        "gotEnd": 239,
         "fadeOutFrames": 30,
         "fitUndone": true
       }
@@ -384,9 +384,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2.01,
+        "fwd2": 1.98,
         "sh2": "◀◀ ×1",
-        "back1": -0.8,
+        "back1": -0.87,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -400,9 +400,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 0.92,
+        "playSpeed": 1.01,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.94,
+        "shuttleSpeed": 1.95,
         "staysPaused": true
       }
     },
@@ -430,30 +430,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_724fcd94050",
-          "clp_724fcd94051"
+          "clp_90b1f43f9b0",
+          "clp_90b1f43f9b1"
         ],
         "afterAB": [
-          "clp_724fcd94050",
-          "clp_724fcd94051"
+          "clp_90b1f43f9b0",
+          "clp_90b1f43f9b1"
         ],
         "afterAdd": [
-          "clp_724fcd94050",
-          "clp_724fcd94051",
-          "clp_724fcd94052"
+          "clp_90b1f43f9b0",
+          "clp_90b1f43f9b1",
+          "clp_90b1f43f9b2"
         ],
         "midEscape": [
-          "clp_724fcd94051"
+          "clp_90b1f43f9b1"
         ],
         "afterEscape": [
-          "clp_724fcd94050",
-          "clp_724fcd94051",
-          "clp_724fcd94052"
+          "clp_90b1f43f9b0",
+          "clp_90b1f43f9b1",
+          "clp_90b1f43f9b2"
         ],
         "afterEscapeUp": [
-          "clp_724fcd94050",
-          "clp_724fcd94051",
-          "clp_724fcd94052"
+          "clp_90b1f43f9b0",
+          "clp_90b1f43f9b1",
+          "clp_90b1f43f9b2"
         ]
       }
     },
@@ -565,11 +565,11 @@
     },
     {
       "name": "tracking, keyboard only: the \"new point\" button opens the picker with the focus on the picture; ten Shift+→ and five ↓ move the pick 100 and 5 frame pixels from the centre, announced in Hebrew; Enter commits create_motion_track at the SOURCE frame the playhead shows (60 at timeline frame 30, speed 2); the focus goes back and the panel says so",
-      "ok": false,
+      "ok": true,
       "detail": {
         "got": {
           "kind": "point",
-          "from": 0,
+          "from": 60,
           "x": 5781,
           "y": 5069
         },
@@ -579,14 +579,14 @@
           "x": 5781,
           "y": 5069
         },
-        "said": "נקודה ב־58% מהרוחב וב־51% מהגובה, פריים מקור 0",
+        "said": "נקודה ב־58% מהרוחב וב־51% מהגובה, פריים מקור 60",
         "focusBack": "mtrack-new-point",
         "status": "נוצר מסלול מעקב. אפשר להתחיל במעקב."
       }
     },
     {
       "name": "tracking, box drag: dragging over the disc picks an area; confirming commits a region track whose centre and size are the dragged box in 1/10000 of the picture (within 2 frame pixels), on source frame 60",
-      "ok": false,
+      "ok": true,
       "detail": {
         "got": {
           "x": 7099,
@@ -595,7 +595,7 @@
             "w": 1312,
             "h": 2333
           },
-          "from": 0
+          "from": 60
         },
         "want": {
           "x": 7099,
@@ -662,10 +662,10 @@
       "name": "tracking, preview: the follower's centre in the editor preview is within 2 px of the still of the same frame (one evaluator); no page errors",
       "ok": true,
       "detail": {
-        "px": 0.564,
+        "px": 0,
         "preview": {
-          "x": 836.2664872139973,
-          "y": 305.2200538358008
+          "x": 835.7035763411279,
+          "y": 305.2572214580468
         },
         "still": {
           "x": 835.7035763411279,
@@ -908,18 +908,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_19cbebddec0",
-          "ast_53f79e7d450",
-          "ast_2f331663ea0",
-          "ast_6bda8625bc0",
-          "ast_1a1f032c690"
+          "ast_49b3d56dec0",
+          "ast_d0d63c8bfd0",
+          "ast_b9b0d8ef1e0",
+          "ast_3c1c30947d0",
+          "ast_ee709cbe3c0"
         ],
         "order1": [
-          "ast_19cbebddec0",
-          "ast_6bda8625bc0",
-          "ast_53f79e7d450",
-          "ast_2f331663ea0",
-          "ast_1a1f032c690"
+          "ast_49b3d56dec0",
+          "ast_3c1c30947d0",
+          "ast_d0d63c8bfd0",
+          "ast_b9b0d8ef1e0",
+          "ast_ee709cbe3c0"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -943,7 +943,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-26T13:37:13.703Z",
+          "createdAt": "2026-11-26T14:07:43.331Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -1138,7 +1138,7 @@
       "ok": true,
       "detail": {
         "slots": 11,
-        "victim": "clp_d749dba9de0",
+        "victim": "clp_a3696f1b870",
         "deleted": true,
         "offered": {
           "count": 1,
@@ -1263,8 +1263,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_042770419e0",
-          "seq_042770419e7"
+          "seq_2ebb7e8f770",
+          "seq_2ebb7e8f777"
         ],
         "revisions": 1,
         "transactions": [
@@ -1274,7 +1274,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_042770419e0",
+          "seq": "seq_2ebb7e8f770",
           "selected": "true"
         }
       }
@@ -1297,7 +1297,7 @@
     },
     {
       "name": "shorts, the sequence tabs by keyboard only: Home reaches the main tab; the arrow toward the end goes to the short next to it and the arrow toward the start (RTL: ArrowRight) comes back to the main tab",
-      "ok": false,
+      "ok": true,
       "detail": {
         "byHome": {
           "id": "sequence-tab-main",
@@ -1305,14 +1305,14 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_042770419e7"
+          "seq": "seq_2ebb7e8f770"
         },
-        "secondTab": "seq_042770419e0",
+        "secondTab": "seq_2ebb7e8f770",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
         },
-        "rtl": false
+        "rtl": true
       }
     },
     {
@@ -1612,7 +1612,7 @@
       "detail": {
         "marked": true,
         "he": {
-          "id": "prj_nvGG0SfwLCA",
+          "id": "prj_3Eotm5YDtDs",
           "count": 1,
           "title": "הארכיון יובא",
           "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגום «English» מסומן שוב «תרגום מכונה · לא נבדק», והנוסח שלו נשמר. אפשר לעבור עליו בלוח «תמלול» ולבחור «סמן כנבדק».",
@@ -1622,7 +1622,7 @@
           "badge": 1
         },
         "en": {
-          "id": "prj_9AMJdWCIyfU",
+          "id": "prj_xHZzO9mUqME",
           "count": 1,
           "title": "The archive was imported",
           "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translation «English» needs review again; its wording is kept. Go through it in the \"Transcript\" panel and choose \"Mark as reviewed\".",
@@ -1728,7 +1728,6 @@
       "ok": true,
       "detail": {
         "seen": [
-          "בודק את הקובץ",
           "מתאים לגודל היעד 1/2",
           "מתאים לגודל היעד 2/2",
           "בודק את גודל הקובץ"
@@ -1810,11 +1809,11 @@
       "detail": {
         "planRows": [
           {
-            "id": "clp_02b381fb030",
+            "id": "clp_3c11e0a08a0",
             "text": "send-quiet.wav · +9.1 dB"
           },
           {
-            "id": "clp_1ac95ca2bd0",
+            "id": "clp_4251e10ad60",
             "text": "send-loud.wav · −9.1 dB"
           }
         ],
@@ -1827,11 +1826,11 @@
       "detail": {
         "resRows": [
           {
-            "id": "clp_02b381fb030",
+            "id": "clp_3c11e0a08a0",
             "by": ""
           },
           {
-            "id": "clp_1ac95ca2bd0",
+            "id": "clp_4251e10ad60",
             "by": ""
           }
         ],
@@ -1957,7 +1956,7 @@
       "ok": true,
       "detail": {
         "empty": 1,
-        "row": "גרסה לבדיקה 26.11.2026, 13:53 · אני · 100 פריימים · 2 KB · המדיה לא מועתקת זהה למצב הנוכחי השוואה שינוי שם מחיקה"
+        "row": "גרסה לבדיקה 26.11.2026, 14:19 · אני · 100 פריימים · 2 KB · המדיה לא מועתקת זהה למצב הנוכחי השוואה שינוי שם מחיקה"
       }
     },
     {
@@ -2046,14 +2045,14 @@
       "ok": true,
       "detail": {
         "first": [
-          "ast_a56561690b0",
-          "ast_2cfaa2bc5c0",
-          "ast_5a5d8871f50"
+          "ast_2751a064f60",
+          "ast_c039784e060",
+          "ast_555341c64b0"
         ],
         "moved": [
-          "ast_2cfaa2bc5c0",
-          "ast_a56561690b0",
-          "ast_5a5d8871f50"
+          "ast_c039784e060",
+          "ast_2751a064f60",
+          "ast_555341c64b0"
         ]
       }
     },
@@ -2138,7 +2137,7 @@
       "ok": true,
       "detail": {
         "n": 1,
-        "asset": "ast_a59c24d7650",
+        "asset": "ast_534cdc17930",
         "start": "1/2",
         "end": "1/1",
         "sources": "transcript"
