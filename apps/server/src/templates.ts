@@ -14,7 +14,7 @@
  */
 import * as T from '@pulseframe/time';
 import {
-  clipEnd, closedGapOnly, derivedRanges, FAMILY_FILM_RUN_RECIPE_ID, GROWING_RUN_RECIPE_ID, STORY_RUN_RECIPE_ID, findClip, movedOnly, onOtherTrack, removedByHand, findGatedTemplate, findTemplate, fingerprint, gatedTemplateError, gatedTemplateSummary, MODEL_GATED_TEMPLATES, planTemplate, summarizeTemplate, TemplateError, TEMPLATE_METHOD, TEMPLATES,
+  clipEnd, closedGapOnly, isOwnTemplateId, OwnTemplateRefusal, ownTemplateRefusal, derivedRanges, FAMILY_FILM_RUN_RECIPE_ID, GROWING_RUN_RECIPE_ID, STORY_RUN_RECIPE_ID, findClip, movedOnly, onOtherTrack, removedByHand, findGatedTemplate, findTemplate, fingerprint, gatedTemplateError, gatedTemplateSummary, MODEL_GATED_TEMPLATES, planTemplate, summarizeTemplate, TemplateError, TEMPLATE_METHOD, TEMPLATES,
   type Asset, type KnownGrid, type ProjectDocument, type RecipeRun, type RunRange, type SlotRecord, type RegenerateOptions, type TemplateApplyResult, type TemplateDef, type TemplatePlan, type TemplatePlanView, type TemplateRegenerateResult, type TemplateSummary,
 } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
@@ -23,6 +23,7 @@ import type { Governance } from './governance.ts';
 import { makeSfx } from './sfx.ts';
 import { makeMusic } from './music.ts';
 import { ApiError, type Store } from './store.ts';
+import { ownTemplateApiError } from './ownTemplates.ts';
 
 const STATUS: Record<TemplateError['code'], number> = { not_found: 404, needs_analysis: 409, needs_capability: 409, invalid_args: 400, nothing_to_do: 409 };
 const CODE: Record<TemplateError['code'], string> = { not_found: 'not_found', needs_analysis: 'needs_analysis', needs_capability: 'needs_capability', invalid_args: 'invalid_request', nothing_to_do: 'nothing_to_do' };
@@ -31,6 +32,7 @@ export const templateApiError = (e: TemplateError) => new ApiError(STATUS[e.code
 const wrap = <R>(fn: () => R): R => {
   try { return fn(); } catch (e) {
     if (e instanceof TemplateError) throw templateApiError(e);
+    if (e instanceof OwnTemplateRefusal) throw ownTemplateApiError(e);
     throw e;
   }
 };
@@ -60,6 +62,12 @@ export function templateCatalog(): TemplateSummary[] {
 function templateOf(templateId: string): TemplateDef {
   const gated = findGatedTemplate(templateId);
   if (gated) throw templateApiError(gatedTemplateError(gated));
+  // an own template (wave 8 owntemplate, C10): looked up only for the reserved prefix; one that is not in this machine's file is
+  // «לא שמורה במחשב הזה» (an archive opened on another computer, or deleted), never "does not exist". W2 threads the data
+  // directory here and looks the id up with ownTemplates.ts findOwnTemplate (the stores of two test servers never share state).
+  if (isOwnTemplateId(templateId)) {
+    throw ownTemplateApiError(ownTemplateRefusal('notOnThisComputer', templateId.slice(0, 64)));
+  }
   const def = findTemplate(templateId);
   if (!def) throw new ApiError(404, 'not_found', `template "${templateId}" does not exist`, { templateId }, `Available: ${TEMPLATES.map((t) => t.id).join(', ') || 'none in this build'} (GET /api/v1/templates).`);
   return def;

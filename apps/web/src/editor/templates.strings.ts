@@ -69,7 +69,7 @@ const he = {
   goMusic: 'לשלב המוזיקה',
   warning: {
     slot_too_short: 'סרטון קצר מדי למשבצת', slots_dropped: 'משבצות שלא נכנסו', cuts_merged: 'חיתוכים שאוחדו', media_unused: 'קבצים שלא נכנסו',
-    media_reused: 'קבצים שחוזרים', transition_shortened: 'מעבר שקוצר', text_too_long: 'טקסט ארוך מדי', designed_for_other_shape: 'התבנית בנויה לצורת פריים אחרת', kept_by_hand: 'נשמר כי נערך ביד',
+    media_reused: 'קבצים שחוזרים', transition_shortened: 'מעבר שקוצר', text_too_long: 'טקסט ארוך מדי', designed_for_other_shape: 'התבנית בנויה לצורת פריים אחרת', kept_by_hand: 'נשמר כי נערך ביד', items_dropped: 'כותרות או מראות שלא נכנסו',
   } satisfies Record<WarningCode, string>,
   method: 'תבנית מבוססת כללים; ללא מודל.',
   // after apply
@@ -148,7 +148,7 @@ const en: Strings = {
   goMusic: 'Go to the music step',
   warning: {
     slot_too_short: 'A video too short for its slot', slots_dropped: 'Slots left out', cuts_merged: 'Cuts merged', media_unused: 'Files left out',
-    media_reused: 'Files used again', transition_shortened: 'A transition shortened', text_too_long: 'Text too long', designed_for_other_shape: 'Built for another frame shape', kept_by_hand: 'Kept: edited by hand',
+    media_reused: 'Files used again', transition_shortened: 'A transition shortened', text_too_long: 'Text too long', designed_for_other_shape: 'Built for another frame shape', kept_by_hand: 'Kept: edited by hand', items_dropped: 'Titles or looks left out',
   },
   method: 'Rule-based template; no model.',
   appliedLabel: 'Applied template',

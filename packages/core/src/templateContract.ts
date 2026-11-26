@@ -6,7 +6,7 @@
  * Rule-based; no model. Templates that would need a model are listed as unavailable (MODEL_GATED_TEMPLATES) and never run.
  */
 import { z } from 'zod';
-import { AssetSchema, isRealWallDate, RationalTimeSchema, SlotRecordSchema, TEMPLATE_SLOT_KINDS, TEXT_ANIM_IN, TEXT_ANIM_LOOP, TEXT_ANIM_OUT, WALL_DATE, type SlotRecord } from './schema.ts';
+import { AssetSchema, TextStyleSchema, isRealWallDate, RationalTimeSchema, SlotRecordSchema, TEMPLATE_SLOT_KINDS, TEXT_ANIM_IN, TEXT_ANIM_LOOP, TEXT_ANIM_OUT, WALL_DATE, type SlotRecord } from './schema.ts';
 import { KnownGridSchema, MUSIC_MAX_SEED, MUSIC_STYLE_ID } from './musicStyles.ts';
 
 export const BIND_NAME = /^[a-z][a-z0-9_-]{0,31}$/;
@@ -103,13 +103,74 @@ export function fillFields(text: string, fields: PackFieldValues, escape: (value
   });
   return { text: filled, missing: PACK_FIELD_KEYS.filter((k) => missing.has(k)) };
 }
-/** Slot length: whole beats or bars of the grid, or exact seconds 'n' or 'n/d'. Every absolute end is snapped once; durations are differences of snapped ends. */
+// ---------- own templates (wave 8 owntemplate «שמירת הסרט כתבנית»; ownTemplateContract.ts) ----------
+/** Ticks per beat of an own template's beats axis (MIDI-style PPQ): every denominator of TICK_DENOMS divides it. */
+export const TICKS_PER_BEAT = 192;
+/** The denominators a captured cut is tried at, smallest first (ownTemplate.ts quantisation; verifier C12). */
+export const TICK_DENOMS = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 192] as const;
+/** A position or length in ticks (1/192 beat): at most 4096 beats. */
+export const OwnTicksSchema = z.number().int().min(0).max(TICKS_PER_BEAT * 4096);
+/** A position or length in frames of `own.rate`. */
+export const OwnFramesSchema = z.number().int().min(0).max(1_000_000);
+/** Slot length: whole beats or bars of the grid, or exact seconds 'n' or 'n/d'; own templates only: ticks (beats axis) or frames (frames axis). Every absolute end is snapped once; durations are differences of snapped ends. */
 export const SpanSchema = z.union([
   z.object({ beats: z.number().int().min(1).max(64) }).strict(),
   z.object({ bars: z.number().int().min(1).max(16) }).strict(),
   z.object({ seconds: z.string().regex(/^[1-9]\d{0,3}(\/[1-9]\d{0,3})?$/) }).strict(),
+  /** Own templates, beats axis: the length in 1/192 beats (never through scaleSpan: verifier C4). */
+  z.object({ ticks: OwnTicksSchema.min(1) }).strict(),
+  /** Own templates, frames axis: the length in frames at own.rate. */
+  z.object({ frames: OwnFramesSchema.min(1) }).strict(),
 ]);
+/** The span arms only own templates may use (TemplateDefSchema refuses them in a template without `own`). */
+export const OWN_SPAN_ARMS = ['ticks', 'frames'] as const;
+/**
+ * Absolute place of an own item on the template's axis (ticks or frames from the axis origin; verifier C7): [from, to). `slot` is
+ * the slot covering `from` (the item is dropped with it: warning items_dropped). The item's `at` / `span` stays as the meaningful
+ * fallback (that same slot); `on` together with offsetBeats or spanSlots is refused.
+ */
+export const OnAxisSchema = z.object({ slot: BindName, from: OwnFramesSchema, to: OwnFramesSchema.min(1) }).strict();
+export type OnAxis = z.infer<typeof OnAxisSchema>;
+/**
+ * The `own` block of a template saved from the owner's film. Numbers and enums only. `origin` is shown in the dialog and never used
+ * to plan. beats axis: `lead` = ticks from the origin (a bar start, else a beat) to the first cut, 0 <= lead < meter·192; the
+ * planner puts the first picture AT the anchor and shifts the music by the lead (verifier C3). frames axis: lead is 0.
+ */
+export const OwnInfoSchema = z.object({
+  madeFrom: z.literal('own-film'),
+  axis: z.enum(['beats', 'frames']),
+  rate: z.object({ num: z.number().int().min(1).max(240000), den: z.number().int().min(1).max(100000) }).strict(),
+  lead: OwnTicksSchema,
+  meter: z.number().int().min(1).max(12),
+  origin: z.object({ bpm: z.number().min(20).max(400).nullable(), beats: z.number().int().min(0).max(50000), seconds: z.number().min(0).max(86400), slots: z.number().int().min(1).max(120) }).strict(),
+  /** True when the owner ticked «להשאיר את הטקסט»: the texts' default words are the film's own (stripped for every reader but the owner's own session, verifier C2h). */
+  keptWords: z.boolean(),
+}).strict();
+export type OwnInfo = z.infer<typeof OwnInfoSchema>;
+/** The id prefix of an own template; reserved (a catalogue template may not use it; verifier C10). */
+export const OWN_TEMPLATE_ID_PREFIX = 'tpl.own-';
+export const OWN_TEMPLATE_ID = /^tpl\.own-[0-9a-f]{12}$/;
+export const isOwnTemplateId = (id: string): boolean => id.startsWith(OWN_TEMPLATE_ID_PREFIX);
+/**
+ * Every limit of a template definition, for a built-in (catalogue or pack) template and for an own one (verifier C8). The schema
+ * allows the own numbers; TemplateDefSchema's refinement holds a template without `own` to the built-in ones, so no built-in can grow
+ * by accident. The places the old 40 is written: TimingSchema.spanSlots and the look's span slots (own items use `on` instead, so they
+ * stay 40), slots, slotUse.min (own templates use {mode:'all', min:1}, so it stays 40), texts, and TemplateInputSchema.media.
+ */
+export const TEMPLATE_LIMITS = {
+  builtin: { slots: 40, texts: 40, elements: 20, sfx: 20, adjust: 8 },
+  own: { slots: 120, texts: 80, elements: 0, sfx: 0, adjust: 16 },
+  spanSlots: 40, lookSpanSlots: 40, slotUseMin: 40, media: 120,
+} as const;
 /** Frame fractions from the centre (TransformSchema x/y). sizeFrac = title size (fraction of frame height). scale = element scale. */
+/**
+ * The keys of a title's style an own template keeps (verifier C2: every one a number, an enum, a #hex colour, or fontFamily, which
+ * capture takes only from FONT_CATALOG and otherwise replaces by DEFAULT_TEXT_STYLE.fontFamily, reporting font_family). A key that
+ * TextStyleSchema gains later is not in this list, so it is never kept until someone adds it here (ownTemplateKeys.test.ts fails
+ * until the key is classified).
+ */
+export const OWN_TEXT_STYLE_KEYS = ['fontFamily', 'fontWeight', 'sizeFrac', 'color', 'align', 'direction', 'lineHeight', 'background', 'stroke', 'strokeFrac', 'gradient', 'tracking', 'stroke2', 'glow', 'extrude', 'longShadow'] as const;
+export const OwnTextStyleSchema = TextStyleSchema.pick(Object.fromEntries(OWN_TEXT_STYLE_KEYS.map((k) => [k, true])) as { [K in (typeof OWN_TEXT_STYLE_KEYS)[number]]: true }).strict();
 export const PlaceSchema = z.object({ x: z.number().min(-0.5).max(0.5), y: z.number().min(-0.5).max(0.5), sizeFrac: z.number().min(0.01).max(0.4).optional(), scale: z.number().min(0.05).max(4).optional() }).strict();
 export const EffectSpecSchema = z.object({ type: z.string().min(1).max(48), params: z.record(z.string(), z.union([z.number(), z.string().max(64), z.boolean()])).optional() }).strict();
 export const SlotDefSchema = z.object({
@@ -117,12 +178,16 @@ export const SlotDefSchema = z.object({
   /** MOTION_PRESETS id. move.* spans the whole slot; in/out/loop presets use their default frames, clamped to the slot. Omitted when input.motion = 'none'. */
   motion: z.object({ presetId: z.string().max(48), amount: z.number().min(0).max(2).optional() }).strict().optional(),
   /** TRANSITIONS id at the start of this slot. frames = round(seconds*fps), clamped to the slot and to the previous slot's source handle (shortened or dropped transitions are reported). dir 'reading': left and right are mirrored when lang = 'he'. */
-  transitionIn: z.object({ type: z.string().max(32), seconds: z.number().min(0.04).max(2), dir: z.enum(['reading', 'fixed']) }).strict().optional(),
+  transitionIn: z.object({ type: z.string().max(32), seconds: z.number().min(0.04).max(2), dir: z.enum(['reading', 'fixed']),
+    /** Own templates only (TemplateDefSchema refuses them elsewhere): set_transition_options after set_transition. No `seed` (cut in version 1). */
+    sync: z.literal('beat').optional(), velocity: z.union([z.literal(2), z.literal(3), z.literal(4)]).optional(), color: Colour.optional() }).strict().optional(),
   /** Keep the clip's own sound (default false: the music carries the sound). */
   keepAudio: z.boolean().optional(),
   tag: z.string().regex(/^[a-z][a-z0-9-]{0,15}$/).optional(),
+  /** Own templates only: the shot's own effects with static params (add_effect after the clip). Params: numbers, booleans, enum members and #hex colours only (ownTemplateKeys.ts). */
+  effects: z.array(EffectSpecSchema).max(16).optional(),
 }).strict();
-const TimingSchema = z.object({ slot: BindName, offsetBeats: z.number().int().min(0).max(32).optional(), spanSlots: z.number().int().min(1).max(40).optional() }).strict();
+const TimingSchema = z.object({ slot: BindName, offsetBeats: z.number().int().min(0).max(32).optional(), spanSlots: z.number().int().min(1).max(TEMPLATE_LIMITS.spanSlots).optional() }).strict();
 export const TextDefSchema = z.object({
   key: BindName, role: Words(40), default: Words(200), maxChars: z.number().int().min(1).max(500),
   /**
@@ -138,6 +203,12 @@ export const TextDefSchema = z.object({
   /** count-down / count-up: one copy on each used picture slot from at.slot onwards; "{n}" becomes N..1 or 1..N. */
   perSlot: z.enum(['none', 'count-down', 'count-up']).optional(),
   place: PlaceSchema,
+  /**
+   * Own templates only. `style`: the title's whole style (OwnTextStyleSchema: the kept keys of TextStyleSchema), applied with
+   * update_text AFTER apply_text_preset, so presetId stays required (verifier C7). `on`: its own [from, to) on the axis.
+   */
+  style: OwnTextStyleSchema.optional(),
+  on: OnAxisSchema.optional(),
 }).strict();
 /**
  * color / color2: left out = the element's own default colours (ElementDef.defaults), else white and teal.
@@ -169,10 +240,12 @@ export const SfxDefSchema = z.object({
 export const AdjustDefSchema = z.object({
   key: BindName,
   /** all = the template's own range; slots = first listed slot start to last listed slot end; tag = each contiguous run of slots with that tag. */
-  span: z.union([z.literal('all'), z.object({ slots: z.array(BindName).min(1).max(40) }).strict(), z.object({ tag: z.string().max(16) }).strict()]),
+  span: z.union([z.literal('all'), z.object({ slots: z.array(BindName).min(1).max(TEMPLATE_LIMITS.lookSpanSlots) }).strict(), z.object({ tag: z.string().max(16) }).strict()]),
   effects: z.array(EffectSpecSchema).min(1).max(16),
   /** Opacity fade at both ends, as opacity keyframes on the adjustment clip. */
   fadeSeconds: z.number().min(0).max(2).optional(),
+  /** Own templates only: the look's own [from, to) on the axis; `span` stays as the fallback ({slots:[the covering slot]}). */
+  on: OnAxisSchema.optional(),
 }).strict();
 export const TemplateDefSchema = z.object({
   id: z.string().regex(/^tpl\.[a-z0-9-]{1,40}$/), version: z.number().int().min(1),
@@ -190,15 +263,67 @@ export const TemplateDefSchema = z.object({
     builtin: MusicStyleId.optional() }).strict(),
   /** The content pack this template belongs to (packs/contract.ts PackDef.templates). */
   pack: z.string().regex(PACK_ID).optional(),
-  slots: z.array(SlotDefSchema).min(1).max(40),
+  /** Limits: TEMPLATE_LIMITS (the own numbers here; a template without `own` is held to the built-in ones by the refinement below). */
+  slots: z.array(SlotDefSchema).min(1).max(TEMPLATE_LIMITS.own.slots),
   /** all = every slot is used (media cycle, each reuse of a video starts further in); media = the first max(min, media count) slots are used. */
-  slotUse: z.object({ mode: z.enum(['all', 'media']), min: z.number().int().min(1).max(40) }).strict(),
-  texts: z.array(TextDefSchema).max(40), elements: z.array(ElementDefSchema).max(20), sfx: z.array(SfxDefSchema).max(20), adjust: z.array(AdjustDefSchema).max(8),
-}).strict();
+  slotUse: z.object({ mode: z.enum(['all', 'media']), min: z.number().int().min(1).max(TEMPLATE_LIMITS.slotUseMin) }).strict(),
+  texts: z.array(TextDefSchema).max(TEMPLATE_LIMITS.own.texts), elements: z.array(ElementDefSchema).max(TEMPLATE_LIMITS.builtin.elements), sfx: z.array(SfxDefSchema).max(TEMPLATE_LIMITS.builtin.sfx), adjust: z.array(AdjustDefSchema).max(TEMPLATE_LIMITS.own.adjust),
+  /** Wave 8 owntemplate: present exactly on a template saved from the owner's film (id tpl.own-…). Absent on every built-in, which therefore parses and plans exactly as before. */
+  own: OwnInfoSchema.optional(),
+}).strict().superRefine((d, ctx) => { for (const problem of templateDefProblems(d)) ctx.addIssue({ code: 'custom', message: problem }); });
 export type TemplateDef = z.infer<typeof TemplateDefSchema>;
 
+/**
+ * What TemplateDefSchema refuses beyond the shapes (verifier C7, C8, C10), as messages; [] = fine. Complete in the pre-pass:
+ * - without `own` (every catalogue and pack template): the built-in limits of TEMPLATE_LIMITS; no id with the reserved prefix
+ *   tpl.own-; none of the own-only fields (ticks or frames spans, slot effects, transition sync/velocity/color, title style or
+ *   `on`, look `on`). So a built-in parses, and plans, exactly as before.
+ * - with `own`: the id is tpl.own-<12 hex>; no graphic elements or sound effects (not carried in version 1); slotUse is
+ *   {mode:'all', min:1}; every span is ticks (axis beats) or every span is frames (axis frames); frames axis: lead 0; beats axis:
+ *   lead < meter·192; an item with `on` names a slot of the template, has from < to, and its `at` has no offsetBeats or spanSlots.
+ */
+export function templateDefProblems(d: Omit<TemplateDef, never>): string[] {
+  const out: string[] = [];
+  const L = d.own ? TEMPLATE_LIMITS.own : TEMPLATE_LIMITS.builtin;
+  if (d.slots.length > L.slots) out.push(`at most ${L.slots} slots (${d.slots.length})`);
+  if (d.texts.length > L.texts) out.push(`at most ${L.texts} texts (${d.texts.length})`);
+  if (d.adjust.length > L.adjust) out.push(`at most ${L.adjust} looks (${d.adjust.length})`);
+  if (d.elements.length > L.elements) out.push(d.own ? 'a template saved from a film carries no graphic elements' : `at most ${L.elements} elements`);
+  if (d.sfx.length > L.sfx) out.push(d.own ? 'a template saved from a film carries no sound effects' : `at most ${L.sfx} sound effects`);
+  const ownOnly: string[] = [];
+  d.slots.forEach((s) => {
+    if ('ticks' in s.span || 'frames' in s.span) ownOnly.push(`slot ${s.key}: span ${Object.keys(s.span)[0]}`);
+    if (s.effects !== undefined) ownOnly.push(`slot ${s.key}: effects`);
+    if (s.transitionIn && (s.transitionIn.sync !== undefined || s.transitionIn.velocity !== undefined || s.transitionIn.color !== undefined)) ownOnly.push(`slot ${s.key}: transition sync, velocity or color`);
+  });
+  d.texts.forEach((t) => { if (t.style !== undefined) ownOnly.push(`text ${t.key}: style`); if (t.on !== undefined) ownOnly.push(`text ${t.key}: on`); });
+  d.adjust.forEach((a) => { if (a.on !== undefined) ownOnly.push(`look ${a.key}: on`); });
+  if (!d.own) {
+    if (isOwnTemplateId(d.id)) out.push(`the id prefix ${OWN_TEMPLATE_ID_PREFIX} is reserved for templates saved from a film`);
+    for (const x of ownOnly) out.push(`${x} is only for a template saved from a film (own)`);
+    return out;
+  }
+  const own = d.own;
+  if (!OWN_TEMPLATE_ID.test(d.id)) out.push(`a template saved from a film has the id ${OWN_TEMPLATE_ID_PREFIX}<12 hex digits>`);
+  if (d.slotUse.mode !== 'all' || d.slotUse.min !== 1) out.push('a template saved from a film uses slotUse {mode: all, min: 1}');
+  const arm = own.axis === 'beats' ? 'ticks' : 'frames';
+  d.slots.forEach((s) => { if (!(arm in s.span)) out.push(`slot ${s.key}: every span of a ${own.axis}-axis template is in ${arm}`); });
+  if (own.axis === 'frames' && own.lead !== 0) out.push('a frames-axis template has lead 0');
+  if (own.axis === 'beats' && own.lead >= own.meter * TICKS_PER_BEAT) out.push(`lead must be under one bar (${own.meter * TICKS_PER_BEAT} ticks)`);
+  const slotKeys = new Set(d.slots.map((s) => s.key));
+  const onRule = (what: string, on: OnAxis | undefined, extra: boolean) => {
+    if (!on) return;
+    if (!slotKeys.has(on.slot)) out.push(`${what}: on.slot "${on.slot}" is not a slot of the template`);
+    if (on.from >= on.to) out.push(`${what}: on.from must be before on.to`);
+    if (extra) out.push(`${what}: on together with offsetBeats or spanSlots`);
+  };
+  d.texts.forEach((t) => onRule(`text ${t.key}`, t.on, t.at.offsetBeats !== undefined || t.at.spanSlots !== undefined));
+  d.adjust.forEach((a) => onRule(`look ${a.key}`, a.on, false));
+  return out;
+}
+
 export const TemplateInputSchema = z.object({
-  media: z.array(z.string()).max(40).default([]).describe('Picture or video asset ids, in order'),
+  media: z.array(z.string()).max(TEMPLATE_LIMITS.media).default([]).describe('Picture or video asset ids, in order (at most 120)'),
   musicAssetId: z.string().nullable().default(null),
   texts: z.record(z.string(), z.string().min(1).max(500)).default({}).describe('By text key'),
   at: RationalTimeSchema.optional().describe('Frame-aligned start on the main sequence; default 0 when it is empty, else the end of the last picture or title'),
@@ -215,7 +340,7 @@ export const TemplateInputSchema = z.object({
   fields: PackFieldsInputSchema.optional().describe('Words for {name} {name2} {age} {night} {place} {when} in the template\'s own titles; literal text'),
 }).strict();
 export type TemplateInput = z.infer<typeof TemplateInputSchema>;
-export const TEMPLATE_WARNING_CODES = ['slot_too_short', 'slots_dropped', 'cuts_merged', 'media_unused', 'media_reused', 'transition_shortened', 'text_too_long', 'designed_for_other_shape', 'kept_by_hand'] as const;
+export const TEMPLATE_WARNING_CODES = ['slot_too_short', 'slots_dropped', 'cuts_merged', 'media_unused', 'media_reused', 'transition_shortened', 'text_too_long', 'designed_for_other_shape', 'kept_by_hand', 'items_dropped'] as const;
 export interface TemplateWarning { code: (typeof TEMPLATE_WARNING_CODES)[number]; message: string; details: Record<string, unknown> }
 /**
  * What the planner decided by itself about fields, built-in music and elements (ADR-0022), with the reason. A list of its
