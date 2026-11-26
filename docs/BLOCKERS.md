@@ -87,8 +87,13 @@ Each is built, integrated and passes its proof in this container (final regressi
 ## Unverified after this evening's merges (2026-11-26; laptop rows)
 - Made clips: sandbox, net-log channels and alpha decode are measured in the Linux container only; the owner's Windows laptop rows
   L1–L6 of the motioncode plan remain.
-- In-editor agent: whether each provider accepts the adapters' requests (headers, `max_tokens`, images, tool calls, a probe while
-  the model thinks) is unknown until the laptop runs them with a real key typed by the owner into the connect card.
+- In-editor agent (merged; proven with a labelled scripted model only). The laptop list, with a key the owner types into the
+  connect card: (1) «בדיקה» on each provider's current model; (2) Claude: the walk goal, thinking blocks replayed, `x-api-key`
+  accepted; (3) newer OpenAI models: `max_tokens` against `max_completion_tokens`, Chat Completions against Responses only;
+  (4) Gemini's compatible endpoint: `max_tokens` and images; (5) Ollama: the image form, a context of at least 64k, whether small
+  models call tools at all; (6) whether a probe with `max_tokens` 1 fails while thinking is on; (7) the cost line against the
+  provider's billing page; (8) `icacls` on `<dataDir>\agent\keys`, also when the data folder is on E: (exFAT has no ACLs);
+  (9) Hebrew captions from speech inside a run.
 - Sources: real Openverse, Pixabay and Wikimedia answers and their live limits, Pixabay's licence page and CDN hosts, and the
   Windows file permissions on `connectors/keys` are unverified.
 - `proof:incremental` did not finish on the loaded machine (I14 lag 239.6 ms against 100 ms at load 25; I12 not reached): rerun
