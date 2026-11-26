@@ -1,16 +1,16 @@
 {
-  "ranAt": "2026-11-25T21:25:28.913Z",
+  "ranAt": "2026-11-26T01:32:49.998Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "cpus": 4,
     "memoryGiB": 15.7,
     "loadAtStart": [
-      6.76,
-      5.41,
-      7.19
+      0.88,
+      1.82,
+      2.05
     ]
   },
-  "freeDiskBytesAtStart": 3616468992,
+  "freeDiskBytesAtStart": 4590628864,
   "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
   "notVerifiedHere": [
     "a real phone and its pickers (iOS, Android; whether they hand over the original HEVC with its date)",
@@ -145,8 +145,8 @@
           "state": "waiting",
           "waitingFor": "check"
         },
-        "aSavedMs": 103,
-        "allSavedMs": 397
+        "aSavedMs": 80,
+        "allSavedMs": 353
       }
     },
     {
@@ -219,10 +219,10 @@
     },
     {
       "id": "P9",
-      "name": "every API path and method of the main server, plus /mcp, the app's pages and traversal forms, answers 404 on the door with an empty body, no cookie and no CORS header (668 requests); the page holds no project id or name and no main-server token",
+      "name": "every API path and method of the main server, plus /mcp, the app's pages and traversal forms, answers 404 on the door with an empty body, no cookie and no CORS header (676 requests); the page holds no project id or name and no main-server token",
       "pass": true,
       "numbers": {
-        "requests": 668,
+        "requests": 676,
         "bad": [],
         "leaks": []
       }
@@ -257,20 +257,15 @@
           "card-hevc.mp4": [
             "ממתין",
             "ממיר 0%",
-            "ממיר 10%",
-            "ממיר 31%",
-            "ממיר 49%",
-            "ממיר 67%",
-            "ממיר 98%",
+            "ממיר 26%",
+            "ממיר 66%",
             "מוכן"
           ],
           "card2-hevc.mp4": [
             "ממתין",
             "ממיר 0%",
-            "ממיר 6%",
-            "ממיר 27%",
-            "ממיר 53%",
-            "ממיר 98%",
+            "ממיר 12%",
+            "ממיר 57%",
             "מוכן"
           ]
         },
@@ -390,7 +385,7 @@
       "name": "killed with SIGKILL during a conversion and restarted: the code is gone (its port refuses), all 20 files import exactly once (20 assets whose originals are the 20 sources), the interrupted job ran again (attempt 2), and no temporary file is left once any orphan ffmpeg has exited",
       "pass": true,
       "numbers": {
-        "killedPid": 27973,
+        "killedPid": 9045,
         "convertingSeen": true,
         "doorClosed": true,
         "jobs": 20,
@@ -398,9 +393,9 @@
         "assets": 20,
         "distinctOriginals": 20,
         "interruptedAttempt": 2,
-        "orphanFfmpegAfterKill": "28026",
+        "orphanFfmpegAfterKill": "9094",
         "leftovers": [],
-        "secondsToAllImported": 14.304
+        "secondsToAllImported": 8.223
       }
     },
     {
@@ -409,26 +404,26 @@
       "pass": true,
       "numbers": {
         "idle": {
-          "p50": 3.2,
-          "p95": 16.9,
-          "max": 82.8
+          "p50": 3.4,
+          "p95": 8.6,
+          "max": 22
         },
         "convertingImports": {
-          "p50": 3.2,
-          "p95": 13.3,
-          "max": 48.2
+          "p50": 3.7,
+          "p95": 8.4,
+          "max": 18.3
         },
         "during300MBUpload": {
-          "p50": 6.2,
-          "p95": 26.7,
-          "max": 407.7
+          "p50": 4.9,
+          "p95": 11.6,
+          "max": 22.2
         },
         "limitMs": 120,
         "upload": 201,
         "load": [
-          8.37,
-          6.64,
-          7.39
+          2.5,
+          1.89,
+          2.03
         ]
       }
     },
@@ -474,7 +469,7 @@
           "unnamed": [],
           "live": true
         },
-        "doorAnswersRead": 705,
+        "doorAnswersRead": 713,
         "stackTraces": 0
       }
     },
@@ -501,7 +496,7 @@
     "p18Frames": "barcode frames at three positions between preview, server still and export: not run in this proof (the parity suite and proof:phase4 hold the shared compositor)",
     "pageLanguage": "the page follows navigator.language: an English-locale phone gets the English page first (review item; the owner decides whether a Hebrew household with en-US phones should get Hebrew first)"
   },
-  "seconds": 171,
+  "seconds": 131,
   "summary": {
     "passed": 31,
     "failed": [],
