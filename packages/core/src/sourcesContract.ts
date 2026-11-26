@@ -302,4 +302,4 @@ export class SourcesNotBuiltError extends Error {
   constructor(readonly fn: string) { super(`${fn}: stock sources are not built in this build yet`); }
 }
 /** Whether each part is built (flipped by the builders and the integrator). */
-export const SOURCES_BUILT = { op: false, duties: false, credits: false, routes: false, fetcher: false, ui: false } as const;
+export const SOURCES_BUILT = { op: false, duties: false, credits: false, routes: false, fetcher: false, ui: true } as const;

@@ -58,6 +58,22 @@ export const SOURCES_HE = {
   'sources.connect.contact': 'פרטי קשר לוויקימדיה', 'sources.connect.contactHint': 'כתובת מייל, אתר או שם משתמש בוויקי. נשלח לוויקימדיה עם כל בקשה, כפי שהמדיניות שלה מבקשת',
   'sources.connect.maxBytes': 'מגבלת הורדה', 'sources.connect.maxBytesHint': 'לכל היותר מגבלת ההעלאה ({max})',
   'sources.connect.windows': 'ב־Windows המפתח מוגן בהרשאות של תיקיית הנתונים',
+  // wave 8 W3: the tab's own lines
+  'sources.chips': 'שירותים', 'sources.kinds': 'סוג', 'sources.kindAll': 'הכול', 'sources.searchGo': 'חיפוש', 'sources.searching': 'מחפשים…',
+  'sources.state.ready': 'מחובר', 'sources.state.not_built': 'לא נבנה בגרסה הזו', 'sources.results': 'תוצאות החיפוש', 'sources.byAuthor': 'מאת {name}', 'sources.noProject': 'פתחו פרויקט כדי להוסיף קבצים',
+  'sources.addProjectHint': 'Enter: הוספה בסמן · Shift+Enter: לפרויקט בלבד · רווח: תצוגה מקדימה',
+  'sources.added': 'ההורדה התחילה: {title}', 'sources.close': 'סגירה', 'sources.licenceNone': 'רישיון לא צוין',
+  'sources.link.route.direct': 'הקובץ יורד ישירות מהכתובת שהדבקתם', 'sources.link.route.provider': 'הקובץ יורד מהשירות',
+  'sources.link.started': 'ההורדה התחילה', 'sources.link.terms': 'מה כתוב בתנאים',
+  'sources.job.failed': 'ההורדה נכשלה', 'sources.job.dismiss': 'הסתרה',
+  'sources.assetHeading': 'מקור הקובץ',
+  'sources.connect.pixabay': 'שירות Pixabay', 'sources.connect.openverse': 'שירות Openverse', 'sources.connect.wikimedia': 'ויקישיתוף (Wikimedia Commons)',
+  'sources.connect.pixabayHint': 'וידאו ותמונות. המפתח חינמי באתר השירות', 'sources.connect.openverseHint': 'מוזיקה, צלילים ותמונות. עובד גם בלי חיבור',
+  'sources.connect.anonymous': 'בלי חיבור: {n} חיפושים בשעה', 'sources.connect.clientMode': 'מחוברים עם לקוח משלכם',
+  'sources.connect.policy': 'המדיניות של ויקימדיה', 'sources.connect.stored': 'נשמר', 'sources.connect.removed': 'נמחק',
+  'sources.connect.contactSet': 'פרטי קשר שמורים', 'sources.connect.noContact': 'אין פרטי קשר שמורים',
+  'sources.connect.limitNow': 'המגבלה בפועל: {n}', 'sources.connect.noLimit': 'בלי מגבלה משלכם', 'sources.connect.loading': 'טוענים את המצב…',
+  'sources.connect.stateOnly': 'המצב מוצג כאן. שמירה של מפתחות נעשית מחלון הבעלים',
 } as const;
 
 export const SOURCES_EN: Record<keyof typeof SOURCES_HE, string> = {
@@ -102,6 +118,21 @@ export const SOURCES_EN: Record<keyof typeof SOURCES_HE, string> = {
   'sources.connect.contact': 'Contact for Wikimedia', 'sources.connect.contactHint': 'An email address, a website or a wiki user name. Sent to Wikimedia with every request, as its policy asks',
   'sources.connect.maxBytes': 'Download limit', 'sources.connect.maxBytesHint': 'At most the upload limit ({max})',
   'sources.connect.windows': 'On Windows the key is protected by the data folder\'s permissions',
+  'sources.chips': 'Services', 'sources.kinds': 'Kind', 'sources.kindAll': 'All', 'sources.searchGo': 'Search', 'sources.searching': 'Searching…',
+  'sources.state.ready': 'Connected', 'sources.state.not_built': 'Not built in this version', 'sources.results': 'Search results', 'sources.byAuthor': 'By {name}', 'sources.noProject': 'Open a project to add files',
+  'sources.addProjectHint': 'Enter: add at the playhead · Shift+Enter: to the project only · Space: preview',
+  'sources.added': 'Download started: {title}', 'sources.close': 'Close', 'sources.licenceNone': 'No licence stated',
+  'sources.link.route.direct': 'The file is downloaded straight from the address you pasted', 'sources.link.route.provider': 'The file is downloaded from the service',
+  'sources.link.started': 'Download started', 'sources.link.terms': 'What the terms say',
+  'sources.job.failed': 'The download failed', 'sources.job.dismiss': 'Dismiss',
+  'sources.assetHeading': 'Where the file came from',
+  'sources.connect.pixabay': 'Pixabay', 'sources.connect.openverse': 'Openverse', 'sources.connect.wikimedia': 'Wikimedia Commons',
+  'sources.connect.pixabayHint': 'Video and photos. The key is free on the service\'s site', 'sources.connect.openverseHint': 'Music, sounds and photos. Works without connecting',
+  'sources.connect.anonymous': 'Not connected: {n} searches an hour', 'sources.connect.clientMode': 'Connected with your own client',
+  'sources.connect.policy': 'Wikimedia\'s policy', 'sources.connect.stored': 'Stored', 'sources.connect.removed': 'Removed',
+  'sources.connect.contactSet': 'Contact stored', 'sources.connect.noContact': 'No contact stored',
+  'sources.connect.limitNow': 'The limit in effect: {n}', 'sources.connect.noLimit': 'No limit of your own', 'sources.connect.loading': 'Loading the state…',
+  'sources.connect.stateOnly': 'The state is shown here. Keys are stored from the owner\'s window',
 };
 
 /** The Hebrew of every refusal of use_source_item and of the sources routes (the English is core's, fixed). */

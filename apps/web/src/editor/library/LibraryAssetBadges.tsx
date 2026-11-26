@@ -10,11 +10,14 @@ import { useEditorState } from '../store.ts';
 import { LIBRARY_TESTIDS as TID } from './library.testids.ts';
 import { LIBRARY_UI_STRINGS } from './library.strings.ts';
 import { assetBadges, badgeText } from './library.logic.ts';
+import { SourceAssetLines } from '../sources/SourceAssetLines.tsx';
 
 export function LibraryAssetBadgesView({ asset, lang }: { asset: Asset; lang: Lang }): ReactElement | null {
   const lib = asset.provenance?.library;
+  const src = asset.provenance?.source;
   const [open, setOpen] = useState(false);
-  if (!lib) return null;
+  // a file from «מאגר» (wave 8 sources) carries provenance.source instead: its own lines (a library copy keeps the library record)
+  if (!lib) return src ? <SourceAssetLines source={src} lang={lang} /> : null;
   const L = LIBRARY_UI_STRINGS[lang];
   const badges = assetBadges(asset);
   return (
