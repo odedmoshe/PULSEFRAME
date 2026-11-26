@@ -188,4 +188,10 @@ export const DRAWN_SITES: readonly DrawnSite[] = [
   { file: "packages/evals/src/growing-proof.server.ts", snippet: "lots ?? []).filter((x) => x.kind === 'text').map((x) =>", class: 'proof', note: "growing proof reads the title slots it made" },
   { file: "packages/evals/src/growing-proof.server.ts", snippet: "typeof v === 'object' && v.kind === 'text' && typeof v", class: 'proof', note: "growing proof reads the title slots it made" },
   { file: "apps/server/src/growing.ts", snippet: "lots ?? []).filter((s) => s.kind === 'text').map((s) =>", class: 'n/a', note: "growing kept slot kind (a run record's slot, not a clip branch)" },
+  { file: "packages/core/src/qcChecks.ts", snippet: "=> c.type === 'media' || c.type === 'text' || c.type =", class: 'placement', note: "export checks: a drawn clip is a picture like a title (the same list names 'drawn')" },
+  { file: "packages/core/src/qcChecks.ts", snippet: "k.kind === 'video' || track.kind === 'text')) continue;", class: 'n/a', note: "track kind, not a clip branch" },
+  { file: "packages/core/src/qcChecks.ts", snippet: "if (track.hidden || track.kind !== 'text') continue;", class: 'n/a', note: "track kind, not a clip branch" },
+  { file: "packages/core/src/qcChecks.ts", snippet: "track.clips.filter((c) => c.type === 'text' || c.type =", class: 'placement', note: "title_hidden counts drawn clips with titles (the same line names 'drawn')" },
+  { file: "packages/core/src/qcChecks.ts", snippet: "kind === 'video' || x.track.kind === 'text').flatMap((x", class: 'n/a', note: "track kind, not a clip branch" },
+  { file: "packages/core/src/qcChecks.ts", snippet: "if (c.type === 'text' && c.animat", class: 'words', note: "a title's in/out animation explains a fade; a drawn clip has none" },
 ];

@@ -117,7 +117,9 @@ describe('eyes: the owner\'s own session only', () => {
     const msg = JSON.parse((r.headers.get('content-type') ?? '').includes('text/event-stream') ? text.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5)).join('') : text);
     const names: string[] = msg.result.tools.map((t: { name: string }) => t.name);
     expect(names.length).toBeGreaterThan(10);
-    for (const n of names) expect(n, n).not.toMatch(/eye|picture_model|face|depth|matte/i);
+    // the living-picture track's ops work on a depth the owner DRAWS (set_clip_depth, set_living_picture): not this track's model tools
+    const drawnDepthOps = new Set(['set_clip_depth', 'set_living_picture']);
+    for (const n of names.filter((x) => !drawnDepthOps.has(x))) expect(n, n).not.toMatch(/eye|picture_model|face|depth|matte/i);
   });
 });
 
