@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { applyTransaction, createProject, creativeProjection, OpError, SOURCES_BUILT, validateProject, type OpCall } from '@pulseframe/core';
+import { applyTransaction, createProject, creativeProjection, OpError, validateProject, type OpCall } from '@pulseframe/core';
 import { ApiError, Store } from '../../../apps/server/src/store.ts';
 import { createFuzz } from './ops-fuzz.gen.ts';
 
@@ -19,31 +19,7 @@ const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 describe('use_source_item fuzz', () => {
-  it.skipIf(SOURCES_BUILT.op)('every call is refused with sources_not_built and changes nothing', () => {
-    for (let seed = 1; seed <= SEEDS; seed++) {
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-srcfuzz-')); dirs.push(dir);
-      const s = new Store(dir);
-      try {
-        const fz = createFuzz(seed + 8000);
-        const pid = s.createProject({ name: 'fuzz', width: 640, height: 360, frameRate: fz.rate }).doc.id;
-        s.commit({ projectId: pid, actor: 'system', allowInternal: true, ops: fz.importOps });
-        s.commit({ projectId: pid, actor: 'system', ops: fz.setup(s.getProject(pid).doc) });
-        for (let step = 0; step < 20; step++) {
-          const doc = s.getProject(pid).doc;
-          const call: OpCall = step % 2 === 0 ? fz.genSource() : fz.gen(doc);
-          const before = creativeProjection(doc);
-          try { s.commit({ projectId: pid, actor: 'agent:fuzz', allowInternal: true, ops: [call] }); } catch (e) {
-            if (!(e instanceof ApiError)) throw e;
-            if (call.op === 'use_source_item') expect(JSON.stringify(e.toJSON())).toContain('sources_not_built');
-            expect(creativeProjection(s.getProject(pid).doc)).toEqual(before);
-            continue;
-          }
-          expect(call.op, 'use_source_item is never accepted before W1 builds it').not.toBe('use_source_item');
-        }
-      } finally { s.close(); }
-    }
-  }, 60_000);
-  it.runIf(SOURCES_BUILT.op)('W1: accepted calls leave a valid document; one asset added or the record attached (a library copy kept); refusals are data facts only and change nothing; undo all, redo all and replay reproduce the recorded documents', () => {
+  it('W1: accepted calls leave a valid document; one asset added or the record attached (a library copy kept); refusals are data facts only and change nothing; undo all, redo all and replay reproduce the recorded documents', () => {
     const tally = { accepted: 0, added: 0, attached: 0, dedup: 0, refused: 0, warned: 0 };
     const FACTS = ['source_no_record', 'source_hash_mismatch', 'source_record_weaker', 'source_credit_missing'];
     for (let seed = 1; seed <= SEEDS; seed++) {
@@ -100,7 +76,7 @@ describe('use_source_item fuzz', () => {
     }
     expect({ accepted: tally.accepted > 0, added: tally.added > 0, refused: tally.refused > 0, warned: tally.warned > 0 }, JSON.stringify(tally)).toEqual({ accepted: true, added: true, refused: true, warned: true });
   }, 240_000);
-  it.runIf(SOURCES_BUILT.op)('W1: a CC BY-SA, CC BY-ND, provider: or unknown licence is never refused; its warning is in output.warnings', () => {
+  it('W1: a CC BY-SA, CC BY-ND, provider: or unknown licence is never refused; its warning is in output.warnings', () => {
     const fz = createFuzz(8999);
     const seen = new Set<string>();
     for (let i = 0; i < 400; i++) {

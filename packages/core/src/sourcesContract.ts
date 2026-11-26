@@ -45,12 +45,16 @@ export const SOURCES_LIMITS = {
   /** a link as pasted */ linkChars: 4096,
 } as const;
 /**
- * The largest download (C6): the owner's setting (Settings › «חיבורים», or PF_SOURCES_MAX_BYTES) but NEVER above the import queue's
- * upload limit (cfg.maxUploadBytes, default 2 GiB), because the bytes go through `imports.receive`, which caps at that limit. The card
- * says so. Pure.
+ * The largest download (C6, reconciled with ADR-0036 I9 at integration): the owner's setting (Settings › «חיבורים», or
+ * PF_SOURCES_MAX_BYTES) but NEVER above the upload limit in effect (importContracts.ts `uploadCapFor`), because the bytes go through
+ * `imports.receive`, which caps at that limit. In open mode with no upload limit set, `uploadCapFor` is none (passed as null or
+ * Infinity): the setting alone, and with no setting null = no byte limit of its own; the free space against the disk reserve
+ * (download_disk_full, checked before and while downloading) and the storage ceiling still hold. Pure.
  */
-export function sourcesMaxBytes(setting: number | null | undefined, maxUploadBytes: number): number {
-  return setting && setting > 0 ? Math.min(setting, maxUploadBytes) : maxUploadBytes;
+export function sourcesMaxBytes(setting: number | null | undefined, maxUploadBytes: number | null): number | null {
+  const cap = maxUploadBytes !== null && Number.isFinite(maxUploadBytes) ? maxUploadBytes : null;
+  if (setting && setting > 0) return cap === null ? setting : Math.min(setting, cap);
+  return cap;
 }
 
 // ---------------------------------------------------------------- the record on the asset (schema.ts provenance.source)
@@ -272,7 +276,9 @@ export interface SourceJobInput {
   provider: SourceProviderId; itemId: string; rendition?: string;
   place?: { start: { value: string; timescale: number }; trackId?: string; sequenceId?: string };
   /** for a link: the host only, for the job card (the full link is in the sidecar) */ host?: string;
-  maxBytes: number;
+  /** the download limit when the job was made (sourcesMaxBytes); null = none of its own (open mode, no upload limit set) */ maxBytes: number | null;
+  /** the key a repeat names (store.findJobByKey) */ idempotencyKey?: string;
+  /** the grant the job was started under (a restart places the clip as that grant) */ grantId?: string;
 }
 /** The job's stage JSON (resume, C6/C11): bytes so far, the validator of the first answer for If-Range, the import job once started. */
 export interface SourceJobProgress { stage: SourceJobStage; bytes: number; total: number | null; etag: string | null; lastModified: string | null; importJobId: string | null }
@@ -286,7 +292,8 @@ export interface SourceState {
   /** Openverse: anonymous or the owner's client */ mode?: 'anonymous' | 'client';
   remaining: { count: number; perSeconds: number } | null;
 }
-export interface SourcesSettings { maxDownloadBytes: number | null; maxUploadBytes: number; effectiveMaxBytes: number }
+/** null in maxUploadBytes / effectiveMaxBytes: no limit set (open mode, ADR-0036 I9); the free space and the disk reserve still hold. */
+export interface SourcesSettings { maxDownloadBytes: number | null; maxUploadBytes: number | null; effectiveMaxBytes: number | null }
 export const SourcesSettingsBodySchema = z.object({ maxDownloadBytes: z.number().int().positive().nullable() }).strict();
 /** PUT /api/v1/sources/:provider/credentials (the owner's own session only). One form per service. */
 export const SourceCredentialsBodySchema = z.union([

@@ -53,8 +53,8 @@ export function sourceDuties(r: SourceRecord, title: string): SourceWarning[] {
   if (nd) out.push({ code: 'licence_no_derivatives', ...base, termIds: [LICENCE_WARNING_TERMS.licence_no_derivatives!], message: `${t}: the licence ${licenceLabel(r)}${at} says in its own words: ${quoted(LICENCE_WARNING_TERMS.licence_no_derivatives!)}` });
   if (sa) out.push({ code: 'licence_share_alike', ...base, termIds: [LICENCE_WARNING_TERMS.licence_share_alike!], message: `${t}: the licence ${licenceLabel(r)}${at} says in its own words: ${quoted(LICENCE_WARNING_TERMS.licence_share_alike!)}` });
   const unknown = r.licence.from === 'none' || r.licence.id === 'unknown';
-  if (unknown) out.push({ code: 'licence_unknown', ...base, termIds: [], message: `${t}: licence unknown: the service or the link named no licence${r.pageUrl ? `; its page: ${r.pageUrl}` : ''}` });
-  else if (!f.known && !nd && !sa) out.push({ code: 'licence_unconfirmed', ...base, termIds: [], message: `${t}: the licence ${licenceLabel(r)} was not read in full here; read it at ${r.licence.url ?? r.pageUrl ?? 'the service\'s page'} before publishing` });
+  if (unknown) out.push({ code: 'licence_unknown', ...base, termIds: [], message: `${t}: licence unknown: the service or the link named no licence${r.link ? `; it came from ${r.link.host}` : r.pageUrl ? `; its page: ${r.pageUrl}` : ''}` });
+  else if (!f.known && !nd && !sa) out.push({ code: 'licence_unconfirmed', ...base, termIds: [], message: `${t}: the licence ${licenceLabel(r)} was not read in full here; read it at ${r.licence.url ?? (r.link ? r.link.host : r.pageUrl) ?? 'the service\'s page'} before publishing` });
   const terms = (r.terms ?? []).filter((id) => Object.hasOwn(SOURCE_TERMS, id));
   if (terms.length) {
     const providers = [...new Set(terms.map((id) => SOURCE_TERMS[id]!.provider))].join(', ');

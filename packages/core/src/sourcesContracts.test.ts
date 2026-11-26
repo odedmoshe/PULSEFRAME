@@ -8,7 +8,7 @@ import * as T from '@pulseframe/time';
 import {
   applyTransaction, archiveLibraryPlan, collectCredits, createProject, creativeProjection, creditDue, creditsView, CREDIT_PLACEMENTS, diffEntities, FIT_GRID_METHOD, FIT_METHOD, fitLicenceProblem, fitSourceNotes, fittedLibraryRecord, fittedSourceRecord, getOp, LEARN,
   licenceFacts, licensedOrigins, MUSICFIT_REFUSALS, OpError, ProjectSchema, restoreEntities, shareable, soundRoleOf, SOURCE_OP_REFUSALS, SOURCE_TERMS, sourceDuties, SourceRecordSchema, sourceRecordKey,
-  sourceRecordProblems, SOURCES_BUILT, sourcesMaxBytes, SPDX_LICENCES, summarize, validateProject, type Asset, type LibraryRecord, type ProjectDocument, type SourceRecord, type UseSourceItemOutput,
+  sourceRecordProblems, sourcesMaxBytes, SPDX_LICENCES, summarize, validateProject, type Asset, type LibraryRecord, type ProjectDocument, type SourceRecord, type UseSourceItemOutput,
 } from './index.ts';
 
 const HEX = 'a'.repeat(64);
@@ -107,22 +107,23 @@ describe('download limit (C6)', () => {
     expect(sourcesMaxBytes(500, 2000)).toBe(500);
     expect(sourcesMaxBytes(5000, 2000)).toBe(2000);
   });
+  it('open mode with no upload limit set (ADR-0036 I9; uploadCapFor = none): the setting alone, or none (null: the free space and the disk reserve are the limit)', () => {
+    expect(sourcesMaxBytes(null, null)).toBeNull();
+    expect(sourcesMaxBytes(5000, null)).toBe(5000);
+    expect(sourcesMaxBytes(5000, Number.POSITIVE_INFINITY)).toBe(5000);
+    expect(sourcesMaxBytes(null, Number.POSITIVE_INFINITY)).toBeNull();
+  });
 });
 
-describe('use_source_item registration (and its not-built state before W1)', () => {
+describe('use_source_item registration', () => {
   it('is registered internal, with a LEARN row (C17c)', () => {
     expect(getOp('use_source_item')?.internal).toBe(true);
     expect(LEARN.use_source_item).toBeDefined();
   });
-  it.runIf(!SOURCES_BUILT.op)('refuses with sources_not_built and changes nothing; an API client cannot issue it', () => {
+  it('an API client cannot issue it (internal: forbidden_op) and nothing changes', () => {
     const doc = createProject({ id: 'prj_src2', name: 'S', width: 640, height: 360 });
     const before = JSON.stringify(doc);
     const { id: _id, ...a } = asset({ source: rec() });
-    let err: unknown;
-    try { applyTransaction(doc, [{ op: 'use_source_item', args: { asset: a } }], { idSeed: 's_', actor: 'test', allowInternal: true }); } catch (e) { err = e; }
-    expect(err).toBeInstanceOf(OpError);
-    expect((err as OpError).message).toBe(SOURCE_OP_REFUSALS.notBuilt.message());
-    expect((err as OpError).details).toMatchObject({ why: 'sources_not_built' });
     let forbidden: unknown;
     try { applyTransaction(doc, [{ op: 'use_source_item', args: { asset: a } }], { idSeed: 's_', actor: 'test' }); } catch (e) { forbidden = e; }
     expect((forbidden as OpError).code).toBe('forbidden_op');
@@ -230,6 +231,10 @@ describe('sourceDuties (W1): warnings in order, the licence named, deed rows quo
     expect(sa[0]!.message).toContain(SOURCE_TERMS['cc.sa']!.quote);
     expect(sa[0]!.message).toContain(SA.licence.url);
     expect(sourceDuties({ ...rec(), ...UNKNOWN }, 'X').map((w) => w.code)).toEqual(['licence_unknown']);
+    // a pasted link (C11): the warning names the host, never the link's path (a share link's path is its token; job rows carry warnings)
+    const linked = sourceDuties({ ...rec(), ...UNKNOWN, provider: 'link', itemId: 'f'.repeat(32), pageUrl: 'https://files.example.invalid/s/tok3n/clip.mp4', link: { via: 'direct', host: 'files.example.invalid' } }, 'clip.mp4');
+    expect(linked[0]!.message).toContain('files.example.invalid');
+    expect(linked[0]!.message).not.toContain('tok3n');
     expect(sourceDuties({ ...rec(), ...PIXABAY }, 'X').map((w) => w.code)).toEqual(['licence_unconfirmed', 'source_terms']);
     expect(sourceDuties({ ...rec(), licence: { id: 'CC0-1.0', name: 'cc0', from: 'item' }, credit: undefined }, 'X')).toEqual([]);
     expect(sourceDuties(rec(), 'X')).toEqual([]);

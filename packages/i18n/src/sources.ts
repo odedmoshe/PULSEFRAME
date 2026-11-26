@@ -56,7 +56,7 @@ export const SOURCES_HE = {
   'sources.connect.signup': 'קבלת מפתח חינמי',
   'sources.connect.openverseClient': 'רישום לקוח חינמי ב־Openverse (100 בדקה, 10,000 ביום)', 'sources.connect.clientId': 'מזהה לקוח', 'sources.connect.clientSecret': 'סוד לקוח',
   'sources.connect.contact': 'פרטי קשר לוויקימדיה', 'sources.connect.contactHint': 'כתובת מייל, אתר או שם משתמש בוויקי. נשלח לוויקימדיה עם כל בקשה, כפי שהמדיניות שלה מבקשת',
-  'sources.connect.maxBytes': 'מגבלת הורדה', 'sources.connect.maxBytesHint': 'לכל היותר מגבלת ההעלאה ({max})',
+  'sources.connect.maxBytes': 'מגבלת הורדה', 'sources.connect.maxBytesHint': 'לכל היותר מגבלת ההעלאה ({max})', 'sources.connect.noUploadCap': 'לא נקבעה מגבלת העלאה (מצב פתוח): רק ההגדרה הזאת והמקום הפנוי בדיסק מגבילים הורדה',
   'sources.connect.windows': 'ב־Windows המפתח מוגן בהרשאות של תיקיית הנתונים',
   // wave 8 W3: the tab's own lines
   'sources.chips': 'שירותים', 'sources.kinds': 'סוג', 'sources.kindAll': 'הכול', 'sources.searchGo': 'חיפוש', 'sources.searching': 'מחפשים…',
@@ -116,7 +116,7 @@ export const SOURCES_EN: Record<keyof typeof SOURCES_HE, string> = {
   'sources.connect.signup': 'Get a free key',
   'sources.connect.openverseClient': 'Register a free Openverse client (100 a minute, 10,000 a day)', 'sources.connect.clientId': 'Client id', 'sources.connect.clientSecret': 'Client secret',
   'sources.connect.contact': 'Contact for Wikimedia', 'sources.connect.contactHint': 'An email address, a website or a wiki user name. Sent to Wikimedia with every request, as its policy asks',
-  'sources.connect.maxBytes': 'Download limit', 'sources.connect.maxBytesHint': 'At most the upload limit ({max})',
+  'sources.connect.maxBytes': 'Download limit', 'sources.connect.maxBytesHint': 'At most the upload limit ({max})', 'sources.connect.noUploadCap': 'No upload limit is set (open mode): only this setting and the free disk space limit a download',
   'sources.connect.windows': 'On Windows the key is protected by the data folder\'s permissions',
   'sources.chips': 'Services', 'sources.kinds': 'Kind', 'sources.kindAll': 'All', 'sources.searchGo': 'Search', 'sources.searching': 'Searching…',
   'sources.state.ready': 'Connected', 'sources.state.not_built': 'Not built in this version', 'sources.results': 'Search results', 'sources.byAuthor': 'By {name}', 'sources.noProject': 'Open a project to add files',

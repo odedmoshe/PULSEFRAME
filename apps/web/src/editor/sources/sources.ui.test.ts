@@ -10,7 +10,7 @@ import { DownloadRow, LinkBox, TermRows, WarningLine } from './SourceParts.tsx';
 import { ResultCard } from './SourcesTab.tsx';
 import { SourceAssetLines } from './SourceAssetLines.tsx';
 import { SOURCES_TESTIDS as TID } from './sources.testids.ts';
-import { gridNext, licenceLabel, parseStage, percentOf, recordWarnings, remainingLine, safePageUrl, sx, termLines, warningHead } from './sources.logic.ts';
+import { gridNext, licenceLabel, limitLine, parseStage, percentOf, recordWarnings, remainingLine, safePageUrl, sx, termLines, warningHead } from './sources.logic.ts';
 
 const nd: SourceWarning = { code: 'licence_no_derivatives', licenceName: 'CC BY-ND 4.0', licenceId: 'CC-BY-ND-4.0', termIds: ['cc.nd'], message: '' };
 const row = (over: Partial<SourceResultRow> = {}): SourceResultRow => ({
@@ -127,5 +127,15 @@ describe('pure helpers', () => {
     expect(recordWarnings(rec({ flags: { licenceUnconfirmed: true }, licence: { id: 'unknown', name: '', from: 'none' } })).map((w) => w.code)).toEqual(['licence_unknown']);
     expect(safePageUrl('https://a.test/x')).toBe('https://a.test/x'); expect(safePageUrl('data:text/html,x')).toBeNull(); expect(safePageUrl(undefined)).toBeNull();
     expect(warningHead('en', nd)).toBe(sx('en', 'sources.warn.licence_no_derivatives', { name: 'CC BY-ND 4.0' }));
+  });
+});
+
+describe('the download limit line (C6 with ADR-0036 I9)', () => {
+  it('guarded or a set upload limit: at most the upload limit; open mode with none: says so, and the setting alone limits', () => {
+    expect(limitLine('he', { maxDownloadBytes: null, maxUploadBytes: 2 * 1024 ** 3, effectiveMaxBytes: 2 * 1024 ** 3 })).toBe('לכל היותר מגבלת ההעלאה (2.0 GB). בלי מגבלה משלכם');
+    expect(limitLine('en', { maxDownloadBytes: 100 * 1024 ** 2, maxUploadBytes: 2 * 1024 ** 3, effectiveMaxBytes: 100 * 1024 ** 2 })).toBe('At most the upload limit (2.0 GB). The limit in effect: 100.0 MB');
+    expect(limitLine('he', { maxDownloadBytes: null, maxUploadBytes: null, effectiveMaxBytes: null })).toBe(`${sx('he', 'sources.connect.noUploadCap')}. ${sx('he', 'sources.connect.noLimit')}`);
+    expect(limitLine('en', { maxDownloadBytes: 5 * 1024 ** 3, maxUploadBytes: null, effectiveMaxBytes: 5 * 1024 ** 3 })).toBe(`${sx('en', 'sources.connect.noUploadCap')}. The limit in effect: 5.0 GB`);
+    expect(sx('en', 'sources.connect.noUploadCap')).not.toBe('sources.connect.noUploadCap');
   });
 });

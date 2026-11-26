@@ -93,3 +93,9 @@ export function recordWarnings(r: Pick<SourceRecord, 'licence' | 'flags' | 'titl
 }
 /** Only an http(s) page is linked. */
 export const safePageUrl = (u: string | undefined): string | null => { try { const x = new URL(u ?? ''); return x.protocol === 'https:' || x.protocol === 'http:' ? x.href : null; } catch { return null; } };
+/** The download limit line of «חיבורים»: at most the upload limit in effect; in open mode with none set (ADR-0036 I9) it says so. */
+export function limitLine(lang: Lang, s: { maxDownloadBytes: number | null; maxUploadBytes: number | null; effectiveMaxBytes: number | null }): string {
+  const cap = s.maxUploadBytes === null ? sx(lang, 'sources.connect.noUploadCap') : sx(lang, 'sources.connect.maxBytesHint', { max: sizeText(s.maxUploadBytes) });
+  const now = s.maxDownloadBytes && s.effectiveMaxBytes !== null ? sx(lang, 'sources.connect.limitNow', { n: sizeText(s.effectiveMaxBytes) }) : sx(lang, 'sources.connect.noLimit');
+  return `${cap}. ${now}`;
+}

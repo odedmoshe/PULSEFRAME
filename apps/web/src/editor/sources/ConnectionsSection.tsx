@@ -11,7 +11,7 @@ import { isOwnerActor } from '../library/library.logic.ts';
 import { useEditorState } from '../store.ts';
 import { SOURCES_TESTIDS as TID } from './sources.testids.ts';
 import { sourcesApi } from './sourcesApi.ts';
-import { providerName, sizeText, sx } from './sources.logic.ts';
+import { limitLine, providerName, sx } from './sources.logic.ts';
 import './sources.css';
 
 const SIGNUP: Record<'pixabay' | 'openverse', string> = { pixabay: 'https://pixabay.com/api/docs/', openverse: 'https://api.openverse.org/v1/' };
@@ -110,9 +110,9 @@ export function ConnectionsSection(): ReactElement {
         <form className="pf-src-conn" onSubmit={(e) => void saveLimit(e)}>
           <label className="pf-src-field" htmlFor="pf-conn-max">
             <span>{sx(lang, 'sources.connect.maxBytes')} (MB)</span>
-            <input id="pf-conn-max" type="number" min={1} step={1} dir="ltr" className="pf-src-input" value={limit} onChange={(e) => setLimit(e.target.value)} data-testid={TID.maxBytes} placeholder={String(Math.round(settings.effectiveMaxBytes / 1024 ** 2))} />
+            <input id="pf-conn-max" type="number" min={1} step={1} dir="ltr" className="pf-src-input" value={limit} onChange={(e) => setLimit(e.target.value)} data-testid={TID.maxBytes} placeholder={settings.effectiveMaxBytes === null ? '' : String(Math.round(settings.effectiveMaxBytes / 1024 ** 2))} />
           </label>
-          <p className="pf-src-muted" dir="auto">{sx(lang, 'sources.connect.maxBytesHint', { max: sizeText(settings.maxUploadBytes) })}. {settings.maxDownloadBytes ? sx(lang, 'sources.connect.limitNow', { n: sizeText(settings.effectiveMaxBytes) }) : sx(lang, 'sources.connect.noLimit')}</p>
+          <p className="pf-src-muted" dir="auto">{limitLine(lang, settings)}</p>
           <div className="pf-src-row"><Button type="submit" size="sm" variant="secondary">{sx(lang, 'sources.connect.save')}</Button></div>
           <p role="status" className={note && !note.ok ? 'pf-src-err' : 'pf-src-muted'} dir="auto">{note?.text}</p>
         </form>

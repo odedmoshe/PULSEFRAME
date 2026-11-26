@@ -20,6 +20,7 @@ import type { Principal } from '../auth.ts';
 import { ownerKeeps, actsAsOwner } from '../autonomy.ts';
 import { classifyAddress, defaultAddressPolicy } from '../connectors/fetch.ts';
 import { ConnectorKeyStore, readConnectorSettings, writeConnectorSettings, type ConnectorKeyId } from '../connectors/keys.ts';
+import { uploadCapFor } from '../importContracts.ts';
 import { freeDiskBytes } from '../storage.ts';
 import { ApiError, type JobRow } from '../store.ts';
 import { AnswerCache, RequestCounter } from './cache.ts';
@@ -96,7 +97,10 @@ export function createSourcesRuntime(deps: SourcesDeps, o: SourcesRuntimeOptions
   };
   const settingsNow = (): SourcesSettings => {
     const stored = readConnectorSettings(cfg.dataDir).sources.maxDownloadBytes;
-    return { maxDownloadBytes: stored, maxUploadBytes: cfg.maxUploadBytes, effectiveMaxBytes: sourcesMaxBytes(cfg.sourcesMaxBytes ?? stored, cfg.maxUploadBytes) };
+    // the upload limit IN EFFECT (ADR-0036 I9): open mode with no cap set has none, and then the download has only its own setting
+    const cap = uploadCapFor(cfg);
+    const upload = Number.isFinite(cap) ? cap : null;
+    return { maxDownloadBytes: stored, maxUploadBytes: upload, effectiveMaxBytes: sourcesMaxBytes(cfg.sourcesMaxBytes ?? stored, upload) };
   };
 
   const runner = new SourceJobRunner({

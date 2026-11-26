@@ -2,8 +2,8 @@
  * The import queue's SOURCE BRANCH (importQueue.ts; verify C7, C6 recovery), driven directly (no server, no port): receive's check
  * of the record and the bytes, the commit by use_source_item with provenance.source and no upload record, no duplicate short-cut,
  * the restart between commit and job update recognised by provider + itemId (ownCommit), and the clean-up of src_* temp files.
- * Labelled: `derivatives` is a counting fake, the free space is injected, use_source_item's body is the stand-in of
- * doubles/sources/standIns.ts until W1's is merged. Fixtures are synthetic (ffmpeg) and deleted.
+ * Labelled: `derivatives` is a counting fake, the free space is injected; use_source_item is core's own op (W1, merged).
+ * Fixtures are synthetic (ffmpeg) and deleted.
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -12,24 +12,21 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Asset, SourceRecord } from '@pulseframe/core';
-import { installUseSourceItemStandIn } from '../../../../packages/evals/src/doubles/sources/standIns.ts';
 import type { ImportQueue } from '../importContracts.ts';
 import { createImportQueue } from '../importQueue.ts';
 import { FifoComputeLane } from '../lane.ts';
 import { ApiError, Store, type JobRow } from '../store.ts';
 
 let root = '', png = Buffer.alloc(0), png2 = Buffer.alloc(0);
-let restore: () => void = () => {};
 const stores: Store[] = [];
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 beforeAll(() => {
-  restore = installUseSourceItemStandIn();
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-src-branch-'));
   for (const [n, c] of [['a.png', 'red'], ['b.png', 'yellow']] as const) execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-nostdin', '-y', '-f', 'lavfi', '-i', `color=c=${c}:s=32x32`, '-frames:v', '1', path.join(root, n)]);
   png = fs.readFileSync(path.join(root, 'a.png'));
   png2 = fs.readFileSync(path.join(root, 'b.png'));
 }, 60_000);
-afterAll(() => { for (const s of stores) { try { s.close(); } catch { /* closed */ } } restore(); fs.rmSync(root, { recursive: true, force: true }); });
+afterAll(() => { for (const s of stores) { try { s.close(); } catch { /* closed */ } } fs.rmSync(root, { recursive: true, force: true }); });
 
 function world(): { store: Store; queue: ImportQueue; pid: string; dir: string } {
   const dir = fs.mkdtempSync(path.join(root, 'w-'));

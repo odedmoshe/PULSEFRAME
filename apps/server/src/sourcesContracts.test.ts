@@ -4,8 +4,8 @@
  * credential; every route answers 501 sources_not_built after its checks until W2 builds the runtime; the MCP tools are listed,
  * classified and answer the same; the descriptors' ids are core's; the import contract carries the source part (C7).
  * W2: the last part runs the plan's proof checks against the BUILT runtime through the real server (startServer, port 0) on
- * LABELLED doubles only (packages/evals/src/doubles/sources: 127.0.0.9, port 0, the injected test address policy), with a labelled
- * stand-in for W1's use_source_item body until it is merged. Never a real service, real media or a real key.
+ * LABELLED doubles only (packages/evals/src/doubles/sources: 127.0.0.9, port 0, the injected test address policy) and core's own
+ * use_source_item (W1). Never a real service, real media or a real key.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -28,14 +28,10 @@ import { SOURCES_MCP_TOOLS, SOURCES_ROUTES } from './sources/contract.ts';
 import { Speech } from './speech.ts';
 import { Store } from './store.ts';
 
-import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { SOURCE_JOB_TYPE, validateProject, type Asset } from '@pulseframe/core';
-import { DOUBLE_HOST, DOUBLE_PRIVATE_HOST, doublePolicy, startLinkHost, startOpenverseDouble, startPixabayDouble, startWikimediaDouble, type LinkHost, type OpenverseDouble, type PixabayDouble, type WikimediaDouble } from '../../../packages/evals/src/doubles/sources/doubles.ts';
-import { installUseSourceItemStandIn } from '../../../packages/evals/src/doubles/sources/standIns.ts';
-import { defaultAddressPolicy } from './connectors/fetch.ts';
-import { startServer, type RunningServer } from './index.ts';
-import type { JobRow } from './store.ts';
+import { DOUBLE_HOST, DOUBLE_PRIVATE_HOST, type LinkHost, type OpenverseDouble, type PixabayDouble, type WikimediaDouble } from '../../../packages/evals/src/doubles/sources/doubles.ts';
+import { bootSources, client, CONTACT, filesContaining as filesContainingOf, freeSpace, makeFixtures, PX_KEY, sha, startDoubles, tmpFiles as tmpFilesOf, until, type Doubles, type Fixtures } from '../../../packages/evals/src/doubles/sources/harness.ts';
+import type { RunningServer } from './index.ts';
 import { createSourcesRuntime } from './sources/runtime.ts';
 let dir: string, cfg: Config, store: Store, auth: Auth, app: ReturnType<typeof createApp>, mcp: ReturnType<typeof createMcp>, speech: Speech, capabilities: Capabilities;
 let pid = '', ownerCookie = '';
@@ -146,86 +142,32 @@ describe('descriptors and the User-Agent', () => {
 
 
 // ---------------------------------------------------------------- W2: the built runtime on labelled doubles (proof checks of sources-plan §5 as cut)
-const PX_KEY = 'pxkey-double-7f3a91c2';
-const CONTACT = 'me@example.invalid';
+// one harness with proof:sources (packages/evals/src/doubles/sources/harness.ts)
 let root = '', ddir = '';
 let s: RunningServer;
 let ov: OpenverseDouble, px: PixabayDouble, wm: WikimediaDouble, host: LinkHost, nas: LinkHost;
-let restore: () => void = () => {};
-let rpid = '', rCookie = '';
-const free = { bytes: 100 * 1024 ** 3 as number | null };
-const fx: Record<string, Buffer> = {};
-const ff = (args: string[]) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-nostdin', '-y', ...args]);
-const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
-
-async function boot() {
-  s = await startServer({ port: 0, dataDir: ddir, importReserveBytes: 1024 ** 2, speechPython: null, voicePython: null, backupDir: null }, {
-    sourcesTest: { addressPolicy: doublePolicy(defaultAddressPolicy), baseUrls: { openverse: ov.url, pixabay: px.url, wikimedia: wm.url } }, // labelled doubles
-    sourcesOptions: { freeBytes: () => free.bytes, timeouts: { headerMs: 3000, idleMs: 1500 } }, // labelled free-space stand-in; short timers
-  });
-  rCookie = s.auth.issueSession(new Request(`${s.url}/api/v1/session`, { headers: { origin: s.url, 'x-pf-owner-key': s.auth.tokens.owner } })).split(';')[0]!;
-}
-type RWho = 'owner' | 'agent' | 'observer';
-async function api(who: RWho, method: string, p: string, body?: unknown): Promise<{ status: number; body: any; headers: Headers; raw: Buffer }> {
-  const h: Record<string, string> = who === 'owner' ? { origin: s.url, cookie: rCookie } : { authorization: `Bearer ${who === 'agent' ? s.auth.tokens.agent : s.auth.tokens.observer}` };
-  const r = await fetch(`${s.url}${p}`, { method, headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
-  const raw = Buffer.from(await r.arrayBuffer());
-  const ct = r.headers.get('content-type') ?? '';
-  return { status: r.status, headers: r.headers, raw, body: ct.includes('json') ? JSON.parse(raw.toString('utf8')) : null };
-}
-async function finished(jobId: string, ms = 60_000): Promise<JobRow> {
-  const t = Date.now();
-  for (;;) {
-    const j = s.store.getJob(jobId);
-    if (['succeeded', 'failed', 'canceled'].includes(j.status)) return j;
-    if (Date.now() - t > ms) throw new Error(`job ${jobId} still ${j.status} ${j.stage}`);
-    await new Promise((r) => setTimeout(r, 50));
-  }
-}
-async function until(f: () => boolean, ms = 20_000) { const t = Date.now(); while (!f()) { if (Date.now() - t > ms) throw new Error('timed out'); await new Promise((r) => setTimeout(r, 25)); } }
-const tmpFiles = () => { try { return fs.readdirSync(path.join(ddir, 'tmp')).filter((f) => /^(src|up|imp)_/.test(f)); } catch { return []; } };
+let dbl: Doubles;
+let rpid = '';
+const free = freeSpace;
+let fx: Fixtures;
+const { api, finished } = client(() => s);
+const tmpFiles = () => tmpFilesOf(ddir);
 const assets = () => Object.values(s.store.wholeProject(rpid).doc.assets) as Asset[];
-/** every file of the data folder that contains `needle` (the key store itself excepted) */
-function filesContaining(needle: string): string[] {
-  const out: string[] = [];
-  const walk = (d: string) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) walk(f); else if (!f.includes(`${path.sep}connectors${path.sep}keys${path.sep}`) && fs.statSync(f).size < 64 * 1024 ** 2 && fs.readFileSync(f).includes(needle)) out.push(path.relative(ddir, f)); } };
-  walk(ddir);
-  return out;
-}
+const filesContaining = (needle: string) => filesContainingOf(ddir, needle);
+async function boot() { s = await bootSources(ddir, dbl); }
 
 beforeAll(async () => {
-  restore = installUseSourceItemStandIn(); // labelled stand-in while W1's op body is not merged
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-sources-rt-'));
   ddir = path.join(root, 'data');
-  const f = (n: string) => path.join(root, n);
-  ff(['-f', 'lavfi', '-i', 'color=c=red:s=64x64', '-frames:v', '1', f('red.png')]);
-  ff(['-f', 'lavfi', '-i', 'color=c=blue:s=64x64', '-frames:v', '1', f('blue.png')]);
-  ff(['-f', 'lavfi', '-i', 'color=c=green:s=64x64', '-frames:v', '1', f('green.png')]);
-  ff(['-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=30', '-t', '2', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', f('small.mp4')]);
-  ff(['-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=30', '-t', '2', '-c:v', 'libx264', '-qp', '0', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', f('big.mp4')]);
-  ff(['-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=25', '-t', '2', '-c:v', 'libx264', '-qp', '0', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', f('big2.mp4')]);
-  ff(['-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=30', '-t', '2', '-c:v', 'libx264', '-qp', '0', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', f('big3.mp4')]);
-  for (const n of ['red.png', 'blue.png', 'green.png', 'small.mp4', 'big.mp4', 'big2.mp4', 'big3.mp4']) fx[n] = fs.readFileSync(f(n));
-  host = await startLinkHost();
-  nas = await startLinkHost(DOUBLE_PRIVATE_HOST);
-  ov = await startOpenverseDouble([
-    { id: 'a1b2c3d4-0000-4000-8000-000000000001', media: 'images', title: 'Red cat', creator: 'Ann Author', license: 'by', license_version: '4.0', fileUrl: host.put('/ov/red.png', { bytes: fx['red.png']!, contentType: 'image/png' }), thumbnail: host.put('/ov/red-thumb.png', { bytes: fx['red.png']!, contentType: 'image/png' }), filetype: 'png', width: 64, height: 64, category: 'photograph' },
-    { id: 'a1b2c3d4-0000-4000-8000-000000000002', media: 'images', title: 'Blue cat', creator: 'Bo', license: 'by-nd', license_version: '4.0', fileUrl: host.put('/ov/blue.png', { bytes: fx['blue.png']!, contentType: 'image/png' }), filetype: 'png' },
-  ]);
-  px = await startPixabayDouble(PX_KEY, [
-    { id: 4242, type: 'film', tags: 'sunrise, sea', user: 'Monika', fileUrl: host.put('/px/sunrise.mp4', { bytes: fx['small.mp4']!, contentType: 'video/mp4' }), previewUrl: host.put('/px/sunrise.jpg', { bytes: fx['green.png']!, contentType: 'image/png' }), size: fx['small.mp4']!.length, duration: 2 },
-  ]);
-  wm = await startWikimediaDouble([
-    { pageid: 777, title: 'File:Green field.png', fileUrl: host.put('/wm/green.png', { bytes: fx['green.png']!, contentType: 'image/png' }), mime: 'image/png', mediatype: 'BITMAP', width: 64, height: 64, size: fx['green.png']!.length,
-      extmetadata: { LicenseShortName: { value: 'CC BY-SA 4.0' }, LicenseUrl: { value: 'https://creativecommons.org/licenses/by-sa/4.0' }, Artist: { value: '<a href="//commons.wikimedia.org/wiki/User:Ann">Ann</a>' }, AttributionRequired: { value: 'true' } } },
-  ]);
+  fx = makeFixtures(root);
+  dbl = await startDoubles(fx);
+  ({ host, nas, ov, px, wm } = dbl);
   await boot();
   rpid = s.store.createProject({ name: 'Secret project name 9z' }).doc.id;
 }, 180_000);
 afterAll(async () => {
   await s?.close();
-  for (const d of [ov, px, wm, host, nas]) await d?.close();
-  restore();
+  await dbl?.close();
   fs.rmSync(root, { recursive: true, force: true });
 });
 

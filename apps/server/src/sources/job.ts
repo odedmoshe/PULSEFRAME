@@ -29,8 +29,8 @@ import { ApiError, type JobRow, type Store } from '../store.ts';
 import type { AddressPolicy } from './contract.ts';
 import { flagsFor, recordOf, warningsOf, type ServiceItem } from './service.ts';
 
-/** What the job row's input holds beyond core SourceJobInput: the key a repeat names, and the grant (for a restart's placement). */
-export type StoredSourceInput = SourceJobInput & { idempotencyKey?: string; grantId?: string };
+/** The job row's input: core SourceJobInput (it carries the key a repeat names and the grant, for a restart's placement). */
+export type StoredSourceInput = SourceJobInput;
 /** What a finished job answers (job.output). */
 export interface SourceJobOutput {
   assetId: string; revision: number; importJobId: string; deduplicated: boolean; recordAttached: boolean; libraryKept: boolean;
@@ -137,6 +137,8 @@ export class SourceJobRunner {
     if (row0.status === 'cancel-requested') return this.finish(jobId, 'canceled', null, SourceJobError.of('canceled', {}));
     store.updateJob(jobId, { status: 'running', attempt: (row0.attempt ?? 0) + 1 });
     const input = row0.input as StoredSourceInput;
+    // null = no byte limit of its own (open mode with no upload limit set, core sourcesMaxBytes): the disk reserve still holds
+    const maxBytes = input.maxBytes ?? Number.POSITIVE_INFINITY;
     let p = progressOf(row0);
     const warnings: SourceWarning[] = [];
     try {
@@ -149,7 +151,7 @@ export class SourceJobRunner {
         if (input.route === 'provider') {
           item = await this.env.resolveItem(input.provider as SearchableSourceId, input.itemId, ac.signal);
           if (!item) throw SourceJobError.of('sourceNotFound', { provider: input.provider });
-          const r = item.renditions.find((x) => x.id === input.rendition) ?? defaultRendition(item, input.maxBytes);
+          const r = item.renditions.find((x) => x.id === input.rendition) ?? defaultRendition(item, maxBytes);
           url = r.url;
           name = `${item.title || `${item.provider} ${item.itemId}`}`.slice(0, 200);
           userAgent = this.env.userAgentFor(input.provider);
@@ -163,7 +165,7 @@ export class SourceJobRunner {
         }
         if (ac.signal.aborted) throw new SourceJobError('canceled', '', '');
         p = { ...p, stage: 'downloading' }; this.save(jobId, p);
-        const dl = await this.download(jobId, url, userAgent, input.maxBytes, p, ac.signal, (np) => { p = np; });
+        const dl = await this.download(jobId, url, userAgent, maxBytes, p, ac.signal, (np) => { p = np; });
         for (const w of dl.warnings) warnings.push({ code: w, termIds: [], message: input.route === 'direct' ? `the link leads to a home-network address (${input.host ?? 'its host'})` : 'a file of this item is on a home-network address' });
         bytes = dl.size;
         const fetchedAt = new Date(this.env.now()).toISOString();
@@ -173,7 +175,7 @@ export class SourceJobRunner {
         if (ac.signal.aborted) throw new SourceJobError('canceled', '', '');
         p = { ...p, stage: 'importing' }; this.save(jobId, p);
         const job = this.job(jobId)!;
-        const imp = await imports.receive({ projectId: job.projectId, actor: job.actor, body: fs.createReadStream(partPath(store, jobId)), name: fileName, via: 'browser', declaredBytes: dl.size, maxBytes: input.maxBytes, commitKind: 'background', source: { record, expect: { sha256: dl.sha256 }, fetchJobId: jobId } });
+        const imp = await imports.receive({ projectId: job.projectId, actor: job.actor, body: fs.createReadStream(partPath(store, jobId)), name: fileName, via: 'browser', declaredBytes: dl.size, maxBytes, commitKind: 'background', source: { record, expect: { sha256: dl.sha256 }, fetchJobId: jobId } });
         importJobId = imp.id;
         p = { ...p, importJobId }; this.save(jobId, p);
         fs.rmSync(partPath(store, jobId), { force: true }); // the bytes are in the blob store now
