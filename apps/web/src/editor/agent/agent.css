@@ -1,0 +1,35 @@
+/* The «סוכן» tab (wave 8 autonomy Part 2). Design tokens only (copilot.css / ds); logical properties so right-to-left needs nothing more. */
+.pf-agent { font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); color: var(--pf-text); }
+.pf-agent h3, .pf-agent h4, .pf-agent h5 { margin: 0; font-size: var(--pf-fs-sm); font-weight: var(--pf-fw-semibold); letter-spacing: 0; color: var(--pf-text); font-family: var(--pf-font); }
+.pf-agent h5 { font-size: var(--pf-fs-xs); color: var(--pf-text-2); margin-block-start: var(--pf-sp-3); }
+.pf-agent p, .pf-agent ul, .pf-agent ol { margin: 0; }
+.pf-agent-dim { color: var(--pf-text-3); }
+.pf-agent-ok { color: var(--pf-ok); }
+.pf-agent-warn { color: var(--pf-warn, var(--pf-danger)); }
+.pf-agent-connect, .pf-agent-run, .pf-agent-runs, .pf-agent-goal { display: flex; flex-direction: column; gap: var(--pf-sp-3); padding: var(--pf-sp-5); border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); background: var(--pf-surface-2); }
+.pf-agent-goal textarea, .pf-agent-fields input { min-inline-size: 0; padding: var(--pf-sp-3) var(--pf-sp-4); font: inherit; font-size: var(--pf-fs-sm); color: var(--pf-text); background: var(--pf-surface-1); border: 1px solid var(--pf-line-control); border-radius: var(--pf-r-md); }
+.pf-agent-goal textarea { resize: vertical; min-block-size: 64px; }
+.pf-agent-sent { padding: var(--pf-sp-3) var(--pf-sp-4); border-inline-start: 3px solid var(--pf-agent); background: var(--pf-agent-soft); color: var(--pf-text-2); }
+.pf-agent-providers, .pf-agent-runs ul, .pf-agent-steps { list-style: none; padding: 0; display: grid; gap: var(--pf-sp-4); }
+.pf-agent-provider { display: flex; flex-direction: column; gap: var(--pf-sp-3); padding: var(--pf-sp-4); border: 1px solid var(--pf-line-control); border-radius: var(--pf-r-md); background: var(--pf-surface-1); }
+.pf-agent-provider[data-selected='true'] { border-color: var(--pf-agent); }
+.pf-agent-use { display: flex; align-items: center; gap: var(--pf-sp-3); min-block-size: var(--pf-h-sm); cursor: pointer; }
+.pf-agent-fields { display: grid; grid-template-columns: auto 1fr; gap: var(--pf-sp-3) var(--pf-sp-4); align-items: center; }
+.pf-agent-actions { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); }
+.pf-agent-prices summary, .pf-agent-step summary { cursor: pointer; min-block-size: 24px; color: var(--pf-info); }
+.pf-agent-step summary { color: var(--pf-text); display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3); }
+.pf-agent-step { padding: var(--pf-sp-3) var(--pf-sp-4); border: 1px solid var(--pf-line-control); border-inline-start: 3px solid var(--pf-agent); border-radius: var(--pf-r-md); background: var(--pf-surface-1); }
+.pf-agent-step[data-status='failed'] { border-inline-start-color: var(--pf-danger); }
+.pf-agent-step pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; max-block-size: 220px; overflow: auto; font-family: var(--pf-mono, monospace); font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
+.pf-agent-chip { display: inline-flex; align-items: center; padding: 0 var(--pf-sp-4); min-block-size: 20px; border: 1px solid var(--pf-line-control); border-radius: var(--pf-r-pill); color: var(--pf-text-2); background: var(--pf-surface-3); }
+.pf-agent-chip[data-status='done'], .pf-agent-chip[data-status='succeeded'] { color: var(--pf-ok); }
+.pf-agent-chip[data-status='failed'] { color: var(--pf-danger); }
+.pf-agent-chip[data-status='running'] { color: var(--pf-agent); border-color: var(--pf-agent); }
+.pf-agent-plan ol { padding-inline-start: var(--pf-sp-7); display: grid; gap: var(--pf-sp-3); }
+.pf-agent-status { font-size: var(--pf-fs-sm); }
+.pf-agent-meta { color: var(--pf-text-2); }
+.pf-agent-undo { display: flex; flex-direction: column; gap: var(--pf-sp-3); padding-block-start: var(--pf-sp-4); border-block-start: 1px solid var(--pf-line-control); }
+.pf-agent-undo ul, .pf-agent-call ul { padding-inline-start: var(--pf-sp-7); display: grid; gap: var(--pf-sp-2); }
+.pf-agent-runs li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3); }
+.pf-agent-runs-goal { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-agent input:focus-visible, .pf-agent textarea:focus-visible, .pf-agent summary:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
