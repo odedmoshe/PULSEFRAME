@@ -53,13 +53,25 @@ export function statusWords(lang: Lang, run: Pick<AgentRun, 'status' | 'stopReas
   return { status, why };
 }
 
-/** The pictures a tool step listed: the loop writes them as {image: frame, revision} in the answer summary (agentContract). */
-export function framesOf(summary: string | null): { frame: number; revision: number }[] {
-  if (!summary) return [];
-  const out: { frame: number; revision: number }[] = [];
-  const re = /\{\s*"?image"?\s*:\s*(\d+)\s*,\s*"?revision"?\s*:\s*(\d+)\s*\}/g;
-  for (let m = re.exec(summary); m; m = re.exec(summary)) out.push({ frame: Number(m[1]), revision: Number(m[2]) });
-  return out;
+export interface LookedFrame { frame: number; revision: number; sequenceId?: string; variantId?: string }
+/**
+ * The pictures a step looked at, read from the editor's own answer (mcp.ts): render_frame `{revision, frameIndex, sequenceId?,
+ * variantId?}`, render_contact_sheet `{revision, frames: [...]}`. Read by pattern, so a summary cut short still names them.
+ */
+export function framesOf(tool: string | null | undefined, summary: string | null): LookedFrame[] {
+  if (!summary || (tool !== 'render_frame' && tool !== 'render_contact_sheet')) return [];
+  const rev = /"revision"\s*:\s*(\d+)/.exec(summary);
+  if (!rev) return [];
+  const revision = Number(rev[1]);
+  if (tool === 'render_contact_sheet') {
+    const list = /"frames"\s*:\s*\[([\d,\s]*)\]/.exec(summary);
+    return list ? list[1]!.split(',').map((x) => x.trim()).filter(Boolean).map((x) => ({ frame: Number(x), revision })) : [];
+  }
+  const idx = /"frameIndex"\s*:\s*(\d+)/.exec(summary);
+  if (!idx) return [];
+  const seq = /"sequenceId"\s*:\s*"([^"]+)"/.exec(summary);
+  const variant = /"variantId"\s*:\s*"([^"]+)"/.exec(summary);
+  return [{ frame: Number(idx[1]), revision, ...(seq ? { sequenceId: seq[1]! } : {}), ...(variant ? { variantId: variant[1]! } : {}) }];
 }
 
 /** The arguments of a call as pretty text (the model's own object; a string is shown as it is). */

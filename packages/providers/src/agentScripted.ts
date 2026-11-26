@@ -12,7 +12,7 @@ import { AgentProviderError, type AgentEndpoint, type AgentModelAdapter, type Ag
 
 export const MOCK_SCRIPTED_ID = 'MOCK-scripted-model';
 export const MOCK_LABEL = '[MOCK scripted model — not a language model]';
-export type ScriptedAnswer = { text?: string; toolCalls?: { name: string; input: unknown }[]; finish?: AgentTurnResponse['finish']; usage?: AgentTurnResponse['usage'] } | { fail: AgentProviderErrorCode; retryAfterSeconds?: number };
+export type ScriptedAnswer = { text?: string; toolCalls?: { name: string; input: unknown }[]; finish?: AgentTurnResponse['finish']; usage?: AgentTurnResponse['usage']; /** opaque state a real family returns (lead decision 6); the loop must hand it back unchanged */ providerState?: unknown } | { fail: AgentProviderErrorCode; retryAfterSeconds?: number };
 export type ScriptedTurn = ScriptedAnswer | ((req: AgentTurnRequest, turn: number) => ScriptedAnswer);
 
 export interface ScriptedModel extends AgentModelAdapter {
@@ -45,6 +45,7 @@ export function createScriptedModel(script: readonly ScriptedTurn[], opts: { usa
         finish: a.finish ?? (toolCalls.length ? 'tool' : 'stop'),
         usage: a.usage === undefined ? (opts.usage ?? { inputTokens: 1000, outputTokens: 100 }) : a.usage,
         providerRequestId: `mock_req_${n}`,
+        ...(a.providerState !== undefined ? { providerState: a.providerState } : {}),
       };
     },
     async probe(ep): Promise<AgentProbeResult> { return { ok: true, model: ep.model }; },

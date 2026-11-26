@@ -168,17 +168,23 @@ describe('the loop (MOCK scripted model)', () => {
     expect(tools[1]!.status).toBe('done');
   });
 
-  it('unknown tools, other projects and too many calls in one turn are answered as errors, not run', async () => {
+  it('unknown tools, edits of another project and too many calls in one turn are answered as errors, not run; reading another project is allowed (lead decision 4)', async () => {
     const calls = Array.from({ length: 9 }, (_, i) => ({ name: 'get_summary', input: {} as Record<string, unknown>, i }));
+    const other = freshProject();
+    const before = store.wholeProject(other).revision;
     const { svc } = service([
-      { toolCalls: [{ name: 'add_text', input: { text: 'x' } }, { name: 'get_summary', input: { projectId: 'prj_other' } }] },
+      { toolCalls: [{ name: 'add_text', input: { text: 'x' } }, { name: 'apply_transaction', input: { projectId: other, ops: [marker('elsewhere', 1)] } }, { name: 'get_summary', input: { projectId: other } }] },
       { toolCalls: calls.map(({ name, input }) => ({ name, input })) },
       { toolCalls: [{ name: 'finish', input: { summary: 'ok', outcome: 'done' } }] },
     ]);
     const a = await final(svc, svc.start(OWNER, pid, { goal: 'x' }).runId);
-    const codes = a.steps.filter((s) => s.kind === 'tool').map((s) => s.tool!.errorCode);
-    expect(codes.slice(0, 2)).toEqual(['unknown_tool', 'other_project']);
-    expect(codes.slice(2, 11)).toEqual([...Array(8).fill(null), 'too_many_calls']);
+    const tools = a.steps.filter((s) => s.kind === 'tool');
+    const codes = tools.map((s) => s.tool!.errorCode);
+    expect(codes.slice(0, 3)).toEqual(['unknown_tool', 'other_project', null]);
+    expect(tools[1]!.tool!.resultSummary).toMatch(/Start a run in that project/);
+    expect(tools[2]!.tool!.resultSummary).toContain(other);
+    expect(store.wholeProject(other).revision).toBe(before);
+    expect(codes.slice(3, 12)).toEqual([...Array(8).fill(null), 'too_many_calls']);
   });
 
   it('a first turn without a tool call stops model_no_tools and is not counted; an unparseable call twice stops the same way (check 9, C16)', async () => {
@@ -238,6 +244,12 @@ describe('the loop (MOCK scripted model)', () => {
       const b = await final(r.svc, r.svc.start(OWNER, pid, { goal: 'x' }).runId);
       expect([code, b.run.status, b.run.stopReason]).toEqual([code, 'provider_unavailable', reason]);
     }
+    // every code W2's adapters throw ends with its own reason; bad_request has its own (lead decision 3), never internal_error
+    for (const [code, status, reason] of [['refused', 'failed', 'model_refused'], ['bad_request', 'failed', 'provider_bad_request'], ['no_tool_calling', 'failed', 'model_no_tools']] as const) {
+      const r = service([{ fail: code }, fin]);
+      const b = await final(r.svc, r.svc.start(OWNER, pid, { goal: 'x' }).runId);
+      expect([code, b.run.status, b.run.stopReason, r.model.requests.length]).toEqual([code, status, reason, 1]);
+    }
     const u = service([{ fail: 'unknown_after_send' }, fin]);
     const id = u.svc.start(OWNER, pid, { goal: 'x' }).runId;
     const c = await final(u.svc, id);
@@ -281,6 +293,46 @@ describe('the loop (MOCK scripted model)', () => {
     await m.svc.whenIdle(id2);
     m.svc.continue(OWNER, pid, id2, {});
     expect((await final(m.svc, id2)).run.status).toBe('succeeded');
+  });
+
+  it('MCP cancel_job on an agent.run job is the run\'s own cancel (lead decision 5): the run ends canceled_by_owner, not only its job row', async () => {
+    gov.setPaused(pid, true, OWNER);
+    const { svc } = service([{ toolCalls: [{ name: 'finish', input: { summary: 'ok', outcome: 'done' } }] }]);
+    mcp.bindAgent(svc);
+    try {
+      const { runId, jobId } = svc.start(OWNER, pid, { goal: 'x' });
+      await until(svc, runId, (a) => a.run.status === 'waiting');
+      const res = await mcp.serveAs(OWNER, new Request('http://127.0.0.1/mcp', { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'cancel_job', arguments: { jobId } } }) }));
+      const raw = await res.text();
+      const body = JSON.parse(raw.includes('data:') ? raw.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5)).join('') : raw);
+      expect(body.result?.isError).not.toBe(true);
+      const a = svc.get(OWNER, pid, runId);
+      expect([a.run.status, a.run.stopReason, store.getJob(jobId).status]).toEqual(['canceled', 'canceled_by_owner', 'canceled']);
+      gov.setPaused(pid, false, OWNER);
+      await svc.whenIdle(runId);
+      expect(svc.get(OWNER, pid, runId).run.status).toBe('canceled'); // resuming the project does not revive it
+    } finally { gov.setPaused(pid, false, OWNER); }
+  });
+
+  it('lead decision 6: a turn\'s opaque provider state (Claude\'s thinking blocks) goes back unchanged on the next request, is never stored, and is removed from every turn once a picture is dropped (the history is no longer append-only)', async () => {
+    const frame: ScriptedTurn = { toolCalls: [{ name: 'render_frame', input: { frameIndex: 0 } }] };
+    const script: ScriptedTurn[] = [
+      { ...frame, providerState: { anthropicContent: [{ type: 'thinking', thinking: '', signature: 'TEST-ONLY-sig-0' }] } },
+      ...Array.from({ length: 7 }, (_, i) => ({ ...frame, providerState: { anthropicContent: [{ type: 'thinking', thinking: '', signature: `TEST-ONLY-sig-${i + 1}` }] } })),
+      { toolCalls: [{ name: 'finish', input: { summary: 'ok', outcome: 'done' } }] },
+    ];
+    const { svc, model } = service(script);
+    const id = svc.start(OWNER, pid, { goal: 'look' }).runId;
+    const a = await final(svc, id);
+    expect(a.run.status).toBe('succeeded');
+    const states = (k: number) => model.requests[k]!.messages.filter((m) => m.role === 'assistant').map((m) => (m as { providerState?: any }).providerState?.anthropicContent?.[0]?.signature ?? null);
+    expect(states(1)).toEqual(['TEST-ONLY-sig-0']);
+    expect(states(6)).toEqual(['TEST-ONLY-sig-0', 'TEST-ONLY-sig-1', 'TEST-ONLY-sig-2', 'TEST-ONLY-sig-3', 'TEST-ONLY-sig-4', 'TEST-ONLY-sig-5']);
+    // the 7th picture drops the 1st (keepImages 6): an earlier turn changed, so every state goes (and again with each later drop)
+    expect(states(7)).toEqual(Array(7).fill(null));
+    expect(states(8)).toEqual(Array(8).fill(null));
+    expect(JSON.stringify(a)).not.toContain('TEST-ONLY-sig');
+    expect(JSON.stringify(store.db.prepare('SELECT * FROM agent_steps WHERE run_id = ?').all(id))).not.toContain('TEST-ONLY-sig');
   });
 
   it('check 13 (the loop\'s half): the provider key reaches the adapter only, never a step, a run answer or a job event', async () => {

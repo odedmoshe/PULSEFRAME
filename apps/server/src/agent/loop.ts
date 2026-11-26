@@ -18,8 +18,8 @@
  *   provider_unavailable provider_overloaded · context_too_long → a note «קיצרתי», the next rebuild keeps fewer pictures, then
  *   shortens older tool answers (6 levels, then failed internal_error) · bad_tool_call → once a note and a retry, twice in a row
  *   failed model_no_tools · no_tool_calling → failed model_no_tools · unauthorized / no_credit / unreachable / local_server_down →
- *   provider_unavailable with that reason (continuable) · refused → failed model_refused · bad_request → failed internal_error
- *   (core has no stop reason of its own for it: reported) · unknown_after_send → provider_unavailable unknown_after_send, money
+ *   provider_unavailable with that reason (continuable) · refused → failed model_refused · bad_request → failed provider_bad_request
+ *   (lead decision 3) · unknown_after_send → provider_unavailable unknown_after_send, money
  *   unknown, never sent again by itself. A model that answers its first turn without any tool call → failed model_no_tools, and
  *   that turn is not counted as a step. Failed model calls are never counted as steps.
  *
@@ -29,6 +29,7 @@
  */
 import { AGENT_LIMITS, AGENT_REFUSAL_CODES, AGENT_RUN_CONTINUABLE, AGENT_RUN_FINAL, agentIdempotencyKey, agentRunActor, listOps, type AgentContinueBodySchema, type AgentRun, type AgentRunAnswer, type AgentRunListAnswer, type AgentRunStatus, type AgentStartAnswer, type AgentStartBody, type AgentStep, type AgentStopReason, type AgentToolCallRecord, type UndoAllAnswer, type UndoActorBodySchema } from '@pulseframe/core';
 import { AgentProviderError, costCents, type AgentImage, type AgentMessage, type AgentModelAdapter, type AgentToolCall, type AgentToolSpec, type AgentTurnRequest } from '@pulseframe/providers';
+import { createHash } from 'node:crypto';
 import type { z } from 'zod';
 import type { Governance, Principal } from '../governance.ts';
 import { forPrincipal, mayHoldPeople, peopleAccess, scrubPeople } from '../peoplePrivacy.ts';
@@ -36,7 +37,7 @@ import { ApiError, type Store } from '../store.ts';
 import { IDEMPOTENT_TOOLS, runPrincipal, type AgentAdapters, type AgentProviders } from './contract.ts';
 import { boundCents, chargedIsUnknown, markModelCallUnknown, releaseModelCall, reserveModelCall, settleModelCall } from './ledger.ts';
 import { newRunId, RunRepo, type ModelRecord } from './runs.ts';
-import { defaultFrameScale, FinishInput, LOOP_TOOL_NAMES, loopToolSpecs, plannerToolNames, UpdatePlanInput, WaitForJobInput, type LoopToolName } from './tools.ts';
+import { defaultFrameScale, FinishInput, mayNameOtherProject, LOOP_TOOL_NAMES, loopToolSpecs, plannerToolNames, UpdatePlanInput, WaitForJobInput, type LoopToolName } from './tools.ts';
 import { undoActorFor, undoAllRun } from './undoAll.ts';
 
 export interface AgentRunService {
@@ -83,7 +84,9 @@ export interface AgentServiceDeps {
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
 }
 interface RunCtl { abort: AbortController; stop: { status: AgentRunStatus; reason: AgentStopReason } | null; promise: Promise<void> | null; trim: number; badCalls: number; overloaded: number;
-  /** live-run memory only (never stored): whole tool answers and pictures by step n */ full: Map<number, string>; images: Map<number, AgentImage[]> }
+  /** live-run memory only (never stored): whole tool answers and pictures by step n */ full: Map<number, string>; images: Map<number, AgentImage[]>;
+  /** live-run memory only (lead decision 6): each model step's opaque provider state, and the digests of the last request's messages */
+  providerState: Map<number, unknown>; sent: string[] }
 
 const FINAL_JOB = new Set(['succeeded', 'failed', 'canceled', 'submission-unknown']);
 const realSleep = (ms: number, signal: AbortSignal) => new Promise<void>((resolve) => { if (signal.aborted) return resolve(); const t = setTimeout(done, ms); function done() { clearTimeout(t); signal.removeEventListener('abort', done); resolve(); } signal.addEventListener('abort', done, { once: true }); });
@@ -113,7 +116,7 @@ export function createAgentService(deps: AgentServiceDeps): AgentRunService & { 
   let stopping = false;
   const ctlOf = (runId: string): RunCtl => {
     let c = ctls.get(runId);
-    if (!c) { c = { abort: new AbortController(), stop: null, promise: null, trim: 0, badCalls: 0, overloaded: 0, full: new Map(), images: new Map() }; ctls.set(runId, c); }
+    if (!c) { c = { abort: new AbortController(), stop: null, promise: null, trim: 0, badCalls: 0, overloaded: 0, full: new Map(), images: new Map(), providerState: new Map(), sent: [] }; ctls.set(runId, c); }
     return c;
   };
 
@@ -175,7 +178,8 @@ export function createAgentService(deps: AgentServiceDeps): AgentRunService & { 
     for (let i = 0; i < steps.length; i++) {
       const m = steps[i]!;
       if (m.kind !== 'model' || m.status !== 'done' || !m.model) continue;
-      msgs.push({ role: 'assistant', text: m.model.text, toolCalls: m.model.toolCalls.map((c) => ({ id: c.callId, name: c.tool, input: c.input })) });
+      const state = ctl.providerState.get(m.n);
+      msgs.push({ role: 'assistant', text: m.model.text, toolCalls: m.model.toolCalls.map((c) => ({ id: c.callId, name: c.tool, input: c.input })), ...(state !== undefined ? { providerState: state } : {}) });
       if (!m.model.toolCalls.length) continue;
       const window = steps.slice(i + 1).filter((s, j, a) => s.kind === 'tool' && !a.slice(0, j).some((x) => x.kind === 'model'));
       msgs.push({ role: 'tool', results: m.model.toolCalls.map((c, k) => {
@@ -191,7 +195,20 @@ export function createAgentService(deps: AgentServiceDeps): AgentRunService & { 
         return { callId: c.callId, text, isError: t.tool.isError, ...(imageSteps.has(t.n) ? { images: imgs } : {}) };
       }) });
     }
-    return msgs;
+    return keepStateOnlyIfAppendOnly(msgs, ctl);
+  }
+  /**
+   * Lead decision 6 (the claude-api skill, preserved thinking): a provider's state (Claude's thinking blocks) is valid only while
+   * the conversation before it is unchanged. When this rebuild is not an append to the last request (a picture dropped, older
+   * answers shortened), EVERY state is removed, which the API accepts; a later turn's state is kept from then on.
+   */
+  function keepStateOnlyIfAppendOnly(msgs: AgentMessage[], ctl: RunCtl): AgentMessage[] {
+    const digests = msgs.map((m) => createHash('sha256').update(JSON.stringify(m.role === 'assistant' ? { ...m, providerState: undefined } : m)).digest('base64'));
+    const appendOnly = ctl.sent.every((d, i) => digests[i] === d);
+    ctl.sent = digests;
+    if (appendOnly || !ctl.providerState.size) return msgs;
+    ctl.providerState.clear();
+    return msgs.map((m) => (m.role === 'assistant' && 'providerState' in m ? { role: 'assistant', text: m.text, toolCalls: m.toolCalls } : m));
   }
 
   // ----- one tool call -----
@@ -223,11 +240,11 @@ export function createAgentService(deps: AgentServiceDeps): AgentRunService & { 
     const args: Record<string, unknown> = { ...call.input };
     if ('projectId' in props) {
       if (args.projectId === undefined) args.projectId = run.projectId;
-      else if (args.projectId !== run.projectId) return err('other_project', `this run works on project ${run.projectId}`, 'Start a run on the other project for work there.');
+      else if (args.projectId !== run.projectId && !mayNameOtherProject(call.name, (spec as { annotations?: unknown }).annotations)) return err('other_project', `this run edits only project ${run.projectId} (its undo-all covers one project); reading another project is allowed`, 'Start a run in that project for edits there (the «סוכן» tab of that project, or start_agent_run with its projectId).');
     }
     if (key && 'idempotencyKey' in props) args.idempotencyKey = key;
     else delete args.idempotencyKey;
-    if (call.name === 'render_frame' && args.scale === undefined) args.scale = defaultFrameScale(store.wholeProject(run.projectId).doc.settings.width); // C11
+    if (call.name === 'render_frame' && args.scale === undefined) args.scale = defaultFrameScale(store.wholeProject(String(args.projectId)).doc.settings.width); // C11
     for (;;) {
       const r = await rpc(p, 'tools/call', { name: call.name, arguments: args });
       if (r.error) return err(r.error.code === -32602 ? 'bad_arguments' : 'tool_failed', r.error.message);
@@ -392,6 +409,7 @@ export function createAgentService(deps: AgentServiceDeps): AgentRunService & { 
         const res = await adapter.turn(req, resolved.endpoint, resolved.key, ctl.abort.signal);
         const cents = res.usage ? costCents(resolved.row, res.usage) : null;
         settleModelCall(store, run.jobId, step.n, cents);
+        if (res.providerState !== undefined) ctl.providerState.set(step.n, res.providerState); // memory only, never in a step (decision 6)
         const priced = !!resolved.row && resolved.row.priceInPerMTok !== null && resolved.row.priceOutPerMTok !== null;
         const shown = cents ?? (priced ? bound : null);
         const counted = res.toolCalls.length > 0 || hadTools;
@@ -427,7 +445,8 @@ export function createAgentService(deps: AgentServiceDeps): AgentRunService & { 
           case 'local_server_down': end(run, ctl, 'provider_unavailable', 'local_server_down'); return;
           case 'refused': end(run, ctl, 'failed', 'model_refused'); return;
           case 'unknown_after_send': end(run, ctl, 'provider_unavailable', 'unknown_after_send'); return;
-          default: end(run, ctl, 'failed', 'internal_error'); return; // bad_request: core has no stop reason of its own (reported)
+          case 'bad_request': end(run, ctl, 'failed', 'provider_bad_request'); return; // lead decision 3: its own reason and wording
+          default: end(run, ctl, 'failed', 'internal_error'); return;
         }
       }
     }
@@ -529,14 +548,3 @@ export function createAgentService(deps: AgentServiceDeps): AgentRunService & { 
 
 /** Re-queue runs whose job was running when the process died, applying the resume rule (contract.ts). */
 export function recoverAgentRuns(service: { recover(): string[] }): string[] { return service.recover(); }
-
-/**
- * The providers a build has before W2's agent/providers.ts (createAgentProviders) is merged: none connected, said honestly
- * (409 agent_provider_not_connected on start). TODO(integrator): index.ts passes createAgentProviders(cfg.dataDir, …) instead.
- */
-export function noProvidersYet(): AgentProviders {
-  return {
-    resolve() { throw new ApiError(AGENT_REFUSAL_CODES.providerNotConnected.status, AGENT_REFUSAL_CODES.providerNotConnected.code, 'no model provider is connected in this build yet', {}, 'Connect one in the «סוכן» tab once it is built; meanwhile use an outside agent (Claude Code) over MCP.'); },
-    view() { throw agentNotBuilt(); },
-  };
-}

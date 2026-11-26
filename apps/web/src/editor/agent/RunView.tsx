@@ -10,7 +10,7 @@ import { Button } from '../../ds/index.ts';
 import { AGENT_TESTIDS as ID } from './agent.testids.ts';
 import { CONTINUE_STEPS, canContinue, canUndo, conflictText, conflictsOf, costLines, counterLine, failureText, framesOf, isActive, notUndoneTexts, prettyInput, statusWords, tr, type Lang } from './agentState.ts';
 
-export function RunView({ lang, projectId, run, steps, onChanged }: { lang: Lang; projectId: string; run: AgentRun; steps: AgentStep[]; onChanged: () => void }) {
+export function RunView({ lang, projectId, revision, run, steps, onChanged }: { lang: Lang; projectId: string; /** the project's current revision: a looked-at picture is drawn only while it is still the one the agent saw */ revision: number; run: AgentRun; steps: AgentStep[]; onChanged: () => void }) {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState<{ code: string; text: string } | null>(null);
   const words = statusWords(lang, run, steps);
@@ -35,7 +35,7 @@ export function RunView({ lang, projectId, run, steps, onChanged }: { lang: Lang
       {error ? <p className="pf-agent-warn" role="alert" data-testid={ID.error} data-code={error.code}>{error.text}</p> : null}
       <Plan lang={lang} plan={run.plan} />
       {run.summary ? <p className="pf-agent-summary" dir="auto"><b>{tr(lang, 'agent.summary')}: </b>{run.summary}</p> : null}
-      <Steps lang={lang} steps={steps} />
+      <Steps lang={lang} projectId={projectId} revision={revision} steps={steps} />
       <UndoAll lang={lang} projectId={projectId} run={run} stepsKey={`${steps.length}:${steps.at(-1)?.status ?? ''}`} onChanged={onChanged} />
     </section>
   );
@@ -58,7 +58,7 @@ function stepTitle(lang: Lang, s: AgentStep): string {
   return s.note?.text ?? tr(lang, 'agent.kind.note');
 }
 
-function Steps({ lang, steps }: { lang: Lang; steps: AgentStep[] }) {
+function Steps({ lang, projectId, revision, steps }: { lang: Lang; projectId: string; revision: number; steps: AgentStep[] }) {
   if (steps.length === 0) return <p className="pf-agent-dim">{tr(lang, 'agent.stepsEmpty')}</p>;
   return (
     <ol className="pf-agent-steps" aria-label={tr(lang, 'agent.steps')}>
@@ -69,7 +69,7 @@ function Steps({ lang, steps }: { lang: Lang; steps: AgentStep[] }) {
               <span className="num">{tr(lang, 'agent.stepN', { n: s.n })}</span> · <span>{tr(lang, `agent.kind.${s.kind}`)}</span> · <bdi dir="auto">{stepTitle(lang, s)}</bdi>
               <span className="pf-agent-chip" data-status={s.status}>{tr(lang, `agent.step.${s.status}`)}</span>
             </summary>
-            <StepBody lang={lang} s={s} />
+            <StepBody lang={lang} projectId={projectId} revision={revision} s={s} />
           </details>
         </li>
       ))}
@@ -77,16 +77,22 @@ function Steps({ lang, steps }: { lang: Lang; steps: AgentStep[] }) {
   );
 }
 
-function StepBody({ lang, s }: { lang: Lang; s: AgentStep }) {
+function StepBody({ lang, projectId, revision, s }: { lang: Lang; projectId: string; revision: number; s: AgentStep }) {
   if (s.kind === 'tool' && s.tool) {
-    const frames = framesOf(s.tool.resultSummary);
+    const frames = framesOf(s.tool.tool, s.tool.resultSummary);
     return (
       <div className="pf-agent-call">
         <h5>{tr(lang, 'agent.args')}</h5><pre dir="ltr">{prettyInput(s.tool.input)}</pre>
         <h5>{tr(lang, 'agent.result')}</h5>
         {s.tool.isError ? <p className="pf-agent-warn">{tr(lang, 'agent.errorCode', { code: s.tool.errorCode ?? '' })}</p> : null}
         <pre dir="auto">{s.tool.resultSummary ?? ''}</pre>
-        {frames.length ? <div><h5>{tr(lang, 'agent.looked')}</h5><ul>{frames.map((f, i) => <li key={i} data-testid={ID.stepImage} data-frame={f.frame} data-revision={f.revision}>{tr(lang, 'agent.frame', { frame: f.frame, revision: f.revision })}</li>)}</ul></div> : null}
+        {frames.length ? <div><h5>{tr(lang, 'agent.looked')}</h5><ul className="pf-agent-frames">{frames.map((f, i) => (
+          <li key={i} data-testid={ID.stepImage} data-frame={f.frame} data-revision={f.revision} data-shown={f.revision === revision ? 'true' : 'false'}>
+            {/* the frame is drawn now by the editor's compositor: shown only while the project is at the revision the agent saw */}
+            {f.revision === revision ? <img src={api.agentFrameUrl(projectId, f)} alt={tr(lang, 'agent.frame', { frame: f.frame, revision: f.revision })} loading="lazy" width={96} /> : null}
+            <span>{tr(lang, 'agent.frame', { frame: f.frame, revision: f.revision })}</span>
+            {f.revision !== revision ? <span className="pf-agent-dim"> · {tr(lang, 'agent.frameChanged')}</span> : null}
+          </li>))}</ul></div> : null}
       </div>
     );
   }

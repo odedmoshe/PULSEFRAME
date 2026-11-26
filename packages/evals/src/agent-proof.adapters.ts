@@ -106,7 +106,7 @@ async function check13(): Promise<AgentAdapterProofRow> {
     if ((await call('PUT', '/api/v1/agent/providers/openai/key', agent, { key: 'x' })).status !== 403) fails.push('agent key PUT not 403');
     await call('PUT', '/api/v1/agent/providers/openai', owner, { baseUrl: dblBase, model: 'gpt-6.2-sol' });
     const probe = await call('POST', '/api/v1/agent/providers/openai/probe', owner, {});
-    if (!eq(probe.body, { ok: false, code: 'unauthorized', model: 'gpt-6.2-sol' })) fails.push(`probe ${probe.text}`);
+    if (!(eq({ ...probe.body, detail: undefined }, { ok: false, code: 'unauthorized', model: 'gpt-6.2-sol', detail: undefined }) && typeof probe.body?.detail === 'string' && probe.body.detail.includes('[redacted]'))) fails.push(`probe ${probe.text}`); // detail: the provider's words, key redacted (lead decision 7)
     const lan = await call('PUT', '/api/v1/agent/providers/llamacpp', owner, { baseUrl: 'http://192.168.1.20:9931/v1', model: 'local-gguf' });
     const lanRow = lan.body?.providers?.find((p: any) => p.id === 'llamacpp');
     if (!(lanRow?.baseUrl === 'http://192.168.1.20:9931/v1' && lanRow?.unencrypted === true)) fails.push('LAN http not stored or not flagged');

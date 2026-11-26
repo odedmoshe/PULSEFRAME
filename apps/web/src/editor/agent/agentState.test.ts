@@ -48,8 +48,12 @@ describe('agent tab wording (both languages, no DOM)', () => {
     expect(t[2]!.text).toContain('openai');
   });
   it('reads the pictures a step listed and the conflicts of a 409', () => {
-    expect(framesOf('ok {"image": 12, "revision": 7} and {image: 40, revision: 9}')).toEqual([{ frame: 12, revision: 7 }, { frame: 40, revision: 9 }]);
-    expect(framesOf(null)).toEqual([]);
+    // the editor's real answers (mcp.ts render_frame / render_contact_sheet), not a made-up shape
+    expect(framesOf('render_frame', '{"revision":7,"frameIndex":12,"time":{"value":"2","timescale":5},"width":1920,"height":1080,"variantId":"var_1","scale":0.5}')).toEqual([{ frame: 12, revision: 7, variantId: 'var_1' }]);
+    expect(framesOf('render_contact_sheet', '{"revision":9,"scale":0.25,"frames":[0, 30,60],"width":640,"height":360}')).toEqual([0, 30, 60].map((frame) => ({ frame, revision: 9 })));
+    expect(framesOf('render_frame', '{"revision":3,"frameIndex":4,"sequenceId":"seq_2","width":64')).toEqual([{ frame: 4, revision: 3, sequenceId: 'seq_2' }]); // a summary cut short still names them
+    expect(framesOf('get_summary', '{"revision":7,"frameIndex":12}')).toEqual([]);
+    expect(framesOf('render_frame', null)).toEqual([]);
     expect(conflictsOf({ conflicts: [{ entityId: 'c1', changedAtRevision: 5, by: 'user:local' }, 3] })).toHaveLength(1);
     expect(conflictsOf(undefined)).toEqual([]);
   });

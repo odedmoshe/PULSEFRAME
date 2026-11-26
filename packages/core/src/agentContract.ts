@@ -61,7 +61,7 @@ export const AGENT_RUN_CONTINUABLE: readonly AgentRunStatus[] = ['stopped_at_lim
 export const AGENT_STOP_REASONS = [
   'finished', 'step_limit', 'spend_limit', 'budget_reached', 'mode_changed', 'canceled_by_owner',
   'provider_unauthorized', 'provider_no_credit', 'provider_unreachable', 'provider_overloaded', 'local_server_down',
-  'model_no_tools', 'model_refused', 'unknown_after_send', 'internal_error',
+  'model_no_tools', 'model_refused', 'provider_bad_request', 'unknown_after_send', 'internal_error',
 ] as const;
 export type AgentStopReason = (typeof AGENT_STOP_REASONS)[number];
 
@@ -98,7 +98,7 @@ export const AgentToolCallRecordSchema = z.object({
   tool: z.string().max(128),
   /** the arguments as the model sent them (parsed object; never a provider payload) */
   input: z.unknown(),
-  /** at most AGENT_LIMITS.resultSummaryChars of the answer's text; images are listed as {image: frameIndex, revision} */
+  /** at most AGENT_LIMITS.resultSummaryChars of the answer's text; the render tools' answers name their revision and frameIndex / frames (the tab reads them for its thumbnails) */
   resultSummary: z.string().max(AGENT_LIMITS.resultSummaryChars).nullable(),
   isError: z.boolean(),
   /** the error code when isError (an ApiError code, or the loop's own: unknown_tool, bad_arguments, too_many_calls) */
@@ -211,7 +211,14 @@ export interface AgentRunListAnswer { runs: AgentRun[] }
 /** GET /api/v1/agent/providers: one row per preset; NEVER the key. `unencrypted` = http:// to a non-loopback host (C5). */
 export interface AgentProviderView { id: string; family: 'anthropic-messages' | 'openai-chat'; baseUrl: string; model: string | null; needsKey: boolean; keySet: boolean; keyAddedAt: string | null; unencrypted: boolean; compatNote: boolean; local: boolean }
 export interface AgentProvidersAnswer { providers: AgentProviderView[]; /** the provider a run uses when the start body names none */ defaultProviderId: string | null }
-export interface AgentProbeAnswer { ok: boolean; /** AGENT_PROVIDER_ERROR_CODES or bad_config when not ok */ code: string | null; model: string | null }
+export interface AgentProbeAnswer { ok: boolean; /** AGENT_PROVIDER_ERROR_CODES or bad_config when not ok */ code: string | null; model: string | null;
+  /** lead decision 7: the provider's own words when it failed (key redacted, at most AGENT_PROBE_DETAIL_CHARS), for the card's second line; null when ok */
+  detail: string | null }
+export const AGENT_PROBE_DETAIL_CHARS = 300;
+/** One row of the model table as GET /api/v1/agent/models answers it (packages/providers AgentModelRowSchema; core does not import it). */
+export interface AgentModelRowView { providerId: string; id: string; label: string; contextTokens: number | null; maxOutputTokens: number | null; priceInPerMTok: number | null; priceOutPerMTok: number | null; vision: boolean; /** YYYY-MM-DD read, or 'owner' */ readAt: string; source: string; note?: string }
+/** GET /api/v1/agent/models (lead decision 7: typed): the built-in rows with the owner's merged in, the owner's own rows, and a problem reading them. */
+export interface AgentModelsAnswer { rows: AgentModelRowView[]; ownerRows: AgentModelRowView[]; problem: string | null }
 
 export const UndoActorBodySchema = z.object({
   actor: z.string().min(1).max(128),
@@ -221,6 +228,7 @@ export const UndoActorBodySchema = z.object({
   /** «ביטול מה שאפשר»: skip the conflicting entities and undo the rest */
   partial: z.boolean().optional(),
 }).strict();
+export type UndoActorBody = z.infer<typeof UndoActorBodySchema>;
 
 /** One entity another actor changed between the actor's first and last touch of it (C6): never overwritten. */
 export interface UndoActorConflict { entityId: string; changedAtRevision: number; by: string }
@@ -306,4 +314,4 @@ export class AgentNotBuiltError extends Error {
   constructor(readonly fn: string) { super(`${fn}: the in-editor agent is not built in this build yet`); }
 }
 /** Flipped by the integrator once the loop (W1), the adapters (W2) and the tab (W3) are in and proof:agent passes. */
-export const AGENT_BUILT: boolean = false;
+export const AGENT_BUILT: boolean = true;

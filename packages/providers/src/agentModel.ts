@@ -39,7 +39,10 @@ import type { JsonSchema } from './chat.ts';
 export interface AgentImage { mediaType: 'image/png' | 'image/jpeg'; base64: string; /** what the loop shows instead once the image is dropped (keepImages) */ label: string }
 export type AgentMessage =
   | { role: 'user'; text: string; images?: AgentImage[] }
-  | { role: 'assistant'; text: string | null; toolCalls: AgentToolCall[] }
+  | { role: 'assistant'; text: string | null; toolCalls: AgentToolCall[];
+      /** the live run's opaque copy of this turn as the provider answered it (AgentTurnResponse.providerState): replayed unchanged by
+       *  its own family's converter, never stored, never shown; absent after a restart or once the history was shortened (lead decision 6) */
+      providerState?: unknown }
   | { role: 'tool'; results: AgentToolResult[] };
 export interface AgentToolCall { id: string; name: string; /** parsed object (family C parses the JSON string; a parse failure is bad_tool_call) */ input: unknown }
 export interface AgentToolResult { callId: string; text: string; isError: boolean; images?: AgentImage[] }
@@ -62,6 +65,13 @@ export interface AgentTurnResponse {
   finish: 'tool' | 'stop' | 'length' | 'refusal' | 'other';
   usage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number } | null;
   providerRequestId: string | null;
+  /**
+   * Opaque, in memory only (lead decision 6): what the family needs back unchanged on the next request of the same conversation.
+   * Family A: the answer's whole `content` (thinking blocks with their signatures included), which the Messages API wants passed
+   * back unchanged in a tool loop; the API also accepts a history with ALL thinking blocks removed (a leading run, a trailing run or
+   * all of them; the claude-api skill, "preserved thinking"), so a run continues without them after a restart or a trim.
+   */
+  providerState?: unknown;
 }
 export type AgentProbeResult = { ok: true; model: string } | { ok: false; code: AgentProviderErrorCode | 'bad_config'; detail: string };
 
@@ -145,7 +155,9 @@ export const MISSING_RESULT_TEXT = 'no result was recorded for this call (the ru
  * failures (the docs' success example has no flag); tool_choice is always {type:'auto'} (+ disable_parallel_tool_use when
  * parallel calls are off), and is left out when there are no tools; `cache` marks the system text and the LAST tool with
  * cache_control ephemeral (two of the four breakpoints); NEVER temperature / top_p / top_k (a 400 on 2026-10-21, R§1.1).
- * Thinking blocks are never replayed (the neutral history holds none; the API accepts a history with all of them removed).
+ * Thinking blocks: an assistant message carrying `providerState` from fromAnthropicResponse is replayed as that answer's content,
+ * UNCHANGED (thinking blocks and their signatures included, lead decision 6); without it the turn is rebuilt from its text and calls
+ * and holds no thinking block (the API accepts a history with all of them removed: after a restart, or once the loop shortened it).
  */
 export function toAnthropicRequest(req: AgentTurnRequest, model: string): AnthropicMessagesRequest {
   type Block = AnthropicTextBlock | AnthropicImageBlock | AnthropicToolUseBlock | AnthropicToolResultBlock;
@@ -159,9 +171,13 @@ export function toAnthropicRequest(req: AgentTurnRequest, model: string): Anthro
   let pendingCalls: AgentToolCall[] = [];
   for (const m of req.messages) {
     if (m.role === 'assistant') {
+      const raw = anthropicContentOf(m.providerState);
       const blocks: Block[] = [];
-      if (m.text) blocks.push({ type: 'text', text: m.text });
-      for (const c of m.toolCalls) blocks.push({ type: 'tool_use', id: c.id, name: c.name, input: isObject(c.input) ? c.input : {} });
+      if (raw && sameCalls(raw, m.toolCalls)) blocks.push(...(raw as Block[]));
+      else {
+        if (m.text) blocks.push({ type: 'text', text: m.text });
+        for (const c of m.toolCalls) blocks.push({ type: 'tool_use', id: c.id, name: c.name, input: isObject(c.input) ? c.input : {} });
+      }
       push('assistant', blocks);
       pendingCalls = m.toolCalls;
       continue;
@@ -188,6 +204,18 @@ export function toAnthropicRequest(req: AgentTurnRequest, model: string): Anthro
   if (req.system) body.system = req.cache ? [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }] : req.system;
   if (tools.length) body.tool_choice = req.parallelToolCalls ? { type: 'auto' } : { type: 'auto', disable_parallel_tool_use: true };
   return body;
+}
+
+/** The raw content an anthropic-messages providerState carries, or null (another family's state, or none). */
+function anthropicContentOf(state: unknown): unknown[] | null {
+  if (!state || typeof state !== 'object') return null;
+  const c = (state as { anthropicContent?: unknown }).anthropicContent;
+  return Array.isArray(c) && c.length ? c : null;
+}
+/** The raw content's tool_use blocks are exactly the turn's calls (same ids, same order): otherwise the turn is rebuilt. */
+function sameCalls(raw: unknown[], calls: AgentToolCall[]): boolean {
+  const ids = raw.filter((b) => isObject(b) && (b as { type?: unknown }).type === 'tool_use').map((b) => (b as { id?: unknown }).id);
+  return ids.length === calls.length && ids.every((id, i) => id === calls[i]!.id);
 }
 
 /**
@@ -217,6 +245,8 @@ export function fromAnthropicResponse(res: AnthropicMessagesResponse): AgentTurn
     finish,
     usage: u ? { inputTokens: u.input_tokens, outputTokens: u.output_tokens, ...(u.cache_read_input_tokens !== undefined ? { cacheReadTokens: u.cache_read_input_tokens } : {}), ...(u.cache_creation_input_tokens !== undefined ? { cacheWriteTokens: u.cache_creation_input_tokens } : {}) } : null,
     providerRequestId: typeof res.id === 'string' ? res.id : null,
+    // the whole answer, unchanged, for the next request of this live run only (lead decision 6); never stored
+    ...(content.length ? { providerState: { anthropicContent: structuredClone(content) } } : {}),
   };
 }
 

@@ -5,7 +5,7 @@
  * authorization is enforced in `need()` from the authenticated principal.
  */
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
-import { AgentStartBodySchema, transcriptPage, UndoActorBodySchema } from '@pulseframe/core';
+import { AGENT_JOB_TYPE, AgentStartBodySchema, transcriptPage, UndoActorBodySchema } from '@pulseframe/core';
 import { notBuiltAgentService, type AgentRunService } from './agent/loop.ts';
 import { NarrationBody, NarrationScriptBody, TranscribeBody, type Speech } from './speech.ts';
 import { z } from 'zod';
@@ -342,6 +342,8 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
         const j = store.getJob(jobId);
         gov.assertMayAct(principal, j.projectId, 'observe');
         if (j.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, principal, j, 'cancel'); return extras.imports.cancel(jobId, principal.actor); }
+        // an in-editor agent run (lead decision 5): its own cancel, the same as POST /projects/{id}/agent/runs/{runId}/cancel (edit scope)
+        if (j.type === AGENT_JOB_TYPE) return agentService.cancel(principal, j.projectId, String((j.input as { runId?: unknown } | null)?.runId ?? ''));
         assertMayCancel(gov, principal, j);
         // the same dispatch as POST /jobs/:jobId/cancel (http.ts)
         if (j.type === ASSISTANT_JOB_TYPE) {

@@ -11,17 +11,30 @@
 import { z } from 'zod';
 import { AGENT_LIMITS, AgentPlanSchema } from '@pulseframe/core';
 
-export const PLANNER_TOOLS = [
-  // reading
+/** The planner tools that only read (lead decision 4: a run READS any project its credential may read; it EDITS only its own). */
+export const READING_TOOLS = [
   'get_summary', 'get_timeline', 'list_sequences', 'describe_moment', 'render_contact_sheet', 'render_frame', 'get_transcript',
   'find_text', 'find_in_footage', 'find_silences', 'find_filler_words', 'find_short_candidates', 'get_analysis', 'preflight',
   'measure_loudness', 'list_catalog', 'list_capabilities', 'estimate_capability', 'get_job', 'get_speech_status', 'get_controls', 'plan_export',
+] as const;
+export const PLANNER_TOOLS = [
+  ...READING_TOOLS,
   // acting
   'apply_transaction', 'describe_ops', 'undo', 'plan_shorts', 'make_shorts', 'plan_template', 'apply_template', 'plan_recipe', 'apply_recipe',
   'transcribe_asset', 'translate_captions', 'analyze_asset', 'run_capability', 'export_project', 'export_batch', 'cancel_job',
   // Part 1 (verifier C3): present once wt/auto-p1 lands; left out until registered
   'start_model_download', 'install_speech_engine', 'list_versions', 'save_version', 'restore_version',
 ] as const;
+
+/**
+ * May this call name another project than the run's? Reading tools (the list above, or any tool the editor marks readOnlyHint)
+ * may: the editor's own read checks for the run's credential apply as for any agent. Acting tools may not: «ביטול הכול» covers
+ * one project (a fact, not a policy), so the run edits only its own (lead decision 4).
+ */
+export function mayNameOtherProject(name: string, annotations: unknown): boolean {
+  if ((READING_TOOLS as readonly string[]).includes(name)) return true;
+  return !!annotations && typeof annotations === 'object' && (annotations as { readOnlyHint?: unknown }).readOnlyHint === true;
+}
 
 /** render_frame / render_contact_sheet arguments the loop adds when the model leaves them out (C11). */
 export function defaultFrameScale(outputWidth: number): 1 | 0.5 { return outputWidth > 1280 ? AGENT_LIMITS.frameScaleOver1280 : 1; }

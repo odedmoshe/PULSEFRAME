@@ -40,7 +40,8 @@ describe('anthropic-messages converters (R§1.2)', () => {
   });
   it('the docs\' tool-use answer reads as one call with an OBJECT input and finish tool', () => {
     const res = fromAnthropicResponse({ id: 'msg_01Aq9w938a90dw8q', model: 'claude-opus-5-5', stop_reason: 'tool_use', role: 'assistant', content: [{ type: 'text', text: 'I\'ll check the current weather in San Francisco for you.' }, { type: 'tool_use', id: 'toolu_01A09q90qw90lq917835lq9', name: 'get_weather', input: { location: 'San Francisco, CA', unit: 'celsius' } }] });
-    expect(res).toEqual({ text: 'I\'ll check the current weather in San Francisco for you.', toolCalls: [{ id: 'toolu_01A09q90qw90lq917835lq9', name: 'get_weather', input: { location: 'San Francisco, CA', unit: 'celsius' } }], finish: 'tool', usage: null, providerRequestId: 'msg_01Aq9w938a90dw8q' });
+    expect(res).toEqual({ text: 'I\'ll check the current weather in San Francisco for you.', toolCalls: [{ id: 'toolu_01A09q90qw90lq917835lq9', name: 'get_weather', input: { location: 'San Francisco, CA', unit: 'celsius' } }], finish: 'tool', usage: null, providerRequestId: 'msg_01Aq9w938a90dw8q',
+      providerState: { anthropicContent: [{ type: 'text', text: 'I\'ll check the current weather in San Francisco for you.' }, { type: 'tool_use', id: 'toolu_01A09q90qw90lq917835lq9', name: 'get_weather', input: { location: 'San Francisco, CA', unit: 'celsius' } }] } }); // the answer kept whole for its replay (lead decision 6)
   });
   it('a result goes back as the docs\' tool_result; an error carries is_error; results come FIRST, then the next user text', () => {
     const ok = toAnthropicRequest(req({ messages: toolTurn({ role: 'tool', results: [{ callId: 'toolu_01A09q90qw90lq917835lq9', text: '15 degrees', isError: false }] }) }), 'm');
@@ -76,6 +77,28 @@ describe('anthropic-messages converters (R§1.2)', () => {
     expect(res).toMatchObject({ text: 'done', finish: 'stop', usage: { inputTokens: 10, outputTokens: 2, cacheReadTokens: 5, cacheWriteTokens: 0 } });
     expect(fromAnthropicResponse({ id: 'm', model: 'x', role: 'assistant', stop_reason: 'max_tokens', content: [] }).finish).toBe('length');
     expect(() => fromAnthropicResponse({ id: 'm', model: 'x', role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 't', name: 'n', input: 'nope' }] })).toThrow(expect.objectContaining({ code: 'bad_tool_call' }));
+  });
+
+  it('lead decision 6: the answer\'s whole content (thinking blocks with their signatures) comes back as opaque providerState and is replayed UNCHANGED; without it the turn is rebuilt with no thinking block', () => {
+    const content = [{ type: 'thinking', thinking: '', signature: 'TEST-ONLY-signature' } as never, { type: 'text' as const, text: 'I\'ll check.' }, { type: 'tool_use' as const, id: 'toolu_1', name: 'get_weather', input: { location: 'Paris' } }];
+    const res = fromAnthropicResponse({ id: 'm1', model: 'x', role: 'assistant', stop_reason: 'tool_use', content });
+    expect(res.providerState).toEqual({ anthropicContent: content });
+    const messages: AgentTurnRequest['messages'] = [
+      { role: 'user', text: 'weather?' },
+      { role: 'assistant', text: res.text, toolCalls: res.toolCalls, providerState: res.providerState },
+      { role: 'tool', results: [{ callId: 'toolu_1', text: '15 C', isError: false }] },
+    ];
+    const body = toAnthropicRequest(req({ messages }), 'claude-opus-5-5');
+    expect(body.messages[1]).toEqual({ role: 'assistant', content });
+    expect(body.messages[2]!.content).toEqual([{ type: 'tool_result', tool_use_id: 'toolu_1', content: '15 C' }]);
+    const { providerState: _, ...plain } = messages[1] as Extract<AgentTurnRequest['messages'][number], { role: 'assistant' }>;
+    const rebuilt = toAnthropicRequest(req({ messages: [messages[0]!, plain, messages[2]!] }), 'claude-opus-5-5');
+    expect((rebuilt.messages[1]!.content as { type: string }[]).map((b) => b.type)).toEqual(['text', 'tool_use']);
+    // a state whose calls do not match the turn is not trusted: the turn is rebuilt
+    const odd = toAnthropicRequest(req({ messages: [messages[0]!, { ...plain, providerState: { anthropicContent: [{ type: 'tool_use', id: 'other', name: 'x', input: {} }] } }, messages[2]!] }), 'claude-opus-5-5');
+    expect((odd.messages[1]!.content as { type: string }[]).map((b) => b.type)).toEqual(['text', 'tool_use']);
+    // the openai-chat family ignores it
+    expect(JSON.stringify(toOpenAIChatRequest(req({ messages }), 'gpt', preset('openai')))).not.toContain('TEST-ONLY-signature');
   });
 });
 

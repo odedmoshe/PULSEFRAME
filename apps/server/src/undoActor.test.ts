@@ -111,6 +111,25 @@ describe('Store.undoActor', () => {
     expect(textOf(x.clipId)).toBeNull();
   });
 
+  it('Ctrl+Z on the redo of the composite marks the run\'s transactions again, and the next redo clears them again (lead decision 5)', () => {
+    const start = store.wholeProject(pid).revision;
+    const x = addText(RUN, 'one', 0);
+    const s = setText(RUN, x.clipId, 'two');
+    const before = digest();
+    const r = store.undoActor(pid, RUN, start, { byActor: 'user:local' });
+    const undone = digest();
+    store.undo(pid, 'user:local', 'redo');
+    expect(digest()).toBe(before);
+    const z = store.undo(pid, 'user:local', 'undo'); // Ctrl+Z: the redo is reversed
+    expect(digest()).toBe(undone);
+    expect([undoneBy(x.transactionId!), undoneBy(s.transactionId!)]).toEqual([z.transactionId, z.transactionId]);
+    expect(JSON.parse((store.db.prepare('SELECT result FROM transactions WHERE id = ?').get(z.transactionId) as any).result).undoesAll).toEqual(r.undoes);
+    const y = store.undo(pid, 'user:local', 'redo'); // Ctrl+Shift+Z again
+    expect(digest()).toBe(before);
+    expect([undoneBy(x.transactionId!), undoneBy(s.transactionId!)]).toEqual([null, null]);
+    expect(undoneBy(z.transactionId!)).toBe(y.transactionId);
+  });
+
   it('an edit the owner already undid on its own is not reversed twice', () => {
     const start = store.wholeProject(pid).revision;
     const x = addText(RUN, 'one', 0);

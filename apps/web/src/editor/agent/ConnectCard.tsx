@@ -10,7 +10,7 @@ import { Button } from '../../ds/index.ts';
 import { AGENT_TESTIDS as ID } from './agent.testids.ts';
 import { failureText, priceText, probeText, readDates, rowsOf, tr, type Lang, type ModelRow } from './agentState.ts';
 
-interface RowNote { text: string; code: string | null; kind: 'probe' | 'error' | 'saved' }
+interface RowNote { text: string; code: string | null; kind: 'probe' | 'error' | 'saved'; /** the provider's own words (a failed probe; the server redacted the key) */ detail?: string | null }
 
 export function ConnectCard({ lang, providers, models, selected, onSelect, onChanged }: {
   lang: Lang; providers: AgentProviderView[]; models: ModelRow[]; selected: string | null; onSelect: (id: string) => void; onChanged: () => void;
@@ -48,7 +48,7 @@ function ProviderRow({ lang, p, rows, selected, onSelect, onChanged }: { lang: L
     // an address or key typed but not saved yet is saved first: the probe tests what is stored, never what is only on screen
     if (dirty || key.trim()) await save2();
     const a = await api.probeAgentProvider(p.id);
-    setNote({ kind: 'probe', code: a.ok ? 'ok' : (a.code ?? 'unknown'), text: probeText(lang, a) });
+    setNote({ kind: 'probe', code: a.ok ? 'ok' : (a.code ?? 'unknown'), text: probeText(lang, a), detail: a.ok ? null : a.detail });
     onChanged();
   });
   const save2 = async () => { if (dirty) await api.setAgentProvider(p.id, { baseUrl, model: model.trim() || null }); if (key.trim()) await api.setAgentKey(p.id, key.trim()); setKey(''); };
@@ -91,6 +91,7 @@ function ProviderRow({ lang, p, rows, selected, onSelect, onChanged }: { lang: L
       </div>
       <div role="status" aria-live="polite" className="pf-agent-answer">
         {note ? <p data-testid={note.kind === 'probe' ? ID.probeResult : note.kind === 'error' ? ID.error : undefined} data-code={note.code ?? undefined} className={note.kind === 'probe' && note.code === 'ok' ? 'pf-agent-ok' : note.kind === 'saved' ? 'pf-agent-dim' : 'pf-agent-warn'}>{note.text}</p> : null}
+        {note?.detail ? <p className="pf-agent-dim" dir="ltr" data-testid={ID.probeDetail}><span>{tr(lang, 'agent.probe.detail')}: </span><bdi>{note.detail}</bdi></p> : null}
       </div>
     </li>
   );

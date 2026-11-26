@@ -79,6 +79,7 @@ import { registerPicmodelsRoutes } from './picmodels/routes.ts';
 import { registerOwnTemplateRoutes } from './ownTemplates.ts';
 import { registerAgentRoutes } from './agent/routes.ts';
 import { notBuiltAgentService, type AgentRunService } from './agent/loop.ts';
+import { AGENT_JOB_TYPE } from '@pulseframe/core';
 import { registerMadeRoutes } from './made/routes.ts';
 import type { MadeRunner } from './made/contract.ts';
 import type { RenderHost } from '@pulseframe/renderer';
@@ -1083,6 +1084,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (j.type === SPEECH_ENGINE_JOB_TYPE) speech.engineInstall.assertOwner(c.var.principal); // the owner's own, before any scope is named
     const p = need(c, 'edit');
     if (j.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, p, j, 'cancel'); return c.json(extras.imports.cancel(j.id, p.actor)); }
+    if (j.type === AGENT_JOB_TYPE) { gov.assertMayAct(p, j.projectId, 'observe'); return c.json(((mcp as { agentService?: () => AgentRunService }).agentService?.() ?? notBuiltAgentService()).cancel(p, j.projectId, String((j.input as { runId?: unknown } | null)?.runId ?? ''))); } // the run's own cancel (lead decision 5), as MCP cancel_job
     assertMayCancel(gov, p, j);
     if (j.type === ASSISTANT_JOB_TYPE) return c.json(assistant.cancel(p, j.id));
     if (j.type === 'analysis') return c.json(cancelAnalysisJob(store, j.id, p.actor));

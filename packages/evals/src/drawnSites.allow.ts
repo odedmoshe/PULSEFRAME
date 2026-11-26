@@ -183,4 +183,9 @@ export const DRAWN_SITES: readonly DrawnSite[] = [
   { file: "packages/evals/src/voicefx-ui-proof.ts", snippet: "ent as any[]).find((c) => c.type === 'text')?.text;", class: 'proof', note: "proof reads the titles/tool text it made" },
   { file: "packages/core/src/audience.ts", snippet: "if (clip.type !== 'text') continue;", class: 'words', note: "audience versions: the grandparents text size applies to titles only; a drawn clip keeps its own size" },
   { file: "packages/evals/src/audiences-proof.core.ts", snippet: "if (clip.type === 'text') {", class: 'proof', note: "audiences proof reads the titles it made" },
+  { file: "packages/evals/src/agent-proof.server.ts", snippet: "ent as any[]).find((x) => x.type === 'text').text) }; }", class: 'n/a', note: "an MCP content block of type text (the agent proof reads a tool answer), not a title" },
+  { file: "packages/providers/src/agentModel.ts", snippet: "if (b.type === 'text') texts.push", class: 'n/a', note: "an Anthropic answer's text block (the agent's family A converter), not a title" },
+  { file: "apps/server/src/agent/loop.ts", snippet: "t = content.filter((c) => c.type === 'text').map((c) =>", class: 'n/a', note: "an MCP content block of type text (the agent loop reads a tool answer), not a title" },
+  { file: "apps/server/src/agent/loop.ts", snippet: "parse(content.find((c) => c.type === 'text')?.text ?? '", class: 'n/a', note: "an MCP content block of type text (the agent loop reads a tool answer), not a title" },
+  { file: "apps/server/src/agent/loop.ts", snippet: "?? []).filter((c: any) => c.type === 'text').map((c: an", class: 'n/a', note: "an MCP content block of type text (wait_for_job reads get_job), not a title" },
 ];

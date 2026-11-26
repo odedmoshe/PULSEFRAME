@@ -165,14 +165,14 @@ describe('routes (owner floor on keys, addresses, probe and the model table; GET
     await rest('PUT', '/api/v1/agent/providers/anthropic', ownerH(), { baseUrl: dblBase, model: 'claude-opus-5-5' });
     canned = { status: 200, body: { id: 'msg_t', model: 'claude-opus-5-5', role: 'assistant', stop_reason: 'max_tokens', content: [{ type: 'text', text: 'p' }] } };
     const ok = await rest('POST', '/api/v1/agent/providers/anthropic/probe', ownerH(), {});
-    expect(ok.body).toEqual({ ok: true, code: null, model: 'claude-opus-5-5' });
+    expect(ok.body).toEqual({ ok: true, code: null, model: 'claude-opus-5-5', detail: null });
     expect([dblSeen.at(-1)!.url, dblSeen.at(-1)!.headers['x-api-key'], dblSeen.at(-1)!.headers['anthropic-version']]).toEqual(['/v1/messages', FAKE_KEY, '2026-10-21']);
     canned = { status: 401, body: { type: 'error', error: { type: 'authentication_error', message: `invalid x-api-key ${FAKE_KEY}` } } };
     const bad = await rest('POST', '/api/v1/agent/providers/anthropic/probe', ownerH(), {});
-    expect(bad.body).toEqual({ ok: false, code: 'unauthorized', model: 'claude-opus-5-5' });
+    expect(bad.body).toEqual({ ok: false, code: 'unauthorized', model: 'claude-opus-5-5', detail: expect.stringContaining('[redacted]') }); // the provider's words for the card (lead decision 7), key redacted
     expect(bad.text).not.toContain(FAKE_KEY);
     const noModel = await rest('POST', '/api/v1/agent/providers/xai/probe', ownerH(), {});
-    expect(noModel.body).toEqual({ ok: false, code: 'bad_config', model: null });
+    expect(noModel.body).toEqual({ ok: false, code: 'bad_config', model: null, detail: 'no model is chosen for this provider' });
   });
   it('the model table: built-in rows with their date; the owner\'s rows replace or add, persist in agent-models.json (outside agent/); duplicates are 400', async () => {
     const g = await rest('GET', '/api/v1/agent/models', agentH());

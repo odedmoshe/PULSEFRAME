@@ -133,9 +133,15 @@ export async function runServerChecks(check: Check): Promise<void> {
     } catch (e) { probe = { error: String(e).slice(0, 200) } as never; }
     const even = (n: number) => Math.max(2, Math.round(n * 0.25 / 2) * 2);
     const expectFrames = summarize(after.project).frameCount;
-    check('4 measured: the timeline lost both silences (−6 s ± 1 frame, rational), a caption track and a 9:16 variant exist, the export file has the variant\'s size (×0.25) and the frame count',
-      Math.abs(lostFrames - 6 * Number(fr.num) / Number(fr.den)) <= 1 && captionTrack && !!variant && job?.status === 'succeeded' && probe.width === even(variant.width) && probe.height === even(variant.height) && probe.frames === expectFrames,
-      { lostSeconds: T.toSeconds(lost), lostFrames, silencesFound: /"sourceSilences":\[[^\]]*\]|"removableSeconds":[0-9.]+/g.exec(tools.find((t) => t.tool?.tool === 'find_silences')?.tool?.resultSummary ?? '')?.[0] ?? null, removable: /"removableSeconds":[0-9.]+/.exec(tools.find((t) => t.tool?.tool === 'find_silences')?.tool?.resultSummary ?? '')?.[0] ?? null, captionTrack, variant: variant && [variant.width, variant.height], job: job?.status, probe, expectFrames, jobOutput: job?.output });
+    // lead decision 1: the product rounds each cut INWARD to whole frames; the expected loss is computed from the detected ranges
+    // (find_silences' own answer, keepSeconds 0) rounded that way, ± 1 frame per cut
+    const fsSummary = tools.find((t) => t.tool?.tool === 'find_silences')?.tool?.resultSummary ?? '';
+    const detected = [...(/"sourceSilences":\[([^\]]*)\]/.exec(fsSummary)?.[1] ?? '').matchAll(/"startSeconds":([0-9.]+),"endSeconds":([0-9.]+)/g)].map((m) => [Number(m[1]), Number(m[2])] as const);
+    const fps = Number(fr.num) / Number(fr.den);
+    const expectedLost = detected.reduce((n, [a, b]) => n + Math.max(0, Math.floor(b * fps + 1e-9) - Math.ceil(a * fps - 1e-9)), 0);
+    check('4 measured: the timeline lost both detected silences (the detected ranges rounded inward to whole frames, ± 1 frame per cut: lead decision 1; rational), a caption track and a 9:16 variant exist, the export file has the variant\'s size (×0.25) and the frame count',
+      detected.length === 2 && Math.abs(lostFrames - expectedLost) <= detected.length && captionTrack && !!variant && job?.status === 'succeeded' && probe.width === even(variant.width) && probe.height === even(variant.height) && probe.frames === expectFrames,
+      { lostSeconds: T.toSeconds(lost), lostFrames, expectedLostFrames: expectedLost, detected, silencesFound: /"sourceSilences":\[[^\]]*\]|"removableSeconds":[0-9.]+/g.exec(tools.find((t) => t.tool?.tool === 'find_silences')?.tool?.resultSummary ?? '')?.[0] ?? null, removable: /"removableSeconds":[0-9.]+/.exec(tools.find((t) => t.tool?.tool === 'find_silences')?.tool?.resultSummary ?? '')?.[0] ?? null, captionTrack, variant: variant && [variant.width, variant.height], job: job?.status, probe, expectFrames, jobOutput: job?.output });
 
     // ---------- check 5: «ביטול הכול», the interleaved case, redo ----------
     const before5 = digestOf(s.store.replay(pid, w.run.startRevision).doc);
@@ -162,10 +168,10 @@ export async function runServerChecks(check: Check): Promise<void> {
     const redo = await rest(`/projects/${p5}/redo`, {});
     const marks = (s.store.db.prepare('SELECT COUNT(*) AS n FROM transactions WHERE project_id = ? AND actor = ? AND undone_by IS NOT NULL').get(p5, `agent:${r5}`) as { n: number }).n;
     const markersRedone = Object.values((await doc(p5)).project.markers ?? {}).map((m) => m.label).sort();
-    check('5 «ביטול הכול» brings the digest back to the start revision\'s in ONE revision; interleaved: 409 undo_conflict lists X by user:local and applies nothing; partial undoes the rest and leaves X as it is (never set back past the owner\'s edit); redo restores the run\'s states and clears every mark',
+    check('5 «ביטול הכול» brings the digest back to the start revision\'s in ONE revision; interleaved: 409 undo_conflict lists X by user:local and applies nothing; partial undoes the rest, and X (changed later by someone else) is skipped, left as it is and listed (lead decision 2); redo restores the run\'s states and clears every mark',
       ok5a && conflict.status === 409 && conflict.body.error.code === 'undo_conflict' && JSON.stringify(conflict.body.error.details.conflicts) === JSON.stringify([{ entityId: markerId, changedAtRevision: revBefore - 1, by: 'user:local' }]) && unchanged
-      && partial.status === 200 && JSON.stringify(markers) === JSON.stringify(['run 2']) && redo.status === 200 && marks === 0 && JSON.stringify(markersRedone) === JSON.stringify(['other', 'run 2']),
-      { undoAll: [u.status, afterUndo.revision - rev5], conflict: conflict.body?.error?.details?.conflicts, partial: partial.status, markers, redo: redo.status, marksLeft: marks, markersRedone });
+      && partial.status === 200 && JSON.stringify(markers) === JSON.stringify(['run 2']) && (partial.body?.conflicts ?? []).some((c: { entityId: string }) => c.entityId === markerId) && redo.status === 200 && marks === 0 && JSON.stringify(markersRedone) === JSON.stringify(['other', 'run 2']),
+      { undoAll: [u.status, afterUndo.revision - rev5], conflict: conflict.body?.error?.details?.conflicts, partial: partial.status, partialListed: partial.body?.conflicts, markers, redo: redo.status, marksLeft: marks, markersRedone });
 
     // ---------- check 7: step limit ----------
     const p7 = await newProject('limit');

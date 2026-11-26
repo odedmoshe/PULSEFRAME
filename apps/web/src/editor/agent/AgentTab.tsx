@@ -1,15 +1,16 @@
 /**
  * The «סוכן» tab of the Copilot (wave 8 autonomy Part 2, builder W3). Not connected: the connect card «חיבור מודל» first. Connected:
- * the goal box, the live run (RunView), the list of earlier runs, and the card below. Live progress: the job event of the run's
- * job (type agent.run, stage step:<n>:<status>) on the project's event stream, then GET the run; a slow poll covers a stream that is
- * down. Everything the tab shows comes from the server's answers; a 501 agent_not_built is shown as what it is.
+ * the goal box, the live run (RunView), the list of earlier runs, and the card below. Live progress: the editor store forwards each
+ * job event of type agent.run (stage step:<n>:<status>) from its one event stream (state.agentJobs, lead decision 7); the tab then
+ * GETs the run. No second stream and no poll. With no provider connected only the connect card is shown (no start button that cannot
+ * work). Everything the tab shows comes from the server's answers; a 501 agent_not_built is shown as what it is.
  * Strings: packages/i18n/src/agent.ts. Test ids: agent.testids.ts.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AgentProvidersAnswer, AgentRun, AgentStep } from '@pulseframe/core';
 import { AGENT_LIMITS } from '@pulseframe/core';
 import { Send } from 'lucide-react';
-import { ApiFailure, api, type JobEvent } from '../../api.ts';
+import { ApiFailure, api } from '../../api.ts';
 import { Button } from '../../ds/index.ts';
 import { useEditorState } from '../store.ts';
 import { AGENT_TESTIDS as ID } from './agent.testids.ts';
@@ -21,7 +22,6 @@ import './agent.css';
 /** Copilot.tsx shows this panel instead of its honest «not connected» chat panel only while this is true. */
 export const AGENT_TAB_BUILT: boolean = true;
 
-const POLL_MS = 4000;
 
 export function AgentTab() {
   const { state } = useEditorState();
@@ -85,23 +85,17 @@ export function AgentTab() {
     return () => { cancelled = true; };
   }, [projectId, loadRuns, refresh]);
 
-  // live: the job event of the run's job, plus a slow poll while the run is active (the stream may be down)
+  // live: each job event of the run's job, forwarded by the editor store from its event stream (lead decision 7)
   const runId = current?.run.id ?? null;
   const jobId = current?.run.jobId ?? null;
   const active = current ? isActive(current.run.status) : false;
-  const revisionRef = useRef(state.revision); revisionRef.current = state.revision;
-  useEffect(() => {
-    if (!projectId || !runId || !active) return;
-    const es = api.events(projectId, revisionRef.current);
-    es.addEventListener('job', (m) => { try { const j = JSON.parse((m as MessageEvent).data) as JobEvent; if (j.type === 'agent.run' && j.id === jobId) void refresh(runId); } catch { /* a malformed event is skipped */ } });
-    const timer = window.setInterval(() => void refresh(runId), POLL_MS);
-    return () => { es.close(); window.clearInterval(timer); };
-  }, [projectId, runId, jobId, active, refresh]);
+  const jobEvent = jobId ? state.agentJobs[jobId] : undefined;
+  useEffect(() => { if (runId && jobEvent) void refresh(runId); }, [runId, jobEvent, refresh]);
 
   const providerId = selected ?? providers?.defaultProviderId ?? null;
   const connected = !!providers?.defaultProviderId;
   const busy = !!current && active;
-  const reason = !connected ? tr(lang, 'agent.connectFirst') : busy ? tr(lang, 'agent.runBusy') : !goal.trim() ? tr(lang, 'agent.goalNeeded') : undefined;
+  const reason = busy ? tr(lang, 'agent.runBusy') : !goal.trim() ? tr(lang, 'agent.goalNeeded') : undefined;
 
   const start = async () => {
     if (!projectId || reason) return;
@@ -114,38 +108,39 @@ export function AgentTab() {
   };
   const open = (id: string) => void refresh(id);
 
-  const card = providers ? <ConnectCard lang={lang} providers={providers.providers} models={models} selected={providerId} onSelect={setSelected} onChanged={() => void loadProviders()} /> : null;
+  const cardEl = providers ? <ConnectCard key="card" lang={lang} providers={providers.providers} models={models} selected={providerId} onSelect={setSelected} onChanged={() => void loadProviders()} /> : null;
   const earlier = runs.filter((r) => r.id !== runId);
+
+  const goalForm = (
+    <form key="goal" className="pf-agent-goal" onSubmit={(e) => { e.preventDefault(); void start(); }}>
+      <label htmlFor="pf-agent-goal">{tr(lang, 'agent.goalLabel')}</label>
+      <textarea id="pf-agent-goal" rows={3} dir="auto" maxLength={AGENT_LIMITS.goalChars} value={goal} placeholder={tr(lang, 'agent.goalPlaceholder')} onChange={(e) => setGoal(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void start(); } }} data-testid={ID.goal} />
+      <Button type="submit" variant="primary" size="md" busy={starting} disabledReason={reason} icon={<Send size={16} aria-hidden="true" />} data-testid={ID.start}>{tr(lang, 'agent.start')}</Button>
+      {startError ? <p className="pf-agent-warn" role="alert" data-testid={ID.error} data-code={startError.code}>{startError.text}</p> : null}
+    </form>
+  );
+  const runView = current && projectId ? <RunView key="run" lang={lang} projectId={projectId} revision={state.revision} run={current.run} steps={current.steps} onChanged={() => void refresh(current.run.id)} /> : null;
+  const runList = (
+    <section key="runs" className="pf-agent-runs" aria-label={tr(lang, 'agent.runs')} data-testid={ID.runs}>
+      <h4>{tr(lang, 'agent.runs')}</h4>
+      {runs.length === 0 ? <p className="pf-agent-dim">{tr(lang, 'agent.runs.empty')}</p> : earlier.length === 0 ? null : (
+        <ul>{earlier.map((r) => (
+          <li key={r.id} data-status={r.status}>
+            <span className="pf-agent-chip" data-status={r.status}>{tr(lang, `agent.status.${r.status}`)}</span> <bdi dir="auto" className="pf-agent-runs-goal">{r.goal}</bdi>
+            <Button variant="ghost" size="sm" onClick={() => open(r.id)} aria-label={tr(lang, 'agent.runs.goal', { goal: r.goal.slice(0, 60) })}>{tr(lang, 'agent.runs.open')}</Button>
+          </li>))}
+        </ul>)}
+    </section>
+  );
 
   return (
     <div role="tabpanel" id="pf-cop-panel-chat" aria-labelledby="pf-cop-panel-tab-chat" className="pf-cop-body pf-agent" data-testid={ID.tab}>
       {loadError ? <p className="pf-agent-warn" role="alert" data-testid={ID.error} data-code={loadError.code}>{loadError.text}</p> : null}
       {!providers && !loadError ? <p className="pf-agent-dim" role="status">{tr(lang, 'agent.connect.loading')}</p> : null}
       {providers && !connected ? <p className="pf-agent-dim" role="status">{tr(lang, 'agent.notConnected')}</p> : null}
-      {providers && !connected ? card : null}
-      {providers ? (
-        <form className="pf-agent-goal" onSubmit={(e) => { e.preventDefault(); void start(); }}>
-          <label htmlFor="pf-agent-goal">{tr(lang, 'agent.goalLabel')}</label>
-          <textarea id="pf-agent-goal" rows={3} dir="auto" maxLength={AGENT_LIMITS.goalChars} value={goal} placeholder={tr(lang, 'agent.goalPlaceholder')} onChange={(e) => setGoal(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void start(); } }} data-testid={ID.goal} />
-          <Button type="submit" variant="primary" size="md" busy={starting} disabledReason={reason} icon={<Send size={16} aria-hidden="true" />} data-testid={ID.start}>{tr(lang, 'agent.start')}</Button>
-          {startError ? <p className="pf-agent-warn" role="alert" data-testid={ID.error} data-code={startError.code}>{startError.text}</p> : null}
-        </form>
-      ) : null}
-      {current && projectId ? <RunView lang={lang} projectId={projectId} run={current.run} steps={current.steps} onChanged={() => void refresh(current.run.id)} /> : null}
-      {providers ? (
-        <section className="pf-agent-runs" aria-label={tr(lang, 'agent.runs')} data-testid={ID.runs}>
-          <h4>{tr(lang, 'agent.runs')}</h4>
-          {runs.length === 0 ? <p className="pf-agent-dim">{tr(lang, 'agent.runs.empty')}</p> : earlier.length === 0 ? null : (
-            <ul>{earlier.map((r) => (
-              <li key={r.id} data-status={r.status}>
-                <span className="pf-agent-chip" data-status={r.status}>{tr(lang, `agent.status.${r.status}`)}</span> <bdi dir="auto" className="pf-agent-runs-goal">{r.goal}</bdi>
-                <Button variant="ghost" size="sm" onClick={() => open(r.id)} aria-label={tr(lang, 'agent.runs.goal', { goal: r.goal.slice(0, 60) })}>{tr(lang, 'agent.runs.open')}</Button>
-              </li>))}
-            </ul>)}
-        </section>
-      ) : null}
-      {providers && connected ? card : null}
+      {/* one keyed list, so the connect card keeps its state (a probe's answer) when connecting moves it from first to last */}
+      {providers ? (connected ? [goalForm, runView, runList, cardEl] : [cardEl, runView, runList]) : null}
     </div>
   );
 }

@@ -6,7 +6,7 @@
  * Every adapter handed out is wrapped: whatever it throws or answers passes `redact(key)` (assistant/credential.ts) a second time
  * (the adapters redact once themselves), so a provider that echoes the key back cannot put it into a step, an SSE event or a log.
  */
-import { AGENT_REFUSAL_CODES, type AgentProbeAnswer, type AgentProvidersAnswer } from '@pulseframe/core';
+import { AGENT_PROBE_DETAIL_CHARS, AGENT_REFUSAL_CODES, type AgentModelsAnswer, type AgentProbeAnswer, type AgentProvidersAnswer } from '@pulseframe/core';
 import { AGENT_MODEL_TABLE, AGENT_PROVIDER_PRESETS, AgentProviderError, isUnencryptedRemote, mergeModelTable, type AgentEndpoint, type AgentModelAdapter, type AgentModelRow, type AgentProviderPreset } from '@pulseframe/providers';
 import { createAnthropicAdapter } from '@pulseframe/providers/agentAnthropic.ts';
 import { createOpenAIChatAdapter } from '@pulseframe/providers/agentOpenAIChat.ts';
@@ -40,8 +40,8 @@ export function redactingAdapter(a: AgentModelAdapter): AgentModelAdapter {
 export interface AgentProvidersService extends AgentProviders {
   readonly keys: AgentKeyStore;
   /** The built-in rows with the owner's merged in (agentModels.ts mergeModelTable), and the owner's own rows. */
-  models(): { rows: AgentModelRow[]; ownerRows: AgentModelRow[]; problem: string | null };
-  /** «בדיקה»: one 1-token request with the stored key, address and model. The answer never holds the key or a provider detail. */
+  models(): AgentModelsAnswer & { rows: AgentModelRow[]; ownerRows: AgentModelRow[] };
+  /** «בדיקה»: one 1-token request with the stored key, address and model. The answer never holds the key; a failure carries the provider's words, redacted (lead decision 7). */
   probe(providerId: string, signal?: AbortSignal): Promise<AgentProbeAnswer>;
 }
 
@@ -92,11 +92,12 @@ export function createAgentProviders(dataDir: string, adapters: AgentAdapters = 
     async probe(providerId: string, signal: AbortSignal = new AbortController().signal): Promise<AgentProbeAnswer> {
       const preset = presetOf(providerId);
       const s = keys.settingsOf(preset.id);
-      if (!s.model) return { ok: false, code: 'bad_config', model: null };
+      if (!s.model) return { ok: false, code: 'bad_config', model: null, detail: 'no model is chosen for this provider' };
       const key = preset.needsKey ? keys.readKey(preset.id) : null;
-      if (preset.needsKey && !key) return { ok: false, code: 'bad_config', model: s.model };
+      if (preset.needsKey && !key) return { ok: false, code: 'bad_config', model: s.model, detail: 'this provider needs a key and none is stored' };
       const r = await adapterFor(preset).probe({ providerId: preset.id, family: preset.family, baseUrl: s.baseUrl, model: s.model }, key, signal);
-      return r.ok ? { ok: true, code: null, model: r.model } : { ok: false, code: r.code, model: s.model };
+      // the detail passed redact(key) in the adapter and again in redactingAdapter; cut to a line for the card
+      return r.ok ? { ok: true, code: null, model: r.model, detail: null } : { ok: false, code: r.code, model: s.model, detail: redact(key)(r.detail).slice(0, AGENT_PROBE_DETAIL_CHARS) || null };
     },
   };
   return service;

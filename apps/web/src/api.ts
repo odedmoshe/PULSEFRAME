@@ -17,7 +17,7 @@ import type { DerivedLessonView } from '@pulseframe/core';
 import type { MusicFitApplyRequest, MusicFitApplyResult, MusicFitPlan, MusicFitPlanRequest, JoinRemoval } from '@pulseframe/core';
 import type { MusicKitStatus } from '@pulseframe/core';
 import type { OwnTemplateDeleteAnswer, OwnTemplatePreviewAnswer, OwnTemplatePreviewBody, OwnTemplateSaveAnswer, OwnTemplateSaveBody } from '@pulseframe/core';
-import type { AgentProbeAnswer, AgentProvidersAnswer, AgentRunAnswer, AgentRunListAnswer, AgentStartAnswer, AgentStartBody, UndoAllAnswer } from '@pulseframe/core';
+import type { AgentModelsAnswer, AgentProbeAnswer, AgentProvidersAnswer, AgentRunAnswer, AgentRunListAnswer, AgentStartAnswer, AgentStartBody, UndoActorBody, UndoAllAnswer } from '@pulseframe/core';
 import type { BoothAnswerBody, BoothAnswerResult, BoothCheckRow, BoothServerCheckId, BoothView } from '@pulseframe/core';
 
 export class ApiFailure extends Error {
@@ -346,7 +346,11 @@ export const api = {
   setAgentKey: (providerId: string, key: string) => call<{ keySet: boolean; keyAddedAt: string | null }>(`/agent/providers/${encodeURIComponent(providerId)}/key`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key }) }),
   deleteAgentKey: (providerId: string) => call<{ keySet: boolean; keyAddedAt: string | null }>(`/agent/providers/${encodeURIComponent(providerId)}/key`, { method: 'DELETE' }),
   probeAgentProvider: (providerId: string) => call<AgentProbeAnswer>(`/agent/providers/${encodeURIComponent(providerId)}/probe`, json({})),
-  agentModels: () => call<{ rows: unknown[] }>('/agent/models'),
+  agentModels: () => call<AgentModelsAnswer>('/agent/models'),
+  /** «ביטול הכול» of any actor since a revision (core UndoActorBodySchema; agent:local defaults to its last session, shown by dryRun). */
+  undoActor: (projectId: string, body: UndoActorBody) => call<UndoAllAnswer>(`/projects/${projectId}/undo-actor`, json(body)),
+  /** A frame the agent looked at, drawn now through the editor's compositor (GET /projects/:id/frame); `rev` only keys the browser cache. */
+  agentFrameUrl: (projectId: string, f: { frame: number; revision: number; sequenceId?: string; variantId?: string }) => `/api/v1/projects/${encodeURIComponent(projectId)}/frame?index=${f.frame}${f.sequenceId ? `&sequence=${encodeURIComponent(f.sequenceId)}` : ''}${f.variantId ? `&variant=${encodeURIComponent(f.variantId)}` : ''}&rev=${f.revision}`,
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }

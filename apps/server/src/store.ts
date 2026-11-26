@@ -301,7 +301,7 @@ export class Store {
    * the list of conflicts, and unrelated later edits by anyone are never touched.
    */
   undo(projectId: string, actor: string, mode: 'undo' | 'redo', transactionId?: string, guard?: CommitRequest['guard'], anyActor = false): CommitResult {
-    let composite = null as string[] | null; // set below when the redo target is an undoActor composite (wave 8 autonomy C6)
+    let composite = null as string[] | null; // set below when the target is an undoActor composite or its redo (wave 8 autonomy C6)
     const run = this.db.transaction((): CommitRequest => {
       const { doc } = this.wholeProject(projectId); // the stored states are compared with the whole document
       const kinds = mode === 'undo' ? "('edit','redo')" : "('undo')";
@@ -321,7 +321,9 @@ export class Store {
       const conflicts = changes.filter((c) => !sameEntity(live.get(c.id) ?? null, c.after)).map((c) => ({ entityId: c.id, ...(this.entityVersion(projectId, c.id) ?? {}) }));
       if (conflicts.length) throw new ApiError(409, 'undo_conflict', `cannot ${mode}: ${conflicts.length} item(s) were changed afterwards`, { transactionId: target.id, conflicts }, 'Those later changes are kept. Undo them first, or edit manually.');
       const label = `${mode === 'undo' ? 'Undo' : 'Redo'}: ${target.label ?? JSON.parse(target.result).summary}`.slice(0, 200);
-      composite = mode === 'redo' ? (JSON.parse(target.result).undoesAll as string[] | undefined) ?? null : null;
+      // a composite's redo clears its marks; a Ctrl+Z of that redo marks the same transactions again (lead decision 5)
+      const tr = JSON.parse(target.result) as { undoesAll?: string[]; redoesAll?: string[] };
+      composite = (mode === 'redo' ? tr.undoesAll : tr.redoesAll) ?? null;
       return { projectId, actor, label, allowInternal: true, kind: mode, undoes: target.id, ops: [{ op: 'restore_entities', args: { targets: changes.map((c) => ({ id: c.id, state: c.before })) } }] };
     });
     const req = run.immediate();
@@ -333,9 +335,15 @@ export class Store {
         return this.db.transaction(() => {
           const r = this.commit({ ...req, guard });
           if (r.committed && r.transactionId) {
-            const clear = this.db.prepare('UPDATE transactions SET undone_by = NULL WHERE project_id = ? AND id = ? AND undone_by = ?');
-            for (const t of targets) clear.run(projectId, t, req.undoes);
-            this.db.prepare("UPDATE transactions SET result = json_set(result, '$.redoesAll', json(?)) WHERE project_id = ? AND id = ?").run(JSON.stringify(targets), projectId, r.transactionId);
+            if (mode === 'redo') {
+              const clear = this.db.prepare('UPDATE transactions SET undone_by = NULL WHERE project_id = ? AND id = ? AND undone_by = ?');
+              for (const t of targets) clear.run(projectId, t, req.undoes);
+              this.db.prepare("UPDATE transactions SET result = json_set(result, '$.redoesAll', json(?)) WHERE project_id = ? AND id = ?").run(JSON.stringify(targets), projectId, r.transactionId);
+            } else { // Ctrl+Z of a composite's redo: every target is reversed again, so it is marked again, by this undo (its redo clears them)
+              const mark = this.db.prepare('UPDATE transactions SET undone_by = ? WHERE project_id = ? AND id = ? AND undone_by IS NULL');
+              for (const t of targets) mark.run(r.transactionId, projectId, t);
+              this.db.prepare("UPDATE transactions SET result = json_set(result, '$.undoesAll', json(?)) WHERE project_id = ? AND id = ?").run(JSON.stringify(targets), projectId, r.transactionId);
+            }
           }
           return r;
         }).immediate();

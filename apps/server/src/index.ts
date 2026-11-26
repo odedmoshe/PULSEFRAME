@@ -32,7 +32,8 @@ import { RENDER_CACHE_DIR, SegmentStore } from './segmentStore.ts';
 import { closeLibraryService } from './library/index.ts';
 import { dataDirBytes, setStorageHooks } from './storage.ts';
 import { recoverAssistantJobs } from './assistant/job.ts'; // command bar assistant recovery (ADR-0027)
-import { createAgentService, noProvidersYet, recoverAgentRuns } from './agent/loop.ts'; // the in-editor agent «סוכן» (wave 8 autonomy Part 2, W1)
+import { createAgentService, recoverAgentRuns } from './agent/loop.ts';
+import { createAgentProviders } from './agent/providers.ts'; // the in-editor agent «סוכן» (wave 8 autonomy Part 2, W1)
 import type { AgentAdapters, AgentProviders } from './agent/contract.ts';
 import type { AssistantDeps } from './assistant/contract.ts';
 import { createLlamaAdapter } from './assistant/local/llamaAdapter.ts'; // the local assistant's loopback adapter (wave 7)
@@ -117,8 +118,9 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { /** t
   const assistantDeps: AssistantDeps = { ...(deps.assistant ?? { adapters: new Map(), endpoint: () => null }), lane, local: deps.assistant?.local !== undefined ? deps.assistant.local : createLlamaAdapter() };
   const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { imports, renderCache, search });
   // the in-editor agent «סוכן» (wave 8 autonomy Part 2, W1): its loop calls MCP in process through serveAs (C9)
+  // Part 1 (open/guarded mode) is not merged into this build: the seams stay identity / p.kind === 'user' (lead decision 8).
   // TODO(integrator, Part 1): stamp: (p) => stampOpen(p, autonomy.mode), actsAsOwner, modeEvents: autonomy, ownerBudgetCents: () => autonomy.agentBudgetCents
-  const agentService = createAgentService({ store, gov: governance, mcp, providers: deps.agent?.providers ?? noProvidersYet(), ...(deps.agent?.adapters ? { adapters: deps.agent.adapters } : {}) });
+  const agentService = createAgentService({ store, gov: governance, mcp, providers: deps.agent?.providers ?? createAgentProviders(cfg.dataDir, ...(deps.agent?.adapters ? [deps.agent.adapters] : [])), ...(deps.agent?.adapters ? { adapters: deps.agent.adapters } : {}) });
   mcp.bindAgent(agentService);
   const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { imports, door, renderCache, search, pictureModels, assistant: assistantDeps, renderHost: host, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}) });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
