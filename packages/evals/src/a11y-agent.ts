@@ -22,6 +22,8 @@ export interface AgentA11yScenario {
 
 const FIXTURE = 'AUDIT FIXTURE: the agent routes answered by the audit, not by a provider or the server\'s loop';
 const homes = new WeakMap<Page, string>();
+/** The rail category that was selected before a scenario opened the AI rail (restored by `leave`: the rail choice outlives a reload). */
+const rails = new WeakMap<Page, string | null>();
 const settle = (page: Page) => page.waitForTimeout(250);
 const LAN = 'http://192.168.1.20:9931/v1';
 const LLAMA_DEFAULT = 'http://127.0.0.1:9931/v1';
@@ -31,6 +33,7 @@ async function putLlama(page: Page, baseUrl: string): Promise<void> {
   await page.request.put(`${origin}/api/v1/agent/providers/llamacpp`, { headers: { origin, 'content-type': 'application/json' }, data: { baseUrl } });
 }
 async function openTab(page: Page): Promise<boolean> {
+  if (!rails.has(page)) rails.set(page, await page.locator('.pf-rail [role=tab][aria-selected=true]').first().getAttribute('data-testid').catch(() => null));
   if (!(await page.getByTestId(ID.tab).count())) await page.getByTestId('rail-ai').click().catch(() => undefined);
   await page.getByTestId(ID.tab).waitFor({ timeout: 15000 }).catch(() => undefined);
   await settle(page);
@@ -48,6 +51,11 @@ async function restore(ctx: AgentA11yCtx): Promise<void> {
   const home = homes.get(ctx.page);
   homes.delete(ctx.page);
   if (home) { await ctx.page.goto(home); await ctx.page.getByTestId('timecode').waitFor({ timeout: 30000 }).catch(() => undefined); }
+  const rail = rails.get(ctx.page);
+  rails.delete(ctx.page);
+  if (rail && rail !== 'rail-ai') await ctx.page.getByTestId(rail).click().catch(() => undefined);
+  else if (rail === null && (await ctx.page.locator('[data-testid=rail-ai][aria-selected=true]').count())) await ctx.page.getByTestId('rail-ai').click().catch(() => undefined);
+  await settle(ctx.page);
 }
 const json = (body: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
