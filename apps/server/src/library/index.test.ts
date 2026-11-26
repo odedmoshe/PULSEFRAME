@@ -134,6 +134,54 @@ describe('the index file: swapped whole, cancellable, rebuilt after a cut', () =
       fx.restoreLedger();
     }
   });
+  it('a restart while the previous service\'s build is still running: the stopped build does not delete the new build\'s temp file; the new index is whole (2026-11-25: music 7 where 8)', async () => {
+    const dataDir = path.join(base, 'overlap');
+    const hold = (on: { v: boolean }, at: { gate: (() => void) | null; reached: (() => void) | null }) => async () => { if (on.v) { at.reached?.(); await new Promise<void>((r) => { at.gate = r; }); } };
+    const aOn = { v: false }, aAt = { gate: null as (() => void) | null, reached: null as (() => void) | null };
+    const a = service('overlap', { onEntry: hold(aOn, aAt) });
+    await ready(a);
+    expect((await a.status(true)).counts).toEqual(FIX_COUNTS);
+    fx.handLedger();
+    try {
+      // the reindex before the restart: parked inside its build (a slow reader on a loaded machine) when the server stops
+      aOn.v = true;
+      const aParked = new Promise<void>((r) => { aAt.reached = r; });
+      a.startBuild();
+      await aParked;
+      a.close();
+      // the next start: its own build, held once its temp file exists
+      const bOn = { v: true }, bAt = { gate: null as (() => void) | null, reached: null as (() => void) | null };
+      const bParked = new Promise<void>((r) => { bAt.reached = r; });
+      const b = new LibraryService({ dataDir, libraryDir: fx.root } as Config, { onEntry: hold(bOn, bAt) });
+      services.push(b);
+      await bParked;
+      expect(fs.existsSync(path.join(dataDir, 'library-index.sqlite.tmp'))).toBe(true);
+      // the stopped build now notices it was stopped and ends
+      aOn.v = false;
+      aAt.gate?.();
+      await a.idle();
+      expect(fs.existsSync(path.join(dataDir, 'library-index.sqlite.tmp'))).toBe(true);
+      bOn.v = false;
+      bAt.gate?.();
+      await b.idle();
+      const st = await b.status(true);
+      expect({ state: st.state, counts: st.counts }).toEqual({ state: 'ready', counts: { ...FIX_COUNTS, music: FIX_COUNTS.music + 1 } });
+      expect(b.get(FIX_KEYS.dotdot)).not.toBeNull();
+    } finally {
+      fx.restoreLedger();
+    }
+  });
+  it('a build that fails is named in the status (the previous index answers): never a silent stale "ready"', async () => {
+    const dataDir = path.join(base, 'failing');
+    fs.mkdirSync(path.join(dataDir, 'library-index.sqlite'), { recursive: true }); // the swap cannot rename over a folder
+    fs.writeFileSync(path.join(dataDir, 'library-index.sqlite', 'x'), '');
+    const s = service('failing', { noStartupBuild: true });
+    s.startBuild();
+    await s.idle();
+    const st = await s.status(true);
+    expect(st.problems.some((p) => p.item === null && p.reason.startsWith('the last index build failed'))).toBe(true);
+    expect(fs.existsSync(path.join(dataDir, 'library-index.sqlite.tmp'))).toBe(false);
+  });
 });
 
 describe('the root', () => {
