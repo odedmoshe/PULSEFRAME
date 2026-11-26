@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT, MUSICFIT_OPS_BUILT, musicAt, sourceAt, type MediaClip } from '@pulseframe/core';
+import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, KEEP_RULES, musicAt, sourceAt, type MediaClip } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -609,6 +609,8 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       ...(SOURCE_RANGE_OPS_BUILT && !opts.v1Replay ? [() => genPearls(doc)] : []),
       // music that fits the film (wave 7 musicfit): the two public operations, once builder A has built the bodies (never in the v1 corpus)
       ...(MUSICFIT_OPS_BUILT && !opts.v1Replay ? [() => genMusicFit(doc)] : []),
+      // versions for an audience (wave 8 audiences): the three public operations, once W1 has built the projection (never in the v1 corpus)
+      ...(AUDIENCE_PROJECTION_BUILT && !opts.v1Replay ? [() => genAudience(doc)] : []),
       ...(SEQUENCE_OPS_BUILT ? [...sequenceMenu(doc), () => { const others = Object.keys(doc.sequences).filter((id) => id !== doc.mainSequenceId); return { op: 'add_marker', args: { sequenceId: others.length && rnd() < 0.8 ? pick(others) : rnd() < 0.5 ? doc.mainSequenceId : 'seq_none', time: T.frameTime(int(240), rate) } }; }] : []),
       // send and keep (wave 7): the master limiter on and off, and the loudness match of sound clips with their current gain (accepted)
       // or a changed one (refused stale), sometimes a repeated or unknown clip; left out of the recorded v1 replay corpus
@@ -860,6 +862,27 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     return { op: 'sync_impact', args: { clipId, to: rnd() < 0.7 ? 'beat' : 'bar', ...(rnd() < 0.4 ? { moment: at() } : {}), ...(rnd() < 0.5 ? { pick: pick(['nearest', 'earlier', 'later'] as const) } : {}) } };
   };
   /**
+   * Versions for an audience (wave 8 audiences track). `genAudience(doc)` returns a random add_audience_version, update_audience_version
+   * or set_audience_keep call (public; `gen` draws them once AUDIENCE_PROJECTION_BUILT): both profiles, with and without a name; on
+   * audience versions mostly, sometimes on a plain format or an unknown id (refused); levels inside and outside −20..0 and null; roles
+   * on sound tracks, picture tracks and unknown tracks; every keep rule on clips of every kind (title_size in a calm version refused).
+   */
+  const genAudience = (doc: ProjectDocument): OpCall => {
+    const all = Object.values(doc.variants ?? {});
+    const aud = all.filter((v) => v.audience);
+    const variantId = aud.length && rnd() < 0.85 ? pick(aud).id : all.length && rnd() < 0.7 ? pick(all).id : 'var_none';
+    const r = rnd();
+    if (r < 0.3 || !aud.length) return { op: 'add_audience_version', args: { profile: pick(['calm', 'grandparents'] as const), ...(rnd() < 0.4 ? { name: pick(['רגועה', 'לסבא וסבתא', 'Calm']) } : {}) } };
+    if (r < 0.55) {
+      const tracks = Object.values(doc.sequences).flatMap((s) => s.tracks);
+      const audio = tracks.filter((t) => t.kind === 'audio');
+      const trackId = audio.length && rnd() < 0.8 ? pick(audio).id : tracks.length && rnd() < 0.7 ? pick(tracks).id : 'trk_none';
+      return { op: 'update_audience_version', args: { variantId, ...(rnd() < 0.5 ? { musicDb: rnd() < 0.15 ? null : rnd() < 0.1 ? 3 : -int(21) } : {}), ...(rnd() < 0.5 ? { sound: { trackId, role: pick(['music', 'speech', 'other', null] as const) } } : {}), ...(rnd() < 0.2 ? { name: 'גרסה' } : {}) } };
+    }
+    const clips = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips));
+    return { op: 'set_audience_keep', args: { variantId, clipId: clips.length && rnd() < 0.92 ? pick(clips).id : 'clp_none', rule: pick([...KEEP_RULES]), keep: rnd() < 0.7 } };
+  };
+  /**
    * The next random call among the named operations: draws from the same menu until one of them comes up (the menu grows with every
    * feature, so a driver that is about a few operations would otherwise meet them too rarely to say anything about them).
    */
@@ -868,5 +891,5 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience };
 }

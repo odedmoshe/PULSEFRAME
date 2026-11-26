@@ -21,6 +21,7 @@ import { STABILISE_EN, STABILISE_HE } from './stabilise.ts';
 import { PEARLS_EN, PEARLS_HE } from './pearls.ts';
 import { STORY_EN, STORY_HE } from './story.ts';
 import { MUSICFIT_EN, MUSICFIT_HE } from './musicFit.ts';
+import { AUDIENCES_EN, AUDIENCES_HE } from './audiences.ts';
 import { INSTRUMENTS_EN, INSTRUMENTS_HE } from './instruments.ts';
 import { FOOTAGE_EN, FOOTAGE_HE } from './footageSearch.ts';
 export type Lang = 'he' | 'en';
@@ -232,6 +233,7 @@ export const he = {
   ...PEARLS_HE,
   ...STORY_HE,
   ...MUSICFIT_HE,
+  ...AUDIENCES_HE,
   ...FOOTAGE_HE,
   ...INSTRUMENTS_HE,
 };
@@ -443,6 +445,7 @@ export const en: Record<keyof typeof he, string> = {
   ...PEARLS_EN,
   ...STORY_EN,
   ...MUSICFIT_EN,
+  ...AUDIENCES_EN,
   ...FOOTAGE_EN,
   ...INSTRUMENTS_EN,
 };
@@ -472,5 +475,6 @@ export * from './stabilise.ts';
 export * from './pearls.ts';
 export * from './story.ts';
 export * from './musicFit.ts';
+export * from './audiences.ts';
 export * from './footageSearch.ts';
 export * from './instruments.ts';
