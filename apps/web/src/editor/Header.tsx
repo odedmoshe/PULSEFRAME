@@ -23,6 +23,7 @@ import { ProjectsDialog } from './ProjectsDialog.tsx';
 import { IconExport, IconRedo, IconUndo } from './icons.tsx';
 import { WORKSPACES, useEditorState, type Workspace } from './store.ts';
 import { CraftHost } from './craft/CraftHost.tsx';
+import { TeachHost } from './teach/TeachHost.tsx';
 import '../ds/chrome.css';
 import { focusNow } from '../ds/focus.ts';
 
@@ -129,6 +130,8 @@ export function Header() {
       {projectsOpen && <ProjectsDialog onClose={() => { /* return focus to the button that opened the dialog: first, in this task, then close */ focusNow(document.querySelector<HTMLElement>('[data-testid=projects-open]')); setProjectsOpen(false); }} />}
       {/* editing craft (wave 7): the open craft surface — time field, paste dialog, find panel, versions, save field (W3) */}
       <CraftHost />
+      {/* «למדו אותי פעם אחת» (wave 8 teach): the dialog «החילו גם על…» while it is open (teach/TeachHost.tsx; nothing until W3) */}
+      <TeachHost />
     </header>
   );
 }

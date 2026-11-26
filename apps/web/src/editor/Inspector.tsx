@@ -38,6 +38,7 @@ import { VersionsButton } from './craft/VersionsButton.tsx';
 import './inspector.css';
 import { PEARLS_UI_BUILT } from './pearls/PearlsList.tsx';
 import { ScreenTimePanel } from './pearls/ScreenTimePanel.tsx';
+import { TeachChip } from './teach/TeachChip.tsx';
 import { focusNow } from '../ds/focus.ts';
 import { FOCUS_APPROVALS_EVENT } from './focusRequests.ts';
 
@@ -280,6 +281,8 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
             ? <button type="button" className="oh-more" data-testid="inspector-tabs-back" aria-label={S.allToolsBack} title={S.allToolsBack} onClick={() => setPage('clip')}><ListCollapse size={18} strokeWidth={1.75} aria-hidden="true" /></button>
             : <button type="button" className="oh-more" data-testid={pages.includes('all') ? undefined : 'inspector-tab-all'} aria-label={S.allTools} title={S.allTools} onClick={() => setPage('all')}><LayoutList size={18} strokeWidth={1.75} aria-hidden="true" /></button>}
         </div>
+        {/* «למדו אותי פעם אחת» (wave 8 teach): «למדתי N שלבים מהקליפ הזה · החילו גם על…» under the clip header (teach/TeachChip.tsx; nothing until W1 and W3) */}
+        <TeachChip />
         {flat && (
           <div className="pf-sections-bar" role="group" aria-label={SECTION_STRINGS[state.lang].group}>
             <span className="muted">{S.allToolsOn}</span>

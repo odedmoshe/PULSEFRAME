@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { ApiError, type CommitRequest, type CommitResult, type Store } from './store.ts';
 import { assertMayWritePeople, assertOwnerTagsPeople, docForPrincipal, docForReader, PEOPLE_ACCESS, type PeopleAccess } from './peoplePrivacy.ts';
 import { assertMayReleaseBudget } from './assistant/visibility.ts';
+import { assertOwnerAppliesLessons } from './lessons/guard.ts';
 
 export type Mode = 'observe' | 'propose' | 'edit' | 'autopilot';
 export const GrantInput = z
@@ -178,6 +179,8 @@ export class Governance {
    */
   commitAs(p: Principal, req: Omit<CommitRequest, 'actor' | 'guard'>): CommitResult | ReturnType<Governance['propose']> {
     if (p.kind === 'user') return this.store.commit({ ...req, actor: p.actor });
+    // «למדו אותי פעם אחת» (wave 8 teach, version 1): only the owner's own session applies a lesson (commits, dry runs, nested lists)
+    assertOwnerAppliesLessons(p, req.ops);
     // marked ranges (wave 7): only the owner's own session tags people or changes a tagged range (commits, dry runs, propose mode)
     assertOwnerTagsPeople(p, req.ops, () => this.store.wholeProject(req.projectId).doc);
     assertMayWritePeople(p, req.ops); // a credential without the people scope gives names only (also in a dry run)
@@ -196,6 +199,7 @@ export class Governance {
   /** Validate against the current document and store the exact diff for review. Nothing is committed. */
   propose(p: Principal, projectId: string, ops: OpCall[], label?: string) {
     this.assertMayAct(p, projectId, 'propose');
+    assertOwnerAppliesLessons(p, ops); // wave 8 teach: never a proposal either (version 1)
     assertOwnerTagsPeople(p, ops, () => this.store.wholeProject(projectId).doc);
     assertMayWritePeople(p, ops);
     // Worked out on the document as the proposer may read it (whatever request this runs in): the diff stored for review then

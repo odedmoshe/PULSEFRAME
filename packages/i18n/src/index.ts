@@ -22,6 +22,7 @@ import { DRAWN_EN, DRAWN_HE } from './drawn.ts';
 import { PEARLS_EN, PEARLS_HE } from './pearls.ts';
 import { STORY_EN, STORY_HE } from './story.ts';
 import { GROWING_EN, GROWING_HE } from './growing.ts';
+import { TEACH_EN, TEACH_HE } from './teach.ts';
 import { MUSICFIT_EN, MUSICFIT_HE } from './musicFit.ts';
 import { AUDIENCES_EN, AUDIENCES_HE } from './audiences.ts';
 import { INSTRUMENTS_EN, INSTRUMENTS_HE } from './instruments.ts';
@@ -238,6 +239,7 @@ export const he = {
   ...PEARLS_HE,
   ...STORY_HE,
   ...GROWING_HE,
+  ...TEACH_HE,
   ...MUSICFIT_HE,
   ...AUDIENCES_HE,
   ...FOOTAGE_HE,
@@ -454,6 +456,7 @@ export const en: Record<keyof typeof he, string> = {
   ...PEARLS_EN,
   ...STORY_EN,
   ...GROWING_EN,
+  ...TEACH_EN,
   ...MUSICFIT_EN,
   ...AUDIENCES_EN,
   ...FOOTAGE_EN,
@@ -487,6 +490,7 @@ export * from './stabilise.ts';
 export * from './pearls.ts';
 export * from './story.ts';
 export * from './growing.ts';
+export * from './teach.ts';
 export * from './musicFit.ts';
 export * from './audiences.ts';
 export * from './footageSearch.ts';

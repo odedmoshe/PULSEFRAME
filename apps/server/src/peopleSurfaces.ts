@@ -259,6 +259,8 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   'POST /api/v1/booth/checks/:rowId': ['owner-only'],
   // versions for an audience (wave 8): the change list holds ids, frames and dB only, no names
   [`GET ${P}/variants/:variantId/audience`]: ['reader-document'],
+  // «למדו אותי פעם אחת» (wave 8 teach): the owner's own history of one clip; registry values and times, no words of the clip
+  [`GET ${P}/clips/:clipId/lesson`]: ['owner-only'],
   // MCP over HTTP: see PEOPLE_MCP_TOOLS and PEOPLE_MCP_RESOURCES
   'ALL /mcp': ['reader-document'],
 };
