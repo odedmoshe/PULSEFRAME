@@ -59,7 +59,7 @@ import { ColourMatchBody, matchColour } from './colourMatch.ts';
 import { ClipLoudnessBody, measureClipLoudness } from './clipLoudness.ts';
 import { ApplyModeSchema, RunSourceSchema, type RunRequest } from './aiContracts.ts';
 import { assertMayTakeRendered, forPrincipal, mayHoldPeople, peopleAccess, peopleNote, readingAs, scrubPeople, withoutFamily } from './peoplePrivacy.ts';
-import { assertMayHandleImportJob, decodeUploadHeader, IMPORT_JOB_TYPE, type DropDoor, type ImportQueue } from './importContracts.ts';
+import { assertMayHandleImportJob, decodeUploadHeader, IMPORT_JOB_TYPE, uploadCapFor, uploadCapWarnings, type DropDoor, type ImportQueue } from './importContracts.ts';
 import { declaredLength, registerImportRoutes } from './importRoutes.ts';
 import { registerRenderCacheRoutes, type RenderCacheService } from './renderCacheRoutes.ts';
 import { registerCraftRoutes } from './craft/routes.ts';
@@ -756,7 +756,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     // Media goes through the import queue (ADR-0023) and this route waits for its job, so it answers as it always did: 201 with the
     // asset, or the import's own error. Its commit kind is 'edit', as before. A colour table (.cube) keeps the direct path.
     if (extras.imports && !/\.cube$/i.test(name)) {
-      const job = await extras.imports.receive({ projectId, actor: p.actor, body: Readable.fromWeb(c.req.raw.body as any), name, via: 'browser', declaredBytes: declaredLength(c.req.header('content-length')), maxBytes: cfg.maxUploadBytes, commitKind: 'edit', signal: c.req.raw.signal });
+      const job = await extras.imports.receive({ projectId, actor: p.actor, body: Readable.fromWeb(c.req.raw.body as any), name, via: 'browser', declaredBytes: declaredLength(c.req.header('content-length')), maxBytes: uploadCapFor(cfg), commitKind: 'edit', signal: c.req.raw.signal });
       const done = await extras.imports.wait(job.id);
       const head = { 'X-PF-Import-Job': job.id };
       if (done.status !== 'succeeded') {
@@ -765,7 +765,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
         return c.json(err.toJSON(), err.status as any, head);
       }
       const out = done.output as { assetId: string; revision: number; deduplicated: boolean };
-      return c.json({ assetId: out.assetId, revision: out.revision, deduplicated: out.deduplicated, asset: store.getProject(projectId).doc.assets[out.assetId] }, 201, head);
+      // I9, open mode: a file above the guarded cap was accepted because no cap is set; the answer says so
+      const over = (done.input as { byteSize?: number }).byteSize! > cfg.maxUploadBytes ? uploadCapWarnings(cfg) : [];
+      return c.json({ assetId: out.assetId, revision: out.revision, deduplicated: out.deduplicated, asset: store.getProject(projectId).doc.assets[out.assetId], ...(over.length ? { warnings: over } : {}) }, 201, head);
     }
     // Storage ceiling: refuse up front when the declared size cannot fit, and cut a stream of unknown size off at the room left.
     const room = assertStorageRoom(store, Number(c.req.header('content-length') ?? 0) || 1, 'store this upload');
@@ -1100,7 +1102,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/narration/script', async (c) => {
     const p = need(c, 'edit');
     const r = await speech.startNarrationScript(gov, p, c.req.param('id'), await body(c, NarrationScriptBody));
-    return c.json({ sentences: r.sentences, jobs: r.jobs.map((j) => ({ jobId: j.id, status: j.status, type: j.type })) }, 202);
+    return c.json({ sentences: r.sentences, jobs: r.jobs.map((j) => ({ jobId: j.id, status: j.status, type: j.type })), ...(r.warnings ? { warnings: r.warnings } : {}) }, 202);
   });
   app.post('/api/v1/jobs/:jobId/cancel', async (c) => {
     const j = store.getJob(c.req.param('jobId'));

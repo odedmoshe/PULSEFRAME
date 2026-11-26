@@ -18,6 +18,16 @@ export const AUTONOMY_HE = {
   'autonomy.switched': 'המצב שונה. סוכנים שמחוברים יתחברו מחדש במצב החדש',
   'autonomy.budget.none': 'ללא תקרת הוצאה לסוכנים',
   'error.code.owner_required.autonomy': 'רק אתם מחליפים מצב, מחלון העורך במחשב הזה. אפשר לעשות את זה בהגדרות › גישה',
+  // warn-instead-of-refuse (open mode; apps/server/src/autonomy-mode.ts openWarning). Placeholders: {host} {tool} {model} {licence} {evidence} {use} {n} {max}
+  'autonomy.warn.host_not_listed': 'קבצי המודל מורדים מ־{host}, שאינו ברשימת המארחים (PF_MODEL_HOSTS). ההורדה ממשיכה, וכל קובץ נבדק מול הגודל וה־SHA-256 שנקבעו מראש.',
+  'autonomy.warn.comfyui_remote': 'ComfyUI פועל במחשב אחר ({host}) ולא במחשב הזה: התמונות והקטעים שהכלי מעבד נשלחים אליו.',
+  'autonomy.warn.assistant_host_not_listed': 'עוזר השפה שולח את הסיכום אל {host}, שאינו ברשימה (PF_ASSISTANT_HOSTS). החיבור ב־https, והבקשה נשלחת.',
+  'autonomy.warn.egress': 'הכלי {tool} עשוי לפנות לכתובות מחוץ למחשב הזה, וזה לא נבדק. הכלי רץ.',
+  'autonomy.warn.licence': 'המודל {model}: רישיון {licence} (כך נרשם: "{evidence}"). שימוש מסחרי לפי הרישום: {use}. התוצאה מסומנת, והייצוא מציג את האזהרה.',
+  'autonomy.warn.licence_unknown': 'למודל {model} לא רשום רישיון. התוצאה מסומנת, והייצוא מציג את האזהרה.',
+  'autonomy.warn.search_licence': 'רישיון מודל התמונות של החיפוש: {licence} (כך נרשם: "{evidence}"). הוא לא ברשימת הרישיונות של הבנייה הזאת, והחיפוש פועל.',
+  'autonomy.warn.upload_uncapped': 'אין תקרה לגודל של קובץ שמעלים (PF_MAX_UPLOAD_BYTES לא הוגדר). מה שקובע הוא המקום הפנוי בדיסק ותקרת האחסון, אם הוגדרה.',
+  'autonomy.warn.script_long': 'בתסריט {n} משפטים, יותר מ־{max}. כל משפט הוא עבודה משלו, והן רצות בזו אחר זו; אפשר לעצור כל אחת.',
 } as const;
 
 export const AUTONOMY_EN: Record<keyof typeof AUTONOMY_HE, string> = {
@@ -35,4 +45,13 @@ export const AUTONOMY_EN: Record<keyof typeof AUTONOMY_HE, string> = {
   'autonomy.switched': 'The mode changed. Connected agents reconnect under the new mode',
   'autonomy.budget.none': 'No spending ceiling for agents',
   'error.code.owner_required.autonomy': 'Only you switch the mode, from the editor window on this computer. Do it in Settings › Access',
+  'autonomy.warn.host_not_listed': 'The model files are downloaded from {host}, which is not in PF_MODEL_HOSTS. The download goes ahead, and each file is checked against its pinned size and SHA-256.',
+  'autonomy.warn.comfyui_remote': 'ComfyUI runs on another computer ({host}), not on this one: the pictures and clips a tool works on are sent to it.',
+  'autonomy.warn.assistant_host_not_listed': 'The language assistant sends its summary to {host}, which is not in PF_ASSISTANT_HOSTS. The connection is https, and the request is sent.',
+  'autonomy.warn.egress': 'The tool {tool} may contact addresses outside this computer, and this was not reviewed. The tool runs.',
+  'autonomy.warn.licence': 'Model {model}: licence {licence} (as recorded: "{evidence}"). Commercial use as recorded: {use}. The result is marked, and the export shows the warning.',
+  'autonomy.warn.licence_unknown': 'No licence is recorded for model {model}. The result is marked, and the export shows the warning.',
+  'autonomy.warn.search_licence': 'The licence of the search picture model: {licence} (as recorded: "{evidence}"). It is not in this build\'s list of licences, and search runs.',
+  'autonomy.warn.upload_uncapped': 'There is no size limit for an uploaded file (PF_MAX_UPLOAD_BYTES is not set). What counts is the free disk space and the storage ceiling, if one is set.',
+  'autonomy.warn.script_long': 'The script has {n} sentences, more than {max}. Each sentence is its own job, and they run one after another; each can be stopped.',
 };

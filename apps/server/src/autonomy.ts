@@ -26,7 +26,7 @@ import { ApiError } from './store.ts';
 import { AUTONOMY_EN, AUTONOMY_HE } from '../../../packages/i18n/src/autonomy.ts';
 
 import { parseMode, type ServerMode } from './autonomy-mode.ts';
-export { DEFAULT_SERVER_MODE, parseMode, SERVER_MODES, type ServerMode } from './autonomy-mode.ts';
+export { DEFAULT_SERVER_MODE, openWarning, OPEN_WARNING_CODES, parseMode, SERVER_MODES, warnsOpen, type OpenWarning, type OpenWarningCode, type ServerMode } from './autonomy-mode.ts';
 
 /** THE policy predicate: the owner's own session, or an agent the open server stamped. Never used at a floor site. */
 /** The owner's own browser session is the one user principal auth.ts issues (`user:local`); a phone's import principal or a
@@ -119,8 +119,11 @@ export const FLOOR_SITES: readonly { id: string; file: string; needle: string; w
   { id: 'A23', file: 'importRoutes.ts', needle: "only the owner can issue, see or close a code for a phone", why: 'a door for another device on the home network' },
 ];
 
-/** One row per POLICY gate site that now reads `actsAsOwner` (O = opens, W = warns and continues). The proof and tests walk it. */
-export interface OpenGate { id: string; file: string; needle: string; decision: 'O' | 'W' }
+/**
+ * One row per POLICY gate site (O = opens, W = warns and continues). The proof and tests walk it. A row reads `actsAsOwner`
+ * (the principal), or, with `reads: 'mode'`, `warnsOpen` (the SERVER mode: rows that applied to the owner too, verifier C4).
+ */
+export interface OpenGate { id: string; file: string; needle: string; decision: 'O' | 'W'; reads?: 'mode' }
 
 /** What each mode means, in words (he/en from packages/i18n/src/autonomy.ts): the Settings › Access line and what agents read. */
 export function autonomyAnswer(a: AutonomySettings) {
@@ -185,4 +188,19 @@ export const OPEN_GATES: readonly OpenGate[] = [
   { id: 'I5', file: 'capabilities.ts', needle: "const actsOpen = (req: { open?: boolean; principal?: Principal }) => req.open === true || (!!req.principal && actsAsOwner(req.principal));", decision: 'W' },
   { id: 'B5', file: 'governance.ts', needle: "if (actsAsOwner(p) && !(p.grant && p.grant.budgetCents > 0)) return this.reserveOpen(jobId, cents);", decision: 'O' },
   { id: 'B4', file: 'http.ts', needle: 'if (!actsAsOwner(p)) throw new ApiError(403, \'human_approval_required\', \'model downloads must be started', decision: 'O' },
+  // ---- warn and continue: rows that read the SERVER mode (warnsOpen), for the owner and agents alike (verifier C4) ----
+  { id: 'D1', file: 'capabilities.ts', needle: "if (hosts.length && !warnsOpen(this.cfg)) return { code: 'host_not_allowed'", decision: 'W', reads: 'mode' },
+  { id: 'D1', file: 'capabilities.ts', needle: 'const anyHost = warnsOpen(this.cfg); // D1 at admission', decision: 'W', reads: 'mode' },
+  { id: 'D1', file: 'localtools.ts', needle: "if (hosts.length && (!warnsOpen(this.cfg) || hosts.includes('(no source)')))", decision: 'W', reads: 'mode' },
+  { id: 'D5', file: 'capabilities.ts', needle: 'return warnsOpen(this.cfg) ? this.remote.adapter : null; // D5', decision: 'W', reads: 'mode' },
+  { id: 'D6', file: 'assistant/credential.ts', needle: 'host: normalizeHost(body.host, this.allowedHosts, !!this.modeCfg && warnsOpen(this.modeCfg))', decision: 'W', reads: 'mode' },
+  { id: 'D6', file: 'assistant/job.ts', needle: "return h && !isLocalConfig(c) && !cfg.assistantHosts.includes(h) && CHAT_HOST_PATTERN.test(h) && warnsOpen(cfg)", decision: 'W', reads: 'mode' },
+  { id: 'D8', file: 'capabilities.ts', needle: 'private split<B extends Blocker>(d: CapabilityDescriptor, b: B[]) { return splitBlockers(d, this.cfg.distributionProfile, b, warnsOpen(this.cfg)); }', decision: 'W', reads: 'mode' },
+  { id: 'H1', file: 'capabilities.ts', needle: 'private split<B extends Blocker>(d: CapabilityDescriptor, b: B[]) { return splitBlockers(d, this.cfg.distributionProfile, b, warnsOpen(this.cfg)); }', decision: 'W', reads: 'mode' },
+  { id: 'D8', file: 'localtools.ts', needle: 'private split<B extends Blocker>(d: LocalToolDescriptor, b: B[]) { return splitBlockers(d, this.cfg.distributionProfile, b, warnsOpen(this.cfg)); }', decision: 'W', reads: 'mode' },
+  { id: 'H1', file: 'localtools.ts', needle: 'private split<B extends Blocker>(d: LocalToolDescriptor, b: B[]) { return splitBlockers(d, this.cfg.distributionProfile, b, warnsOpen(this.cfg)); }', decision: 'W', reads: 'mode' },
+  { id: 'H2', file: 'search/runtime.ts', needle: "const told = !LICENCES_ALLOWED.has(lic.spdx) && warnsOpen(cfg)", decision: 'W', reads: 'mode' },
+  { id: 'I9', file: 'importContracts.ts', needle: "(cfg.maxUploadBytesSet || !warnsOpen(cfg) ? cfg.maxUploadBytes : Number.POSITIVE_INFINITY)", decision: 'W', reads: 'mode' },
+  { id: 'I11', file: 'speech.ts', needle: "if (long && !warnsOpen(this.cfg)) throw new ApiError(422, 'script_too_long',", decision: 'W', reads: 'mode' },
+  { id: 'D1', file: 'speech.ts', needle: "const opened = warnsOpen(this.cfg) ? { admittedOpen: true", decision: 'W', reads: 'mode' },
 ];

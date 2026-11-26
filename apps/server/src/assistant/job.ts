@@ -43,10 +43,11 @@ import {
   type AssistantConfigBody, type AssistantJobOutput, type AssistantLocalOutput, type AssistantRequestBody, type AssistantSetup,
 } from '@pulseframe/core';
 import {
-  ASSISTANT_CAPABILITY, ASSISTANT_LOCAL_CAPABILITY, ChatProviderError, chatBlockers, localBlockers, LocalModelError,
+  ASSISTANT_CAPABILITY, ASSISTANT_LOCAL_CAPABILITY, CHAT_HOST_PATTERN, ChatProviderError, chatBlockers, localBlockers, LocalModelError,
   type ChatBlocker, type ChatEndpoint, type ChatResponse, type LocalChatResponse, type LocalErrorCode,
 } from '@pulseframe/providers';
 import type { Config } from '../config.ts';
+import { openWarning, warnsOpen, type OpenWarning } from '../autonomy-mode.ts';
 import type { Governance, Principal } from '../governance.ts';
 import { ApiError, type JobRow, type Store } from '../store.ts';
 import { ASSISTANT_LOCAL_LANE_LABEL, ASSISTANT_LOCAL_SENTENCES, assistantPrincipal, type AssistantDeps } from './contract.ts';
@@ -76,9 +77,17 @@ export function centsFor(tokensIn: number, tokensOut: number, prices: { input: n
 export const estimateCents = (requestByteLength: number, maxOut: number, prices: { input: number; output: number }) => centsFor(requestByteLength + ASSISTANT_ESTIMATE_OVERHEAD_BYTES, maxOut, prices);
 
 // ---------- the setup state ----------
-export interface AssistantSetupState { config: AssistantConfigBody; problem: string | null; keySet: boolean; keyAddedAt: string | null; blockers: ChatBlocker[]; setup: AssistantSetup; detail: string; /** the owner chose the local adapter (wave 7) */ local: boolean }
+export interface AssistantSetupState { config: AssistantConfigBody; problem: string | null; keySet: boolean; keyAddedAt: string | null; blockers: ChatBlocker[]; setup: AssistantSetup; detail: string; /** the owner chose the local adapter (wave 7) */ local: boolean; /** open mode (D6): the host outside PF_ASSISTANT_HOSTS that is used, named */ warnings?: OpenWarning[] }
 /** Whether the owner's config chooses the local assistant (wave 7). */
 export const isLocalConfig = (c: AssistantConfigBody): boolean => c.adapter === ASSISTANT_LOCAL_ADAPTER_ID;
+/**
+ * D6, open server mode: the owner's chosen host that PF_ASSISTANT_HOSTS does not list is used, named in a warning. Still only a
+ * plain host name reached over https (CHAT_HOST_PATTERN; anything else stays host_not_allowed), and the key goes only to that host.
+ */
+export function assistantHostWarnings(cfg: Pick<Config, 'assistantHosts' | 'mode' | 'liveMode'>, c: AssistantConfigBody): OpenWarning[] {
+  const h = c.host;
+  return h && !isLocalConfig(c) && !cfg.assistantHosts.includes(h) && CHAT_HOST_PATTERN.test(h) && warnsOpen(cfg) ? [openWarning('assistant_host_not_listed', { host: h })] : [];
+}
 export function assistantSetup(rt: AssistantRuntime): AssistantSetupState {
   const { config, problem } = rt.files.readConfig();
   const ks = rt.files.keyState();
@@ -88,13 +97,14 @@ export function assistantSetup(rt: AssistantRuntime): AssistantSetupState {
     const setup = blockers[0]?.code ?? 'ready';
     return { config, problem, ...ks, blockers, setup, detail: [problem, ...blockers.map((b) => b.message)].filter(Boolean).join('; ') || 'ready', local: true };
   }
+  const told = assistantHostWarnings(rt.cfg, config);
   const blockers = chatBlockers(ASSISTANT_CAPABILITY, {
     adapter: config.adapter, host: config.host, model: config.model, keySet: ks.keySet, pricesCentsPerMTok: config.pricesCentsPerMTok,
     monthlyLimitCents: config.monthlyLimitCents, perRequestCapCents: config.perRequestCapCents,
-    adapters: [...rt.deps.adapters.keys()], allowedHosts: rt.cfg.assistantHosts, promptDigest: assistantPrompt().digest,
+    adapters: [...rt.deps.adapters.keys()], allowedHosts: told.length ? [...rt.cfg.assistantHosts, config.host!] : rt.cfg.assistantHosts, promptDigest: assistantPrompt().digest,
   });
   const setup = blockers[0]?.code ?? 'ready';
-  return { config, problem, ...ks, blockers, setup, detail: [problem, ...blockers.map((b) => b.message)].filter(Boolean).join('; ') || 'ready', local: false };
+  return { config, problem, ...ks, blockers, setup, detail: [problem, ...blockers.map((b) => b.message)].filter(Boolean).join('; ') || 'ready', local: false, ...(told.length ? { warnings: told } : {}) };
 }
 /** The next step for each setup state (the house rule: a refusal says what to do). */
 export const SETUP_HINT: Record<AssistantSetup, string> = {
@@ -177,6 +187,7 @@ export class AssistantJobs {
       promptDigest: assistantPrompt().digest, adapter: adapter.id, host: c.host, model: c.model, maxOutputTokens,
       estimate: { requestBytes: bound, overheadBytes: ASSISTANT_ESTIMATE_OVERHEAD_BYTES, cents: estimate, bytesBoundTokens: adapter.bytesBoundTokens },
       reservedCents: reserveCents, reservationBasis: adapter.bytesBoundTokens ? 'byte-bound estimate' : 'per-request cap',
+      ...(s.warnings ? { openWarnings: s.warnings } : {}), // D6, open mode: told on the job too
     });
     try {
       // plan §7.4 step 2: tokens not bounded by bytes → the reservation is the whole cap, so the cap check inside

@@ -26,8 +26,9 @@ import { describeMedia, ffprobe, NeedsConform, type MediaMeta } from './ingest.t
 import { ModelStore, type ModelStatus } from './models.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 import { assertStorageRoom } from './storage.ts';
+import { openAdmission, splitBlockers } from './openBlockers.ts';
 import type { Principal } from './auth.ts';
-import { actsAsOwner } from './autonomy.ts';
+import { actsAsOwner, openWarning, warnsOpen, type OpenWarning } from './autonomy.ts';
 
 const TYPE = 'capability';
 /**
@@ -46,6 +47,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** The agent caps apply (I5, I6, B11, B12) unless the caller acts as the owner: the owner, or an agent stamped open, as recorded at admission (C2: not keyed on the actor prefix alone). */
 const actsOpen = (req: { open?: boolean; principal?: Principal }) => req.open === true || (!!req.principal && actsAsOwner(req.principal));
 const isAgent = (req: { actor: string; open?: boolean; principal?: Principal }) => !actsOpen(req) && (req.actor.startsWith('agent:') || req.principal?.kind === 'agent');
+/** One warning per model host outside PF_MODEL_HOSTS (row D1, open mode), merged into a setup state's warnings. */
+const hostWarnings = (hosts: string[]): { warnings?: OpenWarning[] } => (hosts.length ? { warnings: hosts.map((host) => openWarning('host_not_listed', { host })) } : {});
+const warningsOf = (...parts: { warnings?: OpenWarning[] }[]): { warnings?: OpenWarning[] } => { const w = parts.flatMap((p) => p.warnings ?? []); return w.length ? { warnings: w } : {}; };
 
 /** Where a validated result goes, fixed when the job is created (job.input.placement). */
 export interface Placement {
@@ -68,6 +72,10 @@ export interface CapabilityDeps {
   providerInputDir?: string | null;
   /** Provider poll interval in ms (default 200). */
   pollMs?: number;
+  /** TEST SEAM ONLY: the fetch ComfyUI model downloads use (a labelled fake host in tests); never set from configuration. */
+  modelFetch?: typeof fetch;
+  /** TEST SEAM ONLY: the fetch a ComfyUI built from PF_COMFYUI_URL uses (a labelled fake in tests); never set from configuration. */
+  comfyFetch?: typeof fetch;
 }
 type Output = { name: string; role: string; mediaType: string; encoding: string; contentHash: string; bytes: number; mimeType: string; [k: string]: unknown };
 /**
@@ -79,8 +87,16 @@ type Output = { name: string; role: string; mediaType: string; encoding: string;
 export const sceneCutFrames = (doc: ProjectDocument, src: Pick<FrameSource, 'assetId' | 'rate' | 'startFrames'>): number[] =>
   (ownSceneCuts(doc, src.assetId)?.cuts ?? []).map((t) => T.frameIndexAt(t, src.rate) - src.startFrames);
 export class Capabilities implements CapabilityService {
-  private adapter: ProviderAdapter | null = null;
-  private configError: string | null = null;
+  private fixedAdapter: ProviderAdapter | null = null;
+  /** A ComfyUI on another computer (PF_COMFYUI_URL not loopback, PF_COMFYUI_ALLOW_REMOTE unset): used in open mode only (row D5). */
+  private remote: { adapter: ProviderAdapter; host: string; error: string } | null = null;
+  /** The provider this run talks to: the configured one, or (open mode, D5) the remote one, named in a warning. Read at each use. */
+  private get adapter(): ProviderAdapter | null {
+    if (this.fixedAdapter || !this.remote) return this.fixedAdapter;
+    return warnsOpen(this.cfg) ? this.remote.adapter : null; // D5: a remote ComfyUI without the flag runs in open mode
+  }
+  private get configError(): string | null { return this.remote && !this.adapter ? this.remote.error : this.configErr; }
+  private configErr: string | null = null;
   private active = new Map<string, Promise<void>>();
   private laneWaits = new Map<string, AbortController>();
   private stopped = false;
@@ -94,12 +110,16 @@ export class Capabilities implements CapabilityService {
   localTools: LocalToolRunner | null;
 
   constructor(private store: Store, private cfg: Config, adapter?: ProviderAdapter, private deps: CapabilityDeps = {}) {
-    this.models = new ModelStore(cfg.comfyuiModelsDir, cfg.modelHosts);
+    this.models = new ModelStore(cfg.comfyuiModelsDir, cfg.modelHosts, deps.modelFetch);
     this.lane = deps.lane ?? null;
     this.localTools = deps.localTools ?? null;
-    if (adapter) this.adapter = adapter;
+    if (adapter) this.fixedAdapter = adapter;
     else if (cfg.comfyuiUrl) {
-      try { this.adapter = new ComfyUIAdapter(cfg.comfyuiUrl, { allowRemote: cfg.comfyuiAllowRemote }); } catch (e: any) { this.configError = e.message; }
+      try { this.fixedAdapter = new ComfyUIAdapter(cfg.comfyuiUrl, { allowRemote: cfg.comfyuiAllowRemote, ...(deps.comfyFetch ? { fetch: deps.comfyFetch } : {}) }); } catch (e: any) {
+        this.configErr = e.message;
+        // the same URL, built as remote: the host check is the only thing the flag changes (http/https, the timeouts are the adapter's)
+        if (e instanceof ProviderError && e.code === 'remote_provider_not_allowed') this.remote = { adapter: new ComfyUIAdapter(cfg.comfyuiUrl, { allowRemote: true, ...(deps.comfyFetch ? { fetch: deps.comfyFetch } : {}) }), host: new URL(cfg.comfyuiUrl).hostname, error: e.message };
+      }
     }
     this.frames = new FrameJobDriver({
       store, adapter: () => this.adapter, lane: () => this.lane, descriptor: (id) => this.comfy(id), modelStatus: (d) => this.modelStatus(d),
@@ -140,8 +160,21 @@ export class Capabilities implements CapabilityService {
   // ---------------------------------------------------------------- setup and listing
   async providerStatus() {
     if (!this.adapter) return { id: 'comfyui', configured: false, reason: this.configError ?? 'PF_COMFYUI_URL is not set', readiness: null };
-    return { id: 'comfyui', configured: true, reason: null, readiness: await this.adapter.probe() };
+    return { id: 'comfyui', configured: true, reason: null, readiness: await this.adapter.probe(), ...warningsOf(this.remoteWarning()) };
   }
+  /** D5 in open mode: the standing warning while a ComfyUI on another computer is in use (route answers, jobs, get_controls). */
+  remoteWarning(): { warnings?: OpenWarning[] } {
+    return this.remote && !this.fixedAdapter && this.adapter ? { warnings: [openWarning('comfyui_remote', { host: this.remote.host })] } : {};
+  }
+  /** What a job is told at admission in open mode (D5 the remote ComfyUI), recorded in its input as `openWarnings`. */
+  private openJobWarnings(d: CapabilityDescriptor, adm: ReturnType<typeof openAdmission> = {}): ReturnType<typeof openAdmission> {
+    const w = [...(adm.openWarnings ?? []), ...(d.provider === 'comfyui' ? this.remoteWarning().warnings ?? [] : [])];
+    return { ...adm, ...(w.length ? { openWarnings: w } : {}) };
+  }
+  /** D8/H1: in open mode the egress and licence blockers become warnings (openBlockers.ts); guarded = unchanged. One read of the mode. */
+  private split<B extends Blocker>(d: CapabilityDescriptor, b: B[]) { return splitBlockers(d, this.cfg.distributionProfile, b, warnsOpen(this.cfg)); }
+  /** What open mode is doing instead of refusing, as long as it lasts (get_controls). */
+  standingWarnings(): OpenWarning[] { return this.remoteWarning().warnings ?? []; }
   /** The model store of the descriptor's provider: ComfyUI's models folder, or the local tools' (PF_TOOLS_MODELS_DIR). */
   private modelStoreFor(d: CapabilityDescriptor): ModelStore | null {
     return d.provider === 'comfyui' ? this.models : (this.localTools?.models() ?? null);
@@ -198,19 +231,21 @@ export class Capabilities implements CapabilityService {
       device = s.device ?? null;
       versions = s.versions;
     }
-    const lic = publicationBlockers(d, this.cfg.distributionProfile).filter((b) => LICENCE_CODES.has(b.code));
-    if (lic.length) return { code: 'licence_blocked', detail: lic.map((b) => b.message).join('; ') };
+    const lic = this.split(d, publicationBlockers(d, this.cfg.distributionProfile).filter((b) => LICENCE_CODES.has(b.code)));
+    if (lic.blockers.length) return { code: 'licence_blocked', detail: lic.blockers.map((b) => b.message).join('; ') };
+    const warned: { warnings?: OpenWarning[] } = lic.warnings.length ? { warnings: lic.warnings } : {}; // H1, open mode: the licence told
     const missing = d.models.filter((_m, i) => status[i]?.state !== 'ready');
     if (missing.length) {
       const missingBytes = status.reduce((n, m) => n + (m.state === 'ready' ? 0 : m.missingBytes), 0);
       if (status.some((m) => m.state === 'unverifiable')) return { code: 'model_missing', detail: status.find((m) => m.state === 'unverifiable')!.detail, missingBytes };
       const hosts = this.blockedHosts(missing);
-      if (hosts.length) return { code: 'host_not_allowed', detail: `the model files are published on ${hosts.join(', ')}, which PF_MODEL_HOSTS does not allow`, hosts, missingBytes };
+      if (hosts.length && !warnsOpen(this.cfg)) return { code: 'host_not_allowed', detail: `the model files are published on ${hosts.join(', ')}, which PF_MODEL_HOSTS does not allow`, hosts, missingBytes };
+      const told = { ...warned, ...hostWarnings(hosts) }; // D1, open mode: a host outside the list is used, named in a warning
       const free = this.freeBytes(this.modelsDir(d));
-      if (free !== null && free < missingBytes + DOWNLOAD_MARGIN_BYTES) return { code: 'disk_insufficient', detail: `the download is ${missingBytes} bytes and needs ${DOWNLOAD_MARGIN_BYTES} more to spare; ${free} are free`, freeBytes: free, missingBytes };
-      return { code: 'model_missing', detail: `${missing.length} model file(s) to download: ${missing.map((m) => m.path).join(', ')}`, missingBytes };
+      if (free !== null && free < missingBytes + DOWNLOAD_MARGIN_BYTES) return { code: 'disk_insufficient', detail: `the download is ${missingBytes} bytes and needs ${DOWNLOAD_MARGIN_BYTES} more to spare; ${free} are free`, freeBytes: free, missingBytes, ...warningsOf(told) };
+      return { code: 'model_missing', detail: `${missing.length} model file(s) to download: ${missing.map((m) => m.path).join(', ')}`, missingBytes, ...warningsOf(told) };
     }
-    return { code: 'ready', detail: 'ready', device, ...(versions ? { versions } : {}) };
+    return { code: 'ready', detail: 'ready', device, ...(versions ? { versions } : {}), ...warningsOf(warned) };
   }
   async list() {
     const provider = await this.providerStatus();
@@ -229,7 +264,7 @@ export class Capabilities implements CapabilityService {
           inputs: d.inputs.map(({ binding: _b, reviewed: _r, ...i }) => i), outputs: d.outputs.map((o) => ({ name: o.name, role: o.role, mediaType: o.mediaType, encoding: o.encoding, expectFrames: o.expectFrames })),
           frames: d.provider === 'comfyui' ? d.frames : null, task: d.provider === 'local' ? d.task : null,
           models: d.models.map((m, i) => ({ ...m, status: modelStatus[i] })), modelsReady, missingDownloadBytes: modelStatus.reduce((n, m) => n + (m.state === 'ready' ? 0 : m.missingBytes), 0), resources: d.resources, limits: d.limits, limitations: d.limitations, qualification: d.qualification,
-          blockers, setup, runnable: engineAvailable && modelsReady && this.executionBlockers(blockers).length === 0,
+          blockers, setup, runnable: engineAvailable && modelsReady && this.split(d, this.executionBlockers(blockers)).blockers.length === 0,
           experimental: blockers.some((b) => NEEDS_REVIEW.has(b.code)), openReviews: blockers.filter((b) => NEEDS_REVIEW.has(b.code)).map((b) => b.code.slice(4)),
         };
       })),
@@ -264,20 +299,24 @@ export class Capabilities implements CapabilityService {
     const status = await this.modelStatus(d);
     const missing = status.reduce((n, m) => n + (m.state === 'ready' ? 0 : m.missingBytes), 0);
     if (missing === 0) throw new ApiError(409, 'models_already_ready', 'all model files for this capability are present and verified');
-    const lic = publicationBlockers(d, this.cfg.distributionProfile).filter((b) => /model|license|unresolved/i.test(b.code));
-    if (lic.length) throw new ApiError(409, 'capability_blocked', 'model files for this capability may not be downloaded in this profile', { blockers: lic });
+    const lic = this.split(d, publicationBlockers(d, this.cfg.distributionProfile).filter((b) => /model|license|unresolved/i.test(b.code)));
+    if (lic.blockers.length) throw new ApiError(409, 'capability_blocked', 'model files for this capability may not be downloaded in this profile', { blockers: lic.blockers });
     if (confirmBytes !== missing) throw new ApiError(409, 'download_size_mismatch', `this download is ${missing} bytes; confirmBytes was ${confirmBytes}`, { missingDownloadBytes: missing }, 'Re-read the capability and confirm the exact size shown.');
     const todo = d.models.filter((_m, i) => status[i]!.state !== 'ready');
     const hosts = this.blockedHosts(todo);
-    if (hosts.length) throw new ApiError(409, 'host_not_allowed', `the model files are published on ${hosts.join(', ')}, which PF_MODEL_HOSTS does not allow`, { hosts, allowed: this.cfg.modelHosts }, 'Add exactly these hosts to PF_MODEL_HOSTS, or place the files by hand.');
+    const anyHost = warnsOpen(this.cfg); // D1 at admission: open mode uses a host outside PF_MODEL_HOSTS (https, pinned SHA-256), recorded on the job
+    if (hosts.length && !anyHost) throw new ApiError(409, 'host_not_allowed', `the model files are published on ${hosts.join(', ')}, which PF_MODEL_HOSTS does not allow`, { hosts, allowed: this.cfg.modelHosts }, 'Add exactly these hosts to PF_MODEL_HOSTS, or place the files by hand.');
     const free = this.freeBytes(this.modelsDir(d));
     if (free !== null && free < missing + DOWNLOAD_MARGIN_BYTES) throw new ApiError(409, 'disk_insufficient', `the download is ${missing} bytes and ${DOWNLOAD_MARGIN_BYTES} must stay free; ${free} are free`, { missingBytes: missing, marginBytes: DOWNLOAD_MARGIN_BYTES, freeBytes: free }, 'Free some disk space and try again.');
-    const job = this.store.createJob(projectId, 'model-download', actor, { capabilityId: d.id, capabilityVersion: d.version, provider: d.provider, approvedBytes: missing, models: d.models.map((m) => ({ path: m.path, sha256: m.sha256, bytes: m.bytes, source: m.source })) });
-    void this.driveDownload(job.id, d, store);
+    const told = [...lic.warnings, ...(hosts.length ? hostWarnings(hosts).warnings! : [])];
+    const opened = anyHost ? { admittedOpen: true, ...(told.length ? { openWarnings: told } : {}) } : {};
+    const job = this.store.createJob(projectId, 'model-download', actor, { capabilityId: d.id, capabilityVersion: d.version, provider: d.provider, approvedBytes: missing, models: d.models.map((m) => ({ path: m.path, sha256: m.sha256, bytes: m.bytes, source: m.source })), ...opened });
+    void this.driveDownload(job.id, d, store, anyHost);
     return job;
   }
-  private async driveDownload(jobId: string, d: CapabilityDescriptor, store: ModelStore) {
+  private async driveDownload(jobId: string, d: CapabilityDescriptor, store: ModelStore, anyHost = false) {
     const started = Date.now();
+    const unlisted = new Set<string>(); // hosts outside the list met on the way (a redirect too), open mode only
     try {
       this.store.updateJob(jobId, { status: 'running', stage: 'preparing', attempt: 1 });
       const done: ModelStatus[] = [];
@@ -287,10 +326,10 @@ export class Capabilities implements CapabilityService {
           if (got - last < 8 << 20 && got !== total) return;
           last = got;
           this.store.updateJob(jobId, { stage: `downloading ${m.path}: ${got}/${total} bytes (measured)` });
-        }));
+        }, undefined, anyHost ? { anyHost, onHost: (h) => unlisted.add(h) } : {}));
         this.store.updateJob(jobId, { stage: `verified ${m.path}` });
       }
-      this.store.updateJob(jobId, { status: 'succeeded', stage: null, output: { models: done, wallSeconds: (Date.now() - started) / 1000 } });
+      this.store.updateJob(jobId, { status: 'succeeded', stage: null, output: { models: done, wallSeconds: (Date.now() - started) / 1000, ...(unlisted.size ? { openWarnings: hostWarnings([...unlisted]).warnings } : {}) } });
     } catch (e: any) {
       this.store.updateJob(jobId, { status: 'failed', stage: null, error: e instanceof ApiError ? e.toJSON().error : { code: 'model_download_failed', message: String(e?.message ?? e), retryable: true } });
     }
@@ -312,7 +351,7 @@ export class Capabilities implements CapabilityService {
   async estimate(req: RunRequest): Promise<CapabilityEstimate> {
     const d = this.descriptor(req.capabilityId);
     const { doc } = this.store.getProject(req.projectId);
-    const blockers: { code: string; message: string }[] = this.executionBlockers(publicationBlockers(d, this.cfg.distributionProfile)).map(({ code, message }) => ({ code, message }));
+    const blockers: { code: string; message: string }[] = this.split(d, this.executionBlockers(publicationBlockers(d, this.cfg.distributionProfile))).blockers.map(({ code, message }) => ({ code, message }));
     const status = await this.modelStatus(d);
     const readiness = d.provider === 'comfyui' && this.adapter ? await this.adapter.probe(d) : null;
     let setup = await this.setupFor(d, readiness, status);
@@ -355,8 +394,10 @@ export class Capabilities implements CapabilityService {
     // A run stores its results in the library: past the storage ceiling it is refused before a job exists, as exports, sounds and narration are.
     assertStorageRoom(this.store, 1, 'run this tool');
     if (d.state !== 'published') throw new ApiError(409, 'capability_is_draft', 'drafts cannot be executed');
-    const blockers = this.executionBlockers(publicationBlockers(d, this.cfg.distributionProfile));
+    const split = this.split(d, this.executionBlockers(publicationBlockers(d, this.cfg.distributionProfile)));
+    const blockers = split.blockers;
     if (blockers.length) throw new ApiError(409, 'capability_blocked', `capability ${d.id} is not eligible to run in the ${this.cfg.distributionProfile} profile`, { blockers });
+    const adm = openAdmission(split); // D8/H1, open mode: what was warned about, and the licence marks the result carries
     const apply: ApplyMode = req.apply ?? 'library';
     if (apply === 'replace-clip' && !(req.source && 'clipId' in req.source)) throw new ApiError(422, 'invalid_request', 'placing the result in a clip needs that clip as the source', { apply }, 'Give source: { clipId }.');
     if (apply === 'new-track' && !(req.source && 'clipId' in req.source) && !req.attach) throw new ApiError(422, 'invalid_request', 'placing the result on a new track needs the clip it is made from, or attach.start', { apply });
@@ -366,9 +407,9 @@ export class Capabilities implements CapabilityService {
       const open = (this.store.db.prepare("SELECT COUNT(*) AS n FROM jobs WHERE type = ? AND actor = ? AND status IN ('queued','running','cancel-requested')").get(TYPE, req.actor) as { n: number }).n;
       if (open >= this.cfg.agentMaxQueuedJobs) throw new ApiError(409, 'agent_limit', `an agent may have at most ${this.cfg.agentMaxQueuedJobs} AI jobs waiting or running; ${open} are`, { open, limit: this.cfg.agentMaxQueuedJobs }, 'Wait for one to finish.');
     }
-    if (d.provider === 'local') return this.startLocal(d, req, apply);
-    if (d.frames) return this.startFrames(d, req, apply);
-    return this.startStill(d, req, apply);
+    if (d.provider === 'local') return this.startLocal(d, req, apply, adm);
+    if (d.frames) return this.startFrames(d, req, apply, adm);
+    return this.startStill(d, req, apply, adm);
   }
   private assertComfyReady(d: ComfyDescriptor) {
     const notReady = this.cfg.comfyuiModelsDir || d.models.length === 0 ? [] : d.models.map((m) => m.path);
@@ -437,7 +478,7 @@ export class Capabilities implements CapabilityService {
   }
 
   /** A still-image ComfyUI capability (G0/G1 path): the source picture is given as a parameter, or as source { clipId | assetId }. */
-  private startStill(d: ComfyDescriptor, req: RunRequest, apply: ApplyMode): JobRow {
+  private startStill(d: ComfyDescriptor, req: RunRequest, apply: ApplyMode, adm: ReturnType<typeof openAdmission> = {}): JobRow {
     const { doc, revision } = this.store.getProject(req.projectId);
     const params = { ...req.params };
     if (req.source) {
@@ -478,7 +519,7 @@ export class Capabilities implements CapabilityService {
     const job = this.store.createJob(req.projectId, TYPE, req.actor, {
       capabilityId: d.id, capabilityVersion: d.version, graphDigest: d.graphDigest, logicDigest: d.graphDigest, params: resolved.resolved, graph: resolved.graph,
       clientRequestId: randomUUID(), ...(actsOpen(req) ? { admittedOpen: true } : {}), projectRevision: revision, idempotencyKey: req.idempotencyKey ?? null, sources,
-      attach: req.attach ?? null, placement,
+      attach: req.attach ?? null, placement, ...this.openJobWarnings(d, adm),
       // Stale-result protection (SPEC §20, FFG-09): remember the version of everything the placement depends on.
       preconditions: this.preconditions(req.projectId, [...(req.dependsOn ?? []), ...(req.attach?.trackId ? [req.attach.trackId] : []), ...dependsOn]),
     });
@@ -514,7 +555,7 @@ export class Capabilities implements CapabilityService {
     return { src, resolved, media, m, out, plan, scratch, measured, seconds, asset };
   }
   /** A frame job (ADR-0017, framejobs.ts). */
-  private startFrames(d: ComfyDescriptor, req: RunRequest, apply: ApplyMode): JobRow {
+  private startFrames(d: ComfyDescriptor, req: RunRequest, apply: ApplyMode, adm: ReturnType<typeof openAdmission> = {}): JobRow {
     if (d.frames!.mode === 'sampled') throw new ApiError(501, 'not_implemented', 'sampled frame jobs are not implemented yet (no reviewed capability uses them)');
     const { doc, revision } = this.store.getProject(req.projectId);
     const p = this.planFrameJob(d, req, doc);
@@ -528,7 +569,7 @@ export class Capabilities implements CapabilityService {
       sources: [{ input: d.frames!.input, assetId: p.src.assetId, contentHash: p.asset.contentHash, mimeType: p.asset.mimeType, width: p.src.width, height: p.src.height, bytes: p.asset.byteSize }],
       frames: p.plan, frameSource: p.src, outputSize: p.out, scratchBytes: p.scratch, estimate: { seconds: p.seconds, basis: p.seconds === null ? 'none' : 'measured-profile' },
       ...(admissionWarnings.length ? { admissionWarnings } : {}), // open mode (B11, B12): told, not refused
-      attach: req.attach ?? null, placement,
+      attach: req.attach ?? null, placement, ...this.openJobWarnings(d, adm),
       preconditions: this.preconditions(req.projectId, [...(req.dependsOn ?? []), ...(req.attach?.trackId ? [req.attach.trackId] : []), ...dependsOn]),
     });
     this.reserveCost(job, d, req);
@@ -536,7 +577,7 @@ export class Capabilities implements CapabilityService {
     return job;
   }
   /** A local tool (provider 'local'): validated here and by the runner's synchronous prepare, then driven by the runner. */
-  private startLocal(d: LocalToolDescriptor, req: RunRequest, apply: ApplyMode): JobRow {
+  private startLocal(d: LocalToolDescriptor, req: RunRequest, apply: ApplyMode, adm: ReturnType<typeof openAdmission> = {}): JobRow {
     if (!this.localTools) throw new ApiError(503, 'engine_not_configured', 'local tools are not available in this server', {}, 'See docs/INTEGRATIONS.md (PF_TOOLS_PYTHON, PF_DENOISE_BIN).');
     const resolved = this.resolve(() => resolveParams(d, req.params));
     const { doc, revision } = this.store.getProject(req.projectId);
@@ -548,7 +589,7 @@ export class Capabilities implements CapabilityService {
       ...additions,
       provider: 'local', capabilityId: d.id, capabilityVersion: d.version, graphDigest: d.codeDigest, logicDigest: d.codeDigest, params: resolved.resolved,
       source: req.source ?? null, apply, placement: { mode: apply, clipId } satisfies Placement,
-      clientRequestId: randomUUID(), ...(actsOpen(req) ? { admittedOpen: true } : {}), projectRevision: revision, idempotencyKey: req.idempotencyKey ?? null, attach: req.attach ?? null,
+      clientRequestId: randomUUID(), ...(actsOpen(req) ? { admittedOpen: true } : {}), projectRevision: revision, idempotencyKey: req.idempotencyKey ?? null, attach: req.attach ?? null, ...this.openJobWarnings(d, adm),
       preconditions: this.preconditions(req.projectId, [...(req.dependsOn ?? []), ...(apply === 'replace-clip' && f ? [f.clip.id, f.track.id] : [])]),
     });
     this.reserveCost(job, d, req);
@@ -644,6 +685,7 @@ export class Capabilities implements CapabilityService {
           derived: {
             jobId: job.id, capabilityId: recipe.capabilityId, capabilityVersion: recipe.capabilityVersion, graphDigest: recipe.graphDigest, params: recipe.params, sourceAssetIds, outputName: o.name, outputRole: o.role, encoding: o.encoding, provider: recipe.provider,
             logicDigest: logicDigest(d), models: d.models.filter((m) => m.sha256).map((m) => ({ path: m.path, sha256: m.sha256! })),
+            ...(job.input.openLicences ? { modelLicences: job.input.openLicences } : {}), // H1: a licence warning stood at admission
             ...(i === primaryIdx ? primaryDerived : {}),
           },
         },

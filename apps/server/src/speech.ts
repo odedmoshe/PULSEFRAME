@@ -33,7 +33,7 @@ import { assertStorageRoom } from './storage.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 import { PYTHON_WORKER_FLAGS } from './pythonArgs.ts';
 import { SpeechEngineInstaller, type EngineDeps } from './speechEngine.ts';
-import { actsAsOwner } from './autonomy.ts';
+import { actsAsOwner, openWarning, warnsOpen, type OpenWarning } from './autonomy.ts';
 
 type ModelFile = CapabilityDescriptor['models'][number];
 export interface SpeechModel { id: string; kind: 'asr' | 'tts'; title: { he: string; en: string }; languages: string[]; note: string; engineModel: string; dir: string; files: ModelFile[] }
@@ -103,6 +103,11 @@ export const NarrationScriptBody = z.object({
   referenceAssetId: NarrationBody.shape.referenceAssetId,
   consent: NarrationBody.shape.consent,
 }).strict();
+/**
+ * At most this many sentences per script request in guarded mode (I11). Not a capacity fact: each sentence is its own durable job
+ * row run one after another through the lane, and the request text is bounded by NarrationScriptBody (6000 characters). In open
+ * mode (ADR-0036) the limit is lifted and the answer says how many sentences there are; the 6000-character bound stays.
+ */
 const MAX_SCRIPT_SENTENCES = 60;
 const CONSENT_STATEMENT = 'The project owner states that the person whose voice is in the reference recording agreed to it being used to generate this speech.';
 
@@ -343,7 +348,10 @@ export class Speech {
     const st = await this.modelStatus(m);
     if (st.ready) throw new ApiError(409, 'models_already_ready', 'every file of this model is present and verified');
     if (confirmBytes !== st.missingDownloadBytes) throw new ApiError(409, 'download_size_mismatch', `this download is ${st.missingDownloadBytes} bytes; confirmBytes was ${confirmBytes}`, { missingDownloadBytes: st.missingDownloadBytes }, 'Read the speech status again and confirm the exact size shown.');
-    const job = this.store.createJob(projectId, DOWNLOAD, actor, { modelId, approvedBytes: st.missingDownloadBytes });
+    // D1 at admission: open mode uses a host outside PF_MODEL_HOSTS (https, pinned SHA-256); recorded so a resumed download keeps it
+    const hosts = this.models.unlistedHosts(m.files.map((f) => f.source));
+    const opened = warnsOpen(this.cfg) ? { admittedOpen: true, ...(hosts.length ? { openWarnings: hosts.map((host) => openWarning('host_not_listed', { host })) } : {}) } : {};
+    const job = this.store.createJob(projectId, DOWNLOAD, actor, { modelId, approvedBytes: st.missingDownloadBytes, ...opened });
     void this.driveDownload(job.id);
     return job;
   }
@@ -355,6 +363,8 @@ export class Speech {
       const m = SPEECH_MODELS.find((x) => x.id === this.store.getJob(jobId).input.modelId);
       if (!m) throw new ApiError(409, 'not_found', 'this model is no longer in the reviewed list');
       this.store.updateJob(jobId, { status: 'running', stage: 'preparing', attempt: 1 });
+      const anyHost = this.store.getJob(jobId).input.admittedOpen === true;
+      const unlisted = new Set<string>();
       const done: ModelStatus[] = [];
       for (const f of m.files) {
         let last = 0;
@@ -362,9 +372,9 @@ export class Speech {
           if (got - last < 8 << 20 && got !== total) return;
           last = got;
           this.store.updateJob(jobId, { stage: `downloading ${path.basename(f.path)}: ${got}/${total} bytes (measured)` });
-        }, ctl.signal));
+        }, ctl.signal, anyHost ? { anyHost, onHost: (h) => unlisted.add(h) } : {}));
       }
-      this.store.updateJob(jobId, { status: 'succeeded', stage: null, output: { modelId: m.id, files: done, wallSeconds: (Date.now() - started) / 1000 } });
+      this.store.updateJob(jobId, { status: 'succeeded', stage: null, output: { modelId: m.id, files: done, wallSeconds: (Date.now() - started) / 1000, ...(unlisted.size ? { openWarnings: [...unlisted].map((host) => openWarning('host_not_listed', { host })) } : {}) } });
     } catch (e: any) {
       if (this.stopped) return; // shutting down: the row stays as it is and the download resumes on the next start
       if (ctl.signal.aborted) this.store.updateJob(jobId, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'the download was canceled; the part already fetched is kept and a new download resumes from it' } });
@@ -547,14 +557,15 @@ export class Speech {
    * Narrate a script: one job per sentence, run in order; each sentence is placed where the previous one ended.
    * A sentence that fails or is canceled leaves a hole of zero length: the next one takes its place.
    */
-  async startNarrationScript(gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof NarrationScriptBody>): Promise<{ jobs: JobRow[]; sentences: string[] }> {
+  async startNarrationScript(gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof NarrationScriptBody>): Promise<{ jobs: JobRow[]; sentences: string[]; warnings?: OpenWarning[] }> {
     gov.assertMayAct(principal, projectId, 'edit');
     gov.assertUnrestricted(principal, 'add media to the library');
     const p = this.store.getProject(projectId);
     const reference = this.referenceInput(principal, p.doc, a);
     const sentences = splitSentences(a.text, 300);
     if (!sentences.length) throw new ApiError(400, 'invalid_request', 'there is no text to speak');
-    if (sentences.length > MAX_SCRIPT_SENTENCES) throw new ApiError(422, 'script_too_long', `the script has ${sentences.length} sentences; at most ${MAX_SCRIPT_SENTENCES} are narrated in one request`, { sentences: sentences.length, max: MAX_SCRIPT_SENTENCES }, 'Send it in parts.');
+    const long = sentences.length > MAX_SCRIPT_SENTENCES;
+    if (long && !warnsOpen(this.cfg)) throw new ApiError(422, 'script_too_long', `the script has ${sentences.length} sentences; at most ${MAX_SCRIPT_SENTENCES} are narrated in one request`, { sentences: sentences.length, max: MAX_SCRIPT_SENTENCES }, 'Send it in parts.');
     const st = await this.status();
     if (!st.narration.ready) throw new ApiError(409, 'voice_not_ready', `narration is not set up: ${st.narration.detail}`, { reason: st.narration.reason }, 'A recorded or imported voice file works without it.');
     assertStorageRoom(this.store, 1, 'generate narration'); // as in startNarration: after the setup state
@@ -564,15 +575,17 @@ export class Speech {
     const seed = a.seed ?? randomBytes(4).readUInt32BE() >>> 1;
     const script = randomBytes(6).toString('hex');
     const jobs: JobRow[] = [];
+    const warnings = long ? [openWarning('script_long', { n: sentences.length, max: MAX_SCRIPT_SENTENCES })] : []; // I11, open mode
     for (const [i, text] of sentences.entries()) {
       const job = this.store.createJob(projectId, NARRATE, principal.actor, {
+        ...(warnings.length ? { openWarnings: warnings } : {}),
         text, language: a.language ?? 'he', seed: (seed + i) % 2 ** 31, modelId: model.id, projectRevision: p.revision,
         start: a.start, ...(a.trackId ? { trackId: a.trackId } : {}), script: { id: script, index: i, of: sentences.length, gap, ...(i ? { follows: jobs[i - 1]!.id } : {}) }, ...reference,
       });
       jobs.push(job);
     }
     for (const j of jobs) this.enqueue(j.id);
-    return { jobs: jobs.map((j) => this.store.getJob(j.id)), sentences };
+    return { jobs: jobs.map((j) => this.store.getJob(j.id)), sentences, ...(warnings.length ? { warnings } : {}) };
   }
   /** Where a sentence of a script goes: after the sentence before it (which may have failed, in which case its own place is taken). */
   private scriptPlace(j: JobRow): { start: unknown; trackId?: string } {

@@ -46,6 +46,13 @@ export interface Config {
   mode: ServerMode;
   /** True when PF_MODE set the mode (it then wins over the owner's stored switch at start-up). */
   modeFromEnv: boolean;
+  /**
+   * The LIVE server mode (index.ts binds it to AutonomySettings, so the owner's switch is seen at once). The warn-instead-of-refuse
+   * rows (autonomy.ts `warnsOpen`) read it at admission; absent (a hand-built config in a unit test) = `mode`.
+   */
+  liveMode?: () => ServerMode;
+  /** True when the owner set PF_MAX_UPLOAD_BYTES. In open mode an upload is capped by that setting only, else by the disk room (I9). */
+  maxUploadBytesSet?: boolean;
   /** Add `Secure` to the owner session cookie (set when the server is reached through HTTPS, i.e. behind a TLS-terminating proxy). Off by default: the local profile is plain HTTP on loopback. */
   secureCookie: boolean;
   /** Directory for automatic backups (outside the data directory); null = automatic backups off (the default). */
@@ -153,6 +160,7 @@ export function loadConfig(env = process.env): Config {
     webDist: path.resolve(env.PF_WEB_DIST ?? path.join(root, 'apps/web/dist')),
     extraOrigins: (env.PF_EXTRA_ORIGINS ?? 'http://localhost:5173,http://127.0.0.1:5173').split(',').filter(Boolean),
     maxUploadBytes: Number(env.PF_MAX_UPLOAD_BYTES ?? 2 * 1024 ** 3),
+    maxUploadBytesSet: env.PF_MAX_UPLOAD_BYTES !== undefined && env.PF_MAX_UPLOAD_BYTES !== '',
     comfyuiUrl: env.PF_COMFYUI_URL || null,
     comfyuiAllowRemote: env.PF_COMFYUI_ALLOW_REMOTE === '1',
     comfyuiModelsDir: env.PF_COMFYUI_MODELS_DIR ? path.resolve(env.PF_COMFYUI_MODELS_DIR) : null,

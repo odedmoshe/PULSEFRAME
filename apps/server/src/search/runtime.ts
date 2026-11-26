@@ -27,7 +27,7 @@ import { ScanJobs } from './indexJob.ts';
 import { removeIndexFiles, SearchIndexDb } from './indexDb.ts';
 import { TEST_DOUBLE_LABEL } from './testEmbedder.ts';
 import { probeSearchPython, SearchWorkers } from './workers.ts';
-import { actsAsOwner } from '../autonomy.ts';
+import { actsAsOwner, openWarning, warnsOpen } from '../autonomy.ts';
 
 /** The reviewed worker script. */
 export const SEARCH_WORKER = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../tools/pf_search.py');
@@ -41,6 +41,8 @@ export interface SearchRuntimeOptions extends SearchRuntimeDeps {
   worker?: string;
   workerSha256?: string | null;
   derivatives?: TrackingDeps['derivatives'];
+  /** TEST SEAM ONLY: the picture model's licence row in place of SEARCH_PICTURE.licence (a labelled other licence); never from configuration */
+  pictureLicence?: { spdx: string; evidence: string };
 }
 
 async function sha256File(file: string): Promise<string> {
@@ -92,8 +94,15 @@ export function createSearchRuntime(deps: SearchRuntimeOptions): SearchRuntime &
   };
 
   async function setup(): Promise<SearchSetup> {
+    // H2 (ADR-0036), open mode: a licence outside LICENCES_ALLOWED is quoted in a warning and search goes on; guarded refuses as before
+    const lic = deps.pictureLicence ?? SEARCH_PICTURE.licence;
+    const told = !LICENCES_ALLOWED.has(lic.spdx) && warnsOpen(cfg) ? [openWarning('search_licence', { licence: lic.spdx, evidence: lic.evidence })] : [];
+    const s = await setupState(lic.spdx, told.length > 0);
+    return told.length ? { ...s, warnings: told } : s;
+  }
+  async function setupState(spdx: string, licenceTold: boolean): Promise<SearchSetup> {
     if (deps.embedder) return { code: 'ready', detail: TEST_DOUBLE_LABEL, device: null };
-    if (!LICENCES_ALLOWED.has(SEARCH_PICTURE.licence.spdx)) return { code: 'licence_blocked', detail: `the picture model's licence (${SEARCH_PICTURE.licence.spdx}) is not allowed in this build` };
+    if (!LICENCES_ALLOWED.has(spdx) && !licenceTold) return { code: 'licence_blocked', detail: `the picture model's licence (${spdx}) is not allowed in this build` };
     if (!reviewed) return { code: 'engine_unverified', detail: 'this build has no reviewed digest of the picture search worker yet (pf_search.py); update the editor' };
     let digest: string;
     try { digest = await sha256File(worker); } catch { return { code: 'engine_unverified', detail: 'the picture search worker (pf_search.py) is missing from this installation; reinstall the editor' }; }

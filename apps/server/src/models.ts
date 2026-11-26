@@ -57,8 +57,24 @@ export class ModelStore {
   private hostAllowed(u: URL) {
     return u.protocol === 'https:' && this.allowedHosts.some((h) => (h.startsWith('.') ? u.hostname.endsWith(h) : u.hostname === h));
   }
-  /** Resumable, verified download. Throws ApiError; leaves a `.part` file for resume unless the digest is wrong. */
-  async download(m: Model, onProgress: (got: number, total: number) => void, signal?: AbortSignal): Promise<ModelStatus> {
+  /** The hosts of these sources (and only those) that the allowed list does not name (a leading dot allows subdomains). */
+  unlistedHosts(sources: readonly (string | null)[]): string[] {
+    const out = new Set<string>();
+    for (const src of sources) {
+      if (!src) continue;
+      let host: string;
+      try { host = new URL(src).hostname; } catch { continue; }
+      if (!this.allowedHosts.some((h) => (h.startsWith('.') ? host.endsWith(h) : host === h))) out.add(host);
+    }
+    return [...out];
+  }
+  /**
+   * Resumable, verified download. Throws ApiError; leaves a `.part` file for resume unless the digest is wrong.
+   * `open.anyHost` (open server mode, decided at admission; autonomy-mode.ts warnsOpen, row D1): a host outside the list is used
+   * and reported through `open.onHost`; https is still required on every hop, no credential is ever sent, and the pinned size and
+   * SHA-256 are checked as always.
+   */
+  async download(m: Model, onProgress: (got: number, total: number) => void, signal?: AbortSignal, open: { anyHost?: boolean; onHost?: (host: string) => void } = {}): Promise<ModelStatus> {
     if (!this.dir) throw new ApiError(409, 'models_dir_not_configured', 'set PF_COMFYUI_MODELS_DIR to the local ComfyUI models directory');
     if (!m.source || !m.sha256 || !m.bytes) throw new ApiError(409, 'unresolved_model', `model ${m.path} has no pinned source, digest and size`);
     if ((await this.status(m)).state === 'ready') return this.status(m);
@@ -72,7 +88,10 @@ export class ModelStore {
       let url = new URL(m.source);
       let res: Response | undefined;
       for (let hop = 0; hop < 6; hop++) {
-        if (!this.hostAllowed(url)) throw new ApiError(403, 'model_host_not_allowed', `download host ${url.hostname} is not in the allowed list`, { allowed: this.allowedHosts });
+        if (!this.hostAllowed(url)) {
+          if (!open.anyHost || url.protocol !== 'https:') throw new ApiError(403, 'model_host_not_allowed', `download host ${url.hostname} is not in the allowed list`, { allowed: this.allowedHosts });
+          open.onHost?.(url.hostname);
+        }
         res = await this.fetchImpl(url, { redirect: 'manual', signal, headers: offset ? { range: `bytes=${offset}-` } : {} });
         const loc = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
         if (!loc) break;

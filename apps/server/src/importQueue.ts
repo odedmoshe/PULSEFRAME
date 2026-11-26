@@ -411,8 +411,14 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
       if (!store.db.prepare('SELECT 1 FROM projects WHERE id = ?').get(req.projectId)) throw new ApiError(404, 'project_not_found', `project ${req.projectId} not found`, { projectId: req.projectId }, 'Call list_projects.');
       const { name, isCube } = cleanUploadName(req.name);
       const relativePath = req.via === 'folder' ? cleanRelativePath(req.relativePath) : undefined;
-      const cap = Math.max(0, Math.min(req.maxBytes, deps.maxUploadBytes));
       const declared = req.declaredBytes !== null && Number.isFinite(req.declaredBytes) && req.declaredBytes >= 0 ? req.declaredBytes : null;
+      let cap = Math.max(0, Math.min(req.maxBytes, deps.maxUploadBytes));
+      if (!Number.isFinite(cap)) {
+        // I9, open mode with no cap set (importContracts.ts uploadCapFor): a declared size meets the disk reserve below; one of unknown
+        // size is cut at the free room minus the reserve (the check that already exists for declared sizes)
+        const free = declared === null ? freeBytes(store.dataDir) : null;
+        cap = free === null || !Number.isFinite(free) ? Number.MAX_SAFE_INTEGER : Math.max(0, free - deps.reserveBytes);
+      }
       if (declared !== null && isCube && declared > LUT_MAX_TEXT_LENGTH) throw new ApiError(413, 'upload_too_large', `a colour table (.cube) file can be at most ${LUT_MAX_TEXT_LENGTH} bytes`, { maxBytes: LUT_MAX_TEXT_LENGTH });
       if (declared !== null && declared > cap) throw new ApiError(413, 'upload_too_large', `upload exceeds ${cap} bytes`, { maxBytes: cap });
       // The ceiling counts what is already arriving (reserved and not yet on disk); this upload reserves its declared size, or,

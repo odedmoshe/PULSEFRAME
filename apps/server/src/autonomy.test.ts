@@ -82,9 +82,21 @@ describe('autonomy source walk (C1, C2)', () => {
       expect(f, g.file).toBeDefined();
       const i = f!.lines.findIndex((l) => l.includes(g.needle));
       expect(i, `${g.id} ${g.file}: ${g.needle}`).toBeGreaterThanOrEqual(0);
-      expect(f!.lines[i], `${g.id} ${g.file}`).toMatch(/actsAsOwner/);
+      expect(f!.lines[i], `${g.id} ${g.file}`).toMatch(g.reads === 'mode' ? /warnsOpen\(/ : /actsAsOwner/);
       expect(f!.lines[i]).not.toContain('isOwnerFloor(');
     }
+  });
+  it('the warn-instead-of-refuse predicate (warnsOpen, the server mode) is read only at W rows of OPEN_GATES, each a W row', () => {
+    const uses: string[] = [];
+    for (const f of FILES) {
+      if (f.rel === 'autonomy.ts' || f.rel === 'autonomy-mode.ts') continue;
+      f.lines.forEach((l, i) => { if (code(l) && l.includes('warnsOpen(')) uses.push(`${f.rel}:${i + 1}`); });
+    }
+    const rows = OPEN_GATES.filter((g) => g.reads === 'mode');
+    for (const g of rows) expect(g.decision, `${g.id} ${g.file}`).toBe('W');
+    const listed = rows.map((g) => { const f = FILES.find((x) => x.rel === g.file)!; return `${g.file}:${f.lines.findIndex((l) => l.includes(g.needle)) + 1}`; });
+    expect(uses.sort()).toEqual([...new Set(listed)].sort());
+    expect(new Set(rows.map((g) => g.id))).toEqual(new Set(['D1', 'D5', 'D6', 'D8', 'H1', 'H2', 'I9', 'I11']));
   });
 });
 

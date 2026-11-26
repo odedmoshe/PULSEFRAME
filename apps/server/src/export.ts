@@ -244,12 +244,29 @@ export function libraryExportWarnings(doc: ProjectDocument): Blocker[] {
   const r = collectCredits(doc);
   const out: Blocker[] = [];
   if (r.nonCommercial.length) out.push({ code: 'non_commercial_content', message: `this video holds library material for non-commercial use only (${list(r.nonCommercial)}); it may not be used commercially, and those files are never passed on in a shared archive`, ids: r.nonCommercial.map((n) => n.assetId), hint: 'Keep the video for non-commercial use, or replace those files.' });
+  // ADR-0036 H1 (open mode): AI results made with a model whose licence was warned about (derived.modelLicences), told the same way
+  const marked = modelLicenceResults(doc);
+  if (marked.length) out.push({ code: 'non_commercial_content', message: `this video holds AI results made with a model whose recorded licence does not allow commercial use, or is not recorded (${marked.map((m) => `"${m.title.slice(0, 60)}": ${m.models}`).slice(0, 8).join(', ')})`, ids: marked.map((m) => m.assetId), hint: 'Read the model\'s licence before using the video commercially, or replace those results.' });
   // credits due (never a courtesy line of a licence that needs none) whose place is the description: a reminder with the text to
   // paste, and the credits card offered (never a required fix: the owner decided the card is offered, not added by itself)
   const described = r.lines.filter((l) => l.placement !== 'on_screen' && creditDue(doc, l));
   if (described.length) out.push({ code: 'credits_for_description', message: `${described.length} credit line(s) of library files must go in the video's description: copy them from the credits (GET /api/v1/projects/{id}/credits) when you publish. A credits card at the end can also be added (add_credits_card); it is optional`, ids: described.map((l) => l.assetId) });
   if (r.onScreenMissing.length) out.push({ code: 'credit_not_on_screen', message: `${r.onScreenMissing.length} credit(s) that the licence wants in the video itself appear in no visible title (${list(r.onScreenMissing)})`, ids: r.onScreenMissing.map((l) => l.assetId), hint: 'Add a credits card (add_credits_card), or a title of your own with the credit.' });
   if (r.people.length) out.push({ code: 'stock_people', message: `the video holds stock footage that shows people (${list(r.people)})`, ids: r.people.map((p) => p.assetId) });
+  return out;
+}
+/** Assets on the main sequence's clips whose provenance carries a licence mark (open mode, H1), with the licences as recorded. */
+function modelLicenceResults(doc: ProjectDocument): { assetId: string; title: string; models: string }[] {
+  const seq = Object.hasOwn(doc.sequences, doc.mainSequenceId) ? doc.sequences[doc.mainSequenceId] : undefined;
+  const seen = new Set<string>();
+  const out: { assetId: string; title: string; models: string }[] = [];
+  for (const c of seq?.tracks.flatMap((t) => t.clips) ?? []) {
+    if (c.type !== 'media' || seen.has(c.assetId)) continue;
+    seen.add(c.assetId);
+    const a = Object.hasOwn(doc.assets, c.assetId) ? doc.assets[c.assetId] : undefined;
+    const marks = a?.provenance.derived?.modelLicences;
+    if (a && marks?.length) out.push({ assetId: a.id, title: a.name, models: marks.map((m) => `${m.path} (${m.licence ?? 'no licence recorded'}, commercial use "${m.commercialUse}")`).join('; ') });
+  }
   return out;
 }
 /** The export job's output.licence: the credits of the rendered snapshot, the text written as the <jobId>.credits.txt sidecar. Null when the video holds no library duty. */

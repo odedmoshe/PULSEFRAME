@@ -23,7 +23,7 @@ import { recoverMomentsJobs, stopMomentsJobs } from './moments.ts';
 import { recoverStillsJobs, stopStillsJobs } from './stills.ts';
 import { createDropDoor } from './drop.ts';
 import { loadDropPage } from './drop-page/index.ts';
-import { dropLimitsFrom, type DropDoor, type ImportQueue } from './importContracts.ts';
+import { dropLimitsFrom, uploadCapFor, uploadCapWarnings, type DropDoor, type ImportQueue } from './importContracts.ts';
 import { createImportQueue } from './importQueue.ts';
 import { incrementalAvailable, runSegmentedExport } from './exportSegments.ts';
 import { frameKeyFor } from './renderCacheEnv.ts';
@@ -31,7 +31,7 @@ import { createRenderCacheService, type RenderCacheService } from './renderCache
 import { RENDER_CACHE_DIR, SegmentStore } from './segmentStore.ts';
 import { closeLibraryService } from './library/index.ts';
 import { dataDirBytes, setStorageHooks } from './storage.ts';
-import { recoverAssistantJobs } from './assistant/job.ts'; // command bar assistant recovery (ADR-0027)
+import { assistantHostWarnings, recoverAssistantJobs } from './assistant/job.ts'; // command bar assistant recovery (ADR-0027)
 import type { AssistantDeps } from './assistant/contract.ts';
 import { createLlamaAdapter } from './assistant/local/llamaAdapter.ts'; // the local assistant's loopback adapter (wave 7)
 import type { MusicKit, SizeFitFault } from '@pulseframe/core';
@@ -41,6 +41,7 @@ import type { PictureModelsTestSeams } from './picmodels/contract.ts';
 import { createPictureModelsRuntime } from './picmodels/runtime.ts';
 
 import { AutonomySettings } from './autonomy.ts';
+import { AssistantFiles } from './assistant/credential.ts';
 export { loadConfig, type Config } from './config.ts';
 export interface RunningServer {
   url: string; /** Link that opens the editor as the owner (carries the launch secret). */ ownerUrl: string; cfg: Config; store: Store; auth: Auth; derivatives: Derivatives; governance: Governance; backup: BackupScheduler;
@@ -62,6 +63,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   // the server mode (autonomy.ts): read on every authentication, so the owner's switch reaches the very next request
   const autonomy = new AutonomySettings(cfg.dataDir, cfg);
   auth.serverMode = () => autonomy.mode;
+  cfg.liveMode = () => autonomy.mode; // the warn-instead-of-refuse rows read the live mode at admission (autonomy.ts warnsOpen)
   const host = new RenderHost();
   let url = `http://${cfg.host}:${cfg.port}`; // re-derived below once the listener is bound (port 0 = any free port)
   // One heavy holder at a time on this machine (ADR-0017): speech, narration, local AI tools and each ComfyUI chunk take the lane;
@@ -90,7 +92,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
     if (!label.startsWith(SEARCH_LANE_PREFIX)) await search.releaseKept(); // picture search workers (wave 7): kept only for their own scan
   });
   // ---- import queue and phone drop (ADR-0023, amends ADR-0002) ----
-  const imports = createImportQueue({ store, lane, derivatives, maxUploadBytes: cfg.maxUploadBytes, reserveBytes: cfg.importReserveBytes, homeZone: cfg.homeZone });
+  const imports = createImportQueue({ store, lane, derivatives, get maxUploadBytes() { return uploadCapFor(cfg); }, reserveBytes: cfg.importReserveBytes, homeZone: cfg.homeZone }); // I9: read per upload (the live mode)
   const projectExists = (id: string) => !!store.db.prepare('SELECT 1 FROM projects WHERE id = ?').get(id);
   // preferredAddress is left unset: the door runs the route probe itself (drop.ts). The door listens only while a code is live.
   const door = createDropDoor({ queue: imports, projectExists, page: loadDropPage, port: cfg.dropPort, limits: dropLimitsFrom(cfg), admitAddresses: cfg.dropAdmitAddresses });
@@ -118,7 +120,10 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   // the command bar assistant (ADR-0027) and, wave 7, the LOCAL assistant: the loopback-only adapter (it contacts 127.0.0.1:<port> only
   // when the owner chose it and asks) and the compute lane; tests may pass their own (a labelled MOCK) in deps.assistant.local
   const assistantDeps: AssistantDeps = { ...(deps.assistant ?? { adapters: new Map(), endpoint: () => null }), lane, local: deps.assistant?.local !== undefined ? deps.assistant.local : createLlamaAdapter() };
-  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { autonomy, imports, renderCache, search });
+  // open mode: standing warnings outside Capabilities for get_controls (D6 the assistant's unlisted host, I9 no upload cap)
+  const assistantFiles = new AssistantFiles(cfg.dataDir, cfg.assistantHosts, cfg);
+  const standingWarnings = () => [...assistantHostWarnings(cfg, assistantFiles.readConfig().config), ...uploadCapWarnings(cfg)];
+  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { autonomy, imports, renderCache, search, standingWarnings });
   const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { autonomy, imports, door, renderCache, search, pictureModels, assistant: assistantDeps, renderHost: host, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}) });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
