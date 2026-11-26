@@ -174,7 +174,6 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   };
   const need = (c: Context<Env>, scope: Scope) => { auth.require(c.var.principal, scope); return c.var.principal; };
   const autonomy = extras.autonomy ?? new AutonomySettings(cfg.dataDir, { mode: cfg.mode, modeFromEnv: true });
-  registerAutonomyRoutes(app, { autonomy, need });
   // Templates with graphic elements are available only where ffmpeg can draw SVG: ask once now, so catalog() knows (ADR-0016).
   void probeElements();
 
@@ -660,6 +659,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   });
 
   // ----- human control: grants, pause, proposals, approvals -----
+  registerAutonomyRoutes(app, { autonomy, need }); // GET any credential, PUT the floor (autonomy.ts)
   // FLOOR (autonomy.ts FLOOR_SITES): only the owner's own session mints or revokes credentials, in both modes
   const floorOwner = (c: Context<Env>) => { const p = c.var.principal; if (!isOwnerFloor(p)) throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session'); return p; };
   // the owner's switches kept in both modes by decision: pause (A6), proposal and approval decisions (B2, B3)

@@ -26,6 +26,9 @@ export function AccessPanel() {
   };
   // Wait until the project is loaded: by then the owner session exists. Asking earlier gets a 401.
   useEffect(() => { if (projectId) void load(); }, [projectId]);
+  // the server mode (autonomy track, GET /api/v1/autonomy): one honest line; the switch itself is a later UI step
+  const [serverMode, setServerMode] = useState<'open' | 'guarded' | null>(null);
+  useEffect(() => { if (projectId) void fetch('/api/v1/autonomy', { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).then((j) => setServerMode(j?.mode === 'open' || j?.mode === 'guarded' ? j.mode : null)).catch(() => setServerMode(null)); }, [projectId]);
 
   const statusOf = (g: GrantItem): 'active' | 'revoked' | 'expired' =>
     g.revokedAt ? 'revoked' : g.expiresAt && Date.parse(g.expiresAt) <= Date.now() ? 'expired' : 'active';
@@ -60,6 +63,7 @@ export function AccessPanel() {
     <section className="fields access" data-testid="access-panel" aria-labelledby="pf-access-h">
       <h3 id="pf-access-h">{t('access.title')}</h3>
       <p className="muted">{t('access.intro')}</p>
+      {serverMode && <p className="muted">{t(serverMode === 'open' ? 'autonomy.open.line' : 'autonomy.guarded.line')}</p>}
       {err && <p className="muted danger" role="alert" data-testid="access-error">{err}</p>}
 
       {token && (

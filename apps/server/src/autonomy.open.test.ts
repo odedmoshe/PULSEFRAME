@@ -163,3 +163,33 @@ describe('decision 2 — the new MCP tools, in both modes (one authority with th
       } finally { await m.s.close(); }
     }, 90_000);
 });
+
+describe('the mode switch (C4): owner only, reaches the next request, closes agent event streams', () => {
+  it('GET /autonomy says the mode in words; an agent cannot switch it (both modes); the owner switches open → guarded; the agent stream gets `mode` and ends; the next agent call is guarded', async () => {
+    const m = await modeServer('open');
+    try {
+      const st = await m.call('GET', '/api/v1/autonomy');
+      expect(st.json).toMatchObject({ mode: 'open', source: 'env', words: { he: { name: 'מצב פתוח' }, en: { name: 'Open mode' } } });
+      expect(st.json.floor).toEqual(expect.arrayContaining(['A5', 'mode', 'C9', 'A23']));
+      expect((await m.call('PUT', '/api/v1/autonomy', { mode: 'guarded' })).code).toBe('owner_required');
+      expect((await m.call('GET', '/api/v1/grants')).status).toBe(200);
+      // the agent listens
+      const ctl = new AbortController();
+      const res = await fetch(`${m.s.url}/api/v1/projects/${m.pid}/events`, { headers: { authorization: `Bearer ${m.s.auth.tokens.agent}` }, signal: ctl.signal });
+      const reader = res.body!.getReader();
+      let seen = '';
+      const read = (async () => { for (;;) { const { done, value } = await reader.read(); if (done) return 'ended'; seen += new TextDecoder().decode(value); } })();
+      await new Promise((r) => setTimeout(r, 300));
+      const owner = await ownerCall(m.s);
+      const sw = await owner('PUT', '/api/v1/autonomy', { mode: 'guarded' });
+      expect(sw.json).toMatchObject({ mode: 'guarded', source: 'stored' });
+      const outcome = await Promise.race([read, new Promise((r) => setTimeout(() => r('still open'), 5000))]);
+      ctl.abort();
+      expect(outcome).toBe('ended');
+      expect(seen).toContain('event: mode');
+      expect((await m.call('GET', '/api/v1/grants')).code).toBe('owner_required');
+      expect((await m.call('PUT', '/api/v1/autonomy', { mode: 'open' })).code).toBe('owner_required');
+      expect((await owner('PUT', '/api/v1/autonomy', { mode: 'sideways' })).status).toBe(400);
+    } finally { await m.s.close(); }
+  }, 60_000);
+});
