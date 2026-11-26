@@ -41,7 +41,28 @@ export const STILLS_CHECKS: Readonly<Record<string, string>> = {
   U5: 'one timing sample of a 600-frame 1080p stretch (stage times), labelled "one sample, this container"; new states in audit:a11y, ids in audit:testids',
 };
 
-if (!STILLS_PROOF_BUILT) {
-  console.error(`stills-proof: not built yet; ${Object.keys(STILLS_CHECKS).length} checks pending (${Object.keys(STILLS_CHECKS).join(', ')}); nothing was measured`);
-  process.exit(2);
+/** One part of the proof: its checks answer true or the reason they failed. W1 (stills-proof.measure.ts) and W2 (stills-proof.still.ts) export the same shape as W3's. */
+export interface StillsProofPart { built: boolean; checks: Record<string, () => Promise<true | string>>; details?: Record<string, unknown> }
+
+async function main(): Promise<void> {
+  if (!STILLS_PROOF_BUILT) {
+    console.error(`stills-proof: not built yet; ${Object.keys(STILLS_CHECKS).length} checks pending (${Object.keys(STILLS_CHECKS).join(', ')}); nothing was measured`);
+    process.exit(2);
+  }
+  // each part by name, found at run time so a part that is not merged yet is a blocked row, not a crash
+  const names = ['./stills-proof.measure.ts', './stills-proof.still.ts', './stills-proof.ui.ts'];
+  const rows: { id: string; status: 'pass' | 'fail' | 'pending'; say?: string }[] = [];
+  const done = new Set<string>();
+  for (const n of names) {
+    let part: StillsProofPart | undefined;
+    try { const mod = (await import(n)) as Record<string, unknown>; part = Object.values(mod).find((v): v is StillsProofPart => !!v && typeof v === 'object' && 'checks' in v && 'built' in v); } catch { part = undefined; }
+    if (!part?.built) continue;
+    for (const [id, run] of Object.entries(part.checks)) { const r = await run(); done.add(id); rows.push(r === true ? { id, status: 'pass' } : { id, status: 'fail', say: r }); }
+  }
+  for (const id of Object.keys(STILLS_CHECKS)) if (!done.has(id)) rows.push({ id, status: 'pending' });
+  for (const r of rows) console.log(`${r.status.toUpperCase().padEnd(8)} ${r.id.padEnd(4)} ${STILLS_CHECKS[r.id]}${r.say ? `\n         ${r.say}` : ''}`);
+  const bad = rows.filter((r) => r.status === 'fail').length, pend = rows.filter((r) => r.status === 'pending').length;
+  console.log(`\n${rows.length - bad - pend} pass, ${bad} fail, ${pend} pending`);
+  process.exit(bad ? 1 : pend ? 2 : 0);
 }
+void main();

@@ -1,0 +1,20 @@
+/* «הפריים הכי חד» (wave 8). Logical properties only; numbers sit in LTR isolates; colours are the theme tokens. */
+.cover { display: grid; gap: var(--pf-sp-4); }
+.cover-tiles { display: grid; gap: var(--pf-sp-5); }
+.cover-tile { display: grid; gap: var(--pf-sp-3); padding: var(--pf-sp-4); border-radius: var(--pf-r-lg, 8px); background: var(--pf-surface-3, transparent); }
+.cover-tile:focus-visible, .cover-crop:focus-visible { outline: 2px solid var(--pf-frame); outline-offset: 2px; }
+.cover-canvas-wrap { inline-size: 100%; }
+.cover-canvas { display: block; inline-size: 100%; block-size: auto; max-block-size: 40vh; object-fit: contain; background: var(--pf-surface-4); }
+.cover-lines { margin: 0; padding-inline-start: var(--pf-sp-6); display: grid; gap: var(--pf-sp-1, 2px); }
+.cover-frame-line, .cover-note, .cover-label, .cover-keyhint { margin: 0; font-size: var(--pf-fs-xs); }
+.cover-note { font-weight: var(--pf-fw-medium); }
+.cover-method summary { cursor: pointer; }
+.cover-dlg { display: grid; gap: var(--pf-sp-4); }
+.cover-pic { position: relative; inline-size: 100%; max-inline-size: 640px; direction: ltr; overflow: hidden; }
+.cover-pic .cover-canvas { max-block-size: none; position: absolute; inset: 0; block-size: 100%; }
+.cover-crop { position: absolute; box-sizing: border-box; border: 2px solid var(--pf-frame); box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.45); cursor: move; touch-action: none; }
+.cover-set { display: flex; flex-wrap: wrap; gap: var(--pf-sp-5); border: 0; padding: 0; margin: 0; }
+.cover-set legend { padding: 0; margin-block-end: var(--pf-sp-2); font-weight: var(--pf-fw-medium); }
+.cover-ppi ul, .cover-notes { margin: 0; padding-inline-start: var(--pf-sp-6); display: grid; gap: var(--pf-sp-2); }
+.cover-job { margin: 0; min-block-size: 1.2em; }
+.cover-download { display: inline-block; text-decoration: none; }
