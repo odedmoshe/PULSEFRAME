@@ -195,6 +195,8 @@ export interface EditorState {
   storyRun: StoryRunInfo | null;
   /** The story dialog's choices kept while the owner went to the phone dialog («מהטלפון»); the story reopens with them when the phone dialog is put away. Session state only, never stored or sent. */
   storyKept: StoryChoices | null;
+  /** «גדלים מול העיניים» (wave 8 growing): the dialog is open. Session state only; its eye marks live in the dialog's own memory, never here, in browser storage or on the server (verifier C8). */
+  growingOpen: boolean;
   // ---- keyframe curves and motion paths (ADR-0019): session state, never stored in the document or sent in presence ----
   /** The selected keys of the keyframe strip (one clip at a time); pruned on load when the clip is gone (W2). */
   keySel: { clipId: string; keys: KeyRef[] } | null;
@@ -299,6 +301,7 @@ export class Editor {
     imports: { local: [], jobs: [], room: null, skipped: null }, phoneDropOpen: false, drop: null, dropLive: null, dropProblem: null, planBlockers: [], missingMedia: [],
     filmOpen: false, filmSource: null, filmRun: null,
     storyOpen: false, storySource: null, storyDraft: null, storyRun: null, storyKept: null,
+    growingOpen: false,
     keySel: null, keyClipboard: null, curvePicker: null, pathOn: readPathOn(), playSharpness: readPlaySharpness(),
   };
   /**
@@ -1061,6 +1064,9 @@ export class Editor {
   /** «ספרו מה היה» (wave 7): open the dialog on an event's files or a selection; close it; the draft while tapping; the run this tab made. */
   openStory(source: StorySource) { this.set({ storyOpen: true, storySource: { assetIds: [...source.assetIds], event: source.event ?? null }, storyKept: null }); }
   closeStory() { this.set({ storyOpen: false, storyKept: null }); }
+  /** «גדלים מול העיניים» (wave 8): open and close the dialog (GrowingEntry on the start hub). */
+  openGrowing() { this.set({ growingOpen: true }); }
+  closeGrowing() { this.set({ growingOpen: false }); }
   /** «מהטלפון» in the story dialog: the dialog closes (its caller released the microphone first), its choices are kept, the phone dialog opens; hidePhoneDrop reopens the story as it was. */
   storyToPhone(choices: StoryChoices) { this.set({ storyOpen: false, storyKept: choices, phoneDropOpen: true }); }
   setStoryDraft(draft: StoryDraft | null) { this.set({ storyDraft: draft }); }

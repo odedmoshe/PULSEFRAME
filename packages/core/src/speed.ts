@@ -155,6 +155,17 @@ export function sourceFrameIndexAt(asset: Pick<Asset, 'duration'> & { video: Non
  */
 export const handleAfterEnd = (c: MediaClip, assetDuration: T.RationalTime): T.RationalTime =>
   isRamped(c) ? T.sub(toTimelineSpan(c, T.sub(assetDuration, c.sourceIn)), c.duration) : c.reverse ? toTimelineSpan(c, c.sourceIn) : toTimelineSpan(c, T.sub(assetDuration, sourceEnd(c)));
+/**
+ * THE rule for the spare source a transition into the next picture plays over after `prev` (ADR-0012), in whole project frames
+ * (frameIndexAt of handleAfterEnd, not clamped: a caller that shows the number clamps it at 0). null = that side never runs out:
+ * a still image, or a freeze frame (wave 8 growing, verifier C1). A freeze shows its sourceIn at every time (toSourceSpan is 0),
+ * and the evaluator draws the outgoing side with clipLayer at times past its end (evaluate.ts), so it holds the same picture for
+ * the whole transition, exactly as a still does. Every check of that handle goes through here: set_transition and
+ * set_transition_options (ops.ts transitionSource, so velocityLimit and preflight follow), replace_clip_media, the template
+ * planner's handleBefore and the editor's cut and transition rooms (inspector.model.ts, gallery.pick.ts).
+ */
+export const spareAfter = (prev: MediaClip, asset: Pick<Asset, 'kind' | 'duration'>, rate: { num: number; den: number }): number | null =>
+  asset.kind === 'image' || isFreeze(prev) ? null : T.frameIndexAt(handleAfterEnd(prev, asset.duration), rate);
 /** Timeline time a forward, constant-speed clip could start earlier before its source runs out (the head a velocity ramp reads, ADR-0012). */
 export const handleBeforeStart = (c: MediaClip): T.RationalTime => toTimelineSpan(c, c.sourceIn);
 /**

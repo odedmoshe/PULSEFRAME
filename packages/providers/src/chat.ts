@@ -133,7 +133,7 @@ export const ASSISTANT_DATA_SENT = ['format', 'version', 'settings', 'duration',
  * text or any op schema the tool offers changes, the server's digest differs, the setup state becomes prompt_digest_mismatch
  * and nothing is sent until the new prompt is reviewed and this pin is updated (prompt.test.ts prints the new digest).
  */
-export const ASSISTANT_PROMPT_DIGEST = 'sha256:be49337a799f70911112f8f4ff4d92076eba11482beb047dccef90e68b3671c8';
+export const ASSISTANT_PROMPT_DIGEST = 'sha256:90a0e5b93c02fd3999c13bf5a9c5eca28d9985d66582baed37f7c4ee4551425c'; // wave 8 growing: re-pinned after review; the only change is add_clip's optional freeze argument
 /**
  * The chat capability of wave 1 (plan §7.1): a DRAFT. No adapter exists, so it was never executed, and nothing about its
  * quality is claimed; only its schema is checked (chat.test.ts). Hosts are empty here: they come from the owner's config.

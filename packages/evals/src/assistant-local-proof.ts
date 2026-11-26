@@ -30,7 +30,7 @@ export const ASSISTANT_LOCAL_CHECKS: Readonly<Record<string, string>> = {
   L12: 'after taken (and separately after the next request, and after project delete) the job output has cleared true, phrase null and slots {}, and the planted title text is absent from the database file and its WAL',
   L13: 'in Chromium from the keyboard, Hebrew and English, RTL: an unknown request shows «לשאול את העוזר המקומי»; Enter, then «הכנס לשורה» puts the phrase in the input with the badge; the grammar preview shows; Enter commits exactly one transaction labelled Command bar: gain_change at the shown revision; intent none shows its sentence and no button',
   L14: 'during the whole proof no socket of this process connects to an address other than 127.0.0.1 (the server, the adapter and the stand-in counted by the same hook)',
-  L15: 'ASSISTANT_PROMPT_DIGEST equals sha256:be49337a799f70911112f8f4ff4d92076eba11482beb047dccef90e68b3671c8 and assistantPrompt().digest equals it; localPrompt().digest equals ASSISTANT_LOCAL_PROMPT_DIGEST',
+  L15: 'ASSISTANT_PROMPT_DIGEST equals sha256:90a0e5b93c02fd3999c13bf5a9c5eca28d9985d66582baed37f7c4ee4551425c and assistantPrompt().digest equals it; localPrompt().digest equals ASSISTANT_LOCAL_PROMPT_DIGEST',
 };
 
 if (!ASSISTANT_LOCAL_PROOF_BUILT) {

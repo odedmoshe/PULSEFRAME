@@ -99,6 +99,7 @@
     "proof:craft": "tsx packages/evals/src/craft-proof.ts",
     "proof:pearls": "tsx packages/evals/src/pearls-proof.ts",
     "proof:story": "tsx packages/evals/src/story-proof.ts",
+    "proof:growing": "tsx packages/evals/src/growing-proof.ts",
     "proof:musicfit": "tsx packages/evals/src/musicfit-proof.ts",
     "proof:audiences": "tsx packages/evals/src/audiences-proof.ts",
     "proof:search": "tsx packages/evals/src/footage-search-proof.ts",

@@ -3,7 +3,7 @@
  * Every pick is one registered op; nothing here keeps project state.
  */
 import * as T from '@pulseframe/time';
-import { COLOR_LOOKS, findClip, handleAfterEnd, handleBeforeStart, previousAdjacent, velocityNeeds, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { COLOR_LOOKS, findClip, handleBeforeStart, previousAdjacent, spareAfter, velocityNeeds, type Clip, type OpCall, type ProjectDocument } from '@pulseframe/core';
 
 export type PickKind = 'effect' | 'look' | 'transition' | 'text' | 'motion';
 export interface PickItem { kind: PickKind; id: string }
@@ -87,8 +87,9 @@ export function transitionRoom(doc: ProjectDocument, clipId: string): Transition
   const fitting = (have: number, need: (n: number) => number) => { let n = room.maxFrames; while (n > 0 && need(n) > have) n--; return n; };
   const prev = previousAdjacent(f.track, f.clip);
   const asset = prev ? doc.assets[prev.assetId] : undefined;
-  if (prev && asset && asset.kind !== 'image') {
-    const handle = Math.max(0, T.frameIndexAt(handleAfterEnd(prev, asset.duration), rate));
+  const spare = prev && asset ? spareAfter(prev, asset, rate) : null; // null: a still or a freeze frame never runs out (core, the one rule)
+  if (spare !== null) {
+    const handle = Math.max(0, spare);
     const n = fitting(handle, (m) => (v ? velocityNeeds(m, v).outFrames : m));
     if (n < room.maxFrames) room = { maxFrames: n, limit: 'previous' };
   }
