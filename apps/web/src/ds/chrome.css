@@ -138,7 +138,7 @@
 .pf-rail { padding-inline: var(--pf-sp-2); }
 .pf-rail-label { font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); font-weight: var(--pf-fw-medium); max-inline-size: 100%; overflow: hidden; text-overflow: clip; white-space: nowrap; }
 .pf-rail-dot { position: absolute; inset-block-start: -2px; inset-inline-end: -4px; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--pf-agent); box-shadow: 0 0 0 2px var(--pf-surface-3); }
-@media (max-height: 780px) { .pf-rail-btn { min-block-size: 44px; padding-block: var(--pf-sp-2); } .pf-rail { padding-block: var(--pf-sp-3); } .pf-rail-list { gap: var(--pf-sp-3); } }
+@media (max-height: 780px) { .pf-rail-btn { min-block-size: 44px; padding-block: 2px; gap: 0; } .pf-rail { padding-block: var(--pf-sp-3); } .pf-rail-list { gap: var(--pf-sp-3); } .pf-rail-ic { inline-size: 20px; block-size: 20px; } .pf-rail-ic svg { inline-size: 18px; block-size: 18px; } .pf-rail-label { line-height: 14px; } .pf-rail-group + .pf-rail-group, .pf-rail-pinned { padding-block-start: var(--pf-sp-2); } }
 @media (max-height: 700px) { .pf-rail-label { display: none; } .pf-rail-btn { min-block-size: 38px; } }
 
 /* ---------- browser drawer ---------- */
