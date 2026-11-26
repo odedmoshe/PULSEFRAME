@@ -741,7 +741,7 @@ async function runFlash() {
   // the edit [140, 170) lies in cell 2 only (frames 120..179): 1 rendered, 4 reused
   check('I10', 'fixture B (a flashing stretch from 3.5 s to 6.5 s across the joins at 4 s and 6 s) with an edit inside 4-6 s: the photosensitivity report of the fast export deep-equals the single pass report of the same revision, the stretch is found, one segment was rendered',
     fill.job?.status === 'succeeded' && inc.job?.status === 'succeeded' && single.job?.status === 'succeeded' && deepEqual && rs?.verdict === 'fail' && rs.ranges.length === 1 && sec(range.from) <= 4 && sec(range.to) >= 6 && inc.report?.rendered === 1 && inc.report?.reused === 4,
-    { deepEqual, verdict: rs?.verdict, range: range && { fromSeconds: sec(range.from), toSeconds: sec(range.to), kind: range.kind, flashesPerSecond: range.flashesPerSecond, area: range.area }, incrementalReport: inc.report && { reused: inc.report.reused, rendered: inc.report.rendered }, singleVerdict: rs?.verdict, incVerdict: ri?.verdict, frames: [ri?.frames, rs?.frames] });
+    { deepEqual, verdict: rs?.verdict, range: range && { fromSeconds: sec(range.from), toSeconds: sec(range.to), kind: range.kind, flashesPerSecond: range.flashesPerSecond, busiestCellFlashesPerSecond: range.busiestCellFlashesPerSecond, area: range.area }, incrementalReport: inc.report && { reused: inc.report.reused, rendered: inc.report.rendered }, singleVerdict: rs?.verdict, incVerdict: ri?.verdict, frames: [ri?.frames, rs?.frames] });
 }
 
 /** Infinity values stay cacheable (a snow overlay always; a strobe before its first flash); I19b: what a GPU effect does to reuse. */

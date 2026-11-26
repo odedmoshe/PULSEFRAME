@@ -17,10 +17,22 @@
  * A light transition whose start is not kept draws with light 0 (`lights`), so strobes and lights together never start
  * more than three flashes in a second.
  *
+ * Transitions that are themselves a flash (TransitionDef.flashes: flash, dip to black or white, the colour blocks, the page
+ * turn; measured, engine flashTransitions.test.ts) are never held or changed (ADR-0011:80), but they reserve their frames
+ * (ADR-0009 amendment 2026-11-26). Such a transition counts as `flashes` flashes in every one-second period that touches any
+ * of its frames (its own rise and fall may be anywhere in them). A strobe or light start is kept only if, besides the gap
+ * after the last kept start, (a) it is at least `gapFrames` from the first and from the last frame of every such transition
+ * (it is held back exactly as a strobe start holds back another), and (b) no one-second period (⌈fps⌉ frames) holding it
+ * would then hold more than three flashes: kept starts, this one, and the flashes of the transitions it touches. The
+ * transitions are always drawn; only starts give way. So strobes, lights and these transitions together never make more
+ * than three flashes in a second, unless the transitions alone already do (two flash transitions close together: not
+ * limited, see below).
+ *
  * The schedule is a pure function of the document (cached per document object), so preview, stills and export agree and
  * any frame can be drawn on its own. What it does not cover: flashing a user builds by other means (keyframed opacity,
- * rapid cuts between bright and dark pictures, the legacy flash and dip transitions, ADR-0011): only the strobe effect and
- * the light transitions are limited here; the export's flash check (flashAnalysis.ts) reads everything else.
+ * rapid cuts between bright and dark pictures, the footage's own flashing, two flashing transitions close together,
+ * ADR-0011): only the strobe effect and the light transitions are limited here; the export's flash check
+ * (flashAnalysis.ts) reads everything else.
  */
 import * as T from '@pulseframe/time';
 import { beatSwitchFrame, flashGapFrames, followedBeats, lightStartFrame, switchFrame, transitionDef, type ProjectDocument } from '@pulseframe/core';
@@ -61,7 +73,14 @@ export interface FlashSchedule {
    * video track, the start inside the clip); the evaluator gives any other light transition light 0.
    */
   lights: Map<string, LightPlan>;
+  /**
+   * The transitions that are themselves a flash (TransitionDef.flashes), as drawn: the carrying clip, the timeline frames the
+   * transition covers (first … last) and how many flashes it counts for. Drawn as they are; they only hold back starts.
+   * Ascending by first frame.
+   */
+  flashing: FlashingTransition[];
 }
+export interface FlashingTransition { clipId: string; type: string; first: number; last: number; flashes: number }
 const keyOf = (clipId: string, effectId: string) => `${clipId}\n${effectId}`;
 const schedules = new WeakMap<ProjectDocument, Map<string, FlashSchedule>>();
 const num = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -77,7 +96,7 @@ export function flashSchedule(doc: ProjectDocument, sequenceId = doc.mainSequenc
   const had = bySequence.get(sequenceId);
   if (had) return had;
   const rate = doc.settings.frameRate, fps = rate.num / rate.den, gapFrames = flashGapFrames(fps);
-  const schedule: FlashSchedule = { fps, gapFrames, shown: new Map(), runOf: new Map(), lights: new Map() };
+  const schedule: FlashSchedule = { fps, gapFrames, shown: new Map(), runOf: new Map(), lights: new Map(), flashing: [] };
   bySequence.set(sequenceId, schedule);
   const seq = doc.sequences[sequenceId];
   if (!seq) return schedule;
@@ -100,6 +119,14 @@ export function flashSchedule(doc: ProjectDocument, sequenceId = doc.mainSequenc
         if (asset && ((asset.kind === 'image' && asset.image) || asset.video) && l0 !== null && first + l0 < end) {
           wanted.push({ frame: first + l0, key: lightKey(clip.id), light: clip.id });
         }
+      }
+      // A transition that is itself a flash: drawn by evaluate.ts on the clip's frames 0 … frames − 1 from its first frame (a
+      // media clip on a visible video track whose asset has a picture); it reserves those frames.
+      const m = tr ? transitionDef(tr.type)?.flashes : undefined;
+      if (clip.type === 'media' && tr && m) {
+        const asset = doc.assets[clip.assetId];
+        const first = firstFrameAt(clip.start, rate), last = Math.min(first + tr.frames, firstFrameAt(T.add(clip.start, clip.duration), rate)) - 1;
+        if (asset && ((asset.kind === 'image' && asset.image) || asset.video) && last >= first) schedule.flashing.push({ clipId: clip.id, type: tr.type, first, last, flashes: m });
       }
       for (const fx of clip.type === 'caption' ? [] : clip.effects ?? []) {
         if (fx.type !== 'light.strobe' || !fx.enabled) continue;
@@ -136,18 +163,45 @@ export function flashSchedule(doc: ProjectDocument, sequenceId = doc.mainSequenc
     }
   }
   wanted.sort((a, b) => a.frame - b.frame);
+  schedule.flashing.sort((a, b) => a.first - b.first || a.last - b.last);
+  const second = Math.ceil(fps - 1e-9); // frames of one second, up to a whole frame
+  const starts: number[] = []; // every kept start, ascending
+  /**
+   * Whether the flashing transitions hold back a start on `frame`: null when not; otherwise the frames between it and the
+   * nearest such transition (0 inside one), or, when only a full second holds it, the frames since the last kept start.
+   */
+  const reserved = (frame: number): number | null => {
+    let near: number | null = null;
+    for (const h of schedule.flashing) {
+      const d = frame < h.first ? h.first - frame : frame > h.last ? frame - h.last : 0;
+      if (d < gapFrames) near = near === null ? d : Math.min(near, d);
+    }
+    if (near !== null) return near;
+    // every one-second period [s, s + second − 1] that holds `frame`: kept starts in it, this start, and its transitions' flashes
+    for (let s = frame - second + 1; s <= frame; s++) {
+      const e = s + second - 1;
+      let n = 1;
+      for (const h of schedule.flashing) if (h.last >= s && h.first <= e) n += h.flashes;
+      if (n <= 1) continue; // no transition touches it: the gap rule alone keeps it at three
+      for (let k = starts.length - 1; k >= 0 && starts[k]! >= s; k--) n++;
+      if (n > 3) return frame - (starts[starts.length - 1] ?? -Infinity);
+    }
+    return null;
+  };
   const kept = new Map<string, number[]>();
   let last = -Infinity;
   for (let i = 0; i < wanted.length; ) {
     const frame = wanted[i]!.frame;
-    const keep = frame - last >= gapFrames;
+    const near = schedule.flashing.length ? reserved(frame) : null;
+    const keep = frame - last >= gapFrames && near === null;
     for (; i < wanted.length && wanted[i]!.frame === frame; i++) {
       const { key: k, light } = wanted[i]!;
-      // a light transition: kept, or held with the frames since the last kept start (of a strobe or another light)
-      if (light !== undefined) { schedule.lights.set(light, { frame, kept: keep, since: keep ? null : frame - last }); continue; }
+      // a light transition: kept, or held with the frames since the last kept start (of a strobe or another light), or, when a
+      // flashing transition holds it, the frames between it and that transition's nearest frame
+      if (light !== undefined) { schedule.lights.set(light, { frame, kept: keep, since: keep ? null : near !== null && frame - last >= gapFrames ? near : frame - last }); continue; }
       if (keep) { let list = kept.get(k); if (!list) kept.set(k, (list = [])); if (list[list.length - 1] !== frame) list.push(frame); }
     }
-    if (keep) last = frame;
+    if (keep) { last = frame; starts.push(frame); }
   }
   for (const [k, frames] of kept) schedule.shown.set(k, Float64Array.from(frames)); // whole numbers, exact up to 2^53 (an Int32Array wrapped at absurd frame rates)
   return schedule;

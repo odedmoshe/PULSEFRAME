@@ -91,6 +91,25 @@ describe('photosensitivity check of rendered frames', () => {
     }), { numRuns: 70 });
   });
 
+  it('the rate of a failing stretch is the rate over the area that fails, never one busy cell; it and the verdict are one rule (property)', () => {
+    // a small fast patch (too small to fail alone) and a large slower patch (the area), both square waves; the picture fails
+    // exactly when the large patch changes more than 6 times in a second, and then reads the large patch's rate
+    fc.assert(fc.property(fc.constantFrom(24, 30, 60), fc.integer({ min: 1, max: 3 }), fc.integer({ min: 2, max: 14 }), fc.integer({ min: 0, max: 40 }), (fps, fastHalf, slowHalf, at) => {
+      const small = (k: number) => Math.floor(k / fastHalf) % 2 === 1, big = (k: number) => Math.floor(k / slowHalf) % 2 === 1;
+      const cache = new Map<string, Uint8ClampedArray>();
+      const pic = (k: number) => { const key = `${small(k)}${big(k)}`; let f = cache.get(key); if (!f) cache.set(key, (f = frame((x, y) => (x < 8 && y < 8 ? (small(k) ? [255, 255, 255] : [0, 0, 0]) : x >= at && x < at + 48 && y >= 40 && y < 88 ? (big(k) ? [255, 255, 255] : [0, 0, 0]) : [0, 0, 0])))); return f; };
+      const r = analyse(fps, 3, pic);
+      const transitions = Math.floor((Math.round(fps) - 1) / slowHalf) + 1;
+      expect(r.verdict).toBe(transitions > 6 ? 'fail' : 'pass');
+      expect(r.areaPeak.general).toBe(transitions / 2);
+      for (const x of r.ranges) {
+        expect(x.flashesPerSecond).toBe(transitions / 2); // the area's rate, above 3
+        expect(x.flashesPerSecond).toBeGreaterThan(3);
+        expect(x.busiestCellFlashesPerSecond).toBe(Math.max(transitions, Math.floor((Math.round(fps) - 1) / fastHalf) + 1) / 2);
+      }
+    }), { numRuns: 60 });
+  });
+
   it('cells are block means of linear light; a frame of any size gives the same cells for the same picture', () => {
     const c = flashCells(WHITE, W, H);
     expect(c.cols).toBe(FLASH_GRID);
