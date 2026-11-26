@@ -19,7 +19,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { LibraryRecordSchema, IMPORT_STAGE, convertingStage, importCardState, importErrorRetryable, LUT_MAX_TEXT_LENGTH, type Asset, type ImportErrorCode, type ImportJobView, type ImportRoom } from '@pulseframe/core';
+import { LibraryRecordSchema, SOURCE_OP, SourceRecordSchema, IMPORT_STAGE, convertingStage, importCardState, importErrorRetryable, LUT_MAX_TEXT_LENGTH, type Asset, type ImportErrorCode, type ImportJobView, type ImportRoom } from '@pulseframe/core';
 import { readCapture } from './captureMeta.ts';
 import { CONFORM_RECIPE, diskReserveRefuses, IMPORT_JOB_TYPE, importIdempotencyKey, importTempName, type ImportJobError, type ImportJobInput, type ImportJobOutput, type ImportQueue, type ImportQueueDeps, type LibraryJobInput, type ReceiveRequest } from './importContracts.ts';
 import { libraryError } from './library/contract.ts';
@@ -43,7 +43,7 @@ export function conformNeedBytes(originalBytes: number, needs: NeedsConform): nu
 }
 
 /** What the queue keeps beside the shared job output: the recipe a converted result was made by (conform reuse is keyed by it). */
-type StoredOutput = ImportJobOutput & { recipe?: string; /** LIBRARY BRANCH (worker A): use_library_item wrote its record onto an asset that existed */ recordAttached?: boolean };
+type StoredOutput = ImportJobOutput & { recipe?: string; /** LIBRARY BRANCH (worker A): use_library_item wrote its record onto an asset that existed */ recordAttached?: boolean; /** SOURCE BRANCH (wave 8 sources): use_source_item's answer */ libraryKept?: boolean; warnings?: unknown[] };
 
 export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
   const { store, lane, derivatives } = deps;
@@ -72,6 +72,9 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
   const settle = (jobId: string) => {
     const row = jobOf(jobId);
     if (!row || !FINISHED.has(row.status)) return;
+    // SOURCE BRANCH (wave 8 sources): the bytes are in the blob store or gone; the fetch job's download and link sidecar go now
+    const src = (row.input as ImportJobInput | null)?.source;
+    if (src) removeSourceTemp(store.tmpDir, src.fetchJobId);
     for (const w of waiters.get(jobId) ?? []) w.resolve(row);
     waiters.delete(jobId);
   };
@@ -170,19 +173,20 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
     let r;
     try {
       // LIBRARY BRANCH (worker A): a library copy is committed by use_library_item (which deduplicates and attaches the record)
-      const op = input.library ? { op: 'use_library_item', args: { asset } } : { op: 'import_asset', args: { asset } };
-      r = store.commit({ projectId: job.projectId, actor: job.actor, allowInternal: true, kind: input.commitKind, idempotencyKey: importIdempotencyKey(job.id), label: `${input.library ? 'Add from the library' : 'Import'} ${asset.name}`, ops: [op] });
+      // SOURCE BRANCH (wave 8 sources): a fetched file is committed by use_source_item (which deduplicates and attaches its record)
+      const op = input.library ? { op: 'use_library_item', args: { asset } } : input.source ? { op: SOURCE_OP, args: { asset } } : { op: 'import_asset', args: { asset } };
+      r = store.commit({ projectId: job.projectId, actor: job.actor, allowInternal: true, kind: input.commitKind, idempotencyKey: importIdempotencyKey(job.id), label: `${input.library ? 'Add from the library' : input.source ? 'Add from a source' : 'Import'} ${asset.name}`, ops: [op] });
     } catch (e) {
       if (e instanceof ApiError && e.code === 'project_not_found') return fail(job, 'project_gone', 'the project was deleted before the file arrived in it', 404, { projectId: job.projectId });
       if (e instanceof ApiError && e.code === 'idempotency_key_reused') return fail(job, 'internal_error', 'another change already used this import\'s commit key; send the file again', 409, { transactionId: e.details.transactionId });
       // LIBRARY BRANCH (worker A): a refusal of the library record is the caller's to see, with its own code
-      if (e instanceof ApiError && input.library && e.status < 500 && e.code !== 'unknown_op') return fail(job, 'internal_error', `the file could not be added to the project: ${e.message}`, e.status, { refusal: e.code, ...e.details }, e.hint);
+      if (e instanceof ApiError && (input.library || input.source) && e.status < 500 && e.code !== 'unknown_op') return fail(job, 'internal_error', `the file could not be added to the project: ${e.message}`, e.status, { refusal: e.code, ...e.details }, e.hint);
       if (e instanceof ApiError) return fail(job, 'internal_error', `the file could not be added to the project: ${e.message}`, 500, { refusal: e.code });
       throw e;
     }
-    const out = r.results[0]?.output as { assetId: string; deduplicated: boolean; recordAttached?: boolean } | undefined;
+    const out = r.results[0]?.output as { assetId: string; deduplicated: boolean; recordAttached?: boolean; libraryKept?: boolean; warnings?: unknown[] } | undefined;
     if (!out?.assetId) return fail(job, 'internal_error', 'the import operation gave no asset', 500);
-    succeed(job, { assetId: out.assetId, revision: r.revision, deduplicated: !!out.deduplicated, converted: extra.converted, reusedConform: extra.reusedConform, reasons: extra.reasons, contentHash: asset.contentHash, conformSeconds: extra.conformSeconds, ...(extra.recipe ? { recipe: extra.recipe } : {}), ...(input.library ? { recordAttached: !!out.recordAttached } : {}) });
+    succeed(job, { assetId: out.assetId, revision: r.revision, deduplicated: !!out.deduplicated, converted: extra.converted, reusedConform: extra.reusedConform, reasons: extra.reasons, contentHash: asset.contentHash, conformSeconds: extra.conformSeconds, ...(extra.recipe ? { recipe: extra.recipe } : {}), ...(input.library ? { recordAttached: !!out.recordAttached } : {}), ...(input.source ? { recordAttached: !!out.recordAttached, libraryKept: !!out.libraryKept, warnings: Array.isArray(out.warnings) ? out.warnings : [] } : {}) });
     ensureDerivatives(job.projectId, out.assetId);
   }
   function ensureDerivatives(projectId: string, assetId: string) {
@@ -195,6 +199,8 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
     const i = inputOf(job);
     // LIBRARY BRANCH (worker A): a library copy carries its licence record and no upload record (validate.ts library_provenance)
     if (i.library) return { origin: 'upload', importedAt: i.receivedAt, importedBy: job.actor, library: i.library.record } as Asset['provenance'];
+    // SOURCE BRANCH (wave 8 sources): a fetched file carries its source record and no upload record (validate.ts source_provenance)
+    if (i.source) return { origin: 'upload', importedAt: i.receivedAt, importedBy: job.actor, source: i.source.record } as Asset['provenance'];
     return { origin: 'upload', importedAt: i.receivedAt, importedBy: job.actor, upload: { via: i.via, jobId: job.id, ...(i.dropId ? { dropId: i.dropId } : {}), ...(i.relativePath && i.via === 'folder' ? { relativePath: i.relativePath } : {}) } } as Asset['provenance'];
   };
   const captureOf = (job: JobRow) => readCapture(store.blobPath(inputOf(job).originalHash), inputOf(job).name, { homeZone: deps.homeZone, now: new Date(inputOf(job).receivedAt) });
@@ -214,7 +220,10 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
       const assetId = JSON.parse(row.result)?.results?.[0]?.output?.assetId;
       const h = inputOf(job).originalHash;
       const lib = inputOf(job).library; // LIBRARY BRANCH (worker A): the library commit names its record, not the job
-      const mine = lib ? ops[0]!.op === 'use_library_item' && asset?.provenance?.library?.itemId === lib.record.itemId : ops[0]!.op === 'import_asset' && asset?.provenance?.upload?.jobId === job.id;
+      const src = inputOf(job).source; // SOURCE BRANCH (wave 8 sources): the commit names its service and item, not the job
+      const mine = lib ? ops[0]!.op === 'use_library_item' && asset?.provenance?.library?.itemId === lib.record.itemId
+        : src ? ops[0]!.op === SOURCE_OP && asset?.provenance?.source?.provider === src.record.provider && asset?.provenance?.source?.itemId === src.record.itemId
+        : ops[0]!.op === 'import_asset' && asset?.provenance?.upload?.jobId === job.id;
       if (row.actor === job.actor && row.allow_internal === 1 && ops.length === 1 && mine && (asset.contentHash === h || asset.conform?.originalContentHash === h) && typeof assetId === 'string')
         return { kind: 'own', transactionId: row.id, revision: row.revision, asset, assetId };
     } catch { /* not ours */ }
@@ -241,7 +250,8 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
   async function shortcut(job: JobRow, needs: NeedsConform | null): Promise<boolean> {
     const input = inputOf(job);
     // LIBRARY BRANCH (worker A): no short-cut for a library copy; use_library_item finds the duplicate and attaches the record
-    const dup = input.library ? null : duplicateIn(job.projectId, input.originalHash);
+    // SOURCE BRANCH (wave 8 sources): no short-cut for a fetched file either; use_source_item finds the duplicate and attaches the record
+    const dup = input.library || input.source ? null : duplicateIn(job.projectId, input.originalHash);
     if (dup) {
       succeed(job, { assetId: dup.asset.id, revision: dup.revision, deduplicated: true, converted: !!dup.asset.conform, reusedConform: false, reasons: dup.asset.conform?.reasons ?? [], contentHash: dup.asset.contentHash, conformSeconds: null });
       return true;
@@ -408,6 +418,16 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
         if (!r.success || !okExpect || req.via !== 'browser') throw new ApiError(400, 'invalid_request', 'a library copy needs a valid record and expectation', {});
       }
       // ---- end of the library branch ----
+      // ---- SOURCE BRANCH (wave 8 sources; sources/job.ts): a file a source_fetch job downloaded. The record must be a valid
+      // SourceRecord naming the expected bytes, never beside a library part; after the bytes are received they must hash to
+      // `expect.sha256` or nothing is stored (sourceExpectFails, below). The job keeps input.source; its commit is use_source_item.
+      if (req.source) {
+        const r = SourceRecordSchema.safeParse(req.source.record);
+        const hex = req.source.expect?.sha256;
+        if (!r.success || typeof hex !== 'string' || !/^[0-9a-f]{64}$/.test(hex) || r.data.sha256 !== hex || req.library || req.via !== 'browser' || typeof req.source.fetchJobId !== 'string' || !/^job_[A-Za-z0-9_-]{1,64}$/.test(req.source.fetchJobId))
+          throw new ApiError(400, 'invalid_request', 'a fetched file needs a valid source record naming its bytes', {});
+      }
+      // ---- end of the source branch ----
       if (!store.db.prepare('SELECT 1 FROM projects WHERE id = ?').get(req.projectId)) throw new ApiError(404, 'project_not_found', `project ${req.projectId} not found`, { projectId: req.projectId }, 'Call list_projects.');
       const { name, isCube } = cleanUploadName(req.name);
       const relativePath = req.via === 'folder' ? cleanRelativePath(req.relativePath) : undefined;
@@ -443,6 +463,8 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
         const libFail = req.library ? libraryExpectFails(req.library.expect, rec) : null;
         if (libFail) { fs.rmSync(rec.tmp, { force: true }); throw libFail; }
         // ---- end of the library branch ----
+        const srcFail = req.source ? sourceExpectFails(req.source.expect, rec) : null; // SOURCE BRANCH (wave 8 sources)
+        if (srcFail) { fs.rmSync(rec.tmp, { force: true }); throw srcFail; }
         const input: ImportJobInput = {
           originalHash: rec.hash, byteSize: rec.size, name, via: req.via,
           ...(req.via === 'phone' && req.dropId ? { dropId: req.dropId } : {}),
@@ -453,6 +475,7 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
           ...(req.batchId ? { batchId: req.batchId } : {}),
           retryOf: null,
           ...(req.library ? { library: req.library } : {}), // LIBRARY BRANCH (worker A)
+          ...(req.source ? { source: { record: req.source.record, expect: { sha256: req.source.expect.sha256 }, fetchJobId: req.source.fetchJobId } } : {}), // SOURCE BRANCH (wave 8 sources)
         };
         // Stored and enqueued in one synchronous step: no job without its bytes, no bytes without a job.
         const row = store.db.transaction(() => {
@@ -557,6 +580,14 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
       // Working files of conversions and receives the process was killed in. A busy file (Windows) never stops start-up.
       try {
         for (const f of fs.readdirSync(store.tmpDir)) if (/^(imp|up)_/.test(f)) { try { fs.rmSync(path.join(store.tmpDir, f), { force: true, recursive: true }); } catch { /* busy: next start */ } }
+        // SOURCE BRANCH (wave 8 sources): a download or link sidecar whose source_fetch job is gone or finished; an open job keeps
+        // its .part (it resumes with Range) and its .link
+        for (const f of fs.readdirSync(store.tmpDir)) {
+          const m = /^src_(.+)\.(part|link)$/.exec(f);
+          if (!m) continue;
+          const st = jobOf(m[1]!)?.status;
+          if (!st || FINISHED.has(st)) { try { fs.rmSync(path.join(store.tmpDir, f), { force: true }); } catch { /* busy: next start */ } }
+        }
       } catch { /* no tmp directory */ }
       const rows = store.recoverJobs(IMPORT_JOB_TYPE);
       for (const r of rows) if (!probeQueue.includes(r.id) && !controls.has(r.id) && !convertQueue.some((c) => c.jobId === r.id)) probeQueue.push(r.id);
@@ -585,3 +616,15 @@ export function libraryExpectFails(expect: LibraryJobInput['expect'], rec: { has
   return rec.size === expect.bytes ? null : libraryError('changedSinceIndex', { bytes: rec.size, indexedBytes: expect.bytes });
 }
 // ---- end of the library branch ----
+
+// ---- SOURCE BRANCH (wave 8 sources) ----
+/** Why received bytes are not the ones the source_fetch job downloaded (409 source_hash_mismatch, nothing stored), or null. */
+export function sourceExpectFails(expect: { sha256: string }, rec: { hash: string }): ApiError | null {
+  return rec.hash === `sha256:${expect.sha256}` ? null : new ApiError(409, 'source_hash_mismatch', 'the received bytes are not the ones the download stored', { sha256: rec.hash.replace(/^sha256:/, ''), expected: expect.sha256 }, 'Import the item again.');
+}
+/** The temp files of a source_fetch job (`<tmp>/src_<jobId>.part` and `.link`). Best effort: a busy file goes at the next start. */
+export function removeSourceTemp(tmpDir: string, fetchJobId: string): void {
+  if (!/^job_[A-Za-z0-9_-]{1,64}$/.test(fetchJobId)) return;
+  for (const ext of ['part', 'link']) { try { fs.rmSync(path.join(tmpDir, `src_${fetchJobId}.${ext}`), { force: true }); } catch { /* busy */ } }
+}
+// ---- end of the source branch ----
