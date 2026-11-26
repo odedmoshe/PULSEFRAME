@@ -12,6 +12,7 @@ import { contentTransform, findClip } from '@pulseframe/core';
 import { boxToTrackUnits, frameToLayerSource, frameToScreen, layerSourceToFrame, screenToFrame, toTrackUnits, type FrameBox, type LayerPlacement } from './tracking.math.ts';
 import { pickAnnouncement, TRACKING_TESTIDS as ID, trackingT } from './tracking.strings.ts';
 import { useEditorState, type Editor } from './store.ts';
+import { focusNow } from '../ds/focus.ts';
 import './tracking.css';
 
 /** The pick in frame px: a point, or a box (centre and size along the frame axes). */
@@ -66,7 +67,7 @@ export function TrackPicker(props: { canvas: HTMLCanvasElement | null }) {
 
   // A new pick starts in the middle of the picture: a point, or a square area a fifth of the picture's drawn height.
   const key = pick ? `${pick.kind}:${pick.clipId}` : '';
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!pick) { setSel(null); setErr(null); return; }
     const tg = targetNow(editor, pick.clipId);
     if (!tg) { setSel(null); setErr(tt('mtrack.pick.noPicture')); }
@@ -77,8 +78,7 @@ export function TrackPicker(props: { canvas: HTMLCanvasElement | null }) {
       setErr(null);
     }
     setLive(`${tt(pick.kind === 'point' ? 'mtrack.pick.point' : 'mtrack.pick.region')}. ${tt('mtrack.pick.help')}`);
-    const id = window.setTimeout(() => surface.current?.focus({ preventScroll: true }), 0);
-    return () => window.clearTimeout(id);
+    focusNow(surface.current, { preventScroll: true }); // this commit has drawn the surface (a layout effect), so the focus is there before anything else can be typed
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const shell = <div className="tp-clip" data-testid="track-picker-clip"><div ref={root} className="tp-root" dir="ltr" style={{ display: 'none' }} /></div>;
@@ -99,9 +99,9 @@ export function TrackPicker(props: { canvas: HTMLCanvasElement | null }) {
   const update = (s: Sel) => { setSel(s); setErr(null); announce(s); };
   const close = () => {
     const kind = pick.kind;
+    // the focus goes back to the button that opened the picker (it is in the page): first, then the picker closes, in this task
+    focusNow(document.querySelector<HTMLElement>(`[data-testid=${kind === 'point' ? ID.newPoint : ID.newRegion}]`));
     editor.closePicker();
-    // the focus goes back to the button that opened the picker
-    window.setTimeout(() => document.querySelector<HTMLElement>(`[data-testid=${kind === 'point' ? ID.newPoint : ID.newRegion}]`)?.focus(), 0);
   };
   const confirm = async () => {
     if (busy) return;

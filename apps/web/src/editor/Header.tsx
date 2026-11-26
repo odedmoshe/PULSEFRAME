@@ -24,6 +24,7 @@ import { IconExport, IconRedo, IconUndo } from './icons.tsx';
 import { WORKSPACES, useEditorState, type Workspace } from './store.ts';
 import { CraftHost } from './craft/CraftHost.tsx';
 import '../ds/chrome.css';
+import { focusNow } from '../ds/focus.ts';
 
 const MODES: Workspace[] = ['pro', 'color', 'sound', 'captions', 'deliver', 'shorts', 'perform'];
 const TINT: Record<string, string> = { pro: 'var(--pf-m-edit)', color: 'var(--pf-m-look)', sound: 'var(--pf-m-sound)', captions: 'var(--pf-m-captions)', deliver: 'var(--pf-m-deliver)', shorts: 'var(--pf-m-look)', perform: 'var(--pf-m-perform)' };
@@ -125,7 +126,7 @@ export function Header() {
           <span className="pf-btn-label">{exporting ? t('export.running') : t('export')}</span>
         </button>
       </div>
-      {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); /* return focus to the button that opened the dialog */ setTimeout(() => document.querySelector<HTMLElement>('[data-testid=projects-open]')?.focus(), 0); }} />}
+      {projectsOpen && <ProjectsDialog onClose={() => { /* return focus to the button that opened the dialog: first, in this task, then close */ focusNow(document.querySelector<HTMLElement>('[data-testid=projects-open]')); setProjectsOpen(false); }} />}
       {/* editing craft (wave 7): the open craft surface — time field, paste dialog, find panel, versions, save field (W3) */}
       <CraftHost />
     </header>

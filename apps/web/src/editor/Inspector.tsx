@@ -7,7 +7,7 @@
  * "All tools on one screen" (the legacy `all` panel, still chosen by `pf.inspector.tab.v1 = all`) lays every panel and every
  * tab of the object out in one scroll with every section open.
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { LayoutList, ListCollapse } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { clipEnd } from '@pulseframe/core';
@@ -38,6 +38,8 @@ import { VersionsButton } from './craft/VersionsButton.tsx';
 import './inspector.css';
 import { PEARLS_UI_BUILT } from './pearls/PearlsList.tsx';
 import { ScreenTimePanel } from './pearls/ScreenTimePanel.tsx';
+import { focusNow } from '../ds/focus.ts';
+import { FOCUS_APPROVALS_EVENT } from './focusRequests.ts';
 
 const TAB_KEY = 'pf.inspector.tab.v1';
 const CUSTOM_TABS_KEY = 'pf.workspace.custom.v1';
@@ -75,14 +77,10 @@ const PANEL_FOCUS: Partial<Record<PanelTarget, string>> = {
   replace: '[data-testid=replace-media-block]', sound: '[data-testid=insp-panel-audio]',
 };
 /** Opens the closed section around `el` (its toggle), scrolls it into view and moves the focus to its first control. */
-function revealControl(el: HTMLElement | null) {
-  if (!el) return;
-  const sec = el.closest<HTMLElement>('.pf-section[data-open=false]');
-  sec?.querySelector<HTMLButtonElement>('.pf-section-toggle')?.click();
-  requestAnimationFrame(() => {
-    el.scrollIntoView({ block: 'center' });
-    (el.matches('button, input, select, textarea, [tabindex]') ? el : el.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]'))?.focus({ preventScroll: true });
-  });
+/** Scroll the control (or the first control inside it) into view and focus it, now: the caller has made sure it is shown (see the layout effect in Inspector). */
+function revealControl(el: HTMLElement): void {
+  el.scrollIntoView({ block: 'center' });
+  focusNow(el.matches('button, input, select, textarea, [tabindex]') ? el : el.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]'), { preventScroll: true });
 }
 
 function FillerSection() {
@@ -155,6 +153,31 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
   useEffect(() => { if (state.cutClipId && kind !== 'cut') editor.selectCut(null); }, [state.cutClipId, kind]); // eslint-disable-line react-hooks/exhaustive-deps
   // another part of the editor asks for a tab of the object (the gallery after it applied an effect)
   useEffect(() => { const r = state.inspectorTab; if (r && tabsFor(kind).includes(r.tab)) { setChosen(r.tab); if (!flat && page !== 'clip' && pages.includes('clip')) setPage('clip'); } }, [state.inspectorTab?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The focus the ride bar's request (reveal) and the AI hub's «go to approvals» (wantApprove) ask for goes to a control that is drawn by the
+  // next commit (the tab, a closed section's body): recorded here, given in the layout effect of the commit that draws it, never in a later task.
+  const [, redraw] = useReducer((n: number) => n + 1, 0);
+  const reveal = useRef<{ target: string; tries: number; clicked: boolean } | null>(null);
+  const wantApprove = useRef(false);
+  useEffect(() => {
+    const on = () => { wantApprove.current = true; document.getElementById('inspector-tab-review')?.click(); redraw(); };
+    window.addEventListener(FOCUS_APPROVALS_EVENT, on);
+    return () => window.removeEventListener(FOCUS_APPROVALS_EVENT, on);
+  }, []);
+  useLayoutEffect(() => {
+    if (wantApprove.current) {
+      wantApprove.current = false;
+      const el = document.querySelector<HTMLElement>('[data-testid=approvals] [data-testid=approval-approve]');
+      el?.scrollIntoView({ block: 'nearest' });
+      focusNow(el);
+    }
+    const r = reveal.current;
+    if (!r) return;
+    const el = root.current?.querySelector<HTMLElement>(r.target) ?? null;
+    const closed = el?.closest<HTMLElement>('.pf-section[data-open=false]') ?? null;
+    if (el && closed && !r.clicked) { r.clicked = true; closed.querySelector<HTMLButtonElement>('.pf-section-toggle')?.click(); redraw(); return; } // its body is drawn by the next commit
+    if (el && !el.closest('[hidden]')) { reveal.current = null; revealControl(el); return; }
+    if (++r.tries < 3) redraw(); else reveal.current = null; // not drawn yet (a tab chosen by a later effect), or not there at all: look at the next commits, then stop
+  });
   // the ride bar asks for a panel (editor.openPanel): the object's tab that holds it, then the focus on its first control. After
   // the selection effect above, so a request that also selected the clip lands on the new object's tab.
   useEffect(() => {
@@ -165,9 +188,9 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
     if (!flat && page !== 'clip' && pages.includes('clip')) setPage('clip');
     const target = PANEL_FOCUS[r.target];
     if (!target) return;
-    // two frames: the tab chosen above has rendered by then
-    let h = requestAnimationFrame(() => { h = requestAnimationFrame(() => revealControl(root.current?.querySelector<HTMLElement>(target) ?? null)); });
-    return () => cancelAnimationFrame(h);
+    // the tab chosen above is drawn by the commit these updates make: the layout effect below puts the focus on its control in that commit
+    reveal.current = { target, tries: 0, clicked: false };
+    redraw();
   }, [state.panelRequest?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   // an effect added to the selected clip: the effects tab opens on it
   const fxCount = sel && sel.clip.type !== 'caption' ? sel.clip.effects?.length ?? 0 : 0;
@@ -350,7 +373,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
       <h2>{t('activity')}</h2>
       <button type="button" className="ghost" data-testid="activity-open" onClick={() => setActivityOpen(true)}>{t('activity.all')}</button>
       <VersionsButton />
-      {activityOpen && <ActivityDialog onClose={() => { setActivityOpen(false); setTimeout(() => document.querySelector<HTMLElement>('[data-testid=activity-open]')?.focus(), 0); }} />}
+      {activityOpen && <ActivityDialog onClose={() => { focusNow(document.querySelector<HTMLElement>('[data-testid=activity-open]')); setActivityOpen(false); }} />}
       <label className="check"><input type="checkbox" checked={state.followAgent} onChange={(e) => editor.set({ followAgent: e.target.checked })} data-testid="follow-agent" /> {t('follow.agent')}</label>
       <ol className="activity" data-testid="activity" aria-live="polite">
         {state.activity.length === 0 && <li className="muted">{t('activity.empty')}</li>}

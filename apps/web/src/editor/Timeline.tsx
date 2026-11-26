@@ -13,6 +13,7 @@ import type { Key, Lang } from '@pulseframe/i18n';
 import { api, readSnapBeats, writeSnapBeats } from '../api.ts';
 import { ClipVisuals } from '../ClipVisuals.tsx';
 import { IconButton, Seg, Tooltip } from '../ds/index.ts';
+import { focusNow } from '../ds/focus.ts';
 import { VolumeLine } from './VolumeLine.tsx';
 import { KeyStrip } from './KeyStrip.tsx';
 import { ASSET_DRAG_TYPE, useEditor, useEditorState, type Editor, type EditorState } from './store.ts';
@@ -266,16 +267,21 @@ function TrackRename({ value, label, onCommit }: { value: string; label: string;
   const [text, setText] = useState(value);
   const input = useRef<HTMLInputElement>(null), button = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (editing) { setText(value); input.current?.focus(); input.current?.select(); } }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
-  const done = (commit: boolean) => {
+  // The button is drawn by the commit that ends the edit: the focus goes to it in that commit's layout effect (not a later task, where the
+  // focus sat on the page body and a late focus could pull it from a field the person moved to). Only Enter and Escape ask for it: a
+  // blur means the focus has already gone somewhere the person chose.
+  const backToButton = useRef(false);
+  useLayoutEffect(() => { if (!editing && backToButton.current) { backToButton.current = false; focusNow(button.current); } }, [editing]);
+  const done = (commit: boolean, refocus = false) => {
+    if (refocus) backToButton.current = true;
     setEditing(false);
     const next = text.trim();
     if (commit && next && next !== value) onCommit(next);
-    setTimeout(() => button.current?.focus(), 0);
   };
   if (editing) {
     return <input ref={input} className="track-rename-input" dir="auto" value={text} aria-label={label} data-testid="track-rename-input" maxLength={120}
       onChange={(e) => setText(e.target.value)} onPointerDown={(e) => e.stopPropagation()}
-      onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); done(true); } else if (e.key === 'Escape') { e.preventDefault(); done(false); } }}
+      onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); done(true, true); } else if (e.key === 'Escape') { e.preventDefault(); done(false, true); } }}
       onBlur={() => { if (editing) done(true); }} />;
   }
   return <button ref={button} type="button" className="track-btn" aria-label={label} title={label} data-testid="track-rename" onPointerDown={(e) => e.stopPropagation()} onClick={() => setEditing(true)}><Pencil size={14} strokeWidth={1.75} aria-hidden="true" /></button>;

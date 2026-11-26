@@ -37,6 +37,7 @@ import { footageT } from './search.strings.ts';
 import { SEARCH_TESTIDS as ID } from './search.testids.ts';
 import '../pearls/pearls.css';
 import './search.css';
+import { focusNow } from '../../ds/focus.ts';
 
 /** True once the results are built (Library.tsx mounts them regardless; until then they render nothing). */
 export const FOOTAGE_UI_BUILT = true;
@@ -153,14 +154,15 @@ export function FootageResults({ query, onView, box }: { query: string; onView: 
   // ---- the viewer and the placements
   const [viewing, setViewing] = useState<Viewing | null>(null);
   const [placing, setPlacing] = useState<string | null>(null);
-  const focusRowButton = (key: string) => requestAnimationFrame(() => listRef.current?.querySelector<HTMLElement>(`[data-row-key="${CSS.escape(key)}"] [data-testid="${ID.rowView}"]`)?.focus());
+  // the row is in the page while the viewer is open: the focus goes back to its button first, then the viewer closes, in one task
+  const focusRowButton = (key: string) => focusNow(listRef.current?.querySelector<HTMLElement>(`[data-row-key="${CSS.escape(key)}"] [data-testid="${ID.rowView}"]`));
   const view = (r: Row) => {
     if (!r.canView) return;
     const m = r.moment;
     if (m.start && m.end) setViewing({ assetId: m.assetId, span: { start: m.start, end: m.end }, key: r.key });
     else onView(m.assetId);
   };
-  const closeViewer = useCallback(() => { const k = viewing?.key; setViewing(null); if (k) focusRowButton(k); }, [viewing]);
+  const closeViewer = useCallback(() => { const k = viewing?.key; if (k) focusRowButton(k); setViewing(null); }, [viewing]);
   const place = async (r: Row, mode: 'add' | 'insert') => {
     if (!rawDoc) return;
     const doc = state.doc;

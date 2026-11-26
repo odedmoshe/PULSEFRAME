@@ -1,5 +1,5 @@
 {
- "when": "2026-11-26T01:13:27.541Z",
+ "when": "2026-11-26T04:48:25.142Z",
  "aBuilt": true,
  "web": true,
  "evidence": {
@@ -62,7 +62,7 @@
     ]
    ],
    "untimedCopies": [
-    "ast_04ea72cc6a1"
+    "ast_837d5b5d061"
    ]
   },
   "P9": {
@@ -91,19 +91,19 @@
   "P12": {
    "picks": [
     [
-     "ast_54b75bd4a10",
+     "ast_0307ef697b0",
      "pearl",
      "rng_a1",
      60
     ],
     [
-     "ast_61f94df1070",
+     "ast_21c366d7d60",
      "pearl",
      "rng_b",
      44
     ],
     [
-     "ast_a13f181f2d0",
+     "ast_61923087eb0",
      "pearl",
      "rng_c",
      15

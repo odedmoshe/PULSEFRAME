@@ -11,6 +11,7 @@ import { SequenceSwitcher } from './SequenceSwitcher.tsx';
 import { Seg } from '../ds/index.ts';
 import { STAGE_STRINGS } from './stage.strings.ts';
 import './stage.css';
+import { focusNow } from '../ds/focus.ts';
 
 export function StageHeader() {
   const { editor, state } = useEditorState();
@@ -48,7 +49,7 @@ export function StageHeader() {
       <button type="button" className="stage-btn" aria-label={full ? S.exitFullscreen : S.fullscreen} title={full ? S.exitFullscreen : S.fullscreen} aria-pressed={full} data-testid="stage-fullscreen" onClick={toggleFull}>
         {full ? <Minimize size={16} strokeWidth={1.75} aria-hidden="true" /> : <Maximize size={16} strokeWidth={1.75} aria-hidden="true" />}
       </button>
-      {source && doc.assets[source] && <SourceViewer assetId={source} onClose={() => { setSource(null); setTimeout(() => document.querySelector<HTMLElement>('[data-testid=stage-view-program]')?.focus(), 0); }} />}
+      {source && doc.assets[source] && <SourceViewer assetId={source} onClose={() => { focusNow(document.querySelector<HTMLElement>('[data-testid=stage-view-program]')); setSource(null); }} />}
     </div>
   );
 }

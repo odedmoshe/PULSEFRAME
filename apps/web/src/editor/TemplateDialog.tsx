@@ -9,6 +9,7 @@ import * as T from '@pulseframe/time';
 import type { TemplateApplyResult, TemplateInput, TemplatePlanView, TemplateSummary } from '@pulseframe/core';
 import { api, ApiFailure } from '../api.ts';
 import { ToastSlot } from '../ds/index.ts';
+import { focusIn } from '../ds/focus.ts';
 import { useEditorState } from './store.ts';
 import { TEMPLATE_STRINGS } from './templates.strings.ts';
 import { TEMPLATE_TESTIDS as TID } from './templates.testids.ts';
@@ -123,6 +124,13 @@ export function TemplateDialog({ summary, onClose, onApplied }: { summary: Templ
     focusStep.current = null;
     document.getElementById(`${titleId}-${step}`)?.focus();
   }, [step, titleId]);
+  const focusMove = useRef<{ id: string; which: 'earlier' | 'later' } | null>(null);
+  useLayoutEffect(() => {
+    const m = focusMove.current;
+    if (!m) return;
+    focusMove.current = null;
+    focusIn(dialogRef.current, `li[data-asset-id="${CSS.escape(m.id)}"] [data-testid="${m.which === 'earlier' ? TID.mediaEarlier : TID.mediaLater}"]`);
+  });
   const go = (s: Step) => {
     setNote(null);
     if (s === step) { document.getElementById(`${titleId}-${s}`)?.focus(); return; }
@@ -138,7 +146,7 @@ export function TemplateDialog({ summary, onClose, onApplied }: { summary: Templ
   const move = (index: number, by: -1 | 1, which: 'earlier' | 'later') => {
     const id = media[index]?.assetId;
     setMedia((m) => moveItem(m, index, by));
-    if (id) setTimeout(() => dialogRef.current?.querySelector<HTMLElement>(`li[data-asset-id="${CSS.escape(id)}"] [data-testid="${which === 'earlier' ? TID.mediaEarlier : TID.mediaLater}"]`)?.focus(), 0);
+    if (id) focusMove.current = { id, which }; // the row is moved (re-inserted) by the next commit, which drops the focus: given back in that commit's layout effect
   };
   const rows = plan ? planRows(plan, doc.settings.frameRate) : null;
   const shownPlan = plan ?? lastPlan;

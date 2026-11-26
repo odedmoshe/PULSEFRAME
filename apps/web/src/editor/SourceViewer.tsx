@@ -8,6 +8,7 @@ import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, type Asset, type ProjectDocument, type SourceSpan } from '@pulseframe/core';
 import { Player } from '../player.ts';
 import { describeError } from './ProjectsDialog.tsx';
+import { focusNow } from '../ds/focus.ts';
 import { useEditorState } from './store.ts';
 import { placementLabel, placementOps } from './placement.range.ts';
 import { PearlForm } from './pearls/PearlForm.tsx';
@@ -122,7 +123,8 @@ export function SourceViewer({ assetId, onClose, startAt, initialSpan }: { asset
   // «שמור כפנינה» (wave 7 pearls): the marks as a span of the file; null = the whole file (nothing marked, or a photo)
   const markedSpan = (): SourceSpan | null => (asset ? spanOfMarks({ inFrame, outFrame, rate, duration: asset.duration, isImage: asset.kind === 'image' }) : null);
   const openForm = () => { playerRef.current?.pause(); setSavedNote(null); setFormOpen(true); };
-  const closeForm = useCallback(() => { setFormOpen(false); requestAnimationFrame(() => saveRef.current?.focus()); }, []);
+  // the save button stays in the page while the form is open: the focus goes to it first, then the form closes, in this task
+  const closeForm = useCallback(() => { focusNow(saveRef.current); setFormOpen(false); }, []);
 
   useEffect(() => {
     // an open pearl form owns Escape (its own listener runs first and prevents the default): the viewer stays open then
@@ -177,7 +179,7 @@ export function SourceViewer({ assetId, onClose, startAt, initialSpan }: { asset
           <button ref={saveRef} type="button" className="ghost" aria-expanded={formOpen} onClick={() => (formOpen ? closeForm() : openForm())} data-testid={PEARL_ID.save}>{P('save')} (P)</button>
           {savedNote && <span role="status" className="muted" data-testid="pearl-saved-note">{savedNote}</span>}
         </div>
-        {formOpen && <PearlForm assetId={assetId} span={markedSpan()} rate={rate} onCancel={closeForm} onSaved={() => { setFormOpen(false); setSavedNote(P('saved')); requestAnimationFrame(() => saveRef.current?.focus()); }} />}
+        {formOpen && <PearlForm assetId={assetId} span={markedSpan()} rate={rate} onCancel={closeForm} onSaved={() => { focusNow(saveRef.current); setFormOpen(false); setSavedNote(P('saved')); }} />}
         <p role="status" data-testid="source-range" data-in={inFrame} data-out={end}>
           {t('source.range')}: <bdi dir="ltr">{tc(inFrame)} – {tc(end)}</bdi> · <bdi dir="ltr">{end - inFrame}</bdi> {t('source.frames')}
         </p>

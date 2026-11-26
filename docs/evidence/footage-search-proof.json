@@ -1,5 +1,5 @@
 {
- "when": "2026-11-26T01:18:12.618Z",
+ "when": "2026-11-26T04:49:07.722Z",
  "exit": 0,
  "checksPassed": 19,
  "checks": 19,
@@ -14,7 +14,7 @@
    "check": "S1",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 2.4
+   "seconds": 2.6
   },
   {
    "check": "S2",
@@ -32,7 +32,7 @@
    "check": "S3",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 0.2
+   "seconds": 0.3
   },
   {
    "check": "S3",
@@ -56,7 +56,7 @@
    "check": "S6",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 0.3
+   "seconds": 0.2
   },
   {
    "check": "S7",
@@ -74,7 +74,7 @@
    "check": "S8",
    "part": "integration",
    "verdict": "PASS",
-   "seconds": 9.9
+   "seconds": 10
   },
   {
    "check": "S9",
@@ -86,13 +86,13 @@
    "check": "S9",
    "part": "integration",
    "verdict": "PASS",
-   "seconds": 0.4
+   "seconds": 0.3
   },
   {
    "check": "S10",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 4.4
+   "seconds": 4.2
   },
   {
    "check": "S11",
@@ -116,7 +116,7 @@
    "check": "S14",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 3
+   "seconds": 2.8
   },
   {
    "check": "S15",
@@ -146,7 +146,7 @@
    "check": "U1",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 13.4
+   "seconds": 12.9
   }
  ],
  "evidence": {
@@ -249,8 +249,8 @@
     "sample": "one sample on a shared 4-CPU machine, not gated",
     "vectors": 200000,
     "dim": 768,
-    "dotMs": 312.1,
-    "top200Ms": 57.9,
+    "dotMs": 303.6,
+    "top200Ms": 56.4,
     "best": 911833
    }
   },
@@ -280,12 +280,12 @@
       "samples": 4
      },
      {
-      "file": "VID_20241226_183000.mp4",
-      "samples": 4
-     },
-     {
       "file": "colours.mp4",
       "samples": 12
+     },
+     {
+      "file": "VID_20241226_183000.mp4",
+      "samples": 4
      }
     ],
     "barcodesRead": 20,
@@ -313,7 +313,7 @@
    },
    "S8": {
     "canceledAfterBatches": 1,
-    "exportMs": 1501,
+    "exportMs": 1500,
     "batchesAfterExport": 1
    },
    "S11": {
@@ -365,9 +365,9 @@
    },
    "S15": {
     "scanLabels": [
-     "local.search.picture scan prj_wxfMigFbBII"
+     "local.search.picture scan prj_8F4M1CEVRSU"
     ],
-    "toolMs": 352,
+    "toolMs": 356,
     "queryDuringScan": "busy"
    },
    "S16": {
@@ -385,7 +385,7 @@
     },
     "found": [
      {
-      "asset": "ast_6e448f3dc70",
+      "asset": "ast_c3c2c057590",
       "start": "",
       "end": "",
       "sources": "name",
@@ -414,7 +414,7 @@
      "start": "9/10",
      "end": "13/10",
      "sources": "transcript",
-     "asset": "ast_64333f8ea30"
+     "asset": "ast_b570186f1d0"
     },
     "placed": {
      "commits": 1,
@@ -490,7 +490,7 @@
    },
    "S8": {
     "route": "server-software-canvas2d",
-    "exportSeconds": 0.663,
+    "exportSeconds": 0.633,
     "exportStatus": "succeeded",
     "exportBytes": 3111,
     "batches": 6,

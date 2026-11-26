@@ -35,6 +35,7 @@ import { collectDropped } from './imports.logic.ts';
 import { MulticamLibraryEntry } from './MulticamLibraryEntry.tsx';
 import '../ds/chrome.css';
 import { PEARLS_UI_BUILT, PearlsList } from './pearls/PearlsList.tsx'; // «פנינים» (wave 7): the fourth view, once builder C has built it
+import { focusNow } from '../ds/focus.ts';
 
 const ACCEPT = 'video/*,audio/*,image/png,image/jpeg,image/webp,.cube';
 
@@ -63,7 +64,7 @@ export function Library() {
         });
       }}>
       {over && <div className="pf-drop-veil" aria-hidden="true"><ImagePlus size={28} />{S.dropTitle}</div>}
-      {viewing && doc?.assets[viewing] && <SourceViewer assetId={viewing} onClose={() => { const id = viewing; setViewing(null); setTimeout(() => (document.querySelector<HTMLElement>(`[data-testid="view-${id}"]`) ?? document.querySelector<HTMLElement>(`[data-testid="more-${id}"]`))?.focus(), 0); }} />}
+      {viewing && doc?.assets[viewing] && <SourceViewer assetId={viewing} onClose={() => { focusNow(document.querySelector<HTMLElement>(`[data-testid="view-${viewing}"]`) ?? document.querySelector<HTMLElement>(`[data-testid="more-${viewing}"]`)); setViewing(null); }} />}
       <LifeHost />
       {rail === 'media' && <MediaDrawer onView={setViewing} />}
       {rail === 'audio' && <AudioDrawer onView={setViewing} />}
