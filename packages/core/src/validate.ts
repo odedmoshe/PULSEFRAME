@@ -106,6 +106,15 @@ export function validateProject(doc: ProjectDocument): Issue[] {
       if ((fr.mapping === 'interpolated') !== (fr.multiplier !== undefined)) issues.push({ code: 'derived_frames', message: `asset ${a.id}: an interpolated result names its multiplier, and only it does`, ids: [a.id] });
       if (fr.heldFrames.some((f, i) => i > 0 && f <= fr.heldFrames[i - 1]!)) issues.push({ code: 'derived_frames', message: `asset ${a.id}: held frames must be strictly ascending`, ids: [a.id] });
     }
+    // «קליפ מקוד» (wave 8 motioncode): a clip made by a page is a generated video whose record matches its file
+    const made = a.provenance.made;
+    if (made) {
+      if (a.provenance.origin !== 'generated' || a.kind !== 'video') issues.push({ code: 'made_provenance', message: `asset ${a.id}: only a generated video records the page that made it`, ids: [a.id] });
+      if (a.video && a.video.frameCount !== made.frames) issues.push({ code: 'made_provenance', message: `asset ${a.id}: the made record says ${made.frames} frames, the file has ${a.video.frameCount}`, ids: [a.id] });
+      if (a.video && made.checks.alpha !== !!a.video.hasAlpha) issues.push({ code: 'made_provenance', message: `asset ${a.id}: the made record and the file disagree about transparency`, ids: [a.id] });
+      const keys = new Set(made.fields.map((f) => f.key));
+      for (const k of Object.keys(made.values)) if (!keys.has(k)) issues.push({ code: 'made_provenance', message: `asset ${a.id}: the value ${k} names no field of the page`, ids: [a.id] });
+    }
     // ADR-0023: how a file arrived through the import queue. Only uploads carry it; a phone file names its drop code (by id) and
     // only a phone file does; only a folder file has a path inside the folder.
     const up = a.provenance.upload;

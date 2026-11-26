@@ -44,7 +44,7 @@ const isVideoAsset = (a: Asset | undefined): a is Asset => !!a && a.kind === 'vi
 export function coversFrame(doc: ProjectDocument, c: MediaClip): boolean {
   const a = doc.assets[c.assetId];
   if (!a) return false;
-  const opaqueSource = a.kind === 'video' ? !!a.video : a.kind === 'image' ? !!a.image && !a.image.hasAlpha : false;
+  const opaqueSource = a.kind === 'video' ? !!a.video && !a.video.hasAlpha : a.kind === 'image' ? !!a.image && !a.image.hasAlpha : false;
   if (!opaqueSource) return false;
   const tr = c.transform;
   if (tr.opacity !== 1 || tr.x !== 0 || tr.y !== 0 || tr.rotation !== 0 || c.keyframes && Object.values(c.keyframes).some((k) => k && k.length) || c.mask || c.blend || c.follow) return false;

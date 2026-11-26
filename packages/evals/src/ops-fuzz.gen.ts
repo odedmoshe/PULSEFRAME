@@ -705,6 +705,30 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     };
   };
   /**
+   * «קליפ מקוד» (wave 8 motioncode; internal: the made routes commit it with allowInternal from a finished job). `genMade(doc)` returns a
+   * random apply_made_clip call: a made asset (a VP9 file with alpha and its made record, frames matching), sometimes without the record,
+   * as a picture, or with frames that disagree; then place (at a random frame, on a new or an existing track), replace (an asset on the
+   * timeline, an unused one or an unknown id), library only, or place AND replace (refused). Not drawn by `gen`. Until W2 builds the
+   * body every call is refused with made_not_built.
+   */
+  const genMade = (doc: ProjectDocument): OpCall => {
+    const frames = 30 + int(90);
+    const hash = `sha256:${Array.from({ length: 64 }, () => '0123456789abcdef'[int(16)]).join('')}`;
+    const record = { v: 1, pageSha256: hash, pageBytes: 200 + int(4000), templateId: pick(['rising-title', 'lower-third', 'counter', 'intro-plate', 'end-card']), templateVersion: 1, fields: [{ key: 'title', kind: 'text', label: { he: 'כותרת', en: 'Title' }, default: 'שלום' }], values: { title: pick(['טיול לגליל 2026', 'Hello', '']) }, frames, width: 640, height: 360, browser: 'fuzz', sandbox: 'chromium', checks: { determinism: { frames: [0, frames >> 1, frames - 1] }, flash: { black: { general: 0, red: 0 }, white: { general: 0, red: 0 } }, alpha: true } };
+    const r = rnd();
+    const asset = {
+      kind: r < 0.05 ? 'image' : 'video', name: 'made.webm', contentHash: hash, byteSize: 1000 + int(9000), container: 'webm', mimeType: 'video/webm', duration: f(frames),
+      video: { width: 640, height: 360, frameRate: rate, codec: 'vp9', rotation: 0, frameCount: r < 0.1 ? frames + 1 : frames, hasAlpha: true },
+      provenance: { origin: 'generated', importedAt: '2026-11-26T00:00:00Z', importedBy: 'fuzz', ...(r < 0.15 ? {} : { made: record }) },
+    };
+    const used = Object.values(doc.sequences).flatMap((sq) => sq.tracks.flatMap((t) => t.clips)).flatMap((c) => (c.type === 'media' ? [c.assetId] : []));
+    const tracks = Object.values(doc.sequences).flatMap((sq) => sq.tracks).filter((t) => t.kind === 'video');
+    const place = { start: fr(), ...(tracks.length && rnd() < 0.3 ? { trackId: pick(tracks).id } : {}) };
+    const replaceAssetId = used.length && rnd() < 0.7 ? pick(used) : rnd() < 0.5 ? Object.keys(doc.assets)[0] ?? 'ast_none' : 'ast_none';
+    const w = rnd();
+    return { op: 'apply_made_clip', args: { asset, ...(w < 0.45 ? { place } : w < 0.75 ? { replaceAssetId } : w < 0.9 ? {} : { place, replaceAssetId }) } };
+  };
+  /**
    * A random apply_take call (perform mode, ADR-0025; internal: a driver commits it with allowInternal, as POST /takes does): a
    * take's steps as the planner would emit them — adjustment hits that change light or not, a title, a sound on a lane bound to
    * an add_track, a punch written with replace_clip_keyframes (range form) on a picture clip — at random frames, so the flash rule
@@ -1039,5 +1063,5 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLiving, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience, genInk, genLesson, genTripMap };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLiving, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience, genInk, genLesson, genTripMap, genMade };
 }

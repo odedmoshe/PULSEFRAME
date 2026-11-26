@@ -230,3 +230,8 @@ export * from './gradeCurves.ts';
 export * from './gradeCurvesOps.ts';
 // the in-editor agent «סוכן» (wave 8 autonomy Part 2): runs, steps, statuses, limits, routes, what undo-all cannot undo (lead pre-pass)
 export * from './agentContract.ts';
+// «קליפ מקוד» (wave 8 motioncode track): the contract (limits, record, wire types, refusals) and apply_made_clip's registration are
+// lead-built; the op body (madeOps.ts) and checkMadePage / madeFieldsCheck (madeCheck.ts) are W2's
+export * from './madeContract.ts';
+export * from './madeCheck.ts';
+export * from './madeOps.ts';

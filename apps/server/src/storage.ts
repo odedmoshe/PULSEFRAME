@@ -8,7 +8,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import type { RenderCacheStatus } from '@pulseframe/core';
+import { MADE_JOB_TYPE, type RenderCacheStatus } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import { ApiError, type Store } from './store.ts';
 
@@ -81,9 +81,20 @@ export function deleteProject(store: Store, by: Principal, projectId: string, co
  */
 export const IMPORT_JOB_PIN_MS = 7 * 24 * 3600_000;
 /** Whether this job row still counts as a reference to the hashes it mentions. */
-function jobPins(r: { type: string; status: string; output: string | null; error: string | null; updated_at: string }, now: number): boolean {
-  if (r.type !== 'import' || (r.status !== 'failed' && r.status !== 'canceled')) return true;
+export function jobPins(r: { type: string; status: string; output: string | null; error: string | null; updated_at: string }, now: number): boolean {
   const parse = (t: string | null) => { try { return JSON.parse(t ?? 'null'); } catch { return null; } };
+  // «קליפ מקוד» (wave 8 motioncode; made/contract.ts): a render's file, stills and page stay while it runs and while its finished result
+  // waits to be applied, until it is dismissed or 7 days after it finished; once applied, the document names what it keeps. A failed or
+  // canceled render keeps nothing.
+  if (r.type === MADE_JOB_TYPE) {
+    if (r.status === 'queued' || r.status === 'running') return true;
+    if (r.status !== 'succeeded') return false;
+    const out = parse(r.output);
+    if (out?.dismissed === true || out?.appliedAssetId) return false;
+    const at = Date.parse(r.updated_at);
+    return !(Number.isFinite(at) && now - at >= IMPORT_JOB_PIN_MS);
+  }
+  if (r.type !== 'import' || (r.status !== 'failed' && r.status !== 'canceled')) return true;
   if (parse(r.error)?.dismissed === true || parse(r.output)?.dismissed === true) return false;
   const at = Date.parse(r.updated_at);
   return !(Number.isFinite(at) && now - at >= IMPORT_JOB_PIN_MS);

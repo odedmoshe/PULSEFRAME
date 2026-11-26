@@ -23,6 +23,13 @@ import type { Store } from './store.ts';
  */
 export type DerivativeKind = 'thumbnails' | 'waveform' | 'proxy' | 'moments' | 'envelope' | 'stills';
 /** Kinds the queue makes on import (moments is not one). */
+/**
+ * Which derivatives an asset gets. A video with alpha (`video.hasAlpha`, made clips wave 8 G2) gets no proxy: the proxy is H.264
+ * yuv420p, which would drop the alpha and draw a black box while playing (and break ADR-0005 parity); playback decodes the original.
+ */
+export function derivativeApplies(asset: Asset): Record<DerivativeKind, boolean> {
+  return { thumbnails: asset.kind === 'video', proxy: asset.kind === 'video' && !asset.video?.hasAlpha, waveform: asset.kind !== 'image' && !!asset.audio, moments: false, envelope: false, stills: false };
+}
 export const QUEUED_DERIVATIVE_KINDS: readonly DerivativeKind[] = ['thumbnails', 'waveform', 'proxy'];
 export interface DerivativeRow { assetHash: string; kind: DerivativeKind; status: 'queued' | 'running' | 'ready' | 'failed' | 'not-applicable'; blobHash: string | null; bytes: number | null; mimeType: string | null; meta: Record<string, unknown> | null; error: string | null; updatedAt: string }
 
@@ -72,7 +79,7 @@ export class Derivatives {
   ensure(asset: Asset): DerivativeRow[] {
     if (asset.kind === 'lut') return []; // a colour table has no picture or sound to derive from
     const hash = asset.contentHash;
-    const applicable: Record<DerivativeKind, boolean> = { thumbnails: asset.kind === 'video', proxy: asset.kind === 'video', waveform: asset.kind !== 'image' && !!asset.audio, moments: false, envelope: false, stills: false };
+    const applicable = derivativeApplies(asset);
     for (const kind of KINDS) {
       if (this.get(hash, kind)) continue;
       if (!applicable[kind]) this.write(hash, kind, { status: 'not-applicable' });

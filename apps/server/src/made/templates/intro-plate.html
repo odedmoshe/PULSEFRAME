@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>intro plate</title>
+<style>html,body{margin:0;background:transparent;overflow:hidden}canvas{display:block}</style></head>
+<body><canvas id="c"></canvas>
+<script>
+// «לוח פתיחה» / intro plate (PULSEFRAME built-in page, version 1). A full-frame plate in one colour; a title grows gently into place and
+// two soft bands open from the middle. An opaque plate (no transparency). Drawn from the frame number only; text is drawn, never markup.
+(function () {
+  var c = document.getElementById('c'), x = c.getContext('2d');
+  c.width = PF.width; c.height = PF.height;
+  var rtlOf = function (s) { var m = /[A-Za-zÀ-ɏ]|[֐-׿؀-ۿ]/.exec(s); return !!m && /[֐-׿؀-ۿ]/.test(m[0]); };
+  var clamp = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; };
+  var easeOut = function (p) { return 1 - Math.pow(1 - p, 3); };
+  PF.render = function (frame) {
+    var f = PF.fields, W = PF.width, H = PF.height, n = PF.frames;
+    var title = String(f.title || ''), bg = String(f.background || '#1d2a44'), colour = String(f.colour || '#ffffff');
+    var p = easeOut(clamp(frame / Math.max(1, Math.round(n * 0.4))));
+    x.globalAlpha = 1; x.fillStyle = bg; x.fillRect(0, 0, W, H);
+    var band = H * 0.18 * p;
+    x.fillStyle = 'rgba(255,255,255,0.08)';
+    x.fillRect(0, H / 2 - band - H * 0.12, W, band * 0.5);
+    x.fillRect(0, H / 2 + H * 0.12 + band * 0.5, W, band * 0.5);
+    var size = Math.round(H * (0.1 + 0.02 * p));
+    x.globalAlpha = p; x.fillStyle = colour; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.direction = rtlOf(title) ? 'rtl' : 'ltr'; x.font = '400 ' + size + 'px "Secular One"';
+    x.fillText(title, W / 2, H / 2);
+    x.globalAlpha = 1;
+  };
+})();
+</script></body></html>

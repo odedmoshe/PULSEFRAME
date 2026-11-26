@@ -12,6 +12,7 @@ import { FollowSchema, MAX_REDACT_REGIONS, MotionTrackSchema, RedactRegionSchema
 import { ANIMATABLE, KeyframeSchema, MAX_TRANSFORM_KEYS, RationalTimeSchema, type Animatable } from './keyframe.ts';
 import { CameraMotionSchema, ClipStabiliseSchema } from './steadyContract.ts';
 import { ClipDepthSchema } from './livingContract.ts';
+import { MadeRecordSchema } from './madeContract.ts';
 import { AUDIENCE_MUSIC_DB_MAX, AUDIENCE_MUSIC_DB_MIN, AUDIENCE_PROFILES, AUDIENCE_RULES_VERSION, KEEP_RULES, SOUND_ROLES } from './audienceLimits.ts';
 import { MOMENTS_MAX_WINDOWS, MomentsFileSchema, MomentsMeasuredSchema, MomentWindowSchema } from './momentsContract.ts';
 import { ANGLE_KINDS, MAX_ANCHORS_PER_PIECE, MAX_ANGLES, MAX_PIECES, MAX_SPEAKERS, MAX_SYNC_CANDIDATES, SYNC_VERDICTS } from './multicamLimits.ts';
@@ -271,7 +272,9 @@ export const AssetSchema = z
         /** True when the file does not say how its colours are encoded. It is then shown as the browser reads it (BT.709 in Chromium), which for standard-definition material differs slightly from the BT.601 reading other players use. */
         untaggedColour: z.literal(true).optional(),
         /** The owner's choice for a file with `untaggedColour`: read its colours as BT.601 (standard-definition material) instead of the browser's BT.709 reading. Applied as a colour correction in the compositor, so preview, stills and export agree. */
-        readColourAs: z.literal('bt601').optional() })
+        readColourAs: z.literal('bt601').optional(),
+        /** The file carries transparency (an alpha plane: VP8/VP9 with `alpha_mode` 1, or a pixel format with alpha such as ProRes 4444). Set by the server's probe only (made clips, wave 8). It gets no H.264 proxy (which would drop it) and never counts as covering the frame. */
+        hasAlpha: z.literal(true).optional() })
       .strict()
       .optional(),
     audio: z.object({ sampleRate: z.number().int().positive(), channels: z.number().int().positive(), codec: z.string(),
@@ -360,6 +363,8 @@ export const AssetSchema = z
         fitted: FittedMusicSchema.optional(),
         /** Present for built-in music made with recorded instruments of the owner's library (wave 7 instruments track): RecordedInstrumentsSchema. origin is 'generated'. */
         instruments: RecordedInstrumentsSchema.optional(),
+        /** Present for a clip made by a page («קליפ מקוד», wave 8 motioncode; madeContract.ts MadeRecordSchema). origin is 'generated', kind 'video'. */
+        made: MadeRecordSchema.optional(),
       })
       .strict(),
   })

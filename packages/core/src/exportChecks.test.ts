@@ -63,6 +63,14 @@ describe('pictureExpectation (core, C10)', () => {
     // covered by an opaque full-frame photo above over frames 30–60
     expect(pictureExpectation(overlay(b.doc, b.img, 30, 60), b.seq, 0, 120).moving).toEqual([[0, 30], [60, 120]]);
   });
+  it('a transparent video above (video.hasAlpha, e.g. a clip made by a page) does not cover the frame; the same file without the flag does (made clips G2)', () => {
+    const b = base();
+    const r = tx(b.doc, [{ op: 'import_asset', args: { asset: asset('video', 'title.webm', 4, { container: 'webm', mimeType: 'video/webm', video: { width: 640, height: 360, frameRate: R, codec: 'vp9', rotation: 0, frameCount: 120, hasAlpha: true } }) } }], true);
+    const clear = r.results[0]!.output!.assetId as string;
+    expect(pictureExpectation(overlay(r.doc, clear, 30, 60), b.seq, 0, 120).moving).toEqual([[0, 120]]);
+    const r2 = tx(b.doc, [{ op: 'import_asset', args: { asset: asset('video', 'plate.webm', 4) } }], true);
+    expect(pictureExpectation(overlay(r2.doc, r2.results[0]!.output!.assetId as string, 30, 60), b.seq, 0, 120).moving).toEqual([[0, 30], [60, 120]]);
+  });
   it('a clip above that does not cover the frame (alpha, opacity, scale, offset, keyframes) leaves the video moving', () => {
     const b = base();
     for (const doc of [

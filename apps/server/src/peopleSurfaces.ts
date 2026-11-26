@@ -257,6 +257,15 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   // «תא הבדיקה» (wave 8 booth track; booth/contract.ts): machine state of the owner's computer, no project, no people; every route
   // the owner's own session only (403 owner_required for every agent, observer and propose credential, GET included)
   'GET /api/v1/booth': ['owner-only'],
+  // «קליפ מקוד» (wave 8 motioncode; made/contract.ts): a page draws pixels from typed values only; it never reads the document's people
+  'GET /api/v1/made/templates': ['no-document'],
+  [`POST ${P}/made/render`]: ['write'],
+  [`GET ${P}/made/jobs/:jobId`]: ['no-document'],
+  [`GET ${P}/made/jobs/:jobId/still/:index`]: ['no-document'],
+  [`GET ${P}/made/jobs/:jobId/file`]: ['no-document'],
+  [`POST ${P}/made/jobs/:jobId/apply`]: ['write'],
+  [`POST ${P}/made/jobs/:jobId/dismiss`]: ['no-document'],
+  [`GET ${P}/made/assets/:assetId/page`]: ['reader-document'],
   // «שמירת הסרט כתבנית» (wave 8 owntemplate; ownTemplates.ts): the owner's own session only; the stored template holds no person by construction (whitelist)
   [`POST ${P}/own-templates/preview`]: ['owner-only'],
   [`POST ${P}/own-templates`]: ['owner-only'],
@@ -323,6 +332,8 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   plan_music_fit: ['reader-document'], apply_music_fit: ['reader-document', 'write'],
   // versions for an audience (wave 8 audiences track)
   get_audience_changes: ['reader-document'],
+  // «קליפ מקוד» (wave 8 motioncode): a page draws pixels from typed values only
+  submit_made_clip: ['write'], view_made_clip: ['no-document'],
   // find it in your footage (wave 7 search track): text only, the reader document without pearl names or tags
   find_in_footage: ['reader-document'],
   // «הפריים הכי חד» (wave 8 cover): numbers only, no picture

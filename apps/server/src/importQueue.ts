@@ -23,7 +23,7 @@ import { LibraryRecordSchema, IMPORT_STAGE, convertingStage, importCardState, im
 import { readCapture } from './captureMeta.ts';
 import { CONFORM_RECIPE, diskReserveRefuses, IMPORT_JOB_TYPE, importIdempotencyKey, importTempName, type ImportJobError, type ImportJobInput, type ImportJobOutput, type ImportQueue, type ImportQueueDeps, type LibraryJobInput, type ReceiveRequest } from './importContracts.ts';
 import { libraryError } from './library/contract.ts';
-import { buildImportedAsset, cleanRelativePath, cleanUploadName, ConformError, conformRecord, conformVideo, describeMedia, NeedsConform, prepareWithoutConform, receiveOriginal, type MediaMeta } from './ingest.ts';
+import { buildImportedAsset, cleanRelativePath, cleanUploadName, ConformError, conformExtension, conformRecord, conformVideo, describeMedia, NeedsConform, prepareWithoutConform, receiveOriginal, type MediaMeta } from './ingest.ts';
 import { assertStorageRoom, dataDirBytes, freeDiskBytes, UploadLedger } from './storage.ts';
 import { ApiError, type JobRow } from './store.ts';
 
@@ -251,6 +251,7 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
     if (!reuse) return false;
     let meta: MediaMeta;
     try { meta = await describeMedia(store.blobPath(reuse)); } catch { return false; } // not readable any more: convert again
+    if (needs.alpha && !meta.video?.hasAlpha) return false; // an earlier conversion (before wave 8 G2) dropped the alpha: convert again
     const capture = await captureOf(job);
     const asset = buildImportedAsset({ meta, name: input.name, contentHash: reuse, byteSize: fs.statSync(store.blobPath(reuse)).size, provenance: provenanceOf(job), capture, conform: conformRecord(needs, input.originalHash, input.byteSize) });
     commitAsset(job, asset, { converted: true, reusedConform: true, conformSeconds: null, reasons: needs.reasons, recipe: CONFORM_RECIPE });
@@ -325,7 +326,7 @@ export function createImportQueue(deps: ImportQueueDeps): ImportQueue {
     const ac = new AbortController();
     controls.set(jobId, ac);
     let release: (() => void) | null = null;
-    const out = path.join(store.tmpDir, `${importTempName(job.id, Math.max(1, job.attempt), randomBytes(4).toString('hex'))}.conform.mp4`);
+    const out = path.join(store.tmpDir, `${importTempName(job.id, Math.max(1, job.attempt), randomBytes(4).toString('hex'))}.conform.${conformExtension(needs)}`);
     try {
       try {
         // A running server export goes first; then the lane, once per file (a speech or AI job waits for at most one conversion).
