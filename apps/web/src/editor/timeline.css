@@ -135,7 +135,7 @@
 .timeline.pf-ds .tl-top-lanes { position: relative; flex: 1 1 0; min-inline-size: 0; }
 .timeline.pf-ds .tempo { display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--pf-sp-3); color: var(--pf-pulse); font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-medium); white-space: nowrap; overflow: hidden; }
 .timeline.pf-ds .tempo .num { font-size: var(--pf-fs-digits); }
-.timeline.pf-ds button.tempo-run { justify-self: end; block-size: 20px; padding-inline: var(--pf-sp-3); border-radius: var(--pf-r-xs); color: var(--pf-text-2); cursor: pointer; }
+.timeline.pf-ds button.tempo-run { justify-self: end; block-size: var(--pf-h-xs); padding-inline: var(--pf-sp-3); border-radius: var(--pf-r-xs); color: var(--pf-text-2); cursor: pointer; }
 .timeline.pf-ds button.tempo-run:hover:not(:disabled) { background: var(--pf-surface-3); color: var(--pf-text); }
 .timeline.pf-ds button.tempo-run:disabled { color: var(--pf-text-3); cursor: default; }
 .timeline.pf-ds .tl-add-track { position: static; display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--pf-sp-1); padding: 0; background: none; opacity: 1; color: var(--pf-text-3); }

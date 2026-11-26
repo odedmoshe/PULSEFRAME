@@ -438,9 +438,6 @@ export function FillerPanel() {
   const [stale, setStale] = useState(false);
   const [res, setRes] = useState<Awaited<ReturnType<typeof api.findFillers>> | null>(null);
   useEffect(() => { setRes(null); setErr(null); setStale(false); }, [assetId]);
-  // «הסרת שתיקות» on the timeline toolbar asked for the focus here (silenceFocus.ts): given in the commit that draws the finder
-  const box = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => { if (box.current && box.current.offsetParent && takeSilenceFocus()) { box.current.scrollIntoView({ block: 'nearest' }); focusIn(box.current, 'button:not(:disabled)', 'input', 'select'); } });
   if (!doc || !assetId) return null;
   const find = async () => {
     setBusy(true); setErr(null); setStale(false); setRes(null);
@@ -503,6 +500,9 @@ export function SilencePanel() {
   const [stale, setStale] = useState(false);
   const [res, setRes] = useState<SilenceResult | null>(null);
   useEffect(() => { setRes(null); setErr(null); setStale(false); }, [assetId]);
+  // «הסרת שתיקות» on the timeline toolbar asked for the focus here (silenceFocus.ts): given in the commit that draws the finder
+  const box = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => { if (box.current && box.current.offsetParent && takeSilenceFocus()) { box.current.scrollIntoView({ block: 'nearest' }); focusIn(box.current, 'button:not(:disabled)', 'input', 'select'); } });
   if (!doc || !assetId) return null;
   const rate = editor.rate;
   const find = async () => {

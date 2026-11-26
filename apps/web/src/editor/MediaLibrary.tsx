@@ -29,6 +29,12 @@ type Loaded = LoadedDerivative<ImageBitmap> | null;
 
 const fmtDur = (s: number) => { const t = Math.max(0, Math.round(s)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 const stem = (name: string) => name.replace(/\.[A-Za-z0-9]{1,5}$/, '');
+/** The language of a file's speech in the interface's words («עברית», «אנגלית»; "Hebrew" in English); the code when the browser has no name for it. */
+export function speechLanguageName(tag: string | undefined | null, ui: string): string | null {
+  const code = tag?.split('-')[0];
+  if (!code) return null;
+  try { return new Intl.DisplayNames([ui], { type: 'language' }).of(code) ?? code.toUpperCase(); } catch { return code.toUpperCase(); }
+}
 const formatOf = (a: Asset) => (/\.([A-Za-z0-9]{1,5})$/.exec(a.name)?.[1] ?? a.mimeType.split('/')[1] ?? a.kind).toUpperCase();
 export type MediaFilter = 'all' | 'video' | 'audio' | 'image' | 'unused';
 /** The assets a filter and a search word keep (the drawer's chips and search box). */
@@ -196,7 +202,7 @@ export function MediaGrid({ onView, query = '', filter = 'all', only }: { onView
         const KindIcon = isLut ? Palette : a.kind === 'image' ? ImageIcon : a.kind === 'video' ? Film : AudioLines;
         const add = () => void editor.addAsset(a.id);
         const { bpm, shots } = libraryFacts(doc, a.id); // its own measurements or its time-preserving source's (analysis.logic.ts)
-        const lang = doc.transcripts[a.id]?.language.split('-')[0]?.toUpperCase() ?? null;
+        const lang = speechLanguageName(doc.transcripts[a.id]?.language, state.lang); // «עברית», not a code (DESIGN_REVIEW I6)
         return (
           <li key={a.id} className={`media-card pf-mc${isMissing ? ' is-missing' : ''}`} draggable={!isLut} data-testid={`asset-${a.id}`} data-kind={a.kind} data-missing={isMissing || undefined} title={isLut ? S.lutHint : t('media.dragHint')}
             onDragStart={isLut ? undefined : (e) => { e.dataTransfer.setData(ASSET_DRAG_TYPE, a.id); e.dataTransfer.effectAllowed = 'copy'; }}>
@@ -222,7 +228,7 @@ export function MediaGrid({ onView, query = '', filter = 'all', only }: { onView
               <span className="pf-mc-glyphs">
                 {bpm && <span title={C.badgeBeat}><bdi className="num">{bpm}</bdi> {C.bpmWord}</span>}
                 {shots && shots > 1 && <span title={C.badgeShots}><bdi className="num">{shots}</bdi> {C.shotsWord}</span>}
-                {lang && <span title={C.badgeVoice}><bdi className="num">{lang}</bdi></span>}
+                {lang && <span title={C.badgeVoice} data-testid={`speech-lang-${a.id}`}><bdi>{lang}</bdi></span>}
               </span>
             )}
           </li>

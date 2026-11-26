@@ -5,6 +5,7 @@
  */
 import * as T from '@pulseframe/time';
 import { Kbd } from '../ds/index.ts';
+import { NumUnit } from '../ds/util.tsx';
 import { COMMANDS, chordLabel } from './commands.ts';
 import { CHROME_STRINGS } from './chrome.strings.ts';
 import { setPaletteView } from './chromeState.ts';
@@ -27,7 +28,7 @@ export function ProjectPanel() {
       <dl className="insp-facts">
         <dt>{S.format}</dt><dd><bdi className="num">{doc.settings.width}×{doc.settings.height}</bdi></dd>
         <dt>{S.frameRate}</dt><dd><bdi className="num">{(rate.num / rate.den).toFixed(rate.den === 1 ? 0 : 2)} fps</bdi></dd>
-        <dt>{S.duration}</dt><dd><bdi className="num">{secondsText(T.toSeconds(editor.duration))} {S.seconds}</bdi></dd>
+        <dt>{S.duration}</dt><dd><NumUnit value={secondsText(T.toSeconds(editor.duration))} unit={S.seconds} /></dd>
         <dt>{S.clips}</dt><dd><bdi className="num">{clips}</bdi></dd>
         <dt>{S.loudness}</dt><dd>{target === null ? S.loudnessOff : <bdi className="num">{target} LUFS</bdi>}</dd>
         <dt>{S.flash}</dt><dd className={flash === 'fail' ? 'is-attention' : flash === 'pass' ? 'is-ok' : undefined}>{flash === 'pass' ? S.flashPass : flash === 'fail' ? S.flashFail : S.flashNone}</dd>

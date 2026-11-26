@@ -48,7 +48,7 @@ import { Section, SectionsContext } from './Section.tsx';
 import { FilmWhy } from './FilmWhy.tsx';
 import { IconKeyframeFull, IconKeyframeHalf, IconKeyframeHollow, IconOnBeat } from './icons.tsx';
 import { Menu, ScrubField, Tabs, type MenuItem, type TabSpec } from '../ds/index.ts';
-import { isolate } from '../ds/util.tsx';
+import { isolate, NumUnit } from '../ds/util.tsx';
 import { INSPECTOR_STRINGS } from './inspector.strings.ts';
 import { cutBefore, keyframeSummary, matchingPreset, objectActions, secondsText, shortTimecode, tabsFor, type InspectorPage, type ObjectAction, type ObjectKind, type ObjectTab } from './inspector.model.ts';
 import { TextStyles } from './TextStyles.tsx';
@@ -87,7 +87,7 @@ export function ObjectHeader({ kind, keymap }: { kind: ObjectKind; keymap: Keyma
   const fps = editor.rate.num / editor.rate.den;
   if (!doc) return null;
   let name: string = doc.name, meta: ReactNode = null, tile: ReactNode = ico(Film, 20), tone = 'project';
-  const sec = (d: T.RationalTime) => <bdi className="num">{secondsText(T.toSeconds(d))} {S.seconds}</bdi>;
+  const sec = (d: T.RationalTime) => <NumUnit value={secondsText(T.toSeconds(d))} unit={S.seconds} />;
   if (kind === 'none') {
     meta = <><bdi className="num">{doc.settings.width}×{doc.settings.height}</bdi> · {sec(editor.duration)}</>;
   } else if (kind === 'multi') {

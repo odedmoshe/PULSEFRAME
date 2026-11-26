@@ -147,7 +147,7 @@ async function main() {
   const img2 = make('img_2041.png', ['-f', 'lavfi', '-i', 'gradients=s=1080x1350:c0=0x2a1a5e:c1=0xf5b84b', '-frames:v', '1']);
   const music = make('שיר-רקע-שמח.wav', ['-f', 'lavfi', '-t', '30', '-i', 'sine=f=110', '-af', 'tremolo=f=2:d=0.9', '-ac', '2']);
 
-  const s = await startServer({ port: 8833, dataDir: path.join(out, 'data') });
+  const s = await startServer({ port: Number(process.env.PF_SHOTS_PORT ?? 8833), dataDir: path.join(out, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => { const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }); const j = (await r.json()) as any; if (!r.ok) throw new Error(`${p}: ${r.status} ${JSON.stringify(j).slice(0, 300)}`); return j; };
   const txs = async (pid: string, ops: unknown[]) => call(`/projects/${pid}/transactions`, { ops });

@@ -18,6 +18,7 @@ import * as T from '@pulseframe/time';
 import { findClip, previousAdjacent, transitionDef, velocityLimit, type Clip } from '@pulseframe/core';
 import { Menu, Tooltip, cx, type MenuItem } from '../ds/index.ts';
 import { rovingNext } from '../ds/logic.ts';
+import { isolate } from '../ds/util.tsx';
 import { COMMANDS, chordLabel } from './commands.ts';
 import { DEFAULT_TRANSITION, defaultTransitionFrames, TransitionGlyph, useSelectedCut } from './CutChip.tsx';
 import { IconBeatLock } from './icons.tsx';
@@ -166,7 +167,7 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
     const canTransition = isPicture && !!previousAdjacent(one!.track, clip!);
     if (mode === 'clip' && clip) {
       const len = lengthLabel(s, T.frameIndexAt(clip.duration, rate), rate, grid);
-      chip = <span className={`ride-chip${len.musical ? ' is-musical' : ''}`} data-testid="ride-length">{len.musical && <AudioLines size={13} strokeWidth={1.75} aria-hidden="true" />}<bdi className="num">{len.text}</bdi></span>;
+      chip = <span className={`ride-chip${len.musical ? ' is-musical' : ''}`} data-testid="ride-length">{len.musical && <AudioLines size={13} strokeWidth={1.75} aria-hidden="true" />}{isolate(len.text) /* digits in .num, the unit outside (D12) */}</span>;
     } else if (mode === 'many') {
       chip = <span className="ride-chip" data-testid="ride-length"><bdi className="num">{s.nSelected(clips.length)}</bdi></span>;
     }
