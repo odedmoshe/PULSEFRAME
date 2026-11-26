@@ -194,4 +194,5 @@ export const DRAWN_SITES: readonly DrawnSite[] = [
   { file: "packages/core/src/qcChecks.ts", snippet: "track.clips.filter((c) => c.type === 'text' || c.type =", class: 'placement', note: "title_hidden counts drawn clips with titles (the same line names 'drawn')" },
   { file: "packages/core/src/qcChecks.ts", snippet: "kind === 'video' || x.track.kind === 'text').flatMap((x", class: 'n/a', note: "track kind, not a clip branch" },
   { file: "packages/core/src/qcChecks.ts", snippet: "if (c.type === 'text' && c.animat", class: 'words', note: "a title's in/out animation explains a fade; a drawn clip has none" },
+  { file: "apps/web/src/editor/made/MadeClipDialog.tsx", snippet: "{...(f.kind === 'text' ? { type: '", class: 'n/a', note: "a made page's field kind (text / colour / number), not a clip branch" },
 ];
