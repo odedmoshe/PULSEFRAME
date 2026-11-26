@@ -214,3 +214,9 @@
 .transport .stage-head .seq-switch { flex: 1 1 0; inline-size: 0; min-inline-size: 132px; }
 /* a narrow stage with shorts: the play-sharpness choice (also in Settings «התמונה בזמן ניגון») gives the tabs its room */
 @container (max-width: 820px) { .transport:has(.seq-switch) .stage-quality { display: none; } }
+/* a narrow transport (≤ 820 px): each format chip shows its shape only; its ratio stays its accessible name and its tooltip, so a
+   project with several formats and shorts keeps the end group inside the stage (wave 8D integration; audit:a11y at 1440×900) */
+@container (max-width: 820px) {
+  .transport .prism-chip .num { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+  .transport .prism-chip { padding-inline: var(--pf-sp-2); }
+}
