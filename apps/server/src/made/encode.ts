@@ -5,8 +5,8 @@
  *     limited range) AND tagged bt709 (`-colorspace/-color_primaries/-color_trc`). Gate G1 found that a file converted with ffmpeg's
  *     default BT.601 matrix but tagged BT.709 draws about 8 levels off; tagging also keeps the asset from being `untaggedColour`;
  *  2. a small RGBA copy (at most 480 wide) for the flash analysis, composited over black AND over white (decision 3: a warning);
- *  3. the full-size alpha plane, for emptiness (made_empty: no frame with at least 0.1% of its pixels drawn, a heuristic threshold
- *     from the plan) and for whether any pixel is not fully opaque.
+ *  3. the full-size alpha plane, for emptiness (made_empty, a fact: no pixel above alpha 0 in any frame; frames under 0.1% of their
+ *     pixels drawn, the plan's heuristic, are only counted and reported) and for whether any pixel is not fully opaque.
  * A clip where every pixel of every frame is opaque (a full-frame plate) is encoded again without alpha (yuv420p): the alpha file is
  * decoded with libvpx-vp9 (ffmpeg's native VP9 decoder would drop the alpha; verify C2b) and re-encoded. Argument arrays only, no
  * shell, `-protocol_whitelist pipe,file`.
@@ -50,8 +50,10 @@ export interface MadeEncodeAnalysis {
   flash: { black: { general: number; red: number }; white: { general: number; red: number } };
   /** a pixel below alpha 255 somewhere */
   alpha: boolean;
-  /** frames with at least MADE_EMPTY_SHARE of their pixels drawn */
+  /** frames with at least MADE_EMPTY_SHARE of their pixels drawn (heuristic; first/last near-empty frames are reported) */
   drawnFrames: number;
+  /** frames with at least one pixel above alpha 0 (a fact: none at all = made_empty) */
+  framesWithPixels: number;
   /** the first and last frame are empty (reported, not a failure) */
   emptyEnds: { first: boolean; last: boolean };
 }
@@ -76,7 +78,7 @@ export class MadeEncoder {
   private stderr = '';
   private closed: Promise<number | null>;
   private black: FrameFlashCheck; private white: FrameFlashCheck;
-  private frames = 0; private alphaSeen = false; private drawn = 0; private alphaFrames = 0; private firstEmpty = false; private lastEmpty = false;
+  private frames = 0; private alphaSeen = false; private drawn = 0; private withPixels = 0; private alphaFrames = 0; private firstEmpty = false; private lastEmpty = false;
   constructor(private readonly o: { width: number; height: number; rate: T.Rate; out: string; signal?: AbortSignal }) {
     const a = analysisSize(o.width, o.height);
     this.black = new FrameFlashCheck(a.width, a.height, o.rate);
@@ -100,6 +102,7 @@ export class MadeEncoder {
       if (below) this.alphaSeen = true;
       const isDrawn = drawn >= Math.max(1, px * MADE_EMPTY_SHARE);
       if (isDrawn) this.drawn++;
+      if (drawn > 0) this.withPixels++;
       if (this.alphaFrames === 0) this.firstEmpty = !isDrawn;
       this.lastEmpty = !isDrawn;
       this.alphaFrames++;
@@ -122,7 +125,7 @@ export class MadeEncoder {
     if (this.o.signal?.aborted) throw new MadeEncodeError('canceled', this.stderr);
     if (code !== 0) throw new MadeEncodeError(`ffmpeg ended with ${code}: ${this.stderr.trim().split('\n').pop() ?? ''}`.slice(0, 400), this.stderr);
     const b = this.black.report(0).areaPeak; const w = this.white.report(0).areaPeak;
-    return { frames: this.alphaFrames, flash: { black: { ...b }, white: { ...w } }, alpha: this.alphaSeen, drawnFrames: this.drawn, emptyEnds: { first: this.firstEmpty, last: this.lastEmpty } };
+    return { frames: this.alphaFrames, flash: { black: { ...b }, white: { ...w } }, alpha: this.alphaSeen, drawnFrames: this.drawn, framesWithPixels: this.withPixels, emptyEnds: { first: this.firstEmpty, last: this.lastEmpty } };
   }
 }
 

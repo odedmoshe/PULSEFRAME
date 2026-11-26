@@ -32,7 +32,7 @@ beforeAll(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-made-job-'));
   store = new Store(dir, 0);
   host = new MadeHost();
-  jobs = new MadeJobs({ store, lane: new FifoComputeLane(), host, fetch: fakeFetch, frameMs: 30_000, jobMs: 600_000 });
+  jobs = new MadeJobs({ store, lane: new FifoComputeLane(), host, fetch: fakeFetch, lookup: async () => ['93.184.216.34'] /* stand-in resolver */, frameMs: 30_000, jobMs: 600_000 });
   projectId = store.createProject({ name: 'made', width: 96, height: 54, frameRate: { num: 10, den: 1 } }).doc.id;
 });
 afterAll(async () => { await jobs.stop(); await host.close(); store.close(); fs.rmSync(dir, { recursive: true, force: true }); });

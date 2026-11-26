@@ -34,7 +34,7 @@ import { assertStorageRoom } from '../storage.ts';
 import { ApiError, type JobRow, type Store } from '../store.ts';
 import { madeError } from './contract.ts';
 import { MadeEncoder, MadeEncodeError, madePlateArgs, runMadeFfmpeg } from './encode.ts';
-import { MadeFetchError, fetchOnce, librariesServed, madeFileResolver, madeFonts, namedAddresses, namedAssetIds, namedFamilies, rewriteAddresses } from './libs.ts';
+import { MadeFetchError, fetchOnce, publicAddresses, type Lookup, librariesServed, madeFileResolver, madeFonts, namedAddresses, namedAssetIds, namedFamilies, rewriteAddresses } from './libs.ts';
 import { checkMadeFile, differingPixels } from './validate.ts';
 
 type Failure = keyof typeof MADE_JOB_FAILURES;
@@ -58,8 +58,9 @@ export interface MadeJobInput {
 }
 export interface MadeJobDeps {
   store: Store; lane: ComputeLane; host: MadeHost;
-  /** commit apply_made_clip as `p` (allowInternal); the default commits through the store */
   fetch?: typeof fetch;
+  /** name resolution for the public-address rule (tests give a labelled stand-in) */
+  lookup?: Lookup;
   /** budgets (MADE_LIMITS in the product; tests may give a frame more time on a loaded machine) */
   frameMs?: number; jobMs?: number;
 }
@@ -250,8 +251,8 @@ export class MadeJobs {
     const j = store.getJob(jobId);
     const original = fs.readFileSync(store.blobPath(input.pageSha256), 'utf8');
     // internet files: fetched once, before drawing
-    const urls = namedAddresses(original);
-    const fetched = urls.length ? await fetchOnce(urls, { signal, ...(this.d.fetch ? { fetch: this.d.fetch } : {}) }) : [];
+    const urls = (await publicAddresses(namedAddresses(original), this.d.lookup)).fetch;
+    const fetched = urls.length ? await fetchOnce(urls, { signal, ...(this.d.fetch ? { fetch: this.d.fetch } : {}), ...(this.d.lookup ? { lookup: this.d.lookup } : {}) }) : [];
     const page = rewriteAddresses(original, fetched.map((f) => f.url));
     // the owner's media, read-only
     const { doc } = store.getProject(j.projectId);
@@ -289,7 +290,7 @@ export class MadeJobs {
     set({ stage: 'encoding' });
     let analysis;
     try { analysis = await encoder.finish(); } catch (e) { throw e instanceof MadeEncodeError && e.message === 'canceled' ? new JobFailure(failOut('canceled', [])) : new JobFailure(failOut('decodeBack', [0], (e as Error).message)); }
-    if (analysis.drawnFrames === 0) throw new JobFailure(failOut('empty', []));
+    if (analysis.framesWithPixels === 0) throw new JobFailure(failOut('empty', [])); // a fact: not one pixel drawn (proof G4.4 drew a 10×10 square under the 0.1% share)
     if (analysis.frames !== n) throw new JobFailure(failOut('frameCount', [analysis.frames, n]));
     // determinism: an ordinary page fails; a WebGL page warns with the pixel count
     const webgl = drawn.webgl || !!input.capabilities?.webgl;
@@ -333,7 +334,7 @@ export class MadeJobs {
     };
     return {
       fileSha256, pageSha256: input.pageSha256, record, stills: stillShas, progress: { frame: n, frames: n },
-      report: { warnings, fontsChecked: drawn.fontsChecked, decodeBack: check.compared, emptyEnds: analysis.emptyEnds, drawnFrames: analysis.drawnFrames, maxAnimations: drawn.maxAnimations, pageErrors: drawn.pageErrors, sandbox: drawn.sandbox, ...(drawn.sandboxWarning ? { sandboxWarning: drawn.sandboxWarning } : {}) },
+      report: { warnings, fontsChecked: drawn.fontsChecked, decodeBack: check.compared, emptyEnds: analysis.emptyEnds, drawnFrames: analysis.drawnFrames, framesWithPixels: analysis.framesWithPixels, maxAnimations: drawn.maxAnimations, pageErrors: drawn.pageErrors, sandbox: drawn.sandbox, ...(drawn.sandboxWarning ? { sandboxWarning: drawn.sandboxWarning } : {}) },
     };
   }
 }

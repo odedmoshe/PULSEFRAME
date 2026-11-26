@@ -9,11 +9,13 @@
  *   pinned version (read from the installed package.json, a fact; the row's `installed` flag is documentation the lead keeps),
  *   and only the files the row lists, at /lib/<name>@<version>/<file>.
  * - The owner's media: /assets/<assetId>, the asset's blob, for ids the request names or the page names, that exist in the project.
- * - Internet files: every http(s) address the page names (outside made.invalid and XML namespaces) is fetched by the server before
- *   drawing, at most MADE_LIMITS.fetchFiles files and fetchBytes bytes in all; the page text served has each address replaced by
+ * - Internet files: every http(s) address the page names (outside made.invalid and XML namespaces) on a PUBLIC host is fetched by
+ *   the server before drawing (loopback, private and local addresses never: the page's request is aborted like any other), at most MADE_LIMITS.fetchFiles files and fetchBytes bytes in all; the page text served has each address replaced by
  *   https://made.invalid/fetched/<n>. A failing address fails the job (made_fetch_failed, naming it).
  */
 import { createHash } from 'node:crypto';
+import dns from 'node:dns/promises';
+import net from 'node:net';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -103,18 +105,61 @@ export function rewriteAddresses(page: string, fetched: readonly string[]): stri
   for (const { u, i } of order) out = out.split(u).join(`${ORIGIN}/fetched/${i}`);
   return out;
 }
+/** Whether an IP address is on the public internet (not loopback, private, link-local, shared, unspecified or multicast). */
+export function isPublicIp(ip: string): boolean {
+  let a = ip.toLowerCase().replace(/^\[|\]$/g, '');
+  const mapped = /^::ffff:(?:(\d+\.\d+\.\d+\.\d+)|([0-9a-f]{1,4}):([0-9a-f]{1,4}))$/.exec(a);
+  if (mapped) a = mapped[1] ?? [parseInt(mapped[2]!, 16) >> 8, parseInt(mapped[2]!, 16) & 255, parseInt(mapped[3]!, 16) >> 8, parseInt(mapped[3]!, 16) & 255].join('.');
+  if (net.isIPv4(a)) {
+    const [x, y] = a.split('.').map(Number) as [number, number];
+    return !(x === 0 || x === 10 || x === 127 || (x === 169 && y === 254) || (x === 172 && y >= 16 && y <= 31) || (x === 192 && y === 168) || (x === 100 && y >= 64 && y <= 127) || x >= 224);
+  }
+  if (net.isIPv6(a)) return !(a === '::' || a === '::1' || /^f[cd]/.test(a) || /^fe[89ab]/.test(a) || /^ff/.test(a));
+  return false;
+}
+export type Lookup = (host: string) => Promise<string[]>;
+const systemLookup: Lookup = async (host) => (await dns.lookup(host, { all: true })).map((r) => r.address);
+/** Whether the server may fetch this address: http(s), a public host (a name must resolve to public addresses only). */
+export async function mayFetch(url: string, lookup: Lookup = systemLookup): Promise<boolean> {
+  let u: URL;
+  try { u = new URL(url); } catch { return false; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+  const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (net.isIP(host)) return isPublicIp(host);
+  if (host === 'localhost' || /\.(localhost|local|invalid|internal|home\.arpa)$/.test(host) || !host.includes('.')) return false;
+  try { const ips = await lookup(host); return ips.length > 0 && ips.every(isPublicIp); } catch { return true; /* unresolved here: the fetch itself fails and names it */ }
+}
+/**
+ * The addresses the server fetches, and those it leaves to the page (never fetched: the page's own request is aborted like any
+ * other). Loopback, private and link-local addresses, local names and names that resolve to them are left: the editor's own port
+ * and the owner's network stay unreachable through a page (found by proof:made G3.3–G3.5, where the server fetched 127.0.0.1).
+ */
+export async function publicAddresses(urls: readonly string[], lookup: Lookup = systemLookup): Promise<{ fetch: string[]; skipped: string[] }> {
+  const fetch: string[] = []; const skipped: string[] = [];
+  for (const u of urls) (await mayFetch(u, lookup) ? fetch : skipped).push(u);
+  return { fetch, skipped };
+}
 export interface FetchedFile { url: string; sha256: string; bytes: number; body: Buffer; contentType: string }
 export class MadeFetchError extends Error { constructor(readonly url: string, why: string) { super(`${url}: ${why}`); } }
-/** Fetch each address once, before drawing; any failure (status, size, network) names the address. */
-export async function fetchOnce(urls: readonly string[], opts: { fetch?: typeof fetch; signal?: AbortSignal; timeoutMs?: number } = {}): Promise<FetchedFile[]> {
+/** Fetch each address once, before drawing; any failure (status, size, network, a redirect to a local address) names the address. */
+export async function fetchOnce(urls: readonly string[], opts: { fetch?: typeof fetch; signal?: AbortSignal; timeoutMs?: number; lookup?: Lookup } = {}): Promise<FetchedFile[]> {
   if (urls.length > MADE_LIMITS.fetchFiles) throw new MadeFetchError(urls[MADE_LIMITS.fetchFiles]!, `a page may name at most ${MADE_LIMITS.fetchFiles} internet files`);
   const get = opts.fetch ?? fetch;
   const out: FetchedFile[] = [];
   let total = 0;
   for (const url of urls) {
     const signal = AbortSignal.any([AbortSignal.timeout(opts.timeoutMs ?? 30_000), ...(opts.signal ? [opts.signal] : [])]);
-    let res: Response;
-    try { res = await get(url, { redirect: 'follow', signal }); } catch (e: any) { throw new MadeFetchError(url, String(e?.message ?? e)); }
+    let res: Response | null = null;
+    let at = url;
+    for (let hop = 0; hop <= 5; hop++) {
+      if (!(await mayFetch(at, opts.lookup))) throw new MadeFetchError(url, `it leads to a local or private address (${at})`);
+      try { res = await get(at, { redirect: 'manual', signal }); } catch (e: any) { throw new MadeFetchError(url, String(e?.message ?? e)); }
+      const next = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
+      if (!next) break;
+      at = new URL(next, at).toString();
+      res = null;
+    }
+    if (!res) throw new MadeFetchError(url, 'too many redirects');
     if (!res.ok) throw new MadeFetchError(url, `HTTP ${res.status}`);
     const body = Buffer.from(await res.arrayBuffer());
     total += body.length;

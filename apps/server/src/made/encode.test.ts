@@ -78,7 +78,14 @@ describe('made encode', () => {
   it('an empty clip draws no frame (made_empty is the job\'s)', async () => {
     const { analysis } = await encode(pngs(`color=c=black@0:s=${W}x${H}:r=30,format=rgba,geq=r=0:g=0:b=0:a=0`, 4), 'empty.webm');
     expect(analysis.drawnFrames).toBe(0);
+    expect(analysis.framesWithPixels).toBe(0);
     expect(analysis.emptyEnds).toEqual({ first: true, last: true });
+  }, 120_000);
+
+  it('a small drawing is not empty (proof:made G4.4: a 10×10 square on 640×360 is below the 0.1% share but was drawn)', async () => {
+    const { analysis } = await encode(pngs(`color=c=black@0:s=${W}x${H}:r=30,format=rgba,geq=r=255:g=255:b=255:a='if(lt(X,1)*lt(Y,1),255,0)'`, 3), 'dot.webm');
+    expect(analysis.drawnFrames).toBe(0); // under the share: reported as a near-empty frame
+    expect(analysis.framesWithPixels).toBe(3); // but something was drawn: not made_empty
   }, 120_000);
 
   it('white and transparent every 2 frames at 30 fps measures above 3 flashes a second over black (a warning, decision 3)', async () => {
