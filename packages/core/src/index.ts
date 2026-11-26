@@ -43,6 +43,13 @@ export * from './geometry.ts';
 export * from './templateContract.ts';
 export * from './templateCatalog.ts';
 export * from './templatePlan.ts';
+// wave 8 owntemplate «שמירת הסרט כתבנית» (lead pre-pass: contract, whitelist, stubs)
+export * from './ownTemplateContract.ts';
+export * from './ownTemplateKeys.ts';
+export * from './ownTemplate.strings.ts';
+export * from './ownTemplate.ts';
+export * from './ownTemplateScan.ts';
+export * from './ownTemplatePlan.ts';
 export * from './templateOps.ts';
 export * from './lineage.ts';
 export * from './sha256.ts';

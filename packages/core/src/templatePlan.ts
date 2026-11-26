@@ -42,7 +42,7 @@ import * as T from '@pulseframe/time';
 import { z } from 'zod';
 import type { Asset, Clip, ProjectDocument, Track } from './schema.ts';
 import {
-  ELEMENT_ID_TOKEN, fillFields, PACK_FIELD_KEYS, TemplateDefSchema, TemplateError, TemplateInputSchema, TEMPLATE_METHOD,
+  ELEMENT_ID_TOKEN, fillFields, TICKS_PER_BEAT, PACK_FIELD_KEYS, TemplateDefSchema, TemplateError, TemplateInputSchema, TEMPLATE_METHOD,
   type PackFieldKey, type PackFieldsInput, type PackFieldValues, type PlannedSlot, type PredictedSlot, type TemplateDef, type TemplateInput, type TemplateNotice, type TemplatePlan, type TemplatePlanContext, type TemplateStep, type TemplateSummary, type TemplateWarning,
 } from './templateContract.ts';
 import { barsForDuration, exactLayoutFor, findMusicStyle, listMusicStyles, MUSIC_MAX_SECONDS, sampleFramesFor, type MusicStyle } from './musicStyles.ts';
@@ -58,6 +58,7 @@ import { flashGapFrames } from './flashSafety.ts';
 import { clipEnd } from './validate.ts';
 import { isRamped, spareAfter } from './speed.ts';
 import { beatsFor, ownBeats } from './lineage.ts';
+import { ownTemplateNotBuilt } from './ownTemplateContract.ts';
 
 type RT = T.RationalTime;
 type SlotDef = TemplateDef['slots'][number];
@@ -109,6 +110,12 @@ export interface Grid {
   /** The last usable grid time (music), or null for a grid without end. */
   last: RT | null;
   meter: number;
+  /**
+   * Wave 8 owntemplate (verifier C12): the exact time of the position n/d beats from grid beat 0 (listGrid: between the two measured
+   * beats around it, a fraction of the way — a definition, labelled; null past the last beat; steadyGrid: at + (n/d)·60/bpm). Built
+   * only with T.add / T.rt (BigInt path for oversized products). STUB until W1: throws OwnTemplateRefusal own_template_not_built.
+   */
+  timeAt(n: bigint, d: bigint): RT | null;
 }
 export function listGrid(beats: readonly RT[], bars: readonly RT[] | null, meter: number): Grid {
   const firstAfter = (list: readonly RT[], c: RT) => { let lo = 0, hi = list.length; while (lo < hi) { const m = (lo + hi) >> 1; if (T.lt(c, list[m]!)) hi = m; else lo = m + 1; } return lo; };
@@ -120,6 +127,7 @@ export function listGrid(beats: readonly RT[], bars: readonly RT[] | null, meter
     barIndex: (t) => (bars ? firstAtOrAfter(bars, t) : 0),
     last: beats[beats.length - 1] ?? null,
     meter,
+    timeAt: () => { throw ownTemplateNotBuilt('timeAt'); },
   };
 }
 /** Beats every 60/bpm seconds from `at` (exact), a bar every 4 beats; endless. */
@@ -137,6 +145,7 @@ export function steadyGrid(at: RT, bpm: number): Grid {
     barIndex: (t) => { const k = groups(t, BigInt(meter)); return Number(T.eq(beatAt(k * BigInt(meter)), t) ? k : k + 1n); },
     last: null,
     meter,
+    timeAt: () => { throw ownTemplateNotBuilt('timeAt'); },
   };
 }
 
@@ -227,6 +236,8 @@ function checkDef(raw: TemplateDef): TemplateDef {
 /** A span with the tempo option applied: half = twice as long, double = half as long (a one-beat slot stays one beat). */
 type Span = { beats: number } | { bars: number } | { seconds: RT };
 function scaleSpan(span: SlotDef['span'], tempo: TemplateInput['tempo'], meter: number): Span {
+  // an own template's span never reaches here: its branch splits before the spans are scaled (verifier C4; ownTemplatePlan.ts)
+  if ('ticks' in span || 'frames' in span) throw new TemplateError('invalid_args', 'an own template\'s ticks or frames span reached scaleSpan (a bug: the own branch splits before it)');
   if ('seconds' in span) { const s = parseSeconds(span.seconds); return { seconds: tempo === 'half' ? twice(s) : tempo === 'double' ? halve(s) : s }; }
   if ('beats' in span) return { beats: tempo === 'half' ? span.beats * 2 : tempo === 'double' ? Math.max(1, Math.floor(span.beats / 2)) : span.beats };
   if (tempo === 'half') return { bars: span.bars * 2 };
@@ -234,7 +245,11 @@ function scaleSpan(span: SlotDef['span'], tempo: TemplateInput['tempo'], meter: 
   return { bars: span.bars };
 }
 /** Length of a span in seconds on the template's own steady grid (for the gallery). */
-const spanSeconds = (span: SlotDef['span'], bpm: number) => ('seconds' in span ? T.toSeconds(parseSeconds(span.seconds)) : ('beats' in span ? span.beats : span.bars * 4) * (60 / bpm));
+const spanSeconds = (span: SlotDef['span'], bpm: number, rate?: { num: number; den: number }) => (
+  'seconds' in span ? T.toSeconds(parseSeconds(span.seconds))
+    : 'ticks' in span ? (span.ticks / TICKS_PER_BEAT) * (60 / bpm)
+      : 'frames' in span ? (rate ? (span.frames * rate.den) / rate.num : 0)
+        : ('beats' in span ? span.beats : span.bars * 4) * (60 / bpm));
 
 /** The gallery entry of a built-in template (TemplateSummary). `seconds` is its full length on its own steady grid. */
 export function summarizeTemplate(def: TemplateDef, env: { elementsAvailable: boolean }): TemplateSummary {
@@ -246,7 +261,7 @@ export function summarizeTemplate(def: TemplateDef, env: { elementsAvailable: bo
     id: def.id, version: def.version, name: def.name, hint: def.hint, genre: def.genre, designedFor: def.designedFor,
     slots: def.slots.map((s) => ({ key: s.key, role: s.role, accept: s.accept })),
     texts: def.texts.map((t) => ({ key: t.key, role: t.role, default: t.default, maxChars: t.maxChars })),
-    seconds: Math.round(def.slots.reduce((n, s) => n + spanSeconds(s.span, def.tempo.fallbackBpm), 0) * 100) / 100,
+    seconds: Math.round(def.slots.reduce((n, s) => n + spanSeconds(s.span, def.tempo.fallbackBpm, def.own?.rate), 0) * 100) / 100,
     needs: { music: def.music.need, elements, gpu, model: null },
     available,
     unavailableReason: available ? null : 'this template places graphic elements, which this machine cannot draw: its ffmpeg has no SVG decoder (librsvg)',
@@ -414,6 +429,8 @@ export function planTemplate(doc: ProjectDocument, def: TemplateDef, input: unkn
   if (wanted && !style) throw new TemplateError('invalid_args', `there is no built-in music style "${wanted.styleId}"`, `The styles are: ${listMusicStyles().map((x) => x.id).join(', ') || 'none in this build'} (GET /api/v1/music).`);
   const builtin = style && d.music.need !== 'none' ? { style, seed: wanted!.seed } : null;
   const meterHint = d.music.need === 'none' || p.musicAssetId === null ? 4 : beatsFor(doc, p.musicAssetId)?.beats.meter ?? 4; // by the same lineage as the grid (placedMusicGrid)
+  // own templates (wave 8): their slots are placed by ownTemplatePlan.ts BEFORE any span is scaled (verifier C4); not built yet
+  if (d.own) throw ownTemplateNotBuilt('plan');
   const spans = d.slots.slice(0, useCount).map((s) => scaleSpan(s.span, p.tempo, meterHint));
   const music = musicOf(doc, d, p, at, spans.some((s) => 'bars' in s), !!builtin);
   if (p.musicAssetId !== null && d.music.need === 'none') basis.push('this template does not use music; the chosen music was not placed');

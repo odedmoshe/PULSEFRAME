@@ -27,6 +27,7 @@ import { MUSICFIT_EN, MUSICFIT_HE } from './musicFit.ts';
 import { AUDIENCES_EN, AUDIENCES_HE } from './audiences.ts';
 import { INSTRUMENTS_EN, INSTRUMENTS_HE } from './instruments.ts';
 import { COVER_EN, COVER_HE } from './cover.ts';
+import { OWNTEMPLATE_EN, OWNTEMPLATE_HE } from './owntemplate.ts';
 import { FOOTAGE_EN, FOOTAGE_HE } from './footageSearch.ts';
 import { PICMODELS_EN, PICMODELS_HE } from './picmodels.ts';
 import { BOOTH_EN, BOOTH_HE } from './booth.ts';
@@ -248,6 +249,7 @@ export const he = {
   ...INSTRUMENTS_HE,
   ...BOOTH_HE,
   ...COVER_HE,
+  ...OWNTEMPLATE_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -466,6 +468,7 @@ export const en: Record<keyof typeof he, string> = {
   ...INSTRUMENTS_EN,
   ...BOOTH_EN,
   ...COVER_EN,
+  ...OWNTEMPLATE_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -501,3 +504,4 @@ export * from './instruments.ts';
 export * from './booth.ts';
 export * from './cover.ts';
 export * from './tripMap.ts';
+export * from './owntemplate.ts';

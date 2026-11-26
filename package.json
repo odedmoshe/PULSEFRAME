@@ -113,6 +113,7 @@
     "proof:booth": "tsx packages/evals/src/booth-proof.ts",
     "booth:ingest": "tsx tools/booth/ingest.ts",
     "proof:stills": "tsx packages/evals/src/stills-proof.ts",
+    "proof:owntemplate": "tsx packages/evals/src/owntemplate-proof.ts",
     "kit:check": "tsx packages/evals/src/kit-check.ts"
   },
   "devDependencies": {

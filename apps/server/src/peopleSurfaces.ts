@@ -257,6 +257,10 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   // «תא הבדיקה» (wave 8 booth track; booth/contract.ts): machine state of the owner's computer, no project, no people; every route
   // the owner's own session only (403 owner_required for every agent, observer and propose credential, GET included)
   'GET /api/v1/booth': ['owner-only'],
+  // «שמירת הסרט כתבנית» (wave 8 owntemplate; ownTemplates.ts): the owner's own session only; the stored template holds no person by construction (whitelist)
+  [`POST ${P}/own-templates/preview`]: ['owner-only'],
+  [`POST ${P}/own-templates`]: ['owner-only'],
+  'DELETE /api/v1/own-templates/:templateId': ['owner-only'],
   'GET /api/v1/booth/items/:id/audio': ['owner-only'],
   'GET /api/v1/booth/test-picture/:which': ['owner-only'],
   'GET /api/v1/booth/items/:id/export-still': ['owner-only'],

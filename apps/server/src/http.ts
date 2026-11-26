@@ -75,6 +75,7 @@ import { registerSearchRoutes } from './search/routes.ts';
 import { registerBoothRoutes } from './booth/routes.ts';
 import { notBuiltPictureModels, type PictureModelsRuntime } from './picmodels/contract.ts';
 import { registerPicmodelsRoutes } from './picmodels/routes.ts';
+import { registerOwnTemplateRoutes } from './ownTemplates.ts';
 import type { RenderHost } from '@pulseframe/renderer';
 
 const TxBody = z
@@ -959,6 +960,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // MCP cancel_job reaches an assistant job through this same handler (one cancel path; mcp.ts bindAssistant)
   (mcp as { bindAssistant?: (a: AssistantJobControls) => void }).bindAssistant?.(assistant);
   // «תא הבדיקה» (wave 8 booth track; booth/contract.ts BOOTH_ROUTES): every route the owner's own session only, GET included
+  // «שמירת הסרט כתבנית» (wave 8 owntemplate; ownTemplates.ts, core OWN_TEMPLATE_ROUTES): the owner's own session only; 501 own_template_not_built until W2
+  registerOwnTemplateRoutes(app, { cfg, store, gov, need });
   registerBoothRoutes(app, { cfg, store, gov, need, exporter, renderHost: extras.renderHost ?? null, speech, assistant, search: searchRuntime, door: extras.door ?? null, ...(extras.musicKits ? { musicKits: extras.musicKits } : {}) });
   const assistantOwner = (c: Context<Env>) => {
     const p = need(c, 'observe');

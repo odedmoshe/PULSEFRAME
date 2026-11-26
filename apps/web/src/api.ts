@@ -15,6 +15,7 @@ import type { PearlsView } from '@pulseframe/core';
 import type { AudienceChanges } from '@pulseframe/core';
 import type { MusicFitApplyRequest, MusicFitApplyResult, MusicFitPlan, MusicFitPlanRequest, JoinRemoval } from '@pulseframe/core';
 import type { MusicKitStatus } from '@pulseframe/core';
+import type { OwnTemplateDeleteAnswer, OwnTemplatePreviewAnswer, OwnTemplatePreviewBody, OwnTemplateSaveAnswer, OwnTemplateSaveBody } from '@pulseframe/core';
 import type { BoothAnswerBody, BoothAnswerResult, BoothCheckRow, BoothServerCheckId, BoothView } from '@pulseframe/core';
 
 export class ApiFailure extends Error {
@@ -313,6 +314,10 @@ export const api = {
   musicKits: () => call<{ kits: MusicKitStatus[] }>('/music/kits'),
   /** The owner's own session only (everyone else gets 403 owner_required). */
   markKitHeard: (kitId: string, heard: boolean) => call<{ kitId: string; version: number; heard: { at: string } | null }>(`/music/kits/${encodeURIComponent(kitId)}/heard`, json({ heard })),
+  // «שמירת הסרט כתבנית» (wave 8 owntemplate; core OWN_TEMPLATE_ROUTES): owner's own session only; 501 own_template_not_built until W2
+  previewOwnTemplate: (projectId: string, body: OwnTemplatePreviewBody) => call<OwnTemplatePreviewAnswer>(`/projects/${encodeURIComponent(projectId)}/own-templates/preview`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  saveOwnTemplate: (projectId: string, body: OwnTemplateSaveBody) => call<OwnTemplateSaveAnswer>(`/projects/${encodeURIComponent(projectId)}/own-templates`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  deleteOwnTemplate: (templateId: string) => call<OwnTemplateDeleteAnswer>(`/own-templates/${encodeURIComponent(templateId)}`, { method: 'DELETE' }),
   // «תא הבדיקה» (wave 8 booth; apps/server/src/booth/contract.ts BOOTH_ROUTES): owner's own session only; 501 booth_not_built until W1
   booth: () => call<BoothView>('/booth'),
   boothAudioUrl: (itemId: string) => `/api/v1/booth/items/${encodeURIComponent(itemId)}/audio`,
