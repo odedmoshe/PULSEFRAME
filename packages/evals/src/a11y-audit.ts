@@ -29,6 +29,7 @@
  * delete (undone again). The untimed copy and the reviewed translation are typed fixtures: no provider and no model ran.
  * In both themes, «תא הבדיקה» (wave 8 booth, a11y-booth.ts): the first screen, the self-check, a music card, a picture card (or its
  * «דורש כרטיס מסך» state), the report.
+ * delete (undone again). In both themes, wave 8: the audience panel open on a calm version (a11y-audiences.ts). The untimed copy and the reviewed translation are typed fixtures: no provider and no model ran.
  *   pnpm build && pnpm audit:a11y
  */
 import { execFileSync } from 'node:child_process';
@@ -53,6 +54,7 @@ import { assistantLocalA11yScenarios } from './assistant-local-proof.ui.ts';
 import { pearlsA11yScenarios } from './a11y-pearls.ts';
 import { storyA11yScenarios } from './a11y-story.ts';
 import { searchA11yScenarios } from './a11y-search.ts';
+import { audiencesA11yScenarios } from './a11y-audiences.ts';
 import { makeApi, ownerApi } from './incremental-fixtures.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
 import { auditInPage, focusAudit, toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
@@ -864,6 +866,12 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      // «גרסה לכל קהל» (wave 8 audiences): the panel «מה שונה בגרסה הזו» open on a calm version, on a scratch project (a11y-audiences.ts)
+      for (const sc of audiencesA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       // music that fits the film «מוזיקה שמתאימה לסרט» (wave 7 musicfit): the fit block, the swap dialog, the impact controls (a11y-musicfit.ts)
       for (const sc of musicfitA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
@@ -1213,6 +1221,12 @@ async function main() {
       await auditState('start-hub', { shown: (await page.getByTestId('welcome').count()) === 1 });
       // music that fits the film (wave 7 musicfit) in the light theme: the same six scenarios as the dark pass (a11y-musicfit.ts)
       for (const sc of musicfitA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // «גרסה לכל קהל» (wave 8 audiences): the panel «מה שונה בגרסה הזו» open on a calm version, in the light theme, on a scratch project (a11y-audiences.ts)
+      for (const sc of audiencesA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });

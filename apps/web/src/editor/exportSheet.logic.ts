@@ -128,7 +128,7 @@ export function exportTargets(doc: ProjectDocument): ExportTarget[] {
   const s = doc.settings;
   const out: ExportTarget[] = [{ key: 'master', kind: 'master', variantId: null, profileId: null, width: s.width, height: s.height, fit: s.fit ?? 'contain', name: aspectName(s.width, s.height) }];
   const variants = Object.values(doc.variants ?? {});
-  for (const v of variants) out.push({ key: `variant:${v.id}`, kind: 'variant', variantId: v.id, profileId: v.profileId ?? null, width: v.width, height: v.height, fit: v.fit, name: aspectName(v.width, v.height, v.name) });
+  for (const v of variants) out.push({ key: variantTargetKey(v.id), kind: 'variant', variantId: v.id, profileId: v.profileId ?? null, width: v.width, height: v.height, fit: v.fit, name: aspectName(v.width, v.height, v.name) });
   for (const p of FORMAT_PROFILES) {
     const taken = variants.some((v) => v.profileId === p.id) || (p.width === s.width && p.height === s.height);
     if (!taken) out.push({ key: `profile:${p.id}`, kind: 'profile', variantId: null, profileId: p.id, width: p.width, height: p.height, fit: p.fit, name: aspectName(p.width, p.height) });
@@ -170,6 +170,17 @@ export function destinationKey(d: Destination, targets: ExportTarget[]): string 
 export function destinationPick(d: Destination, targets: ExportTarget[], choices: ExportChoices): { dest: Destination['id']; keys?: string[]; choices: ExportChoices } {
   const key = destinationKey(d, targets);
   return { dest: d.id, ...(key ? { keys: [key] } : {}), choices: { ...choices, targetBytes: null, ...d.choices } };
+}
+
+/** The export target key of a linked format or a version for an audience (exportTargets' `variant:` rows). */
+export const variantTargetKey = (variantId: string): string => `variant:${variantId}`;
+/**
+ * What the sheet chooses when it is opened ON a version (the audience panel's «לשליחה»): that version's target alone, as a click on its
+ * format row would leave it (a custom destination, so no target size is carried over). A key the project no longer has is dropped by the
+ * sheet's own check (back to the master), so a version removed meanwhile never exports something else silently.
+ */
+export function variantPick(variantId: string, choices: ExportChoices): { dest: 'custom'; keys: string[]; choices: ExportChoices } {
+  return { dest: 'custom', keys: [variantTargetKey(variantId)], choices: { ...choices, targetBytes: null } };
 }
 
 /** Size of the output of a target at a scale: even numbers, as the server rounds them. */

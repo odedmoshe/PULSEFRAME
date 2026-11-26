@@ -95,14 +95,26 @@ export type SoundRoleReason = (typeof SOUND_ROLE_ORDER)[number];
 export interface SoundRoleReading { trackId: string; role: SoundRole; why: SoundRoleReason }
 
 // ---------- the list of changes (GET …/variants/:variantId/audience, MCP get_audience_changes) ----------
-/** One application of a rule. The same code builds the projected document and this list (audience.ts), so they cannot disagree. */
+/**
+ * One application of a rule. The same code builds the projected document and this list (audience.ts), so they cannot disagree.
+ * Granularity (one definition for the list, the panel and proof check 9): ONE ROW PER CHANGED FIELD OF ONE TARGET — per effect
+ * instance (effect: enabled; modulator: modulate), per clip (transition: type; text_loop: loop; title_size: sizeFrac), per caption
+ * track and style field (caption_look: sizeFrac, maxCharsPerLine, background, preset — up to four rows for one track), per sound track
+ * (music_level: gain; ducking: reductionDb). A modulator on an effect that ends up off moves nothing and has no row.
+ */
 export interface AudienceChange {
   /** stable within one revision: `${rule}:${clipId ?? trackId}:${detail}` */
   key: string;
   rule: AudienceRule;
   clipId: string | null;
   trackId: string | null;
-  /** where jump-to goes (inside the clip, or the track's first clip); endFrame exclusive */
+  /**
+   * The sequence the clip or track is in. The rules apply to every sequence of the project (the main edit and each short), and the
+   * frames below are on THAT sequence's own clock: the panel jumps only to rows of the main sequence (the only one a version is viewed
+   * on) and lists the others with their sequence's name and no jump.
+   */
+  sequenceId: string;
+  /** where jump-to goes (inside the clip, or the track's first clip), on the clock of `sequenceId`; endFrame exclusive */
   startFrame: number; endFrame: number;
   /** registry ids, sizes, dB: machine values the panel words (never a sentence) */
   before: string | number | null; after: string | number | null;

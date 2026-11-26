@@ -4,6 +4,8 @@
  * so every master edit reaches every variant and overrides (keyed by clip id) survive those edits.
  */
 import { ANIMATABLE, type ProjectDocument, type SafeArea } from './schema.ts';
+import type { AudienceChange } from './audienceContract.ts';
+import { applyAudience } from './audience.ts';
 
 /**
  * Starting points for common shapes. The safe-area insets are GENERIC guides for where app interfaces usually cover the picture;
@@ -18,7 +20,7 @@ export const FORMAT_PROFILES = [
 export const findProfile = (id: string) => FORMAT_PROFILES.find((p) => p.id === id);
 
 /** The document a variant renders: the master with the variant's frame, fill mode and overrides applied. Pure; the master is not changed. */
-export function projectVariant(doc: ProjectDocument, variantId: string): ProjectDocument {
+export function projectVariant(doc: ProjectDocument, variantId: string, report?: AudienceChange[]): ProjectDocument {
   const v = doc.variants?.[variantId];
   if (!v) throw new Error(`variant ${variantId} not found`);
   const out = structuredClone(doc);
@@ -47,8 +49,9 @@ export function projectVariant(doc: ProjectDocument, variantId: string): Project
         if (text === undefined) continue;
         seg.text = text; seg.words = []; seg.timing = 'segment'; // the word timing described the master wording
       }
-  // «גרסה לכל קהל» (wave 8 audiences): the ONE place the audience rules apply, last, after every override above. W1 adds here, once
-  // audience.ts is built: `if (v.audience) applyAudience(out, v, report);` (report: an optional third parameter of projectVariant).
-  // applyAudience never throws (verifier C7). A size the version sets itself stays absolute; only inherited sizes scale (C3).
+  // «גרסה לכל קהל» (wave 8 audiences): the ONE place the audience rules apply, last, after every override above. applyAudience
+  // never throws (verifier C7). A size the version sets itself stays absolute; only inherited sizes scale (C3). `report` collects
+  // every rule application (audience.ts audienceChanges); callers without it get the same document.
+  if (v.audience) applyAudience(out, v, report);
   return out;
 }
