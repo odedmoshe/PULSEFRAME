@@ -87,7 +87,7 @@ Each is built, integrated and passes its proof in this container (final regressi
 ## Unverified after this evening's merges (2026-11-26; laptop rows)
 - Made clips: sandbox, net-log channels and alpha decode are measured in the Linux container only; the owner's Windows laptop rows
   L1–L6 of the motioncode plan remain.
-- In-editor agent (merged; proven with a labelled scripted model). Owner's screenshot, 2026-11-26 evening, one observation: the connect card on the laptop shows «הספק ענה: אפשר להתחיל · claude-opus-5-5» — the «בדיקה» request to Claude was accepted with the key the owner typed (row 1 for Claude, and `x-api-key`); no run has been made yet. The laptop list, with a key the owner types into the
+- In-editor agent (merged; proven with a labelled scripted model). Owner's screenshot, 2026-11-26 evening, one observation: the connect card on the laptop shows «הספק ענה: אפשר להתחיל · claude-opus-5-5» — the «בדיקה» request to Claude was accepted with the key the owner typed (row 1 for Claude, and `x-api-key`). Later the same evening the owner wrote that the agent "works well" after trying it (the owner's own words; the goal, the steps and the cost were not shown to the lead, so rows 2 and 7 stay open until a run's steps are seen). The laptop list, with a key the owner types into the
   connect card: (1) «בדיקה» on each provider's current model; (2) Claude: the walk goal, thinking blocks replayed, `x-api-key`
   accepted; (3) newer OpenAI models: `max_tokens` against `max_completion_tokens`, Chat Completions against Responses only;
   (4) Gemini's compatible endpoint: `max_tokens` and images; (5) Ollama: the image form, a context of at least 64k, whether small
