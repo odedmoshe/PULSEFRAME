@@ -39,6 +39,7 @@ import type { DropPage } from './drop-page/index.ts';
 import { candidateAddresses, parseBearer, parseContentLength, parseLastModified, plainIPv4, preferredRouteAddress, sameSubnet, TokenBucket } from './dropNet.ts';
 import { decodeUploadHeader, diskReserveRefuses, DROP_WIRE_ERROR_CODES, type DropByeResponse, type DropDoor, type DropDoorDeps, type DropHelloResponse, type DropStatusResponse, type DropUploadResponse, type DropWireErrorCode } from './importContracts.ts';
 import { ApiError } from './store.ts';
+import { isOwnerFloor } from './autonomy.ts';
 import type { ImportRoom } from '@pulseframe/core';
 
 /** The timers of the door's own clocks (code lifetime, upload stall, refusal drain). Tests inject a fake clock. */
@@ -609,7 +610,7 @@ export function createDropDoor(deps: DropDoorOptions): DropDoor {
   };
 
   const issue = async (by: Principal, projectId: string, address: string): Promise<DropCodeView> => {
-    if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'only the owner can open uploading from a phone', {}, 'Open the phone drop from the editor on this computer.');
+    if (!isOwnerFloor(by)) throw new ApiError(403, 'owner_required', 'only the owner can open uploading from a phone', {}, 'Open the phone drop from the editor on this computer.');
     if (!deps.projectExists(projectId)) throw new ApiError(404, 'project_not_found', `project ${projectId} not found`, { projectId });
     const list = door.addresses();
     if (list.length === 0) throw new ApiError(409, 'no_private_network', 'this computer has no home-network address a phone could reach', {}, 'Connect this computer to the home Wi-Fi (not only a VPN or a mobile hotspot) and try again.');

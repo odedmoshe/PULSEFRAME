@@ -20,6 +20,7 @@ import type { Config } from './config.ts';
 import type { Governance } from './governance.ts';
 import { assertMayHandleImportJob, decodeUploadHeader, type DropDoor, type ImportQueue } from './importContracts.ts';
 import { ApiError, type Store } from './store.ts';
+import { isOwnerFloor } from './autonomy.ts';
 
 type Env = { Variables: { principal: Principal } };
 const AddressBody = z.object({ address: z.string().min(1).max(64) }).strict();
@@ -35,7 +36,7 @@ export const declaredLastModified = (raw: string | undefined): string | undefine
 
 export function registerImportRoutes(app: Hono<Env>, deps: { cfg: Config; store: Store; gov: Governance; imports: ImportQueue; door: DropDoor | null; need: (c: Context<Env>, scope: Scope) => Principal }) {
   const { cfg, store, gov, imports, door, need } = deps;
-  const owner = (c: Context<Env>) => { const p = c.var.principal; if (p.kind !== 'user') throw new ApiError(403, 'owner_required', 'only the owner can issue, see or close a code for a phone, from their own session'); return p; };
+  const owner = (c: Context<Env>) => { const p = c.var.principal; if (!isOwnerFloor(p)) throw new ApiError(403, 'owner_required', 'only the owner can issue, see or close a code for a phone, from their own session'); return p; };
   const theDoor = () => { if (!door) throw new ApiError(503, 'drop_listen_failed', 'the phone drop is not available on this server'); return door; };
 
   app.post('/api/v1/projects/:id/imports', async (c) => {

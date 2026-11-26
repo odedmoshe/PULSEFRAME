@@ -53,11 +53,12 @@ import type { AssistantJobControls } from './assistant/routes.ts';
 import { proposalsFor } from './assistant/visibility.ts';
 import { notBuiltRuntime, SEARCH_INDEX_JOB_TYPE, type SearchRuntime } from './search/contract.ts';
 import { findInFootageFor } from './search/routes.ts';
+import { actsAsOwner, ownerKeeps, type AutonomySettings } from './autonomy.ts';
 
 export const SERVER_INFO = { name: 'pulseframe-studio', version: '0.0.0' };
 
 /** `derivatives` lets tracking jobs read an asset's editing proxy; without it they read the stored media. */
-export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, presence: Presence, governance?: Governance, speech?: Speech, derivatives?: Derivatives, extras: { imports?: ImportQueue; renderCache?: RenderCacheService; /** picture search (wave 7 search track; search/runtime.ts); index.ts always passes the built runtime; absent (a test host) = the not-built runtime */ search?: SearchRuntime } = {}) {
+export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, presence: Presence, governance?: Governance, speech?: Speech, derivatives?: Derivatives, extras: { /** the server mode (autonomy.ts): a switch ends non-owner listen streams */ autonomy?: AutonomySettings; imports?: ImportQueue; renderCache?: RenderCacheService; /** picture search (wave 7 search track; search/runtime.ts); index.ts always passes the built runtime; absent (a test host) = the not-built runtime */ search?: SearchRuntime } = {}) {
   const gov = governance ?? new Governance(store);
   const search = extras.search ?? notBuiltRuntime();
   /**
@@ -357,6 +358,9 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
   };
   store.events.on('revision', onRevision);
   store.events.on('projects', onProjects);
+  // a mode switch (autonomy.ts) ends every listen stream but the owner's own (C4): the client reconnects under the new mode
+  const onMode = () => { for (const [key, h] of handlers) if (!ownerKeeps(h.principal)) { handlers.delete(key); void h.handler.close().catch(() => {}); } };
+  extras.autonomy?.on('mode', onMode);
 
   /** Authenticate first, then hand the verified principal to the SDK (which does no token checks itself). */
   const serve = async (req: Request): Promise<Response> => {
@@ -366,6 +370,6 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
     return readingAs(principal, () => handlerFor(principal).fetch(req, { authInfo: { token: 'redacted', clientId: principal.actor, scopes: principal.scopes, extra: { principal } } }));
   };
   /** Stop notifying and end open listen streams (server shutdown). */
-  const close = async () => { store.events.off('revision', onRevision); store.events.off('projects', onProjects); await Promise.all([...handlers.values()].map((h) => h.handler.close().catch(() => {}))); handlers.clear(); };
+  const close = async () => { extras.autonomy?.off('mode', onMode); store.events.off('revision', onRevision); store.events.off('projects', onProjects); await Promise.all([...handlers.values()].map((h) => h.handler.close().catch(() => {}))); handlers.clear(); };
   return Object.assign(serve, { close, /** createApp hands over the assistant's job controls, so cancel_job and POST /jobs/:jobId/cancel share one cancel. */ bindAssistant(a: AssistantJobControls) { assistantJobs = a; } });
 }

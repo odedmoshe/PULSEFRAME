@@ -67,6 +67,7 @@ import { peopleSuggestions } from './lifeline.ts';
 import { takeFor } from './perform.ts';
 import { ASSISTANT_JOB_TYPE, AssistantConfigBodySchema, AssistantKeyBodySchema, AssistantRequestBodySchema } from '@pulseframe/core';
 import { isOwnerSession, type AssistantDeps } from './assistant/contract.ts';
+import { actsAsOwner, AutonomySettings, isOwnerFloor, ownerKeeps, registerAutonomyRoutes } from './autonomy.ts';
 import { assistantCancelRefusal, createAssistantHandlers, type AssistantJobControls } from './assistant/routes.ts';
 import { assertMayReadProposal, assertMayReleaseBudget, assistantJobStub, mayReadProposal, proposalsFor } from './assistant/visibility.ts';
 import { libraryOwner } from './library/contract.ts';
@@ -151,7 +152,7 @@ export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self';
 export const DATA_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
 
 /** Services wired by the server (index.ts) that tests may leave out: the import queue and the phone drop (ADR-0023), the render cache (ADR-0024). */
-export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps; /** picture search (wave 7 search track; search/runtime.ts): absent = the not-built runtime */ search?: SearchRuntime; /** the local picture-model runtime and eyes (wave 8 picmodels; picmodels/runtime.ts): absent = the not-built runtime */ pictureModels?: PictureModelsRuntime; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS, never from the environment */ musicKits?: readonly MusicKit[]; /** The render host whose identity the export uses (wave 8 booth: self-check row export-gpu); absent in test apps without one */ renderHost?: RenderHost }
+export interface AppExtras { /** The server mode (autonomy.ts); absent in unit tests that build an app by hand (then the config's mode, read-only). */ autonomy?: AutonomySettings; imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps; /** picture search (wave 7 search track; search/runtime.ts): absent = the not-built runtime */ search?: SearchRuntime; /** the local picture-model runtime and eyes (wave 8 picmodels; picmodels/runtime.ts): absent = the not-built runtime */ pictureModels?: PictureModelsRuntime; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS, never from the environment */ musicKits?: readonly MusicKit[]; /** The render host whose identity the export uses (wave 8 booth: self-check row export-gpu); absent in test apps without one */ renderHost?: RenderHost }
 export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler, speechService?: Speech, extras: AppExtras = {}) {
   setMeasurementExporter(exporter); // colour-match jobs render stills, also when they are recovered after a restart
   const gov = governance ?? new Governance(store);
@@ -163,6 +164,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     return parsed.data;
   };
   const need = (c: Context<Env>, scope: Scope) => { auth.require(c.var.principal, scope); return c.var.principal; };
+  const autonomy = extras.autonomy ?? new AutonomySettings(cfg.dataDir, { mode: cfg.mode, modeFromEnv: true });
+  registerAutonomyRoutes(app, { autonomy, need });
   // Templates with graphic elements are available only where ffmpeg can draw SVG: ask once now, so catalog() knows (ADR-0016).
   void probeElements();
 
@@ -625,12 +628,16 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
       // The phone drop's public view (no token, PIN or session: drop.ts), to the owner's own session only: it is the owner's dialog.
       const onDrop = (d: { projectId: string }) => d.projectId === projectId && now({ event: 'drop', data: JSON.stringify(d) });
       if (listener.kind === 'user') extras.door?.events.on('drop', onDrop);
+      // a mode switch closes every stream but the owner's own (C4): the client reconnects and is judged under the new mode
+      let endForMode: (() => void) | null = null;
+      const onMode = (m: unknown) => { const end = endForMode; if (!end) return; endForMode = null; void stream.writeSSE({ event: 'mode', data: JSON.stringify(m) }).catch(() => {}).finally(end); };
+      if (!ownerKeeps(listener)) autonomy.on('mode', onMode);
       try {
         await stream.writeSSE({ event: 'hello', data: JSON.stringify({ revision: current }) });
         for (const e of store.eventsSince(projectId, since)) await send(e);
         for (const e of pending) await send(e);
         live = true;
-        await new Promise<void>((resolve) => stream.onAbort(resolve));
+        await new Promise<void>((resolve) => { endForMode = resolve; stream.onAbort(resolve); });
       } finally {
         store.events.off('revision', onEvent);
         store.events.off('job', onJob);
@@ -638,15 +645,19 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
         for (const [k, fn] of govHandlers) store.events.off(k, fn);
         presence.events.off('presence', onPresence);
         extras.door?.events.off('drop', onDrop);
+        autonomy.off('mode', onMode);
       }
     });
   });
 
   // ----- human control: grants, pause, proposals, approvals -----
-  const owner = (c: Context<Env>) => { const p = c.var.principal; if (p.kind !== 'user') throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session'); return p; };
-  app.get('/api/v1/grants', (c) => { owner(c); return c.json({ grants: gov.listGrants() }); });
-  app.post('/api/v1/grants', async (c) => c.json(gov.createGrant(await c.req.json().catch(() => undefined), owner(c)), 201));
-  app.post('/api/v1/grants/:grantId/revoke', (c) => c.json({ grant: gov.revokeGrant(c.req.param('grantId'), owner(c)) }));
+  // FLOOR (autonomy.ts FLOOR_SITES): only the owner's own session mints or revokes credentials, in both modes
+  const floorOwner = (c: Context<Env>) => { const p = c.var.principal; if (!isOwnerFloor(p)) throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session'); return p; };
+  // the owner's switches kept in both modes by decision: pause (A6), proposal and approval decisions (B2, B3)
+  const owner = (c: Context<Env>) => { const p = c.var.principal; if (!ownerKeeps(p)) throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session'); return p; };
+  app.get('/api/v1/grants', (c) => { const p = c.var.principal; if (!actsAsOwner(p)) throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session'); return c.json({ grants: gov.listGrants() }); }); // A19 policy: an open agent reads the list (hashes only)
+  app.post('/api/v1/grants', async (c) => c.json(gov.createGrant(await c.req.json().catch(() => undefined), floorOwner(c)), 201));
+  app.post('/api/v1/grants/:grantId/revoke', (c) => c.json({ grant: gov.revokeGrant(c.req.param('grantId'), floorOwner(c)) }));
   app.get('/api/v1/projects/:id/controls', (c) => { need(c, 'observe'); return c.json({ projectId: c.req.param('id'), agentsPaused: gov.isPaused(c.req.param('id')) }); });
   app.post('/api/v1/projects/:id/agents/pause', (c) => c.json(gov.setPaused(c.req.param('id'), true, owner(c))));
   app.post('/api/v1/projects/:id/agents/resume', (c) => c.json(gov.setPaused(c.req.param('id'), false, owner(c))));

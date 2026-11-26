@@ -23,6 +23,7 @@
 import type { Config } from '../config.ts';
 import type { Governance, Principal } from '../governance.ts';
 import { ApiError, type Store } from '../store.ts';
+import { actsAsOwner, isOwnerFloor } from '../autonomy.ts';
 import type { AssistantLocalCheck } from '@pulseframe/core';
 import { isOwnerSession, type AssistantDeps, type AssistantHandlers, type AssistantStatus } from './contract.ts';
 import { assistantStatusFor } from './visibility.ts';
@@ -50,6 +51,10 @@ export const assistantCancelRefusal = (jobId: string) => new ApiError(403, 'owne
   'a language-assistant request belongs to the owner\'s own session, so an agent credential cannot cancel it', { jobId },
   'Ask the owner to cancel it in the editor\'s command bar («ביטול הבקשה», Cancel the request); left alone it ends when the service answers, and it only ever makes a proposal the owner accepts or rejects.');
 
+/** FLOOR (autonomy.ts FLOOR_SITES): the provider key and its endpoint stay the owner's in both modes (C9). */
+const assertKeyOwner = (p: Principal) => {
+  if (!isOwnerFloor(p)) throw new ApiError(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only', undefined, 'The owner sets it up in Settings.');
+};
 const owner = (p: Principal) => {
   if (!isOwnerSession(p)) throw new ApiError(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only', undefined, 'The owner sets it up in Settings.');
 };
@@ -86,9 +91,9 @@ export function createAssistantHandlers(ctx: AssistantRouteContext): AssistantHa
       const { doc } = ctx.store.getProject(projectId);
       return assistantSummary(doc, sctx, rt.files.readConfig().config.toggles);
     },
-    putConfig: (p, body) => { owner(p); rt.files.writeConfig(body); return assistantStatusFor(p, status()); },
-    putKey: (p, key) => { owner(p); return rt.files.writeKey(key); },
-    deleteKey: (p) => { owner(p); return rt.files.deleteKey(); },
+    putConfig: (p, body) => { assertKeyOwner(p); rt.files.writeConfig(body); return assistantStatusFor(p, status()); },
+    putKey: (p, key) => { assertKeyOwner(p); return rt.files.writeKey(key); },
+    deleteKey: (p) => { assertKeyOwner(p); return rt.files.deleteKey(); },
     request: (p, projectId, body) => { owner(p); return jobs.start(p, projectId, body); },
     cancel: (p, jobId) => { if (!isOwnerSession(p)) throw assistantCancelRefusal(jobId); return jobs.cancel(jobId, p.actor); },
     done: (jobId) => jobs.done(jobId),

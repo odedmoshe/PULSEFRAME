@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Config } from './config.ts';
 import { ApiError } from './store.ts';
+import { stampOpen, type ServerMode } from './autonomy.ts';
 
 export type Scope = 'observe' | 'edit';
 export type { Principal } from './governance.ts';
@@ -23,6 +24,8 @@ export class Auth {
   private sessions = new Map<string, Principal>();
   /** Named agent grants (governance.ts). Checked before the bootstrap tokens. */
   resolveGrant: ((token: string) => Principal | null) | null = null;
+  /** The server mode, read on every authentication (autonomy.ts AutonomySettings), so a switch reaches the very next request. */
+  serverMode: () => ServerMode;
   /** Clock for the rate limiter (replaceable in tests). */
   now: () => number = Date.now;
   private buckets = new Map<string, { tokens: number; at: number }>();
@@ -34,6 +37,7 @@ export class Auth {
     const stored: Partial<Tokens> = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
     this.tokens = { agent: stored.agent ?? `pfa_${randomBytes(24).toString('base64url')}`, observer: stored.observer ?? `pfo_${randomBytes(24).toString('base64url')}`, owner: stored.owner ?? `pfk_${randomBytes(24).toString('base64url')}` };
     if (!stored.agent || !stored.observer || !stored.owner) fs.writeFileSync(file, JSON.stringify(this.tokens, null, 2), { mode: 0o600 });
+    this.serverMode = () => cfg.mode;
     this.allowedHosts = new Set();
     this.allowedOrigins = new Set();
     this.bindPort(cfg.port);
@@ -102,9 +106,10 @@ export class Auth {
     const header = req.headers.get('authorization');
     if (header?.startsWith('Bearer ')) {
       const token = header.slice(7);
+      // the one stamp (autonomy.ts): in open mode an editing agent credential acts as the owner's own window at policy gates
       const granted = this.resolveGrant?.(token);
-      if (granted) return this.throttle(granted);
-      if (this.same(token, this.tokens.agent)) return this.throttle({ actor: 'agent:local', kind: 'agent', scopes: ['observe', 'edit'] });
+      if (granted) return this.throttle(stampOpen(granted, this.serverMode()));
+      if (this.same(token, this.tokens.agent)) return this.throttle(stampOpen({ actor: 'agent:local', kind: 'agent', scopes: ['observe', 'edit'] }, this.serverMode()));
       if (this.same(token, this.tokens.observer)) return this.throttle({ actor: 'agent:observer', kind: 'agent', scopes: ['observe'] });
       throw new ApiError(401, 'invalid_token', 'bearer token not recognised');
     }

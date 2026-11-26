@@ -11,6 +11,7 @@ import { ApiError, type CommitRequest, type CommitResult, type Store } from './s
 import { assertMayWritePeople, assertOwnerTagsPeople, docForPrincipal, docForReader, PEOPLE_ACCESS, type PeopleAccess } from './peoplePrivacy.ts';
 import { assertMayReleaseBudget } from './assistant/visibility.ts';
 import { assertOwnerAppliesLessons } from './lessons/guard.ts';
+import { actsAsOwner, isOwnerFloor, OPEN_AGENTS_LEDGER, ownerKeeps } from './autonomy.ts';
 
 export type Mode = 'observe' | 'propose' | 'edit' | 'autopilot';
 export const GrantInput = z
@@ -29,7 +30,7 @@ export const GrantInput = z
   })
   .strict();
 export interface Grant { id: string; name: string; mode: Mode; projectIds: string[] | null; trackIds: string[] | null; range: { start: T.RationalTime; end: T.RationalTime } | null; budgetCents: number; requestsPerMinute: number | null; exportsPerDay: number | null; /** What it reads about people (peoplePrivacy.ts); a grant stored before this existed is 'names'. */ people: PeopleAccess; expiresAt: string | null; revokedAt: string | null; createdAt: string; createdBy: string }
-export interface Principal { actor: string; kind: 'user' | 'agent'; scopes: ('observe' | 'edit')[]; mode?: Mode; grant?: Grant }
+export interface Principal { actor: string; kind: 'user' | 'agent'; scopes: ('observe' | 'edit')[]; mode?: Mode; grant?: Grant; /** Stamped by Auth.authenticate when the server is in open mode (autonomy.ts stampOpen); never set from a request. */ open?: true }
 
 const now = () => new Date().toISOString();
 const rid = (p: string) => `${p}_${randomBytes(8).toString('base64url').replace(/[-_]/g, 'x')}`;
@@ -56,7 +57,7 @@ export class Governance {
   private grantRow = (r: any): Grant => ({ id: r.id, name: r.name, mode: r.mode, requestsPerMinute: null, exportsPerDay: null, people: 'names', ...JSON.parse(r.constraints), budgetCents: r.budget_cents, expiresAt: r.expires_at, revokedAt: r.revoked_at, createdAt: r.created_at, createdBy: r.created_by });
   /** The token is returned once and only its hash is stored. */
   createGrant(raw: unknown, by: Principal): { grant: Grant; token: string } {
-    if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'only the project owner can create agent grants');
+    if (!isOwnerFloor(by)) throw new ApiError(403, 'owner_required', 'only the project owner can create agent grants'); // FLOOR (autonomy.ts FLOOR_SITES)
     const p = GrantInput.safeParse(raw);
     if (!p.success) throw new ApiError(400, 'invalid_request', z.prettifyError(p.error), { issues: p.error.issues });
     const g = p.data;
@@ -79,7 +80,7 @@ export class Governance {
     return (this.store.db.prepare('SELECT * FROM grants ORDER BY created_at').all() as any[]).map((r) => ({ ...this.grantRow(r), ...this.spend(r.id) }));
   }
   revokeGrant(id: string, by: Principal): Grant {
-    if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'only the project owner can revoke grants');
+    if (!isOwnerFloor(by)) throw new ApiError(403, 'owner_required', 'only the project owner can revoke grants'); // FLOOR
     this.getGrant(id);
     this.store.db.prepare('UPDATE grants SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?').run(now(), id);
     return this.getGrant(id);
@@ -128,7 +129,7 @@ export class Governance {
   }
   /** Suspends every agent's ability to mutate this project. Running jobs are reported, not killed: their results become proposals. */
   setPaused(projectId: string, paused: boolean, by: Principal) {
-    if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'only the project owner can pause or resume agents');
+    if (!ownerKeeps(by)) throw new ApiError(403, 'owner_required', 'only the project owner can pause or resume agents'); // the owner's brake, kept in both modes (A6)
     this.store.getProject(projectId);
     this.store.db.prepare('INSERT INTO project_controls (project_id, agents_paused, changed_at, changed_by) VALUES (?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET agents_paused = excluded.agents_paused, changed_at = excluded.changed_at, changed_by = excluded.changed_by').run(projectId, paused ? 1 : 0, now(), by.actor);
     const jobs = (this.store.db.prepare("SELECT id, type, actor, status FROM jobs WHERE project_id = ? AND actor LIKE 'agent:%' AND status IN ('queued','running','cancel-requested')").all(projectId) as any[]);
@@ -247,7 +248,7 @@ export class Governance {
    * stale with the conflict list and nothing is applied.
    */
   decide(id: string, decision: 'accept' | 'reject', by: Principal) {
-    if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'only the project owner can decide on proposals');
+    if (!ownerKeeps(by)) throw new ApiError(403, 'owner_required', 'only the project owner can decide on proposals'); // B2: a proposal accepted by its author is not one
     const pr = this.getProposal(id);
     if (pr.status !== 'open') throw new ApiError(409, 'proposal_closed', `proposal is already ${pr.status}`, { status: pr.status });
     const set = (status: string, extra: { rev?: number; conflicts?: unknown } = {}) => {
@@ -295,7 +296,7 @@ export class Governance {
   }
   /** Only an authenticated human; an agent can never approve its own (or anyone's) request. */
   decideApproval(id: string, decision: 'approve' | 'reject', by: Principal) {
-    if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'approvals can only be given by the project owner');
+    if (!ownerKeeps(by)) throw new ApiError(403, 'owner_required', 'approvals can only be given by the project owner'); // B3: kept; open agents need none
     const a = this.getApproval(id);
     if (a.status !== 'pending') throw new ApiError(409, 'approval_closed', `approval is ${a.status}`, { status: a.status });
     this.store.db.prepare("UPDATE approvals SET status = ?, decided_by = ?, decided_at = ? WHERE id = ? AND status = 'pending'").run(decision === 'approve' ? 'approved' : 'rejected', by.actor, now(), id);
