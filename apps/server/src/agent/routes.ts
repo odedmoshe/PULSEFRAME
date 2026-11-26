@@ -1,7 +1,7 @@
 /**
  * REST routes of the in-editor agent (wave 8 autonomy Part 2; core AGENT_ROUTES). LEAD PRE-PASS: every route registered with its
- * checks in order (scope, the project may be read, the body parses, the owner floor where it applies) and then the service, which
- * answers 501 agent_not_built until W1 (runs) and W2 (providers, keys, models) build it. W1 owns the run handlers, W2 the
+ * checks in order (scope, the project may be read, the body parses, the owner floor where it applies) and then the service. The run
+ * routes answer 501 agent_not_built until W1's service is bound; the provider, key and model routes are built (W2, agent/providers.ts). W1 owns the run handlers, W2 the
  * provider/model handlers; the first lines of each handler (the checks) stay.
  *
  * Who: run routes need the scope named in AGENT_ROUTES and nothing else: the owner's session and any agent credential with that
@@ -18,7 +18,12 @@ import { isOwnerSession } from '../assistant/contract.ts';
 import type { Scope } from '../auth.ts';
 import type { Governance, Principal } from '../governance.ts';
 import { ApiError, type Store } from '../store.ts';
-import { agentNotBuilt, type AgentRunService } from './loop.ts';
+import { AGENT_KEY_MAX_CHARS } from './keys.ts';
+import type { AgentRunService } from './loop.ts';
+import { createAgentProviders } from './providers.ts';
+
+/** PUT /api/v1/agent/providers/:providerId: an omitted field keeps its stored value; model null forgets the choice. */
+export const ProviderSettingsBodySchema = z.object({ baseUrl: z.string().min(1).max(2048).optional(), model: z.string().max(128).nullable().optional() }).strict();
 
 export type AgentEnv = { Variables: { principal: Principal } };
 export interface AgentRouteDeps { store: Store; gov: Governance; need: (c: Context<AgentEnv>, scope: Scope) => Principal; /** read per request: mcp.ts agentService() (W1's service once index.ts binds it, else the not-built one) */ service: () => AgentRunService }
@@ -52,12 +57,30 @@ export function registerAgentRoutes(app: Hono<AgentEnv>, deps: AgentRouteDeps): 
   app.post(`${P}/agent/runs/:runId/continue`, async (c) => { const p = project(c, 'edit'); const b = await parse(c, AgentContinueBodySchema); return c.json(svc().continue(p, c.req.param('id'), c.req.param('runId'), b)); });
   app.post(`${P}/agent/runs/:runId/undo-all`, async (c) => { const p = project(c, 'edit'); const b = await parse(c, z.object({ dryRun: z.boolean().optional(), partial: z.boolean().optional() }).strict()); return c.json(svc().undoAll(p, c.req.param('id'), c.req.param('runId'), b)); });
   app.post(`${P}/undo-actor`, async (c) => { const p = project(c, 'edit'); const b = await parse(c, UndoActorBodySchema); return c.json(svc().undoActor(p, c.req.param('id'), b)); });
-  // providers, keys, models (W2): 501 after the checks
-  app.get('/api/v1/agent/providers', (c) => { need(c, 'observe'); throw agentNotBuilt(); });
-  app.put('/api/v1/agent/providers/:providerId', (c) => { agentOwnerFloor(need(c, 'observe')); providerOf(c.req.param('providerId')); throw agentNotBuilt(); });
-  app.put('/api/v1/agent/providers/:providerId/key', (c) => { agentOwnerFloor(need(c, 'observe')); providerOf(c.req.param('providerId')); throw agentNotBuilt(); });
-  app.delete('/api/v1/agent/providers/:providerId/key', (c) => { agentOwnerFloor(need(c, 'observe')); providerOf(c.req.param('providerId')); throw agentNotBuilt(); });
-  app.post('/api/v1/agent/providers/:providerId/probe', (c) => { agentOwnerFloor(need(c, 'observe')); providerOf(c.req.param('providerId')); throw agentNotBuilt(); });
-  app.get('/api/v1/agent/models', (c) => { need(c, 'observe'); throw agentNotBuilt(); });
-  app.put('/api/v1/agent/models', async (c) => { agentOwnerFloor(need(c, 'observe')); await parse(c, z.object({ rows: AgentModelTableSchema }).strict()); throw agentNotBuilt(); });
+  // providers, keys, models (W2). Files are read per request (createAgentProviders keeps no state); the key never leaves the server.
+  const prov = () => createAgentProviders(deps.store.dataDir);
+  app.get('/api/v1/agent/providers', (c) => { need(c, 'observe'); return c.json(prov().view()); });
+  app.put('/api/v1/agent/providers/:providerId', async (c) => {
+    agentOwnerFloor(need(c, 'observe')); const id = providerOf(c.req.param('providerId'));
+    const b = await parse(c, ProviderSettingsBodySchema);
+    const p = prov(); const cur = p.keys.settingsOf(id);
+    p.keys.writeSettings({ providerId: id, baseUrl: b.baseUrl ?? cur.baseUrl, model: b.model === undefined ? cur.model : b.model });
+    return c.json(p.view());
+  });
+  app.put('/api/v1/agent/providers/:providerId/key', async (c) => {
+    agentOwnerFloor(need(c, 'observe')); const id = providerOf(c.req.param('providerId'));
+    const b = await parse(c, z.object({ key: z.string().max(AGENT_KEY_MAX_CHARS * 2) }).strict());
+    return c.json(prov().keys.writeKey(id, b.key));
+  });
+  app.delete('/api/v1/agent/providers/:providerId/key', (c) => { agentOwnerFloor(need(c, 'observe')); const id = providerOf(c.req.param('providerId')); return c.json(prov().keys.deleteKey(id)); });
+  app.post('/api/v1/agent/providers/:providerId/probe', async (c) => {
+    agentOwnerFloor(need(c, 'observe')); const id = providerOf(c.req.param('providerId'));
+    await parse(c, z.object({}).strict());
+    return c.json(await prov().probe(id, c.req.raw.signal));
+  });
+  app.get('/api/v1/agent/models', (c) => { need(c, 'observe'); return c.json(prov().models()); });
+  app.put('/api/v1/agent/models', async (c) => {
+    agentOwnerFloor(need(c, 'observe')); const b = await parse(c, z.object({ rows: AgentModelTableSchema }).strict());
+    const p = prov(); p.keys.writeOwnerModels(b.rows); return c.json(p.models());
+  });
 }
