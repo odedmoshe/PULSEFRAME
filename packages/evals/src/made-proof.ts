@@ -49,12 +49,12 @@ export const MADE_PROOF_CHECKS = [
   '7 flashing page (white/transparent every 2 frames at 30 fps): the job SUCCEEDS with made_flash warning and its measured rate on black and on white (decision 3)',
   '8 empty page: made_empty',
   '10 infinite loop in render(5): made_frame_timeout within 2 s + 10 s; the next job succeeds; an export started meanwhile completes',
-  '11 memory hog: made_crashed; the next job succeeds',
-  '12 cancel at frame 20 of 120: canceled, nothing imported, blobs not pinned after dismissal',
+  '11 memory hog: made_crashed or made_frame_timeout (which one is reported; lead, integration decision 3); the next job succeeds',
+  '12 cancel at frame 20 of 120: canceled, nothing imported, blobs not pinned after dismissal, no made browser context left open',
   '13 apply with place at frame 30 as an AGENT credential: one top track and one clip, committed as that agent; undo removes clip, track and asset; redo restores; render_frame shows the background through; the paused preview equals render_frame at 3 frames; draft playback uses the original (no proxy)',
   '14 edit and re-render, apply replace with 2 clips (one in a second sequence): ids, starts, durations, effects kept; one undo restores both',
   '15 agents over MCP: submit_made_clip with then.place applies itself (open semantics); view_made_clip returns 3 images to the submitter, an error to another agent; an observer is refused; a second active render 429 made_busy; agents paused: refused',
-  '16 archive and collector: the archive holds the page blob; an import as a new project reopens the page; storage clean-up does not list it',
+  '16 archive and collector: the archive holds the page blob; an import as a new project reopens the page; storage clean-up does not list it, read 11 minutes ahead (past the 10-minute grace), where an unreferenced control blob IS listed',
   '17 a transparent WebM made by another tool (the G1 file) imported through the ordinary upload composites with alpha in render_frame',
   '18 all five built-in pages render with Hebrew and with English values; pictures written for the integrator to look at (RTL: the opaque box of «טיול לגליל 2026» recorded beside the English one)',
 ] as const;
@@ -230,7 +230,7 @@ async function main() {
       let ok = true;
       for (const [name, js] of [['location', `w['loca' + 'tion']['hr' + 'ef'] = 'http://${hosts[0]}/nav'`], ['window.open', `w['op' + 'en']('http://${hosts[0]}/open')`], ['form', `(() => { const f = d.createElement('fo' + 'rm'); f.action = 'http://${hosts[0]}/form'; f.method = 'post'; d.body.appendChild(f); f.submit(); })()`]] as const) {
         const before = listeners();
-        const { rep } = await renderDone(owner, pid, { page: canvasPage(`if (frame === 1) { ${js}; } ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 20, 20);`), seconds: 0.2 });
+        const { rep } = await renderDone(owner, pid, { page: canvasPage(`const w = window, d = document; if (frame === 1) { ${js}; } ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 20, 20);`), seconds: 0.2 });
         const zero = listeners().tcpConnections === before.tcpConnections;
         // window.open opens no frame of this page, so it need not fail the job; a navigation of the page itself must
         const navigatedOrNoNav = name === 'window.open' ? true : rep?.failure?.why === 'navigated';
@@ -363,7 +363,7 @@ PF.render = (frame) => { cube.rotation.set(frame * 0.05, frame * 0.07, 0); r.ren
     await guard(MADE_PROOF_CHECKS[18], async () => {
       const { rep } = await renderDone(owner, pid, { page: HOG_PAGE, seconds: 0.5 });
       const next = await renderDone(owner, pid, { page: TITLE_PAGE, fields: TITLE_FIELDS, seconds: 0.5 });
-      record(MADE_PROOF_CHECKS[18], rep?.failure?.why === 'crashed' && next.rep?.status === 'succeeded', { failure: rep?.failure, next: next.rep?.status });
+      record(MADE_PROOF_CHECKS[18], (rep?.failure?.why === 'crashed' || rep?.failure?.why === 'frameTimeout') && next.rep?.status === 'succeeded', { endedAs: rep?.failure?.why, failure: rep?.failure, next: next.rep?.status });
     });
     await guard(MADE_PROOF_CHECKS[19], async () => {
       const assetsBefore = Object.keys((await doc(pid)).assets).length;
@@ -373,7 +373,8 @@ PF.render = (frame) => { cube.rotation.set(frame * 0.05, frame * 0.07, 0); r.ren
       const dismissed = await call(owner, 'POST', `/projects/${pid}/made/jobs/${j.jobId}/dismiss`, {});
       const row = s.store.db.prepare('SELECT type, status, output, error, updated_at FROM jobs WHERE id = ?').get(j.jobId) as { type: string; status: string; output: string | null; error: string | null; updated_at: string };
       const assetsAfter = Object.keys((await doc(pid)).assets).length;
-      record(MADE_PROOF_CHECKS[19], rep.status === 'canceled' && assetsAfter === assetsBefore && !jobPins(row, Date.now()), { status: rep.status, cancelAskedAtFrame: cancelAt, frames: rep.progress?.frames, assetsBefore, assetsAfter, dismiss: dismissed.status, pinned: jobPins(row, Date.now()), note: 'whether a made browser context stays open is the harness\'s to show (not in the contract)' });
+      const openContexts = await s.made.host.openContexts();
+      record(MADE_PROOF_CHECKS[19], rep.status === 'canceled' && assetsAfter === assetsBefore && !jobPins(row, Date.now()) && openContexts === 0, { status: rep.status, cancelAskedAtFrame: cancelAt, frames: rep.progress?.frames, assetsBefore, assetsAfter, dismiss: dismissed.status, pinned: jobPins(row, Date.now()), openContexts });
     });
 
     // 13: as an AGENT credential: place, undo, redo, render_frame, the paused preview
@@ -474,8 +475,11 @@ PF.render = (frame) => { cube.rotation.set(frame * 0.05, frame * 0.07, 0); r.ren
       const imported = (await imp.json()) as any;
       const newPid = imported?.project?.id as string;
       const back = newPid ? await call(owner, 'GET', `/projects/${newPid}/made/assets/${assetId}/page`) : null;
-      const hashes = (storageReport(s.store, OWNER).unreferenced as unknown as { hashes: string[] }).hashes.map((h) => h.replace(/^sha256:/, ''));
-      record(MADE_PROOF_CHECKS[23], inArchive && imp.status === 201 && back?.status === 200 && back.body.page === TITLE_PAGE && !hashes.includes(pageHex), { inArchive, import: imp.status, reopened: back?.status, samePage: back?.body?.page === TITLE_PAGE, listedForCleanUp: hashes.includes(pageHex) });
+      // a control blob nothing names: the report read 11 minutes ahead must list it, so "not listed" says something about the page
+      const control = `control blob ${Date.now()} ${Math.random()}`, controlHex = (await import('node:crypto')).createHash('sha256').update(control).digest('hex');
+      const controlTmp = path.join(work, 'control.txt'); fs.writeFileSync(controlTmp, control); s.store.putBlob(`sha256:${controlHex}`, controlTmp, Buffer.byteLength(control), 'text/plain');
+      const hashes = (storageReport(s.store, OWNER, Date.now() + 11 * 60_000).unreferenced as unknown as { hashes: string[] }).hashes.map((h) => h.replace(/^sha256:/, ''));
+      record(MADE_PROOF_CHECKS[23], inArchive && imp.status === 201 && back?.status === 200 && back.body.page === TITLE_PAGE && !hashes.includes(pageHex) && hashes.includes(controlHex), { inArchive, import: imp.status, reopened: back?.status, samePage: back?.body?.page === TITLE_PAGE, listedForCleanUp: hashes.includes(pageHex), controlListed: hashes.includes(controlHex), readAheadMinutes: 11 });
     });
     await guard(MADE_PROOF_CHECKS[24], async () => {
       const gpid = (await call(owner, 'POST', '/projects', { name: 'made proof g1', width: 320, height: 240, frameRate: R })).body.project.id as string;
@@ -529,7 +533,7 @@ async function previewParity(ownerUrl: string, pid: string, frames: number[], st
     const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
     await page.goto(`${ownerUrl}&project=${pid}`);
     await page.locator('[data-testid=ruler]').waitFor({ timeout: 60_000 });
-    const out: { frame: number; equal: boolean; source: string | undefined; differing: number }[] = [];
+    const out: { frame: number; equal: boolean; source: string | undefined; shownFrame: string | undefined; quality: string | undefined; differing: number }[] = [];
     for (const k of frames) {
       await page.evaluate((x) => { const el = document.querySelector('[data-testid=ruler]')!; const r = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent('pointerdown', { clientX: r.left + x, clientY: r.top + 5, bubbles: true })); el.dispatchEvent(new PointerEvent('pointerup', { clientX: r.left + x, clientY: r.top + 5, bubbles: true })); }, (k / 30) * 90 + 0.5);
       await page.waitForFunction((want) => { const c = document.querySelector('[data-testid=preview]') as HTMLCanvasElement; return c?.dataset.frame === String(want) && c.dataset.quality === 'full'; }, k, { timeout: 30_000 }).catch(() => {});
@@ -537,7 +541,7 @@ async function previewParity(ownerUrl: string, pid: string, frames: number[], st
         const c = document.querySelector('[data-testid=preview]') as HTMLCanvasElement;
         const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), 'image/png'));
         const data: string = await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(String(fr.result).split(',')[1]!); fr.readAsDataURL(blob); });
-        return { source: c.dataset.source, data, w: c.width, h: c.height };
+        return { source: c.dataset.source, shownFrame: c.dataset.frame, quality: c.dataset.quality, data, w: c.width, h: c.height };
       });
       const rgba = (png: Buffer) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-f', 'png_pipe', '-i', 'pipe:0', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-'], { input: png, maxBuffer: 1 << 28 });
       const ref = rgba(await still(k));
@@ -547,7 +551,7 @@ async function previewParity(ownerUrl: string, pid: string, frames: number[], st
         differing = 0;
         for (let i = 0; i < ref.length; i++) if (ref[i] !== mine[i]) differing++;
       }
-      out.push({ frame: k, equal: differing === 0, source: shot.source, differing });
+      out.push({ frame: k, equal: differing === 0, source: shot.source, shownFrame: shot.shownFrame, quality: shot.quality, differing });
     }
     return { pass: out.every((o) => o.equal && o.source === 'original'), frames: out };
   } finally { await browser.close().catch(() => {}); }
