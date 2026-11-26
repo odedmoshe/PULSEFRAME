@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-26T03:05:40.761Z",
+  "ranAt": "2026-11-26T03:56:39.242Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "browser": "153.0.8010.12"
@@ -145,7 +145,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_136b7aaa130]",
+          "focusAfterClose": "button[data-testid=more-ast_0218f57a290]",
           "focusReturned": true
         },
         {
@@ -764,7 +764,7 @@
         },
         {
           "state": "cache-sheet-first",
-          "controls": 485,
+          "controls": 486,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1376,7 +1376,7 @@
         },
         {
           "state": "multicam-panel",
-          "controls": 390,
+          "controls": 391,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1706,7 +1706,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_136b7aaa130]",
+          "focusAfterClose": "button[data-testid=more-ast_0218f57a290]",
           "focusReturned": true
         },
         {
@@ -2565,7 +2565,7 @@
         },
         {
           "state": "story-bar",
-          "controls": 364,
+          "controls": 365,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3290,7 +3290,10 @@
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
-          "shown": true
+          "shown": true,
+          "cards": 1,
+          "clipsMissing": 1,
+          "alerts": []
         },
         {
           "state": "transcript-skipped-note",
@@ -3910,7 +3913,10 @@
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
-          "shown": true
+          "shown": true,
+          "cards": 1,
+          "clipsMissing": 1,
+          "alerts": []
         },
         {
           "state": "transcript-skipped-note",
