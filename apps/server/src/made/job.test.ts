@@ -158,7 +158,7 @@ PF.render = (f, t) => { tl.seek(t, false); };
     expect(j.output.record.libraries).toEqual(['gsap@3.15.1']);
   }, 600_000);
 
-  it('the five built-in pages render with Hebrew and with English values and pass every check (two passes alike; functional only, nobody has looked)', async () => {
+  it('the six built-in pages render with Hebrew and with English values and pass every check (two passes alike, or for card-3d on WebGL the warning; functional only, nobody has looked)', async () => {
     for (const t of MADE_TEMPLATES) for (const lang of ['he', 'en'] as const) {
       const { jobId } = jobs.start(owner, projectId, { page: { templateId: t.id }, seconds: 1, name: t.name.en, values: t.samples[lang] }, { text: t.page, sha256: t.pageSha256, templateId: t.id, templateVersion: t.version, fields: t.fields });
       let j = store.getJob(jobId);

@@ -80,10 +80,10 @@ describe('the made routes are registered, documented, classified and open', () =
     }
     for (const t of MADE_MCP_TOOLS) expect(PEOPLE_MCP_TOOLS[t], t).toBeTruthy();
   });
-  it('the catalogue answers any credential: five pages with their sha256 and the limits', async () => {
+  it('the catalogue answers any credential: six pages with their sha256 and the limits', async () => {
     const r = await rest(observer, 'GET', '/api/v1/made/templates');
     expect(r.status).toBe(200);
-    expect(r.body.templates.map((t: any) => t.id)).toEqual(['rising-title', 'lower-third', 'counter', 'intro-plate', 'end-card']);
+    expect(r.body.templates.map((t: any) => t.id)).toEqual(['rising-title', 'lower-third', 'counter', 'intro-plate', 'end-card', 'card-3d']);
     expect(r.body.limits.maxSeconds).toBe(20);
   });
   it('without a runner (W1 not wired): valid requests from an agent that may edit pass every check and answer 501 made_not_built; an observer cannot render', async () => {
@@ -207,7 +207,8 @@ describe('what the builders make pass (W2, against a LABELLED FAKE runner: no br
     expect((await h.rest(h.observerH, 'GET', h.url('assets/ast_none/page'))).body.error.code).toBe('made_no_page');
     h.close();
   });
-  it.todo('W1: a render that was running when the server stopped ends failed with made_restarted and imports nothing; cancel_job stops it (W1 owns the job; not W2)');
+  // A render running when the server stopped ends failed with made_restarted and imports nothing, and cancel_job (REST and MCP) stops a
+  // made render: apps/server/src/made/wiring.test.ts (a real server restarted on the same data folder; integration).
 });
 
 // ---------------------------------------------------------------- a LABELLED FAKE runner (test only): job rows in the real store, a synthetic made asset, no browser
