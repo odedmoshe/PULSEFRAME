@@ -39,6 +39,11 @@ export const DETAIL_BOX = { lonMin: 29, lonMax: 39.5, latMin: 27, latMax: 36.5 }
 /** Place rule: every place inside PLACE_BOX, plus places worldwide with SCALERANK <= PLACE_MAX_SCALERANK. */
 export const PLACE_BOX = DETAIL_BOX;
 export const PLACE_MAX_SCALERANK = 3;
+// Checked by W2 on a fresh download of the pinned file (2026-11-26, same SHA-256): ne_10m_populated_places v5.1.2 has NO record named
+// Elat/Eilat, Petra, Wadi Musa, Taba, Dahab or Sharm el Sheikh (NAME, NAMEASCII, NAME_EN, NAMEALT, whole file), and every one of the
+// 75 records inside PLACE_BOX has a NAME_HE, so no place was dropped for a missing Hebrew name. Aqaba is in the list with its own
+// NAME_HE «עקבה». No Hebrew name in the output comes from outside the data, and no coordinate was typed: those places are placed by
+// clicking on the map.
 
 /**
  * Levels. `q`: quantum in Mercator degrees (x = longitude in degrees; y = (180/π)·ln(tan(π/4 + φ/2)), same unit).
