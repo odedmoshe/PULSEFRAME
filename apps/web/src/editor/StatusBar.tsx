@@ -5,12 +5,11 @@
  * The shell (ds/shell.css) gives the row its height once this renders something. Styles: ds/chrome.css.
  */
 import { Check, ShieldCheck, TriangleAlert } from 'lucide-react';
-import * as T from '@pulseframe/time';
 import { capStageLabel } from './statusStage.ts';
 import { Ring } from '../ds/index.ts';
 import { CHROME_STRINGS } from './chrome.strings.ts';
 import { setSettingsOpen } from './chromeState.ts';
-import { editEnd } from './commands.ts';
+import { filmClock } from './filmLength.ts';
 import { useEditorState } from './store.ts';
 import { dictionaries } from '@pulseframe/i18n';
 import type { ExportChecks } from '@pulseframe/core';
@@ -23,8 +22,7 @@ export function StatusBar() {
   const { state, t } = useEditorState();
   const S = CHROME_STRINGS[state.lang];
   const { doc, capJob, gpu, provider, exportJob } = state;
-  const seconds = doc ? T.toSeconds(editEnd(doc)) : 0;
-  const clock = `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+  const clock = filmClock(doc);
   const fps = doc ? Math.round((doc.settings.frameRate.num / doc.settings.frameRate.den) * 100) / 100 : 0;
   const job = capJob && ['queued', 'running'].includes(capJob.status) ? capJob : null;
   const pct = job && typeof job.output?.progress === 'number' ? Math.round(job.output.progress * 100) : null;

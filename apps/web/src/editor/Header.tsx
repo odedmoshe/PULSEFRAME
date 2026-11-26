@@ -9,11 +9,11 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Bot, Check, ChevronDown, CircleAlert, CloudOff, Pencil, Search, TriangleAlert, User } from 'lucide-react';
-import * as T from '@pulseframe/time';
 import { LOGO_SVG } from '@pulseframe/brand';
 import type { Key } from '@pulseframe/i18n';
 import { IconButton, ModeBar, Ring, Tooltip, type SegOption } from '../ds/index.ts';
-import { chordLabel, editEnd } from './commands.ts';
+import { chordLabel } from './commands.ts';
+import { filmClock } from './filmLength.ts';
 import { CHROME_STRINGS } from './chrome.strings.ts';
 import { onMenuKeyDown } from './menuKeys.ts';
 import { InlineRename } from './InlineRename.tsx';
@@ -70,8 +70,7 @@ export function Header() {
   }));
   const shownMode: Workspace = MODES.includes(state.workspace) ? state.workspace : 'pro';
 
-  const seconds = doc ? T.toSeconds(editEnd(doc)) : 0;
-  const clock = `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+  const clock = filmClock(doc);
   const saveWord = save === 'save.offline' ? S.offline : save === 'save.conflict' ? S.conflict : save === 'save.saving' ? S.saving : S.saved;
   const saveTone = save === 'save.conflict' ? 'warn' : save === 'save.offline' ? 'quiet' : '';
   const SaveIcon = save === 'save.offline' ? CloudOff : save === 'save.conflict' ? CircleAlert : Check;
