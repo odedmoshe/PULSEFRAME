@@ -7,7 +7,7 @@
  * Fixtures are synthetic, made here with ffmpeg from raw bytes: the coordinate photo 640×360 (R = x mod 256, G = y mod 256,
  * B = 64·⌊x/256⌋): the source position each output pixel came from is decoded without ambiguity, since every displacement is under
  * 128 px; pixels within 2 px of a wrap column (or row) are skipped. Depths: a hand disc (base flat, one near dab of size 300 at the
- * centre) and a ramp (horizon 400). Project 640×360 at 30 fps, the photo on 3 s (90 frames).
+ * centre) and a ramp (horizon 400). Project 640×360 at 30 fps, the photo on LIVING_ENGINE_FIXTURE.frames (271: the shortest clip a slide at amount 1 fits).
  *
  * Needs W1 (set_living_picture and core depthGrid): until LIVING_BUILT is true the part reports every check as not run (blocked),
  * never as a pass.
@@ -19,7 +19,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { Browser, Page } from 'playwright';
 import * as T from '@pulseframe/time';
-import { depthGrid, fitScale, LIVING_BUILT, LIVING_MAX_SHIFT, type ClipDepth, type ProjectDocument } from '@pulseframe/core';
+import { depthGrid, fitScale, LIVING_BUILT, LIVING_MAX_SHIFT, livingMaxAmount, type ClipDepth, type ProjectDocument } from '@pulseframe/core';
 import { evaluate, livingModel, livingParams, type ImageLayer } from '@pulseframe/engine';
 
 export interface LivingEngineCtx {
@@ -33,7 +33,15 @@ export interface LivingEngineCtx {
 }
 export const LIVING_PROOF_ENGINE = { built: true as boolean, checks: [1, 2, 3, 4, 5, 6, 7, 9, 12, 17, 19] as const };
 
-const W = 640, H = 360, FPS = { num: 30, den: 1 }, FRAMES = 90;
+const W = 640, H = 360, FPS = { num: 30, den: 1 };
+/**
+ * The clip length: the shortest (from 90 frames up) on which a slide at amount 1 with ease-in-out fits the comfort rule of thumb
+ * (core livingMaxAmount; set_living_picture refuses a faster move, verifier C1): 271 frames at 30 fps. The sampled frames are the
+ * middle, the last and the quarters of the clip (the plan's 45, 89 and 0/22/45/67/89 on its 90-frame clip).
+ */
+const FRAMES = (() => { let n = 90; while (livingMaxAmount(n, FPS, 'slide', 'ease-in-out') < 1) n++; return n; })();
+const MID = Math.round((FRAMES - 1) / 2), LAST = FRAMES - 1, QUARTERS = [0, 1, 2, 3, 4].map((k) => Math.round((k * (FRAMES - 1)) / 4));
+export const LIVING_ENGINE_FIXTURE = { frames: FRAMES, fps: FPS, sample: { mid: MID, last: LAST, quarters: QUARTERS } } as const;
 const DISC: ClipDepth = { v: 1, base: { kind: 'flat' }, strokes: [{ layer: 'near', size: 300, pts: [500, 500] }] };
 const RAMP: ClipDepth = { v: 1, base: { kind: 'ramp', horizon: 400 }, strokes: [] };
 const A_PX = (amount: number) => amount * LIVING_MAX_SHIFT * H; // the largest relative shift in frame px (3% of the height at amount 1)
@@ -123,7 +131,7 @@ export async function runLivingEngine(ctx: LivingEngineCtx): Promise<void> {
     const inside: [number, number][] = [], outside: [number, number][] = [];
     for (let y = 8; y < H - 8; y += 4) for (let x = 8; x < W - 8; x += 4) { const s = mLast.source(x, y); if (!s) continue; const v = mLast.nearAt(s[0], s[1]); if (v === 255) inside.push([x, y]); else if (v === 0) outside.push([x, y]); }
     const a = compare(last, mLast, outside, 1, true), b = compare(last, mLast, inside, 1, true);
-    ctx.check(1, 'slide, amount 1, the still at frame 89: pixels well outside the disc (m = −f) and well inside it (m = 1 − f) decode to livingModel\'s source within 1 px', a.compared > 500 && b.compared > 50 && a.within1px === a.compared && b.within1px === b.compared, { outside: a, inside: b, travel: mLast.travel, numbers: mLast.numbers });
+    ctx.check(1, `slide, amount 1, the still at the last frame (${LAST}): pixels well outside the disc (m = −f) and well inside it (m = 1 − f) decode to livingModel's source within 1 px`, a.compared > 500 && b.compared > 50 && a.within1px === a.compared && b.within1px === b.compared, { outside: a, inside: b, travel: mLast.travel, numbers: mLast.numbers });
   }
   {
     // the trailing edge of the disc on the middle row: the band is where the output shows a source that is neither its far-plane
@@ -145,9 +153,9 @@ export async function runLivingEngine(ctx: LivingEngineCtx): Promise<void> {
     ctx.check(3, `the band beside the disc's trailing edge is at most ⌈A⌉ + 2 = ${Math.ceil(A) + 2} px wide, its pixels come from outside the disc, and no pixel of the picture is transparent`, longest <= Math.ceil(A) + 2 && intoDisc === 0 && transparent === 0, { longestBandPx: longest, bandPixelsFromInsideTheDisc: intoDisc, transparentPixels: transparent });
   }
 
-  // ---------- 2: 300 random pixels at frame 45; the ramp's rows ----------
+  // ---------- 2: 300 random pixels at the middle frame; the ramp's rows ----------
   {
-    const mid = await still(disc.pid, 45), m = modelAt(docDisc, 45);
+    const mid = await still(disc.pid, MID), m = modelAt(docDisc, MID);
     let seed = 7; const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 2 ** 32);
     const pts: [number, number][] = Array.from({ length: 300 }, () => [Math.floor(rnd() * W), Math.floor(rnd() * H)]);
     const a = compare(mid, m, pts, 1, true);
@@ -164,7 +172,7 @@ export async function runLivingEngine(ctx: LivingEngineCtx): Promise<void> {
       const S = mr.numbers[11]!, cv = (mr.numbers[4]! + mr.numbers[6]!) / 2, rest = (cv + (320.5 / W - cv) / S) * W - 0.5;
       worstRow = Math.max(worstRow, Math.abs((rest - got[0]) - (n - 0.5) * d));
     }
-    ctx.check(2, '300 random pixels of the still at frame 45 decode to livingModel within 1 px (pixels near a depth edge skipped, C14 e); the ramp\'s rows follow livingModel and shift in proportion to (y − h)/(1 − h) within 1 px', a.within1px === a.compared && a.compared >= 150 && b.within1px === b.compared && worstRow <= 1 + 1 / 255 * Math.abs(d), { random: a, ramp: b, worstRowPx: Number(worstRow.toFixed(2)) });
+    ctx.check(2, `300 random pixels of the still at the middle frame (${MID}) decode to livingModel within 1 px (pixels near a depth edge skipped, C14 e); the ramp's rows follow livingModel and shift in proportion to (y − h)/(1 − h) within 1 px`, a.within1px === a.compared && a.compared >= 150 && b.within1px === b.compared && worstRow <= 1 + 1 / 255 * Math.abs(d), { random: a, ramp: b, worstRowPx: Number(worstRow.toFixed(2)) });
   }
 
   // ---------- 4: rotation ----------
@@ -175,7 +183,7 @@ export async function runLivingEngine(ctx: LivingEngineCtx): Promise<void> {
     await tx(rot.pid, [{ op: 'set_clip_transform', args: { clipId: rot.clipId, transform: { rotation: 0 } } }]);
     await living(rot.pid, rot.clipId, { depth: DISC, move: 'slide', amount: 1 });
     await tx(rot.pid, [{ op: 'set_clip_transform', args: { clipId: rot.clipId, transform: { rotation: 10 } } }]);
-    const after = await call(`/projects/${rot.pid}/frame?index=45`);
+    const after = await call(`/projects/${rot.pid}/frame?index=${MID}`);
     const text = JSON.stringify(after.body);
     ctx.check(4, 'a rotated photo: set_living_picture refuses living_rotated; a living picture rotated afterwards is refused as a still, naming the effect and the rotation (never drawn flat)', refused.status !== 200 && JSON.stringify(refused.body).includes('living_rotated') && after.status !== 200 && /depth\.living/.test(text) && /rotated/i.test(text), { refusal: refused.status, refusalWhy: refused.body?.error?.details?.why, still: after.status, stillMessage: text.slice(0, 300) });
   }
@@ -183,11 +191,11 @@ export async function runLivingEngine(ctx: LivingEngineCtx): Promise<void> {
   // ---------- 5: disabled ----------
   {
     const plain = await newPhotoProject('living-plain');
-    const ref = await still(plain.pid, 45);
+    const ref = await still(plain.pid, MID);
     const off = await newPhotoProject('living-off');
     const o = await living(off.pid, off.clipId, { depth: DISC, move: 'slide', amount: 1 });
     await tx(off.pid, [{ op: 'update_effect', args: { clipId: off.clipId, effectId: o.effectId, enabled: false } }]);
-    const got = await still(off.pid, 45);
+    const got = await still(off.pid, MID);
     ctx.check(5, 'the living picture disabled: the still equals the still of the same photo without it, byte for byte', sha(got) === sha(ref), { equal: sha(got) === sha(ref) });
   }
 
@@ -204,7 +212,7 @@ export async function runLivingEngine(ctx: LivingEngineCtx): Promise<void> {
     };
     const preview = async (): Promise<Buffer> => Buffer.from(await page.evaluate(() => { const c = document.querySelector<HTMLCanvasElement>('canvas[data-testid=preview]')!; const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data; const o: number[] = []; for (let i = 0; i < d.length; i += 4) o.push(d[i]!, d[i + 1]!, d[i + 2]!); return o; }));
     const rows: unknown[] = []; let same = true;
-    for (const frame of [0, 45, 89]) {
+    for (const frame of [0, MID, LAST]) {
       await seek(frame);
       const ref = await still(disc.pid, frame);
       let got = await preview();
@@ -213,7 +221,7 @@ export async function runLivingEngine(ctx: LivingEngineCtx): Promise<void> {
       rows.push({ frame, differingBytes: diff }); if (diff) same = false;
     }
     for (const nums of (await page.evaluate(() => (globalThis as { __pfLivingNumbers?: () => number[][] }).__pfLivingNumbers?.() ?? [])) as number[][]) kPreview.push(nums[10]!);
-    ctx.check(6, 'the paused editor preview equals render_frame byte for byte at frames 0, 45 and 89', same, rows);
+    ctx.check(6, `the paused editor preview equals render_frame byte for byte at frames 0, ${MID} and ${LAST}`, same, rows);
   } finally { await page.close(); }
 
   // ---------- 7: export ----------
@@ -229,14 +237,14 @@ export async function runLivingEngine(ctx: LivingEngineCtx): Promise<void> {
       const frameBytes = W * H * 3, n = all.length / frameBytes;
       // the disc's centre (output pixel at the photo's centre at rest): its decoded source against the ease-in-out keys (livingModel)
       const centre: unknown[] = []; let worstCentre = 0;
-      for (const f of [0, 22, 45, 67, 89]) {
+      for (const f of QUARTERS) {
         const img = all.subarray(f * frameBytes, (f + 1) * frameBytes) as Buffer, m = modelAt(docDisc, f);
         const want = m.source(W / 2, H / 2)!, got = decode(img, W / 2, H / 2, want);
         const e = got ? Math.abs(got[0] - want[0]) : Infinity; worstCentre = Math.max(worstCentre, e); centre.push({ frame: f, travel: m.travel, got: got?.[0], want: Number(want[0].toFixed(2)) });
       }
       let worstPsnr = Infinity;
       for (let f = 0; f < n; f++) worstPsnr = Math.min(worstPsnr, psnr(all.subarray(f * frameBytes, (f + 1) * frameBytes) as Buffer, await still(disc.pid, f)));
-      ctx.check(7, 'export (MP4): the disc\'s decoded centre at frames 0, 22, 45, 67, 89 follows the ease-in-out keys within 1.5 px; every exported frame within 36 dB PSNR of its still', n === FRAMES && worstCentre <= 1.5 && worstPsnr >= 36, { frames: n, centre, worstCentrePx: Number(worstCentre.toFixed(2)), worstPsnrDb: Number(worstPsnr.toFixed(2)), exportSecondsOneSample: Math.round((Date.now() - t0) / 100) / 10 });
+      ctx.check(7, `export (MP4): the disc's decoded centre at frames ${QUARTERS.join(', ')} follows the ease-in-out keys within 1.5 px; every exported frame within 36 dB PSNR of its still`, n === FRAMES && worstCentre <= 1.5 && worstPsnr >= 36, { frames: n, centre, worstCentrePx: Number(worstCentre.toFixed(2)), worstPsnrDb: Number(worstPsnr.toFixed(2)), exportSecondsOneSample: Math.round((Date.now() - t0) / 100) / 10 });
     }
   }
 
@@ -263,7 +271,7 @@ export async function runLivingEngine(ctx: LivingEngineCtx): Promise<void> {
       ctx.check(9, 'the page\'s depthGrid digest equals Node\'s for the hand disc and the ramp', same, rows);
       // 19: the step count of a still at 1280×720 and of the export at 640×360, from the numbers the pass would be sent there,
       // against what the paused preview at 640×360 sent (read back from the editor page above)
-      const at = (out: { width: number; height: number }) => modelAt(docDisc, 45, out).numbers[10]!;
+      const at = (out: { width: number; height: number }) => modelAt(docDisc, MID, out).numbers[10]!;
       const kStill = at({ width: 1280, height: 720 }), kExport = at({ width: W, height: H });
       ctx.check(19, 'C7: the pass\'s step count K is the same for the paused preview at 640×360 (read back from the editor page), a still at 1280×720 and the export at 640×360', kPreview.length > 0 && kPreview.every((k) => k === kStill && k === kExport), { preview: [...new Set(kPreview)], still1280: kStill, export640: kExport });
     } finally { await p.close(); }
@@ -272,8 +280,8 @@ export async function runLivingEngine(ctx: LivingEngineCtx): Promise<void> {
   // ---------- 12: the calm audience version ----------
   {
     const v = (await tx(disc.pid, [{ op: 'add_audience_version', args: { profile: 'calm' } }])).results[0].output.variantId as string;
-    const master = await still(disc.pid, 89), calm = await still(disc.pid, 89, `&variant=${v}`);
-    ctx.check(12, 'the calm audience version: the still at frame 89 equals the master\'s (stir none, C12)', sha(master) === sha(calm), { equal: sha(master) === sha(calm) });
+    const master = await still(disc.pid, LAST), calm = await still(disc.pid, LAST, `&variant=${v}`);
+    ctx.check(12, `the calm audience version: the still at the last frame (${LAST}) equals the master's (stir none, C12)`, sha(master) === sha(calm), { equal: sha(master) === sha(calm) });
   }
 
   // ---------- 17: Ken Burns scale 1.18 ----------

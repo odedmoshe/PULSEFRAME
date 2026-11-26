@@ -21,6 +21,7 @@ import { startServer } from '@pulseframe/server';
 import { LIVING_PROOF_CORE, runLivingCore } from './living-proof.core.ts';
 import { LIVING_PROOF_ENGINE, runLivingEngine } from './living-proof.engine.ts';
 import { runLivingUi } from './living-proof.ui.ts';
+import { syntheticPng } from './a11y-living.ts';
 
 export const LIVING_PROOF_BUILT = true;
 export const LIVING_CHECKS: Readonly<Record<string, string>> = {
@@ -118,12 +119,18 @@ async function main() {
   s = await startServer({ port: 0, dataDir });
   try {
     const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
-    const pid = ((await (await fetch(`${s.url}/api/v1/projects`, { headers: h })).json()) as any).projects.find((p: any) => p.name === 'living-disc')?.id as string | undefined;
-    if (!pid) check(14, 'still without an adapter: not run (the engine part made no living project)', false, { blocked: 'no living-disc project' });
+    // its own project (a synthetic gradient photo with a living picture on a ramp depth), made on this server
+    const json = { ...h, 'content-type': 'application/json' };
+    const pid = ((await (await fetch(`${s.url}/api/v1/projects`, { method: 'POST', headers: json, body: JSON.stringify({ name: 'living-no-adapter', width: 640, height: 360 }) })).json()) as any).project.id as string;
+    const assetId = ((await (await fetch(`${s.url}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'photo.png' }, body: new Uint8Array(syntheticPng()) })).json()) as any).assetId as string;
+    const add = (await (await fetch(`${s.url}/api/v1/projects/${pid}/transactions`, { method: 'POST', headers: json, body: JSON.stringify({ ops: [{ op: 'add_clip', args: { assetId, start: { value: '0', timescale: 30 }, duration: { value: '150', timescale: 30 } } }] }) })).json()) as any;
+    const clipId = add?.results?.[0]?.output?.clipId as string | undefined;
+    const made = clipId ? await fetch(`${s.url}/api/v1/projects/${pid}/transactions`, { method: 'POST', headers: json, body: JSON.stringify({ ops: [{ op: 'set_living_picture', args: { clipId, depth: { v: 1, base: { kind: 'ramp', horizon: 450 }, strokes: [] } } }] }) }) : null;
+    if (made?.status !== 200) check(14, 'still without an adapter: not run (the living picture was not made on the server without an adapter)', false, { blocked: `set_living_picture answered ${made?.status ?? 'no clip'}` });
     else {
-      const r = await fetch(`${s.url}/api/v1/projects/${pid}/frame?index=45`, { headers: h });
+      const r = await fetch(`${s.url}/api/v1/projects/${pid}/frame?index=75`, { headers: h });
       const body = r.headers.get('content-type')?.includes('json') ? ((await r.json()) as any) : null;
-      check(14, 'PF_RENDER_GPU=off: the still of a living picture is refused with the graphics-adapter reason (not delivered flat)', r.status >= 400 && /gpu_effect_unavailable|graphics adapter/.test(JSON.stringify(body)) && /depth\.living/.test(JSON.stringify(body)), { status: r.status, error: String(body?.error?.message ?? '').slice(0, 300) });
+      check(14, 'PF_RENDER_GPU=off: the still of a living picture is refused with the graphics-adapter reason naming depth.living (not delivered flat)', r.status >= 400 && /gpu_effect_unavailable|graphics adapter/.test(JSON.stringify(body)) && /depth\.living/.test(JSON.stringify(body)), { status: r.status, error: String(body?.error?.message ?? '').slice(0, 300) });
     }
   } finally { await s.close(); delete process.env.PF_RENDER_GPU; }
 

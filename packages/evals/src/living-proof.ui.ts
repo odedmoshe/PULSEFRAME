@@ -60,6 +60,12 @@ async function stablePreview(page: Page): Promise<Buffer> {
   for (let i = 0; i < 33; i++) { await page.waitForTimeout(300); const b = await read(); if (b.equals(a)) return b; a = b; }
   return a;
 }
+/** What the page and the server show when the block did not turn on after «שמירה» (a failure, with what is known). */
+async function notOn(page: Page, pid: string, since: number): Promise<Record<string, unknown>> {
+  return { notOnAfter30s: true, blockState: await page.getByTestId('living-block').getAttribute('data-state').catch(() => null), dialogOpen: await page.getByTestId('depth-dialog').count(),
+    saveDisabled: await page.getByTestId('depth-save').isDisabled({ timeout: 1000 }).catch(() => null), refusal: await page.getByTestId('living-refusal').textContent({ timeout: 1000 }).catch(() => null),
+    transactionsSince: (await txSince(page, pid, since)).map((t) => t.ops) };
+}
 async function seek(page: Page, frame: number): Promise<boolean> {
   const rb = (await page.getByTestId('ruler').boundingBox())!;
   await page.mouse.click(rb.x + frame * 3 + 0.5, rb.y + rb.height / 2); // 90 px/s = 3 px a frame at 30 fps (keyframes-proof.ts)
@@ -85,9 +91,10 @@ export async function check15(ctx: LivingUiCtx): Promise<LivingUiResult> {
   await apply.focus(); await page.keyboard.press('Enter');
   await page.getByTestId('depth-dialog').waitFor({ timeout: 8000 });
   const startRamp = await page.getByTestId('depth-canvas').getAttribute('aria-valuenow');
+  await page.waitForFunction(() => !(document.querySelector('[data-testid=depth-save]') as HTMLButtonElement | null)?.disabled, null, { timeout: 15_000 }).catch(() => {});
   await page.getByTestId('depth-save').focus(); await page.keyboard.press('Enter');
-  const done = await page.getByTestId('living-block').and(page.locator('[data-state=on]')).waitFor({ timeout: 10_000 }).then(() => true, () => false);
-  if (!done) return { id: 15, ok: false, blocked: 'set_living_picture did not commit (not built, or refused)', detail: { ramp: startRamp, refusal: await page.getByTestId('living-refusal').textContent().catch(() => null) } };
+  const done = await page.getByTestId('living-block').and(page.locator('[data-state=on]')).waitFor({ timeout: 30_000 }).then(() => true, () => false);
+  if (!done) return { id: 15, ok: false, detail: { ramp: startRamp, ...(await notOn(page, pid, r0)) } };
   const applied = await txSince(page, pid, r0);
   const afterApply = await doc(page, pid);
   const r1 = await lastRevision(page, pid);
@@ -158,8 +165,8 @@ export async function check18(ctx: LivingUiCtx): Promise<LivingUiResult> {
   const r0 = await lastRevision(page, pid);
   await page.getByTestId('living-apply').click();
   await page.getByTestId('depth-save').click();
-  const done = await page.getByTestId('living-block').and(page.locator('[data-state=on]')).waitFor({ timeout: 10_000 }).then(() => true, () => false);
-  if (!done) return { id: 18, ok: false, blocked: 'set_living_picture did not commit (not built, or refused)', detail: {} };
+  const done = await page.getByTestId('living-block').and(page.locator('[data-state=on]')).waitFor({ timeout: 30_000 }).then(() => true, () => false);
+  if (!done) return { id: 18, ok: false, detail: await notOn(page, pid, r0) };
   const line = await page.getByText(/התנועה הקודמת הוחלפה|previous move was replaced/).count();
   const applied = await txSince(page, pid, r0);
   const after = await doc(page, pid);
