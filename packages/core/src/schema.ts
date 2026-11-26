@@ -271,7 +271,9 @@ export const AssetSchema = z
         /** True when the file does not say how its colours are encoded. It is then shown as the browser reads it (BT.709 in Chromium), which for standard-definition material differs slightly from the BT.601 reading other players use. */
         untaggedColour: z.literal(true).optional(),
         /** The owner's choice for a file with `untaggedColour`: read its colours as BT.601 (standard-definition material) instead of the browser's BT.709 reading. Applied as a colour correction in the compositor, so preview, stills and export agree. */
-        readColourAs: z.literal('bt601').optional() })
+        readColourAs: z.literal('bt601').optional(),
+        /** The file carries transparency (an alpha plane: VP8/VP9 with `alpha_mode` 1, or a pixel format with alpha such as ProRes 4444). Set by the server's probe only (made clips, wave 8). It gets no H.264 proxy (which would drop it) and never counts as covering the frame. */
+        hasAlpha: z.literal(true).optional() })
       .strict()
       .optional(),
     audio: z.object({ sampleRate: z.number().int().positive(), channels: z.number().int().positive(), codec: z.string(),
