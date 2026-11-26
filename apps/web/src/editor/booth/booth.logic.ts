@@ -108,6 +108,11 @@ export const drawnOnSoftware = (a: BoothAnswer | null): boolean => !!a && (a.bro
 export const hasNotes = (items: readonly BoothItemView[]): boolean => items.some((v) => (v.answer?.note ?? '').length > 0);
 /** A picture card has no adapter to draw on when the browser row says off, fail or unknown (a missing row is not yet known). */
 export const noAdapter = (row: Pick<BoothCheckRow, 'state'> | null | undefined): boolean => !!row && (row.state === 'off' || row.state === 'fail' || row.state === 'unknown');
+/** A picture card with no graphics card (the row says so, or the drawing itself found none) offers only «דלגו». */
+export const pictureOnlySkip = (v: BoothItemView, row: Pick<BoothCheckRow, 'state'> | null | undefined, drawBlocked: boolean): boolean =>
+  v.item.kind === 'picture' && (noAdapter(row) || drawBlocked);
+/** Whether an answer may be given (by a button or by its key): «דלגו» always; «בסדר» and «לא טוב» not on a picture that offers only «דלגו». */
+export const answerAllowed = (verdict: BoothVerdict, onlySkip: boolean): boolean => verdict === 'skip' || !onlySkip;
 
 // -------------------------------------------------------------------------------------------------------------- the self-check rows
 export type StoredRows = Partial<Record<string, BoothCheckRow>>;
@@ -149,6 +154,18 @@ export const LIGHT_CHECKS = BOOTH_CHECKS.filter((c) => !c.heavy);
 export const HEAVY_CHECKS = BOOTH_CHECKS.filter((c) => c.heavy);
 
 // -------------------------------------------------------------------------------------------------------------------- the answer
+/** The mic card's measurement as the answer carries it (integration, lead point 3): dBFS to 0.1 within [-200, 0], null for silence, a
+ * whole clipped count. Numbers only; the take itself never leaves the card. */
+export function micExtras(m: { peakDbfs: number | null; clipped: number }): BoothAnswerExtras {
+  const peak = m.peakDbfs === null || !Number.isFinite(m.peakDbfs) ? null : Math.min(0, Math.max(-200, Math.round(m.peakDbfs * 10) / 10));
+  return { mic: { peakDbfs: peak === 0 ? 0 : peak, clipped: Number.isFinite(m.clipped) ? Math.max(0, Math.floor(m.clipped)) : 0 } };
+}
+/** GET /api/v1/booth asks with the adapters the rows found (W1: a picture answer on another adapter then reads 'changed: adapter'). */
+export function viewQuery(rows: StoredRows): { browserAdapter?: string; exportAdapter?: string } {
+  const a = (r: BoothCheckRow | undefined) => (r && typeof r.data.adapter === 'string' && r.data.adapter.length > 0 ? r.data.adapter : undefined);
+  const b = a(rows['browser-gpu']), e = a(rows['export-gpu']);
+  return { ...(b ? { browserAdapter: b } : {}), ...(e ? { exportAdapter: e } : {}) };
+}
 /** `x-pf-content-sha256` as the contract's `played` (sha256:<hex>), whether the header carries the prefix or not; null when it is neither. */
 export function playedHash(header: string | null): string | null {
   const m = /^(?:sha256:)?([0-9a-f]{64})$/i.exec((header ?? '').trim());
@@ -168,6 +185,7 @@ export function answerBody(v: BoothItemView, input: AnswerInput): BoothAnswerBod
     ...(x.played ? { played: x.played } : {}),
     ...(x.browserAdapter ? { browserAdapter: x.browserAdapter } : {}), ...(x.browserSoftware !== undefined ? { browserSoftware: x.browserSoftware } : {}),
     ...(x.exportAdapter ? { exportAdapter: x.exportAdapter } : {}), ...(x.exportSoftware !== undefined ? { exportSoftware: x.exportSoftware } : {}),
+    ...(x.mic && v.item.kind === 'task' ? { mic: x.mic } : {}),
   };
 }
 /** The view after the server stored an answer: that item answered (not changed), the rest as they were. */

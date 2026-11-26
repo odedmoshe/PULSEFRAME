@@ -19,7 +19,7 @@ import { adapterFacts, browserExtras, drawIncomplete, drawNeedsGpu, frameAt, fps
 type Phase = 'loading' | 'ready' | 'failed' | 'needs-gpu' | 'not-a-scene';
 interface Loaded { scene: BoothScene; provider: ReturnType<typeof pictureProvider>; bitmaps: Map<string, ImageBitmap> }
 
-export function BoothPicture({ lang, view, browserGpu, guard, reducedMotion, onExtras }: BoothPictureProps): ReactElement {
+export function BoothPicture({ lang, view, browserGpu, guard, reducedMotion, onExtras, onNeedsGpu }: BoothPictureProps): ReactElement {
   const t = createT(lang), S = boothPageStrings(lang);
   const item = view.item, make = item.make;
   const mode = pictureMode(item, browserGpu, reducedMotion);
@@ -30,6 +30,9 @@ export function BoothPicture({ lang, view, browserGpu, guard, reducedMotion, onE
   const loaded = useRef<Loaded | null>(null);
   const halt = useRef(false);
   const facts = adapterFacts(browserGpu);
+  const needsRef = useRef(onNeedsGpu);
+  needsRef.current = onNeedsGpu;
+  useEffect(() => { needsRef.current?.(phase === 'needs-gpu'); }, [phase]);
 
   // what the card knows about the browser's adapter goes to the dialog with the answer
   const extras = useRef(onExtras);
@@ -109,10 +112,9 @@ export function BoothPicture({ lang, view, browserGpu, guard, reducedMotion, onE
   const showCanvases = phase === 'loading' || phase === 'ready';
   return (
     <div className="pf-booth-picture" data-state={phase} data-mode={mode} dir={lang === 'he' ? 'rtl' : 'ltr'} lang={lang}>
-      <p>{t('booth.testPicture')}</p>
-      {item.changesLight && <p>{t('booth.changesLight')}</p>}
+      {/* the test-picture and changes-light lines are the card's own (BoothCard), said once */}
       {mode === 'three-stills' && <p>{t('booth.reducedMotion')}</p>}
-      {phase === 'needs-gpu' && <p role="status">{t('booth.needsGpu')}</p>}
+      {phase === 'needs-gpu' && <p role="status" data-part="needs-gpu">{t('booth.needsGpu')}</p>}
       {phase === 'failed' && <p role="status">{S.pictureFailed}</p>}
       {phase === 'not-a-scene' && <p role="status">{S.pictureNoSceneKind}</p>}
       {phase === 'loading' && <p role="status">{S.pictureLoading}</p>}
@@ -128,7 +130,7 @@ export function BoothPicture({ lang, view, browserGpu, guard, reducedMotion, onE
         ))}
       </div>
       {mode === 'still' && phase !== 'needs-gpu' && phase !== 'not-a-scene' && (
-        <Button data-testid={ID.play} aria-pressed={playing} disabled={phase !== 'ready'} onClick={() => void play()}>{playing ? t('booth.stop') : t('booth.play')}</Button>
+        <Button data-testid={ID.picturePlay} aria-pressed={playing} disabled={phase !== 'ready'} onClick={() => void play()}>{playing ? t('booth.stop') : t('booth.play')}</Button>
       )}
       {playing && <p role="status">{S.playing}</p>}
       {held > 0 && <p role="status">{S.playbackHeld(held)}</p>}

@@ -4,7 +4,7 @@ import { BOOTH_CHECKS, BOOTH_FIRST_SITTING_CARDS, BoothNotBuiltError, INSTRUMENT
 import { dictionaries } from '@pulseframe/i18n';
 import { BOOTH_COMMANDS } from './booth.commands.ts';
 import {
-  answerBody, buildQueue, commandIn, dateOf, firstPartCounts, hasNotes, isTyping, keyAction, localDay, moreGroups, nextPartIndex, noAdapter, orderWithinGroup, parseRows, playedHash,
+  answerAllowed, answerBody, buildQueue, micExtras, pictureOnlySkip, viewQuery, commandIn, dateOf, firstPartCounts, hasNotes, isTyping, keyAction, localDay, moreGroups, nextPartIndex, noAdapter, orderWithinGroup, parseRows, playedHash,
   queueCounts, reportBox, rowWords, rowsInOrder, startIndex, stateLine, withAnswer,
 } from './booth.logic.ts';
 import { BOOTH_PAGE, makeSay } from './booth.strings.ts';
@@ -196,5 +196,31 @@ describe('booth dialog logic (builder W3)', () => {
       for (const w of [...praiseEn, ...INSTRUMENTS_FORBIDDEN_WORDS]) expect({ k, w, hit: enWord(w).test(e) }).toEqual({ k, w, hit: false });
       expect({ k, total: /196/.test(h) || /196/.test(e) }).toEqual({ k, total: false });
     }
+  });
+});
+
+describe('integration (lead points 3, 4 and the seam of the picture card)', () => {
+  it('the mic measurement goes with the answer of the mic card only, as numbers rounded to 0.1 dBFS; silence stays null', () => {
+    expect(micExtras({ peakDbfs: -12.345, clipped: 3.7 })).toEqual({ mic: { peakDbfs: -12.3, clipped: 3 } });
+    expect(micExtras({ peakDbfs: null, clipped: 0 })).toEqual({ mic: { peakDbfs: null, clipped: 0 } });
+    expect(micExtras({ peakDbfs: -Infinity, clipped: -1 })).toEqual({ mic: { peakDbfs: null, clipped: 0 } });
+    expect(micExtras({ peakDbfs: -0.04, clipped: 0 }).mic!.peakDbfs).toBe(0);
+    expect(answerBody(view(mic), { verdict: 'ok', extras: micExtras({ peakDbfs: -20, clipped: 0 }) })).toEqual({ verdict: 'ok', recipe: sha, mic: { peakDbfs: -20, clipped: 0 } });
+    // a measurement handed to another kind of card is not sent
+    expect(answerBody(view(music[0]!), { verdict: 'ok', extras: { mic: { peakDbfs: -20, clipped: 0 } } })).toEqual({ verdict: 'ok', recipe: sha });
+  });
+  it('GET /booth is asked with the adapters the rows found (browser and export), none when a row has none', () => {
+    const row = (id: 'browser-gpu' | 'export-gpu', adapter?: string) => ({ id, state: 'ok' as const, code: null, data: adapter ? { adapter } : {} });
+    expect(viewQuery({})).toEqual({});
+    expect(viewQuery({ 'browser-gpu': row('browser-gpu', 'intel|gen-12lp||'), 'export-gpu': row('export-gpu', 'nvidia|ampere||') })).toEqual({ browserAdapter: 'intel|gen-12lp||', exportAdapter: 'nvidia|ampere||' });
+    expect(viewQuery({ 'browser-gpu': row('browser-gpu') })).toEqual({});
+  });
+  it('a picture with no graphics card offers only «דלגו», for the buttons and for the keys alike', () => {
+    const pic = view(trans[0]!);
+    expect(pictureOnlySkip(pic, { state: 'off' }, false)).toBe(true);
+    expect(pictureOnlySkip(pic, { state: 'ok' }, true)).toBe(true);
+    expect(pictureOnlySkip(pic, { state: 'ok' }, false)).toBe(false);
+    expect(pictureOnlySkip(view(music[0]!), { state: 'off' }, true)).toBe(false);
+    expect([answerAllowed('ok', true), answerAllowed('bad', true), answerAllowed('skip', true), answerAllowed('ok', false)]).toEqual([false, false, true, true]);
   });
 });

@@ -78,6 +78,46 @@ async function skipTo(p: Page, want: (kind: string, item: string, light: string)
   return false;
 }
 
+const tabTo = async (p: Page, want: (f: string) => boolean, max = 25): Promise<boolean> => {
+  for (let i = 0; i < max; i++) { if (want(await focusId(p))) return true; await p.keyboard.press('Tab'); }
+  return want(await focusId(p));
+};
+/** The rest of the first sitting with the keyboard only (Tab, Space, Enter, digits, typing). Returns what it did, in words. */
+async function walkRest(p: Page, problems: string[]): Promise<string> {
+  const card = sel(ID.card);
+  const cur = () => p.locator(card).first().getAttribute('data-item').catch(() => null);
+  const badItem = await cur();
+  if (!badItem) { problems.push('no card after the first answer'); return 'no rest walked'; }
+  await p.keyboard.press('Digit2');
+  await p.waitForFunction(() => (document.activeElement as HTMLInputElement | null)?.type === 'checkbox', undefined, { timeout: 5000 }).catch(() => problems.push('Digit2 did not put the focus on the first problem'));
+  await p.keyboard.press('Space');
+  if (!(await tabTo(p, (f) => f.startsWith(`TEXTAREA|${ID.note}|`)))) problems.push('the note field could not be reached with Tab');
+  await p.keyboard.type('רועש מדי בהתחלה');
+  if (!(await tabTo(p, (f) => f.startsWith('BUTTON||in')))) problems.push('the save button could not be reached with Tab');
+  const advice = await p.locator('[data-part=note-advice]').first().innerText().catch(() => '');
+  if (!advice.includes(say('booth.noteAdvice').slice(0, 20))) problems.push('the note advice is not next to the note field');
+  await p.keyboard.press('Enter');
+  await p.waitForFunction((was) => document.querySelector('[data-testid="booth-card"]')?.getAttribute('data-item') !== was, badItem, { timeout: 8000 }).catch(() => problems.push('saving «לא טוב» from the keyboard did not move on'));
+  let skipped = 0, windows = 0;
+  for (let i = 0; i < BOOTH_FIRST_SITTING_CARDS + 5; i++) {
+    if (await p.locator('.pf-booth[data-mode=home]').count()) break;
+    if (await p.locator(sel(ID.windowsStep)).count()) {
+      windows++;
+      if (!(await tabTo(p, (f) => f.startsWith(`BUTTON|${ID.next}|`)))) { problems.push('«הבא» on the Windows step could not be reached with Tab'); break; }
+      await p.keyboard.press('Enter');
+    } else if (await p.locator(card).count()) { skipped++; await p.keyboard.press('Digit3'); }
+    await p.waitForTimeout(150);
+    const f = await focusId(p);
+    if (!f.endsWith('|in')) problems.push(`the focus left the dialog during the sitting (${f})`);
+  }
+  if (!(await p.locator('.pf-booth[data-mode=home]').count())) problems.push('the sitting did not end on the first screen');
+  else if (!(await focusId(p)).startsWith('H3||in')) problems.push(`at the end of the sitting the focus is ${await focusId(p)}, expected the first screen's heading`);
+  const bad = await p.evaluate(async (id) => { const r = await fetch('/api/v1/booth', { credentials: 'same-origin' }); const v = (await r.json()) as { items: { item: { id: string }; answer: { verdict: string; problems?: string[]; note?: string } | null }[] }; const a = v.items.find((x) => x.item.id === id)?.answer; return a ? `${a.verdict}/${(a.problems ?? []).length}/${a.note ?? ''}` : 'missing'; }, badItem);
+  if (bad !== 'bad/1/רועש מדי בהתחלה') problems.push(`the server holds ${bad} for ${badItem}, expected bad/1/the note`);
+  const progress = ((await p.locator(sel(ID.progress)).innerText().catch(() => '')) ?? '').trim();
+  return `then by keys only: «לא טוב» on ${badItem} with one problem and a typed note (stored ${bad.split('/')[0]}), ${windows} Windows step by Tab+Enter, ${skipped} cards skipped with 3, back on the first screen («${progress}») with the focus on its heading`;
+}
+
 async function b12(browser: Browser, s: RunningServer, pid: string): Promise<BoothUiRow> {
   const problems: string[] = [];
   // not the owner: no entry, no booth request (STAND-IN session, labelled in the header)
@@ -130,11 +170,13 @@ async function b12(browser: Browser, s: RunningServer, pid: string): Promise<Boo
     // the server holds the answer
     const stored = await page.evaluate(async (id) => { const r = await fetch('/api/v1/booth', { credentials: 'same-origin' }); const v = (await r.json()) as { items: { item: { id: string }; answer: { verdict: string } | null; state: string }[] }; const x = v.items.find((i) => i.item.id === id); return x ? `${x.state}/${x.answer?.verdict ?? ''}` : 'missing'; }, item);
     if (stored !== 'answered/ok') problems.push(`the server holds ${stored} for ${item}, expected answered/ok`);
+    // integration (lead point 7): the rest of the first sitting by keys only — «לא טוב» with a problem and a note, the Windows step, «דלגו» to the end
+    const walked = await walkRest(page, problems);
     // Escape closes and the focus returns to the rail button
     await page.keyboard.press('Escape');
     await page.locator(sel(ID.dialog)).waitFor({ state: 'detached', timeout: 5000 }).catch(() => problems.push('Escape did not close the dialog'));
     if ((await focusId(page)) !== `BUTTON|${ID.rail}|out`) problems.push(`after Escape the focus is ${await focusId(page)}, expected the rail button`);
-    return { id: 'B12', status: problems.length ? 'fail' : 'pass', detail: problems.length ? problems.join('; ') : `button only for the owner (STAND-IN other session: none, 0 booth requests); first screen «${progress}»; self-check rows ${rows.join(' ')}; Space played ${item} (currentTime ${times[0]!.toFixed(2)} to ${times[times.length - 1]!.toFixed(2)}, measured, not heard); Digit1 stored answered/ok; focus stayed in the dialog; Escape returned it to the rail button` };
+    return { id: 'B12', status: problems.length ? 'fail' : 'pass', detail: problems.length ? problems.join('; ') : `button only for the owner (STAND-IN other session: none, 0 booth requests); first screen «${progress}»; self-check rows ${rows.join(' ')}; Space played ${item} (currentTime ${times[0]!.toFixed(2)} to ${times[times.length - 1]!.toFixed(2)}, measured, not heard); Digit1 stored answered/ok; ${walked}; focus stayed in the dialog; Escape returned it to the rail button` };
   } finally { await ctx.close(); }
 }
 
@@ -157,7 +199,9 @@ async function b13(browser: Browser, s: RunningServer, pid: string): Promise<Boo
       const before = (await guard())!;
       if (!reduced) {
         if (before.rises.length) problems.push('a light rise was shown before any play (the card must start as a still)');
-        const play = page.locator(`${sel(ID.card)} button`).filter({ hasText: say('booth.play') }).first();
+        // the picture card's own play button (integration: its own test id, so it is not found by its text)
+        const play = page.locator(`${sel(ID.card)} ${sel(ID.picturePlay)}`).first();
+        await page.waitForFunction((q) => { const b = document.querySelector(q); return !!b && !(b as HTMLButtonElement).disabled; }, `${sel(ID.card)} ${sel(ID.picturePlay)}`, { timeout: 15000 }).catch(() => undefined);
         if (!(await play.count())) { problems.push('no play button on the light-changing card'); continue; }
         await play.focus(); await page.keyboard.press('Enter');
         await page.waitForTimeout(4000);

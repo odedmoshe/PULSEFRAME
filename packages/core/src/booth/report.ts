@@ -5,7 +5,9 @@
  * FORMAT (plain text, one language for the human part, then the machine block):
  *   PULSEFRAME — <booth.report.title> · <date> · build <commit>
  *   <booth.report.counts: answered of the first sitting / of everything shown, ok, bad, skipped, changed since>
- *   <booth.report.bad>: one line per 'bad' answer: id «title» — problems — "note" (the note as stored, already scrubbed on the server)
+ *   <booth.report.bad>: one line per 'bad' answer (also one whose item changed since, marked with booth.changed.<why>): id «title» —
+ *     problems — mic numbers — "note" (the note as stored, already scrubbed on the server)
+ *   (before the bad list) one line per other answer that carries the microphone card's numbers: «title»: peak dBFS · clipped samples
  *   <booth.report.checks>: one line per self-check row: title — state words (no data values but versions and adapter vendor)
  *   -----BEGIN PF-BOOTH 1-----
  *   <BoothBlock JSON, ASCII only, cut into lines of at most 64 characters>
@@ -17,7 +19,7 @@
 import { sha256Hex } from '../sha256.ts';
 import {
   BOOTH_BLOCK_BEGIN, BOOTH_BLOCK_END, BOOTH_FIRST_GROUPS, BOOTH_LIMITS, BoothBlockSchema, BoothCheckRowSchema,
-  type BoothBlock, type BoothBlockParse, type BoothItemView, type BoothReportInput, type BoothSay,
+  type BoothBlock, type BoothBlockParse, type BoothItemView, type BoothMicMeasure, type BoothReportInput, type BoothSay,
 } from './contract.ts';
 
 const counts = (views: readonly BoothItemView[]) => {
@@ -38,6 +40,9 @@ function codeWords(say: BoothSay, id: string, code: string | null): string | nul
   return null;
 }
 const oneLine = (t: string) => t.replace(/[\r\n\t]+/g, ' ').trim();
+/** «שיא: -12.3 dBFS · דגימות שנחתכו: 0»: numbers as measured, one decimal, an ASCII minus; silence has no peak (-inf). */
+const micWords = (say: BoothSay, m: BoothMicMeasure) =>
+  `${say('booth.mic.peak', { peak: m.peakDbfs === null ? '-inf' : m.peakDbfs.toFixed(1) })} · ${say('booth.mic.clipped', { n: m.clipped })}`;
 
 /** The whole report text (human part + machine block). Pure; same in Node and Chromium. */
 export function boothReport(input: BoothReportInput, say: BoothSay): string {
@@ -47,13 +52,19 @@ export function boothReport(input: BoothReportInput, say: BoothSay): string {
   const first = view.items.filter((v) => BOOTH_FIRST_GROUPS.includes(v.item.group));
   lines.push(say('booth.report.counts', counts(first)));
   if (first.length < view.items.length && view.items.some((v) => !BOOTH_FIRST_GROUPS.includes(v.item.group) && v.answer)) lines.push(`${say('booth.more')}: ${say('booth.report.counts', counts(view.items))}`);
+  // the microphone card's numbers (measured on the take; no audio is stored), whatever the verdict
+  const mics = view.items.filter((v) => v.answer?.mic && v.answer.verdict !== 'bad' && v.state !== 'unanswered');
+  for (const v of mics) lines.push(`${hebrew ? v.item.title.he : v.item.title.en}: ${micWords(say, v.answer!.mic!)}`);
   lines.push(say('booth.report.bad'));
-  const bad = view.items.filter((v) => v.state === 'answered' && v.answer!.verdict === 'bad');
+  // a 'bad' answer whose item changed since is listed too, marked with why it changed (the block carries it as state 'changed')
+  const bad = view.items.filter((v) => (v.state === 'answered' || v.state === 'changed') && v.answer?.verdict === 'bad');
   if (!bad.length) lines.push(`- ${say('booth.report.none')}`);
   for (const v of bad) {
     const a = v.answer!;
     const parts = [`- ${v.item.id} «${hebrew ? v.item.title.he : v.item.title.en}»`];
+    if (v.state === 'changed') parts.push(`(${say(`booth.changed.${v.changedWhy ?? 'recipe'}`)})`);
     if (a.problems?.length) parts.push(a.problems.map((p) => say(`booth.problem.${p}`)).join(', '));
+    if (a.mic) parts.push(micWords(say, a.mic));
     if (a.note) parts.push(`"${oneLine(a.note)}"`);
     lines.push(parts.join(' — '));
   }
@@ -78,6 +89,7 @@ export function boothBlockOf(input: BoothReportInput): BoothBlock {
       id: v.item.id, recipe: a.recipe, ...(a.played ? { played: a.played } : {}), verdict: a.verdict, ...(a.problems?.length ? { problems: [...a.problems] } : {}),
       ...(a.browserAdapter !== undefined ? { browserAdapter: a.browserAdapter } : {}), ...(a.browserSoftware !== undefined ? { browserSoftware: a.browserSoftware } : {}),
       ...(a.exportAdapter !== undefined ? { exportAdapter: a.exportAdapter } : {}), ...(a.exportSoftware !== undefined ? { exportSoftware: a.exportSoftware } : {}),
+      ...(a.mic ? { mic: { peakDbfs: a.mic.peakDbfs, clipped: a.mic.clipped } } : {}),
       date: a.at.slice(0, 10), state: v.state as 'answered' | 'changed',
     };
   });

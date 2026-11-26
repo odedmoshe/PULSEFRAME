@@ -23,7 +23,7 @@ import type { BoothAnswerExtras } from './booth.contract.ts';
 import { BOOTH_TESTIDS as TID } from './booth.testids.ts';
 import {
   answerBody, buildQueue, commandIn, firstPartCounts, hasNotes, HEAVY_CHECKS, isTyping, keyAction, LIGHT_CHECKS, localDay, moreGroups, nextPartIndex, queueCounts,
-  reportBox, reportInput, rowWords, startIndex, withAnswer, type BoothKeyAction, type QueueEntry,
+  answerAllowed, pictureOnlySkip, reportBox, reportInput, rowWords, startIndex, viewQuery, withAnswer, type BoothKeyAction, type QueueEntry,
 } from './booth.logic.ts';
 import { closeBooth, readRows, readVolume, useBoothOpen, writeRow, writeVolume } from './booth.state.ts';
 import { makeSay } from './booth.strings.ts';
@@ -76,6 +76,7 @@ function Sitting({ lang }: { lang: Lang }): ReactElement {
   const [names, setNames] = useState<Record<string, number>>({});
   const [volume, setVolume] = useState(readVolume);
   const [copied, setCopied] = useState('');
+  const [drawBlockedId, setDrawBlockedId] = useState<string | null>(null);
   const guard = useMemo(() => new CountingGuard(), []);
   const extras = useRef<Record<string, Partial<BoothAnswerExtras>>>({});
   const audioControl = useRef<AudioControl | null>(null);
@@ -84,12 +85,15 @@ function Sitting({ lang }: { lang: Lang }): ReactElement {
   const focusIntent = useRef<'card' | 'problem' | 'home' | null>(null);
   const reduced = useMemo(reducedMotion, []);
 
-  // the booth view: asked of the server only now, when the owner opened the dialog
+  // the booth view: asked of the server only now, when the owner opened the dialog, with the adapters the rows found (a picture answer
+  // given on another graphics card then reads «נבדק על כרטיס מסך אחר — בדקו כאן»); asked again when a row finds another adapter
+  const q = viewQuery(rows);
+  const qKey = `${q.browserAdapter ?? ''}\n${q.exportAdapter ?? ''}`;
   useEffect(() => {
     let live = true;
-    api.booth().then((v) => { if (live) { setView(v); setLoadError(null); } }, (e: unknown) => { if (live) setLoadError(failureWords(lang, e)); });
+    api.booth(q).then((v) => { if (live) { setView(v); setLoadError(null); } }, (e: unknown) => { if (live) setLoadError(failureWords(lang, e)); });
     return () => { live = false; };
-  }, [lang, loadTick]);
+  }, [lang, loadTick, qKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const byId = useMemo(() => new Map((view?.items ?? []).map((v) => [v.item.id, v])), [view]);
   const entry = queue?.[at] ?? null;
@@ -108,7 +112,7 @@ function Sitting({ lang }: { lang: Lang }): ReactElement {
       homeRef.current?.focus();
     } else {
       const c = cardRef.current;
-      const target = c?.querySelector<HTMLElement>(`[data-testid="${TID.play}"]`) ?? c?.querySelector<HTMLElement>(`[data-testid="${TID.answer}"]`) ?? c?.querySelector<HTMLElement>('h3') ?? c;
+      const target = c?.querySelector<HTMLElement>(`[data-testid="${TID.play}"]`) ?? c?.querySelector<HTMLElement>(`[data-testid="${TID.picturePlay}"]:not([disabled])`) ?? c?.querySelector<HTMLElement>(`[data-testid="${TID.micRecord}"]`) ?? c?.querySelector<HTMLElement>(`[data-testid="${TID.answer}"]`) ?? c?.querySelector<HTMLElement>('h3') ?? c;
       target?.focus();
     }
     focusIntent.current = null;
@@ -172,13 +176,15 @@ function Sitting({ lang }: { lang: Lang }): ReactElement {
     api.putBoothAnswer(v.item.id, body).then((res) => {
       setView((cur) => (cur ? withAnswer(cur, res.answer as BoothAnswer) : cur));
       setNames((n) => ({ ...n, [v.item.id]: res.namesInNote }));
+      if (res.namesInNote > 0) setAnnounce(say('page.names', { n: res.namesInNote }));
     }, (e: unknown) => {
       if (e instanceof ApiFailure && e.code === 'booth_stale_recipe') setLoadTick((t) => t + 1);
       setSaveProblem({ text: say('page.saveFailed', { title: v.item.title[lang], why: failureWords(lang, e) }), idx: here, queue: q });
     });
   };
+  const onlySkip = !!current && pictureOnlySkip(current, gpuRow, drawBlockedId === current.item.id);
   const answer = (verdict: BoothVerdict) => {
-    if (!current) return;
+    if (!current || !answerAllowed(verdict, onlySkip)) return;
     if (verdict === 'bad' && !bad) { setBad({ problems: [], note: '' }); focusIntent.current = 'problem'; return; }
     save(current, verdict, verdict === 'bad' ? bad ?? { problems: [], note: '' } : undefined);
   };
@@ -260,7 +266,8 @@ function Sitting({ lang }: { lang: Lang }): ReactElement {
             <BoothCard ref={cardRef} lang={lang} say={say} view={current} n={cardsBefore + 1} m={counts.total} replay={replay} browserGpu={gpuRow} guard={guard} reducedMotion={reduced}
               volume={volume} onVolume={setVol} audioControl={audioControl} onPlayed={onPlayed(current.item.id)} onExtras={onExtras(current.item.id)}
               bad={bad} onBad={setBad} onSubmitBad={() => save(current, 'bad', bad ?? undefined)} onCancelBad={() => { setBad(null); focusIntent.current = 'card'; }}
-              onAnswer={answer} onAgain={again} names={names[current.item.id] ?? 0} />
+              onAnswer={answer} onAgain={again} names={names[current.item.id] ?? 0}
+              drawBlocked={drawBlockedId === current.item.id} onNeedsGpu={(needs) => setDrawBlockedId((cur) => (needs ? current.item.id : cur === current.item.id ? null : cur))} />
           )}
         {/* ONE export strip for the dialog, kept mounted (hidden) when the card is not a transition of the first sitting */}
         <div hidden={!(current?.item.exportStrip)} data-part="export-strip-wrap"><BoothExportStrip lang={lang} views={exportStripViews} exportGpu={rows['export-gpu'] ?? null} onExtras={(id, x) => onExtras(id)(x)} /></div>

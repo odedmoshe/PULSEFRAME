@@ -108,3 +108,36 @@ describe('the human part', () => {
     expect(parseBoothBlock(t).ok).toBe(true);
   });
 });
+
+describe('integration: a changed bad answer and the microphone numbers', () => {
+  const micItem: BoothItem = { ...item('music:music.calm', 'first.mic', 'mic'), id: 'task:mic', source: 'task', kind: 'task', make: { route: 'task', task: 'mic' } };
+  const extra: BoothItemView[] = [
+    // a 'bad' answer whose item's recipe changed since: listed in «לא טוב», marked changed (it was in the block only before integration)
+    { item: item('gpu-transition:page-turn-left', 'first.gpu-new', 'page'), answer: answer('gpu-transition:page-turn-left', 'bad', { problems: ['flicker'] }), state: 'changed', changedWhy: 'recipe' },
+    { item: micItem, answer: answer('task:mic', 'ok', { mic: { peakDbfs: -12.3, clipped: 4 } }), state: 'answered' },
+  ];
+  const inp: BoothReportInput = { ...input, view: { ...input.view, items: [...views, ...extra] } };
+  it('the changed bad answer is in the human «לא טוב» list, marked with why it changed', () => {
+    const human = boothReport(inp, he).split(BOOTH_BLOCK_BEGIN)[0]!;
+    expect(human).toContain('- gpu-transition:page-turn-left «page-he» — (השתנה מאז — בדקו שוב) — הבהוב');
+    expect(boothReport(inp, en)).toContain('- gpu-transition:page-turn-left «page-en» — (Changed since — look again) — Flicker');
+  });
+  it('the microphone measurement is in the human part and in the machine block as numbers', () => {
+    const t = boothReport(inp, he);
+    expect(t.split(BOOTH_BLOCK_BEGIN)[0]).toContain('mic-he: שיא: -12.3 dBFS · דגימות שנחתכו: 4');
+    const p = parseBoothBlock(t);
+    expect(p.ok).toBe(true);
+    if (!p.ok) return;
+    expect(p.block.answers.find((a) => a.id === 'task:mic')!.mic).toEqual({ peakDbfs: -12.3, clipped: 4 });
+    // silence has no peak: null in the block, «-inf» in words
+    const silent = boothReport({ ...inp, view: { ...inp.view, items: [{ ...extra[1]!, answer: answer('task:mic', 'bad', { mic: { peakDbfs: null, clipped: 0 } }) }] } }, en);
+    expect(silent).toContain('- task:mic «mic-en» — Peak: -inf dBFS · Clipped samples: 0');
+    const ps = parseBoothBlock(silent);
+    expect(ps.ok && ps.block.answers[0]!.mic).toEqual({ peakDbfs: null, clipped: 0 });
+  });
+  it('the block refuses anything but numbers for the measurement (no audio can ride in it)', () => {
+    const b = boothBlockOf(inp);
+    const bad = { ...b, answers: b.answers.map((a) => (a.id === 'task:mic' ? { ...a, mic: { peakDbfs: -1, clipped: 0, wav: 'UklGR' } } : a)) };
+    expect(BoothBlockSchema.safeParse(bad).success).toBe(false);
+  });
+});

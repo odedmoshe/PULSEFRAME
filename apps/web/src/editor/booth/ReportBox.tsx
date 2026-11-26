@@ -29,8 +29,9 @@ export function ReportBox({ say, box, notes, names }: ReportBoxProps): ReactElem
       {notes && <p className="pf-booth-warn" role="note" data-part="notes-warning">{say('booth.report.notesWarning')}</p>}
       {names > 0 && <p className="pf-booth-warn" role="alert" data-part="name-warning">{say('booth.report.nameWarning')}</p>}
       <textarea ref={area} readOnly dir="auto" rows={12} spellCheck={false} className="pf-booth-reportbox" aria-label={say('booth.report.box')} data-testid={TID.reportBox} data-built={box.ok ? 'yes' : 'no'} value={box.text} />
+      <p id="pf-booth-report-advice" className="pf-booth-note" data-part="note-advice">{say('booth.noteAdvice')}</p>
       <div className="pf-booth-actions">
-        <Button variant="primary" data-testid={TID.reportCopy} disabledReason={box.ok ? undefined : say('page.reportNotBuilt')} onClick={() => void copy()}>{say('booth.report.copy')}</Button>
+        <Button variant="primary" data-testid={TID.reportCopy} aria-describedby="pf-booth-report-advice" disabledReason={box.ok ? undefined : say('page.reportNotBuilt')} onClick={() => void copy()}>{say('booth.report.copy')}</Button>
         <span role="status" aria-live="polite" className="pf-booth-note" data-part="copy-state">{said}</span>
       </div>
     </section>

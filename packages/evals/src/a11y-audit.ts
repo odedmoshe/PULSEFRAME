@@ -27,6 +27,8 @@
  * pacing panel's note that names the same clip as left out of its word counts, the
  * archive import's toast about cleared review marks (closed with its ×), and the Templates bar's «החזרת החלקים שנמחקו» after a hand
  * delete (undone again). The untimed copy and the reviewed translation are typed fixtures: no provider and no model ran.
+ * In both themes, «תא הבדיקה» (wave 8 booth, a11y-booth.ts): the first screen, the self-check, a music card, a picture card (or its
+ * «דורש כרטיס מסך» state), the report.
  *   pnpm build && pnpm audit:a11y
  */
 import { execFileSync } from 'node:child_process';
@@ -45,6 +47,7 @@ import { craftA11yScenarios } from './a11y-craft.ts';
 import { stabiliseA11yScenarios } from './a11y-stabilise.ts';
 import { musicfitA11yScenarios } from './a11y-musicfit.ts';
 import { instrumentsA11yScenarios } from './a11y-instruments.ts';
+import { boothA11yScenarios } from './a11y-booth.ts';
 import { assistantLocalA11yScenarios } from './assistant-local-proof.ui.ts';
 import { pearlsA11yScenarios } from './a11y-pearls.ts';
 import { storyA11yScenarios } from './a11y-story.ts';
@@ -877,6 +880,12 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      // «תא הבדיקה» (wave 8 booth): the first screen, the self-check, a music card, a picture card or its «דורש כרטיס מסך» state, the report (a11y-booth.ts)
+      for (const sc of boothA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       if (await page.getByTestId('cache-fast-switch').count() === 0) { await page.getByTestId('export').click(); await page.getByTestId('cache-fast-switch').waitFor({ timeout: 8000 }).catch(() => {}); }
       if ((await page.getByTestId('cache-fast-switch').getAttribute('aria-checked').catch(() => null)) === 'true') await page.getByTestId('cache-fast-switch').click();
       if (await page.getByTestId('export-sheet').count()) { await page.keyboard.press('Escape'); await page.getByTestId('export-sheet').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {}); }
@@ -1220,6 +1229,12 @@ async function main() {
       }
       // «כלים מוקלטים» (wave 7 instruments) in the light theme: the same five scenarios as the dark pass; the «צליל» radiogroup not set, not calibrated, ready with its duties, the blind pair, a refused add (a11y-instruments.ts)
       for (const sc of instrumentsA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // «תא הבדיקה» (wave 8 booth) in the light theme: the first screen, the self-check, a music card, a picture card or its «דורש כרטיס מסך» state, the report (a11y-booth.ts)
+      for (const sc of boothA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });

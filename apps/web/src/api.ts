@@ -302,7 +302,10 @@ export const api = {
   /** The owner's own session only (everyone else gets 403 owner_required). */
   markKitHeard: (kitId: string, heard: boolean) => call<{ kitId: string; version: number; heard: { at: string } | null }>(`/music/kits/${encodeURIComponent(kitId)}/heard`, json({ heard })),
   // «תא הבדיקה» (wave 8 booth; apps/server/src/booth/contract.ts BOOTH_ROUTES): owner's own session only; 501 booth_not_built until W1
-  booth: () => call<BoothView>('/booth'),
+  booth: (q: { browserAdapter?: string; exportAdapter?: string } = {}) => {
+    const p = new URLSearchParams(Object.entries(q).filter((e): e is [string, string] => typeof e[1] === 'string' && e[1].length > 0)).toString();
+    return call<BoothView>(`/booth${p ? `?${p}` : ''}`);
+  },
   boothAudioUrl: (itemId: string) => `/api/v1/booth/items/${encodeURIComponent(itemId)}/audio`,
   boothTestPictureUrl: (which: 'a' | 'b') => `/api/v1/booth/test-picture/${which}`,
   boothExportStillUrl: (itemId: string) => `/api/v1/booth/items/${encodeURIComponent(itemId)}/export-still`,

@@ -13,7 +13,7 @@ import { BoothPicture } from './BoothPicture.tsx';
 import { MicCard } from './MicCard.tsx';
 import type { BoothAnswerExtras } from './booth.contract.ts';
 import { BOOTH_TESTIDS as TID } from './booth.testids.ts';
-import { drawnOnSoftware, noAdapter, stateLine } from './booth.logic.ts';
+import { drawnOnSoftware, micExtras, noAdapter, pictureOnlySkip, stateLine } from './booth.logic.ts';
 
 export interface BadPanel { problems: string[]; note: string }
 export interface BoothCardProps {
@@ -23,12 +23,15 @@ export interface BoothCardProps {
   onExtras: (x: BoothAnswerExtras) => void;
   bad: BadPanel | null; onBad: (b: BadPanel) => void; onSubmitBad: () => void; onCancelBad: () => void;
   onAnswer: (v: BoothVerdict) => void; onAgain: () => void; names: number;
+  /** the picture's own drawing found no graphics card (BoothPicture onNeedsGpu), kept by the dialog so its keys obey it too */
+  drawBlocked: boolean; onNeedsGpu: (needs: boolean) => void;
 }
 
 export const BoothCard = forwardRef<HTMLElement, BoothCardProps>(function BoothCard(p, ref): ReactElement {
   const { lang, say, view, bad } = p;
   const it = view.item;
-  const pictureBlocked = it.kind === 'picture' && noAdapter(p.browserGpu);
+  const rowBlocked = it.kind === 'picture' && noAdapter(p.browserGpu);
+  const pictureBlocked = pictureOnlySkip(view, p.browserGpu, p.drawBlocked);
   const kindWhat = it.source === 'music' || it.source === 'sfx' ? say(it.source === 'music' ? 'booth.what.music' : 'booth.what.sfx')
     : it.source === 'gpu-transition' ? say('booth.what.transition') : it.source === 'gpu-effect' ? say('booth.what.effect') : '';
   const toggle = (id: string) => { if (!bad) return; const on = bad.problems.includes(id); p.onBad({ ...bad, problems: on ? bad.problems.filter((x) => x !== id) : [...bad.problems, id] }); };
@@ -45,10 +48,10 @@ export const BoothCard = forwardRef<HTMLElement, BoothCardProps>(function BoothC
       {view.answer && drawnOnSoftware(view.answer) && <p className="pf-booth-warn" data-part="software">{say('booth.software')}</p>}
       <div className="pf-booth-body" key={p.replay}>
         {it.kind === 'audio' && <AudioCard lang={lang} say={say} view={view} volume={p.volume} onVolume={p.onVolume} onPlayed={p.onPlayed} control={p.audioControl} />}
-        {it.kind === 'picture' && (pictureBlocked
+        {it.kind === 'picture' && (rowBlocked
           ? <p className="pf-booth-warn" role="status" data-part="needs-gpu">{say('booth.needsGpu')}</p>
-          : <BoothPicture lang={lang} view={view} browserGpu={p.browserGpu} guard={p.guard} reducedMotion={p.reducedMotion} onExtras={p.onExtras} />)}
-        {it.kind === 'task' && <MicCard lang={lang} view={view} onMeasured={() => undefined} />}
+          : <BoothPicture lang={lang} view={view} browserGpu={p.browserGpu} guard={p.guard} reducedMotion={p.reducedMotion} onExtras={p.onExtras} onNeedsGpu={p.onNeedsGpu} />)}
+        {it.kind === 'task' && <MicCard lang={lang} view={view} onMeasured={(m) => p.onExtras(micExtras(m))} />}
       </div>
       {p.names > 0 && <p className="pf-booth-warn" role="alert" data-part="name-warning">{say('page.names', { n: p.names })}</p>}
       <div className="pf-booth-answers" role="group" aria-label={say('booth.title')}>
@@ -72,8 +75,9 @@ export const BoothCard = forwardRef<HTMLElement, BoothCardProps>(function BoothC
           </fieldset>
           <label className="pf-booth-notefield">
             <span>{say('booth.note')}</span>
-            <textarea data-testid={TID.note} dir="auto" rows={3} maxLength={280} value={bad.note} onChange={(e) => p.onBad({ ...bad, note: e.target.value })} />
+            <textarea data-testid={TID.note} dir="auto" rows={3} maxLength={280} aria-describedby="pf-booth-note-advice" value={bad.note} onChange={(e) => p.onBad({ ...bad, note: e.target.value })} />
           </label>
+          <p id="pf-booth-note-advice" className="pf-booth-note" data-part="note-advice">{say('booth.noteAdvice')}</p>
           <div className="pf-booth-actions">
             <Button type="submit" variant="primary">{say('page.save')}</Button>
             <Button variant="ghost" onClick={p.onCancelBad}>{say('page.cancelProblems')}</Button>

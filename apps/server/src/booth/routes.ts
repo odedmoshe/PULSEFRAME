@@ -1,8 +1,8 @@
 /**
  * The booth routes (wave 8 booth track; booth/contract.ts BOOTH_ROUTES). The first line of every handler is
- * `boothOwner(need(c, 'observe'))`: 403 owner_required before the id, a query or the body is read. While BOOTH_BUILT is false (until
- * the lead flips it at integration) every route answers 501 booth_not_built after that check; `built` lets a test mount the real
- * handlers on its own app before then (http.ts passes nothing, so the flag decides).
+ * `boothOwner(need(c, 'observe'))`: 403 owner_required before the id, a query or the body is read. BOOTH_BUILT is true since the
+ * integration; with `built` false (a test's choice) every route answers 501 booth_not_built after that check (http.ts passes nothing,
+ * so the flag decides).
  *
  * Nothing here answers free server text: refusals only through boothError (wording frozen in i18n), rows through checks.ts, notes
  * scrubbed (core scrubNote) with this machine's user name, home folder, host name, data folder and library folder as literals before

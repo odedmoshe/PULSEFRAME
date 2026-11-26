@@ -9,7 +9,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { BOOTH_FIRST_SITTING_CARDS, BOOTH_SCRUB_MARK, type BoothAnswerResult, type BoothView } from '@pulseframe/core';
+import { BOOTH_BLOCK_BEGIN, BOOTH_BLOCK_END, BOOTH_FIRST_SITTING_CARDS, BOOTH_SCRUB_MARK, boothReport, parseBoothBlock, type BoothAnswerResult, type BoothCheckRow, type BoothSay, type BoothView } from '@pulseframe/core';
+import { BOOTH_EN, BOOTH_HE } from '../../../../packages/i18n/src/booth.ts';
 import { loadConfig, type Config } from '../config.ts';
 import { Exporter } from '../export.ts';
 import { Governance, type Principal } from '../governance.ts';
@@ -153,4 +154,51 @@ describe('pictures, audio and checks', () => {
     const lib = await call(built, 'POST', '/api/v1/booth/checks/library');
     expect(JSON.stringify(lib.json)).not.toContain('Family');
   });
+});
+
+describe('integration: the copied report on a realistic fixture (lead point 6)', () => {
+  const sayOf = (dict: Record<string, string>): BoothSay => (key, vars) => (dict[key] ?? key).replace(/\{(\w+)\}/g, (_, k: string) => String(vars?.[k] ?? `{${k}}`));
+  it('holds no absolute path, user, host, project or media file name; the machine block holds no note text; the mic numbers are there', async () => {
+    const v0 = await view();
+    const user = os.userInfo().username, home = os.homedir(), host = os.hostname();
+    const project = 'גן של נועה 2026', media = 'נועה-גן-2026.mp4';
+    const ink = v0.items.find((i) => i.item.id === 'gpu-transition:ink-bleed')!.item;
+    const mic = v0.items.find((i) => i.item.kind === 'task')!.item;
+    // what an owner might really type: a Windows path into OneDrive with the family name, the project and the media file, a home path
+    // with a space, a forward-slash path, the data and library folders, the host and the user name as words
+    const note = `ב-${home}/Videos/${media} וגם C:\\Users\\${user}\\OneDrive - Cohen Family\\${project}\\${media}\nC:/Users/${user}/Desktop/${media} ${dir}/x ${libDir}/y המחשב ${host} של ${user}`;
+    const r1 = await call(built, 'PUT', `/api/v1/booth/answers/${encodeURIComponent(ink.id)}`, { verdict: 'bad', problems: ['flicker'], note: note.slice(0, 280), recipe: ink.recipe, browserAdapter: 'intel|gen-12lp||', browserSoftware: false });
+    expect(r1.status).toBe(200);
+    const r2 = await call(built, 'PUT', `/api/v1/booth/answers/${encodeURIComponent(mic.id)}`, { verdict: 'ok', recipe: mic.recipe, mic: { peakDbfs: -14.2, clipped: 0 } });
+    expect(r2.status).toBe(200);
+    expect(readOwnerReview(dir).answers.find((a) => a.id === mic.id)!.mic).toEqual({ peakDbfs: -14.2, clipped: 0 });
+    // a PUT that tries to carry audio with the measurement is refused
+    expect((await call(built, 'PUT', `/api/v1/booth/answers/${encodeURIComponent(mic.id)}`, { verdict: 'ok', recipe: mic.recipe, mic: { peakDbfs: -1, clipped: 0, wav: 'UklGRg==' } })).status).toBe(400);
+    const v = (await call(built, 'GET', '/api/v1/booth?browserAdapter=intel%7Cgen-12lp%7C%7C')).json as BoothView;
+    const checks: BoothCheckRow[] = [];
+    for (const id of ['ffmpeg', 'svg', 'library', 'kit', 'assistant', 'disk', 'drop']) checks.push((await call(built, 'POST', `/api/v1/booth/checks/${id}`)).json as BoothCheckRow);
+    for (const say of [sayOf(BOOTH_HE), sayOf(BOOTH_EN)]) {
+      const text = boothReport({ view: v, checks, date: '2026-11-26' }, say);
+      const word = (w: string) => new RegExp(`(^|[^\\p{L}\\p{N}_])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}\\p{N}_])`, 'iu');
+      for (const bit of [home, dir, libDir, 'Family Library', 'OneDrive', 'Cohen', 'Users', 'Videos', 'Desktop', project, media, 'נועה-גן'].filter((b) => b.length >= 2)) {
+        expect({ bit, inReport: text.includes(bit) }).toEqual({ bit, inReport: false });
+      }
+      for (const w of [user, host].filter((b) => b.length >= 2)) expect({ w, inReport: word(w).test(text) }).toEqual({ w, inReport: false });
+      // no absolute path at all: no drive letter path, no POSIX path from the root, no UNC
+      expect(text).not.toMatch(/(?<![\p{L}\p{N}])[A-Za-z]:[\\/]|(?:^|\s)\/[A-Za-z]|\\\\[A-Za-z]/u);
+      // the bad answer is listed with its scrubbed note; the mic numbers are in the human part
+      const human = text.slice(0, text.indexOf(BOOTH_BLOCK_BEGIN));
+      expect(human).toContain(ink.id);
+      expect(human).toContain(BOOTH_SCRUB_MARK);
+      expect(human).toMatch(/-14\.2 dBFS/);
+      // the machine block: no note text (not the mark, not a word of it), the numbers present, the checksum passes
+      const block = text.slice(text.indexOf(BOOTH_BLOCK_BEGIN), text.indexOf(BOOTH_BLOCK_END));
+      expect(block).not.toMatch(/[\u0590-\u05FF]|\\u05|note/u);
+      const p = parseBoothBlock(text);
+      expect(p.ok).toBe(true);
+      if (!p.ok) return;
+      expect(JSON.stringify(p.block)).not.toMatch(/note|\\u05|הוסר|המחשב/);
+      expect(p.block.answers.find((a) => a.id === mic.id)!.mic).toEqual({ peakDbfs: -14.2, clipped: 0 });
+    }
+  }, 60_000);
 });
