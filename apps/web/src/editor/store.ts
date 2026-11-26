@@ -410,9 +410,15 @@ export class Editor {
   }
   /** A preview frame failed: when a stored file went missing meanwhile, the asset is marked missing and the frame drawn without it; otherwise the error is shown. */
   private async previewFailed(projectId: string, e: unknown) {
+    const before = this.state.missingMedia.join();
     const changed = await this.checkMedia(projectId);
     // The frame may have failed just before the list (asked for on load) arrived: it is drawn again once per list, never in a loop.
     const key = this.state.missingMedia.join();
+    // The list changed while this failure's check was out, brought by another check (the load's, or an earlier failed frame's), which
+    // drew the frame again with it: this frame was drawn without the list, so its failure is not an error. A frame drawn with the list
+    // that fails still comes here with the list unchanged and is said (a11y audit, 2026-11-26: two frames stepped through before a
+    // slow list arrived left «asset …: HTTP 404» in the error bar under a clip already shown as missing).
+    if (!changed && key && key !== before) return;
     if (changed || (key && this.mediaRetried !== key)) {
       this.mediaRetried = key;
       console.warn('preview: a stored media file is missing; its clips are shown as missing', e);

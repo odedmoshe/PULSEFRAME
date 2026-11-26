@@ -13,7 +13,7 @@ import { translateRefusal } from '@pulseframe/i18n';
 import { api } from '../../api.ts';
 import { useEditorState } from '../store.ts';
 import { CRAFT_TESTIDS as TID } from './craft.testids.ts';
-import { craftSurface } from './craft.state.ts';
+import { closeSurface, craftSurface } from './craft.state.ts';
 import { afterOf, clipOfMatch, craftFailure, DEFAULT_FIND, findQueryOf, groupMatches, listKey, noteLines, replaceNotes, replacePlanOf, replaceablePicks, say, snippetOf, type FindOptions, type Failure } from './craft.logic.ts';
 
 type Flag = 'wholeWord' | 'ignoreMarks' | 'finalsEqual' | 'ignoreCase';
@@ -46,7 +46,7 @@ export function FindReplacePanel() {
   const selection = state.selection;
   const viewed = state.viewVariantId;
   const query = useMemo(() => findQueryOf(text, opts, selection, viewed), [text, opts, selection, viewed]);
-  const close = () => { craftSurface.set(null); const o = opener.current; setTimeout(() => { if (o && o.isConnected) o.focus(); }, 0); };
+  const close = () => closeSurface(opener.current);
 
   // Ctrl+F again (or the command from elsewhere) brings the focus back to the search field
   const serial = craftSurface.serial;

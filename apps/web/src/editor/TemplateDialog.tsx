@@ -4,7 +4,7 @@
  * focus to the card that opened it. Planning is read-only; "Use" applies the plan as ONE transaction on the server
  * (POST …/apply with the plan's revision as expectedRevision), so the editor sees one new revision and one undo step.
  */
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import * as T from '@pulseframe/time';
 import type { TemplateApplyResult, TemplateInput, TemplatePlanView, TemplateSummary } from '@pulseframe/core';
 import { api, ApiFailure } from '../api.ts';
@@ -112,7 +112,23 @@ export function TemplateDialog({ summary, onClose, onApplied }: { summary: Templ
     if (e.shiftKey && (at === first || !dialogRef.current?.contains(at))) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && (at === last || !dialogRef.current?.contains(at))) { e.preventDefault(); first.focus(); }
   };
-  const go = (s: Step) => { setStep(s); setNote(null); setTimeout(() => document.getElementById(`${titleId}-${s}`)?.focus(), 0); };
+  /**
+   * A step change moves the focus to the new step's heading in the same commit that draws the step (a layout effect), never in a later
+   * task: a deferred focus() fired after the person (or a script) had already put the focus in the new step's first field and taken
+   * the typing with it (editor-interactions: one Hebrew letter of «יום הולדת שמח» landed on the heading).
+   */
+  const focusStep = useRef<Step | null>(null);
+  useLayoutEffect(() => {
+    if (focusStep.current !== step) return;
+    focusStep.current = null;
+    document.getElementById(`${titleId}-${step}`)?.focus();
+  }, [step, titleId]);
+  const go = (s: Step) => {
+    setNote(null);
+    if (s === step) { document.getElementById(`${titleId}-${s}`)?.focus(); return; }
+    focusStep.current = s;
+    setStep(s);
+  };
   const at = STEPS.indexOf(step);
   if (!doc) return null;
 

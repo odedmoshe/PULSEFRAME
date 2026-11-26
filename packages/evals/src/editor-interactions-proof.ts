@@ -1052,6 +1052,17 @@ async function main() {
       if (await musicRadio.count()) { await musicRadio.focus(); await tpage.keyboard.press('Space'); }
       const musicChosen = (await musicRadio.count()) ? await musicRadio.isChecked() : pick?.needs.music === 'none';
       await next();
+      // the step heading takes the focus in the commit that draws the step, not in a later task that could take it from a field the
+      // person already went to: Back and Next clicked in one page task, the focus read after the microtasks only (no timer has run)
+      const stepFocus = await tpage.evaluate(async () => {
+        const dlg = document.querySelector('[data-testid=template-dialog]')!;
+        const heading = () => { const a = document.activeElement; return a?.tagName === 'H3' && dlg.contains(a) ? (dlg.querySelector('[data-testid=template-step][aria-current=step]')?.getAttribute('data-step') ?? '?') : `${a?.tagName ?? 'none'}:${a?.getAttribute('data-testid') ?? ''}`; };
+        const settle = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
+        (dlg.querySelector('[data-testid=template-back]') as HTMLButtonElement).click(); await settle(); const back = heading();
+        (dlg.querySelector('[data-testid=template-next]') as HTMLButtonElement).click(); await settle(); const next = heading();
+        return { back, next };
+      });
+      check('the template dialog\'s Back and Next put the focus on the new step\'s heading in the same task that draws the step (no deferred focus that could take a field\'s typing)', stepFocus.back === 'music' && stepFocus.next === 'texts', stepFocus);
       const firstText = tpage.getByTestId(TID.text).first();
       let textKey: string | null = null, counted: string | null = null;
       if (await firstText.count()) {

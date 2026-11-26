@@ -7,7 +7,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { api } from '../../api.ts';
 import { useEditorState } from '../store.ts';
 import { CRAFT_TESTIDS as TID } from './craft.testids.ts';
-import { craftSurface } from './craft.state.ts';
+import { closeSurface } from './craft.state.ts';
 import { craftFailure, defaultVersionName, nameProblem, say, type Failure } from './craft.logic.ts';
 
 export function SaveVersionField() {
@@ -22,7 +22,7 @@ export function SaveVersionField() {
   const opener = useRef<HTMLElement | null>(document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const id = useId();
   const pid = doc?.id;
-  const close = () => { craftSurface.set(null); const o = opener.current; setTimeout(() => { if (o && o.isConnected) o.focus(); }, 0); };
+  const close = () => closeSurface(opener.current);
   useEffect(() => { input.current?.focus(); input.current?.select(); }, []);
   // the next number comes from the versions already saved; the field keeps what the person typed meanwhile
   useEffect(() => {
