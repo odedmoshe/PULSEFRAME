@@ -75,3 +75,10 @@ Each is built, integrated and passes its proof in this container (final regressi
 - **Content library in the editor:** proven here on a synthetic library tree; steps H0–H4 on the real drive E are not done.
 - **«ספרו מה היה»:** a real microphone, Windows' permission prompt, tap latency with real sound: not checked.
 - **Listening:** nobody has heard the music fits' joins, the music under a narration, the stabilised picture on real hand-held footage, or any instrument. Wording and defaults awaiting the owner are in `docs/OWNER_REVIEW.he.md`.
+
+## B-12 — The recorded kit's laptop check needs a folder on a drive with links (owner decision, 2026-11-26)
+
+- State: `kit.calm.vsco@1` is calibrated in the table (piano 70 files, viola ensemble 27 files, both digests recomputed here; edge 2 on pad and double) and `pnpm kit:check` exists (L1, L4, L6, L2, L3, L5 in one read-only command; tested here on the labelled synthetic kit only). Nothing has been rendered from the real samples: every part still has the placeholder gain −18 dB.
+- What stopped it: the library drive E: is exFAT. A clone into `E:\PULSEFRAME-Library\_tools\app` works, but git refuses commands there (the file system records no ownership; no `safe.directory` entry was added, by the owner's rule) and `pnpm install` cannot create its links there, with the default linker and with `--config.node-linker=hoisted` alike (`ERR_PNPM_EISDIR … symlink`, read from the helper's transcript, three attempts, the folder cleaned after each).
+- Unblocked by one of: (a) the owner allowing a tools folder on an NTFS drive (C: or D:, about 600 MB with the packages) where the helper clones, installs and runs the check; or (b) the owner running the one command from their own working copy of the editor after `git pull` and `pnpm install`: `pnpm kit:check --library E:\PULSEFRAME-Library --kit kit.calm.vsco --bars 16 --seed 1`, and pasting the printed report (it holds no personal paths by construction; not yet seen on Windows).
+- Until then: the kit is selectable where the library is set, labelled unheard, at the placeholder gains; the product's own validation refuses a track that fails its checks.
