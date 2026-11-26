@@ -31,11 +31,11 @@ export const MADE_PROOF_CHECKS = [
   'G3.1 fetch, XHR, Image, CSS url(), remote @font-face, WebSocket, EventSource, sendBeacon to 127.0.0.1, localhost and pf-probe.localhost: zero at the listeners, every attempt failed in the page',
   'G3.2 RTCPeerConnection with STUN on 127.0.0.1, in the page and in an about:blank iframe: zero UDP (G0 measured 3 datagrams without the init-script lock)',
   'G3.3 WebTransport, link prefetch and dns-prefetch, speculation rules, a blob: Worker: zero',
-  'G3.4 location.href, window.open, form submit: the job fails with made_navigated on any framenavigated after load; zero requests',
+  'G3.4 location.href, window.open, form submit: the job fails with made_navigated on any framenavigated after load (a form submit refused by form-action \'none\' navigates nowhere: the page shows the violation); zero requests',
   'G3.5 the editor\'s own port: a page cannot reach the server it was submitted to (every attempt failed in the page)',
   'G3.6 internet files: a page naming an https URL gets it fetched ONCE before drawing (recorded url + sha256); a failing address fails the job with made_fetch_failed naming it',
   // G4 (W1): determinism
-  'G4.1 the five built-in pages: two passes compared at frames 0, n/2, n-1 and three frames from a per-job seed (the record lists them)',
+  'G4.1 the six built-in pages (card-3d is WebGL: a difference between passes is the warning, decision 3): two passes compared at frames 0, n/2, n-1 and three frames from a per-job seed (the record lists them)',
   'G4.2 a page that counts render calls fails with made_not_deterministic naming a compared frame',
   'G4.3 fonts are loaded before frame 0: a Heebo 700 page has no made_font_missing; an unlisted family warns made_font_missing and still renders',
   'G4.4 clock reads through string-built names (Date.now, Math.random, requestAnimationFrame, Intl.DateTimeFormat, document.timeline) are reported as made_clock warnings with API and frame',
@@ -56,7 +56,7 @@ export const MADE_PROOF_CHECKS = [
   '15 agents over MCP: submit_made_clip with then.place applies itself (open semantics); view_made_clip returns 3 images to the submitter, an error to another agent; an observer is refused; a second active render 429 made_busy; agents paused: refused',
   '16 archive and collector: the archive holds the page blob; an import as a new project reopens the page; storage clean-up does not list it, read 11 minutes ahead (past the 10-minute grace), where an unreferenced control blob IS listed',
   '17 a transparent WebM made by another tool (the G1 file) imported through the ordinary upload composites with alpha in render_frame',
-  '18 all five built-in pages render with Hebrew and with English values; pictures written for the integrator to look at (RTL: the opaque box of «טיול לגליל 2026» recorded beside the English one)',
+  '18 all six built-in pages render with Hebrew and with English values, the sample text inside the frame (no near-white pixel in the 4 edge columns); pictures written for the integrator to look at (RTL: the opaque box of «טיול לגליל 2026» recorded beside the English one)',
 ] as const;
 
 // ---------------------------------------------------------------- synthetic pages (from the contract: window.PF, PF.render(frame, t))
@@ -230,11 +230,20 @@ async function main() {
       let ok = true;
       for (const [name, js] of [['location', `w['loca' + 'tion']['hr' + 'ef'] = 'http://${hosts[0]}/nav'`], ['window.open', `w['op' + 'en']('http://${hosts[0]}/open')`], ['form', `(() => { const f = d.createElement('fo' + 'rm'); f.action = 'http://${hosts[0]}/form'; f.method = 'post'; d.body.appendChild(f); f.submit(); })()`]] as const) {
         const before = listeners();
-        const { rep } = await renderDone(owner, pid, { page: canvasPage(`const w = window, d = document; if (frame === 1) { ${js}; } ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 20, 20);`), seconds: 0.2 });
+        // the page paints a blue square at x 30 once the browser reports a form-action violation (the page CSP has form-action 'none')
+        // (the form is submitted in EVERY frame and each frame waits for the violation, so the drawing depends on the frame only)
+        const body = name === 'form'
+          ? `const w = window, d = document; const seen = await new Promise((r) => { const on = (e) => { if (e.violatedDirective === 'form-action') { d.removeEventListener('securitypolicyviolation', on); r(true); } }; d.addEventListener('securitypolicyviolation', on); ${js}; setTimeout(() => { d.removeEventListener('securitypolicyviolation', on); r(false); }, 500); }); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 20, 20); if (seen) { ctx.fillStyle = '#0000ff'; ctx.fillRect(30, 0, 10, 10); }`
+          : `const w = window, d = document; if (frame === 1) { ${js}; } ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 20, 20);`;
+        const { rep } = await renderDone(owner, pid, { page: canvasPage(body), seconds: 0.2 });
         const zero = listeners().tcpConnections === before.tcpConnections;
-        // window.open opens no frame of this page, so it need not fail the job; a navigation of the page itself must
-        const navigatedOrNoNav = name === 'window.open' ? true : rep?.failure?.why === 'navigated';
-        out[name] = { job: rep?.status, failure: rep?.failure?.why, zeroAtListeners: zero };
+        // window.open opens no frame of this page, so it need not fail the job; a navigation of the page itself must fail it. A form
+        // submit is refused by the page CSP (form-action 'none') before any navigation: then the job draws on, and the last frame shows
+        // the violation the browser reported (blue square at x 30).
+        let formBlocked: boolean | null = null;
+        if (name === 'form' && rep?.status === 'succeeded') { const d = decode(await fileOf(owner, pid, rep.jobId, 'form.webm'), W, H); const [r, g, b, a] = px(d.frame(d.n - 1), W, 35, 5); formBlocked = b! > 200 && r! < 60 && g! < 60 && a! > 200; }
+        const navigatedOrNoNav = name === 'window.open' ? true : name === 'form' ? (rep?.failure?.why === 'navigated' || formBlocked === true) : rep?.failure?.why === 'navigated';
+        out[name] = { job: rep?.status, failure: rep?.failure?.why, zeroAtListeners: zero, ...(name === 'form' ? { formActionViolationSeen: formBlocked } : {}) };
         ok &&= zero && navigatedOrNoNav;
       }
       record(MADE_PROOF_CHECKS[3], ok, out);
@@ -507,7 +516,12 @@ PF.render = (frame) => { cube.rotation.set(frame * 0.05, frame * 0.07, 0); r.ren
         const last = d.frame(d.n - 1);
         const shot = path.join(pics, `${t.id}-${lang}.png`);
         ff(['-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', `${W}x${H}`, '-i', 'pipe:0', '-frames:v', '1', '-y', shot], Buffer.from(last));
-        out[`${t.id}.${lang}`] = { frames: d.n, opaqueBoxLastFrame: opaqueBox(last, W, H), warnings: warnWhys(rep), picture: path.relative(root, shot) };
+        // the sample text fits the frame: no near-white pixel in the 4 columns at either edge of the last frame (found at integration:
+        // the intro plate's English sample ran off both edges, 129 such pixels)
+        let edgeBright = 0;
+        for (let y = 0; y < H; y++) for (const x of [0, 1, 2, 3, W - 4, W - 3, W - 2, W - 1]) { const [r, g, b, a] = px(last, W, x, y); if (r! > 200 && g! > 200 && b! > 200 && a! > 128) edgeBright++; }
+        ok &&= edgeBright === 0;
+        out[`${t.id}.${lang}`] = { frames: d.n, opaqueBoxLastFrame: opaqueBox(last, W, H), edgeBright, warnings: warnWhys(rep), picture: path.relative(root, shot) };
       }
       record(MADE_PROOF_CHECKS[25], ok, { ...out, note: 'functional only; the pictures are for the integrator to look at (nobody has)' });
     });
@@ -533,10 +547,14 @@ async function previewParity(ownerUrl: string, pid: string, frames: number[], st
     const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })).newPage();
     await page.goto(`${ownerUrl}&project=${pid}`);
     await page.locator('[data-testid=ruler]').waitFor({ timeout: 60_000 });
-    const out: { frame: number; equal: boolean; source: string | undefined; shownFrame: string | undefined; quality: string | undefined; differing: number }[] = [];
+    // the project document must be in the player before the first seek: Player.seek clamps to its frame count, which is 0 until the
+    // document is loaded, so a seek sent earlier lands on frame 0 (the first run of this proof at integration saw exactly that:
+    // the preview showed frame 0 when frame 35 was asked, and the 30 s wait below was swallowed)
+    await page.locator('.clip').first().waitFor({ timeout: 60_000 });
+    const out: { frame: number; reached: boolean; equal: boolean; source: string | undefined; shownFrame: string | undefined; quality: string | undefined; differing: number }[] = [];
     for (const k of frames) {
       await page.evaluate((x) => { const el = document.querySelector('[data-testid=ruler]')!; const r = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent('pointerdown', { clientX: r.left + x, clientY: r.top + 5, bubbles: true })); el.dispatchEvent(new PointerEvent('pointerup', { clientX: r.left + x, clientY: r.top + 5, bubbles: true })); }, (k / 30) * 90 + 0.5);
-      await page.waitForFunction((want) => { const c = document.querySelector('[data-testid=preview]') as HTMLCanvasElement; return c?.dataset.frame === String(want) && c.dataset.quality === 'full'; }, k, { timeout: 30_000 }).catch(() => {});
+      const reached = await page.waitForFunction((want) => { const c = document.querySelector('[data-testid=preview]') as HTMLCanvasElement; return c?.dataset.frame === String(want) && c.dataset.quality === 'full'; }, k, { timeout: 30_000 }).then(() => true, () => false);
       const shot = await page.evaluate(async () => {
         const c = document.querySelector('[data-testid=preview]') as HTMLCanvasElement;
         const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), 'image/png'));
@@ -551,8 +569,8 @@ async function previewParity(ownerUrl: string, pid: string, frames: number[], st
         differing = 0;
         for (let i = 0; i < ref.length; i++) if (ref[i] !== mine[i]) differing++;
       }
-      out.push({ frame: k, equal: differing === 0, source: shot.source, shownFrame: shot.shownFrame, quality: shot.quality, differing });
+      out.push({ frame: k, reached, equal: differing === 0, source: shot.source, shownFrame: shot.shownFrame, quality: shot.quality, differing });
     }
-    return { pass: out.every((o) => o.equal && o.source === 'original'), frames: out };
+    return { pass: out.every((o) => o.reached && o.equal && o.source === 'original'), frames: out };
   } finally { await browser.close().catch(() => {}); }
 }

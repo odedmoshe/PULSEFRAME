@@ -21,6 +21,7 @@ describe('made runner wiring', () => {
       await s.close();
       s = await startServer({ port: 0, dataDir: dir });
       expect(s.store.getJob(running.id)).toMatchObject({ status: 'failed', error: { code: 'made_restarted', why: 'restarted' } });
+      expect(Object.keys(s.store.getProject(projectId).doc.assets)).toEqual([]); // nothing imported
       const queued = s.store.createJob(projectId, MADE_JOB_TYPE, 'agent:local', { pageSha256: 'sha256:' + '0'.repeat(64) }); // a stand-in: queued, not running here
       const r = await fetch(`${s.url}/api/v1/jobs/${queued.id}/cancel`, { method: 'POST', headers: { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' } });
       expect(r.status).toBe(200);
