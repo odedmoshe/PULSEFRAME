@@ -68,6 +68,7 @@ export const DRAWN_SITES: readonly DrawnSite[] = [
   { file: "apps/web/src/editor/lifeline/lifeCommands.ts", snippet: "lected?.clip; return c && c.type === 'text' && c.fields", class: 'words', note: "live fields" },
   { file: "apps/web/src/editor/lifeline/lifeCommands.ts", snippet: "if (!d || !f || f.clip.type !== 'text' || !f.clip.", class: 'words', note: "live fields" },
   { file: "apps/web/src/editor/store.ts", snippet: "SequenceId]!.tracks) if (tr.kind !== 'text') for (const", class: 'placement', note: "append point ignores text tracks" },
+  { file: "packages/core/src/audienceOps.ts", snippet: "le === 'text_loop' ? f.clip.type === 'text' : a.rule ==", class: 'words', note: "audiences (merged from the lead): title_size and text_loop are about a title's letters; on a drawn clip the keep is refused (ruleNotForClip)" },
   { file: "packages/core/src/commandBar/resolve.ts", snippet: "'adjustment' ? c.label : c.type === 'text' ? c.text :", class: 'wrong-placement', note: "command-bar clip name: drawn named by its kind" },
   { file: "packages/core/src/commandBar/resolve.ts", snippet: "itle = (f: Found) => f.clip.type === 'text';", class: 'words', note: "isTitle: «change the words» intents never target a drawing" },
   { file: "packages/core/src/commandBar/resolve.ts", snippet: "type === 'media') || f.clip.type === 'text' || f.clip.t", class: 'wrong-placement', note: "isPicture: effects/looks intents take a drawing" },
