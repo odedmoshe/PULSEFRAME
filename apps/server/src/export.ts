@@ -6,6 +6,7 @@
  * Jobs are durable rows; a job interrupted by a restart re-runs from its immutable snapshot and
  * publishes its output with an atomic rename, so a retry never yields a duplicate or partial file.
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
@@ -60,6 +61,17 @@ export const ExportOptionsSchema = z
   })
   .strict();
 export type ExportOptions = z.infer<typeof ExportOptionsSchema>;
+/**
+ * Idempotency keys of exports (wave 8 autonomy C8): every export job started inside `fn` stores `<key>#<n>` (n = 0, 1, … in start
+ * order) in its input, so a resend with the same key finds the jobs (priorExportJobs) instead of starting new ones.
+ */
+const jobKeyScope = new AsyncLocalStorage<{ key: string; n: number }>();
+export function withJobKey<R>(key: string | undefined, fn: () => R): R { return key ? jobKeyScope.run({ key, n: 0 }, fn) : fn(); }
+/** The export jobs an actor started with this key, in start order ([] = none). */
+export function priorExportJobs(store: Store, actor: string, key: string): JobRow[] {
+  const out: JobRow[] = [];
+  for (let n = 0; ; n++) { const j = store.findJobByKey('export', actor, `${key}#${n}`); if (!j) return out; out.push(j); }
+}
 const hideCaptions = (doc: ProjectDocument): ProjectDocument => ({ ...doc, sequences: Object.fromEntries(Object.entries(doc.sequences).map(([id, s]) => [id, { ...s, tracks: s.tracks.map((t) => (t.kind === 'caption' ? { ...t, hidden: true } : t)) }])) });
 /** Subtitle file for an export: the first caption track as it plays, shifted and clipped to the exported range. */
 function captionSidecar(doc: ProjectDocument, manifest: Manifest): { format: 'srt' | 'vtt'; text: string; cues: number } | null {
@@ -552,7 +564,8 @@ export class Exporter {
     const resolved = retryOf || stillDoc ? p.doc : outputDoc(p.doc, { sequenceId: manifest.options.sequenceId, variantId: manifest.options.variantId });
     const snapshot = retryOf ? p.doc : stillDoc ?? renderDocFor(p.doc, manifest.options);
     const sidecar = retryOf ? retryOf.input.sidecar ?? null : stillDoc ? null : captionSidecar(resolved, manifest);
-    const job = this.store.createJob(projectId, 'export', actor, { revision: p.revision, snapshot, sidecar, manifest, warnings, retryOf: retryOf?.id ?? null });
+    const scope = retryOf ? undefined : jobKeyScope.getStore(); // wave 8 autonomy C8: export_project / export_batch with an idempotencyKey
+    const job = this.store.createJob(projectId, 'export', actor, { revision: p.revision, snapshot, sidecar, manifest, warnings, retryOf: retryOf?.id ?? null, ...(scope ? { idempotencyKey: `${scope.key}#${scope.n++}` } : {}) });
     this.enqueue(job);
     return job;
   }

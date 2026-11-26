@@ -77,6 +77,8 @@ import { registerBoothRoutes } from './booth/routes.ts';
 import { notBuiltPictureModels, type PictureModelsRuntime } from './picmodels/contract.ts';
 import { registerPicmodelsRoutes } from './picmodels/routes.ts';
 import { registerOwnTemplateRoutes } from './ownTemplates.ts';
+import { registerAgentRoutes } from './agent/routes.ts';
+import { notBuiltAgentService, type AgentRunService } from './agent/loop.ts';
 import type { RenderHost } from '@pulseframe/renderer';
 
 const TxBody = z
@@ -967,6 +969,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // «שמירת הסרט כתבנית» (wave 8 owntemplate; ownTemplates.ts, core OWN_TEMPLATE_ROUTES): the owner's own session only; 501 own_template_not_built until W2
   registerOwnTemplateRoutes(app, { cfg, store, gov, need });
   registerBoothRoutes(app, { cfg, store, gov, need, exporter, renderHost: extras.renderHost ?? null, speech, assistant, search: searchRuntime, door: extras.door ?? null, ...(extras.musicKits ? { musicKits: extras.musicKits } : {}) });
+  // the in-editor agent «סוכן» (wave 8 autonomy Part 2; agent/routes.ts, core AGENT_ROUTES): runs, undo-all, providers; 501 agent_not_built until built
+  registerAgentRoutes(app, { store, gov, need, service: () => (mcp as { agentService?: () => AgentRunService }).agentService?.() ?? notBuiltAgentService() });
   const assistantOwner = (c: Context<Env>) => {
     const p = need(c, 'observe');
     if (!isOwnerSession(p)) throw new ApiError(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only', undefined, 'The owner sets it up in Settings.');

@@ -16,6 +16,7 @@ import { ApiFailure, api, type RevisionEvent } from '../api.ts';
 import { useEditorState, type Editor } from './store.ts';
 import { HUB_STRINGS } from './aiHub.strings.ts';
 import './copilot.css';
+import { AGENT_TAB_BUILT, AgentTab } from './agent/AgentTab.tsx';
 
 type CopTab = 'chat' | 'receipts';
 type Mode = 'guide' | 'run';
@@ -39,7 +40,7 @@ export function Copilot() {
         <Seg label={H.mode} size="sm" value={mode} onChange={(v) => setMode(v)} options={[{ value: 'guide', label: H.guide }, { value: 'run', label: H.run }]} />
       </header>
       <Tabs label={H.title} value={tab} onChange={(id) => setTab(id as CopTab)} panelPrefix="pf-cop-panel" tabs={[{ id: 'chat', label: H.chat, testId: 'copilot-tab-chat' }, { id: 'receipts', label: H.receipts, count: receipts.length, testId: 'copilot-tab-receipts' }]} />
-      {tab === 'chat' ? <Chat /> : <Receipts editor={editor} receipts={receipts} />}
+      {tab === 'chat' ? (AGENT_TAB_BUILT ? <AgentTab /> : <Chat />) : <Receipts editor={editor} receipts={receipts} />}
     </section>
   );
 }

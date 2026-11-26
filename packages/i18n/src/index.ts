@@ -32,6 +32,7 @@ import { GRADE_EN, GRADE_HE } from './grade.ts';
 import { INSTRUMENTS_EN, INSTRUMENTS_HE } from './instruments.ts';
 import { COVER_EN, COVER_HE } from './cover.ts';
 import { OWNTEMPLATE_EN, OWNTEMPLATE_HE } from './owntemplate.ts';
+import { AGENT_EN, AGENT_HE } from './agent.ts';
 import { FOOTAGE_EN, FOOTAGE_HE } from './footageSearch.ts';
 import { PICMODELS_EN, PICMODELS_HE } from './picmodels.ts';
 import { BOOTH_EN, BOOTH_HE } from './booth.ts';
@@ -260,6 +261,7 @@ export const he = {
   ...OWNTEMPLATE_HE,
   ...GRADE_HE,
   ...QC_HE,
+  ...AGENT_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -484,6 +486,7 @@ export const en: Record<keyof typeof he, string> = {
   ...OWNTEMPLATE_EN,
   ...GRADE_EN,
   ...QC_EN,
+  ...AGENT_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -512,6 +515,7 @@ export * from './pearls.ts';
 export * from './story.ts';
 export * from './growing.ts';
 export * from './teach.ts';
+export * from './agent.ts';
 export * from './musicFit.ts';
 export * from './audiences.ts';
 export * from './living.ts';

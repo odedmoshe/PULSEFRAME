@@ -186,6 +186,8 @@ const PARAMS: Record<string, () => string> = {
   id: () => pid, jobId: () => exportJobId, proposalId: () => proposalId, assetId: () => assetId, token: () => 'rnd_none', kind: () => 'thumb', motionTrackId: () => 'mtk_none',
   capabilityId: () => 'none.cap', recipeId: () => 'none', runId: () => 'run_none', templateId: () => 'none', variantId: () => 'var_none', approvalId: () => 'apr_none', grantId: () => 'grt_none',
   sfxId: () => 'none', modelId: () => 'none', index: () => '0', styleId: () => 'none',
+  // the in-editor agent (wave 8 autonomy Part 2): a provider preset id (the routes answer before reading a project)
+  providerId: () => 'anthropic',
   // shorts (ADR-0018): the main sequence of the walked project (every project made by createProject has it)
   sequenceId: () => 'seq_main',
   // multicam (ADR-0020): a group the walked project does not have (the routes answer 404 before reading anything)

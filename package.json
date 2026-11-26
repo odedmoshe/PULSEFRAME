@@ -108,6 +108,7 @@
     "proof:audiences": "tsx packages/evals/src/audiences-proof.ts",
     "proof:tripmap": "tsx packages/evals/src/tripmap-proof.ts",
     "proof:teach": "tsx packages/evals/src/teach-proof.ts",
+    "proof:agent": "tsx packages/evals/src/agent-proof.ts",
     "proof:living": "tsx packages/evals/src/living-proof.ts",
     "proof:ink": "tsx packages/evals/src/ink-proof.ts",
     "proof:grade": "tsx packages/evals/src/grade-proof.ts",
