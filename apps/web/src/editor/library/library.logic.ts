@@ -140,12 +140,15 @@ export function assetBadges(asset: Pick<Asset, 'provenance'>): AssetBadge[] {
 }
 
 // ---------- the export job's licence lines ----------
-export interface ExportLicence { nonCommercial: string[]; credits: { lines: number; descriptionText: string } | null; people: number }
+/** A licence or term finding of a fetched file (wave 8 sources): its code, the file, the licence as the service wrote it, the quoted term rows and the server's sentence. */
+export interface ExportLicenceNote { code: string; title: string; licenceName: string; termIds: string[]; message: string }
+export interface ExportLicence { nonCommercial: string[]; credits: { lines: number; descriptionText: string } | null; people: number; /** present only when the job output holds some */ licenceNotes?: ExportLicenceNote[] }
 const isRec = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 /**
  * Read output.licence of a finished export job; null when the job holds none. The server writes it (apps/server/src/export.ts
  * exportLicence): core's CreditsView without its descriptionText — `lines`, `onScreenMissing`, `nonCommercial` and `people` (each
- * an array of {assetId, title, …}) — plus `credits: {descriptionText, file}`. Shapes it does not know are skipped, not guessed.
+ * an array of {assetId, title, …}) — plus `credits: {descriptionText, file}`, and (wave 8 sources) `licenceNotes` when the video holds
+ * fetched files with licence or term findings. Shapes it does not know are skipped, not guessed.
  */
 export function exportLicence(output: Record<string, unknown> | null | undefined): ExportLicence | null {
   const l = output?.licence;
@@ -154,7 +157,11 @@ export function exportLicence(output: Record<string, unknown> | null | undefined
   const c = isRec(l.credits) ? l.credits : null;
   const text = c && typeof c.descriptionText === 'string' ? c.descriptionText : '';
   const lines = Array.isArray(l.lines) ? l.lines.length : 0;
-  return { nonCommercial: [...new Set(nc)], credits: lines > 0 && text ? { lines, descriptionText: text } : null, people: Array.isArray(l.people) ? l.people.length : 0 };
+  const str = (v: unknown) => (typeof v === 'string' ? v : '');
+  const notes: ExportLicenceNote[] = Array.isArray(l.licenceNotes)
+    ? l.licenceNotes.flatMap((x) => (isRec(x) && typeof x.code === 'string' && typeof x.message === 'string' ? [{ code: x.code, title: str(x.title), licenceName: str(x.licenceName), termIds: Array.isArray(x.termIds) ? x.termIds.filter((t): t is string => typeof t === 'string') : [], message: x.message }] : []))
+    : [];
+  return { nonCommercial: [...new Set(nc)], credits: lines > 0 && text ? { lines, descriptionText: text } : null, people: Array.isArray(l.people) ? l.people.length : 0, ...(notes.length ? { licenceNotes: notes } : {}) };
 }
 
 // ---------- the archive choice ----------

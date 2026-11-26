@@ -8,6 +8,7 @@ import { timelineMarkers } from './cleanup.ts';
 import { assetNotices } from './notices.ts';
 import { eventDisplayName } from './events.ts';
 import { shareable } from './libraryCredits.ts';
+import { sourceDuties } from './sourceDuties.ts';
 import { audienceMusicDb, hasFormatOverride } from './audienceContract.ts';
 
 const sec = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));
@@ -45,6 +46,21 @@ function libraryPart(a: Asset) {
   return { itemId: r.itemId, title: r.title, licenceId: r.licence.id, credit: r.credit?.text ?? null, creditPlacement: r.credit?.placement ?? null, nonCommercial: r.flags.nonCommercial === true, shareable: shareable(a), people: r.flags.people === true };
 }
 
+/**
+ * An asset's source part of the summary (wave 8 sources, verify C3): where a fetched file came from, its licence as the service wrote
+ * it, its credit (verbatim, or null), whether that credit is due, the marks that bind its use and the codes of its licence and term
+ * warnings (sourceDuties; the export and GET …/credits carry their sentences).
+ */
+function sourcePart(a: Asset) {
+  const r = a.provenance.source!;
+  return {
+    provider: r.provider, itemId: r.itemId, kind: r.kind, title: r.title, author: r.author ?? null, pageUrl: r.pageUrl ?? null,
+    licenceId: r.licence.id, licenceName: r.licence.name, licenceUrl: r.licence.url ?? null, credit: r.credit?.text ?? null, creditPlacement: r.credit?.placement ?? null,
+    creditDue: r.credit?.due === true, nonCommercial: r.flags.nonCommercial === true, shareable: shareable(a), people: r.flags.people === true,
+    warnings: sourceDuties(r, r.title || a.name).map((w) => w.code),
+  };
+}
+
 /** Compact, agent-readable overview. Exact times are included alongside readable seconds. */
 export function summarize(doc: ProjectDocument) {
   const seq = doc.sequences[doc.mainSequenceId]!;
@@ -60,7 +76,9 @@ export function summarize(doc: ProjectDocument) {
       // life line (ADR-0021): the file's own capture date; `circa` = an estimate (a file-name date)
       ...(a.capture ? { capture: { at: a.capture.at, source: a.capture.source, circa: a.capture.circa === true } } : {}), notices: assetNotices(a),
       // the content library (wave 7): the licence record of a file copied from the owner's library folder, and what it demands
-      ...(a.provenance.library ? { library: libraryPart(a) } : {}) })),
+      ...(a.provenance.library ? { library: libraryPart(a) } : {}),
+      // stock sources and links (wave 8): the record of a fetched file (or of the song shortened from one)
+      ...(a.provenance.source ? { source: sourcePart(a) } : {}) })),
     tracks: seq.tracks.map((t) => ({ id: t.id, kind: t.kind, name: t.name, locked: t.locked, muted: t.muted, clipCount: t.clips.length, ...(t.caption ? { caption: { mode: t.caption.mode, linkedTrackId: t.caption.linkedTrackId, preset: t.caption.style.preset } } : {}) })),
     // shorts (ADR-0018): every sequence of the project, the main edit first; `tracks` above are the main edit's
     sequences: sequenceList(doc),

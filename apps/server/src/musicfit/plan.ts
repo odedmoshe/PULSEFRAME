@@ -22,7 +22,7 @@
 import * as T from '@pulseframe/time';
 import {
   applyTransaction, barsForDuration, BUILTIN_MUSIC_ASSET_KEY, clipEnd, cutStats, exactLayoutFor, FAMILY_FILM_RUN_RECIPE_ID, FAMILY_FILM_TEMPLATE_ID, FAMILY_FILM_VERSION, FilmError, FILM_BINDS,
-  filmRunParams, filmRunRecordParams, findClip, findMusicStyle, fitLicenceProblem, fitLicenceRefusal, flashGapFrames, followable, isBuiltinMusic, joinMeasuredSentence, knownGridOf, MUSIC_GENERATOR,
+  filmRunParams, filmRunRecordParams, findClip, findMusicStyle, fitLicenceProblem, fitLicenceRefusal, fitSourceNotes, flashGapFrames, followable, isBuiltinMusic, joinMeasuredSentence, knownGridOf, MUSIC_GENERATOR,
   MUSIC_MAX_SECONDS, MUSIC_SAMPLE_RATE, MUSICFIT, MUSICFIT_COMPOSED_AGAIN, musicFitRefusal, MusicFitNotBuilt, musicLayout, musicProvenanceParams, musicStartOf, OpError, ownBeats, placedMusicGrid, planFamilyFilm,
   planImpact, planMusicSwap, sampleFramesFor, sha256Hex, TemplateError,
   type Asset, type CutStats, type FamilyFilmPlan, type FittedGrid, type JoinCandidate, type JoinRemoval, type KnownGrid, type MediaClip, type MusicFitNote, type MusicFitPlan, type MusicFitPlanRequest, type OpCall,
@@ -310,7 +310,7 @@ async function prepareClip(store: Store, projectId: string, doc: ProjectDocument
     // the clip ends where the made file ends when that comes before the target (ending early): the same rule planMusicSwap applies
     // on the made file in apply's second plan (its end floored to a frame from the clip's start), else apply refuses fit_unstable
     if (found.usableEnd) firstEndFrame = Math.min(firstEndFrame, T.frameIndexAt(T.add(clip.start, madeLength(startAt, c.removal, found.usableEnd)), doc.settings.frameRate));
-    warnings.push(...joinNotes(c));
+    warnings.push(...joinNotes(c), ...fitSourceNotes(doc, choice.assetId)); // wave 8 sources (C4): licence findings of a fetched song are warnings
     basis.push(...found.basis, ...joinBasis(c));
   } else {
     // the file as it is: its own end, or cut at the clip's end with a fade
@@ -439,7 +439,7 @@ async function prepareFilm(store: Store, projectId: string, doc: ProjectDocument
     make = { kind: 'fitted', sourceAssetId: choice.assetId, startAt, removal: c.removal };
     planMake = { kind: 'fitted', sourceAssetId: choice.assetId, candidates: r.candidates, chosen: r.chosen };
     ending = endingOf(c.madeSeconds, T.toSeconds(wanted), false);
-    warnings.push(...joinNotes(c));
+    warnings.push(...joinNotes(c), ...fitSourceNotes(doc, choice.assetId)); // wave 8 sources (C4): licence findings of a fetched song are warnings
     basis.push(...found.basis, ...joinBasis(c), 'the cuts shown are planned on the whole song; they are planned again on the shortened file before anything is committed');
     first = { doc, assetId: choice.assetId };
   } else {
@@ -523,7 +523,7 @@ async function prepareTemplate(store: Store, projectId: string, doc: ProjectDocu
     make = { kind: 'fitted', sourceAssetId: choice.assetId, startAt, removal: c.removal };
     planMake = { kind: 'fitted', sourceAssetId: choice.assetId, candidates: r.candidates, chosen: r.chosen };
     ending = endingOf(c.madeSeconds, T.toSeconds(wanted), false);
-    warnings.push(...joinNotes(c));
+    warnings.push(...joinNotes(c), ...fitSourceNotes(doc, choice.assetId)); // wave 8 sources (C4): licence findings of a fetched song are warnings
     basis.push(...found.basis, ...joinBasis(c), 'the cuts shown are planned on the whole song; they are planned again on the shortened file before anything is committed');
     params = (assetId) => ({ musicAssetId: assetId, builtinMusic: null });
     firstAsset = choice.assetId;

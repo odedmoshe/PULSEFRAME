@@ -17,7 +17,8 @@ import * as T from '@pulseframe/time';
 import { AssetSchema, RationalTimeSchema, type LibraryRecord, type ProjectDocument } from './schema.ts';
 import type { OpErrorCode } from './ops.ts';
 import { OpError } from './ops.ts';
-import { libraryOrigins } from './libraryCredits.ts';
+import { libraryOrigins, licensedOrigins } from './libraryCredits.ts';
+import type { SourceRecord, SourceWarningCode } from './sourcesContract.ts';
 import { libraryRecordProblems } from './libraryDuties.ts';
 
 export const MUSICFIT = {
@@ -77,7 +78,7 @@ export type MusicFitApplyRequest = z.infer<typeof MusicFitApplyRequestSchema>;
 
 export const MUSICFIT_WARNING_CODES = ['join_weak', 'tempo_unsteady', 'music_keys_dropped', 'cuts_faster', 'kept_cuts_close', 'music_short', 'impacts_off_beat', 'composed_again'] as const;
 export const MUSICFIT_BLOCKING_CODES = ['flash_gap', 'template_blocked'] as const;
-export interface MusicFitNote { code: (typeof MUSICFIT_WARNING_CODES)[number] | (typeof MUSICFIT_BLOCKING_CODES)[number]; message: string; details: Record<string, unknown> }
+export interface MusicFitNote { code: (typeof MUSICFIT_WARNING_CODES)[number] | (typeof MUSICFIT_BLOCKING_CODES)[number] | FitSourceNoteCode; message: string; details: Record<string, unknown> }
 export interface JoinCandidate {
   removal: JoinRemoval;
   /** Seconds of the made file and how far it lies from the wanted length (negative = shorter). */
@@ -193,9 +194,12 @@ export function fitLicenceProblem(doc: ProjectDocument, assetId: string): { key:
   const asset = Object.hasOwn(doc.assets, assetId) ? doc.assets[assetId] : undefined;
   if (!asset) return null;
   if (asset.provenance.fitted) return { key: 'alreadyFitted', licenceId: null };
+  // library AND source records (wave 8 sources, C4): one copy carries one record, so more than one origin stays refused (a fact)
+  const all = licensedOrigins(doc, assetId);
+  if (all.length > 1) return { key: 'licenceManyOrigins', licenceId: null };
+  // a song from a stock source or a link: its licence findings are WARNINGS (fitSourceNotes), never a refusal (C14)
   const origins = libraryOrigins(doc, assetId);
   if (origins.length === 0) return null;
-  if (origins.length > 1) return { key: 'licenceManyOrigins', licenceId: null };
   const record = origins[0]!.record;
   const first = libraryRecordProblems(record)[0];
   if (!first) return null;
@@ -206,6 +210,28 @@ export function fitLicenceProblem(doc: ProjectDocument, assetId: string): { key:
 export function fittedLibraryRecord(doc: ProjectDocument, assetId: string): LibraryRecord | null {
   const origins = libraryOrigins(doc, assetId);
   return origins.length === 1 ? structuredClone(origins[0]!.record) : null;
+}
+/**
+ * The source record a shortened copy of this file carries (provenance.source of the made file, C4a), or null: the record of its ONE
+ * licensed origin when that origin is a fetched file. Only after fitLicenceProblem passed. The copy is origin 'derived' with fitted,
+ * which validation allows; its sha256 stays the fetched original's (compared only for origin 'upload').
+ */
+export function fittedSourceRecord(doc: ProjectDocument, assetId: string): SourceRecord | null {
+  const origins = licensedOrigins(doc, assetId);
+  return origins.length === 1 && origins[0]!.source ? structuredClone(origins[0]!.source) : null;
+}
+/** The licence findings a plan of a shortened source song shows (sourceDuties of its one source record), as music-fit notes. */
+export const FIT_SOURCE_NOTE_CODES = ['licence_no_derivatives', 'licence_share_alike', 'licence_unknown', 'licence_unconfirmed', 'source_terms', 'non_commercial_content'] as const satisfies readonly (SourceWarningCode | 'non_commercial_content')[];
+export type FitSourceNoteCode = (typeof FIT_SOURCE_NOTE_CODES)[number];
+/**
+ * Warnings (never refusals, C14) of shortening a song fetched from a stock source or a link: the licence and term findings of its one
+ * source record, each quoting the licence's own words (sourceDuties). Empty for a library song, built-in music or the owner's file.
+ */
+export function fitSourceNotes(doc: ProjectDocument, assetId: string): MusicFitNote[] {
+  const origins = licensedOrigins(doc, assetId);
+  if (origins.length !== 1 || origins[0]!.origin !== 'source') return [];
+  return origins[0]!.licenceNotes.filter((n): n is typeof n & { code: FitSourceNoteCode } => (FIT_SOURCE_NOTE_CODES as readonly string[]).includes(n.code))
+    .map((n) => ({ code: n.code, message: n.message, details: { assetId: n.assetId ?? assetId, licenceId: n.licenceId ?? null, licenceName: n.licenceName ?? null, termIds: n.termIds } }));
 }
 /** The licence refusal of fitLicenceProblem as an OpError (add_fitted_music, and the planner's own check). */
 export function fitLicenceRefusal(p: { key: FitLicenceKey; licenceId: string | null }, assetId: string): OpError {
