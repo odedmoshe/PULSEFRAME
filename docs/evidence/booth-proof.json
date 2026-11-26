@@ -1,0 +1,107 @@
+{
+  "proof": "proof:booth",
+  "date": "2026-11-26",
+  "seconds": 42,
+  "summary": "13 pass, 0 partial, 1 blocked, 0 fail, 0 pending (of 14); one sample each",
+  "machine": "the build container: 4 shared CPUs, no hardware GPU, no microphone, headless Chromium; nobody here hears or sees anything",
+  "rows": [
+    {
+      "id": "B1",
+      "part": "server",
+      "status": "pass",
+      "check": "the registry has one item per catalogue member it covers and a BOOTH_LATER row with a reason for each member it does not; ids unique; the first sitting is exactly 14 cards",
+      "sample": "162 items (music 6, sfx 80, gpu transitions 46, gpu effects 29, task 1), 59 later rows, first sitting 14"
+    },
+    {
+      "id": "B2",
+      "part": "server",
+      "status": "pass",
+      "check": "recipes are equal across two server starts; a labelled synthetic registry with one changed SFX graph changes only that item's recipe; the SFX recipe holds the ffmpeg version line",
+      "sample": "162 recipes equal across 2 process starts; one SFX graph changed -> only sfx:sfx.whoosh; ffmpeg line in every SFX recipe (\"ffmpeg version 6.1.1-3ubuntu5 Copyright …\")"
+    },
+    {
+      "id": "B3",
+      "part": "server",
+      "status": "pass",
+      "check": "for all six styles the booth audio bytes have the sha256 of music.golden.json and equal GET /api/v1/music/:id/audio?bars=8&seed=1 (x-pf-expected-match 1)",
+      "sample": "6/6 styles equal music.golden.json and GET /music/:id/audio?bars=8&seed=1, x-pf-expected-match 1 (festive, birthday, calm, pop, lofi, cinematic)"
+    },
+    {
+      "id": "B4",
+      "part": "server",
+      "status": "pass",
+      "check": "an SFX item's booth audio equals GET /api/v1/sfx/:id/audio byte for byte",
+      "sample": "11 auto-used SFX equal GET /api/v1/sfx/:id/audio byte for byte"
+    },
+    {
+      "id": "B5",
+      "part": "server",
+      "status": "pass",
+      "check": "agent, observer and propose credentials get 403 owner_required on every booth route, GET included and a PUT with an invalid body; no booth path in DROP_ROUTES; no MCP booth tool",
+      "sample": "21 calls (3 credentials × 7 routes, PUT with an invalid body) → 403 owner_required; DROP_ROUTES and 215 MCP tools have no booth entry"
+    },
+    {
+      "id": "B6",
+      "part": "server",
+      "status": "pass",
+      "check": "PUT ok and PUT bad store rows; GET /api/v1/music labels are unchanged (the booth changes no product label); the report lists the bad one",
+      "sample": "2 rows stored; GET /api/v1/music byte-equal before/after (3287 bytes); the report lists music:music.pop under «לא טוב»"
+    },
+    {
+      "id": "B7",
+      "part": "server",
+      "status": "pass",
+      "check": "a row whose recipe no longer matches is changed and counted unanswered; a PUT with an old recipe gets 409 booth_stale_recipe; a picture on another adapter is changed with booth.changed.adapter",
+      "sample": "film-burn on another adapter: changed (adapter, «נבדק על כרטיס מסך אחר — בדקו כאן»); calm with an old recipe: changed (recipe), counted unanswered; PUT old recipe → 409 booth_stale_recipe"
+    },
+    {
+      "id": "B8",
+      "part": "server",
+      "status": "pass",
+      "check": "music-kits-heard.json and its route are untouched (proof:instruments I16/I17 still pass); the kit is a self-check row only",
+      "sample": "music-kits-heard.json byte-equal after booth answers and the kit row (81 bytes); no kit card (proof:instruments I16/I17 run separately)"
+    },
+    {
+      "id": "B9",
+      "part": "server",
+      "status": "pass",
+      "check": "owner-review.json is mode 0600 where the OS has modes, written atomically, in no project document, no archive and no backup destination",
+      "sample": "mode 0600; a kill before rename left the old file; not in the project, its archive plan or a backup (5 files copied)"
+    },
+    {
+      "id": "B10",
+      "part": "server",
+      "status": "pass",
+      "check": "the report contains none of the planted values (data dir, user, host, project, asset name, «נועה», birth date, loopback and LAN address, agent token, library root, home path with a space, C:/ path, OneDrive folder); a planted note comes out scrubbed; parseBoothBlock round-trips; a bidi mark or one changed character is refused",
+      "sample": "20 planted values absent from the 3383-character report; the note stored as «[הוסר]…»; block round-trips 5 answers; U+200F → not_ascii, one character → checksum"
+    },
+    {
+      "id": "B11",
+      "part": "server",
+      "status": "pass",
+      "check": "every server row answers within its timeout with a BoothCheckRowSchema row: export-gpu reports a software adapter or none and never ok on it; ffmpeg has its version line and h264_nvenc false; library setup; heavy rows skipped while an export runs",
+      "sample": "export-gpu fail/software_adapter 1096ms; ffmpeg ok/encoder_present 2ms; svg ok 1ms; library fail/ledger_missing 3ms; kit setup/item_missing 2ms; speech setup/not_installed 2ms; assistant setup/not_installed 3ms; search off/not_built 2ms; disk setup/low 1ms; drop off/cannot_open 1ms; ffmpeg h264_nvenc true (encoder_present); during an export: 3 heavy rows skipped, export still 409 booth_busy (one sample each)"
+    },
+    {
+      "id": "B12",
+      "part": "ui",
+      "status": "pass",
+      "check": "UI: the booth button exists only in the owner's session; keyboard only: open from the rail, the first screen says «חלק ראשון: 0 מתוך 14», run the check, Space plays (currentTime advances — measured, not heard), Digit1 answers, Escape closes and focus returns to rail-booth",
+      "sample": "button only for the owner (STAND-IN other session: none, 0 booth requests); first screen «חלק ראשון: 0 מתוך 14»; self-check rows browser-gpu=off browser-codecs=ok export-gpu=idle ffmpeg=ok svg=ok mic=off library=setup kit=setup speech=idle assistant=setup search=idle disk=setup drop=off; Space played music:music.festive (currentTime 0.24 to 2.25, measured, not heard); Digit1 stored answered/ok; then by keys only: «לא טוב» on music:music.birthday with one problem and a typed note (stored bad), 1 Windows step by Tab+Enter, 12 cards skipped with 3, back on the first screen («חלק ראשון: 14 מתוך 14») with the focus on its heading; focus stayed in the dialog; Escape returned it to the rail button"
+    },
+    {
+      "id": "B13",
+      "part": "ui",
+      "status": "blocked",
+      "check": "UI, flash: a light-changing GPU card starts as a still, plays with no light rise closer than 1/3 s by the guard's own counter; under reduced motion no animation frame is drawn",
+      "sample": "this headless Chromium has no WebGPU adapter: the card says «דורש כרטיס מסך שהדפדפן הזה לא מצא. אפשר רק לדלג» and cannot be drawn here"
+    },
+    {
+      "id": "B14",
+      "part": "ui",
+      "status": "pass",
+      "check": "UI: «העתקת הדוח» puts exactly the box's text on the clipboard",
+      "sample": "«העתקת הדוח» put exactly the box's 2952 characters on the clipboard"
+    }
+  ]
+}

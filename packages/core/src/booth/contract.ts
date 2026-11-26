@@ -133,6 +133,13 @@ export type BoothItem = z.infer<typeof BoothItemSchema>;
 export const BOOTH_VERDICTS = ['ok', 'bad', 'skip'] as const;
 export type BoothVerdict = (typeof BOOTH_VERDICTS)[number];
 
+/** The microphone card's measurement of one take (MicCard / mic.logic.ts micMeasure): peak in dBFS (≤ 0, null for silence), clipped samples. */
+export const BoothMicMeasureSchema = z.object({
+  peakDbfs: z.number().min(-200).max(0).nullable(),
+  clipped: z.number().int().min(0).max(100_000_000),
+}).strict();
+export type BoothMicMeasure = z.infer<typeof BoothMicMeasureSchema>;
+
 /** PUT /api/v1/booth/answers/:id. The note is scrubbed on the SERVER before it is stored (scrub.ts, verify C4b). */
 export const BoothAnswerBodySchema = z.object({
   verdict: z.enum(BOOTH_VERDICTS),
@@ -147,6 +154,9 @@ export const BoothAnswerBodySchema = z.object({
   browserSoftware: z.boolean().optional(),
   exportAdapter: Ascii(BOOTH_LIMITS.adapterChars).optional(),
   exportSoftware: z.boolean().optional(),
+  /** The microphone card only: what was MEASURED on the 5 s take (integration, lead point 3). Numbers only; no audio is ever sent or
+   * stored. peakDbfs null = no sample above zero (silence); dBFS rounded to 0.1. */
+  mic: BoothMicMeasureSchema.optional(),
 }).strict();
 export type BoothAnswerBody = z.infer<typeof BoothAnswerBodySchema>;
 
@@ -260,6 +270,7 @@ export const BoothBlockSchema = z.object({
   answers: z.array(z.object({
     id: BoothItemIdSchema, recipe: Sha, played: Sha.optional(), verdict: z.enum(BOOTH_VERDICTS), problems: z.array(BoothProblemSchema).max(BOOTH_LIMITS.problems).optional(),
     browserAdapter: Ascii(BOOTH_LIMITS.adapterChars).optional(), browserSoftware: z.boolean().optional(), exportAdapter: Ascii(BOOTH_LIMITS.adapterChars).optional(), exportSoftware: z.boolean().optional(),
+    /** The microphone card's numbers (never audio). */ mic: BoothMicMeasureSchema.optional(),
     /** Answered on this date (YYYY-MM-DD). */ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     /** The item's state when the report was made. */ state: z.enum(['answered', 'changed']),
   }).strict()).max(BOOTH_LIMITS.rows),

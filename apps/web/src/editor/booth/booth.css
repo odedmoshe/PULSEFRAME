@@ -1,0 +1,35 @@
+/* «תא הבדיקה» (wave 8 booth, builder W3): redesign tokens only; logical properties, so the dialog mirrors with the page direction. */
+.pf-booth { display: grid; gap: var(--pf-sp-4); color: var(--pf-text); font: var(--pf-fw-regular) var(--pf-fs-sm) / var(--pf-lh-sm) var(--pf-font); min-inline-size: 0; }
+.pf-booth p, .pf-booth h3 { margin: 0; }
+.pf-booth h3 { font-size: var(--pf-fs-md, 1rem); font-weight: var(--pf-fw-semibold); }
+.pf-booth-title:focus { outline: none; }
+.pf-booth-title:focus-visible { outline: 2px solid var(--pf-focus, currentColor); outline-offset: 2px; }
+.pf-booth-first { font-size: var(--pf-fs-lg, 1.125rem); font-weight: var(--pf-fw-semibold); }
+.pf-booth-note { color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); overflow-wrap: anywhere; }
+.pf-booth-warn { color: var(--pf-danger); padding: var(--pf-sp-3) var(--pf-sp-4); background: var(--pf-surface-2); border-radius: var(--pf-r-md); overflow-wrap: anywhere; }
+.pf-booth-live { min-block-size: var(--pf-lh-sm); color: var(--pf-text-2); }
+.pf-booth-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--pf-sp-3); }
+.pf-booth-progress { font-weight: var(--pf-fw-semibold); }
+.pf-booth-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-3); }
+.pf-booth-card { display: grid; gap: var(--pf-sp-3); padding: var(--pf-sp-5); background: var(--pf-surface-2); border-radius: var(--pf-r-md); box-shadow: var(--pf-e1), var(--pf-hilite); min-inline-size: 0; }
+.pf-booth-meta { color: var(--pf-text-2); font-size: var(--pf-fs-xs); }
+.pf-booth-state[data-state="changed"] { color: var(--pf-danger); }
+.pf-booth-body { display: grid; gap: var(--pf-sp-3); min-inline-size: 0; }
+.pf-booth-audio { display: grid; gap: var(--pf-sp-3); }
+.pf-booth-volume { display: inline-flex; align-items: center; gap: var(--pf-sp-3); min-inline-size: 180px; }
+.pf-booth-volume-label { color: var(--pf-text-2); font-size: var(--pf-fs-xs); white-space: nowrap; }
+.pf-booth-answers { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); }
+.pf-booth-problems { display: grid; gap: var(--pf-sp-3); padding: var(--pf-sp-4); background: var(--pf-surface-1); border-radius: var(--pf-r-md); }
+.pf-booth-problems fieldset { margin: 0; padding: 0; border: 0; display: grid; gap: var(--pf-sp-2); }
+.pf-booth-problems legend { padding: 0; margin-block-end: var(--pf-sp-2); font-weight: var(--pf-fw-semibold); }
+.pf-booth-problem { display: inline-flex; align-items: center; gap: var(--pf-sp-3); min-block-size: 32px; }
+.pf-booth-notefield { display: grid; gap: var(--pf-sp-2); }
+.pf-booth-notefield textarea, .pf-booth-reportbox { inline-size: 100%; box-sizing: border-box; background: var(--pf-surface-1); color: var(--pf-text); border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-sm); padding: var(--pf-sp-3); font: inherit; }
+.pf-booth-reportbox { font-family: var(--pf-font-mono); font-size: var(--pf-fs-xs); resize: vertical; min-block-size: 160px; }
+.pf-booth-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--pf-sp-3); }
+.pf-booth-row { padding: var(--pf-sp-3) var(--pf-sp-4); background: var(--pf-surface-2); border-radius: var(--pf-r-md); }
+.pf-booth-row[data-state="fail"], .pf-booth-row[data-state="off"] { box-shadow: inset 0 0 0 1px var(--pf-danger); }
+.pf-booth-check, .pf-booth-more, .pf-booth-report { display: grid; gap: var(--pf-sp-3); }
+@media (prefers-reduced-motion: reduce) { .pf-booth * { animation: none !important; transition: none !important; } }
+/* (integration) the volume slider shows its focus on the control itself, not only on the knob (pnpm audit:a11y, booth-music-card) */
+.pf-booth-volume .pf-slider:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 3px; }
