@@ -15,6 +15,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EyesWorkerLineSchema, pictureModel } from '@pulseframe/core';
 import { PICTURE_WORKER, PICTURE_WORKER_SHA256 } from './contract.ts';
+import { PYTHON_WORKER_FLAGS } from '../pythonArgs.ts';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../../..');
 const worker = path.join(root, PICTURE_WORKER);
@@ -22,7 +23,7 @@ const fake = path.join(root, 'apps/server/src/picmodels/testdata/fake_pf_picture
 const lock = path.join(root, 'apps/server/tools/requirements-picture-win-cpu.txt');
 const python = (() => { try { execFileSync('python3', ['-I', '-c', 'pass']); return 'python3'; } catch { return null; } })();
 const py = (args: string[], input = '', env: Record<string, string> = {}) => {
-  const r = spawnSync(python!, ['-I', ...args], { input, encoding: 'utf8', cwd: os.tmpdir(), env: { ...process.env, ...env }, timeout: 60_000 });
+  const r = spawnSync(python!, [...PYTHON_WORKER_FLAGS, ...args], { input, encoding: 'utf8', cwd: os.tmpdir(), env: { ...process.env, ...env }, timeout: 60_000 });
   return { code: r.status, lines: r.stdout.split('\n').filter(Boolean), stderr: r.stderr };
 };
 
@@ -122,7 +123,7 @@ describe('pf_picture.py (eyes role)', () => {
     const r = spawnSync(python!, ['-I', '-B', '-m', 'unittest', 'discover', '-s', path.dirname(worker), '-p', 'test_pf_picture.py'], { encoding: 'utf8', cwd: os.tmpdir(), timeout: 120_000 });
     expect(r.status, r.stderr).toBe(0);
     expect(r.stderr).toMatch(/Ran \d+ tests[\s\S]*OK/);
-  });
+  }, 180_000); // the suite's own spawn allows 120 s; vitest's 5 s default failed it on a loaded machine (integration, 2026-11-26)
 });
 
 describe('the labelled fake (fake_pf_picture.py)', () => {

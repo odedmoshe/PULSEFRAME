@@ -50,7 +50,7 @@ async function setLang(page: Page, lang: 'he' | 'en') {
   if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
 }
 /** A fresh empty project, its hub's card, the file chooser answered with the two faces: true once the dialog shows both. */
-async function openDialog(ctx: GrowingA11yCtx): Promise<boolean> {
+export async function openDialog(ctx: GrowingA11yCtx): Promise<boolean> {
   const { page, lang } = ctx;
   const f = makeFiles();
   const pid = (await api(page, 'POST', '/projects', { name: 'a11y-growing', width: W, height: H, frameRate: { num: 30, den: 1 } })).body?.project?.id as string | undefined;
@@ -70,7 +70,7 @@ async function openDialog(ctx: GrowingA11yCtx): Promise<boolean> {
   if (!(await page.getByTestId(ID.dialog).waitFor({ timeout: 60000 }).then(() => true, () => false))) return false;
   return page.waitForFunction((sel) => document.querySelectorAll(sel).length >= 2, `[data-testid="${ID.pickItem}"]`, { timeout: 30000 }).then(() => true, () => false);
 }
-async function tickBoth(page: Page) { for (const t of await page.getByTestId(ID.pickTick).all()) if (!(await t.isChecked())) await t.check(); }
+export async function tickBoth(page: Page) { for (const t of await page.getByTestId(ID.pickTick).all()) if (!(await t.isChecked())) await t.check(); }
 /** Both pictures marked by clicking their eyes (the picture fills the stage at its own proportions). */
 async function markBoth(page: Page): Promise<boolean> {
   await page.getByTestId(ID.pickNext).click();
@@ -84,7 +84,7 @@ async function markBoth(page: Page): Promise<boolean> {
   return page.getByTestId(ID.preview).waitFor({ timeout: 15000 }).then(() => true, () => false);
 }
 /** Close the dialog if it is open (with marks it asks first: «close anyway»). */
-async function closeDialog(page: Page) {
+export async function closeDialog(page: Page) {
   if (!(await page.getByTestId(ID.dialog).count())) return;
   await page.keyboard.press('Escape');
   if (await page.getByTestId(ID.closeAsk).waitFor({ timeout: 2000 }).then(() => true, () => false)) await page.getByTestId(ID.closeConfirm).click().catch(() => {});

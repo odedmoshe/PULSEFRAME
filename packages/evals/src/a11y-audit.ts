@@ -55,6 +55,7 @@ import { assistantLocalA11yScenarios } from './assistant-local-proof.ui.ts';
 import { pearlsA11yScenarios } from './a11y-pearls.ts';
 import { storyA11yScenarios } from './a11y-story.ts';
 import { growingA11yScenarios } from './a11y-growing.ts';
+import { eyesA11yScenarios } from './a11y-eyes.ts';
 import { searchA11yScenarios } from './a11y-search.ts';
 import { audiencesA11yScenarios } from './a11y-audiences.ts';
 import { makeApi, ownerApi } from './incremental-fixtures.ts';
@@ -869,6 +870,12 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      // «הציעו עיניים» in the marking view (wave 8 picmodels): the honest not-built state, then a labelled AUDIT FIXTURE proposal (a11y-eyes.ts)
+      for (const sc of eyesA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       // «חיפוש בצילומים» (wave 7 search): results, «לא נמצא דבר», the picture status line, the forget confirmation (a11y-search.ts, builder C)
       for (const sc of searchA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
@@ -1227,6 +1234,12 @@ async function main() {
       }
       // «גדלים מול העיניים» in the light theme too (a11y-growing.ts, integration)
       for (const sc of growingA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid: emptyPid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid: emptyPid });
+      }
+      // «הציעו עיניים» in the light theme too (a11y-eyes.ts)
+      for (const sc of eyesA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid: emptyPid });
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid: emptyPid });
