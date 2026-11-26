@@ -22,6 +22,10 @@ export interface EyesStrings {
   /** verify C11, consistent with growing's privacy sentence */
   privacy: string;
   method: string;
+  /** a face was chosen (by a click or [ ]): `i` is its place in reading order */
+  chosenFace(i: number): string;
+  /** the setup of eye suggestions could not be read at all */
+  setupUnknown: string;
   /** the setup words of a code, with `{module}` / `{bytes}` filled */
   setup(code: PictureModelSetupCode, fill?: { module?: string; bytes?: number }): string;
 }
@@ -44,6 +48,8 @@ const HE: EyesStrings = {
   faceLetter: (i) => HE_LETTERS[i] ?? String(i + 1),
   privacy: 'ההצעה מחושבת רק במחשב הזה ואינה נשמרת. אחרי שתאשרו ותבנו, אפשר לחשב את מקום העיניים ממיקום התמונות בסרט, כמו בסימון ביד. המודל מוצא מקום של עיניים ולא מזהה מי בתמונה.',
   method: 'הצעה של מודל במחשב הזה, מקום העיניים בלבד',
+  chosenFace: (i) => `הפנים ${HE_LETTERS[i] ?? i + 1} נבחרו: לחצו Enter לאישור`,
+  setupUnknown: 'לא ניתן לבדוק אם הצעת עיניים זמינה. סמנו את העיניים ביד',
   setup: setupOf(PICMODELS_HE),
 };
 const EN: EyesStrings = {
@@ -59,6 +65,8 @@ const EN: EyesStrings = {
   faceLetter: (i) => EN_LETTERS[i] ?? String(i + 1),
   privacy: 'The suggestion is worked out only on this computer and is not saved. After you accept and build, the eye positions can be worked out from where the pictures sit in the film, as with marking by hand. The model finds where eyes are; it does not identify who is in the picture.',
   method: 'A model\'s suggestion on this computer, eye positions only',
+  chosenFace: (i) => `Face ${EN_LETTERS[i] ?? i + 1} chosen: press Enter to accept`,
+  setupUnknown: 'Could not check whether eye suggestions are available. Mark the eyes by hand',
   setup: setupOf(PICMODELS_EN),
 };
 export const eyesStrings = (lang: 'he' | 'en'): EyesStrings => (lang === 'he' ? HE : EN);
