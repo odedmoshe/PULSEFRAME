@@ -42,6 +42,9 @@ const DETAIL_HE: [RegExp, (m: RegExpExecArray, details: unknown) => string][] = 
     () => 'פריטים שנערכו ביד נשמרים במקומם, אבל הם כבר אינם נמצאים בדיוק בטווח שהתכנון החדש נותן להם, ולכן היו נשארים פריימים בלי תמונה'],
   [/^this credential may only propose edits, and a template cannot be proposed: it is applied through an internal step that a proposal does not carry$/, () => 'ההרשאה הזו מאפשרת רק להציע עריכות, ואי אפשר להציע תבנית: היא מוחלת בצעד פנימי שהצעה אינה נושאת'],
   [/^template "\S+" does not exist$/, () => 'התבנית הזו אינה קיימת בגרסה הזו'],
+  // a template saved from a film that this computer does not have (wave 8 owntemplate, C10; core OWN_TEMPLATE_REFUSALS.notOnThisComputer;
+  // translateRefusal words it first through i18n HE_OWNTEMPLATE, this row keeps the template table complete): never "does not exist"
+  [/^the template "tpl\.own-[0-9a-f]+" is not saved on this computer; undo still works and every clip stays editable$/, () => 'התבנית הזו לא שמורה במחשב הזה; ביטול הפעולה עובד וכל קטע נשאר לעריכה'],
   [/^template run \S+ not found$/, () => 'ההחלה הקודמת של התבנית כבר אינה קיימת'],
 ];
 
@@ -68,6 +71,7 @@ const HINTS: [RegExp, (m: RegExpExecArray) => string, ((m: RegExpExecArray) => s
   [/^Regenerate with restoreRemoved: true to make the deleted items again\.$/, () => `אפשר ליצור מחדש עם «${TEMPLATE_STRINGS.he.restoreRemoved}» כדי שהפריטים שנמחקו ייווצרו שוב.`, () => `Regenerate with “${TEMPLATE_STRINGS.en.restoreRemoved}” to make the deleted items again.`],
   [/^Ask the project owner to apply the template, or for a grant in edit mode\.( plan_template still shows what it would do\.)?$/, () => 'אפשר לבקש מבעל/ת הפרויקט להחיל את התבנית, או לבקש הרשאה במצב עריכה.', () => 'Ask the project owner to apply the template, or for a grant in edit mode.'],
   [/^Choose one of the available templates \(GET \/api\/v1\/templates\)\.$|^Available: .* \(GET \/api\/v1\/templates\)\.$/, () => 'אפשר לבחור אחת מהתבניות הזמינות.', () => 'Choose one of the available templates.'],
+  [/^Undo still works and every clip stays editable\.$/, () => 'אפשר לבטל את הפעולה, וכל קטע נשאר לעריכה ביד.', () => 'Undo still works, and every clip stays editable by hand.'],
   [/^A template run id is returned by apply \(runId\)\.$/, () => 'אפשר להחיל את התבנית שוב.', () => 'Apply the template again.'],
   // the planner's built-in-music refusals (templatePlan.ts; their details are worded in i18n HE_PACKS)
   [/^Send musicAssetId: null together with builtinMusic, and builtinMusic: null together with musicAssetId/, () => 'יש לבחור מקור מוזיקה אחד: קובץ מהספרייה או מוזיקה מובנית.', () => 'Choose one source of music: a file from the library or built-in music.'],

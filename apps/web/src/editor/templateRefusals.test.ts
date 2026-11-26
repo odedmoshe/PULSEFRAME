@@ -130,3 +130,14 @@ describe('template refusals', () => {
     expect(templateRefusal('he', new Error('Failed to fetch'))).toEqual({ code: null, message: 'Failed to fetch' });
   });
 });
+
+describe('a template saved from a film that is not on this computer (wave 8 owntemplate, C10)', () => {
+  it('is worded «לא שמורה במחשב הזה» with its next step, never "does not exist", in both languages', () => {
+    const e = new ApiFailure(404, 'not_found', 'the template "tpl.own-0123456789ab" is not saved on this computer; undo still works and every clip stays editable', {}, 'Undo still works and every clip stays editable.');
+    const he = templateRefusal('he', e);
+    expect(he.message).toContain('התבנית הזו לא שמורה במחשב הזה; ביטול הפעולה עובד וכל קטע נשאר לעריכה');
+    expect(he.message).not.toContain('אינה קיימת');
+    expect(latin(he.hint!)).toEqual([]);
+    expect(templateRefusal('en', e).hint).toBe('Undo still works, and every clip stays editable by hand.');
+  });
+});
