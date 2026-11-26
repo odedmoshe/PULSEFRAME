@@ -12,6 +12,7 @@
 import * as T from '@pulseframe/time';
 import type { Asset, LibraryRecord, ProjectDocument } from './schema.ts';
 import { recordNeedsCredit, recordShareable } from './libraryDuties.ts';
+import { SourcesNotBuiltError, type SourceRecord, type SourceWarning } from './sourcesContract.ts';
 
 export interface CreditLine {
   assetId: string; title: string; text: string; placement: 'description' | 'on_screen' | 'either'; group: 'music' | 'sound' | 'picture';
@@ -32,9 +33,11 @@ export interface CreditsReport {
   nonCommercial: { assetId: string; title: string }[];
   /** Library files flagged as showing people (stock footage). */
   people: { assetId: string; title: string }[];
+  /** wave 8 sources (W1): the licence and term warnings of the source files in the sequence (sourceDuties), in timeline order; absent when there are none, so library-only answers stay byte-identical. */
+  licenceNotes?: SourceWarning[];
 }
 /** The JSON shape of a CreditsReport (GET /projects/:id/credits, MCP get_credits, the export job's output.licence). */
-export interface CreditsView { lines: CreditLine[]; descriptionText: string; onScreenMissing: CreditLine[]; nonCommercial: { assetId: string; title: string }[]; people: { assetId: string; title: string }[] }
+export interface CreditsView { lines: CreditLine[]; descriptionText: string; onScreenMissing: CreditLine[]; nonCommercial: { assetId: string; title: string }[]; people: { assetId: string; title: string }[]; /** wave 8 sources (W1): as CreditsReport.licenceNotes; absent when none */ licenceNotes?: SourceWarning[] }
 
 export interface ArchiveLibraryPlan {
   /** Content hashes (sha256:…) a shared archive leaves out: restricted library files and their conform originals. */
@@ -72,6 +75,26 @@ export function libraryOrigins(doc: ProjectDocument, assetId: string): { asset: 
   };
   visit(assetId);
   return out;
+}
+
+/**
+ * The licensed files an asset stems from, library AND source records (wave 8 `sources`, verify C3/C4; W1 builds the body). It walks
+ * the same graph as libraryOrigins (itself, provenance.derived sources, the voice reference, instrument records) and also yields an
+ * asset's provenance.source (a shortened copy carries its one source's record, C4a). W1 then moves collectCredits, creditDue,
+ * shareable, archiveLibraryPlan, the export lines (export.ts) and the summary's part (queries.ts) onto it; for documents without a
+ * source record every answer stays byte-identical to credits.golden.json (recorded before this file was touched).
+ * `due`: the credit is a duty of its licence (library: recordNeedsCredit; source: credit.due). `licenceNotes`: the source warnings
+ * (sourceDuties.ts) of this origin, empty for library records.
+ */
+export interface LicensedOrigin {
+  asset: Asset; origin: 'library' | 'source';
+  /** exactly one of the two, as `origin` says */ library?: LibraryRecord; source?: SourceRecord;
+  title: string; creditText: string | null; placement: CreditLine['placement'] | null; due: boolean; group: CreditLine['group'];
+  nonCommercial: boolean; people: boolean; shareable: boolean; licenceId: string; itemId: string; licenceNotes: SourceWarning[];
+}
+export function licensedOrigins(doc: ProjectDocument, assetId: string): LicensedOrigin[] {
+  void doc; void assetId;
+  throw new SourcesNotBuiltError('licensedOrigins');
 }
 
 const groupOf = (r: LibraryRecord): CreditLine['group'] => (r.kind === 'music' || r.kind === 'loop' ? 'music' : r.kind === 'sound' ? 'sound' : 'picture');

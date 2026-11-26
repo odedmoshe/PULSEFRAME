@@ -183,4 +183,6 @@ export const DRAWN_SITES: readonly DrawnSite[] = [
   { file: "packages/evals/src/voicefx-ui-proof.ts", snippet: "ent as any[]).find((c) => c.type === 'text')?.text;", class: 'proof', note: "proof reads the titles/tool text it made" },
   { file: "packages/core/src/audience.ts", snippet: "if (clip.type !== 'text') continue;", class: 'words', note: "audience versions: the grandparents text size applies to titles only; a drawn clip keeps its own size" },
   { file: "packages/evals/src/audiences-proof.core.ts", snippet: "if (clip.type === 'text') {", class: 'proof', note: "audiences proof reads the titles it made" },
+  { file: "packages/evals/src/autonomy-proof.ts", snippet: "ent as any[]).find((x) => x.type === 'text')?.text;", class: 'proof', note: "MCP tool answer text, not a clip" },
+  { file: "packages/evals/src/autonomy-proof.ts", snippet: "ent as any[]).find((x) => x.type === 'text')?.text; let", class: 'proof', note: "MCP tool answer text, not a clip" },
 ];

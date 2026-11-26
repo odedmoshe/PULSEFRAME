@@ -188,6 +188,8 @@ const PARAMS: Record<string, () => string> = {
   sfxId: () => 'none', modelId: () => 'none', index: () => '0', styleId: () => 'none',
   // the in-editor agent (wave 8 autonomy Part 2): a provider preset id (the routes answer before reading a project)
   providerId: () => 'anthropic',
+  // stock sources (wave 8 sources): a searchable source id and a preview handle nobody issued (the routes answer before any service is asked)
+  provider: () => 'openverse', handle: () => 'none',
   // shorts (ADR-0018): the main sequence of the walked project (every project made by createProject has it)
   sequenceId: () => 'seq_main',
   // multicam (ADR-0020): a group the walked project does not have (the routes answer 404 before reading anything)

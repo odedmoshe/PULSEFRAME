@@ -114,6 +114,7 @@ export const FLOOR_SITES: readonly { id: string; file: string; needle: string; w
   { id: 'mode', file: 'autonomy.ts', needle: "only the owner switches between open and guarded mode", why: 'an agent switching the mode it is judged by' },
   { id: 'C9', file: 'assistant/routes.ts', needle: "if (!isOwnerFloor(p)) throw new ApiError(403, 'owner_required', 'the language assistant", why: 'the provider key and base URL (a readable key spends the owner\'s money elsewhere)' },
   { id: 'C9b', file: 'agent/routes.ts', needle: "if (!isOwnerFloor(p)) throw new ApiError(AGENT_REFUSAL_CODES.ownerRequired.status", why: 'the in-editor agent\'s provider keys and base URLs (a readable key spends the owner\'s money elsewhere)' },
+  { id: 'C9c', file: 'sources/routes.ts', needle: "if (!isOwnerFloor(p)) throw sourcesError('ownerRequired')", why: 'a source connector\'s key or contact line (typed by the owner; a readable key is used elsewhere in the owner\'s name)' },
   { id: 'A23', file: 'drop.ts', needle: "only the owner can open uploading from a phone", why: 'a door for another device on the home network' },
   { id: 'A23', file: 'importRoutes.ts', needle: "only the owner can issue, see or close a code for a phone", why: 'a door for another device on the home network' },
 ];

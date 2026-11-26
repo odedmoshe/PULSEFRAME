@@ -21,6 +21,7 @@ import { gradeCurvesListIssues } from './gradeCurves.ts';
 const curveMismatch = (k: Keyframe) => (k.easing === 'bezier') !== (k.bezier !== undefined);
 import { multicamIssues } from './multicamValidate.ts';
 import { libraryRecordIssues } from './libraryDuties.ts';
+import { sourceRecordIssues } from './sourceDuties.ts';
 import { steadyIssues } from './steadyValidate.ts';
 import { validateSourceRanges } from './sourceRanges.ts';
 import { musicFitIssues } from './musicFitValidate.ts';
@@ -133,6 +134,20 @@ export function validateProject(doc: ProjectDocument): Issue[] {
       if (a.provenance.upload) issues.push({ code: 'library_provenance', message: `asset ${a.id}: a file from the library has no upload record`, ids: [a.id] });
       if (lib.raster && a.kind !== 'image') issues.push({ code: 'library_provenance', message: `asset ${a.id}: only a picture can be rasterised from the library`, ids: [a.id] });
       for (const message of libraryRecordIssues(lib)) issues.push({ code: 'library_provenance', message: `asset ${a.id}: ${message}`, ids: [a.id] });
+    }
+    // wave 8 `sources` (sourcesContract.ts SourceRecordSchema; verify C4a, C5, C14): a fetched file's source record. Only an upload
+    // carries it (or a song shortened from one, which keeps its one source's record), never beside an upload or a library record; its
+    // hash is the bytes exactly as fetched; only a link names how it was fetched; the record is not weaker than its own licence id
+    // (sourceDuties.ts sourceRecordIssues: data facts). Nothing about whether a licence is acceptable is refused here.
+    const src = a.provenance.source;
+    if (src) {
+      const fittedCopy = a.provenance.origin === 'derived' && !!a.provenance.fitted;
+      if (a.provenance.origin !== 'upload' && !fittedCopy) issues.push({ code: 'source_provenance', message: `asset ${a.id}: only a fetched file (or a song shortened from one) carries a source record`, ids: [a.id] });
+      if (a.provenance.upload) issues.push({ code: 'source_provenance', message: `asset ${a.id}: a fetched file has no upload record`, ids: [a.id] });
+      if (a.provenance.library) issues.push({ code: 'source_provenance', message: `asset ${a.id}: a file carries a library record or a source record, not both`, ids: [a.id] });
+      if (a.provenance.origin === 'upload' && `sha256:${src.sha256}` !== (a.conform?.originalContentHash ?? a.contentHash)) issues.push({ code: 'source_provenance', message: `asset ${a.id}: the source record names other bytes than the file's original`, ids: [a.id] });
+      if ((src.provider === 'link') !== (src.link !== undefined)) issues.push({ code: 'source_provenance', message: `asset ${a.id}: a link records how it was fetched, and only a link does`, ids: [a.id] });
+      for (const message of sourceRecordIssues(src)) issues.push({ code: 'source_provenance', message: `asset ${a.id}: ${message}`, ids: [a.id] });
     }
     const rangeStart = a.provenance.derived?.sourceRangeStart;
     if (rangeStart && T.isNegative(rangeStart)) issues.push({ code: 'derived_range', message: `asset ${a.id}: its source range cannot start before 0`, ids: [a.id] });

@@ -1,0 +1,768 @@
+{
+ "library": {
+  "sequences": [
+   {
+    "sequenceId": "seq_gls_0",
+    "lines": [
+     {
+      "assetId": "ast_bird",
+      "title": "Bird",
+      "text": "Bird by Rec",
+      "placement": "either",
+      "group": "sound"
+     },
+     {
+      "assetId": "ast_star",
+      "title": "Star",
+      "text": "Star set by Ann — CC BY 4.0 (https://example.invalid)",
+      "placement": "description",
+      "group": "picture"
+     }
+    ],
+    "due": [
+     true,
+     true
+    ],
+    "he": "קרדיטים\n\nBird by Rec\n\nStar set by Ann — CC BY 4.0 (https://example.invalid)\n\nלשימוש לא מסחרי בלבד: Bird",
+    "en": "Credits\n\nBird by Rec\n\nStar set by Ann — CC BY 4.0 (https://example.invalid)\n\nFor non-commercial use only: Bird",
+    "onScreenMissing": [],
+    "nonCommercial": [
+     {
+      "assetId": "ast_bird",
+      "title": "Bird"
+     }
+    ],
+    "people": [],
+    "card": {
+     "he": {
+      "texts": [
+       "קרדיטים",
+       "Bird by Rec\nStar set by Ann — CC BY 4.0 (https://example.invalid)"
+      ],
+      "output": {
+       "clipIds": [
+        "clp_gold_0",
+        "clp_gold_2"
+       ],
+       "trackId": "trk_gold_1",
+       "removed": 0
+      }
+     },
+     "en": {
+      "texts": [
+       "Credits",
+       "Bird by Rec\nStar set by Ann — CC BY 4.0 (https://example.invalid)"
+      ],
+      "output": {
+       "clipIds": [
+        "clp_gold_0",
+        "clp_gold_2"
+       ],
+       "trackId": "trk_gold_1",
+       "removed": 0
+      }
+     }
+    }
+   },
+   {
+    "sequenceId": "seq_main",
+    "lines": [
+     {
+      "assetId": "ast_song",
+      "title": "Song",
+      "text": "Song Somebody   Else (example.invalid)\nLicensed under CC BY 4.0",
+      "placement": "on_screen",
+      "group": "music"
+     },
+     {
+      "assetId": "ast_zero",
+      "title": "Zero",
+      "text": "Zero by Somebody (courtesy)",
+      "placement": "description",
+      "group": "music"
+     },
+     {
+      "assetId": "ast_bird",
+      "title": "Bird",
+      "text": "Bird by Rec",
+      "placement": "either",
+      "group": "sound"
+     },
+     {
+      "assetId": "ast_star",
+      "title": "Star",
+      "text": "Star set by Ann — CC BY 4.0 (https://example.invalid)",
+      "placement": "description",
+      "group": "picture"
+     }
+    ],
+    "due": [
+     true,
+     false,
+     true,
+     true
+    ],
+    "he": "קרדיטים\n\nSong Somebody   Else (example.invalid)\nLicensed under CC BY 4.0\n\nZero by Somebody (courtesy)\n\nBird by Rec\n\nStar set by Ann — CC BY 4.0 (https://example.invalid)\n\nלשימוש לא מסחרי בלבד: Bird",
+    "en": "Credits\n\nSong Somebody   Else (example.invalid)\nLicensed under CC BY 4.0\n\nZero by Somebody (courtesy)\n\nBird by Rec\n\nStar set by Ann — CC BY 4.0 (https://example.invalid)\n\nFor non-commercial use only: Bird",
+    "onScreenMissing": [
+     {
+      "assetId": "ast_song",
+      "title": "Song",
+      "text": "Song Somebody   Else (example.invalid)\nLicensed under CC BY 4.0",
+      "placement": "on_screen",
+      "group": "music"
+     }
+    ],
+    "nonCommercial": [
+     {
+      "assetId": "ast_bird",
+      "title": "Bird"
+     }
+    ],
+    "people": [
+     {
+      "assetId": "ast_walk",
+      "title": "Walk"
+     }
+    ],
+    "card": {
+     "he": {
+      "texts": [
+       "קרדיטים",
+       "Song Somebody   Else (example.invalid)\nLicensed under CC BY 4.0\nZero by Somebody (courtesy)\nBird by Rec\nStar set by Ann — CC BY 4.0 (https://example.invalid)"
+      ],
+      "output": {
+       "clipIds": [
+        "clp_gold_0",
+        "clp_gold_2"
+       ],
+       "trackId": "trk_gold_1",
+       "removed": 0
+      }
+     },
+     "en": {
+      "texts": [
+       "Credits",
+       "Song Somebody   Else (example.invalid)\nLicensed under CC BY 4.0\nZero by Somebody (courtesy)\nBird by Rec\nStar set by Ann — CC BY 4.0 (https://example.invalid)"
+      ],
+      "output": {
+       "clipIds": [
+        "clp_gold_0",
+        "clp_gold_2"
+       ],
+       "trackId": "trk_gold_1",
+       "removed": 0
+      }
+     }
+    }
+   }
+  ],
+  "shareable": [
+   [
+    "ast_bird",
+    false
+   ],
+   [
+    "ast_own",
+    true
+   ],
+   [
+    "ast_prel",
+    false
+   ],
+   [
+    "ast_song",
+    true
+   ],
+   [
+    "ast_star",
+    true
+   ],
+   [
+    "ast_walk",
+    true
+   ],
+   [
+    "ast_zero",
+    true
+   ]
+  ],
+  "archive": {
+   "omit": [
+    "sha256:0000000000000000000000000000000000000000000000000000000000000003",
+    "sha256:0000000000000000000000000000000000000000000000000000000000000006",
+    "sha256:0000000000000000000000000000000000000000000000000000000000000021"
+   ],
+   "omitted": [
+    {
+     "hash": "sha256:0000000000000000000000000000000000000000000000000000000000000003",
+     "assetId": "ast_bird",
+     "itemId": "gold-c/bird.wav",
+     "title": "Bird",
+     "licenceId": "CC-BY-NC-4.0"
+    },
+    {
+     "hash": "sha256:0000000000000000000000000000000000000000000000000000000000000021",
+     "assetId": "ast_bird",
+     "itemId": "gold-c/bird.wav",
+     "title": "Bird",
+     "licenceId": "CC-BY-NC-4.0"
+    },
+    {
+     "hash": "sha256:0000000000000000000000000000000000000000000000000000000000000006",
+     "assetId": "ast_prel",
+     "itemId": "musopen-flac/x.flac",
+     "title": "Prelude",
+     "licenceId": "custom:musopen-flac"
+    }
+   ],
+   "notices": [
+    {
+     "title": "Bird",
+     "licenceId": "CC-BY-NC-4.0",
+     "credit": "Bird by Rec",
+     "url": null
+    },
+    {
+     "title": "Prelude",
+     "licenceId": "custom:musopen-flac",
+     "credit": null,
+     "url": null
+    }
+   ]
+  },
+  "summary": [
+   {
+    "id": "ast_zero",
+    "library": {
+     "itemId": "gold-a/zero.wav",
+     "title": "Zero",
+     "licenceId": "CC0-1.0",
+     "credit": "Zero by Somebody (courtesy)",
+     "creditPlacement": "description",
+     "nonCommercial": false,
+     "shareable": true,
+     "people": false
+    }
+   },
+   {
+    "id": "ast_song",
+    "library": {
+     "itemId": "gold-b/song.wav",
+     "title": "Song",
+     "licenceId": "CC-BY-4.0",
+     "credit": "Song Somebody   Else (example.invalid)\nLicensed under CC BY 4.0",
+     "creditPlacement": "on_screen",
+     "nonCommercial": false,
+     "shareable": true,
+     "people": false
+    }
+   },
+   {
+    "id": "ast_bird",
+    "library": {
+     "itemId": "gold-c/bird.wav",
+     "title": "Bird",
+     "licenceId": "CC-BY-NC-4.0",
+     "credit": "Bird by Rec",
+     "creditPlacement": "either",
+     "nonCommercial": true,
+     "shareable": false,
+     "people": false
+    }
+   },
+   {
+    "id": "ast_star",
+    "library": {
+     "itemId": "gold-d/star.svg#star",
+     "title": "Star",
+     "licenceId": "CC-BY-4.0",
+     "credit": "Star set by Ann — CC BY 4.0 (https://example.invalid)",
+     "creditPlacement": "description",
+     "nonCommercial": false,
+     "shareable": true,
+     "people": false
+    }
+   },
+   {
+    "id": "ast_walk",
+    "library": {
+     "itemId": "gold-e/walk.mp4",
+     "title": "Walk",
+     "licenceId": "CC0-1.0",
+     "credit": null,
+     "creditPlacement": null,
+     "nonCommercial": false,
+     "shareable": true,
+     "people": true
+    }
+   },
+   {
+    "id": "ast_prel",
+    "library": {
+     "itemId": "musopen-flac/x.flac",
+     "title": "Prelude",
+     "licenceId": "custom:musopen-flac",
+     "credit": null,
+     "creditPlacement": null,
+     "nonCommercial": false,
+     "shareable": false,
+     "people": false
+    }
+   },
+   {
+    "id": "ast_own",
+    "library": null
+   }
+  ]
+ },
+ "instruments": {
+  "sequences": [
+   {
+    "sequenceId": "seq_main",
+    "lines": [
+     {
+      "assetId": "ast_r",
+      "title": "Piano",
+      "text": "Piano samples by Nobody, CC BY 4.0",
+      "placement": "description",
+      "group": "music"
+     },
+     {
+      "assetId": "ast_r",
+      "title": "Strings",
+      "text": "Strings samples by Nobody, CC BY-NC 4.0",
+      "placement": "description",
+      "group": "music"
+     }
+    ],
+    "due": [
+     true,
+     true
+    ],
+    "he": "קרדיטים\n\nPiano samples by Nobody, CC BY 4.0\n\nStrings samples by Nobody, CC BY-NC 4.0\n\nלשימוש לא מסחרי בלבד: Strings",
+    "en": "Credits\n\nPiano samples by Nobody, CC BY 4.0\n\nStrings samples by Nobody, CC BY-NC 4.0\n\nFor non-commercial use only: Strings",
+    "onScreenMissing": [],
+    "nonCommercial": [
+     {
+      "assetId": "ast_r",
+      "title": "Strings"
+     }
+    ],
+    "people": [],
+    "card": {
+     "he": {
+      "texts": [
+       "קרדיטים",
+       "Piano samples by Nobody, CC BY 4.0\nStrings samples by Nobody, CC BY-NC 4.0"
+      ],
+      "output": {
+       "clipIds": [
+        "clp_gold_0",
+        "clp_gold_2"
+       ],
+       "trackId": "trk_gold_1",
+       "removed": 0
+      }
+     },
+     "en": {
+      "texts": [
+       "Credits",
+       "Piano samples by Nobody, CC BY 4.0\nStrings samples by Nobody, CC BY-NC 4.0"
+      ],
+      "output": {
+       "clipIds": [
+        "clp_gold_0",
+        "clp_gold_2"
+       ],
+       "trackId": "trk_gold_1",
+       "removed": 0
+      }
+     }
+    }
+   }
+  ],
+  "shareable": [
+   [
+    "ast_p",
+    true
+   ],
+   [
+    "ast_r",
+    true
+   ]
+  ],
+  "archive": {
+   "omit": [
+    "sha256:000000000000000000000000000000000000000000000000000000000000000b"
+   ],
+   "omitted": [
+    {
+     "hash": "sha256:000000000000000000000000000000000000000000000000000000000000000b",
+     "assetId": "ast_r",
+     "itemId": "gold-i/strings.sfz",
+     "title": "Calm · recorded instruments.wav",
+     "licenceId": "CC-BY-NC-4.0"
+    }
+   ],
+   "notices": [
+    {
+     "title": "Strings",
+     "licenceId": "CC-BY-NC-4.0",
+     "credit": "Strings samples by Nobody, CC BY-NC 4.0",
+     "url": null
+    }
+   ]
+  },
+  "summary": [
+   {
+    "id": "ast_r",
+    "library": null
+   },
+   {
+    "id": "ast_p",
+    "library": {
+     "itemId": "gold-h/piano-loose.wav",
+     "title": "Piano",
+     "licenceId": "CC-BY-4.0",
+     "credit": "Piano samples by Nobody, CC BY 4.0",
+     "creditPlacement": "description",
+     "nonCommercial": false,
+     "shareable": true,
+     "people": false
+    }
+   }
+  ]
+ },
+ "musicfit": {
+  "sequences": [
+   {
+    "sequenceId": "seq_main",
+    "lines": [
+     {
+      "assetId": "ast_tune",
+      "title": "Tune",
+      "text": "\"Tune\" by Player, CC BY 3.0",
+      "placement": "description",
+      "group": "music",
+      "modified": "shortened"
+     },
+     {
+      "assetId": "ast_zero_fit",
+      "title": "Zero",
+      "text": "Zero by Somebody (courtesy)",
+      "placement": "description",
+      "group": "music",
+      "modified": "shortened"
+     }
+    ],
+    "due": [
+     true,
+     false
+    ],
+    "he": "קרדיטים\n\n\"Tune\" by Player, CC BY 3.0\n(קוצר בעורך: הוסרו תיבות מהאמצע)\n\nZero by Somebody (courtesy)\n(קוצר בעורך: הוסרו תיבות מהאמצע)",
+    "en": "Credits\n\n\"Tune\" by Player, CC BY 3.0\n(shortened in the editor: bars removed from the middle)\n\nZero by Somebody (courtesy)\n(shortened in the editor: bars removed from the middle)",
+    "onScreenMissing": [],
+    "nonCommercial": [],
+    "people": [],
+    "card": {
+     "he": {
+      "texts": [
+       "קרדיטים",
+       "\"Tune\" by Player, CC BY 3.0\nZero by Somebody (courtesy)"
+      ],
+      "output": {
+       "clipIds": [
+        "clp_gold_0",
+        "clp_gold_2"
+       ],
+       "trackId": "trk_gold_1",
+       "removed": 0
+      }
+     },
+     "en": {
+      "texts": [
+       "Credits",
+       "\"Tune\" by Player, CC BY 3.0\nZero by Somebody (courtesy)"
+      ],
+      "output": {
+       "clipIds": [
+        "clp_gold_0",
+        "clp_gold_2"
+       ],
+       "trackId": "trk_gold_1",
+       "removed": 0
+      }
+     }
+    }
+   }
+  ],
+  "shareable": [
+   [
+    "ast_tune",
+    true
+   ],
+   [
+    "ast_tune_fit",
+    true
+   ],
+   [
+    "ast_zero",
+    true
+   ],
+   [
+    "ast_zero_fit",
+    true
+   ]
+  ],
+  "archive": {
+   "omit": [],
+   "omitted": [],
+   "notices": []
+  },
+  "summary": [
+   {
+    "id": "ast_tune",
+    "library": {
+     "itemId": "gold-f/tune.wav",
+     "title": "Tune",
+     "licenceId": "CC-BY-3.0",
+     "credit": "\"Tune\" by Player, CC BY 3.0",
+     "creditPlacement": "description",
+     "nonCommercial": false,
+     "shareable": true,
+     "people": false
+    }
+   },
+   {
+    "id": "ast_tune_fit",
+    "library": {
+     "itemId": "gold-f/tune.wav",
+     "title": "Tune",
+     "licenceId": "CC-BY-3.0",
+     "credit": "\"Tune\" by Player, CC BY 3.0",
+     "creditPlacement": "description",
+     "nonCommercial": false,
+     "shareable": true,
+     "people": false
+    }
+   },
+   {
+    "id": "ast_zero",
+    "library": {
+     "itemId": "gold-a/zero.wav",
+     "title": "Zero",
+     "licenceId": "CC0-1.0",
+     "credit": "Zero by Somebody (courtesy)",
+     "creditPlacement": "description",
+     "nonCommercial": false,
+     "shareable": true,
+     "people": false
+    }
+   },
+   {
+    "id": "ast_zero_fit",
+    "library": {
+     "itemId": "gold-a/zero.wav",
+     "title": "Zero",
+     "licenceId": "CC0-1.0",
+     "credit": "Zero by Somebody (courtesy)",
+     "creditPlacement": "description",
+     "nonCommercial": false,
+     "shareable": true,
+     "people": false
+    }
+   }
+  ]
+ },
+ "derived": {
+  "sequences": [
+   {
+    "sequenceId": "seq_main",
+    "lines": [
+     {
+      "assetId": "ast_bird",
+      "title": "Bird",
+      "text": "Bird by Rec",
+      "placement": "either",
+      "group": "sound"
+     },
+     {
+      "assetId": "ast_read",
+      "title": "Reading",
+      "text": "Reading by Speaker, CC BY 4.0",
+      "placement": "either",
+      "group": "sound"
+     }
+    ],
+    "due": [
+     true,
+     true
+    ],
+    "he": "קרדיטים\n\nBird by Rec\n\nReading by Speaker, CC BY 4.0\n\nלשימוש לא מסחרי בלבד: Bird",
+    "en": "Credits\n\nBird by Rec\n\nReading by Speaker, CC BY 4.0\n\nFor non-commercial use only: Bird",
+    "onScreenMissing": [],
+    "nonCommercial": [
+     {
+      "assetId": "ast_bird",
+      "title": "Bird"
+     }
+    ],
+    "people": [],
+    "card": {
+     "he": {
+      "texts": [
+       "קרדיטים",
+       "Bird by Rec\nReading by Speaker, CC BY 4.0"
+      ],
+      "output": {
+       "clipIds": [
+        "clp_gold_0",
+        "clp_gold_2"
+       ],
+       "trackId": "trk_gold_1",
+       "removed": 0
+      }
+     },
+     "en": {
+      "texts": [
+       "Credits",
+       "Bird by Rec\nReading by Speaker, CC BY 4.0"
+      ],
+      "output": {
+       "clipIds": [
+        "clp_gold_0",
+        "clp_gold_2"
+       ],
+       "trackId": "trk_gold_1",
+       "removed": 0
+      }
+     }
+    }
+   }
+  ],
+  "shareable": [
+   [
+    "ast_bird",
+    false
+   ],
+   [
+    "ast_read",
+    true
+   ],
+   [
+    "ast_stem",
+    true
+   ],
+   [
+    "ast_tts",
+    true
+   ]
+  ],
+  "archive": {
+   "omit": [
+    "sha256:000000000000000000000000000000000000000000000000000000000000001f",
+    "sha256:0000000000000000000000000000000000000000000000000000000000000021"
+   ],
+   "omitted": [
+    {
+     "hash": "sha256:000000000000000000000000000000000000000000000000000000000000001f",
+     "assetId": "ast_bird",
+     "itemId": "gold-c/bird.wav",
+     "title": "Bird",
+     "licenceId": "CC-BY-NC-4.0"
+    },
+    {
+     "hash": "sha256:0000000000000000000000000000000000000000000000000000000000000021",
+     "assetId": "ast_stem",
+     "itemId": "gold-c/bird.wav",
+     "title": "ast_stem.wav",
+     "licenceId": "CC-BY-NC-4.0"
+    }
+   ],
+   "notices": [
+    {
+     "title": "Bird",
+     "licenceId": "CC-BY-NC-4.0",
+     "credit": "Bird by Rec",
+     "url": null
+    }
+   ]
+  },
+  "summary": [
+   {
+    "id": "ast_bird",
+    "library": {
+     "itemId": "gold-c/bird.wav",
+     "title": "Bird",
+     "licenceId": "CC-BY-NC-4.0",
+     "credit": "Bird by Rec",
+     "creditPlacement": "either",
+     "nonCommercial": true,
+     "shareable": false,
+     "people": false
+    }
+   },
+   {
+    "id": "ast_read",
+    "library": {
+     "itemId": "gold-g/read.wav",
+     "title": "Reading",
+     "licenceId": "CC-BY-4.0",
+     "credit": "Reading by Speaker, CC BY 4.0",
+     "creditPlacement": "either",
+     "nonCommercial": false,
+     "shareable": true,
+     "people": false
+    }
+   },
+   {
+    "id": "ast_stem",
+    "library": null
+   },
+   {
+    "id": "ast_tts",
+    "library": null
+   }
+  ]
+ },
+ "plain": {
+  "sequences": [
+   {
+    "sequenceId": "seq_main",
+    "lines": [],
+    "due": [],
+    "he": "",
+    "en": "",
+    "onScreenMissing": [],
+    "nonCommercial": [],
+    "people": [],
+    "card": {
+     "he": {
+      "refused": "nothing in this sequence needs a credit"
+     },
+     "en": {
+      "refused": "nothing in this sequence needs a credit"
+     }
+    }
+   }
+  ],
+  "shareable": [
+   [
+    "ast_own",
+    true
+   ]
+  ],
+  "archive": {
+   "omit": [],
+   "omitted": [],
+   "notices": []
+  },
+  "summary": [
+   {
+    "id": "ast_own",
+    "library": null
+   }
+  ]
+ }
+}
