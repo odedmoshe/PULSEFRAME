@@ -74,7 +74,7 @@ afterAll(async () => {
 
 
 describe('recorded instruments: routes and refusals (lead)', () => {
-  it('GET /music/kits: every kit with its honest state; no library set → library_not_set; a kit without its checked files → not_calibrated', async () => {
+  it('GET /music/kits: every kit with its honest state; no library set → library_not_set; a library without the kit\'s download → item_missing', async () => {
     const r = await rest('GET', '/music/kits', undefined, headers(grant({ mode: 'observe' })));
     expect(r.status).toBe(200);
     expect(r.body.kits.map((k: any) => [k.kitId, k.version, k.styleId, k.state, k.reason, k.heard])).toEqual([['kit.calm.vsco', 1, 'music.calm', 'library_not_set', 'instruments_library_not_set', null]]);
@@ -84,7 +84,7 @@ describe('recorded instruments: routes and refusals (lead)', () => {
     try {
       const cfg2 = { ...cfg, dataDir: path.join(dir, 'other'), libraryDir: lib };
       fs.mkdirSync(cfg2.dataDir, { recursive: true });
-      expect((await listMusicKits(cfg2)).kits.map((k) => [k.state, k.reason])).toEqual([['not_calibrated', 'instruments_kit_not_ready']]);
+      expect((await listMusicKits(cfg2)).kits.map((k) => [k.state, k.reason])).toEqual([['item_missing', 'instruments_item_missing']]);
       closeLibraryService(cfg2.dataDir);
     } finally { fs.rmSync(lib, { recursive: true, force: true }); }
   });

@@ -177,19 +177,23 @@ describe('SFZ parser (untrusted text: paths, includes and sizes bounded; only In
 
 // =====================================================================================================================================
 describe('honest states: nothing is offered and nothing is made unless every file and source passes', () => {
-  it('no library folder; version 1\'s only kit with no file names and no checksums (the laptop has not downloaded it); item missing; another commit', async () => {
+  it('no library folder; a kit with no file names and no checksums; the real kit with its item not downloaded; item missing; another commit', async () => {
     const none = world({ library: false });
     const c0 = await checkKit(none.cfg, MUSIC_KITS[0]!);
     expect([c0.state, c0.state !== 'ready' && c0.error.code]).toEqual(['library_not_set', 'instruments_library_not_set']);
-    // with a library set, the real kit of this build is not calibrated: entry null, files [] (no file names or checksums committed)
+    // a kit whose instrument has no entry and no files is not calibrated and offered nowhere (the real kit was in this state until
+    // both instruments were read on the owner's computer on 2026-11-26)
     const w = world();
-    expect([MUSIC_KITS[0]!.instruments.every((i) => i.entry === null && i.files.length === 0)]).toEqual([true]);
-    const c1 = await checkKit(w.cfg, MUSIC_KITS[0]!);
+    const unread = structuredClone(MUSIC_KITS[0]!) as MusicKit;
+    unread.instruments[0]!.entry = null; unread.instruments[0]!.files = [];
+    const c1 = await checkKit(w.cfg, unread);
     expect([c1.state, c1.state !== 'ready' && c1.error.code, c1.state !== 'ready' && c1.error.hint]).toEqual(['not_calibrated', 'instruments_kit_not_ready', expect.stringMatching(/synthesised/)]);
+    // the real kit of this build is calibrated; this library has no download of its item, and that is what it says
+    expect(MUSIC_KITS[0]!.instruments.map((i) => [i.id, i.entry, i.files.length])).toEqual([['strings', 'ViolaEnsSusVib.sfz', 27], ['piano', 'UprightPiano.sfz', 70]]);
     const listed = await listMusicKits(w.cfg);
-    expect(listed.kits.map((k) => [k.kitId, k.state, k.reason, k.sources])).toEqual([['kit.calm.vsco', 'not_calibrated', 'instruments_kit_not_ready', []]]);
+    expect(listed.kits.map((k) => [k.kitId, k.state, k.reason])).toEqual([['kit.calm.vsco', 'item_missing', 'instruments_item_missing']]);
     // a recorded request for it is refused before anything is made (the store holds no blob afterwards)
-    expect(await codeOf(makeMusic(w.store, { styleId: 'music.calm', bars: 4, seed: 1, instruments: 'recorded' as const }, 'test', createMusicQueue(), { cfg: w.cfg }))).toBe('409:instruments_kit_not_ready');
+    expect(await codeOf(makeMusic(w.store, { styleId: 'music.calm', bars: 4, seed: 1, instruments: 'recorded' as const }, 'test', createMusicQueue(), { cfg: w.cfg }))).toBe('409:instruments_item_missing');
     expect(fs.readdirSync(w.store.blobDir)).toEqual([]);
     // a style with no kit
     expect(await codeOf(makeMusic(w.store, { styleId: 'music.pop', bars: 4, seed: 1, instruments: 'recorded' as const }, 'test', createMusicQueue(), { cfg: w.cfg, kits: [w.lib!.kit] }))).toBe('404:instruments_no_kit');

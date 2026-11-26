@@ -37,12 +37,18 @@ export const MUSIC_MAX_SECONDS = 300;
 /** The id of a built-in music style; also the procedural id of the assets it makes. */
 export const MUSIC_STYLE_ID = /^music\.[a-z0-9-]{1,24}$/;
 export const MUSIC_MAX_SEED = 1_000_000;
-export type MusicReview = 'unheard' | 'approved' | 'rejected';
+/**
+ * 'heard' (wave 8 booth, decisions L3): the owner listened on their own machine and the lead set it from the booth report, with the
+ * day in `heardOn`; it is NOT an approval (that stays 'approved', set by the lead per style, L4). A core type value, not schema.
+ */
+export type MusicReview = 'unheard' | 'heard' | 'approved' | 'rejected';
 export interface MusicStyle {
   id: `music.${string}`; version: number; name: { he: string; en: string }; hint: { he: string; en: string };
   bpm: (typeof MUSIC_BPMS)[number]; meter: 4; minBars: number; mood: 'festive' | 'happy' | 'calm' | 'energetic' | 'mellow' | 'moving';
   /** 'unheard' until the owner listens; only the lead changes it, with the date in docs/PROGRESS.md. A 'rejected' style is not listed, planned or made. */
   review: MusicReview;
+  /** With review 'heard' only: the day (YYYY-MM-DD) the owner listened, from the booth report. */
+  heardOn?: string;
 }
 /** The names and hints are starting points: nobody has listened to any of these yet. */
 export const MUSIC_STYLES: readonly MusicStyle[] = [
@@ -59,7 +65,13 @@ export const findMusicStyle = (id: string): MusicStyle | undefined => MUSIC_STYL
 export const MUSIC_UNHEARD_LABEL = { he: 'מוזיקה מובנית — עוד לא הושמעה לאף אחד', en: 'Built-in music — nobody has listened to it yet' } as const;
 /** Shown once the owner approved a style. */
 export const MUSIC_APPROVED_LABEL = { he: 'מוזיקה מובנית', en: 'Built-in music' } as const;
-export const musicLabel = (style: Pick<MusicStyle, 'review'>): { he: string; en: string } => (style.review === 'approved' ? MUSIC_APPROVED_LABEL : MUSIC_UNHEARD_LABEL);
+/** Shown once the lead set review 'heard' from the booth report ({date} = heardOn): the owner listened; nothing about how it sounds. */
+export const MUSIC_HEARD_LABEL = { he: 'מוזיקה מובנית — נשמעה במחשב של בעל הפרויקט ({date}), עוד לא אושרה', en: 'Built-in music — listened to on the owner\'s computer ({date}), not approved yet' } as const;
+export const musicLabel = (style: Pick<MusicStyle, 'review' | 'heardOn'>): { he: string; en: string } => {
+  if (style.review === 'approved') return MUSIC_APPROVED_LABEL;
+  if (style.review === 'heard' && style.heardOn && /^\d{4}-\d{2}-\d{2}$/.test(style.heardOn)) return { he: MUSIC_HEARD_LABEL.he.replace('{date}', style.heardOn), en: MUSIC_HEARD_LABEL.en.replace('{date}', style.heardOn) };
+  return MUSIC_UNHEARD_LABEL; // 'heard' without a valid day says no more than unheard
+};
 
 export type MusicSectionKind = (typeof MUSIC_SECTION_KINDS)[number];
 export interface MusicLayoutSection { startBar: number; bars: number; start: T.RationalTime; kind: MusicSectionKind; level: 0 | 1 | 2 | 3 }

@@ -31,6 +31,8 @@ import { trackingT } from './tracking.strings.ts';
 import { ClipTimeRows } from './craft/ClipTimeRows.tsx';
 import { STABILISE_UI_BUILT, StabiliseBlock } from './stabilise/StabiliseBlock.tsx';
 import { stabiliseT } from './stabilise/stabilise.strings.ts';
+import { COVER_UI_BUILT, SharpBlock } from './cover/SharpBlock.tsx';
+import { coverT } from './cover/cover.strings.ts';
 import { BlendField, EffectsBlock, LOOK_CATALOG_COUNTS, LooksField, LookTarget, LookTargetLine, MaskControls, musicUnder, useLook, type LookState } from './LookPanel.tsx';
 import { ColourMatchPanel } from './ColourMatchPanel.tsx';
 import { ClipSound, DuckSwitch } from './SoundPanel.tsx';
@@ -642,6 +644,7 @@ function MotionTab({ clip }: PanelProps) {
   const S = INSPECTOR_STRINGS[state.lang];
   const tt = trackingT(state.lang);
   const video = clip.type === 'media' && !!state.doc?.assets[clip.assetId]?.video;
+  const picture = clip.type === 'media' && (video || state.doc?.assets[clip.assetId]?.kind === 'image');
   return (
     <>
       <Section id="entrance" title={S.secEntrance} help><AnimateControls key={`anim:${clip.id}`} clipId={clip.id} /></Section>
@@ -649,6 +652,8 @@ function MotionTab({ clip }: PanelProps) {
       <Section id="follow" title={tt('follow.title')} defaultOpen={false} help><FollowControls key={`follow:${clip.id}`} /></Section>
       {/* stabilisation (wave 7): one selected video clip; mounted only once W3 has built the block */}
       {STABILISE_UI_BUILT && video && clip.type === 'media' && state.selection.length === 1 && <Section id="stabilise" title={stabiliseT(state.lang)('title')} defaultOpen={false} help><StabiliseBlock key={`stabilise:${clip.id}`} clip={clip} /></Section>}
+      {/* «הפריים הכי חד» (wave 8 cover): one selected video or picture clip; mounted only once W3 has built the block */}
+      {COVER_UI_BUILT && picture && clip.type === 'media' && state.selection.length === 1 && <Section id="sharpest" title={coverT(state.lang)('title')} defaultOpen={false} help><SharpBlock key={`sharpest:${clip.id}`} clip={clip} /></Section>}
       {video && <Section id="tracking" title={tt('mtrack.title')} defaultOpen={false} help><TrackingPanel key={`tracking:${clip.id}`} /></Section>}
     </>
   );

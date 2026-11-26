@@ -12,6 +12,7 @@ echo [3/4] pnpm build
 call pnpm build || goto failed
 echo [4/4] pnpm start
 echo Open the "Editor (owner)" link that appears below in Chrome. Ctrl+C in this window stops the editor.
+if not defined PF_OPEN_BROWSER set "PF_OPEN_BROWSER=1"
 call pnpm start
 goto done
 :failed

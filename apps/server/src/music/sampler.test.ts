@@ -14,7 +14,7 @@ import { INSTRUMENTS_LIMITS, KIT_PART_ROLES, MUSIC_SAMPLER_VERSION, musicLayout 
 import { arrange, clicks } from './arrange.ts';
 import { compose } from './compose.ts';
 import { renderMusic, sampledNotesOf } from './render.ts';
-import { decodedBytesOf, KERNEL, KERNEL_PHASES, KERNEL_TAPS, kernelTable, midiVelocity, planZones, renderSampled, SamplerBankError, SamplerRangeError, selectRegions, velocityGain, type ResolvedBank, type SampledNote } from './sampler.ts';
+import { decodedBytesOf, KERNEL, KERNEL_PHASES, KERNEL_TAPS, kernelTable, midiVelocity, noteRegions, planZones, renderSampled, SamplerBankError, SamplerRangeError, selectRegions, velocityGain, type ResolvedBank, type SampledNote } from './sampler.ts';
 import { styleSpec } from './styles.ts';
 import {
   checkI1, checkI14, checkI2, checkI3, checkI3b, checkI4, checkI5, checkI6, GOLDEN_RENDERS, goldenKey, playNote, readInstrumentsGolden, samplerTestBank, sineZone,
@@ -303,4 +303,81 @@ describe('I14: the track checks hold for recorded renders of the synthetic test 
     console.log('I14', JSON.stringify(r.measured));
     expect(r.status).toBe('pass');
   }, 300_000);
+});
+
+describe('edge notes (kit part edge, ADR-0029): a note no region matches by key borrows the nearest key within edge, at its own pitch', () => {
+  // a synthetic test instrument: two velocity layers (two zones) covering keys 60..64 only, keycenter 62, 48 kHz (r = 1 at 62)
+  const zones = [sineZone(48000, 293.66, 1, 0.3, { start: 4800, end: 47999 }), sineZone(48000, 293.66, 1, 0.6, { start: 4800, end: 47999 })];
+  const layers = (lo: number, hi: number, over: Partial<Parameters<typeof testRegion>[0]> = {}) => [
+    testRegion({ zone: 0, lokey: lo, hikey: hi, keycenter: 62, lovel: 1, hivel: 63, ampVeltrack: 0, loopMode: 'loop_continuous', release: 0.05, ...over }),
+    testRegion({ zone: 1, lokey: lo, hikey: hi, keycenter: 62, lovel: 64, hivel: 127, ampVeltrack: 0, loopMode: 'loop_continuous', release: 0.05, ...over }),
+  ];
+  const inst = testInstrument('edge', zones, layers(60, 64));
+  const bytesOf = (part: ReturnType<typeof testPart>, midi: number, vel = 1, gate = 9600) => { const { L, R, n } = playNote(part, midi, vel, gate, 24000); return sha(Buffer.from(L.buffer, 0, n * 8)) + sha(Buffer.from(R.buffer, 0, n * 8)); };
+  const out = (part: ReturnType<typeof testPart>, midi: number) => planZones([{ part: 'pad', midi, vel: 1, gate: 9600 }], { parts: { pad: part } }).outOfRange;
+
+  it('one and two semitones below and above the range play with edge 2: the edge key\'s regions, the real note\'s ratio, other bytes', () => {
+    const part = testPart(inst, { edge: 2 });
+    for (const [midi, key] of [[59, 60], [58, 60], [65, 64], [66, 64]] as const) {
+      for (const v of [10, 100]) {
+        const got = noteRegions(inst, midi, v, 2);
+        expect(got.key, `${midi}`).toBe(key);
+        expect(got.regions).toEqual(selectRegions(inst, key, v)); // velocity matched as for the edge key: one layer each
+        expect(got.regions.length).toBe(1);
+      }
+      expect(out(part, midi), `${midi}`).toBeNull();
+      // the same bytes as the same regions widened to hold the note (ratio from the real note), not the edge key's note
+      const widened = testPart(testInstrument('edge', zones, layers(Math.min(60, midi), Math.max(64, midi))));
+      expect(bytesOf(part, midi), `${midi}`).toBe(bytesOf(widened, midi));
+      expect(bytesOf(part, midi, 0.1)).toBe(bytesOf(widened, midi, 0.1));
+      expect(bytesOf(part, midi)).not.toBe(bytesOf(part, key));
+    }
+  });
+  it('two away is refused with edge 1, one away plays; without edge (absent or 0) both are refused, as before', () => {
+    expect([out(testPart(inst, { edge: 1 }), 58), out(testPart(inst, { edge: 1 }), 59), out(testPart(inst, { edge: 1 }), 66), out(testPart(inst, { edge: 1 }), 65)])
+      .toEqual([{ part: 'pad', instrument: 'edge', midi: 58 }, null, { part: 'pad', instrument: 'edge', midi: 66 }, null]);
+    for (const part of [testPart(inst), testPart(inst, { edge: 0 })]) {
+      expect(out(part, 59)).toEqual({ part: 'pad', instrument: 'edge', midi: 59 });
+      expect(out(part, 65)).toEqual({ part: 'pad', instrument: 'edge', midi: 65 });
+      expect(playNote(part, 59, 1, 9600, 24000).n).toBe(0); // renderSampled plays nothing for it
+    }
+    expect(noteRegions(inst, 57, 100, 2)).toEqual({ key: 57, regions: [] }); // beyond edge: no region
+  });
+  it('a gap inside the range is filled the same way, the lower key first on a tie; a keyswitch key is never a substitute', () => {
+    const gap = testInstrument('gap', zones, [...layers(60, 62), ...layers(66, 70)]);
+    expect([63, 64, 65].map((m) => noteRegions(gap, m, 100, 2).key)).toEqual([62, 62, 66]);
+    expect(noteRegions(gap, 64, 100, 2).regions).toEqual(selectRegions(gap, 62, 100));
+    expect(noteRegions(gap, 64, 100, 1).regions).toEqual([]);
+    const gp = testPart(gap, { edge: 2 });
+    expect(bytesOf(gp, 64)).toBe(bytesOf(testPart(testInstrument('gap', zones, [...layers(60, 64), ...layers(66, 70)])), 64));
+    // key 60 holds a plain region but is also the keyswitch of the 61..64 regions: note 59 skips it and borrows 61
+    const sw = { lokey: 60, hikey: 60, last: 60, default: 60 };
+    const ks = testInstrument('ks', zones, [...layers(61, 64, { sw }), testRegion({ zone: 0, lokey: 60, hikey: 60, keycenter: 62 })]);
+    expect(selectRegions(ks, 60, 100).length).toBe(1); // played itself, key 60 is the plain region (as before)
+    expect(noteRegions(ks, 59, 100, 2).key).toBe(61);
+    expect(noteRegions(ks, 59, 100, 1)).toEqual({ key: 59, regions: [] });
+  });
+  it('the ratio limit still applies: an edge note whose ratio exceeds INSTRUMENTS_LIMITS.maxRatio is refused', () => {
+    // keys 40..50, keycenter 40, 48 kHz: 52 is r = 2 (in), 53 is r = 2^(13/12) (out), even with edge 12
+    const hi = testInstrument('hi', zones, layers(40, 50, { keycenter: 40 }));
+    const part = testPart(hi, { edge: 12 });
+    expect(out(part, 52)).toBeNull();
+    expect(out(part, 53)).toEqual({ part: 'pad', instrument: 'hi', midi: 53 });
+    expect(playNote(part, 53, 1, 9600, 24000).n).toBe(0);
+  });
+  it('a keytrack 0 region at an edge note sounds exactly as at the edge key (its pitch never follows the key)', () => {
+    const flat = testInstrument('flat', zones, layers(60, 64, { keytrack: 0 }));
+    const part = testPart(flat, { edge: 2 });
+    expect(bytesOf(part, 58)).toBe(bytesOf(part, 60));
+  });
+  it('planZones asks for every frame renderSampled reads at an edge note: zones cut to the plan render the same bytes', () => {
+    const part = testPart(inst, { edge: 2 });
+    const notes: SampledNote[] = [58, 59, 61, 65, 66].map((midi) => ({ part: 'pad', midi, vel: 1, gate: 2400 }));
+    const { needs, outOfRange } = planZones(notes, { parts: { pad: part } });
+    expect(outOfRange).toBeNull();
+    expect(needs.map((n) => n.zone)).toEqual([1]); // vel 1 → MIDI 127: the loud layer only
+    const cut = testPart({ ...inst, zones: inst.zones.map((z, zi) => { const f = needs.find((n) => n.zone === zi)?.frames ?? 0; return { ...z, frames: f, samples: z.samples.slice(0, f * z.channels) }; }) }, { edge: 2 });
+    expect(cut.instrument.zones[1]!.frames).toBeLessThan(zones[1]!.frames);
+    for (const n of notes) expect(bytesOf(cut, n.midi, n.vel, n.gate)).toBe(bytesOf(part, n.midi, n.vel, n.gate));
+  });
 });

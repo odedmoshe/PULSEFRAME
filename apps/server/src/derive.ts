@@ -17,7 +17,11 @@ import type { Store } from './store.ts';
  * 'envelope' (multicam, ADR-0020): the level envelope of a file's sound (core multicamEnvelope.ts), built on demand by the multicam
  * sync job or the envelope route under heavy() and stored with putBytes(); it is never queued on import either.
  */
-export type DerivativeKind = 'thumbnails' | 'waveform' | 'proxy' | 'moments' | 'envelope';
+/**
+ * 'stills' (wave 8 cover): the per-frame sharpness records of a file (core StillsData), made outside the queue by the stills job and
+ * stored with put(); never queued on import.
+ */
+export type DerivativeKind = 'thumbnails' | 'waveform' | 'proxy' | 'moments' | 'envelope' | 'stills';
 /** Kinds the queue makes on import (moments is not one). */
 export const QUEUED_DERIVATIVE_KINDS: readonly DerivativeKind[] = ['thumbnails', 'waveform', 'proxy'];
 export interface DerivativeRow { assetHash: string; kind: DerivativeKind; status: 'queued' | 'running' | 'ready' | 'failed' | 'not-applicable'; blobHash: string | null; bytes: number | null; mimeType: string | null; meta: Record<string, unknown> | null; error: string | null; updatedAt: string }
@@ -68,7 +72,7 @@ export class Derivatives {
   ensure(asset: Asset): DerivativeRow[] {
     if (asset.kind === 'lut') return []; // a colour table has no picture or sound to derive from
     const hash = asset.contentHash;
-    const applicable: Record<DerivativeKind, boolean> = { thumbnails: asset.kind === 'video', proxy: asset.kind === 'video', waveform: asset.kind !== 'image' && !!asset.audio, moments: false, envelope: false };
+    const applicable: Record<DerivativeKind, boolean> = { thumbnails: asset.kind === 'video', proxy: asset.kind === 'video', waveform: asset.kind !== 'image' && !!asset.audio, moments: false, envelope: false, stills: false };
     for (const kind of KINDS) {
       if (this.get(hash, kind)) continue;
       if (!applicable[kind]) this.write(hash, kind, { status: 'not-applicable' });

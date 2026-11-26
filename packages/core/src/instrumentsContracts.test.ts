@@ -5,6 +5,7 @@
  * share-alike / no-derivatives / unknown refuse), and the UNION of duties of a kit that mixes sources (credits, the non-commercial line,
  * the archive rule) through libraryOrigins. Synthetic records only: no real sample set is named as installed.
  */
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import {
@@ -43,8 +44,13 @@ describe('the kit table (decisions §4.1)', () => {
     expect(Object.keys(MUSIC_KITS[0]!.parts).sort()).toEqual(['arp', 'double', 'lead', 'pad']);
     for (const p of Object.values(MUSIC_KITS[0]!.parts)) expect(p!.gainDb).toBe(-18);
   });
-  it('until laptop check L1 names the files, the kit is not calibrated (never offered)', () => {
-    expect(kitCalibrated(MUSIC_KITS[0]!)).toBe(false);
+  it('a kit is calibrated only when every used instrument names its entry and lists its files (never offered otherwise)', () => {
+    // both instruments of the real kit were read on the owner's computer on 2026-11-26
+    expect(MUSIC_KITS[0]!.instruments.map((i) => [i.id, i.entry, i.files.length])).toEqual([['strings', 'ViolaEnsSusVib.sfz', 27], ['piano', 'UprightPiano.sfz', 70]]);
+    expect(kitCalibrated(MUSIC_KITS[0]!)).toBe(true);
+    const unread: MusicKit = structuredClone(MUSIC_KITS[0]!) as MusicKit;
+    unread.instruments[0]!.entry = null; unread.instruments[0]!.files = [];
+    expect(kitCalibrated(unread)).toBe(false);
     const k: MusicKit = structuredClone(MUSIC_KITS[0]!) as MusicKit;
     for (const i of k.instruments) { i.entry = `${i.id}.sfz`; i.files = [{ path: `${i.id}.sfz`, bytes: 10, sha256: 'b'.repeat(64) }, { path: `${i.id}/c4.wav`, bytes: 100, sha256: 'c'.repeat(64) }]; }
     expect(kitCalibrated(k)).toBe(true);
@@ -68,6 +74,43 @@ describe('the kit table (decisions §4.1)', () => {
     const k4 = structuredClone(k); k4.parts.pad!.gainDb = -12;
     expect(kitBankInput(k4)).not.toBe(kitBankInput(k));
     expect(kitBankInput(k, 2)).not.toBe(kitBankInput(k));
+  });
+  it('edge (0..12, whole, optional): a kit without it has the bank text it had before the field; 0 is the same; edge > 0 changes it', () => {
+    // pinned from kitBankInput as it was before `edge` existed (the same kit, the same text, the same sha256)
+    const pinned: MusicKit = {
+      id: 'kit.calm.pinned', version: 1, styleId: 'music.calm', review: 'unheard',
+      instruments: [
+        { id: 'strings', title: { he: 'מיתרים', en: 'Strings' }, ledgerItem: 'test/strings', ledgerPin: 'c1', entry: 's.sfz', files: [{ path: 's.sfz', bytes: 10, sha256: 'a'.repeat(64) }, { path: 's/c4.wav', bytes: 100, sha256: 'b'.repeat(64) }], cc: { '1': 20 } },
+        { id: 'piano', title: { he: 'פסנתר', en: 'Piano' }, ledgerItem: 'test/piano', ledgerPin: 'c2', entry: 'p.sfz', files: [{ path: 'p.sfz', bytes: 11, sha256: 'c'.repeat(64) }] },
+      ],
+      parts: {
+        pad: { instrument: 'strings', gainDb: -18, vel: [40, 100] },
+        double: { instrument: 'strings', gainDb: -18, vel: [40, 100], releaseMax: 1 },
+        lead: { instrument: 'piano', gainDb: -12, vel: [50, 120], attackMax: 0.1 },
+      },
+    };
+    const sha = (t: string) => createHash('sha256').update(t).digest('hex');
+    expect(MusicKitSchema.safeParse(pinned).success).toBe(true);
+    expect(kitBankInput(pinned)).toBe('["pulseframe-kit-bank",1,"kit.calm.pinned",1,1,[["pad","strings",-18,40,100,null,null],["lead","piano",-12,50,120,0.1,null],["double","strings",-18,40,100,null,1]],[["strings","test/strings","c1","s.sfz",[["1",20]]],["piano","test/piano","c2","p.sfz",[]]],[["test/piano","c2","p.sfz",11,"' + 'c'.repeat(64) + '"],["test/strings","c1","s.sfz",10,"' + 'a'.repeat(64) + '"],["test/strings","c1","s/c4.wav",100,"' + 'b'.repeat(64) + '"]]]');
+    expect(sha(kitBankInput(pinned))).toBe('4222cfaf021925a621f1d20022cdee20d9471c252261e9b531b100a25930474f');
+    const zero = structuredClone(pinned); zero.parts.pad!.edge = 0;
+    expect(MusicKitSchema.safeParse(zero).success).toBe(true);
+    expect(kitBankInput(zero)).toBe(kitBankInput(pinned));
+    const two = structuredClone(pinned); two.parts.pad!.edge = 2;
+    expect(MusicKitSchema.safeParse(two).success).toBe(true);
+    expect(kitBankInput(two)).not.toBe(kitBankInput(pinned));
+    expect(JSON.parse(kitBankInput(two))[5][0]).toEqual(['pad', 'strings', -18, 40, 100, null, null, 2]);
+    const one = structuredClone(pinned); one.parts.pad!.edge = 1;
+    expect(kitBankInput(one)).not.toBe(kitBankInput(two));
+    // bounds: whole semitones 0..12 on a part, and the part stays strict
+    for (const bad of [-1, 13, 1.5]) { const k = structuredClone(pinned); k.parts.pad!.edge = bad; expect(MusicKitSchema.safeParse(k).success, String(bad)).toBe(false); }
+    const extra = structuredClone(pinned) as unknown as { parts: { pad: Record<string, unknown> } }; extra.parts.pad.edges = 2;
+    expect(MusicKitSchema.safeParse(extra).success).toBe(false);
+  });
+  it('kit.calm.vsco: edge 2 on pad and double only, nothing else about those parts changed', () => {
+    const p = MUSIC_KITS[0]!.parts;
+    expect([p.pad, p.double]).toEqual([{ instrument: 'strings', gainDb: -18, vel: [40, 100], edge: 2 }, { instrument: 'strings', gainDb: -18, vel: [40, 100], edge: 2 }]);
+    expect([p.arp?.edge, p.lead?.edge]).toEqual([undefined, undefined]);
   });
 });
 

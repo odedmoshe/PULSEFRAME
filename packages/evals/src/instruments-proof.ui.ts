@@ -5,7 +5,7 @@
  * REAL and STAND-IN, said exactly (nothing here is hidden behind a pass):
  * - REAL: three servers (this process, free 127.0.0.1 ports, data in a temporary folder deleted on exit): one without a library folder
  *   (state «library_not_set»), one with a library folder holding the LABELLED synthetic test kit and the shipped kit list (state
- *   «not_calibrated»: the one real kit of version 1 has no checked file list), and one with the same folder and the synthetic kit
+ *   «item_missing»: the real kit's file lists were read on 2026-11-26, and this folder has no download of its item), and one with the same folder and the synthetic kit
  *   injected as its kit list (startServer's TEST-only musicKits; never from the environment): its «ready» state, its recorded preview
  *   with its real x-pf-level-scale, its recorded add, its heard route are the real server's. The blind pair is checked by the SHA-256 of
  *   the bytes each player holds against the bytes this process fetched from the same server, and by the volume against the header.
@@ -166,7 +166,7 @@ async function oneLanguage(lang: 'he' | 'en'): Promise<{ I16: string[]; I17: str
     }
   }
 
-  // ===== REAL server with the synthetic library: the state is «not_calibrated», said plainly
+  // ===== REAL server with the synthetic library: the shipped kit's download is not in it, state «item_missing», said plainly
   {
     const pid = await projectOn(withLib!, `instr-ui-${lang}-b`);
     const real = (await realKits(withLib!)).state;
@@ -177,9 +177,9 @@ async function oneLanguage(lang: 'he' | 'en'): Promise<{ I16: string[]; I17: str
       await opt(page, 'recorded').click();
       const state = await row(page).getByTestId(ID.state).getAttribute('data-state');
       const words = await text(page, ID.state);
-      step('I17', state === real && real === 'not_calibrated', `with a library folder the server's state is «${real}», the page shows «${state}»`);
-      step('I17', words.includes(lang === 'he' ? 'לא הורדה ולא נבדקה' : 'not been downloaded and checked'), `«not calibrated» says plainly that the set was not downloaded and checked (${words.slice(0, 140)})`);
-      step('I17', words.includes(t('next.not_calibrated')), 'its next step is said');
+      step('I17', state === real && real === 'item_missing', `with a library folder that lacks the kit's download the server's state is «${real}», the page shows «${state}»`);
+      step('I17', words.includes(lang === 'he' ? 'הכלים לא נמצאו בספרייה' : 'The instruments were not found in the library'), `«item missing» says plainly that the instruments are not in the library (${words.slice(0, 140)})`);
+      step('I17', words.includes(t('next.item_missing')), 'its next step is said');
       step('I17', (await text(page, ID.unheard)).includes(lang === 'he' ? 'עוד לא הושמעו לאף אחד' : 'nobody has listened yet'), 'the kit is unheard');
     } finally { await ctx.close(); }
   }

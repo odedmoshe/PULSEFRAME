@@ -19,6 +19,7 @@ import { z } from 'zod';
 import type { LedgerEntry } from './libraryContract.ts';
 import type { LicenceDuties } from './libraryDuties.ts';
 import type { LibraryRecord } from './schema.ts';
+import { VSCO_UPRIGHT_PIANO_FILES, VSCO_VIOLA_ENS_SUSVIB_FILES } from './musicKits.vsco.ts';
 
 /** Version of the sampler (recorded in provenance.instruments.sampler); a change that gives other bytes for the same kit raises it. */
 export const MUSIC_SAMPLER_VERSION = 1;
@@ -61,6 +62,13 @@ export const KitPartSchema = z.object({
   vel: z.tuple([z.number().int().min(1).max(127), z.number().int().min(1).max(127)]),
   /** Caps, in seconds, on the instrument's envelope (so the ending stays inside its bar: test M8). */
   attackMax: z.number().min(0).max(4).optional(), releaseMax: z.number().min(0).max(8).optional(),
+  /**
+   * Edge notes (ADR-0029, lead decision 2026-11-26), whole semitones 0..12, absent = 0: a note that no region of the instrument matches
+   * by key is played by the regions of the nearest key that does match, at most `edge` semitones away (the lower key first on a tie;
+   * never a keyswitch key), pitch-shifted to the note; INSTRUMENTS_LIMITS.maxRatio and every other rule still apply; beyond `edge` the
+   * request is refused as without it (instruments_range). Server: sampler.ts noteRegions.
+   */
+  edge: z.number().int().min(0).max(12).optional(),
 }).strict();
 export type KitPart = z.infer<typeof KitPartSchema>;
 export const MusicKitSchema = z.object({
@@ -78,18 +86,21 @@ export type MusicKit = z.infer<typeof MusicKitSchema>;
 const VSCO = { ledgerItem: 'vsco-2-ce/repo', ledgerPin: '28092772094b2d9f1148d84cea97f4545b8c687d' } as const;
 /**
  * The kits of this build. ONE in v1 (decisions §1): calm, from VSCO-2 CE only. The .sfz names and file lists are filled by the lead
- * after laptop check L1; until then the kit is not calibrated and every recorded request for it is refused with that reason.
+ * after laptop check L1 (done 2026-11-26 for both instruments: musicKits.vsco.ts). A kit with an instrument that has no entry or no
+ * files is not calibrated and every recorded request for it is refused with that reason.
  */
 export const MUSIC_KITS: readonly MusicKit[] = [
   {
     id: 'kit.calm.vsco', version: 1, styleId: 'music.calm', review: 'unheard',
     instruments: [
-      { id: 'strings', title: { he: 'מיתרים (VSCO-2 CE)', en: 'Strings (VSCO-2 CE)' }, ...VSCO, entry: null, files: [] },
-      { id: 'piano', title: { he: 'פסנתר (VSCO-2 CE)', en: 'Piano (VSCO-2 CE)' }, ...VSCO, entry: null, files: [] },
+      { id: 'strings', title: { he: 'מיתרים (VSCO-2 CE)', en: 'Strings (VSCO-2 CE)' }, ...VSCO, entry: 'ViolaEnsSusVib.sfz', files: [...VSCO_VIOLA_ENS_SUSVIB_FILES] },
+      // both file tables were read on the owner's computer 2026-11-26 (musicKits.vsco.ts); nobody has heard the kit
+      { id: 'piano', title: { he: 'פסנתר (VSCO-2 CE)', en: 'Piano (VSCO-2 CE)' }, ...VSCO, entry: 'UprightPiano.sfz', files: [...VSCO_UPRIGHT_PIANO_FILES] },
     ],
     parts: {
-      pad: { instrument: 'strings', gainDb: -18, vel: [40, 100] },
-      double: { instrument: 'strings', gainDb: -18, vel: [40, 100] },
+      // edge 2: no sustained-strings instrument of the set covers every note of pad (47..78 seen) and double (69..88) (lead, 2026-11-26)
+      pad: { instrument: 'strings', gainDb: -18, vel: [40, 100], edge: 2 },
+      double: { instrument: 'strings', gainDb: -18, vel: [40, 100], edge: 2 },
       arp: { instrument: 'piano', gainDb: -18, vel: [40, 110] },
       lead: { instrument: 'piano', gainDb: -18, vel: [50, 120] },
     },
@@ -107,22 +118,28 @@ export const kitCalibrated = (kit: MusicKit): boolean => {
 /**
  * The canonical text whose sha256 (first 16 hex characters) is a recorded track's bank: the kit, its version, the sampler version, the
  * part settings, and every file of every used instrument sorted by (ledger item, path) with its bytes and sha256. Nothing read at render
- * time enters it.
+ * time enters it. A part's `edge` is appended to its tuple ONLY when present and > 0, so a kit without it (or with 0) has the same text
+ * and bank hash as before the field existed.
  */
 export function kitBankInput(kit: MusicKit, sampler: number = MUSIC_SAMPLER_VERSION): string {
   const used = new Set(Object.values(kit.parts).map((p) => p!.instrument));
   const files = kit.instruments.filter((i) => used.has(i.id))
     .flatMap((i) => i.files.map((f) => [i.ledgerItem, i.ledgerPin, f.path, f.bytes, f.sha256] as const))
     .sort((a, b) => (a[0] + '\n' + a[2] < b[0] + '\n' + b[2] ? -1 : a[0] + '\n' + a[2] > b[0] + '\n' + b[2] ? 1 : 0));
-  const parts = KIT_PART_ROLES.filter((r) => kit.parts[r]).map((r) => [r, kit.parts[r]!.instrument, kit.parts[r]!.gainDb, kit.parts[r]!.vel[0], kit.parts[r]!.vel[1], kit.parts[r]!.attackMax ?? null, kit.parts[r]!.releaseMax ?? null]);
+  const parts = KIT_PART_ROLES.filter((r) => kit.parts[r]).map((r) => {
+    const p = kit.parts[r]!;
+    const row: (string | number | null)[] = [r, p.instrument, p.gainDb, p.vel[0], p.vel[1], p.attackMax ?? null, p.releaseMax ?? null];
+    if (p.edge !== undefined && p.edge > 0) row.push(p.edge);
+    return row;
+  });
   const instruments = kit.instruments.filter((i) => used.has(i.id)).map((i) => [i.id, i.ledgerItem, i.ledgerPin, i.entry, Object.entries(i.cc ?? {}).sort()]);
   return JSON.stringify(['pulseframe-kit-bank', 1, kit.id, kit.version, sampler, parts, instruments, files]);
 }
 
 /** Shown with every recorded kit and every recorded track until the owner marks the kit as heard. */
 export const MUSIC_RECORDED_UNHEARD_LABEL = { he: 'כלים מוקלטים — עוד לא הושמעו לאף אחד', en: 'Recorded instruments — nobody has listened yet' } as const;
-/** After the owner's own mark ({date} is the day they marked it). Says that they listened, nothing about how it sounds. */
-export const MUSIC_RECORDED_HEARD_LABEL = { he: 'כלים מוקלטים — בעל הפרויקט שמע ({date})', en: 'Recorded instruments — the owner listened ({date})' } as const;
+/** After the owner's own mark ({date} is the day they marked it). Says that someone listened on this computer, nothing about how it sounds; plural and impersonal, no gendered form (wave 8 booth pre-pass). */
+export const MUSIC_RECORDED_HEARD_LABEL = { he: 'כלים מוקלטים — נשמעו במחשב הזה ({date})', en: 'Recorded instruments — the owner listened ({date})' } as const;
 /** Added to the library name of a recorded track ("Calm and warm · 16 bars · recorded instruments.wav"). */
 export const RECORDED_NAME_SUFFIX = ' · recorded instruments' as const;
 /** Words no instruments string may use (he, en): nobody here has listened, and a recording is not «better» by being recorded. */

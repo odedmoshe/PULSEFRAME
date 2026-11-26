@@ -53,6 +53,14 @@ nothing. Nobody here can listen: nothing below says how anything sounds.
 9. **Memory, one render at a time** (the existing queue): decoded zones ≤ 96 MB, kernel tables 1 MB, scratch 3 MB; nothing decoded is
    kept between renders (I13 measures what remains after a full garbage collection).
 10. No new op, no engine change, no dependency; both assistant prompt digests unchanged.
+11. **Edge notes (lead, 2026-11-26).** A kit part may set `edge` (whole semitones 0..12, absent = 0). A note that no region of the
+    instrument matches by key is played by the regions of the nearest key that does match, at most `edge` semitones away (lower key
+    first on a tie, never a keyswitch key), pitch-shifted to the note; the ratio limit and every other rule still apply, and beyond
+    `edge` the request is refused (`instruments_range`). `planZones` and `renderSampled` select through the same `noteRegions`.
+    `kitBankInput` carries the value only when > 0, so kits without it keep their bank. Why: the overview read on the owner's computer
+    (`tools/library/kit-inventory.mjs`) showed that no sustained-strings instrument of VSCO-2 CE covers what the calm style plays
+    (pad 47..78 and double 69..88 over 200 seed and length combinations here; viola ensemble keys 48..86, cello 36..77, violin 55..86),
+    so `kit.calm.vsco` sets `edge: 2` on pad and double. A region with keytrack 0 gives the substitute key's bytes, not the note's pitch.
 
 ## Consequences
 - Integration found and fixed two defects, each pinned by a test that failed first: the renderer compared a bank only with the style's
@@ -71,6 +79,10 @@ nothing. Nobody here can listen: nothing below says how anything sounds.
   bound once); the 96 MB refusal was exercised only with a lowered bound.
 
 ## Not built / not known
+- 2026-11-26: the upright piano's 70 files (`UprightPiano.sfz`, 253,644,252 bytes, table digest f002db28…d4a0, recomputed here from the
+  lines the owner's computer printed) are in the kit table (`packages/core/src/musicKits.vsco.ts`). The overview of the 50 piano, harp
+  and strings instruments read there showed no missing file, no path leaving the item and no `..` segment, so `sfzPath` needs no
+  change for them. The strings instrument (the lead chose `ViolaEnsSusVib.sfz`) is not read yet: the kit stays `not_calibrated`.
 - The real kit's files, checksums, gains (−18 dB placeholder) and whether its `.sfz` files use `..\Samples\…` paths, which `sfzPath`
   refuses today (a decision for then: containment after normalising, still inside the item).
 - How any of it sounds; whether the sustains are long enough for the pads; L2–L5 on the owner's laptop.

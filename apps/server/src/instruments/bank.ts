@@ -176,7 +176,8 @@ export async function checkKit(cfg: Config, kit: MusicKit, signal?: AbortSignal)
 
 // ---------- reading an instrument (both in the check and in the turn) ----------
 type KitInstrumentRow = MusicKit['instruments'][number];
-interface ReadInstrument { regions: (Omit<Region, 'zone'> & { zonePath: string })[]; zones: { path: string; info: WavInfo }[]; warnings: string[] }
+/** An instrument as read for a check or a load; `ignored` (opcodes counted, never applied) is reported by kit:check (laptop check L1). */
+export interface ReadInstrument { regions: (Omit<Region, 'zone'> & { zonePath: string })[]; zones: { path: string; info: WavInfo }[]; warnings: string[]; ignored: Record<string, number> }
 const TEXT_MAX = 1024 * 1024;
 const isText = (p: string) => /\.(sfz|sfzh|txt|inc)$/i.test(p);
 
@@ -207,8 +208,8 @@ function tablePath(table: readonly string[], want: string, warnings: string[]): 
 }
 const join = (dir: string, rel: string) => (dir === '.' || dir === '' ? rel : `${dir}/${rel}`);
 
-/** Parses an instrument's .sfz (with its includes, from the kit table only) and reads every sample's WAV header. */
-async function readInstrument(check: ReadyKit, ins: KitInstrumentRow, signal?: AbortSignal): Promise<ReadInstrument> {
+/** Parses an instrument's .sfz (with its includes, from the kit table only) and reads every sample's WAV header. Exported for kit:check. */
+export async function readInstrument(check: ReadyKit, ins: KitInstrumentRow, signal?: AbortSignal): Promise<ReadInstrument> {
   const table = ins.files.map((f) => f.path);
   const texts = new Map<string, string>();
   for (const p of table.filter(isText)) {
@@ -256,7 +257,7 @@ async function readInstrument(check: ReadyKit, ins: KitInstrumentRow, signal?: A
     regions.push({ ...rest, loopMode, loopStart: rest.loopStart ?? info.loop?.start ?? null, loopEnd: rest.loopEnd ?? info.loop?.end ?? null, zonePath: p });
   }
   if (!regions.length) throw instrumentsError('format', { path: entry }, entry, 'no region with a sample');
-  return { regions, zones, warnings };
+  return { regions, zones, warnings, ignored: { ...parsed.ignored } };
 }
 
 /** The notes of the kit's parts in a piece (the arranger's own notes, nothing else): what loadBank plans the zones for. */
@@ -294,7 +295,7 @@ export async function loadBank(check: ReadyKit, kit: MusicKit, notes: readonly S
   const parts: ResolvedBank['parts'] = {};
   for (const role of Object.keys(kit.parts) as KitPartRole[]) {
     const p = kit.parts[role]!;
-    parts[role] = { instrument: resolved.get(p.instrument)! as ResolvedInstrument, gainDb: p.gainDb, vel: p.vel, ...(p.attackMax !== undefined ? { attackMax: p.attackMax } : {}), ...(p.releaseMax !== undefined ? { releaseMax: p.releaseMax } : {}) };
+    parts[role] = { instrument: resolved.get(p.instrument)! as ResolvedInstrument, gainDb: p.gainDb, vel: p.vel, ...(p.attackMax !== undefined ? { attackMax: p.attackMax } : {}), ...(p.releaseMax !== undefined ? { releaseMax: p.releaseMax } : {}), ...(p.edge !== undefined ? { edge: p.edge } : {}) };
   }
   let plan: ReturnType<typeof samplerPlanZones>;
   try { plan = deps.planZones(notes, { parts }); } catch (e) {
