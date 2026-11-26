@@ -83,6 +83,12 @@ async function main() {
     void d0;
     const vEnd = 100;
 
+    {
+      // the playhead's time label sits on the ruler, whether or not the beat row is drawn (this film has no analysed beat)
+      const cap = (await page.locator('.playhead-cap .num').boundingBox())!;
+      const onRuler = cap.y >= ruler.y - 1 && cap.y + cap.height <= ruler.y + ruler.height + 1;
+      check('a0 with no analysed beat (no beat row) the playhead\'s time label sits on the ruler, not over the first lane', onRuler, { cap: [Math.round(cap.y), Math.round(cap.height)], ruler: [Math.round(ruler.y), Math.round(ruler.height)] });
+    }
     console.log('\n# a: dragging the playhead');
     {
       const grab = page.getByTestId('playhead-grab-cap');

@@ -76,3 +76,12 @@ export class FrameGate {
 
 /** A press on the grab area that moved less than this (CSS px) has not started a drag yet (the playhead stays where it is). */
 export const CLICK_SLOP_PX = 3;
+
+/**
+ * Whether a press starts a scrub: the main button, except a second finger on a touch screen (isPrimary false there). A pointer
+ * event made by a script is not marked primary unless it says so (a seek dispatched by a proof or an assistive tool): it is still
+ * a press on the ruler, as it was before the ruler became draggable.
+ */
+export function pressStartsScrub(e: { button: number; isPrimary: boolean; pointerType: string }): boolean {
+  return e.button === 0 && (e.isPrimary || e.pointerType !== 'touch');
+}

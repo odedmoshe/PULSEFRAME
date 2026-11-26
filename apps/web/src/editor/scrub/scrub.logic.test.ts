@@ -78,3 +78,14 @@ describe('FrameGate', () => {
     expect(sought).toEqual([]);
   });
 });
+
+describe('which press starts a scrub (wave 8D integration)', () => {
+  it('a left press does, whether or not the browser marks it primary; a second finger and other buttons do not', async () => {
+    const { pressStartsScrub } = await import('./scrub.logic.ts');
+    expect(pressStartsScrub({ button: 0, isPrimary: true, pointerType: 'mouse' })).toBe(true);
+    // a pointer event made by a script (proofs, assistive tools) is not "primary" unless it says so; it is still a press on the ruler
+    expect(pressStartsScrub({ button: 0, isPrimary: false, pointerType: '' })).toBe(true);
+    expect(pressStartsScrub({ button: 0, isPrimary: false, pointerType: 'touch' })).toBe(false);
+    expect(pressStartsScrub({ button: 2, isPrimary: true, pointerType: 'mouse' })).toBe(false);
+  });
+});

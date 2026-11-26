@@ -96,6 +96,8 @@
 /* without an analysed beat the Pulse Strip has no row: the ruler is the first row under the toolbar */
 .timeline.pf-ds .tl-top[data-beats='none'] .pulse-strip { display: none; }
 .timeline.pf-ds .tl-top[data-beats='none'] .tl-corner { grid-template-rows: var(--pf-lane-ruler) var(--pf-lane-flash); }
+/* …and the playhead's time label sits on the ruler, which is then the first row (it was one beat row lower, over the first lane) */
+.timeline.pf-ds .tl-top[data-beats='none'] .playhead-cap .num { inset-block-start: 3px; }
 
 /* the ride bar */
 .timeline.pf-ds .tl-ride-zone { flex: 1 1 0; min-inline-size: 0; position: relative; align-self: stretch; }
@@ -373,6 +375,7 @@
 .timeline.pf-ds .ghost-playhead.user { border-color: var(--pf-info); }
 .timeline.pf-ds .ghost-playhead span { position: sticky; inset-block-start: calc(var(--pf-lane-pulse) + var(--pf-lane-ruler) + var(--pf-lane-flash) + 2px); display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: var(--pf-r-xs); background: var(--pf-agent); color: var(--pf-canvas); font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-semibold); white-space: nowrap; }
 .timeline.pf-ds .ghost-playhead.user span { background: var(--pf-info); }
+/* no beat row (no analysed beat): the label sits just under the ruler and flash rows, on the first lane as it did with the row */
 
 /* ---------- dragging: the ghost, the live length chip, the tether through the lanes, the marquee ---------- */
 .timeline.pf-ds [data-timeline-drag]:not([data-timeline-drag='idle']) { cursor: grabbing; user-select: none; }
@@ -446,3 +449,11 @@
   .timeline.pf-ds button.cut-chip, .timeline.pf-ds button.cut-add { border: 1px solid ButtonText; }
 }
 .timeline.pf-ds .trim-chip.is-refused { background: var(--pf-danger-soft); color: var(--pf-text); white-space: normal; max-width: 360px; }
+
+/* No beat row (no analysed beat, wave 8D WP1): the labels placed under the top rows go up by the beat row's height, so they stay
+   where they were with it (the playhead label on the ruler; the others just under the ruler and flash rows) — wave 8D integration */
+.timeline.pf-ds .tl-top[data-beats='none'] ~ .ghost-playhead span { inset-block-start: calc(var(--pf-lane-ruler) + var(--pf-lane-flash) + 2px); }
+.timeline.pf-ds .tl-top[data-beats='none'] ~ .marker-bar,
+.timeline.pf-ds .tl-top[data-beats='none'] ~ * .marker-bar { inset-block-start: calc(var(--pf-lane-ruler) + var(--pf-lane-flash) + 4px); }
+.timeline.pf-ds .tl-top[data-beats='none'] ~ .drop-line span { inset-block-start: calc(var(--pf-lane-ruler) + var(--pf-lane-flash) + 4px); }
+.timeline.pf-ds .tl-top[data-beats='none'] ~ .tether span { inset-block-start: 3px; }

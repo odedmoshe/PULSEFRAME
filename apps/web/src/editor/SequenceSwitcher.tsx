@@ -80,8 +80,9 @@ export function SequenceSwitcher() {
     e.stopPropagation();
     go(list[(n + list.length) % list.length]!.id);
   };
+  // in the interface's direction wherever it is mounted (the transport row is LTR, wave 8D): the arrows follow the order seen
   return (
-    <div className="seq-switch pf-ds" data-testid={ID.switcher}>
+    <div className="seq-switch pf-ds" data-testid={ID.switcher} dir={rtl ? 'rtl' : 'ltr'}>
       <div role="tablist" aria-label={t['sequence.switcher']} onKeyDown={onKey} className="seq-tabs">
         {list.map((s) => (
           <button key={s.id} type="button" role="tab" id={`sequence-tab-${s.id}`} aria-selected={s.id === active} aria-controls="pf-stage pf-timeline" tabIndex={s.id === active ? 0 : -1}

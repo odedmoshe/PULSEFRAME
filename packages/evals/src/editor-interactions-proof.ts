@@ -269,7 +269,7 @@ async function main() {
     await page.locator('[data-testid=effect-key][data-param=radius]').click();
     const firstKey = await until((x2) => clipOf(x2, picClip).effects?.[0]?.keyframes?.radius?.length === 1);
     // No wait for the panel here, on purpose: the slider is used straight after the ◆ click and must still write a key (the decision is taken when the edit's turn comes).
-    await page.mouse.click(px0 + 60, rb.y + rb.height / 2); // 20 frames later
+    await page.mouse.click(px0 + 20 * PF, rb.y + rb.height / 2); // 20 frames later
     await page.locator('[data-testid=effect-param][data-param=radius]').fill('0.1');
     await page.locator('[data-testid=effect-param][data-param=radius]').dispatchEvent('pointerup');
     const secondKey = await until((x2) => clipOf(x2, picClip).effects?.[0]?.keyframes?.radius?.length === 2);
@@ -785,7 +785,7 @@ async function main() {
       tpage.on('pageerror', (e) => tErrors.push(String(e)));
       await tpage.goto(`${s.ownerUrl}&project=${tp}`);
       const seek = async (frame: number) => {
-        await tpage.evaluate((x) => { const el = document.querySelector('[data-testid=ruler]')!; const r = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent('pointerdown', { clientX: r.left + x, clientY: r.top + 5, bubbles: true })); }, (frame / 30) * 90 + 0.5);
+        await tpage.evaluate((fr) => { const el = document.querySelector('[data-testid=ruler]')!; const r = el.getBoundingClientRect(); const pps = Number(document.querySelector('.tl-inner')?.getAttribute('data-pps')); /* the zoom the film opened at (fitted, wave 8D) */ el.dispatchEvent(new PointerEvent('pointerdown', { clientX: r.left + (fr / 30) * pps + 0.5, clientY: r.top + 5, bubbles: true })); }, frame);
         await tpage.waitForFunction((t) => { const c = document.querySelector('[data-testid=preview]') as HTMLCanvasElement | null; return c?.dataset.frame === String(t) && c?.dataset.quality === 'full'; }, frame, { timeout: 15000 }).catch(() => {});
       };
       await tpage.locator(`.clip[data-clip-id="${vclip}"]`).click();

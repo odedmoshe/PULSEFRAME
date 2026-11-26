@@ -6,7 +6,7 @@
  */
 import { useCallback, useMemo, type PointerEvent as ReactPointerEvent } from 'react';
 import { useEditor } from '../store.ts';
-import { CLICK_SLOP_PX, FrameGate, cutFrames, snapFrame, xOfFrame } from './scrub.logic.ts';
+import { CLICK_SLOP_PX, FrameGate, cutFrames, pressStartsScrub, snapFrame, xOfFrame } from './scrub.logic.ts';
 
 /** Measurement only (the timeline-basics proof sets it): each pointer move of a drag is recorded with the frame it asked for. */
 type Probe = { t: number; frame: number }[];
@@ -22,7 +22,7 @@ export interface Scrub {
 export function useScrub(): Scrub {
   const editor = useEditor();
   const start = useCallback((e: ReactPointerEvent<HTMLElement>, jump: boolean) => {
-    if (e.button !== 0 || !e.isPrimary) return;
+    if (!pressStartsScrub(e)) return;
     const ruler = e.currentTarget.closest('.timeline')?.querySelector<HTMLElement>('[data-testid=ruler]');
     const player = editor.player;
     if (!ruler || !player || player.frameCount <= 0) return;
@@ -40,8 +40,6 @@ export function useScrub(): Scrub {
     const root = host.closest<HTMLElement>('.timeline');
     try { host.setPointerCapture(id); } catch { /* the pointer is already gone */ }
     root?.setAttribute('data-scrubbing', 'true');
-    // the drag draws the playing picture (draft, reduced); the release draws the full frame again (Player.setScrubbing)
-    player.setScrubbing(true);
     let moved = false;
     const aim = (clientX: number, alt: boolean, t: number) => {
       const { frame } = snapFrame(clientX - offset - origin, pps, rate, last, cuts, !alt);
@@ -51,7 +49,9 @@ export function useScrub(): Scrub {
     if (jump) { aim(e.clientX, e.altKey, e.timeStamp); gate.flush(); }
     const move = (ev: PointerEvent) => {
       if (ev.pointerId !== id) return;
-      if (Math.abs(ev.clientX - x0) >= CLICK_SLOP_PX) moved = true;
+      // once the pointer really moves, the drag draws the playing picture (draft, reduced) and the release the full frame
+      // again (Player.setScrubbing); a press that does not move shows the full frame at once
+      if (!moved && Math.abs(ev.clientX - x0) >= CLICK_SLOP_PX) { moved = true; player.setScrubbing(true); }
       if (moved || jump) aim(ev.clientX, ev.altKey, ev.timeStamp);
     };
     const end = (ev: PointerEvent | null, cancelled: boolean) => {
