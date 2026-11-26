@@ -94,8 +94,11 @@ Each is built, integrated and passes its proof in this container (final regressi
   models call tools at all; (6) whether a probe with `max_tokens` 1 fails while thinking is on; (7) the cost line against the
   provider's billing page; (8) `icacls` on `<dataDir>\agent\keys`, also when the data folder is on E: (exFAT has no ACLs);
   (9) Hebrew captions from speech inside a run.
-- Sources: real Openverse, Pixabay and Wikimedia answers and their live limits, Pixabay's licence page and CDN hosts, and the
-  Windows file permissions on `connectors/keys` are unverified.
+- Sources (merged; proven on labelled doubles only), rows S1–S7 for the laptop: real Openverse, Pixabay and Commons answers,
+  their licence fields and live limits (Openverse's deployed throttle against the 5-an-hour source default); Hebrew queries on
+  Pixabay; Pixabay's licence page and CDN hosts; one large download; Windows file names under `tmp/` with real-time virus
+  scanning; Windows file permissions on `connectors/keys`; the owner's own key and contact line typed by the owner, and the real
+  status a service gives a wrong key. Also no end-to-end DNS double for a name answering a public and a loopback address.
 - `proof:incremental` did not finish on the loaded machine (I14 lag 239.6 ms against 100 ms at load 25; I12 not reached): rerun
   alone on a quiet machine or on the laptop.
 
