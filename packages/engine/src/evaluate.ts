@@ -17,7 +17,7 @@ import { OVERLAY_TYPES, heldOverlayParams } from './overlays.ts';
 import { pieceAt, runStart, stutterFrame, tapOffsets, tapWeights } from './taps.ts';
 import { beatPositionAt, isTimeEffect, temporalOf, type BeatPosition, type TextAnimation, effectParamsAt, pictureSourceAt, provideSoundTails, sourceAt, sourceFrameIndexAt, transformAt, type BlendMode, type Clip, type FollowInfo, type Mask, type ProjectDocument, type ResolvedRegion, type SoundTail, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
 import { beatSwitchFrame, lightEnvelope, makeFieldIndex, resolveFields, stampText, switchFrame, transitionDef, transitionProgress, velocityOffsets, type FieldIndex } from '@pulseframe/core';
-import { clipSourceFrames, limitToCover, steadyPose, type Asset, type MediaClip } from '@pulseframe/core';
+import { clipSourceFrames, drawnSummary, limitToCover, steadyPose, type Asset, type DrawnPayload, type MediaClip } from '@pulseframe/core';
 import { audioPlan, soundEnd, type AudioPlan } from './audio.ts';
 import { resolveFollows, resolveRegions, type Follower } from './follow.ts';
 
@@ -26,7 +26,7 @@ import { resolveFollows, resolveRegions, type Follower } from './follow.ts';
  */
 export interface TimeTap {
   /** The carrier clip (or a cut piece before it) as shown at `time`, without any look: no effects, blend, mask, transition or time. Video taps keep the CARRIER's clipId and set `lane`. */
-  layer: VideoLayer | ImageLayer | TextLayer;
+  layer: PlacedLayer;
   /** Exact timeline time of this picture, clamped into the run of cut pieces (ADR-0011). Shutter: the sub-frame time of the transform. */
   time: T.RationalTime;
   /** Decode lane: 0 = the clip's own picture; k = the k-th tap (its own decoder, moving forward on its own in sequential export). */
@@ -102,7 +102,17 @@ export interface TextLayer extends LayerLook { kind: 'text'; clipId: string; tra
 export interface AdjustLayer extends Pick<LayerLook, 'effects' | 'blend' | 'mask' | 'local'> { kind: 'adjust'; clipId: string; trackId: string; opacity: number }
 /** Scratch canvas slot (look.ts `scratch`) reserved for the adjustment pass (wave-3 allocation: 14 = templates track). */
 export const ADJUST_PASS_SLOT = 14;
-export type Layer = VideoLayer | ImageLayer | TextLayer | AdjustLayer | CaptionLayer;
+/**
+ * A drawn overlay (wave 8 carrier, core drawn.ts): a drawing or a map, painted by its kind's painter (drawnPainters.ts). It is
+ * placed like a title (its anchor is the frame centre plus the transform; it spans the frame for masks and effects) and faded
+ * like a picture (opaque into the layer buffer, then fadeBuf), so overlapping strokes do not darken where they cross.
+ * `drawn` is the stored payload exactly; `clipTime` the exact clip-local time of this picture (a time tap's own), `localFrame`
+ * its whole frame (floor) at `fps`. Nothing font-related: the frame key holds the payload and these numbers only.
+ */
+export interface DrawnLayer extends LayerLook { kind: 'drawn'; clipId: string; trackId: string; drawn: DrawnPayload; transform: Transform; clipTime: T.RationalTime; localFrame: number; fps: T.Rate }
+/** The layers placed with a transform: pictures, titles and drawn overlays. */
+export type PlacedLayer = VideoLayer | ImageLayer | TextLayer | DrawnLayer;
+export type Layer = PlacedLayer | AdjustLayer | CaptionLayer;
 export type PictureLayer = VideoLayer | ImageLayer;
 export interface ActiveAudio { clipId: string; trackId: string; assetId: string; sourceTime: T.RationalTime; gain: number }
 export interface RenderGraph {
@@ -196,10 +206,15 @@ const titleText = (cx: Scope, clip: Extract<Clip, { type: 'text' }>, time: T.Rat
   clip.fields ? resolveFields(cx.doc, cx.sequenceId, clip, time, { index: fieldIndexOf(cx.doc) }).text : clip.text;
 const bareText = (cx: Scope, track: Track, clip: Extract<Clip, { type: 'text' }>, time: T.RationalTime): TextLayer =>
   ({ kind: 'text', clipId: clip.id, trackId: track.id, text: titleText(cx, clip, time), style: clip.style, transform: transformAt(clip, time), ...textAnimationAt(clip, time, cx.doc.settings.frameRate) });
-type Bare = VideoLayer | ImageLayer | TextLayer;
+/** A drawn overlay at `time` without any look (wave 8 carrier): its payload as stored, at the exact clip-local time. */
+const bareDrawn = (cx: Scope, track: Track, clip: Extract<Clip, { type: 'drawn' }>, time: T.RationalTime): DrawnLayer => {
+  const rate = cx.doc.settings.frameRate, clipTime = T.sub(time, clip.start);
+  return { kind: 'drawn', clipId: clip.id, trackId: track.id, drawn: clip.drawn, transform: transformAt(clip, time), clipTime, localFrame: T.frameIndexAt(clipTime, rate), fps: rate };
+};
+type Bare = PlacedLayer;
 /** A clip's layer at `time` without any look. A time tap or a stutter calls this at the time it SHOWS, so a title's fields resolve at the picture shown then. */
 const bareLayer = (cx: Scope, track: Track, clip: Clip, time: T.RationalTime): Bare | null =>
-  clip.type === 'media' ? barePicture(cx.doc, track, clip, time) : clip.type === 'text' ? bareText(cx, track, clip, time) : null;
+  clip.type === 'media' ? barePicture(cx.doc, track, clip, time) : clip.type === 'text' ? bareText(cx, track, clip, time) : clip.type === 'drawn' ? bareDrawn(cx, track, clip, time) : null;
 
 /**
  * The adjustment pass of an adjustment clip at `time` (ADR-0016), or null when it would change nothing: at opacity 0, and
@@ -229,7 +244,7 @@ const fieldIndexOf = (doc: ProjectDocument): FieldIndex => { let i = fieldIndexe
  * is a time effect it is taken out of `effects`; a 'taps' effect (echo, split, shutter) lists the pictures to merge in
  * `time`, a remap (stutter) changes the picture shown and is reported in `remap`.
  */
-function clipLayer(cx: Ctx, track: Track, clip: Clip, time: T.RationalTime): VideoLayer | ImageLayer | TextLayer | null {
+function clipLayer(cx: Ctx, track: Track, clip: Clip, time: T.RationalTime): PlacedLayer | null {
   if (clip.type === 'caption') return null;
   const bare = bareLayer(cx, track, clip, time);
   if (!bare) return null;
@@ -256,7 +271,7 @@ function clipLayer(cx: Ctx, track: Track, clip: Clip, time: T.RationalTime): Vid
     const live = own!.params.motion === 'live';
     const moved = live ? { ...pic, transform: bare.transform, ...(pic.kind === 'text' ? { animation: bare.kind === 'text' ? bare.animation : undefined } : {}) } : pic;
     if (moved.kind === 'text' && !moved.animation) delete moved.animation;
-    return { ...moved, clipId: clip.id, trackId: track.id, ...after, remap: { type: own!.type, shownFrame } } as VideoLayer | ImageLayer | TextLayer;
+    return { ...moved, clipId: clip.id, trackId: track.id, ...after, remap: { type: own!.type, shownFrame } } as PlacedLayer;
   }
   const params = own!.params;
   const offsets = tapOffsets(own!.type, params, rate);
@@ -276,14 +291,14 @@ function clipLayer(cx: Ctx, track: Track, clip: Clip, time: T.RationalTime): Vid
     layer = layer.kind === 'video' ? { ...layer, clipId: clip.id, trackId: track.id, ...(lane ? { lane } : {}) } : { ...layer, clipId: clip.id, trackId: track.id };
     return { layer, time: at, lane, weight: weights[k] ?? 0 };
   });
-  return { ...bare, ...after, time: { type: own!.type, params, taps } } as VideoLayer | ImageLayer | TextLayer;
+  return { ...bare, ...after, time: { type: own!.type, params, taps } } as PlacedLayer;
 }
 
 /**
  * A video layer showing the source picture of `from` (another moment of the same clip: a velocity ramp, ADR-0012), with its
  * own placement and look. Image and title layers, and layers whose picture a time effect already chose, are left as they are.
  */
-function withPictureOf<L extends VideoLayer | ImageLayer | TextLayer>(layer: L, from: Bare | null): L {
+function withPictureOf<L extends PlacedLayer>(layer: L, from: Bare | null): L {
   if (layer.kind !== 'video' || !from || from.kind !== 'video' || layer.time || layer.remap) return layer;
   // the privacy regions go with the picture (ADR-0015): they were resolved at the picture's own source frame, so a velocity ramp
   // that shows another frame must hide what is in THAT frame
@@ -311,7 +326,7 @@ export function evaluate(doc: ProjectDocument, time: T.RationalTime, sequenceId 
     for (const clip of track.clips) {
       // half-open [start, start+duration)
       if (T.lt(time, clip.start) || !T.lt(time, T.add(clip.start, clip.duration))) continue;
-      if (clip.type === 'text') {
+      if (clip.type === 'text' || clip.type === 'drawn') { // a drawn overlay (wave 8) is placed like a title on its text track
         if (!track.hidden) { const l = clipLayer(cx, track, clip, time); if (l) { graph.layers.push(l); follows(l, clip); } }
         continue;
       }
@@ -454,7 +469,7 @@ export function describeMoment(doc: ProjectDocument, time: T.RationalTime) {
     time: g.time,
     seconds: T.toSeconds(g.time),
     frameIndex: g.frameIndex,
-    layers: g.layers.map((l) => (l.kind === 'adjust' ? { kind: l.kind, clipId: l.clipId, effects: (l.effects ?? []).map((e) => e.type), opacity: Number(l.opacity.toFixed(4)), ...(l.mask ? { mask: l.mask.shape } : {}), ...(l.blend ? { blend: l.blend } : {}) } : l.kind === 'video' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, sourceFrameIndex: l.sourceFrameIndex, sourceTime: l.sourceTime, ...(l.colourFix ? { colourFix: l.colourFix } : {}), ...lookOf(l) } : l.kind === 'image' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, ...lookOf(l) } : l.kind === 'caption' ? { kind: l.kind, trackId: l.trackId, sourceId: l.sourceId, text: l.words.map((w) => w.text).join(' '), currentWord: l.words.find((w) => w.state === 'current')?.text ?? null } : { kind: l.kind, clipId: l.clipId, text: l.text, ...lookOf(l) })),
+    layers: g.layers.map((l) => (l.kind === 'adjust' ? { kind: l.kind, clipId: l.clipId, effects: (l.effects ?? []).map((e) => e.type), opacity: Number(l.opacity.toFixed(4)), ...(l.mask ? { mask: l.mask.shape } : {}), ...(l.blend ? { blend: l.blend } : {}) } : l.kind === 'video' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, sourceFrameIndex: l.sourceFrameIndex, sourceTime: l.sourceTime, ...(l.colourFix ? { colourFix: l.colourFix } : {}), ...lookOf(l) } : l.kind === 'image' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, ...lookOf(l) } : l.kind === 'caption' ? { kind: l.kind, trackId: l.trackId, sourceId: l.sourceId, text: l.words.map((w) => w.text).join(' '), currentWord: l.words.find((w) => w.state === 'current')?.text ?? null } : l.kind === 'drawn' ? { kind: l.kind, clipId: l.clipId, drawn: drawnSummary(l.drawn), localFrame: l.localFrame, ...lookOf(l) } : { kind: l.kind, clipId: l.clipId, text: l.text, ...lookOf(l) })),
     audio: [...g.audio.map((a) => ({ ...a, fx: sound.fx.get(a.clipId) ?? [] })), ...sound.tails],
   };
 }

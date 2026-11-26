@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
-import { findClip, type Clip } from '@pulseframe/core';
+import { drawnBox, findClip, type Clip } from '@pulseframe/core';
 import { boxToScreen, clampRotation, clampScale, clampX, edgeProxies, layerBox, rotationFromDrag, scaleFromDrag, SCALE_ANCHORS, screenDeltaToFrameFraction, type LayerHandle, type LayerTransform, type ScaleHandle } from './interactions.math.ts';
 import { useEditorState, type ResolvedNow } from './store.ts';
 import { MotionPath } from './MotionPath.tsx';
@@ -84,6 +84,11 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
   if (clip.type === 'text') {
     const lines = Math.max(1, clip.text.split('\n').length);
     natural = { w: frameW * TEXT_NOMINAL_W, h: lines * clip.style.sizeFrac * clip.style.lineHeight * frameH, fit: false };
+  } else if (clip.type === 'drawn') {
+    // a drawn overlay (wave 8 carrier): its kind's box (frame-height units around the anchor), widened to the box centred on the
+    // anchor that holds it, since the handles scale and turn about the anchor; a kind without a box (a map) spans the frame
+    const b = drawnBox(clip.drawn);
+    natural = b ? { w: 2 * Math.max(Math.abs(b.x), Math.abs(b.x + b.w)) * frameH, h: 2 * Math.max(Math.abs(b.y), Math.abs(b.y + b.h)) * frameH, fit: false } : { w: frameW, h: frameH, fit: false };
   } else if (clip.type === 'media') {
     const a = doc.assets[clip.assetId];
     const dims = a?.video ?? a?.image;

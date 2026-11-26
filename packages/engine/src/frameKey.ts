@@ -218,13 +218,16 @@ function inputsOf(doc: ProjectDocument, graph: RenderGraph, ctx: FrameKeyContext
     switch (l.kind) {
       case 'video': case 'image': asset(l.assetId, `${at}.assetId`); return;
       case 'text': font(l.style.fontFamily, `${at}.style.fontFamily`); return;
+      // a drawn overlay (wave 8): everything it reads is its payload and numbers, already in the graph (canonical JSON of g);
+      // nothing font-related is keyed. Its painter's code is covered by the bundle digest of the engine fingerprint.
+      case 'drawn': return;
       default: { const other: never = l; throw new UnkeyableError('unknown_layer_kind', `${at} (kind ${String((other as { kind?: unknown }).kind)})`); }
     }
   };
   graph.layers.forEach((layer: Layer, i) => {
     const at = `$.g.layers[${i}]`;
     switch (layer.kind) {
-      case 'video': case 'image': case 'text': {
+      case 'video': case 'image': case 'text': case 'drawn': {
         bare(layer, at);
         lookOf(layer, at);
         if (layer.time) {

@@ -14,6 +14,7 @@ import { HE_LIBRARY } from './library.ts';
 import { HE_SEND } from './send.ts';
 import { HE_CRAFT } from './craft.ts';
 import { HE_STABILISE } from './stabilise.ts';
+import { HE_DRAWN } from './drawn.ts';
 import { HE_PEARLS } from './pearls.ts';
 import { HE_STORY } from './story.ts';
 import { HE_GROWING } from './growing.ts';
@@ -185,7 +186,7 @@ const HE_TRACKING: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^filling in needs a usable sample before the stretch and another after it$/, () => 'כדי להשלים קטע צריך מיקום אמין לפניו ומיקום אמין אחריו. אפשר לסמן מיקום ביד בכל צד'],
   [/^(\d+) clip\(s\) follow this motion track or hide a region with it$/, (m) => `${m[1]} קליפים עוקבים אחרי מסלול המעקב הזה או מסתירים אזור בעזרתו; יש לנתק אותם קודם, או למחוק עם ניתוק`],
   [/^(\d+) clip\(s\) still follow a motion track of this file or hide a region with one$/, (m) => `${m[1]} קליפים עדיין עוקבים אחרי מסלול מעקב של הקובץ הזה או מסתירים אזור בעזרתו; יש לנתק אותם קודם`],
-  [/^only a title, or a picture on a video track, can follow a motion track$/, () => 'רק כותרת, או תמונה ברצועת וידאו, יכולות לעקוב אחרי מסלול מעקב'],
+  [/^only a title or a drawing, or a picture on a video track, can follow a motion track$/, () => 'רק כותרת או ציור, או תמונה ברצועת וידאו, יכולים לעקוב אחרי מסלול מעקב'],
   [/^a clip follows a picture on a video track; track \S+ is a \S+ track$/, () => 'קליפ עוקב אחרי תמונה ברצועת וידאו, והרצועה שנבחרה אינה רצועת וידאו'],
   [/^a clip cannot follow the picture on its own track$/, () => 'קליפ אינו יכול לעקוב אחרי התמונה שברצועה שלו עצמו; אפשר להעביר אותו לרצועה שמעליה'],
   [/^a clip with a time effect \(echo, time split, shutter or stutter\) cannot follow a motion track yet$/, () => `קליפ עם אפקט זמן ${TIME_EFFECTS_HE} עדיין אינו יכול לעקוב אחרי מסלול מעקב`],
@@ -295,7 +296,7 @@ const HE_MEDIA: [RegExp, (m: RegExpExecArray) => string][] = [
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA, ...HE_LIBRARY, ...HE_SEND, ...HE_CRAFT, ...HE_STABILISE, ...HE_PEARLS, ...HE_STORY, ...HE_MUSICFIT, ...HE_AUDIENCES, ...HE_FOOTAGE, ...HE_INSTRUMENTS, ...HE_BOOTH, ...HE_COVER, ...HE_GROWING]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA, ...HE_LIBRARY, ...HE_SEND, ...HE_CRAFT, ...HE_STABILISE, ...HE_DRAWN, ...HE_PEARLS, ...HE_STORY, ...HE_MUSICFIT, ...HE_AUDIENCES, ...HE_FOOTAGE, ...HE_INSTRUMENTS, ...HE_BOOTH, ...HE_COVER, ...HE_GROWING]) { const m = re.exec(message); if (m) return say(m); }
   for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
   // The export routes wrap the first blocker (Exporter.start, the browser export): worded only when the blocker itself is.
   const start = /^export cannot start: ([\s\S]+)$/.exec(message);

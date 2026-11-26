@@ -17,7 +17,7 @@
  */
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { defineOp, findClip, getOp, mustClip, OpError, refuseInheritedIds, shiftClips, type OpContext, type OpResult, type ShiftEntry } from './ops.ts';
+import { defineOp, findClip, getOp, mustClip, OpError, refuseDrawnText, refuseInheritedIds, shiftClips, type OpContext, type OpResult, type ShiftEntry } from './ops.ts';
 import type { ProjectDocument, Track } from './schema.ts';
 import {
   carrierLimit, craftRefusal, PasteAttributesArgsSchema, ReplaceTextArgsSchema, RIPPLE_TRIM_WORDS, RippleTrimArgsSchema,
@@ -136,6 +136,7 @@ export const wordsOf = (text: string): string[] => text.split(/\s+/).filter(Bool
 
 /** Every check of one edit, before anything is written. */
 function checkEdit(d: ProjectDocument, e: ReplaceTextArgs['edits'][number]): void {
+  if (e.at.kind === 'title' || e.at.kind === 'cue' || e.at.kind === 'override') refuseDrawnText(findClip(d, e.at.clipId)?.clip); // a drawing has no words (drawn_not_text)
   const where = carrierKey(e.at);
   const now = carrierText(d, e.at);
   if (now === null) throw craftRefusal('replaceMissing', { at: e.at }, where);

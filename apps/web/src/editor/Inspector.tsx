@@ -63,7 +63,7 @@ function loadTab(): InspectorPage {
 export function panelTab(target: PanelTarget, kind: string): ObjectTab | null {
   switch (target) {
     case 'speed': return 'speed';
-    case 'animation': return kind === 'text' ? 'anim' : 'motion';
+    case 'animation': return kind === 'text' ? 'anim' : kind === 'drawn' ? 'place' : 'motion'; // a drawn clip's movement is its position keys
     case 'effects': return 'effects';
     case 'transition': return 'transition';
     case 'sound': return 'audio';
@@ -140,13 +140,13 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
     // A new selection always opens the object's first tab, and the object itself when the mode offers it beside another panel.
     setChosen(null);
     if (selKey && !flat && page !== 'clip' && pages.includes('clip')) setPage('clip');
-    // A title or a caption chosen while the playhead is elsewhere: the playhead moves into it, so it shows in the viewer.
+    // A title, a drawn overlay or a caption chosen while the playhead is elsewhere: the playhead moves into it, so it shows in the viewer.
     // A move of the view only, never an edit.
     const one = state.selection.length === 1 ? editor.selected : undefined;
-    if (one && (one.clip.type === 'text' || one.clip.type === 'caption') && !editor.player?.playing && !(T.lte(one.clip.start, editor.playhead) && T.lt(editor.playhead, clipEnd(one.clip)))) {
+    if (one && (one.clip.type === 'text' || one.clip.type === 'drawn' || one.clip.type === 'caption') && !editor.player?.playing && !(T.lte(one.clip.start, editor.playhead) && T.lt(editor.playhead, clipEnd(one.clip)))) {
       const a = T.frameIndexAt(one.clip.start, editor.rate), b = T.frameIndexAt(clipEnd(one.clip), editor.rate);
       editor.seek(Math.min(b - 1, a + Math.floor((b - a) / 2)));
-      editor.sayOnStage(STAGE_STRINGS[state.lang][one.clip.type === 'text' ? 'movedIntoTitle' : 'movedIntoCue']);
+      editor.sayOnStage(STAGE_STRINGS[state.lang][one.clip.type === 'text' ? 'movedIntoTitle' : one.clip.type === 'drawn' ? 'movedIntoDrawn' : 'movedIntoCue']);
     }
   }, [selKey]); // eslint-disable-line react-hooks/exhaustive-deps
   // a cut that no longer exists (its clips were moved apart, or the clip is gone) is no longer chosen

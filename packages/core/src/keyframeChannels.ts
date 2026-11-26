@@ -28,7 +28,7 @@ const effectOf = (clip: Clip, effectId: string) => (clip.effects ?? []).find((e)
 export function channelsFor(clip: Clip, track: Track): ChannelRef[] {
   if (clip.type === 'caption' || track.kind === 'audio' || track.kind === 'caption') return [];
   const out: ChannelRef[] = clip.type === 'adjustment' ? [{ property: 'opacity' }]
-    : clip.type === 'text' || (clip.type === 'media' && track.kind === 'video') ? ANIMATABLE.map((property) => ({ property })) : [];
+    : clip.type === 'text' || clip.type === 'drawn' || (clip.type === 'media' && track.kind === 'video') ? ANIMATABLE.map((property) => ({ property })) : [];
   for (const fx of clip.effects ?? []) for (const param of animatableParams(fx.type)) out.push({ effectId: fx.id, param });
   return out;
 }

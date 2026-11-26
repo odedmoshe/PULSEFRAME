@@ -1,11 +1,11 @@
 import { MULTICAM_STRINGS } from './multicam.strings.ts';
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import {
-  AudioLines, Captions, Clapperboard, Film, Layers, Link2, MapPin, Metronome, Mic, MousePointer2, Music, Pencil, Plus, Rewind, Scissors, Snowflake, Sparkles, TrendingUp, Type, Zap,
+  AudioLines, Captions, Clapperboard, Film, Layers, Link2, MapPin, Metronome, Mic, MousePointer2, Music, Pencil, Plus, Rewind, Scissors, Shapes, Snowflake, Sparkles, TrendingUp, Type, Zap,
 } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import {
-  toSourceSpan, clipEnd, fieldsToDisplay, keyTimes, findAudioEffect, findEffect, getOp, sortAudioFx, sourceEnd, speedValue, timelineAt, timelineMarkers, transcriptFor, velocityLimit, MARKER_COLORS,
+  toSourceSpan, clipEnd, drawnName, fieldsToDisplay, keyTimes, findAudioEffect, findEffect, getOp, sortAudioFx, sourceEnd, speedValue, timelineAt, timelineMarkers, transcriptFor, velocityLimit, MARKER_COLORS,
   type Clip, type Marker, type ProjectDocument, type Track,
 } from '@pulseframe/core';
 import { duckEnvelope, flashSchedule, speechRanges } from '@pulseframe/engine';
@@ -58,7 +58,7 @@ export function mcBadgeText(doc: ProjectDocument, tag: { groupId: string; angleI
   const n = a.kind === 'picture' ? String(g.angles.filter((x) => x.kind === 'picture').indexOf(a) + 1) : '♪';
   return MULTICAM_STRINGS[lang].badge(n, a.label);
 }
-export const clipLabel = (doc: ProjectDocument, c: Clip, lang: 'he' | 'en' = 'he') => (c.type === 'media' ? assetDisplayName(doc.assets[c.assetId], lang) ?? c.assetId : c.type === 'adjustment' ? c.label ?? '' : c.type === 'text' && c.fields ? fieldsToDisplay(lang, c.text, doc) : c.text); // a title with live fields shows the readable form, `{תאריך}`, never the stored `{date}`
+export const clipLabel = (doc: ProjectDocument, c: Clip, lang: 'he' | 'en' = 'he') => (c.type === 'media' ? assetDisplayName(doc.assets[c.assetId], lang) ?? c.assetId : c.type === 'adjustment' ? c.label ?? '' : c.type === 'drawn' ? drawnName(c.drawn)[lang] : c.type === 'text' && c.fields ? fieldsToDisplay(lang, c.text, doc) : c.text); // a title with live fields shows the readable form, `{תאריך}`, never the stored `{date}`
 /** A file name as the timeline shows it: without its extension. */
 const bare = (name: string) => name.replace(/\.[a-z0-9]{2,5}$/i, '');
 
@@ -111,9 +111,9 @@ function trackTitle(s: TlStrings, lane: Lane<Track>, flavour: Flavour): string {
   if (tr.kind === 'adjustment') return s.trackAdjust;
   return flavour === 'voice' ? s.trackVoice : flavour === 'music' ? s.trackMusic : flavour === 'sfx' ? s.trackSfx : s.trackSound;
 }
-const kindOf = (doc: ProjectDocument, lane: Lane<Track>, c: Clip): string => c.type === 'caption' ? 'caption' : c.type === 'adjustment' ? 'adjust' : c.type === 'text' ? 'text'
+const kindOf = (doc: ProjectDocument, lane: Lane<Track>, c: Clip): string => c.type === 'caption' ? 'caption' : c.type === 'adjustment' ? 'adjust' : c.type === 'text' ? 'text' : c.type === 'drawn' ? 'drawn'
   : lane.track.kind === 'audio' ? flavourOf(doc, c.assetId) : lane.role === 'v1' ? 'video' : 'overlay';
-const KIND_ICON: Record<string, typeof Film> = { video: Film, overlay: Clapperboard, text: Type, caption: Captions, adjust: Layers, voice: Mic, music: Music, sfx: Zap, sound: AudioLines };
+const KIND_ICON: Record<string, typeof Film> = { video: Film, overlay: Clapperboard, text: Type, drawn: Shapes, caption: Captions, adjust: Layers, voice: Mic, music: Music, sfx: Zap, sound: AudioLines };
 const TRACK_ICON = (lane: Lane<Track>, flavour: Flavour) => KIND_ICON[lane.track.kind === 'audio' ? flavour : lane.track.kind === 'video' ? (lane.role === 'v1' ? 'video' : 'overlay') : lane.track.kind === 'adjustment' ? 'adjust' : lane.track.kind]!;
 
 /** The editor state, unchanged by player ticks: the heavy parts of the timeline render from it, so playback does not redraw them. */

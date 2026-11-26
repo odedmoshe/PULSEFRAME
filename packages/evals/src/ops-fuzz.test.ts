@@ -5,6 +5,8 @@
  *  - a refusal is a typed OpError and leaves the document unchanged; nothing else may be thrown;
  *  - the document can be evaluated (picture graph, audio plan, timeline and summary queries, every linked format);
  *  - the entity diff of the step, applied backwards, restores the previous document exactly (the undo path).
+ * Two drawn clips of the TEST-ONLY kind (drawn.testKind.ts) are on the timeline before the random steps, so every operation
+ * meets them (text operations refuse them with drawn_not_text; placement edits move, cut and copy them).
  * Deterministic: seeds 1..PF_FUZZ_SEEDS (default 60), PF_FUZZ_STEPS steps each (default 90). A failure names seed, step and op.
  */
 import { describe, expect, it } from 'vitest';
@@ -12,6 +14,10 @@ import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, creativeProjection, diffEntities, LIBRARY_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, SOURCE_RANGE_OPS_BUILT, STEADY_OPS_BUILT, SST, OpError, ProjectSchema, projectVariant, restoreEntities, summarize, timeline, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, evaluate } from '@pulseframe/engine';
 import { createFuzz } from './ops-fuzz.gen.ts';
+import { registerTestDrawnOp, testDrawn } from '@pulseframe/core/drawn.testKind.ts';
+
+// drawn clips (wave 8 carrier): the TEST-ONLY drawn kind and its add op, registered in this test only (production registers no kind)
+registerTestDrawnOp();
 
 const SEEDS = Math.max(1, Number(process.env.PF_FUZZ_SEEDS ?? 60));
 const STEPS = Math.max(1, Number(process.env.PF_FUZZ_STEPS ?? 90));
@@ -100,6 +106,15 @@ function run(seed: number, focus: () => string[] = () => []) {
     doc = next;
     return output ?? {};
   };
+  // two drawn clips of the test kind before the random steps (fixed numbers, no draw from the random stream), then a fixed
+  // split, trim-start and text edit of the first through the same oracles: the edit is a typed refusal (drawn_not_text)
+  const drawnA = step({ op: 'add_test_drawn', args: { start: f(5), duration: f(40), drawn: testDrawn({ offset: 3 }), transform: { x: 0.1, opacity: 0.6 } } }, 'drawn add')?.clipId as string | undefined;
+  step({ op: 'add_test_drawn', args: { start: f(20), duration: f(60), drawn: testDrawn({ color: '#30A0E0', w: 500, h: 900 }) } }, 'drawn add 2');
+  if (drawnA) {
+    step({ op: 'split_clip', args: { clipId: drawnA, at: f(25) } }, 'drawn split');
+    step({ op: 'trim_clip', args: { clipId: drawnA, edge: 'start', to: f(8) } }, 'drawn trim');
+    if (step({ op: 'update_text', args: { clipId: drawnA, text: 'x' } }, 'drawn words') !== null) throw new Error(`seed ${seed}: update_text was accepted on a drawn clip`);
+  }
   for (let s = 0; s < STEPS; s++) step(gen(s), s);
   // marked ranges (wave 7): after the random steps (so no other operation's sequence moves), one fixed add, update and remove of a
   // pearl through the same oracles, so each of the three is accepted in every run that still has a timed file; fixed numbers, no draw

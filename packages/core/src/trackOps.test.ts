@@ -144,7 +144,7 @@ describe('motion tracking operations: refusals', () => {
   it('set_clip_follow, and time effects on a clip that follows', () => {
     const s = setup();
     const sf = (clipId: string, fo: unknown) => [{ op: 'set_clip_follow', args: { clipId, follow: fo } }];
-    const only = 'only a title, or a picture on a video track, can follow a motion track';
+    const only = 'only a title or a drawing, or a picture on a video track, can follow a motion track';
     refused(s.doc, sf(s.cue, follow(s.face, s.V1)), 'incompatible', only);
     refused(s.doc, sf(s.song, follow(s.face, s.V1)), 'incompatible', only);
     refused(s.doc, sf(s.sound, follow(s.face, s.V1)), 'incompatible', only);

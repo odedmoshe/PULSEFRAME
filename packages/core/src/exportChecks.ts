@@ -72,7 +72,7 @@ export function pictureExpectation(doc: ProjectDocument, sequenceId: string, fir
   const visible: { track: Track; index: number }[] = seq.tracks.map((track, index) => ({ track, index })).filter((x) => !x.track.hidden && (x.track.kind === 'video' || x.track.kind === 'text'));
   const from = T.frameTime(firstFrame, rate), to = T.frameTime(firstFrame + Math.max(0, frames), rate);
   // only clips that overlap the range matter
-  const clips = visible.flatMap(({ track, index }) => track.clips.filter((c) => (c.type === 'media' || c.type === 'text') && T.lt(c.start, to) && T.lt(from, T.add(c.start, c.duration))).map((c) => ({ c, track, index })));
+  const clips = visible.flatMap(({ track, index }) => track.clips.filter((c) => (c.type === 'media' || c.type === 'text' || c.type === 'drawn') && T.lt(c.start, to) && T.lt(from, T.add(c.start, c.duration))).map((c) => ({ c, track, index })));
   for (let k = 0; k < frames; k++) {
     const t = T.frameTime(firstFrame + k, rate);
     const here = clips.filter((x) => activeAt(x.c, t));

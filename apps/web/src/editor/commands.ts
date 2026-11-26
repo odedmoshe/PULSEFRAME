@@ -5,7 +5,7 @@
  */
 import * as T from '@pulseframe/time';
 import { effectParamLabel, type Key } from '@pulseframe/i18n';
-import { adjustmentRefusal, carriedChannels, CURVES_BUILT, COLOR_LOOKS, copyKeys, curveOps, deleteKeysOps, findClip, findEffect, getOp, keyTimes, moveKeysOps, pasteKeysOps, channelKey, type ChannelRef, type Clip, type CurveHandles, type Easing, type OpCall, type ProjectDocument, type Track, clipEnd, deleteOps, editEnd, emptyTrackIds, rippleDeleteOn } from '@pulseframe/core';
+import { adjustmentRefusal, carriedChannels, drawnName, CURVES_BUILT, COLOR_LOOKS, copyKeys, curveOps, deleteKeysOps, findClip, findEffect, getOp, keyTimes, moveKeysOps, pasteKeysOps, channelKey, type ChannelRef, type Clip, type CurveHandles, type Easing, type OpCall, type ProjectDocument, type Track, clipEnd, deleteOps, editEnd, emptyTrackIds, rippleDeleteOn } from '@pulseframe/core';
 import type { Editor, Notice } from './store.ts';
 import { COMMAND_STRINGS } from './commands.strings.ts';
 import { cutBefore } from './inspector.model.ts';
@@ -180,7 +180,7 @@ const deleteSelected = (keepGap: boolean) => async (e: Editor) => {
     if (!doc) return null;
     const ripple = !keepGap && rippleDeleteOn(doc);
     const plan = deleteOps(doc, ids, ripple);
-    said = plan ? { moved: plan.moved, deleted: plan.deleted, ripple: ripple && plan.ops.length > plan.deleted, name: plan.deleted === 1 ? deletedName(doc, plan.first) : null } : null;
+    said = plan ? { moved: plan.moved, deleted: plan.deleted, ripple: ripple && plan.ops.length > plan.deleted, name: plan.deleted === 1 ? deletedName(doc, plan.first, e.getState().lang) : null } : null;
     return plan?.ops ?? null;
   }, keepGap ? 'Delete, keep the gap' : 'Delete');
   const s = said as { moved: number; deleted: number; ripple: boolean; name: string | null } | null;
@@ -188,10 +188,10 @@ const deleteSelected = (keepGap: boolean) => async (e: Editor) => {
   return r;
 };
 /** What a deleted clip is called in its toast: the file's name, the title's words or the adjustment's label; null when it has none. */
-function deletedName(doc: ProjectDocument, clipId: string): string | null {
+function deletedName(doc: ProjectDocument, clipId: string, lang: 'he' | 'en'): string | null {
   const c = findClip(doc, clipId)?.clip;
   if (!c) return null;
-  const name = c.type === 'media' ? doc.assets[c.assetId]?.name : c.type === 'adjustment' ? c.label : c.type === 'text' ? c.text : undefined;
+  const name = c.type === 'media' ? doc.assets[c.assetId]?.name : c.type === 'adjustment' ? c.label : c.type === 'text' ? c.text : c.type === 'drawn' ? drawnName(c.drawn)[lang] : undefined;
   const one = name?.replace(/\s+/g, ' ').trim();
   return one ? (one.length > 40 ? `${one.slice(0, 39)}…` : one) : null;
 }

@@ -18,6 +18,7 @@ import { COMMAND_BAR_EN, COMMAND_BAR_HE } from './commandBar.ts';
 import { LIBRARY_EN, LIBRARY_HE } from './library.ts';
 import { CRAFT_EN, CRAFT_HE } from './craft.ts';
 import { STABILISE_EN, STABILISE_HE } from './stabilise.ts';
+import { DRAWN_EN, DRAWN_HE } from './drawn.ts';
 import { PEARLS_EN, PEARLS_HE } from './pearls.ts';
 import { STORY_EN, STORY_HE } from './story.ts';
 import { GROWING_EN, GROWING_HE } from './growing.ts';
@@ -233,6 +234,7 @@ export const he = {
   ...SEND_HE,
   ...CRAFT_HE,
   ...STABILISE_HE,
+  ...DRAWN_HE,
   ...PEARLS_HE,
   ...STORY_HE,
   ...GROWING_HE,
@@ -448,6 +450,7 @@ export const en: Record<keyof typeof he, string> = {
   ...SEND_EN,
   ...CRAFT_EN,
   ...STABILISE_EN,
+  ...DRAWN_EN,
   ...PEARLS_EN,
   ...STORY_EN,
   ...GROWING_EN,

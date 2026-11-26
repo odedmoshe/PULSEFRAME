@@ -16,7 +16,7 @@ export function FollowControls() {
   const sel = editor.selected;
   if (!state.doc || !sel || state.selection.length !== 1) return null;
   const c = sel.clip;
-  if (!(c.type === 'text' || (c.type === 'media' && sel.track.kind === 'video'))) return null;
+  if (!(c.type === 'text' || c.type === 'drawn' || (c.type === 'media' && sel.track.kind === 'video'))) return null; // a drawn overlay follows like a title (wave 8)
   return <FollowFields key={c.id} clipId={c.id} />;
 }
 
