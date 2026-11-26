@@ -7,6 +7,7 @@ import { useEditorState } from './store.ts';
 import { RenderCacheStorage } from './RenderCacheStorage.tsx';
 import { AssistantSettings } from './commandBar/AssistantSettings.tsx';
 import { LibrarySettings } from './library/LibrarySettings.tsx';
+import { UNDERSTAND_UI_BUILT, UnderstandSettings } from './understand/ShotNotes.tsx';
 import { ConnectionsSection, SOURCES_UI_BUILT } from './sources/SourcesTab.tsx';
 
 const THEME_KEY = 'pf.theme';
@@ -57,6 +58,8 @@ export function SettingsDialog() {
         {settingsOpen && <LibrarySettings />}
         {/* «חיבורים» (wave 8 sources, C1): the outside services' keys and the download limit; mounted only once built */}
         {settingsOpen && SOURCES_UI_BUILT && <ConnectionsSection />}
+        {/* «מה יש בקליפ» (wave 8 understand): auto, stretch length, the describing model; mounted only once built (W3) */}
+        {settingsOpen && UNDERSTAND_UI_BUILT && <UnderstandSettings />}
       </div>
     </Dialog>
   );

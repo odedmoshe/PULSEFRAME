@@ -377,6 +377,9 @@ export function validateProject(doc: ProjectDocument): Issue[] {
       const why = momentsProblem(asset, mo);
       if (why) issues.push({ code: 'analysis_moments', message: `moments of asset ${key}: ${why}`, ids: [key] });
     }
+    // footage notes (wave 8 understand): every span is counted once, described or failed
+    const no = an.notes;
+    if (no && no.described + no.failed !== no.spans) issues.push({ code: 'analysis_notes', message: `footage notes of asset ${key}: ${no.described} described and ${no.failed} failed are not ${no.spans} spans`, ids: [key] });
   }
   for (const [key, tr] of Object.entries(doc.transcripts ?? {})) {
     if (key !== tr.assetId) issues.push({ code: 'key_mismatch', message: `transcript key ${key} != assetId ${tr.assetId}`, ids: [key] });

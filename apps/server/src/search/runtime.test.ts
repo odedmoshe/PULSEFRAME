@@ -122,7 +122,8 @@ describe('integration: no picture, frame, asset or vector is a query anywhere; t
     const t = tools.find((x) => x.name === 'find_in_footage')!;
     expect(Object.keys(t.inputSchema.properties).sort()).toEqual(['limit', 'projectId', 'query']);
     expect(t.inputSchema.properties.query!.type).toBe('string');
-    expect(tools.map((x) => x.name).filter((n) => /footage|search_index|scan|similar|like_this|by_image|by_frame/.test(n))).toEqual(['find_in_footage']);
+    // understand_footage (wave 8 understand) starts the describe job: it takes no query, image or frame
+    expect(tools.map((x) => x.name).filter((n) => /footage|search_index|scan|similar|like_this|by_image|by_frame/.test(n) && n !== 'understand_footage')).toEqual(['find_in_footage']);
   });
   it('the server\'s search code opens no network connection and fetches nothing (no http, https, net, dgram, fetch or undici in search/*.ts)', () => {
     const dir = new URL('.', import.meta.url).pathname;

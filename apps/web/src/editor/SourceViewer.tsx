@@ -14,6 +14,7 @@ import { useEditorState } from './store.ts';
 import { placementLabel, placementOps } from './placement.range.ts';
 import { PearlForm } from './pearls/PearlForm.tsx';
 import { PearlStrip } from './pearls/PearlStrip.tsx';
+import { ShotNotes, UNDERSTAND_UI_BUILT } from './understand/ShotNotes.tsx';
 import { spanOfMarks } from './pearls/pearls.logic.ts';
 import { pearlsT } from './pearls/pearls.strings.ts';
 import { PEARLS_TESTIDS as PEARL_ID } from './pearls/pearls.testids.ts';
@@ -170,6 +171,8 @@ export function SourceViewer({ assetId, onClose, startAt, initialSpan }: { asset
           <button type="button" className="ghost" disabled={inFrame === 0 && outFrame === null} onClick={() => { setIn(0); setOut(null); }} data-testid="source-clear">{t('source.clear')}</button>
         </div>
         <PearlStrip assetId={assetId} />
+        {/* «מה יש בקליפ» (wave 8 understand): shots and notes of this file; mounted only once built (W3) */}
+        {UNDERSTAND_UI_BUILT && <ShotNotes assetId={assetId} onSeek={seek} />}
         <div className="row">
           <button ref={saveRef} type="button" className="ghost" aria-expanded={formOpen} onClick={() => (formOpen ? closeForm() : openForm())} data-testid={PEARL_ID.save}>{P('save')} (P)</button>
           {savedNote && <span role="status" className="muted" data-testid="pearl-saved-note">{savedNote}</span>}

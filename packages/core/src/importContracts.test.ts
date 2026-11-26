@@ -98,6 +98,9 @@ describe('retry and actors', () => {
     expect(isPhoneActor('user:local')).toBe(false);
     expect(['user:local', 'agent:local', 'agent:observer', 'phone:drp_1', 'system'].map(actorKind)).toEqual(['user', 'agent', 'agent', 'phone', 'other']);
   });
+  it('wave 8 understand (C7): the server\'s automatic runs are their own actor kind, never shown as the owner', () => {
+    expect(['server:understand', 'server:moments', 'server', 'serverless'].map(actorKind)).toEqual(['server', 'server', 'other', 'other']);
+  });
 });
 
 describe('cutUploadName (the name cut of the upload headers and of receive())', () => {

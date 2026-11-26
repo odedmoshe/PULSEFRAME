@@ -296,6 +296,12 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   'GET /api/v1/sources/:provider/search': ['no-document'], 'GET /api/v1/source-previews/:handle': ['no-document'],
   'PUT /api/v1/sources/:provider/credentials': ['owner-only'], 'DELETE /api/v1/sources/:provider/credentials': ['owner-only'],
   [`POST ${P}/sources/import`]: ['write'], [`POST ${P}/sources/link`]: ['write'],
+  // «מה יש בקליפ» (wave 8 understand; understand/contract.ts): shots and notes are read from the credential's reader document and the
+  // notes table (a model's descriptions of what is seen; the describer is never given a name, a date or the transcript); the job writes
+  // through attach_analysis and attach_footage_notes; the settings are machine settings, no document. No owner-only route (decision 6).
+  [`GET ${P}/understand`]: ['reader-document'], [`POST ${P}/understand`]: ['write'],
+  [`GET ${P}/assets/:assetId/shots`]: ['reader-document'], [`GET ${P}/assets/:assetId/notes`]: ['reader-document'],
+  'GET /api/v1/understand/settings': ['no-document'], 'PUT /api/v1/understand/settings': ['no-document'],
   // MCP over HTTP: see PEOPLE_MCP_TOOLS and PEOPLE_MCP_RESOURCES
   'ALL /mcp': ['reader-document'],
 };
@@ -354,6 +360,8 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   start_agent_run: ['rows-scrubbed'], get_agent_run: ['rows-scrubbed'], undo_actor_since: ['write'],
   // «מאגר» (wave 8 sources): services' answers hold no document; imports write through use_source_item and add_clip
   list_sources: ['no-document'], search_sources: ['no-document'], import_source: ['write'], import_from_link: ['write'],
+  // «מה יש בקליפ» (wave 8 understand): read from the reader document and the notes table; the job writes through internal ops
+  get_shots: ['reader-document'], describe_clip: ['reader-document'], understand_footage: ['write'],
 };
 /** MCP resources and prompts (every resource answer passes forPrincipal; prompts carry no project content). */
 export const PEOPLE_MCP_RESOURCES: Readonly<Record<string, readonly PeopleFilter[]>> = {

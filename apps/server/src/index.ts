@@ -35,6 +35,7 @@ import { assistantHostWarnings, recoverAssistantJobs } from './assistant/job.ts'
 import { createAgentService, recoverAgentRuns } from './agent/loop.ts';
 import { createAgentProviders } from './agent/providers.ts'; // the in-editor agent «סוכן» (wave 8 autonomy Part 2, W1)
 import type { AgentAdapters, AgentProviders } from './agent/contract.ts';
+import { createUnderstandRuntime } from './understand/runtime.ts'; // «מה יש בקליפ» (wave 8 understand, W2)
 import type { AssistantDeps } from './assistant/contract.ts';
 import { createLlamaAdapter } from './assistant/local/llamaAdapter.ts'; // the local assistant's loopback adapter (wave 7)
 import type { MusicKit, SizeFitFault } from '@pulseframe/core';
@@ -126,13 +127,17 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { /** t
   // open mode: standing warnings outside Capabilities for get_controls (D6 the assistant's unlisted host, I9 no upload cap)
   const assistantFiles = new AssistantFiles(cfg.dataDir, cfg.assistantHosts, cfg);
   const standingWarnings = () => [...assistantHostWarnings(cfg, assistantFiles.readConfig().config), ...uploadCapWarnings(cfg)];
-  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { autonomy, imports, renderCache, search, standingWarnings });
+  // the agent's providers, shared by the in-editor agent and the describer of «מה יש בקליפ» (wave 8 understand, decision 1: one key store, one adapter set)
+  const agentProviders = deps.agent?.providers ?? createAgentProviders(cfg.dataDir, ...(deps.agent?.adapters ? [deps.agent.adapters] : []));
+  // «מה יש בקליפ» (wave 8 understand; understand/runtime.ts, W2): shots on import without a model; notes when a describer is chosen
+  const understand = createUnderstandRuntime({ cfg, store, gov: governance, lane, derivatives, providers: agentProviders, ownerBudgetCents: () => autonomy.agentBudgetCents });
+  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { autonomy, imports, renderCache, search, standingWarnings, understand });
   // the in-editor agent «סוכן» (wave 8 autonomy Part 2): its loop calls MCP in process through serveAs (C9)
-  const agentService = createAgentService({ store, gov: governance, mcp, providers: deps.agent?.providers ?? createAgentProviders(cfg.dataDir, ...(deps.agent?.adapters ? [deps.agent.adapters] : [])), ...(deps.agent?.adapters ? { adapters: deps.agent.adapters } : {}),
+  const agentService = createAgentService({ store, gov: governance, mcp, providers: agentProviders, ...(deps.agent?.adapters ? { adapters: deps.agent.adapters } : {}),
     // Part 1 (autonomy.ts): the run's principal is stamped like any agent's, every step; the owner-or-open predicate; a switch to guarded stops open runs (C4); the owner-wide budget
     stamp: (p) => stampOpen(p, autonomy.mode), actsAsOwner, modeEvents: autonomy, ownerBudgetCents: () => autonomy.agentBudgetCents });
   mcp.bindAgent(agentService);
-  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { autonomy, imports, door, renderCache, search, pictureModels, assistant: assistantDeps, renderHost: host, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}) });
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { autonomy, imports, door, renderCache, search, pictureModels, assistant: assistantDeps, renderHost: host, understand, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}) });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   const bound = (server.address() as AddressInfo).port;
@@ -160,12 +165,14 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { /** t
   recoverAssistantJobs(store, governance);
   // ---- end command bar assistant recovery ----
   recoverAgentRuns(agentService); // the in-editor agent: runs cut off by the restart resume by the resume rule (agent/contract.ts)
+  understand.recover(); // «מה יש בקליפ» (wave 8 understand): describe jobs cut off by the restart continue; described spans are not sent again
   backup.start();
   return {
     url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance, backup, imports, door, renderCache,
     async close() {
       (app as any).browserExport?.stop();
       await agentService.stop(); // the agent's steps in flight finish their write; its runs stay running for recover
+      await understand.stop(); // a describe call in flight is aborted at its span; the job row stays running for recover()
       await mcp.close();
       await backup.stop();
       await capabilities.stop();

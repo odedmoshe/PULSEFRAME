@@ -25,6 +25,7 @@
     "proof:made-g1": "tsx --import ./packages/evals/src/proof-mode.ts packages/evals/src/made-g1.ts",
     "proof:made": "tsx --import ./packages/evals/src/proof-mode.ts packages/evals/src/made-proof.ts",
     "proof:sources": "tsx --import ./packages/evals/src/proof-mode.ts packages/evals/src/sources-proof.ts",
+    "proof:understand": "tsx --import ./packages/evals/src/proof-mode.ts packages/evals/src/understand-proof.ts",
     "conformance:seek": "tsx --import ./packages/evals/src/proof-mode.ts packages/evals/src/seek-conformance.ts",
     "check:notices": "tsx --import ./packages/evals/src/proof-mode.ts packages/evals/src/notices-check.ts",
     "check": "pnpm typecheck && pnpm test && pnpm build && pnpm check:notices && pnpm proof",

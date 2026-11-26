@@ -28,6 +28,7 @@ import { removeIndexFiles, SearchIndexDb } from './indexDb.ts';
 import { TEST_DOUBLE_LABEL } from './testEmbedder.ts';
 import { probeSearchPython, SearchWorkers } from './workers.ts';
 import { actsAsOwner, openWarning, warnsOpen } from '../autonomy.ts';
+import { notesMapFor } from '../understand/view.ts';
 
 /** The reviewed worker script. */
 export const SEARCH_WORKER = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../tools/pf_search.py');
@@ -164,7 +165,7 @@ export function createSearchRuntime(deps: SearchRuntimeOptions): SearchRuntime &
       return e;
     },
   });
-  const ctx: PictureContext = { core, setup, embedder: embedderFor, index: indexIfExists, scanOpen: (pid) => !!scans.openFor(pid) };
+  const ctx: PictureContext = { core, setup, embedder: embedderFor, index: indexIfExists, scanOpen: (pid) => !!scans.openFor(pid), notes: (doc) => notesMapFor(store.db, doc) };
 
   return {
     scans, index: indexIfExists, held, modelDir,

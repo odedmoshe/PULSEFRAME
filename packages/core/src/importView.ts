@@ -130,12 +130,16 @@ export function importCardState(job: { status: string; stage: string | null }): 
 export const PHONE_ACTOR_PREFIX = 'phone:';
 export const phoneActor = (dropId: string): string => `${PHONE_ACTOR_PREFIX}${dropId}`;
 export const isPhoneActor = (actor: string): boolean => typeof actor === 'string' && actor.startsWith(PHONE_ACTOR_PREFIX);
-/** Who an actor string names, for the activity list: the owner, an agent, a phone drop code, or something else (shown as written). */
-export function actorKind(actor: string): 'user' | 'agent' | 'phone' | 'other' {
+/**
+ * Who an actor string names, for the activity list: the owner, an agent, a phone drop code, the server's own automatic runs
+ * (`server:<what>`, e.g. server:understand: shots and notes on import, wave 8 understand C7, shown «אוטומטי»), or something else.
+ */
+export function actorKind(actor: string): 'user' | 'agent' | 'phone' | 'server' | 'other' {
   if (typeof actor !== 'string') return 'other';
   if (actor.startsWith('user:')) return 'user';
   if (actor.startsWith('agent')) return 'agent';
   if (isPhoneActor(actor)) return 'phone';
+  if (actor.startsWith('server:')) return 'server';
   return 'other';
 }
 

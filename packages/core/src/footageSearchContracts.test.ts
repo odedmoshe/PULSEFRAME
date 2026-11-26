@@ -27,8 +27,9 @@ describe('wire shapes', () => {
     expect(StartScanBodySchema.safeParse({ assetIds: ['a'], auto: true }).success).toBe(false);
   });
   it('the sources hold no "similar" and no person-finding source', () => {
-    expect([...MOMENT_SOURCES]).toEqual(['name', 'date', 'event', 'transcript', 'pearl', 'person', 'picture']);
-    expect([...AGENT_SOURCES]).toEqual(['name', 'date', 'event', 'transcript']);
+    // wave 8 understand: `seen` and `onscreen` (footage notes) are given to every credential (decision 6, verify C8)
+    expect([...MOMENT_SOURCES]).toEqual(['name', 'date', 'event', 'transcript', 'pearl', 'person', 'picture', 'seen', 'onscreen']);
+    expect([...AGENT_SOURCES]).toEqual(['name', 'date', 'event', 'transcript', 'seen', 'onscreen']);
   });
   it('no refusal message holds a placeholder for the query, and none offers a query by example', () => {
     for (const [k, x] of Object.entries(FOOTAGE_REFUSALS)) {
@@ -51,6 +52,14 @@ describe('the privacy filter of an agent answer (agentAnswerOf)', () => {
     pictureState: 'ready', setup: { code: 'ready', detail: 'cuda', device: 'cuda', versions: { torch: '2.15.0' } }, scanned: { files: 3, of: 4 },
     embedder: 'siglip2-b16-256@3f9f96cb/fp16/pre1', heuristic: true, note: FOOTAGE_NOTE.en,
   };
+  it('wave 8 understand: the notes section is passed to agents (decision 6, C8), rebuilt from its own keys', () => {
+    const notes = [{ assetId: 'a5', start: t(0), end: t(60), sources: ['seen' as const, 'onscreen' as const], snippet: 'TEST DOUBLE: a blue picture', by: 'TEST-DOUBLE-describer/1', frame: 9 } as never];
+    const a = agentAnswerOf({ ...owner, notes, notesState: 'ready' });
+    expect(AgentFootageAnswerSchema.parse(a)).toEqual(a);
+    expect(a.notes).toEqual([{ assetId: 'a5', start: t(0), end: t(60), sources: ['seen', 'onscreen'], snippet: 'TEST DOUBLE: a blue picture', by: 'TEST-DOUBLE-describer/1' }]);
+    expect(a.notesState).toBe('ready');
+    expect(agentAnswerOf(owner)).not.toHaveProperty('notes');
+  });
   it('keeps only assetId, start, end and agent sources; drops moments found only by a pearl name or a tag; empties pictures', () => {
     const a = agentAnswerOf(owner);
     expect(AgentFootageAnswerSchema.parse(a)).toEqual(a);
