@@ -12,6 +12,7 @@ import { Dialog } from '../../ds/index.ts';
 import { useEditorState } from '../store.ts';
 import { clipLabel } from '../Timeline.tsx';
 import { CRAFT_TESTIDS as TID } from './craft.testids.ts';
+import { livingT } from '../living/living.strings.ts';
 import { craftSurface } from './craft.state.ts';
 import { groupName, pasteGroupRows, pastePlanOf, pasteOps, pasteTargets, readTicks, say, skipReason, writeTicks, type Failure } from './craft.logic.ts';
 
@@ -90,6 +91,7 @@ export function PasteAttributesDialog() {
             </fieldset>
             {!effective.length && <p className="pf-craft-hint" role="status">{say(lang, 'pasteNothingTicked')}</p>}
             {effective.length > 0 && plan && !plan.applied.length && <p role="status" className="pf-craft-error" data-testid="craft-paste-none">{say(lang, 'pasteNothingApplies')}</p>}
+            {plan && (plan as { opOnlyLeftOut?: number }).opOnlyLeftOut ? <p className="pf-craft-hint" data-testid="craft-paste-living-left">{livingT(lang)('living.pasteLeftOut')}</p> : null}
             {plan && plan.keysLeftOut > 0 && <p className="pf-craft-hint">{say(lang, 'pasteKeysLeft', { n: plan.keysLeftOut })}</p>}
             {plan && (plan.applied.length > 0 || plan.skipped.length > 0) && (
               <>
