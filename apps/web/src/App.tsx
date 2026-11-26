@@ -6,6 +6,10 @@ import './editor/timeline.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ToastProvider, useToasts, type ToastInput } from './ds/index.ts';
 import { CanvasHandles } from './editor/CanvasHandles.tsx';
+// «ציור חי» (wave 8 ink): the drawing mode over the stage and, on import, the drawing's clip panel (both only once INK_UI_BUILT)
+import { INK_UI_BUILT, InkMode } from './editor/ink/InkMode.tsx';
+import { INK_MODE } from './editor/ink/inkKeys.ts';
+import './editor/ink/InkPanel.tsx';
 import { TrackPicker } from './editor/TrackPicker.tsx';
 import { CommandPalette } from './editor/CommandPalette.tsx';
 import { chordOf, Keymap } from './editor/commands.ts';
@@ -54,6 +58,8 @@ export function App() {
     const onFocus = (e: FocusEvent) => { const el = e.target instanceof HTMLElement ? e.target : null; origin = { el, visible: !!el?.matches(':focus-visible') }; };
     document.addEventListener('focusin', onFocus, true);
     const onKey = (e: KeyboardEvent) => {
+      // the drawing mode (wave 8 ink) owns every key while it is on: its capture listener has acted on it (inkKeys.ts)
+      if (INK_MODE.on) return;
       const chord = chordOf(e);
       const target = e.target instanceof HTMLElement ? e.target : null;
       // Space on a control that has keyboard focus presses that control (a mouse-focused one still lets Space play and pause)
@@ -183,6 +189,7 @@ function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasEle
         <div className="canvas-wrap">
           <canvas ref={(el) => { (canvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = el; setCanvasEl(el); }} aria-label={t('preview')} data-testid="preview" />
           <CanvasHandles canvas={canvasEl} />
+          {INK_UI_BUILT && <InkMode canvas={canvasEl} />}
           <TrackPicker canvas={canvasEl} />
           <PreviewNotice />
           <Welcome />

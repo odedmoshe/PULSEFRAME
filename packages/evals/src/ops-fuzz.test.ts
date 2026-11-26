@@ -115,6 +115,15 @@ function run(seed: number, focus: () => string[] = () => []) {
     step({ op: 'trim_clip', args: { clipId: drawnA, edge: 'start', to: f(8) } }, 'drawn trim');
     if (step({ op: 'update_text', args: { clipId: drawnA, text: 'x' } }, 'drawn words') !== null) throw new Error(`seed ${seed}: update_text was accepted on a drawn clip`);
   }
+  // «ציור חי» (wave 8 ink): one fixed drawing, a split, a trim-start, an edit and a text edit (refused) through the same oracles, so
+  // each is accepted in every run; fixed numbers, no draw from the random stream
+  const inkA = step({ op: 'add_ink', args: { start: f(10), strokes: [{ brush: 'neon', color: '#ffcc00', width: 80, at: 0, x: [-500, 0, 500], y: [0, 300, 0], t: [0, 40, 90] }, { brush: 'highlighter', color: '#00FFAA', width: 240, at: 200, x: [0], y: [-200], t: [0] }] } }, 'ink add')?.clipId as string | undefined;
+  if (inkA) {
+    step({ op: 'split_clip', args: { clipId: inkA, at: f(20) } }, 'ink split');
+    step({ op: 'trim_clip', args: { clipId: inkA, edge: 'start', to: f(13) } }, 'ink trim');
+    step({ op: 'edit_ink', args: { clipId: inkA, play: 'all', fadeOut: true } }, 'ink edit');
+    if (step({ op: 'update_text', args: { clipId: inkA, text: 'x' } }, 'ink words') !== null) throw new Error(`seed ${seed}: update_text was accepted on a drawing`);
+  }
   for (let s = 0; s < STEPS; s++) step(gen(s), s);
   // marked ranges (wave 7): after the random steps (so no other operation's sequence moves), one fixed add, update and remove of a
   // pearl through the same oracles, so each of the three is accepted in every run that still has a timed file; fixed numbers, no draw

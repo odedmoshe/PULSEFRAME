@@ -71,6 +71,8 @@ export const ASSISTANT_EXCLUDED_OPS = [
   // versions for an audience (wave 8 audiences): left out so the reviewed ASSISTANT_PROMPT_DIGEST stays as it is; on MCP and REST as
   // ordinary reversible edits
   'add_audience_version', 'update_audience_version', 'set_audience_keep',
+  // «ציור חי» (wave 8 ink): left out so the reviewed ASSISTANT_PROMPT_DIGEST stays as it is; on MCP and REST as ordinary reversible edits
+  'add_ink', 'edit_ink',
 ] as const;
 /** The ops a proposal may hold: every registered public op minus ASSISTANT_EXCLUDED_OPS and PERSON_OPS, in registry order. */
 export function assistantOps(): string[] {

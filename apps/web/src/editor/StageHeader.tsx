@@ -12,6 +12,7 @@ import { Seg } from '../ds/index.ts';
 import { STAGE_STRINGS } from './stage.strings.ts';
 import './stage.css';
 import { focusNow } from '../ds/focus.ts';
+import { INK_UI_BUILT, InkModeButton } from './ink/InkMode.tsx';
 
 export function StageHeader() {
   const { editor, state } = useEditorState();
@@ -40,6 +41,7 @@ export function StageHeader() {
       <FormatPrism />
       <SequenceSwitcher />
       <span className="stage-head-space" />
+      {INK_UI_BUILT && <InkModeButton />}
       {viewed?.safeArea && (
         <label className="stage-toggle" title={S.safeArea}>
           <input type="checkbox" checked={state.safeAreaOn} onChange={(e) => editor.setSafeArea(e.target.checked)} data-testid="safe-area-toggle" />

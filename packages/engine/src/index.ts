@@ -27,3 +27,5 @@ export { limiterCeilingLinear, limiterWindow, MasterLimiter, MASTER_LIMITER_BUIL
 export { SoundCheck, SOUND_CHECK_BUILT, type SoundRun } from './soundCheck.ts';
 export { PictureCheck, PICTURE_CHECK_BUILT, type PictureRun } from './pictureCheck.ts';
 export { registerDrawnPainter, unregisterDrawnPainter, drawnPainter, noPainterId, type DrawnPainter, type DrawnPaintEnv } from './drawnPainters.ts';
+// «ציור חי» (wave 8 ink): the painter of the drawn kind `ink`; the rule and signatures are lead-built, the bodies W2's (registered once built)
+export * from './inkPainter.ts';
