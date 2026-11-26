@@ -26,4 +26,9 @@ export * from './segmentGrid.ts';
 export { limiterCeilingLinear, limiterWindow, MasterLimiter, MASTER_LIMITER_BUILT, type LimiterStats } from './masterLimiter.ts';
 export { SoundCheck, SOUND_CHECK_BUILT, type SoundRun } from './soundCheck.ts';
 export { PictureCheck, PICTURE_CHECK_BUILT, type PictureRun } from './pictureCheck.ts';
-export { registerDrawnPainter, unregisterDrawnPainter, drawnPainter, noPainterId, type DrawnPainter, type DrawnPaintEnv } from './drawnPainters.ts';
+export { registerDrawnPainter, unregisterDrawnPainter, drawnPainter, noPainterId, prepareDrawn, drawnUnready, type DrawnPainter, type DrawnPaintEnv, type DrawnPainterOptions } from './drawnPainters.ts';
+// trip map (wave 8 tripmap): the painter of the drawn kind `map` registers itself (map/register.ts); its contract and data types
+import './map/register.ts';
+export { paintMap, MAP_PAINTER_BUILT, MAP_NOT_BUILT_WHY } from './map/paintMap.ts';
+export { decodeGroup, mapLevelFor, loadOutlines, MapDataNotBuiltError, type OutlineData, type OutlineLevel, type OutlineGroup, type DecodedRing } from './map/outlines.ts';
+export { mapOutlines } from './map/register.ts';

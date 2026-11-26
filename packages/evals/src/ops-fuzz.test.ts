@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, creativeProjection, diffEntities, LIBRARY_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, SOURCE_RANGE_OPS_BUILT, STEADY_OPS_BUILT, SST, OpError, ProjectSchema, projectVariant, restoreEntities, summarize, timeline, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, creativeProjection, diffEntities, LIBRARY_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, MAP_OPS_BUILT, SOURCE_RANGE_OPS_BUILT, STEADY_OPS_BUILT, SST, OpError, ProjectSchema, projectVariant, restoreEntities, summarize, timeline, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, evaluate } from '@pulseframe/engine';
 import { createFuzz } from './ops-fuzz.gen.ts';
 import { registerTestDrawnOp, testDrawn } from '@pulseframe/core/drawn.testKind.ts';
@@ -140,6 +140,20 @@ function run(seed: number, focus: () => string[] = () => []) {
     if (variantId) {
       step({ op: 'update_audience_version', args: { variantId, musicDb: -9, ...(sound ? { sound: { trackId: sound.id, role: 'music' } } : {}) } }, 'audience update');
       if (clip) { step({ op: 'set_audience_keep', args: { variantId, clipId: clip.id, rule: 'effect', keep: true } }, 'audience keep'); step({ op: 'set_audience_keep', args: { variantId, clipId: clip.id, rule: 'effect', keep: false } }, 'audience give back'); }
+    }
+  }
+  // trip maps (wave 8 tripmap): after the random steps, one fixed add (three stops, even timing), update, retime, split and trim-start of
+  // the map, and a text edit on it (a typed refusal, drawn_not_text) through the same oracles; fixed numbers, no draw from the random stream
+  if (MAP_OPS_BUILT) {
+    const end = T.frameIndexAt(timeline(doc)!.duration, rate) + 10;
+    const stops = [{ name: 'תל אביב', lon: 34_768_066, lat: 32_081_937 }, { name: 'ירושלים', lon: 35_206_626, lat: 31_778_408, via: 'road' }, { name: 'לונדון', lon: -118_668, lat: 51_501_941, via: 'flight' }];
+    const mapId = step({ op: 'add_trip_map', args: { start: f(end), duration: f(240), stops } }, 'map add')?.clipId as string | undefined;
+    if (mapId) {
+      step({ op: 'update_trip_map', args: { clipId: mapId, look: 'night' } }, 'map update');
+      step({ op: 'time_trip_map', args: { clipId: mapId, to: 'even' } }, 'map even');
+      step({ op: 'split_clip', args: { clipId: mapId, at: f(end + 120) } }, 'map split');
+      step({ op: 'trim_clip', args: { clipId: mapId, edge: 'start', to: f(end + 15) } }, 'map trim');
+      if (step({ op: 'update_text', args: { clipId: mapId, text: 'x' } }, 'map words') !== null) throw new Error(`seed ${seed}: update_text was accepted on a trip map`);
     }
   }
   return stats;

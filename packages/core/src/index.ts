@@ -186,3 +186,7 @@ export * from './audienceContract.ts';
 export * from './audienceValidate.ts';
 export * from './audience.ts';
 export * from './audienceOps.ts';
+// trip map (wave 8 tripmap): the drawn kind `map` (registered on import), its pure functions and its three ops
+export * from './mapContract.ts';
+export * from './tripMap.ts';
+export * from './mapOps.ts';

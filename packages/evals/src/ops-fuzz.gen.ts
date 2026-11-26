@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, KEEP_RULES, musicAt, sourceAt, type MediaClip } from '@pulseframe/core';
+import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, KEEP_RULES, MAP_OPS_BUILT, MAP_MODES, MAP_LOOKS, musicAt, sourceAt, type MediaClip } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -611,6 +611,8 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       ...(MUSICFIT_OPS_BUILT && !opts.v1Replay ? [() => genMusicFit(doc)] : []),
       // versions for an audience (wave 8 audiences): the three public operations, once W1 has built the projection (never in the v1 corpus)
       ...(AUDIENCE_PROJECTION_BUILT && !opts.v1Replay ? [() => genAudience(doc)] : []),
+      // trip maps (wave 8 tripmap): the three public operations, once W1 has built the bodies (never in the v1 corpus)
+      ...(MAP_OPS_BUILT && !opts.v1Replay ? [() => genTripMap(doc)] : []),
       // a held frame (add_clip freeze, wave 8 growing; never in the v1 corpus, which keyframe-replay and ripple-delete-golden pin): mostly a video picture right after a picture clip (where a dissolve out of it can
       // follow), now and then a still, linked sound, no duration or a picture past the end (each refused)
       ...(opts.v1Replay ? [] : [() => {
@@ -890,6 +892,37 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     return { op: 'set_audience_keep', args: { variantId, clipId: clips.length && rnd() < 0.92 ? pick(clips).id : 'clp_none', rule: pick([...KEEP_RULES]), keep: rnd() < 0.7 } };
   };
   /**
+   * Trip maps (wave 8 tripmap track). `genTripMap(doc)` returns a random add_trip_map, update_trip_map or time_trip_map call (public;
+   * `gen` draws them once MAP_OPS_BUILT): 2–12 stops mostly (sometimes 1 or 13), micro-degree coordinates off the 0.01° grid (the op
+   * rounds), latitudes now and then beyond ±80°, repeated places, empty and 41-letter names, hidden stops, travel modes (sometimes on
+   * stop 0), times on every stop, on none or on some; updates and timings on map clips mostly, sometimes on another clip or an unknown id.
+   */
+  const genTripMap = (doc: ProjectDocument): OpCall => {
+    const maps = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips)).filter((c) => c.type === 'drawn' && c.drawn.kind === 'map');
+    const others = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips)).filter((c) => !(c.type === 'drawn' && c.drawn.kind === 'map'));
+    const clipId = maps.length && rnd() < 0.85 ? pick(maps).id : others.length && rnd() < 0.7 ? pick(others).id : 'clp_none';
+    const stops = () => {
+      const n = rnd() < 0.9 ? 2 + int(11) : pick([1, 13]);
+      const timed = rnd() < 0.2 ? 'all' : rnd() < 0.1 ? 'some' : 'none';
+      let at = int(30);
+      return Array.from({ length: n }, (_, i) => {
+        at += 1 + int(rnd() < 0.9 ? 90 : 20);
+        const same = i > 0 && rnd() < 0.04;
+        return {
+          name: rnd() < 0.03 ? '' : rnd() < 0.02 ? 'א'.repeat(41) : pick(['תל אביב', 'ירושלים', 'אילת', 'London', 'פטרה', 'חיפה']),
+          lon: same ? 34_770_000 : int(360_000_001) - 180_000_000, lat: same ? 32_080_000 : int(rnd() < 0.95 ? 160_000_001 : 180_000_001) - (rnd() < 0.95 ? 80_000_000 : 90_000_000),
+          ...(i > 0 || rnd() < 0.05 ? (rnd() < 0.7 ? { via: pick([...MAP_MODES]) } : {}) : {}),
+          ...(rnd() < 0.08 ? { hidden: true as const } : {}),
+          ...(timed === 'all' || (timed === 'some' && rnd() < 0.5) ? { at } : {}),
+        };
+      });
+    };
+    const r = rnd();
+    if (r < 0.45 || !maps.length) return { op: 'add_trip_map', args: { start: fr(), duration: f(30 + int(400)), stops: stops(), ...(rnd() < 0.5 ? { look: pick([...MAP_LOOKS]) } : {}) } };
+    if (r < 0.75) return { op: 'update_trip_map', args: { clipId, ...(rnd() < 0.6 ? { stops: stops() } : {}), ...(rnd() < 0.5 ? { look: pick([...MAP_LOOKS]) } : {}) } };
+    return { op: 'time_trip_map', args: { clipId, to: rnd() < 0.6 ? 'even' : 'bars' } };
+  };
+  /**
    * The next random call among the named operations: draws from the same menu until one of them comes up (the menu grows with every
    * feature, so a driver that is about a few operations would otherwise meet them too rarely to say anything about them).
    */
@@ -898,5 +931,5 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience, genTripMap };
 }

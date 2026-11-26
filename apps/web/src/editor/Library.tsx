@@ -23,6 +23,7 @@ import { SourceViewer } from './SourceViewer.tsx';
 import { useEditorState } from './store.ts';
 import { TemplatesDrawer } from './TemplatesDrawer.tsx';
 import { TextStyles } from './TextStyles.tsx';
+import { TripMapEntry, TRIPMAP_UI_BUILT } from './tripMap/TripMapDialog.tsx';
 import { LifeHost, LifeLibrary, LifeViewSwitch } from './lifeline/LifeLibrary.tsx';
 import { FontsSection, MusicTab, PacksSection } from './lifeline/PacksMount.tsx';
 import { PACKS_MOUNT_STRINGS } from './lifeline/packs.mount.strings.ts';
@@ -72,6 +73,8 @@ export function Library() {
         <Pane title={S.textTitle}>
           <p className="pf-bw-lead">{S.textLead}</p>
           <Button variant="primary" size="md" icon={<Type size={16} aria-hidden="true" />} disabled={!doc} onClick={() => void editor.addText()} data-testid="add-text">{t('text.add')}</Button>
+          {/* «מפת טיול חדשה» (wave 8 tripmap): mounted only once the map is built, so no dead button is shown */}
+          {TRIPMAP_UI_BUILT && <TripMapEntry />}
           {/* the text styles as tiles: they apply to the selected title (apply_text_preset) and say so while none is selected */}
           <div className="pf-bw-scroll"><TextStyles testId="text-preset-drawer" /><FontsSection /></div>
         </Pane>

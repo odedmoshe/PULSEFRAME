@@ -14,6 +14,7 @@ import type { Asset, Clip, OpCall, ProjectDocument } from '@pulseframe/core';
 import { assetDisplayName } from './assetLabel.ts';
 import { beatPositionAt, clipEnd, drawnName, fieldsToDisplay, findClip, findEffect, fitScale, speedValue, TEXT_PRESETS, transitionDef } from '@pulseframe/core';
 import { drawnPanel } from './drawnPanels.tsx';
+import './tripMap/register.ts'; // the trip map's panel (wave 8 tripmap)
 import { beatFacts } from './analysis.logic.ts';
 import { effectParamLabel, type Key } from '@pulseframe/i18n';
 import { CurveChip } from './CurvePicker.tsx';
