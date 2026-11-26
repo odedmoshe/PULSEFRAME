@@ -40,3 +40,18 @@ Consequence: the worker's launch mode is found by the render host for projects t
 
 ## What this does not decide
 Performance targets (SPEC Appendix C2), HDR output, video memory budgets, use of the RTX 3050, and decoding straight to GPU textures. Each needs its own measurements.
+
+## Amendment (2026-11-26): data textures at binding 3 — the living picture and the grade curves
+- A pass may bind ONE data texture at binding 3 beside its picture: the living picture's depth strip (`depth.living`: RGBA8,
+  nearness in R, read with `textureLoad` and the pass's own bilinear, never the hardware sampler; a 12-float struct; the number of
+  steps K worked out from the depth grid; the sample point clamped to the picture as cut by the frame) or the grade's curve tables
+  (`color.grade` with curves: its own pipeline `fx:color.grade+curves`, `textureLoad` only). Each pass binds only its own; the two
+  never meet in one pass. Privacy regions are drawn before effects, so a living move never uncovers a hidden region.
+- `depth.living` is made only by `set_living_picture` (`add_effect` refuses it). It is not drawn on a rotated photo or without a
+  depth: the still and the export refuse it (`living_unavailable` in the export plan) and the preview says why.
+- Verified on the software adapter only (one run each): the living pass matches its JavaScript model within 0.5 px; curve tables are
+  identical in Node and Chromium (40 digests) and a still is within 2/255 of the model on gentle curves; `trend-baseline --check`
+  348 hashes unchanged with both passes present. OPEN: `proof:living` check 7 fails — an exported moving living picture measures
+  32.42 dB against the model where 36 dB is required (the same photo exported without the effect gives 43.33 dB; the stills match,
+  so the gap is in the encoded file; cause not established). Not run on any hardware adapter; nobody has looked at either result.
+
