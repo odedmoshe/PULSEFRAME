@@ -38,6 +38,8 @@ const RAW_ALLOWED: readonly { file: string; frag: string; why: string }[] = [
   { file: 'shorts.ts', frag: '.mode === \'propose\') throw', why: 'A25 fact: a proposal cannot carry internal steps (propose credentials are never stamped open)' },
   { file: 'music.ts', frag: '.mode === \'propose\') throw', why: 'A25 fact: a proposal cannot carry internal steps (propose credentials are never stamped open)' },
   { file: 'story.ts', frag: '.mode === \'propose\') throw', why: 'A25 fact: a proposal cannot carry internal steps (propose credentials are never stamped open)' },
+  { file: 'made/routes.ts', frag: 'if (p.kind === \'agent\' && gov.isPaused(projectId)) throw madeError(\'agentsPaused\'', why: 'A6 pause: the owner\'s brake, kept (K)' },
+  { file: 'made/job.ts', frag: 'if (kind === \'user\') return;', why: 'capacity, not permission (decision 2): the owner\'s own renders go first on the compute lane; open agents still yield' },
   { file: 'musicfit/routes.ts', frag: '.mode === \'propose\') throw', why: 'A25 fact: a proposal cannot carry internal steps (propose credentials are never stamped open)' },
 ];
 /** Policy sites not swapped yet (this list is emptied family by family; an entry here is a gate still shut in open mode). */

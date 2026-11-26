@@ -185,4 +185,6 @@ export const OPEN_GATES: readonly OpenGate[] = [
   { id: 'I5', file: 'capabilities.ts', needle: "const actsOpen = (req: { open?: boolean; principal?: Principal }) => req.open === true || (!!req.principal && actsAsOwner(req.principal));", decision: 'W' },
   { id: 'B5', file: 'governance.ts', needle: "if (actsAsOwner(p) && !(p.grant && p.grant.budgetCents > 0)) return this.reserveOpen(jobId, cents);", decision: 'O' },
   { id: 'B4', file: 'http.ts', needle: 'if (!actsAsOwner(p)) throw new ApiError(403, \'human_approval_required\', \'model downloads must be started', decision: 'O' },
+  { id: 'M1', file: 'made/routes.ts', needle: 'if (!actsAsOwner(p) && r.submittedBy !== p.actor) throw notYours(jobId);', decision: 'O' },
+  { id: 'M1', file: 'made/runner.ts', needle: 'if (actsAsOwner(p) || p.actor === j.actor) return;', decision: 'O' },
 ];

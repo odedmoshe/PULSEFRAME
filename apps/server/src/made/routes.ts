@@ -27,6 +27,7 @@ import {
   type ApplyMadeClipOutput, type MadeApplyRequest, type MadeAssetPage, type MadeField, type MadeJobReport, type MadeRenderRequest,
 } from '@pulseframe/core';
 import type { Principal } from '../auth.ts';
+import { actsAsOwner } from '../autonomy.ts';
 import type { Governance } from '../governance.ts';
 import { ApiError, type Store } from '../store.ts';
 import { madeError, notBuiltMadeRunner, type MadeApp, type MadeRouteDeps, type MadeRunner } from './contract.ts';
@@ -91,10 +92,11 @@ export function createMadeService(store: Store, gov: Governance, runner: MadeRun
     if (p.kind === 'agent' && gov.isPaused(projectId)) throw madeError('agentsPaused', { projectId });
     gov.assertMayAct(p, projectId, need);
   };
-  /** the report, after the reading rule: the owner's session, or the credential that submitted it */
+  /** the report, after the reading rule (decision 5): whoever acts as the owner (ADR-0036: the owner's session; in open mode every
+   *  stamped agent too), or the credential that submitted it */
   const ownReport = (p: Principal, projectId: string, jobId: string) => {
     const r = runner.report(p, projectId, jobId);
-    if (p.kind !== 'user' && r.submittedBy !== p.actor) throw notYours(jobId);
+    if (!actsAsOwner(p) && r.submittedBy !== p.actor) throw notYours(jobId);
     return r;
   };
   const capacity = (p: Principal) => {

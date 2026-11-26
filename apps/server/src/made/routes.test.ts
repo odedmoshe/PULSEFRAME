@@ -139,3 +139,36 @@ describe('MCP: submit_made_clip and view_made_clip share the routes\' service', 
     expect(text).not.toMatch(/\bsafe\b|verified/i);
   });
 });
+
+describe('decision 5: reading another credential\'s render — the owner or the submitter when guarded; everyone who acts as the owner when open', () => {
+  it('REST report: agent b is refused agent a\'s render in guarded mode and reads it in open mode (stamped by Auth)', async () => {
+    const r = await rest(a, 'POST', `/api/v1/projects/${pid}/made/render`, { page: { templateId: 'counter' }, seconds: 1, name: 'd5' });
+    expect(r.status).toBe(202);
+    const jobId = r.body.jobId as string;
+    finishAll();
+    const read = () => rest(b, 'GET', `/api/v1/projects/${pid}/made/jobs/${jobId}`);
+    expect(auth.serverMode()).toBe('guarded');
+    expect((await read()).body.error.code).toBe('made_not_yours');
+    const was = auth.serverMode;
+    auth.serverMode = () => 'open';
+    try {
+      const open = await read();
+      expect({ status: open.status, submittedBy: open.body.submittedBy }).toMatchObject({ status: 200, submittedBy: expect.stringMatching(/^agent:/) });
+      expect((await rest(b, 'GET', `/api/v1/projects/${pid}/made/jobs/${jobId}/still/0`)).status).toBe(200);
+      expect((await rest(observer, 'GET', `/api/v1/projects/${pid}/made/jobs/${jobId}`)).body.error.code).toBe('made_not_yours'); // a read-only credential is never stamped
+    } finally { auth.serverMode = was; }
+    expect((await read()).body.error.code).toBe('made_not_yours');
+  });
+  it('the real runner\'s own read rule (runner.ts) reads actsAsOwner too', async () => {
+    const { createMadeRunner } = await import('./runner.ts');
+    // LABELLED STUB of MadeJobs: only report() is called by runner.report
+    const runner = createMadeRunner(store, { report: (j: { id: string; actor: string }) => ({ jobId: j.id, submittedBy: j.actor }) } as never);
+    const j = store.createJob(pid, MADE_JOB_TYPE, 'agent:a-stub', { FAKE: true });
+    const agentB = { actor: 'agent:b-stub', kind: 'agent' as const, scopes: ['observe', 'edit'] as ('observe' | 'edit')[] };
+    expect(() => runner.report(agentB, pid, j.id)).toThrow(/owner and to the credential/);
+    expect(runner.report({ ...agentB, open: true }, pid, j.id)).toMatchObject({ jobId: j.id });
+    expect(runner.report(OWNER, pid, j.id)).toMatchObject({ jobId: j.id });
+    expect(runner.report({ ...agentB, actor: 'agent:a-stub' }, pid, j.id)).toMatchObject({ jobId: j.id });
+    expect(() => runner.report({ actor: 'user:phone', kind: 'user', scopes: ['observe'] }, pid, j.id)).toThrow(/owner and to the credential/);
+  });
+});
